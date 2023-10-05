@@ -10,17 +10,13 @@ import (
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/logger"
-	extension "github.com/viant/datly/repository/extension"
-	"github.com/viant/datly/shared"
-	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox"
-	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
-	"path"
 	"reflect"
 	"strings"
 	"time"
@@ -64,9 +60,7 @@ type (
 
 		Substitutes Substitutes
 
-		ExpandSourceURL string
-		_expandMap      rdata.Map
-		fs              afs.Service
+		fs afs.Service
 	}
 
 	NamedResources map[string]*Resource
@@ -113,10 +107,6 @@ func (r *Resource) loadText(ctx context.Context, URL string, expand bool) (strin
 
 	if err = r.updateTime(ctx, URL, err); err != nil {
 		return "", err
-	}
-
-	if expand && len(r._expandMap) > 0 {
-		return r._expandMap.ExpandWithoutUDF(string(data)), nil
 	}
 
 	return string(data), err
@@ -188,7 +178,7 @@ func (r *Resource) mergeConnectors(resource *Resource) {
 	connectors := r.ConnectorByName()
 	for i, candidate := range resource.Connectors {
 		if _, ok := connectors[candidate.Name]; !ok {
-			connector := *resource.Connectors[i]
+			connector := *resource.Connectors[i] //TODO why clone ?
 			r.Connectors = append(r.Connectors, &connector)
 		}
 	}
@@ -291,22 +281,6 @@ func (r *Resource) GetConnectors() Connectors {
 
 // Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
-	if r.ExpandSourceURL != "" {
-		text, err := r.loadText(ctx, r.ExpandSourceURL, false)
-		if err != nil {
-			return err
-		}
-
-		r._expandMap = rdata.NewMap()
-		if err = shared.UnmarshalWithExt([]byte(strings.TrimSpace(text)), r._expandMap, path.Ext(r.ExpandSourceURL)); err != nil {
-			return err
-		}
-
-		if err = types.Traverse(r, r.expandStringField); err != nil {
-			return err
-		}
-	}
-
 	types, codecs, cache, transforms, predicates := r.readOptions(options)
 	r.indexProviders()
 	if codecs == nil {
@@ -318,7 +292,6 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		types = r.TypeRegistry()
 	}
 	r._types = types
-
 	for _, definition := range r.Types {
 		if err := definition.Init(ctx, types.Lookup); err != nil {
 			return err
@@ -364,7 +337,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 
 func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.Registry, map[string]Columns, marshal.TransformIndex, *extension.PredicateRegistry) {
 	var types *xreflect.Types
-	var visitors = codec.NewRegistry()
+	var codecs *codec.Registry
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
 	var predicatesRegistry *extension.PredicateRegistry
@@ -375,7 +348,7 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.R
 		}
 		switch actual := option.(type) {
 		case *codec.Registry:
-			visitors = actual
+			codecs = actual
 		case map[string]Columns:
 			cache = actual
 		case *xreflect.Types:
@@ -386,10 +359,22 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.R
 			predicatesRegistry = actual
 		case extension.PredicateRegistry:
 			predicatesRegistry = &actual
+		case *extension.Registry:
+			if predicatesRegistry == nil {
+				predicatesRegistry = actual.Predicates
+			}
+			if codecs == nil {
+				codecs = actual.Codecs
+			}
+			if types == nil {
+				types = actual.Types
+			}
 		}
 	}
-
-	return types, visitors, cache, transformsIndex, predicatesRegistry
+	if r._types != nil {
+		types = r._types
+	}
+	return types, codecs, cache, transformsIndex, predicatesRegistry
 }
 
 // View returns View with given name
@@ -720,21 +705,4 @@ func (r *Resource) mergeTemplates(resource *Resource) {
 func (r *Resource) addTemplate(template *predicate.Template) {
 	r.Predicates = append(r.Predicates, template)
 	r._predicates.Add(template)
-}
-
-func (r *Resource) expandStringField(value reflect.Value) error {
-	if value.Kind() != reflect.String {
-		return nil
-	}
-
-	strValue := value.String()
-	expanded := r._expandMap.ExpandWithoutUDF(strValue)
-	expandedValue := reflect.ValueOf(expanded)
-	if value.Type() == xreflect.StringType {
-		value.Set(expandedValue)
-	} else {
-		value.Set(expandedValue.Convert(value.Type()))
-	}
-
-	return nil
 }

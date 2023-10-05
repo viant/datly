@@ -3,9 +3,13 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router"
+	"github.com/viant/datly/repository"
+	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/repository/path"
+	"github.com/viant/datly/utils/httputils"
 	"net/http"
-	"path"
 	"strings"
 )
 
@@ -17,27 +21,23 @@ const (
 
 type (
 	Route struct {
-		RouteMeta
+		Path          *contract.Path
 		Kind          int
-		ApiKeys       []*router.APIKey
-		Routes        []*router.Route
-		NewMultiRoute func(routes []*router.Route) *Route
+		ApiKeys       []*path.APIKey
+		Providers     []*repository.Provider
+		NewMultiRoute func(routes []*contract.Path) *Route
 		Handler       func(ctx context.Context, response http.ResponseWriter, req *http.Request)
-	}
-
-	RouteMeta struct {
-		Method string
-		URL    string
 	}
 )
 
-func (r *Route) Handle(res http.ResponseWriter, req *http.Request) {
+func (r *Route) Handle(res http.ResponseWriter, req *http.Request) error {
 	if !r.CanHandle(req) {
 		write(res, http.StatusForbidden, nil)
-		return
+		return httputils.NewHttpStatusError(http.StatusForbidden)
 	}
 
 	r.Handler(context.Background(), res, req)
+	return nil
 }
 
 func (r *Route) CanHandle(req *http.Request) bool {
@@ -51,37 +51,27 @@ func (r *Route) CanHandle(req *http.Request) bool {
 	return true
 }
 
-func (r *Router) NewRouteHandler(aRouter *router.Router, route *router.Route) *Route {
-	URI := route.URI
+func (r *Router) NewRouteHandler(handler *router.Handler) *Route {
+	URI := handler.Path.URI
 	if !strings.HasPrefix(URI, "/") {
 		URI = "/" + URI
 	}
-
 	return &Route{
-		RouteMeta: RouteMeta{
-			Method: route.Method,
-			URL:    URI,
-		},
-		Routes: []*router.Route{route},
-		Handler: func(ctx context.Context, r http.ResponseWriter, req *http.Request) {
-			err := aRouter.HandleRequest(ctx, r, req, route)
-			if err != nil {
-				r.WriteHeader(http.StatusNotFound)
-			}
-		},
+		Path:      &handler.Path.Path,
+		Providers: []*repository.Provider{handler.Provider},
+		Handler:   handler.HandleRequest,
 	}
 }
 
 func (r *Route) URI() string {
-	return r.URL
+	return r.Path.URI
 }
 
 func (r *Route) Namespaces() []string {
-	namespaces := []string{"", r.Method}
-	if r.Method != http.MethodGet {
+	namespaces := []string{"", r.Path.Method}
+	if r.Path.Method != http.MethodGet {
 		namespaces = append(namespaces, http.MethodOptions)
 	}
-
 	return namespaces
 }
 
@@ -89,7 +79,7 @@ func (r *Router) routeURL(oldPrefix string, newPrefix, URI string) string {
 	if strings.HasPrefix(URI, oldPrefix) {
 		URI = strings.Trim(strings.Replace(URI, oldPrefix, "", 1), "/")
 		newPrefix = strings.Trim(newPrefix, "/")
-		URI = path.Join(newPrefix, URI)
+		URI = url.Join(newPrefix, URI)
 	}
 
 	if !strings.HasPrefix(URI, "/") {

@@ -18,11 +18,11 @@ func TestBlock_Stringify(t *testing.T) {
 			description: "assign",
 			options:     Options{Lang: LangVelty},
 			block: Block{
-				&Assign{Holder: &Ident{Name: "inited"}, Expression: &CallExpr{Receiver: Ident{Name: "Campaign"}, Name: "Init", Args: []Expression{
+				&Assign{Holder: &Ident{Name: "inited"}, Expression: &CallExpr{Receiver: Ident{Name: "Campaign"}, Name: "init", Args: []Expression{
 					Ident{Name: "CurCampaign"},
 				}}},
 			},
-			expect: `#set($inited = $Campaign.Init($CurCampaign))`,
+			expect: `#set($inited = $Campaign.init($CurCampaign))`,
 		},
 		{
 			description: "for each ",
@@ -45,7 +45,7 @@ func TestBlock_Stringify(t *testing.T) {
 				&Condition{
 					If: &BinaryExpr{X: &Ident{Name: "Campaign.Id"}, Op: ">", Y: &LiteralExpr{Literal: "1"}},
 					IFBlock: Block{
-						&Assign{Holder: &Ident{Name: "inited"}, Expression: &CallExpr{Receiver: Ident{Name: "Campaign"}, Name: "Init", Args: []Expression{
+						&Assign{Holder: &Ident{Name: "inited"}, Expression: &CallExpr{Receiver: Ident{Name: "Campaign"}, Name: "init", Args: []Expression{
 							Ident{Name: "CurCampaign"},
 						}}},
 					},
@@ -61,7 +61,7 @@ func TestBlock_Stringify(t *testing.T) {
 				},
 			},
 			expect: `#if($Campaign.Id > 1)
-  #set($inited = $Campaign.Init($CurCampaign))
+  #set($inited = $Campaign.init($CurCampaign))
 #elseif($Campaign.Name == "Foo")
   #set($fooed = $Campaign.Foo($CurCampaign))
 #end`,

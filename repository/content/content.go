@@ -2,6 +2,7 @@ package content
 
 import (
 	"fmt"
+	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/gateway/router/marshal/tabjson"
@@ -42,11 +43,13 @@ type (
 
 	Content struct {
 		Marshaller
-		DateFormat  string             `json:",omitempty"`
-		CSV         *CSVConfig         `json:",omitempty"`
-		XLS         *XLSConfig         `json:",omitempty"`
-		XML         *XMLConfig         `json:",omitempty"`
-		TabularJSON *TabularJSONConfig `json:",omitempty"`
+		DateFormat               string             `json:",omitempty"`
+		CSV                      *CSVConfig         `json:",omitempty"`
+		XLS                      *XLSConfig         `json:",omitempty"`
+		XML                      *XMLConfig         `json:",omitempty"`
+		TabularJSON              *TabularJSONConfig `json:",omitempty"`
+		Transforms               marshal.Transforms `json:"Transforms,omitempty" yaml:"Transforms,omitempty" `
+		unmarshallerInterceptors marshal.Transforms
 	}
 
 	JSON struct {
@@ -61,6 +64,10 @@ type (
 		JSON
 	}
 )
+
+func (r *Content) UnmarshallerInterceptors() marshal.Transforms {
+	return r.unmarshallerInterceptors
+}
 
 func (r *Content) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 	contentType := request.Header.Get(HeaderContentType)
@@ -97,6 +104,7 @@ func (x *XLSConfig) Options() []xlsy.Option {
 }
 
 func (c *Content) InitMarshaller(config config.IOConfig, exclude []string, inputType, outputType reflect.Type) error {
+	c.unmarshallerInterceptors = c.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
 	c.JsonMarshaller = json.New(config)
 	c.XlsMarshaller = xlsy.NewMarshaller(c.XLS.Options()...)
 

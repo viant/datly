@@ -1,6 +1,6 @@
 package endpoint
 
-//Config defines standalone app endpoint
+// Config defines standalone app endpoint
 type Config struct {
 	Port           int
 	ReadTimeoutMs  int
@@ -8,7 +8,7 @@ type Config struct {
 	MaxHeaderBytes int
 }
 
-//Init initialises endpoint
+// init initialises endpoint
 func (e *Config) Init() {
 	if e.Port == 0 {
 		e.Port = 8080

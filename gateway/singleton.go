@@ -5,7 +5,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/repository/extension"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/gmetric"
 	"net/http"
 	"os"

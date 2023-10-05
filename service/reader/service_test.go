@@ -401,7 +401,7 @@ outer:
 		types := xreflect.NewTypes()
 
 		for key, rType := range testCase.compTypes {
-			if !assert.Nil(t, types.Register(key, xreflect.WithReflectType(rType)), testCase.description) {
+			if !assert.Nil(t, types.SetComponents(key, xreflect.WithReflectType(rType)), testCase.description) {
 				continue outer
 			}
 		}
@@ -415,7 +415,7 @@ outer:
 			}
 		} else {
 			resource = testCase.resource
-			if err = resource.Init(context.TODO(), types, testCase.visitors, map[string]view.Columns{}); err != nil {
+			if err = resource.init(context.TODO(), types, testCase.visitors, map[string]view.Columns{}); err != nil {
 				t.Fatalf(err.Error())
 			}
 		}

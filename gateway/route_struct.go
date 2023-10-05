@@ -2,33 +2,36 @@ package gateway
 
 import (
 	"context"
-	"github.com/viant/datly/gateway/router"
+	"github.com/viant/datly/repository"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/xreflect"
 	"net/http"
 	"reflect"
 )
 
-func (r *Router) NewStructRoute(URL string, route *router.Route) *Route {
+func (r *Router) NewStructRoute(URL string, provider *repository.Provider) *Route {
 	return &Route{
-		RouteMeta: RouteMeta{
-			Method: http.MethodGet,
-			URL:    URL,
-		},
-		Routes: []*router.Route{route},
+		Path:      contract.NewPath(http.MethodGet, URL),
+		Providers: []*repository.Provider{provider},
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
-			r.handleGolangStruct(response, route)
+			r.handleGolangStruct(ctx, response, provider)
 		},
 	}
 }
 
-func (r *Router) handleGolangStruct(response http.ResponseWriter, route *router.Route) {
-	statusCode, content := r.generateGoStruct(route)
+func (r *Router) handleGolangStruct(ctx context.Context, response http.ResponseWriter, provider *repository.Provider) {
+	component, err := provider.Component(ctx)
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	statusCode, content := r.generateGoStruct(component)
 	setContentType(response, statusCode, "text/plain")
 	write(response, statusCode, content)
 }
 
-func (r *Router) generateGoStruct(route *router.Route) (int, []byte) {
-	schemaType := route.View.Schema.CompType()
+func (r *Router) generateGoStruct(component *repository.Component) (int, []byte) {
+	schemaType := component.View.Schema.CompType()
 	for schemaType.Kind() == reflect.Ptr {
 		schemaType = schemaType.Elem()
 	}

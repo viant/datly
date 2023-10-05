@@ -11,7 +11,7 @@ import (
 	_ "github.com/viant/bigquery"
 	_ "github.com/viant/cloudless/async/mbus/aws"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/repository/extension"
+	"github.com/viant/datly/view/extension"
 	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
 	_ "github.com/viant/sqlx/metadata/product/bigquery"

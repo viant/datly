@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/viant/datly/internal/plugin"
-	"github.com/viant/datly/repository/extension"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
 	"go/format"

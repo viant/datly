@@ -13,7 +13,7 @@ func (s *Service) WarmupCache(ctx context.Context, cache *options.CacheWarmup) e
 	if err != nil {
 		return err
 	}
-	response := warmup.PreCache(srv.Service.PreCachables, cache.WarmupURIs...)
+	response := warmup.PreCache(ctx, srv.Service.PreCachables, cache.WarmupURIs...)
 	data, _ := json.Marshal(response)
 	fmt.Printf("%s\n", data)
 	return nil

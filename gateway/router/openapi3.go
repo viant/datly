@@ -1,9 +1,11 @@
 package router
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/gateway/router/openapi3"
+	"github.com/viant/datly/repository"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
@@ -53,10 +55,10 @@ type (
 	}
 )
 
-func (g *generator) GenerateSpec(info openapi3.Info, route ...*Route) (*openapi3.OpenAPI, error) {
+func (g *generator) GenerateSpec(ctx context.Context, info openapi3.Info, providers ...*repository.Provider) (*openapi3.OpenAPI, error) {
 	components := g.generateComponents()
 
-	paths, err := g.generatePaths(route)
+	paths, err := g.generatePaths(ctx, providers)
 	if err != nil {
 		return nil, err
 	}
@@ -76,13 +78,13 @@ func (g *generator) GenerateSpec(info openapi3.Info, route ...*Route) (*openapi3
 	}, nil
 }
 
-func GenerateOpenAPI3Spec(info openapi3.Info, routes ...*Route) (*openapi3.OpenAPI, error) {
+func GenerateOpenAPI3Spec(ctx context.Context, info openapi3.Info, providers ...*repository.Provider) (*openapi3.OpenAPI, error) {
 	return (&generator{
 		_schemasIndex:    map[string]*openapi3.Schema{},
 		commonSchemas:    map[string]*openapi3.Schema{},
 		commonParameters: map[string]*openapi3.Parameter{},
 		_parametersIndex: map[string]*openapi3.Parameter{},
-	}).GenerateSpec(info, routes...)
+	}).GenerateSpec(ctx, info, providers...)
 }
 
 func (g *generator) generateComponents() *openapi3.Components {
@@ -100,19 +102,19 @@ func (g *generator) generateComponents() *openapi3.Components {
 	}
 }
 
-func (g *generator) generateSchemas(route *Route) (openapi3.Schemas, error) {
+func (g *generator) generateSchemas(component *repository.Component) (openapi3.Schemas, error) {
 	result := openapi3.Schemas{}
 
-	schemas := g.getViewSchemas(route.View)
+	schemas := g.getViewSchemas(component.View)
 	var err error
 	for _, schemaWrapper := range schemas {
-		typeName := g.typeName(route, schemaWrapper.schema.Type(), schemaWrapper.defaultName)
+		typeName := g.typeName(component, schemaWrapper.schema.Type(), schemaWrapper.defaultName)
 		kind := schemaWrapper.schema.Type().Kind()
 		if kind != reflect.Slice && kind != reflect.Struct {
 			continue
 		}
 
-		result[schemaWrapper.defaultName], err = g.getOrGenerateSchema(route, schemaWrapper.schema.Type(), !schemaWrapper.resultSchema, typeName, g.typeName(route, schemaWrapper.schema.Type(), schemaWrapper.defaultName))
+		result[schemaWrapper.defaultName], err = g.getOrGenerateSchema(component, schemaWrapper.schema.Type(), !schemaWrapper.resultSchema, typeName, g.typeName(component, schemaWrapper.schema.Type(), schemaWrapper.defaultName))
 		if err != nil {
 			return nil, err
 		}
@@ -121,10 +123,11 @@ func (g *generator) generateSchemas(route *Route) (openapi3.Schemas, error) {
 	return result, nil
 }
 
-func (g *generator) typeName(route *Route, schemaType reflect.Type, defaultValue string) string {
-	typeName, ok := route._resource.TypeName(schemaType)
-	if ok {
-		return typeName
+func (g *generator) typeName(component *repository.Component, schemaType reflect.Type, defaultValue string) string {
+	types := component.TypeRegistry()
+	aType := types.Info(schemaType)
+	if aType != nil {
+		return aType.Name
 	}
 	return defaultValue
 }
@@ -155,14 +158,14 @@ func (g *generator) addSchemaParam(schemas *[]*schemaNamed, param *state.Paramet
 	*schemas = append(*schemas, &schemaNamed{schema: param.Schema, defaultName: param.Name})
 }
 
-func (g *generator) getOrGenerateSchema(route *Route, rType reflect.Type, formatFieldName bool, description, schemaName string) (*openapi3.Schema, error) {
+func (g *generator) getOrGenerateSchema(component *repository.Component, rType reflect.Type, formatFieldName bool, description, schemaName string) (*openapi3.Schema, error) {
 	if schemaName == "" {
-		return g.generateSchema(route, rType, "", formatFieldName, description, nil, "")
+		return g.generateSchema(component, rType, "", formatFieldName, description, nil, "")
 	}
 
 	schema, ok := g._schemasIndex[schemaName]
 	if !ok {
-		generatedSchema, err := g.generateSchema(route, rType, "", formatFieldName, description, nil, "")
+		generatedSchema, err := g.generateSchema(component, rType, "", formatFieldName, description, nil, "")
 		if err != nil {
 			return nil, err
 		}
@@ -180,7 +183,7 @@ func (g *generator) getOrGenerateSchema(route *Route, rType reflect.Type, format
 	return &openapi3.Schema{Ref: "#/components/schema/" + schemaName}, nil
 }
 
-func (g *generator) generateSchema(route *Route, rType reflect.Type, dateFormat string, formatFieldName bool, description string, tag *json.DefaultTag, path string) (*openapi3.Schema, error) {
+func (g *generator) generateSchema(component *repository.Component, rType reflect.Type, dateFormat string, formatFieldName bool, description string, tag *json.DefaultTag, path string) (*openapi3.Schema, error) {
 	schema := &openapi3.Schema{
 		Description: description,
 	}
@@ -188,14 +191,14 @@ func (g *generator) generateSchema(route *Route, rType reflect.Type, dateFormat 
 		schema.Nullable = tag.IsNullable()
 	}
 
-	if err := g.addToSchema(schema, route, rType, dateFormat, formatFieldName, tag, path); err != nil {
+	if err := g.addToSchema(schema, component, rType, dateFormat, formatFieldName, tag, path); err != nil {
 		return nil, err
 	}
 
 	return schema, nil
 }
 
-func (g *generator) addToSchema(schema *openapi3.Schema, route *Route, rType reflect.Type, dateFormat string, isOutputSchema bool, tag *json.DefaultTag, path string) error {
+func (g *generator) addToSchema(schema *openapi3.Schema, component *repository.Component, rType reflect.Type, dateFormat string, isOutputSchema bool, tag *json.DefaultTag, path string) error {
 	for rType.Kind() == reflect.Ptr {
 		rType = rType.Elem()
 	}
@@ -203,7 +206,7 @@ func (g *generator) addToSchema(schema *openapi3.Schema, route *Route, rType ref
 	switch rType.Kind() {
 	case reflect.Slice:
 		var err error
-		schema.Items, err = g.generateSchema(route, rType.Elem(), dateFormat, isOutputSchema, "", nil, path)
+		schema.Items, err = g.generateSchema(component, rType.Elem(), dateFormat, isOutputSchema, "", nil, path)
 		if err != nil {
 			return err
 		}
@@ -237,12 +240,12 @@ func (g *generator) addToSchema(schema *openapi3.Schema, route *Route, rType ref
 				fieldPath = path + "." + fieldPath
 			}
 
-			if _, ok := route.Output.Excluded()[fieldPath]; ok {
+			if _, ok := component.Output.Excluded()[fieldPath]; ok {
 				continue
 			}
 
 			if aField.Anonymous {
-				if err := g.addToSchema(schema, route, aField.Type, dateFormat, isOutputSchema, tag, fieldPath); err != nil {
+				if err := g.addToSchema(schema, component, aField.Type, dateFormat, isOutputSchema, tag, fieldPath); err != nil {
 					return err
 				}
 				continue
@@ -257,10 +260,10 @@ func (g *generator) addToSchema(schema *openapi3.Schema, route *Route, rType ref
 			if defaultTag.IgnoreCaseFormatter {
 				fieldName = aField.Name
 			} else if isOutputSchema {
-				fieldName = format.CaseUpperCamel.Format(aField.Name, *route.Output.FormatCase())
+				fieldName = format.CaseUpperCamel.Format(aField.Name, *component.Output.FormatCase())
 			}
 
-			schema.Properties[fieldName], err = g.generateSchema(route, aField.Type, defaultTag.Format, isOutputSchema, "", defaultTag, fieldPath)
+			schema.Properties[fieldName], err = g.generateSchema(component, aField.Type, defaultTag.Format, isOutputSchema, "", defaultTag, fieldPath)
 			if err != nil {
 				return err
 			}
@@ -317,40 +320,45 @@ func (g *generator) toOpenApiType(rType reflect.Type) (string, string, error) {
 	return empty, empty, fmt.Errorf("unsupported openapi3 type %v", rType.String())
 }
 
-func (g *generator) generatePaths(routes []*Route) (openapi3.Paths, error) {
+func (g *generator) generatePaths(ctx context.Context, providers []*repository.Provider) (openapi3.Paths, error) {
 	paths := openapi3.Paths{}
 
-	for _, route := range routes {
+	for _, provider := range providers {
+
+		component, err := provider.Component(ctx)
+		if err != nil {
+			return nil, err
+		}
 		pathItem := &openapi3.PathItem{}
-		operation, err := g.generateOperation(route, route.Method)
+		operation, err := g.generateOperation(component, component.Method)
 		if err != nil {
 			return nil, err
 		}
 
-		switch route.Method {
+		switch component.Method {
 		case http.MethodGet:
 			pathItem.Get = operation
 		case http.MethodPost:
 			pathItem.Post = operation
 		}
 
-		paths[route.URI] = pathItem
+		paths[component.URI] = pathItem
 	}
 	return paths, nil
 }
 
-func (g *generator) generateOperation(route *Route, method string) (*openapi3.Operation, error) {
-	body, err := g.requestBody(route, method)
+func (g *generator) generateOperation(component *repository.Component, method string) (*openapi3.Operation, error) {
+	body, err := g.requestBody(component, method)
 	if err != nil {
 		return nil, err
 	}
 
-	parameters, err := g.getAllViewsParameters(route, route.View)
+	parameters, err := g.getAllViewsParameters(component, component.View)
 	if err != nil {
 		return nil, err
 	}
 
-	responses, err := g.responses(route, method)
+	responses, err := g.responses(component, method)
 	if err != nil {
 		return nil, err
 	}
@@ -369,10 +377,10 @@ func (g *generator) generateOperation(route *Route, method string) (*openapi3.Op
 	return operation, nil
 }
 
-func (g *generator) viewParameters(aView *view.View, route *Route) ([]*openapi3.Parameter, error) {
+func (g *generator) viewParameters(aView *view.View, component *repository.Component) ([]*openapi3.Parameter, error) {
 	parameters := make([]*openapi3.Parameter, 0)
 	for _, param := range aView.Template.Parameters {
-		converted, ok, err := g.convertParam(route, param, "")
+		converted, ok, err := g.convertParam(component, param, "")
 		if err != nil {
 			return nil, err
 		}
@@ -383,39 +391,39 @@ func (g *generator) viewParameters(aView *view.View, route *Route) ([]*openapi3.
 		parameters = append(parameters, converted)
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.CriteriaParameter); err != nil {
+	if err := g.appendBuiltInParam(&parameters, component, aView.Selector.CriteriaParameter); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.LimitParameter); err != nil {
+	if err := g.appendBuiltInParam(&parameters, component, aView.Selector.LimitParameter); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.OffsetParameter); err != nil {
+	if err := g.appendBuiltInParam(&parameters, component, aView.Selector.OffsetParameter); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.PageParameter); err != nil {
+	if err := g.appendBuiltInParam(&parameters, component, aView.Selector.PageParameter); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.OrderByParameter); err != nil {
+	if err := g.appendBuiltInParam(&parameters, component, aView.Selector.OrderByParameter); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.FieldsParameter); err != nil {
+	if err := g.appendBuiltInParam(&parameters, component, aView.Selector.FieldsParameter); err != nil {
 		return nil, err
 	}
 
 	return parameters, nil
 }
 
-func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Route, param *state.Parameter) error {
+func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, component *repository.Component, param *state.Parameter) error {
 	if param == nil {
 		return nil
 	}
 
-	converted, ok, err := g.convertParam(route, param, param.Description)
+	converted, ok, err := g.convertParam(component, param, param.Description)
 	if err != nil {
 		return err
 	}
@@ -426,7 +434,7 @@ func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Rou
 	return nil
 }
 
-func (g *generator) convertParam(route *Route, param *state.Parameter, description string) (*openapi3.Parameter, bool, error) {
+func (g *generator) convertParam(component *repository.Component, param *state.Parameter, description string) (*openapi3.Parameter, bool, error) {
 	if param.In.Kind == state.KindDataView || param.In.Kind == state.KindRequestBody || param.In.Kind == state.KindEnvironment || param.In.Kind == state.KindConst {
 		return nil, false, nil
 	}
@@ -443,7 +451,7 @@ func (g *generator) convertParam(route *Route, param *state.Parameter, descripti
 		return &openapi3.Parameter{Ref: "#/components/parameters/" + param.Name}, true, nil
 	}
 
-	schema, err := g.getOrGenerateSchema(route, param.Schema.Type(), false, "Parameter "+param.Name+" schema", g.typeName(route, param.Schema.Type(), param.Name))
+	schema, err := g.getOrGenerateSchema(component, param.Schema.Type(), false, "Parameter "+param.Name+" schema", g.typeName(component, param.Schema.Type(), param.Name))
 	if err != nil {
 		return nil, false, err
 	}
@@ -480,14 +488,14 @@ func (g *generator) getViewPrefixes(mainView bool, route *Route, aView *view.Vie
 	return prefixes
 }
 
-func (g *generator) getAllViewsParameters(route *Route, aView *view.View) ([]*openapi3.Parameter, error) {
-	params, err := g.viewParameters(aView, route)
+func (g *generator) getAllViewsParameters(component *repository.Component, aView *view.View) ([]*openapi3.Parameter, error) {
+	params, err := g.viewParameters(aView, component)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, relation := range aView.With {
-		relationParams, err := g.getAllViewsParameters(route, &relation.Of.View)
+		relationParams, err := g.getAllViewsParameters(component, &relation.Of.View)
 		if err != nil {
 			return nil, err
 		}
@@ -505,13 +513,13 @@ func (g *generator) indexParameters(parameters []*openapi3.Parameter) openapi3.P
 	return result
 }
 
-func (g *generator) requestBody(route *Route, method string) (*openapi3.RequestBody, error) {
-	if method != http.MethodPost || route.BodyType() == nil {
+func (g *generator) requestBody(component *repository.Component, method string) (*openapi3.RequestBody, error) {
+	if method != http.MethodPost || component.BodyType() == nil {
 		return nil, nil
 	}
 
-	typeName := g.typeName(route, route.BodyType(), "RequestBody")
-	requestBodySchema, err := g.getOrGenerateSchema(route, route.BodyType(), false, typeName, "Request body schema")
+	typeName := g.typeName(component, component.BodyType(), "RequestBody")
+	requestBodySchema, err := g.getOrGenerateSchema(component, component.BodyType(), false, typeName, "Request body schema")
 	if err != nil {
 		return nil, err
 	}
@@ -526,14 +534,14 @@ func (g *generator) requestBody(route *Route, method string) (*openapi3.RequestB
 	}, nil
 }
 
-func (g *generator) responses(route *Route, method string) (openapi3.Responses, error) {
+func (g *generator) responses(component *repository.Component, method string) (openapi3.Responses, error) {
 	if method == http.MethodOptions {
 		return nil, nil
 	}
 
-	responseType := route.OutputType()
-	schemaName := g.typeName(route, responseType, route.View.Name)
-	successSchema, err := g.getOrGenerateSchema(route, responseType, true, successSchemaDescription, schemaName)
+	responseType := component.OutputType()
+	schemaName := g.typeName(component, responseType, component.View.Name)
+	successSchema, err := g.getOrGenerateSchema(component, responseType, true, successSchemaDescription, schemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -548,7 +556,7 @@ func (g *generator) responses(route *Route, method string) (openapi3.Responses, 
 		},
 	}
 
-	errorSchema, err := g.getOrGenerateSchema(route, errorType, false, errorSchemaDescription, "")
+	errorSchema, err := g.getOrGenerateSchema(component, errorType, false, errorSchemaDescription, "")
 	if err != nil {
 		return nil, err
 	}

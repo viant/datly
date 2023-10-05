@@ -52,7 +52,7 @@ func ExampleService_ReadInto() {
 	)
 
 	aReader.Resource.AddViews(invoiceView)
-	if err := aReader.Resource.Init(context.Background()); err != nil {
+	if err := aReader.Resource.init(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 
@@ -103,7 +103,7 @@ func ExampleService_MultiDbReadInto() {
 	)
 
 	aReader.Resource.AddViews(aView)
-	if err := aReader.Resource.Init(context.Background()); err != nil {
+	if err := aReader.Resource.init(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 
@@ -185,7 +185,7 @@ func ExampleService_ReadWithTemplate() {
 	)
 
 	aReader.Resource.AddViews(aView)
-	if err := aReader.Resource.Init(context.Background()); err != nil {
+	if err := aReader.Resource.init(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 
@@ -260,7 +260,7 @@ func ExampleService_LifeCycleReadInto() {
 	)
 
 	aReader.Resource.AddViews(aView)
-	if err := aReader.Resource.Init(context.Background()); err != nil {
+	if err := aReader.Resource.init(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 

@@ -394,13 +394,13 @@ func TestBuilder_Build(t *testing.T) {
 			Driver: "sqlite3",
 		}
 
-		if !assert.Nil(t, useCase.view.Init(context.TODO(), view.EmptyResource()), useCase.description) {
+		if !assert.Nil(t, useCase.view.init(context.TODO(), view.EmptyResource()), useCase.description) {
 			continue
 		}
 
 		builder := NewBuilder()
 
-		useCase.selector.Init(useCase.view)
+		useCase.selector.init(useCase.view)
 		matcher, err := builder.Build(useCase.view, useCase.selector, useCase.batchData, useCase.relation, nil, nil, nil)
 
 		assert.Nil(t, err, useCase.description)

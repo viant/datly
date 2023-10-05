@@ -3,15 +3,13 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"github.com/viant/datly/repository/contract"
 	"net/http"
 )
 
 func (r *Router) NewConfigRoute() *Route {
 	return &Route{
-		RouteMeta: RouteMeta{
-			Method: http.MethodGet,
-			URL:    r.config.Meta.ConfigURI,
-		},
+		Path: contract.NewPath(http.MethodGet, r.config.Meta.ConfigURI),
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleConfig(response)
 		},

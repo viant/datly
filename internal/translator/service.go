@@ -14,12 +14,12 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	rasync "github.com/viant/datly/repository/async"
-	"github.com/viant/datly/repository/contract"
-	"github.com/viant/datly/repository/extension"
+	signature2 "github.com/viant/datly/repository/contract/signature"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
@@ -38,7 +38,7 @@ type Service struct {
 	Repository *Repository //TODO init repo with basic config and dependencies
 	Plugins    []*options.Plugin
 	fs         afs.Service
-	signature  *contract.Service
+	signature  *signature2.Service
 }
 
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string, opts *options.Options) (err error) {
@@ -80,11 +80,11 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	return nil
 }
 
-func (s *Service) discoverComponentContract(ctx context.Context, resource *Resource, location *state.Location) (*contract.Signature, error) {
+func (s *Service) discoverComponentContract(ctx context.Context, resource *Resource, location *state.Location) (*signature2.Signature, error) {
 	var err error
 	if s.signature == nil {
 		prefix := path.Join(s.Repository.Config.APIPrefix, resource.rule.ModulePrefix)
-		if s.signature, err = contract.New(ctx, prefix, s.Repository.Config.RouteURL); err != nil {
+		if s.signature, err = signature2.New(ctx, prefix, s.Repository.Config.RouteURL); err != nil {
 			return nil, err
 		}
 	}

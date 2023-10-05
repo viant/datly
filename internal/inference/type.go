@@ -2,10 +2,10 @@ package inference
 
 import (
 	"fmt"
-	dConfig "github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	dConfig "github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/structology"

@@ -10,11 +10,11 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
-	"github.com/viant/datly/repository/extension"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx"
 	"github.com/viant/toolbox"
@@ -134,7 +134,7 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *parser.Type
 		if i > 0 {
 			alias = ""
 		}
-		//_ = config.Config.Types.Register(name, xreflect.WithTypeDefinition(dataType))
+		//_ = config.Config.Types.SetComponents(name, xreflect.WithTypeDefinition(dataType))
 		setter.SetStringIfEmpty(&typeDef.Alias, alias)
 		r.AppendTypeDefinition(typeDef)
 	}

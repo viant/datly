@@ -3,7 +3,7 @@ package component
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
@@ -13,7 +13,7 @@ import (
 
 type componentLocator struct {
 	custom     []interface{}
-	dispatch   component.Dispatcher
+	dispatch   contract.Dispatcher
 	getRequest func() (*http.Request, error)
 }
 
@@ -27,12 +27,12 @@ func (l *componentLocator) Value(ctx context.Context, name string) (interface{},
 	if err != nil {
 		return nil, false, err
 	}
-	value, err := l.dispatch.Dispatch(ctx, &component.Path{Method: method, URI: URI}, request)
+	value, err := l.dispatch.Dispatch(ctx, &contract.Path{Method: method, URI: URI}, request)
 	return value, err == nil, err
 }
 
 // TODO passed locator options to dispatcher so that this wil not be nil
-var dispatcher component.Dispatcher
+var dispatcher contract.Dispatcher
 
 // newComponentLocator returns component locator
 func newComponentLocator(opts ...locator.Option) (kind.Locator, error) {

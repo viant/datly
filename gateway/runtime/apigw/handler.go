@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/service/auth/jwt"
+	"github.com/viant/datly/view/extension"
 	"net/http"
 	"time"
 

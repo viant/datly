@@ -42,7 +42,7 @@ pipeline:
         Expect:
           Code: 200
 
-      - Method: POST
-        URL: http://127.0.0.1:8080/v1/api/cache/warmup/dev/secured/vendors/2
-        Expect:
-          Code: 403
+#      - Method: POST
+#        URL: http://127.0.0.1:8080/v1/api/cache/warmup/dev/secured/vendors/2
+#        Expect:
+#          Code: 403

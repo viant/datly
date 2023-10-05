@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
-	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/gateway/runtime/meta"
+	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service/auth/cognito"
 	"github.com/viant/datly/service/auth/secret"
 	"github.com/viant/scy/auth/jwt/signer"
@@ -24,7 +24,7 @@ type (
 	}
 
 	SensitiveConfig struct {
-		APIKeys router.APIKeys
+		APIKeys path.APIKeys
 	}
 
 	ExposableConfig struct {
@@ -76,7 +76,7 @@ func (c *Config) Discovery() bool {
 	return c.AutoDiscovery == nil || *c.AutoDiscovery
 }
 
-func (c *Config) Init() error {
+func (c *Config) Init(ctx context.Context) error {
 	if c.SyncFrequencyMs == 0 {
 		c.SyncFrequencyMs = 2000
 	}
@@ -86,7 +86,28 @@ func (c *Config) Init() error {
 
 	c.Meta.Init()
 	c.ChangeDetection.Init()
-	return c.APIKeys.Init()
+	if err := c.APIKeys.Init(ctx); err != nil {
+		return err
+	}
+
+	return c.initSecrets(ctx)
+}
+
+func (c *Config) initSecrets(ctx context.Context) error {
+	if len(c.Secrets) == 0 {
+		return nil
+	}
+	secrets := secret.New()
+	for _, sec := range c.Secrets {
+		if err := secrets.Apply(ctx, sec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Config) SyncFrequency() time.Duration {
+	return time.Duration(c.SyncFrequencyMs) * time.Millisecond
 }
 
 func NewConfigFromURL(ctx context.Context, fs afs.Service, URL string) (*Config, error) {
@@ -111,7 +132,7 @@ func NewConfigFromURL(ctx context.Context, fs afs.Service, URL string) (*Config,
 	if err != nil {
 		return nil, err
 	}
-	if err = cfg.Init(); err != nil {
+	if err = cfg.Init(ctx); err != nil {
 		return nil, err
 	}
 	return cfg, cfg.Validate()

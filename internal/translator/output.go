@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
-	"github.com/viant/datly/repository/component"
-	"github.com/viant/datly/repository/extension"
-	codec2 "github.com/viant/datly/repository/extension/codec"
-	"github.com/viant/datly/repository/extension/codec/jsontab"
-	"github.com/viant/datly/repository/extension/codec/transfer"
-	"github.com/viant/datly/repository/extension/codec/xmlfilter"
-	"github.com/viant/datly/repository/extension/codec/xmltab"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/extension/codec"
+	"github.com/viant/datly/view/extension/codec/jsontab"
+	"github.com/viant/datly/view/extension/codec/transfer"
+	"github.com/viant/datly/view/extension/codec/xmlfilter"
+	"github.com/viant/datly/view/extension/codec/xmltab"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/predicate"
@@ -50,7 +50,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
-	component.EnsureOutputKindParameterTypes(outputParameters, nil)
+	contract.EnsureOutputKindParameterTypes(outputParameters, nil)
 	for _, parameter := range outputParameters {
 		if err = s.adjustOutputParameter(resource, parameter, typesRegistry); err != nil {
 			return err
@@ -196,7 +196,7 @@ func (s *Service) newTypeRegistry(resource *Resource, rootViewlet *Viewlet) *xre
 
 func (s *Service) adjustTransferOutputType(parameter *state.Parameter, types *xreflect.Types, resource *Resource) error {
 
-	if output := parameter.Output; output != nil && output.Name == codec2.KeyTransfer {
+	if output := parameter.Output; output != nil && output.Name == codec.KeyTransfer {
 		destTypeName := output.Args[0]
 		dest, err := types.Lookup(destTypeName)
 		if err != nil {
@@ -246,7 +246,7 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 			outputType = reflect.TypeOf(&jsontab.Result{})
 		}
 		switch tag.Codec {
-		case codec2.KeyFilters:
+		case codec.KeyFilters:
 			outputType = reflect.TypeOf(predicate.NamedFilters{})
 		}
 
@@ -275,11 +275,11 @@ func (s *Service) ensureOutputParameters(resource *Resource, outputState inferen
 	outputParameters := outputState.ViewParameters()
 	if len(outputParameters) == 0 {
 		if field := resource.Rule.Route.Output.Field; field != "" {
-			outputParameters = append(outputParameters, component.DataOutputParameter(field))
-			outputParameters = append(outputParameters, component.DefaultStatusOutputParameter())
+			outputParameters = append(outputParameters, contract.DataOutputParameter(field))
+			outputParameters = append(outputParameters, contract.DefaultStatusOutputParameter())
 
 		} else {
-			outputParameters = append(outputParameters, component.DefaultDataOutputParameter())
+			outputParameters = append(outputParameters, contract.DefaultDataOutputParameter())
 		}
 	}
 	return outputParameters

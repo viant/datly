@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -32,7 +32,7 @@ type (
 		View             *view.View
 		Metrics          reader.Metrics
 		State            *structology.State
-		Dispatcher       component.Dispatcher
+		Dispatcher       contract.Dispatcher
 	}
 
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
@@ -159,7 +159,7 @@ func WithOutputParameters(parameters state.Parameters) Option {
 }
 
 // WithDispatcher returns options to set dispatcher
-func WithDispatcher(dispatcher component.Dispatcher) Option {
+func WithDispatcher(dispatcher contract.Dispatcher) Option {
 	return func(o *Options) {
 		o.Dispatcher = dispatcher
 	}

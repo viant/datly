@@ -10,8 +10,10 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/repository/async"
-	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/repository/content"
+	"github.com/viant/datly/repository/contract"
+	dpath "github.com/viant/datly/repository/path"
+	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -30,7 +32,7 @@ type (
 		orderNamespaces  []string
 		Root             string
 		router.Route
-		*component.Output
+		*contract.Output
 		Async        *async.Config              `json:",omitempty"`
 		Cache        *view.Cache                `json:",omitempty"`
 		CSV          *content.CSVConfig         `json:",omitempty"`
@@ -100,10 +102,10 @@ func (r *Rule) applyGeneratorOutputSetting() {
 	outputConfig := root.OutputSettings
 	setter.SetStringIfEmpty(&r.Route.Output.Field, outputConfig.Field)
 	if r.Route.Output.Style == "" && r.Route.Output.Field != "" {
-		r.Route.Output.Style = component.ComprehensiveStyle
+		r.Route.Output.Style = contract.ComprehensiveStyle
 	}
 	if r.Route.Output.Style == "" {
-		r.Route.Output.Style = component.Style(outputConfig.Style)
+		r.Route.Output.Style = contract.Style(outputConfig.Style)
 	}
 	if r.Route.Output.Cardinality == "" {
 		r.Route.Output.Cardinality = outputConfig.ViewCardinality()
@@ -136,7 +138,7 @@ func (r *Rule) IsMany() bool {
 }
 
 func (r *Rule) IsBasic() bool {
-	return r.Route.Output.Style != component.ComprehensiveStyle && r.Route.Output.Field == ""
+	return r.Route.Output.Style != contract.ComprehensiveStyle && r.Route.Output.Field == ""
 }
 
 func (r *Rule) ExtractSettings(dSQL *string) error {
@@ -266,7 +268,7 @@ func (r *Rule) applyDefaults() {
 	setter.SetBoolIfFalse(&r.EnableAudit, true)
 	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.HandlerType != "")
 	if r.Route.Cors == nil {
-		r.Route.Cors = &router.Cors{
+		r.Route.Cors = &dpath.Cors{
 			AllowCredentials: setter.BoolPtr(true),
 			AllowHeaders:     setter.StringsPtr("*"),
 			AllowMethods:     setter.StringsPtr("*"),
@@ -313,7 +315,7 @@ func (r *Rule) applyRootViewRouteShorthands() {
 	root := r.RootViewlet()
 	setter.SetStringIfEmpty(&r.Route.Output.Field, root.Field)
 	if r.Route.Output.Style == "" {
-		r.Route.Output.Style = component.Style(root.Style)
+		r.Route.Output.Style = contract.Style(root.Style)
 	}
 	if r.Route.Output.Cardinality == "" {
 		r.Route.Output.Cardinality = root.ViewCardinality()
@@ -323,7 +325,7 @@ func (r *Rule) applyRootViewRouteShorthands() {
 
 func (r *Rule) applyShortHands() {
 	if r.ResponseBody != nil {
-		r.Route.Output.ResponseBody = &component.BodySelector{}
+		r.Route.Output.ResponseBody = &contract.BodySelector{}
 		r.Route.Output.ResponseBody.StateValue = r.ResponseBody.From
 	}
 	if r.HandlerType != "" {
@@ -333,7 +335,7 @@ func (r *Rule) applyShortHands() {
 		}
 	}
 	if r.Route.Output.Field != "" {
-		r.Route.Output.Style = component.ComprehensiveStyle
+		r.Route.Output.Style = contract.ComprehensiveStyle
 	}
 	if r.Route.TabularJSON != nil && r.Route.Output.DataFormat == "" {
 		r.Route.Output.DataFormat = content.JSONDataFormatTabular
@@ -341,6 +343,10 @@ func (r *Rule) applyShortHands() {
 	if r.Route.XML != nil && r.Route.Output.DataFormat == "" {
 		r.Route.Output.DataFormat = content.XMLFormat
 	}
+}
+
+func (r *Rule) IsReader() bool {
+	return r.Service == "" || r.Service == service.TypeReader
 }
 
 func NewRule() *Rule {

@@ -7,12 +7,12 @@ import (
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/logger"
-	"github.com/viant/datly/repository/extension/codec"
 	expand2 "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/column"
+	"github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric/provider"
@@ -148,6 +148,13 @@ func (v *View) OutputType() reflect.Type {
 		return v.Schema.SliceType()
 	}
 	return v.Schema.Type()
+}
+
+func (v *View) Warmup() *Warmup {
+	if v.Cache == nil {
+		return nil
+	}
+	return v.Cache.Warmup
 }
 
 func (v *View) ViewName() string {
@@ -737,7 +744,7 @@ func (v *View) detectColumns(ctx context.Context, resource *Resource) error {
 	if err != nil {
 		return fmt.Errorf("failed to build parameterized query: %v due to %w", SQL, err)
 	}
-	db, err := v.Db()
+	db, err := v.Connector.DB()
 	if err != nil {
 		return err
 	}
