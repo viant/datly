@@ -3,6 +3,9 @@ package path
 import (
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
+	"github.com/viant/datly/utils/httputils"
+	"net/http"
+	"strings"
 	"time"
 )
 
@@ -17,11 +20,12 @@ type (
 	}
 
 	Settings struct {
-		APIKey      *APIKey      `json:",omitempty"  yaml:"APIKey,omitempty"`
-		Cors        *Cors        `json:",omitempty"  yaml:"Cors,omitempty"`
-		Compression *Compression `json:",omitempty"  yaml:"Compression,omitempty"`
-		Redirect    *Redirect    `json:",omitempty"  yaml:"PreSign,omitempty"`
-		Logger      *Logger      `json:",omitempty"  yaml:"Logger,omitempty"`
+		APIKey       *APIKey      `json:",omitempty"  yaml:"APIKey,omitempty"`
+		Cors         *Cors        `json:",omitempty"  yaml:"Cors,omitempty"`
+		Compression  *Compression `json:",omitempty"  yaml:"Compression,omitempty"`
+		Redirect     *Redirect    `json:",omitempty"  yaml:"PreSign,omitempty"`
+		Logger       *Logger      `json:",omitempty"  yaml:"Logger,omitempty"`
+		RevealMetric *bool
 	}
 
 	Path struct {
@@ -64,10 +68,47 @@ func (r *Settings) inherit(from *Settings) {
 		r.Redirect = from.Redirect
 		return
 	}
+	if r.RevealMetric == nil {
+		r.RevealMetric = from.RevealMetric
+		return
+	}
+}
+
+func (p *Path) IsMetricsEnabled(req *http.Request) bool {
+	return p.IsMetricInfo(req) || p.IsMetricDebug(req)
+}
+
+func (p *Path) IsMetricInfo(req *http.Request) bool {
+	if !p.IsRevealMetric() {
+		return false
+	}
+	value := req.Header.Get(httputils.DatlyRequestMetricsHeader)
+	if value == "" {
+		value = req.Header.Get(strings.ToLower(httputils.DatlyRequestMetricsHeader))
+	}
+	return strings.ToLower(value) == httputils.DatlyInfoHeaderValue
+}
+
+func (p *Path) IsMetricDebug(req *http.Request) bool {
+	if !p.IsRevealMetric() {
+		return false
+	}
+	value := req.Header.Get(httputils.DatlyRequestMetricsHeader)
+	if value == "" {
+		value = req.Header.Get(strings.ToLower(httputils.DatlyRequestMetricsHeader))
+	}
+	return strings.ToLower(value) == httputils.DatlyDebugHeaderValue
 }
 
 func (p *Path) CorsEnabled() bool {
 	return p.Cors != nil
+}
+
+func (p *Path) IsRevealMetric() bool {
+	if p.RevealMetric == nil {
+		return false
+	}
+	return *p.RevealMetric
 }
 
 func (p *Container) setModTime(ts time.Time) {

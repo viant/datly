@@ -99,7 +99,6 @@ func (s *Service) initProviders(ctx context.Context) error {
 	var providers []*Provider
 	for i := 0; i < pathsLen; i++ {
 		route := paths.Items[i]
-
 		sourceURL := route.SourceURL
 		if url.IsRelative(sourceURL) {
 			sourceURL = url.Join(s.paths.URL, sourceURL)
@@ -128,13 +127,12 @@ func (s *Service) loadComponent(ctx context.Context, opts []Option, sourceURL st
 	if err != nil {
 		return nil, err
 	}
-	if err := components.Init(ctx); err != nil {
+	if err = components.Init(ctx); err != nil {
 		return nil, err
 	}
 	for _, component := range components.Components {
-		component.dispatcher = s.registry.dispatcher
+		s.inheritFromPath(component, aPath)
 	}
-
 	for _, candidate := range components.Components {
 		if candidate.Path.Equals(&aPath.Path) {
 			if err = s.updateCacheConnectorRef(components.Resource, candidate.View); err != nil {
@@ -144,6 +142,13 @@ func (s *Service) loadComponent(ctx context.Context, opts []Option, sourceURL st
 		}
 	}
 	return nil, nil
+}
+
+func (s *Service) inheritFromPath(component *Component, aPath *path.Path) {
+	component.dispatcher = s.registry.dispatcher
+	if component.Output.RevealMetric == nil {
+		component.Output.RevealMetric = aPath.RevealMetric
+	}
 }
 
 func New(ctx context.Context, componentsURL string, opts ...Option) (*Service, error) {

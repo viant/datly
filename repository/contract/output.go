@@ -31,14 +31,13 @@ type Output struct {
 	Exclude          []string
 	NormalizeExclude *bool
 
-	RevealMetric *bool
-	DebugKind    view.MetaKind
+	DebugKind view.MetaKind
 
 	DataFormat string `json:",omitempty"` //default data format
 
 	ResponseBody *BodySelector
-
-	Type state.Type
+	RevealMetric *bool
+	Type         state.Type
 
 	_caser    *format.Case
 	_excluded map[string]bool

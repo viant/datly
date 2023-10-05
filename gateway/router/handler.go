@@ -15,10 +15,10 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service"
-	expand2 "github.com/viant/datly/service/executor/expand"
+	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/processor"
-	reader "github.com/viant/datly/service/reader"
-	session "github.com/viant/datly/service/session"
+	"github.com/viant/datly/service/reader"
+	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -193,7 +193,7 @@ func (r *Handler) responseStatusError(message string, anObject interface{}) resp
 		Message: message,
 	}
 
-	asEmbeddable, ok := anObject.(expand2.EmbeddableMap)
+	asEmbeddable, ok := anObject.(expand.EmbeddableMap)
 	if !ok {
 		responseStatus.Errors = anObject
 	} else {
@@ -280,9 +280,9 @@ func (r *Handler) compressIfNeeded(marshalled []byte, option ...RequestDataReade
 	return AsBytesReader(buffer, httputils.EncodingGzip, payloadSize), nil
 }
 
-func (r *Handler) logAudit(request *http.Request, response http.ResponseWriter, route *Route) {
+func (r *Handler) logAudit(request *http.Request, response http.ResponseWriter, aPath *path.Path) {
 	headers := request.Header.Clone()
-	Sanitize(request, route, headers, response)
+	Sanitize(request, aPath, headers, response)
 
 	asBytes, _ := goJson.Marshal(path.Audit{
 		URL:     request.RequestURI,
@@ -380,4 +380,10 @@ func appendCacheWarmupViews(aView *view.View, result *[]*view.View) {
 	for i := range aView.With {
 		appendCacheWarmupViews(&aView.With[i].Of.View, result)
 	}
+}
+
+func normalizeStorageURL(part string) string {
+	part = strings.ReplaceAll(part, "-", "")
+	part = strings.ReplaceAll(part, "_", "")
+	return part
 }

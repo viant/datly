@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/view/discover"
 	extension2 "github.com/viant/datly/view/extension"
 	"github.com/viant/xdatly/codec"
-	"strings"
 	"time"
 )
 
@@ -45,12 +44,6 @@ type (
 		MinExecutionMs *int
 	}
 )
-
-func normalizeStorageURL(part string) string {
-	part = strings.ReplaceAll(part, "-", "")
-	part = strings.ReplaceAll(part, "_", "")
-	return part
-}
 
 func (r *Resource) Init(ctx context.Context) error {
 	if r._initialised {
