@@ -43,6 +43,20 @@ func main() {
 		}
 	}()
 
+	//os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/awitas/.secret/viant-e2e.json")
+	//os.Chdir("/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting")
+	//
+	//os.Args = []string{"",
+	//	"dsql",
+	//	"-s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/forecasting/total.sql",
+	//	"-u=forecasting",
+	//	"-p=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting",
+	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
+	//	"-c=datly_jobs|mysql|root:dev@tcp(127.0.0.1:3306)/datly_jobs?parseTime=true",
+	//	"-S=dsql/forecasting/shared/substitutes.yaml",
+	//	"-r=repo/dev",
+	//}
+
 	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)

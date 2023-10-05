@@ -9,7 +9,11 @@ func (s Substitutes) Replace(text string) string {
 		return text
 	}
 	for k, v := range s {
-		key := "$" + k
+		key := "${" + k + "}"
+		if count := strings.Count(text, key); count > 0 {
+			text = strings.Replace(text, key, v, count)
+		}
+		key = "$" + k
 		if count := strings.Count(text, key); count > 0 {
 			text = strings.Replace(text, key, v, count)
 		}
@@ -22,7 +26,7 @@ func (s Substitutes) ReverseReplace(text string) string {
 		return text
 	}
 	for k, v := range s {
-		key := "$" + k
+		key := "${" + k + "}"
 		if count := strings.Count(text, v); count > 0 {
 			text = strings.Replace(text, v, key, count)
 		}
