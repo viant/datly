@@ -34,7 +34,7 @@ func (m *entry) Namespaces() []string {
 }
 
 func (s *Service) init(ctx context.Context) error {
-	if err := s.loadSignatures(ctx, s.URL); err != nil {
+	if err := s.loadSignatures(ctx, s.URL, true); err != nil {
 		return err
 	}
 
@@ -80,7 +80,7 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	return aMatch.header.Signature(contract, typeRegistry)
 }
 
-func (s *Service) loadSignatures(ctx context.Context, URL string) error {
+func (s *Service) loadSignatures(ctx context.Context, URL string, isRoot bool) error {
 	objects, err := fs.List(ctx, URL)
 	if err != nil {
 		return err
@@ -89,11 +89,14 @@ func (s *Service) loadSignatures(ctx context.Context, URL string) error {
 		if url.Equals(object.URL(), URL) {
 			continue
 		}
+		if isRoot && object.Name() == "paths.yaml" {
+			continue
+		}
 		if object.IsDir() {
 			if object.Name() == ".meta" {
 				continue
 			}
-			if err := s.loadSignatures(ctx, object.URL()); err != nil {
+			if err := s.loadSignatures(ctx, object.URL(), isRoot); err != nil {
 				return err
 			}
 		}

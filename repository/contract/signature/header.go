@@ -17,7 +17,7 @@ type (
 	Header struct {
 		URL       string
 		Resource  *Resource       `yaml:"Resource"`
-		Contracts []*ContractPath `yaml:"Items"`
+		Contracts []*ContractPath `yaml:"Routes"`
 	}
 
 	Type struct {
