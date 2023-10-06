@@ -20,7 +20,7 @@ require (
 	github.com/viant/afs v1.24.2
 	github.com/viant/afsc v1.9.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
-	github.com/viant/bigquery v0.3.0
+	github.com/viant/bigquery v0.3.2-0.20231006194728-bc2cef8e6029
 	github.com/viant/cloudless v1.9.2-0.20231004135620-2f963048061d
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
@@ -30,7 +30,7 @@ require (
 	github.com/viant/parsly v0.3.0
 	github.com/viant/pgo v0.10.4-0.20230801151735-5700d39f8114
 	github.com/viant/scy v0.6.0
-	github.com/viant/sqlx v0.9.1-0.20230929213554-060bd365887b
+	github.com/viant/sqlx v0.9.1-0.20231006193533-9d25a148f41f
 	github.com/viant/structql v0.4.1
 	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
