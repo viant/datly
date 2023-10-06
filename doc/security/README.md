@@ -36,7 +36,7 @@ Datly uses Oauth Identity token with JWT Claims verification with one of the fol
 - **config.JWTValidator** allows you to specify RSA, HMAC or Public OAth Certificate base authentication. 
 - **config.Cognito** allows you to specify Cognito integration settings.
 
-The following dsql examples, defines $Jwt header based parameter with JWTClaim codec 
+The following dql examples, defines $Jwt header based parameter with JWTClaim codec 
 and Authentication data view parameters to check if UserID from JWT Claims exists in USERS table.
 
 ```sql

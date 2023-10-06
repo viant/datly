@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-//go:embed tmpl/dsql.sqlx
-var dsqlTemplate string
+//go:embed tmpl/dql.sqlx
+var dqlTemplate string
 
 //go:embed tmpl/handler/index.gox
 var goIndexTmpl string
@@ -26,7 +26,7 @@ func (t *Template) generateDSQL(options ast.Options) (string, error) {
 	if err != nil {
 		return "", nil
 	}
-	code := strings.Replace(dsqlTemplate, "$RouteOption", string(configContent), 1)
+	code := strings.Replace(dqlTemplate, "$RouteOption", string(configContent), 1)
 	var imports, declaration, businessLogic string
 	if options.Lang == ast.LangVelty {
 		imports = t.Imports.TypeImports()

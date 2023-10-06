@@ -56,7 +56,7 @@ func New() *Executor {
 	}
 }
 
-// Execute executes view dsql
+// Execute executes view dql
 func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Option) error {
 	sessionState := vsession.New(aView)
 	session, err := NewSession(sessionState, aView)

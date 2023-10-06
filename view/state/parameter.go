@@ -225,7 +225,7 @@ func (p *Parameter) IsRequired() bool {
 }
 
 func (p *Parameter) initSchema(resource Resource) error {
-	if p.In.Kind == KindGroup {
+	if p.In.Kind == KindObject {
 		if err := p.initGroupSchema(resource); err != nil {
 			return err
 		}

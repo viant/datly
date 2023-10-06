@@ -96,7 +96,7 @@ Finally, it's integrated with OAuth, which provides a convenient way for both co
 See more [Datly secutity](doc/security/README.md)
 
 
-Datly use [dsql](doc/README.md#datly-sql--dsql-) to auto generate struct or internal datly rule
+Datly use [dql](doc/README.md#datly-sql--dql-) to auto generate struct or internal datly rule
 
 
 **dept.sql**
@@ -110,15 +110,15 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_I
 JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 ```
 
-To test dsql vi reset endpoint run the following command
+To test dql vi reset endpoint run the following command
 ```bash
-datly dsql -c='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true' -s=dept.sql -P=8080
+datly translate -c='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true' -s=dept.sql -P=8080
 open http://127.0.0.1:8080/v1/api/dev/dept    
 ```
 
 To persist rule and then run datly run the following
 ```bash
-datly dsql -c='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -s=dept.sql -r=reop/dev
+datly translate -c='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -s=dept.sql -r=reop/dev
 datly run -c=proj/Datly/config.json
 ```
 

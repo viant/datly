@@ -8,18 +8,18 @@ import (
 	"github.com/viant/structology"
 )
 
-type Group struct {
+type Object struct {
 	ParameterLookup
 
 	InputParameters  state.NamedParameters
 	OutputParameters state.NamedParameters
 }
 
-func (p *Group) Names() []string {
+func (p *Object) Names() []string {
 	return nil
 }
 
-func (p *Group) Value(ctx context.Context, names string) (interface{}, bool, error) {
+func (p *Object) Value(ctx context.Context, names string) (interface{}, bool, error) {
 	parameter := p.matchByLocation(names)
 	if parameter == nil {
 		return nil, false, fmt.Errorf("failed to match parameter by location: %v", names)
@@ -45,26 +45,26 @@ func (p *Group) Value(ctx context.Context, names string) (interface{}, bool, err
 	return ret, isAnyItemSet, nil
 }
 
-//func (p *Group) matchByLocation(names string) *state.Parameter {
+//func (p *Object) matchByLocation(names string) *state.Parameter {
 //	var parameter *state.Parameter
 //	for _, candidate := range p.Parameters {
-//		if candidate.In.Kind == state.KindGroup && candidate.In.Name == names {
+//		if candidate.In.Kind == state.KindObject && candidate.In.Name == names {
 //			parameter = candidate
 //		}
 //	}
 //	return parameter
 //}
 
-func (p *Group) matchByLocation(names string) *state.Parameter {
-	matched := p.OutputParameters.LookupByLocation(state.KindGroup, names)
+func (p *Object) matchByLocation(names string) *state.Parameter {
+	matched := p.OutputParameters.LookupByLocation(state.KindObject, names)
 	if matched == nil {
-		matched = p.InputParameters.LookupByLocation(state.KindGroup, names)
+		matched = p.InputParameters.LookupByLocation(state.KindObject, names)
 	}
 	return matched
 }
 
-// NewGroup returns parameter locator
-func NewGroup(opts ...Option) (kind.Locator, error) {
+// NewObject returns parameter locator
+func NewObject(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
 	if options.ParameterLookup == nil {
 		return nil, fmt.Errorf("parameterLookup was empty")
@@ -72,7 +72,7 @@ func NewGroup(opts ...Option) (kind.Locator, error) {
 	if options.InputParameters == nil {
 		return nil, fmt.Errorf("parameters was empty")
 	}
-	return &Group{
+	return &Object{
 		ParameterLookup:  options.ParameterLookup,
 		InputParameters:  options.InputParameters,
 		OutputParameters: options.OutputParameters,

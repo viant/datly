@@ -32,14 +32,14 @@ type (
 		contract.Path `yaml:",inline"`
 		Settings      `yaml:",inline"`
 		Internal      bool             `json:"Internal,omitempty" yaml:"Internal,omitempty" `
-		Kind          string           `json:"Kind,omitempty" yaml:"Kind,omitempty" `
+		ContentURL    string           `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
 		SourceURL     string           `yaml:"-" json:"-"`
 		Version       *version.Control `yaml:"-" json:"-"`
 	}
 
 	Item struct {
 		SourceURL string  `yaml:"SourceURL"`
-		Paths     []*Path `yaml:"Routes"`
+		Paths     []*Path `yaml:"Routes" json:"Routes"`
 		Settings  `yaml:",inline"`
 		Version   version.Control `yaml:"Version,omitempty"`
 	}

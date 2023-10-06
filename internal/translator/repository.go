@@ -30,6 +30,7 @@ type (
 		Messages        msg.Messages
 		Files           asset.Files
 		Substitutes     view.Substitutes
+		PersistAssets   bool
 	}
 )
 
@@ -43,6 +44,10 @@ func (r *Repository) RuleName(rule *options.Rule) string {
 
 func (r *Repository) RuleBaseURL(rule *options.Rule) string {
 	return url.Join(r.Config.Config.RouteURL, rule.ModulePrefix)
+}
+
+func (r *Repository) ContentBaseURL(rule *options.Rule) string {
+	return url.Join(r.Config.Config.ContentURL, rule.ModulePrefix)
 }
 
 func (r *Repository) LookupDb(name string) (*sql.DB, error) {
@@ -150,7 +155,7 @@ func (r *Repository) ensureDependencies(ctx context.Context) error {
 
 // UploadPartialRules uploads rule into dest, this is temporary to see signature for component parameters
 func (r *Repository) UploadPartialRules(ctx context.Context) error {
-	if len(r.Resource) == 0 {
+	if !r.PersistAssets {
 		return nil
 	}
 	var yamlFiles asset.Files
@@ -163,7 +168,7 @@ func (r *Repository) UploadPartialRules(ctx context.Context) error {
 }
 
 func (r *Repository) Upload(ctx context.Context) error {
-	if len(r.Resource) == 0 {
+	if !r.PersistAssets {
 		return nil
 	}
 	return r.Files.Upload(ctx, r.fs)

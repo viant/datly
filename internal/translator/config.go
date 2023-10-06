@@ -68,6 +68,10 @@ func (c *Config) updateURIs() error {
 		cfg.RouteURL = url.Join(baseURL, "routes")
 		_ = fs.Create(context.Background(), cfg.RouteURL, file.DefaultDirOsMode, true)
 	}
+	if cfg.ContentURL == "" {
+		cfg.ContentURL = url.Join(baseURL, "content")
+		_ = fs.Create(context.Background(), cfg.RouteURL, file.DefaultDirOsMode, true)
+	}
 	if cfg.PluginsURL == "" {
 		cfg.PluginsURL = url.Join(baseURL, "plugins")
 		_ = fs.Create(context.Background(), cfg.RouteURL, file.DefaultDirOsMode, true)
@@ -149,6 +153,9 @@ func (c *Config) NormalizeURL(repositoryURL string) {
 
 	if url.IsRelative(cfg.RouteURL) {
 		cfg.RouteURL = url.Join(baseURL, cfg.RouteURL)
+	}
+	if url.IsRelative(cfg.ContentURL) {
+		cfg.ContentURL = url.Join(baseURL, cfg.ContentURL)
 	}
 	if url.IsRelative(cfg.PluginsURL) {
 		cfg.RouteURL = url.Join(baseURL, cfg.PluginsURL)

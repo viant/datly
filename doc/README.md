@@ -4,7 +4,7 @@ Datly has been design as modern flexible ORM for rapid development.
 Datly can operate in  **managed** , **autonomous** and **custom mode**.
 In managed mode datly is used as regular GoLang ORM where you operate on golang struct and datly reader or executor service programmatically.
 
-In autonomous mode datly uses a **dsql** based rules with single gateway entry point handling all incoming request matching defined rules.
+In autonomous mode datly uses a **dql** based rules with single gateway entry point handling all incoming request matching defined rules.
 
 In custom mode datly also operates as single gateway entry point handling all incoming request, allowing
 method/receiver go struct behaviour customization associated with the rule, this is achieved by custom data type registry 
@@ -41,7 +41,7 @@ Executor service is used to validate, transform and modify data in database prog
 Post (insert), Put(update), Patch(insert/update) operation are supported.
 
 Executor service use [velty](https://github.com/viant/velty) temple engine to operates on GoLang struct.
-You can use ```datly gen``` command to generate initial dsql with corresponding go struct(s) 
+You can use ```datly gen``` command to generate initial dql with corresponding go struct(s) 
 for single or multi relation data mutation.  Datly uses transaction to modify data in database.
 
 For patch/update operation datly support input state distinction, with Has marker,
@@ -53,7 +53,7 @@ This approach simplify input validation and tracking actual changes supplied by 
 
 ## Reader
 
-##### Reader dsql structure
+##### Reader dql structure
 
 ```sql
 [RouteConfig]
@@ -98,7 +98,7 @@ Datly uses specific dialect of SQL to define rule for view(s) and relation betwe
 DSQL is transformed into datly internal view representation with the following command:
 
 ```go
-datly dsql -c='myDB|driver|dsn|secretURL|secretKey' -s=myRule.sql -d=autogen
+datly translate -c='myDB|driver|dsn|secretURL|secretKey' -s=myRule.sql -d=autogen
 ```
 
 where -d would persist rule with datly config to specific myProjectLocation
@@ -398,7 +398,7 @@ Post (insert), Put(update), Patch(insert/update) are supported.
 ##### Executor DSQL
 
 Executor DSQL uses the following structure
-```dsql
+```dql
 /* ROUTE OPTION */
 import ...
 #set( $_ = ...) //input paramter initialization
@@ -422,14 +422,14 @@ Where
 ```    
 
 
-To generate initial executor DSQL, use ```datly gen``` with reader dsql defining
+To generate initial executor DQL, use ```datly gen``` with reader dql defining
 one or multi view with corresponding relations with additional input hints
 
 All DML operation are executed in the one transaction, any errors trigger either 
 by database or programmatically  ($logger.Fatalf) cause transaction rollback.
 
 
-Executor dsql rule can be generated from regular reader dsql
+Executor dql rule can be generated from regular reader dql
 
 - **simple object ({})** 
 ```sql 
@@ -473,8 +473,8 @@ datly gen -o=patch|post|put|delete  -s=myRule.sql -c='myDB|driver|dsn[|secretURL
 ```
 
 As a result the following file would be generated:
-- dsql/<myRule>.sql  - initial logic for patch|post|put|delete operations
-- dsql/<myrule>Post.json - example of JSON for testing a service
+- dql/<myRule>.sql  - initial logic for patch|post|put|delete operations
+- dql/<myrule>Post.json - example of JSON for testing a service
 - pkg/<myrule>.go   - initial go struct(s)
 
 
@@ -490,9 +490,9 @@ Datly generate basic tempalte with the following parameters expressions
 - #set($_ = $Entities<[]*Entity>(body/data))  for namespaced array ({"data":[]})
 
 
-After adjusting logic in executor dsql, 
+After adjusting logic in executor dql, 
 ```bash
-datly dsql -c='myDB|driver|dsn' -s=exeuctor_dsql_rule.sql  -p=$myProjectLocation
+datly translate -c='myDB|driver|dsn' -s=exeuctor_dql_rule.sql  -p=$myProjectLocation
 ```
 
 For "complex" validation logic it's recommend to use datly in custom mode where all custom logic is implemented/unit tested 
@@ -541,7 +541,7 @@ TODO add all supported and update/add example
 ###### Validation
 
 Any database constraint validation can be customized with [sqlx validator service](https://github.com/viant/sqlx#validator-service)
-```dsql
+```dql
 #set($validation = $sqlx.Validate($Entity))
 #if($validation.Failed)
   $logger.Fatal($validation)
@@ -552,7 +552,7 @@ Any database constraint validation can be customized with [sqlx validator servic
 ###### Insert operation:
 
 with service
-```dsql
+```dql
 $sequencer.Allocate("MY_TABLE", $Entity, "Id")
 #if($Unsafe.Entity)
   $sql.Insert($Entity, "MY_TABLE");
@@ -560,7 +560,7 @@ $sequencer.Allocate("MY_TABLE", $Entity, "Id")
 ```
 
 with DML
-```dsql
+```dql
 $sequencer.Allocate("MyTable", $Entity, "Id")
 INSERT INTO MY_TABLE(ID, NAME) VALUES($Entity.Id, $Entity.Name)
 ```
@@ -568,7 +568,7 @@ INSERT INTO MY_TABLE(ID, NAME) VALUES($Entity.Id, $Entity.Name)
 
 ###### Update operation:
 
-```dsql
+```dql
 $sequencer.Allocate("MyTable", $Entity, "Id")
 #if($Unsafe.Entity)
   $sql.Update($Entity, "MyTable");
@@ -577,7 +577,7 @@ $sequencer.Allocate("MyTable", $Entity, "Id")
 
 
 with DML
-```dsql
+```dql
 UPDATE MY_TABLE SET 
     NAME = $Entity.Name
 #if($Entity.Has.Description)
@@ -600,7 +600,7 @@ import (
 ```
 
 
-###### Blending go call within dsql
+###### Blending go call within dql
 
 ```sql
 
@@ -694,7 +694,7 @@ otherwise the $criteria.In function returns false, to ensure correct SQL generat
 
 ###### Indexing data
 
-Any go collection can be index with IndexBy dsql method 
+Any go collection can be index with IndexBy dql method 
 
 ```sql
 
@@ -808,7 +808,7 @@ where each asset URL is rewritten with CLOUD_STORAGE_DATLY_CONFIG_URL
 The following layout organizes datly specific resources
 ```bash
   ProjectRoot
-      | -  dsql
+      | -  dql
             | - business Unit 1 (appName)
                  | - entity_X_get.sql
                  | - entity_X_put.sql 

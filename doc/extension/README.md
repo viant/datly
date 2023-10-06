@@ -6,7 +6,7 @@ In some scenario you may consider blending datly with customized go code for bot
 This is achieved by registering custom data type in xdatly registry, once that done you can use/invoke any registered type method.
 
 Datly in this mode requires custom datly binary, which supplemental changes managed by datly go plugin.
-In this scenario once initial datly binary is deployed, any logic changes in dsql or struct behaviour require only rule and plugin folder deployment.
+In this scenario once initial datly binary is deployed, any logic changes in dql or struct behaviour require only rule and plugin folder deployment.
 Datly use go plugin architecture, thus if any go.mod dependency changes it requires custom datly binary redeployment.
 
 #### Custom datly project initialization
@@ -22,7 +22,7 @@ The following project structure get generated
  Project Root
   | .build
   |    - datly
-  | - dsql
+  | - dql
   | 
   | - pkg 
   |    |
@@ -37,7 +37,7 @@ where
  - 'pkg/depenency/init.go' contains default imports with customized go struct xdatly registration
 
 
-#### Generating dsql for patch,put or post operation
+#### Generating dql for patch,put or post operation
 
 To add prepare/generate executor (put/patch/post) rule run the following command
 ```bash
@@ -47,11 +47,11 @@ To add prepare/generate executor (put/patch/post) rule run the following command
  -m=$projectPath
 ```
 
-would add rule to dsql folder and go struct to pkg folder
+would add rule to dql folder and go struct to pkg folder
 
 
 
-#### Convert dsql into datly rule project
+#### Convert dql into datly rule project
 
 
 #### Building datly binary

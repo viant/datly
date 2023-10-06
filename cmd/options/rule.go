@@ -2,6 +2,7 @@ package options
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
@@ -32,7 +33,7 @@ func (r *Rule) GoModuleLocation() string {
 }
 
 func (r *Rule) BaseRuleURL() string {
-	return url.Path(url.Join(r.Project, "dsql"))
+	return url.Path(url.Join(r.Project, "dql"))
 }
 
 func (r *Rule) GoCodeLocation() string {
@@ -48,7 +49,7 @@ func (r *Rule) Package() string {
 		return r.Packages[r.Index]
 	}
 	pkg := extractPackageFromSource(r.SourceURL())
-	if pkg != "dsql" {
+	if pkg != "dql" {
 		return pkg
 	}
 	return ""
@@ -102,7 +103,11 @@ func (r *Rule) Init() error {
 
 	if r.Index == 0 && len(r.Source) == 1 {
 		src := r.Source[r.Index]
-		if object, _ := fs.Object(context.Background(), src); object.IsDir() {
+		object, err := fs.Object(context.Background(), src)
+		if err != nil {
+			return fmt.Errorf("failed to locate source: %s, %w", src, err)
+		}
+		if object.IsDir() {
 			r.expandFolderSource(src)
 		}
 	}

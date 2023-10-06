@@ -21,7 +21,7 @@ const (
 	datlyFolder = "datly"
 	extFolder   = ".build/ext"
 
-	dsqlFolder = "dsql"
+	dqlFolder = "dql"
 
 	datlyHeadURL = "https:github.com/viant/datly/archive/refs/heads/master.zip/zip://localhost/"
 	datlyTagURL  = "https:github.com/viant/datly/archive/refs/tags/%v.zip/zip://localhost/"

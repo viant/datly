@@ -11,7 +11,7 @@ import (
 type Generate struct {
 	Repository
 	Rule
-	Dest      string `short:"d" long:"dest" description:"dsql location" default:"dsql"`
+	Dest      string `short:"d" long:"dest" description:"dql file location" default:"dql"`
 	Operation string `short:"o" long:"op" description:"operation" choice:"post" choice:"patch" choice:"put"`
 	Kind      string `short:"k" long:"kind" description:"execution kind" choice:"dml" choice:"service"`
 	Lang      string `short:"l" long:"lang" description:"lang" choice:"velty" choice:"go"`
@@ -42,7 +42,7 @@ func (g *Generate) Init() error {
 		return fmt.Errorf("operation was empty")
 	}
 	if g.Dest == "" {
-		g.Dest = "dsql"
+		g.Dest = "dql"
 	}
 	if g.Lang == "" {
 		g.Lang = "velty"

@@ -29,11 +29,11 @@
 * Added dynamic plugin support (experimental)
 
 ## Dec 12 2022 v0.4.1.0
-* Added update dsql generator
+* Added update dql generator
 * Minor fixes
 
 ## Dec 1 2022 v0.4.0.0
-* Added insert dsql generator
+* Added insert dql generator
 * Added transformer service
 * Added structql integration
 * Minor fixes

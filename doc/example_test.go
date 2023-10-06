@@ -82,7 +82,7 @@ func Example_ReadRuleDebugging() {
 	err := service.LoadRoute(ctx, ruleURL,
 		view.NewPackagedType("domain", "Product", reflect.TypeOf(Product{})),
 	)
-	//note that product has to have OnFetch(ctx context.Group) error with breakpoint for go customization
+	//note that product has to have OnFetch(ctx context.Object) error with breakpoint for go customization
 	if err == nil {
 		err = service.Init(ctx)
 	}

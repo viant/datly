@@ -1,5 +1,5 @@
 {
   "Name": "$tagId",
-  "URL": "$path/dsql_persist.sql",
+  "URL": "$path/dql_persist.dql",
   "Args": ""
 }

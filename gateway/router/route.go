@@ -36,6 +36,8 @@ type (
 	Route struct {
 		APIKey      *path.APIKey      `json:",omitempty"`
 		Cors        *path.Cors        `json:",omitempty"`
+		Internal    bool              `json:"Internal,omitempty" yaml:"Internal,omitempty" `
+		ContentURL  string            `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
 		EnableAudit bool              `json:",omitempty"`
 		EnableDebug *bool             `json:",omitempty"`
 		Compression *path.Compression `json:",omitempty"`

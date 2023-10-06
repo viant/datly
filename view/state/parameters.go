@@ -73,7 +73,7 @@ func (p *Parameter) matchByLocation(kind Kind, location string) *Parameter {
 				return parameter
 			}
 		}
-	case KindGroup:
+	case KindObject:
 		for _, parameter := range p.Group {
 			if parameter.In.Name == location {
 				return parameter
@@ -95,7 +95,7 @@ func (p *Parameter) matchByKind(kind Kind, result *Parameters) {
 	switch p.In.Kind {
 	case kind:
 		*result = append(*result, p)
-	case KindGroup:
+	case KindObject:
 		for _, parameter := range p.Group {
 			if parameter.In.Kind == kind {
 				*result = append(*result, parameter)

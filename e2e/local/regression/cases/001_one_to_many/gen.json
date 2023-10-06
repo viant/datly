@@ -1,5 +1,5 @@
 {
   "Name": "$tagId",
-  "URL": "$path/vendor_list.sql",
+  "URL": "$path/vendor_list.dql",
   "Args": ""
 }

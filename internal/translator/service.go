@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
-	rasync "github.com/viant/datly/repository/async"
 	signature "github.com/viant/datly/repository/contract/signature"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
@@ -25,7 +24,6 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"path"
@@ -55,8 +53,8 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 		return err
 	}
 
-	if resource.Rule.StaticContentURL != "" {
-
+	if resource.Rule.ContentURL != "" {
+		return s.buildStaticContent(ctx, rule, resource, opts)
 	}
 
 	if err = resource.ExtractDeclared(&dSQL); err != nil {
@@ -81,6 +79,7 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 		}
 	}
 	s.Repository.Resource = append(s.Repository.Resource, resource)
+	s.Repository.PersistAssets = true
 	return nil
 }
 
@@ -335,46 +334,6 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	return nil
 }
 
-func (s *Service) applyAsyncOption(resource *Resource, route *router.Route) error {
-	asyncModule := resource.Rule.Async
-
-	if len(resource.AsyncState) > 0 {
-		if asyncModule == nil {
-			asyncModule = &rasync.Config{}
-			resource.Rule.Async = asyncModule
-		}
-
-		for i, parameter := range resource.AsyncState {
-			switch strings.ToLower(parameter.Name) {
-			case "userid":
-				asyncModule.State.UserID = &resource.AsyncState[i].Parameter
-			case "useremail":
-				asyncModule.State.UserEmail = &resource.AsyncState[i].Parameter
-			case "jobmatchkey":
-				asyncModule.State.JobMatchKey = &resource.AsyncState[i].Parameter
-			}
-		}
-	}
-	if asyncModule == nil {
-		return nil
-	}
-
-	if asyncModule.Method == "" {
-		schema := url.Scheme(asyncModule.Destination, "err")
-		switch schema {
-		case "file", "s3", "gs":
-			asyncModule.Method = async.NotificationMethodStorage
-		}
-	}
-	if asyncModule.Jobs.Connector == nil {
-		asyncModule.Jobs.Connector = view.NewRefConnector(s.DefaultConnector())
-	}
-	if asyncModule.State.JobMatchKey == nil {
-		return fmt.Errorf("async matchKey parameter is not defined")
-	}
-	return nil
-}
-
 func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mode) error {
 	if mode == view.ModeQuery {
 		resource.Rule.updateExclude(viewlet)
@@ -558,20 +517,20 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		return nil
 	}
 	for _, parameter := range parameters {
-		signature, err := s.discoverComponentContract(ctx, resource, parameter.In)
+		aSignature, err := s.discoverComponentContract(ctx, resource, parameter.In)
 		if err != nil {
 			return fmt.Errorf("failed to discover component %v output type: %w", parameter.In.Name, err)
 		}
-		parameter.In.Name = signature.Method + ":" + signature.URI
-		parameter.Schema = signature.Output.Clone()
+		parameter.In.Name = aSignature.Method + ":" + aSignature.URI
+		parameter.Schema = aSignature.Output.Clone()
 		parameter.Schema.EnsurePointer()
-		for _, typeDef := range signature.Types {
+		for _, typeDef := range aSignature.Types {
 			if err = extension.Config.Types.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
 				return err
 			}
 		}
-		for i := range signature.Types {
-			resource.AppendTypeDefinition(signature.Types[i])
+		for i := range aSignature.Types {
+			resource.AppendTypeDefinition(aSignature.Types[i])
 		}
 	}
 	return nil
