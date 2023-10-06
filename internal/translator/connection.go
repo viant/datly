@@ -2,7 +2,6 @@ package translator
 
 import (
 	"context"
-	"fmt"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/view"
 	"regexp"
@@ -46,9 +45,9 @@ func (r *Repository) ensureConnectors(ctx context.Context) (err error) {
 			connectors = append(connectors, connectorResource.Connectors[i])
 		}
 	}
-	if len(connectors) == 0 {
-		return fmt.Errorf("connectors were empty")
-	}
+	//if len(connectors) == 0 {
+	//	return fmt.Errorf("connectors were empty")
+	//}
 	r.Connectors = connectors
 	view.ConnectorSlice(r.Connectors).IndexInto(&r.NamedConnectors)
 	return nil

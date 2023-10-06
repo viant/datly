@@ -17,6 +17,7 @@ import (
 )
 
 type (
+	//deprecated TODO replace with repository.Components
 	Resource struct {
 		URL         string   `json:",omitempty" yaml:",omitempty"`
 		SourceURL   string   `json:",omitempty"`

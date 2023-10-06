@@ -191,7 +191,7 @@ func (s State) FilterByKind(kind state.Kind) State {
 					result.Append(candidate)
 				}
 			}
-		case state.KindGroup:
+		case state.KindObject:
 			for _, candidate := range parameter.Group {
 				if candidate.In.Kind == kind {
 					result.Append(candidate)
@@ -260,7 +260,7 @@ func expandPredicateExpr(query string) string {
 	return expandPredicateExpr(query)
 }
 
-// DsqlParameterDeclaration returns dsql parameter declaration
+// DsqlParameterDeclaration returns dql parameter declaration
 func (s State) DsqlParameterDeclaration() string {
 	var result []string
 	for _, param := range s {
@@ -392,14 +392,14 @@ func (s State) MetaViewSQL() *Parameter {
 
 // Normalize normalizes state
 func (s State) Normalize() (State, error) {
-	ret := s.Group()
+	ret := s.Object()
 	return ret.Repeated()
 }
 
-func (s *State) Group() State {
+func (s *State) Object() State {
 	newState := make(State, 0, len(*s))
 	groupIndex := map[string][]*Parameter{}
-	groupParams := s.FilterByKind(state.KindGroup)
+	groupParams := s.FilterByKind(state.KindObject)
 	for _, param := range groupParams {
 		baseParams := strings.Split(param.In.Name, ",")
 		for _, baseParam := range baseParams {

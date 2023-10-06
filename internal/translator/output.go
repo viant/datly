@@ -84,11 +84,11 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 		}
 	}
 
-	for _, parameter := range outputParameters.FilterByKind(state.KindGroup) {
+	for _, parameter := range outputParameters.FilterByKind(state.KindObject) {
 		if err := parameter.Init(context.Background(), resourcelet); err != nil {
 			return err
 		}
-		parameter.Schema.Name = parameter.Name + "Group"
+		parameter.Schema.Name = parameter.Name + "Object"
 		resource.AppendTypeDefinition(&view.TypeDefinition{Name: parameter.Schema.Name, DataType: parameter.Schema.Type().String()})
 	}
 

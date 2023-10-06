@@ -25,7 +25,7 @@ func (s *Service) RunInitExtension(ctx context.Context, init *options.Extension)
 			return err
 		}
 	}
-	dSQLLoc := url.Join(init.Project, dsqlFolder)
+	dSQLLoc := url.Join(init.Project, dqlFolder)
 	if ok, _ := s.fs.Exists(ctx, dSQLLoc); !ok {
 		if err = s.fs.Create(ctx, dSQLLoc, file.DefaultDirOsMode, true); err != nil {
 			return err

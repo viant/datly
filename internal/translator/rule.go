@@ -31,26 +31,27 @@ type (
 		CustomValidation bool
 		orderNamespaces  []string
 		Root             string
+		//TODO replace with repository.Component and path.Settings ?
 		router.Route
+
 		*contract.Output
-		Async            *async.Config              `json:",omitempty"`
-		Cache            *view.Cache                `json:",omitempty"`
-		CSV              *content.CSVConfig         `json:",omitempty"`
-		Const            map[string]interface{}     `json:",omitempty"`
-		ConstURL         string                     `json:",omitempty"`
-		RequestBody      *BodyConfig                `json:",omitempty"`
-		TypeSrc          *parser.TypeImport         `json:",omitempty"`
-		ResponseBody     *ResponseBodyConfig        `json:",omitempty"`
-		Package          string                     `json:",omitempty"`
-		Router           *RouterConfig              `json:",omitempty" yaml:",omitempty"`
-		DataFormat       string                     `json:",omitempty"`
-		TabularJSON      *content.TabularJSONConfig `json:",omitempty"`
-		XML              *content.XMLConfig         `json:",omitempty"`
-		HandlerType      string                     `json:",omitempty"`
-		StaticContentURL string
-		StateType        string   `json:",omitempty"`
-		With             []string `json:",omitempty"`
-		Include          []string `json:",omitempty"`
+		Async        *async.Config              `json:",omitempty"`
+		Cache        *view.Cache                `json:",omitempty"`
+		CSV          *content.CSVConfig         `json:",omitempty"`
+		Const        map[string]interface{}     `json:",omitempty"`
+		ConstURL     string                     `json:",omitempty"`
+		RequestBody  *BodyConfig                `json:",omitempty"`
+		TypeSrc      *parser.TypeImport         `json:",omitempty"`
+		ResponseBody *ResponseBodyConfig        `json:",omitempty"`
+		Package      string                     `json:",omitempty"`
+		Router       *RouterConfig              `json:",omitempty" yaml:",omitempty"`
+		DataFormat   string                     `json:",omitempty"`
+		TabularJSON  *content.TabularJSONConfig `json:",omitempty"`
+		XML          *content.XMLConfig         `json:",omitempty"`
+		HandlerType  string                     `json:",omitempty"`
+		StateType    string                     `json:",omitempty"`
+		With         []string                   `json:",omitempty"`
+		Include      []string                   `json:",omitempty"`
 		indexNamespaces
 		IsGeneratation  bool
 		OutputParameter *inference.Parameter

@@ -77,6 +77,7 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		return err
 	}
 	s.translator.Repository.Resource = nil
+	s.translator.Repository.PersistAssets = false
 	options.UpdateTranslate()
 	return s.Translate(ctx, options)
 }
@@ -157,7 +158,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 
 func (s *Service) generateTemplate(gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
 	//needed for both go and velty
-	opts := s.dsqlGenerationOptions(gen, info)
+	opts := s.translateGenerationOptions(gen, info)
 	return s.generateTemplateFiles(gen, template, info, opts...)
 }
 
@@ -178,7 +179,7 @@ func (s *Service) uploadContent(ctx context.Context, URL string, content string)
 	return s.fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(content))
 }
 
-func (s *Service) dsqlGenerationOptions(gen *options.Generate, info *plugin.Info) []codegen.Option {
+func (s *Service) translateGenerationOptions(gen *options.Generate, info *plugin.Info) []codegen.Option {
 	var options []codegen.Option
 	if gen.Lang == ast.LangGO {
 		options = append(options, codegen.WithoutBusinessLogic())

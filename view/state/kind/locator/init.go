@@ -12,7 +12,7 @@ func init() {
 	Register(state.KindRequestBody, NewBody)
 	Register(state.KindEnvironment, NewEnv)
 	Register(state.KindParam, NewParameter)
-	Register(state.KindGroup, NewGroup)
+	Register(state.KindObject, NewObject)
 	Register(state.KindRepeated, NewRepeated)
 	Register(state.KindState, NewState)
 }

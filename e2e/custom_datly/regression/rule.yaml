@@ -32,9 +32,9 @@ pipeline:
       target: '$target'
       checkError: true
       commands:
-        - mkdir -p ${appPath}/.extension/types/${rule.Path}/dsql
-        - cp $stepURL/${stepRule.URL} ${appPath}/.extension/dsql
-        - /tmp/datly gen -o=${stepRule.Method} -s='${appPath}/.extension/dsql/${stepRule.URL}' -c='${dbDSN}' -p='${appPath}/.extension' -g='${stepRule.PackageName}'
+        - mkdir -p ${appPath}/.extension/types/${rule.Path}/dql
+        - cp $stepURL/${stepRule.URL} ${appPath}/.extension/dql
+        - /tmp/datly gen -o=${stepRule.Method} -s='${appPath}/.extension/dql/${stepRule.URL}' -c='${dbDSN}' -p='${appPath}/.extension' -g='${stepRule.PackageName}'
 
   addBusinessLogic:
     when: ${state.step}=step2_before_replace
@@ -46,10 +46,10 @@ pipeline:
       checkError: true
       commands:
         - echo 'stepRule -> $stepURL/${stepRule.URL}'
-        - cp $stepURL/${stepRule.URL} ${appPath}/.extension/dsql
+        - cp $stepURL/${stepRule.URL} ${appPath}/.extension/dql
         - mkdir -p ${appPath}/.extension/pkg/${rule.Path}
         - cp $stepURL/.${stepRule.GoFile} ${appPath}/.extension/pkg/${rule.Path}/${stepRule.GoFile}
-        - /tmp/datly dsql -p='${appPath}/.extension' -s='./dsql/${stepRule.URL}' -c='${dbDSN}'
+        - /tmp/datly translate -p='${appPath}/.extension' -s='./dql/${stepRule.URL}' -c='${dbDSN}'
 
 
   generatePlugins:
@@ -62,9 +62,9 @@ pipeline:
       checkError: true
       commands:
         - export GO111MODULE=on
-        - cp $stepURL/${stepRule.URL} ${appPath}/.extension/dsql
+        - cp $stepURL/${stepRule.URL} ${appPath}/.extension/dql
         - cp $stepURL/.${stepRule.GoFile} ${appPath}/.extension/pkg/${rule.Path}/${stepRule.GoFile}
-        - /tmp/datly dsql -p='${appPath}/.extension' -s='./dsql/${stepRule.URL}' -c='${dbDSN}'
+        - /tmp/datly translate -p='${appPath}/.extension' -s='./dql/${stepRule.URL}' -c='${dbDSN}'
 
 
   runTestsTemplate:

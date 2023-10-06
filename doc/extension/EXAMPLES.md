@@ -37,7 +37,7 @@ myproject
 ├── .build
 │   ├── datly
 │   └── ext
-├── dsql
+├── dql
 └── pkg
     ├── bootstrap
     ├── checksum
@@ -49,17 +49,17 @@ myproject
 
 ### 1.2 Create folder for actor's resources
    ```shell
-   mkdir -p ~/myproject/dsql/actor/init
+   mkdir -p ~/myproject/dql/actor/init
    ```
 
 ### 1.3 Create actor's init sql file
    ```shell
-   touch ~/myproject/dsql/actor/init/actor_patch_init.sql
+   touch ~/myproject/dql/actor/init/actor_patch_init.sql
    ```
 ```shell
 myproject
 ...
-├── dsql
+├── dql
 │   └── actor
 │       └── init
 │           └── actor_patch_init.sql
@@ -70,7 +70,7 @@ myproject
 
 e.g. for vi users
 ```shell
-vi ~/myproject/dsql/actor/init/actor_patch_init.sql
+vi ~/myproject/dql/actor/init/actor_patch_init.sql
 ```
 
 ```sql
@@ -79,12 +79,12 @@ SELECT  Actor.* /* {"Cardinality":"Many", "Field":"Entity" } */
 FROM (select * from actor) Actor
 ```
 
-### 1.5 Generate go files and dsql file for patch operations ~~and JSON entity~~
+### 1.5 Generate go files and dql file for patch operations ~~and JSON entity~~
 ```shell
 datly gen \
 -o=patch \
 -c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
--s=dsql/actor/init/actor_patch_init.sql \
+-s=dql/actor/init/actor_patch_init.sql \
 -g=actor \
 -p=~/myproject \
 -l=go
@@ -94,7 +94,7 @@ The following folders and files get generated or updated
 ```shell
 myproject
 ...
-├── dsql
+├── dql
 │   └── actor
 │       └── Actor_patch.sql
 └── pkg
@@ -162,7 +162,7 @@ Connectors:
 ModTime: "2023-06-02T20:16:54.658521+02:00"
 ```
 
-First connector in connections.yaml is a default connector for all dsql files.
+First connector in connections.yaml is a default connector for all dql files.
 You can use connector different from default.
 
 **Warning!**  
@@ -170,16 +170,16 @@ You can use connector different from default.
 ***You can't use it for insert/update/delete operations because they use executor service.***
 
 
-Add $DB[<connector_name>] param prefix before db source inside dsql file i.e. in ActorReader.sql:
+Add $DB[<connector_name>] param prefix before db source inside dql file i.e. in ActorReader.sql:
 ```sql
 /* { "URI":"reader/actor"} */
 SELECT  actor.*
 FROM (select * from $DB[sakiladb02].actor) actor
 ```
 
-### 1.7 Generate repo rules from dsql
+### 1.7 Generate repo rules from dql
 ```shell
-datly dsql -s=dsql/actor/Actor_patch.sql \
+datly translate -s=dql/actor/Actor_patch.sql \
 -p=~/myproject \
 -c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
 -r=repo/dev
@@ -324,7 +324,7 @@ Content-Type: application/json
 }
 ```
 - **Tip**: We have to pass 4 fields (so far) in the request body because they are all required by db.
-- ~~You can simple use~~ ~~/myproject/dsql/actor/EntityPost.json file as a template. It contains just required fields.~~
+- ~~You can simple use~~ ~~/myproject/dql/actor/EntityPost.json file as a template. It contains just required fields.~~
 
 The response should be like:
 ```json
@@ -452,7 +452,7 @@ func (a *Actor) initialiseForUpdate(cur *Actor) {
 }
 ```
 
-+ add initialiseForUpdate invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
++ add initialiseForUpdate invocation inside file ~/myproject/dql/actor/Actor_patch.sql
 
 ```go
 if curActorByActorId.Has(recActor.ActorId) == true {
@@ -850,7 +850,7 @@ The response should be like:
 ```
 
 - [Generate plugin](#generate-plugin)
-- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dql)
 
 
 
@@ -878,7 +878,7 @@ The following project structure get generated
   |    | - datly
   |    | - ext
   |
-  | - dsql
+  | - dql
   | 
   | - pkg 
   |    | - bootstrap
@@ -897,17 +897,17 @@ The following project structure get generated
 
 ### 2.2 Create folder for actor's resources
    ```shell
-   mkdir -p ~/myproject/dsql/actor/init
+   mkdir -p ~/myproject/dql/actor/init
    ```
 
 ### 2.3 Create actor's init sql file
    ```shell
-   touch ~/myproject/dsql/actor/init/actor_patch_init.sql
+   touch ~/myproject/dql/actor/init/actor_patch_init.sql
    ```
 ```shell
  myproject
   ...
-  | - dsql 
+  | - dql 
   |    | - actor
   |         | - init
   |              | - actor_patch_init.sql
@@ -918,7 +918,7 @@ The following project structure get generated
 
 e.g. for vi users
 ```shell
-vi ~/myproject/dsql/actor/init/actor_patch_init.sql
+vi ~/myproject/dql/actor/init/actor_patch_init.sql
 ```
 
 ```sql
@@ -927,12 +927,12 @@ SELECT  Actor.* /* {"Cardinality":"Many", "Field":"Entity" } */
 FROM (select * from actor) Actor
 ```
 
-### 2.5 Generate go files and dsql file for patch operations and JSON entity
+### 2.5 Generate go files and dql file for patch operations and JSON entity
 ```shell
 datly gen \
 -o=patch \
 -c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
--s=dsql/actor/init/actor_patch_init.sql \
+-s=dql/actor/init/actor_patch_init.sql \
 -g=actor \
 -p=~/myproject
 ```
@@ -941,7 +941,7 @@ The following folders and files get generated or updated
 ```shell
  myproject
   ...
-  | - dsql 
+  | - dql 
   |    | - actor
   |         | - Actor_patch.sql
   |         | - EntityPost.json
@@ -954,7 +954,7 @@ The following folders and files get generated or updated
   |         | - init.go
   ...
 ```
-+ Actor_patch.sql - patch logic written in dsql
++ Actor_patch.sql - patch logic written in dql
 + ~~EntityPost.json - request body template just with required fields`~~
 + actor.go - all needed go structs
 + init.go - updated imports
@@ -1009,7 +1009,7 @@ Connectors:
 ModTime: "2023-06-02T20:16:54.658521+02:00"
 ```
 
-First connector in connections.yaml is a default connector for all dsql files.
+First connector in connections.yaml is a default connector for all dql files.
 You can use connector different from default.
 
 **Warning!**  
@@ -1017,16 +1017,16 @@ You can use connector different from default.
 ***You can't use it for insert/update/delete operations because they use executor service.***
 
 
-Add $DB[<connector_name>] param prefix before db source inside dsql file i.e. in ActorReader.sql:
+Add $DB[<connector_name>] param prefix before db source inside dql file i.e. in ActorReader.sql:
 ```sql
 /* { "URI":"reader/actor"} */
 SELECT  actor.*
 FROM (select * from $DB[sakiladb02].actor) actor
 ```
 
-### 2.7 Generate repo rules from dsql
+### 2.7 Generate repo rules from dql
 ```shell
-datly dsql -s=dsql/actor/Actor_patch.sql \
+datly translate -s=dql/actor/Actor_patch.sql \
 -p=~/myproject \
 -r=repo/dev
 ```
@@ -1171,7 +1171,7 @@ Content-Type: application/json
 }
 ```
 + **Tip**: We have to pass 4 fields (so far) in the request body because they are all required by db.  
-You can simple use ~/myproject/dsql/actor/EntityPost.json file as a template. It contains just required fields.
+You can simple use ~/myproject/dql/actor/EntityPost.json file as a template. It contains just required fields.
 
 The response should be like:
 ```json
@@ -1223,7 +1223,7 @@ The following folders and files get generated
   |                   | - main_1_17_1_darwin_amd64.so.gz
   ...
 ```
-+ add InitialiseForInsert invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
++ add InitialiseForInsert invocation inside file ~/myproject/dql/actor/Actor_patch.sql
 
 ```code
 #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
@@ -1234,7 +1234,7 @@ The following folders and files get generated
 #end
 ```
 
-- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dql)
 
 **Tip:**  
 You don't have to build and deploy app after changing rules or code in go.
@@ -1311,7 +1311,7 @@ func (a *Actor) initialiseForUpdate(cur *Actor) bool {
 ```
 - [Generate plugin](#generate-plugin)
 
-+ add InitialiseForUpdate invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
++ add InitialiseForUpdate invocation inside file ~/myproject/dql/actor/Actor_patch.sql
 
 ```code
 #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
@@ -1323,7 +1323,7 @@ func (a *Actor) initialiseForUpdate(cur *Actor) bool {
 #end
 ```
 
-- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dql)
 
 
 ### 2.15 Check if InitialiseForUpdate works
@@ -1379,7 +1379,7 @@ func (a *Actor) Init(cur *Actor) bool {
 }
 ```
 
-+ adjust file ~/myproject/dsql/actor/Actor_patch.sql (two cases):  
++ adjust file ~/myproject/dql/actor/Actor_patch.sql (two cases):  
 
   + **mysql and sequencer case (our case) when the db table has required fields (more than id field)**  
     This case requires running initialization before using a sequencer.
@@ -1444,7 +1444,7 @@ func (a *Actor) Init(cur *Actor) bool {
   #end
   ```
 - [Generate plugin](#generate-plugin)
-- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dql)
 
 ### 2.18 Default struct's validation with tags
 + Datly allows validating entities using tags.  
@@ -1576,7 +1576,7 @@ func (a *Actor) validateNames(info *shared.Validation, firstName string, lastNam
 }
 ```
 
-+ check if exists Validate invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
++ check if exists Validate invocation inside file ~/myproject/dql/actor/Actor_patch.sql
 ```code
 #foreach($recActor in $Unsafe.Actor)
     #if($recActor)
@@ -1598,7 +1598,7 @@ func (a *Actor) validateNames(info *shared.Validation, firstName string, lastNam
 ```
 
 - [Generate plugin](#generate-plugin)
-- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dql)
 ////////////
 + create folder ~/myproject/pkg/shared
 + create file ~/myproject/pkg/shared/message.go
@@ -1717,7 +1717,7 @@ func (a *Actor) Validate(cur *Actor) *shared.Validation {
 	return info
 }
 ```
-+ add Validate invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
++ add Validate invocation inside file ~/myproject/dql/actor/Actor_patch.sql
 
 ```code
 #foreach($recActor in $Unsafe.Actor)
@@ -1761,7 +1761,7 @@ type Actor struct {
 
 
 - [Generate plugin](#generate-plugin)
-- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dql)
 
 + **If you insert/update (patch) an actor with a first name which length is less than 3 
 then you get a validation error like this**
@@ -1829,7 +1829,7 @@ func (a *Actor) validateNames(info *shared.Validation, firstName string, lastNam
 }
 ```
 
-+ check if exists Validate invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
++ check if exists Validate invocation inside file ~/myproject/dql/actor/Actor_patch.sql
 ```code
 #foreach($recActor in $Unsafe.Actor)
     #if($recActor)
@@ -1851,7 +1851,7 @@ func (a *Actor) validateNames(info *shared.Validation, firstName string, lastNam
 ```
 
 - [Generate plugin](#generate-plugin)
-- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dql)
 
 + **If you insert/update (patch) actor with a first name and last name beginning with the same char 
 then you get a validation error like this:**
@@ -1993,7 +1993,7 @@ error:
 ```
 
 reason 1:  
-Missing bracket in variable definition, in entity rule file (in this current case ~/myproject/dsql/actor/Actor_patch.sql)
+Missing bracket in variable definition, in entity rule file (in this current case ~/myproject/dql/actor/Actor_patch.sql)
 ```
 #set($result = $recActor.Validate($curActorByActorId[$recActor.ActorId], $session)
 ```

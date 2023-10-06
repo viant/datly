@@ -47,7 +47,7 @@ type (
 	PredicateConfig struct {
 		Parent string
 		Name   string `yaml:"Name"`
-		Group  int    `yaml:"Group"`
+		Group  int    `yaml:"Object"`
 		Ensure bool
 		Args   []string `yaml:"Args"`
 	}

@@ -33,14 +33,14 @@ type ParamName string
 // Validate checks if ParamName is valid
 func (p ParamName) Validate(kind Kind) error {
 	switch kind {
-	case KindGroup:
+	case KindObject:
 		split := strings.Split(string(p), ",")
 		if len(split) == 0 {
 			return fmt.Errorf("param name can't be empty")
 		}
 
 		if len(split) == 1 {
-			return fmt.Errorf("param Group must contain at least 2 params")
+			return fmt.Errorf("param Object must contain at least 2 params")
 		}
 
 		return nil
@@ -87,9 +87,9 @@ func NewOutputLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindOutput}
 }
 
-// NewGroupLocation creates an output location
-func NewGroupLocation(name string) *Location {
-	return &Location{Name: name, Kind: KindGroup}
+// NewObjectLocation creates an output location
+func NewObjectLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindObject}
 }
 
 // NewDataViewLocation creates a dataview location

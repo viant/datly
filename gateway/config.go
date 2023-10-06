@@ -30,6 +30,7 @@ type (
 	ExposableConfig struct {
 		APIPrefix            string //like /v1/api/
 		RouteURL             string
+		ContentURL           string
 		PluginsURL           string
 		DependencyURL        string
 		UseCacheFS           bool

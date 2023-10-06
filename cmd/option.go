@@ -22,7 +22,7 @@ const (
 	APIPrefix = "/v1/api/"
 
 	//folderDev = "dev"
-	folderSQL = "dsql"
+	dqlFolder = "dql"
 
 	rootFolder          = "Datly"
 	buildModePluginless = "pluginless"
@@ -91,7 +91,7 @@ type (
 	Prepare struct {
 		PrepareRule  string `short:"G" long:"generate" description:"prepare rule for patch|post|put"`
 		ExecKind     string `long:"execKind" description:"allows to switch between service / dml"`
-		DSQLOutput   string `long:"dsqlOutput" description:"output path"`
+		DSQLOutput   string `long:"dqlOutput" description:"output path"`
 		GoFileOutput string `long:"goFileOut" description:"destination of go file"`
 		GoModulePkg  string `long:"goModulePkg" description:"go module package"`
 		LoadPrevious bool   `long:"loadSQL" description:"decides whether to load records using "`
@@ -186,7 +186,7 @@ func (o *Options) Init() error {
 	}
 
 	if o.DSQLOutput == "" {
-		o.DSQLOutput = folderSQL
+		o.DSQLOutput = dqlFolder
 	}
 
 	if url.IsRelative(o.DSQLOutput) {
@@ -498,25 +498,25 @@ func (o *Options) MergeFromRun(run *options.Run) {
 	o.ConfigURL = run.ConfigURL
 }
 
-func (o *Options) MergeFromDSql(dsql *options.Translate) {
-	o.WriteLocation = dsql.RepositoryURL
-	o.Name = dsql.Name
-	o.Location = dsql.SourceURL()
-	o.Connects = dsql.Connectors
-	o.JWTVerifierHMACKey = string(dsql.JwtVerifier.HMAC)
-	o.JWTVerifierRSAKey = string(dsql.JwtVerifier.RSA)
-	o.ConstURL = dsql.ConstURL
-	if dsql.Port != nil {
-		o.Port = *dsql.Port
+func (o *Options) MergeFromDSql(translate *options.Translate) {
+	o.WriteLocation = translate.RepositoryURL
+	o.Name = translate.Name
+	o.Location = translate.SourceURL()
+	o.Connects = translate.Connectors
+	o.JWTVerifierHMACKey = string(translate.JwtVerifier.HMAC)
+	o.JWTVerifierRSAKey = string(translate.JwtVerifier.RSA)
+	o.ConstURL = translate.ConstURL
+	if translate.Port != nil {
+		o.Port = *translate.Port
 		o.hasPort = true
 	}
-	o.RoutePrefix = dsql.ModulePrefix
-	if dsql.ModuleLocation != "" {
-		o.RelativePath = dsql.ModuleLocation
+	o.RoutePrefix = translate.ModulePrefix
+	if translate.ModuleLocation != "" {
+		o.RelativePath = translate.ModuleLocation
 	}
-	if dsql.Port == nil {
-		o.PartialConfigURL = dsql.Configs.URL()
-		o.RouteURL = url.Join(dsql.RepositoryURL, "Datly/routes")
+	if translate.Port == nil {
+		o.PartialConfigURL = translate.Configs.URL()
+		o.RouteURL = url.Join(translate.RepositoryURL, "Datly/routes")
 	}
 }
 

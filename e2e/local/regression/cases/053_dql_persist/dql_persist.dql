@@ -1,7 +1,7 @@
-/* {"URI":"dsql-persist","Method":"PUT","ResponseBody":{"From":"Preference"}} */
+/* {"URI":"dql-persist","Method":"PUT","ResponseBody":{"From":"Preference"}} */
 
 import (
-	"regression/cases/053_dsql_persist.Preference"
+	"regression/cases/053_dql_persist.Preference"
 )
 
 #set($_ = $Preference<*Preference>(body/))
