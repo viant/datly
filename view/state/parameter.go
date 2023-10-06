@@ -32,6 +32,7 @@ type (
 		Schema            *Schema     `json:",omitempty" yaml:"Schema"`
 		Output            *Codec      `json:",omitempty" yaml:"Output"`
 		Const             interface{} `json:",omitempty" yaml:"Const"`
+		Default           interface{} `json:",omitempty" yaml:"Default"`
 		DateFormat        string      `json:",omitempty" yaml:"DateFormat"`
 		ErrorStatusCode   int         `json:",omitempty" yaml:"ErrorStatusCode"`
 		Tag               string      `json:",omitempty" yaml:"Tag"`

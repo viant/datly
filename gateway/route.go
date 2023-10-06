@@ -8,7 +8,6 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
-	"github.com/viant/datly/utils/httputils"
 	"net/http"
 	"strings"
 )
@@ -30,14 +29,11 @@ type (
 	}
 )
 
-func (r *Route) Handle(res http.ResponseWriter, req *http.Request) error {
+func (r *Route) Handle(res http.ResponseWriter, req *http.Request) {
 	if !r.CanHandle(req) {
 		write(res, http.StatusForbidden, nil)
-		return httputils.NewHttpStatusError(http.StatusForbidden)
 	}
-
 	r.Handler(context.Background(), res, req)
-	return nil
 }
 
 func (r *Route) CanHandle(req *http.Request) bool {

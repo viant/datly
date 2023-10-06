@@ -238,6 +238,13 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 			required := false
 			declaration.Required = &required
+		case "Required":
+			if len(args) != 0 {
+				return fmt.Errorf("expected Required to have zero args, but got %v", len(args))
+			}
+			required := true
+			declaration.Required = &required
+
 		case "WithPredicate":
 			if err := s.appendPredicate(declaration, args, false); err != nil {
 				return err
@@ -252,6 +259,10 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			declaration.When = strings.Trim(content, "'\"")
 		case "Of":
 			declaration.Of = strings.Trim(content, "'\"")
+		case "Default":
+			if err := s.setDefaultValue(declaration, content); err != nil {
+				return err
+			}
 		case "UtilParam":
 		//deprecated
 		case "QuerySelector":
@@ -260,6 +271,33 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			declaration.IsAsync = true
 		}
 		cursor.MatchOne(whitespaceMatcher)
+	}
+	return nil
+}
+
+func (s *Declarations) setDefaultValue(declaration *Declaration, content string) error {
+	declaration.Default = strings.Trim(content, "'\"")
+	outputType := declaration.OutputType
+	if outputType == "" && declaration.Schema != nil {
+		outputType = declaration.Schema.DataType
+	}
+	var err error
+	if literal, ok := declaration.Default.(string); ok {
+		switch outputType {
+		case "bool":
+			if declaration.Default, err = strconv.ParseBool(literal); err != nil {
+				return fmt.Errorf("invalid parameter: %s bool default value: %s %w", declaration.Name, declaration.Default, err)
+			}
+		case "int":
+			if declaration.Default, err = strconv.Atoi(literal); err != nil {
+				return fmt.Errorf("invalid parameter: %s int default value: %s %w", declaration.Name, declaration.Default, err)
+			}
+		case "float64":
+			if declaration.Default, err = strconv.ParseFloat(literal, 64); err != nil {
+				return fmt.Errorf("invalid parameter: %s float default value: %s %w", declaration.Name, declaration.Default, err)
+			}
+
+		}
 	}
 	return nil
 }

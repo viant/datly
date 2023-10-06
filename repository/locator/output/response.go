@@ -3,7 +3,7 @@ package output
 import (
 	"context"
 	"github.com/viant/datly/repository/locator/output/keys"
-	"github.com/viant/datly/service/processor/exec"
+	"github.com/viant/datly/service/operator/exec"
 )
 
 func (l *outputLocator) getResponseValue(ctx context.Context, name string) (interface{}, bool, error) {

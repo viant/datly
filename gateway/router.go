@@ -13,7 +13,7 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
-	"github.com/viant/datly/service/processor"
+	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
@@ -29,7 +29,7 @@ type (
 		routeMatcher  *matcher.Matcher
 		apiKeyMatcher *matcher.Matcher
 		repository    *repository.Service
-		processor     *processor.Service
+		operator      *operator.Service
 		config        *Config
 		OpenAPIInfo   openapi3.Info
 		metrics       *gmetric.Service
@@ -69,7 +69,7 @@ func NewRouter(ctx context.Context, components *repository.Service, config *Conf
 		statusHandler: statusHandler,
 		authorizer:    authorizer,
 		repository:    components,
-		processor:     processor.New(),
+		operator:      operator.New(),
 		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
 	}
 	return r, r.init(ctx)
@@ -142,7 +142,7 @@ func (r *Router) HandleJob(ctx context.Context, job *async.Job) error {
 	if err = aSession.Unmarshal(aComponent.Input.Type.Parameters, []byte(job.State)); err != nil {
 		return err
 	}
-	if _, err = r.processor.Process(ctx, aComponent, aSession); err != nil {
+	if _, err = r.operator.Operate(ctx, aComponent, aSession); err != nil {
 		return err
 	}
 	return nil
