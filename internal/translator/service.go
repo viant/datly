@@ -55,6 +55,10 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 		return err
 	}
 
+	if resource.Rule.StaticContentURL != "" {
+
+	}
+
 	if err = resource.ExtractDeclared(&dSQL); err != nil {
 		return err
 	}
