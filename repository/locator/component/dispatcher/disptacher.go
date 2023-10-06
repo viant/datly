@@ -4,14 +4,14 @@ import (
 	"context"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
-	"github.com/viant/datly/service/processor"
+	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/session"
 	"net/http"
 )
 
 type Dispatcher struct {
 	registry *repository.Registry
-	service  *processor.Service
+	service  *operator.Service
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request *http.Request) (interface{}, error) {
@@ -25,7 +25,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request 
 	if err = aSession.Populate(ctx); err != nil {
 		return nil, err
 	}
-	value, err := d.service.Process(ctx, aComponent, aSession)
+	value, err := d.service.Operate(ctx, aComponent, aSession)
 	return value, err
 }
 
@@ -33,6 +33,6 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request 
 func New(registry *repository.Registry) contract.Dispatcher {
 	return &Dispatcher{
 		registry: registry,
-		service:  processor.New(),
+		service:  operator.New(),
 	}
 }

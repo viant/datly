@@ -320,6 +320,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		return fmt.Errorf("failed to build component : %s, %w", rootViewName, err)
 	}
 
+	routerResource.Resource.Substitutes = nil
 	data, err := asset.EncodeYAML(routerResource)
 	if err != nil {
 		return fmt.Errorf("failed to encode: %+v, %w", routerResource, err)

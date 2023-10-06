@@ -380,6 +380,12 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 			return nil, false, err
 		}
 	}
+
+	if !has && parameter.Value != nil {
+		has = true
+		value = parameter.Value
+	}
+
 	if !has {
 		return nil, has, nil
 	}

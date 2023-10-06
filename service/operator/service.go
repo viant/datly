@@ -1,4 +1,4 @@
-package processor
+package operator
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"github.com/viant/datly/repository"
 	rasync "github.com/viant/datly/repository/async"
 	"github.com/viant/datly/service"
-	"github.com/viant/datly/service/processor/exec"
+	"github.com/viant/datly/service/operator/exec"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -21,19 +21,19 @@ type Service struct {
 	fs afs.Service
 }
 
-// Process processes data component with data session
-func (s *Service) Process(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
+// Operate processes data component with data session
+func (s *Service) Operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	if err := s.updateJobStatusRunning(ctx, aComponent); err != nil {
 		return nil, err
 	}
-	result, err := s.process(ctx, aComponent, aSession)
+	result, err := s.operate(ctx, aComponent, aSession)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 
-func (s *Service) process(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
+func (s *Service) operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	var err error
 	ctx, err = s.EnsureContext(ctx, aComponent, aSession)
 	if err != nil {

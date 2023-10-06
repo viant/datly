@@ -1288,7 +1288,7 @@ func (v *View) MetaTemplateEnabled() bool {
 }
 
 func (v *View) AreNullValuesAllowed() bool {
-	return v.AllowNulls != nil && !*v.AllowNulls
+	return v.AllowNulls != nil && *v.AllowNulls
 }
 
 func (v *View) validateSelfRef() error {

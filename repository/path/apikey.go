@@ -10,7 +10,7 @@ import (
 type (
 	APIKey struct {
 		URI    string        `yaml:"URI,omitempty"`
-		Value  string        `yaml:"Value,omitempty"`
+		Value  string        `yaml:"GetValue,omitempty"`
 		Header string        `yaml:"Header,omitempty"`
 		Secret *scy.Resource `yaml:"Secret,omitempty"`
 	}
