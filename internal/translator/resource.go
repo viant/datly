@@ -201,7 +201,6 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	}
 	r.Declarations.SQL = parser.RemoveParameterHints(r.Declarations.SQL, r.State)
 	*dSQL = r.Declarations.SQL
-	*dSQL = r.Resource.Substitutes.Replace(*dSQL)
 	return nil
 }
 

@@ -57,7 +57,6 @@ func (s *Service) translate(ctx context.Context, opts *options.Options) error {
 		if err != nil {
 			return err
 		}
-
 		if err = s.translateDSQL(ctx, rule, dSQL, opts); err != nil {
 			return err
 		}
