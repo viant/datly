@@ -259,8 +259,8 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			declaration.When = strings.Trim(content, "'\"")
 		case "Of":
 			declaration.Of = strings.Trim(content, "'\"")
-		case "Default":
-			if err := s.setDefaultValue(declaration, content); err != nil {
+		case "Value":
+			if err := s.setValue(declaration, content); err != nil {
 				return err
 			}
 		case "UtilParam":
@@ -275,29 +275,32 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 	return nil
 }
 
-func (s *Declarations) setDefaultValue(declaration *Declaration, content string) error {
-	declaration.Default = strings.Trim(content, "'\"")
+func (s *Declarations) setValue(declaration *Declaration, content string) error {
+	value := strings.Trim(content, "'\"")
 	outputType := declaration.OutputType
 	if outputType == "" && declaration.Schema != nil {
 		outputType = declaration.Schema.DataType
 	}
 	var err error
-	if literal, ok := declaration.Default.(string); ok {
-		switch outputType {
-		case "bool":
-			if declaration.Default, err = strconv.ParseBool(literal); err != nil {
-				return fmt.Errorf("invalid parameter: %s bool default value: %s %w", declaration.Name, declaration.Default, err)
-			}
-		case "int":
-			if declaration.Default, err = strconv.Atoi(literal); err != nil {
-				return fmt.Errorf("invalid parameter: %s int default value: %s %w", declaration.Name, declaration.Default, err)
-			}
-		case "float64":
-			if declaration.Default, err = strconv.ParseFloat(literal, 64); err != nil {
-				return fmt.Errorf("invalid parameter: %s float default value: %s %w", declaration.Name, declaration.Default, err)
-			}
-
+	switch outputType {
+	case "bool":
+		if declaration.Value, err = strconv.ParseBool(value); err != nil {
+			return fmt.Errorf("invalid parameter: %s bool default value: %s %w", declaration.Name, value, err)
 		}
+	case "int":
+		if declaration.Value, err = strconv.Atoi(value); err != nil {
+			return fmt.Errorf("invalid parameter: %s int default value: %s %w", declaration.Name, value, err)
+		}
+	case "float64":
+		if declaration.Value, err = strconv.ParseFloat(value, 64); err != nil {
+			return fmt.Errorf("invalid parameter: %s float default value: %s %w", declaration.Name, value, err)
+		}
+	}
+	if declaration.Kind == string(state.KindLiteral) {
+		declaration.Const = value
+	} else {
+		declaration.Value = value
+
 	}
 	return nil
 }

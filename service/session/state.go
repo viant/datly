@@ -381,9 +381,9 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 		}
 	}
 
-	if !has && parameter.Default != nil {
+	if !has && parameter.Value != nil {
 		has = true
-		value = parameter.Default
+		value = parameter.Value
 	}
 
 	if !has {

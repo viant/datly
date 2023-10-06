@@ -32,7 +32,7 @@ type (
 		Schema            *Schema     `json:",omitempty" yaml:"Schema"`
 		Output            *Codec      `json:",omitempty" yaml:"Output"`
 		Const             interface{} `json:",omitempty" yaml:"Const"`
-		Default           interface{} `json:",omitempty" yaml:"Default"`
+		Value             interface{} `json:"Value,omitempty" yaml:"Value"`
 		DateFormat        string      `json:",omitempty" yaml:"DateFormat"`
 		ErrorStatusCode   int         `json:",omitempty" yaml:"ErrorStatusCode"`
 		Tag               string      `json:",omitempty" yaml:"Tag"`
@@ -387,7 +387,7 @@ func (p *Parameter) pathFields(path string, structType reflect.Type) ([]*xunsafe
 	return xFields, nil
 }
 
-func (p *Parameter) Value(state *structology.State) (interface{}, error) {
+func (p *Parameter) GetValue(state *structology.State) (interface{}, error) {
 	return p._selector.Value(state.Pointer()), nil
 }
 
