@@ -288,8 +288,6 @@ github.com/viant/afsc v1.9.0/go.mod h1:FA/xVjaMM10qGByabP8anTVMH6N4eUsAeWm5xcEZJ
 github.com/viant/assertly v0.4.8/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49uaYMPRU=
 github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60 h1:VFJvCOHKXv4IqX8rJwn1otpHWQGgMDv2bXtAPgEzndM=
 github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49uaYMPRU=
-github.com/viant/bigquery v0.2.1 h1:nngQ/BD3xaeKfflo0vzLAJc9KATDJfi2wDOAGMYq4Pk=
-github.com/viant/bigquery v0.2.1/go.mod h1:EYjfaKz5a0ho9Wg48+NzHnwOuA+Q81c0I0lBUEtsX8s=
 github.com/viant/bigquery v0.3.0 h1:ngnDRpuxHY9FgDpiDguN5gB7eZlOiUcOjVEn+Z91UoE=
 github.com/viant/bigquery v0.3.0/go.mod h1:EYjfaKz5a0ho9Wg48+NzHnwOuA+Q81c0I0lBUEtsX8s=
 github.com/viant/cloudless v1.9.2-0.20231004135620-2f963048061d h1:mJb0lVNRyzKf6CB8N74z+J92+j0ndzIKUlJ/5KR8XVs=

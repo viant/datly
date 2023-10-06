@@ -534,3 +534,8 @@ func (c Caches) Unique() []*Cache {
 	}
 	return result
 }
+
+// NewRefCache creates cache reference
+func NewRefCache(name string) *Cache {
+	return &Cache{Reference: shared.Reference{Ref: name}}
+}

@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
+	"strconv"
 
 	"strings"
 )
@@ -93,7 +95,7 @@ func (n *Viewlets) applyViewHintSettings() error {
 	})
 }
 
-func (n Viewlets) addRelations(query *query.Select) {
+func (n *Viewlets) addRelations(query *query.Select) {
 	for _, join := range query.Joins {
 		relation := n.Lookup(join.Alias)
 		if relation.IsMetaView() {
@@ -112,17 +114,21 @@ func (n Viewlets) addRelations(query *query.Select) {
 	}
 }
 
-func (n Viewlets) applyTopLevelDSQLSetting(query *query.Select, namespace *Viewlet) error {
+func (n *Viewlets) applyTopLevelDSQLSetting(query *query.Select, namespace *Viewlet) error {
 	columns := sqlparser.NewColumns(query.List)
 	for i := range columns {
-		if err := n.updateTopQuery(columns[i], namespace); err != nil {
+		if err := n.applyTopLevelSetting(columns[i], namespace); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (n Viewlets) updateTopQuery(column *sqlparser.Column, viewlet *Viewlet) error {
+func (n *Viewlets) applyTopLevelSetting(column *sqlparser.Column, viewlet *Viewlet) error {
+	done, err := n.applySettingFunctions(column)
+	if done || err != nil {
+		return err
+	}
 	if column.Namespace == "" {
 		column.Namespace = viewlet.Name
 	}
@@ -156,4 +162,67 @@ func (n Viewlets) updateTopQuery(column *sqlparser.Column, viewlet *Viewlet) err
 		viewlet.Casts[column.Name] = column.Type
 	}
 	return nil
+}
+
+// TODO introduce function abstraction for datly -h list funciton, with validation signtaure description
+func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error) {
+	funcName, funcArgs := extractFunction(column)
+	funcName = strings.ReplaceAll(funcName, "_", "")
+	switch strings.ToLower(funcName) {
+	case "useconnector":
+		column.Namespace = funcArgs[0]
+		dest := n.Lookup(column.Namespace)
+		dest.Connector = funcArgs[1]
+	case "usecacheref":
+		column.Namespace = funcArgs[0]
+		dest := n.Lookup(column.Namespace)
+		dest.View.Cache = view.NewRefCache(funcArgs[1])
+	case "cardinality":
+		column.Namespace = funcArgs[0]
+		dest := n.Lookup(column.Namespace)
+		if dest.View.Schema == nil {
+			dest.View.Schema = &state.Schema{}
+		}
+		dest.View.Schema.Cardinality = state.Cardinality(funcArgs[1])
+	case "limit":
+		column.Namespace = funcArgs[0]
+		dest := n.Lookup(column.Namespace)
+		if dest.View.Selector == nil {
+			dest.View.Selector = &view.Config{}
+		}
+		limit, err := strconv.Atoi(funcArgs[1])
+		if err != nil {
+			return false, err
+		}
+		if dest.View.Selector.Constraints == nil {
+			dest.View.Selector.Constraints = &view.Constraints{}
+		}
+		dest.View.Selector.Constraints.Limit = true
+		dest.View.Selector.Limit = limit
+
+	case "allownulls":
+		column.Namespace = funcArgs[0]
+		dest := n.Lookup(column.Namespace)
+		flag := true
+		if len(funcArgs) == 2 {
+			flag, _ = strconv.ParseBool(funcArgs[1])
+		}
+		dest.View.AllowNulls = &flag
+	default:
+		return false, nil
+	}
+	return true, nil
+}
+
+func extractFunction(column *sqlparser.Column) (string, []string) {
+	fnName := ""
+	var args []string
+	if index := strings.Index(column.Expression, "("); index != -1 {
+		fnName = column.Expression[:index]
+		arg := column.Expression[index+1 : len(column.Expression)-2]
+		for _, item := range strings.Split(arg, ",") {
+			args = append(args, strings.TrimSpace(item))
+		}
+	}
+	return fnName, args
 }
