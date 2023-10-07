@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/asset"
 	dpath "github.com/viant/datly/repository/path"
+	"path"
 )
 
 func (s *Service) buildStaticContent(ctx context.Context, rule *options.Rule, resource *Resource, opts *options.Options) error {
@@ -18,7 +19,7 @@ func (s *Service) buildStaticContent(ctx context.Context, rule *options.Rule, re
 	aPath.APIKey = resource.Rule.APIKey
 	ruleName := s.Repository.RuleName(resource.rule)
 	aPath.Path = resource.Rule.Path
-	aPath.ContentURL = ruleName
+	aPath.ContentURL = path.Join(resource.rule.ModulePrefix, ruleName)
 	items := &dpath.Item{Paths: []*dpath.Path{aPath}}
 	data, err := asset.EncodeYAML(items)
 	if err != nil {

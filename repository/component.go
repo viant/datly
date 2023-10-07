@@ -26,7 +26,7 @@ import (
 // Component represents abstract API view/handler based component
 type (
 	Component struct {
-		version.Version
+		version.Version `json:"-" yaml:"-"`
 		contract.Path
 		contract.Contract
 		content.Content

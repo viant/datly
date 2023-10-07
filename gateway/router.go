@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/viant/afs"
+	ahttp "github.com/viant/afs/adapter/http"
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/gateway/router"
@@ -313,21 +315,25 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				aPath.APIKey = matched
 				apiKeys = append(apiKeys, matched)
 			}
-
-			provider, err := r.repository.Registry().LookupProvider(ctx, &aPath.Path)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
-			}
 			offset := len(routes)
-			routes = append(routes, r.NewRouteHandler(router.New(aPath, provider)))
-			routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.APIPrefix, r.config.Meta.ViewURI, aPath.URI), provider))
-			routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.OpenApiURI, aPath.URI), provider))
-			routes = append(routes, r.NewStructRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.StructURI, aPath.URI), provider))
 
-			//TODO extend path.Path with cache info to pre exract cacheable view
-			//if views := router.ExtractCacheableViews(route); len(views) > 0 {
-			//	routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.CacheWarmURI, route.URI), route))
-			//}
+			if aPath.ContentURL != "" {
+				routes = append(routes, r.NewContentRoute(aPath))
+			} else {
+				provider, err := r.repository.Registry().LookupProvider(ctx, &aPath.Path)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
+				}
+				routes = append(routes, r.NewRouteHandler(router.New(aPath, provider)))
+				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.APIPrefix, r.config.Meta.ViewURI, aPath.URI), provider))
+				routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.OpenApiURI, aPath.URI), provider))
+				routes = append(routes, r.NewStructRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.StructURI, aPath.URI), provider))
+				//TODO extend path.Path with cache info to pre exract cacheable view
+				//if views := router.ExtractCacheableViews(route); len(views) > 0 {
+				//	routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.CacheWarmURI, route.URI), route))
+				//}
+
+			}
 			if len(apiKeys) > 0 { //update keys to all path derived routes
 				for i := offset; i < len(routes); i++ {
 					routes[i].ApiKeys = apiKeys
@@ -351,4 +357,34 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 		matchables = append(matchables, route)
 	}
 	return matcher.NewMatcher(matchables), paths, nil
+}
+
+func (r *Router) NewContentRoute(aPath *path.Path) *Route {
+	ensureWildcard(aPath)
+	pathURI := aPath.URI[:len(aPath.URI)-2]
+	contentPath := furl.Join(r.config.ContentURL, aPath.ContentURL)
+	fileSever := http.FileServer(ahttp.New(afs.New(), contentPath))
+	route := &Route{Path: &aPath.Path, Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+
+		request := req.Clone(ctx)
+		if index := strings.Index(request.URL.Path, pathURI); index != -1 {
+			URI := request.RequestURI[index+len(pathURI)+1:]
+			request.URL.Path = URI
+			request.RequestURI = request.URL.RequestURI()
+		}
+		fileSever.ServeHTTP(response, request)
+		if aPath.Cors != nil {
+			router.CorsHandler(req, aPath.Cors)(response)
+		}
+	}}
+	return route
+}
+
+func ensureWildcard(aPath *path.Path) {
+	if !strings.HasSuffix(aPath.URI, "/*") {
+		if !strings.HasSuffix(aPath.URI, "/") {
+			aPath.URI += "/"
+		}
+		aPath.URI += "*"
+	}
 }

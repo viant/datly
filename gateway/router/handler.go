@@ -52,12 +52,12 @@ func (r *Handler) HandleRequest(ctx context.Context, response http.ResponseWrite
 		return
 	}
 	if request.Method == http.MethodOptions {
-		corsHandler(request, r.Path.Cors)(response)
+		CorsHandler(request, r.Path.Cors)(response)
 		return
 	}
 	r.Handle(ctx, response, request)
 	if r.Path.Cors != nil {
-		corsHandler(request, r.Path.Cors)(response)
+		CorsHandler(request, r.Path.Cors)(response)
 	}
 }
 
@@ -83,7 +83,7 @@ func New(aPath *path.Path, provider *repository.Provider) *Handler {
 	return ret
 }
 
-func corsHandler(request *http.Request, cors *path.Cors) func(writer http.ResponseWriter) {
+func CorsHandler(request *http.Request, cors *path.Cors) func(writer http.ResponseWriter) {
 	return func(writer http.ResponseWriter) {
 		enableCors(writer, request, cors, true)
 	}

@@ -65,7 +65,14 @@ func (s *Service) translate(ctx context.Context, opts *options.Options) error {
 			return err
 		}
 	}
+
+	paths := url.Join(s.translator.Repository.Config.RouteURL, "paths.yaml")
+	if ok, _ := s.fs.Exists(ctx, paths); ok {
+		_ = s.fs.Delete(ctx, paths)
+	}
+
 	return nil
+
 }
 
 func (s *Service) translateDSQL(ctx context.Context, rule *options.Rule, dSQL string, opts *options.Options) error {

@@ -17,11 +17,11 @@ require (
 	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.4
-	github.com/viant/afs v1.24.2
+	github.com/viant/afs v1.24.4-0.20231007030525-b635d6c4d60a
 	github.com/viant/afsc v1.9.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.3.2-0.20231006194728-bc2cef8e6029
-	github.com/viant/cloudless v1.9.2-0.20231004135620-2f963048061d
+	github.com/viant/cloudless v1.9.3-0.20231007034518-7d85a868e57f
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
@@ -128,3 +128,5 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/viant/afs => /Users/awitas/go/src/github.com/viant/afs
