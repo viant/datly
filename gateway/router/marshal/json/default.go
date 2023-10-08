@@ -12,7 +12,6 @@ import (
 
 const (
 	DefaultTagName = "default"
-	DatlyTagName   = "default"
 
 	FormatAttribute     = "format"
 	IgnoreCaseFormatter = "ignorecaseformatter"

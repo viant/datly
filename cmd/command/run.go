@@ -6,6 +6,7 @@ import (
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/storage"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/service/auth/jwt"
 	"github.com/viant/xdatly/handler/async"
@@ -41,6 +42,7 @@ func (s *Service) dispatchEventsIfNeeded(ctx context.Context, run *options.Run, 
 			time.Sleep(300 * time.Millisecond)
 			continue
 		}
+
 		wg := sync.WaitGroup{}
 		for i, object := range objects {
 			if object.IsDir() {
@@ -49,19 +51,22 @@ func (s *Service) dispatchEventsIfNeeded(ctx context.Context, run *options.Run, 
 			wg.Add(1)
 			go func(object storage.Object) {
 				defer wg.Done()
-				err := s.dispatchEvent(context.Background(), object, srv)
-				if err != nil {
-					log.Println(err)
+				router, _ := srv.Service.Router()
+				if router != nil {
+					err := router.DispatchStorageEvent(context.Background(), object)
+					if err != nil {
+						log.Println(err)
+					}
+				} else {
+					log.Println("router was nil")
 				}
-				_ = s.fs.Delete(ctx, object.URL())
-
 			}(objects[i])
 		}
 		wg.Wait()
 	}
 }
 
-func (s *Service) dispatchEvent(ctx context.Context, object storage.Object, srv *standalone.Server) error {
+func (s *Service) DispatchStorageEvent(ctx context.Context, object storage.Object, router *gateway.Router) error {
 	data, err := s.fs.Download(ctx, object)
 	if err != nil {
 		return err
@@ -70,7 +75,7 @@ func (s *Service) dispatchEvent(ctx context.Context, object storage.Object, srv 
 	if err = json.Unmarshal(data, job); err != nil {
 		return err
 	}
-	router, _ := srv.Service.Router()
+	job.EventURL = object.URL()
 	return router.HandleJob(ctx, job)
 }
 

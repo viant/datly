@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	ahttp "github.com/viant/afs/adapter/http"
+	"github.com/viant/afs/storage"
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/gateway/router"
@@ -118,10 +119,25 @@ func (r *Router) handleWithError(writer http.ResponseWriter, request *http.Reque
 	return http.StatusOK, nil
 }
 
-func (r *Router) HandleJob(ctx context.Context, job *async.Job) error {
+var fs = afs.New()
+
+func (r *Router) DispatchStorageEvent(ctx context.Context, object storage.Object) error {
+	data, err := fs.Download(ctx, object)
+	if err != nil {
+		return err
+	}
+	job := &async.Job{}
+	if err = json.Unmarshal(data, job); err != nil {
+		return err
+	}
+	job.EventURL = object.URL()
+	return r.HandleJob(ctx, job)
+}
+
+func (r *Router) HandleJob(ctx context.Context, aJob *async.Job) error {
 	aPath := &contract.Path{
-		URI:    job.URI,
-		Method: job.Method,
+		URI:    aJob.URI,
+		Method: aJob.Method,
 	}
 	registry := r.repository.Registry()
 	aComponent, err := registry.Lookup(ctx, aPath)
@@ -132,20 +148,31 @@ func (r *Router) HandleJob(ctx context.Context, job *async.Job) error {
 	if err != nil {
 		return err
 	}
-	ctx = context.WithValue(ctx, async.JobKey, job)
+	ctx = context.WithValue(ctx, async.JobKey, aJob)
 	ctx = context.WithValue(ctx, async.InvocationTypeKey, async.InvocationTypeEvent)
-	request := &http.Request{Method: job.Method, URL: URL, RequestURI: aPath.URI}
+	request := &http.Request{Method: aJob.Method, URL: URL, RequestURI: aPath.URI}
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, unmarshal))
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...))
 	if err != nil {
 		return err
 	}
-	if err = aSession.Unmarshal(aComponent.Input.Type.Parameters, []byte(job.State)); err != nil {
+	if err = aSession.Unmarshal(aComponent.Input.Type.Parameters, []byte(aJob.State)); err != nil {
 		return err
 	}
 	if _, err = r.operator.Operate(ctx, aComponent, aSession); err != nil {
 		return err
+	}
+
+	if aJob.EventURL != "" {
+		if err == nil {
+			if err := fs.Delete(ctx, aJob.EventURL); err != nil {
+				//non-critical error, warning here
+				fmt.Printf("[WARNING] unable to delete storage event %v\n", err)
+			}
+		} else {
+			//TODO add separate location to failed event for further troubleshooting and monitoring
+		}
 	}
 	return nil
 }

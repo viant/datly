@@ -2,21 +2,13 @@ package lambda
 
 import (
 	"context"
-	"fmt"
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/router/proxy"
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
-	"github.com/viant/datly/service/auth/jwt"
-	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/gateway/runtime/serverless"
 	"net/http"
-	"os"
-	"sync"
 	"time"
 )
-
-var gwayConfig *gateway.Config
-var configInit sync.Once
 
 func HandleRequest(ctx context.Context, request *adapter.Request) (*events.LambdaFunctionURLResponse, error) {
 	httpRequest := request.Request()
@@ -28,45 +20,14 @@ func HandleRequest(ctx context.Context, request *adapter.Request) (*events.Lambd
 }
 
 func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) error {
-	service, err := prepareHandler(writer)
+	now := time.Now()
+	service, err := serverless.GetService()
 	if err != nil {
 		return err
 	}
 	service.ServeHTTP(writer, httpRequest)
-	return nil
-}
-
-func prepareHandler(writer http.ResponseWriter) (*gateway.Service, error) {
-	now := time.Now()
-
-	configURL := os.Getenv("CONFIG_URL")
-	if configURL == "" {
-		return nil, fmt.Errorf("config was emty")
-	}
-
-	var err error
-	fs := gateway.NewFs(configURL)
-	configInit.Do(func() {
-		gwayConfig, err = gateway.NewConfigFromURL(context.Background(), fs, configURL)
-	})
-
-	if err != nil {
-		configInit = sync.Once{}
-		return nil, err
-	}
-
-	var authorizer gateway.Authorizer
-	if jwtAuthorizer, err := jwt.Init(gwayConfig, nil); err == nil {
-		authorizer = jwtAuthorizer
-	} else {
-		return nil, err
-	}
-
-	service, err := gateway.SingletonWithConfig(gwayConfig, nil, authorizer, extension.Config, nil)
-	if err != nil {
-		return nil, err
-	}
-
 	service.LogInitTimeIfNeeded(now, writer)
-	return service, nil
+	service.LogInitTimeIfNeeded(now, writer)
+
+	return nil
 }
