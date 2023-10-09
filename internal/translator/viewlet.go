@@ -43,7 +43,7 @@ type (
 		Whitelisted    []string
 		Casts          map[string]string
 		Tags           map[string]string
-		Transforms     map[string]*Function
+		//Transforms     map[string]*Function
 		ColumnConfig   []*view.ColumnConfig
 		View           *View
 		TypeDefinition *view.TypeDefinition
@@ -53,11 +53,6 @@ type (
 		typeRegistry  *xreflect.Types
 		Summary       *Viewlet
 		IsSummary     bool
-	}
-
-	Function struct {
-		Name string
-		Args []string
 	}
 
 	OutputSettings struct {
@@ -197,16 +192,15 @@ func NewViewlet(name, SQL string, join *query.Join, resource *Resource) *Viewlet
 	SQL = inference.TrimParenthesis(SQL)
 	connector := ExtractConnectorRef(&SQL)
 	ret := &Viewlet{
-		Name:       name,
-		SQL:        SQL,
-		Join:       join,
-		Exclude:    nil,
-		Resource:   resource,
-		Transforms: map[string]*Function{},
-		Tags:       map[string]string{},
-		Casts:      map[string]string{},
-		View:       &View{Namespace: name, View: view.View{Name: name}},
-		Connector:  connector,
+		Name:      name,
+		SQL:       SQL,
+		Join:      join,
+		Exclude:   nil,
+		Resource:  resource,
+		Tags:      map[string]string{},
+		Casts:     map[string]string{},
+		View:      &View{Namespace: name, View: view.View{Name: name}},
+		Connector: connector,
 	}
 	return ret
 }
