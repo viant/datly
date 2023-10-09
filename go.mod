@@ -17,7 +17,7 @@ require (
 	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.4
-	github.com/viant/afs v1.24.4-0.20231007030525-b635d6c4d60a
+	github.com/viant/afs v1.25.0
 	github.com/viant/afsc v1.9.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.3.2-0.20231006194728-bc2cef8e6029
@@ -50,12 +50,12 @@ require (
 )
 
 require (
-	github.com/viant/structology v0.4.3-0.20230928035534-24145d53cbd0
+	github.com/viant/structology v0.5.0
 	github.com/viant/xdatly v0.3.1-0.20230926222707-334d3e2572d7
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230921001159-c3fcf1e963d0
 	github.com/viant/xdatly/types/core v0.0.0-20230619231115-e622dd6aff79
-	github.com/viant/xlsy v0.2.1-0.20230927184006-41af53377053
+	github.com/viant/xlsy v0.2.1
 	github.com/viant/xmlify v0.0.0-20230928150431-7c1d895ce5d2
 	golang.org/x/tools v0.12.0
 )
@@ -111,9 +111,9 @@ require (
 	github.com/richardlehane/msoleps v1.0.3 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/viant/igo v0.1.0 // indirect
-	github.com/xuri/efp v0.0.0-20220603152613-6918739fd470 // indirect
-	github.com/xuri/excelize/v2 v2.7.1 // indirect
-	github.com/xuri/nfp v0.0.0-20220409054826-5e722a1d9e22 // indirect
+	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
+	github.com/xuri/excelize/v2 v2.8.0 // indirect
+	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/net v0.14.0 // indirect
@@ -128,4 +128,3 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-

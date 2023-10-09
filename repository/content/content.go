@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io/load/reader/csv"
+	"github.com/viant/structology/format"
 	"github.com/viant/xlsy"
 	"github.com/viant/xmlify"
 	"net/http"
@@ -91,7 +92,7 @@ func (x *XLSConfig) Options() []xlsy.Option {
 		options = append(options, xlsy.WithDefaultStyle(x.DefaultStyle))
 	}
 	if x.SheetName != "" {
-		options = append(options, xlsy.WithTag(&xlsy.Tag{Name: x.SheetName}))
+		options = append(options, xlsy.WithTag(&xlsy.Tag{Tag: &format.Tag{Name: x.SheetName}}))
 	}
 	if len(x.Styles) > 0 {
 		var pairs []string
