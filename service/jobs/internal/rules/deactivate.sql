@@ -7,7 +7,7 @@
     $logger.Fatal("both module and view were empty")
 #end
 
-UPDATE DATLY_JOB SET Deactivated = 1  WHERE
+UPDATE DATLY_JOBS SET Deactivated = 1  WHERE
 #if($Unsafe.Views.Length() >  0)
     $criteria.In("ID", $Views)
 #elseif($Has.Module==true)
