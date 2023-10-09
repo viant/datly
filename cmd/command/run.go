@@ -29,6 +29,11 @@ func (s *Service) Run(ctx context.Context, run *options.Run) (err error) {
 }
 
 func (s *Service) dispatchEventsIfNeeded(ctx context.Context, run *options.Run, srv *standalone.Server) {
+	var limiter chan bool
+	if run.MaxJobs > 0 {
+		limiter = make(chan bool, run.MaxJobs)
+	}
+
 	for {
 		objects, _ := s.fs.List(ctx, run.JobURL, option.NewRecursive(true))
 		objectCount := 0
@@ -48,9 +53,17 @@ func (s *Service) dispatchEventsIfNeeded(ctx context.Context, run *options.Run, 
 			if object.IsDir() {
 				continue
 			}
+			if limiter != nil {
+				limiter <- true
+			}
 			wg.Add(1)
 			go func(object storage.Object) {
-				defer wg.Done()
+				defer func() {
+					wg.Done()
+					if limiter != nil {
+						<-limiter
+					}
+				}()
 				router, _ := srv.Service.Router()
 				if router != nil {
 					err := router.DispatchStorageEvent(context.Background(), object)

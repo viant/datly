@@ -8,6 +8,7 @@ type Run struct {
 	ConfigURL  string   `short:"c" long:"conf" description:"datly config"`
 	WarmupURIs []string `short:"w" long:"warmup" description:"warmup uris"`
 	JobURL     string   `short:"z" long:"joburl" description:"job url"`
+	MaxJobs    int      `short:"W" long:"mjobs" description:"max jobs" default:"40" `
 }
 
 func (r *Run) Init() error {
