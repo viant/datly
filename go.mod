@@ -20,7 +20,7 @@ require (
 	github.com/viant/afs v1.25.0
 	github.com/viant/afsc v1.9.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
-	github.com/viant/bigquery v0.3.3-0.20231009195638-b4cfee6e7f5a
+	github.com/viant/bigquery v0.3.3-0.20231010200221-c3e8c785f1e0
 	github.com/viant/cloudless v1.9.3-0.20231007034518-7d85a868e57f
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
