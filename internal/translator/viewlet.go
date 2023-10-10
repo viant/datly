@@ -43,7 +43,7 @@ type (
 		Whitelisted    []string
 		Casts          map[string]string
 		Tags           map[string]string
-		//Transforms     map[string]*Function
+		//Transforms     map[string]*Applier
 		ColumnConfig   []*view.ColumnConfig
 		View           *View
 		TypeDefinition *view.TypeDefinition
