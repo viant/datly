@@ -32,18 +32,15 @@ import (
 
 type (
 	Service struct {
-		initialized    int32
-		reader         *reader.Service
-		executor       *executor.Executor
-		jwtVerifier    *verifier.Service
-		routerResource *router.Resource
-		resource       *view.Resource
-		JwtSigner      *signer.Service
-		config         *Config
-		connector      *view.Connector
-		types          *xreflect.Types
-		registry       *extension.Registry
-		fs             afs.Service
+		initialized int32
+
+		jwtVerifier *verifier.Service
+		resource    *view.Resource
+		JwtSigner   *signer.Service
+		config      *Config
+		connector   *view.Connector
+		registry    *extension.Registry
+		fs          afs.Service
 	}
 
 	Config struct {

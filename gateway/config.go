@@ -33,6 +33,8 @@ type (
 		ContentURL           string
 		PluginsURL           string
 		DependencyURL        string
+		JobURL               string
+		MaxJobs              int
 		UseCacheFS           bool
 		SyncFrequencyMs      int
 		Secrets              []*secret.Resource
