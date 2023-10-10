@@ -158,6 +158,9 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 		result.WriteByte('(')
 		result.WriteString(criteria.Expression)
 		result.WriteByte(')')
+		if len(criteria.Placeholders) > 0 {
+			p.ctx.DataUnit.addAll(criteria.Placeholders...)
+		}
 	}
 
 	return result.String(), nil
