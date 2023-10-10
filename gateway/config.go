@@ -34,6 +34,7 @@ type (
 		PluginsURL           string
 		DependencyURL        string
 		JobURL               string
+		FailedJobURL         string
 		MaxJobs              int
 		UseCacheFS           bool
 		SyncFrequencyMs      int

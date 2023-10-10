@@ -5,15 +5,12 @@ import (
 	"fmt"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/executor/extension"
-	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/template"
 	"github.com/viant/structology"
 	rdata "github.com/viant/toolbox/data"
-	"github.com/viant/velty"
 	"github.com/viant/xreflect"
-	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 	"sync"
@@ -329,14 +326,6 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 	return nil
 }
 
-func nonStateParameters(parameters []*state.Parameter) []*state.Parameter {
-	params := make([]*state.Parameter, 0, len(parameters))
-	for _, p := range parameters {
-		params = append(params, p)
-	}
-	return params
-}
-
 func (t *Template) updateParametersFields() error {
 	for _, param := range t.Parameters {
 		param.SetSelector(t.stateType.Lookup(param.Name))
@@ -346,27 +335,6 @@ func (t *Template) updateParametersFields() error {
 	}
 
 	return nil
-}
-
-func fieldByTemplateName(structType reflect.Type, name string) (*xunsafe.Field, error) {
-	structType = shared.Elem(structType)
-
-	field, ok := structType.FieldByName(name)
-	if !ok {
-		for i := 0; i < structType.NumField(); i++ {
-			field = structType.Field(i)
-			veltyTag := velty.Parse(field.Tag.Get("velty"))
-			for _, fieldName := range veltyTag.Names {
-				if fieldName == name {
-					return xunsafe.NewField(field), nil
-				}
-			}
-		}
-
-		return nil, fmt.Errorf("not found field %v at type %v", name, structType.String())
-	}
-
-	return xunsafe.NewField(field), nil
 }
 
 func (t *Template) IsActualTemplate() bool {

@@ -322,8 +322,6 @@ func (r *Handler) payloadReader(ctx context.Context, request *http.Request, writ
 		format := aComponent.Output.Format(request.URL.Query())
 		contentType := aComponent.Output.ContentType(format)
 		filters := aComponent.Exclusion(aSession.State())
-		fmt.Printf("REST: %T %v\n", aResponse, aResponse)
-
 		data, err := aComponent.Marshal(format, aComponent.Output.Field, aResponse, filters)
 		if err != nil {
 			return nil, httputils.NewHttpMessageError(500, fmt.Errorf("failed to marshal response: %w", err))

@@ -58,7 +58,14 @@ func (e *predicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 		return nil, err
 	}
 
-	return &codec.Criteria{Expression: evaluate.Buffer.String(), Placeholders: evaluate.DataUnit.ParamsGroup[offset:]}, nil
+	placeholderLen := len(evaluate.DataUnit.ParamsGroup) - offset
+	var values = make([]interface{}, placeholderLen)
+	if placeholderLen > 0 {
+		copy(values, evaluate.DataUnit.ParamsGroup[offset:])
+	}
+	criteria := &codec.Criteria{Expression: evaluate.Buffer.String(), Placeholders: values}
+	cuxtomCtx.DataUnit.ParamsGroup = cuxtomCtx.DataUnit.ParamsGroup[:offset]
+	return criteria, nil
 }
 
 func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state *structology.State, value interface{}) (*expand.State, error) {

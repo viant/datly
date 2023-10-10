@@ -22,6 +22,7 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 		return nil, err
 	}
 	setter.SetStringIfEmpty(&s.config.JobURL, run.JobURL)
+	setter.SetStringIfEmpty(&s.config.FailedJobURL, run.FailedJobURL)
 	setter.SetIntIfZero(&s.config.MaxJobs, run.MaxJobs)
 
 	authenticator, err := jwt.Init(s.config.Config, nil)
