@@ -200,6 +200,9 @@ func (p *Parameter) inherit(param *Parameter) {
 	if p.Predicates == nil {
 		p.Predicates = param.Predicates
 	}
+	if p.Value == nil {
+		p.Value = param.Value
+	}
 
 	if len(p.Group) == 0 {
 		p.Group = param.Group
