@@ -207,6 +207,10 @@ func (p *Parameter) inherit(param *Parameter) {
 	if len(p.Group) == 0 {
 		p.Group = param.Group
 	}
+	if len(p.Repeated) == 0 {
+		p.Repeated = param.Repeated
+	}
+
 }
 
 // Validate checks if parameter is valid
