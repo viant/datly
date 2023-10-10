@@ -64,7 +64,7 @@ var parameterDeclarationMatcher = parsly.NewToken(parameterDeclarationToken, "$_
 var commentMatcher = parsly.NewToken(commentToken, "/**/", matcher.NewSeqBlock("/*", "*/"))
 var typeMatcher = parsly.NewToken(typeToken, "<T>", matcher.NewSeqBlock("<", ">"))
 var dotMatcher = parsly.NewToken(dotToken, "call", matcher.NewByte('.'))
-var selectMatcher = parsly.NewToken(selectToken, "Function call", imatchers.NewIdentity())
+var selectMatcher = parsly.NewToken(selectToken, "Applier call", imatchers.NewIdentity())
 
 var execStmtMatcher = parsly.NewToken(execStmtToken, "Exec statement", matcher.NewFragmentsFold([]byte("insert"), []byte("update"), []byte("delete"), []byte("call"), []byte("begin")))
 var readStmtMatcher = parsly.NewToken(readStmtToken, "Select statement", matcher.NewFragmentsFold([]byte("select")))

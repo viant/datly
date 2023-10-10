@@ -124,6 +124,7 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 			return nil, err
 		}
 	}
+	go srv.watchAsyncJob(context.Background())
 	fmt.Printf("[INFO]: started gatweay after: %s\n", time.Since(start))
 	return srv, err
 }

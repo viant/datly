@@ -43,16 +43,13 @@ func NewFs(configURL string) afs.Service {
 
 func SingletonWithConfig(config *Config, statusHandler http.Handler, authorizer Authorizer, registry *extension.Registry, metric *gmetric.Service) (*Service, error) {
 	var err error
-
 	once.Do(func() {
 		ctx := context.Background()
 		service, err = New(ctx, config, statusHandler, authorizer, registry, metric)
 	})
-
 	if err != nil {
 		once = sync.Once{}
 	}
-
 	return service, err
 }
 
