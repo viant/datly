@@ -7,6 +7,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/translator"
+	"github.com/viant/datly/view/extension"
 )
 
 func (s *Service) ensureTranslator(opts *options.Options) error {
@@ -49,6 +50,8 @@ func (s *Service) translate(ctx context.Context, opts *options.Options) error {
 	}
 	rule := opts.Rule()
 	for rule.Index = 0; rule.Index < len(rule.Source); rule.Index++ {
+		extension.InitRegistry()
+		_ = s.translator.InitSignature(ctx, rule)
 		currRule := opts.Rule()
 		sourceURL := currRule.SourceURL()
 		_, name := url.Split(sourceURL, file.Scheme)

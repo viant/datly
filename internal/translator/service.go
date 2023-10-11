@@ -39,6 +39,14 @@ type Service struct {
 	signature  *signature.Service
 }
 
+func (s *Service) InitSignature(ctx context.Context, rule *options.Rule) (err error) {
+	prefix := path.Join(s.Repository.Config.APIPrefix, rule.ModulePrefix)
+	if s.signature, err = signature.New(ctx, prefix, s.Repository.Config.RouteURL); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string, opts *options.Options) (err error) {
 	resource := NewResource(rule, s.Repository.Config.repository, &s.Repository.Messages)
 	resource.Resource.Substitutes = s.Repository.Substitutes
@@ -86,8 +94,7 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 func (s *Service) discoverComponentContract(ctx context.Context, resource *Resource, location *state.Location) (*signature.Signature, error) {
 	var err error
 	if s.signature == nil {
-		prefix := path.Join(s.Repository.Config.APIPrefix, resource.rule.ModulePrefix)
-		if s.signature, err = signature.New(ctx, prefix, s.Repository.Config.RouteURL); err != nil {
+		if err = s.InitSignature(ctx, resource.rule); err != nil {
 			return nil, err
 		}
 	}

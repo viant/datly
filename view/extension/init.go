@@ -28,64 +28,69 @@ const (
 	CodecKeyJwtClaim        = "JwtClaim"
 )
 
-var Config = &Registry{
-	Types: xreflect.NewTypes(xreflect.WithTypes(
-		xreflect.NewType(TypeJwtTokenInfo, xreflect.WithReflectType(reflect.TypeOf(&jwt.Claims{}))),
-		xreflect.NewType(TypeJwtClaims, xreflect.WithReflectType(reflect.TypeOf(jwt.Claims{}))),
-		xreflect.NewType("RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
-		xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
-		xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
-		xreflect.NewType("types.BitBool", xreflect.WithReflectType(reflect.TypeOf(types.BitBool(true)))),
-		xreflect.NewType("time.Time", xreflect.WithReflectType(xreflect.TimeType)),
-		xreflect.NewType("response.Status", xreflect.WithReflectType(reflect.TypeOf(response.Status{}))),
-		xreflect.NewType("response.JobInfo", xreflect.WithReflectType(reflect.TypeOf(response.JobInfo{}))),
-
-		xreflect.NewType("predicate.StringsFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.StringsFilter{}))),
-		xreflect.NewType("predicate.IntFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.IntFilter{}))),
-		xreflect.NewType("predicate.BoolFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.BoolFilter{}))),
-		xreflect.NewType("xmltab.Result", xreflect.WithReflectType(reflect.TypeOf(xmltab.Result{}))),
-		xreflect.NewType("xmlfilter.Result", xreflect.WithReflectType(reflect.TypeOf(xmlfilter.Result{}))),
-		xreflect.NewType("jsontab.Result", xreflect.WithReflectType(reflect.TypeOf(jsontab.Result{}))),
-		xreflect.NewType("async.Job", xreflect.WithReflectType(reflect.TypeOf(async.Job{}))),
-		xreflect.NewType("predicate.NamedFilters", xreflect.WithReflectType(reflect.TypeOf(predicate.NamedFilters{}))),
-	)),
-	Codecs: codec.NewRegistry(
-		codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
-		codec.WithCodec(dcodec.CognitoKeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
-		codec.WithCodec(dcodec.KeyAsStrings, &dcodec.AsStrings{}, time.Time{}),
-		codec.WithFactory(dcodec.KeyCSV, dcodec.CsvFactory(""), time.Time{}),
-		codec.WithFactory(dcodec.Structql, dcodec.StructQLFactory(""), time.Time{}),
-		codec.WithFactory(dcodec.JSON, &dcodec.JSONFactory{}, time.Time{}),
-		codec.WithFactory(dcodec.VeltyCriteria, &dcodec.VeltyCriteriaFactory{}, time.Time{}),
-		codec.WithFactory(dcodec.KeyCriteriaBuilder, &dcodec.CriteriaBuilderFactory{}, time.Time{}),
-		codec.WithFactory(dcodec.Encode, &dcodec.EncodeFactory{}, time.Time{}),
-		codec.WithFactory(dcodec.KeyTransfer, &dcodec.TransferFactory{}, time.Time{}),
-		codec.WithFactory(dcodec.KeyXmlTab, &dcodec.XmlTabFactory{}, time.Time{}),
-		codec.WithFactory(dcodec.KeyXmlFilter, &dcodec.XmlFilterFactory{}, time.Time{}),
-		codec.WithFactory(dcodec.KeyJsonTab, &dcodec.JsonTabFactory{}, time.Time{}),
-		codec.WithFactory(dcodec.KeyFilters, &dcodec.FiltersRegistry{}, time.Time{}),
-		codec.WithFactory(dcodec.KeyURIRewrite, &dcodec.URIRewriterFactory{}, time.Time{}),
-		codec.WithFactory(dcodec.KeyTimeDiff, &dcodec.TimeDiffFactory{}, time.Time{}),
-	),
-	Predicates: &PredicateRegistry{
-		registry: map[string]*Predicate{
-			PredicateEqual:       NewEqualPredicate(),
-			PredicateNotEqual:    NewNotEqualPredicate(),
-			PredicateNotIn:       NewNotInPredicate(),
-			PredicateIn:          NewInPredicate(),
-			PredicateMultiNotIn:  NewMultiNotInPredicate(),
-			PredicateMultiIn:     NewMultiInPredicate(),
-			PredicateLessOrEqual: NewLessOrEqualPredicate(),
-			PredicateLike:        NewLikePredicate(),
-			PredicateNotLike:     NewNotLikePredicate(),
-			PredicateHandler:     NewPredicateHandler(),
-			PredicateContains:    NewContainsPredicate(),
-			PredicateNotContains: NewNotContainsPredicate(),
-		},
-	},
-}
+var Config *Registry
 
 func init() {
+	InitRegistry()
+}
+
+func InitRegistry() {
+	Config = &Registry{
+		Types: xreflect.NewTypes(xreflect.WithTypes(
+			xreflect.NewType(TypeJwtTokenInfo, xreflect.WithReflectType(reflect.TypeOf(&jwt.Claims{}))),
+			xreflect.NewType(TypeJwtClaims, xreflect.WithReflectType(reflect.TypeOf(jwt.Claims{}))),
+			xreflect.NewType("RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
+			xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
+			xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
+			xreflect.NewType("types.BitBool", xreflect.WithReflectType(reflect.TypeOf(types.BitBool(true)))),
+			xreflect.NewType("time.Time", xreflect.WithReflectType(xreflect.TimeType)),
+			xreflect.NewType("response.Status", xreflect.WithReflectType(reflect.TypeOf(response.Status{}))),
+			xreflect.NewType("response.JobInfo", xreflect.WithReflectType(reflect.TypeOf(response.JobInfo{}))),
+
+			xreflect.NewType("predicate.StringsFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.StringsFilter{}))),
+			xreflect.NewType("predicate.IntFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.IntFilter{}))),
+			xreflect.NewType("predicate.BoolFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.BoolFilter{}))),
+			xreflect.NewType("xmltab.Result", xreflect.WithReflectType(reflect.TypeOf(xmltab.Result{}))),
+			xreflect.NewType("xmlfilter.Result", xreflect.WithReflectType(reflect.TypeOf(xmlfilter.Result{}))),
+			xreflect.NewType("jsontab.Result", xreflect.WithReflectType(reflect.TypeOf(jsontab.Result{}))),
+			xreflect.NewType("async.Job", xreflect.WithReflectType(reflect.TypeOf(async.Job{}))),
+			xreflect.NewType("predicate.NamedFilters", xreflect.WithReflectType(reflect.TypeOf(predicate.NamedFilters{}))),
+		)),
+		Codecs: codec.NewRegistry(
+			codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
+			codec.WithCodec(dcodec.CognitoKeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
+			codec.WithCodec(dcodec.KeyAsStrings, &dcodec.AsStrings{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyCSV, dcodec.CsvFactory(""), time.Time{}),
+			codec.WithFactory(dcodec.Structql, dcodec.StructQLFactory(""), time.Time{}),
+			codec.WithFactory(dcodec.JSON, &dcodec.JSONFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.VeltyCriteria, &dcodec.VeltyCriteriaFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyCriteriaBuilder, &dcodec.CriteriaBuilderFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.Encode, &dcodec.EncodeFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyTransfer, &dcodec.TransferFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyXmlTab, &dcodec.XmlTabFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyXmlFilter, &dcodec.XmlFilterFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyJsonTab, &dcodec.JsonTabFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyFilters, &dcodec.FiltersRegistry{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyURIRewrite, &dcodec.URIRewriterFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyTimeDiff, &dcodec.TimeDiffFactory{}, time.Time{}),
+		),
+		Predicates: &PredicateRegistry{
+			registry: map[string]*Predicate{
+				PredicateEqual:       NewEqualPredicate(),
+				PredicateNotEqual:    NewNotEqualPredicate(),
+				PredicateNotIn:       NewNotInPredicate(),
+				PredicateIn:          NewInPredicate(),
+				PredicateMultiNotIn:  NewMultiNotInPredicate(),
+				PredicateMultiIn:     NewMultiInPredicate(),
+				PredicateLessOrEqual: NewLessOrEqualPredicate(),
+				PredicateLike:        NewLikePredicate(),
+				PredicateNotLike:     NewNotLikePredicate(),
+				PredicateHandler:     NewPredicateHandler(),
+				PredicateContains:    NewContainsPredicate(),
+				PredicateNotContains: NewNotContainsPredicate(),
+			},
+		},
+	}
 	types, _ := core.Types(nil)
 	for packageName, typesRegsitry := range types {
 		for typeName, rType := range typesRegsitry {
