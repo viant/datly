@@ -348,6 +348,12 @@ func (s *Session) HttpRequest(ctx context.Context, options *Options) (*http.Requ
 	return request, nil
 }
 
+// SetCacheValue sets cache value
+func (s *Session) SetCacheValue(ctx context.Context, parameter *state.Parameter, value interface{}) error {
+	_, _, err := s.adjustAndCache(ctx, parameter, &s.Options, true, value, true)
+	return err
+}
+
 func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, opts *Options) (value interface{}, has bool, err error) {
 	if opts == nil {
 		opts = &s.Options
@@ -381,11 +387,15 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 		}
 	}
 
+	return s.adjustAndCache(ctx, parameter, opts, has, value, cachable)
+}
+
+func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter, opts *Options, has bool, value interface{}, cachable bool) (interface{}, bool, error) {
+	var err error
 	if !has && parameter.Value != nil {
 		has = true
 		value = parameter.Value
 	}
-
 	if !has {
 		return nil, has, nil
 	}

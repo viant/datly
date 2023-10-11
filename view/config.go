@@ -70,9 +70,23 @@ type (
 		Fields   string `json:",omitempty"`
 		OrderBy  string `json:",omitempty"`
 		Criteria string `json:",omitempty"`
-		SyncFalg string `json:",omitempty"`
+		SyncFlag string `json:",omitempty"`
 	}
 )
+
+func (c *Config) GetSyncFlagParameter() *state.Parameter {
+	if c.SyncFlagParameter != nil {
+		return c.SyncFlagParameter
+	}
+	return QueryStateParameters.SyncFlagParameter
+}
+
+func (c *Config) GetContentFormatParameter() *state.Parameter {
+	if c.ContentFormatParameter != nil {
+		return c.ContentFormatParameter
+	}
+	return QueryStateParameters.ContentFormatParameter
+}
 
 func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) error {
 	if err := c.ensureConstraints(resource); err != nil {
@@ -114,7 +128,7 @@ func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) err
 		c.OrderByParameter = c.newSelectorParam(name, OrderByQuery, parent)
 	}
 
-	if name := parameters.SyncFalg; (name != "") && derefBool(c.fieldsDefault, c.SyncFlagParameter == nil) {
+	if name := parameters.SyncFlag; (name != "") && derefBool(c.fieldsDefault, c.SyncFlagParameter == nil) {
 		c.fieldsDefault = boolPtr(name == "")
 		c.SyncFlagParameter = c.newSelectorParam(name, SyncFlag, parent)
 	}
