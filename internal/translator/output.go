@@ -237,18 +237,16 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 		}
 		outputType := sourceSelector.Type()
 		fmt.Printf("source selector type: %s\n", outputType.String())
-		if tag.AsXmlTab {
-			outputType = reflect.TypeOf(&xmltab.Result{})
-		}
-		if tag.AsXmlFilter {
-			outputType = reflect.TypeOf(&xmlfilter.Result{})
-		}
-		if tag.AsJsonTab {
-			outputType = reflect.TypeOf(&jsontab.Result{})
-		}
+
 		switch tag.Codec {
 		case codec.KeyFilters:
 			outputType = reflect.TypeOf(predicate.NamedFilters{})
+		case codec.KeyXmlTab:
+			outputType = reflect.TypeOf(&xmltab.Result{})
+		case codec.KeyJsonTab:
+			outputType = reflect.TypeOf(&jsontab.Result{})
+		case codec.KeyXmlFilter:
+			outputType = reflect.TypeOf(&xmlfilter.Result{})
 		}
 
 		adjustedDest.Append(&inference.Parameter{

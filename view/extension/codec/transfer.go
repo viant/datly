@@ -87,28 +87,25 @@ func (e *Transfer) Value(ctx context.Context, raw interface{}, options ...codec.
 			return nil, err
 		}
 
-		if aTransfer.tag.AsXmlTab {
-			value, err = e.srvXmlTab.Transfer(value)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if aTransfer.tag.AsJsonTab {
-			value, err = e.srvJsonTab.Transfer(value)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if aTransfer.tag.AsXmlFilter {
-			value, err = e.srvXmlFilter.Transfer(value)
-			if err != nil {
-				return nil, err
-			}
-		}
 		switch aTransfer.tag.Codec { //TODO pass in ctx codec registry and generalize it
 		case KeyFilters:
 			aCodec, _ := e.filters.New(&codec.Config{})
 			value, err = aCodec.Value(ctx, value)
+			if err != nil {
+				return nil, err
+			}
+		case KeyXmlTab:
+			value, err = e.srvXmlTab.Transfer(value)
+			if err != nil {
+				return nil, err
+			}
+		case KeyJsonTab:
+			value, err = e.srvJsonTab.Transfer(value)
+			if err != nil {
+				return nil, err
+			}
+		case KeyXmlFilter:
+			value, err = e.srvXmlFilter.Transfer(value)
 			if err != nil {
 				return nil, err
 			}
