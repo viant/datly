@@ -144,5 +144,5 @@ func (c *Context) AsyncStatus() string {
 }
 
 func NewContext() *Context {
-	return &Context{StartTime: time.Now()}
+	return &Context{StartTime: time.Now(), values: map[string]interface{}{}}
 }
