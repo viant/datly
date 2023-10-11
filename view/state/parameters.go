@@ -472,3 +472,9 @@ func WithParameterSchema(schema *Schema) ParameterOption {
 		p.Schema = schema
 	}
 }
+
+func WithCachable(flag bool) ParameterOption {
+	return func(p *Parameter) {
+		p.Cacheable = &flag
+	}
+}

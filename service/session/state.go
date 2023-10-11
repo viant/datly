@@ -362,7 +362,7 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 	if !canRead || err != nil {
 		return nil, false, err
 	}
-	cachable := isCachable(parameter)
+	cachable := parameter.IsCacheable()
 	if value, has = s.cache.lookup(parameter); has && cachable {
 		return value, has, nil
 	}
@@ -413,15 +413,6 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 		s.cache.put(parameter, value)
 	}
 	return value, has, err
-}
-
-func isCachable(parameter *state.Parameter) bool {
-	switch parameter.In.Kind {
-	case state.KindState:
-		return false
-	default:
-		return true
-	}
 }
 
 func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (interface{}, error) {

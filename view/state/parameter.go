@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
@@ -38,15 +39,24 @@ type (
 		Tag               string      `json:",omitempty" yaml:"Tag"`
 		Lazy              bool        `json:",omitempty" yaml:"Lazy"`
 		When              string      `json:",omitempty" yaml:"When"`
-		isOutputType      bool
-		_selector         *structology.Selector
-		_initialized      bool
-		_dependsOn        *Parameter
-		_state            *structology.StateType
+		Cacheable         *bool       `json:",omitempty" yaml:"Cacheable"`
+
+		isOutputType bool
+
+		_selector    *structology.Selector
+		_initialized bool
+		_dependsOn   *Parameter
+		_state       *structology.StateType
 	}
 	ParameterOption func(p *Parameter)
 )
 
+func (p *Parameter) IsCacheable() bool {
+	if p.Cacheable == nil {
+		return p.In.Kind != KindState
+	}
+	return *p.Cacheable
+}
 func (p Parameters) FlagOutput() {
 	for _, param := range p {
 		param.isOutputType = true
@@ -169,10 +179,14 @@ func (p *Parameter) inheritParamIfNeeded(ctx context.Context, resource Resource)
 }
 
 func (p *Parameter) inherit(param *Parameter) {
-	p.Name = shared.FirstNotEmpty(p.Name, param.Name)
-	p.Description = shared.FirstNotEmpty(p.Description, param.Description)
-	p.Style = shared.FirstNotEmpty(p.Style, param.Style)
-	p.Tag = shared.FirstNotEmpty(p.Tag, param.Tag)
+	setter.SetStringIfEmpty(&p.Name, param.Name)
+	setter.SetStringIfEmpty(&p.Description, param.Description)
+	setter.SetStringIfEmpty(&p.Style, param.Style)
+	setter.SetStringIfEmpty(&p.DataType, param.DataType)
+	setter.SetStringIfEmpty(&p.Tag, param.Tag)
+	setter.SetStringIfEmpty(&p.When, param.When)
+	setter.SetBoolIfFalse(&p.Lazy, param.Lazy)
+
 	if p.Const == nil {
 		p.Const = param.Const
 	}

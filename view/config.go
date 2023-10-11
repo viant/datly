@@ -22,6 +22,7 @@ const (
 	SyncFlag      = "viewSyncFlag"
 )
 
+var trueValue = true
 var stringsType = reflect.TypeOf([]string{})
 
 var QueryStateParameters = &Config{
@@ -31,7 +32,7 @@ var QueryStateParameters = &Config{
 	FieldsParameter:        &state.Parameter{Name: "Fields", In: state.NewQueryLocation(FieldsQuery), Schema: state.NewSchema(stringsType)},
 	OrderByParameter:       &state.Parameter{Name: "OrderBy", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(stringsType)},
 	CriteriaParameter:      &state.Parameter{Name: "Criteria", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(xreflect.StringType)},
-	SyncFlagParameter:      &state.Parameter{Name: "SyncFlag", In: state.NewState(SyncFlag), Schema: state.NewSchema(boolType)},
+	SyncFlagParameter:      &state.Parameter{Name: "SyncFlag", Cacheable: &trueValue, In: state.NewState(SyncFlag), Schema: state.NewSchema(boolType)},
 	ContentFormatParameter: &state.Parameter{Name: "ContentFormat", In: state.NewQueryLocation(ContentFormat), Schema: state.NewSchema(xreflect.StringType)},
 }
 
