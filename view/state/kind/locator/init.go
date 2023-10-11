@@ -15,4 +15,5 @@ func init() {
 	Register(state.KindObject, NewObject)
 	Register(state.KindRepeated, NewRepeated)
 	Register(state.KindState, NewState)
+	Register(state.KindContext, NewContext)
 }

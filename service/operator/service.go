@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/service/operator/exec"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler/async"
 )
@@ -50,12 +51,12 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 }
 
 func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
-	var info *exec.Info
-	if ctx.Value(exec.InfoKey) == nil {
-		ctx = context.WithValue(ctx, exec.InfoKey, &exec.Info{})
+	var info *exec.Context
+	if ctx.Value(exec.ContextKey) == nil {
+		ctx = context.WithValue(ctx, exec.ContextKey, exec.NewContext())
 	}
-	if infoValue := ctx.Value(exec.InfoKey); infoValue != nil {
-		info = infoValue.(*exec.Info)
+	if infoValue := ctx.Value(exec.ContextKey); infoValue != nil {
+		info = infoValue.(*exec.Context)
 	}
 	s.ensureContentSetting(ctx, aSession, aComponent)
 	asyncModule := aComponent.Async
@@ -70,14 +71,19 @@ func (s *Service) ensureContentSetting(ctx context.Context, aSession *session.Se
 	if settings != nil && settings.ContentFormat == "" {
 		settings.ContentFormat = aComponent.Output.DataFormat
 	}
+	execContext := ctx.Value(exec.ContextKey).(*exec.Context)
+	if value, has := execContext.Value(view.SyncFlag); has {
+		settings.SyncFlag = value.(bool)
+	}
 	switch settings.ContentFormat { //fore sync response for the following content types
 	case content.XLSFormat:
+		execContext.SetValue(view.SyncFlag, true)
 		_ = aSession.SetCacheValue(ctx, aComponent.View.Selector.GetSyncFlagParameter(), true)
 		settings.SyncFlag = true
 	}
 }
 
-func (s *Service) ensureAsyncContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session, asyncModule *rasync.Config, info *exec.Info) (context.Context, error) {
+func (s *Service) ensureAsyncContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session, asyncModule *rasync.Config, info *exec.Context) (context.Context, error) {
 	if job := ctx.Value(async.JobKey); job != nil {
 		return ctx, nil
 	}

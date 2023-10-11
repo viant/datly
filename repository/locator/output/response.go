@@ -7,11 +7,11 @@ import (
 )
 
 func (l *outputLocator) getResponseValue(ctx context.Context, name string) (interface{}, bool, error) {
-	infoValue := ctx.Value(exec.InfoKey)
+	infoValue := ctx.Value(exec.ContextKey)
 	if infoValue == nil {
 		return nil, false, nil
 	}
-	info := infoValue.(*exec.Info)
+	info := infoValue.(*exec.Context)
 
 	switch name {
 	case keys.ResponseElapsedInSec:

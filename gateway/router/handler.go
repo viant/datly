@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/operator"
+	"github.com/viant/datly/service/operator/exec"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
@@ -129,6 +130,7 @@ func (r *Handler) Serve(serverPath string) error {
 
 func (r *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx := context.Background()
+	ctx = context.WithValue(ctx, exec.ContextKey, exec.NewContext())
 	r.HandleRequest(ctx, writer, request)
 }
 

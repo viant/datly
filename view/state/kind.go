@@ -28,13 +28,14 @@ const (
 	KindOutput    Kind = "output"    //reader output
 	KindState     Kind = "state"     //input state
 	KindComponent Kind = "component" //input state
+	KindContext   Kind = "context"   //global context based state
 
 )
 
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindComponent:
+	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindComponent:
 		return nil
 	}
 
@@ -67,8 +68,10 @@ func (k Kind) Ordinal() int {
 		return 10
 	case KindState:
 		return 11
-	case KindComponent:
+	case KindContext:
 		return 12
+	case KindComponent:
+		return 13
 	}
 	return -1
 }
