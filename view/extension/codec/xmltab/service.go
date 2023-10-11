@@ -12,6 +12,7 @@ import (
 )
 
 const RFC3339NanoCustomized = "2006-01-02T15:04:05.000Z07:00"
+const XmlTabNullValue = "true"
 
 type (
 	ColumnHeader struct {
@@ -29,6 +30,7 @@ type (
 		DoubleType *string `json:",omitempty" xmlify:"omitempty,path=@db"`
 		DateType   *string `json:",omitempty" xmlify:"omitempty,path=@ts"`
 		Value      *string `json:",omitempty" xmlify:"omitempty,omittagname"`
+		ValueAttr  *string `json:",omitempty" xmlify:"omitempty,path=@nil"`
 	}
 
 	Row struct {
@@ -81,6 +83,8 @@ func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsaf
 
 func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Pointer) (*Row, error) {
 	var row Row
+	var nullValue = XmlTabNullValue
+
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
 		tag := xmlify.ParseTag(field.Tag.Get("xmlify"))
@@ -107,21 +111,29 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 			case reflect.String:
 				if v := field.StringPtr(sourcePtr); v != nil {
 					value.Value = v
+				} else {
+					value.ValueAttr = &nullValue
 				}
 			case reflect.Int:
 				if v := field.IntPtr(sourcePtr); v != nil {
 					s := strconv.Itoa(*v)
 					value.LongType = &s
+				} else {
+					value.ValueAttr = &nullValue
 				}
 			case reflect.Float64:
 				if v := field.Float64Ptr(sourcePtr); v != nil {
 					s := strconv.FormatFloat(*v, 'f', -1, 64)
 					value.DoubleType = &s
+				} else {
+					value.ValueAttr = &nullValue
 				}
 			case reflect.Float32:
 				if v := field.Float32Ptr(sourcePtr); v != nil {
 					s := strconv.FormatFloat(float64(*v), 'f', -1, 32)
 					value.DoubleType = &s
+				} else {
+					value.ValueAttr = &nullValue
 				}
 			default:
 				v := field.Value(sourcePtr)
@@ -130,32 +142,22 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 					if ts, ok := v.(*time.Time); ok && ts != nil {
 						s := ts.Format(RFC3339NanoCustomized)
 						value.DateType = &s
+					} else {
+						value.ValueAttr = &nullValue
 					}
 				case xreflect.TimeType:
 					if ts, ok := v.(time.Time); ok {
 						s := ts.Format(RFC3339NanoCustomized)
 						value.DateType = &s
+					} else {
+						value.ValueAttr = &nullValue
 					}
 				default:
 					return nil, fmt.Errorf("xmltab: usnupported type: %T", v)
 				}
 			}
 		default:
-			v := field.Value(sourcePtr)
-			switch field.Type {
-			case xreflect.TimePtrType:
-				if ts, ok := v.(*time.Time); ok && ts != nil {
-					s := ts.Format(RFC3339NanoCustomized)
-					value.DateType = &s
-				}
-			case xreflect.TimeType:
-				if ts, ok := v.(time.Time); ok {
-					s := ts.Format(RFC3339NanoCustomized)
-					value.DateType = &s
-				}
-			default:
-				return nil, fmt.Errorf("xmltab: usnupported type: %T", v)
-			}
+			return nil, fmt.Errorf("xmltab: usnupported kind: %v", field.Type.Kind())
 		}
 		row.ColumnValues = append(row.ColumnValues, value)
 	}
