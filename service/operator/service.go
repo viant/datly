@@ -68,7 +68,7 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 func (s *Service) ensureContentSetting(aSession *session.Session, aComponent *repository.Component) {
 	settings := aSession.State().QuerySettings(aComponent.View)
 	if settings != nil && settings.ContentFormat == "" {
-		settings.ContentFormat = aComponent.DateFormat
+		settings.ContentFormat = aComponent.Output.DataFormat
 	}
 	switch settings.ContentFormat { //fore sync response for the following content types
 	case content.XLSFormat:
