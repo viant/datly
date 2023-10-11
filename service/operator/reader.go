@@ -39,7 +39,6 @@ func (s *Service) adjustAsyncOptions(ctx context.Context, aSession *session.Sess
 			}
 		}
 	}
-
 }
 
 func (s *Service) InvocationType(ctx context.Context) async.InvocationType {

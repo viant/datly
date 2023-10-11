@@ -22,6 +22,16 @@ const (
 )
 
 type (
+	Content struct {
+		Marshaller
+		DateFormat               string             `json:",omitempty"`
+		CSV                      *CSVConfig         `json:",omitempty"`
+		XLS                      *XLSConfig         `json:",omitempty"`
+		XML                      *XMLConfig         `json:",omitempty"`
+		TabularJSON              *TabularJSONConfig `json:",omitempty"`
+		Transforms               marshal.Transforms `json:"Transforms,omitempty" yaml:"Transforms,omitempty" `
+		unmarshallerInterceptors marshal.Transforms
+	}
 	XLSConfig struct {
 		DefaultStyle string
 		SheetName    string
@@ -40,17 +50,6 @@ type (
 		config           *xmlify.Config
 		InputMarshaller  *xmlify.Marshaller
 		OutputMarshaller *xmlify.Marshaller
-	}
-
-	Content struct {
-		Marshaller
-		DateFormat               string             `json:",omitempty"`
-		CSV                      *CSVConfig         `json:",omitempty"`
-		XLS                      *XLSConfig         `json:",omitempty"`
-		XML                      *XMLConfig         `json:",omitempty"`
-		TabularJSON              *TabularJSONConfig `json:",omitempty"`
-		Transforms               marshal.Transforms `json:"Transforms,omitempty" yaml:"Transforms,omitempty" `
-		unmarshallerInterceptors marshal.Transforms
 	}
 
 	JSON struct {

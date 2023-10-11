@@ -9,6 +9,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/datly/repository"
 	rasync "github.com/viant/datly/repository/async"
+	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/operator/exec"
 	"github.com/viant/datly/service/session"
@@ -70,7 +71,7 @@ func (s *Service) ensureContentSetting(aSession *session.Session, aComponent *re
 		settings.ContentFormat = aComponent.DateFormat
 	}
 	switch settings.ContentFormat { //fore sync response for the following content types
-	case "xls":
+	case content.XLSFormat:
 		settings.SyncFlag = true
 	}
 }
