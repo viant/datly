@@ -72,7 +72,7 @@ func (s *Service) ensureContentSetting(ctx context.Context, aSession *session.Se
 	}
 	switch settings.ContentFormat { //fore sync response for the following content types
 	case content.XLSFormat:
-		_ = aSession.SetCacheValue(ctx, aComponent.View.Selector.GetSyncFlagParameter(), settings.ContentFormat)
+		_ = aSession.SetCacheValue(ctx, aComponent.View.Selector.GetSyncFlagParameter(), true)
 		settings.SyncFlag = true
 	}
 }
