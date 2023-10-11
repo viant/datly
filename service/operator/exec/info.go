@@ -110,7 +110,7 @@ func (i *Info) AsyncStatus() string {
 	runningCount := 0
 	doneCount := 0
 	for _, candidate := range i.jobs {
-		if candidate.Status == string(async.StatusDone) {
+		if candidate.Status == string(async.StatusDone) || candidate.Status == string(async.StatusError) {
 			doneCount++
 		} else if candidate.Status == string(async.StatusRunning) {
 			runningCount++

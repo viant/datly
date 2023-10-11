@@ -38,6 +38,12 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	}
 	job := s.Job(ctx)
 	job.Status = string(async.StatusDone)
+
+	if response.Error != nil {
+		errMessage := response.Error.Error()
+		job.Status = string(async.StatusError)
+		job.Error = &errMessage
+	}
 	endedAt := time.Now()
 	job.EndTime = &endedAt
 	elapsed := endedAt.Sub(*job.StartTime)
