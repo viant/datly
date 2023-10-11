@@ -103,6 +103,9 @@ func (s *Session) setPageQuerySelector(value interface{}, ns *view.NamespaceView
 func (s *Session) setSyncFlag(value interface{}, ns *view.NamespaceView) error {
 	flag, _ := value.(bool)
 	selector := s.state.Lookup(ns.View)
+	if selector.SyncFlag { //once flag is sync do not allow reset
+		return nil
+	}
 	selector.SyncFlag = flag
 	return nil
 }
