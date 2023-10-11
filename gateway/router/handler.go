@@ -9,10 +9,11 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/option"
-	"github.com/viant/afs/option/content"
+	acontent "github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/status"
 	"github.com/viant/datly/repository"
+	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/executor/expand"
@@ -224,7 +225,7 @@ func (r *Handler) writeResponse(ctx context.Context, request *http.Request, resp
 
 	compressionType := payloadReader.CompressionType()
 	if compressionType != "" {
-		response.Header().Set(content.Encoding, compressionType)
+		response.Header().Set(acontent.Encoding, compressionType)
 	}
 	response.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(response, payloadReader)
@@ -236,13 +237,13 @@ func (r *Handler) PreSign(ctx context.Context, viewName string, payload PayloadR
 	UUID := uuid.New()
 	URL := url.Join(redirect.StorageURL, normalizeStorageURL(viewName), normalizeStorageURL(UUID.String())) + ".json"
 	preSign := option.NewPreSign(redirect.TimeToLive())
-	kv := []string{content.Type, httputils.ContentTypeJSON}
+	kv := []string{acontent.Type, httputils.ContentTypeJSON}
 	compressionType := payload.CompressionType()
 
 	if compressionType != "" {
-		kv = append(kv, content.Encoding, compressionType)
+		kv = append(kv, acontent.Encoding, compressionType)
 	}
-	meta := content.NewMeta(kv...)
+	meta := acontent.NewMeta(kv...)
 	err := fs.Upload(ctx, URL, file.DefaultFileOsMode, payload, preSign, meta)
 	return preSign, err
 }
@@ -323,12 +324,20 @@ func (r *Handler) payloadReader(ctx context.Context, request *http.Request, writ
 	if aComponent.Service == service.TypeReader {
 		format := aComponent.Output.Format(request.URL.Query())
 		contentType := aComponent.Output.ContentType(format)
+		var options []RequestDataReaderOption
+		options = append(options, WithHeader("Content-Type", contentType))
+		if aComponent.Output.Title != "" {
+			switch format {
+			case content.XLSFormat:
+				options = append(options, WithHeader("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.xlsx"`, aComponent.Output.GetTitle())))
+			}
+		}
 		filters := aComponent.Exclusion(aSession.State())
-		data, err := aComponent.Marshal(format, aComponent.Output.Field, aResponse, filters)
+		data, err := aComponent.Content.Marshal(format, aComponent.Output.Field, aResponse, filters)
 		if err != nil {
 			return nil, httputils.NewHttpMessageError(500, fmt.Errorf("failed to marshal response: %w", err))
 		}
-		return r.compressIfNeeded(data, WithHeader("Content-Type", contentType))
+		return r.compressIfNeeded(data, options...)
 	}
 
 	return r.marshalCustomOutput(aResponse, aComponent)
@@ -345,7 +354,7 @@ func (r *Handler) marshalCustomOutput(output interface{}, aComponent *repository
 	case []byte:
 		return NewBytesReader(actual, ""), nil
 	default:
-		marshal, err := aComponent.JsonMarshaller.Marshal(output)
+		marshal, err := aComponent.Content.JsonMarshaller.Marshal(output)
 		if err != nil {
 			return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
 		}
@@ -359,7 +368,7 @@ func (r *Handler) extractValueFromResponse(aComponent *repository.Component, act
 	case []byte:
 		return responseValue, nil
 	default:
-		return aComponent.JsonMarshaller.Marshal(responseValue)
+		return aComponent.Content.JsonMarshaller.Marshal(responseValue)
 	}
 }
 

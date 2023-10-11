@@ -8,11 +8,13 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/toolbox/data"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xdatly/handler/response"
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 )
 
 const (
@@ -24,7 +26,7 @@ type Output struct {
 	CaseFormat  formatter.CaseFormat `json:",omitempty"`
 	OmitEmpty   bool                 `json:",omitempty"`
 	Style       Style                `json:",omitempty"`
-
+	Title       string               `json:",omitempty"`
 	//Filed defines optional main view data holder
 	//deprecated
 	Field            string `json:",omitempty"`
@@ -41,6 +43,14 @@ type Output struct {
 
 	_caser    *format.Case
 	_excluded map[string]bool
+}
+
+func (o *Output) GetTitle() string {
+	replcaer := data.NewMap()
+	replcaer.Put("Time", time.Now().Format(time.RFC3339))
+	replcaer.Put("DateTime", time.Now().Format("2006-01-02T15_04_05"))
+	replcaer.Put("UnixTime", time.Now().Unix())
+	return replcaer.ExpandAsText(o.Title)
 }
 
 func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters state.Parameters, isReader bool) (err error) {

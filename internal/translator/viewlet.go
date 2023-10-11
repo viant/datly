@@ -61,6 +61,7 @@ type (
 		Kind        string
 		Cardinality state.Cardinality
 		DataType    string
+		Title       string
 	}
 )
 

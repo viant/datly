@@ -109,6 +109,11 @@ func (r *Rule) applyGeneratorOutputSetting() {
 	if r.Route.Output.Style == "" {
 		r.Route.Output.Style = contract.Style(outputConfig.Style)
 	}
+
+	if r.Route.Output.Title == "" {
+		r.Route.Output.Title = outputConfig.Title
+	}
+
 	if r.Route.Output.Cardinality == "" {
 		r.Route.Output.Cardinality = outputConfig.ViewCardinality()
 	}
