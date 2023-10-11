@@ -6,7 +6,11 @@ import (
 )
 
 func (s *Service) UpdateJob(ctx context.Context, job *async.Job) error {
-	_, err := s.updater.Exec(ctx, job)
+	db, err := s.connector.DB()
+	if err != nil {
+		return err
+	}
+	_, err = s.updater.Exec(ctx, job, db)
 	if err != nil {
 		return err
 	}

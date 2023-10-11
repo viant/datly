@@ -42,6 +42,7 @@ func detectColumns(ctx context.Context, evaluation *TemplateEvaluation, v *View)
 		v.Logger.LogDatabaseErr(SQL, err, args...)
 		return nil, SQL, err
 	}
+	defer query.Close()
 
 	types, err := query.ColumnTypes()
 	if err != nil {
