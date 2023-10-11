@@ -236,8 +236,6 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 			return nil, fmt.Errorf("invalid transfer, field: %v does not have coresponding source field %v, %s ", selector.Name(), tag.From, source.String())
 		}
 		outputType := sourceSelector.Type()
-		fmt.Printf("source selector type: %s\n", outputType.String())
-
 		switch tag.Codec {
 		case codec.KeyFilters:
 			outputType = reflect.TypeOf(predicate.NamedFilters{})
