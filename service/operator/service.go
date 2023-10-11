@@ -57,7 +57,7 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 	if infoValue := ctx.Value(exec.InfoKey); infoValue != nil {
 		info = infoValue.(*exec.Info)
 	}
-	s.ensureContentSetting(aSession, aComponent)
+	s.ensureContentSetting(ctx, aSession, aComponent)
 	asyncModule := aComponent.Async
 	if asyncModule == nil {
 		return ctx, nil
@@ -65,13 +65,14 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 	return s.ensureAsyncContext(ctx, aComponent, aSession, asyncModule, info)
 }
 
-func (s *Service) ensureContentSetting(aSession *session.Session, aComponent *repository.Component) {
+func (s *Service) ensureContentSetting(ctx context.Context, aSession *session.Session, aComponent *repository.Component) {
 	settings := aSession.State().QuerySettings(aComponent.View)
 	if settings != nil && settings.ContentFormat == "" {
 		settings.ContentFormat = aComponent.Output.DataFormat
 	}
 	switch settings.ContentFormat { //fore sync response for the following content types
 	case content.XLSFormat:
+		_ = aSession.SetCacheValue(ctx, aComponent.View.Selector.GetContentFormatParameter(), settings.ContentFormat)
 		settings.SyncFlag = true
 	}
 }
