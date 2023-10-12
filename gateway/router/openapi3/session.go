@@ -18,12 +18,11 @@ type (
 	}
 )
 
-
 func (s *Session) AddDefer(fn func() error) {
 	s.defers = append(s.defers, fn)
 }
 
-//RegisterComponents returns location components
+// RegisterComponents returns location components
 func (s *Session) RegisterComponents(location string, components *Components) {
 
 	if len(components.Schemas) == 0 {
@@ -39,7 +38,7 @@ func (s *Session) RegisterComponents(location string, components *Components) {
 		components.RequestBodies = map[string]*RequestBody{}
 	}
 	if len(components.Responses) == 0 {
-		components.Responses = map[string]*Response{}
+		components.Responses = map[interface{}]*Response{}
 	}
 	if len(components.SecuritySchemes) == 0 {
 		components.SecuritySchemes = map[string]*SecurityScheme{}
@@ -59,7 +58,7 @@ func (s *Session) RegisterComponents(location string, components *Components) {
 	s.components[location] = components
 }
 
-//LookupSchema lookups schema
+// LookupSchema lookups schema
 func (s *Session) LookupSchema(location string, ref string) (*Schema, error) {
 	switch ref[0] {
 	case '#':
@@ -85,8 +84,7 @@ func (s *Session) LookupSchema(location string, ref string) (*Schema, error) {
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
-
-//LookupParameter lookup parameters
+// LookupParameter lookup parameters
 func (s *Session) LookupParameter(location string, ref string) (*Parameter, error) {
 	switch ref[0] {
 	case '#':
@@ -112,7 +110,7 @@ func (s *Session) LookupParameter(location string, ref string) (*Parameter, erro
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
-//LookupHeaders lookup headers
+// LookupHeaders lookup headers
 func (s *Session) LookupHeaders(location string, ref string) (*Parameter, error) {
 	switch ref[0] {
 	case '#':
@@ -137,7 +135,7 @@ func (s *Session) LookupHeaders(location string, ref string) (*Parameter, error)
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
-//LookupRequestBody lookup request body
+// LookupRequestBody lookup request body
 func (s *Session) LookupRequestBody(location string, ref string) (*RequestBody, error) {
 	switch ref[0] {
 	case '#':
@@ -162,7 +160,7 @@ func (s *Session) LookupRequestBody(location string, ref string) (*RequestBody, 
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
-//LookupResponse lookup response
+// LookupResponse lookup response
 func (s *Session) LookupResponse(location string, ref string) (*Response, error) {
 	switch ref[0] {
 	case '#':
@@ -187,7 +185,7 @@ func (s *Session) LookupResponse(location string, ref string) (*Response, error)
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
-//LookupSecurityScheme lookup security scheme
+// LookupSecurityScheme lookup security scheme
 func (s *Session) LookupSecurityScheme(location string, ref string) (*SecurityScheme, error) {
 	switch ref[0] {
 	case '#':
@@ -212,7 +210,7 @@ func (s *Session) LookupSecurityScheme(location string, ref string) (*SecuritySc
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
-//LookupExample lookup example
+// LookupExample lookup example
 func (s *Session) LookupExample(location string, ref string) (*Example, error) {
 	switch ref[0] {
 	case '#':
@@ -237,9 +235,7 @@ func (s *Session) LookupExample(location string, ref string) (*Example, error) {
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
-
-
-//LookupLink lookup link
+// LookupLink lookup link
 func (s *Session) LookupLink(location string, ref string) (*Link, error) {
 	switch ref[0] {
 	case '#':
@@ -264,7 +260,7 @@ func (s *Session) LookupLink(location string, ref string) (*Link, error) {
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
-//LookupLink lookup callback
+// LookupLink lookup callback
 func (s *Session) LookupCallback(location string, ref string) (*CallbackRef, error) {
 	switch ref[0] {
 	case '#':
@@ -289,7 +285,6 @@ func (s *Session) LookupCallback(location string, ref string) (*CallbackRef, err
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
-
 func (s *Session) Close() error {
 	if len(s.defers) > 0 {
 		for i := range s.defers {
@@ -309,7 +304,7 @@ func NewSession() *Session {
 	return &Session{}
 }
 
-//LookupSession lookup session
+// LookupSession lookup session
 func LookupSession(ctx context.Context) *Session {
 	value := ctx.Value(_sessionKey)
 	if value == nil {
@@ -318,9 +313,7 @@ func LookupSession(ctx context.Context) *Session {
 	return value.(*Session)
 }
 
-
-
-//NewSessionContext creates a session context
+// NewSessionContext creates a session context
 func NewSessionContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, _sessionKey, NewSession())
 }

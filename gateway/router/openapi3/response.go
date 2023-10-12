@@ -7,7 +7,7 @@ import (
 
 // Responses is specified by OpenAPI/Swagger 3.0 standard.
 type (
-	Responses map[string]*Response
+	Responses map[interface{}]*Response
 
 	// Response is specified by OpenAPI/Swagger 3.0 standard.
 	Response struct {
@@ -52,8 +52,6 @@ func (r *Response) MarshalJSON() ([]byte, error) {
 	res := mergeJSON(data, extData)
 	return res, nil
 }
-
-
 
 func (s *Response) UnmarshalYAML(ctx context.Context, fn func(dest interface{}) error) error {
 	type temp Response

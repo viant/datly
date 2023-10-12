@@ -14,5 +14,6 @@ func (s *Service) CreateJob(ctx context.Context, job *async.Job) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

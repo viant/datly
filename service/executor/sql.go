@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"fmt"
 	expand2 "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/executor/extension"
 	"github.com/viant/datly/service/executor/parser"
@@ -19,10 +18,6 @@ func NewBuilder() *SqlBuilder {
 }
 
 func (s *SqlBuilder) Build(aView *view.View, templateState *structology.State, session *extension.Session, dataUnit *expand2.DataUnit) (*expand2.State, []*expand2.SQLStatment, error) {
-
-	fmt.Printf("SOURCE: %s\n", aView.Template.Source)
-	fmt.Printf("templateState: %T \n%+v\n", templateState.State(), templateState.State())
-
 	state, err := aView.Template.EvaluateStateWithSession(templateState, nil, nil, session, dataUnit)
 	if err != nil {
 		return state, nil, err
