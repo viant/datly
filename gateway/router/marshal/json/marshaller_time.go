@@ -3,6 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
+	ftime "github.com/viant/structology/format/time"
 	"github.com/viant/xunsafe"
 	"strconv"
 	"time"
@@ -10,19 +11,21 @@ import (
 )
 
 type timeMarshaller struct {
-	timeFormat string
+	timeLayout string
 	zeroValue  string
 	tag        *DefaultTag
 }
 
-func newTimeMarshaller(tag *DefaultTag, config config.IOConfig) *timeMarshaller {
-	timeFormat := time.RFC3339
+func newTimeMarshaller(tag *DefaultTag, config *config.IOConfig) *timeMarshaller {
+	timeLayout := time.RFC3339
 	if tag.Format != "" {
-		timeFormat = tag.Format
+		timeLayout = tag.Format
 	}
-
-	if config.DateLayout != "" {
-		timeFormat = config.DateLayout
+	if config.DateFormat != "" {
+		config.TimeLayout = ftime.DateFormatToTimeLayout(config.DateFormat)
+	}
+	if config.TimeLayout != "" {
+		timeLayout = config.TimeLayout
 	}
 
 	zeroValue := time.Time{}
@@ -31,15 +34,15 @@ func newTimeMarshaller(tag *DefaultTag, config config.IOConfig) *timeMarshaller 
 	}
 
 	return &timeMarshaller{
-		timeFormat: timeFormat,
-		zeroValue:  strconv.Quote(zeroValue.Format(timeFormat)),
+		timeLayout: timeLayout,
+		zeroValue:  strconv.Quote(zeroValue.Format(timeLayout)),
 		tag:        tag,
 	}
 }
 
 func (t *timeMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	aTime := xunsafe.AsTimePtr(pointer)
-	if err := decoder.AddTime(aTime, t.timeFormat); err != nil {
+	if err := decoder.AddTime(aTime, t.timeLayout); err != nil {
 		return err
 	}
 	return nil
@@ -52,7 +55,7 @@ func (t *timeMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession)
 		return nil
 	}
 
-	return appendTime(sb, aTime, t.timeFormat)
+	return appendTime(sb, aTime, t.timeLayout)
 }
 
 func appendTime(sb *MarshallSession, aTime time.Time, timeFormat string) error {

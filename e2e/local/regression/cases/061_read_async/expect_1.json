@@ -4,9 +4,9 @@
     "mainView": "vendor",
     "method": "GET",
     "matchKey": "vendor/jobid=123",
-    "uRI": "/v1/api/dev/async/vendor/2",
+    "uri": "/v1/api/dev/async/vendor/2",
     "userEmail": "dev@viantint.com",
-    "userID": "2"
+    "userId": "2"
   },
 
   "status": "ok"

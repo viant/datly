@@ -2,13 +2,12 @@ package inference
 
 import (
 	"fmt"
-	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	"go/ast"
 	"reflect"
@@ -47,11 +46,6 @@ func (p *Parameter) HasSchema() bool {
 		return false
 	}
 	return true
-}
-
-func (p *Parameter) LocalVariable() string {
-	upperCamel, _ := formatter.UpperCamel.Caser()
-	return upperCamel.Format(p.Name, format.CaseLowerCamel)
 }
 
 func (p *Parameter) DsqlParameterDeclaration() string {
@@ -147,9 +141,12 @@ func (p *Parameter) addedValidationModifierIfNeeded(builder *strings.Builder, SQ
 	}
 }
 
+func (p *Parameter) LocalVariable() string {
+	return text.CaseFormatUpperCamel.Format(p.Name, text.CaseFormatLowerCamel)
+}
+
 func (p *Parameter) localVariableDefinition() (string, string) {
-	upperCamel, _ := formatter.UpperCamel.Caser()
-	fieldName := upperCamel.Format(p.Name, format.CaseLowerCamel)
+	fieldName := p.LocalVariable()
 	return fieldName, fmt.Sprintf("%v := state.%v", fieldName, p.Name)
 }
 

@@ -536,7 +536,7 @@ func autoCoalesce() usecase {
 		Table:                "events",
 		Output:               state.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
-		Caser:                format.CaseUpperUnderscore,
+		CaseFormat:                text.CaseFormatUpperUnderscore,
 	})
 
 	return usecase{
@@ -570,7 +570,7 @@ func wildcardAllowedFilterable() usecase {
 		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
 		Output:               state.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
-		Caser:                format.CaseUpperUnderscore,
+		CaseFormat:                text.CaseFormatUpperUnderscore,
 		Selector: &view.Config{
 			Constraints: &view.Constraints{
 				Filterable: []string{"*"},
@@ -622,7 +622,7 @@ func inheritLogger() usecase {
 		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
 		Output:               state.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
-		Caser:                format.CaseUpperUnderscore,
+		CaseFormat:                text.CaseFormatUpperUnderscore,
 	})
 
 	return usecase{
@@ -656,7 +656,7 @@ func inheritCoalesceTypes() usecase {
 		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
 		Output:               state.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
-		Caser:                format.CaseUpperUnderscore,
+		CaseFormat:                text.CaseFormatUpperUnderscore,
 	})
 
 	return usecase{

@@ -3,16 +3,16 @@ package shared
 import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 )
 
-func MatchField(rType reflect.Type, name string, sourceCase format.Case) *xunsafe.Field {
+func MatchField(rType reflect.Type, name string, sourceCase text.CaseFormat) *xunsafe.Field {
 	rType = Elem(rType)
 
-	field := xunsafe.FieldByName(rType, sourceCase.Format(name, format.CaseUpperCamel))
+	field := xunsafe.FieldByName(rType, sourceCase.Format(name, text.CaseFormatUpperCamel))
 	if field != nil {
 		return field
 	}

@@ -17,7 +17,7 @@ type (
 	}
 )
 
-func newInlinableMarshaller(field reflect.StructField, config config.IOConfig, path, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*inlinableMarshaller, error) {
+func newInlinableMarshaller(field reflect.StructField, config *config.IOConfig, path, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*inlinableMarshaller, error) {
 	marshaler, err := cache.loadMarshaller(field.Type, config, path, outputPath, dTag)
 	if err != nil {
 		return nil, err

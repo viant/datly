@@ -13,9 +13,8 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/service/executor/handler"
-	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view/extension"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"strings"
 )
 
@@ -201,8 +200,8 @@ func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.G
 
 func ensureGoFileCaseFormat(template *codegen.Template) string {
 	entityName := template.Spec.Type.Name
-	if columnCase, err := format.NewCase(formatter.DetectCase(entityName)); err == nil {
-		entityName = columnCase.Format(entityName, format.CaseLowerUnderscore)
+	if columnCase := text.DetectCaseFormat(entityName); columnCase.IsDefined() {
+		entityName = columnCase.Format(entityName, text.CaseFormatLowerUnderscore)
 	}
 	return entityName
 }

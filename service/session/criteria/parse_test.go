@@ -283,7 +283,7 @@ func TestParse(t *testing.T) {
 		tests.LogHeader(fmt.Sprintf("Running testcase %v\n", i))
 
 		for _, column := range testCase.columns {
-			if !assert.Nil(t, column.Init(view.NewResourcelet(view.EmptyResource(), &view.View{}), format.CaseLowerUnderscore, true, nil), testCase.input) {
+			if !assert.Nil(t, column.Init(view.NewResourcelet(view.EmptyResource(), &view.View{}), text.CaseFormatLowerUnderscore, true, nil), testCase.input) {
 				continue
 			}
 		}

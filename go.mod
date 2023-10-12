@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/francoispqt/gojay v1.2.13
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/goccy/go-json v0.9.11 // indirect
+	github.com/goccy/go-json v0.9.11
 	github.com/golang-jwt/jwt/v4 v4.4.1 // indirect
 	github.com/google/gops v0.3.23
 	github.com/google/uuid v1.3.0
@@ -50,7 +50,7 @@ require (
 )
 
 require (
-	github.com/viant/structology v0.5.0
+	github.com/viant/structology v0.5.1-0.20231012223007-9c4e8313872e
 	github.com/viant/xdatly v0.3.1-0.20231011142237-5bacab192d09
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20231011142237-5bacab192d09

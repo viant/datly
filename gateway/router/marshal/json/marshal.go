@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -14,16 +14,16 @@ const null = `null`
 
 var nullBytes = []byte(`null`)
 
-const defaultCaser = format.CaseUpperCamel
+const defaultCaser = text.CaseFormatUpperCamel
 
 type (
 	Marshaller struct {
 		cache  *marshallersCache
-		config config.IOConfig
+		config *config.IOConfig
 	}
 )
 
-func New(config config.IOConfig) *Marshaller {
+func New(config *config.IOConfig) *Marshaller {
 	m := &Marshaller{
 		cache:  newCache(),
 		config: config,

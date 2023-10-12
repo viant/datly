@@ -1,12 +1,11 @@
 package options
 
 import (
-	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 )
 
 type mapper map[string]string
@@ -53,8 +52,7 @@ func (r *Rule) NormalizeSQL(SQL string, handleVeltyExpression func() sqlparser.O
 }
 
 func normalizeName(k string) string {
-	detectedCase := formatter.DetectCase(k)
-	caser, _ := format.NewCase(detectedCase)
-	name := caser.Format(k, format.CaseUpperCamel)
+	caseFormat := text.DetectCaseFormat(k)
+	name := caseFormat.Format(k, text.CaseFormatUpperCamel)
 	return name
 }

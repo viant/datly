@@ -4,7 +4,7 @@ import (
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"strings"
 	"sync"
 )
@@ -27,8 +27,8 @@ type (
 
 	QuerySelector struct {
 		//SELECTORS
-		DatabaseFormat format.Case
-		OutputFormat   format.Case
+		DatabaseFormat text.CaseFormat
+		OutputFormat   text.CaseFormat
 		Columns        []string `json:",omitempty"`
 		Fields         []string `json:",omitempty"`
 		OrderBy        string   `json:",omitempty"`
@@ -90,7 +90,7 @@ func (s *QuerySelector) Add(fieldName string, isHolder bool) {
 		s.Columns = append(s.Columns, fieldName)
 	} else {
 		s.Columns = append(s.Columns, s.OutputFormat.Format(fieldName, s.DatabaseFormat))
-		s.Fields = append(s.Fields, s.OutputFormat.Format(fieldName, format.CaseUpperCamel))
+		s.Fields = append(s.Fields, s.OutputFormat.Format(fieldName, text.CaseFormatUpperCamel))
 	}
 }
 

@@ -9,7 +9,6 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/internal/tests"
-	"github.com/viant/toolbox/format"
 	"net/http"
 	"reflect"
 	"testing"
@@ -60,7 +59,7 @@ func TestJson_Marshal(t *testing.T) {
 			expect:      `[{"id":1,"quantity":125.5,"EventName":"ev-1","time_ptr":"2012-07-12T00:00:00Z"},{"id":2,"quantity":250.5,"time":"2022-05-10T00:00:00Z"}]`,
 			defaultConfig: config.IOConfig{
 				OmitEmpty:  true,
-				CaseFormat: format.CaseLowerUnderscore,
+				CaseFormat: text.CaseFormatLowerUnderscore,
 			},
 		},
 		{
@@ -124,7 +123,7 @@ func TestJson_Marshal(t *testing.T) {
 			data:        idStruct,
 			expect:      `[{"id":10,"name":"foo","price":125.5}]`,
 			defaultConfig: config.IOConfig{
-				CaseFormat: format.CaseLowerCamel,
+				CaseFormat: text.CaseFormatLowerCamel,
 			},
 		},
 		{
@@ -132,7 +131,7 @@ func TestJson_Marshal(t *testing.T) {
 			data:        embeddable,
 			expect:      `{"id":10,"name":"foo","price":125.5}`,
 			defaultConfig: config.IOConfig{
-				CaseFormat: format.CaseLowerCamel,
+				CaseFormat: text.CaseFormatLowerCamel,
 			},
 		},
 		{
@@ -140,7 +139,7 @@ func TestJson_Marshal(t *testing.T) {
 			data:        inlinable,
 			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
 			defaultConfig: config.IOConfig{
-				CaseFormat: format.CaseLowerCamel,
+				CaseFormat: text.CaseFormatLowerCamel,
 			},
 		},
 		{
@@ -148,7 +147,7 @@ func TestJson_Marshal(t *testing.T) {
 			data:        jsonRawMessagePtr,
 			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
 			defaultConfig: config.IOConfig{
-				CaseFormat: format.CaseLowerCamel,
+				CaseFormat: text.CaseFormatLowerCamel,
 			},
 		},
 		{
@@ -156,7 +155,7 @@ func TestJson_Marshal(t *testing.T) {
 			data:        jsonRawMessage,
 			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
 			defaultConfig: config.IOConfig{
-				CaseFormat: format.CaseLowerCamel,
+				CaseFormat: text.CaseFormatLowerCamel,
 			},
 		},
 		{

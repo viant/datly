@@ -3,11 +3,10 @@ package translator
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	"strings"
 )
@@ -55,7 +54,7 @@ func (s *Service) detectComponentViewType(cache discover.Columns, resource *Reso
 	}
 }
 
-func (s *Service) detectViewCaser(columns view.Columns) (format.Case, error) {
+func (s *Service) detectViewCaser(columns view.Columns) (text.CaseFormat, error) {
 	var columnNames []string
 	for _, column := range columns {
 		if strings.Contains(strings.ToLower(column.Tag), "ignorecaseformatter") {
@@ -63,12 +62,11 @@ func (s *Service) detectViewCaser(columns view.Columns) (format.Case, error) {
 		}
 		columnNames = append(columnNames, column.Name)
 	}
-	caseFormat := formatter.CaseFormat(formatter.DetectCase(columnNames...))
-	if err := caseFormat.Init(); err != nil {
-		return 0, err
+	caseFormat := text.DetectCaseFormat(columnNames...)
+	if !caseFormat.IsDefined() {
+		return "", fmt.Errorf("failed to detect case format for: %v", columnNames)
 	}
-	caser, err := caseFormat.Caser()
-	return caser, err
+	return caseFormat, nil
 }
 
 func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache discover.Columns, registry *xreflect.Types) ([]*view.Relation, error) {

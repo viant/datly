@@ -8,8 +8,8 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/toolbox/data"
-	"github.com/viant/toolbox/format"
 	"github.com/viant/xdatly/handler/response"
 	"net/url"
 	"reflect"
@@ -22,11 +22,11 @@ const (
 )
 
 type Output struct {
-	Cardinality state.Cardinality    `json:",omitempty"`
-	CaseFormat  formatter.CaseFormat `json:",omitempty"`
-	OmitEmpty   bool                 `json:",omitempty"`
-	Style       Style                `json:",omitempty"`
-	Title       string               `json:",omitempty"`
+	Cardinality state.Cardinality `json:",omitempty"`
+	CaseFormat  text.CaseFormat   `json:",omitempty"`
+	OmitEmpty   bool              `json:",omitempty"`
+	Style       Style             `json:",omitempty"`
+	Title       string            `json:",omitempty"`
 	//Filed defines optional main view data holder
 	//deprecated
 	Field            string `json:",omitempty"`
@@ -40,9 +40,7 @@ type Output struct {
 	ResponseBody *BodySelector
 	RevealMetric *bool
 	Type         state.Type
-
-	_caser    *format.Case
-	_excluded map[string]bool
+	_excluded    map[string]bool
 }
 
 func (o *Output) GetTitle() string {
@@ -54,7 +52,7 @@ func (o *Output) GetTitle() string {
 }
 
 func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters state.Parameters, isReader bool) (err error) {
-	if err = o.initCaser(); err != nil {
+	if err = o.ensureCaseFormat(); err != nil {
 		return err
 	}
 	o.initExclude()
@@ -127,30 +125,15 @@ func (o *Output) IsRevealMetric() bool {
 	return *o.RevealMetric
 }
 
-func (o *Output) initCaser() error {
-	if o._caser != nil {
-		return nil
-	}
-
+func (o *Output) ensureCaseFormat() error {
 	if o.CaseFormat == "" {
-		o.CaseFormat = formatter.UpperCamel
+		o.CaseFormat = text.CaseFormatUpperCamel
 	}
-
-	var err error
-	caser, err := o.CaseFormat.Caser()
-	if err != nil {
-		return err
-	}
-	o._caser = &caser
 	return nil
 }
 
 func (o *Output) Excluded() map[string]bool {
 	return o._excluded
-}
-
-func (o *Output) FormatCase() *format.Case {
-	return o._caser
 }
 
 func (o *Output) ShouldNormalizeExclude() bool {

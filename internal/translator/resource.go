@@ -12,13 +12,12 @@ import (
 	"github.com/viant/datly/internal/translator/parser"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/toolbox"
-	"github.com/viant/toolbox/format"
 	"github.com/viant/xreflect"
 	"path"
 	"reflect"
@@ -283,9 +282,9 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	sourceSQL := viewlet.SanitizedSQL
 
 	if metaViewSQL != nil {
-		cFormat, err := format.NewCase(formatter.DetectCase(viewlet.Name))
-		if err == nil && cFormat != format.CaseUpperCamel {
-			viewlet.Name = cFormat.Format(viewlet.Name, format.CaseUpperCamel)
+		cFormat := text.DetectCaseFormat(viewlet.Name)
+		if err == nil && cFormat != text.CaseFormatUpperCamel {
+			viewlet.Name = cFormat.Format(viewlet.Name, text.CaseFormatUpperCamel)
 		}
 
 		sourceViewName := metaViewSQL.Name[5 : len(metaViewSQL.Name)-4]

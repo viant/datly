@@ -107,7 +107,7 @@ func matchExpression(cursor *parsly.Cursor, columns view.NamedColumns, buffer *b
 	case inToken:
 		return matchDataSet(cursor, columns, column, buffer, placeholders, methods)
 	default:
-		return matchFieldValue(cursor, columns, columnType, column.Format, buffer, placeholders, methods)
+		return matchFieldValue(cursor, columns, columnType, column.TimeLayout(), buffer, placeholders, methods)
 	}
 }
 
@@ -139,7 +139,7 @@ func matchDataSet(cursor *parsly.Cursor, columns view.NamedColumns, column *view
 				columnType = columnType.Elem()
 			}
 
-			if err := matchFieldValue(valueCursor, columns, columnType, column.Format, buffer, placeholders, methods); err != nil {
+			if err := matchFieldValue(valueCursor, columns, columnType, column.TimeLayout(), buffer, placeholders, methods); err != nil {
 				return err
 			}
 
@@ -156,7 +156,7 @@ func matchDataSet(cursor *parsly.Cursor, columns view.NamedColumns, column *view
 	}
 }
 
-func matchFieldValue(cursor *parsly.Cursor, columns view.NamedColumns, columnType reflect.Type, format string, buffer *bytes.Buffer, placeholders *[]interface{}, methods map[string]*view.Method) error {
+func matchFieldValue(cursor *parsly.Cursor, columns view.NamedColumns, columnType reflect.Type, timeLayout string, buffer *bytes.Buffer, placeholders *[]interface{}, methods map[string]*view.Method) error {
 	valueCandidates, err := expressionValueCandidates(columnType)
 	if err != nil {
 		return err
@@ -185,7 +185,7 @@ func matchFieldValue(cursor *parsly.Cursor, columns view.NamedColumns, columnTyp
 		buffer.WriteByte(' ')
 		buffer.WriteByte('?')
 
-		converted, _, err := converter.Convert(cursorText[1:len(cursorText)-1], columnType, false, format)
+		converted, _, err := converter.Convert(cursorText[1:len(cursorText)-1], columnType, false, timeLayout)
 		if err != nil {
 			return err
 		}
@@ -193,7 +193,7 @@ func matchFieldValue(cursor *parsly.Cursor, columns view.NamedColumns, columnTyp
 		return nil
 	default:
 		rawValue := matched.Text(cursor)
-		converted, _, err := converter.Convert(rawValue, columnType, false, format)
+		converted, _, err := converter.Convert(rawValue, columnType, false, timeLayout)
 		if err != nil {
 			return err
 		}

@@ -23,7 +23,7 @@ import (
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"path"
@@ -112,7 +112,7 @@ func (s *Service) discoverComponentContract(ctx context.Context, resource *Resou
 func normalizeComponentType(location *state.Location) string {
 	componentTypeName := strings.ReplaceAll(location.Name, "-", "_")
 	componentTypeName = strings.ReplaceAll(componentTypeName, ".", "_")
-	componentTypeName = format.CaseLowerUnderscore.Format(componentTypeName, format.CaseUpperCamel)
+	componentTypeName = text.CaseFormatLowerUnderscore.Format(componentTypeName, text.CaseFormatUpperCamel)
 	return componentTypeName
 }
 

@@ -10,7 +10,7 @@ import (
 
 type interfaceMarshaller struct {
 	rType      reflect.Type
-	config     config.IOConfig
+	config     *config.IOConfig
 	path       string
 	outputPath string
 	tag        *DefaultTag
@@ -19,7 +19,7 @@ type interfaceMarshaller struct {
 	hasMethod  bool
 }
 
-func newInterfaceMarshaller(rType reflect.Type, config config.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*interfaceMarshaller, error) {
+func newInterfaceMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*interfaceMarshaller, error) {
 	return &interfaceMarshaller{
 		xType:      xunsafe.NewType(rType),
 		rType:      rType,

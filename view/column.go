@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -13,18 +14,18 @@ import (
 // Column represents View column
 type (
 	Column struct {
-		Name                string       `json:",omitempty"`
-		DataType            string       `json:",omitempty"`
-		Tag                 string       `json:",omitempty"`
-		IgnoreCaseFormatter bool         `json:",omitempty"`
-		Expression          string       `json:",omitempty"`
-		Filterable          bool         `json:",omitempty"`
-		Nullable            bool         `json:",omitempty"`
-		Default             string       `json:",omitempty"`
-		Format              string       `json:",omitempty"`
-		Codec               *state.Codec `json:",omitempty"`
-		DatabaseColumn      string       `json:",omitempty"`
-		IndexedBy           string       `json:",omitempty"`
+		Name     string `json:",omitempty"`
+		DataType string `json:",omitempty"`
+		Tag      string `json:",omitempty"`
+
+		Expression     string       `json:",omitempty"`
+		Filterable     bool         `json:",omitempty"`
+		Nullable       bool         `json:",omitempty"`
+		Default        string       `json:",omitempty"`
+		FormatTag      *format.Tag  `json:",omitempty"`
+		Codec          *state.Codec `json:",omitempty"`
+		DatabaseColumn string       `json:",omitempty"`
+		IndexedBy      string       `json:",omitempty"`
 
 		rType         reflect.Type
 		sqlExpression string
@@ -34,6 +35,25 @@ type (
 	}
 	ColumnOption func(c *Column)
 )
+
+func (c *Column) TimeLayout() string {
+	if c.FormatTag == nil {
+		return ""
+	}
+	return c.FormatTag.TimeLayout
+}
+
+func (c *Column) CaseFormat() text.CaseFormat {
+	if c.FormatTag == nil {
+		return text.CaseFormatUndefined
+	}
+	return text.NewCaseFormat(c.FormatTag.CaseFormat)
+}
+func (c *Column) EnsureFormatTag() {
+	if c.FormatTag == nil {
+		c.FormatTag = &format.Tag{}
+	}
+}
 
 // SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
 func (c *Column) SqlExpression() string {
@@ -46,7 +66,7 @@ func (c *Column) ColumnName() string {
 }
 
 // Init initializes Column
-func (c *Column) Init(resource state.Resource, caser format.Case, allowNulls bool) error {
+func (c *Column) Init(resource state.Resource, caseFormat text.CaseFormat, allowNulls bool) error {
 	if c._initialized {
 		return nil
 	}
@@ -65,7 +85,11 @@ func (c *Column) Init(resource state.Resource, caser format.Case, allowNulls boo
 		return err
 	}
 
-	c._fieldName = caser.Format(c.Name, format.CaseUpperCamel)
+	if caseFormat.IsDefined() {
+		c._fieldName = text.CaseFormatUpperCamel.Format(c.Name, caseFormat)
+	} else {
+		c._fieldName = c.Name //OR TO detect input case format and still convert to upper camel
+	}
 	if c.Codec != nil {
 		if err := c.Codec.Init(resource, c.rType); err != nil {
 			return err
@@ -157,16 +181,11 @@ func (c *Column) ApplyConfig(config *ColumnConfig) {
 	if config.DataType != nil && *config.DataType != "" {
 		c.DataType = *config.DataType
 	}
-
 	if config.Tag != nil {
 		c.Tag += " " + strings.Trim(*config.Tag, ` '`)
-	}
-
-	if config.Format != nil {
-		c.Format = *config.Format
-	}
-	if config.IgnoreCaseFormatter != nil {
-		c.IgnoreCaseFormatter = *config.IgnoreCaseFormatter
+		if formatTag, err := format.Parse(reflect.StructTag(*config.Tag)); err == nil {
+			c.FormatTag = formatTag
+		}
 	}
 	if config.Default != nil {
 		c.Default = *config.Default

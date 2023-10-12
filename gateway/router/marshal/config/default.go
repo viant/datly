@@ -1,15 +1,16 @@
 package config
 
 import (
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"strings"
 )
 
 type IOConfig struct {
 	OmitEmpty  bool
-	CaseFormat format.Case
+	CaseFormat text.CaseFormat
 	Exclude    map[string]bool
-	DateLayout string
+	DateFormat string
+	TimeLayout string
 }
 
 func NormalizeExclusionKey(item string) string {

@@ -4,7 +4,7 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	structology "github.com/viant/structology"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	xunsafe "github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -19,7 +19,7 @@ type (
 		indexUpdater        *presenceUpdater
 		marshallersIndex    map[string]int
 		marshallers         []*marshallerWithField
-		config              config.IOConfig
+		config              *config.IOConfig
 
 		path       string
 		outputPath string
@@ -56,7 +56,7 @@ type (
 	}
 )
 
-func newStructMarshaller(config config.IOConfig, rType reflect.Type, path string, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*structMarshaller, error) {
+func newStructMarshaller(config *config.IOConfig, rType reflect.Type, path string, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*structMarshaller, error) {
 	result := &structMarshaller{
 		path:             path,
 		outputPath:       outputPath,
@@ -161,7 +161,7 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 	return nil
 }
 
-func isExcluded(filter Filter, name string, ioConfig config.IOConfig, path string) bool {
+func isExcluded(filter Filter, name string, ioConfig *config.IOConfig, path string) bool {
 	if ioConfig.Exclude != nil {
 		if _, ok := ioConfig.Exclude[path]; ok {
 			return true
@@ -274,7 +274,7 @@ func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithFiel
 		if dTag.Name != "" {
 			jsonName = dTag.Name
 		}
-	} else if s.config.CaseFormat != 0 {
+	} else if s.config.CaseFormat != "" {
 		jsonName = formatName(jsonName, s.config.CaseFormat)
 	}
 
@@ -316,17 +316,19 @@ func (s *structMarshaller) marshallerByName(name string) (*marshallerWithField, 
 	return nil, false
 }
 
-func formatName(jsonName string, caseFormat format.Case) string {
+func formatName(jsonName string, caseFormat text.CaseFormat) string {
+	//TODO do we still need it
+	fromCaseFormat := defaultCaser
 	if jsonName == "ID" {
 		switch caseFormat {
-		case format.CaseLowerUnderscore, format.CaseLower, format.CaseLowerCamel:
+		case text.CaseFormatLowerUnderscore, text.CaseFormatLower, text.CaseFormatLowerCamel:
 			return "id"
-		case format.CaseUpperCamel, format.CaseUpper, format.CaseUpperUnderscore:
+		case text.CaseFormatUpperCamel, text.CaseFormatUpper, text.CaseFormatUpperUnderscore:
 			return "ID"
 		}
 	}
 
-	jsonName = defaultCaser.Format(jsonName, caseFormat)
+	jsonName = fromCaseFormat.Format(jsonName, caseFormat)
 	return jsonName
 }
 
@@ -337,7 +339,7 @@ func addToPath(path, field string) string {
 	return path + "." + field
 }
 
-func (f *marshallerWithField) init(field reflect.StructField, config config.IOConfig, cache *marshallersCache) error {
+func (f *marshallerWithField) init(field reflect.StructField, config *config.IOConfig, cache *marshallersCache) error {
 	defaultTag, err := NewDefaultTag(field)
 	if err != nil {
 		return err

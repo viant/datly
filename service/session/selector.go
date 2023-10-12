@@ -6,7 +6,7 @@ import (
 	"github.com/viant/datly/service/session/criteria"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xdatly/codec"
 	"strconv"
 	"strings"
@@ -216,7 +216,7 @@ func (s *Session) setFieldsQuerySelector(value interface{}, ns *view.NamespaceVi
 	selector := s.state.Lookup(ns.View)
 	fields := value.([]string)
 	for _, field := range fields {
-		fieldName := ns.View.Caser.Format(field, format.CaseUpperCamel)
+		fieldName := ns.View.CaseFormat.Format(field, text.CaseFormatUpperCamel)
 		if err = canUseColumn(ns.View, fieldName); err != nil {
 			return err
 		}

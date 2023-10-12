@@ -2,14 +2,13 @@ package inference
 
 import (
 	"fmt"
-	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	dConfig "github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/structology"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"reflect"
 )
 
@@ -82,18 +81,17 @@ func (t *Type) ExpandType(simpleName string) string {
 }
 
 func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool) (*Field, error) {
-	columnCase, err := format.NewCase(formatter.DetectCase(column.Name))
-	if err != nil {
-		return nil, err
+	columnNameOrAlias := column.Alias
+	if columnNameOrAlias == "" {
+		columnNameOrAlias = column.Name
 	}
-
-	fieldName := column.Alias
-	if fieldName == "" {
-		fieldName = column.Name
+	columnCase := text.DetectCaseFormat(columnNameOrAlias)
+	if !columnCase.IsDefined() {
+		return nil, fmt.Errorf("unable to detect case format for: '%s'", column.Name)
 	}
 	field := &Field{Column: column,
 		ColumnCase: columnCase,
-		Field:      view.Field{Name: columnCase.Format(fieldName, format.CaseUpperCamel)},
+		Field:      view.Field{Name: columnCase.Format(columnNameOrAlias, text.CaseFormatUpperCamel)},
 		Ptr:        column.IsNullable,
 		Tags:       Tags{},
 	}

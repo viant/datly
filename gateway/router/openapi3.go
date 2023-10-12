@@ -10,7 +10,7 @@ import (
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"net/http"
 	"reflect"
 	"time"
@@ -260,7 +260,7 @@ func (g *generator) addToSchema(schema *openapi3.Schema, component *repository.C
 			if defaultTag.IgnoreCaseFormatter {
 				fieldName = aField.Name
 			} else if isOutputSchema {
-				fieldName = format.CaseUpperCamel.Format(aField.Name, *component.Output.FormatCase())
+				fieldName = text.CaseFormatUpperCamel.Format(aField.Name, component.Output.CaseFormat)
 			}
 
 			schema.Properties[fieldName], err = g.generateSchema(component, aField.Type, defaultTag.Format, isOutputSchema, "", defaultTag, fieldPath)

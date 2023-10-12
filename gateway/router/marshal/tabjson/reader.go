@@ -3,6 +3,7 @@ package tabjson
 import (
 	"fmt"
 	"github.com/viant/sqlx/io"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/toolbox/format"
 	goIo "io"
 	"reflect"
@@ -206,7 +207,8 @@ func (r *Reader) writeHeaderIfNeeded() error {
 
 	if r.stringifierConfig.CaseFormat != format.CaseUpperCamel {
 		for i, field := range fields {
-			fields[i] = format.CaseUpperCamel.Format(field, r.stringifierConfig.CaseFormat)
+			caseFormat := text.NewCaseFormat(r.stringifierConfig.CaseFormat.String())
+			fields[i] = text.CaseFormatUpperCamel.Format(field, caseFormat)
 		}
 	}
 

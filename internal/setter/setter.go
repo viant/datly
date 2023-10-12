@@ -1,6 +1,6 @@
 package setter
 
-import "github.com/viant/datly/utils/formatter"
+import "github.com/viant/structology/format/text"
 
 func SetStringIfEmpty(dest *string, src string) {
 	if dest != nil && *dest == "" {
@@ -8,7 +8,7 @@ func SetStringIfEmpty(dest *string, src string) {
 	}
 }
 
-func SetCaseFormatIfEmpty(dest *formatter.CaseFormat, src formatter.CaseFormat) {
+func SetCaseFormatIfEmpty(dest *text.CaseFormat, src text.CaseFormat) {
 	if dest != nil && *dest == "" {
 		*dest = src
 	}

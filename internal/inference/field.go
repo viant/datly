@@ -5,7 +5,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/metadata/sink"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"reflect"
 	"strings"
 )
@@ -17,7 +17,7 @@ type Field struct {
 	Pk         *sink.Key
 	Tags       Tags
 	Ptr        bool
-	ColumnCase format.Case
+	ColumnCase text.CaseFormat
 	Relation   string
 }
 

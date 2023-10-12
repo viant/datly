@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	"net/http"
 	"reflect"
@@ -39,6 +40,7 @@ type (
 
 		dispatcher contract.Dispatcher
 		types      *xreflect.Types
+		ioConfig   *config.IOConfig
 	}
 )
 
@@ -171,13 +173,19 @@ func (c *Component) LocatorOptions(request *http.Request, unmarshal shared.Unmar
 	return result
 }
 
-func (c *Component) IOConfig() config.IOConfig {
-	return config.IOConfig{
-		OmitEmpty:  c.Output.OmitEmpty,
-		CaseFormat: *c.Output.FormatCase(),
-		Exclude:    config.Exclude(c.Output.Exclude).Index(),
-		DateLayout: c.DateFormat,
+func (c *Component) IOConfig() *config.IOConfig {
+	ret := c.ioConfig
+	if ret != nil {
+		return c.ioConfig
 	}
+	ret = &config.IOConfig{
+		OmitEmpty:  c.Output.OmitEmpty,
+		CaseFormat: text.NewCaseFormat(string(c.Output.CaseFormat)),
+		Exclude:    config.Exclude(c.Output.Exclude).Index(),
+		DateFormat: c.DateFormat,
+	}
+	c.ioConfig = ret
+	return ret
 }
 
 func (r *Component) UnmarshalFunc(request *http.Request) shared.Unmarshal {

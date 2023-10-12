@@ -9,7 +9,6 @@ import (
 	"github.com/viant/datly/logger"
 	expand2 "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/column"
 	"github.com/viant/datly/view/extension/codec"
@@ -20,7 +19,7 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/structology"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -44,21 +43,20 @@ type (
 	//View represents a View
 	View struct {
 		shared.Reference
-		Mode                 Mode                 `json:",omitempty"`
-		Connector            *Connector           `json:",omitempty"`
-		Async                *Async               `json:",omitempty"`
-		Standalone           bool                 `json:",omitempty"`
-		Name                 string               `json:",omitempty"`
-		Description          string               `json:",omitempty"`
-		Module               string               `json:",omitempty"`
-		Alias                string               `json:",omitempty"`
-		Table                string               `json:",omitempty"`
-		From                 string               `json:",omitempty"`
-		FromURL              string               `json:",omitempty"`
-		Exclude              []string             `json:",omitempty"`
-		Columns              []*Column            `json:",omitempty"`
-		InheritSchemaColumns bool                 `json:",omitempty"`
-		CaseFormat           formatter.CaseFormat `json:",omitempty"`
+		Mode                 Mode       `json:",omitempty"`
+		Connector            *Connector `json:",omitempty"`
+		Async                *Async     `json:",omitempty"`
+		Standalone           bool       `json:",omitempty"`
+		Name                 string     `json:",omitempty"`
+		Description          string     `json:",omitempty"`
+		Module               string     `json:",omitempty"`
+		Alias                string     `json:",omitempty"`
+		Table                string     `json:",omitempty"`
+		From                 string     `json:",omitempty"`
+		FromURL              string     `json:",omitempty"`
+		Exclude              []string   `json:",omitempty"`
+		Columns              []*Column  `json:",omitempty"`
+		InheritSchemaColumns bool       `json:",omitempty"`
 
 		Criteria string `json:",omitempty"`
 
@@ -72,9 +70,9 @@ type (
 		MatchStrategy MatchStrategy `json:",omitempty"`
 		Batch         *Batch        `json:",omitempty"`
 
-		Logger  *logger.Adapter `json:",omitempty"`
-		Counter logger.Counter  `json:"-"`
-		Caser   format.Case     `json:",omitempty"`
+		Logger     *logger.Adapter `json:",omitempty"`
+		Counter    logger.Counter  `json:"-"`
+		CaseFormat text.CaseFormat `json:",omitempty"`
 
 		DiscoverCriteria *bool  `json:",omitempty"`
 		AllowNulls       *bool  `json:",omitempty"`
@@ -525,10 +523,10 @@ func (v *View) initView(ctx context.Context) error {
 	if err = Columns(v.Columns).ApplyConfig(v.ColumnsConfig, resourcelet.LookupType()); err != nil {
 		return err
 	}
-	if err = Columns(v.Columns).Init(resourcelet, v.Caser, v.AreNullValuesAllowed()); err != nil {
+	if err = Columns(v.Columns).Init(resourcelet, v.CaseFormat, v.AreNullValuesAllowed()); err != nil {
 		return err
 	}
-	v._columns = Columns(v.Columns).Index(v.Caser)
+	v._columns = Columns(v.Columns).Index(v.CaseFormat)
 	if err = v.validateSelfRef(); err != nil {
 		return err
 	}
@@ -799,7 +797,7 @@ func (v *View) ensureSchema(ctx context.Context, resource *Resource) (err error)
 	}
 	v.Schema = state.NewSchema(nil,
 		state.WithMany(),
-		state.WithAutoGenFunc(v.generateSchemaTypeFromColumn(v.Caser, v.Columns, v.With)))
+		state.WithAutoGenFunc(v.generateSchemaTypeFromColumn(v.CaseFormat, v.Columns, v.With)))
 	aResource := &Resourcelet{Resource: resource}
 	return v.Schema.Init(aResource)
 }
@@ -859,7 +857,6 @@ func (v *View) inherit(view *View) error {
 
 	if v.CaseFormat == "" {
 		v.CaseFormat = view.CaseFormat
-		v.Caser = view.Caser
 	}
 
 	if v._newCollector == nil && len(v.With) == 0 {
@@ -944,17 +941,12 @@ func (v *View) ensureCaseFormat() error {
 		for i, column := range v.Columns {
 			columnNames[i] = column.Name
 		}
-
-		v.CaseFormat = formatter.CaseFormat(formatter.DetectCase(columnNames...))
+		v.CaseFormat = text.DetectCaseFormat(columnNames...)
 	}
-
-	if err := v.CaseFormat.Init(); err != nil {
-		return err
+	if v.CaseFormat != "" && !v.CaseFormat.IsDefined() {
+		return fmt.Errorf("unsupported case format: %v", v.CaseFormat)
 	}
-
-	var err error
-	v.Caser, err = v.CaseFormat.Caser()
-	return err
+	return nil
 }
 
 func (v *View) ensureCollector() {
@@ -1056,14 +1048,14 @@ func (v *View) deriveColumnsFromSchema(relation *Relation) error {
 	}
 
 	newColumns := make([]*Column, 0)
-	columnsIndex := Columns(newColumns).Index(v.Caser)
+	columnsIndex := Columns(newColumns).Index(v.CaseFormat)
 
 	if err := v.updateColumn("", shared.Elem(v.Schema.Type()), &newColumns, relation, columnsIndex); err != nil {
 		return err
 	}
 
 	v.Columns = newColumns
-	v._columns = Columns(newColumns).Index(v.Caser)
+	v._columns = Columns(newColumns).Index(v.CaseFormat)
 
 	return nil
 }
@@ -1106,7 +1098,7 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 		if ok {
 			*columns = append(*columns, column)
 			//			column.field = &field
-			columnsIndex.Register(v.Caser, column)
+			columnsIndex.Register(v.CaseFormat, column)
 		}
 	}
 
@@ -1162,7 +1154,7 @@ func (v *View) inheritFromViewIfNeeded(ctx context.Context) error {
 }
 
 func (v *View) indexColumns() {
-	v._columns = Columns(v.Columns).Index(v.Caser)
+	v._columns = Columns(v.Columns).Index(v.CaseFormat)
 }
 
 func (v *View) ensureLogger() error {
@@ -1243,7 +1235,7 @@ func (v *View) indexTransforms() error {
 			continue
 		}
 
-		columnName := format.CaseUpperCamel.Format(transform.Path, v.Caser)
+		columnName := text.CaseFormatUpperCamel.Format(transform.Path, v.CaseFormat)
 		aConfig, ok := v.ColumnsConfig[columnName]
 		if !ok {
 			aConfig = &ColumnConfig{}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	xunsafe "github.com/viant/xunsafe"
 	"reflect"
@@ -179,12 +179,12 @@ func NewField(aTag string, structFieldName string, rType reflect.Type) reflect.S
 	return aField
 }
 
-func StructFieldName(sourceCaseFormat format.Case, columnName string) string {
+func StructFieldName(sourceCaseFormat text.CaseFormat, columnName string) string {
 	var structFieldName string
-	if sourceCaseFormat == format.CaseUpperCamel {
+	if sourceCaseFormat == text.CaseFormatUpperCamel {
 		structFieldName = columnName
 	} else {
-		structFieldName = sourceCaseFormat.Format(columnName, format.CaseUpperCamel)
+		structFieldName = sourceCaseFormat.Format(columnName, text.CaseFormatUpperCamel)
 	}
 	return structFieldName
 }

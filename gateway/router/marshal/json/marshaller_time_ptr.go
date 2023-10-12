@@ -3,6 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
+	ftime "github.com/viant/structology/format/time"
 	"github.com/viant/xunsafe"
 	"strconv"
 	"time"
@@ -15,14 +16,18 @@ type timePtrMarshaller struct {
 	tag        *DefaultTag
 }
 
-func newTimePtrMarshaller(tag *DefaultTag, config config.IOConfig) *timePtrMarshaller {
+func newTimePtrMarshaller(tag *DefaultTag, config *config.IOConfig) *timePtrMarshaller {
 	timeFormat := time.RFC3339
 	if tag.Format != "" {
 		timeFormat = tag.Format
 	}
 
-	if config.DateLayout != "" {
-		timeFormat = config.DateLayout
+	if config.DateFormat != "" {
+		config.TimeLayout = ftime.DateFormatToTimeLayout(config.DateFormat)
+
+	}
+	if config.TimeLayout != "" {
+		timeFormat = config.TimeLayout
 	}
 
 	var zeroValue *time.Time

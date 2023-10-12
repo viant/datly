@@ -2,8 +2,7 @@ package ast
 
 import (
 	"fmt"
-	"github.com/viant/datly/utils/formatter"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 )
 
 type (
@@ -135,8 +134,8 @@ func (b Block) Generate(builder *Builder) error {
 func (e Ident) Generate(builder *Builder) (err error) {
 	identName := e.Name
 	if builder.WithLowerCaseIdent {
-		upperCamel, _ := formatter.UpperCamel.Caser()
-		identName = upperCamel.Format(identName, format.CaseLowerCamel)
+		upperCamel := text.CaseFormatUpperCamel
+		identName = upperCamel.Format(identName, text.CaseFormatLowerCamel)
 	}
 	if e.WithState && builder.StateName != "" {
 		identName = identName + "." + builder.StateName

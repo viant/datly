@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 	expand "github.com/viant/datly/service/executor/expand"
-	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/structology"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -50,9 +49,9 @@ func (m *TemplateSummary) Init(ctx context.Context, owner *Template, resource *R
 
 	m.Kind = MetaKind(strings.ToLower(string(m.Kind)))
 
-	cFormat, err := format.NewCase(formatter.DetectCase(m.Name))
-	if err == nil && cFormat != format.CaseUpperCamel {
-		m.Name = cFormat.Format(m.Name, format.CaseUpperCamel)
+	cFormat := text.DetectCaseFormat(m.Name)
+	if cFormat.IsDefined() && cFormat != text.CaseFormatUpperCamel {
+		m.Name = cFormat.Format(m.Name, text.CaseFormatUpperCamel)
 	}
 
 	if m.Name == "" {
@@ -108,7 +107,7 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 		return err
 	}
 	resourcelet := NewResourcelet(resource, owner._view)
-	if err = columns.Init(resourcelet, owner._view.Caser, owner._view.AreNullValuesAllowed()); err != nil {
+	if err = columns.Init(resourcelet, owner._view.CaseFormat, owner._view.AreNullValuesAllowed()); err != nil {
 		return err
 	}
 	if err != nil {
@@ -118,21 +117,18 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 	for i, column := range columns {
 		columnNames[i] = column.Name
 	}
-	newCase, err := format.NewCase(formatter.DetectCase(columnNames...))
-	if err != nil {
-		return err
-	}
-	m.Schema = state.NewSchema(nil, state.WithAutoGenFunc(m._owner._view.generateSchemaTypeFromColumn(newCase, columns, nil)))
+	caseFormat := text.DetectCaseFormat(columnNames...)
+	m.Schema = state.NewSchema(nil, state.WithAutoGenFunc(m._owner._view.generateSchemaTypeFromColumn(caseFormat, columns, nil)))
 	err = m.Schema.Init(resourcelet)
 
 	return err
 }
 
-func (v *View) generateSchemaTypeFromColumn(caser format.Case, columns []*Column, relations []*Relation) func() (reflect.Type, error) {
+func (v *View) generateSchemaTypeFromColumn(caser text.CaseFormat, columns []*Column, relations []*Relation) func() (reflect.Type, error) {
 	return ColumnsSchema(caser, columns, relations, v)
 }
 
-func ColumnsSchema(caser format.Case, columns []*Column, relations []*Relation, v *View) func() (reflect.Type, error) {
+func ColumnsSchema(caseFormat text.CaseFormat, columns []*Column, relations []*Relation, v *View) func() (reflect.Type, error) {
 	return func() (reflect.Type, error) {
 		excluded := make(map[string]bool)
 		for _, rel := range relations {
@@ -161,8 +157,8 @@ func ColumnsSchema(caser format.Case, columns []*Column, relations []*Relation, 
 				}
 			}
 
-			aTag := generateFieldTag(columns[i], caser)
-			aField := newCasedField(aTag, columnName, caser, rType)
+			aTag := generateFieldTag(columns[i], caseFormat)
+			aField := newCasedField(aTag, columnName, caseFormat, rType)
 			if unique[aField.Name] {
 				continue
 			}
@@ -174,7 +170,7 @@ func ColumnsSchema(caser format.Case, columns []*Column, relations []*Relation, 
 		v.buildRelationField(relations, holders, &structFields)
 
 		if v.SelfReference != nil {
-			structFields = append(structFields, newCasedField("", v.SelfReference.Holder, format.CaseUpperCamel, reflect.SliceOf(ast.InterfaceType)))
+			structFields = append(structFields, newCasedField("", v.SelfReference.Holder, text.CaseFormatUpperCamel, reflect.SliceOf(ast.InterfaceType)))
 		}
 		return reflect.PtrTo(reflect.StructOf(structFields)), nil
 	}
@@ -221,12 +217,12 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 				metaType = reflect.PtrTo(metaType)
 			}
 			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-"`
-			*structFields = append(*structFields, newCasedField(tag, meta.Name, format.CaseUpperCamel, metaType))
+			*structFields = append(*structFields, newCasedField(tag, meta.Name, text.CaseFormatUpperCamel, metaType))
 		}
 	}
 }
 
-func newCasedField(aTag string, columnName string, sourceCaseFormat format.Case, rType reflect.Type) reflect.StructField {
+func newCasedField(aTag string, columnName string, sourceCaseFormat text.CaseFormat, rType reflect.Type) reflect.StructField {
 	structFieldName := state.StructFieldName(sourceCaseFormat, columnName)
 	return state.NewField(aTag, structFieldName, rType)
 }

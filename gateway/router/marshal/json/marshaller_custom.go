@@ -9,7 +9,7 @@ import (
 )
 
 type customMarshaller struct {
-	config     config.IOConfig
+	config     *config.IOConfig
 	path       string
 	outputPath string
 	tag        *DefaultTag
@@ -19,7 +19,7 @@ type customMarshaller struct {
 	addrType   *xunsafe.Type
 }
 
-func newCustomUnmarshaller(rType reflect.Type, config config.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newCustomUnmarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
 	marshaller, err := cache.loadMarshaller(rType, config, path, outputPath, tag, &cacheConfig{ignoreCustomUnmarshaller: true})
 	if err != nil {
 		return nil, err

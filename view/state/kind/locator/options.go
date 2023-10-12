@@ -22,7 +22,7 @@ type (
 		URIPattern       string
 		BodyType         reflect.Type
 		Unmarshal        Unmarshal
-		IOConfig         config.IOConfig
+		IOConfig         *config.IOConfig
 		Custom           []interface{}
 		ParameterLookup  ParameterLookup
 		ReadInto         ReadInto
@@ -114,7 +114,7 @@ func WithParameterLookup(lookupFn ParameterLookup) Option {
 	}
 }
 
-func WithIOConfig(config config.IOConfig) Option {
+func WithIOConfig(config *config.IOConfig) Option {
 	return func(o *Options) {
 		o.IOConfig = config
 	}

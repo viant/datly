@@ -2,10 +2,9 @@ package view
 
 import (
 	"embed"
-	"fmt"
-	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
+	"github.com/viant/structology/tags"
 	"reflect"
 	"strings"
 )
@@ -154,49 +153,23 @@ func ParseTag(tagString string, options ...TagOption) *Tag {
 	return tag
 }
 
-func generateFieldTag(column *Column, viewCaseFormat format.Case) string {
+func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat) string {
+	result := tags.NewTags(column.Tag)
 	columnName := column.Name
-	defaultTag := createDefaultTagIfNeeded(column)
-	sqlxTag := `sqlx:"name=` + columnName + `"`
-	var aTag string
-	if defaultTag == "" {
-		aTag = sqlxTag
-	} else {
-		aTag = sqlxTag + " " + defaultTag
+	//TODO possible add validate tag ?
+	result.SetIfNotFound("sqlx", "name="+columnName)
+	result.SetIfNotFound("velty", generateVelyTagValue(columnName, viewCaseFormat))
+	if column.FormatTag != nil {
+		aTag := tags.NewTag("format", column.FormatTag)
+		result.SetTag(aTag)
 	}
-
-	if column.Tag != "" {
-		if aTag != "" {
-			aTag += " "
-		}
-		aTag += column.Tag
-	}
-	if !strings.Contains(aTag, "velty") {
-		names := columnName
-		if aFieldName := state.StructFieldName(viewCaseFormat, columnName); aFieldName != names {
-			names = names + "|" + aFieldName
-		}
-		aTag += fmt.Sprintf(` velty:"names=%v"`, names)
-	}
-	return aTag
+	return result.Stringify()
 }
 
-func createDefaultTagIfNeeded(column *Column) string {
-	if column == nil {
-		return ""
+func generateVelyTagValue(columnName string, viewCaseFormat text.CaseFormat) string {
+	names := columnName
+	if aFieldName := state.StructFieldName(viewCaseFormat, columnName); aFieldName != names {
+		names = names + "|" + aFieldName
 	}
-	attributes := make([]string, 0)
-	if column.Format != "" {
-		attributes = append(attributes, json.FormatAttribute+"="+column.Format)
-	}
-	if column.IgnoreCaseFormatter {
-		attributes = append(attributes, json.IgnoreCaseFormatter+"=true,name="+column.Name)
-	}
-	if column.Default != "" {
-		attributes = append(attributes, json.ValueAttribute+"="+column.Default)
-	}
-	if len(attributes) == 0 {
-		return ""
-	}
-	return json.DefaultTagName + `:"` + strings.Join(attributes, ",") + `"`
+	return `names=` + names
 }

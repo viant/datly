@@ -1,20 +1,19 @@
 package formatter
 
 import (
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"strings"
 )
 
 func NormalizePath(path string) string {
 	segments := strings.Split(path, ".")
 	for i, segment := range segments {
-		segmentFormat, err := format.NewCase(DetectCase(segment))
-		if err != nil || segmentFormat == format.CaseUpperCamel {
+		segmentFormat := text.DetectCaseFormat(segment)
+		if !segmentFormat.IsDefined() || segmentFormat == text.CaseFormatUpperCamel {
 			continue
 		}
 
-		segments[i] = segmentFormat.Format(segment, format.CaseUpperCamel)
+		segments[i] = segmentFormat.Format(segment, text.CaseFormatUpperCamel)
 	}
-
 	return strings.Join(segments, ".")
 }

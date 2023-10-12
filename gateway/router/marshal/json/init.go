@@ -3,7 +3,7 @@ package json
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"reflect"
 	"sync"
 )
@@ -30,5 +30,5 @@ func ResetCache() {
 		xtypesMap: sync.Map{},
 	}
 
-	namesIndex = &namesCaseIndex{registry: map[format.Case]map[string]string{}}
+	namesIndex = &namesCaseIndex{registry: map[text.CaseFormat]map[string]string{}}
 }

@@ -3,7 +3,6 @@ package tabjson
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/sqlx/io"
-	"github.com/viant/toolbox/format"
 	goIo "io"
 	"log"
 	"testing"
@@ -920,7 +919,7 @@ func TestReader_Read(t *testing.T) {
 			},
 			options: []interface{}{
 				io.StringifierConfig{
-					CaseFormat: format.CaseLowerUnderscore,
+					CaseFormat: text.CaseFormatLowerUnderscore,
 					Fields:     []string{"Comment"},
 				},
 			},
@@ -961,7 +960,7 @@ func TestReader_Read(t *testing.T) {
 			},
 			options: []interface{}{
 				io.StringifierConfig{
-					CaseFormat: format.CaseLowerUnderscore,
+					CaseFormat: text.CaseFormatLowerUnderscore,
 				},
 			},
 			expectedRead: `'i_d','comment'

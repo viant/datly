@@ -103,7 +103,7 @@ func (x *XLSConfig) Options() []xlsy.Option {
 	return options
 }
 
-func (c *Content) InitMarshaller(config config.IOConfig, exclude []string, inputType, outputType reflect.Type) error {
+func (c *Content) InitMarshaller(config *config.IOConfig, exclude []string, inputType, outputType reflect.Type) error {
 	c.unmarshallerInterceptors = c.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
 	c.JsonMarshaller = json.New(config)
 	c.XlsMarshaller = xlsy.NewMarshaller(c.XLS.Options()...)

@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/viant/datly/gateway/router/marshal/config"
-	"github.com/viant/datly/utils/formatter"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -19,7 +18,7 @@ var namesIndex *namesCaseIndex
 type (
 	namesCaseIndex struct {
 		mux      sync.Mutex
-		registry map[format.Case]map[string]string
+		registry map[text.CaseFormat]map[string]string
 	}
 
 	marshallersCache struct {
@@ -41,7 +40,7 @@ func newCache() *marshallersCache {
 	return &marshallersCache{pathCaches: sync.Map{}}
 }
 
-func (n *namesCaseIndex) formatTo(value string, dstFormat format.Case) string {
+func (n *namesCaseIndex) formatTo(value string, dstFormat text.CaseFormat) string {
 	n.mux.Lock()
 	defer n.mux.Unlock()
 
@@ -53,8 +52,8 @@ func (n *namesCaseIndex) formatTo(value string, dstFormat format.Case) string {
 
 	formated, ok := registry[value]
 	if !ok {
-		srcFormat, err := format.NewCase(formatter.DetectCase(value))
-		if err == nil {
+		srcFormat := text.DetectCaseFormat(value)
+		if srcFormat.IsDefined() {
 			formated = srcFormat.Format(value, dstFormat)
 		} else {
 			formated = value
@@ -89,7 +88,7 @@ func getXType(rType reflect.Type) *xunsafe.Type {
 	return xType
 }
 
-func (m *marshallersCache) loadMarshaller(rType reflect.Type, config config.IOConfig, path string, outputPath string, defaultTag *DefaultTag, options ...interface{}) (marshaler, error) {
+func (m *marshallersCache) loadMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, defaultTag *DefaultTag, options ...interface{}) (marshaler, error) {
 	aCache := m.pathCache(path)
 	marshaller, err := aCache.loadOrGetMarshaller(rType, config, path, outputPath, defaultTag, options...)
 	if err != nil {
@@ -99,7 +98,7 @@ func (m *marshallersCache) loadMarshaller(rType reflect.Type, config config.IOCo
 	return marshaller, nil
 }
 
-func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config config.IOConfig, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
+func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
 	value, ok := c.cache.Load(rType)
 	if ok {
 		return value.(marshaler), nil
@@ -115,7 +114,7 @@ func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config config.IOConf
 	return aMarshaler, nil
 }
 
-func (c *pathCache) getMarshaller(rType reflect.Type, config config.IOConfig, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
+func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
 	if tag == nil {
 		tag = &DefaultTag{}
 	}

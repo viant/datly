@@ -6,10 +6,10 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
-	"github.com/viant/datly/utils/formatter"
+
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"path"
 	"strings"
 )
@@ -253,11 +253,8 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		viewRelation.Column = relation.ParentField.Column.Name
 		viewRelation.ColumnNamespace = relation.ParentField.Column.Namespace
 		viewRelation.Field = relation.ParentField.Name
-		holderFormat, err := format.NewCase(formatter.DetectCase(relNamespace.Name))
-		if err != nil {
-			return err
-		}
-		viewRelation.Holder = holderFormat.Format(relNamespace.Name, format.CaseUpperCamel)
+		holderFormat := text.DetectCaseFormat(relNamespace.Name)
+		viewRelation.Holder = holderFormat.Format(relNamespace.Name, text.CaseFormatUpperCamel)
 		viewRelation.IncludeColumn = true
 		relNamespace.Holder = viewRelation.Holder
 		refViewName := relNamespace.View.Name

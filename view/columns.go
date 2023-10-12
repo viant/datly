@@ -7,7 +7,7 @@ import (
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -17,10 +17,10 @@ import (
 // Columns wrap slice of Column
 type Columns []*Column
 
-func (c Columns) Index(caser format.Case) NamedColumns {
+func (c Columns) Index(formatCase text.CaseFormat) NamedColumns {
 	result := NamedColumns{}
 	for i, _ := range c {
-		result.Register(caser, c[i])
+		result.Register(formatCase, c[i])
 	}
 	return result
 }
@@ -49,12 +49,12 @@ func (c NamedColumns) Column(name string) (codec.Column, bool) {
 // Views indexes columns by Column.Name
 
 // Register registers *Column
-func (c NamedColumns) Register(caser format.Case, column *Column) {
+func (c NamedColumns) Register(caseFormat text.CaseFormat, column *Column) {
 	keys := shared.KeysOf(column.Name, true)
 	for _, key := range keys {
 		c[key] = column
 	}
-	c[caser.Format(column.Name, format.CaseUpperCamel)] = column
+	c[caseFormat.Format(column.Name, text.CaseFormatUpperCamel)] = column
 
 	if field := column.Field(); field != nil {
 		c[field.Name] = column
@@ -137,17 +137,17 @@ func (c Columns) ApplyConfig(configs map[string]*ColumnConfig, lookupType xrefle
 }
 
 // Init initializes each Column in the slice.
-func (c Columns) Init(resourcelet state.Resource, caser format.Case, allowNulls bool) error {
+func (c Columns) Init(resourcelet state.Resource, caseFormat text.CaseFormat, allowNulls bool) error {
 	for i := range c {
-		if err := c[i].Init(resourcelet, caser, allowNulls); err != nil {
+		if err := c[i].Init(resourcelet, caseFormat, allowNulls); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c Columns) updateTypes(columns []*Column, caser format.Case) {
-	index := Columns(columns).Index(caser)
+func (c Columns) updateTypes(columns []*Column, caseFormat text.CaseFormat) {
+	index := Columns(columns).Index(caseFormat)
 
 	for _, column := range c {
 		if column.ColumnType() == nil || shared.Elem(column.ColumnType()).Kind() == reflect.Interface {

@@ -6,7 +6,7 @@ import (
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -20,7 +20,7 @@ type (
 	Relation struct {
 		Name            string            `json:",omitempty"`
 		Of              *ReferenceView    `json:",omitempty"`
-		Caser           format.Case       `json:",omitempty"`
+		Caser           text.CaseFormat   `json:",omitempty"`
 		Cardinality     state.Cardinality `json:",omitempty"` //IsToOne, or Many
 		Column          string            `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
 		Field           string            `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
@@ -62,7 +62,7 @@ func (r *ReferenceView) initializeField() {
 	if r.Field == "" {
 		r.Field = r.Column
 	}
-	r._field = shared.MatchField(r.Schema.Type(), r.Field, r.Caser)
+	r._field = shared.MatchField(r.Schema.Type(), r.Field, r.CaseFormat)
 }
 
 // Validate checks if ReferenceView is valid
@@ -79,7 +79,7 @@ func (r *Relation) Init(ctx context.Context, parent *View) error {
 		r.Field = r.Column
 	}
 
-	field := shared.MatchField(parent.DataType(), r.Holder, r.Of.View.Caser)
+	field := shared.MatchField(parent.DataType(), r.Holder, r.Of.View.CaseFormat)
 
 	if err := r.inheritType(field.Type); err != nil {
 		return err
@@ -103,13 +103,13 @@ func (r *Relation) Init(ctx context.Context, parent *View) error {
 
 func (r *Relation) initHolder(v *View) error {
 	dataType := v.DataType()
-	r.holderField = shared.MatchField(dataType, r.Holder, v.Caser)
+	r.holderField = shared.MatchField(dataType, r.Holder, v.CaseFormat)
 	if r.holderField == nil {
 		return fmt.Errorf("failed to lookup holderField %v", r.Holder)
 	}
 
-	columnName := r.Of.Caser.Format(r.Field, format.CaseUpperCamel)
-	r.columnField = shared.MatchField(v.DataType(), columnName, v.Caser)
+	columnName := r.Of.CaseFormat.Format(r.Field, text.CaseFormatUpperCamel)
+	r.columnField = shared.MatchField(v.DataType(), columnName, v.CaseFormat)
 
 	r.hasColumnField = r.columnField != nil
 	if r.Cardinality == state.Many && !r.hasColumnField {

@@ -3,10 +3,9 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"sync"
@@ -411,9 +410,8 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 			return nil
 		}, nil
 	}
-	detectCase := formatter.DetectCase(rel.Of.Field)
-	caser, _ := format.NewCase(detectCase)
-	childMetaFieldName := caser.Format(rel.Of.Field, format.CaseUpperCamel)
+	fieldCaseFormat := text.DetectCaseFormat(rel.Of.Field)
+	childMetaFieldName := fieldCaseFormat.Format(rel.Of.Field, text.CaseFormatUpperCamel)
 	metaChildKeyField := xunsafe.FieldByName(templateMeta.Schema.Type(), childMetaFieldName)
 	if metaChildKeyField == nil {
 		return nil, fmt.Errorf("not found field %v at %v", childMetaFieldName, templateMeta.Schema.Type().String())
@@ -605,7 +603,7 @@ func (r *Collector) createTreeIfNeeded() {
 		return
 	}
 
-	aTree := BuildTree(r.view.Schema.Type(), r.view.Schema.Slice(), r.dest, r.view.SelfReference, r.view.Caser)
+	aTree := BuildTree(r.view.Schema.Type(), r.view.Schema.Slice(), r.dest, r.view.SelfReference, r.view.CaseFormat)
 	if aTree != nil {
 		reflect.ValueOf(r.dest).Elem().Set(reflect.ValueOf(aTree).Elem())
 	}
@@ -632,14 +630,14 @@ func (i NodeIndex) Get(id interface{}) map[interface{}]bool {
 	return index
 }
 
-func BuildTree(schemaType reflect.Type, slice *xunsafe.Slice, nodes interface{}, reference *SelfReference, caser format.Case) interface{} {
+func BuildTree(schemaType reflect.Type, slice *xunsafe.Slice, nodes interface{}, reference *SelfReference, caseFormat text.CaseFormat) interface{} {
 	nodesPtr := xunsafe.AsPointer(nodes)
 	if nodesPtr == nil {
 		return nodes
 	}
 
-	idField := xunsafe.FieldByName(schemaType, caser.Format(reference.Child, format.CaseUpperCamel))
-	parentField := xunsafe.FieldByName(schemaType, caser.Format(reference.Parent, format.CaseUpperCamel))
+	idField := xunsafe.FieldByName(schemaType, caseFormat.Format(reference.Child, text.CaseFormatUpperCamel))
+	parentField := xunsafe.FieldByName(schemaType, caseFormat.Format(reference.Parent, text.CaseFormatUpperCamel))
 	holderField := xunsafe.FieldByName(schemaType, reference.Holder)
 	holderSlice := xunsafe.NewSlice(holderField.Type)
 
