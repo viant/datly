@@ -26,6 +26,7 @@ type (
 		Redirect     *Redirect    `json:",omitempty"  yaml:"PreSign,omitempty"`
 		Logger       *Logger      `json:",omitempty"  yaml:"Logger,omitempty"`
 		RevealMetric *bool
+		With         []string `yaml:"With" json:"With"`
 	}
 
 	Path struct {
@@ -41,7 +42,6 @@ type (
 		SourceURL string  `yaml:"SourceURL"`
 		Paths     []*Path `yaml:"Routes" json:"Routes"`
 		Settings  `yaml:",inline"`
-		With      []string        `yaml:"With" json:"With"`
 		Version   version.Control `yaml:"-" json:"-"`
 	}
 )
@@ -71,6 +71,10 @@ func (r *Settings) inherit(from *Settings) {
 	}
 	if r.RevealMetric == nil {
 		r.RevealMetric = from.RevealMetric
+		return
+	}
+	if len(r.With) == 0 {
+		r.With = from.With
 		return
 	}
 }
