@@ -122,6 +122,7 @@ func (s *Service) loadComponent(ctx context.Context, opts []Option, sourceURL st
 	opts = append([]Option{
 		WithResources(s.resources),
 		WithExtensions(s.extensions),
+		WithPath(aPath),
 	}, opts...)
 	components, err := LoadComponents(ctx, sourceURL, opts...)
 	if err != nil {

@@ -94,8 +94,14 @@ func LoadComponents(ctx context.Context, URL string, opts ...Option) (*Component
 
 	substitutes := options.resources.Substitutes()
 	for k, item := range substitutes {
-		if bytes.Contains(data, []byte(k)) {
-			data = []byte(item.Replace(string(data)))
+		if options.path != nil && len(options.path.With) > 0 {
+			if options.path.HasWith(k) {
+				data = []byte(item.Replace(string(data)))
+			}
+		} else { //fallback fuzzy substitution
+			if bytes.Contains(data, []byte(k)) {
+				data = []byte(item.Replace(string(data)))
+			}
 		}
 	}
 	components, err := unmarshalComponent(data)

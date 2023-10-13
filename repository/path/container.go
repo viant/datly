@@ -46,6 +46,18 @@ type (
 	}
 )
 
+func (r *Settings) HasWith(candidate string) bool {
+	if len(r.With) == 0 {
+		return false
+	}
+	for _, item := range r.With {
+		if item == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *Settings) inherit(from *Settings) {
 	if r.Cors == nil {
 		r.Cors = from.Cors

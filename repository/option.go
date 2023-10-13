@@ -4,6 +4,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/repository/resource"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/gmetric"
@@ -27,6 +28,7 @@ type Options struct {
 	transforms           marshal.TransformIndex
 	dispatcher           func(registry *Registry) contract.Dispatcher
 	cacheConnectorPrefix string
+	path                 *path.Path
 }
 
 func (o *Options) UseColumn() bool {
@@ -181,5 +183,11 @@ func WithApiPrefix(prefix string) Option {
 func WithDispatcher(fn func(registry *Registry) contract.Dispatcher) Option {
 	return func(o *Options) {
 		o.dispatcher = fn
+	}
+}
+
+func WithPath(aPath *path.Path) Option {
+	return func(o *Options) {
+		o.path = aPath
 	}
 }
