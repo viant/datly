@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -21,10 +22,10 @@ type mapMarshaller struct {
 	keyType              reflect.Type
 }
 
-func newMapMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*mapMarshaller, error) {
+func newMapMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, cache *marshallersCache) (*mapMarshaller, error) {
 	result := &mapMarshaller{
 		xType:      getXType(rType),
-		isEmbedded: tag.Embedded,
+		isEmbedded: tag.Inline,
 		cache:      cache,
 		config:     config,
 		valueType:  rType.Elem(),

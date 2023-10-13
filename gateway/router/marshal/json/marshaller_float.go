@@ -2,6 +2,7 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"strconv"
 	"unsafe"
@@ -9,17 +10,16 @@ import (
 
 type float32Marshaller struct {
 	zeroValue string
-	dTag      *DefaultTag
+	dTag      *format.Tag
 }
 
-func newFloat32Marshaller(dTag *DefaultTag) *float32Marshaller {
-	var zeroValue float32
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(float32)
+func newFloat32Marshaller(dTag *format.Tag) *float32Marshaller {
+	var zeroValue = "0.0"
+	if dTag.IsNullable() {
+		zeroValue = null
 	}
-
 	return &float32Marshaller{
-		zeroValue: formatFloat(float64(zeroValue)),
+		zeroValue: zeroValue,
 		dTag:      dTag,
 	}
 }
@@ -44,17 +44,17 @@ func (i *float32Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *go
 
 type float64Marshaller struct {
 	zeroValue string
-	dTag      *DefaultTag
+	dTag      *format.Tag
 }
 
-func newFloat64Marshaller(dTag *DefaultTag) *float64Marshaller {
-	var zeroValue float64
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(float64)
+func newFloat64Marshaller(dTag *format.Tag) *float64Marshaller {
+	var zeroValue = "0.0"
+	if dTag.IsNullable() {
+		zeroValue = null
 	}
 
 	return &float64Marshaller{
-		zeroValue: formatFloat(zeroValue),
+		zeroValue: zeroValue,
 		dTag:      dTag,
 	}
 }

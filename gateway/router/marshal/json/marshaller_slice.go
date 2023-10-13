@@ -3,6 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -29,11 +30,11 @@ type (
 		config     *config.IOConfig
 		outputPath string
 		path       string
-		tag        *DefaultTag
+		tag        *format.Tag
 	}
 )
 
-func newSliceMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newSliceMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, cache *marshallersCache) (marshaler, error) {
 	elemType := rType.Elem()
 
 	marshaller, err := cache.loadMarshaller(elemType, config, path, outputPath, tag)
@@ -104,7 +105,7 @@ func (s *sliceDecoder) UnmarshalJSONArray(d *gojay.Decoder) error {
 	return s.unmarshaller.UnmarshallObject(xunsafe.AsPointer(add), d, nil, s.session)
 }
 
-func newSliceInterfaceMarshaller(config *config.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) marshaler {
+func newSliceInterfaceMarshaller(config *config.IOConfig, path string, outputPath string, tag *format.Tag, cache *marshallersCache) marshaler {
 	return &sliceInterfaceMarshaller{
 		cache:      cache,
 		config:     config,

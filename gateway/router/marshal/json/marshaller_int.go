@@ -2,6 +2,7 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"strconv"
 	"unsafe"
@@ -9,18 +10,17 @@ import (
 
 type intMarshaller struct {
 	defaultValue string
-	dTag         *DefaultTag
+	dTag         *format.Tag
 }
 
-func newIntMarshaller(dTag *DefaultTag) *intMarshaller {
-	var zeroValue int
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(int)
+func newIntMarshaller(dTag *format.Tag) *intMarshaller {
+	var zeroValue = "0"
+	if dTag.IsNullable() {
+		zeroValue = null
 	}
-
 	return &intMarshaller{
 		dTag:         dTag,
-		defaultValue: strconv.Itoa(zeroValue),
+		defaultValue: zeroValue,
 	}
 }
 
@@ -40,17 +40,12 @@ func (i *intMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.
 
 type int8Marshaller struct {
 	defaultValue string
-	dTag         *DefaultTag
+	dTag         *format.Tag
 }
 
-func NewInt8Marshaller(tag *DefaultTag) *int8Marshaller {
-	var zeroValue int8
-	if tag._value != nil {
-		zeroValue, _ = tag._value.(int8)
-	}
-
+func NewInt8Marshaller(tag *format.Tag) *int8Marshaller {
 	return &int8Marshaller{
-		defaultValue: strconv.Itoa(int(zeroValue)),
+		defaultValue: intZeroValue(tag),
 		dTag:         tag,
 	}
 }
@@ -71,17 +66,12 @@ func (i *int8Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay
 
 type int16Marshaller struct {
 	zeroValue string
-	dTag      *DefaultTag
+	dTag      *format.Tag
 }
 
-func newInt16Marshaller(dTag *DefaultTag) *int16Marshaller {
-	var zeroValue int16
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(int16)
-	}
-
+func newInt16Marshaller(dTag *format.Tag) *int16Marshaller {
 	return &int16Marshaller{
-		zeroValue: strconv.Itoa(int(zeroValue)),
+		zeroValue: intZeroValue(dTag),
 		dTag:      dTag,
 	}
 }
@@ -102,17 +92,12 @@ func (i *int16Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *goja
 
 type int32Marshaller struct {
 	zeroValue string
-	dTag      *DefaultTag
+	dTag      *format.Tag
 }
 
-func newInt32Marshaller(dTag *DefaultTag) *int32Marshaller {
-	var zeroValue int32
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(int32)
-	}
-
+func newInt32Marshaller(dTag *format.Tag) *int32Marshaller {
 	return &int32Marshaller{
-		zeroValue: strconv.Itoa(int(zeroValue)),
+		zeroValue: intZeroValue(dTag),
 		dTag:      dTag,
 	}
 }
@@ -133,17 +118,16 @@ func (i *int32Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *goja
 
 type int64Marshaller struct {
 	zeroValue string
-	dTag      *DefaultTag
+	dTag      *format.Tag
 }
 
-func newInt64Marshaller(dTag *DefaultTag) *int64Marshaller {
-	var zeroValue int64
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(int64)
+func newInt64Marshaller(dTag *format.Tag) *int64Marshaller {
+	var zeroValue = "0"
+	if dTag.IsNullable() {
+		zeroValue = null
 	}
-
 	return &int64Marshaller{
-		zeroValue: strconv.Itoa(int(zeroValue)),
+		zeroValue: zeroValue,
 		dTag:      dTag,
 	}
 }
@@ -168,4 +152,12 @@ func appendInt(value int, sb *MarshallSession) error {
 	parsed := strconv.AppendInt(dst, int64(value), 10)
 	sb.Write(parsed)
 	return nil
+}
+
+func intZeroValue(dTag *format.Tag) string {
+	var zeroValue = "0"
+	if dTag.IsNullable() {
+		zeroValue = null
+	}
+	return zeroValue
 }

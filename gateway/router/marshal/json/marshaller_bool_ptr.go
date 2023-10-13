@@ -2,30 +2,24 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
-	"strconv"
 	"unsafe"
 )
 
 type boolPtrMarshaller struct {
 	zeroValue string
-	dTag      *DefaultTag
+	dTag      *format.Tag
 }
 
-func newBoolPtrMarshaller(dTag *DefaultTag) *boolPtrMarshaller {
-	var zeroValue *bool
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(*bool)
+func newBoolPtrMarshaller(dTag *format.Tag) *boolPtrMarshaller {
+	var zeroValue = "false"
+	if dTag.IsNullable() {
+		zeroValue = null
 	}
-
-	zeroString := null
-	if zeroValue != nil {
-		zeroString = strconv.FormatBool(*zeroValue)
-	}
-
 	return &boolPtrMarshaller{
 		dTag:      dTag,
-		zeroValue: zeroString,
+		zeroValue: zeroValue,
 	}
 }
 

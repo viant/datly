@@ -4,6 +4,7 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	structology "github.com/viant/structology"
+	"github.com/viant/structology/format"
 	"github.com/viant/structology/format/text"
 	xunsafe "github.com/viant/xunsafe"
 	"reflect"
@@ -32,7 +33,7 @@ type (
 		marshaller     marshaler
 		xField         *xunsafe.Field
 		indirectXField *xunsafe.Field //in case anonymous pointer field
-		tag            *DefaultTag
+		tag            *format.Tag
 		indexUpdater   *presenceUpdater
 		marshallerMetadata
 	}
@@ -56,7 +57,7 @@ type (
 	}
 )
 
-func newStructMarshaller(config *config.IOConfig, rType reflect.Type, path string, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*structMarshaller, error) {
+func newStructMarshaller(config *config.IOConfig, rType reflect.Type, path string, outputPath string, dTag *format.Tag, cache *marshallersCache) (*structMarshaller, error) {
 	result := &structMarshaller{
 		path:             path,
 		outputPath:       outputPath,
@@ -141,7 +142,7 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 			sb.WriteByte(',')
 		}
 
-		if !stringifier.tag.Embedded {
+		if !stringifier.tag.Inline {
 			sb.WriteByte('"')
 			sb.WriteString(stringifier.jsonName)
 			sb.WriteString(`":`)
@@ -180,7 +181,7 @@ func isExcluded(filter Filter, name string, ioConfig *config.IOConfig, path stri
 
 func (s *structMarshaller) init() error {
 	fields := groupFields(s.rType)
-	marshallers, err := s.createStructMarshallers(fields, s.path, s.outputPath, &DefaultTag{})
+	marshallers, err := s.createStructMarshallers(fields, s.path, s.outputPath, &format.Tag{})
 	if err != nil {
 		return err
 	}
@@ -207,7 +208,7 @@ func (s *structMarshaller) init() error {
 	return nil
 }
 
-func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path string, outputPath string, dTag *DefaultTag) ([]*marshallerWithField, error) {
+func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path string, outputPath string, dTag *format.Tag) ([]*marshallerWithField, error) {
 	marshallers := make([]*marshallerWithField, 0)
 	if len(fields.inlinable) == 1 {
 		field := fields.inlinable[0]
@@ -219,7 +220,7 @@ func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path s
 		s.inlinableMarshaller = marshaller
 	} else {
 		for _, field := range fields.regularFields {
-			dTag, err := NewDefaultTag(field)
+			dTag, err := format.Parse(field.Tag, TagName, XTagName, DefaultTagName)
 			if err != nil {
 				return nil, err
 			}
@@ -233,7 +234,7 @@ func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path s
 	return marshallers, nil
 }
 
-func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithField, field reflect.StructField, path string, outputPath string, dTag *DefaultTag) error {
+func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithField, field reflect.StructField, path string, outputPath string, dTag *format.Tag) error {
 	if field.Anonymous {
 		rType, ptrSize := field.Type, 0
 		for rType.Kind() == reflect.Ptr {
@@ -270,14 +271,13 @@ func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithFiel
 
 	if tag.FieldName != "" {
 		jsonName = tag.FieldName
-	} else if dTag.IgnoreCaseFormatter {
+	} else if dTag.CaseFormat == "-" {
 		if dTag.Name != "" {
 			jsonName = dTag.Name
 		}
 	} else if s.config.CaseFormat != "" {
 		jsonName = formatName(jsonName, s.config.CaseFormat)
 	}
-
 	path, outputPath = addToPath(path, field.Name), addToPath(outputPath, jsonName)
 
 	xField := xunsafe.NewField(field)
@@ -340,7 +340,7 @@ func addToPath(path, field string) string {
 }
 
 func (f *marshallerWithField) init(field reflect.StructField, config *config.IOConfig, cache *marshallersCache) error {
-	defaultTag, err := NewDefaultTag(field)
+	defaultTag, err := format.Parse(field.Tag, "default", TagName, XTagName)
 	if err != nil {
 		return err
 	}

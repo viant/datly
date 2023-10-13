@@ -15,8 +15,10 @@ type XTag struct {
 	Inline bool
 }
 
-const TagName = "json"
-const XTagName = "jsonx"
+const (
+	TagName  = "json"
+	XTagName = "jsonx"
+)
 
 func Parse(tagValue string) *Tag {
 	tag := &Tag{}

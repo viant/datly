@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/viant/structology/format/text"
+	ftime "github.com/viant/structology/format/time"
 	"strings"
 )
 
@@ -11,6 +12,17 @@ type IOConfig struct {
 	Exclude    map[string]bool
 	DateFormat string
 	TimeLayout string
+}
+
+func (c *IOConfig) GetTimeLayout() string {
+	if c.TimeLayout != "" {
+		return c.TimeLayout
+	}
+	if c.DateFormat == "" {
+		return ""
+	}
+	c.TimeLayout = ftime.DateFormatToTimeLayout(c.DateFormat)
+	return c.TimeLayout
 }
 
 func NormalizeExclusionKey(item string) string {

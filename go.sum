@@ -316,8 +316,8 @@ github.com/viant/sqlparser v0.5.1-0.20230922175231-bed6153c0f7e h1:cVxlDJFZETm9A
 github.com/viant/sqlparser v0.5.1-0.20230922175231-bed6153c0f7e/go.mod h1:/ABOSxNPYt/el6LtIe+Ikl8fzkIywbfOfmEB3dxc7Lw=
 github.com/viant/sqlx v0.9.1-0.20231006193533-9d25a148f41f h1:tU0Fyxn7VwK2x5NWW9Y6NzeAp2ge8AFgKyAb3rdg2sU=
 github.com/viant/sqlx v0.9.1-0.20231006193533-9d25a148f41f/go.mod h1:q96jEKSL4oHIZ41M5yhBweEZxTBHNyAHmi0GvtP2MgE=
-github.com/viant/structology v0.5.1-0.20231012223007-9c4e8313872e h1:Ws6fVzD0YwwpWSsjMCPUyb/VtkdVKMlgQlssf5qHE4Y=
-github.com/viant/structology v0.5.1-0.20231012223007-9c4e8313872e/go.mod h1:FuV201UpB3efpVlm5YVERK6vEDT7L8u+xbrei/MeHe8=
+github.com/viant/structology v0.5.1-0.20231013005029-3378ee627666 h1:WU/YXVz2kW0JelK7h5nTNtMnJ0IIlRu7AO/OS6NVw9k=
+github.com/viant/structology v0.5.1-0.20231013005029-3378ee627666/go.mod h1:FuV201UpB3efpVlm5YVERK6vEDT7L8u+xbrei/MeHe8=
 github.com/viant/structql v0.4.1 h1:eQab1M5eTGFTSLSLIwRMpz/C5IKzixRskon2V8qhtRM=
 github.com/viant/structql v0.4.1/go.mod h1:gHebhXqfhtTpehk9VyeDq6D1rO87hv62AgG4p/e91UY=
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=

@@ -3,7 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
-	ftime "github.com/viant/structology/format/time"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"strconv"
 	"time"
@@ -13,26 +13,18 @@ import (
 type timeMarshaller struct {
 	timeLayout string
 	zeroValue  string
-	tag        *DefaultTag
+	tag        *format.Tag
 }
 
-func newTimeMarshaller(tag *DefaultTag, config *config.IOConfig) *timeMarshaller {
+func newTimeMarshaller(tag *format.Tag, config *config.IOConfig) *timeMarshaller {
 	timeLayout := time.RFC3339
-	if tag.Format != "" {
-		timeLayout = tag.Format
+	if layout := config.GetTimeLayout(); layout != "" {
+		timeLayout = layout
 	}
-	if config.DateFormat != "" {
-		config.TimeLayout = ftime.DateFormatToTimeLayout(config.DateFormat)
+	if tag.TimeLayout != "" {
+		timeLayout = tag.TimeLayout
 	}
-	if config.TimeLayout != "" {
-		timeLayout = config.TimeLayout
-	}
-
 	zeroValue := time.Time{}
-	if tag._value != nil {
-		zeroValue, _ = tag._value.(time.Time)
-	}
-
 	return &timeMarshaller{
 		timeLayout: timeLayout,
 		zeroValue:  strconv.Quote(zeroValue.Format(timeLayout)),

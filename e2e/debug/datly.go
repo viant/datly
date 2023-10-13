@@ -70,6 +70,7 @@ func main() {
 	os.Args = []string{
 		"",
 		"-c=" + configURL,
+
 		"-z=/tmp/jobs/datly",
 	}
 

@@ -3,6 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -12,14 +13,14 @@ type customMarshaller struct {
 	config     *config.IOConfig
 	path       string
 	outputPath string
-	tag        *DefaultTag
+	tag        *format.Tag
 	cache      *marshallersCache
 	marshaller marshaler
 	valueType  *xunsafe.Type
 	addrType   *xunsafe.Type
 }
 
-func newCustomUnmarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newCustomUnmarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, cache *marshallersCache) (marshaler, error) {
 	marshaller, err := cache.loadMarshaller(rType, config, path, outputPath, tag, &cacheConfig{ignoreCustomUnmarshaller: true})
 	if err != nil {
 		return nil, err

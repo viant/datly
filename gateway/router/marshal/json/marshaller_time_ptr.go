@@ -3,7 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
-	ftime "github.com/viant/structology/format/time"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"strconv"
 	"time"
@@ -11,38 +11,27 @@ import (
 )
 
 type timePtrMarshaller struct {
-	timeFormat string
+	timeLayout string
 	zeroValue  string
-	tag        *DefaultTag
+	tag        *format.Tag
 }
 
-func newTimePtrMarshaller(tag *DefaultTag, config *config.IOConfig) *timePtrMarshaller {
-	timeFormat := time.RFC3339
-	if tag.Format != "" {
-		timeFormat = tag.Format
+func newTimePtrMarshaller(tag *format.Tag, config *config.IOConfig) *timePtrMarshaller {
+	timeLayout := time.RFC3339
+	if layout := config.GetTimeLayout(); layout != "" {
+		timeLayout = layout
+	}
+	if tag.TimeLayout != "" {
+		timeLayout = tag.TimeLayout
 	}
 
-	if config.DateFormat != "" {
-		config.TimeLayout = ftime.DateFormatToTimeLayout(config.DateFormat)
-
+	zeroValue := null
+	if !tag.IsNullable() {
+		zeroValue = strconv.Quote(time.Time{}.Format(timeLayout))
 	}
-	if config.TimeLayout != "" {
-		timeFormat = config.TimeLayout
-	}
-
-	var zeroValue *time.Time
-	if tag._value != nil {
-		zeroValue, _ = tag._value.(*time.Time)
-	}
-
-	zeroString := null
-	if zeroValue != nil {
-		zeroString = strconv.Quote(zeroValue.Format(timeFormat))
-	}
-
 	return &timePtrMarshaller{
-		timeFormat: timeFormat,
-		zeroValue:  zeroString,
+		timeLayout: timeLayout,
+		zeroValue:  zeroValue,
 		tag:        tag,
 	}
 }
@@ -51,7 +40,7 @@ func (t *timePtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *go
 	aTime := xunsafe.AsTimeAddrPtr(pointer)
 
 	timeDst := time.Time{}
-	if err := decoder.AddTime(&timeDst, t.timeFormat); err != nil {
+	if err := decoder.AddTime(&timeDst, t.timeLayout); err != nil {
 		return err
 	}
 
@@ -69,5 +58,5 @@ func (t *timePtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessi
 		return nil
 	}
 
-	return appendTime(sb, **aTime, t.timeFormat)
+	return appendTime(sb, **aTime, t.timeLayout)
 }

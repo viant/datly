@@ -2,28 +2,24 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"unsafe"
 )
 
 type float32PtrMarshaller struct {
 	zeroValue string
-	dTag      *DefaultTag
+	dTag      *format.Tag
 }
 
-func newFloat32PtrMarshaller(dTag *DefaultTag) *float32PtrMarshaller {
-	var zeroValue *float32
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(*float32)
-	}
-
-	zeroString := null
-	if zeroValue != nil {
-		zeroString = formatFloat(float64(*zeroValue))
+func newFloat32PtrMarshaller(dTag *format.Tag) *float32PtrMarshaller {
+	var zeroValue = "0.0"
+	if dTag.IsNullable() {
+		zeroValue = null
 	}
 
 	return &float32PtrMarshaller{
-		zeroValue: zeroString,
+		zeroValue: zeroValue,
 		dTag:      dTag,
 	}
 }
@@ -44,22 +40,16 @@ func (i *float32PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder 
 
 type float64PtrMarshaller struct {
 	zeroValue string
-	dTag      *DefaultTag
+	dTag      *format.Tag
 }
 
-func newFloat64PtrMarshaller(dTag *DefaultTag) *float64PtrMarshaller {
-	var zeroValue *float64
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(*float64)
+func newFloat64PtrMarshaller(dTag *format.Tag) *float64PtrMarshaller {
+	var zeroValue = "0.0"
+	if dTag.IsNullable() {
+		zeroValue = null
 	}
-
-	zeroString := null
-	if zeroValue != nil {
-		zeroString = formatFloat(*zeroValue)
-	}
-
 	return &float64PtrMarshaller{
-		zeroValue: zeroString,
+		zeroValue: zeroValue,
 		dTag:      dTag,
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -16,7 +17,7 @@ type ptrMarshaller struct {
 	isElemIface bool
 }
 
-func newPtrMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newPtrMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, cache *marshallersCache) (marshaler, error) {
 	elem := rType.Elem()
 	marshaller, err := cache.loadMarshaller(elem, config, path, outputPath, tag)
 	if err != nil {

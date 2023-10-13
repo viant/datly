@@ -3,6 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -17,7 +18,7 @@ type (
 	}
 )
 
-func newInlinableMarshaller(field reflect.StructField, config *config.IOConfig, path, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*inlinableMarshaller, error) {
+func newInlinableMarshaller(field reflect.StructField, config *config.IOConfig, path, outputPath string, dTag *format.Tag, cache *marshallersCache) (*inlinableMarshaller, error) {
 	marshaler, err := cache.loadMarshaller(field.Type, config, path, outputPath, dTag)
 	if err != nil {
 		return nil, err

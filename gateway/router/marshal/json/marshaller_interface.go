@@ -3,6 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -13,13 +14,13 @@ type interfaceMarshaller struct {
 	config     *config.IOConfig
 	path       string
 	outputPath string
-	tag        *DefaultTag
+	tag        *format.Tag
 	cache      *marshallersCache
 	xType      *xunsafe.Type
 	hasMethod  bool
 }
 
-func newInterfaceMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*interfaceMarshaller, error) {
+func newInterfaceMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, cache *marshallersCache) (*interfaceMarshaller, error) {
 	return &interfaceMarshaller{
 		xType:      xunsafe.NewType(rType),
 		rType:      rType,

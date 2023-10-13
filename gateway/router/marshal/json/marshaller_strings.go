@@ -2,8 +2,8 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
-	"strconv"
 	"strings"
 	"unicode"
 	"unsafe"
@@ -11,17 +11,14 @@ import (
 
 type stringMarshaller struct {
 	defaultValue string
-	dTag         *DefaultTag
+	dTag         *format.Tag
 }
 
-func newStringMarshaller(dTag *DefaultTag) *stringMarshaller {
-	var zeroValue string
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(string)
+func newStringMarshaller(dTag *format.Tag) *stringMarshaller {
+	var zeroValue = `""`
+	if dTag.IsNullable() {
+		zeroValue = null
 	}
-
-	zeroValue = strconv.Quote(zeroValue)
-
 	return &stringMarshaller{
 		dTag:         dTag,
 		defaultValue: zeroValue,

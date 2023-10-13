@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/viant/datly/gateway/router/marshal/config"
+	"github.com/viant/structology/format"
 	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -88,9 +89,9 @@ func getXType(rType reflect.Type) *xunsafe.Type {
 	return xType
 }
 
-func (m *marshallersCache) loadMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, defaultTag *DefaultTag, options ...interface{}) (marshaler, error) {
+func (m *marshallersCache) loadMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, formatTag *format.Tag, options ...interface{}) (marshaler, error) {
 	aCache := m.pathCache(path)
-	marshaller, err := aCache.loadOrGetMarshaller(rType, config, path, outputPath, defaultTag, options...)
+	marshaller, err := aCache.loadOrGetMarshaller(rType, config, path, outputPath, formatTag, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +99,7 @@ func (m *marshallersCache) loadMarshaller(rType reflect.Type, config *config.IOC
 	return marshaller, nil
 }
 
-func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
+func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, options ...interface{}) (marshaler, error) {
 	value, ok := c.cache.Load(rType)
 	if ok {
 		return value.(marshaler), nil
@@ -114,9 +115,9 @@ func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config *config.IOCon
 	return aMarshaler, nil
 }
 
-func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
+func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, options ...interface{}) (marshaler, error) {
 	if tag == nil {
-		tag = &DefaultTag{}
+		tag = &format.Tag{}
 	}
 
 	aConfig := c.parseConfig(options)

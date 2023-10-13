@@ -2,30 +2,24 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
-	"strconv"
 	"unsafe"
 )
 
 type stringPtrMarshaller struct {
 	defaultValue string
-	dTag         *DefaultTag
+	dTag         *format.Tag
 }
 
-func newStringPtrMarshaller(dTag *DefaultTag) *stringPtrMarshaller {
-	var zeroValue *string
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(*string)
+func newStringPtrMarshaller(dTag *format.Tag) *stringPtrMarshaller {
+	var zeroValue = `""`
+	if dTag.IsNullable() {
+		zeroValue = null
 	}
-
-	zeroString := null
-	if zeroValue != nil {
-		zeroString = strconv.Quote(*zeroValue)
-	}
-
 	return &stringPtrMarshaller{
 		dTag:         dTag,
-		defaultValue: zeroString,
+		defaultValue: zeroValue,
 	}
 }
 

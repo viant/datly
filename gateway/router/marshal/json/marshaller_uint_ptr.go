@@ -2,30 +2,20 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
+	"github.com/viant/structology/format"
 	"github.com/viant/xunsafe"
-	"strconv"
 	"unsafe"
 )
 
 type uintPtrMarshaller struct {
 	defaultValue string
-	dTag         *DefaultTag
+	dTag         *format.Tag
 }
 
-func newUintPtrMarshaller(dTag *DefaultTag) *uintPtrMarshaller {
-	var zeroValue *uint
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(*uint)
-	}
-
-	zeroString := null
-	if zeroValue != nil {
-		zeroString = strconv.Itoa(int(*zeroValue))
-	}
-
+func newUintPtrMarshaller(dTag *format.Tag) *uintPtrMarshaller {
 	return &uintPtrMarshaller{
 		dTag:         dTag,
-		defaultValue: zeroString,
+		defaultValue: intPtrDefaultValue(dTag),
 	}
 }
 
@@ -45,22 +35,12 @@ func (i *uintPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *go
 
 type uint8PtrMarshaller struct {
 	defaultValue string
-	dTag         *DefaultTag
+	dTag         *format.Tag
 }
 
-func newUint8PtrMarshaller(tag *DefaultTag) *uint8PtrMarshaller {
-	var zeroValue *uint8
-	if tag._value != nil {
-		zeroValue, _ = tag._value.(*uint8)
-	}
-
-	zeroString := null
-	if zeroValue != nil {
-		zeroString = strconv.Itoa(int(*zeroValue))
-	}
-
+func newUint8PtrMarshaller(tag *format.Tag) *uint8PtrMarshaller {
 	return &uint8PtrMarshaller{
-		defaultValue: zeroString,
+		defaultValue: intPtrDefaultValue(tag),
 		dTag:         tag,
 	}
 }
@@ -80,31 +60,21 @@ func (i *uint8PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *g
 }
 
 type uint16PtrMarshaller struct {
-	zeroValue string
-	dTag      *DefaultTag
+	defaultValue string
+	dTag         *format.Tag
 }
 
-func newUint16PtrMarshaller(dTag *DefaultTag) *uint16PtrMarshaller {
-	var zeroValue *uint16
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(*uint16)
-	}
-
-	zeroString := null
-	if zeroValue != nil {
-		zeroString = strconv.Itoa(int(*zeroValue))
-	}
-
+func newUint16PtrMarshaller(dTag *format.Tag) *uint16PtrMarshaller {
 	return &uint16PtrMarshaller{
-		zeroValue: zeroString,
-		dTag:      dTag,
+		defaultValue: intPtrDefaultValue(dTag),
+		dTag:         dTag,
 	}
 }
 
 func (i *uint16PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	intPtr := xunsafe.AsUint16AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
-		sb.WriteString(i.zeroValue)
+		sb.WriteString(i.defaultValue)
 		return nil
 	}
 
@@ -116,31 +86,21 @@ func (i *uint16PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *
 }
 
 type uint32PtrMarshaller struct {
-	zeroValue string
-	dTag      *DefaultTag
+	defaultValue string
+	dTag         *format.Tag
 }
 
-func newUint32PtrMarshaller(dTag *DefaultTag) *uint32PtrMarshaller {
-	var zeroValue *uint32
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(*uint32)
-	}
-
-	zeroString := null
-	if zeroValue != nil {
-		zeroString = strconv.Itoa(int(*zeroValue))
-	}
-
+func newUint32PtrMarshaller(dTag *format.Tag) *uint32PtrMarshaller {
 	return &uint32PtrMarshaller{
-		zeroValue: zeroString,
-		dTag:      dTag,
+		defaultValue: intPtrDefaultValue(dTag),
+		dTag:         dTag,
 	}
 }
 
 func (i *uint32PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	intPtr := xunsafe.AsUint32AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
-		sb.WriteString(i.zeroValue)
+		sb.WriteString(i.defaultValue)
 		return nil
 	}
 
@@ -152,31 +112,21 @@ func (i *uint32PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *
 }
 
 type uint64PtrMarshaller struct {
-	zeroValue string
-	dTag      *DefaultTag
+	defaultValue string
+	dTag         *format.Tag
 }
 
-func newUint64PtrMarshaller(dTag *DefaultTag) *uint64PtrMarshaller {
-	var zeroValue *uint64
-	if dTag._value != nil {
-		zeroValue, _ = dTag._value.(*uint64)
-	}
-
-	zeroString := null
-	if zeroValue != nil {
-		zeroString = strconv.Itoa(int(*zeroValue))
-	}
-
+func newUint64PtrMarshaller(dTag *format.Tag) *uint64PtrMarshaller {
 	return &uint64PtrMarshaller{
-		zeroValue: zeroString,
-		dTag:      dTag,
+		defaultValue: intPtrDefaultValue(dTag),
+		dTag:         dTag,
 	}
 }
 
 func (i *uint64PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	intPtr := xunsafe.AsUint64AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
-		sb.WriteString(i.zeroValue)
+		sb.WriteString(i.defaultValue)
 		return nil
 	}
 
