@@ -2,6 +2,8 @@ package command
 
 import (
 	"context"
+	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/internal/setter"
@@ -24,7 +26,10 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 	setter.SetStringIfEmpty(&s.config.JobURL, run.JobURL)
 	setter.SetStringIfEmpty(&s.config.FailedJobURL, run.FailedJobURL)
 	setter.SetIntIfZero(&s.config.MaxJobs, run.MaxJobs)
-
+	if s.config.FailedJobURL == "" && s.config.JobURL != "" {
+		parent, _ := url.Split(s.config.JobURL, file.Scheme)
+		s.config.FailedJobURL = url.Join(parent, "failed", "jobs")
+	}
 	authenticator, err := jwt.Init(s.config.Config, nil)
 	var srv *standalone.Server
 	if authenticator == nil {

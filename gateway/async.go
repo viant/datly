@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/storage"
+	"github.com/viant/afs/url"
 	"github.com/viant/xdatly/handler/async"
 	"log"
 	"sync"
@@ -55,6 +56,16 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 					if err != nil {
 						log.Println(err)
 					}
+					if err == nil {
+						err = fs.Delete(ctx, object.URL())
+					} else {
+						destURL := url.Join(s.Config.FailedJobURL, time.Now().Format("20060102"), object.Name())
+						err = fs.Move(ctx, object.URL(), destURL)
+					}
+					if err != nil {
+						log.Println(err)
+					}
+
 				} else {
 					log.Println("router was nil")
 				}

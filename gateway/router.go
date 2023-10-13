@@ -163,17 +163,6 @@ func (r *Router) HandleJob(ctx context.Context, aJob *async.Job) error {
 	if _, err = r.operator.Operate(ctx, aComponent, aSession); err != nil {
 		return err
 	}
-
-	if aJob.EventURL != "" {
-		if err == nil {
-			if err := fs.Delete(ctx, aJob.EventURL); err != nil {
-				//non-critical error, warning here
-				fmt.Printf("[WARNING] unable to delete storage event %v\n", err)
-			}
-		} else {
-			//TODO add separate location to failed event for further troubleshooting and monitoring
-		}
-	}
 	return nil
 }
 

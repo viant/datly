@@ -43,7 +43,6 @@ func (r *Route) CanHandle(req *http.Request) bool {
 			return false
 		}
 	}
-
 	return true
 }
 
