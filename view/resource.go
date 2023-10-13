@@ -3,7 +3,6 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/xdatly/docs"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/storage"
@@ -15,6 +14,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/docs"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"

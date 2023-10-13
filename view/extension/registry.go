@@ -2,6 +2,7 @@ package extension
 
 import (
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/docs"
 	"github.com/viant/xreflect"
 	"reflect"
 	"sync"
