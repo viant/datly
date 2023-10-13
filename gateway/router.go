@@ -386,7 +386,6 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	return matcher.NewMatcher(matchables), paths, nil
 }
 func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
-
 	if !strings.HasSuffix(aPath.Path.URI, "/") {
 		aPath.Path.URI += "/"
 	}
@@ -398,7 +397,10 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 	defaultRoute := &Route{Path: &aPath.Path, Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 		request := req.Clone(ctx)
 		if index := strings.Index(request.URL.Path, pathURI); index != -1 {
-			URI := furl.Join(request.RequestURI[index+len(pathURI)+1:], "index.html")
+			URI := request.RequestURI[index+len(pathURI):]
+			if strings.Index(URI, ".") == -1 {
+				URI = furl.Join(URI, "index.html")
+			}
 			request.URL.Path = URI
 			request.RequestURI = request.URL.RequestURI()
 		}
@@ -407,9 +409,7 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 			router.CorsHandler(req, aPath.Cors)(response)
 		}
 	}}
-
 	result = append(result, defaultRoute)
-
 	aWildcardPath := wildcardPath(aPath)
 	route := &Route{Path: &aWildcardPath.Path, Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 		request := req.Clone(ctx)
