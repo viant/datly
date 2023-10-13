@@ -33,6 +33,9 @@ func (s *snapshot) onChange(ctx context.Context, object storage.Object, operatio
 		if err != nil && !manager.IsPluginOutdated(err) {
 			return err
 		}
+		if aPlugin == nil {
+			return nil
+		}
 		if err = s.extractExtensions(aPlugin); err != nil {
 			return err
 		}
