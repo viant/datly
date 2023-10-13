@@ -16,7 +16,7 @@ func (o Options) Tag() *Tag {
 	return nil
 }
 
-func (o Options) DefaultTag() *format.Tag {
+func (o Options) FormatTag() *format.Tag {
 	for _, candidate := range o {
 		if value, ok := candidate.(*format.Tag); ok {
 			return value

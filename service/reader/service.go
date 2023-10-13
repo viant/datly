@@ -3,7 +3,6 @@ package reader
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
@@ -64,9 +63,6 @@ func (s *Service) read(ctx context.Context, session *Session) error {
 	if dest, ok := session.DataPtr.(*interface{}); ok {
 		*dest = collector.Dest()
 	}
-	data, _ := json.Marshal(session.DataPtr)
-	fmt.Printf("DEST: %T %s\n", session.DataPtr, data)
-
 	session.syncData(session.View.Schema.Cardinality)
 	state := session.State.Lookup(session.View)
 	session.Filters = state.Filters

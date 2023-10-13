@@ -5,7 +5,6 @@ import (
 	"context"
 	goJson "encoding/json"
 	"fmt"
-	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -318,8 +317,6 @@ func (r *Handler) payloadReader(ctx context.Context, request *http.Request, writ
 	if err != nil {
 		return nil, err
 	}
-	data, _ := json.Marshal(aResponse)
-	fmt.Printf("%T %s\n", aResponse, data)
 	if aResponse == nil {
 		return NewBytesReader(nil, ""), nil
 	}

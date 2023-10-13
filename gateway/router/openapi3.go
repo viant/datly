@@ -3,7 +3,6 @@ package router
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/gateway/router/openapi3"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository"
@@ -12,7 +11,7 @@ import (
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	format2 "github.com/viant/structology/format"
+	format "github.com/viant/structology/format"
 	"github.com/viant/structology/format/text"
 	"net/http"
 	"reflect"
@@ -191,7 +190,7 @@ func (g *generator) getOrGenerateSchema(component *repository.Component, rType r
 	return &openapi3.Schema{Ref: "#/components/schemas/" + schemaName}, nil
 }
 
-func (g *generator) generateSchema(component *repository.Component, rType reflect.Type, dateFormat string, formatFieldName bool, description string, tag *json.DefaultTag, path string) (*openapi3.Schema, error) {
+func (g *generator) generateSchema(component *repository.Component, rType reflect.Type, dateFormat string, formatFieldName bool, description string, tag *format.Tag, path string) (*openapi3.Schema, error) {
 	schema := &openapi3.Schema{
 		Description: description,
 	}
@@ -206,7 +205,7 @@ func (g *generator) generateSchema(component *repository.Component, rType reflec
 	return schema, nil
 }
 
-func (g *generator) addToSchema(schema *openapi3.Schema, component *repository.Component, rType reflect.Type, dateFormat string, isOutputSchema bool, tag *json.DefaultTag, path string) error {
+func (g *generator) addToSchema(schema *openapi3.Schema, component *repository.Component, rType reflect.Type, dateFormat string, isOutputSchema bool, tag *format.Tag, path string) error {
 	for rType.Kind() == reflect.Ptr {
 		rType = rType.Elem()
 	}
@@ -238,21 +237,15 @@ func (g *generator) addToSchema(schema *openapi3.Schema, component *repository.C
 				continue
 			}
 
-			defaultTag, err := json.NewDefaultTag(aField)
+			aTag, err := format.Parse(aField.Tag, "json")
 			if err != nil {
 				return err
 			}
-
-			aTag, err := format2.Parse(aField.Tag, "json", "default")
-			if err != nil {
-				return err
-			}
-
 			if aTag.Ignore {
 				continue
 			}
 
-			if defaultTag.Embedded {
+			if aTag.Inline {
 				schema.AdditionalPropertiesAllowed = setter.BoolPtr(true)
 				continue
 			}
@@ -274,18 +267,20 @@ func (g *generator) addToSchema(schema *openapi3.Schema, component *repository.C
 			}
 
 			fieldName := aField.Name
-			if defaultTag.IgnoreCaseFormatter {
+			if aTag.CaseFormat == "-" {
 				fieldName = aField.Name
 			} else if isOutputSchema {
 				fieldName = text.CaseFormatUpperCamel.Format(aField.Name, component.Output.CaseFormat)
 			}
-
-			schema.Properties[fieldName], err = g.generateSchema(component, aField.Type, defaultTag.Format, isOutputSchema, "", defaultTag, fieldPath)
+			if len(schema.Properties) == 0 {
+				schema.Properties = make(openapi3.Schemas)
+			}
+			schema.Properties[fieldName], err = g.generateSchema(component, aField.Type, aTag.TimeLayout, isOutputSchema, "", tag, fieldPath)
 			if err != nil {
 				return err
 			}
 
-			if defaultTag.IsRequired() {
+			if !aTag.IsNullable() {
 				schema.Required = append(schema.Required, fieldName)
 			}
 		}

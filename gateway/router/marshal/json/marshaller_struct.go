@@ -220,7 +220,7 @@ func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path s
 		s.inlinableMarshaller = marshaller
 	} else {
 		for _, field := range fields.regularFields {
-			dTag, err := format.Parse(field.Tag, TagName, XTagName, DefaultTagName)
+			dTag, err := format.Parse(field.Tag, TagName, XTagName)
 			if err != nil {
 				return nil, err
 			}
@@ -340,7 +340,7 @@ func addToPath(path, field string) string {
 }
 
 func (f *marshallerWithField) init(field reflect.StructField, config *config.IOConfig, cache *marshallersCache) error {
-	defaultTag, err := format.Parse(field.Tag, "default", TagName, XTagName)
+	defaultTag, err := format.Parse(field.Tag, TagName, XTagName)
 	if err != nil {
 		return err
 	}
