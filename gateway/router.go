@@ -345,7 +345,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 			offset := len(routes)
 
 			if aPath.ContentURL != "" {
-				routes = append(routes, r.NewContentRoute(aPath))
+				routes = append(routes, r.NewContentRoute(aPath)...)
 			} else {
 				provider, err := r.repository.Registry().LookupProvider(ctx, &aPath.Path)
 				if err != nil {
@@ -385,17 +385,20 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	}
 	return matcher.NewMatcher(matchables), paths, nil
 }
+func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 
-func (r *Router) NewContentRoute(aPath *path.Path) *Route {
-	ensureWildcard(aPath)
+	if !strings.HasSuffix(aPath.Path.URI, "/") {
+		aPath.Path.URI += "/"
+	}
+	var result []*Route
 	pathURI := aPath.URI[:len(aPath.URI)-2]
 	contentPath := furl.Join(r.config.ContentURL, aPath.ContentURL)
 	fileSever := http.FileServer(ahttp.New(afs.New(), contentPath))
-	route := &Route{Path: &aPath.Path, Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 
+	defaultRoute := &Route{Path: &aPath.Path, Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 		request := req.Clone(ctx)
 		if index := strings.Index(request.URL.Path, pathURI); index != -1 {
-			URI := request.RequestURI[index+len(pathURI)+1:]
+			URI := furl.Join(request.RequestURI[index+len(pathURI)+1:], "index.html")
 			request.URL.Path = URI
 			request.RequestURI = request.URL.RequestURI()
 		}
@@ -404,14 +407,34 @@ func (r *Router) NewContentRoute(aPath *path.Path) *Route {
 			router.CorsHandler(req, aPath.Cors)(response)
 		}
 	}}
-	return route
+
+	result = append(result, defaultRoute)
+
+	aWildcardPath := wildcardPath(aPath)
+	route := &Route{Path: &aWildcardPath.Path, Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+		request := req.Clone(ctx)
+		if index := strings.Index(request.URL.Path, pathURI); index != -1 {
+			URI := request.RequestURI[index+len(pathURI)+1:]
+			request.URL.Path = URI
+			request.RequestURI = request.URL.RequestURI()
+		}
+
+		fileSever.ServeHTTP(response, request)
+		if aPath.Cors != nil {
+			router.CorsHandler(req, aPath.Cors)(response)
+		}
+	}}
+	result = append(result, route)
+	return result
 }
 
-func ensureWildcard(aPath *path.Path) {
-	if !strings.HasSuffix(aPath.URI, "/*") {
-		if !strings.HasSuffix(aPath.URI, "/") {
-			aPath.URI += "/"
+func wildcardPath(aPath *path.Path) *path.Path {
+	ret := *aPath
+	if !strings.HasSuffix(ret.URI, "/*") {
+		if !strings.HasSuffix(ret.URI, "/") {
+			ret.URI += "/"
 		}
 		aPath.URI += "*"
 	}
+	return &ret
 }
