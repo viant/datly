@@ -124,8 +124,8 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 	return err
 }
 
-func (v *View) generateSchemaTypeFromColumn(caser text.CaseFormat, columns []*Column, relations []*Relation) func() (reflect.Type, error) {
-	return ColumnsSchema(caser, columns, relations, v)
+func (v *View) generateSchemaTypeFromColumn(caseFormat text.CaseFormat, columns []*Column, relations []*Relation) func() (reflect.Type, error) {
+	return ColumnsSchema(caseFormat, columns, relations, v)
 }
 
 func ColumnsSchema(caseFormat text.CaseFormat, columns []*Column, relations []*Relation, v *View) func() (reflect.Type, error) {

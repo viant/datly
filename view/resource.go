@@ -59,10 +59,17 @@ type (
 		_columnsCache map[string]Columns
 
 		Substitutes Substitutes
+		Docs        *Docs
 
-		fs afs.Service
+		_doc *docs.Service
+		fs   afs.Service
 	}
 
+	Docs struct {
+		URL       string
+		Connector string
+		Name      string
+	}
 	NamedResources map[string]*Resource
 )
 

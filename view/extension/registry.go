@@ -13,6 +13,7 @@ type Registry struct {
 	Types      *xreflect.Types
 	Codecs     *codec.Registry
 	Predicates *PredicateRegistry
+	Docs       *docs.Registry
 }
 
 func NewRegistry() *Registry {
