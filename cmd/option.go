@@ -60,8 +60,8 @@ type (
 		ConstURL      string `long:"constURL" description:"path where const files are stored"`
 		Legacy        bool   `short:"l"`
 		cache         *view.Cache
-		SubstituesURL string `long:"substituesURL" description:"substitues URL, expands template before processing"`
-		JobURL        string `short:"z" long:"joburl" description:"job url"`
+		SubstituesURL []string `long:"substituesURL" description:"substitues URL, expands template before processing"`
+		JobURL        string   `short:"z" long:"joburl" description:"job url"`
 	}
 
 	Package struct {

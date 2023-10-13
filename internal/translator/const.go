@@ -3,10 +3,13 @@ package translator
 import (
 	"context"
 	"fmt"
+	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view"
 	"github.com/viant/toolbox"
 	"path"
+	"strings"
 )
 
 func (r *Repository) ensureConstants(ctx context.Context) error {
@@ -27,20 +30,20 @@ func (r *Repository) ensureConstants(ctx context.Context) error {
 }
 
 func (r *Repository) ensureSubstitutes(ctx context.Context) error {
-	if substitutesResource, _ := r.loadDependency(ctx, "substitutes.yaml"); substitutesResource != nil {
-		r.Substitutes = substitutesResource.Substitutes
-	}
-	if URL := r.Config.repository.SubstitutesURL; URL != "" {
+	r.Substitutes = map[string]view.Substitutes{}
+	for _, URL := range r.Config.repository.SubstitutesURL {
+		_, name := url.Split(URL, file.Scheme)
+		if index := strings.LastIndex(name, "."); index != -1 {
+			name = name[:index]
+		}
 		aMap, err := r.loadMap(ctx, URL)
 		if err != nil {
 			return err
 		}
-		if len(r.Substitutes) == 0 {
-			r.Substitutes = map[string]string{}
-		}
+		r.Substitutes[name] = map[string]string{}
 		for k, v := range aMap {
 			fragment := toolbox.AsString(v)
-			r.Substitutes[k] = fragment
+			r.Substitutes[name][k] = fragment
 		}
 	}
 	return nil

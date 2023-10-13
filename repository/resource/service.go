@@ -41,6 +41,24 @@ func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
 	return snap.changed(), err
 }
 
+func (s *Service) Substitutes() map[string]view.Substitutes {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	var result = make(map[string]view.Substitutes)
+	for _, aResource := range s.items {
+		if len(aResource.Substitutes) == 0 {
+			continue
+		}
+		_, name := furl.Split(aResource.SourceURL, file.Scheme)
+		if index := strings.Index(name, "."); index != -1 {
+			name = name[:index]
+		}
+		result[name] = aResource.Substitutes
+
+	}
+	return result
+}
+
 func (s *Service) Lookup(ctx context.Context, key string) (*version.Resource, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()

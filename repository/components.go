@@ -91,9 +91,11 @@ func LoadComponents(ctx context.Context, URL string, opts ...Option) (*Component
 	if err != nil {
 		return nil, err
 	}
-	if substitutes, _ := options.resources.Lookup(ctx, "substitutes"); substitutes != nil {
-		if bytes.Contains(data, []byte("substitutes")) {
-			data = []byte(substitutes.Substitutes.Replace(string(data)))
+
+	substitutes := options.resources.Substitutes()
+	for k, item := range substitutes {
+		if bytes.Contains(data, []byte(k)) {
+			data = []byte(item.Replace(string(data)))
 		}
 	}
 	components, err := unmarshalComponent(data)

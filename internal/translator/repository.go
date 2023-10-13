@@ -29,10 +29,36 @@ type (
 		MessageBuses    []*mbus.Resource
 		Messages        msg.Messages
 		Files           asset.Files
-		Substitutes     view.Substitutes
+		Substitutes     Substitutes
 		PersistAssets   bool
 	}
+
+	Substitutes map[string]view.Substitutes
 )
+
+func (s Substitutes) Merge() view.Substitutes {
+	var result = view.Substitutes{}
+	for _, item := range s {
+		for k, v := range item {
+			result[k] = v
+		}
+	}
+	return result
+}
+
+func (s Substitutes) Replace(text string) string {
+	for _, item := range s {
+		text = item.Replace(text)
+	}
+	return text
+}
+
+func (s Substitutes) ReverseReplace(text string) string {
+	for _, item := range s {
+		text = item.ReverseReplace(text)
+	}
+	return text
+}
 
 func (r *Repository) RuleName(rule *options.Rule) string {
 	_, name := url.Split(rule.SourceURL(), file.Scheme)
@@ -98,12 +124,14 @@ func (r *Repository) persistSubstitutes() error {
 		return nil
 	}
 	cfg := r.Config
-	resource := view.Resource{Substitutes: r.Substitutes}
-	content, err := asset.EncodeYAML(resource)
-	if err != nil {
-		return err
+	for k, item := range r.Substitutes {
+		resource := view.Resource{Substitutes: item}
+		content, err := asset.EncodeYAML(resource)
+		if err != nil {
+			return err
+		}
+		r.Files.Append(asset.NewFile(url.Join(cfg.DependencyURL, k+".yaml"), string(content)))
 	}
-	r.Files.Append(asset.NewFile(url.Join(cfg.DependencyURL, "substitutes.yaml"), string(content)))
 	return nil
 }
 

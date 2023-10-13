@@ -49,7 +49,7 @@ func (s *Service) InitSignature(ctx context.Context, rule *options.Rule) (err er
 
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string, opts *options.Options) (err error) {
 	resource := NewResource(rule, s.Repository.Config.repository, &s.Repository.Messages)
-	resource.Resource.Substitutes = s.Repository.Substitutes
+	resource.Resource.Substitutes = s.Repository.Substitutes.Merge()
 	resource.State.Append(s.Repository.State...)
 	if err = resource.InitRule(&dSQL, ctx, s.Repository.fs, opts); err != nil {
 		return err
@@ -369,7 +369,7 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 
 	aView := &viewlet.View.View
 	resource.Resource.Views = append(resource.Resource.Views, aView)
-	viewlet.View.GenerateFiles(baseRuleURL, ruleName, &s.Repository.Files, s.Repository.Substitutes)
+	viewlet.View.GenerateFiles(baseRuleURL, ruleName, &s.Repository.Files, s.Repository.Substitutes.Merge())
 	if viewlet.TypeDefinition != nil {
 		if len(viewlet.TypeDefinition.Fields) > 0 {
 			viewType := reflect.StructOf(viewlet.Spec.Type.Fields())
@@ -459,9 +459,10 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 		resource.Rule.With = append(resource.Rule.With, "cache")
 	}
 
-	if len(s.Repository.Substitutes) > 0 {
-		resource.Rule.With = append([]string{"substitutes"}, resource.Rule.With...)
+	for k := range s.Repository.Substitutes {
+		resource.Rule.With = append([]string{k}, resource.Rule.With...)
 	}
+
 	result.With = resource.Rule.With
 	if err := s.handleCustomTypes(ctx, resource); err != nil {
 		return nil, err
