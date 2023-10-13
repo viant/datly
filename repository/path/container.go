@@ -41,6 +41,7 @@ type (
 		SourceURL string  `yaml:"SourceURL"`
 		Paths     []*Path `yaml:"Routes" json:"Routes"`
 		Settings  `yaml:",inline"`
+		With      []string        `yaml:"With" json:"With"`
 		Version   version.Control `yaml:"-" json:"-"`
 	}
 )
