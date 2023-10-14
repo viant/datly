@@ -101,10 +101,9 @@ func ensureFrequency(checkFrequency time.Duration) time.Duration {
 	return checkFrequency
 }
 
-func NewOptions(componentsURL string, opts ...Option) *Options {
-	ret := &Options{componentURL: componentsURL}
+func NewOptions(opts []Option) *Options {
+	ret := &Options{}
 	ret.Apply(opts...)
-
 	return ret
 }
 
@@ -177,6 +176,12 @@ func WithPluginURL(URL string) Option {
 func WithApiPrefix(prefix string) Option {
 	return func(o *Options) {
 		o.apiPrefix = prefix
+	}
+}
+
+func WithComponentURL(componentURL string) Option {
+	return func(o *Options) {
+		o.componentURL = componentURL
 	}
 }
 

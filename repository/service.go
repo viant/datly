@@ -76,8 +76,9 @@ func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
 	return snap.majorChange, snap.error()
 }
 
-func (s *Service) init(ctx context.Context, URL string, options *Options) (err error) {
-	if s.paths, err = path.New(ctx, options.fs, URL, options.refreshFrequency); err != nil {
+func (s *Service) init(ctx context.Context, options *Options) (err error) {
+
+	if s.paths, err = path.New(ctx, options.fs, options.componentURL, options.refreshFrequency); err != nil {
 		return err
 	}
 	if s.resources == nil && options.resourceURL != "" {
@@ -152,8 +153,8 @@ func (s *Service) inheritFromPath(component *Component, aPath *path.Path) {
 	}
 }
 
-func New(ctx context.Context, componentsURL string, opts ...Option) (*Service, error) {
-	options := NewOptions(componentsURL, opts...)
+func New(ctx context.Context, opts ...Option) (*Service, error) {
+	options := NewOptions(opts)
 	ret := &Service{
 		options:          options,
 		refreshFrequency: options.refreshFrequency,
@@ -161,7 +162,7 @@ func New(ctx context.Context, componentsURL string, opts ...Option) (*Service, e
 		extensions:       options.extensions,
 		registry:         NewRegistry(options.apiPrefix, options.dispatcher),
 	}
-	err := ret.init(ctx, componentsURL, options)
+	err := ret.init(ctx, options)
 	return ret, err
 }
 

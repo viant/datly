@@ -6,7 +6,7 @@ pipeline:
     set_sdk:
       action: sdk.set
       target: $target
-      sdk: go:1.20
+      sdk: go:1.21
 
     cleanupXDatly:
       action: exec:run

@@ -91,7 +91,7 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		return nil, err
 	}
 
-	repository, err := repository.New(ctx, aConfig.RouteURL,
+	repository, err := repository.New(ctx, repository.WithComponentURL(aConfig.RouteURL),
 		repository.WithResourceURL(aConfig.DependencyURL),
 		repository.WithPluginURL(aConfig.PluginsURL),
 		repository.WithApiPrefix(aConfig.APIPrefix),

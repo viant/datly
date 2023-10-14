@@ -8,7 +8,7 @@ pipeline:
   setSdk:
     action: sdk.set
     target: $target
-    sdk: go:1.20
+    sdk: go:1.21
 
   cleanup:
     action: exec:run

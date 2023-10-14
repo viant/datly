@@ -86,7 +86,7 @@ func (c *Components) ensureColumns(ctx context.Context) error {
 }
 
 func LoadComponents(ctx context.Context, URL string, opts ...Option) (*Components, error) {
-	options := NewOptions("", opts...)
+	options := NewOptions(opts)
 	data, err := options.fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err

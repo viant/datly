@@ -52,12 +52,18 @@ func (s *Service) GetPaths() Container {
 }
 
 func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
+	if s.URL == "" {
+		return false, nil
+	}
 	snap := newSnapshot(s)
 	err := s.notifier.Notify(ctx, s.fs, snap.onChange)
 	return snap.hasChanged(), err
 }
 
 func (s *Service) IsCheckDue(t time.Time) bool {
+	if s.URL == "" {
+		return false
+	}
 	if s == nil {
 		return false
 	}
@@ -241,6 +247,9 @@ func (s *Service) onDelete(ctx context.Context, object storage.Object) error {
 
 func New(ctx context.Context, fs afs.Service, URL string, refreshFrequency time.Duration) (*Service, error) {
 	ret := &Service{fs: fs, URL: URL, notifier: resource.New(URL, refreshFrequency), bySourceURL: make(map[string]int), byPath: make(map[string]int)}
+	if URL == "" {
+		return ret, nil
+	}
 	err := ret.Init(ctx)
 	return ret, err
 }
