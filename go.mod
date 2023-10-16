@@ -51,7 +51,7 @@ require (
 
 require (
 	github.com/viant/structology v0.5.1-0.20231013043327-cb71b3c08401
-	github.com/viant/xdatly v0.3.1-0.20231013165938-4696f5e14cd4
+	github.com/viant/xdatly v0.3.1-0.20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20231013011318-82109bd80ac8
 	github.com/viant/xdatly/types/core v0.0.0-20230619231115-e622dd6aff79

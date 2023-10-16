@@ -18,6 +18,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/structology/format/text"
+	"github.com/viant/xdatly/docs"
 	"github.com/viant/xreflect"
 	"net/http"
 	"reflect"
@@ -41,6 +42,7 @@ type (
 		dispatcher contract.Dispatcher
 		types      *xreflect.Types
 		ioConfig   *config.IOConfig
+		doc        docs.Service
 	}
 )
 
@@ -81,6 +83,8 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	if err = c.Async.Init(ctx, resource, c.View); err != nil {
 		return err
 	}
+
+	c.doc, _ = resource.Doc()
 	return nil
 }
 
@@ -231,4 +235,8 @@ func (r *Component) transformFn(request *http.Request, transform *marshal.Transf
 		}
 		return nil
 	}
+}
+
+func (c *Component) Doc() (docs.Service, bool) {
+	return c.doc, c.doc != nil
 }

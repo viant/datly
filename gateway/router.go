@@ -10,7 +10,7 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/gateway/router"
-	"github.com/viant/datly/gateway/router/openapi3"
+	"github.com/viant/datly/gateway/router/openapi/openapi3"
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/repository"

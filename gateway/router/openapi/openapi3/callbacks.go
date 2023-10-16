@@ -5,12 +5,11 @@ import "context"
 type (
 	Callbacks   map[string]*CallbackRef
 	CallbackRef struct {
-		Ref string `json:"$ref,omitempty" yaml:"$ref,omitempty"`
-		Callback   `yaml:",inline"`
+		Ref      string `json:"$ref,omitempty" yaml:"$ref,omitempty"`
+		Callback `yaml:",inline"`
 	}
 	Callback map[string]*PathItem
 )
-
 
 func (s *CallbackRef) UnmarshalYAML(ctx context.Context, fn func(dest interface{}) error) error {
 	type temp CallbackRef

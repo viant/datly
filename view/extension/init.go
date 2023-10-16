@@ -10,6 +10,7 @@ import (
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/docs"
 	_ "github.com/viant/xdatly/extension" //go mod level placeholder replacement
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
@@ -90,6 +91,7 @@ func InitRegistry() {
 				PredicateNotContains: NewNotContainsPredicate(),
 			},
 		},
+		Docs: docs.New(),
 	}
 	types, _ := core.Types(nil)
 	for packageName, typesRegsitry := range types {
@@ -110,4 +112,8 @@ func InitRegistry() {
 	for key, value := range codecs {
 		Config.Codecs.RegisterCodec(key, value)
 	}
+
+	docs.ForEach(func(name string, provider docs.Provider) {
+		Config.Docs.Register(name, provider)
+	})
 }

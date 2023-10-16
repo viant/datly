@@ -62,16 +62,21 @@ type (
 		Substitutes Substitutes
 		Docs        *Docs
 
-		_doc *docs.Service
-		fs   afs.Service
+		_doc  docs.Service
+		fs    afs.Service
+		_docs *docs.Registry
 	}
 
-	Docs struct {
-		URL       string
-		Connector string
-		Name      string
-	}
 	NamedResources map[string]*Resource
+
+	ResourceOptions struct {
+		Codecs          *codec.Registry
+		Columns         map[string]Columns
+		Types           *xreflect.Types
+		TransformsIndex marshal.TransformIndex
+		Predicates      *extension.PredicateRegistry
+		Docs            *docs.Registry
+	}
 )
 
 func (r *Resource) NamedParameters() state.NamedParameters {
@@ -289,19 +294,15 @@ func (r *Resource) GetConnectors() Connectors {
 
 // Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
-	types, codecs, cache, transforms, predicates := r.readOptions(options)
+	opts := r.readOptions(options)
 	r.indexProviders()
-	if codecs == nil {
-		codecs = extension.Config.Codecs
-	}
-	r.codecs = codecs
-	r._columnsCache = cache
-	if types == nil {
-		types = r.TypeRegistry()
-	}
-	r._types = types
+
+	r.codecs = opts.Codecs
+	r._columnsCache = opts.Columns
+	r._types = opts.Types
+
 	for _, definition := range r.Types {
-		if err := definition.Init(ctx, types.Lookup); err != nil {
+		if err := definition.Init(ctx, opts.Types.Lookup); err != nil {
 			return err
 		}
 		if err := r.TypeRegistry().Register(definition.Name, xreflect.WithPackage(definition.Package), xreflect.WithReflectType(definition.Type())); err != nil {
@@ -317,12 +318,12 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		}
 	}
 
-	if err := r.initTemplates(predicates); err != nil {
+	if err := r.initTemplates(opts.Predicates); err != nil {
 		return err
 	}
 
 	var err error
-	r._views = Views(r.Views).Index()
+	r._views = r.Views.Index()
 	r._connectors = ConnectorSlice(r.Connectors).Index()
 	r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
 	r._parameters = r.Parameters.Index()
@@ -337,52 +338,68 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	}
 
 	r.Views.EnsureResource(r)
-	if err = r.Views.Init(ctx, r, transforms); err != nil {
+	if err = r.Views.Init(ctx, r, opts.TransformsIndex); err != nil {
 		return err
 	}
+
+	if err = r.initDocs(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.Registry, map[string]Columns, marshal.TransformIndex, *extension.PredicateRegistry) {
-	var types *xreflect.Types
-	var codecs *codec.Registry
-	var cache map[string]Columns
-	var transformsIndex marshal.TransformIndex
-	var predicatesRegistry *extension.PredicateRegistry
-
+func (r *Resource) readOptions(options []interface{}) *ResourceOptions {
+	result := &ResourceOptions{}
 	for _, option := range options {
 		if option == nil {
 			continue
 		}
 		switch actual := option.(type) {
 		case *codec.Registry:
-			codecs = actual
+			result.Codecs = actual
 		case map[string]Columns:
-			cache = actual
+			result.Columns = actual
 		case *xreflect.Types:
-			types = actual
+			result.Types = actual
 		case marshal.TransformIndex:
-			transformsIndex = actual
+			result.TransformsIndex = actual
 		case *extension.PredicateRegistry:
-			predicatesRegistry = actual
+			result.Predicates = actual
 		case extension.PredicateRegistry:
-			predicatesRegistry = &actual
+			result.Predicates = &actual
 		case *extension.Registry:
-			if predicatesRegistry == nil {
-				predicatesRegistry = actual.Predicates
+			if result.Predicates == nil {
+				result.Predicates = actual.Predicates
 			}
-			if codecs == nil {
-				codecs = actual.Codecs
+
+			if result.Codecs == nil {
+				result.Codecs = actual.Codecs
 			}
-			if types == nil {
-				types = actual.Types
+
+			if result.Types == nil {
+				result.Types = actual.Types
 			}
 		}
 	}
+
 	if r._types != nil {
-		types = r._types
+		result.Types = r._types
 	}
-	return types, codecs, cache, transformsIndex, predicatesRegistry
+
+	if result.Codecs == nil {
+		result.Codecs = extension.Config.Codecs
+	}
+
+	if result.Types == nil {
+		result.Types = r.TypeRegistry()
+	}
+
+	if result.Docs == nil {
+		result.Docs = extension.Config.Docs
+	}
+
+	return result
 }
 
 // View returns View with given name
@@ -713,4 +730,16 @@ func (r *Resource) mergeTemplates(resource *Resource) {
 func (r *Resource) addTemplate(template *predicate.Template) {
 	r.Predicates = append(r.Predicates, template)
 	r._predicates.Add(template)
+}
+
+func (r *Resource) initDocs(ctx context.Context) error {
+	if r.Docs == nil {
+		return nil
+	}
+
+	return r.Docs.Init(ctx, r._docs, r._connectors)
+}
+
+func (r *Resource) Doc() (docs.Service, bool) {
+	return r._doc, r._doc != nil
 }

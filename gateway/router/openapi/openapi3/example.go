@@ -18,7 +18,6 @@ type (
 	}
 )
 
-
 func (e *Example) UnmarshalJSON(b []byte) error {
 	type temp Example
 	var tmp = temp{}
@@ -51,9 +50,6 @@ func (e *Example) MarshalJSON() ([]byte, error) {
 	res := mergeJSON(data, extData)
 	return res, nil
 }
-
-
-
 
 func (e *Example) UnmarshalYAML(ctx context.Context, fn func(dest interface{}) error) error {
 	type temp Example

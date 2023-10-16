@@ -11,6 +11,7 @@ import (
 	"github.com/viant/afs/option"
 	acontent "github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/gateway/router/openapi"
 	"github.com/viant/datly/gateway/router/status"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/content"
@@ -358,7 +359,7 @@ func (r *Handler) marshalCustomOutput(output interface{}, aComponent *repository
 		if err != nil {
 			return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
 		}
-		return NewBytesReader(marshal, "", WithHeader(HeaderContentType, applicationJson)), nil
+		return NewBytesReader(marshal, "", WithHeader(HeaderContentType, openapi.ApplicationJson)), nil
 	}
 }
 

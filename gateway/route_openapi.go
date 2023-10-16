@@ -2,7 +2,7 @@ package gateway
 
 import (
 	"context"
-	"github.com/viant/datly/gateway/router"
+	"github.com/viant/datly/gateway/router/openapi"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"gopkg.in/yaml.v3"
@@ -30,7 +30,7 @@ func (r *Router) handleOpenAPI(ctx context.Context, components *repository.Servi
 }
 
 func (r *Router) generateOpenAPI(ctx context.Context, components *repository.Service, providers []*repository.Provider) (int, []byte) {
-	spec, err := router.GenerateOpenAPI3Spec(ctx, components, r.OpenAPIInfo, providers...)
+	spec, err := openapi.GenerateOpenAPI3Spec(ctx, components, r.OpenAPIInfo, providers...)
 	if err != nil {
 		return http.StatusInternalServerError, []byte(err.Error())
 	}

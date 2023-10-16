@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/gateway/router/openapi3"
+	"github.com/viant/datly/gateway/router/openapi/openapi3"
 	"github.com/viant/datly/gateway/runtime/standalone/endpoint"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"

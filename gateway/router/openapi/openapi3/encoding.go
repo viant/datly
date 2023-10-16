@@ -15,7 +15,6 @@ type Encoding struct {
 	AllowReserved bool    `json:"allowReserved,omitempty" yaml:"allowReserved,omitempty"`
 }
 
-
 func (e *Encoding) UnmarshalJSON(b []byte) error {
 	type temp Encoding
 	var tmp = temp{}
@@ -48,9 +47,6 @@ func (e *Encoding) MarshalJSON() ([]byte, error) {
 	res := mergeJSON(data, extData)
 	return res, nil
 }
-
-
-
 
 func (e *Encoding) UnmarshalYAML(ctx context.Context, fn func(dest interface{}) error) error {
 	type temp Encoding

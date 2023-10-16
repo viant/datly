@@ -51,7 +51,6 @@ func (r *RequestBody) MarshalJSON() ([]byte, error) {
 	return res, nil
 }
 
-
 func (s *RequestBody) UnmarshalYAML(ctx context.Context, fn func(dest interface{}) error) error {
 	type temp RequestBody
 	tmp := temp(*s)

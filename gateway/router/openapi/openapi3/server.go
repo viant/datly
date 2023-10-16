@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 )
 
-//Server  represents a server node defined is specified by OpenAPI/Swagger standard version 3.0.
+// Server  represents a server node defined is specified by OpenAPI/Swagger standard version 3.0.
 type (
 	Servers []Server
 	Server  struct {
@@ -56,7 +56,6 @@ func (s *Server) MarshalJSON() ([]byte, error) {
 	return res, nil
 }
 
-
 func (s *Server) UnmarshalYAML(ctx context.Context, fn func(dest interface{}) error) error {
 	type temp Server
 	tmp := temp(*s)
@@ -106,7 +105,6 @@ func (s *ServerVariable) MarshalJSON() ([]byte, error) {
 	res := mergeJSON(data, extData)
 	return res, nil
 }
-
 
 func (s *ServerVariable) UnmarshalYAML(ctx context.Context, fn func(dest interface{}) error) error {
 	type temp ServerVariable
