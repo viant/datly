@@ -37,11 +37,11 @@ func (s *Service) Operate(ctx context.Context, aComponent *repository.Component,
 
 func (s *Service) operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	var err error
-	ctx, err = s.EnsureInputContext(ctx, aComponent, aSession)
+	ctx, err = s.EnsureContext(ctx, aComponent, aSession)
 	if err != nil {
 		return nil, err
 	}
-	if err = s.UpdateContext(ctx, aComponent, aSession); err != nil {
+	if ctx, err = s.EnsureAsyncContext(ctx, aComponent, aSession); err != nil {
 		return nil, err
 	}
 	switch aComponent.Service {
@@ -53,7 +53,7 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported Type %v", aComponent.Service))
 }
 
-func (s *Service) EnsureInputContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
+func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
 	var info *exec.Context
 	if ctx.Value(exec.ContextKey) == nil {
 		ctx = context.WithValue(ctx, exec.ContextKey, exec.NewContext())
@@ -69,16 +69,16 @@ func (s *Service) EnsureInputContext(ctx context.Context, aComponent *repository
 	return ctx, nil
 }
 
-func (s *Service) UpdateContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session) error {
+func (s *Service) EnsureAsyncContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
 	infoValue := ctx.Value(exec.ContextKey)
 	if infoValue == nil {
-		return nil
+		return ctx, nil
 	}
 	info := infoValue.(*exec.Context)
 	s.ensureContentSetting(ctx, aSession, aComponent)
 	asyncModule := aComponent.Async
 	if asyncModule == nil {
-		return nil
+		return ctx, nil
 	}
 	return s.ensureAsyncContext(ctx, aComponent, aSession, asyncModule, info)
 }
@@ -100,9 +100,9 @@ func (s *Service) ensureContentSetting(ctx context.Context, aSession *session.Se
 	}
 }
 
-func (s *Service) ensureAsyncContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session, asyncModule *rasync.Config, info *exec.Context) error {
+func (s *Service) ensureAsyncContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session, asyncModule *rasync.Config, info *exec.Context) (context.Context, error) {
 	if job := ctx.Value(async.JobKey); job != nil {
-		return nil
+		return ctx, nil
 	}
 	asyncModule.Lock()
 	defer asyncModule.Unlock()
@@ -111,33 +111,33 @@ func (s *Service) ensureAsyncContext(ctx context.Context, aComponent *repository
 	external := aComponent.Input.Type.Parameters.External()
 	options := aSession.Indirect(true, locator.WithState(aState))
 	if err := aSession.SetState(ctx, external, aState, options); err != nil {
-		return err
+		return nil, err
 	}
 
 	matchKey, err := aState.String(asyncModule.JobMatchKey.Name)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	matchKey = aComponent.View.Name + "/" + matchKey
 	job, err := aComponent.Async.JobByMatchKey(ctx, matchKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if job == nil {
 		if job, err = s.buildJob(ctx, aSession, aState, aComponent, matchKey, options); err != nil {
-			return err
+			return nil, err
 		}
 		destURL := asyncModule.DestinationURL(job)
 		job.EventURL = destURL
 		if err = asyncModule.CreateJob(ctx, job, &asyncModule.Notification); err != nil {
-			return err
+			return nil, err
 		}
 		if err = s.publishEvent(ctx, asyncModule, job); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	info.AppendJob(job)
-	return nil
+	return context.WithValue(ctx, async.JobKey, job), nil
 }
 
 func (s *Service) publishEvent(ctx context.Context, asyncModule *rasync.Config, job *async.Job) error {

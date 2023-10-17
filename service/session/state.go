@@ -203,6 +203,8 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 			return err
 		}
 	}
+	fmt.Printf("%T %v\n", value, value)
+
 	if value, err = s.ensureValidValue(value, parameter, parameterSelector); err != nil {
 		return err
 	}
@@ -242,7 +244,9 @@ func (s *Session) canRead(ctx context.Context, parameter *state.Parameter) (bool
 
 func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter, selector *structology.Selector) (interface{}, error) {
 	valueType := reflect.TypeOf(value)
-
+	if valueType == nil {
+		fmt.Printf("VALUE TYPE WAS NIL %s\n", parameter.Name)
+	}
 	switch valueType.Kind() {
 	case reflect.Ptr:
 		if parameter.IsRequired() && isNil(value) {
