@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	"reflect"
 	"strings"
 )
 
@@ -138,6 +139,12 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 		selector := predicateConfig.Selector
 
 		value := predicateConfig.Selector.Value(p.state.Pointer())
+		rType := reflect.TypeOf(value)
+		if rType.Kind() == reflect.Slice {
+			if reflect.ValueOf(value).Len() == 0 {
+				continue
+			}
+		}
 
 		criteria, err := predicateConfig.Expander.Compute(ctx, value)
 		if err != nil {
