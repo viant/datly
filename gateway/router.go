@@ -379,7 +379,7 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 		aPath.Path.URI += "/"
 	}
 	var result []*Route
-	pathURI := aPath.URI[:len(aPath.URI)-2]
+	pathURI := aPath.URI[:len(aPath.URI)-1]
 	contentPath := furl.Join(r.config.ContentURL, aPath.ContentURL)
 	fileSever := http.FileServer(ahttp.New(afs.New(), contentPath))
 
