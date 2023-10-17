@@ -51,6 +51,17 @@ type (
 	ParameterOption func(p *Parameter)
 )
 
+func (p *Parameter) SetTypeNameTag() {
+	schema := p.OutputSchema()
+	if schema == nil {
+		return
+	}
+	if strings.Contains(p.Tag, "xreflect:") {
+		return
+	}
+	p.Tag += ` xreflect:"` + schema.Name + "`"
+}
+
 func (p *Parameter) IsCacheable() bool {
 	if p.Cacheable == nil {
 		return p.In.Kind != KindState
