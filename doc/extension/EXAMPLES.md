@@ -2194,7 +2194,7 @@ func TestService_Patch(t *testing.T) {
 ```mod
 module github.com/viant/datly
 
-go 1.20
+go 1.21
 
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
