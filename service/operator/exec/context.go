@@ -12,10 +12,11 @@ var ContextKey = contextKey("context")
 
 // Context represents an execution context
 type Context struct {
-	mux       sync.RWMutex
-	jobs      []*async.Job
-	values    map[string]interface{}
-	StartTime time.Time
+	mux                        sync.RWMutex
+	jobs                       []*async.Job
+	values                     map[string]interface{}
+	StartTime                  time.Time
+	IgnoreEmptyQueryParameters bool
 }
 
 func (c *Context) SetValue(key string, value interface{}) {

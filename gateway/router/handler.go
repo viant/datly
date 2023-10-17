@@ -311,6 +311,9 @@ func (r *Handler) payloadReader(ctx context.Context, request *http.Request, writ
 	if err != nil {
 		return nil, err
 	}
+	if ctx, err = r.dispatcher.EnsureInputContext(ctx, aComponent, aSession); err != nil {
+		return nil, err
+	}
 	if err := aSession.Populate(ctx); err != nil {
 		return nil, err
 	}

@@ -28,9 +28,10 @@ type (
 	Rule struct {
 		Viewlets
 
-		CustomValidation bool
-		orderNamespaces  []string
-		Root             string
+		CustomValidation           bool
+		IgnoreEmptyQueryParameters bool
+		orderNamespaces            []string
+		Root                       string
 		//TODO replace with repository.Component and path.Settings ?
 		router.Route
 
@@ -273,6 +274,7 @@ func (r *Rule) applyDefaults() {
 	setter.SetStringIfEmpty(&r.Method, "GET")
 	setter.SetCaseFormatIfEmpty(&r.Route.Output.CaseFormat, "lc")
 	setter.SetBoolIfFalse(&r.EnableAudit, true)
+	setter.SetBoolIfFalse(&r.Input.IgnoreEmptyQueryParameters, r.IgnoreEmptyQueryParameters)
 	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.HandlerType != "")
 	if r.Route.Cors == nil {
 		r.Route.Cors = &dpath.Cors{

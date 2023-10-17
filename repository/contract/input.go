@@ -8,9 +8,10 @@ import (
 )
 
 type Input struct {
-	Body             state.Type
-	Type             state.Type
-	CustomValidation bool `json:",omitempty"`
+	Body                       state.Type
+	Type                       state.Type
+	CustomValidation           bool `json:",omitempty"`
+	IgnoreEmptyQueryParameters bool `json:",omitempty"`
 }
 
 func (i *Input) Init(ctx context.Context, aView *view.View) error {

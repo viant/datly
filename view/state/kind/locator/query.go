@@ -3,6 +3,7 @@ package locator
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/service/operator/exec"
 	"github.com/viant/datly/view/state/kind"
 	"net/url"
 )
@@ -28,10 +29,25 @@ func (q *Query) Value(ctx context.Context, name string) (interface{}, bool, erro
 	if !ok {
 		return nil, false, nil
 	}
+	if len(value) == 1 && value[0] == "" && q.ignoreEmptyParameters(ctx) {
+		return "", false, nil
+	}
 	if len(value) > 0 {
 		return value[0], true, nil
 	}
+
+	if q.ignoreEmptyParameters(ctx) {
+		return "", false, nil
+	}
 	return "", true, nil
+}
+
+func (q *Query) ignoreEmptyParameters(ctx context.Context) bool {
+	ignoreEmptyParameters := false
+	if value := ctx.Value(exec.ContextKey); value != nil {
+		ignoreEmptyParameters = value.(*exec.Context).IgnoreEmptyQueryParameters
+	}
+	return ignoreEmptyParameters
 }
 
 // NewQuery returns query locator
