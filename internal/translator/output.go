@@ -288,5 +288,5 @@ func (s *Service) updateParameterWithComponentOutputType(dataParameter *state.Pa
 	cardinality := string(state.Many)
 	setter.SetStringIfEmpty(&cardinality, string(rootViewlet.Cardinality))
 	dataParameter.Schema.Cardinality = state.Cardinality(cardinality)
-	dataParameter.SetTypeNameTag()
+	//dataParameter.SetTypeNameTag()
 }
