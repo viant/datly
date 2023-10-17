@@ -203,8 +203,6 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 			return err
 		}
 	}
-	fmt.Printf("%T %v\n", value, value)
-
 	if value, err = s.ensureValidValue(value, parameter, parameterSelector); err != nil {
 		return err
 	}
