@@ -342,14 +342,12 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				}
 				routes = append(routes, r.NewRouteHandler(router.New(aPath, provider)))
 				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.APIPrefix, r.config.Meta.ViewURI, aPath.URI), provider))
-				//TODO: uncomment when bug fixed
-				//routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.OpenApiURI, aPath.URI), r.repository, provider))
+				routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.OpenApiURI, aPath.URI), r.repository, provider))
 				routes = append(routes, r.NewStructRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.StructURI, aPath.URI), provider))
 				//TODO extend path.Path with cache info to pre exract cacheable view
 				//if views := router.ExtractCacheableViews(route); len(views) > 0 {
 				//	routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.CacheWarmURI, route.URI), route))
 				//}
-
 			}
 			if len(apiKeys) > 0 { //update keys to all path derived routes
 				for i := offset; i < len(routes); i++ {

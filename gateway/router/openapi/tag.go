@@ -3,6 +3,7 @@ package openapi
 import (
 	"github.com/viant/govalidator"
 	"github.com/viant/structology/format"
+	"github.com/viant/xreflect"
 	"reflect"
 )
 
@@ -26,6 +27,9 @@ type (
 		MaxItems     *uint64
 		Default      interface{}
 		Example      interface{}
+
+		_tag     *format.Tag
+		TypeName string
 	}
 )
 
@@ -45,7 +49,9 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag) (Tag, error) {
 		Inlined:     aTag.Inline,
 		Ignore:      aTag.Ignore,
 		IsNullable:  !validationTag.Required && field.Type.Kind() == reflect.Ptr,
+		TypeName:    tag.Get(xreflect.TagTypeName),
 		CaseFormat:  aTag.CaseFormat,
 		Description: tag.Get("description"),
+		_tag:        aTag,
 	}, nil
 }

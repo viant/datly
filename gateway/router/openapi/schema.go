@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/structology/format/text"
 	"github.com/viant/xdatly/docs"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -35,6 +36,7 @@ type (
 		description string
 		rType       reflect.Type
 		tag         Tag
+		toFormatter text.CaseFormat
 	}
 
 	SchemaContainer struct {
@@ -57,6 +59,14 @@ func (s *Schema) Field(field reflect.StructField, tag Tag) (*Schema, error) {
 	result.rType = field.Type
 	result.tag = tag
 	result.fieldName = field.Name
+	result.name = tag._tag.FormatName()
+	if result.name == "" {
+		if s.toFormatter == "" {
+			result.name = field.Name
+		} else {
+			result.name = text.CaseFormatUpperCamel.To(s.toFormatter).Format(field.Name)
+		}
+	}
 
 	return &result, nil
 }
@@ -85,7 +95,7 @@ func NewComponentSchema(components *repository.Service, component *repository.Co
 
 func (c *ComponentSchema) RequestBody(ctx context.Context) (*Schema, error) {
 	inputType := c.component.Input.Type
-	result, err := c.TypedSchema(ctx, inputType, "RequestBody")
+	result, err := c.TypedSchema(ctx, inputType, "RequestBody", "")
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +105,7 @@ func (c *ComponentSchema) RequestBody(ctx context.Context) (*Schema, error) {
 }
 
 func (c *ComponentSchema) ResponseBody(ctx context.Context) (*Schema, error) {
-	schema, err := c.TypedSchema(ctx, c.component.Output.Type, "ResponseBody")
+	schema, err := c.TypedSchema(ctx, c.component.Output.Type, "ResponseBody", c.component.Output.CaseFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +113,7 @@ func (c *ComponentSchema) ResponseBody(ctx context.Context) (*Schema, error) {
 	return schema, nil
 }
 
-func (c *ComponentSchema) TypedSchema(ctx context.Context, stateType state.Type, defaultTypeName string) (*Schema, error) {
+func (c *ComponentSchema) TypedSchema(ctx context.Context, stateType state.Type, defaultTypeName string, toFormatter text.CaseFormat) (*Schema, error) {
 	rType := stateType.Schema.Type()
 	typeName := c.TypeName(rType, defaultTypeName)
 	path := stateType.Package + "." + typeName
@@ -120,6 +130,7 @@ func (c *ComponentSchema) TypedSchema(ctx context.Context, stateType state.Type,
 		fieldName:   typeName,
 		description: description,
 		rType:       rType,
+		toFormatter: toFormatter,
 	}, nil
 }
 
@@ -158,11 +169,11 @@ func (c *ComponentSchema) TypeName(schemaType reflect.Type, defaultValue string)
 	return defaultValue
 }
 
-func (c *ComponentSchema) ReflectSchema(name string, rType reflect.Type, description string) *Schema {
-	return c.SchemaWithTag(name, rType, description, Tag{})
+func (c *ComponentSchema) ReflectSchema(name string, rType reflect.Type, description string, toFormatter text.CaseFormat) *Schema {
+	return c.SchemaWithTag(name, rType, description, toFormatter, Tag{})
 }
 
-func (c *ComponentSchema) SchemaWithTag(name string, rType reflect.Type, description string, tag Tag) *Schema {
+func (c *ComponentSchema) SchemaWithTag(name string, rType reflect.Type, description string, toFormatter text.CaseFormat, tag Tag) *Schema {
 	stringified := rType.String()
 	return &Schema{
 		path:        stringified,
@@ -171,6 +182,7 @@ func (c *ComponentSchema) SchemaWithTag(name string, rType reflect.Type, descrip
 		description: description,
 		rType:       rType,
 		tag:         tag,
+		toFormatter: toFormatter,
 	}
 }
 func (c *ComponentSchema) GenerateSchema(ctx context.Context, schema *Schema) (*openapi3.Schema, error) {
@@ -260,7 +272,7 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 			}
 
 			if aField.Anonymous {
-				if err := c.addToSchema(ctx, component, dst, schema); err != nil {
+				if err := c.addToSchema(ctx, component, dst, fieldSchema); err != nil {
 					return err
 				}
 				continue
@@ -270,7 +282,7 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 				dst.Properties = make(openapi3.Schemas)
 			}
 
-			dst.Properties[fieldSchema.fieldName], err = c.createSchema(ctx, component, fieldSchema)
+			dst.Properties[fieldSchema.name], err = c.createSchema(ctx, component, fieldSchema)
 			if err != nil {
 				return err
 			}
@@ -281,23 +293,7 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 		}
 	default:
 		if rType.Kind() == reflect.Interface {
-			dst.AnyOf = openapi3.SchemaList{
-				{
-					Type: stringOutput,
-				},
-				{
-					Type: objectOutput,
-				},
-				{
-					Type: arrayOutput,
-				},
-				{
-					Type: numberOutput,
-				},
-				{
-					Type: booleanOutput,
-				},
-			}
+			dst.Type = objectOutput
 			break
 		}
 		var err error
@@ -322,35 +318,32 @@ func (c *SchemaContainer) CreateSchema(ctx context.Context, componentSchema *Com
 }
 
 func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *ComponentSchema, fieldSchema *Schema) (*openapi3.Schema, error) {
-	apiType, format, err := c.toOpenApiType(fieldSchema.rType)
-	if err == nil {
+	if fieldSchema.tag.TypeName != "" {
+		schema, ok := c.generatedSchemas[fieldSchema.tag.TypeName]
+		if ok {
+			return schema, nil
+		}
+	}
+
+	apiType, format, ok := c.asOpenApiType(fieldSchema.rType)
+	if ok {
 		return &openapi3.Schema{
 			Type:   apiType,
 			Format: format,
 		}, nil
 	}
 
-	if currentSchema := c.generatedSchemas[fieldSchema.name]; currentSchema != nil {
-		*currentSchema = *c.SchemaRef(fieldSchema.name)
-		c.generatedSchemas[fieldSchema.name] = nil //do not delete, just mark it was replaced with schema reference
+	schema, err := componentSchema.GenerateSchema(ctx, fieldSchema)
+	if err != nil {
+		return nil, err
 	}
 
-	schemaName := fieldSchema.name
-
-	_, ok := c.generatedSchemas[schemaName]
-	if !ok {
-		generatedSchema, err := componentSchema.GenerateSchema(ctx, fieldSchema)
-		if err != nil {
-			return nil, err
-		}
-
-		c.index[schemaName] = len(c.schemas)
-		c.schemas = append(c.schemas, generatedSchema)
-		c.generatedSchemas[schemaName] = generatedSchema
-		return generatedSchema, err
+	if fieldSchema.tag.TypeName != "" {
+		c.generatedSchemas[fieldSchema.tag.TypeName] = schema
+		c.schemas = append(c.schemas, schema)
 	}
 
-	return c.SchemaRef(schemaName), nil
+	return schema, err
 }
 
 func (c *SchemaContainer) SchemaRef(schemaName string) *openapi3.Schema {
@@ -358,18 +351,26 @@ func (c *SchemaContainer) SchemaRef(schemaName string) *openapi3.Schema {
 }
 
 func (c *SchemaContainer) toOpenApiType(rType reflect.Type) (string, string, error) {
+	apiType, format, ok := c.asOpenApiType(rType)
+	if !ok {
+		return empty, empty, fmt.Errorf("unsupported openapi3 type %v", rType.String())
+	}
+	return apiType, format, nil
+}
+
+func (c *SchemaContainer) asOpenApiType(rType reflect.Type) (string, string, bool) {
 	switch rType.Kind() {
 	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
-		return integerOutput, int64Format, nil
+		return integerOutput, int64Format, true
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16, reflect.Uint32:
-		return integerOutput, int32Format, nil
+		return integerOutput, int32Format, true
 	case reflect.Float64, reflect.Float32:
-		return numberOutput, doubleFormat, nil
+		return numberOutput, doubleFormat, true
 	case reflect.Bool:
-		return booleanOutput, empty, nil
+		return booleanOutput, empty, true
 	case reflect.String:
-		return stringOutput, empty, nil
+		return stringOutput, empty, true
 	}
 
-	return empty, empty, fmt.Errorf("unsupported openapi3 type %v", rType.String())
+	return empty, empty, false
 }

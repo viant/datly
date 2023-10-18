@@ -314,7 +314,7 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		return []*openapi.Parameter{{Ref: "#/components/parameters/" + param.Name}}, true, nil
 	}
 
-	schema, err := component.GenerateSchema(ctx, component.SchemaWithTag(param.Name, param.Schema.Type(), "Parameter "+param.Name+" schema", Tag{
+	schema, err := component.GenerateSchema(ctx, component.SchemaWithTag(param.Name, param.Schema.Type(), "Parameter "+param.Name+" schema", "", Tag{
 		Format:     param.DateFormat,
 		IsNullable: !param.IsRequired(),
 	}))
@@ -429,7 +429,7 @@ func (g *generator) responses(ctx context.Context, component *ComponentSchema) (
 		},
 	}
 
-	errorSchema, err := component.GetOrGenerateSchema(ctx, component.ReflectSchema("", errorType, errorSchemaDescription))
+	errorSchema, err := component.GetOrGenerateSchema(ctx, component.ReflectSchema("", errorType, errorSchemaDescription, component.component.Output.CaseFormat))
 	if err != nil {
 		return nil, err
 	}
