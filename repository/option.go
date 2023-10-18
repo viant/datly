@@ -7,7 +7,7 @@ import (
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/repository/resource"
-	"github.com/viant/datly/service/auth/jwt"
+
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/gmetric"
 	"github.com/viant/scy/auth/jwt/signer"
@@ -33,7 +33,7 @@ type Options struct {
 	dispatcher           func(registry *Registry) contract.Dispatcher
 	cacheConnectorPrefix string
 	path                 *path.Path
-	jWTValidator         *verifier.Service
+	jWTVerifier          *verifier.Service
 	jwtSigner            *signer.Service
 }
 
@@ -213,15 +213,7 @@ func WithJWTSigner(aSigner *signer.Config) Option {
 func WithJWTVerifier(aVerifier *verifier.Config) Option {
 	return func(o *Options) {
 		jwtVerifier := verifier.New(aVerifier)
-		o.jWTValidator = jwtVerifier
-		if err := jwtVerifier.Init(context.Background()); err == nil {
-			codecs := extension.Config.Codecs
-			if o.extensions != nil {
-				codecs = o.extensions.Codecs
-			}
-			codecs.RegisterInstance(
-				extension.CodecKeyJwtClaim, jwt.New(jwtVerifier.VerifyClaims), time.Time{},
-			)
-		}
+		o.jWTVerifier = jwtVerifier
+		_ = jwtVerifier.Init(context.Background())
 	}
 }

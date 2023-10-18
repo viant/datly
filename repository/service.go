@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/repository/resource"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/scy/auth/jwt/signer"
+	"github.com/viant/scy/auth/jwt/verifier"
 	"strings"
 	"sync"
 	"time"
@@ -161,6 +162,11 @@ func (s *Service) loadComponent(ctx context.Context, opts []Option, sourceURL st
 // JWTSigner returns jwt signer
 func (s *Service) JWTSigner() *signer.Service {
 	return s.options.jwtSigner
+}
+
+// JWTVerifier returns jwt signer
+func (s *Service) JWTVerifier() *verifier.Service {
+	return s.options.jWTVerifier
 }
 
 func (s *Service) inheritFromPath(component *Component, aPath *path.Path) {

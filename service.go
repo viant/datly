@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
+	sjwt "github.com/viant/datly/service/auth/jwt"
 	"github.com/viant/datly/service/auth/mock"
 	"github.com/viant/datly/service/executor"
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
 	"net/http"
@@ -121,12 +123,9 @@ func (s *Service) View(ctx context.Context, name string) (*view.View, error) {
 	return component.View, nil
 }
 
-//func (s *Service) NewRequestSession(aPath *contract.Path)
-
-func (s *Service) OperateWithRequest(ctx context.Context, aComponent *repository.Component, request *http.Request) (interface{}, error) {
+func (s *Service) NewComponentSession(aComponent *repository.Component, request *http.Request) *session.Session {
 	options := aComponent.LocatorOptions(request, aComponent.UnmarshalFunc(request))
-	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...))
-	return s.operator.Operate(ctx, aComponent, aSession)
+	return session.New(aComponent.View, session.WithLocatorOptions(options...))
 }
 
 func (s *Service) Operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
@@ -187,6 +186,14 @@ func New(ctx context.Context, options ...repository.Option) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if verifier := aRepository.JWTVerifier(); verifier != nil {
+		codecs := aRepository.Extensions().Codecs
+		codecs.RegisterInstance(
+			extension.CodecKeyJwtClaim, sjwt.New(verifier.VerifyClaims), time.Time{},
+		)
+	}
+
 	ret := &Service{
 		reader:     reader.New(),
 		executor:   executor.New(),
