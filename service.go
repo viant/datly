@@ -32,6 +32,34 @@ type (
 	}
 )
 
+func (s *Service) NewComponentSession(aComponent *repository.Component, request *http.Request) *session.Session {
+	options := aComponent.LocatorOptions(request, aComponent.UnmarshalFunc(request))
+	return session.New(aComponent.View, session.WithLocatorOptions(options...))
+}
+
+// SignRequest signes http request with the supplied claim
+func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
+	if claims != nil {
+		aSigner := s.repository.JWTSigner()
+		if aSigner == nil {
+			return fmt.Errorf("JWT aSigner was empty")
+		}
+		token, err := aSigner.Create(time.Hour, claims)
+		if err == nil {
+			request.Header.Set("Authorization", "Bearer "+token)
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
+// Operate performs respective operation on supplied component
+func (s *Service) Operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
+	return s.operator.Operate(ctx, aComponent, aSession)
+}
+
+// Read reads data from a view
 func (s *Service) Read(ctx context.Context, viewId string, dest interface{}, option ...reader.Option) error {
 	aView, err := s.View(ctx, wrapWithMethod(http.MethodGet, viewId))
 	if err != nil {
@@ -40,7 +68,7 @@ func (s *Service) Read(ctx context.Context, viewId string, dest interface{}, opt
 	return s.reader.ReadInto(ctx, dest, aView, option...)
 }
 
-// Exec executes
+// Exec executes view template
 func (s *Service) Exec(ctx context.Context, viewId string, options ...executor.Option) error {
 	execView, err := s.View(ctx, wrapWithMethod(http.MethodPost, viewId))
 	if err != nil {
@@ -49,17 +77,36 @@ func (s *Service) Exec(ctx context.Context, viewId string, options ...executor.O
 	return s.executor.Execute(ctx, execView, options...)
 }
 
-func internalPath(URI string) string {
-	return "/internal/" + URI
-}
-
-func wrapWithMethod(method, name string) string {
+// Component returns component matched by name, optionally you can use METHOD:component name notation
+func (s *Service) Component(ctx context.Context, name string) (*repository.Component, error) {
+	method := http.MethodGet
 	if index := strings.Index(name, ":"); index != -1 {
-		return name
+		method = strings.ToUpper(name[:index])
+		name = name[index+1:]
 	}
-	return method + ":" + name
+	aPath := contract.NewPath(method, name)
+	component, err := s.repository.Registry().Lookup(ctx, aPath)
+	if component != nil {
+		return component, err
+	}
+	aPath = contract.NewPath(method, internalPath(name))
+	if component, _ = s.repository.Registry().Lookup(ctx, aPath); component != nil {
+		return component, nil
+	}
+
+	return nil, err
 }
 
+// View returns a view matched by name, optionally you can use METHOD:component name notation
+func (s *Service) View(ctx context.Context, name string) (*view.View, error) {
+	component, err := s.Component(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return component.View, nil
+}
+
+// AddViews adds views to the repository
 func (s *Service) AddViews(ctx context.Context, views ...*view.View) error {
 	components := repository.NewComponents(ctx, s.options...)
 	components.Resource.MergeFrom(s.resource, s.repository.Extensions().Types)
@@ -96,46 +143,21 @@ func (s *Service) AddViews(ctx context.Context, views ...*view.View) error {
 	return nil
 }
 
-func (s *Service) Component(ctx context.Context, name string) (*repository.Component, error) {
-	method := http.MethodGet
-	if index := strings.Index(name, ":"); index != -1 {
-		method = strings.ToUpper(name[:index])
-		name = name[index+1:]
+// AddComponents adds components to repository
+func (s *Service) AddComponents(ctx context.Context, components *repository.Components) error {
+	if err := components.Init(ctx); err != nil {
+		return err
 	}
-	aPath := contract.NewPath(method, name)
-	component, err := s.repository.Registry().Lookup(ctx, aPath)
-	if component != nil {
-		return component, err
-	}
-	aPath = contract.NewPath(method, internalPath(name))
-	if component, _ = s.repository.Registry().Lookup(ctx, aPath); component != nil {
-		return component, nil
-	}
-
-	return nil, err
+	s.repository.Registry().Register(components.Components...)
+	return nil
 }
 
-func (s *Service) View(ctx context.Context, name string) (*view.View, error) {
-	component, err := s.Component(ctx, name)
-	if err != nil {
-		return nil, err
-	}
-	return component.View, nil
-}
-
-func (s *Service) NewComponentSession(aComponent *repository.Component, request *http.Request) *session.Session {
-	options := aComponent.LocatorOptions(request, aComponent.UnmarshalFunc(request))
-	return session.New(aComponent.View, session.WithLocatorOptions(options...))
-}
-
-func (s *Service) Operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
-	return s.operator.Operate(ctx, aComponent, aSession)
-}
-
+// AddResource adds named resource
 func (s *Service) AddResource(name string, resource *view.Resource) {
 	s.repository.Resource().AddResource(name, resource)
 }
 
+// AddConnectors adds connectors
 func (s *Service) AddConnectors(ctx context.Context, connectors ...*view.Connector) error {
 	connectionResource, err := s.repository.Resource().Lookup(view.ResourceConnectors)
 	if err != nil {
@@ -154,26 +176,28 @@ func (s *Service) AddConnectors(ctx context.Context, connectors ...*view.Connect
 	return nil
 }
 
+// AddConnector adds connector
 func (s *Service) AddConnector(ctx context.Context, name string, driver string, dsn string) (*view.Connector, error) {
 	connector := view.NewConnector(name, driver, dsn)
 	err := s.AddConnectors(ctx, connector)
 	return connector, err
 }
 
-func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
-	if claims != nil {
-		aSigner := s.repository.JWTSigner()
-		if aSigner == nil {
-			return fmt.Errorf("JWT aSigner was empty")
-		}
-		token, err := aSigner.Create(time.Hour, claims)
-		if err == nil {
-			request.Header.Set("Authorization", "Bearer "+token)
-		} else {
-			return err
-		}
+// LoadComponents loads components into registry, it returns loaded components
+func (s *Service) LoadComponents(ctx context.Context, URL string, opts ...repository.Option) (*repository.Components, error) {
+	opts = append([]repository.Option{
+		repository.WithResources(s.repository.Resource()),
+		repository.WithExtensions(s.repository.Extensions()),
+	}, opts...)
+	components, err := repository.LoadComponents(ctx, URL, opts...)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	if err = components.Init(ctx); err != nil {
+		return nil, err
+	}
+	s.repository.Registry().Register(components.Components...)
+	return components, nil
 }
 
 // New creates a datly service
@@ -203,4 +227,15 @@ func New(ctx context.Context, options ...repository.Option) (*Service, error) {
 		operator:   operator.New(),
 	}
 	return ret, nil
+}
+
+func internalPath(URI string) string {
+	return "/internal/" + URI
+}
+
+func wrapWithMethod(method, name string) string {
+	if index := strings.Index(name, ":"); index != -1 {
+		return name
+	}
+	return method + ":" + name
 }

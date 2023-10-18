@@ -6,8 +6,7 @@ import (
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
-	"github.com/viant/datly/repository/resource"
-
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/gmetric"
 	"github.com/viant/scy/auth/jwt/signer"
@@ -24,7 +23,7 @@ type Options struct {
 	resourceURL          string
 	pluginURL            string
 	extensions           *extension.Registry
-	resources            *resource.Service
+	resources            Resources
 	refreshFrequency     time.Duration
 	apiPrefix            string
 	useColumns           *bool
@@ -35,6 +34,7 @@ type Options struct {
 	path                 *path.Path
 	jWTVerifier          *verifier.Service
 	jwtSigner            *signer.Service
+	types                []*view.PackagedType
 }
 
 func (o *Options) UseColumn() bool {
@@ -86,6 +86,12 @@ func (o *Options) init() {
 	}
 	o.ensureResourceURL()
 	o.ensurePluginURL()
+
+	if len(o.types) > 0 {
+		for _, aType := range o.types {
+			_ = o.extensions.Types.Register(aType.TypeName(), xreflect.WithReflectType(aType.Type))
+		}
+	}
 }
 
 func (o *Options) ensurePluginURL() {
@@ -110,6 +116,7 @@ func ensureFrequency(checkFrequency time.Duration) time.Duration {
 func NewOptions(opts []Option) *Options {
 	ret := &Options{}
 	ret.Apply(opts...)
+
 	return ret
 }
 
@@ -148,7 +155,7 @@ func WithExtensions(registry *extension.Registry) Option {
 	}
 }
 
-func WithResources(resources *resource.Service) Option {
+func WithResources(resources Resources) Option {
 	return func(o *Options) {
 		o.resources = resources
 	}
@@ -207,6 +214,12 @@ func WithJWTSigner(aSigner *signer.Config) Option {
 	return func(o *Options) {
 		o.jwtSigner = signer.New(aSigner)
 		_ = o.jwtSigner.Init(context.Background())
+	}
+}
+
+func WithPackageTypes(types ...*view.PackagedType) Option {
+	return func(o *Options) {
+		o.types = types
 	}
 }
 

@@ -21,11 +21,19 @@ func ensureStruct(fType reflect.Type) reflect.Type {
 	return nil
 }
 
-//PackagedType represtns a package type
+// PackagedType represtns a package type
 type PackagedType struct {
 	Package string
 	Name    string
 	reflect.Type
+}
+
+// TypeName returns type name
+func (p *PackagedType) TypeName() string {
+	if p.Package == "" {
+		return p.Name
+	}
+	return p.Package + "." + p.Name
 }
 
 func NewPackagedType(pkg string, name string, t reflect.Type) *PackagedType {

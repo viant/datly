@@ -19,7 +19,7 @@ type (
 	Service struct {
 		registry         *Registry
 		paths            *path.Service
-		resources        *resource.Service
+		resources        Resources
 		extensions       *extension.Registry
 		plugins          *plugin.Service
 		refreshFrequency time.Duration
