@@ -6,9 +6,17 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service/executor/handler"
+	xhandler "github.com/viant/xdatly/handler"
+
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view/state/kind/locator"
 )
+
+// HandlerSession returns a handler session
+func (s *Service) HandlerSession(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (xhandler.Session, error) {
+	anExecutor := handler.NewExecutor(aComponent.View, aSession)
+	return anExecutor.NewHandlerSession(ctx)
+}
 
 func (s *Service) execute(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	anExecutor := handler.NewExecutor(aComponent.View, aSession)

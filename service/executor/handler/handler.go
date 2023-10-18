@@ -23,13 +23,15 @@ type (
 	}
 )
 
-func (h *Handler) Init(ctx context.Context, resource *view.Resource) error {
-	h.resource = resource
-	handlerType, err := h.resource.TypeRegistry().Lookup(h.HandlerType)
-	if err != nil {
-		return fmt.Errorf("couldn't parse Handler type due to %w", err)
+func (h *Handler) Init(ctx context.Context, resource *view.Resource) (err error) {
+	handlerType := h._handlerType
+	if handlerType == nil {
+		h.resource = resource
+		handlerType, err = h.resource.TypeRegistry().Lookup(h.HandlerType)
+		if err != nil {
+			return fmt.Errorf("couldn't parse Handler type due to %w", err)
+		}
 	}
-
 	if _, ok := handlerType.MethodByName("Exec"); !ok {
 		handlerType = reflect.PtrTo(handlerType)
 	}
@@ -37,10 +39,8 @@ func (h *Handler) Init(ctx context.Context, resource *view.Resource) error {
 	if !h._handlerType.Implements(Type) {
 		return fmt.Errorf("handler %v has to implement %v", h._handlerType.String(), Type.String())
 	}
-
 	method, _ := h._handlerType.MethodByName("Exec")
 	h.caller = method
-
 	return nil
 }
 
@@ -52,4 +52,9 @@ func (h *Handler) Call(ctx context.Context, session handler.Session) (interface{
 	}
 
 	return asHandler.Exec(ctx, session)
+}
+
+func NewHandler(handler handler.Handler) *Handler {
+	rType := reflect.TypeOf(handler)
+	return &Handler{HandlerType: rType.Name(), _handlerType: rType}
 }

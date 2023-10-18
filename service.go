@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
+	xhandler "github.com/viant/xdatly/handler"
 	"net/http"
 	"strings"
 	"time"
@@ -35,6 +36,11 @@ type (
 func (s *Service) NewComponentSession(aComponent *repository.Component, request *http.Request) *session.Session {
 	options := aComponent.LocatorOptions(request, aComponent.UnmarshalFunc(request))
 	return session.New(aComponent.View, session.WithLocatorOptions(options...))
+}
+
+// HandlerSession returns handler session
+func (s *Service) HandlerSession(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (xhandler.Session, error) {
+	return s.operator.HandlerSession(ctx, aComponent, aSession)
 }
 
 // SignRequest signes http request with the supplied claim
@@ -93,7 +99,6 @@ func (s *Service) Component(ctx context.Context, name string) (*repository.Compo
 	if component, _ = s.repository.Registry().Lookup(ctx, aPath); component != nil {
 		return component, nil
 	}
-
 	return nil, err
 }
 
@@ -107,14 +112,9 @@ func (s *Service) View(ctx context.Context, name string) (*view.View, error) {
 }
 
 // AddViews adds views to the repository
-func (s *Service) AddViews(ctx context.Context, views ...*view.View) error {
-	components := repository.NewComponents(ctx, s.options...)
-	components.Resource.MergeFrom(s.resource, s.repository.Extensions().Types)
+func (s *Service) AddViews(ctx context.Context, views ...*view.View) (*repository.Component, error) {
+	components, refConnector := s.buildDefaultComponents(ctx)
 	components.Resource.Views = views
-	refConnector := ""
-	if len(s.resource.Connectors) > 0 {
-		refConnector = s.resource.Connectors[0].Name
-	}
 	if refConnector != "" {
 		for _, aView := range views {
 			if aView.Connector == nil {
@@ -137,10 +137,20 @@ func (s *Service) AddViews(ctx context.Context, views ...*view.View) error {
 	}
 	components.Components = append(components.Components, component)
 	if err := components.Init(ctx); err != nil {
-		return err
+		return nil, err
 	}
 	s.repository.Registry().Register(component)
-	return nil
+	return component, nil
+}
+
+func (s *Service) buildDefaultComponents(ctx context.Context) (*repository.Components, string) {
+	components := repository.NewComponents(ctx, s.options...)
+	components.Resource.MergeFrom(s.resource, s.repository.Extensions().Types)
+	refConnector := ""
+	if len(s.resource.Connectors) > 0 {
+		refConnector = s.resource.Connectors[0].Name
+	}
+	return components, refConnector
 }
 
 // AddComponents adds components to repository
@@ -150,6 +160,31 @@ func (s *Service) AddComponents(ctx context.Context, components *repository.Comp
 	}
 	s.repository.Registry().Register(components.Components...)
 	return nil
+}
+
+// AddComponents adds components to repository
+func (s *Service) AddComponent(ctx context.Context, component *repository.Component) error {
+	components, refConnector := s.buildDefaultComponents(ctx)
+	if refConnector != "" {
+		if component.View.Connector == nil {
+			component.View.Connector = &view.Connector{}
+		}
+		if connector := component.View.Connector; connector.Driver == "" && connector.Ref == "" {
+			component.View.Connector = view.NewRefConnector(refConnector)
+		}
+	}
+	if err := components.Init(ctx); err != nil {
+		return err
+	}
+	s.repository.Registry().Register(components.Components...)
+	return nil
+}
+
+// AddHandler adds handler component to repository
+func (s *Service) AddHandler(ctx context.Context, aPath contract.Path, handler xhandler.Handler) (*repository.Component, error) {
+	component := repository.NewComponent(aPath, repository.WithHandler(handler))
+	err := s.AddComponent(ctx, component)
+	return component, err
 }
 
 // AddResource adds named resource

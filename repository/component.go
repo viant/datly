@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
+	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
@@ -19,6 +20,7 @@ import (
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/structology/format/text"
 	"github.com/viant/xdatly/docs"
+	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xreflect"
 	"net/http"
 	"reflect"
@@ -44,6 +46,8 @@ type (
 		ioConfig   *config.IOConfig
 		doc        docs.Service
 	}
+
+	ComponentOption func(c *Component)
 )
 
 func (c *Component) TypeRegistry() *xreflect.Types {
@@ -60,6 +64,7 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 		if err = c.Handler.Init(ctx, resource); err != nil {
 			return err
 		}
+		c.Contract.Service = service.TypeExecutor
 	}
 	err = c.initView(ctx, resource)
 	if err != nil {
@@ -239,4 +244,29 @@ func (r *Component) transformFn(request *http.Request, transform *marshal.Transf
 
 func (c *Component) Doc() (docs.Service, bool) {
 	return c.doc, c.doc != nil
+}
+
+func NewComponent(path contract.Path, options ...ComponentOption) *Component {
+	ret := &Component{Path: path, View: &view.View{}}
+	for _, opt := range options {
+		opt(ret)
+	}
+	return ret
+}
+
+func WithView(aView *view.View) ComponentOption {
+	return func(c *Component) {
+		c.View = aView
+	}
+}
+
+func WithHandler(aHandler xhandler.Handler) ComponentOption {
+	return func(c *Component) {
+		c.Handler = handler.NewHandler(aHandler)
+		if c.View == nil {
+			c.View = &view.View{}
+		}
+		c.View.Mode = view.ModeHandler
+		c.Service = service.TypeExecutor
+	}
 }

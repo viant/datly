@@ -711,7 +711,7 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	if len(v.Columns) != 0 {
 		return nil
 	}
-	if v.Mode == "Write" || v.Mode == ModeExec {
+	if v.Mode == "Write" || v.Mode == ModeExec || v.Mode == ModeHandler {
 		return nil
 	}
 
