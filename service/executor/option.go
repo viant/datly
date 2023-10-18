@@ -23,7 +23,6 @@ func (o Options) Apply(session *Session) error {
 func WithParameter(name string, value interface{}) Option {
 	return func(session *Session) error {
 		state := session.Session.State()
-
 		return session.View.SetParameter(name, state, value)
 	}
 }

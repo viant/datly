@@ -296,6 +296,9 @@ func (v *View) init(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := v.ensureConnector(ctx); err != nil {
+		return err
+	}
 
 	if err := v.initViewRelations(ctx, v.With, nameTaken); err != nil {
 		return err
@@ -401,7 +404,9 @@ func (v *View) initViewRelations(ctx context.Context, relations []*Relation, not
 		if err := rel.ensureColumnAliasIfNeeded(); err != nil {
 			return err
 		}
-
+		if refView.Connector == nil {
+			refView.Connector = v.Connector
+		}
 		if err := refView.initViewRelations(ctx, refView.With, notUnique); err != nil {
 			return err
 		}

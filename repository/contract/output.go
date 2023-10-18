@@ -178,7 +178,7 @@ func (o *Output) initDebugStyleIfNeeded() {
 func (o *Output) initParameters(aView *view.View, inputParameters state.Parameters, isReader bool) (err error) {
 	if o.Type.IsAnonymous() {
 		o.Style = BasicStyle
-	} else if outputParameters := o.Type.Parameters.Filter(state.KindOutput); outputParameters != nil {
+	} else if outputParameters := o.Type.Parameters.Filter(state.KindOutput); len(outputParameters) > 0 {
 		o.Style = ComprehensiveStyle
 		for _, dataParameter := range outputParameters {
 			if dataParameter.In.Name == "data" {
@@ -195,17 +195,22 @@ func (o *Output) initParameters(aView *view.View, inputParameters state.Paramete
 
 func (o *Output) defaultParameters(aView *view.View, inputParameters state.Parameters, isReader bool) (state.Parameters, error) {
 	var parameters state.Parameters
-	if isReader && o.Style == ComprehensiveStyle {
-		parameters = state.Parameters{
-			DataOutputParameter(o.Field),
-			DefaultStatusOutputParameter(),
+	if isReader {
+		if o.Style == ComprehensiveStyle {
+			parameters = state.Parameters{
+				DataOutputParameter(o.Field),
+				DefaultStatusOutputParameter(),
+			}
+			if aView != nil && aView.MetaTemplateEnabled() && aView.Template.Summary.Kind == view.MetaKindRecord {
+				parameters = append(parameters, state.NewParameter(aView.Template.Summary.Name,
+					state.NewOutputLocation("summary"),
+					state.WithParameterType(aView.Template.Summary.Schema.Type())))
+			}
+			return parameters, nil
 		}
-		if aView != nil && aView.MetaTemplateEnabled() && aView.Template.Summary.Kind == view.MetaKindRecord {
-			parameters = append(parameters, state.NewParameter(aView.Template.Summary.Name,
-				state.NewOutputLocation("summary"),
-				state.WithParameterType(aView.Template.Summary.Schema.Type())))
-		}
-		return parameters, nil
+		dataParameter := DataOutputParameter("data")
+		dataParameter.Tag = `anonynous:"true"`
+		return state.Parameters{dataParameter}, nil
 	}
 
 	if o.ResponseBody != nil && o.ResponseBody.StateValue != "" {

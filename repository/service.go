@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/repository/plugin"
 	"github.com/viant/datly/repository/resource"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/scy/auth/jwt/signer"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,14 @@ type (
 		majorChange bool
 	}
 )
+
+func (s *Service) Extensions() *extension.Registry {
+	return s.extensions
+}
+
+func (s *Service) Resource() Resources {
+	return s.resources
+}
 
 func (s *Service) Registry() *Registry {
 	return s.registry
@@ -85,6 +94,9 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 		if s.resources, err = resource.New(ctx, options.fs, options.resourceURL, options.refreshFrequency); err != nil {
 			return err
 		}
+	}
+	if s.resources == nil {
+		s.resources, _ = resource.New(ctx, options.fs, "", options.refreshFrequency)
 	}
 	if s.plugins == nil && options.pluginURL != "" {
 		if s.plugins, err = plugin.New(ctx, options.fs, options.pluginURL, options.refreshFrequency); err != nil {
@@ -144,6 +156,11 @@ func (s *Service) loadComponent(ctx context.Context, opts []Option, sourceURL st
 		}
 	}
 	return nil, nil
+}
+
+// JWTSigner returns jwt signer
+func (s *Service) JWTSigner() *signer.Service {
+	return s.options.jwtSigner
 }
 
 func (s *Service) inheritFromPath(component *Component, aPath *path.Path) {

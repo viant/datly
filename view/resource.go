@@ -23,6 +23,13 @@ import (
 	"time"
 )
 
+const (
+	//ResourceConnectors default connector resource name
+	ResourceConnectors = "connectors"
+	//ResourceConstants default constants resource name
+	ResourceConstants = "constants"
+)
+
 // Resource represents grouped View needed to build the View
 // can be loaded from i.e. yaml file
 type (
@@ -161,7 +168,7 @@ func (r *Resource) MergeFrom(resource *Resource, types *xreflect.Types) {
 	r.mergeConnectors(resource)
 	r.mergeMessageBuses(resource)
 	r.mergeProviders(resource)
-	r.mergeTemplates(resource)
+	r.mergePredicates(resource)
 }
 
 func (r *Resource) mergeSubstitutes(resource *Resource) {
@@ -318,7 +325,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		}
 	}
 
-	if err := r.initTemplates(opts.Predicates); err != nil {
+	if err := r.initPredicates(opts.Predicates); err != nil {
 		return err
 	}
 
@@ -700,36 +707,33 @@ func (r *Resource) mergeMessageBuses(resource *Resource) {
 	}
 }
 
-func (r *Resource) initTemplates(registry *extension.PredicateRegistry) error {
+func (r *Resource) initPredicates(registry *extension.PredicateRegistry) error {
 	if registry != nil {
 		r._predicates = registry.Scope()
 	}
-
-	r.ensureTemplatesIndex()
-
-	for _, template := range r.Predicates {
-		r._predicates.Add(template)
+	r.ensurePredicateIndex()
+	for _, aPredicate := range r.Predicates {
+		r._predicates.Add(aPredicate)
 	}
-
 	return nil
 }
 
-func (r *Resource) ensureTemplatesIndex() {
+func (r *Resource) ensurePredicateIndex() {
 	if r._predicates == nil {
 		r._predicates = extension.NewPredicates()
 	}
 }
 
-func (r *Resource) mergeTemplates(resource *Resource) {
-	r.ensureTemplatesIndex()
-	for _, template := range resource.Predicates {
-		r.addTemplate(template)
+func (r *Resource) mergePredicates(resource *Resource) {
+	r.ensurePredicateIndex()
+	for _, aPredicate := range resource.Predicates {
+		r.addPredicate(aPredicate)
 	}
 }
 
-func (r *Resource) addTemplate(template *predicate.Template) {
-	r.Predicates = append(r.Predicates, template)
-	r._predicates.Add(template)
+func (r *Resource) addPredicate(aPredicate *predicate.Template) {
+	r.Predicates = append(r.Predicates, aPredicate)
+	r._predicates.Add(aPredicate)
 }
 
 func (r *Resource) initDocs(ctx context.Context) error {

@@ -59,7 +59,20 @@ func (s *Service) Substitutes() map[string]view.Substitutes {
 	return result
 }
 
-func (s *Service) Lookup(ctx context.Context, key string) (*version.Resource, error) {
+func (s *Service) AddResource(key string, aResource *view.Resource) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.items[key] = &version.Resource{Resource: aResource}
+}
+
+func (s *Service) Has(key string) bool {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	_, ok := s.items[key]
+	return ok
+}
+
+func (s *Service) Lookup(key string) (*version.Resource, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	ret, ok := s.items[key]
@@ -126,5 +139,8 @@ func (s *Service) onModify(ctx context.Context, object storage.Object) error {
 func New(ctx context.Context, fs afs.Service, URL string, refreshFrequency time.Duration) (*Service, error) {
 	ret := &Service{URL: URL, fs: fs, notifier: resource.New(URL, refreshFrequency), ctx: ctx, items: make(map[string]*version.Resource)}
 	err := ret.Init(ctx)
+	if !ret.Has(view.ResourceConnectors) {
+		ret.AddResource(view.ResourceConnectors, &view.Resource{})
+	}
 	return ret, err
 }

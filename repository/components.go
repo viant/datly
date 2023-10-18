@@ -59,7 +59,7 @@ func (c *Components) mergeResources(ctx context.Context) error {
 		return nil
 	}
 	for _, ref := range c.With {
-		refResource, err := c.options.resources.Lookup(ctx, ref)
+		refResource, err := c.options.resources.Lookup(ref)
 		if err != nil {
 			return err
 		}
@@ -83,6 +83,14 @@ func (c *Components) ensureColumns(ctx context.Context) error {
 		return nil
 	}
 	return c.columns.Load(ctx)
+}
+
+// NewComponents creates components
+func NewComponents(ctx context.Context, options ...Option) *Components {
+	opts := NewOptions(options)
+	ret := &Components{Resource: &view.Resource{}}
+	ret.options = opts
+	return ret
 }
 
 func LoadComponents(ctx context.Context, URL string, opts ...Option) (*Components, error) {
@@ -118,7 +126,7 @@ func LoadComponents(ctx context.Context, URL string, opts ...Option) (*Component
 	}
 
 	//TODO make it working
-	//components.Resource.Metrics = options.metrics
+	//components.Resources.Metrics = options.metrics
 
 	components.Resource.SourceURL = URL
 	components.Resource.SetTypes(options.extensions.Types)

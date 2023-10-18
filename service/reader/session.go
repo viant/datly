@@ -211,14 +211,15 @@ func WithDryRun() Option {
 
 // NewSession creates a session
 func NewSession(dest interface{}, aView *view.View, opts ...Option) (*Session, error) {
+	viewState := view.NewState()
 	ret := &Session{
 		Output: Output{DataPtr: dest},
 		View:   aView,
+		State:  viewState,
 	}
-
 	err := options(opts).Apply(ret)
 	if ret.State == nil {
-		ret.State = view.NewState()
+		ret.State = viewState
 	}
 	return ret, err
 }

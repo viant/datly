@@ -1,13 +1,17 @@
 package repository
 
 import (
+	"context"
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/repository/resource"
+	"github.com/viant/datly/service/auth/jwt"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/gmetric"
+	"github.com/viant/scy/auth/jwt/signer"
+	"github.com/viant/scy/auth/jwt/verifier"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 	"strings"
@@ -29,6 +33,8 @@ type Options struct {
 	dispatcher           func(registry *Registry) contract.Dispatcher
 	cacheConnectorPrefix string
 	path                 *path.Path
+	jWTValidator         *verifier.Service
+	jwtSigner            *signer.Service
 }
 
 func (o *Options) UseColumn() bool {
@@ -194,5 +200,28 @@ func WithDispatcher(fn func(registry *Registry) contract.Dispatcher) Option {
 func WithPath(aPath *path.Path) Option {
 	return func(o *Options) {
 		o.path = aPath
+	}
+}
+
+func WithJWTSigner(aSigner *signer.Config) Option {
+	return func(o *Options) {
+		o.jwtSigner = signer.New(aSigner)
+		_ = o.jwtSigner.Init(context.Background())
+	}
+}
+
+func WithJWTVerifier(aVerifier *verifier.Config) Option {
+	return func(o *Options) {
+		jwtVerifier := verifier.New(aVerifier)
+		o.jWTValidator = jwtVerifier
+		if err := jwtVerifier.Init(context.Background()); err == nil {
+			codecs := extension.Config.Codecs
+			if o.extensions != nil {
+				codecs = o.extensions.Codecs
+			}
+			codecs.RegisterInstance(
+				extension.CodecKeyJwtClaim, jwt.New(jwtVerifier.VerifyClaims), time.Time{},
+			)
+		}
 	}
 }
