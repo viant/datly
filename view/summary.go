@@ -196,6 +196,8 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 		}
 
 		var fieldTag string
+		fieldTag += getTypenameTag(rel.Of.Schema)
+
 		holders[rel.Holder] = true
 		*structFields = append(*structFields, reflect.StructField{
 			Name: rel.Holder,
@@ -208,11 +210,20 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 			if metaType.Kind() != reflect.Ptr {
 				metaType = reflect.PtrTo(metaType)
 			}
-			relTypeName := rel.Name + "Output"
-			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-" ` + xreflect.TagTypeName + `:"` + relTypeName + `"`
+
+			typeNameTag := getTypenameTag(meta.Schema)
+			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-" ` + typeNameTag
 			*structFields = append(*structFields, newCasedField(tag, meta.Name, text.CaseFormatUpperCamel, metaType))
 		}
 	}
+}
+
+func getTypenameTag(schema *state.Schema) string {
+	typeNameTag := ""
+	if typeName := schema.Name; typeName != "" {
+		typeNameTag = " " + xreflect.TagTypeName + `:"` + typeName + `"`
+	}
+	return typeNameTag
 }
 
 func newCasedField(aTag string, columnName string, sourceCaseFormat text.CaseFormat, rType reflect.Type) reflect.StructField {

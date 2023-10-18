@@ -60,7 +60,7 @@ func (p *Parameter) SetTypeNameTag() {
 	if _, ok := reflect.StructTag(p.Tag).Lookup(xreflect.TagTypeName); ok {
 		return
 	}
-	p.Tag += " " + xreflect.TagTypeName + `"` + schema.Name + "`"
+	p.Tag += " " + xreflect.TagTypeName + `:"` + schema.Name + `"`
 }
 
 func (p *Parameter) IsCacheable() bool {
