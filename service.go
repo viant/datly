@@ -200,7 +200,7 @@ func (s *Service) LoadComponents(ctx context.Context, URL string, opts ...reposi
 	return components, nil
 }
 
-// New creates a datly service
+// New creates a datly service, repository allows you to bootstrap empty or existing yaml repository
 func New(ctx context.Context, options ...repository.Option) (*Service, error) {
 	options = append([]repository.Option{
 		repository.WithJWTSigner(mock.HmacJwtSigner()),
