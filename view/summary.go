@@ -196,14 +196,6 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 		}
 
 		var fieldTag string
-		if v.Async != nil {
-			if v.Async.MarshalRelations {
-				fieldTag = AsyncTagName + `:"enc=JSON" jsonx:"rawJSON"`
-			} else {
-				fieldTag = AsyncTagName + `:"table=` + v.Async.Table + `"`
-			}
-		}
-
 		holders[rel.Holder] = true
 		*structFields = append(*structFields, reflect.StructField{
 			Name: rel.Holder,
@@ -216,7 +208,8 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 			if metaType.Kind() != reflect.Ptr {
 				metaType = reflect.PtrTo(metaType)
 			}
-			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-"`
+			relTypeName := rel.Name + "Output"
+			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-" ` + xreflect.TagTypeName + `:"` + relTypeName + `"`
 			*structFields = append(*structFields, newCasedField(tag, meta.Name, text.CaseFormatUpperCamel, metaType))
 		}
 	}
