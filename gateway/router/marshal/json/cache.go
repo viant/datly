@@ -132,6 +132,10 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, p
 		return newRawMessageMarshaller(), nil
 	}
 
+	if isNullable := rType.Kind() == reflect.Ptr; isNullable && tag.Nullable == nil {
+		tag.Nullable = &isNullable
+	}
+
 	switch rType.Kind() {
 	case reflect.Ptr:
 		switch rType.Elem().Kind() {
