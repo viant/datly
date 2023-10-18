@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/structology"
+	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -56,10 +57,10 @@ func (p *Parameter) SetTypeNameTag() {
 	if schema == nil {
 		return
 	}
-	if strings.Contains(p.Tag, "xreflect:") {
+	if _, ok := reflect.StructTag(p.Tag).Lookup(xreflect.TagTypeName); ok {
 		return
 	}
-	p.Tag += ` xreflect:"` + schema.Name + "`"
+	p.Tag += " " + xreflect.TagTypeName + `"` + schema.Name + "`"
 }
 
 func (p *Parameter) IsCacheable() bool {
