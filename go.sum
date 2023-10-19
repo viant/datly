@@ -318,6 +318,8 @@ github.com/viant/sqlx v0.9.1-0.20231013155302-719dec71d5ae h1:yS/JuKBHbUV2wIVZLU
 github.com/viant/sqlx v0.9.1-0.20231013155302-719dec71d5ae/go.mod h1:q96jEKSL4oHIZ41M5yhBweEZxTBHNyAHmi0GvtP2MgE=
 github.com/viant/structology v0.5.2-0.20231019184115-8f6c2878d2ae h1:EJaH/ZtpzB1/ezyaZ3XlLsb0v5nOD1V09O5P2xdeY5o=
 github.com/viant/structology v0.5.2-0.20231019184115-8f6c2878d2ae/go.mod h1:FuV201UpB3efpVlm5YVERK6vEDT7L8u+xbrei/MeHe8=
+github.com/viant/structology v0.5.2 h1:C5CwgIEbmftxgmnMcHRhJ6bOfWUKlFSbujMije2Zl90=
+github.com/viant/structology v0.5.2/go.mod h1:FuV201UpB3efpVlm5YVERK6vEDT7L8u+xbrei/MeHe8=
 github.com/viant/structql v0.4.1 h1:eQab1M5eTGFTSLSLIwRMpz/C5IKzixRskon2V8qhtRM=
 github.com/viant/structql v0.4.1/go.mod h1:gHebhXqfhtTpehk9VyeDq6D1rO87hv62AgG4p/e91UY=
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
