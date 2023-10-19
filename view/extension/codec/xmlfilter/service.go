@@ -2,7 +2,6 @@ package xmlfilter
 
 import (
 	"fmt"
-	"github.com/viant/toolbox"
 	"github.com/viant/xmlify"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -170,12 +169,19 @@ func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
 			return nil, err
 		}
 
-		filter.Tag = xmlify.ParseTag(field.Tag.Get("xmlify"))
+		filter.Tag, err = xmlify.ParseTag(field.Tag)
+		if err != nil {
+			return nil, fmt.Errorf("xmlfilter: invalid tag %v: %w", field.Tag, err)
+		}
+		//tag, err := format.Parse(field.Tag)
+		//if err != nil || tag.Ignore {
+		//	continue
+		//}
 
 		result.Filters = append(result.Filters, filter)
 	}
 
-	toolbox.DumpIndent(result, false)
+	//toolbox.DumpIndent(result, false)
 
 	return result, nil
 

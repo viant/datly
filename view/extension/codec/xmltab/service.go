@@ -2,6 +2,7 @@ package xmltab
 
 import (
 	"fmt"
+	"github.com/viant/structology/format"
 	"github.com/viant/xmlify"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -87,8 +88,8 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
-		tag := xmlify.ParseTag(field.Tag.Get("xmlify"))
-		if tag.Transient {
+		tag, err := xmlify.ParseTag(field.Tag)
+		if err != nil || tag.Ignore {
 			continue
 		}
 
@@ -168,8 +169,8 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
 
-		tag := xmlify.ParseTag(field.Tag.Get("xmlify"))
-		if tag.Transient {
+		tag, err := format.Parse(field.Tag)
+		if err != nil || tag.Ignore {
 			continue
 		}
 
