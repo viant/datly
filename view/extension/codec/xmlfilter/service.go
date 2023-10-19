@@ -2,6 +2,7 @@ package xmlfilter
 
 import (
 	"fmt"
+	"github.com/viant/structology/format"
 	"github.com/viant/xmlify"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -13,7 +14,7 @@ import (
 type (
 	Filter struct {
 		Name          string
-		Tag           *xmlify.Tag
+		Tag           format.Tag
 		IncludeString []string `json:",omitempty" xmlify:"omitempty"`
 		ExcludeString []string `json:",omitempty" xmlify:"omitempty"`
 		IncludeInt    []int    `json:",omitempty" xmlify:"omitempty"`
@@ -39,6 +40,7 @@ func (f *Result) MarshalXML() ([]byte, error) {
 		//TODO check if filter is empty
 		sb.WriteString("\n")
 		sb.WriteString("<")
+
 		if filter.Tag.Name != "" {
 			sb.WriteString(filter.Tag.Name)
 		} else {
@@ -142,6 +144,11 @@ func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
 	result := &Result{}
 
 	for _, field := range xFilters.Fields {
+		aTag, _ := format.Parse(field.Tag, xmlify.TagName)
+		if aTag != nil && aTag.Ignore {
+			continue
+		}
+
 		//fmt.Printf("### %s %s %s\n", field.Name, field.Kind(), field.Type.String())
 		fieldType := field.Type
 
@@ -168,15 +175,9 @@ func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		filter.Tag, err = xmlify.ParseTag(field.Tag)
-		if err != nil {
-			return nil, fmt.Errorf("xmlfilter: invalid tag %v: %w", field.Tag, err)
+		if aTag != nil {
+			filter.Tag = *aTag
 		}
-		//tag, err := format.Parse(field.Tag)
-		//if err != nil || tag.Ignore {
-		//	continue
-		//}
 
 		result.Filters = append(result.Filters, filter)
 	}
