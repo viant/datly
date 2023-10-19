@@ -175,7 +175,12 @@ func (r *Resource) mergeSubstitutes(resource *Resource) {
 	if len(resource.Substitutes) == 0 {
 		return
 	}
-	r.Substitutes = resource.Substitutes
+	if len(r.Substitutes) == 0 {
+		r.Substitutes = resource.Substitutes
+	}
+	for k, v := range resource.Substitutes {
+		r.Substitutes[k] = v
+	}
 }
 
 func (r *Resource) mergeViews(resource *Resource) {
