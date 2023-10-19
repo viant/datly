@@ -88,7 +88,7 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
-		tag, err := xmlify.ParseTag(field.Tag)
+		tag, err := format.Parse(field.Tag, xmlify.TagName)
 		if err != nil || tag.Ignore {
 			continue
 		}
@@ -169,7 +169,7 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
 
-		tag, err := format.Parse(field.Tag)
+		tag, err := format.Parse(field.Tag, xmlify.TagName)
 		if err != nil || tag.Ignore {
 			continue
 		}
