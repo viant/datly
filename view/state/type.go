@@ -70,7 +70,6 @@ func (t *Type) Init(options ...Option) error {
 	} else if t.Schema == nil {
 		t.Schema = EmptySchema()
 	} else {
-
 		for _, parameter := range t.Parameters {
 			if err := parameter.Init(context.Background(), t.resource); err != nil {
 				return err
