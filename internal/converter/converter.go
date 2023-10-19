@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/viant/datly/shared"
-	"github.com/viant/toolbox"
+	ftime "github.com/viant/structology/format/time"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strconv"
@@ -173,13 +173,11 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 			if format == "" {
 				format = time.RFC3339
 			}
-
-			asTime, err := toolbox.ToTime(raw, format)
+			asTime, err := ftime.Parse(format, raw)
 			if err != nil {
 				return nil, false, err
 			}
-
-			return *asTime, false, nil
+			return asTime, false, nil
 		}
 	}
 
