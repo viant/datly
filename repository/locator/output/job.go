@@ -46,7 +46,7 @@ func (l *outputLocator) getJobValue(ctx context.Context, name string) (interface
 		}
 		switch async.Status(jobInfo.JobStatus) {
 		case async.StatusDone:
-			return "COMPLET", true, nil
+			return "COMPLETE", true, nil
 		case async.StatusPending:
 			return "WAITING", true, nil
 		default:
