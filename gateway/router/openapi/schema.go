@@ -316,7 +316,7 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 			}
 
 			if !aTag.IsNullable {
-				dst.Required = append(dst.Required, fieldSchema.fieldName)
+				dst.Required = append(dst.Required, fieldSchema.name)
 			}
 		}
 	default:
