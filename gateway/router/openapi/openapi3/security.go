@@ -57,8 +57,6 @@ func (s *SecurityScheme) MarshalJSON() ([]byte, error) {
 	return res, nil
 }
 
-
-
 func (s *SecurityScheme) UnmarshalYAML(ctx context.Context, fn func(dest interface{}) error) error {
 	type temp SecurityScheme
 	tmp := temp(*s)

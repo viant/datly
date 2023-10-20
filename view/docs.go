@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/xdatly/docs"
-	"strings"
 )
 
 type (
@@ -18,15 +17,15 @@ type (
 	}
 
 	TypesDoc struct {
-		DefaultPkg string
+		DefaultPkg *string
 		Doc        []*TypeDoc
 		_docIndex  map[string]int
 	}
 
 	TypeDoc struct {
-		Pkg    string
-		Name   string
-		Fields map[string]string
+		Pkg   *string
+		Name  string
+		Paths map[string]string
 	}
 
 	MapBasedDoc struct {
@@ -80,12 +79,19 @@ func (d *Docs) Init(ctx context.Context, registry *docs.Registry, connectors Con
 func NewMapBasedDoc(types *TypesDoc) docs.Service {
 	index := map[string]string{}
 	for _, doc := range types.Doc {
-		if doc.Pkg == "" {
+		if doc.Pkg == nil {
 			doc.Pkg = types.DefaultPkg
 		}
 
-		for key, value := range doc.Fields {
-			index[strings.Join([]string{doc.Pkg, key}, ".")] = value
+		for key, value := range doc.Paths {
+			var aKey string
+			if doc.Pkg != nil {
+				aKey = *doc.Pkg + "." + key
+			} else {
+				aKey = key
+			}
+
+			index[aKey] = value
 		}
 	}
 

@@ -429,7 +429,7 @@ func (g *generator) responses(ctx context.Context, component *ComponentSchema) (
 		},
 	}
 
-	errorSchema, err := component.GetOrGenerateSchema(ctx, component.ReflectSchema("", errorType, errorSchemaDescription, component.component.Output.CaseFormat))
+	errorSchema, err := component.GetOrGenerateSchema(ctx, component.ReflectSchema("ErrorResponse", errorType, errorSchemaDescription, component.component.Output.CaseFormat))
 	if err != nil {
 		return nil, err
 	}

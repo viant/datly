@@ -9,9 +9,11 @@ import (
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology/format/text"
+	ftime "github.com/viant/structology/format/time"
 	"github.com/viant/xdatly/docs"
 	"github.com/viant/xreflect"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 )
@@ -47,9 +49,17 @@ type (
 	}
 )
 
-func (s *Schema) ReplaceType(rType reflect.Type) *Schema {
+func (s *Schema) SliceItem(rType reflect.Type) *Schema {
 	result := *s
-	result.rType = rType
+	elem := rType.Elem()
+
+	if elem.Name() != "" {
+		result.tag.TypeName = elem.Name()
+	} else {
+		result.tag.TypeName = result.tag.TypeName + "Item"
+	}
+
+	result.rType = elem
 	return &result
 }
 
@@ -95,7 +105,7 @@ func NewComponentSchema(components *repository.Service, component *repository.Co
 
 func (c *ComponentSchema) RequestBody(ctx context.Context) (*Schema, error) {
 	inputType := c.component.Input.Type
-	result, err := c.TypedSchema(ctx, inputType, "RequestBody", "")
+	result, err := c.TypedSchema(ctx, inputType, "Input", "")
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +115,7 @@ func (c *ComponentSchema) RequestBody(ctx context.Context) (*Schema, error) {
 }
 
 func (c *ComponentSchema) ResponseBody(ctx context.Context) (*Schema, error) {
-	schema, err := c.TypedSchema(ctx, c.component.Output.Type, "ResponseBody", c.component.Output.CaseFormat)
+	schema, err := c.TypedSchema(ctx, c.component.Output.Type, "Output", c.component.Output.CaseFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +134,7 @@ func (c *ComponentSchema) TypedSchema(ctx context.Context, stateType state.Type,
 	}
 
 	return &Schema{
+		tag:         Tag{TypeName: defaultTypeName},
 		pkg:         stateType.Package,
 		path:        path,
 		name:        typeName,
@@ -220,10 +231,14 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 		rType = rType.Elem()
 	}
 
+	if schema.tag.Example != "" {
+		dst.Example = schema.tag.Example
+	}
+
 	switch rType.Kind() {
 	case reflect.Slice, reflect.Array:
 		var err error
-		dst.Items, err = c.createSchema(ctx, component, schema.ReplaceType(rType.Elem()))
+		dst.Items, err = c.createSchema(ctx, component, schema.SliceItem(rType))
 		if err != nil {
 			return err
 		}
@@ -231,11 +246,24 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 	case reflect.Struct:
 		if rType == xreflect.TimeType {
 			dst.Type = stringOutput
-			dateFormat := schema.tag.Format
-			if dateFormat == "" {
-				dateFormat = time.RFC3339
+			timeLayout := schema.tag._tag.TimeLayout
+			if timeLayout == "" {
+				timeLayout = time.RFC3339
 			}
+
+			var dateFormat string
+			if containsAny(timeLayout, "15", "04", "05") {
+				dateFormat = "date-time"
+			} else {
+				dateFormat = "date"
+			}
+
 			dst.Format = dateFormat
+			if dst.Example == nil {
+				dst.Example = time.Now().Format(timeLayout)
+			}
+
+			dst.Pattern = ftime.TimeLayoutToDateFormat(timeLayout)
 			break
 		}
 
@@ -306,6 +334,16 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 	return nil
 }
 
+func containsAny(format string, values ...string) bool {
+	for _, value := range values {
+		if strings.Contains(format, value) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (c *ComponentSchema) GetOrGenerateSchema(ctx context.Context, schema *Schema) (*openapi3.Schema, error) {
 	return c.schemas.CreateSchema(ctx, c, schema)
 }
@@ -319,9 +357,9 @@ func (c *SchemaContainer) CreateSchema(ctx context.Context, componentSchema *Com
 
 func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *ComponentSchema, fieldSchema *Schema) (*openapi3.Schema, error) {
 	if fieldSchema.tag.TypeName != "" {
-		schema, ok := c.generatedSchemas[fieldSchema.tag.TypeName]
+		_, ok := c.generatedSchemas[fieldSchema.tag.TypeName]
 		if ok {
-			return schema, nil
+			return c.SchemaRef(fieldSchema.tag.TypeName), nil
 		}
 	}
 
@@ -341,6 +379,7 @@ func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *Com
 	if fieldSchema.tag.TypeName != "" {
 		c.generatedSchemas[fieldSchema.tag.TypeName] = schema
 		c.schemas = append(c.schemas, schema)
+		schema = c.SchemaRef(fieldSchema.tag.TypeName)
 	}
 
 	return schema, err
