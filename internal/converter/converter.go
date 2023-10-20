@@ -14,29 +14,12 @@ import (
 func Convert(raw string, toType reflect.Type, skipValidation bool, format string, options ...interface{}) (value interface{}, wasNil bool, err error) {
 	switch toType.Kind() {
 	case reflect.Slice:
-		switch toType.Elem().Kind() {
-		case reflect.Int:
-			v, err := NewRepeated(raw, true).AsInts()
-			return v, false, err
-		case reflect.Uint64:
-			v, err := NewRepeated(raw, true).AsUInt64s()
-			return v, false, err
-		case reflect.Int64:
-			v, err := NewRepeated(raw, true).AsInt64s()
-			return v, false, err
-		case reflect.Uint:
-			v, err := NewRepeated(raw, true).AsUInts()
-			return v, false, err
-		case reflect.String:
-			v := NewRepeated(raw, false)
-			return []string(v), false, nil
-		case reflect.Float64:
-			v, err := NewRepeated(raw, true).AsFloats64()
-			return v, false, err
-		case reflect.Float32:
-			v, err := NewRepeated(raw, true).AsFloats32()
-			return v, false, err
-
+		repeated := NewRepeated(raw, true)
+		if toType.Elem().Kind() == reflect.String {
+			repeated = NewRepeated(raw, false)
+		}
+		if value, err := repeated.Convert(toType); value != nil || err != nil {
+			return value, false, err
 		}
 	case reflect.Bool:
 		parseBool, err := strconv.ParseBool(raw)
@@ -222,6 +205,32 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 	}
 
 	return result, isNil, nil
+}
+
+func (r Repeated) Convert(toType reflect.Type) (interface{}, error) {
+	switch toType.Elem().Kind() {
+	case reflect.Int:
+		v, err := r.AsInts()
+		return v, err
+	case reflect.Uint64:
+		v, err := r.AsUInt64s()
+		return v, err
+	case reflect.Int64:
+		v, err := r.AsInt64s()
+		return v, err
+	case reflect.Uint:
+		v, err := r.AsUInts()
+		return v, err
+	case reflect.String:
+		return []string(r), nil
+	case reflect.Float64:
+		v, err := r.AsFloats64()
+		return v, err
+	case reflect.Float32:
+		v, err := r.AsFloats32()
+		return v, err
+	}
+	return nil, nil
 }
 
 func unmarshaller(options []interface{}) shared.Unmarshal {

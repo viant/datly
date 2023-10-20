@@ -419,10 +419,18 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 
 func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (interface{}, error) {
 	var err error
-	if parameter.Schema.Type().Kind() != reflect.String { //TODO add support for all incompatible types
+	switch actual := value.(type) {
+	case string:
 		if textValue, ok := value.(string); ok {
 			value, _, err = converter.Convert(textValue, parameter.Schema.Type(), false, parameter.DateFormat)
 		}
+	case []string:
+		repeated := converter.Repeated(actual)
+		rType := parameter.OutputType()
+		value, _, err = repeated.Convert(rType)
+	}
+	if parameter.Schema.Type().Kind() != reflect.String { //TODO add support for all incompatible types
+
 	}
 	return value, err
 }
