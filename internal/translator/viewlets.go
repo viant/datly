@@ -8,6 +8,7 @@ import (
 	"github.com/viant/sqlparser"
 	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
+	"github.com/viant/structology/tags"
 	"strings"
 )
 
@@ -34,7 +35,12 @@ func (n *Viewlets) Append(viewlet *Viewlet) {
 	n.keys = append(n.keys, viewlet.Name)
 }
 func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Resource, initFn, setType func(ctx context.Context, n *Viewlet) error) error {
-	root := NewViewlet(aQuery.From.Alias, sqlparser.Stringify(aQuery.From.X), nil, resource)
+
+	SQL, err := SafeQueryStringify(aQuery)
+	if err != nil {
+		return err
+	}
+	root := NewViewlet(aQuery.From.Alias, SQL, nil, resource)
 	root.ViewJSONHint = aQuery.From.Comments
 	if root.ViewJSONHint == "" && aQuery.From.X != nil {
 		if rawExpr, ok := aQuery.From.X.(*qexpr.Raw); ok {
@@ -84,6 +90,16 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 
 	n.addRelations(aQuery)
 	return nil
+}
+
+func SafeQueryStringify(aQuery *query.Select) (SQL string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("invalid dql: %v", err)
+		}
+	}()
+	SQL = sqlparser.Stringify(aQuery.From.X)
+	return SQL, err
 }
 
 func (n *Viewlets) applyViewHintSettings() error {
@@ -166,14 +182,16 @@ func extractFunction(column *sqlparser.Column) (string, []string) {
 	var args []string
 	if index := strings.Index(column.Expression, "("); index != -1 {
 		fnName = column.Expression[:index]
-		arg := column.Expression[index+1 : len(column.Expression)-1]
-		for _, item := range strings.Split(arg, ",") {
+		exprArgs := column.Expression[index+1 : len(column.Expression)-1]
+		values := tags.Values(exprArgs)
+		_ = values.Match(func(item string) error {
 			arg := strings.TrimSpace(item)
 			if len(arg) > 0 && arg[0] == '\'' && arg[len(arg)-1] == '\'' {
 				arg = arg[1 : len(arg)-1]
 			}
 			args = append(args, arg)
-		}
+			return nil
+		})
 	}
 	return fnName, args
 }

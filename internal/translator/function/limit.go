@@ -25,7 +25,7 @@ func (c *limit) Apply(args []string, column *sqlparser.Column, resource *view.Re
 }
 
 func (c *limit) Name() string {
-	return "limit"
+	return "set_limit"
 }
 
 func (c *limit) Description() string {

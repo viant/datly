@@ -376,7 +376,7 @@ func (r *Resource) IncludeSnippets(ctx context.Context, fs afs.Service, dSQL *st
 		content = []byte(r.Resource.Substitutes.Replace(string(content)))
 		ext := path.Ext(assetURL)
 		switch ext {
-		case ".sql", ".sqlx":
+		case ".sql", ".sqlx", ".dql", ".dqlx":
 			contentStr := string(content)
 			if sqlXContent != "" {
 				sqlXContent += "\n"
