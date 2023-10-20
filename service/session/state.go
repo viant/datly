@@ -427,7 +427,7 @@ func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (in
 	case []string:
 		repeated := converter.Repeated(actual)
 		rType := parameter.OutputType()
-		value, _, err = repeated.Convert(rType)
+		value, err = repeated.Convert(rType)
 	}
 	if parameter.Schema.Type().Kind() != reflect.String { //TODO add support for all incompatible types
 
