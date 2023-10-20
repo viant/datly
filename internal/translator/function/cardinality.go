@@ -19,7 +19,7 @@ func (c *cardinality) Apply(args []string, column *sqlparser.Column, resource *v
 	if aView.Schema == nil {
 		aView.Schema = &state.Schema{}
 	}
-	aView.Schema.Cardinality = state.Cardinality(args[1])
+	aView.Schema.Cardinality = state.Cardinality(args[0])
 	return nil
 }
 

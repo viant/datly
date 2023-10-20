@@ -166,9 +166,13 @@ func extractFunction(column *sqlparser.Column) (string, []string) {
 	var args []string
 	if index := strings.Index(column.Expression, "("); index != -1 {
 		fnName = column.Expression[:index]
-		arg := column.Expression[index+1 : len(column.Expression)-2]
+		arg := column.Expression[index+1 : len(column.Expression)-1]
 		for _, item := range strings.Split(arg, ",") {
-			args = append(args, strings.TrimSpace(item))
+			arg := strings.TrimSpace(item)
+			if len(arg) > 0 && arg[0] == '\'' && arg[len(arg)-1] == '\'' {
+				arg = arg[1 : len(arg)-1]
+			}
+			args = append(args, arg)
 		}
 	}
 	return fnName, args

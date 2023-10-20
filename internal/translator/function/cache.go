@@ -11,12 +11,12 @@ func (c *cache) Apply(args []string, column *sqlparser.Column, resource *view.Re
 	if _, err := convertArguments(c, args); err != nil {
 		return err
 	}
-	aView.Cache = view.NewRefCache(args[1])
+	aView.Cache = view.NewRefCache(args[0])
 	return nil
 }
 
 func (c *cache) Name() string {
-	return "cache"
+	return "use_cache"
 }
 
 func (c *cache) Description() string {

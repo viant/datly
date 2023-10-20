@@ -15,12 +15,12 @@ func (c *connector) Apply(args []string, column *sqlparser.Column, resource *vie
 	if _, err := convertArguments(c, args); err != nil {
 		return err
 	}
-	aView.Connector = view.NewRefConnector(args[1])
+	aView.Connector = view.NewRefConnector(args[0])
 	return nil
 }
 
 func (c *connector) Name() string {
-	return "connector"
+	return "use_connector"
 }
 
 func (c *connector) Arguments() []*Argument {

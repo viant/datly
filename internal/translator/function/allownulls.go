@@ -18,7 +18,7 @@ func (c *allownulls) Apply(args []string, column *sqlparser.Column, resource *vi
 }
 
 func (c *allownulls) Name() string {
-	return "allownulls"
+	return "allow_nulls"
 }
 
 func (c *allownulls) Description() string {
