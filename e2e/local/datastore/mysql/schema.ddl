@@ -187,7 +187,7 @@ CREATE TABLE BAR (
 DROP TABLE IF EXISTS DATLY_JOBS;
 
 CREATE TABLE `DATLY_JOBS` (
-                              `MatchKey` varchar(1024) NOT NULL,
+                              `MatchKey` varchar(32000) NOT NULL,
                               `Status` varchar(40) NOT NULL,
                               `Metrics` text NOT NULL,
                               `Connector` varchar(256),
