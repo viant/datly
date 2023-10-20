@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/structology"
+	"github.com/viant/structology/tags"
 	"github.com/viant/velty"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -369,10 +370,12 @@ func (p Parameters) PredicateStructType() reflect.Type {
 
 	var structFields []reflect.StructField
 	for _, field := range fields {
+		fieldTags := tags.NewTags(field.StructTagTag())
+		fieldTags.SetIfNotFound("json", ",omitempty")
 		structFields = append(structFields, reflect.StructField{
 			Name: field.Name,
 			Type: field.Type(),
-			Tag:  reflect.StructTag(`json:",omitempty" ` + strings.Trim(string(field.StructTagTag()), "`")),
+			Tag:  reflect.StructTag(fieldTags.Stringify()),
 		})
 	}
 

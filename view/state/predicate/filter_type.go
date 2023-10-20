@@ -22,11 +22,11 @@ func (f *FilterType) Type() reflect.Type {
 	return reflect.TypeOf(&predicate.StringsFilter{})
 }
 
-func (f *FilterType) StructTagTag() reflect.StructTag {
+func (f *FilterType) StructTagTag() string {
 	if f.IncludeTag != "" {
-		return reflect.StructTag(f.IncludeTag)
+		return f.IncludeTag
 	}
-	return reflect.StructTag(f.ExcludeTag)
+	return f.ExcludeTag
 }
 
 func isIntType(t reflect.Type) bool {
