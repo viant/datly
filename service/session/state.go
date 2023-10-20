@@ -425,8 +425,8 @@ func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (in
 			value, _, err = converter.Convert(textValue, parameter.Schema.Type(), false, parameter.DateFormat)
 		}
 	case []string:
-		repeated := converter.Repeated(actual)
 		if rType := parameter.OutputType(); rType.Kind() == reflect.Slice {
+			repeated := converter.Repeated(actual)
 			if v, err := repeated.Convert(rType); v != nil || err != nil {
 				return v, err
 			}
