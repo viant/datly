@@ -430,7 +430,7 @@ func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (in
 			if v, err := repeated.Convert(rType); v != nil || err != nil {
 				return v, err
 			}
-		} else if len(actual) > 0 {
+		} else if len(actual) > 0 { //destination is not a slice, thus using the first element
 			value = actual[0]
 		}
 	}
