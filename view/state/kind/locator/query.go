@@ -32,10 +32,13 @@ func (q *Query) Value(ctx context.Context, name string) (interface{}, bool, erro
 	if len(value) == 1 && value[0] == "" && q.ignoreEmptyParameters(ctx) {
 		return "", false, nil
 	}
-	if len(value) > 0 {
+	switch len(value) {
+	case 0:
+	case 1:
 		return value[0], true, nil
+	default:
+		return value, true, nil
 	}
-
 	if q.ignoreEmptyParameters(ctx) {
 		return "", false, nil
 	}
