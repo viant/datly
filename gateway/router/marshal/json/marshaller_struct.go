@@ -259,18 +259,17 @@ func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithFiel
 		return nil
 	}
 
-	tag := ParseXTag(field.Tag.Get(TagName), field.Tag.Get(XTagName))
-	if tag.Transient {
+	if dTag.Ignore {
 		return nil
 	}
 
 	jsonName := field.Name
-	if !unicode.IsLetter(rune(jsonName[0])) && tag.FieldName == "" {
+	if !unicode.IsLetter(rune(jsonName[0])) && dTag.Name == "" {
 		return nil
 	}
 
-	if tag.FieldName != "" {
-		jsonName = tag.FieldName
+	if dTag.Name != "" {
+		jsonName = dTag.Name
 	} else if dTag.CaseFormat == "-" {
 		if dTag.Name != "" {
 			jsonName = dTag.Name
@@ -287,7 +286,7 @@ func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithFiel
 		marshallerMetadata: marshallerMetadata{
 			path:       path,
 			outputPath: outputPath,
-			omitEmpty:  tag.OmitEmpty || s.config.OmitEmpty,
+			omitEmpty:  dTag.Omitempty || s.config.OmitEmpty,
 			jsonName:   jsonName,
 			fieldName:  field.Name,
 		},
