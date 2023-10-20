@@ -426,9 +426,10 @@ func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (in
 		}
 	case []string:
 		repeated := converter.Repeated(actual)
-		rType := parameter.OutputType()
-		if v, err := repeated.Convert(rType); v != nil || err != nil {
-			return v, err
+		if rType := parameter.OutputType(); rType.Kind() == reflect.Slice {
+			if v, err := repeated.Convert(rType); v != nil || err != nil {
+				return v, err
+			}
 		}
 	}
 	return value, err
