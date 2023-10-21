@@ -60,7 +60,7 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 func (t *Template) generateRegisterType() string {
 	registry := &customTypeRegistry{}
 	for _, param := range t.State {
-		if param.In.Kind != state.KindDataView {
+		if !param.In.IsView() {
 			continue
 		}
 		registry.register(param.Schema.TypeName())
@@ -74,7 +74,7 @@ func (t *Template) generateRegisterType() string {
 func (t *Template) generateMapTypeBody() string {
 	var initElements []string
 	for _, param := range t.State {
-		if param.In.Kind != state.KindDataView {
+		if !param.In.IsView() {
 			continue
 		}
 		initElements = append(initElements, fmt.Sprintf(registerMapEntryTemplate, param.Schema.TypeName(), param.Schema.TypeName()))

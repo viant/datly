@@ -122,9 +122,7 @@ func (d *Declaration) ExpandShorthands() {
 		if d.Parameter.Schema.Cardinality == "" {
 			d.Parameter.Schema.Cardinality = state.Many
 		}
-		d.In.Kind = state.KindDataView
-		d.In.Name = d.Name
-
+		d.In = state.NewViewLocation(d.Name)
 	}
 	if d.In != nil && d.In.Kind == state.KindRequestBody {
 		required := true

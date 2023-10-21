@@ -177,11 +177,16 @@ func (s State) IndexByPathIndex() map[string]*Parameter {
 
 // FilterByKind filters state parameter by kind
 func (s State) FilterByKind(kind state.Kind) State {
+
 	result := State{}
 	if len(s) == 0 {
 		return result
 	}
 	for _, parameter := range s {
+		if kind == state.KindView && parameter.In.IsView() {
+			result.Append(parameter)
+			continue
+		}
 		switch parameter.In.Kind {
 		case kind:
 			result.Append(parameter)

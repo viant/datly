@@ -108,7 +108,7 @@ func (h *Httper) replaceQuery(request *http.Request, params url.Values) *url.URL
 func (h *Httper) appendParams(aView *view.View, dst *[]*state.Parameter) error {
 	for _, parameter := range aView.Template.Parameters {
 		*dst = append(*dst, parameter)
-		if parameter.In.Kind == state.KindDataView {
+		if parameter.In.IsView() {
 			paramView, err := h.resource.View(parameter.In.Name)
 			if err != nil {
 				return err

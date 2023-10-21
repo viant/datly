@@ -73,7 +73,7 @@ func (t *Template) BuildState(spec *inference.Spec, bodyHolder string, opts ...O
 	var structFields []reflect.StructField
 
 	for _, parameter := range t.State {
-		if parameter.In.Kind == state.KindDataView && !parameter.IsAuxiliary {
+		if parameter.In.IsView() && !parameter.IsAuxiliary {
 			parameter.Schema.Cardinality = state.Many
 		}
 		var structTag reflect.StructTag

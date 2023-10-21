@@ -218,7 +218,7 @@ func (r *Resource) appendPathVariableParams() {
 }
 
 func (r *Resource) buildParameterViews() {
-	for _, parameter := range r.State.FilterByKind(state.KindDataView) {
+	for _, parameter := range r.State.FilterByKind(state.KindView) {
 		viewlet := NewViewlet(parameter.Name, parameter.SQL, nil, r)
 		if parameter.Connector != "" {
 			viewlet.Connector = parameter.Connector
@@ -314,7 +314,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 }
 
 func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet) error) error {
-	viewParameters := r.State.FilterByKind(state.KindDataView)
+	viewParameters := r.State.FilterByKind(state.KindView)
 	for _, viewParameter := range viewParameters {
 		if viewParameter.Schema != nil && viewParameter.Schema.Type() != nil {
 			continue

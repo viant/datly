@@ -9,7 +9,11 @@ import (
 type Kind string
 
 const (
-	KindDataView    Kind = "data_view"
+	KindView Kind = "view"
+
+	//deprecated use view instead
+	KindDataView Kind = "data_view"
+
 	KindHeader      Kind = "header"
 	KindQuery       Kind = "query"
 	KindPath        Kind = "path"
@@ -35,7 +39,7 @@ const (
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindComponent:
+	case KindView, KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindComponent:
 		return nil
 	}
 
@@ -44,7 +48,7 @@ func (k Kind) Validate() error {
 
 func (k Kind) Ordinal() int {
 	switch k {
-	case KindDataView:
+	case KindView:
 		return 0
 	case KindHeader:
 		return 1

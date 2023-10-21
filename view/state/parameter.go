@@ -125,7 +125,7 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 		return fmt.Errorf("param %v value was not set", p.Name)
 	}
 
-	if p.In.Kind == KindDataView {
+	if p.In.IsView() {
 		if err := p.initDataViewParameter(ctx, resource); err != nil {
 			return err
 		}

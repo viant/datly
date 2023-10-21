@@ -15,7 +15,7 @@ import (
 ? SELECT ARRAY_AGG(Id) AS Values FROM  `/FoosPerformance` LIMIT 1
 */
 )
-	#set($_ = $CurFoosPerformance<[]*FoosPerformance>(data_view/CurFoosPerformance) /*
+	#set($_ = $CurFoosPerformance<[]*FoosPerformance>(view/CurFoosPerformance) /*
 ? SELECT * FROM FOOS_PERFORMANCE
 WHERE $criteria.In("ID", $CurFoosFoosPerformanceId.Values)
 */

@@ -31,7 +31,7 @@ func (p *DataView) Value(ctx context.Context, name string) (interface{}, bool, e
 	return sliceValue.Elem().Interface(), true, err
 }
 
-func NewDataView(opts ...Option) (kind.Locator, error) {
+func NewView(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
 	if options.Views == nil {
 		return nil, fmt.Errorf("views type was empty")

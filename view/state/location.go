@@ -25,6 +25,10 @@ func (l *Location) Validate() error {
 	return nil
 }
 
+func (l *Location) IsView() bool {
+	return l.Kind == KindView || l.Kind == KindDataView
+}
+
 // ParamName represents name of parameter in given Location.Kind
 // i.e. if you want to extract lang from query string: ?foo=bar&lang=eng
 // required Kind is KindQuery and ParamName `lang`
@@ -47,7 +51,7 @@ func (p ParamName) Validate(kind Kind) error {
 
 	case KindRequest, KindLiteral, KindConst, KindRequestBody, KindQuery:
 		return nil
-	case KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindContext, KindOutput, KindComponent:
+	case KindView, KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindContext, KindOutput, KindComponent:
 		if p == "" {
 			return fmt.Errorf("param name can't be empty")
 		}
@@ -92,9 +96,9 @@ func NewObjectLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindObject}
 }
 
-// NewDataViewLocation creates a dataview location
-func NewDataViewLocation(name string) *Location {
-	return &Location{Name: name, Kind: KindDataView}
+// NewViewLocation creates a dataview location
+func NewViewLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindView}
 }
 
 func NewConstLocation(name string) *Location {
