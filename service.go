@@ -154,15 +154,6 @@ func (s *Service) buildDefaultComponents(ctx context.Context) (*repository.Compo
 }
 
 // AddComponents adds components to repository
-func (s *Service) AddComponents(ctx context.Context, components *repository.Components) error {
-	if err := components.Init(ctx); err != nil {
-		return err
-	}
-	s.repository.Registry().Register(components.Components...)
-	return nil
-}
-
-// AddComponents adds components to repository
 func (s *Service) AddComponent(ctx context.Context, component *repository.Component) error {
 	components, refConnector := s.buildDefaultComponents(ctx)
 	if refConnector != "" {
@@ -173,6 +164,15 @@ func (s *Service) AddComponent(ctx context.Context, component *repository.Compon
 			component.View.Connector = view.NewRefConnector(refConnector)
 		}
 	}
+	if err := components.Init(ctx); err != nil {
+		return err
+	}
+	s.repository.Registry().Register(components.Components...)
+	return nil
+}
+
+// AddComponents adds components to repository
+func (s *Service) AddComponents(ctx context.Context, components *repository.Components) error {
 	if err := components.Init(ctx); err != nil {
 		return err
 	}

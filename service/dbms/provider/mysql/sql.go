@@ -49,7 +49,7 @@ func (s *SQLSource) CreateTable(recordType reflect.Type, tableName string, tagNa
 	}
 
 	if autogeneratePk {
-		column := io.NewColumn("DATLY_RECORD_ID", "", xreflect.IntType, &io.Tag{Autoincrement: true, PrimaryKey: true})
+		column := io.NewColumn("DATLY_RECORD_ID", "", xreflect.IntType, io.WithTag(&io.Tag{Autoincrement: true, PrimaryKey: true}))
 		pkColumns = make([]io.Column, 0)
 		buffer.WriteString(", \n")
 		if err = s.appendColumn(buffer, column, &pkColumns, nil); err != nil {
