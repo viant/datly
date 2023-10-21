@@ -702,9 +702,21 @@ func (v *View) updateViewAndRelations(ctx context.Context, relations []*Relation
 }
 
 func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
-	if resource._columnsCache != nil {
-		if cachedColumns, ok := resource._columnsCache[v.Name]; ok {
+	if resource.viewColumns != nil {
+		if cachedColumns, ok := resource.viewColumns[v.Name]; ok {
 			v.Columns = cachedColumns
+		}
+	}
+	if len(v.Columns) != 0 {
+		return nil
+	}
+	//if scheme type defines sqlx tag, use it as source for column instead of detection
+	if rType := v.Schema.Type(); rType != nil {
+		sType := types.EnsureStruct(rType)
+		if columns := io.ExtractColumnNames(sType); len(columns) > 0 {
+			if columns, err := io.StructColumns(sType, "sqlx"); err == nil {
+				v.Columns = convertIoColumnsToColumns(columns, make(map[string]bool))
+			}
 		}
 	}
 
@@ -719,8 +731,8 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	if err != nil {
 		return err
 	}
-	if resource._columnsCache != nil {
-		resource._columnsCache[v.Name] = v.Columns
+	if resource.viewColumns != nil {
+		resource.viewColumns[v.Name] = v.Columns
 	}
 	return nil
 }

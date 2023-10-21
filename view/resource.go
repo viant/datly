@@ -64,7 +64,7 @@ type (
 		Predicates  []*predicate.Template
 		_predicates *extension.PredicateRegistry
 
-		_columnsCache map[string]Columns
+		viewColumns map[string]Columns
 
 		Substitutes Substitutes
 		Docs        *Docs
@@ -310,7 +310,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	r.indexProviders()
 
 	r.codecs = opts.Codecs
-	r._columnsCache = opts.Columns
+	r.viewColumns = opts.Columns
 	r._types = opts.Types
 
 	for _, definition := range r.Types {

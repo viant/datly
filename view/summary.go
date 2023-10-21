@@ -232,8 +232,8 @@ func newCasedField(aTag string, columnName string, sourceCaseFormat text.CaseFor
 }
 
 func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, owner *Template) (Columns, error) {
-	if resource._columnsCache != nil {
-		columns, ok := resource._columnsCache[m.newMetaColumnsCacheKey()]
+	if resource.viewColumns != nil {
+		columns, ok := resource.viewColumns[m.newMetaColumnsCacheKey()]
 		if ok {
 			return columns, nil
 		}
@@ -255,8 +255,8 @@ func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, ow
 		return nil, err
 	}
 
-	if resource._columnsCache != nil {
-		resource._columnsCache[m.newMetaColumnsCacheKey()] = columns
+	if resource.viewColumns != nil {
+		resource.viewColumns[m.newMetaColumnsCacheKey()] = columns
 	}
 
 	return columns, nil
