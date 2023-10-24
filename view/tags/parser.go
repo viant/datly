@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/structology/format"
 	"github.com/viant/structology/tags"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -18,7 +19,7 @@ func ParseViewTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
 
 // ParseStateTags parse state related tags
 func ParseStateTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
-	ret, err := Parse(tag, fs, ParameterTag, SQLTag, PredicateTag, CodecTag)
+	ret, err := Parse(tag, fs, ParameterTag, SQLTag, PredicateTag, CodecTag, format.TagName)
 	if err != nil {
 		return nil, err
 	}
@@ -26,8 +27,8 @@ func ParseStateTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
 }
 
 func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error) {
-	ret := &Tag{fs: afs.New(), TypeName: tag.Get(xreflect.TagTypeName)}
-
+	ret := &Tag{fs: afs.New(), TypeName: tag.Get(xreflect.TagTypeName), Description: tag.Get(DescriptionTag)}
+	var err error
 	for _, tagName := range tagNames {
 		tagValue, ok := tag.Lookup(tagName)
 		if !ok {
@@ -88,6 +89,10 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 		case ParameterTag:
 			ret.Parameter = &Parameter{Name: name}
 			return ret, values.MatchPairs(ret.updatedParameter)
+		case format.TagName:
+			if ret.Format, err = format.Parse(tag); err != nil {
+				return nil, err
+			}
 		default:
 			return nil, fmt.Errorf("unsupported tag: %s", tagName)
 		}

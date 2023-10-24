@@ -17,7 +17,7 @@ type Tag struct {
 	Predicate   *Predicate
 	Codec       *Codec
 	TypeName    string
-	Description *string
+	Description string
 	Format      *format.Tag
 }
 
