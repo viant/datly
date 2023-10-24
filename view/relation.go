@@ -47,13 +47,13 @@ type (
 	}
 )
 
-// NewLinks returns links
-func NewLinks(links ...*Link) Links {
+// JoinOn returns links
+func JoinOn(links ...*Link) Links {
 	return links
 }
 
-// NewLink returns a link
-func NewLink(field, column string) *Link {
+// WithLink returns a link
+func WithLink(field, column string) *Link {
 	return &Link{Field: field, Column: column}
 }
 

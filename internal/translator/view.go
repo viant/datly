@@ -262,7 +262,7 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		refField := relation.KeyField.Name
 		aRefView := view.NewRefView(refViewName)
 		aRefView.Name = refViewName + "#"
-		viewRelation.Of = view.NewReferenceView(view.NewLinks(view.NewLink(refField, refColumn)), aRefView)
+		viewRelation.Of = view.NewReferenceView(view.JoinOn(view.WithLink(refField, refColumn)), aRefView)
 		viewRelation.Cardinality = relation.Cardinality
 		v.View.With = append(v.View.With, viewRelation)
 	}

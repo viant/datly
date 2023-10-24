@@ -274,7 +274,10 @@ func (b *Builder) updateColumnsIn(params *view.CriteriaParam, view *view.View, r
 		sb.WriteString(batchData.ColumnNames[0])
 	default:
 		sb.WriteString("(")
-		for _, column := range batchData.ColumnNames {
+		for i, column := range batchData.ColumnNames {
+			if i > 0 {
+				sb.WriteString(",")
+			}
 			sb.WriteString(column)
 		}
 		sb.WriteString(")")
@@ -290,6 +293,9 @@ func (b *Builder) updateColumnsIn(params *view.CriteriaParam, view *view.View, r
 		default:
 			sb.WriteString("(")
 			for j := 0; j < columns; j++ {
+				if j > 0 {
+					sb.WriteString(",")
+				}
 				sb.WriteString(placeholderFragment)
 			}
 			sb.WriteString(")")
