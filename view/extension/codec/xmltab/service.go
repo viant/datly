@@ -12,7 +12,6 @@ import (
 	"unsafe"
 )
 
-const RFC3339NanoCustomized = "2006-01-02T15:04:05.000Z07:00"
 const XmlTabNullValue = "true"
 
 type (
@@ -85,12 +84,17 @@ func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsaf
 func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Pointer) (*Row, error) {
 	var row Row
 	var nullValue = XmlTabNullValue
+	var timeLayout = time.RFC3339
 
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
 		tag, err := format.Parse(field.Tag, xmlify.TagName)
 		if err != nil || tag.Ignore {
 			continue
+		}
+
+		if tag.TimeLayout != "" {
+			timeLayout = tag.TimeLayout
 		}
 
 		value := &ColumnValue{}
@@ -141,14 +145,14 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 				switch field.Type {
 				case xreflect.TimePtrType:
 					if ts, ok := v.(*time.Time); ok && ts != nil {
-						s := ts.Format(RFC3339NanoCustomized)
+						s := ts.Format(timeLayout)
 						value.DateType = &s
 					} else {
 						value.ValueAttr = &nullValue
 					}
 				case xreflect.TimeType:
 					if ts, ok := v.(time.Time); ok {
-						s := ts.Format(RFC3339NanoCustomized)
+						s := ts.Format(timeLayout)
 						value.DateType = &s
 					} else {
 						value.ValueAttr = &nullValue
