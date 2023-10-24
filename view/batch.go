@@ -1,7 +1,7 @@
 package view
 
 type BatchData struct {
-	ColumnName     string
+	ColumnNames    []string
 	Parent         int
 	ParentReadSize int
 

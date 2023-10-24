@@ -244,10 +244,10 @@ func (t *Template) EvaluateStateWithSession(parameterState *structology.State, p
 	)
 }
 
-// WithTemplateParameter return parameter template options
-func WithTemplateParameter(parameter *state.Parameter) TemplateOption {
+// WithTemplateParameters return parameter template options
+func WithTemplateParameters(parameters ...*state.Parameter) TemplateOption {
 	return func(t *Template) {
-		t.Parameters = append(t.Parameters, parameter)
+		t.Parameters = append(t.Parameters, parameters...)
 	}
 }
 

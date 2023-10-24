@@ -251,7 +251,7 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 			return fmt.Errorf("failed to add relation: %v, unknown reference", relation.Name)
 		}
 		viewRelation.Column = relation.ParentField.Column.Name
-		viewRelation.ColumnNamespace = relation.ParentField.Column.Namespace
+		viewRelation.Namespace = relation.ParentField.Column.Namespace
 		viewRelation.Field = relation.ParentField.Name
 		holderFormat := text.DetectCaseFormat(relNamespace.Name)
 		viewRelation.Holder = holderFormat.Format(relNamespace.Name, text.CaseFormatUpperCamel)
@@ -259,9 +259,10 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		relNamespace.Holder = viewRelation.Holder
 		refViewName := relNamespace.View.Name
 		refColumn := relation.KeyField.Column.Name
-		refField := ""
-		refField = relation.KeyField.Name
-		viewRelation.Of = view.NewReferenceView(refViewName, refViewName+"#", refColumn, refField)
+		refField := relation.KeyField.Name
+		aRefView := view.NewRefView(refViewName)
+		aRefView.Name = refViewName + "#"
+		viewRelation.Of = view.NewReferenceView(view.NewLinks(view.NewLink(refField, refColumn)), aRefView)
 		viewRelation.Cardinality = relation.Cardinality
 		v.View.With = append(v.View.With, viewRelation)
 	}

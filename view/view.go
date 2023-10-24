@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io"
@@ -43,20 +44,19 @@ type (
 	//View represents a View
 	View struct {
 		shared.Reference
-		Mode                 Mode       `json:",omitempty"`
-		Connector            *Connector `json:",omitempty"`
-		Async                *Async     `json:",omitempty"`
-		Standalone           bool       `json:",omitempty"`
-		Name                 string     `json:",omitempty"`
-		Description          string     `json:",omitempty"`
-		Module               string     `json:",omitempty"`
-		Alias                string     `json:",omitempty"`
-		Table                string     `json:",omitempty"`
-		From                 string     `json:",omitempty"`
-		FromURL              string     `json:",omitempty"`
-		Exclude              []string   `json:",omitempty"`
-		Columns              []*Column  `json:",omitempty"`
-		InheritSchemaColumns bool       `json:",omitempty"`
+		Mode        Mode       `json:",omitempty"`
+		Connector   *Connector `json:",omitempty"`
+		Async       *Async     `json:",omitempty"`
+		Standalone  bool       `json:",omitempty"`
+		Name        string     `json:",omitempty"`
+		Description string     `json:",omitempty"`
+		Module      string     `json:",omitempty"`
+		Alias       string     `json:",omitempty"`
+		Table       string     `json:",omitempty"`
+		From        string     `json:",omitempty"`
+		FromURL     string     `json:",omitempty"`
+		Exclude     []string   `json:",omitempty"`
+		Columns     []*Column  `json:",omitempty"`
 
 		Criteria string `json:",omitempty"`
 
@@ -325,43 +325,88 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 	if recType == nil {
 		return nil
 	}
+	var viewOptions []ViewOption
 	for i := 0; i < recType.NumField(); i++ {
 		field := recType.Field(i)
-		rawTag, ok := field.Tag.Lookup(DatlyTag)
-		if !ok {
-			continue
-		}
-		tag := ParseTag(rawTag)
-		tag.RefSQL, _ = field.Tag.Lookup("sql")
-		if !tag.HasRelationSpec() {
-			continue
-		}
-		refViewOptions, err := v.buildRefViewOptions(tag)
+		aTag, err := tags.ParseViewTags(field.Tag, nil)
 		if err != nil {
 			return err
 		}
-		if viewOptions := tag.RelationOption(field, refViewOptions...); len(viewOptions) > 0 {
-			viewOptions.Apply(v)
+		viewTag := aTag.View
+		if viewTag == nil || len(aTag.LinkOn) == 0 {
+			continue
 		}
+		setter.SetStringIfEmpty(&aTag.View.Name, aTag.TypeName)
+		setter.SetStringIfEmpty(&aTag.View.Name, field.Name)
+		refViewOptions, err := v.buildViewOptions(aTag)
+		if err != nil {
+			return err
+		}
+		relLinks, refLinks, err := v.buildLinks(aTag)
+		if err != nil {
+			return err
+		}
+		if isSlice(field.Type) {
+			viewOptions = append(viewOptions, WithOneToMany(field.Name, relLinks,
+				NewReferenceView(refLinks, NewView(viewTag.Name, viewTag.Table, refViewOptions...))))
+		} else {
+			viewOptions = append(viewOptions, WithOneToOne(field.Name, relLinks,
+				NewReferenceView(refLinks, NewView(viewTag.Name, viewTag.Table, refViewOptions...))))
+		}
+	}
+	if len(viewOptions) > 0 {
+		ViewOptions(viewOptions).Apply(v)
 	}
 	return nil
 }
 
-func (v *View) buildRefViewOptions(tag *Tag) ([]ViewOption, error) {
-	var refViewOptions []ViewOption
+func (v *View) buildViewOptions(tag *tags.Tag) ([]ViewOption, error) {
+	var options []ViewOption
 	var err error
 	var connector *Connector
-	if tag.RefConnector != "" {
-		if connector, err = v._resource.Connector(tag.RefConnector); err != nil {
-			return nil, fmt.Errorf("%w, ref View '%v' connector: '%v'", err, tag.RefName, tag.RefConnector)
+	var parameters []*state.Parameter
+	if vTag := tag.View; vTag != nil {
+		if vTag.Connector != "" {
+			if connector, err = v._resource.Connector(vTag.Connector); err != nil {
+				return nil, fmt.Errorf("%w, View '%v' connector: '%v'", err, vTag.Name, vTag.Connector)
+			}
+			options = append(options, WithConnector(connector))
 		}
-	} else if v.Connector != nil {
-		connector = v.Connector
+		for _, name := range vTag.Parameters {
+			parameters = append(parameters, state.NewRefParameter(name))
+		}
 	}
-	if connector != nil {
-		refViewOptions = append(refViewOptions, WithConnector(connector))
+	if SQL := tag.SQL; SQL != "" {
+		tmpl := NewTemplate(string(SQL), WithTemplateParameters(parameters...))
+		options = append(options, WithTemplate(tmpl))
 	}
-	return refViewOptions, nil
+
+	return options, nil
+}
+
+func (v *View) buildLinks(aTag *tags.Tag) (Links, Links, error) {
+	if len(aTag.LinkOn) == 0 {
+		return nil, nil, fmt.Errorf("relation not defined")
+	}
+	var rel, ref Links
+	err := aTag.LinkOn.ForEach(func(relField, relColumn, refField, refColumn string, includeColumn *bool) error {
+		rel = append(rel, &Link{Field: relField, Column: relColumn, IncludeColumn: includeColumn})
+		ref = append(ref, &Link{Field: refField, Column: refColumn})
+		return nil
+	})
+	return rel, ref, err
+}
+
+func (v *View) buildRefLinks(aTag *tags.Tag) (Links, error) {
+	if len(aTag.LinkOn) == 0 {
+		return nil, fmt.Errorf("relation not defined")
+	}
+	var result = Links{}
+	err := aTag.LinkOn.ForEach(func(relField, relColumn, refField, refColumn string, includeColumn *bool) error {
+		result = append(result, &Link{Field: relField, Column: relColumn, IncludeColumn: includeColumn})
+		return nil
+	})
+	return result, err
 }
 
 func (v *View) loadFromWithURL(ctx context.Context) error {
@@ -398,10 +443,6 @@ func (v *View) initViewRelations(ctx context.Context, relations []*Relation, not
 		}
 
 		if err := refView.inheritFromViewIfNeeded(ctx); err != nil {
-			return err
-		}
-
-		if err := rel.ensureColumnAliasIfNeeded(); err != nil {
 			return err
 		}
 		if refView.Connector == nil {
@@ -683,9 +724,6 @@ func (v *View) updateViewAndRelations(ctx context.Context, relations []*Relation
 		return err
 	}
 	v.ensureCollector()
-	if err := v.deriveColumnsFromSchema(nil); err != nil {
-		return err
-	}
 	for _, rel := range relations {
 		if err := rel.Init(ctx, v); err != nil {
 			return err
@@ -1059,24 +1097,6 @@ func (v *View) indexSqlxColumnsByFieldName() error {
 	return nil
 }
 
-func (v *View) deriveColumnsFromSchema(relation *Relation) error {
-	if !v.InheritSchemaColumns {
-		return nil
-	}
-
-	newColumns := make([]*Column, 0)
-	columnsIndex := Columns(newColumns).Index(v.CaseFormat)
-
-	if err := v.updateColumn("", shared.Elem(v.Schema.Type()), &newColumns, relation, columnsIndex); err != nil {
-		return err
-	}
-
-	v.Columns = newColumns
-	v._columns = Columns(newColumns).Index(v.CaseFormat)
-
-	return nil
-}
-
 func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, relation *Relation, columnsIndex NamedColumns) error {
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
@@ -1084,7 +1104,6 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 		if !isExported {
 			continue
 		}
-
 		if field.Anonymous {
 			if err := v.updateColumn("", field.Type, columns, relation, columnsIndex); err != nil {
 				return err
@@ -1437,9 +1456,9 @@ func WithTemplate(template *Template) ViewOption {
 }
 
 // WithOneToMany creates to many relation View option
-func WithOneToMany(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
+func WithOneToMany(holder string, on Links, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
-		relation := &Relation{Cardinality: state.Many, Column: column, Holder: holder, Of: ref}
+		relation := &Relation{Cardinality: state.Many, On: on, Holder: holder, Of: ref}
 		for _, opt := range opts {
 			opt(relation)
 		}
@@ -1448,9 +1467,9 @@ func WithOneToMany(holder, column string, ref *ReferenceView, opts ...RelationOp
 }
 
 // WithOneToOne creates to one relation View option
-func WithOneToOne(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
+func WithOneToOne(holder string, on Links, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
-		relation := &Relation{Cardinality: state.One, Column: column, Holder: holder, Of: ref}
+		relation := &Relation{Cardinality: state.One, On: on, Holder: holder, Of: ref}
 		for _, opt := range opts {
 			opt(relation)
 		}
@@ -1494,12 +1513,6 @@ func (o ViewOptions) Apply(view *View) {
 	}
 }
 
-func NewReferenceView(refView, name string, column, field string) *ReferenceView {
-	ret := &ReferenceView{View: *NewRefView(refView), Column: column, Field: field}
-	ret.View.Name = name
-	return ret
-}
-
 func NewRefView(ref string) *View {
 	return &View{Reference: shared.Reference{Ref: ref}}
 }
@@ -1515,7 +1528,7 @@ func NewView(name, table string, opts ...ViewOption) *View {
 func NewExecView(name, table string, template string, parameters []*state.Parameter, opts ...ViewOption) *View {
 	var templateParameters []TemplateOption
 	for i := range parameters {
-		templateOption := WithTemplateParameter(parameters[i])
+		templateOption := WithTemplateParameters(parameters[i])
 		templateParameters = append(templateParameters, templateOption)
 	}
 	opts = append(opts, WithViewKind(ModeExec),
@@ -1524,24 +1537,6 @@ func NewExecView(name, table string, template string, parameters []*state.Parame
 }
 
 type RelationOption func(r *Relation)
-
-func WithRelationColumnNamespace(ns string) RelationOption {
-	return func(r *Relation) {
-		r.ColumnNamespace = ns
-	}
-}
-
-func WithRelationField(name string) RelationOption {
-	return func(r *Relation) {
-		r.Field = name
-	}
-}
-
-func WithRelationIncludeColumn(flag bool) RelationOption {
-	return func(r *Relation) {
-		r.IncludeColumn = flag
-	}
-}
 
 func WithTransforms(transforms marshal.Transforms) ViewOption {
 	return func(v *View) {

@@ -276,7 +276,7 @@ func TestBuilder_Build(t *testing.T) {
 				},
 			},
 			batchData: &view.BatchData{
-				ColumnName:  "user_id",
+				ColumnNames:  "user_id",
 				ValuesBatch: []interface{}{4, 5, 9, 2},
 			},
 			selector: &view.Statelet{
@@ -323,7 +323,7 @@ func TestBuilder_Build(t *testing.T) {
 				},
 			},
 			batchData: &view.BatchData{
-				ColumnName:  "user_id",
+				ColumnNames:  "user_id",
 				ValuesBatch: []interface{}{4, 5, 9, 2},
 			},
 			selector: &view.Statelet{

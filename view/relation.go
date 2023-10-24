@@ -8,7 +8,6 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology/format/text"
 	"github.com/viant/xunsafe"
-	"reflect"
 	"strings"
 )
 
@@ -18,51 +17,135 @@ type (
 	//locators View represents Employee{AccountId: int}, Relation represents Account{Id: int}
 	//We want to create result like:  Employee{Account{Id:int}}
 	Relation struct {
-		Name            string            `json:",omitempty"`
-		Of              *ReferenceView    `json:",omitempty"`
-		Caser           text.CaseFormat   `json:",omitempty"`
-		Cardinality     state.Cardinality `json:",omitempty"` //IsToOne, or Many
-		Column          string            `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
-		Field           string            `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
-		ColumnNamespace string            `json:",omitempty"` //Represents column namespace, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
-		Holder          string            `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
-		IncludeColumn   bool              `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
-
-		hasColumnField bool
-		holderField    *xunsafe.Field
-		columnField    *xunsafe.Field
+		Name        string            `json:",omitempty"`
+		Of          *ReferenceView    `json:",omitempty"`
+		Caser       text.CaseFormat   `json:",omitempty"`
+		Cardinality state.Cardinality `json:",omitempty"` //IsToOne, or Many
+		Link
+		On            Links
+		Holder        string `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
+		IncludeColumn bool   `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
+		holderField   *xunsafe.Field
 	}
 
 	//ReferenceView represents referenced View
 	//In our example it would be Account
 	ReferenceView struct {
-		View          // event type
-		Column string `json:",omitempty"`
-		Field  string `json:",omitempty"`
-		_field *xunsafe.Field
+		View // event type
+		Link
+		On Links `json:",omitempty"`
+	}
+
+	Links []*Link
+
+	Link struct {
+		Namespace     string
+		Column        string
+		Field         string
+		IncludeColumn *bool
+		xField        *xunsafe.Field
 	}
 )
 
-// Init initializes ReferenceView
-func (r *ReferenceView) Init(_ context.Context, _ *Resource) error {
-	r.initializeField()
-	return r.Validate()
+// NewLinks returns links
+func NewLinks(links ...*Link) Links {
+	return links
 }
 
-func (r *Relation) inheritType(rType reflect.Type) error {
-	r.Of.Schema.InheritType(rType)
-	r.Of.initializeField()
-	if err := r.Of.View.deriveColumnsFromSchema(r); err != nil {
-		return err
+// NewLink returns a link
+func NewLink(field, column string) *Link {
+	return &Link{Field: field, Column: column}
+}
+
+func (l Links) Init(name string, v *View) error {
+	rType := v.DataType()
+	for _, link := range l {
+		link.Init()
+		if link.Namespace == "" {
+			link.Namespace = v.Alias
+		}
+		if link.Field != "" {
+			if link.xField = shared.MatchField(rType, link.Field, v.CaseFormat); link.xField == nil {
+				return fmt.Errorf("invalid relation %v, field %v not defined in the struct: %s", name, link.Field, v.DataType().String())
+			}
+		}
+		if link.Field == "" && link.Column != "" {
+			derivedField := v.CaseFormat.Format(link.Column, text.CaseFormatUpperCamel)
+			link.xField = shared.MatchField(v.DataType(), derivedField, v.CaseFormat)
+		}
 	}
 	return nil
 }
 
-func (r *ReferenceView) initializeField() {
-	if r.Field == "" {
-		r.Field = r.Column
+func (l *Link) Validate() error {
+	if l.Column == "" {
+		return fmt.Errorf("reference column can't be empty")
 	}
-	r._field = shared.MatchField(r.Schema.Type(), r.Field, r.CaseFormat)
+	return nil
+}
+
+func (l Links) InColumnExpression() []string {
+	var ret []string
+	for _, link := range l {
+		if link.Namespace != "" {
+			ret = append(ret, link.Namespace+"."+link.Column)
+			continue
+		}
+		ret = append(ret, link.Column)
+	}
+	return ret
+}
+
+func (l Links) Validate() error {
+	for _, link := range l {
+		if err := link.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (l Links) Namespace() string {
+	for _, link := range l {
+		if link.Namespace != "" {
+			return link.Namespace
+		}
+	}
+	return ""
+}
+
+func (l *Link) Init() {
+	l.ensureNamespace()
+}
+
+func (l *Link) ensureNamespace() {
+	if l.Namespace != "" {
+		return
+	}
+	if index := strings.Index(l.Column, "."); index != -1 {
+		l.Namespace = l.Column[:index]
+		l.Column = l.Column[index+1:]
+	}
+}
+
+// Init initializes ReferenceView
+func (r *ReferenceView) Init(_ context.Context, aView *View) (err error) {
+	if len(r.On) == 0 {
+		r.On = Links{&r.Link}
+	} else {
+		r.Link = *r.On[0]
+	}
+	if err = r.On.Init(r.Name, aView); err != nil {
+		return err
+	}
+	return r.On.Validate()
+}
+
+func (r *Relation) inheritType() {
+	if r.Of.Schema != nil && r.Of.Schema.Type() != nil {
+		return
+	}
+	r.Of.Schema.InheritType(r.holderField.Type)
 }
 
 // Validate checks if ReferenceView is valid
@@ -75,48 +158,35 @@ func (r *ReferenceView) Validate() error {
 
 // Init initializes Relation
 func (r *Relation) Init(ctx context.Context, parent *View) error {
-	if r.Field == "" {
-		r.Field = r.Column
-	}
-
-	field := shared.MatchField(parent.DataType(), r.Holder, r.Of.View.CaseFormat)
-
-	if err := r.inheritType(field.Type); err != nil {
+	if err := r.initParentLink(parent); err != nil {
 		return err
 	}
-
-	if err := r.initHolder(parent); err != nil {
-		return err
-	}
-
-	view := &r.Of.View
-	view.updateColumnTypes()
-
-	if err := view.indexSqlxColumnsByFieldName(); err != nil {
-		return err
-	}
-
-	view.indexColumns()
-
-	return r.Validate()
-}
-
-func (r *Relation) initHolder(v *View) error {
-	dataType := v.DataType()
-	r.holderField = shared.MatchField(dataType, r.Holder, v.CaseFormat)
+	r.holderField = shared.MatchField(parent.DataType(), r.Holder, r.Of.View.CaseFormat)
 	if r.holderField == nil {
 		return fmt.Errorf("failed to lookup holderField %v", r.Holder)
 	}
-
-	columnName := r.Of.CaseFormat.Format(r.Field, text.CaseFormatUpperCamel)
-	r.columnField = shared.MatchField(v.DataType(), columnName, v.CaseFormat)
-
-	r.hasColumnField = r.columnField != nil
-	if r.Cardinality == state.Many && !r.hasColumnField {
-		return fmt.Errorf("column %v doesn't have corresponding _field in the struct: %v", columnName, v.DataType().String())
+	r.inheritType()
+	view := &r.Of.View
+	if err := r.Of.Init(ctx, view); err != nil {
+		return err
 	}
 
-	return nil
+	//TODO analyze if still needed, given column are inherited from schema or schema is ingerited from columns
+	view.updateColumnTypes()
+	if err := view.indexSqlxColumnsByFieldName(); err != nil {
+		return err
+	}
+	view.indexColumns()
+	return r.Validate()
+}
+
+func (r *Relation) initParentLink(v *View) error {
+	if len(r.On) == 0 {
+		r.On = append(r.On, &r.Link)
+	} else {
+		r.Link = *r.On[0]
+	}
+	return r.On.Init(r.Name, v)
 }
 
 // Validate checks if Relation is valid
@@ -132,7 +202,7 @@ func (r *Relation) Validate() error {
 	if r.Of == nil {
 		return fmt.Errorf("relation of can't be nil")
 	}
-	if err := r.Of.Validate(); err != nil {
+	if err := r.Of.On.Validate(); err != nil {
 		return err
 	}
 	if r.Holder == "" {
@@ -142,22 +212,6 @@ func (r *Relation) Validate() error {
 	if strings.Title(r.Holder)[0] != r.Holder[0] {
 		return fmt.Errorf("holder has to start with uppercase")
 	}
-
-	return nil
-}
-
-func (r *Relation) ensureColumnAliasIfNeeded() error {
-	columnSegments := strings.Split(r.Column, ".")
-	if len(columnSegments) > 2 {
-		return fmt.Errorf("invalid column name, supported only 0 or 1 dots are allowed")
-	}
-
-	if len(columnSegments) == 1 {
-		return nil
-	}
-
-	r.Column = columnSegments[1]
-	r.ColumnNamespace = columnSegments[0]
 
 	return nil
 }
@@ -188,56 +242,17 @@ func (v *View) applyOptions(options []Option) {
 // RelationsSlice represents slice of Relation
 type RelationsSlice []*Relation
 
-// Index indexes Relations by Relation.Holder
-func (r RelationsSlice) Index() map[string]*Relation {
-	result := make(map[string]*Relation)
-	for i, rel := range r {
-		keys := shared.KeysOf(rel.Holder, true)
-
-		for _, key := range keys {
-			result[key] = r[i]
-		}
-	}
-
-	return result
-}
-
-// PopulateWithResolve filters RelationsSlice by the columns that won't be present in Database
-// due to the removing StructField after assembling nested StructType.
-func (r RelationsSlice) PopulateWithResolve() []*Relation {
-	result := make([]*Relation, 0)
-	for i, rel := range r {
-		if !rel.hasColumnField {
-			result = append(result, r[i])
-		}
-	}
-
-	return result
-}
-
-// Columns extract Relation.Column from RelationsSlice
-func (r RelationsSlice) Columns() []string {
-	resolverColumns := make([]string, 0)
-	for i := range r {
-		resolverColumns = append(resolverColumns, r[i].Column)
-	}
-	return resolverColumns
-}
-
 // PopulateWithVisitor filters RelationsSlice by the columns that will be present in Database, and because of that
 // they wouldn't be resolved as unmapped columns.
 func (r RelationsSlice) PopulateWithVisitor() []*Relation {
 	result := make([]*Relation, 0)
-	for i, rel := range r {
-		if rel.hasColumnField {
-			result = append(result, r[i])
-		}
+	for i, _ := range r {
+		result = append(result, r[i])
 	}
-
 	return result
 }
 
-// NwReferenceView creates a reference View
-func NwReferenceView(field, column string, view *View) *ReferenceView {
-	return &ReferenceView{View: *view, Column: column, Field: field}
+// NewReferenceView creates a reference View
+func NewReferenceView(links Links, view *View) *ReferenceView {
+	return &ReferenceView{View: *view, On: links}
 }

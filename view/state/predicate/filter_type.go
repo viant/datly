@@ -1,16 +1,17 @@
 package predicate
 
 import (
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/xdatly/predicate"
 	"reflect"
 )
 
 // FilterType represents fitler type
 type FilterType struct {
-	*Tag
 	IncludeTag    string
 	ExcludeTag    string
 	ParameterType reflect.Type
+	Tag           *tags.Predicate
 }
 
 func (f *FilterType) Type() reflect.Type {

@@ -123,7 +123,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	}
 
 	batchData := s.batchData(collector)
-	if batchData.ColumnName != "" && len(batchData.Values) == 0 {
+	if len(batchData.ColumnNames) != 0 && len(batchData.Values) == 0 {
 		return
 	}
 
@@ -172,7 +172,7 @@ func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *view.Colle
 func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 	batchData := &view.BatchData{}
 
-	batchData.Values, batchData.ColumnName = collector.ParentPlaceholders()
+	batchData.Values, batchData.ColumnNames = collector.ParentPlaceholders()
 	batchData.ParentReadSize = len(batchData.Values)
 
 	return batchData

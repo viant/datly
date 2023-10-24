@@ -3,6 +3,7 @@ package inference
 import (
 	"fmt"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/sqlparser"
 	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
@@ -155,39 +156,37 @@ func (p *Parameter) IndexVariable() string {
 }
 
 // TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
-func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error) {
+func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*Parameter, error) {
 	SQL := extractSQL(field)
 	if field.Tag == nil {
 		return nil, nil
 	}
+
 	structTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
-	parameterTag := structTag.Get(state.TagName)
-	if parameterTag == "" {
-		return nil, nil
-	}
-	tag, err := state.ParseTag(parameterTag, nil)
-	if err != nil {
+	aTag, err := tags.ParseStateTags(structTag, nil)
+	if err != nil || aTag.Parameter == nil {
 		return nil, err
 	}
+	pTag := aTag.Parameter
 	param := &Parameter{
 		SQL: SQL,
 	}
 	//	updateSQLTag(field, SQL)
 	param.Name = field.Names[0].Name
-	if tag.Name != "" {
-		param.Name = tag.Name
+	if pTag.Name != "" {
+		param.Name = pTag.Name
 	}
-	param.In = &state.Location{Name: tag.In, Kind: state.Kind(tag.Kind)}
+	param.When = pTag.When
+	param.Lazy = pTag.Lazy
+	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
 	cardinality := state.One
 	if sliceExpr, ok := field.Type.(*ast.ArrayType); ok {
 		field.Type = sliceExpr.Elt
 		cardinality = state.Many
 	}
-
 	if ptr, ok := field.Type.(*ast.StarExpr); ok {
 		field.Type = ptr.X
 	}
-
 	fieldType, err := xreflect.Node{Node: field.Type}.Stringify()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create param: %v due to %w", param.Name, err)

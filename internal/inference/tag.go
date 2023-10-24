@@ -2,7 +2,7 @@ package inference
 
 import (
 	"fmt"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/io"
 	"reflect"
@@ -18,7 +18,7 @@ type (
 	}
 )
 
-//Append appends tag value element
+// Append appends tag value element
 func (e *TagValue) Append(element string) {
 	if element == "" {
 		return
@@ -26,7 +26,7 @@ func (e *TagValue) Append(element string) {
 	*e = append(*e, element)
 }
 
-//Set sets tag value
+// Set sets tag value
 func (t *Tags) Set(tag string, value TagValue) {
 	if len(value) == 0 {
 		return
@@ -138,28 +138,41 @@ func (t *Tags) buildRelation(spec *Spec, relation *Relation) {
 	if join == nil || relation.KeyField == nil || relation.ParentField == nil {
 		return
 	}
-	datlyTag := TagValue{}
-	datlyTag.Append(fmt.Sprintf("relName=%s", join.Alias))
-	datlyTag.Append(fmt.Sprintf("relColumn=%s", relation.ParentField.Column.Name))
-	datlyTag.Append(fmt.Sprintf("relField=%s", relation.ParentField.Name))
-	if spec.Table != "" {
-		datlyTag.Append(fmt.Sprintf("refTable=%v", spec.Table))
+	viewTag := tags.View{
+		Name:  join.Alias,
+		Table: spec.Table,
 	}
-	datlyTag.Append(fmt.Sprintf("refColumn=%s", relation.KeyField.Column.Name))
-	datlyTag.Append(fmt.Sprintf("refField=%s", relation.KeyField.Name))
-	if relation.KeyField.Column.Namespace != "" {
-		datlyTag.Append(fmt.Sprintf("refns=%s", relation.KeyField.Column.Namespace))
-	}
+	joinTag := tags.LinkOn{}
+	joinTag = joinTag.Append(
+		tags.WithRelLink(relation.ParentField.Column.Name, relation.ParentField.Name, nil),
+		tags.WithRefLink(relation.KeyField.Column.Name, relation.KeyField.Name),
+	)
+
+	//datlyTag.Append(fmt.Sprintf("relName=%s", join.Alias))
+	//datlyTag.Append(fmt.Sprintf("relColumn=%s", relation.ParentField.Column.Name))
+	//datlyTag.Append(fmt.Sprintf("relField=%s", relation.ParentField.Name))
+	//if spec.Table != "" {
+	//	datlyTag.Append(fmt.Sprintf("refTable=%v", spec.Table))
+	//}
+	//datlyTag.Append(fmt.Sprintf("refColumn=%s", relation.KeyField.Column.Name))
+	//datlyTag.Append(fmt.Sprintf("refField=%s", relation.KeyField.Name))
+	//if relation.KeyField.Column.Namespace != "" {
+	//	datlyTag.Append(fmt.Sprintf("refns=%s", relation.KeyField.Column.Namespace))
+	//}
+
 	sqlTag := TagValue{}
 	if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {
 		rawSQL = strings.Replace(rawSQL, "("+spec.Table+")", spec.Table, 1)
 		sqlTag.Append(strings.ReplaceAll(rawSQL, "\n", " "))
 	}
-	t.Set("datly", datlyTag)
-	t.Set("sql", sqlTag)
+
+	t.Set(tags.LinkOnTag, []string(joinTag))
+
+	t.Set(tags.ViewTag, []string{string(viewTag.Tag().Values)})
+	t.Set(tags.SQLTag, sqlTag)
 }
 
-//Stringify return text representation of struct tag
+// Stringify return text representation of struct tag
 func (t *Tags) Stringify() string {
 	if len(t.order) == 0 {
 		return ""
@@ -178,14 +191,6 @@ func (t *Tags) Stringify() string {
 	}
 	//builder.WriteByte('`')
 	return builder.String()
-}
-
-func DatlyTag(tag reflect.StructTag) *view.Tag {
-	datlyTagString, _ := tag.Lookup("datly")
-	if datlyTagString == "" {
-		return nil
-	}
-	return view.ParseTag(datlyTagString)
 }
 
 func SqlxTag(tag reflect.StructTag) *io.Tag {

@@ -261,33 +261,39 @@ func (b *Builder) updateColumnsIn(params *view.CriteriaParam, view *view.View, r
 	if exclude.ColumnsIn {
 		return
 	}
-
-	columnsIn := columnsInMeta.has()
-
-	if batchData == nil || batchData.ColumnName == "" {
+	if batchData == nil || len(batchData.ColumnNames) == 0 {
 		return
-	}
-
-	alias := b.viewAlias(view)
-	if hasCriteria || columnsIn {
-		if relation.ColumnNamespace != "" {
-			alias = relation.ColumnNamespace + "."
-		} else {
-			alias = ""
-		}
 	}
 
 	sb := strings.Builder{}
 	sb.WriteString(" ")
-	sb.WriteString(alias)
-	sb.WriteString(batchData.ColumnName)
-	sb.WriteString(inFragment)
+	columns := len(batchData.ColumnNames)
 
-	for i := range batchData.ValuesBatch {
+	switch columns {
+	case 1:
+		sb.WriteString(batchData.ColumnNames[0])
+	default:
+		sb.WriteString("(")
+		for _, column := range batchData.ColumnNames {
+			sb.WriteString(column)
+		}
+		sb.WriteString(")")
+	}
+	sb.WriteString(inFragment)
+	for i := 0; i < len(batchData.ValuesBatch); i += columns {
 		if i != 0 {
 			sb.WriteString(separatorFragment)
 		}
-		sb.WriteString(placeholderFragment)
+		switch columns {
+		case 1:
+			sb.WriteString(placeholderFragment)
+		default:
+			sb.WriteString("(")
+			for j := 0; j < columns; j++ {
+				sb.WriteString(placeholderFragment)
+			}
+			sb.WriteString(")")
+		}
 	}
 	sb.WriteString(encloseFragment)
 	params.ColumnsIn = sb.String()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"reflect"
 	"strings"
@@ -116,18 +117,19 @@ func (t *Type) buildParameter(field reflect.StructField) (*Parameter, error) {
 
 func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error) {
 	result := &Parameter{}
-	paramTag, err := ParseTag(field.Tag.Get(TagName), fs)
+	aTag, err := tags.ParseStateTags(field.Tag, fs)
 	if err != nil {
 		return nil, err
 	}
+	pTag := aTag.Parameter
 	result.Name = field.Name
-	if paramTag.Name != "" {
-		result.Name = paramTag.Name
+	if pTag.Name != "" {
+		result.Name = pTag.Name
 	}
 	result.Tag = string(field.Tag)
-	result.In = &Location{Kind: Kind(paramTag.Kind), Name: paramTag.In}
+	result.In = &Location{Kind: Kind(pTag.Kind), Name: pTag.In}
 	result.Schema = NewSchema(field.Type)
-	BuildPredicate(field.Tag, result)
+	BuildPredicate(aTag, result)
 	return result, nil
 }
 

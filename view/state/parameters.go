@@ -5,8 +5,9 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state/predicate"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
-	"github.com/viant/structology/tags"
+	stags "github.com/viant/structology/tags"
 	"github.com/viant/velty"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	SetMarkerTag      = `setMarker:"true" xls:"-" sqlx:"-" diff:"-" xmlify:"-"`
+	SetMarkerTag      = `setMarker:"true" format:"-" sqlx:"-" diff:"-" `
 	TypedSetMarkerTag = SetMarkerTag + ` typeName:"%s"`
 )
 
@@ -350,15 +351,16 @@ func (p Parameters) PredicateStructType() reflect.Type {
 		if len(candidate.Predicates) == 0 {
 			continue
 		}
-		tagText, _ := reflect.StructTag(candidate.Tag).Lookup(predicate.TagName)
-		tag := predicate.ParseTag(tagText, candidate.Name)
-		filterType, ok := fieldTypes[tag.Name]
+		aTag, _ := tags.ParseStateTags(reflect.StructTag(candidate.Tag), nil)
+		pTag := aTag.EnsurePredicate()
+		pTag.Init(candidate.Name)
+		filterType, ok := fieldTypes[pTag.Filter]
 		if !ok {
-			filterType = &predicate.FilterType{ParameterType: candidate.OutputType(), Tag: tag}
-			fieldTypes[tag.Name] = filterType
+			filterType = &predicate.FilterType{ParameterType: candidate.OutputType(), Tag: pTag}
+			fieldTypes[pTag.Filter] = filterType
 			fields = append(fields, filterType)
 		}
-		if tag.Exclusion {
+		if pTag.Exclusion {
 			filterType.ExcludeTag = candidate.Tag
 		} else {
 			filterType.IncludeTag = candidate.Tag
@@ -370,15 +372,14 @@ func (p Parameters) PredicateStructType() reflect.Type {
 
 	var structFields []reflect.StructField
 	for _, field := range fields {
-		fieldTags := tags.NewTags(field.StructTagTag())
+		fieldTags := stags.NewTags(field.StructTagTag())
 		fieldTags.SetIfNotFound("json", ",omitempty")
 		structFields = append(structFields, reflect.StructField{
-			Name: field.Name,
+			Name: field.Tag.Filter,
 			Type: field.Type(),
 			Tag:  reflect.StructTag(fieldTags.Stringify()),
 		})
 	}
-
 	if len(structFields) == 0 {
 		return emptyStruct
 	}

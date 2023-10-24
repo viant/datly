@@ -2,7 +2,7 @@ package expand
 
 import (
 	"context"
-	"github.com/viant/datly/view/state/predicate"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"strings"
@@ -167,10 +167,14 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 }
 
 func (p *Predicate) appendFilter(selector *structology.Selector, value []interface{}) {
-	tagText, _ := selector.Tag().Lookup(predicate.TagName)
-	predicateTag := predicate.ParseTag(tagText, selector.Name())
-	filter := p.ctx.Filters.LookupOrAdd(predicateTag.Name)
-	if predicateTag.Exclusion {
+	aTag, _ := tags.ParseStateTags(selector.Tag(), nil)
+	if aTag.Predicate == nil {
+		aTag.Predicate = &tags.Predicate{}
+	}
+	pTag := aTag.Predicate
+	pTag.Init(selector.Name())
+	filter := p.ctx.Filters.LookupOrAdd(pTag.Filter)
+	if pTag.Exclusion {
 		filter.Exclude = value
 	} else {
 		filter.Include = value

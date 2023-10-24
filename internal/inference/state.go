@@ -3,10 +3,10 @@ package inference
 import (
 	"fmt"
 	"github.com/viant/datly/utils/types"
-	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/data"
@@ -480,7 +480,7 @@ func (s *State) AdjustOutput() error {
 		return fmt.Errorf("invalid output type - missing schema type")
 	}
 	sType := structology.NewStateType(outputType)
-	outputParameters := sType.MatchByTag(state.TagName)
+	outputParameters := sType.MatchByTag(tags.ParameterTag)
 
 	var adjustedMap = map[string]bool{}
 	var adjusted State
@@ -560,19 +560,19 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 				return nil
 			}
 			fieldTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
-			datlyTag, _ := fieldTag.Lookup(view.DatlyTag)
-			if datlyTag == "" {
+			aTag, _ := tags.ParseStateTags(fieldTag, nil)
+			if aTag.Parameter == nil {
 				return nil
 			}
-			tag := view.ParseTag(datlyTag)
-			if tag.Kind == "" {
+			pTag := aTag.Parameter
+			if pTag.Kind == "" {
 				return nil
 			}
-			param, err := buildParameter(field, types)
+			param, err := buildParameter(field, aTag, types)
 			if param == nil {
 				return err
 			}
-			state.BuildPredicate(fieldTag, &param.Parameter)
+			state.BuildPredicate(aTag, &param.Parameter)
 			aState.Append(param)
 			return nil
 		}))

@@ -185,10 +185,13 @@ func (r *Collector) valueIndexer(ctx context.Context, visitorRelations []*Relati
 	return func(value interface{}) error {
 		ptr := xunsafe.AsPointer(value)
 		for _, rel := range distinctRelations {
-			fieldValue := rel.columnField.Value(ptr)
-			r.indexValueByRel(fieldValue, rel, r.indexCounter)
+			for _, link := range rel.On {
+				if field := link.xField; field != nil {
+					fieldValue := field.Value(ptr)
+					r.indexValueByRel(fieldValue, rel, r.indexCounter)
+				}
+			}
 		}
-
 		r.indexCounter++
 		if r.view._codec != nil {
 			r.appender.Append(value)
@@ -236,31 +239,32 @@ func (r *Collector) indexValueToPosition(rel *Relation, fieldValue interface{}, 
 }
 
 func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error {
-	keyField := relation.Of._field
+	links := relation.Of.On
 	holderField := relation.holderField
 	dest := r.parent.Dest()
 	destPtr := xunsafe.AsPointer(dest)
-	var key interface{}
+	var aKey interface{}
 
 	return func(owner interface{}) error {
-		key = keyField.Interface(xunsafe.AsPointer(owner))
-		key = io.NormalizeKey(key)
-		valuePosition := r.parentValuesPositions(relation.Column)
-		positions, ok := valuePosition[key]
-		if !ok {
-			return nil
-		}
-
-		for _, index := range positions {
-			item := r.parent.slice.ValuePointerAt(destPtr, index)
-			holderField.SetValue(xunsafe.AsPointer(item), owner)
+		for _, link := range links {
+			aKey = link.xField.Interface(xunsafe.AsPointer(owner))
+			aKey = io.NormalizeKey(aKey)
+			valuePosition := r.parentValuesPositions(link.Column)
+			positions, ok := valuePosition[aKey]
+			if !ok {
+				return nil
+			}
+			for _, index := range positions {
+				item := r.parent.slice.ValuePointerAt(destPtr, index)
+				holderField.SetValue(xunsafe.AsPointer(item), owner)
+			}
 		}
 		return nil
 	}
 }
 
 func (r *Collector) visitorMany(relation *Relation) func(value interface{}) error {
-	keyField := relation.Of._field
+	links := relation.Of.On
 	holderField := relation.holderField
 	var xType *xunsafe.Type
 	var values *[]interface{}
@@ -269,37 +273,36 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 	destPtr := xunsafe.AsPointer(dest)
 
 	return func(owner interface{}) error {
-		if keyField == nil && xType == nil {
-			xType = r.types[relation.Of.Column]
-			values = r.values[relation.Of.Column]
+		for i, link := range links {
+			keyField := link.xField
+			if keyField == nil && xType == nil {
+				xType = r.types[link.Column]
+				values = r.values[link.Column]
+			}
+
+			if keyField != nil {
+				key = keyField.Interface(xunsafe.AsPointer(owner))
+			} else {
+				key = xType.Deref((*values)[r.manyCounter])
+				r.manyCounter++
+			}
+			valuePosition := r.parentValuesPositions(relation.On[i].Column)
+			key = io.NormalizeKey(key)
+			positions, ok := valuePosition[key]
+			if !ok {
+				return nil
+			}
+			for _, index := range positions {
+				parentItem := r.parent.slice.ValuePointerAt(destPtr, index)
+				r.Lock().Lock()
+				sliceAddPtr := holderField.Pointer(xunsafe.AsPointer(parentItem))
+				slice := relation.Of.Schema.Slice()
+				appender := slice.Appender(sliceAddPtr)
+				appender.Append(owner)
+				r.Lock().Unlock()
+				r.view.Logger.ObjectReconciling(dest, owner, parentItem, index)
+			}
 		}
-
-		if keyField != nil {
-			key = keyField.Interface(xunsafe.AsPointer(owner))
-		} else {
-			key = xType.Deref((*values)[r.manyCounter])
-			r.manyCounter++
-		}
-
-		valuePosition := r.parentValuesPositions(relation.Column)
-
-		key = io.NormalizeKey(key)
-		positions, ok := valuePosition[key]
-		if !ok {
-			return nil
-		}
-
-		for _, index := range positions {
-			parentItem := r.parent.slice.ValuePointerAt(destPtr, index)
-			r.Lock().Lock()
-			sliceAddPtr := holderField.Pointer(xunsafe.AsPointer(parentItem))
-			slice := relation.Of.Schema.Slice()
-			appender := slice.Appender(sliceAddPtr)
-			appender.Append(owner)
-			r.Lock().Unlock()
-			r.view.Logger.ObjectReconciling(dest, owner, parentItem, index)
-		}
-
 		return nil
 	}
 }
@@ -410,6 +413,8 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 			return nil
 		}, nil
 	}
+	//TODO refactor it so the multi relation fields can be used here
+
 	fieldCaseFormat := text.DetectCaseFormat(rel.Of.Field)
 	childMetaFieldName := fieldCaseFormat.Format(rel.Of.Field, text.CaseFormatUpperCamel)
 	metaChildKeyField := xunsafe.FieldByName(templateMeta.Schema.Type(), childMetaFieldName)
@@ -480,32 +485,36 @@ func (r *Collector) MergeData() {
 }
 
 func (r *Collector) mergeToParent() {
-	valuePositions := r.parentValuesPositions(r.relation.Column)
-	destPtr := xunsafe.AsPointer(r.dest)
-	field := r.relation.Of._field
-	holderField := r.relation.holderField
-	parentSlice := r.parent.slice
-	parentDestPtr := xunsafe.AsPointer(r.parent.dest)
+	links := r.relation.Of.On
 
-	for i := 0; i < r.slice.Len(destPtr); i++ {
-		value := r.slice.ValuePointerAt(destPtr, i)
-		key := io.NormalizeKey(field.Value(xunsafe.AsPointer(value)))
-		positions, ok := valuePositions[key]
-		if !ok {
-			continue
-		}
+	for i, link := range links {
+		valuePositions := r.parentValuesPositions(r.relation.On[i].Column)
+		destPtr := xunsafe.AsPointer(r.dest)
+		holderField := r.relation.holderField
+		parentSlice := r.parent.slice
+		parentDestPtr := xunsafe.AsPointer(r.parent.dest)
 
-		for _, position := range positions {
-			parentValue := parentSlice.ValuePointerAt(parentDestPtr, position)
-			if r.relation.Cardinality == state.One {
-				at := r.slice.ValuePointerAt(destPtr, i)
-				holderField.SetValue(xunsafe.AsPointer(parentValue), at)
-			} else if r.relation.Cardinality == state.Many {
-				r.Lock().Lock()
-				appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
-				appender.Append(value)
-				r.Lock().Unlock()
-				r.view.Logger.ObjectReconciling(r.dest, value, parentValue, position)
+		field := link.xField
+		for i := 0; i < r.slice.Len(destPtr); i++ {
+			value := r.slice.ValuePointerAt(destPtr, i)
+			key := io.NormalizeKey(field.Value(xunsafe.AsPointer(value)))
+			positions, ok := valuePositions[key]
+			if !ok {
+				continue
+			}
+
+			for _, position := range positions {
+				parentValue := parentSlice.ValuePointerAt(parentDestPtr, position)
+				if r.relation.Cardinality == state.One {
+					at := r.slice.ValuePointerAt(destPtr, i)
+					holderField.SetValue(xunsafe.AsPointer(parentValue), at)
+				} else if r.relation.Cardinality == state.Many {
+					r.Lock().Lock()
+					appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
+					appender.Append(value)
+					r.Lock().Unlock()
+					r.view.Logger.ObjectReconciling(r.dest, value, parentValue, position)
+				}
 			}
 		}
 	}
@@ -515,53 +524,53 @@ func (r *Collector) mergeToParent() {
 // that the relation was created from, otherwise empty slice and empty string
 // i.e. if locators Collector collects Employee{AccountId: int}, Column.Name is account_id and Collector collects Account
 // it will extract and return all the AccountId that were accumulated and account_id
-func (r *Collector) ParentPlaceholders() ([]interface{}, string) {
+func (r *Collector) ParentPlaceholders() ([]interface{}, []string) {
 	if r.parent == nil || r.parent.SupportsParallel() {
-		return []interface{}{}, ""
+		return []interface{}{}, nil
 	}
-	column := r.relation.Of.Column
-	if r.relation.columnField != nil {
-		destPtr := xunsafe.AsPointer(r.parent.dest)
-		sliceLen := r.parent.slice.Len(destPtr)
-		result := make([]interface{}, 0)
-		for i := 0; i < sliceLen; i++ {
-			parent := r.parent.slice.ValuePointerAt(destPtr, i)
-			fieldValue := r.relation.columnField.Value(xunsafe.AsPointer(parent))
-			switch actual := fieldValue.(type) {
-			case []*int64:
-				for j := range actual {
-					result = append(result, int(*actual[j]))
+	destPtr := xunsafe.AsPointer(r.parent.dest)
+	sliceLen := r.parent.slice.Len(destPtr)
+	result := make([]interface{}, 0)
+outer:
+	for i := 0; i < sliceLen; i++ {
+		parent := r.parent.slice.ValuePointerAt(destPtr, i)
+		for _, link := range r.relation.On {
+			field := link.xField
+			if field != nil {
+				fieldValue := field.Value(xunsafe.AsPointer(parent))
+				switch actual := fieldValue.(type) {
+				case []*int64:
+					for j := range actual {
+						result = append(result, int(*actual[j]))
+					}
+				case []int64:
+					for j := range actual {
+						result = append(result, int(actual[j]))
+					}
+				case []int:
+					for j := range actual {
+						result = append(result, actual[j])
+					}
+				case []string:
+					for j := range actual {
+						result = append(result, actual[j])
+					}
+				default:
+					result = append(result, fieldValue)
 				}
-			case []int64:
-				for j := range actual {
-					result = append(result, int(actual[j]))
-				}
-			case []int:
-				for j := range actual {
-					result = append(result, actual[j])
-				}
-			case []string:
-				for j := range actual {
-					result = append(result, actual[j])
-				}
-			default:
-				result = append(result, fieldValue)
+				continue
 			}
+			positions := r.parentValuesPositions(r.relation.On[i].Column)
+			result := make([]interface{}, len(positions))
+			counter := 0
+			for key := range positions {
+				result[counter] = key
+				counter++
+			}
+			continue outer
 		}
-
-		return result, column
-	} else {
-		positions := r.parentValuesPositions(r.relation.Column)
-		result := make([]interface{}, len(positions))
-		counter := 0
-
-		for key := range positions {
-			result[counter] = key
-			counter++
-		}
-		return result, column
-
 	}
+	return result, r.relation.Of.On.InColumnExpression()
 }
 
 func (r *Collector) WaitIfNeeded() {
