@@ -2,7 +2,7 @@ package jsontab
 
 import (
 	"fmt"
-	"github.com/viant/datly/gateway/router/marshal/json"
+	"github.com/viant/structology/format"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -10,8 +10,6 @@ import (
 	"time"
 	"unsafe"
 )
-
-const RFC3339NanoCustomized = "2006-01-02T15:04:05.000Z07:00"
 
 type (
 	Column struct {
@@ -69,11 +67,20 @@ func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsaf
 
 func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Pointer) (Record, error) {
 	var record Record
+	var timeLayout = time.RFC3339
+
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
-		tag := json.Parse(field.Tag.Get("json"))
-		if tag.Transient {
+		tag, err := format.Parse(field.Tag, "json")
+		if err != nil {
+			return nil, err
+		}
+		if tag.Ignore {
 			continue
+		}
+
+		if tag.TimeLayout != "" {
+			timeLayout = tag.TimeLayout
 		}
 
 		value := ""
@@ -82,7 +89,6 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 			value = field.String(sourcePtr)
 		case reflect.Int:
 			value = strconv.Itoa(field.Int(sourcePtr))
-
 		case reflect.Float64:
 			value = strconv.FormatFloat(field.Float64(sourcePtr), 'f', 10, 64)
 		case reflect.Float32:
@@ -110,11 +116,11 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 				switch field.Type {
 				case xreflect.TimePtrType:
 					if ts, ok := v.(*time.Time); ok && ts != nil {
-						value = ts.Format(RFC3339NanoCustomized)
+						value = ts.Format(timeLayout)
 					}
 				case xreflect.TimeType:
 					if ts, ok := v.(time.Time); ok {
-						value = ts.Format(RFC3339NanoCustomized)
+						value = ts.Format(timeLayout)
 					}
 				default:
 					return nil, fmt.Errorf("jsontab: usnupported type: %T", v)
@@ -125,11 +131,11 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 			switch field.Type {
 			case xreflect.TimePtrType:
 				if ts, ok := v.(*time.Time); ok && ts != nil {
-					value = ts.Format(RFC3339NanoCustomized)
+					value = ts.Format(timeLayout)
 				}
 			case xreflect.TimeType:
 				if ts, ok := v.(time.Time); ok {
-					value = ts.Format(RFC3339NanoCustomized)
+					value = ts.Format(timeLayout)
 				}
 			default:
 				return nil, fmt.Errorf("jsontab: usnupported type: %T", v)
@@ -144,14 +150,14 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
 
-		tag := json.Parse(field.Tag.Get("json"))
-		if tag.Transient {
+		tag, err := format.Parse(field.Tag, "json")
+		if err != nil || tag.Ignore {
 			continue
 		}
 
 		column := &Column{}
-		if tag.FieldName != "" {
-			column.Name = tag.FieldName
+		if tag.Name != "" {
+			column.Name = tag.Name
 		} else {
 			column.Name = field.Name
 		}
