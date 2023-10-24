@@ -50,7 +50,7 @@ require (
 )
 
 require (
-	github.com/viant/structology v0.5.5-0.20231023195833-b06ae878545a
+	github.com/viant/structology v0.5.5
 	github.com/viant/xdatly v0.3.1-0.20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20231013011318-82109bd80ac8

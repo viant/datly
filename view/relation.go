@@ -21,6 +21,7 @@ type (
 		Of          *ReferenceView    `json:",omitempty"`
 		Caser       text.CaseFormat   `json:",omitempty"`
 		Cardinality state.Cardinality `json:",omitempty"` //IsToOne, or Many
+		//deprecated, use On instead
 		Link
 		On            Links
 		Holder        string `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
@@ -32,6 +33,7 @@ type (
 	//In our example it would be Account
 	ReferenceView struct {
 		View // event type
+		//deprecated use On instead
 		Link
 		On Links `json:",omitempty"`
 	}
