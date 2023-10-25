@@ -78,7 +78,7 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 	compactedParameters.FlagOutput()
 
 	for _, parameter := range outputParameters {
-		err := s.updateOutputParameterSchema(parameter, typesRegistry)
+		err := s.updateOutputParameterSchema(parameter, typesRegistry, resource)
 		if err != nil {
 			return err
 		}
@@ -104,10 +104,10 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 	return nil
 }
 
-func (s *Service) updateOutputParameterSchema(parameter *state.Parameter, typesRegistry *xreflect.Types) error {
+func (s *Service) updateOutputParameterSchema(parameter *state.Parameter, typesRegistry *xreflect.Types, resource *Resource) error {
 	if len(parameter.Object) > 0 {
 		for _, item := range parameter.Object {
-			if err := s.updateOutputParameterSchema(item, typesRegistry); err != nil {
+			if err := s.updateOutputParameterSchema(item, typesRegistry, resource); err != nil {
 				return err
 			}
 		}
@@ -115,20 +115,17 @@ func (s *Service) updateOutputParameterSchema(parameter *state.Parameter, typesR
 	}
 	if len(parameter.Repeated) > 0 {
 		for _, item := range parameter.Repeated {
-			if err := s.updateOutputParameterSchema(item, typesRegistry); err != nil {
+			if err := s.updateOutputParameterSchema(item, typesRegistry, resource); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
 	if parameter.Schema.Type() != nil && parameter.Schema.Type().Kind() != reflect.Interface {
+		resource.AddParameterType(parameter)
 		return nil
 	}
-	typeName := parameter.Schema.DataType
-	if typeName == "" {
-		typeName = parameter.Schema.Name
-	}
-	rType, err := types.LookupType(typesRegistry.Lookup, typeName)
+	rType, err := types.LookupType(typesRegistry.Lookup, parameter.Schema.TypeName())
 	if err != nil {
 		return fmt.Errorf("failed to build output, %s %w", parameter.Name, err)
 	}
