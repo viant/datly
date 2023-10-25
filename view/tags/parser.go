@@ -27,7 +27,7 @@ func ParseStateTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
 }
 
 func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error) {
-	ret := &Tag{fs: afs.New(), TypeName: tag.Get(xreflect.TagTypeName), Description: tag.Get(DescriptionTag)}
+	ret := &Tag{fs: afs.New(), TypeName: tag.Get(xreflect.TagTypeName), Description: tag.Get(DescriptionTag), embed: fs}
 	var err error
 	for _, tagName := range tagNames {
 		tagValue, ok := tag.Lookup(tagName)
