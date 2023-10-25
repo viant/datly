@@ -259,6 +259,7 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			declaration.When = strings.Trim(content, "'\"")
 		case "Of":
 			declaration.Of = strings.Trim(content, "'\"")
+			declaration.Name = "." + declaration.Name
 		case "Value":
 			if err := s.setValue(declaration, content); err != nil {
 				return err

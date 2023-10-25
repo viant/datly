@@ -238,8 +238,8 @@ func (o *Output) defaultParameters(aView *view.View, inputParameters state.Param
 func EnsureOutputKindParameterTypes(parameters []*state.Parameter, aView *view.View) {
 	for _, parameter := range parameters {
 		ensureOutputParameterType(parameter, aView)
-		if len(parameter.Group) > 0 {
-			EnsureOutputKindParameterTypes(parameter.Group.FilterByKind(state.KindOutput), aView)
+		if len(parameter.Object) > 0 {
+			EnsureOutputKindParameterTypes(parameter.Object.FilterByKind(state.KindOutput), aView)
 		}
 		if len(parameter.Repeated) > 0 {
 			EnsureOutputKindParameterTypes(parameter.Repeated.FilterByKind(state.KindOutput), aView)

@@ -69,6 +69,7 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	for _, typeDef := range aMatch.header.Resource.Types {
 		typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType))
 	}
+
 	contract.Input = aMatch.header.Resource.InputParameters
 	for _, parameter := range contract.Input {
 		if len(parameter.Predicates) == 0 {

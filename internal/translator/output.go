@@ -88,7 +88,9 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 		if err := parameter.Init(context.Background(), resourcelet); err != nil {
 			return err
 		}
-		parameter.Schema.Name = parameter.Name + "Object"
+
+		parameter.Schema.Name = parameter.Name
+
 		resource.AppendTypeDefinition(&view.TypeDefinition{Name: parameter.Schema.Name, DataType: parameter.Schema.Type().String()})
 	}
 
@@ -103,8 +105,8 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 }
 
 func (s *Service) updateOutputParameterSchema(parameter *state.Parameter, typesRegistry *xreflect.Types) error {
-	if len(parameter.Group) > 0 {
-		for _, item := range parameter.Group {
+	if len(parameter.Object) > 0 {
+		for _, item := range parameter.Object {
 			if err := s.updateOutputParameterSchema(item, typesRegistry); err != nil {
 				return err
 			}
@@ -149,13 +151,13 @@ func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Par
 		parameter.Schema = &state.Schema{Cardinality: state.Many, Name: itemTypeName}
 		return err
 	}
-	if len(parameter.Group) > 0 {
-		for _, group := range parameter.Group {
+	if len(parameter.Object) > 0 {
+		for _, group := range parameter.Object {
 			if err = s.adjustOutputParameter(resource, group, types); err != nil {
 				return err
 			}
 		}
-		rType, _ := parameter.Group.ReflectType(resource.rule.ModuleLocation, types.Lookup, false)
+		rType, _ := parameter.Object.ReflectType(resource.rule.ModuleLocation, types.Lookup, false)
 		parameter.Schema = state.NewSchema(rType)
 		return nil
 	}
@@ -195,7 +197,6 @@ func (s *Service) newTypeRegistry(resource *Resource, rootViewlet *Viewlet) *xre
 }
 
 func (s *Service) adjustTransferOutputType(parameter *state.Parameter, types *xreflect.Types, resource *Resource) error {
-
 	if output := parameter.Output; output != nil && output.Name == codec.KeyTransfer {
 		destTypeName := output.Args[0]
 		dest, err := types.Lookup(destTypeName)
@@ -212,6 +213,9 @@ func (s *Service) adjustTransferOutputType(parameter *state.Parameter, types *xr
 			return err
 		}
 		parameter.Output.Schema = &state.Schema{Name: adjustedTypeName}
+		parameter.Output.Schema.SetType(adjustedType)
+		resource.AddParameterType(parameter)
+
 		resource.AppendTypeDefinition(&view.TypeDefinition{
 			Name:     adjustedTypeName,
 			DataType: adjustedType.String(),

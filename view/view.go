@@ -46,7 +46,6 @@ type (
 		shared.Reference
 		Mode        Mode       `json:",omitempty"`
 		Connector   *Connector `json:",omitempty"`
-		Async       *Async     `json:",omitempty"`
 		Standalone  bool       `json:",omitempty"`
 		Name        string     `json:",omitempty"`
 		Description string     `json:",omitempty"`
@@ -606,11 +605,6 @@ func (v *View) initView(ctx context.Context) error {
 	if v.TableBatches == nil {
 		v.TableBatches = map[string]bool{}
 	}
-
-	if err = v.ensureAsyncTableNameIfNeeded(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -960,11 +954,6 @@ func (v *View) inherit(view *View) error {
 	if v.TableBatches == nil {
 		v.TableBatches = view.TableBatches
 	}
-
-	if v.Async == nil {
-		v.Async = view.Async
-	}
-
 	return nil
 }
 
@@ -1374,19 +1363,6 @@ func (v *View) SetParameter(name string, selectors *State, value interface{}) er
 		return fmt.Errorf("failed to lookup selector: %v", aView.Name)
 	}
 	return param.Set(selector.Template, value)
-}
-
-func (v *View) ensureAsyncTableNameIfNeeded() error {
-	if v.Async == nil {
-		return nil
-	}
-
-	if v.Async.Table == "" {
-		viewName := removeNonAlphaNumeric(v.Name)
-		v.Async.Table = AsyncJobsTable + "_" + strings.ToUpper(viewName)
-	}
-
-	return nil
 }
 
 func (v *View) BuildParametrizedSQL(state state.Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand2.StateOption) (*sqlx.SQL, error) {

@@ -208,7 +208,7 @@ func (g *generator) forEachParam(parameters state.Parameters, iterator func(para
 			continue
 		}
 
-		if err = g.forEachParam(parameter.Group, iterator); err != nil {
+		if err = g.forEachParam(parameter.Object, iterator); err != nil {
 			return err
 		}
 
@@ -284,7 +284,7 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 
 	if param.In.Kind == state.KindObject {
 		var result []*openapi.Parameter
-		for _, parameter := range param.Group {
+		for _, parameter := range param.Object {
 			convertParam, ok, err := g.convertParam(ctx, component, parameter, description)
 			if err != nil {
 				return nil, false, err

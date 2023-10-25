@@ -28,7 +28,7 @@ func (p *Object) Value(ctx context.Context, names string) (interface{}, bool, er
 	aState := stateType.NewState()
 
 	isAnyItemSet := false
-	for _, item := range parameter.Group {
+	for _, item := range parameter.Object {
 		value, has, err := p.ParameterLookup(ctx, item)
 		if err != nil {
 			return nil, false, err
@@ -45,7 +45,7 @@ func (p *Object) Value(ctx context.Context, names string) (interface{}, bool, er
 	return ret, isAnyItemSet, nil
 }
 
-//func (p *Object) matchByLocation(names string) *state.Parameter {
+//func (p *NormalizeObject) matchByLocation(names string) *state.Parameter {
 //	var parameter *state.Parameter
 //	for _, candidate := range p.Parameters {
 //		if candidate.In.Kind == state.KindObject && candidate.In.Name == names {

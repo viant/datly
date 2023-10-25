@@ -21,7 +21,7 @@ type (
 		Explicit bool //explicit parameter are added to the main view as dependency
 		state.Parameter
 		Repeated State
-		Group    State
+		Object   State
 		ModificationSetting
 		SQL         string
 		Hint        string
@@ -261,25 +261,22 @@ func ExtractRelationColumns(join *query.Join) (string, string) {
 	return relColumn, refColumn
 }
 
-func (d *Parameter) EnsureCodec() {
-	//if d.Parameter.Codec == nil {
-	//	d.Parameter.Codec = &view.Codec{}
+func (p *Parameter) EnsureCodec() {
+	//if p.Parameter.Codec == nil {
+	//	p.Parameter.Codec = &view.Codec{}
 	//}
-	if d.Parameter.Output == nil {
-		d.Parameter.Output = &state.Codec{}
+	if p.Parameter.Output == nil {
+		p.Parameter.Output = &state.Codec{}
 	}
 }
 
-func (d *Parameter) EnsureLocation() {
-	if d.Parameter.In == nil {
-		d.Parameter.In = &state.Location{}
+func (p *Parameter) EnsureLocation() {
+	if p.Parameter.In == nil {
+		p.Parameter.In = &state.Location{}
 	}
 }
 
 func (p *Parameter) HasDataType() bool {
-	if p.DataType != "" {
-		return true
-	}
 	if p.Schema == nil {
 		return false
 	}
@@ -320,37 +317,33 @@ func (p *Parameter) IsUsedBy(text string) bool {
 	return false
 }
 
-func (d *Parameter) EnsureSchema() {
-	if d.Parameter.Schema != nil {
+func (p *Parameter) EnsureSchema() {
+	if p.Parameter.Schema != nil {
 		return
 	}
-	d.Parameter.Schema = &state.Schema{}
+	p.Parameter.Schema = &state.Schema{}
 }
 
 func (p *Parameter) MergeFrom(info *Parameter) {
 	if p.Output == nil {
 		p.Output = info.Output
 	}
-	if info.DataType != "" {
-		p.EnsureSchema()
-		p.Schema.DataType = info.DataType
-	}
 	if info.ErrorStatusCode != 0 {
 		p.ErrorStatusCode = info.ErrorStatusCode
 	}
 }
 
-func (s *Parameter) adjustMetaViewIfNeeded() {
-	if !strings.HasPrefix(s.Name, "View.") {
+func (p *Parameter) adjustMetaViewIfNeeded() {
+	if !strings.HasPrefix(p.Name, "View.") {
 		return
 	}
-	if strings.HasSuffix(s.Name, ".SQL") {
-		s.Schema = state.NewSchema(reflect.TypeOf(""))
-		s.Schema.DataType = "string"
+	if strings.HasSuffix(p.Name, ".SQL") {
+		p.Schema = state.NewSchema(reflect.TypeOf(""))
+		p.Schema.DataType = "string"
 	}
-	if strings.HasSuffix(s.Name, ".Limit") {
-		s.Schema = state.NewSchema(reflect.TypeOf(0))
-		s.Schema.DataType = "int"
+	if strings.HasSuffix(p.Name, ".Limit") {
+		p.Schema = state.NewSchema(reflect.TypeOf(0))
+		p.Schema.DataType = "int"
 	}
 }
 

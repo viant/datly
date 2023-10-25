@@ -29,10 +29,10 @@ package expand_test
 //			},
 //			config: []*expand.PredicateConfig{
 //				{
-//					Object:       0,
+//					NormalizeObject:       0,
 //					StateAccessor: types.NewAccessor(xunsafe.FieldByName(reflect.TypeOf(Foo{}), "ID")),
 //					HasAccessor:   types.NewAccessor(xunsafe.FieldByName(reflect.TypeOf(FooHas{}), "ID")),
-//					Expander: func(ctx *expand.Object, value interface{}) (*parameter.Criteria, error) {
+//					Expander: func(ctx *expand.NormalizeObject, value interface{}) (*parameter.Criteria, error) {
 //						return &parameter.Criteria{
 //							Query: "ID = ?",
 //							Args:  []interface{}{value},

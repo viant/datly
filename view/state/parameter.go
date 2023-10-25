@@ -18,15 +18,14 @@ import (
 type (
 	Parameter struct {
 		shared.Reference
-		Group      Parameters                   `json:",omitempty"`
-		Repeated   Parameters                   `json:",omitempty" yaml:"Repeated"`
+		Object     Parameters                   `json:",omitempty"`
+		Repeated   Parameters                   `json:",omitempty" yaml:"NormalizeRepeated"`
 		Predicates []*extension.PredicateConfig `json:",omitempty" yaml:"Predicates"`
 		Name       string                       `json:",omitempty" yaml:"Name"`
 
 		In                *Location   `json:",omitempty" yaml:"In" `
 		Required          *bool       `json:",omitempty"`
 		Description       string      `json:",omitempty"`
-		DataType          string      `json:",omitempty" `
 		Style             string      `json:",omitempty"`
 		MaxAllowedRecords *int        `json:",omitempty"`
 		MinAllowedRecords *int        `json:",omitempty"`
@@ -194,7 +193,6 @@ func (p *Parameter) inherit(param *Parameter) {
 	setter.SetStringIfEmpty(&p.Name, param.Name)
 	setter.SetStringIfEmpty(&p.Description, param.Description)
 	setter.SetStringIfEmpty(&p.Style, param.Style)
-	setter.SetStringIfEmpty(&p.DataType, param.DataType)
 	setter.SetStringIfEmpty(&p.Tag, param.Tag)
 	setter.SetStringIfEmpty(&p.When, param.When)
 	setter.SetBoolIfFalse(&p.Lazy, param.Lazy)
@@ -230,8 +228,8 @@ func (p *Parameter) inherit(param *Parameter) {
 		p.Value = param.Value
 	}
 
-	if len(p.Group) == 0 {
-		p.Group = param.Group
+	if len(p.Object) == 0 {
+		p.Object = param.Object
 	}
 	if len(p.Repeated) == 0 {
 		p.Repeated = param.Repeated
@@ -299,11 +297,7 @@ func (p *Parameter) initSchema(resource Resource) error {
 	}
 
 	if p.Schema == nil {
-		if p.DataType != "" {
-			p.Schema = &Schema{DataType: p.DataType}
-		} else {
-			return fmt.Errorf("parameter %v schema can't be empty", p.Name)
-		}
+		return fmt.Errorf("parameter %v schema can't be empty", p.Name)
 	}
 
 	if p.Schema.DataType == "" && p.Schema.Name == "" {
@@ -372,7 +366,7 @@ func (p *Parameter) initGroupSchema(resource Resource) (err error) {
 		}
 	}
 	if rType == nil {
-		if rType, err = p.Group.ReflectType(pkgPath, resource.LookupType(), !p.isOutputType); err != nil {
+		if rType, err = p.Object.ReflectType(pkgPath, resource.LookupType(), !p.isOutputType); err != nil {
 			return err
 		}
 	}
@@ -493,7 +487,7 @@ func (p *Parameter) Selector() *structology.Selector {
 }
 
 func (p *Parameter) initGroupParams(ctx context.Context, resource Resource) error {
-	for _, parameter := range p.Group {
+	for _, parameter := range p.Object {
 		if err := parameter.Init(ctx, resource); err != nil {
 			return err
 		}

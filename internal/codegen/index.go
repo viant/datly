@@ -277,7 +277,7 @@ func (n *IndexGenerator) expandIndexByTemplate(param *inference.Parameter) (*Ind
 	result = strings.ReplaceAll(result, "$IndexName", pathParam.IndexField.Name)
 	return &IndexBy{
 		FnName:    "IndexBy" + pathParam.IndexField.Name,
-		SliceType: param.Schema.SimpleTypeName() + "Repeated",
+		SliceType: param.Schema.SimpleTypeName() + "NormalizeRepeated",
 		IndexType: "Indexed" + param.Schema.SimpleTypeName(),
 	}, result
 }

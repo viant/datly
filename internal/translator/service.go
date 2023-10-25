@@ -129,7 +129,7 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 	}
 
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
-		return s.persistView(viewlet, resource, view.ModeExec)
+		return s.adjustView(viewlet, resource, view.ModeExec)
 	}); err != nil {
 		return err
 	}
@@ -195,12 +195,15 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	}
 
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
-		return s.persistView(viewlet, resource, view.ModeQuery)
+		return s.adjustView(viewlet, resource, view.ModeQuery)
 	}); err != nil {
 		return err
 	}
+	if err = s.updateExplicitInputType(resource, resource.Rule.RootViewlet(), resource.State.ViewParameters()); err != nil {
+		return err
+	}
 
-	if err := s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.ViewParameters()); err != nil {
+	if err = s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.ViewParameters()); err != nil {
 		return err
 	}
 
@@ -337,7 +340,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	return nil
 }
 
-func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mode) error {
+func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mode) error {
 	if mode == view.ModeQuery {
 		resource.Rule.updateExclude(viewlet)
 	}
@@ -345,12 +348,7 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 	if viewlet.IsMetaView() {
 		return nil
 	}
-	if resource.Rule.Async != nil {
-		viewlet.View.View.Async = &view.Async{
-			MarshalRelations: true,
-			Table:            "",
-		}
-	}
+
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 	ruleName := s.Repository.RuleName(resource.rule)
 	if err := viewlet.View.buildView(resource.Rule, mode); err != nil {
@@ -535,6 +533,35 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		}
 		for i := range aSignature.Types {
 			resource.AppendTypeDefinition(aSignature.Types[i])
+		}
+	}
+	return nil
+}
+
+func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet, parameters state.Parameters) error {
+	res := view.NewResourcelet(&resource.Resource, &viewlet.View.View)
+
+	predicates := 0
+	for _, param := range parameters {
+		_ = param.Init(context.Background(), res)
+		predicates += len(param.Predicates)
+		switch param.In.Kind {
+		case state.KindRepeated:
+
+		case state.KindObject:
+			resource.AddParameterType(param)
+		}
+
+	}
+	if predicates > 0 {
+		output := resource.OutputState.ViewParameters()
+		filter := output.LookupByLocation(state.KindOutput, "filter")
+		if filter != nil {
+			if filter.Schema == nil {
+				filter.Schema = &state.Schema{}
+			}
+			filter.Schema.SetType(parameters.PredicateStructType())
+			resource.AddParameterType(filter)
 		}
 	}
 	return nil

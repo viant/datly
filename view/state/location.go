@@ -3,7 +3,6 @@ package state
 import (
 	"fmt"
 	"os"
-	"strings"
 )
 
 // Location represents parameter location
@@ -38,17 +37,7 @@ type ParamName string
 func (p ParamName) Validate(kind Kind) error {
 	switch kind {
 	case KindObject:
-		split := strings.Split(string(p), ",")
-		if len(split) == 0 {
-			return fmt.Errorf("param name can't be empty")
-		}
-
-		if len(split) == 1 {
-			return fmt.Errorf("param Object must contain at least 2 params")
-		}
-
 		return nil
-
 	case KindRequest, KindLiteral, KindConst, KindRequestBody, KindQuery:
 		return nil
 	case KindView, KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindContext, KindOutput, KindComponent:

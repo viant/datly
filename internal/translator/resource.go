@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/internal/translator/parser"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
@@ -140,6 +141,29 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *parser.Type
 	return nil
 }
 
+func (r *Resource) AddParameterType(param *state.Parameter) {
+	typeName := reflect.StructTag(param.Tag).Get(xreflect.TagTypeName)
+
+	if rType := param.Schema.Type(); rType != nil && types.EnsureStruct(rType) != nil {
+		setter.SetStringIfEmpty(&typeName, param.Schema.Name)
+		setter.SetStringIfEmpty(&typeName, view.SanitizeTypeName(param.Name))
+		param.Schema.Name = typeName
+		pkg := r.rule.Package()
+		aType := xreflect.NewType(typeName, xreflect.WithReflectType(rType), xreflect.WithPackage(pkg))
+		r.AppendTypeDefinition(&view.TypeDefinition{Name: typeName, DataType: aType.Body(), Package: pkg})
+	}
+
+	if param.Output != nil && param.Output.Schema != nil && param.Output.Schema.Type() != nil {
+		schema := param.Output.Schema
+		setter.SetStringIfEmpty(&typeName, schema.Name)
+		setter.SetStringIfEmpty(&typeName, view.SanitizeTypeName(param.Name))
+		schema.Name = typeName
+		pkg := r.rule.Package()
+		aType := xreflect.NewType(typeName, xreflect.WithReflectType(schema.Type()), xreflect.WithPackage(pkg))
+		r.AppendTypeDefinition(&view.TypeDefinition{Name: typeName, DataType: aType.Body(), Package: pkg})
+	}
+}
+
 func (r *Resource) TypeDefinition(name string) *view.TypeDefinition {
 	if len(r.Resource.Types) == 0 {
 		return nil
@@ -183,10 +207,10 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	r.OutputState.Append(r.Declarations.OutputState...)
 	r.Rule.OutputParameter = r.OutputState.GetOutputParameter()
 
-	if r.State, err = r.State.Normalize(); err != nil {
+	if r.State, err = r.State.NormalizeComposites(); err != nil {
 		return fmt.Errorf("failed to normalize input state: %w", err)
 	}
-	if r.OutputState, err = r.OutputState.Normalize(); err != nil {
+	if r.OutputState, err = r.OutputState.NormalizeComposites(); err != nil {
 		return fmt.Errorf("failed to normalize output state: %w", err)
 	}
 

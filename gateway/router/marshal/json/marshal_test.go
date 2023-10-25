@@ -1146,8 +1146,8 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				return v.Interface()
 			},
 		},
-		httpUnmarshallTestcase("Boo", `{"Object": {"Value1": "Abc", "Value2": 125.5}}`, `{"ID":0,"Object":{"Value1":"Abc","Value2":125.5},"Name":""}`),
-		httpUnmarshallTestcase("Bar", `{"Object": {"CreatedAt": "time.Now", "UpdatedAt": "time.Now + 5 Days"}}`, `{"ID":0,"Object":{"CreatedAt":"time.Now","UpdatedAt":"time.Now + 5 Days"},"Name":""}`),
+		httpUnmarshallTestcase("Boo", `{"NormalizeObject": {"Value1": "Abc", "Value2": 125.5}}`, `{"ID":0,"NormalizeObject":{"Value1":"Abc","Value2":125.5},"Name":""}`),
+		httpUnmarshallTestcase("Bar", `{"NormalizeObject": {"CreatedAt": "time.Now", "UpdatedAt": "time.Now + 5 Days"}}`, `{"ID":0,"NormalizeObject":{"CreatedAt":"time.Now","UpdatedAt":"time.Now + 5 Days"},"Name":""}`),
 		{
 			description: "ints slice",
 			data:        `{"Name": "Foo", "Ints": [1,2,3,4,5,6,7,8,9,10]}`,
@@ -1269,7 +1269,7 @@ func httpUnmarshallTestcase(typeName string, data string, expected string) unmar
 		options: []interface{}{
 			request,
 			json.UnmarshalerInterceptors{
-				"Object": func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
+				"NormalizeObject": func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
 					var httpRequest *http.Request
 					for _, option := range options {
 						switch actual := option.(type) {

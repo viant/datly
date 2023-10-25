@@ -44,6 +44,18 @@ func main() {
 	//	"-w=autogen",
 	//	"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
 	//}
+
+	//os.Chdir("/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting")
+	//os.Args = []string{"",
+	//	"translate",
+	//	"-s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/dql/forecasting/total.sql",
+	//	"-u=forecasting",
+	//	"-p=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting",
+	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
+	//	"-c=datly_jobs|mysql|root:dev@tcp(127.0.0.1:3306)/datly_jobs?parseTime=true",
+	//	"-S=dql/forecasting/shared/keys_project.yaml",
+	//	"-S=dql/forecasting/shared/keys_app.yaml",
+	//	"-r=repo/dev"}
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)

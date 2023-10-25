@@ -55,10 +55,10 @@ func (s State) ViewParameters() state.Parameters {
 	var result = make([]*state.Parameter, 0, len(s))
 	for i, _ := range s {
 		parameter := &s[i].Parameter
-		if len(s[i].Group) > 0 {
-			parameter.Group = nil
-			for j := range s[i].Group {
-				parameter.Group = append(parameter.Group, &s[i].Group[j].Parameter)
+		if len(s[i].Object) > 0 {
+			parameter.Object = nil
+			for j := range s[i].Object {
+				parameter.Object = append(parameter.Object, &s[i].Object[j].Parameter)
 			}
 		}
 		if len(s[i].Repeated) > 0 {
@@ -197,7 +197,7 @@ func (s State) FilterByKind(kind state.Kind) State {
 				}
 			}
 		case state.KindObject:
-			for _, candidate := range parameter.Group {
+			for _, candidate := range parameter.Object {
 				if candidate.In.Kind == kind {
 					result.Append(candidate)
 				}
@@ -322,9 +322,6 @@ func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (refl
 		if schema == nil {
 			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
 		}
-		if schema.DataType == "" && param.DataType != "" {
-			schema.DataType = param.DataType
-		}
 		rType := schema.Type()
 		if rType == nil {
 			if rType, err = types.LookupType(lookupType, schema.DataType); err != nil {
@@ -395,78 +392,65 @@ func (s State) MetaViewSQL() *Parameter {
 	return nil
 }
 
-// Normalize normalizes state
-func (s State) Normalize() (State, error) {
-	ret := s.Object()
-	return ret.Repeated()
-}
-
-func (s *State) Object() State {
-	newState := make(State, 0, len(*s))
-	groupIndex := map[string][]*Parameter{}
-	groupParams := s.FilterByKind(state.KindObject)
-	for _, param := range groupParams {
-		baseParams := strings.Split(param.In.Name, ",")
-		for _, baseParam := range baseParams {
-			groupIndex[baseParam] = append(groupIndex[baseParam], param)
-		}
-	}
-
-	for _, parameter := range *s {
-		parameters, ok := groupIndex[parameter.Name]
-		if !ok {
-			newState.Append(parameter)
-			continue
-		}
-
-		for _, parent := range parameters {
-			parent.Parameter.Group = append(parent.Parameter.Group, &parameter.Parameter)
-			parent.Group = append(parent.Group, parameter)
-		}
-	}
-
-	return newState
-}
-
-func (s State) Repeated() (State, error) {
-	sliceParameters := s.FilterByKind(state.KindRepeated)
-	if len(sliceParameters) == 0 {
-		return s, nil
-	}
-	sliceParameter := map[string]state.Parameters{}
+// NormalizeComposites normalizes state
+func (s State) NormalizeComposites() (State, error) {
+	var result = State{}
 	byName := s.IndexByName()
-	for _, param := range sliceParameters {
-		sliceParameter[param.Name] = state.Parameters{}
-		if param.In.Name == "" {
-			continue
-		}
-		baseParameters := strings.Split(param.In.Name, ",")
-		for _, name := range baseParameters {
-			baseParameter, ok := byName[strings.TrimSpace(name)]
-			if !ok {
-				return nil, fmt.Errorf("unknwon slice base paramter: %s", name)
+	var itemParaemters = map[string]bool{}
+	for _, candidate := range s { //TODO to be deprecated we just one way of assembling compositie types
+		switch candidate.In.Kind {
+		case state.KindRepeated, state.KindObject:
+			if candidate.In.Name != "" {
+				baseParams := strings.Split(candidate.In.Name, ",")
+				candidate.In.Name = ""
+				for _, name := range baseParams {
+					itemParaemters[name] = true
+					baseParameter := byName[name]
+					if baseParameter == nil {
+						return nil, fmt.Errorf("invalid %v(%v) failed to lookup base parameter: %s", candidate.Name, candidate.In.Kind, name)
+					}
+					candidate.AppendComposite(baseParameter)
+				}
 			}
-			baseParameter.Of = param.Name
 		}
 	}
 
-	result := State{}
-	var repeatedName []string
-	for i, parameter := range s {
-		if parameter.Of == "" {
-			result = append(result, s[i])
+	result = State{}
+	for i, candidate := range s { //filter composite element parameters
+		if itemParaemters[candidate.Name] {
 			continue
 		}
-		parent, ok := byName[parameter.Of]
-		if !ok {
-			return nil, fmt.Errorf("unkown parent parameter %v, base: %v", parameter.Of, parameter.Name)
+		result = append(result, s[i])
+	}
+	s = result
+	result = State{}
+	for i, candidate := range s {
+		if candidate.Of != "" {
+			candidate.Name = strings.Trim(candidate.Name, ".")
+			holder := byName[candidate.Of]
+			if holder == nil {
+				return nil, fmt.Errorf("invalid %v(%v) failed to lookup holder: %s", candidate.Name, candidate.In.Kind, candidate.Of)
+			}
+			holder.AppendComposite(s[i])
+			continue
 		}
-		repeatedName = append(repeatedName, parameter.Name)
-		parent.Parameter.Repeated = append(parent.Parameter.Repeated, &parameter.Parameter)
-		parent.Repeated = append(parent.Repeated, parameter)
-		parent.Parameter.In.Name = strings.Join(repeatedName, ",")
+		result = append(result, s[i])
 	}
 	return result, nil
+}
+
+func (p *Parameter) AppendComposite(baseParameter *Parameter) {
+	if p.In.Kind == state.KindObject {
+		p.Object = append(p.Object, baseParameter)
+		p.Parameter.Object = append(p.Parameter.Object, &baseParameter.Parameter)
+	} else {
+		p.Repeated = append(p.Repeated, baseParameter)
+		p.Parameter.Repeated = append(p.Parameter.Repeated, &baseParameter.Parameter)
+	}
+	if p.In.Name != "" {
+		p.In.Name += ","
+	}
+	p.In.Name += baseParameter.Name
 }
 
 func (s *State) AdjustOutput() error {
@@ -501,9 +485,9 @@ func (s *State) AdjustOutput() error {
 					return fmt.Errorf("failed to expand output type: %w", err)
 				}
 			}
-			parent.Group = append(parent.Group, parameter)
+			parent.Object = append(parent.Object, parameter)
 			var items []string
-			for _, item := range parent.Group {
+			for _, item := range parent.Object {
 				items = append(items, item.Name)
 			}
 			parent.In.Name = strings.Join(items, ",`")

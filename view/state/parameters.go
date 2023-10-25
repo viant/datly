@@ -76,7 +76,7 @@ func (p *Parameter) matchByLocation(kind Kind, location string) *Parameter {
 			}
 		}
 	case KindObject:
-		for _, parameter := range p.Group {
+		for _, parameter := range p.Object {
 			if parameter.In.Name == location {
 				return parameter
 			}
@@ -98,7 +98,7 @@ func (p *Parameter) matchByKind(kind Kind, result *Parameters) {
 	case kind:
 		*result = append(*result, p)
 	case KindObject:
-		for _, parameter := range p.Group {
+		for _, parameter := range p.Object {
 			if parameter.In.Kind == kind {
 				*result = append(*result, parameter)
 			}
@@ -177,10 +177,6 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		if schema == nil {
 			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
 		}
-		if schema.DataType == "" && param.DataType != "" {
-			schema.DataType = param.DataType
-		}
-
 		rType := schema.Type()
 		dt := schema.DataType
 		if dt == "" {
@@ -254,9 +250,6 @@ func (p Parameters) buildStateType(pkgPath string, lookupType xreflect.LookupTyp
 		if schema == nil {
 			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
 		}
-		if schema.DataType == "" && param.DataType != "" {
-			schema.DataType = param.DataType
-		}
 		rType := schema.Type()
 		if rType == nil {
 			if rType, err = types.LookupType(lookupType, schema.DataType); err != nil {
@@ -319,7 +312,7 @@ func (p Parameters) Index() NamedParameters {
 			continue
 		}
 		result[parameter.Name] = p[i]
-		for _, item := range parameter.Group {
+		for _, item := range parameter.Object {
 			result[item.Name] = item
 		}
 		for _, item := range parameter.Repeated {
