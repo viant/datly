@@ -11,29 +11,32 @@ import (
 	"strings"
 )
 
-func (s *Service) detectComponentViewType(cache discover.Columns, resource *Resource) {
+func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource *Resource) {
 	if resource.Rule.IsGeneratation {
 		return
 	}
 	root := resource.Rule.RootViewlet()
 	//TODO remove with, OutputState check and fix it
-	if len(cache.Items) == 0 || root.TypeDefinition == nil {
+	if len(viewColumns.Items) == 0 || root.TypeDefinition == nil {
 		return
 	}
 
 	cloneRoot := view.View{}
-	//TODO understand implication of not cloning
 	if data, err := json.Marshal(root.View.View); err == nil {
 		_ = json.Unmarshal(data, &cloneRoot)
 	}
 	rootViewlet := resource.Rule.RootViewlet()
-	_, err := s.updateViewSchema(&cloneRoot, resource, cache, rootViewlet.typeRegistry)
-	if err != nil {
+	var types []*xreflect.Type
+	if err := s.updateViewSchema(&cloneRoot, resource, viewColumns, rootViewlet.typeRegistry, &types); err != nil {
 		fmt.Printf("ERROR: %v\n", err)
 	}
 
-	root.TypeDefinition.DataType = cloneRoot.Schema.CompType().String()
-	root.TypeDefinition.Fields = nil
+	rootType := MatchByName(types, view.DefaultTypeName(root.View.Name))
+	if rootType != nil {
+		root.TypeDefinition.DataType = rootType.Body()
+		root.TypeDefinition.Name = rootType.Name
+		root.TypeDefinition.Fields = nil
+	}
 	if root.View.View.Schema == nil {
 		root.View.View.Schema = &state.Schema{Cardinality: state.Many}
 	}
@@ -41,17 +44,15 @@ func (s *Service) detectComponentViewType(cache discover.Columns, resource *Reso
 		root.View.Schema.Cardinality = state.Many
 	}
 	root.View.View.Schema.Name = "*" + root.TypeDefinition.Name
+}
 
-	if cloneRoot.Template != nil && cloneRoot.Template.Summary != nil {
-		summarySchema := cloneRoot.Template.Summary.Schema
-		if summarySchema.Type() != nil && summarySchema.Name == "" {
-			summary := root.View.Template.Summary
-			summaryTypeName := summary.Name + "Output"
-			summarySchema.Name = "*" + summaryTypeName
-			summary.Schema = summarySchema
-			resource.AppendTypeDefinition(&view.TypeDefinition{Name: summaryTypeName, DataType: summary.Schema.Type().String()})
+func MatchByName(types []*xreflect.Type, name string) *xreflect.Type {
+	for _, candidate := range types {
+		if candidate.Name == name {
+			return candidate
 		}
 	}
+	return nil
 }
 
 func (s *Service) detectViewCaser(columns view.Columns) (text.CaseFormat, error) {
@@ -69,56 +70,81 @@ func (s *Service) detectViewCaser(columns view.Columns) (text.CaseFormat, error)
 	return caseFormat, nil
 }
 
-func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache discover.Columns, registry *xreflect.Types) ([]*view.Relation, error) {
+func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache discover.Columns, registry *xreflect.Types, types *[]*xreflect.Type) (err error) {
+	if aView.Schema != nil && aView.Schema.Name != "" {
+		return nil
+	}
 	var relations []*view.Relation
-	var err error
 	for i := range aView.With {
 		rel := aView.With[i]
 		of := *rel.Of
 		rel.Of = &of
 		relViewlet := resource.Rule.Viewlets.Lookup(rel.Of.View.Ref)
 		relView := &relViewlet.View.View
+		relSchema := relView.Schema
+		if relSchema != nil && relSchema.Name != "" { //used has defined custom type, skip generation
+			continue
+		}
+		relSchema.Name = view.DefaultTypeName(relSchema.Name)
 		rel.Of.View = *relView
 		relations = append(relations, rel)
-		if _, err = s.updateViewSchema(relView, resource, cache, registry); err != nil {
-			return nil, err
+		if err = s.updateViewSchema(relView, resource, cache, registry, types); err != nil {
+			return err
 		}
 	}
 
 	columns := cache.Items[aView.Name]
 	if err = columns.ApplyConfig(aView.ColumnsConfig, registry.Lookup); err != nil {
-		return nil, err
+		return err
 	}
 	caser, err := s.detectViewCaser(columns)
 	if err != nil {
-		return nil, fmt.Errorf("invalud view %scaser: %w", aView.Name, err)
+		return fmt.Errorf("invalud view %scaser: %w", aView.Name, err)
 	}
 
 	aViewlet := resource.Rule.Viewlets.Lookup(aView.Name)
 	if aViewlet.Summary != nil {
-		summary := aView.Template.Summary
-		if summary.Schema == nil {
-			summary.Schema = &state.Schema{}
-		}
-		if summary.Schema.Type() == nil {
-			//dataType := summary.Schema.TypeName()
-			buildSummarySchema := view.ColumnsSchema(caser, aViewlet.Summary.Columns, nil, &aViewlet.View.View)
-			summaryType, err := buildSummarySchema()
-			if err != nil {
-				return nil, fmt.Errorf("failed to build summary view %v schema %w", summary.Name, err)
-			}
-			summary.Schema.SetType(summaryType)
+		err := s.updateSummarySchema(resource, aView, caser, aViewlet)
+		if err != nil {
+			return err
 		}
 	}
-
 	fn := view.ColumnsSchema(caser, columns, relations, aView)
-	schema, err := fn()
+	schemaType, err := fn()
 	if err != nil {
 		s.Repository.Messages.AddWarning(aView.Name, "detection", fmt.Sprintf("unable detect component view type: %v", err))
-		return relations, nil
+		return nil
 	}
-	aView.Schema.SetType(schema)
-	return relations, nil
+	aView.Schema.SetType(schemaType)
+	aView.Schema.Name = view.DefaultTypeName(aView.Name)
+	pkg := resource.rule.Package()
+	rType := aView.Schema.CompType()
+	viewType := xreflect.NewType(view.DefaultTypeName(aView.Name), xreflect.WithPackage(pkg), xreflect.WithReflectType(rType))
+	*types = append(*types, viewType)
+	typeDef := &view.TypeDefinition{Name: viewType.Name, Package: pkg, DataType: viewType.Body()}
+	resource.AppendTypeDefinition(typeDef)
+	return nil
+}
+
+func (s *Service) updateSummarySchema(resource *Resource, aView *view.View, caser text.CaseFormat, aViewlet *Viewlet) error {
+	summary := aView.Template.Summary
+	if summary.Schema == nil {
+		summary.Schema = &state.Schema{}
+	}
+	if summary.Schema.Type() == nil {
+		buildSummarySchema := view.ColumnsSchema(caser, aViewlet.Summary.Columns, nil, &aViewlet.View.View)
+		summaryType, err := buildSummarySchema()
+		if err != nil {
+			return fmt.Errorf("failed to build summary view %v schema %w", summary.Name, err)
+		}
+		summary.Schema.SetType(summaryType)
+	}
+	pkg := resource.rule.Package()
+	rType := summary.Schema.CompType()
+	summaryType := xreflect.NewType(view.DefaultTypeName(summary.Name), xreflect.WithPackage(pkg), xreflect.WithReflectType(rType))
+	summary.Schema.Name = "*" + summaryType.Name
+	resource.AppendTypeDefinition(&view.TypeDefinition{Name: summaryType.Name, Package: pkg, DataType: summaryType.Body()})
+	return nil
 }
 
 func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Columns) (err error) {
@@ -146,7 +172,6 @@ func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Col
 	}); err != nil {
 		return err
 	}
-
 	if !resource.Rule.IsGeneratation && resource.Rule.IsReader() { //skip view column generation if generator use translator
 		err = s.persistViewMetaColumn(columnDiscovery, resource)
 		if err != nil {

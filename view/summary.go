@@ -12,6 +12,7 @@ import (
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -196,7 +197,7 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 		}
 
 		var fieldTag string
-		fieldTag += getTypenameTag(rel.Of.Schema)
+		fieldTag += getTypenameTag(rel.Of.Schema.Name)
 
 		holders[rel.Holder] = true
 		*structFields = append(*structFields, reflect.StructField{
@@ -211,19 +212,39 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 				metaType = reflect.PtrTo(metaType)
 			}
 
-			typeNameTag := getTypenameTag(meta.Schema)
+			typeNameTag := getTypenameTag(meta.Schema.Name)
 			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-" ` + typeNameTag
 			*structFields = append(*structFields, newCasedField(tag, meta.Name, text.CaseFormatUpperCamel, metaType))
 		}
 	}
 }
 
-func getTypenameTag(schema *state.Schema) string {
-	typeNameTag := ""
-	if typeName := schema.Name; typeName != "" {
-		typeNameTag = " " + xreflect.TagTypeName + `:"` + typeName + `"`
+// DefaultTypeName returns a default view type name
+func DefaultTypeName(name string) string {
+	if name == "" {
+		return name
 	}
-	return typeNameTag
+	name = sanitizeTypeName(name)
+	from := text.DetectCaseFormat(name)
+	return from.To(text.CaseFormatUpperCamel).Format(name) + "View"
+}
+
+func getTypenameTag(typeName string) string {
+	if typeName == "" {
+		return ""
+	}
+	typeName = sanitizeTypeName(typeName)
+	return " " + xreflect.TagTypeName + `:"` + typeName + `"`
+}
+
+func sanitizeTypeName(typeName string) string {
+	var runes []rune
+	for _, r := range typeName {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_' {
+			runes = append(runes, r)
+		}
+	}
+	return string(runes)
 }
 
 func newCasedField(aTag string, columnName string, sourceCaseFormat text.CaseFormat, rType reflect.Type) reflect.StructField {

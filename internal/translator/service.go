@@ -251,11 +251,7 @@ func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool) {
 
 	viewlet.TypeDefinition = viewlet.Spec.TypeDefinition("", false)
 	viewlet.TypeDefinition.Cardinality = ""
-	viewlet.TypeDefinition.Name = TypeDefinitionName(viewlet)
-}
-
-func TypeDefinitionName(viewlet *Viewlet) string {
-	return strings.Title(viewlet.Name) + "Output"
+	viewlet.TypeDefinition.Name = view.DefaultTypeName(viewlet.Name)
 }
 
 func (s *Service) persistViewMetaColumn(cache discover.Columns, resource *Resource) error {

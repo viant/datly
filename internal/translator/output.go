@@ -283,8 +283,8 @@ func (s *Service) ensureOutputParameters(resource *Resource, outputState inferen
 }
 
 func (s *Service) updateParameterWithComponentOutputType(dataParameter *state.Parameter, rootViewlet *Viewlet) {
-	dataParameter.Schema.Name = TypeDefinitionName(rootViewlet)
-	dataParameter.Schema.DataType = "*" + TypeDefinitionName(rootViewlet)
+	dataParameter.Schema.Name = view.DefaultTypeName(rootViewlet.Name)
+	dataParameter.Schema.DataType = "*" + view.DefaultTypeName(rootViewlet.Name)
 	cardinality := string(state.Many)
 	setter.SetStringIfEmpty(&cardinality, string(rootViewlet.Cardinality))
 	dataParameter.Schema.Cardinality = state.Cardinality(cardinality)
