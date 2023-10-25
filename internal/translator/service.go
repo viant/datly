@@ -182,13 +182,13 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 
 	resource.Rule.updateExclude(resource.Rule.RootViewlet())
 
-	cache := discover.Columns{Items: make(map[string]view.Columns)}
+	componentColumns := discover.Columns{Items: make(map[string]view.Columns)}
 
-	if err = s.detectColumns(resource, cache); err != nil {
+	if err = s.detectColumns(resource, componentColumns); err != nil {
 		return err
 	}
 
-	s.detectComponentViewType(cache, resource)
+	s.detectComponentViewType(componentColumns, resource)
 	rootViewlet := resource.Rule.RootViewlet()
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
 		return err

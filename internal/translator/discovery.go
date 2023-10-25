@@ -17,7 +17,7 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 	}
 	root := resource.Rule.RootViewlet()
 	//TODO remove with, OutputState check and fix it
-	if len(viewColumns.Items) == 0 || root.TypeDefinition == nil {
+	if len(viewColumns.Items) == 0 || root.TypeDefinition == nil || root.View.Self != nil {
 		return
 	}
 
@@ -55,7 +55,7 @@ func MatchByName(types []*xreflect.Type, name string) *xreflect.Type {
 	return nil
 }
 
-func (s *Service) detectViewCaser(columns view.Columns) (text.CaseFormat, error) {
+func (s *Service) detectColumnCaseFormat(columns view.Columns) (text.CaseFormat, error) {
 	var columnNames []string
 	for _, column := range columns {
 		if strings.Contains(strings.ToLower(column.Tag), "ignorecaseformatter") {
@@ -97,19 +97,19 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 	if err = columns.ApplyConfig(aView.ColumnsConfig, registry.Lookup); err != nil {
 		return err
 	}
-	caser, err := s.detectViewCaser(columns)
+	caseFormat, err := s.detectColumnCaseFormat(columns)
 	if err != nil {
 		return fmt.Errorf("invalud view %scaser: %w", aView.Name, err)
 	}
 
 	aViewlet := resource.Rule.Viewlets.Lookup(aView.Name)
 	if aViewlet.Summary != nil {
-		err := s.updateSummarySchema(resource, aView, caser, aViewlet)
+		err := s.updateSummarySchema(resource, aView, caseFormat, aViewlet)
 		if err != nil {
 			return err
 		}
 	}
-	fn := view.ColumnsSchema(caser, columns, relations, aView)
+	fn := view.ColumnsSchema(caseFormat, columns, relations, aView)
 	schemaType, err := fn()
 	if err != nil {
 		s.Repository.Messages.AddWarning(aView.Name, "detection", fmt.Sprintf("unable detect component view type: %v", err))
