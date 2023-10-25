@@ -3,7 +3,6 @@ package operator
 import (
 	"bytes"
 	"context"
-	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
@@ -120,8 +119,6 @@ func (s *Service) ensureAsyncContext(ctx context.Context, aComponent *repository
 		return nil, err
 	}
 	matchKey = aComponent.View.Name + "/" + matchKey
-	matchKey = fmt.Sprintf("%x", sha1.Sum([]byte(matchKey)))
-
 	job, err := aComponent.Async.JobByMatchKey(ctx, matchKey)
 	if err != nil {
 		return nil, err
