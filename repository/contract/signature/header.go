@@ -71,9 +71,14 @@ func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Type
 	if schema.Name == "" {
 		schema.Name = "Filter"
 	}
-
+	dataParameter := output.LookupByLocation(state.KindOutput, "data")
 	predicateType := contract.Input.PredicateStructType()
 	if predicateType.NumField() > 0 {
+		pkg := ""
+		if dataParameter != nil {
+			pkg = dataParameter.Schema.Package
+		}
+		signature.Types = append(signature.Types, &view.TypeDefinition{Name: schema.Name, DataType: predicateType.String(), Package: pkg})
 		signature.Filter = state.NewSchema(predicateType)
 		registry.Register(schema.Name, xreflect.WithTypeDefinition(signature.Filter.Type().String()))
 	}
