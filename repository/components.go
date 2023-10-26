@@ -38,7 +38,16 @@ func (c *Components) Init(ctx context.Context) error {
 	if c.columns != nil {
 		columns = c.columns.Items
 	}
-	if err := c.Resource.Init(ctx, c.options.extensions, columns); err != nil {
+
+	//TODO replace with explicit option
+	var options = []interface{}{c.options.extensions}
+	if len(columns) > 0 {
+		options = append(options, columns)
+	}
+	if c.options.metrics != nil && len(c.Components) > 0 {
+		options = append(options, &view.Metrics{URIPart: c.Components[0].URI, Service: c.options.metrics})
+	}
+	if err := c.Resource.Init(ctx, options...); err != nil {
 		return err
 	}
 	for _, component := range c.Components {

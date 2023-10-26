@@ -83,6 +83,7 @@ type (
 		TransformsIndex marshal.TransformIndex
 		Predicates      *extension.PredicateRegistry
 		Docs            *docs.Registry
+		Metrics         *Metrics
 	}
 )
 
@@ -308,7 +309,7 @@ func (r *Resource) GetConnectors() Connectors {
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	opts := r.readOptions(options)
 	r.indexProviders()
-
+	r.Metrics = opts.Metrics
 	r.codecs = opts.Codecs
 	r.viewColumns = opts.Columns
 	r._types = opts.Types
@@ -380,6 +381,8 @@ func (r *Resource) readOptions(options []interface{}) *ResourceOptions {
 			result.Predicates = actual
 		case extension.PredicateRegistry:
 			result.Predicates = &actual
+		case *Metrics:
+			result.Metrics = actual
 		case *extension.Registry:
 			if result.Predicates == nil {
 				result.Predicates = actual.Predicates

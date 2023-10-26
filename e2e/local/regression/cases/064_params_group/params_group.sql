@@ -13,6 +13,7 @@
 #set($_ = $IDMin<int>(query/idMin).Of('IDRange').WithTag('velty:"names=IDMin|ValueMin"').Optional())
 #set($_ = $IDMax<int>(query/idMax).Of('IDRange').WithTag('velty:"names=IDMax|ValueMax"').Optional())
 
+
 SELECT bar.*
 FROM (SELECT *
       FROM BAR t

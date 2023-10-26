@@ -67,6 +67,7 @@ import(
 SELECT mainViewAlias.*  [EXCEPT COLUMN][OutputConfig]
 [, secondViewAlias.*       [OutputConfig]  ]
 [, NviewAlias.*            [OutputConfig]  ]
+[, DQL configuration function ]
 FROM (
     SELECT
     ID  [ColumnConfig],
@@ -85,6 +86,53 @@ FROM (
     
 ]    
 ```
+
+#### Datly parameters
+
+Datly has ability to implies parameter from DQL however it's recommended to provided explicit parameters declarations.
+
+Datly parameters define component contract, and data flow. They are converted into component input,output, async go structs.
+
+#set( $_ = $PARAMETER_NAME<InputType[,OptionalOutputCodecType]>(KIND/LOCATION)[.Options]) //
+
+Parameters location **kind** indicates source of parameter, the following kinds are supported:
+    - query: to access http request query string
+    - path: to access http request matched URI parameters
+    - body: to access http request body derived type
+    - const: to access defined constants
+    - env: to access defined env variables
+    - param: to access other defined parameter
+    - component: to access other datly component
+    - state:  to access field from defined state
+    - object: to access composite struct type
+    - repeated: to access composite slice type
+    - output: to access view response,status, performance metrics,view summary
+
+Parameters support the following **Options**
+    * Output()  - to define output scope
+    * Async()   - to define async option
+    * WithTag('') - to define parameter tag
+    * WithCodec('name' [,args...]) - to define input transofer codec
+    * WithPredicate('name', group [,args...])
+    * Value(value) - defines default value
+    * Required() - set required flag
+    * Optional() - set optional flag
+    * Of('parent') - defines composite parent holder/owner
+    * WithStatusCode(code) - defines error status code
+
+
+#### DQL configuration function
+    * tag - defines column derived struct field tag
+    * cast - type cast
+    * use_connector - sets connector ref
+    * use_cache - sets cache ref
+    * set_limit - sets default query limit
+    * order_by  - sets default order by clause 
+    * cardinality - sets view cardinality
+    * allow_nulls - allows nulls in output
+    
+See function [registry](https://github.com/viant/datly/tree/master/internal/translator/function)
+
 
 #### Reader hints
 - **RouteConfig** is JSON representation of [Route](option/route.go) settings i.e {"URI":"app1/view1/{Id}"}

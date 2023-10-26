@@ -11,7 +11,7 @@ import (
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
-	extension2 "github.com/viant/datly/view/extension"
+	extension "github.com/viant/datly/view/extension"
 	"github.com/viant/xdatly/codec"
 	"time"
 )
@@ -87,7 +87,7 @@ func (r *Resource) Init(ctx context.Context) error {
 		columnsCache = r.ColumnsCache.Items
 	}
 
-	if err := r.Resource.Init(ctx, r.Resource.TypeRegistry(), r._codecs, columnsCache, transforms, extension2.Config.Predicates); err != nil {
+	if err := r.Resource.Init(ctx, r.Resource.TypeRegistry(), r._codecs, columnsCache, transforms, extension.Config.Predicates); err != nil {
 		return err
 	}
 
