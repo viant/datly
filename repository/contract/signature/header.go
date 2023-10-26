@@ -115,6 +115,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 		if cardinality == state.Many {
 			rType = reflect.PtrTo(rType)
 		}
+
 		outputType, err := parameters.ReflectType("github.com/viant/datly/view/autogen", registry.Lookup, false)
 		if err != nil {
 			return fmt.Errorf("failed to get output type: %w", err)

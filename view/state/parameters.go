@@ -183,8 +183,7 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 			dt = schema.Name
 		}
 		if rType == nil {
-
-			rType, err = types.LookupType(lookupType, schema.TypeName())
+			rType, err = types.LookupType(lookupType, schema.DataType)
 			if err != nil {
 				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", param.Name, schema.TypeName(), err)
 			}
