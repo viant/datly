@@ -176,34 +176,30 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	}
 	root := resource.Rule.RootView()
 	root.Module = resource.rule.ModulePrefix
-	if err := root.buildView(resource.Rule, view.ModeQuery); err != nil {
+	if err = root.buildView(resource.Rule, view.ModeQuery); err != nil {
 		return err
 	}
-
 	resource.Rule.updateExclude(resource.Rule.RootViewlet())
-
+	if err = s.updateExplicitInputType(resource, resource.Rule.RootViewlet(), resource.State.ViewParameters()); err != nil {
+		return err
+	}
 	componentColumns := discover.Columns{Items: make(map[string]view.Columns)}
-
 	if err = s.detectColumns(resource, componentColumns); err != nil {
 		return err
 	}
 
 	s.detectComponentViewType(componentColumns, resource)
 	rootViewlet := resource.Rule.RootViewlet()
+
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
 		return err
 	}
-
+	if err = s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.ViewParameters()); err != nil {
+		return err
+	}
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
 		return s.adjustView(viewlet, resource, view.ModeQuery)
 	}); err != nil {
-		return err
-	}
-	if err = s.updateExplicitInputType(resource, resource.Rule.RootViewlet(), resource.State.ViewParameters()); err != nil {
-		return err
-	}
-
-	if err = s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.ViewParameters()); err != nil {
 		return err
 	}
 
@@ -527,41 +523,12 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		parameter.Schema = aSignature.Output.Clone()
 		parameter.Schema.EnsurePointer()
 		for _, typeDef := range aSignature.Types {
-			if err = extension.Config.Types.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
+			if err = extension.Config.Types.Register(typeDef.Name, xreflect.WithPackage(typeDef.Package), xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
 				return err
 			}
 		}
 		for i := range aSignature.Types {
 			resource.AppendTypeDefinition(aSignature.Types[i])
-		}
-	}
-	return nil
-}
-
-func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet, parameters state.Parameters) error {
-	res := view.NewResourcelet(&resource.Resource, &viewlet.View.View)
-
-	predicates := 0
-	for _, param := range parameters {
-		_ = param.Init(context.Background(), res)
-		predicates += len(param.Predicates)
-		switch param.In.Kind {
-		case state.KindRepeated:
-
-		case state.KindObject:
-			resource.AddParameterType(param)
-		}
-
-	}
-	if predicates > 0 {
-		output := resource.OutputState.ViewParameters()
-		filter := output.LookupByLocation(state.KindOutput, "filter")
-		if filter != nil {
-			if filter.Schema == nil {
-				filter.Schema = &state.Schema{}
-			}
-			filter.Schema.SetType(parameters.PredicateStructType())
-			resource.AddParameterType(filter)
 		}
 	}
 	return nil

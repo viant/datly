@@ -609,6 +609,10 @@ func (r *Resource) SetTypes(types *xreflect.Types) {
 	r._types = xreflect.NewTypes(xreflect.WithRegistry(types))
 }
 
+func (r *Resource) SetCodecs(codecs *codec.Registry) {
+	r.codecs = codecs
+}
+
 func (r *Resource) TypeName(t reflect.Type) (string, bool) {
 	info := r._types.Info(t)
 	if info == nil {

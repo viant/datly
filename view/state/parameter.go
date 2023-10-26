@@ -436,7 +436,9 @@ func (p *Parameter) initCodec(resource Resource) error {
 
 func (p *Parameter) OutputType() reflect.Type {
 	if p.Output != nil && p.Output.Schema != nil {
-		return p.Output.Schema.Type()
+		if rType := p.Output.Schema.Type(); rType != nil {
+			return rType
+		}
 	}
 	return p.Schema.Type()
 }

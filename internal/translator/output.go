@@ -177,19 +177,21 @@ func outputTypeDefinition(resource *Resource) *view.TypeDefinition {
 }
 
 func (s *Service) newTypeRegistry(resource *Resource, rootViewlet *Viewlet) *xreflect.Types {
-	if rootViewlet.typeRegistry != nil {
-		return rootViewlet.typeRegistry
+	if resource.typeRegistry != nil {
+		return resource.typeRegistry
 	}
 
 	types := xreflect.NewTypes(xreflect.WithRegistry(extension.Config.Types))
 	for _, aType := range resource.Resource.Types {
-		_ = types.Register(aType.Name, xreflect.WithTypeDefinition(aType.DataType))
-	}
-	if aType := rootViewlet.TypeDefinition; aType != nil {
+		_ = types.Register(aType.Name, xreflect.WithTypeDefinition(aType.DataType), xreflect.WithPackage(resource.rule.Package()))
 		_ = types.Register(aType.Name, xreflect.WithTypeDefinition(aType.DataType))
 
 	}
-	rootViewlet.typeRegistry = types
+	if aType := rootViewlet.TypeDefinition; aType != nil {
+		_ = types.Register(aType.Name, xreflect.WithTypeDefinition(aType.DataType), xreflect.WithPackage(resource.rule.Package()))
+
+	}
+	resource.typeRegistry = types
 	return types
 }
 

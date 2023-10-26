@@ -37,25 +37,6 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 func main() {
 	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
 
-	//os.Args = []string{
-	//	"",
-	//	"-N=run_tests_one_to_many",
-	//	"-X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/047_raw_json_tag/raw_json_expr.sql",
-	//	"-w=autogen",
-	//	"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
-	//}
-
-	//os.Chdir("/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting")
-	//os.Args = []string{"",
-	//	"translate",
-	//	"-s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/dql/forecasting/total.sql",
-	//	"-u=forecasting",
-	//	"-p=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting",
-	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
-	//	"-c=datly_jobs|mysql|root:dev@tcp(127.0.0.1:3306)/datly_jobs?parseTime=true",
-	//	"-S=dql/forecasting/shared/keys_project.yaml",
-	//	"-S=dql/forecasting/shared/keys_app.yaml",
-	//	"-r=repo/dev"}
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)

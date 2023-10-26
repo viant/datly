@@ -25,9 +25,8 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 	if data, err := json.Marshal(root.View.View); err == nil {
 		_ = json.Unmarshal(data, &cloneRoot)
 	}
-	rootViewlet := resource.Rule.RootViewlet()
 	var types []*xreflect.Type
-	if err := s.updateViewSchema(&cloneRoot, resource, viewColumns, rootViewlet.typeRegistry, &types); err != nil {
+	if err := s.updateViewSchema(&cloneRoot, resource, viewColumns, resource.typeRegistry, &types); err != nil {
 		fmt.Printf("ERROR: %v\n", err)
 	}
 

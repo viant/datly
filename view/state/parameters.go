@@ -351,6 +351,7 @@ func (p Parameters) PredicateStructType() reflect.Type {
 		if !ok {
 			filterType = &predicate.FilterType{ParameterType: candidate.OutputType(), Tag: pTag}
 			fieldTypes[pTag.Filter] = filterType
+
 			fields = append(fields, filterType)
 		}
 		if pTag.Exclusion {
@@ -367,6 +368,7 @@ func (p Parameters) PredicateStructType() reflect.Type {
 	for _, field := range fields {
 		fieldTags := stags.NewTags(field.StructTagTag())
 		fieldTags.SetIfNotFound("json", ",omitempty")
+
 		structFields = append(structFields, reflect.StructField{
 			Name: field.Tag.Filter,
 			Type: field.Type(),

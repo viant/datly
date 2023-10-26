@@ -53,10 +53,29 @@ func (h *Header) Signature(contract *ContractPath, registry *xreflect.Types) (*S
 }
 
 func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Types, signature *Signature) {
+	output := state.Parameters(contract.Output.Type.Parameters)
+	filter := output.LookupByLocation(state.KindOutput, "filter")
+	if filter == nil {
+		return
+	}
+	schema := filter.Schema
+	if schema.Type() != nil {
+		return
+	}
+
+	if typeName := schema.TypeName(); typeName != "" {
+		if rType, _ := registry.Lookup(typeName); rType != nil {
+			return
+		}
+	}
+	if schema.Name == "" {
+		schema.Name = "Filter"
+	}
+
 	predicateType := contract.Input.PredicateStructType()
 	if predicateType.NumField() > 0 {
 		signature.Filter = state.NewSchema(predicateType)
-		registry.Register("Filter", xreflect.WithTypeDefinition(signature.Filter.Type().String()))
+		registry.Register(schema.Name, xreflect.WithTypeDefinition(signature.Filter.Type().String()))
 	}
 }
 
@@ -68,6 +87,9 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	isAnonymous := len(parameters) == 1 && strings.Contains(parameters[0].Tag, "anonymous")
 
 	outputParameter := parameters.LookupByLocation(state.KindOutput, "data")
+	if reflect.StructTag(outputParameter.Tag).Get(xreflect.TagTypeName) == "" {
+		outputParameter.Tag += ` ` + xreflect.TagTypeName + `:"` + outputParameter.Schema.Name + `"`
+	}
 
 	var viewType *view.TypeDefinition
 	for _, candidate := range h.Resource.Types {
@@ -81,25 +103,25 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 		return fmt.Errorf("failed to match data component output type for path: %v:%v", aContract.Method, aContract.URI)
 	}
 	contract.EnsureOutputKindParameterTypes(parameters, nil)
+
 	if !isAnonymous {
 		rType, _ := registry.Lookup(viewType.Name)
 		cardinality := outputParameter.Schema.Cardinality
 		if cardinality == state.Many {
 			rType = reflect.PtrTo(rType)
 		}
-		outputParameter.Schema.SetType(rType)
-		outputParameter.Schema.Cardinality = state.One
 		outputType, err := parameters.ReflectType("github.com/viant/datly/view/autogen", registry.Lookup, false)
 		if err != nil {
 			return fmt.Errorf("failed to get output type: %w", err)
 		}
-		typeName := outputParameter.Schema.Name
-		outputParameter.Schema = state.NewSchema(outputType)
-		outputParameter.Schema.Name = typeName
-		outputParameter.Schema.Cardinality = state.One
-		viewType.DataType = outputType.String()
+		componentSchema := state.NewSchema(outputType)
+		componentSchema.Name = strings.Replace(outputParameter.Schema.Name, "View", "", 1) + "Output"
+		componentSchema.Cardinality = state.One
+		componentSchema.DataType = outputType.String()
+		signature.Output = componentSchema
+	} else {
+		signature.Output = outputParameter.Schema
 	}
-	signature.Output = outputParameter.Schema
 	signature.Anonymous = isAnonymous
 	signature.Types = append(signature.Types, viewType)
 	return nil

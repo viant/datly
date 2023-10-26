@@ -159,7 +159,7 @@ func (r *Resource) AddParameterType(param *state.Parameter) {
 			return
 		}
 		schema := param.Output.Schema
-		setter.SetStringIfEmpty(&typeName, schema.TypeName())
+		typeName := schema.TypeName()
 		setter.SetStringIfEmpty(&typeName, view.SanitizeTypeName(param.Name))
 		schema.Name = typeName
 		pkg := r.rule.Package()
@@ -186,6 +186,8 @@ func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
 	}
 	definition := *typeDef
 	r.Resource.Types = append(r.Resource.Types, &definition)
+	r.typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType), xreflect.WithPackage(typeDef.Package))
+
 }
 
 func (r *Resource) AdjustCustomType(info *plugin.Info) {
@@ -433,6 +435,8 @@ func (r *Resource) IncludeURL(ctx context.Context, URL string, fs afs.Service) (
 
 func NewResource(rule *options.Rule, repository *options.Repository, messages *msg.Messages) *Resource {
 	ret := &Resource{Rule: NewRule(), rule: rule, repository: repository, messages: messages}
+	ret.ensureRegistry()
+
 	ret.Rule.Output = &ret.Rule.Route.Output
 	ret.Resource.SetTypes(xreflect.NewTypes(
 		xreflect.WithRegistry(extension.Config.Types),

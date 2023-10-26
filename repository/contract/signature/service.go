@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/xreflect"
 	"path"
+	"strings"
 )
 
 type (
@@ -66,19 +68,34 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	contract := aMatch.header.Contracts[aMatch.index]
 
 	typeRegistry := xreflect.NewTypes(xreflect.WithRegistry(extension.Config.Types))
+	var customTypes []*view.TypeDefinition
 	for _, typeDef := range aMatch.header.Resource.Types {
+		if strings.Contains(typeDef.DataType, " ") {
+			customTypes = append(customTypes, typeDef)
+		}
 		typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType))
+
 	}
+
+	resource := &view.Resource{}
+	resource.SetTypes(typeRegistry)
+	resource.SetCodecs(extension.Config.Codecs)
+	stateResource := view.NewResourcelet(resource, &view.View{})
 
 	contract.Input = aMatch.header.Resource.InputParameters
 	for _, parameter := range contract.Input {
-		if len(parameter.Predicates) == 0 {
-			continue
-		}
 		parameter.Schema.InitType(typeRegistry.Lookup, false)
+		if parameter.Output != nil {
+			parameter.Output.Init(stateResource, parameter.Schema.Type())
+		}
 	}
 
-	return aMatch.header.Signature(contract, typeRegistry)
+	signature, err := aMatch.header.Signature(contract, typeRegistry)
+	if err != nil {
+		return nil, err
+	}
+	signature.Types = append(customTypes, signature.Types...)
+	return signature, err
 }
 
 func (s *Service) loadSignatures(ctx context.Context, URL string, isRoot bool) error {
