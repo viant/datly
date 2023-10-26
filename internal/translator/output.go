@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/repository/locator/output/keys"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
@@ -46,7 +47,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 	}
 
 	outputParameters := s.ensureOutputParameters(resource, resource.OutputState)
-	if dataParameter := outputParameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
+	if dataParameter := outputParameters.LookupByLocation(state.KindOutput, keys.ViewData); dataParameter != nil {
 		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
