@@ -64,6 +64,10 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		}
 		SQL := l.Output.Metrics.SQL()
 		return SQL, true, nil
+	case "zero":
+		return 0, true, nil
+	case "empty":
+		return 0, true, nil
 	default:
 		switch {
 		case strings.HasPrefix(aName, keys.Response):

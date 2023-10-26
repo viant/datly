@@ -23,10 +23,6 @@ func (l *outputLocator) getResponseValue(ctx context.Context, name string) (inte
 	case keys.ResponseTime:
 		//return info.AsyncGroupEndTime(), true, nil
 		return info.EndTime(), true, nil
-	case "zero":
-		return 0, true, nil
-	case "empty":
-		return 0, true, nil
 
 	}
 	return nil, false, nil
