@@ -1,137 +1,22 @@
 package keys
 
 import (
-	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"reflect"
 )
 
-const ( //Components keys
-	//Data represents component view response
-	Data = "data"
-
-	//SQL represents component expanded SQL
-	SQL = "sql"
-
-	//Status represents response status output key
-	Status = "status"
-
-	Error = "error"
-
-	StatusCode = "status.code"
-
-	//Summary represents view summary output key
-	Summary = "summary"
-
-	//SummaryMeta legacy, alternative SummaryKey
-	SummaryMeta = "meta"
-	ViewID      = "view.id"
-
-	ViewName        = "view.name"
-	ViewDescription = "view.description"
-)
-
-const ( //Job/Async keys
-	Job = "job"
-
-	JobInfo = "jobinfo"
-
-	JobInfoStatus = "jobinfo.status"
-
-	JobInfoStatusCode = "jobinfo.code"
-
-	JobCreationTime = "job.creationtime"
-
-	JobEndTime = "job.endtime"
-
-	JobEndUnixTimeInSec = "job.endunixtimeinsec"
-
-	JobInfoCacheHit  = "jobinfo.cachehit"
-	JobInfoCacheHits = "jobinfo.cachehits"
-
-	JobInfoCacheKey = "jobinfo.cachekey"
-	JobInfoPriority = "jobinfo.priority"
-
-	JobInfoMatchKey      = "jobinfo.matchkey"
-	JobInfoWaitTimeInMs  = "jobinfo.waittimeinms"
-	JobInfoWaitTimeInSec = "jobinfo.waittimeinsec"
-	JobInfoRunTimeInMs   = "jobinfo.runtimeinms"
-	JobInfoRunTimeInSec  = "jobinfo.runtimeinsec"
-	JobInfoExpiryInSec   = "jobinfo.expiryinsec"
-
-	AsyncStatus = "async.status"
-
-	AsyncDone = "async.done"
-
-	AsyncElapsedInSec = "async.elapsedinsec"
-
-	AsyncElapsedInMs = "async.elapsedinms"
-
-	AsyncEndTime = "async.endtime"
-
-	AsyncEndUnixTimeInSec = "async.endunixtimeinsec"
-
-	AsyncCreationTime = "async.creationtime"
-
-	AsyncCreationUnixTimeInSec = "async.creationunixtimeinsec"
-)
-
-const ( //Response keys
-	ResponseElapsedInSec = "response.elapsedinsec"
-
-	ResponseElapsedInMs = "response.elapsedinms"
-
-	ResponseTime = "response.time"
-
-	ResponseUnixTimeInSec = "response.unixtimeinsec"
-)
-
-const (
-	Filter  = "filter"
-	Filters = "filters"
-)
-
 var Types = map[string]reflect.Type{
+
 	//component/View related keys
-	Error:           xreflect.StringType,
-	Status:          reflect.TypeOf(response.Status{}),
-	SQL:             xreflect.StringType,
-	ViewName:        xreflect.StringType,
-	ViewDescription: xreflect.StringType,
-	Filters:         reflect.TypeOf(predicate.NamedFilters{}),
-
-	//Job types
-	Job:                  reflect.TypeOf(&async.Job{}),
-	JobCreationTime:      xreflect.TimeType,
-	JobEndTime:           xreflect.TimePtrType,
-	JobEndUnixTimeInSec:  xreflect.IntType,
-	JobInfoStatus:        xreflect.StringType,
-	JobInfoStatusCode:    xreflect.StringType,
-	JobInfoMatchKey:      xreflect.StringType,
-	JobInfoWaitTimeInMs:  xreflect.IntType,
-	JobInfoWaitTimeInSec: xreflect.IntType,
-	JobInfoRunTimeInMs:   xreflect.IntType,
-	JobInfoRunTimeInSec:  xreflect.IntType,
-	JobInfoExpiryInSec:   xreflect.IntType,
-	JobInfoPriority:      xreflect.IntType,
-	JobInfoCacheHit:      xreflect.BoolType,
-	JobInfoCacheHits:     xreflect.IntType,
-
-	AsyncStatus:       xreflect.StringType,
-	AsyncDone:         xreflect.BoolType,
-	AsyncElapsedInSec: xreflect.IntType,
-	AsyncElapsedInMs:  xreflect.IntType,
-
-	AsyncCreationTime:          xreflect.TimePtrType,
-	AsyncCreationUnixTimeInSec: xreflect.IntType,
-	AsyncEndTime:               xreflect.TimePtrType,
-	AsyncEndUnixTimeInSec:      xreflect.IntType,
+	Error:   xreflect.StringType,
+	Status:  reflect.TypeOf(response.Status{}),
+	SQL:     xreflect.StringType,
+	Filters: reflect.TypeOf(predicate.NamedFilters{}),
 
 	//Response keys
-	ResponseTime: xreflect.TimeType,
-
+	ResponseTime:          xreflect.TimeType,
 	ResponseElapsedInSec:  xreflect.IntType,
 	ResponseElapsedInMs:   xreflect.IntType,
 	ResponseUnixTimeInSec: xreflect.IntType,

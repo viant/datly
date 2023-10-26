@@ -20,9 +20,10 @@
 #set($_ = $JobMatchKey<string>(query/).Async())
 
 
-#set($_ = $Job<?>(output/job).WithTag('json:",omitempty"'))
-#set($_ = $Result<?>(output/data))
+#set($_ = $Job<?>(async/job).Output().WithTag('json:",omitempty"'))
+#set($_ = $Result<?>(output/view))
 #set($_ = $Status<?>(output/status))
+
 
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
 #set($_ = $Authorization  /*

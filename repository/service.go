@@ -119,6 +119,7 @@ func (s *Service) initProviders(ctx context.Context) error {
 		}
 		for _, aPath := range route.Paths {
 			provider := NewProvider(aPath.Path, aPath.Version, func(ctx context.Context, opts ...Option) (*Component, error) {
+				opts = append(opts, WithMetrics(s.options.metrics))
 				component, err := s.loadComponent(ctx, opts, sourceURL, aPath)
 				if err != nil || component != nil {
 					return component, err

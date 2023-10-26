@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/repository/locator/output/keys"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
@@ -71,7 +72,7 @@ func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Type
 	if schema.Name == "" {
 		schema.Name = "Filter"
 	}
-	dataParameter := output.LookupByLocation(state.KindOutput, "data")
+	dataParameter := output.LookupByLocation(state.KindOutput, keys.ViewData)
 	predicateType := contract.Input.PredicateStructType()
 	if predicateType.NumField() > 0 {
 		pkg := ""
@@ -91,7 +92,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	parameters := state.Parameters(aContract.Output.Type.Parameters)
 	isAnonymous := len(parameters) == 1 && strings.Contains(parameters[0].Tag, "anonymous")
 
-	outputParameter := parameters.LookupByLocation(state.KindOutput, "data")
+	outputParameter := parameters.LookupByLocation(state.KindOutput, keys.ViewData)
 	if reflect.StructTag(outputParameter.Tag).Get(xreflect.TagTypeName) == "" {
 		outputParameter.Tag += ` ` + xreflect.TagTypeName + `:"` + outputParameter.Schema.Name + `"`
 	}
@@ -107,7 +108,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	if viewType == nil {
 		return fmt.Errorf("failed to match data component output type for path: %v:%v", aContract.Method, aContract.URI)
 	}
-	contract.EnsureOutputKindParameterTypes(parameters, nil)
+	contract.EnsureParameterTypes(parameters, nil)
 
 	if !isAnonymous {
 		rType, _ := registry.Lookup(viewType.Name)

@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/gmetric"
 	"net/http"
+	"strings"
 )
 
 func (r *Router) NewMetricRoute() *Route {
@@ -17,5 +18,6 @@ func (r *Router) NewMetricRoute() *Route {
 }
 
 func (r *Router) handleMetrics(writer http.ResponseWriter, req *http.Request) {
-	gmetric.NewHandler(r.config.Meta.MetricURI, r.metrics).ServeHTTP(writer, req)
+	URI := strings.Trim(r.config.Meta.MetricURI, "*")
+	gmetric.NewHandler(URI, r.metrics).ServeHTTP(writer, req)
 }

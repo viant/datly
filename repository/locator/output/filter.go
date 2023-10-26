@@ -27,7 +27,6 @@ func (l *outputLocator) getFilterValue(ctx context.Context) (interface{}, bool, 
 
 func (l *outputLocator) getFiltersValue(ctx context.Context) (interface{}, bool, error) {
 	var filters predicate.NamedFilters
-
 	for i, filter := range l.Output.Filters {
 		output := l.Output.Filters[i]
 		aFilter := &predicate.NamedFilter{Name: output.Name}

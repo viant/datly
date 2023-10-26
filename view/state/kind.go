@@ -29,7 +29,12 @@ const (
 
 	KindRepeated Kind = "repeated"
 
-	KindOutput    Kind = "output"    //reader output
+	KindOutput Kind = "output" //reader output
+
+	KindAsync Kind = "async" //async jobs/status related information
+
+	KindMeta Kind = "meta" //component/view meta information
+
 	KindState     Kind = "state"     //input state
 	KindComponent Kind = "component" //input state
 	KindContext   Kind = "context"   //global context based state
@@ -39,7 +44,7 @@ const (
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindView, KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindComponent:
+	case KindView, KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindComponent, KindMeta, KindAsync:
 		return nil
 	}
 
@@ -76,6 +81,11 @@ func (k Kind) Ordinal() int {
 		return 12
 	case KindComponent:
 		return 13
+	case KindAsync:
+		return 14
+	case KindMeta:
+		return 15
+
 	}
 	return -1
 }

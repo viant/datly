@@ -40,7 +40,7 @@ func (p ParamName) Validate(kind Kind) error {
 		return nil
 	case KindRequest, KindLiteral, KindConst, KindRequestBody, KindQuery:
 		return nil
-	case KindView, KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindContext, KindOutput, KindComponent:
+	case KindView, KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindContext, KindOutput, KindComponent, KindMeta, KindAsync:
 		if p == "" {
 			return fmt.Errorf("param name can't be empty")
 		}

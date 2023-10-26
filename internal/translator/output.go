@@ -50,7 +50,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
-	contract.EnsureOutputKindParameterTypes(outputParameters, nil)
+	contract.EnsureParameterTypes(outputParameters, nil)
 	for _, parameter := range outputParameters {
 		if err = s.adjustOutputParameter(resource, parameter, typesRegistry); err != nil {
 			return err
@@ -88,9 +88,7 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 		if err := parameter.Init(context.Background(), resourcelet); err != nil {
 			return err
 		}
-
 		parameter.Schema.Name = parameter.Name
-
 		resource.AppendTypeDefinition(&view.TypeDefinition{Name: parameter.Schema.Name, DataType: parameter.Schema.Type().String()})
 	}
 

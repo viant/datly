@@ -2,7 +2,7 @@ package meta
 
 const (
 	//MetricURI represents default metric URIPrefix
-	MetricURI = "/v1/api/meta/metric"
+	MetricURI = "/v1/api/meta/metric/*"
 	//StatusURI represents status URIPrefix
 	StatusURI = "/v1/api/meta/status"
 	//ConfigURI represents default config URIPrefix

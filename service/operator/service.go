@@ -58,6 +58,7 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 	if ctx.Value(exec.ContextKey) == nil {
 		ctx = context.WithValue(ctx, exec.ContextKey, exec.NewContext())
 	}
+	ctx = context.WithValue(ctx, view.ContextKey, aComponent.View)
 	if infoValue := ctx.Value(exec.ContextKey); infoValue != nil {
 		info = infoValue.(*exec.Context)
 	}

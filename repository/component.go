@@ -88,7 +88,6 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	if err = c.Async.Init(ctx, resource, c.View); err != nil {
 		return err
 	}
-
 	c.doc, _ = resource.Doc()
 	return nil
 }

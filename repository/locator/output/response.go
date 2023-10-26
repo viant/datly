@@ -21,7 +21,7 @@ func (l *outputLocator) getResponseValue(ctx context.Context, name string) (inte
 	case keys.ResponseUnixTimeInSec:
 		return info.EndTime().Unix(), true, nil
 	case keys.ResponseTime:
-		//return info.AsyncEndTime(), true, nil
+		//return info.AsyncGroupEndTime(), true, nil
 		return info.EndTime(), true, nil
 
 	}

@@ -92,6 +92,9 @@ type (
 		_parent          *View
 	}
 
+	//contextKey context key
+	contextKey string
+
 	ViewOption func(v *View)
 
 	ViewOptions []ViewOption
@@ -120,6 +123,9 @@ type (
 		_initialized     bool
 	}
 )
+
+// ContextKey view context key
+var ContextKey = contextKey("view")
 
 // Constraints configure what can be selected by Statelet
 // For each _field, default value is `false`

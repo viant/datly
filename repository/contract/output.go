@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/repository/content"
-	"github.com/viant/datly/repository/locator/output/keys"
+	asynckeys "github.com/viant/datly/repository/locator/async/keys"
+	metakeys "github.com/viant/datly/repository/locator/meta/keys"
+	outputkeys "github.com/viant/datly/repository/locator/output/keys"
+
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -70,7 +73,7 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters sta
 	}
 	if o.Field == "" && o.Style != BasicStyle {
 		if isReader {
-			o.Field = "Data"
+			o.Field = "ViewData"
 
 		} else {
 			o.Field = "ResponseBody"
@@ -181,7 +184,7 @@ func (o *Output) initParameters(aView *view.View, inputParameters state.Paramete
 	} else if outputParameters := o.Type.Parameters.Filter(state.KindOutput); len(outputParameters) > 0 {
 		o.Style = ComprehensiveStyle
 		for _, dataParameter := range outputParameters {
-			if dataParameter.In.Name == "data" {
+			if dataParameter.In.Name == outputkeys.ViewData {
 				o.Field = dataParameter.Name
 			}
 		}
@@ -189,7 +192,7 @@ func (o *Output) initParameters(aView *view.View, inputParameters state.Paramete
 	if len(o.Type.Parameters) == 0 {
 		o.Type.Parameters, err = o.defaultParameters(aView, inputParameters, isReader)
 	}
-	EnsureOutputKindParameterTypes(o.Type.Parameters, aView)
+	EnsureParameterTypes(o.Type.Parameters, aView)
 	return err
 }
 
@@ -208,7 +211,7 @@ func (o *Output) defaultParameters(aView *view.View, inputParameters state.Param
 			}
 			return parameters, nil
 		}
-		dataParameter := DataOutputParameter("data")
+		dataParameter := DataOutputParameter(outputkeys.ViewData)
 		dataParameter.Tag = `anonynous:"true"`
 		return state.Parameters{dataParameter}, nil
 	}
@@ -234,78 +237,100 @@ func (o *Output) defaultParameters(aView *view.View, inputParameters state.Param
 	return parameters, nil
 }
 
-// EnsureOutputKindParameterTypes update output kind parameter type
-func EnsureOutputKindParameterTypes(parameters []*state.Parameter, aView *view.View) {
+// EnsureParameterTypes update output kind parameter type
+func EnsureParameterTypes(parameters []*state.Parameter, aView *view.View) {
 	for _, parameter := range parameters {
-		ensureOutputParameterType(parameter, aView)
+		ensureParameterType(parameter, aView)
 		if len(parameter.Object) > 0 {
-			EnsureOutputKindParameterTypes(parameter.Object.FilterByKind(state.KindOutput), aView)
+			EnsureParameterTypes(parameter.Object, aView)
 		}
 		if len(parameter.Repeated) > 0 {
-			EnsureOutputKindParameterTypes(parameter.Repeated.FilterByKind(state.KindOutput), aView)
+			EnsureParameterTypes(parameter.Repeated, aView)
 		}
 	}
 }
 
-func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
+func ensureParameterType(parameter *state.Parameter, aView *view.View) {
 	rType := parameter.Schema.Type()
 	if rType != nil && rType.Kind() != reflect.String && rType.Kind() != reflect.Interface {
 		return
 	}
-	if parameter.In.Kind == state.KindOutput {
+
+	switch parameter.In.Kind {
+	case state.KindOutput:
 		key := strings.ToLower(parameter.In.Name)
 		switch key {
 		case "":
 			return
-		case "data":
+		case outputkeys.ViewData:
 			if aView != nil {
 				parameter.Schema = state.NewSchema(aView.OutputType())
 			}
 
-		case "summary":
+		case outputkeys.ViewSummaryData:
 			if aView != nil {
 				parameter.Schema = aView.Template.Summary.Schema
 			}
-		case "filter":
+		case outputkeys.Filter:
 			if aView != nil {
 				predicateType := aView.Template.Parameters.PredicateStructType()
 				parameter.Schema = state.NewSchema(predicateType)
-				parameter.Schema.Name = strings.Title(aView.Name) + "Filter"
+				parameter.Schema.Name = strings.Title(aView.Name) + outputkeys.Filter
 				parameter.SetTypeNameTag()
 			} else {
-				parameter.Schema.Name = "Filter"
-				parameter.Schema.DataType = "Filter"
+				parameter.Schema.Name = outputkeys.Filter
+				parameter.Schema.DataType = outputkeys.Filter
 			}
 		default:
 			//static types
-			if rType, ok := keys.Types[key]; ok {
-				parameter.Schema = state.NewSchema(rType)
-				if rType.Kind() == reflect.Ptr {
-					rType = rType.Elem()
-				}
-				if rType.Kind() == reflect.Struct {
+			if rType, ok := outputkeys.Types[key]; ok {
+				updateParameterType(parameter, rType)
+			}
 
-					if parameter.Name == "" {
-						parameter.Name = rType.Name()
-					}
-					if parameter.Tag == "" {
-						parameter.Tag = `json:",omitempty"`
-						if parameter.Name == rType.Name() {
-							parameter.Tag += ` anonymous:"true"`
-						}
-					}
-				}
+		}
+	case state.KindMeta:
+		key := strings.ToLower(parameter.In.Name)
+		switch key {
+		default:
+			if rType, ok := metakeys.Types[key]; ok {
+				updateParameterType(parameter, rType)
+			}
+		}
+	case state.KindAsync:
+		key := strings.ToLower(parameter.In.Name)
+		switch key {
+		default:
+			if rType, ok := asynckeys.Types[key]; ok {
+				updateParameterType(parameter, rType)
+			}
+		}
+	}
+}
+
+func updateParameterType(parameter *state.Parameter, rType reflect.Type) {
+	parameter.Schema = state.NewSchema(rType)
+	if rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	if rType.Kind() == reflect.Struct {
+		if parameter.Name == "" {
+			parameter.Name = rType.Name()
+		}
+		if parameter.Tag == "" {
+			parameter.Tag = `json:",omitempty"`
+			if parameter.Name == rType.Name() {
+				parameter.Tag += ` anonymous:"true"`
 			}
 		}
 	}
 }
 
 func DefaultDataOutputParameter() *state.Parameter {
-	return &state.Parameter{Name: "Output", Tag: `anonymous:"true"`, In: state.NewOutputLocation("data"), Schema: state.NewSchema(nil)}
+	return &state.Parameter{Name: "Output", Tag: `anonymous:"true"`, In: state.NewOutputLocation(outputkeys.ViewData), Schema: state.NewSchema(nil)}
 }
 
 func DataOutputParameter(name string) *state.Parameter {
-	return &state.Parameter{Name: name, In: state.NewOutputLocation("data"), Schema: state.NewSchema(nil)}
+	return &state.Parameter{Name: name, In: state.NewOutputLocation(outputkeys.ViewData), Schema: state.NewSchema(nil)}
 }
 
 func DefaultStatusOutputParameter() *state.Parameter {

@@ -1,4 +1,4 @@
 
 
-#set( $_ = $Jobs<?>(output/data))
+#set( $_ = $Jobs<?>(output/view))
 #set( $_ = $Status<?>(output/status))

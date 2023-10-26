@@ -170,6 +170,7 @@ func (r *Resource) MergeFrom(resource *Resource, types *xreflect.Types) {
 	r.mergeMessageBuses(resource)
 	r.mergeProviders(resource)
 	r.mergePredicates(resource)
+	r.mergeMetrics(resource)
 }
 
 func (r *Resource) mergeSubstitutes(resource *Resource) {
@@ -758,4 +759,8 @@ func (r *Resource) initDocs(ctx context.Context) error {
 
 func (r *Resource) Doc() (docs.Service, bool) {
 	return r._doc, r._doc != nil
+}
+
+func (r *Resource) mergeMetrics(resource *Resource) {
+	r.Metrics = resource.Metrics
 }

@@ -4,7 +4,9 @@ import (
 	"context"
 	goJson "encoding/json"
 	"github.com/viant/datly/gateway/router/status"
+	_ "github.com/viant/datly/repository/locator/async"
 	_ "github.com/viant/datly/repository/locator/component"
+	_ "github.com/viant/datly/repository/locator/meta"
 	_ "github.com/viant/datly/repository/locator/output"
 
 	reader "github.com/viant/datly/service/reader"
