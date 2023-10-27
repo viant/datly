@@ -8,16 +8,22 @@ import (
 	"strings"
 )
 
-func (r *Router) NewMetricRoute() *Route {
+func (r *Router) NewMetricRoute(URI string) *Route {
+	if !strings.HasSuffix(URI, "/") {
+		URI += "/"
+	}
+	pathURI := URI
+	if !strings.HasSuffix(pathURI, "*") {
+		pathURI += "*"
+	}
 	return &Route{
-		Path: contract.NewPath(http.MethodGet, r.config.Meta.MetricURI),
+		Path: contract.NewPath(http.MethodGet, pathURI),
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
-			r.handleMetrics(response, req)
+			r.handleMetrics(response, req, URI)
 		},
 	}
 }
 
-func (r *Router) handleMetrics(writer http.ResponseWriter, req *http.Request) {
-	URI := strings.Trim(r.config.Meta.MetricURI, "*")
+func (r *Router) handleMetrics(writer http.ResponseWriter, req *http.Request, URI string) {
 	gmetric.NewHandler(URI, r.metrics).ServeHTTP(writer, req)
 }

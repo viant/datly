@@ -7,7 +7,7 @@ import (
 
 type Metrics struct {
 	*gmetric.Service
-	URIPart string
+	Method string
 }
 
 type metricsLocation struct {

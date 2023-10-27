@@ -70,7 +70,8 @@ func (r *Route) Namespaces() []string {
 	return namespaces
 }
 
-func (r *Router) routeURL(oldPrefix string, newPrefix, URI string) string {
+func (r *Router) routeURL(newPrefix, URI string) string {
+	oldPrefix := r.config.APIPrefix
 	if strings.HasPrefix(URI, oldPrefix) {
 		URI = strings.Trim(strings.Replace(URI, oldPrefix, "", 1), "/")
 		newPrefix = strings.Trim(newPrefix, "/")
@@ -81,6 +82,18 @@ func (r *Router) routeURL(oldPrefix string, newPrefix, URI string) string {
 		URI = "/" + URI
 	}
 
+	return URI
+}
+
+func (r *Router) metricURL(newPrefix, URI string) string {
+	URI = r.routeURL(newPrefix, URI)
+	if index := strings.Index(URI, "{"); index != -1 {
+		fragment := URI[index:]
+		if index := strings.Index(fragment, "}"); index != -1 {
+			fragment = fragment[:index+1]
+		}
+		URI = strings.Replace(URI, fragment, "T", 1)
+	}
 	return URI
 }
 

@@ -23,6 +23,7 @@ import (
 	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
+	"net/http"
 	"reflect"
 	"strings"
 	"time"
@@ -687,11 +688,10 @@ func (v *View) ensureCounter() {
 	var counter logger.Counter
 	if metric := v._resource.Metrics; metric != nil {
 		name := v.Name
-		if metric.URIPart != "" {
-			name = metric.URIPart + name
+		if metric.Method != "" && metric.Method != http.MethodGet {
+			name = metric.Method + ":" + name
 		}
 		name = strings.ReplaceAll(name, "/", ".")
-
 		cnt := metric.Service.LookupOperation(name)
 		if cnt == nil {
 			counter = metric.Service.MultiOperationCounter(metricLocation(), name, name+" performance", time.Millisecond, time.Minute, 2, provider.NewBasic())
@@ -959,6 +959,9 @@ func (v *View) inherit(view *View) error {
 
 	if v.TableBatches == nil {
 		v.TableBatches = view.TableBatches
+	}
+	if v.Counter == nil {
+		v.Counter = view.Counter
 	}
 	return nil
 }

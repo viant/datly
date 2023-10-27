@@ -319,6 +319,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	routes := make([]*Route, 0)
 	paths := make([]*contract.Path, 0, len(routes))
 	container := r.repository.Container()
+
 	for _, anItem := range container.Items {
 
 		for _, aPath := range anItem.Paths {
@@ -341,9 +342,11 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 					return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
 				}
 				routes = append(routes, r.NewRouteHandler(router.New(aPath, provider)))
-				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.APIPrefix, r.config.Meta.ViewURI, aPath.URI), provider))
-				routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.OpenApiURI, aPath.URI), r.repository, provider))
-				routes = append(routes, r.NewStructRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.StructURI, aPath.URI), provider))
+				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.Meta.ViewURI, aPath.URI), provider))
+				routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.Meta.OpenApiURI, aPath.URI), r.repository, provider))
+				routes = append(routes, r.NewStructRoute(r.routeURL(r.config.Meta.StructURI, aPath.URI), provider))
+				routes = append(routes, r.NewMetricRoute(r.metricURL(r.config.Meta.MetricURI, aPath.URI)))
+
 				//TODO extend path.Path with cache info to pre exract cacheable view
 				//if views := router.ExtractCacheableViews(route); len(views) > 0 {
 				//	routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.CacheWarmURI, route.URI), route))
@@ -363,7 +366,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	routes = append(
 		routes,
 		r.NewStatusRoute(),
-		r.NewMetricRoute(),
+
 		r.NewConfigRoute(),
 	)
 

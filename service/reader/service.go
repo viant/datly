@@ -181,7 +181,7 @@ func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session) error {
 	execution := &TemplateExecution{}
 	start := Now()
-	onFinish := session.View.Counter.Begin(start)
+	onFinish := view.Counter.Begin(start)
 	err := s.readObjectsWithMeta(ctx, session, batchData, view, collector, selector, execution)
 	s.afterRead(session, collector, &start, execution, err, onFinish)
 	return err

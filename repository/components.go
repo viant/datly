@@ -45,7 +45,7 @@ func (c *Components) Init(ctx context.Context) error {
 		options = append(options, columns)
 	}
 	if c.options.metrics != nil && len(c.Components) > 0 {
-		options = append(options, &view.Metrics{URIPart: c.Components[0].URI, Service: c.options.metrics})
+		options = append(options, &view.Metrics{Method: c.Components[0].Method, Service: c.options.metrics})
 	}
 	if err := c.Resource.Init(ctx, options...); err != nil {
 		return err
