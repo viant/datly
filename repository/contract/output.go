@@ -275,11 +275,11 @@ func ensureParameterType(parameter *state.Parameter, aView *view.View) {
 			if aView != nil {
 				predicateType := aView.Template.Parameters.PredicateStructType()
 				parameter.Schema = state.NewSchema(predicateType)
-				parameter.Schema.Name = strings.Title(aView.Name) + outputkeys.Filter
+				parameter.Schema.Name = strings.Title(aView.Name) + "Filter"
 				parameter.SetTypeNameTag()
 			} else {
-				parameter.Schema.Name = outputkeys.Filter
-				parameter.Schema.DataType = outputkeys.Filter
+				parameter.Schema.Name = "Filter"
+				parameter.Schema.DataType = "Filter"
 			}
 		default:
 			//static types
