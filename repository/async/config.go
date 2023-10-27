@@ -112,7 +112,14 @@ func (c *Config) JobByMatchKey(ctx context.Context, jobRef string) (*async.Job, 
 }
 
 func (c *Config) CreateJob(ctx context.Context, job *async.Job, notification *async.Notification) error {
-	return c.service.CreateJob(ctx, job)
+	err := c.service.CreateJob(ctx, job)
+	if err != nil { //unable to create job thus, adding to memory so foregrand thread can access it vi memory
+		errMessage := err.Error()
+		job.Status = "ERROR"
+		job.Error = &errMessage
+		c.service.AddFailedJob(job)
+	}
+	return err
 }
 
 func (c *Config) UpdateJob(ctx context.Context, job *async.Job) error {

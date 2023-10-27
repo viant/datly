@@ -131,9 +131,6 @@ func (s *Service) ensureAsyncContext(ctx context.Context, aComponent *repository
 		destURL := asyncModule.DestinationURL(job)
 		job.EventURL = destURL
 		if err = asyncModule.CreateJob(ctx, job, &asyncModule.Notification); err != nil {
-			errMessage := err.Error()
-			job.Error = &errMessage
-			job.Status = "ERROR"
 			return nil, err
 		}
 		if err = s.publishEvent(ctx, asyncModule, job); err != nil {

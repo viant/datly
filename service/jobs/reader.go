@@ -41,7 +41,7 @@ func (s *Service) JobByMatchKey(ctx context.Context, matchKey string, ttl time.D
 		return nil, err
 	}
 	if len(result) == 0 {
-		return nil, nil
+		return s.matchFailedJob(matchKey), nil
 	}
 	return result[0], nil
 }

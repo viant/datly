@@ -11,6 +11,7 @@ import (
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xreflect"
 	"reflect"
+	"sync"
 )
 
 type Service struct {
@@ -22,6 +23,28 @@ type Service struct {
 	inserter   *insert.Service
 	updater    *update.Service
 	readerView *view.View
+	sync.RWMutex
+	failedJobs []*async.Job
+}
+
+func (s *Service) AddFailedJob(job *async.Job) {
+	s.RWMutex.Lock()
+	defer s.RWMutex.Unlock()
+	if len(s.failedJobs) > 100 {
+		s.failedJobs = s.failedJobs[5:]
+	}
+	s.failedJobs = append(s.failedJobs, job)
+}
+
+func (s *Service) matchFailedJob(matchKey string) *async.Job {
+	s.RWMutex.RLock()
+	defer s.RWMutex.RUnlock()
+	for _, candidate := range s.failedJobs {
+		if candidate.MatchKey == matchKey {
+			return candidate
+		}
+	}
+	return nil
 }
 
 func (s *Service) EnsureJobTables(ctx context.Context) error {
