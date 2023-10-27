@@ -6,10 +6,10 @@ import (
 )
 
 func BuildPredicate(aTag *tags.Tag, param *Parameter) {
-	if aTag == nil || aTag.Predicate == nil {
+	if aTag == nil || len(aTag.Predicates) == 0 {
 		return
 	}
-	pTag := aTag.Predicate
+	pTag := aTag.Predicates[0]
 	pTag.Init(param.Name)
 	param.Predicates = append(param.Predicates, &extension.PredicateConfig{
 		Group: pTag.Group,

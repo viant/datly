@@ -51,7 +51,7 @@ func (p *Predicate) Init(name string) {
 }
 
 func (t *Tag) updatedPredicate(key string, value string) (err error) {
-	tag := t.Predicate
+	tag := t.Predicates[len(t.Predicates)-1]
 	lKey := strings.ToLower(key)
 	switch lKey {
 	case "name":

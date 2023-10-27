@@ -168,10 +168,10 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 
 func (p *Predicate) appendFilter(selector *structology.Selector, value []interface{}) {
 	aTag, _ := tags.ParseStateTags(selector.Tag(), nil)
-	if aTag.Predicate == nil {
-		aTag.Predicate = &tags.Predicate{}
+	if len(aTag.Predicates) == 0 {
+		aTag.EnsurePredicate()
 	}
-	pTag := aTag.Predicate
+	pTag := aTag.Predicates[0]
 	pTag.Init(selector.Name())
 	filter := p.ctx.Filters.LookupOrAdd(pTag.Filter)
 	if pTag.Exclusion {

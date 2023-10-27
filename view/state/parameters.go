@@ -2,12 +2,14 @@ package state
 
 import (
 	"fmt"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	stags "github.com/viant/structology/tags"
+	"github.com/viant/toolbox"
 	"github.com/viant/velty"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -203,9 +205,8 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 			structField := reflect.StructField{Name: fieldName,
 				Type:    rType,
 				PkgPath: PkgPath(fieldName, pkgPath),
-				Tag:     reflect.StructTag(param.Tag),
+				Tag:     param.buildTag(),
 			}
-
 			if fieldName == rType.Name() || strings.Contains(param.Tag, "anonymous") {
 				structField.Anonymous = true
 			}
@@ -378,6 +379,40 @@ func (p Parameters) PredicateStructType() reflect.Type {
 		return emptyStruct
 	}
 	return reflect.StructOf(structFields)
+}
+
+func (p *Parameter) buildTag() reflect.StructTag {
+	aTag := tags.Tag{}
+	aTag.Parameter = &tags.Parameter{
+		Name: p.Name,
+		Kind: string(p.In.Kind),
+		In:   string(p.In.Name),
+		When: p.When,
+		Lazy: p.Lazy,
+	}
+	if p.Output != nil && p.Output.Schema != nil {
+		if p.Output.Schema.TypeName() != p.Schema.TypeName() {
+			aTag.Parameter.DataType = p.Schema.TypeName()
+		}
+	}
+	if strings.Contains(aTag.Parameter.In, ",") {
+		aTag.Parameter.In = "{" + aTag.Parameter.In + "}"
+	}
+	setter.SetStringIfEmpty(&aTag.Description, p.Description)
+	if p.Const != nil {
+		aTag.DefaultValue = toolbox.AsString(p.Const)
+	} else if p.Value != nil {
+		aTag.DefaultValue = toolbox.AsString(p.Value)
+	}
+	if p.Output != nil {
+		aTag.Codec = &tags.Codec{Name: p.Output.Name, Arguments: p.Output.Args}
+	}
+	if p.Predicates != nil {
+		for _, aPredicate := range p.Predicates {
+			aTag.Predicates = append(aTag.Predicates, &tags.Predicate{Name: aPredicate.Name, Group: aPredicate.Group, Arguments: aPredicate.Args})
+		}
+	}
+	return aTag.UpdateTag(reflect.StructTag(p.Tag))
 }
 
 func (p NamedParameters) Merge(with NamedParameters) {

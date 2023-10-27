@@ -2,6 +2,7 @@ package tags
 
 import (
 	"fmt"
+	"github.com/viant/structology/tags"
 	"strconv"
 	"strings"
 )
@@ -18,6 +19,10 @@ type (
 	}
 	LinkOption func(o *linkOption)
 )
+
+func (l LinkOn) Tag() *tags.Tag {
+	return &tags.Tag{Name: LinkOnTag, Values: tags.Values(strings.Join(l, ","))}
+}
 
 func WithRelLink(field, column string, include *bool) LinkOption {
 	return func(o *linkOption) {

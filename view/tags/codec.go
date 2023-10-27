@@ -41,6 +41,9 @@ func (t *Tag) updatedCodec(key string, value string) (err error) {
 
 func (p *Codec) Tag() *tags.Tag {
 	builder := &strings.Builder{}
+	if p == nil {
+		return nil
+	}
 	builder.WriteString(p.Name)
 	for _, arg := range p.Arguments {
 		builder.WriteString(",")

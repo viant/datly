@@ -12,9 +12,12 @@ import (
 	"strings"
 )
 
+// DefaultValueTag represents default value tag
+const DefaultValueTag = "default"
+
 // ParseViewTags parse view related tags
 func ParseViewTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
-	return Parse(tag, fs, ViewTag, SQLTag, SQLSummaryTag, LinkOnTag)
+	return Parse(tag, fs, ViewTag, SQLTag, SQLSummaryTag, LinkOnTag, format.TagName)
 }
 
 // ParseStateTags parse state related tags
@@ -27,7 +30,7 @@ func ParseStateTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
 }
 
 func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error) {
-	ret := &Tag{fs: afs.New(), TypeName: tag.Get(xreflect.TagTypeName), Description: tag.Get(DescriptionTag), embed: fs}
+	ret := &Tag{fs: afs.New(), TypeName: tag.Get(xreflect.TagTypeName), Description: tag.Get(DescriptionTag), DefaultValue: tag.Get(DefaultValueTag), embed: fs}
 	var err error
 	for _, tagName := range tagNames {
 		tagValue, ok := tag.Lookup(tagName)
@@ -70,10 +73,11 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 			}
 			ret.SummarySQL = ViewSQLSummary(data)
 		case PredicateTag:
-			ret.Predicate = &Predicate{Name: name}
-			if err := values.MatchPairs(ret.updatedPredicate); err != nil {
+			err := parsePredicate(tag, ret)
+			if err != nil {
 				return nil, err
 			}
+
 		case CodecTag:
 			ret.Codec = &Codec{Name: name}
 			if err := values.MatchPairs(ret.updatedCodec); err != nil {
@@ -96,8 +100,31 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 		default:
 			return nil, fmt.Errorf("unsupported tag: %s", tagName)
 		}
-
 	}
 
 	return ret, nil
+}
+
+func parsePredicate(tag reflect.StructTag, ret *Tag) error {
+	tagLiteral := string(tag)
+	for i := 0; i < 10; i++ { //upto 10 predicates max
+		index := strings.Index(tagLiteral, PredicateTag+":")
+		if index == -1 {
+			break
+		}
+		offset := len(ParameterTag) + 3
+		predicateTag := tagLiteral[index:]
+		if index = strings.Index(predicateTag[offset:], `"`); index != -1 {
+			predicateTag = predicateTag[:offset+index+1]
+			tagLiteral = strings.Replace(tagLiteral, predicateTag, "", 1)
+			values := tags.Values(reflect.StructTag(predicateTag).Get(PredicateTag))
+			var name string
+			name, values = values.Name()
+			ret.Predicates = append(ret.Predicates, &Predicate{Name: name})
+			if err := values.MatchPairs(ret.updatedPredicate); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

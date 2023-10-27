@@ -11,14 +11,21 @@ func TestTag_updatePredicate(t *testing.T) {
 	var testCases = []struct {
 		description string
 		tag         reflect.StructTag
-		expect      *Predicate
+		expect      []*Predicate
 		expectTag   string
 	}{
 
 		{
 			description: "basic predicate",
 			tag:         `predicate:"p1,group=1,A1,A2"`,
-			expect:      &Predicate{Name: "p1", Group: 1, Arguments: []string{"A1", "A2"}},
+			expect:      []*Predicate{{Name: "p1", Group: 1, Arguments: []string{"A1", "A2"}}},
+		},
+		{
+			description: "basic predicate",
+			tag:         `predicate:"p1,group=1,A1,A2" predicate:"p2,group=1,A3,A2"`,
+			expect: []*Predicate{
+				{Name: "p1", Group: 1, Arguments: []string{"A1", "A2"}},
+				{Name: "p2", Group: 1, Arguments: []string{"A3", "A2"}}},
 		},
 	}
 
@@ -27,11 +34,7 @@ func TestTag_updatePredicate(t *testing.T) {
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}
-		assert.EqualValues(t, testCase.expect, actual.Predicate, testCase.description)
-		expectTag := testCase.expectTag
-		if expectTag == "" {
-			expectTag = testCase.tag.Get(PredicateTag)
-		}
-		assert.EqualValues(t, expectTag, string(actual.Predicate.Tag().Values), testCase.description)
+		assert.EqualValues(t, testCase.expect, actual.Predicates, testCase.description)
+
 	}
 }

@@ -53,6 +53,9 @@ func (t *Tag) getOptions() []storage.Option {
 
 func (v *View) Tag() *tags.Tag {
 	builder := &strings.Builder{}
+	if v == nil {
+		return nil
+	}
 	builder.WriteString(v.Name)
 	appendNonEmpty(builder, "table", v.Table)
 	appendNonEmpty(builder, "connector", v.Connector)
