@@ -16,6 +16,7 @@ import (
 type Locator struct{}
 
 func (l *Locator) Value(ctx context.Context, name string) (interface{}, bool, error) {
+	name = strings.ToLower(name)
 	switch {
 	case strings.HasPrefix(name, keys.Group):
 		return l.getGroupValue(ctx, name)
