@@ -104,6 +104,9 @@ func (c *Config) updateURIs() error {
 	if !strings.HasPrefix(cfg.Meta.StructURI, c.repository.APIPrefix) {
 		cfg.Meta.StructURI = strings.Replace(cfg.Meta.StructURI, cfg.APIPrefix, c.repository.APIPrefix, 1)
 	}
+	if !strings.HasPrefix(cfg.Meta.StateURI, c.repository.APIPrefix) {
+		cfg.Meta.StateURI = strings.Replace(cfg.Meta.StateURI, cfg.APIPrefix, c.repository.APIPrefix, 1)
+	}
 	return nil
 }
 

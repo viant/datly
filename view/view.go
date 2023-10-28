@@ -704,6 +704,13 @@ func (v *View) ensureCounter() {
 
 }
 
+func (c *View) TypeDefinitions() []*TypeDefinition {
+	if c._resource == nil {
+		return nil
+	}
+	return c._resource.Types
+}
+
 func (v *View) updateColumnTypes() {
 	rType := shared.Elem(v.DataType())
 	for i := 0; i < rType.NumField(); i++ {

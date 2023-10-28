@@ -15,6 +15,9 @@ const (
 	CacheWarmupURI = "/v1/api/cache/warmup"
 	//StructURI URIPrefix that generates a Golang struct representation
 	StructURI = "/v1/api/meta/struct"
+
+	//StateURI state uri
+	StateURI = "/v1/api/meta/state"
 )
 
 // Config represents meta config
@@ -28,6 +31,7 @@ type Config struct {
 	OpenApiURI    string
 	CacheWarmURI  string
 	StructURI     string
+	StateURI      string
 }
 
 // Init initialises config
@@ -57,4 +61,8 @@ func (m *Config) Init() {
 	if m.StructURI == "" {
 		m.StructURI = StructURI
 	}
+	if m.StateURI == "" {
+		m.StateURI = StateURI
+	}
+
 }
