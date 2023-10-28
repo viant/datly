@@ -12,6 +12,7 @@ import (
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -509,4 +510,12 @@ func (p *Parameter) initRepeatedParams(ctx context.Context, resource Resource) e
 
 func (p *Parameter) NewState(value interface{}) *structology.State {
 	return p._state.WithValue(value)
+}
+
+func (p *Parameter) CombineTags() reflect.StructTag {
+	if p.Description == "" {
+		return reflect.StructTag(p.Tag)
+	}
+
+	return reflect.StructTag(p.Tag + " description:" + strconv.Quote(p.Description))
 }

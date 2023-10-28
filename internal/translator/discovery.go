@@ -26,7 +26,7 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 		_ = json.Unmarshal(data, &cloneRoot)
 	}
 	var types []*xreflect.Type
-	if err := s.updateViewSchema(&cloneRoot, resource, viewColumns, resource.typeRegistry, &types); err != nil {
+	if err := s.updateViewSchema(&cloneRoot, resource, viewColumns, resource.typeRegistry, &types, resource.Rule.Doc.Columns); err != nil {
 		fmt.Printf("ERROR: %v\n", err)
 	}
 
@@ -69,7 +69,7 @@ func (s *Service) detectColumnCaseFormat(columns view.Columns) (text.CaseFormat,
 	return caseFormat, nil
 }
 
-func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache discover.Columns, registry *xreflect.Types, types *[]*xreflect.Type) (err error) {
+func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache discover.Columns, registry *xreflect.Types, types *[]*xreflect.Type, doc state.Documentation) (err error) {
 	if aView.Schema != nil && aView.Schema.Name != "" {
 		return nil
 	}
@@ -87,7 +87,7 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 		relSchema.Name = view.DefaultTypeName(relSchema.Name)
 		rel.Of.View = *relView
 		relations = append(relations, rel)
-		if err = s.updateViewSchema(relView, resource, cache, registry, types); err != nil {
+		if err = s.updateViewSchema(relView, resource, cache, registry, types, doc); err != nil {
 			return err
 		}
 	}
@@ -108,7 +108,7 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 			return err
 		}
 	}
-	fn := view.ColumnsSchema(caseFormat, columns, relations, aView)
+	fn := view.ColumnsSchemaDocumented(caseFormat, columns, relations, aView, doc)
 	schemaType, err := fn()
 	if err != nil {
 		s.Repository.Messages.AddWarning(aView.Name, "detection", fmt.Sprintf("unable detect component view type: %v", err))
@@ -166,7 +166,7 @@ func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Col
 				columnDiscovery.Items[key] = summary.Columns
 			}
 		}
-		s.updateViewOutputType(viewlet, true)
+		s.updateViewOutputType(viewlet, true, resource.Rule.Doc.Columns)
 		return nil
 	}); err != nil {
 		return err

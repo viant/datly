@@ -49,7 +49,7 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		root.Spec.Type.Cardinality = resource.Rule.Route.Output.Cardinality
 		template := codegen.NewTemplate(resource.Rule, root.Spec)
 		root.Spec.Type.Package = ruleOption.Package()
-		template.BuildTypeDef(root.Spec, resource.Rule.GetField())
+		template.BuildTypeDef(root.Spec, resource.Rule.GetField(), resource.Rule.Doc.Columns)
 		template.Imports.AddType(resource.Rule.HandlerType)
 		template.Imports.AddType(resource.Rule.StateType)
 

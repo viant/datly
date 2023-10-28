@@ -1,4 +1,4 @@
-/* {"URI":"vendors/{vendorID}"} */
+/* {"URI":"vendors/{vendorID}", "DocURL":"./doc.yaml" } */
 
 
 

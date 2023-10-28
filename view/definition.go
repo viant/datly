@@ -37,6 +37,7 @@ type (
 		Fields      []*Field          `json:",omitempty"`
 		Tag         string            `json:",omitempty"`
 		Ptr         bool
+		Description string
 	}
 )
 
@@ -165,6 +166,10 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 		aTagValue := jsonTagValue(jsonName, field, field.Tag)
 		if field.Column != "" && !strings.Contains(string(aTagValue), "sqlx") {
 			aTagValue += fmt.Sprintf(`sqlx:"name=%v" `, field.Column)
+		}
+
+		if field.Description != "" {
+			aTagValue += `description:"` + field.Description + `"`
 		}
 
 		var fieldPath string

@@ -15,6 +15,7 @@ import (
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -202,11 +203,13 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 			if index := strings.LastIndex(fieldName, "."); index != -1 {
 				fieldName = fieldName[index+1:]
 			}
+
 			structField := reflect.StructField{Name: fieldName,
 				Type:    rType,
 				PkgPath: PkgPath(fieldName, pkgPath),
 				Tag:     param.buildTag(),
 			}
+
 			if fieldName == rType.Name() || strings.Contains(param.Tag, "anonymous") {
 				structField.Anonymous = true
 			}
@@ -337,7 +340,7 @@ func (p Parameters) Filter(kind Kind) NamedParameters {
 	return index
 }
 
-func (p Parameters) PredicateStructType() reflect.Type {
+func (p Parameters) PredicateStructType(d Documentation) reflect.Type {
 	var fields []*predicate.FilterType
 	fieldTypes := map[string]*predicate.FilterType{}
 	for _, candidate := range p {
@@ -359,15 +362,19 @@ func (p Parameters) PredicateStructType() reflect.Type {
 		} else {
 			filterType.IncludeTag = candidate.Tag
 		}
-		if ok {
-			continue
-		}
 	}
 
 	var structFields []reflect.StructField
 	for _, field := range fields {
 		fieldTags := stags.NewTags(field.StructTagTag())
 		fieldTags.SetIfNotFound("json", ",omitempty")
+
+		if d != nil {
+			fieldDescription, ok := d.ByName(field.Tag.Filter)
+			if ok {
+				fieldTags.Set("description", fieldDescription)
+			}
+		}
 
 		structFields = append(structFields, reflect.StructField{
 			Name: field.Tag.Filter,
@@ -412,7 +419,13 @@ func (p *Parameter) buildTag() reflect.StructTag {
 			aTag.Predicates = append(aTag.Predicates, &tags.Predicate{Name: aPredicate.Name, Group: aPredicate.Group, Arguments: aPredicate.Args})
 		}
 	}
-	return aTag.UpdateTag(reflect.StructTag(p.Tag))
+
+	result := aTag.UpdateTag(reflect.StructTag(p.Tag))
+	if p.Description != "" {
+		result = reflect.StructTag(string(result) + "description:" + strconv.Quote(p.Description))
+	}
+
+	return result
 }
 
 func (p NamedParameters) Merge(with NamedParameters) {

@@ -35,7 +35,7 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet, 
 			if filter.Schema == nil {
 				filter.Schema = &state.Schema{}
 			}
-			filter.Schema.SetType(parameters.PredicateStructType())
+			filter.Schema.SetType(parameters.PredicateStructType(resource.Rule.Doc.Filter))
 			resource.AddParameterType(filter)
 		}
 	}

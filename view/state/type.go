@@ -22,6 +22,7 @@ type (
 		fs           *embed.FS
 		Package      string
 		withBodyType bool
+		Doc          Documentation
 	}
 	Option func(t *Type)
 )
@@ -155,6 +156,12 @@ func NewType(option ...Option) (*Type, error) {
 func WithResource(resource Resource) Option {
 	return func(t *Type) {
 		t.resource = resource
+	}
+}
+
+func WithDoc(doc Documentation) Option {
+	return func(t *Type) {
+		t.Doc = doc
 	}
 }
 

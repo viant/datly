@@ -80,7 +80,7 @@ func (t *Type) ExpandType(simpleName string) string {
 	return pkg + "." + simpleName
 }
 
-func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool) (*Field, error) {
+func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, doc state.Documentation, table string) (*Field, error) {
 	columnNameOrAlias := column.Alias
 	if columnNameOrAlias == "" {
 		columnNameOrAlias = column.Name
@@ -94,6 +94,12 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool) (*Field
 		Field:      view.Field{Name: columnCase.Format(columnNameOrAlias, text.CaseFormatUpperCamel)},
 		Ptr:        column.IsNullable,
 		Tags:       Tags{},
+	}
+
+	if doc != nil {
+		if fieldDoc, ok := doc.ColumnDocumentation(table, field.Column.Name); ok {
+			field.Tags.Set("description", TagValue{fieldDoc})
+		}
 	}
 	if column.Type == "" {
 		return nil, fmt.Errorf("failed to match type: %v %v %v\n", column.Alias, column.Name, column.Expression)
@@ -113,9 +119,9 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool) (*Field
 	return field, nil
 }
 
-func (s *Spec) Fields(includeHas bool) []*view.Field {
+func (s *Spec) Fields(includeHas bool, doc state.Documentation) []*view.Field {
 	specType := s.Type
-	result := specType.ColumnFields()
+	result := specType.ColumnFields(s.Table, doc)
 
 	hasFieldName := "Has"
 	hasField := &view.Field{
@@ -126,28 +132,35 @@ func (s *Spec) Fields(includeHas bool) []*view.Field {
 
 	for i, rel := range s.Relations {
 		relField := specType.RelationFields[i].Field
-		relField.Fields = rel.Fields(includeHas)
+		relField.Fields = rel.Fields(includeHas, doc)
 		result = append(result, &relField)
 	}
+
 	for _, field := range specType.columnFields {
 		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &state.Schema{DataType: "bool"}})
 	}
 	for _, field := range specType.RelationFields {
 		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &state.Schema{DataType: "bool"}})
 	}
+
 	if includeHas {
 		result = append(result, hasField)
 	}
 	return result
 }
 
-func (t *Type) ColumnFields() []*view.Field {
+func (t *Type) ColumnFields(table string, doc state.Documentation) []*view.Field {
 	var result = make([]*view.Field, 0, 1+len(t.columnFields)+len(t.RelationFields))
 	for i := range t.columnFields {
 		field := t.columnFields[i].Field
 		if t.columnFields[i].Column.IsNullable {
 			field.Ptr = true
 		}
+
+		if doc != nil {
+			field.Description, _ = doc.ColumnDocumentation(table, t.columnFields[i].Column.Name)
+		}
+
 		result = append(result, &field)
 	}
 	return result

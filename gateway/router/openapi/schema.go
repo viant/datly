@@ -78,6 +78,7 @@ func (s *Schema) Field(field reflect.StructField, tag Tag) (*Schema, error) {
 		}
 	}
 
+	result.description = field.Tag.Get("description")
 	return &result, nil
 }
 
@@ -356,18 +357,24 @@ func (c *SchemaContainer) CreateSchema(ctx context.Context, componentSchema *Com
 }
 
 func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *ComponentSchema, fieldSchema *Schema) (*openapi3.Schema, error) {
+	description, err := componentSchema.Description(ctx, fieldSchema.path, fieldSchema.description)
+	if err != nil {
+		return nil, err
+	}
+
 	if fieldSchema.tag.TypeName != "" {
 		_, ok := c.generatedSchemas[fieldSchema.tag.TypeName]
 		if ok {
-			return c.SchemaRef(fieldSchema.tag.TypeName), nil
+			return c.SchemaRef(fieldSchema.tag.TypeName, description), nil
 		}
 	}
 
 	apiType, format, ok := c.asOpenApiType(fieldSchema.rType)
 	if ok {
 		return &openapi3.Schema{
-			Type:   apiType,
-			Format: format,
+			Type:        apiType,
+			Format:      format,
+			Description: description,
 		}, nil
 	}
 
@@ -379,14 +386,17 @@ func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *Com
 	if fieldSchema.tag.TypeName != "" {
 		c.generatedSchemas[fieldSchema.tag.TypeName] = schema
 		c.schemas = append(c.schemas, schema)
-		schema = c.SchemaRef(fieldSchema.tag.TypeName)
+		schema = c.SchemaRef(fieldSchema.tag.TypeName, description)
 	}
 
 	return schema, err
 }
 
-func (c *SchemaContainer) SchemaRef(schemaName string) *openapi3.Schema {
-	return &openapi3.Schema{Ref: "#/components/schemas/" + schemaName}
+func (c *SchemaContainer) SchemaRef(schemaName string, description string) *openapi3.Schema {
+	return &openapi3.Schema{
+		Ref:         "#/components/schemas/" + schemaName,
+		Description: description,
+	}
 }
 
 func (c *SchemaContainer) toOpenApiType(rType reflect.Type) (string, string, error) {

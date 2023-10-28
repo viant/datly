@@ -37,7 +37,10 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 	for _, parameter := range resource.OutputState.FilterByKind(state.KindState) {
 		if stateParameter := resource.State.Lookup(parameter.In.Name); stateParameter != nil {
 			res := view.NewResourcelet(&resource.Resource, &rootViewlet.View.View)
-			stateParameter.Init(context.Background(), res)
+			if err = stateParameter.Init(context.Background(), res); err != nil {
+				return err
+			}
+
 			parameter.Schema = stateParameter.OutputSchema()
 		}
 	}
@@ -51,7 +54,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
-	contract.EnsureParameterTypes(outputParameters, nil)
+	contract.EnsureParameterTypes(outputParameters, nil, resource.Rule.Doc.Parameters, resource.Rule.Doc.Filter)
 	for _, parameter := range outputParameters {
 		if err = s.adjustOutputParameter(resource, parameter, typesRegistry); err != nil {
 			return err
@@ -69,7 +72,10 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 	typesRegistry := s.newTypeRegistry(resource, rootViewlet)
 
 	if rootViewlet.TypeDefinition != nil {
-		typesRegistry.Register(rootViewlet.TypeDefinition.Name, xreflect.WithTypeDefinition(rootViewlet.TypeDefinition.DataType))
+		err := typesRegistry.Register(rootViewlet.TypeDefinition.Name, xreflect.WithTypeDefinition(rootViewlet.TypeDefinition.DataType))
+		if err != nil {
+			return err
+		}
 	}
 
 	outputResource := resource.Resource

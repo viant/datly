@@ -70,6 +70,10 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	}
 
 	outputState := resource.Declarations.OutputState
+	if resource.Rule.Output != nil {
+		resource.Rule.Output.Doc = resource.Rule.Doc.Output
+		resource.Rule.Output.FilterDoc = resource.Rule.Doc.Filter
+	}
 
 	componentParameters := outputState.FilterByKind(state.KindComponent)
 	if err = s.updateComponentType(ctx, resource, componentParameters); err != nil {
@@ -121,7 +125,7 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 		return err
 	}
 	resource.buildParameterViews()
-	if err := resource.ensureViewParametersSchema(ctx, s.buildQueryViewletType); err != nil {
+	if err := resource.ensureViewParametersSchema(ctx, s.buildQueryViewletType, resource.Rule.Doc.Columns); err != nil {
 		return err
 	}
 	if err := resource.ensurePathParametersSchema(ctx); err != nil {
@@ -209,7 +213,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	return nil
 }
 
-func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool) {
+func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool, documentation state.Documentation) {
 	if viewlet.Resource.Rule.IsGeneratation {
 		return
 	}
@@ -219,7 +223,7 @@ func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool) {
 
 	for _, relField := range viewlet.Spec.Type.RelationFields {
 		relViewlet := viewlet.Resource.Rule.Viewlets.Lookup(relField.Relation)
-		s.updateViewOutputType(relViewlet, false)
+		s.updateViewOutputType(relViewlet, false, documentation)
 
 		relType := relViewlet.View.Schema.Type()
 		if relType.Kind() == reflect.Struct {
@@ -234,6 +238,8 @@ func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool) {
 	}
 
 	fields := viewlet.Spec.Type.Fields()
+	viewlet.Spec.Type.Fields()
+
 	if len(fields) > 0 {
 		if viewlet.View.Schema == nil {
 			viewlet.View.Schema = &state.Schema{}
@@ -248,7 +254,7 @@ func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool) {
 		return
 	}
 
-	viewlet.TypeDefinition = viewlet.Spec.TypeDefinition("", false)
+	viewlet.TypeDefinition = viewlet.Spec.TypeDefinition("", false, documentation)
 	viewlet.TypeDefinition.Cardinality = ""
 	viewlet.TypeDefinition.Name = view.DefaultTypeName(viewlet.Name)
 }
@@ -372,7 +378,7 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 }
 
 // initReaderViewlet detect SQL dependent Table columns with implicit parameters type to produce sanitized SQL
-func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet) error {
+func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet, _ state.Documentation) error {
 	if viewlet.Connector == "" {
 		viewlet.Connector = s.DefaultConnector()
 	}
@@ -406,30 +412,30 @@ func (s *Service) DefaultConnector() string {
 }
 
 // buildQueryViewletType build SQL/Table specification (field/column/keys) type
-func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet) error {
+func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet, doc state.Documentation) error {
 	db, err := s.Repository.LookupDb(viewlet.Connector)
 	if err != nil {
 		return err
 	}
 	if viewlet.Table == nil {
-		if err = s.initReaderViewlet(ctx, viewlet); err != nil {
+		if err = s.initReaderViewlet(ctx, viewlet, doc); err != nil {
 			return err
 		}
 	}
 	if viewlet.Expanded, err = viewlet.Resource.expandSQL(viewlet); err != nil {
 		return err
 	}
-	return s.buildViewletType(ctx, db, viewlet)
+	return s.buildViewletType(ctx, db, viewlet, doc)
 }
 
-func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Viewlet) (err error) {
+func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Viewlet, doc state.Documentation) (err error) {
 	if viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.Expanded.Query, viewlet.Expanded.Args...); err != nil {
 		return fmt.Errorf("failed to create spec for %v, %w", viewlet.Name, err)
 	}
 	viewlet.Spec.Namespace = viewlet.Name
 	pkg := ""
 	cardinality := state.Many
-	if err = viewlet.Spec.BuildType(pkg, viewlet.Name, cardinality, viewlet.whitelistMap(), nil); err != nil {
+	if err = viewlet.Spec.BuildType(pkg, viewlet.Name, cardinality, viewlet.whitelistMap(), nil, doc); err != nil {
 		return err
 	}
 	return nil

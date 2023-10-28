@@ -290,8 +290,8 @@ func (t *Template) RecordPrefix() string {
 	return recordPrefix
 }
 
-func (t *Template) BuildTypeDef(spec *inference.Spec, wrapperField string) {
-	t.TypeDef = spec.TypeDefinition(wrapperField, true)
+func (t *Template) BuildTypeDef(spec *inference.Spec, wrapperField string, columns state.Documentation) {
+	t.TypeDef = spec.TypeDefinition(wrapperField, true, columns)
 	t.ensurePackageImports(t.TypeDef.Package, t.TypeDef.Fields)
 	t.ensureTypeImport(spec.Type.Name)
 	if wrapperField != "" {

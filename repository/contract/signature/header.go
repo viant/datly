@@ -73,7 +73,7 @@ func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Type
 		schema.Name = "Filter"
 	}
 	dataParameter := output.LookupByLocation(state.KindOutput, keys.ViewData)
-	predicateType := contract.Input.PredicateStructType()
+	predicateType := contract.Input.PredicateStructType(nil)
 	if predicateType.NumField() > 0 {
 		pkg := ""
 		if dataParameter != nil {
@@ -108,7 +108,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	if viewType == nil {
 		return fmt.Errorf("failed to match data component output type for path: %v:%v", aContract.Method, aContract.URI)
 	}
-	contract.EnsureParameterTypes(parameters, nil)
+	contract.EnsureParameterTypes(parameters, nil, nil, nil)
 
 	if !isAnonymous {
 		rType, _ := registry.Lookup(viewType.Name)

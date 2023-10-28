@@ -36,11 +36,13 @@ type (
 		router.Route
 
 		*contract.Output
-		Async        *async.Config              `json:",omitempty"`
-		Cache        *view.Cache                `json:",omitempty"`
-		CSV          *content.CSVConfig         `json:",omitempty"`
-		Const        map[string]interface{}     `json:",omitempty"`
-		ConstURL     string                     `json:",omitempty"`
+		Async        *async.Config          `json:",omitempty"`
+		Cache        *view.Cache            `json:",omitempty"`
+		CSV          *content.CSVConfig     `json:",omitempty"`
+		Const        map[string]interface{} `json:",omitempty"`
+		ConstURL     string                 `json:",omitempty"`
+		DocURL       string
+		Doc          state.Docs
 		RequestBody  *BodyConfig                `json:",omitempty"`
 		TypeSrc      *parser.TypeImport         `json:",omitempty"`
 		ResponseBody *ResponseBodyConfig        `json:",omitempty"`
@@ -177,6 +179,10 @@ func (r *Resource) initRule(ctx context.Context, fs afs.Service, dSQL *string) e
 	rule.applyDefaults()
 	if err := r.loadData(ctx, fs, rule.ConstURL, &rule.Const); err != nil {
 		r.messages.AddWarning(r.rule.RuleName(), "const", fmt.Sprintf("failed to load constant : %v %w", rule.ConstURL, err))
+	}
+
+	if err := r.loadData(ctx, fs, rule.DocURL, &rule.Doc); err != nil {
+		r.messages.AddWarning(r.rule.RuleName(), "doc", fmt.Sprintf("failed to load documentation: %v due to the %v", rule.DocURL, err.Error()))
 	}
 	r.State.AppendConst(rule.Const)
 	return nil

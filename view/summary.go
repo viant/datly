@@ -130,6 +130,10 @@ func (v *View) generateSchemaTypeFromColumn(caseFormat text.CaseFormat, columns 
 }
 
 func ColumnsSchema(caseFormat text.CaseFormat, columns []*Column, relations []*Relation, v *View) func() (reflect.Type, error) {
+	return ColumnsSchemaDocumented(caseFormat, columns, relations, v, nil)
+}
+
+func ColumnsSchemaDocumented(caseFormat text.CaseFormat, columns []*Column, relations []*Relation, v *View, doc state.Documentation) func() (reflect.Type, error) {
 	return func() (reflect.Type, error) {
 		excluded := make(map[string]bool)
 		for _, rel := range relations {
@@ -158,7 +162,7 @@ func ColumnsSchema(caseFormat text.CaseFormat, columns []*Column, relations []*R
 				}
 			}
 
-			aTag := generateFieldTag(columns[i], caseFormat)
+			aTag := generateFieldTag(columns[i], caseFormat, doc, v.Table)
 			aField := newCasedField(aTag, columnName, caseFormat, rType)
 			if unique[aField.Name] {
 				continue

@@ -527,6 +527,15 @@ func (s *State) GetOutputParameter() *Parameter {
 	return nil
 }
 
+func (s State) AddDescriptions(doc state.Documentation) {
+	for _, parameter := range s {
+		description, ok := doc.ByName(parameter.Name)
+		if ok {
+			parameter.Description = description
+		}
+	}
+}
+
 // NewState creates a state from state go struct
 func NewState(modulePath, dataType string, types *xreflect.Types) (State, error) {
 	baseDir := modulePath

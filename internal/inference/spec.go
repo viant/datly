@@ -80,11 +80,11 @@ func (s *Spec) EnsureRelationType() {
 }
 
 // BuildType build a type from infered table/SQL definition
-func (s *Spec) BuildType(pkg, name string, cardinality state.Cardinality, whitelist, blacklist map[string]bool) error {
+func (s *Spec) BuildType(pkg, name string, cardinality state.Cardinality, whitelist, blacklist map[string]bool, doc state.Documentation) error {
 	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
 	for i, column := range s.Columns {
 		skipped := s.shouldSkipColumn(whitelist, blacklist, column)
-		field, err := aType.AppendColumnField(s.Columns[i], skipped)
+		field, err := aType.AppendColumnField(s.Columns[i], skipped, doc, s.Table)
 		if err != nil {
 			return err
 		}
@@ -106,37 +106,12 @@ func (s *Spec) BuildType(pkg, name string, cardinality state.Cardinality, whitel
 }
 
 // TypeDefinition builds spec based tyep definition
-func (s *Spec) TypeDefinition(wrapper string, includeHas bool) *view.TypeDefinition {
+func (s *Spec) TypeDefinition(wrapper string, includeHas bool, doc state.Documentation) *view.TypeDefinition {
 	typeDef := &view.TypeDefinition{
 		Package:     s.Type.Package,
 		Name:        s.Type.Name,
 		Cardinality: s.Type.Cardinality,
-		Fields:      s.Fields(includeHas),
-	}
-	if wrapper != "" {
-		return &view.TypeDefinition{
-			Name:    wrapper,
-			Package: s.Type.Package,
-			Fields: []*view.Field{
-				{
-					Name:        wrapper,
-					Fields:      typeDef.Fields,
-					Cardinality: typeDef.Cardinality,
-					Tag:         fmt.Sprintf(`typeName:"%v"`, typeDef.Name),
-					Ptr:         true,
-				},
-			},
-		}
-	}
-	return typeDef
-}
-
-func (s *Spec) SchemaTypeDefinition(wrapper string, includeHas bool) *view.TypeDefinition {
-	typeDef := &view.TypeDefinition{
-		Package:     s.Type.Package,
-		Name:        s.Type.Name,
-		Cardinality: s.Type.Cardinality,
-		Fields:      s.Fields(includeHas),
+		Fields:      s.Fields(includeHas, doc),
 	}
 	if wrapper != "" {
 		return &view.TypeDefinition{

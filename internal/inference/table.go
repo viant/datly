@@ -16,7 +16,7 @@ type (
 		Columns        sqlparser.Columns
 		QueryColumns   sqlparser.Columns
 		index          map[string]*sqlparser.Column
-		tables         []*Table
+		Tables         []*Table
 		OutputJSONHint string
 	}
 )
@@ -25,10 +25,10 @@ func (t *Table) HasTable(table string) bool {
 	if t.Name == table {
 		return true
 	}
-	if len(t.tables) == 0 {
+	if len(t.Tables) == 0 {
 		return false
 	}
-	for _, candidate := range t.tables {
+	for _, candidate := range t.Tables {
 		if candidate.HasTable(table) {
 			return true
 		}
@@ -40,10 +40,10 @@ func (t *Table) HasNamespace(ns string) bool {
 	if t.Namespace == ns {
 		return true
 	}
-	if len(t.tables) == 0 {
+	if len(t.Tables) == 0 {
 		return false
 	}
-	for _, candidate := range t.tables {
+	for _, candidate := range t.Tables {
 		if candidate.HasTable(ns) {
 			return true
 		}
@@ -65,7 +65,7 @@ func (t *Table) lookup(ns, column string) *sqlparser.Column {
 	if ret, ok := t.index[strings.ToLower(column)]; ok && (ns == "" || strings.ToLower(ns) == t.Namespace) {
 		return ret
 	}
-	for _, table := range t.tables {
+	for _, table := range t.Tables {
 		if ret := table.lookup(ns, column); ret != nil {
 			return ret
 		}
@@ -103,7 +103,7 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 			return err
 		}
 		joinTable.Namespace = strings.ToLower(join.Alias)
-		t.tables = append(t.tables, joinTable)
+		t.Tables = append(t.Tables, joinTable)
 	}
 	setter.SetStringIfEmpty(&t.OutputJSONHint, query.From.Comments)
 	return nil
@@ -116,7 +116,7 @@ func (t *Table) Detect(ctx context.Context, db *sql.DB) (err error) {
 }
 
 func (t *Table) AppendTable(table *Table) {
-	t.tables = append(t.tables, table)
+	t.Tables = append(t.Tables, table)
 }
 
 func (t *Table) extractColumns(ctx context.Context, db *sql.DB, expr string) (err error) {
