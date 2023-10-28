@@ -12,8 +12,8 @@ import (
 	"strings"
 )
 
-// DefaultValueTag represents default value tag
-const DefaultValueTag = "default"
+// ValueTag represents default value tag
+const ValueTag = "value"
 
 // ParseViewTags parse view related tags
 func ParseViewTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
@@ -30,7 +30,7 @@ func ParseStateTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
 }
 
 func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error) {
-	ret := &Tag{fs: afs.New(), TypeName: tag.Get(xreflect.TagTypeName), Description: tag.Get(DescriptionTag), DefaultValue: tag.Get(DefaultValueTag), embed: fs}
+	ret := &Tag{fs: afs.New(), TypeName: tag.Get(xreflect.TagTypeName), Description: tag.Get(DescriptionTag), Value: tag.Get(ValueTag), embed: fs}
 	var err error
 	for _, tagName := range tagNames {
 		tagValue, ok := tag.Lookup(tagName)

@@ -170,7 +170,33 @@ func (p Parameters) InitRepeated(state *structology.State) (err error) {
 
 var boolType = reflect.TypeOf(true)
 
-func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, withSetMarker bool) (reflect.Type, error) {
+type (
+	reflectOptions struct {
+		withSetterMarker bool
+		typeName         string
+	}
+	ReflectOption func(o *reflectOptions)
+)
+
+func newReflectOptions(opts []ReflectOption) *reflectOptions {
+	ret := &reflectOptions{}
+	for _, opt := range opts {
+		opt(ret)
+	}
+	return ret
+}
+func WithSetMarker() ReflectOption {
+	return func(o *reflectOptions) {
+		o.withSetterMarker = true
+	}
+}
+
+func WithTypeName(name string) ReflectOption {
+	return func(o *reflectOptions) {
+		o.typeName = name
+	}
+}
+func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, opts ...ReflectOption) (reflect.Type, error) {
 	var fields []reflect.StructField
 	var setMarkerFields []reflect.StructField
 	//TODO add compaction here
@@ -217,10 +243,11 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: fieldName, Type: boolType, PkgPath: PkgPath(fieldName, pkgPath), Tag: reflect.StructTag(param.Tag)})
 		}
 	}
+	options := newReflectOptions(opts)
 
-	if withSetMarker && len(fields) > 0 {
+	if options.withSetterMarker && len(fields) > 0 {
 		setMarkerType := reflect.StructOf(setMarkerFields)
-		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: SetMarkerTag})
+		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: reflect.StructTag(fmt.Sprintf(TypedSetMarkerTag, options.typeName+"Has"))})
 	}
 	if len(fields) == 0 {
 		return emptyStruct, nil
@@ -241,7 +268,7 @@ func (p Parameters) BuildBodyType(pkgPath string, lookupType xreflect.LookupType
 		}
 		return candidate.Schema.Type(), nil
 	}
-	return bodyLeafParameters.ReflectType(pkgPath, lookupType, true)
+	return bodyLeafParameters.ReflectType(pkgPath, lookupType, WithSetMarker())
 }
 
 func (p Parameters) buildStateType(pkgPath string, lookupType xreflect.LookupType, withSetMarker bool) (reflect.Type, error) {
@@ -407,9 +434,9 @@ func (p *Parameter) buildTag() reflect.StructTag {
 	}
 	setter.SetStringIfEmpty(&aTag.Description, p.Description)
 	if p.Const != nil {
-		aTag.DefaultValue = toolbox.AsString(p.Const)
+		aTag.Value = toolbox.AsString(p.Const)
 	} else if p.Value != nil {
-		aTag.DefaultValue = toolbox.AsString(p.Value)
+		aTag.Value = toolbox.AsString(p.Value)
 	}
 	if p.Output != nil {
 		aTag.Codec = &tags.Codec{Name: p.Output.Name, Arguments: p.Output.Args}

@@ -117,7 +117,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 			rType = reflect.PtrTo(rType)
 		}
 
-		outputType, err := parameters.ReflectType("github.com/viant/datly/view/autogen", registry.Lookup, false)
+		outputType, err := parameters.ReflectType("github.com/viant/datly/view/autogen", registry.Lookup)
 		if err != nil {
 			return fmt.Errorf("failed to get output type: %w", err)
 		}

@@ -136,7 +136,7 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 			return err
 		}
 	}
-	rType, err := t.Parameters.ReflectType(t.Package(), t._view._resource.LookupType(), true)
+	rType, err := t.Parameters.ReflectType(t.Package(), t._view._resource.LookupType(), state.WithSetMarker())
 	if err != nil {
 		return fmt.Errorf("failed to build template %s reflect type: %w", t._view.Name, err)
 	}

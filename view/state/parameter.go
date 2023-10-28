@@ -258,7 +258,7 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(resource Resource) error {
 	if p.In.Kind == KindObject {
-		if err := p.initGroupSchema(resource); err != nil {
+		if err := p.initObjectSchema(resource); err != nil {
 			return err
 		}
 		p._state = structology.NewStateType(p.Schema.Type())
@@ -355,7 +355,7 @@ func (p *Parameter) initRepeatedSchema(resource Resource) (err error) {
 	return nil
 }
 
-func (p *Parameter) initGroupSchema(resource Resource) (err error) {
+func (p *Parameter) initObjectSchema(resource Resource) (err error) {
 	var rType reflect.Type
 	if p.Schema == nil {
 		p.Schema = &Schema{}
@@ -367,7 +367,11 @@ func (p *Parameter) initGroupSchema(resource Resource) (err error) {
 		}
 	}
 	if rType == nil {
-		if rType, err = p.Object.ReflectType(pkgPath, resource.LookupType(), !p.isOutputType); err != nil {
+		var opts = []ReflectOption{WithTypeName(SanitizeTypeName(p.Name))}
+		if !p.isOutputType {
+			opts = append(opts, WithSetMarker())
+		}
+		if rType, err = p.Object.ReflectType(pkgPath, resource.LookupType(), opts...); err != nil {
 			return err
 		}
 	}

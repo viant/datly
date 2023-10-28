@@ -35,7 +35,7 @@ func (r *Router) generateComponentState(component *repository.Component) (int, [
 
 	input := component.Input.Type.Type()
 	registry := component.TypeRegistry()
-	output, _ := component.Output.Type.Parameters.ReflectType("", registry.Lookup, false)
+	output, _ := component.Output.Type.Parameters.ReflectType("", registry.Lookup)
 
 	inputState := xreflect.GenerateStruct("Input", input.Type(), xreflect.WithTypes(xreflect.NewType("Output", xreflect.WithReflectType(output))), xreflect.WithPackage("state"))
 	builder.WriteString(inputState)

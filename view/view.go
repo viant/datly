@@ -1381,23 +1381,23 @@ func (v *View) SetParameter(name string, selectors *State, value interface{}) er
 	return param.Set(selector.Template, value)
 }
 
-func (v *View) BuildParametrizedSQL(state state.Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand2.StateOption) (*sqlx.SQL, error) {
-	reflectType, err := state.ReflectType(pkgPath, types.Lookup, true)
+func (v *View) BuildParametrizedSQL(aState state.Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand2.StateOption) (*sqlx.SQL, error) {
+	reflectType, err := aState.ReflectType(pkgPath, types.Lookup, state.WithSetMarker())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create state %v type: %w", v.Name, err)
+		return nil, fmt.Errorf("failed to create aState %v type: %w", v.Name, err)
 	}
 	stateType := structology.NewStateType(reflectType)
 	inputState := stateType.NewState()
 
-	if err = state.SetLiterals(inputState); err != nil {
+	if err = aState.SetLiterals(inputState); err != nil {
 		return nil, err
 	}
-	if err := state.InitRepeated(inputState); err != nil {
+	if err := aState.InitRepeated(inputState); err != nil {
 		return nil, err
 	}
 	options = append(options, expand2.WithParameterState(inputState))
 
-	evaluator, err := NewEvaluator(state, stateType, SQL, types.Lookup, nil)
+	evaluator, err := NewEvaluator(aState, stateType, SQL, types.Lookup, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create evaluator %v: %w", v.Name, err)
 	}

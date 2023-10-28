@@ -12,7 +12,6 @@ import (
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
-	"unicode"
 )
 
 const (
@@ -228,7 +227,7 @@ func DefaultTypeName(name string) string {
 	if name == "" {
 		return name
 	}
-	name = SanitizeTypeName(name)
+	name = state.SanitizeTypeName(name)
 	return name + "View"
 }
 
@@ -236,23 +235,8 @@ func getTypenameTag(typeName string) string {
 	if typeName == "" {
 		return ""
 	}
-	typeName = SanitizeTypeName(typeName)
+	typeName = state.SanitizeTypeName(typeName)
 	return " " + xreflect.TagTypeName + `:"` + typeName + `"`
-}
-
-func SanitizeTypeName(typeName string) string {
-	var runes []rune
-	for _, r := range typeName {
-		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_' {
-			runes = append(runes, r)
-		}
-	}
-	name := string(runes)
-	from := text.DetectCaseFormat(name)
-	if from == text.CaseFormatUpperCamel {
-		return name
-	}
-	return from.To(text.CaseFormatUpperCamel).Format(name)
 }
 
 func newCasedField(aTag string, columnName string, sourceCaseFormat text.CaseFormat, rType reflect.Type) reflect.StructField {

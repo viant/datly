@@ -146,7 +146,7 @@ func (r *Resource) AddParameterType(param *state.Parameter) {
 
 	if rType := param.Schema.Type(); rType != nil && types.EnsureStruct(rType) != nil {
 		setter.SetStringIfEmpty(&typeName, param.Schema.TypeName())
-		setter.SetStringIfEmpty(&typeName, view.SanitizeTypeName(param.Name))
+		setter.SetStringIfEmpty(&typeName, state.SanitizeTypeName(param.Name))
 		param.Schema.Name = typeName
 		pkg := r.rule.Package()
 		aType := xreflect.NewType(typeName, xreflect.WithReflectType(rType), xreflect.WithPackage(pkg))
@@ -160,7 +160,7 @@ func (r *Resource) AddParameterType(param *state.Parameter) {
 		}
 		schema := param.Output.Schema
 		typeName := schema.TypeName()
-		setter.SetStringIfEmpty(&typeName, view.SanitizeTypeName(param.Name))
+		setter.SetStringIfEmpty(&typeName, state.SanitizeTypeName(param.Name))
 		schema.Name = typeName
 		pkg := r.rule.Package()
 		aType := xreflect.NewType(typeName, xreflect.WithReflectType(rType), xreflect.WithPackage(pkg))

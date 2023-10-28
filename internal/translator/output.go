@@ -99,7 +99,7 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 		resource.AppendTypeDefinition(&view.TypeDefinition{Name: parameter.Schema.Name, DataType: parameter.Schema.Type().String()})
 	}
 
-	outputType, err := compactedParameters.ReflectType(resource.rule.ModuleLocation, typesRegistry.Lookup, false)
+	outputType, err := compactedParameters.ReflectType(resource.rule.ModuleLocation, typesRegistry.Lookup)
 	if err != nil {
 		return fmt.Errorf("failed to build outputType: %w", err)
 	}
@@ -159,7 +159,7 @@ func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Par
 				return err
 			}
 		}
-		rType, _ := parameter.Object.ReflectType(resource.rule.ModuleLocation, types.Lookup, false)
+		rType, _ := parameter.Object.ReflectType(resource.rule.ModuleLocation, types.Lookup)
 		parameter.Schema = state.NewSchema(rType)
 		return nil
 	}
@@ -269,7 +269,7 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
 		return nil, fmt.Errorf("failed to rewrite transfer type: %v %w", parameter.Name, err)
 	}
-	adjustedType, err := adjustedDest.ViewParameters().ReflectType(resource.rule.ModuleLocation, types.Lookup, false)
+	adjustedType, err := adjustedDest.ViewParameters().ReflectType(resource.rule.ModuleLocation, types.Lookup)
 	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
 		return nil, fmt.Errorf("failed to adjust transfer type: %v %w", parameter.Name, err)
 	}

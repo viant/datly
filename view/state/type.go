@@ -6,8 +6,10 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
+	"github.com/viant/structology/format/text"
 	"reflect"
 	"strings"
+	"unicode"
 )
 
 type (
@@ -100,7 +102,11 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 	if t.withBodyType {
 		rType, err = t.Parameters.BuildBodyType(pkgPath, t.resource.LookupType())
 	} else {
-		rType, err = t.Parameters.ReflectType(pkgPath, t.resource.LookupType(), withMarker)
+		var opts []ReflectOption
+		if withMarker {
+			opts = append(opts, WithSetMarker())
+		}
+		rType, err = t.Parameters.ReflectType(pkgPath, t.resource.LookupType(), opts...)
 	}
 	if err != nil {
 		return err
@@ -199,4 +205,19 @@ func WithBodyType(bodyType bool) Option {
 	return func(t *Type) {
 		t.withBodyType = bodyType
 	}
+}
+
+func SanitizeTypeName(typeName string) string {
+	var runes []rune
+	for _, r := range typeName {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_' {
+			runes = append(runes, r)
+		}
+	}
+	name := string(runes)
+	from := text.DetectCaseFormat(name)
+	if from == text.CaseFormatUpperCamel {
+		return name
+	}
+	return from.To(text.CaseFormatUpperCamel).Format(name)
 }
