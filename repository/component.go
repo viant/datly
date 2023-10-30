@@ -103,6 +103,9 @@ func (r *Component) initTransforms(ctx context.Context) error {
 }
 
 func (c *Component) initInputParameters(ctx context.Context, resource *view.Resource) error {
+	if len(c.Contract.Input.Type.Parameters) > 0 {
+		return nil
+	}
 	inputParameters := resource.Parameters
 	for _, parameter := range c.View.InputParameters() {
 		inputParameters.Append(parameter)

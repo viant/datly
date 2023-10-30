@@ -271,49 +271,6 @@ func (p Parameters) BuildBodyType(pkgPath string, lookupType xreflect.LookupType
 	return bodyLeafParameters.ReflectType(pkgPath, lookupType, WithSetMarker())
 }
 
-func (p Parameters) buildStateType(pkgPath string, lookupType xreflect.LookupType, withSetMarker bool) (reflect.Type, error) {
-	var fields []reflect.StructField
-	var setMarkerFields []reflect.StructField
-	var err error
-	for _, param := range p {
-		schema := param.OutputSchema()
-		if schema == nil {
-			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
-		}
-		rType := schema.Type()
-		if rType == nil {
-			if rType, err = types.LookupType(lookupType, schema.DataType); err != nil {
-				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", param.Name, schema.DataType, err)
-			}
-		}
-		param.Schema.Cardinality = schema.Cardinality
-		if rType != nil {
-			structField := reflect.StructField{Name: param.Name,
-				Type:    rType,
-				PkgPath: PkgPath(param.Name, pkgPath),
-				Tag:     reflect.StructTag(param.Tag),
-			}
-
-			if param.Name == rType.Name() || strings.Contains(param.Tag, "anonymous") {
-				structField.Anonymous = true
-			}
-			fields = append(fields, structField)
-			if withSetMarker {
-				setMarkerFields = append(setMarkerFields, reflect.StructField{Name: param.Name, Type: boolType, PkgPath: PkgPath(param.Name, pkgPath), Tag: reflect.StructTag(param.Tag)})
-			}
-		}
-	}
-	if withSetMarker && len(fields) > 0 {
-		setMarkerType := reflect.StructOf(setMarkerFields)
-		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: SetMarkerTag})
-	}
-	if len(fields) == 0 {
-		return emptyStruct, nil
-	}
-	baseType := reflect.StructOf(fields)
-	return baseType, nil
-}
-
 // Append appends parameter
 func (p *Parameters) Append(parameter *Parameter) {
 	for _, param := range *p {
@@ -445,6 +402,11 @@ func (p *Parameter) buildTag() reflect.StructTag {
 		for _, aPredicate := range p.Predicates {
 			aTag.Predicates = append(aTag.Predicates, &tags.Predicate{Name: aPredicate.Name, Group: aPredicate.Group, Arguments: aPredicate.Args})
 		}
+	}
+
+	switch p.In.Kind {
+	case KindObject:
+		aTag.TypeName = SanitizeTypeName(p.Name)
 	}
 
 	result := aTag.UpdateTag(reflect.StructTag(p.Tag))

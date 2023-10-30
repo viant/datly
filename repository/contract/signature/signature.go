@@ -12,6 +12,7 @@ type Signature struct {
 	Anonymous bool
 	Types     []*view.TypeDefinition
 	Output    *state.Schema
+	Input     *state.Type
 	Filter    *state.Schema
 	//TODO add input, body with types def if needed
 }

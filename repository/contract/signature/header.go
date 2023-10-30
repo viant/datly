@@ -22,18 +22,24 @@ type (
 	}
 
 	Type struct {
+		Name       string             `yaml:"Name"`
+		Package    string             `yaml:"Package"`
 		Parameters []*state.Parameter `yaml:"Parameters"`
 	}
 
 	Output struct {
 		Type *Type `yaml:"Type"`
 	}
+	Input struct {
+		Type *Type `yaml:"Type"`
+	}
 
 	ContractPath struct {
-		Method string  `yaml:"Method"`
-		URI    string  `yaml:"URI"`
-		Output *Output `yaml:"Output"`
-		Input  state.Parameters
+		Method          string  `yaml:"Method"`
+		URI             string  `yaml:"URI"`
+		Input           *Input  `yaml:"Input"`
+		Output          *Output `yaml:"Output"`
+		InputParameters state.Parameters
 	}
 
 	Resource struct {
@@ -42,12 +48,11 @@ type (
 	}
 )
 
-func (h *Header) Signature(contract *ContractPath, registry *xreflect.Types) (*Signature, error) {
-
-	signature := &Signature{URI: contract.URI, Method: contract.Method}
-
-	h.buildFilterType(contract, registry, signature)
-	if err := h.buildOutputType(contract, signature, registry); err != nil {
+func (h *Header) Signature(aContract *ContractPath, registry *xreflect.Types) (*Signature, error) {
+	signature := &Signature{URI: aContract.URI, Method: aContract.Method}
+	h.buildInputType(aContract, signature)
+	h.buildFilterType(aContract, registry, signature)
+	if err := h.buildOutputType(aContract, signature, registry); err != nil {
 		return nil, err
 	}
 	return signature, nil
@@ -73,7 +78,7 @@ func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Type
 		schema.Name = "Filter"
 	}
 	dataParameter := output.LookupByLocation(state.KindOutput, keys.ViewData)
-	predicateType := contract.Input.PredicateStructType(nil)
+	predicateType := contract.InputParameters.PredicateStructType(nil)
 	if predicateType.NumField() > 0 {
 		pkg := ""
 		if dataParameter != nil {
@@ -86,9 +91,15 @@ func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Type
 }
 
 func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, registry *xreflect.Types) error {
-	if aContract.Output == nil || aContract.Output.Type == nil || len(aContract.Output.Type.Parameters) == 0 {
+
+	if aContract.Output == nil || aContract.Output.Type == nil {
 		return nil
 	}
+	if len(aContract.Output.Type.Parameters) == 0 && aContract.Output.Type.Name != "" {
+		//TODO check definition to see if this is inline type or external type
+		signature.Output = &state.Schema{Name: aContract.Output.Type.Name}
+	}
+
 	parameters := state.Parameters(aContract.Output.Type.Parameters)
 	isAnonymous := len(parameters) == 1 && strings.Contains(parameters[0].Tag, "anonymous")
 
@@ -130,8 +141,21 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 		signature.Output = outputParameter.Schema
 	}
 	signature.Anonymous = isAnonymous
+
 	signature.Types = append(signature.Types, viewType)
 	return nil
+}
+
+func (h *Header) buildInputType(aContract *ContractPath, signature *Signature) {
+	input := &state.Type{
+		Parameters: aContract.InputParameters,
+		Schema:     &state.Schema{},
+	}
+	if inputType := aContract.Input.Type; inputType != nil {
+		input.Name = inputType.Name
+		input.Package = inputType.Package
+	}
+	signature.Input = input
 }
 
 var fs = afs.New()

@@ -60,6 +60,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 			return err
 		}
 	}
+	resource.Rule.Route.Output.Type.Package = resource.rule.Package()
 	resource.Rule.Route.Output.Type.Parameters = outputParameters
 	return nil
 }

@@ -178,6 +178,7 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*P
 	}
 	param.When = pTag.When
 	param.Lazy = pTag.Lazy
+
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
 	cardinality := state.One
 	if sliceExpr, ok := field.Type.(*ast.ArrayType); ok {

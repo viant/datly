@@ -87,7 +87,6 @@ func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
 }
 
 func (s *Service) init(ctx context.Context, options *Options) (err error) {
-
 	if s.paths, err = path.New(ctx, options.fs, options.componentURL, options.refreshFrequency); err != nil {
 		return err
 	}

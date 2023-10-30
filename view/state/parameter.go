@@ -19,31 +19,35 @@ import (
 type (
 	Parameter struct {
 		shared.Reference
-		Object     Parameters                   `json:",omitempty"`
-		Repeated   Parameters                   `json:",omitempty" yaml:"NormalizeRepeated"`
-		Predicates []*extension.PredicateConfig `json:",omitempty" yaml:"Predicates"`
-		Name       string                       `json:",omitempty" yaml:"Name"`
+		Object   Parameters `json:",omitempty"`
+		Repeated Parameters `json:",omitempty" yaml:"NormalizeRepeated"`
+		//LocationInput, component input
+		LocationInput     *Type                        `json:",omitempty" yaml:"Input"`
+		Predicates        []*extension.PredicateConfig `json:",omitempty" yaml:"Predicates"`
+		Name              string                       `json:",omitempty" yaml:"Name"`
+		In                *Location                    `json:",omitempty" yaml:"In" `
+		Scope             string                       `json:",omitempty" yaml:"Scope" `
+		Required          *bool                        `json:",omitempty"  yaml:"Required" `
+		Description       string                       `json:",omitempty" yaml:"Description"`
+		Style             string                       `json:",omitempty" yaml:"Style"`
+		MaxAllowedRecords *int                         `json:",omitempty"`
+		MinAllowedRecords *int                         `json:",omitempty"`
+		ExpectedReturned  *int                         `json:",omitempty"`
+		Schema            *Schema                      `json:",omitempty" yaml:"Schema"`
+		Output            *Codec                       `json:",omitempty" yaml:"Output"`
+		Const             interface{}                  `json:",omitempty" yaml:"Const"`
+		Value             interface{}                  `json:"Value,omitempty" yaml:"Value"`
 
-		In                *Location   `json:",omitempty" yaml:"In" `
-		Required          *bool       `json:",omitempty"`
-		Description       string      `json:",omitempty"`
-		Style             string      `json:",omitempty"`
-		MaxAllowedRecords *int        `json:",omitempty"`
-		MinAllowedRecords *int        `json:",omitempty"`
-		ExpectedReturned  *int        `json:",omitempty"`
-		Schema            *Schema     `json:",omitempty" yaml:"Schema"`
-		Output            *Codec      `json:",omitempty" yaml:"Output"`
-		Const             interface{} `json:",omitempty" yaml:"Const"`
-		Value             interface{} `json:"Value,omitempty" yaml:"Value"`
-		DateFormat        string      `json:",omitempty" yaml:"DateFormat"`
-		ErrorStatusCode   int         `json:",omitempty" yaml:"ErrorStatusCode"`
-		Tag               string      `json:",omitempty" yaml:"Tag"`
-		Lazy              bool        `json:",omitempty" yaml:"Lazy"`
-		When              string      `json:",omitempty" yaml:"When"`
-		Cacheable         *bool       `json:",omitempty" yaml:"Cacheable"`
+		//deprecated use format timelayout instead
+		DateFormat      string `json:",omitempty" yaml:"DateFormat"`
+		ErrorStatusCode int    `json:",omitempty" yaml:"ErrorStatusCode"`
+		Tag             string `json:",omitempty" yaml:"Tag"`
+		Lazy            bool   `json:",omitempty" yaml:"Lazy"`
+		When            string `json:",omitempty" yaml:"When"`
+		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
 
 		isOutputType bool
-
+		_timeLayout  string
 		_selector    *structology.Selector
 		_initialized bool
 		_dependsOn   *Parameter

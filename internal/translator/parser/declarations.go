@@ -81,13 +81,16 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	declaration.ExpandShorthands()
 
 	if declaration.InOutput {
+		declaration.Parameter.Scope = "out"
 		d.OutputState.Append(&declaration.Parameter)
 		return nil
 	}
 	if declaration.IsAsync {
+		declaration.Parameter.Scope = "async"
 		d.AsyncState.Append(&declaration.Parameter)
 		return nil
 	}
+	declaration.Parameter.Scope = "in"
 	d.State.Append(&declaration.Parameter)
 	if authParameter := declaration.AuthParameter(); authParameter != nil {
 		if !d.State.Append(authParameter) {

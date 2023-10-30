@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"embed"
+	"fmt"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
@@ -17,7 +18,7 @@ type (
 	//Type represents parameters/schema derived state type
 	Type struct {
 		*Schema
-		Parameters   Parameters
+		Parameters   Parameters `json:",omitempty" yaml:"Parameters"`
 		withMarker   bool
 		stateType    *structology.StateType
 		resource     Resource
@@ -81,6 +82,9 @@ func (t *Type) Init(options ...Option) error {
 		}
 	}
 	rType := t.Schema.Type()
+	if rType == nil {
+		return fmt.Errorf("actual type was nil")
+	}
 	t.stateType = structology.NewStateType(rType)
 	return nil
 }
@@ -114,7 +118,11 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 	if rType.Kind() == reflect.Struct {
 		rType = reflect.PtrTo(rType)
 	}
-	t.Schema = NewSchema(rType)
+	if t.Schema == nil {
+		t.Schema = &Schema{}
+	}
+	t.Schema.SetType(rType)
+	//	t.Schema = NewSchema(rType)
 	return nil
 }
 

@@ -184,7 +184,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 	resource.Rule.updateExclude(resource.Rule.RootViewlet())
-	if err = s.updateExplicitInputType(resource, resource.Rule.RootViewlet(), resource.State.ViewParameters()); err != nil {
+	if err = s.updateExplicitInputType(resource, resource.Rule.RootViewlet()); err != nil {
 		return err
 	}
 	componentColumns := discover.Columns{Items: make(map[string]view.Columns)}
@@ -300,8 +300,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	route.Content.CSV = resource.Rule.CSV
 	route.Content.TabularJSON = resource.Rule.TabularJSON
 	route.Content.XML = resource.Rule.XML
-	route.Output.DataFormat = resource.Rule.DataFormat
-
+	route.Component.Output.DataFormat = resource.Rule.DataFormat
 	if err := s.applyAsyncOption(resource, route); err != nil {
 		return err
 	}
@@ -528,6 +527,9 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		parameter.In.Name = aSignature.Method + ":" + aSignature.URI
 		parameter.Schema = aSignature.Output.Clone()
 		parameter.Schema.EnsurePointer()
+		if aSignature.Input != nil {
+			parameter.LocationInput = aSignature.Input
+		}
 		for _, typeDef := range aSignature.Types {
 			if err = extension.Config.Types.Register(typeDef.Name, xreflect.WithPackage(typeDef.Package), xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
 				return err

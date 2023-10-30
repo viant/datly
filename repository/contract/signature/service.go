@@ -81,15 +81,12 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	resource.SetTypes(typeRegistry)
 	resource.SetCodecs(extension.Config.Codecs)
 	stateResource := view.NewResourcelet(resource, &view.View{})
-
-	contract.Input = aMatch.header.Resource.InputParameters
-	for _, parameter := range contract.Input {
+	for _, parameter := range contract.InputParameters {
 		parameter.Schema.InitType(typeRegistry.Lookup, false)
 		if parameter.Output != nil {
 			parameter.Output.Init(stateResource, parameter.Schema.Type())
 		}
 	}
-
 	signature, err := aMatch.header.Signature(contract, typeRegistry)
 	if err != nil {
 		return nil, err

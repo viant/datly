@@ -40,6 +40,7 @@ func InitRegistry() {
 		Types: xreflect.NewTypes(xreflect.WithTypes(
 			xreflect.NewType(TypeJwtTokenInfo, xreflect.WithReflectType(reflect.TypeOf(&jwt.Claims{}))),
 			xreflect.NewType(TypeJwtClaims, xreflect.WithReflectType(reflect.TypeOf(jwt.Claims{}))),
+			xreflect.NewType("jwt.Claims", xreflect.WithReflectType(reflect.TypeOf(jwt.Claims{}))),
 			xreflect.NewType("RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
 			xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
 			xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
