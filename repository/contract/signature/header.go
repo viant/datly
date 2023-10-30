@@ -35,11 +35,10 @@ type (
 	}
 
 	ContractPath struct {
-		Method          string  `yaml:"Method"`
-		URI             string  `yaml:"URI"`
-		Input           *Input  `yaml:"Input"`
-		Output          *Output `yaml:"Output"`
-		InputParameters state.Parameters
+		Method string  `yaml:"Method"`
+		URI    string  `yaml:"URI"`
+		Input  *Input  `yaml:"Input"`
+		Output *Output `yaml:"Output"`
 	}
 
 	Resource struct {
@@ -48,9 +47,20 @@ type (
 	}
 )
 
+func (p *ContractPath) ensureInput(aMatch *entry) {
+	if p.Input == nil {
+		p.Input = &Input{}
+	}
+	if p.Input.Type == nil {
+		p.Input.Type = &Type{}
+	}
+	if len(p.Input.Type.Parameters) == 0 {
+		p.Input.Type.Parameters = aMatch.header.Resource.InputParameters
+	}
+}
+
 func (h *Header) Signature(aContract *ContractPath, registry *xreflect.Types) (*Signature, error) {
 	signature := &Signature{URI: aContract.URI, Method: aContract.Method}
-	h.buildInputType(aContract, signature)
 	h.buildFilterType(aContract, registry, signature)
 	if err := h.buildOutputType(aContract, signature, registry); err != nil {
 		return nil, err
@@ -78,7 +88,8 @@ func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Type
 		schema.Name = "Filter"
 	}
 	dataParameter := output.LookupByLocation(state.KindOutput, keys.ViewData)
-	predicateType := contract.InputParameters.PredicateStructType(nil)
+	inputParameters := state.Parameters(contract.Input.Type.Parameters)
+	predicateType := inputParameters.PredicateStructType(nil)
 	if predicateType.NumField() > 0 {
 		pkg := ""
 		if dataParameter != nil {
@@ -128,7 +139,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 			rType = reflect.PtrTo(rType)
 		}
 
-		outputType, err := parameters.ReflectType("github.com/viant/datly/view/autogen", registry.Lookup)
+		outputType, err := parameters.ReflectType(aContract.Output.Type.Package, registry.Lookup)
 		if err != nil {
 			return fmt.Errorf("failed to get output type: %w", err)
 		}
@@ -144,18 +155,6 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 
 	signature.Types = append(signature.Types, viewType)
 	return nil
-}
-
-func (h *Header) buildInputType(aContract *ContractPath, signature *Signature) {
-	input := &state.Type{
-		Parameters: aContract.InputParameters,
-		Schema:     &state.Schema{},
-	}
-	if inputType := aContract.Input.Type; inputType != nil {
-		input.Name = inputType.Name
-		input.Package = inputType.Package
-	}
-	signature.Input = input
 }
 
 var fs = afs.New()

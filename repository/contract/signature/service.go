@@ -65,15 +65,16 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	if aMatch == nil {
 		return nil, fmt.Errorf("invalid contract match")
 	}
-	contract := aMatch.header.Contracts[aMatch.index]
 
+	contract := aMatch.header.Contracts[aMatch.index]
+	contract.ensureInput(aMatch)
 	typeRegistry := xreflect.NewTypes(xreflect.WithRegistry(extension.Config.Types))
 	var customTypes []*view.TypeDefinition
 	for _, typeDef := range aMatch.header.Resource.Types {
 		if strings.Contains(typeDef.DataType, " ") {
 			customTypes = append(customTypes, typeDef)
 		}
-		typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType))
+		_ = typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType))
 
 	}
 
@@ -81,8 +82,8 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	resource.SetTypes(typeRegistry)
 	resource.SetCodecs(extension.Config.Codecs)
 	stateResource := view.NewResourcelet(resource, &view.View{})
-	for _, parameter := range contract.InputParameters {
-		parameter.Schema.InitType(typeRegistry.Lookup, false)
+	for _, parameter := range contract.Input.Type.Parameters {
+		_ = parameter.Schema.InitType(typeRegistry.Lookup, false)
 		if parameter.Output != nil {
 			parameter.Output.Init(stateResource, parameter.Schema.Type())
 		}
