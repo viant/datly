@@ -54,8 +54,10 @@ func (v *Codec) initFnIfNeeded(resource Resource, inputType reflect.Type) error 
 	if err != nil {
 		return err
 	}
-
-	v.Schema = NewSchema(resultType)
+	if v.Schema == nil {
+		v.Schema = &Schema{}
+	}
+	v.Schema.SetType(resultType)
 	return nil
 }
 
@@ -84,7 +86,10 @@ func (v *Codec) inheritCodecIfNeeded(resource Resource, inputType reflect.Type) 
 	}
 
 	v._codec = instance
-	v.Schema = NewSchema(codecType)
+	if v.Schema == nil {
+		v.Schema = &Schema{}
+	}
+	v.Schema.SetType(codecType)
 	return nil
 }
 

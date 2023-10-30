@@ -81,6 +81,11 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters sta
 			o.Field = "ResponseBody"
 		}
 	}
+	pkg := pkgPath
+	if o.Type.Package != "" {
+		pkg = o.Type.Package
+	}
+
 	if o.Type.Schema != nil && o.Type.Name != "" {
 		lookupType := aView.Resource().LookupType()
 		rType, err := lookupType(o.Type.Name)
@@ -89,10 +94,6 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters sta
 		}
 		o.Type.SetType(rType)
 
-	}
-	pkg := pkgPath
-	if o.Type.Package != "" {
-		pkg = o.Type.Package
 	}
 
 	o.Type.Parameters.FlagOutput()
