@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -435,11 +436,26 @@ func (p *Parameter) initCodec(resource Resource) error {
 	if p.Output == nil {
 		return nil
 	}
-
 	if err := p.Output.Init(resource, p.Schema.Type()); err != nil {
 		return err
 	}
+	rType := p.Output.Schema.Type()
 
+	if rType.Kind() == reflect.Slice {
+		rType = rType.Elem()
+	}
+	if rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	if rType.Kind() == reflect.Struct {
+		if rType.Name() == "" && p.Output.Schema.Name != "" {
+			fieldTag := reflect.StructTag(p.Tag)
+			if stateTag, _ := tags.ParseStateTags(fieldTag, nil); stateTag != nil {
+				stateTag.TypeName = SanitizeTypeName(p.Output.Schema.Name)
+				p.Tag = string(stateTag.UpdateTag(fieldTag))
+			}
+		}
+	}
 	return nil
 }
 

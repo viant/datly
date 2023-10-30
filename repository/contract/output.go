@@ -90,9 +90,13 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters sta
 		o.Type.SetType(rType)
 
 	}
+	pkg := pkgPath
+	if o.Type.Package != "" {
+		pkg = o.Type.Package
+	}
 
 	o.Type.Parameters.FlagOutput()
-	if err = o.Type.Init(state.WithResource(aView.Resource()), state.WithPackage(pkgPath)); err != nil {
+	if err = o.Type.Init(state.WithResource(aView.Resource()), state.WithPackage(pkg)); err != nil {
 		return fmt.Errorf("failed to initialise output: %w", err)
 	}
 

@@ -18,8 +18,12 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 	if len(i.Body.Parameters) == 0 {
 		i.Body.Parameters = aView.InputParameters()
 	}
+	pkg := pkgPath
+	if i.Type.Package != "" {
+		pkg = i.Type.Package
+	}
 	if err := i.Body.Init(state.WithResource(aView.Resource()),
-		state.WithPackage(pkgPath),
+		state.WithPackage(pkg),
 		state.WithMarker(true),
 		state.WithBodyType(true)); err != nil {
 		return fmt.Errorf("failed to initialise input: %w", err)

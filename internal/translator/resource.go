@@ -20,6 +20,7 @@ import (
 	"github.com/viant/structology/format/text"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
+	"golang.org/x/mod/modfile"
 	"path"
 	"reflect"
 	"strings"
@@ -44,6 +45,7 @@ type (
 		CustomTypeURLs []string
 		typeRegistry   *xreflect.Types
 		messages       *msg.Messages
+		Module         *modfile.Module
 	}
 )
 

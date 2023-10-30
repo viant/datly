@@ -38,27 +38,35 @@ func (r *Router) generateComponentState(component *repository.Component) (int, [
 	output, _ := component.Output.Type.Parameters.ReflectType("", registry.Lookup)
 
 	var packageTypes []*xreflect.Type
+	var importModules = map[string]string{}
 
-	inPackageComponentTypes := indexComponentPackageTypes(component)
+	inPackageComponentTypes := indexComponentPackageTypes(component, "state")
 	for _, def := range component.View.TypeDefinitions() {
 		if inPackageComponentTypes[def.Name] {
 			continue
 		}
+		if def.Package != "" && component.ModulePath != "" && strings.Contains(def.DataType, " ") { //complex type
+			importModules[def.Package] = component.ModulePath
+		}
 		packageTypes = append(packageTypes, xreflect.NewType(def.Name, xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType)))
 	}
 	inputState := xreflect.GenerateStruct("Input", input.Type(),
-		xreflect.WithTypes(xreflect.NewType("Output", xreflect.WithReflectType(output))), xreflect.WithPackage("state"),
+		xreflect.WithPackage("state"),
+		xreflect.WithTypes(xreflect.NewType("Output", xreflect.WithReflectType(output))),
 		xreflect.WithPackageTypes(packageTypes...),
+		xreflect.WithImportModule(importModules),
 	)
+
 	builder.WriteString(inputState)
-	return http.StatusOK, []byte(builder.String())
+	result := builder.String()
+	result = component.View.Resource().ReverseSubstitutes(result)
+	return http.StatusOK, []byte(result)
 }
 
-func indexComponentPackageTypes(component *repository.Component) map[string]bool {
+func indexComponentPackageTypes(component *repository.Component, inPkg string) map[string]bool {
 	thisPackageTypes := map[string]bool{}
-	pkg := component.Output.Type.Package
 	for _, def := range component.View.TypeDefinitions() {
-		if def.Package == pkg {
+		if def.Package == inPkg {
 			thisPackageTypes[def.Name] = true
 		}
 	}

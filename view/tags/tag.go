@@ -35,8 +35,12 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 	pTags := tags.NewTags(string(tag))
 
 	var ret []*tags.Tag
-	t.appendTag(t.Parameter, &ret)
-	t.appendTag(t.Codec, &ret)
+	if t.Parameter != nil {
+		t.appendTag(t.Parameter, &ret)
+	}
+	if t.Codec != nil {
+		t.appendTag(t.Codec, &ret)
+	}
 	if t.Format != nil {
 		if formatTag := tags.NewTag(format.TagName, t.Format).Values; formatTag != "" {
 			pTags.Set(format.TagName, string(formatTag))
@@ -54,7 +58,9 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 	if t.TypeName != "" {
 		pTags.Set(xreflect.TagTypeName, string(t.TypeName))
 	}
-	t.appendTag(t.View, &ret)
+	if t.View != nil {
+		t.appendTag(t.View, &ret)
+	}
 	t.appendTag(t.LinkOn, &ret)
 
 	if t.Value != "" {

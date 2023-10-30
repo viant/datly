@@ -25,6 +25,7 @@ import (
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
+	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"
 	"path"
 	"reflect"
@@ -49,6 +50,14 @@ func (s *Service) InitSignature(ctx context.Context, rule *options.Rule) (err er
 
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string, opts *options.Options) (err error) {
 	resource := NewResource(rule, s.Repository.Config.repository, &s.Repository.Messages)
+	modFile := url.Join(rule.ModuleLocation, "go.mod")
+	if ok, _ := s.fs.Exists(ctx, modFile); ok {
+		data, _ := s.fs.DownloadWithURL(ctx, modFile)
+		if goMod, _ := modfile.Parse(modFile, data, nil); goMod != nil {
+			resource.Module = goMod.Module
+		}
+	}
+
 	resource.Resource.Substitutes = s.Repository.Substitutes.Merge()
 	resource.State.Append(s.Repository.State...)
 	if err = resource.InitRule(&dSQL, ctx, s.Repository.fs, opts); err != nil {
@@ -297,10 +306,14 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	ruleName := s.Repository.RuleName(resource.rule)
 	route.Service = serviceType
 	route.View = view.NewRefView(resource.Rule.Root)
+	if resource.Module != nil {
+		route.Contract.ModulePath = resource.Module.Mod.Path
+	}
 	route.Content.CSV = resource.Rule.CSV
 	route.Content.TabularJSON = resource.Rule.TabularJSON
 	route.Content.XML = resource.Rule.XML
 	route.Component.Output.DataFormat = resource.Rule.DataFormat
+
 	if err := s.applyAsyncOption(resource, route); err != nil {
 		return err
 	}

@@ -17,5 +17,7 @@ type (
 		CodecOptions() *codec.Options
 
 		ExpandSubstitutes(text string) string
+
+		ReverseSubstitutes(text string) string
 	}
 )

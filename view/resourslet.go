@@ -19,6 +19,9 @@ func (r *Resourcelet) LookupParameter(name string) (*state.Parameter, error) {
 func (r *Resourcelet) ExpandSubstitutes(text string) string {
 	return r.Substitutes.Replace(text)
 }
+func (r *Resourcelet) ReverseSubstitutes(text string) string {
+	return r.Substitutes.ReverseReplace(text)
+}
 
 func (r *Resourcelet) lookupParameter(name string) (*state.Parameter, error) {
 	var viewParameter *state.Parameter

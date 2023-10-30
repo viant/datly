@@ -20,6 +20,10 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet) 
 		if strings.Contains(item.Name, ".") {
 			continue
 		}
+
+		if err := s.adjustCodecOutputType(&item.Parameter, resource.typeRegistry, resource); err != nil {
+			return err
+		}
 		inputState.Append(resource.State[i])
 	}
 	inputState.Append(resource.AsyncState...)

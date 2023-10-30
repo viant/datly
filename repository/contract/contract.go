@@ -18,10 +18,11 @@ type (
 	Style string
 
 	Contract struct {
-		Name    string `json:",omitempty" yaml:",omitempty"`
-		Input   Input
-		Output  Output
-		Service service.Type `json:",omitempty"`
+		Name       string `json:",omitempty" yaml:",omitempty"`
+		Input      Input
+		Output     Output
+		ModulePath string
+		Service    service.Type `json:",omitempty"`
 	}
 
 	// BodySelector deprecated,  use output parameter instead
