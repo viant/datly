@@ -37,7 +37,30 @@ func (r *Router) generateComponentState(component *repository.Component) (int, [
 	registry := component.TypeRegistry()
 	output, _ := component.Output.Type.Parameters.ReflectType("", registry.Lookup)
 
-	inputState := xreflect.GenerateStruct("Input", input.Type(), xreflect.WithTypes(xreflect.NewType("Output", xreflect.WithReflectType(output))), xreflect.WithPackage("state"))
+	var packageTypes []*xreflect.Type
+
+	inPackageComponentTypes := indexComponentPackageTypes(component)
+	for _, def := range component.View.TypeDefinitions() {
+		if inPackageComponentTypes[def.Name] {
+			continue
+		}
+		packageTypes = append(packageTypes, xreflect.NewType(def.Name, xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType)))
+	}
+	inputState := xreflect.GenerateStruct("Input", input.Type(),
+		xreflect.WithTypes(xreflect.NewType("Output", xreflect.WithReflectType(output))), xreflect.WithPackage("state"),
+		xreflect.WithPackageTypes(packageTypes...),
+	)
 	builder.WriteString(inputState)
 	return http.StatusOK, []byte(builder.String())
+}
+
+func indexComponentPackageTypes(component *repository.Component) map[string]bool {
+	thisPackageTypes := map[string]bool{}
+	pkg := component.Output.Type.Package
+	for _, def := range component.View.TypeDefinitions() {
+		if def.Package == pkg {
+			thisPackageTypes[def.Name] = true
+		}
+	}
+	return thisPackageTypes
 }
