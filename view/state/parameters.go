@@ -240,7 +240,7 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 				structField.Anonymous = true
 			}
 			fields = append(fields, structField)
-			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: fieldName, Type: boolType, PkgPath: PkgPath(fieldName, pkgPath), Tag: reflect.StructTag(param.Tag)})
+			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: fieldName, Type: boolType, PkgPath: PkgPath(fieldName, pkgPath)})
 		}
 	}
 	options := newReflectOptions(opts)
