@@ -39,8 +39,8 @@ func (p *Repeated) Value(ctx context.Context, names string) (interface{}, bool, 
 	var values = make([]interface{}, 0, int(hasCount))
 	for i := range temp {
 		anEntry := &temp[i]
-		if err := anEntry.err; err != nil {
-			return nil, false, err
+		if anEntry.err != nil {
+			return nil, false, anEntry.err
 		}
 		if !anEntry.has {
 			continue
@@ -66,7 +66,7 @@ func (p *Repeated) getRepeatedItems(ctx context.Context, parameter *state.Parame
 		go func(index int, item *state.Parameter) {
 			defer wg.Done()
 			anEntry := &temp[index]
-			if anEntry.value, anEntry.has, anEntry.err = p.ParameterLookup(ctx, item); anEntry.has {
+			if anEntry.value, anEntry.has, anEntry.err = p.ParameterLookup(ctx, item); anEntry.has || anEntry.err != nil {
 				atomic.AddInt32(&hasCount, 1)
 			}
 		}(i, parameter.Repeated[i])

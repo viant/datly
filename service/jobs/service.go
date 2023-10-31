@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/datly/service/dbms"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
@@ -36,15 +37,21 @@ func (s *Service) AddFailedJob(job *async.Job) {
 	s.failedJobs = append(s.failedJobs, job)
 }
 
-func (s *Service) matchFailedJob(matchKey string) *async.Job {
+func (s *Service) matchFailedJob(matchKey string) (*async.Job, error) {
 	s.RWMutex.RLock()
 	defer s.RWMutex.RUnlock()
 	for _, candidate := range s.failedJobs {
 		if candidate.MatchKey == matchKey {
-			return candidate
+			var err error
+			if candidate.Error != nil {
+				err = fmt.Errorf(*candidate.Error)
+			} else {
+				err = fmt.Errorf("job has status %s", candidate.Status)
+			}
+			return candidate, err
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func (s *Service) EnsureJobTables(ctx context.Context) error {
