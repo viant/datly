@@ -300,12 +300,7 @@ func (s *Declarations) setValue(declaration *Declaration, content string) error 
 			return fmt.Errorf("invalid parameter: %s float default value: %s %w", declaration.Name, value, err)
 		}
 	}
-	if declaration.Kind == string(state.KindLiteral) {
-		declaration.Const = value
-	} else {
-		declaration.Value = value
-
-	}
+	declaration.Value = value
 	return nil
 }
 

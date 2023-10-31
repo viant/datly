@@ -9,10 +9,11 @@ func BuildPredicate(aTag *tags.Tag, param *Parameter) {
 	if aTag == nil || len(aTag.Predicates) == 0 {
 		return
 	}
-	pTag := aTag.Predicates[0]
-	pTag.Init(param.Name)
-	param.Predicates = append(param.Predicates, &extension.PredicateConfig{
-		Group: pTag.Group,
-		Name:  pTag.Name,
-		Args:  pTag.Arguments})
+	for _, pTag := range aTag.Predicates {
+		pTag.Init(param.Name)
+		param.Predicates = append(param.Predicates, &extension.PredicateConfig{
+			Group: pTag.Group,
+			Name:  pTag.Name,
+			Args:  pTag.Arguments})
+	}
 }

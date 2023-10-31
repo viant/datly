@@ -4,22 +4,26 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
-	"github.com/viant/datly/internal/translator/parser"
+	tparser "github.com/viant/datly/internal/translator/parser"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/sqlx"
 	"github.com/viant/structology/format/text"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
+	"go/ast"
+	"go/parser"
 	"golang.org/x/mod/modfile"
 	"path"
 	"reflect"
@@ -37,15 +41,16 @@ type (
 		OutputState inference.State
 		AsyncState  inference.State
 		Rule        *Rule
-		parser.Statements
+		tparser.Statements
 		RawSQL string
 		indexNamespaces
 		UseCustomTypes bool
-		Declarations   *parser.Declarations
+		Declarations   *tparser.Declarations
 		CustomTypeURLs []string
 		typeRegistry   *xreflect.Types
 		messages       *msg.Messages
 		Module         *modfile.Module
+		ModuleLocation string
 	}
 )
 
@@ -108,13 +113,13 @@ func (r *Resource) parseImports(ctx context.Context, dSQL *string) (err error) {
 			return err
 		}
 	}
-	if err = parser.ParseImports(ctx, dSQL, r.loadImportTypes); err != nil {
+	if err = tparser.ParseImports(ctx, dSQL, r.loadImportTypes); err != nil {
 		return fmt.Errorf("failed to parse import statement: %w", err)
 	}
 	return nil
 }
 
-func (r *Resource) loadImportTypes(ctx context.Context, typesImport *parser.TypeImport) error {
+func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.TypeImport) error {
 	typesImport.EnsureLocation(ctx, fs, r.rule.GoModuleLocation())
 	alias := typesImport.Alias
 	for i, name := range typesImport.Types {
@@ -205,7 +210,7 @@ func (r *Resource) AdjustCustomType(info *plugin.Info) {
 
 // ExtractDeclared extract both parameter declaration and transform expression
 func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
-	r.Declarations, err = parser.NewDeclarations(*dSQL, r.GetSchema)
+	r.Declarations, err = tparser.NewDeclarations(*dSQL, r.GetSchema)
 	if err != nil {
 		return err
 	}
@@ -232,10 +237,10 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	}
 	r.AsyncState = r.Declarations.AsyncState
 	r.Rule.Route.Transforms = r.Declarations.Transforms
-	if err := parser.ExtractParameterHints(r.Declarations.SQL, &r.State); err != nil {
+	if err := tparser.ExtractParameterHints(r.Declarations.SQL, &r.State); err != nil {
 		return err
 	}
-	r.Declarations.SQL = parser.RemoveParameterHints(r.Declarations.SQL, r.State)
+	r.Declarations.SQL = tparser.RemoveParameterHints(r.Declarations.SQL, r.State)
 	*dSQL = r.Declarations.SQL
 	return nil
 }
@@ -286,7 +291,7 @@ func (r *Resource) InitRule(dSQL *string, ctx context.Context, fs afs.Service, o
 		r.Rule.Route.Output = *r.Rule.Output
 		r.Rule.Output = &r.Rule.Route.Output
 	}
-	r.Statements = parser.NewStatements(*dSQL)
+	r.Statements = tparser.NewStatements(*dSQL)
 	r.RawSQL = *dSQL
 	return r.initRule(ctx, fs, dSQL)
 }
@@ -421,11 +426,15 @@ func (r *Resource) IncludeSnippets(ctx context.Context, fs afs.Service, dSQL *st
 			sqlXContent += contentStr
 		case ".yaml", ".yml":
 			resource := &view.Resource{}
-			if err := shared.UnmarshalWithExt(content, resource, ext); err != nil {
+			if err = shared.UnmarshalWithExt(content, resource, ext); err != nil {
 				return err
 			}
 
 			(&r.Resource).MergeFrom(resource, nil)
+		case ".go":
+			if err = r.loadState(ctx, assetURL); err != nil {
+				return err
+			}
 		}
 
 	}
@@ -438,6 +447,82 @@ func (r *Resource) IncludeSnippets(ctx context.Context, fs afs.Service, dSQL *st
 
 func (r *Resource) IncludeURL(ctx context.Context, URL string, fs afs.Service) (string, error) {
 	return r.assetURL(ctx, URL, fs)
+}
+
+func (r *Resource) loadState(ctx context.Context, URL string) error {
+	types := extension.Config.Types
+	aPath := url.Path(URL)
+	location, _ := path.Split(aPath)
+	dirTypes, err := xreflect.ParseTypes(location,
+		xreflect.WithParserMode(parser.ParseComments),
+		xreflect.WithRegistry(types),
+		xreflect.WithModule(r.Module, r.rule.ModuleLocation),
+		xreflect.WithOnField(func(typeName string, field *ast.Field) error {
+			return nil
+		}))
+	if err != nil {
+		return err
+	}
+	typeNames := dirTypes.TypeNamesInPath(aPath)
+	for _, typeName := range typeNames {
+		rType, err := dirTypes.Type(typeName)
+		if err != nil {
+			return fmt.Errorf("failed to load state type:%v %w", typeName, err)
+		}
+		if rType.Kind() == reflect.Slice {
+			rType = rType.Elem()
+		}
+		if rType.Kind() == reflect.Ptr {
+			rType = rType.Elem()
+		}
+		if !strings.HasSuffix(typeName, "Input") {
+			continue
+		}
+		if err = r.extractState(rType); err != nil {
+			return err
+		}
+
+	}
+	return nil
+}
+
+func (r *Resource) extractState(rType reflect.Type) error {
+	if rType.Kind() != reflect.Struct {
+		return nil
+	}
+	for i := 0; i < rType.NumField(); i++ {
+		aField := rType.Field(i)
+		if _, ok := aField.Tag.Lookup(tags.ParameterTag); !ok {
+			continue
+		}
+		parameter, err := state.BuildParameter(&aField, nil)
+		if err != nil {
+			return err
+		}
+		iParameter := &inference.Parameter{Parameter: *parameter}
+		for i, repeated := range parameter.Repeated {
+			iRepeated := &inference.Parameter{Parameter: *repeated}
+			iParameter.Repeated = append(iParameter.Repeated, iRepeated)
+			parameter.Repeated[i] = &iRepeated.Parameter
+		}
+		for i, anObject := range parameter.Object {
+			iRepeated := &inference.Parameter{Parameter: *anObject}
+			iParameter.Object = append(iParameter.Object, iRepeated)
+			parameter.Object[i] = &iRepeated.Parameter
+		}
+		iParameter.Explicit = true
+		switch strings.ToLower(parameter.Scope) {
+		case "out":
+			iParameter.InOutput = true
+			r.OutputState.Append(iParameter)
+		case "async":
+			iParameter.IsAsync = true
+			r.AsyncState.Append(iParameter)
+		default:
+			r.State.Append(iParameter)
+		}
+	}
+	return nil
 }
 
 func NewResource(rule *options.Rule, repository *options.Repository, messages *msg.Messages) *Resource {

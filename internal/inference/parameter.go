@@ -161,12 +161,14 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*P
 	if field.Tag == nil {
 		return nil, nil
 	}
-
+	//TODO convert ast.field to struct field and move that logic to state.BuildParameter
 	structTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
 	aTag, err := tags.ParseStateTags(structTag, nil)
+
 	if err != nil || aTag.Parameter == nil {
 		return nil, err
 	}
+
 	pTag := aTag.Parameter
 	param := &Parameter{
 		SQL: SQL,
@@ -192,6 +194,7 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*P
 	if err != nil {
 		return nil, fmt.Errorf("failed to create param: %v due to %w", param.Name, err)
 	}
+
 	if strings.Contains(fieldType, "struct{") {
 		typeName := ""
 		if field.Tag != nil {
@@ -365,7 +368,7 @@ func NewConstParameter(paramName string, paramValue interface{}) *Parameter {
 	param := &Parameter{
 		Parameter: state.Parameter{
 			Name:   paramName,
-			Const:  paramValue,
+			Value:  paramValue,
 			In:     state.NewConstLocation(paramName),
 			Schema: state.NewSchema(reflect.TypeOf(paramValue)),
 		},

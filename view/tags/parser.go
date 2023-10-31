@@ -30,7 +30,11 @@ func ParseStateTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
 }
 
 func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error) {
-	ret := &Tag{fs: afs.New(), TypeName: tag.Get(xreflect.TagTypeName), Description: tag.Get(DescriptionTag), Value: tag.Get(ValueTag), embed: fs}
+	var value *string
+	if val, ok := tag.Lookup(ValueTag); ok {
+		value = &val
+	}
+	ret := &Tag{fs: afs.New(), TypeName: tag.Get(xreflect.TagTypeName), Description: tag.Get(DescriptionTag), Value: value, embed: fs}
 	var err error
 	for _, tagName := range tagNames {
 		tagValue, ok := tag.Lookup(tagName)
@@ -127,4 +131,18 @@ func parsePredicate(tag reflect.StructTag, ret *Tag) error {
 		}
 	}
 	return nil
+}
+
+// ExcludeStateTags exclude state tags
+func ExcludeStateTags(tag string) string {
+	fieldTags := tags.NewTags(tag)
+	updatedTags := tags.Tags{}
+	for _, item := range fieldTags {
+		switch item.Name {
+		case ParameterTag, PredicateTag, ValueTag, CodecTag:
+		default:
+			updatedTags = append(updatedTags, item)
+		}
+	}
+	return updatedTags.Stringify()
 }

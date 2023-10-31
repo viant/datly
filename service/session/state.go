@@ -378,7 +378,7 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 	locators := opts.kindLocator
 	switch parameter.In.Kind {
 	case state.KindConst:
-		value, has = parameter.Const, true
+		value, has = parameter.Value, true
 	default:
 		parameterLocator, err := locators.Lookup(parameter.In.Kind)
 		if err != nil {

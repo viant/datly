@@ -219,14 +219,19 @@ func (r *Resource) assetURL(ctx context.Context, ruleURL string, fs afs.Service)
 	}
 
 	wd, _ := os.Getwd()
-	constFileURL := filepath.Join(wd, ruleURL)
-	if ok, _ := fs.Exists(ctx, constFileURL); ok {
+	candidateURL := filepath.Join(wd, ruleURL)
+	if ok, _ := fs.Exists(ctx, candidateURL); ok {
 		return filepath.Join(wd, ruleURL), nil
 	}
 
-	constFileURL = filepath.Join(r.rule.SourceDirectory(), ruleURL)
-	if ok, _ := fs.Exists(ctx, constFileURL); ok {
-		return constFileURL, nil
+	candidateURL = filepath.Join(r.rule.SourceDirectory(), ruleURL)
+	if ok, _ := fs.Exists(ctx, candidateURL); ok {
+		return candidateURL, nil
+	}
+
+	candidateURL = filepath.Join(r.rule.ModuleLocation, ruleURL)
+	if ok, _ := fs.Exists(ctx, candidateURL); ok {
+		return candidateURL, nil
 	}
 
 	return filepath.Join(r.rule.BaseRuleURL(), ruleURL), nil

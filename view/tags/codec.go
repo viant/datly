@@ -14,6 +14,7 @@ type Codec struct {
 	Name      string
 	Body      string
 	Arguments []string
+	DataType  string
 }
 
 func (t *Tag) updatedCodec(key string, value string) (err error) {

@@ -8,6 +8,7 @@ import (
 	"github.com/viant/xreflect"
 	"reflect"
 	"sort"
+	"strconv"
 )
 
 type (
@@ -23,13 +24,39 @@ type (
 		Codec       *Codec
 		TypeName    string
 		Description string
-		Value       string
+		Value       *string
 		Format      *format.Tag
 	}
 	Tagger interface {
 		Tag() *tags.Tag
 	}
 )
+
+func (t *Tag) GetValue(destType reflect.Type) (interface{}, error) {
+	if t.Value == nil {
+		return nil, nil
+	}
+	isPtr := false
+	if destType.Kind() == reflect.Ptr {
+		isPtr = true
+		destType = destType.Elem()
+	}
+
+	switch destType.Kind() {
+	case reflect.Bool:
+		return strconv.ParseBool(*t.Value)
+	case reflect.Int:
+		return strconv.Atoi(*t.Value)
+	case reflect.Float64:
+		return strconv.ParseFloat(*t.Value, 64)
+	default:
+		if isPtr {
+			return t.Value, nil
+		}
+		return t.Value, nil
+	}
+
+}
 
 func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 	pTags := tags.NewTags(string(tag))
@@ -63,8 +90,8 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 	}
 	t.appendTag(t.LinkOn, &ret)
 
-	if t.Value != "" {
-		pTags.Set(ValueTag, t.Value)
+	if t.Value != nil {
+		pTags.Set(ValueTag, *t.Value)
 	}
 	for _, aTag := range ret {
 		pTags.Set(aTag.Name, string(aTag.Values))

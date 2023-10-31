@@ -36,9 +36,7 @@ type (
 		ExpectedReturned  *int                         `json:",omitempty"`
 		Schema            *Schema                      `json:",omitempty" yaml:"Schema"`
 		Output            *Codec                       `json:",omitempty" yaml:"Output"`
-		Const             interface{}                  `json:",omitempty" yaml:"Const"`
 		Value             interface{}                  `json:"Value,omitempty" yaml:"Value"`
-
 		//deprecated use format timelayout instead
 		DateFormat      string `json:",omitempty" yaml:"DateFormat"`
 		ErrorStatusCode int    `json:",omitempty" yaml:"ErrorStatusCode"`
@@ -107,8 +105,8 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 	}
 
 	if p.In.Kind == KindConst {
-		if text, ok := p.Const.(string); ok {
-			p.Const = resource.ExpandSubstitutes(text)
+		if text, ok := p.Value.(string); ok {
+			p.Value = resource.ExpandSubstitutes(text)
 		}
 	}
 
@@ -126,7 +124,7 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 
 	p.In.Kind = Kind(strings.ToLower(string(p.In.Kind)))
 
-	if p.In.Kind == KindConst && p.Const == nil {
+	if p.In.Kind == KindConst && p.Value == nil {
 		return fmt.Errorf("param %v value was not set", p.Name)
 	}
 
@@ -202,11 +200,6 @@ func (p *Parameter) inherit(param *Parameter) {
 	setter.SetStringIfEmpty(&p.Tag, param.Tag)
 	setter.SetStringIfEmpty(&p.When, param.When)
 	setter.SetBoolIfFalse(&p.Lazy, param.Lazy)
-
-	if p.Const == nil {
-		p.Const = param.Const
-	}
-
 	if p.In == nil {
 		p.In = param.In
 	}
@@ -285,7 +278,7 @@ func (p *Parameter) initSchema(resource Resource) error {
 
 	if p.Schema == nil {
 		if p.In.Kind == KindConst {
-			p.Schema = NewSchema(reflect.TypeOf(p.Const))
+			p.Schema = NewSchema(reflect.TypeOf(p.Value))
 		} else if p.In.Kind == KindRequest {
 			p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
 		} else {
@@ -298,7 +291,7 @@ func (p *Parameter) initSchema(resource Resource) error {
 	}
 
 	if p.In.Kind == KindConst {
-		p.Schema = NewSchema(reflect.TypeOf(p.Const))
+		p.Schema = NewSchema(reflect.TypeOf(p.Value))
 		return nil
 	}
 

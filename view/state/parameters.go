@@ -147,7 +147,7 @@ func (p Parameters) SetLiterals(state *structology.State) (err error) {
 		if parameter._selector == nil {
 			parameter._selector = state.Type().Lookup(parameter.Name)
 		}
-		if err = parameter._selector.SetValue(state.Pointer(), parameter.Const); err != nil {
+		if err = parameter._selector.SetValue(state.Pointer(), parameter.Value); err != nil {
 			return err
 		}
 	}
@@ -240,7 +240,8 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 				structField.Anonymous = true
 			}
 			fields = append(fields, structField)
-			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: fieldName, Type: boolType, PkgPath: PkgPath(fieldName, pkgPath)})
+			markerTag := buildMarkerFieldTag(structField)
+			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: fieldName, Type: boolType, Tag: reflect.StructTag(markerTag.Stringify()), PkgPath: PkgPath(fieldName, pkgPath)})
 		}
 	}
 	options := newReflectOptions(opts)
@@ -254,6 +255,18 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 	}
 	baseType := reflect.StructOf(fields)
 	return baseType, nil
+}
+
+func buildMarkerFieldTag(structField reflect.StructField) stags.Tags {
+	markerFieldTags := stags.NewTags(string(structField.Tag))
+	var updated = stags.Tags{}
+	for _, item := range markerFieldTags {
+		switch item.Name {
+		case "velty", "json":
+			updated = append(updated, item)
+		}
+	}
+	return updated
 }
 
 func (p Parameters) BuildBodyType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
@@ -390,10 +403,9 @@ func (p *Parameter) buildTag() reflect.StructTag {
 		aTag.Parameter.In = "{" + aTag.Parameter.In + "}"
 	}
 	setter.SetStringIfEmpty(&aTag.Description, p.Description)
-	if p.Const != nil {
-		aTag.Value = toolbox.AsString(p.Const)
-	} else if p.Value != nil {
-		aTag.Value = toolbox.AsString(p.Value)
+	if p.Value != nil {
+		val := toolbox.AsString(p.Value)
+		aTag.Value = &val
 	}
 	if p.Output != nil {
 		aTag.Codec = &tags.Codec{Name: p.Output.Name, Arguments: p.Output.Args}

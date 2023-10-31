@@ -131,21 +131,69 @@ func (t *Type) buildParameter(field reflect.StructField) (*Parameter, error) {
 }
 
 func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error) {
-	result := &Parameter{}
 	aTag, err := tags.ParseStateTags(field.Tag, fs)
 	if err != nil {
 		return nil, err
 	}
 	pTag := aTag.Parameter
+	value, err := aTag.GetValue(field.Type)
+	if err != nil {
+		return nil, fmt.Errorf("invalid parameter %v value: %w", pTag.Name, err)
+	}
+	tag := tags.ExcludeStateTags(string(field.Tag))
+	result := &Parameter{Description: aTag.Description, Tag: tag, Value: value}
 	result.Name = field.Name
 	if pTag.Name != "" {
 		result.Name = pTag.Name
 	}
 	result.Tag = string(field.Tag)
 	result.In = &Location{Kind: Kind(pTag.Kind), Name: pTag.In}
-	result.Schema = NewSchema(field.Type)
+	result.Scope = pTag.Scope
+	result.When = pTag.When
+	result.Lazy = pTag.Lazy
+
+	required := field.Type.Kind() == reflect.Ptr
+	result.Required = &required
+
+	switch result.In.Kind {
+	case KindObject:
+		fieldType := field.Type
+		if fieldType.Kind() == reflect.Ptr {
+			fieldType = fieldType.Elem()
+		}
+		for i := 0; i < fieldType.NumField(); i++ {
+			objectField := fieldType.Field(i)
+			if _, ok := objectField.Tag.Lookup(tags.ParameterTag); !ok {
+				continue
+			}
+			itemParam, err := BuildParameter(&objectField, fs)
+			if err != nil {
+				return nil, err
+			}
+			result.Object = append(result.Object, itemParam)
+		}
+	case KindRepeated:
+		return nil, fmt.Errorf("repeated kind not yet supported in translator")
+		//Add repeated:"" repeated:""  repeated:"" tags with parameter details
+	}
+	BuildCodec(aTag, result)
+	BuildSchema(field, pTag, result)
 	BuildPredicate(aTag, result)
 	return result, nil
+}
+
+func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Parameter) {
+	if pTag.DataType != "" {
+		result.Schema = &Schema{Name: pTag.DataType}
+		if result.Output == nil {
+			result.Schema.SetType(field.Type)
+		} else if result.Output.Schema == nil {
+			result.Output.Schema = &Schema{}
+		}
+		result.Schema.SetType(field.Type)
+	} else {
+		result.Schema = NewSchema(field.Type)
+	}
 }
 
 func (t *Type) buildParameters() error {

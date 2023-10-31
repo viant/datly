@@ -241,7 +241,7 @@ func (s State) Expand(text string) string {
 	expander := data.Map{}
 	if parameters := s.FilterByKind(state.KindConst); len(parameters) > 0 {
 		for _, literal := range parameters {
-			expander[literal.Name] = literal.Const
+			expander[literal.Name] = literal.Value
 		}
 	}
 
@@ -400,6 +400,9 @@ func (s State) NormalizeComposites() (State, error) {
 	for _, candidate := range s { //TODO to be deprecated we just one way of assembling compositie types
 		switch candidate.In.Kind {
 		case state.KindRepeated, state.KindObject:
+			if len(candidate.Object) > 0 || len(candidate.Repeated) > 0 {
+				continue
+			}
 			if candidate.In.Name != "" {
 				baseParams := strings.Split(candidate.In.Name, ",")
 				candidate.In.Name = ""

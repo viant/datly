@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/xdatly/codec"
 	"reflect"
 )
@@ -107,11 +108,9 @@ func (v *Codec) newCodecInstance(resource Resource, inputType reflect.Type, fact
 		Args:       v.Args,
 		OutputType: v.OutputType,
 	}, options...)
-
 	if err != nil {
 		return nil, err
 	}
-
 	return aCodec, nil
 }
 
@@ -155,6 +154,16 @@ func NewCodec(name string, schema *Schema, instance codec.Instance) *Codec {
 		Name:   name,
 		Schema: schema,
 		_codec: instance,
+	}
+}
+
+func BuildCodec(aTag *tags.Tag, param *Parameter) {
+	if aTag == nil || aTag.Codec == nil {
+		return
+	}
+	param.Output = &Codec{Name: aTag.Codec.Name, Body: aTag.Codec.Body, Args: aTag.Codec.Arguments}
+	if aTag.Codec.DataType != "" {
+		param.Output.Schema = &Schema{Name: aTag.Codec.DataType}
 	}
 }
 
