@@ -173,7 +173,6 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 			result.Object = append(result.Object, itemParam)
 		}
 	case KindRepeated:
-		return nil, fmt.Errorf("repeated kind not yet supported in translator")
 		//Add repeated:"" repeated:""  repeated:"" tags with parameter details
 	}
 	BuildCodec(aTag, result)
