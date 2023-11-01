@@ -49,7 +49,7 @@ func (s *Service) HandleError(ctx context.Context, err error, aComponent *reposi
 
 	var options = aSession.Indirect(true, locatorOptions...)
 	err = aSession.SetState(ctx, aComponent.Output.Type.Parameters, output, options)
-	return output, err
+	return output.State(), err
 }
 
 func (s *Service) operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
