@@ -34,6 +34,10 @@ func (t *Tags) Set(tag string, value TagValue) {
 	if len(t.tags) == 0 {
 		t.tags = map[string]TagValue{}
 	}
+	if _, ok := t.tags[tag]; ok {
+		t.tags[tag] = value
+		return
+	}
 	t.order = append(t.order, tag)
 	t.tags[tag] = value
 }

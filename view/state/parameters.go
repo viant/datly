@@ -369,7 +369,7 @@ func (p Parameters) PredicateStructType(d Documentation) reflect.Type {
 		if d != nil {
 			fieldDescription, ok := d.ByName(field.Tag.Filter)
 			if ok {
-				fieldTags.Set("description", fieldDescription)
+				fieldTags.Set(tags.DocumentationTag, fieldDescription)
 			}
 		}
 
@@ -402,7 +402,7 @@ func (p *Parameter) buildTag() reflect.StructTag {
 	if strings.Contains(aTag.Parameter.In, ",") {
 		aTag.Parameter.In = "{" + aTag.Parameter.In + "}"
 	}
-	setter.SetStringIfEmpty(&aTag.Description, p.Description)
+	setter.SetStringIfEmpty(&aTag.Documentation, p.Description)
 	if p.Value != nil {
 		val := toolbox.AsString(p.Value)
 		aTag.Value = &val

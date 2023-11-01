@@ -2,6 +2,8 @@ package view
 
 import (
 	"github.com/viant/datly/view/state"
+	vtags "github.com/viant/datly/view/tags"
+
 	"github.com/viant/structology/format/text"
 	"github.com/viant/structology/tags"
 )
@@ -20,7 +22,7 @@ func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.
 	if doc != nil {
 		description, ok := doc.ColumnDocumentation(table, columnName)
 		if ok {
-			result.Set("description", description)
+			result.Set(vtags.DocumentationTag, description)
 		}
 	}
 

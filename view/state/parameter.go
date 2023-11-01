@@ -29,7 +29,7 @@ type (
 		In                *Location                    `json:",omitempty" yaml:"In" `
 		Scope             string                       `json:",omitempty" yaml:"Scope" `
 		Required          *bool                        `json:",omitempty"  yaml:"Required" `
-		Description       string                       `json:",omitempty" yaml:"Description"`
+		Description       string                       `json:",omitempty" yaml:"Documentation"`
 		Style             string                       `json:",omitempty" yaml:"Style"`
 		MaxAllowedRecords *int                         `json:",omitempty"`
 		MinAllowedRecords *int                         `json:",omitempty"`

@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/view"
 	dConfig "github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/sqlparser"
 	"github.com/viant/structology"
 	"github.com/viant/structology/format/text"
@@ -98,7 +99,7 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, doc sta
 
 	if doc != nil {
 		if fieldDoc, ok := doc.ColumnDocumentation(table, field.Column.Name); ok {
-			field.Tags.Set("description", TagValue{fieldDoc})
+			field.Tags.Set(tags.DocumentationTag, TagValue{fieldDoc})
 		}
 	}
 	if column.Type == "" {

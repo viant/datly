@@ -143,7 +143,7 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 		return nil, fmt.Errorf("invalid parameter %v value: %w", pTag.Name, err)
 	}
 	tag := tags.ExcludeStateTags(string(field.Tag))
-	result := &Parameter{Description: aTag.Description, Tag: tag, Value: value}
+	result := &Parameter{Description: aTag.Documentation, Tag: tag, Value: value}
 	result.Name = field.Name
 	if pTag.Name != "" {
 		result.Name = pTag.Name

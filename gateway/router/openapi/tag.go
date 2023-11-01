@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/govalidator"
 	"github.com/viant/structology/format"
 	"github.com/viant/xreflect"
@@ -62,7 +63,7 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag) (Tag, error) {
 		IsNullable:  !validationTag.Required && field.Type.Kind() == reflect.Ptr,
 		TypeName:    typeName,
 		CaseFormat:  aTag.CaseFormat,
-		Description: tag.Get("description"),
+		Description: tag.Get(tags.DocumentationTag),
 		Example:     tag.Get("example"),
 		_tag:        *aTag,
 	}, nil

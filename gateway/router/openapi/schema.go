@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology/format/text"
 	ftime "github.com/viant/structology/format/time"
 	"github.com/viant/xdatly/docs"
@@ -78,7 +79,7 @@ func (s *Schema) Field(field reflect.StructField, tag Tag) (*Schema, error) {
 		}
 	}
 
-	result.description = field.Tag.Get("description")
+	result.description = field.Tag.Get(tags.DocumentationTag)
 	return &result, nil
 }
 

@@ -1,3 +1,3 @@
 package tags
 
-const DescriptionTag = "description"
+const DocumentationTag = "doc"
