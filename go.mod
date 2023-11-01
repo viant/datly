@@ -36,7 +36,7 @@ require (
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xreflect v0.3.3
-	github.com/viant/xunsafe v0.9.1-0.20230927172001-c46ad2c48d68
+	github.com/viant/xunsafe v0.9.2
 	golang.org/x/mod v0.12.0
 	golang.org/x/oauth2 v0.7.0 // indirect
 	google.golang.org/api v0.114.0 // indirect
