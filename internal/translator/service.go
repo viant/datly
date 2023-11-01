@@ -485,7 +485,6 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 		}
 		resource.Rule.Async.WithCache = true
 		setter.SetIntIfZero(&resource.Rule.Async.ExpiryTimeInSec, rootView.Cache.TimeToLiveMs)
-		setter.SetIntIfZero(&resource.Rule.Async.ErrorExpiryTimeInSec, rootView.Cache.ErrorTimeToLiveMs)
 		route.Async = resource.Rule.Async
 
 	}
