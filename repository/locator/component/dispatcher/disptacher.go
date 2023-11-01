@@ -26,6 +26,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request 
 		return nil, err
 	}
 	value, err := d.service.Operate(ctx, aComponent, aSession)
+	if err != nil {
+		return d.service.HandleError(ctx, err, aComponent, aSession)
+	}
 	return value, err
 }
 

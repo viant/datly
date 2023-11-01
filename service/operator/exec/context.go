@@ -7,8 +7,10 @@ import (
 )
 
 type contextKey string
+type errorKey string
 
 var ContextKey = contextKey("context")
+var ErrorKey = errorKey("error")
 
 // Context represents an execution context
 type Context struct {

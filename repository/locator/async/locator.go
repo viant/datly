@@ -17,6 +17,12 @@ type Locator struct{}
 
 func (l *Locator) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	name = strings.ToLower(name)
+
+	if name == keys.JobError {
+		if err := ctx.Value(exec.ErrorKey); err != nil {
+			return err.(error), true, nil
+		}
+	}
 	switch {
 	case strings.HasPrefix(name, keys.Group):
 		return l.getGroupValue(ctx, name)
@@ -27,6 +33,7 @@ func (l *Locator) Value(ctx context.Context, name string) (interface{}, bool, er
 }
 
 func (l *Locator) getJobValue(ctx context.Context, name string) (interface{}, bool, error) {
+
 	var job *async.Job
 	if value := ctx.Value(async.JobKey); value != nil {
 		job, _ = value.(*async.Job)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/viant/datly/repository/locator/output/keys"
+	"github.com/viant/datly/service/operator/exec"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
@@ -42,6 +43,9 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		}
 		return l.Status, true, nil
 	case keys.Error:
+		if err := ctx.Value(exec.ErrorKey); err != nil {
+			return err.(error), true, nil
+		}
 		if l.Status == nil || l.Status.Status == "ok" {
 			return "", true, nil
 		}

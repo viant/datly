@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler/async"
 )
@@ -33,6 +34,22 @@ func (s *Service) Operate(ctx context.Context, aComponent *repository.Component,
 		return nil, err
 	}
 	return result, nil
+}
+
+// HandleError processes output with error
+func (s *Service) HandleError(ctx context.Context, err error, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
+	ctx = context.WithValue(ctx, exec.ErrorKey, err)
+	output := aComponent.Output.Type.Type().NewState()
+
+	var locatorOptions []locator.Option
+	locatorOptions = append(locatorOptions, locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
+		return aSession.LookupValue(ctx, parameter, aSession.Indirect(true, locatorOptions...))
+	}),
+		locator.WithView(aComponent.View))
+
+	var options = aSession.Indirect(true, locatorOptions...)
+	err = aSession.SetState(ctx, aComponent.Output.Type.Parameters, output, options)
+	return output, err
 }
 
 func (s *Service) operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
