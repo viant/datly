@@ -50,25 +50,58 @@ func (u *URIRewriter) Value(ctx context.Context, raw interface{}, options ...cod
 		return raw, nil
 	}
 	values, err := url.ParseQuery(value)
+	for key, val := range values {
+		if len(val) == 0 {
+			values.Del(key)
+			continue
+		}
+
+		empty := map[int]bool{}
+		for i, s := range val {
+			if s == "" {
+				empty[i] = true
+			}
+		}
+
+		if len(empty) != 0 {
+			newVal := make([]string, len(val)-len(empty))
+			z := 0
+			for j, s := range val {
+				if empty[j] {
+					continue
+				}
+
+				newVal[z] = s
+				z++
+			}
+			values[key] = newVal
+		}
+	}
+
 	if err != nil {
 		return raw, err
 	}
 	for _, exclusion := range u.Exclusion {
 		values.Del(exclusion)
 	}
+
 	var keys []string
-	for k := range values {
+	for k, _ := range values {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	builder := strings.Builder{}
-	for i, k := range keys {
-		if i > 0 {
-			builder.WriteByte('&')
+	var buf strings.Builder
+	for _, key := range keys {
+		vs := values[key]
+		sort.Strings(vs)
+		for _, v := range vs {
+			if buf.Len() > 0 {
+				buf.WriteByte('&')
+			}
+			buf.WriteString(key)
+			buf.WriteByte('=')
+			buf.WriteString(v)
 		}
-		builder.WriteString(k)
-		builder.WriteString("=")
-		builder.WriteString(values.Get(k))
 	}
-	return builder.String(), nil
+	return buf.String(), nil
 }
