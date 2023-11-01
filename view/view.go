@@ -461,6 +461,9 @@ func (v *View) initViewRelations(ctx context.Context, relations []*Relation, not
 		if err := refView.initView(ctx); err != nil {
 			return err
 		}
+		if err = rel.adjustLinkColumn(); err != nil {
+			return err
+		}
 
 	}
 	return nil

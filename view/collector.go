@@ -534,7 +534,7 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, []string) {
 outer:
 	for i := 0; i < sliceLen; i++ {
 		parent := r.parent.slice.ValuePointerAt(destPtr, i)
-		for _, link := range r.relation.On {
+		for k, link := range r.relation.On {
 			field := link.xField
 			if field != nil {
 				fieldValue := field.Value(xunsafe.AsPointer(parent))
@@ -560,7 +560,8 @@ outer:
 				}
 				continue
 			}
-			positions := r.parentValuesPositions(r.relation.On[i].Column)
+
+			positions := r.parentValuesPositions(r.relation.On[k].Column)
 			result := make([]interface{}, len(positions))
 			counter := 0
 			for key := range positions {
