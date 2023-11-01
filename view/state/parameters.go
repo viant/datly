@@ -199,49 +199,36 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 	var fields []reflect.StructField
 	var setMarkerFields []reflect.StructField
 	//TODO add compaction here
-	var err error
+	var used = map[string]bool{}
 	for _, param := range p {
-		schema := param.OutputSchema()
-		if schema == nil {
-			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
-		}
-		rType := schema.Type()
-		dt := schema.DataType
-		if dt == "" {
-			dt = schema.Name
-		}
-		if rType == nil {
-			rType, err = types.LookupType(lookupType, schema.DataType)
-			if err != nil {
-				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", param.Name, schema.TypeName(), err)
-			}
+		if used[param.Name] {
+			continue
 		}
 
-		fieldName := param.Name
-		param.Schema.Cardinality = schema.Cardinality
+		used[param.Name] = true
 
-		if param.Schema.Cardinality == Many && rType.Kind() != reflect.Slice {
-			rType = reflect.SliceOf(rType)
+		structField, markerField, err := param.buildField(pkgPath, lookupType)
+		if err != nil {
+			return nil, err
 		}
+		fields = append(fields, structField)
+		setMarkerFields = append(setMarkerFields, markerField)
 
-		if rType != nil {
-			if index := strings.LastIndex(fieldName, "."); index != -1 {
-				fieldName = fieldName[index+1:]
-			}
+		//if input := param.LocationInput; input != nil {
+		//	for _, item := range input.Parameters {
+		//		if used[item.Name] {
+		//			continue
+		//		}
+		//		used[item.Name] = true
+		//		if structField, markerField, err = item.buildField(pkgPath, lookupType); err != nil {
+		//			return nil, err
+		//		}
+		//		fields = append(fields, structField)
+		//		setMarkerFields = append(setMarkerFields, markerField)
+		//
+		//	}
+		//}
 
-			structField := reflect.StructField{Name: fieldName,
-				Type:    rType,
-				PkgPath: PkgPath(fieldName, pkgPath),
-				Tag:     param.buildTag(),
-			}
-
-			if fieldName == rType.Name() || strings.Contains(param.Tag, "anonymous") {
-				structField.Anonymous = true
-			}
-			fields = append(fields, structField)
-			markerTag := buildMarkerFieldTag(structField)
-			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: fieldName, Type: boolType, Tag: reflect.StructTag(markerTag.Stringify()), PkgPath: PkgPath(fieldName, pkgPath)})
-		}
 	}
 	options := newReflectOptions(opts)
 
@@ -254,6 +241,49 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 	}
 	baseType := reflect.StructOf(fields)
 	return baseType, nil
+}
+
+func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (structField reflect.StructField, markerField reflect.StructField, err error) {
+	schema := p.OutputSchema()
+	if schema == nil {
+		return structField, markerField, fmt.Errorf("invalid parameter: %v schema was empty", p.Name)
+	}
+	rType := schema.Type()
+	dt := schema.DataType
+	if dt == "" {
+		dt = schema.Name
+	}
+	if rType == nil {
+		rType, err = types.LookupType(lookupType, schema.DataType)
+		if err != nil {
+			return structField, markerField, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", p.Name, schema.TypeName(), err)
+		}
+	}
+
+	fieldName := p.Name
+	p.Schema.Cardinality = schema.Cardinality
+
+	if p.Schema.Cardinality == Many && rType.Kind() != reflect.Slice {
+		rType = reflect.SliceOf(rType)
+	}
+	if rType != nil {
+		if index := strings.LastIndex(fieldName, "."); index != -1 {
+			fieldName = fieldName[index+1:]
+		}
+
+		structField = reflect.StructField{Name: fieldName,
+			Type:    rType,
+			PkgPath: PkgPath(fieldName, pkgPath),
+			Tag:     p.buildTag(),
+		}
+
+		if fieldName == rType.Name() || strings.Contains(p.Tag, "anonymous") {
+			structField.Anonymous = true
+		}
+	}
+	markerTag := buildMarkerFieldTag(structField)
+	markerField = reflect.StructField{Name: fieldName, Type: boolType, Tag: reflect.StructTag(markerTag.Stringify()), PkgPath: PkgPath(fieldName, pkgPath)}
+	return structField, markerField, nil
 }
 
 func buildMarkerFieldTag(structField reflect.StructField) stags.Tags {
