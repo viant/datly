@@ -74,7 +74,7 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 		if strings.Contains(typeDef.DataType, " ") {
 			customTypes = append(customTypes, typeDef)
 		}
-		_ = typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType))
+		_ = typeRegistry.Register(typeDef.Name, xreflect.WithPackage(typeDef.Package), xreflect.WithTypeDefinition(typeDef.DataType))
 
 	}
 
