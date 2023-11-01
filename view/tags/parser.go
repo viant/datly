@@ -96,7 +96,10 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 			}
 		case ParameterTag:
 			ret.Parameter = &Parameter{Name: name}
-			return ret, values.MatchPairs(ret.updatedParameter)
+			err := values.MatchPairs(ret.updatedParameter)
+			if err != nil {
+				return nil, err
+			}
 		case format.TagName:
 			if ret.Format, err = format.Parse(tag); err != nil {
 				return nil, err

@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
@@ -135,6 +136,7 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 	if err != nil {
 		return nil, err
 	}
+
 	pTag := aTag.Parameter
 	value, err := aTag.GetValue(field.Type)
 	if err != nil {
@@ -182,17 +184,28 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 }
 
 func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Parameter) {
+
+	rawType := field.Type
+	if rawType.Kind() == reflect.Slice {
+		rawType = rawType.Elem()
+	}
+	if rawType.Kind() == reflect.Ptr {
+		rawType = rawType.Elem()
+	}
+	rawName := rawType.Name()
 	if pTag.DataType != "" {
 		result.Schema = &Schema{Name: pTag.DataType}
 		if result.Output == nil {
 			result.Schema.SetType(field.Type)
 		} else if result.Output.Schema == nil {
 			result.Output.Schema = &Schema{}
+			result.Output.Schema.SetType(field.Type)
+			setter.SetStringIfEmpty(&result.Output.Schema.DataType, rawName)
 		}
-		result.Schema.SetType(field.Type)
 	} else {
 		result.Schema = NewSchema(field.Type)
 	}
+	setter.SetStringIfEmpty(&result.Schema.DataType, rawName)
 }
 
 func (t *Type) buildParameters() error {

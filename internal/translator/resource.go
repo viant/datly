@@ -141,7 +141,6 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.Typ
 		if i > 0 {
 			alias = ""
 		}
-		//_ = config.Config.Types.SetComponents(name, xreflect.WithTypeDefinition(dataType))
 		setter.SetStringIfEmpty(&typeDef.Alias, alias)
 		r.AppendTypeDefinition(typeDef)
 	}
@@ -194,7 +193,6 @@ func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
 	definition := *typeDef
 	r.Resource.Types = append(r.Resource.Types, &definition)
 	r.typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType), xreflect.WithPackage(typeDef.Package))
-
 }
 
 func (r *Resource) AdjustCustomType(info *plugin.Info) {
@@ -453,40 +451,90 @@ func (r *Resource) loadState(ctx context.Context, URL string) error {
 	types := extension.Config.Types
 	aPath := url.Path(URL)
 	location, _ := path.Split(aPath)
+	var registered = map[string]map[string]bool{}
 	dirTypes, err := xreflect.ParseTypes(location,
 		xreflect.WithParserMode(parser.ParseComments),
 		xreflect.WithRegistry(types),
 		xreflect.WithModule(r.Module, r.rule.ModuleLocation),
 		xreflect.WithOnField(func(typeName string, field *ast.Field) error {
 			return nil
+		}), xreflect.WithOnLookup(func(packagePath, pkg, typeName string, rType reflect.Type) {
+			if pkg == "" {
+				return
+			}
+			if _, ok := registered[pkg]; !ok {
+				registered[pkg] = map[string]bool{}
+			}
+			if registered[pkg][typeName] {
+				return
+			}
+			registered[pkg][typeName] = true
+			r.registerType(typeName, pkg, rType, false)
 		}))
 	if err != nil {
 		return err
 	}
-	typeNames := dirTypes.TypeNamesInPath(aPath)
-	for _, typeName := range typeNames {
-		rType, err := dirTypes.Type(typeName)
-		if err != nil {
-			return fmt.Errorf("failed to load state type:%v %w", typeName, err)
-		}
-		if rType.Kind() == reflect.Slice {
-			rType = rType.Elem()
-		}
-		if rType.Kind() == reflect.Ptr {
-			rType = rType.Elem()
-		}
-		if !strings.HasSuffix(typeName, "Input") {
-			continue
-		}
-		if err = r.extractState(rType); err != nil {
-			return err
-		}
 
+	inputTypeName := dirTypes.MatchTypeNamesInPath(aPath, "@input")
+	if inputTypeName == "" {
+		return fmt.Errorf("failed to locate input type in %s, \n\tforgot struct{...}//@input comment", aPath)
+	}
+	inputType, err := dirTypes.Type(inputTypeName)
+	statePackage := dirTypes.PackagePath(aPath)
+	if err != nil {
+		return fmt.Errorf("invalid typename: %s, %w", inputType, err)
+	}
+	delete(registered, statePackage)
+	err = r.registerDependencies(registered, dirTypes)
+	if err != nil {
+		return err
+	}
+
+	r.registerType(inputTypeName, statePackage, inputType, false)
+	if err = r.extractState(inputType, "in"); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (r *Resource) extractState(rType reflect.Type) error {
+func (r *Resource) registerDependencies(registered map[string]map[string]bool, dirTypes *xreflect.DirTypes) error {
+	for depPkg := range registered {
+		packageDir := dirTypes.DirTypes(depPkg)
+		typeNames := dirTypes.TypesInPackage(depPkg)
+		for _, candidate := range typeNames {
+			if registered[depPkg][candidate] {
+				continue
+			}
+			rType, err := packageDir.Type(candidate)
+			if err != nil {
+				return err
+			}
+			methods := packageDir.Methods(candidate)
+			r.registerType(candidate, depPkg, rType, len(methods) > 0)
+		}
+		fmt.Printf("%s\n", depPkg)
+	}
+	return nil
+}
+
+func (r *Resource) registerType(typeName string, pkg string, rType reflect.Type, hasMethods bool) {
+	dataType := rType.Name()
+	if !hasMethods || dataType != "" {
+		aType := xreflect.NewType(typeName, xreflect.WithPackage(pkg), xreflect.WithReflectType(rType))
+		dataType = aType.Body()
+	}
+	if dataType == "" {
+		dataType = state.SanitizeTypeName(typeName)
+	}
+
+	r.AppendTypeDefinition(&view.TypeDefinition{
+		Name:     typeName,
+		Package:  pkg,
+		DataType: dataType,
+	})
+}
+
+func (r *Resource) extractState(rType reflect.Type, scope string) error {
 	if rType.Kind() != reflect.Struct {
 		return nil
 	}
@@ -511,7 +559,7 @@ func (r *Resource) extractState(rType reflect.Type) error {
 			parameter.Object[i] = &iRepeated.Parameter
 		}
 		iParameter.Explicit = true
-		switch strings.ToLower(parameter.Scope) {
+		switch strings.ToLower(scope) {
 		case "out":
 			iParameter.InOutput = true
 			r.OutputState.Append(iParameter)

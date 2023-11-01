@@ -69,11 +69,9 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	if err = resource.parseImports(ctx, &dSQL); err != nil {
 		return err
 	}
-
 	if resource.Rule.ContentURL != "" {
 		return s.buildStaticContent(ctx, rule, resource, opts)
 	}
-
 	if err = resource.ExtractDeclared(&dSQL); err != nil {
 		return err
 	}

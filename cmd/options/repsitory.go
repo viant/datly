@@ -23,6 +23,7 @@ type (
 		APIPrefix            string     `short:"a" long:"api" description:"api prefix"  default:"/v1/api" `
 		Configs              ConfigURLs `short:"C" long:"config" description:"config url" `
 		CacheConnectorPrefix string     `short:"H" long:"cprefix" description:"cache prefix"`
+		LoadPlugin           bool       `short:"L" long:"lplugin" description:"load plugin"`
 	}
 
 	ConfigURL  string

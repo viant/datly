@@ -35,7 +35,7 @@ require (
 	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
-	github.com/viant/xreflect v0.3.3-0.20231031160539-0adca25a2224
+	github.com/viant/xreflect v0.3.3
 	github.com/viant/xunsafe v0.9.1-0.20230927172001-c46ad2c48d68
 	golang.org/x/mod v0.12.0
 	golang.org/x/oauth2 v0.7.0 // indirect
@@ -51,10 +51,10 @@ require (
 
 require (
 	github.com/viant/structology v0.5.6-0.20231027223343-51d596f3b723
-	github.com/viant/xdatly v0.3.1-0.20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
-	github.com/viant/xdatly/handler v0.0.0-20231013011318-82109bd80ac8
-	github.com/viant/xdatly/types/core v0.0.0-20230619231115-e622dd6aff79
+	github.com/viant/xdatly v0.0.0-20231013204918-ecf3c2edf259
+	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
+	github.com/viant/xdatly/handler v0.0.0-20231013204918-ecf3c2edf259
+	github.com/viant/xdatly/types/core v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xlsy v0.2.2
 	github.com/viant/xmlify v0.0.0-20231019172405-c43e4bbd6a66
 	golang.org/x/tools v0.12.0
@@ -128,3 +128,5 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/viant/xreflect => /Users/awitas/go/src/github.com/viant/xreflect
