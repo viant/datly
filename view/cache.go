@@ -123,9 +123,9 @@ func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error
 		return fmt.Errorf("View %v cache TimeToLiveMs can't be empty", viewName)
 	}
 
-	if c.ErrorTimeToLiveMs == 0 {
-		return fmt.Errorf("View %v cache ErrorTimeToLiveMs can't be empty", viewName)
-	}
+	//if c.ErrorTimeToLiveMs == 0 {
+	//	return fmt.Errorf("View %v cache ErrorTimeToLiveMs can't be empty", viewName)
+	//}
 
 	if err := c.ensureCacheClient(aView, viewName); err != nil {
 		return err
