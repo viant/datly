@@ -42,6 +42,11 @@ func (l *Locator) getJobValue(ctx context.Context, name string) (interface{}, bo
 		return job, true, nil
 	case keys.JobCreationTime:
 		return job.CreationTime, true, nil
+	case keys.JobError:
+		if job.Error != nil {
+			return *job.Error, true, nil
+		}
+		return "", true, nil
 	case keys.JobEndTime:
 		val := job.EndTime
 		return val, val != nil, nil

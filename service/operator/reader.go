@@ -31,7 +31,7 @@ func (s *Service) adjustAsyncOptions(ctx context.Context, aSession *session.Sess
 		if s.IsEventInvocation(ctx) {
 			//Makes sure cache is always refreshed
 			*options = append(*options, reader.WithCacheRefresh())
-		} else if async.Status(job.Status) != async.StatusDone && async.Status(job.Status) != async.StatusError {
+		} else if async.Status(job.Status) != async.StatusDone {
 			//Make sure not actual database is used
 			setting := aSession.State().QuerySettings(aView)
 			if !setting.SyncFlag { //sync flag would perform regular read

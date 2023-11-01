@@ -10,6 +10,7 @@ var Types = map[string]reflect.Type{
 	//Job types
 	Job:                  reflect.TypeOf(&async.Job{}),
 	JobCreationTime:      xreflect.TimeType,
+	JobError:             xreflect.StringType,
 	JobEndTime:           xreflect.TimePtrType,
 	JobEndUnixTimeInSec:  xreflect.IntType,
 	JobInfoStatus:        xreflect.StringType,

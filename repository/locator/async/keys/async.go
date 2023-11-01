@@ -11,6 +11,7 @@ const ( //async kind
 
 	JobUserEmail = "job.useremail"
 	JobUserID    = "job.userid"
+	JobError     = "job.error"
 
 	JobEndUnixTimeInSec = "job.endunixtimeinsec"
 
