@@ -484,7 +484,7 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 			return nil, fmt.Errorf("cache setting is required with rasync")
 		}
 		resource.Rule.Async.WithCache = true
-		setter.SetIntIfZero(&resource.Rule.Async.ExpiryTimeInSec, rootView.Cache.TimeToLiveMs)
+		setter.SetIntIfZero(&resource.Rule.Async.ExpiryTimeInSec, int((time.Millisecond * time.Duration(resource.Rule.Cache.TimeToLiveMs)).Seconds()))
 		route.Async = resource.Rule.Async
 
 	}
