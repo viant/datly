@@ -15,9 +15,9 @@ type Data struct {
 }
 
 type Events struct {
-	Id       int        `sqlx:"name=ID,autoincrement,primaryKey"`
-	Name     string     `sqlx:"name=NAME" json:",omitempty"`
-	Quantity int        `sqlx:"name=QUANTITY" json:",omitempty"`
+	Id       int        `sqlx:"ID,autoincrement,primaryKey"`
+	Name     string     `sqlx:"NAME" json:",omitempty"`
+	Quantity int        `sqlx:"QUANTITY" json:",omitempty"`
 	Has      *EventsHas `setMarker:"true" typeName:"EventsHas" json:"-" sqlx:"-"`
 }
 

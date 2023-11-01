@@ -36,6 +36,15 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 
 func main() {
 	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
+
+	//os.Args = []string{
+	//	"",
+	//	"-N=run_tests_one_to_many",
+	//	"-X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/047_raw_json_tag/raw_json_expr.sql",
+	//	"-w=autogen",
+	//	"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
+	//}
+
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)

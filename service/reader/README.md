@@ -62,21 +62,21 @@ import (
 )
 
 type Invoice struct {
-	Id           int32      `sqlx:"name=id"`
-	CustomerName *string    `sqlx:"name=customer_name"`
-	InvoiceDate  *time.Time `sqlx:"name=invoice_date"`
-	DueDate      *time.Time `sqlx:"name=due_date"`
-	TotalAmount  *string    `sqlx:"name=total_amount"`
+	Id           int32      `sqlx:"id"`
+	CustomerName *string    `sqlx:"customer_name"`
+	InvoiceDate  *time.Time `sqlx:"invoice_date"`
+	DueDate      *time.Time `sqlx:"due_date"`
+	TotalAmount  *string    `sqlx:"total_amount"`
 	Items        []*Item
 }
 
 type Item struct {
-	Id          int32   `sqlx:"name=id"`
-	InvoiceId   *int64  `sqlx:"name=invoice_id"`
-	ProductName *string `sqlx:"name=product_name"`
-	Quantity    *int64  `sqlx:"name=quantity"`
-	Price       *string `sqlx:"name=price"`
-	Total       *string `sqlx:"name=total"`
+	Id          int32   `sqlx:"id"`
+	InvoiceId   *int64  `sqlx:"invoice_id"`
+	ProductName *string `sqlx:"product_name"`
+	Quantity    *int64  `sqlx:"quantity"`
+	Price       *string `sqlx:"price"`
+	Total       *string `sqlx:"total"`
 }
 
 
@@ -135,19 +135,19 @@ import (
 )
 
 type Trader struct {
-    Id          int32      `sqlx:"name=id"`
-    FirstName   *string    `sqlx:"name=first_name"`
-    LastName    *string    `sqlx:"name=last_name"`
-    Email       *string    `sqlx:"name=email"`
-    PhoneNumber *string    `sqlx:"name=phone_number"`
-    JoinDate    *time.Time `sqlx:"name=join_date"`
+    Id          int32      `sqlx:"id"`
+    FirstName   *string    `sqlx:"first_name"`
+    LastName    *string    `sqlx:"last_name"`
+    Email       *string    `sqlx:"email"`
+    PhoneNumber *string    `sqlx:"phone_number"`
+    JoinDate    *time.Time `sqlx:"join_date"`
     Acl         *Acl
 }
 
 type Acl struct {
-    UserId         int   `sqlx:"name=USER_ID"`
-    IsReadonly     *bool `sqlx:"name=IS_READONLY"`
-    CanUseFeature1 *bool `sqlx:"name=CAN_USE_FEATURE1"`
+    UserId         int   `sqlx:"USER_ID"`
+    IsReadonly     *bool `sqlx:"IS_READONLY"`
+    CanUseFeature1 *bool `sqlx:"CAN_USE_FEATURE1"`
 }
 
 
@@ -198,33 +198,33 @@ package reader_test
 
 
 type Product struct {
-	Id          int32      `sqlx:"name=ID"`
-	Name        *string    `sqlx:"name=NAME"`
-	VendorId    *int64     `sqlx:"name=VENDOR_ID"`
-	Status      *int64     `sqlx:"name=STATUS"`
-	Created     *time.Time `sqlx:"name=CREATED"`
-	UserCreated *int64     `sqlx:"name=USER_CREATED"`
-	Updated     *time.Time `sqlx:"name=UPDATED"`
-	UserUpdated *int64     `sqlx:"name=USER_UPDATED"`
+	Id          int32      `sqlx:"ID"`
+	Name        *string    `sqlx:"NAME"`
+	VendorId    *int64     `sqlx:"VENDOR_ID"`
+	Status      *int64     `sqlx:"STATUS"`
+	Created     *time.Time `sqlx:"CREATED"`
+	UserCreated *int64     `sqlx:"USER_CREATED"`
+	Updated     *time.Time `sqlx:"UPDATED"`
+	UserUpdated *int64     `sqlx:"USER_UPDATED"`
 	Vendor      *Vendor
 	Performance []*Performance
 }
 
 type Vendor struct {
-	Id          int32      `sqlx:"name=ID"`
-	Name        *string    `sqlx:"name=NAME"`
-	AccountId   *int64     `sqlx:"name=ACCOUNT_ID"`
-	Created     *time.Time `sqlx:"name=CREATED"`
-	UserCreated *int64     `sqlx:"name=USER_CREATED"`
-	Updated     *time.Time `sqlx:"name=UPDATED"`
-	UserUpdated *int64     `sqlx:"name=USER_UPDATED"`
+	Id          int32      `sqlx:"ID"`
+	Name        *string    `sqlx:"NAME"`
+	AccountId   *int64     `sqlx:"ACCOUNT_ID"`
+	Created     *time.Time `sqlx:"CREATED"`
+	UserCreated *int64     `sqlx:"USER_CREATED"`
+	Updated     *time.Time `sqlx:"UPDATED"`
+	UserUpdated *int64     `sqlx:"USER_UPDATED"`
 }
 
 type Performance struct {
-	LocationId *int     `sqlx:"name=location_id"`
-	ProductId  *int     `sqlx:"name=product_id"`
-	Quantity   *float64 `sqlx:"name=quantity"`
-	Price      *float64 `sqlx:"name=price"`
+	LocationId *int     `sqlx:"location_id"`
+	ProductId  *int     `sqlx:"product_id"`
+	Quantity   *float64 `sqlx:"quantity"`
+	Price      *float64 `sqlx:"price"`
 }
 
 var perfTemplate = `SELECT
@@ -314,17 +314,17 @@ import (
  )
 
 type Audience struct {
-  Id              int32   `sqlx:"name=ID"`
-  Name            *string `sqlx:"name=NAME"`
-  MatchExpression *string `sqlx:"name=MATCH_EXPRESSION"`
+  Id              int32   `sqlx:"ID"`
+  Name            *string `sqlx:"NAME"`
+  MatchExpression *string `sqlx:"MATCH_EXPRESSION"`
   dealIds         []int   `sqlx:"-"`
   Deals           []*Deal
 }
 
 type Deal struct {
-  Id   int32   `sqlx:"name=ID"`
-  Name *string `sqlx:"name=NAME"`
-  Fee  *string `sqlx:"name=FEE"`
+  Id   int32   `sqlx:"ID"`
+  Name *string `sqlx:"NAME"`
+  Fee  *string `sqlx:"FEE"`
 }
 
 func (a *Audience) OnFetch(ctx context.Context) error {

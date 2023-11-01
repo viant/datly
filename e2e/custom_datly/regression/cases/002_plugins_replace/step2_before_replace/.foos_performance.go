@@ -13,10 +13,10 @@ func init() {
 }
 
 type FoosPerformance struct {
-	Id           int                 `sqlx:"name=ID,autoincrement,primaryKey"`
-	PerfName     *string             `sqlx:"name=PERF_NAME" json:",omitempty" validate:"omitempty,le(255)"`
-	PerfQuantity *int                `sqlx:"name=PERF_QUANTITY" json:",omitempty"`
-	FooId        *int                `sqlx:"name=FOO_ID,refTable=FOOS,refColumn=ID" json:",omitempty"`
+	Id           int                 `sqlx:"ID,autoincrement,primaryKey"`
+	PerfName     *string             `sqlx:"PERF_NAME" json:",omitempty" validate:"omitempty,le(255)"`
+	PerfQuantity *int                `sqlx:"PERF_QUANTITY" json:",omitempty"`
+	FooId        *int                `sqlx:"FOO_ID,refTable=FOOS,refColumn=ID" json:",omitempty"`
 	Has          *FoosPerformanceHas `setMarker:"true" typeName:"FoosPerformanceHas" json:"-"  sqlx:"-" `
 }
 

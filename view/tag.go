@@ -10,7 +10,7 @@ func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.
 	result := tags.NewTags(column.Tag)
 	columnName := column.Name
 	//TODO possible add validate tag ?
-	result.SetIfNotFound("sqlx", "name="+columnName)
+	result.SetIfNotFound("sqlx", columnName)
 	result.SetIfNotFound("velty", generateVelyTagValue(columnName, viewCaseFormat))
 	if column.FormatTag != nil {
 		aTag := tags.NewTag("format", column.FormatTag)

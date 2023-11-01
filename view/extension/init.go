@@ -74,6 +74,7 @@ func InitRegistry() {
 			codec.WithFactory(dcodec.KeyJsonTab, &dcodec.JsonTabFactory{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyFilters, &dcodec.FiltersRegistry{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyURIRewrite, &dcodec.URIRewriterFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyURIChecksum, &dcodec.UriChecksumFactory{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyTimeDiff, &dcodec.TimeDiffFactory{}, time.Time{}),
 		),
 		Predicates: &PredicateRegistry{
