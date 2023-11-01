@@ -5,16 +5,16 @@ import (
 )
 
 type Events struct {
-	Id                int                  `sqlx:"name=ID"`
-	Quantity          int                  `sqlx:"name=QUANTITY"`
+	Id                int                  `sqlx:"ID"`
+	Quantity          int                  `sqlx:"QUANTITY"`
 	EventsPerformance []*EventsPerformance `typeName:"EventsPerformance" sqlx:"-"`
 }
 
 type EventsPerformance struct {
-	Id        int       `sqlx:"name=ID"`
-	Price     int       `sqlx:"name=PRICE"`
+	Id        int       `sqlx:"ID"`
+	Price     int       `sqlx:"PRICE"`
 	EventId   int       `sqlx:"-"`
-	Timestamp time.Time `sqlx:"name=TIMESTAMP"`
+	Timestamp time.Time `sqlx:"TIMESTAMP"`
 }
 
 type JwtClaims struct {

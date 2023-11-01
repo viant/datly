@@ -5,23 +5,23 @@ import (
 )
 
 type GeneratedStruct struct {
-	Id          int        `sqlx:"name=ID" velty:"names=ID|Id"`
-	Name        *string    `sqlx:"name=NAME" velty:"names=NAME|Name"`
-	AccountId   *int       `sqlx:"name=ACCOUNT_ID" velty:"names=ACCOUNT_ID|AccountId"`
-	Created     *time.Time `sqlx:"name=CREATED" velty:"names=CREATED|Created"`
-	UserCreated *int       `sqlx:"name=USER_CREATED" velty:"names=USER_CREATED|UserCreated"`
-	Updated     *time.Time `sqlx:"name=UPDATED" velty:"names=UPDATED|Updated"`
-	UserUpdated *int       `sqlx:"name=USER_UPDATED" velty:"names=USER_UPDATED|UserUpdated"`
+	Id          int        `sqlx:"ID" velty:"names=ID|Id"`
+	Name        *string    `sqlx:"NAME" velty:"names=NAME|Name"`
+	AccountId   *int       `sqlx:"ACCOUNT_ID" velty:"names=ACCOUNT_ID|AccountId"`
+	Created     *time.Time `sqlx:"CREATED" velty:"names=CREATED|Created"`
+	UserCreated *int       `sqlx:"USER_CREATED" velty:"names=USER_CREATED|UserCreated"`
+	Updated     *time.Time `sqlx:"UPDATED" velty:"names=UPDATED|Updated"`
+	UserUpdated *int       `sqlx:"USER_UPDATED" velty:"names=USER_UPDATED|UserUpdated"`
 	Products    []*Products
 }
 
 type Products struct {
-	Id          int        `sqlx:"name=ID" velty:"names=ID|Id"`
-	Name        *string    `sqlx:"name=NAME" velty:"names=NAME|Name"`
-	VendorId    *int       `sqlx:"name=VENDOR_ID" velty:"names=VENDOR_ID|VendorId"`
-	Status      *int       `sqlx:"name=STATUS" velty:"names=STATUS|Status"`
-	Created     *time.Time `sqlx:"name=CREATED" velty:"names=CREATED|Created"`
-	UserCreated *int       `sqlx:"name=USER_CREATED" velty:"names=USER_CREATED|UserCreated"`
-	Updated     *time.Time `sqlx:"name=UPDATED" velty:"names=UPDATED|Updated"`
-	UserUpdated *int       `sqlx:"name=USER_UPDATED" velty:"names=USER_UPDATED|UserUpdated"`
+	Id          int        `sqlx:"ID" velty:"names=ID|Id"`
+	Name        *string    `sqlx:"NAME" velty:"names=NAME|Name"`
+	VendorId    *int       `sqlx:"VENDOR_ID" velty:"names=VENDOR_ID|VendorId"`
+	Status      *int       `sqlx:"STATUS" velty:"names=STATUS|Status"`
+	Created     *time.Time `sqlx:"CREATED" velty:"names=CREATED|Created"`
+	UserCreated *int       `sqlx:"USER_CREATED" velty:"names=USER_CREATED|UserCreated"`
+	Updated     *time.Time `sqlx:"UPDATED" velty:"names=UPDATED|Updated"`
+	UserUpdated *int       `sqlx:"USER_UPDATED" velty:"names=USER_UPDATED|UserUpdated"`
 }

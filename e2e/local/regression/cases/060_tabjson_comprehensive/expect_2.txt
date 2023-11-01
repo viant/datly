@@ -1,8 +1,8 @@
 package generated
 
 type GeneratedStruct struct {
-	Id    int      `sqlx:"name=ID" velty:"names=ID|Id"`
-	Name  *string  `sqlx:"name=NAME" velty:"names=NAME|Name"`
-	Price *float64 `sqlx:"name=PRICE" velty:"names=PRICE|Price"`
-	Tax   *float64 `sqlx:"name=TAX" velty:"names=TAX|Tax"`
+	Id    int      `sqlx:"ID" velty:"names=ID|Id"`
+	Name  *string  `sqlx:"NAME" velty:"names=NAME|Name"`
+	Price *float64 `sqlx:"PRICE" velty:"names=PRICE|Price"`
+	Tax   *float64 `sqlx:"TAX" velty:"names=TAX|Tax"`
 }

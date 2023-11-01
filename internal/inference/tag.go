@@ -80,7 +80,7 @@ func (t *Tags) Init(tag string) {
 func (t *Tags) buildSqlxTag(source *Spec, field *Field) {
 	column := field.Column
 	tagValue := TagValue{}
-	tagValue.Append("name=" + column.Name)
+	tagValue.Append(column.Name)
 	if column.IsAutoincrement {
 		tagValue.Append("autoincrement")
 	}

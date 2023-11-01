@@ -11,9 +11,9 @@ var Types = []reflect.Type{
 }
 
 type FooPlugin struct {
-	Id       int           `sqlx:"name=ID,primaryKey"`
-	Name     *string       `sqlx:"name=NAME" json:",omitempty"`
-	Quantity *int          `sqlx:"name=QUANTITY" json:",omitempty"`
+	Id       int           `sqlx:"ID,primaryKey"`
+	Name     *string       `sqlx:"NAME" json:",omitempty"`
+	Quantity *int          `sqlx:"QUANTITY" json:",omitempty"`
 	Has      *FooPluginHas `setMarker:"true" typeName:"FoosHas" json:"-" sqlx:"-"`
 }
 

@@ -57,7 +57,7 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 		codecStructFields[i] = reflect.StructField{
 			Name: "Col" + strconv.Itoa(i),
 			Type: column.ColumnType(),
-			Tag:  reflect.StructTag(fmt.Sprintf(`sqlx:"name=%v"`, column.Name)),
+			Tag:  reflect.StructTag(fmt.Sprintf(`sqlx:"%v"`, column.Name)),
 		}
 	}
 

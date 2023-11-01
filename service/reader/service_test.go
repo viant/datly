@@ -137,7 +137,7 @@ func TestRead(t *testing.T) {
 	}
 
 	type AclRecord struct {
-		DatlyCriteria string `sqlx:"name=criteria"`
+		DatlyCriteria string `sqlx:"criteria"`
 		PrincialSubject       string
 	}
 
@@ -819,7 +819,7 @@ type event struct {
 	Id        int
 	Quantity  float64
 	Timestamp time.Time
-	TypeId    int `sqlx:"name=event_type_id"`
+	TypeId    int `sqlx:"event_type_id"`
 	EventType eventType
 }
 
@@ -936,8 +936,8 @@ func nestedRelation() usecase {
 func sqlxColumnNames() usecase {
 	type Event struct {
 		Id             int
-		EventQuantity  float64   `sqlx:"name=quantity"`
-		EventTimestamp time.Time `sqlx:"name=timestamp"`
+		EventQuantity  float64   `sqlx:"quantity"`
+		EventTimestamp time.Time `sqlx:"timestamp"`
 	}
 
 	resource := view.EmptyResource()
@@ -1003,7 +1003,7 @@ func eventTypeViewWithEventTypeIdColumn() usecase {
 		Id        int
 		Quantity  float64
 		Timestamp time.Time
-		TypeId    int `sqlx:"name=event_type_id"`
+		TypeId    int `sqlx:"event_type_id"`
 	}
 
 	type EventType2 struct {

@@ -588,10 +588,10 @@ for _, recActor := range actor {
 + Add validate tags in Actor struct in file ~/myproject/pkg/actor/actor.go
 ```go
 type Actor struct {
-	ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey"`
-	FirstName  string    `sqlx:"name=first_name" validate:"required,le(45)"`
-	LastName   string    `sqlx:"name=last_name,unique,table=actor" validate:"required,le(45)"`
-	LastUpdate time.Time `sqlx:"name=last_update" validate:"required"`
+	ActorId    int       `sqlx:"actor_id,autoincrement,primaryKey"`
+	FirstName  string    `sqlx:"first_name" validate:"required,le(45)"`
+	LastName   string    `sqlx:"last_name,unique,table=actor" validate:"required,le(45)"`
+	LastUpdate time.Time `sqlx:"last_update" validate:"required"`
 	Has        *ActorHas `setMarker:"true" typeName:"ActorHas" json:"-"  sqlx:"-" `
 }
 ```
@@ -1456,10 +1456,10 @@ Available tags:
 + Add validate tags in Actor struct in file ~/myproject/pkg/actor/actor.go
   ```go
   type Actor struct {
-      ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey,required"`
-      FirstName  string    `sqlx:"name=first_name,required" validate:"ge(2),le(15)"`
-      LastName   string    `sqlx:"name=last_name,unique,table=actor,required"  validate:"ge(2),le(15)"`
-      LastUpdate time.Time `sqlx:"name=last_update,required"`
+      ActorId    int       `sqlx:"actor_id,autoincrement,primaryKey,required"`
+      FirstName  string    `sqlx:"first_name,required" validate:"ge(2),le(15)"`
+      LastName   string    `sqlx:"last_name,unique,table=actor,required"  validate:"ge(2),le(15)"`
+      LastUpdate time.Time `sqlx:"last_update,required"`
       Has        *ActorHas `setMarker:"true" typeName:"ActorHas" json:"-"  sqlx:"-" `
   }
   ```
@@ -1742,10 +1742,10 @@ func (a *Actor) Validate(cur *Actor) *shared.Validation {
 + **add validate tags in Actor struct in file ~/myproject/pkg/actor/actor.go**
 ```go
 type Actor struct {
-	ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey,required"`
-	FirstName  string    `sqlx:"name=first_name,required" validate:"ge(2),le(15)"`
-	LastName   string    `sqlx:"name=last_name,unique,table=actor,required"  validate:"ge(2),le(15)"`
-	LastUpdate time.Time `sqlx:"name=last_update,required"`
+	ActorId    int       `sqlx:"actor_id,autoincrement,primaryKey,required"`
+	FirstName  string    `sqlx:"first_name,required" validate:"ge(2),le(15)"`
+	LastName   string    `sqlx:"last_name,unique,table=actor,required"  validate:"ge(2),le(15)"`
+	LastUpdate time.Time `sqlx:"last_update,required"`
 	Has        *ActorHas `setMarker:"true" typeName:"ActorHas" json:"-"  sqlx:"-" `
 }
 ```

@@ -21,7 +21,7 @@ func TestService_Next(t *testing.T) {
 		return
 	}
 	type Emp struct {
-		ID   int64  `sqlx:"name=ID,primaryKey=true"`
+		ID   int64  `sqlx:"ID,primaryKey=true"`
 		Name string `sqlx:"NAME"`
 	}
 
@@ -128,7 +128,7 @@ func TestService_NextMySQL(t *testing.T) {
 		return
 	}
 	type Emp struct {
-		ID   int64  `sqlx:"name=ID,primaryKey=true"`
+		ID   int64  `sqlx:"ID,primaryKey=true"`
 		Name string `sqlx:"NAME"`
 	}
 

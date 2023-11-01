@@ -16,8 +16,8 @@ func init() {
 
 type (
 	Bars struct {
-		Id   int     `sqlx:"name=ID,primaryKey"`
-		Ints *int    `sqlx:"name=INTS" json:",omitempty"`
+		Id   int     `sqlx:"ID,primaryKey"`
+		Ints *int    `sqlx:"INTS" json:",omitempty"`
 		Name *string `sqlx:"NAME" json:",omitempty"`
 		Has  *BarHas `setMarker:"true" typeName:"FoosPerformanceHas" json:"-" sqlx:"-"`
 	}
