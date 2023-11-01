@@ -111,9 +111,7 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 	}
 	if input := p.LocationInput; input != nil {
 		for _, param := range input.Parameters {
-			if err := param.Init(ctx, resource); err != nil {
-				return err
-			}
+			_ = param.Init(ctx, resource)
 		}
 	}
 

@@ -118,6 +118,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	if reflect.StructTag(outputParameter.Tag).Get(xreflect.TagTypeName) == "" {
 		outputParameter.Tag += ` ` + xreflect.TagTypeName + `:"` + outputParameter.Schema.Name + `"`
 	}
+	//pkg := aContract.Output.Type.Package
 
 	var viewType *view.TypeDefinition
 	for _, candidate := range h.Resource.Types {
@@ -133,7 +134,10 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	contract.EnsureParameterTypes(parameters, nil, nil, nil)
 
 	if !isAnonymous {
-		rType, _ := registry.Lookup(viewType.Name)
+		rType, err := registry.Lookup(viewType.Name)
+		if err != nil {
+			return fmt.Errorf("failed to build component signature %s: %w", viewType.Name, err)
+		}
 		cardinality := outputParameter.Schema.Cardinality
 		if cardinality == state.Many {
 			rType = reflect.PtrTo(rType)
