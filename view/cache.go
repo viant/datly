@@ -24,11 +24,12 @@ type (
 		shared.Reference
 		owner *View
 
-		Name         string `json:",omitempty" yaml:",omitempty"`
-		Location     string
-		Provider     string
-		TimeToLiveMs int
-		PartSize     int `json:",omitempty"`
+		Name              string `json:",omitempty" yaml:",omitempty"`
+		Location          string
+		Provider          string
+		TimeToLiveMs      int
+		ErrorTimeToLiveMs int
+		PartSize          int `json:",omitempty"`
 		AerospikeConfig
 		Warmup *Warmup `json:",omitempty" yaml:",omitempty"`
 
@@ -120,6 +121,10 @@ func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error
 
 	if c.TimeToLiveMs == 0 {
 		return fmt.Errorf("View %v cache TimeToLiveMs can't be empty", viewName)
+	}
+
+	if c.ErrorTimeToLiveMs == 0 {
+		return fmt.Errorf("View %v cache ErrorTimeToLiveMs can't be empty", viewName)
 	}
 
 	if err := c.ensureCacheClient(aView, viewName); err != nil {
@@ -316,6 +321,9 @@ func (c *Cache) inherit(source *Cache) error {
 		c.TimeToLiveMs = source.TimeToLiveMs
 	}
 
+	if c.ErrorTimeToLiveMs == 0 {
+		c.ErrorTimeToLiveMs = source.ErrorTimeToLiveMs
+	}
 	return nil
 }
 

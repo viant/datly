@@ -32,8 +32,9 @@ type (
 	Config struct {
 		Jobs
 		State
-		WithCache       bool
-		ExpiryTimeInSec int
+		WithCache            bool
+		ExpiryTimeInSec      int
+		ErrorExpiryTimeInSec int
 		async.Notification
 		mux sync.Mutex
 	}
@@ -45,6 +46,14 @@ func (c *Config) TTL() time.Duration {
 		return ttl
 	}
 	return time.Hour
+}
+
+func (c *Config) ErrorTTL() time.Duration {
+	ttl := time.Second * time.Duration(c.ErrorExpiryTimeInSec)
+	if ttl != 0 {
+		return ttl
+	}
+	return time.Second * 10
 }
 
 func (c *Config) Lock() {

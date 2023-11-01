@@ -39,17 +39,22 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	job := s.Job(ctx)
 	job.Status = string(async.StatusDone)
 
+	var expiryTime time.Time
+	endedAt := time.Now()
+	job.EndTime = &endedAt
+
 	if response.Error != nil {
 		errMessage := response.Error.Error()
 		job.Status = string(async.StatusError)
 		job.Error = &errMessage
+		expiryTime = endedAt.Add(aComponent.Async.ErrorTTL())
+	} else {
+		expiryTime = endedAt.Add(aComponent.Async.TTL())
 	}
-	endedAt := time.Now()
-	job.EndTime = &endedAt
+
+	job.ExpiryTime = &expiryTime
 	elapsed := endedAt.Sub(*job.StartTime)
 	job.RunTimeInMcs = int(elapsed.Microseconds())
-	expiryTime := endedAt.Add(aComponent.Async.TTL())
-	job.ExpiryTime = &expiryTime
 	metrics, _ := json.Marshal(response.Metrics)
 	job.Metrics = string(metrics)
 	if len(response.Metrics) > 0 && len(response.Metrics[0].Execution.Template) > 0 {
