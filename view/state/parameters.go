@@ -15,7 +15,6 @@ import (
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
-	"strconv"
 	"strings"
 )
 
@@ -420,12 +419,7 @@ func (p *Parameter) buildTag() reflect.StructTag {
 	case KindObject:
 		aTag.TypeName = SanitizeTypeName(p.Name)
 	}
-
 	result := aTag.UpdateTag(reflect.StructTag(p.Tag))
-	if p.Description != "" {
-		result = reflect.StructTag(string(result) + "description:" + strconv.Quote(p.Description))
-	}
-
 	return result
 }
 
