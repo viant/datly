@@ -214,20 +214,20 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		fields = append(fields, structField)
 		setMarkerFields = append(setMarkerFields, markerField)
 
-		//if input := param.LocationInput; input != nil {
-		//	for _, item := range input.Parameters {
-		//		if used[item.Name] {
-		//			continue
-		//		}
-		//		used[item.Name] = true
-		//		if structField, markerField, err = item.buildField(pkgPath, lookupType); err != nil {
-		//			return nil, err
-		//		}
-		//		fields = append(fields, structField)
-		//		setMarkerFields = append(setMarkerFields, markerField)
-		//
-		//	}
-		//}
+		if input := param.LocationInput; input != nil {
+			for _, item := range input.Parameters {
+				if used[item.Name] {
+					continue
+				}
+				used[item.Name] = true
+				if structField, markerField, err = item.buildField(pkgPath, lookupType); err != nil {
+					return nil, err
+				}
+				fields = append(fields, structField)
+				setMarkerFields = append(setMarkerFields, markerField)
+
+			}
+		}
 
 	}
 	options := newReflectOptions(opts)
