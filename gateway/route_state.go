@@ -54,6 +54,7 @@ func (r *Router) generateComponentState(component *repository.Component) (int, [
 		xreflect.WithPackage("state"),
 		xreflect.WithTypes(xreflect.NewType("Output", xreflect.WithReflectType(output))),
 		xreflect.WithPackageTypes(packageTypes...),
+		xreflect.WithRewriteDoc(),
 		xreflect.WithImportModule(importModules),
 	)
 
