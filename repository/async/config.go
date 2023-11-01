@@ -117,7 +117,7 @@ func (c *Config) JobByID(ctx context.Context, jobID string) (*async.Job, error) 
 }
 
 func (c *Config) JobByMatchKey(ctx context.Context, jobRef string) (*async.Job, error) {
-	return c.service.JobByMatchKey(ctx, jobRef, c.TTL())
+	return c.service.JobByMatchKey(ctx, jobRef, c.TTL(), c.ErrorTTL())
 }
 
 func (c *Config) CreateJob(ctx context.Context, job *async.Job, notification *async.Notification) error {

@@ -28,7 +28,7 @@ func (s *Service) JobById(ctx context.Context, jobID string) (*async.Job, error)
 	return result[0], nil
 }
 
-func (s *Service) JobByMatchKey(ctx context.Context, matchKey string, ttl time.Duration) (*async.Job, error) {
+func (s *Service) JobByMatchKey(ctx context.Context, matchKey string, ttl time.Duration, ttlErr time.Duration) (*async.Job, error) {
 	var result = []*async.Job{}
 	session, err := reader.NewSession(&result, s.readerView)
 	if err != nil {
@@ -36,7 +36,8 @@ func (s *Service) JobByMatchKey(ctx context.Context, matchKey string, ttl time.D
 	}
 	state := session.State.Lookup(s.readerView)
 	createdAt := time.Now().Add(-ttl).UTC()
-	state.SetCriteria("  MatchKey = ? AND CreationTime >= ? ", []interface{}{matchKey, createdAt})
+	createdAtErr := time.Now().Add(-ttlErr).UTC()
+	state.SetCriteria("  MatchKey = ? AND ((CreationTime >= ? AND Status <> ?) OR (CreationTime >= ? AND Status = ?))", []interface{}{matchKey, createdAt, async.StatusError, createdAtErr, async.StatusError})
 	if err = s.reader.Read(ctx, session); err != nil {
 		return nil, err
 	}
