@@ -15,6 +15,9 @@ func (l *outputLocator) getFilterValue(ctx context.Context) (interface{}, bool, 
 	if parameter == nil {
 		return nil, false, nil
 	}
+	if l.Output == nil {
+		return nil, false, nil
+	}
 	if l.Output.Filters == nil {
 		return nil, false, nil
 	}

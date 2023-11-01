@@ -130,6 +130,11 @@ func NewParamError(view string, param string, err error, opts ...Option) *Error 
 }
 
 func (e *Errors) Error() string {
+	if e.Message == "" {
+		if len(e.Errors) > 0 {
+			return e.Errors[0].Error()
+		}
+	}
 	return e.Message
 }
 

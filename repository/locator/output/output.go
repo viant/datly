@@ -44,7 +44,8 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		return l.Status, true, nil
 	case keys.Error:
 		if err := ctx.Value(exec.ErrorKey); err != nil {
-			return err.(error), true, nil
+			e, _ := err.(error)
+			return e.Error(), true, nil
 		}
 		if l.Status == nil || l.Status.Status == "ok" {
 			return "", true, nil

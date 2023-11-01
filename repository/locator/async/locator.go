@@ -20,7 +20,8 @@ func (l *Locator) Value(ctx context.Context, name string) (interface{}, bool, er
 
 	if name == keys.JobError {
 		if err := ctx.Value(exec.ErrorKey); err != nil {
-			return err.(error), true, nil
+			e, _ := err.(error)
+			return e.Error(), true, nil
 		}
 	}
 	switch {
