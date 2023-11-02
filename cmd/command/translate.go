@@ -2,17 +2,12 @@ package command
 
 import (
 	"context"
-	"debug/buildinfo"
 	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/view/extension"
-	"github.com/viant/pgo/manager"
-	"os"
-	"path"
-	"strconv"
 )
 
 func (s *Service) ensureTranslator(opts *options.Options) error {
@@ -53,64 +48,6 @@ func (s *Service) Translate(ctx context.Context, opts *options.Options) (err err
 		}
 	}
 	return nil
-}
-
-func (s *Service) loadPlugin(ctx context.Context, opts *options.Options) (err error) {
-	if !opts.Repository().LoadPlugin {
-		return
-	}
-	moduleLocation := opts.Rule().ModuleLocation
-	goMod := path.Join(moduleLocation, "go.mod")
-	if ok, _ := s.fs.Exists(ctx, goMod); !ok {
-		return nil
-	}
-	flags := getGcFlags()
-	repo := opts.Repository()
-	destURL := url.Join(repo.ProjectURL, ".build/plugin")
-	_ = s.fs.Delete(ctx, destURL)
-	_ = s.fs.Create(ctx, destURL, file.DefaultDirOsMode, true)
-
-	aPlugin := &options.Plugin{GoBuild: options.GoBuild{Module: moduleLocation,
-		DestURL: destURL,
-		Source:  []string{moduleLocation},
-		BuildArgs: []string{
-			flags,
-		},
-	}}
-	if err = aPlugin.Init(); err != nil {
-		return err
-	}
-	if err := s.BuildPlugin(ctx, aPlugin); err != nil {
-		return err
-	}
-	pManager := manager.New(0)
-	pluginInfo := s.getPluginInfo(ctx, destURL)
-	_, _, err = pManager.OpenWithInfoURL(ctx, pluginInfo)
-	return err
-}
-
-func (s *Service) getPluginInfo(ctx context.Context, destURL string) string {
-	objects, _ := s.fs.List(ctx, destURL)
-	for _, object := range objects {
-		if path.Ext(object.Name()) == ".pinf" {
-			return object.URL()
-		}
-	}
-	return ""
-}
-
-func getGcFlags() string {
-	if fileName, err := os.Executable(); err == nil {
-		info, err := buildinfo.ReadFile(fileName)
-		if err == nil {
-			for _, setting := range info.Settings {
-				if setting.Key == "-gcflags" {
-					return setting.Key + " " + strconv.Quote(setting.Value)
-				}
-			}
-		}
-	}
-	return ""
 }
 
 func (s *Service) translate(ctx context.Context, opts *options.Options) error {

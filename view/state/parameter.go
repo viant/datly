@@ -238,7 +238,9 @@ func (p *Parameter) inherit(param *Parameter) {
 	if len(p.Repeated) == 0 {
 		p.Repeated = param.Repeated
 	}
-
+	if p.LocationInput == nil {
+		p.LocationInput = param.LocationInput
+	}
 }
 
 // Validate checks if parameter is valid
@@ -437,6 +439,10 @@ func (p *Parameter) initCodec(resource Resource) error {
 	if err := p.Output.Init(resource, p.Schema.Type()); err != nil {
 		return err
 	}
+	if p.Output.Schema == nil {
+		return nil
+	}
+	fmt.Printf("%v %v\n", p.Name, p.Schema)
 	rType := p.Output.Schema.Type()
 
 	if rType.Kind() == reflect.Slice {

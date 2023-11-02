@@ -47,6 +47,22 @@ type (
 	}
 )
 
+func (h Header) buildInputType(aContract *ContractPath, registry *xreflect.Types, signature *Signature) {
+	anInput := aContract.Input
+	if anInput == nil || anInput.Type == nil {
+		return
+	}
+	inputType := anInput.Type
+	signature.Input = &state.Type{}
+	signature.Input.Parameters = inputType.Parameters
+	if inputType.Name != "" {
+		signature.Input.Schema = &state.Schema{}
+		signature.Input.Schema.Name = inputType.Name
+		signature.Input.Schema.Package = inputType.Package
+	}
+
+}
+
 func (p *ContractPath) ensureInput(aMatch *entry) {
 	if p.Input == nil {
 		p.Input = &Input{}
@@ -61,6 +77,7 @@ func (p *ContractPath) ensureInput(aMatch *entry) {
 
 func (h *Header) Signature(aContract *ContractPath, registry *xreflect.Types) (*Signature, error) {
 	signature := &Signature{URI: aContract.URI, Method: aContract.Method}
+	h.buildInputType(aContract, registry, signature)
 	h.buildFilterType(aContract, registry, signature)
 	if err := h.buildOutputType(aContract, signature, registry); err != nil {
 		return nil, err
