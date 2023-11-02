@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology/format/text"
+	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"strings"
 )
@@ -56,7 +57,13 @@ func JoinOn(links ...*Link) Links {
 
 // WithLink returns a link
 func WithLink(field, column string) *Link {
-	return &Link{Field: field, Column: column}
+	l := &Link{Field: field, Column: column}
+	col := strings.Split(column, ".")
+	if len(col) > 1 {
+		l.Namespace = col[0]
+		l.Column = col[1]
+	}
+	return l
 }
 
 func (l Links) Init(name string, v *View) error {
@@ -64,7 +71,7 @@ func (l Links) Init(name string, v *View) error {
 	for _, link := range l {
 		link.Init()
 		if link.Namespace == "" {
-			link.Namespace = v.Alias
+			//link.Namespace = v.Alias
 		}
 		if link.Field != "" {
 			if link.xField = shared.MatchField(rType, link.Field, v.CaseFormat); link.xField == nil {
@@ -215,6 +222,37 @@ func (r *Relation) Validate() error {
 		return fmt.Errorf("holder has to start with uppercase")
 	}
 
+	return nil
+}
+
+func (r *Relation) adjustLinkColumn() error {
+	byName := Columns(r.Of.View.Columns).Index(text.CaseFormatLower)
+
+	for i, link := range r.Of.On {
+		if link.Column == "" {
+			continue
+		}
+		if _, ok := byName[strings.ToLower(link.Column)]; ok {
+			continue
+		}
+
+		parentLink := r.On[i]
+		columnType := xreflect.InterfaceType
+		if parentLink.xField != nil {
+			columnType = parentLink.xField.Type
+		}
+
+		if link.xField != nil {
+			columnType = link.xField.Type
+		}
+		relColumn := &Column{Name: link.Column, Expression: link.Column}
+		relColumn.SetColumnType(columnType)
+		if err := relColumn.Init(r.Of.View.Resource(), r.Of.View.CaseFormat, false); err != nil {
+			return err
+		}
+		r.Of.View.Columns = append(r.Of.View.Columns, relColumn)
+
+	}
 	return nil
 }
 
