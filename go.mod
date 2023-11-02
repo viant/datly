@@ -56,7 +56,7 @@ require (
 	github.com/viant/xdatly/handler v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/types/core v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xlsy v0.2.2
-	github.com/viant/xmlify v0.0.0-20231101203102-829d8a72dafc
+	github.com/viant/xmlify v0.0.0-20231102170334-ba77175a85fc
 	golang.org/x/tools v0.12.0
 )
 
