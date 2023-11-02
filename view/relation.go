@@ -71,7 +71,7 @@ func (l Links) Init(name string, v *View) error {
 	for _, link := range l {
 		link.Init()
 		if link.Namespace == "" {
-			link.Namespace = v.Alias
+			//link.Namespace = v.Alias
 		}
 		if link.Field != "" {
 			if link.xField = shared.MatchField(rType, link.Field, v.CaseFormat); link.xField == nil {
