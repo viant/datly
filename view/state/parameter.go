@@ -20,8 +20,8 @@ import (
 type (
 	Parameter struct {
 		shared.Reference
-		Object   Parameters `json:",omitempty"`
-		Repeated Parameters `json:",omitempty" yaml:"NormalizeRepeated"`
+		Object   Parameters `json:",omitempty" yaml:"Object"`
+		Repeated Parameters `json:",omitempty" yaml:"Repeated"`
 		//LocationInput, component input
 		LocationInput     *Type                        `json:",omitempty" yaml:"Input"`
 		Predicates        []*extension.PredicateConfig `json:",omitempty" yaml:"Predicates"`
