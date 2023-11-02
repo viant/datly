@@ -173,6 +173,7 @@ type (
 	reflectOptions struct {
 		withSetterMarker bool
 		typeName         string
+		locationInput    Parameters
 	}
 	ReflectOption func(o *reflectOptions)
 )
@@ -195,6 +196,26 @@ func WithTypeName(name string) ReflectOption {
 		o.typeName = name
 	}
 }
+
+// LocationInput returns location input
+func (p Parameters) LocationInput() Parameters {
+	var result = Parameters{}
+	var used = map[string]bool{}
+	for _, param := range p {
+		if input := param.LocationInput; input != nil {
+			for _, item := range input.Parameters {
+				if used[item.Name] {
+					continue
+				}
+				used[item.Name] = true
+				result = append(result, item)
+
+			}
+		}
+	}
+	return result
+}
+
 func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, opts ...ReflectOption) (reflect.Type, error) {
 	var fields []reflect.StructField
 	var setMarkerFields []reflect.StructField
@@ -204,31 +225,13 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		if used[param.Name] {
 			continue
 		}
-
 		used[param.Name] = true
-
 		structField, markerField, err := param.buildField(pkgPath, lookupType)
 		if err != nil {
 			return nil, err
 		}
 		fields = append(fields, structField)
 		setMarkerFields = append(setMarkerFields, markerField)
-
-		if input := param.LocationInput; input != nil {
-			for _, item := range input.Parameters {
-				if used[item.Name] {
-					continue
-				}
-				used[item.Name] = true
-				if structField, markerField, err = item.buildField(pkgPath, lookupType); err != nil {
-					return nil, err
-				}
-				fields = append(fields, structField)
-				setMarkerFields = append(setMarkerFields, markerField)
-
-			}
-		}
-
 	}
 	options := newReflectOptions(opts)
 
@@ -547,5 +550,11 @@ func WithParameterSchema(schema *Schema) ParameterOption {
 func WithCachable(flag bool) ParameterOption {
 	return func(p *Parameter) {
 		p.Cacheable = &flag
+	}
+}
+
+func WithLocationInput(parameters Parameters) ReflectOption {
+	return func(o *reflectOptions) {
+		o.locationInput = parameters
 	}
 }

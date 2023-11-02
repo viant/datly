@@ -50,6 +50,24 @@ func (c *Contract) Init(ctx context.Context, path *Path, aView *view.View) (err 
 	if err = c.Output.Init(ctx, aView, c.Input.Body.Parameters, c.Service == service.TypeReader); err != nil {
 		return err
 	}
+	if err := c.adjustInputType(aView); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Contract) adjustInputType(aView *view.View) error {
+	if c.Input.Type.Schema.IsNamed() {
+		return nil
+	}
+	if localInput := c.Output.Type.Parameters.LocationInput(); len(localInput) > 0 {
+		aResource := aView.Resource()
+		rType, err := c.Input.Type.Parameters.ReflectType(c.Input.Type.Package, aResource.LookupType(), state.WithLocationInput(localInput))
+		if err != nil {
+			return fmt.Errorf("invalid local input: %w", err)
+		}
+		c.Input.Type.Schema.SetType(rType)
+	}
 	return nil
 }
 

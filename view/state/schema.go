@@ -88,6 +88,14 @@ func (s *Schema) Type() reflect.Type {
 	return s.rType
 }
 
+// IsNamed returns true if compiled named type is used
+func (s *Schema) IsNamed() bool {
+	if s.rType == nil {
+		return false
+	}
+	return s.rType.Name() != ""
+}
+
 // CompType returns component type
 func (s *Schema) CompType() reflect.Type {
 	if s.sliceType == nil {
