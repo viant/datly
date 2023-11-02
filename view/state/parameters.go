@@ -201,19 +201,29 @@ func WithTypeName(name string) ReflectOption {
 func (p Parameters) LocationInput() Parameters {
 	var result = Parameters{}
 	var used = map[string]bool{}
+	p.locationParameter(used, &result)
+	return result
+}
+
+func (p Parameters) locationParameter(used map[string]bool, result *Parameters) {
 	for _, param := range p {
+		if len(param.Object) > 0 {
+			param.Object.locationParameter(used, result)
+		}
+		if len(param.Repeated) > 0 {
+			param.Repeated.locationParameter(used, result)
+		}
 		if input := param.LocationInput; input != nil {
 			for _, item := range input.Parameters {
 				if used[item.Name] {
 					continue
 				}
 				used[item.Name] = true
-				result = append(result, item)
+				*result = append(*result, item)
 
 			}
 		}
 	}
-	return result
 }
 
 func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, opts ...ReflectOption) (reflect.Type, error) {
@@ -233,7 +243,22 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		fields = append(fields, structField)
 		setMarkerFields = append(setMarkerFields, markerField)
 	}
+
 	options := newReflectOptions(opts)
+	if input := options.locationInput; len(input) > 0 {
+		for _, param := range input {
+			if used[param.Name] {
+				continue
+			}
+			used[param.Name] = true
+			structField, markerField, err := param.buildField(pkgPath, lookupType)
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, structField)
+			setMarkerFields = append(setMarkerFields, markerField)
+		}
+	}
 
 	if options.withSetterMarker && len(fields) > 0 {
 		setMarkerType := reflect.StructOf(setMarkerFields)
