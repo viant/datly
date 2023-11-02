@@ -95,7 +95,6 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 	if p._initialized == true {
 		return nil
 	}
-	p._initialized = true
 
 	if err := p.inheritParamIfNeeded(ctx, resource); err != nil {
 		return err
@@ -151,6 +150,7 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 	if err := p.initCodec(resource); err != nil {
 		return err
 	}
+	p._initialized = true
 	return p.Validate()
 }
 

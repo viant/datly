@@ -262,7 +262,7 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 
 	if options.withSetterMarker && len(fields) > 0 {
 		setMarkerType := reflect.StructOf(setMarkerFields)
-		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: reflect.StructTag(fmt.Sprintf(TypedSetMarkerTag, options.typeName+"Has"))})
+		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: xreflect.PkgPath("Has", pkgPath), Tag: reflect.StructTag(fmt.Sprintf(TypedSetMarkerTag, options.typeName+"Has"))})
 	}
 	if len(fields) == 0 {
 		return emptyStruct, nil
@@ -301,7 +301,7 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 
 		structField = reflect.StructField{Name: fieldName,
 			Type:    rType,
-			PkgPath: PkgPath(fieldName, pkgPath),
+			PkgPath: xreflect.PkgPath(fieldName, pkgPath),
 			Tag:     p.buildTag(),
 		}
 
@@ -310,7 +310,7 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 		}
 	}
 	markerTag := buildMarkerFieldTag(structField)
-	markerField = reflect.StructField{Name: fieldName, Type: boolType, Tag: reflect.StructTag(markerTag.Stringify()), PkgPath: PkgPath(fieldName, pkgPath)}
+	markerField = reflect.StructField{Name: fieldName, Type: boolType, Tag: reflect.StructTag(markerTag.Stringify()), PkgPath: xreflect.PkgPath(fieldName, pkgPath)}
 	return structField, markerField, nil
 }
 

@@ -86,8 +86,13 @@ func (t *Type) Init(options ...Option) error {
 	if rType == nil {
 		return fmt.Errorf("actual type was nil")
 	}
-	t.stateType = structology.NewStateType(rType)
+	t.SetType(rType)
 	return nil
+}
+
+func (t *Type) SetType(rType reflect.Type) {
+	t.Schema.SetType(rType)
+	t.stateType = structology.NewStateType(rType)
 }
 
 func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {

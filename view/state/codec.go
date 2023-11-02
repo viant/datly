@@ -24,13 +24,10 @@ func (v *Codec) Init(resource Resource, inputType reflect.Type) error {
 	if v._initialized {
 		return nil
 	}
-
 	if err := v.inheritCodecIfNeeded(resource, inputType); err != nil {
 		return err
 	}
-
 	v.ensureSchema(inputType)
-
 	if err := v.Schema.Init(resource); err != nil {
 		return err
 	}

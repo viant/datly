@@ -73,7 +73,7 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	if err := c.initInputParameters(ctx, resource); err != nil {
 		return err
 	}
-	if err = c.Contract.Init(ctx, &c.Path, c.View); err != nil {
+	if err = c.Contract.Init(ctx, &c.Path, c.View, resource); err != nil {
 		return err
 	}
 	if err := c.normalizePaths(); err != nil {
