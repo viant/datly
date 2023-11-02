@@ -442,7 +442,6 @@ func (p *Parameter) initCodec(resource Resource) error {
 	if p.Output.Schema == nil {
 		return nil
 	}
-	fmt.Printf("%v %v\n", p.Name, p.Schema)
 	rType := p.Output.Schema.Type()
 
 	if rType.Kind() == reflect.Slice {

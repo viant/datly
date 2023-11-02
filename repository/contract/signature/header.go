@@ -47,7 +47,7 @@ type (
 	}
 )
 
-func (h Header) buildInputType(aContract *ContractPath, registry *xreflect.Types, signature *Signature) {
+func (h *Header) buildInputType(aContract *ContractPath, registry *xreflect.Types, signature *Signature) {
 	anInput := aContract.Input
 	if anInput == nil || anInput.Type == nil {
 		return

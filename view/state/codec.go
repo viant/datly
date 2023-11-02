@@ -25,8 +25,6 @@ func (v *Codec) Init(resource Resource, inputType reflect.Type) error {
 		return nil
 	}
 
-	v._initialized = true
-
 	if err := v.inheritCodecIfNeeded(resource, inputType); err != nil {
 		return err
 	}
@@ -36,8 +34,11 @@ func (v *Codec) Init(resource Resource, inputType reflect.Type) error {
 	if err := v.Schema.Init(resource); err != nil {
 		return err
 	}
-
-	return v.initFnIfNeeded(resource, inputType)
+	if err := v.initFnIfNeeded(resource, inputType); err != nil {
+		return err
+	}
+	v._initialized = true
+	return nil
 }
 
 func (v *Codec) initFnIfNeeded(resource Resource, inputType reflect.Type) error {
