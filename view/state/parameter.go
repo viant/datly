@@ -108,12 +108,6 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 			p.Value = resource.ExpandSubstitutes(text)
 		}
 	}
-	if input := p.LocationInput; input != nil {
-		for _, param := range input.Parameters {
-			_ = param.Init(ctx, resource)
-		}
-	}
-
 	if err := p.initGroupParams(ctx, resource); err != nil {
 		return err
 	}

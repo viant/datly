@@ -201,17 +201,17 @@ func WithTypeName(name string) ReflectOption {
 func (p Parameters) LocationInput() Parameters {
 	var result = Parameters{}
 	var used = map[string]bool{}
-	p.locationParameter(used, &result)
+	p.buildLocationParameters(used, &result)
 	return result
 }
 
-func (p Parameters) locationParameter(used map[string]bool, result *Parameters) {
+func (p Parameters) buildLocationParameters(used map[string]bool, result *Parameters) {
 	for _, param := range p {
 		if len(param.Object) > 0 {
-			param.Object.locationParameter(used, result)
+			param.Object.buildLocationParameters(used, result)
 		}
 		if len(param.Repeated) > 0 {
-			param.Repeated.locationParameter(used, result)
+			param.Repeated.buildLocationParameters(used, result)
 		}
 		if input := param.LocationInput; input != nil {
 			for _, item := range input.Parameters {
