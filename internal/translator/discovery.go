@@ -61,7 +61,7 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 	if root.View.Schema.Cardinality == "" {
 		root.View.Schema.Cardinality = state.Many
 	}
-	root.View.View.Schema.Name = "*" + root.TypeDefinition.Name
+	root.View.View.Schema.DataType = "*" + root.TypeDefinition.Name
 	root.View.View.Schema.SetPackage(resource.rule.Package())
 }
 
@@ -90,7 +90,7 @@ func (s *Service) detectColumnCaseFormat(columns view.Columns) (text.CaseFormat,
 }
 
 func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache discover.Columns, registry *xreflect.Types, types *[]*xreflect.Type, doc state.Documentation) (err error) {
-	if aView.Schema != nil && aView.Schema.Name != "" {
+	if aView.Schema != nil && aView.Schema.Type() != nil {
 		return nil
 	}
 	var relations []*view.Relation
