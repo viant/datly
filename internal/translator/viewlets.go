@@ -9,6 +9,7 @@ import (
 	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/structology/tags"
+	"github.com/viant/xreflect"
 	"strings"
 )
 
@@ -95,7 +96,7 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 func SafeQueryStringify(aQuery *query.Select) (SQL string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("invalid dql: %v", err)
+			err = fmt.Errorf("invalid dql: %v", r)
 		}
 	}()
 	SQL = sqlparser.Stringify(aQuery.From.X)
@@ -171,10 +172,39 @@ func (n *Viewlets) applyTopLevelSetting(column *sqlparser.Column, viewlet *Viewl
 	if column.Tag != "" {
 		viewlet.Tags[column.Name] = column.Tag
 	}
+
+	tryColumnType(column)
+
 	if column.Type != "" {
+		if column.Name == viewlet.Name {
+			viewlet.updateViewSchema(column.Type)
+			return nil
+		}
 		viewlet.Casts[column.Name] = column.Type
 	}
 	return nil
+}
+
+func (v *Viewlet) updateViewSchema(typeName string) {
+	if v.View.Schema == nil {
+		v.View.Schema = &state.Schema{}
+	}
+	pkg := v.Resource.typePackages[state.RawComponentType(typeName)]
+	v.View.Schema.Name = typeName
+	v.View.Schema.Package = pkg
+	if rType, err := v.Resource.typeRegistry.Lookup(typeName, xreflect.WithPackage(pkg)); err == nil {
+		v.View.Schema.SetType(rType)
+	}
+}
+
+func tryColumnType(column *sqlparser.Column) {
+	lcExpr := strings.ToLower(column.Expression)
+	if strings.HasPrefix(lcExpr, "cast") {
+		if index := strings.Index(lcExpr, " as "); index != -1 {
+			dataType := column.Expression[index+4 : len(column.Expression)-1]
+			column.Type = strings.TrimSpace(dataType)
+		}
+	}
 }
 
 func extractFunction(column *sqlparser.Column) (string, []string) {

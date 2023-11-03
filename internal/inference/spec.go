@@ -62,6 +62,7 @@ func (s *Spec) EnsureRelationType() {
 			field.Schema = state.NewSchema(reflect.StructOf(rel.Type.Fields()))
 		}
 		field.Schema.Cardinality = rel.Cardinality
+		field.Schema.SetPackage(s.Package)
 	}
 	if len(s.Type.RelationFields) > 0 {
 		return
@@ -75,6 +76,8 @@ func (s *Spec) EnsureRelationType() {
 			field.Schema = state.NewSchema(reflect.StructOf(rel.Type.Fields()))
 		}
 		field.Schema.Cardinality = rel.Cardinality
+		field.Schema.SetPackage(s.Package)
+
 		s.Type.RelationFields = append(s.Type.RelationFields, field)
 	}
 }
@@ -227,7 +230,6 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL
 	}
 	result.pk = sink.Keys(keys).By(sink.KeyName.Column)
 	result.Fk = sink.Keys(fkKeys).By(sink.KeyName.Column)
-
 	return result, nil
 }
 

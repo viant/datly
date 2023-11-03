@@ -493,7 +493,7 @@ func (s *State) AdjustOutput() error {
 			for _, item := range parent.Object {
 				items = append(items, item.Name)
 			}
-			parent.In.Name = strings.Join(items, ",`")
+			parent.In.Name = strings.Join(items, ",")
 			continue
 		}
 		if !adjustedMap[parameter.Name] {

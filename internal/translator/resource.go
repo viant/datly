@@ -51,11 +51,15 @@ type (
 		messages       *msg.Messages
 		Module         *modfile.Module
 		ModuleLocation string
+		typePackages   map[string]string
 	}
 )
 
 // LookupTypeDef returns matched type definition
 func (r *Resource) LookupTypeDef(typeName string) *view.TypeDefinition {
+	if typeName == "Root" {
+		fmt.Printf("1\n")
+	}
 	for _, typeDef := range r.Resource.Types {
 		if typeDef.Name == typeName {
 			return typeDef
@@ -75,27 +79,21 @@ func (r *Resource) AddCustomTypeURL(URL string) {
 
 func (r *Resource) GetSchema(dataType string, opts ...xreflect.Option) (*state.Schema, error) {
 	registry := r.ensureRegistry()
-	rType, err := registry.Lookup(dataType, opts...)
+
+	if pkg, ok := r.typePackages[state.RawComponentType(dataType)]; ok {
+		opts = append(opts, xreflect.WithPackage(pkg))
+	}
+
+	aType := xreflect.NewType(dataType, opts...)
+	rType, err := registry.LookupType(aType)
 	if err != nil {
 		return nil, err
 	}
-	schema := state.NewSchema(rType)
-
-	if methods, _ := r.typeRegistry.Methods(dataType); len(methods) > 0 {
-		schema.Methods = methods
-
-	}
-	if pkgSymbol, err := r.typeRegistry.Symbol("PackageName"); err == nil {
-		if text, ok := pkgSymbol.(string); ok {
-			if !strings.Contains(dataType, ".") {
-				schema.Package = text
-			}
-		}
-	}
+	schema := state.NewSchema(rType, state.WithSchemaPackage(aType.Package), state.WithSchemaMethods(aType.Methods))
 	if strings.HasPrefix(dataType, "*") {
 		dataType = dataType[1:]
 	}
-	schema.DataType = dataType
+	schema.Name = dataType
 	return schema, nil
 }
 
@@ -123,13 +121,14 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.Typ
 	typesImport.EnsureLocation(ctx, fs, r.rule.GoModuleLocation())
 	alias := typesImport.Alias
 	for i, name := range typesImport.Types {
-		if typeDef := r.TypeDefinition(name); typeDef != nil {
+		if typeDef := r.LookupTypeDef(name); typeDef != nil {
 			return nil
 		}
 		schema, err := r.GetSchema(name, xreflect.WithPackagePath(typesImport.URL))
 		if err != nil {
 			return fmt.Errorf("unable to include import type: %v,  %w", name, err)
 		}
+		r.typePackages[name] = schema.Package
 		if len(schema.Methods) > 0 {
 			r.AddCustomTypeURL(typesImport.URL)
 		}
@@ -148,8 +147,11 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.Typ
 }
 
 func (r *Resource) AddParameterType(param *state.Parameter) {
-	typeName := reflect.StructTag(param.Tag).Get(xreflect.TagTypeName)
 
+	typeName := reflect.StructTag(param.Tag).Get(xreflect.TagTypeName)
+	if param.Schema.IsNamed() {
+		return
+	}
 	if rType := param.Schema.Type(); rType != nil && types.EnsureStruct(rType) != nil {
 		setter.SetStringIfEmpty(&typeName, param.Schema.TypeName())
 		setter.SetStringIfEmpty(&typeName, state.SanitizeTypeName(param.Name))
@@ -174,20 +176,8 @@ func (r *Resource) AddParameterType(param *state.Parameter) {
 	}
 }
 
-func (r *Resource) TypeDefinition(name string) *view.TypeDefinition {
-	if len(r.Resource.Types) == 0 {
-		return nil
-	}
-	for _, candidate := range r.Resource.Types {
-		if candidate.Name == name {
-			return candidate
-		}
-	}
-	return nil
-}
-
 func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
-	if r.TypeDefinition(typeDef.Name) != nil {
+	if r.LookupTypeDef(typeDef.Name) != nil {
 		return
 	}
 	definition := *typeDef
@@ -574,7 +564,7 @@ func (r *Resource) extractState(rType reflect.Type, scope string) error {
 }
 
 func NewResource(rule *options.Rule, repository *options.Repository, messages *msg.Messages) *Resource {
-	ret := &Resource{Rule: NewRule(), rule: rule, repository: repository, messages: messages}
+	ret := &Resource{Rule: NewRule(), rule: rule, repository: repository, messages: messages, typePackages: map[string]string{}}
 	ret.ensureRegistry()
 
 	ret.Rule.Output = &ret.Rule.Route.Output

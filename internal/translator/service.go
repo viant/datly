@@ -50,13 +50,7 @@ func (s *Service) InitSignature(ctx context.Context, rule *options.Rule) (err er
 
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string, opts *options.Options) (err error) {
 	resource := NewResource(rule, s.Repository.Config.repository, &s.Repository.Messages)
-	modFile := url.Join(rule.ModuleLocation, "go.mod")
-	if ok, _ := s.fs.Exists(ctx, modFile); ok {
-		data, _ := s.fs.DownloadWithURL(ctx, modFile)
-		if goMod, _ := modfile.Parse(modFile, data, nil); goMod != nil {
-			resource.Module = goMod.Module
-		}
-	}
+	s.detectModule(ctx, rule, resource)
 
 	resource.Resource.Substitutes = s.Repository.Substitutes.Merge()
 	resource.State.Append(s.Repository.State...)
@@ -100,6 +94,16 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	s.Repository.Resource = append(s.Repository.Resource, resource)
 	s.Repository.PersistAssets = true
 	return nil
+}
+
+func (s *Service) detectModule(ctx context.Context, rule *options.Rule, resource *Resource) {
+	modFile := url.Join(rule.ModuleLocation, "go.mod")
+	if ok, _ := s.fs.Exists(ctx, modFile); ok {
+		data, _ := s.fs.DownloadWithURL(ctx, modFile)
+		if goMod, _ := modfile.Parse(modFile, data, nil); goMod != nil {
+			resource.Module = goMod.Module
+		}
+	}
 }
 
 func (s *Service) discoverComponentContract(ctx context.Context, resource *Resource, location *state.Location) (*signature.Signature, error) {
@@ -442,8 +446,9 @@ func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Vie
 	if viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.Expanded.Query, viewlet.Expanded.Args...); err != nil {
 		return fmt.Errorf("failed to create spec for %v, %w", viewlet.Name, err)
 	}
+	pkg := viewlet.Resource.rule.Package()
+	viewlet.Spec.Package = pkg
 	viewlet.Spec.Namespace = viewlet.Name
-	pkg := ""
 	cardinality := state.Many
 	if err = viewlet.Spec.BuildType(pkg, viewlet.Name, cardinality, viewlet.whitelistMap(), nil, doc); err != nil {
 		return err

@@ -111,6 +111,7 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, doc sta
 	}
 	field.Schema = state.NewSchema(aType)
 	field.Schema.DataType = aType.Name()
+	field.Schema.SetPackage(t.Package)
 	if skipped {
 		field.Skipped = skipped
 		t.skipped = append(t.skipped, field)

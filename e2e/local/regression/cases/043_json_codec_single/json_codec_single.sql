@@ -7,12 +7,14 @@ import (
 	"regression/cases/043_json_codec_single.Record"
 )
 
-SELECT main.* EXCEPT Id /* {"Cardinality":"One"} */
+SELECT main.* EXCEPT(Id),
+cast(main AS Record),
+cardinality(main, 'One') AS main
 FROM (
          SELECT
              ID as Id,
              OBJECT AS Preferences /* { "Codec": {"Ref": "JSON", "OutputType": "$Rec.ClassName" } } */,
              CLASS_NAME as ClassName
-         FROM OBJECTS /* { "DataType": "Record" } */
+         FROM OBJECTS
          WHERE ID = $Id
      ) main

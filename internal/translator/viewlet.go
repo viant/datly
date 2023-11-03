@@ -112,7 +112,11 @@ func (v *Viewlet) UpdateParameterType(aState *inference.State, name string, expr
 	parameter.EnsureSchema()
 	if expression.Column != "" {
 		if column := v.Table.Lookup(expression.Column); column != nil && column.Type != "" {
-			parameter.Schema.DataType = column.Type
+			parameter.Schema.Name = column.Type
+			pkg, ok := v.Resource.typePackages[state.RawComponentType(column.Type)]
+			if ok {
+				parameter.Schema.SetPackage(pkg)
+			}
 		}
 	}
 	if elements := expression.BeforeElements(); len(elements) > 0 {

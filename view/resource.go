@@ -322,9 +322,11 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		if err := r.TypeRegistry().Register(definition.Name, xreflect.WithPackage(definition.Package), xreflect.WithReflectType(definition.Type())); err != nil {
 			return err
 		}
+		//DO we really need cluster global namespace
 		if err := r.TypeRegistry().Register(definition.Name, xreflect.WithReflectType(definition.Type())); err != nil {
 			return err
 		}
+
 		if definition.Alias != "" {
 			if err := r.TypeRegistry().Register(definition.Alias, xreflect.WithReflectType(definition.Type())); err != nil {
 				return err

@@ -58,7 +58,7 @@ func (h *Header) buildInputType(aContract *ContractPath, registry *xreflect.Type
 	if inputType.Name != "" {
 		signature.Input.Schema = &state.Schema{}
 		signature.Input.Schema.Name = inputType.Name
-		signature.Input.Schema.Package = inputType.Package
+		signature.Input.Schema.SetPackage(inputType.Package)
 	}
 
 }

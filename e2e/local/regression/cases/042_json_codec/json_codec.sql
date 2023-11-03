@@ -14,5 +14,5 @@ FROM (
              ID as Id,
              OBJECT AS Preferences /* { "Codec":{ "Ref": "JSON", "OutputType": "$Rec.ClassName" } } */,
              CLASS_NAME as ClassName
-         FROM OBJECTS /* { "DataType": "Record" } */
+         FROM OBJECTS
      ) main

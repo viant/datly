@@ -1,7 +1,8 @@
 /* {"URI":"raw_json_expr"} */
 
 
-SELECT main.*
+SELECT main.*,
+       cast(main.Name AS string)
 FROM (
          SELECT
              ID as Id,

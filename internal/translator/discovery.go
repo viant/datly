@@ -15,7 +15,15 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 	if resource.Rule.IsGeneratation {
 		return
 	}
+
 	root := resource.Rule.RootViewlet()
+
+	schema := root.View.Schema
+	if schema != nil {
+		if schema.Type() != nil {
+			return
+		}
+	}
 	//TODO remove with, OutputState check and fix it
 	if len(viewColumns.Items) == 0 || root.TypeDefinition == nil || root.View.Self != nil {
 		return
@@ -43,6 +51,7 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 		root.View.Schema.Cardinality = state.Many
 	}
 	root.View.View.Schema.Name = "*" + root.TypeDefinition.Name
+	root.View.View.Schema.SetPackage(resource.rule.Package())
 }
 
 func MatchByName(types []*xreflect.Type, name string) *xreflect.Type {
@@ -117,6 +126,7 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 	aView.Schema.SetType(schemaType)
 	aView.Schema.Name = view.DefaultTypeName(aView.Name)
 	pkg := resource.rule.Package()
+	aView.Schema.SetPackage(pkg)
 	rType := aView.Schema.CompType()
 	viewType := xreflect.NewType(view.DefaultTypeName(aView.Name), xreflect.WithPackage(pkg), xreflect.WithReflectType(rType))
 	*types = append(*types, viewType)

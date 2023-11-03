@@ -70,7 +70,7 @@ func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupTyp
 			return err
 		}
 		d.Schema = state.NewSchema(rType)
-		d.Schema.Package = d.Package
+		d.Schema.SetPackage(d.Package)
 		return nil
 	}
 	if d.Schema != nil {

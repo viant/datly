@@ -97,10 +97,10 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 			return err
 		}
 		parameter.Schema.Name = parameter.Name
-		resource.AppendTypeDefinition(&view.TypeDefinition{Name: parameter.Schema.Name, DataType: parameter.Schema.Type().String()})
+		resource.AppendTypeDefinition(&view.TypeDefinition{Name: parameter.Schema.Name, Package: resource.rule.Package(), DataType: parameter.Schema.Type().String()})
 	}
 
-	outputType, err := compactedParameters.ReflectType(resource.rule.ModuleLocation, typesRegistry.Lookup)
+	outputType, err := compactedParameters.ReflectType(resource.rule.Package(), typesRegistry.Lookup)
 	if err != nil {
 		return fmt.Errorf("failed to build outputType: %w", err)
 	}
@@ -319,8 +319,13 @@ func (s *Service) ensureOutputParameters(resource *Resource, outputState inferen
 }
 
 func (s *Service) updateParameterWithComponentOutputType(dataParameter *state.Parameter, rootViewlet *Viewlet) {
-	dataParameter.Schema.Name = view.DefaultTypeName(rootViewlet.Name)
-	dataParameter.Schema.DataType = "*" + view.DefaultTypeName(rootViewlet.Name)
+	typeName := rootViewlet.View.Schema.Name
+	if typeName == "" {
+		typeName = view.DefaultTypeName(rootViewlet.Name)
+	}
+	setter.SetStringIfEmpty(&dataParameter.Schema.Name, typeName)
+	setter.SetStringIfEmpty(&dataParameter.Schema.Package, rootViewlet.Resource.rule.Package())
+	dataParameter.Schema.DataType = "*" + typeName
 	cardinality := string(state.Many)
 	setter.SetStringIfEmpty(&cardinality, string(rootViewlet.Cardinality))
 	dataParameter.Schema.Cardinality = state.Cardinality(cardinality)

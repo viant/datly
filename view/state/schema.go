@@ -50,6 +50,12 @@ func (s *Schema) LoadTypeIfNeeded(lookupType xreflect.LookupType) error {
 	return nil
 }
 
+func (s *Schema) SetPackage(pkg string) {
+	if s.IsNamed() || pkg == "" {
+		return
+	}
+	s.Package = pkg
+}
 func (s *Schema) EnsurePointer() {
 	hasDataType := s.DataType != ""
 	if hasDataType {

@@ -7,7 +7,8 @@ import (
 	"regression/cases/044_inline_json_codec.Record"
 )
 
-SELECT main.*
+SELECT main.*,
+  cast(main AS Record)
 FROM (
          SELECT
              ID as Id,
@@ -15,4 +16,4 @@ FROM (
              CLASS_NAME as ClassName
          FROM OBJECTS
          WHERE ID != 999
-     ) main  /* { "DataType": "Record" } */
+     ) main

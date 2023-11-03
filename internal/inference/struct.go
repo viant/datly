@@ -2,6 +2,7 @@ package inference
 
 import (
 	"github.com/viant/datly/view/state"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -39,7 +40,7 @@ func (p *parameterStruct) reflectType() reflect.Type {
 }
 func (p *parameterStruct) structField() reflect.StructField {
 	if p.Parameter != nil && (p.Parameter.In.Kind != state.KindObject) {
-		return reflect.StructField{Name: p.name, Type: p.Parameter.Schema.Type(), Tag: reflect.StructTag(p.Parameter.Tag), PkgPath: PkgPath(p.Parameter.Name, defaultPackageName)}
+		return reflect.StructField{Name: p.name, Type: p.Parameter.Schema.Type(), Tag: reflect.StructTag(p.Parameter.Tag), PkgPath: xreflect.PkgPath(p.Parameter.Name, p.Parameter.Schema.Package)}
 	}
 	var fields []reflect.StructField
 	for _, f := range p.fields {

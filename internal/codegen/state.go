@@ -55,7 +55,6 @@ func (t *Template) getPakcage(pkg string) string {
 
 func (t *Template) buildState(spec *inference.Spec, aState *inference.State, card state.Cardinality) reflect.Type {
 	t.Imports.AddType(spec.Type.TypeName())
-
 	pathParameter := t.buildPathParameterIfNeeded(spec)
 	if pathParameter != nil {
 		aState.Append(pathParameter)
@@ -93,7 +92,7 @@ func (t *Template) buildPathParameterIfNeeded(spec *inference.Spec) *inference.P
 func (t *Template) buildDataViewParameter(spec *inference.Spec, cardinality state.Cardinality) *inference.Parameter {
 	param := &inference.Parameter{ModificationSetting: inference.ModificationSetting{IsAuxiliary: spec.IsAuxiliary}}
 	param.Name = t.ParamName(spec.Type.Name)
-	param.Schema = &state.Schema{DataType: spec.Type.Name, Cardinality: cardinality}
+	param.Schema = &state.Schema{DataType: spec.Type.Name, Cardinality: cardinality, Package: spec.Package}
 	param.In = state.NewViewLocation(param.Name)
 	param.SQL = spec.ViewSQL(t.ColumnParameterNamer(spec.Selector()))
 	columnFields := spec.Type.Fields(inference.WithStructTag())

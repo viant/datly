@@ -262,6 +262,18 @@ func WithPackage(pkg string) Option {
 	}
 }
 
+func WithSchemaPackage(pkg string) SchemaOption {
+	return func(s *Schema) {
+		s.SetPackage(pkg)
+	}
+}
+
+func WithSchemaMethods(methods []reflect.Method) SchemaOption {
+	return func(s *Schema) {
+		s.Methods = methods
+	}
+}
+
 func WithFS(fs *embed.FS) Option {
 	return func(t *Type) {
 		t.fs = fs
@@ -293,4 +305,14 @@ func SanitizeTypeName(typeName string) string {
 		return name
 	}
 	return from.To(text.CaseFormatUpperCamel).Format(name)
+}
+
+func RawComponentType(typeName string) string {
+	if strings.HasPrefix(typeName, "[]") {
+		typeName = typeName[2:]
+	}
+	if strings.HasPrefix(typeName, "*") {
+		typeName = typeName[1:]
+	}
+	return typeName
 }
