@@ -80,7 +80,7 @@ func (s *Schema) SimpleTypeName() string {
 
 func (s *Schema) TypeName() string {
 	name := shared.FirstNotEmpty(s.Name, s.DataType)
-	if s.Package == "" {
+	if s.Package == "" || strings.Contains(name, ".") {
 		return name
 	}
 	return s.Package + "." + name
