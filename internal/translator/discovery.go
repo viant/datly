@@ -19,11 +19,17 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 	root := resource.Rule.RootViewlet()
 
 	schema := root.View.Schema
+
 	if schema != nil {
 		if rType := schema.Type(); rType != nil {
-			aType := xreflect.NewType(schema.Name, xreflect.WithReflectType(rType))
+			if schema.Name == "" || schema.Name == "string" {
+				root.View.View.Schema.Name = view.DefaultTypeName(root.View.Name)
+				root.View.View.Schema.DataType = "*" + root.View.View.Schema.Name
+				root.View.View.Schema.SetPackage(resource.rule.Package())
+			}
+			aType := xreflect.NewType(schema.Name, xreflect.WithReflectType(rType), xreflect.WithPackage(resource.rule.Package()))
 			root.TypeDefinition.DataType = aType.Body()
-			root.TypeDefinition.Name = aType.Name
+			root.TypeDefinition.Name = root.View.View.Schema.Name
 			root.TypeDefinition.Package = aType.Package
 			root.TypeDefinition.Fields = nil
 			return

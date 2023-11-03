@@ -324,6 +324,7 @@ func (s *Service) updateParameterWithComponentOutputType(dataParameter *state.Pa
 	typeName := rootViewlet.View.Schema.Name
 	if typeName == "" || typeName == "string" {
 		typeName = view.DefaultTypeName(rootViewlet.Name)
+		rootViewlet.View.Schema.Name = typeName
 	}
 	setter.SetStringIfEmpty(&dataParameter.Schema.Name, typeName)
 	setter.SetStringIfEmpty(&dataParameter.Schema.Package, rootViewlet.Resource.rule.Package())
