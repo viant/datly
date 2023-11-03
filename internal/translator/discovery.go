@@ -36,7 +36,7 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 	//	}
 	//}
 	//TODO remove with, OutputState check and fix it
-	if len(viewColumns.Items) == 0 || root.TypeDefinition == nil || root.View.Self != nil {
+	if len(viewColumns.Items) == 0 || root.TypeDefinition == nil {
 		return
 	}
 
@@ -90,7 +90,7 @@ func (s *Service) detectColumnCaseFormat(columns view.Columns) (text.CaseFormat,
 }
 
 func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache discover.Columns, registry *xreflect.Types, types *[]*xreflect.Type, doc state.Documentation) (err error) {
-	if aView.Schema != nil && aView.Schema.Type() != nil {
+	if aView.Schema != nil && aView.Schema.Name != "" {
 		return nil
 	}
 	var relations []*view.Relation
