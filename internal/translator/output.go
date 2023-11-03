@@ -233,7 +233,9 @@ func (s *Service) adjustCodecOutputType(parameter *state.Parameter, types *xrefl
 
 func (s *Service) adjustTransferCodecOutput(parameter *state.Parameter, types *xreflect.Types, resource *Resource, output *state.Codec) error {
 	destTypeName := output.Args[0]
-	dest, err := types.Lookup(destTypeName)
+
+	pkg := resource.typePackages[destTypeName]
+	dest, err := types.Lookup(destTypeName, xreflect.WithPackage(pkg))
 	if err != nil {
 		return fmt.Errorf("failed to init transfer codec for type %v: parameter: %v, %w", destTypeName, parameter.Name, err)
 	}
@@ -320,7 +322,7 @@ func (s *Service) ensureOutputParameters(resource *Resource, outputState inferen
 
 func (s *Service) updateParameterWithComponentOutputType(dataParameter *state.Parameter, rootViewlet *Viewlet) {
 	typeName := rootViewlet.View.Schema.Name
-	if typeName == "" {
+	if typeName == "" || typeName == "string" {
 		typeName = view.DefaultTypeName(rootViewlet.Name)
 	}
 	setter.SetStringIfEmpty(&dataParameter.Schema.Name, typeName)

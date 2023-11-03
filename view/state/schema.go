@@ -42,7 +42,7 @@ func (s *Schema) LoadTypeIfNeeded(lookupType xreflect.LookupType) error {
 	if s.TypeName() == "" {
 		return nil
 	}
-	rType, err := lookupType(s.TypeName())
+	rType, err := lookupType(s.TypeName(), xreflect.WithPackage(s.Package))
 	if err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func (s *Schema) LoadTypeIfNeeded(lookupType xreflect.LookupType) error {
 }
 
 func (s *Schema) SetPackage(pkg string) {
-	if s.IsNamed() || pkg == "" {
+	if s.IsNamed() || pkg == "" || strings.Contains(s.Name, ".") {
 		return
 	}
 	s.Package = pkg
@@ -99,7 +99,14 @@ func (s *Schema) IsNamed() bool {
 	if s.rType == nil {
 		return false
 	}
-	return s.rType.Name() != ""
+	rType := s.rType
+	if rType.Kind() == reflect.Slice {
+		rType = rType.Elem()
+	}
+	if rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	return rType.Name() != ""
 }
 
 // CompType returns component type
@@ -285,6 +292,9 @@ func NewSchema(compType reflect.Type, opts ...SchemaOption) *Schema {
 	result := &Schema{
 		Name:    "",
 		autoGen: false,
+	}
+	if compType != nil && compType.Name() != "" {
+		result.rType = compType
 	}
 
 	for _, opt := range opts {

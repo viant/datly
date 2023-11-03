@@ -103,7 +103,6 @@ func (s *Spec) BuildType(pkg, name string, cardinality state.Cardinality, whitel
 			aType.PkFields = append(aType.PkFields, field)
 		}
 	}
-
 	s.Type = aType
 	return nil
 }

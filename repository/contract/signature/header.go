@@ -139,7 +139,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 
 	var viewType *view.TypeDefinition
 	for _, candidate := range h.Resource.Types {
-		_ = registry.Register(candidate.Name, xreflect.WithTypeDefinition(candidate.DataType))
+		_ = registry.Register(candidate.Name, xreflect.WithTypeDefinition(candidate.DataType), xreflect.WithPackage(candidate.Package))
 		if candidate.Name == outputParameter.Schema.Name {
 			viewType = candidate
 			break
@@ -151,7 +151,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	contract.EnsureParameterTypes(parameters, nil, nil, nil)
 
 	if !isAnonymous {
-		rType, err := registry.Lookup(viewType.Name)
+		rType, err := registry.Lookup(viewType.Name, xreflect.WithPackage(viewType.Package))
 		if err != nil {
 			return fmt.Errorf("failed to build component signature %s: %w", viewType.Name, err)
 		}

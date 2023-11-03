@@ -74,12 +74,10 @@ func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupTyp
 		return nil
 	}
 	if d.Schema != nil {
-		if d.Schema.Package == "" {
-			d.Schema.Package = d.Package
-		}
 		if d.Schema.DataType != d.Name && d.Name != "" {
 			d.Schema.Name = d.Name
 		}
+		d.Schema.SetPackage(d.Package)
 		if err := d.Schema.InitType(lookupType, d.Ptr); err != nil {
 			return fmt.Errorf("invalid type def: %s (%s), %w", d.Name, d.DataType, err)
 		}

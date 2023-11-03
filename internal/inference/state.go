@@ -374,7 +374,7 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 			dataType = "string"
 			//			return fmt.Errorf("data type was emtpy for %v", param.Name)
 		}
-		rType, err := types.LookupType(typeRegistry.Lookup, dataType)
+		rType, err := types.LookupType(typeRegistry.Lookup, dataType, xreflect.WithPackage(param.Schema.Package))
 		if err != nil {
 			return err
 		}

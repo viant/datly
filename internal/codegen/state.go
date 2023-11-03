@@ -92,7 +92,8 @@ func (t *Template) buildPathParameterIfNeeded(spec *inference.Spec) *inference.P
 func (t *Template) buildDataViewParameter(spec *inference.Spec, cardinality state.Cardinality) *inference.Parameter {
 	param := &inference.Parameter{ModificationSetting: inference.ModificationSetting{IsAuxiliary: spec.IsAuxiliary}}
 	param.Name = t.ParamName(spec.Type.Name)
-	param.Schema = &state.Schema{DataType: spec.Type.Name, Cardinality: cardinality, Package: spec.Package}
+	param.Schema = &state.Schema{DataType: spec.Type.Name, Cardinality: cardinality}
+	param.Schema.SetPackage(spec.Package)
 	param.In = state.NewViewLocation(param.Name)
 	param.SQL = spec.ViewSQL(t.ColumnParameterNamer(spec.Selector()))
 	columnFields := spec.Type.Fields(inference.WithStructTag())

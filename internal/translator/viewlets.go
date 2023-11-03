@@ -191,7 +191,7 @@ func (v *Viewlet) updateViewSchema(typeName string) {
 	}
 	pkg := v.Resource.typePackages[state.RawComponentType(typeName)]
 	v.View.Schema.Name = typeName
-	v.View.Schema.Package = pkg
+	v.View.Schema.SetPackage(pkg)
 	if rType, err := v.Resource.typeRegistry.Lookup(typeName, xreflect.WithPackage(pkg)); err == nil {
 		v.View.Schema.SetType(rType)
 	}

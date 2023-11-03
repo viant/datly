@@ -57,9 +57,6 @@ type (
 
 // LookupTypeDef returns matched type definition
 func (r *Resource) LookupTypeDef(typeName string) *view.TypeDefinition {
-	if typeName == "Root" {
-		fmt.Printf("1\n")
-	}
 	for _, typeDef := range r.Resource.Types {
 		if typeDef.Name == typeName {
 			return typeDef
@@ -89,6 +86,7 @@ func (r *Resource) GetSchema(dataType string, opts ...xreflect.Option) (*state.S
 	if err != nil {
 		return nil, err
 	}
+
 	schema := state.NewSchema(rType, state.WithSchemaPackage(aType.Package), state.WithSchemaMethods(aType.Methods))
 	if strings.HasPrefix(dataType, "*") {
 		dataType = dataType[1:]

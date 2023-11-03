@@ -20,7 +20,12 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 
 	schema := root.View.Schema
 	if schema != nil {
-		if schema.Type() != nil {
+		if rType := schema.Type(); rType != nil {
+			aType := xreflect.NewType(schema.Name, xreflect.WithReflectType(rType))
+			root.TypeDefinition.DataType = aType.Body()
+			root.TypeDefinition.Name = aType.Name
+			root.TypeDefinition.Package = aType.Package
+			root.TypeDefinition.Fields = nil
 			return
 		}
 	}
