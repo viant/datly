@@ -355,7 +355,7 @@ func (p *Parameter) initRepeatedSchema(resource Resource) (err error) {
 		if elemType.Kind() == reflect.Ptr {
 			elemType = elemType.Elem()
 		}
-		if !itemType.AssignableTo(elemType) {
+		if !rawItem.AssignableTo(elemType) {
 			return fmt.Errorf("incompatible repeated type: %s, expected: %s, but had: %s -> %s", item.Name, itemType.String(), item.Name, item.OutputType().String())
 		}
 	}
