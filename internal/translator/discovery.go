@@ -90,7 +90,7 @@ func (s *Service) detectColumnCaseFormat(columns view.Columns) (text.CaseFormat,
 }
 
 func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache discover.Columns, registry *xreflect.Types, types *[]*xreflect.Type, doc state.Documentation) (err error) {
-	if aView.Schema != nil && aView.Schema.Name != "" {
+	if aView.Schema != nil && (aView.Schema.Name != "" && aView.Schema.Name != "string") {
 		return nil
 	}
 	var relations []*view.Relation
