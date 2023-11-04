@@ -15,7 +15,8 @@ type Parameter struct {
 	When     string `tag:"when,omitempty"`  //condition to evaluate
 	Scope    string `tag:"scope,omitempty"` //input/output/async
 	Lazy     bool   `tag:"lazy,omitempty"`
-	DataType string `tag:"dataTypr,omitempty"`
+	DataType string `tag:"dataType,omitempty"` //parameter input type
+	With     string `tag:"with,omitempty"`     //optional auxiliary type name holding parameters
 }
 
 func (t *Tag) updatedParameter(key string, value string) (err error) {

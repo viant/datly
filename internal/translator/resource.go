@@ -436,13 +436,13 @@ func (r *Resource) IncludeURL(ctx context.Context, URL string, fs afs.Service) (
 }
 
 func (r *Resource) loadState(ctx context.Context, URL string) error {
-	types := extension.Config.Types
+	typeRegistry := r.ensureRegistry()
 	aPath := url.Path(URL)
 	location, _ := path.Split(aPath)
 	var registered = map[string]map[string]bool{}
 	dirTypes, err := xreflect.ParseTypes(location,
 		xreflect.WithParserMode(parser.ParseComments),
-		xreflect.WithRegistry(types),
+		xreflect.WithRegistry(typeRegistry),
 		xreflect.WithModule(r.Module, r.rule.ModuleLocation),
 		xreflect.WithOnField(func(typeName string, field *ast.Field) error {
 			return nil
@@ -464,25 +464,51 @@ func (r *Resource) loadState(ctx context.Context, URL string) error {
 	}
 
 	inputTypeName := dirTypes.MatchTypeNamesInPath(aPath, "@input")
-	if inputTypeName == "" {
-		return fmt.Errorf("failed to locate input type in %s, \n\tforgot struct{...}//@input comment", aPath)
+	outputTypeName := dirTypes.MatchTypeNamesInPath(aPath, "@output")
+
+	loadType := func(typeName string) (reflect.Type, error) {
+		return r.loadType(dirTypes, typeName, aPath, registered)
 	}
-	inputType, err := dirTypes.Type(inputTypeName)
+
+	if inputTypeName == "" && outputTypeName == "" {
+		return fmt.Errorf("failed to locate contract types in %s, \n\tforgot struct{...}//@input or //@output comment ?", aPath)
+	}
+	if inputTypeName != "" {
+		inputType, err := loadType(inputTypeName)
+		if err != nil {
+			return err
+		}
+		if err = r.extractState(loadType, inputType, &r.State); err != nil {
+			return err
+		}
+	}
+
+	if outputTypeName != "" {
+		outputType, err := loadType(outputTypeName)
+		if err != nil {
+			return err
+		}
+		if err = r.extractState(loadType, outputType, &r.OutputState); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *Resource) loadType(dirTypes *xreflect.DirTypes, typeName string, aPath string, registered map[string]map[string]bool) (reflect.Type, error) {
+	rType, err := dirTypes.Type(typeName)
 	statePackage := dirTypes.PackagePath(aPath)
 	if err != nil {
-		return fmt.Errorf("invalid typename: %s, %w", inputType, err)
+		return nil, fmt.Errorf("invalid typename: %v, %w", typeName, err)
 	}
 	delete(registered, statePackage)
 	err = r.registerDependencies(registered, dirTypes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	r.registerType(inputTypeName, statePackage, inputType, false)
-	if err = r.extractState(inputType, "in"); err != nil {
-		return err
-	}
-	return nil
+	r.registerType(typeName, statePackage, rType, false)
+	return rType, err
 }
 
 func (r *Resource) registerDependencies(registered map[string]map[string]bool, dirTypes *xreflect.DirTypes) error {
@@ -500,12 +526,14 @@ func (r *Resource) registerDependencies(registered map[string]map[string]bool, d
 			methods := packageDir.Methods(candidate)
 			r.registerType(candidate, depPkg, rType, len(methods) > 0)
 		}
-		fmt.Printf("%s\n", depPkg)
 	}
 	return nil
 }
 
 func (r *Resource) registerType(typeName string, pkg string, rType reflect.Type, hasMethods bool) {
+	if types.EnsureStruct(rType) == nil { //register only struct based type
+		return
+	}
 	dataType := rType.Name()
 	if !hasMethods || dataType != "" {
 		aType := xreflect.NewType(typeName, xreflect.WithPackage(pkg), xreflect.WithReflectType(rType))
@@ -514,7 +542,6 @@ func (r *Resource) registerType(typeName string, pkg string, rType reflect.Type,
 	if dataType == "" {
 		dataType = state.SanitizeTypeName(typeName)
 	}
-
 	r.AppendTypeDefinition(&view.TypeDefinition{
 		Name:     typeName,
 		Package:  pkg,
@@ -522,7 +549,7 @@ func (r *Resource) registerType(typeName string, pkg string, rType reflect.Type,
 	})
 }
 
-func (r *Resource) extractState(rType reflect.Type, scope string) error {
+func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, error), rType reflect.Type, dest *inference.State) error {
 	if rType.Kind() != reflect.Struct {
 		return nil
 	}
@@ -536,26 +563,35 @@ func (r *Resource) extractState(rType reflect.Type, scope string) error {
 			return err
 		}
 		iParameter := &inference.Parameter{Parameter: *parameter}
-		for i, repeated := range parameter.Repeated {
-			iRepeated := &inference.Parameter{Parameter: *repeated}
-			iParameter.Repeated = append(iParameter.Repeated, iRepeated)
-			parameter.Repeated[i] = &iRepeated.Parameter
+		switch parameter.In.Kind {
+		case state.KindRepeated:
+			with := parameter.With
+			if with == "" {
+				return fmt.Errorf("with was empty, auxiliary type name is required for %v ypes ", parameter.In.Kind)
+			}
+			wType, err := loadType(with)
+			if err != nil {
+				return fmt.Errorf("failed to load parameter auxiliary type: %s, %w", with, err)
+			}
+			auxiliaryState := inference.State{}
+			if err = r.extractState(loadType, wType, &auxiliaryState); err != nil {
+				return fmt.Errorf("failed to extract parameters from auxiliary type: %s, %w", with, err)
+			}
+			for _, item := range auxiliaryState {
+				parameter.Repeated = append(parameter.Repeated, &item.Parameter)
+				iParameter.Repeated = append(iParameter.Repeated, item)
+			}
 		}
+
 		for i, anObject := range parameter.Object {
 			iRepeated := &inference.Parameter{Parameter: *anObject}
 			iParameter.Object = append(iParameter.Object, iRepeated)
 			parameter.Object[i] = &iRepeated.Parameter
 		}
 		iParameter.Explicit = true
-		switch strings.ToLower(scope) {
-		case "out":
-			iParameter.InOutput = true
-			r.OutputState.Append(iParameter)
-		case "async":
-			iParameter.IsAsync = true
+		dest.Append(iParameter)
+		if strings.Contains(iParameter.Scope, "async") {
 			r.AsyncState.Append(iParameter)
-		default:
-			r.State.Append(iParameter)
 		}
 	}
 	return nil

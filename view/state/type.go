@@ -141,8 +141,10 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 	if err != nil {
 		return nil, err
 	}
-
 	pTag := aTag.Parameter
+	if pTag != nil {
+		setter.SetStringIfEmpty(&pTag.Name, field.Name)
+	}
 	value, err := aTag.GetValue(field.Type)
 	if err != nil {
 		return nil, fmt.Errorf("invalid parameter %v value: %w", pTag.Name, err)
@@ -158,7 +160,7 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 	result.Scope = pTag.Scope
 	result.When = pTag.When
 	result.Lazy = pTag.Lazy
-
+	result.With = pTag.With
 	required := field.Type.Kind() == reflect.Ptr
 	result.Required = &required
 
@@ -179,8 +181,6 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 			}
 			result.Object = append(result.Object, itemParam)
 		}
-	case KindRepeated:
-		//Add repeated:"" repeated:""  repeated:"" tags with parameter details
 	}
 	BuildCodec(aTag, result)
 	BuildSchema(field, pTag, result)

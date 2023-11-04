@@ -2,6 +2,7 @@ package inference
 
 import (
 	"fmt"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/keywords"
@@ -564,6 +565,11 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 			if pTag.Kind == "" {
 				return nil
 			}
+			var name string
+			if len(field.Names) > 0 {
+				name = field.Names[0].Name
+			}
+			setter.SetStringIfEmpty(&pTag.Name, name)
 			param, err := buildParameter(field, aTag, types)
 			if param == nil {
 				return err

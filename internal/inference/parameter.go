@@ -162,25 +162,23 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*P
 		return nil, nil
 	}
 	//TODO convert ast.field to struct field and move that logic to state.BuildParameter
+	//currenty there are two places to mange filed tag  to parameter conversion
 	structTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
 	aTag, err := tags.ParseStateTags(structTag, nil)
-
 	if err != nil || aTag.Parameter == nil {
 		return nil, err
 	}
-
 	pTag := aTag.Parameter
 	param := &Parameter{
 		SQL: SQL,
 	}
-	//	updateSQLTag(field, SQL)
 	param.Name = field.Names[0].Name
 	if pTag.Name != "" {
 		param.Name = pTag.Name
 	}
 	param.When = pTag.When
 	param.Lazy = pTag.Lazy
-
+	param.With = pTag.With
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
 	cardinality := state.One
 	if sliceExpr, ok := field.Type.(*ast.ArrayType); ok {
@@ -194,7 +192,6 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*P
 	if err != nil {
 		return nil, fmt.Errorf("failed to create param: %v due to %w", param.Name, err)
 	}
-
 	if strings.Contains(fieldType, "struct{") {
 		typeName := ""
 		if field.Tag != nil {

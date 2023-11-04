@@ -55,7 +55,6 @@ func (t *Tag) GetValue(destType reflect.Type) (interface{}, error) {
 		}
 		return t.Value, nil
 	}
-
 }
 
 func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {

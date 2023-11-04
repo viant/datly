@@ -81,7 +81,6 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	declaration.ExpandShorthands()
 
 	if declaration.InOutput {
-		declaration.Parameter.Scope = "out"
 		d.OutputState.Append(&declaration.Parameter)
 		return nil
 	}
@@ -90,7 +89,6 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 		d.AsyncState.Append(&declaration.Parameter)
 		return nil
 	}
-	declaration.Parameter.Scope = "in"
 	d.State.Append(&declaration.Parameter)
 	if authParameter := declaration.AuthParameter(); authParameter != nil {
 		if !d.State.Append(authParameter) {
@@ -233,7 +231,6 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			if err != nil {
 				return err
 			}
-
 			declaration.StatusCode = &statusCode
 		case "Optional":
 			if len(args) != 0 {
@@ -247,7 +244,6 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 			required := true
 			declaration.Required = &required
-
 		case "WithPredicate":
 			if err := s.appendPredicate(declaration, args, false); err != nil {
 				return err
@@ -267,8 +263,6 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			if err := s.setValue(declaration, content); err != nil {
 				return err
 			}
-		case "UtilParam":
-		//deprecated
 		case "QuerySelector":
 			declaration.Explicit = false
 		case "Async":

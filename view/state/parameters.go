@@ -302,7 +302,7 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 		structField = reflect.StructField{Name: fieldName,
 			Type:    rType,
 			PkgPath: xreflect.PkgPath(fieldName, pkgPath),
-			Tag:     p.buildTag(),
+			Tag:     p.buildTag(fieldName),
 		}
 
 		if fieldName == rType.Name() || strings.Contains(p.Tag, "anonymous") {
@@ -442,14 +442,19 @@ func (p Parameters) PredicateStructType(d Documentation) reflect.Type {
 	return reflect.StructOf(structFields)
 }
 
-func (p *Parameter) buildTag() reflect.StructTag {
+func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	aTag := tags.Tag{}
+	name := p.Name
+	if fieldName == p.Name {
+		name = ""
+	}
 	aTag.Parameter = &tags.Parameter{
-		Name: p.Name,
+		Name: name,
 		Kind: string(p.In.Kind),
 		In:   string(p.In.Name),
 		When: p.When,
 		Lazy: p.Lazy,
+		With: p.With,
 	}
 	if p.Output != nil && p.Output.Schema != nil {
 		if p.Output.Schema.TypeName() != p.Schema.TypeName() {

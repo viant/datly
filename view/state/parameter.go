@@ -22,8 +22,10 @@ type (
 		shared.Reference
 		Object   Parameters `json:",omitempty" yaml:"Object"`
 		Repeated Parameters `json:",omitempty" yaml:"Repeated"`
+
 		//LocationInput, component input
-		LocationInput     *Type                        `json:",omitempty" yaml:"Input"`
+		LocationInput *Type `json:",omitempty" yaml:"Input"`
+
 		Predicates        []*extension.PredicateConfig `json:",omitempty" yaml:"Predicates"`
 		Name              string                       `json:",omitempty" yaml:"Name"`
 		In                *Location                    `json:",omitempty" yaml:"In" `
@@ -43,6 +45,7 @@ type (
 		Tag             string `json:",omitempty" yaml:"Tag"`
 		Lazy            bool   `json:",omitempty" yaml:"Lazy"`
 		When            string `json:",omitempty" yaml:"When"`
+		With            string `json:",omitempty" yaml:"With"`
 		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
 
 		isOutputType bool
@@ -108,7 +111,7 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 			p.Value = resource.ExpandSubstitutes(text)
 		}
 	}
-	if err := p.initGroupParams(ctx, resource); err != nil {
+	if err := p.initObjectParams(ctx, resource); err != nil {
 		return err
 	}
 
@@ -199,6 +202,7 @@ func (p *Parameter) inherit(param *Parameter) {
 	setter.SetStringIfEmpty(&p.Tag, param.Tag)
 	setter.SetStringIfEmpty(&p.When, param.When)
 	setter.SetBoolIfFalse(&p.Lazy, param.Lazy)
+	setter.SetStringIfEmpty(&p.With, param.With)
 	if p.In == nil {
 		p.In = param.In
 	}
@@ -519,7 +523,7 @@ func (p *Parameter) Selector() *structology.Selector {
 	return p._selector
 }
 
-func (p *Parameter) initGroupParams(ctx context.Context, resource Resource) error {
+func (p *Parameter) initObjectParams(ctx context.Context, resource Resource) error {
 	for _, parameter := range p.Object {
 		if err := parameter.Init(ctx, resource); err != nil {
 			return err
