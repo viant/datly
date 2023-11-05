@@ -23,6 +23,8 @@ type GoBuild struct {
 	GoVersion string   `short:"v"  long:"goVer" description:"build go Version"`
 	GoOs      string   `short:"o" long:"goOs" description:"plugin OS"`
 	GoArch    string   `short:"a" long:"goArch" description:"plugin ARCH"`
+	GoPath    string   `short:"P" long:"goPath" description:"go path"`
+	GoRoot    string   `short:"R" long:"goRoot" description:"go root"`
 }
 
 type Build struct {

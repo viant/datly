@@ -28,7 +28,7 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.0
-	github.com/viant/pgo v0.10.4-0.20230801151735-5700d39f8114
+	github.com/viant/pgo v0.10.4
 	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.10.0
 	github.com/viant/structql v0.4.1
@@ -128,4 +128,3 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-

@@ -26,8 +26,8 @@ type (
 		Ptr              bool              `json:",omitempty" yaml:"Ptr" `
 		CustomType       bool              `json:",omitempty"`
 	}
-
-	Field struct {
+	TypeDefinitions []*TypeDefinition
+	Field           struct {
 		Name        string            `json:",omitempty"`
 		Embed       bool              `json:",omitempty"`
 		Column      string            `json:",omitempty"`
@@ -41,6 +41,19 @@ type (
 	}
 )
 
+func (d TypeDefinitions) Exclude(candidates ...string) TypeDefinitions {
+	var result = make(TypeDefinitions, 0, len(d))
+outer:
+	for _, def := range d {
+		for i := 0; i < len(candidates); i++ {
+			if def.Name == candidates[i] {
+				continue outer
+			}
+		}
+		result = append(result, def)
+	}
+	return result
+}
 func (d *TypeDefinition) AddField(field *Field) {
 	if len(d._fields) == 0 {
 		d._fields = map[string]bool{}

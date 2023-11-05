@@ -102,6 +102,8 @@ func (s *Service) PrepareBuild(ctx context.Context, aBuild *options.Build) error
 		Version:     aBuild.GoVersion,
 		MainPath:    aBuild.MainPath,
 		BuildArgs:   aBuild.BuildArgs,
+		GoRoot:      aBuild.GoRoot,
+		GoPath:      aBuild.GoPath,
 		BuildMode:   "exec",
 		Compression: "gzip",
 		WithLogger:  true,

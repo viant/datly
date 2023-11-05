@@ -32,6 +32,8 @@ func (s *Service) BuildPlugin(ctx context.Context, plugin *options.Plugin) error
 		Version:     plugin.GoVersion,
 		MainPath:    plugin.MainPath,
 		BuildArgs:   plugin.BuildArgs,
+		GoRoot:      plugin.GoRoot,
+		GoPath:      plugin.GoPath,
 		BuildMode:   "",
 		Compression: "gzip",
 		WithLogger:  true,
@@ -73,10 +75,15 @@ func (s *Service) loadPlugin(ctx context.Context, opts *options.Options) (err er
 	destURL := url.Join(repo.ProjectURL, ".build/plugin")
 	_ = s.fs.Delete(ctx, destURL)
 	_ = s.fs.Create(ctx, destURL, file.DefaultDirOsMode, true)
-
+	goPath := os.Getenv("GOPATH")
+	if goPath == "" {
+		goPath = path.Join(os.Getenv("HOME"), "go")
+	}
 	aPlugin := &options.Plugin{GoBuild: options.GoBuild{Module: moduleLocation,
 		DestURL: destURL,
 		Source:  []string{moduleLocation},
+		GoPath:  goPath,
+		GoRoot:  os.Getenv("GOROOT"),
 		BuildArgs: []string{
 			flags,
 		},

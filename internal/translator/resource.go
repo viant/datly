@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
-	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/msg"
@@ -22,8 +21,6 @@ import (
 	"github.com/viant/structology/format/text"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
-	"go/ast"
-	"go/parser"
 	"golang.org/x/mod/modfile"
 	"path"
 	"reflect"
@@ -181,6 +178,12 @@ func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
 	definition := *typeDef
 	r.Resource.Types = append(r.Resource.Types, &definition)
 	r.typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType), xreflect.WithPackage(typeDef.Package))
+}
+
+func (r *Resource) AppendTypeDefinitions(typeDefs []*view.TypeDefinition) {
+	for _, def := range typeDefs {
+		r.AppendTypeDefinition(def)
+	}
 }
 
 func (r *Resource) AdjustCustomType(info *plugin.Info) {
@@ -435,83 +438,22 @@ func (r *Resource) IncludeURL(ctx context.Context, URL string, fs afs.Service) (
 	return r.assetURL(ctx, URL, fs)
 }
 
-func (r *Resource) loadState(ctx context.Context, URL string) error {
-	typeRegistry := r.ensureRegistry()
-	aPath := url.Path(URL)
-	location, _ := path.Split(aPath)
-	var registered = map[string]map[string]bool{}
-	dirTypes, err := xreflect.ParseTypes(location,
-		xreflect.WithParserMode(parser.ParseComments),
-		xreflect.WithRegistry(typeRegistry),
-		xreflect.WithModule(r.Module, r.rule.ModuleLocation),
-		xreflect.WithOnField(func(typeName string, field *ast.Field) error {
-			return nil
-		}), xreflect.WithOnLookup(func(packagePath, pkg, typeName string, rType reflect.Type) {
-			if pkg == "" {
-				return
-			}
-			if _, ok := registered[pkg]; !ok {
-				registered[pkg] = map[string]bool{}
-			}
-			if registered[pkg][typeName] {
-				return
-			}
-			registered[pkg][typeName] = true
-			r.registerType(typeName, pkg, rType, false)
-		}))
-	if err != nil {
-		return err
-	}
-
-	inputTypeName := dirTypes.MatchTypeNamesInPath(aPath, "@input")
-	outputTypeName := dirTypes.MatchTypeNamesInPath(aPath, "@output")
-
-	loadType := func(typeName string) (reflect.Type, error) {
-		return r.loadType(dirTypes, typeName, aPath, registered)
-	}
-
-	if inputTypeName == "" && outputTypeName == "" {
-		return fmt.Errorf("failed to locate contract types in %s, \n\tforgot struct{...}//@input or //@output comment ?", aPath)
-	}
-	if inputTypeName != "" {
-		inputType, err := loadType(inputTypeName)
-		if err != nil {
-			return err
-		}
-		if err = r.extractState(loadType, inputType, &r.State); err != nil {
-			return err
-		}
-	}
-
-	if outputTypeName != "" {
-		outputType, err := loadType(outputTypeName)
-		if err != nil {
-			return err
-		}
-		if err = r.extractState(loadType, outputType, &r.OutputState); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *Resource) loadType(dirTypes *xreflect.DirTypes, typeName string, aPath string, registered map[string]map[string]bool) (reflect.Type, error) {
+func (r *Resource) loadType(dirTypes *xreflect.DirTypes, typeName string, aPath string, registered map[string]map[string]bool, typeDefs *view.TypeDefinitions) (reflect.Type, error) {
 	rType, err := dirTypes.Type(typeName)
 	statePackage := dirTypes.PackagePath(aPath)
 	if err != nil {
 		return nil, fmt.Errorf("invalid typename: %v, %w", typeName, err)
 	}
 	delete(registered, statePackage)
-	err = r.registerDependencies(registered, dirTypes)
+	err = r.registerDependencies(registered, dirTypes, typeDefs)
 	if err != nil {
 		return nil, err
 	}
-	r.registerType(typeName, statePackage, rType, false)
+	r.registerType(typeName, statePackage, rType, false, typeDefs)
 	return rType, err
 }
 
-func (r *Resource) registerDependencies(registered map[string]map[string]bool, dirTypes *xreflect.DirTypes) error {
+func (r *Resource) registerDependencies(registered map[string]map[string]bool, dirTypes *xreflect.DirTypes, defs *view.TypeDefinitions) error {
 	for depPkg := range registered {
 		packageDir := dirTypes.DirTypes(depPkg)
 		typeNames := dirTypes.TypesInPackage(depPkg)
@@ -523,29 +465,30 @@ func (r *Resource) registerDependencies(registered map[string]map[string]bool, d
 			if err != nil {
 				return err
 			}
-			methods := packageDir.Methods(candidate)
-			r.registerType(candidate, depPkg, rType, len(methods) > 0)
+			r.registerType(candidate, depPkg, rType, false, defs)
 		}
 	}
 	return nil
 }
 
-func (r *Resource) registerType(typeName string, pkg string, rType reflect.Type, hasMethods bool) {
+func (r *Resource) registerType(typeName string, pkg string, rType reflect.Type, customType bool, dest *view.TypeDefinitions) {
 	if types.EnsureStruct(rType) == nil { //register only struct based type
 		return
 	}
 	dataType := rType.Name()
-	if !hasMethods || dataType != "" {
+	if dataType == "" {
 		aType := xreflect.NewType(typeName, xreflect.WithPackage(pkg), xreflect.WithReflectType(rType))
 		dataType = aType.Body()
+		customType = len(aType.Methods) > 0
 	}
 	if dataType == "" {
 		dataType = state.SanitizeTypeName(typeName)
 	}
-	r.AppendTypeDefinition(&view.TypeDefinition{
-		Name:     typeName,
-		Package:  pkg,
-		DataType: dataType,
+	*dest = append(*dest, &view.TypeDefinition{
+		Name:       typeName,
+		Package:    pkg,
+		DataType:   dataType,
+		CustomType: customType,
 	})
 }
 
