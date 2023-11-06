@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/datly/view/extension/codec/jsontab"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler/response/tabular/tjson"
 	"reflect"
 )
 
@@ -25,7 +26,7 @@ func (e *JsonTabFactory) New(codecConfig *codec.Config, options ...codec.Option)
 }
 
 func (e *JsonTab) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	return reflect.TypeOf(&jsontab.Result{}), nil
+	return reflect.TypeOf(&tjson.Tabular{}), nil
 }
 
 func (e *JsonTab) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {

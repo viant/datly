@@ -3,132 +3,16 @@ package xmlfilter
 import (
 	"fmt"
 	"github.com/viant/tagly/format"
+	"github.com/viant/xdatly/handler/response/tabular/xml"
 	"github.com/viant/xmlify"
 	"github.com/viant/xunsafe"
 	"reflect"
-	"strconv"
-	"strings"
 	"unsafe"
 )
 
-type (
-	Filter struct {
-		Name          string
-		Tag           format.Tag
-		IncludeString []string `json:",omitempty" xmlify:"omitempty"`
-		ExcludeString []string `json:",omitempty" xmlify:"omitempty"`
-		IncludeInt    []int    `json:",omitempty" xmlify:"omitempty"`
-		ExcludeInt    []int    `json:",omitempty" xmlify:"omitempty"`
-		IncludeBool   []bool   `json:",omitempty" xmlify:"omitempty"`
-		ExcludeBool   []bool   `json:",omitempty" xmlify:"omitempty"`
-	}
-
-	Result struct {
-		Filters []*Filter
-	}
-)
-
-func (f *Result) MarshalXML() ([]byte, error) {
-
-	var sb strings.Builder
-
-	sb.WriteString("<filter>")
-
-	for _, filter := range f.Filters {
-		wasInclusion := false
-
-		//TODO check if filter is empty
-		sb.WriteString("\n")
-		sb.WriteString("<")
-
-		if filter.Tag.Name != "" {
-			sb.WriteString(filter.Tag.Name)
-		} else {
-			sb.WriteString(filter.Name)
-		}
-
-		sb.WriteString(" ")
-
-		switch {
-		case filter.IncludeInt != nil:
-			sb.WriteString(`include-ids="`)
-			for i, value := range filter.IncludeInt {
-				if i > 0 {
-					sb.WriteString(",")
-				}
-				sb.WriteString(strconv.Itoa(value))
-			}
-			sb.WriteString(`"`)
-			wasInclusion = true
-		case filter.IncludeString != nil:
-			sb.WriteString(`include-ids="`)
-			for i, value := range filter.IncludeString {
-				if i > 0 {
-					sb.WriteString(",")
-				}
-				sb.WriteString(value)
-			}
-			sb.WriteString(`"`)
-			wasInclusion = true
-		case filter.IncludeBool != nil:
-			sb.WriteString(`include-ids="`)
-			for i, value := range filter.IncludeBool {
-				if i > 0 {
-					sb.WriteString(",")
-				}
-				sb.WriteString(strconv.FormatBool(value))
-			}
-			sb.WriteString(`"`)
-			wasInclusion = true
-		}
-
-		isExclusion := filter.ExcludeInt != nil || filter.ExcludeString != nil || filter.ExcludeBool != nil
-		if wasInclusion && isExclusion {
-			sb.WriteString(` `)
-		}
-
-		switch {
-		case filter.ExcludeInt != nil:
-			sb.WriteString(`exclude-ids="`)
-			for i, value := range filter.ExcludeInt {
-				if i > 0 {
-					sb.WriteString(",")
-				}
-				sb.WriteString(strconv.Itoa(value))
-			}
-			sb.WriteString(`"`)
-		case filter.ExcludeString != nil:
-			sb.WriteString(`exclude-ids="`)
-			for i, value := range filter.ExcludeString {
-				if i > 0 {
-					sb.WriteString(",")
-				}
-				sb.WriteString(value)
-			}
-			sb.WriteString(`"`)
-		case filter.ExcludeBool != nil:
-			sb.WriteString(`exclude-ids="`)
-			for i, value := range filter.ExcludeBool {
-				if i > 0 {
-					sb.WriteString(",")
-				}
-				sb.WriteString(strconv.FormatBool(value))
-			}
-			sb.WriteString(`"`)
-		}
-
-		sb.WriteString("/>")
-	}
-
-	sb.WriteString("\n")
-	sb.WriteString("</filter>")
-	//fmt.Println(sb.String())
-	return []byte(sb.String()), nil
-}
-
 type Service struct{}
 
-func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
+func (t *Service) Transfer(aStruct interface{}) (*xml.FilterHolder, error) {
 
 	structType := reflect.TypeOf(aStruct)
 	if structType.Kind() == reflect.Ptr {
@@ -141,7 +25,7 @@ func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
 	ptr := xunsafe.AsPointer(aStruct)
 	xFilters := xunsafe.NewStruct(structType)
 
-	result := &Result{}
+	result := &xml.FilterHolder{}
 
 	for _, field := range xFilters.Fields {
 		aTag, _ := format.Parse(field.Tag, xmlify.TagName)
@@ -188,10 +72,10 @@ func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
 
 }
 
-func (t *Service) transferFilterObject(xFieldStruct *xunsafe.Struct, ptr unsafe.Pointer, name string) (*Filter, error) {
+func (t *Service) transferFilterObject(xFieldStruct *xunsafe.Struct, ptr unsafe.Pointer, name string) (*xml.Filter, error) {
 	const include = "Include"
 	const exclude = "Exclude"
-	filterObj := &Filter{Name: name}
+	filterObj := &xml.Filter{Name: name}
 
 	for _, subField := range xFieldStruct.Fields {
 		//fmt.Printf("###### name: %s kind: %s type: %s\n", subField.Name, subField.Kind(), subField.Type.String())

@@ -12,12 +12,11 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/extension/codec"
-	"github.com/viant/datly/view/extension/codec/jsontab"
 	"github.com/viant/datly/view/extension/codec/transfer"
-	"github.com/viant/datly/view/extension/codec/xmlfilter"
-	"github.com/viant/datly/view/extension/codec/xmltab"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/handler/response/tabular/tjson"
+	"github.com/viant/xdatly/handler/response/tabular/xml"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -278,11 +277,11 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 		case codec.KeyFilters:
 			outputType = reflect.TypeOf(predicate.NamedFilters{})
 		case codec.KeyXmlTab:
-			outputType = reflect.TypeOf(&xmltab.Result{})
+			outputType = reflect.TypeOf(&xml.Tabular{})
 		case codec.KeyJsonTab:
-			outputType = reflect.TypeOf(&jsontab.Result{})
+			outputType = reflect.TypeOf(&tjson.Tabular{})
 		case codec.KeyXmlFilter:
-			outputType = reflect.TypeOf(&xmlfilter.Result{})
+			outputType = reflect.TypeOf(&xml.FilterHolder{})
 		}
 
 		adjustedDest.Append(&inference.Parameter{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/datly/view/extension/codec/xmltab"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler/response/tabular/xml"
 	"reflect"
 )
 
@@ -25,7 +26,7 @@ func (e *XmlTabFactory) New(codecConfig *codec.Config, options ...codec.Option) 
 }
 
 func (e *XmlTab) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	return reflect.TypeOf(&xmltab.Result{}), nil
+	return reflect.TypeOf(&xml.Tabular{}), nil
 }
 
 func (e *XmlTab) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {

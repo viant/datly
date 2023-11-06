@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/datly/view/extension/codec/xmlfilter"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler/response/tabular/xml"
 	"reflect"
 )
 
@@ -25,7 +26,7 @@ func (e *XmlFilterFactory) New(codecConfig *codec.Config, options ...codec.Optio
 }
 
 func (e *XmlFilter) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	return reflect.TypeOf(&xmlfilter.Result{}), nil
+	return reflect.TypeOf(&xml.FilterHolder{}), nil
 }
 
 func (e *XmlFilter) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {

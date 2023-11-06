@@ -4,9 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	dcodec "github.com/viant/datly/view/extension/codec"
-	"github.com/viant/datly/view/extension/codec/jsontab"
-	"github.com/viant/datly/view/extension/codec/xmlfilter"
-	"github.com/viant/datly/view/extension/codec/xmltab"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	"github.com/viant/xdatly/codec"
@@ -14,6 +11,9 @@ import (
 	_ "github.com/viant/xdatly/extension" //go mod level placeholder replacement
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
+	"github.com/viant/xdatly/handler/response/tabular/tjson"
+	"github.com/viant/xdatly/handler/response/tabular/xml"
+
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xdatly/types/core"
 	_ "github.com/viant/xdatly/types/custom"
@@ -52,9 +52,14 @@ func InitRegistry() {
 			xreflect.NewType("predicate.StringsFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.StringsFilter{}))),
 			xreflect.NewType("predicate.IntFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.IntFilter{}))),
 			xreflect.NewType("predicate.BoolFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.BoolFilter{}))),
-			xreflect.NewType("xmltab.Result", xreflect.WithReflectType(reflect.TypeOf(xmltab.Result{}))),
-			xreflect.NewType("xmlfilter.Result", xreflect.WithReflectType(reflect.TypeOf(xmlfilter.Result{}))),
-			xreflect.NewType("jsontab.Result", xreflect.WithReflectType(reflect.TypeOf(jsontab.Result{}))),
+			xreflect.NewType("xmltab.Result", xreflect.WithReflectType(reflect.TypeOf(xml.Tabular{}))),
+			xreflect.NewType("xmlfilter.Result", xreflect.WithReflectType(reflect.TypeOf(xml.FilterHolder{}))),
+			xreflect.NewType("jsontab.Result", xreflect.WithReflectType(reflect.TypeOf(tjson.Tabular{}))),
+
+			xreflect.NewType("xml.Tabular", xreflect.WithReflectType(reflect.TypeOf(xml.Tabular{}))),
+			xreflect.NewType("xml.FilterHolder", xreflect.WithReflectType(reflect.TypeOf(xml.FilterHolder{}))),
+			xreflect.NewType("json.Tabular", xreflect.WithReflectType(reflect.TypeOf(tjson.Tabular{}))),
+
 			xreflect.NewType("async.Job", xreflect.WithReflectType(reflect.TypeOf(async.Job{}))),
 			xreflect.NewType("predicate.NamedFilters", xreflect.WithReflectType(reflect.TypeOf(predicate.NamedFilters{}))),
 		)),

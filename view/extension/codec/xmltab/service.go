@@ -3,6 +3,7 @@ package xmltab
 import (
 	"fmt"
 	"github.com/viant/tagly/format"
+	"github.com/viant/xdatly/handler/response/tabular/xml"
 	"github.com/viant/xmlify"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -14,42 +15,9 @@ import (
 
 const XmlTabNullValue = "true"
 
-type (
-	ColumnHeader struct {
-		ID   string `json:",omitempty" xmlify:"path=@id"`
-		Type string `json:",omitempty" xmlify:"path=@type"`
-	}
-
-	ColumnsWrapper struct {
-		Columns []*ColumnHeader `xmlify:"name=column"`
-	}
-
-	ColumnValue struct {
-		LongType   *string `json:",omitempty" xmlify:"omitempty,path=@lg"`
-		IntType    *string `json:",omitempty" xmlify:"omitempty,path=@long"`
-		DoubleType *string `json:",omitempty" xmlify:"omitempty,path=@db"`
-		DateType   *string `json:",omitempty" xmlify:"omitempty,path=@ts"`
-		Value      *string `json:",omitempty" xmlify:"omitempty,omittagname"`
-		ValueAttr  *string `json:",omitempty" xmlify:"omitempty,path=@nil"`
-	}
-
-	Row struct {
-		ColumnValues []*ColumnValue `xmlify:"name=c"`
-	}
-
-	RowsWrapper struct {
-		Rows []*Row `xmlify:"name=r"`
-	}
-
-	Result struct {
-		ColumnsWrapper ColumnsWrapper `xmlify:"name=columns"`
-		RowsWrapper    RowsWrapper    `xmlify:"name=rows"`
-	}
-)
-
 type Service struct{}
 
-func (t *Service) Transfer(aSlice interface{}) (*Result, error) {
+func (t *Service) Transfer(aSlice interface{}) (*xml.Tabular, error) {
 	sliceType := reflect.TypeOf(aSlice)
 	if sliceType.Kind() != reflect.Slice {
 		return nil, fmt.Errorf("expected slice but had: %T", aSlice)
@@ -62,13 +30,13 @@ func (t *Service) Transfer(aSlice interface{}) (*Result, error) {
 	ptr := xunsafe.AsPointer(aSlice)
 	sliceLen := xSlice.Len(ptr)
 	xStruct := xunsafe.NewStruct(componentType)
-	var result = &Result{}
+	var result = &xml.Tabular{}
 	t.transferColumns(xStruct, result)
 	err := t.transferRecords(sliceLen, xSlice, ptr, xStruct, result)
 	return result, err
 }
 
-func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsafe.Pointer, xStruct *xunsafe.Struct, result *Result) error {
+func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsafe.Pointer, xStruct *xunsafe.Struct, result *xml.Tabular) error {
 	for i := 0; i < sliceLen; i++ {
 		source := xSlice.ValuePointerAt(ptr, i)
 		sourcePtr := xunsafe.AsPointer(source)
@@ -81,8 +49,8 @@ func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsaf
 	return nil
 }
 
-func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Pointer) (*Row, error) {
-	var row Row
+func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Pointer) (*xml.Row, error) {
+	var row xml.Row
 	var nullValue = XmlTabNullValue
 	var timeLayout = time.RFC3339
 
@@ -97,7 +65,7 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 			timeLayout = tag.TimeLayout
 		}
 
-		value := &ColumnValue{}
+		value := &xml.Column{}
 		switch field.Type.Kind() {
 		case reflect.String:
 			s := field.String(sourcePtr)
@@ -164,12 +132,12 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 		default:
 			return nil, fmt.Errorf("xmltab: usnupported kind: %v", field.Type.Kind())
 		}
-		row.ColumnValues = append(row.ColumnValues, value)
+		row.Columns = append(row.Columns, value)
 	}
 	return &row, nil
 }
 
-func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
+func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *xml.Tabular) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
 
@@ -178,7 +146,7 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 			continue
 		}
 
-		column := &ColumnHeader{}
+		column := &xml.ColumnHeader{}
 		if tag.Name != "" {
 			column.ID = tag.Name
 		} else {

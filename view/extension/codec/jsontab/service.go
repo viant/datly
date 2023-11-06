@@ -3,6 +3,7 @@ package jsontab
 import (
 	"fmt"
 	"github.com/viant/tagly/format"
+	"github.com/viant/xdatly/handler/response/tabular/tjson"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -11,29 +12,9 @@ import (
 	"unsafe"
 )
 
-type (
-	Column struct {
-		Name string `json:",omitempty"`
-		Type string `json:",omitempty"`
-	}
-
-	Value string
-
-	Record []Value
-
-	Records []Record
-
-	Columns []*Column
-
-	Result struct {
-		Columns Columns `json:",omitempty"`
-		Records Records `json:",omitempty"`
-	}
-)
-
 type Service struct{}
 
-func (t *Service) Transfer(aSlice interface{}) (*Result, error) {
+func (t *Service) Transfer(aSlice interface{}) (*tjson.Tabular, error) {
 	sliceType := reflect.TypeOf(aSlice)
 	if sliceType.Kind() != reflect.Slice {
 		return nil, fmt.Errorf("expected slice but had: %T", aSlice)
@@ -46,13 +27,13 @@ func (t *Service) Transfer(aSlice interface{}) (*Result, error) {
 	ptr := xunsafe.AsPointer(aSlice)
 	sliceLen := xSlice.Len(ptr)
 	xStruct := xunsafe.NewStruct(componentType)
-	var result = &Result{}
+	var result = &tjson.Tabular{}
 	t.transferColumns(xStruct, result)
 	err := t.transferRecords(sliceLen, xSlice, ptr, xStruct, result)
 	return result, err
 }
 
-func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsafe.Pointer, xStruct *xunsafe.Struct, result *Result) error {
+func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsafe.Pointer, xStruct *xunsafe.Struct, result *tjson.Tabular) error {
 	for i := 0; i < sliceLen; i++ {
 		source := xSlice.ValuePointerAt(ptr, i)
 		sourcePtr := xunsafe.AsPointer(source)
@@ -65,8 +46,8 @@ func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsaf
 	return nil
 }
 
-func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Pointer) (Record, error) {
-	var record Record
+func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Pointer) (tjson.Record, error) {
+	var record tjson.Record
 	var timeLayout = time.RFC3339
 
 	for i := range xStruct.Fields {
@@ -141,12 +122,12 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 				return nil, fmt.Errorf("jsontab: usnupported type: %T", v)
 			}
 		}
-		record = append(record, Value(value))
+		record = append(record, tjson.Value(value))
 	}
 	return record, nil
 }
 
-func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
+func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *tjson.Tabular) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
 
@@ -155,7 +136,7 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 			continue
 		}
 
-		column := &Column{}
+		column := &tjson.Column{}
 		if tag.Name != "" {
 			column.Name = tag.Name
 		} else {
