@@ -33,8 +33,13 @@ func (r *Repository) ensureSubstitutes(ctx context.Context) error {
 	r.Substitutes = map[string]view.Substitutes{}
 	for _, URL := range r.Config.repository.SubstitutesURL {
 		_, name := url.Split(URL, file.Scheme)
+
 		if index := strings.LastIndex(name, "."); index != -1 {
 			name = name[:index]
+		}
+
+		if profile := r.Config.repository.Profile; profile != "" {
+			name = strings.Replace(name, profile, "", 1)
 		}
 		aMap, err := r.loadMap(ctx, URL)
 		if err != nil {

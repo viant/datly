@@ -19,6 +19,7 @@ type (
 		RepositoryURL        string     `short:"r" long:"repo" description:"datly rule repository location"  default:"repo/dev" `
 		ConstURL             string     `short:"O" long:"const" description:"const location" `
 		SubstitutesURL       []string   `short:"S" long:"subs" description:"substitutes location" `
+		Profile              string     `short:"X" long:"profile" description:"substitutes profile" `
 		Port                 *int       `short:"P" long:"port" description:"endpoint port" `
 		APIPrefix            string     `short:"a" long:"api" description:"api prefix"  default:"/v1/api" `
 		Configs              ConfigURLs `short:"C" long:"config" description:"config url" `
