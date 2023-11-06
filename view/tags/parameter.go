@@ -36,8 +36,10 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 		tag.DataType = strings.TrimSpace(value)
 	case "lazy":
 		tag.Lazy = strings.TrimSpace(value) == "true" || value == ""
+	case "with":
+		tag.With = value
 	default:
-		return fmt.Errorf("invalid paramerer tag key %s", key)
+		return fmt.Errorf("invalid paramerer tag key: '%s'", key)
 	}
 	return err
 }
