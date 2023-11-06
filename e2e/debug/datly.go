@@ -22,9 +22,10 @@ import (
 	_ "github.com/viant/sqlx/metadata/product/mysql"
 	_ "github.com/viant/sqlx/metadata/product/pg"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
+	"github.com/viant/toolbox"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"time"
 )
@@ -63,120 +64,17 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 func main() {
 	os.Setenv("DATLY_NOPANIC", "0")
 
-	//baseDir := toolbox.CallerDirectory(3)
-	//configURL := filepath.Join(baseDir, "../local/autogen/Datly/config.json")
+	//os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", path.Join(os.Getenv("HOME"), ".secret/viant-e2e.json"))
+	//os.Chdir("/Users/michal/Go/src/github.vianttech.com/adelphic/datly-forecasting")
 
-	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", path.Join(os.Getenv("HOME"), ".secret/viant-e2e.json"))
-	os.Chdir("/Users/michal/Go/src/github.vianttech.com/adelphic/datly-forecasting")
-
-	//configURL := "/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting/repo/dev/Datly/config.json"
-	//
-	//os.Args = []string{
-	//	"",
-	//	"-c=" + configURL,
-	//	"-z=/tmp/jobs/datly",
-	//}
-
-	//os.Args = []string{
-	//	"",
-	//	"initExt",
-	//	"-p=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting",
-	//}
-
-	//
-	//
-	//datly
-	//dsql
-	//-s=dsql/actor/Actor_patch.sql \
-	//-p=~/myproject3 \
-	//-c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
-	//-r=repo/dev
-
-	//os.Args = []string{
-	//	"",
-	//	"dsql",
-	//	"-p=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting",
-	//}
-
-	//os.Args = []string{
-	//	"",
-	//	"dsql",
-	//	"-s=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/forecasting/total.sql",
-	//	"-u=forecasting",
-	//	"-p=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting",
-	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
-	//	"-c=datly_jobs|mysql|root:dev@tcp(127.0.0.1:3306)/datly_jobs?parseTime = true",
-	//	"-r=repo/dev",
-	//}
-
-	//os.Args = []string{
-	//	"",
-	//	"dsql",
-	//	"-s=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/forecasting/total.sql",
-	//	"-s=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/forecasting/multixml.sql",
-	//	"-u=forecasting",
-	//	"-p=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting",
-	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
-	//	"-c=datly_jobs|mysql|root:dev@tcp(127.0.0.1:3306)/datly_jobs?parseTime=true",
-	//	"-S=dsql/forecasting/shared/substitutes.yaml",
-	//	"-r=repo/dev",
-	//}
-
-	//os.Args = []string{
-	//	"",
-	//	"dsql",
-	//	"-s=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/forecasting/empty.sql",
-	//	"-u=forecasting",
-	//	"-p=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting",
-	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
-	//	"-c=datly_jobs|mysql|root:dev@tcp(127.0.0.1:3306)/datly_jobs?parseTime=true",
-	//	"-S=dsql/forecasting/shared/substitutes.yaml",
-	//	"-r=repo/dev",
-	//}
-
-	//os.Args = []string{
-	//	"",
-	//	"dsql",
-	//	"-s=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/forecasting/empty.sql",
-	//	"-u=forecasting",
-	//	"-p=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting",
-	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
-	//	"-c=datly_jobs|mysql|root:dev@tcp(127.0.0.1:3306)/datly_jobs?parseTime=true",
-	//	"-S=dsql/forecasting/shared/substitutes.yaml",
-	//	"-r=repo/dev",
-	//}
-
-	//os.Args = []string{
-	//	"",
-	//	"translate",
-	//	"-s=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting/dql/forecasting/multitab.sql",
-	//	"-u=forecasting",
-	//	"-p=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting",
-	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
-	//	"-c=datly_jobs|mysql|root:dev@tcp(127.0.0.1:3306)/datly_jobs?parseTime=true",
-	//	"-S=dql/forecasting/shared/keys_project.yaml",
-	//	"-S=dql/forecasting/shared/keys_app.yaml",
-	//	"-r=repo/dev",
-	//}
+	baseDir := toolbox.CallerDirectory(3)
+	configURL := filepath.Join(baseDir, "../local/autogen/Datly/config.json")
 
 	os.Args = []string{
 		"",
-		"translate",
-		"-s=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting/dql/forecasting/multitab.sql",
-		"-u=forecasting",
-		"-p=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting",
-		"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
-		"-c=datly_jobs|mysql|root:dev@tcp(127.0.0.1:3306)/datly_jobs?parseTime=true",
-		"-S=dql/forecasting/shared/keys_project.yaml",
-		"-S=dql/forecasting/shared/keys_app.yaml",
-		"-r=repo/dev",
+		"-c=" + configURL,
+		"-z=/tmp/jobs/datly",
 	}
-
-	//os.Args = []string{
-	//	"",
-	//	"dsql",
-	//	"-p=/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting",
-	//}
 
 	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
 
