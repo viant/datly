@@ -18,7 +18,7 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state/kind/locator"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/docs"
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xreflect"

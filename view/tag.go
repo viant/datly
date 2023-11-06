@@ -4,8 +4,8 @@ import (
 	"github.com/viant/datly/view/state"
 	vtags "github.com/viant/datly/view/tags"
 
-	"github.com/viant/structology/format/text"
-	"github.com/viant/structology/tags"
+	"github.com/viant/tagly/format/text"
+	"github.com/viant/tagly/tags"
 )
 
 func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.Documentation, table string) string {

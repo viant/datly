@@ -8,7 +8,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/structology"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"

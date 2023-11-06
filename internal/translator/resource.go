@@ -18,7 +18,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/sqlx"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"

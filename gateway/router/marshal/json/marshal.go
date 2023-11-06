@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"

@@ -3,7 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
-	"github.com/viant/structology/format"
+	"github.com/viant/tagly/format"
 	"github.com/viant/xunsafe"
 	"strconv"
 	"time"

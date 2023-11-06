@@ -3,7 +3,7 @@ package json
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"reflect"
 	"sync"
 )

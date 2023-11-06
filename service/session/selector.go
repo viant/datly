@@ -6,7 +6,7 @@ import (
 	"github.com/viant/datly/service/session/criteria"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/codec"
 	"strconv"
 	"strings"

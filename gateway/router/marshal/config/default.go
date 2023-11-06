@@ -1,8 +1,8 @@
 package config
 
 import (
-	"github.com/viant/structology/format/text"
-	ftime "github.com/viant/structology/format/time"
+	"github.com/viant/tagly/format/text"
+	ftime "github.com/viant/tagly/format/time"
 	"strings"
 )
 

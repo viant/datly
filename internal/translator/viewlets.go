@@ -8,7 +8,7 @@ import (
 	"github.com/viant/sqlparser"
 	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
-	"github.com/viant/structology/tags"
+	"github.com/viant/tagly/tags"
 	"github.com/viant/xreflect"
 	"strings"
 )

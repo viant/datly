@@ -3,7 +3,7 @@ package tabjson
 import (
 	"fmt"
 	"github.com/viant/sqlx/io"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/toolbox/format"
 	goIo "io"
 	"reflect"

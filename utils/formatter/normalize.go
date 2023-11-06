@@ -1,7 +1,7 @@
 package formatter
 
 import (
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"strings"
 )
 

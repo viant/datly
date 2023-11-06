@@ -4,7 +4,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/govalidator"
-	"github.com/viant/structology/format"
+	"github.com/viant/tagly/format"
 	"github.com/viant/xreflect"
 	"reflect"
 )

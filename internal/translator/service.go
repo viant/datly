@@ -23,7 +23,7 @@ import (
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"

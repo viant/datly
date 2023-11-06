@@ -1,6 +1,6 @@
 package setter
 
-import "github.com/viant/structology/format/text"
+import "github.com/viant/tagly/format/text"
 
 func SetStringIfEmpty(dest *string, src string) {
 	if dest != nil && *dest == "" {

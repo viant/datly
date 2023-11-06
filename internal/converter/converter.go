@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/viant/datly/shared"
-	ftime "github.com/viant/structology/format/time"
+	ftime "github.com/viant/tagly/format/time"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strconv"

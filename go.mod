@@ -30,7 +30,7 @@ require (
 	github.com/viant/parsly v0.3.0
 	github.com/viant/pgo v0.10.4
 	github.com/viant/scy v0.6.0
-	github.com/viant/sqlx v0.10.0
+	github.com/viant/sqlx v0.10.1
 	github.com/viant/structql v0.4.1
 	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
@@ -51,12 +51,13 @@ require (
 
 require (
 	github.com/viant/structology v0.5.6-0.20231027223343-51d596f3b723
+	github.com/viant/tagly v0.1.0
 	github.com/viant/xdatly v0.3.1-0.20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/types/core v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xlsy v0.2.2
-	github.com/viant/xmlify v0.0.0-20231102170334-ba77175a85fc
+	github.com/viant/xlsy v0.3.0
+	github.com/viant/xmlify v0.1.0
 	golang.org/x/tools v0.12.0
 )
 

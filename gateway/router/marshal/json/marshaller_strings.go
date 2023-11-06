@@ -2,7 +2,7 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
-	"github.com/viant/structology/format"
+	"github.com/viant/tagly/format"
 	"github.com/viant/xunsafe"
 	"strings"
 	"unicode"

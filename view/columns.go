@@ -7,7 +7,7 @@ import (
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 	"reflect"

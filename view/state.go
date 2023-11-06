@@ -4,7 +4,7 @@ import (
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"strings"
 	"sync"
 )

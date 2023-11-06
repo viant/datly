@@ -2,7 +2,7 @@ package xmltab
 
 import (
 	"fmt"
-	"github.com/viant/structology/format"
+	"github.com/viant/tagly/format"
 	"github.com/viant/xmlify"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"

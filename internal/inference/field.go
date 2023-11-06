@@ -5,7 +5,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/metadata/sink"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"reflect"
 	"strings"
 )

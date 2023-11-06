@@ -8,7 +8,7 @@ import (
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
-	stags "github.com/viant/structology/tags"
+	stags "github.com/viant/tagly/tags"
 	"github.com/viant/toolbox"
 	"github.com/viant/velty"
 	"github.com/viant/xreflect"

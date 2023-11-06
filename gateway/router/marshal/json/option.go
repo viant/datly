@@ -1,7 +1,7 @@
 package json
 
 import (
-	"github.com/viant/structology/format"
+	"github.com/viant/tagly/format"
 )
 
 type Option interface{}

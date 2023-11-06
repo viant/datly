@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/viant/afs/storage"
-	"github.com/viant/structology/tags"
+	"github.com/viant/tagly/tags"
 	"strings"
 )
 

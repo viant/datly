@@ -2,7 +2,7 @@ package xmlfilter
 
 import (
 	"fmt"
-	"github.com/viant/structology/format"
+	"github.com/viant/tagly/format"
 	"github.com/viant/xmlify"
 	"github.com/viant/xunsafe"
 	"reflect"

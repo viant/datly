@@ -1,7 +1,7 @@
 package tags
 
 import (
-	"github.com/viant/structology/tags"
+	"github.com/viant/tagly/tags"
 )
 
 const (

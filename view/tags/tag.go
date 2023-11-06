@@ -3,8 +3,8 @@ package tags
 import (
 	"embed"
 	"github.com/viant/afs"
-	"github.com/viant/structology/format"
-	"github.com/viant/structology/tags"
+	"github.com/viant/tagly/format"
+	"github.com/viant/tagly/tags"
 	"github.com/viant/xreflect"
 	"reflect"
 	"sort"

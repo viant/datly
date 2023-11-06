@@ -3,7 +3,7 @@ package shared
 import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"

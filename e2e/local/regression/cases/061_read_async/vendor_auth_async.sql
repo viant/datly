@@ -35,5 +35,5 @@
 
 SELECT vendor.*,
        products.* EXCEPT VENDOR_ID
-FROM (SELECT CAST($Jwt.FirstName AS CHAR) AS FIRST_NAME, t.* FROM VENDOR t /* {"AsyncTableName": "vendors-async" } */ WHERE t.ID = $vendorID ) vendor /* {"Cache":{"Ref":"aerospike"}} */
+FROM (SELECT CAST($Jwt.FirstName AS CHAR) AS FIRST_NAME, t.* FROM VENDOR t  WHERE t.ID = $vendorID ) vendor /* {"Cache":{"Ref":"aerospike"}} */
     JOIN (SELECT * FROM PRODUCT t) products /* {"Cache":{"Ref":"aerospike"}} */  ON products.VENDOR_ID = vendor.ID

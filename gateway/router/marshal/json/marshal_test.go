@@ -9,7 +9,7 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/internal/tests"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"net/http"
 	"reflect"
 	"testing"

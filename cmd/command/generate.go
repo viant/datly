@@ -14,7 +14,7 @@ import (
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/view/extension"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"strings"
 )
 

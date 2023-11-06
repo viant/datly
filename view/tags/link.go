@@ -2,7 +2,7 @@ package tags
 
 import (
 	"fmt"
-	"github.com/viant/structology/tags"
+	"github.com/viant/tagly/tags"
 	"strconv"
 	"strings"
 )

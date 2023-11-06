@@ -9,7 +9,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io/load/reader/csv"
-	"github.com/viant/structology/format"
+	"github.com/viant/tagly/format"
 	"github.com/viant/xlsy"
 	"github.com/viant/xmlify"
 	"net/http"
