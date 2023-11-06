@@ -58,7 +58,7 @@ func InitRegistry() {
 
 			xreflect.NewType("xml.Tabular", xreflect.WithReflectType(reflect.TypeOf(xml.Tabular{}))),
 			xreflect.NewType("xml.FilterHolder", xreflect.WithReflectType(reflect.TypeOf(xml.FilterHolder{}))),
-			xreflect.NewType("json.Tabular", xreflect.WithReflectType(reflect.TypeOf(tjson.Tabular{}))),
+			xreflect.NewType("tjson.Tabular", xreflect.WithReflectType(reflect.TypeOf(tjson.Tabular{}))),
 
 			xreflect.NewType("async.Job", xreflect.WithReflectType(reflect.TypeOf(async.Job{}))),
 			xreflect.NewType("predicate.NamedFilters", xreflect.WithReflectType(reflect.TypeOf(predicate.NamedFilters{}))),
