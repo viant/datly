@@ -39,6 +39,7 @@ func (r *Repository) ensureSubstitutes(ctx context.Context) error {
 		}
 
 		if profile := r.Config.repository.Profile; profile != "" {
+			name = strings.Replace(name, "_"+profile, "", 1)
 			name = strings.Replace(name, profile, "", 1)
 		}
 		aMap, err := r.loadMap(ctx, URL)
