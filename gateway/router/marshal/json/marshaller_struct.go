@@ -419,15 +419,15 @@ func groupFields(elemType reflect.Type) *groupedFields {
 
 func (d *structDecoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) error {
 	marshaller, ok := d.marshaller.marshallerByName(fieldName)
+	if !ok {
+		return nil
+	}
+
 	if len(d.session.PathMarshaller) > 0 {
 		interceptor, ok := d.session.PathMarshaller[marshaller.path]
 		if ok {
 			return interceptor(marshaller.xField.Addr(d.ptr), decoder, d.session.Options...)
 		}
-	}
-
-	if !ok {
-		return nil
 	}
 
 	if err := marshaller.marshaller.UnmarshallObject(marshaller.xField.Pointer(d.ptr), decoder, nil, d.session); err != nil {
