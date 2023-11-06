@@ -91,7 +91,7 @@ func (m *Metric) SQL() string {
 	if m.Execution != nil && len(m.Execution.Template) > 0 {
 		tmpl := m.Execution.Template[0]
 		SQL := shared.ExpandSQL(tmpl.SQL, tmpl.Args)
-		SQL = strings.ReplaceAll(SQL, "\n", "\\n")
+		//SQL = strings.ReplaceAll(SQL, "\n", "\\n") // don't escape before marshalling
 		return SQL
 	}
 	return ""
