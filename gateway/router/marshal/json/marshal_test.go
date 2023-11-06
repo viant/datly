@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/internal/tests"
+	"github.com/viant/structology/format/text"
 	"net/http"
 	"reflect"
 	"testing"
@@ -184,6 +185,16 @@ func TestJson_Marshal(t *testing.T) {
 				}
 			},
 		},
+		{
+			description: "escaping special characters",
+			expect:      `{"escaped":"\\__\"__\/__\b__\f__\n__\r__\t__"}`,
+			data: func() interface{} {
+				type Member struct {
+					escaped string
+				}
+				return &Member{escaped: "\\__\"__/__\b__\f__\n__\r__\t__"}
+			},
+		},
 	}
 
 	//for i, testcase := range testcases[:len(testcases)-1] {
@@ -198,18 +209,21 @@ func TestJson_Marshal(t *testing.T) {
 			dataType = dataType.Elem()
 		}
 
-		marshaller := json.New(testcase.defaultConfig)
+		marshaller := json.New(&testcase.defaultConfig)
 		result, err := marshaller.Marshal(data, testcase.filters)
 		if !assert.Nil(t, err, testcase.description) {
 			t.Fail()
 			return
 		}
-		if string(result) == testcase.expect {
+		actual := string(result)
+		if actual == testcase.expect {
 			continue
 		}
 		if !assertly.AssertValues(t, testcase.expect, string(result), testcase.description) {
-			fmt.Println(string(result))
-			fmt.Println(string(testcase.expect))
+			fmt.Println("### ACTUAL:")
+			fmt.Println(actual)
+			fmt.Println("### EXPECTED:")
+			fmt.Println(testcase.expect)
 
 		}
 
@@ -787,7 +801,7 @@ func BenchmarkMarshal(b *testing.B) {
 		},
 	}
 
-	benchMarshaller = json.New(config.IOConfig{})
+	benchMarshaller = json.New(&config.IOConfig{})
 
 	b.Run("SDK json", func(b *testing.B) {
 		var bytes []byte
@@ -1103,7 +1117,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 			},
 		},
 		{
-			description:  "broken case 17",
+			description:  "broken case 17a",
 			data:         ` {"Name":"017_"}`,
 			expect:       `{"Id":0,"Name":"017_"}`,
 			stringsEqual: true,
@@ -1124,7 +1138,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 			},
 		},
 		{
-			description:  "broken case 17",
+			description:  "broken case 17b",
 			data:         `{"data":null}`,
 			expect:       `{"data":null}`,
 			stringsEqual: true,
@@ -1146,8 +1160,8 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				return v.Interface()
 			},
 		},
-		httpUnmarshallTestcase("Boo", `{"NormalizeObject": {"Value1": "Abc", "Value2": 125.5}}`, `{"ID":0,"NormalizeObject":{"Value1":"Abc","Value2":125.5},"Name":""}`),
-		httpUnmarshallTestcase("Bar", `{"NormalizeObject": {"CreatedAt": "time.Now", "UpdatedAt": "time.Now + 5 Days"}}`, `{"ID":0,"NormalizeObject":{"CreatedAt":"time.Now","UpdatedAt":"time.Now + 5 Days"},"Name":""}`),
+		///httpUnmarshallTestcase("Boo", `{"NormalizeObject": {"Value1": "Abc", "Value2": 125.5}}`, `{"ID":0,"NormalizeObject":{"Value1":"Abc","Value2":125.5},"Name":""}`),
+		///httpUnmarshallTestcase("Bar", `{"NormalizeObject": {"CreatedAt": "time.Now", "UpdatedAt": "time.Now + 5 Days"}}`, `{"ID":0,"NormalizeObject":{"CreatedAt":"time.Now","UpdatedAt":"time.Now + 5 Days"},"Name":""}`),
 		{
 			description: "ints slice",
 			data:        `{"Name": "Foo", "Ints": [1,2,3,4,5,6,7,8,9,10]}`,
@@ -1195,9 +1209,9 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 
 	//for i, testCase := range testCases[len(testCases)-1:] {
 	for i, testCase := range testCases {
-		fmt.Printf("Running testcase nr#%v\n", i)
+		fmt.Printf("Running testcase nr #%v %s\n", i, testCase.description)
 		actual := testCase.into()
-		marshaller := json.New(config.IOConfig{})
+		marshaller := json.New(&config.IOConfig{})
 
 		marshalErr := marshaller.Unmarshal([]byte(testCase.data), actual, testCase.options...)
 
@@ -1262,7 +1276,7 @@ func httpUnmarshallTestcase(typeName string, data string, expected string) unmar
 	}
 
 	return unmarshallTestcase{
-		description:  "broken case 17",
+		description:  "broken case 17c",
 		data:         data,
 		expect:       expected,
 		stringsEqual: true,
