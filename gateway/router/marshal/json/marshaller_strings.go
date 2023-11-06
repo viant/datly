@@ -12,6 +12,7 @@ import (
 type stringMarshaller struct {
 	defaultValue string
 	dTag         *format.Tag
+	replacer     *strings.Replacer
 }
 
 func newStringMarshaller(dTag *format.Tag) *stringMarshaller {
@@ -19,9 +20,11 @@ func newStringMarshaller(dTag *format.Tag) *stringMarshaller {
 	if dTag.IsNullable() {
 		zeroValue = null
 	}
+
 	return &stringMarshaller{
 		dTag:         dTag,
 		defaultValue: zeroValue,
+		replacer:     getReplacer(),
 	}
 }
 
@@ -32,7 +35,8 @@ func (i *stringMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 		return nil
 	}
 
-	marshallString(asString, sb)
+	i.ensureReplacer()
+	marshallString(asString, sb, i.replacer)
 	return nil
 }
 
@@ -40,17 +44,29 @@ func (i *stringMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *goj
 	return decoder.AddString(xunsafe.AsStringPtr(pointer))
 }
 
-func marshallString(asString string, sb *MarshallSession) {
+func (i *stringMarshaller) ensureReplacer() {
+	if i.replacer == nil {
+		i.replacer = getReplacer()
+	}
+}
+
+func marshallString(asString string, sb *MarshallSession, replacer *strings.Replacer) {
 	asString = strings.TrimFunc(asString, func(r rune) bool {
 		return !unicode.IsGraphic(r)
 	})
 
 	sb.WriteByte('"')
-	if strings.Contains(asString, `"`) {
-		sb.WriteString(strings.ReplaceAll(strings.ReplaceAll(asString, `\`, `\\`), `"`, `\"`))
-	} else {
-		sb.WriteString(asString)
-	}
-
+	sb.WriteString(replacer.Replace(asString))
 	sb.WriteByte('"')
+}
+
+func getReplacer() *strings.Replacer {
+	return strings.NewReplacer(`\`, `\\`,
+		`"`, `\"`,
+		`/`, `\/`,
+		"\b", `\b`,
+		"\f", `\f`,
+		"\n", `\n`,
+		"\r", `\r`,
+		"\t", `\t`)
 }
