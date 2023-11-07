@@ -61,12 +61,12 @@ func (r *Registry) LookupProvider(ctx context.Context, path *contract.Path) (*Pr
 	return result, nil
 }
 
-func (r *Registry) Lookup(ctx context.Context, path *contract.Path) (*Component, error) {
+func (r *Registry) Lookup(ctx context.Context, path *contract.Path, opts ...Option) (*Component, error) {
 	provider, err := r.LookupProvider(ctx, path)
 	if err != nil {
 		return nil, err
 	}
-	return provider.Component(ctx)
+	return provider.Component(ctx, opts...)
 }
 
 func (r *Registry) Register(components ...*Component) {

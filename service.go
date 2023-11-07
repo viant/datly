@@ -84,19 +84,19 @@ func (s *Service) Exec(ctx context.Context, viewId string, options ...executor.O
 }
 
 // Component returns component matched by name, optionally you can use METHOD:component name notation
-func (s *Service) Component(ctx context.Context, name string) (*repository.Component, error) {
+func (s *Service) Component(ctx context.Context, name string, opts ...repository.Option) (*repository.Component, error) {
 	method := http.MethodGet
 	if index := strings.Index(name, ":"); index != -1 {
 		method = strings.ToUpper(name[:index])
 		name = name[index+1:]
 	}
 	aPath := contract.NewPath(method, name)
-	component, err := s.repository.Registry().Lookup(ctx, aPath)
+	component, err := s.repository.Registry().Lookup(ctx, aPath, opts...)
 	if component != nil {
 		return component, err
 	}
 	aPath = contract.NewPath(method, internalPath(name))
-	if component, _ = s.repository.Registry().Lookup(ctx, aPath); component != nil {
+	if component, _ = s.repository.Registry().Lookup(ctx, aPath, opts...); component != nil {
 		return component, nil
 	}
 	return nil, err
