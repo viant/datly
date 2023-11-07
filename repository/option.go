@@ -159,6 +159,12 @@ func WithExtensions(registry *extension.Registry) Option {
 	}
 }
 
+func WithNoPlugin() Option {
+	return func(o *Options) {
+		o.ignorePlugin = true
+	}
+}
+
 func WithResources(resources Resources) Option {
 	return func(o *Options) {
 		o.resources = resources
