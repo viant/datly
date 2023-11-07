@@ -98,9 +98,11 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 	if s.resources == nil {
 		s.resources, _ = resource.New(ctx, options.fs, "", options.refreshFrequency)
 	}
-	if s.plugins == nil && options.pluginURL != "" {
-		if s.plugins, err = plugin.New(ctx, options.fs, options.pluginURL, options.refreshFrequency); err != nil {
-			fmt.Printf("WARNING: failed to load plugin: %v\n", err)
+	if !options.ignorePlugin {
+		if s.plugins == nil && options.pluginURL != "" {
+			if s.plugins, err = plugin.New(ctx, options.fs, options.pluginURL, options.refreshFrequency); err != nil {
+				fmt.Printf("WARNING: failed to load plugin: %v\n", err)
+			}
 		}
 	}
 	return s.initProviders(ctx)

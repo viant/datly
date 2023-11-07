@@ -249,6 +249,7 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	if valueType == nil {
 		fmt.Printf("value type was nil %s\n", parameter.Name)
 	}
+
 	switch valueType.Kind() {
 	case reflect.Ptr:
 		if parameter.IsRequired() && isNil(value) {
@@ -418,9 +419,14 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 		value = transformed
 	}
 	if has && err == nil && cachable {
-		s.cache.put(parameter, value)
+		s.SetValue(parameter, value)
 	}
 	return value, has, err
+}
+
+// SetValue sets value to session cache
+func (s *Session) SetValue(parameter *state.Parameter, value interface{}) {
+	s.cache.put(parameter, value)
 }
 
 func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (interface{}, error) {

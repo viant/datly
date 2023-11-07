@@ -22,6 +22,7 @@ type Options struct {
 	componentURL         string
 	resourceURL          string
 	pluginURL            string
+	ignorePlugin         bool
 	extensions           *extension.Registry
 	resources            Resources
 	refreshFrequency     time.Duration
@@ -95,6 +96,9 @@ func (o *Options) init() {
 }
 
 func (o *Options) ensurePluginURL() {
+	if o.ignorePlugin {
+		return
+	}
 	if index := strings.LastIndex(o.resourceURL, "/dependencies"); index != -1 && o.pluginURL == "" {
 		o.pluginURL = o.resourceURL[:index] + "/plugins"
 	}
@@ -228,5 +232,11 @@ func WithJWTVerifier(aVerifier *verifier.Config) Option {
 		jwtVerifier := verifier.New(aVerifier)
 		o.jWTVerifier = jwtVerifier
 		_ = jwtVerifier.Init(context.Background())
+	}
+}
+
+func WithIgnorePlugin(flag bool) Option {
+	return func(o *Options) {
+		o.ignorePlugin = flag
 	}
 }

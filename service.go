@@ -2,6 +2,7 @@ package datly
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
@@ -13,10 +14,12 @@ import (
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/structology"
 	xhandler "github.com/viant/xdatly/handler"
+	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
 	"strings"
@@ -38,6 +41,34 @@ type (
 func (s *Service) NewComponentSession(aComponent *repository.Component, request *http.Request) *session.Session {
 	options := aComponent.LocatorOptions(request, aComponent.UnmarshalFunc(request))
 	return session.New(aComponent.View, session.WithLocatorOptions(options...))
+}
+
+func (s *Service) NewComponentSessionWithState(ctx context.Context, aComponent *repository.Component, aState interface{}) (*session.Session, error) {
+	options := aComponent.LocatorOptions(&http.Request{Header: make(http.Header)}, json.Unmarshal)
+	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...))
+	rType := reflect.TypeOf(aState)
+	sType := structology.NewStateType(rType, structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
+		stateTag, _ := tags.ParseStateTags(tag, nil)
+		if stateTag == nil || stateTag.Parameter == nil || stateTag.Parameter.Name == "" {
+			return []string{name}
+		}
+		return []string{stateTag.Parameter.Name}
+	}))
+
+	input := sType.WithValue(aState)
+	ptr := xunsafe.AsPointer(aState)
+	for _, parameter := range aComponent.Input.Type.Parameters {
+		selector, _ := input.Selector(parameter.Name)
+		if selector == nil {
+			continue
+		}
+		if !selector.Has(ptr) {
+			continue
+		}
+		value := selector.Value(ptr)
+		aSession.SetValue(parameter, value)
+	}
+	return aSession, nil
 }
 
 // HandlerSession returns handler session
