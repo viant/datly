@@ -67,7 +67,7 @@ func (s *Service) Operate(ctx context.Context, aComponent *repository.Component,
 	return s.operator.Operate(ctx, aComponent, aSession)
 }
 
-func (s *Service) PrepareInput(ctx context.Context, aComponent *repository.Component, request *http.Request, inputPtr interface{}) error {
+func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Component, request *http.Request, inputPtr interface{}) error {
 	aSession := s.NewComponentSession(aComponent, request)
 	inputType := reflect.TypeOf(inputPtr)
 	if inputType.Kind() != reflect.Ptr {
