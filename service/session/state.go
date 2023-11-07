@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
@@ -419,13 +420,13 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 		value = transformed
 	}
 	if has && err == nil && cachable {
-		s.SetValue(parameter, value)
+		s.setValue(parameter, value)
 	}
 	return value, has, err
 }
 
 // SetValue sets value to session cache
-func (s *Session) SetValue(parameter *state.Parameter, value interface{}) {
+func (s *Session) setValue(parameter *state.Parameter, value interface{}) {
 	s.cache.put(parameter, value)
 }
 
@@ -470,6 +471,32 @@ func New(aView *view.View, opts ...Option) *Session {
 	ret.namedParameters = ret.namespacedView.Parameters()
 	ret.apply(opts)
 	return ret
+}
+
+func (s *Session) LoadState(parameters state.Parameters, aState interface{}) error {
+	rType := reflect.TypeOf(aState)
+	sType := structology.NewStateType(rType, structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
+		stateTag, _ := tags.ParseStateTags(tag, nil)
+		if stateTag == nil || stateTag.Parameter == nil || stateTag.Parameter.Name == "" {
+			return []string{name}
+		}
+		return []string{stateTag.Parameter.Name}
+	}))
+	inputState := sType.WithValue(aState)
+	ptr := xunsafe.AsPointer(aState)
+	for _, parameter := range parameters {
+		selector, _ := inputState.Selector(parameter.Name)
+		if selector == nil {
+			continue
+		}
+		if !selector.Has(ptr) {
+			continue
+		}
+		value := selector.Value(ptr)
+		s.setValue(parameter, value)
+	}
+
+	return nil
 }
 
 func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *httputils.Errors) {

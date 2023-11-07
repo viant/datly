@@ -2,6 +2,7 @@ package datly
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
@@ -13,12 +14,10 @@ import (
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
-	"github.com/viant/datly/view/tags"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/structology"
 	xhandler "github.com/viant/xdatly/handler"
-	"github.com/viant/xunsafe"
 	"net/http"
 	nurl "net/url"
 	"reflect"
@@ -39,7 +38,6 @@ type (
 
 	sessionOptions struct {
 		request *http.Request
-		input   interface{}
 	}
 	SessionOption func(o *sessionOptions)
 )
@@ -61,48 +59,11 @@ func WithRequest(request *http.Request) SessionOption {
 	}
 }
 
-func WithInput(input interface{}) SessionOption {
-	return func(o *sessionOptions) {
-		o.input = input
-	}
-}
-
-func (s *Service) NewComponentSession(aComponent *repository.Component, opts ...SessionOption) (*session.Session, error) {
+func (s *Service) NewComponentSession(aComponent *repository.Component, opts ...SessionOption) *session.Session {
 	sessionOpt := newSessionOptions(opts)
 	options := aComponent.LocatorOptions(sessionOpt.request, aComponent.UnmarshalFunc(sessionOpt.request))
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...))
-	if input := sessionOpt.input; input != nil {
-		if err := s.populateSession(aComponent, input, aSession); err != nil {
-			return nil, err
-		}
-	}
-	return aSession, nil
-}
-
-func (s *Service) populateSession(aComponent *repository.Component, input interface{}, aSession *session.Session) error {
-	rType := reflect.TypeOf(input)
-	sType := structology.NewStateType(rType, structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
-		stateTag, _ := tags.ParseStateTags(tag, nil)
-		if stateTag == nil || stateTag.Parameter == nil || stateTag.Parameter.Name == "" {
-			return []string{name}
-		}
-		return []string{stateTag.Parameter.Name}
-	}))
-
-	inputState := sType.WithValue(input)
-	ptr := xunsafe.AsPointer(input)
-	for _, parameter := range aComponent.Input.Type.Parameters {
-		selector, _ := inputState.Selector(parameter.Name)
-		if selector == nil {
-			continue
-		}
-		if !selector.Has(ptr) {
-			continue
-		}
-		value := selector.Value(ptr)
-		aSession.SetValue(parameter, value)
-	}
-	return nil
+	return aSession
 }
 
 // HandlerSession returns handler session
@@ -127,16 +88,36 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 	return nil
 }
 
+func (s *Service) OperateWith(ctx context.Context, aComponent *repository.Component, input interface{}, output interface{}) error {
+	aSession := s.NewComponentSession(aComponent)
+	if err := aSession.LoadState(aComponent.Input.Type.Parameters, input); err != nil {
+		return err
+	}
+	if err := aSession.Populate(ctx); err != nil {
+		return err
+	}
+	return s.OperateInto(ctx, aComponent, aSession, output)
+}
+
+func (s *Service) OperateInto(ctx context.Context, aComponent *repository.Component, aSession *session.Session, output interface{}) error {
+	response, err := s.operator.Operate(ctx, aComponent, aSession)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(response)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, output)
+}
+
 // Operate performs respective operation on supplied component
 func (s *Service) Operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	return s.operator.Operate(ctx, aComponent, aSession)
 }
 
 func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Component, request *http.Request, inputPtr interface{}) error {
-	aSession, err := s.NewComponentSession(aComponent, WithRequest(request))
-	if err != nil {
-		return err
-	}
+	aSession := s.NewComponentSession(aComponent, WithRequest(request))
 	inputValue := reflect.ValueOf(inputPtr)
 	inputType := inputValue.Type()
 	if inputValue.Type().Kind() != reflect.Ptr {
@@ -145,7 +126,7 @@ func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Comp
 	aStateType := structology.NewStateType(inputType.Elem())
 	aState := aStateType.NewState()
 	opts := aSession.ViewOptions(aComponent.View, session.WithReportNotAssignable(false))
-	err = aSession.SetState(ctx, aComponent.Input.Type.Parameters, aState, opts.Indirect(true))
+	err := aSession.SetState(ctx, aComponent.Input.Type.Parameters, aState, opts.Indirect(true))
 	if err != nil {
 		return err
 	}
@@ -241,7 +222,7 @@ func (s *Service) buildDefaultComponents(ctx context.Context) (*repository.Compo
 	return components, refConnector
 }
 
-// AddComponents adds components to repository
+// AddComponent adds components to repository
 func (s *Service) AddComponent(ctx context.Context, component *repository.Component) error {
 	components, refConnector := s.buildDefaultComponents(ctx)
 	if refConnector != "" {
