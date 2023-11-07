@@ -243,7 +243,7 @@ func (s *Session) canRead(ctx context.Context, parameter *state.Parameter) (bool
 func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter, selector *structology.Selector) (interface{}, error) {
 	valueType := reflect.TypeOf(value)
 	if valueType == nil {
-		fmt.Printf("VALUE TYPE WAS NIL %s\n", parameter.Name)
+		fmt.Printf("value type was nil %s\n", parameter.Name)
 	}
 	switch valueType.Kind() {
 	case reflect.Ptr:
@@ -388,7 +388,6 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 			return nil, false, err
 		}
 	}
-
 	return s.adjustAndCache(ctx, parameter, opts, has, value, cachable)
 }
 

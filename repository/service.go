@@ -100,7 +100,7 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 	}
 	if s.plugins == nil && options.pluginURL != "" {
 		if s.plugins, err = plugin.New(ctx, options.fs, options.pluginURL, options.refreshFrequency); err != nil {
-			fmt.Printf("ERROR: failed to load plugin: %v\n", err)
+			fmt.Printf("WARNING: failed to load plugin: %v\n", err)
 		}
 	}
 	return s.initProviders(ctx)
