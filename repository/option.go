@@ -153,12 +153,14 @@ func WithPredicates(predicates *extension.PredicateRegistry) Option {
 	}
 }
 
+// WithExtensions returns extension option
 func WithExtensions(registry *extension.Registry) Option {
 	return func(o *Options) {
 		o.extensions = registry
 	}
 }
 
+// WithNoPlugin returns with no plugin option
 func WithNoPlugin() Option {
 	return func(o *Options) {
 		o.ignorePlugin = true
