@@ -20,6 +20,7 @@ import (
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xunsafe"
 	"net/http"
+	nurl "net/url"
 	"reflect"
 	"strings"
 	"time"
@@ -49,7 +50,8 @@ func newSessionOptions(opts []SessionOption) *sessionOptions {
 		opt(sessionOpt)
 	}
 	if sessionOpt.request == nil {
-		sessionOpt.request = &http.Request{Header: make(http.Header)}
+		URL, _ := nurl.Parse("http://127.0.0.1/")
+		sessionOpt.request = &http.Request{Header: make(http.Header), URL: URL}
 	}
 	return sessionOpt
 }
