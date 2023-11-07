@@ -50,6 +50,7 @@ func (p *Parameter) Tag() *tags.Tag {
 	appendNonEmpty(builder, "kind", p.Kind)
 	appendNonEmpty(builder, "in", p.In)
 	appendNonEmpty(builder, "when", p.When)
+	appendNonEmpty(builder, "with", p.With)
 	appendNonEmpty(builder, "scope", p.Scope)
 	appendNonEmpty(builder, "dataType", p.DataType)
 	if p.Lazy {

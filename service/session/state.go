@@ -407,7 +407,7 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 	if parameter.Output != nil {
 		transformed, err := parameter.Output.Transform(ctx, value, opts.codecOptions...)
 		if err != nil {
-			return nil, false, fmt.Errorf("failed to transform: %v, %w", value, err)
+			return nil, false, fmt.Errorf("failed to transform %s with %s: %v, %w", parameter.Name, parameter.Output.Name, value, err)
 		}
 		value = transformed
 	}

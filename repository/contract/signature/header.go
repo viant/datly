@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/locator/output/keys"
 	"github.com/viant/datly/view"
@@ -101,9 +102,9 @@ func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Type
 			return
 		}
 	}
-	if schema.Name == "" {
-		schema.Name = "Filter"
-	}
+	setter.SetStringIfEmpty(&schema.Name, "Filter")
+	setter.SetStringIfEmpty(&schema.Package, contract.Output.Type.Package)
+
 	dataParameter := output.LookupByLocation(state.KindOutput, keys.ViewData)
 	inputParameters := state.Parameters(contract.Input.Type.Parameters)
 	predicateType := inputParameters.PredicateStructType(nil)
@@ -114,7 +115,7 @@ func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Type
 		}
 		signature.Types = append(signature.Types, &view.TypeDefinition{Name: schema.Name, DataType: predicateType.String(), Package: pkg})
 		signature.Filter = state.NewSchema(predicateType)
-		registry.Register(schema.Name, xreflect.WithTypeDefinition(signature.Filter.Type().String()))
+		registry.Register(schema.Name, xreflect.WithPackage(schema.Package), xreflect.WithTypeDefinition(signature.Filter.Type().String()))
 	}
 }
 
@@ -125,7 +126,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	}
 	if len(aContract.Output.Type.Parameters) == 0 && aContract.Output.Type.Name != "" {
 		//TODO check definition to see if this is inline type or external type
-		signature.Output = &state.Schema{Name: aContract.Output.Type.Name}
+		signature.Output = &state.Schema{Name: aContract.Output.Type.Name, Package: signature.Output.Package}
 	}
 
 	parameters := state.Parameters(aContract.Output.Type.Parameters)
@@ -166,6 +167,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 		}
 		componentSchema := state.NewSchema(outputType)
 		componentSchema.Name = strings.Replace(outputParameter.Schema.Name, "View", "", 1) + "Output"
+		componentSchema.Package = aContract.Output.Type.Package
 		componentSchema.Cardinality = state.One
 		componentSchema.DataType = outputType.String()
 		signature.Output = componentSchema

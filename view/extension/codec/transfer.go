@@ -2,6 +2,7 @@ package codec
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension/codec/jsontab"
 	"github.com/viant/datly/view/extension/codec/transfer"
@@ -84,7 +85,7 @@ func (e *Transfer) Value(ctx context.Context, raw interface{}, options ...codec.
 	for _, aTransfer := range e.transfers {
 		value, err := src.Value(aTransfer.tag.From)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read: %s %w", aTransfer.tag.From, err)
 		}
 
 		switch aTransfer.tag.Codec { //TODO pass in ctx codec registry and generalize it
@@ -113,7 +114,7 @@ func (e *Transfer) Value(ctx context.Context, raw interface{}, options ...codec.
 
 		if value != nil {
 			if err = aTransfer.selector.SetValue(dest.Pointer(), value); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to set: %s %w", aTransfer.selector.Name(), err)
 			}
 		}
 	}

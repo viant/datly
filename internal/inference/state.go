@@ -195,12 +195,36 @@ func (s State) FilterByKind(kind state.Kind) State {
 			for _, candidate := range parameter.Repeated {
 				if candidate.In.Kind == kind {
 					result.Append(candidate)
+					continue
+				}
+				switch candidate.In.Kind {
+				case state.KindRepeated:
+					if values := State(candidate.Repeated).FilterByKind(kind); len(values) > 0 {
+						result.Append(values...)
+					}
+				case state.KindObject:
+					if values := State(candidate.Object).FilterByKind(kind); len(values) > 0 {
+						result.Append(values...)
+					}
+
 				}
 			}
 		case state.KindObject:
 			for _, candidate := range parameter.Object {
 				if candidate.In.Kind == kind {
 					result.Append(candidate)
+					continue
+				}
+
+				switch candidate.In.Kind {
+				case state.KindRepeated:
+					if values := State(candidate.Repeated).FilterByKind(kind); len(values) > 0 {
+						result.Append(values...)
+					}
+				case state.KindObject:
+					if values := State(candidate.Object).FilterByKind(kind); len(values) > 0 {
+						result.Append(values...)
+					}
 				}
 			}
 		}

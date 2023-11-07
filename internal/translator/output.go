@@ -127,7 +127,7 @@ func (s *Service) updateOutputParameterSchema(parameter *state.Parameter, typesR
 		return nil
 	}
 	if parameter.Schema.Type() != nil && parameter.Schema.Type().Kind() != reflect.Interface {
-		resource.AddParameterType(parameter)
+		resource.addParameterType(parameter)
 		return nil
 	}
 	rType, err := types.LookupType(typesRegistry.Lookup, parameter.Schema.TypeName())
@@ -145,6 +145,10 @@ func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Par
 				return err
 			}
 		}
+		if err = s.adjustParameterType(parameter, types, resource); err != nil {
+			return err
+		}
+
 		if err = s.adjustCodecOutputType(parameter, types, resource); err != nil {
 			return err
 		}
@@ -202,6 +206,17 @@ func (s *Service) newTypeRegistry(resource *Resource, rootViewlet *Viewlet) *xre
 	return types
 }
 
+func (s *Service) adjustParameterType(parameter *state.Parameter, types *xreflect.Types, resource *Resource) error {
+	if schema := parameter.Schema; schema.Name != "" && schema.Type() == nil {
+		rType, err := types.Lookup(schema.Name, xreflect.WithPackage(schema.Package))
+		if err != nil {
+			return err
+		}
+		schema.SetType(rType)
+	}
+	return nil
+}
+
 func (s *Service) adjustCodecOutputType(parameter *state.Parameter, types *xreflect.Types, resource *Resource) error {
 	output := parameter.Output
 	if output == nil {
@@ -230,32 +245,43 @@ func (s *Service) adjustCodecOutputType(parameter *state.Parameter, types *xrefl
 	return nil
 }
 
-func (s *Service) adjustTransferCodecOutput(parameter *state.Parameter, types *xreflect.Types, resource *Resource, output *state.Codec) error {
+func (s *Service) adjustTransferCodecOutput(parameter *state.Parameter, typesRegistry *xreflect.Types, resource *Resource, output *state.Codec) (err error) {
+	var destType reflect.Type
 	destTypeName := output.Args[0]
+	if parameter.Output != nil && parameter.Output.Schema != nil {
+		outputSchema := parameter.Output.Schema
+		if destType = outputSchema.Type(); destType != nil {
+			destType = types.EnsureStruct(destType)
+		}
+		setter.SetStringIfEmpty(&outputSchema.Name, destTypeName)
+	}
 
 	pkg := resource.typePackages[destTypeName]
-	dest, err := types.Lookup(destTypeName, xreflect.WithPackage(pkg))
-	if err != nil {
-		return fmt.Errorf("failed to init transfer codec for type %v: parameter: %v, %w", destTypeName, parameter.Name, err)
+	if destType == nil {
+		if destType, err = typesRegistry.Lookup(destTypeName, xreflect.WithPackage(pkg)); err != nil {
+			return fmt.Errorf("failed to init transfer codec for type %v: parameter: %v, %w", destTypeName, parameter.Name, err)
+		}
+
 	}
 	if len(output.Args) == 1 {
 		parameter.Output.Schema = &state.Schema{Name: destTypeName}
 		return nil
 	}
+
 	adjustedTypeName := output.Args[1]
-	adjustedType, err := s.adjustTransferCodecType(resource, parameter, types, dest)
+	adjustedType, err := s.adjustTransferCodecType(resource, parameter, typesRegistry, destType)
 	if err != nil {
 		return err
 	}
 	parameter.Output.Schema = &state.Schema{Name: adjustedTypeName}
 	parameter.Output.Schema.SetType(adjustedType)
-	resource.AddParameterType(parameter)
+	resource.addParameterType(parameter)
 
 	resource.AppendTypeDefinition(&view.TypeDefinition{
 		Name:     adjustedTypeName,
 		DataType: adjustedType.String(),
 	})
-	_ = types.Register(adjustedTypeName, xreflect.WithReflectType(adjustedType))
+	_ = typesRegistry.Register(adjustedTypeName, xreflect.WithReflectType(adjustedType))
 	return nil
 }
 

@@ -23,7 +23,6 @@ import (
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
-	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"
@@ -70,7 +69,7 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 		return err
 	}
 
-	outputState := resource.Declarations.OutputState
+	outputState := resource.OutputState
 	if resource.Rule.Output != nil {
 		resource.Rule.Output.Doc = resource.Rule.Doc.Output
 		resource.Rule.Output.FilterDoc = resource.Rule.Doc.Filter
@@ -113,22 +112,9 @@ func (s *Service) discoverComponentContract(ctx context.Context, resource *Resou
 			return nil, err
 		}
 	}
-
-	componentTypeName := normalizeComponentType(location)
 	location.Name = strings.ReplaceAll(location.Name, ".", "/")
 	method, URI := shared.ExtractPath(location.Name)
-	ret, err := s.signature.Signature(method, URI)
-	if ret != nil {
-		ret.AdjustedRegisteredType(componentTypeName)
-	}
-	return ret, err
-}
-
-func normalizeComponentType(location *state.Location) string {
-	componentTypeName := strings.ReplaceAll(location.Name, "-", "_")
-	componentTypeName = strings.ReplaceAll(componentTypeName, ".", "_")
-	componentTypeName = text.CaseFormatLowerUnderscore.Format(componentTypeName, text.CaseFormatUpperCamel)
-	return componentTypeName
+	return s.signature.Signature(method, URI)
 }
 
 func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource, DSQL string) (err error) {
@@ -554,6 +540,10 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		for i := range aSignature.Types {
 			resource.AppendTypeDefinition(aSignature.Types[i])
 		}
+	}
+
+	for _, parameter := range parameters {
+		resource.addParameterSchemaType(&parameter.Parameter)
 	}
 	return nil
 }

@@ -95,7 +95,7 @@ func (s *Session) umarshalStructParameter(name string, parameterType reflect.Typ
 		return nil, fmt.Errorf("failed unmarsha: %w", err)
 	}
 	if err = json.Unmarshal(fieldData, parameterValue); err != nil {
-		return nil, fmt.Errorf("failed to transfer %w", err)
+		return nil, fmt.Errorf("failed to transfer %v %w", name, err)
 	}
 	if isPtr {
 		return parameterValue, nil

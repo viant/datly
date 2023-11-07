@@ -103,13 +103,36 @@ func (p *Parameter) matchByKind(kind Kind, result *Parameters) {
 		for _, parameter := range p.Object {
 			if parameter.In.Kind == kind {
 				*result = append(*result, parameter)
+				continue
+			}
+			switch parameter.In.Kind {
+			case KindRepeated:
+				if values := Parameters(parameter.Repeated).FilterByKind(kind); len(values) > 0 {
+					*result = append(*result, values...)
+				}
+			case KindObject:
+				if values := Parameters(parameter.Object).FilterByKind(kind); len(values) > 0 {
+					*result = append(*result, values...)
+				}
 			}
 		}
 	case KindRepeated:
 		for _, parameter := range p.Repeated {
 			if parameter.In.Kind == kind {
 				*result = append(*result, parameter)
+				continue
 			}
+			switch parameter.In.Kind {
+			case KindRepeated:
+				if values := Parameters(parameter.Repeated).FilterByKind(kind); len(values) > 0 {
+					*result = append(*result, values...)
+				}
+			case KindObject:
+				if values := Parameters(parameter.Object).FilterByKind(kind); len(values) > 0 {
+					*result = append(*result, values...)
+				}
+			}
+
 		}
 	}
 }

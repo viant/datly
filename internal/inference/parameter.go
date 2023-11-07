@@ -155,6 +155,17 @@ func (p *Parameter) IndexVariable() string {
 	return p.Name + "By" + p.PathParam.IndexField.Name
 }
 
+func (p *Parameter) SyncObject() {
+	parameter := &p.Parameter
+	if len(parameter.Object) > 0 && len(p.Object) == 0 {
+		for i, anObject := range parameter.Object {
+			iRepeated := &Parameter{Parameter: *anObject}
+			p.Object = append(p.Object, iRepeated)
+			parameter.Object[i] = &iRepeated.Parameter
+		}
+	}
+}
+
 // TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
 func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*Parameter, error) {
 	SQL := extractSQL(field)

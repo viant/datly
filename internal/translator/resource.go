@@ -141,21 +141,8 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.Typ
 	return nil
 }
 
-func (r *Resource) AddParameterType(param *state.Parameter) {
-
-	typeName := reflect.StructTag(param.Tag).Get(xreflect.TagTypeName)
-	if param.Schema.IsNamed() {
-		return
-	}
-	if rType := param.Schema.Type(); rType != nil && types.EnsureStruct(rType) != nil {
-		setter.SetStringIfEmpty(&typeName, param.Schema.TypeName())
-		setter.SetStringIfEmpty(&typeName, state.SanitizeTypeName(param.Name))
-		param.Schema.Name = typeName
-		pkg := r.rule.Package()
-		aType := xreflect.NewType(typeName, xreflect.WithReflectType(rType), xreflect.WithPackage(pkg))
-		r.AppendTypeDefinition(&view.TypeDefinition{Name: typeName, DataType: aType.Body(), Package: pkg})
-	}
-
+func (r *Resource) addParameterType(param *state.Parameter) {
+	r.addParameterSchemaType(param)
 	if param.Output != nil && param.Output.Schema != nil {
 		rType := param.Output.Schema.Type()
 		if types.EnsureStruct(rType) == nil {
@@ -169,6 +156,23 @@ func (r *Resource) AddParameterType(param *state.Parameter) {
 		aType := xreflect.NewType(typeName, xreflect.WithReflectType(rType), xreflect.WithPackage(pkg))
 		r.AppendTypeDefinition(&view.TypeDefinition{Name: typeName, DataType: aType.Body(), Package: pkg})
 	}
+}
+
+func (r *Resource) addParameterSchemaType(param *state.Parameter) {
+	typeName := reflect.StructTag(param.Tag).Get(xreflect.TagTypeName)
+	if param.Schema.IsNamed() {
+		return
+	}
+	if rType := param.Schema.Type(); rType != nil && types.EnsureStruct(rType) != nil {
+		setter.SetStringIfEmpty(&param.Schema.Package, r.rule.Package())
+		setter.SetStringIfEmpty(&typeName, state.SanitizeTypeName(param.Schema.Name))
+		setter.SetStringIfEmpty(&typeName, state.SanitizeTypeName(param.Name))
+		param.Schema.Name = typeName
+
+		aType := xreflect.NewType(typeName, xreflect.WithReflectType(rType), xreflect.WithPackage(param.Schema.Package))
+		r.AppendTypeDefinition(&view.TypeDefinition{Name: typeName, DataType: aType.Body(), Package: param.Schema.Package})
+	}
+
 }
 
 func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
@@ -506,37 +510,100 @@ func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, er
 			return err
 		}
 		iParameter := &inference.Parameter{Parameter: *parameter}
-		switch parameter.In.Kind {
-		case state.KindRepeated:
-			with := parameter.With
-			if with == "" {
-				return fmt.Errorf("with was empty, auxiliary type name is required for %v ypes ", parameter.In.Kind)
-			}
-			wType, err := loadType(with)
-			if err != nil {
-				return fmt.Errorf("failed to load parameter auxiliary type: %s, %w", with, err)
-			}
-			auxiliaryState := inference.State{}
-			if err = r.extractState(loadType, wType, &auxiliaryState); err != nil {
-				return fmt.Errorf("failed to extract parameters from auxiliary type: %s, %w", with, err)
-			}
-			for _, item := range auxiliaryState {
-				parameter.Repeated = append(parameter.Repeated, &item.Parameter)
-				iParameter.Repeated = append(iParameter.Repeated, item)
-			}
+		parameter = &iParameter.Parameter
+		if err = r.updateComposites(loadType, iParameter); err != nil {
+			return err
 		}
 
-		for i, anObject := range parameter.Object {
-			iRepeated := &inference.Parameter{Parameter: *anObject}
-			iParameter.Object = append(iParameter.Object, iRepeated)
-			parameter.Object[i] = &iRepeated.Parameter
-		}
 		iParameter.Explicit = true
 		dest.Append(iParameter)
 		if strings.Contains(iParameter.Scope, "async") {
 			r.AsyncState.Append(iParameter)
 		}
 	}
+	return nil
+}
+
+func (r *Resource) updateComposites(loadType func(typeName string) (reflect.Type, error), iParameter *inference.Parameter) (err error) {
+	if err = r.updatedRepeated(loadType, iParameter); err != nil {
+		return nil
+	}
+	if err = r.updatedObject(loadType, iParameter); err != nil {
+		return nil
+	}
+	for _, anObject := range iParameter.Object {
+		if err = r.updateComposites(loadType, anObject); err != nil {
+			return err
+		}
+	}
+	for _, anObject := range iParameter.Repeated {
+		if err = r.updateComposites(loadType, anObject); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (r *Resource) updatedRepeated(loadType func(typeName string) (reflect.Type, error), iParameter *inference.Parameter) error {
+	parameter := &iParameter.Parameter
+	if parameter.In.Kind != state.KindRepeated {
+		return nil
+	}
+	with := parameter.With
+	if with == "" {
+		return fmt.Errorf("with was empty, auxiliary type name is required for %v ypes ", parameter.In.Kind)
+	}
+	wType, err := loadType(with)
+	if err != nil {
+		return fmt.Errorf("failed to load parameter auxiliary type: %s, %w", with, err)
+	}
+	auxiliaryState := inference.State{}
+	if err = r.extractState(loadType, wType, &auxiliaryState); err != nil {
+		return fmt.Errorf("failed to extract parameters from auxiliary type: %s, %w", with, err)
+	}
+	for _, item := range auxiliaryState {
+		parameter.Repeated = append(parameter.Repeated, &item.Parameter)
+		iParameter.Repeated = append(iParameter.Repeated, item)
+		if parameter.In.Name != "" {
+			parameter.In.Name += ","
+		}
+		parameter.In.Name += item.Name
+	}
+	return nil
+}
+
+func (r *Resource) updatedObject(loadType func(typeName string) (reflect.Type, error), iParameter *inference.Parameter) error {
+
+	parameter := &iParameter.Parameter
+	if parameter.In.Kind != state.KindObject {
+		return nil
+	}
+
+	iParameter.SyncObject()
+
+	if len(iParameter.Object) > 0 {
+		return nil
+	}
+
+	schema := parameter.OutputSchema()
+	wType := schema.Type()
+	if wType == nil {
+		return fmt.Errorf("failed to get parameter auxiliary type: %s, %w", parameter.Name, schema.Name)
+	}
+	auxiliaryState := inference.State{}
+	if err := r.extractState(loadType, wType, &auxiliaryState); err != nil {
+		return fmt.Errorf("failed to extract parameters from auxiliary type: %s, %w", schema.Name, err)
+	}
+
+	for _, item := range auxiliaryState {
+		parameter.Object = append(parameter.Object, &item.Parameter)
+		iParameter.Object = append(iParameter.Object, item)
+		if parameter.In.Name != "" {
+			parameter.In.Name += ","
+		}
+		parameter.In.Name += item.Name
+	}
+
 	return nil
 }
 
