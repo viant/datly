@@ -2,7 +2,6 @@ package datly
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
@@ -106,12 +105,8 @@ func (s *Service) OperateInto(ctx context.Context, aComponent *repository.Compon
 	if err != nil {
 		return err
 	}
-	data, err := json.Marshal(response)
-	if err != nil {
-		return err
-	}
-	//TODO check if output and response assignable , use xunsafe
-	return json.Unmarshal(data, output)
+	copier := session.NewCopier(reflect.TypeOf(response), reflect.TypeOf(output))
+	return copier.Copy(response, output)
 }
 
 // Operate performs respective operation on supplied component
