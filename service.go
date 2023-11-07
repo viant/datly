@@ -131,7 +131,10 @@ func (s *Service) Operate(ctx context.Context, aComponent *repository.Component,
 }
 
 func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Component, request *http.Request, inputPtr interface{}) error {
-	aSession := s.NewComponentSession(aComponent, request)
+	aSession, err := s.NewComponentSession(aComponent, WithRequest(request))
+	if err != nil {
+		return err
+	}
 	inputValue := reflect.ValueOf(inputPtr)
 	inputType := inputValue.Type()
 	if inputValue.Type().Kind() != reflect.Ptr {
@@ -140,7 +143,7 @@ func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Comp
 	aStateType := structology.NewStateType(inputType.Elem())
 	aState := aStateType.NewState()
 	opts := aSession.ViewOptions(aComponent.View, session.WithReportNotAssignable(false))
-	err := aSession.SetState(ctx, aComponent.Input.Type.Parameters, aState, opts.Indirect(true))
+	err = aSession.SetState(ctx, aComponent.Input.Type.Parameters, aState, opts.Indirect(true))
 	if err != nil {
 		return err
 	}
