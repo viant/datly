@@ -69,13 +69,20 @@ func (s *Service) Operate(ctx context.Context, aComponent *repository.Component,
 
 func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Component, request *http.Request, inputPtr interface{}) error {
 	aSession := s.NewComponentSession(aComponent, request)
-	inputType := reflect.TypeOf(inputPtr)
-	if inputType.Kind() != reflect.Ptr {
-		return fmt.Errorf("expected input pointer, but had: %T", inputType)
+	inputValue := reflect.ValueOf(inputPtr)
+	inputType := inputValue.Type()
+	if inputValue.Type().Kind() != reflect.Ptr {
+		return fmt.Errorf("expected input pointer, but had: %T", inputPtr)
 	}
 	aStateType := structology.NewStateType(inputType.Elem())
-	aState := aStateType.WithValue(inputType)
-	return aSession.SetState(ctx, aComponent.Input.Type.Parameters, aState, aSession.Indirect(true))
+	aState := aStateType.NewState()
+	opts := aSession.ViewOptions(aComponent.View, session.WithReportNotAssignable(false))
+	err := aSession.SetState(ctx, aComponent.Input.Type.Parameters, aState, opts.Indirect(true))
+	if err != nil {
+		return err
+	}
+	inputValue.Elem().Set(reflect.ValueOf(aState.State()))
+	return nil
 }
 
 // Read reads data from a view

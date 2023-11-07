@@ -9,17 +9,24 @@ import (
 
 type (
 	Options struct {
-		state           *view.State
-		namespacedView  view.NamespacedView
-		kindLocator     *locator.KindLocator
-		namedParameters state.NamedParameters
-		locatorOptions  []locator.Option //resousrce, route level options
-		codecOptions    []codec.Option
-		indirectState   bool
+		state               *view.State
+		namespacedView      view.NamespacedView
+		kindLocator         *locator.KindLocator
+		namedParameters     state.NamedParameters
+		locatorOptions      []locator.Option //resousrce, route level options
+		codecOptions        []codec.Option
+		indirectState       bool
+		reportNotAssignable *bool
 	}
 	Option func(o *Options)
 )
 
+func (o *Options) shallReportNotAssignable() bool {
+	if o.reportNotAssignable == nil {
+		return true
+	}
+	return *o.reportNotAssignable
+}
 func (o *Options) Indirect(flag bool, options ...locator.Option) *Options {
 	ret := *o
 	ret.indirectState = flag
@@ -79,5 +86,11 @@ func WithLocatorOptions(options ...locator.Option) Option {
 func WithCodeOptions(options ...codec.Option) Option {
 	return func(s *Options) {
 		s.codecOptions = options
+	}
+}
+
+func WithReportNotAssignable(flag bool) Option {
+	return func(s *Options) {
+		s.reportNotAssignable = &flag
 	}
 }

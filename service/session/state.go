@@ -121,7 +121,7 @@ func (s *Session) viewLookupOptions(aView *view.View, parameters state.NamedPara
 	return result
 }
 
-func (s *Session) ViewOptions(aView *view.View) *Options {
+func (s *Session) ViewOptions(aView *view.View, opts ...Option) *Options {
 	selectors := s.state.Lookup(aView)
 	viewOptions := s.Options.Clone()
 	var parameters state.NamedParameters
@@ -139,7 +139,9 @@ func (s *Session) ViewOptions(aView *view.View) *Options {
 	viewOptions.AddCodec(codec.WithValueGetter(getter))
 	viewOptions.AddCodec(codec.WithValueLookup(getter.Value))
 	//TODO end
-
+	for _, opt := range opts {
+		opt(viewOptions)
+	}
 	return viewOptions
 }
 
@@ -283,7 +285,9 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	}
 
 	if parameter.Schema.IsStruct() && !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
-		fmt.Printf("parameter %v is not assignable from %s:%s\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
+		if s.shallReportNotAssignable() {
+			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
+		}
 		reflectValue := reflect.New(valueType)
 		valuePtr := reflectValue.Interface()
 		if data, err := json.Marshal(value); err == nil {
