@@ -2,7 +2,6 @@ package datly
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
@@ -36,17 +35,50 @@ type (
 		options    []repository.Option
 		signer     *signer.Service
 	}
+
+	sessionOptions struct {
+		request *http.Request
+		input   interface{}
+	}
+	SessionOption func(o *sessionOptions)
 )
 
-func (s *Service) NewComponentSession(aComponent *repository.Component, request *http.Request) *session.Session {
-	options := aComponent.LocatorOptions(request, aComponent.UnmarshalFunc(request))
-	return session.New(aComponent.View, session.WithLocatorOptions(options...))
+func newSessionOptions(opts []SessionOption) *sessionOptions {
+	sessionOpt := &sessionOptions{}
+	for _, opt := range opts {
+		opt(sessionOpt)
+	}
+	if sessionOpt.request == nil {
+		sessionOpt.request = &http.Request{Header: make(http.Header)}
+	}
+	return sessionOpt
+}
+func WithRequest(request *http.Request) SessionOption {
+	return func(o *sessionOptions) {
+		o.request = request
+	}
 }
 
-func (s *Service) NewComponentSessionWithState(ctx context.Context, aComponent *repository.Component, aState interface{}) (*session.Session, error) {
-	options := aComponent.LocatorOptions(&http.Request{Header: make(http.Header)}, json.Unmarshal)
+func WithInput(input interface{}) SessionOption {
+	return func(o *sessionOptions) {
+		o.input = input
+	}
+}
+
+func (s *Service) NewComponentSession(aComponent *repository.Component, opts ...SessionOption) (*session.Session, error) {
+	sessionOpt := newSessionOptions(opts)
+	options := aComponent.LocatorOptions(sessionOpt.request, aComponent.UnmarshalFunc(sessionOpt.request))
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...))
-	rType := reflect.TypeOf(aState)
+	if input := sessionOpt.input; input != nil {
+		if err := s.populateSession(aComponent, input, aSession); err != nil {
+			return nil, err
+		}
+	}
+	return aSession, nil
+}
+
+func (s *Service) populateSession(aComponent *repository.Component, input interface{}, aSession *session.Session) error {
+	rType := reflect.TypeOf(input)
 	sType := structology.NewStateType(rType, structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
 		stateTag, _ := tags.ParseStateTags(tag, nil)
 		if stateTag == nil || stateTag.Parameter == nil || stateTag.Parameter.Name == "" {
@@ -55,10 +87,10 @@ func (s *Service) NewComponentSessionWithState(ctx context.Context, aComponent *
 		return []string{stateTag.Parameter.Name}
 	}))
 
-	input := sType.WithValue(aState)
-	ptr := xunsafe.AsPointer(aState)
+	inputState := sType.WithValue(input)
+	ptr := xunsafe.AsPointer(input)
 	for _, parameter := range aComponent.Input.Type.Parameters {
-		selector, _ := input.Selector(parameter.Name)
+		selector, _ := inputState.Selector(parameter.Name)
 		if selector == nil {
 			continue
 		}
@@ -68,7 +100,7 @@ func (s *Service) NewComponentSessionWithState(ctx context.Context, aComponent *
 		value := selector.Value(ptr)
 		aSession.SetValue(parameter, value)
 	}
-	return aSession, nil
+	return nil
 }
 
 // HandlerSession returns handler session
