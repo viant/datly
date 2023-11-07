@@ -70,7 +70,7 @@ func (s *Session) ResetViewState(ctx context.Context, aView *view.View) error {
 func (s *Session) setViewState(ctx context.Context, aView *view.View) (err error) {
 	opts := s.ViewOptions(aView)
 	if aView.Mode == view.ModeQuery {
-		ns := s.viewNaespace(aView)
+		ns := s.viewNamespace(aView)
 		if err = s.setQuerySelector(ctx, ns, opts); err != nil {
 			return err
 		}
@@ -81,7 +81,7 @@ func (s *Session) setViewState(ctx context.Context, aView *view.View) (err error
 	}
 
 	if aView.Mode == view.ModeQuery {
-		ns := s.viewNaespace(aView)
+		ns := s.viewNamespace(aView)
 		if err = s.setQuerySettings(ctx, ns, opts); err != nil {
 			return err
 		}
@@ -89,7 +89,7 @@ func (s *Session) setViewState(ctx context.Context, aView *view.View) (err error
 	return err
 }
 
-func (s *Session) viewNaespace(aView *view.View) *view.NamespaceView {
+func (s *Session) viewNamespace(aView *view.View) *view.NamespaceView {
 	ns := s.namespacedView.ByName(aView.Name)
 	if ns == nil {
 		ns = &view.NamespaceView{View: aView, Path: "", Namespaces: []string{aView.Selector.Namespace}}
@@ -197,7 +197,6 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 		}
 		return nil
 	}
-
 	parameterSelector := parameter.Selector()
 	if options.indirectState || parameterSelector == nil { //p
 		parameterSelector, err = aState.Selector(parameter.Name)
@@ -205,7 +204,7 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 			return err
 		}
 	}
-	if value, err = s.ensureValidValue(value, parameter, parameterSelector); err != nil {
+	if value, err = s.ensureValidValue(value, parameter, parameterSelector, options); err != nil {
 		return err
 	}
 	err = parameterSelector.SetValue(aState.Pointer(), value)
@@ -242,7 +241,10 @@ func (s *Session) canRead(ctx context.Context, parameter *state.Parameter) (bool
 	return shallPopulate, err
 }
 
-func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter, selector *structology.Selector) (interface{}, error) {
+func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter, selector *structology.Selector, options *Options) (interface{}, error) {
+	if options == nil {
+		options = &s.Options
+	}
 	valueType := reflect.TypeOf(value)
 	if valueType == nil {
 		fmt.Printf("value type was nil %s\n", parameter.Name)
@@ -285,7 +287,7 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	}
 
 	if parameter.Schema.IsStruct() && !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
-		if s.shallReportNotAssignable() {
+		if options.shallReportNotAssignable() {
 			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
 		}
 		reflectValue := reflect.New(valueType)
