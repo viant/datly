@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/viant/datly/internal/converter"
 	"github.com/viant/datly/utils/types"
-	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -125,14 +124,11 @@ func (e *Encoder) encodeSlice(ctx context.Context, raw interface{}, options code
 		if err != nil {
 			return nil, err
 		}
-
 		item := appender.Add()
 		if err = e.update(xunsafe.AsPointer(item), segments); err != nil {
 			return nil, err
 		}
 	}
-
-	toolbox.Dump(value)
 	return value, nil
 }
 

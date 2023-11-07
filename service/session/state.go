@@ -290,7 +290,8 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		if options.shallReportNotAssignable() {
 			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
 		}
-		reflectValue := reflect.New(valueType)
+
+		reflectValue := reflect.New(valueType) //TODO replace with fast xreflect copy
 		valuePtr := reflectValue.Interface()
 		if data, err := json.Marshal(value); err == nil {
 			if err = json.Unmarshal(data, valuePtr); err == nil {
