@@ -88,6 +88,7 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 	return nil
 }
 
+// OperateWith performs respective component operation with supplied input, it passes result into output
 func (s *Service) OperateWith(ctx context.Context, aComponent *repository.Component, input interface{}, output interface{}) error {
 	aSession := s.NewComponentSession(aComponent)
 	if err := aSession.LoadState(aComponent.Input.Type.Parameters, input); err != nil {
@@ -99,6 +100,7 @@ func (s *Service) OperateWith(ctx context.Context, aComponent *repository.Compon
 	return s.OperateInto(ctx, aComponent, aSession, output)
 }
 
+// OperateInto performs respective component operation, it passes result into output
 func (s *Service) OperateInto(ctx context.Context, aComponent *repository.Component, aSession *session.Session, output interface{}) error {
 	response, err := s.operator.Operate(ctx, aComponent, aSession)
 	if err != nil {
