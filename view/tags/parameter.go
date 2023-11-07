@@ -17,6 +17,7 @@ type Parameter struct {
 	Lazy     bool   `tag:"lazy,omitempty"`
 	DataType string `tag:"dataType,omitempty"` //parameter input type
 	With     string `tag:"with,omitempty"`     //optional auxiliary type name holding parameters
+	Required bool   `tag:"required,omitempty"`
 }
 
 func (t *Tag) updatedParameter(key string, value string) (err error) {
@@ -38,6 +39,8 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 		tag.Lazy = strings.TrimSpace(value) == "true" || value == ""
 	case "with":
 		tag.With = value
+	case "required":
+		tag.Required = true
 	default:
 		return fmt.Errorf("invalid paramerer tag key: '%s'", key)
 	}
@@ -55,6 +58,10 @@ func (p *Parameter) Tag() *tags.Tag {
 	appendNonEmpty(builder, "dataType", p.DataType)
 	if p.Lazy {
 		appendNonEmpty(builder, "lazy", "true")
+	}
+
+	if p.Required {
+		appendNonEmpty(builder, "required", "true")
 	}
 	return &tags.Tag{Name: ParameterTag, Values: tags.Values(builder.String())}
 }

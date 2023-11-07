@@ -197,7 +197,7 @@ func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, bat
 			return err
 		}
 
-		if batchData.Parent == batchData.ParentReadSize {
+		if batchData.Parent >= batchData.ParentReadSize {
 			break
 		}
 
