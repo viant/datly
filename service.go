@@ -15,8 +15,10 @@ import (
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
+	"github.com/viant/structology"
 	xhandler "github.com/viant/xdatly/handler"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -63,6 +65,17 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 // Operate performs respective operation on supplied component
 func (s *Service) Operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	return s.operator.Operate(ctx, aComponent, aSession)
+}
+
+func (s *Service) PrepareInput(ctx context.Context, aComponent *repository.Component, request *http.Request, inputPtr interface{}) error {
+	aSession := s.NewComponentSession(aComponent, request)
+	inputType := reflect.TypeOf(inputPtr)
+	if inputType.Kind() != reflect.Ptr {
+		return fmt.Errorf("expected input pointer, but had: %T", inputType)
+	}
+	aStateType := structology.NewStateType(inputType.Elem())
+	aState := aStateType.WithValue(inputType)
+	return aSession.SetState(ctx, aComponent.Input.Type.Parameters, aState, aSession.Indirect(true))
 }
 
 // Read reads data from a view
