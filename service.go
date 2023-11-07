@@ -108,6 +108,7 @@ func (s *Service) OperateInto(ctx context.Context, aComponent *repository.Compon
 	if err != nil {
 		return err
 	}
+	//TODO check if output and response assignable , use xunsafe
 	return json.Unmarshal(data, output)
 }
 
