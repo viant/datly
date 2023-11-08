@@ -178,10 +178,17 @@ func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 	return batchData
 }
 
+func nopCounterDone(end time.Time, values ...interface{}) int64 {
+	return 0
+}
+
 func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session) error {
 	execution := &TemplateExecution{}
 	start := Now()
-	onFinish := view.Counter.Begin(start)
+	onFinish := nopCounterDone
+	if !session.DryRun {
+		onFinish = view.Counter.Begin(start)
+	}
 	err := s.readObjectsWithMeta(ctx, session, batchData, view, collector, selector, execution)
 	s.afterRead(session, collector, &start, execution, err, onFinish)
 	return err
