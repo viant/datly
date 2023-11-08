@@ -191,6 +191,11 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*P
 	param.Lazy = pTag.Lazy
 	param.With = pTag.With
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
+	if pTag.Required {
+		value := pTag.Required
+		param.Required = &value
+	}
+
 	cardinality := state.One
 	if sliceExpr, ok := field.Type.(*ast.ArrayType); ok {
 		field.Type = sliceExpr.Elt
