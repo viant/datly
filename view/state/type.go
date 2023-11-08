@@ -161,7 +161,7 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 	result.When = pTag.When
 	result.Lazy = pTag.Lazy
 	result.With = pTag.With
-	required := field.Type.Kind() == reflect.Ptr
+	required := field.Type.Kind() == reflect.Ptr || pTag.Required
 	result.Required = &required
 
 	switch result.In.Kind {
