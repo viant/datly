@@ -106,7 +106,7 @@ func (s *Service) OperateInto(ctx context.Context, aComponent *repository.Compon
 		return err
 	}
 	copier := session.NewCopier(reflect.TypeOf(response), reflect.TypeOf(output))
-	return copier.Copy(response, output)
+	return copier.Copy(response, output, session.WithDebug())
 }
 
 // Operate performs respective operation on supplied component

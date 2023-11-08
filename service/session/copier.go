@@ -8,13 +8,32 @@ import (
 )
 
 // Copier copies data between struct
-type Copier struct {
-	dest *xunsafe.Struct
-	src  map[string]*xunsafe.Field
+type (
+	Copier struct {
+		dest *xunsafe.Struct
+		src  map[string]*xunsafe.Field
+	}
+
+	copierOptions struct {
+		debug bool
+	}
+
+	CopierOption func(o *copierOptions)
+)
+
+func WithDebug() CopierOption {
+	return func(o *copierOptions) {
+		o.debug = true
+	}
 }
 
 // Copy copes field with the same name (initial version)
-func (c *Copier) Copy(src interface{}, dest interface{}) error {
+func (c *Copier) Copy(src interface{}, dest interface{}, opts ...CopierOption) error {
+	options := &copierOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	srcPtr := xunsafe.AsPointer(src)
 	destPtr := xunsafe.AsPointer(dest)
 	for i := range c.dest.Fields {
@@ -24,7 +43,14 @@ func (c *Copier) Copy(src interface{}, dest interface{}) error {
 			continue
 		}
 		value := srcField.Value(srcPtr)
-		if srcField.Type.AssignableTo(destField.Type) || srcField.Type.ConvertibleTo(destField.Type) {
+		isCompatible := srcField.Type.AssignableTo(destField.Type) || srcField.Type.ConvertibleTo(destField.Type)
+		if options.debug && isCompatible {
+			if aStruct := types.EnsureStruct(srcField.Type); aStruct != nil && aStruct.Name() == "" {
+				isCompatible = false
+			}
+		}
+
+		if isCompatible {
 			destField.SetValue(destPtr, value)
 			continue
 		}

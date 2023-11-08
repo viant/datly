@@ -12,8 +12,7 @@ const ( //Components keys
 
 	//Status represents response status output key
 	Status = "status"
-
-	Error = "error"
+	Error  = "error"
 
 	StatusCode = "status.code"
 )
