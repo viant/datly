@@ -228,7 +228,9 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	if err = r.OutputState.AdjustOutput(); err != nil {
 		return err
 	}
-	r.AsyncState = r.Declarations.AsyncState
+	if len(r.Declarations.AsyncState) > 0 {
+		r.AsyncState = r.Declarations.AsyncState
+	}
 	r.Rule.Route.Transforms = r.Declarations.Transforms
 	if err := tparser.ExtractParameterHints(r.Declarations.SQL, &r.State); err != nil {
 		return err
