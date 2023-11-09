@@ -520,6 +520,9 @@ func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, er
 		if strings.Contains(iParameter.Scope, "async") {
 			r.AsyncState.Append(iParameter)
 		}
+		if iParameter.Scope == "async" {
+			r.AsyncState.Append(iParameter)
+		}
 	}
 	return nil
 }
