@@ -20,6 +20,12 @@ func TestTag_updateParameter(t *testing.T) {
 			tag:         `parameter:"p1,kind=query,in=qp1"`,
 			expect:      &Parameter{Name: "p1", Kind: "query", In: "qp1"},
 		},
+
+		{
+			description: "async Parameter",
+			tag:         `parameter:"p1,kind=query,in=qp1,scope=async"`,
+			expect:      &Parameter{Name: "p1", Kind: "query", In: "qp1", Scope: "async"},
+		},
 	}
 
 	for _, testCase := range testCases {

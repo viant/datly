@@ -14,7 +14,7 @@ type Parameter struct {
 	In       string `tag:"in,omitempty"`    //parameter location name
 	When     string `tag:"when,omitempty"`  //condition to evaluate
 	Scope    string `tag:"scope,omitempty"` //input/output/async
-	Lazy     bool   `tag:"lazy,omitempty"`
+	Lazy     string `tag:"lazy,omitempty"`
 	DataType string `tag:"dataType,omitempty"` //parameter input type
 	With     string `tag:"with,omitempty"`     //optional auxiliary type name holding parameters
 	Required bool   `tag:"required,omitempty"`
@@ -36,7 +36,7 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 	case "datatype":
 		tag.DataType = strings.TrimSpace(value)
 	case "lazy":
-		tag.Lazy = strings.TrimSpace(value) == "true" || value == ""
+		tag.Lazy = value
 	case "with":
 		tag.With = value
 	case "required":
@@ -56,9 +56,7 @@ func (p *Parameter) Tag() *tags.Tag {
 	appendNonEmpty(builder, "with", p.With)
 	appendNonEmpty(builder, "scope", p.Scope)
 	appendNonEmpty(builder, "dataType", p.DataType)
-	if p.Lazy {
-		appendNonEmpty(builder, "lazy", "true")
-	}
+	appendNonEmpty(builder, "lazy", p.Lazy)
 
 	if p.Required {
 		appendNonEmpty(builder, "required", "true")

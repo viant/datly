@@ -189,6 +189,7 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*P
 	}
 	param.When = pTag.When
 	param.Lazy = pTag.Lazy
+	param.Scope = pTag.Scope
 	param.With = pTag.With
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
 	if pTag.Required {

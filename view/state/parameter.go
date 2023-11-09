@@ -43,7 +43,7 @@ type (
 		DateFormat      string `json:",omitempty" yaml:"DateFormat"`
 		ErrorStatusCode int    `json:",omitempty" yaml:"ErrorStatusCode"`
 		Tag             string `json:",omitempty" yaml:"Tag"`
-		Lazy            bool   `json:",omitempty" yaml:"Lazy"`
+		Lazy            string `json:",omitempty" yaml:"Lazy"`
 		When            string `json:",omitempty" yaml:"When"`
 		With            string `json:",omitempty" yaml:"With"`
 		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
@@ -201,7 +201,7 @@ func (p *Parameter) inherit(param *Parameter) {
 	setter.SetStringIfEmpty(&p.Style, param.Style)
 	setter.SetStringIfEmpty(&p.Tag, param.Tag)
 	setter.SetStringIfEmpty(&p.When, param.When)
-	setter.SetBoolIfFalse(&p.Lazy, param.Lazy)
+	setter.SetStringIfEmpty(&p.Lazy, param.Lazy)
 	setter.SetStringIfEmpty(&p.With, param.With)
 	if p.In == nil {
 		p.In = param.In
