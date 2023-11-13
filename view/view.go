@@ -117,12 +117,6 @@ type (
 		Name string          `json:",omitempty"`
 		Args []*state.Schema `json:",omitempty"`
 	}
-
-	Async struct {
-		MarshalRelations bool   `json:",omitempty"`
-		Table            string `json:",omitempty"`
-		_initialized     bool
-	}
 )
 
 // ContextKey view context key

@@ -83,12 +83,13 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	if declaration.InOutput {
 		d.OutputState.Append(&declaration.Parameter)
 		return nil
+	} else {
+		name := declaration.Parameter.Name
+		if state.IsReservedAsyncState(name) {
+			d.AsyncState.Append(&declaration.Parameter)
+		}
 	}
-	if declaration.IsAsync {
-		declaration.Parameter.Scope = "async"
-		d.AsyncState.Append(&declaration.Parameter)
-		return nil
-	}
+
 	d.State.Append(&declaration.Parameter)
 	if authParameter := declaration.AuthParameter(); authParameter != nil {
 		if !d.State.Append(authParameter) {
@@ -98,6 +99,7 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	return nil
 }
 
+// IsStructQL returns true if struct QL
 func IsStructQL(SQL string) bool {
 	query, _ := sqlparser.ParseQuery(SQL)
 	if query == nil || query.From.X == nil {

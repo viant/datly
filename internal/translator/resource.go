@@ -519,7 +519,7 @@ func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, er
 
 		iParameter.Explicit = true
 		dest.Append(iParameter)
-		if iParameter.Scope == "async" {
+		if state.IsReservedAsyncState(iParameter.Name) {
 			r.AsyncState.Append(iParameter)
 		}
 	}
