@@ -48,10 +48,14 @@ func (e *Extension) Init() error {
 			return fmt.Errorf("invalid %v %w", pkgMod, err)
 		}
 		index := strings.LastIndex(goMod.Module.Mod.Path, "/")
-		gitRepository := goMod.Module.Mod.Path[:index]
-		name := goMod.Module.Mod.Path[index+1:]
+		name := goMod.Module.Mod.Path
+		gitRepository := ""
 		if e.GitRepository == nil {
 			e.GitRepository = &gitRepository
+		}
+		if index != -1 {
+			gitRepository = goMod.Module.Mod.Path[:index]
+			name = goMod.Module.Mod.Path[index+1:]
 		}
 		if e.Name == "" {
 			e.Name = name

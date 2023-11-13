@@ -139,6 +139,11 @@ var initContent string
 
 func (s *Service) updatePackage(ctx context.Context, pkgLocation string, init *options.Extension) (err error) {
 	replacer := init.Replacer(&init.Module)
+	err = s.ensureDependencies(ctx, pkgLocation, replacer)
+	if err != nil {
+		return err
+	}
+
 	if err = s.ensureChecksum(ctx, pkgLocation, replacer); err != nil {
 		return fmt.Errorf("failed to ensure checksum %s", err)
 	}
@@ -159,15 +164,6 @@ func (s *Service) generatePackage(ctx context.Context, pkgLocation string, init 
 	if err != nil {
 		return err
 	}
-	replacer := init.Replacer(&init.Module)
-	boostrapDest := url.Join(pkgLocation, "bootstrap/bootstrap.go")
-	if err := s.fs.Upload(ctx, boostrapDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(bootstrapContent))); err != nil {
-		return err
-	}
-	dependencyDest := url.Join(pkgLocation, "dependency/init.go")
-	if err := s.fs.Upload(ctx, dependencyDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(dependecnyContent))); err != nil {
-		return err
-	}
 	if err = s.updatePackage(ctx, pkgLocation, init); err != nil {
 		return err
 	}
@@ -176,6 +172,21 @@ func (s *Service) generatePackage(ctx context.Context, pkgLocation string, init 
 		return err
 	}
 	if err := s.syncSourceDependencies(ctx, pkgLocation); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) ensureDependencies(ctx context.Context, pkgLocation string, replacer rdata.Map) error {
+	dependencyDest := url.Join(pkgLocation, "dependency/init.go")
+	if ok, _ := s.fs.Exists(ctx, dependencyDest); ok {
+		return nil
+	}
+	boostrapDest := url.Join(pkgLocation, "bootstrap/bootstrap.go")
+	if err := s.fs.Upload(ctx, boostrapDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(bootstrapContent))); err != nil {
+		return err
+	}
+	if err := s.fs.Upload(ctx, dependencyDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(dependecnyContent))); err != nil {
 		return err
 	}
 	return nil

@@ -272,19 +272,19 @@ func (n *IndexGenerator) OnSliceItem(value *ast.Ident, set *ast.Ident) error {
 
 func (n *IndexGenerator) expandIndexByTemplate(param *inference.Parameter) (*IndexBy, string) {
 	pathParam := param.PathParam
-	result := strings.ReplaceAll(indexTemplate, "$ValueType", param.Schema.TypeName())
-	result = strings.ReplaceAll(result, "$KeyType", pathParam.IndexField.Schema.TypeName())
+	result := strings.ReplaceAll(indexTemplate, "$ValueType", param.Schema.SimpleTypeName())
+	result = strings.ReplaceAll(result, "$KeyType", pathParam.IndexField.Schema.SimpleTypeName())
 	result = strings.ReplaceAll(result, "$IndexName", pathParam.IndexField.Name)
 	return &IndexBy{
 		FnName:    "IndexBy" + pathParam.IndexField.Name,
-		SliceType: param.Schema.SimpleTypeName() + "NormalizeRepeated",
+		SliceType: param.Schema.SimpleTypeName() + "Slice",
 		IndexType: "Indexed" + param.Schema.SimpleTypeName(),
 	}, result
 }
 
 func (n *IndexGenerator) expandHasKeyTemplate(receiverType string, parameter *inference.Parameter) string {
 	result := strings.ReplaceAll(hasKeyTemplate, "$IndexType", receiverType)
-	result = strings.ReplaceAll(result, "$KeyType", parameter.PathParam.IndexField.Schema.TypeName())
+	result = strings.ReplaceAll(result, "$KeyType", parameter.PathParam.IndexField.Schema.SimpleTypeName())
 	return result
 }
 

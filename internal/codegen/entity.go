@@ -63,10 +63,10 @@ func (t *Template) generateRegisterType() string {
 		if !param.In.IsView() {
 			continue
 		}
-		registry.register(param.Schema.TypeName())
+		registry.register(param.Schema.SimpleTypeName())
 	}
 	for _, param := range t.State.FilterByKind(state.KindRequestBody) {
-		registry.register(param.Schema.TypeName())
+		registry.register(param.Schema.SimpleTypeName())
 	}
 	return registry.stringify()
 }
