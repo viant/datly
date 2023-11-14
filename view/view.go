@@ -1423,10 +1423,11 @@ func isInRange(aByte int32, lowerBound int32, upperBound int32) bool {
 }
 
 // WithSQL creates SQL FROM View option
-func WithSQL(SQL string) ViewOption {
+func WithSQL(SQL string, parameters ...*state.Parameter) ViewOption {
 	return func(v *View) {
 		v.EnsureTemplate()
 		v.Template.Source = SQL
+		v.Template.Parameters = parameters
 	}
 }
 
