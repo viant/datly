@@ -12,7 +12,8 @@ import (
 func MatchField(rType reflect.Type, name string, sourceCase text.CaseFormat) *xunsafe.Field {
 	rType = Elem(rType)
 
-	field := xunsafe.FieldByName(rType, sourceCase.Format(name, text.CaseFormatUpperCamel))
+	upperCamelName := sourceCase.Format(name, text.CaseFormatUpperCamel)
+	field := xunsafe.FieldByName(rType, upperCamelName)
 	if field != nil {
 		return field
 	}
@@ -25,6 +26,9 @@ func MatchField(rType reflect.Type, name string, sourceCase text.CaseFormat) *xu
 				return xunsafe.NewField(sField)
 			}
 		}
+		if strings.ToLower(sField.Name) == name {
+			return xunsafe.NewField(sField)
+		}
 		if tag.Transient {
 			continue
 		}
@@ -33,6 +37,7 @@ func MatchField(rType reflect.Type, name string, sourceCase text.CaseFormat) *xu
 			return xunsafe.NewField(sField)
 		}
 	}
+	//TODO are these needed?
 	for i := 0; i < rType.NumField(); i++ {
 		sField := rType.Field(i)
 		tag := io.ParseTag(sField.Tag.Get(option.TagSqlx))
