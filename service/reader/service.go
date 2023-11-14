@@ -448,7 +448,7 @@ func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, 
 
 	aView.Logger.LogDatabaseErr(matcher.SQL, err, matcher.Args...)
 	stats.Error = err.Error()
-	return nil, fmt.Errorf("database error occured while fetching Data for view %v", aView.Name)
+	return nil, fmt.Errorf("database error occured while fetching Data for view %v %w", aView.Name, err)
 }
 
 func (s *Service) NewExecutionInfo(session *Session, index *cache.ParmetrizedQuery, cacheStats *cache.Stats, cacheError error) *SQLExecution {

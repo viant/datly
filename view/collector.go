@@ -247,6 +247,9 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 
 	return func(owner interface{}) error {
 		for _, link := range links {
+			if link.xField == nil {
+				return fmt.Errorf("link %v field %v is not found", relation.Name, link.Column)
+			}
 			aKey = link.xField.Interface(xunsafe.AsPointer(owner))
 			aKey = io.NormalizeKey(aKey)
 			valuePosition := r.parentValuesPositions(link.Column)
