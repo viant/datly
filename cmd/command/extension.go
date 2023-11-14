@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/cmd/options"
 	rdata "github.com/viant/toolbox/data"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 )
@@ -96,10 +97,10 @@ func (s *Service) ensureDatly(ctx context.Context, init *options.Extension) erro
 	if err := s.fs.Copy(ctx, sourceURL, init.Datly.Location); err != nil {
 		return err
 	}
-	if err := s.fs.Move(ctx, moveSource, moveDest); err != nil {
+	cmd := exec.Command("mv", moveSource, moveDest)
+	if _, err := cmd.Output(); err != nil {
 		return err
 	}
-	//s.fs.Delete(ctx)
 	return nil
 }
 
