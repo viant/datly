@@ -5,7 +5,7 @@ import "github.com/viant/datly/shared"
 // Names represents columns names slice.
 type Names []string
 
-// Views creates presence map.
+// Indexm creates column map.
 func (c Names) Index() map[string]bool {
 	result := make(map[string]bool)
 	for _, column := range c {

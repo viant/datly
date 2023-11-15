@@ -145,7 +145,7 @@ func (v Views) Index() NamedViews {
 // Init initializes views.
 func (v Views) Init(ctx context.Context, resource *Resource, transforms marshal.TransformIndex) error {
 	for i := range v {
-		var options []ViewOption
+		var options []Option
 		transform, ok := transforms[v[i].Name]
 		if ok {
 			options = append(options, WithTransforms(transform))

@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"fmt"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/setter"
@@ -84,6 +85,7 @@ type (
 		TableBatches     map[string]bool `json:",omitempty"`
 		_transforms      marshal.Transforms
 		_resource        *Resource
+		_fs              *embed.FS
 		_initialized     bool
 		_newCollector    newCollectorFn
 		_codec           *columnsCodec
@@ -95,10 +97,6 @@ type (
 
 	//contextKey context key
 	contextKey string
-
-	ViewOption func(v *View)
-
-	ViewOptions []ViewOption
 
 	SelfReference struct {
 		Holder string
@@ -270,18 +268,20 @@ func (v *View) setResource(resource *Resource) {
 // Init initializes View using View provided in Resource.
 // i.e. If View, Connector etc. should inherit from others - it has te bo included in Resource.
 // It is important to call Init for every View because it also initializes due to the optimization reasons.
-func (v *View) Init(ctx context.Context, resource *Resource, opts ...ViewOption) error {
+func (v *View) Init(ctx context.Context, resource *Resource, opts ...Option) error {
 	if v._initialized {
 		return nil
 	}
-	ViewOptions(opts).Apply(v)
+	if err := Options(opts).Apply(v); err != nil {
+		return err
+	}
 	v._initialized = true
 	v.setResource(resource)
 	return v.init(ctx)
 }
 
 func (v *View) init(ctx context.Context) error {
-	nameTaken := map[string]bool{
+	takeNames := map[string]bool{
 		v.Name: true,
 	}
 	lookupType := v._resource.LookupType()
@@ -291,16 +291,12 @@ func (v *View) init(ctx context.Context) error {
 	if v.Description == "" {
 		v.Description = v.Name
 	}
-	if schema := v.Schema; schema != nil && len(v.With) == 0 {
-		if err := v.inheritRelationsFromTag(schema); err != nil {
-			return err
-		}
-	}
+
 	if err := v.ensureConnector(ctx); err != nil {
 		return err
 	}
 
-	if err := v.initViewRelations(ctx, v.With, nameTaken); err != nil {
+	if err := v.initViewRelations(ctx, takeNames); err != nil {
 		return err
 	}
 	if err := v.initView(ctx); err != nil {
@@ -325,20 +321,25 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 	if recType == nil {
 		return nil
 	}
-	var viewOptions []ViewOption
+	var viewOptions []Option
 	for i := 0; i < recType.NumField(); i++ {
 		field := recType.Field(i)
-		aTag, err := tags.ParseViewTags(field.Tag, nil)
+		aTag, err := tags.ParseViewTags(field.Tag, v._fs)
 		if err != nil {
 			return err
 		}
-		viewTag := aTag.View
-		if viewTag == nil || len(aTag.LinkOn) == 0 {
+		if len(aTag.LinkOn) == 0 {
 			continue
+		}
+
+		viewTag := aTag.View
+		if viewTag == nil {
+			aTag.View = &tags.View{}
+			viewTag = aTag.View
 		}
 		setter.SetStringIfEmpty(&aTag.View.Name, aTag.TypeName)
 		setter.SetStringIfEmpty(&aTag.View.Name, field.Name)
-		refViewOptions, err := v.buildViewOptions(aTag)
+		refViewOptions, err := v.buildViewOptions(field.Type, aTag)
 		if err != nil {
 			return err
 		}
@@ -355,16 +356,23 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 		}
 	}
 	if len(viewOptions) > 0 {
-		ViewOptions(viewOptions).Apply(v)
+		return Options(viewOptions).Apply(v)
 	}
+
 	return nil
 }
 
-func (v *View) buildViewOptions(tag *tags.Tag) ([]ViewOption, error) {
-	var options []ViewOption
+func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option, error) {
+	var options []Option
 	var err error
 	var connector *Connector
 	var parameters []*state.Parameter
+	if v._fs != nil {
+		options = append(options, WithFS(v._fs))
+	}
+	if aViewType != nil {
+		options = append(options, WithViewType(aViewType))
+	}
 	if vTag := tag.View; vTag != nil {
 		if vTag.Connector != "" {
 			if connector, err = v._resource.Connector(vTag.Connector); err != nil {
@@ -376,6 +384,7 @@ func (v *View) buildViewOptions(tag *tags.Tag) ([]ViewOption, error) {
 			parameters = append(parameters, state.NewRefParameter(name))
 		}
 	}
+
 	if SQL := tag.SQL; SQL != "" {
 		tmpl := NewTemplate(string(SQL), WithTemplateParameters(parameters...))
 		options = append(options, WithTemplate(tmpl))
@@ -390,8 +399,12 @@ func (v *View) buildLinks(aTag *tags.Tag) (Links, Links, error) {
 	}
 	var rel, ref Links
 	err := aTag.LinkOn.ForEach(func(relField, relColumn, refField, refColumn string, includeColumn *bool) error {
-		rel = append(rel, &Link{Field: relField, Column: relColumn, IncludeColumn: includeColumn})
-		ref = append(ref, &Link{Field: refField, Column: refColumn})
+		relLink := &Link{Field: relField, Column: relColumn, IncludeColumn: includeColumn}
+		relLink.ensureNamespace()
+		rel = append(rel, relLink)
+		refLink := &Link{Field: refField, Column: refColumn}
+		refLink.ensureNamespace()
+		ref = append(ref, refLink)
 		return nil
 	})
 	return rel, ref, err
@@ -418,21 +431,29 @@ func (v *View) loadFromWithURL(ctx context.Context) error {
 	return err
 }
 
-func (v *View) initViewRelations(ctx context.Context, relations []*Relation, notUnique map[string]bool) (err error) {
+func (v *View) initViewRelations(ctx context.Context, takenNames map[string]bool) (err error) {
+	if schema := v.Schema; schema != nil && len(v.With) == 0 {
+		if err = v.inheritRelationsFromTag(schema); err != nil {
+			return err
+		}
+	}
+
 	compType := v.ComponentType()
+	relations := v.With
 	for _, rel := range relations {
 		refView := &rel.Of.View
 		refView._parent = v
+		refView._resource = v._resource
 		v.generateNameIfNeeded(refView, rel)
 		if err = v.updateRelationSchemaIfDefined(compType, rel); err != nil {
 			return err
 		}
 
-		isNotUnique := notUnique[rel.Of.View.Name]
+		isNotUnique := takenNames[rel.Of.View.Name]
 		if isNotUnique {
 			return fmt.Errorf("not unique View name: %v", rel.Of.View.Name)
 		}
-		notUnique[rel.Of.View.Name] = true
+		takenNames[rel.Of.View.Name] = true
 		for _, transform := range v._transforms {
 			pathPrefix := rel.Holder + "."
 			if strings.HasPrefix(transform.Path, pathPrefix) {
@@ -448,10 +469,9 @@ func (v *View) initViewRelations(ctx context.Context, relations []*Relation, not
 		if refView.Connector == nil {
 			refView.Connector = v.Connector
 		}
-		if err := refView.initViewRelations(ctx, refView.With, notUnique); err != nil {
+		if err := refView.initViewRelations(ctx, takenNames); err != nil {
 			return err
 		}
-
 		if err := refView.initView(ctx); err != nil {
 			return err
 		}
@@ -520,10 +540,12 @@ func (v *View) initView(ctx context.Context) error {
 	}
 	v.ensureIndexExcluded()
 	v.ensureBatch()
+	v.ensureSelector()
 	if err = v.ensureLogger(); err != nil {
 		return err
 	}
 	v.ensureCounter()
+
 	setter.SetStringIfEmpty(&v.Alias, "t")
 	if v.From == "" {
 		setter.SetStringIfEmpty(&v.Table, v.Name)
@@ -538,9 +560,6 @@ func (v *View) initView(ctx context.Context) error {
 	}
 	if err = v.MatchStrategy.Validate(); err != nil {
 		return err
-	}
-	if v.Selector == nil {
-		v.Selector = &Config{}
 	}
 	if v.Name == v.Ref && !v.Standalone {
 		return fmt.Errorf("view name and ref cannot be the same")
@@ -557,7 +576,7 @@ func (v *View) initView(ctx context.Context) error {
 		if err = v.ensureColumns(ctx, v._resource); err != nil {
 			return err
 		}
-		v.reconsileColumnTypes()
+		v.reconcileColumnTypes()
 	}
 
 	if err = v.ensureCaseFormat(); err != nil {
@@ -612,7 +631,13 @@ func (v *View) initView(ctx context.Context) error {
 	return nil
 }
 
-func (v *View) reconsileColumnTypes() {
+func (v *View) ensureSelector() {
+	if v.Selector == nil {
+		v.Selector = &Config{}
+	}
+}
+
+func (v *View) reconcileColumnTypes() {
 	if rType := v.Schema.Type(); rType != nil {
 		aStruct := types.EnsureStruct(rType)
 		index := map[string]*reflect.StructField{}
@@ -1407,115 +1432,21 @@ func (v *View) BuildParametrizedSQL(aState state.Parameters, types *xreflect.Typ
 	return &sqlx.SQL{Query: result.Expanded, Args: bindingArgs}, nil
 }
 
-func removeNonAlphaNumeric(name string) string {
-	result := &strings.Builder{}
-	for _, aByte := range name {
-		if isInRange(aByte, 'A', 'Z') || isInRange(aByte, 'a', 'z') || isInRange(aByte, '0', '9') {
-			result.WriteByte(byte(aByte))
-		}
-	}
-
-	return result.String()
-}
-
-func isInRange(aByte int32, lowerBound int32, upperBound int32) bool {
-	return aByte >= lowerBound && aByte <= upperBound
-}
-
-// WithSQL creates SQL FROM View option
-func WithSQL(SQL string, parameters ...*state.Parameter) ViewOption {
-	return func(v *View) {
-		v.EnsureTemplate()
-		v.Template.Source = SQL
-		v.Template.Parameters = parameters
-	}
-}
-
-// WithConnector creates connector View option
-func WithConnector(connector *Connector) ViewOption {
-	return func(v *View) {
-		v.Connector = connector
-	}
-}
-
-// WithTemplate creates connector View option
-func WithTemplate(template *Template) ViewOption {
-	return func(v *View) {
-		v.Template = template
-	}
-}
-
-// WithOneToMany creates to many relation View option
-func WithOneToMany(holder string, on Links, ref *ReferenceView, opts ...RelationOption) ViewOption {
-	return func(v *View) {
-		relation := &Relation{Cardinality: state.Many, On: on, Holder: holder, Of: ref}
-		for _, opt := range opts {
-			opt(relation)
-		}
-		v.With = append(v.With, relation)
-	}
-}
-
-// WithOneToOne creates to one relation View option
-func WithOneToOne(holder string, on Links, ref *ReferenceView, opts ...RelationOption) ViewOption {
-	return func(v *View) {
-		relation := &Relation{Cardinality: state.One, On: on, Holder: holder, Of: ref}
-		for _, opt := range opts {
-			opt(relation)
-		}
-		v.With = append(v.With, relation)
-	}
-}
-
-// WithCriteria creates criteria constraints View option
-func WithCriteria(columns ...string) ViewOption {
-	return func(v *View) {
-		if v.Selector == nil {
-			v.Selector = &Config{}
-		}
-		if v.Selector.Constraints == nil {
-			v.Selector.Constraints = &Constraints{}
-		}
-		v.Selector.Constraints.Criteria = true
-		v.Selector.Constraints.Filterable = columns
-	}
-}
-
-// WithViewType creates schema type View option
-func WithViewType(t reflect.Type) ViewOption {
-	return func(v *View) {
-		v.Schema = state.NewSchema(t)
-	}
-}
-
-func WithViewKind(mode Mode) ViewOption {
-	return func(aView *View) {
-		aView.Mode = mode
-	}
-}
-
-func (o ViewOptions) Apply(view *View) {
-	if len(o) == 0 {
-		return
-	}
-	for _, opt := range o {
-		opt(view)
-	}
-}
-
 func NewRefView(ref string) *View {
 	return &View{Reference: shared.Reference{Ref: ref}}
 }
 
 // NewView creates a View
-func NewView(name, table string, opts ...ViewOption) *View {
+func NewView(name, table string, opts ...Option) *View {
 	ret := &View{Name: name, Table: table}
-	ViewOptions(opts).Apply(ret)
+	if err := Options(opts).Apply(ret); err != nil {
+		panic(fmt.Errorf("failed to create view %s,  %v", ret.Name, err))
+	}
 	return ret
 }
 
 // NewExecView creates an execution View
-func NewExecView(name, table string, template string, parameters []*state.Parameter, opts ...ViewOption) *View {
+func NewExecView(name, table string, template string, parameters []*state.Parameter, opts ...Option) *View {
 	var templateParameters []TemplateOption
 	for i := range parameters {
 		templateOption := WithTemplateParameters(parameters[i])
@@ -1524,18 +1455,4 @@ func NewExecView(name, table string, template string, parameters []*state.Parame
 	opts = append(opts, WithViewKind(ModeExec),
 		WithTemplate(NewTemplate(template, templateParameters...)))
 	return NewView(name, table, opts...)
-}
-
-type RelationOption func(r *Relation)
-
-func WithTransforms(transforms marshal.Transforms) ViewOption {
-	return func(v *View) {
-		v._transforms = transforms
-	}
-}
-
-func WithColumns(columns Columns) ViewOption {
-	return func(v *View) {
-		v.Columns = columns
-	}
 }

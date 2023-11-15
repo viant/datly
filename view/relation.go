@@ -3,7 +3,6 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
@@ -58,11 +57,7 @@ func JoinOn(links ...*Link) Links {
 // WithLink returns a link
 func WithLink(field, column string) *Link {
 	l := &Link{Field: field, Column: column}
-	col := strings.Split(column, ".")
-	if len(col) > 1 {
-		l.Namespace = col[0]
-		l.Column = col[1]
-	}
+	l.ensureNamespace()
 	return l
 }
 
@@ -131,10 +126,16 @@ func (l *Link) ensureNamespace() {
 	if l.Namespace != "" {
 		return
 	}
-	if index := strings.Index(l.Column, "."); index != -1 {
-		l.Namespace = l.Column[:index]
-		l.Column = l.Column[index+1:]
+	l.Column, l.Namespace = extractNamesapce(l.Column)
+}
+
+func extractNamesapce(column string) (string, string) {
+	ns := ""
+	if index := strings.Index(column, "."); index != -1 {
+		ns = column[:index]
+		column = column[index+1:]
 	}
+	return column, ns
 }
 
 // Init initializes ReferenceView
@@ -254,29 +255,6 @@ func (r *Relation) adjustLinkColumn() error {
 
 	}
 	return nil
-}
-
-// ViewReference creates a View reference
-func ViewReference(name, ref string, options ...Option) *View {
-	viewRef := &View{
-		Name:      name,
-		Reference: shared.Reference{Ref: ref},
-	}
-
-	viewRef.applyOptions(options)
-
-	return viewRef
-}
-
-func (v *View) applyOptions(options []Option) {
-	for _, option := range options {
-		switch actual := option.(type) {
-		case logger.Logger:
-			v.Logger = logger.NewLogger("", actual)
-		case logger.Counter:
-			v.Counter = actual
-		}
-	}
 }
 
 // RelationsSlice represents slice of Relation

@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -26,8 +27,6 @@ import (
 const (
 	//ResourceConnectors default connector resource name
 	ResourceConnectors = "connectors"
-	//ResourceConstants default constants resource name
-	ResourceConstants = "constants"
 )
 
 // Resource represents grouped View needed to build the View
@@ -69,9 +68,10 @@ type (
 		Substitutes Substitutes
 		Docs        *Docs
 
-		_doc  docs.Service
-		fs    afs.Service
-		_docs *docs.Registry
+		_doc     docs.Service
+		fs       afs.Service
+		_embedFs embed.FS
+		_docs    *docs.Registry
 	}
 
 	NamedResources map[string]*Resource
