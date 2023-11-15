@@ -39,6 +39,7 @@ func (s *Service) Operate(ctx context.Context, aComponent *repository.Component,
 // HandleError processes output with error
 func (s *Service) HandleError(ctx context.Context, err error, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	ctx = context.WithValue(ctx, exec.ErrorKey, err)
+	ctx = context.WithValue(ctx, view.ContextKey, aComponent.View)
 	output := aComponent.Output.Type.Type().NewState()
 
 	var locatorOptions []locator.Option
