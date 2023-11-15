@@ -30,6 +30,10 @@ func (e *UriChecksumFactory) New(codecConfig *codec.Config, options ...codec.Opt
 	if len(codecConfig.Args) > 0 {
 		exclusion = strings.Split(codecConfig.Args[0], ",")
 	}
+	for i, _ := range exclusion {
+		exclusion[i] = strings.Trim(exclusion[i], "'")
+	}
+
 	if len(codecConfig.Args) > 1 {
 		checksum = codecConfig.Args[1]
 	}
