@@ -237,6 +237,10 @@ func (r *Relation) adjustLinkColumn() error {
 			continue
 		}
 
+		if i >= len(r.On) {
+			return fmt.Errorf("invalid on link %s", r.Name)
+		}
+
 		parentLink := r.On[i]
 		columnType := xreflect.InterfaceType
 		if parentLink.xField != nil {

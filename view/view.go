@@ -469,6 +469,9 @@ func (v *View) initViewRelations(ctx context.Context, takenNames map[string]bool
 		if refView.Connector == nil {
 			refView.Connector = v.Connector
 		}
+		if err := rel.Init(ctx, v); err != nil {
+			return err
+		}
 		if err := refView.initViewRelations(ctx, takenNames); err != nil {
 			return err
 		}
