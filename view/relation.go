@@ -253,26 +253,26 @@ func (r *Relation) TagLink() tags.LinkOn {
 	var links []string
 	for i, parent := range r.On {
 		child := r.Of.On[i]
-
-		parentLink := ""
-		childLink := ""
-		if parent.Namespace != "" {
-			parentLink += parent.Namespace + "." + parent.Field
-		}
-		if child.Namespace != "" {
-			childLink += child.Namespace + "." + child.Field
-		}
-		if parentLink != "" {
-			parentLink += ":"
-		}
-		if childLink != "" {
-			childLink += ":"
-		}
-		parentLink += parent.Column
-		childLink += child.Column
-		links = append(links, parentLink+"="+childLink)
+		links = append(links, parent.EncodeLinkTag()+"="+child.EncodeLinkTag())
 	}
-	return tags.LinkOn(links)
+	return links
+}
+
+func (l *Link) EncodeLinkTag() string {
+	result := ""
+	if l.Field != "" {
+		result += l.Field
+	}
+	if result != "" {
+		result += ":"
+	}
+	if l.Namespace != "" && l.Column != "" {
+		result += l.Namespace + "."
+	}
+	if l.Column != "" {
+		result += l.Column
+	}
+	return result
 }
 
 // RelationsSlice represents slice of Relation

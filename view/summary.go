@@ -206,7 +206,7 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 		aTag.TypeName = rel.Of.Schema.Name
 		aTag.LinkOn = rel.TagLink()
 		aTag.SQL = tags.ViewSQL(rel.Of.View.Template.Source)
-		fieldTag := aTag.UpdateTag("")
+		fieldTag := aTag.UpdateTag(`sqlx:"-"`)
 
 		holders[rel.Holder] = true
 		*structFields = append(*structFields, reflect.StructField{
