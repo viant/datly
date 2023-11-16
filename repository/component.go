@@ -92,9 +92,9 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	return nil
 }
 
-func (r *Component) initTransforms(ctx context.Context) error {
-	for _, transform := range r.Transforms {
-		if err := transform.Init(ctx, afs.New(), r.types.Lookup); err != nil {
+func (c *Component) initTransforms(ctx context.Context) error {
+	for _, transform := range c.Transforms {
+		if err := transform.Init(ctx, afs.New(), c.types.Lookup); err != nil {
 			return err
 		}
 	}
@@ -199,41 +199,41 @@ func (c *Component) IOConfig() *config.IOConfig {
 	return ret
 }
 
-func (r *Component) UnmarshalFunc(request *http.Request) shared.Unmarshal {
+func (c *Component) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 	contentType := request.Header.Get(content.HeaderContentType)
 	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(content.HeaderContentType)))
 	switch contentType {
 	case content.CSVContentType:
-		return r.Content.CSV.Unmarshal
+		return c.Content.CSV.Unmarshal
 	}
 	jsonPathInterceptor := json.UnmarshalerInterceptors{}
-	unmarshallerInterceptors := r.UnmarshallerInterceptors()
+	unmarshallerInterceptors := c.UnmarshallerInterceptors()
 	for i := range unmarshallerInterceptors {
 		transform := unmarshallerInterceptors[i]
-		jsonPathInterceptor[transform.Path] = r.transformFn(request, transform)
+		jsonPathInterceptor[transform.Path] = c.transformFn(request, transform)
 	}
 	return func(bytes []byte, i interface{}) error {
-		return r.Content.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
+		return c.Content.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
 	}
 }
 
-func (r *Component) normalizePaths() error {
-	if !r.Output.ShouldNormalizeExclude() {
+func (c *Component) normalizePaths() error {
+	if !c.Output.ShouldNormalizeExclude() {
 		return nil
 	}
-	for i, transform := range r.Transforms {
-		r.Transforms[i].Path = formatter.NormalizePath(transform.Path)
+	for i, transform := range c.Transforms {
+		c.Transforms[i].Path = formatter.NormalizePath(transform.Path)
 	}
 	return nil
 }
 
-func (r *Component) transformFn(request *http.Request, transform *marshal.Transform) func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
+func (c *Component) transformFn(request *http.Request, transform *marshal.Transform) func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
 	unmarshaller := transform.UnmarshalerInto()
 	if unmarshaller != nil {
 		return unmarshaller.UnmarshalJSONWithOptions
 	}
 	return func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
-		evaluate, err := transform.Evaluate(request, decoder, r.types.Lookup)
+		evaluate, err := transform.Evaluate(request, decoder, c.types.Lookup)
 		if err != nil {
 			return err
 		}

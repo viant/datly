@@ -126,7 +126,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Statelet, batchData *vi
 	}
 
 	if exclude.ColumnsIn && relation != nil {
-		matcher.By = shared.FirstNotEmpty(relation.Of.Field, relation.Of.Column)
+		matcher.By = shared.FirstNotEmpty(relation.Of.On[0].Field, relation.Of.On[0].Column)
 		matcher.In = batchData.ValuesBatch
 	}
 
@@ -339,7 +339,7 @@ func (b *Builder) appendRelationColumn(sb *strings.Builder, aView *view.View, se
 }
 
 func (b *Builder) checkViewAndAppendRelColumn(sb *strings.Builder, aView *view.View, relation *view.Relation) error {
-	if _, ok := aView.ColumnByName(relation.Of.Column); ok {
+	if _, ok := aView.ColumnByName(relation.Of.On[0].Column); ok {
 		return nil
 	}
 
@@ -350,22 +350,22 @@ func (b *Builder) checkViewAndAppendRelColumn(sb *strings.Builder, aView *view.V
 	sb.WriteString(separatorFragment)
 	sb.WriteString(aView.Alias)
 	sb.WriteString(".")
-	sb.WriteString(relation.Of.Column)
+	sb.WriteString(relation.Of.On[0].Column)
 	sb.WriteString(" ")
 
 	return nil
 }
 
 func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *view.View, selector *view.Statelet, relation *view.Relation) error {
-	if relation == nil || selector.Has(relation.Of.Column) || aView.Template.IsActualTemplate() {
+	if relation == nil || selector.Has(relation.Of.On[0].Column) || aView.Template.IsActualTemplate() {
 		return nil
 	}
 
 	sb.WriteString(separatorFragment)
 	sb.WriteString(" ")
-	col, ok := aView.ColumnByName(relation.Of.Column)
+	col, ok := aView.ColumnByName(relation.Of.On[0].Column)
 	if !ok {
-		sb.WriteString(relation.Of.Column)
+		sb.WriteString(relation.Of.On[0].Column)
 	} else {
 		sb.WriteString(col.SqlExpression())
 	}
@@ -427,7 +427,7 @@ func (b *Builder) metaSQL(aView *view.View, selector *view.Statelet, batchData *
 	}
 
 	if relation != nil {
-		matcher.By = relation.Of.Field
+		matcher.By = relation.Of.On[0].Field
 	}
 
 	return matcher, nil

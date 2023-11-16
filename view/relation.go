@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -17,12 +18,10 @@ type (
 	//locators View represents Employee{AccountId: int}, Relation represents Account{Id: int}
 	//We want to create result like:  Employee{Account{Id:int}}
 	Relation struct {
-		Name        string            `json:",omitempty"`
-		Of          *ReferenceView    `json:",omitempty"`
-		Caser       text.CaseFormat   `json:",omitempty"`
-		Cardinality state.Cardinality `json:",omitempty"` //IsToOne, or Many
-		//deprecated, use On instead
-		Link
+		Name          string            `json:",omitempty"`
+		Of            *ReferenceView    `json:",omitempty"`
+		Caser         text.CaseFormat   `json:",omitempty"`
+		Cardinality   state.Cardinality `json:",omitempty"` //IsToOne, or Many
 		On            Links
 		Holder        string `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
 		IncludeColumn bool   `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
@@ -33,8 +32,7 @@ type (
 	//In our example it would be Account
 	ReferenceView struct {
 		View // event type
-		//deprecated use On instead
-		Link
+		//Link
 		On Links `json:",omitempty"`
 	}
 
@@ -140,11 +138,6 @@ func extractNamesapce(column string) (string, string) {
 
 // Init initializes ReferenceView
 func (r *ReferenceView) Init(_ context.Context, aView *View) (err error) {
-	if len(r.On) == 0 {
-		r.On = Links{&r.Link}
-	} else {
-		r.Link = *r.On[0]
-	}
 	if err = r.On.Init(r.Name, aView); err != nil {
 		return err
 	}
@@ -160,7 +153,7 @@ func (r *Relation) inheritType() {
 
 // Validate checks if ReferenceView is valid
 func (r *ReferenceView) Validate() error {
-	if r.Column == "" {
+	if r.On[0].Column == "" {
 		return fmt.Errorf("reference column can't be empty")
 	}
 	return nil
@@ -191,11 +184,6 @@ func (r *Relation) Init(ctx context.Context, parent *View) error {
 }
 
 func (r *Relation) initParentLink(v *View) error {
-	if len(r.On) == 0 {
-		r.On = append(r.On, &r.Link)
-	} else {
-		r.Link = *r.On[0]
-	}
 	return r.On.Init(r.Name, v)
 }
 
@@ -205,7 +193,7 @@ func (r *Relation) Validate() error {
 		return fmt.Errorf("cardinality has to be Many or IsToOne")
 	}
 
-	if r.Column == "" {
+	if r.On[0].Column == "" {
 		return fmt.Errorf("column can't be empty")
 	}
 
@@ -259,6 +247,32 @@ func (r *Relation) adjustLinkColumn() error {
 
 	}
 	return nil
+}
+
+func (r *Relation) TagLink() tags.LinkOn {
+	var links []string
+	for i, parent := range r.On {
+		child := r.Of.On[i]
+
+		parentLink := ""
+		childLink := ""
+		if parent.Namespace != "" {
+			parentLink += parent.Namespace + "." + parent.Field
+		}
+		if child.Namespace != "" {
+			childLink += child.Namespace + "." + child.Field
+		}
+		if parentLink != "" {
+			parentLink += ":"
+		}
+		if childLink != "" {
+			childLink += ":"
+		}
+		parentLink += parent.Column
+		childLink += child.Column
+		links = append(links, parentLink+"="+childLink)
+	}
+	return tags.LinkOn(links)
 }
 
 // RelationsSlice represents slice of Relation

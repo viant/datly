@@ -6,6 +6,7 @@ import (
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/structology"
 	"github.com/viant/tagly/format/text"
@@ -136,8 +137,10 @@ func ColumnsSchemaDocumented(caseFormat text.CaseFormat, columns []*Column, rela
 	return func() (reflect.Type, error) {
 		excluded := make(map[string]bool)
 		for _, rel := range relations {
-			if !rel.IncludeColumn && rel.Cardinality == state.One {
-				excluded[rel.Column] = true
+			for _, item := range rel.On {
+				if !rel.IncludeColumn && rel.Cardinality == state.One {
+					excluded[item.Column] = true
+				}
 			}
 		}
 
@@ -199,14 +202,17 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 			rType = reflect.SliceOf(rType)
 		}
 
-		var fieldTag string
-		fieldTag += getTypenameTag(rel.Of.Schema.Name)
+		aTag := tags.Tag{}
+		aTag.TypeName = rel.Of.Schema.Name
+		aTag.LinkOn = rel.TagLink()
+		aTag.SQL = tags.ViewSQL(rel.Of.View.Template.Source)
+		fieldTag := aTag.UpdateTag("")
 
 		holders[rel.Holder] = true
 		*structFields = append(*structFields, reflect.StructField{
 			Name: rel.Holder,
 			Type: rType,
-			Tag:  reflect.StructTag(fieldTag),
+			Tag:  fieldTag,
 		})
 
 		if meta := rel.Of.View.Template.Summary; meta != nil {

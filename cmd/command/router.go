@@ -6,12 +6,8 @@ import (
 )
 
 func (s *Service) configureRouter(opts *options.Options) error {
-	if rule := opts.Rule(); rule.CustomRouter == "" {
-		return nil
-	}
 	if err := s.ensureTranslator(opts); err != nil {
 		return fmt.Errorf("failed to create translator: %v", err)
 	}
-
 	return nil
 }
