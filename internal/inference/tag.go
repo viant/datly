@@ -147,23 +147,19 @@ func (t *Tags) buildRelation(spec *Spec, relation *Relation) {
 		Table: spec.Table,
 	}
 	joinTag := tags.LinkOn{}
+
+	parentColumn := relation.ParentField.Column.Name
+	if ns := relation.ParentField.Column.Namespace; ns != "" {
+		parentColumn = ns + "." + parentColumn
+	}
+	keyColumn := relation.KeyField.Column.Name
+	if ns := relation.KeyField.Column.Namespace; ns != "" {
+		keyColumn = ns + "." + keyColumn
+	}
 	joinTag = joinTag.Append(
-		tags.WithRelLink(relation.ParentField.Column.Name, relation.ParentField.Name, nil),
-		tags.WithRefLink(relation.KeyField.Column.Name, relation.KeyField.Name),
+		tags.WithRelLink(parentColumn, relation.ParentField.Name, nil),
+		tags.WithRefLink(keyColumn, relation.KeyField.Name),
 	)
-
-	//datlyTag.Append(fmt.Sprintf("relName=%s", join.Alias))
-	//datlyTag.Append(fmt.Sprintf("relColumn=%s", relation.ParentField.Column.Name))
-	//datlyTag.Append(fmt.Sprintf("relField=%s", relation.ParentField.Name))
-	//if spec.Table != "" {
-	//	datlyTag.Append(fmt.Sprintf("refTable=%v", spec.Table))
-	//}
-	//datlyTag.Append(fmt.Sprintf("refColumn=%s", relation.KeyField.Column.Name))
-	//datlyTag.Append(fmt.Sprintf("refField=%s", relation.KeyField.Name))
-	//if relation.KeyField.Column.Namespace != "" {
-	//	datlyTag.Append(fmt.Sprintf("refns=%s", relation.KeyField.Column.Namespace))
-	//}
-
 	sqlTag := TagValue{}
 	if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {
 		rawSQL = strings.Replace(rawSQL, "("+spec.Table+")", spec.Table, 1)

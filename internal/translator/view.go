@@ -263,6 +263,10 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		relNamespace.Holder = viewRelation.Holder
 		refViewName := relNamespace.View.Name
 		refColumn := relation.KeyField.Column.Name
+		if ns := relation.KeyField.Column.Namespace; ns != "" {
+			refColumn = ns + "." + refColumn
+		}
+
 		refField := relation.KeyField.Name
 		aRefView := view.NewRefView(refViewName)
 		aRefView.Name = refViewName + "#"
