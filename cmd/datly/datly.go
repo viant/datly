@@ -37,8 +37,6 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 func main() {
 	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
 
-	//
-
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)

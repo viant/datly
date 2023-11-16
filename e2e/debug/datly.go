@@ -69,7 +69,6 @@ func main() {
 
 	baseDir := toolbox.CallerDirectory(3)
 	configURL := filepath.Join(baseDir, "../local/autogen/Datly/config.json")
-
 	os.Args = []string{
 		"",
 		"-c=" + configURL,

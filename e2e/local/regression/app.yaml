@@ -5,16 +5,6 @@ pipeline:
       target: $target
       input: datly
 
-    copyAssets:
-      action: exec:run
-      comments: copy assets
-      target: $target
-      checkError: true
-      commands:
-        - cp -r ${appPath}/e2e/local/assets/. ${appPath}/e2e/local/autogen/Datly/assets/
-
-
-
     start:
       action: process:start
       sleepTimeMs: 6000
