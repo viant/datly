@@ -1,0 +1,9 @@
+
+
+	/*
+	xxxxView := view.NewView("xxxx", "",
+		view.WithCriteria("ID"),
+		view.WithViewType(reflect.TypeOf(&XXXX{})),
+		view.WithStructTag(`sql:"uri=sql/xxxx.sql"`, &embedFS),
+	)
+	 */

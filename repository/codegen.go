@@ -1,6 +1,7 @@
 package repository
 
 import (
+	_ "embed"
 	"fmt"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/view/state"
@@ -8,6 +9,9 @@ import (
 	"github.com/viant/xreflect"
 	"strings"
 )
+
+//go:embed codegen/contract.gox
+var contractInit string
 
 func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string) string {
 	builder := strings.Builder{}
@@ -40,7 +44,8 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 	if withEmbed {
 		options = append(options,
 			xreflect.WithImports([]string{"embed", "github.com/viant/datly"}),
-			xreflect.WithEmbed(embeds),
+			xreflect.WithSQLRewrite(embeds),
+			xreflect.WithLinkTag(true),
 			xreflect.WithEmbeddedFormatter(func(s string) string {
 				return text.CaseFormatUpperCamel.Format(s, text.CaseFormatLowerUnderscore)
 			}),
@@ -49,12 +54,14 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 var embedFS embed.FS
 
 `),
-			xreflect.WithVelty(false),
+
+			xreflect.WithVeltyTag(false),
 			xreflect.WithSnippetAfter(fmt.Sprintf(`
 func defineView(datly *datly.Service) {
-	
+	%v
 }
-`)))
+`, contractInit)))
+
 	}
 
 	inputState := xreflect.GenerateStruct("Input", input.Type(), options...)

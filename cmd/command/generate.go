@@ -123,12 +123,19 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 	if err = s.fs.Upload(ctx, destURL, file.DefaultFileOsMode, strings.NewReader(code)); err != nil {
 		return err
 	}
-	return s.persistEmbeds(ctx, moduleLocation, modulePrefix, embeds)
+	return s.persistEmbeds(ctx, moduleLocation, modulePrefix, embeds, aComponent)
 
 }
 
-func (s *Service) persistEmbeds(ctx context.Context, moduleLocation string, modulePrefix string, embeds map[string]string) error {
+func (s *Service) persistEmbeds(ctx context.Context, moduleLocation string, modulePrefix string, embeds map[string]string, component *repository.Component) error {
 	embedBaseURL := path.Join(path.Join(moduleLocation, modulePrefix, "sql"))
+	rootName := component.View.Name
+	formatter := text.DetectCaseFormat(rootName)
+	rootSQL := path.Join(embedBaseURL, formatter.Format(rootName, text.CaseFormatLowerUnderscore)+".sql")
+	if err := s.fs.Upload(ctx, rootSQL, file.DefaultFileOsMode, strings.NewReader(component.View.Template.Source)); err != nil {
+		return err
+	}
+
 	for k, v := range embeds {
 		embedURL := path.Join(embedBaseURL, k)
 		v = strings.ReplaceAll(v, `\n`, "\n")
