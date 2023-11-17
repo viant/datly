@@ -5,6 +5,8 @@ import (
 	"embed"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/afs/storage"
+	"github.com/viant/afs/url"
 	"github.com/viant/tagly/format"
 	"github.com/viant/tagly/tags"
 	"github.com/viant/xreflect"
@@ -58,7 +60,7 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 				continue
 			}
 			URI := tagValue[4:]
-			data, err := ret.fs.DownloadWithURL(context.Background(), strings.TrimSpace(URI), ret.getOptions()...)
+			data, err := loadContent(URI, ret.fs, ret.getOptions(), fs)
 			if err != nil {
 				return nil, err
 			}
@@ -71,7 +73,7 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 				continue
 			}
 			URI := tagValue[4:]
-			data, err := ret.fs.DownloadWithURL(context.Background(), strings.TrimSpace(URI), ret.getOptions()...)
+			data, err := loadContent(URI, ret.fs, ret.getOptions(), fs)
 			if err != nil {
 				return nil, err
 			}
@@ -110,6 +112,21 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 	}
 
 	return ret, nil
+}
+
+func loadContent(URI string, fs afs.Service, storageOptions []storage.Option, embedFs *embed.FS) ([]byte, error) {
+	if embedFs != nil {
+		storageOptions = append(storageOptions, embedFs)
+	}
+	embedURI := strings.TrimSpace(URI)
+	if url.Scheme(embedURI, "") == "" {
+		embedURI = "embed://" + URI
+		if data, err := fs.DownloadWithURL(context.Background(), embedURI, storageOptions...); err == nil {
+			return data, nil
+		}
+	}
+	data, err := fs.DownloadWithURL(context.Background(), URI, storageOptions...)
+	return data, err
 }
 
 func parsePredicate(tag reflect.StructTag, ret *Tag) error {
