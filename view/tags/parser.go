@@ -120,7 +120,7 @@ func loadContent(URI string, fs afs.Service, storageOptions []storage.Option, em
 	}
 	embedURI := strings.TrimSpace(URI)
 	if url.Scheme(embedURI, "") == "" {
-		embedURI = "embed://" + URI
+		embedURI = "embed:///" + URI
 		if data, err := fs.DownloadWithURL(context.Background(), embedURI, storageOptions...); err == nil {
 			return data, nil
 		}
