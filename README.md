@@ -143,8 +143,6 @@ For reader usage, see: [how to use reader](service/reader/README.md)
 
 For executor usage, see: [how to use executor](service/executor/README.md)
 
-For filter usage, see (external project): [Filter guide](https://github.vianttech.com/adelphic/datly-forecasting/blob/ENG-39161_multixml/doc/EXAMPLES.md)
-
 #### Autonomus mode
 
 ## Contributing to datly
