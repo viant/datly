@@ -28,6 +28,7 @@ type (
 		State         *view.State
 		Parent        *view.View
 		Output
+		MetricPtr *Metrics
 	}
 
 	Output struct {
@@ -205,6 +206,14 @@ func (s *Session) AddMetric(m *Metric) {
 func WithDryRun() Option {
 	return func(session *Session) error {
 		session.DryRun = true
+		return nil
+	}
+}
+
+// WithMetrics returns with dry run option
+func WithMetrics(metrics *Metrics) Option {
+	return func(session *Session) error {
+		session.MetricPtr = metrics
 		return nil
 	}
 }

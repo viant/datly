@@ -29,7 +29,11 @@ func (s *Service) ReadInto(ctx context.Context, dest interface{}, aView *view.Vi
 	if err != nil {
 		return err
 	}
-	return s.Read(ctx, session)
+	err = s.Read(ctx, session)
+	if session.MetricPtr != nil {
+		*session.MetricPtr = session.Metrics
+	}
+	return err
 }
 
 // Read select view from database based on View and assign it to dest. ParentDest has to be pointer.
