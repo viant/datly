@@ -144,7 +144,9 @@ func (r *Collector) Visitor(ctx context.Context) VisitorFn {
 	relation := r.relation
 	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
 	for _, rel := range visitorRelations {
-		r.valuePosition[rel.Column] = map[interface{}][]int{}
+		for _, item := range rel.On {
+			r.valuePosition[item.Column] = map[interface{}][]int{}
+		}
 	}
 
 	visitors := make([]VisitorFn, 1)
@@ -175,11 +177,13 @@ func (r *Collector) valueIndexer(ctx context.Context, visitorRelations []*Relati
 	presenceMap := map[string]bool{}
 
 	for i := range visitorRelations {
-		if _, ok := presenceMap[visitorRelations[i].Column]; ok {
-			continue
+		for _, item := range visitorRelations[i].On {
+			if _, ok := presenceMap[item.Column]; ok {
+				continue
+			}
+			distinctRelations = append(distinctRelations, visitorRelations[i])
+			presenceMap[item.Column] = true
 		}
-		distinctRelations = append(distinctRelations, visitorRelations[i])
-		presenceMap[visitorRelations[i].Column] = true
 	}
 
 	return func(value interface{}) error {
@@ -230,11 +234,14 @@ func (r *Collector) indexValueByRel(fieldValue interface{}, rel *Relation, count
 }
 
 func (r *Collector) indexValueToPosition(rel *Relation, fieldValue interface{}, counter int) {
-	_, ok := r.valuePosition[rel.Column][fieldValue]
-	if !ok {
-		r.valuePosition[rel.Column][fieldValue] = []int{counter}
-	} else {
-		r.valuePosition[rel.Column][fieldValue] = append(r.valuePosition[rel.Column][fieldValue], counter)
+
+	for _, item := range rel.On {
+		_, ok := r.valuePosition[item.Column][fieldValue]
+		if !ok {
+			r.valuePosition[item.Column][fieldValue] = []int{counter}
+		} else {
+			r.valuePosition[item.Column][fieldValue] = append(r.valuePosition[item.Column][fieldValue], counter)
+		}
 	}
 }
 
@@ -420,8 +427,8 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 	}
 	//TODO refactor it so the multi relation fields can be used here
 
-	fieldCaseFormat := text.DetectCaseFormat(rel.Of.Field)
-	childMetaFieldName := fieldCaseFormat.Format(rel.Of.Field, text.CaseFormatUpperCamel)
+	fieldCaseFormat := text.DetectCaseFormat(rel.Of.On[0].Field)
+	childMetaFieldName := fieldCaseFormat.Format(rel.Of.On[0].Field, text.CaseFormatUpperCamel)
 	metaChildKeyField := xunsafe.FieldByName(templateMeta.Schema.Type(), childMetaFieldName)
 	if metaChildKeyField == nil {
 		return nil, fmt.Errorf("not found field %v at %v", childMetaFieldName, templateMeta.Schema.Type().String())
@@ -434,25 +441,27 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 
 	var valuesPosition map[interface{}][]int
 	return func(viewMeta interface{}) error {
-		if valuesPosition == nil {
-			valuesPosition = r.valuePosition[rel.Column]
-		}
+		for _, item := range rel.On {
+			if valuesPosition == nil {
+				valuesPosition = r.valuePosition[item.Column]
+			}
 
-		viewMetaPtr := xunsafe.AsPointer(viewMeta)
-		if viewMetaPtr == nil {
-			return nil
-		}
+			viewMetaPtr := xunsafe.AsPointer(viewMeta)
+			if viewMetaPtr == nil {
+				return nil
+			}
 
-		value := io.NormalizeKey(metaChildKeyField.Value(viewMetaPtr))
-		positions, ok := valuesPosition[value]
-		if !ok {
-			return nil
-		}
+			value := io.NormalizeKey(metaChildKeyField.Value(viewMetaPtr))
+			positions, ok := valuesPosition[value]
+			if !ok {
+				return nil
+			}
 
-		slicePtr := xunsafe.AsPointer(r.dest)
-		for _, position := range positions {
-			ownerPtr := xunsafe.AsPointer(r.slice.ValuePointerAt(slicePtr, position))
-			metaParentHolderField.SetValue(ownerPtr, viewMeta)
+			slicePtr := xunsafe.AsPointer(r.dest)
+			for _, position := range positions {
+				ownerPtr := xunsafe.AsPointer(r.slice.ValuePointerAt(slicePtr, position))
+				metaParentHolderField.SetValue(ownerPtr, viewMeta)
+			}
 		}
 
 		return nil

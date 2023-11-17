@@ -23,27 +23,26 @@ func (s *Service) ensureTranslator(opts *options.Options) error {
 }
 
 func (s *Service) Translate(ctx context.Context, opts *options.Options) (err error) {
-	if err = s.configureRouter(opts); err != nil {
-		return err
-	}
-
 	if err = s.loadPlugin(ctx, opts); err != nil {
 		return err
 	}
-
 	if err = s.translate(ctx, opts); err != nil {
 		return err
 	}
+	return s.persistRepository(ctx)
+}
+
+func (s *Service) persistRepository(ctx context.Context) error {
 	repository := s.translator.Repository
 
-	if err = repository.PersistConfig(); err != nil {
+	if err := repository.PersistConfig(); err != nil {
 		return err
 	}
-	if err = repository.Upload(ctx); err != nil {
+	if err := repository.Upload(ctx); err != nil {
 		return err
 	}
 	for _, cmd := range s.translator.Plugins {
-		if err = s.BuildPlugin(ctx, cmd); err != nil {
+		if err := s.BuildPlugin(ctx, cmd); err != nil {
 			return fmt.Errorf("failed to build plugin: %w", err)
 		}
 	}

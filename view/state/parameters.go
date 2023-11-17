@@ -197,6 +197,9 @@ type (
 		withSetterMarker bool
 		typeName         string
 		locationInput    Parameters
+		withRelation     bool
+		withSQL          bool
+		withVelty        *bool
 	}
 	ReflectOption func(o *reflectOptions)
 )
@@ -214,6 +217,23 @@ func WithSetMarker() ReflectOption {
 	}
 }
 
+func WithVelty(flag bool) ReflectOption {
+	return func(o *reflectOptions) {
+		o.withVelty = &flag
+	}
+}
+
+func WithSQL() ReflectOption {
+	return func(o *reflectOptions) {
+		o.withSQL = true
+	}
+}
+
+func WithRelation() ReflectOption {
+	return func(o *reflectOptions) {
+		o.withRelation = true
+	}
+}
 func WithTypeName(name string) ReflectOption {
 	return func(o *reflectOptions) {
 		o.typeName = name

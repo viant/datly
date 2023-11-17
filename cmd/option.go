@@ -15,7 +15,6 @@ type (
 		Port               int `short:"p" long:"port" description:"port"  `
 		hasPort            bool
 		RouteURL           string `short:"r" long:"routeURL" description:"route URL"  `
-		CustomRouterURL    string `long:"routerConfig" description:"custom router template/config URL"`
 		DependencyURL      string `short:"d" long:"deps" description:"dependencies URL" `
 		ConfigURL          string `short:"c" long:"config" description:"configuration URL" `
 		PartialConfigURL   string `short:"e" long:"partialConfig" description:"partial configuration file URL"`
@@ -161,9 +160,6 @@ func (o *Options) BuildOption() *options.Options {
 		rule.ModulePrefix = o.RoutePrefix
 		if o.GoModulePkg != "" {
 			rule.Packages = []string{o.GoModulePkg}
-		}
-		if o.CustomRouterURL != "" {
-			rule.CustomRouter = o.CustomRouterURL
 		}
 	}
 

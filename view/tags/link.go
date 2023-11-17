@@ -97,7 +97,7 @@ func (l LinkOn) decodeLink(cb func(relField string, relColumn string, refField s
 	if err != nil {
 		return err
 	}
-	if err := cb(refField, relColumn, relField, refColumn, incl); err != nil {
+	if err := cb(relField, relColumn, refField, refColumn, incl); err != nil {
 		return err
 	}
 	return nil

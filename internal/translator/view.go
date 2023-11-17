@@ -250,15 +250,23 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		if relation.KeyField == nil {
 			return fmt.Errorf("failed to add relation: %v, unknown reference", relation.Name)
 		}
-		viewRelation.Column = relation.ParentField.Column.Name
-		viewRelation.Namespace = relation.ParentField.Column.Namespace
-		viewRelation.Field = relation.ParentField.Name
+
+		viewRelation.On = append(viewRelation.On, &view.Link{
+			Column:    relation.ParentField.Column.Name,
+			Namespace: relation.ParentField.Column.Namespace,
+			Field:     relation.ParentField.Name,
+		})
+
 		holderFormat := text.DetectCaseFormat(relNamespace.Name)
 		viewRelation.Holder = holderFormat.Format(relNamespace.Name, text.CaseFormatUpperCamel)
 		viewRelation.IncludeColumn = true
 		relNamespace.Holder = viewRelation.Holder
 		refViewName := relNamespace.View.Name
 		refColumn := relation.KeyField.Column.Name
+		if ns := relation.KeyField.Column.Namespace; ns != "" {
+			refColumn = ns + "." + refColumn
+		}
+
 		refField := relation.KeyField.Name
 		aRefView := view.NewRefView(refViewName)
 		aRefView.Name = refViewName + "#"

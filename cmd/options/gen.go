@@ -12,7 +12,7 @@ type Generate struct {
 	Repository
 	Rule
 	Dest      string `short:"d" long:"dest" description:"dql file location" default:"dql"`
-	Operation string `short:"o" long:"op" description:"operation" choice:"post" choice:"patch" choice:"put"`
+	Operation string `short:"o" long:"op" description:"operation" choice:"post" choice:"patch" choice:"put" choice:"get"`
 	Kind      string `short:"k" long:"kind" description:"execution kind" choice:"dml" choice:"service"`
 	Lang      string `short:"l" long:"lang" description:"lang" choice:"velty" choice:"go"`
 	Translate bool   `short:"t" long:"translate" description:"translate generated DSQL"`

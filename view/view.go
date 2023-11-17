@@ -1047,7 +1047,8 @@ func (v *View) Collector(dest interface{}, handleMeta viewMetaHandlerFn, support
 
 func (v *View) registerHolders() error {
 	for i := range v.With {
-		if err := v._columns.RegisterHolder(v.With[i].Column, v.With[i].Holder); err != nil {
+
+		if err := v._columns.RegisterHolder(v.With[i].On[0].Column, v.With[i].Holder); err != nil {
 			return err
 		}
 	}
@@ -1169,26 +1170,29 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 	}
 
 	for _, rel := range v.With {
-		if _, ok := columnsIndex[rel.Of.Column]; ok {
-			continue
+		for i, item := range rel.Of.On {
+			parent := rel.On[i]
+			if _, ok := columnsIndex[item.Column]; ok {
+				continue
+			}
+			col, err := v._columns.Lookup(parent.Column)
+			if err != nil {
+				return fmt.Errorf("invalid rel: %v %w", rel.Name, err)
+			}
+			*columns = append(*columns, col)
 		}
-
-		col, err := v._columns.Lookup(rel.Column)
-		if err != nil {
-			return fmt.Errorf("invalid rel: %v %w", rel.Name, err)
-		}
-
-		*columns = append(*columns, col)
 	}
 
 	if relation != nil {
-		_, err := columnsIndex.Lookup(relation.Of.Column)
-		if err != nil {
-			col, err := v._columns.Lookup(relation.Of.Column)
+		for _, item := range relation.Of.On {
+			_, err := columnsIndex.Lookup(item.Column)
 			if err != nil {
-				return fmt.Errorf("invalid ref: %v %w", relation.Name, err)
+				col, err := v._columns.Lookup(item.Column)
+				if err != nil {
+					return fmt.Errorf("invalid ref: %v %w", relation.Name, err)
+				}
+				*columns = append(*columns, col)
 			}
-			*columns = append(*columns, col)
 		}
 	}
 
@@ -1441,11 +1445,20 @@ func NewRefView(ref string) *View {
 
 // NewView creates a View
 func NewView(name, table string, opts ...Option) *View {
-	ret := &View{Name: name, Table: table}
-	if err := Options(opts).Apply(ret); err != nil {
-		panic(fmt.Errorf("failed to create view %s,  %v", ret.Name, err))
+	ret, err := New(name, table, opts...)
+	if err != nil {
+		panic(err.Error())
 	}
 	return ret
+}
+
+// New creates a View
+func New(name, table string, opts ...Option) (*View, error) {
+	ret := &View{Name: name, Table: table}
+	if err := Options(opts).Apply(ret); err != nil {
+		return nil, fmt.Errorf("failed to create view %s,  %v", ret.Name, err)
+	}
+	return ret, nil
 }
 
 // NewExecView creates an execution View

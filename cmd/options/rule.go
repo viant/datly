@@ -20,7 +20,6 @@ type Rule struct {
 	Packages       []string `short:"g" long:"pkg" description:"entity package"`
 	Output         []string
 	Index          int
-	CustomRouter   string `short:"R" long:"router" description:"custom router location"`
 	ModuleLocation string `short:"m" long:"module" description:"go module package root" default:"pkg"`
 	Generated      bool
 }
