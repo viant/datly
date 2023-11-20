@@ -5,7 +5,6 @@ import (
 	"fmt"
 	codec2 "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/sqlx/io"
-	"github.com/viant/sqlx/option"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
@@ -82,7 +81,7 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 
 	c.unwrapper = xunsafe.FieldByIndex(c.actualType, 1)
 	stateType := structology.NewStateType(c.actualType, structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
-		sqlxTag := io.ParseTag(tag.Get(option.TagSqlx))
+		sqlxTag := io.ParseTag(tag)
 		if sqlxTag.Column == "" {
 			return []string{name}
 		}

@@ -42,7 +42,7 @@ func (s *Schema) LoadTypeIfNeeded(lookupType xreflect.LookupType) error {
 	if s.TypeName() == "" {
 		return nil
 	}
-	rType, err := lookupType(s.TypeName(), xreflect.WithPackage(s.Package))
+	rType, err := types.LookupType(lookupType, s.TypeName(), xreflect.WithPackage(s.Package))
 	if err != nil {
 		return err
 	}
@@ -125,6 +125,9 @@ func (s *Schema) IsStruct() bool {
 func (s *Schema) SetType(rType reflect.Type) {
 	if rType.Kind() == reflect.Slice { //i.e []int
 		s.Cardinality = Many
+		if compType := rType.Elem(); compType.Name() != "" {
+			s.Name = compType.Name()
+		}
 	}
 
 	if s.Cardinality == "" {

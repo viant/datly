@@ -3,6 +3,7 @@ package translator
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/datly/view/state"
@@ -21,21 +22,42 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 		return
 	}
 
+	rootViewTypeName := root.View.Schema.Name
+	pkg := root.View.Schema.Package
+	setter.SetStringIfEmpty(&pkg, resource.rule.Package())
+	if index := strings.LastIndex(rootViewTypeName, "."); index != -1 {
+		pkg = rootViewTypeName[:index]
+		rootViewTypeName = rootViewTypeName[index+1:]
+	}
+
+	viewType, _ := resource.typeRegistry.Lookup(rootViewTypeName, xreflect.WithPackage(pkg))
+	if viewType != nil {
+		root.View.View.Schema.Name = rootViewTypeName
+		root.View.View.Schema.DataType = "*" + rootViewTypeName
+		root.View.View.Schema.Package = pkg
+		return
+	}
+
 	cloneRoot := view.View{}
 	if data, err := json.Marshal(root.View.View); err == nil {
 		_ = json.Unmarshal(data, &cloneRoot)
 	}
+	cloneRoot.SetResource(&resource.Resource)
 	var types []*xreflect.Type
+
 	if err := s.updateViewSchema(&cloneRoot, resource, viewColumns, resource.typeRegistry, &types, resource.Rule.Doc.Columns); err != nil {
 		fmt.Printf("ERROR: %v\n", err)
 	}
 
-	rootType := MatchByName(types, view.DefaultTypeName(root.View.Name))
+	setter.SetStringIfEmpty(&rootViewTypeName, view.DefaultTypeName(root.View.Name))
+
+	rootType := MatchByName(types, rootViewTypeName)
 	if rootType != nil {
 		root.TypeDefinition.DataType = rootType.Body()
 		root.TypeDefinition.Name = rootType.Name
 		root.TypeDefinition.Fields = nil
 	}
+
 	if root.View.View.Schema == nil {
 		root.View.View.Schema = &state.Schema{Cardinality: state.Many}
 	}

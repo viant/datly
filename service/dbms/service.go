@@ -155,7 +155,7 @@ func (c *Service) getMatcher(recordType reflect.Type) (*io.Matcher, error) {
 		recordType = recordType.Elem()
 	}
 
-	matcher := io.NewMatcher("sqlx", func(column io.Column) func(pointer unsafe.Pointer) interface{} {
+	matcher := io.NewMatcher(func(column io.Column) func(pointer unsafe.Pointer) interface{} {
 		return func(pointer unsafe.Pointer) interface{} {
 			return reflect.New(column.ScanType()).Elem().Interface()
 		}

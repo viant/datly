@@ -1,8 +1,9 @@
 package expand
 
 import (
-	"fmt"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -116,27 +117,13 @@ func ParseDatlyTag(field reflect.StructField) (*CriteriaColumn, error) {
 	if tagContent == "" {
 		return nil, nil
 	}
-
 	result := &CriteriaColumn{
 		Field: xunsafe.NewField(field),
 	}
-
-	segments := strings.Split(tagContent, "|")
-	for _, segment := range segments {
-		split := strings.Split(segment, "=")
-		if len(split) != 2 {
-			return nil, fmt.Errorf("criteria tag must be format of name=value")
-		}
-
-		key := strings.ToLower(split[0])
-		switch key {
-		case "column":
-			result.Name = split[1]
-		case "alias":
-			result.Alias = split[1]
-		}
-	}
-
+	aTag := io.ParseTag(field.Tag)
+	result.Name = aTag.Name()
+	setter.SetStringIfEmpty(&result.Name, field.Name)
+	result.Alias = aTag.Ns
 	return result, nil
 }
 

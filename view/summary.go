@@ -158,6 +158,7 @@ func ColumnsSchemaDocumented(caseFormat text.CaseFormat, columns []*Column, rela
 				rType = reflect.PtrTo(rType)
 			}
 			if columns[i].Codec != nil {
+				columns[i].Codec.Init(v.Resource(), columns[i].rType)
 				rType = columns[i].Codec.Schema.Type()
 				if rType == nil {
 					rType = xreflect.InterfaceType
@@ -206,7 +207,7 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 		aTag.TypeName = rel.Of.Schema.Name
 		aTag.LinkOn = rel.TagLink()
 		aTag.SQL = tags.ViewSQL(rel.Of.View.Template.Source)
-		fieldTag := aTag.UpdateTag(`sqlx:"-"`)
+		fieldTag := aTag.UpdateTag(``)
 
 		holders[rel.Holder] = true
 		*structFields = append(*structFields, reflect.StructField{

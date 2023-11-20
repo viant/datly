@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+const (
+	KeyAsInts = "AsInts"
+)
+
 type AsInts struct {
 }
 

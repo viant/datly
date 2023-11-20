@@ -2,7 +2,6 @@ package shared
 
 import (
 	"github.com/viant/sqlx/io"
-	"github.com/viant/sqlx/option"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -20,7 +19,7 @@ func MatchField(rType reflect.Type, name string, sourceCase text.CaseFormat) *xu
 	name = strings.ToLower(name)
 	for i := 0; i < rType.NumField(); i++ {
 		sField := rType.Field(i)
-		tag := io.ParseTag(sField.Tag.Get(option.TagSqlx))
+		tag := io.ParseTag(sField.Tag)
 		if tag.Column == "" {
 			if name == strings.ToLower(sField.Name) {
 				return xunsafe.NewField(sField)
@@ -40,7 +39,7 @@ func MatchField(rType reflect.Type, name string, sourceCase text.CaseFormat) *xu
 	//TODO are these needed?
 	for i := 0; i < rType.NumField(); i++ {
 		sField := rType.Field(i)
-		tag := io.ParseTag(sField.Tag.Get(option.TagSqlx))
+		tag := io.ParseTag(sField.Tag)
 		if tag.Column == "" || tag.Transient {
 			continue
 		}
@@ -51,7 +50,7 @@ func MatchField(rType reflect.Type, name string, sourceCase text.CaseFormat) *xu
 
 	for i := 0; i < rType.NumField(); i++ {
 		sField := rType.Field(i)
-		tag := io.ParseTag(sField.Tag.Get(option.TagSqlx))
+		tag := io.ParseTag(sField.Tag)
 		if tag.Column != "" {
 			continue
 		}

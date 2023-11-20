@@ -132,6 +132,7 @@ func (c Columns) ApplyConfig(configs map[string]*ColumnConfig, lookupType xrefle
 			}
 			column.SetColumnType(rType)
 		}
+
 	}
 	return nil
 }

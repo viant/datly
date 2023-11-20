@@ -194,9 +194,9 @@ func (t *Tags) Stringify() string {
 }
 
 func SqlxTag(tag reflect.StructTag) *io.Tag {
-	datlyTagString, _ := tag.Lookup("sqlx")
+	datlyTagString, _ := tag.Lookup(io.TagSqlx)
 	if datlyTagString == "" {
 		return nil
 	}
-	return io.ParseTag(datlyTagString)
+	return io.ParseTag(tag)
 }

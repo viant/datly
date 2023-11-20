@@ -2,7 +2,6 @@ package types
 
 import (
 	"github.com/viant/sqlx/io"
-	"github.com/viant/sqlx/option"
 	"github.com/viant/velty"
 	"reflect"
 	"strings"
@@ -26,7 +25,7 @@ func (s *FieldNamer) Names(rField reflect.StructField) []string {
 }
 
 func (s *SqlxNamer) Names(rField reflect.StructField) []string {
-	sqlxTag := io.ParseTag(rField.Tag.Get(option.TagSqlx))
+	sqlxTag := io.ParseTag(rField.Tag)
 	if sqlxTag.Column == "" {
 		return []string{rField.Name}
 	}

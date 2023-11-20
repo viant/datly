@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format"
@@ -179,7 +180,7 @@ func (c *Column) ApplyConfig(config *ColumnConfig) {
 	}
 
 	if config.DataType != nil && *config.DataType != "" {
-		c.DataType = *config.DataType
+		setter.SetStringIfEmpty(&c.DataType, *config.DataType)
 	}
 	if config.Tag != nil {
 		c.Tag += " " + strings.Trim(*config.Tag, ` '`)
@@ -212,13 +213,27 @@ func NewColumn(name, dataTypeName string, rType reflect.Type, nullable bool, opt
 	return ret
 }
 
-type ColumnConfig struct {
-	Name                string       `json:",omitempty"`
-	IgnoreCaseFormatter *bool        `json:",omitempty"`
-	Expression          *string      `json:",omitempty"`
-	Codec               *state.Codec `json:",omitempty"`
-	DataType            *string      `json:",omitempty"`
-	Format              *string      `json:",omitempty"`
-	Tag                 *string      `json:",omitempty"`
-	Default             *string      `json:",omitempty"`
+type (
+	ColumnConfig struct {
+		Name                string       `json:",omitempty"`
+		IgnoreCaseFormatter *bool        `json:",omitempty"`
+		Expression          *string      `json:",omitempty"`
+		Codec               *state.Codec `json:",omitempty"`
+		DataType            *string      `json:",omitempty"`
+		Format              *string      `json:",omitempty"`
+		Tag                 *string      `json:",omitempty"`
+		Default             *string      `json:",omitempty"`
+	}
+
+	ColumnConfigs []*ColumnConfig
+
+	NamedColumnConfig map[string]*ColumnConfig
+)
+
+func (c ColumnConfigs) Index() NamedColumnConfig {
+	var result = make(map[string]*ColumnConfig)
+	for _, item := range c {
+		result[item.Name] = item
+	}
+	return result
 }

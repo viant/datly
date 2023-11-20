@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
-	qexpr "github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/tagly/tags"
 	"github.com/viant/xreflect"
@@ -44,7 +45,7 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 	root := NewViewlet(aQuery.From.Alias, SQL, nil, resource)
 	root.ViewJSONHint = aQuery.From.Comments
 	if root.ViewJSONHint == "" && aQuery.From.X != nil {
-		if rawExpr, ok := aQuery.From.X.(*qexpr.Raw); ok {
+		if rawExpr, ok := aQuery.From.X.(*expr.Raw); ok {
 			if querySelect, ok := rawExpr.X.(*query.Select); ok {
 				root.ViewJSONHint = querySelect.From.Comments
 			}
@@ -146,43 +147,76 @@ func (n *Viewlets) applyTopLevelSetting(column *sqlparser.Column, viewlet *Viewl
 	if column.Namespace == "" {
 		column.Namespace = viewlet.Name
 	}
-	namespaceForColumn := n.Lookup(column.Namespace)
-	if namespaceForColumn == nil {
+	columnViewlet := n.Lookup(column.Namespace)
+	if columnViewlet == nil {
 		return fmt.Errorf("unknown query viewlet: %v", column.Namespace)
 	}
 	if len(column.Except) > 0 {
-		namespaceForColumn.Exclude = column.Except
+		columnViewlet.Exclude = column.Except
 	}
 	if column.Comments != "" && strings.Contains(column.Expression, "*") {
-		namespaceForColumn.OutputJSONHint = column.Comments
-		if err := inference.TryUnmarshalHint(namespaceForColumn.OutputJSONHint, &namespaceForColumn.OutputSettings); err != nil {
+		columnViewlet.OutputJSONHint = column.Comments
+		if err := inference.TryUnmarshalHint(columnViewlet.OutputJSONHint, &columnViewlet.OutputSettings); err != nil {
 			return err
 		}
-		if namespaceForColumn.OutputSettings.Field != "" {
-			viewlet.Resource.Rule.Route.Output.Field = namespaceForColumn.OutputSettings.Field
+		if columnViewlet.OutputSettings.Field != "" {
+			viewlet.Resource.Rule.Route.Output.Field = columnViewlet.OutputSettings.Field
 		}
-		if namespaceForColumn.OutputSettings.Cardinality != "" {
+		if columnViewlet.OutputSettings.Cardinality != "" {
 			if viewlet.View.Schema == nil {
 				viewlet.View.Schema = &state.Schema{}
 			}
-			viewlet.View.Schema.Cardinality = namespaceForColumn.OutputSettings.Cardinality
+			viewlet.View.Schema.Cardinality = columnViewlet.OutputSettings.Cardinality
 		}
 	}
 
-	if column.Tag != "" {
-		viewlet.Tags[column.Name] = column.Tag
+	columnName := column.Name
+	if columnName == viewlet.Name {
+		viewlet.updateViewSchema(column.Type)
+		return nil
 	}
 
-	tryColumnType(column)
-
-	if column.Type != "" {
-		if column.Name == viewlet.Name {
-			viewlet.updateViewSchema(column.Type)
-			return nil
-		}
-		viewlet.Casts[column.Name] = column.Type
+	_, columnName = namespacedColumn(columnName)
+	if columnName == "" {
+		return nil
+	}
+	columnConfig := columnViewlet.columnConfig(columnName)
+	if tag := column.Tag; tag != "" {
+		tag = trimQuotes(strings.TrimSpace(tag))
+		columnConfig.Tag = &tag
 	}
 	return nil
+}
+
+func namespacedColumn(columnName string) (string, string) {
+	var ns string
+	if index := strings.Index(columnName, "."); index != -1 {
+		ns = columnName[:index]
+		columnName = columnName[index+1:]
+	}
+	return ns, columnName
+}
+
+func (v *Viewlet) columnConfig(columnName string) *view.ColumnConfig {
+	namedConfig := v.namedColumnConfig
+	if len(namedConfig) == 0 {
+		v.namedColumnConfig = v.ColumnConfig.Index()
+		namedConfig = v.namedColumnConfig
+	}
+	columnConfig, ok := namedConfig[columnName]
+	if !ok {
+		columnConfig = &view.ColumnConfig{Name: columnName}
+		namedConfig[columnName] = columnConfig
+		v.ColumnConfig = append(v.ColumnConfig, columnConfig)
+	}
+	return columnConfig
+}
+
+func trimQuotes(tag string) string {
+	if (tag[0] == '\'' && tag[len(tag)-1] == '\'') || (tag[0] == '"' && tag[len(tag)-1] == '"') {
+		tag = tag[1 : len(tag)-1]
+	}
+	return tag
 }
 
 func (v *Viewlet) updateViewSchema(typeName string) {
@@ -197,28 +231,23 @@ func (v *Viewlet) updateViewSchema(typeName string) {
 	}
 }
 
-func tryColumnType(column *sqlparser.Column) {
-	lcExpr := strings.ToLower(column.Expression)
-	if strings.HasPrefix(lcExpr, "cast") {
-		if index := strings.Index(lcExpr, " as "); index != -1 {
-			dataType := column.Expression[index+4 : len(column.Expression)-1]
-			column.Type = strings.TrimSpace(dataType)
-		}
-	}
-}
-
 func extractFunction(column *sqlparser.Column) (string, []string) {
 	fnName := ""
 	var args []string
 	if index := strings.Index(column.Expression, "("); index != -1 {
 		fnName = column.Expression[:index]
 		exprArgs := column.Expression[index+1 : len(column.Expression)-1]
+
+		lcArgs := strings.ToLower(exprArgs)
+		if index := strings.Index(lcArgs, " as "); index != -1 {
+			name := trimQuotes(strings.TrimSpace((exprArgs[:index])))
+			typeName := trimQuotes(strings.TrimSpace((exprArgs[index+4:])))
+			args = append(args, name, typeName)
+			return fnName, args
+		}
 		values := tags.Values(exprArgs)
 		_ = values.Match(func(item string) error {
-			arg := strings.TrimSpace(item)
-			if len(arg) > 0 && arg[0] == '\'' && arg[len(arg)-1] == '\'' {
-				arg = arg[1 : len(arg)-1]
-			}
+			arg := trimQuotes(strings.TrimSpace(item))
 			args = append(args, arg)
 			return nil
 		})

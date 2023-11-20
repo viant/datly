@@ -25,27 +25,25 @@ var arithmeticOperator = map[string]bool{
 
 type (
 	Viewlet struct {
-		Name           string
-		Holder         string
-		Connector      string
-		SQL            string
-		SanitizedSQL   string
-		Expanded       *sqlx.SQL
-		Resource       *Resource
-		Table          *inference.Table
-		Join           *query.Join
-		Spec           *inference.Spec
-		OutputJSONHint string
-		ViewJSONHint   string
-		TableJSONHint  string
-		Exclude        []string
-		Whitelisted    []string
-		Casts          map[string]string
-		Tags           map[string]string
-		//Transforms     map[string]*Applier
-		ColumnConfig   []*view.ColumnConfig
-		View           *View
-		TypeDefinition *view.TypeDefinition
+		Name              string
+		Holder            string
+		Connector         string
+		SQL               string
+		SanitizedSQL      string
+		Expanded          *sqlx.SQL
+		Resource          *Resource
+		Table             *inference.Table
+		Join              *query.Join
+		Spec              *inference.Spec
+		OutputJSONHint    string
+		ViewJSONHint      string
+		TableJSONHint     string
+		Exclude           []string
+		Whitelisted       []string
+		ColumnConfig      view.ColumnConfigs
+		namedColumnConfig view.NamedColumnConfig
+		View              *View
+		TypeDefinition    *view.TypeDefinition
 		OutputSettings
 		sourceViewlet *Viewlet
 		Columns       view.Columns
@@ -200,8 +198,6 @@ func NewViewlet(name, SQL string, join *query.Join, resource *Resource) *Viewlet
 		Join:      join,
 		Exclude:   nil,
 		Resource:  resource,
-		Tags:      map[string]string{},
-		Casts:     map[string]string{},
 		View:      &View{Namespace: name, View: view.View{Name: name}},
 		Connector: connector,
 	}
@@ -226,11 +222,13 @@ func (v *Viewlet) discoverTables(ctx context.Context, db *sql.DB, SQL string) (e
 			}
 		}
 	}
-
 	//Whitelisted
-	for name, dataType := range v.Casts {
-		if column := v.Table.Lookup(name); column != nil {
-			column.Type = dataType
+	for _, config := range v.ColumnConfig {
+		if config.DataType == nil {
+			continue
+		}
+		if column := v.Table.Lookup(config.Name); column != nil {
+			column.Type = *config.DataType
 		}
 	}
 	return err

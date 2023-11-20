@@ -67,6 +67,7 @@ func InitRegistry() {
 			codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
 			codec.WithCodec(dcodec.CognitoKeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
 			codec.WithCodec(dcodec.KeyAsStrings, &dcodec.AsStrings{}, time.Time{}),
+			codec.WithCodec(dcodec.KeyAsInts, &dcodec.AsInts{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyCSV, dcodec.CsvFactory(""), time.Time{}),
 			codec.WithFactory(dcodec.Structql, dcodec.StructQLFactory(""), time.Time{}),
 			codec.WithFactory(dcodec.JSON, &dcodec.JSONFactory{}, time.Time{}),

@@ -19,7 +19,6 @@ import (
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io"
-	"github.com/viant/sqlx/option"
 	"github.com/viant/structology"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
@@ -647,7 +646,7 @@ func (v *View) reconcileColumnTypes() {
 		for i := 0; i < aStruct.NumField(); i++ {
 			field := aStruct.Field(i)
 			index[field.Name] = &field
-			if tag := io.ParseTag(field.Tag.Get("sqlx")); tag != nil {
+			if tag := io.ParseTag(field.Tag); tag != nil {
 				index[tag.Column] = &field
 			}
 		}
@@ -737,6 +736,9 @@ func (c *View) TypeDefinitions() []*TypeDefinition {
 }
 
 func (v *View) updateColumnTypes() {
+	if len(v._columns) == 0 {
+		return
+	}
 	rType := shared.Elem(v.DataType())
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
@@ -1098,7 +1100,7 @@ func (v *View) markColumnsAsFilterable() error {
 	for _, colName := range v.Selector.Constraints.Filterable {
 		column, err := v._columns.Lookup(colName)
 		if err != nil {
-			return fmt.Errorf("invalid View: %v %w", v.Name, err)
+			return fmt.Errorf("criteria column %v, on view has not been defined, %w", colName, v.Name, err)
 		}
 		column.Filterable = true
 	}
@@ -1106,6 +1108,9 @@ func (v *View) markColumnsAsFilterable() error {
 }
 
 func (v *View) indexSqlxColumnsByFieldName() error {
+	if len(v._columns) == 0 {
+		return nil
+	}
 	rType := shared.Elem(v.Schema.Type())
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
@@ -1114,7 +1119,7 @@ func (v *View) indexSqlxColumnsByFieldName() error {
 			continue
 		}
 
-		tag := io.ParseTag(field.Tag.Get(option.TagSqlx))
+		tag := io.ParseTag(field.Tag)
 		//TODO: support anonymous fields
 		if tag.Column != "" {
 			column, err := v._columns.Lookup(tag.Column)
@@ -1142,7 +1147,8 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 			continue
 		}
 
-		sqlxTag := io.ParseTag(field.Tag.Get(option.TagSqlx))
+		//TODO analyze usage of io.ParseTag to simplify
+		sqlxTag := io.ParseTag(field.Tag)
 		elemType := types.Elem(field.Type)
 		if !v.IsHolder(field.Name) && sqlxTag.Ns != "" && elemType.Kind() == reflect.Struct {
 			if err := v.updateColumn(sqlxTag.Ns, elemType, columns, relation, columnsIndex); err != nil {
@@ -1284,15 +1290,12 @@ func (v *View) DatabaseType() reflect.Type {
 func (v *View) UnwrapDatabaseType(ctx context.Context, value interface{}) (interface{}, error) {
 	if v._codec != nil {
 		actualRecord := v._codec.unwrapper.Value(xunsafe.AsPointer(value))
-
 		if err := v._codec.updateValue(ctx, value, &codec.ParentValue{Value: actualRecord, RType: v.Schema.CompType()}); err != nil {
 			return nil, err
 		}
-
 		actualRecord = v._codec.unwrapper.Value(xunsafe.AsPointer(value))
 		return actualRecord, nil
 	}
-
 	return value, nil
 }
 
@@ -1437,6 +1440,10 @@ func (v *View) BuildParametrizedSQL(aState state.Parameters, types *xreflect.Typ
 	bindingArgs = append(bindingArgs, result.Context.DataUnit.ParamsGroup...)
 	result.Expanded = shared.TrimPair(result.Expanded, '(', ')')
 	return &sqlx.SQL{Query: result.Expanded, Args: bindingArgs}, nil
+}
+
+func (v *View) SetResource(resource *Resource) {
+	v._resource = resource
 }
 
 func NewRefView(ref string) *View {

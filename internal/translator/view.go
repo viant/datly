@@ -11,7 +11,6 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
 	"path"
-	"strings"
 )
 
 type (
@@ -193,25 +192,11 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 func (v *View) buildColumnConfig(namespace *Viewlet) {
 	v.Exclude = namespace.Exclude
 	//TODO add tags, formats, etc ...
-	v.ColumnsConfig = map[string]*view.ColumnConfig{}
+	if len(v.ColumnsConfig) == 0 {
+		v.ColumnsConfig = map[string]*view.ColumnConfig{}
+	}
 	for i, config := range namespace.ColumnConfig {
 		v.ColumnsConfig[config.Name] = namespace.ColumnConfig[i]
-	}
-	for k := range namespace.Tags {
-		tag := namespace.Tags[k]
-		config, ok := v.ColumnsConfig[k]
-		if !ok {
-			config = &view.ColumnConfig{Name: k}
-			v.ColumnsConfig[k] = config
-		}
-		tag = strings.TrimSpace(tag)
-		if len(tag) > 0 {
-			if (tag[0] == '\'' && tag[len(tag)-1] == '\'') || (tag[0] == '"' && tag[len(tag)-1] == '"') {
-				tag = tag[1 : len(tag)-1]
-			}
-		}
-		config.Tag = &tag
-
 	}
 }
 
