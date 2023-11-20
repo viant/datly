@@ -11,10 +11,10 @@ import (
 const CodecTag = "codec"
 
 type Codec struct {
-	Name      string
-	Body      string
-	Arguments []string
-	DataType  string
+	Name      string   `tag:"name,omitempty"`
+	Body      string   `tag:"body,omitempty"`
+	Arguments []string `tag:"arguments,omitempty"`
+	DataType  string   `tag:"dataType,omitempty"`
 }
 
 func (t *Tag) updatedCodec(key string, value string) (err error) {

@@ -34,9 +34,11 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 		packageTypes = append(packageTypes, xreflect.NewType(def.Name, xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType)))
 	}
 
+	prefix := c.View.Name
+
 	var options = []xreflect.Option{
 		xreflect.WithPackage(statePkg),
-		xreflect.WithTypes(xreflect.NewType("Output", xreflect.WithReflectType(output))),
+		xreflect.WithTypes(xreflect.NewType(prefix+"Output", xreflect.WithReflectType(output))),
 		xreflect.WithPackageTypes(packageTypes...),
 		xreflect.WithRewriteDoc(),
 		xreflect.WithImportModule(importModules),
@@ -64,7 +66,7 @@ func defineView(datly *datly.Service) {
 
 	}
 
-	inputState := xreflect.GenerateStruct("Input", input.Type(), options...)
+	inputState := xreflect.GenerateStruct(prefix+"Input", input.Type(), options...)
 	builder.WriteString(inputState)
 	result := builder.String()
 	result = c.View.Resource().ReverseSubstitutes(result)

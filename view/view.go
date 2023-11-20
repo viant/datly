@@ -653,6 +653,12 @@ func (v *View) reconcileColumnTypes() {
 
 		for i := range v.Columns {
 			col := v.Columns[i]
+			if col.Codec != nil {
+				if colType, err := types.LookupType(v._resource.LookupType(), col.DataType); err == nil {
+					col.SetColumnType(colType)
+					continue
+				}
+			}
 			if field, ok := index[col.Name]; ok {
 				if col.rType != field.Type {
 					fieldType := field.Type
@@ -849,7 +855,22 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 		scanType := ioColumns[i].ScanType()
 		dataTypeName := ioColumns[i].DatabaseTypeName()
 		isNullable, _ := ioColumns[i].Nullable()
-		columns = append(columns, NewColumn(ioColumns[i].Name(), dataTypeName, scanType, nullable[ioColumns[i].Name()] || isNullable))
+		columnTag := ""
+		if tag := ioColumns[i].Tag(); tag != nil {
+			columnTag = tag.Raw
+		}
+		aColum := NewColumn(ioColumns[i].Name(), dataTypeName, scanType, nullable[ioColumns[i].Name()] || isNullable, WithColumnTag(columnTag))
+		aTag, _ := tags.ParseStateTags(reflect.StructTag(aColum.Tag), nil)
+		if aTag != nil {
+			if aTag.Format != nil {
+				aColum.FormatTag = aTag.Format
+			}
+			if codec := aTag.Codec; codec != nil {
+				aColum.Codec = &state.Codec{Name: codec.Name, Args: codec.Arguments}
+			}
+
+		}
+		columns = append(columns, aColum)
 	}
 	return columns
 }
