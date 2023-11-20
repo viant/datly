@@ -34,8 +34,7 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 		packageTypes = append(packageTypes, xreflect.NewType(def.Name, xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType)))
 	}
 
-	prefix := c.View.Name
-
+	prefix := state.SanitizeTypeName(c.View.Name)
 	var options = []xreflect.Option{
 		xreflect.WithPackage(statePkg),
 		xreflect.WithTypes(xreflect.NewType(prefix+"Output", xreflect.WithReflectType(output))),
