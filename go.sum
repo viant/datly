@@ -1054,8 +1054,7 @@ github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60 h1:VFJvCOHKXv4IqX
 github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49uaYMPRU=
 github.com/viant/bigquery v0.3.3-0.20231010200221-c3e8c785f1e0 h1:jEQ4Iim89W9rjSXp/jKBH2zirs7aor92DHO4AQ5DFko=
 github.com/viant/bigquery v0.3.3-0.20231010200221-c3e8c785f1e0/go.mod h1:EYjfaKz5a0ho9Wg48+NzHnwOuA+Q81c0I0lBUEtsX8s=
-github.com/viant/cloudless v1.9.3-0.20231007034518-7d85a868e57f h1:YidmK4QDOvM6wLX91iRr7Op1HzLd6yyV92UJuiKykbs=
-github.com/viant/cloudless v1.9.3-0.20231007034518-7d85a868e57f/go.mod h1:t6BDFAXg3s3/aULrPrR885vNmyI4MoHfXNu+TIzl/M0=
+github.com/viant/cloudless v1.9.3-0.20231120191931-ea2ca95db778 h1:uAZXOTW316oe9YlDdz686A3py8YJBjESarNtb2NxAWA=
 github.com/viant/cloudless v1.9.3-0.20231120191931-ea2ca95db778/go.mod h1:t6BDFAXg3s3/aULrPrR885vNmyI4MoHfXNu+TIzl/M0=
 github.com/viant/dsc v0.16.2 h1:Kw8zNct6dTISVZpartYK4MlKiwSSqIdRSq5CYjtZcc4=
 github.com/viant/dsc v0.16.2/go.mod h1:vkBPh3XSXUBB/ePbEO0VsKPaiN4JLRuB3QVftbS6KI4=

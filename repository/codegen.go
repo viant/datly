@@ -60,7 +60,12 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 
 		defineComponentFunc := replacer.ExpandAsText(contractInit)
 		options = append(options,
-			xreflect.WithImports([]string{"embed", "github.com/viant/datly"}),
+			xreflect.WithImports([]string{"embed", "github.com/viant/datly",
+				"fmt",
+				"context",
+				"reflect",
+				"github.com/viant/datly/repository",
+				"github.com/viant/datly/repository/contract"}),
 			xreflect.WithSQLRewrite(embeds),
 			xreflect.WithLinkTag(true),
 			xreflect.WithEmbeddedFormatter(func(s string) string {
