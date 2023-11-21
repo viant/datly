@@ -67,7 +67,7 @@ func (s *Service) IsCheckDue(t time.Time) bool {
 	if s == nil {
 		return false
 	}
-	return s.notifier.IsCheckDue(t)
+	return s.notifier.NextCheck().IsZero() || t.After(s.notifier.NextCheck())
 }
 
 // IncreaseVersion increase version of the all routes
@@ -214,7 +214,8 @@ func (s *Service) load(ctx context.Context) error {
 }
 
 func (s *Service) onModify(ctx context.Context, object storage.Object) error {
-	prev := s.lookupRouteBySourceURL(object.URL())
+	path := url.Path(object.URL())
+	prev := s.lookupRouteBySourceURL(path)
 	if prev != nil && prev.Version.HasChanged(object.ModTime()) {
 		return nil
 	}
@@ -236,13 +237,39 @@ func (s *Service) onModify(ctx context.Context, object storage.Object) error {
 }
 
 func (s *Service) onDelete(ctx context.Context, object storage.Object) error {
-	prev := s.lookupRouteBySourceURL(object.URL())
+	path := url.Path(object.URL())
+	prev := s.lookupRouteBySourceURL(path)
 	if prev == nil {
 		return nil
 	}
 	prev.Version.SetChangeKind(version.ChangeKindDeleted)
 	prev.Version.Increase()
+
+	// TODO delete works fine but after adding back rule file we get panic
+	//s.delete(prev, path)
 	return nil
+}
+
+func (s *Service) delete(item *Item, path string) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
+
+	delete(s.bySourceURL, path)
+
+	for _, aPath := range item.Paths {
+		delete(s.byPath, aPath.Key())
+	}
+
+	updatedItems := make([]*Item, len(s.Container.Items)-1)
+	j := 0
+	for i, _ := range s.Container.Items {
+		if s.Container.Items[i] != item {
+			updatedItems[j] = s.Container.Items[i]
+			j++
+		}
+	}
+	s.Container.Items = updatedItems
+
 }
 
 func New(ctx context.Context, fs afs.Service, URL string, refreshFrequency time.Duration) (*Service, error) {
