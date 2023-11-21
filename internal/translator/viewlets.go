@@ -252,5 +252,9 @@ func extractFunction(column *sqlparser.Column) (string, []string) {
 			return nil
 		})
 	}
+	switch fnName {
+	case "tag":
+		return "", nil
+	}
 	return fnName, args
 }
