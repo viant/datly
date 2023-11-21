@@ -105,6 +105,15 @@ func (s *Service) OperateInto(ctx context.Context, aComponent *repository.Compon
 	if err != nil {
 		return err
 	}
+	responseType := reflect.TypeOf(response)
+	outputType := reflect.TypeOf(output)
+
+	if outputType.Elem() == responseType {
+		responseReflect := reflect.ValueOf(response)
+		outputReflect := reflect.ValueOf(output)
+		outputReflect.Elem().Set(responseReflect)
+		return nil
+	}
 	copier := session.NewCopier(reflect.TypeOf(response), reflect.TypeOf(output))
 	return copier.Copy(response, output, session.WithDebug())
 }
@@ -133,8 +142,8 @@ func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Comp
 }
 
 // Read reads data from a view
-func (s *Service) Read(ctx context.Context, viewId string, dest interface{}, option ...reader.Option) error {
-	aView, err := s.View(ctx, wrapWithMethod(http.MethodGet, viewId))
+func (s *Service) Read(ctx context.Context, locator string, dest interface{}, option ...reader.Option) error {
+	aView, err := s.View(ctx, wrapWithMethod(http.MethodGet, locator))
 	if err != nil {
 		return err
 	}
