@@ -203,6 +203,8 @@ func (r *Service) syncChanges(ctx context.Context, metrics *gmetric.Service, sta
 	if !changed {
 		return nil
 	}
+	start := time.Now()
+	fmt.Printf("[INFO] detected resources changes, rebuilding routers\n")
 	mainRouter, err := NewRouter(ctx, r.repository, r.Config, metrics, statusHandler, authorizer)
 	if err != nil {
 		return err
@@ -210,6 +212,7 @@ func (r *Service) syncChanges(ctx context.Context, metrics *gmetric.Service, sta
 	r.mux.Lock()
 	r.mainRouter = mainRouter
 	r.mux.Unlock()
+	fmt.Printf("[INFO]: routers rebuild completed after: %s\n", time.Since(start))
 	return nil
 }
 

@@ -53,8 +53,10 @@ func (s *Service) Container() *path.Container {
 // SyncChanges checks if resource, plugin or components have changes
 // if so it would increase individual or all component/paths version number resulting in lazy reload
 func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
-	snap := &snapshot{}
 	now := time.Now()
+	fmt.Printf("[INFO] sync changes started\n")
+	snap := &snapshot{}
+
 	if s.plugins.IsCheckDue(now) {
 		snap.group.Add(1)
 		go func() {
@@ -83,6 +85,8 @@ func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
 	if snap.majorChange {
 		s.paths.IncreaseVersion()
 	}
+
+	fmt.Printf("[INFO] sync changes completed after: %s\n", time.Since(now))
 	return snap.majorChange, snap.error()
 }
 

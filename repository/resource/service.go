@@ -30,7 +30,7 @@ func (s *Service) IsCheckDue(t time.Time) bool {
 	if s == nil {
 		return false
 	}
-	return s.notifier.IsCheckDue(t)
+	return s.notifier.NextCheck().IsZero() || t.After(s.notifier.NextCheck())
 }
 func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
 	if s == nil {
