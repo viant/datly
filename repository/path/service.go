@@ -87,6 +87,8 @@ func (s *Service) FormatURL(URI string) string {
 }
 
 func (s *Service) Append(paths *Item) {
+	s.mux.Lock()
+	defer s.mux.Unlock()
 	index := len(s.Container.Items)
 	s.Container.Items = append(s.Container.Items, paths)
 	s.bySourceURL[s.FormatURL(paths.SourceURL)] = index
