@@ -87,11 +87,12 @@ func (s *Service) FormatURL(URI string) string {
 }
 
 func (s *Service) Append(paths *Item) {
+	key := s.FormatURL(paths.SourceURL)
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	index := len(s.Container.Items)
 	s.Container.Items = append(s.Container.Items, paths)
-	s.bySourceURL[s.FormatURL(paths.SourceURL)] = index
+	s.bySourceURL[key] = index
 	for _, aPath := range paths.Paths {
 		s.byPath[aPath.Key()] = index
 		aPath.Version = &paths.Version
@@ -100,12 +101,15 @@ func (s *Service) Append(paths *Item) {
 
 func (s *Service) lookupRouteBySourceURL(URL string) *Item {
 	s.mux.RLock()
-	defer s.mux.RLock()
 	index, ok := s.bySourceURL[URL]
+	s.mux.RUnlock()
 	if !ok {
 		return nil
 	}
-	return s.Container.Items[index]
+	s.mux.RLock()
+	ret := s.Container.Items[index]
+	s.mux.RUnlock()
+	return ret
 }
 
 func (s *Service) Lookup(aPath *contract.Path) *Path {
@@ -253,8 +257,8 @@ func (s *Service) onDelete(ctx context.Context, object storage.Object) error {
 }
 
 func (s *Service) delete(item *Item, path string) {
-	s.mux.RLock()
-	defer s.mux.RUnlock()
+	s.mux.Lock()
+	defer s.mux.Unlock()
 
 	delete(s.bySourceURL, path)
 
