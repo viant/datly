@@ -114,7 +114,7 @@ func (s *Service) lookupRouteBySourceURL(URL string) *Item {
 
 func (s *Service) Lookup(aPath *contract.Path) *Path {
 	s.mux.RLock()
-	defer s.mux.RLock()
+	defer s.mux.RUnlock()
 	index, ok := s.byPath[aPath.Key()]
 	if !ok {
 		return nil
