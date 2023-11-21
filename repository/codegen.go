@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology/format/text"
+	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -43,15 +44,21 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 		packageTypes = append(packageTypes, xreflect.NewType(def.Name, xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType)))
 	}
 
-	prefix := state.SanitizeTypeName(c.View.Name)
+	componentName := state.SanitizeTypeName(c.View.Name)
 	var options = []xreflect.Option{
 		xreflect.WithPackage(statePkg),
-		xreflect.WithTypes(xreflect.NewType(prefix+"Output", xreflect.WithReflectType(output))),
+		xreflect.WithTypes(xreflect.NewType(componentName+"Output", xreflect.WithReflectType(output))),
 		xreflect.WithPackageTypes(packageTypes...),
 		xreflect.WithRewriteDoc(),
 		xreflect.WithImportModule(importModules),
 	}
 	if withEmbed {
+		replacer := data.NewMap()
+		replacer.Put("Name", componentName)
+		replacer.Put("URI", c.URI)
+		replacer.Put("Method", c.Method)
+
+		defineComponentFunc := replacer.ExpandAsText(contractInit)
 		options = append(options,
 			xreflect.WithImports([]string{"embed", "github.com/viant/datly"}),
 			xreflect.WithSQLRewrite(embeds),
@@ -59,20 +66,16 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 			xreflect.WithEmbeddedFormatter(func(s string) string {
 				return text.CaseFormatUpperCamel.Format(s, text.CaseFormatLowerUnderscore)
 			}),
-			xreflect.WithSnippetBefore(`
+			xreflect.WithSnippetBefore(fmt.Sprintf(`
 //go:embed sql/*.sql
-var embedFS embed.FS
+var %vFS embed.FS
 
-`),
+`, componentName)),
 			xreflect.WithVeltyTag(false),
-			xreflect.WithSnippetAfter(fmt.Sprintf(`
-func defineView(datly *datly.Service) {
-	%v
-}
-`, contractInit)))
+			xreflect.WithSnippetAfter(defineComponentFunc))
 	}
 
-	inputState := xreflect.GenerateStruct(prefix+"Input", input.Type(), options...)
+	inputState := xreflect.GenerateStruct(componentName+"Input", input.Type(), options...)
 	builder.WriteString(inputState)
 	result := builder.String()
 	result = c.View.Resource().ReverseSubstitutes(result)

@@ -1,9 +1,15 @@
 
 
-	/*
-	xxxxView := view.NewView("xxxx", "",
-		view.WithCriteria("ID"),
-		view.WithViewType(reflect.TypeOf(&XXXX{})),
-		view.WithStructTag(`sql:"uri=sql/xxxx.sql"`, &embedFS),
+func define${Name}Component(srv *datly.Service) error {
+	aComponent, err := repository.NewComponent(
+	    contract.NewPath(http.Method${Method}, "${URI}"),
+		repository.WithContract(reflect.TypeOf(AudienceInput{}), reflect.TypeOf(AudienceOutput{}), &${Name}FS)
 	)
-	 */
+	if err != nil {
+		return fmt.Errorf("failed to create ${Name} component: %w",err)
+	}
+	if err := srv.AddComponent(context.Background(), aComponent); err != nil {
+		return fmt.Errorf("failed to add ${Name} component: %w",err)
+	}
+	return nil
+}
