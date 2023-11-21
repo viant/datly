@@ -192,6 +192,7 @@ func (s *Service) AddViews(ctx context.Context, views ...*view.View) (*repositor
 			}
 		}
 	}
+
 	component := &repository.Component{}
 	component.View = view.NewRefView(views[0].Name)
 	component.Path.URI = internalPath(views[0].Name)
@@ -231,6 +232,12 @@ func (s *Service) AddComponent(ctx context.Context, component *repository.Compon
 			component.View.Connector = view.NewRefConnector(refConnector)
 		}
 	}
+	aView := component.View
+	if aView.Name != "" { //swap with ref view
+		components.Resource.Views = append(components.Resource.Views, aView)
+		component.View = view.NewRefView(aView.Name)
+	}
+	components.Components = append(components.Components, component)
 	if err := components.Init(ctx); err != nil {
 		return err
 	}
@@ -248,9 +255,12 @@ func (s *Service) AddComponents(ctx context.Context, components *repository.Comp
 }
 
 // AddHandler adds handler component to repository
-func (s *Service) AddHandler(ctx context.Context, aPath contract.Path, handler xhandler.Handler) (*repository.Component, error) {
-	component := repository.NewComponent(aPath, repository.WithHandler(handler))
-	err := s.AddComponent(ctx, component)
+func (s *Service) AddHandler(ctx context.Context, aPath *contract.Path, handler xhandler.Handler) (*repository.Component, error) {
+	component, err := repository.NewComponent(aPath, repository.WithHandler(handler))
+	if err != nil {
+		return nil, err
+	}
+	err = s.AddComponent(ctx, component)
 	return component, err
 }
 

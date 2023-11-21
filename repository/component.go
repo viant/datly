@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"embed"
+	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/router/marshal"
@@ -16,8 +18,11 @@ import (
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/docs"
 	xhandler "github.com/viant/xdatly/handler"
@@ -47,7 +52,7 @@ type (
 		doc        docs.Service
 	}
 
-	ComponentOption func(c *Component)
+	ComponentOption func(c *Component) error
 )
 
 func (c *Component) TypeRegistry() *xreflect.Types {
@@ -248,27 +253,69 @@ func (c *Component) Doc() (docs.Service, bool) {
 	return c.doc, c.doc != nil
 }
 
-func NewComponent(path contract.Path, options ...ComponentOption) *Component {
-	ret := &Component{Path: path, View: &view.View{}}
+func NewComponent(path *contract.Path, options ...ComponentOption) (*Component, error) {
+	ret := &Component{Path: *path, View: &view.View{}}
 	for _, opt := range options {
-		opt(ret)
+		if err := opt(ret); err != nil {
+			return nil, err
+		}
 	}
-	return ret
+	return ret, nil
 }
 
 func WithView(aView *view.View) ComponentOption {
-	return func(c *Component) {
+	return func(c *Component) error {
 		c.View = aView
+		return nil
 	}
 }
 
 func WithHandler(aHandler xhandler.Handler) ComponentOption {
-	return func(c *Component) {
+	return func(c *Component) error {
 		c.Handler = handler.NewHandler(aHandler)
 		if c.View == nil {
 			c.View = &view.View{}
 		}
 		c.View.Mode = view.ModeHandler
 		c.Service = service.TypeExecutor
+		return nil
+	}
+}
+
+func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) ComponentOption {
+	return func(c *Component) error {
+		c.Contract.Input.Type = state.Type{Schema: state.NewSchema(inputType)}
+		if err := c.Contract.Input.Type.Init(); err != err {
+			return fmt.Errorf("failed to initalize input: %w", err)
+		}
+		c.Contract.Output.Type = state.Type{Schema: state.NewSchema(outputType)}
+		if err := c.Contract.Output.Type.Init(); err != err {
+			return fmt.Errorf("failed to initalize output: %w", err)
+		}
+		sTypes := types.EnsureStruct(outputType)
+		viewName := sTypes.Name()
+		if index := strings.LastIndex(viewName, "Output"); index != -1 {
+			viewName = viewName[:index]
+		}
+		var vOptions = []view.Option{}
+		table := ""
+		if viewParameter := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil {
+			vOptions = append(vOptions, view.WithViewType(viewParameter.Schema.SliceType().Elem()))
+			aTag, err := tags.ParseViewTags(reflect.StructTag(viewParameter.Tag), embedFs)
+			if err != nil {
+				return fmt.Errorf("invalid output view %v tag: %w", viewName, err)
+			}
+			if aView := aTag.View; aView != nil {
+				setter.SetStringIfEmpty(&viewName, aView.Name)
+				table = aView.Table
+			}
+			if aTag.SQL != "" {
+				anInputType := c.Contract.Input.Type
+				vOptions = append(vOptions, view.WithSQL(string(aTag.SQL), anInputType.Parameters...))
+			}
+		}
+		aView := view.NewView(viewName, table, vOptions...)
+		c.View = aView
+		return nil
 	}
 }

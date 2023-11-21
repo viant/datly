@@ -64,9 +64,6 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 func main() {
 	os.Setenv("DATLY_NOPANIC", "0")
 
-	//os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", path.Join(os.Getenv("HOME"), ".secret/viant-e2e.json"))
-	//os.Chdir("/Users/michal/Go/src/github.vianttech.com/adelphic/datly-forecasting")
-
 	baseDir := toolbox.CallerDirectory(3)
 	configURL := filepath.Join(baseDir, "../local/autogen/Datly/config.json")
 	os.Args = []string{

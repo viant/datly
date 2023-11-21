@@ -21,6 +21,9 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 		if strings.Contains(funcArgs[0], ".") {
 			column.Namespace, column.Name = namespacedColumn(funcArgs[0])
 		} else {
+			if n.Lookup(funcArgs[0]) == nil {
+				return false, nil
+			}
 			column.Namespace = funcArgs[0]
 		}
 	}

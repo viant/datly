@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology/format/text"
 	"github.com/viant/xreflect"
+	"reflect"
 	"strings"
 )
 
@@ -17,6 +19,13 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 	builder := strings.Builder{}
 	input := c.Input.Type.Type()
 	registry := c.TypeRegistry()
+
+	if viewParameter := c.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil {
+		aTag := &tags.Tag{}
+		aTag.SQL = tags.ViewSQL(c.View.Template.Source)
+		viewParameter.Tag = string(aTag.UpdateTag(reflect.StructTag(viewParameter.Tag)))
+	}
+
 	output, _ := c.Output.Type.Parameters.ReflectType("", registry.Lookup, state.WithRelation(), state.WithSQL(), state.WithVelty(false))
 	var packageTypes []*xreflect.Type
 	var importModules = map[string]string{}
@@ -55,14 +64,12 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 var embedFS embed.FS
 
 `),
-
 			xreflect.WithVeltyTag(false),
 			xreflect.WithSnippetAfter(fmt.Sprintf(`
 func defineView(datly *datly.Service) {
 	%v
 }
 `, contractInit)))
-
 	}
 
 	inputState := xreflect.GenerateStruct(prefix+"Input", input.Type(), options...)
