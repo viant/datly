@@ -56,7 +56,7 @@ func (o *Options) ConfigURLs() []string {
 
 func (o *Options) Init(ctx context.Context) error {
 	if o.InitExt != nil {
-		return o.InitExt.Init()
+		return o.InitExt.Init(ctx)
 	}
 	if o.Build != nil {
 		return o.Build.Init()

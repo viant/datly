@@ -17,7 +17,7 @@ type outputLocator struct {
 	Output           *reader.Output
 	Status           *response.Status
 	OutputParameters state.NamedParameters
-	Metrics          reader.Metrics
+	Metrics          response.Metrics
 }
 
 func (l *outputLocator) Names() []string {
@@ -63,6 +63,11 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 			return "unknown", true, nil
 		}
 		return l.Status.Status, true, nil
+	case keys.Metrics:
+		if l.Metrics == nil {
+			return nil, true, nil
+		}
+		return l.Metrics, true, nil
 	case keys.SQL:
 		if l.Output == nil {
 			return nil, false, nil

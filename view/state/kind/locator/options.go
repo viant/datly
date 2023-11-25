@@ -5,11 +5,11 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/repository/contract"
-	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/handler/response"
 	"net/http"
 	"reflect"
 )
@@ -30,7 +30,7 @@ type (
 		OutputParameters state.NamedParameters
 		Views            view.NamedViews
 		View             *view.View
-		Metrics          reader.Metrics
+		Metrics          response.Metrics
 		State            *structology.State
 		Dispatcher       contract.Dispatcher
 	}
@@ -173,7 +173,7 @@ func WithView(aView *view.View) Option {
 }
 
 // WithMetrics return metrics option
-func WithMetrics(metrics reader.Metrics) Option {
+func WithMetrics(metrics response.Metrics) Option {
 	return func(o *Options) {
 		o.Metrics = metrics
 	}

@@ -3,6 +3,7 @@ package translator
 import (
 	"fmt"
 	"github.com/viant/datly/internal/translator/function"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
@@ -81,5 +82,11 @@ func (v *Viewlet) applyExplicitCast(column *sqlparser.Column, funcArgs []string)
 	}
 	columnConfig := v.columnConfig(column.Name)
 	columnConfig.DataType = &funcArgs[1]
+	column.Type = funcArgs[1]
+	rType, err := types.LookupType(v.Resource.typeRegistry.Lookup, column.Type)
+	if err != nil {
+		return false, fmt.Errorf("unknown column %v type: %s, %w", column.Name, column.Type, err)
+	}
+	column.RawType = rType
 	return true, nil
 }

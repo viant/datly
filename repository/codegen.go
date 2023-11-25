@@ -42,16 +42,18 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 		if def.Package != "" && c.ModulePath != "" && strings.Contains(def.DataType, " ") { //complex type
 			importModules[def.Package] = c.ModulePath
 		}
-		packageTypes = append(packageTypes, xreflect.NewType(def.Name, xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType)))
+		packageTypes = append(packageTypes, xreflect.NewType(def.Name, xreflect.WithModulePath(def.ModulePath), xreflect.WithModulePath(def.ModulePath), xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType)))
 	}
 
 	componentName := state.SanitizeTypeName(c.View.Name)
+	fsLocation := text.CaseFormatUpperCamel.Format(componentName, text.CaseFormatLowerUnderscore)
 	var options = []xreflect.Option{
 		xreflect.WithPackage(statePkg),
 		xreflect.WithTypes(xreflect.NewType(componentName+"Output", xreflect.WithReflectType(output))),
 		xreflect.WithPackageTypes(packageTypes...),
 		xreflect.WithRewriteDoc(),
 		xreflect.WithImportModule(importModules),
+		xreflect.WithRegistry(c.types),
 	}
 	if withEmbed {
 		replacer := data.NewMap()
@@ -67,16 +69,16 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 				"reflect",
 				"github.com/viant/datly/repository",
 				"github.com/viant/datly/repository/contract"}),
-			xreflect.WithSQLRewrite(embeds),
+			xreflect.WithSQLRewrite(fsLocation, embeds),
 			xreflect.WithLinkTag(true),
 			xreflect.WithEmbeddedFormatter(func(s string) string {
 				return text.CaseFormatUpperCamel.Format(s, text.CaseFormatLowerUnderscore)
 			}),
 			xreflect.WithSnippetBefore(fmt.Sprintf(`
-//go:embed sql/*.sql
+//go:embed %v/*.sql
 var %vFS embed.FS
 
-`, componentName)),
+`, fsLocation, componentName)),
 			xreflect.WithVeltyTag(false),
 			xreflect.WithSnippetAfter(defineComponentFunc))
 	}

@@ -63,11 +63,12 @@ func InitRegistry() {
 			xreflect.NewType("async.Job", xreflect.WithReflectType(reflect.TypeOf(async.Job{}))),
 			xreflect.NewType("predicate.NamedFilters", xreflect.WithReflectType(reflect.TypeOf(predicate.NamedFilters{}))),
 		)),
-		Codecs: codec.NewRegistry(
+		Codecs: codec.New(
 			codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
 			codec.WithCodec(dcodec.CognitoKeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
 			codec.WithCodec(dcodec.KeyAsStrings, &dcodec.AsStrings{}, time.Time{}),
 			codec.WithCodec(dcodec.KeyAsInts, &dcodec.AsInts{}, time.Time{}),
+			codec.WithCodec(dcodec.KeyNil, &dcodec.Nil{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyCSV, dcodec.CsvFactory(""), time.Time{}),
 			codec.WithFactory(dcodec.Structql, dcodec.StructQLFactory(""), time.Time{}),
 			codec.WithFactory(dcodec.JSON, &dcodec.JSONFactory{}, time.Time{}),

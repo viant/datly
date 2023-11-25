@@ -2,5 +2,5 @@
 package dependency
 
 import (
-	_ "$module/bootstrap"
+	_ "${impModule}/bootstrap"
 )

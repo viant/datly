@@ -12,6 +12,7 @@ import (
 	"github.com/viant/sqlx/io/read"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/sqlx/option"
+	"github.com/viant/xdatly/handler/response"
 	"reflect"
 	"sync"
 	"time"
@@ -73,12 +74,12 @@ func (s *Service) read(ctx context.Context, session *Session) error {
 	return nil
 }
 
-func (s *Service) afterRead(session *Session, collector *view.Collector, start *time.Time, info *TemplateExecution, err error, onFinish counter.OnDone) {
+func (s *Service) afterRead(session *Session, collector *view.Collector, start *time.Time, info *response.Execution, err error, onFinish counter.OnDone) {
 	end := Now()
 	viewName := collector.View().Name
 	session.View.Logger.ReadTime(viewName, start, &end, err)
 	elapsed := Dif(end, *start)
-	session.AddMetric(&Metric{View: viewName, Execution: info, ElapsedMs: int(elapsed.Milliseconds()), Elapsed: elapsed.String(), Rows: collector.Len()})
+	session.AddMetric(&response.Metric{View: viewName, Execution: info, ElapsedMs: int(elapsed.Milliseconds()), Elapsed: elapsed.String(), Rows: collector.Len()})
 	if err != nil {
 		session.View.Counter.IncrementValue(Error)
 	} else {
@@ -187,7 +188,7 @@ func nopCounterDone(end time.Time, values ...interface{}) int64 {
 }
 
 func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session) error {
-	execution := &TemplateExecution{}
+	execution := &response.Execution{}
 	start := Now()
 	onFinish := nopCounterDone
 	if !session.DryRun {
@@ -198,7 +199,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 	return err
 }
 
-func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Statelet, info *TemplateExecution) error {
+func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Statelet, info *response.Execution) error {
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 	visitor := collector.Visitor(ctx)
 
@@ -220,7 +221,7 @@ func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, bat
 	return nil
 }
 
-func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.View, originalSelector *view.Statelet, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) (*SQLExecution, error) {
+func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.View, originalSelector *view.Statelet, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) (*response.SQLExecution, error) {
 	selectorDeref := *originalSelector
 	selectorDeref.Fields = []string{}
 	selectorDeref.Columns = []string{}
@@ -339,7 +340,7 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Statelet, batchDa
 	return fullMatch, columnInMatcher, cacheErr
 }
 
-func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *TemplateExecution, batchData *view.BatchData, selector *view.Statelet) error {
+func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *response.Execution, batchData *view.BatchData, selector *view.Statelet) error {
 	wg := &sync.WaitGroup{}
 	db, err := aView.Db()
 	if err != nil {
@@ -351,11 +352,11 @@ func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aV
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			var templateMeta *SQLExecution
+			var templateMeta *response.SQLExecution
 			parentMeta := view.AsViewParam(aView, selector, batchData)
 			templateMeta, metaErr = s.queryMeta(ctx, session, aView, selector, batchData, collector, parentMeta)
 			if templateMeta != nil {
-				info.TemplateMeta = append(info.TemplateMeta, templateMeta)
+				info.Summary = append(info.Summary, templateMeta)
 			}
 		}()
 	}
@@ -366,13 +367,13 @@ func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aV
 	}
 
 	if objectStats != nil {
-		info.Template = append(info.Template, objectStats)
+		info.View = append(info.View, objectStats)
 	}
 	wg.Wait()
 	return metaErr
 }
 
-func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.Statelet, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn) (*SQLExecution, error) {
+func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.Statelet, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn) (*response.SQLExecution, error) {
 	fullMatcher, columnInMatcher, err := s.getMatchers(aView, selector, batchData, collector, session)
 	if err != nil {
 		return nil, err
@@ -445,7 +446,7 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	return stats, nil
 }
 
-func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.ParmetrizedQuery, stats *SQLExecution) (*SQLExecution, error) {
+func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.ParmetrizedQuery, stats *response.SQLExecution) (*response.SQLExecution, error) {
 	if session.IncludeSQL {
 		return nil, err
 	}
@@ -455,23 +456,36 @@ func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, 
 	return nil, fmt.Errorf("database error occured while fetching Data for view %v %w", aView.Name, err)
 }
 
-func (s *Service) NewExecutionInfo(session *Session, index *cache.ParmetrizedQuery, cacheStats *cache.Stats, cacheError error) *SQLExecution {
+func (s *Service) NewExecutionInfo(session *Session, index *cache.ParmetrizedQuery, cacheStats *cache.Stats, cacheError error) *response.SQLExecution {
 	var SQL string
 	var args []interface{}
 	if session.IncludeSQL {
 		SQL = index.SQL
 		args = index.Args
 	}
-
 	var cacheErrorMessage string
 	if cacheError != nil {
 		cacheErrorMessage = cacheError.Error()
 	}
-
-	return &SQLExecution{
+	var cache *response.CacheStats
+	if cacheStats != nil {
+		cache = &response.CacheStats{
+			Type:           string(cacheStats.Type),
+			RecordsCounter: cacheStats.RecordsCounter,
+			Key:            cacheStats.Key,
+			Dataset:        cacheStats.Dataset,
+			Namespace:      cacheStats.Namespace,
+			FoundWarmup:    cacheStats.FoundWarmup,
+			FoundLazy:      cacheStats.FoundLazy,
+			ErrorType:      cacheStats.ErrorType,
+			ErrorCode:      int(cacheStats.ErrorCode),
+			ExpiryTime:     cacheStats.ExpiryTime,
+		}
+	}
+	return &response.SQLExecution{
 		SQL:        SQL,
 		Args:       args,
-		CacheStats: cacheStats,
+		CacheStats: cache,
 		CacheError: cacheErrorMessage,
 	}
 }

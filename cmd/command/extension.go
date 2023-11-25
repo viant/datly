@@ -39,12 +39,7 @@ func (s *Service) RunInitExtension(ctx context.Context, init *options.Extension)
 		if err = s.updatePackage(ctx, pkgDest, init); err != nil {
 			return fmt.Errorf("failed to update package: %w", err)
 		}
-		//if info, _ := plugin.NewInfo(context.Background(), pkgDest); info != nil && err == nil {
-		//	fmt.Printf("custom types info: %v %v\n", info.CustomCodecPackages, info.CustomTypesPackages)
-		//	if err = s.EnsurePluginArtifacts(context.Background(), info); err != nil {
-		//		return fmt.Errorf("failed to update plugin artifacts: %w", err)
-		//	}
-		//}
+
 	} else {
 		fmt.Printf("generating %v ...\n", pkgDest)
 		if err = s.generatePackage(ctx, pkgDest, init); err != nil {

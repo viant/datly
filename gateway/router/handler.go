@@ -20,7 +20,6 @@ import (
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/operator/exec"
-	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
@@ -295,7 +294,7 @@ func (r *Handler) logAudit(request *http.Request, response http.ResponseWriter, 
 	fmt.Printf("%v\n", string(asBytes))
 }
 
-func (r *Handler) logMetrics(URI string, metrics []*reader.Metric) {
+func (r *Handler) logMetrics(URI string, metrics []*response.Metric) {
 	asBytes, _ := goJson.Marshal(NewMetrics(URI, metrics))
 	fmt.Printf("%v\n", string(asBytes))
 }

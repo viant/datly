@@ -31,6 +31,18 @@ func (r *Rule) GoModuleLocation() string {
 	return "pkg"
 }
 
+func (r *Rule) ModFileLocation(ctx context.Context) string {
+	goMod := path.Join(r.ModuleLocation, "go.mod")
+	if ok, _ := fs.Exists(ctx, goMod); ok {
+		return r.ModuleLocation
+	}
+	parent, _ := path.Split(r.ModuleLocation)
+	if ok, _ := fs.Exists(ctx, path.Join(parent, "go.mod")); ok {
+		return parent
+	}
+	return r.ModuleLocation
+}
+
 func (r *Rule) BaseRuleURL() string {
 	return url.Path(url.Join(r.Project, "dql"))
 }

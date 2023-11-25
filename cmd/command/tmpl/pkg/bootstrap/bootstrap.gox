@@ -2,7 +2,7 @@ package bootstrap
 
 import (
 	"github.com/viant/xdatly/types/core"
-	"${module}/checksum"
+	"${impModule}/checksum"
 	"reflect"
 )
 

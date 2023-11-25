@@ -84,10 +84,11 @@ func (r *Resource) GetSchema(dataType string, opts ...xreflect.Option) (*state.S
 		return nil, err
 	}
 
-	schema := state.NewSchema(rType, state.WithSchemaPackage(aType.Package), state.WithSchemaMethods(aType.Methods))
+	schema := state.NewSchema(rType, state.WithSchemaPackage(aType.Package), state.WithModulePath(aType.ModulePath), state.WithSchemaMethods(aType.Methods))
 	if strings.HasPrefix(dataType, "*") {
 		dataType = dataType[1:]
 	}
+	schema.Package = aType.Package
 	schema.Name = dataType
 	return schema, nil
 }
@@ -119,6 +120,7 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.Typ
 		if typeDef := r.LookupTypeDef(name); typeDef != nil {
 			return nil
 		}
+
 		schema, err := r.GetSchema(name, xreflect.WithPackagePath(typesImport.URL))
 		if err != nil {
 			return fmt.Errorf("unable to include import type: %v,  %w", name, err)
@@ -131,7 +133,7 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.Typ
 		if rType := schema.Type(); rType != nil {
 			dataType = rType.String()
 		}
-		typeDef := &view.TypeDefinition{Name: name, Package: schema.Package, DataType: dataType, CustomType: len(schema.Methods) > 0}
+		typeDef := &view.TypeDefinition{Name: name, Package: schema.Package, DataType: dataType, ModulePath: schema.ModulePath, CustomType: len(schema.Methods) > 0}
 		if i > 0 {
 			alias = ""
 		}
@@ -181,7 +183,10 @@ func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
 	}
 	definition := *typeDef
 	r.Resource.Types = append(r.Resource.Types, &definition)
-	r.typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType), xreflect.WithPackage(typeDef.Package))
+	if rType := typeDef.Schema; rType != nil && rType.Type() != nil && rType.Type().Name() != "" {
+		return
+	}
+	r.typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType), xreflect.WithModulePath(typeDef.ModulePath), xreflect.WithPackage(typeDef.Package))
 }
 
 func (r *Resource) AppendTypeDefinitions(typeDefs []*view.TypeDefinition) {

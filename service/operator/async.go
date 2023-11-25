@@ -57,8 +57,8 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	job.RunTimeInMcs = int(elapsed.Microseconds())
 	metrics, _ := json.Marshal(response.Metrics)
 	job.Metrics = string(metrics)
-	if len(response.Metrics) > 0 && len(response.Metrics[0].Execution.Template) > 0 {
-		if cacheStat := response.Metrics[0].Execution.Template[0].CacheStats; cacheStat != nil {
+	if len(response.Metrics) > 0 && len(response.Metrics[0].Execution.View) > 0 {
+		if cacheStat := response.Metrics[0].Execution.View[0].CacheStats; cacheStat != nil {
 			job.CacheNamespace = &cacheStat.Namespace
 			job.CacheSet = &cacheStat.Dataset
 			job.CacheKey = &cacheStat.Key

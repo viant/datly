@@ -30,6 +30,9 @@ func (s *Service) Generate(ctx context.Context, options *options.Options) error 
 
 func (s *Service) generate(ctx context.Context, options *options.Options) error {
 	ruleOption := options.Rule()
+	if err := s.loadPlugin(ctx, options); err != nil {
+		return err
+	}
 	if options.Generate.Operation == "get" {
 		return s.generateGet(ctx, options)
 	}
@@ -86,10 +89,12 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 }
 
 func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err error) {
+
 	translate := &options.Translate{
 		Repository: *opts.Repository(),
 		Rule:       *opts.Rule(),
 	}
+
 	opts.Translate = translate
 	opts.Generate = nil
 	if err = s.translate(ctx, opts); err != nil {

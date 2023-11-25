@@ -207,7 +207,24 @@ func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Col
 // ensureValidColumns checks if all column have detected data type
 func (s *Service) ensureValidColumns(viewlet *Viewlet) bool {
 	isValid := true
+	columnConfig := viewlet.ColumnConfig.Index()
+
 	for _, candidate := range viewlet.Columns {
+		if config, ok := columnConfig[candidate.Name]; ok {
+			if config.Tag != nil {
+				candidate.Tag = *config.Tag
+			}
+			if config.DataType != nil {
+				candidate.DataType = *config.DataType
+				rType, _ := viewlet.Resource.typeRegistry.Lookup(candidate.DataType)
+				if rType != nil {
+					candidate.SetColumnType(rType)
+				}
+				typeName := strings.ReplaceAll(strings.ReplaceAll(*config.DataType, "*", ""), "[]", "")
+				candidate.Tag += fmt.Sprintf(` typeName:"%s"`, typeName)
+			}
+		}
+
 		if candidate.DataType == "" {
 			s.Repository.Messages.AddWarning("detection", "view", fmt.Sprintf("view: %v column: %v, unable to detect column type", viewlet.Name, candidate.Name))
 			isValid = false

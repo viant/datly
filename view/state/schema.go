@@ -15,6 +15,7 @@ import (
 type (
 	Schema struct {
 		Package     string      `json:",omitempty" yaml:"Package,omitempty"`
+		ModulePath  string      `json:",omitempty" yaml:"ModulePath,omitempty"`
 		Name        string      `json:",omitempty" yaml:"Name,omitempty"`
 		DataType    string      `json:",omitempty" yaml:"DataType,omitempty"`
 		Cardinality Cardinality `json:",omitempty" yaml:"Cardinality,omitempty"`

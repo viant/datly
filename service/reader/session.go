@@ -3,15 +3,13 @@ package reader
 import (
 	"fmt"
 	"github.com/viant/datly/service/executor/expand"
-	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/predicate"
-	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/handler/response"
 	"reflect"
-	"strings"
 	"sync"
 )
 
@@ -28,7 +26,7 @@ type (
 		State         *view.State
 		Parent        *view.View
 		Output
-		MetricPtr *Metrics
+		MetricPtr *response.Metrics
 	}
 
 	Output struct {
@@ -36,7 +34,7 @@ type (
 		DataType    reflect.Type
 		DataPtr     interface{} //slice pointer
 		DataSummary interface{}
-		Metrics     Metrics
+		Metrics     response.Metrics
 		Filters     predicate.Filters //filter used by request
 	}
 
@@ -44,113 +42,7 @@ type (
 		View     *view.View
 		Selector *view.Statelet
 	}
-
-	Metric struct {
-		View      string             `json:",omitempty"`
-		Elapsed   string             `json:",omitempty"`
-		ElapsedMs int                `json:",omitempty"`
-		Rows      int                `json:",omitempty"`
-		Execution *TemplateExecution `json:",omitempty"`
-	}
-
-	Metrics []*Metric
-
-	TemplateExecution struct {
-		Template     []*SQLExecution `json:",omitempty"`
-		TemplateMeta []*SQLExecution `json:",omitempty"`
-		Elapsed      string          `json:",omitempty"`
-	}
-
-	SQLExecution struct {
-		SQL        string        `json:",omitempty"`
-		Args       []interface{} `json:",omitempty"`
-		CacheStats *cache.Stats  `json:",omitempty"`
-		Error      string        `json:",omitempty"`
-		CacheError string        `json:",omitempty"`
-	}
 )
-
-func (m Metrics) Basic() Metrics {
-	var result = make(Metrics, len(m))
-	copy(result, m)
-	for _, item := range m {
-		item.Execution = nil
-	}
-	return result
-}
-
-// SQL returns main view SQL
-func (m *Metrics) SQL() string {
-	if m == nil || len(*m) == 0 {
-		return ""
-	}
-	return (*m)[0].SQL()
-}
-
-// SQL returns view SQL
-func (m *Metric) SQL() string {
-	if m.Execution != nil && len(m.Execution.Template) > 0 {
-		tmpl := m.Execution.Template[0]
-		SQL := shared.ExpandSQL(tmpl.SQL, tmpl.Args)
-		//SQL = strings.ReplaceAll(SQL, "\n", "\\n") // don't escape before marshalling
-		return SQL
-	}
-	return ""
-}
-
-func (e Metrics) Lookup(viewName string) *Metric {
-	for _, candidate := range e {
-		if candidate.View == viewName {
-			return candidate
-		}
-	}
-	return nil
-}
-
-func (i *Metric) HideSQL() *Metric {
-	ret := *i
-	if i.Execution == nil {
-		return &ret
-	}
-	ret.Execution = &TemplateExecution{
-		Template:     make([]*SQLExecution, len(i.Execution.Template)),
-		TemplateMeta: make([]*SQLExecution, len(i.Execution.TemplateMeta)),
-	}
-	copy(ret.Execution.Template, i.Execution.Template)
-	copy(ret.Execution.TemplateMeta, i.Execution.TemplateMeta)
-	for _, elem := range i.Execution.Template {
-		elem.SQL = ""
-		elem.Args = nil
-	}
-	for _, elem := range i.Execution.TemplateMeta {
-		elem.SQL = ""
-		elem.Args = nil
-	}
-	return &ret
-}
-
-func (e Metrics) ParametrizedSQL() []*sqlx.SQL {
-	var result []*sqlx.SQL
-	for _, metric := range e {
-		result = append(result, metric.ParametrizedSQL()...)
-	}
-	return result
-}
-
-func (e *Metric) ParametrizedSQL() []*sqlx.SQL {
-	var result = make([]*sqlx.SQL, 0)
-	if e.Execution == nil {
-		return result
-	}
-	for _, tmpl := range e.Execution.Template {
-		result = append(result, &sqlx.SQL{Query: tmpl.SQL, Args: tmpl.Args})
-	}
-	return result
-}
-
-func (i *Metric) Name() string {
-	return strings.Title(i.View)
-}
 
 func (r *Output) syncData(cardinality state.Cardinality) {
 	if r.DataPtr == nil {
@@ -196,7 +88,7 @@ func (s *Session) AddCriteria(aView *view.View, criteria string, placeholders ..
 	sel.Placeholders = placeholders
 }
 
-func (s *Session) AddMetric(m *Metric) {
+func (s *Session) AddMetric(m *response.Metric) {
 	s.mux.Lock()
 	s.Metrics = append(s.Metrics, m)
 	s.mux.Unlock()
@@ -211,7 +103,7 @@ func WithDryRun() Option {
 }
 
 // WithMetrics returns with dry run option
-func WithMetrics(metrics *Metrics) Option {
+func WithMetrics(metrics *response.Metrics) Option {
 	return func(session *Session) error {
 		session.MetricPtr = metrics
 		return nil

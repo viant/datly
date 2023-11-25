@@ -34,7 +34,7 @@ type (
 		Output     interface{}
 		OutputType reflect.Type
 		Status     *response.Status
-		Metrics    reader.Metrics
+		Metrics    response.Metrics
 		StatusCode int
 		Error      error
 		http.Header

@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/pgo"
 	"github.com/viant/pgo/manager"
 	"io"
@@ -65,13 +66,17 @@ func (s *Service) loadPlugin(ctx context.Context, opts *options.Options) (err er
 	if !opts.Repository().LoadPlugin {
 		return
 	}
-	moduleLocation := opts.Rule().ModuleLocation
+	aRule := opts.Rule()
+	moduleLocation := opts.Rule().ModFileLocation(ctx)
 	goMod := path.Join(moduleLocation, "go.mod")
 	if ok, _ := s.fs.Exists(ctx, goMod); !ok {
 		return nil
 	}
+	moduleLocation = aRule.ModuleLocation
 	flags := getGcFlags()
 	repo := opts.Repository()
+
+	setter.SetStringIfEmpty(&repo.ProjectURL, aRule.Project)
 	destURL := url.Join(repo.ProjectURL, ".build/plugin")
 	_ = s.fs.Delete(ctx, destURL)
 	_ = s.fs.Create(ctx, destURL, file.DefaultDirOsMode, true)
@@ -79,11 +84,16 @@ func (s *Service) loadPlugin(ctx context.Context, opts *options.Options) (err er
 	if goPath == "" {
 		goPath = path.Join(os.Getenv("HOME"), "go")
 	}
+	mainPath := ""
+	if ok, _ := s.fs.Exists(ctx, path.Join(moduleLocation, "plugin")); ok {
+		mainPath = path.Join(moduleLocation, "plugin")
+	}
 	aPlugin := &options.Plugin{GoBuild: options.GoBuild{Module: moduleLocation,
-		DestURL: destURL,
-		Source:  []string{moduleLocation},
-		GoPath:  goPath,
-		GoRoot:  os.Getenv("GOROOT"),
+		DestURL:  destURL,
+		Source:   []string{moduleLocation},
+		GoPath:   goPath,
+		MainPath: mainPath,
+		GoRoot:   os.Getenv("GOROOT"),
 		BuildArgs: []string{
 			flags,
 		},
@@ -129,7 +139,7 @@ func (s *Service) reportPluginIssue(ctx context.Context, destURL string) error {
 			continue
 		}
 		if rtDep.Version != candidate.Version || rtDep.Sum != candidate.Sum {
-			fmt.Printf("dependency difference: %v %v <-> %v", candidate.Path, rtDep.Version, candidate.Version)
+			fmt.Printf("dependency difference: %v %v <-> %v\n", candidate.Path, rtDep.Version, candidate.Version)
 		}
 	}
 	return nil

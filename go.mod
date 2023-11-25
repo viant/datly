@@ -28,14 +28,14 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.2
-	github.com/viant/pgo v0.10.5-0.20231113165225-f7bf2df1eca7
+	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.12.0
 	github.com/viant/structql v0.4.1
 	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
-	github.com/viant/xreflect v0.4.2-0.20231121192748-896897add230
+	github.com/viant/xreflect v0.4.2
 	github.com/viant/xunsafe v0.9.2
 	golang.org/x/mod v0.14.0
 	golang.org/x/oauth2 v0.13.0 // indirect
@@ -51,10 +51,10 @@ require (
 
 require (
 	github.com/viant/structology v0.5.6-0.20231027223343-51d596f3b723
-	github.com/viant/tagly v0.1.2-0.20231109185545-415334b70d1d
+	github.com/viant/tagly v0.1.2-0.20231123035525-6cf2e043531e
 	github.com/viant/xdatly v0.3.1-0.20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20231106205318-5846f0cb1d0d
+	github.com/viant/xdatly/handler v0.0.0-20231125203549-7a5482cefc30
 	github.com/viant/xdatly/types/core v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xlsy v0.3.0
 	github.com/viant/xmlify v0.1.0
@@ -130,3 +130,7 @@ require (
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/viant/xdatly => /Users/awitas/go/src/github.com/viant/xdatly
+
+replace github.com/viant/xdatly/handler => /Users/awitas/go/src/github.com/viant/xdatly/handler

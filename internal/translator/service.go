@@ -493,6 +493,7 @@ func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) (er
 	URL := resource.CustomTypeURLs[0]
 	customTypeLocation := url.Path(URL)
 	if strings.Contains(customTypeLocation, modLocation) {
+		modLocation = s.adjustModLocation(ctx, modLocation)
 		info, err = plugin.NewInfo(ctx, modLocation)
 	} else {
 		info, err = plugin.NewInfo(ctx, URL)
@@ -546,6 +547,17 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		resource.addParameterSchemaType(&parameter.Parameter)
 	}
 	return nil
+}
+
+func (s *Service) adjustModLocation(ctx context.Context, location string) string {
+	if ok, _ := s.fs.Exists(ctx, path.Join(location, "go.mod")); ok {
+		return location
+	}
+	parent, _ := path.Split(location)
+	if ok, _ := s.fs.Exists(ctx, path.Join(parent, "go.mod")); ok {
+		return parent
+	}
+	return location
 }
 
 func New(config *Config, service afs.Service) *Service {

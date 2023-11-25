@@ -23,6 +23,7 @@ type (
 		DataType         string            `json:",omitempty"  yaml:"DataType" `
 		Cardinality      state.Cardinality `json:",omitempty"  yaml:"Cardinality" `
 		Package          string            `json:",omitempty"  yaml:"Package" `
+		ModulePath       string            `json:",omitempty"  yaml:"ModulePath" `
 		Ptr              bool              `json:",omitempty" yaml:"Ptr" `
 		CustomType       bool              `json:",omitempty"`
 	}
@@ -82,7 +83,10 @@ func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupTyp
 		if err != nil {
 			return err
 		}
-		d.Schema = state.NewSchema(rType)
+		if d.Schema == nil {
+			d.Schema = &state.Schema{}
+		}
+		d.Schema.SetType(rType)
 		d.Schema.SetPackage(d.Package)
 		return nil
 	}
@@ -95,11 +99,12 @@ func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupTyp
 			return fmt.Errorf("invalid type def: %s (%s), %w", d.Name, d.DataType, err)
 		}
 	} else {
+		d.Schema = &state.Schema{}
 		schemaType := buildTypeFromFields(d.Fields)
-		if d.Ptr {
+		if d.Ptr && schemaType.Kind() != reflect.Ptr {
 			schemaType = reflect.PtrTo(schemaType)
 		}
-		d.Schema = state.NewSchema(schemaType)
+		d.Schema.SetType(schemaType)
 	}
 	return nil
 }
@@ -119,7 +124,7 @@ func (d *TypeDefinition) Type() reflect.Type {
 }
 
 func (d *TypeDefinition) createSchemaIfNeeded() {
-	if d.DataType == "" {
+	if d.DataType == "" || d.Schema != nil {
 		return
 	}
 	d.Schema = &state.Schema{DataType: d.DataType, Cardinality: d.Cardinality}

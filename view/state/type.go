@@ -270,6 +270,12 @@ func WithSchemaPackage(pkg string) SchemaOption {
 	}
 }
 
+func WithModulePath(aPath string) SchemaOption {
+	return func(s *Schema) {
+		s.ModulePath = aPath
+	}
+}
+
 func WithSchemaMethods(methods []reflect.Method) SchemaOption {
 	return func(s *Schema) {
 		s.Methods = methods

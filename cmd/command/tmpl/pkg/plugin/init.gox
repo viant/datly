@@ -1,5 +1,5 @@
 package main
 
 import (
-	_ "$module/dependency"
+	_ "${impModule}/dependency"
 )

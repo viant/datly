@@ -182,9 +182,10 @@ func (c *Column) ApplyConfig(config *ColumnConfig) {
 	if config.DataType != nil && *config.DataType != "" {
 		setter.SetStringIfEmpty(&c.DataType, *config.DataType)
 	}
-	if config.Tag != nil {
-		c.Tag += " " + strings.Trim(*config.Tag, ` '`)
-		if formatTag, err := format.Parse(reflect.StructTag(*config.Tag)); err == nil {
+
+	if config.Tag != nil && c.Tag != *config.Tag {
+		c.Tag = " " + strings.Trim(*config.Tag, ` '`)
+		if formatTag, _ := format.Parse(reflect.StructTag(*config.Tag)); formatTag != nil {
 			c.FormatTag = formatTag
 		}
 	}

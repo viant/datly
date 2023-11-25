@@ -7,6 +7,7 @@ import (
 	"github.com/viant/toolbox/data"
 	"golang.org/x/mod/modfile"
 	"os"
+	"path"
 	"strings"
 	"time"
 )
@@ -19,6 +20,8 @@ type (
 	}
 	Module struct {
 		GitRepository *string `short:"g" long:"gitrepo" description:"git module repo"`
+		GitFolder     *string
+		GitPrivate    *string `short:"T" long:"gitprivate" description:"git private"`
 		Name          string  `short:"n" long:"name" description:"module name" `
 	}
 	Datly struct {
@@ -34,19 +37,18 @@ func (e *Extension) PackageLocation() string {
 	return pkgDest
 }
 
-func (e *Extension) Init() error {
+func (e *Extension) Init(ctx context.Context) error {
 	if e.Project == "" {
 		e.Project, _ = os.Getwd()
 	}
 	e.Project = ensureAbsPath(e.Project)
 
-	pkgMod := url.Join(e.PackageLocation(), "go.mod")
-	if ok, _ := fs.Exists(context.Background(), pkgMod); ok {
-		data, _ := fs.DownloadWithURL(context.Background(), pkgMod)
-		goMod, err := modfile.Parse(pkgMod, data, nil)
-		if err != nil {
-			return fmt.Errorf("invalid %v %w", pkgMod, err)
-		}
+	goMod, loc, err := tryLoadModule(ctx, e.PackageLocation())
+	if err != nil {
+		return fmt.Errorf("invalid %v %w", path.Join(e.PackageLocation(), "go.mod"), err)
+	}
+
+	if goMod != nil {
 		index := strings.LastIndex(goMod.Module.Mod.Path, "/")
 		name := goMod.Module.Mod.Path
 		gitRepository := ""
@@ -57,6 +59,7 @@ func (e *Extension) Init() error {
 			gitRepository = goMod.Module.Mod.Path[:index]
 			name = goMod.Module.Mod.Path[index+1:]
 		}
+		e.GitFolder = &loc
 		if e.Name == "" {
 			e.Name = name
 		}
@@ -85,6 +88,32 @@ func (e *Extension) Init() error {
 	return nil
 }
 
+func tryLoadModule(ctx context.Context, loc string) (*modfile.File, string, error) {
+	pkgMod := url.Join(loc, "go.mod")
+	if ok, _ := fs.Exists(ctx, pkgMod); ok {
+		ret, err := loadModFile(ctx, pkgMod)
+		return ret, "", err
+	}
+	parent, leaf := path.Split(loc)
+	pkgMod = url.Join(parent, "go.mod")
+	if ok, _ := fs.Exists(ctx, pkgMod); ok {
+		ret, err := loadModFile(ctx, pkgMod)
+		if err != nil {
+			return nil, "", err
+		}
+		return ret, leaf, nil
+	}
+	return nil, "", nil
+}
+
+func loadModFile(ctx context.Context, pkgMod string) (*modfile.File, error) {
+	data, err := fs.DownloadWithURL(ctx, pkgMod)
+	if err != nil {
+		return nil, err
+	}
+	return modfile.Parse(pkgMod, data, nil)
+}
+
 func (e *Module) Module() string {
 	if e.GitRepository == nil {
 		return e.Name
@@ -97,13 +126,22 @@ func (e *Extension) Replacer(shared *Module) data.Map {
 	now := time.Now().UTC().Format(time.RFC3339)
 	module := shared.Module()
 	name := extractModuleName(module)
-
 	replacer.Put("module", module)
+	impModule := module
+	if e.GitFolder != nil {
+		impModule = path.Join(module, *e.GitFolder)
+	}
+	replacer.Put("impModule", impModule)
+
 	if index := strings.Index(name, "-"); index != -1 {
 		name = name[index+1:]
 	}
 	replacer.Put("moduleName", name)
-	replacer.Put("modulePath", url.Join(e.Project, "pkg"))
+	modulePath := e.Project
+	if e.GitFolder == nil {
+		modulePath = path.Join(modulePath, "pkg")
+	}
+	replacer.Put("modulePath", modulePath)
 	replacer.Put("extModulePath", url.Join(e.Project, ".build/ext"))
 	replacer.Put("generatedAt", now)
 	return replacer

@@ -1,14 +1,14 @@
 package router
 
 import (
-	"github.com/viant/datly/service/reader"
+	"github.com/viant/xdatly/handler/response"
 )
 
 type Metrics struct {
 	URI     string
-	Metrics []*reader.Metric
+	Metrics []*response.Metric
 }
 
-func NewMetrics(URI string, metrics []*reader.Metric) *Metrics {
+func NewMetrics(URI string, metrics []*response.Metric) *Metrics {
 	return &Metrics{URI: URI, Metrics: metrics}
 }
