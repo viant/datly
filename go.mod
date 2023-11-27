@@ -50,14 +50,14 @@ require (
 )
 
 require (
-	github.com/viant/structology v0.5.6-0.20231027223343-51d596f3b723
+	github.com/viant/structology v0.5.6-0.20231127181208-736f8ad06193
 	github.com/viant/tagly v0.1.2-0.20231123035525-6cf2e043531e
 	github.com/viant/xdatly v0.3.1-0.20231125211515-a61f20e41821
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20231125211515-a61f20e41821
 	github.com/viant/xdatly/types/core v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xlsy v0.3.0
-	github.com/viant/xmlify v0.1.0
+	github.com/viant/xmlify v0.1.1-0.20231127181625-8a6b48ceea12
 	golang.org/x/tools v0.13.0
 )
 

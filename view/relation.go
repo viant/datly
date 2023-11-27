@@ -194,7 +194,7 @@ func (r *Relation) Validate() error {
 	}
 
 	if r.On[0].Column == "" {
-		return fmt.Errorf("column can't be empty")
+		return fmt.Errorf("relation column can't be empty")
 	}
 
 	if r.Of == nil {

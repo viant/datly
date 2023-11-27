@@ -1080,8 +1080,8 @@ github.com/viant/sqlparser v0.5.1 h1:ec5y4nmFaCSyrKwcQO1AhkVQ1LAN/sE+yMZlWszkBtY
 github.com/viant/sqlparser v0.5.1/go.mod h1:cfJpZuqzt9iWoIbEWBYsnpzEzJ8T8xatW4qSbeiMEzg=
 github.com/viant/sqlx v0.12.0 h1:7Pz/JoGZ2LR3jUJOlVCNT9nBy1fZ8eJawJ9TQkxXnc4=
 github.com/viant/sqlx v0.12.0/go.mod h1:Fpw3BNWCXM1su+5Xil1r+do3vTysFXZMJlFYMi1zuKg=
-github.com/viant/structology v0.5.6-0.20231027223343-51d596f3b723 h1:XOFlZalvCoh8idg2ilxna9K43EUnRn4A7odUlrIQztE=
-github.com/viant/structology v0.5.6-0.20231027223343-51d596f3b723/go.mod h1:FuV201UpB3efpVlm5YVERK6vEDT7L8u+xbrei/MeHe8=
+github.com/viant/structology v0.5.6-0.20231127181208-736f8ad06193 h1:wKs4BXSTV0VAubYVO4giNJIwRCE4OS1Ctk2y9MeKax4=
+github.com/viant/structology v0.5.6-0.20231127181208-736f8ad06193/go.mod h1:oGgckfRCArsyzFpRqem+U0EEyzxjoNx3o21MXO43uh0=
 github.com/viant/structql v0.4.1 h1:eQab1M5eTGFTSLSLIwRMpz/C5IKzixRskon2V8qhtRM=
 github.com/viant/structql v0.4.1/go.mod h1:gHebhXqfhtTpehk9VyeDq6D1rO87hv62AgG4p/e91UY=
 github.com/viant/tagly v0.1.2-0.20231123035525-6cf2e043531e h1:j73+636UrqfP8Yn/aZJPP6DbWa6z/SPbjlSkqQg2WQk=
@@ -1104,8 +1104,8 @@ github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7 h1:lQZR7
 github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7/go.mod h1:NVeS+s/uf2dj/M2QlLdY5KXoci0KPMbD9n02Y0m5hBw=
 github.com/viant/xlsy v0.3.0 h1:j/cADAd41XcxfAGSyPUZmEOHbVe2dcjdVI6JiTKA6ws=
 github.com/viant/xlsy v0.3.0/go.mod h1:RajfF9HkL/PfIxRCvZSubpNlpdMUNDKYZp8C1o3vF4Q=
-github.com/viant/xmlify v0.1.0 h1:tV89imjeDpP+a5Y9oRIacJ/MwUFI1RT6jIPLDXNsaC4=
-github.com/viant/xmlify v0.1.0/go.mod h1:Zke5Kwd9CJ2mBGyrotU5IYetSIRQhe5mIxVz9WOQeVg=
+github.com/viant/xmlify v0.1.1-0.20231127181625-8a6b48ceea12 h1:j7I0D1M5lvmc5dxXzSyx99GSfYiilrSc1hnmFFL+jrg=
+github.com/viant/xmlify v0.1.1-0.20231127181625-8a6b48ceea12/go.mod h1:w25+umH6nthlQ8ACT3K2/YJOLlbTXKLQXkdqFs6ky9s=
 github.com/viant/xreflect v0.5.2 h1:ggD/tpqLcHjrFS3WIWkaLF8ZF7TiJ9vSAGar6cyRHVg=
 github.com/viant/xreflect v0.5.2/go.mod h1:BwI+lqFjhKv2Vn4E0Jt6nvbwcFOWrM6H+sOMOX3JiU4=
 github.com/viant/xunsafe v0.9.2 h1:ZPLrb6AxfE7+Hw813OmqHWuC7PDzW7u9GLJDeKmbpZA=

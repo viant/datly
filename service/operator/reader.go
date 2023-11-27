@@ -10,6 +10,10 @@ import (
 	"github.com/viant/xdatly/handler/async"
 )
 
+type Finalizer interface {
+	Finalize(ctx context.Context) error
+}
+
 func (s *Service) runQuery(ctx context.Context, component *repository.Component, aSession *session.Session) (interface{}, error) {
 	//TODO handler async
 

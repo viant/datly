@@ -35,7 +35,10 @@ func (s *Service) Operate(ctx context.Context, aSession *session.Session, aCompo
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	if finalizer, ok := result.(Finalizer); ok {
+		err = finalizer.Finalize(ctx)
+	}
+	return result, err
 }
 
 // HandleError processes output with error

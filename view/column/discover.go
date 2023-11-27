@@ -241,6 +241,9 @@ func parseQuery(SQL string) (string, string, sqlparser.Columns) {
 			}
 		}
 		sqlQuery.Offset = nil
+		if sqlQuery.From.Alias == "" {
+			sqlQuery.From.Alias = "t"
+		}
 		SQL = sqlparser.Stringify(sqlQuery)
 		if table != "" {
 			SQL += " LIMIT 1"

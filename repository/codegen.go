@@ -6,7 +6,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
-	"github.com/viant/structology/format/text"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
 	"reflect"

@@ -81,7 +81,8 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, aSession *sessio
 		return ret
 	}
 	ret.OutputType = h.output.Type()
-	ret.Output = resultState.State()
+	resultState.SyncPointer()
+	ret.Output = resultState.StatePtr()
 	return ret
 }
 
