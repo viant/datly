@@ -103,8 +103,9 @@ func (c *Component) adjustStructField(embedURI string, embeds map[string]string,
 	return func(aField *reflect.StructField, tag, typeName, doc *string) {
 		fieldTag := *tag
 		if !generateContract {
-			fieldTag, _ = xreflect.RemoveTag(fieldTag, "velty")
 			fieldTag, _ = xreflect.RemoveTag(fieldTag, "on")
+		} else {
+			fieldTag, _ = xreflect.RemoveTag(fieldTag, "velty")
 		}
 		fieldTag, value := xreflect.RemoveTag(fieldTag, "sql")
 		if value != "" && generateContract {
