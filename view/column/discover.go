@@ -241,8 +241,10 @@ func parseQuery(SQL string) (string, string, sqlparser.Columns) {
 			}
 		}
 		sqlQuery.Offset = nil
-		if sqlQuery.From.Alias == "" {
-			sqlQuery.From.Alias = "t"
+		if sqlQuery.From.Alias == "" && sqlQuery.From.X != nil {
+			if _, ok := sqlQuery.From.X.(*expr.Ident); !ok {
+				sqlQuery.From.Alias = "t"
+			}
 		}
 		SQL = sqlparser.Stringify(sqlQuery)
 		if table != "" {
