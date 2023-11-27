@@ -111,7 +111,7 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 			return nil, err
 		}
 		if input == nil {
-			ctx = context.WithValue(ctx, xhandler.InputKey, inputState)
+			ctx = context.WithValue(ctx, xhandler.InputKey, inputState.State())
 		}
 	}
 	return ctx, nil
