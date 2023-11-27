@@ -20,6 +20,11 @@ func TestTag_updateCodec(t *testing.T) {
 			tag:         `codec:"c1,A1,A2"`,
 			expect:      &Codec{Name: "c1", Arguments: []string{"A1", "A2"}},
 		},
+		{
+			description: "basic codec",
+			tag:         `codec:"c1,A1,A2"`,
+			expect:      &Codec{Name: "c1", Arguments: []string{"A1", "A2"}},
+		},
 	}
 
 	for _, testCase := range testCases {
