@@ -138,7 +138,7 @@ func (e *Extension) Replacer(shared *Module) data.Map {
 	}
 	replacer.Put("moduleName", name)
 	modulePath := e.Project
-	if e.GitFolder == nil {
+	if e.GitFolder == nil || *e.GitFolder == "" {
 		modulePath = path.Join(modulePath, "pkg")
 	}
 	replacer.Put("modulePath", modulePath)
