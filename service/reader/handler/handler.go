@@ -102,7 +102,7 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 		return err
 	}
 	aSession.State = aState.State()
-	if err = reader.New().Read(context.TODO(), aSession); err != nil {
+	if err = reader.New().Read(ctx, aSession); err != nil {
 		return err //TODO add 501 for database errors ?
 	}
 	ret.Reader = &aSession.Output
