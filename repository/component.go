@@ -171,11 +171,15 @@ func (c *Component) Exclusion(state *view.State) []*json.FilterEntry {
 
 func (c *Component) LocatorOptions(request *http.Request, unmarshal shared.Unmarshal) []locator.Option {
 	var result []locator.Option
-	result = append(result, locator.WithUnmarshal(unmarshal))
+	if unmarshal != nil {
+		result = append(result, locator.WithUnmarshal(unmarshal))
+	}
 	if c.dispatcher != nil {
 		result = append(result, locator.WithDispatcher(c.dispatcher))
 	}
-	result = append(result, locator.WithRequest(request))
+	if request != nil {
+		result = append(result, locator.WithRequest(request))
+	}
 	result = append(result, locator.WithURIPattern(c.URI))
 	result = append(result, locator.WithIOConfig(c.IOConfig()))
 	result = append(result, locator.WithInputParameters(c.Input.Type.Parameters.Index()))

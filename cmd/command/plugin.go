@@ -133,15 +133,23 @@ func (s *Service) reportPluginIssue(ctx context.Context, destURL string) error {
 	for _, dep := range runtimeInfo.Deps {
 		runtimeDep[dep.Path] = dep
 	}
+	fixBuilder := strings.Builder{}
 	for _, candidate := range pluginInfo.Deps {
 		rtDep, ok := runtimeDep[candidate.Path]
 		if !ok {
 			continue
 		}
 		if rtDep.Version != candidate.Version || rtDep.Sum != candidate.Sum {
-			fmt.Printf("dependency difference: %v %v <-> %v\n", candidate.Path, rtDep.Version, candidate.Version)
+			fmt.Printf("dependency difference: %v %v <-> %v, checksum(%v <-> %v)\n", candidate.Path, rtDep.Version, candidate.Version, rtDep.Sum, candidate.Sum)
+			version := rtDep.Version
+			if index := strings.LastIndex(rtDep.Version, "-"); index != -1 {
+				version = rtDep.Version[index+1:]
+			}
+			fixBuilder.WriteString("go get " + candidate.Path + "@" + version)
+			fixBuilder.WriteString("\n")
 		}
 	}
+	fmt.Printf(fixBuilder.String())
 	return nil
 }
 

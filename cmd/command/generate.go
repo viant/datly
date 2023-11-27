@@ -97,50 +97,50 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 
 	opts.Translate = translate
 	opts.Generate = nil
+	sources := opts.Rule().Source
 	if err = s.translate(ctx, opts); err != nil {
 		return err
 	}
-	moduleLocation := translate.Rule.ModuleLocation
-	modulePrefix := translate.Rule.ModulePrefix
-	sourceURL := translate.Source[0]
-	_, sourceName := path.Split(url.Path(sourceURL))
-	sourceName = trimExt(sourceName)
-
-	URI := s.translator.Repository.Resource[0].Rule.URI
-
 	if err = s.persistRepository(ctx); err != nil {
 		return err
 	}
-	s.translator.Repository.Files.Reset()
-	componentURL := s.translator.Repository.Config.RouteURL
-	datlySrv, err := datly.New(ctx, repository.WithComponentURL(componentURL))
-	if err != nil {
-		return err
-	}
 
-	aComponent, err := datlySrv.Component(ctx, URI)
-	if err != nil {
-		return err
-	}
-	var embeds = map[string]string{}
-	code := aComponent.GenerateOutputCode(true, embeds)
-	destURL := path.Join(moduleLocation, modulePrefix, sourceName+".go")
-	if err = s.fs.Upload(ctx, destURL, file.DefaultFileOsMode, strings.NewReader(code)); err != nil {
-		return err
-	}
-	return s.persistEmbeds(ctx, moduleLocation, modulePrefix, embeds, aComponent)
+	for i, resource := range s.translator.Repository.Resource {
+		moduleLocation := translate.Rule.ModuleLocation
+		modulePrefix := translate.Rule.ModulePrefix
+		_, sourceName := path.Split(url.Path(sources[i]))
+		sourceName = trimExt(sourceName)
+		URI := resource.Rule.URI
+		componentURL := s.translator.Repository.Config.RouteURL
+		datlySrv, err := datly.New(ctx, repository.WithComponentURL(componentURL))
+		if err != nil {
+			return err
+		}
+		aComponent, err := datlySrv.Component(ctx, URI)
+		if err != nil {
+			return err
+		}
+		var embeds = map[string]string{}
+		code := aComponent.GenerateOutputCode(true, embeds)
+		destURL := path.Join(moduleLocation, modulePrefix, sourceName+".go")
+		if err = s.fs.Upload(ctx, destURL, file.DefaultFileOsMode, strings.NewReader(code)); err != nil {
+			return err
+		}
+		if err = s.persistEmbeds(ctx, moduleLocation, modulePrefix, embeds, aComponent); err != nil {
+			return err
+		}
 
+		s.translator.Init(ctx)
+
+	}
+	return nil
 }
 
 func (s *Service) persistEmbeds(ctx context.Context, moduleLocation string, modulePrefix string, embeds map[string]string, component *repository.Component) error {
-	embedBaseURL := path.Join(path.Join(moduleLocation, modulePrefix, "sql"))
 	rootName := component.View.Name
 	formatter := text.DetectCaseFormat(rootName)
-	rootSQL := path.Join(embedBaseURL, formatter.Format(rootName, text.CaseFormatLowerUnderscore)+".sql")
-	if err := s.fs.Upload(ctx, rootSQL, file.DefaultFileOsMode, strings.NewReader(component.View.Template.Source)); err != nil {
-		return err
-	}
-
+	formatter.Format(rootName, text.CaseFormatLowerUnderscore)
+	embedBaseURL := path.Join(path.Join(moduleLocation, modulePrefix, formatter.Format(rootName, text.CaseFormatLowerUnderscore)))
 	for k, v := range embeds {
 		embedURL := path.Join(embedBaseURL, k)
 		v = strings.ReplaceAll(v, `\n`, "\n")

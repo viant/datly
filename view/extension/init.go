@@ -47,6 +47,8 @@ func InitRegistry() {
 			xreflect.NewType("types.BitBool", xreflect.WithReflectType(reflect.TypeOf(types.BitBool(true)))),
 			xreflect.NewType("time.Time", xreflect.WithReflectType(xreflect.TimeType)),
 			xreflect.NewType("response.Status", xreflect.WithReflectType(reflect.TypeOf(response.Status{}))),
+			xreflect.NewType("response.Metrics", xreflect.WithReflectType(reflect.TypeOf(response.Metrics{}))),
+			xreflect.NewType("response.Metric", xreflect.WithReflectType(reflect.TypeOf(response.Metric{}))),
 			xreflect.NewType("response.JobInfo", xreflect.WithReflectType(reflect.TypeOf(response.JobInfo{}))),
 
 			xreflect.NewType("predicate.StringsFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.StringsFilter{}))),

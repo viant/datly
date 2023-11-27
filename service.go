@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/repository/locator/component/dispatcher"
 	sjwt "github.com/viant/datly/service/auth/jwt"
 	"github.com/viant/datly/service/auth/mock"
 	"github.com/viant/datly/service/executor"
@@ -39,7 +40,69 @@ type (
 		request *http.Request
 	}
 	SessionOption func(o *sessionOptions)
+
+	operateOptions struct {
+		path           *contract.Path
+		component      *repository.Component
+		session        *session.Session
+		output         interface{}
+		input          interface{}
+		sessionOptions []SessionOption
+	}
+	OperateOption func(o *operateOptions)
 )
+
+func newOperateOptions(opts []OperateOption) *operateOptions {
+	ret := &operateOptions{}
+	for _, opt := range opts {
+		opt(ret)
+	}
+	return ret
+}
+
+// WithPath returns
+func WithPath(aPath *contract.Path) OperateOption {
+	return func(o *operateOptions) {
+		o.path = aPath
+	}
+}
+
+func WithSessionOptions(options ...SessionOption) OperateOption {
+	return func(o *operateOptions) {
+		o.sessionOptions = options
+	}
+}
+
+// WithURI returns with URI option
+func WithURI(URI string) OperateOption {
+	return func(o *operateOptions) {
+		pair := strings.Split(URI, ":")
+		method := http.MethodGet
+		if len(pair) == 2 {
+			method = pair[0]
+			URI = pair[1]
+		}
+		o.path = contract.NewPath(method, URI)
+	}
+}
+
+func WithOutput(output interface{}) OperateOption {
+	return func(o *operateOptions) {
+		o.output = output
+	}
+}
+
+func WithSession(session *session.Session) OperateOption {
+	return func(o *operateOptions) {
+		o.session = session
+	}
+}
+
+func WithInput(input interface{}) OperateOption {
+	return func(o *operateOptions) {
+		o.input = input
+	}
+}
 
 func newSessionOptions(opts []SessionOption) *sessionOptions {
 	sessionOpt := &sessionOptions{}
@@ -87,40 +150,61 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 	return nil
 }
 
-// OperateWith performs respective component operation with supplied input, it passes result into output
-func (s *Service) OperateWith(ctx context.Context, aComponent *repository.Component, input interface{}, output interface{}) error {
-	aSession := s.NewComponentSession(aComponent)
+func LoadInput(ctx context.Context, aSession *session.Session, aComponent *repository.Component, input interface{}) error {
 	if err := aSession.LoadState(aComponent.Input.Type.Parameters, input); err != nil {
 		return err
 	}
 	if err := aSession.Populate(ctx); err != nil {
 		return err
 	}
-	return s.OperateInto(ctx, aComponent, aSession, output)
-}
-
-// OperateInto performs respective component operation, it passes result into output
-func (s *Service) OperateInto(ctx context.Context, aComponent *repository.Component, aSession *session.Session, output interface{}) error {
-	response, err := s.operator.Operate(ctx, aComponent, aSession)
-	if err != nil {
-		return err
-	}
-	responseType := reflect.TypeOf(response)
-	outputType := reflect.TypeOf(output)
-
-	if outputType.Elem() == responseType {
-		responseReflect := reflect.ValueOf(response)
-		outputReflect := reflect.ValueOf(output)
-		outputReflect.Elem().Set(responseReflect)
-		return nil
-	}
-	copier := session.NewCopier(reflect.TypeOf(response), reflect.TypeOf(output))
-	return copier.Copy(response, output, session.WithDebug())
+	return nil
 }
 
 // Operate performs respective operation on supplied component
-func (s *Service) Operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
-	return s.operator.Operate(ctx, aComponent, aSession)
+func (s *Service) Operate(ctx context.Context, opts ...OperateOption) (interface{}, error) {
+	options := newOperateOptions(opts)
+	var err error
+	if options.component == nil {
+		if options.path == nil {
+			return nil, fmt.Errorf("path/component were empty")
+		}
+		if options.component, err = s.Component(ctx, options.path.Method+":"+options.path.URI); err != nil {
+			return nil, err
+		}
+	}
+	if options.session == nil {
+		options.session = s.NewComponentSession(options.component, options.sessionOptions...)
+	}
+	if input := options.input; input != nil {
+		if err = LoadInput(ctx, options.session, options.component, input); err != nil {
+			return nil, err
+		}
+	}
+
+	response, err := s.operator.Operate(ctx, options.session, options.component)
+	if err != nil {
+		return nil, err
+	}
+	if output := options.output; output != nil {
+		if err = s.Reconcile(response, output); err != nil {
+			return nil, err
+		}
+	}
+	return response, err
+}
+
+// Reconcile reconciles from with to
+func (s *Service) Reconcile(from interface{}, to interface{}) error {
+	responseType := reflect.TypeOf(from)
+	outputType := reflect.TypeOf(to)
+	if outputType.Elem() == responseType {
+		responseReflect := reflect.ValueOf(from)
+		outputReflect := reflect.ValueOf(to)
+		outputReflect.Elem().Set(responseReflect)
+		return nil
+	}
+	copier := session.NewCopier(reflect.TypeOf(from), reflect.TypeOf(to))
+	return copier.Copy(from, to, session.WithDebug())
 }
 
 func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Component, request *http.Request, inputPtr interface{}) error {
@@ -326,6 +410,7 @@ func New(ctx context.Context, options ...repository.Option) (*Service, error) {
 	options = append([]repository.Option{
 		repository.WithJWTSigner(mock.HmacJwtSigner()),
 		repository.WithJWTVerifier(mock.HmacJwtVerifier()),
+		repository.WithDispatcher(dispatcher.New),
 	}, options...)
 	aRepository, err := repository.New(ctx, options...)
 	if err != nil {

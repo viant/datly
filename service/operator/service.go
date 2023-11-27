@@ -17,6 +17,8 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/structology"
+	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/async"
 )
 
@@ -25,7 +27,7 @@ type Service struct {
 }
 
 // Operate processes data component with data session
-func (s *Service) Operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
+func (s *Service) Operate(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (interface{}, error) {
 	if err := s.updateJobStatusRunning(ctx, aComponent); err != nil {
 		return nil, err
 	}
@@ -37,17 +39,15 @@ func (s *Service) Operate(ctx context.Context, aComponent *repository.Component,
 }
 
 // HandleError processes output with error
-func (s *Service) HandleError(ctx context.Context, err error, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
+func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aComponent *repository.Component, err error) (interface{}, error) {
 	ctx = context.WithValue(ctx, exec.ErrorKey, err)
 	ctx = context.WithValue(ctx, view.ContextKey, aComponent.View)
 	output := aComponent.Output.Type.Type().NewState()
-
 	var locatorOptions []locator.Option
-	locatorOptions = append(locatorOptions, locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
-		return aSession.LookupValue(ctx, parameter, aSession.Indirect(true, locatorOptions...))
-	}),
-		locator.WithView(aComponent.View))
-
+	locatorOptions = append(locatorOptions, locator.WithView(aComponent.View),
+		locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
+			return aSession.LookupValue(ctx, parameter, aSession.Indirect(true, locatorOptions...))
+		}))
 	var options = aSession.Indirect(true, locatorOptions...)
 	err = aSession.SetState(ctx, aComponent.Output.Type.Parameters, output, options)
 	return output.State(), err
@@ -55,15 +55,19 @@ func (s *Service) HandleError(ctx context.Context, err error, aComponent *reposi
 
 func (s *Service) operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	var err error
-	ctx, err = s.EnsureContext(ctx, aComponent, aSession)
+	ctx, err = s.EnsureContext(ctx, aSession, aComponent)
 	if err != nil {
 		return nil, err
 	}
-	if ctx, err = s.EnsureAsyncContext(ctx, aComponent, aSession); err != nil {
+	if ctx, err = s.EnsureAsyncContext(ctx, aSession, aComponent); err != nil {
 		return nil, err
 	}
+
 	switch aComponent.Service {
 	case service.TypeReader:
+		if ctx, err = s.EnsureInput(ctx, aComponent, aSession); err != nil {
+			return nil, err
+		}
 		return s.runQuery(ctx, aComponent, aSession)
 	case service.TypeExecutor:
 		return s.execute(ctx, aComponent, aSession)
@@ -71,7 +75,7 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported Type %v", aComponent.Service))
 }
 
-func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
+func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
 	var info *exec.Context
 	if ctx.Value(exec.ContextKey) == nil {
 		ctx = context.WithValue(ctx, exec.ContextKey, exec.NewContext())
@@ -88,7 +92,32 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 	return ctx, nil
 }
 
-func (s *Service) EnsureAsyncContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
+func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
+	if job := s.Job(ctx); job != nil { //
+		return ctx, nil
+	}
+	if inputType := aComponent.Input.Type; inputType.Type() != nil {
+		var inputState *structology.State
+		input := ctx.Value(xhandler.InputKey)
+		if input != nil {
+			inputState = inputType.Type().WithValue(input)
+		} else {
+			inputState = inputType.Type().NewState()
+		}
+		locatorOptions := aComponent.LocatorOptions(nil, nil)
+		options := aSession.ViewOptions(aComponent.View, session.WithLocatorOptions(locatorOptions...))
+		err := aSession.SetState(ctx, inputType.Parameters, inputState, options)
+		if err != nil {
+			return nil, err
+		}
+		if input == nil {
+			ctx = context.WithValue(ctx, xhandler.InputKey, inputState)
+		}
+	}
+	return ctx, nil
+}
+
+func (s *Service) EnsureAsyncContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
 	infoValue := ctx.Value(exec.ContextKey)
 	if infoValue == nil {
 		return ctx, nil
@@ -99,7 +128,7 @@ func (s *Service) EnsureAsyncContext(ctx context.Context, aComponent *repository
 	if asyncModule == nil {
 		return ctx, nil
 	}
-	return s.ensureAsyncContext(ctx, aComponent, aSession, asyncModule, info)
+	return s.ensureAsyncContext(ctx, aSession, aComponent, asyncModule, info)
 }
 
 func (s *Service) ensureContentSetting(ctx context.Context, aSession *session.Session, aComponent *repository.Component) {
@@ -119,7 +148,7 @@ func (s *Service) ensureContentSetting(ctx context.Context, aSession *session.Se
 	}
 }
 
-func (s *Service) ensureAsyncContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session, asyncModule *rasync.Config, info *exec.Context) (context.Context, error) {
+func (s *Service) ensureAsyncContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component, asyncModule *rasync.Config, info *exec.Context) (context.Context, error) {
 	if job := ctx.Value(async.JobKey); job != nil {
 		return ctx, nil
 	}

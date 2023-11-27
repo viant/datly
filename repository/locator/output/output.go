@@ -13,18 +13,18 @@ import (
 	"strings"
 )
 
-type outputLocator struct {
+type Locator struct {
 	Output           *reader.Output
 	Status           *response.Status
 	OutputParameters state.NamedParameters
 	Metrics          response.Metrics
 }
 
-func (l *outputLocator) Names() []string {
+func (l *Locator) Names() []string {
 	return nil
 }
 
-func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (l *Locator) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	aName := strings.ToLower(name)
 	switch aName {
 	case keys.ViewData:
@@ -94,7 +94,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 // newOutputLocator returns output locator
 func newOutputLocator(opts ...locator.Option) (kind.Locator, error) {
 	options := locator.NewOptions(opts)
-	ret := &outputLocator{OutputParameters: options.OutputParameters}
+	ret := &Locator{OutputParameters: options.OutputParameters}
 	for _, candidate := range options.Custom {
 		if output, ok := candidate.(*reader.Output); ok {
 			ret.Output = output

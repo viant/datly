@@ -170,7 +170,6 @@ func (r *Resource) addParameterSchemaType(param *state.Parameter) {
 		setter.SetStringIfEmpty(&typeName, state.SanitizeTypeName(param.Schema.Name))
 		setter.SetStringIfEmpty(&typeName, state.SanitizeTypeName(param.Name))
 		param.Schema.Name = typeName
-
 		aType := xreflect.NewType(typeName, xreflect.WithReflectType(rType), xreflect.WithPackage(param.Schema.Package))
 		r.AppendTypeDefinition(&view.TypeDefinition{Name: typeName, DataType: aType.Body(), Package: param.Schema.Package})
 	}

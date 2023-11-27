@@ -34,7 +34,6 @@ func (s *Service) Translate(ctx context.Context, opts *options.Options) (err err
 
 func (s *Service) persistRepository(ctx context.Context) error {
 	repository := s.translator.Repository
-
 	if err := repository.PersistConfig(); err != nil {
 		return err
 	}

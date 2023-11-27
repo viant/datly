@@ -310,13 +310,13 @@ func (r *Handler) payloadReader(ctx context.Context, request *http.Request, writ
 	if err != nil {
 		return nil, err
 	}
-	if ctx, err = r.dispatcher.EnsureContext(ctx, aComponent, aSession); err != nil {
+	if ctx, err = r.dispatcher.EnsureContext(ctx, aSession, aComponent); err != nil {
 		return nil, err
 	}
 	if err := aSession.Populate(ctx); err != nil {
 		return nil, err
 	}
-	aResponse, err := r.dispatcher.Operate(ctx, aComponent, aSession)
+	aResponse, err := r.dispatcher.Operate(ctx, aSession, aComponent)
 	if err != nil {
 		return nil, err
 	}

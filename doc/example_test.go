@@ -70,7 +70,7 @@ func Example_ComponentDebugging() {
 		log.Fatal(err)
 	}
 	aComponent := components.Components[0]
-	aSession := service.NewComponentSession(aComponent, httpRequest)
+	aSession := service.NewComponentSession(aComponent, datly.WithRequest(httpRequest))
 	response, err := service.Operate(ctx, aComponent, aSession)
 	if err != nil {
 		log.Fatal(err)

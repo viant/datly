@@ -68,18 +68,16 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	if err = resource.ExtractDeclared(&dSQL); err != nil {
 		return err
 	}
-
-	outputState := resource.OutputState
 	if resource.Rule.Output != nil {
 		resource.Rule.Output.Doc = resource.Rule.Doc.Output
 		resource.Rule.Output.FilterDoc = resource.Rule.Doc.Filter
 	}
-
-	componentParameters := outputState.FilterByKind(state.KindComponent)
-	if err = s.updateComponentType(ctx, resource, componentParameters); err != nil {
+	if err = s.updateComponentType(ctx, resource, resource.State.FilterByKind(state.KindComponent)); err != nil {
 		return err
 	}
-
+	if err = s.updateComponentType(ctx, resource, resource.OutputState.FilterByKind(state.KindComponent)); err != nil {
+		return err
+	}
 	dSQL = rule.NormalizeSQL(dSQL, handleVeltyExpression)
 	if resource.IsExec() || resource.Rule.Handler != nil {
 		if err := s.translateExecutorDSQL(ctx, resource, dSQL); err != nil {

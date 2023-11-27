@@ -12,6 +12,7 @@ import (
 
 func (s *Service) runQuery(ctx context.Context, component *repository.Component, aSession *session.Session) (interface{}, error) {
 	//TODO handler async
+
 	readerHandler := handler.New(component.Output.Type.Type(), &component.Output.Type)
 	var options = []reader.Option{
 		reader.WithIncludeSQL(true),

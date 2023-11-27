@@ -130,7 +130,6 @@ func (s *Session) ViewOptions(aView *view.View, opts ...Option) *Options {
 		parameters = aView.Template.Parameters.Index()
 	}
 	viewOptions.kindLocator = s.kindLocator.With(s.viewLookupOptions(aView, parameters, viewOptions)...)
-
 	viewOptions.AddCodec(codec.WithSelector(codec.Selector(selectors)))
 	viewOptions.AddCodec(codec.WithColumnsSource(aView.IndexedColumns()))
 

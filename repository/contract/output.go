@@ -87,13 +87,15 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters sta
 	}
 
 	if o.Type.Schema != nil && o.Type.Name != "" {
-		lookupType := aView.Resource().LookupType()
-		rType, err := lookupType(o.Type.Name)
-		if err != nil {
-			return fmt.Errorf("unknwout output: %w", err)
+		rType := o.Type.Type()
+		if rType == nil {
+			lookupType := aView.Resource().LookupType()
+			rType, err := lookupType(o.Type.Name)
+			if err != nil {
+				return fmt.Errorf("unknwout output: %w", err)
+			}
+			o.Type.SetType(rType)
 		}
-		o.Type.SetType(rType)
-
 	}
 
 	o.Type.Parameters.FlagOutput()

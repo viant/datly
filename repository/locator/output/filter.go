@@ -10,7 +10,7 @@ import (
 	"strconv"
 )
 
-func (l *outputLocator) getFilterValue(ctx context.Context) (interface{}, bool, error) {
+func (l *Locator) getFilterValue(ctx context.Context) (interface{}, bool, error) {
 	parameter := l.OutputParameters.LookupByLocation(state.KindOutput, "filter")
 	if parameter == nil {
 		return nil, false, nil
@@ -28,7 +28,7 @@ func (l *outputLocator) getFilterValue(ctx context.Context) (interface{}, bool, 
 	return filterState.State(), true, nil
 }
 
-func (l *outputLocator) getFiltersValue(ctx context.Context) (interface{}, bool, error) {
+func (l *Locator) getFiltersValue(ctx context.Context) (interface{}, bool, error) {
 	var filters predicate.NamedFilters
 	for i, filter := range l.Output.Filters {
 		output := l.Output.Filters[i]
@@ -40,7 +40,7 @@ func (l *outputLocator) getFiltersValue(ctx context.Context) (interface{}, bool,
 	return filters, true, nil
 }
 
-func (l *outputLocator) transferValues(source []interface{}, dest *[]string) {
+func (l *Locator) transferValues(source []interface{}, dest *[]string) {
 	for _, value := range source {
 		switch actual := value.(type) {
 		case string:
@@ -53,7 +53,7 @@ func (l *outputLocator) transferValues(source []interface{}, dest *[]string) {
 	}
 }
 
-func (l *outputLocator) buildFilter(parameter *state.Parameter) (*structology.State, error) {
+func (l *Locator) buildFilter(parameter *state.Parameter) (*structology.State, error) {
 	filterType := structology.NewStateType(parameter.Schema.Type())
 	filterState := filterType.NewState()
 	if err := l.setFilterFields(filterState); err != nil {
@@ -68,7 +68,7 @@ var (
 	boolFilterType   = reflect.TypeOf(&predicate.BoolFilter{})
 )
 
-func (l *outputLocator) setFilterFields(filterState *structology.State) error {
+func (l *Locator) setFilterFields(filterState *structology.State) error {
 	var err error
 	for i := range l.Output.Filters {
 		filter := l.Output.Filters[i]

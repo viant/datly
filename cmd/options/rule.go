@@ -110,8 +110,10 @@ func (r *Rule) Init() error {
 	if url.IsRelative(r.ModuleLocation) {
 		r.ModuleLocation = url.Join(r.Project, r.ModuleLocation)
 	}
-	expandRelativeIfNeeded(&r.Source[r.Index], r.Project)
-
+	r.expandSourceIfNeeded()
+	for i := range r.Source {
+		expandRelativeIfNeeded(&r.Source[i], r.Project)
+	}
 	if r.Index == 0 && len(r.Source) == 1 {
 		src := r.Source[r.Index]
 		object, err := fs.Object(context.Background(), src)
@@ -157,4 +159,25 @@ func (r *Rule) LoadSource(ctx context.Context, fs afs.Service, URL string) (stri
 		return "", err
 	}
 	return string(data), nil
+}
+
+func (r *Rule) expandSourceIfNeeded() {
+	var expanded []string
+	useExpanded := false
+	for _, item := range r.Source {
+		parent, name := path.Split(item)
+		names := strings.Split(name, "|")
+		if len(names) > 1 {
+			useExpanded = true
+			for _, fname := range names {
+				expanded = append(expanded, path.Join(parent, strings.TrimSpace(fname)))
+			}
+			continue
+		}
+		expanded = append(expanded, item)
+	}
+	if !useExpanded {
+		return
+	}
+	r.Source = expanded
 }

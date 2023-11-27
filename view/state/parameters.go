@@ -348,7 +348,7 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 			Tag:     p.buildTag(fieldName),
 		}
 
-		if fieldName == rType.Name() || strings.Contains(p.Tag, "anonymous") {
+		if fieldName == rType.Name() && strings.Contains(p.Tag, "anonymous") {
 			structField.Anonymous = true
 		}
 	}

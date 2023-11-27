@@ -36,6 +36,12 @@ func (r *Router) generateGoStruct(component *repository.Component) (int, []byte)
 		schemaType = schemaType.Elem()
 	}
 
-	structContent := xreflect.GenerateStruct("GeneratedStruct", schemaType)
+	structContent := xreflect.GenerateStruct("GeneratedStruct", schemaType, xreflect.WithOnStructField(
+		func(field *reflect.StructField, tag, typeName, documentation *string) {
+			fieldTag := *tag
+			fieldTag, _ = xreflect.RemoveTag(fieldTag, "on")
+			fieldTag, _ = xreflect.RemoveTag(fieldTag, "sql")
+			*tag = fieldTag
+		}))
 	return http.StatusOK, []byte(structContent)
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/viant/datly/service/operator/exec"
 )
 
-func (l *outputLocator) getResponseValue(ctx context.Context, name string) (interface{}, bool, error) {
+func (l *Locator) getResponseValue(ctx context.Context, name string) (interface{}, bool, error) {
 	infoValue := ctx.Value(exec.ContextKey)
 	if infoValue == nil {
 		return nil, false, nil

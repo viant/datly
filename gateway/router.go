@@ -160,7 +160,7 @@ func (r *Router) HandleJob(ctx context.Context, aJob *async.Job) error {
 	if err = aSession.Unmarshal(aComponent.Input.Type.Parameters, []byte(aJob.State)); err != nil {
 		return err
 	}
-	if _, err = r.operator.Operate(ctx, aComponent, aSession); err != nil {
+	if _, err = r.operator.Operate(ctx, aSession, aComponent); err != nil {
 		return err
 	}
 	return nil

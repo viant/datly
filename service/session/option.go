@@ -44,6 +44,10 @@ func (o *Options) State() *view.State {
 func (o *Options) AddLocator(option locator.Option) {
 	o.locatorOptions = append(o.locatorOptions, option)
 }
+
+func (o *Options) AddLocators(options ...locator.Option) {
+	o.locatorOptions = append(o.locatorOptions, options...)
+}
 func (o *Options) AddCodec(option codec.Option) {
 	o.codecOptions = append(o.codecOptions, option)
 }

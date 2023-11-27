@@ -141,7 +141,11 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 	if err != nil {
 		return nil, err
 	}
+
 	pTag := aTag.Parameter
+	if pTag == nil {
+		return nil, nil
+	}
 	if pTag != nil {
 		setter.SetStringIfEmpty(&pTag.Name, field.Name)
 	}
@@ -221,6 +225,9 @@ func (t *Type) buildParameters() error {
 		parameter, err := t.buildParameter(structType.Field(i))
 		if err != nil {
 			return err
+		}
+		if parameter == nil {
+			continue
 		}
 		t.Parameters = append(t.Parameters, parameter)
 	}
