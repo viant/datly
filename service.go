@@ -98,6 +98,12 @@ func WithSession(session *session.Session) OperateOption {
 	}
 }
 
+func WithComponent(component *repository.Component) OperateOption {
+	return func(o *operateOptions) {
+		o.component = component
+	}
+}
+
 func WithInput(input interface{}) OperateOption {
 	return func(o *operateOptions) {
 		o.input = input
