@@ -149,6 +149,9 @@ func (s *Service) reportPluginIssue(ctx context.Context, destURL string) error {
 			fixBuilder.WriteString("\n")
 		}
 	}
+	if fixBuilder.Len() > 0 {
+		fmt.Printf("to fix pulugin dependency run the following:\n")
+	}
 	fmt.Printf(fixBuilder.String())
 	return nil
 }
