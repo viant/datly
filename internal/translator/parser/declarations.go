@@ -12,6 +12,7 @@ import (
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
+	"reflect"
 
 	"strconv"
 	"strings"
@@ -171,16 +172,15 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	types := strings.Split(typeContent, ",")
 	dataType := types[0]
 
-	if declaration.Cardinality == "" {
-		if strings.HasPrefix(dataType, "[]") {
-			declaration.Cardinality = state.Many
-			dataType = dataType[2:]
-		} else if strings.Contains(dataType, "map[") {
-			declaration.Cardinality = state.Many
-		} else {
-			declaration.Cardinality = state.One
-		}
+	if strings.HasPrefix(dataType, "[]") {
+		declaration.Cardinality = state.Many
+		dataType = dataType[2:]
+	} else if strings.Contains(dataType, "map[") {
+		declaration.Cardinality = state.Many
+	} else {
+		declaration.Cardinality = state.One
 	}
+
 	typeName := ""
 	if index := strings.Index(dataType, "$"); index != -1 {
 		typeName = dataType[index:]
@@ -190,6 +190,11 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	if dataType != "" {
 		if schema, _ := d.lookup(dataType); schema != nil {
 			schema.Cardinality = declaration.Cardinality
+			if rType := schema.Type(); rType != nil && schema.Cardinality == state.Many {
+				if rType.Kind() != reflect.Slice && rType.Kind() != reflect.Map {
+					schema.SetType(reflect.SliceOf(rType))
+				}
+			}
 			declaration.Schema = schema
 		}
 	}
@@ -260,10 +265,6 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			default:
 				return fmt.Errorf("invalid cardinality: %v", args[0])
 			}
-			if declaration.Schema == nil {
-				declaration.Schema = &state.Schema{}
-			}
-			declaration.Schema.Cardinality = declaration.Cardinality
 		case "Required":
 			if len(args) != 0 {
 				return fmt.Errorf("expected Required to have zero args, but got %v", len(args))

@@ -335,7 +335,6 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 	}
 	fieldName := p.Name
 	p.Schema.Cardinality = schema.Cardinality
-
 	if p.Schema.Cardinality == Many && (rType.Kind() != reflect.Slice && rType.Kind() != reflect.Map) {
 		rType = reflect.SliceOf(rType)
 	}
