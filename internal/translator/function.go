@@ -37,7 +37,9 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 			case "cast":
 				return dest.applyExplicitCast(column, funcArgs)
 			case "required":
-				column.Tag += ` required:"true"`
+				column := dest.columnConfig(column.Name)
+				required := true
+				column.Required = &required
 				return true, nil
 			}
 			column := dest.columnConfig(column.Name)

@@ -221,6 +221,7 @@ type (
 		Expression          *string      `json:",omitempty"`
 		Codec               *state.Codec `json:",omitempty"`
 		DataType            *string      `json:",omitempty"`
+		Required            *bool        `json:",omitempty"`
 		Format              *string      `json:",omitempty"`
 		Tag                 *string      `json:",omitempty"`
 		Default             *string      `json:",omitempty"`

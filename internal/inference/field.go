@@ -48,7 +48,7 @@ func NewField(rField *reflect.StructField) *Field {
 		}
 		column.IsNullable = !sqlxTag.Required
 		column.Type = field.Schema.DataType
-		column.Tag = strings.Trim(string(rField.Tag), "`")
+		column.Tag += " " + strings.Trim(string(rField.Tag), "`")
 		field.Column = &column
 	}
 	return field
