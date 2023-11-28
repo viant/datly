@@ -378,11 +378,20 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	return matcher.NewMatcher(matchables), paths, nil
 }
 func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
-	if !strings.HasSuffix(aPath.Path.URI, "/") {
+	if !strings.HasSuffix(aPath.Path.URI, "/") && !strings.HasSuffix(aPath.Path.URI, "*") {
 		aPath.Path.URI += "/"
 	}
 	var result []*Route
-	pathURI := aPath.URI[:len(aPath.URI)-1]
+
+	pathURI := aPath.Path.URI
+	if strings.HasSuffix(pathURI, "/") {
+		pathURI = pathURI[:len(pathURI)-1]
+	}
+
+	if strings.HasSuffix(pathURI, "/*") {
+		pathURI = pathURI[:len(pathURI)-2]
+	}
+
 	contentPath := furl.Join(r.config.ContentURL, aPath.ContentURL)
 	fileSever := http.FileServer(ahttp.New(afs.New(), contentPath))
 
@@ -428,5 +437,10 @@ func wildcardPath(aPath *path.Path) *path.Path {
 		}
 		aPath.URI += "*"
 	}
+
+	if strings.HasSuffix(ret.URI, "*") {
+		ret.URI = ret.URI[:len(ret.URI)-1]
+	}
+
 	return &ret
 }

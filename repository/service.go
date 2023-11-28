@@ -54,7 +54,7 @@ func (s *Service) Container() *path.Container {
 // if so it would increase individual or all component/paths version number resulting in lazy reload
 func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
 	now := time.Now()
-	fmt.Printf("[INFO] sync changes started\n")
+	//fmt.Printf("[INFO] sync changes started\n")
 	snap := &snapshot{}
 
 	if s.plugins.IsCheckDue(now) {
@@ -86,7 +86,7 @@ func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
 		s.paths.IncreaseVersion()
 	}
 
-	fmt.Printf("[INFO] sync changes completed after: %s\n", time.Since(now))
+	//fmt.Printf("[INFO] sync changes completed after: %s\n", time.Since(now))
 	return snap.majorChange, snap.error()
 }
 
