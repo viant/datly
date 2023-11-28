@@ -1080,6 +1080,8 @@ github.com/viant/sqlparser v0.5.1 h1:ec5y4nmFaCSyrKwcQO1AhkVQ1LAN/sE+yMZlWszkBtY
 github.com/viant/sqlparser v0.5.1/go.mod h1:cfJpZuqzt9iWoIbEWBYsnpzEzJ8T8xatW4qSbeiMEzg=
 github.com/viant/sqlparser v0.5.2-0.20231128190734-015873cc2f3f h1:18iN9jhG8N6+jb6Ghh5WjsaVSHuqb6bVxkGe0KYtRFU=
 github.com/viant/sqlparser v0.5.2-0.20231128190734-015873cc2f3f/go.mod h1:cfJpZuqzt9iWoIbEWBYsnpzEzJ8T8xatW4qSbeiMEzg=
+github.com/viant/sqlparser v0.5.2 h1:V5IkjWcU7Tr+GRYUkGZOfpLhH3NfKR7JnE8voWx++aI=
+github.com/viant/sqlparser v0.5.2/go.mod h1:cfJpZuqzt9iWoIbEWBYsnpzEzJ8T8xatW4qSbeiMEzg=
 github.com/viant/sqlx v0.12.0 h1:7Pz/JoGZ2LR3jUJOlVCNT9nBy1fZ8eJawJ9TQkxXnc4=
 github.com/viant/sqlx v0.12.0/go.mod h1:Fpw3BNWCXM1su+5Xil1r+do3vTysFXZMJlFYMi1zuKg=
 github.com/viant/structology v0.5.6-0.20231127181208-736f8ad06193 h1:wKs4BXSTV0VAubYVO4giNJIwRCE4OS1Ctk2y9MeKax4=
