@@ -42,6 +42,8 @@ func (l *Locator) Value(ctx context.Context, name string) (interface{}, bool, er
 			return nil, false, nil
 		}
 		return l.Status, true, nil
+	case keys.Nil:
+		return nil, false, nil
 	case keys.Error:
 		if err := ctx.Value(exec.ErrorKey); err != nil {
 			e, _ := err.(error)

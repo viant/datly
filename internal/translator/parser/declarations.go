@@ -174,8 +174,16 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	if strings.HasPrefix(dataType, "[]") {
 		declaration.Cardinality = state.Many
 		dataType = dataType[2:]
+	} else if strings.Contains(dataType, "map[") {
+		declaration.Cardinality = state.Many
 	} else {
 		declaration.Cardinality = state.One
+	}
+
+	typeName := ""
+	if index := strings.Index(dataType, "$"); index != -1 {
+		typeName = dataType[index:]
+		dataType = strings.Replace(dataType, typeName, "interface{}", 1)
 	}
 
 	if dataType != "" {
@@ -186,6 +194,7 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	}
 	declaration.EnsureSchema()
 	declaration.Schema.DataType = dataType
+	declaration.Schema.Name = typeName
 	if len(types) > 1 {
 		declaration.OutputType = types[1]
 	}

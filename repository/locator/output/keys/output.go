@@ -14,6 +14,7 @@ const ( //Components keys
 	Status = "status"
 	Error  = "error"
 
+	Nil        = "nil"
 	Metrics    = "metrics"
 	StatusCode = "status.code"
 )

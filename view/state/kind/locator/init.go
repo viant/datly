@@ -17,4 +17,7 @@ func init() {
 	Register(state.KindRepeated, NewRepeated)
 	Register(state.KindState, NewState)
 	Register(state.KindContext, NewContext)
+	Register(state.KindGenerator, NewGenerator)
+	Register(state.KindTransient, NewTransient)
+
 }

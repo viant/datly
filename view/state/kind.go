@@ -39,12 +39,17 @@ const (
 	KindComponent Kind = "component" //input state
 	KindContext   Kind = "context"   //global context based state
 
+	//KindGenerator represents common value generator
+	KindGenerator Kind = "generator"
+
+	//KindTransient represents parameter placeholder with no actual value source
+	KindTransient Kind = "transient"
 )
 
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindView, KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindComponent, KindMeta, KindAsync:
+	case KindView, KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindGenerator, KindTransient, KindComponent, KindMeta, KindAsync:
 		return nil
 	}
 
@@ -85,7 +90,10 @@ func (k Kind) Ordinal() int {
 		return 14
 	case KindMeta:
 		return 15
-
+	case KindGenerator:
+		return 16
+	case KindTransient:
+		return 17
 	}
 	return -1
 }

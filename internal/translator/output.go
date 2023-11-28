@@ -49,12 +49,18 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 	}
 
 	outputParameters := s.ensureOutputParameters(resource, resource.OutputState)
-	if dataParameter := outputParameters.LookupByLocation(state.KindOutput, keys.ViewData); dataParameter != nil {
+	dataParameter := outputParameters.LookupByLocation(state.KindOutput, keys.ViewData)
+	if dataParameter != nil {
 		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
 	contract.EnsureParameterTypes(outputParameters, nil, resource.Rule.Doc.Parameters, resource.Rule.Doc.Filter)
 	for _, parameter := range outputParameters {
+		if schema := parameter.Schema; schema != nil && schema.Name == "$ViewType" {
+			schema.DataType = strings.Replace(schema.DataType, "interface{}", "*"+dataParameter.Schema.Name, 1)
+			schema.Name = schema.DataType
+			parameter.Tag += fmt.Sprintf(` typeName:"%s"`, dataParameter.Schema.Name)
+		}
 		if err = s.adjustOutputParameter(resource, parameter, typesRegistry); err != nil {
 			return err
 		}

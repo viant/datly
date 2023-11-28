@@ -139,7 +139,7 @@ func (s *Schema) SetType(rType reflect.Type) {
 		rType = reflect.PtrTo(rType)
 	}
 	if s.Cardinality == Many {
-		if rType.Kind() != reflect.Slice {
+		if rType.Kind() != reflect.Slice && rType.Kind() != reflect.Map {
 			rType = reflect.SliceOf(rType)
 		}
 	} else if rType.Kind() == reflect.Slice {

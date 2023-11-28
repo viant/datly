@@ -38,13 +38,12 @@ func (p ParamName) Validate(kind Kind) error {
 	switch kind {
 	case KindObject:
 		return nil
-	case KindRequest, KindLiteral, KindConst, KindRequestBody, KindQuery:
+	case KindRequest, KindLiteral, KindConst, KindRequestBody, KindQuery, KindTransient, KindOutput:
 		return nil
-	case KindView, KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindContext, KindOutput, KindComponent, KindMeta, KindAsync:
+	case KindView, KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindGenerator, KindContext, KindComponent, KindMeta, KindAsync:
 		if p == "" {
-			return fmt.Errorf("param name can't be empty")
+			return fmt.Errorf("%v location name can't be empty", kind)
 		}
-
 		return nil
 	case KindEnvironment:
 		if os.Getenv(string(p)) == "" {
@@ -117,4 +116,9 @@ func NewComponent(name string) *Location {
 // NewContextLocation creates a context location
 func NewContextLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindContext}
+}
+
+// NewGenerator creates a generator kind
+func NewGenerator(name string) *Location {
+	return &Location{Name: name, Kind: KindGenerator}
 }
