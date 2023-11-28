@@ -422,7 +422,7 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 
 func wildcardPath(aPath *path.Path) *path.Path {
 	ret := *aPath
-	if !strings.HasSuffix(ret.URI, "/*") {
+	if !strings.HasSuffix(ret.URI, "*") {
 		if !strings.HasSuffix(ret.URI, "/") {
 			ret.URI += "/"
 		}
