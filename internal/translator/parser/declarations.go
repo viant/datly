@@ -171,15 +171,16 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	types := strings.Split(typeContent, ",")
 	dataType := types[0]
 
-	if strings.HasPrefix(dataType, "[]") {
-		declaration.Cardinality = state.Many
-		dataType = dataType[2:]
-	} else if strings.Contains(dataType, "map[") {
-		declaration.Cardinality = state.Many
-	} else {
-		declaration.Cardinality = state.One
+	if declaration.Cardinality == "" {
+		if strings.HasPrefix(dataType, "[]") {
+			declaration.Cardinality = state.Many
+			dataType = dataType[2:]
+		} else if strings.Contains(dataType, "map[") {
+			declaration.Cardinality = state.Many
+		} else {
+			declaration.Cardinality = state.One
+		}
 	}
-
 	typeName := ""
 	if index := strings.Index(dataType, "$"); index != -1 {
 		typeName = dataType[index:]
@@ -249,6 +250,20 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 			required := false
 			declaration.Required = &required
+		case "Cardinality":
+			value := strings.Trim(args[0], `"'`)
+			switch strings.ToLower(value) {
+			case "one":
+				declaration.Cardinality = state.One
+			case "many":
+				declaration.Cardinality = state.Many
+			default:
+				return fmt.Errorf("invalid cardinality: %v", args[0])
+			}
+			if declaration.Schema == nil {
+				declaration.Schema = &state.Schema{}
+			}
+			declaration.Schema.Cardinality = declaration.Cardinality
 		case "Required":
 			if len(args) != 0 {
 				return fmt.Errorf("expected Required to have zero args, but got %v", len(args))

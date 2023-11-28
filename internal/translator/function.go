@@ -36,8 +36,10 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 			switch strings.ToLower(funcName) {
 			case "cast":
 				return dest.applyExplicitCast(column, funcArgs)
+			case "required":
+				column.Tag += ` required:"true"`
+				return true, nil
 			}
-
 			column := dest.columnConfig(column.Name)
 			column.Codec = &state.Codec{Name: funcName, Args: funcArgs[1:]}
 			codec, err := extension.Config.Codecs.Lookup(funcName)

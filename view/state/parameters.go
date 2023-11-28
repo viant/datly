@@ -327,10 +327,12 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 	if rType == nil {
 		rType, err = types.LookupType(lookupType, schema.DataType, xreflect.WithPackage(schema.Package))
 		if err != nil {
-			return structField, markerField, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", p.Name, schema.TypeName(), err)
+			rType, err = types.LookupType(lookupType, schema.DataType, xreflect.WithPackage(pkgPath))
+			if err != nil {
+				return structField, markerField, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", p.Name, schema.TypeName(), err)
+			}
 		}
 	}
-
 	fieldName := p.Name
 	p.Schema.Cardinality = schema.Cardinality
 
