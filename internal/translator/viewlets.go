@@ -171,7 +171,8 @@ func (n *Viewlets) applyTopLevelSetting(column *sqlparser.Column, viewlet *Viewl
 	}
 
 	columnName := column.Name
-	if columnName == viewlet.Name {
+	//TODO move it to the cast logic  - MASTER LOCATION OR LOGIC PLEASE
+	if columnName == viewlet.Name && strings.Contains(column.Expression, "cast(") {
 		viewlet.updateViewSchema(column.Type)
 		return nil
 	}
