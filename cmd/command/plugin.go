@@ -149,7 +149,7 @@ func (s *Service) reportPluginIssue(ctx context.Context, destURL string) error {
 				fixBuilder.WriteString("go get " + candidate.Path + "@" + version)
 			} else if rtDep.Sum != candidate.Sum {
 				if candidate.Replace != nil {
-					fixBuilder.WriteString("remove go replace from mod file")
+					fixBuilder.WriteString(fmt.Sprintf("remove replace %v from mod file", rtDep.Path))
 				} else {
 					fixBuilder.WriteString("remove go vendor")
 				}
