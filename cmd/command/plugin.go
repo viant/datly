@@ -150,7 +150,7 @@ func (s *Service) reportPluginIssue(ctx context.Context, destURL string) error {
 		}
 	}
 	if fixBuilder.Len() > 0 {
-		fmt.Printf("to fix pulugin dependency run the following:\n")
+		fmt.Printf("[FIXME]: to address pulugin dependency run the following:\n")
 	}
 	fmt.Printf(fixBuilder.String())
 	return nil
