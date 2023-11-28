@@ -145,7 +145,16 @@ func (s *Service) reportPluginIssue(ctx context.Context, destURL string) error {
 			if index := strings.LastIndex(rtDep.Version, "-"); index != -1 {
 				version = rtDep.Version[index+1:]
 			}
-			fixBuilder.WriteString("go get " + candidate.Path + "@" + version)
+			if rtDep.Version != candidate.Version {
+				fixBuilder.WriteString("go get " + candidate.Path + "@" + version)
+			} else if rtDep.Sum != candidate.Sum {
+				if candidate.Replace != nil {
+					fixBuilder.WriteString("remove go replace from mod file")
+				} else {
+					fixBuilder.WriteString("remove go vendor")
+				}
+
+			}
 			fixBuilder.WriteString("\n")
 		}
 	}
