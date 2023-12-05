@@ -207,6 +207,13 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 		aTag.TypeName = rel.Of.Schema.Name
 		aTag.LinkOn = rel.TagLink()
 		aTag.SQL = tags.ViewSQL(rel.Of.View.Template.Source)
+		holderConnector := v.Connector
+		if connector := rel.Of.Connector; connector != nil {
+			if connector.Ref != holderConnector.Ref {
+				aTag.View = &tags.View{Connector: connector.Ref}
+			}
+		}
+
 		fieldTag := aTag.UpdateTag(``)
 
 		holders[rel.Holder] = true
