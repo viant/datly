@@ -2,6 +2,7 @@ package translator
 
 import (
 	"fmt"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/function"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
@@ -64,6 +65,7 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 			return false, fmt.Errorf("failed to execute dql function: '%s', %w", funcName, err)
 		}
 	}
+	setter.SetStringIfEmpty(&dest.Connector, dest.View.View.Connector.Ref)
 	return true, nil
 }
 
