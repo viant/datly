@@ -65,7 +65,9 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 			return false, fmt.Errorf("failed to execute dql function: '%s', %w", funcName, err)
 		}
 	}
-	setter.SetStringIfEmpty(&dest.Connector, dest.View.View.Connector.Ref)
+	if dest.View != nil && dest.View.View.Connector != nil {
+		setter.SetStringIfEmpty(&dest.Connector, dest.View.View.Connector.Ref)
+	}
 	return true, nil
 }
 
