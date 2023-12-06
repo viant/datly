@@ -17,6 +17,7 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 	if funcName == "" {
 		return false, nil
 	}
+
 	funcName = strings.ReplaceAll(funcName, "_", "")
 	if column.Namespace == "" && funcArgs[0] != "" {
 		if strings.Contains(funcArgs[0], ".") {
@@ -28,12 +29,17 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 			column.Namespace = funcArgs[0]
 		}
 	}
+
 	dest := n.Lookup(column.Namespace)
 	fn := function.Lookup(funcName)
 	if fn == nil {
 
 		if dest != nil {
 			switch strings.ToLower(funcName) {
+			case "tag":
+				columnConfig := dest.columnConfig(column.Name)
+				columnConfig.Tag = &column.Tag
+				return true, nil
 			case "cast":
 				return dest.applyExplicitCast(column, funcArgs)
 			case "required":
