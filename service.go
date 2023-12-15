@@ -19,6 +19,7 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	xhandler "github.com/viant/xdatly/handler"
+	"github.com/viant/xreflect"
 	"net/http"
 	nurl "net/url"
 	"reflect"
@@ -389,8 +390,8 @@ func (s *Service) AddConnectors(ctx context.Context, connectors ...*view.Connect
 }
 
 // BuildPredicates added build predicate method
-func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}) (*codec.Criteria, error) {
-	return s.reader.BuildPredicates(ctx, expression, input)
+func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}, typeRegistry *xreflect.Types) (*codec.Criteria, error) {
+	return s.reader.BuildPredicates(ctx, expression, input, typeRegistry)
 }
 
 // AddConnector adds connector
