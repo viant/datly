@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
@@ -16,6 +17,7 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/response"
+	"github.com/viant/xreflect"
 	"reflect"
 	"sync"
 	"time"
@@ -343,9 +345,27 @@ func (s *Service) buildParametrizedSQL(aView *view.View, selector *view.Statelet
 	return parametrizedSQL, columnInMatcher, cacheErr
 }
 
-func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}) (*codec.Criteria, error) {
+func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}, typeRegistry *xreflect.Types) (*codec.Criteria, error) {
 	aSchema := state.NewSchema(reflect.TypeOf(input))
-	aView, err := view.New("autogen", "", view.WithTemplate(view.NewTemplate(expression, view.WithTemplateSchema(aSchema))))
+	if typeRegistry == nil {
+		typeRegistry = extension.Config.Types
+	}
+	resource := &view.Resourcelet{Resource: &view.Resource{}, View: &view.View{}}
+	resource.SetTypes(typeRegistry)
+
+	aType, err := state.NewType(state.WithSchema(aSchema), state.WithResource(resource))
+	if err != nil {
+		return nil, err
+	}
+
+	if err := aType.Init(state.WithResource(resource)); err != nil {
+		return nil, err
+	}
+	aView, err := view.New("autogen", "", view.WithTemplate(view.NewTemplate(expression, view.WithTemplateSchema(aSchema), view.WithTemplateParameters(aType.Parameters...))))
+	if err != nil {
+		return nil, err
+	}
+	err = aView.Template.Init(ctx, resource.Resource, aView)
 	if err != nil {
 		return nil, err
 	}

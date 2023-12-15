@@ -255,13 +255,6 @@ func WithTemplateParameters(parameters ...*state.Parameter) TemplateOption {
 func WithTemplateSchema(schema *state.Schema) TemplateOption {
 	return func(t *Template) {
 		t.Schema = schema
-		if rType := schema.Type(); rType != nil {
-			t.stateType = structology.NewStateType(rType)
-		}
-		stateType := state.Type{Schema: schema}
-		if err := stateType.Init(); err == nil {
-			t.Parameters = stateType.Parameters
-		}
 	}
 }
 
