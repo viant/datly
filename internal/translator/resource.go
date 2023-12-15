@@ -511,7 +511,7 @@ func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, er
 		if _, ok := aField.Tag.Lookup(tags.ParameterTag); !ok {
 			continue
 		}
-		parameter, err := state.BuildParameter(&aField, nil)
+		parameter, err := state.BuildParameter(&aField, nil, nil)
 		if err != nil {
 			return err
 		}

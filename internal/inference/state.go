@@ -537,7 +537,7 @@ func (s *State) selectorParameter(predefined map[string]*Parameter, parameterFie
 	}
 	tag := string(parameterField.Tag())
 	structField := &reflect.StructField{Name: parameterField.Name(), Tag: reflect.StructTag(tag), Type: parameterField.Type()}
-	stateParameter, err := state.BuildParameter(structField, nil)
+	stateParameter, err := state.BuildParameter(structField, nil, nil)
 	if err != nil {
 		return nil, err
 	}

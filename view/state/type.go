@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 	"unicode"
@@ -133,10 +135,11 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 }
 
 func (t *Type) buildParameter(field reflect.StructField) (*Parameter, error) {
-	return BuildParameter(&field, t.fs)
+	return BuildParameter(&field, t.fs, t.resource.LookupType())
 }
 
-func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error) {
+func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflect.LookupType) (*Parameter, error) {
+
 	aTag, err := tags.ParseStateTags(field.Tag, fs)
 	if err != nil {
 		return nil, err
@@ -181,7 +184,7 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 			if _, ok := objectField.Tag.Lookup(tags.ParameterTag); !ok {
 				continue
 			}
-			itemParam, err := BuildParameter(&objectField, fs)
+			itemParam, err := BuildParameter(&objectField, fs, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -189,13 +192,15 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error
 		}
 	}
 	BuildCodec(aTag, result)
-	BuildSchema(field, pTag, result)
+	BuildSchema(field, pTag, result, lookupType)
 	BuildPredicate(aTag, result)
 	return result, nil
 }
 
-func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Parameter) {
-
+func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Parameter, lookupType xreflect.LookupType) {
+	if lookupType == nil {
+		lookupType = extension.Config.Types.Lookup
+	}
 	rawType := field.Type
 	if rawType.Kind() == reflect.Slice {
 		rawType = rawType.Elem()
@@ -212,6 +217,11 @@ func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Param
 			result.Output.Schema = &Schema{}
 			result.Output.Schema.SetType(field.Type)
 			setter.SetStringIfEmpty(&result.Output.Schema.DataType, rawName)
+		}
+		if result.Schema.rType == nil && lookupType != nil {
+			if rType, _ := lookupType(result.Schema.DataType); rType != nil {
+				result.Schema.SetType(rType)
+			}
 		}
 	} else {
 		result.Schema = NewSchema(field.Type)
