@@ -64,5 +64,9 @@ func (r Resourcelet) IndexedColumns() NamedColumns {
 }
 
 func NewResourcelet(resource *Resource, view *View) *Resourcelet {
-	return &Resourcelet{View: view, Resource: resource}
+	ret := &Resourcelet{View: view, Resource: resource}
+	if view._resource != nil {
+		ret.Resource = view._resource
+	}
+	return ret
 }
