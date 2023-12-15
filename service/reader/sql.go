@@ -43,18 +43,18 @@ func NewBuilder() *Builder {
 }
 
 // Build builds SQL Select statement
-func (b *Builder) Build(aView *view.View, selector *view.Statelet, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.ParmetrizedQuery, error) {
+func (b *Builder) Build(aView *view.View, statelet *view.Statelet, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.ParmetrizedQuery, error) {
 	if exclude == nil {
 		exclude = &Exclude{}
 	}
 
-	state, err := aView.Template.EvaluateSource(selector.Template, parent, batchData, expander)
+	state, err := aView.Template.EvaluateSource(statelet.Template, parent, batchData, expander)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(state.Filters) > 0 {
-		selector.Filters = append(selector.Filters, state.Filters...)
+		statelet.Filters = append(statelet.Filters, state.Filters...)
 	}
 	if aView.Template.IsActualTemplate() && aView.ShouldTryDiscover() {
 		state.Expanded = metadata.EnrichWithDiscover(state.Expanded, true)
@@ -62,11 +62,11 @@ func (b *Builder) Build(aView *view.View, selector *view.Statelet, batchData *vi
 
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
-	if err = b.appendColumns(&sb, aView, selector); err != nil {
+	if err = b.appendColumns(&sb, aView, statelet); err != nil {
 		return nil, err
 	}
 
-	if err = b.appendRelationColumn(&sb, aView, selector, relation); err != nil {
+	if err = b.appendRelationColumn(&sb, aView, statelet, relation); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +82,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Statelet, batchData *vi
 
 	b.updateColumnsIn(&commonParams, aView, relation, batchData, columnsInMeta, hasCriteria, exclude)
 
-	if err = b.updatePagination(&commonParams, aView, selector, exclude); err != nil {
+	if err = b.updatePagination(&commonParams, aView, statelet, exclude); err != nil {
 		return nil, err
 	}
 
@@ -115,7 +115,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Statelet, batchData *vi
 
 	var placeholders []interface{}
 
-	SQL, err := aView.Expand(&placeholders, sb.String(), selector, commonParams, batchData, state.DataUnit)
+	SQL, err := aView.Expand(&placeholders, sb.String(), statelet, commonParams, batchData, state.DataUnit)
 	if err != nil {
 		return nil, err
 	}
@@ -131,8 +131,8 @@ func (b *Builder) Build(aView *view.View, selector *view.Statelet, batchData *vi
 	}
 
 	if exclude.Pagination {
-		matcher.Offset = selector.Offset
-		matcher.Limit = actualLimit(aView, selector)
+		matcher.Offset = statelet.Offset
+		matcher.Limit = actualLimit(aView, statelet)
 	}
 
 	return matcher, err

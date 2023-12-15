@@ -124,14 +124,14 @@ func (e *Module) Module() string {
 func (e *Extension) Replacer(shared *Module) data.Map {
 	var replacer = data.Map{}
 	now := time.Now().UTC().Format(time.RFC3339)
-	module := shared.Module()
+	module := strings.Trim(shared.Module(), "/")
 	name := extractModuleName(module)
 	replacer.Put("module", module)
 	impModule := module
 	if e.GitFolder != nil {
 		impModule = path.Join(module, *e.GitFolder)
 	}
-	replacer.Put("impModule", impModule)
+	replacer.Put("impModule", strings.Trim(impModule, "/"))
 
 	if index := strings.Index(name, "-"); index != -1 {
 		name = name[index+1:]
@@ -161,6 +161,6 @@ func (e *Extension) GoModInitArgs(shared *Module) []string {
 	return []string{
 		"mod",
 		"init",
-		shared.Module(),
+		strings.Trim(shared.Module(), "/"),
 	}
 }

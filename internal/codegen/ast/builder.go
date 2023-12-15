@@ -11,8 +11,9 @@ type (
 	Builder struct {
 		*strings.Builder
 		Options
-		Indent string
-		State  *Scope
+		Indent       string
+		State        *Scope
+		declarations map[string]string
 	}
 )
 
@@ -36,8 +37,9 @@ func (b *Builder) WriteString(s string) error {
 
 func NewBuilder(option Options, declaredVariables ...string) *Builder {
 	return &Builder{
-		Builder: &strings.Builder{},
-		Options: option,
-		State:   NewScope(declaredVariables...),
+		Builder:      &strings.Builder{},
+		Options:      option,
+		declarations: map[string]string{},
+		State:        NewScope(declaredVariables...),
 	}
 }

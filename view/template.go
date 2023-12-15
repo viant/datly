@@ -251,6 +251,20 @@ func WithTemplateParameters(parameters ...*state.Parameter) TemplateOption {
 	}
 }
 
+// WithTemplateSchema returns with template schema
+func WithTemplateSchema(schema *state.Schema) TemplateOption {
+	return func(t *Template) {
+		t.Schema = schema
+		if rType := schema.Type(); rType != nil {
+			t.stateType = structology.NewStateType(rType)
+		}
+		stateType := state.Type{Schema: schema}
+		if err := stateType.Init(); err == nil {
+			t.Parameters = stateType.Parameters
+		}
+	}
+}
+
 // NewTemplate creates a template
 func NewTemplate(source string, opts ...TemplateOption) *Template {
 	ret := &Template{Source: source}

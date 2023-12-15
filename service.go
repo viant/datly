@@ -17,6 +17,7 @@ import (
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/codec"
 	xhandler "github.com/viant/xdatly/handler"
 	"net/http"
 	nurl "net/url"
@@ -385,6 +386,11 @@ func (s *Service) AddConnectors(ctx context.Context, connectors ...*view.Connect
 	}
 	s.resource.Connectors = append(s.resource.Connectors, connectors...)
 	return nil
+}
+
+// BuildPredicates added build predicate method
+func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}) (*codec.Criteria, error) {
+	return s.reader.BuildPredicates(ctx, expression, input)
 }
 
 // AddConnector adds connector

@@ -37,6 +37,7 @@ func (s *Foreach) Generate(builder *Builder) (err error) {
 		return nil
 
 	case LangGO:
+
 		if err = builder.WriteIndentedString("\nfor _, "); err != nil {
 			return err
 		}

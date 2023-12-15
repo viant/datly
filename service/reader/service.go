@@ -7,11 +7,14 @@ import (
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/sqlx/option"
+	"github.com/viant/structology"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/response"
 	"reflect"
 	"sync"
@@ -311,7 +314,7 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 	return s.NewExecutionInfo(session, indexed, cacheStats, cacheErr), nil
 }
 
-func (s *Service) getMatchers(aView *view.View, selector *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
+func (s *Service) buildParametrizedSQL(aView *view.View, selector *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session) (parametrizedSQL *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -328,7 +331,7 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Statelet, batchDa
 	}()
 
 	data, _ := session.ParentData()
-	fullMatch, err = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{
+	parametrizedSQL, err = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{
 		Pagination: relation != nil && len(batchData.ValuesBatch) > 1,
 	}, data.AsParam(), nil)
 
@@ -337,7 +340,25 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Statelet, batchDa
 	}
 
 	wg.Wait()
-	return fullMatch, columnInMatcher, cacheErr
+	return parametrizedSQL, columnInMatcher, cacheErr
+}
+
+func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}) (*codec.Criteria, error) {
+	aSchema := state.NewSchema(reflect.TypeOf(input))
+	aView, err := view.New("autogen", "", view.WithTemplate(view.NewTemplate(expression, view.WithTemplateSchema(aSchema))))
+	if err != nil {
+		return nil, err
+	}
+	stateType := structology.NewStateType(reflect.TypeOf(input))
+	statelet := &view.Statelet{Template: stateType.NewState()}
+	parametrizedSQL, err := s.sqlBuilder.Build(aView, statelet, nil, nil, &Exclude{
+		Pagination: false, ColumnsIn: false,
+	}, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	ret := &codec.Criteria{Expression: parametrizedSQL.SQL, Placeholders: parametrizedSQL.Args}
+	return ret, nil
 }
 
 func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *response.Execution, batchData *view.BatchData, selector *view.Statelet) error {
@@ -374,7 +395,7 @@ func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aV
 }
 
 func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.Statelet, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn) (*response.SQLExecution, error) {
-	fullMatcher, columnInMatcher, err := s.getMatchers(aView, selector, batchData, collector, session)
+	parametrizedSQL, columnInMatcher, err := s.buildParametrizedSQL(aView, selector, batchData, collector, session)
 	if err != nil {
 		return nil, err
 	}
@@ -402,14 +423,14 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		options = append(options, session.CacheRefresh)
 	}
 
-	stats := s.NewExecutionInfo(session, fullMatcher, cacheStats, err)
+	stats := s.NewExecutionInfo(session, parametrizedSQL, cacheStats, err)
 	if session.DryRun {
 		return stats, nil
 	}
 
-	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
+	reader, err := read.New(ctx, db, parametrizedSQL.SQL, collector.NewItem(), options...)
 	if err != nil {
-		return s.HandleSQLError(err, session, aView, fullMatcher, stats)
+		return s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
 	}
 
 	defer func() {
@@ -435,12 +456,12 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 			}
 		}
 		return visitor(row)
-	}, fullMatcher.Args...)
+	}, parametrizedSQL.Args...)
 	end := time.Now()
 
-	aView.Logger.ReadingData(end.Sub(begin), fullMatcher.SQL, readData, fullMatcher.Args, err)
+	aView.Logger.ReadingData(end.Sub(begin), parametrizedSQL.SQL, readData, parametrizedSQL.Args, err)
 	if err != nil {
-		return s.HandleSQLError(err, session, aView, fullMatcher, stats)
+		return s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
 	}
 
 	return stats, nil

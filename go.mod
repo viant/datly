@@ -1,6 +1,8 @@
 module github.com/viant/datly
 
-go 1.20
+go 1.21.3
+
+toolchain go1.21.5
 
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
@@ -51,7 +53,7 @@ require (
 
 require (
 	github.com/viant/structology v0.5.6-0.20231127181208-736f8ad06193
-	github.com/viant/tagly v0.1.2-0.20231123035525-6cf2e043531e
+	github.com/viant/tagly v0.1.2-0.20231206233427-702446dd356c
 	github.com/viant/xdatly v0.3.1-0.20231125211515-a61f20e41821
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20231125211515-a61f20e41821
@@ -130,3 +132,4 @@ require (
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
