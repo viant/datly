@@ -345,14 +345,13 @@ func (s *Service) buildParametrizedSQL(aView *view.View, selector *view.Statelet
 	return parametrizedSQL, columnInMatcher, cacheErr
 }
 
-func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}, typeRegistry *xreflect.Types) (*codec.Criteria, error) {
+func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}, typeRegistry *xreflect.Types, baseView *view.View) (*codec.Criteria, error) {
 	aSchema := state.NewSchema(reflect.TypeOf(input))
 	if typeRegistry == nil {
 		typeRegistry = extension.Config.Types
 	}
-	resource := &view.Resourcelet{Resource: &view.Resource{}, View: &view.View{}}
+	resource := &view.Resourcelet{Resource: &view.Resource{}, View: baseView}
 	resource.SetTypes(typeRegistry)
-
 	aType, err := state.NewType(state.WithSchema(aSchema), state.WithResource(resource))
 	if err != nil {
 		return nil, err

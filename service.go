@@ -390,8 +390,8 @@ func (s *Service) AddConnectors(ctx context.Context, connectors ...*view.Connect
 }
 
 // BuildPredicates added build predicate method
-func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}, typeRegistry *xreflect.Types) (*codec.Criteria, error) {
-	return s.reader.BuildPredicates(ctx, expression, input, typeRegistry)
+func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}, typeRegistry *xreflect.Types, baseView *view.View) (*codec.Criteria, error) {
+	return s.reader.BuildPredicates(ctx, expression, input, typeRegistry, baseView)
 }
 
 // AddConnector adds connector

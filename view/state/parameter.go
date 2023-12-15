@@ -479,6 +479,9 @@ func (p *Parameter) OutputType() reflect.Type {
 }
 
 func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resource) error {
+	if p.Schema.Type() != nil {
+		return nil
+	}
 	parameterName := p.In.Name
 	var parameterSelectr string
 	if index := strings.Index(parameterName, "."); index != -1 {
