@@ -21,14 +21,17 @@ type (
 )
 
 // Apply applies option
-func (o Options) Apply(view *View) error {
+func (o Options) Apply(aView *View) error {
 	if len(o) == 0 {
 		return nil
 	}
 	for _, opt := range o {
-		if err := opt(view); err != nil {
+		if err := opt(aView); err != nil {
 			return err
 		}
+	}
+	if aView.Selector == nil {
+		aView.Selector = &Config{}
 	}
 	return nil
 }
@@ -152,6 +155,16 @@ func WithCriteria(columns ...string) Option {
 		}
 		v.Selector.Constraints.Criteria = true
 		v.Selector.Constraints.Filterable = columns
+		return nil
+	}
+}
+
+// WithResource creates resource View option
+func WithResource(resource state.Resource) Option {
+	return func(v *View) error {
+		if res, ok := resource.(*Resourcelet); ok {
+			v._resource = res._resource
+		}
 		return nil
 	}
 }

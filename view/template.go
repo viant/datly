@@ -60,7 +60,9 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	if t.initialized {
 		return nil
 	}
-
+	if view._resource != nil {
+		resource = view._resource
+	}
 	t.wasEmpty = t.Source == "" && t.SourceURL == ""
 	t.initialized = true
 
