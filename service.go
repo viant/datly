@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/structology"
@@ -39,7 +40,8 @@ type (
 	}
 
 	sessionOptions struct {
-		request *http.Request
+		request  *http.Request
+		resource state.Resource
 	}
 	SessionOption func(o *sessionOptions)
 
@@ -129,10 +131,16 @@ func WithRequest(request *http.Request) SessionOption {
 	}
 }
 
+func WithStateResource(resource state.Resource) SessionOption {
+	return func(o *sessionOptions) {
+		o.resource = resource
+	}
+}
+
 func (s *Service) NewComponentSession(aComponent *repository.Component, opts ...SessionOption) *session.Session {
 	sessionOpt := newSessionOptions(opts)
 	options := aComponent.LocatorOptions(sessionOpt.request, aComponent.UnmarshalFunc(sessionOpt.request))
-	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...))
+	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...), session.WithStateResource(sessionOpt.resource))
 	return aSession
 }
 
@@ -181,7 +189,8 @@ func (s *Service) Operate(ctx context.Context, opts ...OperateOption) (interface
 		}
 	}
 	if options.session == nil {
-		options.session = s.NewComponentSession(options.component, options.sessionOptions...)
+		sOptions := append(options.sessionOptions, WithStateResource(options.component.View.Resource()))
+		options.session = s.NewComponentSession(options.component, sOptions...)
 	}
 	if input := options.input; input != nil {
 		if err = LoadInput(ctx, options.session, options.component, input); err != nil {
@@ -342,7 +351,9 @@ func (s *Service) AddComponent(ctx context.Context, component *repository.Compon
 	if err := components.Init(ctx); err != nil {
 		return err
 	}
+
 	s.repository.Registry().Register(components.Components...)
+
 	return nil
 }
 
@@ -356,11 +367,20 @@ func (s *Service) AddComponents(ctx context.Context, components *repository.Comp
 }
 
 // AddHandler adds handler component to repository
-func (s *Service) AddHandler(ctx context.Context, aPath *contract.Path, handler xhandler.Handler) (*repository.Component, error) {
-	component, err := repository.NewComponent(aPath, repository.WithHandler(handler))
+func (s *Service) AddHandler(ctx context.Context, aPath *contract.Path, handler xhandler.Handler, options ...repository.ComponentOption) (*repository.Component, error) {
+	options = append([]repository.ComponentOption{repository.WithHandler(handler)}, options...)
+	component, err := repository.NewComponent(aPath, options...)
 	if err != nil {
 		return nil, err
 	}
+	if component.View.Name == "" {
+		rType := reflect.TypeOf(handler)
+		if rType.Kind() == reflect.Ptr {
+			rType = rType.Elem()
+		}
+		component.View.Name = rType.Name()
+	}
+	component.View.Mode = view.ModeHandler
 	err = s.AddComponent(ctx, component)
 	return component, err
 }

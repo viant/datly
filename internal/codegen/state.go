@@ -2,9 +2,11 @@ package codegen
 
 import (
 	_ "embed"
+	"fmt"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/tagly/format/text"
 	"reflect"
 	"strings"
 )
@@ -12,32 +14,46 @@ import (
 //go:embed tmpl/state.gox
 var stateGoTemplate string
 
-func (t *Template) GenerateState(pkg string, info *plugin.Info) string {
+func (t *Template) GenerateState(pkg string, info *plugin.Info, embedContent map[string]string) string {
 	pkg = t.getPakcage(pkg)
 	if len(t.State) == 0 {
 		return ""
 	}
 	var output = strings.Replace(stateGoTemplate, "$Package", pkg, 1)
 	var fields = []string{}
+
+	root := text.DetectCaseFormat(t.Prefix).Format(t.Prefix, text.CaseFormatLowerUnderscore)
 	for _, input := range t.State {
-		fields = append(fields, input.FieldDeclaration())
+		fields = append(fields, input.FieldDeclaration(root, embedContent, t.TypeDef))
+
+	}
+	imports := inference.NewImports()
+
+	embedFSSnippet := ""
+	if len(embedContent) > 0 {
+		embedFSSnippet = fmt.Sprintf(`
+//go:embed %v/*.sql
+var %vFS embed.FS`, root, t.Prefix)
+		imports.AddPackage("embed")
 	}
 	output = strings.Replace(output, "$Fields", strings.Join(fields, "\n\n"), 1)
 	registerTypes := ""
 	importFragment := ""
 	switch info.IntegrationMode {
 	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
-		imports := inference.NewImports()
 		imports.AddPackage(info.ChecksumPkg())
 		imports.AddPackage("reflect")
 		imports.AddPackage(info.TypeCorePkg())
 		importFragment = imports.PackageImports()
 		registry := &customTypeRegistry{}
-		registry.register("State")
+		registry.register(t.Prefix + "Input")
 		registerTypes = registry.stringify()
 	}
 	output = strings.Replace(output, "$Imports", importFragment, 1)
 	output = strings.Replace(output, "$RegisterTypes", registerTypes, 1)
+	output = strings.ReplaceAll(output, "${Prefix}", t.Prefix)
+	output = strings.ReplaceAll(output, "$EmbedFS", embedFSSnippet)
+
 	return output
 }
 

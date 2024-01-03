@@ -28,6 +28,7 @@ type (
 
 		Predicates        []*extension.PredicateConfig `json:",omitempty" yaml:"Predicates"`
 		Name              string                       `json:",omitempty" yaml:"Name"`
+		SQL               string                       `json:",omitempty" yaml:"SQL"`
 		In                *Location                    `json:",omitempty" yaml:"In" `
 		Scope             string                       `json:",omitempty" yaml:"Scope" `
 		Required          *bool                        `json:",omitempty"  yaml:"Required" `
@@ -43,7 +44,6 @@ type (
 		DateFormat      string `json:",omitempty" yaml:"DateFormat"`
 		ErrorStatusCode int    `json:",omitempty" yaml:"ErrorStatusCode"`
 		Tag             string `json:",omitempty" yaml:"Tag"`
-		Lazy            string `json:",omitempty" yaml:"Lazy"`
 		When            string `json:",omitempty" yaml:"When"`
 		With            string `json:",omitempty" yaml:"With"`
 		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
@@ -58,6 +58,39 @@ type (
 	ParameterOption func(p *Parameter)
 )
 
+func (p *Parameter) IsUsedBy(text string) bool {
+	parameter := p.Name
+	text = strings.ReplaceAll(text, "Unsafe.", "")
+	if index := strings.Index(text, "${"+parameter); index != -1 {
+		match := text[index+2:]
+		if index := strings.Index(match, "}"); index != -1 {
+			match = match[:index]
+		}
+		if p.Name == match {
+			return true
+		}
+	}
+	for i := 0; i < len(text); i++ {
+		index := strings.Index(text, "$"+parameter)
+		if index == -1 {
+			break
+		}
+		text = text[index+1:]
+		if len(parameter) == len(text) {
+			return true
+		}
+		terminator := text[len(parameter)]
+		if terminator >= 65 && terminator <= 132 {
+			continue
+		}
+		switch terminator {
+		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			continue
+		}
+		return true
+	}
+	return false
+}
 func (p *Parameter) SetTypeNameTag() {
 	schema := p.OutputSchema()
 	if schema == nil {
@@ -128,7 +161,6 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 	if p.In.Kind == KindConst && p.Value == nil {
 		return fmt.Errorf("param %v value was not set", p.Name)
 	}
-
 	if p.In.IsView() {
 		if err := p.initDataViewParameter(ctx, resource); err != nil {
 			return err
@@ -201,7 +233,7 @@ func (p *Parameter) inherit(param *Parameter) {
 	setter.SetStringIfEmpty(&p.Style, param.Style)
 	setter.SetStringIfEmpty(&p.Tag, param.Tag)
 	setter.SetStringIfEmpty(&p.When, param.When)
-	setter.SetStringIfEmpty(&p.Lazy, param.Lazy)
+	setter.SetStringIfEmpty(&p.Scope, param.Scope)
 	setter.SetStringIfEmpty(&p.With, param.With)
 	if p.In == nil {
 		p.In = param.In
@@ -443,7 +475,9 @@ func (p *Parameter) initCodec(resource Resource) error {
 	if p.Output == nil {
 		return nil
 	}
-	if err := p.Output.Init(resource, p.Schema.Type()); err != nil {
+
+	inputType := p.Schema.Type()
+	if err := p.Output.Init(resource, inputType); err != nil {
 		return err
 	}
 	if p.Output.Schema == nil {

@@ -1,7 +1,10 @@
 package inference
 
 import (
+	"embed"
+	_ "embed"
 	"fmt"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/sqlparser"
@@ -11,6 +14,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"go/ast"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -82,7 +86,7 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 	return builder.String()
 }
 
-func (p *Parameter) FieldDeclaration() string {
+func (p *Parameter) FieldDeclaration(embedRoot string, embed map[string]string, def *view.TypeDefinition) string {
 	builder := strings.Builder{}
 	if p.SQL != "" {
 		p.buildSQLDoc(&builder)
@@ -103,9 +107,38 @@ func (p *Parameter) FieldDeclaration() string {
 		builder.WriteString(paramType.String())
 	}
 
-	tag := fmt.Sprintf(`parameter:"kind=%v,in=%v"`, p.In.Kind, p.In.Name)
+	aTag := tags.Tag{}
+	aTag.Parameter = &tags.Parameter{
+		Kind: string(p.In.Kind),
+		In:   string(p.In.Name),
+	}
+
+	URI := text.DetectCaseFormat(p.Name).Format(p.Name, text.CaseFormatLowerUnderscore)
+	key := path.Join(embedRoot, URI) + ".sql"
+
+	if p.SQL != "" {
+		embed[key] = strings.TrimSpace(p.SQL)
+		switch p.In.Kind {
+		case state.KindParam:
+			aTag.Codec = &tags.Codec{Name: "structql"}
+			aTag.Codec.URI = key
+			dataType := def.TypeName()
+			if def.Cardinality == state.Many {
+				dataType = "[]" + dataType
+			}
+			aTag.Parameter.DataType = dataType
+		default:
+			aTag.SQL.URI = key
+			aTag.View = &tags.View{}
+			aTag.Parameter.In = p.Name[3:]
+			aTag.View.Name = p.Name[3:]
+			//add parameter extraction from SQL
+		}
+	}
+
 	builder.WriteString("`")
-	builder.WriteString(tag)
+	tag := aTag.UpdateTag("")
+	builder.WriteString(string(tag))
 	builder.WriteString("`")
 	builder.WriteString(" ")
 	return builder.String()
@@ -167,7 +200,7 @@ func (p *Parameter) SyncObject() {
 }
 
 // TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
-func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*Parameter, error) {
+func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS) (*Parameter, error) {
 	SQL := extractSQL(field)
 	if field.Tag == nil {
 		return nil, nil
@@ -175,7 +208,7 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*P
 	//TODO convert ast.field to struct field and move that logic to state.BuildParameter
 	//currenty there are two places to mange filed tag  to parameter conversion
 	structTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
-	aTag, err := tags.ParseStateTags(structTag, nil)
+	aTag, err := tags.ParseStateTags(structTag, embedFS)
 	if err != nil || aTag.Parameter == nil {
 		return nil, err
 	}
@@ -188,7 +221,6 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types) (*P
 		param.Name = pTag.Name
 	}
 	param.When = pTag.When
-	param.Lazy = pTag.Lazy
 	param.Scope = pTag.Scope
 	param.With = pTag.With
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
@@ -299,40 +331,6 @@ func (p *Parameter) HasDataType() bool {
 		return false
 	}
 	return p.Schema.DataType != ""
-}
-
-func (p *Parameter) IsUsedBy(text string) bool {
-	parameter := p.Name
-	text = strings.ReplaceAll(text, "Unsafe.", "")
-	if index := strings.Index(text, "${"+parameter); index != -1 {
-		match := text[index+2:]
-		if index := strings.Index(match, "}"); index != -1 {
-			match = match[:index]
-		}
-		if p.Name == match {
-			return true
-		}
-	}
-	for i := 0; i < len(text); i++ {
-		index := strings.Index(text, "$"+parameter)
-		if index == -1 {
-			break
-		}
-		text = text[index+1:]
-		if len(parameter) == len(text) {
-			return true
-		}
-		terminator := text[len(parameter)]
-		if terminator >= 65 && terminator <= 132 {
-			continue
-		}
-		switch terminator {
-		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-			continue
-		}
-		return true
-	}
-	return false
 }
 
 func (p *Parameter) EnsureSchema() {

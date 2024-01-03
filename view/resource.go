@@ -298,6 +298,10 @@ func (r *Resource) GetViews() NamedViews {
 	return r._views
 }
 
+func (r *Resource) IndexViews() {
+	r._views = r.Views.Index()
+}
+
 // GetConnectors returns Connectors supplied with the Resource
 func (r *Resource) GetConnectors() Connectors {
 	if len(r.Connectors) > len(r._connectors) {
@@ -338,7 +342,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	}
 
 	var err error
-	r._views = r.Views.Index()
+	r.IndexViews()
 	r._connectors = ConnectorSlice(r.Connectors).Index()
 	r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
 	r._parameters = r.Parameters.Index()
@@ -421,6 +425,11 @@ func (r *Resource) readOptions(options []interface{}) *ResourceOptions {
 
 // View returns View with given name
 func (r *Resource) View(name string) (*View, error) {
+	ret, err := r._views.Lookup(name)
+	if ret != nil || len(r.Views) == len(r._views) {
+		return ret, err
+	}
+	r._views = r.Views.Index()
 	return r._views.Lookup(name)
 }
 

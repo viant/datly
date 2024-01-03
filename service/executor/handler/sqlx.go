@@ -231,7 +231,6 @@ func (s *Service) Allocate(ctx context.Context, tableName string, dest interface
 	if err != nil {
 		return err
 	}
-
 	service := sequencer.New(context.Background(), db)
 	return service.Next(tableName, dest, selector)
 }

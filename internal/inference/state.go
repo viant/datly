@@ -1,7 +1,12 @@
 package inference
 
 import (
+	"context"
 	"fmt"
+	"github.com/viant/afs"
+	"github.com/viant/afs/embed"
+	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
@@ -39,6 +44,14 @@ func (s *State) Append(params ...*Parameter) bool {
 		appended = true
 	}
 	return appended
+}
+
+func (s *State) AppendParameters(parameters ...state.Parameters) {
+	for _, params := range parameters {
+		for _, param := range params {
+			s.Append(&Parameter{Parameter: *param})
+		}
+	}
 }
 
 func (s State) RemoveReserved() State {
@@ -572,6 +585,13 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 		dataType = pair[1]
 	}
 
+	embedRoot := baseDir
+	if index := strings.LastIndex(dataType, "."); index != -1 {
+		embedRoot = path.Join(embedRoot, dataType[:index])
+	}
+
+	embedHolder := discoverEmbeds(embedRoot)
+	embedFS := embedHolder.EmbedFs()
 	var aState = State{}
 	dirTypes, err := xreflect.ParseTypes(baseDir,
 		xreflect.WithParserMode(parser.ParseComments),
@@ -581,7 +601,10 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 				return nil
 			}
 			fieldTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
-			aTag, _ := tags.ParseStateTags(fieldTag, nil)
+			aTag, err := tags.ParseStateTags(fieldTag, embedFS)
+			if err != nil {
+				return err
+			}
 			if aTag.Parameter == nil {
 				return nil
 			}
@@ -594,7 +617,7 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 				name = field.Names[0].Name
 			}
 			setter.SetStringIfEmpty(&pTag.Name, name)
-			param, err := buildParameter(field, aTag, types)
+			param, err := buildParameter(field, aTag, types, embedFS)
 			if param == nil {
 				return err
 			}
@@ -613,4 +636,28 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 		return nil, err
 	}
 	return aState, nil
+}
+
+func discoverEmbeds(embedRoot string) *embed.Holder {
+	embedRoot = url.Normalize(embedRoot, file.Scheme)
+	fs := afs.New()
+	embedFs := embed.NewHolder()
+	if objects, _ := fs.List(context.Background(), embedRoot); len(objects) > 0 {
+		for _, holder := range objects {
+			if !holder.IsDir() || url.Equals(holder.URL(), embedRoot) {
+				continue
+			}
+			if candidates, _ := fs.List(context.Background(), holder.URL()); len(objects) > 0 {
+				for _, candidate := range candidates {
+					if strings.HasSuffix(candidate.Name(), ".sql") {
+						URI := path.Join(holder.Name(), candidate.Name())
+						if content, _ := fs.DownloadWithURL(context.Background(), candidate.URL()); len(content) > 0 {
+							embedFs.Add(URI, string(content))
+						}
+					}
+				}
+			}
+		}
+	}
+	return embedFs
 }

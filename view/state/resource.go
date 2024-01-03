@@ -9,6 +9,8 @@ import (
 type (
 	Resource interface {
 		LookupParameter(name string) (*Parameter, error)
+
+		AppendParameter(parameter *Parameter)
 		ViewSchema(ctx context.Context, schema string) (*Schema, error)
 		LookupType() xreflect.LookupType
 		LoadText(ctx context.Context, URL string) (string, error)

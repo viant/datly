@@ -177,7 +177,7 @@ func (a *Async) initHandlerIfNeeded(ctx context.Context) error {
 }
 
 func (a *Async) detectHandlerType(ctx context.Context) (async.Handler, error) {
-	switch a.HandlerType {
+	switch a.Type {
 	case async.HandlerTypeS3:
 		return s3.NewHandler(ctx, a.BucketURL)
 	case async.HandlerTypeSQS:
@@ -193,23 +193,23 @@ func (a *Async) detectHandlerType(ctx context.Context) (async.Handler, error) {
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported async HandlerType %v", a.HandlerType)
+		return nil, fmt.Errorf("unsupported async Type %v", a.Type)
 	}
 }
 
 func (a *Async) inheritHandlerTypeIfNeeded() {
 	switch env.BuildType {
 	case env.BuildTypeKindLambdaSQS, env.BuildTypeKindLambdaS3:
-		a.HandlerType = ""
+		a.Type = ""
 		return
 	}
 
-	if a.HandlerType != "" {
+	if a.Type != "" {
 		return
 	}
 
 	if a.BucketURL != "" {
-		a.HandlerType = "S3"
+		a.Type = "S3"
 		return
 	}
 }

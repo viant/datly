@@ -19,7 +19,7 @@ require (
 	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.4
-	github.com/viant/afs v1.25.0
+	github.com/viant/afs v1.25.1-0.20231110184132-877ed98abca1
 	github.com/viant/afsc v1.9.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.3.3-0.20231010200221-c3e8c785f1e0
@@ -32,7 +32,7 @@ require (
 	github.com/viant/parsly v0.3.2
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.6.0
-	github.com/viant/sqlx v0.12.0
+	github.com/viant/sqlx v0.12.1-0.20240103001512-e8d07c43e9c6
 	github.com/viant/structql v0.4.1
 	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
@@ -54,9 +54,9 @@ require (
 require (
 	github.com/viant/structology v0.5.6-0.20231127181208-736f8ad06193
 	github.com/viant/tagly v0.1.2-0.20231206234118-551d2cad5d61
-	github.com/viant/xdatly v0.3.1-0.20231125211515-a61f20e41821
+	github.com/viant/xdatly v0.3.1-0.20231228175357-d3889b908202
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20231125211515-a61f20e41821
+	github.com/viant/xdatly/handler v0.0.0-20231228175357-d3889b908202
 	github.com/viant/xdatly/types/core v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xlsy v0.3.0
 	github.com/viant/xmlify v0.1.1-0.20231127181625-8a6b48ceea12

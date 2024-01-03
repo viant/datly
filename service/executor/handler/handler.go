@@ -10,51 +10,77 @@ import (
 )
 
 var Type = reflect.TypeOf((*handler.Handler)(nil)).Elem()
+var FactoryType = reflect.TypeOf((*handler.Factory)(nil)).Elem()
 
 type (
 	Handler struct {
-		HandlerType string
-		StateType   string
-
-		_handlerType reflect.Type
-		_stateType   reflect.Type
-		caller       reflect.Method
-		resource     *view.Resource
+		Type       string
+		Arguments  []string
+		InputType  string
+		OutputType string
+		factory    handler.Factory
+		_type      reflect.Type
+		caller     reflect.Method
+		resource   *view.Resource
 	}
 )
 
 func (h *Handler) Init(ctx context.Context, resource *view.Resource) (err error) {
-	handlerType := h._handlerType
-	if handlerType == nil {
+
+	aType := h._type
+	if aType == nil {
 		h.resource = resource
-		handlerType, err = h.resource.TypeRegistry().Lookup(h.HandlerType)
+		aType, err = h.resource.TypeRegistry().Lookup(h.Type)
 		if err != nil {
 			return fmt.Errorf("couldn't parse Handler type due to %w", err)
 		}
 	}
-	if _, ok := handlerType.MethodByName("Exec"); !ok {
-		handlerType = reflect.PtrTo(handlerType)
+
+	if aType.Implements(FactoryType) {
+		factory := types.NewValue(h._type)
+		if aFactory, ok := factory.(handler.Factory); ok {
+			h.factory = aFactory
+			return nil
+		}
 	}
-	h._handlerType = handlerType
-	if !h._handlerType.Implements(Type) {
-		return fmt.Errorf("handler %v has to implement %v", h._handlerType.String(), Type.String())
+
+	if _, ok := aType.MethodByName("Exec"); !ok {
+		aType = reflect.PtrTo(aType)
 	}
-	method, _ := h._handlerType.MethodByName("Exec")
+
+	h._type = aType
+	if !h._type.Implements(Type) {
+		return fmt.Errorf("handler %v has to implement %v", h._type.String(), Type.String())
+	}
+	method, _ := h._type.MethodByName("Exec")
 	h.caller = method
 	return nil
 }
 
 func (h *Handler) Call(ctx context.Context, session handler.Session) (interface{}, error) {
-	aHandler := types.NewValue(h._handlerType)
+	var aHandler handler.Handler
+	var err error
+	if h.factory != nil {
+		if aHandler, err = h.factory.New(ctx, h.Arguments...); err != nil {
+			return nil, fmt.Errorf("failed to create handler: %w", err)
+		}
+	}
+	if aHandler == nil {
+		var ok bool
+		if value := types.NewValue(h._type); value != nil {
+			if aHandler, ok = value.(handler.Handler); !ok {
+				return nil, fmt.Errorf("expected handler to implement %T", aHandler)
+			}
+		}
+	}
 	asHandler, ok := aHandler.(handler.Handler)
 	if !ok {
 		return nil, fmt.Errorf("expected handler to implement %T", asHandler)
 	}
-
 	return asHandler.Exec(ctx, session)
 }
 
 func NewHandler(handler handler.Handler) *Handler {
 	rType := reflect.TypeOf(handler)
-	return &Handler{HandlerType: rType.Name(), _handlerType: rType}
+	return &Handler{Type: rType.Name(), _type: rType}
 }

@@ -59,8 +59,8 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		template := codegen.NewTemplate(resource.Rule, root.Spec)
 		root.Spec.Type.Package = ruleOption.Package()
 		template.BuildTypeDef(root.Spec, resource.Rule.GetField(), resource.Rule.Doc.Columns)
-		template.Imports.AddType(resource.Rule.HandlerType)
-		template.Imports.AddType(resource.Rule.StateType)
+		template.Imports.AddType(resource.Rule.Type)
+		template.Imports.AddType(resource.Rule.InputType)
 
 		var opts = []codegen.Option{codegen.WithHTTPMethod(gen.HttpMethod()), codegen.WithLang(gen.Lang)}
 		template.BuildState(spec, resource.Rule.GetField(), opts...)
@@ -165,7 +165,11 @@ func (s *Service) generateCode(ctx context.Context, gen *options.Generate, templ
 	if err := s.generateTemplate(gen, template, info); err != nil {
 		return err
 	}
-	code := template.GenerateState(pkg, info)
+	embedContent := make(map[string]string)
+	code := template.GenerateState(pkg, info, embedContent)
+	for k, v := range embedContent {
+		s.Files.Append(asset.NewFile(gen.EmbedLocation(k), v))
+	}
 	s.Files.Append(asset.NewFile(gen.StateLocation(), code))
 	return s.generateEntity(ctx, pkg, gen, info, template)
 }
@@ -201,13 +205,15 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		*dSQL = origin
 		return nil
 	}
-	state, err := inference.NewState(ruleOptions.GoModuleLocation(), rule.StateType, extension.Config.Types)
+	state, err := inference.NewState(ruleOptions.GoModuleLocation(), rule.InputType, extension.Config.Types)
 	if err != nil {
 		return err
 	}
 	rule.Handler = &handler.Handler{
-		HandlerType: rule.HandlerType,
-		StateType:   rule.StateType,
+		Type:       rule.Type,
+		InputType:  rule.InputType,
+		OutputType: rule.OutputType,
+		Arguments:  rule.HandlerArgs,
 	}
 	entityParam := state[0]
 	entityType := entityParam.Schema.Type()
@@ -219,8 +225,8 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		return err
 	}
 	tmpl := codegen.NewTemplate(rule, &inference.Spec{Type: aType})
-	tmpl.Imports.AddType(rule.StateType)
-	tmpl.Imports.AddType(rule.HandlerType)
+	tmpl.Imports.AddType(rule.InputType)
+	tmpl.Imports.AddType(rule.Type)
 	tmpl.EnsureImports(aType)
 	tmpl.State = state
 	handlerDSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())

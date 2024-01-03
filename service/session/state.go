@@ -466,6 +466,7 @@ func New(aView *view.View, opts ...Option) *Session {
 		Options: Options{namespacedView: *view.IndexViews(aView)},
 		cache:   newCache(),
 		views:   newViews(),
+		Types:   *state.NewTypes(),
 	}
 	ret.namedParameters = ret.namespacedView.Parameters()
 	ret.apply(opts)
@@ -492,6 +493,20 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 			continue
 		}
 		value := selector.Value(ptr)
+		switch parameter.In.Kind {
+		case state.KindView, state.KindParam, state.KindState:
+			if value == nil {
+				return nil
+			}
+
+			rType := parameter.OutputType()
+			if rType.Kind() == reflect.Ptr {
+				ptr := (*unsafe.Pointer)(xunsafe.AsPointer(value))
+				if ptr == nil || *ptr == nil {
+					return nil
+				}
+			}
+		}
 		s.setValue(parameter, value)
 	}
 

@@ -24,6 +24,7 @@ type (
 		paramPrefix   string
 		recordPrefix  string
 		StateType     reflect.Type
+		Prefix        string
 	}
 )
 
@@ -348,5 +349,5 @@ func (t *Template) ensurePackageImports(defaultPkg string, fields []*view.Field)
 }
 
 func NewTemplate(rule *translator.Rule, spec *inference.Spec) *Template {
-	return &Template{paramPrefix: paramPrefix, Config: rule, Imports: inference.NewImports(), Spec: spec}
+	return &Template{paramPrefix: paramPrefix, Prefix: rule.Root, Config: rule, Imports: inference.NewImports(), Spec: spec}
 }

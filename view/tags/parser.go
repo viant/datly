@@ -56,7 +56,7 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 		case SQLTag:
 			ret.View = ret.ensureView()
 			if !strings.HasPrefix(tagValue, "uri") {
-				ret.SQL = ViewSQL(tagValue)
+				ret.SQL = NewViewSQL(tagValue, "")
 				continue
 			}
 			URI := tagValue[4:]
@@ -64,12 +64,12 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 			if err != nil {
 				return nil, err
 			}
-			ret.SQL = ViewSQL(data)
+			ret.SQL = NewViewSQL(string(data), URI)
 
 		case SQLSummaryTag:
 			ret.View = ret.ensureView()
 			if !strings.HasPrefix(tagValue, "uri") {
-				ret.SummarySQL = ViewSQLSummary(tagValue)
+				ret.SummarySQL = NewViewSQLSummary(tagValue, "")
 				continue
 			}
 			URI := tagValue[4:]
@@ -77,7 +77,7 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 			if err != nil {
 				return nil, err
 			}
-			ret.SummarySQL = ViewSQLSummary(data)
+			ret.SummarySQL = NewViewSQLSummary(string(data), URI)
 		case PredicateTag:
 			err := parsePredicate(tag, ret)
 			if err != nil {

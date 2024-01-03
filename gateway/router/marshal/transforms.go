@@ -68,7 +68,6 @@ func (t *Transform) Init(ctx context.Context, fs afs.Service, lookupType xreflec
 			return err
 		}
 		value := types.NewValue(rType)
-
 		unmarshaler, ok := value.(json.UnmarshalerInto)
 		if ok {
 			t._unmarshaler = unmarshaler

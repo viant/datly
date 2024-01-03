@@ -15,7 +15,7 @@ func (a Arguments) IsHelp() bool {
 
 func (a Arguments) IsLegacy() bool {
 	for _, arg := range a {
-		if arg == "-l" {
+		if arg == "-L" {
 			return true
 		}
 	}

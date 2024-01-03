@@ -12,7 +12,7 @@ import (
 // Statelet allows customizing View fetched from Database
 type (
 
-	//StateType represents view state
+	//InputType represents view state
 	Statelet struct {
 		Template *structology.State
 		QuerySelector

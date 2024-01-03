@@ -54,6 +54,15 @@ func (p Parameters) LookupByLocation(kind Kind, location string) *Parameter {
 	return nil
 }
 
+func (p Parameters) UsedBy(text string) Parameters {
+	var result = Parameters{}
+	for _, candidate := range p {
+		if candidate.IsUsedBy(text) {
+			result = append(result, candidate)
+		}
+	}
+	return result
+}
 func (p Parameters) External() Parameters {
 	var result Parameters
 	for i, parameter := range p {
@@ -141,7 +150,10 @@ func (p Parameters) GroupByStatusCode() []Parameters {
 	var result []Parameters
 	var unAuthorizedParameters Parameters
 	var forbiddenParameters Parameters
+	var external Parameters
+	var transient Parameters
 	var others Parameters
+
 	for i, candidate := range p {
 		switch candidate.ErrorStatusCode {
 		case http.StatusUnauthorized, http.StatusProxyAuthRequired:
@@ -149,7 +161,15 @@ func (p Parameters) GroupByStatusCode() []Parameters {
 		case http.StatusForbidden, http.StatusNotAcceptable, http.StatusMethodNotAllowed:
 			forbiddenParameters = append(forbiddenParameters, p[i])
 		default:
-			others = append(others, p[i])
+			switch candidate.In.Kind {
+			case KindHeader, KindQuery, KindRequestBody, KindCookie, KindRequest:
+				external = append(external, p[i])
+			case KindParam, KindState:
+				transient = append(transient, p[i])
+			default:
+				others = append(others, p[i])
+
+			}
 		}
 	}
 	if len(unAuthorizedParameters) > 0 {
@@ -158,6 +178,13 @@ func (p Parameters) GroupByStatusCode() []Parameters {
 	if len(forbiddenParameters) > 0 {
 		result = append(result, forbiddenParameters)
 	}
+	if len(external) > 0 {
+		result = append(result, external)
+	}
+	if len(transient) > 0 {
+		result = append(result, transient)
+	}
+
 	if len(others) > 0 {
 		result = append(result, others)
 	}
@@ -493,12 +520,12 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 		name = ""
 	}
 	aTag.Parameter = &tags.Parameter{
-		Name: name,
-		Kind: string(p.In.Kind),
-		In:   string(p.In.Name),
-		When: p.When,
-		Lazy: p.Lazy,
-		With: p.With,
+		Name:  name,
+		Kind:  string(p.In.Kind),
+		In:    string(p.In.Name),
+		When:  p.When,
+		Scope: p.Scope,
+		With:  p.With,
 	}
 	if p.Output != nil && p.Output.Schema != nil {
 		if p.Output.Schema.TypeName() != p.Schema.TypeName() {

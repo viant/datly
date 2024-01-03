@@ -2,11 +2,13 @@ package $Package
 
 $Imports
 
+$EmbedFS
+
 func init() {
     $RegisterTypes
 }
 
 
-type State struct {
+type ${Prefix}Input struct {
     $Fields
 }

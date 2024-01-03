@@ -68,11 +68,14 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 
 	switch aComponent.Service {
 	case service.TypeReader:
-		if ctx, err = s.EnsureInput(ctx, aComponent, aSession); err != nil {
+		if ctx, err = s.EnsureReaderInput(ctx, aComponent, aSession); err != nil {
 			return nil, err
 		}
 		return s.runQuery(ctx, aComponent, aSession)
 	case service.TypeExecutor:
+		if ctx, err = s.EnsureInput(ctx, aComponent, aSession, true); err != nil {
+			return nil, err
+		}
 		return s.execute(ctx, aComponent, aSession)
 	}
 	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported Type %v", aComponent.Service))
@@ -95,10 +98,14 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 	return ctx, nil
 }
 
-func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
+func (s *Service) EnsureReaderInput(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
 	if job := s.Job(ctx); job != nil { //
 		return ctx, nil
 	}
+	return s.EnsureInput(ctx, aComponent, aSession, false)
+}
+
+func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Component, aSession *session.Session, indirect bool) (context.Context, error) {
 	if inputType := aComponent.Input.Type; inputType.Type() != nil {
 		var inputState *structology.State
 		input := ctx.Value(xhandler.InputKey)
@@ -109,6 +116,9 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 		}
 		locatorOptions := aComponent.LocatorOptions(nil, nil)
 		options := aSession.ViewOptions(aComponent.View, session.WithLocatorOptions(locatorOptions...))
+		if indirect {
+			options = options.Indirect(true)
+		}
 		err := aSession.SetState(ctx, inputType.Parameters, inputState, options)
 		if err != nil {
 			return nil, err

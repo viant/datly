@@ -3,6 +3,7 @@ package extension
 import (
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/docs"
+	"github.com/viant/xdatly/types/core"
 	"github.com/viant/xreflect"
 	"reflect"
 	"sync"
@@ -18,6 +19,18 @@ type Registry struct {
 }
 
 func NewRegistry() *Registry {
+	types := Config.Types
+
+	if pkgTypes, _ := core.Types(func(packageName, typeName string, rType reflect.Type, insertedAt time.Time) {
+		_ = types.Register(typeName, xreflect.WithPackage(packageName), xreflect.WithReflectType(rType))
+	}); len(pkgTypes) > 0 {
+		for pkg, v := range pkgTypes {
+			for name, v := range v {
+				_ = types.Register(name, xreflect.WithPackage(pkg), xreflect.WithReflectType(v))
+			}
+		}
+	}
+
 	return &Registry{
 		Mutex:      sync.Mutex{},
 		Types:      xreflect.NewTypes(xreflect.WithRegistry(Config.Types)),

@@ -20,6 +20,7 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/datly/view/tags"
@@ -259,11 +260,15 @@ func (c *Component) Doc() (docs.Service, bool) {
 
 func NewComponent(path *contract.Path, options ...ComponentOption) (*Component, error) {
 	ret := &Component{Path: *path, View: &view.View{}}
+	res := &view.Resource{}
+	res.SetTypes(extension.Config.Types)
+	ret.View.SetResource(res)
 	for _, opt := range options {
 		if err := opt(ret); err != nil {
 			return nil, err
 		}
 	}
+
 	return ret, nil
 }
 
@@ -286,9 +291,27 @@ func WithHandler(aHandler xhandler.Handler) ComponentOption {
 	}
 }
 
-func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) ComponentOption {
+func WithInput(inputType reflect.Type) ComponentOption {
 	return func(c *Component) error {
 		c.Contract.Input.Type = state.Type{Schema: state.NewSchema(inputType)}
+		if err := c.Contract.Input.Type.Init(); err != err {
+			return fmt.Errorf("failed to initalize input: %w", err)
+		}
+		return nil
+	}
+}
+
+func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) ComponentOption {
+	return func(c *Component) error {
+		if outputType == nil {
+			outputType = reflect.TypeOf(struct{}{})
+		}
+
+		sType, err := state.NewType(state.WithResource(c.View.Resource()), state.WithSchema(state.NewSchema(inputType)))
+		if err != nil {
+			return err
+		}
+		c.Contract.Input.Type = *sType
 		if err := c.Contract.Input.Type.Init(); err != err {
 			return fmt.Errorf("failed to initalize input: %w", err)
 		}
@@ -313,9 +336,9 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 				setter.SetStringIfEmpty(&viewName, aView.Name)
 				table = aView.Table
 			}
-			if aTag.SQL != "" {
+			if aTag.SQL.SQL != "" {
 				anInputType := c.Contract.Input.Type
-				vOptions = append(vOptions, view.WithSQL(string(aTag.SQL), anInputType.Parameters...))
+				vOptions = append(vOptions, view.WithSQL(string(aTag.SQL.SQL), anInputType.Parameters...))
 			}
 		}
 		aView := view.NewView(viewName, table, vOptions...)

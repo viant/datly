@@ -11,7 +11,11 @@ func (s *Session) Into(ctx context.Context, dest interface{}) (err error) {
 	destType := reflect.TypeOf(dest)
 	stateType, ok := s.Types.Lookup(types.EnsureStruct(destType))
 	if !ok {
-		if stateType, err = state.NewType(state.WithSchema(state.NewSchema(destType))); err != nil {
+
+		if stateType, err = state.NewType(
+			state.WithSchema(state.NewSchema(destType)),
+			state.WithResource(s.resource),
+		); err != nil {
 			return err
 		}
 		s.Types.Put(stateType)

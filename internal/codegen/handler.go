@@ -15,8 +15,8 @@ var handlerTemplate string
 
 func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (string, string, error) {
 	fields, localVariableDeclaration := t.State.HandlerLocalVariables()
-	t.Config.HandlerType = opts.HandlerType()
-	t.Config.StateType = opts.StateType()
+	t.Config.Type = opts.HandlerType(t.Prefix)
+	t.Config.InputType = opts.InputType(t.Prefix)
 	t.Config.ResponseBody = nil
 
 	index := NewIndexGenerator(t.State)
@@ -38,11 +38,12 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 
 	handlerContent := strings.Replace(handlerTemplate, "$Package", opts.Package(), 1)
 	handlerContent = strings.Replace(handlerContent, "$LocalVariable", localVariableDeclaration, 1)
+	handlerContent = strings.ReplaceAll(handlerContent, "${Prefix}", t.Prefix)
 
 	registry := &customTypeRegistry{}
-	registry.register("Handler")
+	registry.register(t.Prefix + "Handler")
 	registerTypes := registry.stringify()
-	handlerContent = strings.Replace(handlerContent, "$RegisterTypes", registerTypes, 1)
+	handlerContent = strings.ReplaceAll(handlerContent, "$RegisterTypes", registerTypes)
 	imports := inference.NewImports()
 	imports.AddPackage(info.ChecksumPkg())
 	imports.AddPackage(info.TypeCorePkg())
@@ -52,6 +53,7 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 	info.ChecksumPkg()
 	logic := builder.String()
 	handlerContent = strings.Replace(handlerContent, "$BusinessLogic", logic, 1)
+
 	bodyParam := t.State.FilterByKind(state.KindRequestBody)[0]
 	handlerContent = strings.Replace(handlerContent, "$Response", "state."+bodyParam.Name, 1)
 	return handlerContent, indexContent, nil

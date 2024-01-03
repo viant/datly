@@ -23,7 +23,7 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 
 	if viewParameter := c.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil {
 		aTag := &tags.Tag{}
-		aTag.SQL = tags.ViewSQL(c.View.Template.Source)
+		aTag.SQL = tags.NewViewSQL(c.View.Template.Source, "")
 		aTag.View = &tags.View{Name: c.View.Name}
 		viewParameter.Tag = string(aTag.UpdateTag(reflect.StructTag(viewParameter.Tag)))
 	}

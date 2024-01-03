@@ -72,12 +72,17 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 			pTags.Set(format.TagName, string(formatTag))
 		}
 	}
-	if t.SQL != "" {
-		pTags.Set(SQLTag, string(t.SQL))
+	if t.SQL.URI != "" {
+		pTags.Set(SQLTag, "uri="+string(t.SQL.URI))
+	} else if t.SQL.SQL != "" {
+		pTags.Set(SQLTag, string(t.SQL.SQL))
 	}
-	if t.SummarySQL != "" {
-		pTags.Set(SQLSummaryTag, string(t.SummarySQL))
+	if t.SummarySQL.URI != "" {
+		pTags.Set(SQLSummaryTag, "uri="+string(t.SummarySQL.URI))
+	} else if t.SummarySQL.SQL != "" {
+		pTags.Set(SQLSummaryTag, string(t.SummarySQL.SQL))
 	}
+
 	if t.Documentation != "" {
 		pTags.Set(DocumentationTag, string(t.Documentation))
 	}

@@ -10,6 +10,7 @@ import (
 type (
 	Options struct {
 		state               *view.State
+		resource            state.Resource
 		namespacedView      view.NamespacedView
 		kindLocator         *locator.KindLocator
 		namedParameters     state.NamedParameters
@@ -84,6 +85,12 @@ func WithLocators(locators *locator.KindLocator) Option {
 func WithLocatorOptions(options ...locator.Option) Option {
 	return func(s *Options) {
 		s.locatorOptions = options
+	}
+}
+
+func WithStateResource(resource state.Resource) Option {
+	return func(s *Options) {
+		s.resource = resource
 	}
 }
 

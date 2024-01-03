@@ -47,7 +47,7 @@ func (o *Options) UseColumn() bool {
 
 func (o *Options) ensureRegistry() {
 	if o.extensions == nil {
-		o.extensions = &extension.Registry{}
+		o.extensions = extension.NewRegistry()
 	}
 }
 

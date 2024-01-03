@@ -239,7 +239,6 @@ func (t *Template) EvaluateStateWithSession(parameterState *structology.State, p
 	if dataUnit != nil {
 		ops = append(ops, expand.WithDataUnit(dataUnit))
 	}
-
 	return Evaluate(
 		t.sqlEvaluator,
 		ops...,

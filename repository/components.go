@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/repository/resource"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
+	"reflect"
 )
 
 type Components struct {
@@ -54,8 +58,62 @@ func (c *Components) Init(ctx context.Context) error {
 		if err := component.Init(ctx, c.Resource); err != nil {
 			return err
 		}
+		for _, parameter := range component.Input.Type.Parameters {
+			if param := c.Resource.Parameters.Lookup(parameter.Name); param == nil {
+				c.Resource.Parameters.Append(parameter)
+			}
+			switch parameter.In.Kind {
+			case state.KindView:
+				viewName := parameter.In.Name
+				if prev, _ := c.Resource.View(viewName); prev != nil {
+					continue
+				}
+
+				viewParameters := component.Input.Type.Parameters.UsedBy(parameter.SQL)
+				viewSchema := parameterViewSchema(parameter)
+				SQL := parameter.SQL
+				if len(viewParameters) > 0 {
+					aState := inference.State{}
+					aState.AppendParameters(viewParameters)
+					if tmpl, _ := parser.NewTemplate(SQL, &aState); tmpl != nil {
+						SQL = tmpl.Sanitize()
+					}
+
+				}
+
+				parameterView, err := view.New(viewName, "",
+					view.WithMode(view.ModeQuery),
+					view.WithSchema(viewSchema),
+					view.WithConnector(component.View.Connector),
+					view.WithTemplate(
+						view.NewTemplate(SQL,
+							view.WithTemplateParameters(viewParameters...))))
+
+				if err != nil {
+					return err
+				}
+				if err := parameterView.Init(ctx, c.Resource); err != nil {
+					return fmt.Errorf("failed to initialize view parameter: %v, %w", parameter.Name, err)
+				}
+				component.indexedView[viewName] = parameterView
+				c.Resource.Views = append(c.Resource.Views, parameterView)
+			}
+		}
+
 	}
+
 	return nil
+}
+
+func parameterViewSchema(parameter *state.Parameter) *state.Schema {
+	rType := parameter.Schema.Type()
+	var schemaOptions []state.SchemaOption
+	if rType.Kind() == reflect.Slice {
+		rType = rType.Elem()
+		schemaOptions = append(schemaOptions, state.WithMany())
+	}
+	viewSchema := state.NewSchema(rType, schemaOptions...)
+	return viewSchema
 }
 
 func (c *Components) columnsFile() string {

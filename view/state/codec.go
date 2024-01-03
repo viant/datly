@@ -160,9 +160,7 @@ func BuildCodec(aTag *tags.Tag, param *Parameter) {
 		return
 	}
 	param.Output = &Codec{Name: aTag.Codec.Name, Body: aTag.Codec.Body, Args: aTag.Codec.Arguments}
-	if aTag.Codec.DataType != "" {
-		param.Output.Schema = &Schema{Name: aTag.Codec.DataType}
-	}
+
 }
 
 // AsCodecOptions creates codec options

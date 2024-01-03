@@ -1,7 +1,6 @@
 package tags
 
 import (
-	"context"
 	"fmt"
 	"github.com/viant/tagly/tags"
 	"strings"
@@ -13,8 +12,8 @@ const CodecTag = "codec"
 type Codec struct {
 	Name      string   `tag:"name,omitempty"`
 	Body      string   `tag:"body,omitempty"`
+	URI       string   `tag:"uri,omitempty"`
 	Arguments []string `tag:"arguments,omitempty"`
-	DataType  string   `tag:"dataType,omitempty"`
 }
 
 func (t *Tag) updatedCodec(key string, value string) (err error) {
@@ -26,7 +25,7 @@ func (t *Tag) updatedCodec(key string, value string) (err error) {
 		tag.Body = value
 	case "uri":
 		URI := strings.TrimSpace(value)
-		data, err := t.fs.DownloadWithURL(context.Background(), strings.TrimSpace(URI), t.getOptions()...)
+		data, err := loadContent(URI, t.fs, t.getOptions(), t.embed)
 		if err != nil {
 			return err
 		}
@@ -46,6 +45,10 @@ func (p *Codec) Tag() *tags.Tag {
 		return nil
 	}
 	builder.WriteString(p.Name)
+	if p.URI != "" {
+		builder.WriteString(",uri=")
+		builder.WriteString(p.URI)
+	}
 	for _, arg := range p.Arguments {
 		builder.WriteString(",")
 		builder.WriteString(arg)

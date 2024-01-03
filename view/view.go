@@ -384,8 +384,8 @@ func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option
 		}
 	}
 
-	if SQL := tag.SQL; SQL != "" {
-		tmpl := NewTemplate(string(SQL), WithTemplateParameters(parameters...))
+	if SQL := tag.SQL; SQL.SQL != "" {
+		tmpl := NewTemplate(string(SQL.SQL), WithTemplateParameters(parameters...))
 		options = append(options, WithTemplate(tmpl))
 	}
 
@@ -941,6 +941,7 @@ func (v *View) inherit(view *View) error {
 	setter.SetStringIfEmpty(&v.Alias, view.Alias)
 	setter.SetStringIfEmpty(&v.Table, view.Table)
 	setter.SetStringIfEmpty(&v.Module, view.Module)
+
 	setter.SetStringIfEmpty(&v.Description, view.Description)
 
 	setter.SetStringIfEmpty(&v.From, view.From)
@@ -1486,6 +1487,7 @@ func New(name, table string, opts ...Option) (*View, error) {
 	if err := Options(opts).Apply(ret); err != nil {
 		return nil, fmt.Errorf("failed to create view %s,  %v", ret.Name, err)
 	}
+
 	return ret, nil
 }
 

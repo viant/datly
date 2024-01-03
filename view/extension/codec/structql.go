@@ -7,6 +7,7 @@ import (
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"strings"
 )
 
 const Structql = "structql"
@@ -27,7 +28,15 @@ func (s StructQLFactory) New(codec *codec.Config, _ ...codec.Option) (codec.Inst
 		return nil, fmt.Errorf("codec query can't be empty")
 	}
 
-	structQLCodec, err := NewStructQLCodec(codec.Body, codec.InputType)
+	SQL := strings.TrimSpace(codec.Body)
+	switch SQL[0] {
+	case '?':
+		SQL = SQL[1:]
+	case '!':
+		SQL = SQL[1:]
+	}
+
+	structQLCodec, err := NewStructQLCodec(SQL, codec.InputType)
 	if err != nil {
 		return nil, err
 	}

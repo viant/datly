@@ -16,6 +16,10 @@ func (r *Resourcelet) LookupParameter(name string) (*state.Parameter, error) {
 	return parameter, err
 }
 
+func (r *Resourcelet) AppendParameter(parameter *state.Parameter) {
+	r.Parameters.Append(parameter)
+}
+
 func (r *Resourcelet) ExpandSubstitutes(text string) string {
 	return r.Substitutes.Replace(text)
 }
@@ -34,8 +38,12 @@ func (r *Resourcelet) lookupParameter(name string) (*state.Parameter, error) {
 		}
 	}
 	ret, err := r._parameters.Lookup(name)
+
 	if ret == nil && viewParameter != nil {
 		return viewParameter, nil
+	}
+	if ret = r.Parameters.Lookup(name); ret != nil {
+		return ret, nil
 	}
 	return ret, err
 }

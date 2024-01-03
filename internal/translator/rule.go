@@ -51,8 +51,10 @@ type (
 		DataFormat   string                     `json:",omitempty"`
 		TabularJSON  *content.TabularJSONConfig `json:",omitempty"`
 		XML          *content.XMLConfig         `json:",omitempty"`
-		HandlerType  string                     `json:",omitempty"`
-		StateType    string                     `json:",omitempty"`
+		Type         string                     `json:",omitempty"`
+		HandlerArgs  []string                   `json:",omitempty"`
+		InputType    string                     `json:",omitempty"`
+		OutputType   string                     `json:",omitempty"`
 		With         []string                   `json:",omitempty"`
 		Include      []string                   `json:",omitempty"`
 		indexNamespaces
@@ -92,14 +94,14 @@ type (
 )
 
 func (r *Rule) StateTypePackage() string {
-	if r.StateType == "" {
+	if r.InputType == "" {
 		return ""
 	}
-	index := strings.LastIndex(r.StateType, ".")
+	index := strings.LastIndex(r.InputType, ".")
 	if index == -1 {
 		return ""
 	}
-	return r.StateType[:index]
+	return r.InputType[:index]
 }
 
 func (r *Rule) applyGeneratorOutputSetting() {
@@ -128,19 +130,19 @@ func (r *Rule) DSQLSetting() interface{} {
 		URI          string
 		Method       string
 		ResponseBody *ResponseBodyConfig `json:",omitempty"`
-		HandlerType  string              `json:",omitempty"`
-		StateType    string              `json:",omitempty"`
+		Type         string              `json:",omitempty"`
+		InputType    string              `json:",omitempty"`
 	}{
 		URI:          r.URI,
 		Method:       r.Method,
 		ResponseBody: r.ResponseBody,
-		HandlerType:  r.HandlerType,
-		StateType:    r.StateType,
+		Type:         r.Type,
+		InputType:    r.InputType,
 	}
 }
 
 func (r *Rule) ShallGenerateHandler() bool {
-	return r.HandlerType != ""
+	return r.Type != ""
 }
 
 func (r *Rule) IsMany() bool {
@@ -286,7 +288,7 @@ func (r *Rule) applyDefaults() {
 	setter.SetCaseFormatIfEmpty(&r.Route.Output.CaseFormat, "lc")
 	setter.SetBoolIfFalse(&r.EnableAudit, true)
 	setter.SetBoolIfFalse(&r.Input.IgnoreEmptyQueryParameters, r.IgnoreEmptyQueryParameters)
-	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.HandlerType != "")
+	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.Type != "")
 	if r.Route.Cors == nil {
 		r.Route.Cors = &dpath.Cors{
 			AllowCredentials: setter.BoolPtr(true),
@@ -348,10 +350,12 @@ func (r *Rule) applyShortHands() {
 		r.Route.Output.ResponseBody = &contract.BodySelector{}
 		r.Route.Output.ResponseBody.StateValue = r.ResponseBody.From
 	}
-	if r.HandlerType != "" {
+	if r.Type != "" {
 		r.Handler = &handler.Handler{
-			HandlerType: r.HandlerType,
-			StateType:   r.StateType,
+			Type:       r.Type,
+			InputType:  r.InputType,
+			OutputType: r.OutputType,
+			Arguments:  r.HandlerArgs,
 		}
 	}
 	if r.Route.Output.Field != "" {

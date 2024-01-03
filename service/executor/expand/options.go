@@ -24,10 +24,8 @@ type Variable struct {
 func (v *Variable) Validate() error {
 	actualType := reflect.TypeOf(v.Value)
 	if actualType != v.Type {
-		panic(1)
-		return fmt.Errorf("type missmatch, wanted %v got %v", actualType.String(), v.Type.String())
+		return fmt.Errorf("type missmatch, wanted %s got %s", actualType.String(), v.Type.String())
 	}
-
 	return nil
 }
 

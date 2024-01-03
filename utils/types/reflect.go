@@ -5,13 +5,12 @@ import (
 )
 
 func NewValue(p reflect.Type) interface{} {
-	return NewRValue(p).Interface()
+	return newReflectValue(p).Interface()
 }
 
-func NewRValue(p reflect.Type) reflect.Value {
+func newReflectValue(p reflect.Type) reflect.Value {
 	if p.Kind() == reflect.Ptr {
 		return reflect.New(p.Elem())
 	}
-
 	return reflect.New(p).Elem()
 }

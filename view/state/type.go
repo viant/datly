@@ -79,6 +79,7 @@ func (t *Type) Init(options ...Option) error {
 		t.Schema = EmptySchema()
 	} else {
 		for _, parameter := range t.Parameters {
+			t.resource.AppendParameter(parameter)
 			if err := parameter.Init(context.Background(), t.resource); err != nil {
 				return err
 			}
@@ -166,7 +167,6 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflec
 	result.In = &Location{Kind: Kind(pTag.Kind), Name: pTag.In}
 	result.Scope = pTag.Scope
 	result.When = pTag.When
-	result.Lazy = pTag.Lazy
 	result.With = pTag.With
 	required := field.Type.Kind() == reflect.Ptr || pTag.Required
 	if required {
@@ -193,7 +193,11 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflec
 	}
 	BuildCodec(aTag, result)
 	BuildSchema(field, pTag, result, lookupType)
+
 	BuildPredicate(aTag, result)
+	if aTag.SQL.SQL != "" {
+		result.SQL = aTag.SQL.SQL
+	}
 	return result, nil
 }
 

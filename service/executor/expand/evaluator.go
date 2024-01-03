@@ -188,6 +188,7 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 				return nil, err
 			}
 		}
+
 		externalType := state.ParametersState.Type().Type()
 		if e.stateType.Type() != externalType {
 			return nil, fmt.Errorf("inompactible types, wanted %v got %T", e.stateType.Type().String(), externalType.String())
@@ -222,7 +223,6 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 			}
 		}
 	}
-
 	if err := e.executor.Exec(state.State); err != nil {
 		return state, err
 	}

@@ -111,6 +111,22 @@ func WithConnector(connector *Connector) Option {
 	}
 }
 
+// WithSchema creates connector View option
+func WithSchema(schema *state.Schema) Option {
+	return func(v *View) error {
+		v.Schema = schema
+		return nil
+	}
+}
+
+// WithMode creates mode View option
+func WithMode(mode Mode) Option {
+	return func(v *View) error {
+		v.Mode = mode
+		return nil
+	}
+}
+
 // WithTemplate creates connector View option
 func WithTemplate(template *Template) Option {
 	return func(v *View) error {

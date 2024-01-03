@@ -34,6 +34,11 @@ func (g *Generate) StateLocation() string {
 	return url.Join(codeLocation, "state.go")
 }
 
+func (g *Generate) EmbedLocation(URI string) string {
+	codeLocation := g.GoCodeLocation()
+	return url.Join(codeLocation, URI)
+}
+
 func (g *Generate) Init() error {
 	if err := g.Rule.Init(); err != nil {
 		return err
@@ -81,16 +86,16 @@ func (g *Generate) HandlerLocation() string {
 	return url.Join(baseURL, "handler.go")
 }
 
-func (g *Generate) HandlerType() string {
-	result := "Handler"
+func (g *Generate) HandlerType(prefix string) string {
+	result := prefix + "Handler"
 	if g.Package() == "" {
 		return result
 	}
 	return g.Package() + "." + result
 }
 
-func (g *Generate) StateType() string {
-	result := "State"
+func (g *Generate) InputType(prefix string) string {
+	result := prefix + "Input"
 	if g.Package() == "" {
 		return result
 	}
