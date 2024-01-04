@@ -295,6 +295,22 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	if resource.Module != nil {
 		route.Contract.ModulePath = resource.Module.Mod.Path
 	}
+
+	if route.Handler != nil {
+
+		if route.Component.Output.Type.Schema == nil {
+			route.Component.Output.Type.Schema = &state.Schema{}
+		}
+		if route.Component.Input.Type.Schema == nil {
+			route.Component.Input.Type.Schema = &state.Schema{}
+		}
+		route.Component.Output.Type.Package,
+			route.Component.Output.Type.Name = extractTypeNameWithPackage(route.Handler.OutputType)
+
+		route.Component.Input.Type.Package,
+			route.Component.Input.Type.Name = extractTypeNameWithPackage(route.Handler.InputType)
+	}
+
 	route.Content.CSV = resource.Rule.CSV
 	route.Content.TabularJSON = resource.Rule.TabularJSON
 	route.Content.XML = resource.Rule.XML
@@ -338,6 +354,13 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	ruleSource = s.Repository.Substitutes.ReverseReplace(ruleSource)
 	s.Repository.Files.Append(asset.NewFile(url.Join(baseRuleURL, ruleName+".yaml"), ruleSource))
 	return nil
+}
+
+func extractTypeNameWithPackage(outputName string) (string, string) {
+	if index := strings.Index(outputName, "."); index != -1 {
+		return outputName[:index], outputName[index+1:]
+	}
+	return outputName, ""
 }
 
 func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mode) error {

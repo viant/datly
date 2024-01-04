@@ -217,7 +217,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		*dSQL = origin
 		return nil
 	}
-	state, err := inference.NewState(ruleOptions.GoModuleLocation(), rule.InputType, extension.Config.Types)
+	aState, err := inference.NewState(ruleOptions.GoModuleLocation(), rule.InputType, extension.Config.Types)
 	if err != nil {
 		return err
 	}
@@ -227,7 +227,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		OutputType: rule.OutputType,
 		Arguments:  rule.HandlerArgs,
 	}
-	entityParam := state[0]
+	entityParam := aState[0]
 	entityType := entityParam.Schema.Type()
 	if entityType == nil {
 		return fmt.Errorf("entity type was empty")
@@ -241,7 +241,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	tmpl.Imports.AddType(rule.InputType)
 	tmpl.Imports.AddType(rule.Type)
 	tmpl.EnsureImports(aType)
-	tmpl.State = state
+	tmpl.State = aState
 	handlerDSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
 	if err != nil {
 		return err
