@@ -35,9 +35,6 @@ func (s *Service) Operate(ctx context.Context, aSession *session.Session, aCompo
 	if err != nil {
 		return nil, err
 	}
-	if finalizer, ok := result.(Finalizer); ok {
-		err = finalizer.Finalize(ctx)
-	}
 	return result, err
 }
 
@@ -71,14 +68,26 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 		if ctx, err = s.EnsureReaderInput(ctx, aComponent, aSession); err != nil {
 			return nil, err
 		}
-		return s.runQuery(ctx, aComponent, aSession)
+		ret, err := s.runQuery(ctx, aComponent, aSession)
+		return s.finalize(ctx, ret, err)
 	case service.TypeExecutor:
 		if ctx, err = s.EnsureInput(ctx, aComponent, aSession, true); err != nil {
 			return nil, err
 		}
-		return s.execute(ctx, aComponent, aSession)
+		ret, err := s.execute(ctx, aComponent, aSession)
+		return s.finalize(ctx, ret, err)
 	}
 	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported Type %v", aComponent.Service))
+}
+
+func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (interface{}, error) {
+	if err != nil {
+		return nil, err
+	}
+	if finalizer, ok := ret.(Finalizer); ok {
+		err = finalizer.Finalize(ctx)
+	}
+	return ret, err
 }
 
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
