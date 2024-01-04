@@ -24,6 +24,7 @@ import (
 )
 
 func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewlet) (err error) {
+	s.updateOutputFieldTypes(resource)
 	if tmpl := rootViewlet.View.Template; tmpl != nil && tmpl.Summary != nil {
 		return nil //NOT YEY supported for summary
 	}
@@ -70,6 +71,23 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 	return nil
 }
 
+func (s *Service) updateOutputFieldTypes(resource *Resource) {
+	for _, parameter := range resource.OutputState {
+		switch parameter.In.Kind {
+		case state.KindAsync:
+			contract.UpdateParameterAsyncType(&parameter.Parameter)
+		case state.KindOutput:
+			contract.UpdateOutputParameterType(&parameter.Parameter)
+		case state.KindMeta:
+			contract.UpdateParameterMetaType(&parameter.Parameter)
+		case state.KindRequestBody:
+			if baseParameter := resource.State.FilterByKind(state.KindRequestBody); len(baseParameter) > 0 {
+				parameter.Schema = baseParameter[0].Schema.Clone()
+			}
+		}
+	}
+}
+
 func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *Viewlet, outputParameters state.Parameters) error {
 	outputTypeDef := outputTypeDefinition(resource)
 	if outputTypeDef == nil {
@@ -87,7 +105,7 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 	outputResource := resource.Resource
 	outputResource.SetTypes(typesRegistry)
 	resourcelet := view.NewResourcelet(&outputResource, &rootViewlet.View.View)
-	compactedParameters := resource.OutputState.ViewParameters()
+	compactedParameters := resource.OutputState.Parameters()
 	compactedParameters.FlagOutput()
 
 	for _, parameter := range outputParameters {
@@ -330,7 +348,7 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
 		return nil, fmt.Errorf("failed to rewrite transfer type: %v %w", parameter.Name, err)
 	}
-	adjustedType, err := adjustedDest.ViewParameters().ReflectType(resource.rule.ModuleLocation, types.Lookup)
+	adjustedType, err := adjustedDest.Parameters().ReflectType(resource.rule.ModuleLocation, types.Lookup)
 	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
 		return nil, fmt.Errorf("failed to adjust transfer type: %v %w", parameter.Name, err)
 	}
@@ -338,7 +356,7 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 }
 
 func (s *Service) ensureOutputParameters(resource *Resource, outputState inference.State) state.Parameters {
-	outputParameters := outputState.ViewParameters()
+	outputParameters := outputState.Parameters()
 	if len(outputParameters) == 0 {
 		if field := resource.Rule.Route.Output.Field; field != "" {
 			outputParameters = append(outputParameters, contract.DataOutputParameter(field))

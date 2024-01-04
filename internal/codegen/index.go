@@ -52,7 +52,7 @@ func NewIndexGenerator(specState inference.State) *IndexGenerator {
 		paramByIndexName:     specState.IndexByPathIndex(),
 		builder:              &strings.Builder{},
 		index:                receiverIndex{},
-		stateName:            "state",
+		stateName:            "input",
 		exprToType:           map[string]string{},
 		variableToExpression: map[string]string{},
 		variableToType:       map[string]reflect.Type{},

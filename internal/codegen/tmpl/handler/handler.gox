@@ -1,4 +1,4 @@
-package $Package
+package $PackageName
 
 import (
 	"context"
@@ -13,11 +13,10 @@ func init() {
 type ${Prefix}Handler struct {}
 
 func (h *${Prefix}Handler) Exec(ctx context.Context, sess handler.Session) (interface{}, error) {
-    state := &${Prefix}Input{}
-    if err := sess.Stater().Into(ctx, state);err != nil {
+    input := &${Prefix}Input{}
+    if err := sess.Stater().Into(ctx, input);err != nil {
         return nil, err
     }
-
     sql, err := sess.Db()
     if err != nil {
         return nil, err
@@ -26,7 +25,6 @@ func (h *${Prefix}Handler) Exec(ctx context.Context, sess handler.Session) (inte
 
     $LocalVariable
     $BusinessLogic
-
-    return $Response, nil
+    $ResponseCode
 }
 

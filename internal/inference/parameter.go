@@ -181,7 +181,7 @@ func (p *Parameter) LocalVariable() string {
 
 func (p *Parameter) localVariableDefinition() (string, string) {
 	fieldName := p.LocalVariable()
-	return fieldName, fmt.Sprintf("%v := state.%v", fieldName, p.Name)
+	return fieldName, fmt.Sprintf("%v := input.%v", fieldName, p.Name)
 }
 
 func (p *Parameter) IndexVariable() string {

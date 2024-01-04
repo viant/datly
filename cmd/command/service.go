@@ -125,12 +125,14 @@ func (s *Service) tidyModule(ctx context.Context, goModule string) error {
 func (s *Service) generateTemplateFiles(gen *options.Generate, template *codegen.Template, info *plugin.Info, opts ...codegen.Option) error {
 	switch gen.Lang {
 	case ast.LangGO:
-		handler, index, err := template.GenerateHandler(gen, info)
+		handler, index, init, err := template.GenerateHandler(gen, info)
 		if err != nil {
 			return err
 		}
-		s.Files.Append(asset.NewFile(gen.HandlerLocation(), handler))
-		s.Files.Append(asset.NewFile(gen.IndexLocation(), index))
+		s.Files.Append(asset.NewFile(gen.HandlerLocation(template.FilePrefix()), handler))
+		s.Files.Append(asset.NewFile(gen.IndexLocation(template.FilePrefix()), index))
+		s.Files.Append(asset.NewFile(gen.InitLocation(template.FilePrefix()), init))
+
 		fallthrough
 	case ast.LangVelty:
 		dSQLContent, err := template.GenerateDSQL(opts...)

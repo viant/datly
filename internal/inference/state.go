@@ -65,7 +65,7 @@ func (s State) RemoveReserved() State {
 	return result
 }
 
-func (s State) ViewParameters() state.Parameters {
+func (s State) Parameters() state.Parameters {
 	var result = make([]*state.Parameter, 0, len(s))
 	for i, _ := range s {
 		parameter := &s[i].Parameter
@@ -589,7 +589,6 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 	if index := strings.LastIndex(dataType, "."); index != -1 {
 		embedRoot = path.Join(embedRoot, dataType[:index])
 	}
-
 	embedHolder := discoverEmbeds(embedRoot)
 	embedFS := embedHolder.EmbedFs()
 	var aState = State{}

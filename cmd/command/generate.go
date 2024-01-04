@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
 	"path"
 	"strings"
@@ -57,13 +58,22 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		}
 		root.Spec.Type.Cardinality = resource.Rule.Route.Output.Cardinality
 		template := codegen.NewTemplate(resource.Rule, root.Spec)
+		template.Resource = resource
 		root.Spec.Type.Package = ruleOption.Package()
 		template.BuildTypeDef(root.Spec, resource.Rule.GetField(), resource.Rule.Doc.Columns)
 		template.Imports.AddType(resource.Rule.Type)
 		template.Imports.AddType(resource.Rule.InputType)
 
 		var opts = []codegen.Option{codegen.WithHTTPMethod(gen.HttpMethod()), codegen.WithLang(gen.Lang)}
-		template.BuildState(spec, resource.Rule.GetField(), opts...)
+		template.BuildInput(spec, resource.Rule.GetField(), opts...)
+
+		registry := resource.Resource.TypeRegistry()
+		if parameters := resource.OutputState.FilterByKind(state.KindRequestBody); len(parameters) >= 1 {
+			parameters[0].Tag += `  typeName:"` + template.Prefix + `"`
+			parameters[0].Schema = state.NewSchema(template.BodyType)
+			template.BodyParameter = parameters[0]
+		}
+		template.OutputType, err = resource.OutputState.Parameters().ReflectType(resource.Rule.Package, registry.Lookup)
 		template.BuildLogic(spec, opts...)
 
 		if err := s.generateCode(ctx, options.Generate, template, info); err != nil {
@@ -160,17 +170,19 @@ func trimExt(sourceName string) string {
 
 func (s *Service) generateCode(ctx context.Context, gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
 	pkg := info.Package(gen.Package())
-
 	//TODO adjust if handler option is used
 	if err := s.generateTemplate(gen, template, info); err != nil {
 		return err
 	}
 	embedContent := make(map[string]string)
-	code := template.GenerateState(pkg, info, embedContent)
+	inputCode := template.GenerateInput(pkg, info, embedContent)
 	for k, v := range embedContent {
 		s.Files.Append(asset.NewFile(gen.EmbedLocation(k), v))
 	}
-	s.Files.Append(asset.NewFile(gen.StateLocation(), code))
+	s.Files.Append(asset.NewFile(gen.InputLocation(template.FilePrefix()), inputCode))
+	outputCode := template.GenerateOutput(pkg, info)
+
+	s.Files.Append(asset.NewFile(gen.OutputLocation(template.FilePrefix()), outputCode))
 	return s.generateEntity(ctx, pkg, gen, info, template)
 }
 
@@ -225,6 +237,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		return err
 	}
 	tmpl := codegen.NewTemplate(rule, &inference.Spec{Type: aType})
+	tmpl.Resource = &translator.Resource{Rule: rule}
 	tmpl.Imports.AddType(rule.InputType)
 	tmpl.Imports.AddType(rule.Type)
 	tmpl.EnsureImports(aType)

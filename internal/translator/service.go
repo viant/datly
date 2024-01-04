@@ -193,7 +193,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
 		return err
 	}
-	if err = s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.ViewParameters()); err != nil {
+	if err = s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.Parameters()); err != nil {
 		return err
 	}
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
@@ -314,7 +314,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	if err != nil {
 		return fmt.Errorf("failed to compact aState: %w", err)
 	}
-	resource.Resource.Parameters = aState.RemoveReserved().ViewParameters()
+	resource.Resource.Parameters = aState.RemoveReserved().Parameters()
 	if serviceType == service.TypeExecutor {
 		resource.Rule.Route.Output.Field = aState.BodyField()
 	}

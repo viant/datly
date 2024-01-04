@@ -141,7 +141,7 @@ func (r *Repository) persistConstants() error {
 	if len(literals) == 0 {
 		return nil
 	}
-	resource := view.Resource{Parameters: literals.ViewParameters()}
+	resource := view.Resource{Parameters: literals.Parameters()}
 	content, err := asset.EncodeYAML(resource)
 	if err != nil {
 		return err

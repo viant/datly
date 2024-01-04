@@ -132,12 +132,14 @@ func (r *Rule) DSQLSetting() interface{} {
 		ResponseBody *ResponseBodyConfig `json:",omitempty"`
 		Type         string              `json:",omitempty"`
 		InputType    string              `json:",omitempty"`
+		OutputType   string              `json:",omitempty"`
 	}{
 		URI:          r.URI,
 		Method:       r.Method,
 		ResponseBody: r.ResponseBody,
 		Type:         r.Type,
 		InputType:    r.InputType,
+		OutputType:   r.OutputType,
 	}
 }
 
@@ -357,6 +359,7 @@ func (r *Rule) applyShortHands() {
 			OutputType: r.OutputType,
 			Arguments:  r.HandlerArgs,
 		}
+
 	}
 	if r.Route.Output.Field != "" {
 		r.Route.Output.Style = contract.ComprehensiveStyle

@@ -1,0 +1,19 @@
+package $PackageName
+
+import (
+	"context"
+	"github.com/viant/datly"
+	"github.com/viant/datly/repository"
+	"github.com/viant/datly/repository/contract"
+	"reflect"
+)
+
+var ${Prefix}PathURI = "$URI"
+
+func define${Prefix}Component(ctx context.Context, srv *datly.Service) (*repository.Component, error) {
+	return srv.AddHandler(ctx, contract.NewPath("$Method", ${Prefix}PathURI), &${Prefix}Handler{},
+	repository.WithContract(
+		reflect.TypeOf(&${Prefix}Input{}),
+		reflect.TypeOf(&${Prefix}Output{}),
+		&${Prefix}FS))
+}

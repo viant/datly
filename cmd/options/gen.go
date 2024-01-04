@@ -29,9 +29,14 @@ func (g *Generate) EntityLocation(entityName string) string {
 	return url.Join(codeLocation, entityName+".go")
 }
 
-func (g *Generate) StateLocation() string {
+func (g *Generate) InputLocation(prefix string) string {
 	codeLocation := g.GoCodeLocation()
-	return url.Join(codeLocation, "state.go")
+	return url.Join(codeLocation, prefix+"input.go")
+}
+
+func (g *Generate) OutputLocation(prefix string) string {
+	codeLocation := g.GoCodeLocation()
+	return url.Join(codeLocation, prefix+"output.go")
 }
 
 func (g *Generate) EmbedLocation(URI string) string {
@@ -77,13 +82,13 @@ func (g *Generate) DSQLLocation() string {
 	return url.Join(baseURL, name+".sql")
 }
 
-func (g *Generate) HandlerLocation() string {
+func (g *Generate) HandlerLocation(prefix string) string {
 	_, name := url.Split(g.SourceURL(), file.Scheme)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}
 	baseURL := g.GoCodeLocation()
-	return url.Join(baseURL, "handler.go")
+	return url.Join(baseURL, prefix+"handler.go")
 }
 
 func (g *Generate) HandlerType(prefix string) string {
@@ -102,11 +107,28 @@ func (g *Generate) InputType(prefix string) string {
 	return g.Package() + "." + result
 }
 
-func (g *Generate) IndexLocation() string {
+func (g *Generate) IndexLocation(prefix string) string {
 	_, name := url.Split(g.SourceURL(), file.Scheme)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}
 	baseURL := g.GoCodeLocation()
-	return url.Join(baseURL, "index.go")
+	return url.Join(baseURL, prefix+"index.go")
+}
+
+func (g *Generate) InitLocation(prefix string) string {
+	_, name := url.Split(g.SourceURL(), file.Scheme)
+	if ext := path.Ext(name); ext != "" {
+		name = name[:len(name)-len(ext)]
+	}
+	baseURL := g.GoCodeLocation()
+	return url.Join(baseURL, prefix+"init.go")
+}
+
+func (g *Generate) OutputType(prefix string) string {
+	result := prefix + "Output"
+	if g.Package() == "" {
+		return result
+	}
+	return g.Package() + "." + result
 }

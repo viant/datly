@@ -27,7 +27,7 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet) 
 		inputState.Append(resource.State[i])
 	}
 	inputState.Append(resource.AsyncState...)
-	inputParameters := inputState.ViewParameters()
+	inputParameters := inputState.Parameters()
 
 	resource.Rule.Input.Type.Parameters = inputParameters
 	if resource.Rule.Input.Type.Schema == nil {

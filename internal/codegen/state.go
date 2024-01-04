@@ -6,26 +6,27 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
 
-//go:embed tmpl/state.gox
-var stateGoTemplate string
+//go:embed tmpl/input.gox
+var inputGoTemplate string
 
-func (t *Template) GenerateState(pkg string, info *plugin.Info, embedContent map[string]string) string {
+func (t *Template) GenerateInput(pkg string, info *plugin.Info, embedContent map[string]string) string {
 	pkg = t.getPakcage(pkg)
 	if len(t.State) == 0 {
 		return ""
 	}
-	var output = strings.Replace(stateGoTemplate, "$Package", pkg, 1)
+	var output = strings.Replace(inputGoTemplate, "$Package", pkg, 1)
 	var fields = []string{}
 
 	root := text.DetectCaseFormat(t.Prefix).Format(t.Prefix, text.CaseFormatLowerUnderscore)
 	for _, input := range t.State {
 		fields = append(fields, input.FieldDeclaration(root, embedContent, t.TypeDef))
-
 	}
 	imports := inference.NewImports()
 
@@ -55,6 +56,45 @@ var %vFS embed.FS`, root, t.Prefix)
 	output = strings.ReplaceAll(output, "$EmbedFS", embedFSSnippet)
 
 	return output
+}
+
+//go:embed tmpl/output.gox
+var outputGoTemplate string
+
+func (t *Template) GenerateOutput(pkg string, info *plugin.Info) string {
+	pkg = t.getPakcage(pkg)
+	var imports []string
+
+	registerTypes := ""
+	switch info.IntegrationMode {
+	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
+
+		imports = append(imports, info.ChecksumPkg())
+		imports = append(imports, "reflect")
+		imports = append(imports, info.TypeCorePkg())
+		registry := &customTypeRegistry{}
+		registry.register(t.Prefix + "Output")
+		registerTypes = registry.stringify()
+	}
+	var registerSnippet = outputGoTemplate
+	registerSnippet = strings.Replace(registerSnippet, "$RegisterTypes", registerTypes, 1)
+	registerSnippet = strings.ReplaceAll(registerSnippet, "${Prefix}", t.Prefix)
+
+	var options = []xreflect.Option{
+		xreflect.WithPackage(pkg),
+		xreflect.WithImports(imports),
+		xreflect.WithSkipFieldType(func(field *reflect.StructField) bool {
+			if aTag, _ := tags.Parse(field.Tag, nil, tags.ParameterTag); aTag != nil && aTag.Parameter != nil {
+				return aTag.Parameter.Kind == string(state.KindRequestBody)
+			}
+			return false
+		}),
+		xreflect.WithRegistry(t.Resource.Rule.TypeRegistry()),
+		xreflect.WithSnippetBefore(registerSnippet),
+	}
+	outputState := xreflect.GenerateStruct(t.Prefix+"Output", t.OutputType, options...)
+
+	return outputState
 }
 
 func (t *Template) getPakcage(pkg string) string {

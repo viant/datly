@@ -248,7 +248,7 @@ func (r *Resource) appendPathVariableParams() {
 	params := extractURIParams(r.Rule.Route.URI)
 	required := true
 	for paramName := range params {
-		if param := r.State.ViewParameters().LookupByLocation(state.KindPath, paramName); param != nil {
+		if param := r.State.Parameters().LookupByLocation(state.KindPath, paramName); param != nil {
 			param.Required = &required
 			continue
 		}
@@ -346,7 +346,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	}
 
 	sourceSQL = viewlet.Resource.State.Expand(sourceSQL)
-	templateParameters := sqlState.ViewParameters()
+	templateParameters := sqlState.Parameters()
 	if strings.Contains(sourceSQL, "$View.ParentJoinOn") {
 		//TODO adjust parameter value type
 		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))

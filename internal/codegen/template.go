@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -15,16 +16,21 @@ import (
 
 type (
 	Template struct {
-		Spec    *inference.Spec
-		Config  *translator.Rule
-		TypeDef *view.TypeDefinition
+		Resource *translator.Resource
+		Spec     *inference.Spec
+		Config   *translator.Rule
+		TypeDef  *view.TypeDefinition
 		inference.Imports
 		inference.State
 		BusinessLogic *ast.Block
 		paramPrefix   string
 		recordPrefix  string
-		StateType     reflect.Type
+		InputType     reflect.Type
+		BodyType      reflect.Type
+		BodyParameter *inference.Parameter
+		OutputType    reflect.Type
 		Prefix        string
+		filePrefix    string
 	}
 )
 
@@ -32,6 +38,14 @@ const (
 	paramPrefix  = "Cur"
 	recordPrefix = "Rec"
 )
+
+func (t *Template) FilePrefix() string {
+	if t.filePrefix != "" {
+		return t.filePrefix
+	}
+	t.filePrefix = text.DetectCaseFormat(t.Prefix).Format(t.Prefix, text.CaseFormatLowerUnderscore) + "_"
+	return t.filePrefix
+}
 
 func (t *Template) ParamPrefix() string {
 	prefix := t.paramPrefix
@@ -60,7 +74,7 @@ func (t *Template) ColumnParameterNamer(selector inference.Selector) inference.C
 	}
 }
 
-func (t *Template) BuildState(spec *inference.Spec, bodyHolder string, opts ...Option) {
+func (t *Template) BuildInput(spec *inference.Spec, bodyHolder string, opts ...Option) {
 	t.State = inference.State{}
 	options := &Options{}
 	options.apply(opts)
@@ -71,6 +85,7 @@ func (t *Template) BuildState(spec *inference.Spec, bodyHolder string, opts ...O
 	}
 
 	bodyParam.Schema.SetType(t.buildState(spec, &t.State, spec.Type.Cardinality))
+	t.BodyType = bodyParam.Schema.Type()
 	var structFields []reflect.StructField
 
 	for _, parameter := range t.State {
@@ -89,7 +104,7 @@ func (t *Template) BuildState(spec *inference.Spec, bodyHolder string, opts ...O
 		})
 	}
 
-	t.StateType = reflect.StructOf(structFields)
+	t.InputType = reflect.StructOf(structFields)
 }
 
 func (t *Template) buildBodyParameter(spec *inference.Spec, bodyHolder string) *inference.Parameter {

@@ -301,27 +301,40 @@ func ensureParameterType(parameter *state.Parameter, aView *view.View, doc state
 			}
 		default:
 			//static types
-			if rType, ok := outputkeys.Types[key]; ok {
-				updateParameterType(parameter, rType)
-			}
+			UpdateOutputParameterType(parameter)
 
 		}
 	case state.KindMeta:
-		key := strings.ToLower(parameter.In.Name)
-		switch key {
-		default:
-			if rType, ok := metakeys.Types[key]; ok {
-				updateParameterType(parameter, rType)
-			}
-		}
+		UpdateParameterMetaType(parameter)
 	case state.KindAsync:
-		key := strings.ToLower(parameter.In.Name)
-		switch key {
-		default:
-			if rType, ok := asynckeys.Types[key]; ok {
-				updateParameterType(parameter, rType)
-			}
+		UpdateParameterAsyncType(parameter)
+	}
+}
+
+func UpdateParameterAsyncType(parameter *state.Parameter) {
+	key := strings.ToLower(parameter.In.Name)
+	switch key {
+	default:
+		if rType, ok := asynckeys.Types[key]; ok {
+			updateParameterType(parameter, rType)
 		}
+	}
+}
+
+func UpdateParameterMetaType(parameter *state.Parameter) {
+	key := strings.ToLower(parameter.In.Name)
+	switch key {
+	default:
+		if rType, ok := metakeys.Types[key]; ok {
+			updateParameterType(parameter, rType)
+		}
+	}
+}
+
+func UpdateOutputParameterType(parameter *state.Parameter) {
+	key := strings.ToLower(parameter.In.Name)
+	if rType, ok := outputkeys.Types[key]; ok {
+		updateParameterType(parameter, rType)
 	}
 }
 
