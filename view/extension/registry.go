@@ -31,11 +31,12 @@ func NewRegistry() *Registry {
 		}
 	}
 
+	predictes := Config.Predicates
 	return &Registry{
 		Mutex:      sync.Mutex{},
 		Types:      xreflect.NewTypes(xreflect.WithRegistry(Config.Types)),
 		Codecs:     Config.Codecs,
-		Predicates: NewPredicates(),
+		Predicates: predictes,
 	}
 }
 
