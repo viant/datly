@@ -34,7 +34,7 @@ func NewRegistry() *Registry {
 	return &Registry{
 		Mutex:      sync.Mutex{},
 		Types:      xreflect.NewTypes(xreflect.WithRegistry(Config.Types)),
-		Codecs:     codec.New(),
+		Codecs:     Config.Codecs,
 		Predicates: NewPredicates(),
 	}
 }
