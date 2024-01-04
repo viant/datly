@@ -136,7 +136,11 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 }
 
 func (t *Type) buildParameter(field reflect.StructField) (*Parameter, error) {
-	return BuildParameter(&field, t.fs, t.resource.LookupType())
+	lookup := extension.Config.Types.Lookup
+	if t.resource != nil {
+		lookup = t.resource.LookupType()
+	}
+	return BuildParameter(&field, t.fs, lookup)
 }
 
 func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflect.LookupType) (*Parameter, error) {
