@@ -1065,6 +1065,8 @@ github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c h1:M5se4NJFV45xZXyOG
 github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c/go.mod h1:IIV7sI3e5JfCyq+NRimnrjbPCEL1YeKqFmbcm53sxl8=
 github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446 h1:hxMOO03kzLySflKNeAFnghTKb6F98lLwE8ZqgWB9cps=
 github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446/go.mod h1:RHqj7bdVZrPahrhQxhZRsFX3p/I7ixUEt7+G3l5z+v0=
+github.com/viant/gmetric v0.3.1-0.20230405233616-cc90deee60c4 h1:Lz5up/Q1N8A5pchUUIzWufTLmLnQ6OCUgol5XHJLg4E=
+github.com/viant/gmetric v0.3.1-0.20230405233616-cc90deee60c4/go.mod h1:RHqj7bdVZrPahrhQxhZRsFX3p/I7ixUEt7+G3l5z+v0=
 github.com/viant/godiff v0.4.1 h1:pjMA4zOz/mNcXRvl+CjWzg3m8XwOFBjaxDqfUYQXb9M=
 github.com/viant/godiff v0.4.1/go.mod h1:/q54pjC31YIOqbPcQnqwF2/dAZlnIr1SdQOtqoa0MpQ=
 github.com/viant/govalidator v0.2.2-0.20230629211659-f2a3f0659b0b h1:IxRf961iRIoJEWAZjBPa/gCxymUBw4csESJeeLmaiAQ=

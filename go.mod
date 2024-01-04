@@ -27,7 +27,7 @@ require (
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
-	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
+	github.com/viant/gmetric v0.3.1-0.20230405233616-cc90deee60c4
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.2
 	github.com/viant/pgo v0.11.0
