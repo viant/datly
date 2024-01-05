@@ -51,6 +51,7 @@ type (
 		types      *xreflect.Types
 		ioConfig   *config.IOConfig
 		doc        docs.Service
+		embedFs *embed.FS
 	}
 
 	ComponentOption func(c *Component) error
@@ -306,7 +307,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 		if outputType == nil {
 			outputType = reflect.TypeOf(struct{}{})
 		}
-
+		c.embedFs = embedFs
 		sType, err := state.NewType(state.WithResource(c.View.Resource()), state.WithSchema(state.NewSchema(inputType)))
 		if err != nil {
 			return err
@@ -316,7 +317,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 			return fmt.Errorf("failed to initalize input: %w", err)
 		}
 		c.Contract.Output.Type = state.Type{Schema: state.NewSchema(outputType)}
-		if err := c.Contract.Output.Type.Init(); err != err {
+		if err := c.Contract.Output.Type.Init(state.WithFS(embedFs)); err != err {
 			return fmt.Errorf("failed to initalize output: %w", err)
 		}
 		sTypes := types.EnsureStruct(outputType)
@@ -341,6 +342,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 				vOptions = append(vOptions, view.WithSQL(string(aTag.SQL.SQL), anInputType.Parameters...))
 			}
 		}
+		vOptions = append(vOptions, view.WithFS(c.embedFs))
 		aView := view.NewView(viewName, table, vOptions...)
 		c.View = aView
 		return nil
