@@ -160,7 +160,13 @@ func BuildCodec(aTag *tags.Tag, param *Parameter) {
 		return
 	}
 	param.Output = &Codec{Name: aTag.Codec.Name, Body: aTag.Codec.Body, Args: aTag.Codec.Arguments}
+}
 
+func BuildHandler(aTag *tags.Tag, param *Parameter) {
+	if aTag == nil || aTag.Handler == nil {
+		return
+	}
+	param.Handler = &Handler{Name: aTag.Handler.Name, Args: aTag.Handler.Arguments}
 }
 
 // AsCodecOptions creates codec options

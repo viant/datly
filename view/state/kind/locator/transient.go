@@ -12,7 +12,10 @@ func (v *Transient) Names() []string {
 }
 
 func (v *Transient) Value(ctx context.Context, name string) (interface{}, bool, error) {
-	return nil, false, nil
+	if name == "" {
+		return nil, false, nil
+	}
+	return nil, true, nil
 }
 
 // NewTransient returns Transient locator

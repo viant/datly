@@ -71,7 +71,7 @@ func (r Resourcelet) IndexedColumns() NamedColumns {
 	return r.View.IndexedColumns()
 }
 
-func NewResourcelet(resource *Resource, view *View) *Resourcelet {
+func NewResources(resource *Resource, view *View) *Resourcelet {
 	ret := &Resourcelet{View: view, Resource: resource}
 	if view._resource != nil {
 		ret.Resource = view._resource

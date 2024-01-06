@@ -34,6 +34,12 @@ func (s *State) Append(params ...*Parameter) bool {
 		candidate := params[i]
 		if s.Has(candidate.Name) {
 			prev := s.Lookup(candidate.Name)
+			if prev.Value != nil && candidate.Value == nil {
+				candidate.Value = prev.Value
+			} else if prev.Value == nil && candidate.Value != nil {
+				prev.Value = candidate.Value
+			}
+
 			if prev.Required == nil {
 				prev.Required = candidate.Required
 			}

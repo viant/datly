@@ -25,6 +25,7 @@ func (r *Repository) ensureConstants(ctx context.Context) error {
 			return err
 		}
 		r.State.AppendConst(constants)
+
 	}
 	return nil
 }

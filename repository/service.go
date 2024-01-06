@@ -7,7 +7,9 @@ import (
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/repository/plugin"
 	"github.com/viant/datly/repository/resource"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"strings"
@@ -109,6 +111,17 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 			}
 		}
 	}
+	if len(options.constants) > 0 {
+		if constants, _ := s.resources.Lookup(view.ResourceConstants); constants != nil {
+			for k, v := range options.constants {
+				constants.Parameters = append(constants.Parameters, &state.Parameter{
+					Name:  k,
+					Value: v,
+					In:    state.NewConstLocation(k),
+				})
+			}
+		}
+	}
 	return s.initProviders(ctx)
 }
 
@@ -180,6 +193,14 @@ func (s *Service) inheritFromPath(component *Component, aPath *path.Path) {
 	if component.Output.RevealMetric == nil {
 		component.Output.RevealMetric = aPath.RevealMetric
 	}
+}
+
+func (s *Service) Constants() []*state.Parameter {
+	res, err := s.resources.Lookup(view.ResourceConstants)
+	if err != nil {
+		return nil
+	}
+	return res.Parameters
 }
 
 func New(ctx context.Context, opts ...Option) (*Service, error) {

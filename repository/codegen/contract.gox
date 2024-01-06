@@ -4,6 +4,7 @@ var ${Name}PathURI = "${URI}"
 func define${Name}Component(ctx context.Context, srv *datly.Service) error {
 	aComponent, err := repository.NewComponent(
 	    contract.NewPath("${Method}",${Name}PathURI),
+	    repository.WithResource(srv.Resource()),
 		repository.WithContract(
 		    reflect.TypeOf(${Name}Input{}),
 		    reflect.TypeOf(${Name}Output{}), &${Name}FS))

@@ -212,6 +212,7 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 		return err
 	}
 	r.State.Append(r.Declarations.State...)
+
 	r.appendPathVariableParams()
 
 	r.OutputState.Append(r.Declarations.OutputState...)

@@ -51,7 +51,7 @@ type (
 		types      *xreflect.Types
 		ioConfig   *config.IOConfig
 		doc        docs.Service
-		embedFs *embed.FS
+		embedFs    *embed.FS
 	}
 
 	ComponentOption func(c *Component) error
@@ -173,6 +173,7 @@ func (c *Component) Exclusion(state *view.State) []*json.FilterEntry {
 
 func (c *Component) LocatorOptions(request *http.Request, unmarshal shared.Unmarshal) []locator.Option {
 	var result []locator.Option
+
 	if unmarshal != nil {
 		result = append(result, locator.WithUnmarshal(unmarshal))
 	}
@@ -181,6 +182,9 @@ func (c *Component) LocatorOptions(request *http.Request, unmarshal shared.Unmar
 	}
 	if request != nil {
 		result = append(result, locator.WithRequest(request))
+	}
+	if c.View != nil {
+		result = append(result, locator.WithResource(c.View.GetResource()))
 	}
 	result = append(result, locator.WithURIPattern(c.URI))
 	result = append(result, locator.WithIOConfig(c.IOConfig()))

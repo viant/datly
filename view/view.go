@@ -119,6 +119,21 @@ type (
 // ContextKey view context key
 var ContextKey = contextKey("view")
 
+func Context(ctx context.Context) *View {
+	if ctx == nil {
+		return nil
+	}
+	value := ctx.Value(ContextKey)
+	if value == nil {
+		return nil
+	}
+	return value.(*View)
+}
+
+func (v *View) Context(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ContextKey, v)
+}
+
 // Constraints configure what can be selected by Statelet
 // For each _field, default value is `false`
 type Constraints struct {
@@ -134,7 +149,7 @@ type Constraints struct {
 }
 
 func (v *View) Resource() state.Resource {
-	return NewResourcelet(v._resource, v)
+	return NewResources(v._resource, v)
 }
 
 // OutputType returns reader view output type
@@ -589,7 +604,7 @@ func (v *View) initView(ctx context.Context) error {
 		return err
 	}
 
-	resourcelet := NewResourcelet(v._resource, v)
+	resourcelet := NewResources(v._resource, v)
 	if err = Columns(v.Columns).ApplyConfig(v.ColumnsConfig, resourcelet.LookupType()); err != nil {
 		return err
 	}
@@ -1466,6 +1481,10 @@ func (v *View) BuildParametrizedSQL(aState state.Parameters, types *xreflect.Typ
 
 func (v *View) SetResource(resource *Resource) {
 	v._resource = resource
+}
+
+func (v *View) GetResource() *Resource {
+	return v._resource
 }
 
 func NewRefView(ref string) *View {

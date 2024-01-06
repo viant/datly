@@ -85,12 +85,24 @@ func (t *Type) Init(options ...Option) error {
 			}
 		}
 	}
+	t.adjustConstants()
+
 	rType := t.Schema.Type()
 	if rType == nil {
 		return fmt.Errorf("actual type was nil")
 	}
 	t.SetType(rType)
 	return nil
+}
+
+func (t *Type) adjustConstants() {
+	for _, canidates := range t.Parameters {
+		if t.resource != nil && canidates.In.Kind == KindConst {
+			if param, _ := t.resource.LookupParameter(canidates.In.Name); param != nil {
+				canidates.Value = param.Value
+			}
+		}
+	}
 }
 
 func (t *Type) SetType(rType reflect.Type) {
@@ -118,6 +130,9 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 		var opts []ReflectOption
 		if withMarker {
 			opts = append(opts, WithSetMarker())
+		}
+		if t.Schema != nil && t.Schema.Name != "" {
+			opts = append(opts, WithTypeName(t.Name))
 		}
 		rType, err = t.Parameters.ReflectType(pkgPath, t.resource.LookupType(), opts...)
 	}
@@ -196,6 +211,8 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflec
 		}
 	}
 	BuildCodec(aTag, result)
+	BuildHandler(aTag, result)
+
 	BuildSchema(field, pTag, result, lookupType)
 
 	BuildPredicate(aTag, result)
@@ -247,6 +264,7 @@ func (t *Type) buildParameters() error {
 		if parameter == nil {
 			continue
 		}
+
 		t.Parameters = append(t.Parameters, parameter)
 	}
 	return nil

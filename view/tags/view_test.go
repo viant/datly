@@ -29,7 +29,7 @@ func TestTag_updateView(t *testing.T) {
 			description: "basic view",
 			tag:         `view:"foo,connector=dev"  sql:"uri=testdata/foo.sql"`,
 			expectView:  &View{Name: "foo", Connector: "dev"},
-			expectSQL:   "SELECT * FROM FOO",
+			expectSQL:   ViewSQL{SQL: "SELECT * FROM FOO"},
 			expectTag:   "foo,connector=dev",
 		},
 		{
@@ -49,7 +49,7 @@ func TestTag_updateView(t *testing.T) {
 		if expectTag == "" {
 			expectTag = testCase.tag.Get(ViewTag)
 		}
-		if testCase.expectSQL != "" {
+		if testCase.expectSQL.SQL != "" {
 			assert.EqualValues(t, testCase.expectSQL, actual.SQL, testCase.description)
 		}
 		assert.EqualValues(t, expectTag, string(actual.View.Tag().Values), testCase.description)

@@ -22,6 +22,7 @@ type (
 		LinkOn        LinkOn
 		Predicates    []*Predicate
 		Codec         *Codec
+		Handler       *Handler
 		TypeName      string
 		Documentation string
 		Value         *string
@@ -67,6 +68,10 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 	if t.Codec != nil {
 		t.appendTag(t.Codec, &ret)
 	}
+	if t.Handler != nil {
+		t.appendTag(t.Handler, &ret)
+	}
+
 	if t.Format != nil {
 		if formatTag := tags.NewTag(format.TagName, t.Format).Values; formatTag != "" {
 			pTags.Set(format.TagName, string(formatTag))

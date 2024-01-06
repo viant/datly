@@ -18,7 +18,9 @@ type (
 		Arguments  []string
 		InputType  string
 		OutputType string
+		Output     reflect.Type
 		factory    handler.Factory
+		handler    handler.Handler
 		_type      reflect.Type
 		caller     reflect.Method
 		resource   *view.Resource
@@ -26,7 +28,6 @@ type (
 )
 
 func (h *Handler) Init(ctx context.Context, resource *view.Resource) (err error) {
-
 	aType := h._type
 	if aType == nil {
 		h.resource = resource
@@ -35,9 +36,12 @@ func (h *Handler) Init(ctx context.Context, resource *view.Resource) (err error)
 			return fmt.Errorf("couldn't parse Handler type due to %w", err)
 		}
 	}
+	if aType.Kind() != reflect.Ptr {
+		aType = reflect.PtrTo(aType)
+	}
 
 	if aType.Implements(FactoryType) {
-		factory := types.NewValue(h._type)
+		factory := types.NewValue(aType)
 		if aFactory, ok := factory.(handler.Factory); ok {
 			h.factory = aFactory
 			return nil
@@ -58,10 +62,17 @@ func (h *Handler) Init(ctx context.Context, resource *view.Resource) (err error)
 }
 
 func (h *Handler) Call(ctx context.Context, session handler.Session) (interface{}, error) {
+	if h.handler != nil {
+		return h.handler.Exec(ctx, session)
+	}
+
 	var aHandler handler.Handler
-	var err error
 	if h.factory != nil {
-		if aHandler, err = h.factory.New(ctx, h.Arguments...); err != nil {
+		options, err := h.buildFactoryOptions()
+		if err != nil {
+			return nil, err
+		}
+		if aHandler, err = h.factory.New(ctx, options...); err != nil {
 			return nil, fmt.Errorf("failed to create handler: %w", err)
 		}
 	}
@@ -73,11 +84,32 @@ func (h *Handler) Call(ctx context.Context, session handler.Session) (interface{
 			}
 		}
 	}
-	asHandler, ok := aHandler.(handler.Handler)
+	var ok bool
+	aHandler, ok = aHandler.(handler.Handler)
 	if !ok {
-		return nil, fmt.Errorf("expected handler to implement %T", asHandler)
+		return nil, fmt.Errorf("expected handler to implement %T", aHandler)
 	}
-	return asHandler.Exec(ctx, session)
+
+	h.handler = aHandler
+	return aHandler.Exec(ctx, session)
+}
+
+func (h *Handler) buildFactoryOptions() ([]handler.Option, error) {
+	lookupType := h.resource.LookupType()
+	var options = []handler.Option{handler.WithArguments(h.Arguments), handler.WithLookupType(func(name string) (reflect.Type, error) {
+		return lookupType(name)
+	})}
+	if h.InputType != "" {
+		inputType, err := lookupType(h.InputType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to lookup handler input type: %w", err)
+		}
+		options = append(options, handler.WithInputType(inputType))
+	}
+	if h.Output != nil {
+		options = append(options, handler.WithOutputType(h.Output))
+	}
+	return options, nil
 }
 
 func NewHandler(handler handler.Handler) *Handler {

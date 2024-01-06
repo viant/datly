@@ -24,7 +24,7 @@ func ParseViewTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
 
 // ParseStateTags parse state related tags
 func ParseStateTags(tag reflect.StructTag, fs *embed.FS) (*Tag, error) {
-	ret, err := Parse(tag, fs, ParameterTag, SQLTag, PredicateTag, CodecTag, format.TagName)
+	ret, err := Parse(tag, fs, ParameterTag, SQLTag, PredicateTag, CodecTag, HandlerTag, format.TagName)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,11 @@ func Parse(tag reflect.StructTag, fs *embed.FS, tagNames ...string) (*Tag, error
 			if err != nil {
 				return nil, err
 			}
-
+		case HandlerTag:
+			ret.Handler = &Handler{Name: name}
+			if err := values.MatchPairs(ret.updatedHandler); err != nil {
+				return nil, err
+			}
 		case CodecTag:
 			ret.Codec = &Codec{Name: name}
 			if err := values.MatchPairs(ret.updatedCodec); err != nil {

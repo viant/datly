@@ -35,16 +35,13 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 		return response, nil
 	}
 	executorSession, err := anExecutor.ExpandAndExecute(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 	var responseValue interface{}
-
 	if aComponent.Output.ResponseBody == nil {
 		return responseValue, nil
 	}
-
 	if stateType := aComponent.Output.Type.Type(); stateType != nil && stateType.IsDefined() {
 		responseState := aComponent.Output.Type.Type().NewState()
 		statelet := executorSession.Session.State().Lookup(executorSession.View)
@@ -55,7 +52,6 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 			locator.WithState(statelet.Template))); err != nil {
 			return nil, fmt.Errorf("failed to set response %w", err)
 		}
-
 		responseValue = responseState.State()
 		if parameter := aComponent.Output.Type.AnonymousParameters(); parameter != nil {
 			if responseValue, err = responseState.Value(parameter.Name); err != nil {

@@ -27,6 +27,7 @@ import (
 const (
 	//ResourceConnectors default connector resource name
 	ResourceConnectors = "connectors"
+	ResourceConstants  = "constants"
 )
 
 // Resource represents grouped View needed to build the View
@@ -217,7 +218,8 @@ func (r *Resource) mergeParameters(resource *Resource) {
 	}
 	views := r.paramByName()
 	for i, candidate := range resource.Parameters {
-		if _, ok := views[candidate.Name]; !ok {
+		_, ok := views[candidate.Name]
+		if !ok {
 			param := *resource.Parameters[i]
 			r.Parameters = append(r.Parameters, &param)
 		}

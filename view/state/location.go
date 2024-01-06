@@ -25,7 +25,7 @@ func (l *Location) Validate() error {
 }
 
 func (l *Location) IsView() bool {
-	return l.Kind == KindView || l.Kind == KindDataView
+	return l.Kind == KindView
 }
 
 // ParamName represents name of parameter in given Location.Kind
@@ -38,9 +38,9 @@ func (p ParamName) Validate(kind Kind) error {
 	switch kind {
 	case KindObject:
 		return nil
-	case KindRequest, KindLiteral, KindConst, KindRequestBody, KindQuery, KindTransient, KindOutput:
+	case KindRequest, KindLiteral, KindConst, KindRequestBody, KindQuery, KindTransient, KindHandler, KindOutput:
 		return nil
-	case KindView, KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindGenerator, KindContext, KindComponent, KindMeta, KindAsync:
+	case KindView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindGenerator, KindContext, KindComponent, KindMeta, KindAsync:
 		if p == "" {
 			return fmt.Errorf("%v location name can't be empty", kind)
 		}

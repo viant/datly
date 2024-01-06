@@ -29,29 +29,44 @@ type (
 		InputParameters  state.NamedParameters
 		OutputParameters state.NamedParameters
 		Views            view.NamedViews
-		View             *view.View
 		Metrics          response.Metrics
 		State            *structology.State
 		Dispatcher       contract.Dispatcher
+		View             *view.View
+		Resource         *view.Resource
 	}
 
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
 	ReadInto        func(ctx context.Context, dest interface{}, aView *view.View) error
 )
 
-func (u Options) GetRequest() (*http.Request, error) {
-	return shared.CloneHTTPRequest(u.request)
+func (o Options) LookupParameters(name string) *state.Parameter {
+	if len(o.InputParameters) > 0 {
+		if ret, ok := o.InputParameters[name]; ok {
+			return ret
+		}
+	}
+	if len(o.OutputParameters) > 0 {
+		if ret, ok := o.OutputParameters[name]; ok {
+			return ret
+		}
+	}
+	return nil
 }
 
-func (u Options) UnmarshalFunc() Unmarshal {
-	if u.Unmarshal != nil {
-		return u.Unmarshal
+func (o Options) GetRequest() (*http.Request, error) {
+	return shared.CloneHTTPRequest(o.request)
+}
+
+func (o Options) UnmarshalFunc() Unmarshal {
+	if o.Unmarshal != nil {
+		return o.Unmarshal
 	}
-	var jsonUnmarshaller = json.New(u.IOConfig)
-	u.Unmarshal = func(data []byte, dest any) error {
+	var jsonUnmarshaller = json.New(o.IOConfig)
+	o.Unmarshal = func(data []byte, dest any) error {
 		return jsonUnmarshaller.Unmarshal(data, dest)
 	}
-	return u.Unmarshal
+	return o.Unmarshal
 }
 
 func NewOptions(opts []Option) *Options {
@@ -176,5 +191,11 @@ func WithView(aView *view.View) Option {
 func WithMetrics(metrics response.Metrics) Option {
 	return func(o *Options) {
 		o.Metrics = metrics
+	}
+}
+
+func WithResource(resource *view.Resource) Option {
+	return func(o *Options) {
+		o.Resource = resource
 	}
 }

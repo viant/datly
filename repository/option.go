@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
@@ -36,6 +37,8 @@ type Options struct {
 	jWTVerifier          *verifier.Service
 	jwtSigner            *signer.Service
 	types                []*view.PackagedType
+	resource             state.Resource
+	constants            map[string]string
 }
 
 func (o *Options) UseColumn() bool {
@@ -240,6 +243,22 @@ func WithJWTVerifier(aVerifier *verifier.Config) Option {
 		jwtVerifier := verifier.New(aVerifier)
 		o.jWTVerifier = jwtVerifier
 		_ = jwtVerifier.Init(context.Background())
+	}
+}
+
+func WithResource(resource *view.Resource) ComponentOption {
+	return func(c *Component) error {
+		c.View.SetResource(resource)
+		return nil
+	}
+}
+
+func WithConstants(key string, value string) Option {
+	return func(o *Options) {
+		if o.constants == nil {
+			o.constants = make(map[string]string)
+		}
+		o.constants[key] = value
 	}
 }
 

@@ -15,12 +15,12 @@ type (
 		Auth          string            `json:",omitempty" yaml:",omitempty"`
 		Kind          string            `json:",omitempty" yaml:",omitempty"`
 		Location      *string           `json:",omitempty" yaml:",omitempty"`
-		Codec         string            `json:",omitempty" yaml:",omitempty"`
 		OutputType    string            `json:",omitempty" yaml:",omitempty"`
 		Cardinality   state.Cardinality `json:",omitempty" yaml:",omitempty"`
 		StatusCode    *int              `json:",omitempty" yaml:",omitempty"`
 		TransformKind string            `json:",omitempty" yaml:",omitempty"`
 		Transformer   string            `json:",omitempty" yaml:",omitempty"`
+		Codec         string            `json:",omitempty" yaml:",omitempty"`
 		CodecArgs     []string          `json:",omitempty" yaml:",omitempty"`
 	}
 )
@@ -66,7 +66,6 @@ func (d *Declaration) ExpandShorthands() {
 		if d.Parameter.Output.Name == "" {
 			d.Parameter.Output.Name = d.Codec
 		}
-
 		if len(d.Parameter.Output.Args) == 0 {
 			d.Parameter.Output.Args = d.CodecArgs
 		}

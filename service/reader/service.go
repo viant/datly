@@ -350,7 +350,7 @@ func (s *Service) BuildPredicates(ctx context.Context, expression string, input 
 	if typeRegistry == nil {
 		typeRegistry = extension.Config.Types
 	}
-	resource := view.NewResourcelet(&view.Resource{}, baseView)
+	resource := view.NewResources(&view.Resource{}, baseView)
 	resource.SetTypes(typeRegistry)
 	aType, err := state.NewType(state.WithSchema(aSchema), state.WithResource(resource))
 	if err != nil {

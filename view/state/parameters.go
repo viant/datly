@@ -105,6 +105,9 @@ func (p Parameters) FilterByKind(kind Kind) Parameters {
 }
 
 func (p *Parameter) matchByKind(kind Kind, result *Parameters) {
+	if p.In == nil {
+		panic(fmt.Sprintf("kind was nil %s\n", p.Name))
+	}
 	switch p.In.Kind {
 	case kind:
 		*result = append(*result, p)
@@ -195,6 +198,19 @@ func (p Parameters) SetLiterals(state *structology.State) (err error) {
 	for _, parameter := range p.FilterByKind(KindConst) {
 		if parameter._selector == nil {
 			parameter._selector = state.Type().Lookup(parameter.Name)
+		}
+		if parameter.Value == nil {
+			switch parameter.Schema.rType.Kind() {
+			case reflect.String:
+				parameter.Value = ""
+			case reflect.Int:
+				parameter.Value = 0
+			case reflect.Float64:
+				parameter.Value = 0.0
+			case reflect.Bool:
+				parameter.Value = false
+
+			}
 		}
 		if err = parameter._selector.SetValue(state.Pointer(), parameter.Value); err != nil {
 			return err
@@ -531,6 +547,9 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 		if p.Output.Schema.TypeName() != p.Schema.TypeName() {
 			aTag.Parameter.DataType = p.Schema.TypeName()
 		}
+	}
+	if p.Handler != nil {
+		aTag.Handler = &tags.Handler{Name: p.Handler.Name, Arguments: p.Handler.Args}
 	}
 	if strings.Contains(aTag.Parameter.In, ",") {
 		aTag.Parameter.In = "{" + aTag.Parameter.In + "}"

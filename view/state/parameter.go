@@ -39,6 +39,7 @@ type (
 		ExpectedReturned  *int                         `json:",omitempty"`
 		Schema            *Schema                      `json:",omitempty" yaml:"Schema"`
 		Output            *Codec                       `json:",omitempty" yaml:"Output"`
+		Handler           *Handler                     `json:",omitempty" yaml:"Handler"`
 		Value             interface{}                  `json:"Value,omitempty" yaml:"Value"`
 		//deprecated use format timelayout instead
 		DateFormat      string `json:",omitempty" yaml:"DateFormat"`

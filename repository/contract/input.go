@@ -48,6 +48,7 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 	}
 
 	resourcelet := aView.Resource()
+
 	for _, parameter := range i.Type.Parameters {
 		if err := parameter.Init(ctx, resourcelet); err != nil {
 			return err
@@ -59,5 +60,6 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 		state.WithBodyType(false)); err != nil {
 		return fmt.Errorf("failed to initialise input: %w", err)
 	}
+
 	return nil
 }

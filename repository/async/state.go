@@ -7,7 +7,7 @@ import (
 
 func (s *State) Init(ctx context.Context, res *view.Resource, mainView *view.View) error {
 
-	resource := view.NewResourcelet(res, mainView)
+	resource := view.NewResources(res, mainView)
 	if s.UserID != nil {
 		if err := s.UserID.Init(ctx, resource); err != nil {
 			return err

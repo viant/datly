@@ -54,9 +54,10 @@ func (s *Service) init(ctx context.Context) error {
 
 // Signature returns match component signature
 func (s *Service) Signature(method, URI string) (*Signature, error) {
+	URI = strings.ReplaceAll(URI, "[]", "..")
 	matchable, err := s.matcher.MatchOne(method, URI)
 	if err != nil && s.APIPrefix != "" { //fallback to full URI
-		matchable, err = s.matcher.MatchOne(method, path.Join(s.APIPrefix, URI))
+		matchable, err = s.matcher.MatchOne(method, s.buildURI(URI))
 	}
 	if err != nil {
 		return nil, err
@@ -81,7 +82,7 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	resource := &view.Resource{}
 	resource.SetTypes(typeRegistry)
 	resource.SetCodecs(extension.Config.Codecs)
-	stateResource := view.NewResourcelet(resource, &view.View{})
+	stateResource := view.NewResources(resource, &view.View{})
 	for _, parameter := range contract.Input.Type.Parameters {
 		_ = parameter.Schema.InitType(typeRegistry.Lookup, false)
 		if parameter.Output != nil {
@@ -94,6 +95,20 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	}
 	signature.Types = append(customTypes, signature.Types...)
 	return signature, err
+}
+
+func (s *Service) buildURI(URI string) string {
+	APIPrefix := strings.Split(s.APIPrefix, "/")
+	URIs := strings.Split(URI, "/")
+	var suffix []string
+	for _, item := range URIs {
+		if item == ".." {
+			APIPrefix = APIPrefix[:len(APIPrefix)-1]
+			continue
+		}
+		suffix = append(suffix, item)
+	}
+	return strings.Join(append(APIPrefix, suffix...), "/")
 }
 
 func (s *Service) loadSignatures(ctx context.Context, URL string, isRoot bool) error {

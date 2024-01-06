@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/service/session/criteria"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/toolbox/format"
 	"reflect"
 	"testing"
 	"time"
@@ -283,7 +282,7 @@ func TestParse(t *testing.T) {
 		tests.LogHeader(fmt.Sprintf("Running testcase %v\n", i))
 
 		for _, column := range testCase.columns {
-			if !assert.Nil(t, column.Init(view.NewResourcelet(view.EmptyResource(), &view.View{}), text.CaseFormatLowerUnderscore, true, nil), testCase.input) {
+			if !assert.Nil(t, column.Init(view.NewResources(view.EmptyResource(), &view.View{}), text.CaseFormatLowerUnderscore, true, nil), testCase.input) {
 				continue
 			}
 		}

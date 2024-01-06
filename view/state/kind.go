@@ -12,8 +12,6 @@ const (
 	KindView Kind = "view"
 
 	//deprecated use view instead
-	KindDataView Kind = "data_view"
-
 	KindHeader      Kind = "header"
 	KindQuery       Kind = "query"
 	KindPath        Kind = "path"
@@ -44,12 +42,15 @@ const (
 
 	//KindTransient represents parameter placeholder with no actual value source
 	KindTransient Kind = "transient"
+
+	//KindHandler represents handler type
+	KindHandler Kind = "handler"
 )
 
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindView, KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindGenerator, KindTransient, KindComponent, KindMeta, KindAsync:
+	case KindView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindGenerator, KindTransient, KindHandler, KindComponent, KindMeta, KindAsync:
 		return nil
 	}
 
@@ -94,6 +95,8 @@ func (k Kind) Ordinal() int {
 		return 16
 	case KindTransient:
 		return 17
+	case KindHandler:
+		return 18
 	}
 	return -1
 }

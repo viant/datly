@@ -8,6 +8,7 @@ import (
 	_ "github.com/viant/datly/repository/locator/component"
 	_ "github.com/viant/datly/repository/locator/meta"
 	_ "github.com/viant/datly/repository/locator/output"
+	_ "github.com/viant/datly/service/executor/handler/locator"
 
 	reader "github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"

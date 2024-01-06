@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/gateway/router"
@@ -52,7 +53,7 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	s.detectModule(ctx, rule, resource)
 
 	resource.Resource.Substitutes = s.Repository.Substitutes.Merge()
-	resource.State.Append(s.Repository.State...)
+	//resource.State.Append(s.Repository.State...)
 	if err = resource.InitRule(&dSQL, ctx, s.Repository.fs, opts); err != nil {
 		return err
 	}
@@ -68,6 +69,12 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	if err = resource.ExtractDeclared(&dSQL); err != nil {
 		return err
 	}
+	for _, candidate := range resource.State.FilterByKind(state.KindConst) {
+		if param := s.Repository.State.Lookup(candidate.Name); param != nil {
+			candidate.Value = param.Value
+		}
+	}
+
 	if resource.Rule.Output != nil {
 		resource.Rule.Output.Doc = resource.Rule.Doc.Output
 		resource.Rule.Output.FilterDoc = resource.Rule.Doc.Filter
@@ -110,6 +117,7 @@ func (s *Service) discoverComponentContract(ctx context.Context, resource *Resou
 			return nil, err
 		}
 	}
+	location.Name = strings.ReplaceAll(location.Name, "..", "[]")
 	location.Name = strings.ReplaceAll(location.Name, ".", "/")
 	method, URI := shared.ExtractPath(location.Name)
 	return s.signature.Signature(method, URI)
@@ -486,6 +494,8 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 		return nil, err
 	}
 
+	s.adjustModulePackage(resource)
+
 	result.Resource = &resource.Resource
 	result.ColumnsDiscovery = true
 	resource.Rule.applyRootViewRouteShorthands()
@@ -503,6 +513,33 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 
 	result.Routes = append(result.Routes, route)
 	return result, nil
+}
+
+func (s *Service) adjustModulePackage(resource *Resource) {
+	modLocation := resource.rule.GoModuleLocation()
+	moduleURI := resource.rule.ModulePrefix
+	var parent, prefix string
+	goMod, err := s.fs.DownloadWithURL(context.Background(), url.Join(modLocation, "go.mod"))
+	if err != nil {
+		parent, prefix = url.Split(modLocation, file.Scheme)
+		moduleURI = path.Join(prefix, moduleURI)
+		goMod, _ = s.fs.DownloadWithURL(context.Background(), url.Join(parent, "go.mod"))
+	}
+
+	if len(goMod) == 0 {
+		return
+	}
+
+	modFile, _ := modfile.Parse("", goMod, nil)
+	modulePath := path.Join(modFile.Module.Mod.Path, moduleURI)
+	for _, aType := range resource.Resource.Types {
+		if aType.ModulePath != "" || aType.Package == "" {
+			continue
+		}
+		if strings.HasSuffix(moduleURI, aType.Package) {
+			aType.ModulePath = modulePath
+		}
+	}
 }
 
 func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) (err error) {

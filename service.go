@@ -167,6 +167,7 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 }
 
 func LoadInput(ctx context.Context, aSession *session.Session, aComponent *repository.Component, input interface{}) error {
+	ctx = aSession.Context(ctx)
 	if err := aSession.LoadState(aComponent.Input.Type.Parameters, input); err != nil {
 		return err
 	}
@@ -323,6 +324,7 @@ func (s *Service) AddViews(ctx context.Context, views ...*view.View) (*repositor
 
 func (s *Service) buildDefaultComponents(ctx context.Context) (*repository.Components, string) {
 	components := repository.NewComponents(ctx, s.options...)
+	s.resource.Parameters = s.repository.Constants()
 	components.Resource.MergeFrom(s.resource, s.repository.Extensions().Types)
 	refConnector := ""
 	if len(s.resource.Connectors) > 0 {
@@ -383,6 +385,11 @@ func (s *Service) AddHandler(ctx context.Context, aPath *contract.Path, handler 
 	component.View.Mode = view.ModeHandler
 	err = s.AddComponent(ctx, component)
 	return component, err
+}
+
+// Resource returns resource
+func (s *Service) Resource() *view.Resource {
+	return s.resource
 }
 
 // AddResource adds named resource

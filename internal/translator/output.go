@@ -36,7 +36,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 
 	for _, parameter := range resource.OutputState.FilterByKind(state.KindState) {
 		if stateParameter := resource.State.Lookup(parameter.In.Name); stateParameter != nil {
-			res := view.NewResourcelet(&resource.Resource, &rootViewlet.View.View)
+			res := view.NewResources(&resource.Resource, &rootViewlet.View.View)
 			if err = stateParameter.Init(context.Background(), res); err != nil {
 				return err
 			}
@@ -104,7 +104,7 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 
 	outputResource := resource.Resource
 	outputResource.SetTypes(typesRegistry)
-	resourcelet := view.NewResourcelet(&outputResource, &rootViewlet.View.View)
+	resourcelet := view.NewResources(&outputResource, &rootViewlet.View.View)
 	compactedParameters := resource.OutputState.Parameters()
 	compactedParameters.FlagOutput()
 

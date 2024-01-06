@@ -142,5 +142,8 @@ func New(ctx context.Context, fs afs.Service, URL string, refreshFrequency time.
 	if !ret.Has(view.ResourceConnectors) {
 		ret.AddResource(view.ResourceConnectors, &view.Resource{})
 	}
+	if !ret.Has(view.ResourceConstants) {
+		ret.AddResource(view.ResourceConstants, &view.Resource{})
+	}
 	return ret, err
 }

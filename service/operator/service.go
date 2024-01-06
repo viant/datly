@@ -41,7 +41,7 @@ func (s *Service) Operate(ctx context.Context, aSession *session.Session, aCompo
 // HandleError processes output with error
 func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aComponent *repository.Component, err error) (interface{}, error) {
 	ctx = context.WithValue(ctx, exec.ErrorKey, err)
-	ctx = context.WithValue(ctx, view.ContextKey, aComponent.View)
+	ctx = aComponent.View.Context(ctx)
 	output := aComponent.Output.Type.Type().NewState()
 	var locatorOptions []locator.Option
 	locatorOptions = append(locatorOptions, locator.WithView(aComponent.View),
@@ -91,14 +91,17 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (int
 }
 
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
-	var info *exec.Context
-	if ctx.Value(exec.ContextKey) == nil {
-		ctx = context.WithValue(ctx, exec.ContextKey, exec.NewContext())
-	}
 	ctx = context.WithValue(ctx, view.ContextKey, aComponent.View)
-	if infoValue := ctx.Value(exec.ContextKey); infoValue != nil {
+	ctx = aSession.Context(ctx)
+	var info *exec.Context
+	infoValue := ctx.Value(exec.ContextKey)
+	if infoValue == nil {
+		info = exec.NewContext()
+		ctx = context.WithValue(ctx, exec.ContextKey, info)
+	} else {
 		info = infoValue.(*exec.Context)
 	}
+
 	if aComponent.Input.IgnoreEmptyQueryParameters {
 		if value := ctx.Value(exec.ContextKey); value != nil {
 			info.IgnoreEmptyQueryParameters = true

@@ -28,8 +28,41 @@ type (
 		Options
 		state.Types
 	}
+
+	contextKey string
 )
 
+func (s *Session) Value(ctx context.Context, key string) (interface{}, bool, error) {
+	parameter, ok := s.namedParameters[key]
+	if !ok {
+		return nil, false, fmt.Errorf("unknwon state parameter: %v", key)
+	}
+	return s.lookupValue(ctx, parameter, s.Options.Indirect(true))
+}
+
+const _contextKey = contextKey("session")
+
+// Context returns session context
+func Context(ctx context.Context) *Session {
+	if ctx == nil {
+		return nil
+	}
+	value := ctx.Value(_contextKey)
+	if value == nil {
+		return nil
+	}
+	return value.(*Session)
+}
+
+// Context returns session context
+func (s *Session) Context(ctx context.Context) context.Context {
+	if Context(ctx) != nil {
+		return ctx
+	}
+	return context.WithValue(ctx, _contextKey, s)
+}
+
+// Populate populates view state
 func (s *Session) Populate(ctx context.Context) error {
 	if len(s.namespacedView.Views) == 0 {
 		return nil
@@ -187,6 +220,7 @@ func (s *Session) populateParameterInBackground(ctx context.Context, parameter *
 }
 
 func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
+
 	value, has, err := s.LookupValue(ctx, parameter, options)
 	if err != nil {
 		return err
@@ -200,6 +234,9 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 	parameterSelector := parameter.Selector()
 	if options.indirectState || parameterSelector == nil { //p
 		parameterSelector, err = aState.Selector(parameter.Name)
+		if parameter.In.Kind == state.KindConst {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -244,6 +281,13 @@ func (s *Session) canRead(ctx context.Context, parameter *state.Parameter) (bool
 func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter, selector *structology.Selector, options *Options) (interface{}, error) {
 	if options == nil {
 		options = &s.Options
+	}
+	if value == nil {
+		parameterType := parameter.Schema.Type()
+		switch parameterType.Kind() {
+		case reflect.Ptr, reflect.Slice:
+			return reflect.New(parameterType).Elem().Interface(), nil
+		}
 	}
 	valueType := reflect.TypeOf(value)
 	if valueType == nil {
@@ -335,6 +379,7 @@ func (s *Session) lookupFirstValue(ctx context.Context, parameters []*state.Para
 }
 
 func (s *Session) LookupValue(ctx context.Context, parameter *state.Parameter, opts *Options) (value interface{}, has bool, err error) {
+
 	if value, has, err = s.lookupValue(ctx, parameter, opts); err != nil {
 		err = httputils.NewParamError("", parameter.Name, err, httputils.WithObject(value), httputils.WithStatusCode(parameter.ErrorStatusCode))
 	}

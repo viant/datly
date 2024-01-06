@@ -178,6 +178,9 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	} else if strings.Contains(dataType, "map[") {
 		declaration.Cardinality = state.Many
 	} else {
+		if !strings.HasPrefix(dataType, "*") {
+			declaration.Required = &[]bool{true}[0]
+		}
 		declaration.Cardinality = state.One
 	}
 
@@ -240,6 +243,17 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 
 			declaration.Codec = args[0]
 			declaration.CodecArgs = args[1:]
+		case "WithHandler":
+			handler := &state.Handler{}
+			declaration.Handler = handler
+
+			if len(args) < 1 {
+				return fmt.Errorf("expected WithCodec to have at least one arg, but got %v", len(args))
+			}
+			declaration.Location = &declaration.Name
+			handler.Name = args[0]
+			handler.Args = args[1:]
+
 		case "WithStatusCode":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithStatusCode to have one arg, but got %v", len(args))

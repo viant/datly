@@ -36,7 +36,7 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet) 
 	resource.Rule.Input.Type.Package = resource.rule.Package()
 	resource.Rule.Input.Type.Name = state.SanitizeTypeName(viewlet.Name) + "Input"
 
-	res := view.NewResourcelet(&resource.Resource, &viewlet.View.View)
+	res := view.NewResources(&resource.Resource, &viewlet.View.View)
 	res.Parameters = inputParameters
 
 	s.tryToBuildNamedInputType(resource, resource.Rule.Input.Type, res)

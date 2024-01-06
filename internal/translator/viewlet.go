@@ -104,7 +104,7 @@ func (v *Viewlet) UpdateParameterType(aState *inference.State, name string, expr
 	}
 
 	switch parameter.In.Kind {
-	case state.KindParam, state.KindView, state.KindDataView:
+	case state.KindParam, state.KindView:
 		return
 	}
 	parameter.EnsureSchema()

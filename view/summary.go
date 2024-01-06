@@ -107,7 +107,7 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 	if err != nil {
 		return err
 	}
-	resourcelet := NewResourcelet(resource, owner._view)
+	resourcelet := NewResources(resource, owner._view)
 	if err = columns.Init(resourcelet, owner._view.CaseFormat, owner._view.AreNullValuesAllowed()); err != nil {
 		return err
 	}

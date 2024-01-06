@@ -29,28 +29,18 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 	}
 
 	output, _ := c.Output.Type.Parameters.ReflectType("", registry.Lookup, state.WithRelation(), state.WithSQL(), state.WithVelty(false))
-	var packageTypes []*xreflect.Type
 	var importModules = map[string]string{}
 	statePkg := c.Output.Type.Package
 
 	setter.SetStringIfEmpty(&statePkg, "state")
 	inPackageComponentTypes := indexComponentPackageTypes(c, statePkg)
-	for _, def := range c.View.TypeDefinitions() {
-		if inPackageComponentTypes[def.Name] {
-			continue
-		}
-		if def.Package != "" && c.ModulePath != "" && strings.Contains(def.DataType, " ") { //complex type
-			importModules[def.Package] = c.ModulePath
-		}
-		packageTypes = append(packageTypes, xreflect.NewType(def.Name, xreflect.WithModulePath(def.ModulePath), xreflect.WithModulePath(def.ModulePath), xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType)))
-	}
-
+	packagedTypes := c.buildDependencyTypes(inPackageComponentTypes, importModules)
 	componentName := state.SanitizeTypeName(c.View.Name)
 	embedURI := text.CaseFormatUpperCamel.Format(componentName, text.CaseFormatLowerUnderscore)
 	var options = []xreflect.Option{
 		xreflect.WithPackage(statePkg),
 		xreflect.WithTypes(xreflect.NewType(componentName+"Output", xreflect.WithReflectType(output))),
-		xreflect.WithPackageTypes(packageTypes...),
+		xreflect.WithPackageTypes(packagedTypes...),
 		xreflect.WithSkipFieldType(func(field *reflect.StructField) bool {
 			if aTag, _ := tags.Parse(field.Tag, nil, tags.ParameterTag); aTag != nil && aTag.Parameter != nil {
 				return aTag.Parameter.Kind == string(state.KindComponent)
@@ -78,6 +68,34 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 	builder.WriteString(inputState)
 	result := builder.String()
 	result = c.View.Resource().ReverseSubstitutes(result)
+	return result
+}
+
+func (c *Component) buildDependencyTypes(inPackageComponentTypes map[string]bool, importModules map[string]string) []*xreflect.Type {
+	var result []*xreflect.Type
+	uniquePackageTypes := map[string]*xreflect.Type{}
+	packageModule := map[string]string{}
+	for _, def := range c.View.TypeDefinitions() {
+		if inPackageComponentTypes[def.Name] {
+			continue
+		}
+		if def.Package != "" && c.ModulePath != "" && strings.Contains(def.DataType, " ") { //complex type
+			importModules[def.Package] = c.ModulePath
+		}
+		aType := xreflect.NewType(def.Name, xreflect.WithModulePath(def.ModulePath), xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType))
+		prev, found := uniquePackageTypes[aType.TypeName()]
+		if !found {
+			uniquePackageTypes[aType.TypeName()] = aType
+			result = append(result, aType)
+		}
+		if _, found := packageModule[aType.Package]; !found {
+			packageModule[aType.Package] = aType.ModulePath
+		}
+		setter.SetStringIfEmpty(&aType.ModulePath, packageModule[aType.Package])
+		if prev != nil {
+			setter.SetStringIfEmpty(&prev.ModulePath, aType.ModulePath)
+		}
+	}
 	return result
 }
 

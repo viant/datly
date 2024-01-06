@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"context"
 	"github.com/viant/xdatly/handler/async"
 	"sync"
 	"time"
@@ -11,6 +12,17 @@ type errorKey string
 
 var ContextKey = contextKey("context")
 var ErrorKey = errorKey("error")
+
+func GetContext(ctx context.Context) *Context {
+	if ctx == nil {
+		return nil
+	}
+	value := ctx.Value(ContextKey)
+	if value == nil {
+		return nil
+	}
+	return value.(*Context)
+}
 
 // Context represents an execution context
 type Context struct {
@@ -123,7 +135,6 @@ func (c *Context) AsyncStatus() string {
 	if len(c.jobs) == 0 {
 		return "N/A"
 	}
-
 	pendingCount := 0
 	runningCount := 0
 	doneCount := 0
@@ -136,7 +147,6 @@ func (c *Context) AsyncStatus() string {
 			pendingCount++
 		}
 	}
-
 	if doneCount == len(c.jobs) {
 		return string(async.StatusDone)
 	}
