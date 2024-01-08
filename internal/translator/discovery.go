@@ -108,6 +108,7 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 			continue
 		}
 		relSchema.Name = view.DefaultTypeName(relSchema.Name)
+		relView.SetResource(aView.GetResource())
 		rel.Of.View = *relView
 		relations = append(relations, rel)
 		if err = s.updateViewSchema(relView, resource, cache, registry, types, doc); err != nil {
