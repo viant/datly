@@ -143,13 +143,13 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 			return nil, err
 		}
 		if input == nil {
-			anInput := inputState.State()
+			anInput := inputState.StatePtr()
 			if initer, ok := anInput.(Initer); ok {
 				if err = initer.Init(ctx); err != nil {
 					return nil, err
 				}
 			}
-			ctx = context.WithValue(ctx, xhandler.InputKey, anInput)
+			ctx = context.WithValue(ctx, xhandler.InputKey, inputState.StatePtr())
 		}
 	}
 	return ctx, nil
