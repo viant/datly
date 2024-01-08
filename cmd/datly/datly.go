@@ -43,13 +43,6 @@ func main() {
 		}
 	}()
 
-	os.Chdir("/Users/awitas/go/src/github.vianttech.com/adelphic/mediator")
-	os.Args = []string{
-		"",
-		"run",
-		"-c=/Users/awitas/go/src/github.vianttech.com/adelphic/mediator/repo/dev/Datly/config.json",
-		"-L",
-	}
 	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)
