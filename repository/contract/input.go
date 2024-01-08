@@ -54,6 +54,7 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 			return err
 		}
 	}
+
 	if err := i.Type.Init(state.WithResource(aView.Resource()),
 		state.WithPackage(pkgPath),
 		state.WithMarker(true),

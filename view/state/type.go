@@ -67,6 +67,12 @@ func (t *Type) Init(options ...Option) error {
 		t.Schema = EmptySchema()
 	}
 
+	if schema := t.Schema; schema != nil && schema.rType == nil && schema.Name != "" && t.resource != nil {
+		if rType, err := t.resource.LookupType()(schema.Name); err == nil {
+			schema.SetType(rType)
+		}
+	}
+
 	if rType := t.Schema.Type(); rType != nil && !hasParameters {
 		if err := t.buildParameters(); err != nil {
 			return err
