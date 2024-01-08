@@ -379,7 +379,12 @@ func (s *Service) updateParameterWithComponentOutputType(dataParameter *state.Pa
 	setter.SetStringIfEmpty(&dataParameter.Schema.Package, rootViewlet.Resource.rule.Package())
 	dataParameter.Schema.DataType = "*" + typeName
 	cardinality := string(state.Many)
+
 	setter.SetStringIfEmpty(&cardinality, string(rootViewlet.Cardinality))
+	viewSchema := rootViewlet.View.Schema
 	dataParameter.Schema.Cardinality = state.Cardinality(cardinality)
+	if viewSchema != nil && viewSchema.Cardinality != "" {
+		dataParameter.Schema.Cardinality = viewSchema.Cardinality
+	}
 	dataParameter.SetTypeNameTag()
 }

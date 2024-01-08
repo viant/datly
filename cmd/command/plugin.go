@@ -62,22 +62,46 @@ func (s *Service) EnsurePluginArtifacts(ctx context.Context, info *plugin.Info) 
 	return s.fs.Upload(ctx, info.PluginURL(), file.DefaultFileOsMode, strings.NewReader(main))
 }
 
-func (s *Service) loadPlugin(ctx context.Context, opts *options.Options) (err error) {
-	if !opts.Repository().LoadPlugin {
-		return
+func (s *Service) loadPlugin(ctx context.Context, opts *options.Options) (pluginInfo string, err error) {
+	repo := opts.Repository()
+	if repo != nil {
+		if !repo.LoadPlugin {
+			return
+		}
+	} else if opts.Run != nil {
+		if !opts.Run.LoadPlugin {
+			return
+		}
 	}
+
+	pManager := manager.New(0)
 	aRule := opts.Rule()
-	moduleLocation := opts.Rule().ModFileLocation(ctx)
+	if repo == nil {
+		repo = &options.Repository{}
+		repo.Init(ctx, "")
+		aRule = &options.Rule{ModuleLocation: url.Join(repo.ProjectURL, "pkg"), Project: repo.ProjectURL}
+	}
+	moduleLocation := aRule.ModFileLocation(ctx)
 	goMod := path.Join(moduleLocation, "go.mod")
 	if ok, _ := s.fs.Exists(ctx, goMod); !ok {
-		return nil
+
+		return "", nil
 	}
+
 	moduleLocation = aRule.ModuleLocation
 	flags := getGcFlags()
-	repo := opts.Repository()
 
 	setter.SetStringIfEmpty(&repo.ProjectURL, aRule.Project)
 	destURL := url.Join(repo.ProjectURL, ".build/plugin")
+	pluginInfo = s.getPluginInfoURL(ctx, destURL)
+
+	//if plugin info exists and plugin is valid load, return
+	if ok, _ := s.fs.Exists(ctx, pluginInfo); ok && pluginInfo != "" {
+		if _, _, err = pManager.OpenWithInfoURL(ctx, pluginInfo); err == nil {
+			return pluginInfo, nil
+		}
+	}
+
 	_ = s.fs.Delete(ctx, destURL)
 	_ = s.fs.Create(ctx, destURL, file.DefaultDirOsMode, true)
 	goPath := os.Getenv("GOPATH")
@@ -98,21 +122,21 @@ func (s *Service) loadPlugin(ctx context.Context, opts *options.Options) (err er
 			flags,
 		},
 	}}
+
 	if err = aPlugin.Init(); err != nil {
-		return err
+		return "", err
 	}
 	if err := s.BuildPlugin(ctx, aPlugin); err != nil {
-		return err
+		return "", err
 	}
-	pManager := manager.New(0)
-	pluginInfo := s.getPluginInfoURL(ctx, destURL)
+	pluginInfo = s.getPluginInfoURL(ctx, destURL)
 	_, _, err = pManager.OpenWithInfoURL(ctx, pluginInfo)
 	if err != nil {
 		if rErr := s.reportPluginIssue(ctx, destURL); rErr != nil {
-			return rErr
+			return "", rErr
 		}
 	}
-	return err
+	return pluginInfo, err
 }
 
 func (s *Service) reportPluginIssue(ctx context.Context, destURL string) error {

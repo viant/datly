@@ -10,6 +10,8 @@ type Run struct {
 	JobURL       string   `short:"z" long:"joburl" description:"job url"`
 	MaxJobs      int      `short:"W" long:"mjobs" description:"max jobs" default:"40" `
 	FailedJobURL string   `short:"F" long:"fjobs" description:"failed jobs" `
+	LoadPlugin   bool     `short:"L" long:"lplugin" description:"load plugin"`
+	PluginInfo   string
 }
 
 func (r *Run) Init() error {

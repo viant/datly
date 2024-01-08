@@ -61,7 +61,7 @@ func (s *Service) Exec(ctx context.Context, opts *options.Options) error {
 		return s.Translate(ctx, opts)
 	}
 	if opts.Run != nil {
-		return s.Run(ctx, opts.Run)
+		return s.Run(ctx, opts)
 	}
 	if opts.Cache != nil {
 		return s.WarmupCache(ctx, opts.Cache)

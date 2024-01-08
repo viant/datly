@@ -23,7 +23,7 @@ func (s *Service) ensureTranslator(opts *options.Options) error {
 }
 
 func (s *Service) Translate(ctx context.Context, opts *options.Options) (err error) {
-	if err = s.loadPlugin(ctx, opts); err != nil {
+	if _, err = s.loadPlugin(ctx, opts); err != nil {
 		return err
 	}
 	if err = s.translate(ctx, opts); err != nil {

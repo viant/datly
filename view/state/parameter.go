@@ -272,6 +272,9 @@ func (p *Parameter) inherit(param *Parameter) {
 	if p.LocationInput == nil {
 		p.LocationInput = param.LocationInput
 	}
+	if p.Handler == nil {
+		p.Handler = param.Handler
+	}
 }
 
 // Validate checks if parameter is valid

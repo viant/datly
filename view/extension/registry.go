@@ -1,6 +1,7 @@
 package extension
 
 import (
+	"fmt"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/docs"
 	"github.com/viant/xdatly/types/core"
@@ -22,6 +23,7 @@ func NewRegistry() *Registry {
 	types := Config.Types
 
 	if pkgTypes, _ := core.Types(func(packageName, typeName string, rType reflect.Type, insertedAt time.Time) {
+		fmt.Printf("loaded types: %v %v\n", types, rType)
 		_ = types.Register(typeName, xreflect.WithPackage(packageName), xreflect.WithReflectType(rType))
 	}); len(pkgTypes) > 0 {
 		for pkg, v := range pkgTypes {

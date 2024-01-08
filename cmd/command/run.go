@@ -10,8 +10,13 @@ import (
 	"github.com/viant/datly/service/auth/jwt"
 )
 
-func (s *Service) Run(ctx context.Context, run *options.Run) (err error) {
-	srv, err := s.run(ctx, run)
+func (s *Service) Run(ctx context.Context, options *options.Options) (err error) {
+	loc, err := s.loadPlugin(ctx, options)
+	if err != nil {
+		return err
+	}
+	options.Run.PluginInfo = loc
+	srv, err := s.run(ctx, options.Run)
 	if err != nil {
 		return err
 	}
@@ -30,6 +35,12 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 		parent, _ := url.Split(s.config.JobURL, file.Scheme)
 		s.config.FailedJobURL = url.Join(parent, "failed", "jobs")
 	}
+
+	if run.LoadPlugin && s.config.Config.PluginsURL != "" {
+		parent, _ := url.Split(run.PluginInfo, file.Scheme)
+		_ = s.fs.Copy(ctx, parent, s.config.Config.PluginsURL)
+	}
+
 	authenticator, err := jwt.Init(s.config.Config, nil)
 	var srv *standalone.Server
 	if authenticator == nil {

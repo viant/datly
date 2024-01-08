@@ -75,6 +75,7 @@ func (l *Locator) Value(ctx context.Context, name string) (interface{}, bool, er
 			return nil, false, nil
 		}
 		SQL := l.Output.Metrics.SQL()
+		SQL = strings.ReplaceAll(SQL, "\n", "\t ")
 		return SQL, true, nil
 	case "zero":
 		return 0, true, nil

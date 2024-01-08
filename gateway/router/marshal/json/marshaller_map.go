@@ -139,6 +139,9 @@ func (m *mapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) 
 
 	aMap := reflect.ValueOf(asInterface(m.xType, ptr))
 	if aMap.IsNil() {
+		if !m.isEmbedded {
+			sb.WriteString("null")
+		}
 		return nil
 	}
 
