@@ -22,6 +22,10 @@ import (
 	"github.com/viant/xdatly/handler/async"
 )
 
+type Initer interface {
+	Init(ctx context.Context) error
+}
+
 type Service struct {
 	fs afs.Service
 }
@@ -139,7 +143,13 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 			return nil, err
 		}
 		if input == nil {
-			ctx = context.WithValue(ctx, xhandler.InputKey, inputState.State())
+			anInput := inputState.State()
+			if initer, ok := anInput.(Initer); ok {
+				if err = initer.Init(ctx); err != nil {
+					return nil, err
+				}
+			}
+			ctx = context.WithValue(ctx, xhandler.InputKey, anInput)
 		}
 	}
 	return ctx, nil
