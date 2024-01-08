@@ -55,8 +55,8 @@ func Context(ctx context.Context) *Session {
 }
 
 // Context returns session context
-func (s *Session) Context(ctx context.Context) context.Context {
-	if Context(ctx) != nil {
+func (s *Session) Context(ctx context.Context, forceNew bool) context.Context {
+	if Context(ctx) != nil && !forceNew {
 		return ctx
 	}
 	return context.WithValue(ctx, _contextKey, s)

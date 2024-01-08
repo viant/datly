@@ -165,7 +165,7 @@ func (p Parameters) GroupByStatusCode() []Parameters {
 			forbiddenParameters = append(forbiddenParameters, p[i])
 		default:
 			switch candidate.In.Kind {
-			case KindHeader, KindQuery, KindRequestBody, KindCookie, KindRequest:
+			case KindHeader, KindConst, KindLiteral, KindQuery, KindRequestBody, KindCookie, KindRequest:
 				external = append(external, p[i])
 			case KindParam, KindState:
 				transient = append(transient, p[i])

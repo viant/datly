@@ -22,10 +22,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request 
 	}
 	unmarshal := aComponent.UnmarshalFunc(request)
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(aComponent.LocatorOptions(request, unmarshal)...))
-	ctx = aSession.Context(ctx)
-	if err = aSession.Populate(ctx); err != nil {
-		return d.service.HandleError(ctx, aSession, aComponent, err)
-	}
+	ctx = aSession.Context(ctx, true)
 	value, err := d.service.Operate(ctx, aSession, aComponent)
 	return value, err
 }

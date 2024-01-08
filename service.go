@@ -167,7 +167,7 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 }
 
 func LoadInput(ctx context.Context, aSession *session.Session, aComponent *repository.Component, input interface{}) error {
-	ctx = aSession.Context(ctx)
+	ctx = aSession.Context(ctx, false)
 	if err := aSession.LoadState(aComponent.Input.Type.Parameters, input); err != nil {
 		return err
 	}

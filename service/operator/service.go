@@ -68,6 +68,9 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 		if ctx, err = s.EnsureReaderInput(ctx, aComponent, aSession); err != nil {
 			return nil, err
 		}
+		if err = aSession.Populate(ctx); err != nil {
+			return s.HandleError(ctx, aSession, aComponent, err)
+		}
 		ret, err := s.runQuery(ctx, aComponent, aSession)
 		return s.finalize(ctx, ret, err)
 	case service.TypeExecutor:
@@ -92,7 +95,7 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (int
 
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
 	ctx = context.WithValue(ctx, view.ContextKey, aComponent.View)
-	ctx = aSession.Context(ctx)
+	ctx = aSession.Context(ctx, false)
 	var info *exec.Context
 	infoValue := ctx.Value(exec.ContextKey)
 	if infoValue == nil {
