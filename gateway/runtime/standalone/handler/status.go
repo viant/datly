@@ -3,7 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	meta2 "github.com/viant/datly/gateway/runtime/meta"
+	meta "github.com/viant/datly/gateway/runtime/meta"
 	"net/http"
 	"time"
 )
@@ -18,12 +18,12 @@ type (
 
 	StatusHandler struct {
 		info info
-		meta *meta2.Config
+		meta *meta.Config
 	}
 )
 
 func (h *StatusHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	if !meta2.IsAuthorized(request, h.meta.AllowedSubnet) {
+	if !meta.IsAuthorized(request, h.meta.AllowedSubnet) {
 		writer.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -38,7 +38,7 @@ func (h *StatusHandler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 }
 
 // NewStatus creates a status handler
-func NewStatus(version string, meta *meta2.Config) *StatusHandler {
+func NewStatus(version string, meta *meta.Config) *StatusHandler {
 	handler := &StatusHandler{}
 	handler.info.Version = version
 	handler.info.StartTime = time.Now()
