@@ -135,9 +135,7 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 		}
 		locatorOptions := aComponent.LocatorOptions(nil, nil)
 		options := aSession.ViewOptions(aComponent.View, session.WithLocatorOptions(locatorOptions...))
-		if indirect {
-			options = options.Indirect(true)
-		}
+		options = options.Indirect(true)
 		err := aSession.SetState(ctx, inputType.Parameters, inputState, options)
 		if err != nil {
 			return nil, err
