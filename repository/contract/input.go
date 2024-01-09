@@ -31,7 +31,7 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 	}
 
 	pkg := pkgPath
-	if i.Type.Package != "" {
+	if i.Type.Schema != nil && i.Type.Package != "" {
 		pkg = i.Type.Package
 	}
 

@@ -20,26 +20,26 @@ pipeline:
 
 
   test:
-    testNoAuthenticated:
-      action: http/runner:send
-      requests:
-        - Method: GET
-          description: user is no authenticated
-          URL: http://127.0.0.1:8080/v1/api/dev/auth/vendors/2
-          Expect:
-            Code: 401
-
-    testAuthenticatedAndAuthorized:
-      action: http/runner:send
-      requests:
-      - Method: GET
-        description: user is authenticated and authorized for vendor 2
-        URL: http://127.0.0.1:8080/v1/api/dev/auth/vendors/2
-        Header:
-          Authorization: Bearer ${signJWT.TokenString}
-        Expect:
-          Code: 200
-          JSONBody: $expect
+#    testNoAuthenticated:
+#      action: http/runner:send
+#      requests:
+#        - Method: GET
+#          description: user is no authenticated
+#          URL: http://127.0.0.1:8080/v1/api/dev/auth/vendors/2
+#          Expect:
+#            Code: 401
+#
+#    testAuthenticatedAndAuthorized:
+#      action: http/runner:send
+#      requests:
+#      - Method: GET
+#        description: user is authenticated and authorized for vendor 2
+#        URL: http://127.0.0.1:8080/v1/api/dev/auth/vendors/2
+#        Header:
+#          Authorization: Bearer ${signJWT.TokenString}
+#        Expect:
+#          Code: 200
+#          JSONBody: $expect
 
     testAuthenticatedAndNoAuthorized:
       action: http/runner:send

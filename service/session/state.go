@@ -202,8 +202,7 @@ func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aSt
 		for i, _ := range group { //populate non data view parameters first
 			wg.Add(1)
 			parameter := group[i]
-			//go
-			s.populateParameterInBackground(ctx, parameter, aState, opts, err, &wg)
+			go s.populateParameterInBackground(ctx, parameter, aState, opts, err, &wg)
 		}
 		wg.Wait()
 		if err.HasError() {
@@ -291,9 +290,6 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		}
 	}
 	valueType := reflect.TypeOf(value)
-	if parameterType == valueType || parameterType.Kind() == valueType.Kind() {
-		return value, nil
-	}
 
 	if valueType == nil {
 		fmt.Printf("value type was nil %s\n", parameter.Name)

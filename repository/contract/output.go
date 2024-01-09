@@ -82,7 +82,7 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters sta
 		}
 	}
 	pkg := pkgPath
-	if o.Type.Package != "" {
+	if o.Type.Schema != nil && o.Type.Package != "" {
 		pkg = o.Type.Package
 	}
 	o.Type.Parameters.FlagOutput()
