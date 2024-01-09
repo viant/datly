@@ -147,9 +147,6 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 				inputState.SyncPointer()
 				anInput = inputState.StatePtr()
 			}
-			dd, _ := json.Marshal(anInput)
-			fmt.Printf("in: %T %s\n", anInput, dd)
-
 			if initer, ok := anInput.(Initer); ok {
 				if err = initer.Init(ctx); err != nil {
 					return nil, err
