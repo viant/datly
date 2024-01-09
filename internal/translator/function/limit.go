@@ -21,6 +21,7 @@ func (c *limit) Apply(args []string, column *sqlparser.Column, resource *view.Re
 	}
 	aView.Selector.Constraints.Limit = true
 	aView.Selector.Limit = aLimit
+	aView.Selector.NoLimit = aLimit == 0
 	return nil
 }
 

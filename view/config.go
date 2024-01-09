@@ -43,6 +43,7 @@ type (
 		Namespace         string             `json:",omitempty"`
 		OrderBy           string             `json:",omitempty"`
 		Limit             int                `json:",omitempty"`
+		NoLimit           bool               `json:",omitempty"`
 		Constraints       *Constraints       `json:",omitempty"`
 		Parameters        *SelectorParameter `json:",omitempty"`
 		LimitParameter    *state.Parameter   `json:",omitempty"`

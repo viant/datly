@@ -167,10 +167,17 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 	if v.Selector == nil {
 		v.Selector = &view.Config{}
 	}
-
 	selector := v.Selector
 	selector.Namespace = rule.selectorNamespace(v.Name)
-	setter.SetIntIfZero(&selector.Limit, v.defaultLimit(isRoot))
+	defaultLimit := v.defaultLimit(isRoot)
+	if selector.NoLimit {
+		defaultLimit = 0
+	}
+	if rootView := rule.RootView(); rootView.Selector != nil && rootView.Selector.NoLimit {
+		defaultLimit = 0
+	}
+
+	setter.SetIntIfZero(&selector.Limit, defaultLimit)
 	if selector.Constraints == nil {
 		selector.Constraints = &view.Constraints{
 			Criteria:   true,
