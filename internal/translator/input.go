@@ -14,9 +14,18 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet) 
 	if resource.rule.Generated {
 		return nil
 	}
-	//HERE
+	registry := resource.typeRegistry
 	inputState := inference.State{}
 	for i, item := range resource.State {
+		if schema := item.Schema; schema != nil {
+			if schema.Name != "" {
+				if rType, _ := registry.Lookup(schema.Name, xreflect.WithPackage(schema.Package)); rType != nil && rType.Name() != "" {
+					schema.SetType(rType)
+					schema.DataType = ""
+				}
+			}
+		}
+
 		if strings.Contains(item.Name, ".") {
 			continue
 		}

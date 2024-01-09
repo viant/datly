@@ -144,7 +144,6 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 		}
 		if input == nil {
 			anInput := inputState.StatePtr()
-			fmt.Printf("%T\n", anInput)
 			if initer, ok := anInput.(Initer); ok {
 				if err = initer.Init(ctx); err != nil {
 					return nil, err

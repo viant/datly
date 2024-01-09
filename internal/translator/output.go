@@ -66,18 +66,17 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 			return err
 		}
 	}
-	resource.Rule.Route.Output.Type.Package = resource.rule.Package()
-	resource.Rule.Route.Output.Type.Parameters = outputParameters
+
 	if resource.Rule.Route.Output.Type.Schema == nil {
 		resource.Rule.Route.Output.Type.Schema = &state.Schema{}
 	}
-
+	resource.Rule.Route.Output.Type.Package = resource.rule.Package()
+	resource.Rule.Route.Output.Type.Parameters = outputParameters
 	outputTypeName := state.SanitizeTypeName(rootViewlet.Name) + "Output"
 	rType, err := resource.typeRegistry.Lookup(outputTypeName, xreflect.WithPackage(resource.rule.Package()))
 	if err == nil && rType.Name() != "" {
 		resource.Rule.Route.Output.Type.Name = outputTypeName
 	}
-	resource.Rule.Route.Output.Type.Schema.Package = resource.rule.Package()
 	return nil
 }
 
@@ -140,9 +139,6 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 
 	resource.Rule.Route.Output.Type.Parameters = compactedParameters
 	outputTypeDef.DataType = outputType.String()
-
-	resource.Rule.Route.Output.Type.Schema = &state.Schema{Name: outputTypeDef.Name}
-
 	return nil
 }
 

@@ -26,7 +26,6 @@ type (
 		stateType    *structology.StateType
 		resource     Resource
 		fs           *embed.FS
-		Package      string
 		withBodyType bool
 		Doc          Documentation
 	}
@@ -81,7 +80,7 @@ func (t *Type) Init(options ...Option) error {
 		if err := t.buildSchema(context.Background(), t.withMarker); err != nil {
 			return err
 		}
-	} else if t.Schema == nil {
+	} else if t.Schema == nil || t.Schema.Type() == nil {
 		t.Schema = EmptySchema()
 	} else {
 		for _, parameter := range t.Parameters {
@@ -309,6 +308,9 @@ func WithParameters(parameters Parameters) Option {
 
 func WithPackage(pkg string) Option {
 	return func(t *Type) {
+		if t.Schema == nil {
+			t.Schema = &Schema{}
+		}
 		t.Package = pkg
 	}
 }
