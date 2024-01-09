@@ -322,7 +322,6 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 				valueType = reflect.TypeOf(value)
 			case 1:
 				value = slice.ValuePointerAt(ptr, 0)
-				fmt.Printf("%T %v\n", value, value)
 				valueType = reflect.TypeOf(value)
 			default:
 				return nil, fmt.Errorf("parameter %v return more than one value, len: %v rows ", parameter.Name, sliceLen)
