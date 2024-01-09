@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/msg"
-	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	tparser "github.com/viant/datly/internal/translator/parser"
 	expand "github.com/viant/datly/service/executor/expand"
@@ -97,7 +96,8 @@ func (r *Resource) ensureRegistry() *xreflect.Types {
 	if r.typeRegistry != nil {
 		return r.typeRegistry
 	}
-	r.typeRegistry = xreflect.NewTypes(xreflect.WithRegistry(extension.Config.Types))
+	registry := extension.Config.Types
+	r.typeRegistry = xreflect.NewTypes(xreflect.WithRegistry(registry))
 	return r.typeRegistry
 }
 
@@ -194,10 +194,22 @@ func (r *Resource) AppendTypeDefinitions(typeDefs []*view.TypeDefinition) {
 	}
 }
 
-func (r *Resource) AdjustCustomType(info *plugin.Info) {
+func (r *Resource) AdjustCustomType() {
 	//TODO work in progress
 	for i := range r.Resource.Types {
 		aType := r.Resource.Types[i]
+		if rType, err := r.typeRegistry.Lookup(aType.Name, xreflect.WithPackage(aType.Package)); err == nil {
+			if rType.Name() != "" { //if type is register it's named type, ignore it's def
+				aType.CustomType = false
+				prefix := ""
+				if rType.Kind() == reflect.Struct {
+					prefix = "*"
+				}
+				aType.DataType = prefix + aType.Name
+				continue
+			}
+		}
+
 		if aType.CustomType {
 			aType.DataType = aType.Name
 			aType.CustomType = false

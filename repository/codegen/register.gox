@@ -1,0 +1,5 @@
+
+func init() {
+    core.RegisterType("$PackageName", "${Name}Input", reflect.TypeOf(${Name}Input{}), checksum.GeneratedTime)
+    core.RegisterType("$PackageName", "${Name}Output", reflect.TypeOf(${Name}Output{}), checksum.GeneratedTime)
+}

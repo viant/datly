@@ -56,7 +56,7 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 	}
 
 	if err := i.Type.Init(state.WithResource(aView.Resource()),
-		state.WithPackage(pkgPath),
+		state.WithPackage(pkg),
 		state.WithMarker(true),
 		state.WithBodyType(false)); err != nil {
 		return fmt.Errorf("failed to initialise input: %w", err)

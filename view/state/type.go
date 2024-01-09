@@ -68,7 +68,7 @@ func (t *Type) Init(options ...Option) error {
 	}
 
 	if schema := t.Schema; schema != nil && schema.rType == nil && schema.Name != "" && t.resource != nil {
-		if rType, err := t.resource.LookupType()(schema.Name); err == nil {
+		if rType, err := t.resource.LookupType()(schema.Name, xreflect.WithPackage(schema.Package)); err == nil {
 			schema.SetType(rType)
 		}
 	}

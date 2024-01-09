@@ -85,19 +85,6 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters sta
 	if o.Type.Package != "" {
 		pkg = o.Type.Package
 	}
-
-	if o.Type.Schema != nil && o.Type.Name != "" {
-		rType := o.Type.Type()
-		if rType == nil {
-			lookupType := aView.Resource().LookupType()
-			rType, err := lookupType(o.Type.Name)
-			if err != nil {
-				return fmt.Errorf("unknwout output: %w", err)
-			}
-			o.Type.SetType(rType)
-		}
-	}
-
 	o.Type.Parameters.FlagOutput()
 	if err = o.Type.Init(state.WithResource(aView.Resource()), state.WithPackage(pkg)); err != nil {
 		return fmt.Errorf("failed to initialise output: %w", err)

@@ -493,9 +493,7 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 	if err := s.handleCustomTypes(ctx, resource); err != nil {
 		return nil, err
 	}
-
 	s.adjustModulePackage(resource)
-
 	result.Resource = &resource.Resource
 	result.ColumnsDiscovery = true
 	resource.Rule.applyRootViewRouteShorthands()
@@ -543,6 +541,7 @@ func (s *Service) adjustModulePackage(resource *Resource) {
 }
 
 func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) (err error) {
+	resource.AdjustCustomType()
 	if len(resource.CustomTypeURLs) == 0 {
 		return nil
 	}
@@ -572,7 +571,7 @@ func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) (er
 		//pluginCmd.BuildArgs = []string{"'-gcflags \"all=-N -l\"'"}
 		s.Plugins = append(s.Plugins, pluginCmd)
 	}
-	resource.AdjustCustomType(info)
+
 	return nil
 }
 

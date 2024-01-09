@@ -16,6 +16,9 @@ import (
 //go:embed codegen/contract.gox
 var contractInit string
 
+//go:embed codegen/register.gox
+var registerInit string
+
 func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string) string {
 	builder := strings.Builder{}
 	input := c.Input.Type.Type()
@@ -52,16 +55,24 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 		xreflect.WithRegistry(c.types),
 	}
 
+	replacer := data.NewMap()
+	replacer.Put("Name", componentName)
+	replacer.Put("URI", c.URI)
+	replacer.Put("Method", c.Method)
+	replacer.Put("PackageName", c.Output.Type.Package)
+
+	snippetBefore := replacer.ExpandAsText(registerInit)
+
 	if withEmbed {
-		replacer := data.NewMap()
-		replacer.Put("Name", componentName)
-		replacer.Put("URI", c.URI)
-		replacer.Put("Method", c.Method)
 		defineComponentFunc := replacer.ExpandAsText(contractInit)
+		snippetBefore += c.embedTemplate(embedURI, componentName)
 		options = append(options,
-			xreflect.WithImports(c.generatorImports()),
-			xreflect.WithSnippetBefore(c.embedTemplate(embedURI, componentName)),
+			xreflect.WithImports(c.generatorImports(c.Contract.ModulePath)),
 			xreflect.WithSnippetAfter(defineComponentFunc))
+	}
+
+	if snippetBefore != "" {
+		options = append(options, xreflect.WithSnippetBefore(snippetBefore))
 	}
 
 	inputState := xreflect.GenerateStruct(componentName+"Input", input.Type(), options...)
@@ -107,12 +118,21 @@ var %vFS embed.FS
 `, embedURI, componentName)
 }
 
-func (c *Component) generatorImports() []string {
+func (c *Component) generatorImports(modulePath string) []string {
+
+	checksumModule := "github.com/viant/xdatly/types/custom/checksum"
+	index := strings.LastIndex(modulePath, "/pkg/")
+	if index != -1 {
+		checksumModule = modulePath[:index] + "/pkg/checksum"
+	}
+
 	return []string{"embed",
 		"github.com/viant/datly",
 		"fmt",
 		"context",
 		"reflect",
+		"github.com/viant/xdatly/types/core",
+		checksumModule,
 		"github.com/viant/datly/repository",
 		"github.com/viant/datly/repository/contract"}
 }
