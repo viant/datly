@@ -128,6 +128,7 @@ func (c Columns) ApplyConfig(configs map[string]*ColumnConfig, lookupType xrefle
 		}
 		columnType := column.DataType
 		column.ApplyConfig(cfg)
+
 		if column.DataType != columnType {
 			rType, err := types.LookupType(lookupType, column.DataType)
 			if err != nil {

@@ -20,6 +20,10 @@ type Codec struct {
 	_codec       codec.Instance
 }
 
+func (v *Codec) Initialized() bool {
+	return v._initialized
+}
+
 func (v *Codec) Init(resource Resource, inputType reflect.Type) error {
 	if v._initialized {
 		return nil
@@ -137,6 +141,10 @@ func (v *Codec) codecInstance(resource Resource, inputType reflect.Type, foundCo
 }
 
 func (v *Codec) Transform(ctx context.Context, value interface{}, options ...codec.Option) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
+
 	return v._codec.Value(ctx, value, options...)
 }
 

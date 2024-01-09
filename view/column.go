@@ -176,7 +176,12 @@ func (c *Column) SetColumnType(rType reflect.Type) {
 
 func (c *Column) ApplyConfig(config *ColumnConfig) {
 	if config.Codec != nil {
-		c.Codec = config.Codec
+		if c.Codec == nil {
+			c.Codec = config.Codec
+
+		} else if c.Codec.Name != config.Codec.Name {
+			c.Codec = config.Codec
+		}
 	}
 
 	if config.DataType != nil && *config.DataType != "" {
@@ -192,6 +197,7 @@ func (c *Column) ApplyConfig(config *ColumnConfig) {
 	if config.Default != nil {
 		c.Default = *config.Default
 	}
+	c._initialized = false
 }
 
 func WithColumnTag(tag string) ColumnOption {
