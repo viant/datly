@@ -59,7 +59,7 @@ func (t *Type) apply(options []Option) {
 	return
 }
 
-func (t *Type) Init(options ...Option) error {
+func (t *Type) Init(options ...Option) (err error) {
 	t.apply(options)
 	hasParameters := len(t.Parameters) > 0
 	if !hasParameters && t.Schema == nil {
@@ -67,9 +67,13 @@ func (t *Type) Init(options ...Option) error {
 	}
 
 	if schema := t.Schema; schema != nil && schema.rType == nil && schema.Name != "" && t.resource != nil {
-		if rType, err := t.resource.LookupType()(schema.Name, xreflect.WithPackage(schema.Package)); err == nil {
-			schema.SetType(rType)
+		if namedType, err := t.resource.LookupType()(schema.Name, xreflect.WithPackage(schema.Package)); err == nil {
+			schema.SetType(namedType)
+			if namedType.Kind() == reflect.Ptr {
+				namedType = namedType.Elem()
+			}
 		}
+
 	}
 
 	if rType := t.Schema.Type(); rType != nil && !hasParameters {

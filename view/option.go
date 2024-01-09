@@ -199,3 +199,10 @@ func WithViewKind(mode Mode) Option {
 		return nil
 	}
 }
+
+func WithReinitialize() Option {
+	return func(aView *View) error {
+		aView._initialized = false
+		return nil
+	}
+}

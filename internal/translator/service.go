@@ -305,7 +305,6 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	}
 
 	if route.Handler != nil {
-
 		if route.Component.Output.Type.Schema == nil {
 			route.Component.Output.Type.Schema = &state.Schema{}
 		}

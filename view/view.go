@@ -283,11 +283,11 @@ func (v *View) setResource(resource *Resource) {
 // i.e. If View, Connector etc. should inherit from others - it has te bo included in Resource.
 // It is important to call Init for every View because it also initializes due to the optimization reasons.
 func (v *View) Init(ctx context.Context, resource *Resource, opts ...Option) error {
-	if v._initialized {
-		return nil
-	}
 	if err := Options(opts).Apply(v); err != nil {
 		return err
+	}
+	if v._initialized {
+		return nil
 	}
 	v._initialized = true
 	v.setResource(resource)

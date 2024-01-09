@@ -20,6 +20,7 @@ import (
 	"github.com/viant/structology"
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/async"
+	"reflect"
 )
 
 type Initer interface {
@@ -141,14 +142,20 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 			return nil, err
 		}
 		if input == nil {
-			inputState.SyncPointer()
-			anInput := inputState.StatePtr()
+			anInput := inputState.State()
+			if reflect.TypeOf(anInput).Kind() == reflect.Struct {
+				inputState.SyncPointer()
+				anInput = inputState.StatePtr()
+			}
+			dd, _ := json.Marshal(anInput)
+			fmt.Printf("in: %T %s\n", anInput, dd)
+
 			if initer, ok := anInput.(Initer); ok {
 				if err = initer.Init(ctx); err != nil {
 					return nil, err
 				}
 			}
-			ctx = context.WithValue(ctx, xhandler.InputKey, inputState.StatePtr())
+			ctx = context.WithValue(ctx, xhandler.InputKey, anInput)
 		}
 	}
 	return ctx, nil

@@ -73,6 +73,7 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 		}
 		c.Contract.Service = service.TypeExecutor
 	}
+
 	err = c.initView(ctx, resource)
 	if err != nil {
 		return err
@@ -83,6 +84,9 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	if err = c.Contract.Init(ctx, &c.Path, c.View, resource); err != nil {
 		return err
 	}
+
+	c.updatedViewSchemaWithNamedType()
+
 	if err := c.normalizePaths(); err != nil {
 		return err
 	}
@@ -97,6 +101,18 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	}
 	c.doc, _ = resource.Doc()
 	return nil
+}
+
+func (c *Component) updatedViewSchemaWithNamedType() {
+	outputSchema := c.Contract.Output.Type.Schema
+	if param := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); param != nil && outputSchema.IsNamed() {
+		oType := types.EnsureStruct(outputSchema.Type())
+		if viewField, ok := oType.FieldByName(param.Name); ok {
+			if !c.View.Schema.IsNamed() {
+				c.View.Schema.SetType(viewField.Type)
+			}
+		}
+	}
 }
 
 func (c *Component) initTransforms(ctx context.Context) error {

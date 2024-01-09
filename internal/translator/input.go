@@ -17,24 +17,16 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet) 
 	registry := resource.typeRegistry
 	inputState := inference.State{}
 	for i, item := range resource.State {
-		if schema := item.Schema; schema != nil {
-			if schema.Name != "" {
-				if rType, _ := registry.Lookup(schema.Name, xreflect.WithPackage(schema.Package)); rType != nil && rType.Name() != "" {
-					schema.SetType(rType)
-					schema.DataType = ""
-				}
-			}
-		}
-
+		s.updatedNamedType(&item.Parameter, registry)
 		if strings.Contains(item.Name, ".") {
 			continue
 		}
-
 		if err := s.adjustCodecOutputType(&item.Parameter, resource.typeRegistry, resource); err != nil {
 			return err
 		}
 		inputState.Append(resource.State[i])
 	}
+
 	inputState.Append(resource.AsyncState...)
 	inputParameters := inputState.Parameters()
 
@@ -50,6 +42,21 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet) 
 
 	s.tryToBuildNamedInputType(resource, resource.Rule.Input.Type, res)
 	return nil
+}
+
+func (s *Service) updatedNamedType(item *state.Parameter, registry *xreflect.Types) {
+	if schema := item.Schema; schema != nil {
+		if schema.Name != "" {
+			if rType, _ := registry.Lookup(schema.Name, xreflect.WithPackage(schema.Package)); rType != nil && rType.Name() != "" {
+				schema.SetType(rType)
+				prefix := ""
+				if rType.Kind() == reflect.Struct {
+					prefix = "*"
+				}
+				schema.DataType = prefix + rType.Name()
+			}
+		}
+	}
 }
 
 func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type, res *view.Resourcelet) {

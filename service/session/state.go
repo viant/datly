@@ -283,14 +283,18 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	if options == nil {
 		options = &s.Options
 	}
+	parameterType := parameter.Schema.Type()
 	if value == nil {
-		parameterType := parameter.Schema.Type()
 		switch parameterType.Kind() {
 		case reflect.Ptr, reflect.Slice:
 			return reflect.New(parameterType).Elem().Interface(), nil
 		}
 	}
 	valueType := reflect.TypeOf(value)
+	if parameterType == valueType || parameterType.Kind() == valueType.Kind() {
+		return value, nil
+	}
+
 	if valueType == nil {
 		fmt.Printf("value type was nil %s\n", parameter.Name)
 	}
@@ -318,6 +322,7 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 				valueType = reflect.TypeOf(value)
 			case 1:
 				value = slice.ValuePointerAt(ptr, 0)
+				fmt.Printf("%T %v\n", value, value)
 				valueType = reflect.TypeOf(value)
 			default:
 				return nil, fmt.Errorf("parameter %v return more than one value, len: %v rows ", parameter.Name, sliceLen)
