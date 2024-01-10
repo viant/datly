@@ -109,8 +109,7 @@ func (c *Component) updatedViewSchemaWithNamedType(ctx context.Context, resource
 		oType := types.EnsureStruct(outputSchema.Type())
 		if viewField, ok := oType.FieldByName(param.Name); ok {
 			if !c.View.Schema.IsNamed() {
-				c.View.Schema.SetType(viewField.Type)
-				c.View.Init(ctx, resource, view.WithReinitialize())
+				c.View.SetNamedType(viewField.Type)
 			}
 		}
 	}

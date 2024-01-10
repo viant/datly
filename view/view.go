@@ -130,6 +130,16 @@ func Context(ctx context.Context) *View {
 	return value.(*View)
 }
 
+func (v *View) SetNamedType(aType reflect.Type) {
+	v.Schema.SetType(aType)
+	holderType := types.EnsureStruct(aType)
+	for _, rel := range v.With {
+		if holderViewType, ok := holderType.FieldByName(rel.Holder); ok {
+			rel.Of.View.SetNamedType(holderViewType.Type)
+		}
+	}
+}
+
 func (v *View) Context(ctx context.Context) context.Context {
 	return context.WithValue(ctx, ContextKey, v)
 }
