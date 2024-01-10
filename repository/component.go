@@ -85,7 +85,7 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 		return err
 	}
 
-	c.updatedViewSchemaWithNamedType()
+	c.updatedViewSchemaWithNamedType(ctx, resource)
 
 	if err := c.normalizePaths(); err != nil {
 		return err
@@ -103,13 +103,14 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	return nil
 }
 
-func (c *Component) updatedViewSchemaWithNamedType() {
+func (c *Component) updatedViewSchemaWithNamedType(ctx context.Context, resource *view.Resource) {
 	outputSchema := c.Contract.Output.Type.Schema
 	if param := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); param != nil && outputSchema.IsNamed() {
 		oType := types.EnsureStruct(outputSchema.Type())
 		if viewField, ok := oType.FieldByName(param.Name); ok {
 			if !c.View.Schema.IsNamed() {
 				c.View.Schema.SetType(viewField.Type)
+				c.View.Init(ctx, resource, view.WithReinitialize())
 			}
 		}
 	}
