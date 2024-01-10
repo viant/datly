@@ -477,10 +477,14 @@ func (s *Session) setValue(parameter *state.Parameter, value interface{}) {
 
 func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (interface{}, error) {
 	var err error
+	parameterType := parameter.OutputType()
 	switch actual := value.(type) {
 	case string:
 		if textValue, ok := value.(string); ok {
-			value, _, err = converter.Convert(textValue, parameter.Schema.Type(), false, parameter.DateFormat)
+			if parameterType.Kind() == reflect.String {
+				return textValue, nil
+			}
+			value, _, err = converter.Convert(textValue, parameterType, false, parameter.DateFormat)
 		}
 	case []string:
 		if rType := parameter.OutputType(); rType.Kind() == reflect.Slice || rType.Kind() == reflect.Array {

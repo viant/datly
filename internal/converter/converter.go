@@ -162,6 +162,17 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 			}
 			return asTime, false, nil
 		}
+	case reflect.Ptr:
+		if toType == xreflect.TimePtrType {
+			if format == "" {
+				format = time.RFC3339
+			}
+			asTime, err := ftime.Parse(format, raw)
+			if err != nil {
+				return nil, false, err
+			}
+			return &asTime, false, nil
+		}
 	}
 
 	var wasPtr bool
