@@ -73,13 +73,13 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 		if ctx, err = s.EnsureReaderInput(ctx, aComponent, aSession); err != nil {
 			return nil, err
 		}
-		if err = aSession.Populate(ctx); err != nil {
+		if err != nil {
 			return s.HandleError(ctx, aSession, aComponent, err)
 		}
 		ret, err := s.runQuery(ctx, aComponent, aSession)
 		return s.finalize(ctx, ret, err)
 	case service.TypeExecutor:
-		if ctx, err = s.EnsureInput(ctx, aComponent, aSession, true); err != nil {
+		if ctx, err = s.EnsureInput(ctx, aComponent, aSession, false); err != nil {
 			return nil, err
 		}
 		ret, err := s.execute(ctx, aComponent, aSession)
@@ -122,10 +122,10 @@ func (s *Service) EnsureReaderInput(ctx context.Context, aComponent *repository.
 	if job := s.Job(ctx); job != nil { //
 		return ctx, nil
 	}
-	return s.EnsureInput(ctx, aComponent, aSession, false)
+	return s.EnsureInput(ctx, aComponent, aSession, true)
 }
 
-func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Component, aSession *session.Session, indirect bool) (context.Context, error) {
+func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Component, aSession *session.Session, populateView bool) (context.Context, error) {
 	if inputType := aComponent.Input.Type; inputType.Type() != nil {
 		var inputState *structology.State
 		input := ctx.Value(xhandler.InputKey)
@@ -137,6 +137,11 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 		locatorOptions := aComponent.LocatorOptions(nil, nil)
 		options := aSession.ViewOptions(aComponent.View, session.WithLocatorOptions(locatorOptions...))
 		options = options.Indirect(true)
+		if populateView {
+			if err := aSession.Populate(ctx); err != nil {
+				return ctx, err
+			}
+		}
 		err := aSession.SetState(ctx, inputType.Parameters, inputState, options)
 		if err != nil {
 			return nil, err
