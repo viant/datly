@@ -477,7 +477,8 @@ func (s *Session) setValue(parameter *state.Parameter, value interface{}) {
 
 func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (interface{}, error) {
 	var err error
-	parameterType := parameter.OutputType()
+	//we not use parameter.OutputType(), since codec conversion takes place later
+	parameterType := parameter.Schema.Type()
 	switch actual := value.(type) {
 	case string:
 		if textValue, ok := value.(string); ok {
