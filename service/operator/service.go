@@ -11,15 +11,17 @@ import (
 	rasync "github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/service"
-	"github.com/viant/datly/service/operator/exec"
+	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/codec"
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/async"
+	"github.com/viant/xdatly/handler/exec"
 	"reflect"
 )
 
@@ -99,6 +101,7 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (int
 }
 
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
+	ctx = codec.NewCriteriaBuilder(ctx, reader.New())
 	ctx = context.WithValue(ctx, view.ContextKey, aComponent.View)
 	ctx = aSession.Context(ctx, false)
 	var info *exec.Context

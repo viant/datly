@@ -3,8 +3,8 @@ package locator
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/service/operator/exec"
 	"github.com/viant/datly/view/state/kind"
+	"github.com/viant/xdatly/handler/exec"
 )
 
 type Context struct {

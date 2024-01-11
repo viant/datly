@@ -2,7 +2,7 @@ package session
 
 import (
 	"context"
-	reader2 "github.com/viant/datly/service/reader"
+	reader "github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
 )
 
@@ -10,6 +10,6 @@ func (s *Session) ReadInto(ctx context.Context, dest interface{}, aView *view.Vi
 	if err := s.SetViewState(ctx, aView); err != nil {
 		return err
 	}
-	aReader := reader2.New()
-	return aReader.ReadInto(ctx, dest, aView, reader2.WithResourceState(s.state))
+	aReader := reader.New()
+	return aReader.ReadInto(ctx, dest, aView, reader.WithResourceState(s.state))
 }

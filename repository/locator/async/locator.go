@@ -3,11 +3,11 @@ package async
 import (
 	"context"
 	"github.com/viant/datly/repository/locator/async/keys"
-	"github.com/viant/datly/service/operator/exec"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler/async"
+	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
 	"strings"
 	"time"

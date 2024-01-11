@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
@@ -17,7 +16,6 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/response"
-	"github.com/viant/xreflect"
 	"reflect"
 	"sync"
 	"time"
@@ -345,13 +343,10 @@ func (s *Service) buildParametrizedSQL(aView *view.View, selector *view.Statelet
 	return parametrizedSQL, columnInMatcher, cacheErr
 }
 
-func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}, typeRegistry *xreflect.Types, baseView *view.View) (*codec.Criteria, error) {
-	aSchema := state.NewSchema(reflect.TypeOf(input))
-	if typeRegistry == nil {
-		typeRegistry = extension.Config.Types
-	}
-	resource := view.NewResources(&view.Resource{}, baseView)
-	resource.SetTypes(typeRegistry)
+func (s *Service) BuildCriteria(ctx context.Context, value interface{}, options *codec.CriteriaBuilderOptions) (*codec.Criteria, error) {
+	baseView := view.Context(ctx)
+	aSchema := state.NewSchema(reflect.TypeOf(value))
+	resource := baseView.Resource()
 	aType, err := state.NewType(state.WithSchema(aSchema), state.WithResource(resource))
 	if err != nil {
 		return nil, err
@@ -359,15 +354,15 @@ func (s *Service) BuildPredicates(ctx context.Context, expression string, input 
 	if err := aType.Init(state.WithResource(resource)); err != nil {
 		return nil, err
 	}
-	aView, err := view.New("autogen", "", view.WithTemplate(view.NewTemplate(expression, view.WithTemplateSchema(aSchema), view.WithTemplateParameters(aType.Parameters...))))
+	aView, err := view.New("autogen", "", view.WithTemplate(view.NewTemplate(options.Expression, view.WithTemplateSchema(aSchema), view.WithTemplateParameters(aType.Parameters...))))
 	if err != nil {
 		return nil, err
 	}
-	err = aView.Template.Init(ctx, resource.Resource, aView)
+	err = aView.Template.Init(ctx, baseView.GetResource(), aView)
 	if err != nil {
 		return nil, err
 	}
-	stateType := structology.NewStateType(reflect.TypeOf(input))
+	stateType := structology.NewStateType(reflect.TypeOf(value))
 	statelet := &view.Statelet{Template: stateType.NewState()}
 	parametrizedSQL, err := s.sqlBuilder.Build(aView, statelet, nil, nil, &Exclude{
 		Pagination: false, ColumnsIn: false,

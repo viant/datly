@@ -165,7 +165,6 @@ func (s *Session) ViewOptions(aView *view.View, opts ...Option) *Options {
 	viewOptions.kindLocator = s.kindLocator.With(s.viewLookupOptions(aView, parameters, viewOptions)...)
 	viewOptions.AddCodec(codec.WithSelector(codec.Selector(selectors)))
 	viewOptions.AddCodec(codec.WithColumnsSource(aView.IndexedColumns()))
-
 	getter := &valueGetter{Parameters: parameters, Session: s, Options: viewOptions}
 
 	//TODO replace  with locator.ParameterLookup  option
