@@ -38,6 +38,7 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 			switch strings.ToLower(funcName) {
 			case "tag":
 				columnConfig := dest.columnConfig(column.Name)
+				column.Tag = strings.Trim(strings.TrimSpace(column.Tag), "'")
 				columnConfig.Tag = &column.Tag
 				return true, nil
 			case "cast":
