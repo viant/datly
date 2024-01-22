@@ -142,7 +142,7 @@ func (a *Accessor) adjustAndSet(ptr unsafe.Pointer, value interface{}, format st
 		case string:
 			atoi, err := strconv.Atoi(actual)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to conver: %v, %v", a.xFields[0].Name, err)
 			}
 			xField.SetInt(ptr, atoi)
 			return atoi, nil

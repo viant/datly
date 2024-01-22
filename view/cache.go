@@ -265,7 +265,7 @@ func (c *Cache) split(location string) (host string, port int, namespace string,
 
 	port, err = strconv.Atoi(segments[1])
 	if err != nil {
-		return "", 0, "", err
+		return "", 0, "", fmt.Errorf("invalid cache: %w", err)
 	}
 
 	return segments[0], port, namespace, nil

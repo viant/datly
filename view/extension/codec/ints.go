@@ -25,7 +25,9 @@ func (i *AsInts) Value(ctx context.Context, raw interface{}, options ...codec.Op
 	if !ok {
 		return nil, UnexpectedValueType(aString, raw)
 	}
-
+	if aString == "" {
+		return []int{}, nil
+	}
 	split := strings.Split(aString, ",")
 	result := make([]int, len(split))
 
@@ -33,7 +35,7 @@ func (i *AsInts) Value(ctx context.Context, raw interface{}, options ...codec.Op
 	for index, segment := range split {
 		result[index], err = strconv.Atoi(segment)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid ints: %s, %w", raw, err)
 		}
 	}
 
