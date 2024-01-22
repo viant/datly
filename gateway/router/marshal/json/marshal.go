@@ -49,7 +49,6 @@ func (j *Marshaller) Marshal(value interface{}, options ...interface{}) ([]byte,
 	}
 
 	pointer := AsPtr(value, rType)
-
 	if err = marshaller.MarshallObject(pointer, session); err != nil {
 		return nil, err
 	}

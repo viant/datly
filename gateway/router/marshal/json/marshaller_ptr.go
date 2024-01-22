@@ -33,8 +33,11 @@ func newPtrMarshaller(rType reflect.Type, config *config.IOConfig, path string, 
 }
 
 func (i *ptrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
+	if ptr == nil || (*unsafe.Pointer)(ptr) == nil || *(*unsafe.Pointer)(ptr) == nil {
+		sb.Write(nullBytes)
+		return nil
+	}
 	ptr = xunsafe.DerefPointer(ptr)
-
 	if ptr == nil {
 		sb.Write(nullBytes)
 		return nil

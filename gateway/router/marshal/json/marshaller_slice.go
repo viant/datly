@@ -65,7 +65,10 @@ func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession
 		sb.Write(result)
 		return nil
 	}
-
+	if ptr == nil {
+		sb.Write(nullBytes)
+		return nil
+	}
 	sliceHeader := (*reflect.SliceHeader)(ptr)
 	if s != nil && sliceHeader.Data == 0 {
 		sb.WriteString("[]")

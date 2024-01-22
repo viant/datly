@@ -7,6 +7,7 @@ import (
 	"github.com/viant/tagly/format"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"strconv"
 	"unsafe"
 )
 
@@ -41,10 +42,15 @@ func newMapMarshaller(rType reflect.Type, config *config.IOConfig, path string, 
 	if rType == mapStringIfaceType {
 		result.discoveredMarshaller = result.mapStringIfaceMarshaller()
 	} else {
-		keyMarshaller, err := cache.loadMarshaller(rType.Key(), config, path, outputPath, tag)
+		keyType := rType.Key()
+		if keyType.Kind() != reflect.String {
+			keyType = reflect.TypeOf("")
+		}
+		keyMarshaller, err := cache.loadMarshaller(keyType, config, path, outputPath, tag)
 		if err != nil {
 			return nil, err
 		}
+
 		result.keyMarshaller = keyMarshaller
 	}
 
@@ -160,6 +166,17 @@ func (m *mapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) 
 
 		aKey := iterator.Key()
 		keyIface := aKey.Interface()
+		switch actual := keyIface.(type) {
+		case int:
+			keyIface = strconv.Itoa(actual)
+		case uint64:
+			keyIface = strconv.Itoa(int(actual))
+		case int64:
+			keyIface = strconv.Itoa(int(actual))
+		case string:
+		default:
+			keyIface = fmt.Sprintf("%v", actual)
+		}
 		if err := m.keyMarshaller.MarshallObject(AsPtr(keyIface, m.keyType), sb); err != nil {
 			return err
 		}

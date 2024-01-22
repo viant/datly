@@ -152,8 +152,14 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 			sb.WriteString(null)
 			continue
 		}
+		fieldValue := stringifier.xField.Pointer(objPtr)
+		if fieldValue == nil {
+			sb.WriteString(null)
+			continue
+		}
+
 		prevLen = sb.Len()
-		if err := stringifier.marshaller.MarshallObject(stringifier.xField.Pointer(objPtr), sb); err != nil {
+		if err := stringifier.marshaller.MarshallObject(fieldValue, sb); err != nil {
 			return err
 		}
 	}
@@ -371,8 +377,11 @@ func isZeroValue(ptr unsafe.Pointer, stringifier *marshallerWithField, value int
 	case reflect.Ptr:
 		return (*unsafe.Pointer)(valuePtr) == nil || *(*unsafe.Pointer)(valuePtr) == nil
 	case reflect.Slice:
+		if valuePtr == nil {
+			return true
+		}
 		s := (*reflect.SliceHeader)(valuePtr)
-		return s != nil && s.Len == 0
+		return s == nil || s.Len == 0
 	case reflect.Map:
 		return reflect.ValueOf(value).Len() == 0
 	}
