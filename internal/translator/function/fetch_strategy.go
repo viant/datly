@@ -20,7 +20,7 @@ func (c *matchStrategy) Apply(args []string, column *sqlparser.Column, resource 
 }
 
 func (c *matchStrategy) Name() string {
-	return "match_strategy"
+	return "matchstrategy"
 }
 
 func (c *matchStrategy) Arguments() []*Argument {
