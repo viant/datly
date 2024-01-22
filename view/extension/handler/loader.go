@@ -3,6 +3,7 @@ package handler
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,7 +11,9 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/xdatly/handler"
 	"github.com/viant/xunsafe"
+	"io"
 	"reflect"
+	"strings"
 )
 
 const (
@@ -48,9 +51,27 @@ func (l *LoadData) Exec(ctx context.Context, session handler.Session) (interface
 	default:
 		return nil, fmt.Errorf("invalid Loader URL: expected %T, but had %T", URL, URLValue)
 	}
+
+	if ok, _ := l.fs.Exists(ctx, URL); !ok {
+		if ok, _ := l.fs.Exists(ctx, URL+".gz"); ok {
+			URL += ".gz"
+		}
+	}
+
+	isCompressed := strings.HasSuffix(URL, ".gz")
 	data, err := l.fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load URL: %w", err)
+	}
+	if isCompressed {
+		reader, err := gzip.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decompress URL: %w", err)
+		}
+		defer reader.Close()
+		if data, err = io.ReadAll(reader); err != nil {
+			return nil, fmt.Errorf("failed to decompress URL: %w", err)
+		}
 	}
 	itemType := l.Options.OutputType.Elem()
 	xSlice := xunsafe.NewSlice(l.Options.OutputType)
