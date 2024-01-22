@@ -356,11 +356,16 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 			if aView := aTag.View; aView != nil {
 				setter.SetStringIfEmpty(&viewName, aView.Name)
 				table = aView.Table
+				if aView.Match != "" {
+					vOptions = append(vOptions, view.WithMatchStrategy(aView.Match))
+				}
 			}
+
 			if aTag.SQL.SQL != "" {
 				anInputType := c.Contract.Input.Type
 				vOptions = append(vOptions, view.WithSQL(string(aTag.SQL.SQL), anInputType.Parameters...))
 			}
+
 		}
 		vOptions = append(vOptions, view.WithFS(c.embedFs))
 		aView := view.NewView(viewName, table, vOptions...)

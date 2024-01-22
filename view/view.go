@@ -1531,3 +1531,11 @@ func NewExecView(name, table string, template string, parameters []*state.Parame
 		WithTemplate(NewTemplate(template, templateParameters...)))
 	return NewView(name, table, opts...)
 }
+
+// WithMatchStrategy creates an Option to set MatchStrategy
+func WithMatchStrategy(match string) Option {
+	return func(v *View) error {
+		v.MatchStrategy = MatchStrategy(match)
+		return nil
+	}
+}

@@ -20,6 +20,7 @@ type (
 		Table      string
 		Parameters []string //parameter references
 		Connector  string
+		Match      string
 	}
 )
 
@@ -28,6 +29,8 @@ func (t *Tag) updateView(key string, value string) error {
 	switch strings.ToLower(key) {
 	case "name":
 		tag.Name = strings.TrimSpace(value)
+	case "match":
+		tag.Match = strings.TrimSpace(value)
 	case "table":
 		tag.Table = strings.TrimSpace(value)
 	case "connector":
@@ -59,6 +62,7 @@ func (v *View) Tag() *tags.Tag {
 	builder.WriteString(v.Name)
 	appendNonEmpty(builder, "table", v.Table)
 	appendNonEmpty(builder, "connector", v.Connector)
+	appendNonEmpty(builder, "match", v.Match)
 	if len(v.Parameters) > 0 {
 		appendNonEmpty(builder, "parameters", "{"+strings.Join(v.Parameters, ",")+"}")
 	}

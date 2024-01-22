@@ -213,7 +213,13 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 				aTag.View = &tags.View{Connector: connector.Ref}
 			}
 		}
+		if rel.Of.MatchStrategy != "" {
+			if aTag.View == nil {
+				aTag.View = &tags.View{}
+			}
+			aTag.View.Match = string(rel.Of.MatchStrategy)
 
+		}
 		fieldTag := aTag.UpdateTag(``)
 
 		holders[rel.Holder] = true
