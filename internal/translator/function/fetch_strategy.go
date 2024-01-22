@@ -5,13 +5,13 @@ import (
 	"github.com/viant/sqlparser"
 )
 
-type fetch struct{}
+type matchStrategy struct{}
 
-func (c *fetch) Description() string {
-	return "set view.Schema.fetch fetch, default is Many"
+func (c *matchStrategy) Description() string {
+	return "set view.Schema.matchStrategy matchStrategy, default is Many"
 }
 
-func (c *fetch) Apply(args []string, column *sqlparser.Column, resource *view.Resource, aView *view.View) error {
+func (c *matchStrategy) Apply(args []string, column *sqlparser.Column, resource *view.Resource, aView *view.View) error {
 	if _, err := convertArguments(c, args); err != nil {
 		return err
 	}
@@ -19,11 +19,11 @@ func (c *fetch) Apply(args []string, column *sqlparser.Column, resource *view.Re
 	return nil
 }
 
-func (c *fetch) Name() string {
-	return "fetch_strategy"
+func (c *matchStrategy) Name() string {
+	return "match_strategy"
 }
 
-func (c *fetch) Arguments() []*Argument {
+func (c *matchStrategy) Arguments() []*Argument {
 	return []*Argument{
 		{
 			Name:        "strategy",

@@ -7,5 +7,5 @@ func init() {
 	_registry.Register(&orderBy{})
 	_registry.Register(&cardinality{})
 	_registry.Register(&allownulls{})
-	_registry.Register(&fetch{})
+	_registry.Register(&matchStrategy{})
 }
