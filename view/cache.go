@@ -388,7 +388,7 @@ func (c *Cache) getParamValues(ctx context.Context, paramValue *ParamValue) ([]i
 		marshal := fmt.Sprintf("%v", value)
 		converted, _, err := converter.Convert(marshal, paramValue._param.Schema.Type(), false, paramValue._param.DateFormat)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to convert %v, %w", paramValue.Name, err)
 		}
 		result[i] = converted
 	}

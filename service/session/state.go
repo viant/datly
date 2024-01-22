@@ -485,6 +485,9 @@ func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (in
 				return textValue, nil
 			}
 			value, _, err = converter.Convert(textValue, parameterType, false, parameter.DateFormat)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert parameter: %v, %w", parameter.Name, err)
+			}
 		}
 	case []string:
 		if rType := parameter.OutputType(); rType.Kind() == reflect.Slice || rType.Kind() == reflect.Array {
