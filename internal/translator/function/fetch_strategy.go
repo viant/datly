@@ -20,7 +20,7 @@ func (c *fetch) Apply(args []string, column *sqlparser.Column, resource *view.Re
 }
 
 func (c *fetch) Name() string {
-	return "fetch"
+	return "fetch_strategy"
 }
 
 func (c *fetch) Arguments() []*Argument {
