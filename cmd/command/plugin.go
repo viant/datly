@@ -81,14 +81,14 @@ func (s *Service) loadPlugin(ctx context.Context, opts *options.Options) (plugin
 		repo.Init(ctx, "")
 		aRule = &options.Rule{ModuleLocation: url.Join(repo.ProjectURL, "pkg"), Project: repo.ProjectURL}
 	}
-	moduleLocation := aRule.ModFileLocation(ctx)
-	goMod := path.Join(moduleLocation, "go.mod")
+	goModPath := aRule.ModFileLocation(ctx)
+	goMod := path.Join(goModPath, "go.mod")
 	if ok, _ := s.fs.Exists(ctx, goMod); !ok {
 
 		return "", nil
 	}
 
-	moduleLocation = aRule.ModuleLocation
+	moduleLocation := aRule.ModuleLocation
 	flags := getGcFlags()
 
 	setter.SetStringIfEmpty(&repo.ProjectURL, aRule.Project)
@@ -100,6 +100,11 @@ func (s *Service) loadPlugin(ctx context.Context, opts *options.Options) (plugin
 		if _, _, err = pManager.OpenWithInfoURL(ctx, pluginInfo); err == nil {
 			return pluginInfo, nil
 		}
+	}
+
+	info, err := plugin.NewInfo(ctx, moduleLocation)
+	if err = s.EnsurePluginArtifacts(ctx, info); err != nil {
+		return "", err
 	}
 
 	_ = s.fs.Delete(ctx, destURL)

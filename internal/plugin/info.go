@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/xreflect"
@@ -38,11 +39,13 @@ type (
 
 		URL                 string
 		Mod                 *modfile.File
+		ModLocation         string
 		NonStandardPackages Packages
 		CustomTypesPackages Packages
 		CustomCodecPackages Packages
 		IntegrationMode     Mode
 		HasMethod           bool
+		UsePkg              bool
 	}
 )
 
@@ -64,7 +67,7 @@ func (i *Info) IsStandalone() bool {
 }
 
 func (i *Info) init(ctx context.Context) error {
-	if err := i.tryLoadModFile(); err != nil {
+	if err := i.tryLoadModFile(ctx); err != nil {
 		return err
 	}
 
@@ -86,11 +89,17 @@ func (i *Info) DependencyPkg() string {
 	if i.Mod == nil || i.Mod.Module == nil {
 		return ""
 	}
+	if i.UsePkg {
+		return path.Join(i.Mod.Module.Mod.Path, "pkg", dependencyDirectory)
+	}
 	return path.Join(i.Mod.Module.Mod.Path, dependencyDirectory)
 }
 func (i *Info) ChecksumPkg() string {
 	if i.Mod == nil || i.Mod.Module == nil {
 		return ""
+	}
+	if i.UsePkg {
+		return path.Join(i.Mod.Module.Mod.Path, "pkg", checksumDirectory)
 	}
 	return path.Join(i.Mod.Module.Mod.Path, checksumDirectory)
 }
@@ -107,18 +116,26 @@ func (i *Info) PluginURL() string {
 	return url.Join(i.URL, pluginDirectory, "main.go")
 }
 
-func (i *Info) tryLoadModFile() error {
-	goModFile := url.Join(i.URL, "go.mod")
-	fileContent, err := i.fs.DownloadWithURL(context.Background(), goModFile)
+func (i *Info) tryLoadModFile(ctx context.Context) error {
+	goModLocation := url.Join(i.URL, "go.mod")
+	if ok, _ := i.fs.Exists(ctx, goModLocation); !ok {
+		parent, _ := url.Split(i.URL, file.Scheme)
+		if ok, _ = i.fs.Exists(ctx, url.Join(parent, "go.mod")); ok {
+			i.UsePkg = true
+			goModLocation = url.Join(parent, "go.mod")
+		}
+	}
+	fileContent, err := i.fs.DownloadWithURL(ctx, goModLocation)
 	if err != nil {
 		return nil
 	}
 	i.Mod, err = modfile.Parse("go.mod", fileContent, nil)
+	i.ModLocation = goModLocation
 	return err
 }
 
 func (i *Info) detectDependencies(ctx context.Context) error {
-	if pkgs, _ := getPackage().NonStandard(ctx, i.URL); len(pkgs) > 0 {
+	if pkgs, _ := getPackage(i.ModLocation, i.Mod).NonStandard(ctx, i.URL); len(pkgs) > 0 {
 		i.NonStandardPackages = pkgs
 	}
 	if i.Mod != nil {
@@ -146,7 +163,7 @@ func (i *Info) detectGoModDependencies() {
 
 func (i *Info) detectCustomTypes(ctx context.Context, URL string) error {
 	location := url.Path(URL)
-	return getPackage().scanPackage(ctx, location, func(ctx context.Context, pkg *packages.Package) (bool, error) {
+	return getPackage(i.ModLocation, i.Mod).scanPackage(ctx, location, func(ctx context.Context, pkg *packages.Package) (bool, error) {
 		if pkg == nil || pkg.ID == "" {
 			return true, nil
 		}

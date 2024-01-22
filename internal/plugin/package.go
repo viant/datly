@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"go/ast"
@@ -12,22 +13,16 @@ import (
 	"path"
 	"runtime"
 	"strings"
-	"sync"
 )
 
-var pkg *Package
-var oncePkg sync.Once
-
-func getPackage() *Package {
-	oncePkg.Do(func() {
-		pkg = NewPackage()
-	})
-	return pkg
+func getPackage(modLocation string, modFile *modfile.File) *Package {
+	return NewPackage(modLocation, modFile)
 }
 
 type Package struct {
 	fs          afs.Service
 	standardPkg map[string]*packages.Package
+	modRoot     string
 	modFile     *modfile.File
 }
 
@@ -99,6 +94,16 @@ func (p *Package) LoadImports(ctx context.Context, location string) (*packages.P
 		return ret, nil
 	}
 
+	relative := ""
+	if p.modRoot != "" {
+		locationPath := url.Path(location)
+		index := strings.Index(locationPath, p.modRoot)
+		if index != -1 {
+			relative = locationPath[index+len(p.modRoot):]
+		}
+		ret.ID = path.Join(p.modFile.Module.Mod.Path, relative)
+	}
+
 	for _, candidate := range objects {
 		if candidate.IsDir() {
 			continue
@@ -113,13 +118,18 @@ func (p *Package) LoadImports(ctx context.Context, location string) (*packages.P
 		fset := token.NewFileSet() // positions are relative to fset
 		f, err := parser.ParseFile(fset, "src.go", data, 0)
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("failed to parse: %v, %v", candidate.URL(), err)
 		}
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch actual := n.(type) {
 			case *ast.File:
 				if p.modFile != nil && p.modFile.Module != nil {
-					ret.ID = p.modFile.Module.Mod.Path + "/" + actual.Name.Name
+					parent, _ := path.Split(relative)
+					if parent != "" {
+						ret.ID = path.Join(p.modFile.Module.Mod.Path, parent, actual.Name.Name)
+					} else {
+						ret.ID = path.Join(p.modFile.Module.Mod.Path, actual.Name.Name)
+					}
 				} else {
 					ret.ID = actual.Name.Name
 				}
@@ -144,8 +154,6 @@ func (p *Package) nonStandardPackages(src *packages.Package, result *Packages) {
 		if p.modFile != nil && p.modFile.Module != nil && strings.HasPrefix(k, p.modFile.Module.Mod.Path) {
 			continue
 		}
-		//github.vianttech.com/adelphic/datly-forecasting/dependency
-		//github.vianttech.com/adelphic/datly-forecasting/forecasting
 		if _, ok := p.standardPkg[k]; !ok {
 			result.Append(pkgImps)
 		}
@@ -160,13 +168,19 @@ func (p *Package) nonStandardPackages(src *packages.Package, result *Packages) {
 	}
 }
 
+var standardPackages Packages
+
 func getStandardPackages() Packages {
+	if len(standardPackages) > 0 {
+		return standardPackages
+	}
 	fs := afs.New()
 	var result Packages
 	parentURL := path.Join(runtime.GOROOT(), "src")
 	discoverPackage(fs, parentURL, "", func(URL string, id string) {
 		result = append(result, &packages.Package{ID: id, Name: id})
 	})
+	standardPackages = result
 	return result
 }
 
@@ -188,6 +202,9 @@ func discoverPackage(fs afs.Service, parentURL, prefix string, fn func(URL strin
 }
 
 // NewPackage returns package informer
-func NewPackage() *Package {
-	return &Package{standardPkg: getStandardPackages().Index(), fs: afs.New()}
+func NewPackage(modFileLocation string, modFile *modfile.File) *Package {
+	if strings.HasSuffix(modFileLocation, "go.mod") {
+		modFileLocation = modFileLocation[:len(modFileLocation)-len("go.mod")]
+	}
+	return &Package{modFile: modFile, standardPkg: getStandardPackages().Index(), fs: afs.New(), modRoot: url.Path(modFileLocation)}
 }
