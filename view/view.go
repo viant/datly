@@ -1087,8 +1087,8 @@ func (v *View) ensureCaseFormat() error {
 }
 
 func (v *View) ensureCollector() {
-	v._newCollector = func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector {
-		return NewCollector(v.Schema.Slice(), v, dest, viewMetaHandler, supportParallel)
+	v._newCollector = func(dest interface{}, viewMetaHandler viewMetaHandlerFn, readAll bool) *Collector {
+		return NewCollector(v.Schema.Slice(), v, dest, viewMetaHandler, readAll)
 	}
 }
 

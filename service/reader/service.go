@@ -114,7 +114,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 	wg.Add(len(collectorChildren))
 	relationGroup := sync.WaitGroup{}
-	if !collector.SupportsParallel() {
+	if !collector.ReadAll() {
 		relationGroup.Add(len(collectorChildren))
 	}
 
@@ -143,7 +143,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 		errorCollector.Append(err)
 	}
 
-	if collector.SupportsParallel() {
+	if collector.ReadAll() {
 		return
 	}
 
@@ -164,7 +164,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 func (s *Service) afterRelationCompleted(wg *sync.WaitGroup, collector *view.Collector, relationGroup *sync.WaitGroup) {
 	wg.Done()
-	if collector.SupportsParallel() {
+	if collector.ReadAll() {
 		return
 	}
 	relationGroup.Done()

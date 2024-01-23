@@ -35,9 +35,9 @@ type Collector struct {
 	view      *View
 	relations []*Collector
 
-	wg              *sync.WaitGroup
-	supportParallel bool
-	wgDelta         int
+	wg      *sync.WaitGroup
+	readAll bool
+	wgDelta int
 
 	indexCounter    int
 	manyCounter     int
@@ -107,16 +107,10 @@ func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]i
 }
 
 // NewCollector creates a collector
-func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector {
+func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHandler viewMetaHandlerFn, readAll bool) *Collector {
 	ensuredDest := ensureDest(dest, view)
 	wg := sync.WaitGroup{}
-	wgDelta := 0
-	if !supportParallel {
-		wgDelta = 1
-	}
-
-	wg.Add(wgDelta)
-
+	wg.Add(1)
 	return &Collector{
 		dest:            ensuredDest,
 		valuePosition:   make(map[string]map[interface{}][]int),
@@ -125,9 +119,9 @@ func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHa
 		view:            view,
 		types:           make(map[string]*xunsafe.Type),
 		values:          make(map[string]*[]interface{}),
-		supportParallel: supportParallel,
+		readAll:         readAll,
 		wg:              &wg,
-		wgDelta:         wgDelta,
+		wgDelta:         1,
 		viewMetaHandler: viewMetaHandler,
 	}
 }
@@ -152,7 +146,7 @@ func (r *Collector) Visitor(ctx context.Context) VisitorFn {
 	visitors := make([]VisitorFn, 1)
 	visitors[0] = r.valueIndexer(ctx, visitorRelations)
 
-	if relation != nil && (r.parent == nil || !r.parent.SupportsParallel()) {
+	if relation != nil && (r.parent == nil || !r.parent.ReadAll()) {
 		switch relation.Cardinality {
 		case "One":
 			visitors = append(visitors, r.visitorOne(relation))
@@ -386,7 +380,7 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 		wg := sync.WaitGroup{}
 
 		delta := 0
-		if !r.SupportsParallel() {
+		if !r.ReadAll() {
 			delta = 1
 		}
 		wg.Add(delta)
@@ -407,7 +401,7 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 			slice:           slice,
 			view:            &r.view.With[i].Of.View,
 			relation:        r.view.With[i],
-			supportParallel: r.view.With[i].Of.MatchStrategy.SupportsParallel(),
+			readAll:         r.view.With[i].Of.MatchStrategy.SupportsParallel(),
 			wg:              &wg,
 			wgDelta:         delta,
 		}
@@ -478,10 +472,10 @@ func (r *Collector) Dest() interface{} {
 	return r.dest
 }
 
-// SupportsParallel if Collector supports parallelism, it means that his Relations can fetch View in the same time
+// ReadAll if Collector uses readAll flag, it means that his Relations can fetch all data View in the same time, (no matching parent data)
 // Later on it will be merged with the parent Collector
-func (r *Collector) SupportsParallel() bool {
-	return r.supportParallel
+func (r *Collector) ReadAll() bool {
+	return r.readAll
 }
 
 // MergeData merges View with Collectors produced via Relations
@@ -491,7 +485,7 @@ func (r *Collector) MergeData() {
 		r.relations[i].MergeData()
 	}
 
-	if r.parent == nil || !r.SupportsParallel() {
+	if r.parent == nil || !r.ReadAll() {
 		return
 	}
 
@@ -539,7 +533,7 @@ func (r *Collector) mergeToParent() {
 // i.e. if locators Collector collects Employee{AccountId: int}, Column.Name is account_id and Collector collects Account
 // it will extract and return all the AccountId that were accumulated and account_id
 func (r *Collector) ParentPlaceholders() ([]interface{}, []string) {
-	if r.parent == nil || r.SupportsParallel() {
+	if r.parent == nil || r.ReadAll() {
 		return []interface{}{}, nil
 	}
 	destPtr := xunsafe.AsPointer(r.parent.dest)
@@ -589,9 +583,9 @@ outer:
 }
 
 func (r *Collector) WaitIfNeeded() {
-	if r.supportParallel {
-		return
-	}
+	//if r.readAll {
+	//	return
+	//}
 	if r.parent != nil {
 		r.parent.wg.Wait()
 	}
