@@ -93,9 +93,14 @@ Datly has ability to implies parameter from DQL however it's recommended to prov
 
 Datly parameters define component contract, and data flow. They are converted into component input,output, async go structs.
 
+If contract destination is not explicitly defined, parameter defines component Input.
+
 ```
 #set( $_ = $PARAMETER_NAME<InputType[,OptionalOutputCodecType]>(KIND/LOCATION)[.Options]) //
 ```
+
+Input type: support golang syntax i.e #set( $_ = $AllocationByID<map[int]int>(transient/))
+
 
 
 ##### Parameters location **kind** indicates source of parameter, the following kinds are supported:
@@ -110,6 +115,7 @@ Datly parameters define component contract, and data flow. They are converted in
     - state:  to access field from defined state
     - object: to access composite struct type
     - repeated: to access composite slice type
+    - transient: to access transient data
     - output: to access view response,status, performance metrics,view summary
 
 
