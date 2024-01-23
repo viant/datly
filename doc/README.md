@@ -64,9 +64,9 @@ import(
 
 #set( $_ = ...) //Parameter declaration    
     
-SELECT mainViewAlias.*  [EXCEPT COLUMN][OutputConfig]
-[, secondViewAlias.*       [OutputConfig]  ]
-[, NviewAlias.*            [OutputConfig]  ]
+SELECT mainViewAlias.*  [EXCEPT COLUMN]
+[, secondViewAlias.*   ]
+[, NviewAlias.*         ]
 [, DQL configuration function ]
 FROM (
     SELECT
