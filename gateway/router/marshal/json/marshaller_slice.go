@@ -83,6 +83,10 @@ func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession
 		}
 
 		valuePtr := s.xslice.PointerAt(ptr, uintptr(i))
+		if valuePtr == nil {
+			sb.Write(nullBytes)
+			continue
+		}
 		if err := s.marshaller.MarshallObject(valuePtr, sb); err != nil {
 			return err
 		}
