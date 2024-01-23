@@ -101,7 +101,9 @@ func (p *Package) LoadImports(ctx context.Context, location string) (*packages.P
 		if index != -1 {
 			relative = locationPath[index+len(p.modRoot):]
 		}
-		ret.ID = path.Join(p.modFile.Module.Mod.Path, relative)
+		if p.modFile != nil {
+			ret.ID = path.Join(p.modFile.Module.Mod.Path, relative)
+		}
 	}
 
 	for _, candidate := range objects {

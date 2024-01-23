@@ -119,6 +119,10 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 		isNil := false
 		objPtr := ptr
 		if stringifier.indirectXField != nil {
+			isIgnore := stringifier.indirectXField.Tag.Get("json") == "-"
+			if isIgnore {
+				continue
+			}
 			objPtr = stringifier.indirectXField.ValuePointer(objPtr)
 			if !stringifier.omitEmpty && strings.Contains(stringifier.indirectXField.Tag.Get("json"), "omitempty") {
 				stringifier.omitEmpty = true
