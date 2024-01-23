@@ -74,6 +74,9 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 			template.BodyParameter = parameters[0]
 		}
 		template.OutputType, err = resource.OutputState.Parameters().ReflectType(resource.Rule.Package, registry.Lookup)
+		if err != nil {
+			return err
+		}
 		template.BuildLogic(spec, opts...)
 
 		if err := s.generateCode(ctx, options.Generate, template, info); err != nil {
@@ -140,7 +143,9 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 			return err
 		}
 
-		s.translator.Init(ctx)
+		if err = s.translator.Init(ctx); err != nil {
+			return err
+		}
 
 	}
 	return nil
