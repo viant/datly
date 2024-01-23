@@ -87,63 +87,68 @@ FROM (
 ]    
 ```
 
-#### Datly parameters
+#### Datly Parameters
+Datly can infer parameters from DQL, but explicit parameter declarations are recommended.
 
-Datly has ability to implies parameter from DQL however it's recommended to provided explicit parameters declarations.
+Datly parameters define the component contract and data flow. They are converted into input, output, and asynchronous Go structs.
 
-Datly parameters define component contract, and data flow. They are converted into component input,output, async go structs.
+If the destination of a contract is not explicitly defined, the parameter specifies the component input.
 
-If contract destination is not explicitly defined, parameter defines component Input.
-
-```
+Syntax Example:
+```text
 #set( $_ = $PARAMETER_NAME<InputType[,OptionalOutputCodecType]>(KIND/LOCATION)[.Options]) //
 ```
 
-Input type: support golang syntax i.e #set( $_ = $AllocationByID<map[int]int>(transient/))
+Input type supports Golang syntax, e.g.,
+```text
+#set( $_ = $AllocationByID<map[int]int>(transient/))
+```
+
+##### Parameter Location Kind
+
+This indicates the source of the parameter. The following kinds are supported:
+
+- query: Access HTTP request query string.
+- path: Access HTTP request matched URI parameters.
+- body: Access HTTP request body derived type.
+- const: Access defined constants.
+- env: Access defined environment variables.
+- param: Access other defined parameters.
+- component: Access other Datly components.
+- state: Access fields from defined state.
+- object: Access composite struct types.
+- repeated: Access composite slice types.
+- transient: Access transient data.
+- output: Access view response, status, performance metrics, view summary.
 
 
+##### Parameter Options
 
-##### Parameters location **kind** indicates source of parameter, the following kinds are supported:
-
-    - query: to access http request query string
-    - path: to access http request matched URI parameters
-    - body: to access http request body derived type
-    - const: to access defined constants
-    - env: to access defined env variables
-    - param: to access other defined parameter
-    - component: to access other datly component
-    - state:  to access field from defined state
-    - object: to access composite struct type
-    - repeated: to access composite slice type
-    - transient: to access transient data
-    - output: to access view response,status, performance metrics,view summary
-
-
-### Parameters support the following **Options**
-    * Output()  - to define output scope
-    * Async()   - to define async option
-    * WithTag('') - to define parameter tag
-    * WithCodec('name' [,args...]) - to define input transformer codec
-    * WithPredicate('name', group [,args...])
-    * WithHandler('name', [,args...])
-    * Value(value) - defines default value
-    * Required() - set required flag
-    * Optional() - set optional flag
-    * Of('parent') - defines composite parent holder/owner
-    * WithStatusCode(code) - defines error status code
+- Output(): Define output scope.
+- Async(): Define asynchronous operation.
+- WithTag('tag'): Define a parameter tag.
+- WithCodec('name' [,args...]): Define input transformer codec.
+- WithPredicate('name', group [,args...]).
+- WithHandler('name' [,args...]).
+- Value(value): Define a default value.
+- Required(): Set the required flag.
+- Optional(): Set the optional flag.
+- Of('parent'): Define composite parent holder/owner.
+- WithStatusCode(code): Define error status code.
 
 
 #### DQL configuration function
-    * tag - defines column derived struct field tag
-    * cast - type cast
-    * use_connector - sets connector ref
-    * use_cache - sets cache ref
-    * set_limit - sets default query limit
-    * order_by  - sets default order by clause 
-    * cardinality - sets view cardinality
-    * allow_nulls - allows nulls in output
-    * match_strategy - sets relation fetch match strategy (read_all, read_matched)
-    
+
+- tag: Defines column-derived go struct field tag.
+- cast: Type cast.
+- use_connector: Sets connector reference.
+- use_cache: Sets cache reference.
+- set_limit: Sets default query limit.
+- order_by: Sets default order by clause.
+- cardinality: Sets view cardinality.
+- allow_nulls: Allows nulls in output.
+- match_strategy: Sets relation fetch match strategy (options: read_all, read_matched).
+
 
 See function [registry](https://github.com/viant/datly/tree/master/internal/translator/function)
 
