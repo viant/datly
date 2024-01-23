@@ -491,7 +491,7 @@ func (r *Collector) MergeData() {
 		r.relations[i].MergeData()
 	}
 
-	if r.parent == nil || !r.parent.SupportsParallel() {
+	if r.parent == nil || !r.SupportsParallel() {
 		return
 	}
 
@@ -539,7 +539,7 @@ func (r *Collector) mergeToParent() {
 // i.e. if locators Collector collects Employee{AccountId: int}, Column.Name is account_id and Collector collects Account
 // it will extract and return all the AccountId that were accumulated and account_id
 func (r *Collector) ParentPlaceholders() ([]interface{}, []string) {
-	if r.parent == nil || r.parent.SupportsParallel() {
+	if r.parent == nil || r.SupportsParallel() {
 		return []interface{}{}, nil
 	}
 	destPtr := xunsafe.AsPointer(r.parent.dest)
@@ -589,6 +589,9 @@ outer:
 }
 
 func (r *Collector) WaitIfNeeded() {
+	if r.supportParallel {
+		return
+	}
 	if r.parent != nil {
 		r.parent.wg.Wait()
 	}

@@ -371,6 +371,9 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 		if err != nil {
 			return err
 		}
+		if viewTag.Match != "" {
+			refViewOptions = append(refViewOptions, WithMatchStrategy(viewTag.Match))
+		}
 		if isSlice(field.Type) {
 			viewOptions = append(viewOptions, WithOneToMany(field.Name, relLinks,
 				NewReferenceView(refLinks, NewView(viewTag.Name, viewTag.Table, refViewOptions...))))
