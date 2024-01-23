@@ -93,9 +93,13 @@ Datly has ability to implies parameter from DQL however it's recommended to prov
 
 Datly parameters define component contract, and data flow. They are converted into component input,output, async go structs.
 
+```
 #set( $_ = $PARAMETER_NAME<InputType[,OptionalOutputCodecType]>(KIND/LOCATION)[.Options]) //
+```
 
-Parameters location **kind** indicates source of parameter, the following kinds are supported:
+
+##### Parameters location **kind** indicates source of parameter, the following kinds are supported:
+
     - query: to access http request query string
     - path: to access http request matched URI parameters
     - body: to access http request body derived type
@@ -108,12 +112,14 @@ Parameters location **kind** indicates source of parameter, the following kinds 
     - repeated: to access composite slice type
     - output: to access view response,status, performance metrics,view summary
 
-Parameters support the following **Options**
+
+### Parameters support the following **Options**
     * Output()  - to define output scope
     * Async()   - to define async option
     * WithTag('') - to define parameter tag
-    * WithCodec('name' [,args...]) - to define input transofer codec
+    * WithCodec('name' [,args...]) - to define input transformer codec
     * WithPredicate('name', group [,args...])
+    * WithHandler('name', [,args...])
     * Value(value) - defines default value
     * Required() - set required flag
     * Optional() - set optional flag
@@ -130,7 +136,9 @@ Parameters support the following **Options**
     * order_by  - sets default order by clause 
     * cardinality - sets view cardinality
     * allow_nulls - allows nulls in output
+    * match_strategy - sets relation fetch match strategy (read_all, read_matched)
     
+
 See function [registry](https://github.com/viant/datly/tree/master/internal/translator/function)
 
 
