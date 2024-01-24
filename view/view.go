@@ -24,7 +24,6 @@ import (
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"net/http"
-	"os/exec"
 	"reflect"
 	"strings"
 	"time"
@@ -1091,9 +1090,7 @@ func (v *View) ensureCollector() {
 	v._newCollector = func(dest interface{}, viewMetaHandler viewMetaHandlerFn, readAll bool) *Collector {
 		return NewCollector(v.Schema.Slice(), v, dest, viewMetaHandler, readAll)
 	}
-	c := exec.Command("a")
-	c.StdinPipe()
-	c.StdoutPipe()
+
 }
 
 // Collector creates new Collector for View.DataType
