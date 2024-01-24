@@ -3,7 +3,8 @@
 
 
 SELECT vendor.*,
-       products.* EXCEPT VENDOR_ID
+       products.* EXCEPT VENDOR_ID,
+       match_strategy(products, 'read_all')
 FROM (SELECT * FROM VENDOR t ) vendor
     JOIN (SELECT * FROM PRODUCT t) products ON products.VENDOR_ID = vendor.ID
 

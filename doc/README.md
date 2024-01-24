@@ -70,11 +70,11 @@ SELECT mainViewAlias.*  [EXCEPT COLUMN]
 [, DQL configuration function ]
 FROM (
     SELECT
-    ID  [ColumnConfig],
+    ID,
     ...,
      other_column   
     FROM table1
-    ) mainViewAlias [ViewConfig],
+    ) mainViewAlias,
 
 [
  JOIN (
@@ -82,10 +82,11 @@ FROM (
         ...,
         other_column
     FROM table2
-    ) secondViewAlias  [ViewConfig] ON mainViewAlias.ID = secondViewAlias.OTHER_ID
+    ) secondViewAlias  ON mainViewAlias.ID = secondViewAlias.OTHER_ID [ AND 1=1]
     
 ]    
 ```
+
 
 #### Datly Parameters
 Datly can infer parameters from DQL, but explicit parameter declarations are recommended.
