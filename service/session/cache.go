@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/toolbox"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"sync"
@@ -39,7 +40,31 @@ func (s *Session) Unmarshal(parameters state.Parameters, data []byte) error {
 		parameterType := parameter.OutputType()
 		switch parameterType.Kind() {
 		case reflect.Slice:
+
 			switch parameterType.Elem().Kind() {
+			case reflect.String:
+				if aSlice, ok := value.([]interface{}); ok {
+					var values = make([]string, 0)
+					for _, item := range aSlice {
+						values = append(values, fmt.Sprintf("%v", item))
+					}
+					s.cache.values[parameter.Name] = values
+				}
+			case reflect.Int:
+				if aSlice, ok := value.([]interface{}); ok {
+					var values = make([]int, 0)
+					for _, item := range aSlice {
+						values = append(values, toolbox.AsInt(item))
+					}
+					s.cache.values[parameter.Name] = values
+				}
+			case reflect.Ptr:
+				if parameterType.Elem().Elem().Kind() == reflect.Struct {
+					if s.cache.values[parameter.Name], err = s.unmarshalSliceParameter(value, parameter, parameterType); err != nil {
+						return fmt.Errorf("failed to umarshal slice parameter: %s, %w", parameter.Name, err)
+					}
+				}
+
 			case reflect.Struct:
 				if s.cache.values[parameter.Name], err = s.unmarshalSliceParameter(value, parameter, parameterType); err != nil {
 					return fmt.Errorf("failed to umarshal slice parameter: %s, %w", parameter.Name, err)
@@ -73,7 +98,7 @@ func (s *Session) unmarshalSliceParameter(value interface{}, parameter *state.Pa
 	slicePtrValue := reflect.New(xSlice.Type)
 	slicePtr := xunsafe.ValuePointer(&slicePtrValue)
 	for i, item := range values {
-		if values[i], err = s.umarshalStructParameter(parameter.Name, parameterType, item); err != nil {
+		if values[i], err = s.umarshalStructParameter(parameter.Name, xSlice.Type.Elem(), item); err != nil {
 			return nil, err
 		}
 	}

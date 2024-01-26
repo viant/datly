@@ -69,6 +69,15 @@ func (p Parameters) External() Parameters {
 		switch parameter.In.Kind {
 		case KindHeader, KindQuery, KindRequestBody, KindCookie, KindRequest:
 			result = append(result, p[i])
+		case KindObject:
+		object:
+			for _, item := range parameter.Object {
+				switch item.In.Kind {
+				case KindHeader, KindQuery, KindRequestBody, KindCookie, KindRequest:
+					result = append(result, parameter)
+					break object
+				}
+			}
 		}
 	}
 	return result
