@@ -3,6 +3,7 @@ package locator
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/structology"
 	"net/http"
@@ -28,7 +29,9 @@ func (r *Body) Names() []string {
 func (r *Body) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	var err error
 	r.Once.Do(func() {
-		r.body, r.err = readRequestBody(r.request)
+		var request *http.Request
+		request, r.err = shared.CloneHTTPRequest(r.request)
+		r.body, r.err = readRequestBody(request)
 		if len(r.body) > 0 {
 			r.err = r.ensureRequest()
 		}
@@ -40,12 +43,7 @@ func (r *Body) Value(ctx context.Context, name string) (interface{}, bool, error
 		return nil, false, r.err
 	}
 	if r.bodyType.Kind() == reflect.Map {
-		aMapPtr := reflect.New(r.bodyType)
-		aMap := reflect.MakeMap(r.bodyType)
-		aMapPtr.Elem().Set(aMap)
-		ret := aMapPtr.Interface()
-		err := r.unmarshal(r.body, ret)
-		return ret, err == nil, err
+		return r.decodeBodyMap(ctx)
 	}
 	if name == "" {
 		return r.requestState.State(), true, nil
@@ -60,6 +58,18 @@ func (r *Body) Value(ctx context.Context, name string) (interface{}, bool, error
 	return sel.Value(r.requestState.Pointer()), true, nil
 }
 
+func (r *Body) decodeBodyMap(ctx context.Context) (interface{}, bool, error) {
+	aMapPtr := reflect.New(r.bodyType)
+	aMap := reflect.MakeMap(r.bodyType)
+	aMapPtr.Elem().Set(aMap)
+	ret := aMapPtr.Interface()
+	err := r.unmarshal(r.body, ret)
+	if err == nil {
+		r.updateQueryString(ctx, ret)
+	}
+	return ret, err == nil, err
+}
+
 // NewBody returns body locator
 func NewBody(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
@@ -72,11 +82,7 @@ func NewBody(opts ...Option) (kind.Locator, error) {
 	if options.Unmarshal == nil {
 		return nil, fmt.Errorf("unmarshal was empty")
 	}
-	request, err := options.GetRequest()
-	if err != nil {
-		return nil, err
-	}
-	var ret = &Body{request: request, bodyType: options.BodyType, unmarshal: options.UnmarshalFunc()}
+	var ret = &Body{request: options.request, bodyType: options.BodyType, unmarshal: options.UnmarshalFunc()}
 	return ret, nil
 }
 
@@ -95,4 +101,38 @@ func (r *Body) ensureRequest() (err error) {
 		r.requestState.Sync()
 	}
 	return err
+}
+
+func (r *Body) updateQueryString(ctx context.Context, body interface{}) {
+	var queryParams map[string]string
+	switch actual := body.(type) {
+	case *map[string]interface{}:
+		queryParams = make(map[string]string)
+
+		for key, value := range *actual {
+			switch actual := value.(type) {
+			case string:
+				queryParams[key] = actual
+			default:
+				queryParams[key] = fmt.Sprintf("%v", value)
+			}
+		}
+	case *map[string]string:
+		queryParams = *actual
+	}
+	UpdateRequestWithQuery(r.request, queryParams)
+}
+
+// UpdateRequestWithQuery updates the given http.Request with query parameters provided in the map.
+func UpdateRequestWithQuery(req *http.Request, queryParams map[string]string) {
+	// Parse the existing query string from the request
+	q := req.URL.Query()
+
+	// Range over the map and add each key-value pair to the query string
+	for key, value := range queryParams {
+		q.Set(key, value)
+	}
+
+	// Encode the query string and assign it back to the request's URL
+	req.URL.RawQuery = q.Encode()
 }

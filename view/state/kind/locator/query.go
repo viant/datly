@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/xdatly/handler/exec"
+	"net/http"
 	"net/url"
 )
 
 type Query struct {
+	request  *http.Request
 	query    url.Values
 	rawQuery string
 }
@@ -22,9 +24,14 @@ func (q *Query) Names() []string {
 }
 
 func (q *Query) Value(ctx context.Context, name string) (interface{}, bool, error) {
+	if q.rawQuery != q.request.URL.RawQuery {
+		q.rawQuery = q.request.URL.RawQuery
+		q.query = q.request.URL.Query()
+	}
 	if name == "" {
 		return q.rawQuery, true, nil
 	}
+
 	value, ok := q.query[name]
 	if !ok {
 		return nil, false, nil
@@ -59,6 +66,5 @@ func NewQuery(opts ...Option) (kind.Locator, error) {
 	if options.request == nil {
 		return nil, fmt.Errorf("requestState was empty")
 	}
-
-	return &Query{query: options.request.URL.Query(), rawQuery: options.request.URL.RawQuery}, nil
+	return &Query{request: options.request}, nil
 }

@@ -206,7 +206,8 @@ func (s *Service) ensureAsyncContext(ctx context.Context, aSession *session.Sess
 
 	aState := aComponent.Input.Type.Type().NewState()
 	external := aComponent.Input.Type.Parameters.External()
-	options := aSession.Indirect(true, locator.WithState(aState))
+	options := aSession.ViewOptions(aComponent.View)
+	options = options.Indirect(true)
 	if err := aSession.SetState(ctx, external, aState, options); err != nil {
 		return nil, err
 	}

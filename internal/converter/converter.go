@@ -153,10 +153,7 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 		return raw, false, nil
 	case reflect.Struct:
 		if toType == xreflect.TimeType {
-			if format == "" {
-				format = time.RFC3339
-			}
-			asTime, err := ftime.Parse(format, raw)
+			asTime, err := toTime(raw, format)
 			if err != nil {
 				return nil, false, err
 			}
@@ -167,7 +164,7 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 			if format == "" {
 				format = time.RFC3339
 			}
-			asTime, err := ftime.Parse(format, raw)
+			asTime, err := toTime(raw, format)
 			if err != nil {
 				return nil, false, err
 			}
@@ -216,6 +213,18 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 	}
 
 	return result, isNil, nil
+}
+
+func toTime(raw string, format string) (time.Time, error) {
+	if format == "" {
+		format = time.RFC3339
+	}
+	asTime, err := ftime.Parse(format, raw)
+	if err != nil {
+		layout := "2006-01-02-07:00"
+		asTime, err = time.Parse(layout, raw)
+	}
+	return asTime, err
 }
 
 func (r Repeated) Convert(toType reflect.Type) (interface{}, error) {
