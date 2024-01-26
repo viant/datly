@@ -83,8 +83,8 @@ func (r *Route) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 	case content.XMLContentType:
 		return r.Marshaller.XML.Unmarshal
 	case content.CSVContentType:
-
 		return r.CSV.Unmarshal
+	default:
 	}
 	jsonPathInterceptor := json.UnmarshalerInterceptors{}
 	for i := range r._unmarshallerInterceptors {

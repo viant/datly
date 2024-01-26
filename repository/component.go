@@ -242,6 +242,11 @@ func (c *Component) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 		return c.Content.Marshaller.XML.Unmarshal
 	case content.CSVContentType:
 		return c.Content.CSV.Unmarshal
+	default:
+		switch c.Output.DataFormat {
+		case content.XMLFormat:
+			return c.Content.Marshaller.XML.Unmarshal
+		}
 	}
 	jsonPathInterceptor := json.UnmarshalerInterceptors{}
 	unmarshallerInterceptors := c.UnmarshallerInterceptors()
