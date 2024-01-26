@@ -179,7 +179,7 @@ func (r *Handler) writeErr(w http.ResponseWriter, aComponent *repository.Compone
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	asBytes, marErr := aComponent.JSON.JsonMarshaller.Marshal(aResponse.State())
+	asBytes, marErr := aComponent.Marshaller.JSON.JsonMarshaller.Marshal(aResponse.State())
 	if marErr != nil {
 		w.Write(asBytes)
 		w.WriteHeader(statusCode)
@@ -357,7 +357,7 @@ func (r *Handler) marshalCustomOutput(output interface{}, aComponent *repository
 	case []byte:
 		return NewBytesReader(actual, ""), nil
 	default:
-		marshal, err := aComponent.Content.JSON.JsonMarshaller.Marshal(output)
+		marshal, err := aComponent.Content.Marshaller.JSON.JsonMarshaller.Marshal(output)
 		if err != nil {
 			return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
 		}
@@ -371,7 +371,7 @@ func (r *Handler) extractValueFromResponse(aComponent *repository.Component, act
 	case []byte:
 		return responseValue, nil
 	default:
-		return aComponent.Content.JSON.JsonMarshaller.Marshal(responseValue)
+		return aComponent.Content.Marshaller.JSON.JsonMarshaller.Marshal(responseValue)
 	}
 }
 

@@ -166,7 +166,7 @@ func (x *XLSConfig) Options() []xlsy.Option {
 
 func (c *Content) InitMarshaller(config *config.IOConfig, exclude []string, inputType, outputType reflect.Type) error {
 	c.unmarshallerInterceptors = c.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
-	c.JSON.JsonMarshaller = json.New(config)
+	c.Marshaller.JSON.JsonMarshaller = json.New(config)
 	c.Marshaller.XLS.XlsMarshaller = xlsy.NewMarshaller(c.XLS.Options()...)
 
 	if err := c.initCSVIfNeeded(inputType, outputType); err != nil {
@@ -427,11 +427,11 @@ func (c *Content) Marshal(format string, field string, response interface{}, opt
 		if field != "" {
 			responseData := ensureSliceValue(response)
 			tabJSONInterceptors := c.tabJSONInterceptors(field, responseData)
-			return c.JSON.JsonMarshaller.Marshal(response, tabJSONInterceptors)
+			return c.Marshaller.JSON.JsonMarshaller.Marshal(response, tabJSONInterceptors)
 		}
 		return c.TabularJSON.OutputMarshaller.Marshal(response, options...)
 	case JSONFormat:
-		return c.JSON.JsonMarshaller.Marshal(response, options...)
+		return c.Marshaller.JSON.JsonMarshaller.Marshal(response, options...)
 	default:
 		return nil, fmt.Errorf("unsupproted readerData format: %s", format)
 	}

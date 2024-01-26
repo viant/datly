@@ -90,7 +90,7 @@ func (r *Route) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 	}
 
 	return func(bytes []byte, i interface{}) error {
-		return r.JSON.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
+		return r.Marshaller.JSON.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
 	}
 }
 
