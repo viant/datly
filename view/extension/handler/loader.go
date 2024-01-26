@@ -78,6 +78,7 @@ func (l *LoadData) Exec(ctx context.Context, session handler.Session) (interface
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	response := reflect.New(l.Options.OutputType).Interface()
 	appender := xSlice.Appender(xunsafe.AsPointer(response))
+	scanner.Buffer(make([]byte, 1024*1024), 5*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) == 0 {
@@ -90,7 +91,7 @@ func (l *LoadData) Exec(ctx context.Context, session handler.Session) (interface
 		}
 		appender.Append(item)
 	}
-	return response, nil
+	return response, scanner.Err()
 }
 
 func (*LoadDataProvider) New(ctx context.Context, opts ...handler.Option) (handler.Handler, error) {
