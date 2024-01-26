@@ -297,6 +297,9 @@ func (r *Rule) applyDefaults() {
 	setter.SetBoolIfFalse(&r.EnableAudit, true)
 	setter.SetBoolIfFalse(&r.Input.IgnoreEmptyQueryParameters, r.IgnoreEmptyQueryParameters)
 	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.Type != "")
+	if r.XMLUnmarshalType != "" {
+		r.Route.Content.Marshaller.XML.TypeName = r.XMLUnmarshalType
+	}
 	if r.Route.Cors == nil {
 		r.Route.Cors = &dpath.Cors{
 			AllowCredentials: setter.BoolPtr(true),

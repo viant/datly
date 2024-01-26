@@ -29,7 +29,9 @@ func (r *Body) Value(ctx context.Context, name string) (interface{}, bool, error
 	var err error
 	r.Once.Do(func() {
 		r.body, r.err = readRequestBody(r.request)
-		r.err = r.ensureRequest()
+		if len(r.body) > 0 {
+			r.err = r.ensureRequest()
+		}
 	})
 	if len(r.body) == 0 {
 		return nil, false, nil

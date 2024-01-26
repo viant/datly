@@ -115,6 +115,9 @@ func (t *Type) adjustConstants() {
 }
 
 func (t *Type) SetType(rType reflect.Type) {
+	if rType.Kind() == reflect.Map {
+		return
+	}
 	t.Schema.SetType(rType)
 	t.stateType = structology.NewStateType(rType)
 }
