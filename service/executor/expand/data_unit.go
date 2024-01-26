@@ -97,13 +97,29 @@ func (c *DataUnit) Add(_ int, value interface{}) (string, error) {
 		return "", err
 	}
 
-	expanded, args, err := lookup.Expand("", value)
+	expanded, err := lookup.Expand("", value)
 	if err != nil {
 		return "", err
 	}
 
-	c.addAll(args...)
-	return expanded, nil
+	result := c.expandWithCommas(expanded)
+	return result, nil
+}
+
+func (c *DataUnit) expandWithCommas(expanded []*Expression) string {
+	sb := &strings.Builder{}
+	for i, expression := range expanded {
+		if i != 0 {
+			sb.WriteString(", ")
+		}
+
+		sb.WriteString(expression.SQLFragment.String())
+		c.addAll(expression.Args...)
+
+	}
+
+	result := sb.String()
+	return result
 }
 
 func (c *DataUnit) At(_ int) []interface{} {
@@ -187,24 +203,50 @@ func (c *DataUnit) in(columnName string, args interface{}, inclusive bool) (stri
 		return "1 = 0", nil
 	}
 
-	sb := &strings.Builder{}
-	sb.WriteString(expander.ColumnExpression(columnName))
-	if !inclusive {
-		sb.WriteString(" NOT")
-	}
-
-	sb.WriteString(" IN ( ")
-
-	expanded, values, err := expander.Expand(columnName, args)
+	expression, err := expander.Expand(columnName, args)
 	if err != nil {
 		return "", err
 	}
 
-	sb.WriteString(expanded)
-	sb.WriteString(")")
+	result := c.expandInExpression(expression, inclusive)
+	return result, nil
+}
 
-	c.addAll(values...)
-	return sb.String(), nil
+func (c *DataUnit) expandInExpression(expressions []*Expression, inclusive bool) string {
+	sb := &strings.Builder{}
+	shouldAddBrackets := len(expressions) > 1
+	sb.WriteString(" (")
+
+	for i, expression := range expressions {
+		if i > 0 {
+			if inclusive {
+				sb.WriteString(" OR ")
+			} else {
+				sb.WriteString(" AND ")
+			}
+		}
+
+		if shouldAddBrackets {
+			sb.WriteString(" (")
+		}
+
+		sb.WriteString(expression.ColumnExpression)
+		if !inclusive {
+			sb.WriteString(" NOT")
+		}
+
+		sb.WriteString(" IN ( ")
+		sb.WriteString(c.expandWithCommas(expressions))
+	}
+
+	if shouldAddBrackets {
+		sb.WriteString(" )")
+	}
+
+	sb.WriteString(" )")
+
+	result := sb.String()
+	return result
 }
 
 func (c *DataUnit) NotIn(columnName string, args interface{}) (string, error) {
@@ -224,6 +266,7 @@ func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (st
 	if err != nil {
 		return "", err
 	}
+
 	if !expander.HasAny(args) {
 		if !inclusive {
 			return "0 = 0", err
@@ -231,41 +274,18 @@ func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (st
 
 		return "1 = 0", nil
 	}
-	sb := &strings.Builder{}
-	_, values, err := expander.Expand(columnName, args)
+
+	expressions, err := expander.Expand(columnName, args)
 	if err != nil {
 		return "", err
 	}
+
 	conjunction := " OR "
 	if !inclusive {
 		conjunction = " AND "
 	}
-	if len(values) > 1 {
-		sb.WriteString("(")
-	}
-	var likeValues []interface{}
-	for i, value := range values {
-		if i > 0 {
-			sb.WriteString(conjunction)
-		}
-		sb.WriteString(expander.ColumnExpression(columnName))
-		if !inclusive {
-			sb.WriteString(" NOT")
-		}
-		sb.WriteString(" LIKE ? ")
-		textValue, ok := value.(string)
-		if !ok {
-			textValue = toolbox.AsString(value)
-		}
 
-		likeValues = append(likeValues, textValue)
-	}
-	c.addAll(likeValues...)
-
-	if len(values) > 1 {
-		sb.WriteString(")")
-	}
-	return sb.String(), nil
+	return c.expandLikeColumnExpressions(expressions, conjunction, inclusive, true), nil
 }
 
 func (c *DataUnit) Contains(columnName string, args interface{}) (string, error) {
@@ -288,43 +308,67 @@ func (c *DataUnit) contains(columnName string, args interface{}, inclusive bool)
 
 		return "1 = 0", nil
 	}
-	sb := &strings.Builder{}
-	_, values, err := expander.Expand(columnName, args)
+
+	expressions, err := expander.Expand(columnName, args)
 	if err != nil {
 		return "", err
 	}
+
 	conjunction := " OR "
 	if !inclusive {
 		conjunction = " AND "
 	}
-	if len(values) > 1 {
-		sb.WriteString("(")
-	}
-	var likeValues []interface{}
-	for i, value := range values {
-		if i > 0 {
-			sb.WriteString(conjunction)
-		}
-		sb.WriteString(expander.ColumnExpression(columnName))
-		if !inclusive {
-			sb.WriteString(" NOT")
-		}
-		sb.WriteString(" LIKE ? ")
-		textValue, ok := value.(string)
-		if !ok {
-			textValue = toolbox.AsString(value)
-		}
 
-		likeValues = append(likeValues, "%"+textValue+"%")
-	}
-	c.addAll(likeValues...)
-
-	if len(values) > 1 {
-		sb.WriteString(")")
-	}
-	return sb.String(), nil
+	return c.expandLikeColumnExpressions(expressions, conjunction, inclusive, false), nil
 }
 
 func (c *DataUnit) Delete(data interface{}, name string) (string, error) {
 	return c.Statements.DeleteWithMarker(name, data), nil
+}
+
+func (c *DataUnit) expandLikeColumnExpressions(expressions []*Expression, conjunction string, inclusive bool, anyMatch bool) string {
+	sb := &strings.Builder{}
+	shouldPutBrackets := len(expressions) > 1
+	for i, expression := range expressions {
+		if i != 0 {
+			sb.WriteString(" ")
+			sb.WriteString(conjunction)
+			sb.WriteString(" ")
+		}
+
+		if shouldPutBrackets || len(expression.Args) > 1 {
+			sb.WriteString("(")
+		}
+
+		var likeValues []interface{}
+		for i, value := range expression.Args {
+			if i > 0 {
+				sb.WriteString(conjunction)
+			}
+			sb.WriteString(expression.ColumnExpression)
+			if !inclusive {
+				sb.WriteString(" NOT")
+			}
+
+			sb.WriteString(" LIKE ? ")
+			textValue, ok := value.(string)
+			if !ok {
+				textValue = toolbox.AsString(value)
+			}
+
+			if !anyMatch {
+				textValue = "%" + textValue + "%"
+			}
+
+			likeValues = append(likeValues, textValue)
+		}
+		c.addAll(likeValues...)
+
+		if shouldPutBrackets || len(expression.Args) > 1 {
+			sb.WriteString(")")
+		}
+
+	}
+
+	return sb.String()
 }
