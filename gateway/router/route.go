@@ -80,8 +80,11 @@ func (r *Route) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 	contentType := request.Header.Get(HeaderContentType)
 	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(HeaderContentType)))
 	switch contentType {
+	case content.XMLContentType:
+		return r.Marshaller.XML.Unmarshal
 	case content.CSVContentType:
 		return r.CSV.Unmarshal
+	default:
 	}
 	jsonPathInterceptor := json.UnmarshalerInterceptors{}
 	for i := range r._unmarshallerInterceptors {
@@ -90,7 +93,7 @@ func (r *Route) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 	}
 
 	return func(bytes []byte, i interface{}) error {
-		return r.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
+		return r.Marshaller.JSON.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
 	}
 }
 

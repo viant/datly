@@ -32,7 +32,7 @@ func (v *Cookie) Value(ctx context.Context, name string) (interface{}, bool, err
 func NewCookie(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
 	if options.request == nil {
-		return nil, fmt.Errorf("request was empty")
+		return nil, fmt.Errorf("requestState was empty")
 	}
 	ret := &Cookie{cookies: options.request.Cookies()}
 	return ret, nil

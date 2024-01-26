@@ -57,7 +57,7 @@ func (q *Query) ignoreEmptyParameters(ctx context.Context) bool {
 func NewQuery(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
 	if options.request == nil {
-		return nil, fmt.Errorf("request was empty")
+		return nil, fmt.Errorf("requestState was empty")
 	}
 
 	return &Query{query: options.request.URL.Query(), rawQuery: options.request.URL.RawQuery}, nil

@@ -80,7 +80,7 @@ func NewOptions(opts []Option) *Options {
 // Option represents locator option
 type Option func(o *Options)
 
-// WithRequest create http request option
+// WithRequest create http requestState option
 func WithRequest(request *http.Request) Option {
 	return func(o *Options) {
 		o.request = request
@@ -94,7 +94,7 @@ func WithCustomOption(options ...interface{}) Option {
 	}
 }
 
-// WithURIPattern create Path pattern request
+// WithURIPattern create Path pattern requestState
 func WithURIPattern(URI string) Option {
 	return func(o *Options) {
 		o.URIPattern = URI

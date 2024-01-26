@@ -111,9 +111,15 @@ func (r *Contract) initCardinality() error {
 		return fmt.Errorf("unsupported cardinality type %v\n", r.Output.Cardinality)
 	}
 }
+
 func (c *Contract) BodyType() reflect.Type {
 	if c.Input.Body.Schema == nil {
 		return nil
+	}
+	rType := c.Input.Body.Schema.Type()
+	if rType != nil && rType.Kind() == reflect.Map {
+		return reflect.TypeOf(struct {
+		}{})
 	}
 	return c.Input.Body.Schema.Type()
 }

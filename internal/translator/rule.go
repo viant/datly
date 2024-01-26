@@ -43,22 +43,26 @@ type (
 		ConstURL     string                 `json:",omitempty"`
 		DocURL       string
 		Doc          state.Docs
-		RequestBody  *BodyConfig                `json:",omitempty"`
-		TypeSrc      *parser.TypeImport         `json:",omitempty"`
-		ResponseBody *ResponseBodyConfig        `json:",omitempty"`
-		Package      string                     `json:",omitempty"`
-		Router       *RouterConfig              `json:",omitempty" yaml:",omitempty"`
-		DataFormat   string                     `json:",omitempty"`
-		TabularJSON  *content.TabularJSONConfig `json:",omitempty"`
-		XML          *content.XMLConfig         `json:",omitempty"`
-		Type         string                     `json:",omitempty"`
-		HandlerArgs  []string                   `json:",omitempty"`
-		InputType    string                     `json:",omitempty"`
-		OutputType   string                     `json:",omitempty"`
-		With         []string                   `json:",omitempty"`
-		Include      []string                   `json:",omitempty"`
+		RequestBody  *BodyConfig         `json:",omitempty"`
+		ResponseBody *ResponseBodyConfig `json:",omitempty"`
+
+		TypeSrc     *parser.TypeImport         `json:",omitempty"`
+		Package     string                     `json:",omitempty"`
+		Router      *RouterConfig              `json:",omitempty" yaml:",omitempty"`
+		DataFormat  string                     `json:",omitempty"`
+		TabularJSON *content.TabularJSONConfig `json:",omitempty"`
+		XML         *content.XMLConfig         `json:",omitempty"`
+		Type        string                     `json:",omitempty"`
+		HandlerArgs []string                   `json:",omitempty"`
+		InputType   string                     `json:",omitempty"`
+		OutputType  string                     `json:",omitempty"`
+		With        []string                   `json:",omitempty"`
+		Include     []string                   `json:",omitempty"`
 		indexNamespaces
-		IsGeneratation  bool
+		IsGeneratation    bool
+		XMLUnmarshalType  string `json:",omitempty"`
+		JSONUnmarshalType string `json:",omitempty"`
+
 		OutputParameter *inference.Parameter
 	}
 
@@ -84,10 +88,12 @@ type (
 		}
 	}
 
+	//depprecated
 	BodyConfig struct {
 		DataType string `json:",omitempty"`
 	}
 
+	//depreacted
 	ResponseBodyConfig struct {
 		From string
 	}
@@ -291,6 +297,9 @@ func (r *Rule) applyDefaults() {
 	setter.SetBoolIfFalse(&r.EnableAudit, true)
 	setter.SetBoolIfFalse(&r.Input.IgnoreEmptyQueryParameters, r.IgnoreEmptyQueryParameters)
 	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.Type != "")
+	if r.XMLUnmarshalType != "" {
+		r.Route.Content.Marshaller.XML.TypeName = r.XMLUnmarshalType
+	}
 	if r.Route.Cors == nil {
 		r.Route.Cors = &dpath.Cors{
 			AllowCredentials: setter.BoolPtr(true),

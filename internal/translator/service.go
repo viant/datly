@@ -27,6 +27,7 @@ import (
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"
+	"net/http"
 	"path"
 	"reflect"
 	"strings"
@@ -296,6 +297,7 @@ func handleVeltyExpression() sqlparser.Option {
 
 func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, serviceType service.Type) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
+
 	route := &resource.Rule.Route
 	ruleName := s.Repository.RuleName(resource.rule)
 	route.Service = serviceType
@@ -321,6 +323,12 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	route.Content.CSV = resource.Rule.CSV
 	route.Content.TabularJSON = resource.Rule.TabularJSON
 	route.Content.XML = resource.Rule.XML
+	if resource.Rule.XMLUnmarshalType != "" {
+		route.Content.Marshaller.XML.TypeName = resource.Rule.XMLUnmarshalType
+	}
+	if resource.Rule.JSONUnmarshalType != "" {
+		route.Content.Marshaller.JSON.TypeName = resource.Rule.JSONUnmarshalType
+	}
 	route.Component.Output.DataFormat = resource.Rule.DataFormat
 
 	if err := s.applyAsyncOption(resource, route); err != nil {
@@ -503,10 +511,23 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 		resource.Rule.Async.WithCache = true
 		setter.SetIntIfZero(&resource.Rule.Async.ExpiryTimeInSec, int((time.Millisecond * time.Duration(resource.Rule.Cache.TimeToLiveMs)).Seconds()))
 		route.Async = resource.Rule.Async
+	}
+	routeMethods := strings.Split(route.Method, ",")
 
+	if len(routeMethods) == 0 {
+		routeMethods = []string{http.MethodGet}
 	}
 
-	result.Routes = append(result.Routes, route)
+	switch len(routeMethods) {
+	case 1:
+		result.Routes = append(result.Routes, route)
+	default:
+		for _, method := range routeMethods {
+			aRoute := *route
+			aRoute.Method = method
+			result.Routes = append(result.Routes, &aRoute)
+		}
+	}
 	return result, nil
 }
 

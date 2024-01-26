@@ -36,7 +36,7 @@ const ( //async kind
 	JobInfoRunTimeInSec  = "jobinfo.runtimeinsec"
 	JobInfoExpiryInSec   = "jobinfo.expiryinsec"
 
-	//Group releated keys
+	//Groups releated keys
 
 	Group = "group"
 

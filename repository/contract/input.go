@@ -42,9 +42,11 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 		return fmt.Errorf("failed to initialise input: %w", err)
 	}
 
-	bodyType := i.Body.Type().Type()
-	if bodyParam := i.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); bodyParam != nil {
-		bodyParam.Schema.SetType(bodyType)
+	if i.Body.Type() != nil {
+		bodyType := i.Body.Type().Type()
+		if bodyParam := i.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); bodyParam != nil {
+			bodyParam.Schema.SetType(bodyType)
+		}
 	}
 
 	resourcelet := aView.Resource()

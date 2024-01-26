@@ -12,6 +12,7 @@ import (
 	"github.com/viant/tagly/format"
 	"github.com/viant/xlsy"
 	"github.com/viant/xmlify"
+	"github.com/viant/xreflect"
 	"net/http"
 	"reflect"
 	"strings"
@@ -23,7 +24,7 @@ const (
 
 type (
 	Content struct {
-		Marshaller
+		Marshaller               Marshaller         `json:",omitempty"`
 		DateFormat               string             `json:",omitempty"`
 		CSV                      *CSVConfig         `json:",omitempty"`
 		XLS                      *XLSConfig         `json:",omitempty"`
@@ -52,18 +53,78 @@ type (
 		OutputMarshaller *xmlify.Marshaller
 	}
 
+	Unmarshal struct {
+		rType     reflect.Type
+		TypeName  string
+		unmarshal shared.Unmarshal
+	}
+
 	JSON struct {
+		Unmarshal
 		JsonMarshaller *json.Marshaller
 	}
 
 	XLS struct {
+		Unmarshal
 		XlsMarshaller *xlsy.Marshaller
 	}
+
+	CSV struct {
+		Unmarshal
+	}
+
 	Marshaller struct {
-		XLS
-		JSON
+		XLS  XLS
+		JSON JSON
+		XML  Unmarshal
+		CSV  Unmarshal
+	}
+
+	Unmarshaller interface {
+		Unmarshal(bytes []byte, dest interface{}) error
 	}
 )
+
+func (u *Unmarshal) Unmarshal(bytes []byte, dest interface{}) error {
+	if u.unmarshal == nil {
+		return fmt.Errorf("unmarshaler was not initialized")
+	}
+	return u.unmarshal(bytes, dest)
+}
+
+func (m *Marshaller) Init(lookupType xreflect.LookupType) error {
+	if err := m.XLS.Init(lookupType); err != nil {
+		return err
+	}
+	if err := m.JSON.Init(lookupType); err != nil {
+		return err
+	}
+	if err := m.XML.Init(lookupType); err != nil {
+		return err
+	}
+	if err := m.CSV.Init(lookupType); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (u *Unmarshal) Init(lookupType xreflect.LookupType) error {
+	if u.TypeName == "" {
+		return nil
+	}
+	rType, err := lookupType(u.TypeName)
+	if err != nil {
+		return err
+	}
+	u.rType = rType
+	value := reflect.New(rType).Interface()
+	unmarshal, ok := value.(Unmarshaller)
+	if !ok {
+		return fmt.Errorf("invalid unmarshaller type: %T, expected :%T", value, unmarshal)
+	}
+	u.unmarshal = unmarshal.Unmarshal
+	return nil
+}
 
 func (c *Content) UnmarshallerInterceptors() marshal.Transforms {
 	return c.unmarshallerInterceptors
@@ -77,7 +138,7 @@ func (c *Content) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 		return c.CSV.Unmarshal
 	}
 	return func(bytes []byte, i interface{}) error {
-		return c.JsonMarshaller.Unmarshal(bytes, i, request)
+		return c.Marshaller.JSON.JsonMarshaller.Unmarshal(bytes, i, request)
 	}
 }
 
@@ -105,8 +166,8 @@ func (x *XLSConfig) Options() []xlsy.Option {
 
 func (c *Content) InitMarshaller(config *config.IOConfig, exclude []string, inputType, outputType reflect.Type) error {
 	c.unmarshallerInterceptors = c.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
-	c.JsonMarshaller = json.New(config)
-	c.XlsMarshaller = xlsy.NewMarshaller(c.XLS.Options()...)
+	c.Marshaller.JSON.JsonMarshaller = json.New(config)
+	c.Marshaller.XLS.XlsMarshaller = xlsy.NewMarshaller(c.XLS.Options()...)
 
 	if err := c.initCSVIfNeeded(inputType, outputType); err != nil {
 		return err
@@ -366,11 +427,11 @@ func (c *Content) Marshal(format string, field string, response interface{}, opt
 		if field != "" {
 			responseData := ensureSliceValue(response)
 			tabJSONInterceptors := c.tabJSONInterceptors(field, responseData)
-			return c.JsonMarshaller.Marshal(response, tabJSONInterceptors)
+			return c.Marshaller.JSON.JsonMarshaller.Marshal(response, tabJSONInterceptors)
 		}
 		return c.TabularJSON.OutputMarshaller.Marshal(response, options...)
 	case JSONFormat:
-		return c.JsonMarshaller.Marshal(response, options...)
+		return c.Marshaller.JSON.JsonMarshaller.Marshal(response, options...)
 	default:
 		return nil, fmt.Errorf("unsupproted readerData format: %s", format)
 	}

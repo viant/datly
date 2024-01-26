@@ -39,13 +39,13 @@ type (
 		version.Version `json:"-" yaml:"-"`
 		contract.Path
 		contract.Contract
-		content.Content
-		Async          *async.Config `json:",omitempty"`
-		View           *view.View    `json:",omitempty"`
-		NamespacedView *view.NamespacedView
-		Handler        *handler.Handler `json:",omitempty"`
-		indexedView    view.NamedViews
-		SourceURL      string
+		content.Content `json:",omitempty" yaml:",inline"`
+		Async           *async.Config `json:",omitempty"`
+		View            *view.View    `json:",omitempty"`
+		NamespacedView  *view.NamespacedView
+		Handler         *handler.Handler `json:",omitempty"`
+		indexedView     view.NamedViews
+		SourceURL       string
 
 		dispatcher contract.Dispatcher
 		types      *xreflect.Types
@@ -94,6 +94,10 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 		return nil
 	}
 	if err := c.Content.InitMarshaller(c.IOConfig(), c.Output.Exclude, c.BodyType(), c.OutputType()); err != nil {
+		return err
+	}
+	lookupType := resource.LookupType()
+	if err := c.Content.Marshaller.Init(lookupType); err != nil {
 		return err
 	}
 	if err = c.Async.Init(ctx, resource, c.View); err != nil {
@@ -234,8 +238,15 @@ func (c *Component) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 	contentType := request.Header.Get(content.HeaderContentType)
 	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(content.HeaderContentType)))
 	switch contentType {
+	case content.XMLContentType:
+		return c.Content.Marshaller.XML.Unmarshal
 	case content.CSVContentType:
 		return c.Content.CSV.Unmarshal
+	default:
+		switch c.Output.DataFormat {
+		case content.XMLFormat:
+			return c.Content.Marshaller.XML.Unmarshal
+		}
 	}
 	jsonPathInterceptor := json.UnmarshalerInterceptors{}
 	unmarshallerInterceptors := c.UnmarshallerInterceptors()
@@ -244,7 +255,7 @@ func (c *Component) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 		jsonPathInterceptor[transform.Path] = c.transformFn(request, transform)
 	}
 	return func(bytes []byte, i interface{}) error {
-		return c.Content.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
+		return c.Content.Marshaller.JSON.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
 	}
 }
 

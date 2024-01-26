@@ -115,6 +115,9 @@ func (t *Type) adjustConstants() {
 }
 
 func (t *Type) SetType(rType reflect.Type) {
+	if rType.Kind() == reflect.Map {
+		return
+	}
 	t.Schema.SetType(rType)
 	t.stateType = structology.NewStateType(rType)
 }
@@ -212,7 +215,7 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflec
 			if _, ok := objectField.Tag.Lookup(tags.ParameterTag); !ok {
 				continue
 			}
-			itemParam, err := BuildParameter(&objectField, fs, nil)
+			itemParam, err := BuildParameter(&objectField, fs, lookupType)
 			if err != nil {
 				return nil, err
 			}
@@ -259,6 +262,9 @@ func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Param
 		}
 	} else {
 		result.Schema = NewSchema(field.Type)
+		if field.Type.Kind() == reflect.Map {
+			result.Schema.DataType = field.Type.String()
+		}
 	}
 	setter.SetStringIfEmpty(&result.Schema.DataType, rawName)
 }
