@@ -211,7 +211,8 @@ func (c *Component) LocatorOptions(request *http.Request, unmarshal shared.Unmar
 	result = append(result, locator.WithInputParameters(c.Input.Type.Parameters.Index()))
 	result = append(result, locator.WithOutputParameters(c.Output.Type.Parameters))
 	if c.Input.Body.Schema != nil {
-		result = append(result, locator.WithBodyType(c.BodyType()))
+		bodyType := c.Input.Body.Schema.Type()
+		result = append(result, locator.WithBodyType(bodyType))
 	}
 	if len(c.indexedView) > 0 {
 		result = append(result, locator.WithViews(c.indexedView))
