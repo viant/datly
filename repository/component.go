@@ -39,13 +39,13 @@ type (
 		version.Version `json:"-" yaml:"-"`
 		contract.Path
 		contract.Contract
-		content.Content
-		Async          *async.Config `json:",omitempty"`
-		View           *view.View    `json:",omitempty"`
-		NamespacedView *view.NamespacedView
-		Handler        *handler.Handler `json:",omitempty"`
-		indexedView    view.NamedViews
-		SourceURL      string
+		content.Content `json:",omitempty" yaml:",inline"`
+		Async           *async.Config `json:",omitempty"`
+		View            *view.View    `json:",omitempty"`
+		NamespacedView  *view.NamespacedView
+		Handler         *handler.Handler `json:",omitempty"`
+		indexedView     view.NamedViews
+		SourceURL       string
 
 		dispatcher contract.Dispatcher
 		types      *xreflect.Types
