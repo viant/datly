@@ -153,9 +153,9 @@ func (e *Encoder) encodeStruct(ctx context.Context, raw interface{}, options cod
 
 func (e *Encoder) split(value string) ([]string, error) {
 	split := strings.Split(value, e.separator)
-	if len(split) != len(e.fields) {
-		return nil, fmt.Errorf("incorrect value format, expected %v values seperated with '%v' but got %v", len(e.fields), e.separator, len(split))
-	}
+	//if len(split) != len(e.fields) {
+	//	return nil, fmt.Errorf("incorrect value format, expected %v values seperated with '%v' but got %v", len(e.fields), e.separator, len(split))
+	//}
 
 	return split, nil
 }
