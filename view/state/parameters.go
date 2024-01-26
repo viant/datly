@@ -149,10 +149,11 @@ func (p *Parameter) matchByKind(kind Kind, result *Parameters) {
 	}
 }
 
-func (p Parameters) GroupByStatusCode() []Parameters {
+func (p Parameters) Groups() []Parameters {
 	var result []Parameters
 	var unAuthorizedParameters Parameters
 	var forbiddenParameters Parameters
+	var body Parameters
 	var external Parameters
 	var transient Parameters
 	var others Parameters
@@ -165,7 +166,9 @@ func (p Parameters) GroupByStatusCode() []Parameters {
 			forbiddenParameters = append(forbiddenParameters, p[i])
 		default:
 			switch candidate.In.Kind {
-			case KindHeader, KindConst, KindLiteral, KindQuery, KindRequestBody, KindCookie, KindRequest:
+			case KindRequestBody:
+				body = append(body, p[i])
+			case KindHeader, KindConst, KindLiteral, KindQuery, KindCookie, KindRequest:
 				external = append(external, p[i])
 			case KindParam, KindState:
 				transient = append(transient, p[i])
@@ -181,13 +184,15 @@ func (p Parameters) GroupByStatusCode() []Parameters {
 	if len(forbiddenParameters) > 0 {
 		result = append(result, forbiddenParameters)
 	}
+	if len(body) > 0 {
+		result = append(result, body)
+	}
 	if len(external) > 0 {
 		result = append(result, external)
 	}
 	if len(transient) > 0 {
 		result = append(result, transient)
 	}
-
 	if len(others) > 0 {
 		result = append(result, others)
 	}

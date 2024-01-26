@@ -22,11 +22,11 @@ func (p *HttpRequest) Value(ctx context.Context, name string) (interface{}, bool
 	return value, true, err
 }
 
-// NewHttpRequest returns http request locator
+// NewHttpRequest returns http requestState locator
 func NewHttpRequest(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
 	if options.request == nil {
-		return nil, fmt.Errorf("request was empty")
+		return nil, fmt.Errorf("requestState was empty")
 	}
 	return &HttpRequest{
 		getRequest: options.GetRequest,
@@ -34,6 +34,9 @@ func NewHttpRequest(opts ...Option) (kind.Locator, error) {
 }
 
 func readRequestBody(request *http.Request) ([]byte, error) {
+	if request.Body == nil {
+		return nil, nil
+	}
 	data, err := io.ReadAll(request.Body)
 	if err != nil {
 		return nil, err

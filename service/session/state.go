@@ -195,7 +195,7 @@ func (s *Session) setTemplateState(ctx context.Context, aView *view.View, opts *
 
 func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aState *structology.State, opts *Options) error {
 	err := httputils.NewErrors()
-	parametersGroup := parameters.GroupByStatusCode()
+	parametersGroup := parameters.Groups()
 	for _, group := range parametersGroup {
 		wg := sync.WaitGroup{}
 		for i, _ := range group { //populate non data view parameters first
