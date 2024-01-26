@@ -24,7 +24,7 @@ const (
 
 type (
 	Content struct {
-		Marshaller               `json:",omitempty"`
+		Marshaller               Marshaller         `json:",omitempty"`
 		DateFormat               string             `json:",omitempty"`
 		CSV                      *CSVConfig         `json:",omitempty"`
 		XLS                      *XLSConfig         `json:",omitempty"`
