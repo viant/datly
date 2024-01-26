@@ -1,10 +1,12 @@
 package expand
 
 import (
+	"fmt"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
+	"math"
 	"reflect"
 	"strings"
 	"sync"
@@ -21,8 +23,14 @@ type (
 
 	BindingsExpander interface {
 		HasAny(value interface{}) bool
-		Expand(source string, value interface{}) (string, []interface{}, error)
+		Expand(source string, value interface{}) ([]*Expression, error)
 		ColumnExpression(source string) string
+	}
+
+	Expression struct {
+		ColumnExpression string
+		SQLFragment      *strings.Builder
+		Args             []interface{}
 	}
 
 	PrimitiveExpander struct {
@@ -71,6 +79,10 @@ func (b *BindingsCache) getBindingsExpander(rType reflect.Type) (BindingsExpande
 		var aSlice *xunsafe.Slice
 		if rType.Kind() == reflect.Slice || rType.Kind() == reflect.Array {
 			aSlice = xunsafe.NewSlice(rType)
+		}
+
+		if len(columns) > 63 {
+			return nil, fmt.Errorf("unsupported criteria columns size (currently max 63)") //due to index implementation
 		}
 
 		return &CriteriaExpander{
@@ -135,29 +147,58 @@ func (c *CriteriaExpander) HasAny(value interface{}) bool {
 	return xunsafe.AsPointer(value) != nil
 }
 
-func (c *CriteriaExpander) Expand(source string, value interface{}) (string, []interface{}, error) {
-	sb := &strings.Builder{}
-	var bindings []interface{}
+func (c *CriteriaExpander) Expand(source string, value interface{}) ([]*Expression, error) {
+	var expressions []*Expression
 	if c.aSlice != nil {
+		expressionsIndex := map[int64]int{}
 		ptr := xunsafe.AsPointer(value)
+		index := c.itemIndex(value)
+		expressionIndex, ok := expressionsIndex[index]
+		if !ok {
+			expressionIndex = len(expressions)
+			expressions = append(expressions, c.newExpression(source, index))
+		}
+
+		expression := expressions[expressionIndex]
 		size := c.aSlice.Len(ptr)
 		for i := 0; i < size; i++ {
 			if i != 0 {
-				sb.WriteString(", ")
+				expression.SQLFragment.WriteString(", ")
 			}
-			c.expandItem(sb, &bindings, c.aSlice.ValueAt(ptr, i))
+			c.expandItem(expression.SQLFragment, &expression.Args, c.aSlice.ValueAt(ptr, i), index)
 		}
 	} else {
-		c.expandItem(sb, &bindings, value)
+		itemIndex := c.itemIndex(value)
+		expression := c.newExpression(source, itemIndex)
+		c.expandItem(expression.SQLFragment, &expression.Args, value, itemIndex)
+		expressions = append(expressions, expression)
 	}
 
-	return sb.String(), bindings, nil
+	return expressions, nil
+}
+
+func (c *CriteriaExpander) newExpression(source string, index int64) *Expression {
+	return &Expression{
+		ColumnExpression: c.columnExpression(source, index),
+		SQLFragment:      &strings.Builder{},
+		Args:             nil,
+	}
 }
 
 func (c *CriteriaExpander) ColumnExpression(source string) string {
+	return c.columnExpression(source, int64(math.MaxInt64))
+}
+
+func (c *CriteriaExpander) columnExpression(source string, presence int64) string {
 	sb := &strings.Builder{}
 	sb.WriteString("(")
-	for i, column := range c.columns {
+
+	var i int
+	for colIndex, column := range c.columns {
+		if presence&(1<<colIndex) == 0 {
+			continue
+		}
+
 		if i != 0 {
 			sb.WriteString(", ")
 		}
@@ -170,16 +211,36 @@ func (c *CriteriaExpander) ColumnExpression(source string) string {
 
 		sb.WriteString(".")
 		sb.WriteString(column.Name)
+		i++
 	}
 
 	sb.WriteString(" )")
 	return sb.String()
 }
 
-func (c *CriteriaExpander) expandItem(sb *strings.Builder, bindings *[]interface{}, value interface{}) {
+func (c *CriteriaExpander) itemIndex(value interface{}) int64 {
+	ptr := xunsafe.AsPointer(value)
+	var result int64
+	for i, column := range c.columns {
+		fieldValue := reflect.ValueOf(column.Field.Value(ptr))
+		if !(fieldValue.Kind() == reflect.Ptr && fieldValue.IsNil()) || !fieldValue.IsZero() {
+			result |= 1 << i
+		}
+	}
+
+	return result
+}
+
+func (c *CriteriaExpander) expandItem(sb *strings.Builder, bindings *[]interface{}, value interface{}, index int64) {
 	ptr := xunsafe.AsPointer(value)
 	sb.WriteString(" ( ")
-	for i, column := range c.columns {
+
+	var i = 0
+	for j, column := range c.columns {
+		if index&(1<<j) == 0 {
+			continue
+		}
+
 		if i != 0 {
 			sb.WriteString(", ")
 		}
@@ -187,6 +248,7 @@ func (c *CriteriaExpander) expandItem(sb *strings.Builder, bindings *[]interface
 		fieldValue := column.Field.Value(ptr)
 		*bindings = append(*bindings, fieldValue)
 		sb.WriteString(" ? ")
+		i++
 	}
 	sb.WriteString(" ) ")
 }
@@ -196,26 +258,30 @@ func (s *SliceExpander) HasAny(value interface{}) bool {
 	return s.aSlice.Len(ptr) > 0
 }
 
-func (s *SliceExpander) Expand(source string, value interface{}) (string, []interface{}, error) {
+func (s *SliceExpander) Expand(source string, value interface{}) ([]*Expression, error) {
 	ptr := xunsafe.AsPointer(value)
 	size := s.aSlice.Len(ptr)
 	sb := &strings.Builder{}
 	result := make([]interface{}, 0, size)
+
 	for i := 0; i < size; i++ {
 		if i != 0 {
 			sb.WriteString(", ")
 		}
 
-		expanded, bindings, err := s.itemExpander.Expand(source, s.aSlice.ValueAt(ptr, i))
+		expanded, err := s.itemExpander.Expand(source, s.aSlice.ValueAt(ptr, i))
 		if err != nil {
-			return "", nil, err
+			return nil, err
 		}
 
-		result = append(result, bindings...)
-		sb.WriteString(expanded)
+		for _, expression := range expanded {
+			result = append(result, expression.Args...)
+			sb.WriteString(expression.ColumnExpression)
+
+		}
 	}
 
-	return sb.String(), result, nil
+	return NewSingleExpression(s.ColumnExpression(source), sb.String(), result), nil
 }
 
 func (s *SliceExpander) ColumnExpression(source string) string {
@@ -230,42 +296,47 @@ func (p *PrimitiveExpander) HasAny(value interface{}) bool {
 	return true
 }
 
-func (p *PrimitiveExpander) Expand(source string, value interface{}) (string, []interface{}, error) {
+func (p *PrimitiveExpander) Expand(source string, value interface{}) ([]*Expression, error) {
 	switch actual := value.(type) {
 	case *string:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *int:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *int64:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *uint64:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *float32:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *float64:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *uint:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *bool:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *int8:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *uint8:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *int32:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *uint32:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *int16:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	case *uint16:
-		return "?", []interface{}{actual}, nil
+		return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{actual}), nil
 	}
 
 	srcValue := reflect.ValueOf(value)
 	dstValue := reflect.New(srcValue.Type())
 	dstValue.Elem().Set(srcValue)
 	valueCopy := dstValue.Elem().Interface()
+	return NewSingleExpression(p.ColumnExpression(source), "?", []interface{}{valueCopy}), nil
+}
 
-	return "?", []interface{}{valueCopy}, nil
+func NewSingleExpression(expression string, fragment string, args []interface{}) []*Expression {
+	builder := &strings.Builder{}
+	builder.WriteString(fragment)
+	return []*Expression{{ColumnExpression: expression, Args: args, SQLFragment: builder}}
 }
