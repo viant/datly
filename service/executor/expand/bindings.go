@@ -152,17 +152,19 @@ func (c *CriteriaExpander) Expand(source string, value interface{}) ([]*Expressi
 	if c.aSlice != nil {
 		expressionsIndex := map[int64]int{}
 		ptr := xunsafe.AsPointer(value)
-		index := c.itemIndex(value)
-		expressionIndex, ok := expressionsIndex[index]
-		if !ok {
-			expressionIndex = len(expressions)
-			expressions = append(expressions, c.newExpression(source, index))
-		}
 
-		expression := expressions[expressionIndex]
 		size := c.aSlice.Len(ptr)
 		for i := 0; i < size; i++ {
-			if i != 0 {
+			index := c.itemIndex(c.aSlice.ValueAt(ptr, i))
+			expressionIndex, ok := expressionsIndex[index]
+			if !ok {
+				expressionIndex = len(expressions)
+				expressions = append(expressions, c.newExpression(source, index))
+				expressionsIndex[index] = expressionIndex
+			}
+			expression := expressions[expressionIndex]
+
+			if len(expression.Args) > 0 {
 				expression.SQLFragment.WriteString(", ")
 			}
 			c.expandItem(expression.SQLFragment, &expression.Args, c.aSlice.ValueAt(ptr, i), index)
@@ -221,9 +223,10 @@ func (c *CriteriaExpander) columnExpression(source string, presence int64) strin
 func (c *CriteriaExpander) itemIndex(value interface{}) int64 {
 	ptr := xunsafe.AsPointer(value)
 	var result int64
+	fmt.Printf("%+v\n", value)
 	for i, column := range c.columns {
 		fieldValue := reflect.ValueOf(column.Field.Value(ptr))
-		if !(fieldValue.Kind() == reflect.Ptr && fieldValue.IsNil()) || !fieldValue.IsZero() {
+		if (fieldValue.Kind() == reflect.Ptr && !fieldValue.IsNil()) || !fieldValue.IsZero() {
 			result |= 1 << i
 		}
 	}
@@ -276,7 +279,7 @@ func (s *SliceExpander) Expand(source string, value interface{}) ([]*Expression,
 
 		for _, expression := range expanded {
 			result = append(result, expression.Args...)
-			sb.WriteString(expression.ColumnExpression)
+			sb.WriteString(expression.SQLFragment.String())
 
 		}
 	}

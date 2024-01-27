@@ -214,7 +214,6 @@ func (c *DataUnit) in(columnName string, args interface{}, inclusive bool) (stri
 
 func (c *DataUnit) expandInExpression(expressions []*Expression, inclusive bool) string {
 	sb := &strings.Builder{}
-	shouldAddBrackets := len(expressions) > 1
 	sb.WriteString(" (")
 
 	for i, expression := range expressions {
@@ -226,21 +225,15 @@ func (c *DataUnit) expandInExpression(expressions []*Expression, inclusive bool)
 			}
 		}
 
-		if shouldAddBrackets {
-			sb.WriteString(" (")
-		}
-
 		sb.WriteString(expression.ColumnExpression)
 		if !inclusive {
 			sb.WriteString(" NOT")
 		}
 
 		sb.WriteString(" IN ( ")
-		sb.WriteString(c.expandWithCommas(expressions))
-	}
-
-	if shouldAddBrackets {
-		sb.WriteString(" )")
+		sb.WriteString(expression.SQLFragment.String())
+		sb.WriteString(")")
+		c.addAll(expression.Args...)
 	}
 
 	sb.WriteString(" )")
