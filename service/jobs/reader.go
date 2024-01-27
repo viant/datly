@@ -13,7 +13,7 @@ const (
 
 func (s *Service) JobById(ctx context.Context, jobID string) (*async.Job, error) {
 	var result = []*async.Job{}
-	session, err := reader.NewSession(&result, s.readerView, reader.WithDryRun())
+	session, err := reader.NewSession(&result, s.readerView)
 	if err != nil {
 		return nil, err
 	}
