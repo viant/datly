@@ -61,7 +61,6 @@ func (c *DataUnit) Allocate(tableName string, dest interface{}, selector string)
 	db, err := c.MetaSource.Db()
 	if err != nil {
 		fmt.Printf("error occured while connecting to DB %v\n", err.Error())
-
 		return "", fmt.Errorf("error occurred while connecting to DB")
 	}
 
