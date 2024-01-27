@@ -223,7 +223,6 @@ func (c *CriteriaExpander) columnExpression(source string, presence int64) strin
 func (c *CriteriaExpander) itemIndex(value interface{}) int64 {
 	ptr := xunsafe.AsPointer(value)
 	var result int64
-	fmt.Printf("%+v\n", value)
 	for i, column := range c.columns {
 		fieldValue := reflect.ValueOf(column.Field.Value(ptr))
 		if (fieldValue.Kind() == reflect.Ptr && !fieldValue.IsNil()) || !fieldValue.IsZero() {
