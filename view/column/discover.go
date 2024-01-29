@@ -70,7 +70,7 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs .
 
 	sqlColumns, err := inferColumnWithSQL(ctx, db, SQL, SQLArgs, byName)
 	if err != nil {
-		return queryColumns, fmt.Errorf("failed to detect column: %w %s %v", err, SQL, SQLArgs)
+		return queryColumns, fmt.Errorf("failed to discover/detect column: %w %s %v", err, SQL, SQLArgs)
 	}
 	if queryColumns.IsStarExpr() {
 		return asColumns(sqlColumns), nil

@@ -3,6 +3,7 @@ package inference
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/view/column"
 	"github.com/viant/sqlparser"
@@ -76,6 +77,9 @@ func (t *Table) lookup(ns, column string) *sqlparser.Column {
 func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 	SQL = TrimParenthesis(SQL)
 	query, err := sqlparser.ParseQuery(SQL)
+	if err != nil {
+		return fmt.Errorf("unable to parseSQL to detect table: %w", err)
+	}
 	query, err = column.RewriteWithQueryIfNeeded(SQL, query)
 	if query == nil || query.From.X == nil {
 		if query != nil && len(query.List) > 0 {

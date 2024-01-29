@@ -289,11 +289,11 @@ func (s State) Expand(text string) string {
 		}
 	}
 
-	text = expandPredicateExpr(text)
+	text = removePredicateExpr(text)
 	return expander.ExpandAsText(text)
 }
 
-func expandPredicateExpr(query string) string {
+func removePredicateExpr(query string) string {
 	//TODO make it more generics
 	indexStart := strings.Index(query, "${predicate.")
 	if indexStart == -1 {
@@ -306,7 +306,7 @@ func expandPredicateExpr(query string) string {
 	if !strings.Contains(query, "${predicate.") {
 		return query
 	}
-	return expandPredicateExpr(query)
+	return removePredicateExpr(query)
 }
 
 // DsqlParameterDeclaration returns dql parameter declaration

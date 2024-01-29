@@ -1,6 +1,6 @@
 module github.com/viant/datly
 
-go 1.21
+go 1.21.6
 
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
@@ -44,7 +44,7 @@ require (
 
 require (
 	github.com/viant/govalidator v0.2.2-0.20230629211659-f2a3f0659b0b
-	github.com/viant/sqlparser v0.5.2
+	github.com/viant/sqlparser v0.5.3-0.20240129191008-1fd7a2507ac5
 	golang.org/x/crypto v0.14.0 // indirect
 )
 
