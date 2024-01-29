@@ -5,7 +5,9 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/structology"
 	"github.com/viant/xreflect"
+	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 )
@@ -61,7 +63,7 @@ func (s *Service) updatedNamedType(item *state.Parameter, registry *xreflect.Typ
 
 func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type, res *view.Resourcelet) {
 	//if you failed at translation i.e due to missing custom codec or other dependencies, it would try to build later at runtime
-	err := aType.Init(state.WithResource(res))
+	err := aType.Init(state.WithResource(res), state.WithMarker(true))
 	if err != nil || aType.Schema == nil {
 		aType.Name = ""
 		return
@@ -74,16 +76,20 @@ func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type,
 	//TO change to use xreflect.Type.Body for rType
 	sType := types.EnsureStruct(rType)
 	var typeDefs []*view.TypeDefinition
+	var markerField *reflect.StructField
 	for _, parameter := range aType.Parameters {
-		anObject, ok := sType.FieldByName(parameter.Name)
+		aStructField, ok := sType.FieldByName(parameter.Name)
 		if !ok {
 			return
 		}
-		fieldTypeName := anObject.Tag.Get(xreflect.TagTypeName)
+		if markerTag := aStructField.Tag.Get(structology.SetMarkerTag); markerTag != "" {
+			markerField = &aStructField
+		}
+		fieldTypeName := aStructField.Tag.Get(xreflect.TagTypeName)
 		if fieldTypeName == "" {
 			continue
 		}
-		fieldType := types.EnsureStruct(anObject.Type)
+		fieldType := types.EnsureStruct(aStructField.Type)
 		if fieldType != nil {
 			if hasField, ok := fieldType.FieldByName("Has"); ok {
 				if hasFieldName := hasField.Tag.Get(xreflect.TagTypeName); hasFieldName != "" {
@@ -91,7 +97,24 @@ func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type,
 				}
 			}
 		}
-		typeDefs = append(typeDefs, buildTypeDef(fieldTypeName, aType.Package, anObject.Type))
+		typeDefs = append(typeDefs, buildTypeDef(fieldTypeName, aType.Package, aStructField.Type))
+	}
+
+	if markerField == nil {
+		xStruct := xunsafe.NewStruct(rType)
+		for i := range xStruct.Fields {
+			field := &xStruct.Fields[i]
+			if markerTag := field.Tag.Get(structology.SetMarkerTag); markerTag != "" {
+				markerField = &reflect.StructField{Name: field.Name, Type: field.Type, Tag: reflect.StructTag(field.Tag)}
+			}
+		}
+	}
+	if markerField != nil {
+		typeName := markerField.Name
+		if fieldTypeName := markerField.Tag.Get(xreflect.TagTypeName); fieldTypeName != "" {
+			typeName = fieldTypeName
+		}
+		typeDefs = append(typeDefs, buildTypeDef(typeName, aType.Package, markerField.Type))
 	}
 
 	for _, aDef := range typeDefs {
