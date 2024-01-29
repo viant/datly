@@ -23,6 +23,10 @@ const (
 	PredicateHandler     = "handler"
 	PredicateContains    = "contains"
 	PredicateNotContains = "not_contains"
+
+	PredicateExists    = "exists"
+	PredicateNotExists = "not_exists"
+
 	// TODO IF NEEDED
 	//PredicateContainsWord = "contains_word" // for backward compatibility: like "% value %", doesn't use regexp
 	//PredicateHasPrefix    = "has_prefix"
@@ -233,6 +237,59 @@ func binaryPredicate(name, operator string) *Predicate {
 			},
 		},
 		Handler: nil,
+	}
+}
+
+func NewExistsPredicate() *Predicate {
+	return newExistsPredicate(PredicateExists, false)
+}
+
+func NewNotExistsPredicate() *Predicate {
+	return newExistsPredicate(PredicateNotExists, true)
+}
+
+func newExistsPredicate(name string, negated bool) *Predicate {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "Alias",
+			Position: 0,
+		},
+		{
+			Name:     "Column",
+			Position: 1,
+		},
+		{
+			Name:     "LookupAlias",
+			Position: 2,
+		},
+		{
+			Name:     "LookupTable",
+			Position: 3,
+		},
+		{
+			Name:     "LookupColumn",
+			Position: 4,
+		},
+		{
+			Name:     "FilterColumn",
+			Position: 5,
+		},
+	}
+
+	clause := ` EXISTS (SELECT 1 FROM ${LookupTable} ${LookupAlias} 
+				WHERE ${LookupAlias}.${LookupColumn} = ${Alias}.${Column} AND
+					  ${LookupAlias}.${FilterColumn} = $FilterValue   ) `
+
+	if negated {
+		clause = " NOT " + clause
+	}
+
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   name,
+			Source: " " + clause,
+			Args:   args,
+		},
 	}
 }
 
