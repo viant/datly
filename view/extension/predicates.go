@@ -278,7 +278,7 @@ func newExistsPredicate(name string, negated bool) *Predicate {
 
 	clause := ` EXISTS (SELECT 1 FROM ${LookupTable} ${LookupAlias} 
 				WHERE ${LookupAlias}.${LookupColumn} = ${Alias}.${Column} AND
-					  ${LookupAlias}.${FilterColumn} = $FilterValue   ) `
+                      $criteria.In(${LookupAlias} + "." + ${FilterColumn}, $FilterValue))  `
 
 	if negated {
 		clause = " NOT " + clause
