@@ -17,7 +17,7 @@ func (r *Form) Names() []string {
 }
 
 func (r *Form) Value(ctx context.Context, name string) (interface{}, bool, error) {
-	if len(r.form.Values) == 0 && r.request == nil {
+	if r.form != nil && len(r.form.Values) == 0 && r.request == nil {
 		return nil, false, nil
 	}
 	value, ok := r.form.Values[name]

@@ -196,7 +196,9 @@ func WithForm(form url.Values) Option {
 		if o.form == nil {
 			o.form = state.NewForm()
 		}
-		o.form.SetValues(form)
+		if len(form) > 0 {
+			o.form.SetValues(form)
+		}
 	}
 }
 
