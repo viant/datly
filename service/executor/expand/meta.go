@@ -307,7 +307,7 @@ func copyValue(data interface{}) interface{} {
 	case reflect.Slice:
 		sliceResult := reflect.MakeSlice(result.Type(), result.Len(), result.Len())
 		reflect.Copy(sliceResult, result)
-		return result.Elem().Interface()
+		return sliceResult.Interface()
 	default:
 		dest := types.NewValue(result.Type())
 		actualType := result.Type()
