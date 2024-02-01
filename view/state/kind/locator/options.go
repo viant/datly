@@ -20,7 +20,7 @@ type (
 	Options struct {
 		request          *http.Request
 		fromError        error
-		Form             *state.Form
+		form             *state.Form
 		Parent           *KindLocator
 		URIPattern       string
 		BodyType         reflect.Type
@@ -86,14 +86,7 @@ type Option func(o *Options)
 // WithRequest create http requestState option
 func WithRequest(request *http.Request) Option {
 	return func(o *Options) {
-		o.fromError = request.ParseForm()
 		o.request = request
-		if o.Form == nil {
-			o.Form = state.NewForm()
-		}
-		if request.Form != nil {
-			o.Form.SetValues(request.Form)
-		}
 	}
 }
 
@@ -200,10 +193,10 @@ func WithView(aView *view.View) Option {
 // WithMetrics return metrics option
 func WithForm(form url.Values) Option {
 	return func(o *Options) {
-		if o.Form == nil {
-			o.Form = state.NewForm()
+		if o.form == nil {
+			o.form = state.NewForm()
 		}
-		o.Form.SetValues(form)
+		o.form.SetValues(form)
 	}
 }
 

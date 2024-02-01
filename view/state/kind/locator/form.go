@@ -4,10 +4,12 @@ import (
 	"context"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
+	"net/http"
 )
 
 type Form struct {
-	Form *state.Form
+	form    *state.Form
+	request *http.Request
 }
 
 func (r *Form) Names() []string {
@@ -15,22 +17,34 @@ func (r *Form) Names() []string {
 }
 
 func (r *Form) Value(ctx context.Context, name string) (interface{}, bool, error) {
-	if len(r.Form.Values) == 0 {
+	if len(r.form.Values) == 0 && r.request == nil {
 		return nil, false, nil
 	}
-	value, ok := r.Form.Values[name]
+	value, ok := r.form.Values[name]
 	if !ok {
-		return nil, false, nil
+		if r.request == nil {
+			return nil, false, nil
+		}
+		value := r.request.FormValue(name)
+		if value == "" {
+			if r.request.Form == nil {
+				return nil, false, nil
+			}
+			_, ok := r.request.Form[name]
+			return nil, ok, nil
+		}
+		return value, true, nil
 	}
+
 	if len(value) > 1 {
 		return value, true, nil
 	}
-	return r.Form.Get(name), true, nil
+	return r.form.Get(name), true, nil
 }
 
 // NewForm returns body locator
 func NewForm(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
-	var ret = &Form{Form: options.Form}
+	var ret = &Form{form: options.form, request: options.request}
 	return ret, nil
 }
