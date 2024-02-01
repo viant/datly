@@ -137,7 +137,8 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 		} else {
 			inputState = inputType.Type().NewState()
 		}
-		locatorOptions := aComponent.LocatorOptions(nil, nil)
+
+		locatorOptions := aComponent.LocatorOptions(nil, nil, nil)
 		options := aSession.ViewOptions(aComponent.View, session.WithLocatorOptions(locatorOptions...))
 		options = options.Indirect(true)
 		if populateView {

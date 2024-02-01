@@ -41,6 +41,7 @@ type (
 	sessionOptions struct {
 		request  *http.Request
 		resource state.Resource
+		form     *state.Form
 	}
 	SessionOption func(o *sessionOptions)
 
@@ -122,11 +123,20 @@ func newSessionOptions(opts []SessionOption) *sessionOptions {
 		URL, _ := nurl.Parse("http://127.0.0.1/")
 		sessionOpt.request = &http.Request{Header: make(http.Header), URL: URL}
 	}
+	if sessionOpt.form == nil {
+		sessionOpt.form = state.NewForm()
+	}
 	return sessionOpt
 }
 func WithRequest(request *http.Request) SessionOption {
 	return func(o *sessionOptions) {
 		o.request = request
+	}
+}
+
+func WithForm(form *state.Form) SessionOption {
+	return func(o *sessionOptions) {
+		o.form = form
 	}
 }
 
@@ -138,7 +148,7 @@ func WithStateResource(resource state.Resource) SessionOption {
 
 func (s *Service) NewComponentSession(aComponent *repository.Component, opts ...SessionOption) *session.Session {
 	sessionOpt := newSessionOptions(opts)
-	options := aComponent.LocatorOptions(sessionOpt.request, aComponent.UnmarshalFunc(sessionOpt.request))
+	options := aComponent.LocatorOptions(sessionOpt.request, sessionOpt.form, aComponent.UnmarshalFunc(sessionOpt.request))
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...), session.WithStateResource(sessionOpt.resource))
 	return aSession
 }

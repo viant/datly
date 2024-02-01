@@ -23,11 +23,11 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request 
 		return nil, err
 	}
 	unmarshal := aComponent.UnmarshalFunc(request)
-	options := aComponent.LocatorOptions(request, unmarshal)
+	options := aComponent.LocatorOptions(request, form, unmarshal)
 	if form != nil {
 		options = append(options, locator.WithForm(form))
 	}
-	options = append(aComponent.LocatorOptions(request, unmarshal), options...)
+	options = append(aComponent.LocatorOptions(request, form, unmarshal), options...)
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...))
 	ctx = aSession.Context(ctx, true)
 	value, err := d.service.Operate(ctx, aSession, aComponent)

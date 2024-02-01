@@ -19,6 +19,7 @@ import (
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric"
 	"github.com/viant/xdatly/handler/async"
 	"net/http"
@@ -152,7 +153,7 @@ func (r *Router) HandleJob(ctx context.Context, aJob *async.Job) error {
 	ctx = context.WithValue(ctx, async.InvocationTypeKey, async.InvocationTypeEvent)
 	request := &http.Request{Method: aJob.Method, URL: URL, RequestURI: aPath.URI}
 	unmarshal := aComponent.UnmarshalFunc(request)
-	locatorOptions := append(aComponent.LocatorOptions(request, unmarshal))
+	locatorOptions := append(aComponent.LocatorOptions(request, state.NewForm(), unmarshal))
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...))
 	if err != nil {
 		return err
