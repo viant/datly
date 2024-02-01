@@ -15,6 +15,7 @@ type componentLocator struct {
 	custom     []interface{}
 	dispatch   contract.Dispatcher
 	getRequest func() (*http.Request, error)
+	getForm    func() *state.Form
 }
 
 func (l *componentLocator) Names() []string {
@@ -27,7 +28,8 @@ func (l *componentLocator) Value(ctx context.Context, name string) (interface{},
 	if err != nil {
 		return nil, false, err
 	}
-	value, err := l.dispatch.Dispatch(ctx, &contract.Path{Method: method, URI: URI}, request)
+	form := l.getForm()
+	value, err := l.dispatch.Dispatch(ctx, &contract.Path{Method: method, URI: URI}, request, form)
 	return value, err == nil, err
 }
 
@@ -48,6 +50,7 @@ func newComponentLocator(opts ...locator.Option) (kind.Locator, error) {
 		custom:     options.Custom,
 		dispatch:   options.Dispatcher,
 		getRequest: options.GetRequest,
+		getForm:    options.GetForm,
 	}
 	return ret, nil
 }

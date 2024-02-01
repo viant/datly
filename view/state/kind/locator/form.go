@@ -39,7 +39,6 @@ func (r *Form) Value(ctx context.Context, name string) (interface{}, bool, error
 		}
 		return value, true, nil
 	}
-
 	if len(value) > 1 {
 		return value, true, nil
 	}

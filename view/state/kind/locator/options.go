@@ -11,7 +11,6 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/handler/response"
 	"net/http"
-	"net/url"
 	"reflect"
 )
 
@@ -57,11 +56,15 @@ func (o Options) LookupParameters(name string) *state.Parameter {
 	return nil
 }
 
-func (o Options) GetRequest() (*http.Request, error) {
+func (o *Options) GetRequest() (*http.Request, error) {
 	return shared.CloneHTTPRequest(o.request)
 }
 
-func (o Options) UnmarshalFunc() Unmarshal {
+func (o *Options) GetForm() *state.Form {
+	return o.form
+}
+
+func (o *Options) UnmarshalFunc() Unmarshal {
 	if o.Unmarshal != nil {
 		return o.Unmarshal
 	}
@@ -191,14 +194,9 @@ func WithView(aView *view.View) Option {
 }
 
 // WithMetrics return metrics option
-func WithForm(form url.Values) Option {
+func WithForm(form *state.Form) Option {
 	return func(o *Options) {
-		if o.form == nil {
-			o.form = state.NewForm()
-		}
-		if len(form) > 0 {
-			o.form.SetValues(form)
-		}
+		o.form = form
 	}
 }
 

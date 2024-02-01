@@ -29,7 +29,6 @@ import (
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xreflect"
 	"net/http"
-	"net/url"
 	"reflect"
 	"strings"
 )
@@ -205,7 +204,7 @@ func (c *Component) LocatorOptions(request *http.Request, unmarshal shared.Unmar
 
 	if request != nil {
 		result = append(result, locator.WithRequest(request))
-		result = append(result, locator.WithForm(url.Values{}))
+		result = append(result, locator.WithForm(state.NewForm()))
 	}
 	if c.View != nil {
 		result = append(result, locator.WithResource(c.View.GetResource()))
