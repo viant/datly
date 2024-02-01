@@ -24,6 +24,14 @@ func (f *Form) Get(key string) string {
 	return f.Values.Get(key)
 }
 
+// Lookup safely gets the first value associated with the given key.
+func (f *Form) Lookup(key string) ([]string, bool) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+	ret, ok := f.Values[key]
+	return ret, ok
+}
+
 // Add safely adds the value to the key.
 func (f *Form) Add(key, value string) {
 	f.mux.Lock()

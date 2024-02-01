@@ -22,7 +22,7 @@ func (r *Form) Value(ctx context.Context, name string) (interface{}, bool, error
 	if r.form != nil && len(r.form.Values) == 0 && r.request == nil {
 		return nil, false, nil
 	}
-	value, ok := r.form.Values[name]
+	values, ok := r.form.Lookup(name)
 	if !ok {
 		if r.request == nil {
 			return nil, false, nil
@@ -39,8 +39,8 @@ func (r *Form) Value(ctx context.Context, name string) (interface{}, bool, error
 		}
 		return value, true, nil
 	}
-	if len(value) > 1 {
-		return value, true, nil
+	if len(values) > 1 {
+		return values, true, nil
 	}
 	return r.form.Get(name), true, nil
 }
