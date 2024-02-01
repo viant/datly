@@ -346,7 +346,7 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 
 func IsHttpParamKind(kind state.Kind) bool {
 	switch kind {
-	case state.KindPath, state.KindQuery, state.KindHeader, state.KindCookie:
+	case state.KindPath, state.KindForm, state.KindQuery, state.KindHeader, state.KindCookie:
 		return true
 	}
 

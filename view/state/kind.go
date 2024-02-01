@@ -9,11 +9,10 @@ import (
 type Kind string
 
 const (
-	KindView Kind = "view"
-
-	//deprecated use view instead
+	KindView        Kind = "view"
 	KindHeader      Kind = "header"
 	KindQuery       Kind = "query"
+	KindForm        Kind = "form"
 	KindPath        Kind = "path"
 	KindCookie      Kind = "cookie"
 	KindRequestBody Kind = "body"
@@ -50,7 +49,7 @@ const (
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindGenerator, KindTransient, KindHandler, KindComponent, KindMeta, KindAsync:
+	case KindView, KindPath, KindForm, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindLiteral, KindParam, KindRequest, KindRepeated, KindObject, KindOutput, KindState, KindContext, KindGenerator, KindTransient, KindHandler, KindComponent, KindMeta, KindAsync:
 		return nil
 	}
 
@@ -65,38 +64,40 @@ func (k Kind) Ordinal() int {
 		return 1
 	case KindQuery:
 		return 2
-	case KindPath:
+	case KindForm:
 		return 3
-	case KindCookie:
+	case KindPath:
 		return 4
-	case KindRequestBody:
+	case KindCookie:
 		return 5
-	case KindEnvironment:
+	case KindRequestBody:
 		return 6
-	case KindConst:
+	case KindEnvironment:
 		return 7
-	case KindParam:
+	case KindConst:
 		return 8
-	case KindRequest:
+	case KindParam:
 		return 9
-	case KindOutput:
+	case KindRequest:
 		return 10
-	case KindState:
+	case KindOutput:
 		return 11
-	case KindContext:
+	case KindState:
 		return 12
-	case KindComponent:
+	case KindContext:
 		return 13
-	case KindAsync:
+	case KindComponent:
 		return 14
-	case KindMeta:
+	case KindAsync:
 		return 15
-	case KindGenerator:
+	case KindMeta:
 		return 16
-	case KindTransient:
+	case KindGenerator:
 		return 17
-	case KindHandler:
+	case KindTransient:
 		return 18
+	case KindHandler:
+		return 19
 	}
 	return -1
 }

@@ -6,6 +6,7 @@ func init() {
 	Register(state.KindRequest, NewHttpRequest)
 	Register(state.KindPath, NewPath)
 	Register(state.KindQuery, NewQuery)
+	Register(state.KindForm, NewForm)
 	Register(state.KindView, NewView)
 	Register(state.KindHeader, NewHeader)
 	Register(state.KindCookie, NewCookie)

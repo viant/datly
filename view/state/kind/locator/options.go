@@ -11,6 +11,7 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/handler/response"
 	"net/http"
+	"net/url"
 	"reflect"
 )
 
@@ -18,6 +19,8 @@ import (
 type (
 	Options struct {
 		request          *http.Request
+		fromError        error
+		form             *state.Form
 		Parent           *KindLocator
 		URIPattern       string
 		BodyType         reflect.Type
@@ -184,6 +187,18 @@ func WithDispatcher(dispatcher contract.Dispatcher) Option {
 func WithView(aView *view.View) Option {
 	return func(o *Options) {
 		o.View = aView
+	}
+}
+
+// WithMetrics return metrics option
+func WithForm(form url.Values) Option {
+	return func(o *Options) {
+		if o.form == nil {
+			o.form = state.NewForm()
+		}
+		if len(form) > 0 {
+			o.form.SetValues(form)
+		}
 	}
 }
 
