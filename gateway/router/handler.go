@@ -141,7 +141,7 @@ func (r *Handler) Handle(ctx context.Context, response http.ResponseWriter, requ
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	payloadReader, err := r.payloadReader(ctx, request, response, aComponent)
+	payloadReader, err := r.handleWithComponent(ctx, request, response, aComponent)
 	if err != nil {
 		code, _ := httputils.BuildErrorResponse(err)
 		r.writeErr(response, aComponent, err, code)
@@ -299,14 +299,14 @@ func (r *Handler) logMetrics(URI string, metrics []*response.Metric) {
 	fmt.Printf("%v\n", string(asBytes))
 }
 
-func (r *Handler) payloadReader(ctx context.Context, request *http.Request, writer http.ResponseWriter, aComponent *repository.Component) (PayloadReader, error) {
+func (r *Handler) handleWithComponent(ctx context.Context, request *http.Request, writer http.ResponseWriter, aComponent *repository.Component) (PayloadReader, error) {
 
 	//TODO merge with Path settings
 	unmarshal := aComponent.UnmarshalFunc(request)
 
 	locatorOptions := append(aComponent.LocatorOptions(request, unmarshal))
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...))
-	err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindQuery, state.KindRequestBody)
+	err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
 	if err != nil {
 		return nil, err
 	}

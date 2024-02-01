@@ -97,17 +97,17 @@ func (r *Router) Handle(writer http.ResponseWriter, request *http.Request) {
 func (r *Router) handle(writer http.ResponseWriter, request *http.Request) {
 	err := r.ensureRequestURL(request)
 	if err != nil {
-		r.handleErrIfNeeded(writer, http.StatusInternalServerError, err)
+		r.handleRequest(writer, http.StatusInternalServerError, err)
 		return
 	}
 	if !r.authorizeRequestIfNeeded(writer, request) {
 		return
 	}
-	errStatusCode, err := r.handleWithError(writer, request)
-	r.handleErrIfNeeded(writer, errStatusCode, err)
+	errStatusCode, err := r.handleRoute(writer, request)
+	r.handleRequest(writer, errStatusCode, err)
 }
 
-func (r *Router) handleWithError(writer http.ResponseWriter, request *http.Request) (int, error) {
+func (r *Router) handleRoute(writer http.ResponseWriter, request *http.Request) (int, error) {
 	if !meta.IsAuthorized(request, r.config.Meta.AllowedSubnet) {
 		return http.StatusForbidden, nil
 	}
@@ -223,11 +223,10 @@ func (r *Router) unexpectedType(asRoute *Route, expected interface{}) error {
 	return fmt.Errorf("unexpected Matchable type, wanted %T got %T", asRoute, expected)
 }
 
-func (r *Router) handleErrIfNeeded(writer http.ResponseWriter, errStatusCode int, err error) {
+func (r *Router) handleRequest(writer http.ResponseWriter, errStatusCode int, err error) {
 	if errStatusCode < http.StatusBadRequest {
 		return
 	}
-
 	var message string
 	if err != nil {
 		switch actual := err.(type) {

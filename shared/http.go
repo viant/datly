@@ -11,6 +11,8 @@ func CloneHTTPRequest(request *http.Request) (*http.Request, error) {
 	var data []byte
 	var err error
 	ret := *request
+	request.ParseForm()
+	ret.URL = request.URL
 	if request.Body != nil {
 		if data, err = readRequestBody(request); err != nil {
 			return nil, err

@@ -38,7 +38,7 @@ func (p ParamName) Validate(kind Kind) error {
 	switch kind {
 	case KindObject:
 		return nil
-	case KindRequest, KindLiteral, KindConst, KindRequestBody, KindQuery, KindTransient, KindHandler, KindOutput:
+	case KindRequest, KindLiteral, KindConst, KindRequestBody, KindForm, KindQuery, KindTransient, KindHandler, KindOutput:
 		return nil
 	case KindView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindGenerator, KindContext, KindComponent, KindMeta, KindAsync:
 		if p == "" {
@@ -62,6 +62,11 @@ func NewHeaderLocation(name string) *Location {
 // NewQueryLocation creates a query location
 func NewQueryLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindQuery}
+}
+
+// NewFormLocation creates a query location
+func NewFormLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindForm}
 }
 
 // NewBodyLocation creates a body location

@@ -192,6 +192,7 @@ func (c *Component) Exclusion(state *view.State) []*json.FilterEntry {
 }
 
 func (c *Component) LocatorOptions(request *http.Request, unmarshal shared.Unmarshal) []locator.Option {
+
 	var result []locator.Option
 
 	if unmarshal != nil {
@@ -200,6 +201,7 @@ func (c *Component) LocatorOptions(request *http.Request, unmarshal shared.Unmar
 	if c.dispatcher != nil {
 		result = append(result, locator.WithDispatcher(c.dispatcher))
 	}
+
 	if request != nil {
 		result = append(result, locator.WithRequest(request))
 	}

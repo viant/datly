@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/structology"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 type Body struct {
 	bodyType     reflect.Type
+	form         *state.Form
 	mux          sync.Mutex
 	body         []byte
 	unmarshal    Unmarshal
@@ -82,7 +84,7 @@ func NewBody(opts ...Option) (kind.Locator, error) {
 	if options.Unmarshal == nil {
 		return nil, fmt.Errorf("unmarshal was empty")
 	}
-	var ret = &Body{request: options.request, bodyType: options.BodyType, unmarshal: options.UnmarshalFunc()}
+	var ret = &Body{request: options.request, bodyType: options.BodyType, unmarshal: options.UnmarshalFunc(), form: options.Form}
 	return ret, nil
 }
 
@@ -120,19 +122,9 @@ func (r *Body) updateQueryString(ctx context.Context, body interface{}) {
 	case *map[string]string:
 		queryParams = *actual
 	}
-	UpdateRequestWithQuery(r.request, queryParams)
-}
-
-// UpdateRequestWithQuery updates the given http.Request with query parameters provided in the map.
-func UpdateRequestWithQuery(req *http.Request, queryParams map[string]string) {
-	// Parse the existing query string from the request
-	q := req.URL.Query()
-
-	// Range over the map and add each key-value pair to the query string
-	for key, value := range queryParams {
-		q.Set(key, value)
+	if len(queryParams) > 0 {
+		for k, v := range queryParams {
+			r.form.Set(k, v)
+		}
 	}
-
-	// Encode the query string and assign it back to the request's URL
-	req.URL.RawQuery = q.Encode()
 }

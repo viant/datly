@@ -67,13 +67,13 @@ func (p Parameters) External() Parameters {
 	var result Parameters
 	for i, parameter := range p {
 		switch parameter.In.Kind {
-		case KindHeader, KindQuery, KindRequestBody, KindCookie, KindRequest:
+		case KindHeader, KindForm, KindQuery, KindRequestBody, KindCookie, KindRequest:
 			result = append(result, p[i])
 		case KindObject:
 		object:
 			for _, item := range parameter.Object {
 				switch item.In.Kind {
-				case KindHeader, KindQuery, KindRequestBody, KindCookie, KindRequest:
+				case KindHeader, KindForm, KindQuery, KindRequestBody, KindCookie, KindRequest:
 					result = append(result, parameter)
 					break object
 				}
@@ -177,7 +177,7 @@ func (p Parameters) Groups() []Parameters {
 			switch candidate.In.Kind {
 			case KindRequestBody:
 				body = append(body, p[i])
-			case KindHeader, KindConst, KindLiteral, KindQuery, KindCookie, KindRequest:
+			case KindHeader, KindConst, KindLiteral, KindForm, KindQuery, KindCookie, KindRequest:
 				external = append(external, p[i])
 			case KindParam, KindState:
 				transient = append(transient, p[i])

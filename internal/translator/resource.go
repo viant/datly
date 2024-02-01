@@ -286,7 +286,7 @@ func (r *Resource) buildParameterViews() {
 func (r *Resource) ImpliedKind() state.Kind {
 	switch strings.ToLower(r.Rule.Method) {
 	case "get":
-		return state.KindQuery
+		return state.KindForm
 	}
 	return state.KindRequestBody
 }
