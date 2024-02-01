@@ -196,7 +196,11 @@ func WithView(aView *view.View) Option {
 // WithMetrics return metrics option
 func WithForm(form *state.Form) Option {
 	return func(o *Options) {
-		o.form = form
+		if o.form == nil {
+			o.form = form
+		} else if form != nil {
+			o.form.SetValues(form.Values)
+		}
 	}
 }
 
