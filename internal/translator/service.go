@@ -21,9 +21,7 @@ import (
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
-	"github.com/viant/sqlparser/query"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"
@@ -86,7 +84,7 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	if err = s.updateComponentType(ctx, resource, resource.OutputState.FilterByKind(state.KindComponent)); err != nil {
 		return err
 	}
-	dSQL = rule.NormalizeSQL(dSQL, handleVeltyExpression)
+	dSQL = rule.NormalizeSQL(dSQL, parser.OnVeltyExpression)
 	if resource.IsExec() || resource.Rule.Handler != nil {
 		if err := s.translateExecutorDSQL(ctx, resource, dSQL); err != nil {
 			return err
@@ -174,7 +172,7 @@ func (s *Service) buildExecutorView(ctx context.Context, resource *Resource, DSQ
 }
 
 func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, dSQL string) error {
-	aQuery, err := sqlparser.ParseQuery(dSQL, handleVeltyExpression())
+	aQuery, err := sqlparser.ParseQuery(dSQL, parser.OnVeltyExpression())
 	if err != nil {
 		return err
 	}
@@ -277,22 +275,6 @@ func (s *Service) persistViewMetaColumn(cache discover.Columns, resource *Resour
 	cacheURL := url.Join(baseRuleURL, ".meta", ruleName+".yaml")
 	s.Repository.Files.Append(asset.NewFile(cacheURL, string(data)))
 	return nil
-}
-
-func handleVeltyExpression() sqlparser.Option {
-	return sqlparser.WithErrorHandler(func(err error, cur *parsly.Cursor, destNode interface{}) error {
-		fromNode, ok := destNode.(*query.From)
-		if !ok {
-			return err
-		}
-		match := cur.MatchOne(parser.IfBlockMatcher)
-		if match.Code == parser.IfBlockToken {
-			fromNode.Unparsed = match.Text(cur)
-			return nil
-		}
-
-		return err
-	})
 }
 
 func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, serviceType service.Type) error {

@@ -77,7 +77,7 @@ func (t *Table) lookup(ns, column string) *sqlparser.Column {
 func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 	SQL = TrimParenthesis(SQL)
 	query, err := sqlparser.ParseQuery(SQL)
-	if err != nil {
+	if err != nil && query.From.X == nil { //TODO add velty expr  handler
 		return fmt.Errorf("unable to parseSQL to detect table: %w", err)
 	}
 	query, err = column.RewriteWithQueryIfNeeded(SQL, query)

@@ -303,7 +303,6 @@ func (r *Handler) handleWithComponent(ctx context.Context, request *http.Request
 
 	//TODO merge with Path settings
 	unmarshal := aComponent.UnmarshalFunc(request)
-
 	locatorOptions := append(aComponent.LocatorOptions(request, state.NewForm(), unmarshal))
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...))
 	err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)

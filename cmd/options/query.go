@@ -18,11 +18,11 @@ func (m mapper) Map(name string) string {
 	return name
 }
 
-func (r *Rule) NormalizeSQL(SQL string, handleVeltyExpression func() sqlparser.Option) string {
+func (r *Rule) NormalizeSQL(SQL string, option func() sqlparser.Option) string {
 	if !r.Generated {
 		return SQL
 	}
-	sqlQuery, err := sqlparser.ParseQuery(SQL, handleVeltyExpression())
+	sqlQuery, err := sqlparser.ParseQuery(SQL, option())
 	if err != nil {
 		return SQL
 	}

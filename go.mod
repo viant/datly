@@ -27,7 +27,7 @@ require (
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 	github.com/viant/gmetric v0.3.1-0.20230405233616-cc90deee60c4
 	github.com/viant/godiff v0.4.1
-	github.com/viant/parsly v0.3.2
+	github.com/viant/parsly v0.3.3-0.20240201231835-eceb98bf4c32
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.12.1-0.20240201190210-9e2be3fa4de3
@@ -37,15 +37,15 @@ require (
 	github.com/viant/xreflect v0.6.2-0.20240129222322-972307391f16
 	github.com/viant/xunsafe v0.9.2
 	golang.org/x/mod v0.14.0
-	golang.org/x/oauth2 v0.13.0 // indirect
+	golang.org/x/oauth2 v0.16.0 // indirect
 	google.golang.org/api v0.126.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
 	github.com/viant/govalidator v0.2.2-0.20230629211659-f2a3f0659b0b
-	github.com/viant/sqlparser v0.5.3-0.20240129191008-1fd7a2507ac5
-	golang.org/x/crypto v0.14.0 // indirect
+	github.com/viant/sqlparser v0.5.3-0.20240202161521-a96ec25a3113
+	golang.org/x/crypto v0.18.0 // indirect
 )
 
 require (
@@ -116,11 +116,11 @@ require (
 	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/net v0.16.0 // indirect
+	golang.org/x/net v0.20.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.13.0 // indirect
-	golang.org/x/term v0.13.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/sys v0.16.0 // indirect
+	golang.org/x/term v0.16.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230530153820-e85fd2cbaebc // indirect

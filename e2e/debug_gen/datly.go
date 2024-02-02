@@ -63,7 +63,7 @@ func main() {
 
 	baseDir := filepath.Join(toolbox.CallerDirectory(3), "..")
 	fmt.Printf("base: %v\n", baseDir)
-	caseName := "032_generate_patch_basic_many"
+	caseName := "009_apikey"
 	caseFolder := filepath.Join(baseDir, "local/regression/cases/", caseName)
 	gen, err := loadGen(caseFolder, caseName)
 	if err != nil {
@@ -73,8 +73,8 @@ func main() {
 	os.Args = []string{"",
 		"-N=" + gen.Name,
 		"-X=" + gen.URL,
-		"-C='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true'",
-		"-C='dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy'",
+		"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
+		"-C=dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy",
 		fmt.Sprintf("-j='%v/local/jwt/public.enc|blowfish://default'", baseDir),
 		"-w=autogen",
 	}
@@ -89,16 +89,11 @@ func main() {
 	}()
 	os.Chdir(path.Join(baseDir, "local"))
 
-	server, err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
+	err = cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if server != nil {
-		if err := server.ListenAndServe(); err != nil {
-			log.Fatal(err.Error())
-		}
-	}
 }
 
 func loadGen(baseURL string, name string) (*Gen, error) {
