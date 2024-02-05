@@ -127,4 +127,12 @@ func (r *Body) updateQueryString(ctx context.Context, body interface{}) {
 			r.form.Set(k, v)
 		}
 	}
+	req := r.request
+	q := req.URL.Query()
+	for key, value := range queryParams {
+		q.Set(key, value)
+	}
+
+	// Encode the query string and assign it back to the request's URL
+	req.URL.RawQuery = q.Encode()
 }
