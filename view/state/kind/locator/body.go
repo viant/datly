@@ -15,7 +15,6 @@ import (
 type Body struct {
 	bodyType     reflect.Type
 	form         *state.Form
-	mux          sync.Mutex
 	body         []byte
 	unmarshal    Unmarshal
 	requestState *structology.State
@@ -106,6 +105,11 @@ func (r *Body) ensureRequest() (err error) {
 }
 
 func (r *Body) updateQueryString(ctx context.Context, body interface{}) {
+	if r.form != nil {
+		mux := r.form.Mutex()
+		mux.Lock()
+		defer mux.Unlock()
+	}
 	var queryParams map[string]string
 	switch actual := body.(type) {
 	case *map[string]interface{}:
@@ -127,6 +131,7 @@ func (r *Body) updateQueryString(ctx context.Context, body interface{}) {
 			r.form.Set(k, v)
 		}
 	}
+
 	req := r.request
 	q := req.URL.Query()
 	for key, value := range queryParams {

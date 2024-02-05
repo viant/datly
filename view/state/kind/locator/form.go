@@ -5,13 +5,11 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"net/http"
-	"sync"
 )
 
 type Form struct {
 	form    *state.Form
 	request *http.Request
-	mux     sync.Mutex
 }
 
 func (r *Form) Names() []string {
@@ -27,8 +25,8 @@ func (r *Form) Value(ctx context.Context, name string) (interface{}, bool, error
 		if r.request == nil {
 			return nil, false, nil
 		}
-		r.mux.Lock()
-		defer r.mux.Unlock()
+		r.form.Mutex().Lock()
+		defer r.form.Mutex().Unlock()
 		value := r.request.FormValue(name)
 		if value == "" {
 			if r.request.Form == nil {

@@ -10,6 +10,10 @@ type Form struct {
 	mux sync.RWMutex
 }
 
+func (f *Form) Mutex() *sync.RWMutex {
+	return &f.mux
+}
+
 // Set safely sets the value for a key.
 func (f *Form) Set(key, value string) {
 	f.mux.Lock()
