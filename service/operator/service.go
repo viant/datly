@@ -69,10 +69,9 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 	if ctx, err = s.EnsureAsyncContext(ctx, aSession, aComponent); err != nil {
 		return nil, err
 	}
-
 	switch aComponent.Service {
 	case service.TypeReader:
-		if ctx, err = s.EnsureReaderInput(ctx, aComponent, aSession); err != nil {
+		if ctx, err = s.EnsureInput(ctx, aComponent, aSession, true); err != nil {
 			return nil, err
 		}
 		if err != nil {
@@ -119,13 +118,6 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 		}
 	}
 	return ctx, nil
-}
-
-func (s *Service) EnsureReaderInput(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
-	if job := s.Job(ctx); job != nil { //
-		return ctx, nil
-	}
-	return s.EnsureInput(ctx, aComponent, aSession, true)
 }
 
 func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Component, aSession *session.Session, populateView bool) (context.Context, error) {
