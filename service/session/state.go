@@ -441,6 +441,21 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 			return nil, false, err
 		}
 	}
+
+	if !has && len(opts.namedParameters) > 0 {
+		switch parameter.In.Kind {
+		case state.KindState, state.KindParam:
+			if baseParameter, ok := opts.namedParameters[parameter.In.Name]; ok && baseParameter != parameter {
+				parameterLocator, err := locators.Lookup(baseParameter.In.Kind)
+				if err != nil {
+					return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", baseParameter.Name, err)
+				}
+				if value, has, err = parameterLocator.Value(ctx, baseParameter.In.Name); err != nil {
+					return nil, false, err
+				}
+			}
+		}
+	}
 	return s.adjustAndCache(ctx, parameter, opts, has, value, cachable)
 }
 
