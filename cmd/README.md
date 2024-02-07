@@ -12,10 +12,9 @@
 
 The general structure for DSQL
 ```sql
-[RouteConfig]
-SELECT mainViewAlias.*  [EXCEPT COLUMN][OutputConfig]
-[, secondViewAlias.*       [OutputConfig]  ]
-[, NviewAlias.*            [OutputConfig]  ]
+SELECT mainViewAlias.*  [EXCEPT COLUMN]
+[, secondViewAlias.* ]
+[, NviewAlias.* ]
 FROM (
     SELECT
     ID  [ColumnConfig],
@@ -23,7 +22,6 @@ FROM (
      other_column   
     FROM table1
     ) mainViewAlias [ViewConfig],
-
 [
  JOIN (
     SELECT OTHER_ID,
@@ -31,7 +29,7 @@ FROM (
         other_column
     FROM table2
     ) secondViewAlias  [ViewConfig] ON mainViewAlias.ID = secondViewAlias.OTHER_ID
-    
+
 ]    
 ```
 

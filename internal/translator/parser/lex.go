@@ -54,6 +54,8 @@ const (
 
 	valuesToken
 	IfBlockToken
+
+	ComponentKeyword
 )
 
 var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
@@ -77,6 +79,8 @@ var selectorStartMatcher = parsly.NewToken(selectorStartToken, "QuerySelector st
 var fullWordMatcher = parsly.NewToken(wordToken, "Word", imatchers.NewWordMatcher(true))
 
 var commentBlockMatcher = parsly.NewToken(commentBlockToken, "Comment", matcher.NewSeqBlock("/*", "*/"))
+
+var ComponentKeywordMatcher = parsly.NewToken(ComponentKeyword, "@component", matcher.NewFragment("@component"))
 
 var scopeBlockMatcher = parsly.NewToken(scopeBlockToken, "{ .... }", matcher.NewBlock('{', '}', '\\'))
 
