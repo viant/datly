@@ -182,7 +182,7 @@ func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Par
 			return err
 		}
 
-		if err = s.adjustCodecOutputType(parameter, types, resource); err != nil {
+		if err = s.adjustCodecType(parameter, types, resource); err != nil {
 			return err
 		}
 		itemTypeName := parameter.Repeated[0].OutputSchema().Name
@@ -202,7 +202,7 @@ func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Par
 		parameter.Schema = state.NewSchema(rType)
 		return nil
 	}
-	if err = s.adjustCodecOutputType(parameter, types, resource); err != nil {
+	if err = s.adjustCodecType(parameter, types, resource); err != nil {
 		return err
 	}
 	return nil
@@ -250,7 +250,7 @@ func (s *Service) adjustParameterType(parameter *state.Parameter, types *xreflec
 	return nil
 }
 
-func (s *Service) adjustCodecOutputType(parameter *state.Parameter, types *xreflect.Types, resource *Resource) error {
+func (s *Service) adjustCodecType(parameter *state.Parameter, types *xreflect.Types, resource *Resource) error {
 	output := parameter.Output
 	if output == nil {
 		return nil

@@ -23,7 +23,7 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet) 
 		if strings.Contains(item.Name, ".") {
 			continue
 		}
-		if err := s.adjustCodecOutputType(&item.Parameter, resource.typeRegistry, resource); err != nil {
+		if err := s.adjustCodecType(&item.Parameter, resource.typeRegistry, resource); err != nil {
 			return err
 		}
 		inputState.Append(resource.State[i])
@@ -114,7 +114,14 @@ func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type,
 		if fieldTypeName := markerField.Tag.Get(xreflect.TagTypeName); fieldTypeName != "" {
 			typeName = fieldTypeName
 		}
-		typeDefs = append(typeDefs, buildTypeDef(typeName, aType.Package, markerField.Type))
+		markerType := markerField.Type
+		if markerType.Kind() == reflect.Ptr {
+			markerType = markerType.Elem()
+		}
+		if markerTypeName := markerType.Name(); markerTypeName != "" {
+			typeName = markerTypeName
+		}
+		typeDefs = append(typeDefs, buildTypeDef(typeName, aType.Package, types.InlineStruct(markerField.Type, nil)))
 	}
 
 	for _, aDef := range typeDefs {

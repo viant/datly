@@ -4,8 +4,10 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/viant/datly/internal/setter"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
+	"github.com/viant/structology"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
@@ -74,8 +76,19 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 	if snippetBefore != "" {
 		options = append(options, xreflect.WithSnippetBefore(snippetBefore))
 	}
+	inputType := input.Type()
+	if inputType.Kind() == reflect.Ptr {
+		inputType = inputType.Elem()
+	}
+	if inputType.Name() != "" { //rewrite as inline sturct
+		inputType = types.InlineStruct(input.Type(), func(field *reflect.StructField) {
+			if markerTag := field.Tag.Get(structology.SetMarkerTag); markerTag != "" {
+				field.Type = types.InlineStruct(field.Type, nil)
+			}
+		})
+	}
 
-	inputState := xreflect.GenerateStruct(componentName+"Input", input.Type(), options...)
+	inputState := xreflect.GenerateStruct(componentName+"Input", inputType, options...)
 	builder.WriteString(inputState)
 	result := builder.String()
 	result = c.View.Resource().ReverseSubstitutes(result)
