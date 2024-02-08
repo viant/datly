@@ -36,7 +36,7 @@ const (
 	commentBlockToken
 	selectorStartToken
 	comaTerminatorToken
-	parenthesesBlockToken
+	ParenthesesBlockToken
 	endToken
 	elseToken
 	assignToken
@@ -86,7 +86,7 @@ var scopeBlockMatcher = parsly.NewToken(scopeBlockToken, "{ .... }", matcher.New
 
 var comaTerminatorMatcher = parsly.NewToken(comaTerminatorToken, "coma", matcher.NewTerminator(',', true))
 
-var parenthesesBlockMatcher = parsly.NewToken(parenthesesBlockToken, "Parentheses", matcher.NewBlock('(', ')', '\\'))
+var ParenthesesBlockMatcher = parsly.NewToken(ParenthesesBlockToken, "Parentheses", matcher.NewBlock('(', ')', '\\'))
 
 var endMatcher = parsly.NewToken(endToken, "End", matcher.NewFragment("#end"))
 var elseMatcher = parsly.NewToken(elseToken, "Else", matcher.NewFragment("#else"))

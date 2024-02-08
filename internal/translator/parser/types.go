@@ -39,7 +39,7 @@ func (t *types) discover(SQL string) []string {
 	t.discoverWithContext()
 	cursor := parsly.NewCursor("", []byte(SQL), 0)
 	for cursor.Pos < cursor.InputSize {
-		matched := cursor.MatchAfterOptional(whitespaceMatcher, insertMatcher, forEachMatcher, ifMatcher, assignMatcher, elseIfMatcher, elseMatcher, endMatcher, commentBlockMatcher, doubleQuoteStringMatcher, singleQuoteStringMatcher, boolTokenMatcher, boolMatcher, numberMatcher, parenthesesBlockMatcher, selectorMatcher, fullWordMatcher, anyMatcher)
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, insertMatcher, forEachMatcher, ifMatcher, assignMatcher, elseIfMatcher, elseMatcher, endMatcher, commentBlockMatcher, doubleQuoteStringMatcher, singleQuoteStringMatcher, boolTokenMatcher, boolMatcher, numberMatcher, ParenthesesBlockMatcher, selectorMatcher, fullWordMatcher, anyMatcher)
 		switch matched.Code {
 		case numberToken:
 			text := matched.Text(cursor)
@@ -48,7 +48,7 @@ func (t *types) discover(SQL string) []string {
 			expr = &ExpressionContext{Type: ast.BoolType}
 		case stringToken:
 			expr = &ExpressionContext{Type: ast.StringType}
-		case parenthesesBlockToken:
+		case ParenthesesBlockToken:
 			sqlFragment := matched.Text(cursor)
 			untypedInBlock := t.discover(sqlFragment[1 : len(sqlFragment)-1])
 			if !isVeltyMatchToken(previouslyMatched) {
@@ -211,8 +211,8 @@ func (t *types) detectInsertedTypers(cursor *parsly.Cursor) {
 		return
 	}
 
-	matched = cursor.MatchAfterOptional(whitespaceMatcher, parenthesesBlockMatcher)
-	if matched.Code != parenthesesBlockToken {
+	matched = cursor.MatchAfterOptional(whitespaceMatcher, ParenthesesBlockMatcher)
+	if matched.Code != ParenthesesBlockToken {
 		return
 	}
 
@@ -225,8 +225,8 @@ func (t *types) detectInsertedTypers(cursor *parsly.Cursor) {
 		return
 	}
 
-	matched = cursor.MatchAfterOptional(whitespaceMatcher, parenthesesBlockMatcher)
-	if matched.Code != parenthesesBlockToken {
+	matched = cursor.MatchAfterOptional(whitespaceMatcher, ParenthesesBlockMatcher)
+	if matched.Code != ParenthesesBlockToken {
 		return
 	}
 

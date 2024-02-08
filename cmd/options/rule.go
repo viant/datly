@@ -2,11 +2,14 @@ package options
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/internal/setter"
+	"github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/parsly"
 	"os"
 	"path"
 	"strings"
@@ -180,4 +183,27 @@ func (r *Rule) expandSourceIfNeeded() {
 		return
 	}
 	r.Source = expanded
+}
+
+func (r *Rule) NormalizeComponent(dSQL *string) {
+	if index := strings.Index(*dSQL, parser.ComponentKeywordMatcher.Name); index != -1 {
+		cursor := parsly.NewCursor("", []byte((*dSQL)[index+len(parser.ComponentKeywordMatcher.Name):]), 0)
+		if match := cursor.MatchOne(parser.ParenthesesBlockMatcher); match.Code == parser.ParenthesesBlockToken {
+			text := match.Text(cursor)
+			fromText := parser.ComponentKeywordMatcher.Name + text
+			JSON := "{" + text[1:len(text)-1] + "}"
+			aRule := struct {
+				Package string
+				Name    string
+			}{}
+			if err := json.Unmarshal([]byte(JSON), &aRule); err == nil {
+				if aRule.Package != "" {
+					r.ModulePrefix = aRule.Package
+					r.Name = aRule.Name
+				}
+			}
+			toText := `/* ` + JSON + ` */`
+			*dSQL = strings.Replace(*dSQL, fromText, toText, 1)
+		}
+	}
 }

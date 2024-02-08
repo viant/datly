@@ -35,12 +35,14 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 }
 
 func main() {
+
 	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)
 		}
 	}()
+
 	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)

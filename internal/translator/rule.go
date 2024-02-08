@@ -162,6 +162,7 @@ func (r *Rule) IsBasic() bool {
 }
 
 func (r *Rule) ExtractSettings(dSQL *string) error {
+
 	if index := strings.Index(*dSQL, "*/"); index != -1 {
 		if err := shared.UnmarshalWithExt([]byte((*dSQL)[:index+2]), &r, ".json"); err != nil {
 			return fmt.Errorf("failed to extract rule setting %w", err)

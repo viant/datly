@@ -84,6 +84,8 @@ func (s *Service) translate(ctx context.Context, opts *options.Options) error {
 
 func (s *Service) translateDSQL(ctx context.Context, rule *options.Rule, dSQL string, opts *options.Options) error {
 	dSQL = s.translator.Repository.Substitutes.Replace(dSQL)
+	rule.NormalizeComponent(&dSQL)
+
 	if err := s.buildHandlerIfNeeded(rule, &dSQL); err != nil {
 		return err
 	}
