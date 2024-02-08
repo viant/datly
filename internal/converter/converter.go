@@ -8,6 +8,7 @@ import (
 	"github.com/viant/xreflect"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -219,6 +220,7 @@ func toTime(raw string, format string) (time.Time, error) {
 	if format == "" {
 		format = time.RFC3339
 	}
+	raw = strings.Trim(raw, "Z")
 	asTime, err := ftime.Parse(format, raw)
 	if err != nil {
 		layout := "2006-01-02-07:00"
