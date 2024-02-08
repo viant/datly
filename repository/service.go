@@ -124,6 +124,16 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 			}
 		}
 	}
+	if len(options.substitutes) > 0 {
+		if holder, _ := s.resources.Lookup(view.ResourceSubstitute); holder != nil {
+			if len(holder.Substitutes) == 0 {
+				holder.Substitutes = map[string]string{}
+			}
+			for k, v := range options.substitutes {
+				holder.Substitutes[k] = v
+			}
+		}
+	}
 	return s.initProviders(ctx)
 }
 
@@ -205,6 +215,13 @@ func (s *Service) Constants() []*state.Parameter {
 	return res.Parameters
 }
 
+func (s *Service) Substitute() view.Substitutes {
+	res, err := s.resources.Lookup(view.ResourceSubstitute)
+	if err != nil {
+		return nil
+	}
+	return res.Substitutes
+}
 func New(ctx context.Context, opts ...Option) (*Service, error) {
 	options := NewOptions(opts)
 	ret := &Service{

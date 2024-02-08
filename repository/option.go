@@ -39,6 +39,7 @@ type Options struct {
 	types                []*view.PackagedType
 	resource             state.Resource
 	constants            map[string]string
+	substitutes          view.Substitutes
 }
 
 func (o *Options) UseColumn() bool {
@@ -259,6 +260,12 @@ func WithConstants(key string, value string) Option {
 			o.constants = make(map[string]string)
 		}
 		o.constants[key] = value
+	}
+}
+
+func WithSubstitutes(substitutes map[string]string) Option {
+	return func(o *Options) {
+		o.substitutes = substitutes
 	}
 }
 

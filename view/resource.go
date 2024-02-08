@@ -28,6 +28,7 @@ const (
 	//ResourceConnectors default connector resource name
 	ResourceConnectors = "connectors"
 	ResourceConstants  = "constants"
+	ResourceSubstitute = "substitutes"
 )
 
 // Resource represents grouped View needed to build the View
