@@ -335,6 +335,7 @@ func (s *Service) AddViews(ctx context.Context, views ...*view.View) (*repositor
 func (s *Service) buildDefaultComponents(ctx context.Context) (*repository.Components, string) {
 	components := repository.NewComponents(ctx, s.options...)
 	s.resource.Parameters = s.repository.Constants()
+	//	s.resource.Substitutes = s.repository.Substitutes()
 	components.Resource.MergeFrom(s.resource, s.repository.Extensions().Types)
 	refConnector := ""
 	if len(s.resource.Connectors) > 0 {
