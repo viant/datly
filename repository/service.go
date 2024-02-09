@@ -40,7 +40,7 @@ func (s *Service) Extensions() *extension.Registry {
 	return s.extensions
 }
 
-func (s *Service) Resource() Resources {
+func (s *Service) Resources() Resources {
 	return s.resources
 }
 

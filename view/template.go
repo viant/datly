@@ -71,6 +71,9 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
+	if len(resource.Substitutes) > 0 {
+		t.Source = resource.Substitutes.Replace(t.Source)
+	}
 	t._view = view
 	t.updateSource(view)
 

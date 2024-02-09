@@ -169,6 +169,7 @@ func (c *Component) adjustStructField(embedURI string, embeds map[string]string,
 			name := *typeName
 			setter.SetStringIfEmpty(&name, aField.Name)
 			key := text.CaseFormatUpperCamel.Format(name, text.CaseFormatLowerUnderscore) + ".sql"
+			value = c.View.Resource().ReverseSubstitutes(value)
 			embeds[key] = value
 			fieldTag += fmt.Sprintf(` sql:"uri=%v/`+key+`" `, embedURI)
 		}

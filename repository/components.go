@@ -8,7 +8,6 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/translator/parser"
-	"github.com/viant/datly/repository/resource"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
@@ -25,7 +24,7 @@ type Components struct {
 	Components  []*Component
 	Resource    *view.Resource
 	columns     *discover.Columns
-	resources   *resource.Service
+	resources   Resources
 	options     *Options
 	initialized bool
 }
@@ -48,6 +47,7 @@ func (c *Components) Init(ctx context.Context) error {
 	if len(columns) > 0 {
 		options = append(options, columns)
 	}
+
 	if c.options.metrics != nil && len(c.Components) > 0 {
 		options = append(options, &view.Metrics{Method: c.Components[0].Method, Service: c.options.metrics})
 	}
@@ -62,6 +62,7 @@ func (c *Components) Init(ctx context.Context) error {
 	if err := c.Resource.Init(ctx, options...); err != nil {
 		return err
 	}
+
 	for _, component := range c.Components {
 		if err := component.Init(ctx, c.Resource); err != nil {
 			return err
@@ -165,6 +166,7 @@ func NewComponents(ctx context.Context, options ...Option) *Components {
 	opts := NewOptions(options)
 	ret := &Components{Resource: &view.Resource{}}
 	ret.options = opts
+	ret.resources = opts.resources
 	return ret
 }
 

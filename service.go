@@ -333,9 +333,9 @@ func (s *Service) AddViews(ctx context.Context, views ...*view.View) (*repositor
 }
 
 func (s *Service) buildDefaultComponents(ctx context.Context) (*repository.Components, string) {
-	components := repository.NewComponents(ctx, s.options...)
+	options := append(s.options, repository.WithResources(s.repository.Resources()))
+	components := repository.NewComponents(ctx, options...)
 	s.resource.Parameters = s.repository.Constants()
-	//	s.resource.Substitutes = s.repository.Substitutes()
 	components.Resource.MergeFrom(s.resource, s.repository.Extensions().Types)
 	refConnector := ""
 	if len(s.resource.Connectors) > 0 {
@@ -405,17 +405,17 @@ func (s *Service) Resource() *view.Resource {
 
 // Resource returns resource
 func (s *Service) Resources() repository.Resources {
-	return s.repository.Resource()
+	return s.repository.Resources()
 }
 
 // AddResource adds named resource
 func (s *Service) AddResource(name string, resource *view.Resource) {
-	s.repository.Resource().AddResource(name, resource)
+	s.repository.Resources().AddResource(name, resource)
 }
 
 // AddConnectors adds connectors
 func (s *Service) AddConnectors(ctx context.Context, connectors ...*view.Connector) error {
-	connectionResource, err := s.repository.Resource().Lookup(view.ResourceConnectors)
+	connectionResource, err := s.repository.Resources().Lookup(view.ResourceConnectors)
 	if err != nil {
 		return err
 	}
@@ -451,7 +451,7 @@ func (s *Service) AddConnector(ctx context.Context, name string, driver string, 
 // LoadComponents loads components into registry, it returns loaded components
 func (s *Service) LoadComponents(ctx context.Context, URL string, opts ...repository.Option) (*repository.Components, error) {
 	opts = append([]repository.Option{
-		repository.WithResources(s.repository.Resource()),
+		repository.WithResources(s.repository.Resources()),
 		repository.WithExtensions(s.repository.Extensions()),
 	}, opts...)
 	components, err := repository.LoadComponents(ctx, URL, opts...)
