@@ -134,7 +134,12 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 			return err
 		}
 		var embeds = map[string]string{}
-		code := aComponent.GenerateOutputCode(true, embeds)
+		var namedResources []string
+
+		if repo := opts.Repository(); repo != nil && len(repo.SubstitutesURL) > 0 {
+			namedResources = append(namedResources, repo.SubstitutesURL...)
+		}
+		code := aComponent.GenerateOutputCode(true, embeds, namedResources...)
 		destURL := path.Join(moduleLocation, modulePrefix, sourceName+".go")
 		if err = s.fs.Upload(ctx, destURL, file.DefaultFileOsMode, strings.NewReader(code)); err != nil {
 			return err

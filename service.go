@@ -29,13 +29,14 @@ import (
 
 type (
 	Service struct {
-		repository *repository.Service
-		resource   *view.Resource
-		reader     *reader.Service
-		executor   *executor.Executor
-		operator   *operator.Service
-		options    []repository.Option
-		signer     *signer.Service
+		repository  *repository.Service
+		resource    *view.Resource
+		reader      *reader.Service
+		executor    *executor.Executor
+		operator    *operator.Service
+		options     []repository.Option
+		signer      *signer.Service
+		substitutes map[string]view.Substitutes
 	}
 
 	sessionOptions struct {
@@ -399,6 +400,11 @@ func (s *Service) AddHandler(ctx context.Context, aPath *contract.Path, handler 
 // Resource returns resource
 func (s *Service) Resource() *view.Resource {
 	return s.resource
+}
+
+// Resource returns resource
+func (s *Service) Resources() repository.Resources {
+	return s.repository.Resource()
 }
 
 // AddResource adds named resource

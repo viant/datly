@@ -52,6 +52,7 @@ type (
 		ioConfig   *config.IOConfig
 		doc        docs.Service
 		embedFs    *embed.FS
+		with       []string
 	}
 
 	ComponentOption func(c *Component) error

@@ -51,6 +51,14 @@ func (c *Components) Init(ctx context.Context) error {
 	if c.options.metrics != nil && len(c.Components) > 0 {
 		options = append(options, &view.Metrics{Method: c.Components[0].Method, Service: c.options.metrics})
 	}
+	for _, component := range c.Components {
+		if len(component.with) > 0 {
+			c.With = append(c.With, component.with...)
+		}
+	}
+
+	c.mergeResources(ctx)
+
 	if err := c.Resource.Init(ctx, options...); err != nil {
 		return err
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -21,7 +22,7 @@ var contractInit string
 //go:embed codegen/register.gox
 var registerInit string
 
-func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string) string {
+func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string, namedResources ...string) string {
 	builder := strings.Builder{}
 	input := c.Input.Type.Type()
 	registry := c.TypeRegistry()
@@ -62,9 +63,15 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 	replacer.Put("URI", c.URI)
 	replacer.Put("Method", c.Method)
 	replacer.Put("PackageName", c.Output.Type.Package)
-
+	withNamedResource := ""
+	if len(namedResources) > 0 {
+		for i, elem := range namedResources {
+			namedResources[i] = strconv.Quote(elem)
+		}
+		withNamedResource = fmt.Sprintf(`\n\trepository.WithNamedResources(%v),`, strings.Join(namedResources, ","))
+	}
+	replacer.Put("WithNamedResource", withNamedResource)
 	snippetBefore := replacer.ExpandAsText(registerInit)
-
 	if withEmbed {
 		defineComponentFunc := replacer.ExpandAsText(contractInit)
 		snippetBefore += c.embedTemplate(embedURI, componentName)
@@ -72,7 +79,6 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string)
 			xreflect.WithImports(c.generatorImports(c.Contract.ModulePath)),
 			xreflect.WithSnippetAfter(defineComponentFunc))
 	}
-
 	if snippetBefore != "" {
 		options = append(options, xreflect.WithSnippetBefore(snippetBefore))
 	}

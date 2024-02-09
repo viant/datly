@@ -26,6 +26,7 @@ type Options struct {
 	ignorePlugin         bool
 	extensions           *extension.Registry
 	resources            Resources
+	namedResources       []string
 	refreshFrequency     time.Duration
 	apiPrefix            string
 	useColumns           *bool
@@ -39,7 +40,7 @@ type Options struct {
 	types                []*view.PackagedType
 	resource             state.Resource
 	constants            map[string]string
-	substitutes          view.Substitutes
+	substitutes          map[string]view.Substitutes
 }
 
 func (o *Options) UseColumn() bool {
@@ -177,6 +178,13 @@ func WithResources(resources Resources) Option {
 	}
 }
 
+func WithNamedResources(names ...string) ComponentOption {
+	return func(c *Component) error {
+		c.with = names
+		return nil
+	}
+}
+
 func WithRefreshFrequency(refreshFrequency time.Duration) Option {
 	return func(o *Options) {
 		o.refreshFrequency = refreshFrequency
@@ -263,9 +271,12 @@ func WithConstants(key string, value string) Option {
 	}
 }
 
-func WithSubstitutes(substitutes map[string]string) Option {
+func WithSubstitutes(name string, substitutes map[string]string) Option {
 	return func(o *Options) {
-		o.substitutes = substitutes
+		if len(o.substitutes) == 0 {
+			o.substitutes = map[string]view.Substitutes{}
+		}
+		o.substitutes[name] = substitutes
 	}
 }
 
