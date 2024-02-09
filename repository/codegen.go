@@ -68,7 +68,7 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string,
 		for i, elem := range namedResources {
 			namedResources[i] = strconv.Quote(elem)
 		}
-		withNamedResource = fmt.Sprintf(`\n\trepository.WithNamedResources(%v),`, strings.Join(namedResources, ","))
+		withNamedResource = fmt.Sprintf("\n\t\trepository.WithNamedResources(%v),", strings.Join(namedResources, ","))
 	}
 	replacer.Put("WithNamedResource", withNamedResource)
 	snippetBefore := replacer.ExpandAsText(registerInit)
