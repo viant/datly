@@ -30,7 +30,7 @@ require (
 	github.com/viant/parsly v0.3.3-0.20240201231835-eceb98bf4c32
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.6.0
-	github.com/viant/sqlx v0.12.1-0.20240201190210-9e2be3fa4de3
+	github.com/viant/sqlx v0.12.1-0.20240208102033-272802a5c5d9
 	github.com/viant/structql v0.4.1
 	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
@@ -111,7 +111,6 @@ require (
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
 	github.com/viant/igo v0.1.0 // indirect
-	github.com/viant/vec v0.1.1-0.20240105002033-6fd6f481e086 // indirect
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
 	github.com/xuri/excelize/v2 v2.8.0 // indirect
 	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect
