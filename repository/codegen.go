@@ -11,6 +11,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -66,7 +67,8 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string,
 	withNamedResource := ""
 	if len(namedResources) > 0 {
 		for i, elem := range namedResources {
-			namedResources[i] = strconv.Quote(elem)
+			name := strings.TrimSuffix(path.Base(elem), path.Ext(elem))
+			namedResources[i] = strconv.Quote(name)
 		}
 		withNamedResource = fmt.Sprintf("\n\t\trepository.WithNamedResources(%v),", strings.Join(namedResources, ","))
 	}
