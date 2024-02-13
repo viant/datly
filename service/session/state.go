@@ -233,7 +233,7 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 	parameterSelector := parameter.Selector()
 	if options.indirectState || parameterSelector == nil { //p
 		parameterSelector, err = aState.Selector(parameter.Name)
-		if parameter.In.Kind == state.KindConst {
+		if parameterSelector == nil && parameter.In.Kind == state.KindConst { // TODO do we really need it?
 			return nil
 		}
 		if err != nil {
