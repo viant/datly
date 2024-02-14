@@ -70,6 +70,10 @@ func (c *Components) Init(ctx context.Context) error {
 		for _, parameter := range component.Input.Type.Parameters {
 			if param := c.Resource.Parameters.Lookup(parameter.Name); param == nil {
 				c.Resource.Parameters.Append(parameter)
+			} else {
+				if parameter.In.Kind == state.KindConst {
+					parameter.Value = param.Value
+				}
 			}
 			switch parameter.In.Kind {
 			case state.KindView:

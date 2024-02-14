@@ -113,17 +113,7 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 			}
 		}
 	}
-	if len(options.constants) > 0 {
-		if constants, _ := s.resources.Lookup(view.ResourceConstants); constants != nil {
-			for k, v := range options.constants {
-				constants.Parameters = append(constants.Parameters, &state.Parameter{
-					Name:  k,
-					Value: v,
-					In:    state.NewConstLocation(k),
-				})
-			}
-		}
-	}
+
 	if len(options.substitutes) > 0 {
 		for resourceName, substitutes := range options.substitutes {
 			if holder, _ := s.resources.Lookup(resourceName); holder == nil {
@@ -134,6 +124,23 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 			}
 		}
 	}
+
+	if len(options.constants) > 0 {
+		if constants, _ := s.resources.Lookup(view.ResourceConstants); constants != nil {
+			for k, v := range options.constants {
+				substitutes := s.Resources().Substitutes()
+				for _, sub := range substitutes {
+					v = sub.Replace(v)
+				}
+				constants.Parameters = append(constants.Parameters, &state.Parameter{
+					Name:  k,
+					Value: v,
+					In:    state.NewConstLocation(k),
+				})
+			}
+		}
+	}
+
 	return s.initProviders(ctx)
 }
 
