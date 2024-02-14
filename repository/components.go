@@ -57,11 +57,16 @@ func (c *Components) Init(ctx context.Context) error {
 		}
 	}
 
-	c.mergeResources(ctx)
-
-	if err := c.Resource.Init(ctx, options...); err != nil {
+	err := c.mergeResources(ctx)
+	if err != nil {
 		return err
 	}
+
+	if err = c.Resource.Init(ctx, options...); err != nil {
+		return err
+	}
+
+	substitutes := c.Resource.Substitutes
 
 	for _, component := range c.Components {
 		if err := component.Init(ctx, c.Resource); err != nil {
@@ -70,12 +75,20 @@ func (c *Components) Init(ctx context.Context) error {
 		for _, parameter := range component.Input.Type.Parameters {
 			if param := c.Resource.Parameters.Lookup(parameter.Name); param == nil {
 				c.Resource.Parameters.Append(parameter)
-			} else {
-				if parameter.In.Kind == state.KindConst {
-					parameter.Value = param.Value
-				}
+			} else if parameter.In.Kind == state.KindConst {
+				parameter.Value = param.Value
 			}
+
 			switch parameter.In.Kind {
+			case state.KindConst:
+				switch parameter.Value.(type) {
+				case string:
+					val, _ := parameter.Value.(string)
+					parameter.Value = substitutes.Replace(val)
+				case *string:
+					val, _ := parameter.Value.(*string)
+					parameter.Value = substitutes.Replace(*val)
+				}
 			case state.KindView:
 				viewName := parameter.In.Name
 				if prev, _ := c.Resource.View(viewName); prev != nil {

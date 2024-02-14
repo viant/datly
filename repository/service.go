@@ -128,10 +128,6 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 	if len(options.constants) > 0 {
 		if constants, _ := s.resources.Lookup(view.ResourceConstants); constants != nil {
 			for k, v := range options.constants {
-				substitutes := s.Resources().Substitutes()
-				for _, sub := range substitutes {
-					v = sub.Replace(v)
-				}
 				constants.Parameters = append(constants.Parameters, &state.Parameter{
 					Name:  k,
 					Value: v,
