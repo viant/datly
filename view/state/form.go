@@ -15,10 +15,10 @@ func (f *Form) Mutex() *sync.RWMutex {
 }
 
 // Set safely sets the value for a key.
-func (f *Form) Set(key, value string) {
+func (f *Form) Set(key string, values ...string) {
 	f.mux.Lock()
 	defer f.mux.Unlock()
-	f.Values.Set(key, value)
+	f.Values[key] = values
 }
 
 // Get safely gets the first value associated with the given key.
