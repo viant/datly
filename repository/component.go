@@ -363,6 +363,9 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 		viewName := sTypes.Name()
 		if index := strings.LastIndex(viewName, "Output"); index != -1 {
 			viewName = viewName[:index]
+			if c.Handler != nil {
+				viewName += "Handler"
+			}
 		}
 		var vOptions = []view.Option{}
 		table := ""
