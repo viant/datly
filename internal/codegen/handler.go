@@ -19,9 +19,9 @@ var handlerInitTemplate string
 
 func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (string, string, string, error) {
 	fields, localVariableDeclaration := t.State.HandlerLocalVariables()
-	t.Config.Type = opts.HandlerType(t.Prefix)
-	t.Config.InputType = opts.InputType(t.Prefix)
-	t.Config.OutputType = opts.OutputType(t.Prefix)
+	t.Config.Type = opts.HandlerType(t.Prefix, t.MethodFragment)
+	t.Config.InputType = opts.InputType(t.Prefix, t.MethodFragment)
+	t.Config.OutputType = opts.OutputType(t.Prefix, t.MethodFragment)
 	t.Config.ResponseBody = nil
 
 	index := NewIndexGenerator(t.State)
@@ -45,7 +45,7 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 	handlerContent = strings.Replace(handlerContent, "$LocalVariable", localVariableDeclaration, 1)
 
 	registry := &customTypeRegistry{}
-	registry.register(t.Prefix + "Handler")
+	registry.register(t.Prefix + t.MethodFragment + "Handler")
 	registerTypes := registry.stringify()
 	handlerContent = strings.ReplaceAll(handlerContent, "$RegisterTypes", registerTypes)
 	imports := inference.NewImports()
@@ -65,7 +65,7 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 `
 	if t.OutputType != nil && t.BodyParameter != nil {
 		responseSnippet = fmt.Sprintf(`
-    response := ${Prefix}Output{}
+    response := ${Prefix}${MethodFragment}Output{}
 	response.%v = %v
 	return response, nil
 `, t.BodyParameter.Name, "input."+bodyParam.Name)
@@ -82,6 +82,7 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 func (t *Template) expandOptions(text string, opts *options.Generate) string {
 	text = strings.ReplaceAll(text, "$PackageName", opts.Package())
 	text = strings.ReplaceAll(text, "${Prefix}", t.Prefix)
+	text = strings.ReplaceAll(text, "${MethodFragment}", t.MethodFragment)
 	if t.Resource != nil {
 		text = strings.ReplaceAll(text, "$Method", t.Resource.Rule.Method)
 		text = strings.ReplaceAll(text, "$URI", t.Resource.Rule.URI)

@@ -55,6 +55,9 @@ func (r *Rule) GoCodeLocation() string {
 	if r.Package() == "" {
 		return module
 	}
+	if r.ModulePrefix != "" {
+		return url.Join(module, r.ModulePrefix)
+	}
 	return url.Join(module, r.Package())
 }
 

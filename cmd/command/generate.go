@@ -58,7 +58,7 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		}
 		root.Spec.Type.Cardinality = resource.Rule.Route.Output.Cardinality
 		template := codegen.NewTemplate(resource.Rule, root.Spec)
-		template.Resource = resource
+		template.SetResource(resource)
 		root.Spec.Type.Package = ruleOption.Package()
 		template.BuildTypeDef(root.Spec, resource.Rule.GetField(), resource.Rule.Doc.Columns)
 		template.Imports.AddType(resource.Rule.Type)
@@ -187,12 +187,13 @@ func (s *Service) generateCode(ctx context.Context, gen *options.Generate, templ
 	embedContent := make(map[string]string)
 	inputCode := template.GenerateInput(pkg, info, embedContent)
 	for k, v := range embedContent {
-		s.Files.Append(asset.NewFile(gen.EmbedLocation(k), v))
+		s.Files.Append(asset.NewFile(gen.EmbedLocation(k, template.MethodFragment), v))
 	}
-	s.Files.Append(asset.NewFile(gen.InputLocation(template.FilePrefix()), inputCode))
-	outputCode := template.GenerateOutput(pkg, info)
+	inputURL := gen.InputLocation(template.FilePrefix(), template.FileMethodFragment())
 
-	s.Files.Append(asset.NewFile(gen.OutputLocation(template.FilePrefix()), outputCode))
+	s.Files.Append(asset.NewFile(inputURL, inputCode))
+	outputCode := template.GenerateOutput(pkg, info)
+	s.Files.Append(asset.NewFile(gen.OutputLocation(template.FilePrefix(), template.FileMethodFragment()), outputCode))
 	return s.generateEntity(ctx, pkg, gen, info, template)
 }
 
@@ -247,7 +248,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		return err
 	}
 	tmpl := codegen.NewTemplate(rule, &inference.Spec{Type: aType})
-	tmpl.Resource = &translator.Resource{Rule: rule}
+	tmpl.SetResource(&translator.Resource{Rule: rule})
 	tmpl.Imports.AddType(rule.InputType)
 	tmpl.Imports.AddType(rule.Type)
 	tmpl.EnsureImports(aType)
@@ -300,7 +301,7 @@ func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.G
 		return err
 	}
 	entityName := ensureGoFileCaseFormat(template)
-	s.Files.Append(asset.NewFile(gen.EntityLocation(entityName), code))
+	s.Files.Append(asset.NewFile(gen.EntityLocation(entityName, template.MethodFragment), code))
 	return nil
 }
 

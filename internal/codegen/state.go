@@ -22,6 +22,8 @@ func (t *Template) GenerateInput(pkg string, info *plugin.Info, embedContent map
 		return ""
 	}
 	var output = strings.Replace(inputGoTemplate, "$Package", pkg, 1)
+
+	output = strings.Replace(output, "${MethodFragment}", t.MethodFragment, 1)
 	var fields = []string{}
 
 	root := text.DetectCaseFormat(t.Prefix).Format(t.Prefix, text.CaseFormatLowerUnderscore)
@@ -34,7 +36,7 @@ func (t *Template) GenerateInput(pkg string, info *plugin.Info, embedContent map
 	if len(embedContent) > 0 {
 		embedFSSnippet = fmt.Sprintf(`
 //go:embed %v/*.sql
-var %vFS embed.FS`, root, t.Prefix)
+var %vFS embed.FS`, root, t.Prefix+t.MethodFragment)
 		imports.AddPackage("embed")
 	}
 	output = strings.Replace(output, "$Fields", strings.Join(fields, "\n\n"), 1)
@@ -47,12 +49,13 @@ var %vFS embed.FS`, root, t.Prefix)
 		imports.AddPackage(info.TypeCorePkg())
 		importFragment = imports.PackageImports()
 		registry := &customTypeRegistry{}
-		registry.register(t.Prefix + "Input")
+		registry.register(t.Prefix + t.MethodFragment + "Input")
 		registerTypes = registry.stringify()
 	}
 	output = strings.Replace(output, "$Imports", importFragment, 1)
 	output = strings.Replace(output, "$RegisterTypes", registerTypes, 1)
 	output = strings.ReplaceAll(output, "${Prefix}", t.Prefix)
+	output = strings.ReplaceAll(output, "${MethodFragment}", t.MethodFragment)
 	output = strings.ReplaceAll(output, "$EmbedFS", embedFSSnippet)
 
 	return output
@@ -73,12 +76,13 @@ func (t *Template) GenerateOutput(pkg string, info *plugin.Info) string {
 		imports = append(imports, "reflect")
 		imports = append(imports, info.TypeCorePkg())
 		registry := &customTypeRegistry{}
-		registry.register(t.Prefix + "Output")
+		registry.register(t.Prefix + t.MethodFragment + "Output")
 		registerTypes = registry.stringify()
 	}
 	var registerSnippet = outputGoTemplate
 	registerSnippet = strings.Replace(registerSnippet, "$RegisterTypes", registerTypes, 1)
 	registerSnippet = strings.ReplaceAll(registerSnippet, "${Prefix}", t.Prefix)
+	registerSnippet = strings.ReplaceAll(registerSnippet, "${MethodFragment}", t.MethodFragment)
 
 	var options = []xreflect.Option{
 		xreflect.WithPackage(pkg),
@@ -92,7 +96,7 @@ func (t *Template) GenerateOutput(pkg string, info *plugin.Info) string {
 		xreflect.WithRegistry(t.Resource.Rule.TypeRegistry()),
 		xreflect.WithSnippetBefore(registerSnippet),
 	}
-	outputState := xreflect.GenerateStruct(t.Prefix+"Output", t.OutputType, options...)
+	outputState := xreflect.GenerateStruct(t.Prefix+t.MethodFragment+"Output", t.OutputType, options...)
 
 	return outputState
 }

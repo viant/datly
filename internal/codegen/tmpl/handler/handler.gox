@@ -10,10 +10,10 @@ func init() {
     $RegisterTypes
 }
 
-type ${Prefix}Handler struct {}
+type ${Prefix}${MethodFragment}Handler struct {}
 
-func (h *${Prefix}Handler) Exec(ctx context.Context, sess handler.Session) (interface{}, error) {
-    input := &${Prefix}Input{}
+func (h *${Prefix}${MethodFragment}Handler) Exec(ctx context.Context, sess handler.Session) (interface{}, error) {
+    input := &${Prefix}${MethodFragment}Input{}
     if err := sess.Stater().Into(ctx, input);err != nil {
         return nil, err
     }

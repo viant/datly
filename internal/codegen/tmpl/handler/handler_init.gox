@@ -8,12 +8,12 @@ import (
 	"reflect"
 )
 
-var ${Prefix}PathURI = "$URI"
+var ${Prefix}${MethodFragment}PathURI = "$URI"
 
-func define${Prefix}Component(ctx context.Context, srv *datly.Service) (*repository.Component, error) {
-	return srv.AddHandler(ctx, contract.NewPath("$Method", ${Prefix}PathURI), &${Prefix}Handler{},
+func define${Prefix}${MethodFragment}Component(ctx context.Context, srv *datly.Service) (*repository.Component, error) {
+	return srv.AddHandler(ctx, contract.NewPath("$Method", ${Prefix}${MethodFragment}PathURI), &${Prefix}${MethodFragment}Handler{},
 	repository.WithContract(
-		reflect.TypeOf(&${Prefix}Input{}),
-		reflect.TypeOf(&${Prefix}Output{}),
-		&${Prefix}FS))
+		reflect.TypeOf(&${Prefix}${MethodFragment}Input{}),
+		reflect.TypeOf(&${Prefix}${MethodFragment}Output{}),
+		&${Prefix}${MethodFragment}FS))
 }

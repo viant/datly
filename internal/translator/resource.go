@@ -51,6 +51,13 @@ type (
 	}
 )
 
+func (r *Resource) GetURI() string {
+	if r.rule.ModulePrefix == "" {
+		return r.Rule.URI
+	}
+	return r.rule.ModulePrefix + r.Rule.URI
+}
+
 // LookupTypeDef returns matched type definition
 func (r *Resource) LookupTypeDef(typeName string) *view.TypeDefinition {
 	for _, typeDef := range r.Resource.Types {
