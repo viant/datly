@@ -587,7 +587,9 @@ func (s State) AddDescriptions(doc state.Documentation) {
 func NewState(modulePath, dataType string, types *xreflect.Types) (State, error) {
 	baseDir := modulePath
 	if pair := strings.Split(dataType, "."); len(pair) > 1 {
-		baseDir = path.Join(baseDir, pair[0])
+		if !strings.HasSuffix(baseDir, pair[0]) {
+			baseDir = path.Join(baseDir, pair[0])
+		}
 		dataType = pair[1]
 	}
 

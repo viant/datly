@@ -27,6 +27,14 @@ type Rule struct {
 	Generated      bool
 }
 
+func (r *Rule) FileFolder() string {
+	fileFolder := r.GoModuleLocation()
+	if r.ModulePrefix != "" {
+		fileFolder = url.Join(fileFolder, r.ModulePrefix)
+	}
+	return fileFolder
+}
+
 func (r *Rule) GoModuleLocation() string {
 	if r.ModuleLocation != "" {
 		return r.ModuleLocation

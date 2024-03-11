@@ -228,7 +228,8 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		*dSQL = origin
 		return nil
 	}
-	aState, err := inference.NewState(ruleOptions.GoModuleLocation(), rule.InputType, extension.Config.Types)
+
+	aState, err := inference.NewState(ruleOptions.FileFolder(), rule.InputType, extension.Config.Types)
 	if err != nil {
 		return err
 	}
