@@ -22,7 +22,7 @@ func (g *Generate) HttpMethod() string {
 	return strings.ToUpper(g.Operation)
 }
 
-func (g *Generate) EntityLocation(entityName string, methodFragment string) string {
+func (g *Generate) EntityLocation(entityName string) string {
 	codeLocation := g.GoCodeLocation()
 
 	entityName = strings.ToLower(entityName)
@@ -39,7 +39,7 @@ func (g *Generate) OutputLocation(prefix string, methodFragment string) string {
 	return url.Join(codeLocation, prefix+methodFragment+"output.go")
 }
 
-func (g *Generate) EmbedLocation(URI string, methodFragment string) string {
+func (g *Generate) EmbedLocation(URI string) string {
 	codeLocation := g.GoCodeLocation()
 	return url.Join(codeLocation, URI)
 }

@@ -319,10 +319,10 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 
 	if resource.rule.Generated { //translation from generator
 		resource.Rule.applyGeneratorOutputSetting()
-		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, resource.Rule.Route.URI)
-	} else {
-		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, resource.Rule.Route.URI)
+
 	}
+
+	resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, resource.Rule.Route.URI)
 
 	aState, err := resource.State.Compact(resource.rule.ModuleLocation)
 	if err != nil {

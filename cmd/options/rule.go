@@ -27,7 +27,7 @@ type Rule struct {
 	Generated      bool
 }
 
-func (r *Rule) FileFolder() string {
+func (r *Rule) SourceCodeLocation() string {
 	fileFolder := r.GoModuleLocation()
 	if r.ModulePrefix != "" {
 		fileFolder = url.Join(fileFolder, r.ModulePrefix)

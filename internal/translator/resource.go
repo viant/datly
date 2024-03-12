@@ -121,7 +121,7 @@ func (r *Resource) parseImports(ctx context.Context, dSQL *string) (err error) {
 }
 
 func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.TypeImport) error {
-	typesImport.EnsureLocation(ctx, fs, r.rule.FileFolder())
+	typesImport.EnsureLocation(ctx, fs, r.rule.SourceCodeLocation())
 	alias := typesImport.Alias
 	for i, name := range typesImport.Types {
 		if typeDef := r.LookupTypeDef(name); typeDef != nil {

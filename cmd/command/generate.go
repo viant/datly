@@ -187,7 +187,7 @@ func (s *Service) generateCode(ctx context.Context, gen *options.Generate, templ
 	embedContent := make(map[string]string)
 	inputCode := template.GenerateInput(pkg, info, embedContent)
 	for k, v := range embedContent {
-		s.Files.Append(asset.NewFile(gen.EmbedLocation(k, template.MethodFragment), v))
+		s.Files.Append(asset.NewFile(gen.EmbedLocation(k), v))
 	}
 	inputURL := gen.InputLocation(template.FilePrefix(), template.FileMethodFragment())
 
@@ -229,7 +229,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		return nil
 	}
 
-	aState, err := inference.NewState(ruleOptions.FileFolder(), rule.InputType, extension.Config.Types)
+	aState, err := inference.NewState(ruleOptions.SourceCodeLocation(), rule.InputType, extension.Config.Types)
 	if err != nil {
 		return err
 	}
@@ -302,7 +302,7 @@ func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.G
 		return err
 	}
 	entityName := ensureGoFileCaseFormat(template)
-	s.Files.Append(asset.NewFile(gen.EntityLocation(entityName, template.MethodFragment), code))
+	s.Files.Append(asset.NewFile(gen.EntityLocation(entityName), code))
 	return nil
 }
 
