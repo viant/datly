@@ -57,10 +57,11 @@ func (r *Handler) HandleRequest(ctx context.Context, response http.ResponseWrite
 		CorsHandler(request, r.Path.Cors)(response)
 		return
 	}
-	r.Handle(ctx, response, request)
 	if r.Path.Cors != nil {
 		CorsHandler(request, r.Path.Cors)(response)
 	}
+	r.Handle(ctx, response, request)
+
 }
 
 func (r *Handler) AuthorizeRequest(request *http.Request, aPath *path.Path) error {
@@ -227,6 +228,7 @@ func (r *Handler) writeResponse(ctx context.Context, request *http.Request, resp
 	if compressionType != "" {
 		response.Header().Set(acontent.Encoding, compressionType)
 	}
+
 	response.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(response, payloadReader)
 }
