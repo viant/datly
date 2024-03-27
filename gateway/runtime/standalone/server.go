@@ -17,7 +17,9 @@ import (
 
 type Server struct {
 	http.Server
-	Service *gateway.Service
+	Service      *gateway.Service
+	auth         gateway.Authorizer
+	useSingleton *bool //true by default
 }
 
 // shutdownOnInterrupt server on interupts
@@ -36,18 +38,19 @@ func (r *Server) shutdownOnInterrupt() {
 	}()
 }
 
-func NewWithAuth(ctx context.Context, gwayConfig *Config, auth gateway.Authorizer) (*Server, error) {
-	gwayConfig.Init(ctx)
+func New(ctx context.Context, opts ...Option) (*Server, error) {
+	options, err := NewOptions(ctx, opts...)
+	config := options.config
+	config.Init(ctx)
 	//mux := http.NewServeMux()
 	metric := gmetric.New()
-	if gwayConfig.Config == nil {
+	if config.Config == nil {
 		return nil, fmt.Errorf("gateway config was empty")
 	}
-
 	service, err := gateway.SingletonWithConfig(
-		gwayConfig.Config,
-		handler.NewStatus(gwayConfig.Version, &gwayConfig.Meta),
-		auth,
+		config.Config,
+		handler.NewStatus(config.Version, &config.Meta),
+		options.auth,
 		extension.Config,
 		metric,
 	)
@@ -63,18 +66,14 @@ func NewWithAuth(ctx context.Context, gwayConfig *Config, auth gateway.Authorize
 	server := &Server{
 		Service: service,
 		Server: http.Server{
-			Addr:           ":" + strconv.Itoa(gwayConfig.Endpoint.Port),
+			Addr:           ":" + strconv.Itoa(config.Endpoint.Port),
 			Handler:        service,
-			ReadTimeout:    time.Millisecond * time.Duration(gwayConfig.Endpoint.ReadTimeoutMs),
-			WriteTimeout:   time.Millisecond * time.Duration(gwayConfig.Endpoint.WriteTimeoutMs),
-			MaxHeaderBytes: gwayConfig.Endpoint.MaxHeaderBytes,
+			ReadTimeout:    time.Millisecond * time.Duration(config.Endpoint.ReadTimeoutMs),
+			WriteTimeout:   time.Millisecond * time.Duration(config.Endpoint.WriteTimeoutMs),
+			MaxHeaderBytes: config.Endpoint.MaxHeaderBytes,
 		},
 	}
 
 	server.shutdownOnInterrupt()
 	return server, nil
-}
-
-func New(ctx context.Context, config *Config) (*Server, error) {
-	return NewWithAuth(ctx, config, nil)
 }

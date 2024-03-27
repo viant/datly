@@ -4,10 +4,17 @@ init:
 pipeline:
 
   deploy:
+    setPath:
+        action: exec:run
+        target: $target
+        checkError: true
+        commands:
+            - export GOPATH=${env.GOPATH}
+            - export PATH=/usr/local/go/bin:$PATH
     set_sdk:
       action: sdk.set
       target: $target
-      sdk: go:1.21
+      sdk: go:1.22
 
     buildValidator:
       action: exec:run
