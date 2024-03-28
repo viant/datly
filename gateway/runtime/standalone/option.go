@@ -16,6 +16,13 @@ type Options struct {
 	useSingleton *bool
 }
 
+func (o *Options) UseSingleton() bool {
+	if o.useSingleton == nil {
+		return true
+	}
+	return *o.useSingleton
+}
+
 func NewOptions(ctx context.Context, opts ...Option) (*Options, error) {
 	options := &Options{}
 	for _, opt := range opts {
@@ -44,18 +51,21 @@ func NewOptions(ctx context.Context, opts ...Option) (*Options, error) {
 // Option represents standalone option
 type Option func(*Options)
 
+// WithAuth sets an authorizer
 func WithAuth(auth gateway.Authorizer) Option {
 	return func(o *Options) {
 		o.auth = auth
 	}
 }
 
+// WithConfig sets a config
 func WithConfig(config *Config) Option {
 	return func(o *Options) {
 		o.config = config
 	}
 }
 
+// WithVersion sets a version
 func WithUseSingleton(useSingleton *bool) Option {
 	return func(o *Options) {
 		o.useSingleton = useSingleton

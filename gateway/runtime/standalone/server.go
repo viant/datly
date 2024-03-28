@@ -47,14 +47,20 @@ func New(ctx context.Context, opts ...Option) (*Server, error) {
 	if config.Config == nil {
 		return nil, fmt.Errorf("gateway config was empty")
 	}
-	service, err := gateway.SingletonWithConfig(
-		config.Config,
-		handler.NewStatus(config.Version, &config.Meta),
-		options.auth,
-		extension.Config,
-		metric,
-	)
 
+	var service *gateway.Service
+	var gOptions = []gateway.Option{
+		gateway.WithExtensions(extension.Config),
+		gateway.WithConfig(config.Config),
+		gateway.WithMetrics(metric),
+		gateway.WithStatusHandler(handler.NewStatus(config.Version, &config.Meta)),
+		gateway.WithAuthorizer(options.auth),
+	}
+	if options.UseSingleton() {
+		service, err = gateway.Singleton(ctx, gOptions...)
+	} else {
+		service, err = gateway.New(ctx, gOptions...)
+	}
 	if err != nil {
 		if service != nil {
 			_ = service.Close()
@@ -62,7 +68,6 @@ func New(ctx context.Context, opts ...Option) (*Server, error) {
 
 		return nil, err
 	}
-
 	server := &Server{
 		Service: service,
 		Server: http.Server{
