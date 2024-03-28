@@ -22,15 +22,17 @@ type (
 		TypeDef  *view.TypeDefinition
 		inference.Imports
 		inference.State
-		BusinessLogic *ast.Block
-		paramPrefix   string
-		recordPrefix  string
-		InputType     reflect.Type
-		BodyType      reflect.Type
-		BodyParameter *inference.Parameter
-		OutputType    reflect.Type
-		Prefix        string
-		filePrefix    string
+		BusinessLogic      *ast.Block
+		paramPrefix        string
+		recordPrefix       string
+		InputType          reflect.Type
+		BodyType           reflect.Type
+		BodyParameter      *inference.Parameter
+		OutputType         reflect.Type
+		MethodFragment     string
+		fileMethodFragment string
+		Prefix             string
+		filePrefix         string
 	}
 )
 
@@ -45,6 +47,14 @@ func (t *Template) FilePrefix() string {
 	}
 	t.filePrefix = text.DetectCaseFormat(t.Prefix).Format(t.Prefix, text.CaseFormatLowerUnderscore) + "_"
 	return t.filePrefix
+}
+
+func (t *Template) FileMethodFragment() string {
+	if t.fileMethodFragment != "" {
+		return t.fileMethodFragment
+	}
+	t.fileMethodFragment = text.DetectCaseFormat(t.MethodFragment).Format(t.MethodFragment, text.CaseFormatLowerUnderscore) + "_"
+	return t.fileMethodFragment
 }
 
 func (t *Template) ParamPrefix() string {
@@ -72,6 +82,26 @@ func (t *Template) ColumnParameterNamer(selector inference.Selector) inference.C
 	return func(field *inference.Field) string {
 		return prefix + field.Name
 	}
+}
+
+func (t *Template) SetResource(resource *translator.Resource) {
+	t.Resource = resource
+	t.setMethodFragment()
+}
+
+func (t *Template) setMethodFragment() {
+	method := strings.ToLower(t.Resource.Rule.Method)
+	switch method {
+	case "get", "":
+		method = ""
+	case "patch":
+		method = "Patch"
+	case "post":
+		method = "Post"
+	case "put":
+		method = "Put"
+	}
+	t.MethodFragment = method
 }
 
 func (t *Template) BuildInput(spec *inference.Spec, bodyHolder string, opts ...Option) {

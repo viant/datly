@@ -27,6 +27,14 @@ type Rule struct {
 	Generated      bool
 }
 
+func (r *Rule) SourceCodeLocation() string {
+	fileFolder := r.GoModuleLocation()
+	if r.ModulePrefix != "" {
+		fileFolder = url.Join(fileFolder, r.ModulePrefix)
+	}
+	return fileFolder
+}
+
 func (r *Rule) GoModuleLocation() string {
 	if r.ModuleLocation != "" {
 		return r.ModuleLocation
@@ -54,6 +62,12 @@ func (r *Rule) GoCodeLocation() string {
 	module := r.GoModuleLocation()
 	if r.Package() == "" {
 		return module
+	}
+	if r.ModulePrefix != "" {
+		if strings.HasSuffix(r.ModulePrefix, r.Package()) {
+			return url.Join(module, r.ModulePrefix)
+		}
+		return url.Join(module, r.ModulePrefix, r.Package())
 	}
 	return url.Join(module, r.Package())
 }

@@ -129,9 +129,9 @@ func (s *Service) generateTemplateFiles(gen *options.Generate, template *codegen
 		if err != nil {
 			return err
 		}
-		s.Files.Append(asset.NewFile(gen.HandlerLocation(template.FilePrefix()), handler))
-		s.Files.Append(asset.NewFile(gen.IndexLocation(template.FilePrefix()), index))
-		s.Files.Append(asset.NewFile(gen.InitLocation(template.FilePrefix()), init))
+		s.Files.Append(asset.NewFile(gen.HandlerLocation(template.FilePrefix(), template.FileMethodFragment()), handler))
+		s.Files.Append(asset.NewFile(gen.IndexLocation(template.FilePrefix(), template.FileMethodFragment()), index))
+		s.Files.Append(asset.NewFile(gen.InitLocation(template.FilePrefix(), template.FileMethodFragment()), init))
 
 		fallthrough
 	case ast.LangVelty:

@@ -29,14 +29,14 @@ func (g *Generate) EntityLocation(entityName string) string {
 	return url.Join(codeLocation, entityName+".go")
 }
 
-func (g *Generate) InputLocation(prefix string) string {
+func (g *Generate) InputLocation(prefix string, methodFragment string) string {
 	codeLocation := g.GoCodeLocation()
-	return url.Join(codeLocation, prefix+"input.go")
+	return url.Join(codeLocation, prefix+methodFragment+"input.go")
 }
 
-func (g *Generate) OutputLocation(prefix string) string {
+func (g *Generate) OutputLocation(prefix string, methodFragment string) string {
 	codeLocation := g.GoCodeLocation()
-	return url.Join(codeLocation, prefix+"output.go")
+	return url.Join(codeLocation, prefix+methodFragment+"output.go")
 }
 
 func (g *Generate) EmbedLocation(URI string) string {
@@ -82,51 +82,51 @@ func (g *Generate) DSQLLocation() string {
 	return url.Join(baseURL, name+".sql")
 }
 
-func (g *Generate) HandlerLocation(prefix string) string {
+func (g *Generate) HandlerLocation(prefix string, methodFragment string) string {
 	_, name := url.Split(g.SourceURL(), file.Scheme)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}
 	baseURL := g.GoCodeLocation()
-	return url.Join(baseURL, prefix+"handler.go")
+	return url.Join(baseURL, prefix+methodFragment+"handler.go")
 }
 
-func (g *Generate) HandlerType(prefix string) string {
-	result := prefix + "Handler"
+func (g *Generate) HandlerType(prefix string, methodFragment string) string {
+	result := prefix + methodFragment + "Handler"
 	if g.Package() == "" {
 		return result
 	}
 	return g.Package() + "." + result
 }
 
-func (g *Generate) InputType(prefix string) string {
-	result := prefix + "Input"
+func (g *Generate) InputType(prefix string, methodFragment string) string {
+	result := prefix + methodFragment + "Input"
 	if g.Package() == "" {
 		return result
 	}
 	return g.Package() + "." + result
 }
 
-func (g *Generate) IndexLocation(prefix string) string {
+func (g *Generate) IndexLocation(prefix string, methodFragment string) string {
 	_, name := url.Split(g.SourceURL(), file.Scheme)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}
 	baseURL := g.GoCodeLocation()
-	return url.Join(baseURL, prefix+"index.go")
+	return url.Join(baseURL, prefix+methodFragment+"index.go")
 }
 
-func (g *Generate) InitLocation(prefix string) string {
+func (g *Generate) InitLocation(prefix string, methodFragment string) string {
 	_, name := url.Split(g.SourceURL(), file.Scheme)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}
 	baseURL := g.GoCodeLocation()
-	return url.Join(baseURL, prefix+"init.go")
+	return url.Join(baseURL, prefix+methodFragment+"init.go")
 }
 
-func (g *Generate) OutputType(prefix string) string {
-	result := prefix + "Output"
+func (g *Generate) OutputType(prefix string, methodFragment string) string {
+	result := prefix + methodFragment + "Output"
 	if g.Package() == "" {
 		return result
 	}

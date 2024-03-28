@@ -30,7 +30,11 @@ func (t *TypeImport) EnsureLocation(ctx context.Context, fs afs.Service, goModul
 	if ok, _ := fs.Exists(ctx, path.Join(currentDir, t.URL)); ok {
 		t.URL = url.Join(currentDir, t.URL)
 	} else {
-		t.URL = url.Join(goModuleLocation, t.URL)
+		if !strings.HasSuffix(goModuleLocation, t.URL) {
+			t.URL = url.Join(goModuleLocation, t.URL)
+		} else {
+			t.URL = goModuleLocation
+		}
 	}
 }
 

@@ -51,6 +51,13 @@ type (
 	}
 )
 
+func (r *Resource) GetURI() string {
+	if r.rule.ModulePrefix == "" {
+		return r.Rule.URI
+	}
+	return r.rule.ModulePrefix + r.Rule.URI
+}
+
 // LookupTypeDef returns matched type definition
 func (r *Resource) LookupTypeDef(typeName string) *view.TypeDefinition {
 	for _, typeDef := range r.Resource.Types {
@@ -114,7 +121,7 @@ func (r *Resource) parseImports(ctx context.Context, dSQL *string) (err error) {
 }
 
 func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.TypeImport) error {
-	typesImport.EnsureLocation(ctx, fs, r.rule.GoModuleLocation())
+	typesImport.EnsureLocation(ctx, fs, r.rule.SourceCodeLocation())
 	alias := typesImport.Alias
 	for i, name := range typesImport.Types {
 		if typeDef := r.LookupTypeDef(name); typeDef != nil {
