@@ -39,6 +39,9 @@ func (r *Server) shutdownOnInterrupt() {
 
 func New(ctx context.Context, opts ...Option) (*Server, error) {
 	options, err := NewOptions(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
 	config := options.config
 	config.Init(ctx)
 	//mux := http.NewServeMux()

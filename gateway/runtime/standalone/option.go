@@ -33,8 +33,12 @@ func NewOptions(ctx context.Context, opts ...Option) (*Options, error) {
 	}))
 	if options.config != nil {
 		options.options = append(options.options, gateway.WithConfig(options.config.Config))
-	} else if options.ConfigURL == "" {
-		options.options = append(options.options, gateway.WithConfigURL(options.ConfigURL))
+	} else if options.ConfigURL != "" {
+		var err error
+		options.config, err = NewConfigFromURL(ctx, options.ConfigURL)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return options, nil
 }
