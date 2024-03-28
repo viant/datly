@@ -229,7 +229,7 @@ func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool, docum
 
 		relType := relViewlet.View.Schema.Type()
 		if relType.Kind() == reflect.Struct {
-			relType = reflect.PtrTo(relType)
+			relType = reflect.PointerTo(relType)
 		}
 		if relField.Cardinality == state.Many {
 			relType = reflect.SliceOf(relType)
@@ -321,9 +321,9 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		resource.Rule.applyGeneratorOutputSetting()
 
 	}
-
-	resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, resource.Rule.Route.URI)
-
+	if !strings.HasPrefix(resource.Rule.Route.URI, resource.repository.APIPrefix) {
+		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, resource.Rule.Route.URI)
+	}
 	aState, err := resource.State.Compact(resource.rule.ModuleLocation)
 	if err != nil {
 		return fmt.Errorf("failed to compact aState: %w", err)
