@@ -40,6 +40,9 @@ func NewOptions(ctx context.Context, opts ...Option) (*Options, error) {
 			return nil, err
 		}
 	}
+	if options.config != nil {
+		options.options = append(options.options, gateway.WithConfig(options.config.Config))
+	}
 	return options, nil
 }
 
