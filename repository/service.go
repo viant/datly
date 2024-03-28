@@ -210,6 +210,30 @@ func (s *Service) inheritFromPath(component *Component, aPath *path.Path) {
 	}
 }
 
+func (s *Service) Register(components ...*Component) {
+	s.registry.Register(components...)
+	var paths = map[string]*path.Item{}
+	for _, pathItem := range s.paths.Container.Items {
+		for _, aPath := range pathItem.Paths {
+			paths[aPath.Key()] = pathItem
+		}
+	}
+	for _, component := range components {
+		pathItem, ok := paths[component.Path.Key()]
+		if !ok {
+			pathItem = &path.Item{}
+			s.paths.Container.Items = append(s.paths.Container.Items, pathItem)
+			paths[component.Path.Key()] = pathItem
+		}
+		pathItem.Paths = append([]*path.Path{}, &path.Path{
+			Settings: path.Settings{
+				Cors: path.DefaultCors(),
+			},
+			Path: component.Path,
+		})
+	}
+}
+
 func (s *Service) Constants() []*state.Parameter {
 	res, err := s.resources.Lookup(view.ResourceConstants)
 	if err != nil {

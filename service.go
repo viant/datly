@@ -3,6 +3,7 @@ package datly
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/locator/component/dispatcher"
@@ -37,6 +38,7 @@ type (
 		options     []repository.Option
 		signer      *signer.Service
 		substitutes map[string]view.Substitutes
+		handler     http.Handler
 	}
 
 	sessionOptions struct {
@@ -328,7 +330,7 @@ func (s *Service) AddViews(ctx context.Context, views ...*view.View) (*repositor
 	if err := components.Init(ctx); err != nil {
 		return nil, err
 	}
-	s.repository.Registry().Register(component)
+	s.repository.Register(component)
 	return component, nil
 }
 
@@ -365,7 +367,7 @@ func (s *Service) AddComponent(ctx context.Context, component *repository.Compon
 		return err
 	}
 
-	s.repository.Registry().Register(components.Components...)
+	s.repository.Register(components.Components...)
 
 	return nil
 }
@@ -375,7 +377,7 @@ func (s *Service) AddComponents(ctx context.Context, components *repository.Comp
 	if err := components.Init(ctx); err != nil {
 		return err
 	}
-	s.repository.Registry().Register(components.Components...)
+	s.repository.Register(components.Components...)
 	return nil
 }
 
@@ -463,6 +465,19 @@ func (s *Service) LoadComponents(ctx context.Context, URL string, opts ...reposi
 	}
 	s.repository.Registry().Register(components.Components...)
 	return components, nil
+}
+
+func (s *Service) HTTPHandler(ctx context.Context, options ...gateway.Option) (http.Handler, error) {
+	if s.handler != nil {
+		return s.handler, nil
+	}
+	var err error
+	options = append(options, gateway.WithRepository(s.repository))
+	s.handler, err = gateway.New(ctx, options...)
+	if err != nil {
+		return nil, err
+	}
+	return s.handler, nil
 }
 
 // New creates a datly service, repository allows you to bootstrap empty or existing yaml repository

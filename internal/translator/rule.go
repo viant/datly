@@ -302,13 +302,8 @@ func (r *Rule) applyDefaults() {
 		r.Route.Content.Marshaller.XML.TypeName = r.XMLUnmarshalType
 	}
 	if r.Route.Cors == nil {
-		r.Route.Cors = &dpath.Cors{
-			AllowCredentials: setter.BoolPtr(true),
-			AllowHeaders:     setter.StringsPtr("*"),
-			AllowMethods:     setter.StringsPtr("*"),
-			AllowOrigins:     setter.StringsPtr("*"),
-			ExposeHeaders:    setter.StringsPtr("*"),
-		}
+		dC := dpath.DefaultCors()
+		r.Route.Cors = dC
 	}
 }
 

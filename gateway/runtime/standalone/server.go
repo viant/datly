@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
 	"github.com/viant/datly/view/extension"
-	"github.com/viant/gmetric"
 	"log"
 	"net/http"
 	"os"
@@ -43,18 +42,16 @@ func New(ctx context.Context, opts ...Option) (*Server, error) {
 	config := options.config
 	config.Init(ctx)
 	//mux := http.NewServeMux()
-	metric := gmetric.New()
 	if config.Config == nil {
 		return nil, fmt.Errorf("gateway config was empty")
 	}
-
 	var service *gateway.Service
 	var gOptions = []gateway.Option{
 		gateway.WithExtensions(extension.Config),
-		gateway.WithConfig(config.Config),
-		gateway.WithMetrics(metric),
 		gateway.WithStatusHandler(handler.NewStatus(config.Version, &config.Meta)),
-		gateway.WithAuthorizer(options.auth),
+	}
+	if options.options != nil {
+		gOptions = append(gOptions, options.options...)
 	}
 	if options.UseSingleton() {
 		service, err = gateway.Singleton(ctx, gOptions...)

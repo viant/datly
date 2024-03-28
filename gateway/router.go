@@ -364,10 +364,12 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 		}
 	}
 
+	if r.statusHandler != nil {
+		routes = append(routes, r.NewStatusRoute())
+	}
+
 	routes = append(
 		routes,
-		r.NewStatusRoute(),
-
 		r.NewConfigRoute(),
 	)
 
