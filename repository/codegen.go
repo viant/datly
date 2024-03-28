@@ -32,6 +32,9 @@ func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string,
 		aTag := &tags.Tag{}
 		aTag.SQL = tags.NewViewSQL(c.View.Template.Source, "")
 		aTag.View = &tags.View{Name: c.View.Name}
+		if tmpl := c.View.Template; tmpl != nil && tmpl.Summary != nil {
+			aTag.SummarySQL = tags.ViewSQLSummary(tags.NewViewSQL(tmpl.Summary.Source, ""))
+		}
 		viewParameter.Tag = string(aTag.UpdateTag(reflect.StructTag(viewParameter.Tag)))
 	}
 

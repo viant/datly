@@ -108,7 +108,7 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	return nil
 }
 
-func (c *Component) updatedViewSchemaWithNamedType(ctx context.Context, resource *view.Resource) {
+func (c *Component) updatedViewSchemaWithNamedType(ctx context.Context, resource *view.Resource) error {
 	outputSchema := c.Contract.Output.Type.Schema
 	if param := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); param != nil && outputSchema.IsNamed() {
 		oType := types.EnsureStruct(outputSchema.Type())
@@ -117,7 +117,18 @@ func (c *Component) updatedViewSchemaWithNamedType(ctx context.Context, resource
 				c.View.SetNamedType(viewField.Type)
 			}
 		}
+		if summaryParam := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "summary"); summaryParam != nil {
+			if aTag, _ := tags.Parse(reflect.StructTag(param.Tag), nil, tags.SQLSummaryTag); aTag != nil {
+				if summary := aTag.SummarySQL; summary.SQL != "" {
+					c.View.Template.Summary = &view.TemplateSummary{Name: summaryParam.Name, Source: summary.SQL, Schema: summaryParam.Schema}
+					if err := c.View.Template.Summary.Init(ctx, c.View.Template, resource); err != nil {
+						return err
+					}
+				}
+			}
+		}
 	}
+	return nil
 }
 
 func (c *Component) initTransforms(ctx context.Context) error {

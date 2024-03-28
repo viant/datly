@@ -26,7 +26,7 @@ import (
 func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewlet) (err error) {
 	s.updateOutputFieldTypes(resource)
 	if tmpl := rootViewlet.View.Template; tmpl != nil && tmpl.Summary != nil {
-		return nil //NOT YEY supported for summary
+		//	return nil //NOT YEY supported for summary
 	}
 	if resource.Rule.IsGeneratation {
 		return nil
