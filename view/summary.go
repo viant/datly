@@ -78,7 +78,6 @@ func (m *TemplateSummary) Init(ctx context.Context, owner *Template, resource *R
 	if err := m.initSchemaIfNeeded(ctx, owner, resource); err != nil {
 		return err
 	}
-	fmt.Printf("SUMMARY SCHEMA: %s  %s\n", m.Name, m.Schema.Type().String())
 	return nil
 }
 
