@@ -14,7 +14,6 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/view/extension"
 	"github.com/viant/gmetric"
 	"github.com/viant/scy/auth/jwt/signer"
 	"net/http"
@@ -76,46 +75,48 @@ func (r *Service) Close() error {
 }
 
 // New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
-func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, authorizer Authorizer, extensions *extension.Registry, metrics *gmetric.Service) (*Service, error) {
+func New(ctx context.Context, opts ...Option) (*Service, error) {
 	start := time.Now()
-	if err := aConfig.Init(ctx); err != nil {
-		return nil, err
-	}
-	err := aConfig.Validate()
+	options, err := newOptions(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
+	aConfig := options.config
 
+	if err := aConfig.Init(ctx); err != nil {
+		return nil, err
+	}
 	fs, err := newFileService(aConfig)
 	if err != nil {
 		return nil, err
 	}
-
-	repository, err := repository.New(ctx, repository.WithComponentURL(aConfig.RouteURL),
-		repository.WithResourceURL(aConfig.DependencyURL),
-		repository.WithPluginURL(aConfig.PluginsURL),
-		repository.WithApiPrefix(aConfig.APIPrefix),
-		repository.WithExtensions(extensions),
-		repository.WithMetrics(metrics),
-		repository.WithRefreshFrequency(aConfig.SyncFrequency()),
-		repository.WithDispatcher(dispatcher.New),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialise component service: %w", err)
+	componentRepository := options.repository
+	if componentRepository == nil {
+		componentRepository, err = repository.New(ctx, repository.WithComponentURL(aConfig.RouteURL),
+			repository.WithResourceURL(aConfig.DependencyURL),
+			repository.WithPluginURL(aConfig.PluginsURL),
+			repository.WithApiPrefix(aConfig.APIPrefix),
+			repository.WithExtensions(options.extensions),
+			repository.WithMetrics(options.metrics),
+			repository.WithRefreshFrequency(aConfig.SyncFrequency()),
+			repository.WithDispatcher(dispatcher.New),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialise component service: %w", err)
+		}
 	}
-
-	mainRouter, err := NewRouter(ctx, repository, aConfig, metrics, statusHandler, authorizer)
+	mainRouter, err := NewRouter(ctx, componentRepository, aConfig, options.metrics, options.statusHandler, options.authorizer)
 	if err != nil {
 		return nil, err
 	}
 	srv := &Service{
-		metrics:       metrics,
-		repository:    repository,
+		metrics:       options.metrics,
+		repository:    componentRepository,
 		Config:        aConfig,
 		mux:           sync.RWMutex{},
 		fs:            fs,
-		statusHandler: statusHandler,
-		authorizer:    authorizer,
+		statusHandler: options.statusHandler,
+		authorizer:    options.authorizer,
 		mainRouter:    mainRouter,
 	}
 	if aConfig.JwtSigner != nil {

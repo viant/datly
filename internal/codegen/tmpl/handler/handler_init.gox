@@ -10,7 +10,7 @@ import (
 
 var ${Prefix}${MethodFragment}PathURI = "$URI"
 
-func define${Prefix}${MethodFragment}Component(ctx context.Context, srv *datly.Service) (*repository.Component, error) {
+func Define${Prefix}${MethodFragment}Component(ctx context.Context, srv *datly.Service) (*repository.Component, error) {
 	return srv.AddHandler(ctx, contract.NewPath("$Method", ${Prefix}${MethodFragment}PathURI), &${Prefix}${MethodFragment}Handler{},
 	repository.WithContract(
 		reflect.TypeOf(&${Prefix}${MethodFragment}Input{}),

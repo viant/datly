@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
 	"github.com/viant/datly/view/extension"
-	"github.com/viant/gmetric"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +16,9 @@ import (
 
 type Server struct {
 	http.Server
-	Service *gateway.Service
+	Service      *gateway.Service
+	auth         gateway.Authorizer
+	useSingleton *bool //true by default
 }
 
 // shutdownOnInterrupt server on interupts
@@ -36,22 +37,27 @@ func (r *Server) shutdownOnInterrupt() {
 	}()
 }
 
-func NewWithAuth(ctx context.Context, gwayConfig *Config, auth gateway.Authorizer) (*Server, error) {
-	gwayConfig.Init(ctx)
+func New(ctx context.Context, opts ...Option) (*Server, error) {
+	options, err := NewOptions(ctx, opts...)
+	config := options.config
+	config.Init(ctx)
 	//mux := http.NewServeMux()
-	metric := gmetric.New()
-	if gwayConfig.Config == nil {
+	if config.Config == nil {
 		return nil, fmt.Errorf("gateway config was empty")
 	}
-
-	service, err := gateway.SingletonWithConfig(
-		gwayConfig.Config,
-		handler.NewStatus(gwayConfig.Version, &gwayConfig.Meta),
-		auth,
-		extension.Config,
-		metric,
-	)
-
+	var service *gateway.Service
+	var gOptions = []gateway.Option{
+		gateway.WithExtensions(extension.Config),
+		gateway.WithStatusHandler(handler.NewStatus(config.Version, &config.Meta)),
+	}
+	if options.options != nil {
+		gOptions = append(gOptions, options.options...)
+	}
+	if options.UseSingleton() {
+		service, err = gateway.Singleton(ctx, gOptions...)
+	} else {
+		service, err = gateway.New(ctx, gOptions...)
+	}
 	if err != nil {
 		if service != nil {
 			_ = service.Close()
@@ -59,22 +65,17 @@ func NewWithAuth(ctx context.Context, gwayConfig *Config, auth gateway.Authorize
 
 		return nil, err
 	}
-
 	server := &Server{
 		Service: service,
 		Server: http.Server{
-			Addr:           ":" + strconv.Itoa(gwayConfig.Endpoint.Port),
+			Addr:           ":" + strconv.Itoa(config.Endpoint.Port),
 			Handler:        service,
-			ReadTimeout:    time.Millisecond * time.Duration(gwayConfig.Endpoint.ReadTimeoutMs),
-			WriteTimeout:   time.Millisecond * time.Duration(gwayConfig.Endpoint.WriteTimeoutMs),
-			MaxHeaderBytes: gwayConfig.Endpoint.MaxHeaderBytes,
+			ReadTimeout:    time.Millisecond * time.Duration(config.Endpoint.ReadTimeoutMs),
+			WriteTimeout:   time.Millisecond * time.Duration(config.Endpoint.WriteTimeoutMs),
+			MaxHeaderBytes: config.Endpoint.MaxHeaderBytes,
 		},
 	}
 
 	server.shutdownOnInterrupt()
 	return server, nil
-}
-
-func New(ctx context.Context, config *Config) (*Server, error) {
-	return NewWithAuth(ctx, config, nil)
 }

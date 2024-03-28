@@ -1,5 +1,7 @@
 package path
 
+import "github.com/viant/datly/internal/setter"
+
 type Cors struct {
 	AllowCredentials *bool     `yaml:"AllowCredentials,omitempty"`
 	AllowHeaders     *[]string `yaml:"AllowHeaders,omitempty"`
@@ -37,4 +39,15 @@ func (c *Cors) inherit(cors *Cors) {
 	if c.MaxAge == nil {
 		c.MaxAge = cors.MaxAge
 	}
+}
+
+func DefaultCors() *Cors {
+	ret := &Cors{
+		AllowCredentials: setter.BoolPtr(true),
+		AllowHeaders:     setter.StringsPtr("*"),
+		AllowMethods:     setter.StringsPtr("*"),
+		AllowOrigins:     setter.StringsPtr("*"),
+		ExposeHeaders:    setter.StringsPtr("*"),
+	}
+	return ret
 }

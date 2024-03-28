@@ -115,6 +115,7 @@ func (c *Config) SyncFrequency() time.Duration {
 }
 
 func NewConfigFromURL(ctx context.Context, fs afs.Service, URL string) (*Config, error) {
+	fs = NewFs(URL, fs)
 	data, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err

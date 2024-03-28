@@ -1,6 +1,6 @@
 module github.com/viant/datly
 
-go 1.21.7
+go 1.22
 
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible

@@ -1,6 +1,7 @@
 package gcf
 
 import (
+	"context"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/viant/afs/embed"
@@ -38,8 +39,8 @@ func handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if configURL == "" {
 		return fmt.Errorf("config was emrty")
 	}
-
-	service, err := gateway.Singleton(configURL, nil, nil, extension.Config, nil)
+	ctx := context.Background()
+	service, err := gateway.Singleton(ctx, gateway.WithConfigURL(configURL), gateway.WithExtensions(extension.Config))
 	if err != nil {
 		return err
 	}

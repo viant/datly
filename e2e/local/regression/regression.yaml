@@ -1,9 +1,11 @@
 init:
+  v1: abc
+  v2: def
 pipeline:
   set_sdk:
     action: sdk.set
     target: $target
-    sdk: go:1.21
+    sdk: go:1.22
 
   database:
     action: run

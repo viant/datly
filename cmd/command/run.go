@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/internal/setter"
-	"github.com/viant/datly/service/auth/jwt"
 )
 
 func (s *Service) Run(ctx context.Context, options *options.Options) (err error) {
@@ -35,18 +34,9 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 		parent, _ := url.Split(s.config.JobURL, file.Scheme)
 		s.config.FailedJobURL = url.Join(parent, "failed", "jobs")
 	}
-
 	if run.LoadPlugin && s.config.Config.PluginsURL != "" {
 		parent, _ := url.Split(run.PluginInfo, file.Scheme)
 		_ = s.fs.Copy(ctx, parent, s.config.Config.PluginsURL)
 	}
-
-	authenticator, err := jwt.Init(s.config.Config, nil)
-	var srv *standalone.Server
-	if authenticator == nil {
-		srv, err = standalone.New(ctx, s.config)
-	} else {
-		srv, err = standalone.NewWithAuth(ctx, s.config, authenticator)
-	}
-	return srv, err
+	return standalone.New(ctx, standalone.WithConfig(s.config))
 }
