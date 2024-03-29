@@ -407,17 +407,33 @@ func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option
 			}
 			options = append(options, WithConnector(connector))
 		}
+		if vTag.Limit != nil {
+			options = append(options, WithLimit(vTag.Limit))
+
+		}
 		for _, name := range vTag.Parameters {
 			parameters = append(parameters, state.NewRefParameter(name))
 		}
 	}
-
 	if SQL := tag.SQL; SQL.SQL != "" {
 		tmpl := NewTemplate(string(SQL.SQL), WithTemplateParameters(parameters...))
 		options = append(options, WithTemplate(tmpl))
 	}
-
 	return options, nil
+}
+
+func WithLimit(limit *int) Option {
+	return func(view *View) error {
+		if view.Selector == nil {
+			view.Selector = &Config{}
+		}
+		if view.Selector.Constraints == nil {
+			view.Selector.Constraints = &Constraints{}
+		}
+		view.Selector.Constraints.Limit = true
+		view.Selector.Limit = *limit
+		return nil
+	}
 }
 
 func (v *View) buildLinks(aTag *tags.Tag) (Links, Links, error) {

@@ -176,7 +176,6 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 	if rootView := rule.RootView(); rootView.Selector != nil && rootView.Selector.NoLimit {
 		defaultLimit = 0
 	}
-
 	setter.SetIntIfZero(&selector.Limit, defaultLimit)
 	if selector.Constraints == nil {
 		selector.Constraints = &view.Constraints{
