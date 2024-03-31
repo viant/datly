@@ -208,9 +208,7 @@ func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Colu
 	}
 	columns, err := config.Columns(ctx, session, db, table)
 	if len(columns) == 0 && table != "" {
-		if columns, e := inferColumnWithSQL(ctx, db, "SELECT * FROM "+table+" WHERE 1 = 0", []interface{}{}, map[string]sink.Column{}); e == nil {
-			return columns, err
-		}
+		columns, err = inferColumnWithSQL(ctx, db, "SELECT * FROM "+table+" WHERE 1 = 0", []interface{}{}, map[string]sink.Column{})
 	}
 	return columns, err
 }
