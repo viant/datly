@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/afs/storage"
 	"github.com/viant/tagly/tags"
+	"strconv"
 	"strings"
 )
 
@@ -20,6 +21,7 @@ type (
 		Table      string
 		Parameters []string //parameter references
 		Connector  string
+		Limit      *int
 		Match      string
 	}
 )
@@ -31,6 +33,12 @@ func (t *Tag) updateView(key string, value string) error {
 		tag.Name = strings.TrimSpace(value)
 	case "match":
 		tag.Match = strings.TrimSpace(value)
+	case "limit":
+		limit, err := strconv.Atoi(value)
+		if err != nil {
+			return err
+		}
+		tag.Limit = &limit
 	case "table":
 		tag.Table = strings.TrimSpace(value)
 	case "connector":
@@ -60,6 +68,9 @@ func (v *View) Tag() *tags.Tag {
 		return nil
 	}
 	builder.WriteString(v.Name)
+	if v.Limit != nil {
+		appendNonEmpty(builder, "limit", strconv.Itoa(*v.Limit))
+	}
 	appendNonEmpty(builder, "table", v.Table)
 	appendNonEmpty(builder, "connector", v.Connector)
 	appendNonEmpty(builder, "match", v.Match)

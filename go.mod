@@ -4,6 +4,7 @@ go 1.22
 
 toolchain go1.22.1
 
+
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
@@ -132,3 +133,4 @@ require (
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
