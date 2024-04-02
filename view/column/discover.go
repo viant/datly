@@ -32,8 +32,8 @@ func Discover(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...int
 		}
 	}
 	if len(columns) == 0 && table != "" { //TODO mere column types
-		sinkColumns, err := readSinkColumns(ctx, db, table)
-		if err != nil {
+		sinkColumns, e := readSinkColumns(ctx, db, table)
+		if e != nil {
 			return nil, err
 		}
 		columns = asColumns(sinkColumns)
