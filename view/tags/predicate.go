@@ -55,7 +55,11 @@ func (t *Tag) updatedPredicate(key string, value string) (err error) {
 	lKey := strings.ToLower(key)
 	switch lKey {
 	case "name":
-		tag.Name = strings.TrimSpace(value)
+		if tag.Name == "" {
+			tag.Name = strings.TrimSpace(value)
+		} else {
+			tag.Arguments = append(tag.Arguments, key)
+		}
 	case "group":
 		if tag.Group, err = strconv.Atoi(strings.TrimSpace(value)); err != nil {
 			return fmt.Errorf("invalid predicate group: %s %w", value, err)
