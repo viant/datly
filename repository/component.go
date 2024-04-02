@@ -358,7 +358,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 			outputType = reflect.TypeOf(struct{}{})
 		}
 		c.embedFs = embedFs
-		sType, err := state.NewType(state.WithResource(c.View.Resource()), state.WithSchema(state.NewSchema(inputType)))
+		sType, err := state.NewType(state.WithResource(c.View.Resource()), state.WithFS(embedFs), state.WithSchema(state.NewSchema(inputType)))
 		if err != nil {
 			return err
 		}
@@ -369,6 +369,10 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 		c.Contract.Output.Type = state.Type{Schema: state.NewSchema(outputType)}
 		if err := c.Contract.Output.Type.Init(state.WithFS(embedFs)); err != err {
 			return fmt.Errorf("failed to initalize output: %w", err)
+		}
+		if c.Contract.Output.CaseFormat == "" {
+			//todo this needs to be pass through from options
+			c.Contract.Output.CaseFormat = "lc"
 		}
 		sTypes := types.EnsureStruct(outputType)
 		viewName := sTypes.Name()
