@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/codec"
-	"reflect"
 )
 
 type (
@@ -18,19 +17,13 @@ type (
 		namedParameters     state.NamedParameters
 		locatorOptions      []locator.Option //resousrce, route level options
 		codecOptions        []codec.Option
-		types               map[reflect.Type]*state.Type
+		types               []*state.Type
 		indirectState       bool
 		reportNotAssignable *bool
 		embeddedFS          *embed.FS
 	}
 	Option func(o *Options)
 )
-
-func (o *Options) Apply(opts ...Option) {
-	for _, opt := range opts {
-		opt(o)
-	}
-}
 
 func (o *Options) shallReportNotAssignable() bool {
 	if o.reportNotAssignable == nil {
@@ -69,7 +62,7 @@ func (o *Options) Clone() *Options {
 }
 
 func NewOptions(options ...Option) *Options {
-	ret := &Options{types: make(map[reflect.Type]*state.Type)}
+	ret := &Options{}
 	ret.apply(options)
 	return ret
 }
@@ -118,9 +111,7 @@ func WithReportNotAssignable(flag bool) Option {
 
 func WithTypes(types ...*state.Type) Option {
 	return func(s *Options) {
-		for _, t := range types {
-			s.types[t.Type().Type()] = t
-		}
+		s.types = append(s.types, types...)
 	}
 }
 

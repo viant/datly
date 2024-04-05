@@ -110,6 +110,12 @@ func enableCors(writer http.ResponseWriter, request *http.Request, cors *path.Co
 	if cors.AllowMethods != nil && allHeaders {
 		writer.Header().Set(httputils.AllowMethodsHeader, request.Method)
 	}
+	if request.Method == "OPTIONS" {
+		requestMethod := request.Header.Get(httputils.AllControlRequestHeader)
+		if requestMethod != "" {
+			writer.Header().Set(httputils.AllowMethodsHeader, requestMethod)
+		}
+	}
 
 	if cors.AllowHeaders != nil && allHeaders {
 		writer.Header().Set(httputils.AllowHeadersHeader, strings.Join(*cors.AllowHeaders, Separator))

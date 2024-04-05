@@ -8,17 +8,19 @@ import (
 type options struct {
 	Types   []*state.Type
 	embedFS *embed.FS
+	opts    []Option
 }
 
-func (o *options) apply(opts []Option) *options {
-	ret := *o
-	for _, opt := range opts {
-		opt(&ret)
-	}
-	return &ret
+func (o *options) Clone(opts []Option) *options {
+	return newOptions(append(o.opts, opts...)...)
+}
+func (o *options) Options(opts []Option) []Option {
+	return append(o.opts, opts...)
 }
 func newOptions(opts ...Option) *options {
-	ret := &options{}
+	ret := &options{
+		opts: opts,
+	}
 	for _, opt := range opts {
 		opt(ret)
 	}

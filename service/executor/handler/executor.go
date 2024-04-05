@@ -88,9 +88,10 @@ func (e *Executor) HandlerSession(ctx context.Context, opts ...Option) (*extensi
 		return e.handlerSession, nil
 	}
 
-	e.options.apply(opts)
-	e.session.Options.Apply(session.WithTypes(e.options.Types...))
-	e.session.Options.Apply(session.WithEmbeddedFS(e.options.embedFS))
+	var options = e.options.Clone(opts)
+	e.session.Apply(session.WithTypes(options.Types...))
+	e.session.Apply(session.WithEmbeddedFS(options.embedFS))
+
 	sess := extension.NewSession(
 		extension.WithTemplateFlush(func(ctx context.Context) error {
 			return e.Execute(ctx)

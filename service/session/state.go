@@ -608,6 +608,14 @@ func (s *Session) InitKinds(kinds ...state.Kind) error {
 	return nil
 }
 
+// Apply applies Options
+func (s *Session) Apply(opts ...Option) {
+	s.Options.apply(opts)
+	for _, aType := range s.Options.types {
+		s.Types.Put(aType)
+	}
+}
+
 // TODO deprecated this abstraction
 type valueGetter struct {
 	Parameters state.NamedParameters
