@@ -51,7 +51,9 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 	ctx = aComponent.View.Context(ctx)
 	output := aComponent.Output.Type.Type().NewState()
 	var locatorOptions []locator.Option
-	locatorOptions = append(locatorOptions, locator.WithView(aComponent.View),
+	locatorOptions = append(locatorOptions,
+		locator.WithView(aComponent.View),
+		locator.WithTypes(aComponent.Types()...),
 		locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
 			return aSession.LookupValue(ctx, parameter, aSession.Indirect(true, locatorOptions...))
 		}))
