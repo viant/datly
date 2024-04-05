@@ -352,6 +352,13 @@ func WithInput(inputType reflect.Type) ComponentOption {
 	}
 }
 
+func WithOutputCaseFormat(format string) ComponentOption {
+	return func(c *Component) error {
+		c.Contract.Output.CaseFormat = text.CaseFormat(format)
+		return nil
+	}
+}
+
 func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) ComponentOption {
 	return func(c *Component) error {
 		if outputType == nil {
