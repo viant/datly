@@ -22,7 +22,7 @@ type (
 		session         *session.Session
 		executorSession *executor.Session
 		handlerSession  *extension.Session
-
+		*options
 		view       *view.View
 		connectors view.Connectors
 		dataUnit   *expand.DataUnit
@@ -39,9 +39,10 @@ func (d *DBProvider) Db() (*sql.DB, error) {
 	return d.db, nil
 }
 
-func NewExecutor(aView *view.View, aSession *session.Session) *Executor {
+func NewExecutor(aView *view.View, aSession *session.Session, opts ...Option) *Executor {
 	return &Executor{
 		view:     aView,
+		options:  newOptions(opts...),
 		session:  aSession,
 		dataUnit: expand.NewDataUnit(aView),
 	}
@@ -69,8 +70,8 @@ func (e *Executor) Session(ctx context.Context) (*executor.Session, error) {
 	return e.executorSession, err
 }
 
-func (e *Executor) NewHandlerSession(ctx context.Context) (handler.Session, error) {
-	aSession, err := e.HandlerSession(ctx)
+func (e *Executor) NewHandlerSession(ctx context.Context, opts ...Option) (handler.Session, error) {
+	aSession, err := e.HandlerSession(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -82,11 +83,14 @@ func (e *Executor) NewHandlerSession(ctx context.Context) (handler.Session, erro
 	return aSession, err
 }
 
-func (e *Executor) HandlerSession(ctx context.Context) (*extension.Session, error) {
+func (e *Executor) HandlerSession(ctx context.Context, opts ...Option) (*extension.Session, error) {
 	if e.handlerSession != nil {
 		return e.handlerSession, nil
 	}
 
+	e.options.apply(opts)
+	e.session.Options.Apply(session.WithTypes(e.options.Types...))
+	e.session.Options.Apply(session.WithEmbeddedFS(e.options.embedFS))
 	sess := extension.NewSession(
 		extension.WithTemplateFlush(func(ctx context.Context) error {
 			return e.Execute(ctx)
@@ -96,6 +100,7 @@ func (e *Executor) HandlerSession(ctx context.Context) (*extension.Session, erro
 		extension.WithSql(e.newSqlService),
 		extension.WithHttp(e.newHttp),
 	)
+
 	e.handlerSession = sess
 
 	return sess, nil

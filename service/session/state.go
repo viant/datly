@@ -26,7 +26,7 @@ type (
 		cache *cache
 		views *views
 		Options
-		state.Types
+		Types state.Types
 	}
 
 	contextKey string
@@ -517,16 +517,17 @@ func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (in
 	return value, err
 }
 
-func (s *Options) apply(options []Option) {
+func (o *Options) apply(options []Option) {
 	for _, opt := range options {
-		opt(s)
+		opt(o)
 	}
-	if s.kindLocator == nil {
-		s.kindLocator = locator.NewKindsLocator(nil, s.locatorOptions...)
+	if o.kindLocator == nil {
+		o.kindLocator = locator.NewKindsLocator(nil, o.locatorOptions...)
 	}
-	if s.state == nil {
-		s.state = view.NewState()
+	if o.state == nil {
+		o.state = view.NewState()
 	}
+
 }
 
 func New(aView *view.View, opts ...Option) *Session {
@@ -538,6 +539,9 @@ func New(aView *view.View, opts ...Option) *Session {
 	}
 	ret.namedParameters = ret.namespacedView.Parameters()
 	ret.apply(opts)
+	for _, aType := range ret.Options.types {
+		ret.Types.Put(aType)
+	}
 	return ret
 }
 

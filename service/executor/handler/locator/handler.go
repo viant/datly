@@ -14,6 +14,7 @@ import (
 
 type Handler struct {
 	options *locator.Options
+	types   []*state.Type
 }
 
 func (v *Handler) Names() []string {
@@ -44,8 +45,10 @@ func (v *Handler) Value(ctx context.Context, name string) (interface{}, bool, er
 		aView.Connector = resource.Connectors[0]
 	}
 	aSession := session.Context(ctx)
+
 	anExecutor := handler.NewExecutor(aView, aSession)
-	handlerSession, err := anExecutor.NewHandlerSession(ctx)
+
+	handlerSession, err := anExecutor.NewHandlerSession(ctx, handler.WithTypes(v.types...))
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to create handler session: %w", err)
 	}

@@ -36,6 +36,7 @@ type (
 		Dispatcher       contract.Dispatcher
 		View             *view.View
 		Resource         *view.Resource
+		Types            []*state.Type
 	}
 
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
@@ -214,5 +215,11 @@ func WithMetrics(metrics response.Metrics) Option {
 func WithResource(resource *view.Resource) Option {
 	return func(o *Options) {
 		o.Resource = resource
+	}
+}
+
+func WithTypes(types ...*state.Type) Option {
+	return func(o *Options) {
+		o.Types = types
 	}
 }

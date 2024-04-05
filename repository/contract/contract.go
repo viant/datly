@@ -37,6 +37,17 @@ const (
 	ComprehensiveStyle Style = "Comprehensive"
 )
 
+// Types returns all types
+func (c *Contract) Types() []*state.Type {
+	var types []*state.Type
+	if c.Input.Type.Type().IsDefined() {
+		types = append(types, &c.Input.Type)
+	}
+	if c.Output.Type.Type().IsDefined() {
+		types = append(types, &c.Output.Type)
+	}
+	return types
+}
 func (c *Contract) Init(ctx context.Context, path *Path, aView *view.View, resource *view.Resource) (err error) {
 	if err = c.initServiceType(path); err != nil {
 		return err
@@ -82,10 +93,10 @@ func (c *Contract) adjustInputType(ctx context.Context, aView *view.View, resour
 	return nil
 }
 
-func (r *Contract) initServiceType(path *Path) error {
-	switch r.Service {
+func (c *Contract) initServiceType(path *Path) error {
+	switch c.Service {
 	case "", service.TypeReader:
-		r.Service = service.TypeReader
+		c.Service = service.TypeReader
 		return nil
 	case service.TypeExecutor:
 		return nil
@@ -93,22 +104,22 @@ func (r *Contract) initServiceType(path *Path) error {
 
 	switch path.Method {
 	case http.MethodGet:
-		r.Service = service.TypeReader
+		c.Service = service.TypeReader
 		return nil
 	default:
 		return fmt.Errorf("http method %v unsupported, no default service specified for given method", path.Method)
 	}
 }
 
-func (r *Contract) initCardinality() error {
-	switch r.Output.Cardinality {
+func (c *Contract) initCardinality() error {
+	switch c.Output.Cardinality {
 	case state.One, state.Many:
 		return nil
 	case "":
-		r.Output.Cardinality = state.Many
+		c.Output.Cardinality = state.Many
 		return nil
 	default:
-		return fmt.Errorf("unsupported cardinality type %v\n", r.Output.Cardinality)
+		return fmt.Errorf("unsupported cardinality type %v\n", c.Output.Cardinality)
 	}
 }
 

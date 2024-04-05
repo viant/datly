@@ -15,13 +15,13 @@ import (
 // HandlerSession returns a handler session
 func (s *Service) HandlerSession(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (xhandler.Session, error) {
 	anExecutor := handler.NewExecutor(aComponent.View, aSession)
-	return anExecutor.NewHandlerSession(ctx)
+	return anExecutor.NewHandlerSession(ctx, handler.WithTypes(aComponent.Types()...))
 }
 
 func (s *Service) execute(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	anExecutor := handler.NewExecutor(aComponent.View, aSession)
 	if aComponent.Handler != nil {
-		sessionHandler, err := anExecutor.NewHandlerSession(ctx)
+		sessionHandler, err := anExecutor.NewHandlerSession(ctx, handler.WithTypes(aComponent.Types()...))
 		if err != nil {
 			return nil, err
 		}
