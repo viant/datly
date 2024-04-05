@@ -410,6 +410,10 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 				vOptions = append(vOptions, view.WithSQL(string(aTag.SQL.SQL), anInputType.Parameters...))
 			}
 
+			if aTag.View.Connector != "" {
+				vOptions = append(vOptions, view.WithConnector(&view.Connector{Reference: shared.Reference{Ref: aTag.View.Connector}}))
+			}
+
 		}
 		vOptions = append(vOptions, view.WithFS(c.embedFs))
 		aView := view.NewView(viewName, table, vOptions...)

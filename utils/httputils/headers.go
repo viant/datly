@@ -1,9 +1,12 @@
 package httputils
 
 const (
-	AllowOriginHeader      = "Access-Control-Allow-Origin"
-	AllowHeadersHeader     = "Access-Control-Allow-Headers"
-	AllowMethodsHeader     = "Access-Control-Allow-Methods"
+	AllowOriginHeader  = "Access-Control-Allow-Origin"
+	AllowHeadersHeader = "Access-Control-Allow-Headers"
+	AllowMethodsHeader = "Access-Control-Allow-Methods"
+
+	AllControlRequestHeader = "Access-Control-Request-Method"
+
 	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
 	ExposeHeadersHeader    = "Access-Control-Expose-Headers"
 	MaxAgeHeader           = "Access-Control-Max-Age"

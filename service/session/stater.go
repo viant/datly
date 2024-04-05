@@ -22,7 +22,7 @@ func (s *Session) Into(ctx context.Context, dest interface{}) (err error) {
 	}
 
 	aState := stateType.Type().WithValue(dest)
-	options := s.Clone()
+	options := s.Clone().Indirect(true)
 	err = s.SetState(ctx, stateType.Parameters, aState, options)
 	return err
 }

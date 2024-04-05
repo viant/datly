@@ -19,7 +19,11 @@ func (c *Types) Lookup(p reflect.Type) (*Type, bool) {
 
 func (c *Types) Put(t *Type) {
 	c.RWMutex.Lock()
-	c.types[t.Schema.rType] = t
+	rType := t.Schema.rType
+	if rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	c.types[rType] = t
 	c.RWMutex.Unlock()
 }
 
