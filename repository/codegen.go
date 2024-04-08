@@ -23,7 +23,7 @@ var contractInit string
 //go:embed codegen/register.gox
 var registerInit string
 
-func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string, namedResources ...string) string {
+func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool, embeds map[string]string, namedResources ...string) string {
 	builder := strings.Builder{}
 	input := c.Input.Type.Type()
 	registry := c.TypeRegistry()
