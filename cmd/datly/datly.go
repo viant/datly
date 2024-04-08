@@ -42,8 +42,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-
-	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
+	err := cmd.RunApp(Version, os.Args[1:])
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)
 		log.Fatal(err)

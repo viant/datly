@@ -8,7 +8,7 @@ import (
 	soptions "github.com/viant/datly/cmd/options"
 )
 
-func New(version string, args soptions.Arguments) error {
+func RunApp(version string, args soptions.Arguments) error {
 	options, err := buildOptions(args)
 	if err != nil {
 		return err
