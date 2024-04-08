@@ -4,7 +4,6 @@ go 1.22
 
 toolchain go1.22.1
 
-
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
@@ -30,11 +29,11 @@ require (
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 	github.com/viant/gmetric v0.3.1-0.20230405233616-cc90deee60c4
 	github.com/viant/godiff v0.4.1
-	github.com/viant/parsly v0.3.3-0.20240201231835-eceb98bf4c32
+	github.com/viant/parsly v0.3.3-0.20240228194022-a61fc21f83e1
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.7.0
 	github.com/viant/sqlx v0.12.1-0.20240215212756-d8cc9d22ff38
-	github.com/viant/structql v0.4.1
+	github.com/viant/structql v0.4.2-0.20240406183616-cff48e18d922
 	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
 	github.com/viant/xreflect v0.6.2-0.20240129222322-972307391f16
@@ -47,7 +46,7 @@ require (
 
 require (
 	github.com/viant/govalidator v0.2.2-0.20230629211659-f2a3f0659b0b
-	github.com/viant/sqlparser v0.5.3-0.20240202165309-fddc570f0301
+	github.com/viant/sqlparser v0.6.0
 	golang.org/x/crypto v0.21.0 // indirect
 )
 
@@ -113,7 +112,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
-	github.com/viant/igo v0.1.0 // indirect
+	github.com/viant/igo v0.2.0 // indirect
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
 	github.com/xuri/excelize/v2 v2.8.0 // indirect
 	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect
@@ -133,4 +132,3 @@ require (
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-

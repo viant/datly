@@ -157,6 +157,6 @@ func (t *Template) buildDataViewParameter(spec *inference.Spec, cardinality stat
 	param.In = state.NewViewLocation(param.Name)
 	param.SQL = spec.ViewSQL(t.ColumnParameterNamer(spec.Selector()))
 	columnFields := spec.Type.Fields(inference.WithStructTag())
-	param.Schema.SetType(reflect.PtrTo(reflect.StructOf(columnFields)))
+	param.Schema.SetType(reflect.PointerTo(reflect.StructOf(columnFields)))
 	return param
 }
