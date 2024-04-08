@@ -25,7 +25,7 @@ type Rule struct {
 	Index          int
 	ModuleLocation string `short:"m" long:"module" description:"go module package root" default:"pkg"`
 	Generated      bool
-	SkipCompDef    bool `short:"A" long:"sComp" description:"skip component def"`
+	SkipCompDef    bool `short:"B" long:"sComp" description:"skip component def"`
 }
 
 func (r *Rule) SourceCodeLocation() string {

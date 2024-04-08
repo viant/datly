@@ -6,10 +6,9 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/viant/datly/cmd/command"
 	soptions "github.com/viant/datly/cmd/options"
-	"io"
 )
 
-func New(version string, args soptions.Arguments, logger io.Writer) error {
+func New(version string, args soptions.Arguments) error {
 	options, err := buildOptions(args)
 	if err != nil {
 		return err
