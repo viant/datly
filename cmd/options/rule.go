@@ -16,15 +16,16 @@ import (
 )
 
 type Rule struct {
-	Project        string   `short:"p" long:"proj" description:"project location"`
-	Name           string   `short:"n" long:"name" description:"rule name"`
-	ModulePrefix   string   `short:"u" long:"namespace" description:"rule uri/namespace"  default:"dev" `
-	Source         []string `short:"s" long:"src" description:"source"`
-	Packages       []string `short:"g" long:"pkg" description:"entity package"`
-	Output         []string
-	Index          int
-	ModuleLocation string `short:"m" long:"module" description:"go module package root" default:"pkg"`
-	Generated      bool
+	Project             string   `short:"p" long:"proj" description:"project location"`
+	Name                string   `short:"n" long:"name" description:"rule name"`
+	ModulePrefix        string   `short:"u" long:"namespace" description:"rule uri/namespace"  default:"dev" `
+	Source              []string `short:"s" long:"src" description:"source"`
+	Packages            []string `short:"g" long:"pkg" description:"entity package"`
+	Output              []string
+	Index               int
+	ModuleLocation      string `short:"m" long:"module" description:"go module package root" default:"pkg"`
+	Generated           bool
+	IncludeComponentDef bool `short:"A" long:"def" description:"include component def" default:"true"`
 }
 
 func (r *Rule) SourceCodeLocation() string {
