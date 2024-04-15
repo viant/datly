@@ -56,14 +56,14 @@ func (o *Output) GetTitle() string {
 	return replcaer.ExpandAsText(o.Title)
 }
 
-func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters state.Parameters, isReader bool) (err error) {
+func (o *Output) Init(ctx context.Context, aView *view.View, inputType *state.Type, isReader bool) (err error) {
 	if err = o.ensureCaseFormat(); err != nil {
 		return err
 	}
 	o.initExclude()
 	o.addExcludePrefixesIfNeeded()
 	o.initDebugStyleIfNeeded()
-	if err = o.initParameters(aView, inputParameters, o.Doc, isReader); err != nil {
+	if err = o.initParameters(aView, inputType, o.Doc, isReader); err != nil {
 		return err
 	}
 	if (o.Style == "" || o.Style == BasicStyle) && o.Field == "" {
@@ -174,7 +174,7 @@ func (o *Output) initDebugStyleIfNeeded() {
 	}
 }
 
-func (o *Output) initParameters(aView *view.View, inputParameters state.Parameters, doc state.Documentation, isReader bool) (err error) {
+func (o *Output) initParameters(aView *view.View, bodyType *state.Type, doc state.Documentation, isReader bool) (err error) {
 	if o.Type.IsAnonymous() {
 		o.Style = BasicStyle
 	} else if outputParameters := o.Type.Parameters.Filter(state.KindOutput); len(outputParameters) > 0 {
@@ -185,8 +185,16 @@ func (o *Output) initParameters(aView *view.View, inputParameters state.Paramete
 			}
 		}
 	}
+
+	if bodyParameter := o.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); bodyParameter != nil {
+		schema := bodyParameter.Schema
+		if schema.Name == "" && schema.Type() == nil {
+			schema = bodyType.Schema
+		}
+	}
+
 	if len(o.Type.Parameters) == 0 {
-		o.Type.Parameters, err = o.defaultParameters(aView, inputParameters, isReader)
+		o.Type.Parameters, err = o.defaultParameters(aView, bodyType.Parameters, isReader)
 	}
 	EnsureParameterTypes(o.Type.Parameters, aView, doc, o.FilterDoc)
 	return err

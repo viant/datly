@@ -58,7 +58,7 @@ func (c *Contract) Init(ctx context.Context, path *Path, aView *view.View, resou
 	if err = c.Input.Init(ctx, aView); err != nil {
 		return err
 	}
-	if err = c.Output.Init(ctx, aView, c.Input.Body.Parameters, c.Service == service.TypeReader); err != nil {
+	if err = c.Output.Init(ctx, aView, &c.Input.Body, c.Service == service.TypeReader); err != nil {
 		return err
 	}
 	if err := c.adjustInputType(ctx, aView, resource); err != nil {
