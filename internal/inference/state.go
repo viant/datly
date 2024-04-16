@@ -139,12 +139,20 @@ func (s *State) AppendConst(constants map[string]interface{}) {
 
 func (s *State) StateForSQL(SQL string, isRoot bool) State {
 	var result = State{}
+	includeParameter := isRoot
+	if isPredicateUsed(SQL) {
+		includeParameter = true
+	}
 	for _, candidate := range *s {
-		if (isRoot && candidate.Explicit) || candidate.IsUsedBy(SQL) {
+		if (includeParameter && candidate.Explicit) || candidate.IsUsedBy(SQL) {
 			result = append(result, candidate)
 		}
 	}
 	return result
+}
+
+func isPredicateUsed(SQL string) bool {
+	return strings.Contains(SQL, "${predicate.Builder()")
 }
 
 func (s State) Clone() State {

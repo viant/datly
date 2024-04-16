@@ -27,12 +27,8 @@ const (
 	PredicateIsNull      = "is_null"
 	PredicateExists      = "exists"
 	PredicateNotExists   = "not_exists"
-
-	// TODO IF NEEDED
-	//PredicateContainsWord = "contains_word" // for backward compatibility: like "% value %", doesn't use regexp
-	//PredicateHasPrefix    = "has_prefix"
-	//PredicateHasSuffix    = "has_suffix"
-
+	PredicateBetween     = "between"
+	PredicateDuration    = "duration"
 )
 
 type (
@@ -118,6 +114,66 @@ func newIsNullPredicate(name string, negated bool) *Predicate {
 		Template: &predicate.Template{
 			Name:   name,
 			Source: " " + clause,
+			Args:   args,
+		},
+	}
+}
+
+func NewBetweenPredicate() *Predicate {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "Expression",
+			Position: 0,
+		},
+		{
+			Name:     "From",
+			Position: 1,
+		},
+		{
+			Name:     "To",
+			Position: 2,
+		},
+	}
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   PredicateBetween,
+			Source: `  ${Expression} BETWEEN ${From} AND ${To}`,
+			Args:   args,
+		},
+	}
+}
+
+func NewDurationPredicate() *Predicate {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "DayExpression",
+			Position: 0,
+		},
+		{
+			Name:     "CurrentDayExpression",
+			Position: 1,
+		},
+		{
+			Name:     "HourExpression",
+			Position: 2,
+		},
+		{
+			Name:     "CurrentHourExpression",
+			Position: 3,
+		},
+	}
+	clause := `
+#if($FilterValue == "hour")
+	  AND ${DayExpression} = ${CurrentDayExpression}
+	  AND ${HourExpression} = ${CurrentHourExpression}
+#elseif($FilterValue == "day")
+	AND ${DayExpression} = ${CurrentDayExpression}
+#end
+`
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   PredicateDuration,
+			Source: clause,
 			Args:   args,
 		},
 	}
