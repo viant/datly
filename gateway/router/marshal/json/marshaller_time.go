@@ -4,8 +4,10 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/tagly/format"
+	ftime "github.com/viant/tagly/format/time"
 	"github.com/viant/xunsafe"
 	"strconv"
+	"strings"
 	"time"
 	"unsafe"
 )
@@ -34,9 +36,17 @@ func newTimeMarshaller(tag *format.Tag, config *config.IOConfig) *timeMarshaller
 
 func (t *timeMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	aTime := xunsafe.AsTimePtr(pointer)
-	if err := decoder.AddTime(aTime, t.timeLayout); err != nil {
+	var timeLiteral string
+	err := decoder.AddString(&timeLiteral)
+	if err != nil {
 		return err
 	}
+	timeLiteral = strings.TrimRight(timeLiteral, "Z")
+	timeDst, err := ftime.Parse(t.timeLayout, timeLiteral)
+	if err != nil {
+		return err
+	}
+	*aTime = timeDst
 	return nil
 }
 
