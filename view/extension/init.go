@@ -105,6 +105,8 @@ func InitRegistry() {
 				PredicateNotContains: NewNotContainsPredicate(),
 				PredicateExists:      NewExistsPredicate(),
 				PredicateNotExists:   NewNotExistsPredicate(),
+				PredicateIsNull:      NewIsNullPredicate(),
+				PredicateIsNotNull:   NewIsNotNullPredicate(),
 			},
 		},
 		Docs: docs.New(),

@@ -23,9 +23,10 @@ const (
 	PredicateHandler     = "handler"
 	PredicateContains    = "contains"
 	PredicateNotContains = "not_contains"
-
-	PredicateExists    = "exists"
-	PredicateNotExists = "not_exists"
+	PredicateIsNotNull   = "is_not_null"
+	PredicateIsNull      = "is_null"
+	PredicateExists      = "exists"
+	PredicateNotExists   = "not_exists"
 
 	// TODO IF NEEDED
 	//PredicateContainsWord = "contains_word" // for backward compatibility: like "% value %", doesn't use regexp
@@ -92,6 +93,42 @@ func NewPredicates() *PredicateRegistry {
 		parent:   nil,
 		registry: map[string]*Predicate{},
 	}
+}
+
+func newIsNullPredicate(name string, negated bool) *Predicate {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "Alias",
+			Position: 0,
+		},
+		{
+			Name:     "Column",
+			Position: 1,
+		},
+	}
+
+	clause := `  ${Alias}.${Column} IS`
+
+	if negated {
+		clause = " NOT "
+	}
+
+	clause += " NULL "
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   name,
+			Source: " " + clause,
+			Args:   args,
+		},
+	}
+}
+
+func NewIsNullPredicate() *Predicate {
+	return newIsNullPredicate(PredicateIsNull, false)
+}
+
+func NewIsNotNullPredicate() *Predicate {
+	return newIsNullPredicate(PredicateIsNotNull, true)
 }
 
 func NewEqualPredicate() *Predicate {
