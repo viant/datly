@@ -28,7 +28,7 @@ func newTimePtrMarshaller(tag *format.Tag, config *config.IOConfig) *timePtrMars
 	}
 
 	zeroValue := null
-	if !tag.IsNullable() {
+	if tag.Nullable != nil && !*tag.Nullable {
 		zeroValue = strconv.Quote(time.Time{}.Format(timeLayout))
 	}
 	return &timePtrMarshaller{
@@ -40,14 +40,14 @@ func newTimePtrMarshaller(tag *format.Tag, config *config.IOConfig) *timePtrMars
 
 func (t *timePtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	aTime := xunsafe.AsTimeAddrPtr(pointer)
-	timeDst := time.Time{}
-	var timeLiteral string
-	err := decoder.AddString(&timeLiteral)
-	if err != nil {
+	var timeLiteral *string
+	err := decoder.AddStringNull(&timeLiteral)
+	if err != nil || timeLiteral == nil {
 		return err
 	}
-	timeLiteral = strings.TrimRight(timeLiteral, "Z")
-	if timeDst, err = ftime.Parse(t.timeLayout, timeLiteral); err != nil {
+	*timeLiteral = strings.TrimRight(*timeLiteral, "Z")
+	var timeDst time.Time
+	if timeDst, err = ftime.Parse(t.timeLayout, *timeLiteral); err != nil {
 		return err
 	}
 	if !timeDst.IsZero() {
