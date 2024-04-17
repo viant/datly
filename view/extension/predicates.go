@@ -134,10 +134,22 @@ func NewBetweenPredicate() *Predicate {
 			Position: 2,
 		},
 	}
+	clause := ` ${Expression} BETWEEN
+      #if($FilterValue.Has.ValueMin)
+          $criteria.AppendBinding($FilterValue.ValueMin)
+      #else
+          NULL
+      #end
+      AND
+      #if($FilterValue.Has.ValueMax)
+          $criteria.AppendBinding($FilterValue.ValueMax)
+      #else
+          NULL
+      #end`
 	return &Predicate{
 		Template: &predicate.Template{
 			Name:   PredicateBetween,
-			Source: `  ${Expression} BETWEEN ${From} AND ${To}`,
+			Source: clause,
 			Args:   args,
 		},
 	}
@@ -164,10 +176,10 @@ func NewDurationPredicate() *Predicate {
 	}
 	clause := `
 #if($FilterValue == "hour")
-	  AND ${DayExpression} = ${CurrentDayExpression}
+	   ${DayExpression} = ${CurrentDayExpression}
 	  AND ${HourExpression} = ${CurrentHourExpression}
 #elseif($FilterValue == "day")
-	AND ${DayExpression} = ${CurrentDayExpression}
+	 ${DayExpression} = ${CurrentDayExpression}
 #end
 `
 	return &Predicate{
