@@ -96,6 +96,13 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 			if markerTag := field.Tag.Get(structology.SetMarkerTag); markerTag != "" {
 				field.Type = types.InlineStruct(field.Type, nil)
 			}
+			if sType := types.EnsureStruct(field.Type); sType != nil && sType.Name() != "" && sType.PkgPath() == input.Type().PkgPath() {
+				field.Type = types.InlineStruct(field.Type, func(sField *reflect.StructField) {
+					if innerField := types.EnsureStruct(sField.Type); innerField != nil && innerField.Name() != "" && innerField.PkgPath() == sType.PkgPath() {
+						sField.Type = types.InlineStruct(sField.Type, nil)
+					}
+				})
+			}
 		})
 	}
 

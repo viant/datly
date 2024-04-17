@@ -86,15 +86,19 @@ func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type,
 			markerField = &aStructField
 		}
 		fieldTypeName := aStructField.Tag.Get(xreflect.TagTypeName)
+		if fieldTypeName == "" && types.EnsureStruct(aStructField.Type) != nil {
+			if typeName := aStructField.Type.Name(); typeName != "" && !strings.Contains(typeName, ".") {
+				fieldTypeName = typeName
+
+			}
+		}
 		if fieldTypeName == "" {
 			continue
 		}
 		fieldType := types.EnsureStruct(aStructField.Type)
 		if fieldType != nil {
-			if hasField, ok := fieldType.FieldByName("Has"); ok {
-				if hasFieldName := hasField.Tag.Get(xreflect.TagTypeName); hasFieldName != "" {
-					typeDefs = append(typeDefs, buildTypeDef(hasFieldName, aType.Package, hasField.Type))
-				}
+			if hasTypeDef := buildMarketTypeDef(fieldType, aType, fieldTypeName); hasTypeDef != nil {
+				typeDefs = append(typeDefs, hasTypeDef)
 			}
 		}
 		typeDefs = append(typeDefs, buildTypeDef(fieldTypeName, aType.Package, aStructField.Type))
@@ -129,7 +133,26 @@ func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type,
 	}
 	aTypeDef := buildTypeDef(aType.Name, aType.Package, rType)
 	resource.AppendTypeDefinition(aTypeDef)
+}
 
+func buildMarketTypeDef(fieldType reflect.Type, aType state.Type, holderName string) *view.TypeDefinition {
+	for i := 0; i < fieldType.NumField(); i++ {
+		field := fieldType.Field(i)
+		if field.Tag.Get(structology.SetMarkerTag) != "" {
+			typeName := field.Tag.Get(xreflect.TagTypeName)
+			if typeName == "" {
+				typeName = field.Type.Name()
+			}
+			if typeName == "" {
+				typeName = holderName + field.Name
+			}
+			if typeName != "" {
+				return buildTypeDef(typeName, aType.Package, field.Type)
+				break
+			}
+		}
+	}
+	return nil
 }
 
 func buildTypeDef(name string, pkg string, rType reflect.Type) *view.TypeDefinition {

@@ -189,7 +189,7 @@ func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
 	}
 	definition := *typeDef
 	r.Resource.Types = append(r.Resource.Types, &definition)
-	if rType := typeDef.Schema; rType != nil && rType.Type() != nil && rType.Type().Name() != "" {
+	if typeDef.Schema.IsNamed() {
 		return
 	}
 	r.typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType), xreflect.WithModulePath(typeDef.ModulePath), xreflect.WithPackage(typeDef.Package))

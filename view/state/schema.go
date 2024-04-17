@@ -97,6 +97,9 @@ func (s *Schema) Type() reflect.Type {
 
 // IsNamed returns true if compiled named type is used
 func (s *Schema) IsNamed() bool {
+	if s == nil {
+		return false
+	}
 	if s.rType == nil {
 		return false
 	}
@@ -145,7 +148,6 @@ func (s *Schema) SetType(rType reflect.Type) {
 	} else if rType.Kind() == reflect.Slice {
 		rType = rType.Elem()
 	}
-
 	s.rType = rType
 	s.slice = xunsafe.NewSlice(rType)
 	s.sliceType = s.slice.Type
