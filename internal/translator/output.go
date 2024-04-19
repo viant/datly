@@ -14,6 +14,8 @@ import (
 	"github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/extension/codec/transfer"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/scy/auth"
+	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/handler/response/tabular/tjson"
 	"github.com/viant/xdatly/handler/response/tabular/xml"
@@ -62,7 +64,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 			schema.Name = schema.DataType
 			parameter.Tag += fmt.Sprintf(` typeName:"%s"`, dataParameter.Schema.Name)
 		}
-		if err = s.adjustOutputParameter(resource, parameter, typesRegistry); err != nil {
+		if err = s.adjustParameterSetting(resource, parameter, typesRegistry); err != nil {
 			return err
 		}
 	}
@@ -95,6 +97,19 @@ func (s *Service) updateOutputFieldTypes(resource *Resource) {
 			}
 		}
 	}
+}
+
+func (s *Service) updateCodecParamters(ctx context.Context, resource *Resource) error {
+	parameters := resource.State
+	if err := resource.ensurePathParametersSchema(ctx, parameters); err != nil {
+		return err
+	}
+	for _, parameter := range parameters {
+		if err := s.adjustParameterSetting(resource, &parameter.Parameter, resource.typeRegistry); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *Viewlet, outputParameters state.Parameters) error {
@@ -171,10 +186,10 @@ func (s *Service) updateOutputParameterSchema(parameter *state.Parameter, typesR
 	return nil
 }
 
-func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Parameter, types *xreflect.Types) (err error) {
+func (s *Service) adjustParameterSetting(resource *Resource, parameter *state.Parameter, types *xreflect.Types) (err error) {
 	if len(parameter.Repeated) > 0 {
 		for _, repeated := range parameter.Repeated {
-			if err = s.adjustOutputParameter(resource, repeated, types); err != nil {
+			if err = s.adjustParameterSetting(resource, repeated, types); err != nil {
 				return err
 			}
 		}
@@ -194,7 +209,7 @@ func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Par
 	}
 	if len(parameter.Object) > 0 {
 		for _, group := range parameter.Object {
-			if err = s.adjustOutputParameter(resource, group, types); err != nil {
+			if err = s.adjustParameterSetting(resource, group, types); err != nil {
 				return err
 			}
 		}
@@ -202,6 +217,7 @@ func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Par
 		parameter.Schema = state.NewSchema(rType)
 		return nil
 	}
+
 	if err = s.adjustCodecType(parameter, types, resource); err != nil {
 		return err
 	}
@@ -273,6 +289,23 @@ func (s *Service) adjustCodecType(parameter *state.Parameter, types *xreflect.Ty
 			output.Schema = &state.Schema{}
 		}
 		output.Schema.Name = destTypeName
+	case codec.KeyFirebaseAuth:
+		if len(output.Args) < 2 {
+			return fmt.Errorf("%v invalid arguments count", output.Name)
+		}
+		if output.Schema == nil {
+			output.Schema = &state.Schema{}
+		}
+		if output.Schema.Type() == nil {
+			output.Schema.SetType(reflect.TypeOf(&auth.Token{}))
+		}
+	case codec.KeyJwtClaim:
+		if output.Schema == nil {
+			output.Schema = &state.Schema{}
+		}
+		if output.Schema.Type() == nil {
+			output.Schema.SetType(reflect.TypeOf(&jwt.Claims{}))
+		}
 	}
 
 	return nil

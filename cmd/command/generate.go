@@ -124,6 +124,9 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		_, sourceName := path.Split(url.Path(sources[i]))
 		sourceName = trimExt(sourceName)
 		URI := resource.Rule.URI
+		if resource.Rule.Route.Method != "GET" {
+			URI = resource.Rule.Route.Method + ":" + URI
+		}
 		componentURL := s.translator.Repository.Config.RouteURL
 		datlySrv, err := datly.New(ctx, repository.WithComponentURL(componentURL))
 		if err != nil {

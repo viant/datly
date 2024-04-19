@@ -84,6 +84,7 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	if err = s.updateComponentType(ctx, resource, resource.OutputState.FilterByKind(state.KindComponent)); err != nil {
 		return err
 	}
+
 	dSQL = rule.NormalizeSQL(dSQL, parser.OnVeltyExpression)
 	if resource.IsExec() || resource.Rule.Handler != nil {
 		if err := s.translateExecutorDSQL(ctx, resource, dSQL); err != nil {
@@ -130,7 +131,7 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 	if err := resource.ensureViewParametersSchema(ctx, s.buildQueryViewletType, resource.Rule.Doc.Columns); err != nil {
 		return err
 	}
-	if err := resource.ensurePathParametersSchema(ctx); err != nil {
+	if err := resource.ensurePathParametersSchema(ctx, resource.State); err != nil {
 		return err
 	}
 
@@ -177,9 +178,13 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 	resource.Rule.Root = aQuery.From.Alias
+	if err = s.updateCodecParamters(ctx, resource); err != nil {
+		return err
+	}
 	if err = resource.Rule.Viewlets.Init(ctx, aQuery, resource, s.initReaderViewlet, s.buildQueryViewletType); err != nil {
 		return err
 	}
+
 	root := resource.Rule.RootView()
 	root.Module = resource.rule.ModulePrefix
 	if err = root.buildView(resource.Rule, view.ModeQuery); err != nil {

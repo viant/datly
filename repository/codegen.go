@@ -41,7 +41,7 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 	output, _ := c.Output.Type.Parameters.ReflectType("", registry.Lookup, state.WithRelation(), state.WithSQL(), state.WithVelty(false))
 	var importModules = map[string]string{}
 	statePkg := c.Output.Type.Package
-
+	setter.SetStringIfEmpty(&statePkg, c.Input.Type.Package)
 	setter.SetStringIfEmpty(&statePkg, "state")
 	inPackageComponentTypes := indexComponentPackageTypes(c, statePkg)
 	packagedTypes := c.buildDependencyTypes(inPackageComponentTypes, importModules)

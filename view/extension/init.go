@@ -5,6 +5,7 @@ import (
 	"fmt"
 	dcodec "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/extension/handler"
+	"github.com/viant/scy/auth"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	"github.com/viant/xdatly/codec"
@@ -66,6 +67,8 @@ func InitRegistry() {
 			xreflect.NewType("async.Job", xreflect.WithReflectType(reflect.TypeOf(async.Job{}))),
 			xreflect.NewType("predicate.NamedFilters", xreflect.WithReflectType(reflect.TypeOf(predicate.NamedFilters{}))),
 			xreflect.NewType("LoadData", xreflect.WithReflectType(reflect.TypeOf(&handler.LoadDataProvider{}))),
+			xreflect.NewType("auth.Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
+			xreflect.NewType("Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 		)),
 		Codecs: codec.New(
 			codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
@@ -88,6 +91,7 @@ func InitRegistry() {
 			codec.WithFactory(dcodec.KeyURIRewrite, &dcodec.URIRewriterFactory{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyURIChecksum, &dcodec.UriChecksumFactory{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyTimeDiff, &dcodec.TimeDiffFactory{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyFirebaseAuth, &dcodec.FirebaseAuth{}, time.Time{}),
 		),
 		Predicates: &PredicateRegistry{
 			registry: map[string]*Predicate{

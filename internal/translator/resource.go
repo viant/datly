@@ -406,15 +406,20 @@ func (r *Resource) ensureViewParameterSchema(parameter *inference.Parameter) err
 	return nil
 }
 
-func (r *Resource) ensurePathParametersSchema(ctx context.Context) error {
-	parameters := r.State.FilterByKind(state.KindParam)
+func (r *Resource) ensurePathParametersSchema(ctx context.Context, parameters inference.State) error {
+	kindParameters := r.State.FilterByKind(state.KindParam)
 	if len(parameters) == 0 {
 		return nil
 	}
-	for _, parameter := range parameters {
+	for _, parameter := range kindParameters {
 		schema := parameter.Schema
 		rType := schema.Type()
 		if rType == nil {
+			if baseParameter := parameters.Lookup(parameter.In.Name); baseParameter != nil {
+				if baseParameter.Schema != nil && baseParameter.Schema.Type() != nil {
+					parameter.Schema = baseParameter.Schema.Clone()
+				}
+			}
 			continue
 		}
 		r.AppendTypeDefinition(&view.TypeDefinition{Name: schema.DataType, DataType: rType.String()})

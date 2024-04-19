@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service/auth/cognito"
+	"github.com/viant/datly/service/auth/firebase"
 	"github.com/viant/datly/service/auth/secret"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
@@ -42,6 +43,7 @@ type (
 		JWTValidator         *verifier.Config
 		JwtSigner            *signer.Config
 		Cognito              *cognito.Config
+		Firebase             *firebase.Config
 		Meta                 meta.Config
 		AutoDiscovery        *bool
 		ChangeDetection      *ChangeDetection
