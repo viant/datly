@@ -173,6 +173,13 @@ func NewDurationPredicate() *Predicate {
 			Name:     "CurrentHourExpression",
 			Position: 3,
 		},
+		{
+			Name:     "YesterdayDayExpression",
+			Position: 4,
+		}, {
+			Name:     "WeekDayExpression",
+			Position: 5,
+		},
 	}
 	clause := `
 #if($FilterValue == "hour")
@@ -180,6 +187,10 @@ func NewDurationPredicate() *Predicate {
 	  AND ${HourExpression} = ${CurrentHourExpression}
 #elseif($FilterValue == "day")
 	 ${DayExpression} = ${CurrentDayExpression}
+#elseif($FilterValue == "yesterday")
+ 	 ${DayExpression} = ${YesterdayDayExpression}
+ #elseif($FilterValue == "week")
+ 	 ${DayExpression} BETWEEN ${WeekDayExpression}  AND ${CurrentDayExpression}
 #end
 `
 	return &Predicate{
