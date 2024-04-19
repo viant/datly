@@ -144,6 +144,11 @@ func (c *cache) put(parameter *state.Parameter, value interface{}) {
 	c.values[c.key(parameter)] = value
 	c.RWMutex.Unlock()
 }
+func (c *cache) remove(parameter *state.Parameter) {
+	c.RWMutex.Lock()
+	delete(c.values, c.key(parameter))
+	c.RWMutex.Unlock()
+}
 
 func (c *cache) key(parameter *state.Parameter) string {
 	ret := parameter.Name

@@ -7,11 +7,8 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/repository/path"
-	"github.com/viant/datly/service/auth/cognito"
-	"github.com/viant/datly/service/auth/firebase"
+	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/service/auth/secret"
-	"github.com/viant/scy/auth/jwt/signer"
-	"github.com/viant/scy/auth/jwt/verifier"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -29,21 +26,17 @@ type (
 	}
 
 	ExposableConfig struct {
-		APIPrefix            string //like /v1/api/
-		RouteURL             string
-		ContentURL           string
-		PluginsURL           string
-		DependencyURL        string
-		JobURL               string
-		FailedJobURL         string
-		MaxJobs              int
-		UseCacheFS           bool
-		SyncFrequencyMs      int
-		Secrets              []*secret.Resource
-		JWTValidator         *verifier.Config
-		JwtSigner            *signer.Config
-		Cognito              *cognito.Config
-		Firebase             *firebase.Config
+		APIPrefix       string //like /v1/api/
+		RouteURL        string
+		ContentURL      string
+		PluginsURL      string
+		DependencyURL   string
+		JobURL          string
+		FailedJobURL    string
+		MaxJobs         int
+		UseCacheFS      bool
+		SyncFrequencyMs int
+		auth.Config
 		Meta                 meta.Config
 		AutoDiscovery        *bool
 		ChangeDetection      *ChangeDetection

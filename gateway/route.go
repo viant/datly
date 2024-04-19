@@ -64,9 +64,6 @@ func (r *Route) URI() string {
 
 func (r *Route) Namespaces() []string {
 	namespaces := []string{"", r.Path.Method}
-	if r.Path.Method != http.MethodGet {
-		namespaces = append(namespaces, http.MethodOptions)
-	}
 	return namespaces
 }
 

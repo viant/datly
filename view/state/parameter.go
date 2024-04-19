@@ -44,6 +44,7 @@ type (
 		//deprecated use format timelayout instead
 		DateFormat      string `json:",omitempty" yaml:"DateFormat"`
 		ErrorStatusCode int    `json:",omitempty" yaml:"ErrorStatusCode"`
+		ErrorMessage    string `json:",omitempty" yaml:"ErrorMessage"`
 		Tag             string `json:",omitempty" yaml:"Tag"`
 		When            string `json:",omitempty" yaml:"When"`
 		With            string `json:",omitempty" yaml:"With"`
@@ -254,6 +255,9 @@ func (p *Parameter) inherit(param *Parameter) {
 
 	if p.ErrorStatusCode == 0 {
 		p.ErrorStatusCode = param.ErrorStatusCode
+	}
+	if p.ErrorMessage == "" {
+		p.ErrorMessage = param.ErrorMessage
 	}
 
 	if p.Predicates == nil {

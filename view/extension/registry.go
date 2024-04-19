@@ -55,6 +55,12 @@ func (r *Registry) RegisterCodec(name string, codecInstance codec.Instance, at t
 	r.Codecs.RegisterInstance(name, codecInstance, at)
 }
 
+func (r *Registry) RegisterCodecFactory(name string, factory codec.Factory, at time.Time) {
+	r.Lock()
+	defer r.Unlock()
+	r.Codecs.RegisterFactory(name, factory, at)
+}
+
 func (r *Registry) MergeFrom(toOverride *Registry) {
 	r.Lock()
 	defer r.Unlock()

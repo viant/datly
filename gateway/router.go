@@ -320,8 +320,8 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	paths := make([]*contract.Path, 0, len(routes))
 	container := r.repository.Container()
 
+	var optionsPaths = map[string][]*path.Path{}
 	for _, anItem := range container.Items {
-
 		for _, aPath := range anItem.Paths {
 			if aPath.Internal {
 				continue
@@ -342,6 +342,9 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 					return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
 				}
 				routes = append(routes, r.NewRouteHandler(router.New(aPath, provider)))
+				if aPath.Cors != nil {
+					optionsPaths[aPath.URI] = append(optionsPaths[aPath.URI], aPath)
+				}
 				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.Meta.ViewURI, aPath.URI), provider))
 				routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.Meta.OpenApiURI, aPath.URI), r.repository, provider))
 				routes = append(routes, r.NewStructRoute(r.routeURL(r.config.Meta.StructURI, aPath.URI), provider))
@@ -362,6 +365,11 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 			// ---
 
 		}
+	}
+
+	for uri, paths := range optionsPaths {
+		routes = append(routes, r.NewOptionsRoute(uri, paths))
+
 	}
 
 	if r.statusHandler != nil {
@@ -429,6 +437,38 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 	}}
 	result = append(result, route)
 	return result
+}
+
+func (r *Router) NewOptionsRoute(uri string, paths []*path.Path) *Route {
+	return &Route{
+		Path: &contract.Path{
+			URI:    uri,
+			Method: http.MethodOptions,
+		},
+		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+			cors := &path.Cors{}
+			allowedMethods := []string{}
+			cors.AllowMethods = &allowedMethods
+			for _, aPath := range paths {
+				if aPath.Cors.AllowCredentials != nil {
+					cors.AllowCredentials = aPath.Cors.AllowCredentials
+				}
+				if aPath.Cors.AllowHeaders != nil {
+					cors.AllowHeaders = aPath.Cors.AllowHeaders
+				}
+				if aPath.Cors.ExposeHeaders != nil {
+					cors.ExposeHeaders = aPath.Cors.ExposeHeaders
+				}
+				if aPath.Cors.AllowOrigins != nil {
+					cors.AllowOrigins = aPath.Cors.AllowOrigins
+				}
+				if aPath.Cors.AllowMethods != nil {
+					*cors.AllowMethods = append(*cors.AllowMethods, *aPath.Cors.AllowMethods...)
+				}
+			}
+			router.CorsHandler(req, cors)(response)
+		},
+	}
 }
 
 func wildcardPath(aPath *path.Path) *path.Path {

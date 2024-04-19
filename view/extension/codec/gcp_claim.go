@@ -18,7 +18,7 @@ const (
 	KeyJwtClaim        = "JwtClaim"
 )
 
-// GCPJwtClaim represents IDJWT visitor
+// JwtClaim represents IDJWT visitor
 type (
 	JwtEntry struct {
 		Token string
@@ -31,7 +31,7 @@ type (
 		mux     sync.RWMutex
 	}
 
-	GCPJwtClaim struct{}
+	JwtClaim struct{}
 )
 
 func (j *JwtCache) Put(token string, claims *jwt.Claims) {
@@ -64,11 +64,11 @@ func (j *JwtCache) Lookup(token string) *jwt.Claims {
 
 var jwtCache = &JwtCache{entries: map[string]*JwtEntry{}}
 
-func (j *GCPJwtClaim) ResultType(paramType reflect.Type) (reflect.Type, error) {
+func (j *JwtClaim) ResultType(paramType reflect.Type) (reflect.Type, error) {
 	return reflect.TypeOf(&jwt.Claims{}), nil
 }
 
-func (j *GCPJwtClaim) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
+func (j *JwtClaim) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	rawString, ok := raw.(string)
 	if !ok {
 		return nil, fmt.Errorf("expected to get string but got %T", raw)

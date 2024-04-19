@@ -263,6 +263,8 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 				return err
 			}
 			declaration.StatusCode = &statusCode
+		case "WithErrorMessage":
+			declaration.ErrorMessage = &args[0]
 		case "Optional":
 			if len(args) != 0 {
 				return fmt.Errorf("expected Optional to have zero args, but got %v", len(args))

@@ -5,6 +5,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway"
+	"github.com/viant/datly/service/auth/firebase"
 	"github.com/viant/scy"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"strings"
@@ -19,6 +20,11 @@ func (c *Config) updateOauth(ctx context.Context) {
 	if res := c.repository.HMAC; res != "" {
 		c.ensureJWTValidator(cfg)
 		cfg.JWTValidator.HMAC = getScyResource(res)
+	}
+	if res := c.repository.Firebase; res != "" {
+		cfg.Firebase = &firebase.Config{
+			Resource: getScyResource(res),
+		}
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/viant/scy/auth"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	"google.golang.org/api/googleapi"
 	"reflect"
 	"sync"
 )
@@ -52,5 +53,26 @@ func (e *FirebaseAuth) Value(ctx context.Context, raw interface{}, options ...co
 	if err != nil {
 		return nil, err
 	}
-	return e.firebaseAuth.BasicAuth(ctx, username, password)
+
+	token, err := e.firebaseAuth.BasicAuth(ctx, username, password)
+	if err != nil {
+		return nil, obfuscateErrorMessage(err)
+	}
+	return token, err
+}
+
+func obfuscateErrorMessage(err error) error {
+	switch actual := err.(type) {
+	case *googleapi.Error:
+		if len(actual.Errors) > 0 {
+			if actual.Errors[0].Message == "EMAIL_NOT_FOUND" || actual.Errors[0].Reason == "invalid" {
+				return fmt.Errorf("invalid credentials")
+			}
+		}
+	}
+	return err
+}
+
+func NewFirebaseAuth(firebaseAuth *firebase.Service) codec.Factory {
+	return &FirebaseAuth{firebaseAuth: firebaseAuth}
 }

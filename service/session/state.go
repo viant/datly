@@ -193,6 +193,11 @@ func (s *Session) setTemplateState(ctx context.Context, aView *view.View, opts *
 	return nil
 }
 
+func (s *Session) ClearCache(parameters state.Parameters) {
+	for _, param := range parameters {
+		s.cache.remove(param)
+	}
+}
 func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aState *structology.State, opts *Options) error {
 	err := httputils.NewErrors()
 	parametersGroup := parameters.Groups()
@@ -586,6 +591,10 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 }
 
 func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *httputils.Errors) {
+	if parameter.ErrorMessage != "" && err != nil {
+		msg := strings.ReplaceAll(parameter.ErrorMessage, "${error}", err.Error())
+		err = fmt.Errorf(msg)
+	}
 	if pErr, ok := err.(*httputils.Error); ok {
 		pErr.StatusCode = parameter.ErrorStatusCode
 		errors.Append(pErr)
@@ -597,6 +606,7 @@ func (s *Session) handleParameterError(parameter *state.Parameter, err error, er
 	} else if asErrors, ok := err.(*httputils.Errors); ok && asErrors.ErrorStatusCode() != http.StatusBadRequest {
 		errors.SetStatus(asErrors.ErrorStatusCode())
 	}
+
 }
 
 func (s *Session) InitKinds(kinds ...state.Kind) error {

@@ -18,6 +18,7 @@ type (
 		OutputType    string            `json:",omitempty" yaml:",omitempty"`
 		Cardinality   state.Cardinality `json:",omitempty" yaml:",omitempty"`
 		StatusCode    *int              `json:",omitempty" yaml:",omitempty"`
+		ErrorMessage  *string           `json:",omitempty" yaml:",omitempty"`
 		TransformKind string            `json:",omitempty" yaml:",omitempty"`
 		Transformer   string            `json:",omitempty" yaml:",omitempty"`
 		Codec         string            `json:",omitempty" yaml:",omitempty"`
@@ -99,6 +100,9 @@ func (d *Declaration) ExpandShorthands() {
 
 	if d.StatusCode != nil {
 		d.Parameter.ErrorStatusCode = *d.StatusCode
+	}
+	if d.ErrorMessage != nil {
+		d.Parameter.ErrorMessage = *d.ErrorMessage
 	}
 
 	if d.Cardinality != "" {

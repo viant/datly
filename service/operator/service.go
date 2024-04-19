@@ -22,6 +22,7 @@ import (
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/exec"
+	"github.com/viant/xdatly/handler/response"
 	"reflect"
 )
 
@@ -54,6 +55,7 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 	locatorOptions = append(locatorOptions,
 		locator.WithView(aComponent.View),
 		locator.WithTypes(aComponent.Types()...),
+		locator.WithCustomOption(&response.Status{Status: "error", Message: err.Error(), Errors: []string{err.Error()}}),
 		locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
 			return aSession.LookupValue(ctx, parameter, aSession.Indirect(true, locatorOptions...))
 		}))
@@ -80,7 +82,11 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 			return s.HandleError(ctx, aSession, aComponent, err)
 		}
 		ret, err := s.runQuery(ctx, aComponent, aSession)
-		return s.finalize(ctx, ret, err)
+		if ret, err = s.finalize(ctx, ret, err); err != nil {
+			aSession.ClearCache(aComponent.Output.Type.Parameters)
+			return s.HandleError(ctx, aSession, aComponent, err)
+		}
+		return ret, err
 	case service.TypeExecutor:
 		if ctx, err = s.EnsureInput(ctx, aComponent, aSession, false); err != nil {
 			return nil, err

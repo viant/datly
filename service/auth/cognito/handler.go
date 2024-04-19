@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/service/auth"
+	"github.com/viant/datly/service/auth/token"
 	"net/http"
 	"strings"
 	"time"
@@ -94,7 +94,7 @@ func (s *Service) authorizeRequest(w http.ResponseWriter, r *http.Request) bool 
 		}
 	}
 
-	authorization := auth.NewAuthorization(authLiteral)
+	authorization := token.NewAuthorization(authLiteral)
 	authType := strings.ToLower(authorization.Type)
 	switch authType {
 	case AuthTypeBasic:

@@ -25,10 +25,9 @@ import (
 )
 
 const (
-	TypeJwtTokenInfo        = "JwtTokenInfo"
-	TypeJwtClaims           = "JwtClaims"
-	CodecCognitoKeyJwtClaim = "CognitoJwtClaim"
-	CodecKeyJwtClaim        = "JwtClaim"
+	TypeJwtTokenInfo = "JwtTokenInfo"
+	TypeJwtClaims    = "JwtClaims"
+	CodecKeyJwtClaim = "JwtClaim"
 )
 
 var Config *Registry
@@ -71,8 +70,8 @@ func InitRegistry() {
 			xreflect.NewType("Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 		)),
 		Codecs: codec.New(
-			codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
-			codec.WithCodec(dcodec.CognitoKeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
+			codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.JwtClaim{}, time.Time{}),
+			codec.WithCodec(dcodec.CognitoKeyJwtClaim, &dcodec.JwtClaim{}, time.Time{}),
 			codec.WithCodec(dcodec.KeyAsStrings, &dcodec.AsStrings{}, time.Time{}),
 			codec.WithCodec(dcodec.KeyAsInts, &dcodec.AsInts{}, time.Time{}),
 			codec.WithCodec(dcodec.KeyNil, &dcodec.Nil{}, time.Time{}),

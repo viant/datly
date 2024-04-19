@@ -31,7 +31,7 @@ require (
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.3-0.20240228194022-a61fc21f83e1
 	github.com/viant/pgo v0.11.0
-	github.com/viant/scy v0.8.1-0.20240415200537-76ed86e3dacc
+	github.com/viant/scy v0.9.1
 	github.com/viant/sqlx v0.12.1-0.20240215212756-d8cc9d22ff38
 	github.com/viant/structql v0.4.2-0.20240406183616-cff48e18d922
 	github.com/viant/toolbox v0.36.0
@@ -54,9 +54,9 @@ require (
 	firebase.google.com/go/v4 v4.14.0
 	github.com/viant/structology v0.5.6-0.20231127181208-736f8ad06193
 	github.com/viant/tagly v0.2.1-0.20240417022938-8b3b65de980b
-	github.com/viant/xdatly v0.3.1-0.20240127003704-a4686f84c64d
+	github.com/viant/xdatly v0.3.1-0.20240419222004-9286c64be2bb
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20240127003704-a4686f84c64d
+	github.com/viant/xdatly/handler v0.0.0-20240419222004-9286c64be2bb
 	github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xlsy v0.3.0
@@ -144,5 +144,3 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-replace github.com/viant/scy => ../scy
