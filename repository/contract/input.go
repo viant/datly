@@ -17,7 +17,11 @@ type Input struct {
 func (i *Input) Init(ctx context.Context, aView *view.View) error {
 
 	if len(i.Body.Parameters) == 0 {
-		i.Body.Parameters = aView.InputParameters()
+		if bodyParameters := i.Type.Parameters.FilterByKind(state.KindRequestBody); len(bodyParameters) > 0 {
+			i.Body.Parameters = bodyParameters
+		} else {
+			i.Body.Parameters = aView.InputParameters()
+		}
 	}
 	if len(i.Body.Parameters) == 0 {
 		candidates := i.Type.Parameters.FilterByKind(state.KindRequestBody)

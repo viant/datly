@@ -77,7 +77,7 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 	if err := resource.ensureViewParametersSchema(ctx, setType, resource.Rule.Doc.Columns); err != nil {
 		return err
 	}
-	if err := resource.ensurePathParametersSchema(ctx); err != nil {
+	if err := resource.ensurePathParametersSchema(ctx, resource.State); err != nil {
 		return err
 	}
 

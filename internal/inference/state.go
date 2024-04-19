@@ -377,7 +377,7 @@ func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (refl
 		rType := schema.Type()
 		if rType == nil {
 			if rType, err = types.LookupType(lookupType, schema.DataType); err != nil {
-				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", param.Name, schema.DataType, err)
+				return nil, fmt.Errorf("failed to detect paramater '%v' type for: %v  %w", param.Name, schema.DataType, err)
 			}
 		}
 		param.Schema.Cardinality = schema.Cardinality
