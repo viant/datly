@@ -224,7 +224,9 @@ func (s *Session) populateParameterInBackground(ctx context.Context, parameter *
 }
 
 func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
-
+	if parameter.Name == "Jwt" {
+		fmt.Printf("here")
+	}
 	value, has, err := s.LookupValue(ctx, parameter, options)
 	if err != nil {
 		return err
@@ -495,6 +497,7 @@ func (s *Session) setValue(parameter *state.Parameter, value interface{}) {
 }
 
 func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (interface{}, error) {
+
 	var err error
 	//we not use parameter.OutputType(), since codec conversion takes place later
 	parameterType := parameter.Schema.Type()
@@ -503,6 +506,9 @@ func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (in
 		if textValue, ok := value.(string); ok {
 			if parameterType.Kind() == reflect.String {
 				return textValue, nil
+			}
+			if output := parameter.Output; output != nil && output.Schema.Type() != nil {
+				return value, nil
 			}
 			value, _, err = converter.Convert(textValue, parameterType, false, parameter.DateFormat)
 			if err != nil {
