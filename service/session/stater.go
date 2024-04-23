@@ -23,6 +23,11 @@ func (s *Session) Into(ctx context.Context, dest interface{}) (err error) {
 
 	aState := stateType.Type().WithValue(dest)
 	options := s.Clone().Indirect(true)
-	err = s.SetState(ctx, stateType.Parameters, aState, options)
+	if err = s.SetState(ctx, stateType.Parameters, aState, options); err != nil {
+		return err
+	}
+	if initializer, ok := dest.(state.Initializer); ok {
+		err = initializer.Init(ctx)
+	}
 	return err
 }

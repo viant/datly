@@ -243,6 +243,9 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		Arguments:  rule.HandlerArgs,
 	}
 	entityParam := aState[0]
+	if param := aState.FilterByKind(state.KindRequestBody); len(param) > 0 {
+		entityParam = param[0]
+	}
 	entityType := entityParam.Schema.Type()
 	if entityType == nil {
 		return fmt.Errorf("entity type was empty")

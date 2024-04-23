@@ -333,8 +333,12 @@ func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 			continue
 		}
 		paramDataType := param.Schema.DataType
-		paramType, err := xreflect.Parse(paramDataType, xreflect.WithTypeLookup(func(name string, option ...xreflect.Option) (reflect.Type, error) {
-			return dirTypes.Type(name)
+		paramType, err := xreflect.Parse(paramDataType, xreflect.WithTypeLookup(func(name string, options ...xreflect.Option) (reflect.Type, error) {
+			result, err := dirTypes.Type(name)
+			if err == nil {
+				return result, nil
+			}
+			return dirTypes.Registry.Lookup(name, options...)
 		}))
 		if err != nil {
 			return fmt.Errorf("invalid parameter '%v' schema: '%v'  %w", param.Name, param.Schema.DataType, err)

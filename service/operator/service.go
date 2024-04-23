@@ -26,10 +26,6 @@ import (
 	"reflect"
 )
 
-type Initer interface {
-	Init(ctx context.Context) error
-}
-
 type Service struct {
 	fs afs.Service
 }
@@ -101,7 +97,7 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (int
 	if err != nil {
 		return nil, err
 	}
-	if finalizer, ok := ret.(Finalizer); ok {
+	if finalizer, ok := ret.(state.Finalizer); ok {
 		err = finalizer.Finalize(ctx)
 	}
 	return ret, err
@@ -156,7 +152,7 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 				inputState.SyncPointer()
 				anInput = inputState.StatePtr()
 			}
-			if initer, ok := anInput.(Initer); ok {
+			if initer, ok := anInput.(state.Initializer); ok {
 				if err = initer.Init(ctx); err != nil {
 					return nil, err
 				}
