@@ -224,9 +224,6 @@ func (s *Session) populateParameterInBackground(ctx context.Context, parameter *
 }
 
 func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
-	if parameter.Name == "Jwt" {
-		fmt.Printf("here")
-	}
 	value, has, err := s.LookupValue(ctx, parameter, options)
 	if err != nil {
 		return err
