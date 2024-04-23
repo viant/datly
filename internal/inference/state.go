@@ -641,6 +641,13 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 				return err
 			}
 			state.BuildPredicate(aTag, &param.Parameter)
+			state.BuildCodec(aTag, &param.Parameter)
+			if param.Output != nil {
+				if param.Output.Schema == nil && param.Schema != nil {
+					param.Output.Schema = param.Schema
+					param.Schema = &state.Schema{DataType: aTag.Parameter.DataType}
+				}
+			}
 			aState.Append(param)
 			return nil
 		}))

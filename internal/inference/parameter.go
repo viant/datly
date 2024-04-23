@@ -82,6 +82,16 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 		builder.WriteString(SQL)
 		builder.WriteString("\n*/\n")
 	}
+	if p.Output != nil {
+		builder.WriteString(".WithCodec('" + p.Output.Name + "'")
+		for i, arg := range p.Output.Args {
+			if i > 0 {
+				builder.WriteString(",")
+			}
+			builder.WriteString("'" + arg + "'")
+		}
+		builder.WriteString(")")
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

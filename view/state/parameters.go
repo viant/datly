@@ -608,9 +608,8 @@ func (p NamedParameters) Lookup(name string) (*Parameter, error) {
 // Register registers parameter
 func (p NamedParameters) Register(parameter *Parameter) error {
 	if _, ok := p[parameter.Name]; ok {
-		fmt.Printf("[WARN] parameter with %v name already exists in given resource", parameter.Name)
+		//fmt.Printf("[WARN] parameter with %v name already exists in given resource", parameter.Name)
 	}
-
 	p[parameter.Name] = parameter
 	return nil
 }
