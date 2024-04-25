@@ -301,12 +301,14 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(resource Resource) error {
 	if p.In.Kind == KindObject {
-		if err := p.initObjectSchema(resource); err != nil {
-			return err
+		if p.Schema.DataType == "" {
+			if err := p.initObjectSchema(resource); err != nil {
+				return err
+			}
+			p._state = structology.NewStateType(p.Schema.Type())
+			p._state.NewState()
+			return nil
 		}
-		p._state = structology.NewStateType(p.Schema.Type())
-		p._state.NewState()
-		return nil
 	}
 
 	if p.In.Kind == KindRepeated {
@@ -574,7 +576,6 @@ func (p *Parameter) initObjectParams(ctx context.Context, resource Resource) err
 			return err
 		}
 	}
-
 	return nil
 }
 

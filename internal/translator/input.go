@@ -101,6 +101,8 @@ func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type,
 				typeDefs = append(typeDefs, hasTypeDef)
 			}
 		}
+		parameter.Schema.DataType = fieldTypeName
+		parameter.Schema.Package = aType.Package
 		typeDefs = append(typeDefs, buildTypeDef(fieldTypeName, aType.Package, aStructField.Type))
 	}
 
@@ -157,6 +159,7 @@ func buildMarketTypeDef(fieldType reflect.Type, aType state.Type, holderName str
 
 func buildTypeDef(name string, pkg string, rType reflect.Type) *view.TypeDefinition {
 	xType := xreflect.NewType(name, xreflect.WithPackage(pkg), xreflect.WithReflectType(rType))
-	aTypeDef := &view.TypeDefinition{Name: name, Package: pkg, DataType: xType.Body()}
+	body := xType.Body()
+	aTypeDef := &view.TypeDefinition{Name: name, Package: pkg, DataType: body}
 	return aTypeDef
 }
