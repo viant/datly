@@ -405,6 +405,11 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 	contentPath := furl.Join(r.config.ContentURL, aPath.ContentURL)
 	fileSever := http.FileServer(ahttp.New(afs.New(), contentPath))
 
+	indexContentURL := furl.Join(contentPath, "index.html")
+	if _, err := fs.Exists(context.Background(), indexContentURL); err == nil {
+		result = r.addIndexRoute(indexContentURL, result)
+	}
+
 	defaultRoute := &Route{Path: &aPath.Path, Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 		request := req.Clone(ctx)
 		if index := strings.Index(request.URL.Path, pathURI); index != -1 {
@@ -436,6 +441,20 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 		}
 	}}
 	result = append(result, route)
+	return result
+}
+
+func (r *Router) addIndexRoute(indexContentURL string, result []*Route) []*Route {
+	if content, err := fs.DownloadWithURL(context.Background(), indexContentURL); err == nil {
+		result = append(result, &Route{Path: contract.NewPath("GET", "/"), Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+			response.Header().Set("Content-Type", "text/html")
+			response.Write(content)
+		}})
+		result = append(result, &Route{Path: contract.NewPath("GET", "/index.html"), Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+			response.Header().Set("Content-Type", "text/html")
+			response.Write(content)
+		}})
+	}
 	return result
 }
 
