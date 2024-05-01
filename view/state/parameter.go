@@ -301,16 +301,6 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(resource Resource) error {
 	if p.In.Kind == KindObject {
-
-		if p.Schema != nil && p.Schema.DataType != "" {
-			if rType, err := resource.LookupType()(p.Schema.DataType, xreflect.WithPackage(p.Schema.Package)); err == nil {
-				if p.Schema == nil {
-					p.Schema = &Schema{}
-				}
-				p.Schema.SetType(rType)
-			}
-		}
-
 		if p.Schema == nil || p.Schema.Type() == nil {
 			if err := p.initObjectSchema(resource); err != nil {
 				return err
@@ -426,10 +416,8 @@ func (p *Parameter) initObjectSchema(resource Resource) (err error) {
 		p.Schema = &Schema{}
 	}
 	if typeName := p.Schema.TypeName(); typeName != "" {
-		rType, err = resource.LookupType()(typeName)
-		if err != nil {
-			return err
-		}
+		rType, _ = resource.LookupType()(typeName)
+		//if unable to get name type fallback to runtime type
 	}
 	if rType == nil {
 		var opts = []ReflectOption{WithTypeName(SanitizeTypeName(p.Name))}
