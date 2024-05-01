@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
 	"github.com/viant/datly/utils/httputils"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -18,6 +19,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -498,14 +500,18 @@ func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (in
 	var err error
 	//we not use parameter.OutputType(), since codec conversion takes place later
 	parameterType := parameter.Schema.Type()
+	parameterStructType := types.EnsureStruct(parameterType)
+	if parameterStructType != nil && parameterStructType == reflect.TypeOf(time.Time{}) {
+		parameterStructType = nil
+	}
 	switch actual := value.(type) {
 	case string:
 		if textValue, ok := value.(string); ok {
 			if parameterType.Kind() == reflect.String {
 				return textValue, nil
 			}
-			if output := parameter.Output; output != nil && output.Schema.Type() != nil {
-				return value, nil
+			if parameterStructType != nil && parameter.OutputType() != nil {
+				return textValue, nil
 			}
 			value, _, err = converter.Convert(textValue, parameterType, false, parameter.DateFormat)
 			if err != nil {
