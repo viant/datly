@@ -507,9 +507,16 @@ func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (in
 	switch actual := value.(type) {
 	case string:
 		if textValue, ok := value.(string); ok {
+
 			if parameterType.Kind() == reflect.String {
 				return textValue, nil
 			}
+			if parameterType.Kind() == reflect.Ptr {
+				if parameterType.Elem().Kind() == reflect.String {
+					return textValue, nil
+				}
+			}
+
 			if parameterStructType != nil && parameter.OutputType() != nil {
 				return textValue, nil
 			}
