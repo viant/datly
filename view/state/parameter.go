@@ -301,14 +301,25 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(resource Resource) error {
 	if p.In.Kind == KindObject {
-		if p.Schema == nil || p.Schema.DataType == "" {
+
+		if p.Schema != nil && p.Schema.DataType != "" {
+			if rType, err := resource.LookupType()(p.Schema.DataType, xreflect.WithPackage(p.Schema.Package)); err == nil {
+				if p.Schema == nil {
+					p.Schema = &Schema{}
+				}
+				p.Schema.SetType(rType)
+			}
+		}
+
+		if p.Schema == nil || p.Schema.Type() == nil {
 			if err := p.initObjectSchema(resource); err != nil {
 				return err
 			}
-			p._state = structology.NewStateType(p.Schema.Type())
-			p._state.NewState()
-			return nil
 		}
+		p._state = structology.NewStateType(p.Schema.Type())
+		p._state.NewState()
+		return nil
+
 	}
 
 	if p.In.Kind == KindRepeated {
