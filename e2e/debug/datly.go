@@ -79,7 +79,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
+	err := cmd.RunApp(Version, os.Args[1:])
 	if err != nil {
 		log.Fatal(err)
 	}
