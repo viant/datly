@@ -301,7 +301,7 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(resource Resource) error {
 	if p.In.Kind == KindObject {
-		if p.Schema.DataType == "" {
+		if p.Schema == nil || p.Schema.DataType == "" {
 			if err := p.initObjectSchema(resource); err != nil {
 				return err
 			}
