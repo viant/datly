@@ -27,8 +27,11 @@ const (
 	PredicateIsNull      = "is_null"
 	PredicateExists      = "exists"
 	PredicateNotExists   = "not_exists"
-	PredicateBetween     = "between"
-	PredicateDuration    = "duration"
+
+	PredicateCriteriaExists    = "exists_criteria"
+	PredicateCriteriaNotExists = "not_exists_criteria"
+	PredicateBetween           = "between"
+	PredicateDuration          = "duration"
 )
 
 type (
@@ -357,14 +360,22 @@ func binaryPredicate(name, operator string) *Predicate {
 }
 
 func NewExistsPredicate() *Predicate {
-	return newExistsPredicate(PredicateExists, false)
+	return newExistsPredicate(PredicateExists, false, false)
 }
 
 func NewNotExistsPredicate() *Predicate {
-	return newExistsPredicate(PredicateNotExists, true)
+	return newExistsPredicate(PredicateNotExists, false, true)
 }
 
-func newExistsPredicate(name string, negated bool) *Predicate {
+func NewExistsCriteriaPredicate() *Predicate {
+	return newExistsPredicate(PredicateCriteriaExists, true, false)
+}
+
+func NewNotExistsCriteriaPredicate() *Predicate {
+	return newExistsPredicate(PredicateCriteriaNotExists, true, true)
+}
+
+func newExistsPredicate(name string, withCriteria bool, negated bool) *Predicate {
 	args := []*predicate.NamedArgument{
 		{
 			Name:     "Alias",
@@ -391,11 +402,22 @@ func newExistsPredicate(name string, negated bool) *Predicate {
 			Position: 5,
 		},
 	}
+	if withCriteria {
+		args = append(args, &predicate.NamedArgument{
+			Name:     "Criterion",
+			Position: 6,
+		})
+	}
 
 	clause := ` EXISTS (SELECT 1 FROM ${LookupTable} ${LookupAlias} 
 				WHERE ${LookupAlias}.${LookupColumn} = ${Alias}.${Column} AND
                       $criteria.In(${LookupAlias} + "." + ${FilterColumn}, $FilterValue))  `
 
+	if withCriteria {
+		clause = ` EXISTS (SELECT 1 FROM ${LookupTable} ${LookupAlias} 
+				WHERE ${LookupAlias}.${LookupColumn} = ${Alias}.${Column} AND ${Criterion} AND
+                      $criteria.In(${LookupAlias} + "." + ${FilterColumn}, $FilterValue))  `
+	}
 	if negated {
 		clause = " NOT " + clause
 	}

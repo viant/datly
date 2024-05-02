@@ -30,15 +30,20 @@ func (t *TypeImport) EnsureLocation(ctx context.Context, fs afs.Service, goModul
 	if ok, _ := fs.Exists(ctx, path.Join(currentDir, t.URL)); ok {
 		t.URL = url.Join(currentDir, t.URL)
 	} else {
+
 		parts := strings.Split(t.URL, "/")
-		if strings.HasSuffix(goModuleLocation, parts[0]) {
+		if strings.HasSuffix(goModuleLocation, parts[0]) { //backward compatiblity
 			candidateURL := url.Join(goModuleLocation, parts[1:]...)
 			if ok, _ := fs.Exists(ctx, candidateURL); ok {
 				t.URL = candidateURL
 				return
 			}
 		}
-
+		candidateURL := url.Join(currentDir, "pkg", t.URL)
+		if ok, _ := fs.Exists(ctx, candidateURL); ok { //backward compatiblity
+			t.URL = candidateURL
+			return
+		}
 		if !strings.HasSuffix(goModuleLocation, t.URL) {
 			t.URL = url.Join(goModuleLocation, t.URL)
 		} else {
