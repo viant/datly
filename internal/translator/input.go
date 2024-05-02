@@ -102,8 +102,11 @@ func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type,
 			}
 		}
 		parameter.Schema.DataType = fieldTypeName
-		parameter.Schema.Package = aType.Package
-		typeDefs = append(typeDefs, buildTypeDef(fieldTypeName, aType.Package, aStructField.Type))
+		pkg := parameter.Schema.Package
+		if pkg == "" {
+			parameter.Schema.Package = aType.Package
+		}
+		typeDefs = append(typeDefs, buildTypeDef(fieldTypeName, parameter.Schema.Package, aStructField.Type))
 	}
 
 	if markerField == nil {
