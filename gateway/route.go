@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
+	"github.com/viant/xdatly/handler/exec"
 	"net/http"
 	"strings"
 )
@@ -29,11 +30,14 @@ type (
 	}
 )
 
-func (r *Route) Handle(res http.ResponseWriter, req *http.Request) {
+func (r *Route) Handle(res http.ResponseWriter, req *http.Request) int {
 	if !r.CanHandle(req) {
 		write(res, http.StatusForbidden, nil)
 	}
-	r.Handler(context.Background(), res, req)
+	execCtx := exec.NewContext()
+	ctx := context.WithValue(context.Background(), exec.ContextKey, execCtx)
+	r.Handler(ctx, res, req)
+	return execCtx.StatusCode
 }
 
 func (r *Route) CanHandle(req *http.Request) bool {

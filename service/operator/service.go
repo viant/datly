@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -23,6 +24,8 @@ import (
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
+	"google.golang.org/api/googleapi"
+	"net/http"
 	"reflect"
 )
 
@@ -44,8 +47,20 @@ func (s *Service) Operate(ctx context.Context, aSession *session.Session, aCompo
 
 // HandleError processes output with error
 func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aComponent *repository.Component, err error) (interface{}, error) {
+
 	ctx = context.WithValue(ctx, exec.ErrorKey, err)
 	ctx = aComponent.View.Context(ctx)
+	execCtx := exec.GetContext(ctx)
+	if execCtx != nil {
+		execCtx.StatusCode = http.StatusInternalServerError
+		if rErr := errors.Unwrap(err); rErr != nil {
+			switch actual := rErr.(type) {
+			case *googleapi.Error:
+				execCtx.StatusCode = actual.Code
+			}
+		}
+
+	}
 	output := aComponent.Output.Type.Type().NewState()
 	var locatorOptions []locator.Option
 	locatorOptions = append(locatorOptions,

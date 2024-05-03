@@ -138,7 +138,8 @@ func (r *Handler) Serve(serverPath string) error {
 
 func (r *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, exec.ContextKey, exec.NewContext())
+	execContext := exec.NewContext()
+	ctx = context.WithValue(ctx, exec.ContextKey, execContext)
 	r.HandleRequest(ctx, writer, request)
 }
 
@@ -235,7 +236,13 @@ func (r *Handler) writeResponse(ctx context.Context, request *http.Request, resp
 		response.Header().Set(acontent.Encoding, compressionType)
 	}
 
-	response.WriteHeader(http.StatusOK)
+	execCtx := exec.GetContext(ctx)
+	if execCtx != nil && execCtx.StatusCode != 0 {
+		response.WriteHeader(execCtx.StatusCode)
+		execCtx.StatusCode = -1
+	} else {
+		response.WriteHeader(http.StatusOK)
+	}
 	_, _ = io.Copy(response, payloadReader)
 }
 

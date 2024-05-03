@@ -98,14 +98,14 @@ func (r *Router) Handle(writer http.ResponseWriter, request *http.Request) {
 func (r *Router) handle(writer http.ResponseWriter, request *http.Request) {
 	err := r.ensureRequestURL(request)
 	if err != nil {
-		r.handleRequest(writer, http.StatusInternalServerError, err)
+		r.handleErrorCode(writer, http.StatusInternalServerError, err)
 		return
 	}
 	if !r.authorizeRequestIfNeeded(writer, request) {
 		return
 	}
 	errStatusCode, err := r.handleRoute(writer, request)
-	r.handleRequest(writer, errStatusCode, err)
+	r.handleErrorCode(writer, errStatusCode, err)
 }
 
 func (r *Router) handleRoute(writer http.ResponseWriter, request *http.Request) (int, error) {
@@ -116,8 +116,8 @@ func (r *Router) handleRoute(writer http.ResponseWriter, request *http.Request) 
 	if err != nil {
 		return http.StatusNotFound, err
 	}
-	aRoute.Handle(writer, request)
-	return http.StatusOK, nil
+	errorStatusCode := aRoute.Handle(writer, request)
+	return errorStatusCode, nil
 }
 
 var fs = afs.New()
@@ -224,7 +224,7 @@ func (r *Router) unexpectedType(asRoute *Route, expected interface{}) error {
 	return fmt.Errorf("unexpected Matchable type, wanted %T got %T", asRoute, expected)
 }
 
-func (r *Router) handleRequest(writer http.ResponseWriter, errStatusCode int, err error) {
+func (r *Router) handleErrorCode(writer http.ResponseWriter, errStatusCode int, err error) {
 	if errStatusCode < http.StatusBadRequest {
 		return
 	}
