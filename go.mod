@@ -32,7 +32,7 @@ require (
 	github.com/viant/parsly v0.3.3-0.20240228194022-a61fc21f83e1
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.9.1
-	github.com/viant/sqlx v0.12.1-0.20240215212756-d8cc9d22ff38
+	github.com/viant/sqlx v0.12.1-0.20240503171210-1d5e29651a93
 	github.com/viant/structql v0.4.2-0.20240406183616-cff48e18d922
 	github.com/viant/toolbox v0.36.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
