@@ -254,6 +254,9 @@ func IsToOne(join *query.Join) bool {
 }
 
 func normalizeSQL(SQL string, table string) string {
+	if table == "" {
+		return SQL
+	}
 	SQL = strings.Replace(SQL, "("+table+")", table, 1)
 	return SQL
 }
