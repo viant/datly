@@ -297,11 +297,11 @@ func (s State) Expand(text string) string {
 		}
 	}
 
-	text = removePredicateExpr(text)
+	text = removeBuilinExpr(text)
 	return expander.ExpandAsText(text)
 }
 
-func removePredicateExpr(query string) string {
+func removeBuilinExpr(query string) string {
 	//TODO make it more generics
 	indexStart := strings.Index(query, "${predicate.")
 	if indexStart == -1 {
@@ -311,10 +311,19 @@ func removePredicateExpr(query string) string {
 	indexEnd := strings.Index(match, "}")
 	match = match[:indexEnd+1]
 	query = strings.Replace(query, match, "  ", 1)
+
+	if index := strings.Index(query, "$View.ParentJoinOn"); index != -1 {
+		fragment := query[index:]
+		if endIndex := strings.Index(fragment, ")"); endIndex != -1 {
+			fragment = fragment[:endIndex+1]
+		}
+		query = strings.ReplaceAll(query, fragment, "")
+	}
+
 	if !strings.Contains(query, "${predicate.") {
 		return query
 	}
-	return removePredicateExpr(query)
+	return removeBuilinExpr(query)
 }
 
 // DsqlParameterDeclaration returns dql parameter declaration

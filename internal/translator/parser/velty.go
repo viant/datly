@@ -4,6 +4,7 @@ import (
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
+	"strings"
 )
 
 func OnVeltyExpression() sqlparser.Option {
@@ -22,6 +23,15 @@ func OnVeltyExpression() sqlparser.Option {
 			}
 			cur.MatchAfterOptional(whitespaceMatcher, IfBlockMatcher)
 			fromNode.Unparsed = string(cur.Input[pos:cur.Pos])
+
+			input := string(cur.Input[cur.Pos:])
+			if strings.HasPrefix(strings.TrimSpace(input), "$View.ParentJoinOn") {
+				if index := strings.Index(input, ")"); index != -1 {
+					cur.Pos += index + 1
+					fromNode.Unparsed += input[:index]
+				}
+			}
+
 			return nil
 		}
 
