@@ -1,0 +1,1 @@
+SELECT * FROM VENDOR t WHERE t.ID = $vendorID
