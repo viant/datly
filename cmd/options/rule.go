@@ -12,6 +12,7 @@ import (
 	"github.com/viant/parsly"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -176,7 +177,30 @@ func (r *Rule) LoadSource(ctx context.Context, fs afs.Service, URL string) (stri
 	if err != nil {
 		return "", err
 	}
-	return string(data), nil
+
+	parentURL, _ := url.Split(URL, file.Scheme)
+	return r.embedContentIfNeeded(ctx, fs, string(data), url.Path(parentURL))
+}
+
+func (r *Rule) embedContentIfNeeded(ctx context.Context, service afs.Service, text string, baseLocation string) (string, error) {
+	index := strings.Index(text, "${embed:")
+	if index == -1 {
+		return text, nil
+	}
+	fragment := text[index:]
+	endIndex := strings.Index(fragment, "}")
+	if endIndex != -1 {
+		fragment = fragment[:endIndex+1]
+	}
+	asset := fragment[len("${embed:"):endIndex]
+	asset = strings.TrimSpace(asset)
+	assetURL := filepath.Join(baseLocation, asset)
+	data, err := service.DownloadWithURL(ctx, assetURL)
+	if err != nil {
+		return "", err
+	}
+	text = strings.Replace(text, fragment, string(data), 1)
+	return r.embedContentIfNeeded(ctx, service, text, baseLocation)
 }
 
 func (r *Rule) expandSourceIfNeeded() {
