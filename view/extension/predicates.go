@@ -30,6 +30,8 @@ const (
 
 	PredicateCriteriaExists    = "exists_criteria"
 	PredicateCriteriaNotExists = "not_exists_criteria"
+	PredicateCriteriaIn        = "in_criteria"
+	PredicateCriteriaNotIn     = "not_in_criteria"
 	PredicateBetween           = "between"
 	PredicateDuration          = "duration"
 )
@@ -226,22 +228,22 @@ func NewNotEqualPredicate() *Predicate {
 }
 
 func NewInPredicate() *Predicate {
-	return newInPredicate(PredicateIn, true, false)
+	return newInPredicate(PredicateIn, false, true, false)
 }
 
 func NewMultiInPredicate() *Predicate {
-	return newInPredicate(PredicateIn, true, true)
+	return newInPredicate(PredicateIn, false, true, true)
 }
 
 func NewMultiNotInPredicate() *Predicate {
-	return newInPredicate(PredicateIn, false, true)
+	return newInPredicate(PredicateIn, false, false, true)
 }
 
 func NewNotInPredicate() *Predicate {
-	return newInPredicate(PredicateNotIn, false, false)
+	return newInPredicate(PredicateNotIn, false, false, false)
 }
 
-func newInPredicate(name string, equal bool, multi bool) *Predicate {
+func newInPredicate(name string, withCriteria bool, equal bool, multi bool) *Predicate {
 	args := []*predicate.NamedArgument{
 		{
 			Name:     "Alias",
@@ -256,6 +258,33 @@ func newInPredicate(name string, equal bool, multi bool) *Predicate {
 			Name:     "ColumnNames",
 			Position: 1,
 		})
+		if withCriteria {
+			args = append(args, &predicate.NamedArgument{
+				Name:     "LookupAlias",
+				Position: 2,
+			})
+
+			args = append(args, &predicate.NamedArgument{
+				Name:     "LookupTable",
+				Position: 3,
+			})
+
+			args = append(args, &predicate.NamedArgument{
+				Name:     "LookupColumn",
+				Position: 4,
+			})
+
+			args = append(args, &predicate.NamedArgument{
+				Name:     "FilterColumn",
+				Position: 5,
+			})
+
+			args = append(args, &predicate.NamedArgument{
+				Name:     "Criterion",
+				Position: 6,
+			})
+
+		}
 	}
 
 	in := fmt.Sprintf(`$criteria.In(%v, $FilterValue)`, column)
@@ -264,6 +293,14 @@ func newInPredicate(name string, equal bool, multi bool) *Predicate {
 		in = fmt.Sprintf(`$criteria.NotIn(%v, $FilterValue)`, column)
 	}
 
+	if withCriteria {
+		in = `${Alias}.${ColumnNames} IN (SELECT ${LookupAlias}.${LookupColumn}  FROM ${LookupTable} ${LookupAlias} 
+				WHERE ${Criterion} AND
+                      $criteria.In(${LookupAlias} + "." + ${FilterColumn}, $FilterValue))  `
+		if !equal {
+			in = " NOT " + in
+		}
+	}
 	return &Predicate{
 		Template: &predicate.Template{
 			Name:   name,
@@ -373,6 +410,14 @@ func NewExistsCriteriaPredicate() *Predicate {
 
 func NewNotExistsCriteriaPredicate() *Predicate {
 	return newExistsPredicate(PredicateCriteriaNotExists, true, true)
+}
+
+func NewInCriteriaPredicate() *Predicate {
+	return newInPredicate(PredicateCriteriaIn, true, true, false)
+}
+
+func NewNotInCriteriaPredicate() *Predicate {
+	return newInPredicate(PredicateCriteriaNotIn, true, false, false)
 }
 
 func newExistsPredicate(name string, withCriteria bool, negated bool) *Predicate {
