@@ -199,7 +199,12 @@ func (r *Rule) embedContentIfNeeded(ctx context.Context, service afs.Service, te
 	if err != nil {
 		return "", err
 	}
-	text = strings.Replace(text, fragment, string(data), 1)
+	baseLocationURL, assetName := url.Split(assetURL, file.Scheme)
+	baseLocation = url.Path(baseLocationURL)
+	text = strings.ReplaceAll(text, fragment, string(data))
+	if strings.Contains(text, "${embed:"+assetName+"}") {
+		return "", fmt.Errorf("failed to embed: content has ref to itself: %v", assetName)
+	}
 	return r.embedContentIfNeeded(ctx, service, text, baseLocation)
 }
 
