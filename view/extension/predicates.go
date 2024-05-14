@@ -253,9 +253,9 @@ func newInPredicate(name string, withCriteria bool, equal bool, multi bool) *Pre
 
 	column := `${Alias}`
 	if !multi {
-		column += `+ "." + ${ColumnNames}`
+		column += `+ "." + ${ColumnName}`
 		args = append(args, &predicate.NamedArgument{
-			Name:     "ColumnNames",
+			Name:     "ColumnName",
 			Position: 1,
 		})
 		if withCriteria {
@@ -294,11 +294,13 @@ func newInPredicate(name string, withCriteria bool, equal bool, multi bool) *Pre
 	}
 
 	if withCriteria {
-		in = `${Alias}.${ColumnNames} IN (SELECT ${LookupAlias}.${LookupColumn}  FROM ${LookupTable} ${LookupAlias} 
+		in = `${Alias}.${ColumnName} IN (SELECT ${LookupAlias}.${LookupColumn}  FROM ${LookupTable} ${LookupAlias} 
 				WHERE ${Criterion} AND
                       $criteria.In(${LookupAlias} + "." + ${FilterColumn}, $FilterValue))  `
 		if !equal {
-			in = " NOT " + in
+			in = `${Alias}.${ColumnName} NOT IN (SELECT ${LookupAlias}.${LookupColumn}  FROM ${LookupTable} ${LookupAlias} 
+				WHERE ${Criterion} AND
+                      $criteria.In(${LookupAlias} + "." + ${FilterColumn}, $FilterValue))  `
 		}
 	}
 	return &Predicate{
@@ -325,11 +327,11 @@ func newLikePredicate(name string, inclusive bool) *Predicate {
 			Position: 0,
 		},
 		{
-			Name:     "ColumnNames",
+			Name:     "ColumnName",
 			Position: 1,
 		},
 	}
-	column := `${Alias}` + `+ "." + ${ColumnNames}`
+	column := `${Alias}` + `+ "." + ${ColumnName}`
 	criteria := fmt.Sprintf(`$criteria.Like(%v, $FilterValue)`, column)
 	if !inclusive {
 		criteria = fmt.Sprintf(`$criteria.NotLike(%v, $FilterValue)`, column)
@@ -358,11 +360,11 @@ func newContainsPredicate(name string, inclusive bool) *Predicate {
 			Position: 0,
 		},
 		{
-			Name:     "ColumnNames",
+			Name:     "ColumnName",
 			Position: 1,
 		},
 	}
-	column := `${Alias}` + `+ "." + ${ColumnNames}`
+	column := `${Alias}` + `+ "." + ${ColumnName}`
 	criteria := fmt.Sprintf(`$criteria.Contains(%v, $FilterValue)`, column)
 	if !inclusive {
 		criteria = fmt.Sprintf(`$criteria.NotContains(%v, $FilterValue)`, column)
@@ -380,14 +382,14 @@ func binaryPredicate(name, operator string) *Predicate {
 	return &Predicate{
 		Template: &predicate.Template{
 			Name:   name,
-			Source: " ${Alias}.${ColumnNames} " + operator + " $criteria.AppendBinding($FilterValue)",
+			Source: " ${Alias}.${ColumnName} " + operator + " $criteria.AppendBinding($FilterValue)",
 			Args: []*predicate.NamedArgument{
 				{
 					Name:     "Alias",
 					Position: 0,
 				},
 				{
-					Name:     "ColumnNames",
+					Name:     "ColumnName",
 					Position: 1,
 				},
 			},
