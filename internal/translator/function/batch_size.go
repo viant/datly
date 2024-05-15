@@ -25,7 +25,7 @@ func (c *batchSize) Apply(args []string, column *sqlparser.Column, resource *vie
 }
 
 func (c *batchSize) Name() string {
-	return "batchSize"
+	return "batchsize"
 }
 
 func (c *batchSize) Arguments() []*Argument {
