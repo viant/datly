@@ -8,4 +8,5 @@ func init() {
 	_registry.Register(&cardinality{})
 	_registry.Register(&allownulls{})
 	_registry.Register(&matchStrategy{})
+	_registry.Register(&batchSize{})
 }

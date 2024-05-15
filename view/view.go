@@ -107,7 +107,7 @@ type (
 	viewMetaHandlerFn func(viewMeta interface{}) error
 
 	Batch struct {
-		Parent int `json:",omitempty"`
+		Size int `json:",omitempty"`
 	}
 
 	Method struct {
@@ -1323,7 +1323,7 @@ func (v *View) ensureBatch() {
 		return
 	}
 	v.Batch = &Batch{
-		Parent: 10000,
+		Size: 10000,
 	}
 }
 

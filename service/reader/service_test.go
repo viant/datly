@@ -504,7 +504,7 @@ func testView(t *testing.T, testCase usecase, dataView *view.View, err error, se
 
 func batchParent() usecase {
 	resource, viewName := eventsResource(&view.Batch{
-		Parent: 1,
+		Size: 1,
 	})
 	return usecase{
 		description: "batch parent",
