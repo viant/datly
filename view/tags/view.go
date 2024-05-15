@@ -35,7 +35,11 @@ func (t *Tag) updateView(key string, value string) error {
 	case "match":
 		tag.Match = strings.TrimSpace(value)
 	case "batch":
-		tag.Match = strings.TrimSpace(value)
+		var err error
+		tag.BatchSize, err = strconv.Atoi(value)
+		if err != nil {
+			return err
+		}
 	case "limit":
 		limit, err := strconv.Atoi(value)
 		if err != nil {
