@@ -173,39 +173,36 @@ func (r *Rule) SourceURL() string {
 }
 
 func (r *Rule) LoadSource(ctx context.Context, fs afs.Service, URL string) (string, error) {
-	data, err := fs.DownloadWithURL(ctx, URL)
+	payload, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return "", err
 	}
 
 	parentURL, _ := url.Split(URL, file.Scheme)
-	return r.embedContentIfNeeded(ctx, fs, string(data), url.Path(parentURL))
+	return r.embedContentIfNeeded(ctx, fs, string(payload), url.Path(parentURL))
 }
 
 func (r *Rule) embedContentIfNeeded(ctx context.Context, service afs.Service, text string, baseLocation string) (string, error) {
-	index := strings.Index(text, "${embed:")
-	if index == -1 {
-		return text, nil
+	embedded, err := newEmbedding(text)
+	if err != nil || embedded == nil {
+		return text, err
 	}
-	fragment := text[index:]
-	endIndex := strings.Index(fragment, "}")
-	if endIndex != -1 {
-		fragment = fragment[:endIndex+1]
-	}
-	asset := fragment[len("${embed:"):endIndex]
-	asset = strings.TrimSpace(asset)
-	assetURL := filepath.Join(baseLocation, asset)
-	data, err := service.DownloadWithURL(ctx, assetURL)
-	if err != nil {
-		return "", err
-	}
+	assetURL := filepath.Join(baseLocation, strings.TrimSpace(embedded.asset))
 	assetHolderURL, assetName := url.Split(assetURL, file.Scheme)
-	expanded, err := r.embedContentIfNeeded(ctx, service, string(data), url.Path(assetHolderURL))
+	payload, err := service.DownloadWithURL(ctx, assetURL)
 	if err != nil {
 		return "", err
 	}
-	text = strings.ReplaceAll(text, fragment, expanded)
-	if strings.Contains(text, "${embed:"+assetName+"}") {
+	expanded, err := r.embedContentIfNeeded(ctx, service, string(payload), url.Path(assetHolderURL))
+	if err != nil {
+		return "", err
+	}
+	expanded = embedded.variables.ExpandAsText(expanded)
+	for k, v := range embedded.variables {
+		expanded = strings.ReplaceAll(expanded, fmt.Sprintf("${%v}", k), fmt.Sprintf("%v", v))
+	}
+	text = strings.ReplaceAll(text, embedded.fragment, expanded)
+	if strings.Contains(text, embedded.fragment) {
 		return "", fmt.Errorf("failed to embed: content has ref to itself: %v", assetName)
 	}
 	return r.embedContentIfNeeded(ctx, service, text, baseLocation)
