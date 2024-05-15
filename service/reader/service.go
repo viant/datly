@@ -197,28 +197,27 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 	if !session.DryRun {
 		onFinish = view.Counter.Begin(start)
 	}
-	err := s.readObjectsWithMeta(ctx, session, batchData, view, collector, selector, execution)
+	err := s.readObjects(ctx, session, batchData, view, collector, selector, execution)
 	s.afterRead(session, collector, &start, execution, err, onFinish)
 	return err
 }
 
-func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Statelet, info *response.Execution) error {
-	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Size)
-	visitor := collector.Visitor(ctx)
+func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Statelet, info *response.Execution) error {
 
+	batchData.ValuesBatch, batchData.Size = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+	visitor := collector.Visitor(ctx)
 	for {
 		err := s.queryObjectsWithMeta(ctx, session, view, collector, visitor, info, batchData, selector)
 		if err != nil {
 			return err
 		}
-
-		if batchData.Parent >= batchData.ParentReadSize {
+		if batchData.Size >= batchData.ParentReadSize {
 			break
 		}
 
 		var nextParents int
-		batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Size)
-		batchData.Parent += nextParents
+		batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+		batchData.Size += nextParents
 	}
 
 	return nil
@@ -412,16 +411,11 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	if err != nil {
 		return nil, err
 	}
-
 	begin := time.Now()
 	var cacheStats *cache.Stats
 	var options = []option.Option{io.Resolve(collector.Resolve)}
 	if session.IsCacheEnabled(aView) {
 		service, err := aView.Cache.Service()
-		if err != nil {
-			fmt.Printf("err: %v\n", err.Error())
-		}
-
 		if err == nil {
 			cacheStats = &cache.Stats{}
 			options = append(options, service, cacheStats)

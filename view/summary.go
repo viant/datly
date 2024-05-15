@@ -206,6 +206,12 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 		aTag.TypeName = rel.Of.Schema.Name
 		aTag.LinkOn = rel.TagLink()
 		aTag.SQL = tags.NewViewSQL(rel.Of.View.Template.Source, "")
+		if aBatch := rel.Of.View.Batch; aBatch != nil {
+			if aTag.View == nil {
+				aTag.View = &tags.View{}
+			}
+			aTag.View.Batch = aBatch.Size
+		}
 		holderConnector := v.Connector
 		if connector := rel.Of.Connector; connector != nil {
 			if connector.Ref != holderConnector.Ref {

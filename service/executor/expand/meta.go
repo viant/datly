@@ -182,9 +182,8 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 	}
 
 	if batchData != nil {
-		colInArgs = batchData.ColIn()
+		colInArgs = batchData.ColInBatch()
 	}
-
 	limit := metaSource.ResultLimit()
 	offset := 0
 	page := 0

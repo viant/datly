@@ -30,8 +30,12 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 
 	if viewParameter := c.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil {
 		aTag := &tags.Tag{}
+
 		aTag.SQL = tags.NewViewSQL(c.View.Template.Source, "")
 		aTag.View = &tags.View{Name: c.View.Name}
+		if c.View != nil && c.View.Batch != nil {
+			aTag.View.Batch = c.View.Batch.Size
+		}
 		if tmpl := c.View.Template; tmpl != nil && tmpl.Summary != nil {
 			aTag.SummarySQL = tags.ViewSQLSummary(tags.NewViewSQL(tmpl.Summary.Source, ""))
 		}

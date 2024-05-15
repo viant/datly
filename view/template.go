@@ -357,16 +357,13 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sta
 	if err != nil {
 		return "", err
 	}
-
 	replacement := &rdata.Map{}
-
 	for _, value := range values {
 		if value.Key == "?" {
 			placeholder, err := sanitized.Next()
 			if err != nil {
 				return "", err
 			}
-
 			*placeholders = append(*placeholders, placeholder)
 			continue
 		}
