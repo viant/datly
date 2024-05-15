@@ -411,8 +411,8 @@ func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option
 			options = append(options, WithLimit(vTag.Limit))
 
 		}
-		if vTag.BatchSize > 0 {
-			options = append(options, WithBatchSize(vTag.BatchSize))
+		if vTag.Batch > 0 {
+			options = append(options, WithBatchSize(vTag.Batch))
 		}
 		for _, name := range vTag.Parameters {
 			parameters = append(parameters, state.NewRefParameter(name))

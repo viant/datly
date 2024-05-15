@@ -23,7 +23,7 @@ type (
 		Connector  string
 		Limit      *int
 		Match      string
-		BatchSize  int
+		Batch      int
 	}
 )
 
@@ -36,7 +36,7 @@ func (t *Tag) updateView(key string, value string) error {
 		tag.Match = strings.TrimSpace(value)
 	case "batch":
 		var err error
-		tag.BatchSize, err = strconv.Atoi(value)
+		tag.Batch, err = strconv.Atoi(value)
 		if err != nil {
 			return err
 		}
@@ -79,8 +79,8 @@ func (v *View) Tag() *tags.Tag {
 		appendNonEmpty(builder, "limit", strconv.Itoa(*v.Limit))
 	}
 	appendNonEmpty(builder, "table", v.Table)
-	if v.BatchSize > 0 {
-		appendNonEmpty(builder, "batch", strconv.Itoa(v.BatchSize))
+	if v.Batch > 0 {
+		appendNonEmpty(builder, "batch", strconv.Itoa(v.Batch))
 	}
 	appendNonEmpty(builder, "connector", v.Connector)
 	appendNonEmpty(builder, "match", v.Match)
