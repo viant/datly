@@ -1559,3 +1559,14 @@ func WithMatchStrategy(match string) Option {
 		return nil
 	}
 }
+
+// WithBatchSize creates an Option to set batchSize
+func WithBatchSize(size int) Option {
+	return func(v *View) error {
+		if v.Batch == nil {
+			v.Batch = &Batch{}
+		}
+		v.Batch.Size = size
+		return nil
+	}
+}

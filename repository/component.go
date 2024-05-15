@@ -403,6 +403,9 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 				if aView.Match != "" {
 					vOptions = append(vOptions, view.WithMatchStrategy(aView.Match))
 				}
+				if aView.BatchSize != 0 {
+					vOptions = append(vOptions, view.WithBatchSize(aView.BatchSize))
+				}
 			}
 
 			if aTag.SQL.SQL != "" {
