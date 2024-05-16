@@ -66,11 +66,11 @@ func (l *LoadData) Exec(ctx context.Context, session handler.Session) (interface
 	if isCompressed {
 		reader, err := gzip.NewReader(bytes.NewReader(data))
 		if err != nil {
-			return nil, fmt.Errorf("failed to decompress URL: %w", err)
+			return nil, fmt.Errorf("failed to decompress URL: failed to create reader: %w (used URL: %s)", err, URL)
 		}
 		defer reader.Close()
 		if data, err = io.ReadAll(reader); err != nil {
-			return nil, fmt.Errorf("failed to decompress URL: %w", err)
+			return nil, fmt.Errorf("failed to decompress URL:%w (used URL: %s)", err, URL)
 		}
 	}
 	itemType := l.Options.OutputType.Elem()
