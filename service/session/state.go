@@ -232,7 +232,7 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 	}
 	if !has {
 		if parameter.IsRequired() {
-			return fmt.Errorf("parameter %v is required", parameter.Name)
+			return fmt.Errorf("populateParameter - parameter %v is required", parameter.Name)
 		}
 		return nil
 	}
@@ -303,7 +303,7 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	switch valueType.Kind() {
 	case reflect.Ptr:
 		if parameter.IsRequired() && isNil(value) {
-			return nil, fmt.Errorf("parameter %v is required", parameter.Name)
+			return nil, fmt.Errorf("ensureValidValue - parameter %v is required", parameter.Name)
 		}
 	case reflect.Slice:
 		ptr := xunsafe.AsPointer(value)
