@@ -20,6 +20,11 @@ type Columns []*Column
 func (c Columns) Index(formatCase text.CaseFormat) NamedColumns {
 	result := NamedColumns{}
 	for i, _ := range c {
+		if aTag := c[i].Tag; aTag != "" {
+			if src := reflect.StructTag(aTag).Get("source"); src != "" {
+				result[strings.ToLower(src)] = c[i]
+			}
+		}
 		result.Register(formatCase, c[i])
 	}
 	return result
@@ -170,7 +175,9 @@ func NewColumns(columns sqlparser.Columns) Columns {
 	for _, item := range columns {
 		name := item.Identity()
 		column := NewColumn(name, item.Type, item.RawType, item.IsNullable, WithColumnTag(item.Tag))
-
+		if item.Name != item.Alias && item.Alias != "" && item.Name != "" {
+			column.Tag = fmt.Sprintf(`source:"%v"`, item.Name)
+		}
 		if item.Default != nil {
 			column.Default = *item.Default
 		}

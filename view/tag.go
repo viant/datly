@@ -3,6 +3,7 @@ package view
 import (
 	"github.com/viant/datly/view/state"
 	vtags "github.com/viant/datly/view/tags"
+	"reflect"
 	"strings"
 
 	"github.com/viant/tagly/format/text"
@@ -23,6 +24,13 @@ func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.
 	if column.FormatTag != nil {
 		aTag = tags.NewTag("format", column.FormatTag)
 		result.SetTag(aTag)
+	}
+
+	if aTag := column.Tag; aTag != "" {
+		rTag := reflect.StructTag(aTag)
+		if src, ok := rTag.Lookup("source"); ok {
+			result.Set("source", src)
+		}
 	}
 
 	if column.Codec != nil {
@@ -48,9 +56,6 @@ func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.
 		result.SetTag(aTag)
 	}
 
-	if column.Codec != nil {
-
-	}
 	return result.Stringify()
 }
 

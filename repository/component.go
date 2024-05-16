@@ -86,7 +86,9 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 		return err
 	}
 
-	c.updatedViewSchemaWithNamedType(ctx, resource)
+	if err = c.updatedViewSchemaWithNamedType(ctx, resource); err != nil {
+		return err
+	}
 
 	if err := c.normalizePaths(); err != nil {
 		return err
