@@ -358,6 +358,9 @@ func (s *Service) AddComponent(ctx context.Context, component *repository.Compon
 		}
 	}
 	aView := component.View
+	if res := aView.GetResource(); res != nil {
+		components.Resource = res
+	}
 	if aView.Name != "" { //swap with ref view
 		components.Resource.Views = append(components.Resource.Views, aView)
 		component.View = view.NewRefView(aView.Name)

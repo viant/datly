@@ -257,7 +257,11 @@ func WithJWTVerifier(aVerifier *verifier.Config) Option {
 
 func WithResource(resource *view.Resource) ComponentOption {
 	return func(c *Component) error {
-		c.View.SetResource(resource)
+		if c.View.GetResource() == nil {
+			c.View.SetResource(&view.Resource{})
+		}
+		res := c.View.GetResource()
+		res.MergeFrom(resource, c.types)
 		return nil
 	}
 }

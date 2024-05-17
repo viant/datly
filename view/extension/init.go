@@ -116,6 +116,7 @@ func InitRegistry() {
 				PredicateDuration:          NewDurationPredicate(),
 				PredicateCriteriaIn:        NewInCriteriaPredicate(),
 				PredicateCriteriaNotIn:     NewNotInCriteriaPredicate(),
+				PredicateWhenPresent:       NewWhenPresent(),
 			},
 		},
 		Docs: docs.New(),

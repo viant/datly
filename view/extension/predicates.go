@@ -34,6 +34,7 @@ const (
 	PredicateCriteriaNotIn     = "not_in_criteria"
 	PredicateBetween           = "between"
 	PredicateDuration          = "duration"
+	PredicateWhenPresent       = "when_present"
 )
 
 type (
@@ -52,9 +53,9 @@ type (
 
 	PredicateConfig struct {
 		Parent string
-		Name   string `yaml:"Name"`
-		Group  int    `yaml:"NormalizeObject"`
-		Ensure bool
+		Name   string   `yaml:"Name"`
+		Group  int      `yaml:"Group"`
+		Ensure bool     `yaml:"Ensure"`
 		Args   []string `yaml:"Args"`
 	}
 
@@ -422,6 +423,10 @@ func NewNotInCriteriaPredicate() *Predicate {
 	return newInPredicate(PredicateCriteriaNotIn, true, false, false)
 }
 
+func NewWhenPresent() *Predicate {
+	return newWhenPredicate(PredicateWhenPresent)
+}
+
 func newExistsPredicate(name string, withCriteria bool, negated bool) *Predicate {
 	args := []*predicate.NamedArgument{
 		{
@@ -500,4 +505,17 @@ func (p *PredicateHandlerFactory) New(lookupType xreflect.LookupType, args ...st
 	}
 
 	return valueHandler, nil
+}
+
+func newWhenPredicate(name string) *Predicate {
+	condition := `#if($HasFilterValue) ${Criterion} #end`
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   name,
+			Source: " " + condition,
+			Args: []*predicate.NamedArgument{
+				{Name: "Criterion", Position: 0},
+			},
+		},
+	}
 }
