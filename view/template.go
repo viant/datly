@@ -78,6 +78,18 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	t.updateSource(view)
 
 	t.isTemplate = t.Source != view.Name && t.Source != view.Table
+	//todo try allocate parameters based on group
+	if len(t.Parameters) == 0 {
+
+		if strings.Contains(t.Source, "${predicate.Builder()") {
+			for i, candidate := range resource.Parameters {
+				if len(candidate.Predicates) > 0 {
+					t.Parameters = append(t.Parameters, state.NewRefParameter(resource.Parameters[i].Name))
+				}
+			}
+
+		}
+	}
 
 	if err = t.initTypes(ctx, resource); err != nil {
 		return err

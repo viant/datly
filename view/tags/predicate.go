@@ -19,6 +19,7 @@ type Predicate struct {
 	ExcludeName string
 	Filter      string
 	Arguments   []string
+	Ensure      bool
 }
 
 func (p *Predicate) Init(name string) {
@@ -64,6 +65,10 @@ func (t *Tag) updatedPredicate(key string, value string) (err error) {
 		if tag.Group, err = strconv.Atoi(strings.TrimSpace(value)); err != nil {
 			return fmt.Errorf("invalid predicate group: %s %w", value, err)
 		}
+	case "ensure":
+		if tag.Ensure, err = strconv.ParseBool(strings.TrimSpace(value)); err != nil {
+			return fmt.Errorf("invalid predicate ensure: %s %w", value, err)
+		}
 	default:
 		if value != "" {
 			return fmt.Errorf("invalid argument %s", value)
@@ -79,6 +84,10 @@ func (p *Predicate) Tag() *tags.Tag {
 	builder.WriteString(",")
 	builder.WriteString("group=")
 	builder.WriteString(strconv.Itoa(p.Group))
+	if p.Ensure {
+		builder.WriteString(",")
+		builder.WriteString("ensure=true")
+	}
 	appendNonEmpty(builder, "filter", p.Filter)
 	for _, arg := range p.Arguments {
 		builder.WriteString(",")

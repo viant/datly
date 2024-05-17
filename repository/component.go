@@ -367,13 +367,19 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 			outputType = reflect.TypeOf(struct{}{})
 		}
 		c.embedFs = embedFs
-		sType, err := state.NewType(state.WithResource(c.View.Resource()), state.WithFS(embedFs), state.WithSchema(state.NewSchema(inputType)))
+		resource := c.View.Resource()
+		sType, err := state.NewType(state.WithResource(resource), state.WithFS(embedFs), state.WithSchema(state.NewSchema(inputType)))
 		if err != nil {
 			return err
 		}
 		c.Contract.Input.Type = *sType
 		if err := c.Contract.Input.Type.Init(); err != err {
 			return fmt.Errorf("failed to initalize input: %w", err)
+		}
+		if len(c.Contract.Input.Type.Parameters) > 0 {
+			for i := range c.Contract.Input.Type.Parameters {
+				resource.AppendParameter(c.Contract.Input.Type.Parameters[i])
+			}
 		}
 		c.Contract.Output.Type = state.Type{Schema: state.NewSchema(outputType)}
 		if err := c.Contract.Output.Type.Init(state.WithFS(embedFs)); err != err {
@@ -420,8 +426,9 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 				vOptions = append(vOptions, view.WithBatchSize(aTag.View.Batch))
 			}
 
+			vOptions = append(vOptions, view.WithFS(c.embedFs))
 		}
-		vOptions = append(vOptions, view.WithFS(c.embedFs))
+		vOptions = append(vOptions, view.WithResource(resource))
 		aView := view.NewView(viewName, table, vOptions...)
 		c.View = aView
 		return nil

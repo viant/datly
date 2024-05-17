@@ -12,8 +12,9 @@ func BuildPredicate(aTag *tags.Tag, param *Parameter) {
 	for _, pTag := range aTag.Predicates {
 		pTag.Init(param.Name)
 		param.Predicates = append(param.Predicates, &extension.PredicateConfig{
-			Group: pTag.Group,
-			Name:  pTag.Name,
-			Args:  pTag.Arguments})
+			Group:  pTag.Group,
+			Name:   pTag.Name,
+			Args:   pTag.Arguments,
+			Ensure: pTag.Ensure})
 	}
 }
