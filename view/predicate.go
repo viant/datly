@@ -36,7 +36,7 @@ type (
 		handler      codec.PredicateHandler
 	}
 
-	predicateEvaluator struct {
+	PredicateEvaluator struct {
 		ctx           *expand.Variable
 		evaluator     *expand.Evaluator
 		valueState    *expand.NamedVariable
@@ -44,7 +44,7 @@ type (
 	}
 )
 
-func (e *predicateEvaluator) Compute(ctx context.Context, value interface{}) (*codec.Criteria, error) {
+func (e *PredicateEvaluator) Compute(ctx context.Context, value interface{}) (*codec.Criteria, error) {
 	cuxtomCtx, ok := ctx.Value(expand.PredicateCtx).(*expand.Context)
 	if !ok {
 		panic("not found custom ctx")
@@ -68,12 +68,24 @@ func (e *predicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 	return criteria, nil
 }
 
-func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state *structology.State, value interface{}) (*expand.State, error) {
+func (e *PredicateEvaluator) Evaluate(ctx *expand.Context, state *structology.State, value interface{}) (*expand.State, error) {
+
+	hasValue := value != nil
+	if value != nil {
+		switch actual := value.(type) {
+		case []int:
+			hasValue = actual != nil
+		case *int:
+			hasValue = actual != nil
+		case *string:
+			hasValue = actual != nil
+		}
+	}
 	return e.evaluator.Evaluate(ctx,
 		expand.WithParameterState(state),
 		expand.WithNamedVariables(
 			e.valueState.New(value),
-			e.hasValueState.New(value != nil),
+			e.hasValueState.New(hasValue),
 		),
 		expand.WithCustomContext(e.ctx),
 	)
@@ -133,7 +145,7 @@ func (p *predicateEvaluatorProvider) new(predicateConfig *extension.PredicateCon
 		Value: dst,
 	}
 
-	return &predicateEvaluator{
+	return &PredicateEvaluator{
 		ctx:           customCtx,
 		evaluator:     p.evaluator,
 		valueState:    p.state,

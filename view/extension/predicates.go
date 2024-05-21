@@ -35,6 +35,7 @@ const (
 	PredicateBetween           = "between"
 	PredicateDuration          = "duration"
 	PredicateWhenPresent       = "when_present"
+	PredicateWhenNotPresent    = "when_not_present"
 )
 
 type (
@@ -427,6 +428,10 @@ func NewWhenPresent() *Predicate {
 	return newWhenPredicate(PredicateWhenPresent)
 }
 
+func NewWhenNotPresent() *Predicate {
+	return NewWhenNotPredicate(PredicateWhenNotPresent)
+}
+
 func newExistsPredicate(name string, withCriteria bool, negated bool) *Predicate {
 	args := []*predicate.NamedArgument{
 		{
@@ -509,6 +514,19 @@ func (p *PredicateHandlerFactory) New(lookupType xreflect.LookupType, args ...st
 
 func newWhenPredicate(name string) *Predicate {
 	condition := `#if($HasFilterValue) ${Criterion} #end`
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   name,
+			Source: " " + condition,
+			Args: []*predicate.NamedArgument{
+				{Name: "Criterion", Position: 0},
+			},
+		},
+	}
+}
+
+func NewWhenNotPredicate(name string) *Predicate {
+	condition := `#if(!$HasFilterValue) ${Criterion} #end`
 	return &Predicate{
 		Template: &predicate.Template{
 			Name:   name,
