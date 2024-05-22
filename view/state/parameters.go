@@ -579,7 +579,7 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	}
 	if p.Predicates != nil {
 		for _, aPredicate := range p.Predicates {
-			aTag.Predicates = append(aTag.Predicates, &tags.Predicate{Name: aPredicate.Name, Group: aPredicate.Group, Arguments: aPredicate.Args})
+			aTag.Predicates = append(aTag.Predicates, &tags.Predicate{Name: aPredicate.Name, Ensure: aPredicate.Ensure, Group: aPredicate.Group, Arguments: aPredicate.Args})
 		}
 	}
 
