@@ -329,8 +329,20 @@ func (s *Declarations) setValue(declaration *Declaration, content string) error 
 			return fmt.Errorf("invalid parameter: %s bool default value: %s %w", declaration.Name, value, err)
 		}
 	case "int":
-		if declaration.Value, err = strconv.Atoi(value); err != nil {
-			return fmt.Errorf("invalid parameter: %s int default value: %s %w", declaration.Name, value, err)
+		if declaration.Cardinality == "Many" {
+			var values []int
+			for _, item := range strings.Split(value, ",") {
+				iValue, err := strconv.Atoi(strings.TrimSpace(item))
+				if err != nil {
+					return fmt.Errorf("invalid parameter: %s []int default value: %s %w", declaration.Name, value, err)
+				}
+				values = append(values, iValue)
+			}
+			declaration.Value = values
+		} else {
+			if declaration.Value, err = strconv.Atoi(value); err != nil {
+				return fmt.Errorf("invalid parameter: %s int default value: %s %w", declaration.Name, value, err)
+			}
 		}
 	case "float64":
 		if declaration.Value, err = strconv.ParseFloat(value, 64); err != nil {
