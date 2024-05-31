@@ -64,8 +64,8 @@ func tryExtractResponseStatus(value interface{}) (*response.Status, bool) {
 	if xField == nil {
 		return nil, false
 	}
-
-	uPtr := xField.Pointer(xunsafe.EnsurePointer(value))
+	ptr := xunsafe.AsPointer(value)
+	uPtr := xField.ValuePointer(ptr)
 	if uPtr == nil {
 		return nil, false
 	}
