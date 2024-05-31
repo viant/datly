@@ -8,7 +8,10 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/xdatly/handler/response"
+	"github.com/viant/xunsafe"
 	"net/http"
+	"reflect"
 )
 
 type componentLocator struct {
@@ -30,7 +33,43 @@ func (l *componentLocator) Value(ctx context.Context, name string) (interface{},
 	}
 	form := l.getForm()
 	value, err := l.dispatch.Dispatch(ctx, &contract.Path{Method: method, URI: URI}, request, form)
+	err = updateErrWithResponseStatus(err, value)
 	return value, err == nil, err
+}
+
+func updateErrWithResponseStatus(err error, response interface{}) error {
+	var statusErr error
+	responseStatus, ok := tryExtractResponseStatus(response)
+	if ok && responseStatus.Status == "error" {
+		statusErr = fmt.Errorf(responseStatus.Message)
+	}
+
+	if statusErr != nil {
+		if err == nil {
+			err = statusErr
+		} else {
+			err = fmt.Errorf("two errors: %w, %w", err, statusErr)
+		}
+	}
+	return err
+}
+
+func tryExtractResponseStatus(value interface{}) (*response.Status, bool) {
+	rType := reflect.TypeOf(value)
+	if rType == nil {
+		return nil, false
+	}
+	xStruct := xunsafe.NewStruct(rType)
+	xField := xStruct.MatchByType(reflect.TypeOf(response.Status{}))
+	if xField == nil {
+		return nil, false
+	}
+
+	uPtr := xField.Pointer(xunsafe.EnsurePointer(value))
+	if uPtr == nil {
+		return nil, false
+	}
+	return (*response.Status)(uPtr), true
 }
 
 // TODO passed locator options to dispatcher so that this wil not be nil
