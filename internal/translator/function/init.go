@@ -9,4 +9,5 @@ func init() {
 	_registry.Register(&allownulls{})
 	_registry.Register(&matchStrategy{})
 	_registry.Register(&batchSize{})
+	_registry.Register(&partitioner{})
 }

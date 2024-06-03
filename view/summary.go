@@ -324,7 +324,7 @@ func (m *TemplateSummary) prepareSQL(owner *Template) (string, []interface{}, er
 	return m.Evaluate(stateValue, viewParam)
 }
 
-func (m *TemplateSummary) Evaluate(parameterState *structology.State, viewParam *expand.MetaParam) (string, []interface{}, error) {
+func (m *TemplateSummary) Evaluate(parameterState *structology.State, viewParam *expand.ViewContext) (string, []interface{}, error) {
 	state, err := Evaluate(m.sqlEvaluator, expand.WithParameterState(parameterState), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err

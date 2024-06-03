@@ -175,6 +175,13 @@ func WithCriteria(columns ...string) Option {
 	}
 }
 
+func WithPartitioned(partitioned *Partitioned) Option {
+	return func(v *View) error {
+		v.Partitioned = partitioned
+		return nil
+	}
+}
+
 // WithResource creates resource View option
 func WithResource(resource state.Resource) Option {
 	return func(v *View) error {

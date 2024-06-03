@@ -140,7 +140,7 @@ func (s *Session) ParentData() (*ParentData, bool) {
 	}, true
 }
 
-func (d *ParentData) AsParam() *expand.MetaParam {
+func (d *ParentData) AsParam() *expand.ViewContext {
 	if d == nil {
 		return nil
 	}

@@ -41,14 +41,10 @@ type (
 	TemplateOption func(t *Template)
 
 	CriteriaParam struct {
-		ColumnsIn   string `velty:"COLUMN_IN"`
-		WhereClause string `velty:"CRITERIA"`
-		Pagination  string `velty:"PAGINATION"`
-	}
-
-	ParamQualifier struct {
-		SQL  string
-		Args []interface{}
+		ColumnsIn             string `velty:"COLUMN_IN"`
+		WhereClause           string `velty:"CRITERIA"`
+		WhereClauseParameters []interface{}
+		Pagination            string `velty:"PAGINATION"`
 	}
 )
 
@@ -221,18 +217,18 @@ func NewEvaluator(parameters state.Parameters, stateType *structology.StateType,
 	)
 }
 
-func (t *Template) EvaluateSource(parameterState *structology.State, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
+func (t *Template) EvaluateSource(parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, options ...interface{}) (*expand.State, error) {
 	if t.wasEmpty {
 		return expand.StateWithSQL(t.Source), nil
 	}
 	return t.EvaluateState(parameterState, parentParam, batchData, options...)
 }
 
-func (t *Template) EvaluateState(parameterState *structology.State, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
+func (t *Template) EvaluateState(parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, options ...interface{}) (*expand.State, error) {
 	return t.EvaluateStateWithSession(parameterState, parentParam, batchData, nil, options...)
 }
 
-func (t *Template) EvaluateStateWithSession(parameterState *structology.State, parentParam *expand.MetaParam, batchData *BatchData, sess *extension.Session, options ...interface{}) (*expand.State, error) {
+func (t *Template) EvaluateStateWithSession(parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, sess *extension.Session, options ...interface{}) (*expand.State, error) {
 	var expander expand.Expander
 	var dataUnit *expand.DataUnit
 	for _, option := range options {
@@ -289,23 +285,23 @@ func Evaluate(evaluator *expand.Evaluator, options ...expand.StateOption) (*expa
 	)
 }
 
-func AsViewParam(aView *View, aSelector *Statelet, batchData *BatchData, options ...interface{}) *expand.MetaParam {
-	var metaSource expand.MetaSource
+func AsViewParam(aView *View, aSelector *Statelet, batchData *BatchData, options ...interface{}) *expand.ViewContext {
+	var metaSource expand.ParentSource
 	if aView != nil {
 		metaSource = aView
 	}
 
-	var metaExtras expand.MetaExtras
+	var metaExtras expand.ParentExtras
 	if aSelector != nil {
 		metaExtras = aSelector
 	}
 
-	var metaBatch expand.MetaBatch
+	var metaBatch expand.ParentBatch
 	if batchData != nil {
 		metaBatch = batchData
 	}
 
-	return expand.NewMetaParam(metaSource, metaExtras, metaBatch, options...)
+	return expand.NewViewContext(metaSource, metaExtras, metaBatch, options...)
 }
 
 func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, param *state.Parameter) error {
@@ -424,11 +420,17 @@ func (t *Template) replacementEntry(key string, params CriteriaParam, selector *
 		return key, criteria, nil
 	default:
 		if strings.HasPrefix(key, keywords.WherePrefix) {
+			if len(params.WhereClauseParameters) > 0 {
+				for i := range params.WhereClauseParameters {
+					if _, err := sanitized.Add(0, params.WhereClauseParameters[i]); err != nil {
+						return "", "", err
+					}
+				}
+			}
 			_, aValue, err := t.replacementEntry(key[len(keywords.WherePrefix):], params, selector, batchData, placeholders, sanitized)
 			if err != nil {
 				return "", "", err
 			}
-
 			return t.valueWithPrefix(key, aValue, " WHERE ", false)
 		}
 

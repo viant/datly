@@ -47,7 +47,7 @@ func (c *matchersCollector) populateCacheCases(ctx context.Context, collector ch
 	}
 
 	for i := range cacheCases {
-		go c.populateChan(c.view, collector, cacheCases[i])
+		go c.populateChan(ctx, c.view, collector, cacheCases[i])
 	}
 
 	cacheSize := len(cacheCases)
@@ -60,18 +60,18 @@ func (c *matchersCollector) populateCacheCases(ctx context.Context, collector ch
 	return cacheSize, err
 }
 
-func (c *matchersCollector) populateChan(aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
-	c.createIndexWarmupEntry(aView, aChan, cacheInput)
+func (c *matchersCollector) populateChan(ctx context.Context, aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
+	c.createIndexWarmupEntry(ctx, aView, aChan, cacheInput)
 
 	if !cacheInput.IndexMeta {
 		return
 	}
 
-	c.createMetaWarmupEntry(aView, aChan, cacheInput)
+	c.createMetaWarmupEntry(ctx, aView, aChan, cacheInput)
 }
 
-func (c *matchersCollector) createMetaWarmupEntry(aView *view.View, aChan chan warmupEntryFn, input *view.CacheInput) {
-	cacheIndex, err := c.builder.CacheMetaSQL(aView, input.Selector, nil, nil, nil)
+func (c *matchersCollector) createMetaWarmupEntry(ctx context.Context, aView *view.View, aChan chan warmupEntryFn, input *view.CacheInput) {
+	cacheIndex, err := c.builder.CacheMetaSQL(ctx, aView, input.Selector, nil, nil, nil)
 	if err != nil {
 		aChan <- func() (*warmupEntry, error) {
 			return nil, err
@@ -88,8 +88,8 @@ func (c *matchersCollector) createMetaWarmupEntry(aView *view.View, aChan chan w
 	}
 }
 
-func (c *matchersCollector) createIndexWarmupEntry(aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
-	build, err := c.builder.CacheSQL(c.view, cacheInput.Selector)
+func (c *matchersCollector) createIndexWarmupEntry(ctx context.Context, aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
+	build, err := c.builder.CacheSQL(ctx, c.view, cacheInput.Selector)
 	aChan <- func() (*warmupEntry, error) {
 		if err != nil {
 			return nil, err

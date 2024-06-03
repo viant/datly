@@ -57,6 +57,7 @@ type (
 		FromURL     string     `json:",omitempty"`
 		Exclude     []string   `json:",omitempty"`
 		Columns     []*Column  `json:",omitempty"`
+		Partitioned *Partitioned
 
 		Criteria string `json:",omitempty"`
 
@@ -103,8 +104,8 @@ type (
 		Child  string
 	}
 
-	newCollectorFn    func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector
-	viewMetaHandlerFn func(viewMeta interface{}) error
+	newCollectorFn       func(dest interface{}, viewSummaryHandler viewSummaryHandlerFn, supportParallel bool) *Collector
+	viewSummaryHandlerFn func(viewSummary interface{}) error
 
 	Batch struct {
 		Size int `json:",omitempty"`
@@ -330,6 +331,7 @@ func (v *View) init(ctx context.Context) error {
 	if err := v.updateViewAndRelations(ctx, v.With); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -370,6 +372,9 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 		relLinks, refLinks, err := v.buildLinks(aTag)
 		if err != nil {
 			return err
+		}
+		if viewTag.PartitionerType != "" {
+			refViewOptions = append(refViewOptions, WithPartitioned(&Partitioned{DataType: viewTag.PartitionerType, Concurrency: viewTag.PartitionedConcurrency}))
 		}
 		if viewTag.Match != "" {
 			refViewOptions = append(refViewOptions, WithMatchStrategy(viewTag.Match))
@@ -677,6 +682,25 @@ func (v *View) initView(ctx context.Context) error {
 	if v.TableBatches == nil {
 		v.TableBatches = map[string]bool{}
 	}
+
+	if partitioned := v.Partitioned; partitioned != nil {
+		if partitioned.partitioner == nil {
+			var partitionerType reflect.Type
+			if partitioned.DataType != "" && partitioned.DataType != "." {
+				if partitionerType, err = types.LookupType(resourcelet.LookupType(), partitioned.DataType); err != nil {
+					return err
+				}
+			}
+			if partitionerType == nil {
+				partitionerType = v.Schema.CompType()
+			}
+			partitioner, ok := reflect.New(partitionerType).Interface().(Partitioner)
+			if !ok {
+				return fmt.Errorf("failed to create partitioner: %T", partitioner)
+			}
+			partitioned.partitioner = partitioner
+		}
+	}
 	return nil
 }
 
@@ -877,7 +901,7 @@ func (v *View) detectColumns(ctx context.Context, resource *Resource) error {
 
 	if strings.Contains(SQL, "$View.ParentJoinOn") {
 		//TODO adjust parameter value type
-		options = append(options, expand2.WithViewParam(&expand2.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand2.DataUnit{}}))
+		options = append(options, expand2.WithViewParam(&expand2.ViewContext{ParentValues: []interface{}{0}, DataUnit: &expand2.DataUnit{}}))
 	}
 	query, err := v.BuildParametrizedSQL(aState, resource.TypeRegistry(), SQL, bindingArguments, options...)
 	v.Logger.ColumnsDetection(query.Query, v.Source())
@@ -1066,6 +1090,9 @@ func (v *View) inherit(view *View) error {
 	if v.Counter == nil {
 		v.Counter = view.Counter
 	}
+	if v.Partitioned == nil {
+		v.Partitioned = view.Partitioned
+	}
 	return nil
 }
 
@@ -1106,14 +1133,14 @@ func (v *View) ensureCaseFormat() error {
 }
 
 func (v *View) ensureCollector() {
-	v._newCollector = func(dest interface{}, viewMetaHandler viewMetaHandlerFn, readAll bool) *Collector {
+	v._newCollector = func(dest interface{}, viewMetaHandler viewSummaryHandlerFn, readAll bool) *Collector {
 		return NewCollector(v.Schema.Slice(), v, dest, viewMetaHandler, readAll)
 	}
 
 }
 
 // Collector creates new Collector for View.DataType
-func (v *View) Collector(dest interface{}, handleMeta viewMetaHandlerFn, supportParallel bool) *Collector {
+func (v *View) Collector(dest interface{}, handleMeta viewSummaryHandlerFn, supportParallel bool) *Collector {
 	return v._newCollector(dest, handleMeta, supportParallel)
 }
 

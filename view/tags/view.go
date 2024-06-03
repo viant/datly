@@ -17,13 +17,15 @@ type (
 
 	//Tag represent basic view tag
 	View struct {
-		Name       string
-		Table      string
-		Parameters []string //parameter references
-		Connector  string
-		Limit      *int
-		Match      string
-		Batch      int
+		Name                   string
+		Table                  string
+		Parameters             []string //parameter references
+		Connector              string
+		Limit                  *int
+		Match                  string
+		Batch                  int
+		PartitionerType        string
+		PartitionedConcurrency int
 	}
 )
 
@@ -50,6 +52,14 @@ func (t *Tag) updateView(key string, value string) error {
 		tag.Table = strings.TrimSpace(value)
 	case "connector":
 		tag.Connector = strings.TrimSpace(value)
+	case "partitioner":
+		tag.PartitionerType = strings.TrimSpace(value)
+	case "concurrency":
+		concurrency, err := strconv.Atoi(value)
+		if err != nil {
+			return err
+		}
+		tag.PartitionedConcurrency = concurrency
 	case "parameters":
 		parameters := strings.Trim(value, "{}'\"")
 		for _, parameter := range strings.Split(parameters, ",") {
@@ -86,6 +96,12 @@ func (v *View) Tag() *tags.Tag {
 	appendNonEmpty(builder, "match", v.Match)
 	if len(v.Parameters) > 0 {
 		appendNonEmpty(builder, "parameters", "{"+strings.Join(v.Parameters, ",")+"}")
+	}
+	if v.PartitionerType != "" {
+		appendNonEmpty(builder, "partitioner", v.PartitionerType)
+		if v.PartitionedConcurrency > 0 {
+			appendNonEmpty(builder, "concurrency", strconv.Itoa(v.PartitionedConcurrency))
+		}
 	}
 	return &tags.Tag{Name: ViewTag, Values: tags.Values(builder.String())}
 }

@@ -1,10 +1,15 @@
 /* {"URI":"vendors/"} */
 
 
+#set( $_ = $VendorName<string>(form/name).Optional().WithPredicate(0, 'contains', 't', 'NAME'))
 
 SELECT vendor.*,
        products.* EXCEPT VENDOR_ID
 FROM (SELECT * FROM VENDOR t ) vendor
-    JOIN (SELECT * FROM PRODUCT t) products ON products.VENDOR_ID = vendor.ID
+    JOIN (
+    SELECT * FROM PRODUCT t WHERE 1 = 1
+     ${predicate.Builder().CombineOr($predicate.FilterGroup(0, "AND")).Build("AND")}
+
+    ) products ON products.VENDOR_ID = vendor.ID
 
 

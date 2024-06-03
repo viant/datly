@@ -22,7 +22,7 @@ type (
 		AndParentJoinOn(column string) (string, error)
 	}
 
-	MetaSource interface {
+	ParentSource interface {
 		Dber
 		ViewName() string
 		TableAlias() string
@@ -34,18 +34,18 @@ type (
 		Db() (*sql.DB, error)
 	}
 
-	MetaExtras interface {
+	ParentExtras interface {
 		CurrentLimit() int
 		CurrentOffset() int
 		CurrentPage() int
 	}
 
-	MetaBatch interface {
+	ParentBatch interface {
 		ColIn() []interface{}
 		ColInBatch() []interface{}
 	}
 
-	MetaParam struct {
+	ViewContext struct {
 		Name         string
 		Alias        string
 		Table        string
@@ -96,18 +96,18 @@ func (e *MockExpander) In(prefix string) (string, error) {
 	return "", nil
 }
 
-func (m *MetaParam) ParentJoinOn(column string, prepend ...string) (string, error) {
+func (m *ViewContext) ParentJoinOn(column string, prepend ...string) (string, error) {
 	if len(prepend) > 0 {
 		return m.ColIn(column, prepend[0])
 	}
 	return m.ColIn("AND", column)
 }
 
-func (m *MetaParam) AndParentJoinOn(column string) (string, error) {
+func (m *ViewContext) AndParentJoinOn(column string) (string, error) {
 	return m.ColIn("AND", column)
 }
 
-func (m *MetaParam) ColIn(prefix, column string) (string, error) {
+func (m *ViewContext) ColIn(prefix, column string) (string, error) {
 	if m.expander != nil {
 		return m.expander.ColIn(prefix, column)
 	}
@@ -124,19 +124,19 @@ func (m *MetaParam) ColIn(prefix, column string) (string, error) {
 	return prefix + column + " IN (" + bindings + " )", nil
 }
 
-func (m *MetaParam) addBindings(args []interface{}) string {
+func (m *ViewContext) addBindings(args []interface{}) string {
 	_, bindings := AsBindings("", args)
 	m.DataUnit.addAll(args...)
 	return bindings
 }
 
-func (m *MetaParam) In(prefix string) (string, error) {
+func (m *ViewContext) In(prefix string) (string, error) {
 	return m.ColIn(prefix, "")
 }
 
 // AddRelation appends SQL and adds binding arguments
 // Deprecated: For the backward compatibility
-func (m *MetaParam) Expand(_ *DataUnit) string {
+func (m *ViewContext) Expand(_ *DataUnit) string {
 	m.DataUnit.addAll(m.Args...)
 	return m.NonWindowSQL
 }
@@ -163,7 +163,7 @@ func AsBindings(key string, values []interface{}) (column string, bindings strin
 	}
 }
 
-func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBatch, options ...interface{}) *MetaParam {
+func NewViewContext(metaSource ParentSource, aSelector ParentExtras, batchData ParentBatch, options ...interface{}) *ViewContext {
 	if metaSource == nil {
 		return nil
 	}
@@ -200,8 +200,7 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 		args = sanitizer.ParamsGroup
 		SQLExec = sanitizer.TemplateSQL
 	}
-
-	viewParam := &MetaParam{
+	result := &ViewContext{
 		expander:     expander,
 		Name:         metaSource.ViewName(),
 		Alias:        metaSource.TableAlias(),
@@ -215,7 +214,7 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 		ParentValues: colInArgs,
 	}
 
-	return viewParam
+	return result
 }
 
 func NewDataUnit(metaSource Dber) *DataUnit {
@@ -233,14 +232,6 @@ func NotZeroOf(values ...int) int {
 	}
 
 	return 0
-}
-
-func MockMetaParam() *MetaParam {
-	return &MetaParam{
-		DataUnit: &DataUnit{
-			Statements: NewStmtHolder(),
-		},
-	}
 }
 
 func (c *DataUnit) Insert(data interface{}, tableName string) (string, error) {

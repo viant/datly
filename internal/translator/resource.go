@@ -351,7 +351,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		sourceViewName := metaViewSQL.Name[5 : len(metaViewSQL.Name)-4]
 		sourceSQL = strings.Replace(sourceSQL, "$"+metaViewSQL.Name, "$View.NonWindowSQL", 1)
 		sourceView := r.Rule.Viewlets.Lookup(sourceViewName)
-		options = append(options, expand.WithViewParam(&expand.MetaParam{NonWindowSQL: sourceView.Expanded.Query, Args: sourceView.Expanded.Args, Limit: 1}))
+		options = append(options, expand.WithViewParam(&expand.ViewContext{NonWindowSQL: sourceView.Expanded.Query, Args: sourceView.Expanded.Args, Limit: 1}))
 		bindingArgs = sourceView.Expanded.Args
 		viewlet.sourceViewlet = sourceView
 		sourceView.View.EnsureTemplate()
@@ -369,7 +369,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	templateParameters := sqlState.Parameters()
 	if strings.Contains(sourceSQL, "$View.ParentJoinOn") {
 		//TODO adjust parameter value type
-		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
+		options = append(options, expand.WithViewParam(&expand.ViewContext{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
 	}
 	return viewlet.View.BuildParametrizedSQL(templateParameters, types, sourceSQL, bindingArgs, options...)
 }

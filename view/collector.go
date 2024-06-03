@@ -44,7 +44,7 @@ type Collector struct {
 	codecSlice      *xunsafe.Slice
 	codecSliceDest  interface{}
 	codecAppender   *xunsafe.Appender
-	viewMetaHandler viewMetaHandlerFn
+	viewMetaHandler viewSummaryHandlerFn
 }
 
 func (r *Collector) Lock() *sync.Mutex {
@@ -107,7 +107,7 @@ func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]i
 }
 
 // NewCollector creates a collector
-func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHandler viewMetaHandlerFn, readAll bool) *Collector {
+func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHandler viewSummaryHandlerFn, readAll bool) *Collector {
 	ensuredDest := ensureDest(dest, view)
 	wg := sync.WaitGroup{}
 	wg.Add(1)

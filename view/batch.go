@@ -5,8 +5,8 @@ type BatchData struct {
 	Size           int
 	ParentReadSize int
 
-	Values      []interface{}
-	ValuesBatch []interface{}
+	Values      []interface{} //all values from parent
+	ValuesBatch []interface{} //batched values defined view.Batch.Size
 }
 
 func (b *BatchData) ColIn() []interface{} {

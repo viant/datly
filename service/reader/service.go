@@ -179,10 +179,8 @@ func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *view.Colle
 
 func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 	batchData := &view.BatchData{}
-
 	batchData.Values, batchData.ColumnNames = collector.ParentPlaceholders()
 	batchData.ParentReadSize = len(batchData.Values)
-
 	return batchData
 }
 
@@ -216,24 +214,22 @@ func (s *Service) readObjects(ctx context.Context, session *Session, batchData *
 	batchData.ValuesBatch, batchData.Size = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
 	visitor := collector.Visitor(ctx)
 	for {
-		err := s.queryObjectsWithMeta(ctx, session, view, collector, visitor, info, batchData, selector)
+		err := s.queryInBatches(ctx, session, view, collector, visitor, info, batchData, selector)
 		if err != nil {
 			return err
 		}
 		if batchData.Size >= batchData.ParentReadSize {
 			break
 		}
-
 		var nextParents int
 		batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
 		batchData.Size += nextParents
 	}
-
 	return nil
 }
 
-func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.View, originalSelector *view.Statelet, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) (*response.SQLExecution, error) {
-	selectorDeref := *originalSelector
+func (s *Service) querySummary(ctx context.Context, session *Session, aView *view.View, statelet *view.Statelet, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.ViewContext) (*response.SQLExecution, error) {
+	selectorDeref := *statelet
 	selectorDeref.Fields = []string{}
 	selectorDeref.Columns = []string{}
 	selector := &selectorDeref
@@ -251,12 +247,11 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 			return
 		}
 
-		cacheMatcher, err := s.sqlBuilder.CacheMetaSQL(aView, selector, batchDataCopy, collector.Relation(), parentViewMetaParam)
+		cacheMatcher, err := s.sqlBuilder.CacheMetaSQL(ctx, aView, selector, batchDataCopy, collector.Relation(), parentViewMetaParam)
 		if err != nil {
 			cacheErr = err
 			return
 		}
-
 		cacheService, err := aView.Cache.Service()
 		if err != nil {
 			return
@@ -267,7 +262,7 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 	}()
 
 	var err error
-	indexed, err = s.sqlBuilder.ExactMetaSQL(aView, selector, batchDataCopy, collector.Relation(), parentViewMetaParam)
+	indexed, err = s.sqlBuilder.ExactMetaSQL(ctx, aView, selector, batchDataCopy, collector.Relation(), parentViewMetaParam)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +317,7 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 	return s.NewExecutionInfo(session, indexed, cacheStats, cacheErr), nil
 }
 
-func (s *Service) buildParametrizedSQL(aView *view.View, selector *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session) (parametrizedSQL *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
+func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session, partitions *view.Partitions) (parametrizedSQL *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -331,22 +326,18 @@ func (s *Service) buildParametrizedSQL(aView *view.View, selector *view.Statelet
 	var cacheErr error
 	go func() {
 		defer wg.Done()
-
 		if (aView.Cache != nil && aView.Cache.Warmup != nil) || relation != nil {
 			data, _ := session.ParentData()
-			columnInMatcher, cacheErr = s.sqlBuilder.CacheSQLWithOptions(aView, selector, batchData, relation, data.AsParam())
+			columnInMatcher, cacheErr = s.sqlBuilder.CacheSQLWithOptions(ctx, aView, statelet, batchData, relation, data.AsParam())
 		}
 	}()
 
 	data, _ := session.ParentData()
-	parametrizedSQL, err = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{
-		Pagination: relation != nil && len(batchData.ValuesBatch) > 1,
-	}, data.AsParam(), nil)
-
+	parametrizedSQL, err = s.sqlBuilder.Build(ctx, WithBuilderView(aView), WithBuilderStatelet(statelet), WithBuilderPartitions(partitions), WithBuilderBatchData(batchData), WithBuilderRelation(relation), WithBuilderExclude(
+		false, relation != nil && len(batchData.ValuesBatch) > 1), WithBuilderParent(data.AsParam()))
 	if err != nil {
 		return nil, nil, err
 	}
-
 	wg.Wait()
 	return parametrizedSQL, columnInMatcher, cacheErr
 }
@@ -372,9 +363,7 @@ func (s *Service) BuildCriteria(ctx context.Context, value interface{}, options 
 	}
 	stateType := structology.NewStateType(reflect.TypeOf(value))
 	statelet := &view.Statelet{Template: stateType.NewState()}
-	parametrizedSQL, err := s.sqlBuilder.Build(aView, statelet, nil, nil, &Exclude{
-		Pagination: false, ColumnsIn: false,
-	}, nil, nil)
+	parametrizedSQL, err := s.sqlBuilder.Build(ctx, WithBuilderView(aView), WithBuilderStatelet(statelet))
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +371,7 @@ func (s *Service) BuildCriteria(ctx context.Context, value interface{}, options 
 	return ret, nil
 }
 
-func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *response.Execution, batchData *view.BatchData, selector *view.Statelet) error {
+func (s *Service) queryInBatches(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *response.Execution, batchData *view.BatchData, selector *view.Statelet) error {
 	wg := &sync.WaitGroup{}
 	db, err := aView.Db()
 	if err != nil {
@@ -396,33 +385,57 @@ func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aV
 			defer wg.Done()
 			var templateMeta *response.SQLExecution
 			parentMeta := view.AsViewParam(aView, selector, batchData)
-			templateMeta, metaErr = s.queryMeta(ctx, session, aView, selector, batchData, collector, parentMeta)
+			templateMeta, metaErr = s.querySummary(ctx, session, aView, selector, batchData, collector, parentMeta)
 			if templateMeta != nil {
 				info.Summary = append(info.Summary, templateMeta)
 			}
 		}()
 	}
 
-	objectStats, err := s.queryObjects(ctx, session, aView, selector, batchData, db, collector, visitor)
+	executions, err := s.queryObjects(ctx, session, aView, selector, batchData, db, collector, visitor)
 	if err != nil {
 		return err
 	}
 
-	if objectStats != nil {
-		info.View = append(info.View, objectStats)
+	if len(executions) > 0 {
+		info.View = append(info.View, executions...)
 	}
 	wg.Wait()
 	return metaErr
 }
 
-func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.Statelet, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn) (*response.SQLExecution, error) {
-	parametrizedSQL, columnInMatcher, err := s.buildParametrizedSQL(aView, selector, batchData, collector, session)
+func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.Statelet, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn) ([]*response.SQLExecution, error) {
+
+	if partitioned := aView.Partitioned; partitioned != nil {
+		return s.queryWithPartitions(ctx, session, aView, selector, batchData, db, collector, visitor, partitioned)
+	}
+	readData := 0
+	parametrizedSQL, columnInMatcher, err := s.buildParametrizedSQL(ctx, aView, selector, batchData, collector, session, nil)
 	if err != nil {
 		return nil, err
 	}
+
+	handler := func(row interface{}) error {
+		row, err = aView.UnwrapDatabaseType(ctx, row)
+		if err != nil {
+			return err
+		}
+		readData++
+		if fetcher, ok := row.(OnFetcher); ok {
+			if err = fetcher.OnFetch(ctx); err != nil {
+				return err
+			}
+		}
+		return visitor(row)
+	}
+	return s.queryWithHandler(ctx, session, aView, collector, columnInMatcher, parametrizedSQL, db, handler, &readData)
+}
+
+func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, columnInMatcher *cache.ParmetrizedQuery, parametrizedSQL *cache.ParmetrizedQuery, db *sql.DB, handler func(row interface{}) error, readData *int) ([]*response.SQLExecution, error) {
 	begin := time.Now()
 	var cacheStats *cache.Stats
 	var options = []option.Option{io.Resolve(collector.Resolve)}
+	var err error
 	if session.IsCacheEnabled(aView) {
 		service, err := aView.Cache.Service()
 		if err == nil {
@@ -430,7 +443,6 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 			options = append(options, service, cacheStats)
 		}
 	}
-
 	if columnInMatcher != nil {
 		columnInMatcher.OnSkip = collector.OnSkip
 		options = append(options, &columnInMatcher)
@@ -441,53 +453,126 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 
 	stats := s.NewExecutionInfo(session, parametrizedSQL, cacheStats, err)
 	if session.DryRun {
-		return stats, nil
+		return []*response.SQLExecution{stats}, nil
 	}
 
 	reader, err := read.New(ctx, db, parametrizedSQL.SQL, collector.NewItem(), options...)
 	if err != nil {
-		return s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
+		exec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
+		return []*response.SQLExecution{exec}, err
 	}
-
 	defer func() {
 		stmt := reader.Stmt()
 		if stmt == nil {
 			return
 		}
-
 		_ = stmt.Close()
 	}()
 
-	readData := 0
-	err = reader.QueryAll(ctx, func(row interface{}) error {
-		row, err = aView.UnwrapDatabaseType(ctx, row)
-		if err != nil {
-			return err
-		}
-
-		readData++
-		if fetcher, ok := row.(OnFetcher); ok {
-			if err = fetcher.OnFetch(ctx); err != nil {
-				return err
-			}
-		}
-		return visitor(row)
-	}, parametrizedSQL.Args...)
+	err = reader.QueryAll(ctx, handler, parametrizedSQL.Args...)
 	end := time.Now()
-
-	aView.Logger.ReadingData(end.Sub(begin), parametrizedSQL.SQL, readData, parametrizedSQL.Args, err)
+	aView.Logger.ReadingData(end.Sub(begin), parametrizedSQL.SQL, *readData, parametrizedSQL.Args, err)
 	if err != nil {
-		return s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
+		exec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
+		return []*response.SQLExecution{exec}, err
+	}
+	return []*response.SQLExecution{stats}, nil
+}
+
+func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aView *view.View, selector *view.Statelet, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn, partitioned *view.Partitioned) ([]*response.SQLExecution, error) {
+
+	concurrency := aView.Partitioned.Concurrency
+	if concurrency == 0 {
+		concurrency = 2
+	}
+	partitioner := partitioned.Partitioner()
+	wg := &sync.WaitGroup{}
+	partitions := partitioner.Partitions(ctx, db, aView)
+
+	repeat := max(1, len(partitions.Partitions))
+	var executions []*response.SQLExecution
+	var mux sync.Mutex
+	xSlice := collector.View().Schema.Slice()
+	var err error
+
+	var rateLimit = make(chan bool, concurrency)
+	var results = make([]*reflect.Value, 0, repeat)
+	for i := 0; i < repeat; i++ {
+		clone := *partitions
+		wg.Add(1)
+		rateLimit <- true
+		go func(i int, partitions *view.Partitions) {
+			defer func() {
+				wg.Done()
+				<-rateLimit
+			}()
+			if i < len(partitions.Partitions) {
+				partitions.Partition = partitions.Partitions[i]
+			}
+			parametrizedSQL, columnInMatcher, err := s.buildParametrizedSQL(ctx, aView, selector, batchData, collector, session, partitions)
+			readData := 0
+			localSlice := reflect.New(aView.Schema.SliceType())
+			slicePtr := unsafe.Pointer(localSlice.Pointer())
+			appender := xSlice.Appender(slicePtr)
+			handler := func(row interface{}) error {
+				row, err = aView.UnwrapDatabaseType(ctx, row)
+				if err != nil {
+					return err
+				}
+				readData++
+				if fetcher, ok := row.(OnFetcher); ok {
+					if err = fetcher.OnFetch(ctx); err != nil {
+						return err
+					}
+				}
+				appender.Append(row)
+				return nil
+			}
+			exec, e := s.queryWithHandler(ctx, session, aView, collector, columnInMatcher, parametrizedSQL, db, handler, &readData)
+			mux.Lock()
+			defer mux.Unlock()
+			if exec != nil {
+				executions = append(executions, exec...)
+			}
+			if e != nil {
+				err = e
+			}
+			if readData > 0 {
+				results = append(results, &localSlice)
+			}
+		}(i, &clone)
+	}
+	wg.Wait()
+
+	if len(results) == 0 {
+		return executions, err
+	}
+	result := results[0]
+	for i := 1; i < len(results); i++ {
+		second := results[i]
+		merged := combineSlices(result.Elem().Interface(), second.Elem().Interface())
+		result.Elem().Set(reflect.ValueOf(merged))
+	}
+	if newReducer, ok := partitioner.(view.ReducerProvider); ok {
+		reducer := newReducer.Reducer(ctx)
+		reduced := reducer.Reduce(result.Elem().Interface())
+		result.Elem().Set(reflect.ValueOf(reduced))
 	}
 
-	return stats, nil
+	values := result.Elem()
+	for i := 0; i < values.Len(); i++ {
+		value := values.Index(i).Interface()
+		if err := visitor(value); err != nil {
+			return executions, err
+		}
+	}
+	return executions, err
 }
 
 func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.ParmetrizedQuery, stats *response.SQLExecution) (*response.SQLExecution, error) {
 	if session.IncludeSQL {
 		return nil, err
 	}
-
 	aView.Logger.LogDatabaseErr(matcher.SQL, err, matcher.Args...)
 	stats.Error = err.Error()
 	return nil, fmt.Errorf("database error occured while fetching Data for view %v %w", aView.Name, err)

@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/reader/metadata"
@@ -29,10 +30,6 @@ const (
 type (
 	//Builder represent SQL Builder
 	Builder struct{}
-	Exclude struct {
-		ColumnsIn  bool
-		Pagination bool
-	}
 
 	//BatchData groups view needed to use various view.MatchStrategy
 )
@@ -43,16 +40,20 @@ func NewBuilder() *Builder {
 }
 
 // Build builds SQL Select statement
-func (b *Builder) Build(aView *view.View, statelet *view.Statelet, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.ParmetrizedQuery, error) {
-	if exclude == nil {
-		exclude = &Exclude{}
-	}
-
+func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.ParmetrizedQuery, error) {
+	options := newBuilderOptions(opts...)
+	aView := options.view
+	statelet := options.statelet
+	batchData := options.batchData
+	relation := options.relation
+	exclude := options.exclude
+	parent := options.parent
+	partitions := options.partitions
+	expander := options.expander
 	state, err := aView.Template.EvaluateSource(statelet.Template, parent, batchData, expander)
 	if err != nil {
 		return nil, err
 	}
-
 	if len(state.Filters) > 0 {
 		statelet.Filters = append(statelet.Filters, state.Filters...)
 	}
@@ -80,7 +81,7 @@ func (b *Builder) Build(aView *view.View, statelet *view.Statelet, batchData *vi
 	criteriaMeta := hasKeyword(state.Expanded, keywords.Criteria)
 	hasCriteria := criteriaMeta.has()
 
-	b.updateColumnsIn(&commonParams, aView, relation, batchData, columnsInMeta, hasCriteria, exclude)
+	b.updateColumnsIn(&commonParams, batchData, exclude)
 
 	if err = b.updatePagination(&commonParams, aView, statelet, exclude); err != nil {
 		return nil, err
@@ -88,6 +89,17 @@ func (b *Builder) Build(aView *view.View, statelet *view.Statelet, batchData *vi
 
 	if err = b.updateCriteria(&commonParams, columnsInMeta); err != nil {
 		return nil, err
+	}
+
+	if partitions != nil && partitions.Expression != "" {
+		if commonParams.WhereClause != "" {
+			commonParams.WhereClause += " AND "
+		}
+		commonParams.WhereClause += partitions.Expression
+		commonParams.WhereClause += " "
+		if len(partitions.Partitions) > 0 {
+			commonParams.WhereClauseParameters = partitions.Partition
+		}
 	}
 
 	if !hasCriteria {
@@ -119,23 +131,25 @@ func (b *Builder) Build(aView *view.View, statelet *view.Statelet, batchData *vi
 	if err != nil {
 		return nil, err
 	}
-
-	matcher := &cache.ParmetrizedQuery{
+	if partitions != nil && partitions.Table != "" && aView.Table != "" {
+		SQL = strings.ReplaceAll(SQL, aView.Table, partitions.Table)
+	}
+	parametrizedQuery := &cache.ParmetrizedQuery{
 		SQL:  SQL,
 		Args: placeholders,
 	}
 
 	if exclude.ColumnsIn && relation != nil {
-		matcher.By = shared.FirstNotEmpty(relation.Of.On[0].Field, relation.Of.On[0].Column)
-		matcher.In = batchData.ValuesBatch
+		parametrizedQuery.By = shared.FirstNotEmpty(relation.Of.On[0].Field, relation.Of.On[0].Column)
+		parametrizedQuery.In = batchData.ValuesBatch
 	}
 
 	if exclude.Pagination {
-		matcher.Offset = statelet.Offset
-		matcher.Limit = actualLimit(aView, statelet)
+		parametrizedQuery.Offset = statelet.Offset
+		parametrizedQuery.Limit = actualLimit(aView, statelet)
 	}
 
-	return matcher, err
+	return parametrizedQuery, err
 }
 
 func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector *view.Statelet) error {
@@ -242,6 +256,7 @@ func (b *Builder) updateCriteria(params *view.CriteriaParam, columnsInMeta *rese
 	}
 
 	params.WhereClause = sb.String()
+
 	return nil
 }
 
@@ -257,7 +272,7 @@ func (b *Builder) appendCriteria(sb *strings.Builder, criteria string, addAnd bo
 	}
 }
 
-func (b *Builder) updateColumnsIn(params *view.CriteriaParam, view *view.View, relation *view.Relation, batchData *view.BatchData, columnsInMeta *reservedMeta, hasCriteria bool, exclude *Exclude) {
+func (b *Builder) updateColumnsIn(params *view.CriteriaParam, batchData *view.BatchData, exclude *Exclude) {
 	if exclude.ColumnsIn {
 		return
 	}
@@ -381,38 +396,39 @@ func actualLimit(aView *view.View, selector *view.Statelet) int {
 	return aView.Selector.Limit
 }
 
-func (b *Builder) ExactMetaSQL(aView *view.View, selector *view.Statelet, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.ParmetrizedQuery, error) {
-	return b.metaSQL(aView, selector, batchData, relation, &Exclude{
+func (b *Builder) ExactMetaSQL(ctx context.Context, aView *view.View, selector *view.Statelet, batchData *view.BatchData, relation *view.Relation, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {
+	return b.metaSQL(ctx, aView, selector, batchData, relation, &Exclude{
 		Pagination: true,
 	}, parent, nil)
 }
 
-func (b *Builder) CacheMetaSQL(aView *view.View, selector *view.Statelet, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.ParmetrizedQuery, error) {
-	return b.metaSQL(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, parent, &expand.MockExpander{})
+func (b *Builder) CacheMetaSQL(ctx context.Context, aView *view.View, selector *view.Statelet, batchData *view.BatchData, relation *view.Relation, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {
+	return b.metaSQL(ctx, aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, parent, &expand.MockExpander{})
 }
 
-func (b *Builder) CacheSQL(aView *view.View, selector *view.Statelet) (*cache.ParmetrizedQuery, error) {
-	return b.CacheSQLWithOptions(aView, selector, nil, nil, nil)
+func (b *Builder) CacheSQL(ctx context.Context, aView *view.View, selector *view.Statelet) (*cache.ParmetrizedQuery, error) {
+	return b.CacheSQLWithOptions(ctx, aView, selector, nil, nil, nil)
 }
 
-func (b *Builder) CacheSQLWithOptions(aView *view.View, selector *view.Statelet, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.ParmetrizedQuery, error) {
-	return b.Build(aView, selector, batchData, relation, &Exclude{
-		ColumnsIn:  true,
-		Pagination: true,
-	}, parent, &expand.MockExpander{})
+func (b *Builder) CacheSQLWithOptions(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, relation *view.Relation, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {
+	return b.Build(ctx, WithBuilderView(aView),
+		WithBuilderStatelet(statelet),
+		WithBuilderBatchData(batchData),
+		WithBuilderRelation(relation),
+		WithBuilderExclude(true, true))
 }
 
-func (b *Builder) metaSQL(aView *view.View, selector *view.Statelet, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.ParmetrizedQuery, error) {
-	matcher, err := b.Build(aView, selector, batchData, relation, exclude, parent, expander)
+func (b *Builder) metaSQL(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.ViewContext, expander expand.Expander) (*cache.ParmetrizedQuery, error) {
+	matcher, err := b.Build(ctx, WithBuilderView(aView), WithBuilderStatelet(statelet), WithBuilderBatchData(batchData), WithBuilderRelation(relation), WithBuilderExclude(exclude.ColumnsIn, exclude.Pagination), WithBuilderParent(parent), WithBuilderExpander(expander))
 	if err != nil {
 		return nil, err
 	}
 
-	viewParam := view.AsViewParam(aView, selector, batchData)
+	viewParam := view.AsViewParam(aView, statelet, batchData)
 	viewParam.NonWindowSQL = matcher.SQL
 	viewParam.Args = matcher.Args
 
-	SQL, args, err := aView.Template.Summary.Evaluate(selector.Template, viewParam)
+	SQL, args, err := aView.Template.Summary.Evaluate(statelet.Template, viewParam)
 	if err != nil {
 		return nil, err
 	}
@@ -425,10 +441,8 @@ func (b *Builder) metaSQL(aView *view.View, selector *view.Statelet, batchData *
 	if len(args) > 0 {
 		matcher.Args = args
 	}
-
 	if relation != nil {
 		matcher.By = relation.Of.On[0].Field
 	}
-
 	return matcher, nil
 }
