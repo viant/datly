@@ -22,25 +22,25 @@ type (
 	}
 
 	Context struct {
-		Printer         *Printer           `velty:"names=logger|fmt"`
-		DataUnit        *DataUnit          `velty:"names=sql|sqlx|sequencer|criteria"`
-		Http            *Http              `velty:"names=http"`
-		ResponseBuilder *ResponseBuilder   `velty:"names=response"`
-		ViewParam       *MetaParam         `velty:"names=View"`
-		ParentParam     *MetaParam         `velty:"names=ParentView"`
-		Session         *extension.Session `velty:"names=session"`
-		Validator       *validator.Service `velty:"names=validator"`
-		MessageBus      *mbus.Service      `velty:"names=messageBus"`
-		Predicate       *Predicate         `velty:"names=predicate"`
-		Filters         predicate.Filters  `velty:"names=filters"`
+		Printer           *Printer           `velty:"names=logger|fmt"`
+		DataUnit          *DataUnit          `velty:"names=sql|sqlx|sequencer|criteria"`
+		Http              *Http              `velty:"names=http"`
+		ResponseBuilder   *ResponseBuilder   `velty:"names=response"`
+		ViewContext       *ViewContext       `velty:"names=View"`
+		ParentViewContext *ViewContext       `velty:"names=ParentView"`
+		Session           *extension.Session `velty:"names=session"`
+		Validator         *validator.Service `velty:"names=validator"`
+		MessageBus        *mbus.Service      `velty:"names=messageBus"`
+		Predicate         *Predicate         `velty:"names=predicate"`
+		Filters           predicate.Filters  `velty:"names=filters"`
 	}
 
 	StateOption func(state *State)
 )
 
-func WithViewParam(viewParam *MetaParam) StateOption {
+func WithViewParam(viewParam *ViewContext) StateOption {
 	return func(state *State) {
-		state.ViewParam = viewParam
+		state.ViewContext = viewParam
 	}
 }
 
@@ -50,9 +50,9 @@ func WithNamedVariables(variables ...*NamedVariable) StateOption {
 	}
 }
 
-func WithParentViewParam(viewParam *MetaParam) StateOption {
+func WithParentViewParam(viewParam *ViewContext) StateOption {
 	return func(state *State) {
-		state.ParentParam = viewParam
+		state.ParentViewContext = viewParam
 	}
 }
 
@@ -93,8 +93,8 @@ func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, op
 		s.Session = extension.NewSession()
 	}
 
-	if s.DataUnit == nil && s.ViewParam != nil {
-		s.DataUnit = s.ViewParam.DataUnit
+	if s.DataUnit == nil && s.ViewContext != nil {
+		s.DataUnit = s.ViewContext.DataUnit
 	}
 
 	if s.DataUnit == nil {
