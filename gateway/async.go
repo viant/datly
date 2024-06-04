@@ -8,6 +8,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/xdatly/handler/async"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,8 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 	if s.Config.MaxJobs > 0 {
 		limiter = make(chan bool, s.Config.MaxJobs)
 	}
+	pending := make(map[string]bool)
+	var mux sync.RWMutex
 	for {
 		objects, _ := s.fs.List(ctx, s.Config.JobURL, option.NewRecursive(true))
 		objectCount := 0
@@ -37,6 +40,16 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 			if object.IsDir() {
 				continue
 			}
+			mux.RLock()
+			isPending := pending[object.URL()]
+			mux.RUnlock()
+			if isPending {
+				continue
+			}
+			mux.Lock()
+			pending[object.URL()] = true
+			mux.Unlock()
+
 			if limiter != nil {
 				limiter <- true
 			}
@@ -46,6 +59,9 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 					if limiter != nil {
 						<-limiter
 					}
+					mux.Lock()
+					delete(pending, object.URL())
+					mux.Unlock()
 				}()
 				router, _ := s.Router()
 				if router != nil {
