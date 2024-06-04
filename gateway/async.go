@@ -8,7 +8,6 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/xdatly/handler/async"
 	"log"
-	"sync"
 	"time"
 )
 
@@ -34,7 +33,6 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 			continue
 		}
 
-		wg := sync.WaitGroup{}
 		for i, object := range objects {
 			if object.IsDir() {
 				continue
@@ -42,10 +40,9 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 			if limiter != nil {
 				limiter <- true
 			}
-			wg.Add(1)
+
 			go func(object storage.Object) {
 				defer func() {
-					wg.Done()
 					if limiter != nil {
 						<-limiter
 					}
@@ -62,6 +59,7 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 						destURL := url.Join(s.Config.FailedJobURL, time.Now().Format("20060102"), object.Name())
 						err = fs.Move(ctx, object.URL(), destURL)
 					}
+
 					if err != nil {
 						log.Println(err)
 					}
@@ -71,7 +69,7 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 				}
 			}(objects[i])
 		}
-		wg.Wait()
+
 	}
 }
 
