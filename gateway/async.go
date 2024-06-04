@@ -75,7 +75,6 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 						destURL := url.Join(s.Config.FailedJobURL, time.Now().Format("20060102"), object.Name())
 						err = fs.Move(ctx, object.URL(), destURL)
 					}
-
 					if err != nil {
 						log.Println(err)
 					}
