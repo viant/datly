@@ -83,8 +83,10 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 					log.Println("router was nil")
 				}
 			}(objects[i])
+
 		}
 
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
