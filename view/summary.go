@@ -211,6 +211,15 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 				aTag.View = &tags.View{}
 			}
 			aTag.View.Batch = aBatch.Size
+
+		}
+		if partitioned := rel.Of.View.Partitioned; partitioned != nil {
+			if aTag.View == nil {
+				aTag.View = &tags.View{}
+			}
+			aTag.View.PartitionerType = partitioned.DataType
+			aTag.View.PartitionedConcurrency = partitioned.Concurrency
+
 		}
 		holderConnector := v.Connector
 		if connector := rel.Of.Connector; connector != nil {

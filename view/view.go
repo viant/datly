@@ -419,6 +419,9 @@ func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option
 		if vTag.Batch > 0 {
 			options = append(options, WithBatchSize(vTag.Batch))
 		}
+		if vTag.PartitionerType != "" {
+			options = append(options, WithPartitioned(&Partitioned{DataType: vTag.PartitionerType, Concurrency: vTag.PartitionedConcurrency}))
+		}
 		for _, name := range vTag.Parameters {
 			parameters = append(parameters, state.NewRefParameter(name))
 		}

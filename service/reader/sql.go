@@ -44,13 +44,14 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	options := newBuilderOptions(opts...)
 	aView := options.view
 	statelet := options.statelet
-	batchData := options.batchData
+	batchData := *options.batchData
 	relation := options.relation
 	exclude := options.exclude
 	parent := options.parent
 	partitions := options.partitions
 	expander := options.expander
-	state, err := aView.Template.EvaluateSource(statelet.Template, parent, batchData, expander)
+	state, err := aView.Template.EvaluateSource(statelet.Template, parent, &batchData, expander)
+
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +82,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	criteriaMeta := hasKeyword(state.Expanded, keywords.Criteria)
 	hasCriteria := criteriaMeta.has()
 
-	b.updateColumnsIn(&commonParams, batchData, exclude)
+	b.updateColumnsIn(&commonParams, &batchData, exclude)
 
 	if err = b.updatePagination(&commonParams, aView, statelet, exclude); err != nil {
 		return nil, err
@@ -99,6 +100,8 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 		commonParams.WhereClause += " "
 		if len(partitions.Partitions) > 0 {
 			commonParams.WhereClauseParameters = partitions.Partition
+		} else {
+			fmt.Printf("No partitions found for %v\n", aView.Name)
 		}
 	}
 
@@ -127,7 +130,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 
 	var placeholders []interface{}
 
-	SQL, err := aView.Expand(&placeholders, sb.String(), statelet, commonParams, batchData, state.DataUnit)
+	SQL, err := aView.Expand(&placeholders, sb.String(), statelet, commonParams, &batchData, state.DataUnit)
 	if err != nil {
 		return nil, err
 	}

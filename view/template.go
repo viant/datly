@@ -419,14 +419,15 @@ func (t *Template) replacementEntry(key string, params CriteriaParam, selector *
 		criteria := selector.Criteria
 		return key, criteria, nil
 	default:
-		if strings.HasPrefix(key, keywords.WherePrefix) {
-			if len(params.WhereClauseParameters) > 0 {
-				for i := range params.WhereClauseParameters {
-					if _, err := sanitized.Add(0, params.WhereClauseParameters[i]); err != nil {
-						return "", "", err
-					}
+		if len(params.WhereClauseParameters) > 0 {
+			for i := range params.WhereClauseParameters {
+				if _, err := sanitized.Add(0, params.WhereClauseParameters[i]); err != nil {
+					return "", "", err
 				}
 			}
+			params.WhereClauseParameters = nil
+		}
+		if strings.HasPrefix(key, keywords.WherePrefix) {
 			_, aValue, err := t.replacementEntry(key[len(keywords.WherePrefix):], params, selector, batchData, placeholders, sanitized)
 			if err != nil {
 				return "", "", err

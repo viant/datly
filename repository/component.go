@@ -426,6 +426,10 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 				vOptions = append(vOptions, view.WithBatchSize(aTag.View.Batch))
 			}
 
+			if aTag.View.PartitionerType != "" {
+				vOptions = append(vOptions, view.WithPartitioned(&view.Partitioned{DataType: aTag.View.PartitionerType, Concurrency: aTag.View.PartitionedConcurrency}))
+			}
+
 			vOptions = append(vOptions, view.WithFS(c.embedFs))
 		}
 		vOptions = append(vOptions, view.WithResource(resource))

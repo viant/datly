@@ -33,8 +33,14 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 
 		aTag.SQL = tags.NewViewSQL(c.View.Template.Source, "")
 		aTag.View = &tags.View{Name: c.View.Name}
-		if c.View != nil && c.View.Batch != nil {
-			aTag.View.Batch = c.View.Batch.Size
+		if c.View != nil {
+			if c.View.Batch != nil {
+				aTag.View.Batch = c.View.Batch.Size
+			}
+			if c.View.Partitioned != nil {
+				aTag.View.PartitionedConcurrency = c.View.Partitioned.Concurrency
+				aTag.View.PartitionerType = c.View.Partitioned.DataType
+			}
 		}
 		if tmpl := c.View.Template; tmpl != nil && tmpl.Summary != nil {
 			aTag.SummarySQL = tags.ViewSQLSummary(tags.NewViewSQL(tmpl.Summary.Source, ""))

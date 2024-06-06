@@ -488,7 +488,6 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 	partitioner := partitioned.Partitioner()
 	wg := &sync.WaitGroup{}
 	partitions := partitioner.Partitions(ctx, db, aView)
-
 	repeat := max(1, len(partitions.Partitions))
 	var executions []*response.SQLExecution
 	var mux sync.Mutex
@@ -501,16 +500,21 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 		clone := *partitions
 		wg.Add(1)
 		rateLimit <- true
-		go func(i int, partitions *view.Partitions) {
+		go func(index int, partitions *view.Partitions) {
 			defer func() {
 				wg.Done()
 				<-rateLimit
 			}()
-			if i < len(partitions.Partitions) {
-				partitions.Partition = partitions.Partitions[i]
+			if index < len(partitions.Partitions) {
+				partitions.Partition = partitions.Partitions[index]
 			}
-			parametrizedSQL, columnInMatcher, err := s.buildParametrizedSQL(ctx, aView, selector, batchData, collector, session, partitions)
+			parametrizedSQL, columnInMatcher, e := s.buildParametrizedSQL(ctx, aView, selector, batchData, collector, session, partitions)
 			readData := 0
+			if e != nil {
+				err = e
+				fmt.Printf("error: %v\n", err)
+				return
+			}
 			localSlice := reflect.New(aView.Schema.SliceType())
 			slicePtr := unsafe.Pointer(localSlice.Pointer())
 			appender := xSlice.Appender(slicePtr)
@@ -541,10 +545,12 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 				results = append(results, &localSlice)
 			}
 		}(i, &clone)
+		if err != nil {
+			break
+		}
 	}
 	wg.Wait()
-
-	if len(results) == 0 {
+	if len(results) == 0 || err != nil {
 		return executions, err
 	}
 	result := results[0]
