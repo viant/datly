@@ -697,12 +697,16 @@ func (v *View) initView(ctx context.Context) error {
 			if partitionerType.Kind() == reflect.Ptr {
 				partitionerType = partitionerType.Elem()
 			}
-			candidate := reflect.New(partitionerType).Interface()
-			partitioner, ok := candidate.(Partitioner)
-			if !ok {
-				return fmt.Errorf("failed to create partitioner: %T, expected: view.Partitioner", candidate)
+			if partitionerType.Name() != "" {
+				candidate := reflect.New(partitionerType).Interface()
+				partitioner, ok := candidate.(Partitioner)
+				if !ok {
+					return fmt.Errorf("failed to create partitioner: %T, expected: view.Partitioner", candidate)
+				}
+				partitioned.partitioner = partitioner
+			} else {
+				fmt.Printf("skipping partitioner for %v - inlined type\n", v.Name)
 			}
-			partitioned.partitioner = partitioner
 		}
 	}
 	return nil
