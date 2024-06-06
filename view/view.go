@@ -694,9 +694,13 @@ func (v *View) initView(ctx context.Context) error {
 			if partitionerType == nil {
 				partitionerType = v.Schema.CompType()
 			}
-			partitioner, ok := reflect.New(partitionerType).Interface().(Partitioner)
+			if partitionerType.Kind() == reflect.Ptr {
+				partitionerType = partitionerType.Elem()
+			}
+			candidate := reflect.New(partitionerType).Interface()
+			partitioner, ok := candidate.(Partitioner)
 			if !ok {
-				return fmt.Errorf("failed to create partitioner: %T", partitioner)
+				return fmt.Errorf("failed to create partitioner: %T, expected: view.Partitioner", candidate)
 			}
 			partitioned.partitioner = partitioner
 		}
