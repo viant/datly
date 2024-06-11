@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/xdatly/handler/async"
+	"time"
 )
 
 func (s *Service) runQuery(ctx context.Context, component *repository.Component, aSession *session.Session) (interface{}, error) {
@@ -18,10 +19,11 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 		reader.WithIncludeSQL(true),
 		reader.WithCacheDisabled(false),
 	}
+	startTime := time.Now()
 	s.adjustAsyncOptions(ctx, aSession, component.View, &options)
 	response := readerHandler.Handle(ctx, component.View, aSession, options...)
 	setting := aSession.State().QuerySettings(component.View)
-	if err := s.updateJobStatusDone(ctx, component, response, setting.SyncFlag); err != nil {
+	if err := s.updateJobStatusDone(ctx, component, response, setting.SyncFlag, startTime); err != nil {
 		return nil, err
 	}
 	return response.Output, response.Error
@@ -36,10 +38,10 @@ func (s *Service) adjustAsyncOptions(ctx context.Context, aSession *session.Sess
 		} else if async.Status(job.Status) != async.StatusDone {
 			//Make sure not actual database is used
 			setting := aSession.State().QuerySettings(aView)
-			if !setting.SyncFlag { //sync flag would perform regular read
-				*options = append(*options, reader.WithDryRun())
-			} else {
+			if setting.SyncFlag { //sync flag would perform regular read
 				*options = append(*options, reader.WithCacheRefresh())
+			} else {
+				*options = append(*options, reader.WithDryRun())
 			}
 		}
 	}

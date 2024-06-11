@@ -20,7 +20,7 @@ func (s *Service) IsEventInvocation(ctx context.Context) bool {
 	return invocation == async.InvocationTypeEvent
 }
 
-func (s *Service) updateJobStatusRunning(ctx context.Context, component *repository.Component) error {
+func (s *Service) updateBackgroundJob(ctx context.Context, component *repository.Component) error {
 	if !s.IsEventInvocation(ctx) {
 		return nil
 	}
@@ -32,7 +32,7 @@ func (s *Service) updateJobStatusRunning(ctx context.Context, component *reposit
 	return component.Async.UpdateJob(ctx, job)
 }
 
-func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repository.Component, response *handler.Response, syncFlag bool) error {
+func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repository.Component, response *handler.Response, syncFlag bool, startTime time.Time) error {
 	if !s.IsEventInvocation(ctx) && !syncFlag {
 		return nil
 	}
@@ -40,6 +40,9 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	job := s.Job(ctx)
 	job.Status = string(async.StatusDone)
 
+	if job.StartTime == nil || syncFlag {
+		job.StartTime = &startTime
+	}
 	var expiryTime time.Time
 	endedAt := time.Now()
 	job.EndTime = &endedAt

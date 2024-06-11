@@ -35,7 +35,7 @@ type Service struct {
 
 // Operate processes data component with data session
 func (s *Service) Operate(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (interface{}, error) {
-	if err := s.updateJobStatusRunning(ctx, aComponent); err != nil {
+	if err := s.updateBackgroundJob(ctx, aComponent); err != nil {
 		return nil, err
 	}
 	result, err := s.operate(ctx, aComponent, aSession)
