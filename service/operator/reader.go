@@ -20,7 +20,8 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 	}
 	s.adjustAsyncOptions(ctx, aSession, component.View, &options)
 	response := readerHandler.Handle(ctx, component.View, aSession, options...)
-	if err := s.updateJobStatusDone(ctx, component, response); err != nil {
+	setting := aSession.State().QuerySettings(component.View)
+	if err := s.updateJobStatusDone(ctx, component, response, setting.SyncFlag); err != nil {
 		return nil, err
 	}
 	return response.Output, response.Error
@@ -37,6 +38,8 @@ func (s *Service) adjustAsyncOptions(ctx context.Context, aSession *session.Sess
 			setting := aSession.State().QuerySettings(aView)
 			if !setting.SyncFlag { //sync flag would perform regular read
 				*options = append(*options, reader.WithDryRun())
+			} else {
+				*options = append(*options, reader.WithCacheRefresh())
 			}
 		}
 	}

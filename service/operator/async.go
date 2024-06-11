@@ -32,10 +32,11 @@ func (s *Service) updateJobStatusRunning(ctx context.Context, component *reposit
 	return component.Async.UpdateJob(ctx, job)
 }
 
-func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repository.Component, response *handler.Response) error {
-	if !s.IsEventInvocation(ctx) {
+func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repository.Component, response *handler.Response, syncFlag bool) error {
+	if !s.IsEventInvocation(ctx) && !syncFlag {
 		return nil
 	}
+
 	job := s.Job(ctx)
 	job.Status = string(async.StatusDone)
 

@@ -125,7 +125,10 @@ func (u *TimeDiff) Value(ctx context.Context, raw interface{}, options ...codec.
 	case "day":
 		fromDays := normalizedDays(from)
 		toDays := normalizedDays(to)
-		return fromDays - toDays, nil
+		if fromDays < toDays {
+			return 0, nil
+		}
+		return (fromDays - toDays) + 1, nil
 	}
 	return 0, nil
 

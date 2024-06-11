@@ -17,7 +17,7 @@ const Encode = "Encode"
 type (
 	EncodeFactory struct {
 	}
-
+	//Encode,*Location,/,Country,Region,City
 	Encoder struct {
 		dstType   reflect.Type
 		aSlice    *xunsafe.Slice
