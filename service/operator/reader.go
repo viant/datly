@@ -32,12 +32,12 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 // adjustAsyncOptions function adjust reading option to dryRun when asyb job is scheduled but not yet completed
 func (s *Service) adjustAsyncOptions(ctx context.Context, aSession *session.Session, aView *view.View, options *[]reader.Option) {
 	if job := s.Job(ctx); job != nil {
+		setting := aSession.State().QuerySettings(aView)
 		if s.IsEventInvocation(ctx) {
 			//Makes sure cache is always refreshed
 			*options = append(*options, reader.WithCacheRefresh())
-		} else if async.Status(job.Status) != async.StatusDone {
+		} else if async.Status(job.Status) != async.StatusDone || setting.SyncFlag {
 			//Make sure not actual database is used
-			setting := aSession.State().QuerySettings(aView)
 			if setting.SyncFlag { //sync flag would perform regular read
 				*options = append(*options, reader.WithCacheRefresh())
 			} else {
