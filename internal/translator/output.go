@@ -99,7 +99,7 @@ func (s *Service) updateOutputFieldTypes(resource *Resource) {
 	}
 }
 
-func (s *Service) updateCodecParamters(ctx context.Context, resource *Resource) error {
+func (s *Service) updateCodecParameters(ctx context.Context, resource *Resource) error {
 	parameters := resource.State
 	if err := resource.ensurePathParametersSchema(ctx, parameters); err != nil {
 		return err
@@ -187,6 +187,14 @@ func (s *Service) updateOutputParameterSchema(parameter *state.Parameter, typesR
 }
 
 func (s *Service) adjustParameterSetting(resource *Resource, parameter *state.Parameter, types *xreflect.Types) (err error) {
+
+	if parameter.Schema != nil && parameter.Schema.Package == "" {
+		parameter.Schema.Package = resource.TypePackage(parameter.Schema.TypeName())
+	}
+	if parameter.Output != nil && parameter.Output.Schema != nil && parameter.Output.Schema.Package == "" {
+		parameter.Output.Schema.Package = resource.TypePackage(parameter.Output.Schema.TypeName())
+	}
+
 	if len(parameter.Repeated) > 0 {
 		for _, repeated := range parameter.Repeated {
 			if err = s.adjustParameterSetting(resource, repeated, types); err != nil {
@@ -311,20 +319,23 @@ func (s *Service) adjustCodecType(parameter *state.Parameter, types *xreflect.Ty
 		}
 	}
 
+	if parameter.Output != nil && parameter.Output.Schema != nil && parameter.Output.Schema.Package == "" {
+		parameter.Output.Schema.Package = resource.TypePackage(parameter.Output.Schema.TypeName())
+	}
 	return nil
 }
 
-func (s *Service) splitPkgType(text string) (string, string) {
-	var name, pkg string
-	starIdx := strings.Index(text, "*")
+func (s *Service) splitPkgType(name string) (string, string) {
+	var pkg string
+	starIdx := strings.Index(name, "*")
 	if starIdx != -1 {
-		text = text[starIdx+1:]
+		name = name[starIdx+1:]
 	}
 
-	if idx := strings.Index(text, "."); idx != -1 {
-		pkg = text[:idx]
-		if idx < len(text)-1 {
-			name = text[idx+1:]
+	if idx := strings.Index(name, "."); idx != -1 {
+		pkg = name[:idx]
+		if idx < len(name)-1 {
+			name = name[idx+1:]
 		}
 	}
 

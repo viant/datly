@@ -178,7 +178,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 	resource.Rule.Root = aQuery.From.Alias
-	if err = s.updateCodecParamters(ctx, resource); err != nil {
+	if err = s.updateCodecParameters(ctx, resource); err != nil {
 		return err
 	}
 	if err = resource.Rule.Viewlets.Init(ctx, aQuery, resource, s.initReaderViewlet, s.buildQueryViewletType); err != nil {
