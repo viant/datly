@@ -36,10 +36,11 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	if !s.IsEventInvocation(ctx) && !syncFlag {
 		return nil
 	}
-
 	job := s.Job(ctx)
+	if job == nil {
+		return nil
+	}
 	job.Status = string(async.StatusDone)
-
 	if job.StartTime == nil || syncFlag {
 		job.StartTime = &startTime
 	}
