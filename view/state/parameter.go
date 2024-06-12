@@ -492,21 +492,12 @@ func (p *Parameter) initCodec(resource Resource) error {
 	if p.Output.Schema == nil {
 		return nil
 	}
-	rType := p.Output.Schema.Type()
 
-	if rType.Kind() == reflect.Slice {
-		rType = rType.Elem()
-	}
-	if rType.Kind() == reflect.Ptr {
-		rType = rType.Elem()
-	}
-	if rType.Kind() == reflect.Struct {
-		if rType.Name() == "" && p.Output.Schema.Name != "" {
-			fieldTag := reflect.StructTag(p.Tag)
-			if stateTag, _ := tags.ParseStateTags(fieldTag, nil); stateTag != nil {
-				stateTag.TypeName = SanitizeTypeName(p.Output.Schema.Name)
-				p.Tag = string(stateTag.UpdateTag(fieldTag))
-			}
+	if !p.Output.Schema.IsNamed() {
+		fieldTag := reflect.StructTag(p.Tag)
+		if stateTag, _ := tags.ParseStateTags(fieldTag, nil); stateTag != nil {
+			stateTag.TypeName = SanitizeTypeName(p.Output.Schema.Name)
+			p.Tag = string(stateTag.UpdateTag(fieldTag))
 		}
 	}
 	return nil

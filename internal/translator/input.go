@@ -78,6 +78,9 @@ func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type,
 	var typeDefs []*view.TypeDefinition
 	var markerField *reflect.StructField
 	for _, parameter := range aType.Parameters {
+		if parameter.Schema.DataType != "" {
+			continue
+		}
 		aStructField, ok := sType.FieldByName(parameter.Name)
 		if !ok {
 			return

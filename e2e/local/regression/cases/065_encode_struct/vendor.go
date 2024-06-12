@@ -1,4 +1,4 @@
-package _65_encode_struct
+package encode_struct
 
 type VendorIds struct {
 	ID          int `sqlx:"column=ID"`

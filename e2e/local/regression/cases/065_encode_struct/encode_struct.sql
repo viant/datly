@@ -4,7 +4,7 @@ import (
    "regression/cases/065_encode_struct.VendorIds"
 )
 
-#set($_ = $IDs<[]string>(query/ids).WithCodec("Encode", "*VendorIds", "/" , "ID", "AccountID", "UserCreated").WithPredicate(0, "multi_in", "t"))
+#set($_ = $IDs<[]string>(query/ids).WithCodec("Encode", "*encode_struct.VendorIds", "/" , "ID", "AccountID", "UserCreated").WithPredicate(0, "multi_in", "t"))
 SELECT vendor.*
 FROM (
         SELECT * FROM VENDOR t

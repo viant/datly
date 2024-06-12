@@ -640,12 +640,14 @@ func (r *Resource) updatedObject(loadType func(typeName string) (reflect.Type, e
 
 func NewResource(rule *options.Rule, repository *options.Repository, messages *msg.Messages) *Resource {
 	ret := &Resource{Rule: NewRule(), rule: rule, repository: repository, messages: messages, typePackages: map[string]string{}}
-	ret.ensureRegistry()
+	ret.typeRegistry = xreflect.NewTypes(xreflect.WithPackagePath(rule.ModuleLocation), xreflect.WithRegistry(extension.Config.Types))
+	types := xreflect.NewTypes(
+		xreflect.WithRegistry(ret.typeRegistry),
+		xreflect.WithPackagePath(rule.ModuleLocation))
+	ret.Resource.SetTypes(types)
 
 	ret.Rule.Output = &ret.Rule.Route.Output
-	ret.Resource.SetTypes(xreflect.NewTypes(
-		xreflect.WithRegistry(extension.Config.Types),
-		xreflect.WithPackagePath(rule.ModuleLocation)))
+
 	return ret
 }
 

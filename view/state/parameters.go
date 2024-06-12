@@ -378,10 +378,6 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 		return structField, markerField, fmt.Errorf("invalid parameter: %v schema was empty", p.Name)
 	}
 	rType := schema.Type()
-	dt := schema.DataType
-	if dt == "" {
-		dt = schema.Name
-	}
 	if rType == nil {
 		rType, err = types.LookupType(lookupType, schema.DataType, xreflect.WithPackage(schema.Package))
 		if err != nil {
@@ -390,6 +386,7 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 				return structField, markerField, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", p.Name, schema.TypeName(), err)
 			}
 		}
+		schema.rType = rType
 	}
 	fieldName := p.Name
 	p.Schema.Cardinality = schema.Cardinality

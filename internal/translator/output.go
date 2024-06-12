@@ -284,11 +284,14 @@ func (s *Service) adjustCodecType(parameter *state.Parameter, types *xreflect.Ty
 		if len(output.Args) == 0 {
 			return fmt.Errorf("%v invalid arguments count", output.Name)
 		}
-		destTypeName := output.Args[0]
 		if output.Schema == nil {
 			output.Schema = &state.Schema{}
 		}
-		output.Schema.Name = destTypeName
+		name, pkg := s.splitPkgType(output.Args[0])
+		output.Schema.Name = name
+		output.Schema.Package = pkg
+		output.Schema.DataType = name
+		output.Schema.Cardinality = parameter.Schema.Cardinality
 	case codec.KeyFirebaseAuth:
 		if len(output.Args) < 2 {
 			return fmt.Errorf("%v invalid arguments count", output.Name)
@@ -309,6 +312,26 @@ func (s *Service) adjustCodecType(parameter *state.Parameter, types *xreflect.Ty
 	}
 
 	return nil
+}
+
+func (s *Service) splitPkgType(text string) (string, string) {
+	var name, pkg string
+	starIdx := strings.Index(text, "*")
+	if starIdx != -1 {
+		text = text[starIdx+1:]
+	}
+
+	if idx := strings.Index(text, "."); idx != -1 {
+		pkg = text[:idx]
+		if idx < len(text)-1 {
+			name = text[idx+1:]
+		}
+	}
+
+	if starIdx != -1 {
+		name = "*" + name
+	}
+	return name, pkg
 }
 
 func (s *Service) adjustTransferCodecOutput(parameter *state.Parameter, typesRegistry *xreflect.Types, resource *Resource, output *state.Codec) (err error) {
