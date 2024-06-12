@@ -242,8 +242,11 @@ func (s *Service) ensureAsyncContext(ctx context.Context, aSession *session.Sess
 		if err = asyncModule.CreateJob(ctx, job, &asyncModule.Notification); err != nil {
 			return nil, err
 		}
-		if err = s.publishEvent(ctx, asyncModule, job); err != nil {
-			return nil, err
+		settings := aSession.State().QuerySettings(aComponent.View)
+		if settings != nil && !settings.SyncFlag {
+			if err = s.publishEvent(ctx, asyncModule, job); err != nil {
+				return nil, err
+			}
 		}
 	}
 	info.AppendJob(job)
