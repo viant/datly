@@ -299,7 +299,9 @@ func (s *Service) adjustCodecType(parameter *state.Parameter, types *xreflect.Ty
 		output.Schema.Name = name
 		output.Schema.Package = pkg
 		output.Schema.DataType = name
-		output.Schema.Cardinality = parameter.Schema.Cardinality
+		if parameter.Schema.Cardinality == state.Many {
+			output.Schema.Cardinality = parameter.Schema.Cardinality
+		}
 	case codec.KeyFirebaseAuth:
 		if len(output.Args) < 2 {
 			return fmt.Errorf("%v invalid arguments count", output.Name)

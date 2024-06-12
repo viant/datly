@@ -239,7 +239,9 @@ func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Param
 		lookupType = extension.Config.Types.Lookup
 	}
 	rawType := field.Type
+	isSlice := false
 	if rawType.Kind() == reflect.Slice {
+		isSlice = true
 		rawType = rawType.Elem()
 	}
 	if rawType.Kind() == reflect.Ptr {
@@ -248,10 +250,16 @@ func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Param
 	rawName := rawType.Name()
 	if pTag.DataType != "" {
 		result.Schema = &Schema{Name: pTag.DataType}
+		if isSlice {
+			result.Schema.Cardinality = Many
+		}
 		if result.Output == nil {
 			result.Schema.SetType(field.Type)
 		} else if result.Output.Schema == nil {
 			result.Output.Schema = &Schema{}
+			if isSlice {
+				result.Output.Schema.Cardinality = Many
+			}
 			result.Output.Schema.SetType(field.Type)
 			setter.SetStringIfEmpty(&result.Output.Schema.DataType, rawName)
 		}
