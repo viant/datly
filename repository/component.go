@@ -361,13 +361,16 @@ func WithOutputCaseFormat(format string) ComponentOption {
 	}
 }
 
-func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) ComponentOption {
+func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOptions ...view.Option) ComponentOption {
 	return func(c *Component) error {
 		if outputType == nil {
 			outputType = reflect.TypeOf(struct{}{})
 		}
 		c.embedFs = embedFs
 		resource := c.View.Resource()
+		for _, opt := range viewOptions {
+			opt(c.View)
+		}
 		sType, err := state.NewType(state.WithResource(resource), state.WithFS(embedFs), state.WithSchema(state.NewSchema(inputType)))
 		if err != nil {
 			return err
