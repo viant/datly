@@ -51,6 +51,11 @@ type (
 	}
 )
 
+func (r *Resource) TypePackage(name string) string {
+	name = strings.Replace(name, "*", "", 1)
+	return r.typePackages[name]
+}
+
 func (r *Resource) GetURI() string {
 	if r.rule.ModulePrefix == "" {
 		return r.Rule.URI
