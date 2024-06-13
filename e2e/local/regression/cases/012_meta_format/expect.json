@@ -10,13 +10,11 @@
         {
           "id": 1,
           "name": "V1 Product 1",
-          "status": 2,
           "userCreated": 1
         },
         {
           "id": 2,
           "name": "V1 Product 2",
-          "status": 1,
           "userCreated": 1
         }
       ],

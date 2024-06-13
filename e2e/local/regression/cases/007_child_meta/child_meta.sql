@@ -1,8 +1,12 @@
 /* {"URI":"meta/vendors-nested/"} */
-SELECT vendor.* /* {"Style":"Comprehensive", "Field":"Data"}  */,
+
+#set( $_ = $Meta<?>(output/summary))
+#set( $_ = $Data<?>(output/view))
+#set( $_ = $Status<?>(output/status).WithTag('anonymous:"true"'))
+
+SELECT vendor.*,
        products.* EXCEPT VENDOR_ID,
-       Meta.* /* {"Kind": "record"} */,
-       ProductsMeta.* EXCEPT VENDOR_ID /* {"Kind": "record"} */
+       ProductsMeta.* EXCEPT VENDOR_ID
 FROM (SELECT t.* FROM VENDOR t WHERE 1=1  ) vendor
     JOIN (SELECT * FROM PRODUCT t) products /* {"Cache": {
          "Name": "aerospike",

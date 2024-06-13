@@ -2,11 +2,12 @@
 
 #set( $_ = $VendorId<[]int>(query/ids).WithPredicate(0,'in','t','id').Optional())
 #set( $_ = $VendorName<string>(query/name).WithPredicate(0,'equal','t','id').Optional())
+#set( $_ = $Meta<?>(output/summary))
+#set( $_ = $Data<?>(output/view))
+#set( $_ = $Status<?>(output/status).WithTag('anonymous:"true"'))
 
-
-SELECT vendor.* /* {"Style":"Comprehensive", "Field":"Data"}  */,
-       products.* EXCEPT VENDOR_ID,
-       Meta.* /* {"Kind": "record"} */
+SELECT vendor.*,
+       products.* EXCEPT VENDOR_ID
 FROM (SELECT t.* FROM VENDOR t WHERE 1=1
                     ${predicate.Builder().CombineOr(
                          $predicate.FilterGroup(0, "AND")

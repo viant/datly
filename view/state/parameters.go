@@ -188,14 +188,14 @@ func (p Parameters) Groups() []Parameters {
 		}
 	}
 
-	if len(body) > 0 {
-		result = append(result, body)
-	}
 	if len(unAuthorizedParameters) > 0 {
 		result = append(result, unAuthorizedParameters)
 	}
 	if len(forbiddenParameters) > 0 {
 		result = append(result, forbiddenParameters)
+	}
+	if len(body) > 0 {
+		result = append(result, body)
 	}
 	if len(external) > 0 {
 		result = append(result, external)

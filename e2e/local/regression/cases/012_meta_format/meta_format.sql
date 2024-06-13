@@ -1,10 +1,15 @@
 /* {"URI":"meta/vendors-format/"} */
-SELECT vendor.* /* {"Style":"Comprehensive", "Field":"Data"}  */,
+
+#set( $_ = $Meta<?>(output/summary))
+#set( $_ = $Data<?>(output/view))
+#set( $_ = $Status<?>(output/status).WithTag('anonymous:"true"'))
+
+SELECT vendor.*,
        products.* EXCEPT VENDOR_ID,
-       Meta.* /* {"Kind": "record"} */,
-       products_meta.* EXCEPT VENDOR_ID /* {"Kind": "record"} */
+       products_meta.* EXCEPT VENDOR_ID,
+       allow_nulls(products)
 FROM (SELECT t.* FROM VENDOR t WHERE 1=1  ) vendor
-    JOIN (SELECT * FROM PRODUCT t) products /* { "AllowNulls": true } */
+    JOIN (SELECT * FROM PRODUCT t) products
     ON products.VENDOR_ID = vendor.ID
     JOIN (SELECT   CAST(1 + (COUNT(1) / $View.Limit) AS SIGNED)  AS PAGE_CNT, COUNT(1) AS CNT
     FROM ($View.vendor.SQL)  t ) AS Meta ON 1=1

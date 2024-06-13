@@ -1,13 +1,14 @@
-/* {"URI": "comprehensive/parameters-order", "Method": "POST", "ResponseBody": {
-        "From": "Events"
-   },
-   "Field": "Data" } */
+/* {"URI": "comprehensive/parameters-order", "Method": "POST"} */
 
 
 import (
 	"regression/cases/040_parameters_order.Events"
 	"regression/cases/040_parameters_order.Data"
 )
+
+
+#set($_ = $Data<*Events>(body/Data).Output())
+#set($_ = $Status<?>(output/status).WithTag('anonymous:"true"'))
 
 #set($_ = $Events<*Events>(body/Data))
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
@@ -21,6 +22,7 @@ import (
     WHERE Authorized
 
 */)
+
 
 $sequencer.Allocate("EVENTS", $Events, "Id")
 #if($Unsafe.Events)
