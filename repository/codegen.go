@@ -55,6 +55,7 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 	setter.SetStringIfEmpty(&statePkg, "state")
 	inPackageComponentTypes := indexComponentPackageTypes(c, statePkg)
 	packagedTypes := c.buildDependencyTypes(inPackageComponentTypes, importModules)
+
 	componentName := state.SanitizeTypeName(c.View.Name)
 	embedURI := text.CaseFormatUpperCamel.Format(componentName, text.CaseFormatLowerUnderscore)
 	var options = []xreflect.Option{
@@ -69,6 +70,7 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 		}),
 		xreflect.WithOnStructField(c.adjustStructField(embedURI, embeds, withEmbed)),
 		xreflect.WithImportModule(importModules),
+		xreflect.WithImports([]string{"github.com/viant/datly/view"}),
 		xreflect.WithRegistry(c.types),
 	}
 
