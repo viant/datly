@@ -7,7 +7,7 @@ func Define${Name}Component(ctx context.Context, srv *datly.Service) error {
 	    repository.WithResource(srv.Resource()),$WithNamedResource
 		repository.WithContract(
 		    reflect.TypeOf(${Name}Input{}),
-		    reflect.TypeOf(${Name}Output{}), &${Name}FS))
+		    reflect.TypeOf(${Name}Output{}), &${Name}FS${WithConnector}))
 
 	if err != nil {
 		return fmt.Errorf("failed to create ${Name} component: %w",err)

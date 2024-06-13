@@ -73,6 +73,7 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 	}
 
 	replacer := data.NewMap()
+	replacer.Put("WithConnector", fmt.Sprintf(`,view.WithConnectorRef("%s")"`, c.View.Connector.Name))
 	replacer.Put("Name", componentName)
 	replacer.Put("URI", c.URI)
 	replacer.Put("Method", c.Method)
