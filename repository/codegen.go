@@ -95,6 +95,8 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 		options = append(options,
 			xreflect.WithImports(append(c.generatorImports(c.Contract.ModulePath), "github.com/viant/datly/view")),
 			xreflect.WithSnippetAfter(defineComponentFunc))
+	} else {
+		replacer.Put("WithConnector", "")
 	}
 	if snippetBefore != "" {
 		options = append(options, xreflect.WithSnippetBefore(snippetBefore))
