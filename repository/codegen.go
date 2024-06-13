@@ -70,7 +70,6 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 		}),
 		xreflect.WithOnStructField(c.adjustStructField(embedURI, embeds, withEmbed)),
 		xreflect.WithImportModule(importModules),
-		xreflect.WithImports([]string{"github.com/viant/datly/view"}),
 		xreflect.WithRegistry(c.types),
 	}
 
@@ -94,7 +93,7 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 		defineComponentFunc := replacer.ExpandAsText(contractInit)
 		snippetBefore += c.embedTemplate(embedURI, componentName)
 		options = append(options,
-			xreflect.WithImports(c.generatorImports(c.Contract.ModulePath)),
+			xreflect.WithImports(append(c.generatorImports(c.Contract.ModulePath), "github.com/viant/datly/view")),
 			xreflect.WithSnippetAfter(defineComponentFunc))
 	}
 	if snippetBefore != "" {
