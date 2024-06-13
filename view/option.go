@@ -111,6 +111,14 @@ func WithConnector(connector *Connector) Option {
 	}
 }
 
+// WithConnector creates connector View option
+func WithConnectorRef(ref string) Option {
+	return func(v *View) error {
+		v.Connector = NewRefConnector(ref)
+		return nil
+	}
+}
+
 // WithSchema creates connector View option
 func WithSchema(schema *state.Schema) Option {
 	return func(v *View) error {

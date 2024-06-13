@@ -361,7 +361,7 @@ func WithOutputCaseFormat(format string) ComponentOption {
 	}
 }
 
-func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) ComponentOption {
+func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOptions ...view.Option) ComponentOption {
 	return func(c *Component) error {
 		if outputType == nil {
 			outputType = reflect.TypeOf(struct{}{})
@@ -397,10 +397,9 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 				viewName += "Handler"
 			}
 		}
-		var vOptions = []view.Option{}
 		table := ""
 		if viewParameter := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil {
-			vOptions = append(vOptions, view.WithViewType(viewParameter.Schema.SliceType().Elem()))
+			viewOptions = append(viewOptions, view.WithViewType(viewParameter.Schema.SliceType().Elem()))
 			aTag, err := tags.ParseViewTags(reflect.StructTag(viewParameter.Tag), embedFs)
 			if err != nil {
 				return fmt.Errorf("invalid output view %v tag: %w", viewName, err)
@@ -409,31 +408,31 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS) Compone
 				setter.SetStringIfEmpty(&viewName, aView.Name)
 				table = aView.Table
 				if aView.Match != "" {
-					vOptions = append(vOptions, view.WithMatchStrategy(aView.Match))
+					viewOptions = append(viewOptions, view.WithMatchStrategy(aView.Match))
 				}
 
 			}
 
 			if aTag.SQL.SQL != "" {
 				anInputType := c.Contract.Input.Type
-				vOptions = append(vOptions, view.WithSQL(string(aTag.SQL.SQL), anInputType.Parameters...))
+				viewOptions = append(viewOptions, view.WithSQL(string(aTag.SQL.SQL), anInputType.Parameters...))
 			}
 
 			if aTag.View.Connector != "" {
-				vOptions = append(vOptions, view.WithConnector(&view.Connector{Reference: shared.Reference{Ref: aTag.View.Connector}}))
+				viewOptions = append(viewOptions, view.WithConnector(&view.Connector{Reference: shared.Reference{Ref: aTag.View.Connector}}))
 			}
 			if aTag.View.Batch != 0 {
-				vOptions = append(vOptions, view.WithBatchSize(aTag.View.Batch))
+				viewOptions = append(viewOptions, view.WithBatchSize(aTag.View.Batch))
 			}
 
 			if aTag.View.PartitionerType != "" {
-				vOptions = append(vOptions, view.WithPartitioned(&view.Partitioned{DataType: aTag.View.PartitionerType, Concurrency: aTag.View.PartitionedConcurrency}))
+				viewOptions = append(viewOptions, view.WithPartitioned(&view.Partitioned{DataType: aTag.View.PartitionerType, Concurrency: aTag.View.PartitionedConcurrency}))
 			}
 
-			vOptions = append(vOptions, view.WithFS(c.embedFs))
+			viewOptions = append(viewOptions, view.WithFS(c.embedFs))
 		}
-		vOptions = append(vOptions, view.WithResource(resource))
-		aView := view.NewView(viewName, table, vOptions...)
+		viewOptions = append(viewOptions, view.WithResource(resource))
+		aView := view.NewView(viewName, table, viewOptions...)
 		c.View = aView
 		return nil
 	}

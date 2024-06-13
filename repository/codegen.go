@@ -55,6 +55,7 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 	setter.SetStringIfEmpty(&statePkg, "state")
 	inPackageComponentTypes := indexComponentPackageTypes(c, statePkg)
 	packagedTypes := c.buildDependencyTypes(inPackageComponentTypes, importModules)
+
 	componentName := state.SanitizeTypeName(c.View.Name)
 	embedURI := text.CaseFormatUpperCamel.Format(componentName, text.CaseFormatLowerUnderscore)
 	var options = []xreflect.Option{
@@ -73,6 +74,7 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 	}
 
 	replacer := data.NewMap()
+	replacer.Put("WithConnector", fmt.Sprintf(`,view.WithConnectorRef("%s")`, c.View.Connector.Name))
 	replacer.Put("Name", componentName)
 	replacer.Put("URI", c.URI)
 	replacer.Put("Method", c.Method)
@@ -91,8 +93,10 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 		defineComponentFunc := replacer.ExpandAsText(contractInit)
 		snippetBefore += c.embedTemplate(embedURI, componentName)
 		options = append(options,
-			xreflect.WithImports(c.generatorImports(c.Contract.ModulePath)),
+			xreflect.WithImports(append(c.generatorImports(c.Contract.ModulePath), "github.com/viant/datly/view")),
 			xreflect.WithSnippetAfter(defineComponentFunc))
+	} else {
+		replacer.Put("WithConnector", "")
 	}
 	if snippetBefore != "" {
 		options = append(options, xreflect.WithSnippetBefore(snippetBefore))
