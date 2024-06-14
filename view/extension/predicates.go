@@ -11,13 +11,17 @@ import (
 )
 
 const (
-	PredicateEqual       = "equal"
-	PredicateNotEqual    = "not_equal"
-	PredicateIn          = "in"
-	PredicateMultiIn     = "multi_in"
-	PredicateNotIn       = "not_in"
-	PredicateMultiNotIn  = "multi_not_in"
-	PredicateLessOrEqual = "less_or_equal"
+	PredicateEqual          = "equal"
+	PredicateNotEqual       = "not_equal"
+	PredicateIn             = "in"
+	PredicateMultiIn        = "multi_in"
+	PredicateNotIn          = "not_in"
+	PredicateMultiNotIn     = "multi_not_in"
+	PredicateLessOrEqual    = "less_or_equal"
+	PredicateLessThan       = "less_than"
+	PredicateGreaterOrEqual = "greater_or_equal"
+	PredicateGreaterThan    = "greater_than"
+
 	PredicateLike        = "like"
 	PredicateNotLike     = "not_like"
 	PredicateHandler     = "handler"
@@ -223,6 +227,17 @@ func NewEqualPredicate() *Predicate {
 
 func NewLessOrEqualPredicate() *Predicate {
 	return binaryPredicate(PredicateLessOrEqual, "<=")
+}
+func NewLessThanPredicate() *Predicate {
+	return binaryPredicate(PredicateLessThan, "<")
+}
+
+func NewGreaterOrEqualPredicate() *Predicate {
+	return binaryPredicate(PredicateGreaterOrEqual, ">=")
+}
+
+func NewGreaterThanPredicate() *Predicate {
+	return binaryPredicate(PredicateGreaterThan, ">")
 }
 
 func NewNotEqualPredicate() *Predicate {
