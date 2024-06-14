@@ -607,6 +607,18 @@ func (s State) AddDescriptions(doc state.Documentation) {
 // NewState creates a state from state go struct
 func NewState(modulePath, dataType string, types *xreflect.Types) (State, error) {
 	baseDir := modulePath
+	parent, name := path.Split(dataType)
+	if name != "" {
+		dataType = name
+	}
+	if !strings.HasSuffix(baseDir, parent) {
+		var subPath string
+		parent, subPath = path.Split(parent)
+		if strings.HasSuffix(baseDir, parent) {
+			baseDir = path.Join(baseDir, subPath)
+		}
+	}
+
 	if pair := strings.Split(dataType, "."); len(pair) > 1 {
 		if !strings.HasSuffix(baseDir, pair[0]) {
 			baseDir = path.Join(baseDir, pair[0])

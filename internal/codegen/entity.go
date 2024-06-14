@@ -23,6 +23,9 @@ var entityTemplate string
 // GenerateEntity generate golang entity
 func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.Info) (string, error) {
 	pkg = info.Package(pkg)
+	if t.MethodFragment != "" && t.MethodFragment != "get" {
+		pkg = strings.ToLower(t.MethodFragment)
+	}
 	if err := t.TypeDef.Init(context.Background(), extension.Config.Types.Lookup); err != nil {
 		return "", err
 	}
@@ -43,7 +46,7 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 `, t.generateMapTypeBody())
 	}
 	initSnippet := strings.Replace(entityTemplate, "$Init", initCode, 1)
-	initSnippet = strings.Replace(initSnippet, "$Package", pkg, 1)
+	initSnippet = strings.Replace(initSnippet, "$Package", pkg+"/"+t.FileMethodFragment(), 1)
 	initSnippet = strings.Replace(initSnippet, "$GlobalDeclaration", globalDeclaration, 1)
 
 	generatedStruct := xreflect.GenerateStruct(t.TypeDef.Name, rType,

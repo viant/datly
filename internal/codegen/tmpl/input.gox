@@ -9,6 +9,6 @@ func init() {
 }
 
 
-type ${Prefix}${MethodFragment}Input struct {
+type Input struct {
     $Fields
 }

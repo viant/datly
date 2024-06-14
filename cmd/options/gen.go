@@ -22,26 +22,9 @@ func (g *Generate) HttpMethod() string {
 	return strings.ToUpper(g.Operation)
 }
 
-func (g *Generate) EntityLocation(entityName string) string {
+func (g *Generate) EmbedLocation(URI string, methodFragment string) string {
 	codeLocation := g.GoCodeLocation()
-
-	entityName = strings.ToLower(entityName)
-	return url.Join(codeLocation, entityName+".go")
-}
-
-func (g *Generate) InputLocation(prefix string, methodFragment string) string {
-	codeLocation := g.GoCodeLocation()
-	return url.Join(codeLocation, prefix+methodFragment+"input.go")
-}
-
-func (g *Generate) OutputLocation(prefix string, methodFragment string) string {
-	codeLocation := g.GoCodeLocation()
-	return url.Join(codeLocation, prefix+methodFragment+"output.go")
-}
-
-func (g *Generate) EmbedLocation(URI string) string {
-	codeLocation := g.GoCodeLocation()
-	return url.Join(codeLocation, URI)
+	return url.Join(codeLocation, methodFragment, URI)
 }
 
 func (g *Generate) Init() error {
@@ -82,53 +65,65 @@ func (g *Generate) DSQLLocation() string {
 	return url.Join(baseURL, name+".sql")
 }
 
+func (g *Generate) EntityLocation(prefix, methodFragment, entityName string) string {
+	return g.normalizeCodeLocation(prefix, methodFragment, entityName+".go")
+}
+
+func (g *Generate) InputLocation(prefix string, methodFragment string) string {
+	return g.normalizeCodeLocation(prefix, methodFragment, "input.go")
+}
+
+func (g *Generate) OutputLocation(prefix string, methodFragment string) string {
+	return g.normalizeCodeLocation(prefix, methodFragment, "output.go")
+}
+
 func (g *Generate) HandlerLocation(prefix string, methodFragment string) string {
-	_, name := url.Split(g.SourceURL(), file.Scheme)
-	if ext := path.Ext(name); ext != "" {
-		name = name[:len(name)-len(ext)]
-	}
-	baseURL := g.GoCodeLocation()
-	return url.Join(baseURL, prefix+methodFragment+"handler.go")
-}
-
-func (g *Generate) HandlerType(prefix string, methodFragment string) string {
-	result := prefix + methodFragment + "Handler"
-	if g.Package() == "" {
-		return result
-	}
-	return g.Package() + "." + result
-}
-
-func (g *Generate) InputType(prefix string, methodFragment string) string {
-	result := prefix + methodFragment + "Input"
-	if g.Package() == "" {
-		return result
-	}
-	return g.Package() + "." + result
+	return g.normalizeCodeLocation(prefix, methodFragment, "handler.go")
 }
 
 func (g *Generate) IndexLocation(prefix string, methodFragment string) string {
-	_, name := url.Split(g.SourceURL(), file.Scheme)
-	if ext := path.Ext(name); ext != "" {
-		name = name[:len(name)-len(ext)]
-	}
-	baseURL := g.GoCodeLocation()
-	return url.Join(baseURL, prefix+methodFragment+"index.go")
+	return g.normalizeCodeLocation(prefix, methodFragment, "index.go")
 }
 
 func (g *Generate) InitLocation(prefix string, methodFragment string) string {
+	return g.normalizeCodeLocation(prefix, methodFragment, "init.go")
+}
+
+func (g *Generate) HandlerType(methodFragment string) string {
+	return g.customType("Handler", methodFragment)
+}
+
+func (g *Generate) InputType(methodFragment string) string {
+	return g.customType("Input", methodFragment)
+}
+
+func (g *Generate) OutputType(methodFragment string) string {
+	return g.customType("Output", methodFragment)
+}
+
+func (g *Generate) customType(result string, methodFragment string) string {
+	if g.Package() == "" {
+		return result
+	}
+	pkg := g.Package()
+	if g.ModulePrefix != "" {
+		if strings.HasSuffix(g.ModulePrefix, pkg) {
+			pkg = g.ModulePrefix
+		} else {
+			pkg = url.Join(g.ModulePrefix, pkg)
+		}
+	}
+	return pkg + "/" + strings.ToLower(methodFragment) + "." + result
+}
+
+func (g *Generate) normalizeCodeLocation(prefix string, methodFragment string, filename string) string {
 	_, name := url.Split(g.SourceURL(), file.Scheme)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}
 	baseURL := g.GoCodeLocation()
-	return url.Join(baseURL, prefix+methodFragment+"init.go")
-}
-
-func (g *Generate) OutputType(prefix string, methodFragment string) string {
-	result := prefix + methodFragment + "Output"
-	if g.Package() == "" {
-		return result
+	if strings.HasSuffix(baseURL, prefix) {
+		prefix = ""
 	}
-	return g.Package() + "." + result
+	return url.Join(baseURL, prefix, methodFragment, filename)
 }

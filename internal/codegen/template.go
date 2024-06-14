@@ -45,7 +45,7 @@ func (t *Template) FilePrefix() string {
 	if t.filePrefix != "" {
 		return t.filePrefix
 	}
-	t.filePrefix = text.DetectCaseFormat(t.Prefix).Format(t.Prefix, text.CaseFormatLowerUnderscore) + "_"
+	t.filePrefix = text.DetectCaseFormat(t.Prefix).Format(t.Prefix, text.CaseFormatLowerUnderscore)
 	return t.filePrefix
 }
 
@@ -53,7 +53,7 @@ func (t *Template) FileMethodFragment() string {
 	if t.fileMethodFragment != "" {
 		return t.fileMethodFragment
 	}
-	t.fileMethodFragment = text.DetectCaseFormat(t.MethodFragment).Format(t.MethodFragment, text.CaseFormatLowerUnderscore) + "_"
+	t.fileMethodFragment = text.DetectCaseFormat(t.MethodFragment).Format(t.MethodFragment, text.CaseFormatLowerUnderscore)
 	return t.fileMethodFragment
 }
 

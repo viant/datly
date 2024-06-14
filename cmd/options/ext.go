@@ -24,6 +24,7 @@ type (
 		GitPrivate    *string `short:"T" long:"gitprivate" description:"git private"`
 		Name          string  `short:"n" long:"name" description:"module name" `
 	}
+
 	Datly struct {
 		Location string `short:"x" long:"dsrc" description:"datly location" default:".build"`
 		Tag      string `short:"t" long:"tag" description:" datly tag"`

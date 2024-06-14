@@ -85,6 +85,13 @@ func (r *Rule) Package() string {
 	return ""
 }
 
+func (r *Rule) ImportPackage() string {
+	if r.ModulePrefix != "" {
+		return r.ModulePrefix
+	}
+	return r.Package()
+}
+
 func extractPackageFromSource(sourceURL string) string {
 	baseURL, _ := url.Split(sourceURL, file.Scheme)
 	_, pkg := url.Split(baseURL, file.Scheme)
@@ -250,4 +257,22 @@ func (r *Rule) NormalizeComponent(dSQL *string) {
 			*dSQL = strings.Replace(*dSQL, fromText, toText, 1)
 		}
 	}
+}
+
+func (r *Rule) ImportType(aType string) string {
+	pkg := ""
+	if index := strings.Index(aType, "."); index != -1 {
+		pkg = aType[:index]
+		aType = aType[index+1:]
+	}
+	if r.ModulePrefix != "" {
+		if strings.HasSuffix(r.ModulePrefix, pkg) {
+			pkg = r.ModulePrefix
+		}
+	}
+	if r.Project != r.ModuleLocation {
+		prefix := r.ModuleLocation[len(r.Project)+1:]
+		pkg = path.Join(prefix, pkg)
+	}
+	return pkg + "." + aType
 }

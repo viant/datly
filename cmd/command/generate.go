@@ -183,6 +183,7 @@ func trimExt(sourceName string) string {
 
 func (s *Service) generateCode(ctx context.Context, gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
 	pkg := info.Package(gen.Package())
+
 	//TODO adjust if handler option is used
 	if err := s.generateTemplate(gen, template, info); err != nil {
 		return err
@@ -190,7 +191,7 @@ func (s *Service) generateCode(ctx context.Context, gen *options.Generate, templ
 	embedContent := make(map[string]string)
 	inputCode := template.GenerateInput(pkg, info, embedContent)
 	for k, v := range embedContent {
-		s.Files.Append(asset.NewFile(gen.EmbedLocation(k), v))
+		s.Files.Append(asset.NewFile(gen.EmbedLocation(k, template.FileMethodFragment()), v))
 	}
 	inputURL := gen.InputLocation(template.FilePrefix(), template.FileMethodFragment())
 
@@ -256,6 +257,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	}
 	tmpl := codegen.NewTemplate(rule, &inference.Spec{Type: aType})
 	tmpl.SetResource(&translator.Resource{Rule: rule})
+
 	tmpl.Imports.AddType(rule.InputType)
 	tmpl.Imports.AddType(rule.Type)
 	tmpl.EnsureImports(aType)
@@ -308,7 +310,7 @@ func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.G
 		return err
 	}
 	entityName := ensureGoFileCaseFormat(template)
-	s.Files.Append(asset.NewFile(gen.EntityLocation(entityName), code))
+	s.Files.Append(asset.NewFile(gen.EntityLocation(template.FilePrefix(), template.FileMethodFragment(), entityName), code))
 	return nil
 }
 
