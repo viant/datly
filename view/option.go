@@ -119,7 +119,7 @@ func WithDBConfig(dbConfig *DBConfig) Option {
 	}
 }
 
-// WithConnector creates connector View option
+// WithConnectorRef creates connector View option
 func WithConnectorRef(ref string) Option {
 	return func(v *View) error {
 		v.Connector = NewRefConnector(ref)
