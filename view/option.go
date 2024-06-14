@@ -111,6 +111,14 @@ func WithConnector(connector *Connector) Option {
 	}
 }
 
+// WithDBConfig creates connector View option
+func WithDBConfig(dbConfig *DBConfig) Option {
+	return func(v *View) error {
+		v.Connector = &Connector{DBConfig: *dbConfig}
+		return nil
+	}
+}
+
 // WithConnector creates connector View option
 func WithConnectorRef(ref string) Option {
 	return func(v *View) error {

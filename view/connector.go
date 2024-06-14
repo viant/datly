@@ -17,12 +17,7 @@ import (
 type (
 	Connector struct {
 		shared.Reference
-		Secret *scy.Resource `json:",omitempty"`
-		Name   string        `json:",omitempty"`
-		Driver string        `json:",omitempty"`
-		DSN    string        `json:",omitempty"`
-
-		*DBConfig
+		DBConfig
 		_dialect     *info.Dialect
 		_dsn         string
 		_db          func() (*sql.DB, error)
@@ -34,11 +29,15 @@ type (
 	ConnectorOption func(c *Connector)
 
 	DBConfig struct {
-		MaxIdleConns      int `json:",omitempty" yaml:",omitempty"`
-		ConnMaxIdleTimeMs int `json:",omitempty" yaml:",omitempty"`
-		MaxOpenConns      int `json:",omitempty" yaml:",omitempty"`
-		ConnMaxLifetimeMs int `json:",omitempty" yaml:",omitempty"`
-		TimeoutTime       int `json:",omitempty" yaml:",omitempty"`
+		Name              string        `json:",omitempty"`
+		Driver            string        `json:",omitempty"`
+		DSN               string        `json:",omitempty"`
+		MaxIdleConns      int           `json:",omitempty" yaml:",omitempty"`
+		ConnMaxIdleTimeMs int           `json:",omitempty" yaml:",omitempty"`
+		MaxOpenConns      int           `json:",omitempty" yaml:",omitempty"`
+		ConnMaxLifetimeMs int           `json:",omitempty" yaml:",omitempty"`
+		TimeoutTime       int           `json:",omitempty" yaml:",omitempty"`
+		Secret            *scy.Resource `json:",omitempty"`
 	}
 )
 
@@ -77,10 +76,6 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 		c.inherit(connector)
 	}
 
-	if c.DBConfig == nil {
-		c.DBConfig = &DBConfig{}
-	}
-
 	if err := c.Validate(); err != nil {
 		return err
 	}
@@ -108,7 +103,7 @@ func (c *Connector) DB() (*sql.DB, error) {
 	}
 
 	c.lock()
-	c._db = aDbPool.DB(c.Driver, dsn, c.DBConfig)
+	c._db = aDbPool.DB(c.Driver, dsn, &c.DBConfig)
 	aDB, err := c._db()
 	c.unlock()
 
@@ -169,10 +164,6 @@ func (c *Connector) inherit(connector *Connector) {
 		c.Name = connector.Name
 	}
 
-	if c.DBConfig == nil {
-		c.DBConfig = connector.DBConfig
-	}
-
 	if c.Secret == nil {
 		c.Secret = connector.Secret
 	}
@@ -216,9 +207,11 @@ func (c EncodedConnector) Decode() (*Connector, error) {
 		return nil, fmt.Errorf("invalid connector format, expected name|driver|dsn[|secretUrl|key]")
 	}
 	conn := &Connector{
-		Name:   parts[0],
-		Driver: parts[1],
-		DSN:    parts[2],
+		DBConfig: DBConfig{
+			Name:   parts[0],
+			Driver: parts[1],
+			DSN:    parts[2],
+		},
 	}
 	switch len(parts) {
 	case 4:
@@ -248,6 +241,16 @@ func WithSecret(secret *scy.Resource) ConnectorOption {
 	}
 }
 
+func WithDbConfig(dbConfig *DBConfig) ConnectorOption {
+	return func(c *Connector) {
+		secret := c.Secret
+		c.DBConfig = *dbConfig
+		if secret != nil {
+			c.DBConfig.Secret = secret
+		}
+	}
+}
+
 // NewRefConnector creates connection reference
 func NewRefConnector(name string) *Connector {
 	return &Connector{Reference: shared.Reference{Ref: name}}
@@ -255,7 +258,7 @@ func NewRefConnector(name string) *Connector {
 
 // NewConnector creates a connector
 func NewConnector(name, driver, dsn string, opts ...ConnectorOption) *Connector {
-	ret := &Connector{Name: name, Driver: driver, DSN: dsn}
+	ret := &Connector{DBConfig: DBConfig{Name: name, Driver: driver, DSN: dsn}}
 	for _, opt := range opts {
 		opt(ret)
 	}
