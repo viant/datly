@@ -199,11 +199,10 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflec
 	result.Scope = pTag.Scope
 	result.When = pTag.When
 	result.With = pTag.With
-	required := field.Type.Kind() == reflect.Ptr || pTag.Required
+	required := pTag.Required && result.In.Kind != KindTransient
 	if required {
 		result.Required = &required
 	}
-
 	switch result.In.Kind {
 	case KindObject:
 		fieldType := field.Type
