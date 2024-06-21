@@ -53,7 +53,7 @@ func (s *Service) read(ctx context.Context, session *Session) error {
 	}
 
 	wg := sync.WaitGroup{}
-	collector := session.View.Collector(session.DataPtr, session.HandleViewMeta, session.View.MatchStrategy.SupportsParallel())
+	collector := session.View.Collector(session.DataPtr, session.HandleViewMeta, session.View.MatchStrategy.ReadAll())
 	errors := shared.NewErrors(0)
 
 	s.readAll(ctx, session, collector, &wg, errors, session.Parent)
@@ -491,11 +491,10 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 	repeat := max(1, len(partitions.Partitions))
 	var executions []*response.SQLExecution
 	var mux sync.Mutex
-	xSlice := collector.View().Schema.Slice()
 	var err error
 
 	var rateLimit = make(chan bool, concurrency)
-	var results = make([]*reflect.Value, 0, repeat)
+	var collectors = make([]*view.Collector, repeat)
 	for i := 0; i < repeat; i++ {
 		clone := *partitions
 		wg.Add(1)
@@ -508,16 +507,10 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 			if index < len(partitions.Partitions) {
 				partitions.Partition = partitions.Partitions[index]
 			}
-			parametrizedSQL, columnInMatcher, e := s.buildParametrizedSQL(ctx, aView, selector, batchData, collector, session, partitions)
+
+			collectors[index] = collector.Clone()
+			parametrizedSQL, columnInMatcher, e := s.buildParametrizedSQL(ctx, aView, selector, batchData, collectors[index], session, partitions)
 			readData := 0
-			if e != nil {
-				err = e
-				fmt.Printf("error: %v\n", err)
-				return
-			}
-			localSlice := reflect.New(aView.Schema.SliceType())
-			slicePtr := unsafe.Pointer(localSlice.Pointer())
-			appender := xSlice.Appender(slicePtr)
 			handler := func(row interface{}) error {
 				row, err = aView.UnwrapDatabaseType(ctx, row)
 				if err != nil {
@@ -529,20 +522,16 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 						return err
 					}
 				}
-				appender.Append(row)
 				return nil
 			}
 			exec, e := s.queryWithHandler(ctx, session, aView, collector, columnInMatcher, parametrizedSQL, db, handler, &readData)
 			mux.Lock()
-			defer mux.Unlock()
 			if exec != nil {
 				executions = append(executions, exec...)
 			}
+			mux.Unlock()
 			if e != nil {
 				err = e
-			}
-			if readData > 0 {
-				results = append(results, &localSlice)
 			}
 		}(i, &clone)
 		if err != nil {
@@ -550,24 +539,27 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 		}
 	}
 	wg.Wait()
-	if len(results) == 0 || err != nil {
+	if len(collectors) == 0 || err != nil {
 		return executions, err
 	}
-	result := results[0]
-	for i := 1; i < len(results); i++ {
-		second := results[i]
-		merged := combineSlices(result.Elem().Interface(), second.Elem().Interface())
-		result.Elem().Set(reflect.ValueOf(merged))
-	}
-	if newReducer, ok := partitioner.(view.ReducerProvider); ok {
-		reducer := newReducer.Reducer(ctx)
-		reduced := reducer.Reduce(result.Elem().Interface())
-		result.Elem().Set(reflect.ValueOf(reduced))
+
+	result := collectors[0]
+
+	for i := 1; i < len(collectors); i++ {
+		second := collectors[i]
+		merged := combineSlices(result.Dest(), second.Dest())
+		result.SetDest(merged)
 	}
 
-	values := result.Elem()
-	for i := 0; i < values.Len(); i++ {
-		value := values.Index(i).Interface()
+	if newReducer, ok := partitioner.(view.ReducerProvider); ok {
+		reducer := newReducer.Reducer(ctx)
+		reduced := reducer.Reduce(result.Dest())
+		collector.SetDest(reduced)
+	}
+
+	resultValue := reflect.ValueOf(result.Dest())
+	for i := 0; i < resultValue.Len(); i++ {
+		value := resultValue.Index(i).Interface()
 		if err := visitor(value); err != nil {
 			return executions, err
 		}

@@ -17,8 +17,8 @@ func (s MatchStrategy) Validate() error {
 	return fmt.Errorf("unsupported match strategy %v", s)
 }
 
-// SupportsParallel indicates whether MatchStrategy support parallel read.
-func (s MatchStrategy) SupportsParallel() bool {
+// ReadAll indicates whether MatchStrategy support parallel read.
+func (s MatchStrategy) ReadAll() bool {
 	return s == ReadAll
 }
 

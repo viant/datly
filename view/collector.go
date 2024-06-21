@@ -47,6 +47,36 @@ type Collector struct {
 	viewMetaHandler viewSummaryHandlerFn
 }
 
+func (r *Collector) SetDest(dest interface{}) {
+	r.dest = dest
+	r.appender = r.slice.Appender(xunsafe.AsPointer(dest))
+}
+
+func (r *Collector) Clone() *Collector {
+	dest := reflect.MakeSlice(r.view.Schema.SliceType(), 0, 1).Interface()
+	return &Collector{
+		parent:          r.parent,
+		dest:            dest,
+		appender:        r.slice.Appender(xunsafe.AsPointer(dest)),
+		valuePosition:   r.valuePosition,
+		types:           r.types,
+		relation:        r.relation,
+		values:          r.values,
+		slice:           r.slice,
+		view:            r.view,
+		relations:       r.relations,
+		wg:              r.wg,
+		readAll:         r.readAll,
+		wgDelta:         r.wgDelta,
+		indexCounter:    r.indexCounter,
+		manyCounter:     r.manyCounter,
+		codecSlice:      r.codecSlice,
+		codecSliceDest:  r.codecSliceDest,
+		codecAppender:   r.codecAppender,
+		viewMetaHandler: r.viewMetaHandler,
+	}
+}
+
 func (r *Collector) Lock() *sync.Mutex {
 	if r.parent == nil {
 		return &r.mutex
@@ -401,7 +431,7 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 			slice:           slice,
 			view:            &r.view.With[i].Of.View,
 			relation:        r.view.With[i],
-			readAll:         r.view.With[i].Of.MatchStrategy.SupportsParallel(),
+			readAll:         r.view.With[i].Of.MatchStrategy.ReadAll(),
 			wg:              &wg,
 			wgDelta:         delta,
 		}
