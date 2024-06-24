@@ -9,7 +9,7 @@ pipeline:
   set_sdk:
     action: sdk.set
     target: $target
-    sdk: go:1.21
+    sdk: go:1.22
   build:
     action: exec:run
     target: $target
@@ -33,4 +33,3 @@ pipeline:
       - export GOARCH=arm64
       - go build -ldflags="-X 'main.Version=${Ver}'" -trimpath
       - tar cvzf datly_darwin_${Ver}_arm64.tar.gz datly
-   
