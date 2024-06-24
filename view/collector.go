@@ -19,10 +19,9 @@ type VisitorFn func(value interface{}) error
 // If View or any of the View.With MatchStrategy support Parallel fetching, it is important to call MergeData
 // when all needed View was fetched
 type Collector struct {
-	mutex  sync.Mutex
-	parent *Collector
-
-	dest          interface{}
+	mutex         sync.Mutex
+	parent        *Collector
+	destValue     reflect.Value
 	appender      *xunsafe.Appender
 	valuePosition map[string]map[interface{}][]int //stores positions in main slice, based on _field name, indexed by _field value.
 	types         map[string]*xunsafe.Type
@@ -48,16 +47,22 @@ type Collector struct {
 }
 
 func (r *Collector) SetDest(dest interface{}) {
-	r.dest = dest
-	r.appender = r.slice.Appender(xunsafe.AsPointer(dest))
+	destValue := reflect.ValueOf(dest)
+	if destValue.Kind() == reflect.Ptr {
+		r.destValue.Elem().Set(destValue.Elem())
+	} else {
+		r.destValue.Elem().Set(destValue)
+	}
 }
 
 func (r *Collector) Clone() *Collector {
-	dest := reflect.MakeSlice(r.view.Schema.SliceType(), 0, 1).Interface()
+	slicePtrValue := reflect.New(r.view.Schema.SliceType())
+	dest := reflect.MakeSlice(r.view.Schema.SliceType(), 0, 1)
+	slicePtrValue.Elem().Set(dest)
 	return &Collector{
 		parent:          r.parent,
-		dest:            dest,
-		appender:        r.slice.Appender(xunsafe.AsPointer(dest)),
+		destValue:       slicePtrValue,
+		appender:        r.slice.Appender(xunsafe.ValuePointer(&slicePtrValue)),
 		valuePosition:   r.valuePosition,
 		types:           r.types,
 		relation:        r.relation,
@@ -142,7 +147,7 @@ func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHa
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	return &Collector{
-		dest:            ensuredDest,
+		destValue:       reflect.ValueOf(ensuredDest),
 		valuePosition:   make(map[string]map[interface{}][]int),
 		appender:        slice.Appender(xunsafe.AsPointer(ensuredDest)),
 		slice:           slice,
@@ -158,7 +163,9 @@ func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHa
 
 func ensureDest(dest interface{}, view *View) interface{} {
 	if _, ok := dest.(*interface{}); ok {
-		return reflect.MakeSlice(view.Schema.SliceType(), 0, 1).Interface()
+		rValue := reflect.New(view.Schema.SliceType())
+		rValue.Elem().Set(reflect.MakeSlice(view.Schema.SliceType(), 0, 1))
+		return rValue.Elem()
 	}
 	return dest
 }
@@ -405,7 +412,9 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 			continue
 		}
 
-		dest := reflect.MakeSlice(r.view.With[i].Of.View.Schema.SliceType(), 0, 1).Interface()
+		destPtr := reflect.New(r.view.With[i].Of.View.Schema.SliceType())
+		dest := reflect.MakeSlice(r.view.With[i].Of.View.Schema.SliceType(), 0, 1)
+		destPtr.Elem().Set(dest)
 		slice := r.view.With[i].Of.View.Schema.Slice()
 		wg := sync.WaitGroup{}
 
@@ -423,8 +432,8 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 		result[counter] = &Collector{
 			parent:          r,
 			viewMetaHandler: handler,
-			dest:            dest,
-			appender:        slice.Appender(xunsafe.AsPointer(dest)),
+			destValue:       destPtr,
+			appender:        slice.Appender(xunsafe.ValuePointer(&destPtr)),
 			valuePosition:   make(map[string]map[interface{}][]int),
 			types:           make(map[string]*xunsafe.Type),
 			values:          make(map[string]*[]interface{}),
@@ -481,7 +490,7 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 				return nil
 			}
 
-			slicePtr := xunsafe.AsPointer(r.dest)
+			slicePtr := xunsafe.AsPointer(r.DestPtr())
 			for _, position := range positions {
 				ownerPtr := xunsafe.AsPointer(r.slice.ValuePointerAt(slicePtr, position))
 				metaParentHolderField.SetValue(ownerPtr, viewMeta)
@@ -497,9 +506,14 @@ func (r *Collector) View() *View {
 	return r.view
 }
 
+// Project returns collector slice ptr
+func (r *Collector) DestPtr() interface{} {
+	return r.destValue.Interface()
+}
+
 // Project returns collector slice
 func (r *Collector) Dest() interface{} {
-	return r.dest
+	return r.destValue.Elem().Interface()
 }
 
 // ReadAll if Collector uses readAll flag, it means that his Relations can fetch all data View in the same time, (no matching parent data)
@@ -527,10 +541,10 @@ func (r *Collector) mergeToParent() {
 
 	for i, link := range links {
 		valuePositions := r.parentValuesPositions(r.relation.On[i].Column)
-		destPtr := xunsafe.AsPointer(r.dest)
+		destPtr := xunsafe.AsPointer(r.DestPtr())
 		holderField := r.relation.holderField
 		parentSlice := r.parent.slice
-		parentDestPtr := xunsafe.AsPointer(r.parent.dest)
+		parentDestPtr := xunsafe.AsPointer(r.parent.DestPtr())
 
 		field := link.xField
 		for i := 0; i < r.slice.Len(destPtr); i++ {
@@ -551,7 +565,7 @@ func (r *Collector) mergeToParent() {
 					appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
 					appender.Append(value)
 					r.Lock().Unlock()
-					r.view.Logger.ObjectReconciling(r.dest, value, parentValue, position)
+					r.view.Logger.ObjectReconciling(r.Dest(), value, parentValue, position)
 				}
 			}
 		}
@@ -566,7 +580,7 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, []string) {
 	if r.parent == nil || r.ReadAll() {
 		return []interface{}{}, nil
 	}
-	destPtr := xunsafe.AsPointer(r.parent.dest)
+	destPtr := xunsafe.AsPointer(r.parent.DestPtr())
 	sliceLen := r.parent.slice.Len(destPtr)
 	result := make([]interface{}, 0)
 outer:
@@ -631,14 +645,14 @@ func (r *Collector) Fetched() {
 }
 
 func (r *Collector) Len() int {
-	if r.dest != nil {
-		return (*reflect.SliceHeader)(xunsafe.AsPointer(r.dest)).Len
+	if r.DestPtr() != nil {
+		return (*reflect.SliceHeader)(xunsafe.AsPointer(r.DestPtr())).Len
 	}
 	return 0
 }
 
 func (r *Collector) Slice() (unsafe.Pointer, *xunsafe.Slice) {
-	return xunsafe.AsPointer(r.dest), r.slice
+	return xunsafe.AsPointer(r.DestPtr()), r.slice
 }
 
 func (r *Collector) Relation() *Relation {
@@ -654,14 +668,14 @@ func (r *Collector) createTreeIfNeeded() {
 		return
 	}
 
-	aTree := BuildTree(r.view.Schema.Type(), r.view.Schema.Slice(), r.dest, r.view.SelfReference, r.view.CaseFormat)
+	aTree := BuildTree(r.view.Schema.Type(), r.view.Schema.Slice(), r.DestPtr(), r.view.SelfReference, r.view.CaseFormat)
 	if aTree != nil {
-		reflect.ValueOf(r.dest).Elem().Set(reflect.ValueOf(aTree).Elem())
+		r.SetDest(aTree)
 	}
 }
 
 func (r *Collector) OnSkip(_ []interface{}) error {
-	sliceLen := r.slice.Len(xunsafe.AsPointer(r.dest))
+	sliceLen := r.slice.Len(xunsafe.AsPointer(r.DestPtr()))
 	if sliceLen == 0 {
 		return nil
 	}
