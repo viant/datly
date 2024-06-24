@@ -524,7 +524,7 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 				}
 				return nil
 			}
-			exec, e := s.queryWithHandler(ctx, session, aView, collector, columnInMatcher, parametrizedSQL, db, handler, &readData)
+			exec, e := s.queryWithHandler(ctx, session, aView, collectors[index], columnInMatcher, parametrizedSQL, db, handler, &readData)
 			mux.Lock()
 			if exec != nil {
 				executions = append(executions, exec...)
@@ -554,7 +554,7 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 	if newReducer, ok := partitioner.(view.ReducerProvider); ok {
 		reducer := newReducer.Reducer(ctx)
 		reduced := reducer.Reduce(result.Dest())
-		collector.SetDest(reduced)
+		result.SetDest(reduced)
 	}
 
 	resultValue := reflect.ValueOf(result.Dest())
@@ -564,6 +564,9 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 			return executions, err
 		}
 	}
+
+	collector.SetDest(result.Dest())
+
 	return executions, err
 }
 
