@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/google/gops/agent"
+	"github.com/viant/datly"
 	"github.com/viant/datly/cmd"
 	"github.com/viant/datly/cmd/env"
 	"log"
@@ -11,8 +12,8 @@ import (
 	"time"
 )
 
+var Version string
 var (
-	Version      = "development"
 	BuildTimeInS string
 )
 
@@ -40,7 +41,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	err := cmd.RunApp(Version, os.Args[1:])
+	err := cmd.RunApp(datly.Version, os.Args[1:])
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)
 		log.Fatal(err)

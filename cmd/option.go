@@ -104,7 +104,9 @@ type (
 var mysqlDev string
 
 func (o *Options) BuildOption() *options.Options {
-	var result = &options.Options{}
+	var result = &options.Options{
+		Version: o.Version,
+	}
 	prep := o.Prepare
 
 	if prep.PrepareRule != "" {

@@ -211,7 +211,7 @@ func (s *Service) ensureDefaultImportInit(ctx context.Context, pkgLocation strin
 }
 
 func (s *Service) ensureChecksum(ctx context.Context, pkgLocation string, replacer rdata.Map) error {
-	checksumDest := url.Join(pkgLocation, "checksum/init.go")
+	checksumDest := url.Join(pkgLocation, "dependency/checksum/init.go")
 	if ok, _ := s.fs.Exists(ctx, checksumDest); ok {
 		return nil
 	}

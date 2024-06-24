@@ -107,7 +107,7 @@ func (g *Generate) customType(result string, methodFragment string) string {
 	}
 	pkg := g.Package()
 	if g.ModulePrefix != "" {
-		if strings.HasSuffix(g.ModulePrefix, pkg) {
+		if strings.Contains(g.ModulePrefix, pkg) {
 			pkg = g.ModulePrefix
 		} else {
 			pkg = url.Join(g.ModulePrefix, pkg)

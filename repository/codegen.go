@@ -175,6 +175,10 @@ func (c *Component) generatorImports(modulePath string) []string {
 	if index != -1 {
 		checksumModule = modulePath[:index] + "/pkg/checksum"
 	}
+	checksumParent, _ := path.Split(checksumModule)
+	if !strings.HasSuffix(checksumParent, "dependency") {
+		checksumModule = path.Join(checksumParent, "dependency", "checksum")
+	}
 
 	return []string{"embed",
 		"github.com/viant/datly",

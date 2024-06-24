@@ -2,6 +2,7 @@ package datly
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/repository"
@@ -27,6 +28,9 @@ import (
 	"strings"
 	"time"
 )
+
+//go:embed Version
+var Version string
 
 type (
 	Service struct {

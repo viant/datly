@@ -58,6 +58,8 @@ func (s *Spec) EnsureRelationType() {
 			continue
 		}
 		rel := s.Relations[i]
+
+		rel.EnsureRelationType()
 		if rel.Type != nil {
 			field.Schema = state.NewSchema(reflect.StructOf(rel.Type.Fields()))
 		}

@@ -26,6 +26,7 @@ func WithStructTag() ReflectOption {
 }
 
 func (f *Field) StructField(opts ...ReflectOption) reflect.StructField {
+
 	ret := reflect.StructField{
 		Name: f.Name,
 		Type: f.Field.Schema.Type(),
@@ -191,12 +192,14 @@ func (t *Type) Fields(opts ...ReflectOption) []reflect.StructField {
 			continue
 		}
 		unique[field.Name] = true
+
 		fields = append(fields, field.StructField(opts...))
 	}
 	for _, field := range t.RelationFields {
 		if unique[field.Name] {
 			continue
 		}
+
 		unique[field.Name] = true
 		fields = append(fields, field.StructField(opts...))
 	}

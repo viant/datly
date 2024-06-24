@@ -138,6 +138,7 @@ func (n *IndexGenerator) lookupParam(name string) (*inference.Parameter, error) 
 
 func (n *IndexGenerator) pathInType(segments []string, receiverType reflect.Type) (reflect.StructField, error) {
 	var structField reflect.StructField
+
 	for i := 0; i < len(segments); i++ {
 		elem := n.deref(receiverType)
 		if elem.Kind() != reflect.Struct {
@@ -146,6 +147,7 @@ func (n *IndexGenerator) pathInType(segments []string, receiverType reflect.Type
 
 		field, ok := elem.FieldByName(segments[i])
 		if !ok {
+
 			return reflect.StructField{}, n.fieldNotFoundError(segments[i], receiverType)
 		}
 
@@ -228,7 +230,14 @@ func (n *IndexGenerator) findVariableType(expression *ast.Ident) (reflect.Type, 
 			return nil, nil
 		}
 
-		inType, err := n.pathInType(split[1:], rType.Elem())
+		rawType := rType
+		if rawType.Kind() == reflect.Slice {
+			rawType = rawType.Elem()
+		}
+		if rawType.Kind() == reflect.Ptr {
+			rawType = rawType.Elem()
+		}
+		inType, err := n.pathInType(split[1:], rawType)
 		if err != nil {
 			return nil, err
 		}

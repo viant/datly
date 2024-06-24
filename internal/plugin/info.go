@@ -19,7 +19,7 @@ const (
 	codecPkg     = "github.com/viant/xdatly/codec"
 
 	dependencyDirectory = "dependency"
-	checksumDirectory   = "checksum"
+	checksumDirectory   = "dependency/checksum"
 	pluginDirectory     = "plugin"
 )
 

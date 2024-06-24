@@ -66,7 +66,7 @@ func (r *Rule) GoCodeLocation() string {
 		return module
 	}
 	if r.ModulePrefix != "" {
-		if strings.HasSuffix(r.ModulePrefix, r.Package()) {
+		if strings.Contains(r.ModulePrefix, r.Package()) {
 			return url.Join(module, r.ModulePrefix)
 		}
 		return url.Join(module, r.ModulePrefix, r.Package())
