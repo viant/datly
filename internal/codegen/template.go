@@ -42,6 +42,9 @@ const (
 )
 
 func (t *Template) FilePrefix() string {
+	if t.MethodFragment != "" {
+		return ""
+	}
 	if t.filePrefix != "" {
 		return t.filePrefix
 	}
