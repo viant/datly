@@ -147,6 +147,13 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 		}
 	}
 	if viewType == nil {
+
+		vType, err := registry.Lookup(outputParameter.Schema.Name)
+		if err == nil {
+			viewType = &view.TypeDefinition{Name: outputParameter.Schema.Name, DataType: vType.String()}
+		}
+	}
+	if viewType == nil {
 		return fmt.Errorf("failed to match data component output type for path: %v:%v", aContract.Method, aContract.URI)
 	}
 	contract.EnsureParameterTypes(parameters, nil, nil, nil)
