@@ -150,7 +150,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 
 		vType, err := registry.Lookup(outputParameter.Schema.Name)
 		if err == nil {
-			viewType = &view.TypeDefinition{Name: outputParameter.Schema.Name, DataType: vType.String()}
+			viewType = &view.TypeDefinition{Name: outputParameter.Schema.Name, DataType: vType.Name()}
 		}
 	}
 	if viewType == nil {
@@ -173,7 +173,15 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 			return fmt.Errorf("failed to get output type: %w", err)
 		}
 		componentSchema := state.NewSchema(outputType)
-		componentSchema.Name = strings.Replace(outputParameter.Schema.Name, "View", "", 1) + "Output"
+
+		typeName := outputParameter.Schema.SimpleTypeName()
+		if aContract.Input.Type.Name != "" {
+			typeName = strings.Replace(aContract.Input.Type.Name, "Input", "Output", 1)
+		}
+		if !strings.HasSuffix(typeName, "Output") {
+			typeName = strings.Replace(typeName, "View", "", 1) + "Output"
+		}
+		componentSchema.Name = typeName
 		componentSchema.Package = aContract.Output.Type.Package
 		componentSchema.Cardinality = state.One
 		componentSchema.DataType = outputType.String()
