@@ -54,9 +54,9 @@ require (
 	firebase.google.com/go/v4 v4.14.0
 	github.com/viant/structology v0.5.6-0.20231127181208-736f8ad06193
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
-	github.com/viant/xdatly v0.3.1-0.20240710033927-ac4a4085de18
+	github.com/viant/xdatly v0.3.1-0.20240710035338-b561698d2bf4
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20240710033927-ac4a4085de18
+	github.com/viant/xdatly/handler v0.0.0-20240710035338-b561698d2bf4
 	github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb
 	github.com/viant/xdatly/types/custom v0.0.0-20240624200855-79bbed0d3db9
 	github.com/viant/xlsy v0.3.0
