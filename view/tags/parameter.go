@@ -34,8 +34,7 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 		tag.When = strings.TrimSpace(value)
 	case "scope":
 		tag.Scope = strings.TrimSpace(value)
-	case "errorCode":
-
+	case "errorcode":
 		if tag.ErrorCode, err = strconv.Atoi(strings.TrimSpace(value)); err != nil {
 			return fmt.Errorf("invalid error code: %w", err)
 		}
