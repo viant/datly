@@ -548,12 +548,13 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 		name = ""
 	}
 	aTag.Parameter = &tags.Parameter{
-		Name:  name,
-		Kind:  string(p.In.Kind),
-		In:    string(p.In.Name),
-		When:  p.When,
-		Scope: p.Scope,
-		With:  p.With,
+		Name:      name,
+		Kind:      string(p.In.Kind),
+		In:        string(p.In.Name),
+		When:      p.When,
+		Scope:     p.Scope,
+		With:      p.With,
+		ErrorCode: p.ErrorStatusCode,
 	}
 	if p.Output != nil && p.Output.Schema != nil {
 		if p.Output.Schema.TypeName() != p.Schema.TypeName() {
