@@ -174,6 +174,9 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 		}
 		token, err := aSigner.Create(time.Hour, claims)
 		if err == nil {
+			if request.Header == nil {
+				request.Header = make(http.Header)
+			}
 			request.Header.Set("Authorization", "Bearer "+token)
 		} else {
 			return err
