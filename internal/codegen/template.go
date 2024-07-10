@@ -21,7 +21,7 @@ type (
 		Config   *translator.Rule
 		TypeDef  *view.TypeDefinition
 		inference.Imports
-		inference.State
+		State              inference.State
 		BusinessLogic      *ast.Block
 		paramPrefix        string
 		recordPrefix       string

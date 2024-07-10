@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	SetMarkerTag      = `setMarker:"true" format:"-" sqlx:"-" diff:"-" `
+	SetMarkerTag      = `setMarker:"true" format:"-" sqlx:"-" diff:"-" json:"-" `
 	TypedSetMarkerTag = SetMarkerTag + ` typeName:"%s"`
 )
 
