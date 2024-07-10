@@ -20,6 +20,7 @@ type (
 		types               []*state.Type
 		indirectState       bool
 		reportNotAssignable *bool
+		scope               string
 		embeddedFS          *embed.FS
 	}
 	Option func(o *Options)

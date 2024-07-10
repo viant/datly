@@ -206,8 +206,11 @@ func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aSt
 	for _, group := range parametersGroup {
 		wg := sync.WaitGroup{}
 		for i, _ := range group { //populate non data view parameters first
-			wg.Add(1)
 			parameter := group[i]
+			if parameter.Scope != opts.scope {
+				continue
+			}
+			wg.Add(1)
 			go s.populateParameterInBackground(ctx, parameter, aState, opts, err, &wg)
 		}
 		wg.Wait()
