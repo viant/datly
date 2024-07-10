@@ -667,6 +667,9 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 				if param.Output.Schema == nil && param.Schema != nil {
 					param.Output.Schema = param.Schema
 					param.Schema = &state.Schema{DataType: aTag.Parameter.DataType}
+					if aTag.Parameter.ErrorCode != 0 {
+						param.ErrorStatusCode = aTag.Parameter.ErrorCode
+					}
 				}
 			}
 			aState.Append(param)

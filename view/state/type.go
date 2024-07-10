@@ -199,6 +199,9 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflec
 	result.Scope = pTag.Scope
 	result.When = pTag.When
 	result.With = pTag.With
+	if pTag.ErrorCode != 0 {
+		result.ErrorStatusCode = pTag.ErrorCode
+	}
 	required := pTag.Required && result.In.Kind != KindTransient
 	if required {
 		result.Required = &required
