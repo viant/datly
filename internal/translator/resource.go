@@ -557,6 +557,9 @@ func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, er
 			r.AsyncState.Append(iParameter)
 		}
 	}
+	if len(r.AsyncState) == 1 && strings.ToLower(r.AsyncState[0].Name) == "userid" {
+		r.AsyncState = inference.State{}
+	}
 	return nil
 }
 
