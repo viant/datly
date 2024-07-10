@@ -82,6 +82,10 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 		builder.WriteString(SQL)
 		builder.WriteString("\n*/\n")
 	}
+	if p.ErrorStatusCode != 0 {
+		builder.WriteString(".WithStatusCode('" + strconv.Itoa(p.ErrorStatusCode) + "'")
+	}
+
 	if p.Output != nil {
 		builder.WriteString(".WithCodec('" + p.Output.Name + "'")
 		for i, arg := range p.Output.Args {
