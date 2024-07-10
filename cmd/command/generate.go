@@ -19,6 +19,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
 	"path"
+	"reflect"
 	"strings"
 )
 
@@ -243,30 +244,40 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		OutputType: rule.OutputType,
 		Arguments:  rule.HandlerArgs,
 	}
-	entityParam := aState[0]
+	var entityParam *inference.Parameter
+	var entityType reflect.Type
 	if param := aState.FilterByKind(state.KindRequestBody); len(param) > 0 {
 		entityParam = param[0]
+		entityType = entityParam.Schema.Type()
 	}
-	entityType := entityParam.Schema.Type()
-	if entityType == nil {
-		return fmt.Errorf("entity type was empty")
+	var aType *inference.Type
+	hasEntity := entityType != nil
+	if hasEntity {
+		aType, err = inference.NewType(rule.StateTypePackage(), entityParam.Name, entityType)
+		if err != nil {
+			return err
+		}
 	}
-	aType, err := inference.NewType(rule.StateTypePackage(), entityParam.Name, entityType)
-	if err != nil {
-		return err
-	}
+
 	tmpl := codegen.NewTemplate(rule, &inference.Spec{Type: aType})
 	tmpl.SetResource(&translator.Resource{Rule: rule})
 
 	tmpl.Imports.AddType(rule.InputType)
 	tmpl.Imports.AddType(rule.Type)
-	tmpl.EnsureImports(aType)
+	if aType != nil {
+		tmpl.EnsureImports(aType)
+	}
 	tmpl.State = aState
 	handlerDSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
 	if err != nil {
 		return err
 	}
-	handlerDSQL += fmt.Sprintf("$Nop($%v)", entityParam.Name)
+
+	name := aState[0].Name
+	if entityParam != nil && entityParam.Name != "" {
+		name = entityParam.Name
+	}
+	handlerDSQL += fmt.Sprintf("$Nop($%v)", name)
 	*dSQL = handlerDSQL
 	return nil
 }
