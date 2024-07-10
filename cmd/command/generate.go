@@ -253,7 +253,11 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	var aType *inference.Type
 	hasEntity := entityType != nil
 	if hasEntity {
-		aType, err = inference.NewType(rule.StateTypePackage(), entityParam.Name, entityType)
+		typeName := entityParam.Schema.SimpleTypeName()
+		if typeName == "" {
+			typeName = entityParam.Name
+		}
+		aType, err = inference.NewType(rule.StateTypePackage(), typeName, entityType)
 		if err != nil {
 			return err
 		}
