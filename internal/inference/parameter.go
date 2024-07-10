@@ -83,7 +83,7 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 		builder.WriteString("\n*/\n")
 	}
 	if p.ErrorStatusCode != 0 {
-		builder.WriteString(".WithStatusCode('" + strconv.Itoa(p.ErrorStatusCode) + "'")
+		builder.WriteString(".WithStatusCode(" + strconv.Itoa(p.ErrorStatusCode) + ")")
 	}
 
 	if p.Output != nil {
