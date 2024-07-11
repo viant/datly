@@ -144,8 +144,8 @@ func (p *Parameter) FieldDeclaration(embedRoot string, embed map[string]string, 
 		default:
 			aTag.SQL.URI = key
 			aTag.View = &tags.View{}
-			aTag.Parameter.In = p.Name[3:]
-			aTag.View.Name = p.Name[3:]
+			aTag.Parameter.In = p.Name ////p.Name[3:]
+			aTag.View.Name = p.Name    //p.Name[3:]
 			//add parameter extraction from SQL
 		}
 	}

@@ -189,6 +189,7 @@ func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resource
 	if p.Schema != nil && p.Schema.Type() != nil {
 		return nil
 	}
+	p.In.Name = p.Name
 	schema, err := resource.ViewSchema(ctx, p.In.Name)
 	if err != nil {
 		return fmt.Errorf("failed to apply view parameter %v, %w", p.Name, err)
