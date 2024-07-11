@@ -45,7 +45,7 @@ require (
 )
 
 require (
-	github.com/viant/govalidator v0.2.2-0.20230629211659-f2a3f0659b0b
+	github.com/viant/govalidator v0.2.2
 	github.com/viant/sqlparser v0.6.0
 	golang.org/x/crypto v0.22.0 // indirect
 )
