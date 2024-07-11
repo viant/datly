@@ -285,7 +285,7 @@ func (r *Resource) appendPathVariableParams() {
 
 func (r *Resource) buildParameterViews() {
 	for _, parameter := range r.State.FilterByKind(state.KindView) {
-		viewlet := NewViewlet(parameter.Name, parameter.SQL, nil, r)
+		viewlet := NewViewlet(parameter.In.Name, parameter.SQL, nil, r)
 		if parameter.Connector != "" {
 			viewlet.Connector = parameter.Connector
 		}
@@ -386,7 +386,7 @@ func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(
 			continue
 		}
 		viewParameter.EnsureSchema()
-		aViewNamespace := r.Rule.Viewlets.Lookup(viewParameter.Name)
+		aViewNamespace := r.Rule.Viewlets.Lookup(viewParameter.In.Name)
 		if err := setType(ctx, aViewNamespace, aDoc); err != nil {
 			return err
 		}
