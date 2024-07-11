@@ -2,10 +2,11 @@ package extension
 
 import (
 	"context"
+	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/differ"
 	"github.com/viant/xdatly/handler/http"
-	"github.com/viant/xdatly/handler/mbus"
+	xmbus "github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/sqlx"
 	"github.com/viant/xdatly/handler/state"
 	"github.com/viant/xdatly/handler/validator"
@@ -14,11 +15,12 @@ import (
 
 type (
 	Session struct {
-		sqlService SqlServiceFn
-		stater     state.Stater
-		validator  *validator.Service
-		differ     *differ.Service
-		mbus       *mbus.Service
+		sqlService    SqlServiceFn
+		stater        state.Stater
+		validator     *validator.Service
+		differ        *differ.Service
+		mbus          *xmbus.Service
+		messageBusses map[string]*mbus.Resource
 		sync.RWMutex
 		templateFlusher TemplateFlushFn
 		redirect        RedirectFn
@@ -42,12 +44,12 @@ func (s *Session) Http() http.Http {
 
 func NewSession(opts ...Option) *Session {
 	ret := &Session{
-		mbus:      NewMBus(nil), //TODO pass view message busses
 		validator: NewValidator(),
 		differ:    NewDiffer(),
 	}
 
 	options(opts).Apply(ret)
+	ret.mbus = NewMBus(ret.messageBusses)
 	return ret
 }
 
@@ -63,7 +65,7 @@ func (s *Session) Differ() *differ.Service {
 	return differ.New(s.differ)
 }
 
-func (s *Session) MessageBus() *mbus.Service {
+func (s *Session) MessageBus() *xmbus.Service {
 	return s.mbus
 }
 
@@ -112,6 +114,15 @@ func WithTemplateFlush(fn TemplateFlushFn) Option {
 func WithHttp(aHttp HttpFn) Option {
 	return func(s *Session) {
 		s.http = aHttp
+	}
+}
+
+func WithMessageBus(messageBusses []*mbus.Resource) Option {
+	return func(s *Session) {
+		s.messageBusses = map[string]*mbus.Resource{}
+		for _, bus := range messageBusses {
+			s.messageBusses[bus.Name] = bus
+		}
 	}
 }
 

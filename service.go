@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
@@ -441,6 +442,27 @@ func (s *Service) AddConnectors(ctx context.Context, connectors ...*view.Connect
 		}
 	}
 	s.resource.Connectors = append(s.resource.Connectors, connectors...)
+	return nil
+}
+
+// AddMBusResources adds message bus resources
+func (s *Service) AddMBusResources(ctx context.Context, resource ...*mbus.Resource) error {
+	mBusResources, _ := s.repository.Resources().Lookup(view.ResourceMBus)
+	registerInResource := view.MessageBuses{}
+	if mBusResources != nil {
+		registerInResource = view.MessageBusSlice(mBusResources.MessageBuses).Index()
+	}
+	registerInService := view.MessageBusSlice(s.resource.MessageBuses).Index()
+	for _, mResource := range resource {
+		if _, ok := registerInService[mResource.Name]; !ok {
+			s.resource.MessageBuses = append(s.resource.MessageBuses, mResource)
+			continue
+		}
+		if _, ok := registerInResource[mResource.Name]; !ok && mBusResources != nil {
+			mBusResources.MessageBuses = append(mBusResources.MessageBuses, mResource)
+			continue
+		}
+	}
 	return nil
 }
 

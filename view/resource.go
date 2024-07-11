@@ -28,6 +28,7 @@ const (
 	//ResourceConnectors default connector resource name
 	ResourceConnectors = "connectors"
 	ResourceConstants  = "constants"
+	ResourceMBus       = "mbus"
 )
 
 // Resource represents grouped View needed to build the View
@@ -265,6 +266,10 @@ func (r *Resource) ConnectorByName() Connectors {
 		index[item.Name] = r.Connectors[i]
 	}
 	return index
+}
+
+func (r *Resource) MBusResourceByName() MessageBuses {
+	return MessageBusSlice(r.MessageBuses).Index()
 }
 
 func (r *Resource) paramByName() map[string]*state.Parameter {

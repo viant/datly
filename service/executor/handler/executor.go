@@ -92,6 +92,7 @@ func (e *Executor) HandlerSession(ctx context.Context, opts ...Option) (*extensi
 	e.session.Apply(session.WithTypes(options.Types...))
 	e.session.Apply(session.WithEmbeddedFS(options.embedFS))
 
+	res := e.view.GetResource()
 	sess := extension.NewSession(
 		extension.WithTemplateFlush(func(ctx context.Context) error {
 			return e.Execute(ctx)
@@ -100,6 +101,7 @@ func (e *Executor) HandlerSession(ctx context.Context, opts ...Option) (*extensi
 		extension.WithRedirect(e.redirect),
 		extension.WithSql(e.newSqlService),
 		extension.WithHttp(e.newHttp),
+		extension.WithMessageBus(res.MessageBuses),
 	)
 
 	e.handlerSession = sess

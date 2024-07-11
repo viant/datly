@@ -478,6 +478,9 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 	if len(s.Repository.Caches) > 0 {
 		resource.Rule.With = append(resource.Rule.With, "cache")
 	}
+	if len(s.Repository.MessageBuses) > 0 {
+		resource.Rule.With = append(resource.Rule.With, "mbus")
+	}
 	for k := range s.Repository.Substitutes {
 		resource.Rule.With = append([]string{k}, resource.Rule.With...)
 	}

@@ -106,6 +106,9 @@ func (r *Repository) PersistConfig() error {
 	if err = r.persistConnections(cfg); err != nil {
 		return err
 	}
+	if err = r.persistMBus(cfg); err != nil {
+		return err
+	}
 	if err = r.persistConstants(); err != nil {
 		return err
 	}
@@ -172,6 +175,10 @@ func (r *Repository) ensureDependencies(ctx context.Context) error {
 	if err := r.ensureConnectors(ctx); err != nil {
 		return err
 	}
+	if err := r.ensureMBus(ctx); err != nil {
+		return err
+	}
+
 	if err := r.ensureConstants(ctx); err != nil {
 		return err
 	}
