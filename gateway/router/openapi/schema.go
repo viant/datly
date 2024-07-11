@@ -227,6 +227,7 @@ func (c *ComponentSchema) GenerateSchema(ctx context.Context, schema *Schema) (*
 	return result, nil
 }
 
+// TODO refactor
 func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentSchema, dst *openapi3.Schema, schema *Schema) error {
 	rType := schema.rType
 	for rType.Kind() == reflect.Ptr {
@@ -326,6 +327,41 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 			dst.Type = objectOutput
 			break
 		}
+
+		if rType.Kind() == reflect.Map {
+			dst.Type = objectOutput
+			keyType := rType.Key()
+			valueType := rType.Elem()
+			valueTypeName := valueType.Name()
+			vType, format, err := c.toOpenApiType(valueType)
+			valueSchema := &openapi3.Schema{
+				Type:   vType,
+				Format: format,
+			}
+			if err != nil {
+				switch valueType.Kind() {
+				case reflect.Struct:
+				case reflect.Slice:
+
+					if vType, format, err = c.toOpenApiType(valueType.Elem()); err != nil {
+						return err
+					}
+					valueTypeName += strings.Title(valueType.Elem().Name()) + "s"
+					valueSchema.Type = arrayOutput
+					valueSchema.Items = &openapi3.Schema{
+						Type:   vType,
+						Format: format,
+					}
+				default:
+					return err
+				}
+			}
+			dst.Properties = openapi3.Schemas{}
+			mapType := strings.Title(keyType.Name()) + valueTypeName + "Map"
+			dst.Properties[mapType] = valueSchema
+			break
+		}
+
 		var err error
 		dst.Type, dst.Format, err = c.toOpenApiType(rType)
 		if err != nil {
@@ -410,6 +446,7 @@ func (c *SchemaContainer) toOpenApiType(rType reflect.Type) (string, string, err
 
 func (c *SchemaContainer) asOpenApiType(rType reflect.Type) (string, string, bool) {
 	switch rType.Kind() {
+
 	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
 		return integerOutput, int64Format, true
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16, reflect.Uint32:
