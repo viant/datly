@@ -1120,6 +1120,8 @@ github.com/viant/cloudless v1.9.5 h1:C70+K/xwnkSnlLINjTztU0H01tguIa0a4rvUlKPbcgE
 github.com/viant/cloudless v1.9.5/go.mod h1:t6BDFAXg3s3/aULrPrR885vNmyI4MoHfXNu+TIzl/M0=
 github.com/viant/cloudless v1.9.6 h1:qSh8Oq6ZtmoeVHJ1RdeGxcsYlOz/lXufnND81MXaNnw=
 github.com/viant/cloudless v1.9.6/go.mod h1:t6BDFAXg3s3/aULrPrR885vNmyI4MoHfXNu+TIzl/M0=
+github.com/viant/cloudless v1.9.7-0.20240711200708-b74577b4b258 h1:nk5FIG3OWHyMlFmoZnfSMnEfLvoh66GlpZPFofcGFRw=
+github.com/viant/cloudless v1.9.7-0.20240711200708-b74577b4b258/go.mod h1:t6BDFAXg3s3/aULrPrR885vNmyI4MoHfXNu+TIzl/M0=
 github.com/viant/dsc v0.16.2 h1:Kw8zNct6dTISVZpartYK4MlKiwSSqIdRSq5CYjtZcc4=
 github.com/viant/dsc v0.16.2/go.mod h1:vkBPh3XSXUBB/ePbEO0VsKPaiN4JLRuB3QVftbS6KI4=
 github.com/viant/dsunit v0.10.8 h1:egq8LH4ogXTweFhzl/RqPhM9PNJtG35sbe02KnjFj3I=
