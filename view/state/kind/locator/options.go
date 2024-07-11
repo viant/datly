@@ -11,6 +11,7 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/handler/response"
 	"net/http"
+	"net/url"
 	"reflect"
 )
 
@@ -87,10 +88,22 @@ func NewOptions(opts []Option) *Options {
 // Option represents locator option
 type Option func(o *Options)
 
+var defaultURL, _ = url.Parse("http://localhost:8080/")
+
 // WithRequest create http requestState option
 func WithRequest(request *http.Request) Option {
 	return func(o *Options) {
+		ensureValueRequest(request)
 		o.request = request
+	}
+}
+
+func ensureValueRequest(request *http.Request) {
+	if request.URL == nil {
+		request.URL = defaultURL
+	}
+	if request.Header == nil {
+		request.Header = make(http.Header)
 	}
 }
 
