@@ -703,12 +703,7 @@ func discoverEmbeds(embedRoot string) *embed.Holder {
 
 				if strings.HasSuffix(name, ".sql") {
 					URI := path.Join(holder.Name(), name)
-					content, err := fs.DownloadWithURL(context.Background(), candidate.URL())
-					fmt.Printf("!%s! %v %s\n", name, strings.HasSuffix(name, ".sql"), content)
-
-					if err != nil {
-						fmt.Printf("1\n")
-					}
+					content, _ := fs.DownloadWithURL(context.Background(), candidate.URL())
 					if len(content) > 0 {
 						embedFs.Add(URI, string(content))
 					}
