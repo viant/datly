@@ -1097,8 +1097,6 @@ github.com/viant/gmetric v0.3.1-0.20230405233616-cc90deee60c4 h1:Lz5up/Q1N8A5pch
 github.com/viant/gmetric v0.3.1-0.20230405233616-cc90deee60c4/go.mod h1:RHqj7bdVZrPahrhQxhZRsFX3p/I7ixUEt7+G3l5z+v0=
 github.com/viant/godiff v0.4.1 h1:pjMA4zOz/mNcXRvl+CjWzg3m8XwOFBjaxDqfUYQXb9M=
 github.com/viant/godiff v0.4.1/go.mod h1:/q54pjC31YIOqbPcQnqwF2/dAZlnIr1SdQOtqoa0MpQ=
-github.com/viant/govalidator v0.2.2-0.20230629211659-f2a3f0659b0b h1:IxRf961iRIoJEWAZjBPa/gCxymUBw4csESJeeLmaiAQ=
-github.com/viant/govalidator v0.2.2-0.20230629211659-f2a3f0659b0b/go.mod h1:D35Dwx0R8rR1knRxhlseoYvOkiqo24kpMg1/o977i9Y=
 github.com/viant/govalidator v0.2.2 h1:9EWbLUQ7M5c9ZAGsi8SZsNdKs4KT46Cy4Tu30mAISZY=
 github.com/viant/govalidator v0.2.2/go.mod h1:D35Dwx0R8rR1knRxhlseoYvOkiqo24kpMg1/o977i9Y=
 github.com/viant/igo v0.2.0 h1:ygWmTCinnGPaeV7omJLiyneOpzYZ5kiw7oYz7mUJZVQ=
@@ -1115,8 +1113,10 @@ github.com/viant/sqlx v0.12.1-0.20240613223731-980e9de11f2f h1:24wEZ4qpkz2Pw4/CD
 github.com/viant/sqlx v0.12.1-0.20240613223731-980e9de11f2f/go.mod h1:gHaDVhZAGYF6l3OP8Pd9FZ/p6tZaani47dwDWDUYTWM=
 github.com/viant/structology v0.5.6-0.20231127181208-736f8ad06193 h1:wKs4BXSTV0VAubYVO4giNJIwRCE4OS1Ctk2y9MeKax4=
 github.com/viant/structology v0.5.6-0.20231127181208-736f8ad06193/go.mod h1:oGgckfRCArsyzFpRqem+U0EEyzxjoNx3o21MXO43uh0=
-github.com/viant/structql v0.4.2-0.20240406183616-cff48e18d922 h1:w/h5njGTM1Pxw2WHeYsS391btY+bXr6XK3IdBFecenU=
-github.com/viant/structql v0.4.2-0.20240406183616-cff48e18d922/go.mod h1:1ko0M6tIUv2nafHo94cnUGG65GmAXYmkEcgeUU/+kCM=
+github.com/viant/structql v0.4.2-0.20240712002135-b1ef22dd834f h1:B9+Qhjh0Owb2SzNwrRBYSGvAp1kNRDgZoVKPXmcsKP0=
+github.com/viant/structql v0.4.2-0.20240712002135-b1ef22dd834f/go.mod h1:1ko0M6tIUv2nafHo94cnUGG65GmAXYmkEcgeUU/+kCM=
+github.com/viant/structql v0.4.2 h1:rwdh8t3GRvB6B8bXvQDygeFgcB/x10uoinQPpeFT7/I=
+github.com/viant/structql v0.4.2/go.mod h1:1ko0M6tIUv2nafHo94cnUGG65GmAXYmkEcgeUU/+kCM=
 github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c h1:j16wc8v05VpZXLaBDqbLZOAjSyN/XrmzjqgcPm6K2FI=
 github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c/go.mod h1:vV8QgJkhug+X+qyKds8av0fhjD+4u7IhNtowL1KGQ5A=
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
