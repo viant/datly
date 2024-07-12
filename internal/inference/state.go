@@ -697,13 +697,20 @@ func discoverEmbeds(embedRoot string) *embed.Holder {
 			if !holder.IsDir() || url.Equals(holder.URL(), embedRoot) {
 				continue
 			}
-			if candidates, _ := fs.List(context.Background(), holder.URL()); len(objects) > 0 {
-				for _, candidate := range candidates {
-					if strings.HasSuffix(candidate.Name(), ".sql") {
-						URI := path.Join(holder.Name(), candidate.Name())
-						if content, _ := fs.DownloadWithURL(context.Background(), candidate.URL()); len(content) > 0 {
-							embedFs.Add(URI, string(content))
-						}
+			assets, _ := fs.List(context.Background(), holder.URL())
+			for _, candidate := range assets {
+				name := strings.TrimSpace(candidate.Name())
+
+				if strings.HasSuffix(name, ".sql") {
+					URI := path.Join(holder.Name(), name)
+					content, err := fs.DownloadWithURL(context.Background(), candidate.URL())
+					fmt.Printf("!%s! %v %s\n", name, strings.HasSuffix(name, ".sql"), content)
+
+					if err != nil {
+						fmt.Printf("1\n")
+					}
+					if len(content) > 0 {
+						embedFs.Add(URI, string(content))
 					}
 				}
 			}

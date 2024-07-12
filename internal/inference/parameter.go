@@ -102,9 +102,9 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 
 func (p *Parameter) FieldDeclaration(embedRoot string, embed map[string]string, def *view.TypeDefinition) string {
 	builder := strings.Builder{}
-	if p.SQL != "" {
-		p.buildSQLDoc(&builder)
-	}
+	//if p.SQL != "" {
+	//	p.buildSQLDoc(&builder)
+	//}
 
 	builder.WriteByte('\t')
 	builder.WriteString(p.Name)
@@ -215,7 +215,7 @@ func (p *Parameter) SyncObject() {
 
 // TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
 func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS) (*Parameter, error) {
-	SQL := extractSQL(field)
+	//SQL := extractSQL(field)
 	if field.Tag == nil {
 		return nil, nil
 	}
@@ -227,8 +227,13 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 		return nil, err
 	}
 	pTag := aTag.Parameter
-	param := &Parameter{
-		SQL: SQL,
+
+	param := &Parameter{}
+	if aTag.Codec != nil {
+		param.SQL = aTag.Codec.Body
+	}
+	if aTag.SQL.SQL != "" {
+		param.SQL = aTag.SQL.SQL
 	}
 	param.Name = field.Names[0].Name
 	if pTag.Name != "" {

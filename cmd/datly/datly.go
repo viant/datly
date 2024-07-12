@@ -41,7 +41,6 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-
 	err := cmd.RunApp(datly.Version, os.Args[1:])
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)
