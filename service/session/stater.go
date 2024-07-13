@@ -21,9 +21,10 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		}
 		s.Types.Put(stateType)
 	}
+	sessionOptions := s.ViewOptions(s.view, WithLocatorOptions())
 	hOptions := hstate.NewOptions(opts...)
 	aState := stateType.Type().WithValue(dest)
-	options := s.Clone().Indirect(true)
+	options := s.Clone().Indirect(true, sessionOptions.kindLocator.Options()...)
 	options.scope = hOptions.Scope()
 	if err = s.SetState(ctx, stateType.Parameters, aState, options); err != nil {
 		return err

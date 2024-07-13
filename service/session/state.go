@@ -27,12 +27,17 @@ type (
 	Session struct {
 		cache *cache
 		views *views
+		view  *view.View
 		Options
 		Types state.Types
 	}
 
 	contextKey string
 )
+
+func (s *Session) SetView(view *view.View) {
+	s.view = view
+}
 
 func (s *Session) Value(ctx context.Context, key string) (interface{}, bool, error) {
 	parameter, ok := s.namedParameters[key]
@@ -253,6 +258,11 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 		return err
 	}
 	err = parameterSelector.SetValue(aState.Pointer(), value)
+
+	//ensure last writen pointer shared
+	if err == nil && parameter.IsCacheable() && parameter.Schema.Type().Kind() == reflect.Ptr {
+		s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
+	}
 	return err
 }
 

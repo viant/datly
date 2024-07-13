@@ -15,6 +15,10 @@ type KindLocator struct {
 	options []Option
 }
 
+func (l *KindLocator) Options() []Option {
+	return l.options
+}
+
 // With creates sub locator with options
 func (l *KindLocator) With(options ...Option) *KindLocator {
 	opts := ensureParentOptions(l, options)
