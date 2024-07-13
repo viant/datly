@@ -259,9 +259,12 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 	}
 	err = parameterSelector.SetValue(aState.Pointer(), value)
 
-	//ensure last writen pointer shared
-	if err == nil && parameter.IsCacheable() && parameter.Schema.Type().Kind() == reflect.Ptr {
-		s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
+	//ensure last written can be shared
+	if err == nil {
+		switch parameterSelector.Type().Kind() {
+		case reflect.Ptr:
+			s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
+		}
 	}
 	return err
 }
