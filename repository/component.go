@@ -118,7 +118,9 @@ func (c *Component) updatedViewSchemaWithNamedType(ctx context.Context, resource
 		if viewField, ok := oType.FieldByName(param.Name); ok {
 			if !c.View.Schema.IsNamed() {
 				c.View.SetNamedType(viewField.Type)
-				//param.Schema.SetType(viewField.Type)
+				if !isGeneratorContext(ctx) {
+					param.Schema.SetType(viewField.Type)
+				}
 			}
 		}
 		if summaryParam := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "summary"); summaryParam != nil {

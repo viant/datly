@@ -134,6 +134,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		if err != nil {
 			return err
 		}
+		ctx = repository.WithGeneratorContext(ctx)
 		aComponent, err := datlySrv.Component(ctx, URI)
 		if err != nil {
 			return err
@@ -144,7 +145,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		if repo := opts.Repository(); repo != nil && len(repo.SubstitutesURL) > 0 {
 			namedResources = append(namedResources, repo.SubstitutesURL...)
 		}
-		code := aComponent.GenerateOutputCode(true, !translate.SkipCompDef, embeds, namedResources...)
+		code := aComponent.GenerateOutputCode(true, embeds, namedResources...)
 		destURL := path.Join(moduleLocation, modulePrefix, sourceName+".go")
 		if err = s.fs.Upload(ctx, destURL, file.DefaultFileOsMode, strings.NewReader(code)); err != nil {
 			return err

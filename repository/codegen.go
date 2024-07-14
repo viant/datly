@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"github.com/viant/datly/internal/setter"
@@ -17,13 +18,23 @@ import (
 	"strings"
 )
 
+var generatorKey string
+
+func isGeneratorContext(ctx context.Context) bool {
+	return ctx.Value(generatorKey) != nil
+}
+
+func WithGeneratorContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, generatorKey, true)
+}
+
 //go:embed codegen/contract.gox
 var contractInit string
 
 //go:embed codegen/register.gox
 var registerInit string
 
-func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool, embeds map[string]string, namedResources ...string) string {
+func (c *Component) GenerateOutputCode(withEmbed bool, embeds map[string]string, namedResources ...string) string {
 	builder := strings.Builder{}
 	input := c.Input.Type.Type()
 	registry := c.TypeRegistry()
