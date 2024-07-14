@@ -106,7 +106,7 @@ func (t *Template) setMethodFragment() {
 	case "put":
 		method = "Put"
 	}
-	if t.Resource.Rule.Handler != nil && t.Resource.Rule.Handler.Type != "" {
+	if t.IsHandler {
 		t.MethodFragment = method
 	}
 }
