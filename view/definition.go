@@ -42,6 +42,14 @@ type (
 	}
 )
 
+func (d TypeDefinition) SimplePackage() string {
+	parts := strings.Split(d.Package, "/")
+	if len(parts) == 0 {
+		return d.Package
+	}
+	return parts[len(parts)-1]
+}
+
 func (d TypeDefinitions) Exclude(candidates ...string) TypeDefinitions {
 	var result = make(TypeDefinitions, 0, len(d))
 outer:

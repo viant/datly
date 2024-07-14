@@ -59,6 +59,7 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		}
 		root.Spec.Type.Cardinality = resource.Rule.Route.Output.Cardinality
 		template := codegen.NewTemplate(resource.Rule, root.Spec)
+		template.IsHandler = options.Generate.Lang == "go"
 		template.SetResource(resource)
 		root.Spec.Type.Package = ruleOption.Package()
 		template.BuildTypeDef(root.Spec, resource.Rule.GetField(), resource.Rule.Doc.Columns)
@@ -257,9 +258,13 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		if typeName == "" {
 			typeName = entityParam.Name
 		}
-		aType, err = inference.NewType(rule.StateTypePackage(), typeName, entityType)
+		statePkg := rule.StateTypePackage()
+		aType, err = inference.NewType(statePkg, typeName, entityType)
 		if err != nil {
 			return err
+		}
+		if len(ruleOptions.Packages) == 0 {
+			ruleOptions.Packages = append(ruleOptions.Packages, statePkg)
 		}
 	}
 
@@ -271,6 +276,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	if aType != nil {
 		tmpl.EnsureImports(aType)
 	}
+
 	tmpl.State = aState
 	handlerDSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
 	if err != nil {
@@ -282,6 +288,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		name = entityParam.Name
 	}
 	handlerDSQL += fmt.Sprintf("$Nop($%v)", name)
+	*dSQL = handlerDSQL
 	*dSQL = handlerDSQL
 	return nil
 }

@@ -112,11 +112,13 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 
 func (c *Component) updatedViewSchemaWithNamedType(ctx context.Context, resource *view.Resource) error {
 	outputSchema := c.Contract.Output.Type.Schema
+
 	if param := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); param != nil && outputSchema.IsNamed() {
 		oType := types.EnsureStruct(outputSchema.Type())
 		if viewField, ok := oType.FieldByName(param.Name); ok {
 			if !c.View.Schema.IsNamed() {
 				c.View.SetNamedType(viewField.Type)
+				param.Schema.SetType(viewField.Type)
 			}
 		}
 		if summaryParam := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "summary"); summaryParam != nil {

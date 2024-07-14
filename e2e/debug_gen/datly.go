@@ -63,7 +63,7 @@ func main() {
 
 	baseDir := filepath.Join(toolbox.CallerDirectory(3), "..")
 	fmt.Printf("base: %v\n", baseDir)
-	caseName := "009_apikey"
+	caseName := "029_generate_put_one_many"
 	caseFolder := filepath.Join(baseDir, "local/regression/cases/", caseName)
 	gen, err := loadGen(caseFolder, caseName)
 	if err != nil {
@@ -89,7 +89,7 @@ func main() {
 	}()
 	os.Chdir(path.Join(baseDir, "local"))
 
-	err = cmd.New(Version, os.Args[1:], &ConsoleWriter{})
+	err = cmd.RunApp(Version, os.Args[1:])
 	if err != nil {
 		log.Fatal(err)
 	}

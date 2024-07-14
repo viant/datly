@@ -73,6 +73,9 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 		afterSnippet.WriteString(fmt.Sprintf("\n\t%v.Has.%v = true", recv, field.Name))
 		afterSnippet.WriteString("\n}\n\n")
 	}
+	if !t.IsHandler {
+		afterSnippet = strings.Builder{}
+	}
 
 	generatedStruct := xreflect.GenerateStruct(t.TypeDef.Name, rType,
 		xreflect.WithPackage(pkg),

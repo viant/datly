@@ -11,7 +11,8 @@ type (
 		LookupParameter(name string) (*Parameter, error)
 
 		AppendParameter(parameter *Parameter)
-		ViewSchema(ctx context.Context, schema string) (*Schema, error)
+		ViewSchema(ctx context.Context, name string) (*Schema, error)
+		ViewSchemaPointer(ctx context.Context, name string) (*Schema, error)
 		LookupType() xreflect.LookupType
 		LoadText(ctx context.Context, URL string) (string, error)
 		Codecs() *codec.Registry

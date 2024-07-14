@@ -661,6 +661,10 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 			if param == nil {
 				return err
 			}
+			if param.In.Kind == state.KindView {
+				fieldType, _ := xreflect.Node{Node: field.Type}.Stringify()
+				param.Schema.DataType = fieldType
+			}
 			state.BuildPredicate(aTag, &param.Parameter)
 			state.BuildCodec(aTag, &param.Parameter)
 			if param.Output != nil {
@@ -672,7 +676,9 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 					}
 				}
 			}
-			aState.Append(param)
+			if typeName == dataType {
+				aState.Append(param)
+			}
 			return nil
 		}))
 

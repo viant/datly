@@ -289,10 +289,15 @@ func (r *Resource) buildParameterViews() {
 		if parameter.Connector != "" {
 			viewlet.Connector = parameter.Connector
 		}
+		if parameter.Schema != nil && parameter.Schema.DataType != "" {
+			viewlet.DataType = parameter.Schema.DataType
+			parameter.Schema.Name = strings.Replace(parameter.Schema.DataType, "*", "", 1)
+		}
 		viewlet.View.Mode = view.ModeQuery
 		viewlet.View.ParameterDerived = true
 		r.Rule.Viewlets.Append(viewlet)
 	}
+
 }
 
 func (r *Resource) ImpliedKind() state.Kind {
@@ -394,10 +399,9 @@ func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(
 		if len(fields) > 0 {
 			paramSchema := reflect.StructOf(fields)
 			viewParameter.Schema.SetType(paramSchema)
-			viewParameter.Schema.DataType = viewParameter.In.Name
 		}
 		aViewNamespace.TypeDefinition = aViewNamespace.Spec.TypeDefinition("", false, r.Rule.Doc.Columns)
-		aViewNamespace.TypeDefinition.Cardinality = viewParameter.Schema.Cardinality
+		//	aViewNamespace.TypeDefinition.Cardinality = viewParameter.Schema.Cardinality
 	}
 	return nil
 }

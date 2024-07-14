@@ -440,6 +440,17 @@ func (r *Resource) View(name string) (*View, error) {
 	return r._views.Lookup(name)
 }
 
+func (r *Resource) ViewSchemaPointer(ctx context.Context, name string) (*state.Schema, error) {
+	aView, err := r.View(name)
+	if err != nil {
+		return nil, err
+	}
+	if aView.Schema == nil {
+		aView.Schema = &state.Schema{}
+	}
+	return aView.Schema, nil
+}
+
 func (r *Resource) ViewSchema(ctx context.Context, name string) (*state.Schema, error) {
 	aView, err := r.View(name)
 	if err != nil {

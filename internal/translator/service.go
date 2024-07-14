@@ -374,7 +374,21 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 	if viewlet.IsMetaView() {
 		return nil
 	}
-
+	if viewlet.TypeDefinition != nil {
+		viewlet.TypeDefinition.Cardinality = ""
+	}
+	if viewlet.TypeDefinition != nil && viewlet.DataType != "" { //if derived from
+		viewlet.TypeDefinition.DataType = strings.ReplaceAll(viewlet.DataType, "*", "")
+		viewlet.TypeDefinition.Name = viewlet.TypeDefinition.DataType
+		pkgLocation := viewlet.Resource.rule.SourceCodeLocation()
+		aType := xreflect.NewType(viewlet.TypeDefinition.Name, xreflect.WithPackage(viewlet.TypeDefinition.SimplePackage()), xreflect.WithPackagePath(pkgLocation))
+		rType, _ := aType.LoadType(resource.typeRegistry)
+		if rType != nil {
+			viewlet.TypeDefinition.DataType = rType.String()
+			viewlet.TypeDefinition.Fields = nil
+			resource.AppendTypeDefinition(viewlet.TypeDefinition)
+		}
+	}
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 	ruleName := s.Repository.RuleName(resource.rule)
 	if err := viewlet.View.buildView(resource.Rule, mode); err != nil {
@@ -456,6 +470,7 @@ func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Vie
 	if viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.Expanded.Query, viewlet.Expanded.Args...); err != nil {
 		return fmt.Errorf("failed to create spec for %v, %w", viewlet.Name, err)
 	}
+
 	pkg := viewlet.Resource.rule.Package()
 	viewlet.Spec.Package = pkg
 	viewlet.Spec.Namespace = viewlet.Name

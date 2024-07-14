@@ -190,6 +190,13 @@ func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resource
 		return nil
 	}
 	p.In.Name = p.Name
+	if p.Schema != nil { //handles named types
+		if xType, _ := resource.LookupType()(p.Schema.Name, xreflect.WithPackage(p.Schema.Package)); xType != nil {
+			if vSchema, _ := resource.ViewSchemaPointer(ctx, p.In.Name); vSchema != nil {
+				vSchema.SetType(xType)
+			}
+		}
+	}
 	schema, err := resource.ViewSchema(ctx, p.In.Name)
 	if err != nil {
 		return fmt.Errorf("failed to apply view parameter %v, %w", p.Name, err)

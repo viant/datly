@@ -74,18 +74,13 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 	builder.WriteByte('/')
 	builder.WriteString(string(p.In.Name))
 	builder.WriteByte(')')
-
-	if p.SQL != "" {
-		builder.WriteString(" /*\n")
-		SQL := strings.TrimSpace(p.SQL)
-		p.addedValidationModifierIfNeeded(&builder, SQL)
-		builder.WriteString(SQL)
-		builder.WriteString("\n*/\n")
-	}
 	if p.ErrorStatusCode != 0 {
 		builder.WriteString(".WithStatusCode(" + strconv.Itoa(p.ErrorStatusCode) + ")")
 	}
 
+	if p.Scope != "" {
+		builder.WriteString(".Scope('" + p.Scope + "')")
+	}
 	if p.Output != nil {
 		builder.WriteString(".WithCodec('" + p.Output.Name + "'")
 		for i, arg := range p.Output.Args {
@@ -96,6 +91,14 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 		}
 		builder.WriteString(")")
 	}
+	if p.SQL != "" {
+		builder.WriteString(" /*\n")
+		SQL := strings.TrimSpace(p.SQL)
+		p.addedValidationModifierIfNeeded(&builder, SQL)
+		builder.WriteString(SQL)
+		builder.WriteString("\n*/\n")
+	}
+
 	builder.WriteByte(')')
 	return builder.String()
 }
@@ -235,7 +238,12 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	if aTag.SQL.SQL != "" {
 		param.SQL = aTag.SQL.SQL
 	}
-	param.Name = field.Names[0].Name
+	if len(field.Names) > 0 {
+		param.Name = field.Names[0].Name
+	} else {
+		fieldType, _ := xreflect.Node{Node: field.Type}.Stringify()
+		param.Name = fieldType
+	}
 	if pTag.Name != "" {
 		param.Name = pTag.Name
 	}

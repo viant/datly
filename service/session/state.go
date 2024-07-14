@@ -354,6 +354,42 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	}
 
 	if parameter.Schema.IsStruct() && !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
+
+		rawSelectorType := selector.Type()
+		isSelectorPtr := false
+		if rawSelectorType.Kind() == reflect.Ptr {
+			rawSelectorType = rawSelectorType.Elem()
+			isSelectorPtr = true
+		}
+		isValuePtr := false
+		rawValueType := valueType
+		if rawValueType.Kind() == reflect.Ptr {
+			rawValueType = valueType.Elem()
+			isValuePtr = true
+		}
+
+		if rawSelectorType.Kind() == reflect.Struct && isSelectorPtr {
+			if rawValueType.ConvertibleTo(rawSelectorType) {
+				ptrValue := reflect.ValueOf(value)
+				if isValuePtr && ptrValue.IsNil() {
+					return nil, nil
+				}
+				var destValue reflect.Value
+				if isValuePtr {
+					destValue = ptrValue.Elem().Convert(rawSelectorType)
+				} else {
+					destValue = ptrValue.Convert(rawSelectorType)
+				}
+				if isSelectorPtr {
+					destPtrType := reflect.New(valueType)
+					destPtrType.Elem().Set(destValue)
+					return destPtrType.Interface(), nil
+				} else {
+					return destValue.Interface(), nil
+				}
+			}
+		}
+
 		if options.shallReportNotAssignable() {
 			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
 		}

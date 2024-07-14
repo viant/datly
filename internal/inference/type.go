@@ -11,6 +11,7 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/tagly/format/text"
 	"reflect"
+	"strings"
 )
 
 type reflectOptions struct {
@@ -204,6 +205,14 @@ func (t *Type) Fields(opts ...ReflectOption) []reflect.StructField {
 		fields = append(fields, field.StructField(opts...))
 	}
 	return fields
+}
+
+func (t *Type) SimplePackage() string {
+	parts := strings.Split(t.Package, ",")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return ""
 }
 
 func NewType(packageName string, name string, rType reflect.Type) (*Type, error) {
