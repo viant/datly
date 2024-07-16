@@ -29,6 +29,6 @@ func (r *Router) handleComponentState(ctx context.Context, response http.Respons
 }
 
 func (r *Router) generateComponentContract(component *repository.Component) (int, []byte) {
-	result := component.GenerateOutputCode(true, map[string]string{})
+	result := component.GenerateOutputCode(context.Background(), true, map[string]string{})
 	return http.StatusOK, []byte(result)
 }
