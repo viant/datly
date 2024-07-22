@@ -17,6 +17,9 @@ import (
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
+	dcodec "github.com/viant/datly/view/extension/codec"
+	verifier2 "github.com/viant/scy/auth/jwt/verifier"
+
 	"github.com/viant/datly/view/state"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
@@ -524,10 +527,19 @@ func New(ctx context.Context, options ...repository.Option) (*Service, error) {
 		return nil, err
 	}
 
-	if verifier := aRepository.JWTVerifier(); verifier != nil {
+	var verifier *verifier2.Service
+	if verifier = aRepository.JWTVerifier(); verifier != nil {
 		codecs := aRepository.Extensions().Codecs
 		codecs.RegisterInstance(
 			extension.CodecKeyJwtClaim, sjwt.New(verifier.VerifyClaims), time.Time{},
+		)
+	}
+
+	if authService := aRepository.AuthService(); authService != nil {
+		codecs := aRepository.Extensions().Codecs
+		srv := dcodec.NewCustomAuth(authService)
+		codecs.RegisterFactory(
+			dcodec.KeyCustomAuth, srv, time.Time{},
 		)
 	}
 

@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric"
+	"github.com/viant/scy/auth/custom"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"github.com/viant/xdatly/codec"
@@ -36,6 +37,7 @@ type Options struct {
 	cacheConnectorPrefix string
 	path                 *path.Path
 	jWTVerifier          *verifier.Service
+	customAuth           *custom.Service
 	jwtSigner            *signer.Service
 	types                []*view.PackagedType
 	resource             state.Resource
@@ -244,6 +246,12 @@ func WithJWTSigner(aSigner *signer.Config) Option {
 func WithPackageTypes(types ...*view.PackagedType) Option {
 	return func(o *Options) {
 		o.types = types
+	}
+}
+
+func WithCustomAuth(auth *custom.Service) Option {
+	return func(o *Options) {
+		o.customAuth = auth
 	}
 }
 

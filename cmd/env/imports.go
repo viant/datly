@@ -2,6 +2,7 @@ package env
 
 import (
 	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/viant/aerospike"
 	_ "github.com/viant/afs/embed"
 	_ "github.com/viant/afsc/aws"
 	_ "github.com/viant/afsc/gcp"
