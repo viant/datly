@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/view/state/kind"
 	"io"
 	"net/http"
+	"strings"
 )
 
 type HttpRequest struct {
@@ -18,6 +19,14 @@ func (p *HttpRequest) Names() []string {
 }
 
 func (p *HttpRequest) Value(ctx context.Context, name string) (interface{}, bool, error) {
+	switch strings.ToLower(name) {
+	case "method":
+		value, err := p.getRequest()
+		if err != nil {
+			return nil, false, err
+		}
+		return value.Method, true, nil
+	}
 	value, err := p.getRequest()
 	return value, true, err
 }
