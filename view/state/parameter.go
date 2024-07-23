@@ -326,7 +326,7 @@ func (p *Parameter) initSchema(resource Resource) error {
 		}
 	}
 
-	if p.In.Kind == KindRequest {
+	if p.In.Kind == KindRequest && p.In.Name == "" {
 		p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
 		return nil
 	}
@@ -334,7 +334,7 @@ func (p *Parameter) initSchema(resource Resource) error {
 	if p.Schema == nil {
 		if p.In.Kind == KindConst {
 			p.Schema = NewSchema(reflect.TypeOf(p.Value))
-		} else if p.In.Kind == KindRequest {
+		} else if p.In.Kind == KindRequest && p.In.Name == "" {
 			p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
 		} else {
 			return fmt.Errorf("parameter %v schema can't be empty", p.Name)
