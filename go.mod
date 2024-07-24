@@ -52,7 +52,7 @@ require (
 require (
 	firebase.google.com/go/v4 v4.14.0
 	github.com/viant/aerospike v0.1.0
-	github.com/viant/structology v0.5.6-0.20240715114555-e89beafaa7b8
+	github.com/viant/structology v0.5.6-0.20240724183243-379c7ed6e097
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.3.1-0.20240710035338-b561698d2bf4
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
@@ -146,4 +146,3 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-

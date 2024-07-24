@@ -28,6 +28,7 @@ import (
 	"github.com/viant/xdatly/handler/response"
 	"io"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 )
@@ -149,7 +150,8 @@ func (r *Handler) Handle(ctx context.Context, response http.ResponseWriter, requ
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	payloadReader, err := r.handleWithComponent(ctx, request, response, aComponent)
+
+	payloadReader, err := r.safelyHandleWithComponent(ctx, response, request, aComponent)
 	if err != nil {
 		code, _ := httputils.BuildErrorResponse(err)
 		r.writeErr(response, aComponent, err, code)
@@ -158,6 +160,37 @@ func (r *Handler) Handle(ctx context.Context, response http.ResponseWriter, requ
 	if payloadReader != nil {
 		r.writeResponse(ctx, request, response, aComponent, payloadReader)
 	}
+}
+
+func (r *Handler) safelyHandleWithComponent(ctx context.Context, response http.ResponseWriter, request *http.Request, aComponent *repository.Component) (reader PayloadReader, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			stackLines := strings.Split(string(debug.Stack()), "\n")
+			stackInfo := extractPanicInfo(stackLines)
+			err = httputils.NewHttpMessageError(http.StatusInternalServerError, fmt.Errorf("failed to handle request %v, %s", r, stackInfo))
+		}
+	}()
+	reader, err = r.handleWithComponent(ctx, request, response, aComponent)
+	return reader, err
+}
+
+func extractPanicInfo(lines []string) interface{} {
+	var postPanic []string
+	hadPanic := false
+	for i := 0; i < len(lines); i++ {
+		if strings.Contains(lines[i], "panic") || strings.Contains(lines[i], "nil") {
+			hadPanic = true
+		}
+		if hadPanic {
+			postPanic = append(postPanic, strings.TrimSpace(lines[i]))
+
+		}
+	}
+
+	if len(postPanic) > 5 {
+		postPanic = postPanic[:5]
+	}
+	return strings.Join(postPanic, "\n")
 }
 
 func (r *Handler) writeErr(w http.ResponseWriter, aComponent *repository.Component, err error, statusCode int) {
