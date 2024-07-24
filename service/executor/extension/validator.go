@@ -85,10 +85,21 @@ func (v *Validator) validateWithGoValidator(ctx context.Context, any interface{}
 func (v *Validator) validateWithSqlx(ctx context.Context, any interface{}, validation *validator.Validation, options *validator.Options) error {
 	db := options.WithDB
 	if db != nil {
-		var sqlxOptions = []sqlxvalidator.Option{
-			sqlxvalidator.WithUnique(true),
-			sqlxvalidator.WithRef(true),
+		var sqlxOptions []sqlxvalidator.Option
+		if options.WithUnique {
+			sqlxOptions = append(sqlxOptions, sqlxvalidator.WithUnique(true))
 		}
+		if options.WithRef {
+			sqlxOptions = append(sqlxOptions, sqlxvalidator.WithRef(true))
+		}
+
+		if len(sqlxOptions) == 0 {
+			return nil
+		}
+		if options.Location != "" {
+			sqlxOptions = append(sqlxOptions, sqlxvalidator.WithLocation(options.Location))
+		}
+
 		if options.WithSetMarker {
 			sqlxOptions = append(sqlxOptions, sqlxvalidator.WithSetMarker())
 		}
