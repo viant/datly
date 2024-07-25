@@ -54,9 +54,9 @@ require (
 	github.com/viant/aerospike v0.1.0
 	github.com/viant/structology v0.5.6-0.20240724183243-379c7ed6e097
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
-	github.com/viant/xdatly v0.4.0
+	github.com/viant/xdatly v0.4.1-0.20240725170734-15a26594f23e
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20240725144805-672af29559ba
+	github.com/viant/xdatly/handler v0.0.0-20240725170734-15a26594f23e
 	github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb
 	github.com/viant/xdatly/types/custom v0.0.0-20240624200855-79bbed0d3db9
 	github.com/viant/xlsy v0.3.0
@@ -146,4 +146,3 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
