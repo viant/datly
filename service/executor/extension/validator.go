@@ -73,6 +73,13 @@ func (v *Validator) validateWithGoValidator(ctx context.Context, any interface{}
 	if options.WithSetMarker {
 		gOptions = append(gOptions, govalidator.WithSetMarker())
 	}
+	if options.CanUseMarkerProvider != nil {
+		gOptions = append(gOptions, govalidator.WithCanUseMarkerProvider(govalidator.CanUseMarkerProvider(options.CanUseMarkerProvider)))
+	}
+	if options.Location != "" {
+		rootPath := govalidator.NewPath()
+		gOptions = append(gOptions, govalidator.WithPath(rootPath.Field(options.Location)))
+	}
 
 	ret, err := goValidator.Validate(ctx, any, gOptions...)
 	if ret != nil && len(ret.Violations) > 0 {
@@ -96,13 +103,13 @@ func (v *Validator) validateWithSqlx(ctx context.Context, any interface{}, valid
 		if len(sqlxOptions) == 0 {
 			return nil
 		}
+		if options.WithShallow {
+			sqlxOptions = append(sqlxOptions, sqlxvalidator.WithShallow(true))
+		}
 		if options.Location != "" {
 			sqlxOptions = append(sqlxOptions, sqlxvalidator.WithLocation(options.Location))
 		}
-
-		if options.WithSetMarker {
-			sqlxOptions = append(sqlxOptions, sqlxvalidator.WithSetMarker())
-		}
+		sqlxOptions = append(sqlxOptions, sqlxvalidator.WithSetMarker())
 		ret, err := sqlxValidator.Validate(ctx, db, any, sqlxOptions...)
 		if ret != nil && len(ret.Violations) > 0 {
 			validation.Violations = httputils.Violations(validation.Violations).MergeSqlViolation(ret.Violations)
