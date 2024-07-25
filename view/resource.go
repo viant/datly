@@ -616,7 +616,7 @@ func (r *Resource) AddMessageBus(messageBuses ...*mbus.Resource) {
 	}
 
 	for i, messageBus := range messageBuses {
-		if _, ok := r._messageBuses[messageBus.Name]; ok {
+		if _, ok := r._messageBuses[messageBus.ID]; ok {
 			continue
 		}
 		r.MessageBuses = append(r.MessageBuses, messageBuses[i])
@@ -741,7 +741,7 @@ func (r *Resource) mergeMessageBuses(resource *Resource) {
 	}
 	messageBusByName := MessageBusSlice(r.MessageBuses).Index()
 	for i, candidate := range resource.MessageBuses {
-		if _, ok := messageBusByName[candidate.Name]; !ok {
+		if _, ok := messageBusByName[candidate.ID]; !ok {
 			messageBus := *resource.MessageBuses[i]
 			r.MessageBuses = append(r.MessageBuses, &messageBus)
 		}

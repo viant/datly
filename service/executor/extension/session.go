@@ -121,7 +121,7 @@ func WithMessageBus(messageBusses []*mbus.Resource) Option {
 	return func(s *Session) {
 		s.messageBusses = map[string]*mbus.Resource{}
 		for _, bus := range messageBusses {
-			s.messageBusses[bus.Name] = bus
+			s.messageBusses[bus.ID] = bus
 		}
 	}
 }

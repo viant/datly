@@ -30,7 +30,7 @@ func (r *Repository) ensureMBus(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			messageBuses[resource.Name] = resource
+			messageBuses[resource.ID] = resource
 			mbusResource = append(mbusResource, resource)
 		}
 	}
@@ -38,7 +38,7 @@ func (r *Repository) ensureMBus(ctx context.Context) error {
 	//load previous defined message buses
 	if prevResource, _ := r.loadDependency(ctx, "mbus.yaml"); prevResource != nil {
 		for _, item := range prevResource.MessageBuses {
-			if _, ok := messageBuses[item.Name]; ok {
+			if _, ok := messageBuses[item.ID]; ok {
 				continue
 			}
 			mbusResource = append(mbusResource, item)

@@ -34,10 +34,10 @@ func (s *Service) Message(dest string, data interface{}) (*mbus.Message, error) 
 	}
 	URI := strings.Join(parts[3:], "/")
 	if len(parts) > 4 {
-		resource.URL = URI
-		resource.Name = parts[len(parts)-1]
-	} else {
 		resource.Name = URI
+		resource.ID = parts[len(parts)-1]
+	} else {
+		resource.ID = URI
 	}
 	return &mbus.Message{Data: data, Resource: resource}, nil
 }
