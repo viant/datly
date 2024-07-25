@@ -14,6 +14,9 @@ func (v Violations) MergeGoViolation(violations []*govalidator.Violation) valida
 		return validator.Violations{}
 	}
 	var ret []*validator.Violation
+	for _, item := range v {
+		ret = append(ret, item)
+	}
 	for _, violation := range violations {
 		aViolation := validator.Violation(*violation)
 		ret = append(ret, &aViolation)
@@ -26,7 +29,9 @@ func (v Violations) MergeSqlViolation(violations []*sqlxvalidator.Violation) val
 		return validator.Violations{}
 	}
 	var ret []*validator.Violation
-
+	for _, item := range v {
+		ret = append(ret, item)
+	}
 	for _, violation := range violations {
 		aViolation := validator.Violation(*violation)
 		ret = append(ret, &aViolation)
