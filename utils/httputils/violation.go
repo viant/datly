@@ -9,32 +9,37 @@ import (
 
 type Violations []*validator.Violation
 
-func (v Violations) MergeGoViolation(violations []*govalidator.Violation) Violations {
+func (v Violations) MergeGoViolation(violations []*govalidator.Violation) validator.Violations {
 	if len(violations) == 0 {
-		return v
+		return validator.Violations{}
 	}
+	var ret []*validator.Violation
 	for _, violation := range violations {
 		aViolation := validator.Violation(*violation)
-		v = append(v, &aViolation)
+		ret = append(ret, &aViolation)
 	}
-	return v
+	return ret
 }
 
-func (v Violations) MergeSqlViolation(violations []*sqlxvalidator.Violation) []*validator.Violation {
+func (v Violations) MergeSqlViolation(violations []*sqlxvalidator.Violation) validator.Violations {
 	if len(violations) == 0 {
-		return v
+		return validator.Violations{}
 	}
+	var ret []*validator.Violation
+
 	for _, violation := range violations {
 		aViolation := validator.Violation(*violation)
-		v = append(v, &aViolation)
+		ret = append(ret, &aViolation)
 	}
-	return v
+	return ret
 }
 
-func (v Violations) MergeErrors(errors []*Error) []*validator.Violation {
+func (v Violations) MergeErrors(errors []*Error) validator.Violations {
 	if len(errors) == 0 {
-		return v
+		return validator.Violations{}
 	}
+	var ret []*validator.Violation
+
 	for _, anError := range errors {
 		aViolation := &validator.Violation{
 			Location: anError.View + "/" + anError.Parameter,
@@ -42,12 +47,12 @@ func (v Violations) MergeErrors(errors []*Error) []*validator.Violation {
 			Check:    fmt.Sprint("%T", anError.Error()),
 			Message:  anError.Message,
 		}
-		v = append(v, aViolation)
+		ret = append(ret, aViolation)
 	}
-	return v
+	return ret
 }
 
-func (v Violations) MergeCustom(custom map[string]interface{}) []*validator.Violation {
+func (v Violations) MergeCustom(custom map[string]interface{}) validator.Violations {
 	var result []*validator.Violation
 	for k, v := range custom {
 		violation := &validator.Violation{Location: k}
