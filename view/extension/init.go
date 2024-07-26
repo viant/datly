@@ -15,6 +15,7 @@ import (
 	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xdatly/handler/response/tabular/tjson"
 	"github.com/viant/xdatly/handler/response/tabular/xml"
+	"github.com/viant/xdatly/handler/validator"
 
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xdatly/types/core"
@@ -42,6 +43,7 @@ func InitRegistry() {
 			xreflect.NewType(TypeJwtTokenInfo, xreflect.WithReflectType(reflect.TypeOf(&jwt.Claims{}))),
 			xreflect.NewType(TypeJwtClaims, xreflect.WithReflectType(reflect.TypeOf(jwt.Claims{}))),
 			xreflect.NewType("jwt.Claims", xreflect.WithReflectType(reflect.TypeOf(jwt.Claims{}))),
+			xreflect.NewType("validator.Violation", xreflect.WithReflectType(reflect.TypeOf(validator.Violation{}))),
 			xreflect.NewType("RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
 			xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
 			xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),

@@ -157,8 +157,8 @@ func (t *Tags) buildRelation(spec *Spec, relation *Relation) {
 		keyColumn = ns + "." + keyColumn
 	}
 	joinTag = joinTag.Append(
-		tags.WithRelLink(parentColumn, relation.ParentField.Name, nil),
-		tags.WithRefLink(keyColumn, relation.KeyField.Name),
+		tags.WithRelLink(relation.ParentField.Name, parentColumn, nil),
+		tags.WithRefLink(relation.KeyField.Name, keyColumn),
 	)
 	sqlTag := TagValue{}
 	if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {

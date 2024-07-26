@@ -238,6 +238,10 @@ type (
 	NamedColumnConfig map[string]*ColumnConfig
 )
 
+func (c *ColumnConfig) IgnoreColumn() bool {
+	return c.Tag != nil && strings.Contains(*c.Tag, `sqlx:"-"`)
+}
+
 func (c ColumnConfigs) Index() NamedColumnConfig {
 	var result = make(map[string]*ColumnConfig)
 	for _, item := range c {

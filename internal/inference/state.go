@@ -661,15 +661,24 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 			if param == nil {
 				return err
 			}
+			if param.In.Kind == state.KindView {
+				fieldType, _ := xreflect.Node{Node: field.Type}.Stringify()
+				param.Schema.DataType = fieldType
+			}
 			state.BuildPredicate(aTag, &param.Parameter)
 			state.BuildCodec(aTag, &param.Parameter)
 			if param.Output != nil {
 				if param.Output.Schema == nil && param.Schema != nil {
 					param.Output.Schema = param.Schema
 					param.Schema = &state.Schema{DataType: aTag.Parameter.DataType}
+					if aTag.Parameter.ErrorCode != 0 {
+						param.ErrorStatusCode = aTag.Parameter.ErrorCode
+					}
 				}
 			}
-			aState.Append(param)
+			if typeName == dataType {
+				aState.Append(param)
+			}
 			return nil
 		}))
 
@@ -694,13 +703,15 @@ func discoverEmbeds(embedRoot string) *embed.Holder {
 			if !holder.IsDir() || url.Equals(holder.URL(), embedRoot) {
 				continue
 			}
-			if candidates, _ := fs.List(context.Background(), holder.URL()); len(objects) > 0 {
-				for _, candidate := range candidates {
-					if strings.HasSuffix(candidate.Name(), ".sql") {
-						URI := path.Join(holder.Name(), candidate.Name())
-						if content, _ := fs.DownloadWithURL(context.Background(), candidate.URL()); len(content) > 0 {
-							embedFs.Add(URI, string(content))
-						}
+			assets, _ := fs.List(context.Background(), holder.URL())
+			for _, candidate := range assets {
+				name := strings.TrimSpace(candidate.Name())
+
+				if strings.HasSuffix(name, ".sql") {
+					URI := path.Join(holder.Name(), name)
+					content, _ := fs.DownloadWithURL(context.Background(), candidate.URL())
+					if len(content) > 0 {
+						embedFs.Add(URI, string(content))
 					}
 				}
 			}

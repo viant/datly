@@ -21,7 +21,9 @@ func (s *Service) HandlerSession(ctx context.Context, aComponent *repository.Com
 func (s *Service) execute(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	anExecutor := handler.NewExecutor(aComponent.View, aSession)
 	if aComponent.Handler != nil {
-		sessionHandler, err := anExecutor.NewHandlerSession(ctx, handler.WithTypes(aComponent.Types()...))
+		aSession.SetView(aComponent.View)
+		sessionHandler, err := anExecutor.NewHandlerSession(ctx,
+			handler.WithTypes(aComponent.Types()...))
 		if err != nil {
 			return nil, err
 		}

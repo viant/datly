@@ -74,13 +74,12 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 	builder.WriteByte('/')
 	builder.WriteString(string(p.In.Name))
 	builder.WriteByte(')')
+	if p.ErrorStatusCode != 0 {
+		builder.WriteString(".WithStatusCode(" + strconv.Itoa(p.ErrorStatusCode) + ")")
+	}
 
-	if p.SQL != "" {
-		builder.WriteString(" /*\n")
-		SQL := strings.TrimSpace(p.SQL)
-		p.addedValidationModifierIfNeeded(&builder, SQL)
-		builder.WriteString(SQL)
-		builder.WriteString("\n*/\n")
+	if p.Scope != "" {
+		builder.WriteString(".Scope('" + p.Scope + "')")
 	}
 	if p.Output != nil {
 		builder.WriteString(".WithCodec('" + p.Output.Name + "'")
@@ -92,15 +91,23 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 		}
 		builder.WriteString(")")
 	}
+	if p.SQL != "" {
+		builder.WriteString(" /*\n")
+		SQL := strings.TrimSpace(p.SQL)
+		p.addedValidationModifierIfNeeded(&builder, SQL)
+		builder.WriteString(SQL)
+		builder.WriteString("\n*/\n")
+	}
+
 	builder.WriteByte(')')
 	return builder.String()
 }
 
 func (p *Parameter) FieldDeclaration(embedRoot string, embed map[string]string, def *view.TypeDefinition) string {
 	builder := strings.Builder{}
-	if p.SQL != "" {
-		p.buildSQLDoc(&builder)
-	}
+	//if p.SQL != "" {
+	//	p.buildSQLDoc(&builder)
+	//}
 
 	builder.WriteByte('\t')
 	builder.WriteString(p.Name)
@@ -140,8 +147,8 @@ func (p *Parameter) FieldDeclaration(embedRoot string, embed map[string]string, 
 		default:
 			aTag.SQL.URI = key
 			aTag.View = &tags.View{}
-			aTag.Parameter.In = p.Name[3:]
-			aTag.View.Name = p.Name[3:]
+			aTag.Parameter.In = p.Name ////p.Name[3:]
+			aTag.View.Name = p.Name    //p.Name[3:]
 			//add parameter extraction from SQL
 		}
 	}
@@ -211,7 +218,7 @@ func (p *Parameter) SyncObject() {
 
 // TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
 func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS) (*Parameter, error) {
-	SQL := extractSQL(field)
+	//SQL := extractSQL(field)
 	if field.Tag == nil {
 		return nil, nil
 	}
@@ -223,10 +230,20 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 		return nil, err
 	}
 	pTag := aTag.Parameter
-	param := &Parameter{
-		SQL: SQL,
+
+	param := &Parameter{}
+	if aTag.Codec != nil {
+		param.SQL = aTag.Codec.Body
 	}
-	param.Name = field.Names[0].Name
+	if aTag.SQL.SQL != "" {
+		param.SQL = aTag.SQL.SQL
+	}
+	if len(field.Names) > 0 {
+		param.Name = field.Names[0].Name
+	} else {
+		fieldType, _ := xreflect.Node{Node: field.Type}.Stringify()
+		param.Name = fieldType
+	}
 	if pTag.Name != "" {
 		param.Name = pTag.Name
 	}

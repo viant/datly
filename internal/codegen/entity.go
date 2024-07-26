@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
 	"go/format"
+	"reflect"
 	"strings"
 )
 
@@ -49,10 +50,39 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 	initSnippet = strings.Replace(initSnippet, "$Package", pkg+"/"+t.FileMethodFragment(), 1)
 	initSnippet = strings.Replace(initSnippet, "$GlobalDeclaration", globalDeclaration, 1)
 
+	recv := strings.ToLower(t.TypeDef.Name[:1])
+
+	afterSnippet := strings.Builder{}
+	for i := 0; i < rType.NumField(); i++ {
+		field := rType.Field(i)
+		isPtr := field.Type.Kind() == reflect.Ptr
+		rawType := field.Type
+		if isPtr {
+			rawType = field.Type.Elem()
+		}
+		if rawType.Name() == "" || strings.Contains(string(field.Tag), `json:"-\"`) {
+			continue
+		}
+
+		afterSnippet.WriteString(fmt.Sprintf("\nfunc (%v *%v) Set%v(value %v) {", recv, t.TypeDef.Name, field.Name, rawType.String()))
+		if isPtr {
+			afterSnippet.WriteString(fmt.Sprintf("\n\t%v.%v = &value", recv, field.Name))
+		} else {
+			afterSnippet.WriteString(fmt.Sprintf("\n\t%v.%v = value", recv, field.Name))
+		}
+		afterSnippet.WriteString(fmt.Sprintf("\n\t%v.Has.%v = true", recv, field.Name))
+		afterSnippet.WriteString("\n}\n\n")
+	}
+	if !t.IsHandler {
+		afterSnippet = strings.Builder{}
+	}
+
 	generatedStruct := xreflect.GenerateStruct(t.TypeDef.Name, rType,
 		xreflect.WithPackage(pkg),
 		xreflect.WithImports(imps.Packages),
-		xreflect.WithSnippetBefore(initSnippet))
+		xreflect.WithSnippetBefore(initSnippet),
+		xreflect.WithSnippetAfter(afterSnippet.String()),
+	)
 	formatted, err := format.Source([]byte(generatedStruct))
 	if err != nil {
 		return "", err

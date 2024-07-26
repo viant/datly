@@ -14,7 +14,7 @@ type (
 	Repository struct {
 		Connector
 		Mbus
-		JwtVerifier
+		Auth
 		ProjectURL           string
 		RepositoryURL        string     `short:"r" long:"repo" description:"datly rule repository location"  default:"repo/dev" `
 		ConstURL             string     `short:"O" long:"const" description:"const location" `
@@ -80,7 +80,7 @@ func (r *Repository) Init(ctx context.Context, project string) error {
 		r.APIPrefix = "/v1/api"
 	}
 	r.Connector.Init()
-	r.JwtVerifier.Init()
+	r.Auth.Init()
 	expandRelativeIfNeeded(&r.RepositoryURL, project)
 	expandRelativeIfNeeded(&r.ConstURL, project)
 	for i := range r.SubstitutesURL {

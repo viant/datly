@@ -19,6 +19,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
 	"path"
+	"reflect"
 	"strings"
 )
 
@@ -58,6 +59,7 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		}
 		root.Spec.Type.Cardinality = resource.Rule.Route.Output.Cardinality
 		template := codegen.NewTemplate(resource.Rule, root.Spec)
+		template.IsHandler = options.Generate.Lang == "go"
 		template.SetResource(resource)
 		root.Spec.Type.Package = ruleOption.Package()
 		template.BuildTypeDef(root.Spec, resource.Rule.GetField(), resource.Rule.Doc.Columns)
@@ -132,6 +134,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		if err != nil {
 			return err
 		}
+		ctx = repository.WithGeneratorContext(ctx)
 		aComponent, err := datlySrv.Component(ctx, URI)
 		if err != nil {
 			return err
@@ -142,7 +145,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		if repo := opts.Repository(); repo != nil && len(repo.SubstitutesURL) > 0 {
 			namedResources = append(namedResources, repo.SubstitutesURL...)
 		}
-		code := aComponent.GenerateOutputCode(true, !translate.SkipCompDef, embeds, namedResources...)
+		code := aComponent.GenerateOutputCode(ctx, true, embeds, namedResources...)
 		destURL := path.Join(moduleLocation, modulePrefix, sourceName+".go")
 		if err = s.fs.Upload(ctx, destURL, file.DefaultFileOsMode, strings.NewReader(code)); err != nil {
 			return err
@@ -243,30 +246,50 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		OutputType: rule.OutputType,
 		Arguments:  rule.HandlerArgs,
 	}
-	entityParam := aState[0]
+	var entityParam *inference.Parameter
+	var entityType reflect.Type
 	if param := aState.FilterByKind(state.KindRequestBody); len(param) > 0 {
 		entityParam = param[0]
+		entityType = entityParam.Schema.Type()
 	}
-	entityType := entityParam.Schema.Type()
-	if entityType == nil {
-		return fmt.Errorf("entity type was empty")
+	var aType *inference.Type
+	hasEntity := entityType != nil
+	if hasEntity {
+		typeName := entityParam.Schema.SimpleTypeName()
+		if typeName == "" {
+			typeName = entityParam.Name
+		}
+		statePkg := rule.StateTypePackage()
+		aType, err = inference.NewType(statePkg, typeName, entityType)
+		if err != nil {
+			return err
+		}
+		if len(ruleOptions.Packages) == 0 {
+			ruleOptions.Packages = append(ruleOptions.Packages, statePkg)
+		}
 	}
-	aType, err := inference.NewType(rule.StateTypePackage(), entityParam.Name, entityType)
-	if err != nil {
-		return err
-	}
+
 	tmpl := codegen.NewTemplate(rule, &inference.Spec{Type: aType})
 	tmpl.SetResource(&translator.Resource{Rule: rule})
 
 	tmpl.Imports.AddType(rule.InputType)
 	tmpl.Imports.AddType(rule.Type)
-	tmpl.EnsureImports(aType)
+	if aType != nil {
+		tmpl.EnsureImports(aType)
+	}
+
 	tmpl.State = aState
 	handlerDSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
 	if err != nil {
 		return err
 	}
-	handlerDSQL += fmt.Sprintf("$Nop($%v)", entityParam.Name)
+
+	name := aState[0].Name
+	if entityParam != nil && entityParam.Name != "" {
+		name = entityParam.Name
+	}
+	handlerDSQL += fmt.Sprintf("$Nop($%v)", name)
+	*dSQL = handlerDSQL
 	*dSQL = handlerDSQL
 	return nil
 }

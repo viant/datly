@@ -15,7 +15,7 @@ const (
 
 type (
 
-	//Tag represent basic view tag
+	//View represent basic view tag
 	View struct {
 		Name                   string
 		Table                  string

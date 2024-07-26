@@ -14,11 +14,11 @@ func NormalizeErr(err error, statusCode int) (int, string, interface{}) {
 	case *httputils.HttpMessageError:
 		return actual.ErrorStatusCode(), actual.ErrorMessage(), nil
 	case *svalidator.Validation:
-		violations = violations.MergeSqlViolation(actual.Violations)
-		return statusCode, err.Error(), violations
+		ret := violations.MergeSqlViolation(actual.Violations)
+		return statusCode, err.Error(), ret
 	case *govalidator.Validation:
-		violations = violations.MergeGoViolation(actual.Violations)
-		return statusCode, actual.Error(), violations
+		ret := violations.MergeGoViolation(actual.Violations)
+		return statusCode, actual.Error(), ret
 	case *httputils.Errors:
 		actual.SetStatus(statusCode)
 		for _, anError := range actual.Errors {

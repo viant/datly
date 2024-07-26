@@ -78,6 +78,7 @@ func (p *ContractPath) ensureInput(aMatch *entry) {
 
 func (h *Header) Signature(aContract *ContractPath, registry *xreflect.Types) (*Signature, error) {
 	signature := &Signature{URI: aContract.URI, Method: aContract.Method}
+
 	h.buildInputType(aContract, registry, signature)
 	h.buildFilterType(aContract, registry, signature)
 	if err := h.buildOutputType(aContract, signature, registry); err != nil {
@@ -126,13 +127,24 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	}
 	if len(aContract.Output.Type.Parameters) == 0 && aContract.Output.Type.Name != "" {
 		//TODO check definition to see if this is inline type or external type
-		signature.Output = &state.Schema{Name: aContract.Output.Type.Name, Package: signature.Output.Package}
+		if signature.Output == nil {
+			signature.Output = &state.Schema{Name: aContract.Output.Type.Name, Package: aContract.Output.Type.Package}
+			rType, _ := registry.Lookup(aContract.Output.Type.Name, xreflect.WithPackage(aContract.Output.Type.Package))
+			if rType != nil {
+				signature.Output.SetType(rType)
+			}
+		}
 	}
 
 	parameters := state.Parameters(aContract.Output.Type.Parameters)
 	isAnonymous := len(parameters) == 1 && strings.Contains(parameters[0].Tag, "anonymous")
-
+	if len(parameters) == 0 && signature.Output.Type() == nil {
+		return nil
+	}
 	outputParameter := parameters.LookupByLocation(state.KindOutput, keys.ViewData)
+	if outputParameter == nil {
+		return nil
+	}
 	if reflect.StructTag(outputParameter.Tag).Get(xreflect.TagTypeName) == "" {
 		outputParameter.Tag += ` ` + xreflect.TagTypeName + `:"` + outputParameter.Schema.Name + `"`
 	}
@@ -144,6 +156,13 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 		if candidate.Name == outputParameter.Schema.Name {
 			viewType = candidate
 			break
+		}
+	}
+	if viewType == nil {
+
+		vType, err := registry.Lookup(outputParameter.Schema.Name)
+		if err == nil {
+			viewType = &view.TypeDefinition{Name: outputParameter.Schema.Name, DataType: vType.Name()}
 		}
 	}
 	if viewType == nil {
@@ -166,7 +185,15 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 			return fmt.Errorf("failed to get output type: %w", err)
 		}
 		componentSchema := state.NewSchema(outputType)
-		componentSchema.Name = strings.Replace(outputParameter.Schema.Name, "View", "", 1) + "Output"
+
+		typeName := outputParameter.Schema.SimpleTypeName()
+		if aContract.Input.Type.Name != "" {
+			typeName = strings.Replace(aContract.Input.Type.Name, "Input", "Output", 1)
+		}
+		if !strings.HasSuffix(typeName, "Output") {
+			typeName = strings.Replace(typeName, "View", "", 1) + "Output"
+		}
+		componentSchema.Name = typeName
 		componentSchema.Package = aContract.Output.Type.Package
 		componentSchema.Cardinality = state.One
 		componentSchema.DataType = outputType.String()

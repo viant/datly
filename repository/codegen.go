@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"github.com/viant/datly/internal/setter"
@@ -17,13 +18,23 @@ import (
 	"strings"
 )
 
+var generatorKey string
+
+func isGeneratorContext(ctx context.Context) bool {
+	return ctx.Value(generatorKey) != nil
+}
+
+func WithGeneratorContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, generatorKey, true)
+}
+
 //go:embed codegen/contract.gox
 var contractInit string
 
 //go:embed codegen/register.gox
 var registerInit string
 
-func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool, embeds map[string]string, namedResources ...string) string {
+func (c *Component) GenerateOutputCode(ctx context.Context, withEmbed bool, embeds map[string]string, namedResources ...string) string {
 	builder := strings.Builder{}
 	input := c.Input.Type.Type()
 	registry := c.TypeRegistry()
@@ -101,11 +112,20 @@ func (c *Component) GenerateOutputCode(withEmbed bool, withDefineComponent bool,
 	if snippetBefore != "" {
 		options = append(options, xreflect.WithSnippetBefore(snippetBefore))
 	}
+
 	inputType := input.Type()
 	if inputType.Kind() == reflect.Ptr {
 		inputType = inputType.Elem()
 	}
+
+	if inputType.Name() != "" && len(c.Input.Type.Parameters) > 0 { //to allow input dql changes, rebuild input from parameters
+		if rawType, _ := c.Input.Type.Parameters.ReflectType(c.Input.Type.Package, registry.Lookup, state.WithSetMarker(), state.WithTypeName(inputType.Name())); rawType != nil {
+			inputType = rawType
+		}
+	}
+
 	if inputType.Name() != "" { //rewrite as inline sturct
+
 		inputType = types.InlineStruct(input.Type(), func(field *reflect.StructField) {
 			if markerTag := field.Tag.Get(structology.SetMarkerTag); markerTag != "" {
 				field.Type = types.InlineStruct(field.Type, nil)

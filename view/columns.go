@@ -30,6 +30,19 @@ func (c Columns) Index(formatCase text.CaseFormat) NamedColumns {
 	return result
 }
 
+func (c Columns) Dedupe() Columns {
+	var unique = make(map[string]*Column)
+	var result Columns
+	for i := range c {
+		if _, ok := unique[c[i].Name]; ok {
+			continue
+		}
+		unique[c[i].Name] = c[i]
+		result = append(result, c[i])
+	}
+	return result
+}
+
 // NamedColumns represents *Column registry.
 type NamedColumns map[string]*Column
 

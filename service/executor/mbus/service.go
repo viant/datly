@@ -39,5 +39,6 @@ func (s *Service) Message(dest string, data interface{}) (*mbus.Message, error) 
 	} else {
 		resource.Name = URI
 	}
+	resource.ID = resource.Name
 	return &mbus.Message{Data: data, Resource: resource}, nil
 }

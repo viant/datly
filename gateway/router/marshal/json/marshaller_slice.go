@@ -51,9 +51,11 @@ func newSliceMarshaller(rType reflect.Type, config *config.IOConfig, path string
 }
 
 func (s *sliceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
+	if skipNull(decoder) {
+		return nil
+	}
 	return decoder.Decode(newSliceDecoder(s.elemType, pointer, s.xslice, s.marshaller, session))
 }
-
 func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 
 	if fn, ok := sb.Interceptors[s.path]; ok {

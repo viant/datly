@@ -299,6 +299,13 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			declaration.InOutput = true
 		case "When":
 			declaration.When = strings.Trim(content, "'\"")
+		case "Scope":
+			declaration.Scope = strings.Trim(content, "'\"")
+		case "WithType":
+			if declaration.Schema == nil {
+				declaration.Schema = &state.Schema{}
+			}
+			declaration.Schema.DataType = strings.Trim(content, "'\"")
 		case "Of":
 			declaration.Of = strings.Trim(content, "'\"")
 			declaration.Name = "." + declaration.Name

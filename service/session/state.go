@@ -27,12 +27,17 @@ type (
 	Session struct {
 		cache *cache
 		views *views
+		view  *view.View
 		Options
 		Types state.Types
 	}
 
 	contextKey string
 )
+
+func (s *Session) SetView(view *view.View) {
+	s.view = view
+}
 
 func (s *Session) Value(ctx context.Context, key string) (interface{}, bool, error) {
 	parameter, ok := s.namedParameters[key]
@@ -206,8 +211,11 @@ func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aSt
 	for _, group := range parametersGroup {
 		wg := sync.WaitGroup{}
 		for i, _ := range group { //populate non data view parameters first
-			wg.Add(1)
 			parameter := group[i]
+			if parameter.Scope != opts.scope {
+				continue
+			}
+			wg.Add(1)
 			go s.populateParameterInBackground(ctx, parameter, aState, opts, err, &wg)
 		}
 		wg.Wait()
@@ -250,6 +258,14 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 		return err
 	}
 	err = parameterSelector.SetValue(aState.Pointer(), value)
+
+	//ensure last written can be shared
+	if err == nil {
+		switch parameterSelector.Type().Kind() {
+		case reflect.Ptr:
+			s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
+		}
+	}
 	return err
 }
 
@@ -338,6 +354,42 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	}
 
 	if parameter.Schema.IsStruct() && !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
+
+		rawSelectorType := selector.Type()
+		isSelectorPtr := false
+		if rawSelectorType.Kind() == reflect.Ptr {
+			rawSelectorType = rawSelectorType.Elem()
+			isSelectorPtr = true
+		}
+		isValuePtr := false
+		rawValueType := valueType
+		if rawValueType.Kind() == reflect.Ptr {
+			rawValueType = valueType.Elem()
+			isValuePtr = true
+		}
+
+		if rawSelectorType.Kind() == reflect.Struct && isSelectorPtr {
+			if rawValueType.ConvertibleTo(rawSelectorType) {
+				ptrValue := reflect.ValueOf(value)
+				if isValuePtr && ptrValue.IsNil() {
+					return nil, nil
+				}
+				var destValue reflect.Value
+				if isValuePtr {
+					destValue = ptrValue.Elem().Convert(rawSelectorType)
+				} else {
+					destValue = ptrValue.Convert(rawSelectorType)
+				}
+				if isSelectorPtr {
+					destPtrType := reflect.New(valueType)
+					destPtrType.Elem().Set(destValue)
+					return destPtrType.Interface(), nil
+				} else {
+					return destValue.Interface(), nil
+				}
+			}
+		}
+
 		if options.shallReportNotAssignable() {
 			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
 		}

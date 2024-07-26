@@ -92,6 +92,7 @@ func (e *Executor) HandlerSession(ctx context.Context, opts ...Option) (*extensi
 	e.session.Apply(session.WithTypes(options.Types...))
 	e.session.Apply(session.WithEmbeddedFS(options.embedFS))
 
+	res := e.view.GetResource()
 	sess := extension.NewSession(
 		extension.WithTemplateFlush(func(ctx context.Context) error {
 			return e.Execute(ctx)
@@ -100,6 +101,7 @@ func (e *Executor) HandlerSession(ctx context.Context, opts ...Option) (*extensi
 		extension.WithRedirect(e.redirect),
 		extension.WithSql(e.newSqlService),
 		extension.WithHttp(e.newHttp),
+		extension.WithMessageBus(res.MessageBuses),
 	)
 
 	e.handlerSession = sess
@@ -163,15 +165,13 @@ func (e *Executor) Execute(ctx context.Context) error {
 	if e.executed {
 		return nil
 	}
-
 	e.executed = true
 	service := executor.New()
-
 	var dbOptions []executor.DBOption
 	if e.tx != nil {
 		dbOptions = append(dbOptions, executor.WithTx(e.tx))
 	}
-	return service.ExecuteStmts(ctx, executor.NewViewDBSource(e.view), &SqlxIterator{toExecute: e.dataUnit.Statements.Executable}, dbOptions...)
+	return service.ExecuteStmts(ctx, executor.NewViewDBSource(e.view), newSqlxIterator(e.dataUnit.Statements.Executable), dbOptions...)
 }
 
 func (e *Executor) ExpandAndExecute(ctx context.Context) (*executor.Session, error) {
@@ -185,7 +185,6 @@ func (e *Executor) ExpandAndExecute(ctx context.Context) (*executor.Session, err
 	if e.tx != nil {
 		dbOptions = append(dbOptions, executor.WithTx(e.tx))
 	}
-
 	return sess, service.Exec(ctx, sess, dbOptions...)
 }
 

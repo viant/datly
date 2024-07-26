@@ -63,7 +63,8 @@ func (o linkOption) Stringify() string {
 	} else if o.refColumn != "" {
 		builder.WriteString(o.refColumn)
 	}
-	return builder.String()
+	ret := builder.String()
+	return ret
 }
 
 func newJoinOnOptions(opts []LinkOption) *linkOption {

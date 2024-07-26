@@ -3,6 +3,7 @@ package signature
 import (
 	"context"
 	"fmt"
+	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/view"
@@ -18,6 +19,7 @@ type (
 		URL       string
 		Headers   []*Header
 		matcher   *matcher.Matcher
+		fs        afs.Service
 	}
 
 	entry struct {
@@ -71,12 +73,18 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	contract.ensureInput(aMatch)
 	typeRegistry := xreflect.NewTypes(xreflect.WithRegistry(extension.Config.Types))
 	var customTypes []*view.TypeDefinition
+	var outputDef *view.TypeDefinition
+	if len(aMatch.header.Resource.Types) > 0 {
+		clone := *aMatch.header.Resource.Types[0]
+		outputDef = &clone
+		outputDef.Name = contract.Output.Type.Name
+	}
+
 	for _, typeDef := range aMatch.header.Resource.Types {
 		if strings.Contains(typeDef.DataType, " ") {
 			customTypes = append(customTypes, typeDef)
 		}
 		_ = typeRegistry.Register(typeDef.Name, xreflect.WithPackage(typeDef.Package), xreflect.WithTypeDefinition(typeDef.DataType))
-
 	}
 
 	resource := &view.Resource{}
@@ -145,6 +153,6 @@ func (s *Service) loadSignatures(ctx context.Context, URL string, isRoot bool) e
 }
 
 func New(ctx context.Context, APIPrefix string, URL string) (*Service, error) {
-	ret := &Service{URL: URL, APIPrefix: APIPrefix}
+	ret := &Service{URL: URL, APIPrefix: APIPrefix, fs: afs.New()}
 	return ret, ret.init(ctx)
 }

@@ -60,7 +60,7 @@ func (w *Walker) allocate(aNode *node, value interface{}, seq *Sequence) error {
 func (w *Walker) countEmpty(aNode *node, value interface{}) (int, error) {
 	ptr := xunsafe.AsPointer(value)
 	if (*unsafe.Pointer)(ptr) == nil {
-		return 0, fmt.Errorf("%T was nil", value)
+		return 0, nil
 	}
 	var result = 0
 	var item interface{}

@@ -28,6 +28,7 @@ const (
 	//ResourceConnectors default connector resource name
 	ResourceConnectors = "connectors"
 	ResourceConstants  = "constants"
+	ResourceMBus       = "mbus"
 )
 
 // Resource represents grouped View needed to build the View
@@ -267,6 +268,10 @@ func (r *Resource) ConnectorByName() Connectors {
 	return index
 }
 
+func (r *Resource) MBusResourceByName() MessageBuses {
+	return MessageBusSlice(r.MessageBuses).Index()
+}
+
 func (r *Resource) paramByName() map[string]*state.Parameter {
 	index := map[string]*state.Parameter{}
 	if len(r.Parameters) == 0 {
@@ -435,6 +440,17 @@ func (r *Resource) View(name string) (*View, error) {
 	return r._views.Lookup(name)
 }
 
+func (r *Resource) ViewSchemaPointer(ctx context.Context, name string) (*state.Schema, error) {
+	aView, err := r.View(name)
+	if err != nil {
+		return nil, err
+	}
+	if aView.Schema == nil {
+		aView.Schema = &state.Schema{}
+	}
+	return aView.Schema, nil
+}
+
 func (r *Resource) ViewSchema(ctx context.Context, name string) (*state.Schema, error) {
 	aView, err := r.View(name)
 	if err != nil {
@@ -600,7 +616,7 @@ func (r *Resource) AddMessageBus(messageBuses ...*mbus.Resource) {
 	}
 
 	for i, messageBus := range messageBuses {
-		if _, ok := r._messageBuses[messageBus.Name]; ok {
+		if _, ok := r._messageBuses[messageBus.ID]; ok {
 			continue
 		}
 		r.MessageBuses = append(r.MessageBuses, messageBuses[i])
@@ -725,7 +741,7 @@ func (r *Resource) mergeMessageBuses(resource *Resource) {
 	}
 	messageBusByName := MessageBusSlice(r.MessageBuses).Index()
 	for i, candidate := range resource.MessageBuses {
-		if _, ok := messageBusByName[candidate.Name]; !ok {
+		if _, ok := messageBusByName[candidate.ID]; !ok {
 			messageBus := *resource.MessageBuses[i]
 			r.MessageBuses = append(r.MessageBuses, &messageBus)
 		}

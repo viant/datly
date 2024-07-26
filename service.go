@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
@@ -16,6 +17,9 @@ import (
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
+	dcodec "github.com/viant/datly/view/extension/codec"
+	verifier2 "github.com/viant/scy/auth/jwt/verifier"
+
 	"github.com/viant/datly/view/state"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
@@ -174,6 +178,9 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 		}
 		token, err := aSigner.Create(time.Hour, claims)
 		if err == nil {
+			if request.Header == nil {
+				request.Header = make(http.Header)
+			}
 			request.Header.Set("Authorization", "Bearer "+token)
 		} else {
 			return err
@@ -441,6 +448,27 @@ func (s *Service) AddConnectors(ctx context.Context, connectors ...*view.Connect
 	return nil
 }
 
+// AddMBusResources adds message bus resources
+func (s *Service) AddMBusResources(ctx context.Context, resource ...*mbus.Resource) error {
+	mBusResources, _ := s.repository.Resources().Lookup(view.ResourceMBus)
+	registerInResource := view.MessageBuses{}
+	if mBusResources != nil {
+		registerInResource = view.MessageBusSlice(mBusResources.MessageBuses).Index()
+	}
+	registerInService := view.MessageBusSlice(s.resource.MessageBuses).Index()
+	for _, mResource := range resource {
+		if _, ok := registerInService[mResource.Name]; !ok {
+			s.resource.MessageBuses = append(s.resource.MessageBuses, mResource)
+			continue
+		}
+		if _, ok := registerInResource[mResource.Name]; !ok && mBusResources != nil {
+			mBusResources.MessageBuses = append(mBusResources.MessageBuses, mResource)
+			continue
+		}
+	}
+	return nil
+}
+
 // BuildPredicates added build predicate method
 func (s *Service) BuildPredicates(ctx context.Context, expression string, input interface{}, baseView *view.View) (*codec.Criteria, error) {
 	opts := &codec.CriteriaBuilderOptions{
@@ -499,10 +527,19 @@ func New(ctx context.Context, options ...repository.Option) (*Service, error) {
 		return nil, err
 	}
 
-	if verifier := aRepository.JWTVerifier(); verifier != nil {
+	var verifier *verifier2.Service
+	if verifier = aRepository.JWTVerifier(); verifier != nil {
 		codecs := aRepository.Extensions().Codecs
 		codecs.RegisterInstance(
 			extension.CodecKeyJwtClaim, sjwt.New(verifier.VerifyClaims), time.Time{},
+		)
+	}
+
+	if authService := aRepository.AuthService(); authService != nil {
+		codecs := aRepository.Extensions().Codecs
+		srv := dcodec.NewCustomAuth(authService)
+		codecs.RegisterFactory(
+			dcodec.KeyCustomAuth, srv, time.Time{},
 		)
 	}
 

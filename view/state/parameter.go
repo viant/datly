@@ -189,6 +189,14 @@ func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resource
 	if p.Schema != nil && p.Schema.Type() != nil {
 		return nil
 	}
+	p.In.Name = p.Name
+	if p.Schema != nil { //handles named types
+		if xType, _ := resource.LookupType()(p.Schema.Name, xreflect.WithPackage(p.Schema.Package)); xType != nil {
+			if vSchema, _ := resource.ViewSchemaPointer(ctx, p.In.Name); vSchema != nil {
+				vSchema.SetType(xType)
+			}
+		}
+	}
 	schema, err := resource.ViewSchema(ctx, p.In.Name)
 	if err != nil {
 		return fmt.Errorf("failed to apply view parameter %v, %w", p.Name, err)
@@ -318,7 +326,7 @@ func (p *Parameter) initSchema(resource Resource) error {
 		}
 	}
 
-	if p.In.Kind == KindRequest {
+	if p.In.Kind == KindRequest && p.In.Name == "" {
 		p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
 		return nil
 	}
@@ -326,7 +334,7 @@ func (p *Parameter) initSchema(resource Resource) error {
 	if p.Schema == nil {
 		if p.In.Kind == KindConst {
 			p.Schema = NewSchema(reflect.TypeOf(p.Value))
-		} else if p.In.Kind == KindRequest {
+		} else if p.In.Kind == KindRequest && p.In.Name == "" {
 			p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
 		} else {
 			return fmt.Errorf("parameter %v schema can't be empty", p.Name)

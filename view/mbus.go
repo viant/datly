@@ -21,12 +21,12 @@ func (m MessageBusSlice) Index() MessageBuses {
 		return result
 	}
 	for i, item := range m {
-		result[item.Name] = m[i]
+		result[item.ID] = m[i]
 	}
 	return result
 }
 
-//Lookup returns message bus for supplied name or error
+// Lookup returns message bus for supplied name or error
 func (m MessageBuses) Lookup(name string) (*mbus.Resource, error) {
 	ret, ok := m[name]
 	if !ok {

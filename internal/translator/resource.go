@@ -285,14 +285,19 @@ func (r *Resource) appendPathVariableParams() {
 
 func (r *Resource) buildParameterViews() {
 	for _, parameter := range r.State.FilterByKind(state.KindView) {
-		viewlet := NewViewlet(parameter.Name, parameter.SQL, nil, r)
+		viewlet := NewViewlet(parameter.In.Name, parameter.SQL, nil, r)
 		if parameter.Connector != "" {
 			viewlet.Connector = parameter.Connector
+		}
+		if parameter.Schema != nil && parameter.Schema.DataType != "" {
+			viewlet.DataType = parameter.Schema.DataType
+			parameter.Schema.Name = strings.Replace(parameter.Schema.DataType, "*", "", 1)
 		}
 		viewlet.View.Mode = view.ModeQuery
 		viewlet.View.ParameterDerived = true
 		r.Rule.Viewlets.Append(viewlet)
 	}
+
 }
 
 func (r *Resource) ImpliedKind() state.Kind {
@@ -386,7 +391,7 @@ func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(
 			continue
 		}
 		viewParameter.EnsureSchema()
-		aViewNamespace := r.Rule.Viewlets.Lookup(viewParameter.Name)
+		aViewNamespace := r.Rule.Viewlets.Lookup(viewParameter.In.Name)
 		if err := setType(ctx, aViewNamespace, aDoc); err != nil {
 			return err
 		}
@@ -394,10 +399,9 @@ func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(
 		if len(fields) > 0 {
 			paramSchema := reflect.StructOf(fields)
 			viewParameter.Schema.SetType(paramSchema)
-			viewParameter.Schema.DataType = viewParameter.Name
 		}
 		aViewNamespace.TypeDefinition = aViewNamespace.Spec.TypeDefinition("", false, r.Rule.Doc.Columns)
-		aViewNamespace.TypeDefinition.Cardinality = viewParameter.Schema.Cardinality
+		//	aViewNamespace.TypeDefinition.Cardinality = viewParameter.Schema.Cardinality
 	}
 	return nil
 }
@@ -556,6 +560,9 @@ func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, er
 		if state.IsReservedAsyncState(iParameter.Name) {
 			r.AsyncState.Append(iParameter)
 		}
+	}
+	if len(r.AsyncState) == 1 && strings.ToLower(r.AsyncState[0].Name) == "userid" {
+		r.AsyncState = inference.State{}
 	}
 	return nil
 }

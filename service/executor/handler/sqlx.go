@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/service/executor"
-	expand2 "github.com/viant/datly/service/executor/expand"
+	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/executor/sequencer"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/config"
@@ -20,7 +20,7 @@ import (
 
 type (
 	Service struct {
-		dataUnit *expand2.DataUnit
+		dataUnit *expand.DataUnit
 		options  *sqlx.Options
 
 		validator *validator.Service
@@ -35,7 +35,7 @@ type (
 		tx         *sql.Tx
 	}
 
-	SqlxIterator struct {
+	sqlxIterator struct {
 		toExecute []interface{}
 		index     int
 	}
@@ -45,17 +45,17 @@ func (s *Service) Load(ctx context.Context, tableName string, data interface{}) 
 	panic("function not yet implemented")
 }
 
-func (s *SqlxIterator) HasNext() bool {
+func (s *sqlxIterator) HasNext() bool {
 	return s.index < len(s.toExecute)
 }
 
-func (s *SqlxIterator) Next() interface{} {
+func (s *sqlxIterator) Next() interface{} {
 	actual := s.index
 	s.index++
 	return s.toExecute[actual]
 }
 
-func (s *SqlxIterator) HasAny() bool {
+func (s *sqlxIterator) HasAny() bool {
 	return len(s.toExecute) > 0
 }
 
@@ -73,7 +73,7 @@ func (s *Service) Flush(ctx context.Context, tableName string) error {
 	options = append(options, executor.WithTx(tx))
 
 	exec := executor.New()
-	if err := exec.ExecuteStmts(ctx, s, &SqlxIterator{
+	if err := exec.ExecuteStmts(ctx, s, &sqlxIterator{
 		toExecute: s.dataUnit.Statements.FilterByTableName(tableName),
 	}, options...); err != nil {
 		return err
@@ -103,7 +103,7 @@ func (s *Service) Execute(DML string, options ...sqlx.ExecutorOption) error {
 		option(opts)
 	}
 
-	s.dataUnit.Statements.Execute(&expand2.SQLStatment{
+	s.dataUnit.Statements.Execute(&expand.SQLStatment{
 		SQL:  DML,
 		Args: opts.Args,
 	})

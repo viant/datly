@@ -34,12 +34,10 @@ func (c *Config) Init(ctx context.Context) error {
 	if err := c.updateURIs(); err != nil {
 		return err
 	}
-	c.updateOauth(ctx)
-	return nil
+	return c.updateAuth(ctx)
 }
 
 func (c *Config) BaseURL() string {
-
 	if c.repository.RepositoryURL == "" {
 		c.repository.RepositoryURL = c.repository.Configs.Repository()
 	}
@@ -49,7 +47,6 @@ func (c *Config) BaseURL() string {
 		}
 		c.repository.RepositoryURL = url.Join(c.repository.ProjectURL, c.repository.RepositoryURL)
 	}
-
 	if c.repository.RepositoryURL != "" {
 		return url.Join(c.repository.RepositoryURL, "Datly")
 	}

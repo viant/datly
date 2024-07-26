@@ -16,12 +16,13 @@ import (
 
 type (
 	Template struct {
-		Resource *translator.Resource
-		Spec     *inference.Spec
-		Config   *translator.Rule
-		TypeDef  *view.TypeDefinition
+		Resource  *translator.Resource
+		Spec      *inference.Spec
+		Config    *translator.Rule
+		TypeDef   *view.TypeDefinition
+		IsHandler bool
 		inference.Imports
-		inference.State
+		State              inference.State
 		BusinessLogic      *ast.Block
 		paramPrefix        string
 		recordPrefix       string
@@ -42,9 +43,10 @@ const (
 )
 
 func (t *Template) FilePrefix() string {
-	if t.MethodFragment != "" {
+	if t.MethodFragment != "" || !t.IsHandler {
 		return ""
 	}
+
 	if t.filePrefix != "" {
 		return t.filePrefix
 	}
@@ -104,7 +106,9 @@ func (t *Template) setMethodFragment() {
 	case "put":
 		method = "Put"
 	}
-	t.MethodFragment = method
+	if t.IsHandler {
+		t.MethodFragment = method
+	}
 }
 
 func (t *Template) BuildInput(spec *inference.Spec, bodyHolder string, opts ...Option) {

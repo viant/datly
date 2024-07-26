@@ -188,6 +188,13 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, p
 		}
 		return marshaller, err
 
+	case reflect.Array:
+		marshaller, err := newArrayMarshaller(rType, config, path, outputPath, tag, c.parent)
+		if err != nil {
+			return nil, err
+		}
+		return marshaller, nil
+
 	case reflect.Slice:
 		if rType.Elem().Kind() == reflect.Interface {
 			return newSliceInterfaceMarshaller(config, path, outputPath, tag, c.parent), nil

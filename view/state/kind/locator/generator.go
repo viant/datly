@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/viant/datly/view/state/kind"
 	"strings"
+	"time"
 )
 
 type Generator struct{}
@@ -25,6 +26,8 @@ func (v *Generator) Value(ctx context.Context, name string) (interface{}, bool, 
 		return 0, true, nil
 	case "one":
 		return 1, true, nil
+	case "now", "current_time":
+		return time.Now(), true, nil
 	case "uuid":
 		UUID := uuid.New()
 		return UUID.String(), true, nil

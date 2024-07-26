@@ -100,7 +100,7 @@ func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type,
 		}
 		fieldType := types.EnsureStruct(aStructField.Type)
 		if fieldType != nil {
-			if hasTypeDef := buildMarkertTypeDef(fieldType, aType, fieldTypeName); hasTypeDef != nil {
+			if hasTypeDef := buildMarkerTypeDef(fieldType, aType, fieldTypeName); hasTypeDef != nil {
 				typeDefs = append(typeDefs, hasTypeDef)
 			}
 		}
@@ -143,7 +143,7 @@ func (s *Service) tryToBuildNamedInputType(resource *Resource, aType state.Type,
 	resource.AppendTypeDefinition(aTypeDef)
 }
 
-func buildMarkertTypeDef(fieldType reflect.Type, aType state.Type, holderName string) *view.TypeDefinition {
+func buildMarkerTypeDef(fieldType reflect.Type, aType state.Type, holderName string) *view.TypeDefinition {
 	for i := 0; i < fieldType.NumField(); i++ {
 		field := fieldType.Field(i)
 		if field.Tag.Get(structology.SetMarkerTag) != "" {
