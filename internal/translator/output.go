@@ -302,7 +302,7 @@ func (s *Service) adjustCodecType(parameter *state.Parameter, types *xreflect.Ty
 		if parameter.Schema.Cardinality == state.Many {
 			output.Schema.Cardinality = parameter.Schema.Cardinality
 		}
-	case codec.KeyFirebaseAuth:
+	case codec.KeyFirebaseAuth, codec.KeyCustomAuth:
 		if len(output.Args) < 2 {
 			return fmt.Errorf("%v invalid arguments count", output.Name)
 		}

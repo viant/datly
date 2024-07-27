@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	KeyCustomAuth = "customAuth"
+	KeyCustomAuth = "CustomAuth"
 )
 
 type customAuth struct {
