@@ -93,6 +93,7 @@ func InitRegistry() {
 			codec.WithFactory(dcodec.KeyURIChecksum, &dcodec.UriChecksumFactory{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyTimeDiff, &dcodec.TimeDiffFactory{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyFirebaseAuth, &dcodec.FirebaseAuth{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyCustomAuth, dcodec.NewCustomAuth(nil), time.Time{}),
 		),
 		Predicates: &PredicateRegistry{
 			registry: map[string]*Predicate{

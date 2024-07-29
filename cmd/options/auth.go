@@ -10,7 +10,7 @@ type (
 		HMAC     string     `short:"A" long:"jwtHMAC" description:"HMACKeyPath|EncKey" `
 		RSA      string     `short:"J" long:"jwtRSA" description:"PublicKeyPath|EncKey" `
 		Firebase string     `short:"F" long:"fsecret" description:"Firebase secrets" `
-		Custom   CustomAuth `short:"E" long:"customAuth" description:"|Custom AuthSQL" `
+		Custom   CustomAuth `short:"E" long:"customAuth" description:"Custom AuthSQL" `
 	}
 )
 

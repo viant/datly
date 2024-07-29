@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/service/auth/firebase"
 	"github.com/viant/scy"
 	custom "github.com/viant/scy/auth/custom"
+	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"strings"
 )
@@ -19,10 +20,16 @@ func (c *Config) updateAuth(ctx context.Context) error {
 		c.ensureJWTValidator(cfg)
 		cfg.JWTValidator.RSA = getScyResource(res)
 	}
+
 	if res := c.repository.HMAC; res != "" {
 		c.ensureJWTValidator(cfg)
 		cfg.JWTValidator.HMAC = getScyResource(res)
+		if cfg.JwtSigner == nil {
+			cfg.JwtSigner = &signer.Config{}
+		}
+		cfg.JwtSigner.HMAC = getScyResource(res)
 	}
+
 	if res := c.repository.Firebase; res != "" {
 		cfg.Firebase = &firebase.Config{
 			Resource: getScyResource(res),
