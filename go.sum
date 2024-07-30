@@ -1087,6 +1087,8 @@ github.com/viant/aerospike v0.1.0 h1:42iPJOG6auRWSOolaKhDR35LO+n/8sYICvNdOKEhZ+A
 github.com/viant/aerospike v0.1.0/go.mod h1:0bFTo5IjbRAk8NpeX0F4GExehaz7BzyuVYDw8uLSews=
 github.com/viant/aerospike v0.1.1 h1:z76swEstU08P65pRWYYbcF1Q7DOGjbfUmS1Z5VnBurI=
 github.com/viant/aerospike v0.1.1/go.mod h1:0bFTo5IjbRAk8NpeX0F4GExehaz7BzyuVYDw8uLSews=
+github.com/viant/aerospike v0.1.2-0.20240730200051-419efba9f72a h1:k/5XkAnohrnDobwE1+l2wvQE+8IlsNpC/xdXaomruy8=
+github.com/viant/aerospike v0.1.2-0.20240730200051-419efba9f72a/go.mod h1:0bFTo5IjbRAk8NpeX0F4GExehaz7BzyuVYDw8uLSews=
 github.com/viant/afs v1.25.1-0.20231110184132-877ed98abca1 h1:q83rO9rKNCsT/W9x9EBmCVt24yjFDRmhslLhaL4h7DE=
 github.com/viant/afs v1.25.1-0.20231110184132-877ed98abca1/go.mod h1:rScbFd9LJPGTM8HOI8Kjwee0AZ+MZMupAvFpPg+Qdj4=
 github.com/viant/afsc v1.9.1 h1:BIus7fYyjM+MDgKuAzCBfoV4oVy2xTVhuFsQKUCPvkQ=
