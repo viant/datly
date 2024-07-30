@@ -104,7 +104,6 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 }
 
 func (p *Parameter) FieldDeclaration(embedRoot string, embed map[string]string, def *view.TypeDefinition) string {
-	embedRoot = strings.ReplaceAll(embedRoot, ".", "")
 	builder := strings.Builder{}
 	//if p.SQL != "" {
 	//	p.buildSQLDoc(&builder)
@@ -132,6 +131,7 @@ func (p *Parameter) FieldDeclaration(embedRoot string, embed map[string]string, 
 	}
 
 	URI := text.DetectCaseFormat(p.Name).Format(p.Name, text.CaseFormatLowerUnderscore)
+	URI = strings.ReplaceAll(URI, ".", "")
 	key := path.Join(embedRoot, URI) + ".sql"
 
 	if p.SQL != "" {
