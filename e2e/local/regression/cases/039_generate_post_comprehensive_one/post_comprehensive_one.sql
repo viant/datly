@@ -3,5 +3,6 @@
    },
    "Field": "Data" } */
 
+
 SELECT events.* /* { "Cardinality": "One" } */
 FROM (SELECT * FROM EVENTS) events

@@ -24,7 +24,6 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/handler/exec"
-	haHttp "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/response"
 	"io"
 	"net/http"
@@ -72,7 +71,7 @@ func (r *Handler) AuthorizeRequest(request *http.Request, aPath *path.Path) erro
 	}
 	key := request.Header.Get(apiKey.Header)
 	if key != apiKey.Value {
-		return httputils.NewHttpMessageError(http.StatusUnauthorized, nil)
+		return response.NewError(http.StatusUnauthorized, "")
 	}
 
 	return nil
@@ -144,34 +143,29 @@ func (r *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	r.HandleRequest(ctx, writer, request)
 }
 
-func (r *Handler) Handle(ctx context.Context, response http.ResponseWriter, request *http.Request) {
+func (r *Handler) Handle(ctx context.Context, writer http.ResponseWriter, request *http.Request) {
 	aComponent, err := r.Provider.Component(ctx)
 	if err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	payloadReader, err := r.safelyHandleWithComponent(ctx, response, request, aComponent)
+	aResponse, err := r.safelyHandleComponent(ctx, request, aComponent)
 	if err != nil {
-		code, _ := httputils.BuildErrorResponse(err)
-		r.writeErr(response, aComponent, err, code)
+		r.writeErrorResponse(writer, aComponent, err, http.StatusBadRequest)
 		return
 	}
-	if payloadReader != nil {
-		r.writeResponse(ctx, request, response, aComponent, payloadReader)
-	}
+	r.writeResponse(ctx, request, writer, aComponent, aResponse)
 }
 
-func (r *Handler) safelyHandleWithComponent(ctx context.Context, response http.ResponseWriter, request *http.Request, aComponent *repository.Component) (reader PayloadReader, err error) {
+func (r *Handler) safelyHandleComponent(ctx context.Context, request *http.Request, aComponent *repository.Component) (aResponse response.Response, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			stackLines := strings.Split(string(debug.Stack()), "\n")
 			stackInfo := extractPanicInfo(stackLines)
-			err = httputils.NewHttpMessageError(http.StatusInternalServerError, fmt.Errorf("failed to handle request %v, %s", r, stackInfo))
+			err = response.NewError(http.StatusInternalServerError, fmt.Sprintf("failed to handle request %v, %s", r, stackInfo))
 		}
 	}()
-	reader, err = r.handleWithComponent(ctx, request, response, aComponent)
-	return reader, err
+	return r.handleComponent(ctx, request, aComponent)
 }
 
 func extractPanicInfo(lines []string) interface{} {
@@ -193,15 +187,13 @@ func extractPanicInfo(lines []string) interface{} {
 	return strings.Join(postPanic, "\n")
 }
 
-func (r *Handler) writeErr(w http.ResponseWriter, aComponent *repository.Component, err error, statusCode int) {
+func (r *Handler) writeErrorResponse(w http.ResponseWriter, aComponent *repository.Component, err error, statusCode int) {
 	statusCode, message, anObjectErr := status.NormalizeErr(err, statusCode)
 	if statusCode < http.StatusBadRequest {
 		statusCode = http.StatusBadRequest
 	}
-
 	responseStatus := r.responseStatusError(message, anObjectErr)
 	statusParameter := aComponent.Output.Type.Parameters.LookupByLocation(state.KindOutput, "status")
-
 	if statusParameter == nil {
 		errAsBytes, marshalErr := goJson.Marshal(responseStatus)
 		if marshalErr != nil {
@@ -215,20 +207,25 @@ func (r *Handler) writeErr(w http.ResponseWriter, aComponent *repository.Compone
 		return
 	}
 
-	aResponse := aComponent.Output.Type.Type().NewState()
-	if err = aResponse.SetValue(statusParameter.Name, responseStatus); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	outputType := aComponent.Output.Type
+	var data []byte
+	if outputType.Type() != nil {
+		aResponse := aComponent.Output.Type.Type().NewState()
+		if err = aResponse.SetValue(statusParameter.Name, responseStatus); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		data, err = aComponent.Marshaller.JSON.JsonMarshaller.Marshal(aResponse.State())
+		if err != nil {
+			w.Write(data)
+			w.WriteHeader(statusCode)
+			return
+		}
 	}
-	asBytes, marErr := aComponent.Marshaller.JSON.JsonMarshaller.Marshal(aResponse.State())
-	if marErr != nil {
-		w.Write(asBytes)
-		w.WriteHeader(statusCode)
-		return
-	}
-
 	w.WriteHeader(statusCode)
-	w.Write(asBytes)
+	if len(data) > 0 {
+		w.Write(data)
+	}
 }
 
 func (r *Handler) responseStatusError(message string, anObject interface{}) response.Status {
@@ -247,65 +244,66 @@ func (r *Handler) responseStatusError(message string, anObject interface{}) resp
 	return responseStatus
 }
 
-func (r *Handler) writeResponse(ctx context.Context, request *http.Request, response http.ResponseWriter, aComponent *repository.Component, payloadReader PayloadReader) {
-	defer payloadReader.Close()
-	redirected, err := r.redirectIfNeeded(ctx, request, response, aComponent, payloadReader)
+func (r *Handler) writeResponse(ctx context.Context, request *http.Request, writer http.ResponseWriter, aComponent *repository.Component, aResponse response.Response) {
+	redirected, err := r.redirectIfNeeded(ctx, request, writer, aComponent, aResponse)
 	if redirected {
 		return
 	}
-
 	if err != nil {
-		r.writeErr(response, aComponent, err, http.StatusInternalServerError)
+		r.writeErrorResponse(writer, aComponent, err, http.StatusInternalServerError)
 		return
 	}
-
-	response.Header().Add(httputils.ContentLength, strconv.Itoa(payloadReader.Size()))
-	for key, value := range payloadReader.Headers() {
-		response.Header().Add(key, value[0])
+	if size := aResponse.Size(); size > 0 {
+		writer.Header().Add(httputils.ContentLength, strconv.Itoa(aResponse.Size()))
 	}
-
-	compressionType := payloadReader.CompressionType()
-	if compressionType != "" {
-		response.Header().Set(acontent.Encoding, compressionType)
+	for key, value := range aResponse.Headers() {
+		writer.Header().Add(key, value[0])
 	}
 
 	execCtx := exec.GetContext(ctx)
 	if execCtx != nil && execCtx.StatusCode != 0 {
-		response.WriteHeader(execCtx.StatusCode)
+		writer.WriteHeader(execCtx.StatusCode)
 		execCtx.StatusCode = -1
 	} else {
-		response.WriteHeader(http.StatusOK)
+		writer.WriteHeader(http.StatusOK)
 	}
-	_, _ = io.Copy(response, payloadReader)
+	if reader := aResponse.Body(); reader != nil {
+		_, _ = io.Copy(writer, reader)
+	}
 }
 
-func (r *Handler) PreSign(ctx context.Context, viewName string, payload PayloadReader) (*option.PreSign, error) {
+func (r *Handler) PreSign(ctx context.Context, viewName string, aResponse response.Response) (*option.PreSign, error) {
 	redirect := r.Path.Redirect
 	fs := afs.New()
 	UUID := uuid.New()
 	URL := url.Join(redirect.StorageURL, normalizeStorageURL(viewName), normalizeStorageURL(UUID.String())) + ".json"
 	preSign := option.NewPreSign(redirect.TimeToLive())
 	kv := []string{acontent.Type, httputils.ContentTypeJSON}
-	compressionType := payload.CompressionType()
+
+	compressed, ok := aResponse.(response.Compressed)
+	if ok {
+		return nil, fmt.Errorf("response is not compressed")
+	}
+	compressionType := compressed.CompressionType()
 
 	if compressionType != "" {
 		kv = append(kv, acontent.Encoding, compressionType)
 	}
 	meta := acontent.NewMeta(kv...)
-	err := fs.Upload(ctx, URL, file.DefaultFileOsMode, payload, preSign, meta)
+	err := fs.Upload(ctx, URL, file.DefaultFileOsMode, aResponse.Body(), preSign, meta)
 	return preSign, err
 }
 
-func (r *Handler) redirectIfNeeded(ctx context.Context, request *http.Request, response http.ResponseWriter, aComponent *repository.Component, payloadReader PayloadReader) (redirected bool, err error) {
+func (r *Handler) redirectIfNeeded(ctx context.Context, request *http.Request, response http.ResponseWriter, aComponent *repository.Component, aResponse response.Response) (redirected bool, err error) {
 	redirect := r.Path.Redirect
 	if redirect == nil {
 		return false, nil
 	}
 
-	if redirect.MinSizeKb*1024 > payloadReader.Size() {
+	if redirect.MinSizeKb*1024 > aResponse.Size() {
 		return false, nil
 	}
-	preSign, err := r.PreSign(ctx, aComponent.View.Name, payloadReader)
+	preSign, err := r.PreSign(ctx, aComponent.View.Name, aResponse)
 	if err != nil {
 		return false, err
 	}
@@ -313,22 +311,18 @@ func (r *Handler) redirectIfNeeded(ctx context.Context, request *http.Request, r
 	return true, nil
 }
 
-func (r *Handler) compressIfNeeded(marshalled []byte, option ...RequestDataReaderOption) (*RequestDataReader, error) {
+func (r *Handler) compressIfNeeded(marshalled []byte, options *response.Options) (response.Response, error) {
 	compression := r.Path.Compression
 	if compression == nil || (compression.MinSizeKb > 0 && len(marshalled) <= compression.MinSizeKb*1024) {
-		return NewBytesReader(marshalled, "", option...), nil
+		options.Append(response.WithBytes(marshalled))
+		return response.NewBuffered(options.Options()...), nil
 	}
 	buffer, err := httputils.Compress(bytes.NewReader(marshalled))
 	if err != nil {
-		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
+		return nil, response.NewError(http.StatusInternalServerError, err.Error(), response.WithError(err))
 	}
-	payloadSize := buffer.Len()
-
-	//TODO address this aws response adapter
-	//if r.inAWS() {
-	//	payloadSize = base64.StdEncoding.EncodedLen(payloadSize)
-	//}
-	return AsBytesReader(buffer, httputils.EncodingGzip, payloadSize), nil
+	options.Append(response.WithBuffer(buffer), response.WithCompressions(httputils.EncodingGzip))
+	return response.NewBuffered(options.Options()...), nil
 }
 
 func (r *Handler) logAudit(request *http.Request, response http.ResponseWriter, aPath *path.Path) {
@@ -347,8 +341,7 @@ func (r *Handler) logMetrics(URI string, metrics []*response.Metric) {
 	fmt.Printf("%v\n", string(asBytes))
 }
 
-func (r *Handler) handleWithComponent(ctx context.Context, request *http.Request, writer http.ResponseWriter, aComponent *repository.Component) (PayloadReader, error) {
-
+func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aComponent *repository.Component) (response.Response, error) {
 	//TODO merge with Path settings
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, state.NewForm(), unmarshal))
@@ -363,62 +356,49 @@ func (r *Handler) handleWithComponent(ctx context.Context, request *http.Request
 	if err := aSession.Populate(ctx); err != nil {
 		return nil, err
 	}
-	aResponse, err := r.dispatcher.Operate(ctx, aSession, aComponent)
-	if err != nil {
-		return nil, err
-	}
-	if aResponse == nil {
-		return NewBytesReader(nil, ""), nil
+	output, operationErr := r.dispatcher.Operate(ctx, aSession, aComponent)
+	if operationErr != nil && output == nil {
+		return nil, operationErr
 	}
 
+	options := &response.Options{}
+	options.AdjustStatusCode(output, operationErr)
+	if output == nil {
+		return response.NewBuffered(options.Options()...), nil
+	}
 	if aComponent.Service == service.TypeReader {
 		format := aComponent.Output.Format(request.URL.Query())
 		contentType := aComponent.Output.ContentType(format)
-		var options []RequestDataReaderOption
-		options = append(options, WithHeader("Content-Type", contentType))
+		options.Append(response.WithHeader("Content-Type", contentType))
 		if aComponent.Output.Title != "" {
 			switch format {
 			case content.XLSFormat:
-				options = append(options, WithHeader("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.xlsx"`, aComponent.Output.GetTitle())))
+				options.Append(response.WithHeader("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.xlsx"`, aComponent.Output.GetTitle())))
 			}
 		}
 		filters := aComponent.Exclusion(aSession.State())
-		data, err := aComponent.Content.Marshal(format, aComponent.Output.Field, aResponse, filters)
+		data, err := aComponent.Content.Marshal(format, aComponent.Output.Field, output, filters)
 		if err != nil {
-			return nil, httputils.NewHttpMessageError(500, fmt.Errorf("failed to marshal response: %w", err))
+			return nil, response.NewError(500, fmt.Sprintf("failed to marshal response: %v", err), response.WithError(err))
 		}
-		return r.compressIfNeeded(data, options...)
+		return r.compressIfNeeded(data, options)
 	}
-
-	return r.marshalCustomOutput(aResponse, aComponent)
+	return r.marshalComponentOutput(output, aComponent, options)
 }
 
-func (r *Handler) marshalCustomOutput(output interface{}, aComponent *repository.Component) (PayloadReader, error) {
+func (r *Handler) marshalComponentOutput(output interface{}, aComponent *repository.Component, options *response.Options) (response.Response, error) {
 	switch actual := output.(type) {
-	case haHttp.Response:
-		responseContent, err := r.extractValueFromResponse(aComponent, actual)
-		if err != nil {
-			return nil, err
-		}
-		return NewBytesReader(responseContent, "", WithHeaders(actual.Headers())), nil
+	case response.Response:
+		return actual, nil
 	case []byte:
-		return NewBytesReader(actual, ""), nil
+		return response.NewBuffered(response.WithBytes(actual)), nil
 	default:
-		marshal, err := aComponent.Content.Marshaller.JSON.JsonMarshaller.Marshal(output)
+		data, err := aComponent.Content.Marshaller.JSON.JsonMarshaller.Marshal(output)
 		if err != nil {
-			return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
+			return nil, response.NewError(http.StatusInternalServerError, err.Error(), response.WithError(err))
 		}
-		return NewBytesReader(marshal, "", WithHeader(HeaderContentType, openapi.ApplicationJson)), nil
-	}
-}
-
-func (r *Handler) extractValueFromResponse(aComponent *repository.Component, actual haHttp.Response) ([]byte, error) {
-	value := actual.Value()
-	switch responseValue := value.(type) {
-	case []byte:
-		return responseValue, nil
-	default:
-		return aComponent.Content.Marshaller.JSON.JsonMarshaller.Marshal(responseValue)
+		options.Append(response.WithHeader(HeaderContentType, openapi.ApplicationJson))
+		return r.compressIfNeeded(data, options)
 	}
 }
 

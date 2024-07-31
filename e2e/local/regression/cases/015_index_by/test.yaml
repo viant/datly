@@ -10,14 +10,14 @@ pipeline:
         Expect:
           Code: 400
           Body:
-            Message: "not found team with ID 100"
+            message: "not found team with ID 100"
 
       - Method: PUT
         URL: http://127.0.0.1:8080/v1/api/dev/teams?TeamIDs=1
         Expect:
           Code: 400
           Body:
-            Message: "can't deactivate team Team - 1 with 2 members"
+            message: "can't deactivate team Team - 1 with 2 members"
 
       - Method: PUT
         URL: http://127.0.0.1:8080/v1/api/dev/teams?TeamIDs=3

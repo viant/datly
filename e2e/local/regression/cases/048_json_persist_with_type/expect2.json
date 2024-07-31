@@ -1,10 +1,10 @@
 {
-  "Status": "error",
-  "Errors": [
+  "status": "error",
+  "errors": [
     {
-      "View": "custom_unmarshall_velty",
-      "Parameter": "Preference",
-      "Message": "json: cannot unmarshal array into Go value of type struct { Id int; Name string; Price float64 }"
+      "view": "custom_unmarshall_velty",
+      "parameter": "Preference",
+      "message": "json: cannot unmarshal array into Go value of type struct { Id int; Name string; Price float64 }"
     }
   ]
 }

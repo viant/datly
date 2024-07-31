@@ -3,9 +3,9 @@ package router
 import (
 	"context"
 	"github.com/viant/datly/service/executor/handler"
-	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/xdatly/handler/response"
 	"net/http"
 	"net/url"
 )
@@ -44,7 +44,7 @@ func (h *Httper) RouteRequest(ctx context.Context) (*http.Request, error) {
 }
 
 func (h *Httper) FailWithCode(statusCode int, err error) error {
-	return httputils.NewHttpMessageError(statusCode, err)
+	return response.NewError(statusCode, err.Error(), response.WithError(err))
 }
 
 func (h *Httper) buildRequest(ctx context.Context, params []*state.Parameter) (*http.Request, error) {

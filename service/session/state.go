@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
-	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -14,6 +13,7 @@ import (
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -74,7 +74,7 @@ func (s *Session) Populate(ctx context.Context) error {
 	if len(s.namespacedView.Views) == 0 {
 		return nil
 	}
-	err := httputils.NewErrors()
+	err := response.NewErrors()
 	wg := sync.WaitGroup{}
 	for i := range s.namespacedView.Views {
 		wg.Add(1)
@@ -88,7 +88,7 @@ func (s *Session) Populate(ctx context.Context) error {
 	return err
 }
 
-func (s *Session) setViewStateInBackground(ctx context.Context, aView *view.View, errors *httputils.Errors, wg *sync.WaitGroup) {
+func (s *Session) setViewStateInBackground(ctx context.Context, aView *view.View, errors *response.Errors, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if err := s.SetViewState(ctx, aView); err != nil {
 		errors.Append(err)
@@ -140,9 +140,9 @@ func (s *Session) viewNamespace(aView *view.View) *view.NamespaceView {
 
 func (s *Session) adjustErrorSource(err error, aView *view.View) {
 	switch actual := err.(type) {
-	case *httputils.Error:
+	case *response.Error:
 		actual.View = aView.Name
-	case *httputils.Errors:
+	case *response.Errors:
 		for _, item := range actual.Errors {
 			item.View = aView.Name
 		}
@@ -206,7 +206,7 @@ func (s *Session) ClearCache(parameters state.Parameters) {
 	}
 }
 func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aState *structology.State, opts *Options) error {
-	err := httputils.NewErrors()
+	err := response.NewErrors()
 	parametersGroup := parameters.Groups()
 	for _, group := range parametersGroup {
 		wg := sync.WaitGroup{}
@@ -226,7 +226,7 @@ func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aSt
 	return nil
 }
 
-func (s *Session) populateParameterInBackground(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options, errors *httputils.Errors, wg *sync.WaitGroup) {
+func (s *Session) populateParameterInBackground(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options, errors *response.Errors, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if err := s.populateParameter(ctx, parameter, aState, options); err != nil {
 		s.handleParameterError(parameter, err, errors)
@@ -439,7 +439,7 @@ func (s *Session) lookupFirstValue(ctx context.Context, parameters []*state.Para
 func (s *Session) LookupValue(ctx context.Context, parameter *state.Parameter, opts *Options) (value interface{}, has bool, err error) {
 
 	if value, has, err = s.lookupValue(ctx, parameter, opts); err != nil {
-		err = httputils.NewParamError("", parameter.Name, err, httputils.WithObject(value), httputils.WithStatusCode(parameter.ErrorStatusCode))
+		err = response.NewParameterError("", parameter.Name, err, response.WithObject(value), response.WithErrorStatusCode(parameter.ErrorStatusCode))
 	}
 	return value, has, err
 }
@@ -658,21 +658,21 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 	return nil
 }
 
-func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *httputils.Errors) {
+func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *response.Errors) {
 	if parameter.ErrorMessage != "" && err != nil {
 		msg := strings.ReplaceAll(parameter.ErrorMessage, "${error}", err.Error())
 		err = fmt.Errorf(msg)
 	}
-	if pErr, ok := err.(*httputils.Error); ok {
-		pErr.StatusCode = parameter.ErrorStatusCode
+	if pErr, ok := err.(*response.Error); ok {
+		pErr.Code = parameter.ErrorStatusCode
 		errors.Append(pErr)
 	} else {
-		errors.AddError("", parameter.Name, err, httputils.WithStatusCode(parameter.ErrorStatusCode))
+		errors.AddError("", parameter.Name, err, response.WithErrorStatusCode(parameter.ErrorStatusCode))
 	}
 	if parameter.ErrorStatusCode != 0 {
-		errors.SetStatus(parameter.ErrorStatusCode)
-	} else if asErrors, ok := err.(*httputils.Errors); ok && asErrors.ErrorStatusCode() != http.StatusBadRequest {
-		errors.SetStatus(asErrors.ErrorStatusCode())
+		errors.SetStatusCode(parameter.ErrorStatusCode)
+	} else if asErrors, ok := err.(*response.Errors); ok && asErrors.StatusCode() != http.StatusBadRequest {
+		errors.SetStatusCode(asErrors.StatusCode())
 	}
 
 }

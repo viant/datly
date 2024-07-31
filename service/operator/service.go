@@ -14,7 +14,6 @@ import (
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
-	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -38,11 +37,7 @@ func (s *Service) Operate(ctx context.Context, aSession *session.Session, aCompo
 	if err := s.updateBackgroundJob(ctx, aComponent); err != nil {
 		return nil, err
 	}
-	result, err := s.operate(ctx, aComponent, aSession)
-	if err != nil {
-		return nil, err
-	}
-	return result, err
+	return s.operate(ctx, aComponent, aSession)
 }
 
 // HandleError processes output with error
@@ -105,7 +100,7 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 		ret, err := s.execute(ctx, aComponent, aSession)
 		return s.finalize(ctx, ret, err)
 	}
-	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported Type %v", aComponent.Service))
+	return nil, response.NewError(500, fmt.Sprintf("unsupported Type %v", aComponent.Service))
 }
 
 func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (interface{}, error) {
