@@ -29,7 +29,7 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 		}
 		response, err := aComponent.Handler.Call(ctx, sessionHandler)
 		if err != nil {
-			return nil, err
+			return response, err
 		}
 		if err = anExecutor.Execute(ctx); err != nil {
 			return nil, err

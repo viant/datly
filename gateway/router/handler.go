@@ -260,12 +260,16 @@ func (r *Handler) writeResponse(ctx context.Context, request *http.Request, writ
 		writer.Header().Add(key, value[0])
 	}
 
+	statusCode := http.StatusOK
+	if aResponse.StatusCode() > 0 {
+		statusCode = aResponse.StatusCode()
+	}
 	execCtx := exec.GetContext(ctx)
 	if execCtx != nil && execCtx.StatusCode != 0 {
 		writer.WriteHeader(execCtx.StatusCode)
 		execCtx.StatusCode = -1
 	} else {
-		writer.WriteHeader(http.StatusOK)
+		writer.WriteHeader(statusCode)
 	}
 	if reader := aResponse.Body(); reader != nil {
 		_, _ = io.Copy(writer, reader)

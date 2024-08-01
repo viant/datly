@@ -105,7 +105,7 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 
 func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (interface{}, error) {
 	if err != nil {
-		return nil, err
+		return ret, err
 	}
 	if finalizer, ok := ret.(state.Finalizer); ok {
 		err = finalizer.Finalize(ctx)
