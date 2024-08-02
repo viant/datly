@@ -57,7 +57,9 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
-	contract.EnsureParameterTypes(outputParameters, nil, resource.Rule.Doc.Parameters, resource.Rule.Doc.Filter)
+	if err := contract.EnsureParameterTypes(outputParameters, nil, resource.Rule.Doc.Parameters, resource.Rule.Doc.Filter); err != nil {
+		return err
+	}
 	for _, parameter := range outputParameters {
 		if schema := parameter.Schema; schema != nil && schema.Name == "$ViewType" {
 			schema.DataType = strings.Replace(schema.DataType, "interface{}", "*"+dataParameter.Schema.Name, 1)
