@@ -57,7 +57,7 @@ func (r *Resource) loadState(ctx context.Context, URL string) error {
 	inputTypeName := dirTypes.MatchTypeNamesInPath(aPath, "@input")
 	outputTypeName := dirTypes.MatchTypeNamesInPath(aPath, "@output")
 	loadType := func(typeName string) (reflect.Type, error) {
-		return r.loadType(dirTypes, typeName, aPath, registered, &typeDefs)
+		return r.loadType(dirTypes, filePackage, typeName, aPath, registered, &typeDefs)
 	}
 	if inputTypeName == "" && outputTypeName == "" {
 		return fmt.Errorf("failed to locate contract types in %s, \n\tforgot struct{...}//@input or //@output comment ?", aPath)

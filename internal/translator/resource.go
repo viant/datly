@@ -482,9 +482,12 @@ func (r *Resource) IncludeURL(ctx context.Context, URL string, fs afs.Service) (
 	return r.assetURL(ctx, URL, fs)
 }
 
-func (r *Resource) loadType(dirTypes *xreflect.DirTypes, typeName string, aPath string, registered map[string]map[string]bool, typeDefs *view.TypeDefinitions) (reflect.Type, error) {
+func (r *Resource) loadType(dirTypes *xreflect.DirTypes, filePackage string, typeName string, aPath string, registered map[string]map[string]bool, typeDefs *view.TypeDefinitions) (reflect.Type, error) {
 	rType, err := dirTypes.Type(typeName)
 	statePackage := dirTypes.PackagePath(aPath)
+	if strings.HasSuffix(filePackage, "/"+statePackage) {
+		statePackage = filePackage
+	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid typename: %v, %w", typeName, err)
 	}
