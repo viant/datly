@@ -204,15 +204,19 @@ func (c *Component) generatorImports(modulePath string, component bool) []string
 	}
 
 	ret := []string{"embed",
-		"github.com/viant/datly",
+
 		"reflect",
 		"github.com/viant/xdatly/types/core",
 		checksumModule,
-		"github.com/viant/datly/repository",
-		"github.com/viant/datly/repository/contract"}
+	}
 
 	if component {
-		ret = append(ret, "fmt", "context")
+		ret = append(ret,
+			"fmt",
+			"context",
+			"github.com/viant/datly/repository",
+			"github.com/viant/datly/repository/contract",
+			"github.com/viant/datly")
 	}
 	return ret
 }
