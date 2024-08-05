@@ -113,6 +113,9 @@ func (g *Generate) customType(result string, methodFragment string) string {
 			pkg = url.Join(g.ModulePrefix, pkg)
 		}
 	}
+	if index := strings.LastIndex(pkg, "/"); index != -1 {
+		pkg = pkg[index+1:]
+	}
 	return pkg + "/" + strings.ToLower(methodFragment) + "." + result
 }
 

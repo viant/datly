@@ -47,7 +47,16 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 `, t.generateMapTypeBody())
 	}
 	initSnippet := strings.Replace(entityTemplate, "$Init", initCode, 1)
-	initSnippet = strings.Replace(initSnippet, "$Package", pkg+"/"+t.FileMethodFragment(), 1)
+
+	registryPackage := pkg + "/" + t.FileMethodFragment()
+	if t.Resource.Rule.InputType != "" {
+		if index := strings.LastIndex(t.Resource.Rule.InputType, "."); index != -1 {
+			registryPackage = t.Resource.Rule.InputType[:index]
+		}
+	}
+
+	initSnippet = strings.Replace(initSnippet, "$Package", registryPackage, 1)
+
 	initSnippet = strings.Replace(initSnippet, "$GlobalDeclaration", globalDeclaration, 1)
 
 	recv := strings.ToLower(t.TypeDef.Name[:1])
