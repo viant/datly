@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"path"
 	"reflect"
+	"strings"
 )
 
 func (r *Resource) loadState(ctx context.Context, URL string) error {
@@ -20,6 +21,14 @@ func (r *Resource) loadState(ctx context.Context, URL string) error {
 	var typeDefs view.TypeDefinitions
 	var registered = map[string]map[string]bool{}
 
+	filePackage := ""
+	if index := strings.Index(URL, r.ModuleLocation); index != -1 && r.ModuleLocation != "" {
+		filePackage = URL[index+len(r.ModuleLocation)+1:]
+		if index = strings.LastIndex(filePackage, "/"); index != -1 {
+			filePackage = filePackage[:index]
+		}
+	}
+
 	dirTypes, err := xreflect.ParseTypes(location,
 		xreflect.WithParserMode(parser.ParseComments),
 		xreflect.WithRegistry(typeRegistry),
@@ -29,6 +38,9 @@ func (r *Resource) loadState(ctx context.Context, URL string) error {
 		}), xreflect.WithOnLookup(func(packagePath, pkg, typeName string, rType reflect.Type) {
 			if pkg == "" {
 				return
+			}
+			if strings.HasSuffix(filePackage, "/"+pkg) {
+				pkg = filePackage
 			}
 			if _, ok := registered[pkg]; !ok {
 				registered[pkg] = map[string]bool{}

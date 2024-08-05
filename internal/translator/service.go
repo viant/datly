@@ -106,6 +106,7 @@ func (s *Service) detectModule(ctx context.Context, rule *options.Rule, resource
 		data, _ := s.fs.DownloadWithURL(ctx, modFile)
 		if goMod, _ := modfile.Parse(modFile, data, nil); goMod != nil {
 			resource.Module = goMod.Module
+			resource.ModuleLocation = rule.ModuleLocation
 		}
 	}
 }

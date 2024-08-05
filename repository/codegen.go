@@ -164,7 +164,18 @@ func (c *Component) buildDependencyTypes(inPackageComponentTypes map[string]bool
 			continue
 		}
 		if def.Package != "" && c.ModulePath != "" && strings.Contains(def.DataType, " ") { //complex type
-			importModules[def.Package] = c.ModulePath
+			if index := strings.LastIndex(def.Package, "/"); index != -1 {
+				pkgAlias := def.Package[index+1:]
+				pkgName := def.Package[:index]
+				if _, ok := importModules[pkgAlias]; !ok {
+					importModules[pkgAlias] = c.ModulePath + "/" + pkgName
+				}
+				def.Package = pkgAlias
+			} else {
+				if _, ok := importModules[def.Package]; !ok {
+					importModules[def.Package] = c.ModulePath
+				}
+			}
 		}
 		aType := xreflect.NewType(def.Name, xreflect.WithModulePath(def.ModulePath), xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType))
 		prev, found := uniquePackageTypes[aType.TypeName()]
