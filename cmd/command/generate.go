@@ -110,6 +110,10 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		Rule:       *opts.Rule(),
 	}
 
+	defComp := true
+	if generate := opts.Generate; generate != nil {
+		defComp = generate.DefineComponent
+	}
 	opts.Translate = translate
 	opts.Generate = nil
 	sources := opts.Rule().Source
@@ -145,7 +149,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		if repo := opts.Repository(); repo != nil && len(repo.SubstitutesURL) > 0 {
 			namedResources = append(namedResources, repo.SubstitutesURL...)
 		}
-		code := aComponent.GenerateOutputCode(ctx, true, embeds, namedResources...)
+		code := aComponent.GenerateOutputCode(ctx, true, defComp, embeds, namedResources...)
 		destURL := path.Join(moduleLocation, modulePrefix, sourceName+".go")
 		if err = s.fs.Upload(ctx, destURL, file.DefaultFileOsMode, strings.NewReader(code)); err != nil {
 			return err

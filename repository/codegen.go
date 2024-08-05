@@ -34,7 +34,7 @@ var contractInit string
 //go:embed codegen/register.gox
 var registerInit string
 
-func (c *Component) GenerateOutputCode(ctx context.Context, withEmbed bool, embeds map[string]string, namedResources ...string) string {
+func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent, withEmbed bool, embeds map[string]string, namedResources ...string) string {
 	builder := strings.Builder{}
 	input := c.Input.Type.Type()
 	registry := c.TypeRegistry()
@@ -102,6 +102,9 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withEmbed bool, embe
 	snippetBefore := replacer.ExpandAsText(registerInit)
 	if withEmbed {
 		defineComponentFunc := replacer.ExpandAsText(contractInit)
+		if !withDefineComponent {
+			defineComponentFunc = ""
+		}
 		snippetBefore += c.embedTemplate(embedURI, componentName)
 		options = append(options,
 			xreflect.WithImports(append(c.generatorImports(c.Contract.ModulePath), "github.com/viant/datly/view")),
