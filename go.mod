@@ -58,7 +58,7 @@ require (
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb
-	github.com/viant/xdatly/types/custom v0.0.0-20240624200855-79bbed0d3db9
+	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.0
 	github.com/viant/xmlify v0.1.1-0.20231127181625-8a6b48ceea12
 	golang.org/x/tools v0.19.0
