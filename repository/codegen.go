@@ -107,7 +107,7 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 		}
 		snippetBefore += c.embedTemplate(embedURI, componentName)
 		options = append(options,
-			xreflect.WithImports(append(c.generatorImports(c.Contract.ModulePath), "github.com/viant/datly/view")),
+			xreflect.WithImports(append(c.generatorImports(c.Contract.ModulePath, withDefineComponent), "github.com/viant/datly/view")),
 			xreflect.WithSnippetAfter(defineComponentFunc))
 	} else {
 		replacer.Put("WithConnector", "")
@@ -191,7 +191,7 @@ var %vFS embed.FS
 `, embedURI, componentName)
 }
 
-func (c *Component) generatorImports(modulePath string) []string {
+func (c *Component) generatorImports(modulePath string, component bool) []string {
 
 	checksumModule := "github.com/viant/xdatly/types/custom/checksum"
 	index := strings.LastIndex(modulePath, "/pkg/")
@@ -203,15 +203,18 @@ func (c *Component) generatorImports(modulePath string) []string {
 		checksumModule = path.Join(checksumParent, "dependency", "checksum")
 	}
 
-	return []string{"embed",
+	ret := []string{"embed",
 		"github.com/viant/datly",
-		"fmt",
-		"context",
 		"reflect",
 		"github.com/viant/xdatly/types/core",
 		checksumModule,
 		"github.com/viant/datly/repository",
 		"github.com/viant/datly/repository/contract"}
+
+	if component {
+		ret = append(ret, "fmt", "context")
+	}
+	return ret
 }
 
 func (c *Component) adjustStructField(embedURI string, embeds map[string]string, generateContract bool) func(aField *reflect.StructField, tag *string, typeName *string, doc *string) {
