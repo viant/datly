@@ -16,7 +16,7 @@ type Generate struct {
 	Kind            string `short:"k" long:"kind" description:"execution kind" choice:"dml" choice:"service"`
 	Lang            string `short:"l" long:"lang" description:"lang" choice:"velty" choice:"go"`
 	Translate       bool   `short:"t" long:"translate" description:"translate generated DSQL"`
-	DefineComponent bool   `short:"Z" long:"defComp" description:"include define component" default:"true"`
+	DefineComponent *bool  `short:"Z" long:"defComp" description:"include define component" default:"true"`
 }
 
 func (g *Generate) HttpMethod() string {
