@@ -107,7 +107,7 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 		}
 		snippetBefore += c.embedTemplate(embedURI, componentName)
 		options = append(options,
-			xreflect.WithImports(append(c.generatorImports(c.Contract.ModulePath, withDefineComponent), "github.com/viant/datly/view")),
+			xreflect.WithImports(c.generatorImports(c.Contract.ModulePath, withDefineComponent)),
 			xreflect.WithSnippetAfter(defineComponentFunc))
 	} else {
 		replacer.Put("WithConnector", "")
@@ -204,7 +204,6 @@ func (c *Component) generatorImports(modulePath string, component bool) []string
 	}
 
 	ret := []string{"embed",
-
 		"reflect",
 		"github.com/viant/xdatly/types/core",
 		checksumModule,
@@ -214,6 +213,7 @@ func (c *Component) generatorImports(modulePath string, component bool) []string
 		ret = append(ret,
 			"fmt",
 			"context",
+			"github.com/viant/datly/view",
 			"github.com/viant/datly/repository",
 			"github.com/viant/datly/repository/contract",
 			"github.com/viant/datly")
