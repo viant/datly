@@ -81,6 +81,10 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 			value.DoubleType = &s
 		case reflect.Ptr:
 			switch field.Type.Elem().Kind() {
+			case reflect.Struct:
+				//TODO: handle nested struct
+				continue
+
 			case reflect.String:
 				if v := field.StringPtr(sourcePtr); v != nil {
 					value.Value = v
@@ -129,6 +133,14 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 					return nil, fmt.Errorf("xmltab: usnupported type: %T", v)
 				}
 			}
+		case reflect.Slice:
+			switch field.Type.Elem().Kind() {
+			case reflect.Ptr:
+				if field.Type.Elem().Elem().Kind() == reflect.Struct {
+					continue //TODO: handle nested struct
+				}
+			}
+
 		default:
 			return nil, fmt.Errorf("xmltab: usnupported kind: %v", field.Type.Kind())
 		}
@@ -164,11 +176,16 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *xml.Tabular) 
 			column.Type = "long"
 		case reflect.Float64, reflect.Float32:
 			column.Type = "double"
+		case reflect.Struct:
+			//TODO: handle nested struct
+			continue
 		default:
 			switch field.Type {
 			case xreflect.TimeType, xreflect.TimePtrType:
 				column.Type = "timestamp"
+
 			}
+
 		}
 
 		result.ColumnsWrapper.Columns = append(result.ColumnsWrapper.Columns, column)
