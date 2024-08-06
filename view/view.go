@@ -57,6 +57,7 @@ type (
 		FromURL     string     `json:",omitempty"`
 		Exclude     []string   `json:",omitempty"`
 		Columns     []*Column  `json:",omitempty"`
+		Tag         string     `json:",omitempty"`
 		Partitioned *Partitioned
 
 		Criteria string `json:",omitempty"`

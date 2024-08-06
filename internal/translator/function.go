@@ -37,6 +37,13 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 		if dest != nil {
 			switch strings.ToLower(funcName) {
 			case "tag":
+				if column.Name == column.Namespace && !strings.Contains(column.Tag, column.Name+"."+column.Name) {
+					if dest.View == nil {
+						dest.View = &View{}
+					}
+					dest.View.Tag = column.Tag
+					return true, nil
+				}
 				columnConfig := dest.columnConfig(column.Name)
 				column.Tag = strings.Trim(strings.TrimSpace(column.Tag), "'")
 				columnConfig.Tag = &column.Tag

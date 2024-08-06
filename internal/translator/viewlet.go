@@ -25,8 +25,9 @@ var arithmeticOperator = map[string]bool{
 
 type (
 	Viewlet struct {
-		Name              string
-		Holder            string
+		Name   string
+		Holder string
+
 		Connector         string
 		SQL               string
 		SanitizedSQL      string
