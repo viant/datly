@@ -95,14 +95,19 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 	if t.TypeName != "" {
 		pTags.Set(xreflect.TagTypeName, string(t.TypeName))
 	}
+	var rawTag string
 	if t.View != nil {
 		t.appendTag(t.View, &ret)
+		if t.View.CustomTag != "" {
+			rawTag = t.View.CustomTag
+		}
 	}
 	t.appendTag(t.LinkOn, &ret)
 
 	if t.Value != nil {
 		pTags.Set(ValueTag, *t.Value)
 	}
+
 	for _, aTag := range ret {
 		pTags.Set(aTag.Name, string(aTag.Values))
 	}
@@ -117,7 +122,11 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 		return prev > next
 	})
 
-	return reflect.StructTag(pTags.Stringify())
+	structTag := pTags.Stringify()
+	if rawTag != "" {
+		structTag = structTag + " " + rawTag
+	}
+	return reflect.StructTag(structTag)
 }
 
 func getTagPriority(tag *tags.Tag) int {

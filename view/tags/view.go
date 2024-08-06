@@ -91,9 +91,6 @@ func (v *View) Tag() *tags.Tag {
 	if v.Limit != nil {
 		appendNonEmpty(builder, "limit", strconv.Itoa(*v.Limit))
 	}
-	if v.CustomTag != "" {
-		appendNonEmpty(builder, "tag", v.CustomTag)
-	}
 	appendNonEmpty(builder, "table", v.Table)
 	if v.Batch > 0 {
 		appendNonEmpty(builder, "batch", strconv.Itoa(v.Batch))
