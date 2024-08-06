@@ -41,7 +41,7 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 					if dest.View == nil {
 						dest.View = &View{}
 					}
-					dest.View.Tag = column.Tag
+					dest.View.Tag = strings.Trim(column.Tag, "'")
 					return true, nil
 				}
 				columnConfig := dest.columnConfig(column.Name)
