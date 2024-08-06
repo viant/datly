@@ -337,6 +337,12 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		if err := r.TypeRegistry().Register(definition.Name, xreflect.WithPackage(definition.Package), xreflect.WithModulePath(definition.ModulePath), xreflect.WithReflectType(definition.Type())); err != nil {
 			return err
 		}
+		if index := strings.LastIndex(definition.Package, "/"); index != -1 {
+			pkg := definition.Package[index+1:]
+			if err := r.TypeRegistry().Register(definition.Name, xreflect.WithPackage(pkg), xreflect.WithModulePath(definition.ModulePath), xreflect.WithReflectType(definition.Type())); err != nil {
+				return err
+			}
+		}
 		if definition.Alias != "" {
 			if err := r.TypeRegistry().Register(definition.Alias, xreflect.WithReflectType(definition.Type())); err != nil {
 				return err
