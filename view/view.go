@@ -380,6 +380,9 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 		if viewTag.Match != "" {
 			refViewOptions = append(refViewOptions, WithMatchStrategy(viewTag.Match))
 		}
+		if viewTag.CustomTag != "" {
+			refViewOptions = append(refViewOptions, WithViewTag(viewTag.CustomTag))
+		}
 		if isSlice(field.Type) {
 			viewOptions = append(viewOptions, WithOneToMany(field.Name, relLinks,
 				NewReferenceView(refLinks, NewView(viewTag.Name, viewTag.Table, refViewOptions...))))
@@ -1598,6 +1601,14 @@ func NewExecView(name, table string, template string, parameters []*state.Parame
 func WithMatchStrategy(match string) Option {
 	return func(v *View) error {
 		v.MatchStrategy = MatchStrategy(match)
+		return nil
+	}
+}
+
+// WithViewTag creates an Option to set tag
+func WithViewTag(tag string) Option {
+	return func(v *View) error {
+		v.Tag = tag
 		return nil
 	}
 }
