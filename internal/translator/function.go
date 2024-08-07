@@ -12,21 +12,27 @@ import (
 )
 
 // TODO introduce function abstraction for datly -h list funciton, with validation signtaure description
-func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error) {
+func (n *Viewlets) applySettingFunctions(column *sqlparser.Column, namespace string) (bool, error) {
 	funcName, funcArgs := extractFunction(column)
 	if funcName == "" {
 		return false, nil
 	}
 
 	funcName = strings.ReplaceAll(funcName, "_", "")
+
 	if column.Namespace == "" && funcArgs[0] != "" {
 		if strings.Contains(funcArgs[0], ".") {
 			column.Namespace, column.Name = namespacedColumn(funcArgs[0])
 		} else {
-			if n.Lookup(funcArgs[0]) == nil {
-				return false, nil
+			if len(n.keys) == 1 && namespace != funcArgs[0] {
+				column.Namespace = namespace
+				column.Name = funcArgs[0]
+			} else {
+				if n.Lookup(column.Namespace) == nil {
+					return false, nil
+				}
+				column.Namespace = funcArgs[0]
 			}
-			column.Namespace = funcArgs[0]
 		}
 	}
 
