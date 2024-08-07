@@ -19,19 +19,19 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column, namespace str
 	}
 
 	funcName = strings.ReplaceAll(funcName, "_", "")
-
 	if column.Namespace == "" && funcArgs[0] != "" {
 		if strings.Contains(funcArgs[0], ".") {
 			column.Namespace, column.Name = namespacedColumn(funcArgs[0])
 		} else {
-			if len(n.keys) == 1 && namespace != funcArgs[0] {
+			ns := funcArgs[0]
+			if len(n.keys) == 1 && namespace != ns {
 				column.Namespace = namespace
-				column.Name = funcArgs[0]
+				column.Name = ns
 			} else {
-				if n.Lookup(column.Namespace) == nil {
+				if n.Lookup(ns) == nil {
 					return false, nil
 				}
-				column.Namespace = funcArgs[0]
+				column.Namespace = ns
 			}
 		}
 	}

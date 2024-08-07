@@ -169,6 +169,7 @@ func (s *Session) ViewOptions(aView *view.View, opts ...Option) *Options {
 	if aView.Template != nil {
 		parameters = aView.Template.Parameters.Index()
 	}
+
 	viewOptions.kindLocator = s.kindLocator.With(s.viewLookupOptions(aView, parameters, viewOptions)...)
 	viewOptions.AddCodec(codec.WithSelector(codec.Selector(selectors)))
 	viewOptions.AddCodec(codec.WithColumnsSource(aView.IndexedColumns()))
@@ -487,17 +488,15 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 	}
 
 	locators := opts.kindLocator
-	switch parameter.In.Kind {
-	case state.KindConst:
+	parameterLocator, err := locators.Lookup(parameter.In.Kind)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", parameter.Name, err)
+	}
+	if value, has, err = parameterLocator.Value(ctx, parameter.In.Name); err != nil {
+		return nil, false, err
+	}
+	if parameter.In.Kind == state.KindConst && !has { //if parameter is const and has no value, use default value
 		value, has = parameter.Value, true
-	default:
-		parameterLocator, err := locators.Lookup(parameter.In.Kind)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", parameter.Name, err)
-		}
-		if value, has, err = parameterLocator.Value(ctx, parameter.In.Name); err != nil {
-			return nil, false, err
-		}
 	}
 
 	if !has && len(opts.namedParameters) > 0 {

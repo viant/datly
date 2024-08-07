@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler/response"
+	hstate "github.com/viant/xdatly/handler/state"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -18,7 +19,7 @@ type componentLocator struct {
 	custom     []interface{}
 	dispatch   contract.Dispatcher
 	getRequest func() (*http.Request, error)
-	getForm    func() *state.Form
+	getForm    func() *hstate.Form
 }
 
 func (l *componentLocator) Names() []string {

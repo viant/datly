@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
@@ -164,18 +165,7 @@ func (c *Component) buildDependencyTypes(inPackageComponentTypes map[string]bool
 			continue
 		}
 		if def.Package != "" && c.ModulePath != "" && strings.Contains(def.DataType, " ") { //complex type
-			if index := strings.LastIndex(def.Package, "/"); index != -1 {
-				pkgAlias := def.Package[index+1:]
-				pkgName := def.Package[:index]
-				if _, ok := importModules[pkgAlias]; !ok {
-					importModules[pkgAlias] = c.ModulePath + "/" + pkgName
-				}
-				def.Package = pkgAlias
-			} else {
-				if _, ok := importModules[def.Package]; !ok {
-					importModules[def.Package] = c.ModulePath
-				}
-			}
+			c.updatePackageModule(def, importModules)
 		}
 		aType := xreflect.NewType(def.Name, xreflect.WithModulePath(def.ModulePath), xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType))
 		prev, found := uniquePackageTypes[aType.TypeName()]
@@ -192,6 +182,21 @@ func (c *Component) buildDependencyTypes(inPackageComponentTypes map[string]bool
 		}
 	}
 	return result
+}
+
+func (c *Component) updatePackageModule(def *view.TypeDefinition, importModules map[string]string) {
+	if index := strings.LastIndex(def.Package, "/"); index != -1 {
+		pkgAlias := def.Package[index+1:]
+		pkgName := def.Package[:index]
+		if _, ok := importModules[pkgAlias]; !ok {
+			importModules[pkgAlias] = c.ModulePath + "/" + pkgName
+		}
+		def.Package = pkgAlias
+	} else {
+		if _, ok := importModules[def.Package]; !ok {
+			importModules[def.Package] = c.ModulePath
+		}
+	}
 }
 
 func (c *Component) embedTemplate(embedURI string, componentName string) string {

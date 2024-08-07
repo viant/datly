@@ -2,8 +2,8 @@ package locator
 
 import (
 	"context"
-	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
+	"github.com/viant/xdatly/handler/state"
 	"net/http"
 )
 

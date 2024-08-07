@@ -19,5 +19,6 @@ func init() {
 	Register(state.KindContext, NewContext)
 	Register(state.KindGenerator, NewGenerator)
 	Register(state.KindTransient, NewTransient)
+	Register(state.KindConst, NewConstants)
 
 }

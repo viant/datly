@@ -19,6 +19,7 @@ import (
 	"github.com/viant/datly/view/extension"
 	dcodec "github.com/viant/datly/view/extension/codec"
 	verifier2 "github.com/viant/scy/auth/jwt/verifier"
+	hstate "github.com/viant/xdatly/handler/state"
 
 	"github.com/viant/datly/view/state"
 	"github.com/viant/scy/auth/jwt"
@@ -52,7 +53,7 @@ type (
 	sessionOptions struct {
 		request  *http.Request
 		resource state.Resource
-		form     *state.Form
+		form     *hstate.Form
 	}
 	SessionOption func(o *sessionOptions)
 
@@ -135,7 +136,7 @@ func newSessionOptions(opts []SessionOption) *sessionOptions {
 		sessionOpt.request = &http.Request{Header: make(http.Header), URL: URL}
 	}
 	if sessionOpt.form == nil {
-		sessionOpt.form = state.NewForm()
+		sessionOpt.form = hstate.NewForm()
 	}
 	return sessionOpt
 }
@@ -145,7 +146,7 @@ func WithRequest(request *http.Request) SessionOption {
 	}
 }
 
-func WithForm(form *state.Form) SessionOption {
+func WithForm(form *hstate.Form) SessionOption {
 	return func(o *sessionOptions) {
 		o.form = form
 	}

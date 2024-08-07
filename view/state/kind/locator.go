@@ -8,7 +8,7 @@ import (
 // Locator defines state locator
 type Locator interface {
 
-	//Output returns parameter value
+	//Value returns parameter value
 	Value(ctx context.Context, name string) (interface{}, bool, error)
 
 	//Names returns names of supported parameters

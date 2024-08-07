@@ -311,6 +311,7 @@ func (v *View) init(ctx context.Context) error {
 		v.Name: true,
 	}
 	lookupType := v._resource.LookupType()
+
 	if err := v.Schema.LoadTypeIfNeeded(lookupType); err != nil {
 		return err
 	}

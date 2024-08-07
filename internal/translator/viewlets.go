@@ -140,7 +140,7 @@ func (n *Viewlets) applyTopLevelDSQLSetting(query *query.Select, namespace *View
 }
 
 func (n *Viewlets) applyTopLevelSetting(column *sqlparser.Column, viewlet *Viewlet) error {
-	done, err := n.applySettingFunctions(column)
+	done, err := n.applySettingFunctions(column, viewlet.Name)
 	if done || err != nil {
 		return err
 	}
@@ -173,7 +173,9 @@ func (n *Viewlets) applyTopLevelSetting(column *sqlparser.Column, viewlet *Viewl
 	columnName := column.Name
 	//TODO move it to the cast logic  - MASTER LOCATION OR LOGIC PLEASE
 	if columnName == viewlet.Name && strings.Contains(column.Expression, "cast(") {
-		viewlet.updateViewSchema(column.Type)
+		if column.Type != "string" {
+			viewlet.updateViewSchema(column.Type)
+		}
 		return nil
 	}
 

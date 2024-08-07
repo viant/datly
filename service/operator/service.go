@@ -61,7 +61,7 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 	locatorOptions = append(locatorOptions,
 		locator.WithView(aComponent.View),
 		locator.WithTypes(aComponent.Types()...),
-		locator.WithCustomOption(&response.Status{Status: "error", Message: err.Error(), Errors: []string{err.Error()}}),
+		locator.WithCustom(&response.Status{Status: "error", Message: err.Error(), Errors: []string{err.Error()}}),
 		locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
 			return aSession.LookupValue(ctx, parameter, aSession.Indirect(true, locatorOptions...))
 		}))

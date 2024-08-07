@@ -25,6 +25,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
+	hstate "github.com/viant/xdatly/handler/state"
 	"io"
 	"net/http"
 	"runtime/debug"
@@ -348,7 +349,7 @@ func (r *Handler) logMetrics(URI string, metrics []*response.Metric) {
 func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aComponent *repository.Component) (response.Response, error) {
 	//TODO merge with Path settings
 	unmarshal := aComponent.UnmarshalFunc(request)
-	locatorOptions := append(aComponent.LocatorOptions(request, state.NewForm(), unmarshal))
+	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...))
 	err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
 	if err != nil {

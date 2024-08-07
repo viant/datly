@@ -225,6 +225,7 @@ func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool, docum
 	if viewlet.Resource.Rule.IsGeneratation {
 		return
 	}
+
 	if schema := viewlet.View.Schema; schema != nil && (schema.Type() != nil || schema.DataType != "") {
 		return
 	}
@@ -403,6 +404,7 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 	//}
 
 	aView := &viewlet.View.View
+
 	resource.Resource.Views = append(resource.Resource.Views, aView)
 	viewlet.View.GenerateFiles(baseRuleURL, ruleName, &s.Repository.Files, s.Repository.Substitutes.Merge())
 	if viewlet.TypeDefinition != nil {

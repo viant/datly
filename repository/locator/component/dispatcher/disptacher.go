@@ -6,8 +6,8 @@ import (
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/session"
-	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
+	hstate "github.com/viant/xdatly/handler/state"
 	"net/http"
 )
 
@@ -16,7 +16,7 @@ type Dispatcher struct {
 	service  *operator.Service
 }
 
-func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request *http.Request, form *state.Form) (interface{}, error) {
+func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request *http.Request, form *hstate.Form) (interface{}, error) {
 	//TODO maybe extract and pass session cache value
 	aComponent, err := d.registry.Lookup(ctx, path)
 	if err != nil {

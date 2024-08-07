@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/structology"
+	hstate "github.com/viant/xdatly/handler/state"
 	"net/http"
 	"reflect"
 	"sync"
@@ -14,7 +14,7 @@ import (
 
 type Body struct {
 	bodyType     reflect.Type
-	form         *state.Form
+	form         *hstate.Form
 	body         []byte
 	unmarshal    Unmarshal
 	requestState *structology.State
