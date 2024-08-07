@@ -43,7 +43,7 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column, namespace str
 		if dest != nil {
 			switch strings.ToLower(funcName) {
 			case "tag":
-				if column.Name == column.Namespace && !strings.Contains(column.Tag, column.Name+"."+column.Name) {
+				if column.Name == column.Namespace && !strings.Contains(column.Expression, column.Name+"."+column.Name) {
 					if dest.View == nil {
 						dest.View = &View{}
 					}
