@@ -168,6 +168,7 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 				}
 			}
 			ctx = context.WithValue(ctx, xhandler.InputKey, anInput)
+			ctx = context.WithValue(ctx, reflect.TypeOf(anInput), anInput)
 		}
 	}
 	return ctx, nil

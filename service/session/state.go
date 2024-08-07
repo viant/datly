@@ -217,7 +217,8 @@ func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aSt
 				continue
 			}
 			wg.Add(1)
-			go s.populateParameterInBackground(ctx, parameter, aState, opts, err, &wg)
+			//go
+			s.populateParameterInBackground(ctx, parameter, aState, opts, err, &wg)
 		}
 		wg.Wait()
 		if err.HasError() {
@@ -629,6 +630,9 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 	inputState := sType.WithValue(aState)
 	ptr := xunsafe.AsPointer(aState)
 	for _, parameter := range parameters {
+		if parameter.Scope != "" {
+			continue
+		}
 		selector, _ := inputState.Selector(parameter.Name)
 		if selector == nil {
 			continue
