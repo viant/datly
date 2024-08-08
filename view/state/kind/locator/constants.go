@@ -33,6 +33,6 @@ func (r *Constants) Value(ctx context.Context, name string) (interface{}, bool, 
 // NewConstants returns body locator
 func NewConstants(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
-	var ret = &Constants{constants: options.constants, resourceConstants: options.resourceConstants}
+	var ret = &Constants{constants: options.Constants, resourceConstants: options.resourceConstants}
 	return ret, nil
 }

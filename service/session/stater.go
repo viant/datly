@@ -22,27 +22,25 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		}
 		s.Types.Put(stateType)
 	}
-	viewOptions := s.ViewOptions(s.view, WithLocatorOptions())
+
 	hOptions := hstate.NewOptions(opts...)
 	aState := stateType.Type().WithValue(dest)
-	stateOptions := viewOptions.kindLocator.Options()
 	if hOptions.Constants() != nil {
-		stateOptions = append(stateOptions, locator.WithConstants(hOptions.Constants()))
+		s.locatorOptions = append(s.locatorOptions, locator.WithConstants(hOptions.Constants()))
+		s.kindLocator.RemoveLocators(state.KindConst)
 	}
 	if hOptions.Form() != nil {
-		stateOptions = append(stateOptions, locator.WithForm(hOptions.Form()))
+		s.locatorOptions = append(s.locatorOptions, locator.WithForm(hOptions.Form()))
+		s.kindLocator.RemoveLocators(state.KindForm)
 	}
 	if hOptions.HttpRequest() != nil {
-		stateOptions = append(stateOptions, locator.WithRequest(hOptions.HttpRequest()))
+		s.locatorOptions = append(s.locatorOptions, locator.WithRequest(hOptions.HttpRequest()))
+		s.kindLocator.RemoveLocators(state.KindForm, state.KindRequest, state.KindQuery)
 	}
-	options := s.Clone().Indirect(true, stateOptions...)
+	viewOptions := s.ViewOptions(s.view, WithLocatorOptions())
+	stateOptions := viewOptions.kindLocator.Options()
+	options := s.Indirect(true, stateOptions...)
 	options.scope = hOptions.Scope()
-	if hOptions.HttpRequest() != nil || hOptions.Form() != nil {
-		options.kindLocator.RemoveLocators(state.KindForm, state.KindRequest, state.KindQuery)
-	}
-	if hOptions.Constants() != nil {
-		options.kindLocator.RemoveLocators(state.KindConst)
-	}
 	if err = s.SetState(ctx, stateType.Parameters, aState, options); err != nil {
 		return err
 	}

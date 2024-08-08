@@ -19,6 +19,7 @@ type Parameter struct {
 	DataType  string `tag:"dataType,omitempty"` //parameter input type
 	With      string `tag:"with,omitempty"`     //optional auxiliary type name holding parameters
 	Required  bool   `tag:"required,omitempty"`
+	Cachable  bool   `tag:"cachable,omitempty"`
 }
 
 func (t *Tag) updatedParameter(key string, value string) (err error) {
@@ -32,6 +33,8 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 		tag.In = strings.Trim(strings.TrimSpace(value), "{}")
 	case "when":
 		tag.When = strings.TrimSpace(value)
+	case "cachable":
+		tag.Cachable = true
 	case "scope":
 		tag.Scope = strings.TrimSpace(value)
 	case "errorcode":

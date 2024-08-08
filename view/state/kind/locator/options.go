@@ -39,7 +39,7 @@ type (
 		View              *view.View
 		Resource          *view.Resource
 		Types             []*state.Type
-		constants         map[string]interface{}
+		Constants         map[string]interface{}
 		resourceConstants map[string]interface{}
 	}
 
@@ -242,10 +242,10 @@ func WithResource(resource *view.Resource) Option {
 	}
 }
 
-// WithConstants return constants option
+// WithConstants return Constants option
 func WithConstants(constants map[string]interface{}) Option {
 	return func(o *Options) {
-		o.constants = constants
+		o.Constants = constants
 	}
 }
 

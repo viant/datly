@@ -16,18 +16,18 @@ type Dispatcher struct {
 	service  *operator.Service
 }
 
-func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request *http.Request, form *hstate.Form) (interface{}, error) {
+func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request *http.Request, form *hstate.Form, opts ...contract.Option) (interface{}, error) {
 	//TODO maybe extract and pass session cache value
 	aComponent, err := d.registry.Lookup(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 	unmarshal := aComponent.UnmarshalFunc(request)
-	options := aComponent.LocatorOptions(request, form, unmarshal)
-	if form != nil {
-		options = append(options, locator.WithForm(form))
+	var options = aComponent.LocatorOptions(request, form, unmarshal)
+	cOptions := contract.NewOptions(opts...)
+	if cOptions.Constants != nil {
+		options = append(options, locator.WithConstants(cOptions.Constants))
 	}
-	options = append(aComponent.LocatorOptions(request, form, unmarshal), options...)
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...))
 	ctx = aSession.Context(ctx, true)
 	value, err := d.service.Operate(ctx, aSession, aComponent)
