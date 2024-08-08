@@ -28,14 +28,17 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 	if hOptions.Constants() != nil {
 		s.locatorOptions = append(s.locatorOptions, locator.WithConstants(hOptions.Constants()))
 		s.kindLocator.RemoveLocators(state.KindConst)
+		s.kindLocator.RemoveLocators(state.KindComponent)
 	}
 	if hOptions.Form() != nil {
 		s.locatorOptions = append(s.locatorOptions, locator.WithForm(hOptions.Form()))
 		s.kindLocator.RemoveLocators(state.KindForm)
+		s.kindLocator.RemoveLocators(state.KindComponent)
 	}
 	if hOptions.HttpRequest() != nil {
 		s.locatorOptions = append(s.locatorOptions, locator.WithRequest(hOptions.HttpRequest()))
 		s.kindLocator.RemoveLocators(state.KindForm, state.KindRequest, state.KindQuery)
+		s.kindLocator.RemoveLocators(state.KindComponent)
 	}
 	viewOptions := s.ViewOptions(s.view, WithLocatorOptions())
 	stateOptions := viewOptions.kindLocator.Options()
