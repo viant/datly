@@ -40,6 +40,9 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 	if hOptions.HttpRequest() != nil || hOptions.Form() != nil {
 		options.kindLocator.RemoveLocators(state.KindForm, state.KindRequest, state.KindQuery)
 	}
+	if hOptions.Constants() != nil {
+		options.kindLocator.RemoveLocators(state.KindConst)
+	}
 	if err = s.SetState(ctx, stateType.Parameters, aState, options); err != nil {
 		return err
 	}
