@@ -541,6 +541,18 @@ func (p Parameters) PredicateStructType(d Documentation) reflect.Type {
 	return reflect.StructOf(structFields)
 }
 
+func (p Parameters) HasErrorParameter() bool {
+	for _, candidate := range p {
+		if candidate.In.Kind == KindOutput && candidate.In.Name == "status" {
+			return true
+		}
+		if candidate.In.Kind == KindAsync && (strings.HasPrefix(candidate.In.Name, "job")) {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	aTag := tags.Tag{}
 	name := p.Name

@@ -56,6 +56,9 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 		}
 
 	}
+	if ! aComponent.Output.Type.Parameters.HasErrorParameter() {
+		return nil, err
+	}
 	output := aComponent.Output.Type.Type().NewState()
 	var locatorOptions []locator.Option
 	locatorOptions = append(locatorOptions,
