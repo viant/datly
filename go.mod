@@ -30,7 +30,7 @@ require (
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
-	github.com/viant/scy v0.11.0
+	github.com/viant/scy v0.11.1-0.20240809212619-84029a5e3755
 	github.com/viant/sqlx v0.15.1
 	github.com/viant/structql v0.4.2-0.20240712002135-b1ef22dd834f
 	github.com/viant/toolbox v0.36.0
@@ -45,13 +45,13 @@ require (
 
 require (
 	github.com/viant/govalidator v0.3.1
-	github.com/viant/sqlparser v0.7.1-0.20240805161001-5b3b5b7479ae
+	github.com/viant/sqlparser v0.7.1
 	golang.org/x/crypto v0.22.0 // indirect
 )
 
 require (
 	firebase.google.com/go/v4 v4.14.0
-	github.com/viant/aerospike v0.2.3-0.20240809193156-a96832e8254e
+	github.com/viant/aerospike v0.2.4-0.20240810131957-aca7e08594ac
 	github.com/viant/structology v0.5.6-0.20240802174922-5eb157550455
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.5.4-0.20240808174705-681c88dd32fa
