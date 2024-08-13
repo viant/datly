@@ -13,9 +13,9 @@ import (
 )
 
 func (r *Repository) ensureConstants(ctx context.Context) error {
-	if constantResource, _ := r.loadDependency(ctx, "constants.yaml"); constantResource != nil {
-		r.State.AppendViewParameters(constantResource.Parameters...)
-	}
+	//if constantResource, _ := r.loadDependency(ctx, "constants.yaml"); constantResource != nil {
+	//	r.State.AppendViewParameters(constantResource.Parameters...)
+	//}
 	if constantResource, _ := r.loadDependency(ctx, "variables.yaml"); constantResource != nil {
 		r.State.AppendViewParameters(constantResource.Parameters...)
 	}
