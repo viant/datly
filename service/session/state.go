@@ -213,7 +213,7 @@ func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aSt
 		wg := sync.WaitGroup{}
 		for i, _ := range group { //populate non data view parameters first
 			parameter := group[i]
-			if parameter.Scope != opts.scope || (opts.scope == "" && parameter.Scope == "async") {
+			if parameter.Scope != opts.scope && !(parameter.Scope == "async" && opts.scope == "") {
 				continue
 			}
 			wg.Add(1)
