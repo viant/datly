@@ -505,6 +505,9 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 
 	if resource.repository.ConstURL != "" {
 		_, name := url.Split(resource.repository.ConstURL, file.Scheme)
+		if ext := path.Ext(name); ext != "" {
+			name = name[:len(name)-len(ext)]
+		}
 		resource.Rule.With = append(resource.Rule.With, name)
 	}
 
