@@ -19,14 +19,14 @@ func (r *Repository) ensureConstants(ctx context.Context) error {
 	if constantResource, _ := r.loadDependency(ctx, "variables.yaml"); constantResource != nil {
 		r.State.AppendViewParameters(constantResource.Parameters...)
 	}
-	if URL := r.Config.repository.ConstURL; URL != "" {
-		constants, err := r.loadMap(ctx, URL)
-		if err != nil {
-			return err
-		}
-		r.State.AppendConst(constants)
+	//if URL := r.Config.repository.ConstURL; URL != "" {
+	//constants, err := r.loadMap(ctx, URL)
+	//if err != nil {
+	//	return err
+	//}
+	//r.State.AppendConst(constants)
 
-	}
+	//}
 	return nil
 }
 
