@@ -503,6 +503,11 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 		resource.Rule.With = append([]string{k}, resource.Rule.With...)
 	}
 
+	if resource.repository.ConstURL != "" {
+		_, name := url.Split(resource.repository.ConstURL, file.Scheme)
+		resource.Rule.With = append(resource.Rule.With, name)
+	}
+
 	result.With = resource.Rule.With
 	if err := s.handleCustomTypes(ctx, resource); err != nil {
 		return nil, err
