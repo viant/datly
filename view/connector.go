@@ -97,7 +97,7 @@ func (c *Connector) DB() (*sql.DB, error) {
 	if c.Secret != nil {
 		secrets := scy.New()
 		if secret, err = secrets.Load(context.Background(), c.Secret); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid db:%v secret, %w", c.DSN, err)
 		}
 		dsn = secret.Expand(dsn)
 	}
