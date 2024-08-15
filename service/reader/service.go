@@ -375,7 +375,7 @@ func (s *Service) queryInBatches(ctx context.Context, session *Session, aView *v
 	wg := &sync.WaitGroup{}
 	db, err := aView.Db()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get db: %w", err)
 	}
 
 	var metaErr error
