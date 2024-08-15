@@ -560,7 +560,7 @@ func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, er
 
 		iParameter.Explicit = true
 		dest.Append(iParameter)
-		if state.IsReservedAsyncState(iParameter.Name) {
+		if state.IsReservedAsyncState(iParameter.Name) && (iParameter.Scope == "async" || iParameter.Async) { //scope to be deprecated
 			r.AsyncState.Append(iParameter)
 		}
 	}
