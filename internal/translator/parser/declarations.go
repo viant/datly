@@ -86,7 +86,7 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 		return nil
 	} else {
 		name := declaration.Parameter.Name
-		if state.IsReservedAsyncState(name) {
+		if state.IsReservedAsyncState(name) && declaration.IsAsync() {
 			d.AsyncState.Append(&declaration.Parameter)
 		}
 	}

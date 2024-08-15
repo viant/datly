@@ -61,6 +61,10 @@ type (
 	ParameterOption func(p *Parameter)
 )
 
+func (p *Parameter) IsAsync() bool {
+	return p.Async || p.Scope == "async"
+}
+
 func (p *Parameter) IsUsedBy(text string) bool {
 	parameter := p.Name
 	text = strings.ReplaceAll(text, "Unsafe.", "")
