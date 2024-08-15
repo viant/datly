@@ -49,6 +49,7 @@ type (
 		When            string `json:",omitempty" yaml:"When"`
 		With            string `json:",omitempty" yaml:"With"`
 		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
+		Async           bool   `json:",omitempty" yaml:"Async"`
 
 		isOutputType bool
 		_timeLayout  string

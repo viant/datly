@@ -33,7 +33,6 @@ type (
 		Connector   string
 		InOutput    bool
 		Of          string
-		IsAsync     bool
 	}
 
 	ModificationSetting struct {
@@ -251,6 +250,7 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	param.When = pTag.When
 	param.Scope = pTag.Scope
 	param.With = pTag.With
+	param.Async = pTag.Async
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
 	if pTag.Required {
 		value := pTag.Required

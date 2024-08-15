@@ -19,7 +19,8 @@ type Parameter struct {
 	DataType  string `tag:"dataType,omitempty"` //parameter input type
 	With      string `tag:"with,omitempty"`     //optional auxiliary type name holding parameters
 	Required  bool   `tag:"required,omitempty"`
-	Cachable  bool   `tag:"cachable,omitempty"`
+	Cachable  *bool  `tag:"cachable,omitempty"`
+	Async     bool   `tag:"async,omitempty"`
 }
 
 func (t *Tag) updatedParameter(key string, value string) (err error) {
@@ -34,7 +35,10 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 	case "when":
 		tag.When = strings.TrimSpace(value)
 	case "cachable":
-		tag.Cachable = true
+		value := strings.TrimSpace(value) == "" || strings.ToLower(strings.TrimSpace(value)) == "true"
+		tag.Cachable = &value
+	case "async":
+		tag.Async = true
 	case "scope":
 		tag.Scope = strings.TrimSpace(value)
 	case "errorcode":
@@ -59,6 +63,13 @@ func (p *Parameter) Tag() *tags.Tag {
 	appendNonEmpty(builder, "kind", p.Kind)
 	appendNonEmpty(builder, "in", p.In)
 	appendNonEmpty(builder, "when", p.When)
+	if p.Cachable != nil {
+		value := "false"
+		if *p.Cachable {
+			value = "true"
+		}
+		appendNonEmpty(builder, "cachable", value)
+	}
 	appendNonEmpty(builder, "with", p.With)
 	appendNonEmpty(builder, "scope", p.Scope)
 	appendNonEmpty(builder, "dataType", p.DataType)

@@ -316,7 +316,7 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 		case "QuerySelector":
 			declaration.Explicit = false
 		case "Async":
-			declaration.IsAsync = true
+			declaration.Async = true
 		}
 		cursor.MatchOne(whitespaceMatcher)
 	}
