@@ -86,7 +86,7 @@ func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aStat
 		URI string `parameters:"kind=query"`
 	}{}
 	_ = aSession.Into(ctx, &uri)
-	aSession.SetCacheValue(ctx, uriParameter, uri.URI)
+	_ = aSession.SetCacheValue(ctx, uriParameter, uri.URI)
 
 	encodedState, err := aSession.MarshalJSON()
 	if err != nil {
