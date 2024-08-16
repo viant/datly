@@ -77,16 +77,16 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	return aComponent.Async.UpdateJob(ctx, job)
 }
 
-var uriParameter = state.NewParameter("uri", state.NewQueryLocation(""))
+var queryParameter = state.NewParameter("query", state.NewQueryLocation(""))
 
 func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aState *structology.State, aComponent *repository.Component, matchKey string, options *session.Options) (*async.Job, error) {
 	asyncModule := aComponent.Async
 
-	uri := struct {
+	query := struct {
 		URI string `parameters:"kind=query"`
 	}{}
-	_ = aSession.Into(ctx, &uri)
-	_ = aSession.SetCacheValue(ctx, uriParameter, uri.URI)
+	_ = aSession.Into(ctx, &query)
+	_ = aSession.SetCacheValue(ctx, queryParameter, query.URI)
 
 	encodedState, err := aSession.MarshalJSON()
 	if err != nil {
