@@ -79,6 +79,7 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 }
 
 var queryParameter = state.NewParameter("Query", state.NewQueryLocation(""), state.WithParameterSchema(state.NewSchema(reflect.TypeOf(""))))
+var textLimit = 63 * 1024
 
 func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aState *structology.State, aComponent *repository.Component, matchKey string, options *session.Options) (*async.Job, error) {
 	asyncModule := aComponent.Async
@@ -92,6 +93,9 @@ func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aStat
 	encodedState, err := aSession.MarshalJSON()
 	if err != nil {
 		return nil, err
+	}
+	if len(encodedState) > textLimit {
+		encodedState = encodedState[:textLimit]
 	}
 	UUID, err := uuid.NewUUID()
 	if err != nil {
