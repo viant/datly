@@ -11,6 +11,7 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/handler/async"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -77,13 +78,13 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	return aComponent.Async.UpdateJob(ctx, job)
 }
 
-var queryParameter = state.NewParameter("query", state.NewQueryLocation(""))
+var queryParameter = state.NewParameter("Query", state.NewQueryLocation(""), state.WithParameterSchema(state.NewSchema(reflect.TypeOf(""))))
 
 func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aState *structology.State, aComponent *repository.Component, matchKey string, options *session.Options) (*async.Job, error) {
 	asyncModule := aComponent.Async
 
 	query := struct {
-		URI string `parameters:"kind=query"`
+		URI string `parameter:"kind=query"`
 	}{}
 	_ = aSession.Into(ctx, &query)
 	_ = aSession.SetCacheValue(ctx, queryParameter, query.URI)

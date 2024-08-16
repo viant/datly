@@ -40,8 +40,11 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		s.kindLocator.RemoveLocators(state.KindForm, state.KindRequest, state.KindQuery)
 		s.kindLocator.RemoveLocators(state.KindComponent)
 	}
-	viewOptions := s.ViewOptions(s.view, WithLocatorOptions())
-	stateOptions := viewOptions.kindLocator.Options()
+	var stateOptions []locator.Option
+	if s.view != nil {
+		viewOptions := s.ViewOptions(s.view, WithLocatorOptions())
+		stateOptions = viewOptions.kindLocator.Options()
+	}
 	options := s.Indirect(true, stateOptions...)
 	options.scope = hOptions.Scope()
 	if err = s.SetState(ctx, stateType.Parameters, aState, options); err != nil {
