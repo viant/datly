@@ -191,7 +191,8 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if err = root.buildView(resource.Rule, view.ModeQuery); err != nil {
 		return err
 	}
-	resource.Rule.updateExclude(resource.Rule.RootViewlet())
+	rootViewlet := resource.Rule.RootViewlet()
+
 	if err = s.updateExplicitInputType(resource, resource.Rule.RootViewlet()); err != nil {
 		return err
 	}
@@ -199,22 +200,23 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if err = s.detectColumns(resource, componentColumns); err != nil {
 		return err
 	}
-
 	s.detectComponentViewType(componentColumns, resource)
-	rootViewlet := resource.Rule.RootViewlet()
-
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
 		return err
 	}
 	if err = s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.Parameters()); err != nil {
 		return err
 	}
+	if viewParameter := resource.OutputState.Parameters().LookupByLocation(state.KindOutput, "view"); viewParameter != nil && !viewParameter.IsAnonymous() {
+		rootViewlet.Holder = viewParameter.Name
+	}
+	resource.Rule.updateExclude(rootViewlet)
+
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
 		return s.adjustView(viewlet, resource, view.ModeQuery)
 	}); err != nil {
 		return err
 	}
-
 	if err = s.persistRouterRule(ctx, resource, service.TypeReader); err != nil {
 		return err
 	}
@@ -369,9 +371,7 @@ func extractTypeNameWithPackage(outputName string) (string, string) {
 }
 
 func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mode) error {
-	if mode == view.ModeQuery {
-		resource.Rule.updateExclude(viewlet)
-	}
+
 	viewlet.applyOutputShorthands()
 	if viewlet.IsMetaView() {
 		return nil
@@ -415,6 +415,7 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 		}
 		resource.AppendTypeDefinition(viewlet.TypeDefinition)
 	}
+
 	return nil
 }
 

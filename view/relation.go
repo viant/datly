@@ -148,6 +148,9 @@ func (r *Relation) inheritType() {
 	if r.Of.Schema != nil && r.Of.Schema.Type() != nil {
 		return
 	}
+	if r.Of.Schema == nil {
+		r.Of.Schema = &state.Schema{}
+	}
 	r.Of.Schema.InheritType(r.holderField.Type)
 }
 

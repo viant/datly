@@ -133,7 +133,6 @@ func (s *Schema) SetType(rType reflect.Type) {
 			s.Name = compType.Name()
 		}
 	}
-
 	if s.Cardinality == "" {
 		s.Cardinality = One
 	}

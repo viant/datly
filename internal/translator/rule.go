@@ -316,9 +316,6 @@ func (r *Rule) RootView() *View {
 }
 
 func (r *Rule) updateExclude(n *Viewlet) {
-	if len(n.Exclude) == 0 {
-		return
-	}
 	prefix := ""
 	r.updateViewExclude(n, prefix)
 }
@@ -327,6 +324,8 @@ func (r *Rule) updateViewExclude(n *Viewlet, prefix string) {
 	if n.Holder != "" {
 		prefix += n.Holder + "."
 	}
+	fmt.Printf("updating exclude: %v %v\n", n.Name, n.Holder)
+
 	for _, exclude := range n.View.Exclude { //Todo convert to field name
 		field := n.Spec.Type.ByColumn(exclude)
 		r.Route.Output.Exclude = append(r.Route.Output.Exclude, prefix+field.Name)

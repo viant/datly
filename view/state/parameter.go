@@ -109,6 +109,10 @@ func (p *Parameter) SetTypeNameTag() {
 	p.Tag += " " + xreflect.TagTypeName + `:"` + schema.Name + `"`
 }
 
+func (p *Parameter) IsAnonymous() bool {
+	return strings.Contains(p.Tag, "anonymous:")
+}
+
 func (p *Parameter) IsCacheable() bool {
 	if p.Cacheable == nil {
 		return p.In.Kind != KindState
