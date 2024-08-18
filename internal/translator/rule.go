@@ -315,28 +315,37 @@ func (r *Rule) RootView() *View {
 	return r.RootViewlet().View
 }
 
-func (r *Rule) updateExclude(n *Viewlet) {
+func (r *Rule) updateExclude(n *Viewlet) error {
 	prefix := ""
-	r.updateViewExclude(n, prefix)
+	return r.updateViewExclude(n, prefix)
 }
 
-func (r *Rule) updateViewExclude(n *Viewlet, prefix string) {
+func (r *Rule) updateViewExclude(n *Viewlet, prefix string) error {
 	if n.Holder != "" {
 		prefix += n.Holder + "."
 	}
-	fmt.Printf("updating exclude: %v %v\n", n.Name, n.Holder)
-
 	for _, exclude := range n.View.Exclude { //Todo convert to field name
 		field := n.Spec.Type.ByColumn(exclude)
+
+		if exclude == "." && prefix != "" {
+			r.Route.Output.Exclude = append(r.Route.Output.Exclude, prefix[:len(prefix)-1])
+			continue
+		}
+		if field == nil {
+			return fmt.Errorf("unable locate column %v to exclude", exclude)
+		}
 		r.Route.Output.Exclude = append(r.Route.Output.Exclude, prefix+field.Name)
 	}
 
 	for _, rel := range n.View.With {
 		viewName := strings.Replace(rel.Of.View.Name, "#", "", 1)
 		relViewlet := r.Viewlets.Lookup(viewName)
-		r.updateViewExclude(relViewlet, prefix)
+		if err := r.updateViewExclude(relViewlet, prefix); err != nil {
+			return err
+		}
 	}
 	n.View.Exclude = nil //TODO do we have to remove it
+	return nil
 }
 
 func (r *Rule) applyRootViewRouteShorthands() {

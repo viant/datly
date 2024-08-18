@@ -210,7 +210,9 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if viewParameter := resource.OutputState.Parameters().LookupByLocation(state.KindOutput, "view"); viewParameter != nil && !viewParameter.IsAnonymous() {
 		rootViewlet.Holder = viewParameter.Name
 	}
-	resource.Rule.updateExclude(rootViewlet)
+	if err = resource.Rule.updateExclude(rootViewlet); err != nil {
+		return err
+	}
 
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
 		return s.adjustView(viewlet, resource, view.ModeQuery)
