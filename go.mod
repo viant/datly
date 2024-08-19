@@ -45,13 +45,13 @@ require (
 
 require (
 	github.com/viant/govalidator v0.3.1
-	github.com/viant/sqlparser v0.7.1
+	github.com/viant/sqlparser v0.7.2
 	golang.org/x/crypto v0.22.0 // indirect
 )
 
 require (
 	firebase.google.com/go/v4 v4.14.0
-	github.com/viant/aerospike v0.2.4
+	github.com/viant/aerospike v0.2.6
 	github.com/viant/structology v0.5.6-0.20240802174922-5eb157550455
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.5.4-0.20240808174705-681c88dd32fa
