@@ -16,6 +16,7 @@ type (
 		kindLocator         *locator.KindLocator
 		namedParameters     state.NamedParameters
 		locatorOptions      []locator.Option //resousrce, route level options
+		locatorOpt          *locator.Options
 		codecOptions        []codec.Option
 		types               []*state.Type
 		indirectState       bool
@@ -26,6 +27,12 @@ type (
 	Option func(o *Options)
 )
 
+func (o *Options) HasInputParameters() bool {
+	if o.locatorOpt == nil {
+		return false
+	}
+	return len(o.locatorOpt.InputParameters) > 0
+}
 func (o *Options) shallReportNotAssignable() bool {
 	if o.reportNotAssignable == nil {
 		return true
@@ -39,6 +46,7 @@ func (o *Options) Indirect(flag bool, options ...locator.Option) *Options {
 		ret.locatorOptions = append(ret.locatorOptions, options...)
 		ret.kindLocator = locator.NewKindsLocator(ret.kindLocator, ret.locatorOptions...)
 	}
+	ret.locatorOpt = locator.NewOptions(ret.locatorOptions)
 	return &ret
 }
 
@@ -89,6 +97,7 @@ func WithLocators(locators *locator.KindLocator) Option {
 func WithLocatorOptions(options ...locator.Option) Option {
 	return func(s *Options) {
 		s.locatorOptions = options
+		s.locatorOpt = locator.NewOptions(options)
 	}
 }
 
