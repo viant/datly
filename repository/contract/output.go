@@ -35,17 +35,15 @@ type Output struct {
 	Field            string `json:",omitempty"`
 	Exclude          []string
 	NormalizeExclude *bool
-
-	DebugKind view.MetaKind
-
-	DataFormat string `json:",omitempty"` //default data format
-
-	ResponseBody *BodySelector
-	RevealMetric *bool
-	Type         state.Type
-	Doc          state.Documentation
-	FilterDoc    state.Documentation
-	_excluded    map[string]bool
+	DebugKind        view.MetaKind
+	DataFormat       string `json:",omitempty"` //default data format
+	ResponseBody     *BodySelector
+	RevealMetric     *bool
+	Type             state.Type
+	ViewType         string
+	Doc              state.Documentation
+	FilterDoc        state.Documentation
+	_excluded        map[string]bool
 }
 
 func (o *Output) GetTitle() string {

@@ -48,6 +48,7 @@ type (
 		Module         *modfile.Module
 		ModuleLocation string
 		typePackages   map[string]string
+		rootConnector  string
 	}
 )
 

@@ -230,7 +230,7 @@ func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool, docum
 		return
 	}
 
-	if schema := viewlet.View.Schema; schema != nil && (schema.Type() != nil || schema.DataType != "") {
+	if schema := viewlet.View.Schema; schema != nil && (schema.Type() != nil || (schema.DataType != "" && withTypeDef)) {
 		return
 	}
 
@@ -423,10 +423,14 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 
 // initReaderViewlet detect SQL dependent Table columns with implicit parameters type to produce sanitized SQL
 func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet, _ state.Documentation) error {
-	if viewlet.Connector == "" {
-		viewlet.Connector = s.DefaultConnector()
+
+	connector := viewlet.GetConnector()
+	if connector == "" {
+		connector = s.DefaultConnector()
 	}
-	db, err := s.Repository.LookupDb(viewlet.Connector)
+	viewlet.Connector = connector
+
+	db, err := s.Repository.LookupDb(connector)
 	if err != nil {
 		return err
 	}

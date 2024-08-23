@@ -57,10 +57,10 @@ type (
 		FromURL     string     `json:",omitempty"`
 		Exclude     []string   `json:",omitempty"`
 		Columns     []*Column  `json:",omitempty"`
+		TypeName    string     `json:",omitempty"`
 		Tag         string     `json:",omitempty"`
 		Partitioned *Partitioned
-
-		Criteria string `json:",omitempty"`
+		Criteria    string `json:",omitempty"`
 
 		Selector *Config   `json:",omitempty"`
 		Template *Template `json:",omitempty"`

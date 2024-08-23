@@ -66,7 +66,9 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 	if err := n.applyViewHintSettings(); err != nil {
 		return err
 	}
+	rootConnector := root.GetConnector()
 	if err := n.Each(func(viewlet *Viewlet) error {
+		n.ensureConnector(viewlet, rootConnector)
 		if err := initFn(ctx, viewlet, resource.Rule.Doc.Columns); err != nil {
 			return fmt.Errorf("failed to init viewlet: %ns, %w", viewlet.Name, err)
 		}
@@ -90,8 +92,18 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 		return err
 	}
 
-	n.addRelations(aQuery)
-	return nil
+	return n.addRelations(aQuery)
+}
+
+func (n *Viewlets) ensureConnector(viewlet *Viewlet, rootConnector string) {
+	if viewlet.Connector == "" {
+		if viewlet.View != nil && viewlet.View.View.Connector != nil {
+			viewlet.Connector = viewlet.View.View.Connector.Name
+		}
+	}
+	if viewlet.Connector == "" {
+		viewlet.Connector = rootConnector
+	}
 }
 
 func SafeQueryStringify(aQuery *query.Select) (SQL string, err error) {
@@ -110,7 +122,7 @@ func (n *Viewlets) applyViewHintSettings() error {
 	})
 }
 
-func (n *Viewlets) addRelations(query *query.Select) {
+func (n *Viewlets) addRelations(query *query.Select) error {
 	for _, join := range query.Joins {
 		relation := n.Lookup(join.Alias)
 		if relation.IsMetaView() {
@@ -125,8 +137,11 @@ func (n *Viewlets) addRelations(query *query.Select) {
 			cardinality = state.One
 		}
 		relName := join.Alias
-		parentViewlet.Spec.AddRelation(relName, join, relation.Spec, cardinality)
+		if err := parentViewlet.Spec.AddRelation(relName, join, relation.Spec, cardinality); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (n *Viewlets) applyTopLevelDSQLSetting(query *query.Select, namespace *Viewlet) error {

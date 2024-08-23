@@ -73,6 +73,18 @@ func (o *OutputSettings) ViewCardinality() state.Cardinality {
 	return o.Cardinality
 }
 
+func (v *Viewlet) GetConnector() string {
+	if v.View != nil {
+		if v.View.View.Connector != nil {
+			return v.View.View.Connector.Ref
+		}
+		if v.View.Connector != "" {
+			return v.View.Connector
+		}
+	}
+	return v.Connector
+}
+
 func (v *Viewlet) IsMetaView() bool {
 	return v.sourceViewlet != nil
 }
