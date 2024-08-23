@@ -162,7 +162,7 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 		for _, item := range s.Type.columnFields {
 			available = append(available, item.Column.Name)
 		}
-		return fmt.Errorf("failed to rel field for %v, available: %v", relColumn, available)
+		return fmt.Errorf("failed to match rel field for %v, available: %v %v", relColumn, s.Type.Name, available)
 	}
 
 	keyField := spec.Type.ByColumn(refColumn)

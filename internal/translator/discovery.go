@@ -104,13 +104,13 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 		relViewlet := resource.Rule.Viewlets.Lookup(rel.Of.View.Ref)
 		relView := &relViewlet.View.View
 		relSchema := relView.Schema
+		relView.SetResource(aView.GetResource())
+		rel.Of.View = *relView
+		relations = append(relations, rel)
 		if relSchema != nil && relSchema.Name != "" { //used has defined custom type, skip generation
 			continue
 		}
 		relSchema.Name = view.DefaultTypeName(relSchema.Name)
-		relView.SetResource(aView.GetResource())
-		rel.Of.View = *relView
-		relations = append(relations, rel)
 		if err = s.updateViewSchema(relView, resource, cache, registry, types, doc); err != nil {
 			return err
 		}

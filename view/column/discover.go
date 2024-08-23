@@ -218,9 +218,12 @@ func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Colu
 	if err != nil {
 		return nil, err
 	}
-	columns, err := config.Columns(ctx, session, db, table)
+	columns, vErr := config.Columns(ctx, session, db, table)
 	if len(columns) == 0 && table != "" {
 		columns, err = inferColumnWithSQL(ctx, db, "SELECT * FROM "+table+" WHERE 1 = 0", []interface{}{}, map[string]sink.Column{})
+	}
+	if len(columns) == 0 {
+		return nil, vErr
 	}
 	return columns, err
 }

@@ -294,7 +294,6 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	}
 	handlerDSQL += fmt.Sprintf("$Nop($%v)", name)
 	*dSQL = handlerDSQL
-	*dSQL = handlerDSQL
 	return nil
 }
 
