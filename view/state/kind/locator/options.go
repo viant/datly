@@ -170,7 +170,7 @@ func WithInputParameters(parameters state.NamedParameters) Option {
 		for k, v := range parameters {
 			o.InputParameters[k] = v
 			if v.In.Kind == state.KindConst {
-				o.resourceConstants[v.Name] = v.Value
+				o.resourceConstants[v.In.Name] = v.Value
 			}
 		}
 

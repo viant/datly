@@ -154,7 +154,10 @@ func (s *Session) viewLookupOptions(aView *view.View, parameters state.NamedPara
 	result = append(result, locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
 		return s.LookupValue(ctx, parameter, opts)
 	}))
-	result = append(result, locator.WithInputParameters(parameters))
+
+	if !opts.HasInputParameters() {
+		result = append(result, locator.WithInputParameters(parameters))
+	}
 	result = append(result, locator.WithReadInto(s.ReadInto))
 	viewState := s.state.Lookup(aView)
 	result = append(result, locator.WithState(viewState.Template))

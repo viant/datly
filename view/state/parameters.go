@@ -460,6 +460,24 @@ func (p Parameters) Lookup(name string) *Parameter {
 	return nil
 }
 
+// ByKindName indexes parameters by Parameter.In.Name
+func (p Parameters) ByKindName() NamedParameters {
+	result := NamedParameters(make(map[string]*Parameter))
+	for i, parameter := range p {
+		if _, ok := result[parameter.In.Name]; ok {
+			continue
+		}
+		result[parameter.In.Name] = p[i]
+		for _, item := range parameter.Object {
+			result[item.In.Name] = item
+		}
+		for _, item := range parameter.Repeated {
+			result[item.In.Name] = item
+		}
+	}
+	return result
+}
+
 // Index indexes parameters by Parameter.Name
 func (p Parameters) Index() NamedParameters {
 	result := NamedParameters(make(map[string]*Parameter))

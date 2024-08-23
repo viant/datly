@@ -217,13 +217,21 @@ func (r *Resource) mergeParameters(resource *Resource) {
 	if len(resource.Parameters) == 0 {
 		return
 	}
-	views := r.paramByName()
+	namedParameters := r.Parameters.Index()
+	byKindNameParameters := r.Parameters.ByKindName()
 	for i, candidate := range resource.Parameters {
-		_, ok := views[candidate.Name]
+		if _, ok := byKindNameParameters[candidate.In.Name]; ok {
+			byKindNameParameters[candidate.In.Name].Value = candidate.Value
+			continue
+		}
+		_, ok := namedParameters[candidate.Name]
 		if !ok {
 			param := *resource.Parameters[i]
 			r.Parameters = append(r.Parameters, &param)
+		} else {
+			namedParameters[candidate.Name].Value = candidate.Value
 		}
+
 	}
 }
 
@@ -270,17 +278,6 @@ func (r *Resource) ConnectorByName() Connectors {
 
 func (r *Resource) MBusResourceByName() MessageBuses {
 	return MessageBusSlice(r.MessageBuses).Index()
-}
-
-func (r *Resource) paramByName() map[string]*state.Parameter {
-	index := map[string]*state.Parameter{}
-	if len(r.Parameters) == 0 {
-		return index
-	}
-	for i, param := range r.Parameters {
-		index[param.Name] = r.Parameters[i]
-	}
-	return index
 }
 
 func (r *Resource) typeByName() map[string]*TypeDefinition {
