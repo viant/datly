@@ -56,7 +56,7 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 		}
 
 	}
-	if ! aComponent.Output.Type.Parameters.HasErrorParameter() {
+	if !aComponent.Output.Type.Parameters.HasErrorParameter() {
 		return nil, err
 	}
 	output := aComponent.Output.Type.Type().NewState()
@@ -141,12 +141,17 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 	if inputType := aComponent.Input.Type; inputType.Type() != nil {
 		var inputState *structology.State
 		input := ctx.Value(xhandler.InputKey)
+		hasInputKey := input != nil
 		if input != nil {
-			inputState = inputType.Type().WithValue(input)
+			if reflect.TypeOf(input).AssignableTo(inputType.Type().Type()) {
+				inputState = inputType.Type().WithValue(input)
+			} else {
+				input = nil
+				inputState = inputType.Type().NewState()
+			}
 		} else {
 			inputState = inputType.Type().NewState()
 		}
-
 		locatorOptions := aComponent.LocatorOptions(nil, nil, nil)
 		options := aSession.ViewOptions(aComponent.View, session.WithLocatorOptions(locatorOptions...))
 		options = options.Indirect(true)
@@ -170,7 +175,9 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 					return nil, err
 				}
 			}
-			ctx = context.WithValue(ctx, xhandler.InputKey, anInput)
+			if !hasInputKey {
+				ctx = context.WithValue(ctx, xhandler.InputKey, anInput)
+			}
 			ctx = context.WithValue(ctx, reflect.TypeOf(anInput), anInput)
 		}
 	}
