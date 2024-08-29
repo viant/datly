@@ -93,7 +93,7 @@ func (s State) Parameters() state.Parameters {
 }
 
 func (s State) Compact(modulePath string) (State, error) {
-	if err := s.EnsureReflectTypes(modulePath); err != nil {
+	if err := s.EnsureReflectTypes(modulePath, ""); err != nil {
 		return nil, err
 	}
 	var result = State{}
@@ -406,7 +406,41 @@ func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (refl
 	return baseType, nil
 }
 
-func (s State) EnsureReflectTypes(modulePath string) error {
+func (s State) EnsureStructQLTypes() error {
+	for _, param := range s {
+		if param.Schema == nil {
+			continue
+		}
+		if param.Schema.Type() != nil {
+			continue
+		}
+		if param.In.Kind == state.KindParam {
+			if err := s.enureStructQLType(param); err != nil {
+				return err
+			}
+			continue
+		}
+	}
+	return nil
+}
+
+func (s State) enureStructQLType(param *Parameter) error {
+	sourceParam := s.Lookup(param.In.Name)
+	if sourceParam == nil {
+		return fmt.Errorf("failed to lookup param parameter: %v", param.In.Name)
+	}
+	if param.SQL != "" {
+		query, err := structql.NewQuery(param.SQL, sourceParam.Schema.Type(), nil)
+		if err != nil {
+			return fmt.Errorf("failed to queryql %v param %v from %s(%s) due to: %w", param.SQL, param.Name, param.In.Name, sourceParam.Schema.Type().String(), err)
+		}
+		param.Schema = state.NewSchema(query.StructType())
+		param.Schema.DataType = param.Name
+	}
+	return nil
+}
+
+func (s State) EnsureReflectTypes(modulePath string, pkg string) error {
 	typeRegistry := xreflect.NewTypes(xreflect.WithPackagePath(modulePath), xreflect.WithRegistry(extension.Config.Types))
 	for _, param := range s {
 		if param.Schema == nil {
@@ -416,17 +450,8 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 			continue
 		}
 		if param.In.Kind == state.KindParam {
-			sourceParam := s.Lookup(param.In.Name)
-			if sourceParam == nil {
-				return fmt.Errorf("failed to lookup param parameter: %v", param.In.Name)
-			}
-			if param.SQL != "" {
-				query, err := structql.NewQuery(param.SQL, sourceParam.Schema.Type(), nil)
-				if err != nil {
-					return fmt.Errorf("failed to queryql param %v from %s(%s) due to: %w", param.Name, param.In.Name, sourceParam.Schema.Type().String(), err)
-				}
-				param.Schema = state.NewSchema(query.StructType())
-				param.Schema.DataType = param.Name
+			if err := s.enureStructQLType(param); err != nil {
+				return err
 			}
 			continue
 		}
@@ -441,7 +466,10 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 		}
 		rType, err := types.LookupType(typeRegistry.Lookup, dataType, xreflect.WithPackage(param.Schema.Package))
 		if err != nil {
-			return err
+			rType, err = types.LookupType(typeRegistry.Lookup, dataType, xreflect.WithPackage(pkg))
+			if err != nil {
+				return err
+			}
 		}
 		param.Schema.SetType(rType)
 	}

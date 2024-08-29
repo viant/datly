@@ -340,7 +340,10 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	types := viewlet.Resource.Resource.TypeRegistry()
 	resourceState := viewlet.Resource.State
-	_ = resourceState.EnsureReflectTypes(r.rule.GoModuleLocation())
+	err := resourceState.EnsureStructQLTypes()
+	if err != nil {
+		return nil, err
+	}
 	sqlState := viewlet.Resource.State.StateForSQL(viewlet.SQL, r.Rule.Root == viewlet.Name)
 	metaViewSQL := sqlState.MetaViewSQL()
 	compacted, err := sqlState.Compact(r.rule.ModuleLocation)
