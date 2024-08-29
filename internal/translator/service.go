@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	signature "github.com/viant/datly/repository/contract/signature"
+	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -26,7 +27,7 @@ import (
 	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"
 	"net/http"
-	"path"
+	spath "path"
 	"reflect"
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ type Service struct {
 }
 
 func (s *Service) InitSignature(ctx context.Context, rule *options.Rule) (err error) {
-	prefix := path.Join(s.Repository.Config.APIPrefix, rule.ModulePrefix)
+	prefix := spath.Join(s.Repository.Config.APIPrefix, rule.ModulePrefix)
 	if s.signature, err = signature.New(ctx, prefix, s.Repository.Config.RouteURL); err != nil {
 		return err
 	}
@@ -333,7 +334,12 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 
 	}
 	if !strings.HasPrefix(resource.Rule.Route.URI, resource.repository.APIPrefix) {
-		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, resource.Rule.Route.URI)
+		resource.Rule.Route.URI = spath.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, resource.Rule.Route.URI)
+	}
+	if resource.Rule.Viewlets.compressionSizeKb > 0 {
+		resource.Rule.Compression = &path.Compression{
+			MinSizeKb: resource.Rule.Viewlets.compressionSizeKb,
+		}
 	}
 	aState, err := resource.State.Compact(resource.rule.ModuleLocation)
 	if err != nil {
@@ -512,7 +518,7 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 
 	if resource.repository.ConstURL != "" {
 		_, name := url.Split(resource.repository.ConstURL, file.Scheme)
-		if ext := path.Ext(name); ext != "" {
+		if ext := spath.Ext(name); ext != "" {
 			name = name[:len(name)-len(ext)]
 		}
 		resource.Rule.With = append(resource.Rule.With, name)
@@ -562,7 +568,7 @@ func (s *Service) adjustModulePackage(resource *Resource) {
 	goMod, err := s.fs.DownloadWithURL(context.Background(), url.Join(modLocation, "go.mod"))
 	if err != nil {
 		parent, prefix = url.Split(modLocation, file.Scheme)
-		moduleURI = path.Join(prefix, moduleURI)
+		moduleURI = spath.Join(prefix, moduleURI)
 		goMod, _ = s.fs.DownloadWithURL(context.Background(), url.Join(parent, "go.mod"))
 	}
 
@@ -571,7 +577,7 @@ func (s *Service) adjustModulePackage(resource *Resource) {
 	}
 
 	modFile, _ := modfile.Parse("", goMod, nil)
-	modulePath := path.Join(modFile.Module.Mod.Path, moduleURI)
+	modulePath := spath.Join(modFile.Module.Mod.Path, moduleURI)
 	for _, aType := range resource.Resource.Types {
 		if aType.ModulePath != "" || aType.Package == "" {
 			continue
@@ -649,11 +655,11 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 }
 
 func (s *Service) adjustModLocation(ctx context.Context, location string) string {
-	if ok, _ := s.fs.Exists(ctx, path.Join(location, "go.mod")); ok {
+	if ok, _ := s.fs.Exists(ctx, spath.Join(location, "go.mod")); ok {
 		return location
 	}
-	parent, _ := path.Split(location)
-	if ok, _ := s.fs.Exists(ctx, path.Join(parent, "go.mod")); ok {
+	parent, _ := spath.Split(location)
+	if ok, _ := s.fs.Exists(ctx, spath.Join(parent, "go.mod")); ok {
 		return parent
 	}
 	return location

@@ -46,18 +46,19 @@ type (
 		RequestBody  *BodyConfig         `json:",omitempty"`
 		ResponseBody *ResponseBodyConfig `json:",omitempty"`
 
-		TypeSrc     *parser.TypeImport         `json:",omitempty"`
-		Package     string                     `json:",omitempty"`
-		Router      *RouterConfig              `json:",omitempty" yaml:",omitempty"`
-		DataFormat  string                     `json:",omitempty"`
-		TabularJSON *content.TabularJSONConfig `json:",omitempty"`
-		XML         *content.XMLConfig         `json:",omitempty"`
-		Type        string                     `json:",omitempty"`
-		HandlerArgs []string                   `json:",omitempty"`
-		InputType   string                     `json:",omitempty"`
-		OutputType  string                     `json:",omitempty"`
-		With        []string                   `json:",omitempty"`
-		Include     []string                   `json:",omitempty"`
+		TypeSrc           *parser.TypeImport         `json:",omitempty"`
+		Package           string                     `json:",omitempty"`
+		Router            *RouterConfig              `json:",omitempty" yaml:",omitempty"`
+		DataFormat        string                     `json:",omitempty"`
+		TabularJSON       *content.TabularJSONConfig `json:",omitempty"`
+		XML               *content.XMLConfig         `json:",omitempty"`
+		Type              string                     `json:",omitempty"`
+		HandlerArgs       []string                   `json:",omitempty"`
+		InputType         string                     `json:",omitempty"`
+		OutputType        string                     `json:",omitempty"`
+		CompressAboveSize int                        `json:",omitempty"`
+		With              []string                   `json:",omitempty"`
+		Include           []string                   `json:",omitempty"`
 		indexNamespaces
 		IsGeneratation    bool
 		XMLUnmarshalType  string `json:",omitempty"`
@@ -133,19 +134,21 @@ func (r *Rule) applyGeneratorOutputSetting() {
 func (r *Rule) DSQLSetting() interface{} {
 
 	return struct {
-		URI          string
-		Method       string
-		ResponseBody *ResponseBodyConfig `json:",omitempty"`
-		Type         string              `json:",omitempty"`
-		InputType    string              `json:",omitempty"`
-		OutputType   string              `json:",omitempty"`
+		URI               string
+		Method            string
+		ResponseBody      *ResponseBodyConfig `json:",omitempty"`
+		Type              string              `json:",omitempty"`
+		InputType         string              `json:",omitempty"`
+		OutputType        string              `json:",omitempty"`
+		CompressAboveSize int                 `json:",omitempty"`
 	}{
-		URI:          r.URI,
-		Method:       r.Method,
-		ResponseBody: r.ResponseBody,
-		Type:         r.Type,
-		InputType:    r.InputType,
-		OutputType:   r.OutputType,
+		URI:               r.URI,
+		Method:            r.Method,
+		ResponseBody:      r.ResponseBody,
+		Type:              r.Type,
+		InputType:         r.InputType,
+		OutputType:        r.OutputType,
+		CompressAboveSize: r.CompressAboveSize,
 	}
 }
 
@@ -373,6 +376,12 @@ func (r *Rule) applyShortHands() {
 			Arguments:  r.HandlerArgs,
 		}
 
+	}
+
+	if r.CompressAboveSize > 0 {
+		r.Compression = &dpath.Compression{
+			MinSizeKb: r.CompressAboveSize,
+		}
 	}
 	if r.Route.Output.Field != "" {
 		r.Route.Output.Style = contract.ComprehensiveStyle

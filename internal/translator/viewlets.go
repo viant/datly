@@ -15,8 +15,9 @@ import (
 )
 
 type Viewlets struct {
-	registry map[string]*Viewlet
-	keys     []string
+	registry          map[string]*Viewlet
+	keys              []string
+	compressionSizeKb int
 }
 
 func (n *Viewlets) Lookup(name string) *Viewlet {
