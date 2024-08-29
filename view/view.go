@@ -1527,6 +1527,7 @@ func (v *View) SetParameter(name string, selectors *State, value interface{}) er
 }
 
 func (v *View) BuildParametrizedSQL(aState state.Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand2.StateOption) (*sqlx.SQL, error) {
+
 	reflectType, err := aState.ReflectType(pkgPath, types.Lookup, state.WithSetMarker())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create aState %v type: %w", v.Name, err)

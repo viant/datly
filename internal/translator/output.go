@@ -47,7 +47,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		}
 	}
 
-	if err = resource.OutputState.EnsureReflectTypes(resource.rule.ModuleLocation); err != nil {
+	if err = resource.OutputState.EnsureReflectTypes(resource.rule.ModuleLocation, resource.rule.Package()); err != nil {
 		return err
 	}
 
