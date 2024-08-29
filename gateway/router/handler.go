@@ -260,7 +260,10 @@ func (r *Handler) writeResponse(ctx context.Context, request *http.Request, writ
 	for key, value := range aResponse.Headers() {
 		writer.Header().Add(key, value[0])
 	}
-
+	compressed, ok := aResponse.(response.Compressed)
+	if ok && compressed.CompressionType() != "" {
+		writer.Header().Add(acontent.Encoding, compressed.CompressionType())
+	}
 	statusCode := http.StatusOK
 	if aResponse.StatusCode() > 0 {
 		statusCode = aResponse.StatusCode()
@@ -290,7 +293,6 @@ func (r *Handler) PreSign(ctx context.Context, viewName string, aResponse respon
 		return nil, fmt.Errorf("response is not compressed")
 	}
 	compressionType := compressed.CompressionType()
-
 	if compressionType != "" {
 		kv = append(kv, acontent.Encoding, compressionType)
 	}
