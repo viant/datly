@@ -8,12 +8,23 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
 // TODO introduce function abstraction for datly -h list funciton, with validation signtaure description
 func (n *Viewlets) applySettingFunctions(column *sqlparser.Column, namespace string) (bool, error) {
 	funcName, funcArgs := extractFunction(column)
+	var err error
+	switch funcName {
+	case "compress_above_size":
+		if len(funcArgs) == 1 {
+			if n.compressionSizeKb, err = strconv.Atoi(funcArgs[0]); err != nil {
+				return false, fmt.Errorf("invalid compression size: %v, %w", funcArgs[0], err)
+			}
+		}
+		return true, nil
+	}
 	if funcName == "" {
 		return false, nil
 	}
