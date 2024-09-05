@@ -297,6 +297,10 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 		case "Output":
 			declaration.InOutput = true
+		case "Cacheable":
+			literal := strings.Trim(args[0], `"'`)
+			value, _ := strconv.ParseBool(literal)
+			declaration.Cacheable = &value
 		case "When":
 			declaration.When = strings.Trim(content, "'\"")
 		case "Scope":

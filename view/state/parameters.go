@@ -583,7 +583,7 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 		In:        string(p.In.Name),
 		When:      p.When,
 		Async:     p.Async,
-		Cachable:  p.Cacheable,
+		Cacheable: p.Cacheable,
 		Scope:     p.Scope,
 		With:      p.With,
 		ErrorCode: p.ErrorStatusCode,
@@ -711,7 +711,7 @@ func WithParameterSchema(schema *Schema) ParameterOption {
 	}
 }
 
-func WithCachable(flag bool) ParameterOption {
+func WithCacheable(flag bool) ParameterOption {
 	return func(p *Parameter) {
 		p.Cacheable = &flag
 	}

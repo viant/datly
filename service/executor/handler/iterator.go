@@ -84,8 +84,12 @@ func newSqlxIterator(toExecute []interface{}) *sqlxIterator {
 	var items []interface{}
 	exec := newExecutions()
 	for _, item := range toExecute {
+
 		switch actual := item.(type) {
 		case *expand.Executable:
+			if actual.Executed() {
+				continue
+			}
 			exec.add(actual.Table, actual.Data, actual.ExecType)
 			continue
 		}

@@ -78,7 +78,6 @@ func (s *Service) Flush(ctx context.Context, tableName string) error {
 	}, options...); err != nil {
 		return err
 	}
-
 	return nil
 }
 

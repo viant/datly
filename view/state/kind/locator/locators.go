@@ -17,6 +17,9 @@ type KindLocator struct {
 }
 
 func (l *KindLocator) RemoveLocators(kind ...state.Kind) {
+	if len(kind) == 0 {
+		return
+	}
 	l.RWMutex.Lock()
 	defer l.RWMutex.Unlock()
 	for _, k := range kind {

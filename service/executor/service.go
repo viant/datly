@@ -144,7 +144,7 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 			return nil
 		}
 
-		defer actual.MarkAsExecuted()
+		actual.MarkAsExecuted()
 		switch actual.ExecType {
 		case expand2.ExecTypeInsert:
 			return e.handleInsert(ctx, sess, actual, db)

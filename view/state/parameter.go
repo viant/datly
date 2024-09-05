@@ -62,7 +62,7 @@ type (
 )
 
 func (p *Parameter) IsAsync() bool {
-	return p.Async || p.Scope == "async"
+	return p.Async
 }
 
 func (p *Parameter) IsUsedBy(text string) bool {
@@ -296,6 +296,10 @@ func (p *Parameter) inherit(param *Parameter) {
 	if p.Handler == nil {
 		p.Handler = param.Handler
 	}
+	if p.Cacheable == nil {
+		p.Cacheable = param.Cacheable
+	}
+
 }
 
 // Validate checks if parameter is valid

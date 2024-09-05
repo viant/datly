@@ -216,7 +216,7 @@ func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aSt
 		wg := sync.WaitGroup{}
 		for i, _ := range group { //populate non data view parameters first
 			parameter := group[i]
-			if parameter.Scope != opts.scope && !(parameter.Scope == "async" && opts.scope == "") {
+			if parameter.Scope != opts.scope {
 				continue
 			}
 			wg.Add(1)
@@ -632,7 +632,7 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 	inputState := sType.WithValue(aState)
 	ptr := xunsafe.AsPointer(aState)
 	for _, parameter := range parameters {
-		if parameter.Scope != "" || parameter.Scope == "async" {
+		if parameter.Scope != "" {
 			continue
 		}
 		selector, _ := inputState.Selector(parameter.Name)
