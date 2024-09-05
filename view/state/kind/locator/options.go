@@ -39,6 +39,7 @@ type (
 		View              *view.View
 		Resource          *view.Resource
 		Types             []*state.Type
+		PathParameters    map[string]string
 		Constants         map[string]interface{}
 		resourceConstants map[string]interface{}
 	}
@@ -174,6 +175,13 @@ func WithInputParameters(parameters state.NamedParameters) Option {
 			}
 		}
 
+	}
+}
+
+// WithPathParameters create with path parameters options
+func WithPathParameters(parameters map[string]string) Option {
+	return func(o *Options) {
+		o.PathParameters = parameters
 	}
 }
 

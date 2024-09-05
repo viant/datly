@@ -35,6 +35,10 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		s.kindLocator.RemoveLocators(state.KindForm)
 		s.kindLocator.RemoveLocators(state.KindComponent)
 	}
+	if len(hOptions.PathParameters()) > 0 {
+		s.locatorOptions = append(s.locatorOptions, locator.WithPathParameters(hOptions.PathParameters()))
+		s.kindLocator.RemoveLocators(state.KindPath)
+	}
 	if hOptions.HttpRequest() != nil {
 		s.locatorOptions = append(s.locatorOptions, locator.WithRequest(hOptions.HttpRequest()))
 		s.kindLocator.RemoveLocators(state.KindForm, state.KindRequest, state.KindQuery)
