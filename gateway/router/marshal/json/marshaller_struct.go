@@ -1,7 +1,6 @@
 package json
 
 import (
-	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	structology "github.com/viant/structology"
@@ -437,7 +436,6 @@ func groupFields(elemType reflect.Type) *groupedFields {
 }
 
 func (d *structDecoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) error {
-	fmt.Println("UnmarshalJSONObject", fieldName)
 	err := d.unmarshalJson(decoder, fieldName)
 	if err == nil {
 		err = decoderError(decoder)
