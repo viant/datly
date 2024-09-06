@@ -16,6 +16,7 @@ var unmarshallerIntoType = reflect.TypeOf((*UnmarshalerInto)(nil)).Elem()
 var mapStringIfaceType = reflect.TypeOf(map[string]interface{}{})
 var decData *xunsafe.Field
 var decCur *xunsafe.Field
+var decErr *xunsafe.Field
 
 func init() {
 	ResetCache()
@@ -25,6 +26,17 @@ func init() {
 	if decCurField, ok := reflect.TypeOf(gojay.Decoder{}).FieldByName("cursor"); ok {
 		decCur = xunsafe.NewField(decCurField)
 	}
+	if decCurField, ok := reflect.TypeOf(gojay.Decoder{}).FieldByName("err"); ok {
+		decErr = xunsafe.NewField(decCurField)
+	}
+}
+
+func decoderError(decoder *gojay.Decoder) error {
+	if decErr == nil {
+		return nil
+	}
+	decPtr := unsafe.Pointer(decoder)
+	return decErr.Error(decPtr)
 }
 
 func ResetCache() {

@@ -1,6 +1,7 @@
 package json
 
 import (
+	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/tagly/format"
@@ -111,7 +112,12 @@ func newSliceDecoder(rType reflect.Type, ptr unsafe.Pointer, xslice *xunsafe.Sli
 
 func (s *sliceDecoder) UnmarshalJSONArray(d *gojay.Decoder) error {
 	add := s.appender.Add()
-	return s.unmarshaller.UnmarshallObject(xunsafe.AsPointer(add), d, nil, s.session)
+	err := s.unmarshaller.UnmarshallObject(xunsafe.AsPointer(add), d, nil, s.session)
+	if err != nil {
+		l := s.appender.Len()
+		return NewError(fmt.Sprintf("[%d]", l-1), err)
+	}
+	return nil
 }
 
 func newSliceInterfaceMarshaller(config *config.IOConfig, path string, outputPath string, tag *format.Tag, cache *marshallersCache) marshaler {
