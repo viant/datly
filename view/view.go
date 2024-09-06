@@ -561,10 +561,12 @@ func (v *View) updateRelationSchemaIfDefined(compType reflect.Type, rel *Relatio
 		return
 	}
 	aView := &rel.Of.View
-	if aView.Schema.Type() != nil {
-		return nil
-	}
 	field, ok := compType.FieldByName(rel.Holder)
+	if aView.Schema.Type() != nil {
+		if aView.Schema.IsNamed() || !ok {
+			return nil
+		}
+	}
 	if !ok {
 		return fmt.Errorf("invalid view '%v' relation '%v' ,failed to locate rel holder: %s, in onwer type: %s", v.Name, rel.Name, rel.Holder, compType.String())
 	}
