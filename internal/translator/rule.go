@@ -56,6 +56,7 @@ type (
 		HandlerArgs       []string                   `json:",omitempty"`
 		InputType         string                     `json:",omitempty"`
 		OutputType        string                     `json:",omitempty"`
+		MessageBus        string                     `json:",omitempty"`
 		CompressAboveSize int                        `json:",omitempty"`
 		With              []string                   `json:",omitempty"`
 		Include           []string                   `json:",omitempty"`
@@ -140,7 +141,9 @@ func (r *Rule) DSQLSetting() interface{} {
 		Type              string              `json:",omitempty"`
 		InputType         string              `json:",omitempty"`
 		OutputType        string              `json:",omitempty"`
+		MessageBus        string              `json:",omitempty"`
 		CompressAboveSize int                 `json:",omitempty"`
+		HandlerArgs       []string            `json:",omitempty"`
 	}{
 		URI:               r.URI,
 		Method:            r.Method,
@@ -149,6 +152,8 @@ func (r *Rule) DSQLSetting() interface{} {
 		InputType:         r.InputType,
 		OutputType:        r.OutputType,
 		CompressAboveSize: r.CompressAboveSize,
+		MessageBus:        r.MessageBus,
+		HandlerArgs:       r.HandlerArgs,
 	}
 }
 
@@ -373,9 +378,9 @@ func (r *Rule) applyShortHands() {
 			Type:       r.Type,
 			InputType:  r.InputType,
 			OutputType: r.OutputType,
+			MessageBus: r.MessageBus,
 			Arguments:  r.HandlerArgs,
 		}
-
 	}
 
 	if r.CompressAboveSize > 0 {

@@ -33,7 +33,7 @@ func (r *Resource) loadState(ctx context.Context, URL string) error {
 		xreflect.WithParserMode(parser.ParseComments),
 		xreflect.WithRegistry(typeRegistry),
 		xreflect.WithModule(r.Module, r.rule.ModuleLocation),
-		xreflect.WithOnField(func(typeName string, field *ast.Field) error {
+		xreflect.WithOnField(func(typeName string, field *ast.Field, imports xreflect.GoImports) error {
 			return nil
 		}), xreflect.WithOnLookup(func(packagePath, pkg, typeName string, rType reflect.Type) {
 			if pkg == "" {

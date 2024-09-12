@@ -85,15 +85,27 @@ func (r *Resource) AddCustomTypeURL(URL string) {
 
 func (r *Resource) GetSchema(dataType string, opts ...xreflect.Option) (*state.Schema, error) {
 	registry := r.ensureRegistry()
-
 	if pkg, ok := r.typePackages[state.RawComponentType(dataType)]; ok {
 		opts = append(opts, xreflect.WithPackage(pkg))
 	}
 
 	aType := xreflect.NewType(dataType, opts...)
-	rType, err := registry.LookupType(aType)
-	if err != nil {
-		return nil, err
+	var rType reflect.Type
+	var err error
+
+	if aType.Package == "" && aType.PackagePath != "" { //try to infer package with
+		if parts := strings.Split(aType.PackagePath, "/"); len(parts) > 1 {
+			aType.Package = strings.Join(parts[len(parts)-2:], "/")
+		}
+		rType, err = registry.LookupType(aType)
+		if err != nil {
+			aType.Package = ""
+		}
+	}
+	if rType == nil {
+		if rType, err = registry.LookupType(aType); err != nil {
+			return nil, fmt.Errorf("failed to lookup type: %v,%v  %w", dataType, aType.PackagePath, err)
+		}
 	}
 
 	schema := state.NewSchema(rType, state.WithSchemaPackage(aType.Package), state.WithModulePath(aType.ModulePath), state.WithSchemaMethods(aType.Methods))
@@ -127,16 +139,15 @@ func (r *Resource) parseImports(ctx context.Context, dSQL *string) (err error) {
 }
 
 func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.TypeImport) error {
-	typesImport.EnsureLocation(ctx, fs, r.rule.SourceCodeLocation())
+	typesImport.EnsureLocation(ctx, fs, r.rule.ModuleLocation, r.rule.ComponentPath())
 	alias := typesImport.Alias
 	for i, name := range typesImport.Types {
 		if typeDef := r.LookupTypeDef(name); typeDef != nil {
 			return nil
 		}
-
 		schema, err := r.GetSchema(name, xreflect.WithPackagePath(typesImport.URL))
 		if err != nil {
-			return fmt.Errorf("unable to include import type: %v,  %w", name, err)
+			return fmt.Errorf("%v unable to include import type: %v,  %w", typesImport.URL, name, err)
 		}
 		r.typePackages[name] = schema.Package
 		if len(schema.Methods) > 0 {
@@ -151,7 +162,8 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.Typ
 			alias = ""
 		}
 		setter.SetStringIfEmpty(&typeDef.Alias, alias)
-		r.AppendTypeDefinition(typeDef)
+		r.AppendTypeDefinition(typeDef) //bit of a mess to be able to handle
+
 	}
 	return nil
 }
@@ -193,12 +205,26 @@ func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
 	if r.LookupTypeDef(typeDef.Name) != nil {
 		return
 	}
+
+	if r.LookupTypeDef(typeDef.Name) != nil {
+		return
+	}
+
 	definition := *typeDef
 	r.Resource.Types = append(r.Resource.Types, &definition)
 	if typeDef.Schema.IsNamed() {
 		return
 	}
+
 	r.typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType), xreflect.WithModulePath(typeDef.ModulePath), xreflect.WithPackage(typeDef.Package))
+
+	if index := strings.LastIndex(typeDef.Package, "/"); index != -1 {
+		if rType, _ := r.typeRegistry.Lookup(typeDef.Name, xreflect.WithPackage(typeDef.Package)); rType != nil {
+			pkg := typeDef.Package[index+1:]
+			r.typeRegistry.Register(typeDef.Name, xreflect.WithReflectType(rType), xreflect.WithPackage(pkg))
+		}
+	}
+
 }
 
 func (r *Resource) AppendTypeDefinitions(typeDefs []*view.TypeDefinition) {
@@ -346,7 +372,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	}
 	sqlState := viewlet.Resource.State.StateForSQL(viewlet.SQL, r.Rule.Root == viewlet.Name)
 	metaViewSQL := sqlState.MetaViewSQL()
-	compacted, err := sqlState.Compact(r.rule.ModuleLocation)
+	compacted, err := sqlState.Compact(r.rule.ModuleLocation, r.typeRegistry)
 	if err == nil && len(compacted) > 0 {
 		sqlState = compacted
 	}

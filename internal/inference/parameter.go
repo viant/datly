@@ -217,7 +217,7 @@ func (p *Parameter) SyncObject() {
 }
 
 // TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
-func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS) (*Parameter, error) {
+func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS, imps xreflect.GoImports) (*Parameter, error) {
 	//SQL := extractSQL(field)
 	if field.Tag == nil {
 		return nil, nil
@@ -270,6 +270,7 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	if err != nil {
 		return nil, fmt.Errorf("failed to create param: %v due to %w", param.Name, err)
 	}
+
 	if strings.Contains(fieldType, "struct{") {
 		typeName := ""
 		if field.Tag != nil {
@@ -277,13 +278,17 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 				typeName = field.Names[0].Name
 			}
 		}
-		rType, err := types.Lookup(typeName, xreflect.WithTypeDefinition(fieldType))
+		aType := xreflect.NewType(typeName, xreflect.WithTypeDefinition(fieldType), xreflect.WithGoImports(imps))
+		rType, err := types.LookupType(aType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create param: %v due reflect.Type %w", param.Name, err)
 		}
-		param.Schema = state.NewSchema(rType)
+		param.Schema = state.NewSchema(rType, state.WithPackagePath(aType.PackagePath))
 	} else {
-		param.Schema = &state.Schema{DataType: fieldType}
+
+		aType := xreflect.NewType(fieldType, xreflect.WithGoImports(imps))
+		_, _ = types.LookupType(aType) //to populate package path
+		param.Schema = &state.Schema{DataType: fieldType, PackagePath: aType.PackagePath}
 	}
 
 	param.Schema.Cardinality = cardinality

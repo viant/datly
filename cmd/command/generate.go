@@ -18,6 +18,9 @@ import (
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/xreflect"
+	"golang.org/x/mod/modfile"
+
 	"path"
 	"reflect"
 	"strings"
@@ -240,7 +243,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		return nil
 	}
 
-	aState, err := inference.NewState(ruleOptions.SourceCodeLocation(), rule.InputType, extension.Config.Types)
+	aState, err := inference.NewState(ruleOptions.ComponentPath(), rule.InputType, extension.Config.Types)
 	if err != nil {
 		return err
 	}
@@ -248,6 +251,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		Type:       rule.Type,
 		InputType:  rule.InputType,
 		OutputType: rule.OutputType,
+		MessageBus: rule.MessageBus,
 		Arguments:  rule.HandlerArgs,
 	}
 	var entityParam *inference.Parameter
@@ -276,6 +280,22 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	tmpl := codegen.NewTemplate(rule, &inference.Spec{Type: aType})
 	tmpl.SetResource(&translator.Resource{Rule: rule})
 
+	for _, param := range aState {
+		if param.Schema.PackagePath != "" {
+			modFile, err := ruleOptions.Module()
+			if err != nil || modFile == nil {
+				return fmt.Errorf("missing mod file: %w", err)
+			}
+			goImps := xreflect.GoImports{{Name: "", Module: param.Schema.PackagePath}}
+			pkg := param.Schema.GetPackage()
+
+			if pkgPath := goImps.Lookup(pkg); pkgPath != "" {
+				pkgPath = s.updateImportPath(pkgPath, modFile)
+				typeName := pkgPath + "." + param.Schema.SimpleTypeName()
+				tmpl.Imports.AddType(typeName)
+			}
+		}
+	}
 	tmpl.Imports.AddType(rule.InputType)
 	tmpl.Imports.AddType(rule.Type)
 	if aType != nil {
@@ -295,6 +315,14 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	handlerDSQL += fmt.Sprintf("$Nop($%v)", name)
 	*dSQL = handlerDSQL
 	return nil
+}
+
+func (s *Service) updateImportPath(path string, file *modfile.Module) string {
+	ret := strings.Replace(path, file.Mod.Path, "", 1)
+	if strings.HasPrefix(ret, "/") {
+		ret = ret[1:]
+	}
+	return ret
 }
 
 func (s *Service) generateTemplate(gen *options.Generate, template *codegen.Template, info *plugin.Info) error {

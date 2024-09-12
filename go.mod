@@ -22,7 +22,7 @@ require (
 	github.com/viant/afsc v1.9.1
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.3.3
-	github.com/viant/cloudless v1.9.9-0.20240725201210-d3d3fbe48d88
+	github.com/viant/cloudless v1.11.0
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
@@ -30,12 +30,12 @@ require (
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
-	github.com/viant/scy v0.11.1-0.20240809212619-84029a5e3755
+	github.com/viant/scy v0.12.0
 	github.com/viant/sqlx v0.15.1
 	github.com/viant/structql v0.4.2-0.20240712002135-b1ef22dd834f
 	github.com/viant/toolbox v0.36.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
-	github.com/viant/xreflect v0.6.2
+	github.com/viant/xreflect v0.7.0
 	github.com/viant/xunsafe v0.9.4
 	golang.org/x/mod v0.16.0
 	golang.org/x/oauth2 v0.19.0 // indirect

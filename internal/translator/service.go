@@ -341,7 +341,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 			MinSizeKb: resource.Rule.Viewlets.compressionSizeKb,
 		}
 	}
-	aState, err := resource.State.Compact(resource.rule.ModuleLocation)
+	aState, err := resource.State.Compact(resource.rule.ModuleLocation, resource.typeRegistry)
 	if err != nil {
 		return fmt.Errorf("failed to compact aState: %w", err)
 	}
@@ -390,7 +390,7 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 	if viewlet.TypeDefinition != nil && viewlet.DataType != "" { //if derived from
 		viewlet.TypeDefinition.DataType = strings.ReplaceAll(viewlet.DataType, "*", "")
 		viewlet.TypeDefinition.Name = viewlet.TypeDefinition.DataType
-		pkgLocation := viewlet.Resource.rule.SourceCodeLocation()
+		pkgLocation := viewlet.Resource.rule.ComponentPath()
 		aType := xreflect.NewType(viewlet.TypeDefinition.Name, xreflect.WithPackage(viewlet.TypeDefinition.SimplePackage()), xreflect.WithPackagePath(pkgLocation))
 		rType, _ := aType.LoadType(resource.typeRegistry)
 		if rType != nil {

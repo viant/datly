@@ -1,9 +1,13 @@
 package repository
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/afs/url"
+	"github.com/viant/cloudless/async/mbus"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/repository/plugin"
 	"github.com/viant/datly/repository/resource"
@@ -13,6 +17,8 @@ import (
 	"github.com/viant/scy/auth/custom"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
+	"log"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -139,10 +145,87 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 		}
 	}
 
-	return s.initProviders(ctx)
+	if err = s.initComponentProviders(ctx); err != nil {
+		return err
+	}
+
+	err = s.initMBusSubscribers(ctx)
+
+	return err
 }
 
-func (s *Service) initProviders(ctx context.Context) error {
+func (s *Service) initMBusSubscribers(ctx context.Context) error {
+	if len(s.paths.MbusPaths) == 0 {
+		return nil
+	}
+	var err error
+	for _, aPath := range s.paths.MbusPaths {
+		mBusResource, err := s.lookupBus(aPath.Handler.MessageBus, aPath.Handler.With)
+		if err != nil {
+			return err
+		}
+		notifier := mbus.LookupNotifier(mBusResource.Vendor)
+		if notifier == nil {
+			return fmt.Errorf("failed to initialize mbus %v, %v:%v", mBusResource.ID, mBusResource.Vendor, mBusResource.Name)
+		}
+		go func(mBusResource *mbus.Resource) {
+			messenger := &messenger{path: aPath, service: s}
+			var options []mbus.NotifierOption
+			options = append(options, mbus.WithResource(mBusResource), mbus.WithMaxMessages(50))
+			if err = notifier.Notify(context.Background(), messenger, options...); err != nil {
+				log.Printf("failed to start mbus notifier: %v", mBusResource.ID)
+			}
+		}(mBusResource)
+
+	}
+	return err
+}
+
+type messenger struct {
+	path    *path.Path
+	service *Service
+}
+
+func (m *messenger) OnMessage(ctx context.Context, message *mbus.Message, ack *mbus.Acknowledgement) error {
+	var options []contract.Option
+	aPath := &m.path.Path
+	var data []byte
+	switch actual := message.Data.(type) {
+	case []byte:
+		data = actual
+	case string:
+		data = []byte(actual)
+	default:
+		var err error
+		if data, err = json.Marshal(actual); err != nil {
+			return err
+		}
+	}
+
+	request, err := http.NewRequest(aPath.Method, "http://localhost"+aPath.URI, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	options = append(options, contract.WithRequest(request))
+	_, err = m.service.registry.dispatcher.Dispatch(ctx, aPath, options...)
+	return err
+}
+
+func (s *Service) lookupBus(name string, resources []string) (*mbus.Resource, error) {
+	var mBusResource *mbus.Resource
+	for _, with := range resources {
+		res, err := s.resources.Lookup(with)
+		if err != nil {
+			return nil, err
+		}
+		if mBusResource, _ = res.MessageBus(name); mBusResource == nil {
+			continue
+		}
+	}
+	return mBusResource, nil
+}
+
+func (s *Service) initComponentProviders(ctx context.Context) error {
 	paths := s.paths.GetPaths()
 	pathsLen := len(paths.Items)
 	var providers []*Provider

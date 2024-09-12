@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/parsly"
+	"golang.org/x/mod/modfile"
 	"os"
 	"path"
 	"path/filepath"
@@ -25,12 +26,49 @@ type Rule struct {
 	Output         []string
 	Index          int
 	ModuleLocation string `short:"m" long:"module" description:"go module package root" default:"pkg"`
+	module         *modfile.Module
 	Generated      bool
 	SkipCompDef    bool `short:"B" long:"sComp" description:"skip component def"`
 }
 
-func (r *Rule) SourceCodeLocation() string {
+// Module returns go module
+func (r *Rule) Module() (*modfile.Module, error) {
+	if r.module != nil {
+		return r.module, nil
+	}
+	var err error
+	fs := afs.New()
+	r.module, err = r.loadModFile(fs, url.Join(r.Project, "go.mod"))
+	if err != nil {
+		return r.module, err
+	}
+	if r.module == nil {
+		r.module, err = r.loadModFile(fs, url.Join(r.ModuleLocation, "go.mod"))
+		if err != nil {
+			return r.module, err
+		}
+	}
+	return r.module, nil
+}
+
+func (r *Rule) loadModFile(fs afs.Service, URL string) (*modfile.Module, error) {
+	if ok, _ := fs.Exists(context.Background(), URL); ok {
+		data, err := fs.DownloadWithURL(context.Background(), URL)
+		if err != nil {
+			return nil, err
+		}
+		aFile, err := modfile.Parse("", data, nil)
+		if err != nil {
+			return nil, err
+		}
+		return aFile.Module, nil
+	}
+	return nil, nil
+}
+
+func (r *Rule) ComponentPath() string {
 	fileFolder := r.GoModuleLocation()
+
 	if r.ModulePrefix != "" {
 		fileFolder = url.Join(fileFolder, r.ModulePrefix)
 	}

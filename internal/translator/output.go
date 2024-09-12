@@ -47,7 +47,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		}
 	}
 
-	if err = resource.OutputState.EnsureReflectTypes(resource.rule.ModuleLocation, resource.rule.Package()); err != nil {
+	if err = resource.OutputState.EnsureReflectTypes(resource.rule.ModuleLocation, resource.rule.Package(), resource.typeRegistry); err != nil {
 		return err
 	}
 
@@ -425,11 +425,11 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 	}
 
 	var err error
-	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
+	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation, resource.typeRegistry); err != nil {
 		return nil, fmt.Errorf("failed to rewrite transfer type: %v %w", parameter.Name, err)
 	}
 	adjustedType, err := adjustedDest.Parameters().ReflectType(resource.rule.ModuleLocation, types.Lookup)
-	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
+	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation, resource.typeRegistry); err != nil {
 		return nil, fmt.Errorf("failed to adjust transfer type: %v %w", parameter.Name, err)
 	}
 	return adjustedType, nil

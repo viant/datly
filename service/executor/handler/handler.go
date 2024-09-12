@@ -19,6 +19,7 @@ type (
 		Arguments  []string
 		InputType  string
 		OutputType string
+		MessageBus string
 		Output     reflect.Type
 		factory    handler.Factory
 		handler    handler.Handler

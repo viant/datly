@@ -22,7 +22,7 @@ type TypeImport struct {
 
 type TypeImports []*TypeImport
 
-func (t *TypeImport) EnsureLocation(ctx context.Context, fs afs.Service, goModuleLocation string) {
+func (t *TypeImport) EnsureLocation(ctx context.Context, fs afs.Service, rootPath, goModuleLocation string) {
 	if !url.IsRelative(t.URL) {
 		return
 	}
@@ -44,6 +44,19 @@ func (t *TypeImport) EnsureLocation(ctx context.Context, fs afs.Service, goModul
 			t.URL = candidateURL
 			return
 		}
+		candidateURL = url.Join(rootPath, t.URL)
+		if ok, _ := fs.Exists(ctx, candidateURL); ok { //backward compatiblity
+			t.URL = candidateURL
+			return
+		}
+		relPathParts := strings.Split(goModuleLocation, "/")
+		relPath := strings.Join(relPathParts[:len(relPathParts)-2], "/")
+		candidateURL = url.Join(relPath, t.URL)
+		if ok, _ := fs.Exists(ctx, candidateURL); ok { //backward compatiblity
+			t.URL = candidateURL
+			return
+		}
+
 		if !strings.HasSuffix(goModuleLocation, t.URL) {
 			t.URL = url.Join(goModuleLocation, t.URL)
 		} else {
