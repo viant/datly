@@ -1173,6 +1173,17 @@ func (v *View) registerHolders() error {
 	return nil
 }
 
+func (v *View) DBProvider(name string) (*sql.DB, error) {
+	if v._resource == nil {
+		return nil, fmt.Errorf("resource not set")
+	}
+	connector, err := v._resource.Connector(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get connector: %v,  %w", name, err)
+	}
+	return connector.DB()
+}
+
 // CanUseSelectorCriteria indicates if Template.Criteria can be used
 func (v *View) CanUseSelectorCriteria() bool {
 	return v.Selector.Constraints.Criteria

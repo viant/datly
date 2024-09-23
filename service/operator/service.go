@@ -23,6 +23,7 @@ import (
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
+	hstate "github.com/viant/xdatly/handler/state"
 	"google.golang.org/api/googleapi"
 	"net/http"
 	"reflect"
@@ -124,7 +125,14 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 	infoValue := ctx.Value(exec.ContextKey)
 	if infoValue == nil {
 		info = exec.NewContext()
+		if aView := aComponent.View; aView != nil {
+			if res := aComponent.View.GetResource(); res != nil {
+				dbProvider := hstate.DBProvider(aView.DBProvider)
+				ctx = context.WithValue(ctx, hstate.DBProviderKey, dbProvider)
+			}
+		}
 		ctx = context.WithValue(ctx, exec.ContextKey, info)
+
 	} else {
 		info = infoValue.(*exec.Context)
 	}

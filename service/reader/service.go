@@ -415,7 +415,6 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	if err != nil {
 		return nil, err
 	}
-	fetcherContext := context.WithValue(ctx, dbTypeKey, db)
 	handler := func(row interface{}) error {
 		row, err = aView.UnwrapDatabaseType(ctx, row)
 		if err != nil {
@@ -423,7 +422,7 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		}
 		readData++
 		if fetcher, ok := row.(OnFetcher); ok {
-			if err = fetcher.OnFetch(fetcherContext); err != nil {
+			if err = fetcher.OnFetch(ctx); err != nil {
 				return err
 			}
 		}
@@ -480,8 +479,6 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 	return []*response.SQLExecution{stats}, nil
 }
 
-var dbTypeKey = reflect.TypeOf(sql.DB{})
-
 func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aView *view.View, selector *view.Statelet, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn, partitioned *view.Partitioned) ([]*response.SQLExecution, error) {
 
 	concurrency := aView.Partitioned.Concurrency
@@ -514,7 +511,6 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 			collectors[index] = collector.Clone()
 			parametrizedSQL, columnInMatcher, e := s.buildParametrizedSQL(ctx, aView, selector, batchData, collectors[index], session, partitions)
 			readData := 0
-			fetcherContext := context.WithValue(ctx, dbTypeKey, db)
 			handler := func(row interface{}) error {
 				row, err = aView.UnwrapDatabaseType(ctx, row)
 				if err != nil {
@@ -522,7 +518,7 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 				}
 				readData++
 				if fetcher, ok := row.(OnFetcher); ok {
-					if err = fetcher.OnFetch(fetcherContext); err != nil {
+					if err = fetcher.OnFetch(ctx); err != nil {
 						return err
 					}
 				}
