@@ -118,6 +118,7 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (int
 }
 
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
+
 	ctx = codec.NewCriteriaBuilder(ctx, reader.New())
 	ctx = context.WithValue(ctx, view.ContextKey, aComponent.View)
 	ctx = aSession.Context(ctx, false)
@@ -125,16 +126,19 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 	infoValue := ctx.Value(exec.ContextKey)
 	if infoValue == nil {
 		info = exec.NewContext()
+		ctx = context.WithValue(ctx, exec.ContextKey, info)
+
+	} else {
+		info = infoValue.(*exec.Context)
+	}
+
+	if ctx.Value(hstate.DBProviderKey) == nil {
 		if aView := aComponent.View; aView != nil {
 			if res := aComponent.View.GetResource(); res != nil {
 				dbProvider := hstate.DBProvider(aView.DBProvider)
 				ctx = context.WithValue(ctx, hstate.DBProviderKey, dbProvider)
 			}
 		}
-		ctx = context.WithValue(ctx, exec.ContextKey, info)
-
-	} else {
-		info = infoValue.(*exec.Context)
 	}
 
 	if aComponent.Input.IgnoreEmptyQueryParameters {
