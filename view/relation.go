@@ -81,7 +81,12 @@ func (l Links) Init(name string, v *View) error {
 
 func (l *Link) Validate() error {
 	if l.Column == "" {
-		return fmt.Errorf("reference column can't be empty")
+		if l.Field != "" {
+			l.Column = l.Field
+		}
+		if l.Column == "" {
+			return fmt.Errorf("reference column can't be empty")
+		}
 	}
 	return nil
 }

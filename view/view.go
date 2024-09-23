@@ -1422,7 +1422,6 @@ func (v *View) indexTransforms() error {
 		if strings.Contains(transform.Path, ".") {
 			continue
 		}
-
 		columnName := text.CaseFormatUpperCamel.Format(transform.Path, v.CaseFormat)
 		aConfig, ok := v.ColumnsConfig[columnName]
 		if !ok {
