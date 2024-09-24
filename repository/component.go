@@ -177,7 +177,15 @@ func (c *Component) initView(ctx context.Context, resource *view.Resource) error
 	if err := c.View.Init(ctx, resource); err != nil {
 		return err
 	}
-	c.NamespacedView = view.IndexViews(c.View)
+	holder := ""
+	if c.Contract.Output.Type.Parameters != nil {
+		if rootHolder := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); rootHolder != nil {
+			if !rootHolder.IsAnonymous() {
+				holder = rootHolder.Name
+			}
+		}
+	}
+	c.NamespacedView = view.IndexViews(c.View, holder)
 	c.indexedView = resource.Views.Index()
 	return nil
 }

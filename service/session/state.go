@@ -607,7 +607,7 @@ func (o *Options) apply(options []Option) {
 
 func New(aView *view.View, opts ...Option) *Session {
 	ret := &Session{
-		Options: Options{namespacedView: *view.IndexViews(aView)},
+		Options: Options{namespacedView: *view.IndexViews(aView, "")},
 		cache:   newCache(),
 		views:   newViews(),
 		Types:   *state.NewTypes(),
