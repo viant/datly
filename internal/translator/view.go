@@ -203,6 +203,11 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 			selector.LimitParameter = &parameter.Parameter
 			selector.Constraints.Limit = true
 		}
+		if parameter := querySelectors.Lookup("Criteria"); parameter != nil {
+			selector.CriteriaParameter = &parameter.Parameter
+			selector.Constraints.Criteria = true
+			selector.Constraints.Filterable = []string{"*"}
+		}
 		if parameter := querySelectors.Lookup("Offset"); parameter != nil {
 			selector.OffsetParameter = &parameter.Parameter
 			selector.Constraints.Offset = true
