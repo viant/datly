@@ -643,9 +643,12 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		parameter.Schema.EnsurePointer()
 		if aSignature.Input != nil {
 			parameter.LocationInput = aSignature.Input
+
 		}
+
+		imps := aSignature.GoImports()
 		for _, typeDef := range aSignature.Types {
-			if err = extension.Config.Types.Register(typeDef.Name, xreflect.WithPackage(typeDef.Package), xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
+			if err = extension.Config.Types.Register(typeDef.Name, xreflect.WithPackage(typeDef.Package), xreflect.WithTypeDefinition(typeDef.DataType), xreflect.WithGoImports(imps)); err != nil {
 				return err
 			}
 		}

@@ -127,9 +127,12 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 
 	aViewlet := resource.Rule.Viewlets.Lookup(aView.Name)
 	if aViewlet.Summary != nil {
-		err := s.updateSummarySchema(resource, aView, caseFormat, aViewlet)
+		summarySchema, err := s.updateSummarySchema(resource, aView, caseFormat, aViewlet)
 		if err != nil {
 			return err
+		}
+		if summaryParameter := resource.OutputState.Parameters().LookupByLocation(state.KindOutput, "summary"); summaryParameter != nil {
+			summaryParameter.Schema = summarySchema
 		}
 	}
 	fn := view.ColumnsSchemaDocumented(caseFormat, columns, relations, aView, doc)
@@ -150,7 +153,7 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 	return nil
 }
 
-func (s *Service) updateSummarySchema(resource *Resource, aView *view.View, caser text.CaseFormat, aViewlet *Viewlet) error {
+func (s *Service) updateSummarySchema(resource *Resource, aView *view.View, caser text.CaseFormat, aViewlet *Viewlet) (*state.Schema, error) {
 	summary := aView.Template.Summary
 	if summary.Schema == nil {
 		summary.Schema = &state.Schema{}
@@ -159,16 +162,17 @@ func (s *Service) updateSummarySchema(resource *Resource, aView *view.View, case
 		buildSummarySchema := view.ColumnsSchema(caser, aViewlet.Summary.Columns, nil, &aViewlet.View.View)
 		summaryType, err := buildSummarySchema()
 		if err != nil {
-			return fmt.Errorf("failed to build summary view %v schema %w", summary.Name, err)
+			return nil, fmt.Errorf("failed to build summary view %v schema %w", summary.Name, err)
 		}
 		summary.Schema.SetType(summaryType)
 	}
 	pkg := resource.rule.Package()
 	rType := summary.Schema.CompType()
 	summaryType := xreflect.NewType(view.DefaultTypeName(summary.Name), xreflect.WithPackage(pkg), xreflect.WithReflectType(rType))
-	summary.Schema.Name = "*" + summaryType.Name
+	summary.Schema.DataType = "*" + summaryType.Name
+	summary.Schema.Package = pkg
 	resource.AppendTypeDefinition(&view.TypeDefinition{Name: summaryType.Name, Package: pkg, DataType: summaryType.Body()})
-	return nil
+	return summary.Schema, nil
 }
 
 func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Columns) (err error) {

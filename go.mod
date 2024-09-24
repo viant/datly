@@ -35,7 +35,7 @@ require (
 	github.com/viant/structql v0.5.2
 	github.com/viant/toolbox v0.36.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
-	github.com/viant/xreflect v0.7.0
+	github.com/viant/xreflect v0.7.1
 	github.com/viant/xunsafe v0.9.4
 	golang.org/x/mod v0.16.0
 	golang.org/x/oauth2 v0.19.0 // indirect
