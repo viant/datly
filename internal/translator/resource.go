@@ -268,7 +268,6 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 
 	r.OutputState.Append(r.Declarations.OutputState...)
 	r.Rule.OutputParameter = r.OutputState.GetOutputParameter()
-
 	if r.State, err = r.State.NormalizeComposites(); err != nil {
 		return fmt.Errorf("failed to normalize input state: %w", err)
 	}

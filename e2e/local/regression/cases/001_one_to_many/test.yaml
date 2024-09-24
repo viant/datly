@@ -17,3 +17,4 @@ pipeline:
         Expect:
           Code: 200
           Body: $Cat('${parentPath}/expect_2.txt')
+#/v1/api/dev/vendors?yy=id,vendorId&xx=id,name,products

@@ -405,6 +405,12 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 		return err
 	}
 
+	if len(resource.Declarations.QuerySelectors) > 0 {
+		for key, state := range resource.Declarations.QuerySelectors {
+			return fmt.Errorf("unknown query selector view %v, %v", key, state[0].Name)
+		}
+	}
+
 	//TODO move cache to dependency but allow local different TTL override
 	//	aView := &viewlet.View.View
 	//if aView.Columns != nil {

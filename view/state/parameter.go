@@ -50,7 +50,6 @@ type (
 		With            string `json:",omitempty" yaml:"With"`
 		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
 		Async           bool   `json:",omitempty" yaml:"Async"`
-		QuerySelector   string
 		isOutputType    bool
 		_timeLayout     string
 		_selector       *structology.Selector

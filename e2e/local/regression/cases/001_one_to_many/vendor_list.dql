@@ -1,7 +1,12 @@
 /* {"URI":"vendors/"} */
 
 
+
 #set( $_ = $VendorName<string>(form/name).Optional().WithPredicate(0, 'contains', 't', 'NAME'))
+#set( $_ = $Fields<[]string>(query/xx).Optional().QuerySelector('vendor'))
+#set( $_ = $Page<int>(query/page).Optional().QuerySelector('vendor'))
+#set( $_ = $Fields<[]string>(query/yy).Optional().QuerySelector('products'))
+
 
 SELECT vendor.*,
        products.* EXCEPT VENDOR_ID

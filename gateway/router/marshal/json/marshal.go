@@ -78,6 +78,8 @@ func (j *Marshaller) prepareMarshallSession(options []interface{}) (*MarshallSes
 		case *MarshallSession:
 			session = actual
 			putBufferBack = session.Buffer == nil
+		case []*FilterEntry:
+			filters = NewFilters(actual...)
 		}
 	}
 

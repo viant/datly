@@ -168,6 +168,7 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 		v.Selector = &view.Config{}
 	}
 	selector := v.Selector
+
 	selector.Namespace = rule.selectorNamespace(v.Name)
 	defaultLimit := v.defaultLimit(isRoot)
 	if selector.NoLimit {
@@ -191,6 +192,31 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 
 	if v.CriteriaParam != "" {
 		selector.CriteriaParameter = state.NewRefParameter(v.CriteriaParam)
+	}
+
+	if querySelectors, ok := namespace.Resource.Declarations.QuerySelectors[namespace.Name]; ok {
+		if parameter := querySelectors.Lookup("Fields"); parameter != nil {
+			selector.FieldsParameter = &parameter.Parameter
+			selector.Constraints.Projection = true
+		}
+		if parameter := querySelectors.Lookup("Limit"); parameter != nil {
+			selector.LimitParameter = &parameter.Parameter
+			selector.Constraints.Limit = true
+		}
+		if parameter := querySelectors.Lookup("Offset"); parameter != nil {
+			selector.OffsetParameter = &parameter.Parameter
+			selector.Constraints.Offset = true
+		}
+		if parameter := querySelectors.Lookup("OrderBy"); parameter != nil {
+			selector.OrderByParameter = &parameter.Parameter
+			selector.Constraints.OrderBy = true
+		}
+		if parameter := querySelectors.Lookup("Page"); parameter != nil {
+			enabled := true
+			selector.PageParameter = &parameter.Parameter
+			selector.Constraints.Page = &enabled
+		}
+		delete(namespace.Resource.Declarations.QuerySelectors, namespace.Name)
 	}
 
 }
