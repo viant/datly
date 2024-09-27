@@ -72,7 +72,10 @@ func (s *Session) populateSyncFlag(ctx context.Context, ns *view.NamespaceView, 
 	syncFlagParameter := ns.SelectorParameters(selectorParameters.SyncFlagParameter, view.QueryStateParameters.SyncFlagParameter)
 	value, has, err := s.lookupFirstValue(ctx, syncFlagParameter, opts)
 	if has && err == nil {
-		err = s.setSyncFlag(value, ns)
+		selector := s.state.Lookup(ns.View)
+		if !selector.SyncFlag { //one sync mode if already set, do not override
+			err = s.setSyncFlag(value, ns)
+		}
 	}
 	return err
 }
