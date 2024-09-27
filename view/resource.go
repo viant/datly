@@ -197,8 +197,8 @@ func (r *Resource) MergeFrom(resource *Resource, types *xreflect.Types) {
 }
 
 func (r *Resource) mergeSubstitutes(resource *Resource) {
-	r._mux.Lock()
-	defer r._mux.Unlock()
+	r.Lock()
+	defer r.Unlock()
 	if len(resource.Substitutes) == 0 {
 		return
 	}

@@ -20,7 +20,7 @@ func (r *Repository) ensureConstants(ctx context.Context) error {
 }
 
 func (r *Repository) ensureSubstitutes(ctx context.Context) error {
-	r.Substitutes = map[string]view.Substitutes{}
+	substitutes := map[string]view.Substitutes{}
 	for _, URL := range r.Config.repository.SubstitutesURL {
 		_, name := url.Split(URL, file.Scheme)
 
@@ -41,8 +41,9 @@ func (r *Repository) ensureSubstitutes(ctx context.Context) error {
 			fragment := toolbox.AsString(v)
 			namedMap[k] = fragment
 		}
-		r.Substitutes[name] = namedMap
+		substitutes[name] = namedMap
 	}
+	r.Substitutes = substitutes
 	return nil
 }
 

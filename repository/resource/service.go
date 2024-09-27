@@ -42,18 +42,19 @@ func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
 }
 
 func (s *Service) Substitutes() map[string]view.Substitutes {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	var result = make(map[string]view.Substitutes)
 	for _, aResource := range s.items {
-		if len(aResource.Substitutes) == 0 {
+		aResource.Lock()
+		substitutes := aResource.Substitutes
+		aResource.Unlock()
+		if len(substitutes) == 0 {
 			continue
 		}
 		_, name := furl.Split(aResource.SourceURL, file.Scheme)
 		if index := strings.Index(name, "."); index != -1 {
 			name = name[:index]
 		}
-		result[name] = aResource.Substitutes
+		result[name] = substitutes
 
 	}
 	return result

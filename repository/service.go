@@ -128,7 +128,9 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 				s.resources.AddResource(resourceName, &view.Resource{})
 			}
 			if holder, _ := s.resources.Lookup(resourceName); holder != nil {
+				holder.Lock()
 				holder.Substitutes = substitutes
+				holder.Unlock()
 			}
 		}
 	}
