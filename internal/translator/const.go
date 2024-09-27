@@ -36,11 +36,12 @@ func (r *Repository) ensureSubstitutes(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		r.Substitutes[name] = map[string]string{}
+		namedMap := map[string]string{}
 		for k, v := range aMap {
 			fragment := toolbox.AsString(v)
-			r.Substitutes[name][k] = fragment
+			namedMap[k] = fragment
 		}
+		r.Substitutes[name] = namedMap
 	}
 	return nil
 }

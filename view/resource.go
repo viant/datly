@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -74,6 +75,7 @@ type (
 		fs       afs.Service
 		_embedFs embed.FS
 		_docs    *docs.Registry
+		_mux     sync.RWMutex
 	}
 
 	NamedResources map[string]*Resource
@@ -105,6 +107,17 @@ func (r *Resource) LookupType() xreflect.LookupType {
 	return r._types.Lookup
 }
 
+func (r *Resource) ExpandSubstitutes(text string) string {
+	r._mux.RLock()
+	defer r._mux.RUnlock()
+	return r.Substitutes.Replace(text)
+}
+func (r *Resource) ReverseSubstitutes(text string) string {
+	r._mux.RLock()
+	defer r._mux.RUnlock()
+	return r.Substitutes.ReverseReplace(text)
+}
+
 func (r *Resource) SetFs(fs afs.Service) {
 	r.fs = fs
 }
@@ -113,7 +126,7 @@ func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data = r.Substitutes.Replace(data)
+	data = r.ExpandSubstitutes(data)
 	return data, nil
 }
 
@@ -183,7 +196,9 @@ func (r *Resource) mergeSubstitutes(resource *Resource) {
 		r.Substitutes = resource.Substitutes
 	}
 	for k, v := range resource.Substitutes {
+		r._mux.Lock()
 		r.Substitutes[k] = v
+		r._mux.Unlock()
 	}
 }
 
