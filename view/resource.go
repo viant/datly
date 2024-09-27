@@ -203,8 +203,9 @@ func (r *Resource) mergeSubstitutes(resource *Resource) {
 		return
 	}
 	if len(r.Substitutes) == 0 {
-		r.Substitutes = resource.Substitutes
+		r.Substitutes = make(Substitutes)
 	}
+
 	for k, v := range resource.Substitutes {
 		r.Substitutes[k] = v
 	}
