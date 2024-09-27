@@ -583,6 +583,7 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 		In:        string(p.In.Name),
 		When:      p.When,
 		Async:     p.Async,
+		Value:     p.Value,
 		Cacheable: p.Cacheable,
 		Scope:     p.Scope,
 		With:      p.With,

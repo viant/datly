@@ -252,6 +252,7 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	param.Cacheable = pTag.Cacheable
 	param.With = pTag.With
 	param.Async = pTag.Async
+	param.Value = pTag.Value
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
 	if pTag.Required {
 		value := pTag.Required

@@ -199,6 +199,7 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflec
 	result.Scope = pTag.Scope
 	result.When = pTag.When
 	result.Async = pTag.Async
+	result.Value = pTag.Value
 	result.Cacheable = pTag.Cacheable
 	result.With = pTag.With
 	if pTag.ErrorCode != 0 {
