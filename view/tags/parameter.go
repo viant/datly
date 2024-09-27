@@ -10,18 +10,17 @@ import (
 const ParameterTag = "parameter"
 
 type Parameter struct {
-	Name      string      `tag:"name,omitempty"`
-	Kind      string      `tag:"kind,omitempty"`  //parameter location kind
-	In        string      `tag:"in,omitempty"`    //parameter location name
-	When      string      `tag:"when,omitempty"`  //condition to evaluate
-	Scope     string      `tag:"scope,omitempty"` //parameter scope
-	ErrorCode int         `tag:"errorCode,omitempty"`
-	DataType  string      `tag:"dataType,omitempty"` //parameter input type
-	With      string      `tag:"with,omitempty"`     //optional auxiliary type name holding parameters
-	Required  bool        `tag:"required,omitempty"`
-	Cacheable *bool       `tag:"cacheable,omitempty"`
-	Async     bool        `tag:"async,omitempty"`
-	Value     interface{} `tag:"value,omitempty"`
+	Name      string `tag:"name,omitempty"`
+	Kind      string `tag:"kind,omitempty"`  //parameter location kind
+	In        string `tag:"in,omitempty"`    //parameter location name
+	When      string `tag:"when,omitempty"`  //condition to evaluate
+	Scope     string `tag:"scope,omitempty"` //parameter scope
+	ErrorCode int    `tag:"errorCode,omitempty"`
+	DataType  string `tag:"dataType,omitempty"` //parameter input type
+	With      string `tag:"with,omitempty"`     //optional auxiliary type name holding parameters
+	Required  bool   `tag:"required,omitempty"`
+	Cacheable *bool  `tag:"cacheable,omitempty"`
+	Async     bool   `tag:"async,omitempty"`
 }
 
 func (t *Tag) updatedParameter(key string, value string) (err error) {
@@ -74,11 +73,6 @@ func (p *Parameter) Tag() *tags.Tag {
 		appendNonEmpty(builder, "cachable", value)
 	}
 
-	if p.Value != nil {
-		if str, ok := p.Value.(string); ok {
-			appendNonEmpty(builder, "value", str)
-		}
-	}
 	appendNonEmpty(builder, "with", p.With)
 	appendNonEmpty(builder, "scope", p.Scope)
 	appendNonEmpty(builder, "dataType", p.DataType)

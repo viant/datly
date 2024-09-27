@@ -80,6 +80,14 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 	if p.Scope != "" {
 		builder.WriteString(".Scope('" + p.Scope + "')")
 	}
+	if p.Value != "" {
+		switch actual := p.Value.(type) {
+		case string:
+			builder.WriteString(".Value('" + actual + "')")
+		case []string:
+
+		}
+	}
 	if p.Output != nil {
 		builder.WriteString(".WithCodec('" + p.Output.Name + "'")
 		for i, arg := range p.Output.Args {
@@ -252,7 +260,6 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	param.Cacheable = pTag.Cacheable
 	param.With = pTag.With
 	param.Async = pTag.Async
-	param.Value = pTag.Value
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
 	if pTag.Required {
 		value := pTag.Required

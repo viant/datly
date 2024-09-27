@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 type (
@@ -43,6 +44,13 @@ func (t *Tag) GetValue(destType reflect.Type) (interface{}, error) {
 		destType = destType.Elem()
 	}
 
+	isSlice := false
+
+	if destType.Kind() == reflect.Slice {
+		isSlice = true
+		destType = destType.Elem()
+	}
+
 	switch destType.Kind() {
 	case reflect.Bool:
 		return strconv.ParseBool(*t.Value)
@@ -53,6 +61,9 @@ func (t *Tag) GetValue(destType reflect.Type) (interface{}, error) {
 	default:
 		if isPtr {
 			return t.Value, nil
+		}
+		if isSlice && t.Value != nil {
+			return strings.Split(*t.Value, ","), nil
 		}
 		return t.Value, nil
 	}

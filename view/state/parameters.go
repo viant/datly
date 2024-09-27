@@ -583,7 +583,6 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 		In:        string(p.In.Name),
 		When:      p.When,
 		Async:     p.Async,
-		Value:     p.Value,
 		Cacheable: p.Cacheable,
 		Scope:     p.Scope,
 		With:      p.With,
@@ -602,8 +601,14 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	}
 	setter.SetStringIfEmpty(&aTag.Documentation, p.Description)
 	if p.Value != nil {
-		val := toolbox.AsString(p.Value)
-		aTag.Value = &val
+		switch actual := p.Value.(type) {
+		case []string:
+			val := strings.Join(actual, ",")
+			aTag.Value = &val
+		default:
+			val := toolbox.AsString(p.Value)
+			aTag.Value = &val
+		}
 	}
 	if p.Output != nil {
 		aTag.Codec = &tags.Codec{Name: p.Output.Name, Arguments: p.Output.Args}
