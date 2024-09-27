@@ -91,6 +91,14 @@ type (
 	}
 )
 
+func (r *Resource) Lock() {
+	r._mux.Lock()
+}
+
+func (r *Resource) Unlock() {
+	r._mux.Unlock()
+}
+
 func (r *Resource) NamedParameters() state.NamedParameters {
 	return r._parameters
 }
@@ -189,6 +197,8 @@ func (r *Resource) MergeFrom(resource *Resource, types *xreflect.Types) {
 }
 
 func (r *Resource) mergeSubstitutes(resource *Resource) {
+	r._mux.Lock()
+	defer r._mux.Unlock()
 	if len(resource.Substitutes) == 0 {
 		return
 	}
@@ -196,9 +206,7 @@ func (r *Resource) mergeSubstitutes(resource *Resource) {
 		r.Substitutes = resource.Substitutes
 	}
 	for k, v := range resource.Substitutes {
-		r._mux.Lock()
 		r.Substitutes[k] = v
-		r._mux.Unlock()
 	}
 }
 

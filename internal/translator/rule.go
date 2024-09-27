@@ -220,7 +220,7 @@ func (r *Resource) loadData(ctx context.Context, fs afs.Service, URL string, des
 	if err != nil {
 		return err
 	}
-	data = []byte(r.Resource.Substitutes.Replace(string(data)))
+	data = []byte(r.Resource.ExpandSubstitutes(string(data)))
 	return shared.UnmarshalWithExt(data, dest, path.Ext(dataURL))
 }
 
