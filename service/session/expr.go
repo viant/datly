@@ -16,6 +16,13 @@ func equals(x interface{}, value string) (bool, error) {
 			}
 		}
 		return false, nil
+	case []interface{}:
+		for _, candidate := range actual {
+			if candidate == value {
+				return true, nil
+			}
+		}
+		return false, nil
 	case int:
 		intY, err := strconv.Atoi(value)
 		if err != nil {
