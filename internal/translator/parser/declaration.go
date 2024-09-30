@@ -23,6 +23,7 @@ type (
 		Transformer   string            `json:",omitempty" yaml:",omitempty"`
 		Codec         string            `json:",omitempty" yaml:",omitempty"`
 		CodecArgs     []string          `json:",omitempty" yaml:",omitempty"`
+		QuerySelector string            `json:",omitempty" yaml:",omitempty"`
 	}
 )
 

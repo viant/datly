@@ -81,7 +81,7 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	}
 
 	for _, typeDef := range aMatch.header.Resource.Types {
-		if strings.Contains(typeDef.DataType, " ") {
+		if strings.Contains(typeDef.DataType, " ") || strings.Contains(typeDef.Package, "/") {
 			customTypes = append(customTypes, typeDef)
 		}
 		_ = typeRegistry.Register(typeDef.Name, xreflect.WithPackage(typeDef.Package), xreflect.WithTypeDefinition(typeDef.DataType))

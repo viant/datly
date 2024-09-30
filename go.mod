@@ -22,7 +22,7 @@ require (
 	github.com/viant/afsc v1.9.1
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.3.3
-	github.com/viant/cloudless v1.9.9-0.20240725201210-d3d3fbe48d88
+	github.com/viant/cloudless v1.11.0
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
@@ -30,13 +30,13 @@ require (
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
-	github.com/viant/scy v0.10.0
-	github.com/viant/sqlx v0.15.0
-	github.com/viant/structql v0.4.2-0.20240712002135-b1ef22dd834f
+	github.com/viant/scy v0.12.0
+	github.com/viant/sqlx v0.15.2-0.20240904183634-ceb6544fd16c
+	github.com/viant/structql v0.5.2
 	github.com/viant/toolbox v0.36.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
-	github.com/viant/xreflect v0.6.2
-	github.com/viant/xunsafe v0.9.3
+	github.com/viant/xreflect v0.7.1
+	github.com/viant/xunsafe v0.9.4
 	golang.org/x/mod v0.16.0
 	golang.org/x/oauth2 v0.19.0 // indirect
 	google.golang.org/api v0.174.0
@@ -44,21 +44,21 @@ require (
 )
 
 require (
-	github.com/viant/govalidator v0.3.0
-	github.com/viant/sqlparser v0.7.1-0.20240717151907-216ea35d127a
+	github.com/viant/govalidator v0.3.1
+	github.com/viant/sqlparser v0.7.5
 	golang.org/x/crypto v0.22.0 // indirect
 )
 
 require (
 	firebase.google.com/go/v4 v4.14.0
-	github.com/viant/aerospike v0.1.0
-	github.com/viant/structology v0.5.6-0.20240724183243-379c7ed6e097
+	github.com/viant/aerospike v0.2.7
+	github.com/viant/structology v0.5.6-0.20240802174922-5eb157550455
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
-	github.com/viant/xdatly v0.4.1-0.20240725170734-15a26594f23e
+	github.com/viant/xdatly v0.5.4-0.20240923185204-11a0855c8bb5
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20240725170734-15a26594f23e
+	github.com/viant/xdatly/handler v0.0.0-20240923185204-11a0855c8bb5
 	github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb
-	github.com/viant/xdatly/types/custom v0.0.0-20240624200855-79bbed0d3db9
+	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.0
 	github.com/viant/xmlify v0.1.1-0.20231127181625-8a6b48ceea12
 	golang.org/x/tools v0.19.0

@@ -3,9 +3,9 @@ package expand
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/velty/est"
 	"github.com/viant/velty/est/op"
+	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -124,13 +124,12 @@ func (p *Printer) Fatalf(any interface{}, args ...interface{}) (string, error) {
 func (p *Printer) FatalfWithCode(code int, any interface{}, args ...interface{}) (string, error) {
 	format, ok := any.(string)
 	if ok {
-		return "", httputils.NewHttpMessageError(code, fmt.Errorf(p.Sprintf(format, args...)))
+		return "", response.NewError(code, fmt.Sprintf(p.Sprintf(format, args...)))
 	}
 	if err, ok := any.(error); ok {
-		return "", httputils.NewHttpMessageError(code, err)
+		return "", response.NewError(code, err.Error(), response.WithError(err))
 	}
-
-	return "", httputils.NewHttpMessageError(code, fmt.Errorf(p.Sprintf("%+v", any)))
+	return "", response.NewError(code, p.Sprintf("%+v", any))
 }
 
 func (p *Printer) derefArgs(args []interface{}) {

@@ -70,6 +70,7 @@ func InitRegistry() {
 			xreflect.NewType("LoadData", xreflect.WithReflectType(reflect.TypeOf(&handler.LoadDataProvider{}))),
 			xreflect.NewType("auth.Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
+			xreflect.NewType("time.Location", xreflect.WithReflectType(reflect.TypeOf(&time.Location{}))),
 		)),
 		Codecs: codec.New(
 			codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.JwtClaim{}, time.Time{}),
@@ -93,6 +94,7 @@ func InitRegistry() {
 			codec.WithFactory(dcodec.KeyURIChecksum, &dcodec.UriChecksumFactory{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyTimeDiff, &dcodec.TimeDiffFactory{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyFirebaseAuth, &dcodec.FirebaseAuth{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyCustomAuth, dcodec.NewCustomAuth(nil), time.Time{}),
 		),
 		Predicates: &PredicateRegistry{
 			registry: map[string]*Predicate{

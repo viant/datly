@@ -31,6 +31,13 @@ func (v *Path) Value(ctx context.Context, name string) (interface{}, bool, error
 // NewPath returns path locator
 func NewPath(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
+	URL := ""
+	if len(options.PathParameters) > 0 {
+		if options.request != nil {
+			URL = options.request.URL.Path
+		}
+		return &Path{parameters: options.PathParameters, path: URL}, nil
+	}
 	if options.request == nil {
 		return nil, fmt.Errorf("requestState was empty")
 	}

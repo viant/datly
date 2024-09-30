@@ -19,6 +19,7 @@ type (
 	View struct {
 		Name                   string
 		Table                  string
+		CustomTag              string
 		Parameters             []string //parameter references
 		Connector              string
 		Limit                  *int
@@ -32,6 +33,8 @@ type (
 func (t *Tag) updateView(key string, value string) error {
 	tag := t.View
 	switch strings.ToLower(key) {
+	case "tag":
+		tag.CustomTag = strings.TrimSpace(value)
 	case "name":
 		tag.Name = strings.TrimSpace(value)
 	case "match":

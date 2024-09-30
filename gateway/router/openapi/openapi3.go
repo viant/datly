@@ -7,9 +7,9 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/xdatly/handler/response"
 	"net/http"
 	"reflect"
 	"sync"
@@ -34,7 +34,7 @@ const (
 )
 
 var (
-	errorType = reflect.TypeOf(httputils.Error{})
+	errorType = reflect.TypeOf(response.Error{})
 )
 
 type (

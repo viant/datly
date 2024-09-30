@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
@@ -34,7 +35,7 @@ var contractInit string
 //go:embed codegen/register.gox
 var registerInit string
 
-func (c *Component) GenerateOutputCode(ctx context.Context, withEmbed bool, embeds map[string]string, namedResources ...string) string {
+func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent, withEmbed bool, embeds map[string]string, namedResources ...string) string {
 	builder := strings.Builder{}
 	input := c.Input.Type.Type()
 	registry := c.TypeRegistry()
@@ -102,9 +103,12 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withEmbed bool, embe
 	snippetBefore := replacer.ExpandAsText(registerInit)
 	if withEmbed {
 		defineComponentFunc := replacer.ExpandAsText(contractInit)
+		if !withDefineComponent {
+			defineComponentFunc = ""
+		}
 		snippetBefore += c.embedTemplate(embedURI, componentName)
 		options = append(options,
-			xreflect.WithImports(append(c.generatorImports(c.Contract.ModulePath), "github.com/viant/datly/view")),
+			xreflect.WithImports(c.generatorImports(c.Contract.ModulePath, withDefineComponent)),
 			xreflect.WithSnippetAfter(defineComponentFunc))
 	} else {
 		replacer.Put("WithConnector", "")
@@ -161,7 +165,7 @@ func (c *Component) buildDependencyTypes(inPackageComponentTypes map[string]bool
 			continue
 		}
 		if def.Package != "" && c.ModulePath != "" && strings.Contains(def.DataType, " ") { //complex type
-			importModules[def.Package] = c.ModulePath
+			c.updatePackageModule(def, importModules)
 		}
 		aType := xreflect.NewType(def.Name, xreflect.WithModulePath(def.ModulePath), xreflect.WithPackage(def.Package), xreflect.WithTypeDefinition(def.DataType))
 		prev, found := uniquePackageTypes[aType.TypeName()]
@@ -180,6 +184,21 @@ func (c *Component) buildDependencyTypes(inPackageComponentTypes map[string]bool
 	return result
 }
 
+func (c *Component) updatePackageModule(def *view.TypeDefinition, importModules map[string]string) {
+	if index := strings.LastIndex(def.Package, "/"); index != -1 {
+		pkgAlias := def.Package[index+1:]
+		pkgName := def.Package[:index]
+		if _, ok := importModules[pkgAlias]; !ok {
+			importModules[pkgAlias] = c.ModulePath + "/" + pkgName
+		}
+		def.Package = pkgAlias
+	} else {
+		if _, ok := importModules[def.Package]; !ok {
+			importModules[def.Package] = c.ModulePath
+		}
+	}
+}
+
 func (c *Component) embedTemplate(embedURI string, componentName string) string {
 	return fmt.Sprintf(`
 //go:embed %v/*.sql
@@ -188,7 +207,7 @@ var %vFS embed.FS
 `, embedURI, componentName)
 }
 
-func (c *Component) generatorImports(modulePath string) []string {
+func (c *Component) generatorImports(modulePath string, component bool) []string {
 
 	checksumModule := "github.com/viant/xdatly/types/custom/checksum"
 	index := strings.LastIndex(modulePath, "/pkg/")
@@ -200,15 +219,22 @@ func (c *Component) generatorImports(modulePath string) []string {
 		checksumModule = path.Join(checksumParent, "dependency", "checksum")
 	}
 
-	return []string{"embed",
-		"github.com/viant/datly",
-		"fmt",
-		"context",
+	ret := []string{"embed",
 		"reflect",
 		"github.com/viant/xdatly/types/core",
 		checksumModule,
-		"github.com/viant/datly/repository",
-		"github.com/viant/datly/repository/contract"}
+	}
+
+	if component {
+		ret = append(ret,
+			"fmt",
+			"context",
+			"github.com/viant/datly/view",
+			"github.com/viant/datly/repository",
+			"github.com/viant/datly/repository/contract",
+			"github.com/viant/datly")
+	}
+	return ret
 }
 
 func (c *Component) adjustStructField(embedURI string, embeds map[string]string, generateContract bool) func(aField *reflect.StructField, tag *string, typeName *string, doc *string) {
@@ -225,7 +251,9 @@ func (c *Component) adjustStructField(embedURI string, embeds map[string]string,
 		if value != "" && generateContract {
 			name := *typeName
 			setter.SetStringIfEmpty(&name, aField.Name)
-			key := text.CaseFormatUpperCamel.Format(name, text.CaseFormatLowerUnderscore) + ".sql"
+			key := text.CaseFormatUpperCamel.Format(name, text.CaseFormatLowerUnderscore)
+			key = strings.ReplaceAll(key, ".", "")
+			key += ".sql"
 			value = c.View.Resource().ReverseSubstitutes(value)
 			embeds[key] = value
 			fieldTag += fmt.Sprintf(` sql:"uri=%v/`+key+`" `, embedURI)

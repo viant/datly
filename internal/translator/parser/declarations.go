@@ -21,12 +21,13 @@ import (
 type (
 	//Declarations defines state (parameters) declaration
 	Declarations struct {
-		SQL         string
-		State       inference.State
-		OutputState inference.State
-		AsyncState  inference.State
-		Transforms  []*marshal.Transform
-		lookup      func(dataType string, opts ...xreflect.Option) (*state.Schema, error)
+		SQL            string
+		State          inference.State
+		OutputState    inference.State
+		AsyncState     inference.State
+		QuerySelectors map[string]inference.State
+		Transforms     []*marshal.Transform
+		lookup         func(dataType string, opts ...xreflect.Option) (*state.Schema, error)
 	}
 )
 
@@ -81,12 +82,23 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	}
 	declaration.ExpandShorthands()
 
+	if declaration.QuerySelector != "" {
+		switch strings.ToLower(declaration.Parameter.Name) {
+		case "limit", "offset", "page", "fields", "orderby":
+		default:
+			return fmt.Errorf("query selector %v can only be used with limit, offset, page, fields, orderby", declaration.QuerySelector)
+		}
+		noCachable := false
+		declaration.Parameter.Cacheable = &noCachable
+		d.QuerySelectors[declaration.QuerySelector] = append(d.QuerySelectors[declaration.QuerySelector], &declaration.Parameter)
+		return nil
+	}
 	if declaration.InOutput {
 		d.OutputState.Append(&declaration.Parameter)
 		return nil
 	} else {
 		name := declaration.Parameter.Name
-		if state.IsReservedAsyncState(name) {
+		if state.IsReservedAsyncState(name) && declaration.IsAsync() {
 			d.AsyncState.Append(&declaration.Parameter)
 		}
 	}
@@ -297,6 +309,10 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 		case "Output":
 			declaration.InOutput = true
+		case "Cacheable":
+			literal := strings.Trim(args[0], `"'`)
+			value, _ := strconv.ParseBool(literal)
+			declaration.Cacheable = &value
 		case "When":
 			declaration.When = strings.Trim(content, "'\"")
 		case "Scope":
@@ -315,8 +331,9 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 		case "QuerySelector":
 			declaration.Explicit = false
+			declaration.QuerySelector = strings.Trim(content, "'\"")
 		case "Async":
-			declaration.IsAsync = true
+			declaration.Async = true
 		}
 		cursor.MatchOne(whitespaceMatcher)
 	}
@@ -424,9 +441,10 @@ func extractArg(cursorContent string) string {
 
 func NewDeclarations(SQL string, lookup func(dataType string, opts ...xreflect.Option) (*state.Schema, error)) (*Declarations, error) {
 	result := &Declarations{
-		SQL:    SQL,
-		State:  nil,
-		lookup: lookup,
+		SQL:            SQL,
+		State:          nil,
+		lookup:         lookup,
+		QuerySelectors: make(map[string]inference.State),
 	}
 	return result, result.Init()
 }

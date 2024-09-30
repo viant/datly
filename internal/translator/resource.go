@@ -48,6 +48,7 @@ type (
 		Module         *modfile.Module
 		ModuleLocation string
 		typePackages   map[string]string
+		rootConnector  string
 	}
 )
 
@@ -84,15 +85,27 @@ func (r *Resource) AddCustomTypeURL(URL string) {
 
 func (r *Resource) GetSchema(dataType string, opts ...xreflect.Option) (*state.Schema, error) {
 	registry := r.ensureRegistry()
-
 	if pkg, ok := r.typePackages[state.RawComponentType(dataType)]; ok {
 		opts = append(opts, xreflect.WithPackage(pkg))
 	}
 
 	aType := xreflect.NewType(dataType, opts...)
-	rType, err := registry.LookupType(aType)
-	if err != nil {
-		return nil, err
+	var rType reflect.Type
+	var err error
+
+	if aType.Package == "" && aType.PackagePath != "" { //try to infer package with
+		if parts := strings.Split(aType.PackagePath, "/"); len(parts) > 1 {
+			aType.Package = strings.Join(parts[len(parts)-2:], "/")
+		}
+		rType, err = registry.LookupType(aType)
+		if err != nil {
+			aType.Package = ""
+		}
+	}
+	if rType == nil {
+		if rType, err = registry.LookupType(aType); err != nil {
+			return nil, fmt.Errorf("failed to lookup type: %v,%v  %w", dataType, aType.PackagePath, err)
+		}
 	}
 
 	schema := state.NewSchema(rType, state.WithSchemaPackage(aType.Package), state.WithModulePath(aType.ModulePath), state.WithSchemaMethods(aType.Methods))
@@ -126,16 +139,15 @@ func (r *Resource) parseImports(ctx context.Context, dSQL *string) (err error) {
 }
 
 func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.TypeImport) error {
-	typesImport.EnsureLocation(ctx, fs, r.rule.SourceCodeLocation())
+	typesImport.EnsureLocation(ctx, fs, r.rule.ModuleLocation, r.rule.ComponentPath())
 	alias := typesImport.Alias
 	for i, name := range typesImport.Types {
 		if typeDef := r.LookupTypeDef(name); typeDef != nil {
 			return nil
 		}
-
 		schema, err := r.GetSchema(name, xreflect.WithPackagePath(typesImport.URL))
 		if err != nil {
-			return fmt.Errorf("unable to include import type: %v,  %w", name, err)
+			return fmt.Errorf("%v unable to include import type: %v,  %w", typesImport.URL, name, err)
 		}
 		r.typePackages[name] = schema.Package
 		if len(schema.Methods) > 0 {
@@ -150,7 +162,8 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.Typ
 			alias = ""
 		}
 		setter.SetStringIfEmpty(&typeDef.Alias, alias)
-		r.AppendTypeDefinition(typeDef)
+		r.AppendTypeDefinition(typeDef) //bit of a mess to be able to handle
+
 	}
 	return nil
 }
@@ -192,12 +205,26 @@ func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
 	if r.LookupTypeDef(typeDef.Name) != nil {
 		return
 	}
+
+	if r.LookupTypeDef(typeDef.Name) != nil {
+		return
+	}
+
 	definition := *typeDef
 	r.Resource.Types = append(r.Resource.Types, &definition)
 	if typeDef.Schema.IsNamed() {
 		return
 	}
+
 	r.typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType), xreflect.WithModulePath(typeDef.ModulePath), xreflect.WithPackage(typeDef.Package))
+
+	if index := strings.LastIndex(typeDef.Package, "/"); index != -1 {
+		if rType, _ := r.typeRegistry.Lookup(typeDef.Name, xreflect.WithPackage(typeDef.Package)); rType != nil {
+			pkg := typeDef.Package[index+1:]
+			r.typeRegistry.Register(typeDef.Name, xreflect.WithReflectType(rType), xreflect.WithPackage(pkg))
+		}
+	}
+
 }
 
 func (r *Resource) AppendTypeDefinitions(typeDefs []*view.TypeDefinition) {
@@ -241,7 +268,6 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 
 	r.OutputState.Append(r.Declarations.OutputState...)
 	r.Rule.OutputParameter = r.OutputState.GetOutputParameter()
-
 	if r.State, err = r.State.NormalizeComposites(); err != nil {
 		return fmt.Errorf("failed to normalize input state: %w", err)
 	}
@@ -339,10 +365,13 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	types := viewlet.Resource.Resource.TypeRegistry()
 	resourceState := viewlet.Resource.State
-	_ = resourceState.EnsureReflectTypes(r.rule.GoModuleLocation())
+	err := resourceState.EnsureStructQLTypes()
+	if err != nil {
+		return nil, err
+	}
 	sqlState := viewlet.Resource.State.StateForSQL(viewlet.SQL, r.Rule.Root == viewlet.Name)
 	metaViewSQL := sqlState.MetaViewSQL()
-	compacted, err := sqlState.Compact(r.rule.ModuleLocation)
+	compacted, err := sqlState.Compact(r.rule.ModuleLocation, r.typeRegistry)
 	if err == nil && len(compacted) > 0 {
 		sqlState = compacted
 	}
@@ -448,7 +477,7 @@ func (r *Resource) IncludeSnippets(ctx context.Context, fs afs.Service, dSQL *st
 		if err != nil {
 			return err
 		}
-		content = []byte(r.Resource.Substitutes.Replace(string(content)))
+		content = []byte(r.Resource.ExpandSubstitutes(string(content)))
 		ext := path.Ext(assetURL)
 		switch ext {
 		case ".sql", ".sqlx", ".dql", ".dqlx":
@@ -482,9 +511,12 @@ func (r *Resource) IncludeURL(ctx context.Context, URL string, fs afs.Service) (
 	return r.assetURL(ctx, URL, fs)
 }
 
-func (r *Resource) loadType(dirTypes *xreflect.DirTypes, typeName string, aPath string, registered map[string]map[string]bool, typeDefs *view.TypeDefinitions) (reflect.Type, error) {
+func (r *Resource) loadType(dirTypes *xreflect.DirTypes, filePackage string, typeName string, aPath string, registered map[string]map[string]bool, typeDefs *view.TypeDefinitions) (reflect.Type, error) {
 	rType, err := dirTypes.Type(typeName)
 	statePackage := dirTypes.PackagePath(aPath)
+	if strings.HasSuffix(filePackage, "/"+statePackage) {
+		statePackage = filePackage
+	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid typename: %v, %w", typeName, err)
 	}
@@ -557,7 +589,7 @@ func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, er
 
 		iParameter.Explicit = true
 		dest.Append(iParameter)
-		if state.IsReservedAsyncState(iParameter.Name) {
+		if state.IsReservedAsyncState(iParameter.Name) && iParameter.IsAsync() { //scope to be deprecated
 			r.AsyncState.Append(iParameter)
 		}
 	}

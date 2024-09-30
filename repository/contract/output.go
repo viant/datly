@@ -35,17 +35,15 @@ type Output struct {
 	Field            string `json:",omitempty"`
 	Exclude          []string
 	NormalizeExclude *bool
-
-	DebugKind view.MetaKind
-
-	DataFormat string `json:",omitempty"` //default data format
-
-	ResponseBody *BodySelector
-	RevealMetric *bool
-	Type         state.Type
-	Doc          state.Documentation
-	FilterDoc    state.Documentation
-	_excluded    map[string]bool
+	DebugKind        view.MetaKind
+	DataFormat       string `json:",omitempty"` //default data format
+	ResponseBody     *BodySelector
+	RevealMetric     *bool
+	Type             state.Type
+	ViewType         string
+	Doc              state.Documentation
+	FilterDoc        state.Documentation
+	_excluded        map[string]bool
 }
 
 func (o *Output) GetTitle() string {
@@ -242,9 +240,11 @@ func (o *Output) defaultParameters(aView *view.View, inputParameters state.Param
 }
 
 // EnsureParameterTypes update output kind parameter type
-func EnsureParameterTypes(parameters []*state.Parameter, aView *view.View, doc state.Documentation, filterDoc state.Documentation) {
+func EnsureParameterTypes(parameters []*state.Parameter, aView *view.View, doc state.Documentation, filterDoc state.Documentation) error {
 	for _, parameter := range parameters {
-		ensureParameterType(parameter, aView, doc, filterDoc)
+		if err := ensureParameterType(parameter, aView, doc, filterDoc); err != nil {
+			return err
+		}
 		var paramDoc state.Documentation
 		if doc != nil {
 			paramDoc, _ = doc.FieldDocumentation(parameter.Name)
@@ -261,12 +261,13 @@ func EnsureParameterTypes(parameters []*state.Parameter, aView *view.View, doc s
 			EnsureParameterTypes(parameter.Repeated, aView, paramDoc, filterDoc)
 		}
 	}
+	return nil
 }
 
-func ensureParameterType(parameter *state.Parameter, aView *view.View, doc state.Documentation, filterDoc state.Documentation) {
+func ensureParameterType(parameter *state.Parameter, aView *view.View, doc state.Documentation, filterDoc state.Documentation) error {
 	rType := parameter.Schema.Type()
 	if rType != nil && rType.Kind() != reflect.String && rType.Kind() != reflect.Interface {
-		return
+		return nil
 	}
 
 	switch parameter.In.Kind {
@@ -274,7 +275,7 @@ func ensureParameterType(parameter *state.Parameter, aView *view.View, doc state
 		key := strings.ToLower(parameter.In.Name)
 		switch key {
 		case "":
-			return
+			return nil
 		case outputkeys.ViewData:
 			if aView != nil {
 				parameter.Schema = state.NewSchema(aView.OutputType())
@@ -282,6 +283,9 @@ func ensureParameterType(parameter *state.Parameter, aView *view.View, doc state
 
 		case outputkeys.ViewSummaryData:
 			if aView != nil {
+				if aView.Template.Summary == nil {
+					return fmt.Errorf("failed to lookup summary view for: %s", aView.Name)
+				}
 				parameter.Schema = aView.Template.Summary.Schema
 			}
 		case outputkeys.Filter:
@@ -304,6 +308,7 @@ func ensureParameterType(parameter *state.Parameter, aView *view.View, doc state
 	case state.KindAsync:
 		UpdateParameterAsyncType(parameter)
 	}
+	return nil
 }
 
 func UpdateParameterAsyncType(parameter *state.Parameter) {

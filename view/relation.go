@@ -81,7 +81,12 @@ func (l Links) Init(name string, v *View) error {
 
 func (l *Link) Validate() error {
 	if l.Column == "" {
-		return fmt.Errorf("reference column can't be empty")
+		if l.Field != "" {
+			l.Column = l.Field
+		}
+		if l.Column == "" {
+			return fmt.Errorf("reference column can't be empty")
+		}
 	}
 	return nil
 }
@@ -147,6 +152,9 @@ func (r *ReferenceView) Init(_ context.Context, aView *View) (err error) {
 func (r *Relation) inheritType() {
 	if r.Of.Schema != nil && r.Of.Schema.Type() != nil {
 		return
+	}
+	if r.Of.Schema == nil {
+		r.Of.Schema = &state.Schema{}
 	}
 	r.Of.Schema.InheritType(r.holderField.Type)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/locator/output/keys"
@@ -45,6 +46,7 @@ type (
 	Resource struct {
 		Types           []*view.TypeDefinition `yaml:"Types"`
 		InputParameters []*state.Parameter     `yaml:"Parameters"`
+		MessageBuses    []*mbus.Resource       `yaml:"MessageBuses"`
 	}
 )
 

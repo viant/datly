@@ -29,9 +29,15 @@ type (
 		With         []string `yaml:"With" json:"With"`
 	}
 
+	Handler struct {
+		MessageBus string `json:"MessageBus,omitempty" yaml:"MessageBus,omitempty" `
+		With       []string
+	}
+
 	Path struct {
 		contract.Path `yaml:",inline"`
 		Settings      `yaml:",inline"`
+		Handler       *Handler         `yaml:"Handler" json:"Handler"`
 		Internal      bool             `json:"Internal,omitempty" yaml:"Internal,omitempty" `
 		ContentURL    string           `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
 		SourceURL     string           `yaml:"-" json:"-"`
@@ -39,10 +45,11 @@ type (
 	}
 
 	Item struct {
-		SourceURL string  `yaml:"SourceURL"`
-		Paths     []*Path `yaml:"Routes" json:"Routes"`
-		Settings  `yaml:",inline"`
-		Version   version.Control `yaml:"-" json:"-"`
+		SourceURL  string  `yaml:"SourceURL"`
+		MessageBus string  `json:"MessageBus,omitempty" yaml:"MessageBus,omitempty" `
+		Paths      []*Path `yaml:"Routes" json:"Routes"`
+		Settings   `yaml:",inline"`
+		Version    version.Control `yaml:"-" json:"-"`
 	}
 )
 

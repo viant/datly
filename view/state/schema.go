@@ -15,6 +15,7 @@ import (
 type (
 	Schema struct {
 		Package     string      `json:",omitempty" yaml:"Package,omitempty"`
+		PackagePath string      `json:",omitempty" yaml:"PackagePath,omitempty"`
 		ModulePath  string      `json:",omitempty" yaml:"ModulePath,omitempty"`
 		Name        string      `json:",omitempty" yaml:"Name,omitempty"`
 		DataType    string      `json:",omitempty" yaml:"DataType,omitempty"`
@@ -133,7 +134,6 @@ func (s *Schema) SetType(rType reflect.Type) {
 			s.Name = compType.Name()
 		}
 	}
-
 	if s.Cardinality == "" {
 		s.Cardinality = One
 	}
@@ -275,6 +275,19 @@ func (s *Schema) InitType(lookupType xreflect.LookupType, ptr bool) error {
 	return nil
 }
 
+func (s *Schema) GetPackage() string {
+	if s.Package != "" {
+		return s.Package
+	}
+	if index := strings.LastIndex(s.DataType, "."); index != -1 {
+		return s.DataType[:index]
+	}
+	if s.rType != nil {
+		return s.rType.PkgPath()
+	}
+	return ""
+}
+
 // WithAutoGenFlag creates with autogen schema option
 func WithAutoGenFlag(flag bool) SchemaOption {
 	return func(s *Schema) {
@@ -282,6 +295,14 @@ func WithAutoGenFlag(flag bool) SchemaOption {
 	}
 }
 
+// WithPackagePath returns package options
+func WithPackagePath(pkgPath string) SchemaOption {
+	return func(s *Schema) {
+		s.PackagePath = pkgPath
+	}
+}
+
+// WithAutoGenFunc return autoget
 func WithAutoGenFunc(fn func() (reflect.Type, error)) SchemaOption {
 	return func(s *Schema) {
 		s.autoGenFn = fn

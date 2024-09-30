@@ -16,22 +16,11 @@ func (r *Repository) ensureConstants(ctx context.Context) error {
 	if constantResource, _ := r.loadDependency(ctx, "constants.yaml"); constantResource != nil {
 		r.State.AppendViewParameters(constantResource.Parameters...)
 	}
-	if constantResource, _ := r.loadDependency(ctx, "variables.yaml"); constantResource != nil {
-		r.State.AppendViewParameters(constantResource.Parameters...)
-	}
-	if URL := r.Config.repository.ConstURL; URL != "" {
-		constants, err := r.loadMap(ctx, URL)
-		if err != nil {
-			return err
-		}
-		r.State.AppendConst(constants)
-
-	}
 	return nil
 }
 
 func (r *Repository) ensureSubstitutes(ctx context.Context) error {
-	r.Substitutes = map[string]view.Substitutes{}
+	substitutes := map[string]view.Substitutes{}
 	for _, URL := range r.Config.repository.SubstitutesURL {
 		_, name := url.Split(URL, file.Scheme)
 
@@ -47,12 +36,14 @@ func (r *Repository) ensureSubstitutes(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		r.Substitutes[name] = map[string]string{}
+		namedMap := map[string]string{}
 		for k, v := range aMap {
 			fragment := toolbox.AsString(v)
-			r.Substitutes[name][k] = fragment
+			namedMap[k] = fragment
 		}
+		substitutes[name] = namedMap
 	}
+	r.Substitutes = substitutes
 	return nil
 }
 

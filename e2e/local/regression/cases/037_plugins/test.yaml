@@ -14,4 +14,4 @@ pipeline:
         Expect:
          Code: 400
          JSONBody:
-           Message: quantity can't be negative
+           message: quantity can't be negative

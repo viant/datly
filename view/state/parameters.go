@@ -460,6 +460,24 @@ func (p Parameters) Lookup(name string) *Parameter {
 	return nil
 }
 
+// ByKindName indexes parameters by Parameter.In.Name
+func (p Parameters) ByKindName() NamedParameters {
+	result := NamedParameters(make(map[string]*Parameter))
+	for i, parameter := range p {
+		if _, ok := result[parameter.In.Name]; ok {
+			continue
+		}
+		result[parameter.In.Name] = p[i]
+		for _, item := range parameter.Object {
+			result[item.In.Name] = item
+		}
+		for _, item := range parameter.Repeated {
+			result[item.In.Name] = item
+		}
+	}
+	return result
+}
+
 // Index indexes parameters by Parameter.Name
 func (p Parameters) Index() NamedParameters {
 	result := NamedParameters(make(map[string]*Parameter))
@@ -541,6 +559,18 @@ func (p Parameters) PredicateStructType(d Documentation) reflect.Type {
 	return reflect.StructOf(structFields)
 }
 
+func (p Parameters) HasErrorParameter() bool {
+	for _, candidate := range p {
+		if candidate.In.Kind == KindOutput && candidate.In.Name == "status" {
+			return true
+		}
+		if candidate.In.Kind == KindAsync && (strings.HasPrefix(candidate.In.Name, "job")) {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	aTag := tags.Tag{}
 	name := p.Name
@@ -552,6 +582,8 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 		Kind:      string(p.In.Kind),
 		In:        string(p.In.Name),
 		When:      p.When,
+		Async:     p.Async,
+		Cacheable: p.Cacheable,
 		Scope:     p.Scope,
 		With:      p.With,
 		ErrorCode: p.ErrorStatusCode,
@@ -569,8 +601,14 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	}
 	setter.SetStringIfEmpty(&aTag.Documentation, p.Description)
 	if p.Value != nil {
-		val := toolbox.AsString(p.Value)
-		aTag.Value = &val
+		switch actual := p.Value.(type) {
+		case []string:
+			val := strings.Join(actual, ",")
+			aTag.Value = &val
+		default:
+			val := toolbox.AsString(p.Value)
+			aTag.Value = &val
+		}
 	}
 	if p.Output != nil {
 		aTag.Codec = &tags.Codec{Name: p.Output.Name, Arguments: p.Output.Args}
@@ -679,7 +717,7 @@ func WithParameterSchema(schema *Schema) ParameterOption {
 	}
 }
 
-func WithCachable(flag bool) ParameterOption {
+func WithCacheable(flag bool) ParameterOption {
 	return func(p *Parameter) {
 		p.Cacheable = &flag
 	}

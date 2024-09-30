@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	signature "github.com/viant/datly/repository/contract/signature"
+	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -26,7 +27,7 @@ import (
 	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"
 	"net/http"
-	"path"
+	spath "path"
 	"reflect"
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ type Service struct {
 }
 
 func (s *Service) InitSignature(ctx context.Context, rule *options.Rule) (err error) {
-	prefix := path.Join(s.Repository.Config.APIPrefix, rule.ModulePrefix)
+	prefix := spath.Join(s.Repository.Config.APIPrefix, rule.ModulePrefix)
 	if s.signature, err = signature.New(ctx, prefix, s.Repository.Config.RouteURL); err != nil {
 		return err
 	}
@@ -106,6 +107,7 @@ func (s *Service) detectModule(ctx context.Context, rule *options.Rule, resource
 		data, _ := s.fs.DownloadWithURL(ctx, modFile)
 		if goMod, _ := modfile.Parse(modFile, data, nil); goMod != nil {
 			resource.Module = goMod.Module
+			resource.ModuleLocation = rule.ModuleLocation
 		}
 	}
 }
@@ -190,7 +192,8 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if err = root.buildView(resource.Rule, view.ModeQuery); err != nil {
 		return err
 	}
-	resource.Rule.updateExclude(resource.Rule.RootViewlet())
+	rootViewlet := resource.Rule.RootViewlet()
+
 	if err = s.updateExplicitInputType(resource, resource.Rule.RootViewlet()); err != nil {
 		return err
 	}
@@ -198,22 +201,25 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if err = s.detectColumns(resource, componentColumns); err != nil {
 		return err
 	}
-
 	s.detectComponentViewType(componentColumns, resource)
-	rootViewlet := resource.Rule.RootViewlet()
-
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
 		return err
 	}
 	if err = s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.Parameters()); err != nil {
 		return err
 	}
+	if viewParameter := resource.OutputState.Parameters().LookupByLocation(state.KindOutput, "view"); viewParameter != nil && !viewParameter.IsAnonymous() {
+		rootViewlet.Holder = viewParameter.Name
+	}
+	if err = resource.Rule.updateExclude(rootViewlet); err != nil {
+		return err
+	}
+
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
 		return s.adjustView(viewlet, resource, view.ModeQuery)
 	}); err != nil {
 		return err
 	}
-
 	if err = s.persistRouterRule(ctx, resource, service.TypeReader); err != nil {
 		return err
 	}
@@ -224,7 +230,8 @@ func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool, docum
 	if viewlet.Resource.Rule.IsGeneratation {
 		return
 	}
-	if schema := viewlet.View.Schema; schema != nil && (schema.Type() != nil || schema.DataType != "") {
+
+	if schema := viewlet.View.Schema; schema != nil && (schema.Type() != nil || (schema.DataType != "" && withTypeDef)) {
 		return
 	}
 
@@ -327,9 +334,14 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 
 	}
 	if !strings.HasPrefix(resource.Rule.Route.URI, resource.repository.APIPrefix) {
-		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, resource.Rule.Route.URI)
+		resource.Rule.Route.URI = spath.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, resource.Rule.Route.URI)
 	}
-	aState, err := resource.State.Compact(resource.rule.ModuleLocation)
+	if resource.Rule.Viewlets.compressionSizeKb > 0 {
+		resource.Rule.Compression = &path.Compression{
+			MinSizeKb: resource.Rule.Viewlets.compressionSizeKb,
+		}
+	}
+	aState, err := resource.State.Compact(resource.rule.ModuleLocation, resource.typeRegistry)
 	if err != nil {
 		return fmt.Errorf("failed to compact aState: %w", err)
 	}
@@ -367,9 +379,7 @@ func extractTypeNameWithPackage(outputName string) (string, string) {
 }
 
 func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mode) error {
-	if mode == view.ModeQuery {
-		resource.Rule.updateExclude(viewlet)
-	}
+
 	viewlet.applyOutputShorthands()
 	if viewlet.IsMetaView() {
 		return nil
@@ -380,7 +390,7 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 	if viewlet.TypeDefinition != nil && viewlet.DataType != "" { //if derived from
 		viewlet.TypeDefinition.DataType = strings.ReplaceAll(viewlet.DataType, "*", "")
 		viewlet.TypeDefinition.Name = viewlet.TypeDefinition.DataType
-		pkgLocation := viewlet.Resource.rule.SourceCodeLocation()
+		pkgLocation := viewlet.Resource.rule.ComponentPath()
 		aType := xreflect.NewType(viewlet.TypeDefinition.Name, xreflect.WithPackage(viewlet.TypeDefinition.SimplePackage()), xreflect.WithPackagePath(pkgLocation))
 		rType, _ := aType.LoadType(resource.typeRegistry)
 		if rType != nil {
@@ -395,6 +405,12 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 		return err
 	}
 
+	if len(resource.Declarations.QuerySelectors) > 0 {
+		for key, state := range resource.Declarations.QuerySelectors {
+			return fmt.Errorf("unknown query selector view %v, %v", key, state[0].Name)
+		}
+	}
+
 	//TODO move cache to dependency but allow local different TTL override
 	//	aView := &viewlet.View.View
 	//if aView.Columns != nil {
@@ -402,6 +418,7 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 	//}
 
 	aView := &viewlet.View.View
+
 	resource.Resource.Views = append(resource.Resource.Views, aView)
 	viewlet.View.GenerateFiles(baseRuleURL, ruleName, &s.Repository.Files, s.Repository.Substitutes.Merge())
 	if viewlet.TypeDefinition != nil {
@@ -412,15 +429,20 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 		}
 		resource.AppendTypeDefinition(viewlet.TypeDefinition)
 	}
+
 	return nil
 }
 
 // initReaderViewlet detect SQL dependent Table columns with implicit parameters type to produce sanitized SQL
 func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet, _ state.Documentation) error {
-	if viewlet.Connector == "" {
-		viewlet.Connector = s.DefaultConnector()
+
+	connector := viewlet.GetConnector()
+	if connector == "" {
+		connector = s.DefaultConnector()
 	}
-	db, err := s.Repository.LookupDb(viewlet.Connector)
+	viewlet.Connector = connector
+
+	db, err := s.Repository.LookupDb(connector)
 	if err != nil {
 		return err
 	}
@@ -500,6 +522,14 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 		resource.Rule.With = append([]string{k}, resource.Rule.With...)
 	}
 
+	if resource.repository.ConstURL != "" {
+		_, name := url.Split(resource.repository.ConstURL, file.Scheme)
+		if ext := spath.Ext(name); ext != "" {
+			name = name[:len(name)-len(ext)]
+		}
+		resource.Rule.With = append(resource.Rule.With, name)
+	}
+
 	result.With = resource.Rule.With
 	if err := s.handleCustomTypes(ctx, resource); err != nil {
 		return nil, err
@@ -544,7 +574,7 @@ func (s *Service) adjustModulePackage(resource *Resource) {
 	goMod, err := s.fs.DownloadWithURL(context.Background(), url.Join(modLocation, "go.mod"))
 	if err != nil {
 		parent, prefix = url.Split(modLocation, file.Scheme)
-		moduleURI = path.Join(prefix, moduleURI)
+		moduleURI = spath.Join(prefix, moduleURI)
 		goMod, _ = s.fs.DownloadWithURL(context.Background(), url.Join(parent, "go.mod"))
 	}
 
@@ -553,7 +583,7 @@ func (s *Service) adjustModulePackage(resource *Resource) {
 	}
 
 	modFile, _ := modfile.Parse("", goMod, nil)
-	modulePath := path.Join(modFile.Module.Mod.Path, moduleURI)
+	modulePath := spath.Join(modFile.Module.Mod.Path, moduleURI)
 	for _, aType := range resource.Resource.Types {
 		if aType.ModulePath != "" || aType.Package == "" {
 			continue
@@ -613,9 +643,12 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		parameter.Schema.EnsurePointer()
 		if aSignature.Input != nil {
 			parameter.LocationInput = aSignature.Input
+
 		}
+
+		imps := aSignature.GoImports()
 		for _, typeDef := range aSignature.Types {
-			if err = extension.Config.Types.Register(typeDef.Name, xreflect.WithPackage(typeDef.Package), xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
+			if err = extension.Config.Types.Register(typeDef.Name, xreflect.WithPackage(typeDef.Package), xreflect.WithTypeDefinition(typeDef.DataType), xreflect.WithGoImports(imps)); err != nil {
 				return err
 			}
 		}
@@ -631,11 +664,11 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 }
 
 func (s *Service) adjustModLocation(ctx context.Context, location string) string {
-	if ok, _ := s.fs.Exists(ctx, path.Join(location, "go.mod")); ok {
+	if ok, _ := s.fs.Exists(ctx, spath.Join(location, "go.mod")); ok {
 		return location
 	}
-	parent, _ := path.Split(location)
-	if ok, _ := s.fs.Exists(ctx, path.Join(parent, "go.mod")); ok {
+	parent, _ := spath.Split(location)
+	if ok, _ := s.fs.Exists(ctx, spath.Join(parent, "go.mod")); ok {
 		return parent
 	}
 	return location

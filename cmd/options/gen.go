@@ -11,11 +11,12 @@ import (
 type Generate struct {
 	Repository
 	Rule
-	Dest      string `short:"d" long:"dest" description:"dql file location" default:"dql"`
-	Operation string `short:"o" long:"op" description:"operation" choice:"post" choice:"patch" choice:"put" choice:"get"`
-	Kind      string `short:"k" long:"kind" description:"execution kind" choice:"dml" choice:"service"`
-	Lang      string `short:"l" long:"lang" description:"lang" choice:"velty" choice:"go"`
-	Translate bool   `short:"t" long:"translate" description:"translate generated DSQL"`
+	Dest           string `short:"d" long:"dest" description:"dql file location" default:"dql"`
+	Operation      string `short:"o" long:"op" description:"operation" choice:"post" choice:"patch" choice:"put" choice:"get"`
+	Kind           string `short:"k" long:"kind" description:"execution kind" choice:"dml" choice:"service"`
+	Lang           string `short:"l" long:"lang" description:"lang" choice:"velty" choice:"go"`
+	Translate      bool   `short:"t" long:"translate" description:"translate generated DSQL"`
+	NoComponentDef bool   `short:"Z" long:"noComDef" description:"do not include component definition" `
 }
 
 func (g *Generate) HttpMethod() string {
@@ -112,6 +113,9 @@ func (g *Generate) customType(result string, methodFragment string) string {
 		} else {
 			pkg = url.Join(g.ModulePrefix, pkg)
 		}
+	}
+	if index := strings.LastIndex(pkg, "/"); index != -1 {
+		pkg = pkg[index+1:]
 	}
 	return pkg + "/" + strings.ToLower(methodFragment) + "." + result
 }

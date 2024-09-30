@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
-	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -14,6 +13,7 @@ import (
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -74,7 +74,7 @@ func (s *Session) Populate(ctx context.Context) error {
 	if len(s.namespacedView.Views) == 0 {
 		return nil
 	}
-	err := httputils.NewErrors()
+	err := response.NewErrors()
 	wg := sync.WaitGroup{}
 	for i := range s.namespacedView.Views {
 		wg.Add(1)
@@ -88,7 +88,7 @@ func (s *Session) Populate(ctx context.Context) error {
 	return err
 }
 
-func (s *Session) setViewStateInBackground(ctx context.Context, aView *view.View, errors *httputils.Errors, wg *sync.WaitGroup) {
+func (s *Session) setViewStateInBackground(ctx context.Context, aView *view.View, errors *response.Errors, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if err := s.SetViewState(ctx, aView); err != nil {
 		errors.Append(err)
@@ -140,9 +140,9 @@ func (s *Session) viewNamespace(aView *view.View) *view.NamespaceView {
 
 func (s *Session) adjustErrorSource(err error, aView *view.View) {
 	switch actual := err.(type) {
-	case *httputils.Error:
+	case *response.Error:
 		actual.View = aView.Name
-	case *httputils.Errors:
+	case *response.Errors:
 		for _, item := range actual.Errors {
 			item.View = aView.Name
 		}
@@ -154,7 +154,10 @@ func (s *Session) viewLookupOptions(aView *view.View, parameters state.NamedPara
 	result = append(result, locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
 		return s.LookupValue(ctx, parameter, opts)
 	}))
-	result = append(result, locator.WithInputParameters(parameters))
+
+	if !opts.HasInputParameters() {
+		result = append(result, locator.WithInputParameters(parameters))
+	}
 	result = append(result, locator.WithReadInto(s.ReadInto))
 	viewState := s.state.Lookup(aView)
 	result = append(result, locator.WithState(viewState.Template))
@@ -169,6 +172,7 @@ func (s *Session) ViewOptions(aView *view.View, opts ...Option) *Options {
 	if aView.Template != nil {
 		parameters = aView.Template.Parameters.Index()
 	}
+
 	viewOptions.kindLocator = s.kindLocator.With(s.viewLookupOptions(aView, parameters, viewOptions)...)
 	viewOptions.AddCodec(codec.WithSelector(codec.Selector(selectors)))
 	viewOptions.AddCodec(codec.WithColumnsSource(aView.IndexedColumns()))
@@ -206,7 +210,7 @@ func (s *Session) ClearCache(parameters state.Parameters) {
 	}
 }
 func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aState *structology.State, opts *Options) error {
-	err := httputils.NewErrors()
+	err := response.NewErrors()
 	parametersGroup := parameters.Groups()
 	for _, group := range parametersGroup {
 		wg := sync.WaitGroup{}
@@ -226,7 +230,7 @@ func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aSt
 	return nil
 }
 
-func (s *Session) populateParameterInBackground(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options, errors *httputils.Errors, wg *sync.WaitGroup) {
+func (s *Session) populateParameterInBackground(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options, errors *response.Errors, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if err := s.populateParameter(ctx, parameter, aState, options); err != nil {
 		s.handleParameterError(parameter, err, errors)
@@ -439,7 +443,7 @@ func (s *Session) lookupFirstValue(ctx context.Context, parameters []*state.Para
 func (s *Session) LookupValue(ctx context.Context, parameter *state.Parameter, opts *Options) (value interface{}, has bool, err error) {
 
 	if value, has, err = s.lookupValue(ctx, parameter, opts); err != nil {
-		err = httputils.NewParamError("", parameter.Name, err, httputils.WithObject(value), httputils.WithStatusCode(parameter.ErrorStatusCode))
+		err = response.NewParameterError("", parameter.Name, err, response.WithObject(value), response.WithErrorStatusCode(parameter.ErrorStatusCode))
 	}
 	return value, has, err
 }
@@ -487,17 +491,15 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 	}
 
 	locators := opts.kindLocator
-	switch parameter.In.Kind {
-	case state.KindConst:
+	parameterLocator, err := locators.Lookup(parameter.In.Kind)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", parameter.Name, err)
+	}
+	if value, has, err = parameterLocator.Value(ctx, parameter.In.Name); err != nil {
+		return nil, false, err
+	}
+	if parameter.In.Kind == state.KindConst && !has { //if parameter is const and has no value, use default value
 		value, has = parameter.Value, true
-	default:
-		parameterLocator, err := locators.Lookup(parameter.In.Kind)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", parameter.Name, err)
-		}
-		if value, has, err = parameterLocator.Value(ctx, parameter.In.Name); err != nil {
-			return nil, false, err
-		}
 	}
 
 	if !has && len(opts.namedParameters) > 0 {
@@ -605,7 +607,7 @@ func (o *Options) apply(options []Option) {
 
 func New(aView *view.View, opts ...Option) *Session {
 	ret := &Session{
-		Options: Options{namespacedView: *view.IndexViews(aView)},
+		Options: Options{namespacedView: *view.IndexViews(aView, "")},
 		cache:   newCache(),
 		views:   newViews(),
 		Types:   *state.NewTypes(),
@@ -630,6 +632,9 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 	inputState := sType.WithValue(aState)
 	ptr := xunsafe.AsPointer(aState)
 	for _, parameter := range parameters {
+		if parameter.Scope != "" {
+			continue
+		}
 		selector, _ := inputState.Selector(parameter.Name)
 		if selector == nil {
 			continue
@@ -658,21 +663,21 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 	return nil
 }
 
-func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *httputils.Errors) {
+func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *response.Errors) {
 	if parameter.ErrorMessage != "" && err != nil {
 		msg := strings.ReplaceAll(parameter.ErrorMessage, "${error}", err.Error())
 		err = fmt.Errorf(msg)
 	}
-	if pErr, ok := err.(*httputils.Error); ok {
-		pErr.StatusCode = parameter.ErrorStatusCode
+	if pErr, ok := err.(*response.Error); ok {
+		pErr.Code = parameter.ErrorStatusCode
 		errors.Append(pErr)
 	} else {
-		errors.AddError("", parameter.Name, err, httputils.WithStatusCode(parameter.ErrorStatusCode))
+		errors.AddError("", parameter.Name, err, response.WithErrorStatusCode(parameter.ErrorStatusCode))
 	}
 	if parameter.ErrorStatusCode != 0 {
-		errors.SetStatus(parameter.ErrorStatusCode)
-	} else if asErrors, ok := err.(*httputils.Errors); ok && asErrors.ErrorStatusCode() != http.StatusBadRequest {
-		errors.SetStatus(asErrors.ErrorStatusCode())
+		errors.SetStatusCode(parameter.ErrorStatusCode)
+	} else if asErrors, ok := err.(*response.Errors); ok && asErrors.StatusCode() != http.StatusBadRequest {
+		errors.SetStatusCode(asErrors.StatusCode())
 	}
 
 }

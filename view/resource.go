@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -74,6 +75,7 @@ type (
 		fs       afs.Service
 		_embedFs embed.FS
 		_docs    *docs.Registry
+		_mux     sync.RWMutex
 	}
 
 	NamedResources map[string]*Resource
@@ -88,6 +90,14 @@ type (
 		Metrics         *Metrics
 	}
 )
+
+func (r *Resource) Lock() {
+	r._mux.Lock()
+}
+
+func (r *Resource) Unlock() {
+	r._mux.Unlock()
+}
 
 func (r *Resource) NamedParameters() state.NamedParameters {
 	return r._parameters
@@ -105,6 +115,17 @@ func (r *Resource) LookupType() xreflect.LookupType {
 	return r._types.Lookup
 }
 
+func (r *Resource) ExpandSubstitutes(text string) string {
+	r._mux.RLock()
+	defer r._mux.RUnlock()
+	return r.Substitutes.Replace(text)
+}
+func (r *Resource) ReverseSubstitutes(text string) string {
+	r._mux.RLock()
+	defer r._mux.RUnlock()
+	return r.Substitutes.ReverseReplace(text)
+}
+
 func (r *Resource) SetFs(fs afs.Service) {
 	r.fs = fs
 }
@@ -113,7 +134,7 @@ func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data = r.Substitutes.Replace(data)
+	data = r.ExpandSubstitutes(data)
 	return data, nil
 }
 
@@ -176,12 +197,15 @@ func (r *Resource) MergeFrom(resource *Resource, types *xreflect.Types) {
 }
 
 func (r *Resource) mergeSubstitutes(resource *Resource) {
+	r.Lock()
+	defer r.Unlock()
 	if len(resource.Substitutes) == 0 {
 		return
 	}
 	if len(r.Substitutes) == 0 {
-		r.Substitutes = resource.Substitutes
+		r.Substitutes = make(Substitutes)
 	}
+
 	for k, v := range resource.Substitutes {
 		r.Substitutes[k] = v
 	}
@@ -217,13 +241,21 @@ func (r *Resource) mergeParameters(resource *Resource) {
 	if len(resource.Parameters) == 0 {
 		return
 	}
-	views := r.paramByName()
+	namedParameters := r.Parameters.Index()
+	byKindNameParameters := r.Parameters.ByKindName()
 	for i, candidate := range resource.Parameters {
-		_, ok := views[candidate.Name]
+		if _, ok := byKindNameParameters[candidate.In.Name]; ok {
+			byKindNameParameters[candidate.In.Name].Value = candidate.Value
+			continue
+		}
+		_, ok := namedParameters[candidate.Name]
 		if !ok {
 			param := *resource.Parameters[i]
 			r.Parameters = append(r.Parameters, &param)
+		} else {
+			namedParameters[candidate.Name].Value = candidate.Value
 		}
+
 	}
 }
 
@@ -270,17 +302,6 @@ func (r *Resource) ConnectorByName() Connectors {
 
 func (r *Resource) MBusResourceByName() MessageBuses {
 	return MessageBusSlice(r.MessageBuses).Index()
-}
-
-func (r *Resource) paramByName() map[string]*state.Parameter {
-	index := map[string]*state.Parameter{}
-	if len(r.Parameters) == 0 {
-		return index
-	}
-	for i, param := range r.Parameters {
-		index[param.Name] = r.Parameters[i]
-	}
-	return index
 }
 
 func (r *Resource) typeByName() map[string]*TypeDefinition {
@@ -336,6 +357,12 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		}
 		if err := r.TypeRegistry().Register(definition.Name, xreflect.WithPackage(definition.Package), xreflect.WithModulePath(definition.ModulePath), xreflect.WithReflectType(definition.Type())); err != nil {
 			return err
+		}
+		if index := strings.LastIndex(definition.Package, "/"); index != -1 {
+			pkg := definition.Package[index+1:]
+			if err := r.TypeRegistry().Register(definition.Name, xreflect.WithPackage(pkg), xreflect.WithModulePath(definition.ModulePath), xreflect.WithReflectType(definition.Type())); err != nil {
+				return err
+			}
 		}
 		if definition.Alias != "" {
 			if err := r.TypeRegistry().Register(definition.Alias, xreflect.WithReflectType(definition.Type())); err != nil {

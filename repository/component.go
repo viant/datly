@@ -27,6 +27,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/docs"
 	xhandler "github.com/viant/xdatly/handler"
+	hstate "github.com/viant/xdatly/handler/state"
 	"github.com/viant/xreflect"
 	"net/http"
 	"reflect"
@@ -176,7 +177,15 @@ func (c *Component) initView(ctx context.Context, resource *view.Resource) error
 	if err := c.View.Init(ctx, resource); err != nil {
 		return err
 	}
-	c.NamespacedView = view.IndexViews(c.View)
+	holder := ""
+	if c.Contract.Output.Type.Parameters != nil {
+		if rootHolder := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); rootHolder != nil {
+			if !rootHolder.IsAnonymous() {
+				holder = rootHolder.Name
+			}
+		}
+	}
+	c.NamespacedView = view.IndexViews(c.View, holder)
 	c.indexedView = resource.Views.Index()
 	return nil
 }
@@ -209,7 +218,7 @@ func (c *Component) Exclusion(state *view.State) []*json.FilterEntry {
 	return result
 }
 
-func (c *Component) LocatorOptions(request *http.Request, form *state.Form, unmarshal shared.Unmarshal) []locator.Option {
+func (c *Component) LocatorOptions(request *http.Request, form *hstate.Form, unmarshal shared.Unmarshal) []locator.Option {
 
 	var result []locator.Option
 

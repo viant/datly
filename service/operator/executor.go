@@ -29,7 +29,7 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 		}
 		response, err := aComponent.Handler.Call(ctx, sessionHandler)
 		if err != nil {
-			return nil, err
+			return response, err
 		}
 		if err = anExecutor.Execute(ctx); err != nil {
 			return nil, err
@@ -50,7 +50,7 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 
 		status := contract.StatusSuccess(executorSession.TemplateState)
 		if err := aSession.SetState(ctx, aComponent.Output.Type.Parameters, responseState, aSession.Indirect(true,
-			locator.WithCustomOption(&status),
+			locator.WithCustom(&status),
 			locator.WithState(statelet.Template))); err != nil {
 			return nil, fmt.Errorf("failed to set response %w", err)
 		}

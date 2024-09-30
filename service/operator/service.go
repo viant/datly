@@ -14,7 +14,6 @@ import (
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
-	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -24,6 +23,7 @@ import (
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
+	hstate "github.com/viant/xdatly/handler/state"
 	"google.golang.org/api/googleapi"
 	"net/http"
 	"reflect"
@@ -38,11 +38,7 @@ func (s *Service) Operate(ctx context.Context, aSession *session.Session, aCompo
 	if err := s.updateBackgroundJob(ctx, aComponent); err != nil {
 		return nil, err
 	}
-	result, err := s.operate(ctx, aComponent, aSession)
-	if err != nil {
-		return nil, err
-	}
-	return result, err
+	return s.operate(ctx, aComponent, aSession)
 }
 
 // HandleError processes output with error
@@ -61,12 +57,15 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 		}
 
 	}
+	if !aComponent.Output.Type.Parameters.HasErrorParameter() {
+		return nil, err
+	}
 	output := aComponent.Output.Type.Type().NewState()
 	var locatorOptions []locator.Option
 	locatorOptions = append(locatorOptions,
 		locator.WithView(aComponent.View),
 		locator.WithTypes(aComponent.Types()...),
-		locator.WithCustomOption(&response.Status{Status: "error", Message: err.Error(), Errors: []string{err.Error()}}),
+		locator.WithCustom(&response.Status{Status: "error", Message: err.Error(), Errors: []string{err.Error()}}),
 		locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
 			return aSession.LookupValue(ctx, parameter, aSession.Indirect(true, locatorOptions...))
 		}))
@@ -105,12 +104,12 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 		ret, err := s.execute(ctx, aComponent, aSession)
 		return s.finalize(ctx, ret, err)
 	}
-	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported Type %v", aComponent.Service))
+	return nil, response.NewError(500, fmt.Sprintf("unsupported Type %v", aComponent.Service))
 }
 
 func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (interface{}, error) {
 	if err != nil {
-		return nil, err
+		return ret, err
 	}
 	if finalizer, ok := ret.(state.Finalizer); ok {
 		err = finalizer.Finalize(ctx)
@@ -119,6 +118,7 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (int
 }
 
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
+
 	ctx = codec.NewCriteriaBuilder(ctx, reader.New())
 	ctx = context.WithValue(ctx, view.ContextKey, aComponent.View)
 	ctx = aSession.Context(ctx, false)
@@ -127,8 +127,18 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 	if infoValue == nil {
 		info = exec.NewContext()
 		ctx = context.WithValue(ctx, exec.ContextKey, info)
+
 	} else {
 		info = infoValue.(*exec.Context)
+	}
+
+	if ctx.Value(hstate.DBProviderKey) == nil {
+		if aView := aComponent.View; aView != nil {
+			if res := aComponent.View.GetResource(); res != nil {
+				dbProvider := hstate.DBProvider(aView.DBProvider)
+				ctx = context.WithValue(ctx, hstate.DBProviderKey, dbProvider)
+			}
+		}
 	}
 
 	if aComponent.Input.IgnoreEmptyQueryParameters {
@@ -143,12 +153,17 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 	if inputType := aComponent.Input.Type; inputType.Type() != nil {
 		var inputState *structology.State
 		input := ctx.Value(xhandler.InputKey)
+		hasInputKey := input != nil
 		if input != nil {
-			inputState = inputType.Type().WithValue(input)
+			if reflect.TypeOf(input).AssignableTo(inputType.Type().Type()) {
+				inputState = inputType.Type().WithValue(input)
+			} else {
+				input = nil
+				inputState = inputType.Type().NewState()
+			}
 		} else {
 			inputState = inputType.Type().NewState()
 		}
-
 		locatorOptions := aComponent.LocatorOptions(nil, nil, nil)
 		options := aSession.ViewOptions(aComponent.View, session.WithLocatorOptions(locatorOptions...))
 		options = options.Indirect(true)
@@ -172,7 +187,10 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 					return nil, err
 				}
 			}
-			ctx = context.WithValue(ctx, xhandler.InputKey, anInput)
+			if !hasInputKey {
+				ctx = context.WithValue(ctx, xhandler.InputKey, anInput)
+			}
+			ctx = context.WithValue(ctx, reflect.TypeOf(anInput), anInput)
 		}
 	}
 	return ctx, nil

@@ -27,21 +27,39 @@ type (
 		bySourceURL map[string]int
 		notifier    *resource.Tracker
 		fs          afs.Service
+		MbusPaths   []*Path
 	}
 )
 
 func (s *Service) Init(ctx context.Context) (err error) {
+	err = s.initPaths(ctx)
+	s.initMbusPaths()
+	return err
+}
+
+func (s *Service) initPaths(ctx context.Context) error {
 	pathFile := url.Join(s.URL, PathFileName)
 	if exists, _ := s.fs.Exists(ctx, pathFile); !exists {
-		if err = s.createPathFiles(ctx); err != nil {
+		if err := s.createPathFiles(ctx); err != nil {
 			return err
 		}
 	} else {
-		if err = s.load(ctx); err != nil {
+		if err := s.load(ctx); err != nil {
 			return err
 		}
 	}
-	return err
+	return nil
+}
+
+func (s *Service) initMbusPaths() {
+	for _, item := range s.Container.Items {
+		for i, aPath := range item.Paths {
+			if handler := aPath.Handler; handler != nil && handler.MessageBus != "" {
+				item.Paths[i].Handler.With = item.With
+				s.MbusPaths = append(s.MbusPaths, item.Paths[i])
+			}
+		}
+	}
 }
 
 func (s *Service) GetPaths() Container {

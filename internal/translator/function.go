@@ -8,12 +8,23 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
 // TODO introduce function abstraction for datly -h list funciton, with validation signtaure description
-func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error) {
+func (n *Viewlets) applySettingFunctions(column *sqlparser.Column, namespace string) (bool, error) {
 	funcName, funcArgs := extractFunction(column)
+	var err error
+	switch funcName {
+	case "compress_above_size":
+		if len(funcArgs) == 1 {
+			if n.compressionSizeKb, err = strconv.Atoi(funcArgs[0]); err != nil {
+				return false, fmt.Errorf("invalid compression size: %v, %w", funcArgs[0], err)
+			}
+		}
+		return true, nil
+	}
 	if funcName == "" {
 		return false, nil
 	}
@@ -23,10 +34,16 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 		if strings.Contains(funcArgs[0], ".") {
 			column.Namespace, column.Name = namespacedColumn(funcArgs[0])
 		} else {
-			if n.Lookup(funcArgs[0]) == nil {
-				return false, nil
+			ns := funcArgs[0]
+			if len(n.keys) == 1 && namespace != ns {
+				column.Namespace = namespace
+				column.Name = ns
+			} else {
+				if n.Lookup(ns) == nil {
+					return false, nil
+				}
+				column.Namespace = ns
 			}
-			column.Namespace = funcArgs[0]
 		}
 	}
 
@@ -37,6 +54,13 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column) (bool, error)
 		if dest != nil {
 			switch strings.ToLower(funcName) {
 			case "tag":
+				if column.Name == column.Namespace && !strings.Contains(column.Expression, column.Name+"."+column.Name) {
+					if dest.View == nil {
+						dest.View = &View{}
+					}
+					dest.View.Tag = strings.Trim(column.Tag, "'")
+					return true, nil
+				}
 				columnConfig := dest.columnConfig(column.Name)
 				column.Tag = strings.Trim(strings.TrimSpace(column.Tag), "'")
 				columnConfig.Tag = &column.Tag

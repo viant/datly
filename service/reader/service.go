@@ -153,6 +153,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	relationGroup.Wait()
 	ptr, xslice := collector.Slice()
 	for i := 0; i < xslice.Len(ptr); i++ {
+
 		if actual, ok := xslice.ValuePointerAt(ptr, i).(OnRelationer); ok {
 			actual.OnRelation(ctx)
 			continue
@@ -375,7 +376,7 @@ func (s *Service) queryInBatches(ctx context.Context, session *Session, aView *v
 	wg := &sync.WaitGroup{}
 	db, err := aView.Db()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get db: %w", err)
 	}
 
 	var metaErr error
@@ -414,7 +415,6 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	if err != nil {
 		return nil, err
 	}
-
 	handler := func(row interface{}) error {
 		row, err = aView.UnwrapDatabaseType(ctx, row)
 		if err != nil {

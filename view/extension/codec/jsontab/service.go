@@ -93,6 +93,7 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 					value = strconv.FormatFloat(float64(*v), 'f', -1, 32)
 				}
 			default:
+
 				v := field.Value(sourcePtr)
 				switch field.Type {
 				case xreflect.TimePtrType:
@@ -104,10 +105,22 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 						value = ts.Format(timeLayout)
 					}
 				default:
+					if field.Type.Elem().Kind() == reflect.Struct {
+						//TODO: handle nested struct
+						continue
+					}
 					return nil, fmt.Errorf("jsontab: usnupported type: %T", v)
 				}
 			}
+		case reflect.Slice:
+			switch field.Type.Elem().Kind() {
+			case reflect.Ptr:
+				if field.Type.Elem().Elem().Kind() == reflect.Struct {
+					continue //TODO: handle nested struct
+				}
+			}
 		default:
+
 			v := field.Value(sourcePtr)
 			switch field.Type {
 			case xreflect.TimePtrType:
@@ -154,11 +167,18 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *tjson.Tabular
 			column.Type = "long"
 		case reflect.Float64, reflect.Float32:
 			column.Type = "double"
+		case reflect.Slice:
+			continue //TODO: handle slice
 		default:
 			switch field.Type {
 			case xreflect.TimeType, xreflect.TimePtrType:
 				column.Type = "timestamp"
+
 			}
+			if field.Type.Kind() == reflect.Ptr && field.Type.Elem().Kind() == reflect.Ptr {
+				continue //TODO: handle nested struct
+			}
+
 		}
 		result.Columns = append(result.Columns, column)
 	}

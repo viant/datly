@@ -11,14 +11,12 @@ import (
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/locator/component/dispatcher"
-	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
 	"github.com/viant/scy/auth/jwt/signer"
 	"net/http"
 	"path"
-	"strings"
 	"sync"
 	"time"
 )
@@ -166,13 +164,10 @@ func CommonURL(URLs ...string) (string, error) {
 				return base, nil
 			}
 		}
-
 		URLs[i] = aPath
 	}
-
 	for {
 		allExhausted := true
-
 		for i, URL := range URLs {
 			if len(URL) <= 1 {
 				continue
@@ -192,7 +187,6 @@ func CommonURL(URLs ...string) (string, error) {
 			break
 		}
 	}
-
 	return base, nil
 }
 
@@ -237,104 +231,6 @@ func (r *Service) PreCachables(ctx context.Context, method string, uri string) (
 	return aRouter.PreCacheables(ctx, method, uri)
 }
 
-func (r *Service) updateRouterAPIKeys(routes router.Routes) {
-	for _, route := range routes {
-		if route.APIKey == nil {
-			route.APIKey = r.Config.APIKeys.Match(route.URI)
-		}
-	}
-}
-
-func (r *Service) updateCacheConnectorRefIfNeeded(routerResource *router.Resource) error {
-	if r.Config.CacheConnectorPrefix == "" {
-		return nil
-	}
-	for _, aView := range routerResource.Resource.Views {
-		if err := r.updateCacheConnectorRef(routerResource, aView); err != nil {
-			return err
-		}
-	}
-
-	for _, route := range routerResource.Routes {
-		if err := r.updateCacheConnectorRef(routerResource, route.View); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *Service) updateCacheConnectorRef(routerResource *router.Resource, aView *view.View) error {
-	viewWarmup, ok := r.viewWarmup(aView)
-	if ok {
-		if viewWarmup.Connector != nil && viewWarmup.Connector.Ref != "" {
-			cacheConnectorName := r.Config.CacheConnectorPrefix + viewWarmup.Connector.Ref
-			if routerResource.Resource.ExistsConnector(cacheConnectorName) {
-				viewWarmup.Connector.Ref = cacheConnectorName
-			}
-		} else if viewWarmup.Connector == nil {
-			viewConnector, ok := r.viewConnector(routerResource, aView)
-			if ok {
-				refName := r.Config.CacheConnectorPrefix + viewConnector.Name
-				if ok && routerResource.Resource.ExistsConnector(refName) {
-					viewWarmup.Connector = &view.Connector{Reference: shared.Reference{Ref: refName}}
-				}
-			}
-		}
-	}
-
-	for _, relation := range aView.With {
-		if err := r.updateCacheConnectorRef(routerResource, &relation.Of.View); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *Service) viewWarmup(aView *view.View) (*view.Warmup, bool) {
-	if aView.Cache == nil {
-		return nil, false
-	}
-
-	return aView.Cache.Warmup, aView.Cache.Warmup != nil
-}
-
-func (r *Service) viewConnector(routerResource *router.Resource, aView *view.View) (*view.Connector, bool) {
-	if aView.Connector.Name != "" {
-		return aView.Connector, true
-	}
-
-	if aView.Connector.Ref != "" {
-		connector, err := routerResource.Resource.Connector(aView.Connector.Ref)
-		return connector, err == nil
-	}
-
-	return nil, false
-}
-
-func (r *Service) viewSQLChanged(aView *view.View, sqlFiles []string) bool {
-	if len(sqlFiles) == 0 {
-		return false
-	}
-
-	if aView.Template.SourceURL != "" {
-		for _, sqlFile := range sqlFiles {
-			if strings.HasSuffix(sqlFile, aView.Template.SourceURL) {
-				return true
-			}
-		}
-	}
-
-	for _, relation := range aView.With {
-		if r.viewSQLChanged(&relation.Of.View, sqlFiles) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (r *Service) WrapResponseIfNeeded(response http.ResponseWriter) http.ResponseWriter {
 	if !r.ShouldRevealMetrics() {
 		return response
@@ -351,6 +247,5 @@ func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWrite
 	if !r.ShouldRevealMetrics() {
 		return
 	}
-
 	writer.Header().Set(httputils.DatlyServiceInitHeader, time.Since(start).String())
 }

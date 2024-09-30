@@ -19,6 +19,8 @@ type Parameter struct {
 	DataType  string `tag:"dataType,omitempty"` //parameter input type
 	With      string `tag:"with,omitempty"`     //optional auxiliary type name holding parameters
 	Required  bool   `tag:"required,omitempty"`
+	Cacheable *bool  `tag:"cacheable,omitempty"`
+	Async     bool   `tag:"async,omitempty"`
 }
 
 func (t *Tag) updatedParameter(key string, value string) (err error) {
@@ -26,12 +28,19 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 	switch strings.ToLower(key) {
 	case "name":
 		tag.Name = strings.TrimSpace(value)
+	case "value":
+		tag.Name = strings.Trim(value, "' ")
 	case "kind":
 		tag.Kind = strings.TrimSpace(value)
 	case "in":
 		tag.In = strings.Trim(strings.TrimSpace(value), "{}")
 	case "when":
 		tag.When = strings.TrimSpace(value)
+	case "cacheable":
+		value := strings.TrimSpace(value) == "" || strings.ToLower(strings.TrimSpace(value)) == "true"
+		tag.Cacheable = &value
+	case "async":
+		tag.Async = true
 	case "scope":
 		tag.Scope = strings.TrimSpace(value)
 	case "errorcode":
@@ -56,6 +65,14 @@ func (p *Parameter) Tag() *tags.Tag {
 	appendNonEmpty(builder, "kind", p.Kind)
 	appendNonEmpty(builder, "in", p.In)
 	appendNonEmpty(builder, "when", p.When)
+	if p.Cacheable != nil {
+		value := "false"
+		if *p.Cacheable {
+			value = "true"
+		}
+		appendNonEmpty(builder, "cachable", value)
+	}
+
 	appendNonEmpty(builder, "with", p.With)
 	appendNonEmpty(builder, "scope", p.Scope)
 	appendNonEmpty(builder, "dataType", p.DataType)

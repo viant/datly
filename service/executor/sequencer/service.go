@@ -3,6 +3,7 @@ package sequencer
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/viant/sqlx/io/insert"
 	"github.com/viant/sqlx/metadata/info/dialect"
 	"strings"
@@ -14,6 +15,14 @@ type Service struct {
 }
 
 func (s *Service) Next(table string, any interface{}, selector string) error {
+	err := s.next(table, any, selector)
+	if err != nil {
+		return fmt.Errorf("failed to allocate %v sequence due to: %w", table, err)
+	}
+	return nil
+}
+
+func (s *Service) next(table string, any interface{}, selector string) error {
 	parts := strings.Split(selector, "/")
 	aWalker, err := NewWalker(any, parts)
 	if err != nil {

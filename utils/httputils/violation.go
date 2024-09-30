@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/govalidator"
 	sqlxvalidator "github.com/viant/sqlx/io/validator"
+	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xdatly/handler/validator"
 )
 
@@ -39,7 +40,7 @@ func (v Violations) MergeSqlViolation(violations []*sqlxvalidator.Violation) val
 	return ret
 }
 
-func (v Violations) MergeErrors(errors []*Error) validator.Violations {
+func (v Violations) MergeErrors(errors []*response.Error) validator.Violations {
 	if len(errors) == 0 {
 		return validator.Violations{}
 	}

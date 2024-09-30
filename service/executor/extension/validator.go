@@ -113,7 +113,6 @@ func (v *Validator) validateWithSqlx(ctx context.Context, any interface{}, valid
 		ret, err := sqlxValidator.Validate(ctx, db, any, sqlxOptions...)
 		if ret != nil && len(ret.Violations) > 0 {
 			validation.Violations = httputils.Violations(validation.Violations).MergeSqlViolation(ret.Violations)
-			validation.Failed = true
 		}
 		return err
 	}

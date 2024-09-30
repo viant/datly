@@ -72,7 +72,7 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, aSession *sessio
 		locator.WithMetrics(ret.Metrics),
 		locator.WithView(aView),
 		locator.WithState(statelet.Template),
-		locator.WithCustomOption(ret.Reader, ret.Status))
+		locator.WithCustom(ret.Reader, ret.Status))
 
 	var options = aSession.Indirect(true, locatorOptions...)
 

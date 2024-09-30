@@ -20,13 +20,6 @@ func (r *Resourcelet) AppendParameter(parameter *state.Parameter) {
 	r.Parameters.Append(parameter)
 }
 
-func (r *Resourcelet) ExpandSubstitutes(text string) string {
-	return r.Substitutes.Replace(text)
-}
-func (r *Resourcelet) ReverseSubstitutes(text string) string {
-	return r.Substitutes.ReverseReplace(text)
-}
-
 func (r *Resourcelet) lookupParameter(name string) (*state.Parameter, error) {
 	var viewParameter *state.Parameter
 	if r.View != nil && r.View.Template != nil && len(r.View.Template.Parameters) > 0 {

@@ -12,6 +12,7 @@ import (
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
+	"reflect"
 
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/xreflect"
@@ -139,6 +140,17 @@ func inferColumnWithSQL(ctx context.Context, db *sql.DB, SQL string, SQLArgs []i
 					Name: item.Name(),
 					Type: item.DatabaseTypeName(),
 				}
+				if sinkColumn.Type == "" {
+					if itemType := item.ScanType(); itemType != nil {
+						if itemType.Kind() == reflect.Pointer {
+							itemType = itemType.Elem()
+						}
+						sinkColumn.Type = itemType.Name()
+					}
+					if sinkColumn.Type == "" {
+						return nil, fmt.Errorf("unable discover column %v type", item.Name())
+					}
+				}
 				if match, ok := byName[sink.ColumnName.Key(&sinkColumn)]; ok {
 					sinkColumn = match
 					tableColumns = append(tableColumns, sinkColumn)
@@ -206,9 +218,12 @@ func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Colu
 	if err != nil {
 		return nil, err
 	}
-	columns, err := config.Columns(ctx, session, db, table)
+	columns, vErr := config.Columns(ctx, session, db, table)
 	if len(columns) == 0 && table != "" {
 		columns, err = inferColumnWithSQL(ctx, db, "SELECT * FROM "+table+" WHERE 1 = 0", []interface{}{}, map[string]sink.Column{})
+	}
+	if len(columns) == 0 {
+		return nil, vErr
 	}
 	return columns, err
 }

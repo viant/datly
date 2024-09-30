@@ -54,9 +54,8 @@ func (s *StructQLCodec) evaluateQuery() (*structql.Query, error) {
 	}
 	query, err := structql.NewQuery(s.query, s.ownerType, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to evaludate structql %v codec: %w", s.query, err)
 	}
-
 	s._query = query
 	return query, nil
 }

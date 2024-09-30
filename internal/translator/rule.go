@@ -46,18 +46,20 @@ type (
 		RequestBody  *BodyConfig         `json:",omitempty"`
 		ResponseBody *ResponseBodyConfig `json:",omitempty"`
 
-		TypeSrc     *parser.TypeImport         `json:",omitempty"`
-		Package     string                     `json:",omitempty"`
-		Router      *RouterConfig              `json:",omitempty" yaml:",omitempty"`
-		DataFormat  string                     `json:",omitempty"`
-		TabularJSON *content.TabularJSONConfig `json:",omitempty"`
-		XML         *content.XMLConfig         `json:",omitempty"`
-		Type        string                     `json:",omitempty"`
-		HandlerArgs []string                   `json:",omitempty"`
-		InputType   string                     `json:",omitempty"`
-		OutputType  string                     `json:",omitempty"`
-		With        []string                   `json:",omitempty"`
-		Include     []string                   `json:",omitempty"`
+		TypeSrc           *parser.TypeImport         `json:",omitempty"`
+		Package           string                     `json:",omitempty"`
+		Router            *RouterConfig              `json:",omitempty" yaml:",omitempty"`
+		DataFormat        string                     `json:",omitempty"`
+		TabularJSON       *content.TabularJSONConfig `json:",omitempty"`
+		XML               *content.XMLConfig         `json:",omitempty"`
+		Type              string                     `json:",omitempty"`
+		HandlerArgs       []string                   `json:",omitempty"`
+		InputType         string                     `json:",omitempty"`
+		OutputType        string                     `json:",omitempty"`
+		MessageBus        string                     `json:",omitempty"`
+		CompressAboveSize int                        `json:",omitempty"`
+		With              []string                   `json:",omitempty"`
+		Include           []string                   `json:",omitempty"`
 		indexNamespaces
 		IsGeneratation    bool
 		XMLUnmarshalType  string `json:",omitempty"`
@@ -133,19 +135,25 @@ func (r *Rule) applyGeneratorOutputSetting() {
 func (r *Rule) DSQLSetting() interface{} {
 
 	return struct {
-		URI          string
-		Method       string
-		ResponseBody *ResponseBodyConfig `json:",omitempty"`
-		Type         string              `json:",omitempty"`
-		InputType    string              `json:",omitempty"`
-		OutputType   string              `json:",omitempty"`
+		URI               string
+		Method            string
+		ResponseBody      *ResponseBodyConfig `json:",omitempty"`
+		Type              string              `json:",omitempty"`
+		InputType         string              `json:",omitempty"`
+		OutputType        string              `json:",omitempty"`
+		MessageBus        string              `json:",omitempty"`
+		CompressAboveSize int                 `json:",omitempty"`
+		HandlerArgs       []string            `json:",omitempty"`
 	}{
-		URI:          r.URI,
-		Method:       r.Method,
-		ResponseBody: r.ResponseBody,
-		Type:         r.Type,
-		InputType:    r.InputType,
-		OutputType:   r.OutputType,
+		URI:               r.URI,
+		Method:            r.Method,
+		ResponseBody:      r.ResponseBody,
+		Type:              r.Type,
+		InputType:         r.InputType,
+		OutputType:        r.OutputType,
+		CompressAboveSize: r.CompressAboveSize,
+		MessageBus:        r.MessageBus,
+		HandlerArgs:       r.HandlerArgs,
 	}
 }
 
@@ -212,7 +220,7 @@ func (r *Resource) loadData(ctx context.Context, fs afs.Service, URL string, des
 	if err != nil {
 		return err
 	}
-	data = []byte(r.Resource.Substitutes.Replace(string(data)))
+	data = []byte(r.Resource.ExpandSubstitutes(string(data)))
 	return shared.UnmarshalWithExt(data, dest, path.Ext(dataURL))
 }
 
@@ -315,29 +323,37 @@ func (r *Rule) RootView() *View {
 	return r.RootViewlet().View
 }
 
-func (r *Rule) updateExclude(n *Viewlet) {
-	if len(n.Exclude) == 0 {
-		return
-	}
+func (r *Rule) updateExclude(n *Viewlet) error {
 	prefix := ""
-	r.updateViewExclude(n, prefix)
+	return r.updateViewExclude(n, prefix)
 }
 
-func (r *Rule) updateViewExclude(n *Viewlet, prefix string) {
+func (r *Rule) updateViewExclude(n *Viewlet, prefix string) error {
 	if n.Holder != "" {
 		prefix += n.Holder + "."
 	}
 	for _, exclude := range n.View.Exclude { //Todo convert to field name
 		field := n.Spec.Type.ByColumn(exclude)
+
+		if exclude == "." && prefix != "" {
+			r.Route.Output.Exclude = append(r.Route.Output.Exclude, prefix[:len(prefix)-1])
+			continue
+		}
+		if field == nil {
+			return fmt.Errorf("unable locate column %v to exclude", exclude)
+		}
 		r.Route.Output.Exclude = append(r.Route.Output.Exclude, prefix+field.Name)
 	}
 
 	for _, rel := range n.View.With {
 		viewName := strings.Replace(rel.Of.View.Name, "#", "", 1)
 		relViewlet := r.Viewlets.Lookup(viewName)
-		r.updateViewExclude(relViewlet, prefix)
+		if err := r.updateViewExclude(relViewlet, prefix); err != nil {
+			return err
+		}
 	}
 	n.View.Exclude = nil //TODO do we have to remove it
+	return nil
 }
 
 func (r *Rule) applyRootViewRouteShorthands() {
@@ -362,9 +378,15 @@ func (r *Rule) applyShortHands() {
 			Type:       r.Type,
 			InputType:  r.InputType,
 			OutputType: r.OutputType,
+			MessageBus: r.MessageBus,
 			Arguments:  r.HandlerArgs,
 		}
+	}
 
+	if r.CompressAboveSize > 0 {
+		r.Compression = &dpath.Compression{
+			MinSizeKb: r.CompressAboveSize,
+		}
 	}
 	if r.Route.Output.Field != "" {
 		r.Route.Output.Style = contract.ComprehensiveStyle

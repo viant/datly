@@ -12,6 +12,7 @@ import (
 	_ "github.com/viant/cloudless/async/mbus/aws"
 	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
+	_ "github.com/viant/sqlx/metadata/product/aerospike"
 	_ "github.com/viant/sqlx/metadata/product/bigquery"
 	_ "github.com/viant/sqlx/metadata/product/mysql"
 	_ "github.com/viant/sqlx/metadata/product/pg"

@@ -92,9 +92,9 @@ func (n *NamespacedView) indexView(aView *View, aPath string) {
 }
 
 // IndexViews indexes views
-func IndexViews(aView *View) *NamespacedView {
+func IndexViews(aView *View, holder string) *NamespacedView {
 	result := &NamespacedView{byNamespace: map[string]int{}, byName: map[string]int{}}
-	result.indexView(aView, "")
+	result.indexView(aView, holder)
 	return result
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/handler/response"
+	hstate "github.com/viant/xdatly/handler/state"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -18,26 +19,29 @@ import (
 // Options represents locator options
 type (
 	Options struct {
-		request          *http.Request
-		fromError        error
-		form             *state.Form
-		Parent           *KindLocator
-		URIPattern       string
-		BodyType         reflect.Type
-		Unmarshal        Unmarshal
-		IOConfig         *config.IOConfig
-		Custom           []interface{}
-		ParameterLookup  ParameterLookup
-		ReadInto         ReadInto
-		InputParameters  state.NamedParameters
-		OutputParameters state.NamedParameters
-		Views            view.NamedViews
-		Metrics          response.Metrics
-		State            *structology.State
-		Dispatcher       contract.Dispatcher
-		View             *view.View
-		Resource         *view.Resource
-		Types            []*state.Type
+		request           *http.Request
+		fromError         error
+		form              *hstate.Form
+		Parent            *KindLocator
+		URIPattern        string
+		BodyType          reflect.Type
+		Unmarshal         Unmarshal
+		IOConfig          *config.IOConfig
+		Custom            []interface{}
+		ParameterLookup   ParameterLookup
+		ReadInto          ReadInto
+		InputParameters   state.NamedParameters
+		OutputParameters  state.NamedParameters
+		Views             view.NamedViews
+		Metrics           response.Metrics
+		State             *structology.State
+		Dispatcher        contract.Dispatcher
+		View              *view.View
+		Resource          *view.Resource
+		Types             []*state.Type
+		PathParameters    map[string]string
+		Constants         map[string]interface{}
+		resourceConstants map[string]interface{}
 	}
 
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
@@ -62,7 +66,7 @@ func (o *Options) GetRequest() (*http.Request, error) {
 	return shared.CloneHTTPRequest(o.request)
 }
 
-func (o *Options) GetForm() *state.Form {
+func (o *Options) GetForm() *hstate.Form {
 	return o.form
 }
 
@@ -107,8 +111,8 @@ func ensureValueRequest(request *http.Request) {
 	}
 }
 
-// WithCustomOption creates custom options
-func WithCustomOption(options ...interface{}) Option {
+// WithCustom creates custom options
+func WithCustom(options ...interface{}) Option {
 	return func(o *Options) {
 		o.Custom = options
 	}
@@ -158,12 +162,26 @@ func WithIOConfig(config *config.IOConfig) Option {
 // WithInputParameters creates with parameter options
 func WithInputParameters(parameters state.NamedParameters) Option {
 	return func(o *Options) {
+		if len(o.resourceConstants) == 0 {
+			o.resourceConstants = make(map[string]interface{})
+		}
 		if len(o.InputParameters) == 0 {
 			o.InputParameters = make(state.NamedParameters)
 		}
 		for k, v := range parameters {
 			o.InputParameters[k] = v
+			if v.In.Kind == state.KindConst {
+				o.resourceConstants[v.In.Name] = v.Value
+			}
 		}
+
+	}
+}
+
+// WithPathParameters create with path parameters options
+func WithPathParameters(parameters map[string]string) Option {
+	return func(o *Options) {
+		o.PathParameters = parameters
 	}
 }
 
@@ -200,15 +218,15 @@ func WithDispatcher(dispatcher contract.Dispatcher) Option {
 	}
 }
 
-// WithDispatched returns options to set dispatcher
+// WithView returns options to set view
 func WithView(aView *view.View) Option {
 	return func(o *Options) {
 		o.View = aView
 	}
 }
 
-// WithMetrics return metrics option
-func WithForm(form *state.Form) Option {
+// WithForm return metrics option
+func WithForm(form *hstate.Form) Option {
 	return func(o *Options) {
 		if o.form == nil {
 			o.form = form
@@ -225,12 +243,21 @@ func WithMetrics(metrics response.Metrics) Option {
 	}
 }
 
+// WithResource return resource option
 func WithResource(resource *view.Resource) Option {
 	return func(o *Options) {
 		o.Resource = resource
 	}
 }
 
+// WithConstants return Constants option
+func WithConstants(constants map[string]interface{}) Option {
+	return func(o *Options) {
+		o.Constants = constants
+	}
+}
+
+// WithTypes return types option
 func WithTypes(types ...*state.Type) Option {
 	return func(o *Options) {
 		o.Types = types

@@ -1,6 +1,7 @@
 package expand
 
 import (
+	"errors"
 	"fmt"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/state/predicate"
@@ -224,6 +225,9 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 		}
 	}
 	if err := e.executor.Exec(state.State); err != nil {
+		if unwrapped := errors.Unwrap(err); unwrapped != nil {
+			err = unwrapped
+		}
 		return state, err
 	}
 

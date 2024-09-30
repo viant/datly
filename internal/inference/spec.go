@@ -151,19 +151,38 @@ func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *sq
 }
 
 // AddRelation adds relations
-func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinality state.Cardinality) {
+func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinality state.Cardinality) error {
 	if IsToOne(join) {
 		cardinality = state.One
 	}
 	relColumn, refColumn := ExtractRelationColumns(join)
+	parentField := s.Type.ByColumn(relColumn)
+	if parentField == nil {
+		var available []string
+		for _, item := range s.Type.columnFields {
+			available = append(available, item.Column.Name)
+		}
+		return fmt.Errorf("failed to match rel field for %v, available: %v %v", relColumn, s.Type.Name, available)
+	}
+
+	keyField := spec.Type.ByColumn(refColumn)
+	if keyField == nil {
+		var available []string
+		for _, item := range spec.Type.columnFields {
+			available = append(available, item.Column.Name)
+		}
+		return fmt.Errorf("failed to ref field for %v, available: %v", refColumn, available)
+	}
+
 	rel := &Relation{Spec: spec,
-		KeyField:    spec.Type.ByColumn(refColumn),
-		ParentField: s.Type.ByColumn(relColumn),
+		KeyField:    keyField,
+		ParentField: parentField,
 		Name:        name,
 		Join:        join,
 		Cardinality: cardinality}
 	s.Relations = append(s.Relations, rel)
 	s.Type.AddRelation(name, spec, rel)
+	return nil
 }
 
 // Selector returns current sepcifiction selector (path from root)

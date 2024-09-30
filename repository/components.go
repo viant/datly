@@ -66,7 +66,9 @@ func (c *Components) Init(ctx context.Context) error {
 		return err
 	}
 
+	c.Resource.Lock()
 	substitutes := c.Resource.Substitutes
+	c.Resource.Unlock()
 
 	for _, component := range c.Components {
 		if err := component.Init(ctx, c.Resource); err != nil {

@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"path"
 	"reflect"
+	"strings"
 )
 
 func (r *Resource) loadState(ctx context.Context, URL string) error {
@@ -20,15 +21,26 @@ func (r *Resource) loadState(ctx context.Context, URL string) error {
 	var typeDefs view.TypeDefinitions
 	var registered = map[string]map[string]bool{}
 
+	filePackage := ""
+	if index := strings.Index(URL, r.ModuleLocation); index != -1 && r.ModuleLocation != "" {
+		filePackage = URL[index+len(r.ModuleLocation)+1:]
+		if index = strings.LastIndex(filePackage, "/"); index != -1 {
+			filePackage = filePackage[:index]
+		}
+	}
+
 	dirTypes, err := xreflect.ParseTypes(location,
 		xreflect.WithParserMode(parser.ParseComments),
 		xreflect.WithRegistry(typeRegistry),
 		xreflect.WithModule(r.Module, r.rule.ModuleLocation),
-		xreflect.WithOnField(func(typeName string, field *ast.Field) error {
+		xreflect.WithOnField(func(typeName string, field *ast.Field, imports xreflect.GoImports) error {
 			return nil
 		}), xreflect.WithOnLookup(func(packagePath, pkg, typeName string, rType reflect.Type) {
 			if pkg == "" {
 				return
+			}
+			if strings.HasSuffix(filePackage, "/"+pkg) {
+				pkg = filePackage
 			}
 			if _, ok := registered[pkg]; !ok {
 				registered[pkg] = map[string]bool{}
@@ -45,7 +57,7 @@ func (r *Resource) loadState(ctx context.Context, URL string) error {
 	inputTypeName := dirTypes.MatchTypeNamesInPath(aPath, "@input")
 	outputTypeName := dirTypes.MatchTypeNamesInPath(aPath, "@output")
 	loadType := func(typeName string) (reflect.Type, error) {
-		return r.loadType(dirTypes, typeName, aPath, registered, &typeDefs)
+		return r.loadType(dirTypes, filePackage, typeName, aPath, registered, &typeDefs)
 	}
 	if inputTypeName == "" && outputTypeName == "" {
 		return fmt.Errorf("failed to locate contract types in %s, \n\tforgot struct{...}//@input or //@output comment ?", aPath)

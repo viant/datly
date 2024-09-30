@@ -33,7 +33,6 @@ type (
 		Connector   string
 		InOutput    bool
 		Of          string
-		IsAsync     bool
 	}
 
 	ModificationSetting struct {
@@ -80,6 +79,14 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 
 	if p.Scope != "" {
 		builder.WriteString(".Scope('" + p.Scope + "')")
+	}
+	if p.Value != "" {
+		switch actual := p.Value.(type) {
+		case string:
+			builder.WriteString(".Value('" + actual + "')")
+		case []string:
+
+		}
 	}
 	if p.Output != nil {
 		builder.WriteString(".WithCodec('" + p.Output.Name + "'")
@@ -131,6 +138,7 @@ func (p *Parameter) FieldDeclaration(embedRoot string, embed map[string]string, 
 	}
 
 	URI := text.DetectCaseFormat(p.Name).Format(p.Name, text.CaseFormatLowerUnderscore)
+	URI = strings.ReplaceAll(URI, ".", "")
 	key := path.Join(embedRoot, URI) + ".sql"
 
 	if p.SQL != "" {
@@ -217,7 +225,7 @@ func (p *Parameter) SyncObject() {
 }
 
 // TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
-func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS) (*Parameter, error) {
+func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS, imps xreflect.GoImports) (*Parameter, error) {
 	//SQL := extractSQL(field)
 	if field.Tag == nil {
 		return nil, nil
@@ -249,7 +257,9 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	}
 	param.When = pTag.When
 	param.Scope = pTag.Scope
+	param.Cacheable = pTag.Cacheable
 	param.With = pTag.With
+	param.Async = pTag.Async
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
 	if pTag.Required {
 		value := pTag.Required
@@ -268,6 +278,7 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	if err != nil {
 		return nil, fmt.Errorf("failed to create param: %v due to %w", param.Name, err)
 	}
+
 	if strings.Contains(fieldType, "struct{") {
 		typeName := ""
 		if field.Tag != nil {
@@ -275,13 +286,17 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 				typeName = field.Names[0].Name
 			}
 		}
-		rType, err := types.Lookup(typeName, xreflect.WithTypeDefinition(fieldType))
+		aType := xreflect.NewType(typeName, xreflect.WithTypeDefinition(fieldType), xreflect.WithGoImports(imps))
+		rType, err := types.LookupType(aType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create param: %v due reflect.Type %w", param.Name, err)
 		}
-		param.Schema = state.NewSchema(rType)
+		param.Schema = state.NewSchema(rType, state.WithPackagePath(aType.PackagePath))
 	} else {
-		param.Schema = &state.Schema{DataType: fieldType}
+
+		aType := xreflect.NewType(fieldType, xreflect.WithGoImports(imps))
+		_, _ = types.LookupType(aType) //to populate package path
+		param.Schema = &state.Schema{DataType: fieldType, PackagePath: aType.PackagePath}
 	}
 
 	param.Schema.Cardinality = cardinality

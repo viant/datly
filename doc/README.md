@@ -125,8 +125,8 @@ This indicates the source of the parameter. The following kinds are supported:
 
 ##### Parameter Options
 
-- Output(): Define output scope.
-- Async(): Define asynchronous operation.
+- Output(): Define output parameter.
+- Async(): Define asynchronous  parameters such as  UserId, UserEmail, JobMatchKey.
 - WithTag('tag'): Define a parameter tag.
 - WithCodec('name' [,args...]): Define input transformer codec.
 - WithPredicate('name', group [,args...]).
@@ -136,6 +136,11 @@ This indicates the source of the parameter. The following kinds are supported:
 - Optional(): Set the optional flag.
 - Of('parent'): Define composite parent holder/owner.
 - WithStatusCode(code): Define error status code.
+- Cacheable(): Set cacheable flag (true by default).
+- QuerySelector(viewName): Defines source a view parameter selector such as Fields, Criteria, OrderBy, Limit, Offset.
+- Scope('scope name'): Define parameter scope. Control state population by scope. Used by handler Stater().Into() 
+- When: Conditional parameter declaration.
+
 
 
 #### DQL configuration function

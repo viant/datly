@@ -47,7 +47,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		}
 	}
 
-	if err = resource.OutputState.EnsureReflectTypes(resource.rule.ModuleLocation); err != nil {
+	if err = resource.OutputState.EnsureReflectTypes(resource.rule.ModuleLocation, resource.rule.Package(), resource.typeRegistry); err != nil {
 		return err
 	}
 
@@ -57,7 +57,9 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
-	contract.EnsureParameterTypes(outputParameters, nil, resource.Rule.Doc.Parameters, resource.Rule.Doc.Filter)
+	if err := contract.EnsureParameterTypes(outputParameters, nil, resource.Rule.Doc.Parameters, resource.Rule.Doc.Filter); err != nil {
+		return err
+	}
 	for _, parameter := range outputParameters {
 		if schema := parameter.Schema; schema != nil && schema.Name == "$ViewType" {
 			schema.DataType = strings.Replace(schema.DataType, "interface{}", "*"+dataParameter.Schema.Name, 1)
@@ -302,7 +304,7 @@ func (s *Service) adjustCodecType(parameter *state.Parameter, types *xreflect.Ty
 		if parameter.Schema.Cardinality == state.Many {
 			output.Schema.Cardinality = parameter.Schema.Cardinality
 		}
-	case codec.KeyFirebaseAuth:
+	case codec.KeyFirebaseAuth, codec.KeyCustomAuth:
 		if len(output.Args) < 2 {
 			return fmt.Errorf("%v invalid arguments count", output.Name)
 		}
@@ -423,11 +425,11 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 	}
 
 	var err error
-	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
+	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation, resource.typeRegistry); err != nil {
 		return nil, fmt.Errorf("failed to rewrite transfer type: %v %w", parameter.Name, err)
 	}
 	adjustedType, err := adjustedDest.Parameters().ReflectType(resource.rule.ModuleLocation, types.Lookup)
-	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
+	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation, resource.typeRegistry); err != nil {
 		return nil, fmt.Errorf("failed to adjust transfer type: %v %w", parameter.Name, err)
 	}
 	return adjustedType, nil

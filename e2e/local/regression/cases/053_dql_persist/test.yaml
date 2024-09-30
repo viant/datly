@@ -34,5 +34,5 @@ pipeline:
           Expect:
             Code: 419
             JSONBody:
-              Message: 'OBJECTS with ID does not exits: 3333333'
-              Status: error
+              message: 'OBJECTS with ID does not exits: 3333333'
+              status: error

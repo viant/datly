@@ -25,8 +25,9 @@ var arithmeticOperator = map[string]bool{
 
 type (
 	Viewlet struct {
-		Name              string
-		Holder            string
+		Name   string
+		Holder string
+
 		Connector         string
 		SQL               string
 		SanitizedSQL      string
@@ -70,6 +71,18 @@ func (o *OutputSettings) ViewCardinality() state.Cardinality {
 		o.Cardinality = state.Many
 	}
 	return o.Cardinality
+}
+
+func (v *Viewlet) GetConnector() string {
+	if v.View != nil {
+		if v.View.View.Connector != nil {
+			return v.View.View.Connector.Ref
+		}
+		if v.View.Connector != "" {
+			return v.View.Connector
+		}
+	}
+	return v.Connector
 }
 
 func (v *Viewlet) IsMetaView() bool {

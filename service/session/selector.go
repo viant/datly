@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/service/session/criteria"
-	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler/response"
 	"strconv"
 	"strings"
 )
@@ -19,22 +19,22 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 	}
 
 	if err = s.populateFieldQuerySelector(ctx, ns, opts); err != nil {
-		return httputils.NewParamError(ns.View.Name, selectorParameters.FieldsParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameters.FieldsParameter.Name, err)
 	}
 	if err = s.populateLimitQuerySelector(ctx, ns, opts); err != nil {
-		return httputils.NewParamError(ns.View.Name, selectorParameters.LimitParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameters.LimitParameter.Name, err)
 	}
 	if err = s.populateOffsetQuerySelector(ctx, ns, opts); err != nil {
-		return httputils.NewParamError(ns.View.Name, selectorParameters.OffsetParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameters.OffsetParameter.Name, err)
 	}
 	if err = s.populateOrderByQuerySelector(ctx, ns, opts); err != nil {
-		return httputils.NewParamError(ns.View.Name, selectorParameters.OrderByParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameters.OrderByParameter.Name, err)
 	}
 	if err = s.populateCriteriaQuerySelector(ctx, ns, opts); err != nil {
-		return httputils.NewParamError(ns.View.Name, selectorParameters.CriteriaParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameters.CriteriaParameter.Name, err)
 	}
 	if err = s.populatePageQuerySelector(ctx, ns, opts); err != nil {
-		return httputils.NewParamError(ns.View.Name, selectorParameters.PageParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameters.PageParameter.Name, err)
 	}
 	selector := s.state.Lookup(ns.View)
 	if selector.Limit == 0 && selector.Offset != 0 {
@@ -49,10 +49,10 @@ func (s *Session) setQuerySettings(ctx context.Context, ns *view.NamespaceView, 
 		return nil
 	}
 	if err = s.populateSyncFlag(ctx, ns, opts); err != nil {
-		return httputils.NewParamError(ns.View.Name, selectorParameters.SyncFlagParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameters.SyncFlagParameter.Name, err)
 	}
 	if err = s.populateContentFormat(ctx, ns, opts); err != nil {
-		return httputils.NewParamError(ns.View.Name, selectorParameters.ContentFormatParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameters.ContentFormatParameter.Name, err)
 	}
 	return nil
 }
@@ -72,7 +72,10 @@ func (s *Session) populateSyncFlag(ctx context.Context, ns *view.NamespaceView, 
 	syncFlagParameter := ns.SelectorParameters(selectorParameters.SyncFlagParameter, view.QueryStateParameters.SyncFlagParameter)
 	value, has, err := s.lookupFirstValue(ctx, syncFlagParameter, opts)
 	if has && err == nil {
-		err = s.setSyncFlag(value, ns)
+		selector := s.state.Lookup(ns.View)
+		if !selector.SyncFlag { //one sync mode if already set, do not override
+			err = s.setSyncFlag(value, ns)
+		}
 	}
 	return err
 }

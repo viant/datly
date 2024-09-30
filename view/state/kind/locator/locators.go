@@ -13,9 +13,34 @@ type KindLocator struct {
 	byKind  map[state.Kind]kind.Locator
 	parent  *KindLocator
 	options []Option
+	opts    *Options
+}
+
+func (l *KindLocator) RemoveLocators(kind ...state.Kind) {
+	if len(kind) == 0 {
+		return
+	}
+	l.RWMutex.Lock()
+	defer l.RWMutex.Unlock()
+	for _, k := range kind {
+		delete(l.byKind, k)
+	}
 }
 
 func (l *KindLocator) Options() []Option {
+	var ret []Option
+	if l.opts.ReadInto != nil {
+		ret = append(ret, WithReadInto(l.opts.ReadInto))
+	}
+	if l.opts.Dispatcher != nil {
+		ret = append(ret, WithDispatcher(l.opts.Dispatcher))
+	}
+	if l.opts.Unmarshal != nil {
+		ret = append(ret, WithUnmarshal(l.opts.Unmarshal))
+	}
+	if l.opts.Custom != nil {
+		ret = append(ret, WithCustom(l.opts.Custom...))
+	}
 	return l.options
 }
 
@@ -80,6 +105,7 @@ func NewKindsLocator(parent *KindLocator, options ...Option) *KindLocator {
 		parent: parent,
 	}
 	ret.options = ensureParentOptions(ret, options)
+	ret.opts = NewOptions(ret.options)
 	return ret
 }
 

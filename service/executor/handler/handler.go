@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/handler"
 	"reflect"
 )
@@ -18,6 +19,7 @@ type (
 		Arguments  []string
 		InputType  string
 		OutputType string
+		MessageBus string
 		Output     reflect.Type
 		factory    handler.Factory
 		handler    handler.Handler
@@ -82,6 +84,12 @@ func (h *Handler) Call(ctx context.Context, session handler.Session) (interface{
 			if aHandler, ok = value.(handler.Handler); !ok {
 				return nil, fmt.Errorf("expected handler to implement %T", aHandler)
 			}
+			if initializer, ok := value.(state.Initializer); ok {
+				if err := initializer.Init(ctx); err != nil {
+					return nil, fmt.Errorf("failed to initialize handler %T, %w", aHandler, err)
+				}
+			}
+
 		}
 	}
 	var ok bool

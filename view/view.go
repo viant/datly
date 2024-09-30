@@ -57,9 +57,10 @@ type (
 		FromURL     string     `json:",omitempty"`
 		Exclude     []string   `json:",omitempty"`
 		Columns     []*Column  `json:",omitempty"`
+		TypeName    string     `json:",omitempty"`
+		Tag         string     `json:",omitempty"`
 		Partitioned *Partitioned
-
-		Criteria string `json:",omitempty"`
+		Criteria    string `json:",omitempty"`
 
 		Selector *Config   `json:",omitempty"`
 		Template *Template `json:",omitempty"`
@@ -310,6 +311,7 @@ func (v *View) init(ctx context.Context) error {
 		v.Name: true,
 	}
 	lookupType := v._resource.LookupType()
+
 	if err := v.Schema.LoadTypeIfNeeded(lookupType); err != nil {
 		return err
 	}
@@ -378,6 +380,9 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 		}
 		if viewTag.Match != "" {
 			refViewOptions = append(refViewOptions, WithMatchStrategy(viewTag.Match))
+		}
+		if viewTag.CustomTag != "" {
+			refViewOptions = append(refViewOptions, WithViewTag(viewTag.CustomTag))
 		}
 		if isSlice(field.Type) {
 			viewOptions = append(viewOptions, WithOneToMany(field.Name, relLinks,
@@ -556,10 +561,12 @@ func (v *View) updateRelationSchemaIfDefined(compType reflect.Type, rel *Relatio
 		return
 	}
 	aView := &rel.Of.View
-	if aView.Schema.Type() != nil {
-		return nil
-	}
 	field, ok := compType.FieldByName(rel.Holder)
+	if aView.Schema.Type() != nil {
+		if aView.Schema.IsNamed() || !ok {
+			return nil
+		}
+	}
 	if !ok {
 		return fmt.Errorf("invalid view '%v' relation '%v' ,failed to locate rel holder: %s, in onwer type: %s", v.Name, rel.Name, rel.Holder, compType.String())
 	}
@@ -1166,6 +1173,17 @@ func (v *View) registerHolders() error {
 	return nil
 }
 
+func (v *View) DBProvider(name string) (*sql.DB, error) {
+	if v._resource == nil {
+		return nil, fmt.Errorf("resource not set")
+	}
+	connector, err := v._resource.Connector(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get connector: %v,  %w", name, err)
+	}
+	return connector.DB()
+}
+
 // CanUseSelectorCriteria indicates if Template.Criteria can be used
 func (v *View) CanUseSelectorCriteria() bool {
 	return v.Selector.Constraints.Criteria
@@ -1415,7 +1433,6 @@ func (v *View) indexTransforms() error {
 		if strings.Contains(transform.Path, ".") {
 			continue
 		}
-
 		columnName := text.CaseFormatUpperCamel.Format(transform.Path, v.CaseFormat)
 		aConfig, ok := v.ColumnsConfig[columnName]
 		if !ok {
@@ -1522,6 +1539,7 @@ func (v *View) SetParameter(name string, selectors *State, value interface{}) er
 }
 
 func (v *View) BuildParametrizedSQL(aState state.Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand2.StateOption) (*sqlx.SQL, error) {
+
 	reflectType, err := aState.ReflectType(pkgPath, types.Lookup, state.WithSetMarker())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create aState %v type: %w", v.Name, err)
@@ -1597,6 +1615,14 @@ func NewExecView(name, table string, template string, parameters []*state.Parame
 func WithMatchStrategy(match string) Option {
 	return func(v *View) error {
 		v.MatchStrategy = MatchStrategy(match)
+		return nil
+	}
+}
+
+// WithViewTag creates an Option to set tag
+func WithViewTag(tag string) Option {
+	return func(v *View) error {
+		v.Tag = tag
 		return nil
 	}
 }

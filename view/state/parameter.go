@@ -49,16 +49,20 @@ type (
 		When            string `json:",omitempty" yaml:"When"`
 		With            string `json:",omitempty" yaml:"With"`
 		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
-
-		isOutputType bool
-		_timeLayout  string
-		_selector    *structology.Selector
-		_initialized bool
-		_dependsOn   *Parameter
-		_state       *structology.StateType
+		Async           bool   `json:",omitempty" yaml:"Async"`
+		isOutputType    bool
+		_timeLayout     string
+		_selector       *structology.Selector
+		_initialized    bool
+		_dependsOn      *Parameter
+		_state          *structology.StateType
 	}
 	ParameterOption func(p *Parameter)
 )
+
+func (p *Parameter) IsAsync() bool {
+	return p.Async
+}
 
 func (p *Parameter) IsUsedBy(text string) bool {
 	parameter := p.Name
@@ -102,6 +106,10 @@ func (p *Parameter) SetTypeNameTag() {
 		return
 	}
 	p.Tag += " " + xreflect.TagTypeName + `:"` + schema.Name + `"`
+}
+
+func (p *Parameter) IsAnonymous() bool {
+	return strings.Contains(p.Tag, "anonymous:")
 }
 
 func (p *Parameter) IsCacheable() bool {
@@ -287,6 +295,10 @@ func (p *Parameter) inherit(param *Parameter) {
 	if p.Handler == nil {
 		p.Handler = param.Handler
 	}
+	if p.Cacheable == nil {
+		p.Cacheable = param.Cacheable
+	}
+
 }
 
 // Validate checks if parameter is valid

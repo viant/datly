@@ -92,8 +92,8 @@ func (s State) Parameters() state.Parameters {
 	return result
 }
 
-func (s State) Compact(modulePath string) (State, error) {
-	if err := s.EnsureReflectTypes(modulePath); err != nil {
+func (s State) Compact(modulePath string, registry *xreflect.Types) (State, error) {
+	if err := s.EnsureReflectTypes(modulePath, "", registry); err != nil {
 		return nil, err
 	}
 	var result = State{}
@@ -342,13 +342,16 @@ func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 			continue
 		}
 		paramDataType := param.Schema.DataType
-		paramType, err := xreflect.Parse(paramDataType, xreflect.WithTypeLookup(func(name string, options ...xreflect.Option) (reflect.Type, error) {
-			result, err := dirTypes.Type(name)
-			if err == nil {
-				return result, nil
-			}
-			return dirTypes.Registry.Lookup(name, options...)
-		}))
+		paramType, err := xreflect.Parse(paramDataType,
+			xreflect.WithGoImports(dirTypes.GoImports),
+			xreflect.WithTypeLookup(func(name string, options ...xreflect.Option) (reflect.Type, error) {
+				result, err := dirTypes.Type(name)
+				if err == nil {
+					return result, nil
+				}
+				options = append(options, xreflect.WithGoImports(dirTypes.GoImports))
+				return dirTypes.Registry.Lookup(name, options...)
+			}))
 		if err != nil {
 			return fmt.Errorf("invalid parameter '%v' schema: '%v'  %w", param.Name, param.Schema.DataType, err)
 		}
@@ -356,9 +359,9 @@ func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 		oldSchema := param.Schema
 		param.Schema = state.NewSchema(paramType)
 		param.Schema.DataType = paramDataType
-
 		if oldSchema != nil {
 			param.Schema.Cardinality = oldSchema.Cardinality
+			param.Schema.PackagePath = oldSchema.PackagePath
 		}
 	}
 	return nil
@@ -406,8 +409,7 @@ func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (refl
 	return baseType, nil
 }
 
-func (s State) EnsureReflectTypes(modulePath string) error {
-	typeRegistry := xreflect.NewTypes(xreflect.WithPackagePath(modulePath), xreflect.WithRegistry(extension.Config.Types))
+func (s State) EnsureStructQLTypes() error {
 	for _, param := range s {
 		if param.Schema == nil {
 			continue
@@ -416,17 +418,46 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 			continue
 		}
 		if param.In.Kind == state.KindParam {
-			sourceParam := s.Lookup(param.In.Name)
-			if sourceParam == nil {
-				return fmt.Errorf("failed to lookup param parameter: %v", param.In.Name)
+			if err := s.enureStructQLType(param); err != nil {
+				return err
 			}
-			if param.SQL != "" {
-				query, err := structql.NewQuery(param.SQL, sourceParam.Schema.Type(), nil)
-				if err != nil {
-					return fmt.Errorf("failed to queryql param %v from %s(%s) due to: %w", param.Name, param.In.Name, sourceParam.Schema.Type().String(), err)
-				}
-				param.Schema = state.NewSchema(query.StructType())
-				param.Schema.DataType = param.Name
+			continue
+		}
+	}
+	return nil
+}
+
+func (s State) enureStructQLType(param *Parameter) error {
+	sourceParam := s.Lookup(param.In.Name)
+	if sourceParam == nil {
+		return fmt.Errorf("failed to lookup param parameter: %v", param.In.Name)
+	}
+	if param.SQL != "" {
+		query, err := structql.NewQuery(param.SQL, sourceParam.Schema.Type(), nil)
+		if err != nil {
+			return fmt.Errorf("failed to queryql %v param %v from %s(%s) due to: %w", param.SQL, param.Name, param.In.Name, sourceParam.Schema.Type().String(), err)
+		}
+		param.Schema = state.NewSchema(query.StructType())
+		param.Schema.DataType = param.Name
+	}
+	return nil
+}
+
+func (s State) EnsureReflectTypes(modulePath string, pkg string, registry *xreflect.Types) error {
+	if registry == nil {
+		registry = extension.Config.Types
+	}
+	typeRegistry := xreflect.NewTypes(xreflect.WithPackagePath(modulePath), xreflect.WithRegistry(registry))
+	for _, param := range s {
+		if param.Schema == nil {
+			continue
+		}
+		if param.Schema.Type() != nil {
+			continue
+		}
+		if param.In.Kind == state.KindParam {
+			if err := s.enureStructQLType(param); err != nil {
+				return err
 			}
 			continue
 		}
@@ -441,7 +472,10 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 		}
 		rType, err := types.LookupType(typeRegistry.Lookup, dataType, xreflect.WithPackage(param.Schema.Package))
 		if err != nil {
-			return err
+			rType, err = types.LookupType(typeRegistry.Lookup, dataType, xreflect.WithPackage(pkg))
+			if err != nil {
+				return err
+			}
 		}
 		param.Schema.SetType(rType)
 	}
@@ -633,13 +667,16 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 	embedHolder := discoverEmbeds(embedRoot)
 	embedFS := embedHolder.EmbedFs()
 	var aState = State{}
+	var goImports xreflect.GoImports
 	dirTypes, err := xreflect.ParseTypes(baseDir,
 		xreflect.WithParserMode(parser.ParseComments),
 		xreflect.WithRegistry(types),
-		xreflect.WithOnField(func(typeName string, field *ast.Field) error {
+		xreflect.WithOnField(func(typeName string, field *ast.Field, imports xreflect.GoImports) error {
 			if field.Tag == nil {
 				return nil
 			}
+			goImports = append(goImports, imports...)
+
 			fieldTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
 			aTag, err := tags.ParseStateTags(fieldTag, embedFS)
 			if err != nil {
@@ -657,7 +694,7 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 				name = field.Names[0].Name
 			}
 			setter.SetStringIfEmpty(&pTag.Name, name)
-			param, err := buildParameter(field, aTag, types, embedFS)
+			param, err := buildParameter(field, aTag, types, embedFS, imports)
 			if param == nil {
 				return err
 			}
@@ -682,12 +719,14 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 			return nil
 		}))
 
+	dirTypes.GoImports = goImports
 	if err != nil {
 		return nil, err
 	}
 	if _, err = dirTypes.Type(dataType); err != nil {
 		return nil, err
 	}
+	dirTypes.GoImports = goImports
 	if err = aState.ensureSchema(dirTypes); err != nil {
 		return nil, err
 	}
