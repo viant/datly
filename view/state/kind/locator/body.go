@@ -83,7 +83,7 @@ func NewBody(opts ...Option) (kind.Locator, error) {
 	if options.Unmarshal == nil {
 		return nil, fmt.Errorf("unmarshal was empty")
 	}
-	var ret = &Body{request: options.request, bodyType: options.BodyType, unmarshal: options.UnmarshalFunc(), form: options.form}
+	var ret = &Body{request: options.request, bodyType: options.BodyType, unmarshal: options.UnmarshalFunc(), form: options.Form}
 	return ret, nil
 }
 

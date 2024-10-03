@@ -60,8 +60,7 @@ type (
 		Loggers  logger.Adapters `json:",omitempty"`
 		_loggers logger.AdapterIndex
 
-		codecs  *codec.Registry
-		ModTime time.Time `json:",omitempty"`
+		codecs *codec.Registry
 
 		Predicates  []*predicate.Template
 		_predicates *extension.PredicateRegistry
@@ -71,6 +70,7 @@ type (
 		Substitutes Substitutes
 		Docs        *Docs
 
+		modTime  time.Time
 		_doc     docs.Service
 		fs       afs.Service
 		_embedFs embed.FS
@@ -149,27 +149,28 @@ func (r *Resource) loadText(ctx context.Context, URL string, expand bool) (strin
 	}
 	data, err := fs.DownloadWithURL(ctx, URL)
 
-	if err = r.updateTime(ctx, URL, err); err != nil {
+	if err = r.UpdateTime(ctx, URL); err != nil {
 		return "", err
 	}
 
 	return string(data), err
 }
 
-func (r *Resource) updateTime(ctx context.Context, URL string, err error) error {
-	if !strings.HasSuffix(URL, ".sql") {
+func (r *Resource) ModTime() time.Time {
+	return r.modTime
+}
+
+func (r *Resource) UpdateTime(ctx context.Context, URL string) error {
+	if !strings.HasSuffix(URL, ".sql") || URL == "" {
 		return nil
 	}
-
 	object, err := r.LoadObject(ctx, URL)
 	if err != nil {
 		return err
 	}
-
-	if object.ModTime().After(r.ModTime) {
-		r.ModTime = object.ModTime()
+	if object.ModTime().After(r.modTime) {
+		r.modTime = object.ModTime()
 	}
-
 	return nil
 }
 
@@ -525,7 +526,7 @@ func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Reso
 	}
 	resource.fs = fs
 	resource.SourceURL = URL
-	resource.ModTime = object.ModTime()
+	resource.modTime = object.ModTime()
 	return resource, err
 }
 

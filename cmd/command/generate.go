@@ -9,6 +9,8 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/codegen"
+	rcodegen "github.com/viant/datly/repository/codegen"
+
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
@@ -141,7 +143,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		if err != nil {
 			return err
 		}
-		ctx = repository.WithGeneratorContext(ctx)
+		ctx = rcodegen.WithGeneratorContext(ctx)
 		aComponent, err := datlySrv.Component(ctx, URI)
 		if err != nil {
 			return err
@@ -243,16 +245,25 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		return nil
 	}
 
-	aState, err := inference.NewState(ruleOptions.ComponentPath(), rule.InputType, extension.Config.Types)
-	if err != nil {
-		return err
+	var aState = inference.State{}
+	var err error
+	if rule.InputType != "" {
+		if aState, err = inference.NewState(ruleOptions.ComponentPath(), rule.InputType, extension.Config.Types); err != nil {
+			return err
+		}
 	}
+
 	rule.Handler = &handler.Handler{
 		Type:       rule.Type,
 		InputType:  rule.InputType,
 		OutputType: rule.OutputType,
 		MessageBus: rule.MessageBus,
 		Arguments:  rule.HandlerArgs,
+	}
+
+	if rule.InputType == "" && rule.OutputType == "" {
+		*dSQL = origin
+		return nil
 	}
 	var entityParam *inference.Parameter
 	var entityType reflect.Type
@@ -308,7 +319,10 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		return err
 	}
 
-	name := aState[0].Name
+	name := "Nop"
+	if len(aState) > 0 {
+		name = aState[0].Name
+	}
 	if entityParam != nil && entityParam.Name != "" {
 		name = entityParam.Name
 	}

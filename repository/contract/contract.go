@@ -3,6 +3,7 @@ package contract
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/repository/codegen"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -61,8 +62,10 @@ func (c *Contract) Init(ctx context.Context, path *Path, aView *view.View, resou
 	if err = c.Output.Init(ctx, aView, &c.Input.Body, c.Service == service.TypeReader); err != nil {
 		return err
 	}
-	if err := c.adjustInputType(ctx, aView, resource); err != nil {
-		return err
+	if !codegen.IsGeneratorContext(ctx) {
+		if err := c.adjustInputType(ctx, aView, resource); err != nil {
+			return err
+		}
 	}
 	return nil
 }

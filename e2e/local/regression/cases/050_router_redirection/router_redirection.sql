@@ -1,6 +1,5 @@
-/* {"URI":"redirect/foo-redirected"} */
-SELECT vendor.*,
-       products.* EXCEPT VENDOR_ID
-FROM (SELECT * FROM VENDOR t ) vendor
-    JOIN (SELECT * FROM PRODUCT t) products ON products.VENDOR_ID = vendor.ID
+/* {"URI":"composition/xxx"} */
+
+#set( $_ = $Http<?>(query/fields).Value('id,name,bar'))
+#set( $_ = $Http<?>(http/).Redirect("/foo-redirected"))
 

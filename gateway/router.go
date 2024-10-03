@@ -341,7 +341,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				if err != nil {
 					return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
 				}
-				routes = append(routes, r.NewRouteHandler(router.New(aPath, provider)))
+				routes = append(routes, r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry())))
 				if aPath.Cors != nil {
 					optionsPaths[aPath.URI] = append(optionsPaths[aPath.URI], aPath)
 				}

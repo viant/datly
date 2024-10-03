@@ -19,16 +19,6 @@ import (
 	"strings"
 )
 
-var generatorKey string
-
-func isGeneratorContext(ctx context.Context) bool {
-	return ctx.Value(generatorKey) != nil
-}
-
-func WithGeneratorContext(ctx context.Context) context.Context {
-	return context.WithValue(ctx, generatorKey, true)
-}
-
 //go:embed codegen/contract.gox
 var contractInit string
 

@@ -227,8 +227,7 @@ func LoadComponents(ctx context.Context, URL string, opts ...Option) (*Component
 
 	components.Resource.SourceURL = URL
 	components.Resource.SetTypes(options.extensions.Types)
-	object, _ := options.fs.Object(ctx, URL)
-	components.Resource.ModTime = object.ModTime()
+	_ = components.Resource.UpdateTime(ctx, URL)
 	return components, nil
 }
 

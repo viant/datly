@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/msg"
@@ -147,7 +148,13 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.Typ
 		}
 		schema, err := r.GetSchema(name, xreflect.WithPackagePath(typesImport.URL))
 		if err != nil {
-			return fmt.Errorf("%v unable to include import type: %v,  %w", typesImport.URL, name, err)
+			_, pkg := url.Split(typesImport.URL, "")
+			if rType, rErr := r.typeRegistry.Lookup(name, xreflect.WithPackage(pkg)); rErr == nil {
+				schema = state.NewSchema(rType, state.WithSchemaPackage(pkg))
+			}
+			if schema == nil {
+				return fmt.Errorf("%v unable to include import type: %v,  %w", typesImport.URL, name, err)
+			}
 		}
 		r.typePackages[name] = schema.Package
 		if len(schema.Methods) > 0 {
@@ -262,6 +269,19 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	if err != nil {
 		return err
 	}
+	for _, item := range r.Declarations.Items {
+		r.RawSQL = strings.Replace(r.RawSQL, item.Raw, "", 1)
+	}
+
+	if index := strings.Index(r.RawSQL, "$Nop("); index != -1 {
+		offset := index + len("$Nop(")
+		if end := strings.Index(r.RawSQL[offset:], ")"); end != -1 {
+			noOp := r.RawSQL[offset : offset+end]
+			r.RawSQL = r.RawSQL[offset+end+1:]
+			r.Declarations.SQL = strings.Replace(r.Declarations.SQL, "$Nop("+noOp+")", "", 1)
+		}
+	}
+	r.RawSQL = strings.TrimSpace(r.RawSQL)
 	r.State.Append(r.Declarations.State...)
 
 	r.appendPathVariableParams()

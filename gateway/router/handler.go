@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/gateway/router/status"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/content"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/executor/expand"
@@ -45,6 +46,7 @@ type (
 		Path       *path.Path
 		Provider   *repository.Provider
 		dispatcher *operator.Service
+		registry   *repository.Registry
 	}
 )
 
@@ -78,11 +80,12 @@ func (r *Handler) AuthorizeRequest(request *http.Request, aPath *path.Path) erro
 	return nil
 }
 
-func New(aPath *path.Path, provider *repository.Provider) *Handler {
+func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry) *Handler {
 	ret := &Handler{
 		Path:       aPath,
 		Provider:   provider,
 		dispatcher: operator.New(),
+		registry:   registry,
 	}
 	return ret
 }
@@ -155,6 +158,7 @@ func (r *Handler) Handle(ctx context.Context, writer http.ResponseWriter, reques
 		r.writeErrorResponse(writer, aComponent, err, http.StatusBadRequest)
 		return
 	}
+
 	r.writeResponse(ctx, request, writer, aComponent, aResponse)
 }
 
@@ -367,6 +371,22 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	if operationErr != nil && output == nil {
 		return nil, operationErr
 	}
+	if redirect := aSession.Redirect; redirect != nil {
+		aSession.Redirect = nil //reset redirect
+		provider, err := r.registry.LookupProvider(ctx, contract.NewPath(redirect.Route.Method, redirect.Route.URL))
+		if err != nil {
+			return nil, err
+		}
+		redirectingComponent, err := provider.Component(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return r.handleComponent(ctx, redirect.Request, redirectingComponent)
+	}
+
+	//TODO: add redirect option
+	//get matched compoent, and requeest
+	//return handleComponent(ctx, request, aComponent)
 
 	options := &response.Options{}
 	options.AdjustStatusCode(output, operationErr)

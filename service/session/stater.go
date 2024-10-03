@@ -9,6 +9,26 @@ import (
 	"reflect"
 )
 
+func (s *Session) ValuesOf(ctx context.Context, any interface{}) (map[string]interface{}, error) {
+	anyType := reflect.TypeOf(any)
+	if anyType.Kind() == reflect.Ptr {
+		anyType = anyType.Elem()
+	}
+	aSchema := state.NewSchema(anyType)
+	aType, err := state.NewType(state.WithSchema(aSchema))
+	if err != nil {
+		return nil, err
+	}
+	if err = aType.Init(); err != nil {
+		return nil, err
+	}
+	var result = make(map[string]interface{})
+	for _, parameter := range aType.Parameters {
+		result[parameter.Name], _, err = s.LookupValue(ctx, parameter, nil)
+	}
+	return result, nil
+}
+
 func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Option) (err error) {
 	destType := reflect.TypeOf(dest)
 	stateType, ok := s.Types.Lookup(types.EnsureStruct(destType))
@@ -33,22 +53,32 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		s.locatorOptions = append(s.locatorOptions, locator.WithConstants(hOptions.Constants()))
 		locatorsToRemove = append(locatorsToRemove, state.KindConst)
 	}
+
+	var httpKinds = []state.Kind{state.KindForm, state.KindRequest, state.KindRequestBody, state.KindQuery, state.KindHeader, state.KindPath}
+
+	//state.KindForm, state.KindRequest, state.KindQuery
 	if hOptions.Form() != nil {
 		stateOptions = append(stateOptions, locator.WithForm(hOptions.Form()))
 		s.locatorOptions = append(s.locatorOptions, locator.WithForm(hOptions.Form()))
-		locatorsToRemove = append(locatorsToRemove, state.KindConst, state.KindForm, state.KindComponent)
+		locatorsToRemove = append(locatorsToRemove, httpKinds...)
+	}
+	if hOptions.Headers() != nil {
+		stateOptions = append(stateOptions, locator.WithHeaders(hOptions.Headers()))
+		s.locatorOptions = append(s.locatorOptions, locator.WithHeaders(hOptions.Headers()))
+		locatorsToRemove = append(locatorsToRemove, httpKinds...)
+	}
+	if hOptions.Query() != nil {
+		stateOptions = append(stateOptions, locator.WithQuery(hOptions.Query()))
+		locatorsToRemove = append(locatorsToRemove, httpKinds...)
 	}
 	if len(hOptions.PathParameters()) > 0 {
 		stateOptions = append(stateOptions, locator.WithPathParameters(hOptions.PathParameters()))
-		s.locatorOptions = append(s.locatorOptions, locator.WithPathParameters(hOptions.PathParameters()))
-		locatorsToRemove = append(locatorsToRemove, state.KindPath)
+		locatorsToRemove = append(locatorsToRemove, httpKinds...)
 	}
 	if hOptions.HttpRequest() != nil {
 		stateOptions = append(stateOptions, locator.WithRequest(hOptions.HttpRequest()))
-		s.locatorOptions = append(s.locatorOptions, locator.WithRequest(hOptions.HttpRequest()))
-		locatorsToRemove = append(locatorsToRemove, state.KindForm, state.KindRequest, state.KindQuery)
+		locatorsToRemove = append(locatorsToRemove, httpKinds...)
 	}
-
 	s.kindLocator.RemoveLocators(locatorsToRemove...)
 	if s.view != nil {
 		viewOptions := s.ViewOptions(s.view, WithLocatorOptions())

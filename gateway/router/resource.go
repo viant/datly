@@ -101,8 +101,8 @@ func (r *Resource) Init(ctx context.Context) error {
 		return err
 	}
 
-	if r.ColumnsDiscovery && (!columnCacheExists || r.Resource.ModTime.After(r.ColumnsCache.ModTime)) {
-		r.ColumnsCache.ModTime = r.Resource.ModTime
+	if r.ColumnsDiscovery && (!columnCacheExists || r.Resource.ModTime().After(r.ColumnsCache.ModTime)) {
+		r.ColumnsCache.ModTime = r.Resource.ModTime()
 		if err := r.ColumnsCache.Store(ctx); err != nil {
 			return err
 		}

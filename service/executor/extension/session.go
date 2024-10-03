@@ -57,10 +57,6 @@ func (s *Session) Validator() *validator.Service {
 	return validator.New(s.validator)
 }
 
-func (s *Session) Redirect(ctx context.Context, route *http.Route) (handler.Session, error) {
-	return s.redirect(ctx, route)
-}
-
 func (s *Session) Differ() *differ.Service {
 	return differ.New(s.differ)
 }

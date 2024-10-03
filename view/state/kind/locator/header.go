@@ -8,7 +8,8 @@ import (
 )
 
 type Header struct {
-	header http.Header
+	request *http.Request
+	header  http.Header
 }
 
 func (q *Header) Names() []string {
@@ -36,6 +37,9 @@ func NewHeader(opts ...Option) (kind.Locator, error) {
 	if options.request == nil {
 		return nil, fmt.Errorf("requestState was empty")
 	}
-	ret := &Header{header: options.request.Header}
+	ret := &Header{request: options.request, header: options.Header}
+	if len(ret.header) == 0 {
+		ret.header = ret.request.Header
+	}
 	return ret, nil
 }

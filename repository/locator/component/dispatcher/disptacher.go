@@ -35,6 +35,12 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, opts ...
 	if cOptions.PathParameters != nil {
 		options = append(options, locator.WithPathParameters(cOptions.PathParameters))
 	}
+	if cOptions.Query != nil {
+		options = append(options, locator.WithQuery(cOptions.Query))
+	}
+	if cOptions.Header != nil {
+		options = append(options, locator.WithHeaders(cOptions.Header))
+	}
 
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...))
 	ctx = aSession.Context(ctx, true)

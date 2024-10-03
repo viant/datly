@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/async"
+	"github.com/viant/datly/repository/codegen"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
@@ -119,7 +120,7 @@ func (c *Component) updatedViewSchemaWithNamedType(ctx context.Context, resource
 		if viewField, ok := oType.FieldByName(param.Name); ok {
 			if !c.View.Schema.IsNamed() {
 				c.View.SetNamedType(viewField.Type)
-				if !isGeneratorContext(ctx) {
+				if !codegen.IsGeneratorContext(ctx) {
 					param.Schema.SetType(viewField.Type)
 				}
 			}
@@ -219,7 +220,6 @@ func (c *Component) Exclusion(state *view.State) []*json.FilterEntry {
 }
 
 func (c *Component) LocatorOptions(request *http.Request, form *hstate.Form, unmarshal shared.Unmarshal) []locator.Option {
-
 	var result []locator.Option
 
 	if unmarshal != nil {

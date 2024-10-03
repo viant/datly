@@ -103,9 +103,7 @@ func (e *Executor) HandlerSession(ctx context.Context, opts ...Option) (*extensi
 		extension.WithHttp(e.newHttp),
 		extension.WithMessageBus(res.MessageBuses),
 	)
-
 	e.handlerSession = sess
-
 	return sess, nil
 }
 
@@ -205,6 +203,5 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route) (handler.Se
 }
 
 func (e *Executor) newHttp() http2.Http {
-	//TODO reimplement it
-	return nil
+	return NewHttp(e, e.view.GetResource())
 }

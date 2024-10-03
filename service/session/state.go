@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	xhttp "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -29,7 +30,13 @@ type (
 		views *views
 		view  *view.View
 		Options
-		Types state.Types
+		Types    state.Types
+		Redirect *Redirect
+	}
+
+	Redirect struct {
+		Route   *xhttp.Route
+		Request *http.Request
 	}
 
 	contextKey string

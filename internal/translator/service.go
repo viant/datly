@@ -23,6 +23,7 @@ import (
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"
@@ -312,6 +313,18 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 
 		route.Component.Input.Type.Package,
 			route.Component.Input.Type.Name = extractTypeNameWithPackage(route.Handler.InputType)
+
+		if len(resource.State) > 0 && route.Component.Input.Type.Name == "" {
+			route.Component.Input.Type.Parameters = resource.State.Parameters()
+			res := &view.Resource{}
+			res.SetTypes(resource.typeRegistry)
+			route.Component.Input.Type.Init(state.WithResource(view.NewResources(res, &view.View{})))
+			formatter := text.DetectCaseFormat(ruleName)
+			inputName := formatter.To(text.CaseFormatUpperCamel).Format(ruleName) + "Input"
+			route.Component.Input.Type.Name = inputName
+			route.Handler.InputType = inputName
+			resource.AppendTypeDefinition(&view.TypeDefinition{Name: inputName, DataType: route.Component.Input.Type.Schema.Type().String()})
+		}
 	}
 
 	route.Content.CSV = resource.Rule.CSV

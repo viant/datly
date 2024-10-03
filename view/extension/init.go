@@ -68,6 +68,7 @@ func InitRegistry() {
 			xreflect.NewType("async.Job", xreflect.WithReflectType(reflect.TypeOf(async.Job{}))),
 			xreflect.NewType("predicate.NamedFilters", xreflect.WithReflectType(reflect.TypeOf(predicate.NamedFilters{}))),
 			xreflect.NewType("LoadData", xreflect.WithReflectType(reflect.TypeOf(&handler.LoadDataProvider{}))),
+			xreflect.NewType("handler.ProxyProvider", xreflect.WithReflectType(reflect.TypeOf(&handler.ProxyProvider{}))),
 			xreflect.NewType("auth.Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("time.Location", xreflect.WithReflectType(reflect.TypeOf(&time.Location{}))),

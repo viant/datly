@@ -4,6 +4,7 @@ import (
 	"context"
 	hstate "github.com/viant/xdatly/handler/state"
 	"net/http"
+	"net/url"
 )
 
 type (
@@ -11,6 +12,8 @@ type (
 	Options struct {
 		Constants      map[string]interface{}
 		PathParameters map[string]string
+		Query          url.Values
+		Header         http.Header
 		Form           *hstate.Form
 		Request        *http.Request
 	}
@@ -40,8 +43,8 @@ func WithConstants(constants map[string]interface{}) Option {
 	}
 }
 
-// WithPathParameters adds path parameters
-func WithPathParameters(pathParameters map[string]string) Option {
+// WithPath adds path parameters
+func WithPath(pathParameters map[string]string) Option {
 	return func(o *Options) {
 		o.PathParameters = pathParameters
 	}
@@ -51,6 +54,20 @@ func WithPathParameters(pathParameters map[string]string) Option {
 func WithForm(form *hstate.Form) Option {
 	return func(o *Options) {
 		o.Form = form
+	}
+}
+
+// WithQuery adds query parameters
+func WithQuery(query url.Values) Option {
+	return func(o *Options) {
+		o.Query = query
+	}
+}
+
+// WithHeader adds header
+func WithHeader(header http.Header) Option {
+	return func(o *Options) {
+		o.Header = header
 	}
 }
 

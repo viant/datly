@@ -20,6 +20,7 @@ type (
 		InputType  string
 		OutputType string
 		MessageBus string
+		ProxyURL   string
 		Output     reflect.Type
 		factory    handler.Factory
 		handler    handler.Handler
