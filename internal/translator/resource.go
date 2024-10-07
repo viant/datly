@@ -269,19 +269,20 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	if err != nil {
 		return err
 	}
-	for _, item := range r.Declarations.Items {
-		r.RawSQL = strings.Replace(r.RawSQL, item.Raw, "", 1)
-	}
+	//for _, item := range r.Declarations.Items {
+	//	r.RawSQL = strings.Replace(r.RawSQL, item.Raw, "", 1)
+	//}
 
-	if index := strings.Index(r.RawSQL, "$Nop("); index != -1 {
-		offset := index + len("$Nop(")
-		if end := strings.Index(r.RawSQL[offset:], ")"); end != -1 {
-			noOp := r.RawSQL[offset : offset+end]
-			r.RawSQL = r.RawSQL[offset+end+1:]
-			r.Declarations.SQL = strings.Replace(r.Declarations.SQL, "$Nop("+noOp+")", "", 1)
-		}
-	}
-	r.RawSQL = strings.TrimSpace(r.RawSQL)
+	//
+	//if index := strings.Index(r.RawSQL, "$Nop("); index != -1 {
+	//	offset := index + len("$Nop(")
+	//	if end := strings.Index(r.RawSQL[offset:], ")"); end != -1 {
+	//		noOp := r.RawSQL[offset : offset+end]
+	//		//	r.RawSQL = r.RawSQL[offset+end+1:]
+	//		r.Declarations.SQL = strings.Replace(r.Declarations.SQL, "$Nop("+noOp+")", "", 1)
+	//	}
+	//}
+	//r.RawSQL = strings.TrimSpace(r.RawSQL)
 	r.State.Append(r.Declarations.State...)
 
 	r.appendPathVariableParams()

@@ -4,14 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/repository/contract"
 	executor "github.com/viant/datly/service/executor"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/executor/extension"
 	session "github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/handler"
 	http2 "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/sqlx"
+	hstate "github.com/viant/xdatly/handler/state"
 	"github.com/viant/xdatly/handler/validator"
 	"net/http"
 )
@@ -87,24 +90,27 @@ func (e *Executor) HandlerSession(ctx context.Context, opts ...Option) (*extensi
 	if e.handlerSession != nil {
 		return e.handlerSession, nil
 	}
+	sess := e.newSession(e.session, opts...)
+	e.handlerSession = sess
+	return sess, nil
+}
 
+func (e *Executor) newSession(aSession *session.Session, opts ...Option) *extension.Session {
 	var options = e.options.Clone(opts)
 	e.session.Apply(session.WithTypes(options.Types...))
 	e.session.Apply(session.WithEmbeddedFS(options.embedFS))
-
 	res := e.view.GetResource()
 	sess := extension.NewSession(
 		extension.WithTemplateFlush(func(ctx context.Context) error {
 			return e.Execute(ctx)
 		}),
-		extension.WithStater(e.session),
+		extension.WithStater(aSession),
 		extension.WithRedirect(e.redirect),
 		extension.WithSql(e.newSqlService),
 		extension.WithHttp(e.newHttp),
 		extension.WithMessageBus(res.MessageBuses),
 	)
-	e.handlerSession = sess
-	return sess, nil
+	return sess
 }
 
 func (e *Executor) newValidator() *validator.Service {
@@ -191,15 +197,25 @@ func (e *Executor) txStarted(tx *sql.Tx) {
 }
 
 func (e *Executor) redirect(ctx context.Context, route *http2.Route) (handler.Session, error) {
-	//TODO reimplement it
-	return nil, fmt.Errorf("not yey supported")
-	//match, err := e.route.match(ctx, route)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//newExecutor := NewExecutor(match, e.request, e.response)
-	//return newExecutor.HandlerSession(ctx)
+	registry := e.session.Registry()
+	if registry == nil {
+		return nil, fmt.Errorf("registry was empty")
+	}
+	aComponent, err := registry.Lookup(ctx, contract.NewPath(route.Method, route.URL))
+	if err != nil {
+		return nil, err
+	}
+	request, _ := http.NewRequest(route.Method, route.URL, nil)
+	unmarshal := aComponent.UnmarshalFunc(request)
+	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...), session.WithRegistry(registry))
+	err = aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
+	if err != nil {
+		return nil, err
+	}
+	ctx = aSession.Context(ctx, true)
+	anExecutor := NewExecutor(aComponent.View, aSession)
+	return anExecutor.NewHandlerSession(ctx)
 }
 
 func (e *Executor) newHttp() http2.Http {

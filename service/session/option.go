@@ -2,6 +2,7 @@ package session
 
 import (
 	"embed"
+	"github.com/viant/datly/repository"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -19,6 +20,7 @@ type (
 		locatorOpt          *locator.Options
 		codecOptions        []codec.Option
 		types               []*state.Type
+		registry            *repository.Registry
 		indirectState       bool
 		reportNotAssignable *bool
 		scope               string
@@ -26,6 +28,10 @@ type (
 	}
 	Option func(o *Options)
 )
+
+func (o *Options) Registry() *repository.Registry {
+	return o.registry
+}
 
 func (o *Options) HasInputParameters() bool {
 	if o.locatorOpt == nil {
@@ -128,5 +134,11 @@ func WithTypes(types ...*state.Type) Option {
 func WithEmbeddedFS(fs *embed.FS) Option {
 	return func(s *Options) {
 		s.embeddedFS = fs
+	}
+}
+
+func WithRegistry(registry *repository.Registry) Option {
+	return func(s *Options) {
+		s.registry = registry
 	}
 }

@@ -3,7 +3,8 @@ package locator
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/service/executor/handler"
+	"github.com/viant/datly/repository/handler"
+	ehandler "github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
@@ -45,10 +46,9 @@ func (v *Handler) Value(ctx context.Context, name string) (interface{}, bool, er
 		aView.Connector = resource.Connectors[0]
 	}
 	aSession := session.Context(ctx)
+	anExecutor := ehandler.NewExecutor(aView, aSession)
 
-	anExecutor := handler.NewExecutor(aView, aSession)
-
-	handlerSession, err := anExecutor.NewHandlerSession(ctx, handler.WithTypes(v.types...))
+	handlerSession, err := anExecutor.NewHandlerSession(ctx, ehandler.WithTypes(v.types...))
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to create handler session: %w", err)
 	}

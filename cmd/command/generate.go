@@ -16,7 +16,7 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/service/executor/handler"
+	"github.com/viant/datly/repository/handler"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"

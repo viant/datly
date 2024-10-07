@@ -63,7 +63,7 @@ func main() {
 
 	baseDir := filepath.Join(toolbox.CallerDirectory(3), "..")
 	fmt.Printf("base: %v\n", baseDir)
-	caseName := "029_generate_put_one_many"
+	caseName := "050_redirect"
 	caseFolder := filepath.Join(baseDir, "local/regression/cases/", caseName)
 	gen, err := loadGen(caseFolder, caseName)
 	if err != nil {
