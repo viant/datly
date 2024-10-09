@@ -103,6 +103,11 @@ func (h *Httper) buildRequestOptions(ctx context.Context, params []*state.Parame
 			}
 			switch actual := value.(type) {
 			case string:
+
+				if parameter.Schema.Type().Kind() == reflect.Slice {
+					opts = append(opts, hstate.WithQueryParameters(parameter.In.Name, strings.Split(actual, ",")))
+					continue
+				}
 				opts = append(opts, hstate.WithQueryParameter(parameter.In.Name, actual))
 			case []string:
 				opts = append(opts, hstate.WithQueryParameters(parameter.In.Name, actual))
