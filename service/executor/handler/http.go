@@ -186,7 +186,7 @@ func mergeOptionsIntoRequest(req *http.Request, opts *hstate.Options) {
 	// 2. Add query parameters to the URL
 	q := req.URL.Query()
 	for key, values := range opts.Query() {
-		q[key] = append(q[key], values...)
+		q[key] = values
 	}
 	req.URL.RawQuery = q.Encode()
 
