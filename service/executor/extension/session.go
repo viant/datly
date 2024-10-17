@@ -29,13 +29,13 @@ type (
 
 	SqlServiceFn    func(options *sqlx.Options) (sqlx.Sqlx, error)
 	TemplateFlushFn func(ctx context.Context) error
-	RedirectFn      func(ctx context.Context, route *http.Route) (handler.Session, error)
+	RedirectFn      func(ctx context.Context, route *http.Route, options ...state.Option) (handler.Session, error)
 	RouterFn        func(ctx context.Context, route *http.Route) (handler.Session, error)
 	HttpFn          func() http.Http
 )
 
-func (s *Session) Route(ctx context.Context, route *http.Route) (handler.Session, error) {
-	return s.redirect(ctx, route)
+func (s *Session) Session(ctx context.Context, route *http.Route, opts ...state.Option) (handler.Session, error) {
+	return s.redirect(ctx, route, opts...)
 }
 
 func (s *Session) Http() http.Http {

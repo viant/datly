@@ -618,12 +618,14 @@ func New(aView *view.View, opts ...Option) *Session {
 		cache:   newCache(),
 		views:   newViews(),
 		Types:   *state.NewTypes(),
+		view:    aView,
 	}
 	ret.namedParameters = ret.namespacedView.Parameters()
 	ret.apply(opts)
 	for _, aType := range ret.Options.types {
 		ret.Types.Put(aType)
 	}
+	ret.resource = aView.Resource()
 	return ret
 }
 

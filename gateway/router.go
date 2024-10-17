@@ -154,7 +154,7 @@ func (r *Router) HandleJob(ctx context.Context, aJob *async.Job) error {
 	request := &http.Request{Method: aJob.Method, URL: URL, RequestURI: aPath.URI}
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
-	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...))
+	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...), session.WithOperate(r.operator.Operate))
 	if err != nil {
 		return err
 	}

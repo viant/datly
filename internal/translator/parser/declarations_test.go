@@ -26,8 +26,7 @@ SELECT 1 FROM t WHERE ID IN($TeamIDs)
 				&inference.Parameter{
 					Explicit: true,
 					Parameter: state.Parameter{
-						Name:     "TeamIDs",
-						DataType: "string",
+						Name: "TeamIDs",
 						In: &state.Location{
 							Kind: state.KindQuery,
 							Name: "tids",

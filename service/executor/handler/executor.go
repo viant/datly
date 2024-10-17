@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	executor "github.com/viant/datly/service/executor"
 	expand "github.com/viant/datly/service/executor/expand"
@@ -11,6 +12,7 @@ import (
 	session "github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler"
 	http2 "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/sqlx"
@@ -26,6 +28,7 @@ type (
 		executorSession *executor.Session
 		handlerSession  *extension.Session
 		*options
+		component  *repository.Component
 		view       *view.View
 		connectors view.Connectors
 		dataUnit   *expand.DataUnit
@@ -196,7 +199,7 @@ func (e *Executor) txStarted(tx *sql.Tx) {
 	e.tx = tx
 }
 
-func (e *Executor) redirect(ctx context.Context, route *http2.Route) (handler.Session, error) {
+func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hstate.Option) (handler.Session, error) {
 	registry := e.session.Registry()
 	if registry == nil {
 		return nil, fmt.Errorf("registry was empty")
@@ -205,10 +208,36 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route) (handler.Se
 	if err != nil {
 		return nil, err
 	}
+	originalRequest, _ := e.session.HttpRequest(ctx, e.session.Clone())
+
 	request, _ := http.NewRequest(route.Method, route.URL, nil)
+	if originalRequest != nil {
+		request.Header = originalRequest.Header
+	}
+	stateOptions := hstate.NewOptions(opts...)
+
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
-	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...), session.WithRegistry(registry))
+	if stateOptions.Query() != nil {
+		locatorOptions = append(locatorOptions, locator.WithQuery(stateOptions.Query()))
+	}
+	if stateOptions.Form() != nil {
+		locatorOptions = append(locatorOptions, locator.WithForm(stateOptions.Form()))
+	}
+	if stateOptions.Headers() != nil {
+		locatorOptions = append(locatorOptions, locator.WithHeaders(stateOptions.Headers()))
+	}
+	if stateOptions.PathParameters() != nil {
+		locatorOptions = append(locatorOptions, locator.WithPathParameters(stateOptions.PathParameters()))
+	}
+	if stateOptions.HttpRequest() != nil {
+		locatorOptions = append(locatorOptions, locator.WithRequest(stateOptions.HttpRequest()))
+	}
+	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...),
+		session.WithOperate(e.session.Options.Operate()),
+		session.WithTypes(&aComponent.Contract.Input.Type, &aComponent.Contract.Output.Type),
+		session.WithComponent(aComponent), session.WithRegistry(registry))
+
 	err = aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
 	if err != nil {
 		return nil, err
