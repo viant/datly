@@ -128,15 +128,6 @@ func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtI
 	return aTx.CommitIfNeeded()
 }
 
-func extractStatements(data []*expand2.SQLStatment) []string {
-	result := make([]string, 0, len(data))
-	for _, datum := range data {
-		result = append(result, datum.SQL)
-	}
-
-	return result
-}
-
 func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface{}, db *sql.DB) error {
 	switch actual := data.(type) {
 	case *expand2.Executable:

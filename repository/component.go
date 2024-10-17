@@ -65,6 +65,7 @@ func (c *Component) TypeRegistry() *xreflect.Types {
 }
 
 func (c *Component) Init(ctx context.Context, resource *view.Resource) (err error) {
+
 	c.types = resource.TypeRegistry()
 	if c.Output.Style == contract.BasicStyle {
 		c.Output.Field = ""
@@ -386,7 +387,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 			return err
 		}
 		c.Contract.Input.Type = *sType
-		if err := c.Contract.Input.Type.Init(); err != err {
+		if err = c.Contract.Input.Type.Init(); err != err {
 			return fmt.Errorf("failed to initalize input: %w", err)
 		}
 		if len(c.Contract.Input.Type.Parameters) > 0 {
@@ -395,7 +396,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 			}
 		}
 		c.Contract.Output.Type = state.Type{Schema: state.NewSchema(outputType)}
-		if err := c.Contract.Output.Type.Init(state.WithFS(embedFs)); err != err {
+		if err = c.Contract.Output.Type.Init(state.WithFS(embedFs)); err != nil {
 			return fmt.Errorf("failed to initalize output: %w", err)
 		}
 		if c.Contract.Output.CaseFormat == "" {

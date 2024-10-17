@@ -42,7 +42,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, opts ...
 		options = append(options, locator.WithHeaders(cOptions.Header))
 	}
 
-	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...), session.WithRegistry(d.registry))
+	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...), session.WithRegistry(d.registry), session.WithComponent(aComponent), session.WithOperate(d.service.Operate))
 	ctx = aSession.Context(ctx, true)
 	value, err := d.service.Operate(ctx, aSession, aComponent)
 	return value, err

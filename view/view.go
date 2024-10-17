@@ -315,6 +315,13 @@ func (v *View) init(ctx context.Context) error {
 	if err := v.Schema.LoadTypeIfNeeded(lookupType); err != nil {
 		return err
 	}
+
+	if rType := v.Schema.Type(); rType != nil && v._fs == nil {
+		iFace := reflect.New(rType).Interface()
+		if embedder, ok := iFace.(state.Embedder); ok {
+			v._fs = embedder.FS()
+		}
+	}
 	if v.Description == "" {
 		v.Description = v.Name
 	}
@@ -407,6 +414,7 @@ func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option
 	if v._fs != nil {
 		options = append(options, WithFS(v._fs))
 	}
+
 	if aViewType != nil {
 		options = append(options, WithViewType(aViewType))
 	}

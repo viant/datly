@@ -20,9 +20,6 @@ func Generate(columns discover.Columns) (map[string]string, error) {
 			if column.Tag != "" {
 				optionsBuilder.WriteString(fmt.Sprintf("view.WithColumnTag(`%s`)", column.Tag))
 			}
-			if column.Format != "" {
-				//TODO add format
-			}
 			optionsSeparator := ""
 			if optionsBuilder.Len() > 0 {
 				optionsSeparator = ","

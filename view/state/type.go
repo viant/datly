@@ -297,6 +297,24 @@ func (t *Type) buildParameters() error {
 	return nil
 }
 
+func (t *Type) EmbedFS() *embed.FS {
+	if t.fs != nil {
+		return t.fs
+	}
+	if t.Schema == nil {
+		return nil
+	}
+	rType := t.Schema.Type()
+	if rType == nil {
+		return nil
+	}
+	instance := reflect.New(rType).Elem().Interface()
+	if embedder, ok := instance.(Embedder); ok {
+		t.fs = embedder.FS()
+	}
+	return t.fs
+}
+
 func NewType(option ...Option) (*Type, error) {
 	ret := &Type{}
 	ret.apply(option)

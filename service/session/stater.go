@@ -33,7 +33,6 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 	destType := reflect.TypeOf(dest)
 	stateType, ok := s.Types.Lookup(types.EnsureStruct(destType))
 	if !ok {
-
 		if stateType, err = state.NewType(
 			state.WithSchema(state.NewSchema(destType)),
 			state.WithResource(s.resource),
@@ -41,6 +40,9 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 			return err
 		}
 		s.Types.Put(stateType)
+	}
+	if destType.Kind() == reflect.Ptr {
+		destType = destType.Elem()
 	}
 
 	hOptions := hstate.NewOptions(opts...)
@@ -84,6 +86,11 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		viewOptions := s.ViewOptions(s.view, WithLocatorOptions())
 		stateOptions = append(viewOptions.kindLocator.Options(), stateOptions...)
 	}
+
+	if s.component != nil && s.component.Contract.Output.Type.Type().Type() == destType {
+		return s.handleComponentpOutputType(ctx, dest, stateOptions)
+	}
+
 	options := s.Indirect(true, stateOptions...)
 	options.scope = hOptions.Scope()
 	if err = s.SetState(ctx, stateType.Parameters, aState, options); err != nil {
@@ -93,4 +100,16 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		err = initializer.Init(ctx)
 	}
 	return err
+}
+
+func (s *Session) handleComponentpOutputType(ctx context.Context, dest interface{}, stateOptions []locator.Option) error {
+	sessionOpt := s.Options
+	s.Options = *s.Indirect(true, stateOptions...)
+	destValue, err := s.operate(ctx, s, s.component)
+	s.Options = sessionOpt
+	if err != nil {
+		return err
+	}
+	reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(destValue).Elem())
+	return nil
 }
