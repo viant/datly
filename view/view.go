@@ -3,7 +3,6 @@ package view
 import (
 	"context"
 	"database/sql"
-	"embed"
 	"fmt"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/setter"
@@ -86,7 +85,7 @@ type (
 		TableBatches     map[string]bool `json:",omitempty"`
 		_transforms      marshal.Transforms
 		_resource        *Resource
-		_fs              *embed.FS
+		_embedder        *state.FSEmbedder
 		_initialized     bool
 		_newCollector    newCollectorFn
 		_codec           *columnsCodec
@@ -306,22 +305,22 @@ func (v *View) Init(ctx context.Context, resource *Resource, opts ...Option) err
 	return v.init(ctx)
 }
 
+func (t *View) ensureEmbedder(reflect.Type) {
+	if t._embedder == nil {
+		t._embedder = state.NewFSEmbedder(nil)
+	}
+	t._embedder.SetType(reflect.TypeOf(t))
+}
+
 func (v *View) init(ctx context.Context) error {
 	takeNames := map[string]bool{
 		v.Name: true,
 	}
 	lookupType := v._resource.LookupType()
-
 	if err := v.Schema.LoadTypeIfNeeded(lookupType); err != nil {
 		return err
 	}
-
-	if rType := v.Schema.Type(); rType != nil && v._fs == nil {
-		iFace := reflect.New(rType).Interface()
-		if embedder, ok := iFace.(state.Embedder); ok {
-			v._fs = embedder.FS()
-		}
-	}
+	v.ensureEmbedder(v.Schema.Type())
 	if v.Description == "" {
 		v.Description = v.Name
 	}
@@ -359,7 +358,7 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 	var viewOptions []Option
 	for i := 0; i < recType.NumField(); i++ {
 		field := recType.Field(i)
-		aTag, err := tags.ParseViewTags(field.Tag, v._fs)
+		aTag, err := tags.ParseViewTags(field.Tag, v._embedder.EmbedFS())
 		if err != nil {
 			return err
 		}
@@ -411,10 +410,9 @@ func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option
 	var err error
 	var connector *Connector
 	var parameters []*state.Parameter
-	if v._fs != nil {
-		options = append(options, WithFS(v._fs))
+	if fs := v._embedder.EmbedFS(); fs != nil {
+		options = append(options, WithFS(fs))
 	}
-
 	if aViewType != nil {
 		options = append(options, WithViewType(aViewType))
 	}

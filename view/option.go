@@ -53,7 +53,10 @@ func WithColumns(columns Columns) Option {
 // WithFS creates fs options
 func WithFS(fs *embed.FS) Option {
 	return func(v *View) error {
-		v._fs = fs
+		v._embedder = state.NewFSEmbedder(fs)
+		if v.Schema != nil {
+			v._embedder.SetType(v.Schema.Type())
+		}
 		return nil
 	}
 }
@@ -75,10 +78,11 @@ func WithTag(aTag *tags.Tag) Option {
 // WithStructTag creates tag options
 func WithStructTag(tag reflect.StructTag, fs *embed.FS) Option {
 	return func(v *View) error {
-		if v._fs == nil {
-			v._fs = fs
+		v._embedder = state.NewFSEmbedder(fs)
+		if v.Schema != nil {
+			v._embedder.SetType(v.Schema.Type())
 		}
-		aTag, err := tags.ParseViewTags(tag, v._fs)
+		aTag, err := tags.ParseViewTags(tag, v._embedder.EmbedFS())
 		if err != nil {
 			return err
 		}

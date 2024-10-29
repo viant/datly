@@ -25,8 +25,8 @@ type (
 		withMarker   bool
 		stateType    *structology.StateType
 		resource     Resource
-		fs           *embed.FS
 		withBodyType bool
+		embedder     *FSEmbedder
 		Doc          Documentation
 	}
 	Option func(t *Type)
@@ -75,8 +75,10 @@ func (t *Type) Init(options ...Option) (err error) {
 		}
 
 	}
+	rType := t.Schema.Type()
+	t.ensureEmbedder(rType)
 
-	if rType := t.Schema.Type(); rType != nil && !hasParameters {
+	if rType != nil && !hasParameters {
 		if err := t.buildParameters(); err != nil {
 			return err
 		}
@@ -95,8 +97,7 @@ func (t *Type) Init(options ...Option) (err error) {
 		}
 	}
 	t.adjustConstants()
-
-	rType := t.Schema.Type()
+	rType = t.Schema.Type()
 	if rType == nil {
 		return fmt.Errorf("actual type was nil")
 	}
@@ -104,11 +105,18 @@ func (t *Type) Init(options ...Option) (err error) {
 	return nil
 }
 
+func (t *Type) ensureEmbedder(reflect.Type) {
+	if t.embedder == nil {
+		t.embedder = NewFSEmbedder(nil)
+	}
+	t.embedder.SetType(reflect.TypeOf(t))
+}
+
 func (t *Type) adjustConstants() {
-	for _, canidates := range t.Parameters {
-		if t.resource != nil && canidates.In.Kind == KindConst {
-			if param, _ := t.resource.LookupParameter(canidates.In.Name); param != nil {
-				canidates.Value = param.Value
+	for _, candidate := range t.Parameters {
+		if t.resource != nil && candidate.In.Kind == KindConst {
+			if param, _ := t.resource.LookupParameter(candidate.In.Name); param != nil {
+				candidate.Value = param.Value
 			}
 		}
 	}
@@ -158,7 +166,6 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 		t.Schema = &Schema{}
 	}
 	t.Schema.SetType(rType)
-	//	t.Schema = NewSchema(rType)
 	return nil
 }
 
@@ -167,16 +174,16 @@ func (t *Type) buildParameter(field reflect.StructField) (*Parameter, error) {
 	if t.resource != nil {
 		lookup = t.resource.LookupType()
 	}
-	return BuildParameter(&field, t.fs, lookup)
+
+	fs := t.embedder.EmbedFS()
+	return BuildParameter(&field, fs, lookup)
 }
 
 func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflect.LookupType) (*Parameter, error) {
-
 	aTag, err := tags.ParseStateTags(field.Tag, fs)
 	if err != nil {
 		return nil, err
 	}
-
 	pTag := aTag.Parameter
 	if pTag == nil {
 		return nil, nil
@@ -297,24 +304,6 @@ func (t *Type) buildParameters() error {
 	return nil
 }
 
-func (t *Type) EmbedFS() *embed.FS {
-	if t.fs != nil {
-		return t.fs
-	}
-	if t.Schema == nil {
-		return nil
-	}
-	rType := t.Schema.Type()
-	if rType == nil {
-		return nil
-	}
-	instance := reflect.New(rType).Elem().Interface()
-	if embedder, ok := instance.(Embedder); ok {
-		t.fs = embedder.FS()
-	}
-	return t.fs
-}
-
 func NewType(option ...Option) (*Type, error) {
 	ret := &Type{}
 	ret.apply(option)
@@ -375,7 +364,10 @@ func WithSchemaMethods(methods []reflect.Method) SchemaOption {
 
 func WithFS(fs *embed.FS) Option {
 	return func(t *Type) {
-		t.fs = fs
+		t.embedder = NewFSEmbedder(fs)
+		if t.Schema != nil {
+			t.embedder.SetType(t.Schema.Type())
+		}
 	}
 }
 
