@@ -248,6 +248,9 @@ func (r Repeated) Convert(toType reflect.Type) (interface{}, error) {
 	case reflect.Float64:
 		v, err := r.AsFloats64()
 		return v, err
+	case reflect.Bool:
+		v, err := r.AsBools()
+		return v, err
 	case reflect.Float32:
 		v, err := r.AsFloats32()
 		return v, err
