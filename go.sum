@@ -1123,6 +1123,8 @@ github.com/viant/sqlx v0.15.2-0.20240904183634-ceb6544fd16c h1:qTESi1p6mTrxXPNS4
 github.com/viant/sqlx v0.15.2-0.20240904183634-ceb6544fd16c/go.mod h1:L8YxBQUAKSvmgRwBxLNLDoCE04nacGuktZZaGqZZXXs=
 github.com/viant/structology v0.5.6-0.20240802174922-5eb157550455 h1:RDd4v38uCo4Gb+3UmQET8/lusddSsLgYuiHZGk5pTTg=
 github.com/viant/structology v0.5.6-0.20240802174922-5eb157550455/go.mod h1:63XfkzUyNw7wdi99HJIsH2Rg3d5AOumqbWLUYytOkxU=
+github.com/viant/structology v0.6.1 h1:Forza+RF/1tmlQFk9ABNhu+IQ8vMAqbYM6FOsYtGh9E=
+github.com/viant/structology v0.6.1/go.mod h1:63XfkzUyNw7wdi99HJIsH2Rg3d5AOumqbWLUYytOkxU=
 github.com/viant/structql v0.5.2 h1:0dAratszxC6AD/TNaV8BnLQQprNO5GJHaKjmszrIoeY=
 github.com/viant/structql v0.5.2/go.mod h1:nm9AYnAuSKH7b7pG+dKVxbQrr1Mgp1CQEMvUwwkE+I8=
 github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c h1:j16wc8v05VpZXLaBDqbLZOAjSyN/XrmzjqgcPm6K2FI=

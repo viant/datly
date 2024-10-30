@@ -51,7 +51,7 @@ require (
 require (
 	firebase.google.com/go/v4 v4.14.0
 	github.com/viant/aerospike v0.2.7
-	github.com/viant/structology v0.5.6-0.20240802174922-5eb157550455
+	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.5.4-0.20241017200152-dec35dd60752
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
