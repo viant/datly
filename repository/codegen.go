@@ -112,32 +112,63 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 		inputType = inputType.Elem()
 	}
 
-	if inputType.Name() != "" && len(c.Input.Type.Parameters) > 0 { //to allow input dql changes, rebuild input from parameters
+	inputTypeName := c.Input.Type.Schema.Name
+	if inputTypeName != "" && len(c.Input.Type.Parameters) > 0 { //to allow input dql changes, rebuild input from parameters
 		if rawType, _ := c.Input.Type.Parameters.ReflectType(c.Input.Type.Package, registry.Lookup, state.WithSetMarker(), state.WithTypeName(inputType.Name())); rawType != nil {
 			inputType = rawType
 		}
 	}
 
-	if inputType.Name() != "" { //rewrite as inline sturct
+	inputType = types.InlineStruct(input.Type(), func(field *reflect.StructField) {
+		if markerTag := field.Tag.Get(structology.SetMarkerTag); markerTag != "" {
+			marketTypeName := inputTypeName + "Has"
+			field.Tag = reflect.StructTag(string(field.Tag) + " typeName:\"" + marketTypeName + "\"")
+			field.Type = types.InlineStruct(field.Type, nil)
+			return
+		}
 
-		inputType = types.InlineStruct(input.Type(), func(field *reflect.StructField) {
-			if markerTag := field.Tag.Get(structology.SetMarkerTag); markerTag != "" {
-				field.Type = types.InlineStruct(field.Type, nil)
+		aTag, _ := tags.ParseStateTags(field.Tag, nil)
+		if aTag != nil && aTag.Parameter != nil {
+			if aTag.Parameter.Kind == string(state.KindComponent) {
+				return
 			}
-			if aTag, _ := tags.ParseStateTags(field.Tag, nil); aTag != nil && aTag.Parameter != nil {
-				if aTag.Parameter.Kind == string(state.KindComponent) {
+			if aTag.Parameter.Kind == string(state.KindObject) {
+				typeName := aTag.TypeName
+				fType := types.EnsureStruct(field.Type)
+				if fType != nil {
+					typeName = fType.String()
+				}
+				fieldPkg := ""
+				if idx := strings.LastIndex(typeName, "."); idx != -1 {
+					fieldPkg = typeName[:idx]
+					typeName = fType.Name()
+				}
+				inTheSamePackage := fieldPkg == statePkg || fieldPkg == ""
+				if aTag.Parameter.Kind == string(state.KindObject) && typeName != "" && inTheSamePackage {
+					field.Type = types.InlineStruct(field.Type, func(innerField *reflect.StructField) {
+						if markerTag := innerField.Tag.Get(structology.SetMarkerTag); markerTag != "" {
+							innerType := types.EnsureStruct(innerField.Type)
+							if innerType == nil || innerType.Name() == "" {
+								return
+							}
+							innerField.Type = types.InlineStruct(innerField.Type, nil)
+							marketTypeName := typeName + "Has"
+							innerField.Tag = reflect.StructTag(string(innerField.Tag) + " typeName:\"" + marketTypeName + "\"")
+						}
+					})
 					return
 				}
+
 			}
-			if sType := types.EnsureStruct(field.Type); sType != nil && sType.Name() != "" && sType.PkgPath() == input.Type().PkgPath() {
-				field.Type = types.InlineStruct(field.Type, func(sField *reflect.StructField) {
-					if innerField := types.EnsureStruct(sField.Type); innerField != nil && innerField.Name() != "" && innerField.PkgPath() == sType.PkgPath() {
-						sField.Type = types.InlineStruct(sField.Type, nil)
-					}
-				})
-			}
-		})
-	}
+		}
+		if sType := types.EnsureStruct(field.Type); sType != nil && sType.Name() != "" && sType.PkgPath() == input.Type().PkgPath() {
+			field.Type = types.InlineStruct(field.Type, func(sField *reflect.StructField) {
+				if innerField := types.EnsureStruct(sField.Type); innerField != nil && innerField.Name() != "" && innerField.PkgPath() == sType.PkgPath() {
+					sField.Type = types.InlineStruct(sField.Type, nil)
+				}
+			})
+		}
+	})
 
 	inputState := xreflect.GenerateStruct(componentName+"Input", inputType, options...)
 	builder.WriteString(inputState)
