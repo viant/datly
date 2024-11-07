@@ -320,6 +320,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	paths := make([]*contract.Path, 0, len(routes))
 	container := r.repository.Container()
 
+	var openAPIs = map[string][]*repository.Provider{}
 	var optionsPaths = map[string][]*path.Path{}
 	for _, anItem := range container.Items {
 		for _, aPath := range anItem.Paths {
@@ -346,7 +347,11 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 					optionsPaths[aPath.URI] = append(optionsPaths[aPath.URI], aPath)
 				}
 				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.Meta.ViewURI, aPath.URI), provider))
-				routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.Meta.OpenApiURI, aPath.URI), r.repository, provider))
+
+				key := r.routeURL(r.config.Meta.OpenApiURI, aPath.URI)
+				openAPIs[key] = append(openAPIs[key], provider)
+				//				//routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.Meta.OpenApiURI, aPath.URI), r.repository, provider))
+
 				routes = append(routes, r.NewStructRoute(r.routeURL(r.config.Meta.StructURI, aPath.URI), provider))
 				routes = append(routes, r.NewStateRoute(r.routeURL(r.config.Meta.StateURI, aPath.URI), provider))
 				routes = append(routes, r.NewMetricRoute(r.metricURL(r.config.Meta.MetricURI, aPath.URI)))
@@ -365,6 +370,10 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 			// ---
 
 		}
+	}
+
+	for key, providers := range openAPIs {
+		routes = append(routes, r.NewOpenAPIRoute(key, r.repository, providers...))
 	}
 
 	for uri, paths := range optionsPaths {

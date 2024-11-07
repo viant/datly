@@ -36,15 +36,14 @@ type (
 		router.Route
 
 		*contract.Output
-		Async        *async.Config          `json:",omitempty"`
-		Cache        *view.Cache            `json:",omitempty"`
-		CSV          *content.CSVConfig     `json:",omitempty"`
-		Const        map[string]interface{} `json:",omitempty"`
-		ConstURL     string                 `json:",omitempty"`
-		DocURL       string
-		Doc          state.Docs
-		RequestBody  *BodyConfig         `json:",omitempty"`
-		ResponseBody *ResponseBodyConfig `json:",omitempty"`
+		Async    *async.Config          `json:",omitempty"`
+		Cache    *view.Cache            `json:",omitempty"`
+		CSV      *content.CSVConfig     `json:",omitempty"`
+		Const    map[string]interface{} `json:",omitempty"`
+		ConstURL string                 `json:",omitempty"`
+		DocURL   string
+		DocURLs  []string
+		Doc      state.Docs
 
 		TypeSrc           *parser.TypeImport         `json:",omitempty"`
 		Package           string                     `json:",omitempty"`
@@ -89,16 +88,6 @@ type (
 			SourceURL string
 		}
 	}
-
-	//depprecated
-	BodyConfig struct {
-		DataType string `json:",omitempty"`
-	}
-
-	//depreacted
-	ResponseBodyConfig struct {
-		From string
-	}
 )
 
 func (r *Rule) StateTypePackage() string {
@@ -115,14 +104,6 @@ func (r *Rule) StateTypePackage() string {
 func (r *Rule) applyGeneratorOutputSetting() {
 	root := r.RootViewlet()
 	outputConfig := root.OutputSettings
-	setter.SetStringIfEmpty(&r.Route.Output.Field, outputConfig.Field)
-	if r.Route.Output.Style == "" && r.Route.Output.Field != "" {
-		r.Route.Output.Style = contract.ComprehensiveStyle
-	}
-	if r.Route.Output.Style == "" {
-		r.Route.Output.Style = contract.Style(outputConfig.Style)
-	}
-
 	if r.Route.Output.Title == "" {
 		r.Route.Output.Title = outputConfig.Title
 	}
@@ -137,17 +118,15 @@ func (r *Rule) DSQLSetting() interface{} {
 	return struct {
 		URI               string
 		Method            string
-		ResponseBody      *ResponseBodyConfig `json:",omitempty"`
-		Type              string              `json:",omitempty"`
-		InputType         string              `json:",omitempty"`
-		OutputType        string              `json:",omitempty"`
-		MessageBus        string              `json:",omitempty"`
-		CompressAboveSize int                 `json:",omitempty"`
-		HandlerArgs       []string            `json:",omitempty"`
+		Type              string   `json:",omitempty"`
+		InputType         string   `json:",omitempty"`
+		OutputType        string   `json:",omitempty"`
+		MessageBus        string   `json:",omitempty"`
+		CompressAboveSize int      `json:",omitempty"`
+		HandlerArgs       []string `json:",omitempty"`
 	}{
 		URI:               r.URI,
 		Method:            r.Method,
-		ResponseBody:      r.ResponseBody,
 		Type:              r.Type,
 		InputType:         r.InputType,
 		OutputType:        r.OutputType,
@@ -166,7 +145,7 @@ func (r *Rule) IsMany() bool {
 }
 
 func (r *Rule) IsBasic() bool {
-	return r.Route.Output.Style != contract.ComprehensiveStyle && r.Route.Output.Field == ""
+	return r.Route.Output.Field() == ""
 }
 
 func (r *Rule) ExtractSettings(dSQL *string) error {
@@ -185,12 +164,7 @@ func (r *Rule) GetField() string {
 	if r.IsBasic() {
 		return ""
 	}
-
-	if r.Field == "" {
-		return "data"
-	}
-
-	return r.Field
+	return r.Output.Field()
 }
 
 func (r *Resource) initRule(ctx context.Context, fs afs.Service, dSQL *string) error {
@@ -199,12 +173,29 @@ func (r *Resource) initRule(ctx context.Context, fs afs.Service, dSQL *string) e
 	if err := r.loadData(ctx, fs, rule.ConstURL, &rule.Const); err != nil {
 		r.messages.AddWarning(r.rule.RuleName(), "const", fmt.Sprintf("failed to load constant : %v %w", rule.ConstURL, err))
 	}
+	r.State.AppendConst(rule.Const)
+	r.loadDocumentation(ctx, fs, rule)
+	return nil
+}
 
-	if err := r.loadData(ctx, fs, rule.DocURL, &rule.Doc); err != nil {
+func (r *Resource) loadDocumentation(ctx context.Context, fs afs.Service, rule *Rule) {
+
+	if len(rule.DocURLs) == 0 && rule.DocURL != "" {
+		rule.DocURLs = append(rule.DocURLs, rule.DocURL)
+	}
+	if len(rule.DocURLs) == 0 {
+		return
+	}
+	if err := r.loadData(ctx, fs, rule.DocURLs[0], &rule.Doc); err != nil {
 		r.messages.AddWarning(r.rule.RuleName(), "doc", fmt.Sprintf("failed to load documentation: %v due to the %v", rule.DocURL, err.Error()))
 	}
-	r.State.AppendConst(rule.Const)
-	return nil
+	for i := 1; i < len(rule.DocURLs); i++ {
+		var doc state.Docs
+		if err := r.loadData(ctx, fs, rule.DocURLs[i], &doc); err != nil {
+			r.messages.AddWarning(r.rule.RuleName(), "doc", fmt.Sprintf("failed to load documentation: %v due to the %v", rule.DocURL, err.Error()))
+		}
+		rule.Doc.Merge(&doc)
+	}
 }
 
 func (r *Resource) loadData(ctx context.Context, fs afs.Service, URL string, dest interface{}) error {
@@ -358,10 +349,6 @@ func (r *Rule) updateViewExclude(n *Viewlet, prefix string) error {
 
 func (r *Rule) applyRootViewRouteShorthands() {
 	root := r.RootViewlet()
-	setter.SetStringIfEmpty(&r.Route.Output.Field, root.Field)
-	if r.Route.Output.Style == "" {
-		r.Route.Output.Style = contract.Style(root.Style)
-	}
 	if r.Route.Output.Cardinality == "" {
 		r.Route.Output.Cardinality = root.ViewCardinality()
 	}
@@ -369,10 +356,6 @@ func (r *Rule) applyRootViewRouteShorthands() {
 }
 
 func (r *Rule) applyShortHands() {
-	if r.ResponseBody != nil {
-		r.Route.Output.ResponseBody = &contract.BodySelector{}
-		r.Route.Output.ResponseBody.StateValue = r.ResponseBody.From
-	}
 	if r.Type != "" {
 		r.Handler = &handler.Handler{
 			Type:       r.Type,
@@ -387,9 +370,6 @@ func (r *Rule) applyShortHands() {
 		r.Compression = &dpath.Compression{
 			MinSizeKb: r.CompressAboveSize,
 		}
-	}
-	if r.Route.Output.Field != "" {
-		r.Route.Output.Style = contract.ComprehensiveStyle
 	}
 	if r.Route.TabularJSON != nil && r.Route.Output.DataFormat == "" {
 		r.Route.Output.DataFormat = content.JSONDataFormatTabular

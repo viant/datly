@@ -245,20 +245,20 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 		content = content[1 : len(content)-1]
 		args := extractArgs(content)
 		switch text {
-		case "WithTag":
+		case "WithTag", "Tag":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithTag to have one args, but got %v", len(args))
 			}
 
 			declaration.Tag = args[0]
-		case "WithCodec":
+		case "WithCodec", "Codec":
 			if len(args) < 1 {
 				return fmt.Errorf("expected WithCodec to have at least one arg, but got %v", len(args))
 			}
 
 			declaration.Codec = args[0]
 			declaration.CodecArgs = args[1:]
-		case "WithHandler":
+		case "WithHandler", "Handler":
 			handler := &state.Handler{}
 			declaration.Handler = handler
 
@@ -269,7 +269,7 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			handler.Name = args[0]
 			handler.Args = args[1:]
 
-		case "WithStatusCode":
+		case "WithStatusCode", "StatusCode":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithStatusCode to have one arg, but got %v", len(args))
 			}
@@ -302,7 +302,7 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 			required := true
 			declaration.Required = &required
-		case "WithPredicate":
+		case "WithPredicate", "Predicate":
 			if err := s.appendPredicate(declaration, args, false); err != nil {
 				return err
 			}
@@ -337,6 +337,8 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			declaration.QuerySelector = strings.Trim(content, "'\"")
 		case "Async":
 			declaration.Async = true
+		default:
+			return fmt.Errorf("unsupported parameter option: %v", text)
 		}
 		cursor.MatchOne(whitespaceMatcher)
 	}

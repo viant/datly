@@ -61,9 +61,14 @@ type Gen struct {
 
 func main() {
 
+	/*
+		-N=run_tests_uri_param -X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/002_uri_param/vendor_details.sql
+		-w=autogen -C='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true' -C='dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy'  -j='/Users/awitas/go/src/github.com/viant/datly/e2e/local/jwt/public.enc|blowfish://default' -m='/Users/awitas/go/src/github.com/viant/datly/e2e/local/jwt/hmac.enc|blowfish://default'
+		--partialConfig='/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/partial_config.json'
+	*/
 	baseDir := filepath.Join(toolbox.CallerDirectory(3), "..")
 	fmt.Printf("base: %v\n", baseDir)
-	caseName := "050_redirect"
+	caseName := "017_generate_post_basic_one"
 	caseFolder := filepath.Join(baseDir, "local/regression/cases/", caseName)
 	gen, err := loadGen(caseFolder, caseName)
 	if err != nil {
@@ -74,6 +79,7 @@ func main() {
 		"-N=" + gen.Name,
 		"-X=" + gen.URL,
 		"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
+		"-G=post",
 		"-C=dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy",
 		fmt.Sprintf("-j='%v/local/jwt/public.enc|blowfish://default'", baseDir),
 		"-w=autogen",

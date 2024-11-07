@@ -260,11 +260,18 @@ func (s State) FilterByKind(kind state.Kind) State {
 }
 
 func (s State) BodyField() string {
+	if bodyParameter := s.BodyParameter(); bodyParameter != nil {
+		return bodyParameter.Name
+	}
+	return ""
+}
+
+func (s State) BodyParameter() *Parameter {
 	body := s.FilterByKind(state.KindRequestBody)
 	if len(body) == 0 {
-		return ""
+		return nil
 	}
-	return body[0].In.Name
+	return body[0]
 }
 
 // Implicit filters implicit parameters
@@ -335,6 +342,15 @@ func (s State) DsqlParameterDeclaration() string {
 	return strings.Join(result, "\n\t")
 }
 
+// DsqlOutputParameterDeclaration returns dql parameter declaration
+func (s State) DsqlOutputParameterDeclaration() string {
+	var result []string
+	for _, param := range s {
+		result = append(result, param.DsqlOutputParameterDeclaration())
+	}
+	return strings.Join(result, "\n\t")
+}
+
 // ensureSchema initialises reflect.Type for each state parameter
 func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 	for _, param := range s {
@@ -379,7 +395,7 @@ func (s State) HandlerLocalVariables() ([]string, string) {
 		names = append(names, fieldName)
 		vars = append(vars, "\t"+definition)
 	}
-	return names, strings.Join(vars, "\n")
+	return names, strings.Join(vars[:1], "\n")
 }
 
 func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
@@ -430,7 +446,7 @@ func (s State) EnsureStructQLTypes() error {
 func (s State) enureStructQLType(param *Parameter) error {
 	sourceParam := s.Lookup(param.In.Name)
 	if sourceParam == nil {
-		return fmt.Errorf("failed to lookup param parameter: %v", param.In.Name)
+		return fmt.Errorf("failed to lookup param parameter: %v for structQL", param.In.Name)
 	}
 	if param.SQL != "" {
 		query, err := structql.NewQuery(param.SQL, sourceParam.Schema.Type(), nil)

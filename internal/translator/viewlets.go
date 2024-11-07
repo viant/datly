@@ -175,9 +175,6 @@ func (n *Viewlets) applyTopLevelSetting(column *sqlparser.Column, viewlet *Viewl
 		if err := inference.TryUnmarshalHint(columnViewlet.OutputJSONHint, &columnViewlet.OutputSettings); err != nil {
 			return err
 		}
-		if columnViewlet.OutputSettings.Field != "" {
-			viewlet.Resource.Rule.Route.Output.Field = columnViewlet.OutputSettings.Field
-		}
 		if columnViewlet.OutputSettings.Cardinality != "" {
 			if viewlet.View.Schema == nil {
 				viewlet.View.Schema = &state.Schema{}

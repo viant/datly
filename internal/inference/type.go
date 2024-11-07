@@ -100,8 +100,11 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, doc sta
 	}
 
 	if doc != nil {
-		if fieldDoc, ok := doc.ColumnDocumentation(table, field.Column.Name); ok {
-			field.Tags.Set(tags.DocumentationTag, TagValue{fieldDoc})
+		if fieldDoc, ok := doc.ColumnDescription(table, field.Column.Name); ok {
+			field.Tags.Set(tags.DescriptionTag, TagValue{fieldDoc})
+		}
+		if fieldDoc, ok := doc.ColumnExample(table, field.Column.Name); ok {
+			field.Tags.Set(tags.ExampleTag, TagValue{fieldDoc})
 		}
 	}
 	if column.Type == "" {
@@ -162,7 +165,8 @@ func (t *Type) ColumnFields(table string, doc state.Documentation) []*view.Field
 		}
 
 		if doc != nil {
-			field.Description, _ = doc.ColumnDocumentation(table, t.columnFields[i].Column.Name)
+			field.Description, _ = doc.ColumnDescription(table, t.columnFields[i].Column.Name)
+			field.Example, _ = doc.ColumnExample(table, t.columnFields[i].Column.Name)
 		}
 
 		result = append(result, &field)

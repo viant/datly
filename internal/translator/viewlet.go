@@ -53,8 +53,6 @@ type (
 	}
 
 	OutputSettings struct {
-		Style       string
-		Field       string
 		Kind        string
 		Cardinality state.Cardinality
 		DataType    string

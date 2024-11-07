@@ -468,11 +468,9 @@ func (t *Template) valueWithPrefix(key string, aValue, prefix string, wrapWithPa
 	if aValue == "" {
 		return key, "", nil
 	}
-
 	if wrapWithParentheses {
 		return key, prefix + "(" + aValue + ")", nil
 	}
-
 	return key, prefix + aValue, nil
 }
 
@@ -480,7 +478,6 @@ func (t *Template) initMetaIfNeeded(ctx context.Context, r *Resource) error {
 	if t.Summary == nil {
 		return nil
 	}
-
 	return t.Summary.Init(ctx, t, r)
 }
 

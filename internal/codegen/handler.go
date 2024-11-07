@@ -2,12 +2,10 @@ package codegen
 
 import (
 	_ "embed"
-	"fmt"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
-	"github.com/viant/datly/view/state"
 	"strings"
 )
 
@@ -22,11 +20,12 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 	t.Config.Type = opts.HandlerType(t.MethodFragment)
 	t.Config.InputType = opts.InputType(t.MethodFragment)
 	t.Config.OutputType = opts.OutputType(t.MethodFragment)
-	t.Config.ResponseBody = nil
 
 	index := NewIndexGenerator(t.State)
+	t.IndexGenerator = index
 	builder := ast.NewBuilder(ast.Options{
 		Lang:               ast.LangGO,
+		StateName:          "i",
 		CallNotifier:       index.OnCallExpr,
 		AssignNotifier:     index.OnAssign,
 		SliceItemNotifier:  index.OnSliceItem,
@@ -37,7 +36,7 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 	if err := t.BusinessLogic.Generate(builder); err != nil {
 		return "", "", "", err
 	}
-
+	t.IndexByCode = builder.IndexByCode.String()
 	indexContent := t.expandOptions(goIndexTmpl, opts)
 	indexContent = strings.ReplaceAll(indexContent, "$Content", index.builder.String())
 
@@ -57,22 +56,9 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 	info.ChecksumPkg()
 	logic := builder.String()
 	handlerContent = strings.Replace(handlerContent, "$BusinessLogic", logic, 1)
+	handlerContent = strings.ReplaceAll(handlerContent, "$DataField", t.InputDataField())
+	handlerContent = strings.ReplaceAll(handlerContent, "$OutputField", t.OutputDataField())
 
-	bodyParam := t.State.FilterByKind(state.KindRequestBody)[0]
-
-	responseSnippet := `
-    return $Response, nil
-`
-	if t.OutputType != nil && t.BodyParameter != nil {
-		responseSnippet = fmt.Sprintf(`
-    response := Output{}
-	response.%v = %v
-	return response, nil
-`, t.BodyParameter.Name, "input."+bodyParam.Name)
-	}
-
-	responseSnippet = strings.Replace(responseSnippet, "$Response", "input."+bodyParam.Name, 1)
-	handlerContent = strings.Replace(handlerContent, "$ResponseCode", responseSnippet, 1)
 	handlerContent = t.expandOptions(handlerContent, opts)
 
 	handlerInit := t.expandOptions(handlerInitTemplate, opts)

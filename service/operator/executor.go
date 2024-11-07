@@ -41,7 +41,8 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 		return nil, err
 	}
 	var responseValue interface{}
-	if aComponent.Output.ResponseBody == nil {
+
+	if len(aComponent.Output.Type.Parameters) == 0 {
 		return responseValue, nil
 	}
 	if stateType := aComponent.Output.Type.Type(); stateType != nil && stateType.IsDefined() {

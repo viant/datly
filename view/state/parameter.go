@@ -32,7 +32,8 @@ type (
 		In                *Location                    `json:",omitempty" yaml:"In" `
 		Scope             string                       `json:",omitempty" yaml:"Scope" `
 		Required          *bool                        `json:",omitempty"  yaml:"Required" `
-		Description       string                       `json:",omitempty" yaml:"Documentation"`
+		Description       string                       `json:",omitempty" yaml:"Description"`
+		Example           string                       `json:",omitempty" yaml:"Example"`
 		Style             string                       `json:",omitempty" yaml:"Style"`
 		MaxAllowedRecords *int                         `json:",omitempty"`
 		MinAllowedRecords *int                         `json:",omitempty"`
@@ -54,7 +55,6 @@ type (
 		_timeLayout     string
 		_selector       *structology.Selector
 		_initialized    bool
-		_dependsOn      *Parameter
 		_state          *structology.StateType
 	}
 	ParameterOption func(p *Parameter)
@@ -536,43 +536,41 @@ func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resour
 		return nil
 	}
 	parameterName := p.In.Name
-	var parameterSelectr string
+	var parameterSelector string
 	if index := strings.Index(parameterName, "."); index != -1 {
 		parameterName = p.In.Name[:index]
-		parameterSelectr = p.In.Name[index+1:]
+		parameterSelector = p.In.Name[index+1:]
 	}
-
 	param, err := resource.LookupParameter(parameterName)
 	if err != nil {
 		return err
 	}
-
 	if err = param.Init(ctx, resource); err != nil {
 		return err
 	}
-
 	baseSchema := param.Schema.Clone()
-
-	if parameterSelectr != "" {
+	if parameterSelector != "" {
 		stateType := structology.NewStateType(param.OutputType())
-		selector := stateType.Lookup(parameterSelectr)
+		selector := stateType.Lookup(parameterSelector)
 		if selector == nil {
-			return fmt.Errorf("invalid parameter %v path %v", p.Name, parameterSelectr)
+			return fmt.Errorf("invalid parameter %v path %v", p.Name, parameterSelector)
 		}
 		baseSchema = NewSchema(selector.Type())
 	}
-
 	p.Schema = baseSchema
-	p._dependsOn = param
 	return nil
-}
-
-func (p *Parameter) Parent() *Parameter {
-	return p._dependsOn
 }
 
 func (p *Parameter) SetSelector(selector *structology.Selector) {
 	p._selector = selector
+}
+
+func (p *Parameter) IsHTTPParameter() bool {
+	switch p.In.Kind {
+	case KindPath, KindForm, KindQuery, KindHeader, KindCookie:
+		return true
+	}
+	return false
 }
 
 func (p *Parameter) Selector() *structology.Selector {

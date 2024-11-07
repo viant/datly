@@ -406,7 +406,7 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 			}
 		}
 		filters := aComponent.Exclusion(aSession.State())
-		data, err := aComponent.Content.Marshal(format, aComponent.Output.Field, output, filters)
+		data, err := aComponent.Content.Marshal(format, aComponent.Output.Field(), output, filters)
 		if err != nil {
 			return nil, response.NewError(500, fmt.Sprintf("failed to marshal response: %v", err), response.WithError(err))
 		}

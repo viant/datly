@@ -27,7 +27,6 @@ type (
 		DataType         string                 `json:",omitempty"`
 		AsyncTableName   string                 `json:",omitempty"`
 		ParameterDerived bool
-		CriteriaParam    string `json:",omitempty"`
 		Cardinality      string
 	}
 )
@@ -188,10 +187,6 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 		if !v.ParameterDerived {
 			selector.Constraints.Filterable = []string{"*"}
 		}
-	}
-
-	if v.CriteriaParam != "" {
-		selector.CriteriaParameter = state.NewRefParameter(v.CriteriaParam)
 	}
 
 	if querySelectors, ok := namespace.Resource.Declarations.QuerySelectors[namespace.Name]; ok {

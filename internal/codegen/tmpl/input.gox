@@ -12,3 +12,6 @@ func init() {
 type Input struct {
     $Fields
 }
+
+
+${EmbedFSFunc}

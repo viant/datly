@@ -284,9 +284,9 @@ func (c *Component) adjustStructField(embedURI string, embeds map[string]string,
 				aField.Anonymous = true
 			}
 		}
-		if fieldTag, value = xreflect.RemoveTag(fieldTag, "doc"); value != "" {
-			*doc = aField.Name + " " + value
-		}
+		//if value := reflect.StructTag(fieldTag).Get("doc"); value != "" {
+		//	*doc = aField.Name + " " + value
+		//}
 		*tag = fieldTag
 	}
 }

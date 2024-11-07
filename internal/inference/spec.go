@@ -171,7 +171,7 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 		for _, item := range spec.Type.columnFields {
 			available = append(available, item.Column.Name)
 		}
-		return fmt.Errorf("failed to ref field for %v, available: %v", refColumn, available)
+		return fmt.Errorf("failed to ref field for %v, available: %v on  %v", refColumn, available, join.Alias)
 	}
 
 	rel := &Relation{Spec: spec,
@@ -186,11 +186,11 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 }
 
 // Selector returns current sepcifiction selector (path from root)
-func (s *Spec) Selector() Selector {
+func (s *Spec) Selector(rootPath string) Selector {
 	if s.Parent != nil {
-		return append(s.Parent.Selector(), s.Type.Name)
+		return append(s.Parent.Selector(rootPath), s.Type.Name)
 	}
-	return []string{s.Type.Name}
+	return []string{rootPath}
 }
 
 // PkStructQL crates a PK struct SQL
@@ -227,7 +227,7 @@ func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 
 // NewSpec discover column derived type for supplied SQL/table
 func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL string, SQLArgs ...interface{}) (*Spec, error) {
-	isAuxiliary := isAuxiliary(SQL)
+	isAuxiliary := isAuxiliary(&SQL)
 	table = normalizeTable(table)
 	SQL = normalizeSQL(SQL, table)
 	if table == "" && SQL == "" {
@@ -254,20 +254,25 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL
 	return result, nil
 }
 
-func isAuxiliary(SQL string) bool {
-	if SQL == "" {
+func isAuxiliary(SQL *string) bool {
+	if *SQL == "" {
 		return false
 	}
-	SQL = TrimParenthesis(SQL)
-	aQuery, _ := sqlparser.ParseQuery(SQL)
+	*SQL = TrimParenthesis(*SQL)
+	aQuery, _ := sqlparser.ParseQuery(*SQL)
 	if aQuery == nil {
 		return false
 	}
 	if aQuery.From.X == nil {
 		return true
 	}
-	from := sqlparser.Stringify(aQuery.From.X)
-	return strings.Contains(from, "(")
+	from := strings.TrimSpace(sqlparser.Stringify(aQuery.From.X))
+	lowerCasedFrom := strings.ToLower(from)
+	ret := strings.HasPrefix(from, "(") && !(strings.Contains(lowerCasedFrom, "select"))
+	if ret {
+		*SQL = strings.Replace(*SQL, from, TrimParenthesis(from), 1)
+	}
+	return ret
 }
 
 func IsToOne(join *query.Join) bool {

@@ -16,14 +16,18 @@ import (
 
 type (
 	Template struct {
-		Resource  *translator.Resource
-		Spec      *inference.Spec
-		Config    *translator.Rule
-		TypeDef   *view.TypeDefinition
-		IsHandler bool
+		Resource   *translator.Resource
+		Spec       *inference.Spec
+		Config     *translator.Rule
+		TypeDef    *view.TypeDefinition
+		IsHandler  bool
+		InsertOnly bool
 		inference.Imports
 		State              inference.State
+		Output             inference.State
 		BusinessLogic      *ast.Block
+		IndexGenerator     *IndexGenerator
+		IndexByCode        string
 		paramPrefix        string
 		recordPrefix       string
 		InputType          reflect.Type
@@ -111,45 +115,70 @@ func (t *Template) setMethodFragment() {
 	}
 }
 
-func (t *Template) BuildInput(spec *inference.Spec, bodyHolder string, opts ...Option) {
+func (t *Template) BuildInput(spec *inference.Spec, explicitInput inference.State, opts ...Option) {
 	t.State = inference.State{}
 	options := &Options{}
 	options.apply(opts)
-	bodyParam := t.buildBodyParameter(spec, bodyHolder)
-	t.State.Append(bodyParam)
-	if options.isInsertOnly() {
+
+	bodyParameter := &inference.Parameter{Parameter: state.Parameter{Schema: &state.Schema{Cardinality: state.Many}}}
+	bodyParameters := explicitInput.FilterByKind(state.KindRequestBody)
+	if len(bodyParameters) > 0 {
+		bodyParameter = bodyParameters[0]
+		if bodyParameter.Schema.Cardinality != "" {
+			spec.Type.Cardinality = bodyParameter.Schema.Cardinality
+		}
+	}
+	t.ensureBodyParameter(spec, bodyParameter)
+	t.State.Append(bodyParameter)
+
+	bodyParameter.Schema.SetType(t.buildState(spec, &t.State, spec.Type.Cardinality))
+	t.BodyType = bodyParameter.Schema.Type()
+	t.InsertOnly = options.IsInsertOnly()
+	if options.IsInsertOnly() {
 		return
 	}
 
-	bodyParam.Schema.SetType(t.buildState(spec, &t.State, spec.Type.Cardinality))
-	t.BodyType = bodyParam.Schema.Type()
 	var structFields []reflect.StructField
 
 	for _, parameter := range t.State {
 		if parameter.In.IsView() && !parameter.IsAuxiliary {
 			parameter.Schema.Cardinality = state.Many
 		}
-		var structTag reflect.StructTag
+		var structTag = reflect.StructTag(parameter.Tag)
 		if parameter.Schema.DataType != "" {
 			structTag = reflect.StructTag(fmt.Sprintf(`%v:"%v"`, xreflect.TagTypeName, parameter.Schema.TypeName()))
 		}
-
 		structFields = append(structFields, reflect.StructField{
 			Name: parameter.Name,
 			Type: parameter.Schema.Type(),
 			Tag:  structTag,
 		})
 	}
+	for i, parameter := range explicitInput {
+		if parameter.In.Kind == state.KindRequestBody {
+			continue
+		}
+		var structTag reflect.StructTag
+		if parameter.Schema.DataType != "" {
+			structTag = reflect.StructTag(fmt.Sprintf(`%v:"%v"`, xreflect.TagTypeName, parameter.Schema.TypeName()))
+		}
+		structFields = append(structFields, reflect.StructField{
+			Name: parameter.Name,
+			Type: parameter.Schema.Type(),
+			Tag:  structTag,
+		})
+		t.State.Append(explicitInput[i])
+	}
 
 	t.InputType = reflect.StructOf(structFields)
 }
 
-func (t *Template) buildBodyParameter(spec *inference.Spec, bodyHolder string) *inference.Parameter {
-	param := &inference.Parameter{}
-	param.Name = spec.Type.Name
-	param.Schema = &state.Schema{DataType: spec.Type.Name, Cardinality: spec.Type.Cardinality}
-	param.In = &state.Location{Kind: state.KindRequestBody, Name: bodyHolder}
-	return param
+func (t *Template) ensureBodyParameter(spec *inference.Spec, bodyParameter *inference.Parameter) {
+	if bodyParameter.Name == "" {
+		bodyParameter.Name = spec.Type.Name
+	}
+	bodyParameter.Schema = &state.Schema{DataType: spec.Type.Name, Cardinality: spec.Type.Cardinality}
+	bodyParameter.In = &state.Location{Kind: state.KindRequestBody, Name: bodyParameter.In.Name}
 }
 
 func (t *Template) BuildLogic(spec *inference.Spec, opts ...Option) {
@@ -167,6 +196,22 @@ func (t *Template) BuildLogic(spec *inference.Spec, opts ...Option) {
 	t.BusinessLogic = &block
 }
 
+func (t *Template) InputDataField() string {
+	dataFields := t.State.FilterByKind(state.KindRequestBody)
+	if len(dataFields) > 0 {
+		return dataFields[0].Name
+	}
+	return ""
+}
+
+func (t *Template) OutputDataField() string {
+	dataFields := t.Output.FilterByKind(state.KindRequestBody)
+	if len(dataFields) > 0 {
+		return dataFields[0].Name
+	}
+	return "Data"
+}
+
 func (t *Template) allocateSequence(options *Options, spec *inference.Spec, block *ast.Block) {
 	if spec.IsAuxiliary {
 		return
@@ -174,15 +219,26 @@ func (t *Template) allocateSequence(options *Options, spec *inference.Spec, bloc
 	if len(spec.Type.PkFields) != 1 {
 		return
 	}
-	if field := spec.Type.PkFields[0]; strings.Contains(field.Schema.TypeName(), "int") {
-		selector := spec.Selector()
 
-		var args = []ast.Expression{ast.NewQuotedLiteral(spec.Table), ast.NewIdent(selector[0]),
+	dataField := t.InputDataField()
+
+	if field := spec.Type.PkFields[0]; strings.Contains(field.Schema.TypeName(), "int") {
+		selector := spec.Selector(t.InputDataField())
+		if dataField == "" {
+			dataField = selector[0]
+		}
+
+		indent := ast.NewIdent(dataField)
+		if t.IsHandler {
+			indent = ast.NewHolderIndent("input", dataField)
+		}
+		var args = []ast.Expression{ast.NewQuotedLiteral(spec.Table), indent,
 			ast.NewQuotedLiteral(strings.TrimLeft(selector.Path(field.Name), "/")),
 		}
 		if options.IsGoLang() {
 			args = append([]ast.Expression{ast.Expression(ast.NewIdent("ctx"))}, args...)
 		}
+
 		call := ast.NewErrorCheck(ast.NewCallExpr(ast.NewIdent("sequencer"), "Allocate", args...))
 		block.Append(ast.NewStatementExpression(call))
 	}
@@ -194,15 +250,15 @@ func (t *Template) allocateSequence(options *Options, spec *inference.Spec, bloc
 }
 
 func (t *Template) indexRecords(options *Options, spec *inference.Spec, block *ast.Block) {
-	if spec.IsAuxiliary {
-		return
-	}
-
+	//if spec.IsAuxiliary {
+	//	return
+	//}
 	field := spec.Type.PkFields[0]
 	holder := t.ParamIndexName(spec.Type.Name, field.Name)
 	source := t.ParamName(spec.Type.Name)
-	indexBy := ast.NewCallExpr(ast.NewIdent(source), "IndexBy", ast.NewQuotedLiteral(field.Name))
-	block.Append(ast.NewAssign(ast.NewIdent(holder), indexBy))
+
+	indexBy := ast.NewCallExpr(ast.NewHolderIndent("i", source), "IndexBy", ast.NewQuotedLiteral(field.Name))
+	block.Append(ast.NewAssign(ast.NewHolderIndent("i", holder), indexBy))
 	for _, rel := range spec.Relations {
 		t.indexRecords(options, rel.Spec, block)
 	}
@@ -217,6 +273,10 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 	}
 
 	structPath := spec.Type.Name
+	if spec == t.Spec {
+		structPath = t.InputDataField()
+	}
+
 	if structPathPrefix != "" {
 		structPath = structPathPrefix + "." + structPath
 	}
@@ -225,7 +285,6 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 	case state.One:
 		structSelector := ast.NewIdent(structPath)
 		checkValid := ast.NewCondition(structSelector, ast.Block{}, nil)
-
 		if rel != nil {
 			parentSelector := structPathPrefix + "." + rel.ParentField.Name
 			holder := structPathPrefix + "." + rel.Name + "." + rel.KeyField.Name
@@ -278,7 +337,9 @@ func (t *Template) modifyRecord(options *Options, recordPath string, spec *infer
 
 	if options.withUpdate {
 		xSelector := ast.NewIdent(t.ParamIndexName(spec.Type.Name, field.Name))
-
+		if t.IsHandler {
+			xSelector = ast.NewHolderIndent("input", t.ParamIndexName(spec.Type.Name, field.Name))
+		}
 		hasFn := "HasKey"
 		if options.IsGoLang() {
 			hasFn = "Has"
@@ -349,16 +410,6 @@ func (t *Template) BuildTypeDef(spec *inference.Spec, wrapperField string, colum
 	t.ensureTypeImport(spec.Type.Name)
 	if wrapperField != "" {
 		t.ensureTypeImport(wrapperField)
-	}
-	t.setResponseBody()
-}
-
-func (t *Template) setResponseBody() {
-	if t.Config.ResponseBody == nil {
-		t.Config.ResponseBody = &translator.ResponseBodyConfig{}
-	}
-	if t.Config.ResponseBody.From == "" {
-		t.Config.ResponseBody.From = t.TypeDef.Name
 	}
 }
 

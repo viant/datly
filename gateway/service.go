@@ -51,7 +51,6 @@ func (r *Service) router(writer http.ResponseWriter) (*Router, http.ResponseWrit
 		writer.WriteHeader(http.StatusNotFound)
 		return nil, nil, false
 	}
-
 	writer = r.WrapResponseIfNeeded(writer)
 	return aRouter, writer, true
 }

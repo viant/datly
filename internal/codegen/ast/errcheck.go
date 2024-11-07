@@ -13,7 +13,7 @@ func (e *ErrorCheck) Generate(builder *Builder) error {
 		if err := e.X.Generate(builder); err != nil {
 			return err
 		}
-		return builder.WriteString(";err != nil {\nreturn nil, err\n}")
+		return builder.WriteString(";err != nil {\nreturn err\n}")
 	case LangVelty:
 		if err := builder.WriteString("\n"); err != nil {
 			return err

@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/codegen"
 	rcodegen "github.com/viant/datly/repository/codegen"
+	"github.com/viant/xdatly/handler/validator"
 
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/inference"
@@ -67,12 +68,12 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		template.IsHandler = options.Generate.Lang == "go"
 		template.SetResource(resource)
 		root.Spec.Type.Package = ruleOption.Package()
-		template.BuildTypeDef(root.Spec, resource.Rule.GetField(), resource.Rule.Doc.Columns)
+		template.BuildTypeDef(root.Spec, resource.DataFieldName(true), resource.Rule.Doc.Columns)
 		template.Imports.AddType(resource.Rule.Type)
 		template.Imports.AddType(resource.Rule.InputType)
 
 		var opts = []codegen.Option{codegen.WithHTTPMethod(gen.HttpMethod()), codegen.WithLang(gen.Lang)}
-		template.BuildInput(spec, resource.Rule.GetField(), opts...)
+		template.BuildInput(spec, resource.State, opts...)
 
 		registry := resource.Resource.TypeRegistry()
 		if parameters := resource.OutputState.FilterByKind(state.KindRequestBody); len(parameters) >= 1 {
@@ -80,6 +81,15 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 			parameters[0].Schema = state.NewSchema(template.BodyType)
 			template.BodyParameter = parameters[0]
 		}
+
+		if template.IsHandler && resource.OutputState.Lookup("Violations") == nil {
+			violationsParameter := &inference.Parameter{Parameter: state.Parameter{In: &state.Location{}}}
+			violationsParameter.In.Kind = state.KindTransient
+			violationsParameter.Name = "Violations"
+			violationsParameter.Schema = state.NewSchema(reflect.TypeOf([]*validator.Violation{}))
+			resource.OutputState.Append(violationsParameter)
+		}
+		template.Output = resource.OutputState
 		template.OutputType, err = resource.OutputState.Parameters().ReflectType(resource.Rule.Package, registry.Lookup)
 		if err != nil {
 			return err
@@ -206,8 +216,16 @@ func (s *Service) generateCode(ctx context.Context, gen *options.Generate, templ
 		s.Files.Append(asset.NewFile(gen.EmbedLocation(k, template.FileMethodFragment()), v))
 	}
 	inputURL := gen.InputLocation(template.FilePrefix(), template.FileMethodFragment())
-
 	s.Files.Append(asset.NewFile(inputURL, inputCode))
+
+	inputInitCode := template.GenerateInputInit(pkg)
+	inputInitURL := gen.InputInitLocation(template.FilePrefix(), template.FileMethodFragment())
+	s.Files.Append(asset.NewFile(inputInitURL, inputInitCode))
+
+	inputValidateCode := template.GenerateInputValidate(pkg)
+	inputValidateURL := gen.InputValidateLocation(template.FilePrefix(), template.FileMethodFragment())
+	s.Files.Append(asset.NewFile(inputValidateURL, inputValidateCode))
+
 	outputCode := template.GenerateOutput(pkg, info)
 	s.Files.Append(asset.NewFile(gen.OutputLocation(template.FilePrefix(), template.FileMethodFragment()), outputCode))
 	return s.generateEntity(ctx, pkg, gen, info, template)

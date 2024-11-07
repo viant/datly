@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/govalidator"
 	"github.com/viant/tagly/format"
@@ -29,21 +30,23 @@ type (
 		MaxItems     *uint64
 		Default      interface{}
 		Example      string
-
-		_tag     format.Tag
-		TypeName string
+		JSONName     string
+		_tag         format.Tag
+		TypeName     string
+		Parameter    *tags.Parameter
 	}
 )
 
-func ParseTag(field reflect.StructField, tag reflect.StructTag) (Tag, error) {
-	aTag, err := format.Parse(tag, "json")
+func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool) (*Tag, error) {
+
+	aTag, err := format.Parse(tag, "json", "openapi")
 	if err != nil {
-		return Tag{}, err
+		return &Tag{}, err
 	}
 
 	validationTag := govalidator.ParseTag(string(tag))
 	if err != nil {
-		return Tag{}, err
+		return &Tag{}, err
 	}
 
 	typeName := tag.Get(xreflect.TagTypeName)
@@ -55,16 +58,34 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag) (Tag, error) {
 	if typeName == "" && rType.Name() != "" && rType.PkgPath() != "time" && rType.Kind() == reflect.Struct {
 		typeName = rType.String()
 	}
+	jsonName := aTag.Name
+	if aTag.Name != "" {
+		jsonName = aTag.Name
+	}
 
-	return Tag{
-		Format:      aTag.DateFormat,
-		Inlined:     aTag.Inline,
-		Ignore:      aTag.Ignore,
-		IsNullable:  !validationTag.Required && field.Type.Kind() == reflect.Ptr,
-		TypeName:    typeName,
+	ret := &Tag{
+		Format:     aTag.DateFormat,
+		Inlined:    aTag.Inline,
+		Ignore:     aTag.Ignore,
+		IsNullable: !validationTag.Required && field.Type.Kind() == reflect.Ptr,
+		TypeName:   typeName,
+
 		CaseFormat:  aTag.CaseFormat,
-		Description: tag.Get(tags.DocumentationTag),
-		Example:     tag.Get("example"),
+		Description: tag.Get(tags.DescriptionTag),
+		Example:     tag.Get(tags.ExampleTag),
+		JSONName:    jsonName,
 		_tag:        *aTag,
-	}, nil
+	}
+
+	if tags, _ := tags.Parse(tag, nil, tags.ParameterTag); tags != nil && isInput {
+		ret.Parameter = tags.Parameter
+		if parameter := ret.Parameter; parameter != nil && parameter.Kind != "" {
+			switch state.Kind(parameter.Kind) {
+			case state.KindForm, state.KindRequestBody:
+			default:
+				ret.Ignore = true
+			}
+		}
+	}
+	return ret, nil
 }

@@ -60,17 +60,24 @@ type (
 	ComponentOption func(c *Component) error
 )
 
+// LookupParameter lookups parameter by name
+func (c *Component) LookupParameter(name string) *state.Parameter {
+	parameter := c.Input.Type.Parameters.Lookup(name)
+	if parameter == nil {
+		parameter = c.Output.Type.Parameters.Lookup(name)
+		if parameter == nil {
+			parameter = c.View.Template.Parameters.Lookup(name)
+		}
+	}
+	return parameter
+}
+
 func (c *Component) TypeRegistry() *xreflect.Types {
 	return c.types
 }
 
 func (c *Component) Init(ctx context.Context, resource *view.Resource) (err error) {
-
 	c.types = resource.TypeRegistry()
-	if c.Output.Style == contract.BasicStyle {
-		c.Output.Field = ""
-	}
-
 	if c.Handler != nil {
 		if err = c.Handler.Init(ctx, resource); err != nil {
 			return err

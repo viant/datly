@@ -69,6 +69,7 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 		if isPtr {
 			rawType = field.Type.Elem()
 		}
+
 		if rawType.Name() == "" || strings.Contains(string(field.Tag), `json:"-\"`) {
 			continue
 		}
@@ -92,6 +93,7 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 		xreflect.WithSnippetBefore(initSnippet),
 		xreflect.WithSnippetAfter(afterSnippet.String()),
 	)
+
 	formatted, err := format.Source([]byte(generatedStruct))
 	if err != nil {
 		return "", err

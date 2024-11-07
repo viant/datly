@@ -10,7 +10,6 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/content"
-	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
@@ -102,9 +101,6 @@ func (r *Route) CorsEnabled() bool {
 }
 
 func (r *Route) Init(ctx context.Context, resource *Resource) error {
-	if r.Output.Style == contract.BasicStyle {
-		r.Output.Field = ""
-	}
 	if err := r.Component.Init(ctx, resource.Resource); err != nil {
 		return err
 	}

@@ -5,7 +5,7 @@ pipeline:
   set_sdk:
     action: sdk.set
     target: $target
-    sdk: go:1.22
+    sdk: go:1.23
 
   database:
     action: run
@@ -30,7 +30,7 @@ pipeline:
         '[]gen': '@gen'
 
       subPath: 'cases/${index}_*'
-      range: 1..069
+      range: 17..017
       template:
         checkSkip:
           action: nop

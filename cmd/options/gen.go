@@ -74,6 +74,14 @@ func (g *Generate) InputLocation(prefix string, methodFragment string) string {
 	return g.normalizeCodeLocation(prefix, methodFragment, "input.go")
 }
 
+func (g *Generate) InputInitLocation(prefix string, methodFragment string) string {
+	return g.normalizeCodeLocation(prefix, methodFragment, "input_init.go")
+}
+
+func (g *Generate) InputValidateLocation(prefix string, methodFragment string) string {
+	return g.normalizeCodeLocation(prefix, methodFragment, "input_validate.go")
+}
+
 func (g *Generate) OutputLocation(prefix string, methodFragment string) string {
 	return g.normalizeCodeLocation(prefix, methodFragment, "output.go")
 }

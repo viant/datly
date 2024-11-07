@@ -418,6 +418,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		sourceView.View.Template.Summary = &view.TemplateSummary{ //TODO go for detail existing impl
 			Source: sourceSQL,
 			Name:   viewlet.Name,
+			Schema: &state.Schema{Name: view.DefaultTypeName(viewlet.Name)},
 			Kind:   "record",
 		}
 
@@ -701,6 +702,23 @@ func (r *Resource) updatedObject(loadType func(typeName string) (reflect.Type, e
 	}
 
 	return nil
+}
+
+func (r *Resource) DataFieldName(inInput bool) string {
+	if inInput {
+		if parameter := r.State.BodyParameter(); parameter != nil {
+			return parameter.Name
+		}
+		return ""
+	}
+	if parameter := r.OutputState.BodyParameter(); parameter != nil {
+		return parameter.Name
+	}
+
+	if len(r.OutputState) == 0 {
+		return ""
+	}
+	return "data"
 }
 
 func NewResource(rule *options.Rule, repository *options.Repository, messages *msg.Messages) *Resource {

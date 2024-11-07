@@ -1,6 +1,8 @@
 package state
 
-import "strings"
+import (
+	"strings"
+)
 
 type (
 	Docs struct {
@@ -12,7 +14,38 @@ type (
 	Documentation map[string]interface{}
 )
 
-func (d Documentation) ColumnDocumentation(table, column string) (string, bool) {
+func (d *Docs) Merge(from *Docs) {
+	if from == nil {
+		return
+	}
+
+	if d.Filter == nil {
+		d.Filter = make(Documentation)
+	}
+	d.Filter.Merge(from.Filter)
+
+	if d.Columns == nil {
+		d.Columns = make(Documentation)
+	}
+	d.Columns.Merge(from.Columns)
+
+	if d.Output == nil {
+		d.Output = make(Documentation)
+	}
+	d.Output.Merge(from.Output)
+
+	if d.Parameters == nil {
+		d.Parameters = make(Documentation)
+	}
+	d.Parameters.Merge(from.Parameters)
+
+}
+
+func (d Documentation) ColumnExample(table, column string) (string, bool) {
+	return d.ColumnDescription(table, column+"$example")
+}
+
+func (d Documentation) ColumnDescription(table, column string) (string, bool) {
 	if tableDoc, ok := d.FieldDocumentation(table); ok {
 		result, ok := tableDoc.ByName(column)
 		if ok {
@@ -79,4 +112,10 @@ func (d Documentation) holderDescription() (string, bool) {
 
 	doc, ok := result.(string)
 	return doc, ok
+}
+
+func (d Documentation) Merge(output Documentation) {
+	for key, value := range output {
+		d[key] = value
+	}
 }

@@ -1,3 +1,4 @@
 package tags
 
-const DocumentationTag = "doc"
+const DescriptionTag = "desc"
+const ExampleTag = "example"

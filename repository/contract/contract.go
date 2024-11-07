@@ -25,17 +25,6 @@ type (
 		ModulePath string
 		Service    service.Type `json:",omitempty"`
 	}
-
-	// BodySelector deprecated,  use output parameter instead
-	//deprecated
-	BodySelector struct {
-		StateValue string
-	}
-)
-
-const (
-	BasicStyle         Style = "Basic"
-	ComprehensiveStyle Style = "Comprehensive"
 )
 
 // Types returns all types

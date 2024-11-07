@@ -438,7 +438,7 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 func (s *Service) ensureOutputParameters(resource *Resource, outputState inference.State) state.Parameters {
 	outputParameters := outputState.Parameters()
 	if len(outputParameters) == 0 {
-		if field := resource.Rule.Route.Output.Field; field != "" {
+		if field := resource.Rule.Route.Output.Field(); field != "" {
 			outputParameters = append(outputParameters, contract.DataOutputParameter(field))
 			outputParameters = append(outputParameters, contract.DefaultStatusOutputParameter())
 

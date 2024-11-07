@@ -54,6 +54,15 @@ func (p Parameters) LookupByLocation(kind Kind, location string) *Parameter {
 	return nil
 }
 
+func (p Parameters) HttpParameters() Parameters {
+	var result = Parameters{}
+	for _, candidate := range p {
+		if candidate.IsHTTPParameter() {
+			result = append(result, candidate)
+		}
+	}
+	return result
+}
 func (p Parameters) UsedBy(text string) Parameters {
 	var result = Parameters{}
 	for _, candidate := range p {
@@ -543,8 +552,13 @@ func (p Parameters) PredicateStructType(d Documentation) reflect.Type {
 		if d != nil {
 			fieldDescription, ok := d.ByName(field.Tag.Filter)
 			if ok {
-				fieldTags.Set(tags.DocumentationTag, fieldDescription)
+				fieldTags.Set(tags.DescriptionTag, fieldDescription)
 			}
+			fieldExample, has := d.ByName(field.Tag.Filter + "$example")
+			if has {
+				fieldTags.Set(tags.ExampleTag, fieldExample)
+			}
+
 		}
 
 		structFields = append(structFields, reflect.StructField{
@@ -599,7 +613,9 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	if strings.Contains(aTag.Parameter.In, ",") {
 		aTag.Parameter.In = "{" + aTag.Parameter.In + "}"
 	}
-	setter.SetStringIfEmpty(&aTag.Documentation, p.Description)
+	setter.SetStringIfEmpty(&aTag.Description, p.Description)
+	setter.SetStringIfEmpty(&aTag.Example, p.Example)
+
 	if p.Value != nil {
 		switch actual := p.Value.(type) {
 		case []string:

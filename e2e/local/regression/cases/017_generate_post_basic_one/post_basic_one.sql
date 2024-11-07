@@ -1,8 +1,11 @@
 /* {
-   "URI": "basic/events", "Method": "POST", "ResponseBody": {
-        "From": "Events"
-   }
+   "URI": "basic/events", "Method": "POST"
 } */
 
-SELECT events.* /* { "Cardinality": "One" } */
+
+#set($_ = $Events<?>(body/).Cardinality('One').Tag('anonymous:"true"'))
+#set($_ = $Events<?>(body/).Output().Tag('anonymous:"true"'))
+
+
+SELECT events.*
 FROM (SELECT * FROM EVENTS) events

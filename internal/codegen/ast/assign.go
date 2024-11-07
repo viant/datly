@@ -34,6 +34,26 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 		return nil
 
 	case LangGO:
+
+		callExpr, ok := s.Expression.(*CallExpr)
+		if ok && callExpr.Name == "IndexBy" {
+			if builder.IndexByCode == nil {
+				builder.IndexByCode = builder.NewBuilder()
+			}
+			indexBuilder := builder.IndexByCode
+			asIdent, _ := s.Holder.(*Ident)
+			if holder := asIdent.Holder; holder != "" {
+				indexBuilder.WriteString(holder + ".")
+			}
+			indexBuilder.WriteString(asIdent.Name)
+			indexBuilder.WriteString(" = ")
+			if err = s.Expression.Generate(indexBuilder); err != nil {
+				return err
+			}
+			indexBuilder.WriteString("\n")
+			return nil
+		}
+
 		if err = builder.WriteString("\n"); err != nil {
 			return err
 		}
@@ -75,6 +95,7 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 }
 
 func (s *Assign) appendGoAssignToken(builder *Builder, isDeclared bool) error {
+
 	if isDeclared {
 		return builder.WriteString(" = ")
 	}

@@ -39,6 +39,7 @@ type (
 		Tag         string            `json:",omitempty"`
 		Ptr         bool
 		Description string
+		Example     string
 	}
 )
 

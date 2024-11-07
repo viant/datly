@@ -144,10 +144,25 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 		return err
 	}
 
+	route := &resource.Rule.Route
+	s.ensureExecutorOutput(route, resource)
 	if err = s.persistRouterRule(ctx, resource, service.TypeExecutor); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (s *Service) ensureExecutorOutput(route *router.Route, resource *Resource) {
+	if route.Handler == nil && len(resource.OutputState) > 0 && len(route.Component.Output.Type.Parameters) == 0 {
+		for _, parameter := range resource.OutputState {
+			if parameter.In.Kind == state.KindRequestBody {
+				if body := route.Component.Input.Type.Parameters.LookupByLocation(parameter.In.Kind, parameter.In.Name); body != nil {
+					parameter.Schema = body.Schema
+				}
+			}
+		}
+		route.Component.Output.Type.Parameters = resource.OutputState.Parameters()
+	}
 }
 
 func (s *Service) buildExecutorView(ctx context.Context, resource *Resource, DSQL string) (err error) {
@@ -359,10 +374,6 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		return fmt.Errorf("failed to compact aState: %w", err)
 	}
 	resource.Resource.Parameters = aState.RemoveReserved().Parameters()
-	if serviceType == service.TypeExecutor {
-		resource.Rule.Route.Output.Field = aState.BodyField()
-	}
-
 	rootViewName := ""
 	if rootView := resource.Rule.RootView(); rootView != nil {
 		rootViewName = rootView.Name

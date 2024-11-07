@@ -50,7 +50,7 @@ func (d *Docs) Init(ctx context.Context, registry *docs.Registry, connectors Con
 
 	provider := registry.Lookup(d.Name)
 	if provider == nil {
-		return fmt.Errorf("not found Documentation provider with name %v", d.Name)
+		return fmt.Errorf("not found Description provider with name %v", d.Name)
 	}
 
 	var serviceOptions []docs.Option

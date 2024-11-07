@@ -14,8 +14,15 @@ type (
 		Indent       string
 		State        *Scope
 		declarations map[string]string
+		IndexByCode  *Builder
 	}
 )
+
+func (b *Builder) NewBuilder() *Builder {
+	r := *b
+	r.Builder = &strings.Builder{}
+	return &r
+}
 
 func (b *Builder) WriteIndentedString(s string) error {
 	fragment := strings.ReplaceAll(s, "\n", "\n"+b.Indent)

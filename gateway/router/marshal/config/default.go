@@ -25,6 +25,13 @@ func (c *IOConfig) GetTimeLayout() string {
 	return c.TimeLayout
 }
 
+func (c *IOConfig) FormatName(value string) string {
+	if c.CaseFormat == "" || !c.CaseFormat.IsDefined() {
+		return value
+	}
+	return text.DetectCaseFormat(value).Format(value, c.CaseFormat)
+}
+
 func NormalizeExclusionKey(item string) string {
 	return strings.ToLower(strings.ReplaceAll(item, "_", ""))
 }

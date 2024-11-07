@@ -48,8 +48,8 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 
 	if i.Body.Type() != nil {
 		bodyType := i.Body.Type().Type()
-		if bodyParam := i.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); bodyParam != nil {
-			bodyParam.Schema.SetType(bodyType)
+		if bodyParams := i.Type.Parameters.FilterByKind(state.KindRequestBody); len(bodyParams) > 0 {
+			bodyParams[0].Schema.SetType(bodyType)
 		}
 	}
 

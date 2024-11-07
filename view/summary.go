@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/repository/codegen"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
@@ -88,6 +89,9 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 	if err := m.Schema.LoadTypeIfNeeded(resource.LookupType()); err != nil && m.Schema.Type() != nil {
 		return err
 	}
+	if m.Schema.Type() != nil && codegen.IsGeneratorContext(ctx) {
+		return nil
+	}
 	source := m._owner._view
 	if parent := source._parent; parent != nil && m.Kind == MetaKindRecord {
 		if compType := parent.Schema.CompType(); compType != nil {
@@ -97,7 +101,6 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 				return fmt.Errorf("invalid view summary:'%s', field %s is missing in the view '%s' schema ", m.Name, m.Name, compType.String())
 			}
 			m.Schema.SetType(field.Type)
-			fmt.Printf("SET SuMMARY: %s\n", field.Type.String())
 			return nil
 		}
 	}
@@ -125,11 +128,11 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 }
 
 func (v *View) generateSchemaTypeFromColumn(caseFormat text.CaseFormat, columns []*Column, relations []*Relation) func() (reflect.Type, error) {
-	return ColumnsSchema(caseFormat, columns, relations, v)
+	return ColumnsSchema(caseFormat, columns, relations, v, nil)
 }
 
-func ColumnsSchema(caseFormat text.CaseFormat, columns []*Column, relations []*Relation, v *View) func() (reflect.Type, error) {
-	return ColumnsSchemaDocumented(caseFormat, columns, relations, v, nil)
+func ColumnsSchema(caseFormat text.CaseFormat, columns []*Column, relations []*Relation, v *View, doc state.Documentation) func() (reflect.Type, error) {
+	return ColumnsSchemaDocumented(caseFormat, columns, relations, v, doc)
 }
 
 func ColumnsSchemaDocumented(caseFormat text.CaseFormat, columns []*Column, relations []*Relation, v *View, doc state.Documentation) func() (reflect.Type, error) {
