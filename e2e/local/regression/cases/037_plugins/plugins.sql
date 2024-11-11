@@ -5,6 +5,8 @@ import (
 )
 
 #set($_ = $Foos<[]*FooPlugin>(body/))
+#set($_ = $Foos<?>(body/).Output().Tag('anonymous:"true"'))
+
 $sequencer.Allocate("FOOS", $Foos, "Id")
 #foreach($recFoos in $Unsafe.Foos)
   $recFoos.Validate()

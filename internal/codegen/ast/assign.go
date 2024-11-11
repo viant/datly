@@ -36,7 +36,7 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 	case LangGO:
 
 		callExpr, ok := s.Expression.(*CallExpr)
-		if ok && callExpr.Name == "IndexBy" {
+		if ok && callExpr.Name == "IndexBy" && builder.Options.Lang == LangGO {
 			if builder.IndexByCode == nil {
 				builder.IndexByCode = builder.NewBuilder()
 			}

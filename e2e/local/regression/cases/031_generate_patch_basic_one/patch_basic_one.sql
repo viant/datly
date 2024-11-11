@@ -1,6 +1,9 @@
-/* {
-   "URI": "basic/foos", "Method": "PATCH"
-} */
+/* {"URI": "basic/foos", "Method": "PATCH"} */
 
-SELECT foos.* /* { "Cardinality": "One" } */
+#set($_ = $Foos<?>(body/).Cardinality('One').Tag('anonymous:"true"'))
+#set($_ = $Foos<?>(body/).Output().Tag('anonymous:"true"'))
+
+
+
+SELECT foos.*
 FROM (SELECT * FROM FOOS) foos

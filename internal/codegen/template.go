@@ -249,8 +249,17 @@ func (t *Template) indexRecords(options *Options, spec *inference.Spec, block *a
 	holder := t.ParamIndexName(spec.Type.Name, field.Name)
 	source := t.ParamName(spec.Type.Name)
 
-	indexBy := ast.NewCallExpr(ast.NewHolderIndent("i", source), "IndexBy", ast.NewQuotedLiteral(field.Name))
-	block.Append(ast.NewAssign(ast.NewHolderIndent("i", holder), indexBy))
+	callIdent := ast.NewIdent(source)
+	if t.IsHandler {
+		callIdent = ast.NewHolderIndent("i", source)
+	}
+	holderIdent := ast.NewIdent(holder)
+	if t.IsHandler {
+		holderIdent = ast.NewHolderIndent("i", holder)
+	}
+
+	indexBy := ast.NewCallExpr(callIdent, "IndexBy", ast.NewQuotedLiteral(field.Name))
+	block.Append(ast.NewAssign(holderIdent, indexBy))
 	for _, rel := range spec.Relations {
 		t.indexRecords(options, rel.Spec, block)
 	}
