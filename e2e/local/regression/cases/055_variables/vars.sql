@@ -4,6 +4,10 @@
   "ConstURL": "./properties.json"
 }
  */
+
+#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+
+
 SELECT main.*
 FROM (
          SELECT

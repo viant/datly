@@ -1,7 +1,7 @@
 /* {"URI":"user-metadata"} */
 
-#set( $_ = $Fields<[]string>(query/fields).Optional().QuerySelector('vendor'))
-#set( $_ = $Page<int>(query/page).Optional().QuerySelector('vendor'))
+#set( $_ = $Fields<[]string>(query/fields).Optional().QuerySelector('user_metadata'))
+#set( $_ = $Page<int>(query/page).Optional().QuerySelector('user_metadata'))
 
 #set( $_ = $UserMetadata<?>(output/view).WithTag('anonymous:"true"'))
 

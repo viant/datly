@@ -1,4 +1,4 @@
-/* {"URI":"basic/patch-custom","Method":"PATCH","ResponseBody":{"From":"Foos"}} */
+/* {"URI":"basic/patch-custom","Method":"PATCH"} */
 
 import (
 	"regression/cases/056_custom_patch.Foos"
@@ -7,6 +7,8 @@ import (
 
 
 #set($_ = $Foos<[]*Foos>(body/))
+#set($_ = $Foos<[]*Foos>(body/).Output().Tag('anonymous:"true"'))
+
 	#set($_ = $CurFoosId<?>(param/Foos) /*
 ? SELECT ARRAY_AGG(Id) AS Values FROM  `/` LIMIT 1
 */

@@ -663,13 +663,15 @@ WHERE ID = $Entity.Id
 
 ```sql
 
-/* {"Method":"PATCH","ResponseBody":{"From":"Product"}} */
+/* {"Method":"PATCH"} */
 
 import (
 	"product.Product"
 )
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
-#set($_ = $Campaign<*[]Product>(body/Entity))
+#set($_ = $Products<*[]Product>(body/Entity))
+#set($_ = $Products<*[]Product>(body/Entity).Output())
+
 ```
 
 
@@ -677,13 +679,14 @@ import (
 
 ```sql
 
-/* {"Method":"PATCH","ResponseBody":{"From":"Product"}} */
+/* {"Method":"PATCH"} */
 
 import (
 	"./product.Product"
 )
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
-#set($_ = $Campaign<*[]Product>(body/Entity))
+#set($_ = $Products<*[]Product>(body/Entity))
+#set($_ = $Products<*[]Product>(body/Entity).Output())
 
 #set($validation = $New("*Validation"))
 #set($hasError = $Product.Init($validation))

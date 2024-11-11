@@ -1,7 +1,4 @@
-/* {"URI": "comprehensive/custom-response", "Method": "POST", "ResponseBody": {
-        "From": "Events"
-   },
-   "Field": "Data" } */
+/* {"URI": "comprehensive/custom-response", "Method": "POST"} */
 
 
 import (
@@ -9,7 +6,9 @@ import (
 	"regression/cases/041_custom_response.Data"
 )
 
-#set($_ = $Events<*Events>(body/Data))
+#set( $_ = $Events<*Events>(body/Data))
+#set( $_ = $Data<*Events>(body/Data).Output())
+#set( $_ = $Status<?>(output/status).Tag('anonymous:"true"'))
 
 $sequencer.Allocate("EVENTS", $Events, "Id")
 #set($defaultResponse = $http.Do(

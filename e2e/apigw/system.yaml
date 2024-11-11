@@ -1,9 +1,0 @@
-pipeline:
-  deployConfig:
-    action: storage:copy
-    expand: true
-    source:
-      URL: $appPath/e2e/lambda/resource/config.json
-    dest:
-      URL: s3://${configBucket}/${appName}/config.json
-      Credentials: $awsCredentials

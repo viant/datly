@@ -1,5 +1,0 @@
-{
-  "Name": "$tagId",
-  "URL": "$path/perf_async_view.sql",
-  "Args": "--envURL=$path/env.json"
-}

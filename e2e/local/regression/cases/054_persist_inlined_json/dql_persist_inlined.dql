@@ -1,10 +1,11 @@
-/* {"URI":"dql-persist-inlined","Method":"PUT","ResponseBody":{"From":"Preference"}} */
+/* {"URI":"dql-persist-inlined","Method":"PUT"} */
 
 import (
     "regression/cases/054_persist_inlined_json.Preference"
 )
 
-#set($_ = $Preference<*Preference>(body/))
+#set( $_ = $Preference<*Preference>(body/))
+#set( $_ = $Preference<*Preference>(body/).Tag('anonymous:"true"').Output())
 
 
 #set($_ = $Record /* {"Required":false}

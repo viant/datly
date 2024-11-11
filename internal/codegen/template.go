@@ -175,7 +175,10 @@ func (t *Template) ensureBodyParameter(spec *inference.Spec, bodyParameter *infe
 		bodyParameter.Name = spec.Type.Name
 	}
 	bodyParameter.Schema = &state.Schema{DataType: spec.Type.Name, Cardinality: spec.Type.Cardinality}
-	bodyParameter.In = &state.Location{Kind: state.KindRequestBody, Name: bodyParameter.In.Name}
+	if bodyParameter.In == nil {
+		bodyParameter.In = &state.Location{Kind: state.KindRequestBody}
+	}
+
 }
 
 func (t *Template) BuildLogic(spec *inference.Spec, opts ...Option) {

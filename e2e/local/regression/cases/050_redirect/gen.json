@@ -1,5 +1,5 @@
 {
   "Name": "$tagId",
-  "URL": "$path/perf_view.sql",
+  "URL": "$path/redirect.sql",
   "Args": ""
 }

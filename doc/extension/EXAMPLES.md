@@ -1384,7 +1384,7 @@ func (a *Actor) Init(cur *Actor) bool {
   + **mysql and sequencer case (our case) when the db table has required fields (more than id field)**  
     This case requires running initialization before using a sequencer.
   ```code
-  /* {"URI":"actor","Method":"PATCH","ResponseBody":{"From":"Actor"}} */
+  /* {"URI":"actor","Method":"PATCH"} */
   
   import (
       "actor.Actor"
@@ -1392,6 +1392,8 @@ func (a *Actor) Init(cur *Actor) bool {
   )
   
   #set($_ = $Actor<[]*Actor>(body/Entity))
+  #set($_ = $Actor<[]*Actor>(body/Entity).Output())
+  
   #set($_ = $ActorActorId<?>(param/Actor) /*
      ? SELECT ARRAY_AGG(ActorId) AS Values FROM  `/` LIMIT 1
      */

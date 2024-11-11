@@ -7,6 +7,9 @@ import (
 	"regression/cases/044_inline_json_codec.Record"
 )
 
+#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+
+
 SELECT main.*,
   cast(main AS Record)
 FROM (
