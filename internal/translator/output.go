@@ -94,8 +94,8 @@ func (s *Service) updateOutputFieldTypes(resource *Resource) {
 		case state.KindMeta:
 			contract.UpdateParameterMetaType(&parameter.Parameter)
 		case state.KindRequestBody:
-			if baseParameter := resource.State.FilterByKind(state.KindRequestBody); len(baseParameter) > 0 {
-				if baseParameter[0].In.Name == "" {
+			if baseParameter := resource.State.FilterByKind(state.KindRequestBody); len(baseParameter) == 1 {
+				if baseParameter[0].In.Name == parameter.In.Name {
 					parameter.Schema = baseParameter[0].Schema.Clone()
 				}
 			}

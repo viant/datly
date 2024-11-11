@@ -76,9 +76,12 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		template.BuildInput(spec, resource.State, opts...)
 
 		registry := resource.Resource.TypeRegistry()
+
 		if parameters := resource.OutputState.FilterByKind(state.KindRequestBody); len(parameters) >= 1 {
 			parameters[0].Tag += `  typeName:"` + template.Prefix + `"`
+			cardinality := parameters[0].Schema.Cardinality
 			parameters[0].Schema = state.NewSchema(template.BodyType)
+			parameters[0].Schema.Cardinality = cardinality
 			template.BodyParameter = parameters[0]
 		}
 

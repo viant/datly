@@ -780,6 +780,10 @@ func (s *State) BodyParameter() *Parameter {
 			return candidate
 		}
 	}
+
+	if len(dataFields) == 1 {
+		return dataFields[0]
+	}
 	var fields = []reflect.StructField{}
 	for _, dataField := range dataFields {
 		fields = append(fields, reflect.StructField{Name: dataField.In.Name, Type: dataField.Schema.Type(), Tag: reflect.StructTag(dataField.Tag)})

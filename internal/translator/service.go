@@ -225,6 +225,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 	s.detectComponentViewType(componentColumns, resource)
+
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
 		return err
 	}

@@ -1,8 +1,11 @@
 /* {
-   "URI": "basic/foos", "Method": "PUT", "ResponseBody": {
-        "From": "Foos"
-   }
+   "URI": "basic/foos", "Method": "PUT"
 } */
 
-SELECT foos.* /* { "Cardinality": "One" } */
+
+#set($_ = $Foos<?>(body/).Cardinality('One').Tag('anonymous:"true"'))
+#set($_ = $Foos<?>(body/).Output().Tag('anonymous:"true"'))
+
+
+SELECT foos.*
 FROM (SELECT * FROM FOOS) foos

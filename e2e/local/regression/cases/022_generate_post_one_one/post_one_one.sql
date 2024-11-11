@@ -1,10 +1,11 @@
-/* {"URI": "basic/events-one-one", "Method": "POST",
-   "ResponseBody": {
-        "From": "Events"
-   }
-} */
+/* {"URI": "basic/events-one-one", "Method": "POST" } */
 
-SELECT EVENTS.* /* { "Cardinality": "One" } */,
-       EVENTS_PERFORMANCE.* /* { "Cardinality": "One" } */
+
+#set($_ = $Events<?>(body/).Cardinality('One').Tag('anonymous:"true"'))
+#set($_ = $Events<?>(body/).Output().Tag('anonymous:"true"'))
+
+
+SELECT EVENTS.*,
+       EVENTS_PERFORMANCE.*
 FROM (SELECT ID, QUANTITY FROM EVENTS) EVENTS
-JOIN (SELECT * FROM EVENTS_PERFORMANCE) EVENTS_PERFORMANCE ON EVENTS.ID = EVENTS_PERFORMANCE.EVENT_ID
+JOIN (SELECT * FROM EVENTS_PERFORMANCE) EVENTS_PERFORMANCE ON EVENTS.ID = EVENTS_PERFORMANCE.EVENT_ID AND 1=1

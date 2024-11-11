@@ -2,9 +2,8 @@
 
 
 #set($_ = $Events<?>(body/Data).Cardinality('Many'))
-
 #set($_ = $Status<?>(output/status).Tag('anonymous:"true"'))
-#set($_ = $Data<?>(state/Events).Output())
+#set($_ = $Data<?>(body/Data).Output())
 
 
 SELECT events.*

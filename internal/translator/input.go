@@ -18,6 +18,8 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet) 
 	}
 	registry := resource.typeRegistry
 	inputState := inference.State{}
+	rootViewlet := resource.Rule.RootViewlet()
+
 	for i, item := range resource.State {
 		s.updatedNamedType(&item.Parameter, registry)
 		if strings.Contains(item.Name, ".") {
@@ -27,6 +29,9 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet) 
 			return err
 		}
 		inputState.Append(resource.State[i])
+		if item.In.Kind == state.KindRequestBody {
+			item.Schema.SetType(rootViewlet.View.Schema.Type())
+		}
 	}
 
 	inputState.Append(resource.AsyncState...)
