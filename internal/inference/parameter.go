@@ -94,6 +94,9 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	if p.Scope != "" {
 		builder.WriteString(".Scope('" + p.Scope + "')")
 	}
+	if p.Tag != "" {
+		builder.WriteString(".WithTag('" + p.Tag + "')")
+	}
 	if p.Value != "" {
 		switch actual := p.Value.(type) {
 		case string:

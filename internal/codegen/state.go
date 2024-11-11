@@ -112,6 +112,9 @@ func (t *Template) GenerateInputValidate(pkg string) string {
 
 	builder := strings.Builder{}
 	for _, parameter := range t.State {
+		if parameter.PathParam == nil || parameter.PathParam.IndexField == nil {
+			continue
+		}
 		if parameter.In.IsView() && !parameter.IsAuxiliary {
 			builder.WriteString("case *")
 			builder.WriteString(parameter.Schema.SimpleTypeName())

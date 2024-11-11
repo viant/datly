@@ -329,6 +329,9 @@ func (c *Component) transformFn(request *http.Request, transform *marshal.Transf
 }
 
 func (c *Component) Doc() (docs.Service, bool) {
+	if c == nil {
+		return nil, false
+	}
 	return c.doc, c.doc != nil
 }
 

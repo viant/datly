@@ -266,14 +266,6 @@ func (s State) BodyField() string {
 	return ""
 }
 
-func (s State) BodyParameter() *Parameter {
-	body := s.FilterByKind(state.KindRequestBody)
-	if len(body) == 0 {
-		return nil
-	}
-	return body[0]
-}
-
 // Implicit filters implicit parameters
 func (s State) Implicit() State {
 	result := State{}
@@ -735,6 +727,9 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 			return nil
 		}))
 
+	if err != nil {
+		return nil, err
+	}
 	dirTypes.GoImports = goImports
 	if err != nil {
 		return nil, err
@@ -773,4 +768,24 @@ func discoverEmbeds(embedRoot string) *embed.Holder {
 		}
 	}
 	return embedFs
+}
+
+func (s *State) BodyParameter() *Parameter {
+	dataFields := s.FilterByKind(state.KindRequestBody)
+	if len(dataFields) == 0 {
+		return nil
+	}
+	for _, candidate := range dataFields {
+		if candidate.In.Name == "" {
+			return candidate
+		}
+	}
+	var fields = []reflect.StructField{}
+	for _, dataField := range dataFields {
+		fields = append(fields, reflect.StructField{Name: dataField.In.Name, Type: dataField.Schema.Type(), Tag: reflect.StructTag(dataField.Tag)})
+	}
+	rType := reflect.StructOf(fields)
+	body := &Parameter{Parameter: state.Parameter{Name: "data", In: state.NewBodyLocation(""), Schema: state.NewSchema(rType), Tag: "anonymous:\"true\""}}
+	*s = append(*s, body)
+	return body
 }

@@ -7,6 +7,11 @@
          "TimeToLiveMs": 3600000
     }
 } */
+
+#set( $_ = $Page<int>(query/page).Optional().QuerySelector('vendor'))
+#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+
+
 SELECT vendor.*,
        products.* EXCEPT VENDOR_ID
 FROM (SELECT * FROM VENDOR t WHERE t.ID = $vendorID ) vendor

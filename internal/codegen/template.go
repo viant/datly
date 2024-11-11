@@ -121,16 +121,13 @@ func (t *Template) BuildInput(spec *inference.Spec, explicitInput inference.Stat
 	options.apply(opts)
 
 	bodyParameter := &inference.Parameter{Parameter: state.Parameter{Schema: &state.Schema{Cardinality: state.Many}}}
-	bodyParameters := explicitInput.FilterByKind(state.KindRequestBody)
-	if len(bodyParameters) > 0 {
-		bodyParameter = bodyParameters[0]
-		if bodyParameter.Schema.Cardinality != "" {
-			spec.Type.Cardinality = bodyParameter.Schema.Cardinality
-		}
+	if parameter := explicitInput.BodyParameter(); parameter != nil {
+		bodyParameter = parameter
+		spec.Type.Cardinality = parameter.Schema.Cardinality
 	}
+
 	t.ensureBodyParameter(spec, bodyParameter)
 	t.State.Append(bodyParameter)
-
 	bodyParameter.Schema.SetType(t.buildState(spec, &t.State, spec.Type.Cardinality))
 	t.BodyType = bodyParameter.Schema.Type()
 	t.InsertOnly = options.IsInsertOnly()
@@ -197,19 +194,11 @@ func (t *Template) BuildLogic(spec *inference.Spec, opts ...Option) {
 }
 
 func (t *Template) InputDataField() string {
-	dataFields := t.State.FilterByKind(state.KindRequestBody)
-	if len(dataFields) > 0 {
-		return dataFields[0].Name
-	}
-	return ""
+	return t.State.BodyField()
 }
 
 func (t *Template) OutputDataField() string {
-	dataFields := t.Output.FilterByKind(state.KindRequestBody)
-	if len(dataFields) > 0 {
-		return dataFields[0].Name
-	}
-	return "Data"
+	return t.Output.BodyField()
 }
 
 func (t *Template) allocateSequence(options *Options, spec *inference.Spec, block *ast.Block) {
@@ -253,6 +242,9 @@ func (t *Template) indexRecords(options *Options, spec *inference.Spec, block *a
 	//if spec.IsAuxiliary {
 	//	return
 	//}
+	if len(spec.Type.PkFields) == 0 {
+		return
+	}
 	field := spec.Type.PkFields[0]
 	holder := t.ParamIndexName(spec.Type.Name, field.Name)
 	source := t.ParamName(spec.Type.Name)

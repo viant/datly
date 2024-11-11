@@ -35,7 +35,7 @@ FROM (
 
 Where
 - **RouteConfig** is JSON representation of [Route](option/route.go) settings i.e {"URI":"app1/view1/{Id}"}
-- **OutputConfig** is JSON representation of [Output](option/output.go) settings i.e {"Style":"Comprehensive"}
+- **OutputConfig** is JSON representation of [Output](option/output.go) settings 
 - **ColumnConfig** is JSON representation of [Column](option/column.go) settings i.e {"DataType":"bool"}
 - **ViewConfig**  is JSON representation of [View](option/view.go) settings i.e {"Cache":{"Ref":"aerospike"}}
 

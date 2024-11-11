@@ -100,7 +100,6 @@ func NewComponentSchema(components *repository.Service, component *repository.Co
 	}
 
 	doc, _ := component.Doc()
-
 	return &ComponentSchema{
 		components: components,
 		component:  component,

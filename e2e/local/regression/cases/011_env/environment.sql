@@ -1,5 +1,6 @@
 /* { "URI":"vendors-env/", "Const": { "Vendor": "VENDOR", "Product": "PRODUCT" } } */
 
+#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
 
 SELECT vendor.*,
        products.*

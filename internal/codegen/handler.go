@@ -36,7 +36,9 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 	if err := t.BusinessLogic.Generate(builder); err != nil {
 		return "", "", "", err
 	}
-	t.IndexByCode = builder.IndexByCode.String()
+	if builder.IndexByCode != nil {
+		t.IndexByCode = builder.IndexByCode.String()
+	}
 	indexContent := t.expandOptions(goIndexTmpl, opts)
 	indexContent = strings.ReplaceAll(indexContent, "$Content", index.builder.String())
 

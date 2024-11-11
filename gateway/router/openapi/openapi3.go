@@ -86,6 +86,10 @@ func (g *generator) generatePaths(ctx context.Context, components *repository.Se
 		if err != nil {
 			retErr = err
 		}
+		if component == nil {
+			fmt.Printf("provider.Component(ctx) returned nil\n")
+			continue
+		}
 		componentSchema := NewComponentSchema(components, component, container)
 		operation, err := g.generateOperation(ctx, componentSchema)
 		if err != nil {

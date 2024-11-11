@@ -145,19 +145,26 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 	}
 
 	route := &resource.Rule.Route
-	s.ensureExecutorOutput(route, resource)
+	s.ensureExcutorContract(route, resource)
 	if err = s.persistRouterRule(ctx, resource, service.TypeExecutor); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Service) ensureExecutorOutput(route *router.Route, resource *Resource) {
+func (s *Service) ensureExcutorContract(route *router.Route, resource *Resource) {
+	if route.Handler != nil {
+		return
+	}
+	root := resource.Resource.Parameters
+
+	fmt.Println("root", root)
+
 	if route.Handler == nil && len(resource.OutputState) > 0 && len(route.Component.Output.Type.Parameters) == 0 {
 		for _, parameter := range resource.OutputState {
 			if parameter.In.Kind == state.KindRequestBody {
-				if body := route.Component.Input.Type.Parameters.LookupByLocation(parameter.In.Kind, parameter.In.Name); body != nil {
-					parameter.Schema = body.Schema
+				if body := resource.State.FilterByKind(parameter.In.Kind); len(body) > 0 {
+					parameter.Schema = body[0].Schema
 				}
 			}
 		}

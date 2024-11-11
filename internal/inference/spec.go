@@ -221,6 +221,9 @@ func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 		i++
 		structQLParam := columnParameter(field)
 		builder.WriteString(fmt.Sprintf(`$criteria.In("%v", $%v.Values)`, field.Column.Name, structQLParam))
+		if field.Column.IsAutoincrement {
+			break
+		}
 	}
 	return builder.String()
 }

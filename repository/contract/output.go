@@ -165,10 +165,11 @@ func (r *Output) Field() string {
 	}
 	outputParameter := r.Type.Parameters.LookupByLocation(state.KindView, "")
 	if outputParameter == nil {
-		if outputParameters := r.Type.Parameters.FilterByKind(state.KindRequestBody); len(outputParameters) > 0 {
-			outputParameter = outputParameters[0]
+		if candidate := r.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); candidate != nil {
+			outputParameter = candidate
 		}
 	}
+
 	if outputParameter != nil {
 		return outputParameter.Name
 	}
