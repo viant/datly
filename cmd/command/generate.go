@@ -394,12 +394,18 @@ func (s *Service) translateGenerationOptions(gen *options.Generate, info *plugin
 }
 
 func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.Generate, info *plugin.Info, template *codegen.Template) error {
-	code, err := template.GenerateEntity(ctx, pkg, info)
+	embedContent := make(map[string]string)
+	embedURI := strings.ToLower(template.Spec.Namespace)
+
+	code, err := template.GenerateEntity(ctx, pkg, info, embedContent)
 	if err != nil {
 		return err
 	}
 	entityName := ensureGoFileCaseFormat(template)
 	s.Files.Append(asset.NewFile(gen.EntityLocation(template.FilePrefix(), template.FileMethodFragment(), entityName), code))
+	for k, v := range embedContent {
+		s.Files.Append(asset.NewFile(gen.EmbedLocation(embedURI+"/"+k, template.FileMethodFragment()), v))
+	}
 	return nil
 }
 

@@ -263,3 +263,12 @@ func (v *Viewlet) mergeTableJSONHint(hint string) error {
 	data, _ := parser.MergeStructs(&output, &v.OutputSettings)
 	return json.Unmarshal(data, &v.OutputSettings)
 }
+
+func (v *Viewlet) NormalizeSQL() {
+	if v.Spec != nil {
+		v.Spec.NormalizeSQL()
+	}
+	if v.Table != nil && v.Table.Name != "" {
+		v.SQL = strings.ReplaceAll(v.SQL, "("+v.Table.Name+")", v.Table.Name)
+	}
+}

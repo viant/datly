@@ -85,6 +85,7 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 	}
 
 	if err := n.Each(func(viewlet *Viewlet) error {
+		viewlet.NormalizeSQL()
 		if err := setType(ctx, viewlet, resource.Rule.Doc.Columns); err != nil {
 			return fmt.Errorf("failed to init viewlet: %v, %w", viewlet.Name, err)
 		}

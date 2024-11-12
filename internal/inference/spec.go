@@ -49,6 +49,13 @@ type (
 	Selector []string
 )
 
+func (s *Spec) NormalizeSQL() {
+	if s.SQL == "" || s.Table == "" {
+		return
+	}
+	s.SQL = strings.ReplaceAll(s.SQL, "("+s.Table+")", s.Table)
+}
+
 func (s *Spec) EnsureRelationType() {
 	if len(s.Relations) == 0 {
 		return

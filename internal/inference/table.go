@@ -93,6 +93,11 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 	}
 	t.Namespace = strings.ToLower(query.From.Alias)
 	from := sqlparser.Stringify(query.From.X)
+
+	trimFrom := strings.TrimSpace(from)
+	if strings.HasPrefix(trimFrom, "(") && strings.HasSuffix(trimFrom, ")") {
+		from = trimFrom[1 : len(trimFrom)-1]
+	}
 	if !HasWhitespace(from) {
 		t.Name = from
 	}

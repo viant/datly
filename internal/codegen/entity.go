@@ -5,7 +5,11 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/tags"
+	"github.com/viant/tagly/format/text"
+
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
 	"go/format"
@@ -22,7 +26,7 @@ const (
 var entityTemplate string
 
 // GenerateEntity generate golang entity
-func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.Info) (string, error) {
+func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.Info, embedContent map[string]string) (string, error) {
 	pkg = info.Package(pkg)
 	if t.MethodFragment != "" && t.MethodFragment != "get" {
 		pkg = strings.ToLower(t.MethodFragment)
@@ -62,35 +66,21 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 	recv := strings.ToLower(t.TypeDef.Name[:1])
 
 	afterSnippet := strings.Builder{}
-	for i := 0; i < rType.NumField(); i++ {
-		field := rType.Field(i)
-		isPtr := field.Type.Kind() == reflect.Ptr
-		rawType := field.Type
-		if isPtr {
-			rawType = field.Type.Elem()
-		}
 
-		if rawType.Name() == "" || strings.Contains(string(field.Tag), `json:"-\"`) {
-			continue
-		}
-
-		afterSnippet.WriteString(fmt.Sprintf("\nfunc (%v *%v) Set%v(value %v) {", recv, t.TypeDef.Name, field.Name, rawType.String()))
-		if isPtr {
-			afterSnippet.WriteString(fmt.Sprintf("\n\t%v.%v = &value", recv, field.Name))
-		} else {
-			afterSnippet.WriteString(fmt.Sprintf("\n\t%v.%v = value", recv, field.Name))
-		}
-		afterSnippet.WriteString(fmt.Sprintf("\n\t%v.Has.%v = true", recv, field.Name))
-		afterSnippet.WriteString("\n}\n\n")
-	}
+	entityType := getBodyType(rType)
+	t.generateSetters(entityType, &afterSnippet, recv)
 	if !t.IsHandler {
 		afterSnippet = strings.Builder{}
 	}
+
+	embedURI := strings.ToLower(t.Spec.Namespace)
 
 	generatedStruct := xreflect.GenerateStruct(t.TypeDef.Name, rType,
 		xreflect.WithPackage(pkg),
 		xreflect.WithImports(imps.Packages),
 		xreflect.WithSnippetBefore(initSnippet),
+		xreflect.WithOnStructField(t.adjustStructField(embedURI, embedContent, true)),
+
 		xreflect.WithSnippetAfter(afterSnippet.String()),
 	)
 
@@ -99,6 +89,64 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 		return "", err
 	}
 	return string(formatted), nil
+}
+
+func (t *Template) generateSetters(rType reflect.Type, afterSnippet *strings.Builder, recv string) {
+	for i := 0; i < rType.NumField(); i++ {
+		field := rType.Field(i)
+		isPtr := field.Type.Kind() == reflect.Ptr
+		rawType := field.Type
+		if isPtr {
+			rawType = field.Type.Elem()
+		}
+		if rawType.Name() == "" || strings.Contains(string(field.Tag), `json:"-\"`) {
+			continue
+		}
+
+		afterSnippet.WriteString(fmt.Sprintf("\nfunc (%v *%v) Set%v(value %v) {", recv, t.Spec.Type.Name, field.Name, rawType.String()))
+		if isPtr {
+			afterSnippet.WriteString(fmt.Sprintf("\n\t%v.%v = &value", recv, field.Name))
+		} else {
+			afterSnippet.WriteString(fmt.Sprintf("\n\t%v.%v = value", recv, field.Name))
+		}
+		afterSnippet.WriteString(fmt.Sprintf("\n\t%v.Has.%v = true", recv, field.Name))
+		afterSnippet.WriteString("\n}\n\n")
+	}
+}
+
+func getBodyType(rType reflect.Type) reflect.Type {
+	if rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	if rType.NumField() == 1 {
+		field := rType.Field(0)
+		fType := field.Type
+		if fType.Kind() == reflect.Slice {
+			fType = fType.Elem()
+		}
+		if fType.Kind() == reflect.Ptr {
+			fType = fType.Elem()
+		}
+		if fType.Kind() == reflect.Struct {
+			return fType
+		}
+	}
+
+	//get body type
+	for i := 0; i < rType.NumField(); i++ {
+		field := rType.Field(i)
+		parameterTag, _ := tags.Parse(field.Tag, nil)
+		if parameterTag.Parameter != nil && parameterTag.Parameter.Kind == string(state.KindRequestBody) {
+			rType = field.Type
+			if rType.Kind() == reflect.Slice {
+				rType = rType.Elem()
+			}
+			if rType.Kind() == reflect.Ptr {
+				rType = rType.Elem()
+			}
+		}
+	}
+	return rType
 }
 
 func (t *Template) generateRegisterType() string {
@@ -126,4 +174,21 @@ func (t *Template) generateMapTypeBody() string {
 
 	initCode := strings.Join(initElements, "\n")
 	return initCode
+}
+
+func (c *Template) adjustStructField(embedURI string, embeds map[string]string, generateContract bool) func(aField *reflect.StructField, tag *string, typeName *string, doc *string) {
+	return func(aField *reflect.StructField, tag, typeName, doc *string) {
+		fieldTag := *tag
+		fieldTag, value := xreflect.RemoveTag(fieldTag, "sql")
+		if value != "" {
+			name := *typeName
+			setter.SetStringIfEmpty(&name, aField.Name)
+			key := text.CaseFormatUpperCamel.Format(name, text.CaseFormatLowerUnderscore)
+			key = strings.ReplaceAll(key, ".", "")
+			key += ".sql"
+			embeds[key] = value
+			fieldTag += fmt.Sprintf(` sql:"uri=%v/`+key+`" `, embedURI)
+		}
+		*tag = fieldTag
+	}
 }
