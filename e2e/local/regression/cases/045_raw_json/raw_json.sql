@@ -4,7 +4,7 @@ import (
 	"regression/cases/045_raw_json.Record"
 )
 
-#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+#set( $_ = $Data<?>(output/view).Embed())
 
 
 SELECT main.*,

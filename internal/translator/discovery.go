@@ -61,6 +61,13 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 	if root.View.View.Schema == nil {
 		root.View.View.Schema = &state.Schema{Cardinality: state.Many}
 	}
+
+	if dataParameter := resource.OutputState.Parameters().LookupByLocation(state.KindOutput, "view"); dataParameter != nil {
+		if dataParameter.Schema != nil && dataParameter.Schema.Cardinality != "" {
+			root.View.Schema.Cardinality = dataParameter.Schema.Cardinality
+		}
+	}
+
 	if root.View.Schema.Cardinality == "" {
 		root.View.Schema.Cardinality = state.Many
 	}

@@ -1,6 +1,6 @@
 /* {"URI":"xml/basic/vendors/", "DataFormat":"xml", "XML":{"FloatPrecision":"20"}} */
 
-#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+#set( $_ = $Data<?>(output/view).Embed())
 
 
 SELECT vendor.* EXCEPT CREATED,UPDATED,

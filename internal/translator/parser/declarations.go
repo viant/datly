@@ -245,6 +245,8 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 		content = content[1 : len(content)-1]
 		args := extractArgs(content)
 		switch text {
+		case "Embed":
+			declaration.Tag += ` anonymous:"true"`
 		case "WithTag", "Tag":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithTag to have one args, but got %v", len(args))

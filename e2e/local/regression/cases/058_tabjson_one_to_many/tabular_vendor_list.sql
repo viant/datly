@@ -1,6 +1,6 @@
 /* {"URI":"tabular/basic/vendors/", "DataFormat":"tabular", "TabularJSON":{"FloatPrecision":"20"}} */
 
-#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+#set( $_ = $Data<?>(output/view).Embed())
 
 SELECT vendor.* EXCEPT CREATED,UPDATED,
        products.* EXCEPT VENDOR_ID,CREATED,UPDATED

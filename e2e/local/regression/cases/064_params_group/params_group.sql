@@ -13,7 +13,7 @@
 #set($_ = $IDMin<int>(query/idMin).Of('IDRange').WithTag('velty:"names=IDMin|ValueMin"').Optional())
 #set($_ = $IDMax<int>(query/idMax).Of('IDRange').WithTag('velty:"names=IDMax|ValueMax"').Optional())
 
-#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+#set( $_ = $Data<?>(output/view).Embed())
 
 
 SELECT bar.*

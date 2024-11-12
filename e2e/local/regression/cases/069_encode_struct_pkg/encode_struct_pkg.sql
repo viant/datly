@@ -5,7 +5,7 @@ import (
 )
 
 #set($_ = $IDs<[]string>(query/ids).WithCodec("Encode", "*encode_struct_pkg.VendorIds", "/" , "ID", "AccountID", "UserCreated").WithPredicate(0, "multi_in", "t"))
-#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+#set( $_ = $Data<?>(output/view).Embed())
 
 SELECT vendor.*
 FROM (

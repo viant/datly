@@ -1,7 +1,7 @@
 /* {"URI":"xml/basic/bars/", "DataFormat":"xml", "XML":{"FloatPrecision":"8"}} */
 
 
-#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+#set( $_ = $Data<?>(output/view).Embed())
 
 
 SELECT bar.*

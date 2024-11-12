@@ -4,7 +4,7 @@
 #set( $_ = $VendorName<string>(query/name).WithPredicate(0,'equal','t','id').Optional())
 #set( $_ = $Meta<?>(output/summary))
 #set( $_ = $Data<?>(output/view))
-#set( $_ = $Status<?>(output/status).WithTag('anonymous:"true"'))
+#set( $_ = $Status<?>(output/status).Embed())
 
 SELECT vendor.*,
        products.* EXCEPT VENDOR_ID

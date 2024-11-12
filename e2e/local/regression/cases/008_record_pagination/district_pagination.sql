@@ -1,7 +1,7 @@
 /* {"URI":"meta/districts"} */
 
 #set( $_ = $Page<int>(query/page).Optional().QuerySelector('districts'))
-#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+#set( $_ = $Data<?>(output/view).Embed())
 
 
 SELECT districts.*,

@@ -8,7 +8,7 @@ import (
 
 
 #set($_ = $Data<*Events>(body/Data).Output())
-#set($_ = $Status<?>(output/status).WithTag('anonymous:"true"'))
+#set($_ = $Status<?>(output/status).Embed())
 
 #set($_ = $Events<*Events>(body/Data))
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))

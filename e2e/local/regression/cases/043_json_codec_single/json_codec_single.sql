@@ -7,7 +7,7 @@ import (
 	"regression/cases/043_json_codec_single.Record"
 )
 
-#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+#set( $_ = $Data<?>(output/view).Embed())
 
 
 SELECT main.* EXCEPT(Id),

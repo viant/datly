@@ -1,6 +1,6 @@
 /* {"URI":"raw_json_tag"} */
 
-#set( $_ = $Data<?>(output/view).WithTag('anonymous:"true"'))
+#set( $_ = $Data<?>(output/view).Embed())
 
 
 SELECT main.*
