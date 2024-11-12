@@ -163,13 +163,12 @@ func (r *Output) Field() string {
 	if r.Type.IsAnonymous() {
 		return ""
 	}
-	outputParameter := r.Type.Parameters.LookupByLocation(state.KindView, "")
+	outputParameter := r.Type.Parameters.LookupByLocation(state.KindOutput, outputkeys.ViewData)
 	if outputParameter == nil {
 		if candidate := r.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); candidate != nil {
 			outputParameter = candidate
 		}
 	}
-
 	if outputParameter != nil {
 		return outputParameter.Name
 	}
@@ -212,43 +211,10 @@ func (o *Output) initParameters(aView *view.View, bodyType *state.Type, doc stat
 func (o *Output) defaultParameters(aView *view.View, inputParameters state.Parameters, isReader bool) (state.Parameters, error) {
 	var parameters state.Parameters
 	if isReader {
-		//if o.Style == ComprehensiveStyle {
-		//	parameters = state.Parameters{
-		//		DataOutputParameter(o.Field),
-		//		DefaultStatusOutputParameter(),
-		//	}
-		//	if aView != nil && aView.MetaTemplateEnabled() && aView.Template.Summary.Kind == view.MetaKindRecord {
-		//		parameters = append(parameters, state.NewParameter(aView.Template.Summary.Name,
-		//			state.NewOutputLocation("summary"),
-		//			state.WithParameterType(aView.Template.Summary.Schema.Type())))
-		//	}
-		//	return parameters, nil
-		//}
 		dataParameter := DataOutputParameter(outputkeys.ViewData)
 		dataParameter.Tag = `anonynous:"true"`
 		return state.Parameters{dataParameter}, nil
 	}
-
-	//if o.ResponseBody != nil && o.ResponseBody.StateValue != "" {
-	//	inputParameter := inputParameters.Lookup(o.ResponseBody.StateValue)
-	//	if inputParameter == nil {
-	//		return nil, fmt.Errorf("failed to lookup state value: %s", o.ResponseBody.StateValue)
-	//	}
-	//	name := inputParameter.In.Name
-	//	tag := ""
-	//	if name == "" { //embed
-	//		tag = `anonymous:"true"`
-	//		name = o.ResponseBody.StateValue
-	//	}
-	//	parameters = state.Parameters{
-	//		{Name: name, In: state.NewState(o.ResponseBody.StateValue), Schema: inputParameter.Schema, Tag: tag},
-	//	}
-	//
-	//
-	//	if inputParameter.In.Name != "" {
-	//		parameters = append(parameters, &state.Parameter{Name: "Status", In: state.NewOutputLocation("status"), Tag: `anonymous:"true"`})
-	//	}
-	//}
 	return parameters, nil
 }
 
