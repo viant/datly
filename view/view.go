@@ -285,6 +285,7 @@ func (v *View) setResource(resource *Resource) {
 	if len(v.With) == 0 {
 		return
 	}
+
 	for _, rel := range v.With {
 		rel.Of.View.setResource(resource)
 	}

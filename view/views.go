@@ -150,6 +150,9 @@ func (v Views) Init(ctx context.Context, resource *Resource, transforms marshal.
 		if ok {
 			options = append(options, WithTransforms(transform))
 		}
+		if resource.FSEmbedder != nil {
+			options = append(options, WithFSEmbedder(resource.FSEmbedder))
+		}
 		if err := v[i].Init(ctx, resource, options...); err != nil {
 			return err
 		}

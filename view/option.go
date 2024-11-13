@@ -61,6 +61,14 @@ func WithFS(fs *embed.FS) Option {
 	}
 }
 
+// WithFSEmbedder creates fs options
+func WithFSEmbedder(embeder *state.FSEmbedder) Option {
+	return func(v *View) error {
+		v._embedder = embeder
+		return nil
+	}
+}
+
 // WithFS creates tag options
 func WithTag(aTag *tags.Tag) Option {
 	return func(v *View) error {

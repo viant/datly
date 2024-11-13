@@ -2,7 +2,6 @@ package view
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -69,13 +68,13 @@ type (
 
 		Substitutes Substitutes
 		Docs        *Docs
+		FSEmbedder  *state.FSEmbedder
 
-		modTime  time.Time
-		_doc     docs.Service
-		fs       afs.Service
-		_embedFs embed.FS
-		_docs    *docs.Registry
-		_mux     sync.RWMutex
+		modTime time.Time
+		_doc    docs.Service
+		fs      afs.Service
+		_docs   *docs.Registry
+		_mux    sync.RWMutex
 	}
 
 	NamedResources map[string]*Resource

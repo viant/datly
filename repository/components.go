@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox"
+	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"reflect"
 )
@@ -60,6 +61,14 @@ func (c *Components) Init(ctx context.Context) error {
 	err := c.mergeResources(ctx)
 	if err != nil {
 		return err
+	}
+	if inputSchema := c.Components[0].Input.Type.Schema; inputSchema != nil {
+		if rType, _ := c.Resource.TypeRegistry().Lookup(inputSchema.Name, xreflect.WithPackage(inputSchema.Package)); rType != nil {
+			embedder := state.NewFSEmbedder(nil)
+			if embedder.SetType(rType) {
+				c.Resource.FSEmbedder = embedder
+			}
+		}
 	}
 
 	if err = c.Resource.Init(ctx, options...); err != nil {

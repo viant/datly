@@ -33,7 +33,12 @@ func (f *FSEmbedder) init() error {
 	if f.rType == nil {
 		return nil
 	}
-	instance := reflect.New(f.rType).Elem().Interface()
+	var instance interface{}
+	if f.rType.Kind() == reflect.Pointer {
+		instance = reflect.New(f.rType).Elem().Interface()
+	} else {
+		instance = reflect.New(f.rType).Interface()
+	}
 	if embedder, ok := instance.(Embedder); ok {
 		f.embedder = embedder
 	}
@@ -41,9 +46,10 @@ func (f *FSEmbedder) init() error {
 }
 
 // SetType sets type
-func (f *FSEmbedder) SetType(rType reflect.Type) {
+func (f *FSEmbedder) SetType(rType reflect.Type) bool {
 	f.rType = rType
 	_ = f.init()
+	return f.embedder != nil
 }
 
 func NewFSEmbedder(fs *embed.FS) *FSEmbedder {
