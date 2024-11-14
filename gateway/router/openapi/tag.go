@@ -5,9 +5,11 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/govalidator"
+	"github.com/viant/sqlx/io"
 	"github.com/viant/tagly/format"
 	"github.com/viant/xreflect"
 	"reflect"
+	"strings"
 )
 
 type (
@@ -34,10 +36,12 @@ type (
 		_tag         format.Tag
 		TypeName     string
 		Parameter    *tags.Parameter
+		Column       string
+		Table        string
 	}
 )
 
-func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool) (*Tag, error) {
+func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, rootTable string) (*Tag, error) {
 
 	aTag, err := format.Parse(tag, "json", "openapi")
 	if err != nil {
@@ -77,15 +81,34 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool) (*
 		_tag:        *aTag,
 	}
 
-	if tags, _ := tags.Parse(tag, nil, tags.ParameterTag); tags != nil && isInput {
+	if tags, _ := tags.Parse(tag, nil, tags.ParameterTag); tags != nil {
 		ret.Parameter = tags.Parameter
 		if parameter := ret.Parameter; parameter != nil && parameter.Kind != "" {
 			switch state.Kind(parameter.Kind) {
 			case state.KindForm, state.KindRequestBody:
+			case state.KindOutput:
+				switch parameter.In {
+				case "summary":
+					ret.Table = strings.ToUpper(parameter.In)
+				case "view":
+					ret.Table = rootTable
+				}
 			default:
-				ret.Ignore = true
+				if isInput {
+					ret.Ignore = true
+				}
 			}
 		}
 	}
+
+	if tags, _ := tags.Parse(tag, nil, tags.ViewTag); tags != nil && isInput {
+		if tags.View != nil && tags.View.Table != "" {
+			ret.Table = tags.View.Table
+		}
+	}
+	if sqlxTag := io.ParseTag(tag); sqlxTag != nil {
+		ret.Column = sqlxTag.Column
+	}
+
 	return ret, nil
 }

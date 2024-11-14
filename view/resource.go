@@ -18,6 +18,7 @@ import (
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
+	"path"
 	"reflect"
 	"strings"
 	"sync"
@@ -67,7 +68,7 @@ type (
 		viewColumns map[string]Columns
 
 		Substitutes Substitutes
-		Docs        *Docs
+		Docs        *Documentation
 		FSEmbedder  *state.FSEmbedder
 
 		modTime time.Time
@@ -89,6 +90,13 @@ type (
 		Metrics         *Metrics
 	}
 )
+
+func (r *Resource) RepositoryURL() string {
+	if index := strings.Index(r.SourceURL, "/routes/"); index != -1 {
+		return r.SourceURL[:index]
+	}
+	return ""
+}
 
 func (r *Resource) Lock() {
 	r._mux.Lock()
@@ -808,8 +816,10 @@ func (r *Resource) initDocs(ctx context.Context) error {
 	if r.Docs == nil {
 		return nil
 	}
-
-	return r.Docs.Init(ctx, r._docs, r._connectors)
+	if r.Docs.BaseURL != "" && url.IsRelative(r.Docs.BaseURL) {
+		r.Docs.BaseURL = path.Join(r.RepositoryURL(), r.Docs.BaseURL)
+	}
+	return r.Docs.Init(ctx, r.fs, r.Substitutes)
 }
 
 func (r *Resource) Doc() (docs.Service, bool) {

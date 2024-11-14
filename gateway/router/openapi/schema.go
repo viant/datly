@@ -29,10 +29,12 @@ type (
 		component  *repository.Component
 		components *repository.Service
 		schemas    *SchemaContainer
+		docs       *state.Docs
 		doc        docs.Service
 	}
 
 	Schema struct {
+		docs        *state.Docs
 		pkg         string
 		path        string
 		fieldName   string
@@ -84,6 +86,7 @@ func (s *Schema) Field(field reflect.StructField, tag *Tag) (*Schema, error) {
 
 	result.description = field.Tag.Get(tags.DescriptionTag)
 	result.example = field.Tag.Get(tags.ExampleTag)
+
 	return &result, nil
 }
 
@@ -159,6 +162,7 @@ func (c *ComponentSchema) TypedSchema(ctx context.Context, stateType state.Type,
 		rType:       rType,
 		ioConfig:    ioConfig,
 		isInput:     isInput,
+		docs:        c.component.Docs(),
 	}, nil
 }
 
@@ -237,6 +241,7 @@ func (c *ComponentSchema) SchemaWithTag(fieldName string, rType reflect.Type, de
 		rType:       rType,
 		tag:         tag,
 		ioConfig:    ioConfig,
+		docs:        c.component.Docs(),
 	}
 }
 func (c *ComponentSchema) GenerateSchema(ctx context.Context, schema *Schema) (*openapi3.Schema, error) {
@@ -278,6 +283,7 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 	if schema.tag.Example != "" {
 		dst.Example = schema.tag.Example
 	}
+	rootTable := component.component.View.Table
 
 	switch rType.Kind() {
 	case reflect.Slice, reflect.Array:
@@ -314,19 +320,41 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 		dst.Properties = openapi3.Schemas{}
 		dst.Type = objectOutput
 		numField := rType.NumField()
+		table := schema.tag.Table
 		for i := 0; i < numField; i++ {
 			aField := rType.Field(i)
 			if aField.PkgPath != "" {
 				continue
 			}
 
-			aTag, err := ParseTag(aField, aField.Tag, schema.isInput)
+			aTag, err := ParseTag(aField, aField.Tag, schema.isInput, rootTable)
 			if err != nil {
 				return err
 			}
 
 			if aTag.Ignore {
 				continue
+			}
+
+			if aTag.Column != "" && table == "" {
+				table = rootTable
+			}
+
+			if table != "" && aTag.Column == "" {
+				aTag.Column = text.DetectCaseFormat(aField.Name).To(text.CaseFormatUpperUnderscore).Format(aField.Name)
+			}
+
+			if aTag.Column != "" {
+				columns := component.component.Docs().Columns
+				if aTag.Description == "" {
+					aTag.Description, _ = columns.ColumnDescription(table, aTag.Column)
+				}
+				if aTag.Description == "" {
+					aTag.Description, _ = columns.ColumnDescription(table, aTag.Column)
+				}
+				if aTag.Example == "" {
+					aTag.Description, _ = columns.ColumnExample(table, aTag.Column)
+				}
 			}
 
 			if aTag.Inlined {
@@ -340,6 +368,31 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 
 			if component.component.Output.IsExcluded(fieldSchema.path) {
 				continue
+			}
+
+			if strings.Contains(fieldSchema.name, "ata") {
+				fmt.Printf("")
+			}
+			docs := component.component.Docs()
+			documentedPaths := docs.Paths
+			if aTag.Description == "" && len(documentedPaths) > 0 {
+				if desc, ok := documentedPaths.ByName(fieldSchema.path); ok {
+					aTag.Description = desc
+					fieldSchema.description = desc
+				} else if desc, ok := documentedPaths.ByName(aField.Name); ok {
+					aTag.Description = desc
+					fieldSchema.description = desc
+				}
+			}
+
+			if aTag.Example == "" && len(documentedPaths) > 0 {
+				if example, ok := documentedPaths.ByName(fieldSchema.path + "$example"); ok {
+					aTag.Example = example
+					fieldSchema.example = example
+				} else if example, ok := documentedPaths.ByName(aField.Name + "$example"); ok {
+					aTag.Example = example
+					fieldSchema.example = example
+				}
 			}
 
 			if aField.Anonymous {

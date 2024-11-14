@@ -72,8 +72,12 @@ func (r *Repository) RuleBaseURL(rule *options.Rule) string {
 	return url.Join(r.Config.Config.RouteURL, rule.ModulePrefix)
 }
 
+func (r *Repository) DocBaseURL() string {
+	return url.Join(r.Config.repository.RepositoryURL, "Datly/doc")
+}
+
 func (r *Repository) ContentBaseURL(rule *options.Rule) string {
-	return url.Join(r.Config.Config.ContentURL, rule.ModulePrefix)
+	return url.Join(r.Config.Config.DependencyURL, "doc")
 }
 
 func (r *Repository) LookupDb(name string) (*sql.DB, error) {

@@ -208,6 +208,10 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 		aTag := tags.Tag{}
 		aTag.TypeName = rel.Of.Schema.Name
 		aTag.LinkOn = rel.TagLink()
+		if rel.Of.View.Table != "" {
+			aTag.View = &tags.View{Table: rel.Of.View.Table}
+		}
+
 		aTag.SQL = tags.NewViewSQL(rel.Of.View.Template.Source, "")
 		if aBatch := rel.Of.View.Batch; aBatch != nil {
 			if aTag.View == nil {

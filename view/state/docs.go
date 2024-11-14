@@ -8,8 +8,8 @@ type (
 	Docs struct {
 		Filter     Documentation
 		Columns    Documentation
-		Output     Documentation
 		Parameters Documentation
+		Paths      Documentation
 	}
 	Documentation map[string]interface{}
 )
@@ -29,10 +29,10 @@ func (d *Docs) Merge(from *Docs) {
 	}
 	d.Columns.Merge(from.Columns)
 
-	if d.Output == nil {
-		d.Output = make(Documentation)
+	if d.Paths == nil {
+		d.Paths = make(Documentation)
 	}
-	d.Output.Merge(from.Output)
+	d.Paths.Merge(from.Paths)
 
 	if d.Parameters == nil {
 		d.Parameters = make(Documentation)

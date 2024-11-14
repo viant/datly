@@ -194,6 +194,10 @@ func (t *Tags) Stringify() string {
 	return builder.String()
 }
 
+func (t *Tags) ViewTag(table string) {
+	t.Set("view", TagValue{"table=", table})
+}
+
 func SqlxTag(tag reflect.StructTag) *io.Tag {
 	datlyTagString, _ := tag.Lookup(io.TagSqlx)
 	if datlyTagString == "" {

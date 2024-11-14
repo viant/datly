@@ -92,11 +92,11 @@ func (s *Spec) EnsureRelationType() {
 }
 
 // BuildType build a type from infered table/SQL definition
-func (s *Spec) BuildType(pkg, name string, cardinality state.Cardinality, whitelist, blacklist map[string]bool, doc state.Documentation) error {
+func (s *Spec) BuildType(pkg, name string, cardinality state.Cardinality, whitelist, blacklist map[string]bool) error {
 	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
 	for i, column := range s.Columns {
 		skipped := s.shouldSkipColumn(whitelist, blacklist, column)
-		field, err := aType.AppendColumnField(s.Columns[i], skipped, doc, s.Table)
+		field, err := aType.AppendColumnField(s.Columns[i], skipped, s.Table)
 		if err != nil {
 			return err
 		}

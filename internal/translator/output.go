@@ -57,7 +57,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
-	if err := contract.EnsureParameterTypes(outputParameters, nil, resource.Rule.Doc.Parameters, resource.Rule.Doc.Filter); err != nil {
+	if err := contract.EnsureParameterTypes(outputParameters, nil); err != nil {
 		return err
 	}
 	for _, parameter := range outputParameters {

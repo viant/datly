@@ -110,7 +110,7 @@ func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Type
 
 	dataParameter := output.LookupByLocation(state.KindOutput, keys.ViewData)
 	inputParameters := state.Parameters(contract.Input.Type.Parameters)
-	predicateType := inputParameters.PredicateStructType(nil)
+	predicateType := inputParameters.PredicateStructType()
 	if predicateType.NumField() > 0 {
 		pkg := ""
 		if dataParameter != nil {
@@ -150,7 +150,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	if reflect.StructTag(outputParameter.Tag).Get(xreflect.TagTypeName) == "" {
 		outputParameter.Tag += ` ` + xreflect.TagTypeName + `:"` + outputParameter.Schema.Name + `"`
 	}
-	//pkg := aContract.Output.Type.Package
+	//pkg := aContract.Paths.Type.Package
 
 	var viewType *view.TypeDefinition
 	for _, candidate := range h.Resource.Types {
@@ -170,7 +170,7 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 	if viewType == nil {
 		return fmt.Errorf("failed to match data component output type for path: %v:%v", aContract.Method, aContract.URI)
 	}
-	contract.EnsureParameterTypes(parameters, nil, nil, nil)
+	contract.EnsureParameterTypes(parameters, nil)
 
 	if !isAnonymous {
 		rType, err := registry.Lookup(viewType.Name, xreflect.WithPackage(viewType.Package))
@@ -190,10 +190,10 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 
 		typeName := outputParameter.Schema.SimpleTypeName()
 		if aContract.Input.Type.Name != "" {
-			typeName = strings.Replace(aContract.Input.Type.Name, "Input", "Output", 1)
+			typeName = strings.Replace(aContract.Input.Type.Name, "Input", "Paths", 1)
 		}
-		if !strings.HasSuffix(typeName, "Output") {
-			typeName = strings.Replace(typeName, "View", "", 1) + "Output"
+		if !strings.HasSuffix(typeName, "Paths") {
+			typeName = strings.Replace(typeName, "View", "", 1) + "Paths"
 		}
 		componentSchema.Name = typeName
 		componentSchema.Package = aContract.Output.Type.Package

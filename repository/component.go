@@ -60,6 +60,21 @@ type (
 	ComponentOption func(c *Component) error
 )
 
+func (c *Component) Docs() *state.Docs {
+	ret := &state.Docs{}
+	if c.View == nil {
+		return ret
+	}
+	res := c.View.GetResource()
+	if res == nil {
+		return ret
+	}
+	if res.Docs == nil {
+		return ret
+	}
+	return res.Docs.Docs
+}
+
 // LookupParameter lookups parameter by name
 func (c *Component) LookupParameter(name string) *state.Parameter {
 	parameter := c.Input.Type.Parameters.Lookup(name)

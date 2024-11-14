@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/xdatly/handler/response"
 	"net/http"
 	"reflect"
@@ -270,6 +271,15 @@ func (g *generator) appendBuiltInParam(ctx context.Context, params *[]*openapi.P
 }
 
 func (g *generator) convertParam(ctx context.Context, component *ComponentSchema, param *state.Parameter, description string) ([]*openapi.Parameter, bool, error) {
+
+	docs := component.component.Docs()
+	parameters := docs.Parameters
+	if len(parameters) > 0 && param.Description == "" {
+		if desc, ok := parameters.ByName(param.Name); ok {
+			param.Description = desc
+			description = desc
+		}
+	}
 	if param.In.Kind == state.KindParam {
 		baseParam := component.component.LookupParameter(param.In.Name)
 		return g.convertParam(ctx, component, baseParam, description)
@@ -307,9 +317,17 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		return []*openapi.Parameter{{Ref: "#/components/parameters/" + param.Name}}, true, nil
 	}
 
+	table := ""
+	if param.Tag != "" {
+		if datlyTags, _ := tags.Parse(reflect.StructTag(param.Tag), nil, tags.ViewTag); datlyTags != nil && datlyTags.View != nil {
+			table = datlyTags.View.Table
+		}
+
+	}
 	schema, err := component.GenerateSchema(ctx, component.SchemaWithTag(param.Name, param.Schema.Type(), "Parameter "+param.Name+" schema", component.component.IOConfig(), Tag{
 		Format:     param.DateFormat,
 		IsNullable: !param.IsRequired(),
+		Table:      table,
 	}))
 
 	if err != nil {

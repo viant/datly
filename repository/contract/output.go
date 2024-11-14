@@ -36,8 +36,6 @@ type Output struct {
 	RevealMetric     *bool
 	Type             state.Type
 	ViewType         string
-	Doc              state.Documentation
-	FilterDoc        state.Documentation
 	_excluded        map[string]bool
 }
 
@@ -56,7 +54,7 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputType *state.Ty
 	o.initExclude()
 	o.addExcludePrefixesIfNeeded()
 	o.initDebugStyleIfNeeded()
-	if err = o.initParameters(aView, inputType, o.Doc, isReader); err != nil {
+	if err = o.initParameters(aView, inputType, isReader); err != nil {
 		return err
 	}
 
@@ -194,7 +192,7 @@ func (o *Output) initDebugStyleIfNeeded() {
 	}
 }
 
-func (o *Output) initParameters(aView *view.View, bodyType *state.Type, doc state.Documentation, isReader bool) (err error) {
+func (o *Output) initParameters(aView *view.View, bodyType *state.Type, isReader bool) (err error) {
 	if bodyParameter := o.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); bodyParameter != nil {
 		schema := bodyParameter.Schema
 		if schema.Name == "" && schema.Type() == nil {
@@ -205,7 +203,7 @@ func (o *Output) initParameters(aView *view.View, bodyType *state.Type, doc stat
 	if len(o.Type.Parameters) == 0 {
 		o.Type.Parameters, err = o.defaultParameters(aView, bodyType.Parameters, isReader)
 	}
-	return EnsureParameterTypes(o.Type.Parameters, aView, doc, o.FilterDoc)
+	return EnsureParameterTypes(o.Type.Parameters, aView)
 }
 
 func (o *Output) defaultParameters(aView *view.View, inputParameters state.Parameters, isReader bool) (state.Parameters, error) {
@@ -219,31 +217,23 @@ func (o *Output) defaultParameters(aView *view.View, inputParameters state.Param
 }
 
 // EnsureParameterTypes update output kind parameter type
-func EnsureParameterTypes(parameters []*state.Parameter, aView *view.View, doc state.Documentation, filterDoc state.Documentation) error {
+func EnsureParameterTypes(parameters []*state.Parameter, aView *view.View) error {
 	for _, parameter := range parameters {
-		if err := ensureParameterType(parameter, aView, doc, filterDoc); err != nil {
+		if err := ensureParameterType(parameter, aView); err != nil {
 			return err
-		}
-		var paramDoc state.Documentation
-		if doc != nil {
-			paramDoc, _ = doc.FieldDocumentation(parameter.Name)
-			paramDescription, ok := doc.ByName(parameter.Name)
-			if ok {
-				parameter.Description = paramDescription
-			}
 		}
 
 		if len(parameter.Object) > 0 {
-			EnsureParameterTypes(parameter.Object, aView, paramDoc, filterDoc)
+			EnsureParameterTypes(parameter.Object, aView)
 		}
 		if len(parameter.Repeated) > 0 {
-			EnsureParameterTypes(parameter.Repeated, aView, paramDoc, filterDoc)
+			EnsureParameterTypes(parameter.Repeated, aView)
 		}
 	}
 	return nil
 }
 
-func ensureParameterType(parameter *state.Parameter, aView *view.View, doc state.Documentation, filterDoc state.Documentation) error {
+func ensureParameterType(parameter *state.Parameter, aView *view.View) error {
 	rType := parameter.Schema.Type()
 	if rType != nil && rType.Kind() != reflect.String && rType.Kind() != reflect.Interface {
 		return nil
@@ -269,7 +259,7 @@ func ensureParameterType(parameter *state.Parameter, aView *view.View, doc state
 			}
 		case outputkeys.Filter:
 			if aView != nil {
-				predicateType := aView.Template.Parameters.PredicateStructType(filterDoc)
+				predicateType := aView.Template.Parameters.PredicateStructType()
 				parameter.Schema = state.NewSchema(predicateType)
 				parameter.Schema.Name = strings.Title(aView.Name) + "Filter"
 				parameter.SetTypeNameTag()

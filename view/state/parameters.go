@@ -520,7 +520,7 @@ func (p Parameters) Filter(kind Kind) NamedParameters {
 	return index
 }
 
-func (p Parameters) PredicateStructType(d Documentation) reflect.Type {
+func (p Parameters) PredicateStructType() reflect.Type {
 	var fields []*predicate.FilterType
 	fieldTypes := map[string]*predicate.FilterType{}
 	for _, candidate := range p {
@@ -548,19 +548,6 @@ func (p Parameters) PredicateStructType(d Documentation) reflect.Type {
 	for _, field := range fields {
 		fieldTags := stags.NewTags(field.StructTagTag())
 		fieldTags.SetIfNotFound("json", ",omitempty")
-
-		if d != nil {
-			fieldDescription, ok := d.ByName(field.Tag.Filter)
-			if ok {
-				fieldTags.Set(tags.DescriptionTag, fieldDescription)
-			}
-			fieldExample, has := d.ByName(field.Tag.Filter + "$example")
-			if has {
-				fieldTags.Set(tags.ExampleTag, fieldExample)
-			}
-
-		}
-
 		structFields = append(structFields, reflect.StructField{
 			Name: field.Tag.Filter,
 			Type: field.Type(),

@@ -292,11 +292,6 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	if r.State, err = r.State.NormalizeComposites(); err != nil {
 		return fmt.Errorf("failed to normalize input state: %w", err)
 	}
-
-	if doc := r.Rule.Doc.Parameters; doc != nil {
-		r.State.AddDescriptions(doc)
-	}
-
 	if r.OutputState, err = r.OutputState.NormalizeComposites(); err != nil {
 		return fmt.Errorf("failed to normalize output state: %w", err)
 	}
@@ -438,7 +433,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	return viewlet.View.BuildParametrizedSQL(templateParameters, types, sourceSQL, bindingArgs, options...)
 }
 
-func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet, doc state.Documentation) error, aDoc state.Documentation) error {
+func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet) error) error {
 	viewParameters := r.State.FilterByKind(state.KindView)
 	for _, viewParameter := range viewParameters {
 		if viewParameter.Schema != nil && viewParameter.Schema.Type() != nil {
@@ -449,7 +444,7 @@ func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(
 		}
 		viewParameter.EnsureSchema()
 		aViewNamespace := r.Rule.Viewlets.Lookup(viewParameter.In.Name)
-		if err := setType(ctx, aViewNamespace, aDoc); err != nil {
+		if err := setType(ctx, aViewNamespace); err != nil {
 			return err
 		}
 		fields := aViewNamespace.Spec.Type.Fields()

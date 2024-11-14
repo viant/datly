@@ -43,7 +43,7 @@ type (
 		ConstURL string                 `json:",omitempty"`
 		DocURL   string
 		DocURLs  []string
-		Doc      state.Docs
+		Doc      view.Documentation
 
 		TypeSrc           *parser.TypeImport         `json:",omitempty"`
 		Package           string                     `json:",omitempty"`
@@ -124,6 +124,8 @@ func (r *Rule) DSQLSetting() interface{} {
 		MessageBus        string   `json:",omitempty"`
 		CompressAboveSize int      `json:",omitempty"`
 		HandlerArgs       []string `json:",omitempty"`
+		DocURL            string   `json:",omitempty"`
+		DocURLs           []string `json:",omitempty"`
 	}{
 		URI:               r.URI,
 		Method:            r.Method,
@@ -133,6 +135,8 @@ func (r *Rule) DSQLSetting() interface{} {
 		CompressAboveSize: r.CompressAboveSize,
 		MessageBus:        r.MessageBus,
 		HandlerArgs:       r.HandlerArgs,
+		DocURL:            r.DocURL,
+		DocURLs:           r.DocURLs,
 	}
 }
 
@@ -174,28 +178,31 @@ func (r *Resource) initRule(ctx context.Context, fs afs.Service, dSQL *string) e
 		r.messages.AddWarning(r.rule.RuleName(), "const", fmt.Sprintf("failed to load constant : %v %w", rule.ConstURL, err))
 	}
 	r.State.AppendConst(rule.Const)
-	r.loadDocumentation(ctx, fs, rule)
-	return nil
+	return r.loadDocumentation(ctx, fs, rule)
 }
 
-func (r *Resource) loadDocumentation(ctx context.Context, fs afs.Service, rule *Rule) {
-
+func (r *Resource) loadDocumentation(ctx context.Context, fs afs.Service, rule *Rule) error {
+	var docURLS []string
 	if len(rule.DocURLs) == 0 && rule.DocURL != "" {
-		rule.DocURLs = append(rule.DocURLs, rule.DocURL)
-	}
-	if len(rule.DocURLs) == 0 {
-		return
-	}
-	if err := r.loadData(ctx, fs, rule.DocURLs[0], &rule.Doc); err != nil {
-		r.messages.AddWarning(r.rule.RuleName(), "doc", fmt.Sprintf("failed to load documentation: %v due to the %v", rule.DocURL, err.Error()))
-	}
-	for i := 1; i < len(rule.DocURLs); i++ {
-		var doc state.Docs
-		if err := r.loadData(ctx, fs, rule.DocURLs[i], &doc); err != nil {
-			r.messages.AddWarning(r.rule.RuleName(), "doc", fmt.Sprintf("failed to load documentation: %v due to the %v", rule.DocURL, err.Error()))
+		docURL, err := r.assetURL(ctx, rule.DocURL, fs)
+		if err != nil {
+			return fmt.Errorf("failed to load documentation: %v due to the %v", rule.DocURL, err.Error())
 		}
-		rule.Doc.Merge(&doc)
+		docURLS = append(docURLS, docURL)
 	}
+	for _, URL := range rule.DocURLs {
+		docURL, err := r.assetURL(ctx, URL, fs)
+		if err != nil {
+			return fmt.Errorf("failed to load documentation: %v due to the %v", rule.DocURL, err.Error())
+		}
+		docURLS = append(docURLS, docURL)
+	}
+	documentation := view.NewDocumentation(docURLS...)
+	if err := documentation.Init(ctx, fs, r.Resource.Substitutes); err != nil {
+		return err
+	}
+	r.Rule.Doc = *documentation
+	return nil
 }
 
 func (r *Resource) loadData(ctx context.Context, fs afs.Service, URL string, dest interface{}) error {

@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/view"
 	dConfig "github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/datly/view/tags"
 	"github.com/viant/sqlparser"
 	"github.com/viant/structology"
 	"github.com/viant/tagly/format/text"
@@ -83,7 +82,7 @@ func (t *Type) ExpandType(simpleName string) string {
 	return pkg + "." + simpleName
 }
 
-func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, doc state.Documentation, table string) (*Field, error) {
+func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, table string) (*Field, error) {
 	columnNameOrAlias := column.Alias
 	if columnNameOrAlias == "" {
 		columnNameOrAlias = column.Name
@@ -97,15 +96,6 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, doc sta
 		Field:      view.Field{Name: columnCase.Format(columnNameOrAlias, text.CaseFormatUpperCamel)},
 		Ptr:        column.IsNullable,
 		Tags:       Tags{},
-	}
-
-	if doc != nil {
-		if fieldDoc, ok := doc.ColumnDescription(table, field.Column.Name); ok {
-			field.Tags.Set(tags.DescriptionTag, TagValue{fieldDoc})
-		}
-		if fieldDoc, ok := doc.ColumnExample(table, field.Column.Name); ok {
-			field.Tags.Set(tags.ExampleTag, TagValue{fieldDoc})
-		}
 	}
 	if column.Type == "" {
 		return nil, fmt.Errorf("failed to match type: %v %v %v\n", column.Alias, column.Name, column.Expression)
@@ -164,10 +154,10 @@ func (t *Type) ColumnFields(table string, doc state.Documentation) []*view.Field
 			field.Ptr = true
 		}
 
-		if doc != nil {
-			field.Description, _ = doc.ColumnDescription(table, t.columnFields[i].Column.Name)
-			field.Example, _ = doc.ColumnExample(table, t.columnFields[i].Column.Name)
-		}
+		//if doc != nil {
+		//	field.Description, _ = doc.ColumnDescription(table, t.columnFields[i].Column.Name)
+		//	field.Example, _ = doc.ColumnExample(table, t.columnFields[i].Column.Name)
+		//}
 
 		result = append(result, &field)
 	}
@@ -184,6 +174,9 @@ func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
 	field.Tags.Set("sqlx", TagValue{"-"})
 	field.Relation = relation.Name
 	field.Tags.buildRelation(spec, relation)
+	if relation.Table != "" {
+		field.Tags.ViewTag(relation.Table)
+	}
 	field.Tag = field.Tags.Stringify()
 	t.RelationFields = append(t.RelationFields, field)
 	return field
