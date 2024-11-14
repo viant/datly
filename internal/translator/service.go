@@ -415,6 +415,7 @@ func (s *Service) persistDocumentation(ctx context.Context, resource *Resource, 
 				docURL = docURL[2:]
 			}
 			destURL := url.Join(baseDocURL, docURL)
+			_ = fs.Delete(ctx, destURL)
 			if err := fs.Copy(ctx, resource.Rule.Doc.URLs[i], destURL); err != nil {
 				return fmt.Errorf("failed to copy doc: %v, %w", resource.Rule.Doc.URLs[i], err)
 			}
