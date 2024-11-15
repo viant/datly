@@ -9,7 +9,6 @@ import (
 	"github.com/viant/tagly/format"
 	"github.com/viant/xreflect"
 	"reflect"
-	"strings"
 )
 
 type (
@@ -89,7 +88,7 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, ro
 			case state.KindOutput:
 				switch parameter.In {
 				case "summary":
-					ret.Table = strings.ToUpper(parameter.In)
+					ret.Table = "SUMMARY"
 				case "view":
 					ret.Table = rootTable
 				}
@@ -101,7 +100,7 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, ro
 		}
 	}
 
-	if tags, _ := tags.Parse(tag, nil, tags.ViewTag); tags != nil && isInput {
+	if tags, _ := tags.Parse(tag, nil, tags.ViewTag); tags != nil {
 		if tags.View != nil && tags.View.Table != "" {
 			ret.Table = tags.View.Table
 		}

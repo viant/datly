@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/tagly/format/text"
@@ -283,8 +284,12 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 	if schema.tag.Example != "" {
 		dst.Example = schema.tag.Example
 	}
-	rootTable := component.component.View.Table
 
+	rootTable := ""
+
+	if component.component.View.Mode == view.ModeQuery {
+		rootTable = component.component.View.Table
+	}
 	switch rType.Kind() {
 	case reflect.Slice, reflect.Array:
 		var err error
@@ -326,35 +331,23 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 			if aField.PkgPath != "" {
 				continue
 			}
-
 			aTag, err := ParseTag(aField, aField.Tag, schema.isInput, rootTable)
 			if err != nil {
 				return err
 			}
-
+			if aTag.Table == "" {
+				aTag.Table = table
+			}
 			if aTag.Ignore {
 				continue
 			}
 
 			if aTag.Column != "" && table == "" {
 				table = rootTable
+				aTag.Table = rootTable
 			}
-
 			if table != "" && aTag.Column == "" {
 				aTag.Column = text.DetectCaseFormat(aField.Name).To(text.CaseFormatUpperUnderscore).Format(aField.Name)
-			}
-
-			if aTag.Column != "" {
-				columns := component.component.Docs().Columns
-				if aTag.Description == "" {
-					aTag.Description, _ = columns.ColumnDescription(table, aTag.Column)
-				}
-				if aTag.Description == "" {
-					aTag.Description, _ = columns.ColumnDescription(table, aTag.Column)
-				}
-				if aTag.Example == "" {
-					aTag.Description, _ = columns.ColumnExample(table, aTag.Column)
-				}
 			}
 
 			if aTag.Inlined {
@@ -370,30 +363,8 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 				continue
 			}
 
-			if strings.Contains(fieldSchema.name, "ata") {
-				fmt.Printf("")
-			}
 			docs := component.component.Docs()
-			documentedPaths := docs.Paths
-			if aTag.Description == "" && len(documentedPaths) > 0 {
-				if desc, ok := documentedPaths.ByName(fieldSchema.path); ok {
-					aTag.Description = desc
-					fieldSchema.description = desc
-				} else if desc, ok := documentedPaths.ByName(aField.Name); ok {
-					aTag.Description = desc
-					fieldSchema.description = desc
-				}
-			}
-
-			if aTag.Example == "" && len(documentedPaths) > 0 {
-				if example, ok := documentedPaths.ByName(fieldSchema.path + "$example"); ok {
-					aTag.Example = example
-					fieldSchema.example = example
-				} else if example, ok := documentedPaths.ByName(aField.Name + "$example"); ok {
-					aTag.Example = example
-					fieldSchema.example = example
-				}
-			}
+			updatedDocumentation(aTag, docs, fieldSchema)
 
 			if aField.Anonymous {
 				if err := c.addToSchema(ctx, component, dst, fieldSchema); err != nil {
@@ -462,6 +433,39 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 	}
 
 	return nil
+}
+
+func updatedDocumentation(aTag *Tag, docs *state.Docs, fieldSchema *Schema) {
+	if docs == nil {
+		return
+	}
+	if aTag.Column != "" && len(docs.Columns) > 0 {
+		columns := docs.Columns
+		if aTag.Description == "" {
+			aTag.Description, _ = columns.ColumnDescription(aTag.Table, aTag.Column)
+		}
+		if aTag.Description == "" {
+			aTag.Description, _ = columns.ColumnDescription("", aTag.Column)
+		}
+		if aTag.Example == "" {
+			aTag.Example, _ = columns.ColumnExample(aTag.Table, aTag.Column)
+		}
+	}
+	if aTag.Description == "" && len(docs.Paths) > 0 {
+		if desc, ok := docs.Paths.ByName(fieldSchema.path); ok {
+			aTag.Description = desc
+		} else if desc, ok := docs.Paths.ByName(fieldSchema.name); ok {
+			aTag.Description = desc
+			fieldSchema.description = desc
+		}
+	}
+	if aTag.Description != "" {
+		fieldSchema.description = aTag.Description
+	}
+	if aTag.Example != "" {
+		fieldSchema.example = aTag.Example
+	}
+
 }
 
 func containsAny(format string, values ...string) bool {
