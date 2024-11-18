@@ -182,7 +182,7 @@ func ColumnsSchemaDocumented(caseFormat text.CaseFormat, columns []*Column, rela
 		if v.SelfReference != nil {
 			structFields = append(structFields, newCasedField("", v.SelfReference.Holder, text.CaseFormatUpperCamel, reflect.SliceOf(ast.InterfaceType)))
 		}
-		return reflect.PtrTo(reflect.StructOf(structFields)), nil
+		return reflect.PointerTo(reflect.StructOf(structFields)), nil
 	}
 }
 

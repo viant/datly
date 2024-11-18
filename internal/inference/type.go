@@ -9,6 +9,7 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/structology"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -100,12 +101,23 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, table s
 	if column.Type == "" {
 		return nil, fmt.Errorf("failed to match type: %v %v %v\n", column.Alias, column.Name, column.Expression)
 	}
-	aType, err := types.LookupType(dConfig.Config.Types.Lookup, column.Type)
+	var options []xreflect.Option
+	var typeName = column.Type
+	if strings.Contains(column.Type, "struct") {
+		options = append(options, xreflect.WithTypeDefinition(column.Type))
+		typeName = text.NewCaseFormat(column.Name).Format(column.Name, text.CaseFormatUpperCamel)
+	}
+	aType, err := types.LookupType(dConfig.Config.Types.Lookup, typeName, options...)
+	column.RawType = aType
 	if err != nil {
 		return nil, err
 	}
 	field.Schema = state.NewSchema(aType)
 	field.Schema.DataType = aType.Name()
+	if field.Schema.DataType == "" {
+		field.Schema.DataType = aType.String()
+	}
+
 	field.Schema.SetPackage(t.Package)
 	if skipped {
 		field.Skipped = skipped

@@ -10,13 +10,13 @@ import (
 	"github.com/viant/sqlx/metadata/info"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // Connector represents database/sql named connection config
 type (
-	Connector struct {
-		shared.Reference
+	Connection struct {
 		DBConfig
 		_dialect     *info.Dialect
 		_dsn         string
@@ -26,9 +26,17 @@ type (
 		_sharedMux   *sync.Mutex
 	}
 
+	Connector struct {
+		Connection
+		Connections  []*Connection
+		index        int32
+		_initialized bool
+	}
+
 	ConnectorOption func(c *Connector)
 
 	DBConfig struct {
+		shared.Reference
 		Name              string        `json:",omitempty"`
 		Driver            string        `json:",omitempty"`
 		DSN               string        `json:",omitempty"`
@@ -51,9 +59,62 @@ func (c *DBConfig) ConnMaxLifetime() time.Duration {
 	return time.Duration(c.ConnMaxLifetimeMs) * time.Millisecond
 }
 
+func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
+	if len(c.Connections) == 0 {
+		return c.Connection.Init(ctx, connectors)
+	}
+	for _, conn := range c.Connections {
+		if err := conn.Init(ctx, connectors); err != nil {
+			return err
+		}
+	}
+	c._initialized = true
+	return nil
+}
+
+var emptyConnectors = make(map[string]*Connector)
+
+func (c *Connector) DB() (*sql.DB, error) {
+	conn, err := c.GetConnection(context.Background(), emptyConnectors)
+	if err != nil {
+		return nil, err
+	}
+	return conn.DB()
+}
+
+func (c *Connector) Validate() error {
+	if len(c.Connections) == 0 {
+		return c.Connection.Validate()
+	}
+	for _, conn := range c.Connections {
+		if err := conn.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Connector) Dialect(ctx context.Context) (*info.Dialect, error) {
+	if len(c.Connections) == 0 {
+		return c.Connection.Dialect(ctx)
+	}
+	return c.Connections[0].Dialect(ctx)
+}
+
+func (c *Connector) GetConnection(ctx context.Context, connectors Connectors) (*Connection, error) {
+	if len(c.Connections) == 0 {
+		return &c.Connection, nil
+	}
+	if len(c.Connections) == 1 {
+		return c.Connections[0], nil
+	}
+	index := int(atomic.AddInt32(&c.index, 1)) % len(c.Connections)
+	return c.Connections[index], nil
+}
+
 // Init initializes connector.
 // If Ref is specified, then Connector with the name has to be registered in Connectors
-func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
+func (c *Connection) Init(ctx context.Context, connectors Connectors) error {
 	if c._initialized {
 		return nil
 	}
@@ -73,7 +134,11 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 		if err != nil {
 			return err
 		}
-		c.inherit(connector)
+		base, err := connector.GetConnection(ctx, connectors)
+		if err != nil {
+			return fmt.Errorf("failed to lookup base connector: %v, %w", c.Ref, err)
+		}
+		c.inherit(base)
 	}
 
 	if err := c.Validate(); err != nil {
@@ -86,7 +151,7 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 
 // DB creates connection to the DB.
 // It is important to not close the DB since the connection is shared.
-func (c *Connector) DB() (*sql.DB, error) {
+func (c *Connection) DB() (*sql.DB, error) {
 	if c._db != nil {
 		return c._db()
 	}
@@ -110,7 +175,7 @@ func (c *Connector) DB() (*sql.DB, error) {
 	return aDB, err
 }
 
-func (c *Connector) unlock() {
+func (c *Connection) unlock() {
 	if c._sharedMux != nil {
 		c._sharedMux.Unlock()
 		return
@@ -119,7 +184,7 @@ func (c *Connector) unlock() {
 	c._mux.Unlock()
 }
 
-func (c *Connector) lock() {
+func (c *Connection) lock() {
 	if c._sharedMux != nil {
 		c._sharedMux.Lock()
 		return
@@ -130,7 +195,7 @@ func (c *Connector) lock() {
 
 // Validate check if connector was configured properly.
 // Name, Driver and DSN are required.
-func (c *Connector) Validate() error {
+func (c *Connection) Validate() error {
 	if c._initialized {
 		return nil
 	}
@@ -149,7 +214,7 @@ func (c *Connector) Validate() error {
 	return nil
 }
 
-func (c *Connector) inherit(connector *Connector) {
+func (c *Connection) inherit(connector *Connection) {
 	c._dsn = shared.FirstNotEmpty(c._dsn, c.DSN, connector._dsn, connector.DSN)
 
 	if c.Driver == "" {
@@ -169,17 +234,17 @@ func (c *Connector) inherit(connector *Connector) {
 	}
 }
 
-func (c *Connector) setDriverOptions(secret *scy.Secret) {
+func (c *Connection) setDriverOptions(secret *scy.Secret) {
 	if secret == nil || c._initialized {
 		return
 	}
 }
 
-func (c *Connector) getDSN() string {
+func (c *Connection) getDSN() string {
 	return shared.FirstNotEmpty(c._dsn, c.DSN)
 }
 
-func (c *Connector) Dialect(ctx context.Context) (*info.Dialect, error) {
+func (c *Connection) Dialect(ctx context.Context) (*info.Dialect, error) {
 	if c._dialect != nil {
 		return c._dialect, nil
 	}
@@ -207,11 +272,11 @@ func (c EncodedConnector) Decode() (*Connector, error) {
 		return nil, fmt.Errorf("invalid connector format, expected name|driver|dsn[|secretUrl|key]")
 	}
 	conn := &Connector{
-		DBConfig: DBConfig{
+		Connection: Connection{DBConfig: DBConfig{
 			Name:   parts[0],
 			Driver: parts[1],
 			DSN:    parts[2],
-		},
+		}},
 	}
 	switch len(parts) {
 	case 4:
@@ -253,12 +318,12 @@ func WithDbConfig(dbConfig *DBConfig) ConnectorOption {
 
 // NewRefConnector creates connection reference
 func NewRefConnector(name string) *Connector {
-	return &Connector{Reference: shared.Reference{Ref: name}}
+	return &Connector{Connection: Connection{DBConfig: DBConfig{Reference: shared.Reference{Ref: name}}}}
 }
 
 // NewConnector creates a connector
 func NewConnector(name, driver, dsn string, opts ...ConnectorOption) *Connector {
-	ret := &Connector{DBConfig: DBConfig{Name: name, Driver: driver, DSN: dsn}}
+	ret := &Connector{Connection: Connection{DBConfig: DBConfig{Name: name, Driver: driver, DSN: dsn}}}
 	for _, opt := range opts {
 		opt(ret)
 	}

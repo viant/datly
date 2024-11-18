@@ -404,7 +404,10 @@ func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.G
 	entityName := ensureGoFileCaseFormat(template)
 	s.Files.Append(asset.NewFile(gen.EntityLocation(template.FilePrefix(), template.FileMethodFragment(), entityName), code))
 	for k, v := range embedContent {
-		s.Files.Append(asset.NewFile(gen.EmbedLocation(embedURI+"/"+k, template.FileMethodFragment()), v))
+		goCodeDest := gen.EmbedLocation(embedURI+"/"+k, template.FileMethodFragment())
+		s.Files.Append(asset.NewFile(goCodeDest, v))
+		//repoDestURL := path.Join(gen.Repository.RepositoryURL, "Datly/routes", gen.ModulePrefix, gen.RuleName(), strings.ToLower(template.Resource.Rule.Root), k)
+		//s.Files.Append(asset.NewFile(repoDestURL, v))
 	}
 	return nil
 }

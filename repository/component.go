@@ -458,7 +458,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 			}
 
 			if aTag.View.Connector != "" {
-				viewOptions = append(viewOptions, view.WithConnector(&view.Connector{Reference: shared.Reference{Ref: aTag.View.Connector}}))
+				viewOptions = append(viewOptions, view.WithConnector(&view.Connector{Connection: view.Connection{DBConfig: view.DBConfig{Reference: shared.Reference{Ref: aTag.View.Connector}}}}))
 			}
 			if aTag.View.Batch != 0 {
 				viewOptions = append(viewOptions, view.WithBatchSize(aTag.View.Batch))

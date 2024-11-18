@@ -152,10 +152,6 @@ func (s *Service) ensureExcutorContract(route *router.Route, resource *Resource)
 	if route.Handler != nil {
 		return
 	}
-	root := resource.Resource.Parameters
-
-	fmt.Println("root", root)
-
 	if route.Handler == nil && len(resource.OutputState) > 0 && len(route.Component.Output.Type.Parameters) == 0 {
 		for _, parameter := range resource.OutputState {
 			if parameter.In.Kind == state.KindRequestBody {

@@ -195,7 +195,7 @@ func (t *Tags) Stringify() string {
 }
 
 func (t *Tags) ViewTag(table string) {
-	t.Set("view", TagValue{"table=", table})
+	t.Set("view", TagValue{",table=" + table})
 }
 
 func SqlxTag(tag reflect.StructTag) *io.Tag {

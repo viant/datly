@@ -244,7 +244,6 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL
 		return nil, fmt.Errorf("both table/SQL were empty")
 	}
 	var result = &Spec{Table: table, SQL: SQL, SQLArgs: SQLArgs, IsAuxiliary: isAuxiliary}
-
 	columns, err := column.Discover(ctx, db, table, SQL, SQLArgs...)
 	if err != nil {
 		return nil, err

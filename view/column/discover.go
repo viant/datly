@@ -140,6 +140,10 @@ func inferColumnWithSQL(ctx context.Context, db *sql.DB, SQL string, SQLArgs []i
 					Name: item.Name(),
 					Type: item.DatabaseTypeName(),
 				}
+
+				if rType := item.ScanType(); rType != nil {
+					sinkColumn.TypeDefinition = rType.String()
+				}
 				if sinkColumn.Type == "" {
 					if itemType := item.ScanType(); itemType != nil {
 						if itemType.Kind() == reflect.Pointer {
@@ -211,6 +215,9 @@ func updateQueryColumn(queryColumn *sqlparser.Column, fromColumn sink.Column) {
 	queryColumn.IsUnique = fromColumn.IsUnique()
 	queryColumn.Default = fromColumn.Default
 	queryColumn.RawType, _ = io.ParseType(fromColumn.Type)
+	if strings.ToLower(queryColumn.Type) == "record" {
+		queryColumn.Type = fromColumn.TypeDefinition
+	}
 }
 
 func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Column, error) {

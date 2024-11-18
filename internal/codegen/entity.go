@@ -75,15 +75,16 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 
 	embedURI := strings.ToLower(t.Spec.Namespace)
 
-	generatedStruct := xreflect.GenerateStruct(t.TypeDef.Name, rType,
+	var options = []xreflect.Option{
 		xreflect.WithPackage(pkg),
 		xreflect.WithImports(imps.Packages),
 		xreflect.WithSnippetBefore(initSnippet),
-		xreflect.WithOnStructField(t.adjustStructField(embedURI, embedContent, true)),
-
 		xreflect.WithSnippetAfter(afterSnippet.String()),
-	)
-
+	}
+	if t.IsHandler {
+		options = append(options, xreflect.WithOnStructField(t.adjustStructField(embedURI, embedContent, true)))
+	}
+	generatedStruct := xreflect.GenerateStruct(t.TypeDef.Name, rType, options...)
 	formatted, err := format.Source([]byte(generatedStruct))
 	if err != nil {
 		return "", err
@@ -179,6 +180,7 @@ func (t *Template) generateMapTypeBody() string {
 func (c *Template) adjustStructField(embedURI string, embeds map[string]string, generateContract bool) func(aField *reflect.StructField, tag *string, typeName *string, doc *string) {
 	return func(aField *reflect.StructField, tag, typeName, doc *string) {
 		fieldTag := *tag
+		fmt.Printf("---- %v %v\n", aField.Name, fieldTag)
 		fieldTag, value := xreflect.RemoveTag(fieldTag, "sql")
 		if value != "" {
 			name := *typeName
