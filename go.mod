@@ -31,7 +31,7 @@ require (
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.12.0
-	github.com/viant/sqlx v0.15.2-0.20240904183634-ceb6544fd16c
+	github.com/viant/sqlx v0.15.2
 	github.com/viant/structql v0.5.2
 	github.com/viant/toolbox v0.36.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
@@ -146,9 +146,3 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-replace github.com/viant/bigquery => ../bigquery
-
-replace github.com/viant/sqlx => ../sqlx
-
-replace github.com/viant/xreflect => ../xreflect
