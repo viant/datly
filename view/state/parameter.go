@@ -60,6 +60,12 @@ type (
 	ParameterOption func(p *Parameter)
 )
 
+func (p *Parameter) ensureSchema() {
+	if p.Schema == nil {
+		p.Schema = &Schema{}
+	}
+}
+
 func (p *Parameter) IsAsync() bool {
 	return p.Async
 }

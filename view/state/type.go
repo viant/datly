@@ -260,11 +260,14 @@ func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Param
 	}
 
 	rawName := rawType.Name()
+	if pTag.Cardinality != "" {
+		result.ensureSchema()
+		result.Schema.Cardinality = Cardinality(pTag.Cardinality)
+	}
+
 	if pTag.DataType != "" {
-		result.Schema = &Schema{Name: pTag.DataType}
-		if pTag.Cardinality != "" {
-			result.Schema.Cardinality = Cardinality(pTag.Cardinality)
-		}
+		result.ensureSchema()
+		result.Schema.DataType = pTag.DataType
 		if isSlice {
 			result.Schema.Cardinality = Many
 		}
