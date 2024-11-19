@@ -249,6 +249,7 @@ func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Param
 	if lookupType == nil {
 		lookupType = extension.Config.Types.Lookup
 	}
+
 	rawType := field.Type
 	isSlice := false
 	if rawType.Kind() == reflect.Slice {
@@ -288,7 +289,11 @@ func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Param
 			}
 		}
 	} else {
-		result.Schema = NewSchema(field.Type)
+		result.ensureSchema()
+		if pTag.Cardinality != "" {
+			result.Schema.Cardinality = Cardinality(pTag.Cardinality)
+		}
+		result.Schema.SetType(field.Type)
 		if field.Type.Kind() == reflect.Map {
 			result.Schema.DataType = field.Type.String()
 		}
