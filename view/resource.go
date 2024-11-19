@@ -568,7 +568,7 @@ func (r *Resource) FindConnector(view *View) (*Connector, error) {
 
 	if view.Connector != nil {
 		if view.Connector.Ref != "" {
-			return r._connectors.Lookup(view.Connector.Ref)
+			return r.Connector(view.Connector.Ref)
 		}
 
 		if err := view.Connector.Validate(); err == nil {
@@ -739,12 +739,12 @@ func (r *Resource) ensureCacheIndex() {
 }
 
 func (r *Resource) ExistsConnector(name string) bool {
-	lookup, err := r._connectors.Lookup(name)
+	lookup, err := r.Connector(name)
 	return lookup != nil && err == nil
 }
 
 func (r *Resource) Connector(name string) (*Connector, error) {
-	if r._connectors == nil {
+	if len(r._connectors) == 0 {
 		r._connectors = ConnectorSlice(r.Connectors).Index()
 	}
 
