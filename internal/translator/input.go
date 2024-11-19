@@ -31,7 +31,9 @@ func (s *Service) updateExplicitInputType(resource *Resource, viewlet *Viewlet) 
 		inputState.Append(resource.State[i])
 		if item.In.Kind == state.KindRequestBody {
 			if rootViewlet.View != nil && rootViewlet.View.Schema != nil {
-				item.Schema.SetType(rootViewlet.View.Schema.Type())
+				if rType := rootViewlet.View.Schema.Type(); rType != nil {
+					item.Schema.SetType(rType)
+				}
 			}
 		}
 	}
