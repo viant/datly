@@ -610,6 +610,13 @@ func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, er
 			return err
 		}
 
+		if parameter.In.Kind == state.KindOutput && parameter.In.Name == "view" {
+			if parameter.Schema.Type().Kind() == reflect.Interface {
+				if parameter.Schema.Cardinality == "" {
+					parameter.Schema.Cardinality = state.Many
+				}
+			}
+		}
 		iParameter.Explicit = true
 		dest.Append(iParameter)
 		if state.IsReservedAsyncState(iParameter.Name) && iParameter.IsAsync() { //scope to be deprecated
