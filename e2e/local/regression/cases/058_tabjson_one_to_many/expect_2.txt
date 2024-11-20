@@ -5,14 +5,14 @@ import (
 )
 
 type GeneratedStruct struct {
-	Id          int        `sqlx:"ID" velty:"names=ID|Id"`
-	Name        *string    `sqlx:"NAME" velty:"names=NAME|Name"`
-	AccountId   *int       `sqlx:"ACCOUNT_ID" velty:"names=ACCOUNT_ID|AccountId"`
-	Created     *time.Time `sqlx:"CREATED" velty:"names=CREATED|Created"`
-	UserCreated *int       `sqlx:"USER_CREATED" velty:"names=USER_CREATED|UserCreated"`
-	Updated     *time.Time `sqlx:"UPDATED" velty:"names=UPDATED|Updated"`
-	UserUpdated *int       `sqlx:"USER_UPDATED" velty:"names=USER_UPDATED|UserUpdated"`
-	Products    []*Products
+	Id          int         `sqlx:"ID" velty:"names=ID|Id"`
+	Name        *string     `sqlx:"NAME" velty:"names=NAME|Name"`
+	AccountId   *int        `sqlx:"ACCOUNT_ID" velty:"names=ACCOUNT_ID|AccountId"`
+	Created     *time.Time  `sqlx:"CREATED" velty:"names=CREATED|Created"`
+	UserCreated *int        `sqlx:"USER_CREATED" velty:"names=USER_CREATED|UserCreated"`
+	Updated     *time.Time  `sqlx:"UPDATED" velty:"names=UPDATED|Updated"`
+	UserUpdated *int        `sqlx:"USER_UPDATED" velty:"names=USER_UPDATED|UserUpdated"`
+	Products    []*Products `view:",table=PRODUCT"`
 }
 
 type Products struct {

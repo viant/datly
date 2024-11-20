@@ -21,7 +21,7 @@ require (
 	github.com/viant/afs v1.25.1-0.20231110184132-877ed98abca1
 	github.com/viant/afsc v1.9.1
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
-	github.com/viant/bigquery v0.3.3
+	github.com/viant/bigquery v0.3.4
 	github.com/viant/cloudless v1.11.0
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
@@ -31,7 +31,7 @@ require (
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.12.0
-	github.com/viant/sqlx v0.15.2
+	github.com/viant/sqlx v0.16.0
 	github.com/viant/structql v0.5.2
 	github.com/viant/toolbox v0.36.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
@@ -146,3 +146,5 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/viant/sqlx => ../sqlx
