@@ -130,7 +130,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 
 	defComp := true
 	if generate := opts.Generate; generate != nil {
-		defComp = !generate.NoComponentDef
+		defComp = !translate.Rule.SkipCompDef
 	}
 	opts.Translate = translate
 	opts.Generate = nil

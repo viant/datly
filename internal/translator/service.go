@@ -218,6 +218,12 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	}
 	s.detectComponentViewType(componentColumns, resource)
 
+	if resource.rule.IncludePredicates {
+		if viewSchema := root.Schema; viewSchema != nil && viewSchema.Type() != nil {
+			s.generateInputPredicate(viewSchema.Type(), rootViewlet.Table.Namespace, resource)
+		}
+	}
+
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
 		return err
 	}
@@ -236,6 +242,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	}); err != nil {
 		return err
 	}
+
 	if err = s.persistRouterRule(ctx, resource, service.TypeReader); err != nil {
 		return err
 	}
