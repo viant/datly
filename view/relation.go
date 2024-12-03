@@ -202,6 +202,7 @@ func (r *Relation) Validate() error {
 	}
 
 	if r.On[0].Column == "" {
+
 		return fmt.Errorf("relation column can't be empty")
 	}
 

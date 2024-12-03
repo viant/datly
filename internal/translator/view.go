@@ -267,9 +267,13 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		if relation.KeyField == nil {
 			return fmt.Errorf("failed to add relation: %v, unknown reference", relation.Name)
 		}
+		columnName := relation.ParentField.Column.Name
+		if columnName == "" {
+			columnName = relation.ParentField.Column.Alias
+		}
 
 		viewRelation.On = append(viewRelation.On, &view.Link{
-			Column:    relation.ParentField.Column.Name,
+			Column:    columnName,
 			Namespace: relation.ParentField.Column.Namespace,
 			Field:     relation.ParentField.Name,
 		})
