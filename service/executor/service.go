@@ -196,8 +196,6 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 		return err
 	}
 
-	collection := sess.collection(executable)
-	collection.Append(executable.Data)
 	if !executable.IsLast {
 		return nil
 	}
@@ -208,16 +206,20 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 			return err
 		}
 		batchSize := 100
-		if collection.Len() < batchSize {
-			batchSize = collection.Len()
+		rType := reflect.TypeOf(executable.Data)
+		if rType.Kind() == reflect.Slice {
+			actual := reflect.ValueOf(executable.Data)
+			if actual.Len() < batchSize {
+				batchSize = actual.Len()
+			}
 		}
-
 		options = append(options, option.BatchSize(batchSize))
 		options = append(options, e.dbOptions(db, sess))
-		_, _, err = service.Exec(ctx, collection.Unwrap(), options...)
+		_, _, err = service.Exec(ctx, executable.Data, options...)
 		return err
 	}
 
+	//TODO: !!!!!! :^^^^^^^^:
 	aBatcher, err := batcherRegistry.GetBatcher(executable.Table, reflect.TypeOf(executable.Data), db, &batcher.Config{
 		MaxElements:   100,
 		MaxDurationMs: 10,
@@ -229,7 +231,7 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 	}
 
 	//TODO: remove reflection
-	rSlice := reflect.ValueOf(collection.Unwrap()).Elem()
+	rSlice := reflect.ValueOf(executable.Data)
 	sliceLen := rSlice.Len()
 	var state *batcher.State
 	for i := 0; i < sliceLen; i++ {
