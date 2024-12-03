@@ -15,7 +15,7 @@ type execution struct {
 
 func (e *execution) populate(dest *[]interface{}, isLast bool) {
 	if len(e.insert) > 0 {
-		exec := expand.Executable{Table: e.tableName, ExecType: expand.ExecTypeInsert, Data: e.asTypedSlice(e.insert)}
+		exec := expand.Executable{Table: e.tableName, IsLast: isLast, ExecType: expand.ExecTypeInsert, Data: e.asTypedSlice(e.insert)}
 
 		*dest = append(*dest, &exec)
 	}
@@ -24,7 +24,7 @@ func (e *execution) populate(dest *[]interface{}, isLast bool) {
 		*dest = append(*dest, &exec)
 	}
 	if len(e.delete) > 0 {
-		exec := expand.Executable{Table: e.tableName, ExecType: expand.ExecTypeDelete, Data: e.asTypedSlice(e.delete)}
+		exec := expand.Executable{Table: e.tableName, IsLast: isLast, ExecType: expand.ExecTypeDelete, Data: e.asTypedSlice(e.delete)}
 		*dest = append(*dest, &exec)
 	}
 }
@@ -95,6 +95,7 @@ func newSqlxIterator(toExecute []interface{}) *sqlxIterator {
 		}
 		items = append(items, item)
 	}
+
 	if len(exec.executions) > 0 {
 		for i, execution := range exec.executions {
 			execution.populate(&items, len(exec.executions)-1 == i)
