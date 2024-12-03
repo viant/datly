@@ -177,7 +177,8 @@ func (e *Executor) handleUpdate(ctx context.Context, sess *dbSession, db *sql.DB
 }
 
 func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable *expand2.Executable, db *sql.DB) error {
-	canBeBatched := sess.supportLocalBatch() && sess.dbSource.CanBatch(executable.Table)
+	canBeBatched := sess.supportLocalBatch()
+	//TODO remove this option make no sense unless its blacklist -&& sess.dbSource.CanBatch(executable.Table)
 	options := e.dbOptions(db, sess)
 	service, err := sess.Inserter(ctx, db, executable.Table, options...)
 	if err != nil {
