@@ -190,10 +190,10 @@ func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, 
 
 		typeName := outputParameter.Schema.SimpleTypeName()
 		if aContract.Input.Type.Name != "" {
-			typeName = strings.Replace(aContract.Input.Type.Name, "Input", "Paths", 1)
+			typeName = strings.Replace(aContract.Input.Type.Name, "Input", "Output", 1)
 		}
-		if !strings.HasSuffix(typeName, "Paths") {
-			typeName = strings.Replace(typeName, "View", "", 1) + "Paths"
+		if !strings.HasSuffix(typeName, "Output") {
+			typeName = strings.Replace(typeName, "View", "", 1) + "Output"
 		}
 		componentSchema.Name = typeName
 		componentSchema.Package = aContract.Output.Type.Package
