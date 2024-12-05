@@ -630,10 +630,6 @@ outer:
 						result = append(result, actual[j])
 					}
 				default:
-					if _, ok := unique[fieldValue]; ok {
-						continue
-					}
-					unique[fieldValue] = true
 					result = append(result, fieldValue)
 				}
 				continue
