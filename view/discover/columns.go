@@ -15,10 +15,18 @@ type (
 		fs        afs.Service
 		cfs       afs.Service
 		Items     map[string]view.Columns
-		ModTime   time.Time
 		SourceURL string
+		modTime   time.Time `yaml:"-"`
 	}
 )
+
+func (c *Columns) SetModTime(modTime time.Time) {
+	c.modTime = modTime
+}
+
+func (c *Columns) ModTime() time.Time {
+	return c.modTime
+}
 
 func (c *Columns) Load(ctx context.Context) error {
 	data, err := c.cfs.DownloadWithURL(ctx, c.SourceURL)
