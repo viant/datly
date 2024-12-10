@@ -300,7 +300,7 @@ func (s *Service) persistViewMetaColumn(cache discover.Columns, resource *Resour
 	if len(cache.Items) == 0 {
 		return nil
 	}
-	cache.ModTime = time.Now()
+	cache.SetModTime(time.Now())
 	data, err := yaml.Marshal(cache)
 	if err != nil {
 		return fmt.Errorf("failed to encode: %T, %w", cache, err)
