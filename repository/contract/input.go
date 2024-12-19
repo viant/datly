@@ -19,6 +19,8 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 	if len(i.Body.Parameters) == 0 {
 		if bodyParameter := i.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); bodyParameter != nil {
 			i.Body.Parameters = append(i.Body.Parameters, bodyParameter)
+		} else if bodyParameters := i.Type.Parameters.FilterByKind(state.KindRequestBody); len(bodyParameters) > 0 {
+			i.Body.Parameters = bodyParameters
 		} else {
 			i.Body.Parameters = aView.InputParameters()
 		}
