@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/xdatly/handler"
+	hauth "github.com/viant/xdatly/handler/auth"
 	"github.com/viant/xdatly/handler/differ"
 	"github.com/viant/xdatly/handler/http"
 	xmbus "github.com/viant/xdatly/handler/mbus"
@@ -25,6 +26,7 @@ type (
 		templateFlusher TemplateFlushFn
 		redirect        RedirectFn
 		http            HttpFn
+		auth            AuthFn
 	}
 
 	SqlServiceFn    func(options *sqlx.Options) (sqlx.Sqlx, error)
@@ -32,6 +34,7 @@ type (
 	RedirectFn      func(ctx context.Context, route *http.Route, options ...state.Option) (handler.Session, error)
 	RouterFn        func(ctx context.Context, route *http.Route) (handler.Session, error)
 	HttpFn          func() http.Http
+	AuthFn          func() hauth.Auth
 )
 
 func (s *Session) Session(ctx context.Context, route *http.Route, opts ...state.Option) (handler.Session, error) {
@@ -40,6 +43,10 @@ func (s *Session) Session(ctx context.Context, route *http.Route, opts ...state.
 
 func (s *Session) Http() http.Http {
 	return s.http()
+}
+
+func (s *Session) Auth() hauth.Auth {
+	return s.auth()
 }
 
 func NewSession(opts ...Option) *Session {
@@ -110,6 +117,12 @@ func WithTemplateFlush(fn TemplateFlushFn) Option {
 func WithHttp(aHttp HttpFn) Option {
 	return func(s *Session) {
 		s.http = aHttp
+	}
+}
+
+func WithAuth(auth AuthFn) Option {
+	return func(s *Session) {
+		s.auth = auth
 	}
 }
 

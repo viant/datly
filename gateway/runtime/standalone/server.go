@@ -17,7 +17,6 @@ import (
 type Server struct {
 	http.Server
 	Service      *gateway.Service
-	auth         gateway.Authorizer
 	useSingleton *bool //true by default
 }
 

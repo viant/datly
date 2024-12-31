@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
+	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -32,6 +33,7 @@ type (
 		Options
 		Types    state.Types
 		Redirect *Redirect
+		auth     *auth.Service
 	}
 
 	Redirect struct {
@@ -93,6 +95,9 @@ func (s *Session) Populate(ctx context.Context) error {
 		return nil
 	}
 	return err
+}
+func (s *Session) Auth() *auth.Service {
+	return s.auth
 }
 
 func (s *Session) setViewStateInBackground(ctx context.Context, aView *view.View, errors *response.Errors, wg *sync.WaitGroup) {

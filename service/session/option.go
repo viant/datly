@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"github.com/viant/datly/repository"
+	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -28,6 +29,7 @@ type (
 		reportNotAssignable *bool
 		scope               string
 		embeddedFS          *embed.FS
+		auth                *auth.Service
 	}
 
 	Option func(o *Options)
@@ -136,6 +138,12 @@ func WithReportNotAssignable(flag bool) Option {
 func WithTypes(types ...*state.Type) Option {
 	return func(s *Options) {
 		s.types = append(s.types, types...)
+	}
+}
+
+func WithAuth(auth *auth.Service) Option {
+	return func(s *Options) {
+		s.auth = auth
 	}
 }
 

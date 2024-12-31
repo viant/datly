@@ -38,7 +38,6 @@ func (i *AsInts) Value(ctx context.Context, raw interface{}, options ...codec.Op
 			return nil, fmt.Errorf("invalid ints: %s, %w", raw, err)
 		}
 	}
-
 	return result, nil
 }
 

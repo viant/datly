@@ -6,9 +6,10 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/service/auth/firebase"
 	"github.com/viant/scy"
+	"github.com/viant/scy/auth/cognito"
 	custom "github.com/viant/scy/auth/custom"
+	"github.com/viant/scy/auth/firebase"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"strings"
@@ -32,7 +33,18 @@ func (c *Config) updateAuth(ctx context.Context) error {
 
 	if res := c.repository.Firebase; res != "" {
 		cfg.Firebase = &firebase.Config{
-			Resource: getScyResource(res),
+			WebAPIKey: getScyResource(res),
+		}
+	}
+
+	if res := c.repository.Cognito; res != "" {
+		parts := strings.Split(res, "|")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid cognito auth resource: %v, expected poolID|secret", res)
+		}
+		cfg.Cognito = &cognito.Config{
+			PoolID:   parts[0],
+			Resource: getScyResource(parts[1]),
 		}
 	}
 
@@ -49,7 +61,6 @@ func (c *Config) updateAuth(ctx context.Context) error {
 		if maxAttempts < 1 {
 			maxAttempts = 5
 		}
-
 		cfg.Custom = &custom.Config{
 			AuthConnector:     authConnector,
 			AuthSQL:           authQuery,

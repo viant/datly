@@ -27,7 +27,7 @@ func HandleHttpRequest(writer http.ResponseWriter, apiRequest *adapter.Request) 
 	if err != nil {
 		return err
 	}
-	httpRequest := apiRequest.Request(service.JWTSigner)
+	httpRequest := apiRequest.Request(service.JWTSigner())
 	service.LogInitTimeIfNeeded(now, writer)
 	service.ServeHTTP(writer, httpRequest)
 	service.LogInitTimeIfNeeded(now, writer)

@@ -1,16 +1,19 @@
 package repository
 
 import (
-	"context"
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
+	"github.com/viant/datly/service/auth"
+	aconfig "github.com/viant/datly/service/auth/config"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric"
+	"github.com/viant/scy/auth/cognito"
 	"github.com/viant/scy/auth/custom"
+	"github.com/viant/scy/auth/firebase"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"github.com/viant/xdatly/codec"
@@ -33,16 +36,14 @@ type Options struct {
 	useColumns           *bool
 	metrics              *gmetric.Service
 	transforms           marshal.TransformIndex
-	dispatcher           func(registry *Registry) contract.Dispatcher
+	dispatcher           func(registry *Registry, auth *auth.Service) contract.Dispatcher
 	cacheConnectorPrefix string
 	path                 *path.Path
-	jWTVerifier          *verifier.Service
-	customAuth           *custom.Service
-	jwtSigner            *signer.Service
 	types                []*view.PackagedType
 	resource             state.Resource
 	constants            map[string]string
 	substitutes          map[string]view.Substitutes
+	authConfig           aconfig.Config
 }
 
 func (o *Options) UseColumn() bool {
@@ -224,7 +225,13 @@ func WithComponentURL(componentURL string) Option {
 	}
 }
 
-func WithDispatcher(fn func(registry *Registry) contract.Dispatcher) Option {
+func WithDependencyURL(URL string) Option {
+	return func(o *Options) {
+		o.authConfig.DependencyURL = URL
+	}
+}
+
+func WithDispatcher(fn func(registry *Registry, service *auth.Service) contract.Dispatcher) Option {
 	return func(o *Options) {
 		o.dispatcher = fn
 	}
@@ -238,28 +245,36 @@ func WithPath(aPath *path.Path) Option {
 
 func WithJWTSigner(aSigner *signer.Config) Option {
 	return func(o *Options) {
-		o.jwtSigner = signer.New(aSigner)
-		_ = o.jwtSigner.Init(context.Background())
+		o.authConfig.JwtSigner = aSigner
+	}
+}
+func WithCustomAuth(auth *custom.Config) Option {
+	return func(o *Options) {
+		o.authConfig.Custom = auth
+	}
+}
+
+func WithJWTVerifier(aVerifier *verifier.Config) Option {
+	return func(o *Options) {
+		o.authConfig.JWTValidator = aVerifier
+	}
+}
+
+func WithCognitoAuth(auth *cognito.Config) Option {
+	return func(o *Options) {
+		o.authConfig.Cognito = auth
+	}
+}
+
+func WithFirebaseAuth(config *firebase.Config) Option {
+	return func(o *Options) {
+		o.authConfig.Firebase = config
 	}
 }
 
 func WithPackageTypes(types ...*view.PackagedType) Option {
 	return func(o *Options) {
 		o.types = types
-	}
-}
-
-func WithCustomAuth(auth *custom.Service) Option {
-	return func(o *Options) {
-		o.customAuth = auth
-	}
-}
-
-func WithJWTVerifier(aVerifier *verifier.Config) Option {
-	return func(o *Options) {
-		jwtVerifier := verifier.New(aVerifier)
-		o.jWTVerifier = jwtVerifier
-		_ = jwtVerifier.Init(context.Background())
 	}
 }
 

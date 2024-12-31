@@ -21,7 +21,7 @@ type (
 	Module struct {
 		GitRepository *string `short:"g" long:"gitrepo" description:"git module repo"`
 		GitFolder     *string
-		GitPrivate    *string `short:"T" long:"gitprivate" description:"git private"`
+		GitPrivate    *string `short:"I" long:"gitprivate" description:"git private"`
 		Name          string  `short:"n" long:"name" description:"module name" `
 	}
 

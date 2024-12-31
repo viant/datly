@@ -14,8 +14,7 @@ import (
 )
 
 const (
-	CognitoKeyJwtClaim = "CognitoJwtClaim"
-	KeyJwtClaim        = "JwtClaim"
+	KeyJwtClaim = "JwtClaim"
 )
 
 // JwtClaim represents IDJWT visitor

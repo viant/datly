@@ -6,7 +6,7 @@ import (
 )
 
 type (
-	jwtVerifier struct {
+	JwtChainVerifier struct {
 		chain []verify
 		cache *cache
 	}
@@ -14,11 +14,21 @@ type (
 	verify func(ctx context.Context, rawToken string) (*jwt.Claims, error)
 )
 
-func (s *jwtVerifier) add(verify verify) {
+func (s *JwtChainVerifier) Size() int {
+	return len(s.chain)
+}
+
+func (s *JwtChainVerifier) AddIfEmpty(verify verify) {
+	if len(s.chain) == 0 {
+		s.Add(verify)
+	}
+}
+
+func (s *JwtChainVerifier) Add(verify verify) {
 	s.chain = append(s.chain, verify)
 }
 
-func (s *jwtVerifier) verifyToken(ctx context.Context, rawToken string) (*jwt.Claims, error) {
+func (s *JwtChainVerifier) VerifyToken(ctx context.Context, rawToken string) (*jwt.Claims, error) {
 	claims := s.cache.get(rawToken)
 	if claims != nil {
 		return claims, nil
@@ -34,6 +44,6 @@ func (s *jwtVerifier) verifyToken(ctx context.Context, rawToken string) (*jwt.Cl
 	return nil, err
 }
 
-func newJwtVerifier() *jwtVerifier {
-	return &jwtVerifier{cache: newCache()}
+func NewJwtVerifier() *JwtChainVerifier {
+	return &JwtChainVerifier{cache: newCache()}
 }

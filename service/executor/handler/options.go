@@ -2,6 +2,7 @@ package handler
 
 import (
 	"embed"
+	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/view/state"
 )
 
@@ -9,6 +10,7 @@ type options struct {
 	Types   []*state.Type
 	embedFS *embed.FS
 	opts    []Option
+	auth    *auth.Service
 }
 
 func (o *options) Clone(opts []Option) *options {
@@ -35,6 +37,11 @@ func WithTypes(types ...*state.Type) Option {
 	}
 }
 
+func WithAuth(auth *auth.Service) Option {
+	return func(o *options) {
+		o.auth = auth
+	}
+}
 func WithEmbedFS(fs *embed.FS) Option {
 	return func(o *options) {
 		o.embedFS = fs

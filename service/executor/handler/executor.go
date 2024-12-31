@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/service/auth"
 	executor "github.com/viant/datly/service/executor"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/executor/extension"
@@ -14,6 +15,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler"
+	hauth "github.com/viant/xdatly/handler/auth"
 	http2 "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/sqlx"
 	hstate "github.com/viant/xdatly/handler/state"
@@ -34,6 +36,7 @@ type (
 		dataUnit   *expand.DataUnit
 		tx         *sql.Tx
 		response   http.ResponseWriter
+		auth       *auth.Service
 	}
 
 	DBProvider struct {
@@ -111,6 +114,7 @@ func (e *Executor) newSession(aSession *session.Session, opts ...Option) *extens
 		extension.WithRedirect(e.redirect),
 		extension.WithSql(e.newSqlService),
 		extension.WithHttp(e.newHttp),
+		extension.WithAuth(e.newAuth),
 		extension.WithMessageBus(res.MessageBuses),
 	)
 	return sess
@@ -233,10 +237,14 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 	if stateOptions.HttpRequest() != nil {
 		locatorOptions = append(locatorOptions, locator.WithRequest(stateOptions.HttpRequest()))
 	}
-	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...),
+	aSession := session.New(aComponent.View,
+		session.WithAuth(e.auth),
+		session.WithLocatorOptions(locatorOptions...),
 		session.WithOperate(e.session.Options.Operate()),
 		session.WithTypes(&aComponent.Contract.Input.Type, &aComponent.Contract.Output.Type),
-		session.WithComponent(aComponent), session.WithRegistry(registry))
+		session.WithComponent(aComponent),
+		session.WithRegistry(registry),
+	)
 
 	err = aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
 	if err != nil {
@@ -249,4 +257,8 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 
 func (e *Executor) newHttp() http2.Http {
 	return NewHttp(e, e.view.GetResource())
+}
+
+func (e *Executor) newAuth() hauth.Auth {
+	return NewAuth(e.auth)
 }

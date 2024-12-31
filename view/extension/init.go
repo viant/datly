@@ -26,9 +26,10 @@ import (
 )
 
 const (
-	TypeJwtTokenInfo = "JwtTokenInfo"
-	TypeJwtClaims    = "JwtClaims"
-	CodecKeyJwtClaim = "JwtClaim"
+	TypeJwtTokenInfo      = "JwtTokenInfo"
+	TypeJwtClaims         = "JwtClaims"
+	CodecKeyJwtClaim      = "JwtClaim"
+	CodecKeyChainJwtClaim = "ChainJwtClaim"
 )
 
 var Config *Registry
@@ -42,6 +43,7 @@ func InitRegistry() {
 		Types: xreflect.NewTypes(xreflect.WithTypes(
 			xreflect.NewType(TypeJwtTokenInfo, xreflect.WithReflectType(reflect.TypeOf(&jwt.Claims{}))),
 			xreflect.NewType(TypeJwtClaims, xreflect.WithReflectType(reflect.TypeOf(jwt.Claims{}))),
+
 			xreflect.NewType("jwt.Claims", xreflect.WithReflectType(reflect.TypeOf(jwt.Claims{}))),
 			xreflect.NewType("validator.Violation", xreflect.WithReflectType(reflect.TypeOf(validator.Violation{}))),
 			xreflect.NewType("RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
@@ -75,9 +77,10 @@ func InitRegistry() {
 		)),
 		Codecs: codec.New(
 			codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.JwtClaim{}, time.Time{}),
-			codec.WithCodec(dcodec.CognitoKeyJwtClaim, &dcodec.JwtClaim{}, time.Time{}),
 			codec.WithCodec(dcodec.KeyAsStrings, &dcodec.AsStrings{}, time.Time{}),
 			codec.WithCodec(dcodec.KeyAsInts, &dcodec.AsInts{}, time.Time{}),
+			codec.WithCodec(dcodec.KeyBasicAuthSubject, &dcodec.BasicAuthSubject{}, time.Time{}),
+			codec.WithCodec(dcodec.KeyBasicAuthSecret, &dcodec.BasicAuthSecret{}, time.Time{}),
 			codec.WithCodec(dcodec.KeyNil, &dcodec.Nil{}, time.Time{}),
 			codec.WithCodec(dcodec.Structql, &dcodec.StructQLCodec{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyCSV, dcodec.CsvFactory(""), time.Time{}),
@@ -95,6 +98,7 @@ func InitRegistry() {
 			codec.WithFactory(dcodec.KeyURIChecksum, &dcodec.UriChecksumFactory{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyTimeDiff, &dcodec.TimeDiffFactory{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyFirebaseAuth, &dcodec.FirebaseAuth{}, time.Time{}),
+			codec.WithFactory(dcodec.KeyCognitoAuth, &dcodec.CogitoAuth{}, time.Time{}),
 			codec.WithFactory(dcodec.KeyCustomAuth, dcodec.NewCustomAuth(nil), time.Time{}),
 		),
 		Predicates: &PredicateRegistry{

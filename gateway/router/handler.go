@@ -18,6 +18,7 @@ import (
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service"
+	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/session"
@@ -47,6 +48,7 @@ type (
 		Provider   *repository.Provider
 		dispatcher *operator.Service
 		registry   *repository.Registry
+		auth       *auth.Service
 	}
 )
 
@@ -80,12 +82,13 @@ func (r *Handler) AuthorizeRequest(request *http.Request, aPath *path.Path) erro
 	return nil
 }
 
-func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry) *Handler {
+func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry, authService *auth.Service) *Handler {
 	ret := &Handler{
 		Path:       aPath,
 		Provider:   provider,
 		dispatcher: operator.New(),
 		registry:   registry,
+		auth:       authService,
 	}
 	return ret
 }
@@ -358,7 +361,11 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	anOperator := operator.New()
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
-	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...), session.WithRegistry(r.registry), session.WithOperate(anOperator.Operate))
+	aSession := session.New(aComponent.View,
+		session.WithAuth(r.auth),
+		session.WithLocatorOptions(locatorOptions...),
+		session.WithRegistry(r.registry),
+		session.WithOperate(anOperator.Operate))
 	err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
 	if err != nil {
 		return nil, err
