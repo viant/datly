@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
-	"github.com/viant/datly/service/auth"
 	executor "github.com/viant/datly/service/executor"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/executor/extension"
@@ -36,7 +35,6 @@ type (
 		dataUnit   *expand.DataUnit
 		tx         *sql.Tx
 		response   http.ResponseWriter
-		auth       *auth.Service
 	}
 
 	DBProvider struct {
