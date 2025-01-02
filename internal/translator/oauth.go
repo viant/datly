@@ -32,19 +32,22 @@ func (c *Config) updateAuth(ctx context.Context) error {
 	}
 
 	if res := c.repository.Firebase; res != "" {
+		webAPIRes := ""
+		if idx := strings.Index(res, ";"); idx != -1 {
+			webAPIRes = res[idx+1:]
+			res = res[:idx]
+		}
 		cfg.Firebase = &firebase.Config{
-			WebAPIKey: getScyResource(res),
+			Secrets: getScyResource(res),
+		}
+		if webAPIRes != "" {
+			cfg.Firebase.WebAPIKey = getScyResource(webAPIRes)
 		}
 	}
 
 	if res := c.repository.Cognito; res != "" {
-		parts := strings.Split(res, "|")
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid cognito auth resource: %v, expected poolID|secret", res)
-		}
 		cfg.Cognito = &cognito.Config{
-			PoolID:   parts[0],
-			Resource: getScyResource(parts[1]),
+			Resource: getScyResource(res),
 		}
 	}
 

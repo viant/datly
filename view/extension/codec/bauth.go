@@ -61,6 +61,7 @@ type BasicAuthSecret struct {
 func (i *BasicAuthSecret) ResultType(paramType reflect.Type) (reflect.Type, error) {
 	return reflect.TypeOf(""), nil
 }
+
 func (i *BasicAuthSecret) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	_, secret, err := ExtractBasicAuth(raw.(string))
 	if err != nil {

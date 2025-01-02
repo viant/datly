@@ -9,8 +9,8 @@ type (
 	Auth struct {
 		HMAC     string     `short:"A" long:"jwtHMAC" description:"HMACKeyPath|EncKey" `
 		RSA      string     `short:"J" long:"jwtRSA" description:"PublicKeyPath|EncKey" `
-		Firebase string     `short:"F" long:"firebase" description:"Firebase secrets" `
-		Cognito  string     `short:"T" long:"cognito" description:"Cognito pollId|secrets" `
+		Firebase string     `short:"F" long:"firebase" description:"Firebase secrets;WebAPIKey secret" `
+		Cognito  string     `short:"T" long:"cognito" description:"secrets|EncKey" `
 		Custom   CustomAuth `short:"E" long:"customAuth" description:"Custom AuthSQL" `
 	}
 )

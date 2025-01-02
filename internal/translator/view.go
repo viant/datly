@@ -77,10 +77,6 @@ func (v *View) applyShorthands(viewlet *Viewlet) {
 		setter.SetStringIfEmpty(&v.Schema.DataType, v.DataType)
 	}
 
-	if v.AsyncTableName != "" {
-
-	}
-
 	if len(v.Warmup) > 0 {
 		v.View.Cache.Warmup = v.buildCacheWarmup(v.Warmup, viewlet)
 	}
