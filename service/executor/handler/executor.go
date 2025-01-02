@@ -103,6 +103,9 @@ func (e *Executor) newSession(aSession *session.Session, opts ...Option) *extens
 	var options = e.options.Clone(opts)
 	e.session.Apply(session.WithTypes(options.Types...))
 	e.session.Apply(session.WithEmbeddedFS(options.embedFS))
+	if options.auth != nil {
+		e.auth = options.auth
+	}
 	res := e.view.GetResource()
 	sess := extension.NewSession(
 		extension.WithTemplateFlush(func(ctx context.Context) error {
