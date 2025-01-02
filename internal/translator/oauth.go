@@ -20,6 +20,10 @@ func (c *Config) updateAuth(ctx context.Context) error {
 	if res := c.repository.RSA; res != "" {
 		c.ensureJWTValidator(cfg)
 		cfg.JWTValidator.RSA = getScyResource(res)
+		if cfg.JwtSigner == nil {
+			cfg.JwtSigner = &signer.Config{}
+		}
+		cfg.JwtSigner.RSA = getScyResource(res)
 	}
 
 	if res := c.repository.HMAC; res != "" {
@@ -28,7 +32,9 @@ func (c *Config) updateAuth(ctx context.Context) error {
 		if cfg.JwtSigner == nil {
 			cfg.JwtSigner = &signer.Config{}
 		}
-		cfg.JwtSigner.HMAC = getScyResource(res)
+		if cfg.JwtSigner.RSA == nil { //prioritize RSA over HMAC
+			cfg.JwtSigner.HMAC = getScyResource(res)
+		}
 	}
 
 	if res := c.repository.Firebase; res != "" {
