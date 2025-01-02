@@ -33,7 +33,6 @@ type (
 		Options
 		Types    state.Types
 		Redirect *Redirect
-		auth     *auth.Service
 	}
 
 	Redirect struct {
