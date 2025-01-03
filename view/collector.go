@@ -335,10 +335,6 @@ func (r *Collector) ParentRow(relation *Relation) func(value interface{}) (inter
 			valuePosition := r.parentValuesPositions(relation.On[i].Column)
 			key = io.NormalizeKey(key)
 			positions, ok := valuePosition[key]
-			fmt.Printf("key=%v, positions=%v\n", key, positions)
-			for key, values := range valuePosition {
-				fmt.Printf("key=%v, values=%v\n", key, values)
-			}
 			if !ok {
 				return nil, fmt.Errorf(`key "%v" is not found`, key)
 			}

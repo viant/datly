@@ -424,19 +424,13 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 			fetchContext := ctx
 			//rel := collector.Relawerwerwetion()
 			//TODO
-			name := aView.Name
-			if name == "Audience" {
-				fmt.Printf("")
-			}
+
 			parent, err := getParentRow(ctx, row, collector, aView)
-			//if err != nil {
-			//	fmt.Printf("getParentRow err=%v\n", err)
-			//	return err
-			//}
+
 			if err != nil && parent != nil {
 				parentKey := reflect.TypeOf(parent)
 				fetchContext = context.WithValue(ctx, parentKey, parent)
-				fmt.Printf("parentkey=%v, parent=%v\n", parentKey, parent)
+
 			}
 
 			if err = fetcher.OnFetch(fetchContext); err != nil {
