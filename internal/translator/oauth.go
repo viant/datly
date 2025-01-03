@@ -18,10 +18,20 @@ import (
 func (c *Config) updateAuth(ctx context.Context) error {
 	cfg := c.Config.Config
 	if res := c.repository.RSA; res != "" {
+		privateRes := ""
+		if idx := strings.Index(res, ";"); idx != -1 {
+			privateRes = res[idx+1:]
+			res = res[:idx]
+		}
+
 		c.ensureJWTValidator(cfg)
 		cfg.JWTValidator.RSA = getScyResource(res)
+
 		if cfg.JwtSigner == nil {
 			cfg.JwtSigner = &signer.Config{}
+		}
+		if privateRes != "" {
+			res = privateRes
 		}
 		cfg.JwtSigner.RSA = getScyResource(res)
 	}
