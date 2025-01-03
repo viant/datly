@@ -8,6 +8,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/datly/repository/codegen"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
@@ -84,6 +85,8 @@ func (c *Components) Init(ctx context.Context) error {
 			return err
 		}
 
+		inputType := component.Input.Type.Type().Type()
+
 		for _, parameter := range component.Input.Type.Parameters {
 			if param := c.Resource.Parameters.Lookup(parameter.Name); param == nil {
 				c.Resource.Parameters.Append(parameter)
@@ -104,6 +107,16 @@ func (c *Components) Init(ctx context.Context) error {
 			case state.KindView:
 				viewName := parameter.In.Name
 				if prev, _ := c.Resource.View(viewName); prev != nil {
+					if !codegen.IsGeneratorContext(ctx) && !prev.Schema.IsNamed() && inputType != nil { //adjust with named type
+						if fName, ok := inputType.FieldByName(parameter.Name); ok {
+							parameter.Schema.SetType(fName.Type)
+							prev.Schema.SetType(fName.Type)
+							viewParmeter := component.View.Template.Parameters.Lookup(parameter.Name)
+							if viewParmeter != nil {
+								viewParmeter.Schema.SetType(fName.Type)
+							}
+						}
+					}
 					continue
 				}
 

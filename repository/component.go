@@ -436,6 +436,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 				viewName += "Handler"
 			}
 		}
+
 		table := ""
 		if viewParameter := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil {
 			viewOptions = append(viewOptions, view.WithViewType(viewParameter.Schema.SliceType().Elem()))
