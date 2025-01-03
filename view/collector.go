@@ -306,16 +306,62 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 	}
 }
 
+func (r *Collector) ParentRow(relation *Relation) func(value interface{}) (interface{}, error) {
+	if relation == nil {
+		return nil
+	}
+	links := relation.Of.On
+	var xType *xunsafe.Type
+	var values *[]interface{}
+	dest := r.parent.Dest()
+	destPtr := xunsafe.AsPointer(dest)
+
+	return func(owner interface{}) (interface{}, error) {
+
+		var key interface{}
+		var parentPosition int
+		for i, link := range links {
+			keyField := link.xField
+			if keyField == nil && xType == nil {
+				xType = r.types[link.Column]
+				values = r.values[link.Column]
+			}
+			if keyField != nil {
+				key = keyField.Interface(xunsafe.AsPointer(owner))
+			} else {
+				key = xType.Deref((*values)[r.manyCounter])
+				r.manyCounter++
+			}
+			valuePosition := r.parentValuesPositions(relation.On[i].Column)
+			key = io.NormalizeKey(key)
+			positions, ok := valuePosition[key]
+			fmt.Printf("key=%v, positions=%v\n", key, positions)
+			for key, values := range valuePosition {
+				fmt.Printf("key=%v, values=%v\n", key, values)
+			}
+			if !ok {
+				return nil, fmt.Errorf(`key "%v" is not found`, key)
+			}
+			if len(positions) > 1 {
+				return nil, fmt.Errorf(`key "%v" has more than one value`, key)
+			}
+			parentPosition = positions[0]
+		}
+		parentItem := r.parent.slice.ValuePointerAt(destPtr, parentPosition)
+		return parentItem, nil
+	}
+}
+
 func (r *Collector) visitorMany(relation *Relation) func(value interface{}) error {
 	links := relation.Of.On
 	holderField := relation.holderField
 	var xType *xunsafe.Type
 	var values *[]interface{}
-	var key interface{}
 	dest := r.parent.Dest()
 	destPtr := xunsafe.AsPointer(dest)
 
 	return func(owner interface{}) error {
+		var key interface{}
 		for i, link := range links {
 			keyField := link.xField
 			if keyField == nil && xType == nil {
