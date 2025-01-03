@@ -384,7 +384,7 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		}
 
 		if rawSelectorType.Kind() == reflect.Struct && isSelectorPtr {
-			if rawValueType.ConvertibleTo(rawSelectorType) || rawValueType.AssignableTo(rawSelectorType) {
+			if rawValueType.ConvertibleTo(rawSelectorType) {
 				ptrValue := reflect.ValueOf(value)
 				if isValuePtr && ptrValue.IsNil() {
 					return nil, nil
