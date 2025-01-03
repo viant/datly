@@ -161,6 +161,11 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 			sb.WriteString(null)
 			continue
 		}
+		if isZeroVal && stringifier.xField.Type.Kind() == reflect.String {
+			sb.WriteString(`""`)
+			continue
+		}
+
 		fieldValue := stringifier.xField.Pointer(objPtr)
 		if fieldValue == nil {
 			sb.WriteString(null)
