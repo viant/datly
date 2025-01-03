@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
+	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -13,6 +14,7 @@ import (
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	xhttp "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -29,7 +31,13 @@ type (
 		views *views
 		view  *view.View
 		Options
-		Types state.Types
+		Types    state.Types
+		Redirect *Redirect
+	}
+
+	Redirect struct {
+		Route   *xhttp.Route
+		Request *http.Request
 	}
 
 	contextKey string
@@ -86,6 +94,9 @@ func (s *Session) Populate(ctx context.Context) error {
 		return nil
 	}
 	return err
+}
+func (s *Session) Auth() *auth.Service {
+	return s.auth
 }
 
 func (s *Session) setViewStateInBackground(ctx context.Context, aView *view.View, errors *response.Errors, wg *sync.WaitGroup) {
@@ -611,12 +622,14 @@ func New(aView *view.View, opts ...Option) *Session {
 		cache:   newCache(),
 		views:   newViews(),
 		Types:   *state.NewTypes(),
+		view:    aView,
 	}
 	ret.namedParameters = ret.namespacedView.Parameters()
 	ret.apply(opts)
 	for _, aType := range ret.Options.types {
 		ret.Types.Put(aType)
 	}
+	ret.resource = aView.Resource()
 	return ret
 }
 

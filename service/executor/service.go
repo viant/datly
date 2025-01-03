@@ -128,15 +128,6 @@ func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtI
 	return aTx.CommitIfNeeded()
 }
 
-func extractStatements(data []*expand2.SQLStatment) []string {
-	result := make([]string, 0, len(data))
-	for _, datum := range data {
-		result = append(result, datum.SQL)
-	}
-
-	return result
-}
-
 func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface{}, db *sql.DB) error {
 	switch actual := data.(type) {
 	case *expand2.Executable:
@@ -186,7 +177,8 @@ func (e *Executor) handleUpdate(ctx context.Context, sess *dbSession, db *sql.DB
 }
 
 func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable *expand2.Executable, db *sql.DB) error {
-	canBeBatched := sess.supportLocalBatch() && sess.dbSource.CanBatch(executable.Table)
+	canBeBatched := sess.supportLocalBatch()
+	//TODO remove this option make no sense unless its blacklist -&& sess.dbSource.CanBatch(executable.Table)
 	options := e.dbOptions(db, sess)
 	service, err := sess.Inserter(ctx, db, executable.Table, options...)
 	if err != nil {
@@ -204,8 +196,6 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 		return err
 	}
 
-	collection := sess.collection(executable)
-	collection.Append(executable.Data)
 	if !executable.IsLast {
 		return nil
 	}
@@ -216,16 +206,20 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 			return err
 		}
 		batchSize := 100
-		if collection.Len() < batchSize {
-			batchSize = collection.Len()
+		rType := reflect.TypeOf(executable.Data)
+		if rType.Kind() == reflect.Slice {
+			actual := reflect.ValueOf(executable.Data)
+			if actual.Len() < batchSize {
+				batchSize = actual.Len()
+			}
 		}
-
 		options = append(options, option.BatchSize(batchSize))
 		options = append(options, e.dbOptions(db, sess))
-		_, _, err = service.Exec(ctx, collection.Unwrap(), options...)
+		_, _, err = service.Exec(ctx, executable.Data, options...)
 		return err
 	}
 
+	//TODO: !!!!!! :^^^^^^^^:
 	aBatcher, err := batcherRegistry.GetBatcher(executable.Table, reflect.TypeOf(executable.Data), db, &batcher.Config{
 		MaxElements:   100,
 		MaxDurationMs: 10,
@@ -237,7 +231,7 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 	}
 
 	//TODO: remove reflection
-	rSlice := reflect.ValueOf(collection.Unwrap()).Elem()
+	rSlice := reflect.ValueOf(executable.Data)
 	sliceLen := rSlice.Len()
 	var state *batcher.State
 	for i := 0; i < sliceLen; i++ {

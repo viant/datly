@@ -2,7 +2,6 @@ package view
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -19,6 +18,7 @@ import (
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
+	"path"
 	"reflect"
 	"strings"
 	"sync"
@@ -60,8 +60,7 @@ type (
 		Loggers  logger.Adapters `json:",omitempty"`
 		_loggers logger.AdapterIndex
 
-		codecs  *codec.Registry
-		ModTime time.Time `json:",omitempty"`
+		codecs *codec.Registry
 
 		Predicates  []*predicate.Template
 		_predicates *extension.PredicateRegistry
@@ -69,13 +68,14 @@ type (
 		viewColumns map[string]Columns
 
 		Substitutes Substitutes
-		Docs        *Docs
+		Docs        *Documentation
+		FSEmbedder  *state.FSEmbedder
 
-		_doc     docs.Service
-		fs       afs.Service
-		_embedFs embed.FS
-		_docs    *docs.Registry
-		_mux     sync.RWMutex
+		modTime time.Time
+		_doc    docs.Service
+		fs      afs.Service
+		_docs   *docs.Registry
+		_mux    sync.RWMutex
 	}
 
 	NamedResources map[string]*Resource
@@ -90,6 +90,13 @@ type (
 		Metrics         *Metrics
 	}
 )
+
+func (r *Resource) RepositoryURL() string {
+	if index := strings.Index(r.SourceURL, "/routes/"); index != -1 {
+		return r.SourceURL[:index]
+	}
+	return ""
+}
 
 func (r *Resource) Lock() {
 	r._mux.Lock()
@@ -149,27 +156,28 @@ func (r *Resource) loadText(ctx context.Context, URL string, expand bool) (strin
 	}
 	data, err := fs.DownloadWithURL(ctx, URL)
 
-	if err = r.updateTime(ctx, URL, err); err != nil {
+	if err = r.UpdateTime(ctx, URL); err != nil {
 		return "", err
 	}
 
 	return string(data), err
 }
 
-func (r *Resource) updateTime(ctx context.Context, URL string, err error) error {
-	if !strings.HasSuffix(URL, ".sql") {
+func (r *Resource) ModTime() time.Time {
+	return r.modTime
+}
+
+func (r *Resource) UpdateTime(ctx context.Context, URL string) error {
+	if !strings.HasSuffix(URL, ".sql") || URL == "" {
 		return nil
 	}
-
 	object, err := r.LoadObject(ctx, URL)
 	if err != nil {
 		return err
 	}
-
-	if object.ModTime().After(r.ModTime) {
-		r.ModTime = object.ModTime()
+	if object.ModTime().After(r.modTime) {
+		r.modTime = object.ModTime()
 	}
-
 	return nil
 }
 
@@ -525,7 +533,7 @@ func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Reso
 	}
 	resource.fs = fs
 	resource.SourceURL = URL
-	resource.ModTime = object.ModTime()
+	resource.modTime = object.ModTime()
 	return resource, err
 }
 
@@ -560,7 +568,7 @@ func (r *Resource) FindConnector(view *View) (*Connector, error) {
 
 	if view.Connector != nil {
 		if view.Connector.Ref != "" {
-			return r._connectors.Lookup(view.Connector.Ref)
+			return r.Connector(view.Connector.Ref)
 		}
 
 		if err := view.Connector.Validate(); err == nil {
@@ -731,12 +739,12 @@ func (r *Resource) ensureCacheIndex() {
 }
 
 func (r *Resource) ExistsConnector(name string) bool {
-	lookup, err := r._connectors.Lookup(name)
+	lookup, err := r.Connector(name)
 	return lookup != nil && err == nil
 }
 
 func (r *Resource) Connector(name string) (*Connector, error) {
-	if r._connectors == nil {
+	if len(r._connectors) == 0 {
 		r._connectors = ConnectorSlice(r.Connectors).Index()
 	}
 
@@ -808,8 +816,10 @@ func (r *Resource) initDocs(ctx context.Context) error {
 	if r.Docs == nil {
 		return nil
 	}
-
-	return r.Docs.Init(ctx, r._docs, r._connectors)
+	if r.Docs.BaseURL != "" && url.IsRelative(r.Docs.BaseURL) {
+		r.Docs.BaseURL = path.Join(r.RepositoryURL(), r.Docs.BaseURL)
+	}
+	return r.Docs.Init(ctx, r.fs, r.Substitutes)
 }
 
 func (r *Resource) Doc() (docs.Service, bool) {

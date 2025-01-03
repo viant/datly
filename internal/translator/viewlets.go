@@ -37,7 +37,7 @@ func (n *Viewlets) Append(viewlet *Viewlet) {
 	n.registry[viewlet.Name] = viewlet
 	n.keys = append(n.keys, viewlet.Name)
 }
-func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Resource, initFn, setType func(ctx context.Context, n *Viewlet, aDoc state.Documentation) error) error {
+func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Resource, initFn, setType func(ctx context.Context, n *Viewlet) error) error {
 
 	SQL, err := SafeQueryStringify(aQuery)
 	if err != nil {
@@ -70,14 +70,14 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 	rootConnector := root.GetConnector()
 	if err := n.Each(func(viewlet *Viewlet) error {
 		n.ensureConnector(viewlet, rootConnector)
-		if err := initFn(ctx, viewlet, resource.Rule.Doc.Columns); err != nil {
+		if err := initFn(ctx, viewlet); err != nil {
 			return fmt.Errorf("failed to init viewlet: %ns, %w", viewlet.Name, err)
 		}
 		return nil
 	}); err != nil {
 		return err
 	}
-	if err := resource.ensureViewParametersSchema(ctx, setType, resource.Rule.Doc.Columns); err != nil {
+	if err := resource.ensureViewParametersSchema(ctx, setType); err != nil {
 		return err
 	}
 	if err := resource.ensurePathParametersSchema(ctx, resource.State); err != nil {
@@ -85,7 +85,8 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 	}
 
 	if err := n.Each(func(viewlet *Viewlet) error {
-		if err := setType(ctx, viewlet, resource.Rule.Doc.Columns); err != nil {
+		viewlet.NormalizeSQL()
+		if err := setType(ctx, viewlet); err != nil {
 			return fmt.Errorf("failed to init viewlet: %v, %w", viewlet.Name, err)
 		}
 		return nil
@@ -174,9 +175,6 @@ func (n *Viewlets) applyTopLevelSetting(column *sqlparser.Column, viewlet *Viewl
 		columnViewlet.OutputJSONHint = column.Comments
 		if err := inference.TryUnmarshalHint(columnViewlet.OutputJSONHint, &columnViewlet.OutputSettings); err != nil {
 			return err
-		}
-		if columnViewlet.OutputSettings.Field != "" {
-			viewlet.Resource.Rule.Route.Output.Field = columnViewlet.OutputSettings.Field
 		}
 		if columnViewlet.OutputSettings.Cardinality != "" {
 			if viewlet.View.Schema == nil {

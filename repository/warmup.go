@@ -22,7 +22,7 @@ func (s *Service) updateCacheConnectorRef(aResource *view.Resource, aView *view.
 			if ok {
 				refName := prefix + viewConnector.Name
 				if ok && aResource.ExistsConnector(refName) {
-					cacheWarmup.Connector = &view.Connector{Reference: shared.Reference{Ref: refName}}
+					cacheWarmup.Connector = &view.Connector{Connection: view.Connection{DBConfig: view.DBConfig{Reference: shared.Reference{Ref: refName}}}}
 				}
 			}
 		}

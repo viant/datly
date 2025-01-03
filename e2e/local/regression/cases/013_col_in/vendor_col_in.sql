@@ -7,6 +7,9 @@
     }
  } */
 
+#set( $_ = $Data<?>(output/view).Embed())
+
+
 SELECT vendor.*,
        products.* EXCEPT VENDOR_ID
 FROM (SELECT * FROM VENDOR t ) vendor

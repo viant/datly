@@ -7,7 +7,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/repository/path"
-	"github.com/viant/datly/service/auth"
+	"github.com/viant/datly/service/auth/config"
 	"github.com/viant/datly/service/auth/secret"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
@@ -36,7 +36,7 @@ type (
 		MaxJobs         int
 		UseCacheFS      bool
 		SyncFrequencyMs int
-		auth.Config
+		config.Config
 		Meta                 meta.Config
 		AutoDiscovery        *bool
 		ChangeDetection      *ChangeDetection

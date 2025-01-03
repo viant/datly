@@ -5,10 +5,12 @@
    "TypeSrc":{
         "URL":"regression/cases/026_transform_service",
         "Types":["PerformanceData", "Events"]
-   },
-    "ResponseBody": { "From": "Events" }
+   }
 } */
+
 #set($_ = $Events<*Events>(body/))
+#set($_ = $Events<*Events>(body/).Output().Tag('anonymous:"true"'))
+
 
 $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
@@ -40,5 +42,5 @@ INSERT INTO EVENTS (
         $recEventsPerformance.EventId,
         $recEventsPerformance.Timestamp
 	);
-	
+
 #end

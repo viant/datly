@@ -10,6 +10,8 @@ import(
 )
 
 #set($_ = $Events<*Events>(body/))
+#set($_ = $Events<*Events>(body/).Output().Tag('anonymous:"true"'))
+
 $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
 
@@ -41,5 +43,5 @@ INSERT INTO EVENTS (
         $recEventsPerformance.EventId,
         $recEventsPerformance.Timestamp
 	);
-	
+
 #end

@@ -53,7 +53,18 @@ func WithColumns(columns Columns) Option {
 // WithFS creates fs options
 func WithFS(fs *embed.FS) Option {
 	return func(v *View) error {
-		v._fs = fs
+		v._embedder = state.NewFSEmbedder(fs)
+		if v.Schema != nil {
+			v._embedder.SetType(v.Schema.Type())
+		}
+		return nil
+	}
+}
+
+// WithFSEmbedder creates fs options
+func WithFSEmbedder(embeder *state.FSEmbedder) Option {
+	return func(v *View) error {
+		v._embedder = embeder
 		return nil
 	}
 }
@@ -75,10 +86,11 @@ func WithTag(aTag *tags.Tag) Option {
 // WithStructTag creates tag options
 func WithStructTag(tag reflect.StructTag, fs *embed.FS) Option {
 	return func(v *View) error {
-		if v._fs == nil {
-			v._fs = fs
+		v._embedder = state.NewFSEmbedder(fs)
+		if v.Schema != nil {
+			v._embedder.SetType(v.Schema.Type())
 		}
-		aTag, err := tags.ParseViewTags(tag, v._fs)
+		aTag, err := tags.ParseViewTags(tag, v._embedder.EmbedFS())
 		if err != nil {
 			return err
 		}
@@ -114,7 +126,7 @@ func WithConnector(connector *Connector) Option {
 // WithDBConfig creates connector View option
 func WithDBConfig(dbConfig *DBConfig) Option {
 	return func(v *View) error {
-		v.Connector = &Connector{DBConfig: *dbConfig}
+		v.Connector = &Connector{Connection: Connection{DBConfig: *dbConfig}}
 		return nil
 	}
 }

@@ -2,6 +2,10 @@
    "URI": "basic/patch-custom", "Method": "PATCH"
 } */
 
+#set($_ = $Foos<*>(body/).Tag('anonymous:"true"'))
+#set($_ = $Foos<*>(body/).Output().Tag('anonymous:"true"'))
+
+
 SELECT foos.*,
        foosPerformance.*
 FROM (SELECT * FROM FOOS) foos

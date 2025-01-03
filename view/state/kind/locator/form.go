@@ -46,6 +46,6 @@ func (r *Form) Value(ctx context.Context, name string) (interface{}, bool, error
 // NewForm returns body locator
 func NewForm(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
-	var ret = &Form{form: options.form, request: options.request}
+	var ret = &Form{form: options.Form, request: options.request}
 	return ret, nil
 }

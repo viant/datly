@@ -17,7 +17,7 @@ func (s *StatementExpression) Generate(builder *Builder) (err error) {
 	return s.Expression.Generate(builder)
 }
 
-//NewStatementExpression return new statement expr
+// NewStatementExpression return new statement expr
 func NewStatementExpression(expr Expression) *StatementExpression {
 	return &StatementExpression{Expression: expr}
 }
@@ -26,12 +26,12 @@ func (e *CallExpr) Generate(builder *Builder) (err error) {
 	if err != nil {
 		return err
 	}
-
 	if expr != e {
 		return expr.Generate(builder)
 	}
 
 	if e.Receiver != nil {
+
 		if err = e.Receiver.Generate(builder); err != nil {
 			return err
 		}
@@ -87,4 +87,9 @@ func unsupportedOptionUse(builder *Builder, s Expression) error {
 
 func NewIdent(name string) *Ident {
 	return &Ident{Name: name}
+}
+
+func NewHolderIndent(holder, name string) *Ident {
+	ret := &Ident{Name: name, Holder: holder}
+	return ret
 }

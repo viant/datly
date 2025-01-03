@@ -57,6 +57,18 @@ func (r Repeated) AsFloats64() ([]float64, error) {
 	return result, nil
 }
 
+func (r Repeated) AsBools() ([]bool, error) {
+	var result = make([]bool, 0, len(r))
+	for _, item := range r {
+		v, err := strconv.ParseBool(item)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert %v into %T, %w", r, result, err)
+		}
+		result = append(result, v)
+	}
+	return result, nil
+}
+
 func (r Repeated) AsFloats32() ([]float32, error) {
 	var result = make([]float32, 0, len(r))
 	for _, item := range r {
@@ -69,7 +81,7 @@ func (r Repeated) AsFloats32() ([]float32, error) {
 	return result, nil
 }
 
-func NewRepeated(text string, isNumeric bool) Repeated {
+func NewRepeated(text string, trimSpace bool) Repeated {
 	if text == "" {
 		return Repeated{}
 	}
@@ -77,12 +89,12 @@ func NewRepeated(text string, isNumeric bool) Repeated {
 		text = text[1 : len(text)-1]
 	}
 	elements := strings.Split(text, ",")
-	if !isNumeric {
+	if !trimSpace {
 		return elements
 	}
 	var result = make(Repeated, 0, len(elements))
 	for _, elem := range elements {
-		if isNumeric {
+		if trimSpace {
 			if elem = strings.TrimSpace(elem); elem == "" {
 				continue
 			}

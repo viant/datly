@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/repository/plugin"
 	"github.com/viant/datly/repository/resource"
+	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
@@ -30,6 +31,7 @@ type (
 		paths            *path.Service
 		resources        Resources
 		extensions       *extension.Registry
+		auth             *auth.Service
 		plugins          *plugin.Service
 		refreshFrequency time.Duration
 		options          *Options
@@ -49,6 +51,10 @@ func (s *Service) Extensions() *extension.Registry {
 
 func (s *Service) Resources() Resources {
 	return s.resources
+}
+
+func (s *Service) Auth() *auth.Service {
+	return s.auth
 }
 
 func (s *Service) Registry() *Registry {
@@ -103,6 +109,12 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 	if s.paths, err = path.New(ctx, options.fs, options.componentURL, options.refreshFrequency); err != nil {
 		return err
 	}
+	s.auth = auth.New(&options.authConfig)
+	err = s.auth.Init(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to initialize auth: %v", err)
+	}
+	s.registry = NewRegistry(options.apiPrefix, s.auth, options.dispatcher)
 
 	if s.resources == nil && options.resourceURL != "" {
 		if s.resources, err = resource.New(ctx, options.fs, options.resourceURL, options.refreshFrequency); err != nil {
@@ -146,12 +158,12 @@ func (s *Service) init(ctx context.Context, options *Options) (err error) {
 			}
 		}
 	}
-
 	if err = s.initComponentProviders(ctx); err != nil {
 		return err
 	}
-
-	err = s.initMBusSubscribers(ctx)
+	if err = s.initMBusSubscribers(ctx); err != nil {
+		return err
+	}
 
 	return err
 }
@@ -282,17 +294,17 @@ func (s *Service) loadComponent(ctx context.Context, opts []Option, sourceURL st
 
 // AuthService returns jwt signer
 func (s *Service) AuthService() *custom.Service {
-	return s.options.customAuth
+	return s.auth.Custom()
 }
 
 // JWTSigner returns jwt signer
 func (s *Service) JWTSigner() *signer.Service {
-	return s.options.jwtSigner
+	return s.auth.Signer()
 }
 
 // JWTVerifier returns jwt signer
 func (s *Service) JWTVerifier() *verifier.Service {
-	return s.options.jWTVerifier
+	return s.auth.Verifier()
 }
 
 func (s *Service) inheritFromPath(component *Component, aPath *path.Path) {
@@ -341,7 +353,6 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 		refreshFrequency: options.refreshFrequency,
 		resources:        options.resources,
 		extensions:       options.extensions,
-		registry:         NewRegistry(options.apiPrefix, options.dispatcher),
 	}
 	err := ret.init(ctx, options)
 	return ret, err

@@ -49,6 +49,13 @@ type (
 	Selector []string
 )
 
+func (s *Spec) NormalizeSQL() {
+	if s.SQL == "" || s.Table == "" {
+		return
+	}
+	s.SQL = strings.ReplaceAll(s.SQL, "("+s.Table+")", s.Table)
+}
+
 func (s *Spec) EnsureRelationType() {
 	if len(s.Relations) == 0 {
 		return
@@ -85,11 +92,11 @@ func (s *Spec) EnsureRelationType() {
 }
 
 // BuildType build a type from infered table/SQL definition
-func (s *Spec) BuildType(pkg, name string, cardinality state.Cardinality, whitelist, blacklist map[string]bool, doc state.Documentation) error {
+func (s *Spec) BuildType(pkg, name string, cardinality state.Cardinality, whitelist, blacklist map[string]bool) error {
 	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
 	for i, column := range s.Columns {
 		skipped := s.shouldSkipColumn(whitelist, blacklist, column)
-		field, err := aType.AppendColumnField(s.Columns[i], skipped, doc, s.Table)
+		field, err := aType.AppendColumnField(s.Columns[i], skipped, s.Table)
 		if err != nil {
 			return err
 		}
@@ -171,7 +178,7 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 		for _, item := range spec.Type.columnFields {
 			available = append(available, item.Column.Name)
 		}
-		return fmt.Errorf("failed to ref field for %v, available: %v", refColumn, available)
+		return fmt.Errorf("failed to ref field for %v, available: %v on  %v", refColumn, available, join.Alias)
 	}
 
 	rel := &Relation{Spec: spec,
@@ -186,11 +193,11 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 }
 
 // Selector returns current sepcifiction selector (path from root)
-func (s *Spec) Selector() Selector {
+func (s *Spec) Selector(rootPath string) Selector {
 	if s.Parent != nil {
-		return append(s.Parent.Selector(), s.Type.Name)
+		return append(s.Parent.Selector(rootPath), s.Type.Name)
 	}
-	return []string{s.Type.Name}
+	return []string{rootPath}
 }
 
 // PkStructQL crates a PK struct SQL
@@ -221,20 +228,22 @@ func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 		i++
 		structQLParam := columnParameter(field)
 		builder.WriteString(fmt.Sprintf(`$criteria.In("%v", $%v.Values)`, field.Column.Name, structQLParam))
+		if field.Column.IsAutoincrement {
+			break
+		}
 	}
 	return builder.String()
 }
 
 // NewSpec discover column derived type for supplied SQL/table
 func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL string, SQLArgs ...interface{}) (*Spec, error) {
-	isAuxiliary := isAuxiliary(SQL)
+	isAuxiliary := isAuxiliary(&SQL)
 	table = normalizeTable(table)
 	SQL = normalizeSQL(SQL, table)
 	if table == "" && SQL == "" {
 		return nil, fmt.Errorf("both table/SQL were empty")
 	}
 	var result = &Spec{Table: table, SQL: SQL, SQLArgs: SQLArgs, IsAuxiliary: isAuxiliary}
-
 	columns, err := column.Discover(ctx, db, table, SQL, SQLArgs...)
 	if err != nil {
 		return nil, err
@@ -254,20 +263,25 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL
 	return result, nil
 }
 
-func isAuxiliary(SQL string) bool {
-	if SQL == "" {
+func isAuxiliary(SQL *string) bool {
+	if *SQL == "" {
 		return false
 	}
-	SQL = TrimParenthesis(SQL)
-	aQuery, _ := sqlparser.ParseQuery(SQL)
+	*SQL = TrimParenthesis(*SQL)
+	aQuery, _ := sqlparser.ParseQuery(*SQL)
 	if aQuery == nil {
 		return false
 	}
 	if aQuery.From.X == nil {
 		return true
 	}
-	from := sqlparser.Stringify(aQuery.From.X)
-	return strings.Contains(from, "(")
+	from := strings.TrimSpace(sqlparser.Stringify(aQuery.From.X))
+	lowerCasedFrom := strings.ToLower(from)
+	ret := strings.HasPrefix(from, "(") && !(strings.Contains(lowerCasedFrom, "select"))
+	if ret {
+		*SQL = strings.Replace(*SQL, from, TrimParenthesis(from), 1)
+	}
+	return ret
 }
 
 func IsToOne(join *query.Join) bool {

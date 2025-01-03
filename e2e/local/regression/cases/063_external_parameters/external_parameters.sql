@@ -5,6 +5,9 @@
    } */
 
 
+#set( $_ = $Data<?>(output/view).Embed())
+
+
 SELECT vendor.*
 FROM (SELECT *
       FROM VENDOR t

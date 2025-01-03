@@ -4,6 +4,10 @@
   "ConstURL": "./properties.json"
 }
  */
+
+#set( $_ = $Data<?>(output/view).Embed())
+
+
 SELECT main.*
 FROM (
          SELECT

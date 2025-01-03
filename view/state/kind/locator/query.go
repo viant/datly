@@ -24,14 +24,9 @@ func (q *Query) Names() []string {
 }
 
 func (q *Query) Value(ctx context.Context, name string) (interface{}, bool, error) {
-	if q.rawQuery != q.request.URL.RawQuery {
-		q.rawQuery = q.request.URL.RawQuery
-		q.query = q.request.URL.Query()
-	}
 	if name == "" {
 		return q.rawQuery, true, nil
 	}
-
 	value, ok := q.query[name]
 	if !ok {
 		return nil, false, nil
@@ -66,5 +61,12 @@ func NewQuery(opts ...Option) (kind.Locator, error) {
 	if options.request == nil {
 		return nil, fmt.Errorf("requestState was empty")
 	}
-	return &Query{request: options.request}, nil
+	ret := &Query{request: options.request, query: options.Query}
+	if len(ret.query) == 0 {
+		ret.rawQuery = ret.request.URL.RawQuery
+		ret.query = ret.request.URL.Query()
+	} else if len(ret.query) > 0 {
+		ret.rawQuery = ret.query.Encode()
+	}
+	return ret, nil
 }

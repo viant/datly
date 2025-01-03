@@ -6,9 +6,10 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/service/auth/firebase"
 	"github.com/viant/scy"
+	"github.com/viant/scy/auth/cognito"
 	custom "github.com/viant/scy/auth/custom"
+	"github.com/viant/scy/auth/firebase"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"strings"
@@ -19,6 +20,10 @@ func (c *Config) updateAuth(ctx context.Context) error {
 	if res := c.repository.RSA; res != "" {
 		c.ensureJWTValidator(cfg)
 		cfg.JWTValidator.RSA = getScyResource(res)
+		if cfg.JwtSigner == nil {
+			cfg.JwtSigner = &signer.Config{}
+		}
+		cfg.JwtSigner.RSA = getScyResource(res)
 	}
 
 	if res := c.repository.HMAC; res != "" {
@@ -27,11 +32,27 @@ func (c *Config) updateAuth(ctx context.Context) error {
 		if cfg.JwtSigner == nil {
 			cfg.JwtSigner = &signer.Config{}
 		}
-		cfg.JwtSigner.HMAC = getScyResource(res)
+		if cfg.JwtSigner.RSA == nil { //prioritize RSA over HMAC
+			cfg.JwtSigner.HMAC = getScyResource(res)
+		}
 	}
 
 	if res := c.repository.Firebase; res != "" {
+		webAPIRes := ""
+		if idx := strings.Index(res, ";"); idx != -1 {
+			webAPIRes = res[idx+1:]
+			res = res[:idx]
+		}
 		cfg.Firebase = &firebase.Config{
+			Secrets: getScyResource(res),
+		}
+		if webAPIRes != "" {
+			cfg.Firebase.WebAPIKey = getScyResource(webAPIRes)
+		}
+	}
+
+	if res := c.repository.Cognito; res != "" {
+		cfg.Cognito = &cognito.Config{
 			Resource: getScyResource(res),
 		}
 	}
@@ -49,7 +70,6 @@ func (c *Config) updateAuth(ctx context.Context) error {
 		if maxAttempts < 1 {
 			maxAttempts = 5
 		}
-
 		cfg.Custom = &custom.Config{
 			AuthConnector:     authConnector,
 			AuthSQL:           authQuery,

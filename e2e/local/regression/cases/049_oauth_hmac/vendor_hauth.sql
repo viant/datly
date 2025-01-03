@@ -1,5 +1,7 @@
 /* {"URI":"hauth/vendors/{vendorID}"} */
 
+
+#set( $_ = $Data<?>(output/view).Embed())
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
 #set($_ = $Authorization  /*
    !!403 SELECT Authorized /* {"DataType":"bool"} */

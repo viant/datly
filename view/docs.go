@@ -2,100 +2,53 @@ package view
 
 import (
 	"context"
-	"fmt"
-	"github.com/viant/xdatly/docs"
+	"github.com/viant/afs"
+	"github.com/viant/afs/url"
+	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/state"
+	"path"
 )
 
 type (
-	Docs struct {
-		Name          string
-		DefaultPkg    string
-		ConnectorName string
-		URL           string
-		Types         *TypesDoc
-		_service      docs.Service
-	}
-
-	TypesDoc struct {
-		DefaultPkg *string
-		Doc        []*TypeDoc
-		_docIndex  map[string]int
-	}
-
-	TypeDoc struct {
-		Pkg   *string
-		Name  string
-		Paths map[string]string
-	}
-
-	MapBasedDoc struct {
-		index map[string]string
+	Documentation struct {
+		BaseURL     string
+		URLs        []string
+		*state.Docs `json:"-"`
 	}
 )
 
-func (m *MapBasedDoc) Lookup(ctx context.Context, key string) (string, bool, error) {
-	result, ok := m.index[key]
-	return result, ok, nil
-}
-
-func (d *Docs) Init(ctx context.Context, registry *docs.Registry, connectors Connectors) error {
-	if d.Types != nil {
-		d._service = NewMapBasedDoc(d.Types)
-		return nil
-	}
-
-	if d.Name == "" {
-		return fmt.Errorf("name can't be empty")
-	}
-
-	provider := registry.Lookup(d.Name)
-	if provider == nil {
-		return fmt.Errorf("not found Documentation provider with name %v", d.Name)
-	}
-
-	var serviceOptions []docs.Option
-	if d.URL != "" {
-		serviceOptions = append(serviceOptions, docs.WithURL(d.URL))
-	}
-
-	if d.ConnectorName != "" {
-		connector, err := connectors.Lookup(d.ConnectorName)
-		if err != nil {
+func (d *Documentation) Init(ctx context.Context, fs afs.Service, substitutes Substitutes) error {
+	d.Docs = &state.Docs{}
+	for _, URL := range d.URLs {
+		if url.IsRelative(URL) {
+			URL = path.Join(d.BaseURL, URL)
+		}
+		var dest = &state.Docs{}
+		if err := d.loadDocument(ctx, fs, substitutes, URL, dest); err != nil {
 			return err
 		}
-
-		serviceOptions = append(serviceOptions, docs.WithConnector(connector))
+		d.Docs.Merge(dest)
 	}
-
-	service, err := provider.Service(ctx, serviceOptions...)
-	if err != nil {
-		return err
-	}
-
-	d._service = service
 	return nil
 }
 
-func NewMapBasedDoc(types *TypesDoc) docs.Service {
-	index := map[string]string{}
-	for _, doc := range types.Doc {
-		if doc.Pkg == nil {
-			doc.Pkg = types.DefaultPkg
-		}
-
-		for key, value := range doc.Paths {
-			var aKey string
-			if doc.Pkg != nil {
-				aKey = *doc.Pkg + "." + key
-			} else {
-				aKey = key
-			}
-
-			index[aKey] = value
-		}
+func (d *Documentation) loadDocument(ctx context.Context, fs afs.Service, substitutes Substitutes, URL string, dest *state.Docs) error {
+	if fs == nil {
+		fs = afs.New()
 	}
+	data, err := fs.DownloadWithURL(ctx, URL)
+	if err != nil {
+		return err
+	}
+	data = []byte(substitutes.Replace(string(data)))
+	err = shared.UnmarshalWithExt(data, dest, path.Ext(URL))
+	return err
+}
 
-	return &MapBasedDoc{
-		index: index,
+// NewDocumentation creates a new documentation
+func NewDocumentation(URLS ...string) *Documentation {
+	return &Documentation{
+		URLs: URLS,
+		Docs: &state.Docs{},
 	}
 }

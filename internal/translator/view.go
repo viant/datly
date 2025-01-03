@@ -27,7 +27,6 @@ type (
 		DataType         string                 `json:",omitempty"`
 		AsyncTableName   string                 `json:",omitempty"`
 		ParameterDerived bool
-		CriteriaParam    string `json:",omitempty"`
 		Cardinality      string
 	}
 )
@@ -76,10 +75,6 @@ func (v *View) applyShorthands(viewlet *Viewlet) {
 			v.Schema = &state.Schema{}
 		}
 		setter.SetStringIfEmpty(&v.Schema.DataType, v.DataType)
-	}
-
-	if v.AsyncTableName != "" {
-
 	}
 
 	if len(v.Warmup) > 0 {
@@ -190,10 +185,6 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 		}
 	}
 
-	if v.CriteriaParam != "" {
-		selector.CriteriaParameter = state.NewRefParameter(v.CriteriaParam)
-	}
-
 	if querySelectors, ok := namespace.Resource.Declarations.QuerySelectors[namespace.Name]; ok {
 		if parameter := querySelectors.Lookup("Fields"); parameter != nil {
 			selector.FieldsParameter = &parameter.Parameter
@@ -272,9 +263,13 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		if relation.KeyField == nil {
 			return fmt.Errorf("failed to add relation: %v, unknown reference", relation.Name)
 		}
+		columnName := relation.ParentField.Column.Name
+		if columnName == "" {
+			columnName = relation.ParentField.Column.Alias
+		}
 
 		viewRelation.On = append(viewRelation.On, &view.Link{
-			Column:    relation.ParentField.Column.Name,
+			Column:    columnName,
 			Namespace: relation.ParentField.Column.Namespace,
 			Field:     relation.ParentField.Name,
 		})

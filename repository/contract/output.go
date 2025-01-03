@@ -25,24 +25,17 @@ const (
 )
 
 type Output struct {
-	Cardinality state.Cardinality `json:",omitempty"`
-	CaseFormat  text.CaseFormat   `json:",omitempty"`
-	OmitEmpty   bool              `json:",omitempty"`
-	Style       Style             `json:",omitempty"`
-	Title       string            `json:",omitempty"`
-	//Filed defines optional main view data holder
-	//deprecated
-	Field            string `json:",omitempty"`
+	Cardinality      state.Cardinality `json:",omitempty"`
+	CaseFormat       text.CaseFormat   `json:",omitempty"`
+	OmitEmpty        bool              `json:",omitempty"`
+	Title            string            `json:",omitempty"`
 	Exclude          []string
 	NormalizeExclude *bool
 	DebugKind        view.MetaKind
 	DataFormat       string `json:",omitempty"` //default data format
-	ResponseBody     *BodySelector
 	RevealMetric     *bool
 	Type             state.Type
 	ViewType         string
-	Doc              state.Documentation
-	FilterDoc        state.Documentation
 	_excluded        map[string]bool
 }
 
@@ -61,22 +54,14 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputType *state.Ty
 	o.initExclude()
 	o.addExcludePrefixesIfNeeded()
 	o.initDebugStyleIfNeeded()
-	if err = o.initParameters(aView, inputType, o.Doc, isReader); err != nil {
+	if err = o.initParameters(aView, inputType, isReader); err != nil {
 		return err
 	}
-	if (o.Style == "" || o.Style == BasicStyle) && o.Field == "" {
-		o.Style = BasicStyle
-		if isReader {
-			o.Type.Schema = state.NewSchema(aView.OutputType())
-			return nil
-		}
-	}
-	if o.Field == "" && o.Style != BasicStyle {
-		if isReader {
-			o.Field = "ViewData"
 
-		} else {
-			o.Field = "ResponseBody"
+	if isReader {
+		if o.Type.IsAnonymous() {
+			o.Type.Schema = state.NewSchema(aView.OutputType())
+			return
 		}
 	}
 	pkg := pkgPath
@@ -133,6 +118,24 @@ func (o *Output) Excluded() map[string]bool {
 	return o._excluded
 }
 
+func (o *Output) IsExcluded(path string) bool {
+	if len(o._excluded) == 0 {
+		return false
+	}
+	if _, ok := o._excluded[path]; ok {
+		return true
+	}
+	parts := strings.Split(path, ".")
+	for i := 2; i < len(parts); i++ {
+		key := strings.Join(parts[len(parts)-2:], ".")
+		if _, ok := o._excluded[key]; ok {
+			return ok
+		}
+	}
+
+	return false
+}
+
 func (o *Output) ShouldNormalizeExclude() bool {
 	return o.NormalizeExclude == nil || *o.NormalizeExclude
 }
@@ -154,12 +157,29 @@ func (o *Output) initExclude() {
 
 }
 
+func (r *Output) Field() string {
+	if r.Type.IsAnonymous() {
+		return ""
+	}
+	outputParameter := r.Type.Parameters.LookupByLocation(state.KindOutput, outputkeys.ViewData)
+	if outputParameter == nil {
+		if candidate := r.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); candidate != nil {
+			outputParameter = candidate
+		}
+	}
+	if outputParameter != nil {
+		return outputParameter.Name
+	}
+	return "data"
+}
+
 func (r *Output) addExcludePrefixesIfNeeded() {
-	if r.Field == "" {
+	field := r.Field()
+	if field == "" {
 		return
 	}
 	for i, actual := range r.Exclude {
-		r.Exclude[i] = r.Field + "." + actual
+		r.Exclude[i] = field + "." + actual
 	}
 }
 
@@ -172,18 +192,7 @@ func (o *Output) initDebugStyleIfNeeded() {
 	}
 }
 
-func (o *Output) initParameters(aView *view.View, bodyType *state.Type, doc state.Documentation, isReader bool) (err error) {
-	if o.Type.IsAnonymous() {
-		o.Style = BasicStyle
-	} else if outputParameters := o.Type.Parameters.Filter(state.KindOutput); len(outputParameters) > 0 {
-		o.Style = ComprehensiveStyle
-		for _, dataParameter := range outputParameters {
-			if dataParameter.In.Name == outputkeys.ViewData {
-				o.Field = dataParameter.Name
-			}
-		}
-	}
-
+func (o *Output) initParameters(aView *view.View, bodyType *state.Type, isReader bool) (err error) {
 	if bodyParameter := o.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); bodyParameter != nil {
 		schema := bodyParameter.Schema
 		if schema.Name == "" && schema.Type() == nil {
@@ -194,77 +203,37 @@ func (o *Output) initParameters(aView *view.View, bodyType *state.Type, doc stat
 	if len(o.Type.Parameters) == 0 {
 		o.Type.Parameters, err = o.defaultParameters(aView, bodyType.Parameters, isReader)
 	}
-	EnsureParameterTypes(o.Type.Parameters, aView, doc, o.FilterDoc)
-	return err
+	return EnsureParameterTypes(o.Type.Parameters, aView)
 }
 
 func (o *Output) defaultParameters(aView *view.View, inputParameters state.Parameters, isReader bool) (state.Parameters, error) {
 	var parameters state.Parameters
 	if isReader {
-		if o.Style == ComprehensiveStyle {
-			parameters = state.Parameters{
-				DataOutputParameter(o.Field),
-				DefaultStatusOutputParameter(),
-			}
-			if aView != nil && aView.MetaTemplateEnabled() && aView.Template.Summary.Kind == view.MetaKindRecord {
-				parameters = append(parameters, state.NewParameter(aView.Template.Summary.Name,
-					state.NewOutputLocation("summary"),
-					state.WithParameterType(aView.Template.Summary.Schema.Type())))
-			}
-			return parameters, nil
-		}
 		dataParameter := DataOutputParameter(outputkeys.ViewData)
 		dataParameter.Tag = `anonynous:"true"`
 		return state.Parameters{dataParameter}, nil
-	}
-
-	if o.ResponseBody != nil && o.ResponseBody.StateValue != "" {
-		inputParameter := inputParameters.Lookup(o.ResponseBody.StateValue)
-		if inputParameter == nil {
-			return nil, fmt.Errorf("failed to lookup state value: %s", o.ResponseBody.StateValue)
-		}
-		name := inputParameter.In.Name
-		tag := ""
-		if name == "" { //embed
-			tag = `anonymous:"true"`
-			name = o.ResponseBody.StateValue
-		}
-		parameters = state.Parameters{
-			{Name: name, In: state.NewState(o.ResponseBody.StateValue), Schema: inputParameter.Schema, Tag: tag},
-		}
-		if inputParameter.In.Name != "" {
-			parameters = append(parameters, &state.Parameter{Name: "Status", In: state.NewOutputLocation("status"), Tag: `anonymous:"true"`})
-		}
 	}
 	return parameters, nil
 }
 
 // EnsureParameterTypes update output kind parameter type
-func EnsureParameterTypes(parameters []*state.Parameter, aView *view.View, doc state.Documentation, filterDoc state.Documentation) error {
+func EnsureParameterTypes(parameters []*state.Parameter, aView *view.View) error {
 	for _, parameter := range parameters {
-		if err := ensureParameterType(parameter, aView, doc, filterDoc); err != nil {
+		if err := ensureParameterType(parameter, aView); err != nil {
 			return err
-		}
-		var paramDoc state.Documentation
-		if doc != nil {
-			paramDoc, _ = doc.FieldDocumentation(parameter.Name)
-			paramDescription, ok := doc.ByName(parameter.Name)
-			if ok {
-				parameter.Description = paramDescription
-			}
 		}
 
 		if len(parameter.Object) > 0 {
-			EnsureParameterTypes(parameter.Object, aView, paramDoc, filterDoc)
+			EnsureParameterTypes(parameter.Object, aView)
 		}
 		if len(parameter.Repeated) > 0 {
-			EnsureParameterTypes(parameter.Repeated, aView, paramDoc, filterDoc)
+			EnsureParameterTypes(parameter.Repeated, aView)
 		}
 	}
 	return nil
 }
 
-func ensureParameterType(parameter *state.Parameter, aView *view.View, doc state.Documentation, filterDoc state.Documentation) error {
+func ensureParameterType(parameter *state.Parameter, aView *view.View) error {
 	rType := parameter.Schema.Type()
 	if rType != nil && rType.Kind() != reflect.String && rType.Kind() != reflect.Interface {
 		return nil
@@ -290,7 +259,7 @@ func ensureParameterType(parameter *state.Parameter, aView *view.View, doc state
 			}
 		case outputkeys.Filter:
 			if aView != nil {
-				predicateType := aView.Template.Parameters.PredicateStructType(filterDoc)
+				predicateType := aView.Template.Parameters.PredicateStructType()
 				parameter.Schema = state.NewSchema(predicateType)
 				parameter.Schema.Name = strings.Title(aView.Name) + "Filter"
 				parameter.SetTypeNameTag()

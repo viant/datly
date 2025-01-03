@@ -17,16 +17,18 @@ type Input struct {
 func (i *Input) Init(ctx context.Context, aView *view.View) error {
 
 	if len(i.Body.Parameters) == 0 {
-		if bodyParameters := i.Type.Parameters.FilterByKind(state.KindRequestBody); len(bodyParameters) > 0 {
+		if bodyParameter := i.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); bodyParameter != nil {
+			i.Body.Parameters = append(i.Body.Parameters, bodyParameter)
+		} else if bodyParameters := i.Type.Parameters.FilterByKind(state.KindRequestBody); len(bodyParameters) > 0 {
 			i.Body.Parameters = bodyParameters
 		} else {
 			i.Body.Parameters = aView.InputParameters()
 		}
 	}
+
 	if len(i.Body.Parameters) == 0 {
-		candidates := i.Type.Parameters.FilterByKind(state.KindRequestBody)
-		i.Body.Parameters = candidates
-		for _, candidate := range candidates {
+		i.Body.Parameters = i.Type.Parameters.FilterByKind(state.KindRequestBody)
+		for _, candidate := range i.Body.Parameters {
 			if candidate.In.Name == "" {
 				i.Body.Schema = candidate.Schema.Clone()
 				break
@@ -48,8 +50,8 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 
 	if i.Body.Type() != nil {
 		bodyType := i.Body.Type().Type()
-		if bodyParam := i.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); bodyParam != nil {
-			bodyParam.Schema.SetType(bodyType)
+		if bodyParameter := i.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); bodyParameter != nil {
+			bodyParameter.Schema.SetType(bodyType)
 		}
 	}
 

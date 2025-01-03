@@ -30,6 +30,9 @@ pipeline:
         Expect:
           Code: 200
 
+    test2:
+      action: http/runner:send
+      requests:
       - Method: GET
         URL: http://127.0.0.1:8080/v1/api/meta/openapi/dev/secured/vendors/2
         Expect:
@@ -42,7 +45,3 @@ pipeline:
         Expect:
           Code: 200
 
-#      - Method: POST
-#        URL: http://127.0.0.1:8080/v1/api/cache/warmup/dev/secured/vendors/2
-#        Expect:
-#          Code: 403

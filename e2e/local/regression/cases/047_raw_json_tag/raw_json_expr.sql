@@ -1,5 +1,7 @@
 /* {"URI":"raw_json_expr"} */
 
+#set( $_ = $Data<?>(output/view).Embed())
+
 
 SELECT main.*,
        cast(main.Name AS string)

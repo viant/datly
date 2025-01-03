@@ -19,9 +19,14 @@ import (
 // Options represents locator options
 type (
 	Options struct {
-		request           *http.Request
+		request *http.Request
+		Form    *hstate.Form
+		Path    map[string]string
+		Query   url.Values
+		Header  http.Header
+		Body    []byte
+
 		fromError         error
-		form              *hstate.Form
 		Parent            *KindLocator
 		URIPattern        string
 		BodyType          reflect.Type
@@ -39,7 +44,6 @@ type (
 		View              *view.View
 		Resource          *view.Resource
 		Types             []*state.Type
-		PathParameters    map[string]string
 		Constants         map[string]interface{}
 		resourceConstants map[string]interface{}
 	}
@@ -64,10 +68,6 @@ func (o Options) LookupParameters(name string) *state.Parameter {
 
 func (o *Options) GetRequest() (*http.Request, error) {
 	return shared.CloneHTTPRequest(o.request)
-}
-
-func (o *Options) GetForm() *hstate.Form {
-	return o.form
 }
 
 func (o *Options) UnmarshalFunc() Unmarshal {
@@ -181,7 +181,7 @@ func WithInputParameters(parameters state.NamedParameters) Option {
 // WithPathParameters create with path parameters options
 func WithPathParameters(parameters map[string]string) Option {
 	return func(o *Options) {
-		o.PathParameters = parameters
+		o.Path = parameters
 	}
 }
 
@@ -225,13 +225,58 @@ func WithView(aView *view.View) Option {
 	}
 }
 
-// WithForm return metrics option
+// WithForm return form option
 func WithForm(form *hstate.Form) Option {
 	return func(o *Options) {
-		if o.form == nil {
-			o.form = form
+		if o.Form == nil {
+			o.Form = form
 		} else if form != nil {
-			o.form.SetValues(form.Values)
+			o.Form.SetValues(form.Values)
+		}
+	}
+}
+
+// WithQuery return query parameters option
+func WithQuery(parameters url.Values) Option {
+	return func(o *Options) {
+		if o.Query == nil {
+			o.Query = parameters
+		} else {
+			for k, v := range parameters {
+				o.Query[k] = v
+			}
+		}
+	}
+}
+
+// WithQueryParameter return query parameter option
+func WithQueryParameter(name, value string) Option {
+	return func(o *Options) {
+		if o.Query == nil {
+			o.Query = make(url.Values)
+		}
+		o.Query.Add(name, value)
+	}
+}
+
+// WithHeader return header option
+func WithHeader(name, value string) Option {
+	return func(o *Options) {
+		if o.Header == nil {
+			o.Header = make(http.Header)
+		}
+		o.Header.Add(name, value)
+	}
+}
+
+// WithHeaders return headers option
+func WithHeaders(header http.Header) Option {
+	return func(o *Options) {
+		if o.Header == nil {
+			o.Header = header
+		}
+		for name, value := range header {
+			o.Header[name] = value
 		}
 	}
 }

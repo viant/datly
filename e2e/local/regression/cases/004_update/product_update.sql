@@ -1,5 +1,6 @@
 /* {"URI":"auth/products/", "Method":"POST"} */
 
+
 #set($_ = $Ids<[]int>(body/Ids))
 
 

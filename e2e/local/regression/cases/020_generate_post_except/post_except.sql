@@ -1,8 +1,9 @@
-/* {"URI": "basic/events-except", "Method": "POST",
-   "ResponseBody": {
-        "From": "Events"
-        }
- } */
+/* {"URI": "basic/events-except", "Method": "POST" } */
 
-SELECT events.* EXCEPT NAME /* { "Cardinality": "One" } */
+#set($_ = $Events<?>(body/).Cardinality('One').Tag('anonymous:"true"'))
+#set($_ = $Events<?>(body/).Output().Tag('anonymous:"true"'))
+
+
+
+SELECT events.* EXCEPT NAME
 FROM (SELECT * FROM EVENTS) events

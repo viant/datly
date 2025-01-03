@@ -61,6 +61,13 @@ func (s *Service) detectComponentViewType(viewColumns discover.Columns, resource
 	if root.View.View.Schema == nil {
 		root.View.View.Schema = &state.Schema{Cardinality: state.Many}
 	}
+
+	if dataParameter := resource.OutputState.Parameters().LookupByLocation(state.KindOutput, "view"); dataParameter != nil {
+		if dataParameter.Schema != nil && dataParameter.Schema.Cardinality != "" {
+			root.View.Schema.Cardinality = dataParameter.Schema.Cardinality
+		}
+	}
+
 	if root.View.Schema.Cardinality == "" {
 		root.View.Schema.Cardinality = state.Many
 	}
@@ -159,7 +166,7 @@ func (s *Service) updateSummarySchema(resource *Resource, aView *view.View, case
 		summary.Schema = &state.Schema{}
 	}
 	if summary.Schema.Type() == nil {
-		buildSummarySchema := view.ColumnsSchema(caser, aViewlet.Summary.Columns, nil, &aViewlet.View.View)
+		buildSummarySchema := view.ColumnsSchema(caser, aViewlet.Summary.Columns, nil, &aViewlet.View.View, resource.Rule.Doc.Columns)
 		summaryType, err := buildSummarySchema()
 		if err != nil {
 			return nil, fmt.Errorf("failed to build summary view %v schema %w", summary.Name, err)
@@ -169,6 +176,7 @@ func (s *Service) updateSummarySchema(resource *Resource, aView *view.View, case
 	pkg := resource.rule.Package()
 	rType := summary.Schema.CompType()
 	summaryType := xreflect.NewType(view.DefaultTypeName(summary.Name), xreflect.WithPackage(pkg), xreflect.WithReflectType(rType))
+
 	summary.Schema.DataType = "*" + summaryType.Name
 	summary.Schema.Package = pkg
 	resource.AppendTypeDefinition(&view.TypeDefinition{Name: summaryType.Name, Package: pkg, DataType: summaryType.Body()})

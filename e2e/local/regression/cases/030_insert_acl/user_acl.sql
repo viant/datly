@@ -1,8 +1,7 @@
 /*
 {
    "URI":"basic/user_acl",
-   "Method":"POST",
-    "ResponseBody": {"From": "Events"}
+   "Method":"POST"
 } */
 
 
@@ -11,7 +10,10 @@ import(
 )
 
 #set($_ = $Events<*Events>(body/))
-#set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401).UtilParam())
+#set($_ = $Events<*Events>(body/).Output().Tag('anonymous:"true"'))
+
+
+#set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
 #set($_ = $Acl<?>(data_view/Acl)/*
     {"Connector":"dyndb", "Cardinality":"One"}
       SELECT USER_ID AS UserID,

@@ -2,9 +2,7 @@ package standalone
 
 import (
 	"context"
-	"embed"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/service/auth/jwt"
 )
 
 // Options represents standalone options
@@ -28,9 +26,7 @@ func NewOptions(ctx context.Context, opts ...Option) (*Options, error) {
 	for _, opt := range opts {
 		opt(options)
 	}
-	options.options = append(options.options, gateway.WithAuthProvider(func(config *gateway.Config, fs *embed.FS) (gateway.Authorizer, error) {
-		return jwt.Init(config, fs)
-	}))
+
 	if options.config != nil {
 		options.options = append(options.options, gateway.WithConfig(options.config.Config))
 	} else if options.ConfigURL != "" {

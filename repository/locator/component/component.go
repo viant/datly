@@ -12,16 +12,19 @@ import (
 	hstate "github.com/viant/xdatly/handler/state"
 	"github.com/viant/xunsafe"
 	"net/http"
+	"net/url"
 	"reflect"
 )
 
 type componentLocator struct {
-	custom         []interface{}
-	dispatch       contract.Dispatcher
-	constants      map[string]interface{}
-	pathParameters map[string]string
-	getRequest     func() (*http.Request, error)
-	getForm        func() *hstate.Form
+	custom     []interface{}
+	dispatch   contract.Dispatcher
+	constants  map[string]interface{}
+	path       map[string]string
+	form       *hstate.Form
+	query      url.Values
+	header     http.Header
+	getRequest func() (*http.Request, error)
 }
 
 func (l *componentLocator) Names() []string {
@@ -34,8 +37,14 @@ func (l *componentLocator) Value(ctx context.Context, name string) (interface{},
 	if err != nil {
 		return nil, false, err
 	}
-	form := l.getForm()
-	value, err := l.dispatch.Dispatch(ctx, &contract.Path{Method: method, URI: URI}, contract.WithRequest(request), contract.WithForm(form), contract.WithConstants(l.constants), contract.WithPathParameters(l.pathParameters))
+	form := l.form
+	value, err := l.dispatch.Dispatch(ctx, &contract.Path{Method: method, URI: URI}, contract.WithRequest(request),
+		contract.WithConstants(l.constants),
+		contract.WithPath(l.path),
+		contract.WithQuery(l.query),
+		contract.WithForm(form),
+		contract.WithHeader(l.header),
+	)
 	err = updateErrWithResponseStatus(err, value)
 	return value, err == nil, err
 }
@@ -89,12 +98,14 @@ func newComponentLocator(opts ...locator.Option) (kind.Locator, error) {
 	}
 	dispatcher = options.Dispatcher
 	ret := &componentLocator{
-		custom:         options.Custom,
-		dispatch:       options.Dispatcher,
-		constants:      options.Constants,
-		getRequest:     options.GetRequest,
-		getForm:        options.GetForm,
-		pathParameters: options.PathParameters,
+		custom:     options.Custom,
+		dispatch:   options.Dispatcher,
+		constants:  options.Constants,
+		getRequest: options.GetRequest,
+		form:       options.Form,
+		query:      options.Query,
+		header:     options.Header,
+		path:       options.Path,
 	}
 	return ret, nil
 }

@@ -100,35 +100,35 @@ func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) err
 		parameters = &SelectorParameter{}
 	}
 
-	if name := parameters.Limit; (name != "" || c.Constraints.Limit) && derefBool(c.limitDefault, c.LimitParameter == nil) {
-		c.limitDefault = boolPtr(name == "")
-		c.LimitParameter = c.newSelectorParam(name, LimitQuery, parent)
-	}
+	//if name := parameters.Limit; (name != "" || c.Constraints.Limit) && derefBool(c.limitDefault, c.LimitParameter == nil) {
+	//	c.limitDefault = boolPtr(name == "")
+	//	c.LimitParameter = c.newSelectorParam(name, LimitQuery, parent)
+	//}
+	//
+	//if name := parameters.Offset; (name != "" || c.Constraints.Offset) && derefBool(c.offsetDefault, c.OffsetParameter == nil) {
+	//	c.offsetDefault = boolPtr(name == "")
+	//	c.OffsetParameter = c.newSelectorParam(name, OffsetQuery, parent)
+	//}
+	//
+	//if name := parameters.Page; (name != "" || c.Constraints.IsPageEnabled()) && derefBool(c.pageDefault, c.PageParameter == nil) {
+	//	c.pageDefault = boolPtr(name == "")
+	//	c.PageParameter = c.newSelectorParam(name, PageQuery, parent)
+	//}
+	//
+	//if name := parameters.Fields; (name != "" || c.Constraints.Projection) && derefBool(c.fieldsDefault, c.FieldsParameter == nil) {
+	//	c.fieldsDefault = boolPtr(name == "")
+	//	c.FieldsParameter = c.newSelectorParam(name, FieldsQuery, parent)
+	//}
 
-	if name := parameters.Offset; (name != "" || c.Constraints.Offset) && derefBool(c.offsetDefault, c.OffsetParameter == nil) {
-		c.offsetDefault = boolPtr(name == "")
-		c.OffsetParameter = c.newSelectorParam(name, OffsetQuery, parent)
-	}
-
-	if name := parameters.Page; (name != "" || c.Constraints.IsPageEnabled()) && derefBool(c.pageDefault, c.PageParameter == nil) {
-		c.pageDefault = boolPtr(name == "")
-		c.PageParameter = c.newSelectorParam(name, PageQuery, parent)
-	}
-
-	if name := parameters.Fields; (name != "" || c.Constraints.Projection) && derefBool(c.fieldsDefault, c.FieldsParameter == nil) {
-		c.fieldsDefault = boolPtr(name == "")
-		c.FieldsParameter = c.newSelectorParam(name, FieldsQuery, parent)
-	}
-
-	if name := parameters.Criteria; (name != "" || c.Constraints.Criteria) && derefBool(c.criteriaDefault, c.CriteriaParameter == nil) {
-		c.criteriaDefault = boolPtr(name == "")
-		c.CriteriaParameter = c.newSelectorParam(name, CriteriaQuery, parent)
-	}
-
-	if name := parameters.OrderBy; (name != "" || c.Constraints.OrderBy) && derefBool(c.orderByDefault, c.OrderByParameter == nil) {
-		c.orderByDefault = boolPtr(name == "")
-		c.OrderByParameter = c.newSelectorParam(name, OrderByQuery, parent)
-	}
+	//if name := parameters.Criteria; (name != "" || c.Constraints.Criteria) && derefBool(c.criteriaDefault, c.CriteriaParameter == nil) {
+	//	c.criteriaDefault = boolPtr(name == "")
+	//	c.CriteriaParameter = c.newSelectorParam(name, CriteriaQuery, parent)
+	//}
+	//
+	//if name := parameters.OrderBy; (name != "" || c.Constraints.OrderBy) && derefBool(c.orderByDefault, c.OrderByParameter == nil) {
+	//	c.orderByDefault = boolPtr(name == "")
+	//	c.OrderByParameter = c.newSelectorParam(name, OrderByQuery, parent)
+	//}
 
 	if name := parameters.SyncFlag; (name != "") && derefBool(c.fieldsDefault, c.SyncFlagParameter == nil) {
 		c.fieldsDefault = boolPtr(name == "")

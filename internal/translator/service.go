@@ -23,6 +23,7 @@ import (
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
+	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"
@@ -75,10 +76,6 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 		}
 	}
 
-	if resource.Rule.Output != nil {
-		resource.Rule.Output.Doc = resource.Rule.Doc.Output
-		resource.Rule.Output.FilterDoc = resource.Rule.Doc.Filter
-	}
 	if err = s.updateComponentType(ctx, resource, resource.State.FilterByKind(state.KindComponent)); err != nil {
 		return err
 	}
@@ -130,7 +127,7 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 		return err
 	}
 	resource.buildParameterViews()
-	if err := resource.ensureViewParametersSchema(ctx, s.buildQueryViewletType, resource.Rule.Doc.Columns); err != nil {
+	if err := resource.ensureViewParametersSchema(ctx, s.buildQueryViewletType); err != nil {
 		return err
 	}
 	if err := resource.ensurePathParametersSchema(ctx, resource.State); err != nil {
@@ -143,10 +140,28 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 		return err
 	}
 
+	route := &resource.Rule.Route
+	s.ensureExcutorContract(route, resource)
 	if err = s.persistRouterRule(ctx, resource, service.TypeExecutor); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (s *Service) ensureExcutorContract(route *router.Route, resource *Resource) {
+	if route.Handler != nil {
+		return
+	}
+	if route.Handler == nil && len(resource.OutputState) > 0 && len(route.Component.Output.Type.Parameters) == 0 {
+		for _, parameter := range resource.OutputState {
+			if parameter.In.Kind == state.KindRequestBody {
+				if body := resource.State.FilterByKind(parameter.In.Kind); len(body) > 0 {
+					parameter.Schema = body[0].Schema
+				}
+			}
+		}
+		route.Component.Output.Type.Parameters = resource.OutputState.Parameters()
+	}
 }
 
 func (s *Service) buildExecutorView(ctx context.Context, resource *Resource, DSQL string) (err error) {
@@ -202,6 +217,13 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 	s.detectComponentViewType(componentColumns, resource)
+
+	if resource.rule.IncludePredicates {
+		if viewSchema := root.Schema; viewSchema != nil && viewSchema.Type() != nil {
+			s.generateInputPredicate(viewSchema.Type(), rootViewlet.Table.Namespace, resource)
+		}
+	}
+
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
 		return err
 	}
@@ -220,6 +242,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	}); err != nil {
 		return err
 	}
+
 	if err = s.persistRouterRule(ctx, resource, service.TypeReader); err != nil {
 		return err
 	}
@@ -277,7 +300,7 @@ func (s *Service) persistViewMetaColumn(cache discover.Columns, resource *Resour
 	if len(cache.Items) == 0 {
 		return nil
 	}
-	cache.ModTime = time.Now()
+	cache.SetModTime(time.Now())
 	data, err := yaml.Marshal(cache)
 	if err != nil {
 		return fmt.Errorf("failed to encode: %T, %w", cache, err)
@@ -291,7 +314,6 @@ func (s *Service) persistViewMetaColumn(cache discover.Columns, resource *Resour
 
 func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, serviceType service.Type) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
-
 	route := &resource.Rule.Route
 	ruleName := s.Repository.RuleName(resource.rule)
 	route.Service = serviceType
@@ -312,6 +334,18 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 
 		route.Component.Input.Type.Package,
 			route.Component.Input.Type.Name = extractTypeNameWithPackage(route.Handler.InputType)
+
+		if len(resource.State) > 0 && route.Component.Input.Type.Name == "" {
+			route.Component.Input.Type.Parameters = resource.State.Parameters()
+			res := &view.Resource{}
+			res.SetTypes(resource.typeRegistry)
+			route.Component.Input.Type.Init(state.WithResource(view.NewResources(res, &view.View{})))
+			formatter := text.DetectCaseFormat(ruleName)
+			inputName := formatter.To(text.CaseFormatUpperCamel).Format(ruleName) + "Input"
+			route.Component.Input.Type.Name = inputName
+			route.Handler.InputType = inputName
+			resource.AppendTypeDefinition(&view.TypeDefinition{Name: inputName, DataType: route.Component.Input.Type.Schema.Type().String()})
+		}
 	}
 
 	route.Content.CSV = resource.Rule.CSV
@@ -346,10 +380,6 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		return fmt.Errorf("failed to compact aState: %w", err)
 	}
 	resource.Resource.Parameters = aState.RemoveReserved().Parameters()
-	if serviceType == service.TypeExecutor {
-		resource.Rule.Route.Output.Field = aState.BodyField()
-	}
-
 	rootViewName := ""
 	if rootView := resource.Rule.RootView(); rootView != nil {
 		rootViewName = rootView.Name
@@ -360,6 +390,11 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		return fmt.Errorf("failed to build component : %s, %w", rootViewName, err)
 	}
 
+	err = s.persistDocumentation(ctx, resource, routerResource)
+	if err != nil {
+		return err
+	}
+
 	routerResource.Resource.Substitutes = nil
 	data, err := asset.EncodeYAML(routerResource)
 	if err != nil {
@@ -368,6 +403,28 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	ruleSource := string(data)
 	ruleSource = s.Repository.Substitutes.ReverseReplace(ruleSource)
 	s.Repository.Files.Append(asset.NewFile(url.Join(baseRuleURL, ruleName+".yaml"), ruleSource))
+	return nil
+}
+
+func (s *Service) persistDocumentation(ctx context.Context, resource *Resource, routerResource *router.Resource) error {
+	if len(resource.Rule.DocURLs) > 0 {
+		routerResource.Resource.Docs = &view.Documentation{
+			BaseURL: "doc",
+		}
+		baseDocURL := s.Repository.DocBaseURL()
+
+		for i, docURL := range resource.Rule.DocURLs {
+			if strings.HasPrefix(docURL, "./") {
+				docURL = docURL[2:]
+			}
+			destURL := url.Join(baseDocURL, docURL)
+			_ = fs.Delete(ctx, destURL)
+			if err := fs.Copy(ctx, resource.Rule.Doc.URLs[i], destURL); err != nil {
+				return fmt.Errorf("failed to copy doc: %v, %w", resource.Rule.Doc.URLs[i], err)
+			}
+			routerResource.Resource.Docs.URLs = append(routerResource.Resource.Docs.URLs, docURL)
+		}
+	}
 	return nil
 }
 
@@ -434,7 +491,7 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 }
 
 // initReaderViewlet detect SQL dependent Table columns with implicit parameters type to produce sanitized SQL
-func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet, _ state.Documentation) error {
+func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet) error {
 
 	connector := viewlet.GetConnector()
 	if connector == "" {
@@ -472,23 +529,23 @@ func (s *Service) DefaultConnector() string {
 }
 
 // buildQueryViewletType build SQL/Table specification (field/column/keys) type
-func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet, doc state.Documentation) error {
+func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet) error {
 	db, err := s.Repository.LookupDb(viewlet.Connector)
 	if err != nil {
 		return err
 	}
 	if viewlet.Table == nil {
-		if err = s.initReaderViewlet(ctx, viewlet, doc); err != nil {
+		if err = s.initReaderViewlet(ctx, viewlet); err != nil {
 			return err
 		}
 	}
 	if viewlet.Expanded, err = viewlet.Resource.expandSQL(viewlet); err != nil {
 		return err
 	}
-	return s.buildViewletType(ctx, db, viewlet, doc)
+	return s.buildViewletType(ctx, db, viewlet)
 }
 
-func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Viewlet, doc state.Documentation) (err error) {
+func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Viewlet) (err error) {
 	if viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.Expanded.Query, viewlet.Expanded.Args...); err != nil {
 		return fmt.Errorf("failed to create spec for %v, %w", viewlet.Name, err)
 	}
@@ -497,7 +554,7 @@ func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Vie
 	viewlet.Spec.Package = pkg
 	viewlet.Spec.Namespace = viewlet.Name
 	cardinality := state.Many
-	if err = viewlet.Spec.BuildType(pkg, viewlet.Name, cardinality, viewlet.whitelistMap(), nil, doc); err != nil {
+	if err = viewlet.Spec.BuildType(pkg, viewlet.Name, cardinality, viewlet.whitelistMap(), nil); err != nil {
 		return err
 	}
 	return nil

@@ -11,11 +11,12 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/async"
+	"github.com/viant/datly/repository/codegen"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/repository/handler"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/service"
-	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
@@ -59,16 +60,39 @@ type (
 	ComponentOption func(c *Component) error
 )
 
+func (c *Component) Docs() *state.Docs {
+	ret := &state.Docs{}
+	if c.View == nil {
+		return ret
+	}
+	res := c.View.GetResource()
+	if res == nil {
+		return ret
+	}
+	if res.Docs == nil {
+		return ret
+	}
+	return res.Docs.Docs
+}
+
+// LookupParameter lookups parameter by name
+func (c *Component) LookupParameter(name string) *state.Parameter {
+	parameter := c.Input.Type.Parameters.Lookup(name)
+	if parameter == nil {
+		parameter = c.Output.Type.Parameters.Lookup(name)
+		if parameter == nil {
+			parameter = c.View.Template.Parameters.Lookup(name)
+		}
+	}
+	return parameter
+}
+
 func (c *Component) TypeRegistry() *xreflect.Types {
 	return c.types
 }
 
 func (c *Component) Init(ctx context.Context, resource *view.Resource) (err error) {
 	c.types = resource.TypeRegistry()
-	if c.Output.Style == contract.BasicStyle {
-		c.Output.Field = ""
-	}
-
 	if c.Handler != nil {
 		if err = c.Handler.Init(ctx, resource); err != nil {
 			return err
@@ -119,7 +143,7 @@ func (c *Component) updatedViewSchemaWithNamedType(ctx context.Context, resource
 		if viewField, ok := oType.FieldByName(param.Name); ok {
 			if !c.View.Schema.IsNamed() {
 				c.View.SetNamedType(viewField.Type)
-				if !isGeneratorContext(ctx) {
+				if !codegen.IsGeneratorContext(ctx) {
 					param.Schema.SetType(viewField.Type)
 				}
 			}
@@ -219,7 +243,6 @@ func (c *Component) Exclusion(state *view.State) []*json.FilterEntry {
 }
 
 func (c *Component) LocatorOptions(request *http.Request, form *hstate.Form, unmarshal shared.Unmarshal) []locator.Option {
-
 	var result []locator.Option
 
 	if unmarshal != nil {
@@ -321,6 +344,9 @@ func (c *Component) transformFn(request *http.Request, transform *marshal.Transf
 }
 
 func (c *Component) Doc() (docs.Service, bool) {
+	if c == nil {
+		return nil, false
+	}
 	return c.doc, c.doc != nil
 }
 
@@ -386,7 +412,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 			return err
 		}
 		c.Contract.Input.Type = *sType
-		if err := c.Contract.Input.Type.Init(); err != err {
+		if err = c.Contract.Input.Type.Init(); err != err {
 			return fmt.Errorf("failed to initalize input: %w", err)
 		}
 		if len(c.Contract.Input.Type.Parameters) > 0 {
@@ -395,7 +421,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 			}
 		}
 		c.Contract.Output.Type = state.Type{Schema: state.NewSchema(outputType)}
-		if err := c.Contract.Output.Type.Init(state.WithFS(embedFs)); err != err {
+		if err = c.Contract.Output.Type.Init(state.WithFS(embedFs)); err != nil {
 			return fmt.Errorf("failed to initalize output: %w", err)
 		}
 		if c.Contract.Output.CaseFormat == "" {
@@ -432,7 +458,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 			}
 
 			if aTag.View.Connector != "" {
-				viewOptions = append(viewOptions, view.WithConnector(&view.Connector{Reference: shared.Reference{Ref: aTag.View.Connector}}))
+				viewOptions = append(viewOptions, view.WithConnector(&view.Connector{Connection: view.Connection{DBConfig: view.DBConfig{Reference: shared.Reference{Ref: aTag.View.Connector}}}}))
 			}
 			if aTag.View.Batch != 0 {
 				viewOptions = append(viewOptions, view.WithBatchSize(aTag.View.Batch))

@@ -29,12 +29,14 @@ type (
 		metrics       *gmetric.Service
 		mainRouter    *Router
 		cancelFn      context.CancelFunc
-		JWTSigner     *signer.Service
 		mux           sync.RWMutex
 		statusHandler http.Handler
-		authorizer    Authorizer
 	}
 )
+
+func (r *Service) JWTSigner() *signer.Service {
+	return r.repository.JWTSigner()
+}
 
 func (r *Service) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	aRouter, writer, ok := r.router(writer)
@@ -51,13 +53,12 @@ func (r *Service) router(writer http.ResponseWriter) (*Router, http.ResponseWrit
 		writer.WriteHeader(http.StatusNotFound)
 		return nil, nil, false
 	}
-
 	writer = r.WrapResponseIfNeeded(writer)
 	return aRouter, writer, true
 }
 
 func (r *Service) Router() (*Router, bool) {
-	if err := r.syncChanges(context.Background(), r.metrics, r.statusHandler, r.authorizer, false); err != nil {
+	if err := r.syncChanges(context.Background(), r.metrics, r.statusHandler, false); err != nil {
 		fmt.Printf("[ERROR] failed to sync changes: %v\n", err)
 	}
 	mainRouter := r.mainRouter
@@ -90,12 +91,19 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 	}
 	componentRepository := options.repository
 	if componentRepository == nil {
+
 		componentRepository, err = repository.New(ctx, repository.WithComponentURL(aConfig.RouteURL),
 			repository.WithResourceURL(aConfig.DependencyURL),
 			repository.WithPluginURL(aConfig.PluginsURL),
 			repository.WithApiPrefix(aConfig.APIPrefix),
 			repository.WithExtensions(options.extensions),
 			repository.WithMetrics(options.metrics),
+			repository.WithJWTSigner(aConfig.JwtSigner),
+			repository.WithJWTVerifier(aConfig.JWTValidator),
+			repository.WithCognitoAuth(aConfig.Cognito),
+			repository.WithFirebaseAuth(aConfig.Firebase),
+			repository.WithCustomAuth(aConfig.Custom),
+			repository.WithDependencyURL(aConfig.DependencyURL),
 			repository.WithRefreshFrequency(aConfig.SyncFrequency()),
 			repository.WithDispatcher(dispatcher.New),
 		)
@@ -103,7 +111,7 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 			return nil, fmt.Errorf("failed to initialise component service: %w", err)
 		}
 	}
-	mainRouter, err := NewRouter(ctx, componentRepository, aConfig, options.metrics, options.statusHandler, options.authorizer)
+	mainRouter, err := NewRouter(ctx, componentRepository, aConfig, options.metrics, options.statusHandler)
 	if err != nil {
 		return nil, err
 	}
@@ -114,14 +122,7 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 		mux:           sync.RWMutex{},
 		fs:            fs,
 		statusHandler: options.statusHandler,
-		authorizer:    options.authorizer,
 		mainRouter:    mainRouter,
-	}
-	if aConfig.JwtSigner != nil {
-		srv.JWTSigner = signer.New(aConfig.JwtSigner)
-		if err = srv.JWTSigner.Init(context.Background()); err != nil {
-			return nil, err
-		}
 	}
 	go srv.watchAsyncJob(context.Background())
 	fmt.Printf("[INFO]: started gatweay after: %s\n", time.Since(start))
@@ -190,7 +191,7 @@ func CommonURL(URLs ...string) (string, error) {
 	return base, nil
 }
 
-func (r *Service) syncChanges(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, isFirst bool) error {
+func (r *Service) syncChanges(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, isFirst bool) error {
 	changed, err := r.repository.SyncChanges(ctx)
 	if err != nil {
 		return err
@@ -200,7 +201,7 @@ func (r *Service) syncChanges(ctx context.Context, metrics *gmetric.Service, sta
 	}
 	start := time.Now()
 	fmt.Printf("[INFO] detected resources changes, rebuilding routers\n")
-	mainRouter, err := NewRouter(ctx, r.repository, r.Config, metrics, statusHandler, authorizer)
+	mainRouter, err := NewRouter(ctx, r.repository, r.Config, metrics, statusHandler)
 	if err != nil {
 		return err
 	}

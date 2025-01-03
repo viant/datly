@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/repository/codegen"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
@@ -88,6 +89,9 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 	if err := m.Schema.LoadTypeIfNeeded(resource.LookupType()); err != nil && m.Schema.Type() != nil {
 		return err
 	}
+	if m.Schema.Type() != nil && codegen.IsGeneratorContext(ctx) {
+		return nil
+	}
 	source := m._owner._view
 	if parent := source._parent; parent != nil && m.Kind == MetaKindRecord {
 		if compType := parent.Schema.CompType(); compType != nil {
@@ -97,7 +101,6 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 				return fmt.Errorf("invalid view summary:'%s', field %s is missing in the view '%s' schema ", m.Name, m.Name, compType.String())
 			}
 			m.Schema.SetType(field.Type)
-			fmt.Printf("SET SuMMARY: %s\n", field.Type.String())
 			return nil
 		}
 	}
@@ -125,11 +128,11 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 }
 
 func (v *View) generateSchemaTypeFromColumn(caseFormat text.CaseFormat, columns []*Column, relations []*Relation) func() (reflect.Type, error) {
-	return ColumnsSchema(caseFormat, columns, relations, v)
+	return ColumnsSchema(caseFormat, columns, relations, v, nil)
 }
 
-func ColumnsSchema(caseFormat text.CaseFormat, columns []*Column, relations []*Relation, v *View) func() (reflect.Type, error) {
-	return ColumnsSchemaDocumented(caseFormat, columns, relations, v, nil)
+func ColumnsSchema(caseFormat text.CaseFormat, columns []*Column, relations []*Relation, v *View, doc state.Documentation) func() (reflect.Type, error) {
+	return ColumnsSchemaDocumented(caseFormat, columns, relations, v, doc)
 }
 
 func ColumnsSchemaDocumented(caseFormat text.CaseFormat, columns []*Column, relations []*Relation, v *View, doc state.Documentation) func() (reflect.Type, error) {
@@ -179,7 +182,7 @@ func ColumnsSchemaDocumented(caseFormat text.CaseFormat, columns []*Column, rela
 		if v.SelfReference != nil {
 			structFields = append(structFields, newCasedField("", v.SelfReference.Holder, text.CaseFormatUpperCamel, reflect.SliceOf(ast.InterfaceType)))
 		}
-		return reflect.PtrTo(reflect.StructOf(structFields)), nil
+		return reflect.PointerTo(reflect.StructOf(structFields)), nil
 	}
 }
 
@@ -205,6 +208,10 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 		aTag := tags.Tag{}
 		aTag.TypeName = rel.Of.Schema.Name
 		aTag.LinkOn = rel.TagLink()
+		if rel.Of.View.Table != "" {
+			aTag.View = &tags.View{Table: rel.Of.View.Table}
+		}
+
 		aTag.SQL = tags.NewViewSQL(rel.Of.View.Template.Source, "")
 		if aBatch := rel.Of.View.Batch; aBatch != nil {
 			if aTag.View == nil {

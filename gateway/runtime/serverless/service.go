@@ -23,7 +23,7 @@ func GetService() (*gateway.Service, error) {
 		return nil, fmt.Errorf("config was emty")
 	}
 	service, err := gateway.Singleton(context.Background(),
-		gateway.WithAuthProvider(func(config *gateway.Config, fs *embed.FS) (gateway.Authorizer, error) {
+		gateway.WithInitializer(func(config *gateway.Config, fs *embed.FS) error {
 			return jwt.Init(gatewayConfig, fs)
 		}),
 		gateway.WithConfigURL(configURL),

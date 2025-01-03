@@ -28,6 +28,7 @@ type (
 		QuerySelectors map[string]inference.State
 		Transforms     []*marshal.Transform
 		lookup         func(dataType string, opts ...xreflect.Option) (*state.Schema, error)
+		Items          []*Declaration
 	}
 )
 
@@ -57,9 +58,11 @@ func (d *Declarations) Init() error {
 			if err != nil {
 				continue
 			}
-			if err = d.buildDeclaration(selector, contentCursor); err != nil {
+			declaration, err := d.buildDeclaration(selector, contentCursor)
+			if err != nil {
 				return err
 			}
+			declaration.Raw = string(SQLBytes[setStart:cursor.Pos])
 			for i := setStart; i < cursor.Pos; i++ {
 				SQLBytes[i] = ' '
 			}
@@ -71,31 +74,31 @@ func (d *Declarations) Init() error {
 	}
 }
 
-func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cursor) error {
+func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cursor) (*Declaration, error) {
 	declaration, err := d.parseExpression(cursor, selector)
 	if declaration == nil || err != nil {
-		return err
+		return nil, err
 	}
+	d.Items = append(d.Items, declaration)
 	if declaration.Transformer != "" || declaration.TransformKind != "" {
 		d.Transforms = append(d.Transforms, declaration.Transform())
-		return nil
+		return declaration, nil
 	}
 	declaration.ExpandShorthands()
-
 	if declaration.QuerySelector != "" {
 		switch strings.ToLower(declaration.Parameter.Name) {
 		case "limit", "offset", "page", "fields", "orderby":
 		default:
-			return fmt.Errorf("query selector %v can only be used with limit, offset, page, fields, orderby", declaration.QuerySelector)
+			return nil, fmt.Errorf("query selector %v can only be used with limit, offset, page, fields, orderby", declaration.QuerySelector)
 		}
 		noCachable := false
 		declaration.Parameter.Cacheable = &noCachable
 		d.QuerySelectors[declaration.QuerySelector] = append(d.QuerySelectors[declaration.QuerySelector], &declaration.Parameter)
-		return nil
+		return declaration, nil
 	}
 	if declaration.InOutput {
 		d.OutputState.Append(&declaration.Parameter)
-		return nil
+		return declaration, nil
 	} else {
 		name := declaration.Parameter.Name
 		if state.IsReservedAsyncState(name) && declaration.IsAsync() {
@@ -106,10 +109,10 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	d.State.Append(&declaration.Parameter)
 	if authParameter := declaration.AuthParameter(); authParameter != nil {
 		if !d.State.Append(authParameter) {
-			return fmt.Errorf("parameter %v redeclared", authParameter.Name)
+			return nil, fmt.Errorf("parameter %v redeclared", authParameter.Name)
 		}
 	}
-	return nil
+	return declaration, nil
 }
 
 // IsStructQL returns true if struct QL
@@ -242,20 +245,22 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 		content = content[1 : len(content)-1]
 		args := extractArgs(content)
 		switch text {
-		case "WithTag":
+		case "Embed":
+			declaration.Tag += ` anonymous:"true"`
+		case "WithTag", "Tag":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithTag to have one args, but got %v", len(args))
 			}
 
 			declaration.Tag = args[0]
-		case "WithCodec":
+		case "WithCodec", "Codec":
 			if len(args) < 1 {
 				return fmt.Errorf("expected WithCodec to have at least one arg, but got %v", len(args))
 			}
 
 			declaration.Codec = args[0]
 			declaration.CodecArgs = args[1:]
-		case "WithHandler":
+		case "WithHandler", "Handler":
 			handler := &state.Handler{}
 			declaration.Handler = handler
 
@@ -266,7 +271,7 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			handler.Name = args[0]
 			handler.Args = args[1:]
 
-		case "WithStatusCode":
+		case "WithStatusCode", "StatusCode":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithStatusCode to have one arg, but got %v", len(args))
 			}
@@ -299,7 +304,7 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 			required := true
 			declaration.Required = &required
-		case "WithPredicate":
+		case "WithPredicate", "Predicate":
 			if err := s.appendPredicate(declaration, args, false); err != nil {
 				return err
 			}
@@ -334,6 +339,8 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			declaration.QuerySelector = strings.Trim(content, "'\"")
 		case "Async":
 			declaration.Async = true
+		default:
+			return fmt.Errorf("unsupported parameter option: %v", text)
 		}
 		cursor.MatchOne(whitespaceMatcher)
 	}

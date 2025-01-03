@@ -161,7 +161,9 @@ func WithStateResource(resource state.Resource) SessionOption {
 func (s *Service) NewComponentSession(aComponent *repository.Component, opts ...SessionOption) *session.Session {
 	sessionOpt := newSessionOptions(opts)
 	options := aComponent.LocatorOptions(sessionOpt.request, sessionOpt.form, aComponent.UnmarshalFunc(sessionOpt.request))
-	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...), session.WithStateResource(sessionOpt.resource))
+	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...),
+		session.WithAuth(s.repository.Auth()),
+		session.WithStateResource(sessionOpt.resource), session.WithOperate(s.operator.Operate))
 	return aSession
 }
 

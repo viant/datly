@@ -9,10 +9,10 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/xdatly/handler/response"
 	"net/http"
 	"reflect"
-	"sync"
 )
 
 const (
@@ -80,43 +80,37 @@ func GenerateOpenAPI3Spec(ctx context.Context, components *repository.Service, i
 func (g *generator) generatePaths(ctx context.Context, components *repository.Service, providers []*repository.Provider) (*SchemaContainer, openapi.Paths, error) {
 	container := NewContainer()
 	builder := &PathsBuilder{paths: openapi.Paths{}}
-	wg := &sync.WaitGroup{}
 	var retErr error
+	pathItem := &openapi.PathItem{}
 	for _, provider := range providers {
-		wg.Add(1)
-		go func(provider *repository.Provider) {
-			defer wg.Done()
-			component, err := provider.Component(ctx)
-			if err != nil {
-				retErr = err
-				return
-			}
-
-			componentSchema := NewComponentSchema(components, component, container)
-
-			operation, err := g.generateOperation(ctx, componentSchema)
-			if err != nil {
-				retErr = err
-				return
-			}
-
-			pathItem := &openapi.PathItem{}
-			switch component.Method {
-			case http.MethodGet:
-				pathItem.Get = operation
-			case http.MethodPost:
-				pathItem.Post = operation
-			case http.MethodDelete:
-				pathItem.Delete = operation
-			case http.MethodPut:
-				pathItem.Put = operation
-			}
-
-			builder.AddPath(component.URI, pathItem)
-		}(provider)
+		component, err := provider.Component(ctx)
+		if err != nil {
+			retErr = err
+		}
+		if component == nil {
+			fmt.Printf("provider.Component(ctx) returned nil\n")
+			continue
+		}
+		componentSchema := NewComponentSchema(components, component, container)
+		operation, err := g.generateOperation(ctx, componentSchema)
+		if err != nil {
+			retErr = err
+		}
+		switch component.Method {
+		case http.MethodGet:
+			pathItem.Get = operation
+		case http.MethodPost:
+			pathItem.Post = operation
+		case http.MethodDelete:
+			pathItem.Delete = operation
+		case http.MethodPut:
+			pathItem.Put = operation
+		case http.MethodPatch:
+			pathItem.Patch = operation
+		}
+		builder.AddPath(component.URI, pathItem)
 	}
 
-	wg.Wait()
 	return container, builder.paths, retErr
 }
 
@@ -233,7 +227,6 @@ func (g *generator) viewParameters(ctx context.Context, aView *view.View, compon
 		}
 		parameters = append(parameters, converted...)
 	}
-
 	if err := g.appendBuiltInParam(ctx, &parameters, component, aView.Selector.CriteriaParameter); err != nil {
 		return nil, err
 	}
@@ -278,8 +271,18 @@ func (g *generator) appendBuiltInParam(ctx context.Context, params *[]*openapi.P
 }
 
 func (g *generator) convertParam(ctx context.Context, component *ComponentSchema, param *state.Parameter, description string) ([]*openapi.Parameter, bool, error) {
+
+	docs := component.component.Docs()
+	parameters := docs.Parameters
+	if len(parameters) > 0 && param.Description == "" {
+		if desc, ok := parameters.ByName(param.Name); ok {
+			param.Description = desc
+			description = desc
+		}
+	}
 	if param.In.Kind == state.KindParam {
-		return g.convertParam(ctx, component, param.Parent(), description)
+		baseParam := component.component.LookupParameter(param.In.Name)
+		return g.convertParam(ctx, component, baseParam, description)
 	}
 
 	if param.In.Kind == state.KindObject {
@@ -298,7 +301,7 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		return result, true, nil
 	}
 
-	if !IsHttpParamKind(param.In.Kind) {
+	if !param.IsHTTPParameter() {
 		return nil, false, nil
 	}
 
@@ -314,9 +317,17 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		return []*openapi.Parameter{{Ref: "#/components/parameters/" + param.Name}}, true, nil
 	}
 
-	schema, err := component.GenerateSchema(ctx, component.SchemaWithTag(param.Name, param.Schema.Type(), "Parameter "+param.Name+" schema", "", Tag{
+	table := ""
+	if param.Tag != "" {
+		if datlyTags, _ := tags.Parse(reflect.StructTag(param.Tag), nil, tags.ViewTag); datlyTags != nil && datlyTags.View != nil {
+			table = datlyTags.View.Table
+		}
+
+	}
+	schema, err := component.GenerateSchema(ctx, component.SchemaWithTag(param.Name, param.Schema.Type(), "Parameter "+param.Name+" schema", component.component.IOConfig(), Tag{
 		Format:     param.DateFormat,
 		IsNullable: !param.IsRequired(),
+		Table:      table,
 	}))
 
 	if err != nil {
@@ -342,15 +353,6 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 
 	g._parametersIndex[param.Name] = convertedParam
 	return []*openapi.Parameter{convertedParam}, true, nil
-}
-
-func IsHttpParamKind(kind state.Kind) bool {
-	switch kind {
-	case state.KindPath, state.KindForm, state.KindQuery, state.KindHeader, state.KindCookie:
-		return true
-	}
-
-	return false
 }
 
 func (g *generator) getAllViewsParameters(ctx context.Context, component *ComponentSchema, aView *view.View) ([]*openapi.Parameter, error) {
@@ -379,10 +381,9 @@ func (g *generator) indexParameters(parameters []*openapi.Parameter) openapi.Par
 }
 
 func (g *generator) requestBody(ctx context.Context, component *ComponentSchema) (*openapi.RequestBody, error) {
-	if component.component.Method != http.MethodPost || component.component.BodyType() == nil {
+	if component.component.BodyType() == nil || component.component.Path.Method == "GET" {
 		return nil, nil
 	}
-
 	bodySchema, err := component.RequestBody(ctx)
 	if err != nil {
 		return nil, err
@@ -429,7 +430,7 @@ func (g *generator) responses(ctx context.Context, component *ComponentSchema) (
 		},
 	}
 
-	errorSchema, err := component.GetOrGenerateSchema(ctx, component.ReflectSchema("ErrorResponse", errorType, errorSchemaDescription, component.component.Output.CaseFormat))
+	errorSchema, err := component.GetOrGenerateSchema(ctx, component.ReflectSchema("ErrorResponse", errorType, errorSchemaDescription, component.component.IOConfig()))
 	if err != nil {
 		return nil, err
 	}

@@ -1,8 +1,0 @@
-init:
-  testCaseSrc: ${parent.req}
-  stepURL: ${parent.stepURL}
-
-pipeline:
-      runTpl:
-        action: run
-        request: '@${stepURL}/test'

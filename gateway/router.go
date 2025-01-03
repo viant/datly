@@ -38,7 +38,6 @@ type (
 		OpenAPIInfo   openapi3.Info
 		metrics       *gmetric.Service
 		statusHandler http.Handler
-		authorizer    Authorizer
 		paths         []*contract.Path
 	}
 
@@ -66,12 +65,11 @@ func (a *AvailableRoutesError) Error() string {
 }
 
 // NewRouter creates new router
-func NewRouter(ctx context.Context, components *repository.Service, config *Config, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) (*Router, error) {
+func NewRouter(ctx context.Context, components *repository.Service, config *Config, metrics *gmetric.Service, statusHandler http.Handler) (*Router, error) {
 	r := &Router{
 		config:        config,
 		metrics:       metrics,
 		statusHandler: statusHandler,
-		authorizer:    authorizer,
 		repository:    components,
 		operator:      operator.New(),
 		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
@@ -99,9 +97,6 @@ func (r *Router) handle(writer http.ResponseWriter, request *http.Request) {
 	err := r.ensureRequestURL(request)
 	if err != nil {
 		r.handleErrorCode(writer, http.StatusInternalServerError, err)
-		return
-	}
-	if !r.authorizeRequestIfNeeded(writer, request) {
 		return
 	}
 	errStatusCode, err := r.handleRoute(writer, request)
@@ -154,7 +149,10 @@ func (r *Router) HandleJob(ctx context.Context, aJob *async.Job) error {
 	request := &http.Request{Method: aJob.Method, URL: URL, RequestURI: aPath.URI}
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
-	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...))
+	aSession := session.New(aComponent.View,
+		session.WithAuth(r.repository.Auth()),
+		session.WithLocatorOptions(locatorOptions...),
+		session.WithOperate(r.operator.Operate))
 	if err != nil {
 		return err
 	}
@@ -267,13 +265,6 @@ func (r *Router) ensureRequestURL(request *http.Request) error {
 	return err
 }
 
-func (r *Router) authorizeRequestIfNeeded(writer http.ResponseWriter, request *http.Request) bool {
-	if r.authorizer == nil {
-		return true
-	}
-	return r.authorizer.Authorize(writer, request)
-}
-
 func (r *Router) PreCacheables(ctx context.Context, method string, uri string) ([]*view.View, error) {
 	route, err := r.Match(method, uri, nil)
 	if err != nil {
@@ -320,6 +311,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	paths := make([]*contract.Path, 0, len(routes))
 	container := r.repository.Container()
 
+	var openAPIs = map[string][]*repository.Provider{}
 	var optionsPaths = map[string][]*path.Path{}
 	for _, anItem := range container.Items {
 		for _, aPath := range anItem.Paths {
@@ -341,12 +333,16 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				if err != nil {
 					return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
 				}
-				routes = append(routes, r.NewRouteHandler(router.New(aPath, provider)))
+				routes = append(routes, r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth())))
 				if aPath.Cors != nil {
 					optionsPaths[aPath.URI] = append(optionsPaths[aPath.URI], aPath)
 				}
 				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.Meta.ViewURI, aPath.URI), provider))
-				routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.Meta.OpenApiURI, aPath.URI), r.repository, provider))
+
+				key := r.routeURL(r.config.Meta.OpenApiURI, aPath.URI)
+				openAPIs[key] = append(openAPIs[key], provider)
+				//				//routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.Meta.OpenApiURI, aPath.URI), r.repository, provider))
+
 				routes = append(routes, r.NewStructRoute(r.routeURL(r.config.Meta.StructURI, aPath.URI), provider))
 				routes = append(routes, r.NewStateRoute(r.routeURL(r.config.Meta.StateURI, aPath.URI), provider))
 				routes = append(routes, r.NewMetricRoute(r.metricURL(r.config.Meta.MetricURI, aPath.URI)))
@@ -365,6 +361,10 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 			// ---
 
 		}
+	}
+
+	for key, providers := range openAPIs {
+		routes = append(routes, r.NewOpenAPIRoute(key, r.repository, providers...))
 	}
 
 	for uri, paths := range optionsPaths {

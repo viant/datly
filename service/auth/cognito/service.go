@@ -2,32 +2,35 @@ package cognito
 
 import (
 	"context"
-	"embed"
-	"github.com/viant/afs"
+	"github.com/viant/scy/auth"
 	"github.com/viant/scy/auth/cognito"
+	"github.com/viant/scy/auth/jwt"
 )
 
 type Service struct {
-	Config *Config
-	*cognito.Service
-	fs  afs.Service
-	efs *embed.FS
+	config  *cognito.Config
+	cognito *cognito.Service
 }
 
-func (s *Service) Name() string {
-	//TODO implement me
-	panic("implement me")
+func (s *Service) BasicAuth(ctx context.Context, user string, password string) (*auth.Token, error) {
+	return s.cognito.InitiateBasicAuth(user, password)
 }
 
-func New(config *Config, fs afs.Service, efs *embed.FS) (*Service, error) {
-	cognito, err := cognito.New(context.Background(), &config.Config)
+func (s *Service) ReissueIdentityToken(ctx context.Context, refreshToken string, subject string) (*auth.Token, error) {
+	return s.cognito.ReissueIdentityToken(ctx, refreshToken, subject)
+}
+
+func (s *Service) VerifyIdentity(ctx context.Context, idToken string) (*jwt.Claims, error) {
+	return s.cognito.VerifyIdentity(ctx, idToken)
+}
+
+func New(config *cognito.Config) (*Service, error) {
+	cognito, err := cognito.New(context.Background(), config)
 	if err != nil {
 		return nil, err
 	}
 	return &Service{
-		Config:  config,
-		Service: cognito,
-		fs:      fs,
-		efs:     efs,
+		config:  config,
+		cognito: cognito,
 	}, nil
 }

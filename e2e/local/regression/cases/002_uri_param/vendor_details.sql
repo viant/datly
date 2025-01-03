@@ -1,6 +1,10 @@
 /* {"URI":"vendors/{vendorID}", "DocURL":"./doc.yaml" } */
 
 
+#set( $_ = $Fields<[]string>(query/fields).Optional().QuerySelector('vendor'))
+#set( $_ = $Page<int>(query/page).Optional().QuerySelector('vendor'))
+#set( $_ = $Data<?>(output/view).Embed())
+
 
 SELECT wrapper.* EXCEPT ID,
        vendor.*,

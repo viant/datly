@@ -1,10 +1,12 @@
-/* {"URI":"dql-persist","Method":"PUT","ResponseBody":{"From":"Preference"}} */
+/* {"URI":"dql-persist","Method":"PUT"} */
 
 import (
 	"regression/cases/053_dql_persist.Preference"
 )
 
-#set($_ = $Preference<*Preference>(body/))
+#set( $_ = $Preference<*Preference>(body/))
+#set( $_ = $Preference<*Preference>(body/).Tag('anonymous:"true"').Output())
+
 
 #set($_ = $Record /* {"Required":false}
 SELECT ID as Id, OBJECT AS obj FROM OBJECTS WHERE ID = $Preference.Id

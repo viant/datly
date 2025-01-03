@@ -52,7 +52,7 @@ func NewIndexGenerator(specState inference.State) *IndexGenerator {
 		paramByIndexName:     specState.IndexByPathIndex(),
 		builder:              &strings.Builder{},
 		index:                receiverIndex{},
-		stateName:            "input",
+		stateName:            "",
 		exprToType:           map[string]string{},
 		variableToExpression: map[string]string{},
 		variableToType:       map[string]reflect.Type{},
@@ -185,12 +185,9 @@ func (n *IndexGenerator) handleHasKey(expr *ast.CallExpr) (ast.Expression, error
 		return expr, nil
 	}
 
-	//expression, ok := expr.Args[0].(*ast.Ident)
-	//if !ok {
-	//	return expr, nil
-	//}
+	indexName := ident.Name
 
-	stateParam, ok := n.paramByIndexName[ident.Name]
+	stateParam, ok := n.paramByIndexName[indexName]
 	if !ok {
 		return nil, fmt.Errorf("failed to lookup  %v\n", ident.Name)
 	}

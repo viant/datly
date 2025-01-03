@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/msg"
@@ -147,7 +148,13 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *tparser.Typ
 		}
 		schema, err := r.GetSchema(name, xreflect.WithPackagePath(typesImport.URL))
 		if err != nil {
-			return fmt.Errorf("%v unable to include import type: %v,  %w", typesImport.URL, name, err)
+			_, pkg := url.Split(typesImport.URL, "")
+			if rType, rErr := r.typeRegistry.Lookup(name, xreflect.WithPackage(pkg)); rErr == nil {
+				schema = state.NewSchema(rType, state.WithSchemaPackage(pkg))
+			}
+			if schema == nil {
+				return fmt.Errorf("%v unable to include import type: %v,  %w", typesImport.URL, name, err)
+			}
 		}
 		r.typePackages[name] = schema.Package
 		if len(schema.Methods) > 0 {
@@ -262,6 +269,20 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	if err != nil {
 		return err
 	}
+	//for _, item := range r.Declarations.Items {
+	//	r.RawSQL = strings.Replace(r.RawSQL, item.Raw, "", 1)
+	//}
+
+	//
+	//if index := strings.Index(r.RawSQL, "$Nop("); index != -1 {
+	//	offset := index + len("$Nop(")
+	//	if end := strings.Index(r.RawSQL[offset:], ")"); end != -1 {
+	//		noOp := r.RawSQL[offset : offset+end]
+	//		//	r.RawSQL = r.RawSQL[offset+end+1:]
+	//		r.Declarations.SQL = strings.Replace(r.Declarations.SQL, "$Nop("+noOp+")", "", 1)
+	//	}
+	//}
+	//r.RawSQL = strings.TrimSpace(r.RawSQL)
 	r.State.Append(r.Declarations.State...)
 
 	r.appendPathVariableParams()
@@ -271,11 +292,6 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	if r.State, err = r.State.NormalizeComposites(); err != nil {
 		return fmt.Errorf("failed to normalize input state: %w", err)
 	}
-
-	if doc := r.Rule.Doc.Parameters; doc != nil {
-		r.State.AddDescriptions(doc)
-	}
-
 	if r.OutputState, err = r.OutputState.NormalizeComposites(); err != nil {
 		return fmt.Errorf("failed to normalize output state: %w", err)
 	}
@@ -311,6 +327,9 @@ func (r *Resource) appendPathVariableParams() {
 
 func (r *Resource) buildParameterViews() {
 	for _, parameter := range r.State.FilterByKind(state.KindView) {
+		if parameter.SQL == "" {
+			continue
+		}
 		viewlet := NewViewlet(parameter.In.Name, parameter.SQL, nil, r)
 		if parameter.Connector != "" {
 			viewlet.Connector = parameter.Connector
@@ -397,6 +416,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		sourceView.View.Template.Summary = &view.TemplateSummary{ //TODO go for detail existing impl
 			Source: sourceSQL,
 			Name:   viewlet.Name,
+			Schema: &state.Schema{Name: view.DefaultTypeName(viewlet.Name)},
 			Kind:   "record",
 		}
 
@@ -413,15 +433,18 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	return viewlet.View.BuildParametrizedSQL(templateParameters, types, sourceSQL, bindingArgs, options...)
 }
 
-func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet, doc state.Documentation) error, aDoc state.Documentation) error {
+func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet) error) error {
 	viewParameters := r.State.FilterByKind(state.KindView)
 	for _, viewParameter := range viewParameters {
 		if viewParameter.Schema != nil && viewParameter.Schema.Type() != nil {
 			continue
 		}
+		if viewParameter.In.Name == "" { //default root schema
+			continue
+		}
 		viewParameter.EnsureSchema()
 		aViewNamespace := r.Rule.Viewlets.Lookup(viewParameter.In.Name)
-		if err := setType(ctx, aViewNamespace, aDoc); err != nil {
+		if err := setType(ctx, aViewNamespace); err != nil {
 			return err
 		}
 		fields := aViewNamespace.Spec.Type.Fields()
@@ -587,6 +610,13 @@ func (r *Resource) extractState(loadType func(typeName string) (reflect.Type, er
 			return err
 		}
 
+		if parameter.In.Kind == state.KindOutput && parameter.In.Name == "view" {
+			if parameter.Schema.Type().Kind() == reflect.Interface {
+				if parameter.Schema.Cardinality == "" {
+					parameter.Schema.Cardinality = state.Many
+				}
+			}
+		}
 		iParameter.Explicit = true
 		dest.Append(iParameter)
 		if state.IsReservedAsyncState(iParameter.Name) && iParameter.IsAsync() { //scope to be deprecated
@@ -680,6 +710,23 @@ func (r *Resource) updatedObject(loadType func(typeName string) (reflect.Type, e
 	}
 
 	return nil
+}
+
+func (r *Resource) DataFieldName(inInput bool) string {
+	if inInput {
+		if parameter := r.State.BodyParameter(); parameter != nil {
+			return parameter.Name
+		}
+		return ""
+	}
+	if parameter := r.OutputState.BodyParameter(); parameter != nil {
+		return parameter.Name
+	}
+
+	if len(r.OutputState) == 0 {
+		return ""
+	}
+	return "data"
 }
 
 func NewResource(rule *options.Rule, repository *options.Repository, messages *msg.Messages) *Resource {

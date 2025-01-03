@@ -17,7 +17,7 @@ import (
 var inputGoTemplate string
 
 func (t *Template) GenerateInput(pkg string, info *plugin.Info, embedContent map[string]string) string {
-	pkg = t.getPakcage(pkg)
+	pkg = t.getPackage(pkg)
 	if len(t.State) == 0 {
 		return ""
 	}
@@ -31,10 +31,20 @@ func (t *Template) GenerateInput(pkg string, info *plugin.Info, embedContent map
 	for _, input := range t.State {
 		fields = append(fields, input.FieldDeclaration(root, embedContent, t.TypeDef))
 	}
+
+	if t.IndexGenerator != nil && len(t.IndexGenerator.paramByIndexName) > 0 && !t.InsertOnly {
+		for _, indexField := range t.IndexGenerator.paramByIndexName {
+			decl := indexField.IndexFieldDeclaration()
+			fields = append(fields, decl)
+		}
+	}
+
 	imports := inference.NewImports()
 
 	embedFSSnippet := ""
+	embedFSName := ""
 	if len(embedContent) > 0 {
+		embedFSName = fmt.Sprintf("&%vFS", t.Prefix+t.MethodFragment)
 		embedFSSnippet = fmt.Sprintf(`
 //go:embed %v/*.sql
 var %vFS embed.FS`, root, t.Prefix+t.MethodFragment)
@@ -53,10 +63,69 @@ var %vFS embed.FS`, root, t.Prefix+t.MethodFragment)
 		registry.register("Input")
 		registerTypes = registry.stringify()
 	}
+	output = strings.ReplaceAll(output, "$DataField", t.InputDataField())
+	output = strings.ReplaceAll(output, "$OutputField", t.OutputDataField())
+
 	output = strings.Replace(output, "$Imports", importFragment, 1)
 	output = strings.Replace(output, "$RegisterTypes", registerTypes, 1)
 	output = strings.ReplaceAll(output, "$EmbedFS", embedFSSnippet)
 
+	embedderFun := ""
+	if t.IsHandler {
+		embedderFun = strings.Replace(`
+	func (i *Input) EmbedFS() (fs *embed.FS) {
+		return ${EmbedFSName}
+	}
+`, "${EmbedFSName}", embedFSName, 1)
+
+	}
+	output = strings.ReplaceAll(output, "${EmbedFSFunc}\n", embedderFun)
+	return output
+}
+
+//go:embed tmpl/input_init.gox
+var inputInitGoTemplate string
+
+func (t *Template) GenerateInputInit(pkg string) string {
+	pkg = t.getPackage(pkg)
+	output := inputInitGoTemplate
+	if t.MethodFragment != "" && t.MethodFragment != "get" {
+		output = strings.Replace(output, "$Package", strings.ToLower(t.MethodFragment), 1)
+	}
+	output = strings.Replace(output, "$Package", pkg, 1)
+	output = strings.Replace(output, "$IndexSlice", t.IndexByCode, 1)
+	return output
+}
+
+//go:embed tmpl/input_validate.gox
+var inputValidateGoTemplate string
+
+func (t *Template) GenerateInputValidate(pkg string) string {
+	pkg = t.getPackage(pkg)
+	output := inputValidateGoTemplate
+	if t.MethodFragment != "" && t.MethodFragment != "get" {
+		output = strings.Replace(output, "$Package", strings.ToLower(t.MethodFragment), 1)
+	}
+	output = strings.Replace(output, "$Package", pkg, 1)
+	output = strings.ReplaceAll(output, "$DataField", t.InputDataField())
+	output = strings.Replace(output, "$IndexSlice", t.IndexByCode, 1)
+
+	builder := strings.Builder{}
+	for _, parameter := range t.State {
+		if parameter.PathParam == nil || parameter.PathParam.IndexField == nil {
+			continue
+		}
+		if parameter.In.IsView() && !parameter.IsAuxiliary {
+			builder.WriteString("case *")
+			builder.WriteString(parameter.Schema.SimpleTypeName())
+			builder.WriteString(":\n_, ok := i.")
+			builder.WriteString(parameter.IndexVariable())
+			builder.WriteString("[actual.")
+			builder.WriteString(parameter.PathParam.IndexField.Name)
+			builder.WriteString("]\nreturn ok\n")
+		}
+	}
+	output = strings.Replace(output, "${CanUseMarkerProviderCases}", builder.String(), 1)
 	return output
 }
 
@@ -64,7 +133,7 @@ var %vFS embed.FS`, root, t.Prefix+t.MethodFragment)
 var outputGoTemplate string
 
 func (t *Template) GenerateOutput(pkg string, info *plugin.Info) string {
-	pkg = t.getPakcage(pkg)
+	pkg = t.getPackage(pkg)
 	if t.MethodFragment != "" && t.MethodFragment != "get" {
 		pkg = strings.ToLower(t.MethodFragment)
 	}
@@ -101,7 +170,7 @@ func (t *Template) GenerateOutput(pkg string, info *plugin.Info) string {
 	return outputState
 }
 
-func (t *Template) getPakcage(pkg string) string {
+func (t *Template) getPackage(pkg string) string {
 	if pkg == "" {
 		if t.TypeDef != nil {
 			pkg = t.TypeDef.Package
@@ -133,7 +202,7 @@ func (t *Template) buildState(spec *inference.Spec, aState *inference.State, car
 }
 
 func (t *Template) buildPathParameterIfNeeded(spec *inference.Spec) *inference.Parameter {
-	selector := spec.Selector()
+	selector := spec.Selector(t.InputDataField())
 	indexField, SQL := spec.PkStructQL(selector)
 	if SQL == "" {
 		return nil
@@ -155,7 +224,7 @@ func (t *Template) buildDataViewParameter(spec *inference.Spec, cardinality stat
 	param.Schema = &state.Schema{DataType: spec.Type.Name, Cardinality: cardinality}
 	param.Schema.SetPackage(spec.Package)
 	param.In = state.NewViewLocation(param.Name)
-	param.SQL = spec.ViewSQL(t.ColumnParameterNamer(spec.Selector()))
+	param.SQL = spec.ViewSQL(t.ColumnParameterNamer(spec.Selector(t.InputDataField())))
 	columnFields := spec.Type.Fields(inference.WithStructTag())
 	param.Schema.SetType(reflect.PointerTo(reflect.StructOf(columnFields)))
 	return param

@@ -46,9 +46,13 @@ func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.
 		result.SetTag(aTag)
 	}
 	if doc != nil {
-		description, ok := doc.ColumnDocumentation(table, columnName)
+		description, ok := doc.ColumnDescription(table, columnName)
 		if ok {
-			result.Set(vtags.DocumentationTag, description)
+			result.Set(vtags.DescriptionTag, description)
+		}
+		example, ok := doc.ColumnExample(table, columnName)
+		if ok {
+			result.Set(vtags.ExampleTag, example)
 		}
 	}
 

@@ -583,6 +583,7 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, []string) {
 	destPtr := xunsafe.AsPointer(r.parent.DestPtr())
 	sliceLen := r.parent.slice.Len(destPtr)
 	result := make([]interface{}, 0)
+	var unique = make(map[any]bool)
 outer:
 	for i := 0; i < sliceLen; i++ {
 		parent := r.parent.slice.ValuePointerAt(destPtr, i)
@@ -590,21 +591,42 @@ outer:
 			field := link.xField
 			if field != nil {
 				fieldValue := field.Value(xunsafe.AsPointer(parent))
+
 				switch actual := fieldValue.(type) {
 				case []*int64:
+
 					for j := range actual {
+						if _, ok := unique[int(*actual[j])]; ok {
+							continue
+						}
+						unique[int(*actual[j])] = true
 						result = append(result, int(*actual[j]))
 					}
 				case []int64:
+
 					for j := range actual {
+						if _, ok := unique[int(actual[j])]; ok {
+							continue
+						}
+						unique[int(actual[j])] = true
 						result = append(result, int(actual[j]))
 					}
 				case []int:
+
 					for j := range actual {
+						if _, ok := unique[actual[j]]; ok {
+							continue
+						}
+						unique[actual[j]] = true
 						result = append(result, actual[j])
 					}
 				case []string:
+
 					for j := range actual {
+						if _, ok := unique[actual[j]]; ok {
+							continue
+						}
+						unique[actual[j]] = true
 						result = append(result, actual[j])
 					}
 				default:

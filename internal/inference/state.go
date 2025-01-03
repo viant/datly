@@ -260,11 +260,10 @@ func (s State) FilterByKind(kind state.Kind) State {
 }
 
 func (s State) BodyField() string {
-	body := s.FilterByKind(state.KindRequestBody)
-	if len(body) == 0 {
-		return ""
+	if bodyParameter := s.BodyParameter(); bodyParameter != nil {
+		return bodyParameter.Name
 	}
-	return body[0].In.Name
+	return ""
 }
 
 // Implicit filters implicit parameters
@@ -335,6 +334,15 @@ func (s State) DsqlParameterDeclaration() string {
 	return strings.Join(result, "\n\t")
 }
 
+// DsqlOutputParameterDeclaration returns dql parameter declaration
+func (s State) DsqlOutputParameterDeclaration() string {
+	var result []string
+	for _, param := range s {
+		result = append(result, param.DsqlOutputParameterDeclaration())
+	}
+	return strings.Join(result, "\n\t")
+}
+
 // ensureSchema initialises reflect.Type for each state parameter
 func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 	for _, param := range s {
@@ -379,7 +387,7 @@ func (s State) HandlerLocalVariables() ([]string, string) {
 		names = append(names, fieldName)
 		vars = append(vars, "\t"+definition)
 	}
-	return names, strings.Join(vars, "\n")
+	return names, strings.Join(vars[:1], "\n")
 }
 
 func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
@@ -430,7 +438,7 @@ func (s State) EnsureStructQLTypes() error {
 func (s State) enureStructQLType(param *Parameter) error {
 	sourceParam := s.Lookup(param.In.Name)
 	if sourceParam == nil {
-		return fmt.Errorf("failed to lookup param parameter: %v", param.In.Name)
+		return fmt.Errorf("failed to lookup param parameter: %v for structQL", param.In.Name)
 	}
 	if param.SQL != "" {
 		query, err := structql.NewQuery(param.SQL, sourceParam.Schema.Type(), nil)
@@ -719,6 +727,9 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 			return nil
 		}))
 
+	if err != nil {
+		return nil, err
+	}
 	dirTypes.GoImports = goImports
 	if err != nil {
 		return nil, err
@@ -757,4 +768,28 @@ func discoverEmbeds(embedRoot string) *embed.Holder {
 		}
 	}
 	return embedFs
+}
+
+func (s *State) BodyParameter() *Parameter {
+	dataFields := s.FilterByKind(state.KindRequestBody)
+	if len(dataFields) == 0 {
+		return nil
+	}
+	for _, candidate := range dataFields {
+		if candidate.In.Name == "" {
+			return candidate
+		}
+	}
+
+	if len(dataFields) == 1 {
+		return dataFields[0]
+	}
+	var fields = []reflect.StructField{}
+	for _, dataField := range dataFields {
+		fields = append(fields, reflect.StructField{Name: dataField.In.Name, Type: dataField.Schema.Type(), Tag: reflect.StructTag(dataField.Tag)})
+	}
+	rType := reflect.StructOf(fields)
+	body := &Parameter{Parameter: state.Parameter{Name: "data", In: state.NewBodyLocation(""), Schema: state.NewSchema(rType), Tag: "anonymous:\"true\""}}
+	*s = append(*s, body)
+	return body
 }

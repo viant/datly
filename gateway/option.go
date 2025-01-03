@@ -11,14 +11,13 @@ import (
 
 type options struct {
 	config        *Config
-	authorizer    Authorizer
+	initializers  []func(config *Config, fs *embed.FS) error
 	extensions    *extension.Registry
 	metrics       *gmetric.Service
 	repository    *repository.Service
 	statusHandler http.Handler
 	embedFs       *embed.FS
 	configURL     string
-	authProvider  func(config *Config, fs *embed.FS) (Authorizer, error)
 }
 
 func newOptions(ctx context.Context, opts ...Option) (*options, error) {
@@ -46,13 +45,6 @@ func newOptions(ctx context.Context, opts ...Option) (*options, error) {
 		result.config = &Config{}
 	}
 
-	if result.authorizer == nil && result.authProvider != nil {
-		var err error
-		if result.authorizer, err = result.authProvider(result.config, result.embedFs); err != nil {
-			return nil, err
-		}
-	}
-
 	return result, nil
 }
 
@@ -63,13 +55,6 @@ type Option func(*options)
 func WithConfig(config *Config) Option {
 	return func(o *options) {
 		o.config = config
-	}
-}
-
-// WithAuthorizer sets an authorizer
-func WithAuthorizer(authorizer Authorizer) Option {
-	return func(o *options) {
-		o.authorizer = authorizer
 	}
 }
 
@@ -107,9 +92,9 @@ func WithStatusHandler(handler http.Handler) Option {
 	}
 }
 
-func WithAuthProvider(authProvider func(config *Config, fs *embed.FS) (Authorizer, error)) Option {
+func WithInitializer(initializer func(config *Config, fs *embed.FS) error) Option {
 	return func(o *options) {
-		o.authProvider = authProvider
+		o.initializers = append(o.initializers, initializer)
 	}
 }
 

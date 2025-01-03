@@ -1,7 +1,10 @@
 package session
 
 import (
+	"context"
 	"embed"
+	"github.com/viant/datly/repository"
+	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -19,13 +22,22 @@ type (
 		locatorOpt          *locator.Options
 		codecOptions        []codec.Option
 		types               []*state.Type
+		registry            *repository.Registry
+		component           *repository.Component
+		operate             func(ctx context.Context, aSession *Session, aComponent *repository.Component) (interface{}, error)
 		indirectState       bool
 		reportNotAssignable *bool
 		scope               string
 		embeddedFS          *embed.FS
+		auth                *auth.Service
 	}
+
 	Option func(o *Options)
 )
+
+func (o *Options) Registry() *repository.Registry {
+	return o.registry
+}
 
 func (o *Options) HasInputParameters() bool {
 	if o.locatorOpt == nil {
@@ -52,6 +64,10 @@ func (o *Options) Indirect(flag bool, options ...locator.Option) *Options {
 
 func (o *Options) State() *view.State {
 	return o.state
+}
+
+func (o *Options) Operate() func(ctx context.Context, aSession *Session, aComponent *repository.Component) (interface{}, error) {
+	return o.operate
 }
 
 func (o *Options) AddLocator(option locator.Option) {
@@ -125,8 +141,38 @@ func WithTypes(types ...*state.Type) Option {
 	}
 }
 
+func WithAuth(auth *auth.Service) Option {
+	return func(s *Options) {
+		s.auth = auth
+	}
+}
+
+func WithComponent(component *repository.Component) Option {
+	return func(s *Options) {
+		s.component = component
+	}
+}
+
 func WithEmbeddedFS(fs *embed.FS) Option {
 	return func(s *Options) {
 		s.embeddedFS = fs
+	}
+}
+
+func WithScope(scope string) Option {
+	return func(s *Options) {
+		s.scope = scope
+	}
+}
+
+func WithOperate(operate func(ctx context.Context, aSession *Session, aComponent *repository.Component) (interface{}, error)) Option {
+	return func(s *Options) {
+		s.operate = operate
+	}
+}
+
+func WithRegistry(registry *repository.Registry) Option {
+	return func(s *Options) {
+		s.registry = registry
 	}
 }

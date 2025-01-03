@@ -4,14 +4,20 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/repository"
+	"github.com/viant/datly/repository/contract"
 	executor "github.com/viant/datly/service/executor"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/executor/extension"
 	session "github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler"
+	hauth "github.com/viant/xdatly/handler/auth"
 	http2 "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/sqlx"
+	hstate "github.com/viant/xdatly/handler/state"
 	"github.com/viant/xdatly/handler/validator"
 	"net/http"
 )
@@ -23,6 +29,7 @@ type (
 		executorSession *executor.Session
 		handlerSession  *extension.Session
 		*options
+		component  *repository.Component
 		view       *view.View
 		connectors view.Connectors
 		dataUnit   *expand.DataUnit
@@ -87,26 +94,31 @@ func (e *Executor) HandlerSession(ctx context.Context, opts ...Option) (*extensi
 	if e.handlerSession != nil {
 		return e.handlerSession, nil
 	}
+	sess := e.newSession(e.session, opts...)
+	e.handlerSession = sess
+	return sess, nil
+}
 
+func (e *Executor) newSession(aSession *session.Session, opts ...Option) *extension.Session {
 	var options = e.options.Clone(opts)
 	e.session.Apply(session.WithTypes(options.Types...))
 	e.session.Apply(session.WithEmbeddedFS(options.embedFS))
-
+	if options.auth != nil {
+		e.auth = options.auth
+	}
 	res := e.view.GetResource()
 	sess := extension.NewSession(
 		extension.WithTemplateFlush(func(ctx context.Context) error {
 			return e.Execute(ctx)
 		}),
-		extension.WithStater(e.session),
+		extension.WithStater(aSession),
 		extension.WithRedirect(e.redirect),
 		extension.WithSql(e.newSqlService),
 		extension.WithHttp(e.newHttp),
+		extension.WithAuth(e.newAuth),
 		extension.WithMessageBus(res.MessageBuses),
 	)
-
-	e.handlerSession = sess
-
-	return sess, nil
+	return sess
 }
 
 func (e *Executor) newValidator() *validator.Service {
@@ -192,19 +204,62 @@ func (e *Executor) txStarted(tx *sql.Tx) {
 	e.tx = tx
 }
 
-func (e *Executor) redirect(ctx context.Context, route *http2.Route) (handler.Session, error) {
-	//TODO reimplement it
-	return nil, fmt.Errorf("not yey supported")
-	//match, err := e.route.match(ctx, route)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//newExecutor := NewExecutor(match, e.request, e.response)
-	//return newExecutor.HandlerSession(ctx)
+func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hstate.Option) (handler.Session, error) {
+	registry := e.session.Registry()
+	if registry == nil {
+		return nil, fmt.Errorf("registry was empty")
+	}
+	aComponent, err := registry.Lookup(ctx, contract.NewPath(route.Method, route.URL))
+	if err != nil {
+		return nil, err
+	}
+	originalRequest, _ := e.session.HttpRequest(ctx, e.session.Clone())
+
+	request, _ := http.NewRequest(route.Method, route.URL, nil)
+	if originalRequest != nil {
+		request.Header = originalRequest.Header
+	}
+	stateOptions := hstate.NewOptions(opts...)
+
+	unmarshal := aComponent.UnmarshalFunc(request)
+	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+	if stateOptions.Query() != nil {
+		locatorOptions = append(locatorOptions, locator.WithQuery(stateOptions.Query()))
+	}
+	if stateOptions.Form() != nil {
+		locatorOptions = append(locatorOptions, locator.WithForm(stateOptions.Form()))
+	}
+	if stateOptions.Headers() != nil {
+		locatorOptions = append(locatorOptions, locator.WithHeaders(stateOptions.Headers()))
+	}
+	if stateOptions.PathParameters() != nil {
+		locatorOptions = append(locatorOptions, locator.WithPathParameters(stateOptions.PathParameters()))
+	}
+	if stateOptions.HttpRequest() != nil {
+		locatorOptions = append(locatorOptions, locator.WithRequest(stateOptions.HttpRequest()))
+	}
+	aSession := session.New(aComponent.View,
+		session.WithAuth(e.auth),
+		session.WithLocatorOptions(locatorOptions...),
+		session.WithOperate(e.session.Options.Operate()),
+		session.WithTypes(&aComponent.Contract.Input.Type, &aComponent.Contract.Output.Type),
+		session.WithComponent(aComponent),
+		session.WithRegistry(registry),
+	)
+
+	err = aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
+	if err != nil {
+		return nil, err
+	}
+	ctx = aSession.Context(ctx, true)
+	anExecutor := NewExecutor(aComponent.View, aSession)
+	return anExecutor.NewHandlerSession(ctx)
 }
 
 func (e *Executor) newHttp() http2.Http {
-	//TODO reimplement it
-	return nil
+	return NewHttp(e, e.view.GetResource())
+}
+
+func (e *Executor) newAuth() hauth.Auth {
+	return NewAuth(e.auth)
 }

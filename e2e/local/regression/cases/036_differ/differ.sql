@@ -6,6 +6,8 @@ import (
 
 
 #set($_ = $Foos<[]*Foos>(body/))
+#set($_ = $Foos<?>(body/).Output().Tag('anonymous:"true"'))
+
 #set($_ = $FooIds<?>(param/Foos) /*
     ? SELECT ARRAY_AGG(Id) AS Values FROM  `/` LIMIT 1
 */)

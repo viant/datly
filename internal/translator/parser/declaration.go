@@ -24,6 +24,7 @@ type (
 		Codec         string            `json:",omitempty" yaml:",omitempty"`
 		CodecArgs     []string          `json:",omitempty" yaml:",omitempty"`
 		QuerySelector string            `json:",omitempty" yaml:",omitempty"`
+		Raw           string
 	}
 )
 

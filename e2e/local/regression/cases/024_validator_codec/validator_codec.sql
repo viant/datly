@@ -1,7 +1,6 @@
 /* {
    "URI":"basic/events-validator",
-   "Method":"POST",
-   "ResponseBody": {"From": "Events" }
+   "Method":"POST"
    } */
 
 import (
@@ -10,6 +9,8 @@ import (
 
 
 #set($_ = $Events<*Events>(body/))
+#set($_ = $Events<*Events>(body/).Output().Tag('anonymous:"true"'))
+
 #set($_  = $EventTypes<?>(param/Events) /*
      SELECT Price, Timestamp FROM `/EventsPerformance`
 */)
@@ -47,5 +48,5 @@ INSERT INTO EVENTS (
         $recEventsPerformance.EventId,
         $recEventsPerformance.Timestamp
 	);
-	
+
 #end

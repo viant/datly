@@ -54,6 +54,15 @@ func (p Parameters) LookupByLocation(kind Kind, location string) *Parameter {
 	return nil
 }
 
+func (p Parameters) HttpParameters() Parameters {
+	var result = Parameters{}
+	for _, candidate := range p {
+		if candidate.IsHTTPParameter() {
+			result = append(result, candidate)
+		}
+	}
+	return result
+}
 func (p Parameters) UsedBy(text string) Parameters {
 	var result = Parameters{}
 	for _, candidate := range p {
@@ -511,7 +520,7 @@ func (p Parameters) Filter(kind Kind) NamedParameters {
 	return index
 }
 
-func (p Parameters) PredicateStructType(d Documentation) reflect.Type {
+func (p Parameters) PredicateStructType() reflect.Type {
 	var fields []*predicate.FilterType
 	fieldTypes := map[string]*predicate.FilterType{}
 	for _, candidate := range p {
@@ -539,14 +548,6 @@ func (p Parameters) PredicateStructType(d Documentation) reflect.Type {
 	for _, field := range fields {
 		fieldTags := stags.NewTags(field.StructTagTag())
 		fieldTags.SetIfNotFound("json", ",omitempty")
-
-		if d != nil {
-			fieldDescription, ok := d.ByName(field.Tag.Filter)
-			if ok {
-				fieldTags.Set(tags.DocumentationTag, fieldDescription)
-			}
-		}
-
 		structFields = append(structFields, reflect.StructField{
 			Name: field.Tag.Filter,
 			Type: field.Type(),
@@ -599,7 +600,9 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	if strings.Contains(aTag.Parameter.In, ",") {
 		aTag.Parameter.In = "{" + aTag.Parameter.In + "}"
 	}
-	setter.SetStringIfEmpty(&aTag.Documentation, p.Description)
+	setter.SetStringIfEmpty(&aTag.Description, p.Description)
+	setter.SetStringIfEmpty(&aTag.Example, p.Example)
+
 	if p.Value != nil {
 		switch actual := p.Value.(type) {
 		case []string:

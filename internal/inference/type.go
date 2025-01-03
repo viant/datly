@@ -6,10 +6,10 @@ import (
 	"github.com/viant/datly/view"
 	dConfig "github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/datly/view/tags"
 	"github.com/viant/sqlparser"
 	"github.com/viant/structology"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -83,7 +83,7 @@ func (t *Type) ExpandType(simpleName string) string {
 	return pkg + "." + simpleName
 }
 
-func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, doc state.Documentation, table string) (*Field, error) {
+func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, table string) (*Field, error) {
 	columnNameOrAlias := column.Alias
 	if columnNameOrAlias == "" {
 		columnNameOrAlias = column.Name
@@ -98,21 +98,26 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool, doc sta
 		Ptr:        column.IsNullable,
 		Tags:       Tags{},
 	}
-
-	if doc != nil {
-		if fieldDoc, ok := doc.ColumnDocumentation(table, field.Column.Name); ok {
-			field.Tags.Set(tags.DocumentationTag, TagValue{fieldDoc})
-		}
-	}
 	if column.Type == "" {
 		return nil, fmt.Errorf("failed to match type: %v %v %v\n", column.Alias, column.Name, column.Expression)
 	}
-	aType, err := types.LookupType(dConfig.Config.Types.Lookup, column.Type)
+	var options []xreflect.Option
+	var typeName = column.Type
+	if strings.Contains(column.Type, "struct") {
+		options = append(options, xreflect.WithTypeDefinition(column.Type))
+		typeName = text.NewCaseFormat(column.Name).Format(column.Name, text.CaseFormatUpperCamel)
+	}
+	aType, err := types.LookupType(dConfig.Config.Types.Lookup, typeName, options...)
+	column.RawType = aType
 	if err != nil {
 		return nil, err
 	}
 	field.Schema = state.NewSchema(aType)
 	field.Schema.DataType = aType.Name()
+	if field.Schema.DataType == "" {
+		field.Schema.DataType = aType.String()
+	}
+
 	field.Schema.SetPackage(t.Package)
 	if skipped {
 		field.Skipped = skipped
@@ -161,9 +166,10 @@ func (t *Type) ColumnFields(table string, doc state.Documentation) []*view.Field
 			field.Ptr = true
 		}
 
-		if doc != nil {
-			field.Description, _ = doc.ColumnDocumentation(table, t.columnFields[i].Column.Name)
-		}
+		//if doc != nil {
+		//	field.Description, _ = doc.ColumnDescription(table, t.columnFields[i].Column.Name)
+		//	field.Example, _ = doc.ColumnExample(table, t.columnFields[i].Column.Name)
+		//}
 
 		result = append(result, &field)
 	}
@@ -180,6 +186,9 @@ func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
 	field.Tags.Set("sqlx", TagValue{"-"})
 	field.Relation = relation.Name
 	field.Tags.buildRelation(spec, relation)
+	if relation.Table != "" {
+		field.Tags.ViewTag(relation.Table)
+	}
 	field.Tag = field.Tags.Stringify()
 	t.RelationFields = append(t.RelationFields, field)
 	return field

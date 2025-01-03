@@ -6,7 +6,7 @@ import (
 )
 
 // Connectors represents Connector registry
-// Output was produced based on Connector.Name
+// Paths was produced based on Connector.Name
 type Connectors map[string]*Connector
 
 // Register registers connector

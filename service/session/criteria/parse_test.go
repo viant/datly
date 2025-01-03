@@ -2,14 +2,17 @@ package criteria_test
 
 import (
 	"fmt"
+	"reflect"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/service/session/criteria"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"reflect"
-	"testing"
-	"time"
+	"github.com/viant/tagly/format"
+	"github.com/viant/tagly/format/text"
 )
 
 func TestParse(t *testing.T) {
@@ -235,7 +238,7 @@ func TestParse(t *testing.T) {
 			description: "time criteria | equal, custom format",
 			input:       "CreatedTime = '2006-01-02'",
 			columns: map[string]*view.Column{
-				"CreatedTime": {Name: "created_time", DataType: "time", Format: "2006-01-02", Filterable: true},
+				"CreatedTime": {Name: "created_time", DataType: "time", FormatTag: &format.Tag{DateFormat: "2006-01-02"}, Filterable: true},
 			},
 			sanitizedCriteria: ` created_time = ?`,
 			placeholders:      []interface{}{newTime("2006-01-02", "2006-01-02")},
@@ -244,7 +247,7 @@ func TestParse(t *testing.T) {
 			description: "time criteria | greater or equal, custom format",
 			input:       "CreatedTime >= '2006-01-02'",
 			columns: map[string]*view.Column{
-				"CreatedTime": {Name: "created_time", DataType: "time", Format: "2006-01-02", Filterable: true},
+				"CreatedTime": {Name: "created_time", DataType: "time", FormatTag: &format.Tag{DateFormat: "2006-01-02"}, Filterable: true},
 			},
 			sanitizedCriteria: ` created_time >= ?`,
 			placeholders:      []interface{}{newTime("2006-01-02", "2006-01-02")},
@@ -282,7 +285,7 @@ func TestParse(t *testing.T) {
 		tests.LogHeader(fmt.Sprintf("Running testcase %v\n", i))
 
 		for _, column := range testCase.columns {
-			if !assert.Nil(t, column.Init(view.NewResources(view.EmptyResource(), &view.View{}), text.CaseFormatLowerUnderscore, true, nil), testCase.input) {
+			if !assert.Nil(t, column.Init(view.NewResources(view.EmptyResource(), &view.View{}), text.CaseFormatLowerUnderscore, true), testCase.input) {
 				continue
 			}
 		}

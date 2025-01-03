@@ -84,6 +84,7 @@ func (t *Tags) Init(tag string) {
 func (t *Tags) buildSqlxTag(source *Spec, field *Field) {
 	column := field.Column
 	tagValue := TagValue{}
+
 	tagValue.Append(column.Name)
 	if column.IsAutoincrement {
 		tagValue.Append("autoincrement")
@@ -191,6 +192,10 @@ func (t *Tags) Stringify() string {
 	}
 	//builder.WriteByte('`')
 	return builder.String()
+}
+
+func (t *Tags) ViewTag(table string) {
+	t.Set("view", TagValue{",table=" + table})
 }
 
 func SqlxTag(tag reflect.StructTag) *io.Tag {

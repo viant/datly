@@ -9,12 +9,15 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/codegen"
+	rcodegen "github.com/viant/datly/repository/codegen"
+	"github.com/viant/xdatly/handler/validator"
+
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/service/executor/handler"
+	"github.com/viant/datly/repository/handler"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
@@ -65,19 +68,31 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		template.IsHandler = options.Generate.Lang == "go"
 		template.SetResource(resource)
 		root.Spec.Type.Package = ruleOption.Package()
-		template.BuildTypeDef(root.Spec, resource.Rule.GetField(), resource.Rule.Doc.Columns)
+		template.BuildTypeDef(root.Spec, resource.DataFieldName(true), resource.Rule.Doc.Columns)
 		template.Imports.AddType(resource.Rule.Type)
 		template.Imports.AddType(resource.Rule.InputType)
 
 		var opts = []codegen.Option{codegen.WithHTTPMethod(gen.HttpMethod()), codegen.WithLang(gen.Lang)}
-		template.BuildInput(spec, resource.Rule.GetField(), opts...)
+		template.BuildInput(spec, resource.State, opts...)
 
 		registry := resource.Resource.TypeRegistry()
+
 		if parameters := resource.OutputState.FilterByKind(state.KindRequestBody); len(parameters) >= 1 {
 			parameters[0].Tag += `  typeName:"` + template.Prefix + `"`
+			cardinality := parameters[0].Schema.Cardinality
 			parameters[0].Schema = state.NewSchema(template.BodyType)
+			parameters[0].Schema.Cardinality = cardinality
 			template.BodyParameter = parameters[0]
 		}
+
+		if template.IsHandler && resource.OutputState.Lookup("Violations") == nil {
+			violationsParameter := &inference.Parameter{Parameter: state.Parameter{In: &state.Location{}}}
+			violationsParameter.In.Kind = state.KindTransient
+			violationsParameter.Name = "Violations"
+			violationsParameter.Schema = state.NewSchema(reflect.TypeOf([]*validator.Violation{}))
+			resource.OutputState.Append(violationsParameter)
+		}
+		template.Output = resource.OutputState
 		template.OutputType, err = resource.OutputState.Parameters().ReflectType(resource.Rule.Package, registry.Lookup)
 		if err != nil {
 			return err
@@ -115,7 +130,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 
 	defComp := true
 	if generate := opts.Generate; generate != nil {
-		defComp = !generate.NoComponentDef
+		defComp = !translate.Rule.SkipCompDef
 	}
 	opts.Translate = translate
 	opts.Generate = nil
@@ -141,7 +156,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		if err != nil {
 			return err
 		}
-		ctx = repository.WithGeneratorContext(ctx)
+		ctx = rcodegen.WithGeneratorContext(ctx)
 		aComponent, err := datlySrv.Component(ctx, URI)
 		if err != nil {
 			return err
@@ -204,8 +219,16 @@ func (s *Service) generateCode(ctx context.Context, gen *options.Generate, templ
 		s.Files.Append(asset.NewFile(gen.EmbedLocation(k, template.FileMethodFragment()), v))
 	}
 	inputURL := gen.InputLocation(template.FilePrefix(), template.FileMethodFragment())
-
 	s.Files.Append(asset.NewFile(inputURL, inputCode))
+
+	inputInitCode := template.GenerateInputInit(pkg)
+	inputInitURL := gen.InputInitLocation(template.FilePrefix(), template.FileMethodFragment())
+	s.Files.Append(asset.NewFile(inputInitURL, inputInitCode))
+
+	inputValidateCode := template.GenerateInputValidate(pkg)
+	inputValidateURL := gen.InputValidateLocation(template.FilePrefix(), template.FileMethodFragment())
+	s.Files.Append(asset.NewFile(inputValidateURL, inputValidateCode))
+
 	outputCode := template.GenerateOutput(pkg, info)
 	s.Files.Append(asset.NewFile(gen.OutputLocation(template.FilePrefix(), template.FileMethodFragment()), outputCode))
 	return s.generateEntity(ctx, pkg, gen, info, template)
@@ -243,16 +266,25 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		return nil
 	}
 
-	aState, err := inference.NewState(ruleOptions.ComponentPath(), rule.InputType, extension.Config.Types)
-	if err != nil {
-		return err
+	var aState = inference.State{}
+	var err error
+	if rule.InputType != "" {
+		if aState, err = inference.NewState(ruleOptions.ComponentPath(), rule.InputType, extension.Config.Types); err != nil {
+			return err
+		}
 	}
+
 	rule.Handler = &handler.Handler{
 		Type:       rule.Type,
 		InputType:  rule.InputType,
 		OutputType: rule.OutputType,
 		MessageBus: rule.MessageBus,
 		Arguments:  rule.HandlerArgs,
+	}
+
+	if rule.InputType == "" && rule.OutputType == "" {
+		*dSQL = origin
+		return nil
 	}
 	var entityParam *inference.Parameter
 	var entityType reflect.Type
@@ -308,7 +340,10 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		return err
 	}
 
-	name := aState[0].Name
+	name := "Nop"
+	if len(aState) > 0 {
+		name = aState[0].Name
+	}
 	if entityParam != nil && entityParam.Name != "" {
 		name = entityParam.Name
 	}
@@ -359,12 +394,21 @@ func (s *Service) translateGenerationOptions(gen *options.Generate, info *plugin
 }
 
 func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.Generate, info *plugin.Info, template *codegen.Template) error {
-	code, err := template.GenerateEntity(ctx, pkg, info)
+	embedContent := make(map[string]string)
+	embedURI := strings.ToLower(template.Spec.Namespace)
+
+	code, err := template.GenerateEntity(ctx, pkg, info, embedContent)
 	if err != nil {
 		return err
 	}
 	entityName := ensureGoFileCaseFormat(template)
 	s.Files.Append(asset.NewFile(gen.EntityLocation(template.FilePrefix(), template.FileMethodFragment(), entityName), code))
+	for k, v := range embedContent {
+		goCodeDest := gen.EmbedLocation(embedURI+"/"+k, template.FileMethodFragment())
+		s.Files.Append(asset.NewFile(goCodeDest, v))
+		//repoDestURL := path.Join(gen.Repository.RepositoryURL, "Datly/routes", gen.ModulePrefix, gen.RuleName(), strings.ToLower(template.Resource.Rule.Root), k)
+		//s.Files.Append(asset.NewFile(repoDestURL, v))
+	}
 	return nil
 }
 

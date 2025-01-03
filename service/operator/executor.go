@@ -15,7 +15,7 @@ import (
 // HandlerSession returns a handler session
 func (s *Service) HandlerSession(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (xhandler.Session, error) {
 	anExecutor := handler.NewExecutor(aComponent.View, aSession)
-	return anExecutor.NewHandlerSession(ctx, handler.WithTypes(aComponent.Types()...))
+	return anExecutor.NewHandlerSession(ctx, handler.WithTypes(aComponent.Types()...), handler.WithAuth(aSession.Auth()))
 }
 
 func (s *Service) execute(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
@@ -23,7 +23,7 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 	if aComponent.Handler != nil {
 		aSession.SetView(aComponent.View)
 		sessionHandler, err := anExecutor.NewHandlerSession(ctx,
-			handler.WithTypes(aComponent.Types()...))
+			handler.WithTypes(aComponent.Types()...), handler.WithAuth(aSession.Auth()))
 		if err != nil {
 			return nil, err
 		}
@@ -41,7 +41,8 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 		return nil, err
 	}
 	var responseValue interface{}
-	if aComponent.Output.ResponseBody == nil {
+
+	if len(aComponent.Output.Type.Parameters) == 0 {
 		return responseValue, nil
 	}
 	if stateType := aComponent.Output.Type.Type(); stateType != nil && stateType.IsDefined() {

@@ -10,17 +10,18 @@ import (
 const ParameterTag = "parameter"
 
 type Parameter struct {
-	Name      string `tag:"name,omitempty"`
-	Kind      string `tag:"kind,omitempty"`  //parameter location kind
-	In        string `tag:"in,omitempty"`    //parameter location name
-	When      string `tag:"when,omitempty"`  //condition to evaluate
-	Scope     string `tag:"scope,omitempty"` //parameter scope
-	ErrorCode int    `tag:"errorCode,omitempty"`
-	DataType  string `tag:"dataType,omitempty"` //parameter input type
-	With      string `tag:"with,omitempty"`     //optional auxiliary type name holding parameters
-	Required  bool   `tag:"required,omitempty"`
-	Cacheable *bool  `tag:"cacheable,omitempty"`
-	Async     bool   `tag:"async,omitempty"`
+	Name        string `tag:"name,omitempty"`
+	Kind        string `tag:"kind,omitempty"`  //parameter location kind
+	In          string `tag:"in,omitempty"`    //parameter location name
+	When        string `tag:"when,omitempty"`  //condition to evaluate
+	Scope       string `tag:"scope,omitempty"` //parameter scope
+	ErrorCode   int    `tag:"errorCode,omitempty"`
+	DataType    string `tag:"dataType,omitempty"`    //parameter input type
+	Cardinality string `tag:"cardinality,omitempty"` //parameter input type
+	With        string `tag:"with,omitempty"`        //optional auxiliary type name holding parameters
+	Required    bool   `tag:"required,omitempty"`
+	Cacheable   *bool  `tag:"cacheable,omitempty"`
+	Async       bool   `tag:"async,omitempty"`
 }
 
 func (t *Tag) updatedParameter(key string, value string) (err error) {
@@ -36,6 +37,8 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 		tag.In = strings.Trim(strings.TrimSpace(value), "{}")
 	case "when":
 		tag.When = strings.TrimSpace(value)
+	case "cardinality":
+		tag.Cardinality = strings.TrimSpace(value)
 	case "cacheable":
 		value := strings.TrimSpace(value) == "" || strings.ToLower(strings.TrimSpace(value)) == "true"
 		tag.Cacheable = &value
@@ -73,6 +76,9 @@ func (p *Parameter) Tag() *tags.Tag {
 		appendNonEmpty(builder, "cachable", value)
 	}
 
+	if p.Cardinality == "One" {
+		appendNonEmpty(builder, "cardinality", "One")
+	}
 	appendNonEmpty(builder, "with", p.With)
 	appendNonEmpty(builder, "scope", p.Scope)
 	appendNonEmpty(builder, "dataType", p.DataType)

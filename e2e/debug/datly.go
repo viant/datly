@@ -68,6 +68,7 @@ func main() {
 	configURL := filepath.Join(baseDir, "../local/autogen/Datly/config.json")
 	os.Args = []string{
 		"",
+
 		"-c=" + configURL,
 		"-z=/tmp/jobs/datly",
 	}

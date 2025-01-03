@@ -14,20 +14,21 @@ import (
 
 type (
 	Tag struct {
-		embed         *embed.FS
-		fs            afs.Service
-		View          *View
-		SQL           ViewSQL
-		SummarySQL    ViewSQLSummary
-		Parameter     *Parameter
-		LinkOn        LinkOn
-		Predicates    []*Predicate
-		Codec         *Codec
-		Handler       *Handler
-		TypeName      string
-		Documentation string
-		Value         *string
-		Format        *format.Tag
+		embed       *embed.FS
+		fs          afs.Service
+		View        *View
+		SQL         ViewSQL
+		SummarySQL  ViewSQLSummary
+		Parameter   *Parameter
+		LinkOn      LinkOn
+		Predicates  []*Predicate
+		Codec       *Codec
+		Handler     *Handler
+		TypeName    string
+		Description string
+		Example     string
+		Value       *string
+		Format      *format.Tag
 	}
 	Tagger interface {
 		Tag() *tags.Tag
@@ -99,8 +100,11 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 		pTags.Set(SQLSummaryTag, string(t.SummarySQL.SQL))
 	}
 
-	if t.Documentation != "" {
-		pTags.Set(DocumentationTag, string(t.Documentation))
+	if t.Description != "" {
+		pTags.Set(DescriptionTag, string(t.Description))
+	}
+	if t.Example != "" {
+		pTags.Set(ExampleTag, string(t.Example))
 	}
 
 	if t.TypeName != "" {

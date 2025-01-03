@@ -29,7 +29,7 @@ func (o *Options) astOption() ast.Options {
 	return astOptions
 }
 
-func (o *Options) isInsertOnly() bool {
+func (o *Options) IsInsertOnly() bool {
 	return o.withInsert && !o.withUpdate
 }
 

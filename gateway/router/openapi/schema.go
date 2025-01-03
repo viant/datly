@@ -3,10 +3,12 @@ package openapi
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/openapi/openapi3"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/tagly/format/text"
@@ -28,18 +30,22 @@ type (
 		component  *repository.Component
 		components *repository.Service
 		schemas    *SchemaContainer
+		docs       *state.Docs
 		doc        docs.Service
 	}
 
 	Schema struct {
+		docs        *state.Docs
 		pkg         string
 		path        string
 		fieldName   string
 		name        string
 		description string
+		example     string
 		rType       reflect.Type
 		tag         Tag
-		toFormatter text.CaseFormat
+		ioConfig    *config.IOConfig
+		isInput     bool
 	}
 
 	SchemaContainer struct {
@@ -53,33 +59,35 @@ type (
 func (s *Schema) SliceItem(rType reflect.Type) *Schema {
 	result := *s
 	elem := rType.Elem()
-
 	if elem.Name() != "" {
 		result.tag.TypeName = elem.Name()
 	} else {
 		result.tag.TypeName = result.tag.TypeName + "Item"
 	}
-
 	result.rType = elem
 	return &result
 }
 
-func (s *Schema) Field(field reflect.StructField, tag Tag) (*Schema, error) {
+func (s *Schema) Field(field reflect.StructField, tag *Tag) (*Schema, error) {
+
 	result := *s
 	result.path = result.path + "." + field.Name
 	result.rType = field.Type
-	result.tag = tag
-	result.fieldName = field.Name
+	if tag != nil {
+		result.tag = *tag
+	}
+	result.fieldName = s.ioConfig.FormatName(field.Name)
+	if tag.JSONName != "" {
+		result.fieldName = tag.JSONName
+	}
 	result.name = tag._tag.FormatName()
 	if result.name == "" {
-		if s.toFormatter == "" {
-			result.name = field.Name
-		} else {
-			result.name = text.CaseFormatUpperCamel.To(s.toFormatter).Format(field.Name)
-		}
+		result.name = s.ioConfig.CaseFormat.Format(result.fieldName, text.CaseFormatUpperCamel)
 	}
 
-	result.description = field.Tag.Get(tags.DocumentationTag)
+	result.description = field.Tag.Get(tags.DescriptionTag)
+	result.example = field.Tag.Get(tags.ExampleTag)
+
 	return &result, nil
 }
 
@@ -96,7 +104,6 @@ func NewComponentSchema(components *repository.Service, component *repository.Co
 	}
 
 	doc, _ := component.Doc()
-
 	return &ComponentSchema{
 		components: components,
 		component:  component,
@@ -107,7 +114,13 @@ func NewComponentSchema(components *repository.Service, component *repository.Co
 
 func (c *ComponentSchema) RequestBody(ctx context.Context) (*Schema, error) {
 	inputType := c.component.Input.Type
-	result, err := c.TypedSchema(ctx, inputType, "Input", "")
+
+	name := inputType.SimpleTypeName()
+	if name == "" {
+		name = "Input"
+	}
+
+	result, err := c.TypedSchema(ctx, inputType, name, c.component.IOConfig(), true)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +130,12 @@ func (c *ComponentSchema) RequestBody(ctx context.Context) (*Schema, error) {
 }
 
 func (c *ComponentSchema) ResponseBody(ctx context.Context) (*Schema, error) {
-	schema, err := c.TypedSchema(ctx, c.component.Output.Type, "Output", c.component.Output.CaseFormat)
+
+	name := c.component.Output.Type.SimpleTypeName()
+	if name == "" {
+		name = "Output"
+	}
+	schema, err := c.TypedSchema(ctx, c.component.Output.Type, name, c.component.IOConfig(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +143,7 @@ func (c *ComponentSchema) ResponseBody(ctx context.Context) (*Schema, error) {
 	return schema, nil
 }
 
-func (c *ComponentSchema) TypedSchema(ctx context.Context, stateType state.Type, defaultTypeName string, toFormatter text.CaseFormat) (*Schema, error) {
+func (c *ComponentSchema) TypedSchema(ctx context.Context, stateType state.Type, defaultTypeName string, ioConfig *config.IOConfig, isInput bool) (*Schema, error) {
 	rType := stateType.Schema.Type()
 	typeName := c.TypeName(rType, defaultTypeName)
 	path := stateType.Package + "." + typeName
@@ -143,7 +161,9 @@ func (c *ComponentSchema) TypedSchema(ctx context.Context, stateType state.Type,
 		fieldName:   typeName,
 		description: description,
 		rType:       rType,
-		toFormatter: toFormatter,
+		ioConfig:    ioConfig,
+		isInput:     isInput,
+		docs:        c.component.Docs(),
 	}, nil
 }
 
@@ -172,6 +192,20 @@ func (c *ComponentSchema) Description(ctx context.Context, path string, defaultD
 	return defaultDescription, nil
 }
 
+func (c *ComponentSchema) Example(ctx context.Context, path string, defaultDescription string) (string, error) {
+	if c.doc != nil {
+		lookupDesc, ok, err := c.doc.Lookup(ctx, path+"$example")
+		if err != nil {
+			return "", err
+		}
+
+		if ok {
+			return lookupDesc, nil
+		}
+	}
+	return defaultDescription, nil
+}
+
 func (c *ComponentSchema) TypeName(schemaType reflect.Type, defaultValue string) string {
 	types := c.component.TypeRegistry()
 	aType := types.Info(schemaType)
@@ -182,20 +216,33 @@ func (c *ComponentSchema) TypeName(schemaType reflect.Type, defaultValue string)
 	return defaultValue
 }
 
-func (c *ComponentSchema) ReflectSchema(name string, rType reflect.Type, description string, toFormatter text.CaseFormat) *Schema {
-	return c.SchemaWithTag(name, rType, description, toFormatter, Tag{})
+func (c *ComponentSchema) ReflectSchema(name string, rType reflect.Type, description string, ioConfig *config.IOConfig) *Schema {
+	return c.SchemaWithTag(name, rType, description, ioConfig, Tag{})
 }
 
-func (c *ComponentSchema) SchemaWithTag(name string, rType reflect.Type, description string, toFormatter text.CaseFormat, tag Tag) *Schema {
-	stringified := rType.String()
+func (c *ComponentSchema) SchemaWithTag(fieldName string, rType reflect.Type, description string, ioConfig *config.IOConfig, tag Tag) *Schema {
+
+	if parameter := tag.Parameter; parameter != nil {
+		if parameter.DataType != "" {
+			typeLookup := c.component.View.Resource().LookupType()
+			if lType, _ := typeLookup(parameter.DataType); lType != nil {
+				rType = lType
+			}
+		}
+	}
+	typeName := rType.String()
+	if ioConfig.CaseFormat.IsDefined() {
+		fieldName = ioConfig.FormatName(typeName)
+	}
 	return &Schema{
-		path:        stringified,
-		fieldName:   name,
-		name:        stringified,
+		path:        typeName,
+		fieldName:   fieldName,
+		name:        typeName,
 		description: description,
 		rType:       rType,
 		tag:         tag,
-		toFormatter: toFormatter,
+		ioConfig:    ioConfig,
+		docs:        c.component.Docs(),
 	}
 }
 func (c *ComponentSchema) GenerateSchema(ctx context.Context, schema *Schema) (*openapi3.Schema, error) {
@@ -238,6 +285,11 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 		dst.Example = schema.tag.Example
 	}
 
+	rootTable := ""
+
+	if component.component.View.Mode == view.ModeQuery {
+		rootTable = component.component.View.Table
+	}
 	switch rType.Kind() {
 	case reflect.Slice, reflect.Array:
 		var err error
@@ -273,34 +325,46 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 		dst.Properties = openapi3.Schemas{}
 		dst.Type = objectOutput
 		numField := rType.NumField()
+		table := schema.tag.Table
 		for i := 0; i < numField; i++ {
 			aField := rType.Field(i)
 			if aField.PkgPath != "" {
 				continue
 			}
-
-			aTag, err := ParseTag(aField, aField.Tag)
+			aTag, err := ParseTag(aField, aField.Tag, schema.isInput, rootTable)
 			if err != nil {
 				return err
 			}
-
+			if aTag.Table == "" {
+				aTag.Table = table
+			}
 			if aTag.Ignore {
 				continue
+			}
+
+			if aTag.Column != "" && table == "" {
+				table = rootTable
+				aTag.Table = rootTable
+			}
+			if table != "" && aTag.Column == "" {
+				aTag.Column = text.DetectCaseFormat(aField.Name).To(text.CaseFormatUpperUnderscore).Format(aField.Name)
 			}
 
 			if aTag.Inlined {
 				dst.AdditionalPropertiesAllowed = setter.BoolPtr(true)
 				continue
 			}
-
 			fieldSchema, err := schema.Field(aField, aTag)
 			if err != nil {
 				return err
 			}
 
-			if _, ok := component.component.Output.Excluded()[fieldSchema.path]; ok {
+			if component.component.Output.IsExcluded(fieldSchema.path) {
 				continue
 			}
+
+			docs := component.component.Docs()
+			updatedDocumentation(aTag, docs, fieldSchema)
 
 			if aField.Anonymous {
 				if err := c.addToSchema(ctx, component, dst, fieldSchema); err != nil {
@@ -312,14 +376,13 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 			if len(dst.Properties) == 0 {
 				dst.Properties = make(openapi3.Schemas)
 			}
-
-			dst.Properties[fieldSchema.name], err = c.createSchema(ctx, component, fieldSchema)
+			dst.Properties[fieldSchema.fieldName], err = c.createSchema(ctx, component, fieldSchema)
 			if err != nil {
 				return err
 			}
 
 			if !aTag.IsNullable {
-				dst.Required = append(dst.Required, fieldSchema.name)
+				dst.Required = append(dst.Required, fieldSchema.fieldName)
 			}
 		}
 	default:
@@ -372,6 +435,39 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 	return nil
 }
 
+func updatedDocumentation(aTag *Tag, docs *state.Docs, fieldSchema *Schema) {
+	if docs == nil {
+		return
+	}
+	if aTag.Column != "" && len(docs.Columns) > 0 {
+		columns := docs.Columns
+		if aTag.Description == "" {
+			aTag.Description, _ = columns.ColumnDescription(aTag.Table, aTag.Column)
+		}
+		if aTag.Description == "" {
+			aTag.Description, _ = columns.ColumnDescription("", aTag.Column)
+		}
+		if aTag.Example == "" {
+			aTag.Example, _ = columns.ColumnExample(aTag.Table, aTag.Column)
+		}
+	}
+	if aTag.Description == "" && len(docs.Paths) > 0 {
+		if desc, ok := docs.Paths.ByName(fieldSchema.path); ok {
+			aTag.Description = desc
+		} else if desc, ok := docs.Paths.ByName(fieldSchema.name); ok {
+			aTag.Description = desc
+			fieldSchema.description = desc
+		}
+	}
+	if aTag.Description != "" {
+		fieldSchema.description = aTag.Description
+	}
+	if aTag.Example != "" {
+		fieldSchema.example = aTag.Example
+	}
+
+}
+
 func containsAny(format string, values ...string) bool {
 	for _, value := range values {
 		if strings.Contains(format, value) {
@@ -398,6 +494,10 @@ func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *Com
 	if err != nil {
 		return nil, err
 	}
+	example, err := componentSchema.Example(ctx, fieldSchema.path, fieldSchema.example)
+	if err != nil {
+		return nil, err
+	}
 
 	if fieldSchema.tag.TypeName != "" {
 		_, ok := c.generatedSchemas[fieldSchema.tag.TypeName]
@@ -412,6 +512,7 @@ func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *Com
 			Type:        apiType,
 			Format:      format,
 			Description: description,
+			Example:     example,
 		}, nil
 	}
 
@@ -445,8 +546,10 @@ func (c *SchemaContainer) toOpenApiType(rType reflect.Type) (string, string, err
 }
 
 func (c *SchemaContainer) asOpenApiType(rType reflect.Type) (string, string, bool) {
+	if rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
 	switch rType.Kind() {
-
 	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
 		return integerOutput, int64Format, true
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16, reflect.Uint32:

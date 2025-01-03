@@ -3,6 +3,8 @@ package codec
 import (
 	"context"
 	"fmt"
+	sfirebase "github.com/viant/scy/auth/firebase"
+
 	"github.com/viant/datly/service/auth/firebase"
 	"github.com/viant/scy/auth"
 	"github.com/viant/structology"
@@ -28,7 +30,7 @@ func (e *FirebaseAuth) New(codecConfig *codec.Config, options ...codec.Option) (
 	}
 	var err error
 	if e.firebaseAuth == nil {
-		if e.firebaseAuth, err = firebase.New(context.Background(), &firebase.Config{}); err != nil {
+		if e.firebaseAuth, err = firebase.New(context.Background(), &sfirebase.Config{}); err != nil {
 			return nil, err
 		}
 	}

@@ -12,7 +12,6 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
 	"github.com/viant/sqlx/io/read/cache"
-	"github.com/viant/sqlx/option"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/response"
@@ -237,7 +236,7 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 
 	var indexed *cache.ParmetrizedQuery
 	var cacheStats *cache.Stats
-	var metaOptions []option.Option
+	var metaOptions []read.Option
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -259,7 +258,7 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 		}
 
 		cacheStats = &cache.Stats{}
-		metaOptions = []option.Option{cacheService, cacheMatcher, cacheStats}
+		metaOptions = []read.Option{read.WithCache(cacheService), read.WithInMatcher(cacheMatcher), read.WithCacheStats(cacheStats)}
 	}()
 
 	var err error
@@ -434,21 +433,21 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, columnInMatcher *cache.ParmetrizedQuery, parametrizedSQL *cache.ParmetrizedQuery, db *sql.DB, handler func(row interface{}) error, readData *int) ([]*response.SQLExecution, error) {
 	begin := time.Now()
 	var cacheStats *cache.Stats
-	var options = []option.Option{io.Resolve(collector.Resolve)}
+	var options = []read.Option{read.WithUnmappedFn(io.Resolve(collector.Resolve))}
 	var err error
 	if session.IsCacheEnabled(aView) {
 		service, err := aView.Cache.Service()
 		if err == nil {
 			cacheStats = &cache.Stats{}
-			options = append(options, service, cacheStats)
+			options = append(options, read.WithCache(service), read.WithCacheStats(cacheStats))
 		}
 	}
 	if columnInMatcher != nil {
 		columnInMatcher.OnSkip = collector.OnSkip
-		options = append(options, &columnInMatcher)
+		options = append(options, read.WithInMatcher(columnInMatcher))
 	}
 	if session.CacheRefresh {
-		options = append(options, session.CacheRefresh)
+		options = append(options, read.WithCacheRefresh(session.CacheRefresh))
 	}
 
 	stats := s.NewExecutionInfo(session, parametrizedSQL, cacheStats, err)

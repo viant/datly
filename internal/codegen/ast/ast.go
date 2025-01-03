@@ -19,8 +19,8 @@ type (
 
 	Block []Statement
 	Ident struct {
-		WithState bool
-		Name      string
+		Holder string
+		Name   string
 	}
 
 	Foreach struct {
@@ -133,16 +133,15 @@ func (b Block) Generate(builder *Builder) error {
 
 func (e Ident) Generate(builder *Builder) (err error) {
 	identName := e.Name
-	if builder.WithLowerCaseIdent {
+	if builder.WithLowerCaseIdent && e.Holder == "" {
 		upperCamel := text.CaseFormatUpperCamel
 		identName = upperCamel.Format(identName, text.CaseFormatLowerCamel)
 	}
-	if e.WithState && builder.StateName != "" {
-		identName = identName + "." + builder.StateName
+
+	if e.Holder != "" {
+		identName = e.Holder + "." + identName
 	}
-
 	builder.State.DeclareVariable(identName)
-
 	if builder.Lang == LangVelty {
 		return builder.WriteString("$" + identName)
 	}

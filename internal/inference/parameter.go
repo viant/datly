@@ -54,6 +54,20 @@ func (p *Parameter) HasSchema() bool {
 
 func (p *Parameter) DsqlParameterDeclaration() string {
 	builder := strings.Builder{}
+	p.veltyDeclaration(&builder)
+	builder.WriteByte(')')
+	return builder.String()
+}
+
+func (p *Parameter) DsqlOutputParameterDeclaration() string {
+	builder := strings.Builder{}
+	p.veltyDeclaration(&builder)
+	builder.WriteString(".Output()")
+	builder.WriteByte(')')
+	return builder.String()
+}
+
+func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	builder.WriteString("#set($_ = $")
 	builder.WriteString(p.Name)
 	builder.WriteString("<")
@@ -80,6 +94,9 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 	if p.Scope != "" {
 		builder.WriteString(".Scope('" + p.Scope + "')")
 	}
+	if p.Tag != "" {
+		builder.WriteString(".WithTag('" + p.Tag + "')")
+	}
 	if p.Value != "" {
 		switch actual := p.Value.(type) {
 		case string:
@@ -101,13 +118,11 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 	if p.SQL != "" {
 		builder.WriteString(" /*\n")
 		SQL := strings.TrimSpace(p.SQL)
-		p.addedValidationModifierIfNeeded(&builder, SQL)
+		p.addedValidationModifierIfNeeded(builder, SQL)
 		builder.WriteString(SQL)
 		builder.WriteString("\n*/\n")
 	}
 
-	builder.WriteByte(')')
-	return builder.String()
 }
 
 func (p *Parameter) FieldDeclaration(embedRoot string, embed map[string]string, def *view.TypeDefinition) string {
@@ -162,7 +177,7 @@ func (p *Parameter) FieldDeclaration(embedRoot string, embed map[string]string, 
 	}
 
 	builder.WriteString("`")
-	tag := aTag.UpdateTag("")
+	tag := aTag.UpdateTag(reflect.StructTag(p.Tag))
 	builder.WriteString(string(tag))
 	builder.WriteString("`")
 	builder.WriteString(" ")
@@ -403,6 +418,14 @@ func (p *Parameter) adjustMetaViewIfNeeded() {
 		p.Schema = state.NewSchema(reflect.TypeOf(0))
 		p.Schema.DataType = "int"
 	}
+}
+
+func (p *Parameter) IndexFieldDeclaration() string {
+	name := p.Name
+	if strings.HasPrefix(name, "Cur") {
+		name = name[3:]
+	}
+	return p.IndexVariable() + " Indexed" + name + " `json:\"-\"`"
 }
 
 func extractSQL(field *ast.Field) string {

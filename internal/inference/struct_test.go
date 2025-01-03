@@ -24,7 +24,7 @@ func TestState_Compact(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		compacted, err := testCase.state.Compact("")
+		compacted, err := testCase.state.Compact("", nil)
 		assert.Nil(t, err, testCase.deccription)
 		assert.Equal(t, testCase.expectedLen, len(compacted))
 	}

@@ -161,7 +161,7 @@ See function [registry](https://github.com/viant/datly/tree/master/internal/tran
 
 #### Reader hints
 - **RouteConfig** is JSON representation of [Route](option/route.go) settings i.e {"URI":"app1/view1/{Id}"}
-- **OutputConfig** is JSON representation of [Output](option/output.go) settings i.e {"Style":"Comprehensive"}
+- **OutputConfig** is JSON representation of [Output](option/output.go) settings 
 - **ColumnConfig** is JSON representation of [Column](option/column.go) settings i.e {"DataType":"bool"}
 - **ViewConfig**  is JSON representation of [View](option/view.go) settings i.e {"Cache":{"Ref":"aerospike"}}
 
@@ -663,13 +663,15 @@ WHERE ID = $Entity.Id
 
 ```sql
 
-/* {"Method":"PATCH","ResponseBody":{"From":"Product"}} */
+/* {"Method":"PATCH"} */
 
 import (
 	"product.Product"
 )
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
-#set($_ = $Campaign<*[]Product>(body/Entity))
+#set($_ = $Products<*[]Product>(body/Entity))
+#set($_ = $Products<*[]Product>(body/Entity).Output())
+
 ```
 
 
@@ -677,13 +679,14 @@ import (
 
 ```sql
 
-/* {"Method":"PATCH","ResponseBody":{"From":"Product"}} */
+/* {"Method":"PATCH"} */
 
 import (
 	"./product.Product"
 )
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
-#set($_ = $Campaign<*[]Product>(body/Entity))
+#set($_ = $Products<*[]Product>(body/Entity))
+#set($_ = $Products<*[]Product>(body/Entity).Output())
 
 #set($validation = $New("*Validation"))
 #set($hasError = $Product.Init($validation))

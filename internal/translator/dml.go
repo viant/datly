@@ -10,6 +10,9 @@ func (s *Service) extractDMLTables(ctx context.Context, resource *Resource) (*in
 	if err != nil {
 		return nil, err
 	}
+	if resource.RawSQL == "" {
+		return nil, nil
+	}
 	var table *inference.Table
 	tables := resource.Statements.DMLTables(resource.RawSQL)
 	if len(tables) > 0 {

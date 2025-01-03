@@ -57,7 +57,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
-	if err := contract.EnsureParameterTypes(outputParameters, nil, resource.Rule.Doc.Parameters, resource.Rule.Doc.Filter); err != nil {
+	if err := contract.EnsureParameterTypes(outputParameters, nil); err != nil {
 		return err
 	}
 	for _, parameter := range outputParameters {
@@ -94,8 +94,10 @@ func (s *Service) updateOutputFieldTypes(resource *Resource) {
 		case state.KindMeta:
 			contract.UpdateParameterMetaType(&parameter.Parameter)
 		case state.KindRequestBody:
-			if baseParameter := resource.State.FilterByKind(state.KindRequestBody); len(baseParameter) > 0 {
-				parameter.Schema = baseParameter[0].Schema.Clone()
+			if baseParameter := resource.State.FilterByKind(state.KindRequestBody); len(baseParameter) == 1 {
+				if baseParameter[0].In.Name == parameter.In.Name {
+					parameter.Schema = baseParameter[0].Schema.Clone()
+				}
 			}
 		}
 	}
@@ -438,7 +440,7 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 func (s *Service) ensureOutputParameters(resource *Resource, outputState inference.State) state.Parameters {
 	outputParameters := outputState.Parameters()
 	if len(outputParameters) == 0 {
-		if field := resource.Rule.Route.Output.Field; field != "" {
+		if field := resource.Rule.Route.Output.Field(); field != "" {
 			outputParameters = append(outputParameters, contract.DataOutputParameter(field))
 			outputParameters = append(outputParameters, contract.DefaultStatusOutputParameter())
 

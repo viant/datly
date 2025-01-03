@@ -6,6 +6,7 @@ import (
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
+	"github.com/viant/datly/service/auth"
 	"sync"
 )
 
@@ -116,11 +117,11 @@ func (r *Registry) Dispatcher() contract.Dispatcher {
 	return r.dispatcher
 }
 
-func NewRegistry(apiPrefix string, newDispatcher func(registry *Registry) contract.Dispatcher) *Registry {
+func NewRegistry(apiPrefix string, auth *auth.Service, newDispatcher func(registry *Registry, auth *auth.Service) contract.Dispatcher) *Registry {
 	ret := &Registry{index: map[string]*Provider{}, apiPrefix: apiPrefix}
 
 	if newDispatcher != nil {
-		ret.dispatcher = newDispatcher(ret)
+		ret.dispatcher = newDispatcher(ret, auth)
 	}
 	return ret
 }

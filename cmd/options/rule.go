@@ -18,17 +18,18 @@ import (
 )
 
 type Rule struct {
-	Project        string   `short:"p" long:"proj" description:"project location"`
-	Name           string   `short:"n" long:"name" description:"rule name"`
-	ModulePrefix   string   `short:"u" long:"namespace" description:"rule uri/namespace"  default:"dev" `
-	Source         []string `short:"s" long:"src" description:"source"`
-	Packages       []string `short:"g" long:"pkg" description:"entity package"`
-	Output         []string
-	Index          int
-	ModuleLocation string `short:"m" long:"module" description:"go module package root" default:"pkg"`
-	module         *modfile.Module
-	Generated      bool
-	SkipCompDef    bool `short:"B" long:"sComp" description:"skip component def"`
+	Project           string   `short:"p" long:"proj" description:"project location"`
+	Name              string   `short:"n" long:"name" description:"rule name"`
+	ModulePrefix      string   `short:"u" long:"namespace" description:"rule uri/namespace"  default:"dev" `
+	Source            []string `short:"s" long:"src" description:"source"`
+	Packages          []string `short:"g" long:"pkg" description:"entity package"`
+	Output            []string
+	Index             int
+	ModuleLocation    string `short:"m" long:"module" description:"go module package root" default:"pkg"`
+	module            *modfile.Module
+	Generated         bool
+	SkipCompDef       bool `short:"B" long:"sComp" description:"skip component def"`
+	IncludePredicates bool `short:"K" long:"inclPred" description:"generate predicate code" `
 }
 
 // Module returns go module
