@@ -3,19 +3,26 @@ package repository
 import (
 	"bytes"
 	"context"
+	"embed"
+	_ "embed"
 	"fmt"
+	"github.com/viant/afs"
+	fembed "github.com/viant/afs/embed"
 	"github.com/viant/afs/file"
-	"github.com/viant/afs/url"
+	furl "github.com/viant/afs/url"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/repository/codegen"
 	"github.com/viant/datly/repository/version"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/tags"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
+	"path"
 	"reflect"
 )
 
@@ -63,39 +70,148 @@ func (c *Components) Init(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if inputSchema := c.Components[0].Input.Type.Schema; inputSchema != nil {
-		if rType, _ := c.Resource.TypeRegistry().Lookup(inputSchema.Name, xreflect.WithPackage(inputSchema.Package)); rType != nil {
-			embedder := state.NewFSEmbedder(nil)
-			if embedder.SetType(rType) {
-				c.Resource.FSEmbedder = embedder
-			}
+	aComponent := c.Components[0]
+	var embedFs *embed.FS
+	if rType := c.ReflectType(c.Components[0].Input.Type.Schema); rType != nil {
+		embedFs, _ = c.ensureEmbedder(ctx, rType)
+		if ioType, _ := state.NewType(state.WithSchema(state.NewSchema(rType)), state.WithFS(embedFs), state.WithResource(view.NewResources(c.Resource, aComponent.View))); ioType != nil {
+			_ = c.updateIOTypeDependencies(ctx, ioType, embedFs, c.Components[0].View, false)
 		}
 	}
 
 	if err = c.Resource.Init(ctx, options...); err != nil {
 		return err
 	}
+	for _, component := range c.Components {
+		component.embedFs = embedFs
+		if err = component.Init(ctx, c.Resource); err != nil {
+			return err
+		}
+		if err = c.updateIOTypeDependencies(ctx, &component.Input.Type, embedFs, c.Components[0].View, true); err != nil {
+			return fmt.Errorf("failed to update io dependencies:%w", err)
+		}
+		if err = c.updateIOTypeDependencies(ctx, &component.Output.Type, embedFs, c.Components[0].View, true); err != nil {
+			return fmt.Errorf("failed to update io dependencies:%w", err)
+		}
+	}
+	return nil
+}
 
+func (c *Components) ReflectType(schema *state.Schema) reflect.Type {
+	if schema == nil {
+		return nil
+	}
+	if schema.IsNamed() {
+		return schema.Type()
+	}
+	rType, _ := c.Resource.TypeRegistry().Lookup(schema.Name, xreflect.WithPackage(schema.Package))
+	return rType
+}
+
+func (c *Components) ensureEmbedder(ctx context.Context, rType reflect.Type) (*embed.FS, error) {
+	embedder := state.NewFSEmbedder(nil)
+	if embedder.SetType(rType) {
+		c.Resource.FSEmbedder = embedder
+	}
+	embedFs := embedder.EmbedFS()
+	if embedFs != nil {
+		return embedFs, nil
+	}
+	embedFs, err := c.buildEmbedFs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c.Resource.FSEmbedder = state.NewFSEmbedder(embedFs)
+	return embedFs, nil
+}
+
+func (c *Components) buildEmbedFs(ctx context.Context) (*embed.FS, error) {
+	fs := afs.New()
+	holder := fembed.NewHolder()
+	var unique = map[string]bool{}
+	baseURL, _ := furl.Split(c.URL, file.Scheme)
+	for _, item := range c.Resource.Views {
+		if tmpl := item.Template; tmpl != nil && tmpl.SourceURL != "" {
+			folder, _ := path.Split(tmpl.SourceURL)
+			embedFsURL := furl.Join(baseURL, folder)
+			objects, err := fs.List(context.Background(), embedFsURL)
+			if err != nil {
+				return nil, err
+			}
+			for _, candidate := range objects {
+				if candidate.IsDir() {
+					continue
+				}
+				data, err := fs.DownloadWithURL(ctx, candidate.URL())
+				if err != nil {
+					return nil, err
+				}
+				key := folder + candidate.Name()
+				if _, found := unique[key]; found {
+					continue
+				}
+				unique[key] = true
+				holder.Add(key, string(data))
+			}
+		}
+	}
+	embedFs := holder.EmbedFs()
+	return embedFs, nil
+}
+
+func (c *Components) updateIOTypeDependencies(ctx context.Context, ioType *state.Type, fs *embed.FS, aView *view.View, isInput bool) error {
+	if ioType == nil || ioType.Type() == nil {
+		return nil
+	}
 	c.Resource.Lock()
 	substitutes := c.Resource.Substitutes
 	c.Resource.Unlock()
-
-	for _, component := range c.Components {
-		if err := component.Init(ctx, c.Resource); err != nil {
-			return err
+	inCodeGeneration := codegen.IsGeneratorContext(ctx)
+	rType := types.EnsureStruct(ioType.Type().Type())
+	for _, parameter := range ioType.Parameters {
+		xField, ok := rType.FieldByName(parameter.Name)
+		if !ok {
+			continue
+		}
+		if !parameter.Schema.IsNamed() && !inCodeGeneration { //prefer named type over inlined type (except code generation)
+			parameter.Schema.SetType(xField.Type)
 		}
 
-		inputType := component.Input.Type.Type().Type()
-
-		for _, parameter := range component.Input.Type.Parameters {
-			if param := c.Resource.Parameters.Lookup(parameter.Name); param == nil {
-				c.Resource.Parameters.Append(parameter)
-			} else if parameter.In.Kind == state.KindConst {
+		if param := c.Resource.Parameters.Lookup(parameter.Name); param == nil && isInput {
+			c.Resource.Parameters.Append(parameter)
+			if parameter.In.Kind == state.KindConst {
 				parameter.Value = param.Value
 			}
+		}
 
-			switch parameter.In.Kind {
-			case state.KindConst:
+		switch parameter.In.Kind {
+		case state.KindView:
+			_, err := c.ensureView(ctx, ioType.Parameters, parameter, fs, aView.Connector)
+			if err != nil {
+				return err
+			}
+
+		case state.KindOutput:
+			switch parameter.In.Name {
+			case "summary":
+				if aTag, _ := tags.Parse(reflect.StructTag(parameter.Tag), nil, tags.SQLSummaryTag); aTag != nil {
+					if summary := aTag.SummarySQL; summary.SQL != "" {
+						aView.Template.Summary = &view.TemplateSummary{Name: parameter.Name, Source: summary.SQL, Schema: parameter.Schema}
+					}
+				}
+			case "view":
+				if !aView.Schema.IsNamed() {
+					if aView.Ref != "" {
+						if baseView, _ := c.Resource.View(aView.Ref); baseView != nil {
+							aView = baseView
+						}
+					}
+					aView.Schema.SetType(parameter.Schema.Type())
+				}
+			}
+
+		case state.KindConst:
+			if isInput {
 				switch parameter.Value.(type) {
 				case string:
 					val, _ := parameter.Value.(string)
@@ -104,55 +220,9 @@ func (c *Components) Init(ctx context.Context) error {
 					val, _ := parameter.Value.(*string)
 					parameter.Value = substitutes.Replace(*val)
 				}
-			case state.KindView:
-				viewName := parameter.In.Name
-				if prev, _ := c.Resource.View(viewName); prev != nil {
-					if !codegen.IsGeneratorContext(ctx) && !prev.Schema.IsNamed() && inputType != nil { //adjust with named type
-						if fName, ok := inputType.FieldByName(parameter.Name); ok {
-							parameter.Schema.SetType(fName.Type)
-							prev.Schema.SetType(fName.Type)
-							viewParmeter := component.View.Template.Parameters.Lookup(parameter.Name)
-							if viewParmeter != nil {
-								viewParmeter.Schema.SetType(fName.Type)
-							}
-						}
-					}
-					continue
-				}
-
-				viewParameters := component.Input.Type.Parameters.UsedBy(parameter.SQL)
-				viewSchema := parameterViewSchema(parameter)
-				SQL := parameter.SQL
-				if len(viewParameters) > 0 {
-					aState := inference.State{}
-					aState.AppendParameters(viewParameters)
-					if tmpl, _ := parser.NewTemplate(SQL, &aState); tmpl != nil {
-						SQL = tmpl.Sanitize()
-					}
-
-				}
-
-				parameterView, err := view.New(viewName, "",
-					view.WithMode(view.ModeQuery),
-					view.WithSchema(viewSchema),
-					view.WithConnector(component.View.Connector),
-					view.WithTemplate(
-						view.NewTemplate(SQL,
-							view.WithTemplateParameters(viewParameters...))))
-
-				if err != nil {
-					return err
-				}
-				if err := parameterView.Init(ctx, c.Resource); err != nil {
-					return fmt.Errorf("failed to initialize view parameter: %v, %w", parameter.Name, err)
-				}
-				component.indexedView[viewName] = parameterView
-				c.Resource.Views = append(c.Resource.Views, parameterView)
 			}
 		}
-
 	}
-
 	return nil
 }
 
@@ -168,8 +238,8 @@ func parameterViewSchema(parameter *state.Parameter) *state.Schema {
 }
 
 func (c *Components) columnsFile() string {
-	parent, leaf := url.Split(c.URL, file.Scheme)
-	return url.Join(parent, ".meta", leaf)
+	parent, leaf := furl.Split(c.URL, file.Scheme)
+	return furl.Join(parent, ".meta", leaf)
 }
 
 func (c *Components) mergeResources(ctx context.Context) error {
@@ -201,6 +271,46 @@ func (c *Components) ensureColumns(ctx context.Context) error {
 		return nil
 	}
 	return c.columns.Load(ctx)
+}
+
+func (c *Components) ensureView(ctx context.Context, parameters state.Parameters, parameter *state.Parameter, fs *embed.FS, connector *view.Connector) (*view.View, error) {
+	aView, _ := c.Resource.View(parameter.In.Name)
+	if aView != nil {
+		if !aView.Schema.IsNamed() {
+			aView.Schema.SetType(parameter.Schema.Type())
+		}
+		return aView, nil
+	}
+	viewParameters := parameters.UsedBy(parameter.SQL)
+	viewSchema := parameterViewSchema(parameter)
+	SQL := parameter.SQL
+	if len(viewParameters) > 0 {
+		aState := inference.State{}
+		aState.AppendParameters(viewParameters)
+		if tmpl, _ := parser.NewTemplate(SQL, &aState); tmpl != nil {
+			SQL = tmpl.Sanitize()
+		}
+
+	}
+	var err error
+	viewName := parameter.In.Name
+	aView, err = view.New(viewName, "",
+		view.WithMode(view.ModeQuery),
+		view.WithSchema(viewSchema),
+		view.WithConnector(connector),
+		view.WithFS(fs),
+		view.WithTemplate(
+			view.NewTemplate(SQL,
+				view.WithTemplateParameters(viewParameters...))))
+
+	if err != nil {
+		return nil, err
+	}
+	if err := aView.Init(ctx, c.Resource); err != nil {
+		return nil, fmt.Errorf("failed to initialize view parameter: %v, %w", parameter.Name, err)
+	}
+	c.Resource.Views = append(c.Resource.Views, aView)
+	return aView, nil
 }
 
 // NewComponents creates components
