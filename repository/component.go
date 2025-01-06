@@ -11,7 +11,6 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/async"
-	"github.com/viant/datly/repository/codegen"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/handler"
@@ -110,11 +109,6 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	if err = c.Contract.Init(ctx, &c.Path, c.View, resource); err != nil {
 		return err
 	}
-
-	if err = c.updatedViewSchemaWithNamedType(ctx, resource); err != nil {
-		return err
-	}
-
 	if err := c.normalizePaths(); err != nil {
 		return err
 	}
@@ -132,33 +126,6 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 		return err
 	}
 	c.doc, _ = resource.Doc()
-	return nil
-}
-
-func (c *Component) updatedViewSchemaWithNamedType(ctx context.Context, resource *view.Resource) error {
-	outputSchema := c.Contract.Output.Type.Schema
-
-	if param := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); param != nil && outputSchema.IsNamed() {
-		oType := types.EnsureStruct(outputSchema.Type())
-		if viewField, ok := oType.FieldByName(param.Name); ok {
-			if !c.View.Schema.IsNamed() {
-				c.View.SetNamedType(viewField.Type)
-				if !codegen.IsGeneratorContext(ctx) {
-					param.Schema.SetType(viewField.Type)
-				}
-			}
-		}
-		if summaryParam := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "summary"); summaryParam != nil {
-			if aTag, _ := tags.Parse(reflect.StructTag(param.Tag), nil, tags.SQLSummaryTag); aTag != nil {
-				if summary := aTag.SummarySQL; summary.SQL != "" {
-					c.View.Template.Summary = &view.TemplateSummary{Name: summaryParam.Name, Source: summary.SQL, Schema: summaryParam.Schema}
-					if err := c.View.Template.Summary.Init(ctx, c.View.Template, resource); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
 	return nil
 }
 

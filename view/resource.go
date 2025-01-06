@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -136,6 +137,7 @@ func (r *Resource) ReverseSubstitutes(text string) string {
 func (r *Resource) SetFs(fs afs.Service) {
 	r.fs = fs
 }
+
 func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
 	data, err := r.loadText(ctx, URL, true)
 	if err != nil {
@@ -154,7 +156,11 @@ func (r *Resource) loadText(ctx context.Context, URL string, expand bool) (strin
 	if fs == nil {
 		fs = afs.New()
 	}
-	data, err := fs.DownloadWithURL(ctx, URL)
+	var embedFs *embed.FS
+	if r.FSEmbedder != nil {
+		embedFs = r.FSEmbedder.EmbedFS()
+	}
+	data, err := fs.DownloadWithURL(ctx, URL, embedFs)
 
 	if err = r.UpdateTime(ctx, URL); err != nil {
 		return "", err
@@ -186,9 +192,12 @@ func (r *Resource) LoadObject(ctx context.Context, URL string) (storage.Object, 
 		parent, _ := url.Split(r.SourceURL, file.Scheme)
 		URL = url.Join(parent, URL)
 	}
-
+	var embedFs *embed.FS
+	if r.FSEmbedder != nil {
+		embedFs = r.FSEmbedder.EmbedFS()
+	}
 	fs := afs.New()
-	data, err := fs.Object(ctx, URL)
+	data, err := fs.Object(ctx, URL, embedFs)
 	return data, err
 }
 

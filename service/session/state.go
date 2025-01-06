@@ -406,9 +406,9 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		}
 
 		if options.shallReportNotAssignable() {
-			if !ensureAssignable(parameter.Name, valueType, selector.Type()) && isSelectorPtr {
-				fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
-			}
+			//if !ensureAssignable(parameter.Name, selector.Type(), valueType) {
+			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
+			//}
 		}
 
 		reflectValue := reflect.New(valueType) //TODO replace with fast xreflect copy
