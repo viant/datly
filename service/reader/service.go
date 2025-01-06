@@ -421,13 +421,35 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		}
 		readData++
 		if fetcher, ok := row.(OnFetcher); ok {
-			if err = fetcher.OnFetch(ctx); err != nil {
+			fetchContext := ctx
+			//rel := collector.Relawerwerwetion()
+			//TODO
+
+			parent, err := getParentRow(ctx, row, collector, aView)
+			if err != nil {
+				return fmt.Errorf("failed to get parent row: %w", err)
+			}
+			if parent != nil {
+				parentKey := reflect.TypeOf(parent)
+				fetchContext = context.WithValue(ctx, parentKey, parent)
+			}
+
+			if err = fetcher.OnFetch(fetchContext); err != nil {
 				return err
 			}
 		}
 		return visitor(row)
 	}
 	return s.queryWithHandler(ctx, session, aView, collector, columnInMatcher, parametrizedSQL, db, handler, &readData)
+}
+
+func getParentRow(ctx context.Context, row interface{}, collector *view.Collector, aView *view.View) (interface{}, error) {
+	parentProvider := collector.ParentRow(collector.Relation())
+	if parentProvider == nil {
+		return nil, nil
+	}
+	return parentProvider(row)
+
 }
 
 func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, columnInMatcher *cache.ParmetrizedQuery, parametrizedSQL *cache.ParmetrizedQuery, db *sql.DB, handler func(row interface{}) error, readData *int) ([]*response.SQLExecution, error) {
