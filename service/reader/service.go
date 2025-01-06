@@ -119,7 +119,10 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 	for i := range collectorChildren {
 		go func(i int, parent *view.View) {
-			defer s.afterRelationCompleted(wg, collector, &relationGroup)
+			defer func() {
+				collectorChildren[i].Unlock()
+				s.afterRelationCompleted(wg, collector, &relationGroup)
+			}()
 			s.readAll(ctx, session, collectorChildren[i], wg, errorCollector, aView)
 		}(i, aView)
 	}
@@ -444,7 +447,7 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 }
 
 func getParentRow(ctx context.Context, row interface{}, collector *view.Collector, aView *view.View) (interface{}, error) {
-	parentProvider := collector.ParentRow(collector.Relation())
+	parentProvider := collector.parentRow(collector.Relation())
 	if parentProvider == nil {
 		return nil, nil
 	}

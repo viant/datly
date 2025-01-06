@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/xdatly/handler"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"sync"
@@ -26,8 +27,8 @@ type Collector struct {
 	valuePosition map[string]map[string]map[interface{}][]int //stores positions in main slice, based on _field name, indexed by _field value.
 	types         map[string]*xunsafe.Type
 	relation      *Relation
-
-	values map[string]*[]interface{} //acts like a buffer. Output resolved with Resolve method can't be put to the value position map
+	dataSync      handler.DataSync
+	values        map[string]*[]interface{} //acts like a buffer. Output resolved with Resolve method can't be put to the value position map
 	// because value fetched from database was not scanned into yet. Putting value to the map as a key, would create key as a pointer to the zero value.
 
 	slice     *xunsafe.Slice
@@ -70,6 +71,7 @@ func (r *Collector) Clone() *Collector {
 		slice:           r.slice,
 		view:            r.view,
 		relations:       r.relations,
+		dataSync:        r.dataSync,
 		wg:              r.wg,
 		readAll:         r.readAll,
 		wgDelta:         r.wgDelta,
@@ -161,6 +163,7 @@ func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHa
 		values:          make(map[string]*[]interface{}),
 		readAll:         readAll,
 		wg:              &wg,
+		dataSync:        handler.DataSync{},
 		wgDelta:         1,
 		viewMetaHandler: viewMetaHandler,
 	}
@@ -175,7 +178,7 @@ func ensureDest(dest interface{}, view *View) interface{} {
 	return dest
 }
 
-// VisitorFn creates visitor function
+// Visitor creates visitor function
 func (r *Collector) Visitor(ctx context.Context) VisitorFn {
 	relation := r.relation
 	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
@@ -323,7 +326,7 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 	}
 }
 
-func (r *Collector) ParentRow(relation *Relation) func(value interface{}) (interface{}, error) {
+func (r *Collector) parentRow(relation *Relation) func(value interface{}) (interface{}, error) {
 	if relation == nil {
 		return nil
 	}
@@ -475,15 +478,19 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 	result := make([]*Collector, len(r.view.With))
 
 	counter := 0
-	for i := range r.view.With {
+
+	for i, rel := range r.view.With {
 		if selector != nil && len(selector.Columns) > 0 && !selector.Has(r.view.With[i].Holder) {
 			continue
 		}
+		lock := &sync.RWMutex{}
+		lock.Lock()
+		r.dataSync[rel.Holder] = lock
 
 		destPtr := reflect.New(r.view.With[i].Of.View.Schema.SliceType())
 		dest := reflect.MakeSlice(r.view.With[i].Of.View.Schema.SliceType(), 0, 1)
 		destPtr.Elem().Set(dest)
-		slice := r.view.With[i].Of.View.Schema.Slice()
+		slice := rel.Of.View.Schema.Slice()
 		wg := sync.WaitGroup{}
 
 		delta := 0
@@ -492,15 +499,15 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 		}
 		wg.Add(delta)
 
-		handler, err := r.ViewMetaHandler(r.view.With[i])
+		aHandler, err := r.ViewMetaHandler(r.view.With[i])
 		if err != nil {
 			return nil, err
 		}
-
 		result[counter] = &Collector{
 			parent:          r,
-			viewMetaHandler: handler,
+			viewMetaHandler: aHandler,
 			destValue:       destPtr,
+			dataSync:        handler.DataSync{},
 			appender:        slice.Appender(xunsafe.ValuePointer(&destPtr)),
 			valuePosition:   make(map[string]map[string]map[interface{}][]int),
 			types:           make(map[string]*xunsafe.Type),
@@ -591,6 +598,15 @@ func (r *Collector) Dest() interface{} {
 // Later on it will be merged with the parent Collector
 func (r *Collector) ReadAll() bool {
 	return r.readAll
+}
+
+func (r *Collector) Unlock() {
+	if r.parent == nil {
+		return
+	}
+	if lock, ok := r.parent.dataSync[r.relation.Holder]; ok {
+		lock.Unlock()
+	}
 }
 
 // MergeData merges View with Collectors produced via Relations
