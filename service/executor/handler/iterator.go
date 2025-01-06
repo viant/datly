@@ -36,7 +36,7 @@ func (e *execution) asTypedSlice(items []interface{}) interface{} {
 		if value.Kind() == reflect.Slice {
 			for i := 0; i < value.Len(); i++ {
 				val := value.Index(i)
-				if value.Kind() == reflect.Slice {
+				if val.Kind() == reflect.Slice {
 					for j := 0; j < val.Len(); j++ {
 						slice = reflect.Append(slice, val.Index(j))
 					}
