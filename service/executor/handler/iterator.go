@@ -34,7 +34,9 @@ func (e *execution) asTypedSlice(items []interface{}) interface{} {
 	for _, item := range items {
 		value := reflect.ValueOf(item)
 		if value.Kind() == reflect.Slice {
-			slice = reflect.AppendSlice(slice, value)
+			for i := 0; i < value.Len(); i++ {
+				slice = reflect.Append(slice, value.Index(i))
+			}
 			continue
 		}
 		slice = reflect.Append(slice, value)
