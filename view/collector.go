@@ -144,7 +144,6 @@ func (r *Collector) parentValuesPositions(ns string, columnName string) map[inte
 		r.indexParentPositions(ns, columnName)
 		result = columnValues[columnName]
 	}
-
 	return result
 }
 
@@ -324,9 +323,18 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 		}
 		return nil
 	}
+
 }
 
-func (r *Collector) parentRow(relation *Relation) func(value interface{}) (interface{}, error) {
+func (r *Collector) Parent() *Collector {
+	return r.parent
+}
+
+func (r *Collector) DataSync() handler.DataSync {
+	return r.dataSync
+}
+
+func (r *Collector) ParentRow(relation *Relation) func(value interface{}) (interface{}, error) {
 	if relation == nil {
 		return nil
 	}
@@ -335,9 +343,33 @@ func (r *Collector) parentRow(relation *Relation) func(value interface{}) (inter
 	var values *[]interface{}
 	dest := r.parent.Dest()
 	destPtr := xunsafe.AsPointer(dest)
+	if len(links) == 1 {
+		keyField := links[0].xField
+		xType = r.types[links[0].Column]
+		column := relation.On[0].Column
+		namespace := relation.On[0].Namespace
+		return func(child interface{}) (interface{}, error) {
+			var key interface{}
+			if keyField != nil {
+				key = keyField.Interface(xunsafe.AsPointer(child))
+			} else {
+				key = xType.Deref((*values)[r.manyCounter])
+			}
+			valuePosition := r.parentValuesPositions(namespace, column)
+			key = io.NormalizeKey(key)
+			positions, ok := valuePosition[key]
+			if !ok {
+				return nil, fmt.Errorf(`key "%v" is not found`, key)
+			}
+			if len(positions) > 1 {
+				return nil, fmt.Errorf(`key "%v" has more than one value`, key)
+			}
+			parentItem := r.parent.slice.ValuePointerAt(destPtr, positions[0])
+			return parentItem, nil
+		}
+	}
 
 	return func(child interface{}) (interface{}, error) {
-
 		var key interface{}
 		var parentPosition int
 		for i, link := range links {
@@ -351,7 +383,6 @@ func (r *Collector) parentRow(relation *Relation) func(value interface{}) (inter
 				key = keyField.Interface(xunsafe.AsPointer(child))
 			} else {
 				key = xType.Deref((*values)[r.manyCounter])
-				r.manyCounter++
 			}
 			valuePosition := r.parentValuesPositions(relation.On[i].Namespace, relation.On[i].Column)
 			key = io.NormalizeKey(key)
@@ -605,6 +636,7 @@ func (r *Collector) Unlock() {
 		return
 	}
 	if lock, ok := r.parent.dataSync[r.relation.Holder]; ok {
+		delete(r.parent.dataSync, r.relation.Holder)
 		lock.Unlock()
 	}
 }
@@ -746,7 +778,6 @@ func (r *Collector) WaitIfNeeded() {
 
 func (r *Collector) Fetched() {
 	r.createTreeIfNeeded()
-
 	if r.wgDelta > 0 {
 		r.wg.Done()
 		r.wgDelta--

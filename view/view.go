@@ -389,6 +389,9 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 		if viewTag.Match != "" {
 			refViewOptions = append(refViewOptions, WithMatchStrategy(viewTag.Match))
 		}
+		if viewTag.PublishParent {
+			refViewOptions = append(refViewOptions, WithViewPublishParent(viewTag.PublishParent))
+		}
 		if viewTag.CustomTag != "" {
 			refViewOptions = append(refViewOptions, WithViewTag(viewTag.CustomTag))
 		}

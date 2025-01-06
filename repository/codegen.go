@@ -39,6 +39,9 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 			if c.View.Batch != nil {
 				aTag.View.Batch = c.View.Batch.Size
 			}
+			if c.View.PublishParent {
+				aTag.View.PublishParent = c.View.PublishParent
+			}
 			if c.View.Partitioned != nil {
 				aTag.View.PartitionedConcurrency = c.View.Partitioned.Concurrency
 				aTag.View.PartitionerType = c.View.Partitioned.DataType

@@ -14,6 +14,7 @@ import (
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/response"
 	"reflect"
 	"sync"
@@ -120,7 +121,6 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	for i := range collectorChildren {
 		go func(i int, parent *view.View) {
 			defer func() {
-				collectorChildren[i].Unlock()
 				s.afterRelationCompleted(wg, collector, &relationGroup)
 			}()
 			s.readAll(ctx, session, collectorChildren[i], wg, errorCollector, aView)
@@ -177,6 +177,7 @@ func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *view.Colle
 	if collectorFetchEmitted {
 		return
 	}
+	collector.Unlock()
 	collector.Fetched()
 }
 
@@ -417,6 +418,8 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	if err != nil {
 		return nil, err
 	}
+
+	var parentProvider func(value interface{}) (interface{}, error)
 	handler := func(row interface{}) error {
 		row, err = aView.UnwrapDatabaseType(ctx, row)
 		if err != nil {
@@ -424,20 +427,13 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		}
 		readData++
 		if fetcher, ok := row.(OnFetcher); ok {
-			fetchContext := ctx
-			//rel := collector.Relawerwerwetion()
-			//TODO
-
-			parent, err := getParentRow(ctx, row, collector, aView)
-			if err != nil {
-				return fmt.Errorf("failed to get parent row: %w", err)
+			if aView.PublishParent && parentProvider == nil {
+				parentProvider = collector.ParentRow(collector.Relation())
 			}
-			if parent != nil {
-				parentKey := reflect.TypeOf(parent)
-				fetchContext = context.WithValue(ctx, parentKey, parent)
+			if ctx, err = s.getParentContext(ctx, row, collector, parentProvider); err != nil {
+				return err
 			}
-
-			if err = fetcher.OnFetch(fetchContext); err != nil {
+			if err = fetcher.OnFetch(ctx); err != nil {
 				return err
 			}
 		}
@@ -446,13 +442,21 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	return s.queryWithHandler(ctx, session, aView, collector, columnInMatcher, parametrizedSQL, db, handler, &readData)
 }
 
-func getParentRow(ctx context.Context, row interface{}, collector *view.Collector, aView *view.View) (interface{}, error) {
-	parentProvider := collector.parentRow(collector.Relation())
+func (s *Service) getParentContext(ctx context.Context, row interface{}, collector *view.Collector, parentProvider func(value interface{}) (interface{}, error)) (context.Context, error) {
 	if parentProvider == nil {
-		return nil, nil
+		return ctx, nil
 	}
-	return parentProvider(row)
-
+	parentRecord, err := parentProvider(row)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get parentRecord row: %w", err)
+	}
+	if parentRecord == nil {
+		return ctx, nil
+	}
+	parentKey := reflect.TypeOf(parentRecord)
+	fetchContext := context.WithValue(ctx, handler.DataSyncKey, collector.Parent().DataSync())
+	fetchContext = context.WithValue(fetchContext, parentKey, parentRecord)
+	return fetchContext, nil
 }
 
 func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, columnInMatcher *cache.ParmetrizedQuery, parametrizedSQL *cache.ParmetrizedQuery, db *sql.DB, handler func(row interface{}) error, readData *int) ([]*response.SQLExecution, error) {
@@ -517,6 +521,8 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 	var mux sync.Mutex
 	var err error
 
+	var parentProvider func(value interface{}) (interface{}, error)
+
 	var rateLimit = make(chan bool, concurrency)
 	var collectors = make([]*view.Collector, repeat)
 	for i := 0; i < repeat; i++ {
@@ -542,6 +548,13 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 				}
 				readData++
 				if fetcher, ok := row.(OnFetcher); ok {
+					if aView.PublishParent && parentProvider == nil {
+						parentProvider = collector.ParentRow(collector.Relation())
+					}
+
+					if ctx, err = s.getParentContext(ctx, row, collector, parentProvider); err != nil {
+						return err
+					}
 					if err = fetcher.OnFetch(ctx); err != nil {
 						return err
 					}

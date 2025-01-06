@@ -417,7 +417,9 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 				if aView.Match != "" {
 					viewOptions = append(viewOptions, view.WithMatchStrategy(aView.Match))
 				}
-
+				if aTag.View.PublishParent {
+					viewOptions = append(viewOptions, view.WithViewPublishParent(aTag.View.PublishParent))
+				}
 			}
 
 			if aTag.SQL.SQL != "" {

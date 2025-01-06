@@ -218,7 +218,12 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 				aTag.View = &tags.View{}
 			}
 			aTag.View.Batch = aBatch.Size
-
+		}
+		if publishParent := rel.Of.View.PublishParent; publishParent {
+			if aTag.View == nil {
+				aTag.View = &tags.View{}
+			}
+			aTag.View.PublishParent = publishParent
 		}
 		if partitioned := rel.Of.View.Partitioned; partitioned != nil {
 			if aTag.View == nil {
