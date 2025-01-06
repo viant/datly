@@ -426,11 +426,12 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 			//TODO
 
 			parent, err := getParentRow(ctx, row, collector, aView)
-
-			if err != nil && parent != nil {
+			if err != nil {
+				return fmt.Errorf("failed to get parent row: %w", err)
+			}
+			if parent != nil {
 				parentKey := reflect.TypeOf(parent)
 				fetchContext = context.WithValue(ctx, parentKey, parent)
-
 			}
 
 			if err = fetcher.OnFetch(fetchContext); err != nil {
