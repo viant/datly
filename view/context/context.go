@@ -6,6 +6,7 @@ import (
 	"github.com/viant/xdatly/handler/state"
 	"golang.org/x/net/context"
 	"reflect"
+	"sync"
 	"time"
 )
 
@@ -18,6 +19,7 @@ type Context struct {
 	job            *async.Job
 	invocationType async.InvocationType
 	dataSync       *handler.DataSync
+	sync.RWMutex
 }
 
 func (vc *Context) Deadline() (deadline time.Time, ok bool) {
@@ -37,8 +39,11 @@ func (vc *Context) Value(key interface{}) interface{} {
 		return nil
 	}
 	if t, ok := key.(reflect.Type); ok {
-		if val, exists := vc.types[t]; exists {
-			return val
+		vc.RLock()
+		ival, exists := vc.types[t]
+		vc.RUnlock()
+		if exists {
+			return ival
 		}
 	}
 	switch key {
@@ -64,7 +69,9 @@ func (vc *Context) WithValue(key interface{}, value interface{}) context.Context
 	}
 
 	if t, ok := key.(reflect.Type); ok {
+		vc.RLock()
 		vc.types[t] = value
+		vc.RUnlock()
 		return vc
 	}
 	switch key {
