@@ -19,6 +19,10 @@ func (s *Service) BasicAuth(ctx context.Context, user string, password string) (
 	return s.firebase.InitiateBasicAuth(ctx, user, password)
 }
 
+func (s *Service) ResetCredentials(ctx context.Context, email, newPassword string) error {
+	return s.firebase.ResetCredentials(ctx, email, newPassword)
+}
+
 func (s *Service) VerifyIdentity(ctx context.Context, idToken string) (*jwt.Claims, error) {
 	return s.verifyToken(ctx, idToken)
 }

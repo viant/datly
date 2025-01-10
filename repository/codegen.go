@@ -39,6 +39,9 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 			if c.View.Batch != nil {
 				aTag.View.Batch = c.View.Batch.Size
 			}
+			if c.View.PublishParent {
+				aTag.View.PublishParent = c.View.PublishParent
+			}
 			if c.View.Partitioned != nil {
 				aTag.View.PartitionedConcurrency = c.View.Partitioned.Concurrency
 				aTag.View.PartitionerType = c.View.Partitioned.DataType
@@ -268,11 +271,15 @@ func (c *Component) adjustStructField(embedURI string, embeds map[string]string,
 				fieldTag, _ = xreflect.RemoveTag(fieldTag, "velty")
 			}
 		}
+
 		fieldTag, value := xreflect.RemoveTag(fieldTag, "sql")
 		if value != "" && generateContract {
 			name := *typeName
 			setter.SetStringIfEmpty(&name, aField.Name)
 			key := text.CaseFormatUpperCamel.Format(name, text.CaseFormatLowerUnderscore)
+			if viewName := extractViewName(aField); viewName != "" {
+				key = viewName
+			}
 			key = strings.ReplaceAll(key, ".", "")
 			key += ".sql"
 			value = c.View.Resource().ReverseSubstitutes(value)
@@ -289,6 +296,15 @@ func (c *Component) adjustStructField(embedURI string, embeds map[string]string,
 		//}
 		*tag = fieldTag
 	}
+}
+
+func extractViewName(aField *reflect.StructField) string {
+	var viewName string
+	if viewTag := aField.Tag.Get("view"); viewTag != "" {
+		if viewName = strings.Split(viewTag, ",")[0]; viewName != "" {
+		}
+	}
+	return viewName
 }
 
 func indexComponentPackageTypes(component *Component, inPkg string) map[string]bool {

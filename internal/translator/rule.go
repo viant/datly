@@ -126,6 +126,7 @@ func (r *Rule) DSQLSetting() interface{} {
 		HandlerArgs       []string `json:",omitempty"`
 		DocURL            string   `json:",omitempty"`
 		DocURLs           []string `json:",omitempty"`
+		Internal          bool     `json:",omitempty"`
 	}{
 		URI:               r.URI,
 		Method:            r.Method,
@@ -137,6 +138,7 @@ func (r *Rule) DSQLSetting() interface{} {
 		HandlerArgs:       r.HandlerArgs,
 		DocURL:            r.DocURL,
 		DocURLs:           r.DocURLs,
+		Internal:          r.Internal,
 	}
 }
 

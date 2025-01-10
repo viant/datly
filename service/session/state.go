@@ -406,7 +406,9 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		}
 
 		if options.shallReportNotAssignable() {
+			//if !ensureAssignable(parameter.Name, selector.Type(), valueType) {
 			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
+			//}
 		}
 
 		reflectValue := reflect.New(valueType) //TODO replace with fast xreflect copy
@@ -418,6 +420,52 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		}
 	}
 	return value, nil
+}
+
+func ensureAssignable(fieldName string, destFieldType reflect.Type, srcFieldType reflect.Type) bool {
+	switch destFieldType.Kind() {
+	case reflect.Slice:
+		destFieldType = destFieldType.Elem()
+		srcFieldType = srcFieldType.Elem()
+		if !ensureAssignable(fieldName, destFieldType, srcFieldType) {
+			return false
+		}
+	case reflect.Ptr:
+		destFieldType = destFieldType.Elem()
+		srcFieldType = srcFieldType.Elem()
+		if !ensureAssignable(fieldName, destFieldType, srcFieldType) {
+			return false
+		}
+	case reflect.Array:
+		if destFieldType.Len() != srcFieldType.Len() {
+			return false
+		}
+		destFieldType = destFieldType.Elem()
+		srcFieldType = srcFieldType.Elem()
+		if destFieldType != srcFieldType && !destFieldType.ConvertibleTo(srcFieldType) {
+			return false
+		}
+	case reflect.Struct:
+		var destStruct = xunsafe.NewStruct(srcFieldType)
+		var srcStruct = xunsafe.NewStruct(destFieldType)
+		if len(destStruct.Fields) != len(srcStruct.Fields) {
+			panic("swissMap and swiss.Map have different fields")
+		}
+		for i := range destStruct.Fields {
+			destFieldType := destStruct.Fields[i].Type
+			srcFieldType := srcStruct.Fields[i].Type
+			if destFieldType != srcFieldType {
+				if ok := ensureAssignable(destStruct.Fields[i].Name, destFieldType, srcFieldType); !ok {
+					return false
+				}
+			}
+		}
+	default:
+		if destFieldType != srcFieldType && !destFieldType.ConvertibleTo(srcFieldType) {
+			return false
+		}
+	}
+	return true
 }
 
 func validateSliceParameter(parameter *state.Parameter, sliceLen int) string {

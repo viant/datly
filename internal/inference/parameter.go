@@ -77,9 +77,18 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	default:
 		if p.Schema.Cardinality == state.Many {
 			builder.WriteString("[]")
-		}
 
-		builder.WriteString("*")
+			switch p.In.Kind {
+			case "query", "form", "header":
+			default:
+				if !p.IsRequired() {
+					builder.WriteString("*")
+				}
+			}
+
+		} else if !p.IsRequired() {
+			builder.WriteString("*")
+		}
 		builder.WriteString(p.Schema.DataType)
 	}
 	builder.WriteString(">(")

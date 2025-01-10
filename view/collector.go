@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/xdatly/handler"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"sync"
@@ -23,11 +24,11 @@ type Collector struct {
 	parent        *Collector
 	destValue     reflect.Value
 	appender      *xunsafe.Appender
-	valuePosition map[string]map[interface{}][]int //stores positions in main slice, based on _field name, indexed by _field value.
+	valuePosition map[string]map[string]map[interface{}][]int //stores positions in main slice, based on _field name, indexed by _field value.
 	types         map[string]*xunsafe.Type
 	relation      *Relation
-
-	values map[string]*[]interface{} //acts like a buffer. Output resolved with Resolve method can't be put to the value position map
+	dataSync      handler.DataSync
+	values        map[string]*[]interface{} //acts like a buffer. Output resolved with Resolve method can't be put to the value position map
 	// because value fetched from database was not scanned into yet. Putting value to the map as a key, would create key as a pointer to the zero value.
 
 	slice     *xunsafe.Slice
@@ -70,6 +71,7 @@ func (r *Collector) Clone() *Collector {
 		slice:           r.slice,
 		view:            r.view,
 		relations:       r.relations,
+		dataSync:        r.dataSync,
 		wg:              r.wg,
 		readAll:         r.readAll,
 		wgDelta:         r.wgDelta,
@@ -131,13 +133,17 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 
 // parentValuesPositions returns positions in the parent main slice by given column name
 // After first use, it is not possible to index new resolved column indexes by Resolve method
-func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]int {
-	result, ok := r.parent.valuePosition[columnName]
+func (r *Collector) parentValuesPositions(ns string, columnName string) map[interface{}][]int {
+	columnValues, ok := r.parent.valuePosition[ns]
 	if !ok {
-		r.indexParentPositions(columnName)
-		result = r.parent.valuePosition[columnName]
+		columnValues = map[string]map[interface{}][]int{}
+		r.parent.valuePosition[ns] = columnValues
 	}
-
+	result, ok := columnValues[columnName]
+	if !ok || len(result) == 0 {
+		r.indexParentPositions(ns, columnName)
+		result = columnValues[columnName]
+	}
 	return result
 }
 
@@ -148,7 +154,7 @@ func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHa
 	wg.Add(1)
 	return &Collector{
 		destValue:       reflect.ValueOf(ensuredDest),
-		valuePosition:   make(map[string]map[interface{}][]int),
+		valuePosition:   make(map[string]map[string]map[interface{}][]int),
 		appender:        slice.Appender(xunsafe.AsPointer(ensuredDest)),
 		slice:           slice,
 		view:            view,
@@ -156,6 +162,7 @@ func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHa
 		values:          make(map[string]*[]interface{}),
 		readAll:         readAll,
 		wg:              &wg,
+		dataSync:        handler.DataSync{},
 		wgDelta:         1,
 		viewMetaHandler: viewMetaHandler,
 	}
@@ -170,16 +177,18 @@ func ensureDest(dest interface{}, view *View) interface{} {
 	return dest
 }
 
-// VisitorFn creates visitor function
+// Visitor creates visitor function
 func (r *Collector) Visitor(ctx context.Context) VisitorFn {
 	relation := r.relation
 	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
 	for _, rel := range visitorRelations {
 		for _, item := range rel.On {
-			r.valuePosition[item.Column] = map[interface{}][]int{}
+			if _, ok := r.valuePosition[item.Namespace]; !ok {
+				r.valuePosition[item.Namespace] = map[string]map[interface{}][]int{}
+			}
+			r.valuePosition[item.Namespace][item.Column] = map[interface{}][]int{}
 		}
 	}
-
 	visitors := make([]VisitorFn, 1)
 	visitors[0] = r.valueIndexer(ctx, visitorRelations)
 
@@ -205,15 +214,18 @@ func (r *Collector) Visitor(ctx context.Context) VisitorFn {
 
 func (r *Collector) valueIndexer(ctx context.Context, visitorRelations []*Relation) func(value interface{}) error {
 	distinctRelations := make([]*Relation, 0)
-	presenceMap := map[string]bool{}
+	presenceMap := map[string]map[string]bool{}
 
 	for i := range visitorRelations {
 		for _, item := range visitorRelations[i].On {
-			if _, ok := presenceMap[item.Column]; ok {
+			if _, ok := presenceMap[item.Namespace]; !ok {
+				presenceMap[item.Namespace] = map[string]bool{}
+			}
+			if _, ok := presenceMap[item.Namespace][item.Column]; ok {
 				continue
 			}
 			distinctRelations = append(distinctRelations, visitorRelations[i])
-			presenceMap[item.Column] = true
+			presenceMap[item.Namespace][item.Column] = true
 		}
 	}
 
@@ -264,14 +276,21 @@ func (r *Collector) indexValueByRel(fieldValue interface{}, rel *Relation, count
 	}
 }
 
+// 6c0d0
 func (r *Collector) indexValueToPosition(rel *Relation, fieldValue interface{}, counter int) {
 
 	for _, item := range rel.On {
-		_, ok := r.valuePosition[item.Column][fieldValue]
+		columnValues, ok := r.valuePosition[item.Namespace]
 		if !ok {
-			r.valuePosition[item.Column][fieldValue] = []int{counter}
+			columnValues = map[string]map[interface{}][]int{}
+			r.valuePosition[item.Namespace] = columnValues
+		}
+
+		_, ok = columnValues[item.Column][fieldValue]
+		if !ok {
+			columnValues[item.Column][fieldValue] = []int{counter}
 		} else {
-			r.valuePosition[item.Column][fieldValue] = append(r.valuePosition[item.Column][fieldValue], counter)
+			columnValues[item.Column][fieldValue] = append(columnValues[item.Column][fieldValue], counter)
 		}
 	}
 }
@@ -292,7 +311,7 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 			aKey = io.NormalizeKey(aKey)
 
 			parentLink := relation.On[j]
-			valuePosition := r.parentValuesPositions(parentLink.Column)
+			valuePosition := r.parentValuesPositions(parentLink.Namespace, parentLink.Column)
 			positions, ok := valuePosition[aKey]
 			if !ok {
 				return nil
@@ -304,6 +323,81 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 		}
 		return nil
 	}
+
+}
+
+func (r *Collector) Parent() *Collector {
+	return r.parent
+}
+
+func (r *Collector) DataSync() handler.DataSync {
+	return r.dataSync
+}
+
+func (r *Collector) ParentRow(relation *Relation) func(value interface{}) (interface{}, error) {
+	if relation == nil {
+		return nil
+	}
+	links := relation.Of.On
+	var xType *xunsafe.Type
+	var values *[]interface{}
+	dest := r.parent.Dest()
+	destPtr := xunsafe.AsPointer(dest)
+	if len(links) == 1 {
+		keyField := links[0].xField
+		xType = r.types[links[0].Column]
+		column := relation.On[0].Column
+		namespace := relation.On[0].Namespace
+		return func(child interface{}) (interface{}, error) {
+			var key interface{}
+			if keyField != nil {
+				key = keyField.Interface(xunsafe.AsPointer(child))
+			} else {
+				key = xType.Deref((*values)[r.manyCounter])
+			}
+			valuePosition := r.parentValuesPositions(namespace, column)
+			key = io.NormalizeKey(key)
+			positions, ok := valuePosition[key]
+			if !ok {
+				return nil, fmt.Errorf(`key "%v" is not found`, key)
+			}
+			if len(positions) > 1 {
+				return nil, fmt.Errorf(`key "%v" has more than one value`, key)
+			}
+			parentItem := r.parent.slice.ValuePointerAt(destPtr, positions[0])
+			return parentItem, nil
+		}
+	}
+
+	return func(child interface{}) (interface{}, error) {
+		var key interface{}
+		var parentPosition int
+		for i, link := range links {
+			keyField := link.xField
+			if keyField == nil && xType == nil {
+				xType = r.types[link.Column]
+				values = r.values[link.Column]
+			}
+
+			if keyField != nil {
+				key = keyField.Interface(xunsafe.AsPointer(child))
+			} else {
+				key = xType.Deref((*values)[r.manyCounter])
+			}
+			valuePosition := r.parentValuesPositions(relation.On[i].Namespace, relation.On[i].Column)
+			key = io.NormalizeKey(key)
+			positions, ok := valuePosition[key]
+			if !ok {
+				return nil, fmt.Errorf(`key "%v" is not found`, key)
+			}
+			if len(positions) > 1 {
+				return nil, fmt.Errorf(`key "%v" has more than one value`, key)
+			}
+			parentPosition = positions[0]
+		}
+		parentItem := r.parent.slice.ValuePointerAt(destPtr, parentPosition)
+		return parentItem, nil
+	}
 }
 
 func (r *Collector) visitorMany(relation *Relation) func(value interface{}) error {
@@ -311,11 +405,11 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 	holderField := relation.holderField
 	var xType *xunsafe.Type
 	var values *[]interface{}
-	var key interface{}
 	dest := r.parent.Dest()
 	destPtr := xunsafe.AsPointer(dest)
 
 	return func(owner interface{}) error {
+		var key interface{}
 		for i, link := range links {
 			keyField := link.xField
 			if keyField == nil && xType == nil {
@@ -329,7 +423,7 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 				key = xType.Deref((*values)[r.manyCounter])
 				r.manyCounter++
 			}
-			valuePosition := r.parentValuesPositions(relation.On[i].Column)
+			valuePosition := r.parentValuesPositions(relation.On[i].Namespace, relation.On[i].Column)
 			key = io.NormalizeKey(key)
 			positions, ok := valuePosition[key]
 			if !ok {
@@ -370,22 +464,30 @@ func (r *Collector) NewItem() func() interface{} {
 	}
 }
 
-func (r *Collector) indexParentPositions(name string) {
+func (r *Collector) indexParentPositions(ns, name string) {
 	if r.parent == nil {
 		return
 	}
 
-	r.parent.indexPositions(name)
+	r.parent.indexPositions(ns, name)
 }
 
-func (r *Collector) indexPositions(name string) {
+func (r *Collector) indexPositions(ns, name string) {
 	values := r.values[name]
 	if values == nil {
 		return
 	}
 
 	xType := r.types[name]
-	r.valuePosition[name] = map[interface{}][]int{}
+	columnValues, ok := r.valuePosition[ns]
+	if !ok {
+		columnValues = map[string]map[interface{}][]int{}
+		r.valuePosition[ns] = columnValues
+	}
+
+	if _, ok := columnValues[name]; !ok {
+		columnValues[name] = map[interface{}][]int{}
+	}
 	for position, v := range *values {
 		if v == nil {
 			continue
@@ -393,12 +495,12 @@ func (r *Collector) indexPositions(name string) {
 
 		val := xType.Deref(v)
 		val = io.NormalizeKey(val)
-		_, ok := r.valuePosition[name][val]
+		_, ok := columnValues[name][val]
 		if !ok {
-			r.valuePosition[name][val] = make([]int, 0)
+			columnValues[name][val] = make([]int, 0)
 		}
 
-		r.valuePosition[name][val] = append(r.valuePosition[name][val], position)
+		columnValues[name][val] = append(columnValues[name][val], position)
 	}
 }
 
@@ -407,15 +509,19 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 	result := make([]*Collector, len(r.view.With))
 
 	counter := 0
-	for i := range r.view.With {
+
+	for i, rel := range r.view.With {
 		if selector != nil && len(selector.Columns) > 0 && !selector.Has(r.view.With[i].Holder) {
 			continue
 		}
+		lock := &sync.RWMutex{}
+		lock.Lock()
+		r.dataSync[rel.Holder] = lock
 
 		destPtr := reflect.New(r.view.With[i].Of.View.Schema.SliceType())
 		dest := reflect.MakeSlice(r.view.With[i].Of.View.Schema.SliceType(), 0, 1)
 		destPtr.Elem().Set(dest)
-		slice := r.view.With[i].Of.View.Schema.Slice()
+		slice := rel.Of.View.Schema.Slice()
 		wg := sync.WaitGroup{}
 
 		delta := 0
@@ -424,17 +530,17 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 		}
 		wg.Add(delta)
 
-		handler, err := r.ViewMetaHandler(r.view.With[i])
+		aHandler, err := r.ViewMetaHandler(r.view.With[i])
 		if err != nil {
 			return nil, err
 		}
-
 		result[counter] = &Collector{
 			parent:          r,
-			viewMetaHandler: handler,
+			viewMetaHandler: aHandler,
 			destValue:       destPtr,
+			dataSync:        handler.DataSync{},
 			appender:        slice.Appender(xunsafe.ValuePointer(&destPtr)),
-			valuePosition:   make(map[string]map[interface{}][]int),
+			valuePosition:   make(map[string]map[string]map[interface{}][]int),
 			types:           make(map[string]*xunsafe.Type),
 			values:          make(map[string]*[]interface{}),
 			slice:           slice,
@@ -476,7 +582,10 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 	return func(viewMeta interface{}) error {
 		for _, item := range rel.On {
 			if valuesPosition == nil {
-				valuesPosition = r.valuePosition[item.Column]
+				if r.valuePosition[item.Namespace] == nil {
+					r.valuePosition[item.Namespace] = map[string]map[interface{}][]int{}
+				}
+				valuesPosition = r.valuePosition[item.Namespace][item.Column]
 			}
 
 			viewMetaPtr := xunsafe.AsPointer(viewMeta)
@@ -522,6 +631,16 @@ func (r *Collector) ReadAll() bool {
 	return r.readAll
 }
 
+func (r *Collector) Unlock() {
+	if r.parent == nil {
+		return
+	}
+	if lock, ok := r.parent.dataSync[r.relation.Holder]; ok {
+		delete(r.parent.dataSync, r.relation.Holder)
+		lock.Unlock()
+	}
+}
+
 // MergeData merges View with Collectors produced via Relations
 // It is sufficient to call it on the most locators Collector to produce result
 func (r *Collector) MergeData() {
@@ -540,7 +659,7 @@ func (r *Collector) mergeToParent() {
 	links := r.relation.Of.On
 
 	for i, link := range links {
-		valuePositions := r.parentValuesPositions(r.relation.On[i].Column)
+		valuePositions := r.parentValuesPositions(r.relation.On[i].Namespace, r.relation.On[i].Column)
 		destPtr := xunsafe.AsPointer(r.DestPtr())
 		holderField := r.relation.holderField
 		parentSlice := r.parent.slice
@@ -635,7 +754,7 @@ outer:
 				continue
 			}
 
-			positions := r.parentValuesPositions(r.relation.On[k].Column)
+			positions := r.parentValuesPositions(r.relation.On[k].Namespace, r.relation.On[k].Column)
 			result := make([]interface{}, len(positions))
 			counter := 0
 			for key := range positions {
@@ -659,7 +778,6 @@ func (r *Collector) WaitIfNeeded() {
 
 func (r *Collector) Fetched() {
 	r.createTreeIfNeeded()
-
 	if r.wgDelta > 0 {
 		r.wg.Done()
 		r.wgDelta--

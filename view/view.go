@@ -44,22 +44,23 @@ type (
 	//View represents a View
 	View struct {
 		shared.Reference
-		Mode        Mode       `json:",omitempty"`
-		Connector   *Connector `json:",omitempty"`
-		Standalone  bool       `json:",omitempty"`
-		Name        string     `json:",omitempty"`
-		Description string     `json:",omitempty"`
-		Module      string     `json:",omitempty"`
-		Alias       string     `json:",omitempty"`
-		Table       string     `json:",omitempty"`
-		From        string     `json:",omitempty"`
-		FromURL     string     `json:",omitempty"`
-		Exclude     []string   `json:",omitempty"`
-		Columns     []*Column  `json:",omitempty"`
-		TypeName    string     `json:",omitempty"`
-		Tag         string     `json:",omitempty"`
-		Partitioned *Partitioned
-		Criteria    string `json:",omitempty"`
+		Mode          Mode       `json:",omitempty"`
+		Connector     *Connector `json:",omitempty"`
+		Standalone    bool       `json:",omitempty"`
+		Name          string     `json:",omitempty"`
+		Description   string     `json:",omitempty"`
+		Module        string     `json:",omitempty"`
+		Alias         string     `json:",omitempty"`
+		Table         string     `json:",omitempty"`
+		From          string     `json:",omitempty"`
+		FromURL       string     `json:",omitempty"`
+		Exclude       []string   `json:",omitempty"`
+		Columns       []*Column  `json:",omitempty"`
+		TypeName      string     `json:",omitempty"`
+		Tag           string     `json:",omitempty"`
+		PublishParent bool       `json:",omitempty"`
+		Partitioned   *Partitioned
+		Criteria      string `json:",omitempty"`
 
 		Selector *Config   `json:",omitempty"`
 		Template *Template `json:",omitempty"`
@@ -387,6 +388,9 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 		}
 		if viewTag.Match != "" {
 			refViewOptions = append(refViewOptions, WithMatchStrategy(viewTag.Match))
+		}
+		if viewTag.PublishParent {
+			refViewOptions = append(refViewOptions, WithViewPublishParent(viewTag.PublishParent))
 		}
 		if viewTag.CustomTag != "" {
 			refViewOptions = append(refViewOptions, WithViewTag(viewTag.CustomTag))
@@ -1037,6 +1041,8 @@ func (v *View) inherit(view *View) error {
 	setter.SetStringIfEmpty(&v.Alias, view.Alias)
 	setter.SetStringIfEmpty(&v.Table, view.Table)
 	setter.SetStringIfEmpty(&v.Module, view.Module)
+	setter.SetStringIfEmpty(&v.Tag, view.Tag)
+	setter.SetBoolIfFalse(&v.PublishParent, view.PublishParent)
 
 	setter.SetStringIfEmpty(&v.Description, view.Description)
 
@@ -1630,6 +1636,14 @@ func WithMatchStrategy(match string) Option {
 func WithViewTag(tag string) Option {
 	return func(v *View) error {
 		v.Tag = tag
+		return nil
+	}
+}
+
+// WithViewPublishParent creates an Option to publish parent
+func WithViewPublishParent(flag bool) Option {
+	return func(v *View) error {
+		v.PublishParent = flag
 		return nil
 	}
 }

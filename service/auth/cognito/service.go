@@ -16,6 +16,10 @@ func (s *Service) BasicAuth(ctx context.Context, user string, password string) (
 	return s.cognito.InitiateBasicAuth(user, password)
 }
 
+func (s *Service) ResetCredentials(ctx context.Context, email, newPassword string) error {
+	return s.cognito.ResetCredentials(email, newPassword)
+}
+
 func (s *Service) ReissueIdentityToken(ctx context.Context, refreshToken string, subject string) (*auth.Token, error) {
 	return s.cognito.ReissueIdentityToken(ctx, refreshToken, subject)
 }

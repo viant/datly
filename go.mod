@@ -30,7 +30,7 @@ require (
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
-	github.com/viant/scy v0.15.1
+	github.com/viant/scy v0.15.3
 	github.com/viant/sqlx v0.16.2
 	github.com/viant/structql v0.5.2
 	github.com/viant/toolbox v0.36.0
@@ -52,9 +52,9 @@ require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
-	github.com/viant/xdatly v0.5.4-0.20241231172300-89f1db57f47a
+	github.com/viant/xdatly v0.5.4-0.20250106215444-d757eac8abe0
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20241231172300-89f1db57f47a
+	github.com/viant/xdatly/handler v0.0.0-20250106215444-d757eac8abe0
 	github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1

@@ -14,6 +14,7 @@ import (
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/response"
 	"reflect"
 	"sync"
@@ -119,7 +120,9 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 	for i := range collectorChildren {
 		go func(i int, parent *view.View) {
-			defer s.afterRelationCompleted(wg, collector, &relationGroup)
+			defer func() {
+				s.afterRelationCompleted(wg, collector, &relationGroup)
+			}()
 			s.readAll(ctx, session, collectorChildren[i], wg, errorCollector, aView)
 		}(i, aView)
 	}
@@ -174,6 +177,7 @@ func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *view.Colle
 	if collectorFetchEmitted {
 		return
 	}
+	collector.Unlock()
 	collector.Fetched()
 }
 
@@ -317,7 +321,7 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 	return s.NewExecutionInfo(session, indexed, cacheStats, cacheErr), nil
 }
 
-func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session, partitions *view.Partitions) (parametrizedSQL *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
+func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session, partitions *view.Partition) (parametrizedSQL *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -414,6 +418,8 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	if err != nil {
 		return nil, err
 	}
+
+	var parentProvider func(value interface{}) (interface{}, error)
 	handler := func(row interface{}) error {
 		row, err = aView.UnwrapDatabaseType(ctx, row)
 		if err != nil {
@@ -421,6 +427,12 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		}
 		readData++
 		if fetcher, ok := row.(OnFetcher); ok {
+			if aView.PublishParent && parentProvider == nil {
+				parentProvider = collector.ParentRow(collector.Relation())
+			}
+			if ctx, err = s.getParentContext(ctx, row, collector, parentProvider); err != nil {
+				return err
+			}
 			if err = fetcher.OnFetch(ctx); err != nil {
 				return err
 			}
@@ -428,6 +440,23 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		return visitor(row)
 	}
 	return s.queryWithHandler(ctx, session, aView, collector, columnInMatcher, parametrizedSQL, db, handler, &readData)
+}
+
+func (s *Service) getParentContext(ctx context.Context, row interface{}, collector *view.Collector, parentProvider func(value interface{}) (interface{}, error)) (context.Context, error) {
+	if parentProvider == nil {
+		return ctx, nil
+	}
+	parentRecord, err := parentProvider(row)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get parentRecord row: %w", err)
+	}
+	if parentRecord == nil {
+		return ctx, nil
+	}
+	parentKey := reflect.TypeOf(parentRecord)
+	fetchContext := context.WithValue(ctx, handler.DataSyncKey, collector.Parent().DataSync())
+	fetchContext = context.WithValue(fetchContext, parentKey, parentRecord)
+	return fetchContext, nil
 }
 
 func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, columnInMatcher *cache.ParmetrizedQuery, parametrizedSQL *cache.ParmetrizedQuery, db *sql.DB, handler func(row interface{}) error, readData *int) ([]*response.SQLExecution, error) {
@@ -486,29 +515,29 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 	}
 	partitioner := partitioned.Partitioner()
 	wg := &sync.WaitGroup{}
-	partitions := partitioner.Partitions(ctx, db, aView)
-	repeat := max(1, len(partitions.Partitions))
+	var err error
+	partitions, err := partitioner.Partitions(ctx, db, aView)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get partition: %w", err)
+	}
+
 	var executions []*response.SQLExecution
 	var mux sync.Mutex
-	var err error
+
+	var parentProvider func(value interface{}) (interface{}, error)
 
 	var rateLimit = make(chan bool, concurrency)
-	var collectors = make([]*view.Collector, repeat)
-	for i := 0; i < repeat; i++ {
-		clone := *partitions
+	var collectors = make([]*view.Collector, len(partitions))
+	for i, partition := range partitions {
 		wg.Add(1)
 		rateLimit <- true
-		go func(index int, partitions *view.Partitions) {
+		go func(i int, partition *view.Partition) {
 			defer func() {
 				wg.Done()
 				<-rateLimit
 			}()
-			if index < len(partitions.Partitions) {
-				partitions.Partition = partitions.Partitions[index]
-			}
-
-			collectors[index] = collector.Clone()
-			parametrizedSQL, columnInMatcher, e := s.buildParametrizedSQL(ctx, aView, selector, batchData, collectors[index], session, partitions)
+			collectors[i] = collector.Clone()
+			parametrizedSQL, columnInMatcher, e := s.buildParametrizedSQL(ctx, aView, selector, batchData, collectors[i], session, partition)
 			readData := 0
 			handler := func(row interface{}) error {
 				row, err = aView.UnwrapDatabaseType(ctx, row)
@@ -517,13 +546,20 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 				}
 				readData++
 				if fetcher, ok := row.(OnFetcher); ok {
+					if aView.PublishParent && parentProvider == nil {
+						parentProvider = collector.ParentRow(collector.Relation())
+					}
+
+					if ctx, err = s.getParentContext(ctx, row, collector, parentProvider); err != nil {
+						return err
+					}
 					if err = fetcher.OnFetch(ctx); err != nil {
 						return err
 					}
 				}
 				return nil
 			}
-			exec, e := s.queryWithHandler(ctx, session, aView, collectors[index], columnInMatcher, parametrizedSQL, db, handler, &readData)
+			exec, e := s.queryWithHandler(ctx, session, aView, collectors[i], columnInMatcher, parametrizedSQL, db, handler, &readData)
 			mux.Lock()
 			if exec != nil {
 				executions = append(executions, exec...)
@@ -532,7 +568,7 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 			if e != nil {
 				err = e
 			}
-		}(i, &clone)
+		}(i, partition)
 		if err != nil {
 			break
 		}

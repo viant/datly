@@ -124,8 +124,11 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 				continue
 			}
 			objPtr = stringifier.indirectXField.ValuePointer(objPtr)
-			if !stringifier.omitEmpty && strings.Contains(stringifier.indirectXField.Tag.Get("json"), "omitempty") {
-				stringifier.omitEmpty = true
+			if !stringifier.omitEmpty {
+				holderJsonTag, ok := stringifier.indirectXField.Tag.Lookup("json")
+				if ok && strings.Contains(holderJsonTag, "omitempty") {
+					stringifier.omitEmpty = true
+				}
 			}
 			if objPtr == nil {
 				isNil = true
@@ -144,7 +147,7 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 			}
 			isZeroVal = isZeroValue(objPtr, stringifier, value)
 		}
-		if stringifier.omitEmpty && isZeroVal {
+		if stringifier.omitEmpty && (isZeroVal || isNil) {
 			continue
 		}
 		if prevLen != sb.Len() {
@@ -161,6 +164,11 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 			sb.WriteString(null)
 			continue
 		}
+		if isZeroVal && stringifier.xField.Type.Kind() == reflect.String {
+			sb.WriteString(`""`)
+			continue
+		}
+
 		fieldValue := stringifier.xField.Pointer(objPtr)
 		if fieldValue == nil {
 			sb.WriteString(null)

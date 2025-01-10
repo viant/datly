@@ -25,6 +25,7 @@ type (
 		Limit                  *int
 		Match                  string
 		Batch                  int
+		PublishParent          bool
 		PartitionerType        string
 		PartitionedConcurrency int
 	}
@@ -39,6 +40,8 @@ func (t *Tag) updateView(key string, value string) error {
 		tag.Name = strings.TrimSpace(value)
 	case "match":
 		tag.Match = strings.TrimSpace(value)
+	case "publishparent":
+		tag.PublishParent = strings.TrimSpace(value) == "true"
 	case "batch":
 		var err error
 		tag.Batch, err = strconv.Atoi(value)
@@ -69,7 +72,7 @@ func (t *Tag) updateView(key string, value string) error {
 			tag.Parameters = append(tag.Parameters, strings.TrimSpace(parameter))
 		}
 	default:
-		return fmt.Errorf("unsupported view tag option: %s", key)
+		return fmt.Errorf("unsupported view tag option: '%s'", key)
 	}
 	return nil
 }
@@ -94,6 +97,9 @@ func (v *View) Tag() *tags.Tag {
 	appendNonEmpty(builder, "table", v.Table)
 	if v.Batch > 0 {
 		appendNonEmpty(builder, "batch", strconv.Itoa(v.Batch))
+	}
+	if v.PublishParent {
+		appendNonEmpty(builder, "publishParent", strconv.FormatBool(v.PublishParent))
 	}
 	appendNonEmpty(builder, "connector", v.Connector)
 	appendNonEmpty(builder, "match", v.Match)

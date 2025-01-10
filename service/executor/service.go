@@ -196,9 +196,9 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 		return err
 	}
 
-	if !executable.IsLast {
-		return nil
-	}
+	//if !executable.IsLast {
+	//	return nil
+	//}
 
 	if !sess.canBeBatchedGlobally {
 		options, err := sess.tx.PrepareTxOptions()
