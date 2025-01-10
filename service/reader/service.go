@@ -321,7 +321,7 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 	return s.NewExecutionInfo(session, indexed, cacheStats, cacheErr), nil
 }
 
-func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session, partitions *view.Partitions) (parametrizedSQL *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
+func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session, partitions *view.Partition) (parametrizedSQL *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -515,31 +515,29 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 	}
 	partitioner := partitioned.Partitioner()
 	wg := &sync.WaitGroup{}
-	partitions := partitioner.Partitions(ctx, db, aView)
-	repeat := max(1, len(partitions.Partitions))
+	var err error
+	partitions, err := partitioner.Partitions(ctx, db, aView)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get partition: %w", err)
+	}
+
 	var executions []*response.SQLExecution
 	var mux sync.Mutex
-	var err error
 
 	var parentProvider func(value interface{}) (interface{}, error)
 
 	var rateLimit = make(chan bool, concurrency)
-	var collectors = make([]*view.Collector, repeat)
-	for i := 0; i < repeat; i++ {
-		clone := *partitions
+	var collectors = make([]*view.Collector, len(partitions))
+	for i, partition := range partitions {
 		wg.Add(1)
 		rateLimit <- true
-		go func(index int, partitions *view.Partitions) {
+		go func(i int, partition *view.Partition) {
 			defer func() {
 				wg.Done()
 				<-rateLimit
 			}()
-			if index < len(partitions.Partitions) {
-				partitions.Partition = partitions.Partitions[index]
-			}
-
-			collectors[index] = collector.Clone()
-			parametrizedSQL, columnInMatcher, e := s.buildParametrizedSQL(ctx, aView, selector, batchData, collectors[index], session, partitions)
+			collectors[i] = collector.Clone()
+			parametrizedSQL, columnInMatcher, e := s.buildParametrizedSQL(ctx, aView, selector, batchData, collectors[i], session, partition)
 			readData := 0
 			handler := func(row interface{}) error {
 				row, err = aView.UnwrapDatabaseType(ctx, row)
@@ -561,7 +559,7 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 				}
 				return nil
 			}
-			exec, e := s.queryWithHandler(ctx, session, aView, collectors[index], columnInMatcher, parametrizedSQL, db, handler, &readData)
+			exec, e := s.queryWithHandler(ctx, session, aView, collectors[i], columnInMatcher, parametrizedSQL, db, handler, &readData)
 			mux.Lock()
 			if exec != nil {
 				executions = append(executions, exec...)
@@ -570,7 +568,7 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 			if e != nil {
 				err = e
 			}
-		}(i, &clone)
+		}(i, partition)
 		if err != nil {
 			break
 		}

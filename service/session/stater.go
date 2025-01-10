@@ -31,7 +31,8 @@ func (s *Session) ValuesOf(ctx context.Context, any interface{}) (map[string]int
 
 func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Option) (err error) {
 	destType := reflect.TypeOf(dest)
-	stateType, ok := s.Types.Lookup(types.EnsureStruct(destType))
+	sType := types.EnsureStruct(destType)
+	stateType, ok := s.Types.Lookup(sType)
 	if !ok {
 		if stateType, err = state.NewType(
 			state.WithSchema(state.NewSchema(destType)),

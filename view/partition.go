@@ -26,7 +26,7 @@ func (p *Partitioned) Partitioner() Partitioner {
 
 // Partitioner represents a partitioner
 type Partitioner interface {
-	Partitions(ctx context.Context, db *sql.DB, aView *View) *Partitions
+	Partitions(ctx context.Context, db *sql.DB, aView *View) (Partitions, error)
 }
 
 // ReducerProvider represents a reducer provider
@@ -39,13 +39,15 @@ type Reducer interface {
 	Reduce(slice interface{}) interface{}
 }
 
-// Partitions represents a partitioned view
-type Partitions struct {
-	Table      string
-	Expression string
-	Partitions [][]interface{}
-	Partition  []interface{}
+// Partition represents a partitioned view
+type Partition struct {
+	Table        string
+	Expression   string
+	Placeholders []interface{}
 }
+
+// Partitions represents a partitioned view
+type Partitions []*Partition
 
 // NewPartitioned creates a new partitioned view
 func NewPartitioned(paritioner Partitioner, concurrency int, args ...string) *Partitioned {
