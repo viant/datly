@@ -62,10 +62,17 @@ func (vc *Context) WithValue(key interface{}, value interface{}) context.Context
 	if key == nil {
 		return vc
 	}
+
 	if t, ok := key.(reflect.Type); ok {
+		if _, exists := vc.types[t]; exists {
+			ret := NewContext(vc)
+			ret.types[t] = value
+			return ret
+		}
 		vc.types[t] = value
 		return vc
 	}
+
 	switch key {
 	case state.DBProviderKey:
 		vc.dbProvider = value.(state.DBProvider)
