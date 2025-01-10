@@ -79,6 +79,8 @@ func (c *Components) Init(ctx context.Context) error {
 		}
 	}
 
+	c.ensureNamedViewType(ctx, embedFs, aComponent)
+
 	if err = c.Resource.Init(ctx, options...); err != nil {
 		return err
 	}
@@ -95,6 +97,23 @@ func (c *Components) Init(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (c *Components) ensureNamedViewType(ctx context.Context, embedFs *embed.FS, aComponent *Component) {
+	inCodeGeneration := codegen.IsGeneratorContext(ctx)
+	if rType := c.ReflectType(c.Components[0].Output.Type.Schema); rType != nil && !inCodeGeneration {
+		if ioType, _ := state.NewType(state.WithSchema(state.NewSchema(rType)), state.WithFS(embedFs), state.WithResource(view.NewResources(c.Resource, aComponent.View))); ioType != nil {
+			if parameter := ioType.Parameters.LookupByLocation(state.KindOutput, "view"); parameter != nil {
+				viewName := c.Components[0].View.Ref
+				if aView, _ := c.Resource.View(viewName); aView != nil {
+					registry := c.Resource.TypeRegistry()
+					viewType := parameter.Schema.CompType()
+					aView.Schema.SetType(viewType)
+					registry.Register(aView.Schema.Name, xreflect.WithReflectType(parameter.Schema.CompType()), xreflect.WithPackage(parameter.Schema.Package))
+				}
+			}
+		}
+	}
 }
 
 func (c *Components) ReflectType(schema *state.Schema) reflect.Type {
@@ -177,7 +196,7 @@ func (c *Components) updateIOTypeDependencies(ctx context.Context, ioType *state
 			parameter.Schema.SetType(xField.Type)
 		}
 
-		if param := c.Resource.Parameters.Lookup(parameter.Name); param == nil && isInput {
+		if param := c.Resource.Parameters.Lookup(parameter.Name); param != nil && isInput {
 			c.Resource.Parameters.Append(parameter)
 			if parameter.In.Kind == state.KindConst {
 				parameter.Value = param.Value

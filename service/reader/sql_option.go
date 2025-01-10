@@ -7,14 +7,14 @@ import (
 
 type (
 	builderOptions struct {
-		view       *view.View
-		statelet   *view.Statelet
-		batchData  *view.BatchData
-		relation   *view.Relation
-		parent     *expand.ViewContext
-		expander   expand.Expander
-		exclude    *Exclude
-		partitions *view.Partitions
+		view      *view.View
+		statelet  *view.Statelet
+		batchData *view.BatchData
+		relation  *view.Relation
+		parent    *expand.ViewContext
+		expander  expand.Expander
+		exclude   *Exclude
+		partition *view.Partition
 	}
 
 	Exclude struct {
@@ -74,10 +74,10 @@ func WithBuilderParent(parent *expand.ViewContext) BuilderOption {
 	}
 }
 
-func WithBuilderPartitions(partitions *view.Partitions) BuilderOption {
+func WithBuilderPartitions(partition *view.Partition) BuilderOption {
 	return func(o *builderOptions) {
-		if partitions != nil {
-			o.partitions = partitions
+		if partition != nil {
+			o.partition = partition
 		}
 	}
 

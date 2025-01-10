@@ -475,7 +475,6 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 	//}
 
 	aView := &viewlet.View.View
-
 	resource.Resource.Views = append(resource.Resource.Views, aView)
 	viewlet.View.GenerateFiles(baseRuleURL, ruleName, &s.Repository.Files, s.Repository.Substitutes.Merge())
 	if viewlet.TypeDefinition != nil {
