@@ -77,7 +77,14 @@ func (vc *Context) WithValue(key interface{}, value interface{}) context.Context
 	case state.DBProviderKey:
 		vc.dbProvider = value.(state.DBProvider)
 	case handler.InputKey:
+
+		if vc.input != nil {
+			ret := NewContext(vc)
+			ret.input = value
+			return ret
+		}
 		vc.input = value
+
 	case handler.DataSyncKey:
 		vc.dataSync = value.(*handler.DataSync)
 	case async.JobKey:
