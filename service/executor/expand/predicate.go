@@ -2,9 +2,11 @@ package expand
 
 import (
 	"context"
+	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+
 	"strings"
 )
 
@@ -12,7 +14,6 @@ var PredicateState predicateState = "state"
 var PredicateCtx predicateCtx = "ctx"
 
 type predicateCtx string
-type predicateHas string
 type predicateState string
 
 type (
@@ -121,8 +122,8 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 	result := &strings.Builder{}
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, PredicateCtx, p.ctx)
-	ctx = context.WithValue(ctx, PredicateState, p.state)
+	ctx = vcontext.WithValue(ctx, PredicateCtx, p.ctx)
+	ctx = vcontext.WithValue(ctx, PredicateState, p.state)
 
 	for _, predicateConfig := range p.config {
 		if predicateConfig.Group != group {

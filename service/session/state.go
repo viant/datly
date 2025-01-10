@@ -39,8 +39,6 @@ type (
 		Route   *xhttp.Route
 		Request *http.Request
 	}
-
-	contextKey string
 )
 
 func (s *Session) SetView(view *view.View) {
@@ -55,7 +53,7 @@ func (s *Session) Value(ctx context.Context, key string) (interface{}, bool, err
 	return s.lookupValue(ctx, parameter, s.Options.Indirect(true))
 }
 
-const _contextKey = contextKey("session")
+var _contextKey = reflect.TypeOf(&Session{})
 
 // Context returns session context
 func Context(ctx context.Context) *Session {

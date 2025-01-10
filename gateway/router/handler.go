@@ -24,10 +24,12 @@ import (
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
+	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
+
 	"io"
 	"net/http"
 	"runtime/debug"
@@ -146,7 +148,7 @@ func (r *Handler) Serve(serverPath string) error {
 func (r *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx := context.Background()
 	execContext := exec.NewContext()
-	ctx = context.WithValue(ctx, exec.ContextKey, execContext)
+	ctx = vcontext.WithValue(ctx, exec.ContextKey, execContext)
 	r.HandleRequest(ctx, writer, request)
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
+	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
@@ -454,8 +455,8 @@ func (s *Service) getParentContext(ctx context.Context, row interface{}, collect
 		return ctx, nil
 	}
 	parentKey := reflect.TypeOf(parentRecord)
-	fetchContext := context.WithValue(ctx, handler.DataSyncKey, collector.Parent().DataSync())
-	fetchContext = context.WithValue(fetchContext, parentKey, parentRecord)
+	fetchContext := vcontext.WithValue(ctx, handler.DataSyncKey, collector.Parent().DataSync())
+	fetchContext = vcontext.WithValue(fetchContext, parentKey, parentRecord)
 	return fetchContext, nil
 }
 
