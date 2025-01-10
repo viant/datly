@@ -64,27 +64,14 @@ func (vc *Context) WithValue(key interface{}, value interface{}) context.Context
 	}
 
 	if t, ok := key.(reflect.Type); ok {
-		if _, exists := vc.types[t]; exists {
-			ret := NewContext(vc)
-			ret.types[t] = value
-			return ret
-		}
 		vc.types[t] = value
 		return vc
 	}
-
 	switch key {
 	case state.DBProviderKey:
 		vc.dbProvider = value.(state.DBProvider)
 	case handler.InputKey:
-
-		if vc.input != nil {
-			ret := NewContext(vc)
-			ret.input = value
-			return ret
-		}
 		vc.input = value
-
 	case handler.DataSyncKey:
 		vc.dataSync = value.(*handler.DataSync)
 	case async.JobKey:
