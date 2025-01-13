@@ -229,9 +229,11 @@ func NewType(packageName string, name string, rType reflect.Type) (*Type, error)
 	rType = types.EnsureStruct(rType)
 	if rType.NumField() == 1 {
 		wrapperField := rType.Field(0)
-		typeName, _ := wrapperField.Tag.Lookup("typeName")
+		if canidateType, _ := wrapperField.Tag.Lookup("typeName"); canidateType != "" {
+			name = canidateType
+		}
 		structType := types.EnsureStruct(wrapperField.Type)
-		return NewType(packageName, typeName, structType)
+		return NewType(packageName, name, structType)
 	}
 
 	for i := 0; i < rType.NumField(); i++ {
