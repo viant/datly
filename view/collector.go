@@ -635,8 +635,13 @@ func (r *Collector) Unlock() {
 	if r.parent == nil {
 		return
 	}
-	if lock, ok := r.parent.dataSync[r.relation.Holder]; ok {
+	r.parent.mutex.Lock()
+	lock, ok := r.parent.dataSync[r.relation.Holder]
+	if ok {
 		delete(r.parent.dataSync, r.relation.Holder)
+	}
+	r.parent.mutex.Unlock()
+	if ok {
 		lock.Unlock()
 	}
 }
