@@ -48,9 +48,11 @@ func (vc *Context) Value(key interface{}) interface{} {
 	}
 	switch key {
 	case state.DBProviderKey:
+		if vc.dbProvider == nil {
+			return nil
+		}
 		return vc.dbProvider
 	case handler.InputKey:
-
 		return vc.input
 	case handler.DataSyncKey:
 		return vc.dataSync

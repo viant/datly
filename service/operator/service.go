@@ -133,7 +133,8 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 		info = infoValue.(*exec.Context)
 	}
 
-	if ctx.Value(hstate.DBProviderKey) == nil {
+	provider := ctx.Value(hstate.DBProviderKey)
+	if provider == nil {
 		if aView := aComponent.View; aView != nil {
 			if res := aComponent.View.GetResource(); res != nil {
 				dbProvider := hstate.DBProvider(aView.DBProvider)
