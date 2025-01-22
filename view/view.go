@@ -119,7 +119,7 @@ type (
 )
 
 // ContextKey view context key
-var ContextKey = contextKey("view")
+var ContextKey = reflect.TypeOf(&View{})
 
 func Context(ctx context.Context) *View {
 	if ctx == nil {

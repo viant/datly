@@ -175,6 +175,15 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 
 	inputState := xreflect.GenerateStruct(componentName+"Input", inputType, options...)
 	builder.WriteString(inputState)
+
+	if withEmbed {
+		embedderCode := fmt.Sprintf(`
+	func (i *%vInput) EmbedFS() *embed.FS {
+		return &%vFS
+	}`, componentName, componentName)
+		builder.WriteString(embedderCode)
+	}
+
 	result := builder.String()
 	result = c.View.Resource().ReverseSubstitutes(result)
 	return result
@@ -227,6 +236,7 @@ func (c *Component) embedTemplate(embedURI string, componentName string) string 
 	return fmt.Sprintf(`
 //go:embed %v/*.sql
 var %vFS embed.FS
+
 
 `, embedURI, componentName)
 }

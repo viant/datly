@@ -27,7 +27,7 @@ type Collector struct {
 	valuePosition map[string]map[string]map[interface{}][]int //stores positions in main slice, based on _field name, indexed by _field value.
 	types         map[string]*xunsafe.Type
 	relation      *Relation
-	dataSync      handler.DataSync
+	dataSync      *handler.DataSync
 	values        map[string]*[]interface{} //acts like a buffer. Output resolved with Resolve method can't be put to the value position map
 	// because value fetched from database was not scanned into yet. Putting value to the map as a key, would create key as a pointer to the zero value.
 
@@ -162,7 +162,7 @@ func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHa
 		values:          make(map[string]*[]interface{}),
 		readAll:         readAll,
 		wg:              &wg,
-		dataSync:        handler.DataSync{},
+		dataSync:        handler.NewDataSync(),
 		wgDelta:         1,
 		viewMetaHandler: viewMetaHandler,
 	}
@@ -330,7 +330,7 @@ func (r *Collector) Parent() *Collector {
 	return r.parent
 }
 
-func (r *Collector) DataSync() handler.DataSync {
+func (r *Collector) DataSync() *handler.DataSync {
 	return r.dataSync
 }
 
@@ -516,7 +516,7 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 		}
 		lock := &sync.RWMutex{}
 		lock.Lock()
-		r.dataSync[rel.Holder] = lock
+		r.dataSync.Put(rel.Holder)
 
 		destPtr := reflect.New(r.view.With[i].Of.View.Schema.SliceType())
 		dest := reflect.MakeSlice(r.view.With[i].Of.View.Schema.SliceType(), 0, 1)
@@ -538,7 +538,7 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 			parent:          r,
 			viewMetaHandler: aHandler,
 			destValue:       destPtr,
-			dataSync:        handler.DataSync{},
+			dataSync:        handler.NewDataSync(),
 			appender:        slice.Appender(xunsafe.ValuePointer(&destPtr)),
 			valuePosition:   make(map[string]map[string]map[interface{}][]int),
 			types:           make(map[string]*xunsafe.Type),
@@ -635,15 +635,8 @@ func (r *Collector) Unlock() {
 	if r.parent == nil {
 		return
 	}
-	r.parent.mutex.Lock()
-	lock, ok := r.parent.dataSync[r.relation.Holder]
-	if ok {
-		delete(r.parent.dataSync, r.relation.Holder)
-	}
-	r.parent.mutex.Unlock()
-	if ok {
-		lock.Unlock()
-	}
+	r.parent.dataSync.Delete(r.relation.Holder)
+
 }
 
 // MergeData merges View with Collectors produced via Relations
