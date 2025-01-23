@@ -111,18 +111,25 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 	}
 
 	inputType := input.Type()
-	if inputType.Kind() == reflect.Ptr {
+	if inputType != nil && inputType.Kind() == reflect.Ptr {
 		inputType = inputType.Elem()
 	}
-
 	inputTypeName := c.Input.Type.Schema.Name
-	if inputTypeName != "" && len(c.Input.Type.Parameters) > 0 { //to allow input dql changes, rebuild input from parameters
+	if len(c.Input.Type.Parameters) > 0 { //to al
+		if inputType != nil {
+			for _, parameter := range c.Input.Type.Parameters {
+				if aField, ok := inputType.FieldByName(parameter.Name); ok {
+					parameter.Schema.SetType(aField.Type)
+				}
+			}
+		}
+		// low input dql changes, rebuild input from parameters
 		if rawType, _ := c.Input.Type.Parameters.ReflectType(c.Input.Type.Package, registry.Lookup, state.WithSetMarker(), state.WithTypeName(inputType.Name())); rawType != nil {
 			inputType = rawType
 		}
 	}
 
-	inputType = types.InlineStruct(input.Type(), func(field *reflect.StructField) {
+	inputType = types.InlineStruct(inputType, func(field *reflect.StructField) {
 		if markerTag := field.Tag.Get(structology.SetMarkerTag); markerTag != "" {
 			marketTypeName := inputTypeName + "Has"
 			field.Tag = reflect.StructTag(string(field.Tag) + " typeName:\"" + marketTypeName + "\"")
