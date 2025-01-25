@@ -56,6 +56,9 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 				execCtx.StatusCode = actual.Code
 			}
 		}
+		if statusCoder, ok := err.(response.StatusCoder); ok {
+			execCtx.StatusCode = statusCoder.StatusCode()
+		}
 
 	}
 	if !aComponent.Output.Type.Parameters.HasErrorParameter() {
