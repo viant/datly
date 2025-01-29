@@ -108,6 +108,9 @@ func (c *Components) ensureNamedViewType(ctx context.Context, embedFs *embed.FS,
 				if aView, _ := c.Resource.View(viewName); aView != nil {
 					registry := c.Resource.TypeRegistry()
 					viewType := parameter.Schema.CompType()
+					if aView.Schema == nil {
+						aView.Schema = state.NewSchema(viewType)
+					}
 					aView.Schema.SetType(viewType)
 					registry.Register(aView.Schema.Name, xreflect.WithReflectType(parameter.Schema.CompType()), xreflect.WithPackage(parameter.Schema.Package))
 				}

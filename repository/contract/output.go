@@ -69,7 +69,15 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputType *state.Ty
 		pkg = o.Type.Package
 	}
 	o.Type.Parameters.FlagOutput()
-	if err = o.Type.Init(state.WithResource(aView.Resource()), state.WithPackage(pkg)); err != nil {
+	var options = []state.Option{
+		state.WithResource(aView.Resource()),
+		state.WithPackage(pkg),
+	}
+	if embeder := aView.GetResource().FSEmbedder; embeder != nil && embeder.EmbedFS() != nil {
+		options = append(options, state.WithFS(embeder.EmbedFS()))
+	}
+
+	if err = o.Type.Init(options...); err != nil {
 		return fmt.Errorf("failed to initialise output: %w", err)
 	}
 
