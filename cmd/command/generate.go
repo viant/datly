@@ -37,6 +37,7 @@ func (s *Service) Generate(ctx context.Context, options *options.Options) error 
 }
 
 func (s *Service) generate(ctx context.Context, options *options.Options) error {
+
 	ruleOption := options.Rule()
 	if _, err := s.loadPlugin(ctx, options); err != nil {
 		return err

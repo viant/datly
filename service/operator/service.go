@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
+	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/structology"
@@ -44,7 +45,7 @@ func (s *Service) Operate(ctx context.Context, aSession *session.Session, aCompo
 // HandleError processes output with error
 func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aComponent *repository.Component, err error) (interface{}, error) {
 
-	ctx = context.WithValue(ctx, exec.ErrorKey, err)
+	ctx = vcontext.WithValue(ctx, exec.ErrorKey, err)
 	ctx = aComponent.View.Context(ctx)
 	execCtx := exec.GetContext(ctx)
 	if execCtx != nil {
@@ -54,6 +55,9 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 			case *googleapi.Error:
 				execCtx.StatusCode = actual.Code
 			}
+		}
+		if statusCoder, ok := err.(response.StatusCoder); ok {
+			execCtx.StatusCode = statusCoder.StatusCode()
 		}
 
 	}
@@ -120,23 +124,24 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (int
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
 
 	ctx = codec.NewCriteriaBuilder(ctx, reader.New())
-	ctx = context.WithValue(ctx, view.ContextKey, aComponent.View)
+	ctx = vcontext.WithValue(ctx, view.ContextKey, aComponent.View)
 	ctx = aSession.Context(ctx, false)
 	var info *exec.Context
 	infoValue := ctx.Value(exec.ContextKey)
 	if infoValue == nil {
 		info = exec.NewContext()
-		ctx = context.WithValue(ctx, exec.ContextKey, info)
+		ctx = vcontext.WithValue(ctx, exec.ContextKey, info)
 
 	} else {
 		info = infoValue.(*exec.Context)
 	}
 
-	if ctx.Value(hstate.DBProviderKey) == nil {
+	provider := ctx.Value(hstate.DBProviderKey)
+	if provider == nil {
 		if aView := aComponent.View; aView != nil {
 			if res := aComponent.View.GetResource(); res != nil {
 				dbProvider := hstate.DBProvider(aView.DBProvider)
-				ctx = context.WithValue(ctx, hstate.DBProviderKey, dbProvider)
+				ctx = vcontext.WithValue(ctx, hstate.DBProviderKey, dbProvider)
 			}
 		}
 	}
@@ -188,9 +193,9 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 				}
 			}
 			if !hasInputKey {
-				ctx = context.WithValue(ctx, xhandler.InputKey, anInput)
+				ctx = vcontext.WithValue(ctx, xhandler.InputKey, anInput)
 			}
-			ctx = context.WithValue(ctx, reflect.TypeOf(anInput), anInput)
+			ctx = vcontext.WithValue(ctx, reflect.TypeOf(anInput), anInput)
 		}
 	}
 	return ctx, nil
@@ -268,7 +273,7 @@ func (s *Service) ensureAsyncContext(ctx context.Context, aSession *session.Sess
 		}
 	}
 	info.AppendJob(job)
-	return context.WithValue(ctx, async.JobKey, job), nil
+	return vcontext.WithValue(ctx, async.JobKey, job), nil
 }
 
 func (s *Service) publishEvent(ctx context.Context, asyncModule *rasync.Config, job *async.Job) error {

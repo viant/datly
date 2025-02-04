@@ -249,7 +249,7 @@ func (p *Parameter) SyncObject() {
 }
 
 // TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
-func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS, imps xreflect.GoImports) (*Parameter, error) {
+func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS, imps xreflect.GoImports, pkg string) (*Parameter, error) {
 	//SQL := extractSQL(field)
 	if field.Tag == nil {
 		return nil, nil
@@ -319,7 +319,13 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	} else {
 
 		aType := xreflect.NewType(fieldType, xreflect.WithGoImports(imps))
-		_, _ = types.LookupType(aType) //to populate package path
+		rType, _ := types.LookupType(aType) //to populate package path
+		if rType == nil && pkg != "" {
+			aType.Package = pkg
+			if rType, _ = types.LookupType(aType); rType != nil {
+				fieldType = pkg + "." + fieldType
+			}
+		}
 		param.Schema = &state.Schema{DataType: fieldType, PackagePath: aType.PackagePath}
 	}
 

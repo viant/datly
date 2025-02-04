@@ -3,12 +3,12 @@ package openapi3
 import (
 	"context"
 	"fmt"
+	vcontext "github.com/viant/datly/view/context"
+	"reflect"
 	"strings"
 )
 
-type sessionKey string
-
-var _sessionKey = sessionKey("session")
+var sessionKey = reflect.TypeOf(&Session{})
 
 type (
 	Session struct {
@@ -306,7 +306,7 @@ func NewSession() *Session {
 
 // LookupSession lookup session
 func LookupSession(ctx context.Context) *Session {
-	value := ctx.Value(_sessionKey)
+	value := ctx.Value(sessionKey)
 	if value == nil {
 		return nil
 	}
@@ -315,5 +315,5 @@ func LookupSession(ctx context.Context) *Session {
 
 // NewSessionContext creates a session context
 func NewSessionContext(ctx context.Context) context.Context {
-	return context.WithValue(ctx, _sessionKey, NewSession())
+	return vcontext.WithValue(ctx, sessionKey, NewSession())
 }

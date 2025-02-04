@@ -10,7 +10,7 @@ require (
 	github.com/francoispqt/gojay v1.2.13
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/goccy/go-json v0.10.2 // indirect
-	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
+	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
 	github.com/google/gops v0.3.23
 	github.com/google/uuid v1.6.0
 	github.com/jessevdk/go-flags v1.5.0
@@ -30,7 +30,7 @@ require (
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
-	github.com/viant/scy v0.15.3
+	github.com/viant/scy v0.15.4
 	github.com/viant/sqlx v0.16.2
 	github.com/viant/structql v0.5.2
 	github.com/viant/toolbox v0.36.0
@@ -54,11 +54,12 @@ require (
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.5.4-0.20250106215444-d757eac8abe0
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20250106215444-d757eac8abe0
+	github.com/viant/xdatly/handler v0.0.0-20250110194948-0ab29e9e1f28
 	github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1
 	github.com/viant/xmlify v0.1.1-0.20231127181625-8a6b48ceea12
+	golang.org/x/net v0.34.0
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
 )
 
@@ -131,12 +132,11 @@ require (
 	go.opentelemetry.io/otel v1.24.0 // indirect
 	go.opentelemetry.io/otel/metric v1.24.0 // indirect
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
-	golang.org/x/crypto v0.26.0 // indirect
-	golang.org/x/net v0.25.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.23.0 // indirect
-	golang.org/x/term v0.23.0 // indirect
-	golang.org/x/text v0.17.0 // indirect
+	golang.org/x/crypto v0.32.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/term v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/appengine/v2 v2.0.2 // indirect
 	google.golang.org/genproto v0.0.0-20240227224415-6ceb2ff114de // indirect
