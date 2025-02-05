@@ -20,6 +20,19 @@ func (p *HttpRequest) Names() []string {
 
 func (p *HttpRequest) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	switch strings.ToLower(name) {
+	case "header":
+		value, err := p.getRequest()
+		if err != nil {
+			return nil, false, err
+		}
+		return value.Header, true, nil
+	case "remoteaddr":
+		value, err := p.getRequest()
+		if err != nil {
+			return nil, false, err
+		}
+		return value.RemoteAddr, true, nil
+
 	case "method":
 		value, err := p.getRequest()
 		if err != nil {

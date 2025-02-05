@@ -57,7 +57,7 @@ func InitRegistry() {
 			xreflect.NewType("response.Metric", xreflect.WithReflectType(reflect.TypeOf(response.Metric{}))),
 			xreflect.NewType("response.JobInfo", xreflect.WithReflectType(reflect.TypeOf(response.JobInfo{}))),
 			xreflect.NewType("http.Request", xreflect.WithReflectType(reflect.TypeOf(http.Request{}))),
-			xreflect.NewType("Request", xreflect.WithReflectType(reflect.TypeOf(http.Request{}))),
+			xreflect.NewType("http.Header", xreflect.WithReflectType(reflect.TypeOf(http.Header{}))),
 
 			xreflect.NewType("predicate.StringsFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.StringsFilter{}))),
 			xreflect.NewType("predicate.IntFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.IntFilter{}))),
