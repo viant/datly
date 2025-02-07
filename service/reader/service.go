@@ -581,8 +581,10 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 
 	for i := 1; i < len(collectors); i++ {
 		second := collectors[i]
-		merged := combineSlices(result.Dest(), second.Dest())
-		result.SetDest(merged)
+		if second != nil && second.Len() > 0 {
+			merged := combineSlices(result.Dest(), second.Dest())
+			result.SetDest(merged)
+		}
 	}
 
 	if newReducer, ok := partitioner.(view.ReducerProvider); ok {

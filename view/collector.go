@@ -747,6 +747,11 @@ outer:
 						result = append(result, actual[j])
 					}
 				default:
+					if count := len(result); count > 0 {
+						if result[count-1] == fieldValue { //value already added
+							continue
+						}
+					}
 					result = append(result, fieldValue)
 				}
 				continue

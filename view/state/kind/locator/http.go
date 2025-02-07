@@ -12,6 +12,7 @@ import (
 
 type HttpRequest struct {
 	getRequest func() (*http.Request, error)
+	request    *http.Request
 }
 
 func (p *HttpRequest) Names() []string {
@@ -19,16 +20,24 @@ func (p *HttpRequest) Names() []string {
 }
 
 func (p *HttpRequest) Value(ctx context.Context, name string) (interface{}, bool, error) {
-	switch strings.ToLower(name) {
-	case "method":
-		value, err := p.getRequest()
+	request := p.request
+	if p.request == nil {
+		var err error
+		request, err = p.getRequest()
 		if err != nil {
 			return nil, false, err
 		}
-		return value.Method, true, nil
 	}
-	value, err := p.getRequest()
-	return value, true, err
+	switch strings.ToLower(name) {
+	case "header":
+
+		return request.Header, true, nil
+	case "remoteaddr":
+		return request.RemoteAddr, true, nil
+	case "method":
+		return request.Method, true, nil
+	}
+	return request, true, nil
 }
 
 // NewHttpRequest returns http requestState locator
@@ -39,6 +48,7 @@ func NewHttpRequest(opts ...Option) (kind.Locator, error) {
 	}
 	return &HttpRequest{
 		getRequest: options.GetRequest,
+		request:    options.request,
 	}, nil
 }
 

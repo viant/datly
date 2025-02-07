@@ -7,6 +7,8 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/view/column"
 	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/query"
 	"strings"
 )
 
@@ -76,23 +78,23 @@ func (t *Table) lookup(ns, column string) *sqlparser.Column {
 
 func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 	SQL = TrimParenthesis(SQL)
-	query, err := sqlparser.ParseQuery(SQL)
-	if err != nil && query.From.X == nil { //TODO add velty expr  handler
+	aQuery, err := sqlparser.ParseQuery(SQL)
+	if err != nil && aQuery.From.X == nil { //TODO add velty expr  handler
 		return fmt.Errorf("unable to parseSQL to detect table: %w", err)
 	}
-	query, err = column.RewriteWithQueryIfNeeded(SQL, query)
-	if query == nil || query.From.X == nil {
-		if query != nil && len(query.List) > 0 {
-			t.Columns = sqlparser.NewColumns(query.List)
+	aQuery, err = column.RewriteWithQueryIfNeeded(SQL, aQuery)
+	if aQuery == nil || aQuery.From.X == nil {
+		if aQuery != nil && len(aQuery.List) > 0 {
+			t.Columns = sqlparser.NewColumns(aQuery.List)
 		}
 		return err
 	}
-	if !query.List.IsStarExpr() {
-		t.QueryColumns = sqlparser.NewColumns(query.List)
+	if !aQuery.List.IsStarExpr() {
+		t.QueryColumns = sqlparser.NewColumns(aQuery.List)
 		t.Columns = t.QueryColumns
 	}
-	t.Namespace = strings.ToLower(query.From.Alias)
-	from := sqlparser.Stringify(query.From.X)
+	t.Namespace = strings.ToLower(aQuery.From.Alias)
+	from := sqlparser.Stringify(aQuery.From.X)
 
 	trimFrom := strings.TrimSpace(from)
 	if strings.HasPrefix(trimFrom, "(") && strings.HasSuffix(trimFrom, ")") {
@@ -100,13 +102,21 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 	}
 	if !HasWhitespace(from) {
 		t.Name = from
+	} else if aQuery.From.X != nil {
+		if raw, ok := aQuery.From.X.(*expr.Raw); ok {
+			if subQuery, ok := raw.X.(*query.Select); ok {
+				if subTable := sqlparser.Stringify(subQuery.From.X); !HasWhitespace(subTable) {
+					t.Name = subTable
+				}
+			}
+		}
 	}
 	if err = t.extractColumns(ctx, db, from); err != nil {
 		if len(t.Columns) == 0 { //no extracted column with db driver error
 			return err
 		}
 	}
-	for _, join := range query.Joins {
+	for _, join := range aQuery.Joins {
 		joinTable, err := NewTable(ctx, db, sqlparser.Stringify(join.With))
 		if joinTable == nil {
 			return err
@@ -114,7 +124,7 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 		joinTable.Namespace = strings.ToLower(join.Alias)
 		t.Tables = append(t.Tables, joinTable)
 	}
-	setter.SetStringIfEmpty(&t.OutputJSONHint, query.From.Comments)
+	setter.SetStringIfEmpty(&t.OutputJSONHint, aQuery.From.Comments)
 	return nil
 }
 

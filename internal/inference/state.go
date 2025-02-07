@@ -661,10 +661,13 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 		}
 	}
 
+	pkg := ""
+
 	if pair := strings.Split(dataType, "."); len(pair) > 1 {
 		if !strings.HasSuffix(baseDir, pair[0]) {
 			baseDir = path.Join(baseDir, pair[0])
 		}
+		pkg = pair[0]
 		dataType = pair[1]
 	}
 
@@ -702,7 +705,7 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 				name = field.Names[0].Name
 			}
 			setter.SetStringIfEmpty(&pTag.Name, name)
-			param, err := buildParameter(field, aTag, types, embedFS, imports)
+			param, err := buildParameter(field, aTag, types, embedFS, imports, pkg)
 			if param == nil {
 				return err
 			}
