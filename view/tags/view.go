@@ -28,6 +28,7 @@ type (
 		PublishParent          bool
 		PartitionerType        string
 		PartitionedConcurrency int
+		RelationalConcurrency  int
 	}
 )
 

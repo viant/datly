@@ -71,7 +71,15 @@ type (
 
 		MatchStrategy MatchStrategy `json:",omitempty"`
 		Batch         *Batch        `json:",omitempty"`
+		/*
 
+			//to conviser, also need to add to tags
+				Concurrencty {
+						Relation int
+						Partition int
+
+				}
+		*/
 		Logger     *logger.Adapter `json:",omitempty"`
 		Counter    logger.Counter  `json:"-"`
 		CaseFormat text.CaseFormat `json:",omitempty"`
@@ -83,17 +91,18 @@ type (
 		ColumnsConfig map[string]*ColumnConfig `json:",omitempty"`
 		SelfReference *SelfReference           `json:",omitempty"`
 
-		TableBatches     map[string]bool `json:",omitempty"`
-		_transforms      marshal.Transforms
-		_resource        *Resource
-		_embedder        *state.FSEmbedder
-		_initialized     bool
-		_newCollector    newCollectorFn
-		_codec           *columnsCodec
-		_columns         NamedColumns
-		_excluded        map[string]bool
-		_inputParameters state.Parameters
-		_parent          *View
+		TableBatches          map[string]bool `json:",omitempty"`
+		_transforms           marshal.Transforms
+		_resource             *Resource
+		_embedder             *state.FSEmbedder
+		_initialized          bool
+		_newCollector         newCollectorFn
+		_codec                *columnsCodec
+		_columns              NamedColumns
+		_excluded             map[string]bool
+		_inputParameters      state.Parameters
+		_parent               *View
+		RelationalConcurrency *RelationalConcurrency `json:",omitempty"`
 	}
 
 	//contextKey context key
@@ -115,6 +124,9 @@ type (
 	Method struct {
 		Name string          `json:",omitempty"`
 		Args []*state.Schema `json:",omitempty"`
+	}
+	RelationalConcurrency struct {
+		Number int `json:",omitempty"`
 	}
 )
 
@@ -435,6 +447,9 @@ func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option
 		if vTag.Batch > 0 {
 			options = append(options, WithBatchSize(vTag.Batch))
 		}
+		if vTag.RelationalConcurrency > 0 {
+			options = append(options, WithRelationalConcurrency(vTag.RelationalConcurrency))
+		}
 		if vTag.PartitionerType != "" {
 			options = append(options, WithPartitioned(&Partitioned{DataType: vTag.PartitionerType, Concurrency: vTag.PartitionedConcurrency}))
 		}
@@ -615,6 +630,7 @@ func (v *View) initView(ctx context.Context) error {
 	}
 	v.ensureIndexExcluded()
 	v.ensureBatch()
+	v.ensureRelationalConcurrency()
 	v.ensureSelector()
 	if err = v.ensureLogger(); err != nil {
 		return err
@@ -1098,6 +1114,10 @@ func (v *View) inherit(view *View) error {
 		v.Batch = view.Batch
 	}
 
+	if v.RelationalConcurrency == nil {
+		v.RelationalConcurrency = view.RelationalConcurrency
+	}
+
 	if v.AllowNulls == nil {
 		v.AllowNulls = view.AllowNulls
 	}
@@ -1398,6 +1418,14 @@ func (v *View) ensureBatch() {
 		Size: 10000,
 	}
 }
+func (v *View) ensureRelationalConcurrency() {
+	if v.RelationalConcurrency != nil {
+		return
+	}
+	v.RelationalConcurrency = &RelationalConcurrency{
+		Number: 1,
+	}
+}
 
 func (v *View) initTemplate(ctx context.Context, res *Resource) error {
 	v.EnsureTemplate()
@@ -1655,6 +1683,16 @@ func WithBatchSize(size int) Option {
 			v.Batch = &Batch{}
 		}
 		v.Batch.Size = size
+		return nil
+	}
+}
+
+func WithRelationalConcurrency(number int) Option {
+	return func(v *View) error {
+		if v.RelationalConcurrency == nil {
+			v.RelationalConcurrency = &RelationalConcurrency{}
+		}
+		v.RelationalConcurrency.Number = number
 		return nil
 	}
 }

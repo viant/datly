@@ -155,13 +155,11 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 	relationGroup.Wait()
 	ptr, xslice := collector.Slice()
-	for i := 0; i < xslice.Len(ptr); i++ {
-
+	for i := 0; i < xslice.Len(ptr); i++ { // make it concurrent call per option
 		if actual, ok := xslice.ValuePointerAt(ptr, i).(OnRelationer); ok {
 			actual.OnRelation(ctx)
 			continue
 		}
-
 		break
 	}
 }

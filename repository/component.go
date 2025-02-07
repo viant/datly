@@ -433,6 +433,9 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 			if aTag.View.Batch != 0 {
 				viewOptions = append(viewOptions, view.WithBatchSize(aTag.View.Batch))
 			}
+			if aTag.View.RelationalConcurrency != 0 {
+				viewOptions = append(viewOptions, view.WithRelationalConcurrency(aTag.View.RelationalConcurrency))
+			}
 
 			if aTag.View.PartitionerType != "" {
 				viewOptions = append(viewOptions, view.WithPartitioned(&view.Partitioned{DataType: aTag.View.PartitionerType, Concurrency: aTag.View.PartitionedConcurrency}))
