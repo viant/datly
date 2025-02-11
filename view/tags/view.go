@@ -67,6 +67,12 @@ func (t *Tag) updateView(key string, value string) error {
 			return err
 		}
 		tag.PartitionedConcurrency = concurrency
+	case "relationalconcurrency":
+		rConcurrency, err := strconv.Atoi(value)
+		if err != nil {
+			return err
+		}
+		tag.RelationalConcurrency = rConcurrency
 	case "parameters":
 		parameters := strings.Trim(value, "{}'\"")
 		for _, parameter := range strings.Split(parameters, ",") {
@@ -98,6 +104,9 @@ func (v *View) Tag() *tags.Tag {
 	appendNonEmpty(builder, "table", v.Table)
 	if v.Batch > 0 {
 		appendNonEmpty(builder, "batch", strconv.Itoa(v.Batch))
+	}
+	if v.RelationalConcurrency > 0 {
+		appendNonEmpty(builder, "relationalConcurrency", strconv.Itoa(v.RelationalConcurrency))
 	}
 	if v.PublishParent {
 		appendNonEmpty(builder, "publishParent", strconv.FormatBool(v.PublishParent))

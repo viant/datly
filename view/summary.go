@@ -225,6 +225,7 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 			}
 			aTag.View.RelationalConcurrency = aRelationalConcurrency.Number
 		}
+
 		if publishParent := rel.Of.View.PublishParent; publishParent {
 			if aTag.View == nil {
 				aTag.View = &tags.View{}

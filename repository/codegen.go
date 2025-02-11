@@ -49,6 +49,7 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 			if c.View.RelationalConcurrency != nil {
 				aTag.View.RelationalConcurrency = c.View.RelationalConcurrency.Number
 			}
+
 		}
 		if tmpl := c.View.Template; tmpl != nil && tmpl.Summary != nil {
 			aTag.SummarySQL = tags.ViewSQLSummary(tags.NewViewSQL(tmpl.Summary.Source, ""))

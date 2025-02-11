@@ -69,20 +69,12 @@ type (
 
 		With []*Relation `json:",omitempty"`
 
-		MatchStrategy MatchStrategy `json:",omitempty"`
-		Batch         *Batch        `json:",omitempty"`
-		/*
-
-			//to conviser, also need to add to tags
-				Concurrencty {
-						Relation int
-						Partition int
-
-				}
-		*/
-		Logger     *logger.Adapter `json:",omitempty"`
-		Counter    logger.Counter  `json:"-"`
-		CaseFormat text.CaseFormat `json:",omitempty"`
+		MatchStrategy         MatchStrategy          `json:",omitempty"`
+		Batch                 *Batch                 `json:",omitempty"`
+		RelationalConcurrency *RelationalConcurrency `json:",omitempty"`
+		Logger                *logger.Adapter        `json:",omitempty"`
+		Counter               logger.Counter         `json:"-"`
+		CaseFormat            text.CaseFormat        `json:",omitempty"`
 
 		DiscoverCriteria *bool  `json:",omitempty"`
 		AllowNulls       *bool  `json:",omitempty"`
@@ -91,18 +83,17 @@ type (
 		ColumnsConfig map[string]*ColumnConfig `json:",omitempty"`
 		SelfReference *SelfReference           `json:",omitempty"`
 
-		TableBatches          map[string]bool `json:",omitempty"`
-		_transforms           marshal.Transforms
-		_resource             *Resource
-		_embedder             *state.FSEmbedder
-		_initialized          bool
-		_newCollector         newCollectorFn
-		_codec                *columnsCodec
-		_columns              NamedColumns
-		_excluded             map[string]bool
-		_inputParameters      state.Parameters
-		_parent               *View
-		RelationalConcurrency *RelationalConcurrency `json:",omitempty"`
+		TableBatches     map[string]bool `json:",omitempty"`
+		_transforms      marshal.Transforms
+		_resource        *Resource
+		_embedder        *state.FSEmbedder
+		_initialized     bool
+		_newCollector    newCollectorFn
+		_codec           *columnsCodec
+		_columns         NamedColumns
+		_excluded        map[string]bool
+		_inputParameters state.Parameters
+		_parent          *View
 	}
 
 	//contextKey context key

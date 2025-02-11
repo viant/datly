@@ -30,6 +30,7 @@ type Service struct {
 
 // ReadInto reads Data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
 func (s *Service) ReadInto(ctx context.Context, dest interface{}, aView *view.View, opts ...Option) error {
+	fmt.Printf("service readInto called...")
 	session, err := NewSession(dest, aView, opts...)
 	if err != nil {
 		return err
@@ -94,6 +95,7 @@ func (s *Service) afterRead(session *Session, collector *view.Collector, start *
 }
 
 func (s *Service) readAll(ctx context.Context, session *Session, collector *view.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors, parent *view.View) {
+
 	if errorCollector.Error() != nil {
 		return
 	}
@@ -152,16 +154,42 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 	collectorFetchEmitted = true
 	collector.Fetched()
-
 	relationGroup.Wait()
+
+	onRelationerConcurrency := 1
+	if aView.RelationalConcurrency != nil && aView.RelationalConcurrency.Number > 1 {
+		onRelationerConcurrency = aView.RelationalConcurrency.Number
+	}
 	ptr, xslice := collector.Slice()
-	for i := 0; i < xslice.Len(ptr); i++ { // make it concurrent call per option
+	xlen := xslice.Len(ptr)
+	if onRelationerConcurrency == 1 {
+		for i := 0; i < xlen; i++ {
+			if actual, ok := xslice.ValuePointerAt(ptr, i).(OnRelationer); ok {
+				actual.OnRelation(ctx)
+				continue
+			}
+			break
+		}
+		return
+	}
+	// if onRelationalConcurrency > 1 , then only we call it concurrently
+	concurrencyLimit := make(chan struct{}, onRelationerConcurrency)
+	var onRelationWaitGroup sync.WaitGroup
+	for i := 0; i < xlen; i++ {
 		if actual, ok := xslice.ValuePointerAt(ptr, i).(OnRelationer); ok {
-			actual.OnRelation(ctx)
+			onRelationWaitGroup.Add(1)
+			concurrencyLimit <- struct{}{} // Acquire slot
+			go func(actual OnRelationer) {
+				defer onRelationWaitGroup.Done()
+				actual.OnRelation(ctx)
+				<-concurrencyLimit // Release slot
+			}(actual)
+
 			continue
 		}
 		break
 	}
+	onRelationWaitGroup.Wait()
 }
 
 func (s *Service) afterRelationCompleted(wg *sync.WaitGroup, collector *view.Collector, relationGroup *sync.WaitGroup) {

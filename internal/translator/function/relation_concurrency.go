@@ -21,6 +21,7 @@ func (c *relationalConcurrency) Apply(args []string, column *sqlparser.Column, r
 	}
 	var err error
 	aView.RelationalConcurrency.Number, err = strconv.Atoi(args[0])
+
 	return err
 }
 
