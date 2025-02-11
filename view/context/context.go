@@ -53,10 +53,19 @@ func (vc *Context) Value(key interface{}) interface{} {
 		}
 		return vc.dbProvider
 	case handler.InputKey:
+		if vc.input == nil {
+			return nil
+		}
 		return vc.input
 	case handler.DataSyncKey:
+		if vc.dataSync == nil {
+			return nil
+		}
 		return vc.dataSync
 	case async.JobKey:
+		if vc.job == nil {
+			return nil
+		}
 		return vc.job
 	case async.InvocationTypeKey:
 		return vc.invocationType
