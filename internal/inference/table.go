@@ -105,8 +105,10 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 	} else if aQuery.From.X != nil {
 		if raw, ok := aQuery.From.X.(*expr.Raw); ok {
 			if subQuery, ok := raw.X.(*query.Select); ok {
-				if subTable := sqlparser.Stringify(subQuery.From.X); !HasWhitespace(subTable) {
-					t.Name = subTable
+				if subQuery.From.X != nil {
+					if subTable := sqlparser.Stringify(subQuery.From.X); !HasWhitespace(subTable) {
+						t.Name = subTable
+					}
 				}
 			}
 		}
