@@ -52,9 +52,9 @@ require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
-	github.com/viant/xdatly v0.5.4-0.20250106215444-d757eac8abe0
+	github.com/viant/xdatly v0.5.4-0.20250205184104-9bbf55668bce
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20250110194948-0ab29e9e1f28
+	github.com/viant/xdatly/handler v0.0.0-20250205184104-9bbf55668bce
 	github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1

@@ -11,3 +11,7 @@ type OnFetcher interface {
 type OnRelationer interface {
 	OnRelation(ctx context.Context)
 }
+
+type OnRelationerConcurrency interface {
+	Concurrency() int
+}

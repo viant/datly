@@ -46,6 +46,10 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 				aTag.View.PartitionedConcurrency = c.View.Partitioned.Concurrency
 				aTag.View.PartitionerType = c.View.Partitioned.DataType
 			}
+			if c.View.RelationalConcurrency != nil {
+				aTag.View.RelationalConcurrency = c.View.RelationalConcurrency.Number
+			}
+
 		}
 		if tmpl := c.View.Template; tmpl != nil && tmpl.Summary != nil {
 			aTag.SummarySQL = tags.ViewSQLSummary(tags.NewViewSQL(tmpl.Summary.Source, ""))
