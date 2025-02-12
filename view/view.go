@@ -520,6 +520,10 @@ func (v *View) initViewRelations(ctx context.Context, takenNames map[string]bool
 		refView := &rel.Of.View
 		refView._parent = v
 		refView._resource = v._resource
+		if refView.Template != nil && strings.Contains(refView.Template.Source, "$") {
+			refView.Template.Parameters = v.Template.Parameters
+		}
+
 		v.generateNameIfNeeded(refView, rel)
 		if err = v.updateRelationSchemaIfDefined(compType, rel); err != nil {
 			return err
