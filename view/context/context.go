@@ -80,9 +80,9 @@ func (vc *Context) WithValue(key interface{}, value interface{}) context.Context
 	}
 
 	if t, ok := key.(reflect.Type); ok {
-		vc.RLock()
+		vc.Lock()
 		vc.types[t] = value
-		vc.RUnlock()
+		vc.Unlock()
 		return vc
 	}
 	switch key {
