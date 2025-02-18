@@ -407,6 +407,7 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 		table := ""
 		if viewParameter := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil {
 			viewOptions = append(viewOptions, view.WithViewType(viewParameter.Schema.SliceType().Elem()))
+
 			aTag, err := tags.ParseViewTags(reflect.StructTag(viewParameter.Tag), embedFs)
 			if err != nil {
 				return fmt.Errorf("invalid output view %v tag: %w", viewName, err)
@@ -432,6 +433,9 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 			}
 			if aTag.View.Batch != 0 {
 				viewOptions = append(viewOptions, view.WithBatchSize(aTag.View.Batch))
+			}
+			if aTag.View.RelationalConcurrency != 0 {
+				viewOptions = append(viewOptions, view.WithRelationalConcurrency(aTag.View.RelationalConcurrency))
 			}
 
 			if aTag.View.PartitionerType != "" {

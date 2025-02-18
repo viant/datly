@@ -11,4 +11,5 @@ func init() {
 	_registry.Register(&batchSize{})
 	_registry.Register(&partitioner{})
 	_registry.Register(&publishParent{})
+	_registry.Register(&relationalConcurrency{})
 }
