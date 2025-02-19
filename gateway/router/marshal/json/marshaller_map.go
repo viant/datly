@@ -142,6 +142,7 @@ func (m *mapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) 
 	if m.discoveredMarshaller != nil {
 		return m.discoveredMarshaller(ptr, sb)
 	}
+
 	aMap := reflect.ValueOf(asInterface(m.xType, ptr))
 	if aMap.IsNil() {
 		if !m.isEmbedded {
@@ -174,15 +175,8 @@ func (m *mapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) 
 			keyIface = strconv.Itoa(int(actual))
 		case string:
 		default:
-			if stringer, ok := actual.(fmt.Stringer); ok {
-				keyIface = stringer.String()
-
-			} else {
-				keyIface = fmt.Sprintf("%v", actual)
-			}
-			m.keyType = reflect.TypeOf(keyIface)
+			keyIface = fmt.Sprintf("%v", actual)
 		}
-
 		if err := m.keyMarshaller.MarshallObject(AsPtr(keyIface, m.keyType), sb); err != nil {
 			return err
 		}
@@ -190,9 +184,7 @@ func (m *mapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) 
 		sb.WriteString(":")
 		value := iterator.Value()
 		valueIface := value.Interface()
-		fmt.Printf("%T %v\n", valueIface, valueIface)
-	    ptr := AsPtr(valueIface, m.valueType)
-		if err := m.valueMarshaller.MarshallObject(ptr, sb); err != nil {
+		if err := m.valueMarshaller.MarshallObject(AsPtr(valueIface, m.valueType), sb); err != nil {
 			return err
 		}
 	}

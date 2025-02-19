@@ -2,7 +2,6 @@ package json
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/tagly/format/text"
