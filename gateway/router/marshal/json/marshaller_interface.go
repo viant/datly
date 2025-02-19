@@ -6,6 +6,7 @@ import (
 	"github.com/viant/tagly/format"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"fmt"
 	"unsafe"
 )
 
@@ -42,6 +43,14 @@ func asInterface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
 	if xType.Kind() == reflect.Interface {
 		return xunsafe.AsInterface(pointer)
 	}
+	if xType.Kind() == reflect.Map {
+		value := xType.Interface(pointer)
+		
+		
+		fmt.Printf("asInterface: %T\n", value)
+		return value
+	}
+
 	return xType.Interface(pointer)
 }
 

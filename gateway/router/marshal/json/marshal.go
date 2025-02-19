@@ -2,6 +2,7 @@ package json
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/tagly/format/text"
@@ -134,6 +135,12 @@ func AsPtr(dest interface{}, rType reflect.Type) unsafe.Pointer {
 		return unsafe.Pointer(&dest)
 	case reflect.Ptr:
 		return xunsafe.RefPointer(xunsafe.AsPointer(dest))
+	case reflect.Map:
+		value := reflect.ValueOf(dest)
+		newMap := reflect.New(value.Type())
+		newMap.Elem().Set(value)
+		ptr := newMap.UnsafePointer()
+		return ptr
 	default:
 		return xunsafe.AsPointer(dest)
 	}
