@@ -6,14 +6,12 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/gateway/router/marshal/tabjson"
-	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/tagly/format"
 	"github.com/viant/xlsy"
 	"github.com/viant/xmlify"
 	"github.com/viant/xreflect"
-	"net/http"
 	"reflect"
 	"strings"
 )
@@ -24,7 +22,7 @@ const (
 
 type (
 	Content struct {
-		Marshaller               Marshaller         `json:",omitempty"`
+		Marshaller               Marshallers        `json:",omitempty"`
 		DateFormat               string             `json:",omitempty"`
 		CSV                      *CSVConfig         `json:",omitempty"`
 		XLS                      *XLSConfig         `json:",omitempty"`
@@ -53,46 +51,66 @@ type (
 		OutputMarshaller *xmlify.Marshaller
 	}
 
-	Unmarshal struct {
+	Codec struct {
 		rType     reflect.Type
 		TypeName  string
 		unmarshal shared.Unmarshal
+		marshal   shared.Marshal
 	}
 
 	JSON struct {
-		Unmarshal
+		Codec
 		JsonMarshaller *json.Marshaller
 	}
 
 	XLS struct {
-		Unmarshal
+		Codec
 		XlsMarshaller *xlsy.Marshaller
 	}
 
 	CSV struct {
-		Unmarshal
+		Codec
 	}
 
-	Marshaller struct {
+	Marshallers struct {
 		XLS  XLS
 		JSON JSON
-		XML  Unmarshal
-		CSV  Unmarshal
+		XML  Codec
+		CSV  Codec
 	}
 
 	Unmarshaller interface {
 		Unmarshal(bytes []byte, dest interface{}) error
 	}
+
+	Marshaller interface {
+		Marshal(src interface{}) ([]byte, error)
+	}
 )
 
-func (u *Unmarshal) Unmarshal(bytes []byte, dest interface{}) error {
+func (u *Codec) CanUnmarshal() bool {
+	return u.unmarshal != nil
+}
+
+func (u *Codec) CanMarshal() bool {
+	return u.marshal != nil
+}
+
+func (u *Codec) Unmarshal(bytes []byte, dest interface{}) error {
 	if u.unmarshal == nil {
 		return fmt.Errorf("unmarshaler was not initialized")
 	}
 	return u.unmarshal(bytes, dest)
 }
 
-func (m *Marshaller) Init(lookupType xreflect.LookupType) error {
+func (u *Codec) Marshal(src interface{}) ([]byte, error) {
+	if u.marshal == nil {
+		return nil, fmt.Errorf("unmarshaler was not initialized")
+	}
+	return u.marshal(src)
+}
+
+func (m *Marshallers) Init(lookupType xreflect.LookupType) error {
 	if err := m.XLS.Init(lookupType); err != nil {
 		return err
 	}
@@ -108,7 +126,7 @@ func (m *Marshaller) Init(lookupType xreflect.LookupType) error {
 	return nil
 }
 
-func (u *Unmarshal) Init(lookupType xreflect.LookupType) error {
+func (u *Codec) Init(lookupType xreflect.LookupType) error {
 	if u.TypeName == "" {
 		return nil
 	}
@@ -119,27 +137,21 @@ func (u *Unmarshal) Init(lookupType xreflect.LookupType) error {
 	u.rType = rType
 	value := reflect.New(rType).Interface()
 	unmarshal, ok := value.(Unmarshaller)
-	if !ok {
-		return fmt.Errorf("invalid unmarshaller type: %T, expected :%T", value, unmarshal)
+	if ok {
+		u.unmarshal = unmarshal.Unmarshal
 	}
-	u.unmarshal = unmarshal.Unmarshal
+	marshaller, ok := value.(Marshaller)
+	if ok {
+		u.marshal = marshaller.Marshal
+	}
+	if u.marshal == nil && u.unmarshal == nil {
+		return fmt.Errorf("invalid type %s:  unmarshaller/marshaller were not initialized", u.TypeName)
+	}
 	return nil
 }
 
 func (c *Content) UnmarshallerInterceptors() marshal.Transforms {
 	return c.unmarshallerInterceptors
-}
-
-func (c *Content) UnmarshalFunc(request *http.Request) shared.Unmarshal {
-	contentType := request.Header.Get(HeaderContentType)
-	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(HeaderContentType)))
-	switch contentType {
-	case CSVContentType:
-		return c.CSV.Unmarshal
-	}
-	return func(bytes []byte, i interface{}) error {
-		return c.Marshaller.JSON.JsonMarshaller.Unmarshal(bytes, i, request)
-	}
 }
 
 func (x *XLSConfig) Options() []xlsy.Option {
@@ -431,6 +443,9 @@ func (c *Content) Marshal(format string, field string, response interface{}, opt
 		}
 		return c.TabularJSON.OutputMarshaller.Marshal(response, options...)
 	case JSONFormat:
+		if c.Marshaller.JSON.CanMarshal() {
+			return c.Marshaller.JSON.Marshal(response)
+		}
 		return c.Marshaller.JSON.JsonMarshaller.Marshal(response, options...)
 	default:
 		return nil, fmt.Errorf("unsupproted readerData format: %s", format)

@@ -22,7 +22,13 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 		} else if bodyParameters := i.Type.Parameters.FilterByKind(state.KindRequestBody); len(bodyParameters) > 0 {
 			i.Body.Parameters = bodyParameters
 		} else {
-			i.Body.Parameters = aView.InputParameters()
+			viewParameters := aView.InputParameters()
+			for j, candidate := range viewParameters {
+				if candidate.In.Kind == state.KindRequest {
+					continue
+				}
+				i.Body.Parameters = append(i.Body.Parameters, viewParameters[j])
+			}
 		}
 	}
 

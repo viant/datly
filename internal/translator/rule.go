@@ -127,6 +127,7 @@ func (r *Rule) DSQLSetting() interface{} {
 		DocURL            string   `json:",omitempty"`
 		DocURLs           []string `json:",omitempty"`
 		Internal          bool     `json:",omitempty"`
+		JSONUnmarshalType string   `json:",omitempty"`
 	}{
 		URI:               r.URI,
 		Method:            r.Method,
@@ -139,6 +140,7 @@ func (r *Rule) DSQLSetting() interface{} {
 		DocURL:            r.DocURL,
 		DocURLs:           r.DocURLs,
 		Internal:          r.Internal,
+		JSONUnmarshalType: r.JSONUnmarshalType,
 	}
 }
 
@@ -308,6 +310,9 @@ func (r *Rule) applyDefaults() {
 	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.Type != "")
 	if r.XMLUnmarshalType != "" {
 		r.Route.Content.Marshaller.XML.TypeName = r.XMLUnmarshalType
+	}
+	if r.JSONUnmarshalType != "" {
+		r.Route.Content.Marshaller.JSON.TypeName = r.JSONUnmarshalType
 	}
 	if r.Route.Cors == nil {
 		dC := dpath.DefaultCors()

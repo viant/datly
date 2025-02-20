@@ -248,6 +248,14 @@ func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path s
 				return nil, err
 			}
 
+			elemType := field.Type
+			switch elemType.Kind() {
+			case reflect.Ptr, reflect.Slice:
+				elemType = elemType.Elem()
+			}
+			if elemType == fields.owner {
+				continue
+			}
 			if err = s.newFieldMarshaller(&marshallers, field, path, outputPath, dTag); err != nil {
 				return nil, err
 			}
@@ -417,7 +425,8 @@ func filterByPath(filters *Filters, path string) (Filter, bool) {
 }
 
 func groupFields(elemType reflect.Type) *groupedFields {
-	result := &groupedFields{}
+
+	result := &groupedFields{owner: elemType}
 	numField := elemType.NumField()
 
 	for i := 0; i < numField; i++ {

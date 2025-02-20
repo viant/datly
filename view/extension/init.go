@@ -5,6 +5,7 @@ import (
 	"fmt"
 	dcodec "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/extension/handler"
+	"github.com/viant/datly/view/extension/marshaller"
 	"github.com/viant/scy/auth"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
@@ -75,6 +76,8 @@ func InitRegistry() {
 			xreflect.NewType("auth.Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("time.Location", xreflect.WithReflectType(reflect.TypeOf(&time.Location{}))),
+			xreflect.NewType("marshaller.JSON", xreflect.WithReflectType(reflect.TypeOf(marshaller.JSON{}))),
+			xreflect.NewType("marshaller.Gojay", xreflect.WithReflectType(reflect.TypeOf(marshaller.Gojay{}))),
 		)),
 		Codecs: codec.New(
 			codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.JwtClaim{}, time.Time{}),
