@@ -77,7 +77,7 @@ func (r *Repository) DocBaseURL() string {
 }
 
 func (r *Repository) ContentBaseURL(rule *options.Rule) string {
-	return url.Join(r.Config.Config.DependencyURL, "doc")
+	return url.Join(r.Config.Config.ContentURL, rule.ModulePrefix)
 }
 
 func (r *Repository) LookupDb(name string) (*sql.DB, error) {
