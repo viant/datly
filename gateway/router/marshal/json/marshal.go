@@ -160,7 +160,6 @@ func (j *Marshaller) prepareUnmarshallSession(options []interface{}) *UnmarshalS
 			interceptors = actual
 		}
 	}
-
 	if unmarshallSession == nil {
 		unmarshallSession = &UnmarshalSession{}
 	}

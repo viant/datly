@@ -30,7 +30,6 @@ type Service struct {
 
 // ReadInto reads Data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
 func (s *Service) ReadInto(ctx context.Context, dest interface{}, aView *view.View, opts ...Option) error {
-	fmt.Printf("service readInto called...")
 	session, err := NewSession(dest, aView, opts...)
 	if err != nil {
 		return err
