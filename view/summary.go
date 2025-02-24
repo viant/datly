@@ -317,10 +317,11 @@ func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, ow
 	}
 
 	columns, _, err := detectColumns(ctx, &TemplateEvaluation{
-		SQL:       SQL,
-		Evaluated: true,
-		Expander:  owner.Expand,
-		Args:      args,
+		SQL:        SQL,
+		Evaluated:  true,
+		Expander:   owner.Expand,
+		Parameters: owner.Parameters,
+		Args:       args,
 	}, owner._view)
 
 	if err != nil {

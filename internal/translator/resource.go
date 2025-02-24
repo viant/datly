@@ -409,6 +409,9 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		sourceViewName := metaViewSQL.Name[5 : len(metaViewSQL.Name)-4]
 		sourceSQL = strings.Replace(sourceSQL, "$"+metaViewSQL.Name, "$View.NonWindowSQL", 1)
 		sourceView := r.Rule.Viewlets.Lookup(sourceViewName)
+		if sourceView == nil {
+			return nil, fmt.Errorf("unable to locate %v for summary view", sourceViewName)
+		}
 		options = append(options, expand.WithViewParam(&expand.ViewContext{NonWindowSQL: sourceView.Expanded.Query, Args: sourceView.Expanded.Args, Limit: 1}))
 		bindingArgs = sourceView.Expanded.Args
 		viewlet.sourceViewlet = sourceView

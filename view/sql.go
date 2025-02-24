@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/reader/metadata"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
@@ -16,10 +17,11 @@ import (
 
 type (
 	TemplateEvaluation struct {
-		SQL       string
-		Evaluated bool
-		Expander  ExpanderFn
-		Args      []interface{}
+		SQL        string
+		Evaluated  bool
+		Expander   ExpanderFn
+		Args       []interface{}
+		Parameters state.Parameters
 	}
 
 	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Statelet, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error)
@@ -29,6 +31,16 @@ func detectColumns(ctx context.Context, evaluation *TemplateEvaluation, v *View)
 	SQL, args, err := detectColumnsSQL(evaluation, v)
 	if err != nil {
 		return nil, "", err
+	}
+
+	for i, parameter := range evaluation.Parameters {
+		if strings.Contains(v.Template.Source, parameter.Name) {
+			schema := parameter.Schema
+			if i < len(args) {
+				args[i] = reflect.New(schema.Type()).Elem().Interface()
+			}
+		}
+
 	}
 
 	aDb, err := v.Connector.DB()
@@ -113,6 +125,7 @@ func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interf
 }
 
 func ensureSelectStatement(evaluation *TemplateEvaluation, v *View) string {
+
 	source := evaluation.SQL
 	if source != v.Name && source != v.Table {
 		if query, _ := sqlparser.ParseQuery(source); query != nil && query.From.X == nil {
