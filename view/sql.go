@@ -119,6 +119,12 @@ func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interf
 
 	if len(placeholders) == 0 {
 		placeholders = evaluation.Args
+	} else {
+		for i, arg := range evaluation.Args {
+			if i < len(placeholders) {
+				placeholders[i] = arg
+			}
+		}
 	}
 
 	return SQL, placeholders, nil
