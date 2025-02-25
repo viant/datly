@@ -316,6 +316,14 @@ func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, ow
 		return nil, err
 	}
 
+	for i, arg := range args {
+		vArg := reflect.ValueOf(arg)
+		if vArg.Kind() == reflect.Ptr {
+			if vArg.IsNil() {
+				args[i] = reflect.New(vArg.Type().Elem()).Elem().Interface()
+			}
+		}
+	}
 	columns, _, err := detectColumns(ctx, &TemplateEvaluation{
 		SQL:        SQL,
 		Evaluated:  true,

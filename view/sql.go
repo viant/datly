@@ -37,18 +37,19 @@ func detectColumns(ctx context.Context, evaluation *TemplateEvaluation, v *View)
 		if strings.Contains(v.Template.Source, parameter.Name) {
 			schema := parameter.Schema
 			if i < len(args) {
-				args[i] = reflect.New(schema.Type()).Elem().Interface()
+				rType := schema.Type()
+				if rType.Kind() == reflect.Ptr {
+					rType = rType.Elem()
+				}
+				args[i] = reflect.New(rType).Elem().Interface()
 			}
 		}
-
 	}
 
 	aDb, err := v.Connector.DB()
-
 	if err != nil {
 		return nil, SQL, err
 	}
-
 	query, err := aDb.QueryContext(ctx, SQL, args...)
 	if err != nil {
 		v.Logger.LogDatabaseErr(SQL, err, args...)

@@ -136,7 +136,8 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 	inputType = types.InlineStruct(inputType, func(field *reflect.StructField) {
 		if markerTag := field.Tag.Get(structology.SetMarkerTag); markerTag != "" {
 			marketTypeName := inputTypeName + "Has"
-			field.Tag = reflect.StructTag(string(field.Tag) + " typeName:\"" + marketTypeName + "\"")
+			prevTag, _ := xreflect.RemoveTag(string(field.Tag), "typeName")
+			field.Tag = reflect.StructTag(prevTag + " typeName:\"" + marketTypeName + "\"")
 			field.Type = types.InlineStruct(field.Type, nil)
 			return
 		}

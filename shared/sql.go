@@ -12,7 +12,12 @@ func ExpandSQL(SQL string, args []interface{}) string {
 	for _, arg := range args {
 		if reflect.TypeOf(arg).Kind() == reflect.Ptr {
 			if arg != nil {
-				arg = reflect.ValueOf(arg).Elem().Interface()
+				value := reflect.ValueOf(arg)
+				if !value.IsNil() {
+					arg = value.Elem().Interface()
+				} else {
+					arg = reflect.New(value.Type().Elem()).Elem().Interface()
+				}
 			}
 		}
 
