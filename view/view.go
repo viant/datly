@@ -521,7 +521,12 @@ func (v *View) initViewRelations(ctx context.Context, takenNames map[string]bool
 		refView._parent = v
 		refView._resource = v._resource
 		if refView.Template != nil && strings.Contains(refView.Template.Source, "$") {
-			refView.Template.Parameters = v.Template.Parameters
+			for i := range v.Template.Parameters {
+				param := v.Template.Parameters[i]
+				if refView.Template.Parameters.Lookup(param.Name) == nil {
+					refView.Template.Parameters = append(refView.Template.Parameters, param)
+				}
+			}
 		}
 
 		v.generateNameIfNeeded(refView, rel)
