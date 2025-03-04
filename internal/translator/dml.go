@@ -6,7 +6,7 @@ import (
 )
 
 func (s *Service) extractDMLTables(ctx context.Context, resource *Resource) (*inference.Table, error) {
-	db, err := s.Repository.LookupDb(s.DefaultConnector())
+	db, err := s.Repository.LookupDb(s.DefaultConnector(resource.rule))
 	if err != nil {
 		return nil, err
 	}

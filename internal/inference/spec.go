@@ -260,6 +260,15 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL
 	}
 	result.pk = sink.Keys(keys).By(sink.KeyName.Column)
 	result.Fk = sink.Keys(fkKeys).By(sink.KeyName.Column)
+	if len(result.pk) == 0 {
+		for _, column := range columns {
+			if column.IsAutoincrement || strings.ToLower(column.Name) == "id" {
+				result.pk = map[string]sink.Key{strings.ToLower(column.Name): {Column: column.Name}}
+				break
+			}
+		}
+	}
+
 	return result, nil
 }
 

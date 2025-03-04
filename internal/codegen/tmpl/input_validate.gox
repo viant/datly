@@ -43,9 +43,5 @@ func (i *Input) validate(ctx context.Context, aValidator *validator.Service, val
 
 
 func (i *Input) canUseMarkerProvider(v interface{}) bool {
-	switch actual := v.(type) {
 	${CanUseMarkerProviderCases}
-	default:
-		return true
-	}
 }

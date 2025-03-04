@@ -151,6 +151,7 @@ func inferColumnWithSQL(ctx context.Context, db *sql.DB, SQL string, SQLArgs []i
 						}
 						sinkColumn.Type = itemType.Name()
 					}
+
 					if sinkColumn.Type == "" {
 						return nil, fmt.Errorf("unable discover column %v type", item.Name())
 					}
@@ -227,7 +228,10 @@ func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Colu
 	}
 	columns, vErr := config.Columns(ctx, session, db, table)
 	if len(columns) == 0 && table != "" {
-		columns, err = inferColumnWithSQL(ctx, db, "SELECT * FROM "+table+" WHERE 1 = 0", []interface{}{}, map[string]sink.Column{})
+		SQL := "SELECT * FROM " + table + " WHERE 1 = 0"
+		var args []interface{}
+		shared.EnsureArgs(SQL, &args)
+		columns, err = inferColumnWithSQL(ctx, db, SQL, args, map[string]sink.Column{})
 	}
 	if len(columns) == 0 {
 		return nil, vErr

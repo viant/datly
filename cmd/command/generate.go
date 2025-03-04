@@ -86,6 +86,11 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 			template.BodyParameter = parameters[0]
 		}
 
+		if root.Connector != "" {
+			resource.OptionRule().Connector = root.Connector
+			resource.Rule.Connector = root.Connector
+		}
+
 		if template.IsHandler && resource.OutputState.Lookup("Violations") == nil {
 			violationsParameter := &inference.Parameter{Parameter: state.Parameter{In: &state.Location{}}}
 			violationsParameter.In.Kind = state.KindTransient
@@ -262,6 +267,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	if err := rule.ExtractSettings(dSQL); err != nil {
 		return err
 	}
+
 	if rule.Handler == nil {
 		*dSQL = origin
 		return nil

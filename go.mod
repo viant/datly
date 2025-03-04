@@ -1,8 +1,6 @@
 module github.com/viant/datly
 
-go 1.22
-
-toolchain go1.22.1
+go 1.23.1
 
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
@@ -45,11 +43,12 @@ require (
 
 require (
 	github.com/viant/govalidator v0.3.1
-	github.com/viant/sqlparser v0.7.5
+	github.com/viant/sqlparser v0.8.1
 )
 
 require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
+	github.com/viant/firebase v0.1.1
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.5.4-0.20250205184104-9bbf55668bce
@@ -73,6 +72,7 @@ require (
 	cloud.google.com/go/longrunning v0.5.5 // indirect
 	cloud.google.com/go/secretmanager v1.11.5 // indirect
 	cloud.google.com/go/storage v1.40.0 // indirect
+	firebase.google.com/go v3.13.0+incompatible // indirect
 	firebase.google.com/go/v4 v4.14.0 // indirect
 	github.com/MicahParks/keyfunc v1.9.0 // indirect
 	github.com/aerospike/aerospike-client-go/v6 v6.15.1 // indirect
@@ -138,6 +138,7 @@ require (
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
+	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/appengine/v2 v2.0.2 // indirect
 	google.golang.org/genproto v0.0.0-20240227224415-6ceb2ff114de // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240314234333-6e1732d8331c // indirect

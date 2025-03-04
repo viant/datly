@@ -36,14 +36,15 @@ type (
 		router.Route
 
 		*contract.Output
-		Async    *async.Config          `json:",omitempty"`
-		Cache    *view.Cache            `json:",omitempty"`
-		CSV      *content.CSVConfig     `json:",omitempty"`
-		Const    map[string]interface{} `json:",omitempty"`
-		ConstURL string                 `json:",omitempty"`
-		DocURL   string
-		DocURLs  []string
-		Doc      view.Documentation
+		Connector string                 `json:",omitempty"`
+		Async     *async.Config          `json:",omitempty"`
+		Cache     *view.Cache            `json:",omitempty"`
+		CSV       *content.CSVConfig     `json:",omitempty"`
+		Const     map[string]interface{} `json:",omitempty"`
+		ConstURL  string                 `json:",omitempty"`
+		DocURL    string
+		DocURLs   []string
+		Doc       view.Documentation
 
 		TypeSrc           *parser.TypeImport         `json:",omitempty"`
 		Package           string                     `json:",omitempty"`
@@ -128,6 +129,7 @@ func (r *Rule) DSQLSetting() interface{} {
 		DocURLs           []string `json:",omitempty"`
 		Internal          bool     `json:",omitempty"`
 		JSONUnmarshalType string   `json:",omitempty"`
+		Connector         string   `json:",omitempty"`
 	}{
 		URI:               r.URI,
 		Method:            r.Method,
@@ -141,6 +143,7 @@ func (r *Rule) DSQLSetting() interface{} {
 		DocURLs:           r.DocURLs,
 		Internal:          r.Internal,
 		JSONUnmarshalType: r.JSONUnmarshalType,
+		Connector:         r.Connector,
 	}
 }
 
@@ -165,6 +168,7 @@ func (r *Rule) ExtractSettings(dSQL *string) error {
 		*dSQL = (*dSQL)[index+2:]
 	}
 	r.applyShortHands()
+
 	return nil
 }
 
