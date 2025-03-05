@@ -39,6 +39,7 @@ type (
 		Settings      `yaml:",inline"`
 		Handler       *Handler         `yaml:"Handler" json:"Handler"`
 		Internal      bool             `json:"Internal,omitempty" yaml:"Internal,omitempty" `
+		Connector     string           `json:",omitempty"`
 		ContentURL    string           `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
 		SourceURL     string           `yaml:"-" json:"-"`
 		Version       *version.Control `yaml:"-" json:"-"`

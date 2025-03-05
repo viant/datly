@@ -36,6 +36,7 @@ type (
 		APIKey      *path.APIKey      `json:",omitempty"`
 		Cors        *path.Cors        `json:",omitempty"`
 		Internal    bool              `json:"Internal,omitempty" yaml:"Internal,omitempty" `
+		Connector   string            `json:",omitempty"`
 		ContentURL  string            `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
 		EnableAudit bool              `json:",omitempty"`
 		EnableDebug *bool             `json:",omitempty"`

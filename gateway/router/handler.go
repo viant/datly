@@ -225,7 +225,13 @@ func (r *Handler) writeErrorResponse(w http.ResponseWriter, aComponent *reposito
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		data, err = aComponent.Marshaller.JSON.JsonMarshaller.Marshal(aResponse.State())
+
+		var data []byte
+		if aComponent.Content.Marshaller.JSON.CanMarshal() {
+			data, err = aComponent.Marshaller.JSON.Codec.Marshal(aResponse.State())
+		} else {
+			data, err = aComponent.Marshaller.JSON.JsonMarshaller.Marshal(aResponse.State())
+		}
 		if err != nil {
 			w.Write(data)
 			w.WriteHeader(statusCode)
@@ -404,6 +410,7 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	if output == nil {
 		return response.NewBuffered(options.Options()...), nil
 	}
+
 	if aComponent.Service == service.TypeReader {
 		format := aComponent.Output.Format(request.URL.Query())
 		contentType := aComponent.Output.ContentType(format)
@@ -431,7 +438,13 @@ func (r *Handler) marshalComponentOutput(output interface{}, aComponent *reposit
 	case []byte:
 		return response.NewBuffered(response.WithBytes(actual)), nil
 	default:
-		data, err := aComponent.Content.Marshaller.JSON.JsonMarshaller.Marshal(output)
+		var data []byte
+		var err error
+		if aComponent.Content.Marshaller.JSON.CanMarshal() {
+			data, err = aComponent.Content.Marshaller.JSON.Codec.Marshal(output)
+		} else {
+			data, err = aComponent.Content.Marshaller.JSON.JsonMarshaller.Marshal(output)
+		}
 		if err != nil {
 			return nil, response.NewError(http.StatusInternalServerError, err.Error(), response.WithError(err))
 		}

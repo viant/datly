@@ -28,6 +28,7 @@ type Rule struct {
 	ModuleLocation    string `short:"m" long:"module" description:"go module package root" default:"pkg"`
 	module            *modfile.Module
 	Generated         bool
+	Connector         string
 	SkipCompDef       bool `short:"B" long:"sComp" description:"skip component def"`
 	IncludePredicates bool `short:"K" long:"inclPred" description:"generate predicate code" `
 }

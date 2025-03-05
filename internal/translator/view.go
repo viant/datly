@@ -283,6 +283,9 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		if ns := relation.KeyField.Column.Namespace; ns != "" {
 			refColumn = ns + "." + refColumn
 		}
+		if relNamespace.View.AllowNulls == nil {
+			relNamespace.View.AllowNulls = v.View.AllowNulls
+		}
 
 		refField := relation.KeyField.Name
 		aRefView := view.NewRefView(refViewName)

@@ -42,7 +42,7 @@ func (s *Service) applyAsyncOption(resource *Resource, route *router.Route) erro
 		}
 	}
 	if asyncModule.Jobs.Connector == nil {
-		asyncModule.Jobs.Connector = view.NewRefConnector(s.DefaultConnector())
+		asyncModule.Jobs.Connector = view.NewRefConnector(s.DefaultConnector(resource.rule))
 	}
 	if asyncModule.State.JobMatchKey == nil {
 		return fmt.Errorf("async matchKey parameter is not defined")

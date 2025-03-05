@@ -11,6 +11,8 @@ import (
 	_ "github.com/viant/bigquery"
 	_ "github.com/viant/cloudless/async/mbus/aws"
 	_ "github.com/viant/dyndb"
+	_ "github.com/viant/firebase/firestore"
+	_ "github.com/viant/firebase/realtime"
 	_ "github.com/viant/scy/kms/blowfish"
 	_ "github.com/viant/sqlx/metadata/product/aerospike"
 	_ "github.com/viant/sqlx/metadata/product/bigquery"

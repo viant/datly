@@ -125,7 +125,19 @@ func (t *Template) GenerateInputValidate(pkg string) string {
 			builder.WriteString("]\nreturn ok\n")
 		}
 	}
-	output = strings.Replace(output, "${CanUseMarkerProviderCases}", builder.String(), 1)
+	var template = `
+switch actual := v.(type) {
+	${Cases}
+default:
+	return true
+}
+`
+
+	expanded := strings.Replace(template, "${Cases}", builder.String(), 1)
+	if builder.Len() == 0 {
+		expanded = "return true"
+	}
+	output = strings.Replace(output, "${CanUseMarkerProviderCases}", expanded, 1)
 	return output
 }
 

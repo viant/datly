@@ -134,6 +134,12 @@ func AsPtr(dest interface{}, rType reflect.Type) unsafe.Pointer {
 		return unsafe.Pointer(&dest)
 	case reflect.Ptr:
 		return xunsafe.RefPointer(xunsafe.AsPointer(dest))
+	case reflect.Map:
+		value := reflect.ValueOf(dest)
+		newMap := reflect.New(value.Type())
+		newMap.Elem().Set(value)
+		ptr := newMap.UnsafePointer()
+		return ptr
 	default:
 		return xunsafe.AsPointer(dest)
 	}
@@ -154,7 +160,6 @@ func (j *Marshaller) prepareUnmarshallSession(options []interface{}) *UnmarshalS
 			interceptors = actual
 		}
 	}
-
 	if unmarshallSession == nil {
 		unmarshallSession = &UnmarshalSession{}
 	}

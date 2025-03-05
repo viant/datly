@@ -53,6 +53,10 @@ type (
 	}
 )
 
+func (r *Resource) OptionRule() *options.Rule {
+	return r.rule
+}
+
 func (r *Resource) TypePackage(name string) string {
 	name = strings.Replace(name, "*", "", 1)
 	return r.typePackages[name]
@@ -334,6 +338,9 @@ func (r *Resource) buildParameterViews() {
 		if parameter.Connector != "" {
 			viewlet.Connector = parameter.Connector
 		}
+		if viewlet.Connector == "" {
+			viewlet.Connector = r.rootConnector
+		}
 		if parameter.Schema != nil && parameter.Schema.DataType != "" {
 			viewlet.DataType = parameter.Schema.DataType
 			parameter.Schema.Name = strings.Replace(parameter.Schema.DataType, "*", "", 1)
@@ -378,6 +385,10 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 		*dSQL = (*dSQL)[index+2:]
 	}
 	r.Rule.applyShortHands()
+	if r.Rule.Connector != "" {
+		r.rule.Connector = r.Rule.Connector
+		r.rootConnector = r.Rule.Connector
+	}
 	return nil
 }
 
@@ -409,6 +420,9 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		sourceViewName := metaViewSQL.Name[5 : len(metaViewSQL.Name)-4]
 		sourceSQL = strings.Replace(sourceSQL, "$"+metaViewSQL.Name, "$View.NonWindowSQL", 1)
 		sourceView := r.Rule.Viewlets.Lookup(sourceViewName)
+		if sourceView == nil {
+			return nil, fmt.Errorf("unable to locate %v for summary view", sourceViewName)
+		}
 		options = append(options, expand.WithViewParam(&expand.ViewContext{NonWindowSQL: sourceView.Expanded.Query, Args: sourceView.Expanded.Args, Limit: 1}))
 		bindingArgs = sourceView.Expanded.Args
 		viewlet.sourceViewlet = sourceView
@@ -738,7 +752,9 @@ func NewResource(rule *options.Rule, repository *options.Repository, messages *m
 	ret.Resource.SetTypes(types)
 
 	ret.Rule.Output = &ret.Rule.Route.Output
-
+	if rule.Connector != "" {
+		ret.rootConnector = rule.Connector
+	}
 	return ret
 }
 

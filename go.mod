@@ -1,8 +1,6 @@
 module github.com/viant/datly
 
-go 1.22
-
-toolchain go1.22.1
+go 1.23.1
 
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
@@ -21,7 +19,7 @@ require (
 	github.com/viant/afs v1.25.1-0.20231110184132-877ed98abca1
 	github.com/viant/afsc v1.9.1
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
-	github.com/viant/bigquery v0.3.4
+	github.com/viant/bigquery v0.4.1
 	github.com/viant/cloudless v1.11.0
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
@@ -31,7 +29,7 @@ require (
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.15.4
-	github.com/viant/sqlx v0.16.2
+	github.com/viant/sqlx v0.16.4-0.20250222192411-e1703190cac4
 	github.com/viant/structql v0.5.2
 	github.com/viant/toolbox v0.36.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
@@ -45,11 +43,12 @@ require (
 
 require (
 	github.com/viant/govalidator v0.3.1
-	github.com/viant/sqlparser v0.7.5
+	github.com/viant/sqlparser v0.8.1
 )
 
 require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
+	github.com/viant/firebase v0.1.1
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.5.4-0.20250205184104-9bbf55668bce
@@ -58,7 +57,7 @@ require (
 	github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1
-	github.com/viant/xmlify v0.1.1-0.20231127181625-8a6b48ceea12
+	github.com/viant/xmlify v0.1.1
 	golang.org/x/net v0.34.0
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
 )
@@ -73,6 +72,7 @@ require (
 	cloud.google.com/go/longrunning v0.5.5 // indirect
 	cloud.google.com/go/secretmanager v1.11.5 // indirect
 	cloud.google.com/go/storage v1.40.0 // indirect
+	firebase.google.com/go v3.13.0+incompatible // indirect
 	firebase.google.com/go/v4 v4.14.0 // indirect
 	github.com/MicahParks/keyfunc v1.9.0 // indirect
 	github.com/aerospike/aerospike-client-go/v6 v6.15.1 // indirect
@@ -138,6 +138,7 @@ require (
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
+	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/appengine/v2 v2.0.2 // indirect
 	google.golang.org/genproto v0.0.0-20240227224415-6ceb2ff114de // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240314234333-6e1732d8331c // indirect

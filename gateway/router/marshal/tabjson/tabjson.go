@@ -30,6 +30,7 @@ type (
 		pathAccessors   map[string]*xunsafe.Field
 		stringifiers    map[reflect.Type]*io2.ObjectStringifier
 		config          *Config
+		uniqueTypes     map[reflect.Type]bool
 	}
 
 	Field struct {
@@ -101,6 +102,7 @@ func NewMarshaller(rType reflect.Type, config *Config) (*Marshaller, error) {
 		references:      map[string][]string{},
 		pathAccessors:   map[string]*xunsafe.Field{},
 		xType:           xunsafe.NewType(elemType), // TODO MFI  reflect.Type => xunsafe.Type
+		uniqueTypes:     map[reflect.Type]bool{},
 	}
 
 	if err := marshaller.init(config, excluded); err != nil {
@@ -145,6 +147,11 @@ func (m *Marshaller) init(config *Config, excluded map[string]bool) error {
 
 func (m *Marshaller) indexByPath(parentType reflect.Type, path string, excluded map[string]bool, holder string, parentAccessor *xunsafe.Field) {
 	elemParentType := elem(parentType)
+	if m.uniqueTypes[parentType] { //avoid cyclic reference
+		return
+	}
+	m.uniqueTypes[parentType] = true
+
 	numField := elemParentType.NumField()
 	m.pathAccessors[path] = parentAccessor
 	for i := 0; i < numField; i++ {

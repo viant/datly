@@ -29,6 +29,8 @@ func (p *HttpRequest) Value(ctx context.Context, name string) (interface{}, bool
 		}
 	}
 	switch strings.ToLower(name) {
+	case "uri":
+		return request.RequestURI, true, nil
 	case "header":
 
 		return request.Header, true, nil

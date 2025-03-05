@@ -177,7 +177,7 @@ func (s *Service) buildExecutorView(ctx context.Context, resource *Resource, DSQ
 			viewlet.Table.Name: true,
 		}
 	}
-	viewlet.Connector = s.DefaultConnector()
+	viewlet.Connector = s.DefaultConnector(resource.rule)
 	resource.Rule.Viewlets.Append(viewlet)
 	SQL := viewlet.Resource.State.Expand(viewlet.SQL)
 	aTemplate, err := parser.NewTemplate(viewlet.SQL, &viewlet.Resource.State)
@@ -195,6 +195,10 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 	resource.Rule.Root = aQuery.From.Alias
+	if resource.Rule.Connector != "" {
+		resource.rootConnector = resource.Rule.Connector
+	}
+
 	if err = s.updateCodecParameters(ctx, resource); err != nil {
 		return err
 	}
@@ -494,7 +498,7 @@ func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet) error
 
 	connector := viewlet.GetConnector()
 	if connector == "" {
-		connector = s.DefaultConnector()
+		connector = s.DefaultConnector(viewlet.Resource.rule)
 	}
 	viewlet.Connector = connector
 
@@ -523,7 +527,12 @@ func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet) error
 	return nil
 }
 
-func (s *Service) DefaultConnector() string {
+func (s *Service) DefaultConnector(rule *options.Rule) string {
+	if rule != nil {
+		if rule.Connector != "" {
+			return rule.Connector
+		}
+	}
 	return s.Repository.Connectors[0].Name
 }
 
@@ -545,6 +554,8 @@ func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet) e
 }
 
 func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Viewlet) (err error) {
+
+	shared.EnsureArgs(viewlet.Expanded.Query, &viewlet.Expanded.Args)
 	if viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.Expanded.Query, viewlet.Expanded.Args...); err != nil {
 		return fmt.Errorf("failed to create spec for %v, %w", viewlet.Name, err)
 	}
