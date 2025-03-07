@@ -54,7 +54,7 @@ require (
 	github.com/viant/xdatly v0.5.4-0.20250205184104-9bbf55668bce
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20250205184104-9bbf55668bce
-	github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb
+	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1
 	github.com/viant/xmlify v0.1.1
@@ -120,6 +120,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
+	github.com/viant/gds v0.4.5 // indirect
 	github.com/viant/igo v0.2.0 // indirect
 	github.com/viant/x v0.3.0 // indirect
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect

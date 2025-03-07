@@ -1107,6 +1107,8 @@ github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c h1:M5se4NJFV45xZXyOG
 github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c/go.mod h1:IIV7sI3e5JfCyq+NRimnrjbPCEL1YeKqFmbcm53sxl8=
 github.com/viant/firebase v0.1.1 h1:a4IiehQ2GWoH4qTnUD7JnJ5lTc87nfxX8ClUwBO7AKU=
 github.com/viant/firebase v0.1.1/go.mod h1:Q2DK7L/pdGS5xNQRgMJ9B/x9VhIeXAfXCeh3cKpSIkM=
+github.com/viant/gds v0.4.5 h1:QEPOdVyFGZCLbCcstjRTzS2vEktxHbN2cm5NZ3Z6yiA=
+github.com/viant/gds v0.4.5/go.mod h1:oLW99/zRR67jOhDj4qnVoquDMtQd1z2mWxVc9KRvOs4=
 github.com/viant/gmetric v0.3.1-0.20230405233616-cc90deee60c4 h1:Lz5up/Q1N8A5pchUUIzWufTLmLnQ6OCUgol5XHJLg4E=
 github.com/viant/gmetric v0.3.1-0.20230405233616-cc90deee60c4/go.mod h1:RHqj7bdVZrPahrhQxhZRsFX3p/I7ixUEt7+G3l5z+v0=
 github.com/viant/godiff v0.4.1 h1:pjMA4zOz/mNcXRvl+CjWzg3m8XwOFBjaxDqfUYQXb9M=
@@ -1147,6 +1149,8 @@ github.com/viant/xdatly/handler v0.0.0-20250205184104-9bbf55668bce h1:uge2stwvQH
 github.com/viant/xdatly/handler v0.0.0-20250205184104-9bbf55668bce/go.mod h1:LRFkkkCHUPdvoVG1r6TdH98Z6CF86pLfzjfrLYhRNGY=
 github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb h1:X4emK6TIR6IXiFlQz9wEdCi5RJMG3dg3e8+VLQ2zhnM=
 github.com/viant/xdatly/types/core v0.0.0-20240109065401-9758ebacb4bb/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
+github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52 h1:G+e1MMDxQXUPPlAXVNlRqSLTLra7udGQZUu3hnr0Y8M=
+github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
 github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a h1:jecH7mH63gj1zJwD18SdvSHM9Ttr9FEOnhHkYfkCNkI=
 github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a/go.mod h1:s0oJuKw3+AIT8RTyr+7+6nk+kBZhN/N4QWAQyYvvlqY=
 github.com/viant/xlsy v0.3.1 h1:KwA7PxOTVg+ns4CCPOdfNy5aEA9OUlIByUbuNC9ju0s=
