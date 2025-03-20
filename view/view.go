@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/logger"
@@ -23,6 +24,7 @@ import (
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"net/http"
+	"path"
 	"reflect"
 	"strings"
 	"time"
@@ -635,7 +637,6 @@ func (v *View) initView(ctx context.Context) error {
 	if err = v.ensureLogger(); err != nil {
 		return err
 	}
-	v.ensureCounter()
 
 	setter.SetStringIfEmpty(&v.Alias, "t")
 	if v.From == "" {
@@ -746,6 +747,8 @@ func (v *View) initView(ctx context.Context) error {
 			}
 		}
 	}
+	v.ensureCounter()
+
 	return nil
 }
 
@@ -834,13 +837,17 @@ func (v *View) ensureCounter() {
 	var counter logger.Counter
 	if metric := v._resource.Metrics; metric != nil {
 		name := v.Name
+
+		pkg := v.discoverPackage()
+		metricName := pkg + "." + name
 		if metric.Method != "" && metric.Method != http.MethodGet {
-			name = metric.Method + ":" + name
+			metricName = metric.Method + ":" + metricName
 		}
-		name = strings.ReplaceAll(name, "/", ".")
-		cnt := metric.Service.LookupOperation(name)
+		metricName = strings.ReplaceAll(metricName, "/", ".")
+		cnt := metric.Service.LookupOperation(metricName)
+
 		if cnt == nil {
-			counter = metric.Service.MultiOperationCounter(metricLocation(), name, name+" performance", time.Millisecond, time.Minute, 2, provider.NewBasic())
+			counter = metric.Service.MultiOperationCounter(pkg, metricName, name+" performance", time.Millisecond, time.Minute, 2, provider.NewBasic())
 		} else {
 			counter = cnt
 		}
@@ -848,6 +855,16 @@ func (v *View) ensureCounter() {
 
 	v.Counter = logger.NewCounter(counter)
 
+}
+
+func (v *View) discoverPackage() string {
+
+	sourceURL := url.Path(v._resource.SourceURL)
+	parent, _ := path.Split(sourceURL)
+	if idx := strings.Index(parent, "/routes/"); idx != -1 {
+		return strings.Trim(parent[idx+len("/routes/"):], "/")
+	}
+	return metricLocation()
 }
 
 func (c *View) TypeDefinitions() []*TypeDefinition {
