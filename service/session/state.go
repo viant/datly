@@ -324,9 +324,8 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		}
 	}
 	valueType := reflect.TypeOf(value)
-
 	if valueType == nil {
-		fmt.Printf("value type was nil %s\n", parameter.Name)
+		return value, nil
 	}
 
 	switch valueType.Kind() {
