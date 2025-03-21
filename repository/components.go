@@ -92,6 +92,13 @@ func (c *Components) Init(ctx context.Context) error {
 		if err = c.updateIOTypeDependencies(ctx, &component.Input.Type, embedFs, c.Components[0].View, true); err != nil {
 			return fmt.Errorf("failed to update io dependencies:%w", err)
 		}
+		for i := range c.Resource.Views {
+			aView := c.Resource.Views[i]
+			if prev, _ := component.indexedView.Lookup(aView.Name); prev == nil {
+				component.indexedView.Register(aView)
+			}
+		}
+
 		if err = c.updateIOTypeDependencies(ctx, &component.Output.Type, embedFs, c.Components[0].View, true); err != nil {
 			return fmt.Errorf("failed to update io dependencies:%w", err)
 		}
