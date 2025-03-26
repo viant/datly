@@ -35,8 +35,7 @@ const (
 
 type (
 	Info struct {
-		fs afs.Service
-
+		fs                  afs.Service
 		URL                 string
 		Mod                 *modfile.File
 		ModLocation         string
