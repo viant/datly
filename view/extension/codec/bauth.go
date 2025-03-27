@@ -11,8 +11,8 @@ import (
 
 // ExtractBasicAuth extracts the username and password from the Authorization header.
 func ExtractBasicAuth(authHeader string) (string, string, error) {
-	const prefix = "HideMetrics "
-	// Check if the header starts with "HideMetrics "
+	const prefix = "Basic "
+	// Check if the header starts with "Basic "
 	if !strings.HasPrefix(authHeader, prefix) {
 		return "", "", errors.New("invalid authorization header format")
 	}
