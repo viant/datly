@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -16,6 +17,7 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler"
+	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
 	"reflect"
 	"sync"
@@ -52,11 +54,9 @@ func (s *Service) read(ctx context.Context, session *Session) error {
 	if err = session.Init(); err != nil {
 		return err
 	}
-
 	wg := sync.WaitGroup{}
 	collector := session.View.Collector(session.DataPtr, session.HandleViewMeta, session.View.MatchStrategy.ReadAll())
 	errors := shared.NewErrors(0)
-
 	s.readAll(ctx, session, collector, &wg, errors, session.Parent)
 	wg.Wait()
 	err = errors.Error()
@@ -64,37 +64,49 @@ func (s *Service) read(ctx context.Context, session *Session) error {
 		return err
 	}
 	collector.MergeData()
-
 	if err = errors.Error(); err != nil {
 		return err
 	}
-
 	if dest, ok := session.DataPtr.(*interface{}); ok {
 		*dest = collector.Dest()
 	}
 	session.syncData(session.View.Schema.Cardinality)
-	state := session.State.Lookup(session.View)
-	session.Filters = state.Filters
+	aState := session.State.Lookup(session.View)
+	session.Filters = aState.Filters
 	return nil
 }
 
-func (s *Service) afterRead(session *Session, collector *view.Collector, start *time.Time, info *response.Execution, err error, onFinish counter.OnDone) {
+func (s *Service) afterRead(ctx context.Context, aSession *Session, collector *view.Collector, start *time.Time, executions response.SQLExecutions, err error, onFinish counter.OnDone) {
 	end := Now()
 	viewName := collector.View().Name
-	session.View.Logger.ReadTime(viewName, start, &end, err)
-	elapsed := Dif(end, *start)
-	session.AddMetric(&response.Metric{View: viewName, Execution: info, ElapsedMs: int(elapsed.Milliseconds()), Elapsed: elapsed.String(), Rows: collector.Len()})
+	aSession.View.Logger.ReadTime(viewName, start, &end, err)
+	elapsed := Diff(end, *start)
+	metrics := &response.Metric{
+		ID:         uuid.New().String(),
+		StartTime:  *start,
+		EndTime:    end,
+		View:       viewName,
+		Type:       "SELECT",
+		Executions: executions,
+		ElapsedMs:  int(elapsed.Milliseconds()),
+		Elapsed:    elapsed.String(),
+		Rows:       collector.Len(),
+	}
+	aSession.AddMetric(metrics)
 	if err != nil {
-		session.View.Counter.IncrementValue(Error)
+		aSession.View.Counter.IncrementValue(Error)
 	} else {
-		session.View.Counter.IncrementValue(Success)
+		aSession.View.Counter.IncrementValue(Success)
 	}
 	onFinish(end)
-	info.Elapsed = elapsed.String()
+	if value := ctx.Value(exec.ContextKey); value != nil {
+		if exeCtx := value.(*exec.Context); exeCtx != nil {
+			exeCtx.Metrics.Append(metrics)
+		}
+	}
 }
 
 func (s *Service) readAll(ctx context.Context, session *Session, collector *view.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors, parent *view.View) {
-
 	if errorCollector.Error() != nil {
 		return
 	}
@@ -219,18 +231,18 @@ func nopCounterDone(end time.Time, values ...interface{}) int64 {
 }
 
 func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session) error {
-	execution := &response.Execution{}
+	execution := response.SQLExecutions{}
 	start := Now()
 	onFinish := nopCounterDone
 	if !session.DryRun {
 		onFinish = view.Counter.Begin(start)
 	}
-	err := s.readObjects(ctx, session, batchData, view, collector, selector, execution)
-	s.afterRead(session, collector, &start, execution, err, onFinish)
+	err := s.readObjects(ctx, session, batchData, view, collector, selector, &execution)
+	s.afterRead(ctx, session, collector, &start, execution, err, onFinish)
 	return err
 }
 
-func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Statelet, info *response.Execution) error {
+func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Statelet, info *response.SQLExecutions) error {
 
 	/*
 		TODO paralelize batching if relation is to one
@@ -276,7 +288,6 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 		if !session.IsCacheEnabled(aView) {
 			return
 		}
-
 		cacheMatcher, err := s.sqlBuilder.CacheMetaSQL(ctx, aView, selector, batchDataCopy, collector.Relation(), parentViewMetaParam)
 		if err != nil {
 			cacheErr = err
@@ -286,24 +297,26 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 		if err != nil {
 			return
 		}
-
 		cacheStats = &cache.Stats{}
 		metaOptions = []read.Option{read.WithCache(cacheService), read.WithInMatcher(cacheMatcher), read.WithCacheStats(cacheStats)}
 	}()
 
 	var err error
 	indexed, err = s.sqlBuilder.ExactMetaSQL(ctx, aView, selector, batchDataCopy, collector.Relation(), parentViewMetaParam)
+	execInfo, onDone := NewExecutionInfo(indexed, cacheStats, collector)
+	defer onDone()
 	if err != nil {
-		return nil, err
+		execInfo.SetError(err)
+		return execInfo, err
 	}
-
 	wg.Wait()
 	if cacheErr != nil {
-		return nil, cacheErr
+		execInfo.SetError(cacheErr)
+		return execInfo, cacheErr
 	}
-
 	db, err := aView.Db()
 	if err != nil {
+		execInfo.SetError(err)
 		return nil, err
 	}
 
@@ -313,17 +326,16 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 
 	SQL := indexed.SQL
 	args := indexed.Args
-	now := Now()
-
+	now := time.Now()
+	defer onDone()
 	reader, err := read.New(ctx, db, SQL, func() interface{} {
 		add := appender.Add()
 		return add
 	}, metaOptions...)
-
 	if err != nil {
+		execInfo.SetError(err)
 		return nil, err
 	}
-
 	defer func() {
 		stmt := reader.Stmt()
 		if stmt == nil {
@@ -332,19 +344,16 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 
 		_ = stmt.Close()
 	}()
-
 	err = reader.QueryAll(ctx, func(row interface{}) error {
 		return collector.AddMeta(row)
 	}, args...)
-
 	if err != nil {
+		execInfo.SetError(err)
 		return nil, err
 	}
-
 	finished := Now()
 	aView.Logger.Log("reading view %v meta took %v, SQL: %v , Args: %v\n", aView.Name, finished.Sub(now).String(), SQL, args)
-
-	return s.NewExecutionInfo(session, indexed, cacheStats, cacheErr), nil
+	return execInfo, nil
 }
 
 func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session, partitions *view.Partition) (parametrizedSQL *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
@@ -401,7 +410,7 @@ func (s *Service) BuildCriteria(ctx context.Context, value interface{}, options 
 	return ret, nil
 }
 
-func (s *Service) queryInBatches(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *response.Execution, batchData *view.BatchData, selector *view.Statelet) error {
+func (s *Service) queryInBatches(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *response.SQLExecutions, batchData *view.BatchData, selector *view.Statelet) error {
 	wg := &sync.WaitGroup{}
 	db, err := aView.Db()
 	if err != nil {
@@ -417,7 +426,7 @@ func (s *Service) queryInBatches(ctx context.Context, session *Session, aView *v
 			parentMeta := view.AsViewParam(aView, selector, batchData)
 			templateMeta, metaErr = s.querySummary(ctx, session, aView, selector, batchData, collector, parentMeta)
 			if templateMeta != nil {
-				info.Summary = append(info.Summary, templateMeta)
+				info.Append(templateMeta)
 			}
 		}()
 	}
@@ -428,7 +437,7 @@ func (s *Service) queryInBatches(ctx context.Context, session *Session, aView *v
 	}
 
 	if len(executions) > 0 {
-		info.View = append(info.View, executions...)
+		info.Append(executions...)
 	}
 	wg.Wait()
 	return metaErr
@@ -488,6 +497,7 @@ func (s *Service) getParentContext(ctx context.Context, row interface{}, collect
 func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, columnInMatcher *cache.ParmetrizedQuery, parametrizedSQL *cache.ParmetrizedQuery, db *sql.DB, handler func(row interface{}) error, readData *int) ([]*response.SQLExecution, error) {
 	begin := time.Now()
 	var cacheStats *cache.Stats
+
 	var options = []read.Option{read.WithUnmappedFn(io.Resolve(collector.Resolve))}
 	var err error
 	if session.IsCacheEnabled(aView) {
@@ -505,15 +515,16 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 		options = append(options, read.WithCacheRefresh(session.CacheRefresh))
 	}
 
-	stats := s.NewExecutionInfo(session, parametrizedSQL, cacheStats, err)
+	stats, onDone := NewExecutionInfo(parametrizedSQL, cacheStats, collector)
+	defer onDone()
 	if session.DryRun {
 		return []*response.SQLExecution{stats}, nil
 	}
-
 	reader, err := read.New(ctx, db, parametrizedSQL.SQL, collector.NewItem(), options...)
 	if err != nil {
-		exec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
-		return []*response.SQLExecution{exec}, err
+		stats.SetError(err)
+		anExec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
+		return []*response.SQLExecution{anExec}, err
 	}
 	defer func() {
 		stmt := reader.Stmt()
@@ -522,19 +533,18 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 		}
 		_ = stmt.Close()
 	}()
-
 	err = reader.QueryAll(ctx, handler, parametrizedSQL.Args...)
 	end := time.Now()
 	aView.Logger.ReadingData(end.Sub(begin), parametrizedSQL.SQL, *readData, parametrizedSQL.Args, err)
 	if err != nil {
-		exec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
-		return []*response.SQLExecution{exec}, err
+		stats.SetError(err)
+		anExec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
+		return []*response.SQLExecution{anExec}, err
 	}
 	return []*response.SQLExecution{stats}, nil
 }
 
 func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aView *view.View, selector *view.Statelet, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn, partitioned *view.Partitioned) ([]*response.SQLExecution, error) {
-
 	concurrency := aView.Partitioned.Concurrency
 	if concurrency == 0 {
 		concurrency = 2
@@ -634,25 +644,12 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 }
 
 func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.ParmetrizedQuery, stats *response.SQLExecution) (*response.SQLExecution, error) {
-	if session.IncludeSQL {
-		return nil, err
-	}
 	aView.Logger.LogDatabaseErr(matcher.SQL, err, matcher.Args...)
 	stats.Error = err.Error()
-	return nil, fmt.Errorf("database error occured while fetching Data for view %v %w", aView.Name, err)
+	return stats, fmt.Errorf("database error occured while fetching Data for view %v %w", aView.Name, err)
 }
 
-func (s *Service) NewExecutionInfo(session *Session, index *cache.ParmetrizedQuery, cacheStats *cache.Stats, cacheError error) *response.SQLExecution {
-	var SQL string
-	var args []interface{}
-	if session.IncludeSQL {
-		SQL = index.SQL
-		args = index.Args
-	}
-	var cacheErrorMessage string
-	if cacheError != nil {
-		cacheErrorMessage = cacheError.Error()
-	}
+func NewExecutionInfo(index *cache.ParmetrizedQuery, cacheStats *cache.Stats, collector *view.Collector) (*response.SQLExecution, func()) {
 	var cache *response.CacheStats
 	if cacheStats != nil {
 		cache = &response.CacheStats{
@@ -668,11 +665,26 @@ func (s *Service) NewExecutionInfo(session *Session, index *cache.ParmetrizedQue
 			ExpiryTime:     cacheStats.ExpiryTime,
 		}
 	}
-	return &response.SQLExecution{
-		SQL:        SQL,
-		Args:       args,
+	var parentId string
+	if parent := collector.Parent(); parent != nil {
+		parentId = parent.Id
+	}
+
+	now := time.Now()
+	ret := &response.SQLExecution{
+		ID:         collector.Id,
+		ParentID:   parentId,
+		StartTime:  now,
+		EndTime:    now,
+		SQL:        index.SQL,
+		Args:       index.Args,
 		CacheStats: cache,
-		CacheError: cacheErrorMessage,
+	}
+
+	return ret, func() {
+		now := time.Now()
+		ret.EndTime = now
+		ret.Rows = collector.Len()
 	}
 }
 

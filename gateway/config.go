@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/runtime/meta"
+	"github.com/viant/datly/repository/logging"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service/auth/config"
 	"github.com/viant/datly/service/auth/secret"
@@ -37,12 +38,13 @@ type (
 		UseCacheFS      bool
 		SyncFrequencyMs int
 		config.Config
+		Logging              logging.Config
 		Meta                 meta.Config
 		AutoDiscovery        *bool
 		ChangeDetection      *ChangeDetection
 		DisableCors          bool
-		RevealMetric         *bool
 		CacheConnectorPrefix string
+		Version              string
 	}
 
 	ChangeDetection struct {

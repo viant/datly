@@ -105,7 +105,7 @@ var mysqlDev string
 
 func (o *Options) BuildOption() *options.Options {
 	var result = &options.Options{
-		Version: o.Version,
+		ShowVersion: o.Version,
 	}
 	prep := o.Prepare
 

@@ -22,15 +22,11 @@ func HandleRequest(ctx context.Context, request *adapter.Request) (*events.APIGa
 }
 
 func HandleHttpRequest(writer http.ResponseWriter, apiRequest *adapter.Request) error {
-	now := time.Now()
 	service, err := serverless.GetService()
 	if err != nil {
 		return err
 	}
 	httpRequest := apiRequest.Request(service.JWTSigner())
-	service.LogInitTimeIfNeeded(now, writer)
 	service.ServeHTTP(writer, httpRequest)
-	service.LogInitTimeIfNeeded(now, writer)
-
 	return nil
 }

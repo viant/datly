@@ -14,6 +14,8 @@ func (r *Router) NewStateRoute(URL string, provider *repository.Provider) *Route
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleComponentState(ctx, response, provider)
 		},
+		Config:  r.config.Logging,
+		Version: r.config.Version,
 	}
 }
 

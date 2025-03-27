@@ -13,7 +13,8 @@ func RunApp(version string, args soptions.Arguments) error {
 	if err != nil {
 		return err
 	}
-	if options.Version {
+	options.Version = version
+	if options.ShowVersion {
 		fmt.Printf("Datly: version: %v\n", version)
 		return nil
 	}

@@ -8,10 +8,8 @@ import (
 	"github.com/viant/afs/matcher"
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/locator/component/dispatcher"
-	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
 	"github.com/viant/scy/auth/jwt/signer"
@@ -53,7 +51,6 @@ func (r *Service) router(writer http.ResponseWriter) (*Router, http.ResponseWrit
 		writer.WriteHeader(http.StatusNotFound)
 		return nil, nil, false
 	}
-	writer = r.WrapResponseIfNeeded(writer)
 	return aRouter, writer, true
 }
 
@@ -230,23 +227,4 @@ func (r *Service) PreCachables(ctx context.Context, method string, uri string) (
 	}
 
 	return aRouter.PreCacheables(ctx, method, uri)
-}
-
-func (r *Service) WrapResponseIfNeeded(response http.ResponseWriter) http.ResponseWriter {
-	if !r.ShouldRevealMetrics() {
-		return response
-	}
-
-	return router.NewMetricResponse(response)
-}
-
-func (r *Service) ShouldRevealMetrics() bool {
-	return r.Config.RevealMetric != nil && *r.Config.RevealMetric
-}
-
-func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWriter) {
-	if !r.ShouldRevealMetrics() {
-		return
-	}
-	writer.Header().Set(httputils.DatlyServiceInitHeader, time.Since(start).String())
 }

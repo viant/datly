@@ -20,14 +20,10 @@ func HandleRequest(ctx context.Context, request *adapter.Request) (*events.Lambd
 }
 
 func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) error {
-	now := time.Now()
 	service, err := serverless.GetService()
 	if err != nil {
 		return err
 	}
 	service.ServeHTTP(writer, httpRequest)
-	service.LogInitTimeIfNeeded(now, writer)
-	service.LogInitTimeIfNeeded(now, writer)
-
 	return nil
 }

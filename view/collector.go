@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/tagly/format/text"
@@ -20,6 +21,7 @@ type VisitorFn func(value interface{}) error
 // If View or any of the View.With MatchStrategy support Parallel fetching, it is important to call MergeData
 // when all needed View was fetched
 type Collector struct {
+	Id            string
 	mutex         sync.Mutex
 	parent        *Collector
 	destValue     reflect.Value
@@ -61,6 +63,7 @@ func (r *Collector) Clone() *Collector {
 	dest := reflect.MakeSlice(r.view.Schema.SliceType(), 0, 1)
 	slicePtrValue.Elem().Set(dest)
 	return &Collector{
+		Id:              uuid.New().String(),
 		parent:          r.parent,
 		destValue:       slicePtrValue,
 		appender:        r.slice.Appender(xunsafe.ValuePointer(&slicePtrValue)),
@@ -153,6 +156,7 @@ func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHa
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	return &Collector{
+		Id:              uuid.New().String(),
 		destValue:       reflect.ValueOf(ensuredDest),
 		valuePosition:   make(map[string]map[string]map[interface{}][]int),
 		appender:        slice.Appender(xunsafe.AsPointer(ensuredDest)),
@@ -535,6 +539,7 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 			return nil, err
 		}
 		result[counter] = &Collector{
+			Id:              uuid.New().String(),
 			parent:          r,
 			viewMetaHandler: aHandler,
 			destValue:       destPtr,

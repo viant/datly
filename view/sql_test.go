@@ -33,23 +33,23 @@ func TestDetectColumnsSQL(t *testing.T) {
 		{
 			description: `Criteria with where`,
 			view: &View{
-				From:  "SELECT * FROM FOOS  WHERE id = 10 $CRITERIA",
+				From:  "SELECT * FROM FOOS  WHERE Id = 10 $CRITERIA",
 				Alias: "t",
 			},
-			sql: `SELECT * FROM FOOS  WHERE id = 10  
+			sql: `SELECT * FROM FOOS  WHERE Id = 10  
 
  AND 1=0 `,
 		},
 		{
 			description: `Criteria with where`,
 			view: &View{
-				From: `SELECT * FROM FOOS  WHERE id = 10
+				From: `SELECT * FROM FOOS  WHERE Id = 10
 --- this is comment
 GROUP BY 1
 `,
 				Alias: "t",
 			},
-			sql: `SELECT * FROM FOOS  WHERE id = 10
+			sql: `SELECT * FROM FOOS  WHERE Id = 10
 --- this is comment 
 
  AND 1=0 

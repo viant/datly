@@ -125,13 +125,11 @@ func (c *Config) loadConfig(ctx context.Context) error {
 }
 
 func (c *Config) inMemoryConfig() *standalone.Config {
-	revealMetrics := true
 	setter.SetIntIfNil(&c.repository.Port, 8080)
 	return &standalone.Config{
 		Config: &gateway.Config{
 			ExposableConfig: gateway.ExposableConfig{
-				APIPrefix:    c.repository.APIPrefix,
-				RevealMetric: &revealMetrics,
+				APIPrefix: c.repository.APIPrefix,
 			},
 			SensitiveConfig: gateway.SensitiveConfig{
 				APIKeys: dpath.APIKeys{

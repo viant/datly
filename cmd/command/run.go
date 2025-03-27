@@ -15,6 +15,7 @@ func (s *Service) Run(ctx context.Context, options *options.Options) (err error)
 		return err
 	}
 	options.Run.PluginInfo = loc
+	options.Run.Version = options.Version
 	srv, err := s.run(ctx, options.Run)
 	if err != nil {
 		return err
@@ -38,5 +39,6 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 		parent, _ := url.Split(run.PluginInfo, file.Scheme)
 		_ = s.fs.Copy(ctx, parent, s.config.Config.PluginsURL)
 	}
+	s.config.Version = run.Version
 	return standalone.New(ctx, standalone.WithConfig(s.config))
 }

@@ -21,7 +21,6 @@ import (
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"net/http"
 	"os"
-	"time"
 )
 
 // Handle handles datly request
@@ -34,7 +33,6 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 
 // GCF doesn't include the function name in the URL segments
 func handleRequest(w http.ResponseWriter, r *http.Request) error {
-	now := time.Now()
 	configURL := os.Getenv("CONFIG_URL")
 	if configURL == "" {
 		return fmt.Errorf("config was emrty")
@@ -44,8 +42,6 @@ func handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	service.LogInitTimeIfNeeded(now, w)
-
 	service.ServeHTTP(w, r)
 	return nil
 }

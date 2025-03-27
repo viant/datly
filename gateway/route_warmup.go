@@ -18,7 +18,9 @@ func (r *Router) NewWarmupRoute(URL string, providers ...*repository.Provider) *
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleCacheWarmup(ctx, response, providers)
 		},
-		Kind: RouteWarmupKind,
+		Kind:    RouteWarmupKind,
+		Config:  r.config.Logging,
+		Version: r.config.Version,
 		NewMultiRoute: func(routes []*contract.Path) *Route {
 			return r.NewWarmupRoute("", providers...)
 		},

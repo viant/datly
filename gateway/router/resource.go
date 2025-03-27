@@ -79,7 +79,6 @@ func (r *Resource) Init(ctx context.Context) error {
 		if route.Output.RevealMetric == nil {
 			route.Output.RevealMetric = r.RevealMetric
 		}
-		route.EnableDebug = r.EnableDebug
 	}
 
 	columnsCache := map[string]view.Columns{}

@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/francoispqt/gojay v1.2.13
 	github.com/go-sql-driver/mysql v1.7.0
-	github.com/goccy/go-json v0.10.2 // indirect
+	github.com/goccy/go-json v0.10.5
 	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
 	github.com/google/gops v0.3.23
 	github.com/google/uuid v1.6.0
@@ -20,7 +20,7 @@ require (
 	github.com/viant/afsc v1.9.1
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.4.1
-	github.com/viant/cloudless v1.11.0
+	github.com/viant/cloudless v1.12.0
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
@@ -51,9 +51,9 @@ require (
 	github.com/viant/firebase v0.1.1
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
-	github.com/viant/xdatly v0.5.4-0.20250205184104-9bbf55668bce
+	github.com/viant/xdatly v0.5.4-0.20250327182527-0cb8b2710153
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20250205184104-9bbf55668bce
+	github.com/viant/xdatly/handler v0.0.0-20250327182527-0cb8b2710153
 	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1
@@ -120,7 +120,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
-	github.com/viant/gds v0.4.5 // indirect
 	github.com/viant/igo v0.2.0 // indirect
 	github.com/viant/x v0.3.0 // indirect
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect

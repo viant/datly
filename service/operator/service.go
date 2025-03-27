@@ -44,12 +44,12 @@ func (s *Service) Operate(ctx context.Context, aSession *session.Session, aCompo
 
 // HandleError processes output with error
 func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aComponent *repository.Component, err error) (interface{}, error) {
-
 	ctx = vcontext.WithValue(ctx, exec.ErrorKey, err)
 	ctx = aComponent.View.Context(ctx)
 	execCtx := exec.GetContext(ctx)
 	if execCtx != nil {
 		execCtx.StatusCode = http.StatusInternalServerError
+		execCtx.SetError(err)
 		if rErr := errors.Unwrap(err); rErr != nil {
 			switch actual := rErr.(type) {
 			case *googleapi.Error:
@@ -92,9 +92,6 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 		if ctx, err = s.EnsureInput(ctx, aComponent, aSession, true); err != nil {
 			return nil, err
 		}
-		if err != nil {
-			return s.HandleError(ctx, aSession, aComponent, err)
-		}
 		ret, err := s.runQuery(ctx, aComponent, aSession)
 		if ret, err = s.finalize(ctx, ret, err); err != nil {
 			aSession.ClearCache(aComponent.Output.Type.Parameters)
@@ -112,6 +109,7 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 }
 
 func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (interface{}, error) {
+
 	if err != nil {
 		return ret, err
 	}
@@ -129,13 +127,11 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 	var info *exec.Context
 	infoValue := ctx.Value(exec.ContextKey)
 	if infoValue == nil {
-		info = exec.NewContext()
+		info = exec.NewContext(aComponent.Method, aComponent.URI, http.Header{}, "")
 		ctx = vcontext.WithValue(ctx, exec.ContextKey, info)
-
 	} else {
 		info = infoValue.(*exec.Context)
 	}
-
 	provider := ctx.Value(hstate.DBProviderKey)
 	if provider == nil {
 		if aView := aComponent.View; aView != nil {

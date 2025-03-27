@@ -61,14 +61,6 @@ func WithParameter(name string, value interface{}) Option {
 	}
 }
 
-// WithIncludeSQL with include SQL
-func WithIncludeSQL(flag bool) Option {
-	return func(session *Session) error {
-		session.IncludeSQL = flag
-		return nil
-	}
-}
-
 // WithCacheDisabled return
 func WithCacheDisabled(flag bool) Option {
 	return func(session *Session) error {

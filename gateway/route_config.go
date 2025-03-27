@@ -13,6 +13,8 @@ func (r *Router) NewConfigRoute() *Route {
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleConfig(response)
 		},
+		Config:  r.config.Logging,
+		Version: r.config.Version,
 	}
 }
 

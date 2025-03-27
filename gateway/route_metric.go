@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/gmetric"
 	"net/http"
@@ -23,6 +22,8 @@ func (r *Router) NewMetricRoute(URI string) *Route {
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleMetrics(response, req, URI)
 		},
+		Config:  r.config.Logging,
+		Version: r.config.Version,
 	}
 }
 

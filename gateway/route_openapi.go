@@ -16,7 +16,9 @@ func (r *Router) NewOpenAPIRoute(URL string, components *repository.Service, pro
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleOpenAPI(ctx, components, response, req, providers)
 		},
-		Kind: RouteOpenAPIKind,
+		Kind:    RouteOpenAPIKind,
+		Config:  r.config.Logging,
+		Version: r.config.Version,
 		NewMultiRoute: func(routes []*contract.Path) *Route {
 			return r.NewOpenAPIRoute("", components, providers...)
 		},

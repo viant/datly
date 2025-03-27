@@ -36,5 +36,6 @@ pipeline:
         action: docker:run
         image: 'amazon/dynamodb-local'
         name: dynamodb
+        sleepTimeMs: 2000
         ports:
           8000: 8000

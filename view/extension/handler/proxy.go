@@ -42,7 +42,7 @@ type Proxy struct {
 // Exec executes handler
 func (p *Proxy) Exec(ctx context.Context, session handler.Session) (interface{}, error) {
 	input := reflect.New(p.inputType).Interface()
-	if err := session.Stater().Into(ctx, input); err != nil {
+	if err := session.Stater().Bind(ctx, input); err != nil {
 		return nil, err
 	}
 	httper := session.Http()

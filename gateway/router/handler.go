@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/repository/logging"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/auth"
@@ -29,7 +30,6 @@ import (
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
-
 	"io"
 	"net/http"
 	"runtime/debug"
@@ -47,10 +47,12 @@ const (
 type (
 	Handler struct {
 		Path       *path.Path
+		Version    string
 		Provider   *repository.Provider
 		dispatcher *operator.Service
 		registry   *repository.Registry
 		auth       *auth.Service
+		logging    logging.Config
 	}
 )
 
@@ -84,13 +86,15 @@ func (r *Handler) AuthorizeRequest(request *http.Request, aPath *path.Path) erro
 	return nil
 }
 
-func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry, authService *auth.Service) *Handler {
+func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry, authService *auth.Service, version string, config logging.Config) *Handler {
 	ret := &Handler{
 		Path:       aPath,
 		Provider:   provider,
 		dispatcher: operator.New(),
 		registry:   registry,
 		auth:       authService,
+		Version:    version,
+		logging:    config,
 	}
 	return ret
 }
@@ -145,11 +149,15 @@ func (r *Handler) Serve(serverPath string) error {
 	return http.ListenAndServe(serverPath, r)
 }
 
-func (r *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+func (r *Handler) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
 	ctx := context.Background()
-	execContext := exec.NewContext()
+	execContext := exec.NewContext(req.Method, req.RequestURI, req.Header, r.Version)
 	ctx = vcontext.WithValue(ctx, exec.ContextKey, execContext)
-	r.HandleRequest(ctx, writer, request)
+	r.HandleRequest(ctx, writer, req)
+	if execContext.StatusCode == 0 {
+		execContext.StatusCode = http.StatusOK
+	}
+	logging.Log(&r.logging, execContext)
 }
 
 func (r *Handler) Handle(ctx context.Context, writer http.ResponseWriter, request *http.Request) {
@@ -160,7 +168,7 @@ func (r *Handler) Handle(ctx context.Context, writer http.ResponseWriter, reques
 	}
 	aResponse, err := r.safelyHandleComponent(ctx, request, aComponent)
 	if err != nil {
-		r.writeErrorResponse(writer, aComponent, err, http.StatusBadRequest)
+		r.writeErrorResponse(ctx, writer, aComponent, err, http.StatusBadRequest)
 		return
 	}
 
@@ -197,10 +205,14 @@ func extractPanicInfo(lines []string) interface{} {
 	return strings.Join(postPanic, "\n")
 }
 
-func (r *Handler) writeErrorResponse(w http.ResponseWriter, aComponent *repository.Component, err error, statusCode int) {
+func (r *Handler) writeErrorResponse(ctx context.Context, w http.ResponseWriter, aComponent *repository.Component, err error, statusCode int) {
 	statusCode, message, anObjectErr := status.NormalizeErr(err, statusCode)
 	if statusCode < http.StatusBadRequest {
 		statusCode = http.StatusBadRequest
+	}
+	execCtx := exec.GetContext(ctx)
+	if execCtx != nil {
+		execCtx.SetError(err)
 	}
 	responseStatus := r.responseStatusError(message, anObjectErr)
 	statusParameter := aComponent.Output.Type.Parameters.LookupByLocation(state.KindOutput, "status")
@@ -211,7 +223,9 @@ func (r *Handler) writeErrorResponse(w http.ResponseWriter, aComponent *reposito
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
+		if execCtx != nil {
+			execCtx.StatusCode = statusCode
+		}
 		w.WriteHeader(statusCode)
 		w.Write(errAsBytes)
 		return
@@ -234,9 +248,15 @@ func (r *Handler) writeErrorResponse(w http.ResponseWriter, aComponent *reposito
 		}
 		if err != nil {
 			w.Write(data)
+			if execCtx != nil {
+				execCtx.StatusCode = statusCode
+			}
 			w.WriteHeader(statusCode)
 			return
 		}
+	}
+	if execCtx != nil {
+		execCtx.StatusCode = statusCode
 	}
 	w.WriteHeader(statusCode)
 	if len(data) > 0 {
@@ -266,7 +286,7 @@ func (r *Handler) writeResponse(ctx context.Context, request *http.Request, writ
 		return
 	}
 	if err != nil {
-		r.writeErrorResponse(writer, aComponent, err, http.StatusInternalServerError)
+		r.writeErrorResponse(ctx, writer, aComponent, err, http.StatusInternalServerError)
 		return
 	}
 	if size := aResponse.Size(); size > 0 {
@@ -282,11 +302,12 @@ func (r *Handler) writeResponse(ctx context.Context, request *http.Request, writ
 	statusCode := http.StatusOK
 	if aResponse.StatusCode() > 0 {
 		statusCode = aResponse.StatusCode()
+
 	}
 	execCtx := exec.GetContext(ctx)
+
 	if execCtx != nil && execCtx.StatusCode != 0 {
 		writer.WriteHeader(execCtx.StatusCode)
-		execCtx.StatusCode = -1
 	} else {
 		writer.WriteHeader(statusCode)
 	}
@@ -345,22 +366,6 @@ func (r *Handler) compressIfNeeded(marshalled []byte, options *response.Options)
 	}
 	options.Append(response.WithBuffer(buffer), response.WithCompressions(httputils.EncodingGzip))
 	return response.NewBuffered(options.Options()...), nil
-}
-
-func (r *Handler) logAudit(request *http.Request, response http.ResponseWriter, aPath *path.Path) {
-	headers := request.Header.Clone()
-	Sanitize(request, aPath, headers, response)
-
-	asBytes, _ := goJson.Marshal(path.Audit{
-		URL:     request.RequestURI,
-		Headers: headers,
-	})
-	fmt.Printf("%v\n", string(asBytes))
-}
-
-func (r *Handler) logMetrics(URI string, metrics []*response.Metric) {
-	asBytes, _ := goJson.Marshal(NewMetrics(URI, metrics))
-	fmt.Printf("%v\n", string(asBytes))
 }
 
 func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aComponent *repository.Component) (response.Response, error) {

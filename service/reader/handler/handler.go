@@ -2,7 +2,7 @@ package handler
 
 import (
 	"context"
-	goJson "encoding/json"
+	goJson "github.com/goccy/go-json"
 	"github.com/viant/datly/gateway/router/status"
 	_ "github.com/viant/datly/repository/locator/async"
 	_ "github.com/viant/datly/repository/locator/component"
@@ -98,7 +98,6 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 	if err != nil {
 		return err
 	}
-	aSession.IncludeSQL = true
 	for _, opt := range opts {
 		if err = opt(aSession); err != nil {
 			return err
@@ -112,7 +111,6 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 		return err //TODO add 501 for database errors ?
 	}
 	ret.Reader = &aSession.Output
-
 	ret.Output = ret.Reader.Data
 	if aSession.View.Schema.Cardinality == state.One && h.output == nil {
 		slice := reflect.ValueOf(ret.Output)
@@ -151,11 +149,8 @@ func (h *Handler) publishMetricsIfNeeded(aSession *reader.Session, ret *Response
 		return
 	}
 	for _, info := range aSession.Metrics {
-		if info.Execution == nil {
+		if info.Executions == nil {
 			continue
-		}
-		if !aSession.IncludeSQL {
-			info = info.HideSQL()
 		}
 		data, err := goJson.Marshal(info)
 		if err != nil {

@@ -12,6 +12,7 @@ type Run struct {
 	FailedJobURL string   `short:"F" long:"fjobs" description:"failed jobs" `
 	LoadPlugin   bool     `short:"L" long:"lplugin" description:"load plugin"`
 	PluginInfo   string
+	Version      string
 }
 
 func (r *Run) Init() error {

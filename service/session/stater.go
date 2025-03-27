@@ -29,7 +29,12 @@ func (s *Session) ValuesOf(ctx context.Context, any interface{}) (map[string]int
 	return result, nil
 }
 
+// Into binds state into provided destination
 func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Option) (err error) {
+	return s.Bind(ctx, dest, opts...)
+}
+
+func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Option) (err error) {
 	destType := reflect.TypeOf(dest)
 	sType := types.EnsureStruct(destType)
 	stateType, ok := s.Types.Lookup(sType)

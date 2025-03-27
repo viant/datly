@@ -11,7 +11,10 @@ import (
 	"github.com/viant/sqlx/io/insert/batcher"
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/option"
+	"github.com/viant/xdatly/handler/exec"
+	"github.com/viant/xdatly/handler/response"
 	"reflect"
+	"time"
 )
 
 type (
@@ -25,10 +28,9 @@ type (
 
 		tx *lazyTx
 		*dbSession
-		canBeBatchedGlobally bool
-		dbSource             DBSource
-		collections          map[string]*batcher.Collection
-		logger               *logger.Adapter
+		dbSource    DBSource
+		collections map[string]*batcher.Collection
+		logger      *logger.Adapter
 	}
 
 	DBOption  func(options *DBOptions)
@@ -40,13 +42,12 @@ type (
 
 func newDbIo(tx *lazyTx, dialect *info.Dialect, dbSource DBSource, canBeBatchedGlobally bool, logger *logger.Adapter) *dbSession {
 	return &dbSession{
-		sqlxIO:               newSqlxIO(),
-		tx:                   tx,
-		dialect:              dialect,
-		dbSource:             dbSource,
-		canBeBatchedGlobally: canBeBatchedGlobally,
-		collections:          map[string]*batcher.Collection{},
-		logger:               logger,
+		sqlxIO:      newSqlxIO(),
+		tx:          tx,
+		dialect:     dialect,
+		dbSource:    dbSource,
+		collections: map[string]*batcher.Collection{},
+		logger:      logger,
 	}
 }
 
@@ -134,7 +135,6 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 		if actual.Executed() {
 			return nil
 		}
-
 		actual.MarkAsExecuted()
 		switch actual.ExecType {
 		case expand2.ExecTypeInsert:
@@ -157,27 +157,50 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 
 		return e.executeStatement(ctx, tx, actual, sess)
 	}
-
 	return fmt.Errorf("unsupported query type %T", data)
 }
 
 func (e *Executor) handleUpdate(ctx context.Context, sess *dbSession, db *sql.DB, executable *expand2.Executable) error {
+	now := time.Now()
 	service, err := sess.Updater(ctx, db, executable.Table, e.dbOptions(db, sess))
 	if err != nil {
 		return err
 	}
-
 	options, err := sess.tx.PrepareTxOptions()
 	if err != nil {
 		return err
 	}
 	options = append(options, db)
-	_, err = service.Exec(ctx, executable.Data, options...)
+
+	updated, err := service.Exec(ctx, executable.Data, options...)
+	e.logMetrics(ctx, executable.Table, "UPDATE", updated, now, err)
 	return err
 }
 
+func (e *Executor) logMetrics(ctx context.Context, table string, operation string, count int64, startTime time.Time, err error) {
+	value := ctx.Value(exec.ContextKey)
+	if value == nil {
+		return
+	}
+	elapsed := time.Since(startTime)
+	metric := response.Metric{
+		View:      table,
+		StartTime: startTime,
+		EndTime:   time.Now(),
+		Type:      operation,
+		Rows:      int(count),
+		ElapsedMs: int(elapsed.Milliseconds()),
+		Elapsed:   elapsed.String(),
+	}
+	if err != nil {
+		metric.Error = err.Error()
+	}
+	value.(*exec.Context).Metrics.Append(&metric)
+}
+
 func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable *expand2.Executable, db *sql.DB) error {
-	canBeBatched := sess.supportLocalBatch()
+	started := time.Now()
+	batchable := sess.supportLocalBatch()
 	//TODO remove this option make no sense unless its blacklist -&& sess.dbSource.CanBatch(executable.Table)
 	options := e.dbOptions(db, sess)
 	service, err := sess.Inserter(ctx, db, executable.Table, options...)
@@ -185,67 +208,35 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 		return err
 	}
 
-	if !canBeBatched {
+	var inserted = int64(0)
+	if !batchable {
 		tx, err := sess.tx.Tx()
 		if err != nil {
 			return err
 		}
-
 		options = append(options, tx)
-		_, _, err = service.Exec(ctx, executable.Data, options...)
+		inserted, _, err = service.Exec(ctx, executable.Data, options...)
+		e.logMetrics(ctx, executable.Table, "INSERT", inserted, started, err)
 		return err
 	}
 
-	//if !executable.IsLast {
-	//	return nil
-	//}
-
-	if !sess.canBeBatchedGlobally {
-		options, err := sess.tx.PrepareTxOptions()
-		if err != nil {
-			return err
-		}
-		batchSize := 100
-		rType := reflect.TypeOf(executable.Data)
-		if rType.Kind() == reflect.Slice {
-			actual := reflect.ValueOf(executable.Data)
-			if actual.Len() < batchSize {
-				batchSize = actual.Len()
-			}
-		}
-		options = append(options, option.BatchSize(batchSize))
-		options = append(options, e.dbOptions(db, sess))
-		_, _, err = service.Exec(ctx, executable.Data, options...)
-		return err
-	}
-
-	//TODO: !!!!!! :^^^^^^^^:
-	aBatcher, err := batcherRegistry.GetBatcher(executable.Table, reflect.TypeOf(executable.Data), db, &batcher.Config{
-		MaxElements:   100,
-		MaxDurationMs: 10,
-		BatchSize:     100,
-	})
-
+	options, err = sess.tx.PrepareTxOptions()
 	if err != nil {
 		return err
 	}
-
-	//TODO: remove reflection
-	rSlice := reflect.ValueOf(executable.Data)
-	sliceLen := rSlice.Len()
-	var state *batcher.State
-	for i := 0; i < sliceLen; i++ {
-		state, err = aBatcher.Collect(rSlice.Index(i).Interface())
-		if err != nil {
-			return err
+	batchSize := 100
+	rType := reflect.TypeOf(executable.Data)
+	if rType.Kind() == reflect.Slice {
+		actual := reflect.ValueOf(executable.Data)
+		if actual.Len() < batchSize {
+			batchSize = actual.Len()
 		}
 	}
-
-	if state != nil {
-		return state.Wait()
-	}
-
-	return nil
+	options = append(options, option.BatchSize(batchSize))
+	options = append(options, e.dbOptions(db, sess))
+	inserted, _, err = service.Exec(ctx, executable.Data, options...)
+	e.logMetrics(ctx, executable.Table, "INSERT", inserted, started, err)
+	return err
 }
 
 func (e *Executor) dbOptions(db *sql.DB, sess *dbSession) []option.Option {

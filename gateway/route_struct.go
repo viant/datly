@@ -16,6 +16,8 @@ func (r *Router) NewStructRoute(URL string, provider *repository.Provider) *Rout
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleGolangStruct(ctx, response, provider)
 		},
+		Config:  r.config.Logging,
+		Version: r.config.Version,
 	}
 }
 

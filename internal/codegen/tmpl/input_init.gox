@@ -6,7 +6,7 @@ import (
 )
 
 func (i *Input) Init(ctx context.Context, sess handler.Session, output *Output) error {
-	if err := sess.Stater().Into(ctx, i); err != nil {
+	if err := sess.Stater().Bind(ctx, i); err != nil {
 		return err
 	}
 	i.indexSlice()

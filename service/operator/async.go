@@ -63,8 +63,8 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	job.RunTimeInMcs = int(elapsed.Microseconds())
 	metrics, _ := json.Marshal(response.Metrics)
 	job.Metrics = string(metrics)
-	if len(response.Metrics) > 0 && len(response.Metrics[0].Execution.View) > 0 {
-		if cacheStat := response.Metrics[0].Execution.View[0].CacheStats; cacheStat != nil {
+	if len(response.Metrics) > 0 && len(response.Metrics[0].Executions) > 0 {
+		if cacheStat := response.Metrics[0].Executions[0].CacheStats; cacheStat != nil {
 			job.CacheNamespace = &cacheStat.Namespace
 			job.CacheSet = &cacheStat.Dataset
 			job.CacheKey = &cacheStat.Key
@@ -87,7 +87,7 @@ func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aStat
 	query := struct {
 		URI string `parameter:"kind=query"`
 	}{}
-	_ = aSession.Into(ctx, &query)
+	_ = aSession.Bind(ctx, &query)
 	_ = aSession.SetCacheValue(ctx, queryParameter, query.URI)
 
 	encodedState, err := aSession.MarshalJSON()

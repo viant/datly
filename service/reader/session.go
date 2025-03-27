@@ -17,7 +17,6 @@ import (
 type (
 	Session struct {
 		mux           sync.Mutex
-		IncludeSQL    bool
 		CacheDisabled bool
 		RevealMetric  bool
 		CacheRefresh  cache.Refresh

@@ -38,8 +38,6 @@ type (
 		Internal    bool              `json:"Internal,omitempty" yaml:"Internal,omitempty" `
 		Connector   string            `json:",omitempty"`
 		ContentURL  string            `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
-		EnableAudit bool              `json:",omitempty"`
-		EnableDebug *bool             `json:",omitempty"`
 		Compression *path.Compression `json:",omitempty"`
 
 		Transforms marshal.Transforms `json:",omitempty"`
@@ -124,10 +122,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 }
 
 func (r *Route) IsCacheDisabled(req *http.Request) bool {
-	if r.EnableDebug == nil {
-		return false
-	}
-	return (*r.EnableDebug) && (req.Header.Get(httputils.DatlyRequestDisableCacheHeader) != "" || req.Header.Get(strings.ToLower(httputils.DatlyRequestDisableCacheHeader)) != "")
+	return (req.Header.Get(httputils.DatlyRequestDisableCacheHeader) != "" || req.Header.Get(strings.ToLower(httputils.DatlyRequestDisableCacheHeader)) != "")
 }
 
 func (r *Route) IsMetricDebug(req *http.Request) bool {

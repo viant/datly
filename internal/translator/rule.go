@@ -309,7 +309,6 @@ func (r *Rule) selectorNamespace(viewName string) string {
 func (r *Rule) applyDefaults() {
 	setter.SetStringIfEmpty(&r.Method, "GET")
 	setter.SetCaseFormatIfEmpty(&r.Route.Output.CaseFormat, "lc")
-	setter.SetBoolIfFalse(&r.EnableAudit, true)
 	setter.SetBoolIfFalse(&r.Input.IgnoreEmptyQueryParameters, r.IgnoreEmptyQueryParameters)
 	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.Type != "")
 	if r.XMLUnmarshalType != "" {

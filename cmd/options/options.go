@@ -5,17 +5,18 @@ import (
 )
 
 type Options struct {
-	InitExt   *Extension   `command:"initExt" description:"initialises datly extension project" `
-	Build     *Build       `command:"build" description:"build custom datly binary"  `
-	Plugin    *Plugin      `command:"plugin" description:"build custom datly rule plugin"  `
-	Generate  *Generate    `command:"gen" description:"generate dql for put,patch or post operation" `
-	Translate *Translate   `command:"translate" description:"translate dql into datly repository rule"`
-	Cache     *CacheWarmup `command:"cache" description:"warmup cache"`
-	Run       *Run         `command:"run" description:"start datly in standalone mode"`
-	Bundle    *Bundle      `command:"bundle" description:"bundles rules for cloud deployment (speed/cost optimization)"`
-	InitCmd   *Init        `command:"init" description:"init datly rule repository"`
-	Touch     *Touch       `command:"touch" description:"forces route rule sync"`
-	Version   bool         `short:"v" long:"version" description:"datly version" `
+	InitExt     *Extension   `command:"initExt" description:"initialises datly extension project" `
+	Build       *Build       `command:"build" description:"build custom datly binary"  `
+	Plugin      *Plugin      `command:"plugin" description:"build custom datly rule plugin"  `
+	Generate    *Generate    `command:"gen" description:"generate dql for put,patch or post operation" `
+	Translate   *Translate   `command:"translate" description:"translate dql into datly repository rule"`
+	Cache       *CacheWarmup `command:"cache" description:"warmup cache"`
+	Run         *Run         `command:"run" description:"start datly in standalone mode"`
+	Bundle      *Bundle      `command:"bundle" description:"bundles rules for cloud deployment (speed/cost optimization)"`
+	InitCmd     *Init        `command:"init" description:"init datly rule repository"`
+	Touch       *Touch       `command:"touch" description:"forces route rule sync"`
+	ShowVersion bool         `short:"v" long:"version" description:"datly version" `
+	Version     string
 }
 
 func (o *Options) UpdateTranslate() {

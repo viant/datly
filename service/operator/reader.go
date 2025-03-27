@@ -16,7 +16,6 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 
 	readerHandler := handler.New(component.Output.Type.Type(), &component.Output.Type)
 	var options = []reader.Option{
-		reader.WithIncludeSQL(true),
 		reader.WithCacheDisabled(false),
 	}
 	startTime := time.Now()

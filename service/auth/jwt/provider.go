@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler/exec"
 	"reflect"
 	"strings"
 )
@@ -28,6 +29,12 @@ func (s *Provider) Value(ctx context.Context, raw interface{}, options ...codec.
 		rawString = rawString[index+1:]
 	}
 	claims, err := s.jwtValidator(ctx, rawString)
+	if value := ctx.Value(exec.ContextKey); value != nil {
+		if exeCtx := value.(*exec.Context); exeCtx != nil {
+			exeCtx.Auth = claims
+		}
+	}
+
 	return claims, err
 }
 

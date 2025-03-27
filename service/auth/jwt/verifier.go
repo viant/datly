@@ -3,6 +3,7 @@ package jwt
 import (
 	"context"
 	"github.com/viant/scy/auth/jwt"
+	"github.com/viant/xdatly/handler/exec"
 )
 
 type (
@@ -29,6 +30,19 @@ func (s *JwtChainVerifier) Add(verify verify) {
 }
 
 func (s *JwtChainVerifier) VerifyToken(ctx context.Context, rawToken string) (*jwt.Claims, error) {
+	claims, err := s.verifyToken(ctx, rawToken)
+	if err != nil {
+		return nil, err
+	}
+	if value := ctx.Value(exec.ContextKey); value != nil {
+		if exeCtx := value.(*exec.Context); exeCtx != nil {
+			exeCtx.Auth = claims
+		}
+	}
+	return claims, nil
+}
+
+func (s *JwtChainVerifier) verifyToken(ctx context.Context, rawToken string) (*jwt.Claims, error) {
 	claims := s.cache.get(rawToken)
 	if claims != nil {
 		return claims, nil

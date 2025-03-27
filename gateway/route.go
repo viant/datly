@@ -2,12 +2,14 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/repository/logging"
 	"github.com/viant/datly/repository/path"
+	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/xdatly/handler/exec"
 	"net/http"
 	"strings"
@@ -27,6 +29,8 @@ type (
 		Providers     []*repository.Provider
 		NewMultiRoute func(routes []*contract.Path) *Route
 		Handler       func(ctx context.Context, response http.ResponseWriter, req *http.Request)
+		logging.Config
+		Version string
 	}
 )
 
@@ -34,10 +38,15 @@ func (r *Route) Handle(res http.ResponseWriter, req *http.Request) int {
 	if !r.CanHandle(req) {
 		write(res, http.StatusForbidden, nil)
 	}
-	execCtx := exec.NewContext()
-	ctx := context.WithValue(context.Background(), exec.ContextKey, execCtx)
+	ctx := context.Background()
+	execContext := exec.NewContext(req.Method, req.RequestURI, req.Header, r.Version)
+	ctx = vcontext.WithValue(ctx, exec.ContextKey, execContext)
 	r.Handler(ctx, res, req)
-	return execCtx.StatusCode
+	if execContext.StatusCode == 0 {
+		execContext.StatusCode = http.StatusOK
+	}
+	logging.Log(&r.Config, execContext)
+	return execContext.StatusCode
 }
 
 func (r *Route) CanHandle(req *http.Request) bool {
@@ -59,6 +68,8 @@ func (r *Router) NewRouteHandler(handler *router.Handler) *Route {
 		Path:      &handler.Path.Path,
 		Providers: []*repository.Provider{handler.Provider},
 		Handler:   handler.HandleRequest,
+		Config:    r.config.Logging,
+		Version:   r.config.Version,
 	}
 }
 

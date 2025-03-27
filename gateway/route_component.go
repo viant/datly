@@ -16,6 +16,8 @@ func (r *Router) NewViewMetaHandler(URL string, provider *repository.Provider) *
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			handleViewMeta(ctx, response, provider)
 		},
+		Config:  r.config.Logging,
+		Version: r.config.Version,
 	}
 }
 
