@@ -1,14 +1,12 @@
 package expand
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/godiff"
 	"github.com/viant/structology"
-	"github.com/viant/toolbox"
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
 	"github.com/viant/velty/est/op"
@@ -197,10 +195,6 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 			return nil, fmt.Errorf("inompactible types, wanted %v got %T", e.stateType.Type().String(), externalType.String())
 		}
 
-		data, err := json.Marshal(state.ParametersState.State())
-
-		fmt.Println(string(data), err)
-
 		if err := state.SetValue(e.stateName, state.ParametersState.State()); err != nil {
 			return nil, err
 		}
@@ -216,14 +210,8 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 		return nil, err
 	}
 
-	data, err := json.Marshal(state.Context)
-	fmt.Println(string(data), err)
-
 	for _, embededVariable := range state.EmbededVariables {
 		if embededVariable.Value != nil {
-			data, err := json.Marshal(embededVariable.Value)
-			fmt.Println(string(data), err)
-
 			if err := state.State.EmbedValue(embededVariable.Value); err != nil {
 				return nil, err
 			}
@@ -232,19 +220,11 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 
 	for _, namedVariable := range state.NamedVariables {
 		if namedVariable.Value != nil {
-
-			data, err := json.Marshal(namedVariable.Value)
-			fmt.Println(string(data), err)
-
 			if err := state.State.SetValue(namedVariable.Name, namedVariable.Value); err != nil {
 				return nil, err
 			}
 		}
 	}
-
-	toolbox.Dump(state.State)
-
-	e.executor.PanicOnError = true
 	if err := e.executor.Exec(state.State); err != nil {
 		if unwrapped := errors.Unwrap(err); unwrapped != nil {
 			err = unwrapped
