@@ -22,8 +22,8 @@ type (
 		executor         *est.Execution
 		stateProvider    func() *est.State
 		setLiterals      func(state *structology.State) error
-		stateType        *structology.StateType
 		predicateConfigs []*PredicateConfig
+		stateType        *structology.StateType
 		stateName        string
 	}
 
