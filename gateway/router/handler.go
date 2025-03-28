@@ -239,8 +239,6 @@ func (r *Handler) writeErrorResponse(ctx context.Context, w http.ResponseWriter,
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		var data []byte
 		if aComponent.Content.Marshaller.JSON.CanMarshal() {
 			data, err = aComponent.Marshaller.JSON.Codec.Marshal(aResponse.State())
 		} else {
