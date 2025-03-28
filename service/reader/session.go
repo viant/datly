@@ -48,16 +48,16 @@ func (r *Output) syncData(cardinality state.Cardinality) {
 		return
 	}
 	slice := reflect.ValueOf(r.DataPtr).Elem()
-	//if cardinality == state.One {//TODO uncomment is here move to one cardinality handling here
-	//	switch slice.Len() {
-	//	case 0:
-	//		r.Data = nil
-	//		return
-	//	case 1:
-	//		r.Data = slice.Index(0).Interface()
-	//		return
-	//	}
-	//}
+	if cardinality == state.One { //TODO uncomment is here move to one cardinality handling here
+		switch slice.Len() {
+		case 0:
+			r.Data = reflect.New(slice.Type().Elem()).Interface()
+			return
+		case 1:
+			r.Data = slice.Index(0).Interface()
+			return
+		}
+	}
 	r.Data = slice.Interface()
 }
 

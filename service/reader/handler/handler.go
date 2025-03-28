@@ -117,6 +117,7 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 		switch slice.Len() {
 		case 0:
 			ret.Output = nil
+
 		case 1:
 			ret.Output = reflect.ValueOf(ret.Output).Index(0).Interface()
 		}
