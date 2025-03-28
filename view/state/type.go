@@ -184,6 +184,7 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflec
 	if err != nil {
 		return nil, err
 	}
+
 	pTag := aTag.Parameter
 	if pTag == nil {
 		return nil, nil
@@ -210,6 +211,9 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflec
 	result.With = pTag.With
 	if pTag.ErrorCode != 0 {
 		result.ErrorStatusCode = pTag.ErrorCode
+	}
+	if pTag.ErrorMessage != "" {
+		result.ErrorMessage = pTag.ErrorMessage
 	}
 	required := pTag.Required && result.In.Kind != KindTransient
 	if required {

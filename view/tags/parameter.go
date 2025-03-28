@@ -10,18 +10,19 @@ import (
 const ParameterTag = "parameter"
 
 type Parameter struct {
-	Name        string `tag:"name,omitempty"`
-	Kind        string `tag:"kind,omitempty"`  //parameter location kind
-	In          string `tag:"in,omitempty"`    //parameter location name
-	When        string `tag:"when,omitempty"`  //condition to evaluate
-	Scope       string `tag:"scope,omitempty"` //parameter scope
-	ErrorCode   int    `tag:"errorCode,omitempty"`
-	DataType    string `tag:"dataType,omitempty"`    //parameter input type
-	Cardinality string `tag:"cardinality,omitempty"` //parameter input type
-	With        string `tag:"with,omitempty"`        //optional auxiliary type name holding parameters
-	Required    bool   `tag:"required,omitempty"`
-	Cacheable   *bool  `tag:"cacheable,omitempty"`
-	Async       bool   `tag:"async,omitempty"`
+	Name         string `tag:"name,omitempty"`
+	Kind         string `tag:"kind,omitempty"`  //parameter location kind
+	In           string `tag:"in,omitempty"`    //parameter location name
+	When         string `tag:"when,omitempty"`  //condition to evaluate
+	Scope        string `tag:"scope,omitempty"` //parameter scope
+	ErrorCode    int    `tag:"errorCode,omitempty"`
+	ErrorMessage string `tag:"errorMessage,omitempty"`
+	DataType     string `tag:"dataType,omitempty"`    //parameter input type
+	Cardinality  string `tag:"cardinality,omitempty"` //parameter input type
+	With         string `tag:"with,omitempty"`        //optional auxiliary type name holding parameters
+	Required     bool   `tag:"required,omitempty"`
+	Cacheable    *bool  `tag:"cacheable,omitempty"`
+	Async        bool   `tag:"async,omitempty"`
 }
 
 func (t *Tag) updatedParameter(key string, value string) (err error) {
@@ -50,6 +51,8 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 		if tag.ErrorCode, err = strconv.Atoi(strings.TrimSpace(value)); err != nil {
 			return fmt.Errorf("invalid error code: %w", err)
 		}
+	case "errormessage":
+		tag.ErrorMessage = strings.TrimSpace(value)
 	case "datatype":
 		tag.DataType = strings.TrimSpace(value)
 	case "with":
@@ -85,6 +88,7 @@ func (p *Parameter) Tag() *tags.Tag {
 	if p.ErrorCode != 0 {
 		appendNonEmpty(builder, "errorCode", strconv.Itoa(p.ErrorCode))
 	}
+	appendNonEmpty(builder, "errorMessage", p.ErrorMessage)
 	if p.Required {
 		appendNonEmpty(builder, "required", "true")
 	}

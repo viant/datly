@@ -2,11 +2,11 @@ package expand
 
 import (
 	"context"
+	"fmt"
 	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
-
 	"strings"
 )
 
@@ -149,7 +149,10 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 			continue
 		}
 
-		p.appendFilter(selector, criteria.Placeholders)
+		err = p.appendFilter(selector, criteria.Placeholders)
+		if err != nil {
+			return "", fmt.Errorf("failed to append filter predicate parameter: %w", err)
+		}
 		if result.Len() != 0 {
 			result.WriteString(" ")
 			result.WriteString(operator)
@@ -167,8 +170,11 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 	return result.String(), nil
 }
 
-func (p *Predicate) appendFilter(selector *structology.Selector, value []interface{}) {
-	aTag, _ := tags.ParseStateTags(selector.Tag(), nil)
+func (p *Predicate) appendFilter(selector *structology.Selector, value []interface{}) error {
+	aTag, err := tags.ParseStateTags(selector.Tag(), nil)
+	if err != nil {
+		return err
+	}
 	if len(aTag.Predicates) == 0 {
 		aTag.EnsurePredicate()
 	}
@@ -180,6 +186,7 @@ func (p *Predicate) appendFilter(selector *structology.Selector, value []interfa
 	} else {
 		filter.Include = value
 	}
+	return nil
 }
 
 func (b *PredicateBuilder) And() *PredicateBuilder {

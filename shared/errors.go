@@ -2,13 +2,13 @@ package shared
 
 import "sync"
 
-//Errors collect errors, supports parallel errors collecting.
+// Errors collect errors, supports parallel errors collecting.
 type Errors struct {
 	locker sync.Mutex
 	errors []error
 }
 
-//NewErrors creates and allocates errors collector with given size
+// NewErrors creates and allocates errors collector with given size
 func NewErrors(size int) *Errors {
 	return &Errors{
 		locker: sync.Mutex{},
@@ -16,18 +16,17 @@ func NewErrors(size int) *Errors {
 	}
 }
 
-//Append appends error.
+// Append appends error.
 func (r *Errors) Append(err error) {
 	if err == nil {
 		return
 	}
-
 	r.locker.Lock()
 	defer r.locker.Unlock()
 	r.errors = append(r.errors, err)
 }
 
-//Error returns first encounter error if any
+// Error returns first encounter error if any
 func (r *Errors) Error() error {
 	r.locker.Lock()
 	defer r.locker.Unlock()
