@@ -393,6 +393,13 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	}
 	if redirect := aSession.Redirect; redirect != nil {
 		aSession.Redirect = nil //reset redirect
+		if !url.IsRelative(redirect.Route.URL) {
+			data, _ := goJson.Marshal(output)
+			response := response.NewBuffered(response.WithBytes(data))
+			response.Headers().Set("Location", redirect.Route.URL)
+			response.SetStatusCode(http.StatusFound)
+			return response, nil
+		}
 		provider, err := r.registry.LookupProvider(ctx, contract.NewPath(redirect.Route.Method, redirect.Route.URL))
 		if err != nil {
 			return nil, err
