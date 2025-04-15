@@ -19,9 +19,9 @@ import (
 
 type (
 	Parameter struct {
-		shared.Reference
-		Object   Parameters `json:",omitempty" yaml:"Object"`
-		Repeated Parameters `json:",omitempty" yaml:"Repeated"`
+		shared.Reference `yaml:",inline"`
+		Object           Parameters `json:",omitempty" yaml:"Object"`
+		Repeated         Parameters `json:",omitempty" yaml:"Repeated"`
 
 		//LocationInput, component input
 		LocationInput *Type `json:",omitempty" yaml:"Input"`

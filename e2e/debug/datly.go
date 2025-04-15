@@ -15,9 +15,6 @@ import (
 	"github.com/viant/datly/service/executor/expand"
 	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
-	"github.com/viant/sqlx/io/insert"
-	"github.com/viant/sqlx/io/read"
-	"github.com/viant/sqlx/io/update"
 	_ "github.com/viant/sqlx/metadata/product/bigquery"
 	_ "github.com/viant/sqlx/metadata/product/mysql"
 	_ "github.com/viant/sqlx/metadata/product/pg"
@@ -38,9 +35,9 @@ var (
 func init() {
 
 	os.Setenv("DATLY_NOPANIC", "true")
-	read.ShowSQL(true)
-	update.ShowSQL(true)
-	insert.ShowSQL(true)
+	//read.ShowSQL(true)
+	//update.ShowSQL(true)
+	//insert.ShowSQL(true)
 	expand.SetPanicOnError(false)
 
 	if BuildTimeInS != "" {
@@ -62,18 +59,21 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 }
 
 func main() {
-	os.Setenv("DATLY_NOPANIC", "0")
+	//os.Setenv("DATLY_NOPANIC", "0")
 
 	baseDir := toolbox.CallerDirectory(3)
+
+	os.Chdir(filepath.Join(baseDir, "../local/autogen/Datly"))
 	configURL := filepath.Join(baseDir, "../local/autogen/Datly/config.json")
 	os.Args = []string{
 		"",
-
+		"mcp",
+		//"-p=4981",
 		"-c=" + configURL,
 		"-z=/tmp/jobs/datly",
 	}
 
-	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
+	//fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)

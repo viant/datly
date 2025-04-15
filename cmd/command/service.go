@@ -39,6 +39,7 @@ type (
 )
 
 func (s *Service) Exec(ctx context.Context, opts *options.Options) error {
+
 	if opts.InitExt != nil {
 		return s.RunInitExtension(ctx, opts.InitExt)
 	}
@@ -60,6 +61,10 @@ func (s *Service) Exec(ctx context.Context, opts *options.Options) error {
 	}
 	if opts.Translate != nil {
 		return s.Translate(ctx, opts)
+	}
+
+	if opts.Mcp != nil {
+		return s.Mcp(ctx, opts)
 	}
 	if opts.Run != nil {
 		return s.Run(ctx, opts)

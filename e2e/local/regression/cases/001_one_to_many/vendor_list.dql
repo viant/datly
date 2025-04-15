@@ -1,5 +1,4 @@
-/* {"URI":"vendors/"} */
-
+/* {"URI":"vendors/", "Name":"VendorList", "Description":"Provides a list of vendors, with optional query parameters"} */
 
 
 #set( $_ = $VendorName<string>(form/name).Optional().WithPredicate(0, 'contains', 't', 'NAME'))

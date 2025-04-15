@@ -37,34 +37,11 @@ func (r *Server) shutdownOnInterrupt() {
 }
 
 func New(ctx context.Context, opts ...Option) (*Server, error) {
-	options, err := NewOptions(ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	config := options.config
-	config.Init(ctx)
-	//mux := http.NewServeMux()
-	if config.Config == nil {
-		return nil, fmt.Errorf("gateway config was empty")
-	}
-	var service *gateway.Service
-	var gOptions = []gateway.Option{
-		gateway.WithExtensions(extension.Config),
-		gateway.WithStatusHandler(handler.NewStatus(config.Version, &config.Meta)),
-	}
-	if options.options != nil {
-		gOptions = append(gOptions, options.options...)
-	}
-	if options.UseSingleton() {
-		service, err = gateway.Singleton(ctx, gOptions...)
-	} else {
-		service, err = gateway.New(ctx, gOptions...)
-	}
+	service, config, err := NewService(ctx, opts...)
 	if err != nil {
 		if service != nil {
 			_ = service.Close()
 		}
-
 		return nil, err
 	}
 	server := &Server{
@@ -80,4 +57,31 @@ func New(ctx context.Context, opts ...Option) (*Server, error) {
 
 	server.shutdownOnInterrupt()
 	return server, nil
+}
+
+func NewService(ctx context.Context, opts ...Option) (*gateway.Service, *Config, error) {
+	options, err := NewOptions(ctx, opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+	config := options.config
+	config.Init(ctx)
+	//mux := http.NewServeMux()
+	if config.Config == nil {
+		return nil, nil, fmt.Errorf("gateway config was empty")
+	}
+	var service *gateway.Service
+	var gOptions = []gateway.Option{
+		gateway.WithExtensions(extension.Config),
+		gateway.WithStatusHandler(handler.NewStatus(config.Version, &config.Meta)),
+	}
+	if options.options != nil {
+		gOptions = append(gOptions, options.options...)
+	}
+	if options.UseSingleton() {
+		service, err = gateway.Singleton(ctx, gOptions...)
+	} else {
+		service, err = gateway.New(ctx, gOptions...)
+	}
+	return service, config, nil
 }

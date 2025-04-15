@@ -1,6 +1,8 @@
 module github.com/viant/datly
 
-go 1.23.1
+go 1.23.4
+
+toolchain go1.23.8
 
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
@@ -47,8 +49,11 @@ require (
 )
 
 require (
+	github.com/mark3labs/mcp-go v0.18.0
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
+	github.com/viant/jsonrpc v0.2.0
+	github.com/viant/mcp v0.1.0
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.5.4-0.20250327185842-85ae4b2733ca
@@ -125,6 +130,7 @@ require (
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
 	github.com/xuri/excelize/v2 v2.8.0 // indirect
 	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect

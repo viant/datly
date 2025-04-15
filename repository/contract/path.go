@@ -1,9 +1,10 @@
 package contract
 
 type Path struct {
-	URI    string `json:",omitempty" yaml:"URI"`
-	Method string `json:",omitempty" yaml:"Method"`
-	key    string
+	URI         string `json:",omitempty" yaml:"URI"`
+	Method      string `json:",omitempty" yaml:"Method"`
+	Description string `json:",omitempty" yaml:"Description"` // optional description for documentation purposes
+	key         string
 }
 
 func (r *Path) Equals(candidate *Path) bool {

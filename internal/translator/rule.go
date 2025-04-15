@@ -27,7 +27,8 @@ import (
 type (
 	Rule struct {
 		Viewlets
-
+		Name                       string `json:",omitempty"`
+		Description                string `json:",omitempty"`
 		CustomValidation           bool
 		IgnoreEmptyQueryParameters bool
 		orderNamespaces            []string

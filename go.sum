@@ -979,6 +979,8 @@ github.com/lyft/protoc-gen-star v0.6.0/go.mod h1:TGAoBVkt8w7MPG72TrKIu85MIdXwDuz
 github.com/lyft/protoc-gen-star v0.6.1/go.mod h1:TGAoBVkt8w7MPG72TrKIu85MIdXwDuzJYeZuUPFPNwA=
 github.com/lyft/protoc-gen-star/v2 v2.0.1/go.mod h1:RcCdONR2ScXaYnQC5tUzxzlpA3WVYF7/opLeUgcQs/o=
 github.com/mailru/easyjson v0.0.0-20190312143242-1de009706dbe/go.mod h1:C1wdFJiN94OJF2b5HbByQZoLdCWB1Yqtg26g4irojpc=
+github.com/mark3labs/mcp-go v0.18.0 h1:YuhgIVjNlTG2ZOwmrkORWyPTp0dz1opPEqvsPtySXao=
+github.com/mark3labs/mcp-go v0.18.0/go.mod h1:KmJndYv7GIgcPVwEKJjNcbhVQ+hJGJhrCCB/9xITzpE=
 github.com/mattn/go-isatty v0.0.12/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Kysco4FUpU=
 github.com/mattn/go-isatty v0.0.16/go.mod h1:kYGgaQfpe5nmfYZH+SKPsOc2e4SrIfOl2e/yFXSvRLM=
 github.com/mattn/go-sqlite3 v1.14.14/go.mod h1:NyWgC/yNuGj7Q9rpYnZvas74GogHl5/Z4A/KQRfk6bU=
@@ -1116,6 +1118,10 @@ github.com/viant/govalidator v0.3.1 h1:V7f/KgfzbP8fVDc+Kj+jyPvfXxMr2N1x7srOlDV6l
 github.com/viant/govalidator v0.3.1/go.mod h1:D35Dwx0R8rR1knRxhlseoYvOkiqo24kpMg1/o977i9Y=
 github.com/viant/igo v0.2.0 h1:ygWmTCinnGPaeV7omJLiyneOpzYZ5kiw7oYz7mUJZVQ=
 github.com/viant/igo v0.2.0/go.mod h1:7V6AWsLhKWeGzXNTNH3AZiIEKa0m33DrQbdWtapsI74=
+github.com/viant/jsonrpc v0.2.0 h1:3WtpJ2/j8feHZaRs3/iUtR4iggv8cvdXWBXS59RwdcQ=
+github.com/viant/jsonrpc v0.2.0/go.mod h1:Q9hEZ9kKXRryxB8HxcZNjVkX4m8IapHGiS1z0FB9bhI=
+github.com/viant/mcp v0.1.0 h1:A/44vWANG9ndN4faWmSChLXzUlz2gQwRd5GFo3vlOsw=
+github.com/viant/mcp v0.1.0/go.mod h1:QWW3FXKQsDeqkd5hi+eHiYZ8eNJw51x5+RW54fcR87I=
 github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b h1:3q166tV28yFdbFV+tXXjH7ViKAmgAgGdoWzMtvhQv28=
 github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b/go.mod h1:85fneXJbErKMGhSQto3A5ElTQCwl3t74U9cSV0waBHw=
 github.com/viant/pgo v0.11.0 h1:PNuYVhwTfyrAHGBO6lxaMFuHP4NkjKV8ULecz3OWk8c=
@@ -1124,8 +1130,6 @@ github.com/viant/scy v0.15.4 h1:cjqCbNIAdRIsIO3GrdI39GKbUx+jcpOvtGdgeAgVkjA=
 github.com/viant/scy v0.15.4/go.mod h1:yHDc9YmfDqhxiMPZcCRS+rb9KUjMNZniWZ9LMQoM0KI=
 github.com/viant/sqlparser v0.8.1 h1:nbcTecMtW7ROk5aNB5/BWUxnduepRPOkhVo9RWxI1Ns=
 github.com/viant/sqlparser v0.8.1/go.mod h1:2QRGiGZYk2/pjhORGG1zLVQ9JO+bXFhqIVi31mkCRPg=
-github.com/viant/sqlx v0.16.4-0.20250222192411-e1703190cac4 h1:A6SQg064KA7+l3HoH7Z2iW+PagJkAC0l4+hwDn26rcs=
-github.com/viant/sqlx v0.16.4-0.20250222192411-e1703190cac4/go.mod h1:dizufL+nTNqDCpivUnE2HqtddTp2TdA6WFghGfZo11c=
 github.com/viant/sqlx v0.16.4-0.20250330143046-7f3b76980252 h1:qSq3fEb29CncJ+fpazSOyNTb9R3mE93eGncvlrDqlrc=
 github.com/viant/sqlx v0.16.4-0.20250330143046-7f3b76980252/go.mod h1:dizufL+nTNqDCpivUnE2HqtddTp2TdA6WFghGfZo11c=
 github.com/viant/structology v0.6.1 h1:Forza+RF/1tmlQFk9ABNhu+IQ8vMAqbYM6FOsYtGh9E=
@@ -1167,6 +1171,8 @@ github.com/xuri/excelize/v2 v2.8.0 h1:Vd4Qy809fupgp1v7X+nCS/MioeQmYVVzi495UCTqB7
 github.com/xuri/excelize/v2 v2.8.0/go.mod h1:6iA2edBTKxKbZAa7X5bDhcCg51xdOn1Ar5sfoXRGrQg=
 github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a h1:Mw2VNrNNNjDtw68VsEj2+st+oCSn4Uz7vZw6TbhcV1o=
 github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a/go.mod h1:WwHg+CVyzlv/TX9xqBFXEZAuxOPxn2k1GNHwG41IIUQ=
+github.com/yosida95/uritemplate/v3 v3.0.2 h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=
+github.com/yosida95/uritemplate/v3 v3.0.2/go.mod h1:ILOh0sOhIJR3+L/8afwt/kE++YT040gmv5BQTMR2HP4=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

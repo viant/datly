@@ -192,8 +192,8 @@ func (s *Service) buildPaths(ctx context.Context, candidate storage.Object, root
 	if err != nil {
 		return nil, err
 	}
-	aRoutes := &Item{}
-	if err := yaml.Unmarshal(data, aRoutes); err != nil {
+	temp := &Item{}
+	if err := yaml.Unmarshal(data, temp); err != nil {
 		return nil, err
 	}
 	sourceURL := candidate.URL()
@@ -202,9 +202,10 @@ func (s *Service) buildPaths(ctx context.Context, candidate storage.Object, root
 	}
 	anItem := &Item{
 		SourceURL: sourceURL,
-		Paths:     aRoutes.Paths,
-		Settings:  aRoutes.Settings,
+		Paths:     temp.Paths,
+		Settings:  temp.Settings,
 		Version:   version.Control{},
+		Resource:  temp.Resource,
 	}
 	for _, aPath := range anItem.Paths {
 		aPath.inherit(&anItem.Settings)

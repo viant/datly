@@ -2,7 +2,9 @@ package openapi3
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
+	"reflect"
 )
 
 type ExternalDocumentation struct {
@@ -44,8 +46,6 @@ func (e *ExternalDocumentation) MarshalJSON() ([]byte, error) {
 	return res, nil
 }
 
-
-
 func (e *ExternalDocumentation) UnmarshalYAML(ctx context.Context, fn func(dest interface{}) error) error {
 	type temp ExternalDocumentation
 	tmp := temp(*e)
@@ -61,4 +61,53 @@ func (e *ExternalDocumentation) UnmarshalYAML(ctx context.Context, fn func(dest 
 	tmp.Extension = Extension(ext)
 	*e = ExternalDocumentation(tmp)
 	return nil
+}
+
+type Param struct {
+	Name string
+}
+
+type StateType[T any] struct {
+	PkgPath    string
+	Package    string
+	Type       Type[T]
+	Parameters []*Parameter
+	embedFS    *embed.FS
+}
+
+type InputType[T any] struct {
+	Body StateType[T]
+	Type StateType[T]
+}
+
+type OutputType[T any] struct {
+	Type StateType[T]
+}
+
+type Binder interface {
+	Bind(ctx context.Context, input any) error
+}
+
+type Handler[Input any, Output any] interface {
+	Handle(ctx context.Context, binder Binder, input *Input, output *Output) error
+}
+
+type Conten struct {
+	Marshaller   reflect.Type
+	Unmarshaller reflect.Type
+	CaseFormat   string
+}
+
+type Type[T any] struct {
+	reflect.Type
+}
+
+type Path struct {
+	Method string
+	URI    string
+}
+type TypedPath[I any, O any, handler Handler[I, O]] struct {
+	Path
+	Input  StateType[I]
+	Output StateType[O]
 }

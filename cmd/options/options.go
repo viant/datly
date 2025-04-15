@@ -12,6 +12,7 @@ type Options struct {
 	Translate   *Translate   `command:"translate" description:"translate dql into datly repository rule"`
 	Cache       *CacheWarmup `command:"cache" description:"warmup cache"`
 	Run         *Run         `command:"run" description:"start datly in standalone mode"`
+	Mcp         *Mcp         `command:"mcp" description:"run mcp"`
 	Bundle      *Bundle      `command:"bundle" description:"bundles rules for cloud deployment (speed/cost optimization)"`
 	InitCmd     *Init        `command:"init" description:"init datly rule repository"`
 	Touch       *Touch       `command:"touch" description:"forces route rule sync"`
@@ -74,6 +75,9 @@ func (o *Options) Init(ctx context.Context) error {
 	if o.Run != nil {
 		return o.Run.Init()
 	}
+	if o.Mcp != nil {
+		return o.Mcp.Init()
+	}
 	if o.Bundle != nil {
 		return o.Bundle.Init()
 	}
@@ -105,6 +109,8 @@ func NewOptions(args Arguments) *Options {
 		ret.Cache = &CacheWarmup{}
 	case "run":
 		ret.Run = &Run{}
+	case "mcp":
+		ret.Mcp = &Mcp{}
 	case "bundle":
 		ret.Bundle = &Bundle{}
 	case "touch":

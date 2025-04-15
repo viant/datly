@@ -79,7 +79,7 @@ func (s *Service) read(ctx context.Context, session *Session) error {
 func (s *Service) afterRead(ctx context.Context, aSession *Session, collector *view.Collector, start *time.Time, executions response.SQLExecutions, err error, onFinish counter.OnDone) {
 	end := Now()
 	viewName := collector.View().Name
-	aSession.View.Logger.ReadTime(viewName, start, &end, err)
+	//aSession.View.Logger.ReadTime(viewName, start, &end, err)
 	elapsed := Diff(end, *start)
 	metrics := &response.Metric{
 		ID:         uuid.New().String(),
@@ -243,16 +243,6 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 }
 
 func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Statelet, info *response.SQLExecutions) error {
-
-	/*
-		TODO paralelize batching if relation is to one
-		isToOne := false
-		if rel := collector.Relation(); rel != nil {
-
-			fmt.Printf("PARENT: %v\n", collector.Relation().Cardinality)
-		}
-	*/
-
 	batchData.ValuesBatch, batchData.Size = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
 	visitor := collector.Visitor(ctx)
 	for {

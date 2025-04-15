@@ -7,7 +7,8 @@ import (
 	"github.com/viant/afs/cache"
 	"github.com/viant/afs/matcher"
 	"github.com/viant/afs/option"
-	"github.com/viant/afs/url"
+	furl "github.com/viant/afs/url"
+	"github.com/viant/datly/mcp/extension"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/locator/component/dispatcher"
 	"github.com/viant/datly/view"
@@ -29,8 +30,19 @@ type (
 		cancelFn      context.CancelFunc
 		mux           sync.RWMutex
 		statusHandler http.Handler
+		mcp           *extension.Integration
 	}
 )
+
+func (r *Service) MCP() *extension.Integration {
+	if r == nil {
+		return nil
+	}
+	if r.mcp == nil {
+		return nil
+	}
+	return r.mcp
+}
 
 func (r *Service) JWTSigner() *signer.Service {
 	return r.repository.JWTSigner()
@@ -72,7 +84,7 @@ func (r *Service) Close() error {
 
 // New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
 func New(ctx context.Context, opts ...Option) (*Service, error) {
-	start := time.Now()
+	//start := time.Now()
 	options, err := newOptions(ctx, opts...)
 	if err != nil {
 		return nil, err
@@ -108,7 +120,13 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 			return nil, fmt.Errorf("failed to initialise component service: %w", err)
 		}
 	}
-	mainRouter, err := NewRouter(ctx, componentRepository, aConfig, options.metrics, options.statusHandler)
+
+	var mcp *extension.Integration
+
+	if aConfig.MCPEndpoint != nil {
+		mcp = extension.NewIntegration()
+	}
+	mainRouter, err := NewRouter(ctx, componentRepository, aConfig, options.metrics, options.statusHandler, mcp)
 	if err != nil {
 		return nil, err
 	}
@@ -120,9 +138,11 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 		fs:            fs,
 		statusHandler: options.statusHandler,
 		mainRouter:    mainRouter,
+		mcp:           mcp,
 	}
+
 	go srv.watchAsyncJob(context.Background())
-	fmt.Printf("[INFO]: started gatweay after: %s\n", time.Since(start))
+	//fmt.Printf("[INFO]: started gatweay after: %s\n", time.Since(start))
 	return srv, err
 }
 
@@ -146,7 +166,7 @@ func NewCacheFs(URL string) afs.Service {
 		matcher.WithExtExclusion(".so", "so", ".gz", "gz"),
 		option.WithCache(PackageFile, "gzip"),
 		option.WithLogger(func(format string, args ...interface{}) {
-			fmt.Printf(format, args...)
+			//fmt.Printf(format, args...)
 		}))
 }
 
@@ -154,7 +174,7 @@ func CommonURL(URLs ...string) (string, error) {
 	counter := map[string]int{}
 	var base string
 	for i, URL := range URLs {
-		dir, aPath := url.Split(URL, "file")
+		dir, aPath := furl.Split(URL, "file")
 		if base == "" {
 			base = dir
 		} else {
@@ -174,7 +194,7 @@ func CommonURL(URLs ...string) (string, error) {
 			allExhausted = false
 			commonCounter := counter[URL] + 1
 			if commonCounter == len(URLs) {
-				return url.Join(base, URL), nil
+				return furl.Join(base, URL), nil
 			}
 
 			counter[URL] = commonCounter
@@ -198,7 +218,7 @@ func (r *Service) syncChanges(ctx context.Context, metrics *gmetric.Service, sta
 	}
 	start := time.Now()
 	fmt.Printf("[INFO] detected resources changes, rebuilding routers\n")
-	mainRouter, err := NewRouter(ctx, r.repository, r.Config, metrics, statusHandler)
+	mainRouter, err := NewRouter(ctx, r.repository, r.Config, metrics, statusHandler, r.mcp)
 	if err != nil {
 		return err
 	}

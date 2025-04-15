@@ -218,11 +218,11 @@ func (d *db) keepConnectionAlive(driver string, dsn string, config *DBConfig) {
 
 				var err error
 				if aDb != nil {
-					started := time.Now()
+					//started := time.Now()
 					err = aDb.PingContext(d.ctx)
-					if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
-						fmt.Printf("[WARN] %v ping took\n", elapsed)
-					}
+					//if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
+					//	fmt.Printf("[WARN] %v ping took\n", elapsed)
+					//}
 				}
 
 				if err != nil || aDb == nil {

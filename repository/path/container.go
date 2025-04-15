@@ -4,6 +4,9 @@ import (
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/utils/httputils"
+	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/state"
 	"net/http"
 	"strings"
 	"time"
@@ -34,6 +37,10 @@ type (
 		With       []string
 	}
 
+	ViewRef struct {
+		Ref string `yaml:"Ref" json:"Ref"` // Ref is the reference to the view definition
+	}
+
 	Path struct {
 		contract.Path `yaml:",inline"`
 		Settings      `yaml:",inline"`
@@ -41,8 +48,22 @@ type (
 		Internal      bool             `json:"Internal,omitempty" yaml:"Internal,omitempty" `
 		Connector     string           `json:",omitempty"`
 		ContentURL    string           `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
+		View          *ViewRef         `yaml:"View" json:"View"` // View is the shared resource view for this path, used for OpenAPI generation
 		SourceURL     string           `yaml:"-" json:"-"`
 		Version       *version.Control `yaml:"-" json:"-"`
+	}
+
+	Parameter struct {
+		Name      string                       `json:"name" yaml:"Name"` // Name of the parameter
+		In        *state.Location              `json:",omitempty" yaml:"In" `
+		Required  bool                         `json:"required,omitempty" yaml:"Required,omitempty"` // Required indicates if the parameter is required
+		Schema    *state.Schema                `json:"schema" yaml:"Schema"`
+		Predicate []*extension.PredicateConfig `json:",omitempty" yaml:"Predicates"`
+	}
+
+	Resource struct {
+		Parameters []*Parameter           `json:",omitempty" yaml:"Parameters,omitempty"` // Parameters for the resource, used for OpenAPI generation
+		Types      []*view.TypeDefinition `json:",omitempty" yaml:"Types,omitempty"`      // Type definitions for the resource, used for OpenAPI generation
 	}
 
 	Item struct {
@@ -50,6 +71,7 @@ type (
 		MessageBus string  `json:"MessageBus,omitempty" yaml:"MessageBus,omitempty" `
 		Paths      []*Path `yaml:"Routes" json:"Routes"`
 		Settings   `yaml:",inline"`
+		Resource   *Resource       `yaml:"Resource,omitempty" json:"Resource,omitempty"` // optional resource for the path
 		Version    version.Control `yaml:"-" json:"-"`
 	}
 )

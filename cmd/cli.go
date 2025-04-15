@@ -9,6 +9,7 @@ import (
 )
 
 func RunApp(version string, args soptions.Arguments) error {
+
 	options, err := buildOptions(args)
 	if err != nil {
 		return err

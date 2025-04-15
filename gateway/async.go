@@ -12,18 +12,18 @@ import (
 	"time"
 )
 
-func (s *Service) watchAsyncJob(ctx context.Context) {
-	if s.Config.JobURL == "" {
+func (r *Service) watchAsyncJob(ctx context.Context) {
+	if r.Config.JobURL == "" {
 		return
 	}
 	var limiter chan bool
-	if s.Config.MaxJobs > 0 {
-		limiter = make(chan bool, s.Config.MaxJobs)
+	if r.Config.MaxJobs > 0 {
+		limiter = make(chan bool, r.Config.MaxJobs)
 	}
 	pending := make(map[string]bool)
 	var mux sync.RWMutex
 	for {
-		objects, _ := s.fs.List(ctx, s.Config.JobURL, option.NewRecursive(true))
+		objects, _ := r.fs.List(ctx, r.Config.JobURL, option.NewRecursive(true))
 		objectCount := 0
 		for _, object := range objects {
 			if object.IsDir() {
@@ -63,7 +63,7 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 					delete(pending, object.URL())
 					mux.Unlock()
 				}()
-				router, _ := s.Router()
+				router, _ := r.Router()
 				if router != nil {
 					err := router.DispatchStorageEvent(context.Background(), object)
 					if err != nil {
@@ -72,7 +72,7 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 					if err == nil {
 						err = fs.Delete(ctx, object.URL())
 					} else {
-						destURL := url.Join(s.Config.FailedJobURL, time.Now().Format("20060102"), object.Name())
+						destURL := url.Join(r.Config.FailedJobURL, time.Now().Format("20060102"), object.Name())
 						err = fs.Move(ctx, object.URL(), destURL)
 					}
 					if err != nil {
@@ -83,15 +83,13 @@ func (s *Service) watchAsyncJob(ctx context.Context) {
 					log.Println("router was nil")
 				}
 			}(objects[i])
-
 		}
-
 		time.Sleep(100 * time.Millisecond)
 	}
 }
 
-func (s *Service) handleJobEvent(ctx context.Context, object storage.Object, router *Router) error {
-	data, err := s.fs.Download(ctx, object)
+func (r *Service) handleJobEvent(ctx context.Context, object storage.Object, router *Router) error {
+	data, err := r.fs.Download(ctx, object)
 	if err != nil {
 		return err
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/gateway/router/openapi/openapi3"
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/gateway/warmup"
+	"github.com/viant/datly/mcp/extension"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
@@ -41,6 +42,7 @@ type (
 		metrics       *gmetric.Service
 		statusHandler http.Handler
 		paths         []*contract.Path
+		mcp           *extension.Integration
 	}
 
 	AvailableRoutesError struct {
@@ -67,7 +69,7 @@ func (a *AvailableRoutesError) Error() string {
 }
 
 // NewRouter creates new router
-func NewRouter(ctx context.Context, components *repository.Service, config *Config, metrics *gmetric.Service, statusHandler http.Handler) (*Router, error) {
+func NewRouter(ctx context.Context, components *repository.Service, config *Config, metrics *gmetric.Service, statusHandler http.Handler, mcp *extension.Integration) (*Router, error) {
 	r := &Router{
 		config:        config,
 		metrics:       metrics,
@@ -75,6 +77,7 @@ func NewRouter(ctx context.Context, components *repository.Service, config *Conf
 		repository:    components,
 		operator:      operator.New(),
 		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
+		mcp:           mcp,
 	}
 	return r, r.init(ctx)
 }
@@ -336,9 +339,15 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				if err != nil {
 					return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
 				}
-				routes = append(routes, r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth(), r.config.Version, r.config.Logging)))
+				aRoute := r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth(), r.config.Version, r.config.Logging))
+				routes = append(routes, aRoute)
 				if aPath.Cors != nil {
 					optionsPaths[aPath.URI] = append(optionsPaths[aPath.URI], aPath)
+				}
+
+				if r.mcp != nil {
+					r.buildResourceTemplatesIntegration(anItem, aPath, aRoute, provider) // build mcp resource integration if applicable, this is optional
+					r.buildToolsIntegration(anItem, aPath, aRoute, provider)
 				}
 				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.Meta.ViewURI, aPath.URI), provider))
 				key := r.routeURL(r.config.Meta.OpenApiURI, aPath.URI)
