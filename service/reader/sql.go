@@ -50,7 +50,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	parent := options.parent
 	partitions := options.partition
 	expander := options.expander
-	state, err := aView.Template.EvaluateSource(statelet.Template, parent, &batchData, expander)
+	state, err := aView.Template.EvaluateSource(ctx, statelet.Template, parent, &batchData, expander)
 
 	if err != nil {
 		return nil, err

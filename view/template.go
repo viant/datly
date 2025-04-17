@@ -218,9 +218,9 @@ func NewEvaluator(parameters state.Parameters, stateType *structology.StateType,
 	)
 }
 
-func (t *Template) EvaluateSource(parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, options ...interface{}) (*expand.State, error) {
+func (t *Template) EvaluateSource(ctx context.Context, parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, options ...interface{}) (*expand.State, error) {
 	if t.wasEmpty {
-		return expand.StateWithSQL(t.Source), nil
+		return expand.StateWithSQL(ctx, t.Source), nil
 	}
 	return t.EvaluateState(parameterState, parentParam, batchData, options...)
 }
