@@ -245,7 +245,7 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 
 func (e *Evaluator) ensureState(ctx *Context, options ...StateOption) *State {
 	state := &State{
-		Context: &Context{Filters: predicate.Filters{}, Context: ctx.Context},
+		Context: &Context{Filters: predicate.Filters{}},
 	}
 
 	if ctx != nil {
