@@ -431,7 +431,7 @@ func (b *Builder) metaSQL(ctx context.Context, aView *view.View, statelet *view.
 	viewParam.NonWindowSQL = matcher.SQL
 	viewParam.Args = matcher.Args
 
-	SQL, args, err := aView.Template.Summary.Evaluate(statelet.Template, viewParam)
+	SQL, args, err := aView.Template.Summary.Evaluate(ctx, statelet.Template, viewParam)
 	if err != nil {
 		return nil, err
 	}

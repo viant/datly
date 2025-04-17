@@ -311,7 +311,7 @@ func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, ow
 		}
 	}
 
-	SQL, args, err := m.prepareSQL(owner)
+	SQL, args, err := m.prepareSQL(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -352,23 +352,23 @@ func SummaryViewKey(ownerName, name string) string {
 	return ownerName + "/DataSummary/" + name
 }
 
-func (m *TemplateSummary) prepareSQL(owner *Template) (string, []interface{}, error) {
+func (m *TemplateSummary) prepareSQL(ctx context.Context, owner *Template) (string, []interface{}, error) {
 	stateValue := owner.stateType.NewState()
 
 	viewParam := AsViewParam(owner._view, nil, nil)
 
-	state, err := Evaluate(owner.sqlEvaluator, expand.WithParameterState(stateValue), expand.WithViewParam(viewParam))
+	state, err := Evaluate(ctx, owner.sqlEvaluator, expand.WithParameterState(stateValue), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}
 
 	viewParam.NonWindowSQL = ExpandWithFalseCondition(state.Buffer.String())
 	viewParam.Args = state.DataUnit.ParamsGroup
-	return m.Evaluate(stateValue, viewParam)
+	return m.Evaluate(ctx, stateValue, viewParam)
 }
 
-func (m *TemplateSummary) Evaluate(parameterState *structology.State, viewParam *expand.ViewContext) (string, []interface{}, error) {
-	state, err := Evaluate(m.sqlEvaluator, expand.WithParameterState(parameterState), expand.WithViewParam(viewParam))
+func (m *TemplateSummary) Evaluate(ctx context.Context, parameterState *structology.State, viewParam *expand.ViewContext) (string, []interface{}, error) {
+	state, err := Evaluate(ctx, m.sqlEvaluator, expand.WithParameterState(parameterState), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}

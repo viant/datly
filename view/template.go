@@ -222,14 +222,14 @@ func (t *Template) EvaluateSource(ctx context.Context, parameterState *structolo
 	if t.wasEmpty {
 		return expand.StateWithSQL(ctx, t.Source), nil
 	}
-	return t.EvaluateState(parameterState, parentParam, batchData, options...)
+	return t.EvaluateState(ctx, parameterState, parentParam, batchData, options...)
 }
 
-func (t *Template) EvaluateState(parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, options ...interface{}) (*expand.State, error) {
-	return t.EvaluateStateWithSession(parameterState, parentParam, batchData, nil, options...)
+func (t *Template) EvaluateState(ctx context.Context, parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, options ...interface{}) (*expand.State, error) {
+	return t.EvaluateStateWithSession(ctx, parameterState, parentParam, batchData, nil, options...)
 }
 
-func (t *Template) EvaluateStateWithSession(parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, sess *extension.Session, options ...interface{}) (*expand.State, error) {
+func (t *Template) EvaluateStateWithSession(ctx context.Context, parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, sess *extension.Session, options ...interface{}) (*expand.State, error) {
 	var expander expand.Expander
 	var dataUnit *expand.DataUnit
 	for _, option := range options {
@@ -251,7 +251,7 @@ func (t *Template) EvaluateStateWithSession(parameterState *structology.State, p
 	if dataUnit != nil {
 		ops = append(ops, expand.WithDataUnit(dataUnit))
 	}
-	return Evaluate(
+	return Evaluate(ctx,
 		t.sqlEvaluator,
 		ops...,
 	)
@@ -280,8 +280,8 @@ func NewTemplate(source string, opts ...TemplateOption) *Template {
 	return ret
 }
 
-func Evaluate(evaluator *expand.Evaluator, options ...expand.StateOption) (*expand.State, error) {
-	return evaluator.Evaluate(nil,
+func Evaluate(ctx context.Context, evaluator *expand.Evaluator, options ...expand.StateOption) (*expand.State, error) {
+	return evaluator.Evaluate(&expand.Context{Context: ctx},
 		options...,
 	)
 }
