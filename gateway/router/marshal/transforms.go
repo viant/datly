@@ -56,7 +56,7 @@ func (t *Transform) Init(ctx context.Context, fs afs.Service, lookupType xreflec
 
 	if t.Source != "" {
 		var err error
-		t._evaluator, err = expand.NewEvaluator(t.Source, expand.WithTypeLookup(lookupType), expand.WithCustomContexts(t.newCtx(CustomContext{})))
+		t._evaluator, err = expand.NewEvaluator(t.Source, expand.WithTypeLookup(lookupType), expand.WithContext(ctx), expand.WithCustomContexts(t.newCtx(CustomContext{})))
 		if err != nil {
 			return err
 		}

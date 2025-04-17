@@ -121,7 +121,10 @@ func (b *PredicateBuilder) Build(keyword string) string {
 func (p *Predicate) expand(group int, operator string) (string, error) {
 	result := &strings.Builder{}
 
-	ctx := context.Background()
+	ctx := p.ctx.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	ctx = vcontext.WithValue(ctx, PredicateCtx, p.ctx)
 	ctx = vcontext.WithValue(ctx, PredicateState, p.state)
 

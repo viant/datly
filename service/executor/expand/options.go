@@ -1,6 +1,7 @@
 package expand
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/structology"
@@ -49,6 +50,7 @@ type config struct {
 	typeLookup     xreflect.LookupType
 	stateName      string
 	predicates     []*PredicateConfig
+	context        context.Context
 }
 
 func newConfig() *config {

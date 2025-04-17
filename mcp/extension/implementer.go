@@ -19,8 +19,8 @@ type (
 	}
 )
 
-func (f *Implementer) Initialize(ctx context.Context, init *schema.InitializeRequestParams, result *schema.InitializeResult) {
-	f.ClientInitialize = init
+func (i *Implementer) Initialize(ctx context.Context, init *schema.InitializeRequestParams, result *schema.InitializeResult) {
+	i.ClientInitialize = init
 	result.ProtocolVersion = init.ProtocolVersion
 }
 

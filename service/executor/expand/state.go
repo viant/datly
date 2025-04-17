@@ -1,7 +1,9 @@
 package expand
 
 import (
+	"context"
 	"github.com/viant/datly/service/executor/extension"
+
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/structology"
 	"github.com/viant/velty/est"
@@ -33,6 +35,7 @@ type (
 		MessageBus        *mbus.Service      `velty:"names=messageBus"`
 		Predicate         *Predicate         `velty:"names=predicate"`
 		Filters           predicate.Filters  `velty:"names=filters"`
+		Context           context.Context    `velty:"-"`
 	}
 
 	StateOption func(state *State)

@@ -1,6 +1,7 @@
 package expand
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/viant/datly/view/keywords"
@@ -35,6 +36,12 @@ type (
 func WithCustomContexts(ctx ...*Variable) EvaluatorOption {
 	return func(c *config) {
 		c.embededTypes = append(c.embededTypes, ctx...)
+	}
+}
+
+func WithContext(ctx context.Context) EvaluatorOption {
+	return func(c *config) {
+		c.context = ctx
 	}
 }
 
@@ -105,7 +112,7 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 		}
 	}
 
-	if err = evaluator.planner.EmbedVariable(Context{Filters: predicate.Filters{}}); err != nil {
+	if err = evaluator.planner.EmbedVariable(Context{Context: aConfig.context, Filters: predicate.Filters{}}); err != nil {
 		return nil, err
 	}
 
@@ -238,7 +245,7 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 
 func (e *Evaluator) ensureState(ctx *Context, options ...StateOption) *State {
 	state := &State{
-		Context: &Context{Filters: predicate.Filters{}},
+		Context: &Context{Filters: predicate.Filters{}, Context: ctx.Context},
 	}
 
 	if ctx != nil {
