@@ -111,7 +111,6 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 			repository.WithJWTVerifier(aConfig.JWTValidator),
 			repository.WithCognitoAuth(aConfig.Cognito),
 			repository.WithFirebaseAuth(aConfig.Firebase),
-			repository.WithCustomAuth(aConfig.Custom),
 			repository.WithDependencyURL(aConfig.DependencyURL),
 			repository.WithRefreshFrequency(aConfig.SyncFrequency()),
 			repository.WithDispatcher(dispatcher.New),

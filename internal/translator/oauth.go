@@ -2,13 +2,11 @@ package translator
 
 import (
 	"context"
-	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/scy"
 	"github.com/viant/scy/auth/cognito"
-	custom "github.com/viant/scy/auth/custom"
 	"github.com/viant/scy/auth/firebase"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
@@ -64,28 +62,6 @@ func (c *Config) updateAuth(ctx context.Context) error {
 	if res := c.repository.Cognito; res != "" {
 		cfg.Cognito = &cognito.Config{
 			Resource: getScyResource(res),
-		}
-	}
-
-	if customOpts := c.repository.Custom; customOpts != "" {
-		size := customOpts.Size()
-		if size < 0 {
-			return fmt.Errorf("invalid customOpts auth resource: %v", customOpts)
-		}
-		authConnector := customOpts.ShiftString()
-		authQuery := customOpts.ShiftString()
-		subjectConnector := customOpts.ShiftString()
-		subjectQuery := customOpts.ShiftString()
-		maxAttempts, _ := customOpts.ShiftInt()
-		if maxAttempts < 1 {
-			maxAttempts = 5
-		}
-		cfg.Custom = &custom.Config{
-			AuthConnector:     authConnector,
-			AuthSQL:           authQuery,
-			IdentityConnector: subjectConnector,
-			IdentitySQL:       subjectQuery,
-			MaxAttempts:       maxAttempts,
 		}
 	}
 	return nil
