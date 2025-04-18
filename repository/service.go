@@ -15,7 +15,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/scy/auth/custom"
+
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"log"
@@ -290,11 +290,6 @@ func (s *Service) loadComponent(ctx context.Context, opts []Option, sourceURL st
 		}
 	}
 	return nil, nil
-}
-
-// AuthService returns jwt signer
-func (s *Service) AuthService() *custom.Service {
-	return s.auth.Custom()
 }
 
 // JWTSigner returns jwt signer

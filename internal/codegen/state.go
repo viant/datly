@@ -17,6 +17,7 @@ import (
 var inputGoTemplate string
 
 func (t *Template) GenerateInput(pkg string, info *plugin.Info, embedContent map[string]string) string {
+
 	pkg = t.getPackage(pkg)
 	if len(t.State) == 0 {
 		return ""

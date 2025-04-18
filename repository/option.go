@@ -12,7 +12,6 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric"
 	"github.com/viant/scy/auth/cognito"
-	"github.com/viant/scy/auth/custom"
 	"github.com/viant/scy/auth/firebase"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
@@ -246,11 +245,6 @@ func WithPath(aPath *path.Path) Option {
 func WithJWTSigner(aSigner *signer.Config) Option {
 	return func(o *Options) {
 		o.authConfig.JwtSigner = aSigner
-	}
-}
-func WithCustomAuth(auth *custom.Config) Option {
-	return func(o *Options) {
-		o.authConfig.Custom = auth
 	}
 }
 

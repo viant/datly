@@ -189,6 +189,7 @@ func (c *Components) buildEmbedFs(ctx context.Context) (*embed.FS, error) {
 }
 
 func (c *Components) updateIOTypeDependencies(ctx context.Context, ioType *state.Type, fs *embed.FS, aView *view.View, isInput bool) error {
+
 	if ioType == nil || ioType.Type() == nil {
 		return nil
 	}

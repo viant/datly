@@ -2,20 +2,15 @@ package auth
 
 import (
 	"context"
-	"fmt"
-	"github.com/viant/afs"
 	"github.com/viant/datly/service/auth/cognito"
 	"github.com/viant/datly/service/auth/config"
 	"github.com/viant/datly/service/auth/firebase"
 	"github.com/viant/datly/service/auth/jwt"
-	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	dcodec "github.com/viant/datly/view/extension/codec"
-	"github.com/viant/scy/auth/custom"
 	"github.com/viant/scy/auth/gcp"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
-	"path"
 	"time"
 )
 
@@ -24,7 +19,6 @@ type Service struct {
 	firebaseAuth    *firebase.Service
 	verifierService *verifier.Service
 	signerService   *signer.Service
-	custom          *custom.Service
 	config          *config.Config
 }
 
@@ -42,10 +36,6 @@ func (s *Service) Cognito() *cognito.Service {
 
 func (s *Service) Firebase() *firebase.Service {
 	return s.firebaseAuth
-}
-
-func (s *Service) Custom() *custom.Service {
-	return s.custom
 }
 
 func (s *Service) Init(ctx context.Context) error {
@@ -86,28 +76,6 @@ func (s *Service) Init(ctx context.Context) error {
 		extension.Config.RegisterCodecFactory(dcodec.KeyFirebaseAuth, dcodec.NewFirebaseAuth(s.firebaseAuth), time.Time{})
 		jwtTokenVerifier.AddIfEmpty(s.firebaseAuth.VerifyIdentity)
 		jwtTokenChainVerifier.AddIfEmpty(s.firebaseAuth.VerifyIdentity)
-	}
-
-	if customConfig := s.config.Custom; customConfig != nil {
-		if s.config.DependencyURL == "" {
-			return fmt.Errorf("dependencyURL was empty")
-		}
-		connectionURL := path.Join(s.config.DependencyURL, "connections.yaml")
-		fs := afs.New()
-		if ok, _ := fs.Exists(context.Background(), connectionURL); ok {
-			var authConnector, identityConnector *view.Connector
-			if resource, _ := view.LoadResourceFromURL(context.Background(), connectionURL, fs); resource != nil {
-				if err := resource.Init(context.Background()); err == nil {
-					authConnector, _ = resource.Connector(customConfig.AuthConnector)
-				}
-				if customConfig.IdentityConnector != "" {
-					identityConnector, _ = resource.Connector(customConfig.IdentityConnector)
-				}
-				s.custom = custom.New(customConfig, authConnector, identityConnector, s.signerService)
-				extension.Config.RegisterCodecFactory(dcodec.KeyCustomAuth, dcodec.NewCustomAuth(s.custom), time.Time{})
-			}
-		}
-
 	}
 
 	if jwtTokenChainVerifier.Size() == 0 {

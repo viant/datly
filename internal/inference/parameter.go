@@ -11,8 +11,10 @@ import (
 	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
+	"github.com/viant/tagly/format"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
+	"github.com/viant/xunsafe"
 	"go/ast"
 	"path"
 	"reflect"
@@ -105,6 +107,9 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	}
 	if p.Tag != "" {
 		builder.WriteString(".WithTag('" + p.Tag + "')")
+	}
+	if p.Connector != "" {
+		builder.WriteString(".WithConnector('" + p.Connector + "')")
 	}
 	if p.Value != "" {
 		switch actual := p.Value.(type) {
@@ -249,7 +254,7 @@ func (p *Parameter) SyncObject() {
 }
 
 // TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
-func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS, imps xreflect.GoImports, pkg string) (*Parameter, error) {
+func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS, imps xreflect.GoImports, pkg string, xField *xunsafe.Field) (*Parameter, error) {
 	//SQL := extractSQL(field)
 	if field.Tag == nil {
 		return nil, nil
@@ -257,7 +262,7 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	//TODO convert ast.field to struct field and move that logic to state.BuildParameter
 	//currenty there are two places to mange filed tag  to parameter conversion
 	structTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
-	aTag, err := tags.ParseStateTags(structTag, embedFS)
+	aTag, err := tags.Parse(structTag, embedFS, tags.ParameterTag, tags.SQLTag, tags.PredicateTag, tags.CodecTag, tags.HandlerTag, tags.ViewTag, format.TagName)
 	if err != nil || aTag.Parameter == nil {
 		return nil, err
 	}
@@ -269,6 +274,10 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	}
 	if aTag.SQL.SQL != "" {
 		param.SQL = aTag.SQL.SQL
+	}
+
+	if aTag.View != nil {
+		param.Connector = aTag.View.Connector
 	}
 	if len(field.Names) > 0 {
 		param.Name = field.Names[0].Name
@@ -312,7 +321,10 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 		}
 		aType := xreflect.NewType(typeName, xreflect.WithTypeDefinition(fieldType), xreflect.WithGoImports(imps))
 		rType, err := types.LookupType(aType)
-		if err != nil {
+		if err != nil && xField != nil {
+			rType = xField.Type
+		}
+		if rType == nil && err != nil {
 			return nil, fmt.Errorf("failed to create param: %v due reflect.Type %w", param.Name, err)
 		}
 		param.Schema = state.NewSchema(rType, state.WithPackagePath(aType.PackagePath))
@@ -327,6 +339,9 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 			}
 		}
 		param.Schema = &state.Schema{DataType: fieldType, PackagePath: aType.PackagePath}
+		if xField != nil {
+			param.Schema.SetType(xField.Type)
+		}
 	}
 
 	param.Schema.Cardinality = cardinality

@@ -17,6 +17,7 @@ import (
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
+	"github.com/viant/xunsafe"
 	"go/ast"
 	"go/parser"
 	"path"
@@ -675,8 +676,24 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 	if index := strings.LastIndex(dataType, "."); index != -1 {
 		embedRoot = path.Join(embedRoot, dataType[:index])
 	}
+
 	embedHolder := discoverEmbeds(embedRoot)
 	embedFS := embedHolder.EmbedFs()
+
+	var fields = map[string]*xunsafe.Field{}
+	inputRType, _ := types.Lookup(dataType, xreflect.WithPackage(pkg))
+	if inputRType != nil {
+		input := reflect.New(inputRType).Interface()
+		if embedder, ok := input.(state.Embedder); ok {
+			embedFS = embedder.EmbedFS()
+		}
+		items := xunsafe.NewStruct(inputRType).Fields
+		for i := range items {
+			fields[items[i].Name] = &items[i]
+		}
+		state.NewType(state.WithSchema(state.NewSchema(inputRType)))
+	}
+
 	var aState = State{}
 	var goImports xreflect.GoImports
 	dirTypes, err := xreflect.ParseTypes(baseDir,
@@ -705,7 +722,8 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 				name = field.Names[0].Name
 			}
 			setter.SetStringIfEmpty(&pTag.Name, name)
-			param, err := buildParameter(field, aTag, types, embedFS, imports, pkg)
+			structField := fields[name]
+			param, err := buildParameter(field, aTag, types, embedFS, imports, pkg, structField)
 			if param == nil {
 				return err
 			}
@@ -737,7 +755,7 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 	if err != nil {
 		return nil, err
 	}
-	if _, err = dirTypes.Type(dataType); err != nil {
+	if _, err = dirTypes.Type(dataType); err != nil && inputRType == nil {
 		return nil, err
 	}
 	dirTypes.GoImports = goImports
