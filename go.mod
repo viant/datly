@@ -56,9 +56,9 @@ require (
 	github.com/viant/mcp v0.1.0
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
-	github.com/viant/xdatly v0.5.4-0.20250327185842-85ae4b2733ca
+	github.com/viant/xdatly v0.5.4-0.20250418144853-029d9a05ae20
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20250327185842-85ae4b2733ca
+	github.com/viant/xdatly/handler v0.0.0-20250418144853-029d9a05ae20
 	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1

@@ -121,7 +121,7 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (int
 
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
 
-	ctx = codec.NewCriteriaBuilder(ctx, reader.New())
+	ctx = vcontext.WithValue(ctx, codec.CriteriaBuilderKey, reader.New())
 	ctx = vcontext.WithValue(ctx, view.ContextKey, aComponent.View)
 	ctx = aSession.Context(ctx, false)
 	var info *exec.Context
