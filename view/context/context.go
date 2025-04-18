@@ -14,7 +14,6 @@ import (
 type Context struct {
 	parent         context.Context
 	types          map[reflect.Type]interface{}
-	values         map[string]interface{}
 	input          interface{}
 	dbProvider     state.DBProvider
 	job            *async.Job
@@ -72,13 +71,6 @@ func (vc *Context) Value(key interface{}) interface{} {
 	case async.InvocationTypeKey:
 		return vc.invocationType
 	default:
-		if k, ok := key.(string); ok {
-			vc.RLock()
-			defer vc.RUnlock()
-			if value, ok := vc.values[k]; ok {
-				return value
-			}
-		}
 		return vc.parent.Value(key)
 	}
 }
@@ -106,12 +98,6 @@ func (vc *Context) WithValue(key interface{}, value interface{}) context.Context
 	case async.InvocationTypeKey:
 		vc.invocationType = value.(async.InvocationType)
 	default:
-		k, ok := key.(string)
-		if ok {
-			vc.values[k] = value
-			return vc
-		}
-
 		vc.parent = context.WithValue(vc.parent, key, value)
 	}
 	return vc
@@ -121,7 +107,6 @@ func NewContext(parent context.Context) *Context {
 	return &Context{
 		parent: parent,
 		types:  make(map[reflect.Type]interface{}),
-		values: make(map[string]interface{}),
 	}
 }
 
@@ -131,5 +116,34 @@ func WithValue(ctx context.Context, key interface{}, value interface{}) context.
 		return c.WithValue(key, value)
 	}
 	c := NewContext(ctx)
+	inheritValues(ctx, c)
 	return c.WithValue(key, value)
+}
+
+func inheritValues(ctx context.Context, c *Context) {
+	if ctx != nil {
+		if value := ctx.Value(state.DBProviderKey); value != nil {
+			if v, ok := value.(state.DBProvider); ok && v != nil {
+				c.dbProvider = v
+			}
+		}
+		if value := ctx.Value(async.JobKey); value != nil {
+			if v, ok := value.(*async.Job); ok && v != nil {
+				c.job = v
+			}
+		}
+		if value := ctx.Value(async.InvocationTypeKey); value != nil {
+			if v, ok := value.(async.InvocationType); ok && v != "" {
+				c.invocationType = v
+			}
+		}
+		if value := ctx.Value(handler.DataSyncKey); value != nil {
+			if v, ok := value.(*handler.DataSync); ok && v != nil {
+				c.dataSync = v
+			}
+		}
+		if value := ctx.Value(handler.InputKey); value != nil {
+			c.input = value
+		}
+	}
 }
