@@ -80,9 +80,6 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 
 func (s *Service) operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	var err error
-	if inputType := aComponent.Input.Type; inputType.Type() != nil && inputType.Type().Type() != nil {
-		ctx = s.setContextInput(ctx, aComponent.Input.Type)
-	}
 	ctx, err = s.EnsureContext(ctx, aSession, aComponent)
 	if err != nil {
 		return nil, err
@@ -151,20 +148,6 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 		}
 	}
 	return ctx, nil
-}
-
-func (s *Service) setContextInput(ctx context.Context, inputType state.Type) context.Context {
-	var inputState *structology.State
-	input := ctx.Value(xhandler.InputKey)
-	if input != nil {
-		return ctx
-	} else {
-		inputState = inputType.Type().NewState()
-		input = inputState.State()
-	}
-	ctx = vcontext.WithValue(ctx, xhandler.InputKey, input)
-	ctx = vcontext.WithValue(ctx, reflect.TypeOf(input), input)
-	return ctx
 }
 
 func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Component, aSession *session.Session, populateView bool) (context.Context, error) {
