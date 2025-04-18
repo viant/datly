@@ -14,6 +14,7 @@ import (
 type Context struct {
 	parent         context.Context
 	types          map[reflect.Type]interface{}
+	values         map[string]interface{}
 	input          interface{}
 	dbProvider     state.DBProvider
 	job            *async.Job
@@ -46,6 +47,7 @@ func (vc *Context) Value(key interface{}) interface{} {
 			return ival
 		}
 	}
+
 	switch key {
 	case state.DBProviderKey:
 		if vc.dbProvider == nil {
@@ -70,6 +72,13 @@ func (vc *Context) Value(key interface{}) interface{} {
 	case async.InvocationTypeKey:
 		return vc.invocationType
 	default:
+		if k, ok := key.(string); ok {
+			vc.RLock()
+			defer vc.RUnlock()
+			if value, ok := vc.values[k]; ok {
+				return value
+			}
+		}
 		return vc.parent.Value(key)
 	}
 }
@@ -97,6 +106,12 @@ func (vc *Context) WithValue(key interface{}, value interface{}) context.Context
 	case async.InvocationTypeKey:
 		vc.invocationType = value.(async.InvocationType)
 	default:
+		k, ok := key.(string)
+		if ok {
+			vc.values[k] = value
+			return vc
+		}
+
 		vc.parent = context.WithValue(vc.parent, key, value)
 	}
 	return vc
@@ -106,6 +121,7 @@ func NewContext(parent context.Context) *Context {
 	return &Context{
 		parent: parent,
 		types:  make(map[reflect.Type]interface{}),
+		values: make(map[string]interface{}),
 	}
 }
 
