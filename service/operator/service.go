@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/state"
@@ -161,6 +162,10 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 			} else {
 				input = nil
 				inputState = inputType.Type().NewState()
+				rawType := types.EnsureStruct(reflect.TypeOf(input))
+				if rawType.Name() == "" { //for dynamic type override input key, for named leave as is, down the line we need to introeuce component specific keys
+					hasInputKey = false
+				}
 			}
 		} else {
 			inputState = inputType.Type().NewState()
