@@ -755,8 +755,10 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 	if err != nil {
 		return nil, err
 	}
-	if _, err = dirTypes.Type(dataType); err != nil && inputRType == nil {
-		return nil, err
+	if inputRType == nil {
+		if _, err = dirTypes.Type(dataType); err != nil {
+			return nil, err
+		}
 	}
 	dirTypes.GoImports = goImports
 	if err = aState.ensureSchema(dirTypes); err != nil {

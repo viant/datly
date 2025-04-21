@@ -286,6 +286,7 @@ func (r *Resource) mergeTypes(resource *Resource, types *xreflect.Types) {
 		if types.Has(candidate.TypeName()) {
 			continue
 		}
+
 		if _, ok := views[candidate.Name]; !ok {
 			typeDef := *resource.Types[i]
 			r.Types = append(r.Types, &typeDef)

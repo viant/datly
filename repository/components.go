@@ -24,6 +24,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"path"
 	"reflect"
+	"strings"
 )
 
 type Components struct {
@@ -308,6 +309,13 @@ func (c *Components) ensureView(ctx context.Context, parameters state.Parameters
 	if aView != nil {
 		if !aView.Schema.IsNamed() {
 			aView.Schema.SetType(parameter.Schema.Type())
+			fullName := strings.Trim(parameter.Schema.Type().String(), "*")
+			pkg := ""
+			if lastDot := strings.LastIndex(fullName, "."); lastDot > 0 {
+				pkg = fullName[:lastDot]
+				fullName = fullName[lastDot+1:]
+			}
+			c.Resource.TypeRegistry().Register(fullName, xreflect.WithReflectType(parameter.Schema.CompType()), xreflect.WithPackage(pkg))
 		}
 		return aView, nil
 	}

@@ -222,6 +222,7 @@ func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
 	}
 
 	definition := *typeDef
+
 	r.Resource.Types = append(r.Resource.Types, &definition)
 	if typeDef.Schema.IsNamed() {
 		return
