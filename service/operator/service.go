@@ -162,7 +162,7 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 			} else {
 				input = nil
 				inputState = inputType.Type().NewState()
-				rawType := types.EnsureStruct(reflect.TypeOf(input))
+				rawType := types.EnsureStruct(inputType.Type().Type())
 				if rawType.Name() == "" { //for dynamic type override input key, for named leave as is, down the line we need to introeuce component specific keys
 					hasInputKey = false
 				}
