@@ -62,16 +62,16 @@ func (k Kind) Ordinal() int {
 		return 0
 	case KindHeader:
 		return 1
-	case KindQuery:
+	case KindRequestBody:
 		return 2
+	case KindQuery:
+		return 3
 	case KindForm:
 		return 3
 	case KindPath:
 		return 4
 	case KindCookie:
 		return 5
-	case KindRequestBody:
-		return 6
 	case KindEnvironment:
 		return 7
 	case KindConst:
