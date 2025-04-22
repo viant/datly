@@ -40,7 +40,7 @@ type (
 	}
 )
 
-func newDbIo(tx *lazyTx, dialect *info.Dialect, dbSource DBSource, canBeBatchedGlobally bool, logger *logger.Adapter) *dbSession {
+func newDbIo(tx *lazyTx, dialect *info.Dialect, dbSource DBSource, logger *logger.Adapter) *dbSession {
 	return &dbSession{
 		sqlxIO:      newSqlxIO(),
 		tx:          tx,
@@ -103,8 +103,6 @@ func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtI
 	for _, apply := range options {
 		apply(ops)
 	}
-
-	canBeBatchedGlobally := dbSource.CanBatchGlobally()
 	db, err := dbSource.Db(ctx)
 	if err != nil {
 		return err
@@ -115,8 +113,8 @@ func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtI
 		return err
 	}
 
-	aTx := newLazyTx(db, canBeBatchedGlobally, ops.tx)
-	aDbSession := newDbIo(aTx, dialect, dbSource, canBeBatchedGlobally, ops.logger)
+	aTx := newLazyTx(db, ops.tx)
+	aDbSession := newDbIo(aTx, dialect, dbSource, ops.logger)
 
 	for it.HasNext() {
 		next := it.Next()

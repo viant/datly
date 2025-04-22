@@ -2,7 +2,6 @@ package executor
 
 import (
 	"database/sql"
-	"fmt"
 	"github.com/viant/sqlx/option"
 )
 
@@ -10,7 +9,6 @@ type (
 	lazyTx struct {
 		db            *sql.DB
 		tx            *sql.Tx
-		isGlobal      bool
 		isTransientTx bool
 	}
 
@@ -30,10 +28,9 @@ func (t *TxTransient) Commit() error {
 	return nil
 }
 
-func newLazyTx(db *sql.DB, globally bool, tx *sql.Tx) *lazyTx {
+func newLazyTx(db *sql.DB, tx *sql.Tx) *lazyTx {
 	return &lazyTx{
 		db:            db,
-		isGlobal:      globally,
 		tx:            tx,
 		isTransientTx: tx != nil,
 	}
@@ -74,9 +71,6 @@ func (l *lazyTx) TxCloser() (Tx, error) {
 }
 
 func (l *lazyTx) Tx() (*sql.Tx, error) {
-	if l.isGlobal {
-		return nil, fmt.Errorf("unexpected attemp to get Tx")
-	}
 
 	if l.tx != nil {
 		return l.tx, nil
