@@ -8,6 +8,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/internal/setter"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/keywords"
@@ -648,121 +649,118 @@ func (s State) AddDescriptions(doc state.Documentation) {
 }
 
 // NewState creates a state from state go struct
-func NewState(modulePath, dataType string, types *xreflect.Types) (State, error) {
-	baseDir := modulePath
-	parent, name := path.Split(dataType)
-	if name != "" {
-		dataType = name
+func NewState(packageLocation, dataType string, types *xreflect.Types) (State, error) {
+
+	if idx := strings.LastIndex(dataType, "."); idx != -1 {
+		packageLocation = path.Join(packageLocation, dataType[:idx])
+		dataType = dataType[idx+1:]
 	}
-	if !strings.HasSuffix(baseDir, parent) {
-		var subPath string
-		parent, subPath = path.Split(parent)
-		if strings.HasSuffix(baseDir, parent) {
-			baseDir = path.Join(baseDir, subPath)
-		}
+	pkgPath, err := shared.FindModulePath(packageLocation)
+	if err != nil {
+		return nil, err
 	}
-
-	pkg := ""
-
-	if pair := strings.Split(dataType, "."); len(pair) > 1 {
-		if !strings.HasSuffix(baseDir, pair[0]) {
-			baseDir = path.Join(baseDir, pair[0])
-		}
-		pkg = pair[0]
-		dataType = pair[1]
-	}
-
-	embedRoot := baseDir
-	if index := strings.LastIndex(dataType, "."); index != -1 {
-		embedRoot = path.Join(embedRoot, dataType[:index])
-	}
-
-	embedHolder := discoverEmbeds(embedRoot)
-	embedFS := embedHolder.EmbedFs()
-
-	var fields = map[string]*xunsafe.Field{}
-	inputRType, _ := types.Lookup(dataType, xreflect.WithPackage(pkg))
-	if inputRType != nil {
-		input := reflect.New(inputRType).Interface()
-		if embedder, ok := input.(state.Embedder); ok {
-			embedFS = embedder.EmbedFS()
-		}
-		items := xunsafe.NewStruct(inputRType).Fields
-		for i := range items {
-			fields[items[i].Name] = &items[i]
-		}
-		state.NewType(state.WithSchema(state.NewSchema(inputRType)))
-	}
-
 	var aState = State{}
-	var goImports xreflect.GoImports
+	stateType, err := discoverStateType(packageLocation, types, dataType, pkgPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to discover state type: %v", err)
+	}
+	embedHolder := discoverEmbeds(packageLocation)
+	embedFS := embedHolder.EmbedFs()
+	embeder := state.NewFSEmbedder(embedFS)
+	embeder.SetType(stateType)
+	embedFS = embeder.EmbedFS()
+
+	var imports xreflect.GoImports
+	xStruct := xunsafe.NewStruct(stateType)
+	for _, field := range xStruct.Fields {
+		fieldTag := field.Tag
+		aTag, err := tags.ParseStateTags(fieldTag, embedFS)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse tags on field: %v: %v ", field.Name, err)
+		}
+		if aTag.Parameter == nil {
+			continue
+		}
+		pTag := aTag.Parameter
+		setter.SetStringIfEmpty(&pTag.Name, field.Name)
+		param, err := buildParameter(&field, aTag, types, embedFS, imports, pkgPath)
+		if param == nil {
+			continue
+		}
+		state.BuildPredicate(aTag, &param.Parameter)
+		state.BuildCodec(aTag, &param.Parameter)
+		if param.Schema.DataType == "" {
+			compType := param.Schema.CompType()
+			if compType.Kind() == reflect.Pointer {
+				compType = compType.Elem()
+			}
+			param.Schema.DataType = compType.Name()
+			param.Schema.PackagePath = compType.PkgPath()
+		}
+		//}
+
+		if param.Output != nil {
+			if param.Output.Schema == nil && param.Schema != nil {
+				param.Output.Schema = param.Schema
+				param.Schema = &state.Schema{DataType: aTag.Parameter.DataType}
+				if aTag.Parameter.ErrorCode != 0 {
+					param.ErrorStatusCode = aTag.Parameter.ErrorCode
+				}
+			}
+		}
+		aState.Append(param)
+	}
+	return aState, nil
+}
+
+func discoverStateType(baseDir string, types *xreflect.Types, dataType string, pkg string) (reflect.Type, error) {
+	var stateTypeFields = []reflect.StructField{}
 	dirTypes, err := xreflect.ParseTypes(baseDir,
 		xreflect.WithParserMode(parser.ParseComments),
 		xreflect.WithRegistry(types),
 		xreflect.WithOnField(func(typeName string, field *ast.Field, imports xreflect.GoImports) error {
-			if field.Tag == nil {
+			if typeName != dataType {
 				return nil
 			}
-			goImports = append(goImports, imports...)
-
-			fieldTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
-			aTag, err := tags.ParseStateTags(fieldTag, embedFS)
-			if err != nil {
-				return err
-			}
-			if aTag.Parameter == nil {
-				return nil
-			}
-			pTag := aTag.Parameter
-			if pTag.Kind == "" {
-				return nil
-			}
-			var name string
+			fieldName := ""
 			if len(field.Names) > 0 {
-				name = field.Names[0].Name
+				fieldName = field.Names[0].Name
 			}
-			setter.SetStringIfEmpty(&pTag.Name, name)
-			structField := fields[name]
-			param, err := buildParameter(field, aTag, types, embedFS, imports, pkg, structField)
-			if param == nil {
-				return err
+
+			typeNode := xreflect.Node{field.Type}
+			dataType, _ := typeNode.Stringify()
+
+			aField := reflect.StructField{
+				Name: fieldName,
+				Tag:  reflect.StructTag(strings.Trim(field.Tag.Value, "`")),
 			}
-			if param.In.Kind == state.KindView {
-				fieldType, _ := xreflect.Node{Node: field.Type}.Stringify()
-				param.Schema.DataType = fieldType
+
+			aType := xreflect.NewType(dataType)
+			if aType.Package == "" {
+				aType.Package = pkg
 			}
-			state.BuildPredicate(aTag, &param.Parameter)
-			state.BuildCodec(aTag, &param.Parameter)
-			if param.Output != nil {
-				if param.Output.Schema == nil && param.Schema != nil {
-					param.Output.Schema = param.Schema
-					param.Schema = &state.Schema{DataType: aTag.Parameter.DataType}
-					if aTag.Parameter.ErrorCode != 0 {
-						param.ErrorStatusCode = aTag.Parameter.ErrorCode
-					}
-				}
+			rType, err := types.LookupType(aType)
+			if err != nil {
+
+				candidate := aType.Package + "/" + aType.Name
+				rType = xunsafe.LookupType(candidate)
 			}
-			if typeName == dataType {
-				aState.Append(param)
-			}
+			aField.Type = rType
+			stateTypeFields = append(stateTypeFields, aField)
+
 			return nil
 		}))
-
 	if err != nil {
 		return nil, err
 	}
-	dirTypes.GoImports = goImports
-	if err != nil {
-		return nil, err
+	var rType = xunsafe.LookupType(dirTypes.ModulePath + "/" + dataType)
+	if rType == nil && len(stateTypeFields) > 0 {
+		rType = reflect.StructOf(stateTypeFields)
 	}
-	if _, err = dirTypes.Type(dataType); err != nil && inputRType == nil {
-		return nil, err
+	if rType == nil {
+		return nil, fmt.Errorf("failed to discover type: %v", dataType)
 	}
-	dirTypes.GoImports = goImports
-	if err = aState.ensureSchema(dirTypes); err != nil {
-		return nil, err
-	}
-	return aState, nil
+	return rType, nil
 }
 
 func discoverEmbeds(embedRoot string) *embed.Holder {

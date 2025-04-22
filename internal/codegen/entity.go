@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/tagly/format/text"
-
-	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
 	"go/format"
 	"reflect"
@@ -31,7 +31,7 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 	if t.MethodFragment != "" && t.MethodFragment != "get" {
 		pkg = strings.ToLower(t.MethodFragment)
 	}
-	if err := t.TypeDef.Init(context.Background(), extension.Config.Types.Lookup); err != nil {
+	if err := t.TypeDef.Init(context.Background(), extension.Config.Types.Lookup, view.Imports{}); err != nil {
 		return "", err
 	}
 	rType := t.TypeDef.Schema.Type()

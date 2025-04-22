@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
+	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 )
@@ -82,11 +83,23 @@ func (d *TypeDefinition) TypeName() string {
 	return d.Package + "." + d.Name
 }
 
-func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupType) error {
+func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupType, imports Imports) error {
 	if err := d.initFields(ctx, lookupType); err != nil {
 		return err
 	}
 	d.createSchemaIfNeeded()
+
+	if anImport := imports[d.Package]; anImport != nil && d.Name != "" {
+		if rType := xunsafe.LookupType(anImport.ModulePath + "/" + d.Name); rType != nil {
+			if d.Schema == nil {
+				d.Schema = &state.Schema{}
+			}
+			d.Schema.SetType(rType)
+			d.Schema.Package = anImport.Alias
+			return nil
+		}
+	}
+
 	if d.Ref != "" && lookupType != nil {
 		rType, err := lookupType(d.Ref, xreflect.WithPackage(d.Package))
 		if err != nil {
