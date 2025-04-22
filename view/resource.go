@@ -106,6 +106,10 @@ func (i Imports) Add(modulePath string) {
 	i[alias] = &Import{alias, modulePath}
 }
 
+func (i Imports) AddWithAlias(alias, modulePath string) {
+	i[alias] = &Import{alias, modulePath}
+}
+
 func (r *Resource) RepositoryURL() string {
 	if index := strings.Index(r.SourceURL, "/routes/"); index != -1 {
 		return r.SourceURL[:index]
@@ -382,6 +386,9 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	for _, definition := range r.Types {
 		if definition.ModulePath != "" {
 			r.Imports.Add(definition.ModulePath)
+			if definition.Package != "" {
+				r.Imports.AddWithAlias(definition.Package, definition.ModulePath)
+			}
 		}
 	}
 

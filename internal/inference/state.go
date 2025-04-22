@@ -650,7 +650,6 @@ func (s State) AddDescriptions(doc state.Documentation) {
 
 // NewState creates a state from state go struct
 func NewState(packageLocation, dataType string, types *xreflect.Types) (State, error) {
-
 	packageLocation, dataType = extractPackageLocationAndType(packageLocation, dataType)
 	pkgPath, err := shared.FindModulePath(packageLocation)
 	if err != nil {
@@ -722,6 +721,7 @@ func extractPackageLocationAndType(packageLocation string, dataType string) (str
 	}
 	if strings.Contains(pkgPath, "/") {
 		parent, pkg := path.Split(pkgPath)
+		parent = "/" + strings.TrimRight(parent, "/")
 		if strings.HasSuffix(packageLocation, parent) {
 			return path.Join(packageLocation, pkg), dataType
 		}
