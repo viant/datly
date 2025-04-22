@@ -711,13 +711,6 @@ func NewState(packageLocation, dataType string, types *xreflect.Types) (State, e
 }
 
 func extractPackageLocationAndType(packageLocation string, dataType string) (string, string) {
-
-	/*
-
-		/Users/tzhao/projects/go_path/src/github.vianttech.com/viant/mdp/pkg/mdp/bidalloc/allocator/
-		allocator/producer: no such
-
-	*/
 	var pkgPath string
 	if idx := strings.LastIndex(dataType, "."); idx != -1 {
 		pkgPath = dataType[:idx]
