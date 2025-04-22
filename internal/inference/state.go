@@ -691,7 +691,7 @@ func NewState(packageLocation, dataType string, types *xreflect.Types) (State, e
 			if compType.Kind() == reflect.Pointer {
 				compType = compType.Elem()
 			}
-			param.Schema.DataType = compType.Name()
+			param.Schema.DataType = compType.String()
 			param.Schema.PackagePath = compType.PkgPath()
 		}
 		//}
