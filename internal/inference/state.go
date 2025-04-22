@@ -651,10 +651,7 @@ func (s State) AddDescriptions(doc state.Documentation) {
 // NewState creates a state from state go struct
 func NewState(packageLocation, dataType string, types *xreflect.Types) (State, error) {
 
-	if idx := strings.LastIndex(dataType, "."); idx != -1 {
-		packageLocation = path.Join(packageLocation, dataType[:idx])
-		dataType = dataType[idx+1:]
-	}
+	packageLocation, dataType = extractPackageLocationAndType(packageLocation, dataType)
 	pkgPath, err := shared.FindModulePath(packageLocation)
 	if err != nil {
 		return nil, err
@@ -711,6 +708,20 @@ func NewState(packageLocation, dataType string, types *xreflect.Types) (State, e
 		aState.Append(param)
 	}
 	return aState, nil
+}
+
+func extractPackageLocationAndType(packageLocation string, dataType string) (string, string) {
+
+	var pkgPath string
+	if idx := strings.LastIndex(dataType, "."); idx != -1 {
+		pkgPath = dataType[:idx]
+		dataType = dataType[idx+1:]
+	}
+	if strings.HasSuffix(packageLocation, pkgPath) {
+		return packageLocation, dataType
+	}
+
+	return path.Join(packageLocation, pkgPath), dataType
 }
 
 func discoverStateType(baseDir string, types *xreflect.Types, dataType string, pkg string) (reflect.Type, error) {
