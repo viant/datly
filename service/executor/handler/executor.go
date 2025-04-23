@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/xdatly/handler"
 	hauth "github.com/viant/xdatly/handler/auth"
 	http2 "github.com/viant/xdatly/handler/http"
@@ -33,6 +34,7 @@ type (
 		view       *view.View
 		connectors view.Connectors
 		dataUnit   *expand.DataUnit
+		dataUnits  map[string]*expand.DataUnit
 		tx         *sql.Tx
 		response   http.ResponseWriter
 	}
@@ -40,10 +42,28 @@ type (
 	DBProvider struct {
 		db *sql.DB
 	}
+
+	DbSource struct {
+		db      *sql.DB
+		dialect *info.Dialect
+	}
 )
 
 func (d *DBProvider) Db() (*sql.DB, error) {
 	return d.db, nil
+}
+
+func (d *DbSource) Db(_ context.Context) (*sql.DB, error) {
+	return d.db, nil
+}
+
+func (d *DbSource) Dialect(ctx context.Context) (*info.Dialect, error) {
+	if d.dialect != nil {
+		return d.dialect, nil
+	}
+	var err error
+	d.dialect, err = getDialect(ctx, d.db)
+	return d.dialect, err
 }
 
 func NewExecutor(aView *view.View, aSession *session.Session, opts ...Option) *Executor {
@@ -148,7 +168,7 @@ func (e *Executor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error) {
 }
 
 func (e *Executor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) {
-	if (options.WithDb == nil && options.WithTx == nil) || options.WithConnector == e.view.Connector.Name {
+	if (options.WithDb == nil && options.WithTx == nil) && options.WithConnector == e.view.Connector.Name {
 		return e.dataUnit, nil
 	}
 
@@ -157,17 +177,30 @@ func (e *Executor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) 
 	}
 
 	if options.WithConnector != "" {
-		connector, err := e.connectors.Lookup(options.WithConnector)
-		if err != nil {
-			return nil, err
+		if e.dataUnits == nil {
+			e.dataUnits = make(map[string]*expand.DataUnit)
 		}
-
+		if ret, ok := e.dataUnits[options.WithConnector]; ok {
+			return ret, nil
+		}
+		var connector *view.Connector
+		if len(e.connectors) == 0 {
+			connector, _ = e.view.GetResource().Connector(options.WithConnector)
+		} else {
+			connector, _ = e.connectors.Lookup(options.WithConnector)
+		}
+		if connector == nil {
+			return nil, fmt.Errorf("failed to lookup connector %v", options.WithConnector)
+		}
 		db, err := connector.DB()
 		if err != nil {
 			return nil, err
 		}
 
-		return expand.NewDataUnit(&DBProvider{db: db}), nil
+		unit := expand.NewDataUnit(&DBProvider{db: db})
+
+		e.dataUnits[options.WithConnector] = unit
+		return unit, nil
 	}
 
 	return e.dataUnit, nil
@@ -183,6 +216,15 @@ func (e *Executor) Execute(ctx context.Context) error {
 	if e.tx != nil {
 		dbOptions = append(dbOptions, executor.WithTx(e.tx))
 	}
+
+	for _, unit := range e.dataUnits {
+		dbSource := &DbSource{}
+		dbSource.db, _ = unit.MetaSource.Db()
+		if err := service.ExecuteStmts(ctx, dbSource, newSqlxIterator(unit.Statements.Executable)); err != nil {
+			return err
+		}
+	}
+
 	return service.ExecuteStmts(ctx, executor.NewViewDBSource(e.view), newSqlxIterator(e.dataUnit.Statements.Executable), dbOptions...)
 }
 

@@ -58,6 +58,8 @@ type (
 		Types  []*TypeDefinition
 		_types *xreflect.Types
 
+		Imports Imports
+
 		Loggers  logger.Adapters `json:",omitempty"`
 		_loggers logger.AdapterIndex
 
@@ -90,7 +92,23 @@ type (
 		Docs            *docs.Registry
 		Metrics         *Metrics
 	}
+
+	Import struct {
+		Alias      string `json:",omitempty"`
+		ModulePath string `json:",omitempty"`
+	}
+
+	Imports map[string]*Import
 )
+
+func (i Imports) Add(modulePath string) {
+	_, alias := path.Split(modulePath)
+	i[alias] = &Import{alias, modulePath}
+}
+
+func (i Imports) AddWithAlias(alias, modulePath string) {
+	i[alias] = &Import{alias, modulePath}
+}
 
 func (r *Resource) RepositoryURL() string {
 	if index := strings.Index(r.SourceURL, "/routes/"); index != -1 {
@@ -364,8 +382,18 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	r.viewColumns = opts.Columns
 	r._types = opts.Types
 
+	r.Imports = Imports{}
 	for _, definition := range r.Types {
-		if err := definition.Init(ctx, opts.Types.Lookup); err != nil {
+		if definition.ModulePath != "" {
+			r.Imports.Add(definition.ModulePath)
+			if definition.Package != "" {
+				r.Imports.AddWithAlias(definition.Package, definition.ModulePath)
+			}
+		}
+	}
+
+	for _, definition := range r.Types {
+		if err := definition.Init(ctx, opts.Types.Lookup, r.Imports); err != nil {
 			return err
 		}
 		//DO we really need cluster global namespace

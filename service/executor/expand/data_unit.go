@@ -25,6 +25,7 @@ type (
 		placeholderCounter int                             `velty:"-"`
 		sqlxValidator      *validator.Service              `velty:"-"`
 		sliceIndex         map[reflect.Type]*xunsafe.Slice `velty:"-"`
+		ctx                context.Context                 `velty:"-"`
 	}
 
 	ExecutablesIndex map[string]*Executable

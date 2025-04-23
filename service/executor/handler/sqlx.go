@@ -21,6 +21,7 @@ import (
 type (
 	Service struct {
 		dataUnit *expand.DataUnit
+		units    []*expand.DataUnit
 		options  *sqlx.Options
 
 		validator *validator.Service
@@ -206,17 +207,16 @@ func (s *Service) Dialect(ctx context.Context) (*info.Dialect, error) {
 		return s.dialect, nil
 	}
 
-	dialect, err := s.getDialect(ctx)
-	s.dialect = dialect
-	return dialect, err
-}
-
-func (s *Service) getDialect(ctx context.Context) (*info.Dialect, error) {
 	db, err := s.Db(ctx)
 	if err != nil {
 		return nil, err
 	}
+	dialect, err := getDialect(ctx, db)
+	s.dialect = dialect
+	return dialect, err
+}
 
+func getDialect(ctx context.Context, db *sql.DB) (*info.Dialect, error) {
 	return config.Dialect(ctx, db)
 }
 

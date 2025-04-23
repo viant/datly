@@ -10,10 +10,10 @@ import (
 )
 
 var service *Service
+var err error
 var once sync.Once
 
 func Singleton(ctx context.Context, options ...Option) (*Service, error) {
-	var err error
 	once.Do(func() {
 		service, err = New(ctx, options...)
 	})

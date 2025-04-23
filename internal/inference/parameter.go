@@ -254,14 +254,14 @@ func (p *Parameter) SyncObject() {
 }
 
 // TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
-func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS, imps xreflect.GoImports, pkg string, xField *xunsafe.Field) (*Parameter, error) {
+func buildParameter(field *xunsafe.Field, aTag *tags.Tag, types *xreflect.Types, embedFS *embed.FS, imps xreflect.GoImports, pkg string) (*Parameter, error) {
 	//SQL := extractSQL(field)
-	if field.Tag == nil {
+	if field.Tag == "" {
 		return nil, nil
 	}
 	//TODO convert ast.field to struct field and move that logic to state.BuildParameter
 	//currenty there are two places to mange filed tag  to parameter conversion
-	structTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
+	structTag := field.Tag
 	aTag, err := tags.Parse(structTag, embedFS, tags.ParameterTag, tags.SQLTag, tags.PredicateTag, tags.CodecTag, tags.HandlerTag, tags.ViewTag, format.TagName)
 	if err != nil || aTag.Parameter == nil {
 		return nil, err
@@ -279,11 +279,14 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	if aTag.View != nil {
 		param.Connector = aTag.View.Connector
 	}
-	if len(field.Names) > 0 {
-		param.Name = field.Names[0].Name
-	} else {
-		fieldType, _ := xreflect.Node{Node: field.Type}.Stringify()
-		param.Name = fieldType
+
+	fType := field.Type
+	param.Name = field.Name
+	if param.Name == "" {
+		if fType.Kind() == reflect.Pointer {
+			fType = fType.Elem()
+		}
+		param.Name = fType.Name()
 	}
 	if pTag.Name != "" {
 		param.Name = pTag.Name
@@ -300,50 +303,10 @@ func buildParameter(field *ast.Field, aTag *tags.Tag, types *xreflect.Types, emb
 	}
 
 	cardinality := state.One
-	if sliceExpr, ok := field.Type.(*ast.ArrayType); ok {
-		field.Type = sliceExpr.Elt
+	if field.Type.Kind() == reflect.Slice {
 		cardinality = state.Many
 	}
-	if ptr, ok := field.Type.(*ast.StarExpr); ok {
-		field.Type = ptr.X
-	}
-	fieldType, err := xreflect.Node{Node: field.Type}.Stringify()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create param: %v due to %w", param.Name, err)
-	}
-
-	if strings.Contains(fieldType, "struct{") {
-		typeName := ""
-		if field.Tag != nil {
-			if typeName, _ = reflect.StructTag(strings.Trim(field.Tag.Value, "`")).Lookup("typeName"); typeName == "" {
-				typeName = field.Names[0].Name
-			}
-		}
-		aType := xreflect.NewType(typeName, xreflect.WithTypeDefinition(fieldType), xreflect.WithGoImports(imps))
-		rType, err := types.LookupType(aType)
-		if err != nil && xField != nil {
-			rType = xField.Type
-		}
-		if rType == nil && err != nil {
-			return nil, fmt.Errorf("failed to create param: %v due reflect.Type %w", param.Name, err)
-		}
-		param.Schema = state.NewSchema(rType, state.WithPackagePath(aType.PackagePath))
-	} else {
-
-		aType := xreflect.NewType(fieldType, xreflect.WithGoImports(imps))
-		rType, _ := types.LookupType(aType) //to populate package path
-		if rType == nil && pkg != "" {
-			aType.Package = pkg
-			if rType, _ = types.LookupType(aType); rType != nil {
-				fieldType = pkg + "." + fieldType
-			}
-		}
-		param.Schema = &state.Schema{DataType: fieldType, PackagePath: aType.PackagePath}
-		if xField != nil {
-			param.Schema.SetType(xField.Type)
-		}
-	}
-
+	param.Schema = state.NewSchema(fType)
 	param.Schema.Cardinality = cardinality
 	return param, nil
 }
