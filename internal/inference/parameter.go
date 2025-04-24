@@ -108,6 +108,7 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	if p.Tag != "" {
 		builder.WriteString(".WithTag('" + p.Tag + "')")
 	}
+
 	if p.Connector != "" {
 		builder.WriteString(".WithConnector('" + p.Connector + "')")
 	}
@@ -129,6 +130,15 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 		}
 		builder.WriteString(")")
 	}
+
+	for _, predicate := range p.Predicates {
+		builder.WriteString(".WithPredicate(" + strconv.Itoa(predicate.Group) + ",'" + predicate.Name + "'")
+		for _, arg := range predicate.Args {
+			builder.WriteString(", '" + arg + "'")
+		}
+		builder.WriteString(")")
+	}
+
 	if p.SQL != "" {
 		builder.WriteString(" /*\n")
 		SQL := strings.TrimSpace(p.SQL)
