@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"reflect"
 )
@@ -27,6 +28,17 @@ func (p *DataView) Value(ctx context.Context, name string) (interface{}, bool, e
 	err := p.ReadInto(ctx, destSlicePtr, aView)
 	if err != nil {
 		return nil, false, err
+	}
+
+	if aView.Schema.Cardinality == state.One {
+		switch sliceValue.Elem().Len() {
+		case 0:
+			return nil, true, nil
+		case 1:
+			return sliceValue.Elem().Index(0).Interface(), true, nil
+		default:
+			return nil, false, fmt.Errorf("multiple values found for view: %v, expected no mor than one", name)
+		}
 	}
 	return sliceValue.Elem().Interface(), true, err
 }

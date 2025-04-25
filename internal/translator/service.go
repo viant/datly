@@ -450,6 +450,9 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 		return nil
 	}
 	if viewlet.TypeDefinition != nil {
+		if viewlet.TypeDefinition.Cardinality == state.Many {
+			viewlet.View.View.Schema.Cardinality = viewlet.TypeDefinition.Cardinality
+		}
 		viewlet.TypeDefinition.Cardinality = ""
 	}
 	if viewlet.TypeDefinition != nil && viewlet.DataType != "" { //if derived from

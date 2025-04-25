@@ -51,7 +51,12 @@ func (r *Output) syncData(cardinality state.Cardinality) {
 	if cardinality == state.One { //TODO uncomment is here move to one cardinality handling here
 		switch slice.Len() {
 		case 0:
-			r.Data = reflect.New(slice.Type().Elem()).Interface()
+			componentType := slice.Type().Elem()
+			if componentType.Kind() == reflect.Ptr {
+				r.Data = reflect.New(componentType).Elem().Interface()
+			} else {
+				r.Data = reflect.New(componentType).Interface()
+			}
 			return
 		case 1:
 			r.Data = slice.Index(0).Interface()
