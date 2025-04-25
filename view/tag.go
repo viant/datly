@@ -3,7 +3,9 @@ package view
 import (
 	"github.com/viant/datly/view/state"
 	vtags "github.com/viant/datly/view/tags"
+	"github.com/viant/sqlx/io"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/viant/tagly/format/text"
@@ -11,7 +13,7 @@ import (
 )
 
 func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.Documentation, table string) string {
-	result := tags.NewTags("")
+	result := tags.NewTags(column.Tag)
 	columnName := column.Name
 	sqlxTagValue := columnName
 	if column.Codec != nil && column.DataType != "" {
@@ -25,11 +27,6 @@ func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.
 		aTag = tags.NewTag("format", column.FormatTag)
 		result.SetTag(aTag)
 	}
-	if column.Tag != "" {
-		t := tags.NewTags(column.Tag)
-		result = append(result, t...)
-	}
-
 	if aTag := column.Tag; aTag != "" {
 		rTag := reflect.StructTag(aTag)
 		if src, ok := rTag.Lookup("source"); ok {
@@ -63,7 +60,17 @@ func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.
 	if column.Codec != nil {
 		result.SetTag(aTag)
 	}
-
+	sort.Slice(result, func(i, j int) bool {
+		// Prioritize "sqlx" as the first element
+		if result[i].Name == io.TagSqlx && result[j].Name != io.TagSqlx {
+			return true
+		}
+		if result[i].Name != io.TagSqlx && result[j].Name == io.TagSqlx {
+			return false
+		}
+		// Otherwise, sort alphabetically
+		return result[i].Name < result[j].Name
+	})
 	return result.Stringify()
 }
 
