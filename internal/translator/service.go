@@ -217,6 +217,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 	componentColumns := discover.Columns{Items: make(map[string]view.Columns)}
+
 	if err = s.detectColumns(resource, componentColumns); err != nil {
 		return err
 	}

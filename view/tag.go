@@ -11,7 +11,7 @@ import (
 )
 
 func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.Documentation, table string) string {
-	result := tags.NewTags(strings.TrimSpace(column.Tag))
+	result := tags.NewTags("")
 	columnName := column.Name
 	sqlxTagValue := columnName
 	if column.Codec != nil && column.DataType != "" {
@@ -24,6 +24,10 @@ func generateFieldTag(column *Column, viewCaseFormat text.CaseFormat, doc state.
 	if column.FormatTag != nil {
 		aTag = tags.NewTag("format", column.FormatTag)
 		result.SetTag(aTag)
+	}
+	if column.Tag != "" {
+		t := tags.NewTags(column.Tag)
+		result = append(result, t...)
 	}
 
 	if aTag := column.Tag; aTag != "" {

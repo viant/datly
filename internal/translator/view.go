@@ -226,6 +226,18 @@ func (v *View) buildColumnConfig(namespace *Viewlet) {
 	for i, config := range namespace.ColumnConfig {
 		v.ColumnsConfig[config.Name] = namespace.ColumnConfig[i]
 	}
+	for _, exclude := range v.Exclude {
+		if _, ok := v.ColumnsConfig[exclude]; !ok {
+			v.ColumnsConfig[exclude] = &view.ColumnConfig{
+				Name: exclude,
+			}
+		}
+		if v.ColumnsConfig[exclude].Tag == nil {
+			text := ""
+			v.ColumnsConfig[exclude].Tag = &text
+		}
+		*v.ColumnsConfig[exclude].Tag += ` internal:"true" `
+	}
 }
 
 func (v *View) buildTemplate(namespace *Viewlet, rule *Rule) {
