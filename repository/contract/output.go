@@ -187,6 +187,9 @@ func (r *Output) addExcludePrefixesIfNeeded() {
 		return
 	}
 	for i, actual := range r.Exclude {
+		if strings.HasPrefix(actual, field) {
+			continue
+		}
 		r.Exclude[i] = field + "." + actual
 	}
 }
