@@ -33,7 +33,7 @@ func (r *Form) Value(ctx context.Context, name string) (interface{}, bool, error
 				return nil, false, nil
 			}
 			_, ok := r.request.Form[name]
-			return nil, ok, nil
+			return "", ok, nil
 		}
 		return value, true, nil
 	}

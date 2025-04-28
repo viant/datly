@@ -34,8 +34,8 @@ func HmacJwtVerifier() *verifier.Config {
 	}
 }
 
-// RSAPublicJwtSigner returns new mock jwt rsa signer config
-func RSAPublicJwtSigner() *signer.Config {
+// RSAPrivateJwtSigner returns new mock jwt rsa signer config
+func RSAPrivateJwtSigner() *signer.Config {
 	return &signer.Config{
 		RSA: &scy.Resource{
 			URL:     "embed:///jwt/public.enc",
@@ -45,13 +45,12 @@ func RSAPublicJwtSigner() *signer.Config {
 	}
 }
 
-// RSAPrivateJwtVerifier returns new mock jwt rsa verifier config
-func RSAPrivateJwtVerifier() *verifier.Config {
-	return &verifier.Config{
-		RSA: &scy.Resource{
-			URL:     "embed:///jwt/private.enc",
-			Key:     "blowfish://default",
-			Options: []storage.Option{&embedFs},
-		},
-	}
+// RSAPublicJwtVerifier returns new mock jwt rsa verifier config
+func RSAPublicJwtVerifier() *verifier.Config {
+	return &verifier.Config{RSA: []*scy.Resource{&scy.Resource{
+		URL:     "embed:///jwt/private.enc",
+		Key:     "blowfish://default",
+		Options: []storage.Option{&embedFs},
+	},
+	}}
 }

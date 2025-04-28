@@ -83,5 +83,5 @@ func NewService(ctx context.Context, opts ...Option) (*gateway.Service, *Config,
 	} else {
 		service, err = gateway.New(ctx, gOptions...)
 	}
-	return service, config, nil
+	return service, config, err
 }

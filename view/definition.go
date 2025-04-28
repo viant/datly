@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/repository/codegen"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
@@ -84,21 +85,35 @@ func (d *TypeDefinition) TypeName() string {
 }
 
 func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupType, imports Imports) error {
+
+	if !codegen.IsGeneratorContext(ctx) {
+		if done := d.initializeWithReflectType(imports); done {
+			return nil
+		}
+	}
+
 	err := d.init(ctx, lookupType)
 	if err != nil {
-		if anImport := imports[d.Package]; anImport != nil && d.Name != "" {
-			if rType := xunsafe.LookupType(anImport.ModulePath + "/" + d.Name); rType != nil {
-				if d.Schema == nil {
-					d.Schema = &state.Schema{}
-				}
-				d.Schema.SetType(rType)
-				d.Schema.Package = anImport.Alias
-				return nil
-			}
+		if done := d.initializeWithReflectType(imports); done {
+			return nil
 		}
 
 	}
 	return err
+}
+
+func (d *TypeDefinition) initializeWithReflectType(imports Imports) bool {
+	if anImport := imports[d.Package]; anImport != nil && d.Name != "" {
+		if rType := xunsafe.LookupType(anImport.ModulePath + "/" + d.Name); rType != nil {
+			if d.Schema == nil {
+				d.Schema = &state.Schema{}
+			}
+			d.Schema.SetType(rType)
+			d.Schema.Package = anImport.Alias
+			return true
+		}
+	}
+	return false
 }
 
 func (d *TypeDefinition) init(ctx context.Context, lookupType xreflect.LookupType) error {

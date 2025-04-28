@@ -345,10 +345,15 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 					optionsPaths[aPath.URI] = append(optionsPaths[aPath.URI], aPath)
 				}
 
+				if !strings.HasPrefix(aPath.URI, r.config.APIPrefix) {
+					continue
+				}
+
 				if r.mcp != nil {
 					r.buildResourceTemplatesIntegration(anItem, aPath, aRoute, provider) // build mcp resource integration if applicable, this is optional
 					r.buildToolsIntegration(anItem, aPath, aRoute, provider)
 				}
+
 				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.Meta.ViewURI, aPath.URI), provider))
 				key := r.routeURL(r.config.Meta.OpenApiURI, aPath.URI)
 				openAPIs[key] = append(openAPIs[key], provider)

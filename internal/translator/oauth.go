@@ -23,7 +23,7 @@ func (c *Config) updateAuth(ctx context.Context) error {
 		}
 
 		c.ensureJWTValidator(cfg)
-		cfg.JWTValidator.RSA = getScyResource(res)
+		cfg.JWTValidator.RSA = getScyResources(res)
 
 		if cfg.JwtSigner == nil {
 			cfg.JwtSigner = &signer.Config{}
@@ -83,5 +83,16 @@ func getScyResource(location string) *scy.Resource {
 		result = &scy.Resource{URL: pair[0]}
 	}
 	result.URL = url.Normalize(result.URL, file.Scheme)
+	return result
+}
+
+func getScyResources(location string) []*scy.Resource {
+	var result []*scy.Resource
+	for _, location := range strings.Split(location, "-") {
+		if strings.TrimSpace(location) == "" {
+			continue
+		}
+		result = append(result, getScyResource(location))
+	}
 	return result
 }

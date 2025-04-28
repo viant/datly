@@ -125,6 +125,7 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 	if aConfig.MCPEndpoint != nil {
 		mcp = extension.NewIntegration()
 	}
+
 	mainRouter, err := NewRouter(ctx, componentRepository, aConfig, options.metrics, options.statusHandler, mcp)
 	if err != nil {
 		return nil, err

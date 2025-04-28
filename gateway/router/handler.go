@@ -32,6 +32,7 @@ import (
 	hstate "github.com/viant/xdatly/handler/state"
 	"io"
 	"net/http"
+	nurl "net/url"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -393,6 +394,13 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	}
 	if redirect := aSession.Redirect; redirect != nil {
 		aSession.Redirect = nil //reset redirect
+
+		if !url.IsRelative(redirect.Route.URL) {
+			resp := response.NewBuffered(response.WithHeaders(http.Header{}))
+			resp.Headers().Set("Location", redirect.Route.URL)
+			resp.SetStatusCode(http.StatusFound)
+			return resp, nil
+		}
 		provider, err := r.registry.LookupProvider(ctx, contract.NewPath(redirect.Route.Method, redirect.Route.URL))
 		if err != nil {
 			return nil, err
@@ -401,7 +409,11 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 		if err != nil {
 			return nil, err
 		}
-		return r.handleComponent(ctx, redirect.Request, redirectingComponent)
+		httpRequest, err := createRequest(ctx, redirect)
+		if err != nil {
+			return nil, err
+		}
+		return r.handleComponent(ctx, httpRequest, redirectingComponent)
 	}
 
 	//TODO: add redirect option
@@ -432,6 +444,28 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 		return r.compressIfNeeded(data, options)
 	}
 	return r.marshalComponentOutput(output, aComponent, options)
+}
+
+func createRequest(ctx context.Context, redirect *session.Redirect) (*http.Request, error) {
+	var err error
+	request := redirect.Request
+	if request == nil || request.URL == nil {
+		if request, err = http.NewRequest(redirect.Route.Method, redirect.Route.URL, nil); err != nil {
+			return nil, err
+		}
+	} else {
+		request = request.Clone(ctx)
+		URL, err := nurl.Parse(redirect.Route.URL)
+		if err != nil {
+			return nil, err
+		}
+		queryParams := URL.Query()
+		if len(queryParams) > 0 {
+			request.URL.RawQuery = queryParams.Encode()
+		}
+	}
+	request.RequestURI = request.URL.RequestURI()
+	return request, nil
 }
 
 func (r *Handler) marshalComponentOutput(output interface{}, aComponent *repository.Component, options *response.Options) (response.Response, error) {
