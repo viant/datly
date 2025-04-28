@@ -198,6 +198,7 @@ func (n *Viewlets) applyTopLevelSetting(column *sqlparser.Column, viewlet *Viewl
 		return nil
 	}
 	columnConfig := columnViewlet.columnConfig(columnName)
+	columnConfig.Alias = column.Alias
 	if tag := column.Tag; tag != "" {
 		tag = trimQuotes(strings.TrimSpace(tag))
 		columnConfig.Tag = &tag

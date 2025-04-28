@@ -978,7 +978,7 @@ func (v *View) detectColumns(ctx context.Context, resource *Resource) error {
 	if err != nil {
 		return fmt.Errorf("failed to detect column with: %v due to %w", query.Query, err)
 	}
-	v.Columns = NewColumns(sqlColumns)
+	v.Columns = NewColumns(sqlColumns, v.ColumnsConfig)
 	return nil
 }
 

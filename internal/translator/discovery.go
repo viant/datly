@@ -189,7 +189,7 @@ func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Col
 			return nil
 		}
 		if columns := viewlet.Spec.Columns; len(columns) > 0 {
-			viewlet.Columns = view.NewColumns(columns).Dedupe()
+			viewlet.Columns = view.NewColumns(columns, viewlet.ColumnConfig.Index()).Dedupe()
 			isValid := s.ensureValidColumns(viewlet)
 			if isValid && !viewlet.IsSummary {
 				columnDiscovery.Items[viewlet.Name] = viewlet.Columns.Dedupe()
@@ -197,7 +197,7 @@ func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Col
 			summary := viewlet.Summary
 			if summary != nil && len(summary.Spec.Columns) > 0 {
 				if len(summary.Columns) == 0 {
-					summary.Columns = view.NewColumns(summary.Spec.Columns).Dedupe()
+					summary.Columns = view.NewColumns(summary.Spec.Columns, viewlet.ColumnConfig.Index()).Dedupe()
 				}
 				key := view.SummaryViewKey(viewlet.View.Name, summary.View.Name)
 				columnDiscovery.Items[key] = summary.Columns.Dedupe()

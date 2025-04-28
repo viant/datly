@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/sqlx/io"
 	"github.com/viant/tagly/format"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
@@ -122,6 +123,7 @@ func (c *Column) EnsureType(lookupType xreflect.LookupType) error {
 func (c *Column) buildSQLExpression(allowNulls bool) error {
 	defaultValue := c.defaultValue(c.rType)
 	c.sqlExpression = c.DatabaseColumn
+
 	if c.Expression != "" {
 		c.sqlExpression = c.Expression
 	}
@@ -217,12 +219,19 @@ func NewColumn(name, dataTypeName string, rType reflect.Type, nullable bool, opt
 	for _, opt := range opts {
 		opt(ret)
 	}
+	if sqlTag := io.ParseTag(reflect.StructTag(ret.Tag)); sqlTag != nil {
+		if name := sqlTag.Name(); name != ret.DatabaseColumn {
+			ret.DatabaseColumn = name
+		}
+	}
+
 	return ret
 }
 
 type (
 	ColumnConfig struct {
 		Name                string       `json:",omitempty"`
+		Alias               string       `json:",omitempty"`
 		IgnoreCaseFormatter *bool        `json:",omitempty"`
 		Expression          *string      `json:",omitempty"`
 		Codec               *state.Codec `json:",omitempty"`

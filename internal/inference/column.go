@@ -20,5 +20,6 @@ func ExtractColumnConfig(column *sqlparser.Column) (*view.ColumnConfig, error) {
 		column.Type = *columnConfig.DataType
 	}
 	columnConfig.Name = column.Identity()
+	columnConfig.Alias = column.Alias
 	return columnConfig, nil
 }

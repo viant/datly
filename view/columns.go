@@ -183,13 +183,22 @@ func (c Columns) updateTypes(columns []*Column, caseFormat text.CaseFormat) {
 	}
 }
 
-func NewColumns(columns sqlparser.Columns) Columns {
+func NewColumns(columns sqlparser.Columns, config map[string]*ColumnConfig) Columns {
 	var result = make(Columns, 0, len(columns))
 	for _, item := range columns {
 		name := item.Identity()
+
+		columnConfig, ok := config[name]
+		if ok {
+			if columnConfig.Alias != "" {
+				item.Name = columnConfig.Alias
+				item.Tag += fmt.Sprintf(` sqlx:"%v"`, columnConfig.Name)
+			}
+		}
+		name = item.Identity()
 		column := NewColumn(name, item.Type, item.RawType, item.IsNullable, WithColumnTag(item.Tag))
 		if item.Name != item.Alias && item.Alias != "" && item.Name != "" {
-			column.Tag = fmt.Sprintf(`source:"%v"`, item.Name)
+			column.Tag += fmt.Sprintf(`source:"%v"`, item.Name)
 		}
 		if item.Default != nil {
 			column.Default = *item.Default

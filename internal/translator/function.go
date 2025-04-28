@@ -119,6 +119,7 @@ func (v *Viewlet) applyExplicitCast(column *sqlparser.Column, funcArgs []string)
 		return true, nil
 	}
 	columnConfig := v.columnConfig(column.Name)
+	columnConfig.Alias = column.Alias
 	columnConfig.DataType = &funcArgs[1]
 	column.Type = funcArgs[1]
 	rType, err := types.LookupType(v.Resource.typeRegistry.Lookup, column.Type)

@@ -1128,6 +1128,8 @@ github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b h1:3q166tV28yFdbFV+
 github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b/go.mod h1:85fneXJbErKMGhSQto3A5ElTQCwl3t74U9cSV0waBHw=
 github.com/viant/pgo v0.11.0 h1:PNuYVhwTfyrAHGBO6lxaMFuHP4NkjKV8ULecz3OWk8c=
 github.com/viant/pgo v0.11.0/go.mod h1:MFzHmkRFZlciugEgUvpl/3grK789PBSH4dUVSLOSo+Q=
+github.com/viant/scy v0.18.0 h1:SEwK9w6zULVAFqrmEELH2t2V34jq18DQQlQS1yrLQKw=
+github.com/viant/scy v0.18.0/go.mod h1:7uNRS67X45YN+JqTLCcMEhehffVjqrejULEDln9p0Ao=
 github.com/viant/sqlparser v0.8.1 h1:nbcTecMtW7ROk5aNB5/BWUxnduepRPOkhVo9RWxI1Ns=
 github.com/viant/sqlparser v0.8.1/go.mod h1:2QRGiGZYk2/pjhORGG1zLVQ9JO+bXFhqIVi31mkCRPg=
 github.com/viant/sqlx v0.16.4-0.20250330143046-7f3b76980252 h1:qSq3fEb29CncJ+fpazSOyNTb9R3mE93eGncvlrDqlrc=
