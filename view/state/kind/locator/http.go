@@ -36,6 +36,8 @@ func (p *HttpRequest) Value(ctx context.Context, name string) (interface{}, bool
 		return request.Header, true, nil
 	case "remoteaddr":
 		return request.RemoteAddr, true, nil
+	case "host":
+		return request.Host, true, nil
 	case "method":
 		return request.Method, true, nil
 	}
