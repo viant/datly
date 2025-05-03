@@ -316,6 +316,8 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 		case "Output":
 			declaration.InOutput = true
+		case "WithCache":
+			declaration.Cache = strings.Trim(args[0], `"'`)
 		case "Cacheable":
 			literal := strings.Trim(args[0], `"'`)
 			value, _ := strconv.ParseBool(literal)

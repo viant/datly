@@ -53,6 +53,17 @@ type (
 	}
 )
 
+func (r *Resource) CacheRef() string {
+	cacheRef := ""
+	for _, view := range r.Resource.Views {
+		if view.Cache != nil {
+			cacheRef = view.Cache.Ref
+			break
+		}
+	}
+	return cacheRef
+}
+
 func (r *Resource) OptionRule() *options.Rule {
 	return r.rule
 }
@@ -337,6 +348,9 @@ func (r *Resource) buildParameterViews() {
 		viewlet := NewViewlet(parameter.In.Name, parameter.SQL, nil, r)
 		if parameter.Connector != "" {
 			viewlet.Connector = parameter.Connector
+		}
+		if parameter.Cache != "" {
+			viewlet.View.Cache = &view.Cache{Reference: shared.Reference{Ref: parameter.Cache}}
 		}
 		if viewlet.Connector == "" {
 			viewlet.Connector = r.rootConnector

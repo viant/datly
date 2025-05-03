@@ -33,6 +33,7 @@ type (
 		Hint        string
 		AssumedType bool
 		Connector   string
+		Cache       string
 		InOutput    bool
 		Of          string
 	}
@@ -107,6 +108,9 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	}
 	if p.Tag != "" {
 		builder.WriteString(".WithTag('" + p.Tag + "')")
+	}
+	if p.Cache != "" {
+		builder.WriteString(".WithCache('" + p.Cache + "')")
 	}
 
 	if p.Connector != "" {
@@ -288,6 +292,9 @@ func buildParameter(field *xunsafe.Field, aTag *tags.Tag, types *xreflect.Types,
 
 	if aTag.View != nil {
 		param.Connector = aTag.View.Connector
+		if aTag.View.Cache != "" {
+			param.Cache = aTag.View.Cache
+		}
 	}
 
 	fType := field.Type
