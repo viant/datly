@@ -419,6 +419,12 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 				if aView.Match != "" {
 					viewOptions = append(viewOptions, view.WithMatchStrategy(aView.Match))
 				}
+
+				if aView.Cache != "" {
+					aCache := &view.Cache{Reference: shared.Reference{Ref: aView.Cache}}
+					viewOptions = append(viewOptions, view.WithCache(aCache))
+				}
+
 				if aTag.View.PublishParent {
 					viewOptions = append(viewOptions, view.WithViewPublishParent(aTag.View.PublishParent))
 				}

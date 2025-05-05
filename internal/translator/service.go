@@ -583,11 +583,16 @@ func (s *Service) Init(ctx context.Context) error {
 
 func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (*router.Resource, error) {
 	result := &router.Resource{}
+
 	if resource.Rule.Cache != nil {
 		s.Repository.Caches.Append(resource.Rule.Cache)
 	}
 	if len(s.Repository.Caches) > 0 {
 		resource.Rule.With = append(resource.Rule.With, "cache")
+	} else {
+		if cacheRef := resource.CacheRef(); cacheRef != "" {
+			resource.Rule.With = append(resource.Rule.With, cacheRef)
+		}
 	}
 	if len(s.Repository.MessageBuses) > 0 {
 		resource.Rule.With = append(resource.Rule.With, "mbus")
