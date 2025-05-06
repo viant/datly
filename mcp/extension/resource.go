@@ -2,7 +2,7 @@ package extension
 
 import (
 	"context"
-	"github.com/viant/mcp/schema"
+	"github.com/viant/mcp-protocol/schema"
 )
 
 type ResourceHandlerFunc func(ctx context.Context, request *schema.ReadResourceRequestParams) ([]schema.ReadResourceResultContentsElem, error)

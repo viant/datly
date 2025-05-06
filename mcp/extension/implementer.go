@@ -5,16 +5,15 @@ import (
 	"fmt"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/jsonrpc/transport"
-	"github.com/viant/mcp/implementer"
-	"github.com/viant/mcp/logger"
-	"github.com/viant/mcp/protocol/client"
-	"github.com/viant/mcp/protocol/server"
-	"github.com/viant/mcp/schema"
+	"github.com/viant/mcp-protocol/client"
+	"github.com/viant/mcp-protocol/logger"
+	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/mcp-protocol/server"
 )
 
 type (
 	Implementer struct {
-		*implementer.Base
+		*server.DefaultImplementer
 		integration *Integration
 	}
 )
@@ -108,10 +107,10 @@ func (i *Implementer) Implements(method string) bool {
 // New creates a new implementer
 func New(integration *Integration) server.NewImplementer {
 	return func(_ context.Context, notifier transport.Notifier, logger logger.Logger, client client.Operations) server.Implementer {
-		base := implementer.New(notifier, logger, client)
+		base := server.NewDefaultImplementer(notifier, logger, client)
 		return &Implementer{
-			integration: integration,
-			Base:        base,
+			integration:        integration,
+			DefaultImplementer: base,
 		}
 	}
 }

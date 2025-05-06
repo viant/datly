@@ -2,7 +2,7 @@ package extension
 
 import (
 	"context"
-	"github.com/viant/mcp/schema"
+	"github.com/viant/mcp-protocol/schema"
 )
 
 type ToolHandlerFunc func(ctx context.Context, request *schema.CallToolRequestParams) (*schema.CallToolResult, error)

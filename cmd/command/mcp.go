@@ -44,6 +44,7 @@ func (s *Service) mcp(ctx context.Context, mcpOption *options.Mcp) error {
 	s.config.Logging.EnableTracing = &disabled
 	s.config.Logging.IncludeSQL = &disabled
 	s.config.MCPEndpoint = &gateway.Endpoint{}
+
 	if mcpOption.Port != nil {
 		s.config.MCPEndpoint.Port = *mcpOption.Port
 	} else {

@@ -10,7 +10,8 @@ import (
 	"github.com/viant/datly/repository"
 	dpath "github.com/viant/datly/repository/path"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/mcp/schema"
+	"github.com/viant/mcp-protocol/authorization"
+	"github.com/viant/mcp-protocol/schema"
 	"io"
 	"net/http"
 	"net/url"
@@ -78,6 +79,12 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 			}
 			responseWriter := proxy.NewWriter()
 			httpRequest, _ := http.NewRequest(http.MethodGet, URL, body)
+			if tokenValue := ctx.Value(authorization.TokenKey); tokenValue != nil {
+				if token, ok := tokenValue.(*authorization.Token); ok {
+					httpRequest.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.Token))
+				}
+			}
+
 			aRoute.Handle(responseWriter, httpRequest) // route the request to the actual handler
 			var result = schema.CallToolResult{}
 			mimeType := "application/json"
@@ -172,6 +179,13 @@ func (r *Router) handleMcpRead(ctx context.Context, params *schema.ReadResourceR
 
 	responseWriter := proxy.NewWriter()
 	httpRequest, _ := http.NewRequest(http.MethodGet, URL, nil)
+
+	if tokenValue := ctx.Value(authorization.TokenKey); tokenValue != nil {
+		if token, ok := tokenValue.(*authorization.Token); ok {
+			httpRequest.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.Token))
+		}
+	}
+
 	aRoute.Handle(responseWriter, httpRequest) // route the request to the actual handler
 	var result []schema.ReadResourceResultContentsElem
 	mimeType := ""

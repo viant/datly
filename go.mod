@@ -1,8 +1,6 @@
 module github.com/viant/datly
 
-go 1.23.4
-
-toolchain go1.23.8
+go 1.23.8
 
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
@@ -17,7 +15,7 @@ require (
 	github.com/lib/pq v1.10.6
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/viant/afs v1.25.1-0.20231110184132-877ed98abca1
 	github.com/viant/afsc v1.9.1
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
@@ -30,7 +28,7 @@ require (
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
-	github.com/viant/scy v0.18.0
+	github.com/viant/scy v0.19.0
 	github.com/viant/sqlx v0.16.4-0.20250330143046-7f3b76980252
 	github.com/viant/structql v0.5.2
 	github.com/viant/toolbox v0.36.0
@@ -38,7 +36,7 @@ require (
 	github.com/viant/xreflect v0.7.2
 	github.com/viant/xunsafe v0.10.3
 	golang.org/x/mod v0.17.0
-	golang.org/x/oauth2 v0.19.0 // indirect
+	golang.org/x/oauth2 v0.28.0
 	google.golang.org/api v0.174.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -49,11 +47,11 @@ require (
 )
 
 require (
-	github.com/mark3labs/mcp-go v0.18.0
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
-	github.com/viant/jsonrpc v0.2.0
-	github.com/viant/mcp v0.1.0
+	github.com/viant/jsonrpc v0.5.0
+	github.com/viant/mcp v0.2.1-0.20250506152606-fec554225736
+	github.com/viant/mcp-protocol v0.1.0
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.5.4-0.20250418144853-029d9a05ae20
@@ -131,7 +129,6 @@ require (
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
 	github.com/xuri/excelize/v2 v2.8.0 // indirect
 	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect
-	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect

@@ -42,9 +42,30 @@ func main() {
 		}
 	}()
 
+	//os.Args = []string{"",
+	//	"mcp",
+	//	"-c=config.json",
+	//	"-C=oauth_local.json",
+	//	"-A=F",
+	//}
+
 	err := cmd.RunApp(datly.Version, os.Args[1:])
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)
 		log.Fatal(err)
 	}
+
+	/*
+		{"id":1,"jsonrpc":"2.0","method":"initialize","params":{"capabilities":{},"clientInfo":{"name":"tester","version":"0.1"},"protocolVersion":"2025-03-26"}}
+
+		{"id":null,"jsonrpc":"2.0","method":"notification/initialized"}
+
+		{"id":2,"jsonrpc":"2.0","method":"tools/list","params":{}}
+
+
+		{"id":3,"jsonrpc":"2.0","method":"tools/call","params":{"arguments":{},"name":"vendor"}}
+		//vendor
+
+	*/
+
 }
