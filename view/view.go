@@ -394,6 +394,12 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 		if viewTag.Match != "" {
 			refViewOptions = append(refViewOptions, WithMatchStrategy(viewTag.Match))
 		}
+
+		if viewTag.Cache != "" {
+			aCache := &Cache{Reference: shared.Reference{Ref: viewTag.Cache}}
+			refViewOptions = append(refViewOptions, WithCache(aCache))
+		}
+
 		if viewTag.PublishParent {
 			refViewOptions = append(refViewOptions, WithViewPublishParent(viewTag.PublishParent))
 		}
@@ -1673,6 +1679,14 @@ func NewExecView(name, table string, template string, parameters []*state.Parame
 func WithMatchStrategy(match string) Option {
 	return func(v *View) error {
 		v.MatchStrategy = MatchStrategy(match)
+		return nil
+	}
+}
+
+// WithCache creates a cache option
+func WithCache(cache *Cache) Option {
+	return func(v *View) error {
+		v.Cache = cache
 		return nil
 	}
 }

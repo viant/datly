@@ -22,6 +22,7 @@ type (
 		CustomTag              string
 		Parameters             []string //parameter references
 		Connector              string
+		Cache                  string
 		Limit                  *int
 		Match                  string
 		Batch                  int
@@ -49,6 +50,8 @@ func (t *Tag) updateView(key string, value string) error {
 		if err != nil {
 			return err
 		}
+	case "cache":
+		tag.Cache = strings.TrimSpace(value)
 	case "limit":
 		limit, err := strconv.Atoi(value)
 		if err != nil {
@@ -112,6 +115,7 @@ func (v *View) Tag() *tags.Tag {
 		appendNonEmpty(builder, "publishParent", strconv.FormatBool(v.PublishParent))
 	}
 	appendNonEmpty(builder, "connector", v.Connector)
+	appendNonEmpty(builder, "cache", v.Cache)
 	appendNonEmpty(builder, "match", v.Match)
 	if len(v.Parameters) > 0 {
 		appendNonEmpty(builder, "parameters", "{"+strings.Join(v.Parameters, ",")+"}")

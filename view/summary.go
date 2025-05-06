@@ -253,6 +253,12 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 			aTag.View.Match = string(rel.Of.MatchStrategy)
 
 		}
+		if v.Cache != nil {
+			if aTag.View == nil {
+				aTag.View = &tags.View{}
+			}
+			aTag.View.Cache = v.Cache.Ref
+		}
 		if rel.Of.Tag != "" {
 			if aTag.View == nil {
 				aTag.View = &tags.View{}
