@@ -56,7 +56,7 @@ func (s *Server) init() error {
 			issuerURL, _ = url.Base(oauth2Config.Endpoint.AuthURL, http.SecureScheme)
 		}
 
-		authCfg := &authorization.Config{
+		authPolicy := &authorization.Policy{
 			ExcludeURI: "/sse",
 			Global: &authorization.Authorization{
 				ProtectedResourceMetadata: &meta.ProtectedResourceMetadata{
@@ -66,7 +66,7 @@ func (s *Server) init() error {
 				UseIdToken: true,
 			},
 		}
-		options = append(options, server.WithAuthConfig(authCfg))
+		options = append(options, server.WithAuthorizationPolicy(authPolicy))
 		switch s.options.Authorizer {
 		case "F":
 
@@ -78,7 +78,7 @@ func (s *Server) init() error {
 			if err != nil {
 				return fmt.Errorf("failed to create auth round tripper: %w", err)
 			}
-			authServer, err := authserver.NewAuthServer(authCfg)
+			authServer, err := authserver.NewAuthServer(authPolicy)
 			if err != nil {
 				return fmt.Errorf("failed to create auth server: %w", err)
 			}

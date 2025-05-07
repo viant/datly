@@ -50,8 +50,8 @@ require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
 	github.com/viant/jsonrpc v0.5.0
-	github.com/viant/mcp v0.2.1
-	github.com/viant/mcp-protocol v0.1.0
+	github.com/viant/mcp v0.2.4-0.20250507174753-67b179239723
+	github.com/viant/mcp-protocol v0.2.0
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.5.4-0.20250418144853-029d9a05ae20
