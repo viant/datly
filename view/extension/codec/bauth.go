@@ -41,7 +41,6 @@ func ExtractBasicAuth(authHeader string) (string, string, error) {
 	if err != nil {
 		return "", "", errors.New("failed to unescape password")
 	}
-
 	return subject, credentials, nil
 }
 
