@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"github.com/viant/xdatly/codec"
+	"net/url"
 	"reflect"
 	"strings"
 )
@@ -32,7 +33,16 @@ func ExtractBasicAuth(authHeader string) (string, string, error) {
 		return "", "", errors.New("invalid credential format")
 	}
 
-	return parts[0], parts[1], nil
+	subject, err := url.QueryUnescape(parts[0])
+	if err != nil {
+		return "", "", errors.New("failed to unescape username")
+	}
+	credentials, err := url.QueryUnescape(parts[1])
+	if err != nil {
+		return "", "", errors.New("failed to unescape password")
+	}
+
+	return subject, credentials, nil
 }
 
 const (
