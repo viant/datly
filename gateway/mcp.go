@@ -28,11 +28,9 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 		return fmt.Errorf("failed to get component from provider: %w", err)
 	}
 	toolInputType := r.buildToolInputType(component)
-	name := component.View.Ref
-	if name == "" {
-		name = component.View.Name
-	}
-	description := component.Description
+
+	name := aPath.Name
+	description := aPath.Description
 	if description == "" {
 		if aPath.Method == http.MethodGet {
 			description = "Query data from " + name + " view; source: " + component.View.Source()
@@ -40,6 +38,7 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 			description = "Modify data in " + name + " view; destination: " + component.View.Table
 		}
 	}
+
 	mcpTool := schema.Tool{
 		Name:        strings.ReplaceAll(name, "#", ""),
 		Description: &description,
@@ -140,12 +139,13 @@ func (r *Router) buildResourceTemplatesIntegration(item *dpath.Item, aPath *dpat
 			// append query parameters to the URL
 			URL += "{?" + strings.Join(parameterNames, ",") + "}"
 		}
-		name := aPath.URI + "." + aPath.View.Ref
+		name := aPath.Name
 		description := aPath.Description
 		if description == "" {
 			// fallback to view name if no description is provided
 			description = aPath.View.Ref
 		}
+
 		mimeType := "application/json"
 		mcpResourceTemplate := schema.ResourceTemplate{
 			UriTemplate: URL,

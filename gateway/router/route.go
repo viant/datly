@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/content"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
@@ -33,15 +34,15 @@ type (
 	Routes []*Route
 	//deprecated
 	Route struct {
-		APIKey      *path.APIKey      `json:",omitempty"`
-		Cors        *path.Cors        `json:",omitempty"`
-		Internal    bool              `json:"Internal,omitempty" yaml:"Internal,omitempty" `
-		Connector   string            `json:",omitempty"`
-		ContentURL  string            `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
-		Compression *path.Compression `json:",omitempty"`
-
-		Transforms marshal.Transforms `json:",omitempty"`
-
+		APIKey      *path.APIKey       `json:",omitempty"`
+		Cors        *path.Cors         `json:",omitempty"`
+		Internal    bool               `json:"Internal,omitempty" yaml:"Internal,omitempty" `
+		Connector   string             `json:",omitempty"`
+		ContentURL  string             `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
+		Compression *path.Compression  `json:",omitempty"`
+		Transforms  marshal.Transforms `json:",omitempty"`
+		contract.Meta
+		contract.ModelContextProtocol
 		repository.Component
 
 		_unmarshallerInterceptors marshal.Transforms

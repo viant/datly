@@ -42,15 +42,17 @@ type (
 	}
 
 	Path struct {
-		contract.Path `yaml:",inline"`
-		Settings      `yaml:",inline"`
-		Handler       *Handler         `yaml:"Handler" json:"Handler"`
-		Internal      bool             `json:"Internal,omitempty" yaml:"Internal,omitempty" `
-		Connector     string           `json:",omitempty"`
-		ContentURL    string           `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
-		View          *ViewRef         `yaml:"View" json:"View"` // View is the shared resource view for this path, used for OpenAPI generation
-		SourceURL     string           `yaml:"-" json:"-"`
-		Version       *version.Control `yaml:"-" json:"-"`
+		contract.Path                 `yaml:",inline"`
+		Settings                      `yaml:",inline"`
+		contract.Meta                 `yaml:",inline"`
+		contract.ModelContextProtocol `yaml:",inline"`
+		Handler                       *Handler         `yaml:"Handler" json:"Handler"`
+		Internal                      bool             `json:"Internal,omitempty" yaml:"Internal,omitempty" `
+		Connector                     string           `json:",omitempty"`
+		ContentURL                    string           `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `
+		View                          *ViewRef         `yaml:"View" json:"View"` // View is the shared resource view for this path, used for OpenAPI generation
+		SourceURL                     string           `yaml:"-" json:"-"`
+		Version                       *version.Control `yaml:"-" json:"-"`
 	}
 
 	Parameter struct {

@@ -21,6 +21,12 @@ type (
 func (i *Implementer) Initialize(ctx context.Context, init *schema.InitializeRequestParams, result *schema.InitializeResult) {
 	i.ClientInitialize = init
 	result.ProtocolVersion = init.ProtocolVersion
+	if i.ToolRegistry.Size() > 0 {
+		result.Capabilities.Tools = &schema.ServerCapabilitiesTools{}
+	}
+	if i.ResourceRegistry.Size() > 0 {
+		result.Capabilities.Resources = &schema.ServerCapabilitiesResources{}
+	}
 }
 
 // ListResources lists all resources
@@ -106,11 +112,11 @@ func (i *Implementer) Implements(method string) bool {
 
 // New creates a new implementer
 func New(integration *Integration) server.NewImplementer {
-	return func(_ context.Context, notifier transport.Notifier, logger logger.Logger, client client.Operations) server.Implementer {
+	return func(_ context.Context, notifier transport.Notifier, logger logger.Logger, client client.Operations) (server.Implementer, error) {
 		base := server.NewDefaultImplementer(notifier, logger, client)
 		return &Implementer{
 			integration:        integration,
 			DefaultImplementer: base,
-		}
+		}, nil
 	}
 }

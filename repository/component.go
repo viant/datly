@@ -38,10 +38,10 @@ import (
 type (
 	Component struct {
 		version.Version `json:"-" yaml:"-"`
+		contract.Meta
 		contract.Path
 		contract.Contract
 		content.Content `json:",omitempty" yaml:",inline"`
-		Name            string        `json:"name" yaml:"name"`
 		Async           *async.Config `json:",omitempty"`
 		View            *view.View    `json:",omitempty"`
 		NamespacedView  *view.NamespacedView

@@ -51,7 +51,8 @@ type (
 		DisableCors          bool
 		CacheConnectorPrefix string
 		Version              string
-		MCPEndpoint          *Endpoint // MCP endpoint, if empty it will default to the same as RouteURL
+		MCPEndpoint          *Endpoint  // MCP endpoint, if empty it will default to the same as RouteURL
+		CORS                 *path.Cors //Default CORS configuration
 	}
 
 	ChangeDetection struct {
@@ -91,7 +92,9 @@ func (c *Config) Init(ctx context.Context) error {
 	if c.ChangeDetection == nil {
 		c.ChangeDetection = &ChangeDetection{}
 	}
-
+	if c.CORS == nil {
+		c.CORS = path.DefaultCors()
+	}
 	c.Meta.Init()
 	c.ChangeDetection.Init()
 	if err := c.APIKeys.Init(ctx); err != nil {
@@ -144,5 +147,6 @@ func NewConfigFromURL(ctx context.Context, fs afs.Service, URL string) (*Config,
 	if err = cfg.Init(ctx); err != nil {
 		return nil, err
 	}
+
 	return cfg, cfg.Validate()
 }

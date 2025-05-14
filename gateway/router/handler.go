@@ -110,15 +110,18 @@ func enableCors(writer http.ResponseWriter, request *http.Request, cors *path.Co
 	if cors == nil {
 		return
 	}
-	origins := request.Header["Origin"]
-	origin := ""
-	if len(origins) > 0 {
-		origin = origins[0]
-	}
-	if origin == "" {
-		writer.Header().Set(httputils.AllowOriginHeader, "*")
+	origin := request.Header.Get("Origin")
+	allowedOrigins := cors.OriginMap()
+	if allowedOrigins["*"] {
+		if origin == "" {
+			writer.Header().Set(httputils.AllowOriginHeader, "*")
+		} else {
+			writer.Header().Set(httputils.AllowOriginHeader, origin)
+		}
 	} else {
-		writer.Header().Set(httputils.AllowOriginHeader, origin)
+		if origin != "" && allowedOrigins[origin] {
+			writer.Header().Set(httputils.AllowOriginHeader, origin)
+		}
 	}
 
 	if cors.AllowMethods != nil && allHeaders {
@@ -394,13 +397,14 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	}
 	if redirect := aSession.Redirect; redirect != nil {
 		aSession.Redirect = nil //reset redirect
-
-		if !url.IsRelative(redirect.Route.URL) {
+		isInternalRequest := url.Scheme(redirect.Route.URL, "") == ""
+		if !isInternalRequest {
 			resp := response.NewBuffered(response.WithHeaders(http.Header{}))
 			resp.Headers().Set("Location", redirect.Route.URL)
 			resp.SetStatusCode(http.StatusFound)
 			return resp, nil
 		}
+
 		provider, err := r.registry.LookupProvider(ctx, contract.NewPath(redirect.Route.Method, redirect.Route.URL))
 		if err != nil {
 			return nil, err

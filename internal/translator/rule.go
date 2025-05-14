@@ -27,8 +27,8 @@ import (
 type (
 	Rule struct {
 		Viewlets
-		Name                       string `json:",omitempty"`
-		Description                string `json:",omitempty"`
+		contract.Meta
+		contract.ModelContextProtocol
 		CustomValidation           bool
 		IgnoreEmptyQueryParameters bool
 		orderNamespaces            []string
@@ -37,15 +37,16 @@ type (
 		router.Route
 
 		*contract.Output
-		Connector string                 `json:",omitempty"`
-		Async     *async.Config          `json:",omitempty"`
-		Cache     *view.Cache            `json:",omitempty"`
-		CSV       *content.CSVConfig     `json:",omitempty"`
-		Const     map[string]interface{} `json:",omitempty"`
-		ConstURL  string                 `json:",omitempty"`
-		DocURL    string
-		DocURLs   []string
-		Doc       view.Documentation
+		Connector string             `json:",omitempty"`
+		Async     *async.Config      `json:",omitempty"`
+		Cache     *view.Cache        `json:",omitempty"`
+		CSV       *content.CSVConfig `json:",omitempty"`
+		Const     map[string]interface {
+		} `json:",omitempty"`
+		ConstURL string `json:",omitempty"`
+		DocURL   string
+		DocURLs  []string
+		Doc      view.Documentation
 
 		TypeSrc           *parser.TypeImport         `json:",omitempty"`
 		Package           string                     `json:",omitempty"`
@@ -131,20 +132,24 @@ func (r *Rule) DSQLSetting() interface{} {
 		Internal          bool     `json:",omitempty"`
 		JSONUnmarshalType string   `json:",omitempty"`
 		Connector         string   `json:",omitempty"`
+		contract.ModelContextProtocol
+		contract.Meta
 	}{
-		URI:               r.URI,
-		Method:            r.Method,
-		Type:              r.Type,
-		InputType:         r.InputType,
-		OutputType:        r.OutputType,
-		CompressAboveSize: r.CompressAboveSize,
-		MessageBus:        r.MessageBus,
-		HandlerArgs:       r.HandlerArgs,
-		DocURL:            r.DocURL,
-		DocURLs:           r.DocURLs,
-		Internal:          r.Internal,
-		JSONUnmarshalType: r.JSONUnmarshalType,
-		Connector:         r.Connector,
+		URI:                  r.URI,
+		Method:               r.Method,
+		Type:                 r.Type,
+		InputType:            r.InputType,
+		OutputType:           r.OutputType,
+		CompressAboveSize:    r.CompressAboveSize,
+		MessageBus:           r.MessageBus,
+		HandlerArgs:          r.HandlerArgs,
+		DocURL:               r.DocURL,
+		DocURLs:              r.DocURLs,
+		Internal:             r.Internal,
+		JSONUnmarshalType:    r.JSONUnmarshalType,
+		Connector:            r.Connector,
+		ModelContextProtocol: r.ModelContextProtocol,
+		Meta:                 r.Meta,
 	}
 }
 
@@ -317,10 +322,6 @@ func (r *Rule) applyDefaults() {
 	}
 	if r.JSONUnmarshalType != "" {
 		r.Route.Content.Marshaller.JSON.TypeName = r.JSONUnmarshalType
-	}
-	if r.Route.Cors == nil {
-		dC := dpath.DefaultCors()
-		r.Route.Cors = dC
 	}
 }
 

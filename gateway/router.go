@@ -349,9 +349,26 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 					continue
 				}
 
-				if r.mcp != nil {
-					r.buildResourceTemplatesIntegration(anItem, aPath, aRoute, provider) // build mcp resource integration if applicable, this is optional
-					r.buildToolsIntegration(anItem, aPath, aRoute, provider)
+				//	name := component.View.Ref
+				//	if name == "" {
+				//		name = component.View.Name
+				//	}
+				//	description := component.Description
+				//	if description == "" {
+				//		if aPath.Method == http.MethodGet {
+				//			description = "Query data from " + name + " view; source: " + component.View.Source()
+				//		} else {
+				//			description = "Modify data in " + name + " view; destination: " + component.View.Table
+				//		}
+				//	}
+
+				if r.mcp != nil && aPath.HasMCPIntegration() {
+					switch {
+					case aPath.MCPResource:
+						r.buildResourceTemplatesIntegration(anItem, aPath, aRoute, provider) // build mcp resource integration if applicable, this is optional
+					default:
+						r.buildToolsIntegration(anItem, aPath, aRoute, provider)
+					}
 				}
 
 				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.Meta.ViewURI, aPath.URI), provider))
@@ -484,10 +501,18 @@ func (r *Router) NewOptionsRoute(uri string, paths []*path.Path) *Route {
 			Method: http.MethodOptions,
 		},
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
-			cors := &path.Cors{}
 			allowedMethods := []string{}
-			cors.AllowMethods = &allowedMethods
+			cors := &path.Cors{AllowMethods: &allowedMethods}
+
 			for _, aPath := range paths {
+				if aPath.Cors == nil {
+					aPath.Cors = &path.Cors{}
+				}
+
+				if r.config.CORS != nil {
+					aPath.Cors.Inherit(r.config.CORS)
+				}
+
 				if aPath.Cors.AllowCredentials != nil {
 					cors.AllowCredentials = aPath.Cors.AllowCredentials
 				}
@@ -497,9 +522,7 @@ func (r *Router) NewOptionsRoute(uri string, paths []*path.Path) *Route {
 				if aPath.Cors.ExposeHeaders != nil {
 					cors.ExposeHeaders = aPath.Cors.ExposeHeaders
 				}
-				if aPath.Cors.AllowOrigins != nil {
-					cors.AllowOrigins = aPath.Cors.AllowOrigins
-				}
+
 				if aPath.Cors.AllowMethods != nil {
 					*cors.AllowMethods = append(*cors.AllowMethods, *aPath.Cors.AllowMethods...)
 				}

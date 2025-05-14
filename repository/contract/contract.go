@@ -19,7 +19,6 @@ type (
 	Style string
 
 	Contract struct {
-		Name       string `json:",omitempty" yaml:",omitempty"`
 		Input      Input
 		Output     Output
 		ModulePath string

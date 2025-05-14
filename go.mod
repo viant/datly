@@ -16,7 +16,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.10.0
-	github.com/viant/afs v1.25.1-0.20231110184132-877ed98abca1
+	github.com/viant/afs v1.26.2
 	github.com/viant/afsc v1.9.1
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.4.1
@@ -36,7 +36,7 @@ require (
 	github.com/viant/xreflect v0.7.2
 	github.com/viant/xunsafe v0.10.3
 	golang.org/x/mod v0.17.0
-	golang.org/x/oauth2 v0.28.0
+	golang.org/x/oauth2 v0.30.0
 	google.golang.org/api v0.174.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -49,9 +49,9 @@ require (
 require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
-	github.com/viant/jsonrpc v0.5.0
-	github.com/viant/mcp v0.2.4-0.20250507174753-67b179239723
-	github.com/viant/mcp-protocol v0.2.0
+	github.com/viant/jsonrpc v0.5.1
+	github.com/viant/mcp v0.2.4
+	github.com/viant/mcp-protocol v0.3.1
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
 	github.com/viant/xdatly v0.5.4-0.20250418144853-029d9a05ae20
@@ -136,11 +136,11 @@ require (
 	go.opentelemetry.io/otel v1.24.0 // indirect
 	go.opentelemetry.io/otel/metric v1.24.0 // indirect
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/term v0.28.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/crypto v0.38.0 // indirect
+	golang.org/x/sync v0.14.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/term v0.32.0 // indirect
+	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/appengine/v2 v2.0.2 // indirect

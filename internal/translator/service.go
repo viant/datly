@@ -327,9 +327,8 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		route.Contract.ModulePath = resource.Module.Mod.Path
 	}
 
-	route.Component.Name = resource.Rule.Name
-	route.Component.Description = resource.Rule.Description
-
+	route.Component.Meta = resource.Rule.Meta
+	route.ModelContextProtocol = resource.Rule.ModelContextProtocol
 	if route.Handler != nil {
 		if route.Component.Output.Type.Schema == nil {
 			route.Component.Output.Type.Schema = &state.Schema{}
