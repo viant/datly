@@ -19,6 +19,7 @@ import (
 	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/gmetric/counter"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	xhandler "github.com/viant/xdatly/handler"
@@ -29,6 +30,7 @@ import (
 	"google.golang.org/api/googleapi"
 	"net/http"
 	"reflect"
+	"time"
 )
 
 type Service struct {
@@ -100,10 +102,17 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 		}
 		return ret, err
 	case service.TypeExecutor:
+		var onDone counter.OnDone
+		if aComponent.View.Counter != nil {
+			onDone = aComponent.View.Counter.Begin(time.Now())
+		}
 		if ctx, err = s.EnsureInput(ctx, aComponent, aSession, false); err != nil {
+			if onDone != nil {
+				onDone(time.Now(), err)
+			}
 			return nil, err
 		}
-		ret, err := s.execute(ctx, aComponent, aSession)
+		ret, err := s.execute(ctx, aComponent, aSession, onDone)
 		return s.finalize(ctx, ret, err)
 	}
 	return nil, response.NewError(500, fmt.Sprintf("unsupported Type %v", aComponent.Service))
