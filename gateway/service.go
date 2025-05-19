@@ -122,7 +122,7 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 
 	var mcp *extension.Integration
 
-	if aConfig.MCPEndpoint != nil {
+	if aConfig.MCP != nil {
 		mcp = extension.NewIntegration()
 	}
 

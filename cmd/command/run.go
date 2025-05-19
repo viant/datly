@@ -20,6 +20,11 @@ func (s *Service) Run(ctx context.Context, options *options.Options) (err error)
 	if err != nil {
 		return err
 	}
+	if srv.MCP != nil {
+		go func() {
+			srv.MCP.ListenAndServe()
+		}()
+	}
 	return srv.ListenAndServe()
 }
 

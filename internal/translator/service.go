@@ -419,7 +419,6 @@ func (s *Service) persistDocumentation(ctx context.Context, resource *Resource, 
 			BaseURL: "doc",
 		}
 		baseDocURL := s.Repository.DocBaseURL()
-
 		for i, docURL := range resource.Rule.DocURLs {
 			if strings.HasPrefix(docURL, "./") {
 				docURL = docURL[2:]

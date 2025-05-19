@@ -24,6 +24,8 @@ const (
 type (
 	Route struct {
 		Path          *contract.Path
+		MCP           *contract.ModelContextProtocol
+		Meta          *contract.Meta
 		Kind          int
 		ApiKeys       []*path.APIKey
 		Providers     []*repository.Provider
@@ -66,6 +68,8 @@ func (r *Router) NewRouteHandler(handler *router.Handler) *Route {
 	}
 	return &Route{
 		Path:      &handler.Path.Path,
+		MCP:       &handler.Path.ModelContextProtocol,
+		Meta:      &handler.Path.Meta,
 		Providers: []*repository.Provider{handler.Provider},
 		Handler:   handler.HandleRequest,
 		Config:    r.config.Logging,

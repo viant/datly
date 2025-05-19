@@ -6,15 +6,15 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/http"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/mcp/extension"
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/mcp-protocol/oauth2/meta"
 	"github.com/viant/mcp-protocol/schema"
-	"github.com/viant/mcp/client/auth/flow"
 	"github.com/viant/mcp/client/auth/store"
 	"github.com/viant/mcp/client/auth/transport"
 	authserver "github.com/viant/mcp/server/auth"
+	"github.com/viant/scy/auth/flow"
 	"os"
 	"path"
 
@@ -29,33 +29,31 @@ import (
 
 type Server struct {
 	server    *server.Server // The underlying MCP server instance
-	options   *options.Mcp
+	config    *gateway.ModelContextProtocol
 	extension *extension.Integration
 }
 
 func (s *Server) init() error {
 
-	stream := false
 	var newImplementer = extension.New(s.extension)
 	var options = []server.Option{
 		server.WithNewImplementer(newImplementer),
 		server.WithImplementation(schema.Implementation{"Datly", "0.1"}),
-		server.WithCapabilities(schema.ServerCapabilities{
-			Resources: &schema.ServerCapabilitiesResources{ListChanged: &stream},
-			Tools:     &schema.ServerCapabilitiesTools{ListChanged: &stream},
-		}),
 	}
-	issuerURL := s.options.IssuerURL
-	if s.options.Authorizer != "" {
+	issuerURL := s.config.IssuerURL
+	var oauth2Config *oauth2.Config
+	var err error
+	if s.config.AuthorizerMode != "" {
 
-		oauth2Config, err := loadAuthConfig(context.Background(), s.options)
-		if err != nil {
-			return err
-		}
-		if issuerURL == "" && oauth2Config != nil {
-			issuerURL, _ = url.Base(oauth2Config.Endpoint.AuthURL, http.SecureScheme)
-		}
+		if s.config.OAuth2ConfigURL != "" {
+			if oauth2Config, err = loadAuthConfig(context.Background(), s.config); err != nil {
 
+				return err
+			}
+			if issuerURL == "" && oauth2Config != nil {
+				issuerURL, _ = url.Base(oauth2Config.Endpoint.AuthURL, http.SecureScheme)
+			}
+		}
 		authPolicy := &authorization.Policy{
 			ExcludeURI: "/sse",
 			Global: &authorization.Authorization{
@@ -66,10 +64,13 @@ func (s *Server) init() error {
 				UseIdToken: true,
 			},
 		}
-		options = append(options, server.WithAuthorizationPolicy(authPolicy))
-		switch s.options.Authorizer {
-		case "F":
 
+		var authService *authserver.Service
+		switch s.config.AuthorizerMode {
+		case "F":
+			if oauth2Config == nil {
+				return fmt.Errorf("Fallback mode requires OAuth2ConfigURL")
+			}
 			memStore := store.NewMemoryStore(store.WithClientConfig(oauth2Config))
 			roundTripper, err := transport.New(
 				transport.WithStore(memStore),
@@ -78,13 +79,18 @@ func (s *Server) init() error {
 			if err != nil {
 				return fmt.Errorf("failed to create auth round tripper: %w", err)
 			}
-			authServer, err := authserver.NewAuthServer(authPolicy)
+			authService, err = authserver.New(&authserver.Config{Policy: authPolicy})
 			if err != nil {
 				return fmt.Errorf("failed to create auth server: %w", err)
 			}
-			fallbackAuth := authserver.NewFallbackAuth(authServer, roundTripper, roundTripper)
-			options = append(options, server.WithAuthorizer(fallbackAuth.EnsureAuthorized))
+			authService.FallBack = authserver.NewFallbackAuth(authService, roundTripper, roundTripper)
+		default:
+			authService, err = authserver.New(&authserver.Config{Policy: authPolicy})
+			if err != nil {
+				return fmt.Errorf("failed to create auth server: %w", err)
+			}
 		}
+		options = append(options, server.WithAuthorizer(authService.Middleware))
 	}
 
 	srv, err := server.New(options...)
@@ -97,7 +103,7 @@ func (s *Server) init() error {
 
 func (s *Server) ListenAndServe() error {
 
-	if s.options.Port == nil {
+	if s.config.Port == nil {
 		stdio := s.server.Stdio(context.Background())
 		err := stdio.ListenAndServe()
 		if err != nil {
@@ -105,7 +111,7 @@ func (s *Server) ListenAndServe() error {
 			return err
 		}
 	} else {
-		httpServer := s.server.HTTP(context.Background(), ":"+strconv.Itoa(*s.options.Port))
+		httpServer := s.server.HTTP(context.Background(), ":"+strconv.Itoa(*s.config.Port))
 		err := httpServer.ListenAndServe()
 		if err != nil {
 			// Handle error starting the SSE server
@@ -117,7 +123,7 @@ func (s *Server) ListenAndServe() error {
 	return nil
 }
 
-func loadAuthConfig(ctx context.Context, mcpOption *options.Mcp) (*oauth2.Config, error) {
+func loadAuthConfig(ctx context.Context, mcpOption *gateway.ModelContextProtocol) (*oauth2.Config, error) {
 	if authClientURL := mcpOption.OAuth2ConfigURL; authClientURL != "" {
 		if url.IsRelative(authClientURL) {
 			fs := afs.New()
@@ -151,12 +157,12 @@ func loadAuthConfig(ctx context.Context, mcpOption *options.Mcp) (*oauth2.Config
 	return nil, nil
 }
 
-func NewServer(extension *extension.Integration, mcp *options.Mcp) (*Server, error) {
+func NewServer(extension *extension.Integration, config *gateway.ModelContextProtocol) (*Server, error) {
 	if extension == nil {
 		return nil, nil
 	}
 	s := &Server{
-		options:   mcp,
+		config:    config,
 		extension: extension,
 	}
 

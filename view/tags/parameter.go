@@ -20,7 +20,7 @@ type Parameter struct {
 	DataType     string `tag:"dataType,omitempty"`    //parameter input type
 	Cardinality  string `tag:"cardinality,omitempty"` //parameter input type
 	With         string `tag:"with,omitempty"`        //optional auxiliary type name holding parameters
-	Required     bool   `tag:"required,omitempty"`
+	Required     *bool  `tag:"required,omitempty"`
 	Cacheable    *bool  `tag:"cacheable,omitempty"`
 	Async        bool   `tag:"async,omitempty"`
 }
@@ -58,7 +58,14 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 	case "with":
 		tag.With = value
 	case "required":
-		tag.Required = true
+		v := true
+		switch strings.TrimSpace(value) {
+		case "false", "0":
+			v = false
+		case "true", "1":
+			v = true
+		}
+		tag.Required = &v
 	default:
 		return fmt.Errorf("invalid paramerer tag key: '%s'", key)
 	}
@@ -89,8 +96,8 @@ func (p *Parameter) Tag() *tags.Tag {
 		appendNonEmpty(builder, "errorCode", strconv.Itoa(p.ErrorCode))
 	}
 	appendNonEmpty(builder, "errorMessage", p.ErrorMessage)
-	if p.Required {
-		appendNonEmpty(builder, "required", "true")
+	if p.Required != nil {
+		appendNonEmpty(builder, "required", strconv.FormatBool(*p.Required))
 	}
 	return &tags.Tag{Name: ParameterTag, Values: tags.Values(builder.String())}
 }

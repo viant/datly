@@ -27,7 +27,8 @@ import (
 type (
 	Rule struct {
 		Viewlets
-		contract.Meta
+		Name        string `json:",omitempty" yaml:"Name"`        // name of the MCP
+		Description string `json:",omitempty" yaml:"Description"` // optional description for documentation purposes
 		contract.ModelContextProtocol
 		CustomValidation           bool
 		IgnoreEmptyQueryParameters bool
@@ -385,6 +386,10 @@ func (r *Rule) applyShortHands() {
 		}
 	}
 
+	r.Meta = contract.Meta{
+		Name:        r.Name,
+		Description: r.Description,
+	}
 	if r.CompressAboveSize > 0 {
 		r.Compression = &dpath.Compression{
 			MinSizeKb: r.CompressAboveSize,

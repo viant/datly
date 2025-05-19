@@ -24,7 +24,7 @@ func (i *Implementer) Initialize(ctx context.Context, init *schema.InitializeReq
 	if i.ToolRegistry.Size() > 0 {
 		result.Capabilities.Tools = &schema.ServerCapabilitiesTools{}
 	}
-	if i.ResourceRegistry.Size() > 0 {
+	if i.ResourceRegistry.Size() > 0 || i.ResourceTemplateRegistry.Size() > 0 {
 		result.Capabilities.Resources = &schema.ServerCapabilitiesResources{}
 	}
 }

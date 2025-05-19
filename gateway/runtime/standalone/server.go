@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
+	"github.com/viant/datly/mcp"
 	"github.com/viant/datly/view/extension"
 	"log"
 	"net/http"
@@ -18,6 +19,7 @@ type Server struct {
 	http.Server
 	Service      *gateway.Service
 	useSingleton *bool //true by default
+	MCP          *mcp.Server
 }
 
 // shutdownOnInterrupt server on interupts
@@ -54,7 +56,12 @@ func New(ctx context.Context, opts ...Option) (*Server, error) {
 			MaxHeaderBytes: config.Endpoint.MaxHeaderBytes,
 		},
 	}
-
+	if config.MCP != nil && config.MCP.Port != nil {
+		server.MCP, err = mcp.NewServer(service.MCP(), config.MCP)
+		if err != nil {
+			return nil, err
+		}
+	}
 	server.shutdownOnInterrupt()
 	return server, nil
 }

@@ -339,6 +339,8 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				if err != nil {
 					return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
 				}
+
+				r.EsnureCors(aPath)
 				aRoute := r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth(), r.config.Version, r.config.Logging))
 				routes = append(routes, aRoute)
 				if aPath.Cors != nil {
@@ -363,11 +365,20 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				//	}
 
 				if r.mcp != nil && aPath.HasMCPIntegration() {
-					switch {
-					case aPath.MCPResource:
-						r.buildResourceTemplatesIntegration(anItem, aPath, aRoute, provider) // build mcp resource integration if applicable, this is optional
-					default:
-						r.buildToolsIntegration(anItem, aPath, aRoute, provider)
+					if aPath.MCPResource {
+						if err = r.buildResourceIntegration(anItem, aPath, aRoute, provider); err != nil {
+							return nil, nil, fmt.Errorf("failed to build resource integration: %w", err)
+						}
+					}
+					if aPath.MCPTemplateResource {
+						if err = r.buildTemplateResourceIntegration(anItem, aPath, aRoute, provider); err != nil {
+							return nil, nil, fmt.Errorf("failed to build template resource integration: %w", err)
+						}
+					}
+					if aPath.MCPTool {
+						if err = r.buildToolsIntegration(anItem, aPath, aRoute, provider); err != nil {
+							return nil, nil, fmt.Errorf("failed to build tool integration: %w", err)
+						}
 					}
 				}
 
@@ -377,7 +388,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 
 				if !unique[aPath.URI] {
 					unique[aPath.URI] = true
-					//				//routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.Meta.OpenApiURI, aPath.URI), r.repository, provider))
+					//				//routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.Build.OpenApiURI, aPath.URI), r.repository, provider))
 					routes = append(routes, r.NewStructRoute(r.routeURL(r.config.Meta.StructURI, aPath.URI), provider))
 					routes = append(routes, r.NewStateRoute(r.routeURL(r.config.Meta.StateURI, aPath.URI), provider))
 					routes = append(routes, r.NewMetricRoute(r.metricURL(r.config.Meta.MetricURI, aPath.URI)))
@@ -385,7 +396,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 
 				//TODO extend path.Path with cache info to pre exract cacheable view
 				//if views := router.ExtractCacheableViews(route); len(views) > 0 {
-				//	routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.CacheWarmURI, route.URI), route))
+				//	routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Build.CacheWarmURI, route.URI), route))
 				//}
 			}
 			if len(apiKeys) > 0 { //update keys to all path derived routes
@@ -446,21 +457,25 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 		result = r.addIndexRoute(indexContentURL, result)
 	}
 
-	defaultRoute := &Route{Path: &aPath.Path, Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
-		request := req.Clone(ctx)
-		if index := strings.Index(request.URL.Path, pathURI); index != -1 {
-			URI := request.RequestURI[index+len(pathURI):]
-			if strings.Index(URI, ".") == -1 {
-				URI = furl.Join(URI, "index.html")
+	defaultRoute := &Route{Path: &aPath.Path,
+		MCP:  &aPath.ModelContextProtocol,
+		Meta: &aPath.Meta,
+		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+			request := req.Clone(ctx)
+			if index := strings.Index(request.URL.Path, pathURI); index != -1 {
+				URI := request.RequestURI[index+len(pathURI):]
+				if strings.Index(URI, ".") == -1 {
+					URI = furl.Join(URI, "index.html")
+				}
+				request.URL.Path = URI
+				request.RequestURI = request.URL.RequestURI()
 			}
-			request.URL.Path = URI
-			request.RequestURI = request.URL.RequestURI()
-		}
-		fileSever.ServeHTTP(response, request)
-		if aPath.Cors != nil {
-			router.CorsHandler(req, aPath.Cors)(response)
-		}
-	}}
+			fileSever.ServeHTTP(response, request)
+			if aPath.Cors != nil {
+				cors := r.EsnureCors(aPath)
+				router.CorsHandler(req, cors)(response)
+			}
+		}}
 	result = append(result, defaultRoute)
 	aWildcardPath := wildcardPath(aPath)
 	route := &Route{Path: &aWildcardPath.Path, Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
@@ -473,7 +488,8 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 
 		fileSever.ServeHTTP(response, request)
 		if aPath.Cors != nil {
-			router.CorsHandler(req, aPath.Cors)(response)
+			cors := r.EsnureCors(aPath)
+			router.CorsHandler(req, cors)(response)
 		}
 	}}
 	result = append(result, route)
@@ -501,35 +517,42 @@ func (r *Router) NewOptionsRoute(uri string, paths []*path.Path) *Route {
 			Method: http.MethodOptions,
 		},
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
-			allowedMethods := []string{}
-			cors := &path.Cors{AllowMethods: &allowedMethods}
-
-			for _, aPath := range paths {
-				if aPath.Cors == nil {
-					aPath.Cors = &path.Cors{}
-				}
-
-				if r.config.CORS != nil {
-					aPath.Cors.Inherit(r.config.CORS)
-				}
-
-				if aPath.Cors.AllowCredentials != nil {
-					cors.AllowCredentials = aPath.Cors.AllowCredentials
-				}
-				if aPath.Cors.AllowHeaders != nil {
-					cors.AllowHeaders = aPath.Cors.AllowHeaders
-				}
-				if aPath.Cors.ExposeHeaders != nil {
-					cors.ExposeHeaders = aPath.Cors.ExposeHeaders
-				}
-
-				if aPath.Cors.AllowMethods != nil {
-					*cors.AllowMethods = append(*cors.AllowMethods, *aPath.Cors.AllowMethods...)
-				}
-			}
+			cors := r.EsnureCors(paths...)
 			router.CorsHandler(req, cors)(response)
 		},
 	}
+}
+
+func (r *Router) EsnureCors(paths ...*path.Path) *path.Cors {
+	allowedMethods := []string{}
+	cors := &path.Cors{AllowMethods: &allowedMethods}
+
+	for _, aPath := range paths {
+		if aPath.Cors == nil {
+			aPath.Cors = &path.Cors{}
+		}
+
+		if r.config.CORS != nil {
+			aPath.Cors.Inherit(r.config.CORS)
+		}
+		if aPath.Cors.AllowCredentials != nil {
+			cors.AllowCredentials = aPath.Cors.AllowCredentials
+		}
+		if aPath.Cors.AllowHeaders != nil {
+			cors.AllowHeaders = aPath.Cors.AllowHeaders
+		}
+		if aPath.Cors.ExposeHeaders != nil {
+			cors.ExposeHeaders = aPath.Cors.ExposeHeaders
+		}
+		if aPath.Cors.AllowMethods != nil {
+			*cors.AllowMethods = append(*cors.AllowMethods, *aPath.Cors.AllowMethods...)
+		}
+		if aPath.Cors.AllowOrigins != nil {
+			cors.AllowOrigins = aPath.Cors.AllowOrigins
+		}
+		aPath.Cors = cors
+	}
+	return cors
 }
 
 func wildcardPath(aPath *path.Path) *path.Path {

@@ -193,8 +193,10 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	} else if strings.Contains(dataType, "map[") {
 		declaration.Cardinality = state.Many
 	} else {
-		if !strings.HasPrefix(dataType, "*") {
-			declaration.Required = &[]bool{true}[0]
+		if declaration.Required == nil {
+			if !strings.Contains(dataType, "*") {
+				declaration.Required = &[]bool{false}[0]
+			}
 		}
 		declaration.Cardinality = state.One
 	}

@@ -61,9 +61,6 @@ func (d *Declaration) Transform() *marshal.Transform {
 func (d *Declaration) ExpandShorthands() {
 	d.Parameter.EnsureSchema()
 	d.Parameter.EnsureLocation()
-	if d.Required != nil {
-		d.Parameter.Parameter.Required = d.Required
-	}
 	if d.OutputType != "" || d.Codec != "" {
 		d.Parameter.EnsureCodec()
 		if d.Parameter.Output.Name == "" {
@@ -131,7 +128,9 @@ func (d *Declaration) ExpandShorthands() {
 	}
 	if d.In != nil && d.In.Kind == state.KindRequestBody {
 		required := true
-		d.Parameter.Required = &required
+		if d.Parameter.Required == nil {
+			d.Parameter.Required = &required
+		}
 	}
 }
 

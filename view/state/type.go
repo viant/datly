@@ -215,10 +215,10 @@ func BuildParameter(field *reflect.StructField, fs *embed.FS, lookupType xreflec
 	if pTag.ErrorMessage != "" {
 		result.ErrorMessage = pTag.ErrorMessage
 	}
-	required := pTag.Required && result.In.Kind != KindTransient
-	if required {
-		result.Required = &required
+	if result.In.Kind == KindTransient {
+		pTag.Required = nil
 	}
+	result.Required = pTag.Required
 	switch result.In.Kind {
 	case KindObject:
 		fieldType := field.Type

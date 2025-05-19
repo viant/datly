@@ -124,18 +124,29 @@ func enableCors(writer http.ResponseWriter, request *http.Request, cors *path.Co
 		}
 	}
 
+	var methods = map[string]bool{}
 	if cors.AllowMethods != nil && allHeaders {
-		writer.Header().Set(httputils.AllowMethodsHeader, request.Method)
+		methods[request.Method] = true
 	}
 	if request.Method == "OPTIONS" {
 		requestMethod := request.Header.Get(httputils.AllControlRequestHeader)
-		if requestMethod != "" {
-			writer.Header().Set(httputils.AllowMethodsHeader, requestMethod)
+		methods[requestMethod] = true
+	}
+
+	if len(methods) > 0 {
+		var methodsList []string
+		for k := range methods {
+			methodsList = append(methodsList, k)
 		}
+		writer.Header().Set(httputils.AllowMethodsHeader, strings.Join(methodsList, Separator))
 	}
 
 	if cors.AllowHeaders != nil && allHeaders {
-		writer.Header().Set(httputils.AllowHeadersHeader, strings.Join(*cors.AllowHeaders, Separator))
+		allowedHeaders := strings.Join(*cors.AllowHeaders, Separator)
+		if allowedHeaders == "*" {
+			allowedHeaders = "Content-Type,Authorization"
+		}
+		writer.Header().Set(httputils.AllowHeadersHeader, allowedHeaders)
 	}
 	if cors.AllowCredentials != nil && allHeaders {
 		writer.Header().Set(httputils.AllowCredentialsHeader, strconv.FormatBool(*cors.AllowCredentials))
@@ -143,9 +154,12 @@ func enableCors(writer http.ResponseWriter, request *http.Request, cors *path.Co
 	if cors.MaxAge != nil && allHeaders {
 		writer.Header().Set(httputils.MaxAgeHeader, strconv.Itoa(int(*cors.MaxAge)))
 	}
-
 	if cors.ExposeHeaders != nil && allHeaders {
-		writer.Header().Set(httputils.ExposeHeadersHeader, strings.Join(*cors.ExposeHeaders, Separator))
+		exposedHeaders := strings.Join(*cors.ExposeHeaders, Separator)
+		if exposedHeaders == "*" {
+			exposedHeaders = "Content-Type,Authorization"
+		}
+		writer.Header().Set(httputils.ExposeHeadersHeader, exposedHeaders)
 	}
 }
 

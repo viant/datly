@@ -12,11 +12,6 @@ import (
 )
 
 func (s *Service) Mcp(ctx context.Context, options *options.Options) (err error) {
-	//loc, err := s.loadPlugin(ctx, options)
-	//if err != nil {
-	//	return err
-	//}
-	//options.Mcp.PluginInfo = loc
 	options.Mcp.Version = options.Version
 	return s.mcp(ctx, options.Mcp)
 }
@@ -43,13 +38,6 @@ func (s *Service) mcp(ctx context.Context, mcpOption *options.Mcp) error {
 	s.config.Logging.EnableAudit = &disabled
 	s.config.Logging.EnableTracing = &disabled
 	s.config.Logging.IncludeSQL = &disabled
-	s.config.MCPEndpoint = &gateway.Endpoint{}
-
-	if mcpOption.Port != nil {
-		s.config.MCPEndpoint.Port = *mcpOption.Port
-	} else {
-		s.config.MCPEndpoint.Stdio = true
-	}
 
 	service, _, err := standalone.NewService(ctx, standalone.WithConfig(s.config))
 	if err != nil {
@@ -57,7 +45,12 @@ func (s *Service) mcp(ctx context.Context, mcpOption *options.Mcp) error {
 	}
 	integration := service.MCP()
 
-	server, err := mcp.NewServer(integration, mcpOption)
+	server, err := mcp.NewServer(integration, &gateway.ModelContextProtocol{
+		Port:            mcpOption.Port,
+		OAuth2ConfigURL: mcpOption.OAuth2ConfigURL,
+		IssuerURL:       mcpOption.IssuerURL,
+		AuthorizerMode:  mcpOption.AuthorizerMode,
+	})
 	if err != nil {
 		return err
 	}

@@ -22,12 +22,6 @@ type (
 		SensitiveConfig `json:",omitempty" yaml:",omitempty"`
 	}
 
-	Endpoint struct {
-		Port  int
-		Host  string // Host is the host to bind to, empty means all interfaces
-		Stdio bool
-	}
-
 	SensitiveConfig struct {
 		APIKeys path.APIKeys
 	}
@@ -51,8 +45,15 @@ type (
 		DisableCors          bool
 		CacheConnectorPrefix string
 		Version              string
-		MCPEndpoint          *Endpoint  // MCP endpoint, if empty it will default to the same as RouteURL
 		CORS                 *path.Cors //Default CORS configuration
+		MCP                  *ModelContextProtocol
+	}
+
+	ModelContextProtocol struct {
+		Port            *int
+		OAuth2ConfigURL string
+		IssuerURL       string
+		AuthorizerMode  string
 	}
 
 	ChangeDetection struct {

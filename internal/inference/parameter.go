@@ -113,6 +113,13 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 		builder.WriteString(".WithCache('" + p.Cache + "')")
 	}
 
+	if p.Required != nil {
+		if !*p.Required {
+			builder.WriteString(".Optional()")
+		} else {
+			builder.WriteString(".Required()")
+		}
+	}
 	if p.Connector != "" {
 		builder.WriteString(".WithConnector('" + p.Connector + "')")
 	}
@@ -314,10 +321,7 @@ func buildParameter(field *xunsafe.Field, aTag *tags.Tag, types *xreflect.Types,
 	param.With = pTag.With
 	param.Async = pTag.Async
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
-	if pTag.Required {
-		value := pTag.Required
-		param.Required = &value
-	}
+	param.Required = pTag.Required
 
 	cardinality := state.One
 	if field.Type.Kind() == reflect.Slice {
