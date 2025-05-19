@@ -6,7 +6,9 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service/executor/handler"
+	"github.com/viant/gmetric/counter"
 	xhandler "github.com/viant/xdatly/handler"
+	"time"
 
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -18,7 +20,7 @@ func (s *Service) HandlerSession(ctx context.Context, aComponent *repository.Com
 	return anExecutor.NewHandlerSession(ctx, handler.WithTypes(aComponent.Types()...), handler.WithAuth(aSession.Auth()))
 }
 
-func (s *Service) execute(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
+func (s *Service) execute(ctx context.Context, aComponent *repository.Component, aSession *session.Session, onDone counter.OnDone) (interface{}, error) {
 	anExecutor := handler.NewExecutor(aComponent.View, aSession)
 	if aComponent.Handler != nil {
 		aSession.SetView(aComponent.View)
@@ -31,7 +33,12 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 		if err != nil {
 			return response, err
 		}
-		if err = anExecutor.Execute(ctx); err != nil {
+
+		err = anExecutor.Execute(ctx)
+		if onDone != nil {
+			onDone(time.Now(), err)
+		}
+		if err != nil {
 			return nil, err
 		}
 		return response, nil
