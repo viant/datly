@@ -21,10 +21,10 @@ type (
 func (i *Implementer) Initialize(ctx context.Context, init *schema.InitializeRequestParams, result *schema.InitializeResult) {
 	i.ClientInitialize = init
 	result.ProtocolVersion = init.ProtocolVersion
-	if i.ToolRegistry.Size() > 0 {
+	if len(i.integration.Tools) > 0 {
 		result.Capabilities.Tools = &schema.ServerCapabilitiesTools{}
 	}
-	if i.ResourceRegistry.Size() > 0 || i.ResourceTemplateRegistry.Size() > 0 {
+	if len(i.integration.Resources) > 0 || len(i.integration.ResourceTemplates) > 0 {
 		result.Capabilities.Resources = &schema.ServerCapabilitiesResources{}
 	}
 }
