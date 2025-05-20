@@ -91,6 +91,7 @@ func (s *Server) init() error {
 			}
 		}
 		options = append(options, server.WithAuthorizer(authService.Middleware))
+		options = append(options, server.WithProtectedResourcesHandler(authService.ProtectedResourcesHandler))
 	}
 
 	srv, err := server.New(options...)

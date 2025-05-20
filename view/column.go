@@ -220,8 +220,8 @@ func NewColumn(name, dataTypeName string, rType reflect.Type, nullable bool, opt
 		opt(ret)
 	}
 	if sqlTag := io.ParseTag(reflect.StructTag(ret.Tag)); sqlTag != nil {
-		if name := sqlTag.Name(); name != ret.DatabaseColumn {
-			ret.DatabaseColumn = name
+		if columnName := sqlTag.Name(); columnName != ret.DatabaseColumn && sqlTag.Ns == "" {
+			ret.DatabaseColumn = columnName
 		}
 	}
 

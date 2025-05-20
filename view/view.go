@@ -997,6 +997,9 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 		columnTag := ""
 		if tag := ioColumns[i].Tag(); tag != nil {
 			columnTag = tag.Raw
+			if tag.Ns != "" {
+				columnTag += ",ns=" + tag.Ns
+			}
 		}
 		aColum := NewColumn(ioColumns[i].Name(), dataTypeName, scanType, nullable[ioColumns[i].Name()] || isNullable, WithColumnTag(columnTag))
 		aTag, _ := tags.ParseStateTags(reflect.StructTag(aColum.Tag), nil)
