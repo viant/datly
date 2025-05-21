@@ -293,6 +293,9 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 
 	var err error
 	indexed, err = s.sqlBuilder.ExactMetaSQL(ctx, aView, selector, batchDataCopy, collector.Relation(), parentViewMetaParam)
+	if indexed == nil {
+		indexed = &cache.ParmetrizedQuery{}
+	}
 	execInfo, onDone := NewExecutionInfo(indexed, cacheStats, collector)
 	defer onDone()
 	if err != nil {
