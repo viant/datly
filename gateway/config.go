@@ -50,10 +50,12 @@ type (
 	}
 
 	ModelContextProtocol struct {
-		Port            *int
-		OAuth2ConfigURL string
-		IssuerURL       string
-		AuthorizerMode  string
+		Port              *int
+		OAuth2ConfigURL   string
+		IssuerURL         string
+		AuthorizerMode    string
+		BFFExchangeHeader string
+		BFFRedirectURI    string
 	}
 
 	ChangeDetection struct {

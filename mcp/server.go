@@ -85,7 +85,16 @@ func (s *Server) init() error {
 			}
 			authService.FallBack = authserver.NewFallbackAuth(authService, roundTripper, roundTripper)
 		default:
-			authService, err = authserver.New(&authserver.Config{Policy: authPolicy})
+			header := flow.AuthorizationExchangeHeader
+			if s.config.BFFExchangeHeader != "" {
+				header = s.config.BFFExchangeHeader
+			}
+			authService, err = authserver.New(&authserver.Config{Policy: authPolicy,
+				BackendForFrontend: &authserver.BackendForFrontend{
+					Client:                      oauth2Config,
+					AuthorizationExchangeHeader: header,
+					RedirectURI:                 s.config.BFFRedirectURI,
+				}})
 			if err != nil {
 				return fmt.Errorf("failed to create auth server: %w", err)
 			}
