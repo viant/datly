@@ -13,6 +13,7 @@ import (
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/toolbox"
 	"io"
 	"net/http"
 	"net/url"
@@ -63,6 +64,16 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 
 			paramName := strings.Title(parameter.Name)
 			value := params.Arguments[paramName]
+			paramType := parameter.Schema.Type()
+			if paramType.Kind() == reflect.Ptr {
+				paramType = paramType.Elem()
+			}
+
+			switch paramType.Kind() {
+			case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
+				value = toolbox.AsInt(value)
+			}
+
 			switch parameter.In.Kind {
 			case state.KindPath:
 				if uniquePath[parameter.In.Name] {
