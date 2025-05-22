@@ -90,7 +90,10 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 					continue
 				}
 				uniqueQuery[parameter.In.Name] = true
-				values.Add(parameter.In.Name, fmt.Sprintf("%s", value))
+				if value == nil || value == "" {
+					continue
+				}
+				values.Add(parameter.In.Name, fmt.Sprintf("%v", value))
 			case state.KindRequestBody:
 				if text, ok := value.(string); ok {
 					body = strings.NewReader(text)
