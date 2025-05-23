@@ -156,6 +156,7 @@ func (r *Router) HandleJob(ctx context.Context, aJob *async.Job) error {
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
 	aSession := session.New(aComponent.View,
 		session.WithAuth(r.repository.Auth()),
+		session.WithComponent(aComponent),
 		session.WithLocatorOptions(locatorOptions...),
 		session.WithOperate(r.operator.Operate))
 	if err != nil {
@@ -175,6 +176,13 @@ func (r *Router) Match(method, URL string, req *http.Request) (*Route, error) {
 }
 
 func (r *Router) match(method string, URL string, req *http.Request) (*Route, error) {
+
+	for _, candidate := range r.routeMatcher.Matchables {
+		if strings.Contains(candidate.URI(), "advertiser") {
+			data, _ := json.Marshal(candidate)
+			fmt.Println(string(data))
+		}
+	}
 	matched := r.routeMatcher.MatchAll(method, URL)
 	switch len(matched) {
 	case 0:

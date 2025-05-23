@@ -29,8 +29,8 @@ type (
 		Kind          int
 		ApiKeys       []*path.APIKey
 		Providers     []*repository.Provider
-		NewMultiRoute func(routes []*contract.Path) *Route
-		Handler       func(ctx context.Context, response http.ResponseWriter, req *http.Request)
+		NewMultiRoute func(routes []*contract.Path) *Route                                       `json:"-"`
+		Handler       func(ctx context.Context, response http.ResponseWriter, req *http.Request) `json:"-"`
 		logging.Config
 		Version string
 	}

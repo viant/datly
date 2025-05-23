@@ -287,7 +287,7 @@ func (s *Session) canRead(ctx context.Context, parameter *state.Parameter, opts 
 		return true, nil
 	}
 	if parameter.URI != "" {
-		if opts.component == nil || opts.component.URI != parameter.URI {
+		if opts.component == nil || !strings.HasSuffix(opts.component.URI, parameter.URI) {
 			return false, nil
 		}
 	}

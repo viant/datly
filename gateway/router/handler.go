@@ -392,6 +392,7 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
 	aSession := session.New(aComponent.View,
 		session.WithAuth(r.auth),
+		session.WithComponent(aComponent),
 		session.WithLocatorOptions(locatorOptions...),
 		session.WithRegistry(r.registry),
 		session.WithOperate(anOperator.Operate))
