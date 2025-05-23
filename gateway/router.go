@@ -176,13 +176,6 @@ func (r *Router) Match(method, URL string, req *http.Request) (*Route, error) {
 }
 
 func (r *Router) match(method string, URL string, req *http.Request) (*Route, error) {
-
-	for _, candidate := range r.routeMatcher.Matchables {
-		if strings.Contains(candidate.URI(), "advertiser") {
-			data, _ := json.Marshal(candidate)
-			fmt.Println(string(data))
-		}
-	}
 	matched := r.routeMatcher.MatchAll(method, URL)
 	switch len(matched) {
 	case 0:
