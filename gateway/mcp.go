@@ -6,13 +6,13 @@ import (
 	"fmt"
 	furl "github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/proxy"
-	"github.com/viant/datly/mcp/extension"
 	"github.com/viant/datly/repository"
 	dpath "github.com/viant/datly/repository/path"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/mcp-protocol/schema"
+	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/toolbox"
 	"io"
 	"net/http"
@@ -30,36 +30,39 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 		return fmt.Errorf("failed to get component from provider: %w", err)
 	}
 	toolInputType := r.buildToolInputType(component)
-
 	meta := aPath.Meta.Build(component.View.Name, component.View.Table, &aPath.Path)
 	mcpTool := schema.Tool{
-		Name:        meta.Name,
+		Name:        strings.ReplaceAll(meta.Name, " ", ""),
 		Description: &meta.Description,
 		InputSchema: schema.ToolInputSchema{},
+	}
+	if _, ok := r.mcpRegistry.ToolRegistry.Get(mcpTool.Name); ok {
+		return nil //already registered
 	}
 	err = mcpTool.InputSchema.Load(reflect.New(toolInputType).Interface())
 	if err != nil {
 		return err
 	}
-
 	handler := r.mcpToolCallHandler(component, aRoute)
-
-	tool := &extension.Tool{
-		Tool:    mcpTool,
-		Handler: handler,
+	tool := &serverproto.ToolEntry{
+		Metadata: mcpTool,
+		Handler:  handler,
 	}
-	r.mcp.AddTool(tool)
+	r.mcpRegistry.RegisterTool(tool)
 	return nil
 }
 
-func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Route) func(ctx context.Context, params *schema.CallToolRequestParams) (*schema.CallToolResult, error) {
-	handler := func(ctx context.Context, params *schema.CallToolRequestParams) (*schema.CallToolResult, error) {
-		URI := furl.Path(aRoute.Path.URI)
+func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Route) serverproto.ToolHandlerFunc {
+	handler := func(ctx context.Context, req *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {
+		params := req.Params
+		URI := r.matchToolCallComponentURI(aRoute, component, params)
+
 		URL := fmt.Sprintf("http://localhost/%v", strings.TrimLeft(URI, "/")) // fallback to a local URL for now, this should be replaced with the actual service URL
 		values := url.Values{}
 		var body io.Reader
 		var uniquePath = make(map[string]bool)
 		var uniqueQuery = make(map[string]bool)
+
 		for _, parameter := range component.Input.Type.Parameters {
 
 			paramName := strings.Title(parameter.Name)
@@ -97,7 +100,7 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 				} else {
 					data, err := json.Marshal(value)
 					if err != nil {
-						return nil, fmt.Errorf("failed to marshal request body: %w", err)
+						return nil, jsonrpc.NewInvalidParamsError("failed to marshal request body: %w", data)
 					}
 					body = strings.NewReader(string(data))
 				}
@@ -110,6 +113,12 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 		}
 		r.addAuthTokenIfPresent(ctx, httpRequest)
 		httpRequest.RequestURI = httpRequest.URL.RequestURI()
+		if URI != aRoute.URI() {
+			if matchedRoute, _ := r.match(component.Method, URI, httpRequest); matchedRoute != nil {
+				aRoute = matchedRoute
+			}
+		}
+
 		aRoute.Handle(responseWriter, httpRequest) // route the request to the actual handler
 		var result = schema.CallToolResult{}
 		mimeType := "application/json"
@@ -121,6 +130,23 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 		return &result, nil
 	}
 	return handler
+}
+
+func (r *Router) matchToolCallComponentURI(aRoute *Route, component *repository.Component, params schema.CallToolRequestParams) string {
+	URI := furl.Path(aRoute.Path.URI)
+	for _, parameter := range component.Input.Type.Parameters {
+		if parameter.URI == "" {
+			continue
+		}
+		paramName := strings.Title(parameter.Name)
+		value, ok := params.Arguments[paramName]
+		if !ok || value == nil || value == "" {
+			continue
+		}
+		URI = furl.Path(parameter.URI)
+		break
+	}
+	return URI
 }
 
 func (r *Router) addAuthTokenIfPresent(ctx context.Context, httpRequest *http.Request) {
@@ -191,19 +217,34 @@ func (r *Router) buildTemplateResourceIntegration(item *dpath.Item, aPath *dpath
 	mimeType := "application/json"
 	mcpResourceTemplate := schema.ResourceTemplate{
 		UriTemplate: URL,
-		Name:        meta.Name,
+		Name:        strings.ReplaceAll(meta.Name, " ", ""),
 		Description: &meta.Description,
 		MimeType:    &mimeType,
 	}
-	resourceTemplate := &extension.ResourceTemplate{
-		ResourceTemplate: mcpResourceTemplate,
-		Handler: func(ctx context.Context, params *schema.ReadResourceRequestParams) ([]schema.ReadResourceResultContentsElem, error) {
-			return r.handleMcpRead(ctx, params, &mcpResourceTemplate, aRoute, provider)
-		},
+
+	// Check if the resource template is already registered
+	handler := r.reactMcpResourceHandler(mcpResourceTemplate, aRoute, provider)
+	if r.hasMcpResource(mcpResourceTemplate.UriTemplate) {
+		return nil
 	}
+
 	// Build the integration for the resource
-	r.mcp.AddResourceTemplate(resourceTemplate)
+	r.mcpRegistry.RegisterResourceTemplate(mcpResourceTemplate, handler)
 	return nil
+}
+
+func (r *Router) reactMcpResourceHandler(mcpResourceTemplate schema.ResourceTemplate, aRoute *Route, provider *repository.Provider) func(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {
+	handler := func(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {
+		result, err := r.handleMcpRead(ctx, &request.Params, &mcpResourceTemplate, aRoute, provider)
+		if err != nil {
+			return nil, jsonrpc.NewInternalError(err.Error(), nil)
+		}
+		if len(result) == 0 {
+			return &schema.ReadResourceResult{Contents: []schema.ReadResourceResultContentsElem{}}, nil
+		}
+		return &schema.ReadResourceResult{Contents: result}, nil
+	}
+	return handler
 }
 
 func (r *Router) buildResourceIntegration(item *dpath.Item, aPath *dpath.Path, aRoute *Route, provider *repository.Provider) error {
@@ -227,7 +268,7 @@ func (r *Router) buildResourceIntegration(item *dpath.Item, aPath *dpath.Path, a
 	mimeType := "application/json"
 	mcpResource := schema.Resource{
 		Uri:         URL,
-		Name:        meta.Name,
+		Name:        strings.ReplaceAll(meta.Name, " ", ""),
 		Description: &meta.Description,
 		MimeType:    &mimeType,
 	}
@@ -237,15 +278,25 @@ func (r *Router) buildResourceIntegration(item *dpath.Item, aPath *dpath.Path, a
 		Description: &meta.Description,
 		MimeType:    &mimeType,
 	}
-	resourceTemplate := &extension.Resource{
-		Resource: mcpResource,
-		Handler: func(ctx context.Context, params *schema.ReadResourceRequestParams) ([]schema.ReadResourceResultContentsElem, error) {
-			return r.handleMcpRead(ctx, params, &mcpResourceTemplate, aRoute, provider)
-		},
+
+	// Check if the resource template is already registered
+	handler := r.reactMcpResourceHandler(mcpResourceTemplate, aRoute, provider)
+	if r.hasMcpResource(mcpResourceTemplate.UriTemplate) {
+		return nil
 	}
-	// Build the integration for the resource
-	r.mcp.AddResource(resourceTemplate)
+	// Build the integration for the mcpResource
+	r.mcpRegistry.RegisterResource(mcpResource, handler)
 	return nil
+}
+
+func (r *Router) hasMcpResource(URI string) bool {
+	if _, ok := r.mcpRegistry.ResourceRegistry.Get(URI); ok {
+		return true //already registered
+	}
+	if _, ok := r.mcpRegistry.ResourceTemplateRegistry.Get(URI); ok {
+		return true //already registered
+	}
+	return false
 }
 
 func (r *Router) handleMcpRead(ctx context.Context, params *schema.ReadResourceRequestParams, template *schema.ResourceTemplate, aRoute *Route, provider *repository.Provider) ([]schema.ReadResourceResultContentsElem, error) {

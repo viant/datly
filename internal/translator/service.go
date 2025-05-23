@@ -626,22 +626,50 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 		route.Async = resource.Rule.Async
 	}
 	routeMethods := strings.Split(route.Method, ",")
+	URIs := s.buildURIs(route, resource)
 
 	if len(routeMethods) == 0 {
 		routeMethods = []string{http.MethodGet}
 	}
 
-	switch len(routeMethods) {
-	case 1:
-		result.Routes = append(result.Routes, route)
-	default:
-		for _, method := range routeMethods {
-			aRoute := *route
-			aRoute.Method = method
-			result.Routes = append(result.Routes, &aRoute)
+	for i := range URIs {
+		URI := URIs[i]
+		uriRoute := *route
+		uriRoute.URI = URI
+		switch len(routeMethods) {
+		case 1:
+			result.Routes = append(result.Routes, &uriRoute)
+		default:
+			for _, method := range routeMethods {
+				methodRoute := uriRoute
+				methodRoute.Method = method
+				result.Routes = append(result.Routes, &methodRoute)
+			}
 		}
 	}
 	return result, nil
+}
+
+func (s *Service) buildURIs(route *router.Route, resource *Resource) []string {
+	var result []string
+	var URIs = map[string]bool{
+		route.URI: true,
+	}
+	result = append(result, route.URI)
+	for _, parameter := range resource.Resource.Parameters {
+		if URIs[parameter.URI] {
+			continue
+		}
+		if URI := parameter.URI; URI != "" {
+
+			if !strings.HasPrefix(URI, resource.repository.APIPrefix) {
+				URI = spath.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, URI)
+			}
+			URIs[URI] = true
+			result = append(result, URI)
+		}
+	}
+	return result
 }
 
 func (s *Service) adjustModulePackage(resource *Resource) {

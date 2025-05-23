@@ -23,6 +23,7 @@ type Parameter struct {
 	Required     *bool  `tag:"required,omitempty"`
 	Cacheable    *bool  `tag:"cacheable,omitempty"`
 	Async        bool   `tag:"async,omitempty"`
+	URI          string `tag:"uri,omitempty"` //parameter URI
 }
 
 func (t *Tag) updatedParameter(key string, value string) (err error) {
@@ -55,6 +56,8 @@ func (t *Tag) updatedParameter(key string, value string) (err error) {
 		tag.ErrorMessage = strings.TrimSpace(value)
 	case "datatype":
 		tag.DataType = strings.TrimSpace(value)
+	case "uri":
+		tag.URI = strings.TrimSpace(value)
 	case "with":
 		tag.With = value
 	case "required":
@@ -78,6 +81,8 @@ func (p *Parameter) Tag() *tags.Tag {
 	appendNonEmpty(builder, "kind", p.Kind)
 	appendNonEmpty(builder, "in", p.In)
 	appendNonEmpty(builder, "when", p.When)
+	appendNonEmpty(builder, "uri", p.URI)
+
 	if p.Cacheable != nil {
 		value := "false"
 		if *p.Cacheable {

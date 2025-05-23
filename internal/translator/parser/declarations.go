@@ -13,7 +13,6 @@ import (
 	"github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
 	"reflect"
-
 	"strconv"
 	"strings"
 )
@@ -249,6 +248,9 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 		switch text {
 		case "Embed":
 			declaration.Tag += ` anonymous:"true"`
+
+		case "WithURI":
+			declaration.URI = strings.Trim(args[0], "'")
 		case "WithTag", "Tag":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithTag to have one args, but got %v", len(args))

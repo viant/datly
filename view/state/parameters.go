@@ -587,6 +587,7 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 		Cacheable:    p.Cacheable,
 		Scope:        p.Scope,
 		With:         p.With,
+		URI:          p.URI,
 		ErrorCode:    p.ErrorStatusCode,
 		ErrorMessage: p.ErrorMessage,
 	}

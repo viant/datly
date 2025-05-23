@@ -49,6 +49,7 @@ type (
 		Tag             string `json:",omitempty" yaml:"Tag"`
 		When            string `json:",omitempty" yaml:"When"`
 		With            string `json:",omitempty" yaml:"With"`
+		URI             string `json:",omitempty" yaml:"URI"`
 		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
 		Async           bool   `json:",omitempty" yaml:"Async"`
 		isOutputType    bool
@@ -259,6 +260,8 @@ func (p *Parameter) inherit(param *Parameter) {
 	setter.SetStringIfEmpty(&p.When, param.When)
 	setter.SetStringIfEmpty(&p.Scope, param.Scope)
 	setter.SetStringIfEmpty(&p.With, param.With)
+	setter.SetStringIfEmpty(&p.URI, param.URI)
+
 	if p.In == nil {
 		p.In = param.In
 	}

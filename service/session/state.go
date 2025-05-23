@@ -282,10 +282,19 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 	return err
 }
 
-func (s *Session) canRead(ctx context.Context, parameter *state.Parameter) (bool, error) {
+func (s *Session) canRead(ctx context.Context, parameter *state.Parameter, opts *Options) (bool, error) {
+	if parameter.When == "" && parameter.URI == "" {
+		return true, nil
+	}
+	if parameter.URI != "" {
+		if opts.component == nil || opts.component.URI != parameter.URI {
+			return false, nil
+		}
+	}
 	if parameter.When == "" {
 		return true, nil
 	}
+
 	//TODO move template based or IGO based expressions, for now qucick impl for equal only based check
 	//move ast to build init time
 	index := strings.Index(parameter.When, "=")
@@ -531,7 +540,7 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 	if opts == nil {
 		opts = &s.Options
 	}
-	canRead, err := s.canRead(ctx, parameter)
+	canRead, err := s.canRead(ctx, parameter, opts)
 	if !canRead || err != nil {
 		return nil, false, err
 	}

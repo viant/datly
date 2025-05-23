@@ -102,7 +102,9 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	if p.ErrorStatusCode != 0 {
 		builder.WriteString(".WithStatusCode(" + strconv.Itoa(p.ErrorStatusCode) + ")")
 	}
-
+	if p.URI != "" {
+		builder.WriteString(".Scope('" + p.Scope + "')")
+	}
 	if p.Scope != "" {
 		builder.WriteString(".Scope('" + p.Scope + "')")
 	}
@@ -319,6 +321,7 @@ func buildParameter(field *xunsafe.Field, aTag *tags.Tag, types *xreflect.Types,
 	param.Scope = pTag.Scope
 	param.Cacheable = pTag.Cacheable
 	param.With = pTag.With
+	param.URI = pTag.URI
 	param.Async = pTag.Async
 	param.In = &state.Location{Name: pTag.In, Kind: state.Kind(pTag.Kind)}
 	param.Required = pTag.Required

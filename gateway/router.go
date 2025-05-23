@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/gateway/router/openapi/openapi3"
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/gateway/warmup"
-	"github.com/viant/datly/mcp/extension"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
@@ -22,6 +21,7 @@ import (
 	"github.com/viant/datly/view"
 	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/gmetric"
+	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/xdatly/handler/async"
 	hstate "github.com/viant/xdatly/handler/state"
 
@@ -42,7 +42,7 @@ type (
 		metrics       *gmetric.Service
 		statusHandler http.Handler
 		paths         []*contract.Path
-		mcp           *extension.Integration
+		mcpRegistry   *serverproto.Registry
 	}
 
 	AvailableRoutesError struct {
@@ -69,7 +69,7 @@ func (a *AvailableRoutesError) Error() string {
 }
 
 // NewRouter creates new router
-func NewRouter(ctx context.Context, components *repository.Service, config *Config, metrics *gmetric.Service, statusHandler http.Handler, mcp *extension.Integration) (*Router, error) {
+func NewRouter(ctx context.Context, components *repository.Service, config *Config, metrics *gmetric.Service, statusHandler http.Handler, mcpRegistry *serverproto.Registry) (*Router, error) {
 	r := &Router{
 		config:        config,
 		metrics:       metrics,
@@ -77,7 +77,7 @@ func NewRouter(ctx context.Context, components *repository.Service, config *Conf
 		repository:    components,
 		operator:      operator.New(),
 		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
-		mcp:           mcp,
+		mcpRegistry:   mcpRegistry,
 	}
 	return r, r.init(ctx)
 }
@@ -364,7 +364,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				//		}
 				//	}
 
-				if r.mcp != nil && aPath.HasMCPIntegration() {
+				if r.mcpRegistry != nil && aPath.HasMCPIntegration() {
 					if aPath.MCPResource {
 						if err = r.buildResourceIntegration(anItem, aPath, aRoute, provider); err != nil {
 							return nil, nil, fmt.Errorf("failed to build resource integration: %w", err)

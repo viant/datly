@@ -14,6 +14,8 @@ import (
 	"github.com/viant/mcp/client/auth/store"
 	"github.com/viant/mcp/client/auth/transport"
 	authserver "github.com/viant/mcp/server/auth"
+
+	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/scy/auth/flow"
 	"os"
 	"path"
@@ -28,14 +30,14 @@ import (
 )
 
 type Server struct {
-	server    *server.Server // The underlying MCP server instance
-	config    *gateway.ModelContextProtocol
-	extension *extension.Integration
+	server   *server.Server // The underlying MCP server instance
+	config   *gateway.ModelContextProtocol
+	registry *serverproto.Registry
 }
 
 func (s *Server) init() error {
 
-	var newImplementer = extension.New(s.extension)
+	var newImplementer = extension.New(s.registry)
 	var options = []server.Option{
 		server.WithNewImplementer(newImplementer),
 		server.WithImplementation(schema.Implementation{"Datly", "0.1"}),
@@ -167,13 +169,13 @@ func loadAuthConfig(ctx context.Context, mcpOption *gateway.ModelContextProtocol
 	return nil, nil
 }
 
-func NewServer(extension *extension.Integration, config *gateway.ModelContextProtocol) (*Server, error) {
-	if extension == nil {
+func NewServer(registry *serverproto.Registry, config *gateway.ModelContextProtocol) (*Server, error) {
+	if registry == nil {
 		return nil, nil
 	}
 	s := &Server{
-		config:    config,
-		extension: extension,
+		config:   config,
+		registry: registry,
 	}
 
 	if err := s.init(); err != nil {

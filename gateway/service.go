@@ -8,11 +8,11 @@ import (
 	"github.com/viant/afs/matcher"
 	"github.com/viant/afs/option"
 	furl "github.com/viant/afs/url"
-	"github.com/viant/datly/mcp/extension"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/locator/component/dispatcher"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
+	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/scy/auth/jwt/signer"
 	"net/http"
 	"path"
@@ -30,18 +30,18 @@ type (
 		cancelFn      context.CancelFunc
 		mux           sync.RWMutex
 		statusHandler http.Handler
-		mcp           *extension.Integration
+		mcpRegistry   *serverproto.Registry
 	}
 )
 
-func (r *Service) MCP() *extension.Integration {
+func (r *Service) MCP() *serverproto.Registry {
 	if r == nil {
 		return nil
 	}
-	if r.mcp == nil {
+	if r.mcpRegistry == nil {
 		return nil
 	}
-	return r.mcp
+	return r.mcpRegistry
 }
 
 func (r *Service) JWTSigner() *signer.Service {
@@ -120,13 +120,11 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 		}
 	}
 
-	var mcp *extension.Integration
-
+	var mcpRegistry *serverproto.Registry
 	if aConfig.MCP != nil {
-		mcp = extension.NewIntegration()
+		mcpRegistry = serverproto.NewRegistry()
 	}
-
-	mainRouter, err := NewRouter(ctx, componentRepository, aConfig, options.metrics, options.statusHandler, mcp)
+	mainRouter, err := NewRouter(ctx, componentRepository, aConfig, options.metrics, options.statusHandler, mcpRegistry)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +136,7 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 		fs:            fs,
 		statusHandler: options.statusHandler,
 		mainRouter:    mainRouter,
-		mcp:           mcp,
+		mcpRegistry:   mcpRegistry,
 	}
 
 	go srv.watchAsyncJob(context.Background())
@@ -218,7 +216,7 @@ func (r *Service) syncChanges(ctx context.Context, metrics *gmetric.Service, sta
 	}
 	start := time.Now()
 	fmt.Printf("[INFO] detected resources changes, rebuilding routers\n")
-	mainRouter, err := NewRouter(ctx, r.repository, r.Config, metrics, statusHandler, r.mcp)
+	mainRouter, err := NewRouter(ctx, r.repository, r.Config, metrics, statusHandler, r.mcpRegistry)
 	if err != nil {
 		return err
 	}
