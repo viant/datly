@@ -84,7 +84,7 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 		if err = s.Expression.Generate(builder); err != nil {
 			return err
 		}
-
+		builder.WriteString("\n")
 		if !wasDeclared {
 			builder.State.DeclareVariable(asIdent.Name)
 		}

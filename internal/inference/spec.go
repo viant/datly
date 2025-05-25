@@ -236,7 +236,7 @@ func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 }
 
 // NewSpec discover column derived type for supplied SQL/table
-func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL string, SQLArgs ...interface{}) (*Spec, error) {
+func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table string, columnsConfig view.ColumnConfigs, SQL string, SQLArgs ...interface{}) (*Spec, error) {
 	isAuxiliary := isAuxiliary(&SQL)
 	table = normalizeTable(table)
 	SQL = normalizeSQL(SQL, table)
@@ -249,6 +249,19 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL
 		return nil, err
 	}
 	result.Columns = columns
+	byName := result.Columns.ByName()
+	for _, columnConfig := range columnsConfig {
+		specColumn, ok := byName[columnConfig.Name]
+		if ok {
+			if columnConfig.DataType != nil {
+				specColumn.Type = *columnConfig.DataType
+			}
+			if columnConfig.Required != nil {
+				specColumn.IsNullable = !*columnConfig.Required
+			}
+		}
+	}
+
 	meta := metadata.New()
 	args := option.NewArgs("", "", table)
 	var fkKeys, keys []sink.Key

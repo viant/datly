@@ -21,8 +21,13 @@ type Viewlets struct {
 }
 
 func (n *Viewlets) Lookup(name string) *Viewlet {
-	return n.registry[name]
+	ret, ok := n.registry[name]
+	if ok {
+		return ret
+	}
+	return n.registry[strings.Title(name)]
 }
+
 func (n *Viewlets) Each(fn func(viewlet *Viewlet) error) error {
 	for _, key := range n.keys {
 		ns := n.registry[key]

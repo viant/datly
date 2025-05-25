@@ -180,7 +180,6 @@ func (t *Template) generateMapTypeBody() string {
 func (c *Template) adjustStructField(embedURI string, embeds map[string]string, generateContract bool) func(aField *reflect.StructField, tag *string, typeName *string, doc *string) {
 	return func(aField *reflect.StructField, tag, typeName, doc *string) {
 		fieldTag := *tag
-		fmt.Printf("---- %v %v\n", aField.Name, fieldTag)
 		fieldTag, value := xreflect.RemoveTag(fieldTag, "sql")
 		if value != "" {
 			name := *typeName
