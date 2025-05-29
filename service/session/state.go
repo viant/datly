@@ -370,7 +370,10 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	if valueType.Kind() != selector.Type().Kind() {
 		if valueType.Kind() == reflect.Ptr && value != nil {
 			valueType = valueType.Elem()
-			value = reflect.ValueOf(value).Elem().Interface()
+			rValue := reflect.ValueOf(value)
+			if !rValue.IsNil() {
+				value = rValue.Elem().Interface()
+			}
 		}
 	}
 

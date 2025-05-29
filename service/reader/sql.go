@@ -325,19 +325,39 @@ func (b *Builder) updateColumnsIn(params *view.CriteriaParam, batchData *view.Ba
 
 func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *view.Statelet) error {
 	if selector.OrderBy != "" {
-		col, ok := view.ColumnByName(selector.OrderBy)
-		if !ok {
-			return fmt.Errorf("not found column %v at view %v", selector.OrderBy, view.Name)
+		fragment := strings.Builder{}
+		items := strings.Split(strings.ReplaceAll(selector.OrderBy, ":", " "), ",")
+		for i, item := range items {
+			if item == "" {
+				continue
+			}
+			if i > 0 {
+				fragment.WriteString(separatorFragment)
+			}
+			column := item
+			sortDirection := ""
+			if index := strings.Index(item, " "); index != -1 {
+				column = item[:index]
+				sortDirection = item[index+1:]
+			}
+			col, ok := view.ColumnByName(column)
+			if !ok {
+				return fmt.Errorf("not found column %v at view %v", column, view.Name)
+			}
+			fragment.WriteString(col.Name)
+			if sortDirection != "" {
+				fragment.WriteString(" ")
+				fragment.WriteString(sortDirection)
+			}
 		}
-
 		sb.WriteString(orderByFragment)
-		sb.WriteString(col.Name)
+		sb.WriteString(fragment.String())
 		return nil
 	}
 
 	if view.Selector.OrderBy != "" {
 		sb.WriteString(orderByFragment)
-		sb.WriteString(view.Selector.OrderBy)
+		sb.WriteString(strings.ReplaceAll(view.Selector.OrderBy, ":", " "))
 		return nil
 	}
 
