@@ -340,6 +340,13 @@ func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *
 				column = item[:index]
 				sortDirection = item[index+1:]
 			}
+
+			switch strings.ToLower(sortDirection) {
+			case "asc", "desc":
+			default:
+				return fmt.Errorf("invalid sort direction %v for column %v at view %v", sortDirection, column, view.Name)
+			}
+
 			col, ok := view.ColumnByName(column)
 			if !ok {
 				return fmt.Errorf("not found column %v at view %v", column, view.Name)

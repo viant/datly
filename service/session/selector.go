@@ -143,18 +143,24 @@ func (s *Session) setOrderByQuerySelector(value interface{}, ns *view.NamespaceV
 	if !ns.View.Selector.Constraints.OrderBy {
 		return fmt.Errorf("can't use orderBy on view %v", ns.View.Name)
 	}
-	columns := value.([]string)
-	for _, column := range columns {
+	items := value.([]string)
+	for _, item := range items {
+		item = strings.ReplaceAll(item, ":", " ")
+		column := item
+		if index := strings.Index(item, " "); index != -1 {
+			column = item[:index]
+		}
 		if _, err := strconv.Atoi(column); err == nil {
 			continue //position based, not need to validate
 		}
+
 		_, ok := ns.View.ColumnByName(column)
 		if !ok {
-			return fmt.Errorf("not found column %v at view %v", columns, ns.View.Name)
+			return fmt.Errorf("not found column %v at view %v", items, ns.View.Name)
 		}
 	}
 	selector := s.state.Lookup(ns.View)
-	selector.OrderBy = strings.Join(columns, ",")
+	selector.OrderBy = strings.Join(items, ",")
 	return nil
 }
 
