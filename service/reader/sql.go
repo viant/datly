@@ -342,7 +342,7 @@ func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *
 			}
 
 			switch strings.ToLower(sortDirection) {
-			case "asc", "desc":
+			case "asc", "desc", "":
 			default:
 				return fmt.Errorf("invalid sort direction %v for column %v at view %v", sortDirection, column, view.Name)
 			}
