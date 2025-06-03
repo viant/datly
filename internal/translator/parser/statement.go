@@ -3,6 +3,7 @@ package parser
 import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/parsly"
+	"github.com/viant/parsly/matcher"
 	"github.com/viant/sqlparser"
 	"github.com/viant/velty/ast/expr"
 	"strings"
@@ -101,6 +102,8 @@ func NewStatements(SQL string) Statements {
 		beforeMatch := cursor.Pos
 
 		matched := cursor.MatchAfterOptional(whitespaceMatcher, exprMatcher, exprEndMatcher, execStmtMatcher, readStmtMatcher, anyMatcher)
+		//tt := matched.Text(cursor)
+		//fmt.Println(tt)
 		switch matched.Code {
 		case exprToken:
 			_ = cursor.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher)
@@ -140,7 +143,16 @@ func NewStatements(SQL string) Statements {
 
 				statements = append(statements, stmt)
 			}
-
+			if !ok {
+				pos := cursor.Pos
+				for ; pos < len(cursor.Input); pos++ {
+					if matcher.IsWhiteSpace(cursor.Input[pos]) {
+						cursor.Pos = pos
+						break
+					}
+				}
+			}
+			nextWhitespace(cursor)
 		}
 	}
 
