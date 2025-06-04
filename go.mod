@@ -53,7 +53,7 @@ require (
 	github.com/viant/mcp v0.2.9
 	github.com/viant/mcp-protocol v0.3.4
 	github.com/viant/structology v0.6.1
-	github.com/viant/tagly v0.2.1-0.20240521205717-55de744e893c
+	github.com/viant/tagly v0.2.2
 	github.com/viant/xdatly v0.5.4-0.20250418144853-029d9a05ae20
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20250418144853-029d9a05ae20
