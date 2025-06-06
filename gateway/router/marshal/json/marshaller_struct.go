@@ -503,5 +503,13 @@ func (d *structDecoder) updatePresenceIfNeeded(marshaller *marshallerWithField) 
 }
 
 func (d *structDecoder) NKeys() int {
-	return len(d.marshaller.marshallers)
+	// Returning 0 forces gojay to parse keys until it reaches the closing
+	// brace '}'. When we provide the exact key count go-jay stops as soon as
+	// it has processed that many keys, leaving the cursor positioned on the
+	// '}' character. If the object is part of a surrounding array the
+	// remaining cursor results in the array decoder seeing '}' where it
+	// expects either ',' or ']', and it raises:
+	//   Invalid JSON, wrong char '}' found at position ...
+	// Parsing all keys removes this alignment issue.
+	return 0
 }

@@ -55,7 +55,19 @@ func (s *sliceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *goja
 	if skipNull(decoder) {
 		return nil
 	}
-	return decoder.Decode(newSliceDecoder(s.elemType, pointer, s.xslice, s.marshaller, session))
+	if pointer != nil {
+		hdr := (*reflect.SliceHeader)(pointer)
+		if hdr.Data == 0 {
+			sliceType := reflect.SliceOf(s.elemType)
+			zeroVal := reflect.MakeSlice(sliceType, 0, 0)
+			reflect.NewAt(sliceType, pointer).Elem().Set(zeroVal)
+		}
+	}
+	err := decoder.Array(newSliceDecoder(s.elemType, pointer, s.xslice, s.marshaller, session))
+	if err != nil {
+		return err
+	}
+	return decoderError(decoder)
 }
 func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 
@@ -161,7 +173,13 @@ func (s *sliceInterfaceMarshaller) UnmarshallObject(pointer unsafe.Pointer, deco
 	ifaces := (*[]interface{})(pointer)
 
 	var result interface{}
-	if err := decoder.DecodeInterface(&result); err != nil {
+
+	// Use Interface() which marks the value as consumed by setting the
+	// decoder's `called` flag. Using DecodeInterface() left that flag unset
+	// which made go-jay believe the key hadn’t been processed, causing it to
+	// skip data and eventually throw errors such as
+	//   Invalid JSON, wrong char '}' found at position ...
+	if err := decoder.Interface(&result); err != nil {
 		return err
 	}
 

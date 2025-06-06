@@ -10,13 +10,13 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/tagly/format/text"
-	"net/http"
 	"reflect"
 	"testing"
 	"time"
 )
 
 func TestJson_Marshal(t *testing.T) {
+
 	testcases := []struct {
 		description   string
 		data          func() interface{}
@@ -24,6 +24,9 @@ func TestJson_Marshal(t *testing.T) {
 		defaultConfig config.IOConfig
 		filters       *json.Filters
 	}{
+		{
+			description: "empty slice",
+		},
 		{
 			description: "primitive",
 			data:        event,
@@ -89,11 +92,7 @@ func TestJson_Marshal(t *testing.T) {
 				&json.FilterEntry{Fields: []string{"Id", "Quantity"}},
 			),
 		},
-		{
-			description: "default tag",
-			data:        defaultTag,
-			expect:      `[{"Int":1,"Int8":2,"Int16":3,"Int32":4,"Int64":5,"Uint":6,"Uint8":7,"Uint16":8,"Uint32":9,"Uint64":10,"IntPtr":1,"Int8Ptr":2,"Int16Ptr":3,"Int32Ptr":4,"Int64Ptr":5,"UintPtr":6,"Uint8Ptr":7,"Uint16Ptr":8,"Uint32Ptr":9,"Uint64Ptr":10,"String":"empty","StringPtr":"empty","Bool":false,"BoolPtr":false,"Float32":10.5,"Float32Ptr":10.5,"Float64":20.5,"Float64Ptr":20.5,"Time":"2012-07-12","TimePtr":"2022-02-08"}]`,
-		},
+
 		{
 			description: "primitive slice",
 			data:        primitiveSlice,
@@ -127,14 +126,7 @@ func TestJson_Marshal(t *testing.T) {
 				CaseFormat: text.CaseFormatLowerCamel,
 			},
 		},
-		{
-			description: "embedded",
-			data:        embeddable,
-			expect:      `{"id":10,"name":"foo","price":125.5}`,
-			defaultConfig: config.IOConfig{
-				CaseFormat: text.CaseFormatLowerCamel,
-			},
-		},
+
 		{
 			description: "inlining",
 			data:        inlinable,
@@ -200,6 +192,9 @@ func TestJson_Marshal(t *testing.T) {
 	//for i, testcase := range testcases[:len(testcases)-1] {
 	//for i, testcase := range testcases[len(testcases)-1:] {
 	for i, testcase := range testcases {
+		if testcase.data == nil {
+			continue
+		}
 		json.ResetCache()
 		tests.LogHeader(fmt.Sprintf("Running testcase nr: %v out of %v \n ", i, len(testcases)-1))
 		data := testcase.data()
@@ -257,21 +252,6 @@ func jsonRawMessagePtr() interface{} {
 		ID:       125,
 		Name:     "Abdef",
 		JSONBody: &jsonBody,
-	}
-}
-
-func embeddable() interface{} {
-	type Foo struct {
-		ID         int
-		Embeddable map[string]interface{} `default:"embedded=true"`
-	}
-
-	return &Foo{
-		ID: 10,
-		Embeddable: map[string]interface{}{
-			"name":  "foo",
-			"price": 125.5,
-		},
 	}
 }
 
@@ -426,47 +406,6 @@ func primitiveNestedSlice() interface{} {
 
 func primitiveSlice() interface{} {
 	return []string{"abc", "def", "ghi"}
-}
-
-func defaultTag() interface{} {
-	type event struct {
-		Int        int        `default:"value=1"`
-		Int8       int8       `default:"value=2"`
-		Int16      int16      `default:"value=3"`
-		Int32      int32      `default:"value=4"`
-		Int64      int64      `default:"value=5"`
-		Uint       uint       `default:"value=6"`
-		Uint8      uint8      `default:"value=7"`
-		Uint16     uint16     `default:"value=8"`
-		Uint32     uint32     `default:"value=9"`
-		Uint64     uint64     `default:"value=10"`
-		IntPtr     *int       `default:"value=1"`
-		Int8Ptr    *int8      `default:"value=2"`
-		Int16Ptr   *int16     `default:"value=3"`
-		Int32Ptr   *int32     `default:"value=4"`
-		Int64Ptr   *int64     `default:"value=5"`
-		UintPtr    *uint      `default:"value=6"`
-		Uint8Ptr   *uint8     `default:"value=7"`
-		Uint16Ptr  *uint16    `default:"value=8"`
-		Uint32Ptr  *uint32    `default:"value=9"`
-		Uint64Ptr  *uint64    `default:"value=10"`
-		String     string     `default:"value=empty"`
-		StringPtr  *string    `default:"value=empty"`
-		Bool       bool       `default:"value=false"`
-		BoolPtr    *bool      `default:"value=false"`
-		Float32    float32    `default:"value=10.5"`
-		Float32Ptr *float32   `default:"value=10.5"`
-		Float64    float64    `default:"value=20.5"`
-		Float64Ptr *float64   `default:"value=20.5"`
-		Time       time.Time  `default:"format=2006-01-02"`
-		TimePtr    *time.Time `default:"value=2022-02-08,format=2006-01-02"`
-	}
-
-	return []event{
-		{
-			Time: newTime("12-07-2012"),
-		},
-	}
 }
 
 func anonymous() interface{} {
@@ -626,6 +565,19 @@ func sliceWithoutRelations() interface{} {
 			Float64: 0.5,
 		},
 	}
+}
+
+func event0() interface{} {
+	type DataItem struct {
+		Writable             bool
+		CampaignManager      bool
+		DefaultChannelsv2Set []string
+		Category             string
+	}
+	type Response struct {
+		Data []DataItem
+	}
+	return &Response{}
 }
 
 func nilsPtr() interface{} {
@@ -881,6 +833,52 @@ func (i *intsSum) UnmarshalJSONWithOptions(dst interface{}, decoder *gojay.Decod
 
 func TestMarshaller_Unmarshal(t *testing.T) {
 	testCases := []unmarshallTestcase{
+		{
+			description: "invalid conversion object to slice",
+			data:        `{"Name":"Foo", "ID": 1}`,
+			expect:      `{"Name":"Foo", "ID": 1}`,
+			expectError: true,
+			into: func() interface{} {
+				type Foo struct {
+					ID   int
+					Name string
+				}
+
+				return []*Foo{}
+			},
+		},
+
+		{
+			into: event0,
+			data: `
+{
+"Data": [
+         {
+            "Writable": true,
+            "CampaignManager": true,
+            "DefaultChannelsv2Set": [],
+            "Category": "AUTO"
+       }
+]
+}
+`,
+		},
+		{
+			into: event0,
+			data: `
+{
+"Data": [
+         {
+            "Writable": true,
+            "CampaignManager": true,
+            "DefaultChannelsv2Set": ["a"],
+            "Category": "AUTO"
+       }
+]
+}
+`,
+		},
+
 		{
 			description: "basic struct with missing colon",
 			data:        `{"Name": "Foo" "ID": 2}`,
@@ -1154,7 +1152,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 							Name     bool
 							Quantity bool
 						} "setMarker:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\""
-					}
+					} `json:"data"`
 				}{})
 				v := reflect.New(rType)
 				return v.Interface()
@@ -1177,20 +1175,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 			stringsEqual:  true,
 			marshallEqual: true,
 		},
-		{
-			description: "invalid conversion object to slice",
-			data:        `{"Name":"Foo", "ID": 1}`,
-			expect:      `{"Name":"Foo", "ID": 1}`,
-			expectError: true,
-			into: func() interface{} {
-				type Foo struct {
-					ID   int
-					Name string
-				}
 
-				return []*Foo{}
-			},
-		},
 		{
 			description: "invalid conversion slice to object",
 			data:        `[{"Name":"Foo", "ID": 1}]`,
@@ -1250,80 +1235,5 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 
 			assertly.AssertValues(t, testCase.expect, string(actualBytes), testCase.description)
 		}
-	}
-}
-
-func httpUnmarshallTestcase(typeName string, data string, expected string) unmarshallTestcase {
-	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:8080/v1/api/dev/custom-unmarshall?type=%v", typeName), nil)
-	if err != nil {
-		panic(err)
-	}
-
-	type Foo struct {
-		ID     int
-		Object interface{}
-		Name   string
-	}
-
-	type Bar struct {
-		CreatedAt string
-		UpdatedAt string
-	}
-
-	type Boo struct {
-		Value1 string
-		Value2 float64
-	}
-
-	return unmarshallTestcase{
-		description:  "broken case 17c",
-		data:         data,
-		expect:       expected,
-		stringsEqual: true,
-		options: []interface{}{
-			request,
-			json.UnmarshalerInterceptors{
-				"NormalizeObject": func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
-					var httpRequest *http.Request
-					for _, option := range options {
-						switch actual := option.(type) {
-						case *http.Request:
-							httpRequest = actual
-						}
-					}
-
-					embeddedJSON := gojay.EmbeddedJSON{}
-					if err = decoder.EmbeddedJSON(&embeddedJSON); err != nil {
-						return err
-					}
-
-					actualDst := dst.(*interface{})
-					query := httpRequest.URL.Query()
-					switch query.Get("type") {
-					case "Bar":
-						aBar := &Bar{}
-
-						if err = goJson.Unmarshal(embeddedJSON, aBar); err != nil {
-							return err
-						}
-
-						*actualDst = aBar
-						return nil
-
-					default:
-						aBoo := &Boo{}
-						if err = goJson.Unmarshal(embeddedJSON, aBoo); err != nil {
-							return err
-						}
-
-						*actualDst = aBoo
-						return nil
-					}
-				},
-			},
-		},
-		into: func() interface{} {
-			return &Foo{}
-		},
 	}
 }

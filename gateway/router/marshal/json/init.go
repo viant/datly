@@ -17,6 +17,7 @@ var mapStringIfaceType = reflect.TypeOf(map[string]interface{}{})
 var decData *xunsafe.Field
 var decCur *xunsafe.Field
 var decErr *xunsafe.Field
+var decCalled *xunsafe.Field
 
 func init() {
 	ResetCache()
@@ -28,6 +29,9 @@ func init() {
 	}
 	if decCurField, ok := reflect.TypeOf(gojay.Decoder{}).FieldByName("err"); ok {
 		decErr = xunsafe.NewField(decCurField)
+	}
+	if decCalledField, ok := reflect.TypeOf(gojay.Decoder{}).FieldByName("called"); ok {
+		decCalled = xunsafe.NewField(decCalledField)
 	}
 }
 
