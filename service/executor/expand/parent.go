@@ -72,6 +72,18 @@ type (
 	MockExpander struct{}
 )
 
+func (e ExecType) String() string {
+	switch e {
+	case ExecTypeInsert:
+		return "insert"
+	case ExecTypeUpdate:
+		return "update"
+	case ExecTypeDelete:
+		return "delete"
+	}
+	return "unknown"
+}
+
 func (e *Executable) Executed() bool {
 	return e.executed
 }

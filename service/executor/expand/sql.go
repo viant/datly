@@ -43,8 +43,8 @@ func (s *Statements) DeleteWithMarker(tableName string, data interface{}) string
 	return s.appendWithMarker(tableName, data, ExecTypeDelete)
 }
 
-func (s *Statements) appendWithMarker(tableName string, data interface{}, insert ExecType) string {
-	s.appendExecutable(tableName, data, insert)
+func (s *Statements) appendWithMarker(tableName string, data interface{}, exectType ExecType) string {
+	s.appendExecutable(tableName, data, exectType)
 	return s.generateMarker()
 }
 

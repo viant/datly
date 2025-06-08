@@ -139,8 +139,10 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 			return e.handleInsert(ctx, sess, actual, db)
 		case expand2.ExecTypeUpdate:
 			return e.handleUpdate(ctx, sess, db, actual)
+		case expand2.ExecTypeDelete:
+			return e.handleDelete(ctx, sess, db, actual)
 		default:
-			return fmt.Errorf("unsupported exec type: %v\n", actual.ExecType)
+			return fmt.Errorf("unsupported '%v' db operation\n", actual.ExecType.String())
 		}
 
 	case *expand2.SQLStatment:
@@ -156,6 +158,23 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 		return e.executeStatement(ctx, tx, actual, sess)
 	}
 	return fmt.Errorf("unsupported query type %T", data)
+}
+
+func (e *Executor) handleDelete(ctx context.Context, sess *dbSession, db *sql.DB, executable *expand2.Executable) error {
+	now := time.Now()
+	service, err := sess.Deleter(ctx, db, executable.Table, e.dbOptions(db, sess))
+	if err != nil {
+		return err
+	}
+	options, err := sess.tx.PrepareTxOptions()
+	if err != nil {
+		return err
+	}
+	options = append(options, db)
+
+	deleted, err := service.Exec(ctx, executable.Data, options...)
+	e.logMetrics(ctx, executable.Table, "DELETE", deleted, now, err)
+	return err
 }
 
 func (e *Executor) handleUpdate(ctx context.Context, sess *dbSession, db *sql.DB, executable *expand2.Executable) error {

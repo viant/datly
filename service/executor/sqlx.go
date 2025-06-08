@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"database/sql"
+	"github.com/viant/sqlx/io/delete"
 	"github.com/viant/sqlx/io/insert"
 	"github.com/viant/sqlx/io/update"
 	"github.com/viant/sqlx/option"
@@ -12,6 +13,8 @@ import (
 type sqlxIO struct {
 	update map[string]*update.Service
 	insert map[string]*insert.Service
+	delete map[string]*delete.Service
+
 	sync.RWMutex
 }
 
@@ -27,6 +30,23 @@ func (s *sqlxIO) Updater(ctx context.Context, db *sql.DB, table string, options 
 	if err == nil {
 		s.RWMutex.Lock()
 		s.update[table] = service
+		s.RWMutex.Unlock()
+	}
+	return service, err
+}
+
+func (s *sqlxIO) Deleter(ctx context.Context, db *sql.DB, table string, options ...option.Option) (*delete.Service, error) {
+	s.RWMutex.RLock()
+	service, ok := s.delete[table]
+	s.RWMutex.RUnlock()
+	if ok {
+		return service, nil
+	}
+	var err error
+	service, err = delete.New(ctx, db, table, options...)
+	if err == nil {
+		s.RWMutex.Lock()
+		s.delete[table] = service
 		s.RWMutex.Unlock()
 	}
 	return service, err
@@ -54,5 +74,6 @@ func newSqlxIO() *sqlxIO {
 	return &sqlxIO{
 		update: map[string]*update.Service{},
 		insert: map[string]*insert.Service{},
+		delete: map[string]*delete.Service{},
 	}
 }
