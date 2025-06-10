@@ -110,6 +110,14 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 			}
 		}
 		responseWriter := proxy.NewWriter()
+		// Add query parameters to URL if any exist
+		if len(values) > 0 {
+			if strings.Contains(URL, "?") {
+				URL += "&" + values.Encode()
+			} else {
+				URL += "?" + values.Encode()
+			}
+		}
 		httpRequest, err := http.NewRequest(aRoute.Path.Method, URL, body)
 		if err != nil {
 			return nil, jsonrpc.NewInvalidRequest(err.Error(), nil)
