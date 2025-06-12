@@ -10,13 +10,13 @@ import (
 )
 
 type (
-	Implementer struct {
-		*server.DefaultImplementer
+	Handler struct {
+		*server.DefaultHandler
 	}
 )
 
 // Implements checks if the method is implemented
-func (i *Implementer) Implements(method string) bool {
+func (i *Handler) Implements(method string) bool {
 	switch method {
 	case schema.MethodResourcesList,
 		schema.MethodResourcesTemplatesList,
@@ -31,12 +31,12 @@ func (i *Implementer) Implements(method string) bool {
 }
 
 // New creates a new implementer
-func New(registry *server.Registry) server.NewImplementer {
-	return func(_ context.Context, notifier transport.Notifier, logger logger.Logger, client client.Operations) (server.Implementer, error) {
-		base := server.NewDefaultImplementer(notifier, logger, client)
+func New(registry *server.Registry) server.NewHandler {
+	return func(_ context.Context, notifier transport.Notifier, logger logger.Logger, client client.Operations) (server.Handler, error) {
+		base := server.NewDefaultHandler(notifier, logger, client)
 		base.Registry = registry
-		return &Implementer{
-			DefaultImplementer: base,
+		return &Handler{
+			DefaultHandler: base,
 		}, nil
 	}
 }

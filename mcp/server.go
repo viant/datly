@@ -39,7 +39,7 @@ func (s *Server) init() error {
 
 	var newImplementer = extension.New(s.registry)
 	var options = []server.Option{
-		server.WithNewImplementer(newImplementer),
+		server.WithNewHandler(newImplementer),
 		server.WithImplementation(schema.Implementation{"Datly", "0.1"}),
 	}
 	issuerURL := s.config.IssuerURL

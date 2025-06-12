@@ -7,6 +7,6 @@ import (
 
 func TestNew(t *testing.T) {
 
-	i := Implementer{}
+	i := Handler{}
 	fmt.Println(i)
 }
