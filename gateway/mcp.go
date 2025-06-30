@@ -56,15 +56,12 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 	handler := func(ctx context.Context, req *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {
 		params := req.Params
 		URI := r.matchToolCallComponentURI(aRoute, component, params)
-
 		URL := fmt.Sprintf("http://localhost/%v", strings.TrimLeft(URI, "/")) // fallback to a local URL for now, this should be replaced with the actual service URL
 		values := url.Values{}
 		var body io.Reader
 		var uniquePath = make(map[string]bool)
 		var uniqueQuery = make(map[string]bool)
-
 		for _, parameter := range component.Input.Type.Parameters {
-
 			paramName := strings.Title(parameter.Name)
 			value := params.Arguments[paramName]
 			paramType := parameter.Schema.Type()
@@ -73,7 +70,10 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 			}
 
 			switch paramType.Kind() {
-			case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
+			case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64, reflect.Float64:
+				if value == nil {
+					continue
+				}
 				value = toolbox.AsInt(value)
 			}
 
@@ -87,6 +87,7 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 				if value == nil {
 					return nil, jsonrpc.NewInvalidRequest("missing path parameter: "+parameter.In.Name, nil)
 				}
+
 				URL = strings.ReplaceAll(URL, "{"+parameter.In.Name+"}", fmt.Sprintf("%v", value))
 			case state.KindQuery, state.KindForm:
 				if uniqueQuery[parameter.In.Name] {
@@ -96,7 +97,16 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 				if value == nil || value == "" {
 					continue
 				}
-				values.Add(parameter.In.Name, fmt.Sprintf("%v", value))
+				// Check if value is a slice and if items are float64, convert to int64
+				if slice, ok := value.([]interface{}); ok {
+					for _, item := range slice {
+						if f, ok := item.(float64); ok {
+							values.Add(parameter.In.Name, fmt.Sprintf("%v", int64(f)))
+						}
+					}
+				} else {
+					values.Add(parameter.In.Name, fmt.Sprintf("%v", value))
+				}
 			case state.KindRequestBody:
 				if text, ok := value.(string); ok {
 					body = strings.NewReader(text)
@@ -129,15 +139,15 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 				aRoute = matchedRoute
 			}
 		}
-
 		aRoute.Handle(responseWriter, httpRequest) // route the request to the actual handler
 		var result = schema.CallToolResult{}
 		mimeType := "application/json"
-		result.Content = append(result.Content, schema.CallToolResultContentElem{
+		item := schema.CallToolResultContentElem{
 			MimeType: mimeType,
-			Type:     "text",
+			Type:     "text", // use data for some clients
 			Text:     responseWriter.Body.String(),
-		})
+		}
+		result.Content = append(result.Content, item)
 		return &result, nil
 	}
 	return handler
