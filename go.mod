@@ -24,18 +24,18 @@ require (
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
-	github.com/viant/gmetric v0.3.1-0.20230405233616-cc90deee60c4
+	github.com/viant/gmetric v0.3.2
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.24.0
 	github.com/viant/sqlx v0.16.6
 	github.com/viant/structql v0.5.2
-	github.com/viant/toolbox v0.36.0
+	github.com/viant/toolbox v0.37.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
 	github.com/viant/xreflect v0.7.3
 	github.com/viant/xunsafe v0.10.3
-	golang.org/x/mod v0.17.0
+	golang.org/x/mod v0.25.0
 	golang.org/x/oauth2 v0.30.0
 	google.golang.org/api v0.174.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -61,8 +61,8 @@ require (
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1
 	github.com/viant/xmlify v0.1.1
-	golang.org/x/net v0.34.0
-	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
+	golang.org/x/net v0.40.0
+	golang.org/x/tools v0.33.0
 	modernc.org/sqlite v1.18.1
 )
 
@@ -142,11 +142,11 @@ require (
 	go.opentelemetry.io/otel v1.24.0 // indirect
 	go.opentelemetry.io/otel/metric v1.24.0 // indirect
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
-	golang.org/x/crypto v0.38.0 // indirect
-	golang.org/x/sync v0.14.0 // indirect
+	golang.org/x/crypto v0.39.0 // indirect
+	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
-	golang.org/x/text v0.25.0 // indirect
+	golang.org/x/text v0.26.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/appengine/v2 v2.0.2 // indirect
