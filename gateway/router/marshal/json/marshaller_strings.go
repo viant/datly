@@ -5,7 +5,6 @@ import (
 	"github.com/viant/tagly/format"
 	"github.com/viant/xunsafe"
 	"strings"
-	"unicode"
 	"unsafe"
 )
 
@@ -51,10 +50,6 @@ func (i *stringMarshaller) ensureReplacer() {
 }
 
 func marshallString(asString string, sb *MarshallSession, replacer *strings.Replacer) {
-	asString = strings.TrimFunc(asString, func(r rune) bool {
-		return !unicode.IsGraphic(r)
-	})
-
 	sb.WriteByte('"')
 	sb.WriteString(replacer.Replace(asString))
 	sb.WriteByte('"')
