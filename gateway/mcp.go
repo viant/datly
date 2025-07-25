@@ -97,13 +97,17 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 				if value == nil || value == "" {
 					continue
 				}
-				// Check if value is a slice and if items are float64, convert to int64
+				// Check if value is a slice and create a comma-separated string
 				if slice, ok := value.([]interface{}); ok {
+					var items []string
 					for _, item := range slice {
 						if f, ok := item.(float64); ok {
-							values.Add(parameter.In.Name, fmt.Sprintf("%v", int64(f)))
+							items = append(items, fmt.Sprintf("%v", int64(f)))
+						} else {
+							items = append(items, fmt.Sprintf("%v", item))
 						}
 					}
+					values.Add(parameter.In.Name, strings.Join(items, ","))
 				} else {
 					values.Add(parameter.In.Name, fmt.Sprintf("%v", value))
 				}
@@ -120,6 +124,7 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 			}
 		}
 		responseWriter := proxy.NewWriter()
+
 		// Add query parameters to URL if any exist
 		if len(values) > 0 {
 			if strings.Contains(URL, "?") {

@@ -12,11 +12,17 @@ type Repeated []string
 func (r Repeated) AsInts() ([]int, error) {
 	var result = make([]int, 0, len(r))
 	for _, item := range r {
-		v, err := strconv.Atoi(item)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert %v into %T, %w", r, result, err)
+		// Try to parse as float first to handle scientific notation
+		if f, err := strconv.ParseFloat(item, 64); err == nil {
+			result = append(result, int(f))
+		} else {
+			// Fall back to Atoi for regular integers
+			v, err := strconv.Atoi(item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert %v into %T, %w", r, result, err)
+			}
+			result = append(result, v)
 		}
-		result = append(result, v)
 	}
 	return result, nil
 }
