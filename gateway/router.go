@@ -473,8 +473,10 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 			}
 			fileSever.ServeHTTP(response, request)
 			if aPath.Cors != nil {
-				cors := r.EsnureCors(aPath)
-				router.CorsHandler(req, cors)(response)
+				// CORS configuration was already resolved at router initialisation time.
+				// Re-use the existing configuration instead of rebuilding it for every request
+				// to avoid unnecessary allocations that may look like a memory leak under load.
+				router.CorsHandler(req, aPath.Cors)(response)
 			}
 		}}
 	result = append(result, defaultRoute)
@@ -489,8 +491,8 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 
 		fileSever.ServeHTTP(response, request)
 		if aPath.Cors != nil {
-			cors := r.EsnureCors(aPath)
-			router.CorsHandler(req, cors)(response)
+			// Re-use an already prepared CORS configuration – see the comment above.
+			router.CorsHandler(req, aPath.Cors)(response)
 		}
 	}}
 	result = append(result, route)
