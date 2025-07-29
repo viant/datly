@@ -341,7 +341,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 					return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
 				}
 
-				r.EsnureCors(aPath)
+				r.EnsureCors(aPath)
 				aRoute := r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth(), r.config.Version, r.config.Logging))
 				routes = append(routes, aRoute)
 				if aPath.Cors != nil {
@@ -491,8 +491,8 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 
 		fileSever.ServeHTTP(response, request)
 		if aPath.Cors != nil {
-			// Re-use an already prepared CORS configuration – see the comment above.
-			router.CorsHandler(req, aPath.Cors)(response)
+			cors := r.EnsureCors(aPath)
+			router.CorsHandler(req, cors)(response)
 		}
 	}}
 	result = append(result, route)
@@ -520,13 +520,13 @@ func (r *Router) NewOptionsRoute(uri string, paths []*path.Path) *Route {
 			Method: http.MethodOptions,
 		},
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
-			cors := r.EsnureCors(paths...)
+			cors := r.EnsureCors(paths...)
 			router.CorsHandler(req, cors)(response)
 		},
 	}
 }
 
-func (r *Router) EsnureCors(paths ...*path.Path) *path.Cors {
+func (r *Router) EnsureCors(paths ...*path.Path) *path.Cors {
 	allowedMethods := []string{}
 	cors := &path.Cors{AllowMethods: &allowedMethods}
 
@@ -548,7 +548,15 @@ func (r *Router) EsnureCors(paths ...*path.Path) *path.Cors {
 			cors.ExposeHeaders = aPath.Cors.ExposeHeaders
 		}
 		if aPath.Cors.AllowMethods != nil {
-			*cors.AllowMethods = append(*cors.AllowMethods, *aPath.Cors.AllowMethods...)
+			var prevMethods = map[string]bool{}
+			for _, prevMethod := range *cors.AllowMethods {
+				prevMethods[prevMethod] = true
+			}
+			for _, method := range *aPath.Cors.AllowMethods {
+				if !prevMethods[method] {
+					*cors.AllowMethods = append(*cors.AllowMethods, method)
+				}
+			}
 		}
 		if aPath.Cors.AllowOrigins != nil {
 			cors.AllowOrigins = aPath.Cors.AllowOrigins
