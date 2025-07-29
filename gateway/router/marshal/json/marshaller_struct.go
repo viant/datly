@@ -119,7 +119,7 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 		isNil := false
 		objPtr := ptr
 		if stringifier.indirectXField != nil {
-			isIgnore := stringifier.indirectXField.Tag.Get("json") == "-"
+			isIgnore := stringifier.indirectXField.Tag.Get("json") == "-" || stringifier.indirectXField.Tag.Get("internal") == "true"
 			if isIgnore {
 				continue
 			}
