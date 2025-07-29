@@ -101,7 +101,7 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 			return s.HandleError(ctx, aSession, aComponent, err)
 		}
 		return ret, err
-	case service.TypeExecutor:
+	case service.TypeExecutor: //Patch/Put/Post/Delete
 		var onDone counter.OnDone
 		if aComponent.View.Counter != nil {
 			onDone = aComponent.View.Counter.Begin(time.Now())
@@ -113,6 +113,14 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 			return nil, err
 		}
 		ret, err := s.execute(ctx, aComponent, aSession, onDone)
+		if err != nil {
+			if statusCoder, ok := err.(response.StatusCoder); ok {
+				ctx = aComponent.View.Context(ctx)
+				execCtx := exec.GetContext(ctx)
+				execCtx.StatusCode = statusCoder.StatusCode()
+			}
+
+		}
 		return s.finalize(ctx, ret, err)
 	}
 	return nil, response.NewError(500, fmt.Sprintf("unsupported Type %v", aComponent.Service))
