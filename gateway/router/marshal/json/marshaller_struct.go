@@ -133,6 +133,11 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 			if objPtr == nil {
 				isNil = true
 			}
+		} else {
+			isIgnore := stringifier.xField.Tag.Get("json") == "-" || stringifier.xField.Tag.Get("internal") == "true"
+			if isIgnore {
+				continue
+			}
 		}
 
 		var value interface{}
