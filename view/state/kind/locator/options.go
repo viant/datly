@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
 	"net/http"
@@ -44,6 +45,7 @@ type (
 		View              *view.View
 		Resource          *view.Resource
 		Types             []*state.Type
+		Logger            logger.Logger
 		Constants         map[string]interface{}
 		resourceConstants map[string]interface{}
 	}
@@ -246,6 +248,12 @@ func WithQuery(parameters url.Values) Option {
 				o.Query[k] = v
 			}
 		}
+	}
+}
+
+func WithLogger(logger logger.Logger) Option {
+	return func(o *Options) {
+		o.Logger = logger
 	}
 }
 

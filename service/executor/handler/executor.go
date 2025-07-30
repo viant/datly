@@ -126,6 +126,9 @@ func (e *Executor) newSession(aSession *session.Session, opts ...Option) *extens
 	if options.auth != nil {
 		e.auth = options.auth
 	}
+	if e.logger == nil {
+		e.logger = options.logger
+	}
 	res := e.view.GetResource()
 	sess := extension.NewSession(
 		extension.WithTemplateFlush(func(ctx context.Context) error {
@@ -135,6 +138,7 @@ func (e *Executor) newSession(aSession *session.Session, opts ...Option) *extens
 		extension.WithRedirect(e.redirect),
 		extension.WithSql(e.newSqlService),
 		extension.WithHttp(e.newHttp),
+		extension.WithLogger(e.logger),
 		extension.WithAuth(e.newAuth),
 		extension.WithMessageBus(res.MessageBuses),
 	)
@@ -262,7 +266,6 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 		request.Header = originalRequest.Header
 	}
 	stateOptions := hstate.NewOptions(opts...)
-
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
 	if stateOptions.Query() != nil {
@@ -286,6 +289,7 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 		session.WithOperate(e.session.Options.Operate()),
 		session.WithTypes(&aComponent.Contract.Input.Type, &aComponent.Contract.Output.Type),
 		session.WithComponent(aComponent),
+		session.WithLogger(e.logger),
 		session.WithRegistry(registry),
 	)
 
@@ -295,7 +299,7 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 	}
 	ctx = aSession.Context(ctx, true)
 	anExecutor := NewExecutor(aComponent.View, aSession)
-	return anExecutor.NewHandlerSession(ctx)
+	return anExecutor.NewHandlerSession(ctx, WithLogger(aSession.Logger()))
 }
 
 func (e *Executor) newHttp() http2.Http {

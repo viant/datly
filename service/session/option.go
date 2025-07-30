@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler/logger"
 )
 
 type (
@@ -24,6 +25,7 @@ type (
 		types               []*state.Type
 		registry            *repository.Registry
 		component           *repository.Component
+		logger              logger.Logger
 		operate             func(ctx context.Context, aSession *Session, aComponent *repository.Component) (interface{}, error)
 		indirectState       bool
 		reportNotAssignable *bool
@@ -34,6 +36,10 @@ type (
 
 	Option func(o *Options)
 )
+
+func (o *Options) Logger() logger.Logger {
+	return o.logger
+}
 
 func (o *Options) Registry() *repository.Registry {
 	return o.registry
@@ -54,6 +60,7 @@ func (o *Options) shallReportNotAssignable() bool {
 func (o *Options) Indirect(flag bool, options ...locator.Option) *Options {
 	ret := *o
 	ret.indirectState = flag
+	ret.locatorOptions = append(ret.locatorOptions, locator.WithLogger(o.logger))
 	if len(options) > 0 {
 		ret.locatorOptions = append(ret.locatorOptions, options...)
 		ret.kindLocator = locator.NewKindsLocator(ret.kindLocator, ret.locatorOptions...)
@@ -174,5 +181,11 @@ func WithOperate(operate func(ctx context.Context, aSession *Session, aComponent
 func WithRegistry(registry *repository.Registry) Option {
 	return func(s *Options) {
 		s.registry = registry
+	}
+}
+
+func WithLogger(logger logger.Logger) Option {
+	return func(s *Options) {
+		s.logger = logger
 	}
 }
