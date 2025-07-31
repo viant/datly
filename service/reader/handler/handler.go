@@ -65,9 +65,7 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, aSession *sessio
 	resultState := h.output.NewState()
 	statelet := aSession.State().Lookup(aView)
 
-	var locatorOptions = []locator.Option{
-		locator.WithLogger(aSession.Logger()),
-	}
+	var locatorOptions []locator.Option
 	locatorOptions = append(locatorOptions, locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
 		return aSession.LookupValue(ctx, parameter, aSession.Indirect(true, locatorOptions...))
 	}),
