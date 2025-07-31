@@ -7,7 +7,6 @@ import (
 	hauth "github.com/viant/xdatly/handler/auth"
 	"github.com/viant/xdatly/handler/differ"
 	"github.com/viant/xdatly/handler/http"
-	"github.com/viant/xdatly/handler/logger"
 	xmbus "github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/sqlx"
 	"github.com/viant/xdatly/handler/state"
@@ -28,7 +27,6 @@ type (
 		redirect        RedirectFn
 		http            HttpFn
 		auth            AuthFn
-		logger          logger.Logger
 	}
 
 	SqlServiceFn    func(options *sqlx.Options) (sqlx.Sqlx, error)
@@ -41,10 +39,6 @@ type (
 
 func (s *Session) Session(ctx context.Context, route *http.Route, opts ...state.Option) (handler.Session, error) {
 	return s.redirect(ctx, route, opts...)
-}
-
-func (s *Session) Logger() logger.Logger {
-	return s.logger
 }
 
 func (s *Session) Http() http.Http {
@@ -123,12 +117,6 @@ func WithTemplateFlush(fn TemplateFlushFn) Option {
 func WithHttp(aHttp HttpFn) Option {
 	return func(s *Session) {
 		s.http = aHttp
-	}
-}
-
-func WithLogger(logger logger.Logger) Option {
-	return func(s *Session) {
-		s.logger = logger
 	}
 }
 

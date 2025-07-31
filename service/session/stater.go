@@ -53,9 +53,7 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 
 	hOptions := hstate.NewOptions(opts...)
 	aState := stateType.Type().WithValue(dest)
-	var stateOptions = []locator.Option{
-		locator.WithLogger(s.logger),
-	}
+	var stateOptions []locator.Option
 
 	var locatorsToRemove = []state.Kind{state.KindComponent}
 	if hOptions.Constants() != nil {

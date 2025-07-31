@@ -18,14 +18,11 @@ import (
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/session"
-	"github.com/viant/datly/shared/logging"
 	"github.com/viant/datly/view"
 	vcontext "github.com/viant/datly/view/context"
-	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/gmetric"
 	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/xdatly/handler/async"
-	"github.com/viant/xdatly/handler/logger"
 	hstate "github.com/viant/xdatly/handler/state"
 
 	"net/http"
@@ -41,7 +38,6 @@ type (
 		repository    *repository.Service
 		operator      *operator.Service
 		config        *Config
-		logger        logger.Logger
 		OpenAPIInfo   openapi3.Info
 		metrics       *gmetric.Service
 		statusHandler http.Handler
@@ -82,7 +78,6 @@ func NewRouter(ctx context.Context, components *repository.Service, config *Conf
 		operator:      operator.New(),
 		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
 		mcpRegistry:   mcpRegistry,
-		logger:        logging.New(logging.INFO, nil),
 	}
 	return r, r.init(ctx)
 }
@@ -159,10 +154,8 @@ func (r *Router) HandleJob(ctx context.Context, aJob *async.Job) error {
 	request := &http.Request{Method: aJob.Method, URL: URL, RequestURI: aPath.URI}
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
-	locatorOptions = append(locatorOptions, locator.WithLogger(r.logger))
 	aSession := session.New(aComponent.View,
 		session.WithAuth(r.repository.Auth()),
-		session.WithLogger(r.logger),
 		session.WithComponent(aComponent),
 		session.WithLocatorOptions(locatorOptions...),
 		session.WithOperate(r.operator.Operate))
@@ -349,7 +342,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				}
 
 				r.EnsureCors(aPath)
-				aRoute := r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth(), r.config.Version, r.config.Logging, r.logger))
+				aRoute := r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth(), r.config.Version, r.config.Logging))
 				routes = append(routes, aRoute)
 				if aPath.Cors != nil {
 					optionsPaths[aPath.URI] = append(optionsPaths[aPath.URI], aPath)

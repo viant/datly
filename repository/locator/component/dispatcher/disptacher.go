@@ -47,7 +47,6 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, opts ...
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...),
 		session.WithAuth(d.auth),
 		session.WithRegistry(d.registry),
-		session.WithLogger(cOptions.Logger),
 		session.WithComponent(aComponent),
 		session.WithOperate(d.service.Operate))
 	ctx = aSession.Context(ctx, true)

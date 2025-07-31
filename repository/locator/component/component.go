@@ -8,7 +8,6 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
-	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
 	"github.com/viant/xunsafe"
@@ -25,7 +24,6 @@ type componentLocator struct {
 	form       *hstate.Form
 	query      url.Values
 	header     http.Header
-	logger     logger.Logger
 	getRequest func() (*http.Request, error)
 }
 
@@ -44,7 +42,6 @@ func (l *componentLocator) Value(ctx context.Context, name string) (interface{},
 		contract.WithConstants(l.constants),
 		contract.WithPath(l.path),
 		contract.WithQuery(l.query),
-		contract.WithLogger(l.logger),
 		contract.WithForm(form),
 		contract.WithHeader(l.header),
 	)
@@ -105,7 +102,6 @@ func newComponentLocator(opts ...locator.Option) (kind.Locator, error) {
 		dispatch:   options.Dispatcher,
 		constants:  options.Constants,
 		getRequest: options.GetRequest,
-		logger:     options.Logger,
 		form:       options.Form,
 		query:      options.Query,
 		header:     options.Header,
