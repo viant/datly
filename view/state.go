@@ -161,7 +161,7 @@ func NewState() *State {
 // Init initializes each Statelet
 func (s *State) Init(aView *View) {
 	s.RWMutex.Lock()
-	s.RWMutex.Unlock()
+	defer s.RWMutex.Unlock()
 	for _, selector := range s.Views {
 		selector.Init(aView)
 	}
