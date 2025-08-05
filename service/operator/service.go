@@ -96,10 +96,6 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 			return nil, err
 		}
 		ret, err := s.runQuery(ctx, aComponent, aSession)
-		if ret, err = s.finalize(ctx, ret, err); err != nil {
-			aSession.ClearCache(aComponent.Output.Type.Parameters)
-			return s.HandleError(ctx, aSession, aComponent, err)
-		}
 		return ret, err
 	case service.TypeExecutor: //Patch/Put/Post/Delete
 		var onDone counter.OnDone
