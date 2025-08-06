@@ -25,6 +25,7 @@ import (
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/exec"
+	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
 	"google.golang.org/api/googleapi"
@@ -137,6 +138,8 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 
 	ctx = vcontext.WithValue(ctx, codec.CriteriaBuilderKey, reader.New())
 	ctx = vcontext.WithValue(ctx, view.ContextKey, aComponent.View)
+	ctx = vcontext.WithValue(ctx, logger.ContextKey, aSession.Logger())
+
 	ctx = aSession.Context(ctx, false)
 	var info *exec.Context
 	infoValue := ctx.Value(exec.ContextKey)
