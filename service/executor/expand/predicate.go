@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler/logger"
 	"strings"
 )
 
@@ -127,7 +128,9 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 	}
 	ctx = vcontext.WithValue(ctx, PredicateCtx, p.ctx)
 	ctx = vcontext.WithValue(ctx, PredicateState, p.state)
-
+	if p.ctx.Session != nil {
+		ctx = vcontext.WithValue(ctx, logger.ContextKey, p.ctx.Session.Logger())
+	}
 	for _, predicateConfig := range p.config {
 		if predicateConfig.Group != group {
 			continue
