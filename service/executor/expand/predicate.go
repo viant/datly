@@ -3,12 +3,13 @@ package expand
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/logger"
-	"strings"
 )
 
 var PredicateState predicateState = "state"
@@ -129,7 +130,8 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 	ctx = vcontext.WithValue(ctx, PredicateCtx, p.ctx)
 	ctx = vcontext.WithValue(ctx, PredicateState, p.state)
 	if p.ctx.Session != nil {
-		ctx = vcontext.WithValue(ctx, logger.ContextKey, p.ctx.Session.Logger())
+		aLogger := p.ctx.Session.Logger()
+		ctx = vcontext.WithValue(ctx, logger.ContextKey, aLogger)
 	}
 	for _, predicateConfig := range p.config {
 		if predicateConfig.Group != group {

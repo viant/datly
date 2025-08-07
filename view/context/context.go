@@ -1,14 +1,15 @@
 package view
 
 import (
+	"reflect"
+	"sync"
+	"time"
+
 	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/state"
 	"golang.org/x/net/context"
-	"reflect"
-	"sync"
-	"time"
 )
 
 // Context represents a view context
@@ -99,7 +100,9 @@ func (vc *Context) WithValue(key interface{}, value interface{}) context.Context
 	case handler.InputKey:
 		vc.input = value
 	case logger.ContextKey:
-		vc.logger = value.(logger.Logger)
+		if value != nil {
+			vc.logger = value.(logger.Logger)
+		}
 	case handler.DataSyncKey:
 		vc.dataSync = value.(*handler.DataSync)
 	case async.JobKey:
