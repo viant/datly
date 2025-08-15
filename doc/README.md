@@ -276,7 +276,7 @@ SELECT
     organization.*
 FROM DEPARMENT dept
 JOIN EMP employee ON dept.ID = employee.DEPT_ID
-JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+JOIN ORG organization ON organization.ID = dept.ORG_ID AND 1=1
 ```
 
 ```bash
@@ -293,7 +293,7 @@ SELECT
     organization.* 
 FROM DEPARMENT dept
 JOIN EMP employee ON dept.ID = employee.DEPT_ID
-JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+JOIN ORG organization ON organization.ID = dept.ORG_ID AND 1=1
 ```
 
 ```bash
@@ -312,7 +312,7 @@ SELECT
     organization.* 
 FROM (SELECT * FROM DEPARMENT t) dept
 JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_ID
-JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+JOIN ORG organization ON organization.ID = dept.ORG_ID AND 1=1
 ```
 
 ```bash
@@ -329,7 +329,7 @@ SELECT
     organization.* 
 FROM (SELECT * FROM DEPARMENT t) dept
 JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_ID
-JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+JOIN ORG organization ON organization.ID = dept.ORG_ID AND 1=1
 WHERE 1=1
 #if ($Has.Id)
 AND ID = $Id
@@ -345,7 +345,7 @@ SELECT
     organization.* 
 FROM (SELECT * FROM DEPARMENT t) dept
 JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_ID
-JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+JOIN ORG organization ON organization.ID = dept.ORG_ID AND 1=1
 WHERE ID = $Id
 ```
 
@@ -364,7 +364,7 @@ JOIN (SELECT ID, NAME, DEPT_ID,
             'x3,x4'
        END) AS SLICE /* {"Codec":{"Ref":"AsStrings"}, "DataType": "string"} */  
     FROM EMP t) employee ON dept.ID = employee.DEPT_ID
-JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+JOIN ORG organization ON organization.ID = dept.ORG_ID AND 1=1
 WHERE ID = $Id
 ```
 
@@ -536,7 +536,7 @@ SELECT
     organization.*
 FROM (SELECT * FROM DEPARMENT) dept
 JOIN (SELECT * FROM EMP) employee ON dept.ID = employee.DEPT_ID
-JOIN (SELECT * FROM ORG) organization ON organization.ID = demp.ORG_ID AND 1=1
+JOIN (SELECT * FROM ORG) organization ON organization.ID = dept.ORG_ID AND 1=1
 ```
 
 

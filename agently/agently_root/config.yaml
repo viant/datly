@@ -1,0 +1,13 @@
+default:
+  model: openai_o3
+  embedder: openai_text
+  agent: datler
+models:
+  url: models
+embedders:
+  url: embedders
+agents:
+  url: agents
+services:
+  - system/exec
+  - system/patch
