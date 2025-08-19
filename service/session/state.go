@@ -4,6 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"reflect"
+	"strings"
+	"sync"
+	"time"
+	"unsafe"
+
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
 	"github.com/viant/datly/service/auth"
@@ -17,12 +24,6 @@ import (
 	xhttp "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xunsafe"
-	"net/http"
-	"reflect"
-	"strings"
-	"sync"
-	"time"
-	"unsafe"
 )
 
 type (
@@ -342,6 +343,15 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	case reflect.Ptr:
 		if parameter.IsRequired() && isNil(value) {
 			return nil, fmt.Errorf("parameter %v is required", parameter.Name)
+		}
+		if valueType.Elem().Kind() == reflect.Struct && parameter.Schema.Type().Kind() == reflect.Slice {
+			if parameter.Schema.CompType() == valueType {
+				sliceValuePtr := reflect.New(parameterType)
+				sliceValue := reflect.MakeSlice(parameterType, 1, 1)
+				sliceValuePtr.Elem().Set(sliceValue)
+				sliceValue.Index(0).Set(reflect.ValueOf(value))
+				return sliceValuePtr.Interface(), nil
+			}
 		}
 	case reflect.Slice:
 		ptr := xunsafe.AsPointer(value)
