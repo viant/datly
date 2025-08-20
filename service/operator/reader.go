@@ -2,12 +2,18 @@ package operator
 
 import (
 	"context"
+	"net/http"
+
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/reader/handler"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/xdatly/handler/async"
+	"github.com/viant/xdatly/handler/response"
+
+	"fmt"
+	"runtime/debug"
 	"time"
 )
 
@@ -31,7 +37,7 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 	s.adjustAsyncOptions(ctx, aSession, component.View, &options)
 	handlerResponse = readerHandler.Handle(ctx, component.View, aSession, options...)
 	setting := aSession.State().QuerySettings(component.View)
-	if err := s.updateJobStatusDone(ctx, component, response, setting.SyncFlag, startTime); err != nil {
+	if err := s.updateJobStatusDone(ctx, component, handlerResponse, setting.SyncFlag, startTime); err != nil {
 		return nil, err
 	}
 	if output, err = s.finalize(ctx, handlerResponse.Output, handlerResponse.Error); err != nil {
