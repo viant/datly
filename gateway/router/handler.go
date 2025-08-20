@@ -27,9 +27,7 @@ import (
 	"github.com/viant/datly/view"
 	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler/exec"
-	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
 	"io"
@@ -56,7 +54,6 @@ type (
 		registry   *repository.Registry
 		auth       *auth.Service
 		logging    logging.Config
-		logger     logger.Logger
 	}
 )
 
@@ -90,7 +87,7 @@ func (r *Handler) AuthorizeRequest(request *http.Request, aPath *path.Path) erro
 	return nil
 }
 
-func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry, authService *auth.Service, version string, config logging.Config, logger logger.Logger) *Handler {
+func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry, authService *auth.Service, version string, config logging.Config) *Handler {
 	ret := &Handler{
 		Path:       aPath,
 		Provider:   provider,
@@ -99,7 +96,6 @@ func New(aPath *path.Path, provider *repository.Provider, registry *repository.R
 		auth:       authService,
 		Version:    version,
 		logging:    config,
-		logger:     logger,
 	}
 	return ret
 }
@@ -394,14 +390,11 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	anOperator := operator.New()
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
-	locatorOptions = append(locatorOptions, locator.WithLogger(r.logger))
 	aSession := session.New(aComponent.View,
 		session.WithAuth(r.auth),
-		session.WithLogger(r.logger),
 		session.WithComponent(aComponent),
 		session.WithLocatorOptions(locatorOptions...),
 		session.WithRegistry(r.registry),
-
 		session.WithOperate(anOperator.Operate))
 	err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
 	if err != nil {

@@ -48,9 +48,7 @@ func (v *Handler) Value(ctx context.Context, name string) (interface{}, bool, er
 	aSession := session.Context(ctx)
 	anExecutor := ehandler.NewExecutor(aView, aSession)
 
-	handlerSession, err := anExecutor.NewHandlerSession(ctx,
-		ehandler.WithLogger(aSession.Logger()),
-		ehandler.WithTypes(v.types...), ehandler.WithAuth(aSession.Auth()))
+	handlerSession, err := anExecutor.NewHandlerSession(ctx, ehandler.WithTypes(v.types...), ehandler.WithAuth(aSession.Auth()))
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to create handler session: %w", err)
 	}

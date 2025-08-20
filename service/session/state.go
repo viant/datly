@@ -168,7 +168,6 @@ func (s *Session) viewLookupOptions(aView *view.View, parameters state.NamedPara
 	if !opts.HasInputParameters() {
 		result = append(result, locator.WithInputParameters(parameters))
 	}
-	result = append(result, locator.WithLogger(s.logger))
 	result = append(result, locator.WithReadInto(s.ReadInto))
 	viewState := s.state.Lookup(aView)
 	result = append(result, locator.WithState(viewState.Template))

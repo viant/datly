@@ -1,0 +1,12 @@
+id: openai_o4-mini
+name: o4 - mini (OpenAI)
+description: OpenAI o4 mini model
+intelligence: 0.85
+speed: 0.95
+options:
+  provider: openai
+  model: o4-mini
+  envKey: OPENAI_API_KEY
+  maxTokens: 100000
+  inputTokenPrice: 0.001  # USD per token (≈ $1 per 1M)
+  outputTokenPrice: 0.003 # USD per token (≈ $3 per 1M)

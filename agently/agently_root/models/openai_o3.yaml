@@ -1,0 +1,12 @@
+id: openai_o3
+name: o3 (OpenAI)
+description: OpenAI o3 model
+intelligence: 0.95
+speed: 0.9
+options:
+  provider: openai
+  model: o3
+  envKey: OPENAI_API_KEY
+  maxTokens: 100000
+  inputTokenPrice: 0.005   # $5 per 1M tokens
+  outputTokenPrice: 0.015  # $15 per 1M tokens

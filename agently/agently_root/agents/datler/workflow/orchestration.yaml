@@ -1,0 +1,43 @@
+init:
+  results: []
+
+stage:
+  loop:
+    plan:
+      action: llm/core:plan
+      input:
+        model: ${model}
+        tools: ${tools}
+        query: ${query}
+        context: ${context}
+        systemContext: ${systemContext}
+        results: ${results}
+        transcript: ${transcript}
+        promptURI: $path(prompt/chat.vm)
+        systemPromptURI: $path(prompt/system.vm)
+
+      post:
+        plan: ${plan}
+        answer: ${answer}
+        elicitation: ${plan.elicitation}
+        results: ${results}
+        transcript: ${transcript}
+
+    exec:
+      action: llm/exec:run_plan
+      when: len(plan.steps) > 0
+      input:
+        plan: ${plan}
+        model: ${model}
+        tools: ${tools}
+        query: ${query}
+        context: ${context}
+        results: ${results}
+        transcript: ${transcript}
+
+      post:
+        results: ${results}
+        elicitation: ${elicitation}
+        transcript: ${transcript}
+      goto:
+        task: loop

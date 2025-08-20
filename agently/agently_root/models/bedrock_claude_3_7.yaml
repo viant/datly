@@ -1,0 +1,15 @@
+id: claude-3-7
+name: Claude 3-7 Sonnet (AWS Bedrock)
+description: Anthropic Claude 3-7 Sonnet served through AWS Bedrock
+intelligence: 0.9
+speed: 0.6
+options:
+  provider: bedrock/claude
+  model: arn:aws:bedrock:us-west-2:${AccountId}:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0
+  region: us-west-2
+  credentialsURL: aws-e2e
+  maxTokens: 1048576
+  inputTokenPrice: 0.003   # USD per token (≈ $3 per 1M)
+  outputTokenPrice: 0.015  # USD per token (≈ $15 per 1M)
+  meta:
+    anthropicVersion: bedrock-2023-05-31
