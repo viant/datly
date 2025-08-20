@@ -11,8 +11,17 @@ import (
 	"time"
 )
 
-func (s *Service) runQuery(ctx context.Context, component *repository.Component, aSession *session.Session) (interface{}, error) {
+func (s *Service) runQuery(ctx context.Context, component *repository.Component, aSession *session.Session) (output interface{}, err error) {
 	//TODO handler async
+	var handlerResponse *handler.Response
+	defer func() {
+		if r := recover(); r != nil {
+			panicMsg := fmt.Sprintf("Panic occurred: %v, Stack trace: %v", r, string(debug.Stack()))
+			aSession.Logger().Errorc(ctx, panicMsg)
+			err = response.NewError(http.StatusInternalServerError, "Internal server error")
+			output = nil
+		}
+	}()
 
 	readerHandler := handler.New(component.Output.Type.Type(), &component.Output.Type)
 	var options = []reader.Option{
@@ -20,12 +29,16 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 	}
 	startTime := time.Now()
 	s.adjustAsyncOptions(ctx, aSession, component.View, &options)
-	response := readerHandler.Handle(ctx, component.View, aSession, options...)
+	handlerResponse = readerHandler.Handle(ctx, component.View, aSession, options...)
 	setting := aSession.State().QuerySettings(component.View)
 	if err := s.updateJobStatusDone(ctx, component, response, setting.SyncFlag, startTime); err != nil {
 		return nil, err
 	}
-	return response.Output, response.Error
+	if output, err = s.finalize(ctx, handlerResponse.Output, handlerResponse.Error); err != nil {
+		aSession.ClearCache(component.Output.Type.Parameters)
+		return s.HandleError(ctx, aSession, component, err)
+	}
+	return output, err
 }
 
 // adjustAsyncOptions function adjust reading option to dryRun when asyb job is scheduled but not yet completed

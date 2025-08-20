@@ -3,6 +3,8 @@ package output
 import (
 	"context"
 	"encoding/json"
+	"strings"
+
 	"github.com/viant/datly/repository/locator/output/keys"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view/state"
@@ -10,7 +12,6 @@ import (
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
-	"strings"
 )
 
 type Locator struct {

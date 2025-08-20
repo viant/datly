@@ -1173,8 +1173,9 @@ github.com/viant/xdatly v0.5.4-0.20250418144853-029d9a05ae20 h1:D1i/wpEGoexgYeGS
 github.com/viant/xdatly v0.5.4-0.20250418144853-029d9a05ae20/go.mod h1:7PvSJ8wDt1nESDFZSkVxPo5GKuPrJdCk5a5jRhPPub8=
 github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259 h1:9Yry3PUBDzc4rWacOYvAq/TKrTV0agvMF0gwm2gaoHI=
 github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259/go.mod h1:fb8YgbVadk8X5ZLz49LWGzWmQlZd7Y/I5wE0ru44bIo=
-github.com/viant/xdatly/handler v0.0.0-20250418144853-029d9a05ae20 h1:FlW+5tYEitxHk8V5mCdJDtpL3nvH/FdIPsWd6cgYAWE=
-github.com/viant/xdatly/handler v0.0.0-20250418144853-029d9a05ae20/go.mod h1:LRFkkkCHUPdvoVG1r6TdH98Z6CF86pLfzjfrLYhRNGY=
+github.com/viant/xdatly/handler v0.0.0-20250730200706-ec3e2de85e2b/go.mod h1:OeV4sVatklNs31nFnZtSp7lEvKJRoVJbH5opNRmRPg0=
+github.com/viant/xdatly/handler v0.0.0-20250806192028-819cadf93282 h1:oNhkNyC6bRBifxWLyd7MTEFmCMwfg1LaAjKAmubrWCM=
+github.com/viant/xdatly/handler v0.0.0-20250806192028-819cadf93282/go.mod h1:OeV4sVatklNs31nFnZtSp7lEvKJRoVJbH5opNRmRPg0=
 github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52 h1:G+e1MMDxQXUPPlAXVNlRqSLTLra7udGQZUu3hnr0Y8M=
 github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
 github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a h1:jecH7mH63gj1zJwD18SdvSHM9Ttr9FEOnhHkYfkCNkI=
