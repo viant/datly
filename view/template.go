@@ -3,6 +3,10 @@ package view
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync"
+
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/executor/extension"
 	"github.com/viant/datly/view/keywords"
@@ -11,9 +15,6 @@ import (
 	"github.com/viant/structology"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
-	"reflect"
-	"strings"
-	"sync"
 )
 
 var boolType = reflect.TypeOf(true)
@@ -371,7 +372,8 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sta
 		if value.Key == "?" {
 			placeholder, err := sanitized.Next()
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("failed to get placeholder: %w, SQL: %v, values: %v\n", err, SQL, values)
+
 			}
 			*placeholders = append(*placeholders, placeholder)
 			continue
