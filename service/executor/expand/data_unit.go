@@ -3,14 +3,15 @@ package expand
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/google/uuid"
 	"github.com/viant/datly/service/executor/sequencer"
 	"github.com/viant/sqlx/io/validator"
 	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
-	"reflect"
-	"strings"
 )
 
 type (
@@ -137,7 +138,7 @@ func (c *DataUnit) Next() (interface{}, error) {
 		return c.ParamsGroup[index], nil
 	}
 
-	return nil, fmt.Errorf("expected to get binding parameter, but noone was found")
+	return nil, fmt.Errorf("expected to get binding parameter, but noone was found, ParamsGroup: %v, placeholderCounter: %v", c.ParamsGroup, c.placeholderCounter)
 }
 
 func (c *DataUnit) ensureSliceIndex() {
