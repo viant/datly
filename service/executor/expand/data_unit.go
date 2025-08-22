@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/viant/datly/service/executor/sequencer"
@@ -23,6 +24,7 @@ type (
 		MetaSource  Dber        `velty:"-"`
 		Statements  *Statements `velty:"-"`
 
+		mu                 sync.Mutex                      `velty:"-"`
 		placeholderCounter int                             `velty:"-"`
 		sqlxValidator      *validator.Service              `velty:"-"`
 		sliceIndex         map[reflect.Type]*xunsafe.Slice `velty:"-"`
@@ -39,6 +41,17 @@ func (c *DataUnit) WithPresence() interface{} {
 func (c *DataUnit) WithLocation(loc string) interface{} {
 	var opt interface{} = validator.WithLocation(loc)
 	return opt
+}
+
+// Reset clears binding-related state so DataUnit can be safely reused for a new evaluation
+func (c *DataUnit) Reset() {
+	c.mu.Lock()
+	c.placeholderCounter = 0
+	if len(c.ParamsGroup) > 0 {
+		c.ParamsGroup = c.ParamsGroup[:0]
+	}
+	c.TemplateSQL = ""
+	c.mu.Unlock()
 }
 
 func (c *DataUnit) Validate(dest interface{}, opts ...interface{}) (*validator.Validation, error) {
@@ -80,7 +93,9 @@ func (c *DataUnit) AppendBinding(value interface{}) (string, error) {
 
 func (c *DataUnit) UUID() string {
 	newUUID := uuid.New()
+	c.mu.Lock()
 	c.ParamsGroup = append(c.ParamsGroup, newUUID.String())
+	c.mu.Unlock()
 	return "?"
 }
 
@@ -124,6 +139,8 @@ func (c *DataUnit) expandWithCommas(expanded []*Expression) string {
 }
 
 func (c *DataUnit) At(_ int) []interface{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.ParamsGroup
 }
 
@@ -132,6 +149,8 @@ func (c *DataUnit) Next() (interface{}, error) {
 		return 0, nil
 	}
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.placeholderCounter < len(c.ParamsGroup) {
 		index := c.placeholderCounter
 		c.placeholderCounter++
@@ -160,7 +179,12 @@ func (c *DataUnit) xunsafeSlice(valueType reflect.Type) *xunsafe.Slice {
 }
 
 func (c *DataUnit) addAll(args ...interface{}) {
+	if len(args) == 0 {
+		return
+	}
+	c.mu.Lock()
 	c.ParamsGroup = append(c.ParamsGroup, args...)
+	c.mu.Unlock()
 }
 
 func (c *DataUnit) IsServiceExec(SQL string) (*Executable, bool) {
