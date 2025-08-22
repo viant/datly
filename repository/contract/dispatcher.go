@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"github.com/viant/xdatly/handler/logger"
 	hstate "github.com/viant/xdatly/handler/state"
 	"net/http"
 	"net/url"
@@ -16,6 +17,7 @@ type (
 		Header         http.Header
 		Form           *hstate.Form
 		Request        *http.Request
+		Logger         logger.Logger
 	}
 	//Option represents a dispatcher option
 	Option func(o *Options)
@@ -75,5 +77,12 @@ func WithHeader(header http.Header) Option {
 func WithRequest(request *http.Request) Option {
 	return func(o *Options) {
 		o.Request = request
+	}
+}
+
+// WithLogger adds path parameters
+func WithLogger(loger logger.Logger) Option {
+	return func(o *Options) {
+		o.Logger = loger
 	}
 }
