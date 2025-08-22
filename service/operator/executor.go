@@ -26,6 +26,7 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 	if aComponent.Handler != nil {
 		aSession.SetView(aComponent.View)
 		sessionHandler, err := anExecutor.NewHandlerSession(ctx,
+			handler.WithLogger(aSession.Logger()),
 			handler.WithTypes(aComponent.Types()...), handler.WithAuth(aSession.Auth()))
 		if err != nil {
 			return nil, err
