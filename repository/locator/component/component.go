@@ -3,27 +3,31 @@ package component
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
+	"reflect"
+
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
 	"github.com/viant/xunsafe"
-	"net/http"
-	"net/url"
-	"reflect"
 )
 
 type componentLocator struct {
-	custom     []interface{}
-	dispatch   contract.Dispatcher
-	constants  map[string]interface{}
-	path       map[string]string
-	form       *hstate.Form
-	query      url.Values
-	header     http.Header
+	custom    []interface{}
+	dispatch  contract.Dispatcher
+	constants map[string]interface{}
+	path      map[string]string
+	form      *hstate.Form
+	query     url.Values
+	header    http.Header
+	logger    logger.Logger
+
 	getRequest func() (*http.Request, error)
 }
 
@@ -43,6 +47,7 @@ func (l *componentLocator) Value(ctx context.Context, name string) (interface{},
 		contract.WithPath(l.path),
 		contract.WithQuery(l.query),
 		contract.WithForm(form),
+		contract.WithLogger(l.logger),
 		contract.WithHeader(l.header),
 	)
 	err = updateErrWithResponseStatus(err, value)
@@ -102,6 +107,7 @@ func newComponentLocator(opts ...locator.Option) (kind.Locator, error) {
 		dispatch:   options.Dispatcher,
 		constants:  options.Constants,
 		getRequest: options.GetRequest,
+		logger:     options.Logger,
 		form:       options.Form,
 		query:      options.Query,
 		header:     options.Header,
