@@ -3,12 +3,13 @@ package operator
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/gmetric/counter"
 	xhandler "github.com/viant/xdatly/handler"
-	"time"
 
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -59,6 +60,8 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 		status := contract.StatusSuccess(executorSession.TemplateState)
 		if err := aSession.SetState(ctx, aComponent.Output.Type.Parameters, responseState, aSession.Indirect(true,
 			locator.WithCustom(&status),
+			locator.WithLogger(aSession.Logger()),
+
 			locator.WithState(statelet.Template))); err != nil {
 			return nil, fmt.Errorf("failed to set response %w", err)
 		}
