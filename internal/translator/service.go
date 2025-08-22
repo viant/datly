@@ -4,6 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
+	spath "path"
+	"reflect"
+	"strings"
+	"time"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
@@ -27,11 +33,6 @@ import (
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"
-	"net/http"
-	spath "path"
-	"reflect"
-	"strings"
-	"time"
 )
 
 type Service struct {
@@ -449,6 +450,9 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 	}
 	if viewlet.TypeDefinition != nil {
 		if viewlet.TypeDefinition.Cardinality == state.Many {
+			if viewlet.View.View.Schema == nil {
+				viewlet.View.View.Schema = &state.Schema{}
+			}
 			viewlet.View.View.Schema.Cardinality = viewlet.TypeDefinition.Cardinality
 		}
 		viewlet.TypeDefinition.Cardinality = ""
