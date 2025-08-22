@@ -29,7 +29,7 @@ require (
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.24.0
-	github.com/viant/sqlx v0.16.6
+	github.com/viant/sqlx v0.17.6
 	github.com/viant/structql v0.5.2
 	github.com/viant/toolbox v0.37.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
@@ -54,7 +54,7 @@ require (
 	github.com/viant/mcp-protocol v0.4.4
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.2
-	github.com/viant/xdatly v0.5.4-0.20250418144853-029d9a05ae20
+	github.com/viant/xdatly v0.5.4-0.20250806192028-819cadf93282
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20250806192028-819cadf93282
 	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
@@ -129,7 +129,6 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
-	github.com/viant/gosh v0.2.1 // indirect
 	github.com/viant/igo v0.2.0 // indirect
 	github.com/viant/x v0.3.0 // indirect
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
