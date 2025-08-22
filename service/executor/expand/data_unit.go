@@ -48,7 +48,7 @@ func (c *DataUnit) Reset() {
 	c.mu.Lock()
 	c.placeholderCounter = 0
 	if len(c.ParamsGroup) > 0 {
-		c.ParamsGroup = c.ParamsGroup[:0]
+		clear(c.ParamsGroup)
 	}
 	c.TemplateSQL = ""
 	c.mu.Unlock()
