@@ -4,6 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
+	"sync"
+	"time"
+	"unsafe"
+
 	"github.com/google/uuid"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
@@ -19,10 +24,6 @@ import (
 	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
-	"reflect"
-	"sync"
-	"time"
-	"unsafe"
 )
 
 // Service represents reader service
@@ -183,6 +184,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 		}
 		return
 	}
+
 	// if onRelationalConcurrency > 1 , then only we call it concurrently
 	concurrencyLimit := make(chan struct{}, onRelationerConcurrency)
 	var onRelationWaitGroup sync.WaitGroup
