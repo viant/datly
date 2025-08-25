@@ -17,18 +17,18 @@ import (
 
 type (
 	DataUnit struct {
-		Columns     codec.ColumnsSource
-		ParamsGroup []interface{}
-		Mock        bool
-		TemplateSQL string
-		MetaSource  Dber        `velty:"-"`
-		Statements  *Statements `velty:"-"`
-
+		Columns            codec.ColumnsSource
+		ParamsGroup        []interface{}
+		Mock               bool
+		TemplateSQL        string
+		MetaSource         Dber                            `velty:"-"`
+		Statements         *Statements                     `velty:"-"`
 		mu                 sync.Mutex                      `velty:"-"`
 		placeholderCounter int                             `velty:"-"`
 		sqlxValidator      *validator.Service              `velty:"-"`
 		sliceIndex         map[reflect.Type]*xunsafe.Slice `velty:"-"`
 		ctx                context.Context                 `velty:"-"`
+		EvalLock           sync.Mutex
 	}
 
 	ExecutablesIndex map[string]*Executable
@@ -184,6 +184,12 @@ func (c *DataUnit) addAll(args ...interface{}) {
 	}
 	c.mu.Lock()
 	c.ParamsGroup = append(c.ParamsGroup, args...)
+	c.mu.Unlock()
+}
+
+func (c *DataUnit) Shrink(offset int) {
+	c.mu.Lock()
+	c.ParamsGroup = c.ParamsGroup[:offset]
 	c.mu.Unlock()
 }
 

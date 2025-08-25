@@ -3,6 +3,10 @@ package view
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync"
+
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
@@ -12,9 +16,6 @@ import (
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"reflect"
-	"strings"
-	"sync"
 )
 
 type (
@@ -50,6 +51,9 @@ func (e *PredicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 		panic("not found custom ctx")
 	}
 
+	cuxtomCtx.DataUnit.EvalLock.Lock()
+	defer cuxtomCtx.DataUnit.EvalLock.Unlock()
+
 	val := ctx.Value(expand.PredicateState)
 	aState := val.(*structology.State)
 	offset := len(cuxtomCtx.DataUnit.ParamsGroup)
@@ -64,7 +68,7 @@ func (e *PredicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 		copy(values, evaluate.DataUnit.ParamsGroup[offset:])
 	}
 	criteria := &codec.Criteria{Expression: evaluate.Buffer.String(), Placeholders: values}
-	cuxtomCtx.DataUnit.ParamsGroup = cuxtomCtx.DataUnit.ParamsGroup[:offset]
+	cuxtomCtx.DataUnit.Shrink(offset)
 	return criteria, nil
 }
 
