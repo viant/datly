@@ -373,7 +373,6 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sta
 			placeholder, err := sanitized.Next()
 			if err != nil {
 				return "", fmt.Errorf("failed to get placeholder: %w, SQL: %v, values: %+v\n", err, SQL, values)
-
 			}
 			*placeholders = append(*placeholders, placeholder)
 			continue

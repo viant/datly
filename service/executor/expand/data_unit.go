@@ -43,17 +43,6 @@ func (c *DataUnit) WithLocation(loc string) interface{} {
 	return opt
 }
 
-// Reset clears binding-related state so DataUnit can be safely reused for a new evaluation
-func (c *DataUnit) Reset() {
-	c.mu.Lock()
-	c.placeholderCounter = 0
-	if len(c.ParamsGroup) > 0 {
-		clear(c.ParamsGroup)
-	}
-	c.TemplateSQL = ""
-	c.mu.Unlock()
-}
-
 func (c *DataUnit) Validate(dest interface{}, opts ...interface{}) (*validator.Validation, error) {
 	db, err := c.MetaSource.Db()
 	if err != nil {
