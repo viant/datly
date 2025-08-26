@@ -3,6 +3,11 @@ package state
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
@@ -11,10 +16,6 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"net/http"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 type (
@@ -512,7 +513,12 @@ func (p *Parameter) initCodec(resource Resource) error {
 	if p.Output == nil {
 		return nil
 	}
-
+	stateTag, _ := tags.ParseStateTags(reflect.StructTag(p.Tag), resource.EmbedFS())
+	if stateTag != nil {
+		if stateTag.Codec != nil && stateTag.Codec.Body != "" {
+			p.Output.Body = stateTag.Codec.Body
+		}
+	}
 	inputType := p.Schema.Type()
 	if err := p.Output.Init(resource, inputType); err != nil {
 		return err
@@ -520,10 +526,9 @@ func (p *Parameter) initCodec(resource Resource) error {
 	if p.Output.Schema == nil {
 		return nil
 	}
-
 	if !p.Output.Schema.IsNamed() {
 		fieldTag := reflect.StructTag(p.Tag)
-		if stateTag, _ := tags.ParseStateTags(fieldTag, resource.EmbedFS()); stateTag != nil {
+		if stateTag != nil {
 			stateTag.TypeName = SanitizeTypeName(p.Output.Schema.Name)
 			p.Tag = string(stateTag.UpdateTag(fieldTag))
 		}
