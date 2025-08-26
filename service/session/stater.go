@@ -116,10 +116,12 @@ func (s *Session) handleComponentpOutputType(ctx context.Context, dest interface
 	destValue, err := s.operate(ctx, s, s.component)
 	s.Options = sessionOpt
 
-	if destValue != nil {
-		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(destValue).Elem())
+	reflectDestValue := reflect.ValueOf(destValue)
+	if reflectDestValue.Kind() == reflect.Ptr {
+		reflect.ValueOf(dest).Elem().Set(reflectDestValue.Elem())
+	} else {
+		reflect.ValueOf(dest).Elem().Set(reflectDestValue)
 	}
-
 	if err != nil {
 		return err
 	}

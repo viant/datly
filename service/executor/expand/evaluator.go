@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/godiff"
@@ -12,7 +14,6 @@ import (
 	"github.com/viant/velty/est"
 	"github.com/viant/velty/est/op"
 	"github.com/viant/xreflect"
-	"reflect"
 )
 
 type (
