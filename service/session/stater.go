@@ -2,11 +2,15 @@ package session
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"reflect"
+	"runtime/debug"
 
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
 )
 
@@ -36,6 +40,18 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 }
 
 func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Option) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicMsg := fmt.Sprintf("Panic occurred: %v, Stack trace: %v", r, string(debug.Stack()))
+			logger := s.Logger()
+			if logger == nil {
+				panic(panicMsg)
+			}
+			s.Logger().Errorc(ctx, panicMsg)
+			err = response.NewError(http.StatusInternalServerError, "Internal server error")
+		}
+	}()
+
 	destType := reflect.TypeOf(dest)
 	sType := types.EnsureStruct(destType)
 	stateType, ok := s.Types.Lookup(sType)
