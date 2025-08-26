@@ -129,6 +129,10 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 	}
 	ctx = vcontext.WithValue(ctx, PredicateCtx, p.ctx)
 	ctx = vcontext.WithValue(ctx, PredicateState, p.state)
+
+	p.ctx.DataUnit.EvalLock.Lock()
+	defer p.ctx.DataUnit.EvalLock.Unlock()
+
 	if p.ctx.Session != nil {
 		aLogger := p.ctx.Session.Logger()
 		ctx = vcontext.WithValue(ctx, logger.ContextKey, aLogger)

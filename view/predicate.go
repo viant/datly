@@ -51,9 +51,6 @@ func (e *PredicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 		panic("not found custom ctx")
 	}
 
-	cuxtomCtx.DataUnit.EvalLock.Lock()
-	defer cuxtomCtx.DataUnit.EvalLock.Unlock()
-
 	val := ctx.Value(expand.PredicateState)
 	aState := val.(*structology.State)
 	offset := len(cuxtomCtx.DataUnit.ParamsGroup)
