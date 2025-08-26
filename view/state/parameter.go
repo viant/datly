@@ -523,7 +523,7 @@ func (p *Parameter) initCodec(resource Resource) error {
 
 	if !p.Output.Schema.IsNamed() {
 		fieldTag := reflect.StructTag(p.Tag)
-		if stateTag, _ := tags.ParseStateTags(fieldTag, nil); stateTag != nil {
+		if stateTag, _ := tags.ParseStateTags(fieldTag, resource.EmbedFS()); stateTag != nil {
 			stateTag.TypeName = SanitizeTypeName(p.Output.Schema.Name)
 			p.Tag = string(stateTag.UpdateTag(fieldTag))
 		}

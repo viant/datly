@@ -72,7 +72,8 @@ type (
 
 		Substitutes Substitutes
 		Docs        *Documentation
-		FSEmbedder  *state.FSEmbedder
+
+		FSEmbedder *state.FSEmbedder
 
 		modTime time.Time
 		_doc    docs.Service
@@ -150,6 +151,17 @@ func (r *Resource) ReverseSubstitutes(text string) string {
 	r._mux.RLock()
 	defer r._mux.RUnlock()
 	return r.Substitutes.ReverseReplace(text)
+}
+
+func (r *Resource) EmbedFS() *embed.FS {
+	if r.FSEmbedder == nil {
+		return nil
+	}
+	return r.FSEmbedder.EmbedFS()
+}
+
+func (r *Resource) SetFSEmbedder(embedder *state.FSEmbedder) {
+	r.FSEmbedder = embedder
 }
 
 func (r *Resource) SetFs(fs afs.Service) {
