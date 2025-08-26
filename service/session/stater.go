@@ -130,17 +130,21 @@ func (s *Session) handleComponentpOutputType(ctx context.Context, dest interface
 	sessionOpt := s.Options
 	s.Options = *s.Indirect(true, stateOptions...)
 	destValue, err := s.operate(ctx, s, s.component)
-	s.Options = sessionOpt
-
-	reflectDestValue := reflect.ValueOf(destValue)
 	destPtr := reflect.ValueOf(dest)
+	if err != nil && destValue == nil {
+		if errorSetter, ok := dest.(response.StatusSetter); ok {
+			errorSetter.SetError(err)
+			return nil
+		}
+		return err
+	}
+	s.Options = sessionOpt
+	reflectDestValue := reflect.ValueOf(destValue)
+
 	if reflectDestValue.Kind() == reflect.Ptr {
 		destPtr.Elem().Set(reflectDestValue.Elem())
 	} else {
 		destPtr.Elem().Set(reflectDestValue)
-	}
-	if err != nil {
-		return err
 	}
 	return nil
 }
