@@ -53,19 +53,26 @@ func (e *PredicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 
 	val := ctx.Value(expand.PredicateState)
 	aState := val.(*structology.State)
-	offset := len(cuxtomCtx.DataUnit.ParamsGroup)
-	evaluate, err := e.Evaluate(cuxtomCtx, aState, value)
+	//  evaluate predicate with an isolated DataUnit to avoid
+	// mutating parent DataUnit and relying on Shrink/restore across nesting.
+	var metaSource expand.Dber
+	if cuxtomCtx.DataUnit != nil {
+		metaSource = cuxtomCtx.DataUnit.MetaSource
+	}
+	isolatedDU := expand.NewDataUnit(metaSource)
+	tmpCtx := *cuxtomCtx
+	tmpCtx.DataUnit = isolatedDU
+
+	evaluate, err := e.Evaluate(&tmpCtx, aState, value)
 	if err != nil {
 		return nil, err
 	}
 
-	placeholderLen := len(evaluate.DataUnit.ParamsGroup) - offset
-	var values = make([]interface{}, placeholderLen)
-	if placeholderLen > 0 {
-		copy(values, evaluate.DataUnit.ParamsGroup[offset:])
-	}
+	// Collect placeholders from the isolated DataUnit and return them
+	// to the caller; do not mutate the parent DataUnit here.
+	values := make([]interface{}, len(isolatedDU.ParamsGroup))
+	copy(values, isolatedDU.ParamsGroup)
 	criteria := &codec.Criteria{Expression: evaluate.Buffer.String(), Placeholders: values}
-	cuxtomCtx.DataUnit.Shrink(offset)
 	return criteria, nil
 }
 

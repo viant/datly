@@ -3,14 +3,15 @@ package reader
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/reader/metadata"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io/read/cache"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -50,6 +51,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	parent := options.parent
 	partitions := options.partition
 	expander := options.expander
+
 	state, err := aView.Template.EvaluateSource(ctx, statelet.Template, parent, &batchData, expander)
 
 	if err != nil {
