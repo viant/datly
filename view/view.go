@@ -478,6 +478,9 @@ func WithLimit(limit *int) Option {
 		}
 		view.Selector.Constraints.Limit = true
 		view.Selector.Limit = *limit
+		if limit != nil {
+			view.Selector.NoLimit = *limit == 0
+		}
 		return nil
 	}
 }
