@@ -4,6 +4,12 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"go/ast"
+	"path"
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
@@ -15,11 +21,6 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"go/ast"
-	"path"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 type (

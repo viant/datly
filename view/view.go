@@ -4,6 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
+	"path"
+	"reflect"
+	"strings"
+	"time"
+
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/setter"
@@ -23,11 +29,6 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"net/http"
-	"path"
-	"reflect"
-	"strings"
-	"time"
 )
 
 const (
@@ -398,6 +399,10 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 		if viewTag.Cache != "" {
 			aCache := &Cache{Reference: shared.Reference{Ref: viewTag.Cache}}
 			refViewOptions = append(refViewOptions, WithCache(aCache))
+		}
+
+		if viewTag.Limit != nil {
+			viewOptions = append(viewOptions, WithLimit(viewTag.Limit))
 		}
 
 		if viewTag.PublishParent {

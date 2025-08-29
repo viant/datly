@@ -4,6 +4,10 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"net/http"
+	"reflect"
+	"strings"
+
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/router/marshal"
@@ -29,9 +33,6 @@ import (
 	xhandler "github.com/viant/xdatly/handler"
 	hstate "github.com/viant/xdatly/handler/state"
 	"github.com/viant/xreflect"
-	"net/http"
-	"reflect"
-	"strings"
 )
 
 // Component represents abstract API view/handler based component
@@ -423,6 +424,9 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 				if aView.Cache != "" {
 					aCache := &view.Cache{Reference: shared.Reference{Ref: aView.Cache}}
 					viewOptions = append(viewOptions, view.WithCache(aCache))
+				}
+				if aView.Limit != nil {
+					viewOptions = append(viewOptions, view.WithLimit(aView.Limit))
 				}
 
 				if aTag.View.PublishParent {
