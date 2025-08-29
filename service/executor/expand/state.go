@@ -2,6 +2,7 @@ package expand
 
 import (
 	"context"
+
 	"github.com/viant/datly/service/executor/extension"
 
 	"github.com/viant/datly/view/state/predicate"
@@ -103,8 +104,6 @@ func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, op
 	if s.DataUnit == nil {
 		s.DataUnit = NewDataUnit(nil)
 	}
-	// Ensure bindings/cursor are reset for a fresh evaluation cycle
-	s.DataUnit.Reset()
 
 	if s.Http == nil {
 		s.Http = &Http{}

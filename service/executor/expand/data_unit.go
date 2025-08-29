@@ -17,22 +17,24 @@ import (
 
 type (
 	DataUnit struct {
-		Columns     codec.ColumnsSource
-		ParamsGroup []interface{}
-		Mock        bool
-		TemplateSQL string
-		MetaSource  Dber        `velty:"-"`
-		Statements  *Statements `velty:"-"`
-
+		Columns            codec.ColumnsSource
+		ParamsGroup        []interface{}
+		Mock               bool
+		TemplateSQL        string
+		MetaSource         Dber                            `velty:"-"`
+		Statements         *Statements                     `velty:"-"`
 		mu                 sync.Mutex                      `velty:"-"`
 		placeholderCounter int                             `velty:"-"`
 		sqlxValidator      *validator.Service              `velty:"-"`
 		sliceIndex         map[reflect.Type]*xunsafe.Slice `velty:"-"`
 		ctx                context.Context                 `velty:"-"`
+		EvalLock           sync.Mutex
 	}
 
 	ExecutablesIndex map[string]*Executable
 )
+
+//
 
 func (c *DataUnit) WithPresence() interface{} {
 	var opt interface{} = validator.WithSetMarker()
@@ -41,17 +43,6 @@ func (c *DataUnit) WithPresence() interface{} {
 func (c *DataUnit) WithLocation(loc string) interface{} {
 	var opt interface{} = validator.WithLocation(loc)
 	return opt
-}
-
-// Reset clears binding-related state so DataUnit can be safely reused for a new evaluation
-func (c *DataUnit) Reset() {
-	c.mu.Lock()
-	c.placeholderCounter = 0
-	if len(c.ParamsGroup) > 0 {
-		c.ParamsGroup = c.ParamsGroup[:0]
-	}
-	c.TemplateSQL = ""
-	c.mu.Unlock()
 }
 
 func (c *DataUnit) Validate(dest interface{}, opts ...interface{}) (*validator.Validation, error) {
@@ -184,6 +175,12 @@ func (c *DataUnit) addAll(args ...interface{}) {
 	}
 	c.mu.Lock()
 	c.ParamsGroup = append(c.ParamsGroup, args...)
+	c.mu.Unlock()
+}
+
+func (c *DataUnit) Shrink(offset int) {
+	c.mu.Lock()
+	c.ParamsGroup = c.ParamsGroup[:offset]
 	c.mu.Unlock()
 }
 
