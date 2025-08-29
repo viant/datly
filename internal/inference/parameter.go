@@ -35,6 +35,7 @@ type (
 		AssumedType bool
 		Connector   string
 		Cache       string
+		Limit       *int
 		InOutput    bool
 		Of          string
 	}
@@ -114,6 +115,10 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	}
 	if p.Cache != "" {
 		builder.WriteString(".WithCache('" + p.Cache + "')")
+	}
+
+	if p.Limit != nil {
+		builder.WriteString(".WithLimit('" + strconv.Itoa(*p.Limit) + "')")
 	}
 
 	if p.Required != nil {
@@ -304,6 +309,9 @@ func buildParameter(field *xunsafe.Field, aTag *tags.Tag, types *xreflect.Types,
 		param.Connector = aTag.View.Connector
 		if aTag.View.Cache != "" {
 			param.Cache = aTag.View.Cache
+		}
+		if aTag.View.Limit != nil {
+			param.Limit = aTag.View.Limit
 		}
 	}
 

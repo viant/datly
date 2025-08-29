@@ -445,6 +445,10 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 			if aTag.View.Batch != 0 {
 				viewOptions = append(viewOptions, view.WithBatchSize(aTag.View.Batch))
 			}
+			if aTag.View.Limit != nil {
+				viewOptions = append(viewOptions, view.WithLimit(aTag.View.Limit))
+			}
+
 			if aTag.View.RelationalConcurrency != 0 {
 				viewOptions = append(viewOptions, view.WithRelationalConcurrency(aTag.View.RelationalConcurrency))
 			}

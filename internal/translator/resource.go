@@ -3,6 +3,10 @@ package translator
 import (
 	"context"
 	"fmt"
+	"path"
+	"reflect"
+	"strings"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
@@ -22,9 +26,6 @@ import (
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
-	"path"
-	"reflect"
-	"strings"
 )
 
 type (
@@ -351,6 +352,15 @@ func (r *Resource) buildParameterViews() {
 		}
 		if parameter.Cache != "" {
 			viewlet.View.Cache = &view.Cache{Reference: shared.Reference{Ref: parameter.Cache}}
+		}
+		if parameter.Limit != nil {
+			if viewlet.View.Selector == nil {
+				viewlet.View.Selector = &view.Config{
+					Constraints: &view.Constraints{Limit: true},
+				}
+			}
+			viewlet.View.Selector.Limit = *parameter.Limit
+			viewlet.View.Selector.NoLimit = viewlet.View.Selector.Limit == 0
 		}
 		if viewlet.Connector == "" {
 			viewlet.Connector = r.rootConnector

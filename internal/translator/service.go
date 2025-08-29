@@ -20,7 +20,7 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
-	signature "github.com/viant/datly/repository/contract/signature"
+	"github.com/viant/datly/repository/contract/signature"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
