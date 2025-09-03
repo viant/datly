@@ -347,10 +347,17 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		if valueType.Elem().Kind() == reflect.Struct && parameter.Schema.Type().Kind() == reflect.Slice {
 			if parameter.Schema.CompType() == valueType {
 				sliceValuePtr := reflect.New(parameterType)
+
+				if isNil(value) {
+					empty := reflect.MakeSlice(parameterType, 0, 0)
+					sliceValuePtr.Elem().Set(empty)
+					return sliceValuePtr.Interface(), nil // []T{}
+				}
+
 				sliceValue := reflect.MakeSlice(parameterType, 1, 1)
 				sliceValuePtr.Elem().Set(sliceValue)
 				sliceValue.Index(0).Set(reflect.ValueOf(value))
-				return sliceValuePtr.Interface(), nil
+				return sliceValuePtr.Interface(), nil // []T{value}`
 			}
 		}
 	case reflect.Slice:
