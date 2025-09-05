@@ -74,7 +74,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 		return nil, fmt.Errorf("failed to evaluate expanded for view %vm statelet was nil", aView.Name)
 	}
 	if len(state.Filters) > 0 {
-		statelet.Filters = append(statelet.Filters, state.Filters...)
+		statelet.AppendFilters(state.Filters)
 	}
 	if aView.Template.IsActualTemplate() && aView.ShouldTryDiscover() {
 		state.Expanded = metadata.EnrichWithDiscover(state.Expanded, true)

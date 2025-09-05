@@ -44,6 +44,7 @@ type (
 		initialized  bool
 		_columnNames map[string]bool
 		result       *cache.ParmetrizedQuery
+		filtersMu    sync.Mutex
 	}
 )
 
@@ -97,6 +98,16 @@ func (s *QuerySelector) Add(fieldName string, isHolder bool) {
 func (s *QuerySelector) SetCriteria(expanded string, placeholders []interface{}) {
 	s.Criteria = expanded
 	s.Placeholders = placeholders
+}
+
+// AppendFilters safely appends filters to the selector's Filters to avoid data races.
+func (s *Statelet) AppendFilters(filters predicate.Filters) {
+	if len(filters) == 0 {
+		return
+	}
+	s.QuerySelector.filtersMu.Lock()
+	s.QuerySelector.Filters = append(s.QuerySelector.Filters, filters...)
+	s.QuerySelector.filtersMu.Unlock()
 }
 
 // NewStatelet creates a selector
