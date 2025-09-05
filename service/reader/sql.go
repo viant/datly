@@ -45,12 +45,22 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	options := newBuilderOptions(opts...)
 	aView := options.view
 	statelet := options.statelet
-	batchData := *options.batchData
+	// guard against nil batchData passed by callers
+	var batchData view.BatchData
+	if options.batchData != nil {
+		batchData = *options.batchData
+	}
 	relation := options.relation
 	exclude := options.exclude
 	parent := options.parent
 	partitions := options.partition
 	expander := options.expander
+
+	// ensure non-nil statelet to avoid nil deref on Template usage
+	if statelet == nil {
+		statelet = view.NewStatelet()
+		statelet.Init(aView)
+	}
 
 	state, err := aView.Template.EvaluateSource(ctx, statelet.Template, parent, &batchData, expander)
 
