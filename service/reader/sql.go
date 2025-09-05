@@ -57,6 +57,12 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	if err != nil {
 		return nil, err
 	}
+	if state == nil {
+		return nil, fmt.Errorf("failed to evaluate state for view %v, state was nil", aView.Name)
+	}
+	if state.Expanded == "" {
+		return nil, fmt.Errorf("failed to evaluate expanded for view %vm statelet was nil", aView.Name)
+	}
 	if len(state.Filters) > 0 {
 		statelet.Filters = append(statelet.Filters, state.Filters...)
 	}
