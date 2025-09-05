@@ -168,6 +168,7 @@ func (s *Session) viewLookupOptions(aView *view.View, parameters state.NamedPara
 	if !opts.HasInputParameters() {
 		result = append(result, locator.WithInputParameters(parameters))
 	}
+	result = append(result, locator.WithLogger(s.logger))
 	result = append(result, locator.WithReadInto(s.ReadInto))
 	viewState := s.state.Lookup(aView)
 	result = append(result, locator.WithState(viewState.Template))
@@ -346,10 +347,17 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		if valueType.Elem().Kind() == reflect.Struct && parameter.Schema.Type().Kind() == reflect.Slice {
 			if parameter.Schema.CompType() == valueType {
 				sliceValuePtr := reflect.New(parameterType)
+
+				if isNil(value) {
+					empty := reflect.MakeSlice(parameterType, 0, 0)
+					sliceValuePtr.Elem().Set(empty)
+					return sliceValuePtr.Interface(), nil // []T{}
+				}
+
 				sliceValue := reflect.MakeSlice(parameterType, 1, 1)
 				sliceValuePtr.Elem().Set(sliceValue)
 				sliceValue.Index(0).Set(reflect.ValueOf(value))
-				return sliceValuePtr.Interface(), nil
+				return sliceValuePtr.Interface(), nil // []T{value}`
 			}
 		}
 	case reflect.Slice:
