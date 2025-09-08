@@ -139,7 +139,7 @@ func (h *Handler) publishViewSummaryIfNeeded(aView *view.View, ret *Response) {
 	if templateMeta.Kind != view.MetaKindHeader {
 		return
 	}
-	data, err := goJson.Marshal(ret.Reader.DataSummary)
+	data, err := goJson.MarshalNoEscape(ret.Reader.DataSummary)
 	if err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Status.Status = "error"
@@ -157,7 +157,7 @@ func (h *Handler) publishMetricsIfNeeded(aSession *reader.Session, ret *Response
 		if info.Executions == nil {
 			continue
 		}
-		data, err := goJson.Marshal(info)
+		data, err := goJson.MarshalNoEscape(info)
 		if err != nil {
 			continue
 		}
