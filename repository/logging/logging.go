@@ -15,7 +15,7 @@ func Log(config *Config, execContext *exec.Context) {
 		execContext.Metrics = execContext.Metrics.HideMetrics()
 	}
 	if config.IsAuditEnabled() {
-		data, _ := json.Marshal(execContext)
+		data, _ := json.MarshalNoEscape(execContext)
 		fmt.Println("[AUDIT] " + string(data))
 	}
 	if config.IsTracingEnabled() {
@@ -42,7 +42,7 @@ func Log(config *Config, execContext *exec.Context) {
 		} else {
 			trace.Spans[0].SetStatusFromHTTPCode(execContext.StatusCode)
 		}
-		traceData, _ := json.Marshal(trace)
+		traceData, _ := json.MarshalNoEscape(trace)
 		fmt.Println("[TRACE] " + string(traceData))
 	}
 }
