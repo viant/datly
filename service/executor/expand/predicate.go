@@ -38,7 +38,11 @@ type (
 	}
 )
 
-func NewPredicate(ctx *Context, state *structology.State, config []*PredicateConfig) *Predicate {
+func NewPredicate(ctx *Context, state *structology.State, config []*PredicateConfig, stateType *structology.StateType) *Predicate {
+	// Initialize state if not provided, but never override an existing state
+	if state == nil && stateType != nil {
+		state = stateType.NewState()
+	}
 	return &Predicate{
 		ctx:    ctx,
 		config: config,

@@ -35,6 +35,7 @@ type (
 		state        *expand.NamedVariable
 		hasStateName *expand.NamedVariable
 		handler      codec.PredicateHandler
+		stateType    *structology.StateType
 	}
 
 	PredicateEvaluator struct {
@@ -42,6 +43,7 @@ type (
 		evaluator     *expand.Evaluator
 		valueState    *expand.NamedVariable
 		hasValueState *expand.NamedVariable
+		stateType     *structology.StateType
 	}
 )
 
@@ -52,7 +54,14 @@ func (e *PredicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 	}
 
 	val := ctx.Value(expand.PredicateState)
-	aState := val.(*structology.State)
+	var aState *structology.State
+	if s, ok := val.(*structology.State); ok {
+		aState = s
+	}
+	if aState == nil && e.stateType != nil {
+		// Initialize state if absent; do not override if provided.
+		aState = e.stateType.NewState()
+	}
 	//  evaluate predicate with an isolated DataUnit to avoid
 	// mutating parent DataUnit and relying on Shrink/restore across nesting.
 	var metaSource expand.Dber
@@ -158,6 +167,7 @@ func (p *predicateEvaluatorProvider) new(predicateConfig *extension.PredicateCon
 		evaluator:     p.evaluator,
 		valueState:    p.state,
 		hasValueState: p.hasStateName,
+		stateType:     p.stateType,
 	}, nil
 }
 
@@ -215,5 +225,6 @@ func (p *predicateEvaluatorProvider) init(resource *Resource, predicateConfig *e
 	p.signature = argsIndexed
 	p.state = stateVariable
 	p.hasStateName = hasVariable
+	p.stateType = stateType
 	return nil
 }
