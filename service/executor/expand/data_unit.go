@@ -275,6 +275,17 @@ func (c *DataUnit) Like(columnName string, args interface{}) (string, error) {
 func (c *DataUnit) NotLike(columnName string, args interface{}) (string, error) {
 	return c.like(columnName, args, false)
 }
+func (c *DataUnit) Expression(expr string, value interface{}) (string, error) {
+	return c.expression(expr, value)
+}
+
+func (c *DataUnit) expression(expr string, value interface{}) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	c.addAll(value)
+	return expr, nil
+}
 
 func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (string, error) {
 	expander, err := bindingsCache.Lookup(args)

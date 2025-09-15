@@ -3,6 +3,8 @@ package extension
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+
 	dcodec "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/extension/handler"
 	"github.com/viant/datly/view/extension/marshaller"
@@ -17,14 +19,14 @@ import (
 	"github.com/viant/xdatly/handler/response/tabular/tjson"
 	"github.com/viant/xdatly/handler/response/tabular/xml"
 	"github.com/viant/xdatly/handler/validator"
-	"net/http"
+
+	"reflect"
+	"time"
 
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xdatly/types/core"
 	_ "github.com/viant/xdatly/types/custom"
 	"github.com/viant/xreflect"
-	"reflect"
-	"time"
 )
 
 const (
@@ -119,6 +121,7 @@ func InitRegistry() {
 				PredicateGreaterOrEqual:    NewGreaterOrEqualPredicate(),
 				PredicateGreaterThan:       NewGreaterThanPredicate(),
 				PredicateLike:              NewLikePredicate(),
+				PredicateExpr:              NewExprPredicate(),
 				PredicateNotLike:           NewNotLikePredicate(),
 				PredicateHandler:           NewPredicateHandler(),
 				PredicateContains:          NewContainsPredicate(),

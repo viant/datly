@@ -49,9 +49,9 @@ require (
 require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
-	github.com/viant/jsonrpc v0.7.2
-	github.com/viant/mcp v0.4.3
-	github.com/viant/mcp-protocol v0.4.4
+	github.com/viant/jsonrpc v0.7.5
+	github.com/viant/mcp v0.5.2
+	github.com/viant/mcp-protocol v0.5.7
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.2
 	github.com/viant/xdatly v0.5.4-0.20250806192028-819cadf93282
@@ -106,7 +106,6 @@ require (
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
