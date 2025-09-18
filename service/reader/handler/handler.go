@@ -2,8 +2,8 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 
-	goJson "github.com/goccy/go-json"
 	"github.com/viant/datly/gateway/router/status"
 	_ "github.com/viant/datly/repository/locator/async"
 	_ "github.com/viant/datly/repository/locator/component"
@@ -139,7 +139,11 @@ func (h *Handler) publishViewSummaryIfNeeded(aView *view.View, ret *Response) {
 	if templateMeta.Kind != view.MetaKindHeader {
 		return
 	}
-	data, err := goJson.MarshalNoEscape(ret.Reader.DataSummary)
+	var data []byte
+	var err error
+	if ret.Reader.DataSummary != nil {
+		data, err = json.Marshal(ret.Reader.DataSummary)
+	}
 	if err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Status.Status = "error"
@@ -157,7 +161,7 @@ func (h *Handler) publishMetricsIfNeeded(aSession *reader.Session, ret *Response
 		if info.Executions == nil {
 			continue
 		}
-		data, err := goJson.MarshalNoEscape(info)
+		data, err := json.Marshal(info)
 		if err != nil {
 			continue
 		}
