@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -515,12 +517,25 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 	if session.DryRun {
 		return []*response.SQLExecution{stats}, nil
 	}
+
+	retires := uint32(0)
+BEGIN:
 	reader, err := read.New(ctx, db, parametrizedSQL.SQL, collector.NewItem(), options...)
+
+	isInvalidConnection := err != nil && strings.Contains(err.Error(), "invalid connection")
+	if isInvalidConnection && atomic.AddUint32(&retires, 1) < 3 {
+		db, err = aView.Connector.DB()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to db: %w", err)
+		}
+		goto BEGIN
+	}
 	if err != nil {
 		stats.SetError(err)
 		anExec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
 		return []*response.SQLExecution{anExec}, err
 	}
+
 	defer func() {
 		stmt := reader.Stmt()
 		if stmt == nil {
@@ -529,7 +544,17 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 		_ = stmt.Close()
 	}()
 	err = reader.QueryAll(ctx, handler, parametrizedSQL.Args...)
+
+	isInvalidConnection = err != nil && strings.Contains(err.Error(), "invalid connection")
+	if isInvalidConnection && atomic.AddUint32(&retires, 1) < 3 {
+		db, err = aView.Connector.DB()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to db: %w", err)
+		}
+		goto BEGIN
+	}
 	end := time.Now()
+
 	aView.Logger.ReadingData(end.Sub(begin), parametrizedSQL.SQL, *readData, parametrizedSQL.Args, err)
 	if err != nil {
 		stats.SetError(err)
