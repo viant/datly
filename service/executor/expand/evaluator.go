@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/godiff"
@@ -12,7 +14,6 @@ import (
 	"github.com/viant/velty/est"
 	"github.com/viant/velty/est/op"
 	"github.com/viant/xreflect"
-	"reflect"
 )
 
 type (
@@ -252,7 +253,7 @@ func (e *Evaluator) ensureState(ctx *Context, options ...StateOption) *State {
 		state.Context = ctx
 	}
 
-	state.Init(e.stateProvider(), e.predicateConfigs, options...)
+	state.Init(e.stateProvider(), e.predicateConfigs, e.stateType, options...)
 	return state
 }
 

@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"embed"
+
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/view"
@@ -181,5 +182,11 @@ func WithOperate(operate func(ctx context.Context, aSession *Session, aComponent
 func WithRegistry(registry *repository.Registry) Option {
 	return func(s *Options) {
 		s.registry = registry
+	}
+}
+
+func WithLogger(logger logger.Logger) Option {
+	return func(s *Options) {
+		s.logger = logger
 	}
 }

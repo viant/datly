@@ -3,13 +3,14 @@ package json
 import (
 	"bytes"
 	"fmt"
+	"reflect"
+	"sync"
+
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/tagly/format"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"reflect"
-	"sync"
 )
 
 var buffersPool *buffers
@@ -105,12 +106,17 @@ func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config *config.IOCon
 		return value.(marshaler), nil
 	}
 
-	aMarshaler, err := c.getMarshaller(rType, config, path, outputPath, tag, options...)
+	// Place a deferred placeholder to break recursive graphs for this path and type.
+	placeholder := &deferredMarshaller{}
+	c.storeMarshaler(rType, placeholder)
 
+	aMarshaler, err := c.getMarshaller(rType, config, path, outputPath, tag, options...)
 	if err != nil {
 		return nil, err
 	}
 
+	// Swap placeholder with the real marshaller and set target for any users that captured it.
+	placeholder.setTarget(aMarshaler)
 	c.storeMarshaler(rType, aMarshaler)
 	return aMarshaler, nil
 }
@@ -121,8 +127,11 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, p
 	}
 
 	aConfig := c.parseConfig(options)
-	if (aConfig == nil || !aConfig.ignoreCustomUnmarshaller) && rType.Implements(unmarshallerIntoType) {
-		return newCustomUnmarshaller(rType, config, path, outputPath, tag, c.parent)
+	// Keep UnmarshalerInto precedence for non-structs; structs handled below to honor gojay first.
+	if rType.Kind() != reflect.Struct {
+		if (aConfig == nil || !aConfig.IgnoreCustomUnmarshaller) && rType.Implements(unmarshallerIntoType) {
+			return newCustomUnmarshaller(rType, config, path, outputPath, tag, c.parent)
+		}
 	}
 
 	switch rType {
@@ -212,12 +221,35 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, p
 			return newTimeMarshaller(tag, config), nil
 		}
 
-		marshaller, err := newStructMarshaller(config, rType, path, outputPath, tag, c.parent)
+		// Decide if type uses gojay; build base without init to handle self-references safely.
+		hasMarshal := (aConfig == nil || !aConfig.IgnoreCustomMarshaller) && (rType.Implements(marshalerJSONObjectType) || reflect.PtrTo(rType).Implements(marshalerJSONObjectType))
+		hasUnmarshal := (aConfig == nil || !aConfig.IgnoreCustomMarshaller) && (rType.Implements(unmarshalerJSONObjectType) || reflect.PtrTo(rType).Implements(unmarshalerJSONObjectType))
+
+		base, err := newStructMarshaller(config, rType, path, outputPath, tag, c.parent)
 		if err != nil {
 			return nil, err
 		}
 
-		return marshaller, nil
+		if hasMarshal || hasUnmarshal {
+			// Wrap base with gojay; placeholder at loadOrGet level already breaks cycles.
+			wrapper := newGojayObjectMarshaller(getXType(rType), getXType(reflect.PtrTo(rType)), base, hasMarshal, hasUnmarshal)
+			if err := base.init(); err != nil {
+				return nil, err
+			}
+			return wrapper, nil
+		}
+
+		// No gojay: just init base and return (placeholder already in place).
+		if err := base.init(); err != nil {
+			return nil, err
+		}
+
+		// Allow custom unmarshaller on structs if defined and not ignored (only if no gojay used).
+		if (aConfig == nil || !aConfig.IgnoreCustomUnmarshaller) && rType.Implements(unmarshallerIntoType) {
+			return newCustomUnmarshaller(rType, config, path, outputPath, tag, c.parent)
+		}
+
+		return base, nil
 
 	case reflect.Interface:
 		marshaller, err := newInterfaceMarshaller(rType, config, path, outputPath, tag, c.parent)

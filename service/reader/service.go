@@ -4,6 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+	"unsafe"
+
 	"github.com/google/uuid"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
@@ -19,10 +26,6 @@ import (
 	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
-	"reflect"
-	"sync"
-	"time"
-	"unsafe"
 )
 
 // Service represents reader service
@@ -183,6 +186,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 		}
 		return
 	}
+
 	// if onRelationalConcurrency > 1 , then only we call it concurrently
 	concurrencyLimit := make(chan struct{}, onRelationerConcurrency)
 	var onRelationWaitGroup sync.WaitGroup
@@ -513,12 +517,25 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 	if session.DryRun {
 		return []*response.SQLExecution{stats}, nil
 	}
+
+	retires := uint32(0)
+BEGIN:
 	reader, err := read.New(ctx, db, parametrizedSQL.SQL, collector.NewItem(), options...)
+
+	isInvalidConnection := err != nil && strings.Contains(err.Error(), "invalid connection")
+	if isInvalidConnection && atomic.AddUint32(&retires, 1) < 3 {
+		db, err = aView.Connector.DB()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to db: %w", err)
+		}
+		goto BEGIN
+	}
 	if err != nil {
 		stats.SetError(err)
 		anExec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
 		return []*response.SQLExecution{anExec}, err
 	}
+
 	defer func() {
 		stmt := reader.Stmt()
 		if stmt == nil {
@@ -527,7 +544,17 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 		_ = stmt.Close()
 	}()
 	err = reader.QueryAll(ctx, handler, parametrizedSQL.Args...)
+
+	isInvalidConnection = err != nil && strings.Contains(err.Error(), "invalid connection")
+	if isInvalidConnection && atomic.AddUint32(&retires, 1) < 3 {
+		db, err = aView.Connector.DB()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to db: %w", err)
+		}
+		goto BEGIN
+	}
 	end := time.Now()
+
 	aView.Logger.ReadingData(end.Sub(begin), parametrizedSQL.SQL, *readData, parametrizedSQL.Args, err)
 	if err != nil {
 		stats.SetError(err)
