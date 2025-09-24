@@ -121,8 +121,11 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, p
 	}
 
 	aConfig := c.parseConfig(options)
-	if (aConfig == nil || !aConfig.ignoreCustomUnmarshaller) && rType.Implements(unmarshallerIntoType) {
-		return newCustomUnmarshaller(rType, config, path, outputPath, tag, c.parent)
+	// Keep UnmarshalerInto precedence for non-structs; structs handled below to honor gojay first.
+	if rType.Kind() != reflect.Struct {
+		if (aConfig == nil || !aConfig.IgnoreCustomUnmarshaller) && rType.Implements(unmarshallerIntoType) {
+			return newCustomUnmarshaller(rType, config, path, outputPath, tag, c.parent)
+		}
 	}
 
 	switch rType {
@@ -212,12 +215,27 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, p
 			return newTimeMarshaller(tag, config), nil
 		}
 
-		marshaller, err := newStructMarshaller(config, rType, path, outputPath, tag, c.parent)
+		// Build base struct marshaller first.
+		base, err := newStructMarshaller(config, rType, path, outputPath, tag, c.parent)
 		if err != nil {
 			return nil, err
 		}
 
-		return marshaller, nil
+		// If struct defines gojay interfaces, wrap the base.
+		if aConfig == nil || !aConfig.IgnoreCustomMarshaller {
+			hasMarshal := rType.Implements(marshalerJSONObjectType) || reflect.PtrTo(rType).Implements(marshalerJSONObjectType)
+			hasUnmarshal := rType.Implements(unmarshalerJSONObjectType) || reflect.PtrTo(rType).Implements(unmarshalerJSONObjectType)
+			if hasMarshal || hasUnmarshal {
+				return newGojayObjectMarshaller(getXType(rType), getXType(reflect.PtrTo(rType)), base, hasMarshal, hasUnmarshal), nil
+			}
+		}
+
+		// Otherwise, allow custom unmarshaller on structs if defined.
+		if (aConfig == nil || !aConfig.IgnoreCustomUnmarshaller) && rType.Implements(unmarshallerIntoType) {
+			return newCustomUnmarshaller(rType, config, path, outputPath, tag, c.parent)
+		}
+
+		return base, nil
 
 	case reflect.Interface:
 		marshaller, err := newInterfaceMarshaller(rType, config, path, outputPath, tag, c.parent)

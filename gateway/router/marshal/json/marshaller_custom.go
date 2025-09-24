@@ -21,7 +21,7 @@ type customMarshaller struct {
 }
 
 func newCustomUnmarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, cache *marshallersCache) (marshaler, error) {
-	marshaller, err := cache.loadMarshaller(rType, config, path, outputPath, tag, &cacheConfig{ignoreCustomUnmarshaller: true})
+	marshaller, err := cache.loadMarshaller(rType, config, path, outputPath, tag, &cacheConfig{IgnoreCustomUnmarshaller: true})
 	if err != nil {
 		return nil, err
 	}
