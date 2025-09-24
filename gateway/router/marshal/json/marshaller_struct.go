@@ -68,7 +68,9 @@ func newStructMarshaller(config *config.IOConfig, rType reflect.Type, path strin
 		marshallersIndex: map[string]int{},
 	}
 
-	return result, result.init()
+	// Initialization is invoked by cache after it stores the marshaller (or wrapper)
+	// to break cycles for self-referential types.
+	return result, nil
 }
 
 func (s *structMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {

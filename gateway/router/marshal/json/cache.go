@@ -3,13 +3,14 @@ package json
 import (
 	"bytes"
 	"fmt"
+	"reflect"
+	"sync"
+
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/tagly/format"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"reflect"
-	"sync"
 )
 
 var buffersPool *buffers
@@ -215,22 +216,32 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, p
 			return newTimeMarshaller(tag, config), nil
 		}
 
-		// Build base struct marshaller first.
+		// Decide if type uses gojay; build base without init to handle self-references safely.
+		hasMarshal := (aConfig == nil || !aConfig.IgnoreCustomMarshaller) && (rType.Implements(marshalerJSONObjectType) || reflect.PtrTo(rType).Implements(marshalerJSONObjectType))
+		hasUnmarshal := (aConfig == nil || !aConfig.IgnoreCustomMarshaller) && (rType.Implements(unmarshalerJSONObjectType) || reflect.PtrTo(rType).Implements(unmarshalerJSONObjectType))
+
 		base, err := newStructMarshaller(config, rType, path, outputPath, tag, c.parent)
 		if err != nil {
 			return nil, err
 		}
 
-		// If struct defines gojay interfaces, wrap the base.
-		if aConfig == nil || !aConfig.IgnoreCustomMarshaller {
-			hasMarshal := rType.Implements(marshalerJSONObjectType) || reflect.PtrTo(rType).Implements(marshalerJSONObjectType)
-			hasUnmarshal := rType.Implements(unmarshalerJSONObjectType) || reflect.PtrTo(rType).Implements(unmarshalerJSONObjectType)
-			if hasMarshal || hasUnmarshal {
-				return newGojayObjectMarshaller(getXType(rType), getXType(reflect.PtrTo(rType)), base, hasMarshal, hasUnmarshal), nil
+		if hasMarshal || hasUnmarshal {
+			// Wrap base with gojay and store wrapper first to break cycles and ensure self-references use wrapper.
+			wrapper := newGojayObjectMarshaller(getXType(rType), getXType(reflect.PtrTo(rType)), base, hasMarshal, hasUnmarshal)
+			c.storeMarshaler(rType, wrapper)
+			if err := base.init(); err != nil {
+				return nil, err
 			}
+			return wrapper, nil
 		}
 
-		// Otherwise, allow custom unmarshaller on structs if defined.
+		// No gojay: store base first to break cycles, then init.
+		c.storeMarshaler(rType, base)
+		if err := base.init(); err != nil {
+			return nil, err
+		}
+
+		// Allow custom unmarshaller on structs if defined and not ignored (only if no gojay used).
 		if (aConfig == nil || !aConfig.IgnoreCustomUnmarshaller) && rType.Implements(unmarshallerIntoType) {
 			return newCustomUnmarshaller(rType, config, path, outputPath, tag, c.parent)
 		}
