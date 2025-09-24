@@ -106,12 +106,17 @@ func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config *config.IOCon
 		return value.(marshaler), nil
 	}
 
-	aMarshaler, err := c.getMarshaller(rType, config, path, outputPath, tag, options...)
+	// Place a deferred placeholder to break recursive graphs for this path and type.
+	placeholder := &deferredMarshaller{}
+	c.storeMarshaler(rType, placeholder)
 
+	aMarshaler, err := c.getMarshaller(rType, config, path, outputPath, tag, options...)
 	if err != nil {
 		return nil, err
 	}
 
+	// Swap placeholder with the real marshaller and set target for any users that captured it.
+	placeholder.setTarget(aMarshaler)
 	c.storeMarshaler(rType, aMarshaler)
 	return aMarshaler, nil
 }
@@ -226,17 +231,15 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, p
 		}
 
 		if hasMarshal || hasUnmarshal {
-			// Wrap base with gojay and store wrapper first to break cycles and ensure self-references use wrapper.
+			// Wrap base with gojay; placeholder at loadOrGet level already breaks cycles.
 			wrapper := newGojayObjectMarshaller(getXType(rType), getXType(reflect.PtrTo(rType)), base, hasMarshal, hasUnmarshal)
-			c.storeMarshaler(rType, wrapper)
 			if err := base.init(); err != nil {
 				return nil, err
 			}
 			return wrapper, nil
 		}
 
-		// No gojay: store base first to break cycles, then init.
-		c.storeMarshaler(rType, base)
+		// No gojay: just init base and return (placeholder already in place).
 		if err := base.init(); err != nil {
 			return nil, err
 		}
