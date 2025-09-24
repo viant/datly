@@ -256,8 +256,8 @@ func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path s
 			}
 
 			elemType := field.Type
-			switch elemType.Kind() {
-			case reflect.Ptr, reflect.Slice:
+			// Unwrap nested pointers/slices to detect self-references like []*T or [][]*T
+			for elemType.Kind() == reflect.Ptr || elemType.Kind() == reflect.Slice {
 				elemType = elemType.Elem()
 			}
 			if elemType == fields.owner {
