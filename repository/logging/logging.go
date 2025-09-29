@@ -1,8 +1,8 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/goccy/go-json"
 	"github.com/viant/xdatly/handler/exec"
 	"strconv"
 	"time"

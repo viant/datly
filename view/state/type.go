@@ -110,6 +110,10 @@ func (t *Type) ensureEmbedder(reflect.Type) {
 		t.embedder = NewFSEmbedder(nil)
 	}
 	t.embedder.SetType(reflect.TypeOf(t))
+	if t.resource != nil && t.resource.EmbedFS() == nil {
+		t.resource.SetFSEmbedder(t.embedder)
+	}
+
 }
 
 func (t *Type) adjustConstants() {

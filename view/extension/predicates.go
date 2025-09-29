@@ -2,12 +2,13 @@ package extension
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/viant/datly/utils/types"
 	codec2 "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
-	"sync"
 )
 
 const (
@@ -32,6 +33,7 @@ const (
 	PredicateExists      = "exists"
 	PredicateNotExists   = "not_exists"
 
+	PredicateExpr              = "expr"
 	PredicateCriteriaExists    = "exists_criteria"
 	PredicateCriteriaNotExists = "not_exists_criteria"
 	PredicateCriteriaIn        = "in_criteria"
@@ -225,6 +227,10 @@ func NewEqualPredicate() *Predicate {
 	return binaryPredicate(PredicateEqual, "=")
 }
 
+func NewColumnExpressionPredicate() *Predicate {
+	return binaryPredicate(PredicateEqual, "=")
+}
+
 func NewLessOrEqualPredicate() *Predicate {
 	return binaryPredicate(PredicateLessOrEqual, "<=")
 }
@@ -333,6 +339,10 @@ func NewLikePredicate() *Predicate {
 	return newLikePredicate(PredicateLike, true)
 }
 
+func NewExprPredicate() *Predicate {
+	return newExprPredicate(PredicateExpr)
+}
+
 func NewNotLikePredicate() *Predicate {
 	return newLikePredicate(PredicateNotLike, false)
 }
@@ -356,6 +366,23 @@ func newLikePredicate(name string, inclusive bool) *Predicate {
 	return &Predicate{
 		Template: &predicate.Template{
 			Name:   name,
+			Source: " " + criteria,
+			Args:   args,
+		},
+	}
+}
+
+func newExprPredicate(expr string) *Predicate {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "Expression",
+			Position: 0,
+		},
+	}
+	criteria := fmt.Sprintf(`$criteria.Expression($Expression, $FilterValue)`)
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   expr,
 			Source: " " + criteria,
 			Args:   args,
 		},

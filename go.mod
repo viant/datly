@@ -7,7 +7,6 @@ require (
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/francoispqt/gojay v1.2.13
 	github.com/go-sql-driver/mysql v1.7.0
-	github.com/goccy/go-json v0.10.5
 	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
 	github.com/google/gops v0.3.23
 	github.com/google/uuid v1.6.0
@@ -29,7 +28,7 @@ require (
 	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.24.0
-	github.com/viant/sqlx v0.17.6
+	github.com/viant/sqlx v0.17.8
 	github.com/viant/structql v0.5.2
 	github.com/viant/toolbox v0.37.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
@@ -49,9 +48,9 @@ require (
 require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
-	github.com/viant/jsonrpc v0.7.2
-	github.com/viant/mcp v0.4.3
-	github.com/viant/mcp-protocol v0.4.4
+	github.com/viant/jsonrpc v0.7.5
+	github.com/viant/mcp v0.5.2
+	github.com/viant/mcp-protocol v0.5.7
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.2
 	github.com/viant/xdatly v0.5.4-0.20250806192028-819cadf93282
@@ -106,7 +105,6 @@ require (
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
