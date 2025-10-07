@@ -48,14 +48,14 @@ require (
 require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
-	github.com/viant/jsonrpc v0.7.5
-	github.com/viant/mcp v0.5.2
+	github.com/viant/jsonrpc v0.9.0
+	github.com/viant/mcp v0.6.0
 	github.com/viant/mcp-protocol v0.5.7
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.2
-	github.com/viant/xdatly v0.5.4-0.20250806192028-819cadf93282
+	github.com/viant/xdatly v0.5.4-0.20251006174948-cb34263ae8aa
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20250806192028-819cadf93282
+	github.com/viant/xdatly/handler v0.0.0-20251006174948-cb34263ae8aa
 	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1
@@ -105,6 +105,7 @@ require (
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
@@ -127,6 +128,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
+	github.com/viant/gosh v0.2.1 // indirect
 	github.com/viant/igo v0.2.0 // indirect
 	github.com/viant/x v0.3.0 // indirect
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect

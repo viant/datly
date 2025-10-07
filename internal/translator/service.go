@@ -329,6 +329,15 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	}
 
 	route.Component.Meta = resource.Rule.Meta
+	if route.Component.Meta.DescriptionURI != "" {
+		URL := url.Join(baseRuleURL, route.Component.Meta.DescriptionURI)
+		description, err := s.fs.DownloadWithURL(ctx, URL)
+		if err != nil {
+			return fmt.Errorf("failed to download meta description: %v %w", URL, err)
+		}
+		route.Component.Meta.Description = string(description)
+	}
+
 	route.ModelContextProtocol = resource.Rule.ModelContextProtocol
 	if route.Handler != nil {
 		if route.Component.Output.Type.Schema == nil {
@@ -362,7 +371,10 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	if resource.Rule.XMLUnmarshalType != "" {
 		route.Content.Marshaller.XML.TypeName = resource.Rule.XMLUnmarshalType
 	}
-	if resource.Rule.JSONUnmarshalType != "" {
+	// JSON marshaller/unmarshaller customization: prefer MarshalType if provided, fallback to UnmarshalType.
+	if resource.Rule.JSONMarshalType != "" {
+		route.Content.Marshaller.JSON.TypeName = resource.Rule.JSONMarshalType
+	} else if resource.Rule.JSONUnmarshalType != "" {
 		route.Content.Marshaller.JSON.TypeName = resource.Rule.JSONUnmarshalType
 	}
 	route.Component.Output.DataFormat = resource.Rule.DataFormat

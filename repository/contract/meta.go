@@ -7,8 +7,9 @@ import (
 
 // MCP Model Configuration Protocol path integration
 type Meta struct {
-	Name        string `json:",omitempty" yaml:"Name"`        // name of the MCP
-	Description string `json:",omitempty" yaml:"Description"` // optional description for documentation purposes
+	Name           string `json:",omitempty" yaml:"Name"`        // name of the MCP
+	Description    string `json:",omitempty" yaml:"Description"` // optional description for documentation purposes
+	DescriptionURI string `json:",omitempty" yaml:"DescriptionURI"`
 }
 
 type ModelContextProtocol struct {

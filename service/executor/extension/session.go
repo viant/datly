@@ -19,7 +19,7 @@ import (
 type (
 	Session struct {
 		sqlService    SqlServiceFn
-		stater        state.Stater
+		injector      state.Injector
 		validator     *validator.Service
 		differ        *differ.Service
 		mbus          *xmbus.Service
@@ -92,7 +92,7 @@ func (s *Session) Db(opts ...sqlx.Option) (*sqlx.Service, error) {
 }
 
 func (s *Session) Stater() *state.Service {
-	return state.New(s.stater)
+	return state.New(s.injector)
 }
 
 func (s *Session) FlushTemplate(ctx context.Context) error {
@@ -148,8 +148,8 @@ func WithMessageBus(messageBusses []*mbus.Resource) Option {
 	}
 }
 
-func WithStater(stater state.Stater) Option {
+func WithStater(injector state.Injector) Option {
 	return func(s *Session) {
-		s.stater = stater
+		s.injector = injector
 	}
 }

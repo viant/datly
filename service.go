@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/repository"
@@ -17,8 +18,15 @@ import (
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/state/kind/locator"
 	verifier2 "github.com/viant/scy/auth/jwt/verifier"
 	hstate "github.com/viant/xdatly/handler/state"
+
+	"net/http"
+	nurl "net/url"
+	"reflect"
+	"strings"
+	"time"
 
 	"github.com/viant/datly/view/state"
 	"github.com/viant/scy/auth/jwt"
@@ -26,11 +34,6 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	xhandler "github.com/viant/xdatly/handler"
-	"net/http"
-	nurl "net/url"
-	"reflect"
-	"strings"
-	"time"
 )
 
 //go:embed Version
@@ -50,16 +53,18 @@ type (
 	}
 
 	sessionOptions struct {
-		request  *http.Request
-		resource state.Resource
-		form     *hstate.Form
+		request        *http.Request
+		resource       state.Resource
+		form           *hstate.Form
+		querySelectors []*hstate.NamedQuerySelector
 	}
 	SessionOption func(o *sessionOptions)
 
 	operateOptions struct {
-		path           *contract.Path
-		component      *repository.Component
-		session        *session.Session
+		path      *contract.Path
+		component *repository.Component
+		session   *session.Session
+
 		output         interface{}
 		input          interface{}
 		sessionOptions []SessionOption
@@ -151,6 +156,12 @@ func WithForm(form *hstate.Form) SessionOption {
 	}
 }
 
+func WithQuerySelectors(selectors ...*hstate.NamedQuerySelector) SessionOption {
+	return func(o *sessionOptions) {
+		o.querySelectors = selectors
+	}
+}
+
 func WithStateResource(resource state.Resource) SessionOption {
 	return func(o *sessionOptions) {
 		o.resource = resource
@@ -160,6 +171,9 @@ func WithStateResource(resource state.Resource) SessionOption {
 func (s *Service) NewComponentSession(aComponent *repository.Component, opts ...SessionOption) *session.Session {
 	sessionOpt := newSessionOptions(opts)
 	options := aComponent.LocatorOptions(sessionOpt.request, sessionOpt.form, aComponent.UnmarshalFunc(sessionOpt.request))
+	if sessionOpt.querySelectors != nil {
+		options = append(options, locator.WithQuerySelectors(sessionOpt.querySelectors))
+	}
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...),
 		session.WithAuth(s.repository.Auth()),
 		session.WithStateResource(sessionOpt.resource), session.WithOperate(s.operator.Operate))
