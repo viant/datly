@@ -8,14 +8,17 @@ import (
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/repository"
+	rcontent "github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/locator/component/dispatcher"
+	srv "github.com/viant/datly/service"
 	sjwt "github.com/viant/datly/service/auth/jwt"
 	"github.com/viant/datly/service/auth/mock"
 	"github.com/viant/datly/service/executor"
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -280,6 +283,67 @@ func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Comp
 	}
 	inputValue.Elem().Set(reflect.ValueOf(aState.State()))
 	return nil
+}
+
+// GetMarshaller prepares a request-scoped marshaller closure and resolved content type for the given component path.
+// It preserves existing behavior for readers (format derived from query) and defaults to JSON otherwise.
+func (s *Service) GetMarshaller(r *http.Request, methodAndPath string, extra ...repository.MarshalOption) (marshal shared.Marshal, contentType string, comp *repository.Component, err error) {
+	comp, err = s.Component(r.Context(), methodAndPath)
+	if err != nil || comp == nil {
+		if err == nil {
+			err = fmt.Errorf("component not found: %s", methodAndPath)
+		}
+		return nil, "", nil, err
+	}
+
+	// Build component session to populate state (for exclusion filters)
+	sess := s.NewComponentSession(comp, WithRequest(r), WithStateResource(comp.View.Resource()))
+	// Compute JSON field filters from populated state
+	filters := comp.Exclusion(sess.State())
+
+	// Optional format override from query parameter `format`
+	override := strings.TrimSpace(r.URL.Query().Get("format"))
+
+	var opts []repository.MarshalOption
+	opts = append(opts, repository.WithRequest(r), repository.WithFilters(filters))
+	if override != "" {
+		opts = append(opts, repository.WithFormat(override))
+	}
+	if len(extra) > 0 {
+		opts = append(opts, extra...)
+	}
+
+	// Prepare marshaller closure
+	marshal = comp.MarshalFunc(opts...)
+
+	// Resolve content type for headers
+	resolved := override
+	if resolved == "" && comp.Service == srv.TypeReader {
+		resolved = comp.Output.Format(r.URL.Query())
+	}
+	if resolved == "" {
+		resolved = rcontent.JSONFormat
+	}
+	contentType = comp.Output.ContentType(resolved)
+	return marshal, contentType, comp, nil
+}
+
+// GetUnmarshaller prepares a request-scoped unmarshaller for the given component path.
+func (s *Service) GetUnmarshaller(r *http.Request, methodAndPath string, extra ...repository.UnmarshalOption) (unmarshal shared.Unmarshal, comp *repository.Component, err error) {
+	comp, err = s.Component(r.Context(), methodAndPath)
+	if err != nil || comp == nil {
+		if err == nil {
+			err = fmt.Errorf("component not found: %s", methodAndPath)
+		}
+		return nil, nil, err
+	}
+	var opts []repository.UnmarshalOption
+	opts = append(opts, repository.WithUnmarshalRequest(r))
+	if len(extra) > 0 {
+		opts = append(opts, extra...)
+	}
+	unmarshal = comp.UnmarshalFor(opts...)
+	return unmarshal, comp, nil
 }
 
 // Read reads data from a view
