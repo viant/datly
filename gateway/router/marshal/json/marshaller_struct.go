@@ -1,16 +1,18 @@
 package json
 
 import (
-	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/gateway/router/marshal/config"
-	structology "github.com/viant/structology"
-	"github.com/viant/tagly/format"
-	"github.com/viant/tagly/format/text"
-	xunsafe "github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 	"unicode"
 	"unsafe"
+
+	"github.com/francoispqt/gojay"
+	"github.com/viant/datly/gateway/router/marshal/config"
+	"github.com/viant/datly/view/tags"
+	structology "github.com/viant/structology"
+	"github.com/viant/tagly/format"
+	"github.com/viant/tagly/format/text"
+	xunsafe "github.com/viant/xunsafe"
 )
 
 type (
@@ -254,6 +256,15 @@ func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path s
 			if err != nil {
 				return nil, err
 			}
+			if dTag.Name == "" { //fallback to parameter
+				if parameterTag := field.Tag.Get("parameter"); parameterTag != "" {
+					if aTag, _ := tags.Parse(field.Tag, nil, tags.ParameterTag); aTag != nil && aTag.Parameter != nil {
+						if aTag.Parameter.Kind == "body" {
+							dTag.Name = aTag.Parameter.In
+						}
+					}
+				}
+			}
 
 			elemType := field.Type
 			// Unwrap nested pointers/slices to detect self-references like []*T or [][]*T
@@ -315,6 +326,7 @@ func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithFiel
 	} else if s.config.CaseFormat != "" {
 		jsonName = formatName(jsonName, s.config.CaseFormat)
 	}
+
 	path, outputPath = addToPath(path, field.Name), addToPath(outputPath, jsonName)
 
 	xField := xunsafe.NewField(field)
