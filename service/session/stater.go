@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"runtime/debug"
 
+	"embed"
+
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -55,12 +57,33 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 	destType := reflect.TypeOf(dest)
 	sType := types.EnsureStruct(destType)
 	stateType, ok := s.Types.Lookup(sType)
-	if !ok {
-		if stateType, err = state.NewType(
-			state.WithSchema(state.NewSchema(destType)),
-			state.WithResource(s.resource),
-		); err != nil {
-			return err
+
+	var embedFs *embed.FS
+	if embedder, ok := dest.(state.Embedder); ok {
+		embedFs = embedder.EmbedFS()
+	}
+
+	if !ok && s.component != nil {
+
+		if s.component.Input.Type.Type() != nil {
+			if destType == s.component.Input.Type.Type().Type() {
+				stateType = &s.component.Input.Type
+			}
+		}
+		if s.component.Output.Type.Type() != nil {
+			if destType == s.component.Output.Type.Type().Type() {
+				stateType = &s.component.Output.Type
+			}
+		}
+
+		if stateType == nil {
+			if stateType, err = state.NewType(
+				state.WithSchema(state.NewSchema(destType)),
+				state.WithResource(s.resource),
+				state.WithFS(embedFs),
+			); err != nil {
+				return err
+			}
 		}
 		s.Types.Put(stateType)
 	}

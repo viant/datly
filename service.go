@@ -179,6 +179,7 @@ func (s *Service) NewComponentSession(aComponent *repository.Component, opts ...
 	}
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...),
 		session.WithAuth(s.repository.Auth()),
+		session.WithComponent(aComponent),
 		session.WithStateResource(sessionOpt.resource), session.WithOperate(s.operator.Operate))
 	return aSession
 }
