@@ -285,6 +285,15 @@ func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Comp
 	return nil
 }
 
+func (s *Service) GetInjector(r *http.Request, comp *repository.Component) (hstate.Injector, error) {
+	if err := s.ensureComponentInitialized(comp); err != nil {
+		return nil, err
+	}
+	// Build component session to populate state (for exclusion filters)
+	sess := s.NewComponentSession(comp, WithRequest(r), WithStateResource(comp.View.Resource()))
+	return sess, nil
+}
+
 // GetMarshaller prepares a request-scoped marshaller closure and resolved content type for the given component path.
 // It preserves existing behavior for readers (format derived from query) and defaults to JSON otherwise.
 func (s *Service) GetMarshaller(r *http.Request, methodAndPath string, extra ...repository.MarshalOption) (marshal shared.Marshal, contentType string, comp *repository.Component, err error) {
@@ -293,6 +302,14 @@ func (s *Service) GetMarshaller(r *http.Request, methodAndPath string, extra ...
 		if err == nil {
 			err = fmt.Errorf("component not found: %s", methodAndPath)
 		}
+		return nil, "", nil, err
+	}
+	return s.getMarshaller(r, comp, extra...)
+}
+
+func (s *Service) getMarshaller(r *http.Request, comp *repository.Component, extra ...repository.MarshalOption) (shared.Marshal, string, *repository.Component, error) {
+	// Ensure component content marshallers are initialized (defensive when invoked outside router lifecycle)
+	if err := s.ensureComponentInitialized(comp); err != nil {
 		return nil, "", nil, err
 	}
 
@@ -314,7 +331,7 @@ func (s *Service) GetMarshaller(r *http.Request, methodAndPath string, extra ...
 	}
 
 	// Prepare marshaller closure
-	marshal = comp.MarshalFunc(opts...)
+	marshal := comp.MarshalFunc(opts...)
 
 	// Resolve content type for headers
 	resolved := override
@@ -324,7 +341,7 @@ func (s *Service) GetMarshaller(r *http.Request, methodAndPath string, extra ...
 	if resolved == "" {
 		resolved = rcontent.JSONFormat
 	}
-	contentType = comp.Output.ContentType(resolved)
+	contentType := comp.Output.ContentType(resolved)
 	return marshal, contentType, comp, nil
 }
 
@@ -337,13 +354,44 @@ func (s *Service) GetUnmarshaller(r *http.Request, methodAndPath string, extra .
 		}
 		return nil, nil, err
 	}
+	return s.getUnmarshaller(r, comp, extra...)
+}
+
+func (s *Service) getUnmarshaller(r *http.Request, comp *repository.Component, extra ...repository.UnmarshalOption) (shared.Unmarshal, *repository.Component, error) {
+	// Ensure component content marshallers are initialized (defensive)
+	if err := s.ensureComponentInitialized(comp); err != nil {
+		return nil, nil, err
+	}
 	var opts []repository.UnmarshalOption
 	opts = append(opts, repository.WithUnmarshalRequest(r))
 	if len(extra) > 0 {
 		opts = append(opts, extra...)
 	}
-	unmarshal = comp.UnmarshalFor(opts...)
+	unmarshal := comp.UnmarshalFor(opts...)
 	return unmarshal, comp, nil
+}
+
+// ensureComponentInitialized defensively initializes component content marshallers when called from external contexts.
+func (s *Service) ensureComponentInitialized(comp *repository.Component) error {
+	if comp == nil {
+		return fmt.Errorf("component was nil")
+	}
+	res := comp.View.GetResource()
+	if res == nil {
+		return nil
+	}
+	// If JSON marshaller already present, assume initialized.
+	if comp.Content.Marshaller.JSON.JsonMarshaller != nil {
+		return nil
+	}
+	// Initialize content marshallers as in Component.Init
+	if err := comp.Content.InitMarshaller(comp.IOConfig(), comp.Output.Exclude, comp.BodyType(), comp.OutputType()); err != nil {
+		return err
+	}
+	if err := comp.Content.Marshaller.Init(res.LookupType()); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Read reads data from a view
@@ -595,7 +643,7 @@ func (s *Service) HTTPHandler(ctx context.Context, options ...gateway.Option) (h
 	return s.handler, nil
 }
 
-// New creates a datly service, repository allows you to bootstrap empty or existing yaml repository
+// New creates a dao dao, repository allows you to bootstrap empty or existing yaml repository
 func New(ctx context.Context, options ...repository.Option) (*Service, error) {
 	options = append([]repository.Option{
 		repository.WithJWTSigner(mock.HmacJwtSigner()),
