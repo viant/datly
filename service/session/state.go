@@ -581,7 +581,8 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", parameter.Name, err)
 	}
-	if value, has, err = parameterLocator.Value(ctx, parameter.In.Name); err != nil {
+
+	if value, has, err = parameterLocator.Value(ctx, parameter.OutputType(), parameter.In.Name); err != nil {
 		return nil, false, err
 	}
 	if parameter.In.Kind == state.KindConst && !has { //if parameter is const and has no value, use default value
@@ -596,7 +597,7 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 				if err != nil {
 					return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", baseParameter.Name, err)
 				}
-				if value, has, err = parameterLocator.Value(ctx, baseParameter.In.Name); err != nil {
+				if value, has, err = parameterLocator.Value(ctx, baseParameter.OutputType(), baseParameter.In.Name); err != nil {
 					return nil, false, err
 				}
 			}

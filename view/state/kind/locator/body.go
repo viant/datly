@@ -27,16 +27,32 @@ func (r *Body) Names() []string {
 	return nil
 }
 
-func (r *Body) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (r *Body) Value(ctx context.Context, rType reflect.Type, name string) (interface{}, bool, error) {
 	var err error
+
 	r.Once.Do(func() {
 		var request *http.Request
 		request, r.err = shared.CloneHTTPRequest(r.request)
 		r.body, r.err = readRequestBody(request)
-		if len(r.body) > 0 {
-			r.err = r.ensureRequest()
-		}
+
 	})
+
+	var requestState *structology.State
+
+	if len(r.body) > 0 {
+		if r.requestState != nil && r.requestState.Type().Type() == rType {
+			requestState = r.requestState
+		}
+		if name == "" {
+			requestState, r.err = r.ensureRequest(rType)
+		} else {
+			requestState, r.err = r.ensureRequest(r.bodyType)
+		}
+		if r.err == nil {
+			r.requestState = requestState
+		}
+	}
+
 	if len(r.body) == 0 {
 		return nil, false, nil
 	}
@@ -47,16 +63,16 @@ func (r *Body) Value(ctx context.Context, name string) (interface{}, bool, error
 		return r.decodeBodyMap(ctx)
 	}
 	if name == "" {
-		return r.requestState.State(), true, nil
+		return requestState.State(), true, nil
 	}
-	sel, err := r.requestState.Selector(name)
+	sel, err := requestState.Selector(name)
 	if err != nil {
 		return nil, false, err
 	}
-	if !sel.Has(r.requestState.Pointer()) {
+	if !sel.Has(requestState.Pointer()) {
 		return nil, false, nil
 	}
-	return sel.Value(r.requestState.Pointer()), true, nil
+	return sel.Value(requestState.Pointer()), true, nil
 }
 
 func (r *Body) decodeBodyMap(ctx context.Context) (interface{}, bool, error) {
@@ -87,21 +103,21 @@ func NewBody(opts ...Option) (kind.Locator, error) {
 	return ret, nil
 }
 
-func (r *Body) ensureRequest() (err error) {
-	if r.bodyType == nil {
-		return nil
+func (r *Body) ensureRequest(rType reflect.Type) (*structology.State, error) {
+	if rType == nil {
+		return nil, nil
 	}
-	rType := r.bodyType
 	if rType.Kind() == reflect.Map {
-		return nil
+		return nil, nil
 	}
-	bodyType := structology.NewStateType(r.bodyType)
-	r.requestState = bodyType.NewState()
-	dest := r.requestState.StatePtr()
-	if err = r.unmarshal(r.body, dest); err == nil {
-		r.requestState.Sync()
+	bodyType := structology.NewStateType(rType)
+	requestState := bodyType.NewState()
+	dest := requestState.StatePtr()
+	err := r.unmarshal(r.body, dest)
+	if err == nil {
+		requestState.Sync()
 	}
-	return err
+	return requestState, err
 }
 
 func (r *Body) updateQueryString(ctx context.Context, body interface{}) {

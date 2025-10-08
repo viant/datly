@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
+	"reflect"
 )
 
 type Parameter struct {
@@ -16,7 +17,7 @@ func (p *Parameter) Names() []string {
 	return nil
 }
 
-func (p *Parameter) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (p *Parameter) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	parameter, ok := p.Parameters[name]
 	if !ok {
 		return nil, false, fmt.Errorf("uknonw parameter: %s", name)

@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/xdatly/handler/state"
 	"net/http"
+	"reflect"
 )
 
 type Form struct {
@@ -16,7 +17,7 @@ func (r *Form) Names() []string {
 	return nil
 }
 
-func (r *Form) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (r *Form) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	if r.form != nil && len(r.form.Values) == 0 && r.request == nil {
 		return nil, false, nil
 	}

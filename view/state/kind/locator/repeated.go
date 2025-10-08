@@ -28,7 +28,7 @@ func (p *Repeated) Names() []string {
 	return nil
 }
 
-func (p *Repeated) Value(ctx context.Context, names string) (interface{}, bool, error) {
+func (p *Repeated) Value(ctx context.Context, _ reflect.Type, names string) (interface{}, bool, error) {
 	parameter := p.matchByLocation(names)
 	if parameter == nil {
 		return nil, false, fmt.Errorf("failed to match parameter by location: %v", names)

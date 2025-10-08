@@ -101,6 +101,7 @@ func (r *Router[T]) Run(writer http.ResponseWriter, request *http.Request) error
 	aPath := contract.NewPath(request.Method, request.URL.Path)
 	component, err := r.dao.repository.Registry().Lookup(request.Context(), aPath)
 	if err != nil {
+		fmt.Println(err)
 		return &routeNotFound{err}
 	}
 	route, ok := r.registry[component.Path.Key()]

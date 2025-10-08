@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/google/uuid"
 	"github.com/viant/datly/view/state/kind"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -14,7 +15,7 @@ func (v *Generator) Names() []string {
 	return nil
 }
 
-func (v *Generator) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (v *Generator) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	switch strings.ToLower(name) {
 	case "nil":
 		return nil, true, nil

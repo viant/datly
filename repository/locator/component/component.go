@@ -35,7 +35,7 @@ func (l *componentLocator) Names() []string {
 	return nil
 }
 
-func (l *componentLocator) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (l *componentLocator) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	method, URI := shared.ExtractPath(name)
 	request, err := l.getRequest()
 	if err != nil {
