@@ -23,6 +23,10 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 	defer func() {
 		if r := recover(); r != nil {
 			panicMsg := fmt.Sprintf("Panic occurred: %v, Stack trace: %v", r, string(debug.Stack()))
+			logger := aSession.Logger()
+			if logger == nil {
+				panic(panicMsg)
+			}
 			aSession.Logger().Errorc(ctx, panicMsg)
 			err = response.NewError(http.StatusInternalServerError, "Internal server error")
 			output = nil

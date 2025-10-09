@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/view/state/kind"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 )
 
@@ -19,7 +20,7 @@ func (p *HttpRequest) Names() []string {
 	return nil
 }
 
-func (p *HttpRequest) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (p *HttpRequest) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	request := p.request
 	if p.request == nil {
 		var err error

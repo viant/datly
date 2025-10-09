@@ -67,6 +67,7 @@ type (
 		IsGeneratation    bool
 		XMLUnmarshalType  string `json:",omitempty"`
 		JSONUnmarshalType string `json:",omitempty"`
+		JSONMarshalType   string `json:",omitempty"`
 
 		OutputParameter *inference.Parameter
 	}
@@ -132,6 +133,7 @@ func (r *Rule) DSQLSetting() interface{} {
 		DocURLs           []string `json:",omitempty"`
 		Internal          bool     `json:",omitempty"`
 		JSONUnmarshalType string   `json:",omitempty"`
+		JSONMarshalType   string   `json:",omitempty"`
 		Connector         string   `json:",omitempty"`
 		contract.ModelContextProtocol
 		contract.Meta
@@ -148,6 +150,7 @@ func (r *Rule) DSQLSetting() interface{} {
 		DocURLs:              r.DocURLs,
 		Internal:             r.Internal,
 		JSONUnmarshalType:    r.JSONUnmarshalType,
+		JSONMarshalType:      r.JSONMarshalType,
 		Connector:            r.Connector,
 		ModelContextProtocol: r.ModelContextProtocol,
 		Meta:                 r.Meta,
@@ -321,7 +324,9 @@ func (r *Rule) applyDefaults() {
 	if r.XMLUnmarshalType != "" {
 		r.Route.Content.Marshaller.XML.TypeName = r.XMLUnmarshalType
 	}
-	if r.JSONUnmarshalType != "" {
+	if r.JSONMarshalType != "" {
+		r.Route.Content.Marshaller.JSON.TypeName = r.JSONMarshalType
+	} else if r.JSONUnmarshalType != "" {
 		r.Route.Content.Marshaller.JSON.TypeName = r.JSONUnmarshalType
 	}
 }
