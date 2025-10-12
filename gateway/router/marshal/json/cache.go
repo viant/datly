@@ -100,25 +100,23 @@ func (m *marshallersCache) loadMarshaller(rType reflect.Type, config *config.IOC
 	return marshaller, nil
 }
 
-func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, options ...interface{}) (marshaler, error) {
-	value, ok := c.cache.Load(rType)
+func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, cfg *config.IOConfig, path, outPath string, tag *format.Tag, options ...interface{}) (marshaler, error) {
+
+	placeholder := newDeferred()
+	value, ok := c.cache.LoadOrStore(rType, placeholder)
 	if ok {
 		return value.(marshaler), nil
 	}
 
-	// Place a deferred placeholder to break recursive graphs for this path and type.
-	placeholder := &deferredMarshaller{}
-	c.storeMarshaler(rType, placeholder)
-
-	aMarshaler, err := c.getMarshaller(rType, config, path, outputPath, tag, options...)
+	aMarshaller, err := c.getMarshaller(rType, cfg, path, outPath, tag, options...)
 	if err != nil {
+		placeholder.fail(err)                        // unblock anyone holding the promise
+		c.cache.CompareAndDelete(rType, placeholder) // allow a clean retry later
 		return nil, err
 	}
 
-	// Swap placeholder with the real marshaller and set target for any users that captured it.
-	placeholder.setTarget(aMarshaler)
-	c.storeMarshaler(rType, aMarshaler)
-	return aMarshaler, nil
+	placeholder.setTarget(aMarshaller) // resolve success
+	return aMarshaller, nil
 }
 
 func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, options ...interface{}) (marshaler, error) {
