@@ -124,3 +124,7 @@ func (r *Router[T]) Register(ctx context.Context, path *contract.Path, handler H
 func NewRouter[T any](dao *Service, service T) *Router[T] {
 	return &Router[T]{registry: make(map[string]*Route[T]), dao: dao, service: service}
 }
+
+type BodyEnvelope[T any] struct {
+	Body T `parameter:",kind=body"`
+}
