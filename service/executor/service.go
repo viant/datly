@@ -4,6 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync/atomic"
+	"time"
+
 	"github.com/viant/datly/logger"
 	expand2 "github.com/viant/datly/service/executor/expand"
 	vsession "github.com/viant/datly/service/session"
@@ -13,8 +18,6 @@ import (
 	"github.com/viant/sqlx/option"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
-	"reflect"
-	"time"
 )
 
 type (
@@ -31,6 +34,8 @@ type (
 		dbSource    DBSource
 		collections map[string]*batcher.Collection
 		logger      *logger.Adapter
+		inserted    int32
+		updated     int32
 	}
 
 	DBOption  func(options *DBOptions)
@@ -190,6 +195,9 @@ func (e *Executor) handleUpdate(ctx context.Context, sess *dbSession, db *sql.DB
 	options = append(options, db)
 
 	updated, err := service.Exec(ctx, executable.Data, options...)
+	if err == nil {
+		atomic.AddInt32(&sess.updated, int32(updated))
+	}
 	e.logMetrics(ctx, executable.Table, "UPDATE", updated, now, err)
 	return err
 }
@@ -233,6 +241,9 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 		}
 		options = append(options, tx)
 		inserted, _, err = service.Exec(ctx, executable.Data, options...)
+		if err == nil {
+			atomic.AddInt32(&sess.inserted, int32(inserted))
+		}
 		e.logMetrics(ctx, executable.Table, "INSERT", inserted, started, err)
 		return err
 	}
@@ -252,6 +263,23 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 	options = append(options, option.BatchSize(batchSize))
 	options = append(options, e.dbOptions(db, sess))
 	inserted, _, err = service.Exec(ctx, executable.Data, options...)
+	if err == nil {
+		atomic.AddInt32(&sess.inserted, int32(inserted))
+	}
+	isInvalidConnection := err != nil && strings.Contains(err.Error(), "invalid connection")
+	if isInvalidConnection && atomic.LoadInt32(&sess.inserted) == 0 && atomic.LoadInt32(&sess.updated) == 0 {
+		var dErr error
+		db, dErr = sess.dbSource.Db(ctx)
+		if dErr != nil {
+			return fmt.Errorf("failed after retry: %w", err)
+		}
+		sess.tx.db = db
+		sess.tx.tx = nil
+		if _, err = sess.tx.Tx(); err != nil {
+			return err
+		}
+		inserted, _, err = service.Exec(ctx, executable.Data, options...)
+	}
 	e.logMetrics(ctx, executable.Table, "INSERT", inserted, started, err)
 	return err
 }

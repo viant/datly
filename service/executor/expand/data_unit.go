@@ -17,22 +17,24 @@ import (
 
 type (
 	DataUnit struct {
-		Columns     codec.ColumnsSource
-		ParamsGroup []interface{}
-		Mock        bool
-		TemplateSQL string
-		MetaSource  Dber        `velty:"-"`
-		Statements  *Statements `velty:"-"`
-
+		Columns            codec.ColumnsSource
+		ParamsGroup        []interface{}
+		Mock               bool
+		TemplateSQL        string
+		MetaSource         Dber                            `velty:"-"`
+		Statements         *Statements                     `velty:"-"`
 		mu                 sync.Mutex                      `velty:"-"`
 		placeholderCounter int                             `velty:"-"`
 		sqlxValidator      *validator.Service              `velty:"-"`
 		sliceIndex         map[reflect.Type]*xunsafe.Slice `velty:"-"`
 		ctx                context.Context                 `velty:"-"`
+		EvalLock           sync.Mutex
 	}
 
 	ExecutablesIndex map[string]*Executable
 )
+
+//
 
 func (c *DataUnit) WithPresence() interface{} {
 	var opt interface{} = validator.WithSetMarker()
@@ -41,17 +43,6 @@ func (c *DataUnit) WithPresence() interface{} {
 func (c *DataUnit) WithLocation(loc string) interface{} {
 	var opt interface{} = validator.WithLocation(loc)
 	return opt
-}
-
-// Reset clears binding-related state so DataUnit can be safely reused for a new evaluation
-func (c *DataUnit) Reset() {
-	c.mu.Lock()
-	c.placeholderCounter = 0
-	if len(c.ParamsGroup) > 0 {
-		c.ParamsGroup = c.ParamsGroup[:0]
-	}
-	c.TemplateSQL = ""
-	c.mu.Unlock()
 }
 
 func (c *DataUnit) Validate(dest interface{}, opts ...interface{}) (*validator.Validation, error) {
@@ -157,7 +148,7 @@ func (c *DataUnit) Next() (interface{}, error) {
 		return c.ParamsGroup[index], nil
 	}
 
-	return nil, fmt.Errorf("expected to get binding parameter, but noone was found, ParamsGroup: %v, placeholderCounter: %v", c.ParamsGroup, c.placeholderCounter)
+	return nil, fmt.Errorf("expected to get binding parameter, but none was found, ParamsGroup: %v, placeholderCounter: %v", c.ParamsGroup, c.placeholderCounter)
 }
 
 func (c *DataUnit) ensureSliceIndex() {
@@ -184,6 +175,12 @@ func (c *DataUnit) addAll(args ...interface{}) {
 	}
 	c.mu.Lock()
 	c.ParamsGroup = append(c.ParamsGroup, args...)
+	c.mu.Unlock()
+}
+
+func (c *DataUnit) Shrink(offset int) {
+	c.mu.Lock()
+	c.ParamsGroup = c.ParamsGroup[:offset]
 	c.mu.Unlock()
 }
 
@@ -277,6 +274,17 @@ func (c *DataUnit) Like(columnName string, args interface{}) (string, error) {
 
 func (c *DataUnit) NotLike(columnName string, args interface{}) (string, error) {
 	return c.like(columnName, args, false)
+}
+func (c *DataUnit) Expression(expr string, value interface{}) (string, error) {
+	return c.expression(expr, value)
+}
+
+func (c *DataUnit) expression(expr string, value interface{}) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	c.addAll(value)
+	return expr, nil
 }
 
 func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (string, error) {

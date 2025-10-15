@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/http"
 	"github.com/viant/afs/url"
@@ -15,18 +16,20 @@ import (
 	"github.com/viant/mcp/client/auth/transport"
 	authserver "github.com/viant/mcp/server/auth"
 
-	serverproto "github.com/viant/mcp-protocol/server"
-	"github.com/viant/scy/auth/flow"
 	"os"
 	"path"
+
+	serverproto "github.com/viant/mcp-protocol/server"
+	"github.com/viant/scy/auth/flow"
+
+	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/viant/mcp/server"
 	"github.com/viant/scy"
 	"github.com/viant/scy/cred"
 	"golang.org/x/oauth2"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 type Server struct {
@@ -40,7 +43,7 @@ func (s *Server) init() error {
 	var newImplementer = extension.New(s.registry)
 	var options = []server.Option{
 		server.WithNewHandler(newImplementer),
-		server.WithImplementation(schema.Implementation{"Datly", "0.1"}),
+		server.WithImplementation(schema.Implementation{Name: "Datly", Version: "0.1"}),
 	}
 	issuerURL := s.config.IssuerURL
 	var oauth2Config *oauth2.Config
