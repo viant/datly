@@ -148,7 +148,7 @@ func (c *DataUnit) Next() (interface{}, error) {
 		return c.ParamsGroup[index], nil
 	}
 
-	return nil, fmt.Errorf("expected to get binding parameter, but noone was found, ParamsGroup: %v, placeholderCounter: %v", c.ParamsGroup, c.placeholderCounter)
+	return nil, fmt.Errorf("expected to get binding parameter, but none was found, ParamsGroup: %v, placeholderCounter: %v", c.ParamsGroup, c.placeholderCounter)
 }
 
 func (c *DataUnit) ensureSliceIndex() {
