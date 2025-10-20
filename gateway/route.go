@@ -2,7 +2,7 @@ package gateway
 
 import (
 	"context"
-	"github.com/goccy/go-json"
+	"encoding/json"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/repository"

@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
+	"reflect"
 )
 
 type Handler struct {
@@ -22,7 +23,7 @@ func (v *Handler) Names() []string {
 	return nil
 }
 
-func (v *Handler) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (v *Handler) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	resource := v.options.Resource
 	if resource == nil {
 		return nil, false, fmt.Errorf("failed to lookup handler resource: %v", name)
