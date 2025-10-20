@@ -166,4 +166,3 @@ require (
 	modernc.org/token v1.0.0 // indirect
 )
 
-replace github.com/viant/mcp => ../mcp
