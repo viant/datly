@@ -48,9 +48,9 @@ require (
 require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
-	github.com/viant/jsonrpc v0.9.0
+	github.com/viant/jsonrpc v0.11.0
 	github.com/viant/mcp v0.6.0
-	github.com/viant/mcp-protocol v0.5.7
+	github.com/viant/mcp-protocol v0.5.10
 	github.com/viant/structology v0.6.1
 	github.com/viant/tagly v0.2.2
 	github.com/viant/xdatly v0.5.4-0.20251006174948-cb34263ae8aa
@@ -166,3 +166,4 @@ require (
 	modernc.org/token v1.0.0 // indirect
 )
 
+replace github.com/viant/mcp => ../mcp

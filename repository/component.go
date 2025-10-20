@@ -170,6 +170,109 @@ func (c *Component) initView(ctx context.Context, resource *view.Resource) error
 	if err := c.View.Init(ctx, resource); err != nil {
 		return err
 	}
+	// For read components (GET), expose and enable offset/limit/fields/page/orderBy for each namespaced view.
+	if strings.EqualFold(c.Path.Method, http.MethodGet) {
+		// Helper to enable limit/offset for a view with namespace prefix (if any)
+		ensureSelectors := func(v *view.View, nsPrefix string) {
+			if v == nil {
+				return
+			}
+			if v.Selector == nil {
+				v.Selector = &view.Config{}
+			}
+			if v.Selector.Constraints == nil {
+				v.Selector.Constraints = &view.Constraints{}
+			}
+			// Enable constraints
+			v.Selector.Constraints.Limit = true
+			v.Selector.Constraints.Offset = true
+			v.Selector.Constraints.Projection = true
+			v.Selector.Constraints.OrderBy = true
+
+			// Limit param
+			if v.Selector.LimitParameter == nil {
+				p := *view.QueryStateParameters.LimitParameter
+				p.Description = view.Description(view.LimitQuery, v.Name)
+				if nsPrefix != "" {
+					p.In = state.NewQueryLocation(nsPrefix + view.LimitQuery)
+				}
+				v.Selector.LimitParameter = &p
+			} else if v.Selector.LimitParameter.Description == "" {
+				v.Selector.LimitParameter.Description = view.Description(view.LimitQuery, v.Name)
+			}
+
+			// Offset param
+			if v.Selector.OffsetParameter == nil {
+				p := *view.QueryStateParameters.OffsetParameter
+				p.Description = view.Description(view.OffsetQuery, v.Name)
+				if nsPrefix != "" {
+					p.In = state.NewQueryLocation(nsPrefix + view.OffsetQuery)
+				}
+				v.Selector.OffsetParameter = &p
+			} else if v.Selector.OffsetParameter.Description == "" {
+				v.Selector.OffsetParameter.Description = view.Description(view.OffsetQuery, v.Name)
+			}
+
+			// Fields param (controls which fields are included)
+			if v.Selector.FieldsParameter == nil {
+				p := *view.QueryStateParameters.FieldsParameter
+				p.Description = view.Description(view.FieldsQuery, v.Name)
+				if nsPrefix != "" {
+					p.In = state.NewQueryLocation(nsPrefix + view.FieldsQuery)
+				}
+				v.Selector.FieldsParameter = &p
+			} else if v.Selector.FieldsParameter.Description == "" {
+				v.Selector.FieldsParameter.Description = view.Description(view.FieldsQuery, v.Name)
+			}
+
+			// Page param (paging interface on top of limit/offset)
+			if v.Selector.PageParameter == nil {
+				p := *view.QueryStateParameters.PageParameter
+				p.Description = view.Description(view.PageQuery, v.Name)
+				if nsPrefix != "" {
+					p.In = state.NewQueryLocation(nsPrefix + view.PageQuery)
+				}
+				v.Selector.PageParameter = &p
+			} else if v.Selector.PageParameter.Description == "" {
+				v.Selector.PageParameter.Description = view.Description(view.PageQuery, v.Name)
+			}
+
+			// OrderBy param
+			if v.Selector.OrderByParameter == nil {
+				p := *view.QueryStateParameters.OrderByParameter
+				p.Description = view.Description(view.OrderByQuery, v.Name)
+				if nsPrefix != "" {
+					p.In = state.NewQueryLocation(nsPrefix + view.OrderByQuery)
+				}
+				v.Selector.OrderByParameter = &p
+			} else if v.Selector.OrderByParameter.Description == "" {
+				v.Selector.OrderByParameter.Description = view.Description(view.OrderByQuery, v.Name)
+			}
+		}
+
+		// Root view
+		nsPrefix := ""
+		if c.View.Selector != nil && c.View.Selector.Namespace != "" {
+			nsPrefix = c.View.Selector.Namespace
+		}
+		ensureSelectors(c.View, nsPrefix)
+
+		// All related views via NamespacedView
+		if c.NamespacedView != nil {
+			for _, nsView := range c.NamespacedView.Views {
+				v := nsView.View
+				// Determine ns prefix from NamespacedView (prefer non-empty namespace if present)
+				pfx := ""
+				for _, ns := range nsView.Namespaces {
+					if ns != "" {
+						pfx = ns
+						break
+					}
+				}
+				ensureSelectors(v, pfx)
+			}
+		}
+	}
 	holder := ""
 	if c.Contract.Output.Type.Parameters != nil {
 		if rootHolder := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); rootHolder != nil {
