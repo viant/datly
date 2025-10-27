@@ -38,42 +38,49 @@ func (s Statements) DMLTables(rawSQL string) []string {
 	var tables = make(map[string]bool)
 	var result []string
 	for _, statement := range s {
-
-		SQL := rawSQL[statement.Start:statement.End]
-		usesService := strings.Contains(SQL, "$sql.")
-		lowerCasedDML := strings.ToLower(SQL)
-
-		quoted := ""
-
-		if index := strings.Index(SQL, `"`); index != -1 {
-			quoted = SQL[index+1:]
-			if index = strings.Index(quoted, `"`); index != -1 {
-				quoted = quoted[:index]
-			}
-		}
-		if usesService && quoted != "" {
-			statement.Table = quoted
-			if _, ok := tables[statement.Table]; ok {
-				continue
-			}
-			result = append(result, statement.Table)
-			tables[statement.Table] = true
+		// Only consider exec statements for DML table extraction.
+		if !statement.IsExec {
 			continue
 		}
+
+		SQL := rawSQL[statement.Start:statement.End]
+
+		// Handle service-based exec ($sql.Insert/$sql.Update) only when explicitly detected as service.
+		if statement.Kind == shared.ExecKindService {
+			quoted := ""
+			if index := strings.Index(SQL, `"`); index != -1 {
+				quoted = SQL[index+1:]
+				if index = strings.Index(quoted, `"`); index != -1 {
+					quoted = quoted[:index]
+				}
+			}
+			if quoted != "" {
+				statement.Table = quoted
+				if _, ok := tables[statement.Table]; ok {
+					continue
+				}
+				result = append(result, statement.Table)
+				tables[statement.Table] = true
+				continue
+			}
+		}
+
+		lowerCasedDML := strings.ToLower(SQL)
+
 		if strings.Contains(lowerCasedDML, "insert") {
-			if stmt, _ := sqlparser.ParseInsert(SQL); stmt != nil {
+			if stmt, _ := sqlparser.ParseInsert(SQL); stmt != nil && stmt.Target.X != nil {
 				if table := sqlparser.Stringify(stmt.Target.X); table != "" {
 					statement.Table = table
 				}
 			}
 		} else if strings.Contains(lowerCasedDML, "update") {
-			if stmt, _ := sqlparser.ParseUpdate(SQL); stmt != nil {
+			if stmt, _ := sqlparser.ParseUpdate(SQL); stmt != nil && stmt.Target.X != nil {
 				if table := sqlparser.Stringify(stmt.Target.X); table != "" {
 					statement.Table = table
 				}
 			}
 		} else if strings.Contains(lowerCasedDML, "delete") {
-			if stmt, _ := sqlparser.ParseDelete(SQL); stmt != nil {
+			if stmt, _ := sqlparser.ParseDelete(SQL); stmt != nil && stmt.Target.X != nil {
 				if table := sqlparser.Stringify(stmt.Target.X); table != "" {
 					statement.Table = table
 				}
