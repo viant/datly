@@ -45,8 +45,9 @@ type (
 
 func (s *Session) NewSession(component *repository.Component) *Session {
 	ret := *s
-	ret.component = component
-	ret.view = component.View
+	s.component = component
+	s.locatorOpt.Views.Register(component.View)
+	s.view = component.View
 	return &ret
 }
 
