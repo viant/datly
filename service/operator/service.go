@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"reflect"
+	"time"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/datly/repository"
@@ -29,9 +33,6 @@ import (
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
 	"google.golang.org/api/googleapi"
-	"net/http"
-	"reflect"
-	"time"
 )
 
 type Service struct {
@@ -118,13 +119,17 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 			}
 
 		}
-		return s.finalize(ctx, ret, err)
+		return s.finalize(ctx, ret, err, aSession)
 	}
 	return nil, response.NewError(500, fmt.Sprintf("unsupported Type %v", aComponent.Service))
 }
 
-func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (interface{}, error) {
+func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSession *session.Session) (interface{}, error) {
 
+	if injectorFinalizer, ok := ret.(state.InjectorFinalizer); ok {
+		err = injectorFinalizer.Finalize(ctx, aSession)
+		return ret, err
+	}
 	if err != nil {
 		return ret, err
 	}
