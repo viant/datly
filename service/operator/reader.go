@@ -44,7 +44,7 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 	if err := s.updateJobStatusDone(ctx, component, handlerResponse, setting.SyncFlag, startTime); err != nil {
 		return nil, err
 	}
-	if output, err = s.finalize(ctx, handlerResponse.Output, handlerResponse.Error, nil); err != nil {
+	if output, err = s.finalize(ctx, handlerResponse.Output, handlerResponse.Error, aSession); err != nil {
 		aSession.ClearCache(component.Output.Type.Parameters)
 		return s.HandleError(ctx, aSession, component, err)
 	}
