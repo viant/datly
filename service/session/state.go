@@ -13,6 +13,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
+	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
@@ -41,6 +42,13 @@ type (
 		Request *http.Request
 	}
 )
+
+func (s *Session) NewSession(component *repository.Component) *Session {
+	ret := *s
+	s.component = component
+	s.view = component.View
+	return &ret
+}
 
 func (s *Session) SetView(view *view.View) {
 	s.view = view

@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 
+	"github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/state"
 )
 
@@ -17,5 +18,5 @@ type Finalizer interface {
 }
 
 type InjectorFinalizer interface {
-	Finalize(ctx context.Context, injector state.Injector) error
+	Finalize(ctx context.Context, getInjector func(ctx context.Context, path http.Route) (state.Injector, error)) error
 }
