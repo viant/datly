@@ -173,6 +173,7 @@ func (e *Executor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error) {
 }
 
 func (e *Executor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) {
+	e.ensureConnectors()
 	if (options.WithDb == nil && options.WithTx == nil) && options.WithConnector == e.view.Connector.Name {
 		return e.dataUnit, nil
 	}
@@ -197,6 +198,11 @@ func (e *Executor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) 
 		if connector == nil {
 			return nil, fmt.Errorf("failed to lookup connector %v", options.WithConnector)
 		}
+
+		if _, ok := e.connectors[options.WithConnector]; !ok {
+			e.connectors[options.WithConnector] = connector
+		}
+
 		db, err := connector.DB()
 		if err != nil {
 			return nil, err
@@ -211,6 +217,17 @@ func (e *Executor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) 
 	return e.dataUnit, nil
 }
 
+func (e *Executor) ensureConnectors() {
+	if len(e.connectors) == 0 {
+		e.connectors = make(view.Connectors)
+		if res := e.view.GetResource(); res != nil {
+			for _, connector := range res.Connectors {
+				e.connectors[connector.Name] = connector
+			}
+		}
+	}
+}
+
 func (e *Executor) Execute(ctx context.Context) error {
 	if e.executed {
 		return nil
@@ -222,6 +239,10 @@ func (e *Executor) Execute(ctx context.Context) error {
 		dbOptions = append(dbOptions, executor.WithTx(e.tx))
 	}
 
+	err := service.ExecuteStmts(ctx, executor.NewViewDBSource(e.view), newSqlxIterator(e.dataUnit.Statements.Executable), dbOptions...)
+	if err != nil {
+		return err
+	}
 	for _, unit := range e.dataUnits {
 		dbSource := &DbSource{}
 		dbSource.db, _ = unit.MetaSource.Db()
@@ -230,7 +251,7 @@ func (e *Executor) Execute(ctx context.Context) error {
 		}
 	}
 
-	return service.ExecuteStmts(ctx, executor.NewViewDBSource(e.view), newSqlxIterator(e.dataUnit.Statements.Executable), dbOptions...)
+	return err
 }
 
 func (e *Executor) ExpandAndExecute(ctx context.Context) (*executor.Session, error) {
