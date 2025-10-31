@@ -577,7 +577,8 @@ func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet) e
 func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Viewlet) (err error) {
 
 	shared.EnsureArgs(viewlet.Expanded.Query, &viewlet.Expanded.Args)
-	if viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.ColumnConfig, viewlet.Expanded.Query, viewlet.Expanded.Args...); err != nil {
+	viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.ColumnConfig, viewlet.Expanded.Query, viewlet.Expanded.Args...)
+	if err != nil {
 		return fmt.Errorf("failed to create spec for %v, %w", viewlet.Name, err)
 	}
 

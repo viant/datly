@@ -474,9 +474,11 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet) error) error {
 	viewParameters := r.State.FilterByKind(state.KindView)
 	for _, viewParameter := range viewParameters {
-		if viewParameter.Schema != nil && viewParameter.Schema.Type() != nil {
-			continue
-		}
+		//WE DO NOT NEEDED IT
+		//if viewParameter.Schema != nil && viewParameter.Schema.Type() != nil {
+		//	fmt.Printf("skipping view %v %v\n", viewParameter.Name, viewParameter.Schema)
+		//	//continue
+		//}
 		if viewParameter.In.Name == "" { //default root schema
 			continue
 		}
