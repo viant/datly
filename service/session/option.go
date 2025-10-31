@@ -33,6 +33,7 @@ type (
 		scope               string
 		embeddedFS          *embed.FS
 		auth                *auth.Service
+		preseedCache        bool
 	}
 
 	Option func(o *Options)
@@ -152,6 +153,13 @@ func WithTypes(types ...*state.Type) Option {
 func WithAuth(auth *auth.Service) Option {
 	return func(s *Options) {
 		s.auth = auth
+	}
+}
+
+// WithPreseedCache controls whether NewSession should pre-seed child cache from parent (default false)
+func WithPreseedCache(flag bool) Option {
+	return func(s *Options) {
+		s.preseedCache = flag
 	}
 }
 

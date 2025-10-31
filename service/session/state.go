@@ -45,9 +45,37 @@ type (
 
 func (s *Session) NewSession(component *repository.Component) *Session {
 	ret := *s
-	s.component = component
-	s.locatorOpt.Views.Register(component.View)
-	s.view = component.View
+	// set component and view on the child session (do not mutate receiver)
+	ret.component = component
+	ret.Options.component = component
+	ret.view = component.View
+	if ret.locatorOpt != nil {
+		if _, ok := ret.locatorOpt.Views[component.View.Name]; !ok {
+			ret.locatorOpt.Views.Register(component.View)
+		}
+	}
+
+	// create a fresh cache and optionally pre-populate from parent cache values
+	parent := s.cache
+	ret.cache = newCache()
+	if ret.Options.preseedCache && parent != nil {
+		parent.RWMutex.RLock()
+		for k, v := range parent.values {
+			ret.cache.values[k] = v
+		}
+		parent.RWMutex.RUnlock()
+	}
+
+	// reset predicates (filters) on the child session state
+	if ret.Options.state != nil {
+		ret.Options.state.RWMutex.Lock()
+		for _, st := range ret.Options.state.Views {
+			if st != nil {
+				st.Filters = nil
+			}
+		}
+		ret.Options.state.RWMutex.Unlock()
+	}
 	return &ret
 }
 

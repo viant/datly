@@ -92,6 +92,40 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 	}
 
 	hOptions := hstate.NewOptions(opts...)
+
+	// Handle WithInput: preload cache from provided input data
+	if input := hOptions.Input(); input != nil {
+		var parameters state.Parameters
+		// If input type matches component input type, reuse component parameters
+		if s.component != nil && s.component.Input.Type.Type() != nil && s.component.Input.Type.Type().Type() != nil {
+			compInType := s.component.Input.Type.Type().Type()
+			inType := reflect.TypeOf(input)
+			if inType != nil && inType.Kind() != reflect.Ptr {
+				inType = reflect.PtrTo(inType)
+			}
+			if inType == compInType {
+				parameters = s.component.Input.Type.Parameters
+			}
+		}
+		// Otherwise, derive parameters from input type
+		if len(parameters) == 0 {
+			inType := reflect.TypeOf(input)
+			aType, e := state.NewType(
+				state.WithSchema(state.NewSchema(inType)),
+				state.WithResource(s.resource),
+			)
+			if e != nil {
+				return e
+			}
+			if e = aType.Init(); e != nil {
+				return e
+			}
+			parameters = aType.Parameters
+		}
+		if e := s.LoadState(parameters, input); e != nil {
+			return e
+		}
+	}
 	aState := stateType.Type().WithValue(dest)
 	var stateOptions = []locator.Option{
 		locator.WithLogger(s.logger),
