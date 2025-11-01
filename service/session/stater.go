@@ -10,6 +10,7 @@ import (
 	"embed"
 
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler/response"
@@ -124,6 +125,9 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		}
 		if e := s.LoadState(parameters, input); e != nil {
 			return e
+		}
+		if s.view.Mode == view.ModeQuery {
+			s.SetViewState(ctx, s.view)
 		}
 	}
 	aState := stateType.Type().WithValue(dest)
