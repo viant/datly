@@ -18,7 +18,7 @@ func (p *DataView) Names() []string {
 	return nil
 }
 
-func (p *DataView) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (p *DataView) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	aView, ok := p.Views[name]
 	if !ok {
 		return nil, false, fmt.Errorf("failed to lookup view: %v", name)

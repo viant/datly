@@ -13,6 +13,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
+	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
@@ -41,6 +42,42 @@ type (
 		Request *http.Request
 	}
 )
+
+func (s *Session) NewSession(component *repository.Component) *Session {
+	ret := *s
+	// set component and view on the child session (do not mutate receiver)
+	ret.component = component
+	ret.Options.component = component
+	ret.view = component.View
+	if ret.locatorOpt != nil {
+		if _, ok := ret.locatorOpt.Views[component.View.Name]; !ok {
+			ret.locatorOpt.Views.Register(component.View)
+		}
+	}
+
+	// create a fresh cache and optionally pre-populate from parent cache values
+	parent := s.cache
+	ret.cache = newCache()
+	if ret.Options.preseedCache && parent != nil {
+		parent.RWMutex.RLock()
+		for k, v := range parent.values {
+			ret.cache.values[k] = v
+		}
+		parent.RWMutex.RUnlock()
+	}
+
+	// reset predicates (filters) on the child session state
+	if ret.Options.state != nil {
+		ret.Options.state.RWMutex.Lock()
+		for _, st := range ret.Options.state.Views {
+			if st != nil {
+				st.Filters = nil
+			}
+		}
+		ret.Options.state.RWMutex.Unlock()
+	}
+	return &ret
+}
 
 func (s *Session) SetView(view *view.View) {
 	s.view = view
@@ -168,6 +205,7 @@ func (s *Session) viewLookupOptions(aView *view.View, parameters state.NamedPara
 	if !opts.HasInputParameters() {
 		result = append(result, locator.WithInputParameters(parameters))
 	}
+	result = append(result, locator.WithLogger(s.logger))
 	result = append(result, locator.WithReadInto(s.ReadInto))
 	viewState := s.state.Lookup(aView)
 	result = append(result, locator.WithState(viewState.Template))
@@ -346,10 +384,17 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		if valueType.Elem().Kind() == reflect.Struct && parameter.Schema.Type().Kind() == reflect.Slice {
 			if parameter.Schema.CompType() == valueType {
 				sliceValuePtr := reflect.New(parameterType)
+
+				if isNil(value) {
+					empty := reflect.MakeSlice(parameterType, 0, 0)
+					sliceValuePtr.Elem().Set(empty)
+					return sliceValuePtr.Interface(), nil // []T{}
+				}
+
 				sliceValue := reflect.MakeSlice(parameterType, 1, 1)
 				sliceValuePtr.Elem().Set(sliceValue)
 				sliceValue.Index(0).Set(reflect.ValueOf(value))
-				return sliceValuePtr.Interface(), nil
+				return sliceValuePtr.Interface(), nil // []T{value}`
 			}
 		}
 	case reflect.Slice:
@@ -573,7 +618,8 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", parameter.Name, err)
 	}
-	if value, has, err = parameterLocator.Value(ctx, parameter.In.Name); err != nil {
+
+	if value, has, err = parameterLocator.Value(ctx, parameter.OutputType(), parameter.In.Name); err != nil {
 		return nil, false, err
 	}
 	if parameter.In.Kind == state.KindConst && !has { //if parameter is const and has no value, use default value
@@ -588,7 +634,7 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 				if err != nil {
 					return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", baseParameter.Name, err)
 				}
-				if value, has, err = parameterLocator.Value(ctx, baseParameter.In.Name); err != nil {
+				if value, has, err = parameterLocator.Value(ctx, baseParameter.OutputType(), baseParameter.In.Name); err != nil {
 					return nil, false, err
 				}
 			}

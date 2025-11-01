@@ -4,6 +4,12 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"go/ast"
+	"path"
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
@@ -15,11 +21,6 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"go/ast"
-	"path"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 type (
@@ -34,6 +35,7 @@ type (
 		AssumedType bool
 		Connector   string
 		Cache       string
+		Limit       *int
 		InOutput    bool
 		Of          string
 	}
@@ -113,6 +115,10 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	}
 	if p.Cache != "" {
 		builder.WriteString(".WithCache('" + p.Cache + "')")
+	}
+
+	if p.Limit != nil {
+		builder.WriteString(".WithLimit('" + strconv.Itoa(*p.Limit) + "')")
 	}
 
 	if p.Required != nil {
@@ -303,6 +309,9 @@ func buildParameter(field *xunsafe.Field, aTag *tags.Tag, types *xreflect.Types,
 		param.Connector = aTag.View.Connector
 		if aTag.View.Cache != "" {
 			param.Cache = aTag.View.Cache
+		}
+		if aTag.View.Limit != nil {
+			param.Limit = aTag.View.Limit
 		}
 	}
 

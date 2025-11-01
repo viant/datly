@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"embed"
+
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/view"
@@ -32,6 +33,7 @@ type (
 		scope               string
 		embeddedFS          *embed.FS
 		auth                *auth.Service
+		preseedCache        bool
 	}
 
 	Option func(o *Options)
@@ -154,6 +156,13 @@ func WithAuth(auth *auth.Service) Option {
 	}
 }
 
+// WithPreseedCache controls whether NewSession should pre-seed child cache from parent (default false)
+func WithPreseedCache(flag bool) Option {
+	return func(s *Options) {
+		s.preseedCache = flag
+	}
+}
+
 func WithComponent(component *repository.Component) Option {
 	return func(s *Options) {
 		s.component = component
@@ -181,5 +190,11 @@ func WithOperate(operate func(ctx context.Context, aSession *Session, aComponent
 func WithRegistry(registry *repository.Registry) Option {
 	return func(s *Options) {
 		s.registry = registry
+	}
+}
+
+func WithLogger(logger logger.Logger) Option {
+	return func(s *Options) {
+		s.logger = logger
 	}
 }

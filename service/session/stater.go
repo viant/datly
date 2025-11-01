@@ -2,11 +2,19 @@ package session
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"reflect"
+	"runtime/debug"
+
+	"embed"
+
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
-	"reflect"
 )
 
 func (s *Session) ValuesOf(ctx context.Context, any interface{}) (map[string]interface{}, error) {
@@ -35,15 +43,48 @@ func (s *Session) Into(ctx context.Context, dest interface{}, opts ...hstate.Opt
 }
 
 func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Option) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicMsg := fmt.Sprintf("Panic occurred: %v, Stack trace: %v", r, string(debug.Stack()))
+			logger := s.Logger()
+			if logger == nil {
+				panic(panicMsg)
+			}
+			s.Logger().Errorc(ctx, panicMsg)
+			err = response.NewError(http.StatusInternalServerError, "Internal server error")
+		}
+	}()
+
 	destType := reflect.TypeOf(dest)
 	sType := types.EnsureStruct(destType)
 	stateType, ok := s.Types.Lookup(sType)
-	if !ok {
-		if stateType, err = state.NewType(
-			state.WithSchema(state.NewSchema(destType)),
-			state.WithResource(s.resource),
-		); err != nil {
-			return err
+
+	var embedFs *embed.FS
+	if embedder, ok := dest.(state.Embedder); ok {
+		embedFs = embedder.EmbedFS()
+	}
+
+	if !ok && s.component != nil {
+
+		if s.component.Input.Type.Type() != nil {
+			if destType == s.component.Input.Type.Type().Type() {
+				stateType = &s.component.Input.Type
+			}
+		}
+		if s.component.Output.Type.Type() != nil {
+			if destType == s.component.Output.Type.Type().Type() {
+				stateType = &s.component.Output.Type
+			}
+		}
+
+		if stateType == nil {
+			if stateType, err = state.NewType(
+				state.WithSchema(state.NewSchema(destType)),
+				state.WithResource(s.resource),
+				state.WithFS(embedFs),
+			); err != nil {
+				return err
+			}
 		}
 		s.Types.Put(stateType)
 	}
@@ -52,9 +93,47 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 	}
 
 	hOptions := hstate.NewOptions(opts...)
-	aState := stateType.Type().WithValue(dest)
-	var stateOptions []locator.Option
 
+	// Handle WithInput: preload cache from provided input data
+	if input := hOptions.Input(); input != nil {
+		var parameters state.Parameters
+		// If input type matches component input type, reuse component parameters
+		if s.component != nil && s.component.Input.Type.Type() != nil && s.component.Input.Type.Type().Type() != nil {
+			compInType := s.component.Input.Type.Type().Type()
+			inType := reflect.TypeOf(input)
+			if inType != nil && inType.Kind() != reflect.Ptr {
+				inType = reflect.PtrTo(inType)
+			}
+			if inType == compInType {
+				parameters = s.component.Input.Type.Parameters
+			}
+		}
+		// Otherwise, derive parameters from input type
+		if len(parameters) == 0 {
+			inType := reflect.TypeOf(input)
+			aType, e := state.NewType(
+				state.WithSchema(state.NewSchema(inType)),
+				state.WithResource(s.resource),
+			)
+			if e != nil {
+				return e
+			}
+			if e = aType.Init(); e != nil {
+				return e
+			}
+			parameters = aType.Parameters
+		}
+		if e := s.LoadState(parameters, input); e != nil {
+			return e
+		}
+		if s.view.Mode == view.ModeQuery {
+			s.SetViewState(ctx, s.view)
+		}
+	}
+	aState := stateType.Type().WithValue(dest)
+	var stateOptions = []locator.Option{
+		locator.WithLogger(s.logger),
+	}
 	var locatorsToRemove = []state.Kind{state.KindComponent}
 	if hOptions.Constants() != nil {
 		stateOptions = append(stateOptions, locator.WithConstants(hOptions.Constants()))
@@ -112,14 +191,21 @@ func (s *Session) handleComponentpOutputType(ctx context.Context, dest interface
 	sessionOpt := s.Options
 	s.Options = *s.Indirect(true, stateOptions...)
 	destValue, err := s.operate(ctx, s, s.component)
-	s.Options = sessionOpt
-
-	if destValue != nil {
-		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(destValue).Elem())
-	}
-
-	if err != nil {
+	destPtr := reflect.ValueOf(dest)
+	if err != nil && destValue == nil {
+		if errorSetter, ok := dest.(response.StatusSetter); ok {
+			errorSetter.SetError(err)
+			return nil
+		}
 		return err
+	}
+	s.Options = sessionOpt
+	reflectDestValue := reflect.ValueOf(destValue)
+
+	if reflectDestValue.Kind() == reflect.Ptr {
+		destPtr.Elem().Set(reflectDestValue.Elem())
+	} else {
+		destPtr.Elem().Set(reflectDestValue)
 	}
 	return nil
 }

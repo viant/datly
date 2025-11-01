@@ -4,6 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"reflect"
+	"strings"
+
 	furl "github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/proxy"
 	"github.com/viant/datly/repository"
@@ -14,11 +20,6 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/toolbox"
-	"io"
-	"net/http"
-	"net/url"
-	"reflect"
-	"strings"
 )
 
 func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRoute *Route, provider *repository.Provider) error {
@@ -53,109 +54,188 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 }
 
 func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Route) serverproto.ToolHandlerFunc {
-	handler := func(ctx context.Context, req *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {
+	return func(ctx context.Context, req *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {
 		params := req.Params
-		URI := r.matchToolCallComponentURI(aRoute, component, params)
-		URL := fmt.Sprintf("http://localhost/%v", strings.TrimLeft(URI, "/")) // fallback to a local URL for now, this should be replaced with the actual service URL
+		uri := r.matchToolCallComponentURI(aRoute, component, params)
+		baseURL := fmt.Sprintf("http://localhost/%v", strings.TrimLeft(uri, "/")) // replace with actual service URL when available
+
 		values := url.Values{}
 		var body io.Reader
-		var uniquePath = make(map[string]bool)
-		var uniqueQuery = make(map[string]bool)
-		for _, parameter := range component.Input.Type.Parameters {
-			paramName := strings.Title(parameter.Name)
-			value := params.Arguments[paramName]
-			paramType := parameter.Schema.Type()
-			if paramType.Kind() == reflect.Ptr {
-				paramType = paramType.Elem()
+		uniquePath := map[string]bool{}
+		uniqueQuery := map[string]bool{}
+
+		// 1) Collect parameters (component + selector pagination)
+		allParams := r.collectToolParameters(component)
+
+		// 2) Apply parameters to request URL/query/body
+		for _, p := range allParams {
+			name := strings.Title(p.Name)
+			value := params.Arguments[name]
+			pType := p.Schema.Type()
+			if pType.Kind() == reflect.Ptr {
+				pType = pType.Elem()
 			}
-
-			switch paramType.Kind() {
-			case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64, reflect.Float64:
-				if value == nil {
-					continue
-				}
-				value = toolbox.AsInt(value)
-			}
-
-			switch parameter.In.Kind {
-			case state.KindPath:
-				if uniquePath[parameter.In.Name] {
-					continue
-				}
-				uniquePath[parameter.In.Name] = true
-
-				if value == nil {
-					return nil, jsonrpc.NewInvalidRequest("missing path parameter: "+parameter.In.Name, nil)
-				}
-
-				URL = strings.ReplaceAll(URL, "{"+parameter.In.Name+"}", fmt.Sprintf("%v", value))
-			case state.KindQuery, state.KindForm:
-				if uniqueQuery[parameter.In.Name] {
-					continue
-				}
-				uniqueQuery[parameter.In.Name] = true
-				if value == nil || value == "" {
-					continue
-				}
-				// Check if value is a slice and create a comma-separated string
-				if slice, ok := value.([]interface{}); ok {
-					var items []string
-					for _, item := range slice {
-						if f, ok := item.(float64); ok {
-							items = append(items, fmt.Sprintf("%v", int64(f)))
-						} else {
-							items = append(items, fmt.Sprintf("%v", item))
-						}
-					}
-					values.Add(parameter.In.Name, strings.Join(items, ","))
-				} else {
-					values.Add(parameter.In.Name, fmt.Sprintf("%v", value))
-				}
-			case state.KindRequestBody:
-				if text, ok := value.(string); ok {
-					body = strings.NewReader(text)
-				} else {
-					data, err := json.Marshal(value)
-					if err != nil {
-						return nil, jsonrpc.NewInvalidParamsError("failed to marshal request body: %w", data)
-					}
-					body = strings.NewReader(string(data))
-				}
+			value = r.coerceNumericValue(value, pType)
+			var rpcErr *jsonrpc.Error
+			baseURL, body, rpcErr = r.applyParamToRequest(baseURL, values, p, value, uniquePath, uniqueQuery, body)
+			if rpcErr != nil {
+				return nil, rpcErr
 			}
 		}
-		responseWriter := proxy.NewWriter()
 
-		// Add query parameters to URL if any exist
-		if len(values) > 0 {
-			if strings.Contains(URL, "?") {
-				URL += "&" + values.Encode()
+		// 3) Finalize URL with query string
+		finalURL := baseURL
+		if enc := values.Encode(); enc != "" {
+			if strings.Contains(finalURL, "?") {
+				finalURL += "&" + enc
 			} else {
-				URL += "?" + values.Encode()
+				finalURL += "?" + enc
 			}
 		}
-		httpRequest, err := http.NewRequest(aRoute.Path.Method, URL, body)
-		if err != nil {
-			return nil, jsonrpc.NewInvalidRequest(err.Error(), nil)
+
+		// 4) Build HTTP request and route
+		httpReq, rpcErr := r.newToolHTTPRequest(aRoute.Path.Method, finalURL, body)
+		if rpcErr != nil {
+			return nil, rpcErr
 		}
-		r.addAuthTokenIfPresent(ctx, httpRequest)
-		httpRequest.RequestURI = httpRequest.URL.RequestURI()
-		if URI != aRoute.URI() {
-			if matchedRoute, _ := r.match(component.Method, URI, httpRequest); matchedRoute != nil {
-				aRoute = matchedRoute
+		r.addAuthTokenIfPresent(ctx, httpReq)
+		httpReq.RequestURI = httpReq.URL.RequestURI()
+		if uri != aRoute.URI() {
+			if matched, _ := r.match(component.Method, uri, httpReq); matched != nil {
+				aRoute = matched
 			}
 		}
-		aRoute.Handle(responseWriter, httpRequest) // route the request to the actual handler
-		var result = schema.CallToolResult{}
-		mimeType := "application/json"
-		item := schema.CallToolResultContentElem{
-			MimeType: mimeType,
-			Type:     "text", // use data for some clients
-			Text:     responseWriter.Body.String(),
-		}
-		result.Content = append(result.Content, item)
-		return &result, nil
+
+		rw := proxy.NewWriter()
+		aRoute.Handle(rw, httpReq)
+
+		// 5) Build tool result (text + structured on error)
+		return r.buildToolCallResult(rw, finalURL, aRoute.Path.Method), nil
 	}
-	return handler
+}
+
+// collectToolParameters aggregates component input parameters with selector pagination (limit/offset) when available.
+func (r *Router) collectToolParameters(component *repository.Component) []*state.Parameter {
+	var all []*state.Parameter
+	all = append(all, component.Input.Type.Parameters...)
+	if component.View != nil && component.View.Selector != nil {
+		if p := component.View.Selector.LimitParameter; p != nil {
+			all = append(all, p)
+		}
+		if p := component.View.Selector.OffsetParameter; p != nil {
+			all = append(all, p)
+		}
+		if p := component.View.Selector.FieldsParameter; p != nil {
+			all = append(all, p)
+		}
+		if p := component.View.Selector.PageParameter; p != nil {
+			all = append(all, p)
+		}
+	}
+	return all
+}
+
+// coerceNumericValue normalizes numeric values to integers when appropriate.
+func (r *Router) coerceNumericValue(value interface{}, paramType reflect.Type) interface{} {
+	switch paramType.Kind() {
+	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64, reflect.Float64:
+		if value == nil {
+			return nil
+		}
+		return toolbox.AsInt(value)
+	}
+	return value
+}
+
+// applyParamToRequest applies a single parameter into path placeholders, query/form values, or request body.
+func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state.Parameter, value interface{}, uniquePath, uniqueQuery map[string]bool, body io.Reader) (string, io.Reader, *jsonrpc.Error) {
+	switch p.In.Kind {
+	case state.KindPath:
+		if uniquePath[p.In.Name] {
+			return baseURL, body, nil
+		}
+		uniquePath[p.In.Name] = true
+		if value == nil {
+			// If parameter has its own URI segment configured, treat as optional and strip the placeholder.
+			if p.URI != "" {
+				baseURL = strings.ReplaceAll(baseURL, "/{"+p.In.Name+"}", "")
+				baseURL = strings.ReplaceAll(baseURL, "{"+p.In.Name+"}", "")
+				return baseURL, body, nil
+			}
+			return baseURL, body, jsonrpc.NewInvalidRequest("missing path parameter: "+p.In.Name, nil)
+		}
+		baseURL = strings.ReplaceAll(baseURL, "{"+p.In.Name+"}", fmt.Sprintf("%v", value))
+	case state.KindQuery, state.KindForm:
+		if uniqueQuery[p.In.Name] {
+			return baseURL, body, nil
+		}
+		uniqueQuery[p.In.Name] = true
+		if value == nil || value == "" {
+			return baseURL, body, nil
+		}
+		if slice, ok := value.([]interface{}); ok {
+			var items []string
+			for _, item := range slice {
+				if f, ok := item.(float64); ok {
+					items = append(items, fmt.Sprintf("%v", int64(f)))
+				} else {
+					items = append(items, fmt.Sprintf("%v", item))
+				}
+			}
+			values.Add(p.In.Name, strings.Join(items, ","))
+		} else {
+			values.Add(p.In.Name, fmt.Sprintf("%v", value))
+		}
+	case state.KindRequestBody:
+		if text, ok := value.(string); ok {
+			body = strings.NewReader(text)
+		} else {
+			data, err := json.Marshal(value)
+			if err != nil {
+				return baseURL, body, jsonrpc.NewInvalidParamsError("failed to marshal request body", nil)
+			}
+			body = strings.NewReader(string(data))
+		}
+	}
+	return baseURL, body, nil
+}
+
+// newToolHTTPRequest constructs an HTTP request for routed tool invocation.
+func (r *Router) newToolHTTPRequest(method, URL string, body io.Reader) (*http.Request, *jsonrpc.Error) {
+	httpRequest, err := http.NewRequest(method, URL, body)
+	if err != nil {
+		return nil, jsonrpc.NewInvalidRequest(err.Error(), nil)
+	}
+	return httpRequest, nil
+}
+
+// buildToolCallResult composes a CallToolResult with text content and structured error info if status is not OK.
+func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method string) *schema.CallToolResult {
+	var result = &schema.CallToolResult{}
+	mimeType := responseWriter.HeaderMap.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = "application/json"
+	}
+	data := responseWriter.Body.Bytes()
+	result.Content = append(result.Content, schema.CallToolResultContentElem{
+		MimeType: mimeType,
+		Type:     "text",
+		Text:     string(data),
+	})
+	_ = json.Unmarshal(data, &result.StructuredContent)
+	if responseWriter.Code >= http.StatusBadRequest {
+		isErr := true
+		result.IsError = &isErr
+		result.StructuredContent = map[string]interface{}{
+			"status":  responseWriter.Code,
+			"error":   true,
+			"message": responseWriter.Body.String(),
+			"headers": responseWriter.HeaderMap,
+			"uri":     URL,
+			"method":  method,
+		}
+	}
+	return result
 }
 
 func (r *Router) matchToolCallComponentURI(aRoute *Route, component *repository.Component, params schema.CallToolRequestParams) string {
@@ -190,6 +270,7 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 	var inputFields []reflect.StructField
 	var uniqueQuery = make(map[string]bool)
 	var uniquePath = make(map[string]bool)
+	// Include component input parameters
 	for _, parameter := range components.Input.Type.Parameters {
 		name := strings.Title(parameter.Name)
 		switch parameter.In.Kind {
@@ -198,20 +279,63 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 				continue
 			}
 			uniquePath[parameter.In.Name] = true
-			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type()})
+			// If parameter is a slice, make it optional in schema via `omitempty` and optional:"true".
+			var tag reflect.StructTag
+			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
+				tag = `json:",omitempty" optional:"true"`
+			}
+			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type(), Tag: tag})
 		case state.KindQuery, state.KindForm:
 
 			if uniqueQuery[parameter.In.Name] {
 				continue
 			}
 			uniqueQuery[parameter.In.Name] = true
+			// Repeated (slice) params are optional regardless of "required" tag.
+			// Otherwise, respect explicit required; default to optional.
 			tag := reflect.StructTag(parameter.Tag)
-			if !strings.Contains(parameter.Tag, "required") {
+			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
+				tag = `json:",omitempty" optional:"true"`
+			} else if !strings.Contains(parameter.Tag, "required") {
 				tag = `json:",omitempty"`
 			}
 			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type(), Tag: tag})
 		case state.KindRequestBody:
-			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type()})
+			// If body is a slice, mark optional in schema.
+			var tag reflect.StructTag
+			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
+				tag = `json:",omitempty" optional:"true"`
+			}
+			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type(), Tag: tag})
+		}
+	}
+
+	// Include selector (limit/offset/fields/page) for read components when available
+	if components.View != nil && components.View.Selector != nil {
+		if p := components.View.Selector.LimitParameter; p != nil && p.In != nil && p.In.Name != "" {
+			if !uniqueQuery[p.In.Name] { // avoid duplicates
+				uniqueQuery[p.In.Name] = true
+				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty"`})
+			}
+		}
+		if p := components.View.Selector.OffsetParameter; p != nil && p.In != nil && p.In.Name != "" {
+			if !uniqueQuery[p.In.Name] {
+				uniqueQuery[p.In.Name] = true
+				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty"`})
+			}
+		}
+		if p := components.View.Selector.FieldsParameter; p != nil && p.In != nil && p.In.Name != "" {
+			if !uniqueQuery[p.In.Name] {
+				uniqueQuery[p.In.Name] = true
+				// Fields is a []string – ensure optional in schema
+				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty" optional:"true"`})
+			}
+		}
+		if p := components.View.Selector.PageParameter; p != nil && p.In != nil && p.In.Name != "" {
+			if !uniqueQuery[p.In.Name] {
+				uniqueQuery[p.In.Name] = true
+				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty"`})
+			}
 		}
 	}
 
@@ -227,6 +351,23 @@ func (r *Router) buildTemplateResourceIntegration(item *dpath.Item, aPath *dpath
 		switch parameter.In.Kind {
 		case state.KindQuery, state.KindForm:
 			parameterNames = append(parameterNames, parameter.In.Name)
+		}
+	}
+	// Also expose view selector pagination controls in URI template if present
+	if provider != nil {
+		if comp, err := provider.Component(context.Background()); err == nil && comp.View != nil && comp.View.Selector != nil {
+			if p := comp.View.Selector.LimitParameter; p != nil && p.In != nil && p.In.Name != "" {
+				parameterNames = append(parameterNames, p.In.Name)
+			}
+			if p := comp.View.Selector.OffsetParameter; p != nil && p.In != nil && p.In.Name != "" {
+				parameterNames = append(parameterNames, p.In.Name)
+			}
+			if p := comp.View.Selector.FieldsParameter; p != nil && p.In != nil && p.In.Name != "" {
+				parameterNames = append(parameterNames, p.In.Name)
+			}
+			if p := comp.View.Selector.PageParameter; p != nil && p.In != nil && p.In.Name != "" {
+				parameterNames = append(parameterNames, p.In.Name)
+			}
 		}
 	}
 	canBuildTemplateResource := len(parameterNames) > 0 || strings.Contains(aPath.URI, "{")
