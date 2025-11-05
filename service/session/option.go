@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 
 	"github.com/viant/datly/repository"
@@ -34,6 +35,7 @@ type (
 		embeddedFS          *embed.FS
 		auth                *auth.Service
 		preseedCache        bool
+		sqlTx               *sql.Tx
 	}
 
 	Option func(o *Options)
@@ -45,6 +47,11 @@ func (o *Options) Logger() logger.Logger {
 
 func (o *Options) Registry() *repository.Registry {
 	return o.registry
+}
+
+// SqlTx returns associated SQL transaction (if any)
+func (o *Options) SqlTx() *sql.Tx {
+	return o.sqlTx
 }
 
 func (o *Options) HasInputParameters() bool {
@@ -153,6 +160,13 @@ func WithTypes(types ...*state.Type) Option {
 func WithAuth(auth *auth.Service) Option {
 	return func(s *Options) {
 		s.auth = auth
+	}
+}
+
+// WithSQLTx associates an existing SQL transaction with the session
+func WithSQLTx(tx *sql.Tx) Option {
+	return func(s *Options) {
+		s.sqlTx = tx
 	}
 }
 

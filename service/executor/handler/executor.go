@@ -95,6 +95,12 @@ func (e *Executor) Session(ctx context.Context) (*executor.Session, error) {
 
 	e.executorSession = sess
 	sess.SessionHandler = sessionHandler
+	// inherit tx from session options if available
+	if e.tx == nil {
+		if tx := e.session.Options.SqlTx(); tx != nil {
+			e.tx = tx
+		}
+	}
 	return e.executorSession, err
 }
 
@@ -161,6 +167,10 @@ func (e *Executor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error) {
 	var txStartedNotifier func(tx *sql.Tx)
 	if unit == e.dataUnit { //we are using View that can contain SQL Statements in Velty
 		txStartedNotifier = e.txStarted
+	}
+	// default SQLx tx to executor tx to avoid internal Begin/Commit if caller provided one
+	if options.WithTx == nil && e.tx != nil {
+		options.WithTx = e.tx
 	}
 	return &Service{
 		txNotifier:    txStartedNotifier,
@@ -314,6 +324,10 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 		session.WithLogger(e.logger),
 		session.WithRegistry(registry),
 	)
+	if tx := stateOptions.SqlTx(); tx != nil {
+		// associate tx with session; child executor will reuse it
+		aSession.Apply(session.WithSQLTx(tx))
+	}
 
 	err = aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
 	if err != nil {
@@ -321,6 +335,10 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 	}
 	ctx = aSession.Context(ctx, true)
 	anExecutor := NewExecutor(aComponent.View, aSession)
+	// ensure Execute(ctx) uses the provided tx (avoid autocommit)
+	if tx := stateOptions.SqlTx(); tx != nil {
+		anExecutor.tx = tx
+	}
 	return anExecutor.NewHandlerSession(ctx, WithLogger(aSession.Logger()))
 }
 
