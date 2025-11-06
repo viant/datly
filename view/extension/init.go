@@ -53,6 +53,7 @@ func InitRegistry() {
 			xreflect.NewType("validator.Violation", xreflect.WithReflectType(reflect.TypeOf(validator.Violation{}))),
 			xreflect.NewType("RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
 			xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
+			xreflect.NewType("FileHeader", xreflect.WithReflectType(reflect.TypeOf(multipart.FileHeader{}))),
 			xreflect.NewType("multipart.FileHeader", xreflect.WithReflectType(reflect.TypeOf(multipart.FileHeader{}))),
 			xreflect.NewType("types.BitBool", xreflect.WithReflectType(reflect.TypeOf(types.BitBool(true)))),
 			xreflect.NewType("time.Time", xreflect.WithReflectType(xreflect.TimeType)),

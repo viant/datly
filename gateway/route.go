@@ -3,6 +3,10 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/repository"
@@ -11,9 +15,6 @@ import (
 	"github.com/viant/datly/repository/path"
 	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/xdatly/handler/exec"
-	"net/http"
-	"strings"
-	"time"
 
 	dlogger "github.com/viant/datly/logger"
 )
@@ -55,7 +56,6 @@ func (r *Route) Handle(res http.ResponseWriter, req *http.Request) int {
 		start = time.Now()
 		onDone = r.Counter.Begin(start)
 	}
-
 	r.Handler(ctx, res, req)
 
 	// finalize metrics

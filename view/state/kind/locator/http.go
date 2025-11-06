@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/viant/datly/view/state/kind"
 	"io"
 	"net/http"
 	"reflect"
 	"strings"
+
+	"github.com/viant/datly/view/state/kind"
 )
 
 type HttpRequest struct {

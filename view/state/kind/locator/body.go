@@ -37,7 +37,6 @@ func (r *Body) Names() []string {
 func (r *Body) Value(ctx context.Context, rType reflect.Type, name string) (interface{}, bool, error) {
 	var err error
 	r.initOnce()
-
 	var requestState *structology.State
 
 	// Multipart handling
@@ -157,14 +156,29 @@ func (r *Body) decodeBodyMap(ctx context.Context) (interface{}, bool, error) {
 // NewBody returns body locator
 func NewBody(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
-	if options.BodyType == nil {
-		return nil, fmt.Errorf("body type was empty")
-	}
 	if options.request == nil {
 		return nil, fmt.Errorf("request was empty")
 	}
 	if options.Unmarshal == nil {
 		return nil, fmt.Errorf("unmarshal was empty")
+	}
+	// Allow missing BodyType only for multipart/form-data requests; otherwise keep existing requirement.
+	if options.BodyType == nil {
+		ct := ""
+		if options.request != nil && options.request.Header != nil {
+			ct = options.request.Header.Get("Content-Type")
+		}
+		isMultipart := false
+		if ct != "" {
+			if mediaType, _, err := mime.ParseMediaType(ct); err == nil {
+				isMultipart = strings.EqualFold(mediaType, "multipart/form-data")
+			} else {
+				isMultipart = strings.Contains(strings.ToLower(ct), "multipart/form-data")
+			}
+		}
+		if !isMultipart {
+			return nil, fmt.Errorf("body type was empty")
+		}
 	}
 	var ret = &Body{request: options.request, bodyType: options.BodyType, unmarshal: options.UnmarshalFunc(), form: options.Form}
 	return ret, nil
