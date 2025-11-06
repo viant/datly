@@ -13,6 +13,9 @@ import (
 	"github.com/viant/xdatly/handler/exec"
 	"net/http"
 	"strings"
+	"time"
+
+	dlogger "github.com/viant/datly/logger"
 )
 
 const (
@@ -33,6 +36,9 @@ type (
 		Handler       func(ctx context.Context, response http.ResponseWriter, req *http.Request) `json:"-"`
 		logging.Config
 		Version string
+
+		// Counter is an optional per-route metrics counter
+		Counter dlogger.Counter `json:"-"`
 	}
 )
 
@@ -43,7 +49,39 @@ func (r *Route) Handle(res http.ResponseWriter, req *http.Request) int {
 	ctx := context.Background()
 	execContext := exec.NewContext(req.Method, req.RequestURI, req.Header, r.Version)
 	ctx = vcontext.WithValue(ctx, exec.ContextKey, execContext)
+	var onDone func(time.Time, ...interface{}) int64 = nil
+	var start time.Time
+	if r.Counter != nil {
+		start = time.Now()
+		onDone = r.Counter.Begin(start)
+	}
+
 	r.Handler(ctx, res, req)
+
+	// finalize metrics
+	if onDone != nil {
+		end := time.Now()
+		onDone(end)
+		// Determine final status code
+		statusCode := execContext.StatusCode
+		if statusCode == 0 {
+			statusCode = http.StatusOK
+		}
+		// Increment error/success buckets
+		if statusCode >= 200 && statusCode < 300 {
+			r.Counter.IncrementValue("Success")
+			r.Counter.IncrementValue("status:2xx")
+		} else if statusCode >= 400 && statusCode < 500 {
+			r.Counter.IncrementValue("Error")
+			r.Counter.IncrementValue("status:4xx")
+		} else if statusCode >= 500 {
+			r.Counter.IncrementValue("Error")
+			r.Counter.IncrementValue("status:5xx")
+		} else {
+			// Treat other codes as success by default
+			r.Counter.IncrementValue("Success")
+		}
+	}
 	if execContext.StatusCode == 0 {
 		execContext.StatusCode = http.StatusOK
 	}
@@ -66,7 +104,7 @@ func (r *Router) NewRouteHandler(handler *router.Handler) *Route {
 	if !strings.HasPrefix(URI, "/") {
 		URI = "/" + URI
 	}
-	return &Route{
+	route := &Route{
 		Path:      &handler.Path.Path,
 		MCP:       &handler.Path.ModelContextProtocol,
 		Meta:      &handler.Path.Meta,
@@ -75,6 +113,9 @@ func (r *Router) NewRouteHandler(handler *router.Handler) *Route {
 		Config:    r.config.Logging,
 		Version:   r.config.Version,
 	}
+	// Pre-register and attach per-route counter if metrics are enabled
+	route.Counter = r.ensureRouteCounter(context.Background(), handler.Provider)
+	return route
 }
 
 func (r *Route) URI() string {
