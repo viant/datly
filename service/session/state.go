@@ -746,7 +746,27 @@ func New(aView *view.View, opts ...Option) *Session {
 	return ret
 }
 
-func (s *Session) LoadState(parameters state.Parameters, aState interface{}) error {
+type loadStateOptions struct {
+	skipKind    map[state.Kind]bool
+	hasSkipKind bool
+}
+
+type LoadStateOption func(o *loadStateOptions)
+
+func WithLoadStateSkipKind(kinds ...state.Kind) LoadStateOption {
+	return func(o *loadStateOptions) {
+		for _, kind := range kinds {
+			o.skipKind[kind] = true
+		}
+	}
+}
+
+func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opts ...LoadStateOption) error {
+	options := &loadStateOptions{skipKind: map[state.Kind]bool{}}
+	for _, opt := range opts {
+		opt(options)
+	}
+	options.hasSkipKind = len(options.skipKind) > 0
 	rType := reflect.TypeOf(aState)
 	sType := structology.NewStateType(rType, structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
 		stateTag, _ := tags.ParseStateTags(tag, nil)
@@ -759,6 +779,9 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 	ptr := xunsafe.AsPointer(aState)
 	for _, parameter := range parameters {
 		if parameter.Scope != "" {
+			continue
+		}
+		if options.hasSkipKind && options.skipKind[parameter.In.Kind] {
 			continue
 		}
 		// Only warm cache for cacheable parameters; LookupValue only reads cache when cacheable

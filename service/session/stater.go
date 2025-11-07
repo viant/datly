@@ -122,7 +122,13 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 			}
 			parameters = aType.Parameters
 		}
-		if e := s.LoadState(parameters, input); e != nil {
+
+		var skipOption []LoadStateOption
+		if s.view.Mode != view.ModeQuery {
+			skipOption = append(skipOption, WithLoadStateSkipKind(state.KindView, state.KindParam))
+		}
+
+		if e := s.LoadState(parameters, input, skipOption...); e != nil {
 			return e
 		}
 		if s.view.Mode == view.ModeQuery {
