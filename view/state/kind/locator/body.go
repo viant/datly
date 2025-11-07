@@ -7,7 +7,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"reflect"
-	"strings"
 	"sync"
 
 	"github.com/viant/datly/shared"
@@ -84,13 +83,18 @@ func (r *Body) Value(ctx context.Context, rType reflect.Type, name string) (inte
 func (r *Body) initOnce() {
 	r.Once.Do(func() {
 		// Multipart branch
-		if r.request != nil && r.isMultipartRequest() {
-			r.isMultipart = true
-			r.err = r.request.ParseMultipartForm(maxMultipartMemory)
-			if r.err == nil {
-				r.seedFormFromMultipart()
+		if r.request != nil {
+			ct := r.request.Header.Get("Content-Type")
+			if shared.IsMultipartContentType(ct) {
+				r.isMultipart = true
+				if mediaType, _, err := mime.ParseMediaType(ct); err == nil && shared.IsFormData(mediaType) {
+					r.err = r.request.ParseMultipartForm(maxMultipartMemory)
+					if r.err == nil {
+						r.seedFormFromMultipart()
+					}
+				}
+				return
 			}
-			return
 		}
 		// Non-multipart: clone and read body safely
 		var request *http.Request
@@ -162,7 +166,7 @@ func NewBody(opts ...Option) (kind.Locator, error) {
 	if options.Unmarshal == nil {
 		return nil, fmt.Errorf("unmarshal was empty")
 	}
-	// Allow missing BodyType only for multipart/form-data requests; otherwise keep existing requirement.
+	// Allow missing BodyType only for multipart/* requests; otherwise keep existing requirement.
 	if options.BodyType == nil {
 		ct := ""
 		if options.request != nil && options.request.Header != nil {
@@ -170,11 +174,7 @@ func NewBody(opts ...Option) (kind.Locator, error) {
 		}
 		isMultipart := false
 		if ct != "" {
-			if mediaType, _, err := mime.ParseMediaType(ct); err == nil {
-				isMultipart = strings.EqualFold(mediaType, "multipart/form-data")
-			} else {
-				isMultipart = strings.Contains(strings.ToLower(ct), "multipart/form-data")
-			}
+			isMultipart = shared.IsMultipartContentType(ct)
 		}
 		if !isMultipart {
 			return nil, fmt.Errorf("body type was empty")
@@ -235,20 +235,7 @@ func (r *Body) updateQueryString(ctx context.Context, body interface{}) {
 }
 
 // isMultipartRequest checks content type for multipart/form-data
-func (r *Body) isMultipartRequest() bool {
-	if r.request == nil {
-		return false
-	}
-	ct := r.request.Header.Get("Content-Type")
-	if ct == "" {
-		return false
-	}
-	mediaType, _, err := mime.ParseMediaType(ct)
-	if err != nil {
-		return strings.Contains(strings.ToLower(ct), "multipart/form-data")
-	}
-	return strings.EqualFold(mediaType, "multipart/form-data")
-}
+// removed: local isMultipartRequest; use shared.IsMultipartContentType instead
 
 // seedFormFromMultipart copies textual multipart values into shared form to avoid re-parsing later
 func (r *Body) seedFormFromMultipart() {

@@ -128,6 +128,10 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 			builder.WriteString(".Required()")
 		}
 	}
+
+	if p.Cacheable != nil {
+		builder.WriteString(".Cacheable('" + strconv.FormatBool(*p.Cacheable) + "')")
+	}
 	if p.Connector != "" {
 		builder.WriteString(".WithConnector('" + p.Connector + "')")
 	}

@@ -761,6 +761,10 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 		if parameter.Scope != "" {
 			continue
 		}
+		// Only warm cache for cacheable parameters; LookupValue only reads cache when cacheable
+		if !parameter.IsCacheable() {
+			continue
+		}
 		selector, _ := inputState.Selector(parameter.Name)
 		if selector == nil {
 			continue

@@ -18,8 +18,8 @@ func CloneHTTPRequest(request *http.Request) (*http.Request, error) {
 		return &ret, nil
 	}
 
-	// Detect multipart/form-data; avoid reading/consuming body
-	if isMultipartRequest(request) {
+	// Detect multipart/*; avoid reading/consuming body
+	if IsMultipartRequest(request) {
 		// share the same Body; caller must ensure only one reader consumes it
 		ret.Body = request.Body
 		return &ret, nil
@@ -44,17 +44,27 @@ func readRequestBody(request *http.Request) ([]byte, error) {
 	return data, err
 }
 
-func isMultipartRequest(r *http.Request) bool {
+// IsMultipartRequest returns true if request Content-Type is multipart/*
+func IsMultipartRequest(r *http.Request) bool {
 	if r == nil || r.Header == nil {
 		return false
 	}
-	ct := r.Header.Get("Content-Type")
+	return IsMultipartContentType(r.Header.Get("Content-Type"))
+}
+
+// IsMultipartContentType returns true when the Content-Type header indicates any multipart/*
+func IsMultipartContentType(ct string) bool {
 	if ct == "" {
 		return false
 	}
 	mediaType, _, err := mime.ParseMediaType(ct)
 	if err != nil {
-		return strings.Contains(strings.ToLower(ct), "multipart/form-data")
+		return strings.Contains(strings.ToLower(ct), "multipart/")
 	}
+	return strings.HasPrefix(strings.ToLower(mediaType), "multipart/")
+}
+
+// IsFormData returns true when mediaType equals multipart/form-data
+func IsFormData(mediaType string) bool {
 	return strings.EqualFold(mediaType, "multipart/form-data")
 }
