@@ -101,10 +101,8 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		if s.component != nil && s.component.Input.Type.Type() != nil && s.component.Input.Type.Type().Type() != nil {
 			compInType := s.component.Input.Type.Type().Type()
 			inType := reflect.TypeOf(input)
-			if inType != nil && inType.Kind() != reflect.Ptr {
-				inType = reflect.PtrTo(inType)
-			}
-			if inType == compInType {
+
+			if inType != nil && compInType != nil && types.EnsureStruct(inType) == types.EnsureStruct(compInType) {
 				parameters = s.component.Input.Type.Parameters
 			}
 		}
@@ -112,6 +110,7 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		if len(parameters) == 0 {
 			inType := reflect.TypeOf(input)
 			aType, e := state.NewType(
+				state.WithFS(embedFs),
 				state.WithSchema(state.NewSchema(inType)),
 				state.WithResource(s.resource),
 			)
