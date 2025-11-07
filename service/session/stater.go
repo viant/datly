@@ -125,6 +125,7 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 
 		var skipOption []LoadStateOption
 		if s.view.Mode != view.ModeQuery {
+			//this is for patch component only (in the future we may pass it to caller when call Bind
 			skipOption = append(skipOption, WithLoadStateSkipKind(state.KindView, state.KindParam))
 		}
 
