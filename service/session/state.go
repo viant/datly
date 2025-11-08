@@ -299,13 +299,21 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 	parameterSelector := parameter.Selector()
 	if options.indirectState || parameterSelector == nil { //p
 		parameterSelector, err = aState.Selector(parameter.Name)
-		if parameterSelector == nil && parameter.In.Kind == state.KindConst { // TODO do we really need it?
-			return nil
+		if parameterSelector == nil {
+			switch parameter.In.Kind {
+			case state.KindConst:
+				return nil
+			case state.KindRequestBody:
+				if parameter.In.Name == "" { //auxiliary body wrapper
+					return nil
+				}
+			}
 		}
 		if err != nil {
 			return err
 		}
 	}
+
 	if value, err = s.ensureValidValue(value, parameter, parameterSelector, options); err != nil {
 		return err
 	}
@@ -564,8 +572,8 @@ func (s *Session) lookupFirstValue(ctx context.Context, parameters []*state.Para
 }
 
 func (s *Session) LookupValue(ctx context.Context, parameter *state.Parameter, opts *Options) (value interface{}, has bool, err error) {
-
-	if value, has, err = s.lookupValue(ctx, parameter, opts); err != nil {
+	value, has, err = s.lookupValue(ctx, parameter, opts)
+	if err != nil {
 		err = response.NewParameterError("", parameter.Name, err, response.WithObject(value), response.WithErrorStatusCode(parameter.ErrorStatusCode))
 	}
 	return value, has, err
@@ -656,6 +664,13 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 		return nil, false, err
 	}
 	if parameter.Output != nil {
+		// Defensive: ensure codec is initialized before Transform.
+		if !parameter.Output.Initialized() {
+			// Initialize using session resource and current parameter input type.
+			if initErr := parameter.Output.Init(s.resource, parameter.Schema.Type()); initErr != nil {
+				return nil, false, initErr
+			}
+		}
 		transformed, err := parameter.Output.Transform(ctx, value, opts.codecOptions...)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to transform %s with %s: %v, %w", parameter.Name, parameter.Output.Name, value, err)
@@ -747,12 +762,18 @@ func New(aView *view.View, opts ...Option) *Session {
 }
 
 type loadStateOptions struct {
-	skipKind    map[state.Kind]bool
-	hasSkipKind bool
+	skipKind     map[state.Kind]bool
+	hasSkipKind  bool
+	useHasMarker bool
 }
 
 type LoadStateOption func(o *loadStateOptions)
 
+func WithHasMarker() LoadStateOption {
+	return func(o *loadStateOptions) {
+		o.useHasMarker = true
+	}
+}
 func WithLoadStateSkipKind(kinds ...state.Kind) LoadStateOption {
 	return func(o *loadStateOptions) {
 		for _, kind := range kinds {
@@ -777,6 +798,10 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 	}))
 	inputState := sType.WithValue(aState)
 	ptr := xunsafe.AsPointer(aState)
+	// Use presence markers only if enabled and supported by the input state
+	hasMarker := options.useHasMarker && inputState.HasMarker()
+	bodyParam := parameters.LookupByLocation(state.KindRequestBody, "")
+
 	for _, parameter := range parameters {
 		if parameter.Scope != "" {
 			continue
@@ -792,22 +817,27 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 		if selector == nil {
 			continue
 		}
-		if !selector.Has(ptr) {
+		// Only use selector.Has when input supports presence markers
+		if hasMarker && !selector.Has(ptr) {
 			continue
 		}
 		value := selector.Value(ptr)
 		switch parameter.In.Kind {
 		case state.KindView, state.KindParam, state.KindState:
 			if value == nil {
-				return nil
+				continue
 			}
 
 			rType := parameter.OutputType()
 			if rType.Kind() == reflect.Ptr {
 				ptr := (*unsafe.Pointer)(xunsafe.AsPointer(value))
 				if ptr == nil || *ptr == nil {
-					return nil
+					continue
 				}
+			}
+		case state.KindRequestBody:
+			if bodyParam != nil {
+				s.setValue(bodyParam, value)
 			}
 		}
 		s.setValue(parameter, value)
