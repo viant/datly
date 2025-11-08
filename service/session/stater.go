@@ -135,6 +135,7 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		viewOptions := s.ViewOptions(s.view, WithLocatorOptions())
 		stateOptions = append(viewOptions.kindLocator.Options(), stateOptions...)
 	}
+
 	if err = s.handleInputState(ctx, hOptions, embedFs); err != nil {
 		return err
 	}
@@ -161,56 +162,58 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 
 func (s *Session) handleInputState(ctx context.Context, hOptions *hstate.Options, embedFs *embed.FS) error {
 	// Handle WithInput: preload cache from provided input data
-	if input := hOptions.Input(); input != nil {
-		var parameters state.Parameters
-		var inputType *state.Type
-		// If input type matches component input type, reuse component parameters
-		if s.component != nil && s.component.Input.Type.Type() != nil && s.component.Input.Type.Type().Type() != nil {
-			compInType := s.component.Input.Type.Type().Type()
-			inType := reflect.TypeOf(input)
-			if inType != nil && compInType != nil && types.EnsureStruct(inType) == types.EnsureStruct(compInType) {
-				parameters = s.component.Input.Type.Parameters
-				inputType = &s.component.Input.Type
-			}
+	input := hOptions.Input()
+	if input == nil {
+		return nil
+	}
+	var parameters state.Parameters
+	var inputType *state.Type
+	// If input type matches component input type, reuse component parameters
+	if s.component != nil && s.component.Input.Type.Type() != nil && s.component.Input.Type.Type().Type() != nil {
+		compInType := s.component.Input.Type.Type().Type()
+		inType := reflect.TypeOf(input)
+		if inType != nil && compInType != nil && types.EnsureStruct(inType) == types.EnsureStruct(compInType) {
+			parameters = s.component.Input.Type.Parameters
+			inputType = &s.component.Input.Type
 		}
-		// Otherwise, derive parameters from input type
-		if len(parameters) == 0 {
-			inType := reflect.TypeOf(input)
-			aType, e := state.NewType(
-				state.WithFS(embedFs),
-				state.WithSchema(state.NewSchema(inType)),
-				state.WithResource(s.resource),
-			)
-			if e != nil {
-				return e
-			}
-			if e = aType.Init(); e != nil {
-				return e
-			}
-			inputType = aType
-			for _, p := range aType.Parameters {
-				p.Init(ctx, s.view.Resource())
-			}
-			parameters = aType.Parameters
-		}
-
-		var skipOption []LoadStateOption
-		skipOption = append(skipOption, WithHasMarker())
-		if s.view.Mode != view.ModeQuery {
-			//this is for patch component only (in the future we may pass it to caller when call Bind
-			skipOption = append(skipOption, WithLoadStateSkipKind(state.KindView, state.KindParam))
-		}
-		if e := s.LoadState(parameters, input, skipOption...); e != nil {
+	}
+	// Otherwise, derive parameters from input type
+	if len(parameters) == 0 {
+		inType := reflect.TypeOf(input)
+		aType, e := state.NewType(
+			state.WithFS(embedFs),
+			state.WithSchema(state.NewSchema(inType)),
+			state.WithResource(s.resource),
+		)
+		if e != nil {
 			return e
 		}
-		if s.view.Mode == view.ModeQuery {
-			inputState := inputType.Type().WithValue(input)
-			options := s.Options.Indirect(true)
-			if err := s.SetState(ctx, parameters, inputState, options); err != nil {
-				return err
-			}
-			_ = s.SetViewState(ctx, s.view)
+		if e = aType.Init(); e != nil {
+			return e
 		}
+		inputType = aType
+		for _, p := range aType.Parameters {
+			p.Init(ctx, s.view.Resource())
+		}
+		parameters = aType.Parameters
+	}
+
+	var skipOption []LoadStateOption
+	skipOption = append(skipOption, WithHasMarker())
+	if s.view.Mode != view.ModeQuery {
+		//this is for patch component only (in the future we may pass it to caller when call Bind
+		skipOption = append(skipOption, WithLoadStateSkipKind(state.KindView, state.KindParam))
+	}
+	if e := s.LoadState(parameters, input, skipOption...); e != nil {
+		return e
+	}
+	if s.view.Mode == view.ModeQuery {
+		inputState := inputType.Type().WithValue(input)
+		options := s.Options.Indirect(true)
+		if err := s.SetState(ctx, parameters, inputState, options); err != nil {
+			return err
+		}
+		_ = s.SetViewState(ctx, s.view)
 	}
 	return nil
 }

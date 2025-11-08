@@ -82,13 +82,6 @@ func (t *Type) Init(options ...Option) (err error) {
 		if err := t.buildParameters(); err != nil {
 			return err
 		}
-		// Ensure all derived parameters are fully initialized (schema, codecs, etc.).
-		for _, parameter := range t.Parameters {
-			t.resource.AppendParameter(parameter)
-			if err := parameter.Init(context.Background(), t.resource); err != nil {
-				return err
-			}
-		}
 	} else if hasParameters && t.Schema.Type() == nil {
 		if err := t.buildSchema(context.Background(), t.withMarker); err != nil {
 			return err

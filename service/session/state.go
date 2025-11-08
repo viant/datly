@@ -303,10 +303,6 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 			switch parameter.In.Kind {
 			case state.KindConst:
 				return nil
-			case state.KindRequestBody:
-				if parameter.In.Name == "" { //auxiliary body wrapper
-					return nil
-				}
 			}
 		}
 		if err != nil {
@@ -800,15 +796,15 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 	ptr := xunsafe.AsPointer(aState)
 	// Use presence markers only if enabled and supported by the input state
 	hasMarker := options.useHasMarker && inputState.HasMarker()
-	bodyParam := parameters.LookupByLocation(state.KindRequestBody, "")
-
 	for _, parameter := range parameters {
 		if parameter.Scope != "" {
 			continue
 		}
+
 		if options.hasSkipKind && options.skipKind[parameter.In.Kind] {
 			continue
 		}
+
 		// Only warm cache for cacheable parameters; LookupValue only reads cache when cacheable
 		if !parameter.IsCacheable() {
 			continue
@@ -834,10 +830,6 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 				if ptr == nil || *ptr == nil {
 					continue
 				}
-			}
-		case state.KindRequestBody:
-			if bodyParam != nil {
-				s.setValue(bodyParam, value)
 			}
 		}
 		s.setValue(parameter, value)
