@@ -231,7 +231,19 @@ func (s *Session) setFieldsQuerySelector(value interface{}, ns *view.NamespaceVi
 		return fmt.Errorf("can't use projection on view %v", ns.View.Name)
 	}
 	selector := s.state.Lookup(ns.View)
-	fields := value.([]string)
+	var fields []string
+	switch v := value.(type) {
+	case []string:
+		fields = v
+	case []interface{}:
+		for _, elem := range v {
+			text, ok := elem.(string)
+			if !ok {
+				continue
+			}
+			fields = append(fields, text)
+		}
+	}
 	for _, field := range fields {
 		fieldName := ns.View.CaseFormat.Format(field, text.CaseFormatUpperCamel)
 		if err = canUseColumn(ns.View, fieldName); err != nil {
