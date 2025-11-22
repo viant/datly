@@ -20,7 +20,28 @@ func CloneHTTPRequest(request *http.Request) (*http.Request, error) {
 
 	// Detect multipart/*; avoid reading/consuming body
 	if IsMultipartRequest(request) {
-		// share the same Body; caller must ensure only one reader consumes it
+		// If multipart form has already been parsed, we don't need to
+		// share or re-read the body. Instead, reuse the parsed form and
+		// multipart data on the clone so that downstream logic can access
+		// form values without touching the body again.
+		if request.MultipartForm != nil {
+			// Body is no longer needed for form access.
+			ret.Body = http.NoBody
+			// Reuse parsed forms and multipart metadata.
+			ret.MultipartForm = request.MultipartForm
+			if request.Form != nil {
+				ret.Form = request.Form
+			}
+			if request.PostForm != nil {
+				ret.PostForm = request.PostForm
+			}
+
+			return &ret, nil
+		}
+
+		// Backwards compatibility: if the multipart form hasn't been
+		// parsed yet, fall back to sharing the body. Callers must
+		// still ensure only one reader consumes it.
 		ret.Body = request.Body
 		return &ret, nil
 	}
