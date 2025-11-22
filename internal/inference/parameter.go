@@ -80,18 +80,19 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	case state.KindParam:
 		builder.WriteString("?")
 	default:
+		isPtr := strings.HasPrefix(p.Schema.DataType, "*")
 		if p.Schema.Cardinality == state.Many {
 			builder.WriteString("[]")
-
 			switch p.In.Kind {
 			case "query", "form", "header":
 			default:
-				if !p.IsRequired() {
+				if !p.IsRequired() && !isPtr {
+					isPtr = true
 					builder.WriteString("*")
 				}
 			}
 
-		} else if !p.IsRequired() {
+		} else if !p.IsRequired() && !isPtr {
 			builder.WriteString("*")
 		}
 		builder.WriteString(p.Schema.DataType)
