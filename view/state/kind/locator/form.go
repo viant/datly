@@ -3,7 +3,9 @@ package locator
 import (
 	"context"
 	"mime"
+	"mime/multipart"
 	"net/http"
+	"net/url"
 	"reflect"
 	"sync"
 
@@ -22,10 +24,37 @@ func (r *Form) Names() []string {
 	return nil
 }
 
-func (r *Form) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
+func (r *Form) Value(ctx context.Context, rType reflect.Type, name string) (interface{}, bool, error) {
 	if r.form != nil && len(r.form.Values) == 0 && r.request == nil {
 		return nil, false, nil
 	}
+
+	// Support file uploads when parameters are declared with kind=form
+	// and types *multipart.FileHeader or []*multipart.FileHeader. This
+	// aligns multipart file fields with form semantics instead of body.
+	if r.request != nil && shared.IsMultipartContentType(r.request.Header.Get("Content-Type")) && rType != nil {
+		// Parse/seed multipart values only once
+		r.once.Do(func() { r.seedFormFromMultipart() })
+		if r.request.MultipartForm != nil {
+			// []*multipart.FileHeader
+			if rType.Kind() == reflect.Slice && rType.Elem() == reflect.TypeOf((*multipart.FileHeader)(nil)) {
+				files := r.request.MultipartForm.File[name]
+				if len(files) == 0 {
+					return nil, false, nil
+				}
+				return files, true, nil
+			}
+			// *multipart.FileHeader
+			if rType == reflect.TypeOf((*multipart.FileHeader)(nil)) {
+				files := r.request.MultipartForm.File[name]
+				if len(files) == 0 {
+					return nil, false, nil
+				}
+				return files[0], true, nil
+			}
+		}
+	}
+
 	values, ok := r.form.Lookup(name)
 	if !ok {
 		if r.request == nil {
@@ -73,8 +102,10 @@ func (r *Form) seedFormFromMultipart() {
 	if r.request == nil || r.form == nil {
 		return
 	}
-	if r.request.MultipartForm == nil {
-		// Only ParseMultipartForm for form-data; other multipart types aren't supported by ParseMultipartForm
+	if r.request.MultipartForm == nil && len(r.form.Values) == 0 {
+		// Only ParseMultipartForm for form-data; other multipart types aren't
+		// supported by ParseMultipartForm. If the shared form already has
+		// values, treat it as authoritative and avoid parsing.
 		ct := r.request.Header.Get("Content-Type")
 		if ct != "" {
 			if mediaType, _, err := mime.ParseMediaType(ct); err == nil && shared.IsFormData(mediaType) {
@@ -87,12 +118,14 @@ func (r *Form) seedFormFromMultipart() {
 	if r.request.MultipartForm == nil {
 		return
 	}
-	r.form.Mutex().Lock()
-	defer r.form.Mutex().Unlock()
+	if len(r.request.Form) == 0 {
+		r.request.Form = url.Values{}
+	}
 	for k, vs := range r.request.MultipartForm.Value {
 		if len(vs) == 0 {
 			continue
 		}
 		r.form.Set(k, vs...)
+		r.request.Form[k] = vs
 	}
 }

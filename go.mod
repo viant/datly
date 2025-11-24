@@ -25,7 +25,7 @@ require (
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/godiff v0.4.1
-	github.com/viant/parsly v0.3.3-0.20240717150634-e1afaedb691b
+	github.com/viant/parsly v0.3.3
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.24.0
 	github.com/viant/sqlx v0.17.8
@@ -51,8 +51,8 @@ require (
 	github.com/viant/jsonrpc v0.15.0
 	github.com/viant/mcp v0.8.0
 	github.com/viant/mcp-protocol v0.5.10
-	github.com/viant/structology v0.6.1
-	github.com/viant/tagly v0.2.2
+	github.com/viant/structology v0.8.0
+	github.com/viant/tagly v0.3.0
 	github.com/viant/xdatly v0.5.4-0.20251113181159-0ac8b8b0ff3a
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20251113181159-0ac8b8b0ff3a
