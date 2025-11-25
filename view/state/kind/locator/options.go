@@ -2,6 +2,10 @@ package locator
 
 import (
 	"context"
+	"net/http"
+	"net/url"
+	"reflect"
+
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/repository/contract"
@@ -9,22 +13,21 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
-	"net/http"
-	"net/url"
-	"reflect"
 )
 
 // Options represents locator options
 type (
 	Options struct {
-		request *http.Request
-		Form    *hstate.Form
-		Path    map[string]string
-		Query   url.Values
-		Header  http.Header
-		Body    []byte
+		request        *http.Request
+		Form           *hstate.Form
+		QuerySelectors hstate.QuerySelectors
+		Path           map[string]string
+		Query          url.Values
+		Header         http.Header
+		Body           []byte
 
 		fromError         error
 		Parent            *KindLocator
@@ -44,6 +47,7 @@ type (
 		View              *view.View
 		Resource          *view.Resource
 		Types             []*state.Type
+		Logger            logger.Logger
 		Constants         map[string]interface{}
 		resourceConstants map[string]interface{}
 	}
@@ -178,6 +182,12 @@ func WithInputParameters(parameters state.NamedParameters) Option {
 	}
 }
 
+func WithQuerySelectors(selectors hstate.QuerySelectors) Option {
+	return func(o *Options) {
+		o.QuerySelectors = selectors
+	}
+}
+
 // WithPathParameters create with path parameters options
 func WithPathParameters(parameters map[string]string) Option {
 	return func(o *Options) {
@@ -246,6 +256,12 @@ func WithQuery(parameters url.Values) Option {
 				o.Query[k] = v
 			}
 		}
+	}
+}
+
+func WithLogger(logger logger.Logger) Option {
+	return func(o *Options) {
+		o.Logger = logger
 	}
 }
 

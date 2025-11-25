@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
+
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	executor "github.com/viant/datly/service/executor"
@@ -20,7 +22,6 @@ import (
 	"github.com/viant/xdatly/handler/sqlx"
 	hstate "github.com/viant/xdatly/handler/state"
 	"github.com/viant/xdatly/handler/validator"
-	"net/http"
 )
 
 type (
@@ -94,6 +95,12 @@ func (e *Executor) Session(ctx context.Context) (*executor.Session, error) {
 
 	e.executorSession = sess
 	sess.SessionHandler = sessionHandler
+	// inherit tx from session options if available
+	if e.tx == nil {
+		if tx := e.session.Options.SqlTx(); tx != nil {
+			e.tx = tx
+		}
+	}
 	return e.executorSession, err
 }
 
@@ -126,6 +133,9 @@ func (e *Executor) newSession(aSession *session.Session, opts ...Option) *extens
 	if options.auth != nil {
 		e.auth = options.auth
 	}
+	if e.logger == nil {
+		e.logger = options.logger
+	}
 	res := e.view.GetResource()
 	sess := extension.NewSession(
 		extension.WithTemplateFlush(func(ctx context.Context) error {
@@ -135,6 +145,7 @@ func (e *Executor) newSession(aSession *session.Session, opts ...Option) *extens
 		extension.WithRedirect(e.redirect),
 		extension.WithSql(e.newSqlService),
 		extension.WithHttp(e.newHttp),
+		extension.WithLogger(e.logger),
 		extension.WithAuth(e.newAuth),
 		extension.WithMessageBus(res.MessageBuses),
 	)
@@ -157,6 +168,10 @@ func (e *Executor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error) {
 	if unit == e.dataUnit { //we are using View that can contain SQL Statements in Velty
 		txStartedNotifier = e.txStarted
 	}
+	// default SQLx tx to executor tx to avoid internal Begin/Commit if caller provided one
+	if options.WithTx == nil && e.tx != nil {
+		options.WithTx = e.tx
+	}
 	return &Service{
 		txNotifier:    txStartedNotifier,
 		dataUnit:      unit,
@@ -168,6 +183,7 @@ func (e *Executor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error) {
 }
 
 func (e *Executor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) {
+	e.ensureConnectors()
 	if (options.WithDb == nil && options.WithTx == nil) && options.WithConnector == e.view.Connector.Name {
 		return e.dataUnit, nil
 	}
@@ -192,6 +208,11 @@ func (e *Executor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) 
 		if connector == nil {
 			return nil, fmt.Errorf("failed to lookup connector %v", options.WithConnector)
 		}
+
+		if _, ok := e.connectors[options.WithConnector]; !ok {
+			e.connectors[options.WithConnector] = connector
+		}
+
 		db, err := connector.DB()
 		if err != nil {
 			return nil, err
@@ -206,6 +227,17 @@ func (e *Executor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) 
 	return e.dataUnit, nil
 }
 
+func (e *Executor) ensureConnectors() {
+	if len(e.connectors) == 0 {
+		e.connectors = make(view.Connectors)
+		if res := e.view.GetResource(); res != nil {
+			for _, connector := range res.Connectors {
+				e.connectors[connector.Name] = connector
+			}
+		}
+	}
+}
+
 func (e *Executor) Execute(ctx context.Context) error {
 	if e.executed {
 		return nil
@@ -217,6 +249,10 @@ func (e *Executor) Execute(ctx context.Context) error {
 		dbOptions = append(dbOptions, executor.WithTx(e.tx))
 	}
 
+	err := service.ExecuteStmts(ctx, executor.NewViewDBSource(e.view), newSqlxIterator(e.dataUnit.Statements.Executable), dbOptions...)
+	if err != nil {
+		return err
+	}
 	for _, unit := range e.dataUnits {
 		dbSource := &DbSource{}
 		dbSource.db, _ = unit.MetaSource.Db()
@@ -225,7 +261,7 @@ func (e *Executor) Execute(ctx context.Context) error {
 		}
 	}
 
-	return service.ExecuteStmts(ctx, executor.NewViewDBSource(e.view), newSqlxIterator(e.dataUnit.Statements.Executable), dbOptions...)
+	return err
 }
 
 func (e *Executor) ExpandAndExecute(ctx context.Context) (*executor.Session, error) {
@@ -262,7 +298,6 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 		request.Header = originalRequest.Header
 	}
 	stateOptions := hstate.NewOptions(opts...)
-
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
 	if stateOptions.Query() != nil {
@@ -286,8 +321,13 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 		session.WithOperate(e.session.Options.Operate()),
 		session.WithTypes(&aComponent.Contract.Input.Type, &aComponent.Contract.Output.Type),
 		session.WithComponent(aComponent),
+		session.WithLogger(e.logger),
 		session.WithRegistry(registry),
 	)
+	if tx := stateOptions.SqlTx(); tx != nil {
+		// associate tx with session; child executor will reuse it
+		aSession.Apply(session.WithSQLTx(tx))
+	}
 
 	err = aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
 	if err != nil {
@@ -295,7 +335,11 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 	}
 	ctx = aSession.Context(ctx, true)
 	anExecutor := NewExecutor(aComponent.View, aSession)
-	return anExecutor.NewHandlerSession(ctx)
+	// ensure Execute(ctx) uses the provided tx (avoid autocommit)
+	if tx := stateOptions.SqlTx(); tx != nil {
+		anExecutor.tx = tx
+	}
+	return anExecutor.NewHandlerSession(ctx, WithLogger(aSession.Logger()))
 }
 
 func (e *Executor) newHttp() http2.Http {

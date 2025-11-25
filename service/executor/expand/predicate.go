@@ -3,11 +3,13 @@ package expand
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
-	"strings"
+	"github.com/viant/xdatly/handler/logger"
 )
 
 var PredicateState predicateState = "state"
@@ -36,7 +38,11 @@ type (
 	}
 )
 
-func NewPredicate(ctx *Context, state *structology.State, config []*PredicateConfig) *Predicate {
+func NewPredicate(ctx *Context, state *structology.State, config []*PredicateConfig, stateType *structology.StateType) *Predicate {
+	// Initialize state if not provided, but never override an existing state
+	if state == nil && stateType != nil {
+		state = stateType.NewState()
+	}
 	return &Predicate{
 		ctx:    ctx,
 		config: config,
@@ -128,6 +134,13 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 	ctx = vcontext.WithValue(ctx, PredicateCtx, p.ctx)
 	ctx = vcontext.WithValue(ctx, PredicateState, p.state)
 
+	p.ctx.DataUnit.EvalLock.Lock()
+	defer p.ctx.DataUnit.EvalLock.Unlock()
+
+	if p.ctx.Session != nil {
+		aLogger := p.ctx.Session.Logger()
+		ctx = vcontext.WithValue(ctx, logger.ContextKey, aLogger)
+	}
 	for _, predicateConfig := range p.config {
 		if predicateConfig.Group != group {
 			continue

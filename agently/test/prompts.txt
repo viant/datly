@@ -1,0 +1,11 @@
+1. table exists
+Create DQL for reading service for table mydb.INVOICE and columns ID, CUSTOMER_ID, INVOICE_NUMBER.
+
+2. table don't exist
+Create DQL for reading service for table mydb.INVOICE_XYZ and columns ID, CUSTOMER_ID, INVOICE_NUMBER.
+
+3. One-to-Many relation: customer (1) -> invoice (N)
+Create DQL for reading service for table mydb.customer joined with mydb.invoice
+
+4. One-to-One relation: invoice (1) -> customer (1)
+Create DQL for reading service for table relations mydb.invoice with mydb.customer

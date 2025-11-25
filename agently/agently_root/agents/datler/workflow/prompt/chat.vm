@@ -1,0 +1,19 @@
+#set($PreventDuplicateRule = "The previous function succeeded. Do NOT make an immediately consecutive call with the same arguments in this assistant reply; reuse its output instead.")
+#if($CanPreventDuplicateToolCalls)
+  ${PreventDuplicateRule}
+#end
+
+#if(${Context})
+Context: ${Context}
+#end
+
+#if(!$CanUseTools)#if(${Results})
+════════════════════════════════════════
+📊 Tool Results
+════════════════════════════════════════
+    #foreach($res in $Results)
+    - tool: ${res.Name} ($res.Args)#if($res.Result) =>  ${res.Result}#end#if($res.Error)Error: ${res.Error}#end
+    #end#end#end
+#if(${ResultSummary})${ResultSummary}#end
+
+User Query:  ${Query}

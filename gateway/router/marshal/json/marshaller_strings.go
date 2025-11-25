@@ -49,16 +49,54 @@ func (i *stringMarshaller) ensureReplacer() {
 	}
 }
 
-func marshallString(asString string, sb *MarshallSession, replacer *strings.Replacer) {
-	// This removes all /n characters at begining and end of log lines in CI_EVENT Table
-	/*
-		asString = strings.TrimFunc(asString, func(r rune) bool {
-			return !unicode.IsGraphic(r)
-		})
-	*/
-
+func marshallString(asString string, sb *MarshallSession, _ *strings.Replacer) {
+	// Fully JSON-escape the string, including control chars and JS line/paragraph separators.
+	const hexDigits = "0123456789abcdef"
 	sb.WriteByte('"')
-	sb.WriteString(replacer.Replace(asString))
+	for i := 0; i < len(asString); i++ {
+		c := asString[i]
+		switch c {
+		case '\\', '"':
+			sb.WriteByte('\\')
+			sb.WriteByte(c)
+		case '/':
+			sb.WriteByte('\\')
+			sb.WriteByte('/')
+		case '\b':
+			sb.WriteString(`\\b`)
+		case '\f':
+			sb.WriteString(`\\f`)
+		case '\n':
+			sb.WriteString(`\\n`)
+		case '\r':
+			sb.WriteString(`\\r`)
+		case '\t':
+			sb.WriteString(`\\t`)
+		default:
+			// Escape other control characters < 0x20 as \u00XX
+			if c < 0x20 {
+				sb.WriteString(`\\u00`)
+				sb.WriteByte(hexDigits[c>>4])
+				sb.WriteByte(hexDigits[c&0x0F])
+				continue
+			}
+			// Escape U+2028 and U+2029 to be safe for JS embed contexts
+			if c == 0xE2 && i+2 < len(asString) {
+				c1 := asString[i+1]
+				c2 := asString[i+2]
+				if c1 == 0x80 && (c2 == 0xA8 || c2 == 0xA9) {
+					if c2 == 0xA8 {
+						sb.WriteString(`\\u2028`)
+					} else {
+						sb.WriteString(`\\u2029`)
+					}
+					i += 2
+					continue
+				}
+			}
+			sb.WriteByte(c)
+		}
+	}
 	sb.WriteByte('"')
 }
 

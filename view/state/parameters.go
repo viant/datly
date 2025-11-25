@@ -2,6 +2,10 @@ package state
 
 import (
 	"fmt"
+	"net/http"
+	"reflect"
+	"strings"
+
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
@@ -13,9 +17,6 @@ import (
 	"github.com/viant/velty"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"net/http"
-	"reflect"
-	"strings"
 )
 
 const (

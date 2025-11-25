@@ -4,6 +4,10 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"net/http"
+	"reflect"
+	"strings"
+
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/router/marshal"
@@ -11,7 +15,7 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/async"
-	"github.com/viant/datly/repository/content"
+	content "github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/handler"
 	"github.com/viant/datly/repository/version"
@@ -29,9 +33,6 @@ import (
 	xhandler "github.com/viant/xdatly/handler"
 	hstate "github.com/viant/xdatly/handler/state"
 	"github.com/viant/xreflect"
-	"net/http"
-	"reflect"
-	"strings"
 )
 
 // Component represents abstract API view/handler based component
@@ -169,6 +170,109 @@ func (c *Component) initView(ctx context.Context, resource *view.Resource) error
 	if err := c.View.Init(ctx, resource); err != nil {
 		return err
 	}
+	// For read components (GET), expose and enable offset/limit/fields/page/orderBy for each namespaced view.
+	if strings.EqualFold(c.Path.Method, http.MethodGet) {
+		// Helper to enable limit/offset for a view with namespace prefix (if any)
+		ensureSelectors := func(v *view.View, nsPrefix string) {
+			if v == nil {
+				return
+			}
+			if v.Selector == nil {
+				v.Selector = &view.Config{}
+			}
+			if v.Selector.Constraints == nil {
+				v.Selector.Constraints = &view.Constraints{}
+			}
+			// Enable constraints
+			v.Selector.Constraints.Limit = true
+			v.Selector.Constraints.Offset = true
+			v.Selector.Constraints.Projection = true
+			v.Selector.Constraints.OrderBy = true
+
+			// Limit param
+			if v.Selector.LimitParameter == nil {
+				p := *view.QueryStateParameters.LimitParameter
+				p.Description = view.Description(view.LimitQuery, v.Name)
+				if nsPrefix != "" {
+					p.In = state.NewQueryLocation(nsPrefix + view.LimitQuery)
+				}
+				v.Selector.LimitParameter = &p
+			} else if v.Selector.LimitParameter.Description == "" {
+				v.Selector.LimitParameter.Description = view.Description(view.LimitQuery, v.Name)
+			}
+
+			// Offset param
+			if v.Selector.OffsetParameter == nil {
+				p := *view.QueryStateParameters.OffsetParameter
+				p.Description = view.Description(view.OffsetQuery, v.Name)
+				if nsPrefix != "" {
+					p.In = state.NewQueryLocation(nsPrefix + view.OffsetQuery)
+				}
+				v.Selector.OffsetParameter = &p
+			} else if v.Selector.OffsetParameter.Description == "" {
+				v.Selector.OffsetParameter.Description = view.Description(view.OffsetQuery, v.Name)
+			}
+
+			// Fields param (controls which fields are included)
+			if v.Selector.FieldsParameter == nil {
+				p := *view.QueryStateParameters.FieldsParameter
+				p.Description = view.Description(view.FieldsQuery, v.Name)
+				if nsPrefix != "" {
+					p.In = state.NewQueryLocation(nsPrefix + view.FieldsQuery)
+				}
+				v.Selector.FieldsParameter = &p
+			} else if v.Selector.FieldsParameter.Description == "" {
+				v.Selector.FieldsParameter.Description = view.Description(view.FieldsQuery, v.Name)
+			}
+
+			// Page param (paging interface on top of limit/offset)
+			if v.Selector.PageParameter == nil {
+				p := *view.QueryStateParameters.PageParameter
+				p.Description = view.Description(view.PageQuery, v.Name)
+				if nsPrefix != "" {
+					p.In = state.NewQueryLocation(nsPrefix + view.PageQuery)
+				}
+				v.Selector.PageParameter = &p
+			} else if v.Selector.PageParameter.Description == "" {
+				v.Selector.PageParameter.Description = view.Description(view.PageQuery, v.Name)
+			}
+
+			// OrderBy param
+			if v.Selector.OrderByParameter == nil {
+				p := *view.QueryStateParameters.OrderByParameter
+				p.Description = view.Description(view.OrderByQuery, v.Name)
+				if nsPrefix != "" {
+					p.In = state.NewQueryLocation(nsPrefix + view.OrderByQuery)
+				}
+				v.Selector.OrderByParameter = &p
+			} else if v.Selector.OrderByParameter.Description == "" {
+				v.Selector.OrderByParameter.Description = view.Description(view.OrderByQuery, v.Name)
+			}
+		}
+
+		// Root view
+		nsPrefix := ""
+		if c.View.Selector != nil && c.View.Selector.Namespace != "" {
+			nsPrefix = c.View.Selector.Namespace
+		}
+		ensureSelectors(c.View, nsPrefix)
+
+		// All related views via NamespacedView
+		if c.NamespacedView != nil {
+			for _, nsView := range c.NamespacedView.Views {
+				v := nsView.View
+				// Determine ns prefix from NamespacedView (prefer non-empty namespace if present)
+				pfx := ""
+				for _, ns := range nsView.Namespaces {
+					if ns != "" {
+						pfx = ns
+						break
+					}
+				}
+				ensureSelectors(v, pfx)
+			}
+		}
+	}
 	holder := ""
 	if c.Contract.Output.Type.Parameters != nil {
 		if rootHolder := c.Contract.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); rootHolder != nil {
@@ -260,27 +364,143 @@ func (c *Component) IOConfig() *config.IOConfig {
 }
 
 func (c *Component) UnmarshalFunc(request *http.Request) shared.Unmarshal {
-	contentType := request.Header.Get(content.HeaderContentType)
-	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(content.HeaderContentType)))
+	// Delegate to options-based variant for symmetry and centralization.
+	return c.UnmarshalFor(WithUnmarshalRequest(request))
+}
+
+// UnmarshalOption configures unmarshal behavior for Component.UnmarshalFor.
+type UnmarshalOption func(*unmarshalOptions)
+
+type unmarshalOptions struct {
+	request      *http.Request
+	contentType  string
+	interceptors json.UnmarshalerInterceptors
+}
+
+// WithUnmarshalRequest supplies an http request for content-type detection and transforms.
+func WithUnmarshalRequest(r *http.Request) UnmarshalOption {
+	return func(o *unmarshalOptions) { o.request = r }
+}
+
+// WithContentType overrides the detected content type.
+func WithContentType(ct string) UnmarshalOption {
+	return func(o *unmarshalOptions) { o.contentType = ct }
+}
+
+// WithUnmarshalInterceptors adds/overrides JSON path interceptors.
+func WithUnmarshalInterceptors(m json.UnmarshalerInterceptors) UnmarshalOption {
+	return func(o *unmarshalOptions) {
+		if o.interceptors == nil {
+			o.interceptors = json.UnmarshalerInterceptors{}
+		}
+		for k, v := range m {
+			o.interceptors[k] = v
+		}
+	}
+}
+
+// UnmarshalFor returns a request-scoped unmarshal function applying content-type detection and transforms.
+func (c *Component) UnmarshalFor(opts ...UnmarshalOption) shared.Unmarshal {
+	options := &unmarshalOptions{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(options)
+		}
+	}
+
+	// Resolve content type if request present
+	contentType := options.contentType
+	if contentType == "" && options.request != nil {
+		contentType = options.request.Header.Get(content.HeaderContentType)
+		setter.SetStringIfEmpty(&contentType, options.request.Header.Get(strings.ToLower(content.HeaderContentType)))
+	}
+
 	switch contentType {
 	case content.XMLContentType:
 		return c.Content.Marshaller.XML.Unmarshal
 	case content.CSVContentType:
 		return c.Content.CSV.Unmarshal
-	default:
-		switch c.Output.DataFormat {
-		case content.XMLFormat:
-			return c.Content.Marshaller.XML.Unmarshal
+	}
+	// Fallback to data format preference when no content type or not matched
+	if c.Output.DataFormat == content.XMLFormat {
+		return c.Content.Marshaller.XML.Unmarshal
+	}
+
+	// Build JSON path interceptors from component transforms and any user-provided ones
+	interceptors := options.interceptors
+	if interceptors == nil {
+		interceptors = json.UnmarshalerInterceptors{}
+	}
+	if options.request != nil {
+		for _, transform := range c.UnmarshallerInterceptors() {
+			interceptors[transform.Path] = c.transformFn(options.request, transform)
 		}
 	}
-	jsonPathInterceptor := json.UnmarshalerInterceptors{}
-	unmarshallerInterceptors := c.UnmarshallerInterceptors()
-	for i := range unmarshallerInterceptors {
-		transform := unmarshallerInterceptors[i]
-		jsonPathInterceptor[transform.Path] = c.transformFn(request, transform)
+
+	req := options.request // capture for closure
+	return func(data []byte, dest interface{}) error {
+		if len(interceptors) > 0 || req != nil {
+			return c.Content.Marshaller.JSON.JsonMarshaller.Unmarshal(data, dest, interceptors, req)
+		}
+		return c.Content.Marshaller.JSON.JsonMarshaller.Unmarshal(data, dest)
 	}
-	return func(bytes []byte, i interface{}) error {
-		return c.Content.Marshaller.JSON.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
+}
+
+// MarshalOption configures marshal behavior for Component.MarshalFunc.
+type MarshalOption func(*marshalOptions)
+
+type marshalOptions struct {
+	request *http.Request
+	format  string
+	field   string
+	filters []*json.FilterEntry
+}
+
+// WithRequest supplies an http request for deriving format and state-based exclusions.
+func WithRequest(r *http.Request) MarshalOption { return func(o *marshalOptions) { o.request = r } }
+
+// WithFormat overrides the output format (e.g. content.JSONFormat, content.CSVFormat, etc.).
+func WithFormat(format string) MarshalOption { return func(o *marshalOptions) { o.format = format } }
+
+// WithField overrides the field used by tabular JSON embedding.
+func WithField(field string) MarshalOption { return func(o *marshalOptions) { o.field = field } }
+
+// WithFilters sets explicit JSON field filters (exclusion-based projection).
+func WithFilters(filters []*json.FilterEntry) MarshalOption {
+	return func(o *marshalOptions) { o.filters = filters }
+}
+
+// MarshalFunc returns a request-scoped marshaller closure applying options like format and exclusions.
+// If no format is specified, it defaults to JSON for non-reader services and derives from request for readers.
+func (c *Component) MarshalFunc(opts ...MarshalOption) shared.Marshal {
+	options := &marshalOptions{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(options)
+		}
+	}
+
+	// Resolve format
+	format := options.format
+	if format == "" {
+		if options.request != nil && c.Service == service.TypeReader {
+			format = c.Output.Format(options.request.URL.Query())
+		} else {
+			format = content.JSONFormat
+		}
+	}
+
+	// Resolve field (used for tabular JSON embedding)
+	field := options.field
+	if field == "" {
+		field = c.Output.Field()
+	}
+
+	// Resolve filters (explicit only)
+	filters := options.filters
+
+	return func(src interface{}) ([]byte, error) {
+		return c.Content.Marshal(format, field, src, filters)
 	}
 }
 
@@ -424,6 +644,9 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 					aCache := &view.Cache{Reference: shared.Reference{Ref: aView.Cache}}
 					viewOptions = append(viewOptions, view.WithCache(aCache))
 				}
+				if aView.Limit != nil {
+					viewOptions = append(viewOptions, view.WithLimit(aView.Limit))
+				}
 
 				if aTag.View.PublishParent {
 					viewOptions = append(viewOptions, view.WithViewPublishParent(aTag.View.PublishParent))
@@ -441,6 +664,10 @@ func WithContract(inputType, outputType reflect.Type, embedFs *embed.FS, viewOpt
 			if aTag.View.Batch != 0 {
 				viewOptions = append(viewOptions, view.WithBatchSize(aTag.View.Batch))
 			}
+			if aTag.View.Limit != nil {
+				viewOptions = append(viewOptions, view.WithLimit(aTag.View.Limit))
+			}
+
 			if aTag.View.RelationalConcurrency != 0 {
 				viewOptions = append(viewOptions, view.WithRelationalConcurrency(aTag.View.RelationalConcurrency))
 			}

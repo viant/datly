@@ -1,0 +1,31 @@
+description: Datler agent
+id: datler
+modelRef: openai_o3
+name: Datler
+orchestrationFlow: workflow/orchestration.yaml
+temperature: 0
+tool:
+  - pattern: system/exec
+  - pattern: system/patch
+  - pattern: sqlkit
+
+knowledge:
+  - inclusionMode: full
+    url: knowledge/
+
+systemKnowledge:
+  - inclusionMode: full
+    url: system_knowledge/
+
+elicitation:
+  message: "Please provide execution context"
+  requestedSchema:
+    type: object
+    properties:
+      Workdir:
+        type: string
+        description: Working directory path
+        format: uri-reference
+        default: ${env.HOME}
+    required:
+      - Workdir

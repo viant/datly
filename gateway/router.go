@@ -18,11 +18,14 @@ import (
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/session"
+	"github.com/viant/datly/shared/logging"
 	"github.com/viant/datly/view"
 	vcontext "github.com/viant/datly/view/context"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/gmetric"
 	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/xdatly/handler/async"
+	"github.com/viant/xdatly/handler/logger"
 	hstate "github.com/viant/xdatly/handler/state"
 
 	"net/http"
@@ -38,6 +41,7 @@ type (
 		repository    *repository.Service
 		operator      *operator.Service
 		config        *Config
+		logger        logger.Logger
 		OpenAPIInfo   openapi3.Info
 		metrics       *gmetric.Service
 		statusHandler http.Handler
@@ -78,6 +82,7 @@ func NewRouter(ctx context.Context, components *repository.Service, config *Conf
 		operator:      operator.New(),
 		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
 		mcpRegistry:   mcpRegistry,
+		logger:        logging.New(logging.INFO, nil),
 	}
 	return r, r.init(ctx)
 }
@@ -154,8 +159,10 @@ func (r *Router) HandleJob(ctx context.Context, aJob *async.Job) error {
 	request := &http.Request{Method: aJob.Method, URL: URL, RequestURI: aPath.URI}
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+	locatorOptions = append(locatorOptions, locator.WithLogger(r.logger))
 	aSession := session.New(aComponent.View,
 		session.WithAuth(r.repository.Auth()),
+		session.WithLogger(r.logger),
 		session.WithComponent(aComponent),
 		session.WithLocatorOptions(locatorOptions...),
 		session.WithOperate(r.operator.Operate))
@@ -341,8 +348,8 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 					return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
 				}
 
-				r.EsnureCors(aPath)
-				aRoute := r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth(), r.config.Version, r.config.Logging))
+				r.EnsureCors(aPath)
+				aRoute := r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth(), r.config.Version, r.config.Logging, r.logger))
 				routes = append(routes, aRoute)
 				if aPath.Cors != nil {
 					optionsPaths[aPath.URI] = append(optionsPaths[aPath.URI], aPath)
@@ -473,8 +480,10 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 			}
 			fileSever.ServeHTTP(response, request)
 			if aPath.Cors != nil {
-				cors := r.EsnureCors(aPath)
-				router.CorsHandler(req, cors)(response)
+				// CORS configuration was already resolved at router initialisation time.
+				// Re-use the existing configuration instead of rebuilding it for every request
+				// to avoid unnecessary allocations that may look like a memory leak under load.
+				router.CorsHandler(req, aPath.Cors)(response)
 			}
 		}}
 	result = append(result, defaultRoute)
@@ -489,7 +498,7 @@ func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 
 		fileSever.ServeHTTP(response, request)
 		if aPath.Cors != nil {
-			cors := r.EsnureCors(aPath)
+			cors := r.EnsureCors(aPath)
 			router.CorsHandler(req, cors)(response)
 		}
 	}}
@@ -518,13 +527,13 @@ func (r *Router) NewOptionsRoute(uri string, paths []*path.Path) *Route {
 			Method: http.MethodOptions,
 		},
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
-			cors := r.EsnureCors(paths...)
+			cors := r.EnsureCors(paths...)
 			router.CorsHandler(req, cors)(response)
 		},
 	}
 }
 
-func (r *Router) EsnureCors(paths ...*path.Path) *path.Cors {
+func (r *Router) EnsureCors(paths ...*path.Path) *path.Cors {
 	allowedMethods := []string{}
 	cors := &path.Cors{AllowMethods: &allowedMethods}
 
@@ -546,7 +555,15 @@ func (r *Router) EsnureCors(paths ...*path.Path) *path.Cors {
 			cors.ExposeHeaders = aPath.Cors.ExposeHeaders
 		}
 		if aPath.Cors.AllowMethods != nil {
-			*cors.AllowMethods = append(*cors.AllowMethods, *aPath.Cors.AllowMethods...)
+			var prevMethods = map[string]bool{}
+			for _, prevMethod := range *cors.AllowMethods {
+				prevMethods[prevMethod] = true
+			}
+			for _, method := range *aPath.Cors.AllowMethods {
+				if !prevMethods[method] {
+					*cors.AllowMethods = append(*cors.AllowMethods, method)
+				}
+			}
 		}
 		if aPath.Cors.AllowOrigins != nil {
 			cors.AllowOrigins = aPath.Cors.AllowOrigins

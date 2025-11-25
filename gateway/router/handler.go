@@ -27,7 +27,9 @@ import (
 	"github.com/viant/datly/view"
 	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler/exec"
+	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
 	"io"
@@ -54,6 +56,7 @@ type (
 		registry   *repository.Registry
 		auth       *auth.Service
 		logging    logging.Config
+		logger     logger.Logger
 	}
 )
 
@@ -87,7 +90,7 @@ func (r *Handler) AuthorizeRequest(request *http.Request, aPath *path.Path) erro
 	return nil
 }
 
-func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry, authService *auth.Service, version string, config logging.Config) *Handler {
+func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry, authService *auth.Service, version string, config logging.Config, logger logger.Logger) *Handler {
 	ret := &Handler{
 		Path:       aPath,
 		Provider:   provider,
@@ -96,6 +99,7 @@ func New(aPath *path.Path, provider *repository.Provider, registry *repository.R
 		auth:       authService,
 		Version:    version,
 		logging:    config,
+		logger:     logger,
 	}
 	return ret
 }
@@ -257,11 +261,8 @@ func (r *Handler) writeErrorResponse(ctx context.Context, w http.ResponseWriter,
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if aComponent.Content.Marshaller.JSON.CanMarshal() {
-			data, err = aComponent.Marshaller.JSON.Codec.Marshal(aResponse.State())
-		} else {
-			data, err = aComponent.Marshaller.JSON.JsonMarshaller.Marshal(aResponse.State())
-		}
+		mf := aComponent.MarshalFunc()
+		data, err = mf(aResponse.State())
 		if err != nil {
 			w.Write(data)
 			if execCtx != nil {
@@ -390,11 +391,14 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	anOperator := operator.New()
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+	locatorOptions = append(locatorOptions, locator.WithLogger(r.logger))
 	aSession := session.New(aComponent.View,
 		session.WithAuth(r.auth),
+		session.WithLogger(r.logger),
 		session.WithComponent(aComponent),
 		session.WithLocatorOptions(locatorOptions...),
 		session.WithRegistry(r.registry),
+
 		session.WithOperate(anOperator.Operate))
 	err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
 	if err != nil {
@@ -455,8 +459,10 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 				options.Append(response.WithHeader("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.xlsx"`, aComponent.Output.GetTitle())))
 			}
 		}
+		// Use component-level marshaller with request-scoped options
 		filters := aComponent.Exclusion(aSession.State())
-		data, err := aComponent.Content.Marshal(format, aComponent.Output.Field(), output, filters)
+		mf := aComponent.MarshalFunc(repository.WithRequest(request), repository.WithFormat(format), repository.WithFilters(filters))
+		data, err := mf(output)
 		if err != nil {
 			return nil, response.NewError(500, fmt.Sprintf("failed to marshal response: %v", err), response.WithError(err))
 		}
@@ -494,13 +500,9 @@ func (r *Handler) marshalComponentOutput(output interface{}, aComponent *reposit
 	case []byte:
 		return response.NewBuffered(response.WithBytes(actual)), nil
 	default:
-		var data []byte
-		var err error
-		if aComponent.Content.Marshaller.JSON.CanMarshal() {
-			data, err = aComponent.Content.Marshaller.JSON.Codec.Marshal(output)
-		} else {
-			data, err = aComponent.Content.Marshaller.JSON.JsonMarshaller.Marshal(output)
-		}
+		// Default to JSON marshalling using component-level marshaller
+		mf := aComponent.MarshalFunc()
+		data, err := mf(output)
 		if err != nil {
 			return nil, response.NewError(http.StatusInternalServerError, err.Error(), response.WithError(err))
 		}

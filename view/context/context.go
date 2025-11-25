@@ -1,13 +1,15 @@
 package view
 
 import (
-	"github.com/viant/xdatly/handler"
-	"github.com/viant/xdatly/handler/async"
-	"github.com/viant/xdatly/handler/state"
-	"golang.org/x/net/context"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/viant/xdatly/handler"
+	"github.com/viant/xdatly/handler/async"
+	"github.com/viant/xdatly/handler/logger"
+	"github.com/viant/xdatly/handler/state"
+	"golang.org/x/net/context"
 )
 
 // Context represents a view context
@@ -15,6 +17,7 @@ type Context struct {
 	parent         context.Context
 	types          map[reflect.Type]interface{}
 	input          interface{}
+	logger         logger.Logger
 	dbProvider     state.DBProvider
 	job            *async.Job
 	invocationType async.InvocationType
@@ -58,6 +61,11 @@ func (vc *Context) Value(key interface{}) interface{} {
 			return nil
 		}
 		return vc.input
+	case logger.ContextKey:
+		if vc.logger == nil {
+			return nil
+		}
+		return vc.logger
 	case handler.DataSyncKey:
 		if vc.dataSync == nil {
 			return nil
@@ -91,6 +99,10 @@ func (vc *Context) WithValue(key interface{}, value interface{}) context.Context
 		vc.dbProvider = value.(state.DBProvider)
 	case handler.InputKey:
 		vc.input = value
+	case logger.ContextKey:
+		if value != nil {
+			vc.logger = value.(logger.Logger)
+		}
 	case handler.DataSyncKey:
 		vc.dataSync = value.(*handler.DataSync)
 	case async.JobKey:
@@ -144,6 +156,9 @@ func inheritValues(ctx context.Context, c *Context) {
 		}
 		if value := ctx.Value(handler.InputKey); value != nil {
 			c.input = value
+		}
+		if value := ctx.Value(logger.ContextKey); value != nil {
+			c.logger = value.(logger.Logger)
 		}
 	}
 }

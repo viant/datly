@@ -2,22 +2,24 @@ package extension
 
 import (
 	"context"
+	"sync"
+
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/xdatly/handler"
 	hauth "github.com/viant/xdatly/handler/auth"
 	"github.com/viant/xdatly/handler/differ"
 	"github.com/viant/xdatly/handler/http"
+	"github.com/viant/xdatly/handler/logger"
 	xmbus "github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/sqlx"
 	"github.com/viant/xdatly/handler/state"
 	"github.com/viant/xdatly/handler/validator"
-	"sync"
 )
 
 type (
 	Session struct {
 		sqlService    SqlServiceFn
-		stater        state.Stater
+		injector      state.Injector
 		validator     *validator.Service
 		differ        *differ.Service
 		mbus          *xmbus.Service
@@ -27,6 +29,7 @@ type (
 		redirect        RedirectFn
 		http            HttpFn
 		auth            AuthFn
+		logger          logger.Logger
 	}
 
 	SqlServiceFn    func(options *sqlx.Options) (sqlx.Sqlx, error)
@@ -39,6 +42,10 @@ type (
 
 func (s *Session) Session(ctx context.Context, route *http.Route, opts ...state.Option) (handler.Session, error) {
 	return s.redirect(ctx, route, opts...)
+}
+
+func (s *Session) Logger() logger.Logger {
+	return s.logger
 }
 
 func (s *Session) Http() http.Http {
@@ -85,7 +92,7 @@ func (s *Session) Db(opts ...sqlx.Option) (*sqlx.Service, error) {
 }
 
 func (s *Session) Stater() *state.Service {
-	return state.New(s.stater)
+	return state.New(s.injector)
 }
 
 func (s *Session) FlushTemplate(ctx context.Context) error {
@@ -120,6 +127,12 @@ func WithHttp(aHttp HttpFn) Option {
 	}
 }
 
+func WithLogger(logger logger.Logger) Option {
+	return func(s *Session) {
+		s.logger = logger
+	}
+}
+
 func WithAuth(auth AuthFn) Option {
 	return func(s *Session) {
 		s.auth = auth
@@ -135,8 +148,8 @@ func WithMessageBus(messageBusses []*mbus.Resource) Option {
 	}
 }
 
-func WithStater(stater state.Stater) Option {
+func WithStater(injector state.Injector) Option {
 	return func(s *Session) {
-		s.stater = stater
+		s.injector = injector
 	}
 }

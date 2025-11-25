@@ -3,33 +3,38 @@ package expand
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync"
+
 	"github.com/google/uuid"
 	"github.com/viant/datly/service/executor/sequencer"
 	"github.com/viant/sqlx/io/validator"
 	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
-	"reflect"
-	"strings"
 )
 
 type (
 	DataUnit struct {
-		Columns     codec.ColumnsSource
-		ParamsGroup []interface{}
-		Mock        bool
-		TemplateSQL string
-		MetaSource  Dber        `velty:"-"`
-		Statements  *Statements `velty:"-"`
-
+		Columns            codec.ColumnsSource
+		ParamsGroup        []interface{}
+		Mock               bool
+		TemplateSQL        string
+		MetaSource         Dber                            `velty:"-"`
+		Statements         *Statements                     `velty:"-"`
+		mu                 sync.Mutex                      `velty:"-"`
 		placeholderCounter int                             `velty:"-"`
 		sqlxValidator      *validator.Service              `velty:"-"`
 		sliceIndex         map[reflect.Type]*xunsafe.Slice `velty:"-"`
 		ctx                context.Context                 `velty:"-"`
+		EvalLock           sync.Mutex
 	}
 
 	ExecutablesIndex map[string]*Executable
 )
+
+//
 
 func (c *DataUnit) WithPresence() interface{} {
 	var opt interface{} = validator.WithSetMarker()
@@ -79,7 +84,9 @@ func (c *DataUnit) AppendBinding(value interface{}) (string, error) {
 
 func (c *DataUnit) UUID() string {
 	newUUID := uuid.New()
+	c.mu.Lock()
 	c.ParamsGroup = append(c.ParamsGroup, newUUID.String())
+	c.mu.Unlock()
 	return "?"
 }
 
@@ -123,6 +130,8 @@ func (c *DataUnit) expandWithCommas(expanded []*Expression) string {
 }
 
 func (c *DataUnit) At(_ int) []interface{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.ParamsGroup
 }
 
@@ -131,13 +140,15 @@ func (c *DataUnit) Next() (interface{}, error) {
 		return 0, nil
 	}
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.placeholderCounter < len(c.ParamsGroup) {
 		index := c.placeholderCounter
 		c.placeholderCounter++
 		return c.ParamsGroup[index], nil
 	}
 
-	return nil, fmt.Errorf("expected to get binding parameter, but noone was found")
+	return nil, fmt.Errorf("expected to get binding parameter, but none was found, ParamsGroup: %v, placeholderCounter: %v", c.ParamsGroup, c.placeholderCounter)
 }
 
 func (c *DataUnit) ensureSliceIndex() {
@@ -159,7 +170,18 @@ func (c *DataUnit) xunsafeSlice(valueType reflect.Type) *xunsafe.Slice {
 }
 
 func (c *DataUnit) addAll(args ...interface{}) {
+	if len(args) == 0 {
+		return
+	}
+	c.mu.Lock()
 	c.ParamsGroup = append(c.ParamsGroup, args...)
+	c.mu.Unlock()
+}
+
+func (c *DataUnit) Shrink(offset int) {
+	c.mu.Lock()
+	c.ParamsGroup = c.ParamsGroup[:offset]
+	c.mu.Unlock()
 }
 
 func (c *DataUnit) IsServiceExec(SQL string) (*Executable, bool) {
@@ -252,6 +274,17 @@ func (c *DataUnit) Like(columnName string, args interface{}) (string, error) {
 
 func (c *DataUnit) NotLike(columnName string, args interface{}) (string, error) {
 	return c.like(columnName, args, false)
+}
+func (c *DataUnit) Expression(expr string, value interface{}) (string, error) {
+	return c.expression(expr, value)
+}
+
+func (c *DataUnit) expression(expr string, value interface{}) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	c.addAll(value)
+	return expr, nil
 }
 
 func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (string, error) {

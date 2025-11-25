@@ -1,0 +1,27 @@
+id: vertexai_claude-opus-4
+name: Claude Opus 4 (Vertex AI)
+description: Anthropic Claude Opus 4 model served through Google Vertex AI Generative AI
+intelligence: 0.96
+speed: 0.75
+
+options:
+  # Provider identifies the adapter used in provider/factory.go
+  provider: vertex/claude
+
+  # Full Vertex model name (revision included)
+  model: claude-opus-4@20250514
+
+  # GCP project/location hosting the model endpoint
+  projectID: viant-e2e
+  location: us-east5
+
+  # Default generation params
+  maxTokens: 32000
+  temperature: 0.7
+
+  # Cost tracking (approx. values – adjust when Google publishes official pricing)
+  inputTokenPrice: 0.015   # USD per 1 M input tokens
+  outputTokenPrice: 0.075  # USD per 1 M output tokens
+
+  meta:
+    anthropicVersion: vertex-2024-10-22

@@ -3,14 +3,15 @@ package reader
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/reader/metadata"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io/read/cache"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -44,19 +45,36 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	options := newBuilderOptions(opts...)
 	aView := options.view
 	statelet := options.statelet
-	batchData := *options.batchData
+	// guard against nil batchData passed by callers
+	var batchData view.BatchData
+	if options.batchData != nil {
+		batchData = *options.batchData
+	}
 	relation := options.relation
 	exclude := options.exclude
 	parent := options.parent
 	partitions := options.partition
 	expander := options.expander
+
+	// ensure non-nil statelet to avoid nil deref on Template usage
+	if statelet == nil {
+		statelet = view.NewStatelet()
+		statelet.Init(aView)
+	}
+
 	state, err := aView.Template.EvaluateSource(ctx, statelet.Template, parent, &batchData, expander)
 
 	if err != nil {
 		return nil, err
 	}
+	if state == nil {
+		return nil, fmt.Errorf("failed to evaluate state for view %v, state was nil", aView.Name)
+	}
+	if state.Expanded == "" {
+		return nil, fmt.Errorf("failed to evaluate expanded for view %vm statelet was nil", aView.Name)
+	}
 	if len(state.Filters) > 0 {
-		statelet.Filters = append(statelet.Filters, state.Filters...)
+		statelet.AppendFilters(state.Filters)
 	}
 	if aView.Template.IsActualTemplate() && aView.ShouldTryDiscover() {
 		state.Expanded = metadata.EnrichWithDiscover(state.Expanded, true)
