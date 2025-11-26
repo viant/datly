@@ -3,9 +3,10 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/viant/xdatly/handler/exec"
 	"strconv"
 	"time"
+
+	"github.com/viant/xdatly/handler/exec"
 )
 
 func Log(config *Config, execContext *exec.Context) {
@@ -15,8 +16,8 @@ func Log(config *Config, execContext *exec.Context) {
 		execContext.Metrics = execContext.Metrics.HideMetrics()
 	}
 	if config.IsAuditEnabled() {
-		data, _ := json.Marshal(execContext)
-		fmt.Println("[AUDIT] " + string(data))
+		data := safeMarshal("EXECCONTEXT", execContext)
+		fmt.Println("[AUDIT]", string(data))
 	}
 	if config.IsTracingEnabled() {
 		trace := execContext.Trace
@@ -42,7 +43,21 @@ func Log(config *Config, execContext *exec.Context) {
 		} else {
 			trace.Spans[0].SetStatusFromHTTPCode(execContext.StatusCode)
 		}
-		traceData, _ := json.Marshal(trace)
-		fmt.Println("[TRACE] " + string(traceData))
+		traceData := safeMarshal("TRACE", trace)
+		fmt.Println("[TRACE]", string(traceData))
 	}
+}
+
+func safeMarshal(label string, v any) []byte {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("[LOG-MARSHAL-PANIC] label=%s type=%T panic=%v\n", label, v, r)
+		}
+	}()
+	data, err := json.Marshal(v)
+	if err != nil {
+		fmt.Printf("[LOG-MARSHAL-ERROR] label=%s type=%T err=%v\n", label, v, err)
+		return nil
+	}
+	return data
 }
