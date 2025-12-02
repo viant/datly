@@ -220,7 +220,7 @@ func (e *Executor) logMetrics(ctx context.Context, table string, operation strin
 	if err != nil {
 		metric.Error = err.Error()
 	}
-	value.(*exec.Context).Metrics.Append(&metric)
+	value.(*exec.Context).AppendMetrics(&metric)
 }
 
 func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable *expand2.Executable, db *sql.DB) error {

@@ -3,6 +3,8 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -51,7 +53,10 @@ func Log(config *Config, execContext *exec.Context) {
 func safeMarshal(label string, v any) []byte {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("[LOG-MARSHAL-PANIC] label=%s type=%T panic=%v\n", label, v, r)
+			fmt.Printf("[LOG-MARSHAL-PANIC] label=%s type=%T panic=%v\nSTACK:\n%s\n", label, v, r, debug.Stack())
+			if execCtx, ok := v.(*exec.Context); ok {
+				findBadField(execCtx)
+			}
 		}
 	}()
 	data, err := json.Marshal(v)
@@ -60,4 +65,30 @@ func safeMarshal(label string, v any) []byte {
 		return nil
 	}
 	return data
+}
+
+func findBadField(execCtx *exec.Context) {
+	val := reflect.ValueOf(execCtx).Elem()
+	typ := val.Type()
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		fieldType := typ.Field(i)
+		fieldName := fieldType.Name
+
+		// Skip unexported fields
+		if !field.CanInterface() {
+			continue
+		}
+
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Printf("[BAD-FIELD-PANIC] %s (%s): %v\n", fieldName, field.Type(), r)
+				}
+			}()
+			if _, err := json.Marshal(field.Interface()); err != nil {
+				fmt.Printf("[BAD-FIELD-ERROR] %s (%s): %v\n", fieldName, field.Type(), err)
+			}
+		}()
+	}
 }
