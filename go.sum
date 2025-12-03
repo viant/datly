@@ -1140,8 +1140,6 @@ github.com/viant/sqlparser v0.8.1 h1:nbcTecMtW7ROk5aNB5/BWUxnduepRPOkhVo9RWxI1Ns
 github.com/viant/sqlparser v0.8.1/go.mod h1:2QRGiGZYk2/pjhORGG1zLVQ9JO+bXFhqIVi31mkCRPg=
 github.com/viant/sqlx v0.17.8 h1:YxGTrXC2B1JmDz1qp8G+G9hGPk7XCRevWN1E4E+ZlCI=
 github.com/viant/sqlx v0.17.8/go.mod h1:dizufL+nTNqDCpivUnE2HqtddTp2TdA6WFghGfZo11c=
-github.com/viant/structology v0.6.1 h1:Forza+RF/1tmlQFk9ABNhu+IQ8vMAqbYM6FOsYtGh9E=
-github.com/viant/structology v0.6.1/go.mod h1:63XfkzUyNw7wdi99HJIsH2Rg3d5AOumqbWLUYytOkxU=
 github.com/viant/structology v0.8.0 h1:WKdK67l+O1eqsubn8PWMhWcgspUGJ22SgJxUMfiRgqE=
 github.com/viant/structology v0.8.0/go.mod h1:Fnm1DyR4gfyPbnhBMkQB5lR6/isYDnncBFO1nCxxmqs=
 github.com/viant/structql v0.5.3 h1:QeOxvF0so8VFGt5bm+Jr6FL8uRnXkvwWY+ZCkbe3zsI=
@@ -1160,8 +1158,8 @@ github.com/viant/xdatly v0.5.4-0.20251113181159-0ac8b8b0ff3a h1:7CLO2LjVnFgOwN0F
 github.com/viant/xdatly v0.5.4-0.20251113181159-0ac8b8b0ff3a/go.mod h1:lZKZHhVdCZ3U9TU6GUFxKoGN3dPtqt2HkDYzJPq5CEs=
 github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259 h1:9Yry3PUBDzc4rWacOYvAq/TKrTV0agvMF0gwm2gaoHI=
 github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259/go.mod h1:fb8YgbVadk8X5ZLz49LWGzWmQlZd7Y/I5wE0ru44bIo=
-github.com/viant/xdatly/handler v0.0.0-20251113181159-0ac8b8b0ff3a h1:ofcLA78XVzYW0lKkmVxix00JFANZXh2JTvrzFlM/BS8=
-github.com/viant/xdatly/handler v0.0.0-20251113181159-0ac8b8b0ff3a/go.mod h1:OeV4sVatklNs31nFnZtSp7lEvKJRoVJbH5opNRmRPg0=
+github.com/viant/xdatly/handler v0.0.0-20251202205015-5f121a805ed3 h1:Xw0xbkb3lAu6k+p+XLlSyxPjl3XXda2qp74+itSbkKU=
+github.com/viant/xdatly/handler v0.0.0-20251202205015-5f121a805ed3/go.mod h1:OeV4sVatklNs31nFnZtSp7lEvKJRoVJbH5opNRmRPg0=
 github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52 h1:G+e1MMDxQXUPPlAXVNlRqSLTLra7udGQZUu3hnr0Y8M=
 github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
 github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a h1:jecH7mH63gj1zJwD18SdvSHM9Ttr9FEOnhHkYfkCNkI=
