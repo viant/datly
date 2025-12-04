@@ -209,7 +209,10 @@ func (s *Session) setLimitQuerySelector(value interface{}, ns *view.NamespaceVie
 		return fmt.Errorf("can't use Limit on view %v", ns.View.Name)
 	}
 	selector := s.state.Lookup(ns.View)
-	limit := value.(int)
+	limit, err := toInt(value)
+	if err != nil {
+		return fmt.Errorf("invalid limit value: %v", err)
+	}
 	if limit <= ns.View.Selector.Limit || ns.View.Selector.Limit == 0 {
 		selector.Limit = limit
 	}
@@ -289,4 +292,21 @@ func canUseColumn(aView *view.View, columnName string) error {
 		return fmt.Errorf("not found column %v in view %v", columnName, aView.Name)
 	}
 	return nil
+}
+
+func toInt(v interface{}) (int, error) {
+	switch val := v.(type) {
+	case int:
+		return val, nil
+	case int32:
+		return int(val), nil
+	case int64:
+		return int(val), nil
+	case float64:
+		return int(val), nil
+	case float32:
+		return int(val), nil
+	default:
+		return 0, fmt.Errorf("unsupported type: %T", v)
+	}
 }
