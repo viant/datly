@@ -21,12 +21,13 @@ import (
 // Options represents locator options
 type (
 	Options struct {
-		request *http.Request
-		Form    *hstate.Form
-		Path    map[string]string
-		Query   url.Values
-		Header  http.Header
-		Body    []byte
+		request        *http.Request
+		Form           *hstate.Form
+		QuerySelectors hstate.QuerySelectors
+		Path           map[string]string
+		Query          url.Values
+		Header         http.Header
+		Body           []byte
 
 		fromError         error
 		Parent            *KindLocator
@@ -178,6 +179,12 @@ func WithInputParameters(parameters state.NamedParameters) Option {
 			}
 		}
 
+	}
+}
+
+func WithQuerySelectors(selectors hstate.QuerySelectors) Option {
+	return func(o *Options) {
+		o.QuerySelectors = selectors
 	}
 }
 
