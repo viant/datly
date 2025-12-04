@@ -29,7 +29,7 @@ require (
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.24.0
 	github.com/viant/sqlx v0.17.8
-	github.com/viant/structql v0.5.3
+	github.com/viant/structql v0.5.4
 	github.com/viant/toolbox v0.37.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
 	github.com/viant/xreflect v0.7.3
