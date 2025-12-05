@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/aws/aws-lambda-go/events"
-	"github.com/viant/xdatly/handler/logger"
 	"io"
 	"log/slog"
 	"os"
 	regexp "regexp"
 	"runtime"
 	strings "strings"
+
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/viant/xdatly/handler/exec"
+	"github.com/viant/xdatly/handler/logger"
 )
 
 const (
@@ -122,6 +124,15 @@ func (s *slogger) getContextValues(ctx context.Context) []any {
 	if openTelemetryTraceId != nil {
 		values = append(values, "OpenTelemetryTraceId", openTelemetryTraceId)
 	}
+
+	execContext := ctx.Value(exec.ContextKey)
+	if execContext != nil {
+		c, ok := execContext.(*exec.Context)
+		if ok && c != nil && c.Trace != nil {
+			values = append(values, "reqTraceId", c.Trace.TraceID)
+		}
+	}
+
 	return values
 }
 
