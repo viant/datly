@@ -162,6 +162,9 @@ func (s *Session) setOrderByQuerySelector(value interface{}, ns *view.NamespaceV
 			continue //position based, not need to validate
 		}
 
+		if ns.View.Selector.Constraints.HasOrderByColumn(column) {
+			continue
+		}
 		_, ok := ns.View.ColumnByName(column)
 		if !ok {
 			return fmt.Errorf("not found column %v at view %v", items, ns.View.Name)

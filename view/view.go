@@ -155,15 +155,16 @@ func (v *View) Context(ctx context.Context) context.Context {
 // Constraints configure what can be selected by Statelet
 // For each _field, default value is `false`
 type Constraints struct {
-	Criteria    bool
-	OrderBy     bool
-	Limit       bool
-	Offset      bool
-	Projection  bool //enables columns projection from client (default ${NS}_fields= query param)
-	Filterable  []string
-	SQLMethods  []*Method `json:",omitempty"`
-	_sqlMethods map[string]*Method
-	Page        *bool
+	Criteria      bool
+	OrderBy       bool
+	OrderByColumn []string
+	Limit         bool
+	Offset        bool
+	Projection    bool //enables columns projection from client (default ${NS}_fields= query param)
+	Filterable    []string
+	SQLMethods    []*Method `json:",omitempty"`
+	_sqlMethods   map[string]*Method
+	Page          *bool
 }
 
 func (v *View) Resource() state.Resource {
