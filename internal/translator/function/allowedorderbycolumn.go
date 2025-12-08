@@ -23,15 +23,35 @@ func (c *allowedOrderByColumns) Apply(args []string, column *sqlparser.Column, r
 	}
 	aView.Selector.Constraints.OrderBy = true
 	if len(values) == 0 {
-		return fmt.Errorf("failed to discover column in allowedOrderByColumns")
+		return fmt.Errorf("failed to discover expression in allowedOrderByColumns")
 	}
 	columns, ok := values[0].(string)
 	if !ok {
 		return fmt.Errorf("invalid columns type: %T, expected: %T in allowedOrderByColumns", values[0], columns)
 	}
-	for _, column := range strings.Split(columns, ",") {
-		column = strings.TrimSpace(column)
-		aView.Selector.Constraints.OrderByColumn = append(aView.Selector.Constraints.OrderByColumn, column)
+	if len(aView.Selector.Constraints.OrderByColumn) == 0 {
+		aView.Selector.Constraints.OrderByColumn = map[string]string{}
+	}
+	for _, expression := range strings.Split(columns, ",") {
+		expression = strings.TrimSpace(expression)
+
+		key := expression
+		value := expression
+		if strings.Contains(expression, ":") {
+			parts := strings.SplitN(expression, ":", 2)
+			key = parts[0]
+			value = parts[1]
+		}
+
+		aView.Selector.Constraints.OrderByColumn[key] = value
+		lcKey := strings.ToLower(key)
+		if lcKey != key {
+			aView.Selector.Constraints.OrderByColumn[lcKey] = value
+		}
+
+		if index := strings.Index(key, "."); index != -1 {
+			aView.Selector.Constraints.OrderByColumn[key[index+1:]] = value
+		}
 	}
 	return nil
 }

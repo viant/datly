@@ -92,13 +92,8 @@ func (c *Config) GetContentFormatParameter() *state.Parameter {
 }
 
 func (c *Constraints) HasOrderByColumn(name string) bool {
-	dotedName := "." + name
-	for _, candidate := range c.OrderByColumn {
-		if candidate == name || strings.HasSuffix(candidate, dotedName) {
-			return true
-		}
-	}
-	return false
+	_, ok := c.OrderByColumn[name]
+	return ok
 }
 
 func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) error {

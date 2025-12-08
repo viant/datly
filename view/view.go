@@ -157,7 +157,7 @@ func (v *View) Context(ctx context.Context) context.Context {
 type Constraints struct {
 	Criteria      bool
 	OrderBy       bool
-	OrderByColumn []string
+	OrderByColumn map[string]string
 	Limit         bool
 	Offset        bool
 	Projection    bool //enables columns projection from client (default ${NS}_fields= query param)
