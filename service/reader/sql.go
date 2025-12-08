@@ -341,7 +341,7 @@ func (b *Builder) updateColumnsIn(params *view.CriteriaParam, batchData *view.Ba
 	params.ColumnsIn = sb.String()
 }
 
-func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *view.Statelet) error {
+func (b *Builder) appendOrderBy(sb *strings.Builder, aView *view.View, selector *view.Statelet) error {
 	if selector.OrderBy != "" {
 		fragment := strings.Builder{}
 		items := strings.Split(strings.ReplaceAll(selector.OrderBy, ":", " "), ",")
@@ -362,12 +362,19 @@ func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *
 			switch strings.ToLower(sortDirection) {
 			case "asc", "desc", "":
 			default:
-				return fmt.Errorf("invalid sort direction %v for column %v at view %v", sortDirection, column, view.Name)
+				return fmt.Errorf("invalid sort direction %v for column %v at aView %v", sortDirection, column, aView.Name)
 			}
 
-			col, ok := view.ColumnByName(column)
+			col, ok := aView.ColumnByName(column)
 			if !ok {
-				return fmt.Errorf("not found column %v at view %v", column, view.Name)
+				if aView.Selector.Constraints.HasOrderByColumn(column) {
+					col = &view.Column{
+						Name: column,
+					}
+				}
+			}
+			if !ok {
+				return fmt.Errorf("not found column %v at aView %v", column, aView.Name)
 			}
 			fragment.WriteString(col.Name)
 			if sortDirection != "" {
@@ -380,9 +387,9 @@ func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *
 		return nil
 	}
 
-	if view.Selector.OrderBy != "" {
+	if aView.Selector.OrderBy != "" {
 		sb.WriteString(orderByFragment)
-		sb.WriteString(strings.ReplaceAll(view.Selector.OrderBy, ":", " "))
+		sb.WriteString(strings.ReplaceAll(aView.Selector.OrderBy, ":", " "))
 		return nil
 	}
 
