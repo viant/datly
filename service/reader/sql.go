@@ -367,6 +367,7 @@ func (b *Builder) appendOrderBy(sb *strings.Builder, aView *view.View, selector 
 
 			col, ok := aView.ColumnByName(column)
 			if !ok {
+
 				if aView.Selector.Constraints.HasOrderByColumn(column) {
 					col = &view.Column{
 						Name: column,

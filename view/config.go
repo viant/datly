@@ -92,8 +92,9 @@ func (c *Config) GetContentFormatParameter() *state.Parameter {
 }
 
 func (c *Constraints) HasOrderByColumn(name string) bool {
+	dotedName := "." + name
 	for _, candidate := range c.OrderByColumn {
-		if candidate == name {
+		if candidate == name || strings.HasSuffix(candidate, dotedName) {
 			return true
 		}
 	}
