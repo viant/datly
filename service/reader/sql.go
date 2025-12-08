@@ -371,7 +371,9 @@ func (b *Builder) appendOrderBy(sb *strings.Builder, aView *view.View, selector 
 					col = &view.Column{
 						Name: column,
 					}
+					ok = true
 				}
+
 			}
 			if !ok {
 				return fmt.Errorf("not found column %v at aView %v", column, aView.Name)
