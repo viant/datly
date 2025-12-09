@@ -6,44 +6,43 @@ import (
 	"reflect"
 	"runtime/debug"
 	"strconv"
-	"time"
 
 	"github.com/viant/xdatly/handler/exec"
 )
 
 func Log(config *Config, execContext *exec.Context) {
-	execContext.ElapsedMs = int(time.Since(execContext.StartTime).Milliseconds())
+	snap := execContext.SnapshotForLogging()
 	includeSQL := config.ShallIncludeSQL()
 	if !includeSQL {
-		execContext.Metrics = execContext.Metrics.HideMetrics()
+		snap.Metrics = snap.Metrics.HideMetrics()
 	}
 	if config.IsAuditEnabled() {
-		data := safeMarshal("EXECCONTEXT", execContext)
+		data := safeMarshal("EXECCONTEXT", snap)
 		fmt.Println("[AUDIT]", string(data))
 	}
 	if config.IsTracingEnabled() {
-		trace := execContext.Trace
+		trace := snap.Trace
 		rootSpan := trace.Spans[0]
-		spans := execContext.Metrics.ToSpans(&rootSpan.SpanID)
-		if execContext.Auth != nil {
-			if execContext.Auth.UserID != 0 {
-				rootSpan.Attributes["jwt.uid"] = strconv.Itoa(execContext.Auth.UserID)
+		spans := snap.Metrics.ToSpans(&rootSpan.SpanID)
+		if snap.Auth != nil {
+			if snap.Auth.UserID != 0 {
+				rootSpan.Attributes["jwt.uid"] = strconv.Itoa(snap.Auth.UserID)
 			}
-			if execContext.Auth.Username != "" {
-				rootSpan.Attributes["jwt.username"] = execContext.Auth.Username
+			if snap.Auth.Username != "" {
+				rootSpan.Attributes["jwt.username"] = snap.Auth.Username
 			}
-			if execContext.Auth.Email != "" {
-				rootSpan.Attributes["jwt.email"] = execContext.Auth.Email
+			if snap.Auth.Email != "" {
+				rootSpan.Attributes["jwt.email"] = snap.Auth.Email
 			}
-			if execContext.Auth.Scope != "" {
-				rootSpan.Attributes["jwt.scope"] = execContext.Auth.Scope
+			if snap.Auth.Scope != "" {
+				rootSpan.Attributes["jwt.scope"] = snap.Auth.Scope
 			}
 		}
 		trace.Append(spans...)
-		if execContext.Error != "" {
-			trace.Spans[0].SetStatus(fmt.Errorf(execContext.Error))
+		if snap.Error != "" {
+			trace.Spans[0].SetStatus(fmt.Errorf(snap.Error))
 		} else {
-			trace.Spans[0].SetStatusFromHTTPCode(execContext.StatusCode)
+			trace.Spans[0].SetStatusFromHTTPCode(snap.StatusCode)
 		}
 		traceData := safeMarshal("TRACE", trace)
 		fmt.Println("[TRACE]", string(traceData))
