@@ -3,6 +3,12 @@ package inference
 import (
 	"context"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"path"
+	"reflect"
+	"strings"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/embed"
 	"github.com/viant/afs/file"
@@ -19,11 +25,6 @@ import (
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"go/ast"
-	"go/parser"
-	"path"
-	"reflect"
-	"strings"
 )
 
 // State defines datly view/resource parameters
@@ -691,12 +692,20 @@ func NewState(packageLocation, dataType string, types *xreflect.Types) (State, e
 		}
 		state.BuildPredicate(aTag, &param.Parameter)
 		state.BuildCodec(aTag, &param.Parameter)
+
 		if param.Schema.DataType == "" {
 			compType := param.Schema.CompType()
+			paramTypeName := compType.String()
+
 			if compType.Kind() == reflect.Pointer {
 				compType = compType.Elem()
+				paramTypeName := compType.String()
+
+				if compType.Kind() == reflect.Struct {
+					paramTypeName = "*" + paramTypeName
+				}
 			}
-			param.Schema.DataType = compType.String()
+			param.Schema.DataType = paramTypeName
 			param.Schema.PackagePath = compType.PkgPath()
 		}
 		//}

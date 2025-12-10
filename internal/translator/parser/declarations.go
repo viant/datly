@@ -2,6 +2,10 @@ package parser
 
 import (
 	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/shared"
@@ -12,9 +16,6 @@ import (
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 type (
@@ -322,6 +323,10 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			declaration.InOutput = true
 		case "WithCache":
 			declaration.Cache = strings.Trim(args[0], `"'`)
+		case "WithLimit":
+			limit, _ := strconv.Atoi(strings.Trim(args[0], `"'`))
+			declaration.Limit = &limit
+
 		case "Cacheable":
 			literal := strings.Trim(args[0], `"'`)
 			value, _ := strconv.ParseBool(literal)

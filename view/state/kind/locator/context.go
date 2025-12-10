@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/xdatly/handler/exec"
+	"reflect"
 )
 
 type Context struct {
@@ -14,7 +15,7 @@ func (v *Context) Names() []string {
 	return nil
 }
 
-func (v *Context) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (v *Context) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 
 	rawValue := ctx.Value(exec.ContextKey)
 	if rawValue == nil {
