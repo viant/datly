@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/aws/aws-lambda-go/events"
-	"github.com/viant/xdatly/handler/logger"
 	"io"
 	"log/slog"
 	"os"
 	regexp "regexp"
 	"runtime"
 	strings "strings"
+
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/viant/xdatly/handler/exec"
+	"github.com/viant/xdatly/handler/logger"
 )
 
 const (
@@ -22,18 +24,28 @@ const (
 	WARN                 = "WARN"
 	ERROR                = "ERROR"
 	UNKNOWN              = "UNKNOWN" // Indicate other environment
+	DefaultTraceIdKey    = "reqTraceId"
 )
 
 type slogger struct {
-	logger *slog.Logger
-	level  slog.Level
+	logger     *slog.Logger
+	level      slog.Level
+	traceIdKey string
+}
+
+type Option func(l *slogger)
+
+func WithTraceIdKey(key string) Option {
+	return func(l *slogger) {
+		l.traceIdKey = key
+	}
 }
 
 // Init creates an ISLogger instance, a structured logger using the JSON Handler.
 // Creating this logger sets this as the default logger, so any logging after this
 // which goes through the standard logging package will also produce JSON structured
 // logs.
-func New(level string, dest io.Writer) logger.Logger {
+func New(level string, dest io.Writer, opts ...Option) logger.Logger {
 	if dest == nil {
 		dest = os.Stdout
 	}
@@ -61,9 +73,12 @@ func New(level string, dest io.Writer) logger.Logger {
 	})
 	sl := slog.New(handler)
 	slog.SetDefault(sl)
-	logger := &slogger{sl, logLevel}
+	l := &slogger{sl, logLevel, DefaultTraceIdKey}
+	for _, opt := range opts {
+		opt(l)
+	}
 
-	return logger
+	return l
 }
 
 func (s *slogger) IsDebugEnabled() bool {
@@ -122,6 +137,22 @@ func (s *slogger) getContextValues(ctx context.Context) []any {
 	if openTelemetryTraceId != nil {
 		values = append(values, "OpenTelemetryTraceId", openTelemetryTraceId)
 	}
+
+	execContext := exec.GetContext(ctx)
+	if execContext != nil {
+		traceId := "unknown"
+
+		// ideally TraceID and Trace.TraceID should be the same
+		// but xdatly/handler/exec.(*Context).setHeader sets TraceID first
+		// with the value of XDATLY_TRACING_HEADER env var value header (adp-request-id for datly platform)
+		if execContext.TraceID != "" {
+			traceId = execContext.TraceID
+		} else if execContext.Trace != nil {
+			traceId = execContext.Trace.TraceID
+		}
+		values = append(values, s.traceIdKey, traceId)
+	}
+
 	return values
 }
 
