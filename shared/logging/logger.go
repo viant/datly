@@ -125,12 +125,19 @@ func (s *slogger) getContextValues(ctx context.Context) []any {
 		values = append(values, "OpenTelemetryTraceId", openTelemetryTraceId)
 	}
 
-	execContext := ctx.Value(exec.ContextKey)
+	execContext := exec.GetContext(ctx)
 	if execContext != nil {
-		c, ok := execContext.(*exec.Context)
-		if ok && c != nil && c.Trace != nil {
-			values = append(values, "reqTraceId", c.Trace.TraceID)
+		traceId := "unknown"
+
+		// ideally TraceID and Trace.TraceID should be the same
+		// but xdatly/handler/exec.(*Context).setHeader TraceID first
+		// with the value of adp-request-id header
+		if execContext.TraceID != "" {
+			traceId = execContext.TraceID
+		} else if execContext.Trace != nil {
+			traceId = execContext.Trace.TraceID
 		}
+		values = append(values, "reqTraceId", traceId)
 	}
 
 	return values
