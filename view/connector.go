@@ -4,14 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/datly/shared"
-	"github.com/viant/scy"
-	"github.com/viant/sqlx/io/config"
-	"github.com/viant/sqlx/metadata/info"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/viant/datly/shared"
+	"github.com/viant/scy"
+	"github.com/viant/sqlx/io/config"
+	"github.com/viant/sqlx/metadata/info"
 )
 
 // Connector represents database/sql named connection config
@@ -231,6 +232,20 @@ func (c *Connection) inherit(connector *Connection) {
 
 	if c.Secret == nil {
 		c.Secret = connector.Secret
+	}
+
+	// Inherit DB pool settings if not explicitly set on child
+	if c.MaxOpenConns == 0 {
+		c.MaxOpenConns = connector.MaxOpenConns
+	}
+	if c.MaxIdleConns == 0 {
+		c.MaxIdleConns = connector.MaxIdleConns
+	}
+	if c.ConnMaxLifetimeMs == 0 {
+		c.ConnMaxLifetimeMs = connector.ConnMaxLifetimeMs
+	}
+	if c.ConnMaxIdleTimeMs == 0 {
+		c.ConnMaxIdleTimeMs = connector.ConnMaxIdleTimeMs
 	}
 }
 

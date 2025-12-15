@@ -3,6 +3,10 @@ package resource
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/storage"
@@ -10,9 +14,6 @@ import (
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/view"
-	"strings"
-	"sync"
-	"time"
 )
 
 type (
@@ -142,6 +143,34 @@ func New(ctx context.Context, fs afs.Service, URL string, refreshFrequency time.
 	err := ret.Init(ctx)
 	if !ret.Has(view.ResourceConnectors) {
 		ret.AddResource(view.ResourceConnectors, &view.Resource{})
+	}
+
+	// Backward/compatibility alias: if a resource file is named "connections.yaml",
+	// treat it as the canonical "connectors" resource and merge its connectors.
+	// This allows projects providing dependencies/connections.yaml to be recognized
+	// without renaming files across repos.
+	if res, ok := ret.items[view.ResourceConnections]; ok {
+		if target, ok2 := ret.items[view.ResourceConnectors]; ok2 && target != nil {
+			// merge connectors by name, avoid duplicates
+			existing := map[string]bool{}
+			for _, c := range target.Resource.Connectors {
+				if c != nil {
+					existing[c.Name] = true
+				}
+			}
+			for _, c := range res.Resource.Connectors {
+				if c == nil {
+					continue
+				}
+				if _, found := existing[c.Name]; found {
+					continue
+				}
+				target.Resource.Connectors = append(target.Resource.Connectors, c)
+			}
+		} else {
+			// if no connectors resource exists, alias directly
+			ret.items[view.ResourceConnectors] = res
+		}
 	}
 	if !ret.Has(view.ResourceConstants) {
 		ret.AddResource(view.ResourceConstants, &view.Resource{})

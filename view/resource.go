@@ -4,6 +4,12 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"path"
+	"reflect"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/storage"
@@ -19,18 +25,14 @@ import (
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
-	"path"
-	"reflect"
-	"strings"
-	"sync"
-	"time"
 )
 
 const (
 	//ResourceConnectors default connector resource name
-	ResourceConnectors = "connectors"
-	ResourceConstants  = "constants"
-	ResourceMBus       = "mbus"
+	ResourceConnectors  = "connectors"
+	ResourceConstants   = "constants"
+	ResourceMBus        = "mbus"
+	ResourceConnections = "connections"
 )
 
 // Resource represents grouped View needed to build the View
