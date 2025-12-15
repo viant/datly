@@ -28,8 +28,8 @@ require (
 	github.com/viant/parsly v0.3.3
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.24.0
-	github.com/viant/sqlx v0.17.8
-	github.com/viant/structql v0.5.3
+	github.com/viant/sqlx v0.21.0
+	github.com/viant/structql v0.5.4
 	github.com/viant/toolbox v0.37.0
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
 	github.com/viant/xreflect v0.7.3
@@ -55,7 +55,7 @@ require (
 	github.com/viant/tagly v0.3.0
 	github.com/viant/xdatly v0.5.4-0.20251113181159-0ac8b8b0ff3a
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20251113181159-0ac8b8b0ff3a
+	github.com/viant/xdatly/handler v0.0.0-20251208172928-dd34b7f09fd5
 	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1
