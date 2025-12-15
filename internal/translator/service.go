@@ -489,7 +489,7 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 
 	if len(resource.Declarations.QuerySelectors) > 0 {
 		for key, state := range resource.Declarations.QuerySelectors {
-			switch strings.ToLower(state[0].In.Name) {
+			switch strings.ToLower(state[0].Name) {
 			case "limit", "page", "offset", "fields", "orderby", "criteria":
 			default:
 				return fmt.Errorf("unknown query selector view %v, %v", key, state[0].In.Name)
