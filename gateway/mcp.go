@@ -99,18 +99,84 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 			return nil, rpcErr
 		}
 		r.addAuthTokenIfPresent(ctx, httpReq)
+
+		// NEW: map MCP view sync flag argument to Sync-Read header
+		r.addSyncReadHeaderIfPresent(ctx, component, &params, httpReq)
+
 		httpReq.RequestURI = httpReq.URL.RequestURI()
 		if uri != aRoute.URI() {
 			if matched, _ := r.match(component.Method, uri, httpReq); matched != nil {
 				aRoute = matched
 			}
 		}
-
 		rw := proxy.NewWriter()
 		aRoute.Handle(rw, httpReq)
 
 		// 5) Build tool result (text + structured on error)
 		return r.buildToolCallResult(rw, finalURL, aRoute.Path.Method), nil
+	}
+}
+
+func (r *Router) addSyncReadHeaderIfPresent(
+	ctx context.Context,
+	component *repository.Component,
+	params *schema.CallToolRequestParams,
+	httpRequest *http.Request,
+) {
+	if params == nil || params.Arguments == nil {
+		return
+	}
+	// MCP tool arguments are generated using exported Go field names, so
+	// the Datly view sync flag (view.SyncFlag == "viewSyncFlag") will appear
+	// as "viewSyncFlag" in the schema/tool call.
+	const mcpSyncFlagArg = "viewSyncFlag"
+	const headerName = "Sync-Read"
+
+	value, ok := params.Arguments[mcpSyncFlagArg]
+	if !ok {
+		return
+	}
+
+	if !isTruthy(value) {
+		return
+	}
+
+	// Optionally, ensure that the underlying component actually declares
+	// a sync flag parameter; if it does not, we simply skip setting the header.
+	if !hasSyncFlagParameter(component) {
+		return
+	}
+
+	httpRequest.Header.Set(headerName, "true")
+}
+
+// hasSyncFlagParameter checks whether the component declares a selector
+// sync flag parameter, which should be exposed as view.SyncFlag.
+func hasSyncFlagParameter(component *repository.Component) bool {
+	if component == nil || component.View == nil || component.View.Selector == nil {
+		return false
+	}
+	param := component.View.Selector.GetSyncFlagParameter()
+	if param == nil {
+		return false
+	}
+	// The selector sync flag parameter is defined in view.Config using
+	// view.SyncFlag as the state key, but here we simply check that it exists.
+	return true
+}
+
+// isTruthy interprets common JSON-serialised truthy values.
+func isTruthy(v interface{}) bool {
+	switch value := v.(type) {
+	case bool:
+		return value
+	case string:
+		s := strings.TrimSpace(strings.ToLower(value))
+		return s == "true" || s == "1" || s == "yes" || s == "y"
+	case float64:
+		return value != 0
+	default:
+		return false
 	}
 }
 
