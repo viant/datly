@@ -120,6 +120,9 @@ func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, cfg *config.IOConfig
 }
 
 func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, options ...interface{}) (marshaler, error) {
+	if rType == nil {
+		return nil, fmt.Errorf("nil reflect.Type for path %q", path)
+	}
 	if tag == nil {
 		tag = &format.Tag{}
 	}
