@@ -2,10 +2,10 @@ package status
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/httputils"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
 	"github.com/viant/xdatly/handler/response"
@@ -17,9 +17,12 @@ func NormalizeErr(err error, statusCode int) (int, string, interface{}) {
 	case *response.Error:
 		code := actual.StatusCode()
 		if code == 0 {
-			code = http.StatusInternalServerError
+			code = statusCode
 		}
-		// For explicit 4xx we trust the message, for 5xx we keep it generic.
+		if code == 0 {
+			code = http.StatusBadRequest
+		}
+		// For explicit 5xx we keep response generic, for 4xx we trust the configured message.
 		if code >= http.StatusInternalServerError {
 			return code, http.StatusText(http.StatusInternalServerError), nil
 		}
@@ -31,17 +34,42 @@ func NormalizeErr(err error, statusCode int) (int, string, interface{}) {
 		ret := violations.MergeGoViolation(actual.Violations)
 		return http.StatusBadRequest, actual.Error(), ret
 	case *response.Errors:
-		// Treat aggregated errors as validation-like by default.
-		actual.SetStatusCode(http.StatusBadRequest)
-		for _, anError := range actual.Errors {
-			isObj := types.IsObject(anError.Err)
-			if isObj {
-				statusCode, anError.Message, anError.Object = NormalizeErr(anError.Err, http.StatusBadRequest)
+		// Respect existing status/message set on aggregated errors (often parameter-driven).
+		if actual.StatusCode() == 0 {
+			if statusCode == 0 {
+				actual.SetStatusCode(http.StatusBadRequest)
 			} else {
-				statusCode, anError.Message, anError.Object = NormalizeErr(anError.Err, http.StatusBadRequest)
-			}
-			if statusCode > actual.StatusCode() {
 				actual.SetStatusCode(statusCode)
+			}
+		}
+		if actual.Message == "" && len(actual.Errors) > 0 {
+			actual.Message = actual.Errors[0].Message
+		}
+
+		for _, anError := range actual.Errors {
+			code := anError.StatusCode()
+
+			switch {
+			case code >= http.StatusInternalServerError:
+				// Explicitly marked as server error at parameter level: generic message.
+				anError.Message = http.StatusText(http.StatusInternalServerError)
+			case code == 0:
+				// No explicit status on this parameter error; classify underlying cause.
+				innerStatus, innerMsg, innerObj := NormalizeErr(anError.Err, actual.StatusCode())
+				anError.Code = innerStatus
+				if innerMsg != "" {
+					anError.Message = innerMsg
+				}
+				if innerObj != nil {
+					anError.Object = innerObj
+				}
+				code = innerStatus
+			default:
+				// 4xx with configured status/message – leave as defined on the parameter.
+			}
+
+			if code > actual.StatusCode() {
+				actual.SetStatusCode(code)
 			}
 		}
 		return actual.StatusCode(), actual.Message, actual.Errors
@@ -55,8 +83,38 @@ func NormalizeErr(err error, statusCode int) (int, string, interface{}) {
 		}
 		return statusCode, actual.Message, actual.Content
 	default:
-		// Any non-validation error is treated as an internal server error with a generic message.
-		// The full error (including DB/sqlx failures) is still available in logs via exec.Context.SetError(err).
-		return http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError), nil
+		// Only DB-caused errors are mapped to 500 with a generic message.
+		if isDatabaseError(err) {
+			return http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError), nil
+		}
+		if statusCode == 0 {
+			statusCode = http.StatusBadRequest
+		}
+		return statusCode, err.Error(), nil
 	}
+}
+
+// isDatabaseError detects errors that originate from DB/sqlx execution.
+// These are the only errors that should be remapped to 500 with a generic message.
+func isDatabaseError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if msg == "" {
+		return false
+	}
+
+	// Known DB-related error patterns from reader/executor paths.
+	if strings.Contains(msg, "database error occured while fetching Data") {
+		return true
+	}
+	if strings.Contains(msg, "error occured while connecting to database") {
+		return true
+	}
+	if strings.Contains(msg, "failed to get db:") {
+		return true
+	}
+
+	return false
 }

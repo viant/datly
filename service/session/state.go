@@ -428,6 +428,18 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 				valueType = reflect.TypeOf(value)
 			case 1:
 				elem := rSlice.Index(0)
+				rawType := elem.Type()
+				if rawType.Kind() == reflect.Ptr {
+					rawType = rawType.Elem()
+				}
+				if rawType.Kind() == reflect.Interface {
+					rawType = rawType.Elem()
+				}
+
+				if rawType.Kind() != reflect.Struct {
+					break
+				}
+
 				if elem.Kind() == reflect.Interface && !elem.IsNil() {
 					elem = elem.Elem()
 				}
