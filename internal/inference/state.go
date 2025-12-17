@@ -785,6 +785,13 @@ func discoverStateType(baseDir string, types *xreflect.Types, dataType string, p
 		return nil, err
 	}
 	var rType = xunsafe.LookupType(dirTypes.ModulePath + "/" + dataType)
+
+	if rType == nil && types != nil && strings.Count(pkg, "/") > 1 { //the last resort fallback collission protection
+		pkg = strings.Replace(pkg, "pkg/", "", 1)
+		rType, _ = types.Lookup(dataType, xreflect.WithPackage(pkg))
+
+	}
+
 	if rType == nil && len(stateTypeFields) > 0 {
 		rType = reflect.StructOf(stateTypeFields)
 	}
