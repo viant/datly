@@ -231,6 +231,10 @@ func (t *Template) EvaluateState(ctx context.Context, parameterState *structolog
 }
 
 func (t *Template) EvaluateStateWithSession(ctx context.Context, parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, sess *extension.Session, options ...interface{}) (*expand.State, error) {
+	// Ensure parameter state is initialized when absent, but never override an existing one.
+	if parameterState == nil && t.stateType != nil {
+		parameterState = t.stateType.NewState()
+	}
 	var expander expand.Expander
 	var dataUnit *expand.DataUnit
 	for _, option := range options {
@@ -372,8 +376,7 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sta
 		if value.Key == "?" {
 			placeholder, err := sanitized.Next()
 			if err != nil {
-				return "", fmt.Errorf("failed to get placeholder: %w, SQL: %v, values: %v\n", err, SQL, values)
-
+				return "", fmt.Errorf("failed to get placeholder: %w, SQL: %v, values: %+v\n", err, SQL, values)
 			}
 			*placeholders = append(*placeholders, placeholder)
 			continue
