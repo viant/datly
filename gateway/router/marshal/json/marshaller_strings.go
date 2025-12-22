@@ -1,11 +1,12 @@
 package json
 
 import (
+	"strings"
+	"unsafe"
+
 	"github.com/francoispqt/gojay"
 	"github.com/viant/tagly/format"
 	"github.com/viant/xunsafe"
-	"strings"
-	"unsafe"
 )
 
 type stringMarshaller struct {
@@ -67,11 +68,11 @@ func marshallString(asString string, sb *MarshallSession, _ *strings.Replacer) {
 		case '\f':
 			sb.WriteString(`\\f`)
 		case '\n':
-			sb.WriteString(`\\n`)
+			sb.WriteString(`\n`)
 		case '\r':
 			sb.WriteString(`\\r`)
 		case '\t':
-			sb.WriteString(`\\t`)
+			sb.WriteString(`\t`)
 		default:
 			// Escape other control characters < 0x20 as \u00XX
 			if c < 0x20 {
