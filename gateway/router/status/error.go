@@ -1,6 +1,7 @@
 package status
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/viant/datly/service/executor/expand"
@@ -15,6 +16,11 @@ func NormalizeErr(err error, statusCode int) (int, string, interface{}) {
 	violations := httputils.Violations{}
 	switch actual := err.(type) {
 	case *response.Error:
+		if derrors.IsDatabaseError(actual.Err) || derrors.IsDatabaseError(errors.New(actual.Message)) {
+			actual.Code = http.StatusInternalServerError
+			actual.Message = http.StatusText(http.StatusInternalServerError)
+			return http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError), nil
+		}
 		code := actual.StatusCode()
 		if code == 0 {
 			code = statusCode
@@ -41,9 +47,15 @@ func NormalizeErr(err error, statusCode int) (int, string, interface{}) {
 		if maxStatus == 0 {
 			maxStatus = http.StatusBadRequest
 		}
-		hasServerError := maxStatus >= http.StatusInternalServerError
+		hasServerError := maxStatus >= http.StatusInternalServerError || derrors.IsDatabaseError(errors.New(actual.Message))
 
 		for _, anError := range actual.Errors {
+			if derrors.IsDatabaseError(anError.Err) || derrors.IsDatabaseError(errors.New(anError.Message)) {
+				anError.Code = http.StatusInternalServerError
+				anError.Message = http.StatusText(http.StatusInternalServerError)
+				hasServerError = true
+			}
+
 			code := anError.StatusCode()
 			switch {
 			case code >= http.StatusInternalServerError:
