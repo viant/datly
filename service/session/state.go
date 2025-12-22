@@ -285,6 +285,52 @@ func (s *Session) populateParameterInBackground(ctx context.Context, parameter *
 	}
 }
 
+// The function below causes SIGBUS when template parameters are rebound.
+//E.g. a predicate builder velty expression is located in an embedded SQL, outside main DQL
+//func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
+//	value, has, err := s.LookupValue(ctx, parameter, options)
+//	if err != nil {
+//		return err
+//	}
+//	if !has {
+//		if parameter.IsRequired() {
+//			return fmt.Errorf("parameter %v is required", parameter.Name)
+//		}
+//		return nil
+//	}
+//
+//	parameterSelector := parameter.Selector()
+//	if options.indirectState || parameterSelector == nil { //p
+//		parameterSelector, err = aState.Selector(parameter.Name)
+//		if parameterSelector == nil {
+//			switch parameter.In.Kind {
+//			case state.KindConst:
+//				return nil
+//			}
+//		}
+//		if err != nil {
+//			return err
+//		}
+//	}
+//
+//	if value, err = s.ensureValidValue(value, parameter, parameterSelector, options); err != nil {
+//		return err
+//	}
+//	err = parameterSelector.SetValue(aState.Pointer(), value)
+//
+//	//ensure last written can be shared
+//	if err == nil {
+//
+//		switch parameterSelector.Type().Kind() {
+//		case reflect.Ptr:
+//			if parameter.Schema.Type() == parameterSelector.Type() {
+//				s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
+//			}
+//		}
+//	}
+//	return err
+//}
+
 func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
 	value, has, err := s.LookupValue(ctx, parameter, options)
 	if err != nil {
@@ -296,36 +342,25 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 		}
 		return nil
 	}
-	parameterSelector := parameter.Selector()
-	if options.indirectState || parameterSelector == nil { //p
-		parameterSelector, err = aState.Selector(parameter.Name)
-		if parameterSelector == nil {
-			switch parameter.In.Kind {
-			case state.KindConst:
-				return nil
-			}
-		}
-		if err != nil {
-			return err
-		}
+
+	//  Resolve selector strictly from the state's layout
+	//    Treat "not found" as a no-op (skip), since this view doesn't declare that parameter.
+	parameterSelector, err := aState.Selector(parameter.Name)
+	if err != nil || parameterSelector == nil {
+		return nil
 	}
 
 	if value, err = s.ensureValidValue(value, parameter, parameterSelector, options); err != nil {
 		return err
 	}
-	err = parameterSelector.SetValue(aState.Pointer(), value)
-
-	//ensure last written can be shared
-	if err == nil {
-
-		switch parameterSelector.Type().Kind() {
-		case reflect.Ptr:
-			if parameter.Schema.Type() == parameterSelector.Type() {
-				s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
-			}
-		}
+	if err = parameterSelector.SetValue(aState.Pointer(), value); err != nil {
+		return err
 	}
-	return err
+
+	if parameterSelector.Type().Kind() == reflect.Ptr {
+		s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
+	}
+	return nil
 }
 
 func (s *Session) canRead(ctx context.Context, parameter *state.Parameter, opts *Options) (bool, error) {
