@@ -47,7 +47,15 @@ func asInterface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
 
 func (i *interfaceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	value := i.AsInterface(ptr)
+	if value == nil {
+		sb.Write(nullBytes)
+		return nil
+	}
 	rType := reflect.TypeOf(value)
+	if rType == nil {
+		sb.Write(nullBytes)
+		return nil
+	}
 
 	marshaller, err := i.cache.loadMarshaller(rType, i.config, i.path, i.outputPath, i.tag)
 	if err != nil {

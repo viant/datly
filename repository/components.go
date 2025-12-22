@@ -236,6 +236,9 @@ func (c *Components) updateIOTypeDependencies(ctx context.Context, ioType *state
 							aView = baseView
 						}
 					}
+					if aView.Schema == nil {
+						aView.Schema = parameterViewSchema(parameter)
+					}
 					aView.Schema.SetType(parameter.Schema.Type())
 				}
 			}

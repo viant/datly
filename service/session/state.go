@@ -285,6 +285,52 @@ func (s *Session) populateParameterInBackground(ctx context.Context, parameter *
 	}
 }
 
+// The function below causes SIGBUS when template parameters are rebound.
+//E.g. a predicate builder velty expression is located in an embedded SQL, outside main DQL
+//func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
+//	value, has, err := s.LookupValue(ctx, parameter, options)
+//	if err != nil {
+//		return err
+//	}
+//	if !has {
+//		if parameter.IsRequired() {
+//			return fmt.Errorf("parameter %v is required", parameter.Name)
+//		}
+//		return nil
+//	}
+//
+//	parameterSelector := parameter.Selector()
+//	if options.indirectState || parameterSelector == nil { //p
+//		parameterSelector, err = aState.Selector(parameter.Name)
+//		if parameterSelector == nil {
+//			switch parameter.In.Kind {
+//			case state.KindConst:
+//				return nil
+//			}
+//		}
+//		if err != nil {
+//			return err
+//		}
+//	}
+//
+//	if value, err = s.ensureValidValue(value, parameter, parameterSelector, options); err != nil {
+//		return err
+//	}
+//	err = parameterSelector.SetValue(aState.Pointer(), value)
+//
+//	//ensure last written can be shared
+//	if err == nil {
+//
+//		switch parameterSelector.Type().Kind() {
+//		case reflect.Ptr:
+//			if parameter.Schema.Type() == parameterSelector.Type() {
+//				s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
+//			}
+//		}
+//	}
+//	return err
+//}
+
 func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
 	value, has, err := s.LookupValue(ctx, parameter, options)
 	if err != nil {
@@ -296,33 +342,25 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 		}
 		return nil
 	}
-	parameterSelector := parameter.Selector()
-	if options.indirectState || parameterSelector == nil { //p
-		parameterSelector, err = aState.Selector(parameter.Name)
-		if parameterSelector == nil {
-			switch parameter.In.Kind {
-			case state.KindConst:
-				return nil
-			}
-		}
-		if err != nil {
-			return err
-		}
+
+	//  Resolve selector strictly from the state's layout
+	//    Treat "not found" as a no-op (skip), since this view doesn't declare that parameter.
+	parameterSelector, err := aState.Selector(parameter.Name)
+	if err != nil || parameterSelector == nil {
+		return nil
 	}
 
 	if value, err = s.ensureValidValue(value, parameter, parameterSelector, options); err != nil {
 		return err
 	}
-	err = parameterSelector.SetValue(aState.Pointer(), value)
-
-	//ensure last written can be shared
-	if err == nil {
-		switch parameterSelector.Type().Kind() {
-		case reflect.Ptr:
-			s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
-		}
+	if err = parameterSelector.SetValue(aState.Pointer(), value); err != nil {
+		return err
 	}
-	return err
+
+	if parameterSelector.Type().Kind() == reflect.Ptr {
+		s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
+	}
+	return nil
 }
 
 func (s *Session) canRead(ctx context.Context, parameter *state.Parameter, opts *Options) (bool, error) {
@@ -402,9 +440,8 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 			}
 		}
 	case reflect.Slice:
-		ptr := xunsafe.AsPointer(value)
-		slice := parameter.Schema.Slice()
-		sliceLen := slice.Len(ptr)
+		rSlice := reflect.ValueOf(value)
+		sliceLen := rSlice.Len()
 		if errorMessage := validateSliceParameter(parameter, sliceLen); errorMessage != "" {
 			return nil, errors.New(errorMessage)
 		}
@@ -415,11 +452,44 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		default:
 			switch sliceLen {
 			case 0:
-				value = reflect.New(parameter.OutputType().Elem()).Elem().Interface()
+				switch outputType.Kind() {
+				case reflect.Ptr:
+					value = reflect.New(outputType.Elem()).Elem().Interface()
+				case reflect.Struct:
+					value = reflect.New(outputType).Elem().Interface()
+				default:
+					value = reflect.New(outputType).Elem().Interface()
+				}
 				valueType = reflect.TypeOf(value)
 			case 1:
-				value = slice.ValuePointerAt(ptr, 0)
-				valueType = reflect.TypeOf(value)
+				elem := rSlice.Index(0)
+				rawType := elem.Type()
+				if rawType.Kind() == reflect.Ptr {
+					rawType = rawType.Elem()
+				}
+				if rawType.Kind() == reflect.Interface {
+					rawType = rawType.Elem()
+				}
+
+				if rawType.Kind() != reflect.Struct {
+					break
+				}
+
+				if elem.Kind() == reflect.Interface && !elem.IsNil() {
+					elem = elem.Elem()
+				}
+				if elem.Kind() == reflect.Ptr {
+					value = elem.Interface()
+					valueType = elem.Type()
+					break
+				}
+				if elem.CanAddr() {
+					value = elem.Addr().Interface()
+					valueType = elem.Addr().Type()
+					break
+				}
+				value = elem.Interface()
+				valueType = elem.Type()
 			default:
 				return nil, fmt.Errorf("parameter %v return more than one value, len: %v rows ", parameter.Name, sliceLen)
 			}
@@ -437,53 +507,55 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	}
 
 	if parameter.Schema.IsStruct() && !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
-
-		rawSelectorType := selector.Type()
-		isSelectorPtr := false
-		if rawSelectorType.Kind() == reflect.Ptr {
-			rawSelectorType = rawSelectorType.Elem()
-			isSelectorPtr = true
-		}
-		isValuePtr := false
-		rawValueType := valueType
-		if rawValueType.Kind() == reflect.Ptr {
-			rawValueType = valueType.Elem()
-			isValuePtr = true
+		destType := selector.Type()
+		rawDestType := destType
+		destIsPtr := false
+		if rawDestType.Kind() == reflect.Ptr {
+			rawDestType = rawDestType.Elem()
+			destIsPtr = true
 		}
 
-		if rawSelectorType.Kind() == reflect.Struct && isSelectorPtr {
-			if rawValueType.ConvertibleTo(rawSelectorType) {
-				ptrValue := reflect.ValueOf(value)
-				if isValuePtr && ptrValue.IsNil() {
+		rawSrcType := valueType
+		srcIsPtr := false
+		if rawSrcType.Kind() == reflect.Ptr {
+			rawSrcType = rawSrcType.Elem()
+			srcIsPtr = true
+		}
+
+		if rawDestType.Kind() == reflect.Struct && rawSrcType.Kind() == reflect.Struct && rawSrcType.ConvertibleTo(rawDestType) {
+			srcValue := reflect.ValueOf(value)
+			if srcIsPtr {
+				if srcValue.IsNil() {
 					return nil, nil
 				}
-				var destValue reflect.Value
-				if isValuePtr {
-					destValue = ptrValue.Elem().Convert(rawSelectorType)
-				} else {
-					destValue = ptrValue.Convert(rawSelectorType)
-				}
-				if isSelectorPtr {
-					destPtrType := reflect.New(valueType)
-					destPtrType.Elem().Set(destValue)
-					return destPtrType.Interface(), nil
-				} else {
-					return destValue.Interface(), nil
-				}
+				srcValue = srcValue.Elem()
 			}
+			converted := srcValue.Convert(rawDestType)
+			if destIsPtr {
+				out := reflect.New(rawDestType)
+				out.Elem().Set(converted)
+				return out.Interface(), nil
+			}
+			return converted.Interface(), nil
 		}
 
 		if options.shallReportNotAssignable() {
-			//if !ensureAssignable(parameter.Name, selector.Type(), valueType) {
-			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
-			//}
+			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), destType.String())
 		}
 
-		reflectValue := reflect.New(valueType) //TODO replace with fast xreflect copy
-		valuePtr := reflectValue.Interface()
+		var target reflect.Value
+		if destIsPtr {
+			target = reflect.New(rawDestType) // *T where destType is *T
+		} else {
+			target = reflect.New(destType) // *T where destType is T
+		}
 		if data, err := json.Marshal(value); err == nil {
-			if err = json.Unmarshal(data, valuePtr); err == nil {
-				value = reflectValue.Elem().Interface()
+			if err = json.Unmarshal(data, target.Interface()); err == nil {
+				if destIsPtr {
+					value = target.Interface()
+				} else {
+					value = target.Elem().Interface()
+				}
 			}
 		}
 	}
@@ -841,7 +913,7 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *response.Errors) {
 	if parameter.ErrorMessage != "" && err != nil {
 		msg := strings.ReplaceAll(parameter.ErrorMessage, "${error}", err.Error())
-		err = fmt.Errorf(msg)
+		err = fmt.Errorf("%s", msg)
 	}
 	if pErr, ok := err.(*response.Error); ok {
 		pErr.Code = parameter.ErrorStatusCode

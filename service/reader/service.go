@@ -104,7 +104,7 @@ func (s *Service) afterRead(ctx context.Context, aSession *Session, collector *v
 	onFinish(end)
 	if value := ctx.Value(exec.ContextKey); value != nil {
 		if exeCtx := value.(*exec.Context); exeCtx != nil {
-			exeCtx.Metrics.Append(metrics)
+			exeCtx.AppendMetrics(metrics)
 		}
 	}
 }
