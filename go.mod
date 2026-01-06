@@ -42,7 +42,7 @@ require (
 
 require (
 	github.com/viant/govalidator v0.3.1
-	github.com/viant/sqlparser v0.8.1
+	github.com/viant/sqlparser v0.9.0
 )
 
 require (
