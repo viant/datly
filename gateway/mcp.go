@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
+	oauthmeta "github.com/viant/mcp-protocol/oauth2/meta"
 	"github.com/viant/mcp-protocol/schema"
 	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/toolbox"
@@ -111,6 +112,10 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 		}
 		rw := proxy.NewWriter()
 		aRoute.Handle(rw, httpReq)
+
+		if rw.Code == http.StatusUnauthorized {
+			return nil, r.mcpUnauthorizedError()
+		}
 
 		// 5) Build tool result (text + structured on error)
 		return r.buildToolCallResult(rw, finalURL, aRoute.Path.Method), nil
@@ -332,6 +337,26 @@ func (r *Router) addAuthTokenIfPresent(ctx context.Context, httpRequest *http.Re
 	}
 }
 
+const defaultMCPProtectedResource = "https://datly.viantinc.com"
+
+func (r *Router) mcpUnauthorizedError() *jsonrpc.Error {
+	if r == nil || r.config == nil || r.config.MCP == nil {
+		return jsonrpc.NewError(schema.Unauthorized, "Unauthorized", nil)
+	}
+	issuerURL := strings.TrimSpace(r.config.MCP.IssuerURL)
+	if issuerURL == "" {
+		return jsonrpc.NewError(schema.Unauthorized, "Unauthorized", nil)
+	}
+	return jsonrpc.NewError(schema.Unauthorized, "Unauthorized", &authorization.Authorization{
+		RequiredScopes: []string{},
+		UseIdToken:     true,
+		ProtectedResourceMetadata: &oauthmeta.ProtectedResourceMetadata{
+			Resource:             defaultMCPProtectedResource,
+			AuthorizationServers: []string{issuerURL},
+		},
+	})
+}
+
 func (r *Router) buildToolInputType(components *repository.Component) reflect.Type {
 	var inputFields []reflect.StructField
 	var uniqueQuery = make(map[string]bool)
@@ -468,9 +493,9 @@ func (r *Router) buildTemplateResourceIntegration(item *dpath.Item, aPath *dpath
 
 func (r *Router) reactMcpResourceHandler(mcpResourceTemplate schema.ResourceTemplate, aRoute *Route, provider *repository.Provider) func(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {
 	handler := func(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {
-		result, err := r.handleMcpRead(ctx, &request.Params, &mcpResourceTemplate, aRoute, provider)
-		if err != nil {
-			return nil, jsonrpc.NewInternalError(err.Error(), nil)
+		result, rpcErr := r.handleMcpRead(ctx, &request.Params, &mcpResourceTemplate, aRoute, provider)
+		if rpcErr != nil {
+			return nil, rpcErr
 		}
 		if len(result) == 0 {
 			return &schema.ReadResourceResult{Contents: []schema.ReadResourceResultContentsElem{}}, nil
@@ -532,12 +557,12 @@ func (r *Router) hasMcpResource(URI string) bool {
 	return false
 }
 
-func (r *Router) handleMcpRead(ctx context.Context, params *schema.ReadResourceRequestParams, template *schema.ResourceTemplate, aRoute *Route, provider *repository.Provider) ([]schema.ReadResourceResultContentsElem, error) {
+func (r *Router) handleMcpRead(ctx context.Context, params *schema.ReadResourceRequestParams, template *schema.ResourceTemplate, aRoute *Route, provider *repository.Provider) ([]schema.ReadResourceResultContentsElem, *jsonrpc.Error) {
 	URI := furl.Path(params.Uri)
 	URL := fmt.Sprintf("http://localhost/%v", URI) // fallback to a local URL for now, this should be replaced with the actual service URL
 	component, err := provider.Component(ctx)      // ensure the provider is initialized
 	if err != nil {
-		return nil, fmt.Errorf("failed to get component from provider: %w", err)
+		return nil, jsonrpc.NewInternalError(fmt.Errorf("failed to get component from provider: %w", err).Error(), nil)
 	}
 	byLoc := make(map[string]*state.Parameter)
 	for _, param := range component.View.GetResource().Parameters {
@@ -551,6 +576,9 @@ func (r *Router) handleMcpRead(ctx context.Context, params *schema.ReadResourceR
 	}
 	r.addAuthTokenIfPresent(ctx, httpRequest)
 	aRoute.Handle(responseWriter, httpRequest) // route the request to the actual handler
+	if responseWriter.Code == http.StatusUnauthorized {
+		return nil, r.mcpUnauthorizedError()
+	}
 	var result []schema.ReadResourceResultContentsElem
 	mimeType := ""
 	if template.MimeType != nil {
