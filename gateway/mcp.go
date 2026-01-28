@@ -288,11 +288,12 @@ func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method s
 		mimeType = "application/json"
 	}
 	data := responseWriter.Body.Bytes()
-	result.Content = append(result.Content, schema.CallToolResultContentElem{
-		MimeType: mimeType,
-		Type:     "text",
-		Text:     string(data),
-	})
+	result.Content = append(result.Content, schema.CallToolResultContentElem(
+		schema.TextContent{
+			Type: "text",
+			Text: string(data),
+		},
+	))
 	_ = json.Unmarshal(data, &result.StructuredContent)
 	if responseWriter.Code >= http.StatusBadRequest {
 		isErr := true

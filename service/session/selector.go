@@ -11,6 +11,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/response"
+	hstate "github.com/viant/xdatly/handler/state"
 )
 
 func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) (err error) {
@@ -21,11 +22,9 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 
 	selector := s.state.Lookup(ns.View)
 
-	if opts != nil && opts.locatorOpt != nil && opts.locatorOpt.QuerySelectors != nil { //override selector
-		querySelectors := opts.locatorOpt.QuerySelectors
-		if namedSelector := querySelectors.Find(ns.View.Name); namedSelector != nil {
-			selector.QuerySelector = namedSelector.QuerySelector
-		}
+	var injected *hstate.NamedQuerySelector
+	if opts != nil && opts.locatorOpt != nil && opts.locatorOpt.QuerySelectors != nil {
+		injected = opts.locatorOpt.QuerySelectors.Find(ns.View.Name)
 	}
 	if err = s.populateFieldQuerySelector(ctx, ns, opts); err != nil {
 		return response.NewParameterError(ns.View.Name, selectorParameters.FieldsParameter.Name, err)
@@ -45,8 +44,59 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 	if err = s.populatePageQuerySelector(ctx, ns, opts); err != nil {
 		return response.NewParameterError(ns.View.Name, selectorParameters.PageParameter.Name, err)
 	}
+
+	// Apply injected selector last so it takes precedence over request-derived values,
+	// but still validate against view selector constraints.
+	if injected != nil {
+		selector.QuerySelector = injected.QuerySelector
+		if err := s.applyInjectedQuerySelector(ns, selector, injected); err != nil {
+			return err
+		}
+	} else if selector.Page > 0 && selector.Offset == 0 {
+		// If selector was pre-set (e.g. from non-query sources) without an explicit page parameter,
+		// apply Page semantics to compute Offset/Limit.
+		_ = s.setPageQuerySelector(selector.Page, ns)
+	}
 	if selector.Limit == 0 && selector.Offset != 0 {
 		return fmt.Errorf("can't use offset without limit - view: %v", ns.View.Name)
+	}
+	return nil
+}
+
+func (s *Session) applyInjectedQuerySelector(ns *view.NamespaceView, selector *view.Statelet, injected *hstate.NamedQuerySelector) error {
+	if injected == nil || selector == nil {
+		return nil
+	}
+	if len(injected.Fields) > 0 {
+		if err := s.setFieldsQuerySelector(injected.Fields, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Limit != 0 {
+		if err := s.setLimitQuerySelector(injected.Limit, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Offset != 0 {
+		if err := s.setOffsetQuerySelector(injected.Offset, ns); err != nil {
+			return err
+		}
+	}
+	if injected.OrderBy != "" {
+		items := strings.Split(injected.OrderBy, ",")
+		if err := s.setOrderByQuerySelector(items, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Criteria != "" {
+		if err := s.setCriteriaQuerySelector(injected.Criteria, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Page != 0 {
+		if err := s.setPageQuerySelector(injected.Page, ns); err != nil {
+			return err
+		}
 	}
 	return nil
 }

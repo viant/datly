@@ -240,7 +240,7 @@ func (s *Session) setTemplateState(ctx context.Context, aView *view.View, opts *
 	aState := s.state.Lookup(aView)
 	if template := aView.Template; template != nil {
 		stateType := template.StateType()
-		if stateType.IsDefined() {
+		if stateType != nil && stateType.IsDefined() {
 			templateState := aState.Template
 			templateState.EnsureMarker()
 			err := s.SetState(ctx, template.Parameters, templateState, opts)
@@ -830,9 +830,10 @@ func New(aView *view.View, opts ...Option) *Session {
 }
 
 type loadStateOptions struct {
-	skipKind     map[state.Kind]bool
-	hasSkipKind  bool
-	useHasMarker bool
+	skipKind        map[state.Kind]bool
+	hasSkipKind     bool
+	useHasMarker    bool
+	fallbackOnValue bool
 }
 
 type LoadStateOption func(o *loadStateOptions)
@@ -840,6 +841,14 @@ type LoadStateOption func(o *loadStateOptions)
 func WithHasMarker() LoadStateOption {
 	return func(o *loadStateOptions) {
 		o.useHasMarker = true
+	}
+}
+
+// WithValuePresenceFallback treats non-zero values as present when no Has marker is available.
+// This is opt-in to avoid changing behavior for existing inputs that intentionally omit markers.
+func WithValuePresenceFallback() LoadStateOption {
+	return func(o *loadStateOptions) {
+		o.fallbackOnValue = true
 	}
 }
 func WithLoadStateSkipKind(kinds ...state.Kind) LoadStateOption {
@@ -869,6 +878,7 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 	// Use presence markers only if enabled and supported by the input state
 	hasMarker := options.useHasMarker && inputState.HasMarker()
 	for _, parameter := range parameters {
+
 		if parameter.Scope != "" {
 			continue
 		}
@@ -889,7 +899,11 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 		if hasMarker && !selector.Has(ptr) {
 			continue
 		}
+
 		value := selector.Value(ptr)
+		if !hasMarker && options.fallbackOnValue && isZeroValue(value) {
+			continue
+		}
 		switch parameter.In.Kind {
 		case state.KindView, state.KindParam, state.KindState:
 			if value == nil {
@@ -908,6 +922,24 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 	}
 
 	return nil
+}
+
+func isZeroValue(value interface{}) bool {
+	if value == nil {
+		return true
+	}
+	v := reflect.ValueOf(value)
+	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return true
+		}
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Slice, reflect.Map, reflect.Array:
+		return v.Len() == 0
+	}
+	return v.IsZero()
 }
 
 func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *response.Errors) {

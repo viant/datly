@@ -119,16 +119,32 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		locatorsToRemove = append(locatorsToRemove, httpKinds...)
 	}
 	if hOptions.Query() != nil {
-		stateOptions = append(stateOptions, locator.WithQuery(hOptions.Query()))
+		queryOpt := locator.WithQuery(hOptions.Query())
+		stateOptions = append(stateOptions, queryOpt)
+		s.locatorOptions = append(s.locatorOptions, queryOpt)
 		locatorsToRemove = append(locatorsToRemove, httpKinds...)
 	}
 	if len(hOptions.PathParameters()) > 0 {
-		stateOptions = append(stateOptions, locator.WithPathParameters(hOptions.PathParameters()))
+		pathOpt := locator.WithPathParameters(hOptions.PathParameters())
+		stateOptions = append(stateOptions, pathOpt)
+		s.locatorOptions = append(s.locatorOptions, pathOpt)
 		locatorsToRemove = append(locatorsToRemove, httpKinds...)
 	}
 	if hOptions.HttpRequest() != nil {
-		stateOptions = append(stateOptions, locator.WithRequest(hOptions.HttpRequest()))
+		requestOpt := locator.WithRequest(hOptions.HttpRequest())
+		stateOptions = append(stateOptions, requestOpt)
+		s.locatorOptions = append(s.locatorOptions, requestOpt)
 		locatorsToRemove = append(locatorsToRemove, httpKinds...)
+	}
+	if selectors := hOptions.QuerySelectors(); len(selectors) > 0 {
+		selectorOpt := locator.WithQuerySelectors(selectors)
+		stateOptions = append(stateOptions, selectorOpt)
+		s.locatorOptions = append(s.locatorOptions, selectorOpt)
+	}
+	// Keep parsed locator options in sync with any dynamic additions made via injector.Bind.
+	if len(s.locatorOptions) > 0 {
+		s.locatorOpt = locator.NewOptions(s.locatorOptions)
+		s.kindLocator = locator.NewKindsLocator(nil, s.locatorOptions...)
 	}
 	s.kindLocator.RemoveLocators(locatorsToRemove...)
 	if s.view != nil {

@@ -211,7 +211,12 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 
 func LoadInput(ctx context.Context, aSession *session.Session, aComponent *repository.Component, input interface{}) error {
 	ctx = aSession.Context(ctx, false)
-	if err := aSession.LoadState(aComponent.Input.Type.Parameters, input); err != nil {
+	if err := aSession.LoadState(
+		aComponent.Input.Type.Parameters,
+		input,
+		session.WithHasMarker(),
+		session.WithValuePresenceFallback(),
+	); err != nil {
 		return err
 	}
 	if err := aSession.Populate(ctx); err != nil {
