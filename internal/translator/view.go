@@ -2,15 +2,17 @@ package translator
 
 import (
 	"fmt"
+
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 
+	"path"
+
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
-	"path"
 )
 
 type (
@@ -212,7 +214,8 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 			selector.PageParameter = &parameter.Parameter
 			selector.Constraints.Page = &enabled
 		}
-		delete(namespace.Resource.Declarations.QuerySelectors, namespace.Name)
+
+		//delete(namespace.Resource.Declarations.QuerySelectors, namespace.Name)
 	}
 
 }
