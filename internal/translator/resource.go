@@ -733,7 +733,7 @@ func (r *Resource) updatedObject(loadType func(typeName string) (reflect.Type, e
 	schema := parameter.OutputSchema()
 	wType := schema.Type()
 	if wType == nil {
-		return fmt.Errorf("failed to get parameter auxiliary type: %s, %w", parameter.Name, schema.Name)
+		return fmt.Errorf("failed to get parameter auxiliary type: %s, %s", parameter.Name, schema.Name)
 	}
 	auxiliaryState := inference.State{}
 	if err := r.extractState(loadType, wType, &auxiliaryState); err != nil {

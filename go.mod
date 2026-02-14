@@ -2,6 +2,12 @@ module github.com/viant/datly
 
 go 1.25.0
 
+replace github.com/viant/velty => ../velty
+
+replace github.com/viant/x => ../x
+
+replace github.com/viant/sqlparser => ../sqlparser
+
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
@@ -15,7 +21,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.11.1
-	github.com/viant/afs v1.26.2
+	github.com/viant/afs v1.29.0
 	github.com/viant/afsc v1.16.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.4.1
@@ -53,6 +59,7 @@ require (
 	github.com/viant/mcp-protocol v0.9.0
 	github.com/viant/structology v0.8.0
 	github.com/viant/tagly v0.3.0
+	github.com/viant/x v0.3.0
 	github.com/viant/xdatly v0.5.4-0.20251113181159-0ac8b8b0ff3a
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20251208172928-dd34b7f09fd5
@@ -151,7 +158,6 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/viant/gosh v0.2.1 // indirect
 	github.com/viant/igo v0.2.0 // indirect
-	github.com/viant/x v0.3.0 // indirect
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
 	github.com/xuri/excelize/v2 v2.8.0 // indirect
 	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect

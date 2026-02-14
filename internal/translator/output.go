@@ -452,6 +452,12 @@ func (s *Service) ensureOutputParameters(resource *Resource, outputState inferen
 }
 
 func (s *Service) updateParameterWithComponentOutputType(dataParameter *state.Parameter, rootViewlet *Viewlet) {
+	if rootViewlet == nil || rootViewlet.View == nil || rootViewlet.Resource == nil || rootViewlet.Resource.rule == nil {
+		return
+	}
+	if rootViewlet.View.Schema == nil {
+		rootViewlet.View.Schema = &state.Schema{}
+	}
 	typeName := rootViewlet.View.Schema.Name
 	if typeName == "" || typeName == "string" {
 		typeName = view.DefaultTypeName(rootViewlet.Name)

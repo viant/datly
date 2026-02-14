@@ -401,7 +401,9 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 		if err != nil {
 			rType, err = types.LookupType(lookupType, schema.DataType, xreflect.WithPackage(pkgPath))
 			if err != nil {
-				return structField, markerField, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", p.Name, schema.TypeName(), err)
+				// Keep unresolved custom parameter types as dynamic `interface{}` so
+				// scan/planning can continue while preserving declared schema metadata.
+				rType = reflect.TypeOf((*interface{})(nil)).Elem()
 			}
 		}
 		schema.rType = rType
