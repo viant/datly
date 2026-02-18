@@ -360,8 +360,19 @@ func (r *Router) mcpUnauthorizedError() *jsonrpc.Error {
 
 func (r *Router) buildToolInputType(components *repository.Component) reflect.Type {
 	var inputFields []reflect.StructField
+	var uniqueFieldName = make(map[string]bool)
 	var uniqueQuery = make(map[string]bool)
 	var uniquePath = make(map[string]bool)
+	appendField := func(name string, fieldType reflect.Type, tag reflect.StructTag) {
+		if name == "" || fieldType == nil {
+			return
+		}
+		if uniqueFieldName[name] {
+			return
+		}
+		uniqueFieldName[name] = true
+		inputFields = append(inputFields, reflect.StructField{Name: name, Type: fieldType, Tag: tag})
+	}
 	// Include component input parameters
 	for _, parameter := range components.Input.Type.Parameters {
 		name := strings.Title(parameter.Name)
@@ -376,7 +387,7 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
 				tag = `json:",omitempty" optional:"true"`
 			}
-			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type(), Tag: tag})
+			appendField(name, parameter.Schema.Type(), tag)
 		case state.KindQuery, state.KindForm:
 
 			if uniqueQuery[parameter.In.Name] {
@@ -391,14 +402,14 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 			} else if !strings.Contains(parameter.Tag, "required") {
 				tag = `json:",omitempty"`
 			}
-			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type(), Tag: tag})
+			appendField(name, parameter.Schema.Type(), tag)
 		case state.KindRequestBody:
 			// If body is a slice, mark optional in schema.
 			var tag reflect.StructTag
 			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
 				tag = `json:",omitempty" optional:"true"`
 			}
-			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type(), Tag: tag})
+			appendField(name, parameter.Schema.Type(), tag)
 		}
 	}
 
@@ -407,26 +418,26 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 		if p := components.View.Selector.LimitParameter; p != nil && p.In != nil && p.In.Name != "" {
 			if !uniqueQuery[p.In.Name] { // avoid duplicates
 				uniqueQuery[p.In.Name] = true
-				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty"`})
+				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty"`)
 			}
 		}
 		if p := components.View.Selector.OffsetParameter; p != nil && p.In != nil && p.In.Name != "" {
 			if !uniqueQuery[p.In.Name] {
 				uniqueQuery[p.In.Name] = true
-				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty"`})
+				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty"`)
 			}
 		}
 		if p := components.View.Selector.FieldsParameter; p != nil && p.In != nil && p.In.Name != "" {
 			if !uniqueQuery[p.In.Name] {
 				uniqueQuery[p.In.Name] = true
 				// Fields is a []string – ensure optional in schema
-				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty" optional:"true"`})
+				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty" optional:"true"`)
 			}
 		}
 		if p := components.View.Selector.PageParameter; p != nil && p.In != nil && p.In.Name != "" {
 			if !uniqueQuery[p.In.Name] {
 				uniqueQuery[p.In.Name] = true
-				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty"`})
+				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty"`)
 			}
 		}
 	}

@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/viant/afs"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/router/openapi/openapi3"
 	"github.com/viant/datly/gateway/runtime/standalone/endpoint"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
+	"path/filepath"
 	"strings"
 )
 
@@ -71,5 +73,35 @@ func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
 	}
 	cfg.URL = URL
 	cfg.Init(ctx)
+	cfg.normalizeURLs(baseDir(URL))
 	return cfg, cfg.Validate()
+}
+
+func (c *Config) normalizeURLs(baseURL string) {
+	if url.IsRelative(c.RouteURL) {
+		c.RouteURL = url.Join(baseURL, c.RouteURL)
+	}
+	if url.IsRelative(c.ContentURL) {
+		c.ContentURL = url.Join(baseURL, c.ContentURL)
+	}
+	if url.IsRelative(c.PluginsURL) {
+		c.PluginsURL = url.Join(baseURL, c.PluginsURL)
+	}
+	if url.IsRelative(c.DependencyURL) {
+		c.DependencyURL = url.Join(baseURL, c.DependencyURL)
+	}
+	if url.IsRelative(c.JobURL) {
+		c.JobURL = url.Join(baseURL, c.JobURL)
+	}
+	if url.IsRelative(c.FailedJobURL) {
+		c.FailedJobURL = url.Join(baseURL, c.FailedJobURL)
+	}
+}
+
+func baseDir(URL string) string {
+	if strings.Contains(URL, "://") {
+		parent, _ := url.Split(URL, "file")
+		return parent
+	}
+	return filepath.Dir(URL)
 }
