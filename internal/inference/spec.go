@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/column"
@@ -14,8 +17,6 @@ import (
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/sqlx/option"
-	"reflect"
-	"strings"
 )
 
 type (

@@ -3,6 +3,10 @@ package translator
 import (
 	"context"
 	"fmt"
+	"path"
+	"reflect"
+	"strings"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
@@ -22,9 +26,6 @@ import (
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
-	"path"
-	"reflect"
-	"strings"
 )
 
 type (
@@ -352,6 +353,15 @@ func (r *Resource) buildParameterViews() {
 		if parameter.Cache != "" {
 			viewlet.View.Cache = &view.Cache{Reference: shared.Reference{Ref: parameter.Cache}}
 		}
+		if parameter.Limit != nil {
+			if viewlet.View.Selector == nil {
+				viewlet.View.Selector = &view.Config{
+					Constraints: &view.Constraints{Limit: true},
+				}
+			}
+			viewlet.View.Selector.Limit = *parameter.Limit
+			viewlet.View.Selector.NoLimit = viewlet.View.Selector.Limit == 0
+		}
 		if viewlet.Connector == "" {
 			viewlet.Connector = r.rootConnector
 		}
@@ -464,9 +474,11 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet) error) error {
 	viewParameters := r.State.FilterByKind(state.KindView)
 	for _, viewParameter := range viewParameters {
-		if viewParameter.Schema != nil && viewParameter.Schema.Type() != nil {
-			continue
-		}
+		//WE DO NOT NEEDED IT
+		//if viewParameter.Schema != nil && viewParameter.Schema.Type() != nil {
+		//	fmt.Printf("skipping view %v %v\n", viewParameter.Name, viewParameter.Schema)
+		//	//continue
+		//}
 		if viewParameter.In.Name == "" { //default root schema
 			continue
 		}

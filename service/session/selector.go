@@ -3,13 +3,15 @@ package session
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/service/session/criteria"
 	"github.com/viant/datly/view"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/response"
-	"strconv"
-	"strings"
+	hstate "github.com/viant/xdatly/handler/state"
 )
 
 func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) (err error) {
@@ -18,6 +20,12 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 		return nil
 	}
 
+	selector := s.state.Lookup(ns.View)
+
+	var injected *hstate.NamedQuerySelector
+	if opts != nil && opts.locatorOpt != nil && opts.locatorOpt.QuerySelectors != nil {
+		injected = opts.locatorOpt.QuerySelectors.Find(ns.View.Name)
+	}
 	if err = s.populateFieldQuerySelector(ctx, ns, opts); err != nil {
 		return response.NewParameterError(ns.View.Name, selectorParameters.FieldsParameter.Name, err)
 	}
@@ -36,9 +44,59 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 	if err = s.populatePageQuerySelector(ctx, ns, opts); err != nil {
 		return response.NewParameterError(ns.View.Name, selectorParameters.PageParameter.Name, err)
 	}
-	selector := s.state.Lookup(ns.View)
+
+	// Apply injected selector last so it takes precedence over request-derived values,
+	// but still validate against view selector constraints.
+	if injected != nil {
+		selector.QuerySelector = injected.QuerySelector
+		if err := s.applyInjectedQuerySelector(ns, selector, injected); err != nil {
+			return err
+		}
+	} else if selector.Page > 0 && selector.Offset == 0 {
+		// If selector was pre-set (e.g. from non-query sources) without an explicit page parameter,
+		// apply Page semantics to compute Offset/Limit.
+		_ = s.setPageQuerySelector(selector.Page, ns)
+	}
 	if selector.Limit == 0 && selector.Offset != 0 {
 		return fmt.Errorf("can't use offset without limit - view: %v", ns.View.Name)
+	}
+	return nil
+}
+
+func (s *Session) applyInjectedQuerySelector(ns *view.NamespaceView, selector *view.Statelet, injected *hstate.NamedQuerySelector) error {
+	if injected == nil || selector == nil {
+		return nil
+	}
+	if len(injected.Fields) > 0 {
+		if err := s.setFieldsQuerySelector(injected.Fields, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Limit != 0 {
+		if err := s.setLimitQuerySelector(injected.Limit, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Offset != 0 {
+		if err := s.setOffsetQuerySelector(injected.Offset, ns); err != nil {
+			return err
+		}
+	}
+	if injected.OrderBy != "" {
+		items := strings.Split(injected.OrderBy, ",")
+		if err := s.setOrderByQuerySelector(items, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Criteria != "" {
+		if err := s.setCriteriaQuerySelector(injected.Criteria, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Page != 0 {
+		if err := s.setPageQuerySelector(injected.Page, ns); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -154,6 +212,9 @@ func (s *Session) setOrderByQuerySelector(value interface{}, ns *view.NamespaceV
 			continue //position based, not need to validate
 		}
 
+		if ns.View.Selector.Constraints.HasOrderByColumn(column) {
+			continue
+		}
 		_, ok := ns.View.ColumnByName(column)
 		if !ok {
 			return fmt.Errorf("not found column %v at view %v", items, ns.View.Name)
@@ -201,7 +262,10 @@ func (s *Session) setLimitQuerySelector(value interface{}, ns *view.NamespaceVie
 		return fmt.Errorf("can't use Limit on view %v", ns.View.Name)
 	}
 	selector := s.state.Lookup(ns.View)
-	limit := value.(int)
+	limit, err := toInt(value)
+	if err != nil {
+		return fmt.Errorf("invalid limit value: %v", err)
+	}
 	if limit <= ns.View.Selector.Limit || ns.View.Selector.Limit == 0 {
 		selector.Limit = limit
 	}
@@ -223,7 +287,19 @@ func (s *Session) setFieldsQuerySelector(value interface{}, ns *view.NamespaceVi
 		return fmt.Errorf("can't use projection on view %v", ns.View.Name)
 	}
 	selector := s.state.Lookup(ns.View)
-	fields := value.([]string)
+	var fields []string
+	switch v := value.(type) {
+	case []string:
+		fields = v
+	case []interface{}:
+		for _, elem := range v {
+			text, ok := elem.(string)
+			if !ok {
+				continue
+			}
+			fields = append(fields, text)
+		}
+	}
 	for _, field := range fields {
 		fieldName := ns.View.CaseFormat.Format(field, text.CaseFormatUpperCamel)
 		if err = canUseColumn(ns.View, fieldName); err != nil {
@@ -269,4 +345,21 @@ func canUseColumn(aView *view.View, columnName string) error {
 		return fmt.Errorf("not found column %v in view %v", columnName, aView.Name)
 	}
 	return nil
+}
+
+func toInt(v interface{}) (int, error) {
+	switch val := v.(type) {
+	case int:
+		return val, nil
+	case int32:
+		return int(val), nil
+	case int64:
+		return int(val), nil
+	case float64:
+		return int(val), nil
+	case float32:
+		return int(val), nil
+	default:
+		return 0, fmt.Errorf("unsupported type: %T", v)
+	}
 }

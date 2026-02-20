@@ -252,7 +252,7 @@ func (e *Evaluator) ensureState(ctx *Context, options ...StateOption) *State {
 		state.Context = ctx
 	}
 
-	state.Init(e.stateProvider(), e.predicateConfigs, options...)
+	state.Init(e.stateProvider(), e.predicateConfigs, e.stateType, options...)
 	return state
 }
 
