@@ -10,6 +10,9 @@ type Import struct {
 type Context struct {
 	DefaultPackage string   `json:",omitempty" yaml:",omitempty"`
 	Imports        []Import `json:",omitempty" yaml:",omitempty"`
+	PackageDir     string   `json:",omitempty" yaml:",omitempty"`
+	PackageName    string   `json:",omitempty" yaml:",omitempty"`
+	PackagePath    string   `json:",omitempty" yaml:",omitempty"`
 }
 
 // Provenance tracks where a resolved type came from.

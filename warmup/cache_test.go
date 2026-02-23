@@ -2,14 +2,13 @@ package warmup
 
 import (
 	"context"
+	"path"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
-	"github.com/viant/afs"
-	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
-	"path"
-	"testing"
 )
 
 func TestPopulateCache(t *testing.T) {
@@ -59,14 +58,14 @@ func TestPopulateCache(t *testing.T) {
 
 		resourcePath := path.Join("testdata", testCase.URL, "resource.yaml")
 
-		resource, err := router.NewResourceFromURL(context.TODO(), afs.New(), resourcePath, false)
+		resource, err := view.NewResourceFromURL(context.TODO(), resourcePath, nil, nil)
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}
 
 		var views []*view.View
-		for _, route := range resource.Routes {
-			views = append(views, route.View)
+		for _, item := range resource.Views {
+			views = append(views, item)
 		}
 
 		inserted, err := PopulateCache(views)
@@ -100,7 +99,7 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 	builder := reader.NewBuilder()
 
 	for _, cacheInput := range input {
-		build, err := builder.CacheSQL(aView, cacheInput.Selector)
+		build, err := builder.CacheSQL(ctx, aView, cacheInput.Selector)
 		if err != nil {
 			return err
 		}
@@ -116,7 +115,7 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 		}
 
 		if cacheInput.IndexMeta && aView.Template.Summary != nil {
-			metaIndex, err := builder.CacheMetaSQL(aView, cacheInput.Selector, &view.BatchData{
+			metaIndex, err := builder.CacheMetaSQL(ctx, aView, cacheInput.Selector, &view.BatchData{
 				ValuesBatch: testCase.metaIndexed,
 				Values:      testCase.metaIndexed,
 			}, nil, nil)

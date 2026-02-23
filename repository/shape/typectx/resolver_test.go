@@ -87,3 +87,28 @@ func TestResolver_ResolveWithProvenance(t *testing.T) {
 	require.Equal(t, "/repo/mdp/performance/order.go", resolved.Provenance.File)
 	require.Equal(t, "resource_type", resolved.Provenance.Kind)
 }
+
+func TestResolver_Resolve_Unqualified_PackagePath(t *testing.T) {
+	reg := x.NewRegistry()
+	reg.Register(x.NewType(reflect.TypeOf(resolveOrder{}), x.WithPkgPath("github.com/acme/mdp/performance"), x.WithName("Order")))
+	resolver := NewResolver(reg, &Context{PackagePath: "github.com/acme/mdp/performance"})
+
+	resolved, err := resolver.ResolveWithProvenance("Order")
+	require.NoError(t, err)
+	require.NotNil(t, resolved)
+	require.Equal(t, "github.com/acme/mdp/performance.Order", resolved.ResolvedKey)
+	require.Equal(t, "package_path", resolved.MatchKind)
+}
+
+func TestResolver_Resolve_Qualified_PackageNameFallback(t *testing.T) {
+	reg := x.NewRegistry()
+	reg.Register(x.NewType(reflect.TypeOf(resolveOrder{}), x.WithPkgPath("github.com/acme/mdp/performance"), x.WithName("Order")))
+	resolver := NewResolver(reg, &Context{
+		PackageName: "performance",
+		PackagePath: "github.com/acme/mdp/performance",
+	})
+
+	key, err := resolver.Resolve("performance.Order")
+	require.NoError(t, err)
+	require.Equal(t, "github.com/acme/mdp/performance.Order", key)
+}

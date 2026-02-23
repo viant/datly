@@ -19,6 +19,8 @@ const (
 // Source represents the caller-provided shape source.
 type Source struct {
 	Name         string
+	Path         string
+	Connector    string
 	Struct       any
 	Type         reflect.Type
 	TypeName     string

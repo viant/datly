@@ -119,6 +119,9 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 			return nil, fmt.Errorf("failed to initialise component service: %w", err)
 		}
 	}
+	if err = (&Service{Config: aConfig}).applyDQLBootstrap(ctx, componentRepository, aConfig.DQLBootstrap); err != nil {
+		return nil, fmt.Errorf("failed to apply DQL bootstrap: %w", err)
+	}
 
 	var mcpRegistry *serverproto.Registry
 	if aConfig.MCP != nil {

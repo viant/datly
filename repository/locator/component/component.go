@@ -2,6 +2,7 @@ package component
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -58,7 +59,7 @@ func updateErrWithResponseStatus(err error, response interface{}) error {
 	var statusErr error
 	responseStatus, ok := tryExtractResponseStatus(response)
 	if ok && responseStatus.Status == "error" {
-		statusErr = fmt.Errorf(responseStatus.Message)
+		statusErr = errors.New(responseStatus.Message)
 	}
 
 	if statusErr != nil {

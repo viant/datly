@@ -471,12 +471,13 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 					rawType = rawType.Elem()
 				}
 
-				if rawType.Kind() != reflect.Struct {
-					break
-				}
-
 				if elem.Kind() == reflect.Interface && !elem.IsNil() {
 					elem = elem.Elem()
+				}
+				if rawType.Kind() != reflect.Struct {
+					value = elem.Interface()
+					valueType = reflect.TypeOf(value)
+					break
 				}
 				if elem.Kind() == reflect.Ptr {
 					value = elem.Interface()

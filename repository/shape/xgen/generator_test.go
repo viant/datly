@@ -256,6 +256,181 @@ type DQLOrderView struct {
 	Old string ` + "`json:\"old,omitempty\"`" + `
 }
 
+func TestGenerateFromDQLShape_UsesTypeContextPackageDefaults(t *testing.T) {
+	projectDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte("module example.com/demo\n\ngo 1.25.0\n"), 0o644); err != nil {
+		t.Fatalf("write go.mod failed: %v", err)
+	}
+	doc := &dqlshape.Document{
+		TypeContext: &typectx.Context{
+			PackageDir:  "pkg/platform/taxonomy",
+			PackageName: "taxonomy",
+			PackagePath: "example.com/demo/pkg/platform/taxonomy",
+		},
+		Root: map[string]any{
+			"Resource": map[string]any{
+				"Views": []any{
+					map[string]any{
+						"Name": "orders",
+						"ColumnsConfig": map[string]any{
+							"ID": map[string]any{"Name": "ID", "DataType": "int"},
+						},
+					},
+				},
+			},
+		},
+	}
+	result, err := GenerateFromDQLShape(doc, &Config{ProjectDir: projectDir})
+	if err != nil {
+		t.Fatalf("generate failed: %v", err)
+	}
+	if result == nil {
+		t.Fatalf("expected result")
+	}
+	if result.PackageName != "taxonomy" {
+		t.Fatalf("expected package name taxonomy, got %q", result.PackageName)
+	}
+	if result.PackagePath != "example.com/demo/pkg/platform/taxonomy" {
+		t.Fatalf("expected package path from type context, got %q", result.PackagePath)
+	}
+	if !strings.Contains(filepath.ToSlash(result.FilePath), "/pkg/platform/taxonomy/") {
+		t.Fatalf("expected file under type-context package dir, got %s", result.FilePath)
+	}
+}
+
+func TestGenerateFromDQLShape_ProvenanceEnrichment_WithReplaceAndTypeContextPackagePath(t *testing.T) {
+	root := t.TempDir()
+	projectDir := filepath.Join(root, "project")
+	modelsDir := filepath.Join(root, "shared-models")
+	if err := os.MkdirAll(filepath.Join(projectDir, "internal", "gen"), 0o755); err != nil {
+		t.Fatalf("mkdir project failed: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(modelsDir, "mdp"), 0o755); err != nil {
+		t.Fatalf("mkdir models failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte("module example.com/project\n\ngo 1.25\nreplace github.com/acme/models => ../shared-models\n"), 0o644); err != nil {
+		t.Fatalf("write project go.mod failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(modelsDir, "go.mod"), []byte("module github.com/acme/models\n\ngo 1.25\n"), 0o644); err != nil {
+		t.Fatalf("write models go.mod failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(modelsDir, "mdp", "types.go"), []byte("package mdp\ntype Order struct{}\n"), 0o644); err != nil {
+		t.Fatalf("write types.go failed: %v", err)
+	}
+	dest := filepath.Join(projectDir, "internal", "gen", "shapes_gen.go")
+	if err := os.WriteFile(dest, []byte("package gen\n"), 0o644); err != nil {
+		t.Fatalf("seed file failed: %v", err)
+	}
+
+	doc := &dqlshape.Document{
+		TypeContext: &typectx.Context{
+			PackagePath: "github.com/acme/models/mdp",
+		},
+		Root: map[string]any{
+			"Resource": map[string]any{
+				"Views": []any{
+					map[string]any{
+						"Name": "orders",
+						"ColumnsConfig": map[string]any{
+							"ID": map[string]any{"Name": "ID", "DataType": "int"},
+						},
+					},
+				},
+			},
+		},
+		TypeResolutions: []typectx.Resolution{
+			{
+				Expression: "Order",
+				ResolvedKey: "Order",
+				Provenance: typectx.Provenance{
+					Kind: "registry",
+				},
+			},
+		},
+	}
+
+	_, err := GenerateFromDQLShape(doc, &Config{
+		ProjectDir:         projectDir,
+		PackageDir:         "internal/gen",
+		PackageName:        "gen",
+		FileName:           "shapes_gen.go",
+		AllowedSourceRoots: []string{modelsDir},
+	})
+	if err != nil {
+		t.Fatalf("expected provenance enrichment to allow rewrite, got: %v", err)
+	}
+}
+
+func TestGenerateFromDQLShape_ProvenanceEnrichment_WithGOPATHFallback(t *testing.T) {
+	root := t.TempDir()
+	projectDir := filepath.Join(root, "project")
+	gopath := filepath.Join(root, "gopath")
+	modelsDir := filepath.Join(gopath, "src", "github.com", "legacy", "models")
+	if err := os.MkdirAll(filepath.Join(projectDir, "internal", "gen"), 0o755); err != nil {
+		t.Fatalf("mkdir project failed: %v", err)
+	}
+	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
+		t.Fatalf("mkdir models failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte("module example.com/project\n\ngo 1.25\n"), 0o644); err != nil {
+		t.Fatalf("write project go.mod failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(modelsDir, "types.go"), []byte("package models\ntype Legacy struct{}\n"), 0o644); err != nil {
+		t.Fatalf("write types.go failed: %v", err)
+	}
+	dest := filepath.Join(projectDir, "internal", "gen", "shapes_gen.go")
+	if err := os.WriteFile(dest, []byte("package gen\n"), 0o644); err != nil {
+		t.Fatalf("seed file failed: %v", err)
+	}
+
+	orig := os.Getenv("GOPATH")
+	if err := os.Setenv("GOPATH", gopath); err != nil {
+		t.Fatalf("set GOPATH failed: %v", err)
+	}
+	defer func() { _ = os.Setenv("GOPATH", orig) }()
+
+	doc := &dqlshape.Document{
+		TypeContext: &typectx.Context{
+			PackagePath: "github.com/legacy/models",
+		},
+		Root: map[string]any{
+			"Resource": map[string]any{
+				"Views": []any{
+					map[string]any{
+						"Name": "legacy",
+						"ColumnsConfig": map[string]any{
+							"ID": map[string]any{"Name": "ID", "DataType": "int"},
+						},
+					},
+				},
+			},
+		},
+		TypeResolutions: []typectx.Resolution{
+			{
+				Expression:  "Legacy",
+				ResolvedKey: "Legacy",
+				Provenance:  typectx.Provenance{Kind: "registry"},
+			},
+		},
+	}
+	_, err := GenerateFromDQLShape(doc, &Config{
+		ProjectDir:         projectDir,
+		PackageDir:         "internal/gen",
+		PackageName:        "gen",
+		FileName:           "shapes_gen.go",
+		AllowedSourceRoots: []string{filepath.Join(gopath, "src")},
+		UseGoModuleResolve: boolPtr(false),
+		UseGOPATHFallback:  boolPtr(true),
+	})
+	if err != nil {
+		t.Fatalf("expected GOPATH provenance enrichment to allow rewrite, got: %v", err)
+	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}
+
 func KeepCustom() string { return "ok" }
 `
 	if err := os.WriteFile(dest, []byte(initial), 0o644); err != nil {

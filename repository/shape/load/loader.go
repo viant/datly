@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/repository/shape"
+	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/plan"
 	"github.com/viant/datly/repository/shape/typectx"
 	shapevalidate "github.com/viant/datly/repository/shape/validate"
@@ -87,6 +88,28 @@ func buildComponent(source *shape.Source, pResult *plan.Result) *Component {
 			continue
 		}
 		ret.Views = append(ret.Views, aView.Name)
+		if aView.Declaration != nil {
+			if ret.Declarations == nil {
+				ret.Declarations = map[string]*plan.ViewDeclaration{}
+			}
+			ret.Declarations[aView.Name] = aView.Declaration
+			if selector := strings.TrimSpace(aView.Declaration.QuerySelector); selector != "" {
+				if ret.QuerySelectors == nil {
+					ret.QuerySelectors = map[string][]string{}
+				}
+				ret.QuerySelectors[selector] = append(ret.QuerySelectors[selector], aView.Name)
+			}
+			if len(aView.Declaration.Predicates) > 0 {
+				if ret.Predicates == nil {
+					ret.Predicates = map[string][]*plan.ViewPredicate{}
+				}
+				ret.Predicates[aView.Name] = append(ret.Predicates[aView.Name], aView.Declaration.Predicates...)
+			}
+		}
+		if len(aView.Relations) > 0 {
+			ret.Relations = append(ret.Relations, aView.Relations...)
+			ret.ViewRelations = append(ret.ViewRelations, toViewRelations(aView.Relations)...)
+		}
 	}
 	rootView := pickRootView(pResult.Views)
 	if rootView != nil {
@@ -117,6 +140,8 @@ func buildComponent(source *shape.Source, pResult *plan.Result) *Component {
 		}
 	}
 	ret.TypeContext = cloneTypeContext(pResult.TypeContext)
+	ret.Directives = cloneDirectives(pResult.Directives)
+	ret.ColumnsDiscovery = pResult.ColumnsDiscovery
 	return ret
 }
 
@@ -126,6 +151,9 @@ func cloneTypeContext(input *typectx.Context) *typectx.Context {
 	}
 	ret := &typectx.Context{
 		DefaultPackage: strings.TrimSpace(input.DefaultPackage),
+		PackageDir:     strings.TrimSpace(input.PackageDir),
+		PackageName:    strings.TrimSpace(input.PackageName),
+		PackagePath:    strings.TrimSpace(input.PackagePath),
 	}
 	for _, item := range input.Imports {
 		pkg := strings.TrimSpace(item.Package)
@@ -137,7 +165,38 @@ func cloneTypeContext(input *typectx.Context) *typectx.Context {
 			Package: pkg,
 		})
 	}
-	if ret.DefaultPackage == "" && len(ret.Imports) == 0 {
+	if ret.DefaultPackage == "" &&
+		len(ret.Imports) == 0 &&
+		ret.PackageDir == "" &&
+		ret.PackageName == "" &&
+		ret.PackagePath == "" {
+		return nil
+	}
+	return ret
+}
+
+func cloneDirectives(input *dqlshape.Directives) *dqlshape.Directives {
+	if input == nil {
+		return nil
+	}
+	ret := &dqlshape.Directives{
+		Meta:             strings.TrimSpace(input.Meta),
+		DefaultConnector: strings.TrimSpace(input.DefaultConnector),
+	}
+	if input.Cache != nil {
+		ret.Cache = &dqlshape.CacheDirective{
+			Enabled: input.Cache.Enabled,
+			TTL:     strings.TrimSpace(input.Cache.TTL),
+		}
+	}
+	if input.MCP != nil {
+		ret.MCP = &dqlshape.MCPDirective{
+			Name:            strings.TrimSpace(input.MCP.Name),
+			Description:     strings.TrimSpace(input.MCP.Description),
+			DescriptionPath: strings.TrimSpace(input.MCP.DescriptionPath),
+		}
+	}
+	if ret.Meta == "" && ret.DefaultConnector == "" && ret.Cache == nil && ret.MCP == nil {
 		return nil
 	}
 	return ret
@@ -178,7 +237,16 @@ func materializeView(item *plan.View) (*view.View, error) {
 	}
 
 	schema := newSchema(schemaType, item.Cardinality)
-	opts := []view.Option{view.WithSchema(schema), view.WithMode(view.ModeQuery)}
+	mode := view.ModeQuery
+	switch strings.TrimSpace(item.Mode) {
+	case string(view.ModeExec):
+		mode = view.ModeExec
+	case string(view.ModeHandler):
+		mode = view.ModeHandler
+	case string(view.ModeQuery):
+		mode = view.ModeQuery
+	}
+	opts := []view.Option{view.WithSchema(schema), view.WithMode(mode)}
 
 	if item.Connector != "" {
 		opts = append(opts, view.WithConnectorRef(item.Connector))
@@ -186,6 +254,13 @@ func materializeView(item *plan.View) (*view.View, error) {
 	if item.SQL != "" || item.SQLURI != "" {
 		tmpl := view.NewTemplate(item.SQL)
 		tmpl.SourceURL = item.SQLURI
+		if strings.TrimSpace(item.Summary) != "" {
+			tmpl.Summary = &view.TemplateSummary{
+				Name:   "Summary",
+				Source: item.Summary,
+				Kind:   view.MetaKindRecord,
+			}
+		}
 		opts = append(opts, view.WithTemplate(tmpl))
 	}
 	if item.CacheRef != "" {
@@ -203,6 +278,27 @@ func materializeView(item *plan.View) (*view.View, error) {
 		return nil, err
 	}
 	aView.Ref = item.Ref
+	aView.Module = item.Module
+	aView.AllowNulls = item.AllowNulls
+	if strings.TrimSpace(item.SelectorNamespace) != "" || item.SelectorNoLimit != nil {
+		if aView.Selector == nil {
+			aView.Selector = &view.Config{}
+		}
+		if strings.TrimSpace(item.SelectorNamespace) != "" {
+			aView.Selector.Namespace = strings.TrimSpace(item.SelectorNamespace)
+		}
+		if item.SelectorNoLimit != nil {
+			aView.Selector.NoLimit = *item.SelectorNoLimit
+		}
+	}
+	if aView.Schema != nil && strings.TrimSpace(item.SchemaType) != "" {
+		if aView.Schema.DataType == "" {
+			aView.Schema.DataType = strings.TrimSpace(item.SchemaType)
+		}
+		if aView.Schema.Name == "" {
+			aView.Schema.Name = strings.Trim(strings.TrimSpace(item.SchemaType), "*")
+		}
+	}
 	return aView, nil
 }
 
@@ -214,6 +310,53 @@ func bestSchemaType(item *plan.View) reflect.Type {
 		return item.ElementType
 	}
 	return nil
+}
+
+func toViewRelations(input []*plan.Relation) []*view.Relation {
+	if len(input) == 0 {
+		return nil
+	}
+	result := make([]*view.Relation, 0, len(input))
+	for _, item := range input {
+		if item == nil {
+			continue
+		}
+		relation := &view.Relation{
+			Name:   item.Name,
+			Holder: item.Holder,
+			On:     toViewLinks(item.On, true),
+			Of: view.NewReferenceView(
+				toViewLinks(item.On, false),
+				view.NewView(item.Ref, item.Table),
+			),
+		}
+		result = append(result, relation)
+	}
+	return result
+}
+
+func toViewLinks(input []*plan.RelationLink, parent bool) view.Links {
+	if len(input) == 0 {
+		return nil
+	}
+	result := make(view.Links, 0, len(input))
+	for _, item := range input {
+		if item == nil {
+			continue
+		}
+		link := &view.Link{}
+		if parent {
+			link.Field = item.ParentField
+			link.Namespace = item.ParentNamespace
+			link.Column = item.ParentColumn
+		} else {
+			link.Field = item.RefField
+			link.Namespace = item.RefNamespace
+			link.Column = item.RefColumn
+		}
+		result = append(result, link)
+	}
+	return result
 }
 
 func newSchema(rType reflect.Type, cardinality string) *state.Schema {

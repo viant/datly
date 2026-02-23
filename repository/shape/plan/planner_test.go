@@ -36,6 +36,18 @@ type reportSource struct {
 	ID     int         `parameter:"id,kind=query,in=id"`
 }
 
+type relationRow struct {
+	ID int
+}
+
+type relationSource struct {
+	Rows []relationRow `view:"rows,table=REPORT" on:"rows.report_id=report.id"`
+}
+
+type relationSourceWithFields struct {
+	Rows []relationRow `view:"rows,table=REPORT" on:"ReportID:rows.report_id=ID:report.id"`
+}
+
 func TestPlanner_Plan(t *testing.T) {
 	scanner := scan.New()
 	scanned, err := scanner.Scan(context.Background(), &shape.Source{Struct: &reportSource{}})
@@ -76,6 +88,54 @@ func TestPlanner_Plan(t *testing.T) {
 	assert.Equal(t, "query", stateByPath["ID"].Kind)
 	assert.Equal(t, "id", stateByPath["ID"].In)
 	assert.Equal(t, stateByPath["ID"].TagType, stateByPath["ID"].EffectiveType)
+}
+
+func TestPlanner_Plan_LinkOnProducesStructuredRelations(t *testing.T) {
+	scanner := scan.New()
+	scanned, err := scanner.Scan(context.Background(), &shape.Source{Struct: &relationSource{}})
+	require.NoError(t, err)
+
+	planner := New()
+	planned, err := planner.Plan(context.Background(), scanned)
+	require.NoError(t, err)
+	require.NotNil(t, planned)
+
+	result, ok := planned.Plan.(*Result)
+	require.True(t, ok)
+	require.Len(t, result.Views, 1)
+	viewPlan := result.Views[0]
+	require.Len(t, viewPlan.Relations, 1)
+	relation := viewPlan.Relations[0]
+	require.Len(t, relation.On, 1)
+	assert.Equal(t, "rows", relation.On[0].ParentNamespace)
+	assert.Equal(t, "report_id", relation.On[0].ParentColumn)
+	assert.Equal(t, "report", relation.On[0].RefNamespace)
+	assert.Equal(t, "id", relation.On[0].RefColumn)
+}
+
+func TestPlanner_Plan_LinkOnPreservesFieldSelectors(t *testing.T) {
+	scanner := scan.New()
+	scanned, err := scanner.Scan(context.Background(), &shape.Source{Struct: &relationSourceWithFields{}})
+	require.NoError(t, err)
+
+	planner := New()
+	planned, err := planner.Plan(context.Background(), scanned)
+	require.NoError(t, err)
+	require.NotNil(t, planned)
+
+	result, ok := planned.Plan.(*Result)
+	require.True(t, ok)
+	require.Len(t, result.Views, 1)
+	viewPlan := result.Views[0]
+	require.Len(t, viewPlan.Relations, 1)
+	relation := viewPlan.Relations[0]
+	require.Len(t, relation.On, 1)
+	assert.Equal(t, "ReportID", relation.On[0].ParentField)
+	assert.Equal(t, "rows", relation.On[0].ParentNamespace)
+	assert.Equal(t, "report_id", relation.On[0].ParentColumn)
+	assert.Equal(t, "ID", relation.On[0].RefField)
+	assert.Equal(t, "report", relation.On[0].RefNamespace)
+	assert.Equal(t, "id", relation.On[0].RefColumn)
 }
 
 func TestPlanner_Plan_InvalidDescriptors(t *testing.T) {

@@ -2,7 +2,6 @@ package typectx
 
 import (
 	"fmt"
-	"path"
 	"sort"
 	"strings"
 
@@ -115,6 +114,9 @@ func (r *Resolver) aliasPackage(alias string) string {
 			return item.Package
 		}
 	}
+	if r.context.PackageName != "" && r.context.PackagePath != "" && r.context.PackageName == alias {
+		return r.context.PackagePath
+	}
 	return ""
 }
 
@@ -177,6 +179,7 @@ func (r *Resolver) searchPackages() []scopedPackage {
 		seen[pkg] = true
 		result = append(result, scopedPackage{pkg: pkg, matchKind: matchKind})
 	}
+	appendPkg(r.context.PackagePath, "package_path")
 	appendPkg(r.context.DefaultPackage, "default_package")
 	for _, item := range r.context.Imports {
 		appendPkg(item.Package, "import_package")
@@ -237,30 +240,7 @@ func packageOf(key string) string {
 }
 
 func normalizeContext(input *Context) *Context {
-	if input == nil {
-		return nil
-	}
-	ret := &Context{
-		DefaultPackage: strings.TrimSpace(input.DefaultPackage),
-	}
-	for _, item := range input.Imports {
-		pkg := strings.TrimSpace(item.Package)
-		if pkg == "" {
-			continue
-		}
-		alias := strings.TrimSpace(item.Alias)
-		if alias == "" {
-			alias = path.Base(pkg)
-		}
-		ret.Imports = append(ret.Imports, Import{
-			Alias:   alias,
-			Package: pkg,
-		})
-	}
-	if ret.DefaultPackage == "" && len(ret.Imports) == 0 {
-		return nil
-	}
-	return ret
+	return Normalize(input)
 }
 
 func splitQualified(value string) (prefix string, name string, alias bool, qualified bool) {

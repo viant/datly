@@ -207,7 +207,7 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 		dataType = strings.Replace(dataType, typeName, "interface{}", 1)
 	}
 
-	if dataType != "" {
+	if dataType != "" && d.lookup != nil {
 		if schema, _ := d.lookup(dataType); schema != nil {
 			schema.Cardinality = declaration.Cardinality
 			if rType := schema.Type(); rType != nil && schema.Cardinality == state.Many {

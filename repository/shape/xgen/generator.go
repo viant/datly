@@ -26,6 +26,7 @@ func GenerateFromDQLShape(doc *shape.Document, cfg *Config) (*Result, error) {
 	if cfg == nil {
 		cfg = &Config{}
 	}
+	hydrateConfigFromTypeContext(doc, cfg)
 	applyDefaults(cfg)
 	projectDir, packageDir, err := resolvePaths(cfg.ProjectDir, cfg.PackageDir)
 	if err != nil {
@@ -131,10 +132,14 @@ func rewriteSafetyIssues(doc *shape.Document, cfg *Config, projectDir string) []
 		UseGOPATHFallback:  policy.useGOPATH,
 	})
 	var issues []string
-	for _, resolution := range doc.TypeResolutions {
+	for i := range doc.TypeResolutions {
+		resolution := &doc.TypeResolutions[i]
 		if srcResolver != nil && strings.TrimSpace(resolution.Provenance.File) == "" {
-			pkg := firstNonEmpty(strings.TrimSpace(resolution.Provenance.Package), packageOfKey(resolution.ResolvedKey))
+			pkg := inferResolutionPackage(*resolution, doc.TypeContext)
 			name := typeNameFromKey(resolution.ResolvedKey)
+			if name == "" {
+				name = strings.TrimSpace(resolution.Expression)
+			}
 			if pkg != "" && name != "" {
 				if file, err := srcResolver.ResolveTypeFile(pkg, name); err == nil {
 					resolution.Provenance.File = file
@@ -144,12 +149,47 @@ func rewriteSafetyIssues(doc *shape.Document, cfg *Config, projectDir string) []
 				}
 			}
 		}
-		if issue := resolutionSafetyIssue(resolution, policy); issue != "" {
+		if issue := resolutionSafetyIssue(*resolution, policy); issue != "" {
 			issues = append(issues, issue)
 		}
 	}
 	sort.Strings(issues)
 	return uniqueStrings(issues)
+}
+
+func hydrateConfigFromTypeContext(doc *shape.Document, cfg *Config) {
+	if doc == nil || cfg == nil || doc.TypeContext == nil {
+		return
+	}
+	if cfg.PackageDir == "" {
+		cfg.PackageDir = strings.TrimSpace(doc.TypeContext.PackageDir)
+	}
+	if cfg.PackageName == "" {
+		cfg.PackageName = strings.TrimSpace(doc.TypeContext.PackageName)
+	}
+	if cfg.PackagePath == "" {
+		cfg.PackagePath = strings.TrimSpace(doc.TypeContext.PackagePath)
+	}
+}
+
+func inferResolutionPackage(resolution typectx.Resolution, ctx *typectx.Context) string {
+	pkg := strings.TrimSpace(resolution.Provenance.Package)
+	if pkg != "" {
+		return pkg
+	}
+	pkg = packageOfKey(resolution.ResolvedKey)
+	if pkg != "" {
+		return pkg
+	}
+	if ctx != nil {
+		if pkg = strings.TrimSpace(ctx.PackagePath); pkg != "" {
+			return pkg
+		}
+		if pkg = strings.TrimSpace(ctx.DefaultPackage); pkg != "" {
+			return pkg
+		}
+	}
+	return ""
 }
 
 func resolutionSafetyIssue(resolution typectx.Resolution, policy rewritePolicy) string {

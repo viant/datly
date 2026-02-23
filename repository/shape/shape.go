@@ -3,6 +3,11 @@ package shape
 import "context"
 
 type (
+	CompileMixedMode           string
+	CompileUnknownNonReadMode  string
+	CompileProfile             string
+	CompileColumnDiscoveryMode string
+
 	// Scanner discovers shape descriptors from Source.
 	Scanner interface {
 		Scan(ctx context.Context, source *Source, opts ...ScanOption) (*ScanResult, error)
@@ -33,12 +38,40 @@ type (
 	ScanOptions    struct{}
 	PlanOptions    struct{}
 	LoadOptions    struct{}
-	CompileOptions struct{}
+	CompileOptions struct {
+		Strict              bool
+		Profile             CompileProfile
+		MixedMode           CompileMixedMode
+		UnknownNonReadMode  CompileUnknownNonReadMode
+		ColumnDiscoveryMode CompileColumnDiscoveryMode
+		DQLPathMarker       string
+		RoutesRelativePath  string
+		TypePackageDir      string
+		TypePackageName     string
+		TypePackagePath     string
+		InferTypeContext    *bool
+	}
 
 	ScanOption    func(*ScanOptions)
 	PlanOption    func(*PlanOptions)
 	LoadOption    func(*LoadOptions)
 	CompileOption func(*CompileOptions)
+)
+
+const (
+	CompileMixedModeExecWins     CompileMixedMode = "exec_wins"
+	CompileMixedModeReadWins     CompileMixedMode = "read_wins"
+	CompileMixedModeErrorOnMixed CompileMixedMode = "error_on_mixed"
+
+	CompileUnknownNonReadWarn  CompileUnknownNonReadMode = "warn"
+	CompileUnknownNonReadError CompileUnknownNonReadMode = "error"
+
+	CompileProfileCompat CompileProfile = "compat"
+	CompileProfileStrict CompileProfile = "strict"
+
+	CompileColumnDiscoveryAuto CompileColumnDiscoveryMode = "auto"
+	CompileColumnDiscoveryOn   CompileColumnDiscoveryMode = "on"
+	CompileColumnDiscoveryOff  CompileColumnDiscoveryMode = "off"
 )
 
 // Engine is a thin facade over scan -> plan -> load pipeline.
@@ -139,7 +172,15 @@ func (e *Engine) compile(ctx context.Context, source *Source) (*PlanResult, erro
 	if e.options.Compiler == nil {
 		return nil, ErrCompilerNotConfigured
 	}
-	return e.options.Compiler.Compile(ctx, source)
+	return e.options.Compiler.Compile(
+		ctx,
+		source,
+		WithCompileStrict(e.options.Strict),
+		WithCompileProfile(e.options.CompileProfile),
+		WithMixedMode(e.options.CompileMixedMode),
+		WithUnknownNonReadMode(e.options.UnknownNonReadMode),
+		WithColumnDiscoveryMode(e.options.ColumnDiscoveryMode),
+	)
 }
 
 func (e *Engine) scanAndPlan(ctx context.Context, source *Source) (*PlanResult, error) {

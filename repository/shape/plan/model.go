@@ -4,6 +4,7 @@ import (
 	"embed"
 	"reflect"
 
+	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/typectx"
 )
 
@@ -12,12 +13,26 @@ type Result struct {
 	RootType reflect.Type
 	EmbedFS  *embed.FS
 
-	Fields      []*Field
-	ByPath      map[string]*Field
-	Views       []*View
-	ViewsByName map[string]*View
-	States      []*State
-	TypeContext *typectx.Context
+	Fields           []*Field
+	ByPath           map[string]*Field
+	Views            []*View
+	ViewsByName      map[string]*View
+	States           []*State
+	Types            []*Type
+	ColumnsDiscovery bool
+	TypeContext      *typectx.Context
+	Directives       *dqlshape.Directives
+	Diagnostics      []*dqlshape.Diagnostic
+}
+
+// Type is normalized type metadata collected during compile.
+type Type struct {
+	Name        string
+	Alias       string
+	DataType    string
+	Cardinality string
+	Package     string
+	ModulePath  string
 }
 
 // Field is a normalized projection of scanned field metadata.
@@ -33,7 +48,9 @@ type View struct {
 	Path                   string
 	Name                   string
 	Ref                    string
+	Mode                   string
 	Table                  string
+	Module                 string
 	Connector              string
 	CacheRef               string
 	Partitioner            string
@@ -42,31 +59,103 @@ type View struct {
 	SQL                    string
 	SQLURI                 string
 	Summary                string
-	Links                  []string
+	Relations              []*Relation
 	Holder                 string
+
+	AllowNulls        *bool
+	SelectorNamespace string
+	SelectorNoLimit   *bool
+	SchemaType        string
+	ColumnsDiscovery  bool
 
 	Cardinality string
 	ElementType reflect.Type
 	FieldType   reflect.Type
+	Declaration *ViewDeclaration
+}
+
+// ViewDeclaration captures declaration options used to derive a view from DQL directives.
+type ViewDeclaration struct {
+	Tag           string
+	Codec         string
+	CodecArgs     []string
+	HandlerName   string
+	HandlerArgs   []string
+	StatusCode    *int
+	ErrorMessage  string
+	QuerySelector string
+	CacheRef      string
+	Limit         *int
+	Cacheable     *bool
+	When          string
+	Scope         string
+	DataType      string
+	Of            string
+	Value         string
+	Async         bool
+	Output        bool
+	Predicates    []*ViewPredicate
+}
+
+// ViewPredicate captures WithPredicate / EnsurePredicate metadata.
+type ViewPredicate struct {
+	Name      string
+	Source    string
+	Ensure    bool
+	Arguments []string
+}
+
+// Relation is normalized relation metadata extracted from DQL joins.
+type Relation struct {
+	Name     string
+	Holder   string
+	Ref      string
+	Table    string
+	Kind     string
+	Raw      string
+	On       []*RelationLink
+	Warnings []string
+}
+
+// RelationLink represents one parent/ref join predicate.
+type RelationLink struct {
+	ParentField     string
+	ParentNamespace string
+	ParentColumn    string
+	RefField        string
+	RefNamespace    string
+	RefColumn       string
+	Expression      string
 }
 
 // State is a normalized parameter field plan.
 type State struct {
-	Path         string
-	Name         string
-	Kind         string
-	In           string
-	When         string
-	Scope        string
-	DataType     string
-	Required     *bool
-	Async        bool
-	Cacheable    *bool
-	With         string
-	URI          string
-	ErrorCode    int
-	ErrorMessage string
+	Path          string
+	Name          string
+	Kind          string
+	In            string
+	QuerySelector string
+	When          string
+	Scope         string
+	DataType      string
+	Value         string
+	Required      *bool
+	Async         bool
+	Cacheable     *bool
+	With          string
+	URI           string
+	ErrorCode     int
+	ErrorMessage  string
+	Predicates    []*StatePredicate
 
 	TagType       reflect.Type
 	EffectiveType reflect.Type
+}
+
+// StatePredicate captures parameter predicate semantics from DQL declarations.
+type StatePredicate struct {
+	Group     int
+	Name      string
+	Ensure    bool
+	Arguments []string
 }

@@ -86,7 +86,7 @@ func normalizeView(field *scan.Field) *View {
 		result.SQLURI = tag.SQL.URI
 		result.Summary = tag.SummarySQL.SQL
 		if len(tag.LinkOn) > 0 {
-			result.Links = append(result.Links, tag.LinkOn...)
+			result.Relations = append(result.Relations, relationFromTagLinks(field.Name, tag.LinkOn))
 		}
 		result.Ref = strings.TrimSpace(tag.TypeName)
 	}
@@ -99,6 +99,67 @@ func normalizeView(field *scan.Field) *View {
 	result.Cardinality = cardinality
 	result.ElementType = elem
 	return result
+}
+
+func relationFromTagLinks(holder string, links []string) *Relation {
+	relation := &Relation{
+		Name:   strings.TrimSpace(holder),
+		Holder: strings.TrimSpace(holder),
+		Ref:    strings.TrimSpace(holder),
+	}
+	for _, linkExpr := range links {
+		linkExpr = strings.TrimSpace(linkExpr)
+		if linkExpr == "" {
+			continue
+		}
+		left, right, ok := strings.Cut(linkExpr, "=")
+		if !ok {
+			continue
+		}
+		leftField, leftNS, leftCol := splitTagSelector(left)
+		rightField, rightNS, rightCol := splitTagSelector(right)
+		if leftCol == "" || rightCol == "" {
+			continue
+		}
+		relation.On = append(relation.On, &RelationLink{
+			ParentField:     leftField,
+			ParentNamespace: leftNS,
+			ParentColumn:    leftCol,
+			RefField:        rightField,
+			RefNamespace:    rightNS,
+			RefColumn:       rightCol,
+			Expression:      strings.TrimSpace(left) + "=" + strings.TrimSpace(right),
+		})
+	}
+	if relation.Ref == "" {
+		relation.Ref = "relation"
+	}
+	if relation.Holder == "" {
+		relation.Holder = relation.Ref
+	}
+	if relation.Name == "" {
+		relation.Name = relation.Holder
+	}
+	return relation
+}
+
+func splitTagSelector(value string) (string, string, string) {
+	value = strings.TrimSpace(value)
+	value = strings.TrimSuffix(value, "(true)")
+	value = strings.TrimSuffix(value, "(false)")
+	field := ""
+	if idx := strings.Index(value, ":"); idx >= 0 {
+		field = strings.TrimSpace(value[:idx])
+		value = value[idx+1:]
+	}
+	value = strings.Trim(value, "`\"")
+	if value == "" {
+		return field, "", ""
+	}
+	if idx := strings.Index(value, "."); idx >= 0 {
+		return field, strings.TrimSpace(value[:idx]), strings.TrimSpace(value[idx+1:])
+	}
+	return field, "", strings.TrimSpace(value)
 }
 
 func normalizeState(field *scan.Field) *State {

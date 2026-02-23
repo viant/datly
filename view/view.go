@@ -1298,7 +1298,7 @@ func (v *View) markColumnsAsFilterable() error {
 	for _, colName := range v.Selector.Constraints.Filterable {
 		column, err := v._columns.Lookup(colName)
 		if err != nil {
-			return fmt.Errorf("criteria column %v, on view has not been defined, %w", colName, v.Name, err)
+			return fmt.Errorf("criteria column %v on view %v has not been defined: %w", colName, v.Name, err)
 		}
 		column.Filterable = true
 	}

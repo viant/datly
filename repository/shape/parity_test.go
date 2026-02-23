@@ -31,6 +31,15 @@ type paritySource struct {
 	Rows []parityRow `view:"rows,table=REPORT,connector=dev" sql:"uri=scan/testdata/report.sql"`
 }
 
+type parityJoinRow struct {
+	ReportID int `source:"REPORT_ID"`
+}
+
+type parityJoinSource struct {
+	parityEmbedded
+	Rows []parityJoinRow `view:"rows,table=REPORT,connector=dev" sql:"uri=scan/testdata/report.sql" on:"ReportID:rows.REPORT_ID=ID:detail.ID"`
+}
+
 func TestEngineParity_StructPipeline(t *testing.T) {
 	source := &paritySource{}
 	scanner := shapeScan.New()
@@ -64,4 +73,36 @@ func TestEngineParity_StructPipeline(t *testing.T) {
 	assert.Equal(t, mv.Template.SourceURL, ev.Template.SourceURL)
 	assert.Equal(t, mv.Schema.Cardinality, ev.Schema.Cardinality)
 	assert.Equal(t, reflect.TypeOf(mv.Schema.CompType()), reflect.TypeOf(ev.Schema.CompType()))
+}
+
+func TestEngineParity_Component_SourceTagFieldJoin(t *testing.T) {
+	source := &parityJoinSource{}
+	scanner := shapeScan.New()
+	planner := shapePlan.New()
+	loader := shapeLoad.New()
+
+	engine := shape.New(
+		shape.WithName("/v1/api/parity"),
+		shape.WithScanner(scanner),
+		shape.WithPlanner(planner),
+		shape.WithLoader(loader),
+	)
+	artifact, err := engine.LoadComponent(context.Background(), source)
+	require.NoError(t, err)
+	require.NotNil(t, artifact)
+
+	component, ok := artifact.Component.(*shapeLoad.Component)
+	require.True(t, ok)
+	require.Len(t, component.ViewRelations, 1)
+	require.Len(t, component.ViewRelations[0].On, 1)
+	require.Len(t, component.ViewRelations[0].Of.On, 1)
+
+	parent := component.ViewRelations[0].On[0]
+	ref := component.ViewRelations[0].Of.On[0]
+	assert.Equal(t, "ReportID", parent.Field)
+	assert.Equal(t, "rows", parent.Namespace)
+	assert.Equal(t, "REPORT_ID", parent.Column)
+	assert.Equal(t, "ID", ref.Field)
+	assert.Equal(t, "detail", ref.Namespace)
+	assert.Equal(t, "ID", ref.Column)
 }

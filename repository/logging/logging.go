@@ -2,6 +2,7 @@ package logging
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime/debug"
@@ -40,7 +41,7 @@ func Log(config *Config, execContext *exec.Context) {
 		}
 		trace.Append(spans...)
 		if snap.Error != "" {
-			trace.Spans[0].SetStatus(fmt.Errorf(snap.Error))
+			trace.Spans[0].SetStatus(errors.New(snap.Error))
 		} else {
 			trace.Spans[0].SetStatusFromHTTPCode(snap.StatusCode)
 		}
