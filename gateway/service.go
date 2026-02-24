@@ -224,6 +224,17 @@ func (r *Service) syncChanges(ctx context.Context, metrics *gmetric.Service, sta
 		return err
 	}
 	r.mux.Lock()
+	newCount := len(mainRouter.paths)
+	oldCount := 0
+	if r.mainRouter != nil {
+		oldCount = len(r.mainRouter.paths)
+	}
+	if newCount < oldCount {
+		r.mux.Unlock()
+		fmt.Printf("[INFO]: routers rebuild skipped (new config has %d routes vs %d existing, keeping existing)\n", newCount, oldCount)
+		return nil
+	}
+	fmt.Printf("[INFO]: router replacing old(%d routes) with new(%d routes)\n", oldCount, newCount)
 	r.mainRouter = mainRouter
 	r.mux.Unlock()
 	fmt.Printf("[INFO]: routers rebuild completed after: %s\n", time.Since(start))

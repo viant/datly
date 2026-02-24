@@ -188,6 +188,10 @@ func (r *Handler) Handle(ctx context.Context, writer http.ResponseWriter, reques
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if aComponent == nil {
+		http.Error(writer, "component not available", http.StatusServiceUnavailable)
+		return
+	}
 	aResponse, err := r.safelyHandleComponent(ctx, request, aComponent)
 	if err != nil {
 		r.writeErrorResponse(ctx, writer, aComponent, err, http.StatusBadRequest)
@@ -237,6 +241,20 @@ func (r *Handler) writeErrorResponse(ctx context.Context, w http.ResponseWriter,
 		execCtx.SetError(err)
 	}
 	responseStatus := r.responseStatusError(message, anObjectErr)
+	if aComponent == nil || aComponent.Output.Type.Parameters == nil {
+		errAsBytes, marshalErr := goJson.Marshal(responseStatus)
+		if marshalErr != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("could not parse error message"))
+			return
+		}
+		if execCtx != nil {
+			execCtx.StatusCode = statusCode
+		}
+		w.WriteHeader(statusCode)
+		w.Write(errAsBytes)
+		return
+	}
 	statusParameter := aComponent.Output.Type.Parameters.LookupByLocation(state.KindOutput, "status")
 	if statusParameter == nil {
 		errAsBytes, marshalErr := goJson.Marshal(responseStatus)
