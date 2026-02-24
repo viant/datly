@@ -247,7 +247,13 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table stri
 	var result = &Spec{Table: table, SQL: SQL, SQLArgs: SQLArgs, IsAuxiliary: isAuxiliary}
 	columns, err := column.Discover(ctx, db, table, SQL, SQLArgs...)
 	if err != nil {
-		return nil, err
+		columns = bestEffortColumnsFromSQL(SQL, columnsConfig)
+		if len(columns) == 0 {
+			return nil, err
+		}
+		if messages != nil {
+			messages.AddWarning(result.Table, "detection", fmt.Sprintf("using best-effort SQL column inference due to discovery error: %v", err))
+		}
 	}
 	result.Columns = columns
 	byName := result.Columns.ByName()
@@ -284,6 +290,56 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table stri
 	}
 
 	return result, nil
+}
+
+func bestEffortColumnsFromSQL(SQL string, columnsConfig view.ColumnConfigs) sqlparser.Columns {
+	if strings.TrimSpace(SQL) == "" {
+		return nil
+	}
+	query, err := sqlparser.ParseQuery(SQL)
+	if err != nil || query == nil {
+		return nil
+	}
+	queryColumns := sqlparser.NewColumns(query.List)
+	if len(queryColumns) == 0 {
+		return nil
+	}
+	cfgByLower := map[string]*view.ColumnConfig{}
+	for _, cfg := range columnsConfig {
+		if cfg == nil || cfg.Name == "" {
+			continue
+		}
+		cfgByLower[strings.ToLower(cfg.Name)] = cfg
+	}
+	var result sqlparser.Columns
+	for _, candidate := range queryColumns {
+		if candidate == nil {
+			continue
+		}
+		expression := strings.TrimSpace(candidate.Expression)
+		if expression == "*" || strings.HasSuffix(expression, ".*") {
+			continue
+		}
+		name := strings.TrimSpace(candidate.Alias)
+		if name == "" {
+			name = strings.TrimSpace(candidate.Name)
+		}
+		if name == "" {
+			continue
+		}
+		if candidate.Type == "" {
+			if cfg, ok := cfgByLower[strings.ToLower(name)]; ok && cfg.DataType != nil && *cfg.DataType != "" {
+				candidate.Type = *cfg.DataType
+			} else if cfg, ok = cfgByLower[strings.ToLower(candidate.Name)]; ok && cfg.DataType != nil && *cfg.DataType != "" {
+				candidate.Type = *cfg.DataType
+			}
+		}
+		if candidate.Type == "" {
+			candidate.Type = "string"
+		}
+		result = append(result, candidate)
+	}
+	return result
 }
 
 func isAuxiliary(SQL *string) bool {

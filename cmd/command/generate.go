@@ -42,6 +42,9 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 	if _, err := s.loadPlugin(ctx, options); err != nil {
 		return err
 	}
+	if ruleOption.EffectiveEngine() == "shape" && options.Generate.Operation != "get" {
+		return fmt.Errorf("shape engine currently supports gen get only")
+	}
 	if options.Generate.Operation == "get" {
 		return s.generateGet(ctx, options)
 	}
@@ -144,8 +147,50 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 	if err = s.translate(ctx, opts); err != nil {
 		return err
 	}
-	if err = s.persistRepository(ctx); err != nil {
-		return err
+	if opts.Rule().EffectiveEngine() != options.EngineShape {
+		if err = s.persistRepository(ctx); err != nil {
+			return err
+		}
+	}
+
+	if opts.Rule().EffectiveEngine() == options.EngineShape {
+		componentURL := url.Join(translate.Repository.RepositoryURL, "Datly", "routes")
+		datlySrv, err := datly.New(ctx, repository.WithComponentURL(componentURL))
+		if err != nil {
+			return err
+		}
+		for i, source := range sources {
+			translate.Rule.Index = i
+			sourceText, loadErr := translate.Rule.LoadSource(ctx, s.fs, source)
+			if loadErr != nil {
+				return loadErr
+			}
+			method, uri := parseShapeRulePath(sourceText, translate.Rule.RuleName(), translate.Repository.APIPrefix)
+			key := uri
+			if !strings.EqualFold(method, "GET") {
+				key = method + ":" + uri
+			}
+			aComponent, compErr := datlySrv.Component(ctx, key)
+			if compErr != nil {
+				return compErr
+			}
+			_, sourceName := path.Split(url.Path(source))
+			sourceName = trimExt(sourceName)
+			var embeds = map[string]string{}
+			var namedResources []string
+			if repo := opts.Repository(); repo != nil && len(repo.SubstitutesURL) > 0 {
+				namedResources = append(namedResources, repo.SubstitutesURL...)
+			}
+			code := aComponent.GenerateOutputCode(ctx, defComp, true, embeds, namedResources...)
+			destURL := path.Join(translate.Rule.ModuleLocation, translate.Rule.ModulePrefix, sourceName+".go")
+			if err = s.fs.Upload(ctx, destURL, file.DefaultFileOsMode, strings.NewReader(code)); err != nil {
+				return err
+			}
+			if err = s.persistEmbeds(ctx, translate.Rule.ModuleLocation, translate.Rule.ModulePrefix, embeds, aComponent); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	for i, resource := range s.translator.Repository.Resource {

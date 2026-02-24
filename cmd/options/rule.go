@@ -22,6 +22,7 @@ type Rule struct {
 	Name              string   `short:"n" long:"name" description:"rule name"`
 	ModulePrefix      string   `short:"u" long:"namespace" description:"rule uri/namespace"  default:"dev" `
 	Source            []string `short:"s" long:"src" description:"source"`
+	Engine            string   `long:"engine" description:"translation engine" choice:"legacy" choice:"shape"`
 	Packages          []string `short:"g" long:"pkg" description:"entity package"`
 	Output            []string
 	Index             int
@@ -31,6 +32,21 @@ type Rule struct {
 	Connector         string
 	SkipCompDef       bool `short:"B" long:"sComp" description:"skip component def"`
 	IncludePredicates bool `short:"K" long:"inclPred" description:"generate predicate code" `
+}
+
+const (
+	EngineLegacy = "legacy"
+	EngineShape  = "shape"
+)
+
+func (r *Rule) EffectiveEngine() string {
+	engine := strings.ToLower(strings.TrimSpace(r.Engine))
+	switch engine {
+	case EngineShape:
+		return EngineShape
+	default:
+		return EngineLegacy
+	}
 }
 
 // Module returns go module

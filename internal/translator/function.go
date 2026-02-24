@@ -124,7 +124,10 @@ func (v *Viewlet) applyExplicitCast(column *sqlparser.Column, funcArgs []string)
 	column.Type = funcArgs[1]
 	rType, err := types.LookupType(v.Resource.typeRegistry.Lookup, column.Type)
 	if err != nil {
-		return false, fmt.Errorf("unknown column %v type: %s, %w", column.Name, column.Type, err)
+		// Keep unresolved custom cast as metadata only. This preserves declared type
+		// (e.g. *fee.Fee) for IR/yaml parity without forcing runtime type resolution.
+		// Built-in and resolvable types still set RawType.
+		return true, nil
 	}
 	column.RawType = rType
 	return true, nil

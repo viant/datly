@@ -18,6 +18,7 @@ import (
 	content "github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/handler"
+	"github.com/viant/datly/repository/shape/typectx"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
@@ -47,6 +48,7 @@ type (
 		View            *view.View    `json:",omitempty"`
 		NamespacedView  *view.NamespacedView
 		Handler         *handler.Handler `json:",omitempty"`
+		TypeContext     *typectx.Context `json:",omitempty" yaml:",omitempty"`
 		indexedView     view.NamedViews
 		SourceURL       string
 

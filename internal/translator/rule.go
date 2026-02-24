@@ -193,7 +193,7 @@ func (r *Resource) initRule(ctx context.Context, fs afs.Service, dSQL *string) e
 	rule := r.Rule
 	rule.applyDefaults()
 	if err := r.loadData(ctx, fs, rule.ConstURL, &rule.Const); err != nil {
-		r.messages.AddWarning(r.rule.RuleName(), "const", fmt.Sprintf("failed to load constant : %v %w", rule.ConstURL, err))
+		r.messages.AddWarning(r.rule.RuleName(), "const", fmt.Sprintf("failed to load constant : %v %v", rule.ConstURL, err))
 	}
 	r.State.AppendConst(rule.Const)
 	return r.loadDocumentation(ctx, fs, rule)

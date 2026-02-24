@@ -31,10 +31,71 @@ SELECT 1 FROM t WHERE ID IN($TeamIDs)
 							Kind: state.KindQuery,
 							Name: "tids",
 						},
-						Output: &state.Codec{Name: "AsInts"},
+						Output: &state.Codec{Name: "AsInts", Args: []string{}},
 						Schema: &state.Schema{
 							Cardinality: state.One,
+							DataType:    "string",
 						},
+						Required: &[]bool{false}[0],
+					},
+
+					ModificationSetting: inference.ModificationSetting{},
+					SQL:                 "",
+					Hint:                "",
+				},
+			},
+		},
+		{
+			description: "Query string param with #define alias",
+			DSQL: `
+#define($_ = $TeamIDs<string>(query/tids).WithCodec(AsInts))
+SELECT 1 FROM t WHERE ID IN($TeamIDs)
+`,
+			expectedSQL: `SELECT 1 FROM t WHERE ID IN($TeamIDs)`,
+			expectedState: inference.State{
+				&inference.Parameter{
+					Explicit: true,
+					Parameter: state.Parameter{
+						Name: "TeamIDs",
+						In: &state.Location{
+							Kind: state.KindQuery,
+							Name: "tids",
+						},
+						Output: &state.Codec{Name: "AsInts", Args: []string{}},
+						Schema: &state.Schema{
+							Cardinality: state.One,
+							DataType:    "string",
+						},
+						Required: &[]bool{false}[0],
+					},
+					ModificationSetting: inference.ModificationSetting{},
+					SQL:                 "",
+					Hint:                "",
+				},
+			},
+		},
+		{
+			description: "Query string param with #settings alias",
+			DSQL: `
+#settings($_ = $TeamIDs<string>(query/tids).WithCodec(AsInts))
+SELECT 1 FROM t WHERE ID IN($TeamIDs)
+`,
+			expectedSQL: `SELECT 1 FROM t WHERE ID IN($TeamIDs)`,
+			expectedState: inference.State{
+				&inference.Parameter{
+					Explicit: true,
+					Parameter: state.Parameter{
+						Name: "TeamIDs",
+						In: &state.Location{
+							Kind: state.KindQuery,
+							Name: "tids",
+						},
+						Output: &state.Codec{Name: "AsInts", Args: []string{}},
+						Schema: &state.Schema{
+							Cardinality: state.One,
+							DataType:    "string",
+						},
+						Required: &[]bool{false}[0],
 					},
 
 					ModificationSetting: inference.ModificationSetting{},
