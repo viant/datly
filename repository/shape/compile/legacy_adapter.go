@@ -16,7 +16,7 @@ func resolveGeneratedCompanionDQL(source *shape.Source) string {
 	if source == nil || strings.TrimSpace(source.Path) == "" {
 		return ""
 	}
-	settings := extractRuleSettings(source)
+	settings := extractRuleSettings(source, nil)
 	typeExpr := strings.TrimSpace(settings.Type)
 	if typeExpr == "" {
 		return ""
@@ -60,7 +60,7 @@ func resolveLegacyRouteViewsWithLayout(source *shape.Source, layout compilePathL
 	if !ok {
 		return nil
 	}
-	settings := extractRuleSettings(source)
+	settings := extractRuleSettings(source, nil)
 	typeExpr := strings.TrimSpace(settings.Type)
 	typeExpr = strings.Trim(typeExpr, `"'`)
 	typeExpr = strings.TrimSuffix(typeExpr, ".Handler")
@@ -264,7 +264,7 @@ func resolveLegacyRouteStatesWithLayout(source *shape.Source, layout compilePath
 	if !ok {
 		return nil
 	}
-	settings := extractRuleSettings(source)
+	settings := extractRuleSettings(source, nil)
 	typeExpr := strings.TrimSpace(settings.Type)
 	typeExpr = strings.Trim(typeExpr, `"'`)
 	typeExpr = strings.TrimSuffix(typeExpr, ".Handler")
@@ -461,7 +461,7 @@ func resolveLegacyRouteTypesWithLayout(source *shape.Source, layout compilePathL
 	if !ok {
 		return nil
 	}
-	settings := extractRuleSettings(source)
+	settings := extractRuleSettings(source, nil)
 	typeExpr := strings.TrimSpace(settings.Type)
 	typeExpr = strings.Trim(typeExpr, `"'`)
 	typeExpr = strings.TrimSuffix(typeExpr, ".Handler")

@@ -9,6 +9,7 @@ import (
 
 	"github.com/viant/datly/repository/shape"
 	"github.com/viant/datly/repository/shape/compile/pipeline"
+	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/plan"
 )
 
@@ -65,7 +66,7 @@ func applySourceParityEnrichmentWithLayout(result *plan.Result, source *shape.So
 func buildParityEnrichmentContext(result *plan.Result, source *shape.Source, layout compilePathLayout) *parityEnrichmentContext {
 	ctx := &parityEnrichmentContext{
 		source:             source,
-		settings:           extractRuleSettings(source),
+		settings:           extractRuleSettings(source, result.Directives),
 		baseDir:            sourceSQLBaseDir(source),
 		module:             sourceModuleWithLayout(source, layout),
 		sourceName:         pipeline.SanitizeName(source.Name),
@@ -169,17 +170,24 @@ func extractSummarySQL(sqlText string) string {
 	return strings.TrimSpace(matches[1])
 }
 
-func extractRuleSettings(source *shape.Source) *ruleSettings {
+func extractRuleSettings(source *shape.Source, directives *dqlshape.Directives) *ruleSettings {
 	if source == nil || strings.TrimSpace(source.DQL) == "" {
 		return &ruleSettings{}
 	}
-	matches := ruleHeaderExpr.FindStringSubmatch(source.DQL)
-	if len(matches) < 2 {
-		return &ruleSettings{}
-	}
-	rawJSON := strings.TrimSpace(matches[1])
 	ret := &ruleSettings{}
-	_ = json.Unmarshal([]byte(rawJSON), ret)
+	matches := ruleHeaderExpr.FindStringSubmatch(source.DQL)
+	if len(matches) >= 2 {
+		rawJSON := strings.TrimSpace(matches[1])
+		_ = json.Unmarshal([]byte(rawJSON), ret)
+	}
+	if directives != nil && directives.Route != nil {
+		if uri := strings.TrimSpace(directives.Route.URI); uri != "" {
+			ret.URI = uri
+		}
+		if len(directives.Route.Methods) > 0 {
+			ret.Method = strings.Join(directives.Route.Methods, ",")
+		}
+	}
 	return ret
 }
 

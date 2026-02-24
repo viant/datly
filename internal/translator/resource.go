@@ -3,8 +3,10 @@ package translator
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"path"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/viant/afs"
@@ -14,6 +16,7 @@ import (
 	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/internal/setter"
 	tparser "github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/datly/repository/content"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
@@ -27,6 +30,27 @@ import (
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 )
+
+var (
+	routeSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$route\s*\(([^)]*)\)\s*\)\s*$`)
+	marshalSettingsLineExpr    = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$marshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	unmarshalSettingsLineExpr  = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$unmarshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	formatSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	dateFormatSettingsLineExpr = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$date_format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	caseFormatSettingsLineExpr = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$case_format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	quotedArgExpr              = regexp.MustCompile(`['"]([^'"]*)['"]`)
+)
+
+type routeSettingsDirective struct {
+	URI               string
+	Methods           []string
+	JSONMarshalType   string
+	JSONUnmarshalType string
+	XMLUnmarshalType  string
+	Format            string
+	DateFormat        string
+	CaseFormat        string
+}
 
 type (
 	Resource struct {
@@ -408,12 +432,208 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 		}
 		*dSQL = (*dSQL)[index+2:]
 	}
+	if directive, ok, err := parseSettingsDirectives(*dSQL); err != nil {
+		return err
+	} else if ok {
+		if directive.URI != "" {
+			r.Rule.URI = directive.URI
+		}
+		if len(directive.Methods) > 0 {
+			r.Rule.Method = strings.Join(directive.Methods, ",")
+		}
+		if directive.JSONMarshalType != "" {
+			r.Rule.JSONMarshalType = directive.JSONMarshalType
+		}
+		if directive.JSONUnmarshalType != "" {
+			r.Rule.JSONUnmarshalType = directive.JSONUnmarshalType
+		}
+		if directive.XMLUnmarshalType != "" {
+			r.Rule.XMLUnmarshalType = directive.XMLUnmarshalType
+		}
+		if directive.Format != "" {
+			r.Rule.DataFormat = directive.Format
+		}
+		if directive.DateFormat != "" {
+			r.Rule.Route.Content.DateFormat = directive.DateFormat
+		}
+		if directive.CaseFormat != "" {
+			r.Rule.Route.Output.CaseFormat = text.CaseFormat(directive.CaseFormat)
+		}
+		*dSQL = removeSettingsDirectives(*dSQL)
+	}
 	r.Rule.applyShortHands()
 	if r.Rule.Connector != "" {
 		r.rule.Connector = r.Rule.Connector
 		r.rootConnector = r.Rule.Connector
 	}
 	return nil
+}
+
+func parseSettingsDirectives(dSQL string) (*routeSettingsDirective, bool, error) {
+	ret := &routeSettingsDirective{}
+	var found bool
+	matches := routeSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		if len(last) < 2 {
+			return nil, false, fmt.Errorf("invalid $route directive")
+		}
+		args := parseQuotedArgs(last[1])
+		if len(args) == 0 {
+			return nil, false, fmt.Errorf("invalid $route directive: missing URI")
+		}
+		URI := strings.TrimSpace(args[0])
+		if !strings.HasPrefix(URI, "/") {
+			return nil, false, fmt.Errorf("invalid $route directive: URI must start with /")
+		}
+		methods, err := normalizeRouteMethods(args[1:])
+		if err != nil {
+			return nil, false, err
+		}
+		ret.URI = URI
+		ret.Methods = methods
+	}
+
+	matches = marshalSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		if len(last) < 3 {
+			return nil, false, fmt.Errorf("invalid $marshal directive")
+		}
+		mimeType := strings.ToLower(strings.TrimSpace(last[1]))
+		if mimeType != content.JSONContentType {
+			return nil, false, fmt.Errorf("invalid $marshal directive: unsupported mime type %q", mimeType)
+		}
+		typeName := strings.TrimSpace(last[2])
+		if typeName == "" {
+			return nil, false, fmt.Errorf("invalid $marshal directive: missing type")
+		}
+		ret.JSONMarshalType = typeName
+	}
+
+	matches = unmarshalSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		for _, match := range matches {
+			if len(match) < 3 {
+				return nil, false, fmt.Errorf("invalid $unmarshal directive")
+			}
+			mimeType := strings.ToLower(strings.TrimSpace(match[1]))
+			typeName := strings.TrimSpace(match[2])
+			if typeName == "" {
+				return nil, false, fmt.Errorf("invalid $unmarshal directive: missing type")
+			}
+			switch mimeType {
+			case content.JSONContentType:
+				ret.JSONUnmarshalType = typeName
+			case content.XMLContentType:
+				ret.XMLUnmarshalType = typeName
+			default:
+				return nil, false, fmt.Errorf("invalid $unmarshal directive: unsupported mime type %q", mimeType)
+			}
+		}
+	}
+
+	matches = formatSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		if len(last) < 2 {
+			return nil, false, fmt.Errorf("invalid $format directive")
+		}
+		raw := strings.ToLower(strings.TrimSpace(last[1]))
+		switch raw {
+		case "tabular_json":
+			ret.Format = content.JSONDataFormatTabular
+		case content.JSONFormat, content.XMLFormat, content.CSVFormat, content.JSONDataFormatTabular:
+			ret.Format = raw
+		default:
+			return nil, false, fmt.Errorf("invalid $format directive: unsupported format %q", raw)
+		}
+	}
+
+	matches = dateFormatSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		if len(last) < 2 || strings.TrimSpace(last[1]) == "" {
+			return nil, false, fmt.Errorf("invalid $date_format directive")
+		}
+		ret.DateFormat = strings.TrimSpace(last[1])
+	}
+
+	matches = caseFormatSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		if len(last) < 2 || strings.TrimSpace(last[1]) == "" {
+			return nil, false, fmt.Errorf("invalid $case_format directive")
+		}
+		caseFormat := strings.TrimSpace(last[1])
+		if !text.NewCaseFormat(caseFormat).IsDefined() {
+			return nil, false, fmt.Errorf("invalid $case_format directive: unsupported case format %q", caseFormat)
+		}
+		ret.CaseFormat = caseFormat
+	}
+	return ret, found, nil
+}
+
+func parseQuotedArgs(input string) []string {
+	matches := quotedArgExpr.FindAllStringSubmatch(input, -1)
+	result := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		result = append(result, strings.TrimSpace(match[1]))
+	}
+	return result
+}
+
+func normalizeRouteMethods(input []string) ([]string, error) {
+	if len(input) == 0 {
+		return nil, nil
+	}
+	valid := map[string]bool{
+		http.MethodGet:     true,
+		http.MethodPost:    true,
+		http.MethodPut:     true,
+		http.MethodPatch:   true,
+		http.MethodDelete:  true,
+		http.MethodHead:    true,
+		http.MethodOptions: true,
+		http.MethodTrace:   true,
+		http.MethodConnect: true,
+	}
+	seen := map[string]bool{}
+	result := make([]string, 0, len(input))
+	for _, item := range input {
+		method := strings.ToUpper(strings.TrimSpace(item))
+		if method == "" {
+			return nil, fmt.Errorf("invalid $route directive: empty method")
+		}
+		if !valid[method] {
+			return nil, fmt.Errorf("invalid $route directive: unsupported method %q", method)
+		}
+		if seen[method] {
+			continue
+		}
+		seen[method] = true
+		result = append(result, method)
+	}
+	return result, nil
+}
+
+func removeSettingsDirectives(dSQL string) string {
+	dSQL = routeSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = marshalSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = unmarshalSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = formatSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = dateFormatSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = caseFormatSettingsLineExpr.ReplaceAllString(dSQL, "")
+	return dSQL
 }
 
 func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {

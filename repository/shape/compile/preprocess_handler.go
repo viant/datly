@@ -112,7 +112,7 @@ func isHandlerSignal(source *shape.Source) bool {
 	if source == nil {
 		return false
 	}
-	settings := extractRuleSettings(source)
+	settings := extractRuleSettings(source, nil)
 	if settings != nil {
 		if strings.TrimSpace(settings.Type) != "" {
 			return true
