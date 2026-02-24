@@ -2,12 +2,6 @@ module github.com/viant/datly
 
 go 1.25.0
 
-replace github.com/viant/velty => ../velty
-
-replace github.com/viant/x => ../x
-
-replace github.com/viant/sqlparser => ../sqlparser
-
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
@@ -37,7 +31,7 @@ require (
 	github.com/viant/sqlx v0.21.0
 	github.com/viant/structql v0.5.4
 	github.com/viant/toolbox v0.37.0
-	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
+	github.com/viant/velty v0.4.0
 	github.com/viant/xreflect v0.7.3
 	github.com/viant/xunsafe v0.10.3
 	golang.org/x/mod v0.28.0
@@ -48,7 +42,7 @@ require (
 
 require (
 	github.com/viant/govalidator v0.3.1
-	github.com/viant/sqlparser v0.9.0
+	github.com/viant/sqlparser v0.11.0
 )
 
 require (
@@ -59,7 +53,7 @@ require (
 	github.com/viant/mcp-protocol v0.9.0
 	github.com/viant/structology v0.8.0
 	github.com/viant/tagly v0.3.0
-	github.com/viant/x v0.3.0
+	github.com/viant/x v0.4.0
 	github.com/viant/xdatly v0.5.4-0.20251113181159-0ac8b8b0ff3a
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20251208172928-dd34b7f09fd5

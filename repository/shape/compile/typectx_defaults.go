@@ -30,6 +30,7 @@ func applyTypeContextDefaults(ctx *typectx.Context, source *shape.Source, opts *
 			}
 		}
 	}
+	ret = normalizeRelativeImports(ret, source, layout)
 	return normalizeTypeContext(ret)
 }
 
@@ -64,24 +65,11 @@ func mergeTypeContext(dst *typectx.Context, src *typectx.Context) *typectx.Conte
 }
 
 func inferDatlyGenTypeContext(source *shape.Source, layout compilePathLayout) *typectx.Context {
-	if source == nil {
+	parsed, ok := parseSourceLayout(source, layout)
+	if !ok {
 		return nil
 	}
-	sourcePath := strings.TrimSpace(source.Path)
-	if sourcePath == "" {
-		return nil
-	}
-	normalizedPath := filepath.ToSlash(filepath.Clean(sourcePath))
-	idx := strings.Index(normalizedPath, layout.dqlMarker)
-	if idx == -1 {
-		return nil
-	}
-	projectRoot := filepath.FromSlash(strings.TrimSuffix(normalizedPath[:idx], "/"))
-	rel := strings.TrimPrefix(normalizedPath[idx+len(layout.dqlMarker):], "/")
-	if rel == "" {
-		return nil
-	}
-	routeDir := strings.Trim(path.Dir(rel), "/")
+	routeDir := strings.Trim(path.Dir(parsed.relativePath), "/")
 	if routeDir == "." {
 		routeDir = ""
 	}
@@ -94,7 +82,7 @@ func inferDatlyGenTypeContext(source *shape.Source, layout compilePathLayout) *t
 		packageName = path.Base(routeDir)
 	}
 	packagePath := ""
-	if module := detectModulePath(projectRoot); module != "" {
+	if module := detectModulePath(parsed.projectRoot); module != "" {
 		packagePath = path.Join(module, packageDir)
 	}
 	return normalizeTypeContext(&typectx.Context{
@@ -155,4 +143,84 @@ func normalizeTypeContext(ctx *typectx.Context) *typectx.Context {
 		return nil
 	}
 	return ctx
+}
+
+func normalizeRelativeImports(ctx *typectx.Context, source *shape.Source, layout compilePathLayout) *typectx.Context {
+	if ctx == nil || len(ctx.Imports) == 0 {
+		return ctx
+	}
+	modulePath := modulePathForSource(source, layout)
+	if modulePath == "" {
+		return ctx
+	}
+	for i, item := range ctx.Imports {
+		pkg := strings.TrimSpace(item.Package)
+		if pkg == "" {
+			continue
+		}
+		ctx.Imports[i].Package = normalizeImportPackage(pkg, modulePath)
+	}
+	return ctx
+}
+
+func modulePathForSource(source *shape.Source, layout compilePathLayout) string {
+	parsed, ok := parseSourceLayout(source, layout)
+	if !ok {
+		return ""
+	}
+	return detectModulePath(parsed.projectRoot)
+}
+
+func normalizeImportPackage(pkg, modulePath string) string {
+	pkg = strings.Trim(strings.ReplaceAll(strings.TrimSpace(pkg), "\\", "/"), "/")
+	if pkg == "" {
+		return ""
+	}
+	if !strings.Contains(pkg, "/") {
+		return pkg
+	}
+	if strings.HasPrefix(pkg, modulePath+"/") || pkg == modulePath {
+		return pkg
+	}
+	first := pkg
+	if index := strings.Index(first, "/"); index != -1 {
+		first = first[:index]
+	}
+	if strings.Contains(first, ".") {
+		return pkg
+	}
+	return path.Join(modulePath, pkg)
+}
+
+type sourceLayout struct {
+	projectRoot  string
+	relativePath string
+}
+
+func parseSourceLayout(source *shape.Source, layout compilePathLayout) (*sourceLayout, bool) {
+	if source == nil {
+		return nil, false
+	}
+	sourcePath := strings.TrimSpace(source.Path)
+	if sourcePath == "" {
+		return nil, false
+	}
+	marker := strings.TrimSpace(layout.dqlMarker)
+	if marker == "" {
+		marker = defaultCompilePathLayout().dqlMarker
+	}
+	normalizedPath := filepath.ToSlash(filepath.Clean(sourcePath))
+	idx := strings.Index(normalizedPath, marker)
+	if idx == -1 {
+		return nil, false
+	}
+	projectRoot := filepath.FromSlash(strings.TrimSuffix(normalizedPath[:idx], "/"))
+	relativePath := strings.TrimPrefix(normalizedPath[idx+len(marker):], "/")
+	if relativePath == "" {
+		return nil, false
+	}
+	return &sourceLayout{
+		projectRoot:  projectRoot,
+		relativePath: relativePath,
+	}, true
 }

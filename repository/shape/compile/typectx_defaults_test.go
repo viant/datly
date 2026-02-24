@@ -67,4 +67,20 @@ func TestApplyTypeContextDefaults_Matrix(t *testing.T) {
 		}, layout)
 		require.Nil(t, got)
 	})
+
+	t.Run("relative imports are normalized to module path", func(t *testing.T) {
+		input := &typectx.Context{
+			Imports: []typectx.Import{
+				{Alias: "sess", Package: "pkg/platform/system/session"},
+				{Alias: "perf", Package: "github.com/acme/perf"},
+				{Alias: "time", Package: "time"},
+			},
+		}
+		got := applyTypeContextDefaults(input, source, nil, layout)
+		require.NotNil(t, got)
+		require.Len(t, got.Imports, 3)
+		require.Equal(t, "github.vianttech.com/viant/platform/pkg/platform/system/session", got.Imports[0].Package)
+		require.Equal(t, "github.com/acme/perf", got.Imports[1].Package)
+		require.Equal(t, "time", got.Imports[2].Package)
+	})
 }

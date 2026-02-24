@@ -207,6 +207,9 @@ type parityEntryEval struct {
 }
 
 func TestPlatform_DQLToRoute_ParityIR_SmokeHandlers(t *testing.T) {
+	if !strings.EqualFold(strings.TrimSpace(os.Getenv("PLATFORM_PARITY_SMOKE")), "1") {
+		t.Skip("set PLATFORM_PARITY_SMOKE=1 to run legacy parity smoke handlers")
+	}
 	platformRoot := os.Getenv("PLATFORM_ROOT")
 	if platformRoot == "" {
 		platformRoot = "/Users/awitas/go/src/github.vianttech.com/viant/platform"

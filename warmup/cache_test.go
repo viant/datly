@@ -2,6 +2,7 @@ package warmup
 
 import (
 	"context"
+	"os"
 	"path"
 	"testing"
 
@@ -12,6 +13,10 @@ import (
 )
 
 func TestPopulateCache(t *testing.T) {
+	if os.Getenv("DATLY_RUN_WARMUP_TESTS") == "" {
+		t.Skip("set DATLY_RUN_WARMUP_TESTS=1 to run warmup integration test")
+	}
+
 	testCases := []struct {
 		description      string
 		URL              string

@@ -153,3 +153,52 @@ func TestAppendComponentTypes_TypeCollisionEmitsDiagnostic(t *testing.T) {
 	require.Len(t, result.Types, 1)
 	assert.Equal(t, "campaign/patch", result.Types[0].Package)
 }
+
+func TestAppendComponentTypes_InvalidRouteYAMLEmitsDiagnostic(t *testing.T) {
+	temp := t.TempDir()
+	dqlDir := filepath.Join(temp, "dql", "platform", "sample")
+	routesDir := filepath.Join(temp, "repo", "dev", "Datly", "routes", "platform", "acl")
+	require.NoError(t, os.MkdirAll(dqlDir, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(routesDir, "auth"), 0o755))
+
+	sourcePath := filepath.Join(dqlDir, "sample.dql")
+	dql := "#set($Auth = $component<../acl/auth>())\nSELECT 1"
+	require.NoError(t, os.WriteFile(sourcePath, []byte(dql), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(routesDir, "auth", "auth.yaml"), []byte("Resource:\n  Types: ["), 0o644))
+
+	result := &plan.Result{
+		States: []*plan.State{{Name: "Auth", Kind: "component", In: "../acl/auth"}},
+	}
+	diags := appendComponentTypes(&shape.Source{Path: sourcePath, DQL: dql}, result)
+	require.NotEmpty(t, diags)
+	assert.Equal(t, dqldiag.CodeCompRouteInvalid, diags[0].Code)
+}
+
+func TestAppendComponentTypes_InvalidRouteYAMLDedupedForRepeatedStates(t *testing.T) {
+	temp := t.TempDir()
+	dqlDir := filepath.Join(temp, "dql", "platform", "sample")
+	routesDir := filepath.Join(temp, "repo", "dev", "Datly", "routes", "platform", "acl")
+	require.NoError(t, os.MkdirAll(dqlDir, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(routesDir, "auth"), 0o755))
+
+	sourcePath := filepath.Join(dqlDir, "sample.dql")
+	dql := "#set($Auth1 = $component<../acl/auth>())\n#set($Auth2 = $component<../acl/auth>())\nSELECT 1"
+	require.NoError(t, os.WriteFile(sourcePath, []byte(dql), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(routesDir, "auth", "auth.yaml"), []byte("Resource:\n  Types: ["), 0o644))
+
+	result := &plan.Result{
+		States: []*plan.State{
+			{Name: "Auth1", Kind: "component", In: "../acl/auth"},
+			{Name: "Auth2", Kind: "component", In: "../acl/auth"},
+		},
+	}
+	diags := appendComponentTypes(&shape.Source{Path: sourcePath, DQL: dql}, result)
+	require.NotEmpty(t, diags)
+	invalidCount := 0
+	for _, item := range diags {
+		if item != nil && item.Code == dqldiag.CodeCompRouteInvalid {
+			invalidCount++
+		}
+	}
+	assert.Equal(t, 1, invalidCount)
+}

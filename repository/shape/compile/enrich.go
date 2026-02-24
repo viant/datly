@@ -10,7 +10,6 @@ import (
 	"github.com/viant/datly/repository/shape"
 	"github.com/viant/datly/repository/shape/compile/pipeline"
 	"github.com/viant/datly/repository/shape/plan"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -30,6 +29,16 @@ type ruleSettings struct {
 	URI       string `json:"URI"`
 }
 
+type parityEnrichmentContext struct {
+	source             *shape.Source
+	settings           *ruleSettings
+	baseDir            string
+	module             string
+	sourceName         string
+	joinEmbedRefs      map[string]string
+	joinSubqueryBodies map[string]string
+}
+
 func applySourceParityEnrichment(result *plan.Result, source *shape.Source) {
 	applySourceParityEnrichmentWithLayout(result, source, defaultCompilePathLayout())
 }
@@ -38,233 +47,114 @@ func applySourceParityEnrichmentWithLayout(result *plan.Result, source *shape.So
 	if result == nil || len(result.Views) == 0 {
 		return
 	}
-	settings := extractRuleSettings(source)
-	legacyViews := loadLegacyRouteViewAttrsWithLayout(source, settings, layout)
-	baseDir := sourceSQLBaseDir(source)
-	module := sourceModuleWithLayout(source, layout)
-	sourceName := pipeline.SanitizeName(source.Name)
-	joinEmbedRefs := map[string]string{}
-	joinSubqueryBodies := map[string]string{}
-	if len(result.Views) > 0 && result.Views[0] != nil {
-		sqlForJoinExtract := result.Views[0].SQL
-		if source != nil && strings.TrimSpace(source.DQL) != "" {
-			sqlForJoinExtract = source.DQL
-		}
-		joinEmbedRefs = extractJoinEmbedRefs(sqlForJoinExtract)
-		joinSubqueryBodies = extractJoinSubqueryBodies(sqlForJoinExtract)
-	}
+	ctx := buildParityEnrichmentContext(result, source, layout)
 	for idx, item := range result.Views {
 		if item == nil {
 			continue
 		}
-		if legacy, ok := lookupLegacyRouteViewAttr(legacyViews, item.Name); ok {
-			if legacy.Mode != "" {
-				item.Mode = legacy.Mode
-			}
-			if legacy.Module != "" {
-				item.Module = legacy.Module
-			}
-			if legacy.AllowNulls != nil {
-				value := *legacy.AllowNulls
-				item.AllowNulls = &value
-			}
-			if legacy.SelectorNamespace != "" {
-				item.SelectorNamespace = legacy.SelectorNamespace
-			}
-			if legacy.SelectorNoLimit != nil {
-				value := *legacy.SelectorNoLimit
-				item.SelectorNoLimit = &value
-			}
-			if legacy.SchemaType != "" {
-				item.SchemaType = legacy.SchemaType
-			}
-			if legacy.Cardinality != "" {
-				item.Cardinality = legacy.Cardinality
-			}
-			if legacy.HasSummary != nil && *legacy.HasSummary && strings.TrimSpace(item.Summary) == "" {
-				item.Summary = "legacy-summary"
-			}
-		}
-		if item.SQLURI == "" && baseDir != "" {
-			item.SQLURI = baseDir + "/" + item.Name + ".sql"
-		}
-		if item.Module == "" {
-			item.Module = module
-		}
-		if item.SelectorNamespace == "" {
-			item.SelectorNamespace = defaultSelectorNamespace(item.Name)
-		}
-		if item.SchemaType == "" {
-			item.SchemaType = defaultSchemaType(item.Name, settings, idx == 0)
-		}
-		if shouldInferTable(item) {
-			candidateSQL := item.SQL
-			if strings.TrimSpace(candidateSQL) == "" {
-				candidateSQL = item.Table
-			}
-			if table := inferTableFromSQL(candidateSQL, source); table != "" {
-				item.Table = table
-			}
-		}
-		if strings.HasPrefix(strings.TrimSpace(item.Table), "(") || normalizedTemplatePlaceholderTable(strings.TrimSpace(item.Table)) {
-			if ref, ok := joinEmbedRefs[item.Name]; ok {
-				if table := inferTableFromEmbedRef(source, ref); table != "" {
-					item.Table = table
-				}
-			}
-			if body, ok := joinSubqueryBodies[item.Name]; ok {
-				if table := inferTableFromSQL(body, source); table != "" {
-					item.Table = table
-				}
-			}
-			if table := inferTableFromSiblingSQL(item.Name, source); table != "" {
-				item.Table = table
-			}
-		}
-		if item.Connector == "" && settings.Connector != "" {
-			item.Connector = settings.Connector
-		}
-		if item.Connector == "" && source != nil && strings.TrimSpace(source.Connector) != "" {
-			item.Connector = strings.TrimSpace(source.Connector)
-		}
-		if item.Connector == "" {
-			item.Connector = inferConnector(item, source)
-		}
-		if item.Summary == "" {
-			item.Summary = extractSummarySQL(item.SQL)
-			if item.Summary == "" && source != nil {
-				item.Summary = extractSummarySQL(source.DQL)
-			}
-		}
+		applyViewDefaults(item, idx == 0, ctx)
+		applyTableInference(item, ctx)
+		applyConnectorInference(item, ctx)
+		applySummaryInference(item, ctx)
 	}
 	if source != nil && strings.TrimSpace(source.Path) != "" {
-		normalizeRootViewName(result, sourceName, settings)
+		normalizeRootViewName(result, ctx.sourceName)
 	}
 }
 
-type legacyRouteViewAttr struct {
-	Name              string
-	Mode              string
-	Module            string
-	AllowNulls        *bool
-	SelectorNamespace string
-	SelectorNoLimit   *bool
-	SchemaType        string
-	Cardinality       string
-	HasSummary        *bool
+func buildParityEnrichmentContext(result *plan.Result, source *shape.Source, layout compilePathLayout) *parityEnrichmentContext {
+	ctx := &parityEnrichmentContext{
+		source:             source,
+		settings:           extractRuleSettings(source),
+		baseDir:            sourceSQLBaseDir(source),
+		module:             sourceModuleWithLayout(source, layout),
+		sourceName:         pipeline.SanitizeName(source.Name),
+		joinEmbedRefs:      map[string]string{},
+		joinSubqueryBodies: map[string]string{},
+	}
+	if len(result.Views) == 0 || result.Views[0] == nil {
+		return ctx
+	}
+	sqlForJoinExtract := result.Views[0].SQL
+	if source != nil && strings.TrimSpace(source.DQL) != "" {
+		sqlForJoinExtract = source.DQL
+	}
+	ctx.joinEmbedRefs = extractJoinEmbedRefs(sqlForJoinExtract)
+	ctx.joinSubqueryBodies = extractJoinSubqueryBodies(sqlForJoinExtract)
+	return ctx
 }
 
-func loadLegacyRouteViewAttrs(source *shape.Source, settings *ruleSettings) []legacyRouteViewAttr {
-	return loadLegacyRouteViewAttrsWithLayout(source, settings, defaultCompilePathLayout())
+func applyViewDefaults(item *plan.View, root bool, ctx *parityEnrichmentContext) {
+	if item == nil || ctx == nil {
+		return
+	}
+	if item.SQLURI == "" && ctx.baseDir != "" {
+		item.SQLURI = ctx.baseDir + "/" + item.Name + ".sql"
+	}
+	if item.Module == "" {
+		item.Module = ctx.module
+	}
+	if item.SelectorNamespace == "" {
+		item.SelectorNamespace = defaultSelectorNamespace(item.Name)
+	}
+	if item.SchemaType == "" {
+		item.SchemaType = defaultSchemaType(item.Name, ctx.settings, root)
+	}
 }
 
-func loadLegacyRouteViewAttrsWithLayout(source *shape.Source, settings *ruleSettings, layout compilePathLayout) []legacyRouteViewAttr {
-	if source == nil || strings.TrimSpace(source.Path) == "" {
-		return nil
+func applyTableInference(item *plan.View, ctx *parityEnrichmentContext) {
+	if item == nil || ctx == nil {
+		return
 	}
-	platformRoot, relativeDir, stem, ok := platformPathParts(source.Path, layout)
-	if !ok {
-		return nil
-	}
-	typeExpr := ""
-	if settings != nil {
-		typeExpr = strings.TrimSpace(settings.Type)
-	}
-	typeExpr = strings.Trim(typeExpr, `"'`)
-	typeExpr = strings.TrimSuffix(typeExpr, ".Handler")
-	typeStem := ""
-	if typeExpr != "" {
-		typeStem = filepath.Base(filepath.FromSlash(typeExpr))
-	}
-	routesRoot := joinRelativePath(platformRoot, layout.routesRelative)
-	routesBase := filepath.Join(routesRoot, filepath.FromSlash(relativeDir))
-	candidates := legacyRouteYAMLCandidates(routesBase, stem, typeStem)
-	for _, candidate := range candidates {
-		if attrs := parseLegacyRouteViewAttrs(candidate); len(attrs) > 0 {
-			return attrs
+	if shouldInferTable(item) {
+		candidateSQL := item.SQL
+		if strings.TrimSpace(candidateSQL) == "" {
+			candidateSQL = item.Table
+		}
+		if table := inferTableFromSQL(candidateSQL, ctx.source); table != "" {
+			item.Table = table
 		}
 	}
-	return nil
-}
-
-func parseLegacyRouteViewAttrs(path string) []legacyRouteViewAttr {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	var payload struct {
-		Resource struct {
-			Views []struct {
-				Name       string `yaml:"Name"`
-				Mode       string `yaml:"Mode"`
-				Module     string `yaml:"Module"`
-				AllowNulls *bool  `yaml:"AllowNulls"`
-				Selector   struct {
-					Namespace string `yaml:"Namespace"`
-					NoLimit   *bool  `yaml:"NoLimit"`
-				} `yaml:"Selector"`
-				Template struct {
-					Summary *struct{} `yaml:"Summary"`
-				} `yaml:"Template"`
-				Schema struct {
-					Cardinality string `yaml:"Cardinality"`
-					DataType    string `yaml:"DataType"`
-					Name        string `yaml:"Name"`
-				} `yaml:"Schema"`
-			} `yaml:"Views"`
-		} `yaml:"Resource"`
-	}
-	if err = yaml.Unmarshal(data, &payload); err != nil {
-		return nil
-	}
-	result := make([]legacyRouteViewAttr, 0, len(payload.Resource.Views))
-	for _, item := range payload.Resource.Views {
-		cardinality := strings.TrimSpace(item.Schema.Cardinality)
-		if cardinality != "" {
-			cardinality = strings.ToLower(cardinality)
+	if strings.HasPrefix(strings.TrimSpace(item.Table), "(") || normalizedTemplatePlaceholderTable(strings.TrimSpace(item.Table)) {
+		if ref, ok := ctx.joinEmbedRefs[item.Name]; ok {
+			if table := inferTableFromEmbedRef(ctx.source, ref); table != "" {
+				item.Table = table
+			}
 		}
-		result = append(result, legacyRouteViewAttr{
-			Name:              strings.TrimSpace(item.Name),
-			Mode:              strings.TrimSpace(item.Mode),
-			Module:            strings.TrimSpace(item.Module),
-			AllowNulls:        item.AllowNulls,
-			SelectorNamespace: strings.TrimSpace(item.Selector.Namespace),
-			SelectorNoLimit:   item.Selector.NoLimit,
-			SchemaType:        firstNonEmptyString(strings.TrimSpace(item.Schema.DataType), strings.TrimSpace(item.Schema.Name)),
-			Cardinality:       cardinality,
-			HasSummary: func() *bool {
-				if item.Template.Summary == nil {
-					return nil
-				}
-				value := true
-				return &value
-			}(),
-		})
-	}
-	return result
-}
-
-func lookupLegacyRouteViewAttr(items []legacyRouteViewAttr, name string) (legacyRouteViewAttr, bool) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return legacyRouteViewAttr{}, false
-	}
-	for _, item := range items {
-		if strings.EqualFold(strings.TrimSpace(item.Name), name) {
-			return item, true
+		if body, ok := ctx.joinSubqueryBodies[item.Name]; ok {
+			if table := inferTableFromSQL(body, ctx.source); table != "" {
+				item.Table = table
+			}
+		}
+		if table := inferTableFromSiblingSQL(item.Name, ctx.source); table != "" {
+			item.Table = table
 		}
 	}
-	return legacyRouteViewAttr{}, false
 }
 
-func firstNonEmptyString(values ...string) string {
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			return value
-		}
+func applyConnectorInference(item *plan.View, ctx *parityEnrichmentContext) {
+	if item == nil || ctx == nil || item.Connector != "" {
+		return
 	}
-	return ""
+	if ctx.settings != nil && ctx.settings.Connector != "" {
+		item.Connector = ctx.settings.Connector
+	}
+	if item.Connector == "" && ctx.source != nil && strings.TrimSpace(ctx.source.Connector) != "" {
+		item.Connector = strings.TrimSpace(ctx.source.Connector)
+	}
+	if item.Connector == "" {
+		item.Connector = inferConnector(item, ctx.source)
+	}
+}
+
+func applySummaryInference(item *plan.View, ctx *parityEnrichmentContext) {
+	if item == nil || ctx == nil || item.Summary != "" {
+		return
+	}
+	item.Summary = extractSummarySQL(item.SQL)
+	if item.Summary == "" && ctx.source != nil {
+		item.Summary = extractSummarySQL(ctx.source.DQL)
+	}
 }
 
 func extractSummarySQL(sqlText string) string {
@@ -677,7 +567,7 @@ func inferConnector(item *plan.View, source *shape.Source) string {
 	}
 }
 
-func normalizeRootViewName(result *plan.Result, sourceName string, settings *ruleSettings) {
+func normalizeRootViewName(result *plan.Result, sourceName string) {
 	if result == nil || len(result.Views) == 0 {
 		return
 	}
@@ -689,7 +579,6 @@ func normalizeRootViewName(result *plan.Result, sourceName string, settings *rul
 	if desired == "" {
 		return
 	}
-	_ = settings
 	current := strings.TrimSpace(root.Name)
 	if current == "" {
 		root.Name = desired

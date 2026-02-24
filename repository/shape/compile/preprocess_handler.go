@@ -9,16 +9,13 @@ import (
 	"github.com/viant/datly/repository/shape/compile/pipeline"
 	dqlpre "github.com/viant/datly/repository/shape/dql/preprocess"
 	dqlstmt "github.com/viant/datly/repository/shape/dql/statement"
-	"github.com/viant/datly/repository/shape/plan"
 )
 
 type handlerPreprocessResult struct {
-	Pre                 *dqlpre.Result
-	Statements          dqlstmt.Statements
-	Decision            pipeline.Decision
-	LegacyViews         []*plan.View
-	EffectiveSource     *shape.Source
-	ForceLegacyContract bool
+	Pre             *dqlpre.Result
+	Statements      dqlstmt.Statements
+	Decision        pipeline.Decision
+	EffectiveSource *shape.Source
 }
 
 func buildHandlerIfNeeded(source *shape.Source, pre *dqlpre.Result, statements dqlstmt.Statements, decision pipeline.Decision, layout compilePathLayout) *handlerPreprocessResult {
@@ -45,21 +42,17 @@ func buildHandlerIfNeeded(source *shape.Source, pre *dqlpre.Result, statements d
 }
 
 func buildHandlerFromContractIfNeeded(ret *handlerPreprocessResult, source *shape.Source, layout compilePathLayout) bool {
-	if ret == nil || source == nil {
-		return false
-	}
-	return buildLegacyRouteFallbackIfNeeded(ret, source, layout)
+	_ = ret
+	_ = source
+	_ = layout
+	return false
 }
 
 func buildGeneratedFallbackIfNeeded(ret *handlerPreprocessResult, source *shape.Source, layout compilePathLayout) bool {
 	if ret == nil || source == nil {
 		return false
 	}
-	if alternate := resolveGeneratedLegacySource(source); alternate != nil {
-		if buildLegacyRouteFallbackIfNeeded(ret, alternate, layout) {
-			return true
-		}
-	}
+	_ = layout
 	generated := strings.TrimSpace(resolveGeneratedCompanionDQL(source))
 	if generated == "" {
 		return false
@@ -76,20 +69,6 @@ func buildGeneratedFallbackIfNeeded(ret *handlerPreprocessResult, source *shape.
 	ret.Pre = candidate
 	ret.Statements = candidateStatements
 	ret.Decision = candidateDecision
-	return true
-}
-
-func buildLegacyRouteFallbackIfNeeded(ret *handlerPreprocessResult, source *shape.Source, layout compilePathLayout) bool {
-	if ret == nil || source == nil {
-		return false
-	}
-	legacyFallbackViews := resolveLegacyRouteViewsWithLayout(source, layout)
-	if len(legacyFallbackViews) == 0 {
-		return false
-	}
-	ret.LegacyViews = legacyFallbackViews
-	ret.EffectiveSource = source
-	ret.ForceLegacyContract = true
 	return true
 }
 

@@ -66,12 +66,7 @@ func (c *DQLCompiler) Compile(_ context.Context, source *shape.Source, opts ...s
 	pre = prepared.Pre
 	statements = prepared.Statements
 	decision = prepared.Decision
-	legacyFallbackViews := prepared.LegacyViews
-	effectiveSource := source
-	if prepared.EffectiveSource != nil {
-		effectiveSource = prepared.EffectiveSource
-	}
-	if strings.TrimSpace(pre.SQL) == "" && len(legacyFallbackViews) == 0 {
+	if strings.TrimSpace(pre.SQL) == "" {
 		allDiags = append(allDiags, &dqlshape.Diagnostic{
 			Code:     dqldiag.CodeParseEmpty,
 			Severity: dqlshape.SeverityError,
@@ -87,11 +82,7 @@ func (c *DQLCompiler) Compile(_ context.Context, source *shape.Source, opts ...s
 	var root *plan.View
 	var compileDiags []*dqlshape.Diagnostic
 	var err error
-	if len(legacyFallbackViews) > 0 {
-		root = legacyFallbackViews[0]
-	} else {
-		root, compileDiags, err = c.compileRoot(source.Name, pre.SQL, statements, decision, compileOptions.MixedMode, compileOptions.UnknownNonReadMode)
-	}
+	root, compileDiags, err = c.compileRoot(source.Name, pre.SQL, statements, decision, compileOptions.MixedMode, compileOptions.UnknownNonReadMode)
 	if err != nil {
 		return nil, err
 	}
@@ -102,18 +93,6 @@ func (c *DQLCompiler) Compile(_ context.Context, source *shape.Source, opts ...s
 	}
 
 	result := newPlanResult(root)
-	if len(legacyFallbackViews) > 1 {
-		for _, item := range legacyFallbackViews[1:] {
-			if item == nil || strings.TrimSpace(item.Name) == "" {
-				continue
-			}
-			if _, exists := result.ViewsByName[item.Name]; exists {
-				continue
-			}
-			result.Views = append(result.Views, item)
-			result.ViewsByName[item.Name] = item
-		}
-	}
 	result.Diagnostics = allDiags
 	result.TypeContext = pre.TypeCtx
 	result.Directives = pre.Directives
@@ -122,26 +101,11 @@ func (c *DQLCompiler) Compile(_ context.Context, source *shape.Source, opts ...s
 	appendRelationViews(result, root, hints)
 	appendDeclaredViews(source.DQL, result)
 	appendDeclaredStates(source.DQL, result)
-	if prepared.ForceLegacyContract && len(legacyFallbackViews) > 0 {
-		if legacyStates := resolveLegacyRouteStatesWithLayout(effectiveSource, pathLayout); len(legacyStates) > 0 {
-			result.States = legacyStates
-		}
-		if legacyTypes := resolveLegacyRouteTypesWithLayout(effectiveSource, pathLayout); len(legacyTypes) > 0 {
-			result.Types = legacyTypes
-		}
-	}
-	result.Diagnostics = append(result.Diagnostics, appendComponentTypesWithLayout(effectiveSource, result, pathLayout)...)
-	mergeLegacyRouteStatesWithLayout(result, effectiveSource, pathLayout)
-	mergeLegacyRouteTypesWithLayout(result, effectiveSource, pathLayout)
+	_ = prepared
 	applyViewHints(result, hints)
-	applySourceParityEnrichmentWithLayout(result, effectiveSource, pathLayout)
+	applySourceParityEnrichmentWithLayout(result, source, pathLayout)
+	applyLinkedTypeSupport(result, source)
 	result.Diagnostics = append(result.Diagnostics, applyColumnDiscoveryPolicy(result, compileOptions)...)
-	if len(result.States) == 0 && len(legacyFallbackViews) > 0 {
-		result.States = resolveLegacyRouteStatesWithLayout(effectiveSource, pathLayout)
-	}
-	if len(result.Types) == 0 && len(legacyFallbackViews) > 0 {
-		result.Types = resolveLegacyRouteTypesWithLayout(effectiveSource, pathLayout)
-	}
 
 	if enforceStrict && hasEscalationWarnings(result.Diagnostics) {
 		return nil, &CompileError{Diagnostics: filterEscalationDiagnostics(result.Diagnostics)}

@@ -39,6 +39,8 @@ func appendComponentTypesWithLayout(source *shape.Source, result *plan.Result, l
 		visited:       map[string]componentVisitState{},
 		outputByRoute: map[string]string{},
 		typesByName:   map[string]*plan.Type{},
+		payloadCache:  map[string]routePayloadLookup{},
+		reportedDiag:  map[string]bool{},
 	}
 	if strings.TrimSpace(sourceNamespace) != "" {
 		collector.collect(sourceNamespace, relationSpan(source.DQL, 0), false)
@@ -109,7 +111,17 @@ type componentCollector struct {
 	visited       map[string]componentVisitState
 	outputByRoute map[string]string
 	typesByName   map[string]*plan.Type
+	payloadCache  map[string]routePayloadLookup
+	reportedDiag  map[string]bool
 	diags         []*dqlshape.Diagnostic
+}
+
+type routePayloadLookup struct {
+	payload     *routePayload
+	found       bool
+	malformed   bool
+	malformedAt string
+	detail      string
 }
 
 func (c *componentCollector) collect(namespace string, span dqlshape.Span, required bool) (string, bool) {
@@ -132,10 +144,11 @@ func (c *componentCollector) collect(namespace string, span dqlshape.Span, requi
 	}
 	c.visited[key] = componentVisitActive
 
-	payload, ok := loadRoutePayload(c.routesRoot, namespace)
+	payload, ok := c.loadRoutePayload(namespace, span)
 	if !ok {
 		c.visited[key] = componentVisitDone
-		if required {
+		if required && !c.hasReported("missing:"+key) {
+			c.reportedDiag["missing:"+key] = true
 			c.diags = append(c.diags, &dqlshape.Diagnostic{
 				Code:     dqldiag.CodeCompRouteMissing,
 				Severity: dqlshape.SeverityWarning,
@@ -347,7 +360,13 @@ type routePayload struct {
 }
 
 func loadRoutePayload(routesRoot, namespace string) (*routePayload, bool) {
+	lookup := readRoutePayload(routesRoot, namespace)
+	return lookup.payload, lookup.found
+}
+
+func readRoutePayload(routesRoot, namespace string) routePayloadLookup {
 	candidates := routeYAMLCandidates(routesRoot, namespace)
+	lookup := routePayloadLookup{}
 	for _, candidate := range candidates {
 		data, err := os.ReadFile(candidate)
 		if err != nil {
@@ -355,11 +374,59 @@ func loadRoutePayload(routesRoot, namespace string) (*routePayload, bool) {
 		}
 		payload := &routePayload{}
 		if err = yaml.Unmarshal(data, payload); err != nil {
+			if !lookup.malformed {
+				lookup.malformed = true
+				lookup.malformedAt = candidate
+				lookup.detail = strings.TrimSpace(err.Error())
+			}
 			continue
 		}
-		return payload, true
+		lookup.payload = payload
+		lookup.found = true
+		lookup.malformed = false
+		lookup.malformedAt = ""
+		lookup.detail = ""
+		return lookup
 	}
-	return nil, false
+	return lookup
+}
+
+func (c *componentCollector) loadRoutePayload(namespace string, span dqlshape.Span) (*routePayload, bool) {
+	key := strings.ToLower(strings.TrimSpace(namespace))
+	if key == "" {
+		return nil, false
+	}
+	lookup, ok := c.payloadCache[key]
+	if !ok {
+		lookup = readRoutePayload(c.routesRoot, namespace)
+		c.payloadCache[key] = lookup
+	}
+	if lookup.malformed && !lookup.found && !c.hasReported("invalid:"+key) {
+		c.reportedDiag["invalid:"+key] = true
+		message := "component route YAML malformed: " + namespace
+		if strings.TrimSpace(lookup.malformedAt) != "" {
+			message += " (" + lookup.malformedAt + ")"
+		}
+		hint := "fix route YAML format"
+		if strings.TrimSpace(lookup.detail) != "" {
+			hint += ": " + lookup.detail
+		}
+		c.diags = append(c.diags, &dqlshape.Diagnostic{
+			Code:     dqldiag.CodeCompRouteInvalid,
+			Severity: dqlshape.SeverityWarning,
+			Message:  message,
+			Hint:     hint,
+			Span:     span,
+		})
+	}
+	return lookup.payload, lookup.found
+}
+
+func (c *componentCollector) hasReported(key string) bool {
+	if c == nil || c.reportedDiag == nil {
+		return false
+	}
+	return c.reportedDiag[key]
 }
 
 func routeOutputType(payload *routePayload) string {

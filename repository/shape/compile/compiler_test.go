@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,8 +59,8 @@ SELECT id
 func TestDQLCompiler_Compile_PropagatesTypeContext(t *testing.T) {
 	compiler := New()
 	dql := `
-#settings($_ = $package('mdp/performance'))
-#settings($_ = $import('perf', 'github.com/acme/mdp/performance'))
+#package('mdp/performance')
+#import('perf', 'github.com/acme/mdp/performance')
 SELECT id FROM ORDERS t`
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql})
 	require.NoError(t, err)
@@ -73,6 +72,26 @@ SELECT id FROM ORDERS t`
 	assert.Equal(t, "mdp/performance", planned.TypeContext.DefaultPackage)
 	require.Len(t, planned.TypeContext.Imports, 1)
 	assert.Equal(t, "perf", planned.TypeContext.Imports[0].Alias)
+}
+
+func TestDQLCompiler_Compile_PropagatesImportedTypeContextWithModuleNormalization(t *testing.T) {
+	compiler := New()
+	projectDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte("module github.vianttech.com/viant/platform\n\ngo 1.23\n"), 0o644)
+	require.NoError(t, err)
+	source := &shape.Source{
+		Name: "orders_report",
+		Path: filepath.Join(projectDir, "dql", "platform", "taxonomy", "get.dql"),
+		DQL:  "#import('session','pkg/platform/system/session')\nSELECT id FROM ORDERS t",
+	}
+	res, err := compiler.Compile(context.Background(), source)
+	require.NoError(t, err)
+	planned, ok := res.Plan.(*plan.Result)
+	require.True(t, ok)
+	require.NotNil(t, planned.TypeContext)
+	require.Len(t, planned.TypeContext.Imports, 1)
+	assert.Equal(t, "session", planned.TypeContext.Imports[0].Alias)
+	assert.Equal(t, "github.vianttech.com/viant/platform/pkg/platform/system/session", planned.TypeContext.Imports[0].Package)
 }
 
 func TestDQLCompiler_Compile_PropagatesSpecialDirectives(t *testing.T) {
@@ -127,7 +146,7 @@ func TestDQLCompiler_Compile_ColumnDiscoveryOffFailsWhenRequired(t *testing.T) {
 func TestDQLCompiler_Compile_TypeContextValidationWarnsInCompat(t *testing.T) {
 	compiler := New()
 	dql := `
-#settings($_ = $package('github.com/acme/perf'))
+#package('github.com/acme/perf')
 SELECT id FROM ORDERS t`
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql}, shape.WithTypeContextPackageName("bad/name"))
 	require.NoError(t, err)
@@ -196,7 +215,7 @@ func TestDQLCompiler_Compile_SyntaxError_RemapsAfterSanitize(t *testing.T) {
 
 func TestDQLCompiler_Compile_DirectiveOnly_HasLineAndChar(t *testing.T) {
 	compiler := New()
-	_, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: "#settings($_ = $package('x'))"})
+	_, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: "#package('x')"})
 	require.Error(t, err)
 	compileErr, ok := err.(*CompileError)
 	require.True(t, ok)
@@ -211,7 +230,7 @@ func TestDQLCompiler_Compile_InvalidDirective_HasLineAndChar(t *testing.T) {
 	compiler := New()
 	_, err := compiler.Compile(context.Background(), &shape.Source{
 		Name: "orders_report",
-		DQL:  "SELECT id FROM ORDERS t\n#settings($_ = $import('alias'))\nSELECT id FROM ORDERS t",
+		DQL:  "SELECT id FROM ORDERS t\n#import('alias')\nSELECT id FROM ORDERS t",
 	})
 	require.Error(t, err)
 	compileErr, ok := err.(*CompileError)
@@ -418,7 +437,7 @@ func TestDQLCompiler_Compile_DMLSyntaxError_HasLineAndChar(t *testing.T) {
 	compiler := New()
 	_, err := compiler.Compile(context.Background(), &shape.Source{
 		Name: "orders_exec",
-		DQL:  "#settings($_ = $package('x'))\nINSERT INTO ORDERS(id VALUES (1)",
+		DQL:  "#package('x')\nINSERT INTO ORDERS(id VALUES (1)",
 	})
 	require.Error(t, err)
 	compileErr, ok := err.(*CompileError)
@@ -661,7 +680,7 @@ JOIN (SELECT * FROM session/attributes) attribute ON attribute.user_id = session
 	assert.Equal(t, "system", related.Connector)
 }
 
-func TestDQLCompiler_Compile_GeneratedHandler_NoBodyInput_UsesLegacyContractStates(t *testing.T) {
+func TestDQLCompiler_Compile_GeneratedHandler_NoBodyInput_DoesNotLoadLegacyContractStates(t *testing.T) {
 	tempDir := t.TempDir()
 	genPath := filepath.Join(tempDir, "dql", "system", "upload", "gen", "upload", "delete.dql")
 	require.NoError(t, os.MkdirAll(filepath.Dir(genPath), 0o755))
@@ -705,21 +724,10 @@ func TestDQLCompiler_Compile_GeneratedHandler_NoBodyInput_UsesLegacyContractStat
 	assert.Equal(t, "SQLExec", planned.Views[0].Mode)
 	assert.Equal(t, "system", planned.Views[0].Connector)
 
-	stateByName := map[string]*plan.State{}
-	for _, item := range planned.States {
-		if item == nil {
-			continue
-		}
-		stateByName[item.Name] = item
-	}
-	require.Contains(t, stateByName, "Method")
-	require.Contains(t, stateByName, "UploadId")
-	assert.Equal(t, "http_request", stateByName["Method"].Kind)
-	assert.Equal(t, "query", stateByName["UploadId"].Kind)
-	assert.NotContains(t, stateByName, "Body")
+	assert.Empty(t, planned.States)
 }
 
-func TestDQLCompiler_Compile_HandlerLegacyTypes_PreferredOverComponentNameCollisions(t *testing.T) {
+func TestDQLCompiler_Compile_HandlerLegacyTypes_NotLoadedFromLegacyRouteYAML(t *testing.T) {
 	tempDir := t.TempDir()
 	sourcePath := filepath.Join(tempDir, "dql", "platform", "campaign", "post.dql")
 	require.NoError(t, os.MkdirAll(filepath.Dir(sourcePath), 0o755))
@@ -776,26 +784,10 @@ func TestDQLCompiler_Compile_HandlerLegacyTypes_PreferredOverComponentNameCollis
 	planned, ok := res.Plan.(*plan.Result)
 	require.True(t, ok)
 
-	typeByName := map[string]*plan.Type{}
-	for _, item := range planned.Types {
-		if item == nil || strings.TrimSpace(item.Name) == "" {
-			continue
-		}
-		typeByName[strings.ToLower(strings.TrimSpace(item.Name))] = item
-	}
-
-	inputType, ok := typeByName["input"]
-	require.True(t, ok)
-	assert.Equal(t, "campaign/patch", inputType.Package)
-	assert.Equal(t, "github.vianttech.com/viant/platform/pkg/platform/campaign/patch", inputType.ModulePath)
-
-	handlerType, ok := typeByName["handler"]
-	require.True(t, ok)
-	assert.Equal(t, "campaign/patch", handlerType.Package)
-	assert.Equal(t, "github.vianttech.com/viant/platform/pkg/platform/campaign/patch", handlerType.ModulePath)
+	assert.Empty(t, planned.Types)
 }
 
-func TestDQLCompiler_Compile_CustomPathLayout_HandlerFallback(t *testing.T) {
+func TestDQLCompiler_Compile_CustomPathLayout_NoLegacyHandlerFallback(t *testing.T) {
 	tempDir := t.TempDir()
 	sourcePath := filepath.Join(tempDir, "sqlsrc", "platform", "campaign", "post.dql")
 	require.NoError(t, os.MkdirAll(filepath.Dir(sourcePath), 0o755))
@@ -825,7 +817,5 @@ func TestDQLCompiler_Compile_CustomPathLayout_HandlerFallback(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Views)
 	assert.Equal(t, "post", planned.Views[0].Name)
-	assert.Equal(t, "SQLExec", planned.Views[0].Mode)
-	assert.Equal(t, "ci_ads", planned.Views[0].Connector)
-	assert.Contains(t, planned.Views[0].SQL, "$Nop(")
+	assert.NotContains(t, planned.Views[0].SQL, "$Nop(")
 }
