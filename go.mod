@@ -2,7 +2,7 @@ module github.com/viant/datly
 
 go 1.25.0
 
-require (
+	require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/francoispqt/gojay v1.2.13
