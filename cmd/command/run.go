@@ -36,10 +36,7 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 	setter.SetStringIfEmpty(&s.config.JobURL, run.JobURL)
 	setter.SetStringIfEmpty(&s.config.FailedJobURL, run.FailedJobURL)
 	setter.SetIntIfZero(&s.config.MaxJobs, run.MaxJobs)
-	if s.config.FailedJobURL == "" && s.config.JobURL != "" {
-		parent, _ := url.Split(s.config.JobURL, file.Scheme)
-		s.config.FailedJobURL = url.Join(parent, "failed", "jobs")
-	}
+	applyAsyncJobDefaults(s.config)
 	if run.LoadPlugin && s.config.Config.PluginsURL != "" {
 		parent, _ := url.Split(run.PluginInfo, file.Scheme)
 		_ = s.fs.Copy(ctx, parent, s.config.Config.PluginsURL)

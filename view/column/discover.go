@@ -248,7 +248,9 @@ func parseQuery(SQL string) (string, string, sqlparser.Columns) {
 		if sqlQuery.From.X != nil {
 			table = sqlparser.Stringify(sqlQuery.From.X)
 		}
-		if sqlQuery.List.IsStarExpr() && !strings.Contains(table, "SELECT") {
+		// For CTE-backed queries (WITH ...), SELECT * FROM cte_alias must still be
+		// resolved via SQL execution; the alias is not a physical table.
+		if sqlQuery.List.IsStarExpr() && !strings.Contains(table, "SELECT") && len(sqlQuery.WithSelects) == 0 {
 			return table, "", nil //use table metadata
 		}
 		sqlQuery.Limit = nil
