@@ -327,7 +327,7 @@ func (g *generator) responses(ctx context.Context, component *ComponentSchema) (
 	}
 
 	responses := openapi.Responses{}
-	openapi.SetResponse(responses, 200, &openapi.Response{
+	openapi.SetResponse(responses, openapi.ResponseOK, &openapi.Response{
 		Description: stringPtr("Success response"),
 		Content: map[string]*openapi.MediaType{
 			ApplicationJson: {

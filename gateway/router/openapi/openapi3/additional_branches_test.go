@@ -10,21 +10,21 @@ import (
 
 func TestResponsesHelpersAndOperationMarshal(t *testing.T) {
 	responses := Responses{}
-	SetResponse(responses, 200, &Response{Description: strPtr("ok")})
+	SetResponse(responses, ResponseOK, &Response{Description: strPtr("ok")})
 	SetResponse(responses, ResponseDefault, &Response{Description: strPtr("fallback")})
-	SetResponse(responses, ResponseIntKey("201"), &Response{Description: strPtr("created")})
+	SetResponse(responses, ResponseCreated, &Response{Description: strPtr("created")})
 
-	if got, ok := GetResponse(responses, 200); !ok || got == nil || got.Description == nil || *got.Description != "ok" {
+	if got, ok := GetResponse(responses, ResponseOK); !ok || got == nil || got.Description == nil || *got.Description != "ok" {
 		t.Fatalf("expected integer-key lookup to resolve 200 response")
 	}
-	if _, ok := GetResponse(responses, "200"); !ok {
+	if _, ok := GetResponse(responses, string(ResponseOK)); !ok {
 		t.Fatalf("expected string-key lookup to resolve 200 response")
 	}
 	if _, ok := GetResponse(responses, ResponseDefault); !ok {
 		t.Fatalf("expected default response")
 	}
-	if got, ok := GetResponse(responses, ResponseIntKey("201")); !ok || got == nil || got.Description == nil || *got.Description != "created" {
-		t.Fatalf("expected ResponseIntKey lookup to resolve 201 response")
+	if got, ok := GetResponse(responses, ResponseCreated); !ok || got == nil || got.Description == nil || *got.Description != "created" {
+		t.Fatalf("expected ResponseCode lookup to resolve 201 response")
 	}
 	if len(responses) != 3 {
 		t.Fatalf("expected three responses to be set")
@@ -39,7 +39,7 @@ func TestResponsesHelpersAndOperationMarshal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected marshal error: %v", err)
 	}
-	if !strings.Contains(string(data), "\"200\"") || !strings.Contains(string(data), "x-extra") {
+	if !strings.Contains(string(data), "\""+string(ResponseOK)+"\"") || !strings.Contains(string(data), "x-extra") {
 		t.Fatalf("expected marshaled operation to include response and extension: %s", string(data))
 	}
 }
@@ -56,8 +56,8 @@ func assertNormalize[T ResponseKey](t *testing.T, name string, input T, expected
 func TestNormalizeResponseCode_Table(t *testing.T) {
 	assertNormalize(t, "string", "default", ResponseCode("default"))
 	assertNormalize(t, "response code", ResponseDefault, ResponseCode("default"))
-	assertNormalize(t, "response int key", ResponseIntKey("200"), ResponseCode("200"))
-	assertNormalize(t, "int", int(200), ResponseCode("200"))
+	assertNormalize(t, "response code literal", ResponseCodeLiteral("200"), ResponseOK)
+	assertNormalize(t, "int", int(200), ResponseOK)
 	assertNormalize(t, "int8", int8(101), ResponseCode("101"))
 	assertNormalize(t, "int16", int16(202), ResponseCode("202"))
 	assertNormalize(t, "int32", int32(203), ResponseCode("203"))

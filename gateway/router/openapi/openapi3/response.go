@@ -22,12 +22,26 @@ type (
 )
 
 const (
-	ResponseDefault ResponseCode = "default"
+	ResponseContinue           ResponseCode = "100"
+	ResponseOK                 ResponseCode = "200"
+	ResponseCreated            ResponseCode = "201"
+	ResponseAccepted           ResponseCode = "202"
+	ResponseNoContent          ResponseCode = "204"
+	ResponseBadRequest         ResponseCode = "400"
+	ResponseUnauthorized       ResponseCode = "401"
+	ResponseForbidden          ResponseCode = "403"
+	ResponseNotFound           ResponseCode = "404"
+	ResponseConflict           ResponseCode = "409"
+	ResponseUnprocessable      ResponseCode = "422"
+	ResponseInternalServerErr  ResponseCode = "500"
+	ResponseBadGateway         ResponseCode = "502"
+	ResponseServiceUnavailable ResponseCode = "503"
+	ResponseDefault            ResponseCode = "default"
 )
 
 type (
-	ResponseCode   string
-	ResponseIntKey string
+	ResponseCode        string
+	ResponseCodeLiteral string
 
 	ResponseKey interface {
 		~string | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64

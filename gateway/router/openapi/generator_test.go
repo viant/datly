@@ -72,7 +72,7 @@ func TestGeneratorTopLevel_Table(t *testing.T) {
 			t.Fatalf("unexpected marshal error: %v", err)
 		}
 		doc := string(data)
-		if !strings.Contains(doc, `"responses":{"200":`) {
+		if !strings.Contains(doc, `"responses":{"`+string(openapi3.ResponseOK)+`":`) {
 			t.Fatalf("expected serialized numeric response key as string in spec: %s", doc)
 		}
 		if !strings.Contains(doc, `"default"`) {
@@ -239,7 +239,7 @@ func TestGeneratorHelpersMore_Table(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if _, ok := openapi3.GetResponse(resp, 200); !ok {
+		if _, ok := openapi3.GetResponse(resp, openapi3.ResponseOK); !ok {
 			t.Fatalf("expected success response")
 		}
 		if _, ok := openapi3.GetResponse(resp, openapi3.ResponseDefault); !ok {
@@ -389,7 +389,7 @@ func TestGeneratorHelpersMore_Table(t *testing.T) {
 		if err != nil || operation == nil {
 			t.Fatalf("unexpected operation result: %v %v", operation, err)
 		}
-		if _, ok := openapi3.GetResponse(operation.Responses, 200); !ok {
+		if _, ok := openapi3.GetResponse(operation.Responses, openapi3.ResponseOK); !ok {
 			t.Fatalf("expected 200 response")
 		}
 	})

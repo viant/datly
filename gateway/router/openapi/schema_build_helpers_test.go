@@ -289,4 +289,52 @@ func TestSchemaBuildHelpers_Table(t *testing.T) {
 			t.Fatalf("expected strict mode polymorphism error")
 		}
 	})
+
+	t.Run("oneOf discriminator and helper branches", func(t *testing.T) {
+		t.Run("empty refs yield nil discriminator", func(t *testing.T) {
+			discriminator := oneOfDiscriminator(openapi3.SchemaList{{Type: objectOutput}, nil})
+			if discriminator != nil {
+				t.Fatalf("expected nil discriminator when refs are absent")
+			}
+		})
+
+		t.Run("apply discriminator skips non-object and missing schema", func(t *testing.T) {
+			container := NewContainer()
+			container.generatedSchemas["User"] = &openapi3.Schema{Type: objectOutput}
+			container.generatedSchemas["Arr"] = &openapi3.Schema{Type: arrayOutput}
+			container.applyDiscriminatorToVariants(&openapi3.Discriminator{
+				PropertyName: "kind",
+				Mapping: map[string]string{
+					"user": "#/components/schemas/User",
+					"arr":  "#/components/schemas/Arr",
+					"miss": "#/components/schemas/Missing",
+				},
+			})
+			user := container.generatedSchemas["User"]
+			if user == nil || user.Properties["kind"] == nil {
+				t.Fatalf("expected discriminator property on object variant")
+			}
+			if !containsString(user.Required, "kind") {
+				t.Fatalf("expected discriminator property required on object variant")
+			}
+			arr := container.generatedSchemas["Arr"]
+			if arr != nil && arr.Properties != nil {
+				if _, ok := arr.Properties["kind"]; ok {
+					t.Fatalf("did not expect discriminator property on non-object variant")
+				}
+			}
+		})
+
+		t.Run("refName invalid variants", func(t *testing.T) {
+			if got := refName(""); got != "" {
+				t.Fatalf("expected empty ref name for empty ref")
+			}
+			if got := refName("abc"); got != "" {
+				t.Fatalf("expected empty ref name for malformed ref")
+			}
+			if got := refName("abc/"); got != "" {
+				t.Fatalf("expected empty ref name for trailing slash")
+			}
+		})
+	})
 }
