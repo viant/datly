@@ -5,7 +5,6 @@ import (
 	"fmt"
 	openapi "github.com/viant/datly/gateway/router/openapi/openapi3"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -75,99 +74,6 @@ func GenerateOpenAPI3Spec(ctx context.Context, components *repository.Service, i
 		commonParameters: map[string]*openapi.Parameter{},
 		_parametersIndex: map[string]*openapi.Parameter{},
 	}).GenerateSpec(ctx, components, info, providers...)
-}
-
-func (g *generator) generatePaths(ctx context.Context, components *repository.Service, providers []*repository.Provider) (*SchemaContainer, openapi.Paths, error) {
-	container := NewContainer()
-	builder := &PathsBuilder{paths: openapi.Paths{}}
-	var retErr error
-	pathItem := &openapi.PathItem{}
-	for _, provider := range providers {
-		component, err := provider.Component(ctx)
-		if err != nil {
-			retErr = err
-		}
-		if component == nil {
-			fmt.Printf("provider.Component(ctx) returned nil\n")
-			continue
-		}
-		componentSchema := NewComponentSchema(components, component, container)
-		operation, err := g.generateOperation(ctx, componentSchema)
-		if err != nil {
-			retErr = err
-		}
-		switch component.Method {
-		case http.MethodGet:
-			pathItem.Get = operation
-		case http.MethodPost:
-			pathItem.Post = operation
-		case http.MethodDelete:
-			pathItem.Delete = operation
-		case http.MethodPut:
-			pathItem.Put = operation
-		case http.MethodPatch:
-			pathItem.Patch = operation
-		}
-		builder.AddPath(component.URI, pathItem)
-	}
-
-	return container, builder.paths, retErr
-}
-
-func (g *generator) generateOperation(ctx context.Context, component *ComponentSchema) (*openapi.Operation, error) {
-	body, err := g.requestBody(ctx, component)
-	if err != nil {
-		return nil, err
-	}
-
-	parameters, err := g.getAllViewsParameters(ctx, component, component.component.View)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if err := g.forEachParam(component.component.Output.Type.Parameters, func(parameter *state.Parameter) (bool, error) {
-		if parameter.In.Kind == state.KindComponent {
-			method, URI := shared.ExtractPath(parameter.In.Name)
-			provider, err := component.components.Registry().LookupProvider(ctx, &contract.Path{
-				URI:    URI,
-				Method: method,
-			})
-
-			if err != nil {
-				return false, err
-			}
-
-			paramComponent, err := provider.Component(ctx)
-			if err != nil {
-				return false, err
-			}
-
-			viewsParameters, err := g.getAllViewsParameters(ctx, NewComponentSchema(component.components, paramComponent, component.schemas), paramComponent.View)
-			if err != nil {
-				return false, err
-			}
-
-			parameters = append(parameters, viewsParameters...)
-		}
-
-		return true, nil
-	}); err != nil {
-		return nil, err
-	}
-
-	responses, err := g.responses(ctx, component)
-	if err != nil {
-		return nil, err
-	}
-
-	operation := &openapi.Operation{
-		Parameters:  dedupe(parameters),
-		RequestBody: body,
-		Responses:   responses,
-	}
-
-	return operation, nil
 }
 
 func dedupe(parameters []*openapi.Parameter) openapi.Parameters {
@@ -407,7 +313,7 @@ func (g *generator) requestBody(ctx context.Context, component *ComponentSchema)
 func (g *generator) responses(ctx context.Context, component *ComponentSchema) (openapi.Responses, error) {
 	method := component.component.Method
 	if method == http.MethodOptions {
-		return nil, nil
+		return openapi.Responses{}, nil
 	}
 
 	responseSchema, err := component.ResponseBody(ctx)
@@ -421,27 +327,27 @@ func (g *generator) responses(ctx context.Context, component *ComponentSchema) (
 	}
 
 	responses := openapi.Responses{}
-	responses[200] = &openapi.Response{
+	openapi.SetResponse(responses, 200, &openapi.Response{
 		Description: stringPtr("Success response"),
 		Content: map[string]*openapi.MediaType{
 			ApplicationJson: {
 				Schema: schema,
 			},
 		},
-	}
+	})
 
 	errorSchema, err := component.GetOrGenerateSchema(ctx, component.ReflectSchema("ErrorResponse", errorType, errorSchemaDescription, component.component.IOConfig()))
 	if err != nil {
 		return nil, err
 	}
 
-	responses["default"] = &openapi.Response{
+	openapi.SetResponse(responses, openapi.ResponseDefault, &openapi.Response{
 		Description: stringPtr("Error response. The view and param may be empty, but one of the message or object should be specified"),
 		Content: map[string]*openapi.MediaType{
 			ApplicationJson: {
 				Schema: errorSchema,
 			},
-		}}
+		}})
 
 	return responses, nil
 }

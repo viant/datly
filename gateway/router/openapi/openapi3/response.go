@@ -3,11 +3,12 @@ package openapi3
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 )
 
 // Responses is specified by OpenAPI/Swagger 3.0 standard.
 type (
-	Responses map[interface{}]*Response
+	Responses map[string]*Response
 
 	// Response is specified by OpenAPI/Swagger 3.0 standard.
 	Response struct {
@@ -19,6 +20,40 @@ type (
 		Links       Links   `json:"links,omitempty" yaml:"links,omitempty"`
 	}
 )
+
+const (
+	ResponseDefault ResponseCode = "default"
+)
+
+type (
+	ResponseCode   string
+	ResponseIntKey string
+
+	ResponseKey interface {
+		~string | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
+	}
+)
+
+func NormalizeResponseCode[T ResponseKey](code T) ResponseCode {
+	return ResponseCode(fmt.Sprintf("%v", code))
+}
+
+func SetResponse[T ResponseKey](r Responses, code T, response *Response) {
+	key := NormalizeResponseCode(code)
+	if key == "" {
+		return
+	}
+	r[string(key)] = response
+}
+
+func GetResponse[T ResponseKey](r Responses, code T) (*Response, bool) {
+	key := NormalizeResponseCode(code)
+	if key == "" {
+		return nil, false
+	}
+	value, ok := r[string(key)]
+	return value, ok
+}
 
 func (r *Response) UnmarshalJSON(b []byte) error {
 	type temp Response
