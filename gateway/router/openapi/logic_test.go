@@ -200,10 +200,33 @@ func TestComponentSchemaHelpers_Table(t *testing.T) {
 		}
 		component.View.GetResource().SetTypes(reg)
 		withTag := componentSchema.SchemaWithTag("F", reflect.TypeOf(struct{ A int }{}), "d", component.IOConfig(), Tag{
+			IsInput:   true,
 			Parameter: &tags.Parameter{DataType: "Alt"},
 		})
 		if withTag.rType != reflect.TypeOf(alt{}) {
 			t.Fatalf("expected datatype override")
+		}
+	})
+
+	t.Run("schema with tag primitive datatype override", func(t *testing.T) {
+		withTag := componentSchema.SchemaWithTag("Jwt", reflect.TypeOf(struct{ A int }{}), "d", component.IOConfig(), Tag{
+			IsInput:   true,
+			Parameter: &tags.Parameter{DataType: "string"},
+		})
+		if withTag.rType != reflect.TypeOf("") {
+			t.Fatalf("expected primitive datatype override to string, got %v", withTag.rType)
+		}
+	})
+
+	t.Run("schema with tag output keeps go type", func(t *testing.T) {
+		goType := reflect.TypeOf(struct{ A int }{})
+		withTag := componentSchema.SchemaWithTag("Out", goType, "d", component.IOConfig(), Tag{
+			Parameter: &tags.Parameter{
+				DataType: "string",
+			},
+		})
+		if withTag.rType != goType {
+			t.Fatalf("expected output kind to keep go type, got %v", withTag.rType)
 		}
 	})
 }

@@ -86,3 +86,9 @@ repository.WithShapePipeline(true)
 ```
 
 Default is disabled to preserve existing behavior.
+
+## Component Contract Parity
+
+Cross-component contract/signature parity target is documented in:
+
+- `compile/COMPONENT_CONTRACT_PARITY.md`

@@ -49,6 +49,24 @@ type (
 	}
 )
 
+func isRequestDerivedInputKind(kind state.Kind) bool {
+	switch kind {
+	case state.KindHeader, state.KindRequestBody, state.KindQuery, state.KindForm:
+		return true
+	default:
+		return false
+	}
+}
+
+func isOpenAPIParameterKind(kind state.Kind) bool {
+	switch kind {
+	case state.KindHeader, state.KindQuery, state.KindForm:
+		return true
+	default:
+		return false
+	}
+}
+
 func (g *generator) GenerateSpec(ctx context.Context, repoComponents *repository.Service, info openapi.Info, providers ...*repository.Provider) (*openapi.OpenAPI, error) {
 	components := &openapi.Components{}
 
@@ -188,6 +206,9 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 	}
 	if param.In.Kind == state.KindParam {
 		baseParam := component.component.LookupParameter(param.In.Name)
+		if baseParam == nil || !isRequestDerivedInputKind(baseParam.In.Kind) {
+			return nil, false, nil
+		}
 		return g.convertParam(ctx, component, baseParam, description)
 	}
 
@@ -207,7 +228,7 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		return result, true, nil
 	}
 
-	if !param.IsHTTPParameter() {
+	if !isOpenAPIParameterKind(param.In.Kind) {
 		return nil, false, nil
 	}
 
@@ -224,16 +245,21 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 	}
 
 	table := ""
+	var parameterTag *tags.Parameter
 	if param.Tag != "" {
-		if datlyTags, _ := tags.Parse(reflect.StructTag(param.Tag), nil, tags.ViewTag); datlyTags != nil && datlyTags.View != nil {
-			table = datlyTags.View.Table
+		if datlyTags, _ := tags.Parse(reflect.StructTag(param.Tag), nil, tags.ViewTag, tags.ParameterTag); datlyTags != nil {
+			parameterTag = datlyTags.Parameter
+			if datlyTags.View != nil {
+				table = datlyTags.View.Table
+			}
 		}
-
 	}
 	schema, err := component.GenerateSchema(ctx, component.SchemaWithTag(param.Name, param.Schema.Type(), "Parameter "+param.Name+" schema", component.component.IOConfig(), Tag{
 		Format:     param.DateFormat,
 		IsNullable: !param.IsRequired(),
 		Table:      table,
+		Parameter:  parameterTag,
+		IsInput:    true,
 	}))
 
 	if err != nil {

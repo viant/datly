@@ -6,10 +6,12 @@ import (
 	"github.com/viant/datly/gateway/router/openapi/openapi3"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/docs"
+	"github.com/viant/xreflect"
 	"reflect"
 	"sync"
 )
@@ -218,9 +220,12 @@ func (c *ComponentSchema) ReflectSchema(name string, rType reflect.Type, descrip
 func (c *ComponentSchema) SchemaWithTag(fieldName string, rType reflect.Type, description string, ioConfig *config.IOConfig, tag Tag) *Schema {
 
 	if parameter := tag.Parameter; parameter != nil {
-		if parameter.DataType != "" {
-			typeLookup := c.component.View.Resource().LookupType()
-			if lType, _ := typeLookup(parameter.DataType); lType != nil {
+		if tag.IsInput && parameter.DataType != "" {
+			var typeLookup xreflect.LookupType
+			if c.component != nil && c.component.View != nil && c.component.View.Resource() != nil {
+				typeLookup = c.component.View.Resource().LookupType()
+			}
+			if lType, _ := types.LookupType(typeLookup, parameter.DataType); lType != nil {
 				rType = lType
 			}
 		}

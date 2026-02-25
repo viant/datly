@@ -35,6 +35,7 @@ type (
 		_tag         format.Tag
 		TypeName     string
 		Parameter    *tags.Parameter
+		IsInput      bool
 		Column       string
 		Table        string
 	}
@@ -78,6 +79,7 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, ro
 		Example:     tag.Get(tags.ExampleTag),
 		JSONName:    jsonName,
 		_tag:        *aTag,
+		IsInput:     isInput,
 	}
 
 	// Keep internal runtime-only fields out of OpenAPI schema.

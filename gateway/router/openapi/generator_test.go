@@ -262,6 +262,54 @@ func TestGeneratorHelpersMore_Table(t *testing.T) {
 		}
 	})
 
+	t.Run("convert param kind whitelist", func(t *testing.T) {
+		testCases := []struct {
+			name       string
+			kind       state.Kind
+			expectKeep bool
+		}{
+			{name: "header", kind: state.KindHeader, expectKeep: true},
+			{name: "query", kind: state.KindQuery, expectKeep: true},
+			{name: "form", kind: state.KindForm, expectKeep: true},
+			{name: "body skipped in parameter list", kind: state.KindRequestBody, expectKeep: false},
+			{name: "path skipped", kind: state.KindPath, expectKeep: false},
+			{name: "cookie skipped", kind: state.KindCookie, expectKeep: false},
+			{name: "state skipped", kind: state.KindState, expectKeep: false},
+		}
+
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				g := &generator{
+					_parametersIndex: map[string]*openapi3.Parameter{},
+					commonParameters: map[string]*openapi3.Parameter{},
+				}
+				comp := newTestComponent(t)
+				comp.View = &view.View{Template: &view.Template{}, Selector: &view.Config{}}
+				cSchema := &ComponentSchema{component: comp, schemas: NewContainer()}
+				param := &state.Parameter{
+					Name:   "ID",
+					In:     &state.Location{Kind: tc.kind, Name: "id"},
+					Schema: state.NewSchema(reflect.TypeOf(1)),
+				}
+
+				converted, ok, err := g.convertParam(context.Background(), cSchema, param, "")
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if ok != tc.expectKeep {
+					t.Fatalf("expected keep=%v, got %v", tc.expectKeep, ok)
+				}
+				if tc.expectKeep && len(converted) != 1 {
+					t.Fatalf("expected one converted parameter, got %d", len(converted))
+				}
+				if !tc.expectKeep && len(converted) != 0 {
+					t.Fatalf("expected no converted parameters, got %d", len(converted))
+				}
+			})
+		}
+	})
+
 	t.Run("convert param object and non-http", func(t *testing.T) {
 		g := &generator{
 			_parametersIndex: map[string]*openapi3.Parameter{},
@@ -708,6 +756,45 @@ func TestGeneratorHelpersMore_Table(t *testing.T) {
 		}
 		if third[0].Ref == "" {
 			t.Fatalf("expected cached nil path to still return ref")
+		}
+	})
+
+	t.Run("convert param kind param skips component reference", func(t *testing.T) {
+		g := &generator{
+			_parametersIndex: map[string]*openapi3.Parameter{},
+			commonParameters: map[string]*openapi3.Parameter{},
+		}
+		comp := newTestComponent(t)
+		comp.View = &view.View{Template: &view.Template{}, Selector: &view.Config{}}
+		base := &state.Parameter{Name: "Auth", In: &state.Location{Kind: state.KindComponent, Name: "GET:/v1/auth"}, Schema: state.NewSchema(reflect.TypeOf(struct{ A int }{}))}
+		comp.Input.Type.Parameters = state.Parameters{base}
+		cSchema := &ComponentSchema{component: comp, schemas: NewContainer()}
+
+		refParam := &state.Parameter{Name: "AuthRef", In: &state.Location{Kind: state.KindParam, Name: "Auth"}, Schema: state.NewSchema(reflect.TypeOf(struct{ A int }{}))}
+		converted, ok, err := g.convertParam(context.Background(), cSchema, refParam, "")
+		if err != nil || ok || len(converted) != 0 {
+			t.Fatalf("expected component kind param reference to be skipped, got ok=%v err=%v len=%d", ok, err, len(converted))
+		}
+	})
+
+	t.Run("convert param kind param body reference skipped from parameters", func(t *testing.T) {
+		g := &generator{
+			_parametersIndex: map[string]*openapi3.Parameter{},
+			commonParameters: map[string]*openapi3.Parameter{},
+		}
+		comp := newTestComponent(t)
+		comp.View = &view.View{Template: &view.Template{}, Selector: &view.Config{}}
+		base := &state.Parameter{Name: "BodyInput", In: &state.Location{Kind: state.KindRequestBody}, Schema: state.NewSchema(reflect.TypeOf(struct{ A int }{}))}
+		comp.Input.Type.Parameters = state.Parameters{base}
+		cSchema := &ComponentSchema{component: comp, schemas: NewContainer()}
+
+		refParam := &state.Parameter{Name: "BodyRef", In: &state.Location{Kind: state.KindParam, Name: "BodyInput"}, Schema: state.NewSchema(reflect.TypeOf(struct{ A int }{}))}
+		converted, ok, err := g.convertParam(context.Background(), cSchema, refParam, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if ok || len(converted) != 0 {
+			t.Fatalf("expected body-derived kind=param to be skipped from parameter list, got ok=%v len=%d", ok, len(converted))
 		}
 	})
 
