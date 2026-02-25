@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,6 +48,13 @@ func TestNormalizeParserSQL_VeltyBlockExpression(t *testing.T) {
 	actual := normalizeParserSQL(input)
 	assert.NotContains(t, actual, "${predicate.Builder()")
 	assert.Contains(t, actual, "SELECT b.* FROM CI_BROWSER b  WHERE 1  AND b.ARCHIVED = 0")
+}
+
+func TestNormalizeParserSQL_PrivateShorthand(t *testing.T) {
+	input := `SELECT private(audience.FREQ_CAPPING) AS freq_capping FROM CI_AUDIENCE audience`
+	actual := normalizeParserSQL(input)
+	assert.NotContains(t, strings.ToLower(actual), "private(")
+	assert.Contains(t, actual, "SELECT audience.FREQ_CAPPING AS freq_capping FROM CI_AUDIENCE audience")
 }
 
 func TestNeedsFallbackParse(t *testing.T) {

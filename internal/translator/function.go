@@ -12,6 +12,8 @@ import (
 	"strings"
 )
 
+const privateColumnTag = `internal:"true" json:"-"`
+
 // TODO introduce function abstraction for datly -h list funciton, with validation signtaure description
 func (n *Viewlets) applySettingFunctions(column *sqlparser.Column, namespace string) (bool, error) {
 	funcName, funcArgs := extractFunction(column)
@@ -54,16 +56,15 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column, namespace str
 		if dest != nil {
 			switch strings.ToLower(funcName) {
 			case "tag":
-				if column.Name == column.Namespace && !strings.Contains(column.Expression, column.Name+"."+column.Name) {
-					if dest.View == nil {
-						dest.View = &View{}
-					}
-					dest.View.Tag = strings.Trim(column.Tag, "'")
-					return true, nil
+				if err := applyColumnTagSetting(dest, column); err != nil {
+					return false, err
 				}
-				columnConfig := dest.columnConfig(column.Name)
-				column.Tag = strings.Trim(strings.TrimSpace(column.Tag), "'")
-				columnConfig.Tag = &column.Tag
+				return true, nil
+			case "private":
+				column.Tag = privateColumnTag
+				if err := applyColumnTagSetting(dest, column); err != nil {
+					return false, err
+				}
 				return true, nil
 			case "cast":
 				return dest.applyExplicitCast(column, funcArgs)
@@ -99,6 +100,20 @@ func (n *Viewlets) applySettingFunctions(column *sqlparser.Column, namespace str
 		dest.Connector = dest.View.View.Connector.Ref
 	}
 	return true, nil
+}
+
+func applyColumnTagSetting(dest *Viewlet, column *sqlparser.Column) error {
+	if column.Name == column.Namespace && !strings.Contains(column.Expression, column.Name+"."+column.Name) {
+		if dest.View == nil {
+			dest.View = &View{}
+		}
+		dest.View.Tag = strings.Trim(column.Tag, "'")
+		return nil
+	}
+	columnConfig := dest.columnConfig(column.Name)
+	column.Tag = strings.Trim(strings.TrimSpace(column.Tag), "'")
+	columnConfig.Tag = &column.Tag
+	return nil
 }
 
 func (v *Viewlet) applyExplicitCast(column *sqlparser.Column, funcArgs []string) (bool, error) {

@@ -140,7 +140,90 @@ func normalizeParserSQL(sqlText string) string {
 	if sqlText == "" {
 		return sqlText
 	}
-	return replaceTemplateTokens(sqlText)
+	return rewritePrivateShorthand(replaceTemplateTokens(sqlText))
+}
+
+func rewritePrivateShorthand(input string) string {
+	var b strings.Builder
+	b.Grow(len(input))
+	for i := 0; i < len(input); {
+		if !hasPrefixFold(input[i:], "private") {
+			b.WriteByte(input[i])
+			i++
+			continue
+		}
+		if i > 0 && isReadIdentifierPart(input[i-1]) {
+			b.WriteByte(input[i])
+			i++
+			continue
+		}
+		pos := i + len("private")
+		pos = skipReadSpaces(input, pos)
+		if pos >= len(input) || input[pos] != '(' {
+			b.WriteByte(input[i])
+			i++
+			continue
+		}
+		body, closeIdx, ok := readReadCallBody(input, pos)
+		if !ok {
+			b.WriteByte(input[i])
+			i++
+			continue
+		}
+		firstArg, ok := firstCallArg(body)
+		if !ok {
+			b.WriteByte(input[i])
+			i++
+			continue
+		}
+		b.WriteString(strings.TrimSpace(firstArg))
+		i = closeIdx + 1
+	}
+	return b.String()
+}
+
+func hasPrefixFold(s, prefix string) bool {
+	if len(s) < len(prefix) {
+		return false
+	}
+	return strings.EqualFold(s[:len(prefix)], prefix)
+}
+
+func firstCallArg(body string) (string, bool) {
+	depth := 0
+	quote := byte(0)
+	for i := 0; i < len(body); i++ {
+		ch := body[i]
+		if quote != 0 {
+			if ch == '\\' && i+1 < len(body) {
+				i++
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			quote = ch
+			continue
+		}
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				arg := strings.TrimSpace(body[:i])
+				return arg, arg != ""
+			}
+		}
+	}
+	arg := strings.TrimSpace(body)
+	return arg, arg != ""
 }
 
 func inferRootFromRelations(relations []*plan.Relation) string {

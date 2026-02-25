@@ -46,6 +46,7 @@ type (
 		schemas          []*openapi3.Schema
 		index            map[string]int
 		generatedSchemas map[string]*openapi3.Schema
+		visitingTypes    map[string]int
 	}
 )
 
@@ -88,6 +89,7 @@ func NewContainer() *SchemaContainer {
 	return &SchemaContainer{
 		index:            map[string]int{},
 		generatedSchemas: map[string]*openapi3.Schema{},
+		visitingTypes:    map[string]int{},
 	}
 }
 

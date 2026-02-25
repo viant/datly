@@ -29,6 +29,20 @@ type testUnsupported chan int
 
 func (testUnsupported) Kind() string { return "unsupported" }
 
+type recursiveAnimal interface {
+	Kind() string
+}
+
+type recursiveDog struct {
+	Child recursiveAnimal `json:"child,omitempty"`
+}
+
+func (recursiveDog) Kind() string { return "dog" }
+
+type RecursiveEmbed struct {
+	*RecursiveEmbed
+}
+
 func TestSchemaBuildHelpers_Table(t *testing.T) {
 	t.Run("apply schema example", func(t *testing.T) {
 		dst := &openapi3.Schema{}
@@ -336,5 +350,60 @@ func TestSchemaBuildHelpers_Table(t *testing.T) {
 				t.Fatalf("expected empty ref name for trailing slash")
 			}
 		})
+	})
+
+	t.Run("recursive polymorphic graph does not loop", func(t *testing.T) {
+		t.Setenv("DATLY_OPENAPI_POLY_STRICT", "false")
+		component := newTestComponent(t)
+		types := xreflect.NewTypes()
+		if err := types.Register("RecursiveAnimal", xreflect.WithPackage("test"), xreflect.WithReflectType(reflect.TypeOf((*recursiveAnimal)(nil)).Elem())); err != nil {
+			t.Fatalf("register interface failed: %v", err)
+		}
+		if err := types.Register("RecursiveDog", xreflect.WithPackage("test"), xreflect.WithReflectType(reflect.TypeOf(recursiveDog{}))); err != nil {
+			t.Fatalf("register struct failed: %v", err)
+		}
+		setUnexportedField(component, "types", types)
+
+		container := NewContainer()
+		componentSchema := &ComponentSchema{component: component, schemas: container}
+		dst := &openapi3.Schema{}
+		err := container.addToSchema(context.Background(), componentSchema, dst, &Schema{
+			rType:    reflect.TypeOf((*recursiveAnimal)(nil)).Elem(),
+			ioConfig: component.IOConfig(),
+		})
+		if err != nil {
+			t.Fatalf("unexpected addToSchema error: %v", err)
+		}
+		if len(dst.OneOf) == 0 {
+			t.Fatalf("expected oneOf variants for recursive interface")
+		}
+		dog := container.generatedSchemas["RecursiveDog"]
+		if dog == nil {
+			t.Fatalf("expected RecursiveDog schema to be generated")
+		}
+		child := dog.Properties["child"]
+		if child == nil {
+			t.Fatalf("expected recursive child schema")
+		}
+		if child.Ref == "" && len(child.OneOf) == 0 {
+			t.Fatalf("expected recursive child to be represented as ref or oneOf")
+		}
+	})
+
+	t.Run("anonymous self embed does not recurse indefinitely", func(t *testing.T) {
+		component := newTestComponent(t)
+		container := NewContainer()
+		componentSchema := &ComponentSchema{component: component, schemas: container}
+		dst := &openapi3.Schema{}
+		err := container.addToSchema(context.Background(), componentSchema, dst, &Schema{
+			rType:    reflect.TypeOf(RecursiveEmbed{}),
+			ioConfig: component.IOConfig(),
+		})
+		if err != nil {
+			t.Fatalf("unexpected addToSchema error: %v", err)
+		}
+		if dst.Type != objectOutput {
+			t.Fatalf("expected object type for recursive embed, got %q", dst.Type)
+		}
 	})
 }

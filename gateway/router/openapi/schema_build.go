@@ -32,6 +32,19 @@ func (c *SchemaContainer) addToSchema(ctx context.Context, component *ComponentS
 	}
 }
 
+func recursionTypeKey(rType reflect.Type) string {
+	rType = dereferenceType(rType)
+	if rType == nil {
+		return ""
+	}
+	switch rType.Kind() {
+	case reflect.Struct, reflect.Interface, reflect.Slice, reflect.Array, reflect.Map:
+		return rType.PkgPath() + ":" + rType.String()
+	default:
+		return ""
+	}
+}
+
 func (c *SchemaContainer) addArraySchema(ctx context.Context, component *ComponentSchema, dst *openapi3.Schema, schema *Schema, rType reflect.Type) error {
 	itemSchema, err := c.createSchema(ctx, component, schema.SliceItem(rType))
 	if err != nil {
@@ -46,6 +59,15 @@ func (c *SchemaContainer) addStructSchema(ctx context.Context, component *Compon
 	if rType == xreflect.TimeType {
 		addTimeSchema(dst, schema)
 		return nil
+	}
+	if selfKey := recursionTypeKey(rType); selfKey != "" {
+		c.visitingTypes[selfKey]++
+		defer func() {
+			c.visitingTypes[selfKey]--
+			if c.visitingTypes[selfKey] == 0 {
+				delete(c.visitingTypes, selfKey)
+			}
+		}()
 	}
 
 	dst.Type = objectOutput
@@ -84,6 +106,10 @@ func (c *SchemaContainer) addStructSchema(ctx context.Context, component *Compon
 
 		updatedDocumentation(aTag, component.component.Docs(), fieldSchema)
 		if field.Anonymous {
+			if childKey := recursionTypeKey(fieldSchema.rType); childKey != "" && c.visitingTypes[childKey] > 0 {
+				// Avoid anonymous self/embed loops while preserving named-schema recursion via createSchema.
+				continue
+			}
 			if err := c.addToSchema(ctx, component, dst, fieldSchema); err != nil {
 				return err
 			}
@@ -303,8 +329,16 @@ func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *Com
 		}, nil
 	}
 
+	// Mark named schemas as in-progress before generation so recursive graphs
+	// (for example polymorphic self references) resolve to $ref instead of looping.
+	if fieldSchema.tag.TypeName != "" {
+		c.generatedSchemas[fieldSchema.tag.TypeName] = nil
+	}
 	schema, err := componentSchema.GenerateSchema(ctx, fieldSchema)
 	if err != nil {
+		if fieldSchema.tag.TypeName != "" {
+			delete(c.generatedSchemas, fieldSchema.tag.TypeName)
+		}
 		return nil, err
 	}
 
