@@ -80,6 +80,11 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, ro
 		_tag:        *aTag,
 	}
 
+	// Keep internal runtime-only fields out of OpenAPI schema.
+	if tag.Get("internal") == "true" {
+		ret.Ignore = true
+	}
+
 	if tags, _ := tags.Parse(tag, nil, tags.ParameterTag); tags != nil {
 		ret.Parameter = tags.Parameter
 		if parameter := ret.Parameter; parameter != nil && parameter.Kind != "" {
