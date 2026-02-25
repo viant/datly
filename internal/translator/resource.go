@@ -32,18 +32,29 @@ import (
 )
 
 var (
-	routeSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$route\s*\(([^)]*)\)\s*\)\s*$`)
-	marshalSettingsLineExpr    = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$marshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
-	unmarshalSettingsLineExpr  = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$unmarshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
-	formatSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
-	dateFormatSettingsLineExpr = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$date_format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
-	caseFormatSettingsLineExpr = regexp.MustCompile(`(?im)^\s*#settings\s*\(\s*\$_\s*=\s*\$case_format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	routeSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$route\s*\(([^)]*)\)\s*\)\s*$`)
+	packageLineExpr            = regexp.MustCompile(`(?im)^\s*#package\s*\(\s*['"]([^'"]+)['"]\s*\)\s*$`)
+	hashImportLineExpr         = regexp.MustCompile(`(?im)^\s*#import\s*\(([^)]*)\)\s*$`)
+	connectorSettingsLineExpr  = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$connector\s*\(([^)]*)\)\s*\)\s*$`)
+	handlerSettingsLineExpr    = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$handler\s*\(([^)]*)\)\s*\)\s*$`)
+	inputSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$input\s*\(([^)]*)\)\s*\)\s*$`)
+	outputSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$output\s*\(([^)]*)\)\s*\)\s*$`)
+	marshalSettingsLineExpr    = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$marshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	unmarshalSettingsLineExpr  = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$unmarshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	formatSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	dateFormatSettingsLineExpr = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$date_format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	caseFormatSettingsLineExpr = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$case_format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
 	quotedArgExpr              = regexp.MustCompile(`['"]([^'"]*)['"]`)
 )
 
 type routeSettingsDirective struct {
 	URI               string
 	Methods           []string
+	Package           string
+	Connector         string
+	HandlerType       string
+	InputType         string
+	OutputType        string
 	JSONMarshalType   string
 	JSONUnmarshalType string
 	XMLUnmarshalType  string
@@ -168,6 +179,7 @@ func (r *Resource) ensureRegistry() *xreflect.Types {
 }
 
 func (r *Resource) parseImports(ctx context.Context, dSQL *string) (err error) {
+	*dSQL = removeHashImportDirectives(*dSQL)
 	if r.Rule.TypeSrc != nil {
 		if err = r.loadImportTypes(ctx, r.Rule.TypeSrc); err != nil {
 			return err
@@ -441,14 +453,29 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 		if len(directive.Methods) > 0 {
 			r.Rule.Method = strings.Join(directive.Methods, ",")
 		}
+		if directive.Package != "" {
+			r.Rule.Package = directive.Package
+		}
+		if directive.Connector != "" {
+			r.Rule.Connector = directive.Connector
+		}
+		if directive.HandlerType != "" {
+			r.Rule.Type = qualifyTypeWithPackage(directive.HandlerType, r.Rule.Package)
+		}
+		if directive.InputType != "" {
+			r.Rule.InputType = qualifyTypeWithPackage(directive.InputType, r.Rule.Package)
+		}
+		if directive.OutputType != "" {
+			r.Rule.OutputType = qualifyTypeWithPackage(directive.OutputType, r.Rule.Package)
+		}
 		if directive.JSONMarshalType != "" {
-			r.Rule.JSONMarshalType = directive.JSONMarshalType
+			r.Rule.JSONMarshalType = qualifyTypeWithPackage(directive.JSONMarshalType, r.Rule.Package)
 		}
 		if directive.JSONUnmarshalType != "" {
-			r.Rule.JSONUnmarshalType = directive.JSONUnmarshalType
+			r.Rule.JSONUnmarshalType = qualifyTypeWithPackage(directive.JSONUnmarshalType, r.Rule.Package)
 		}
 		if directive.XMLUnmarshalType != "" {
-			r.Rule.XMLUnmarshalType = directive.XMLUnmarshalType
+			r.Rule.XMLUnmarshalType = qualifyTypeWithPackage(directive.XMLUnmarshalType, r.Rule.Package)
 		}
 		if directive.Format != "" {
 			r.Rule.DataFormat = directive.Format
@@ -472,7 +499,16 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 func parseSettingsDirectives(dSQL string) (*routeSettingsDirective, bool, error) {
 	ret := &routeSettingsDirective{}
 	var found bool
-	matches := routeSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	matches := packageLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		if len(last) < 2 || strings.TrimSpace(last[1]) == "" {
+			return nil, false, fmt.Errorf("invalid #package directive")
+		}
+		ret.Package = strings.TrimSpace(last[1])
+	}
+	matches = routeSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
 	if len(matches) > 0 {
 		found = true
 		last := matches[len(matches)-1]
@@ -493,6 +529,50 @@ func parseSettingsDirectives(dSQL string) (*routeSettingsDirective, bool, error)
 		}
 		ret.URI = URI
 		ret.Methods = methods
+	}
+
+	matches = connectorSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		value := parseSingleArg(last)
+		if value == "" {
+			return nil, false, fmt.Errorf("invalid $connector directive")
+		}
+		ret.Connector = value
+	}
+
+	matches = handlerSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		value := parseSingleArg(last)
+		if value == "" {
+			return nil, false, fmt.Errorf("invalid $handler directive")
+		}
+		ret.HandlerType = value
+	}
+
+	matches = inputSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		value := parseSingleArg(last)
+		if value == "" {
+			return nil, false, fmt.Errorf("invalid $input directive")
+		}
+		ret.InputType = value
+	}
+
+	matches = outputSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		value := parseSingleArg(last)
+		if value == "" {
+			return nil, false, fmt.Errorf("invalid $output directive")
+		}
+		ret.OutputType = value
 	}
 
 	matches = marshalSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
@@ -592,6 +672,15 @@ func parseQuotedArgs(input string) []string {
 	return result
 }
 
+func parseSingleArg(match []string) string {
+	if len(match) < 2 {
+		return ""
+	}
+	value := strings.TrimSpace(match[1])
+	value = strings.Trim(value, `"'`)
+	return strings.TrimSpace(value)
+}
+
 func normalizeRouteMethods(input []string) ([]string, error) {
 	if len(input) == 0 {
 		return nil, nil
@@ -627,13 +716,53 @@ func normalizeRouteMethods(input []string) ([]string, error) {
 }
 
 func removeSettingsDirectives(dSQL string) string {
+	dSQL = packageLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = routeSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = connectorSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = handlerSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = inputSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = outputSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = marshalSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = unmarshalSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = formatSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = dateFormatSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = caseFormatSettingsLineExpr.ReplaceAllString(dSQL, "")
 	return dSQL
+}
+
+func removeHashImportDirectives(dSQL string) string {
+	return hashImportLineExpr.ReplaceAllString(dSQL, "")
+}
+
+func qualifyTypeWithPackage(typeName, pkg string) string {
+	typeName = strings.TrimSpace(typeName)
+	pkg = strings.TrimSpace(pkg)
+	if typeName == "" || pkg == "" {
+		return typeName
+	}
+
+	prefix := ""
+	base := typeName
+	for {
+		switch {
+		case strings.HasPrefix(base, "[]"):
+			prefix += "[]"
+			base = strings.TrimPrefix(base, "[]")
+		case strings.HasPrefix(base, "*"):
+			prefix += "*"
+			base = strings.TrimPrefix(base, "*")
+		default:
+			goto done
+		}
+	}
+done:
+	if base == "" {
+		return typeName
+	}
+	if strings.Contains(base, ".") || strings.Contains(base, "/") || strings.Contains(base, "[") {
+		return typeName
+	}
+	return prefix + pkg + "." + base
 }
 
 func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {

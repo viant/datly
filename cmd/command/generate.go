@@ -174,6 +174,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 			if compErr != nil {
 				return compErr
 			}
+			applyDefaultComponentPackage(aComponent, translate.Rule.ModulePrefix)
 			_, sourceName := path.Split(url.Path(source))
 			sourceName = trimExt(sourceName)
 			var embeds = map[string]string{}
@@ -212,6 +213,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		if err != nil {
 			return err
 		}
+		applyDefaultComponentPackage(aComponent, modulePrefix)
 		var embeds = map[string]string{}
 		var namedResources []string
 
@@ -233,6 +235,24 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 
 	}
 	return nil
+}
+
+func applyDefaultComponentPackage(component *repository.Component, modulePrefix string) {
+	if component == nil {
+		return
+	}
+	if component.Output.Type.Package != "" || component.Input.Type.Package != "" {
+		return
+	}
+	modulePrefix = strings.Trim(modulePrefix, "/")
+	if modulePrefix == "" {
+		return
+	}
+	base := path.Base(modulePrefix)
+	if base == "" || base == "." || base == "/" {
+		return
+	}
+	component.Output.Type.Package = strings.ReplaceAll(base, "-", "_")
 }
 
 func (s *Service) persistEmbeds(ctx context.Context, moduleLocation string, modulePrefix string, embeds map[string]string, component *repository.Component) error {

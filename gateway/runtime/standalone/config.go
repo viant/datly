@@ -90,10 +90,10 @@ func (c *Config) normalizeURLs(baseURL string) {
 	if url.IsRelative(c.DependencyURL) {
 		c.DependencyURL = url.Join(baseURL, c.DependencyURL)
 	}
-	if url.IsRelative(c.JobURL) {
+	if c.JobURL != "" && url.IsRelative(c.JobURL) {
 		c.JobURL = url.Join(baseURL, c.JobURL)
 	}
-	if url.IsRelative(c.FailedJobURL) {
+	if c.FailedJobURL != "" && url.IsRelative(c.FailedJobURL) {
 		c.FailedJobURL = url.Join(baseURL, c.FailedJobURL)
 	}
 }

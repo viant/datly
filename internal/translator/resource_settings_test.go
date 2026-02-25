@@ -55,3 +55,27 @@ func TestResource_extractRuleSetting_InvalidCaseFormatDirective(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported case format")
 }
+
+func TestResource_extractRuleSetting_PackageQualifiesTypes(t *testing.T) {
+	resource := &Resource{Rule: NewRule(), rule: &options.Rule{}}
+	dSQL := "#package('github.vianttech.com/viant/handson/pkg/platform/acl/auth')\n" +
+		"#settings($_ = $handler('Handler'))\n" +
+		"#settings($_ = $input('Input'))\n" +
+		"#settings($_ = $output('Output'))\n" +
+		"#settings($_ = $marshal('application/json','JSONOut'))\n" +
+		"#settings($_ = $unmarshal('application/json','JSONIn'))\n" +
+		"SELECT 1"
+
+	err := resource.extractRuleSetting(&dSQL)
+	require.NoError(t, err)
+	assert.Equal(t, "github.vianttech.com/viant/handson/pkg/platform/acl/auth", resource.Rule.Package)
+	assert.Equal(t, "github.vianttech.com/viant/handson/pkg/platform/acl/auth.Handler", resource.Rule.Type)
+	assert.Equal(t, "github.vianttech.com/viant/handson/pkg/platform/acl/auth.Input", resource.Rule.InputType)
+	assert.Equal(t, "github.vianttech.com/viant/handson/pkg/platform/acl/auth.Output", resource.Rule.OutputType)
+	assert.Equal(t, "github.vianttech.com/viant/handson/pkg/platform/acl/auth.JSONOut", resource.Rule.JSONMarshalType)
+	assert.Equal(t, "github.vianttech.com/viant/handson/pkg/platform/acl/auth.JSONIn", resource.Rule.JSONUnmarshalType)
+	assert.NotContains(t, dSQL, "#package(")
+	assert.NotContains(t, dSQL, "$handler(")
+	assert.NotContains(t, dSQL, "$input(")
+	assert.NotContains(t, dSQL, "$output(")
+}
