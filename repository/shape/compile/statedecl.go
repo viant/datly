@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/repository/shape/plan"
+	"github.com/viant/parsly"
 )
 
 func appendDeclaredStates(rawDQL string, result *plan.Result) {
@@ -29,6 +30,10 @@ func appendDeclaredStates(rawDQL string, result *plan.Result) {
 			Name: holder,
 			Kind: kind,
 			In:   location,
+		}
+		if inType, outType := parseSetDeclarationTypes(block.Body); inType != "" || outType != "" {
+			state.DataType = inType
+			state.OutputDataType = outType
 		}
 		switch strings.ToLower(kind) {
 		case "query":
@@ -98,6 +103,21 @@ func applyDeclaredStateOptions(state *plan.State, tail string) {
 			if len(args) == 1 {
 				state.DataType = trimQuote(args[0])
 			}
+		case strings.EqualFold(name, "WithCodec"):
+			if len(args) >= 1 {
+				state.Codec = trimQuote(args[0])
+				state.CodecArgs = append([]string{}, trimQuotedArgs(args[1:])...)
+			}
+		case strings.EqualFold(name, "WithStatusCode"):
+			if len(args) == 1 {
+				if value, err := strconv.Atoi(strings.TrimSpace(trimQuote(args[0]))); err == nil {
+					state.ErrorCode = value
+				}
+			}
+		case strings.EqualFold(name, "WithErrorMessage"):
+			if len(args) == 1 {
+				state.ErrorMessage = trimQuote(args[0])
+			}
 		case strings.EqualFold(name, "Value"):
 			if len(args) == 1 {
 				state.Value = trimQuote(args[0])
@@ -106,6 +126,56 @@ func applyDeclaredStateOptions(state *plan.State, tail string) {
 			state.Async = true
 		}
 	}
+}
+
+func parseSetDeclarationTypes(body string) (string, string) {
+	cursor := parsly.NewCursor("", []byte(body), 0)
+	if cursor.MatchAfterOptional(vdWhitespaceMatcher, vdParamDeclMatcher).Code != vdParamDeclToken {
+		return "", ""
+	}
+	if _, matched := readIdentifier(cursor); !matched {
+		return "", ""
+	}
+	_ = cursor.MatchOne(vdWhitespaceMatcher)
+	matchedType := cursor.MatchOne(vdTypeMatcher)
+	if matchedType.Code != vdTypeToken {
+		return "", ""
+	}
+	typeExpr := strings.TrimSpace(matchedType.Text(cursor))
+	if len(typeExpr) < 2 {
+		return "", ""
+	}
+	typeExpr = strings.TrimSpace(typeExpr[1 : len(typeExpr)-1])
+	if typeExpr == "" {
+		return "", ""
+	}
+	args := splitArgs(typeExpr)
+	if len(args) == 0 {
+		return "", ""
+	}
+	inputType := strings.TrimSpace(trimQuote(args[0]))
+	outputType := ""
+	if len(args) > 1 {
+		outputType = strings.TrimSpace(trimQuote(args[1]))
+	}
+	if inputType == "?" {
+		inputType = ""
+	}
+	if outputType == "?" {
+		outputType = ""
+	}
+	return inputType, outputType
+}
+
+func trimQuotedArgs(input []string) []string {
+	if len(input) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(input))
+	for _, item := range input {
+		result = append(result, trimQuote(item))
+	}
+	return result
 }
 
 func appendStatePredicate(state *plan.State, args []string, ensure bool) {

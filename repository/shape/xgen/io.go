@@ -146,20 +146,6 @@ func fileExists(path string) (bool, error) {
 	return false, err
 }
 
-func isWithinProject(projectDir, candidate string) (bool, error) {
-	projectDir = filepath.Clean(projectDir)
-	candidate = filepath.Clean(candidate)
-	rel, err := filepath.Rel(projectDir, candidate)
-	if err != nil {
-		return false, err
-	}
-	if rel == "." {
-		return true, nil
-	}
-	rel = filepath.ToSlash(rel)
-	return !strings.HasPrefix(rel, "../"), nil
-}
-
 func mergeGeneratedShapes(dest string, generated []byte, typeNames []string) ([]byte, error) {
 	existing, err := os.ReadFile(dest)
 	if err != nil {

@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	dqldiag "github.com/viant/datly/repository/shape/dql/diag"
@@ -13,8 +12,6 @@ import (
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 )
-
-var joinSelectorEqExpr = regexp.MustCompile(`(?i)([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)`)
 
 func ExtractJoinRelations(raw string, queryNode *query.Select) ([]*plan.Relation, []*dqlshape.Diagnostic) {
 	if queryNode == nil || len(queryNode.Joins) == 0 {
@@ -110,19 +107,83 @@ func collectJoinPairsFromRaw(input string) []joinPair {
 	if input == "" {
 		return nil
 	}
-	var result []joinPair
-	for _, m := range joinSelectorEqExpr.FindAllStringSubmatch(input, -1) {
-		if len(m) < 5 {
+	var (
+		result []joinPair
+		i      int
+	)
+	for i < len(input) {
+		left, next, ok := parseRelationSelector(input, i)
+		if !ok {
+			i++
 			continue
 		}
-		left := strings.TrimSpace(m[1] + "." + m[2])
-		right := strings.TrimSpace(m[3] + "." + m[4])
-		if left == "" || right == "" {
+		j := skipRelationSpaces(input, next)
+		if j >= len(input) || input[j] != '=' {
+			i = next
+			continue
+		}
+		right, end, ok := parseRelationSelector(input, j+1)
+		if !ok {
+			i = j + 1
+			continue
+		}
+		if strings.TrimSpace(left) == "" || strings.TrimSpace(right) == "" {
+			i = end
 			continue
 		}
 		result = append(result, joinPair{left: left, right: right})
+		i = end
 	}
 	return result
+}
+
+func parseRelationSelector(input string, start int) (string, int, bool) {
+	i := skipRelationSpaces(input, start)
+	nsStart := i
+	if nsStart >= len(input) || !isRelationIdentifierStart(input[nsStart]) {
+		return "", start, false
+	}
+	i++
+	for i < len(input) && isRelationIdentifierPart(input[i]) {
+		i++
+	}
+	ns := input[nsStart:i]
+	i = skipRelationSpaces(input, i)
+	if i >= len(input) || input[i] != '.' {
+		return "", start, false
+	}
+	i++
+	i = skipRelationSpaces(input, i)
+	colStart := i
+	if colStart >= len(input) || !isRelationIdentifierStart(input[colStart]) {
+		return "", start, false
+	}
+	i++
+	for i < len(input) && isRelationIdentifierPart(input[i]) {
+		i++
+	}
+	col := input[colStart:i]
+	return strings.TrimSpace(ns) + "." + strings.TrimSpace(col), i, true
+}
+
+func skipRelationSpaces(input string, index int) int {
+	for index < len(input) {
+		switch input[index] {
+		case ' ', '\t', '\n', '\r':
+			index++
+		default:
+			return index
+		}
+	}
+	return index
+}
+
+func isRelationIdentifierStart(ch byte) bool {
+	return ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+}
+
+func isRelationIdentifierPart(ch byte) bool {
+	return isRelationIdentifierStart(ch) || (ch >= '0' && ch <= '9')
 }
 
 func shouldFallbackToRawJoinPairs(input string) bool {

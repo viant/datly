@@ -3,14 +3,11 @@ package pipeline
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 	"strings"
 
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 )
-
-var nonWord = regexp.MustCompile(`[^a-zA-Z0-9_]+`)
 
 func InferRoot(queryNode *query.Select, fallback string) (string, string, error) {
 	name := SanitizeName(fallback)
@@ -173,7 +170,7 @@ func SanitizeName(value string) string {
 	if value == strings.ToUpper(value) {
 		value = strings.ToLower(value)
 	}
-	value = nonWord.ReplaceAllString(value, "_")
+	value = replaceNonWordWithUnderscore(value)
 	value = strings.Trim(value, "_")
 	if value == "" {
 		return ""
@@ -185,7 +182,7 @@ func SanitizeName(value string) string {
 }
 
 func ExportedName(value string) string {
-	value = nonWord.ReplaceAllString(strings.TrimSpace(value), "_")
+	value = replaceNonWordWithUnderscore(strings.TrimSpace(value))
 	value = strings.Trim(value, "_")
 	if value == "" {
 		return ""
@@ -205,6 +202,29 @@ func ExportedName(value string) string {
 		name = "N" + name
 	}
 	return name
+}
+
+func replaceNonWordWithUnderscore(value string) string {
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(value))
+	lastUnderscore := false
+	for i := 0; i < len(value); i++ {
+		ch := value[i]
+		isWord := ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')
+		if isWord {
+			b.WriteByte(ch)
+			lastUnderscore = false
+			continue
+		}
+		if !lastUnderscore {
+			b.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	return b.String()
 }
 
 func parseColumnType(dataType string) reflect.Type {

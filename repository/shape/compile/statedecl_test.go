@@ -11,6 +11,7 @@ import (
 func TestAppendDeclaredStates(t *testing.T) {
 	dql := `
 #set($_ = $Jwt<string>(header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
+#set($_ = $Claims<string,*JwtClaims>(header/Authorization).WithCodec(JwtClaim))
 #set($_ = $Name<string>(query/name).WithPredicate(0,'contains','sl','NAME').Optional())
 #set($_ = $Fields<[]string>(query/fields).QuerySelector(site_list))
 #set($_ = $Meta<?>(output/summary))
@@ -27,8 +28,15 @@ SELECT id FROM SITE_LIST sl`
 	}
 	require.NotNil(t, byName["Jwt"])
 	assert.Equal(t, "header", byName["Jwt"].Kind)
+	assert.Equal(t, "string", byName["Jwt"].DataType)
+	assert.Equal(t, "JwtClaim", byName["Jwt"].Codec)
+	assert.Equal(t, 401, byName["Jwt"].ErrorCode)
 	require.NotNil(t, byName["Jwt"].Required)
 	assert.True(t, *byName["Jwt"].Required)
+
+	require.NotNil(t, byName["Claims"])
+	assert.Equal(t, "string", byName["Claims"].DataType)
+	assert.Equal(t, "*JwtClaims", byName["Claims"].OutputDataType)
 
 	require.NotNil(t, byName["Name"])
 	assert.Equal(t, "query", byName["Name"].Kind)

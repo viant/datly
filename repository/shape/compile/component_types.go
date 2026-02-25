@@ -204,10 +204,6 @@ func (c *componentCollector) collect(namespace string, span dqlshape.Span, requi
 	return outputType, true
 }
 
-func sourceRoots(sourcePath string) (platformRoot, routesRoot, dqlRoot string, ok bool) {
-	return sourceRootsWithLayout(sourcePath, defaultCompilePathLayout())
-}
-
 func sourceRootsWithLayout(sourcePath string, layout compilePathLayout) (platformRoot, routesRoot, dqlRoot string, ok bool) {
 	path := filepath.Clean(strings.TrimSpace(sourcePath))
 	if path == "" {
@@ -357,11 +353,6 @@ type routePayload struct {
 			} `yaml:"Type"`
 		} `yaml:"Output"`
 	} `yaml:"Routes"`
-}
-
-func loadRoutePayload(routesRoot, namespace string) (*routePayload, bool) {
-	lookup := readRoutePayload(routesRoot, namespace)
-	return lookup.payload, lookup.found
 }
 
 func readRoutePayload(routesRoot, namespace string) routePayloadLookup {

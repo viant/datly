@@ -2,20 +2,11 @@ package pipeline
 
 import (
 	"reflect"
-	"regexp"
 	"strings"
 
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/plan"
 	"github.com/viant/sqlparser/query"
-)
-
-var (
-	criteriaBindingExpr = regexp.MustCompile(`(?i)\$criteria\.AppendBinding\([^)]*\)`)
-	selectorExpr        = regexp.MustCompile(`\$\{?([a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*)\}?`)
-	veltyExpr           = regexp.MustCompile(`\$\{[^}]+\}`)
-	fromTableSimpleExpr = regexp.MustCompile(`(?is)\bfrom\s+([a-zA-Z_][a-zA-Z0-9_$.]*)(?:\s+(?:as\s+)?([a-zA-Z_][a-zA-Z0-9_]*))?`)
-	braceExpr           = regexp.MustCompile(`[{}]`)
 )
 
 func BuildRead(sourceName, sqlText string) (*plan.View, []*dqlshape.Diagnostic, error) {
@@ -117,8 +108,7 @@ func inferLooseRoot(sourceName, sqlText string) (string, string) {
 	if name == "" {
 		name = "DQLView"
 	}
-	if matches := fromTableSimpleExpr.FindStringSubmatch(sqlText); len(matches) > 1 {
-		table := strings.Trim(matches[1], "`\"")
+	if table := extractSimpleFromTable(sqlText); table != "" {
 		return name, table
 	}
 	return name, name
@@ -150,34 +140,7 @@ func normalizeParserSQL(sqlText string) string {
 	if sqlText == "" {
 		return sqlText
 	}
-	normalized := criteriaBindingExpr.ReplaceAllString(sqlText, "1")
-	normalized = veltyExpr.ReplaceAllStringFunc(normalized, func(match string) string {
-		if strings.Contains(match, "sql.Insert") || strings.Contains(match, "sql.Update") || strings.Contains(match, "Nop") {
-			return match
-		}
-		lower := strings.ToLower(match)
-		if strings.Contains(lower, `build("where")`) || strings.Contains(lower, "build('where')") {
-			return " WHERE 1 "
-		}
-		if strings.Contains(lower, `build("and")`) || strings.Contains(lower, "build('and')") {
-			return " AND 1 "
-		}
-		return "1"
-	})
-	normalized = selectorExpr.ReplaceAllStringFunc(normalized, func(match string) string {
-		lower := match
-		if len(match) > 0 && match[0] == '$' {
-			lower = match[1:]
-		}
-		lower = braceExpr.ReplaceAllString(lower, "")
-		switch lower {
-		case "sql.Insert", "sql.Update", "Nop":
-			return match
-		default:
-			return "1"
-		}
-	})
-	return normalized
+	return replaceTemplateTokens(sqlText)
 }
 
 func inferRootFromRelations(relations []*plan.Relation) string {
@@ -196,4 +159,197 @@ func inferRootFromRelations(relations []*plan.Relation) string {
 		}
 	}
 	return ""
+}
+
+func extractSimpleFromTable(sqlText string) string {
+	lower := strings.ToLower(sqlText)
+	for i := 0; i+4 <= len(lower); i++ {
+		if lower[i] != 'f' || !strings.HasPrefix(lower[i:], "from") {
+			continue
+		}
+		if i > 0 && isReadIdentifierPart(lower[i-1]) {
+			continue
+		}
+		j := skipReadSpaces(sqlText, i+4)
+		start := j
+		if start >= len(sqlText) || !isReadIdentifierStart(sqlText[start]) {
+			continue
+		}
+		j++
+		for j < len(sqlText) && (isReadIdentifierPart(sqlText[j]) || sqlText[j] == '.' || sqlText[j] == '$') {
+			j++
+		}
+		if start < j {
+			return strings.Trim(sqlText[start:j], "`\"")
+		}
+	}
+	return ""
+}
+
+func replaceTemplateTokens(input string) string {
+	var b strings.Builder
+	b.Grow(len(input))
+	for i := 0; i < len(input); {
+		if input[i] != '$' {
+			b.WriteByte(input[i])
+			i++
+			continue
+		}
+		if i+1 < len(input) && input[i+1] == '{' {
+			body, end, ok := readReadTemplateExpr(input, i+1)
+			if !ok {
+				b.WriteByte(input[i])
+				i++
+				continue
+			}
+			replacement, keep := normalizeTemplateExprBody(body)
+			if keep {
+				b.WriteString(input[i : end+1])
+			} else {
+				b.WriteString(replacement)
+			}
+			i = end + 1
+			continue
+		}
+		token, end, ok := readReadSelector(input, i)
+		if !ok {
+			b.WriteByte(input[i])
+			i++
+			continue
+		}
+		if strings.EqualFold(token, "$criteria.AppendBinding") {
+			pos := skipReadSpaces(input, end)
+			if pos < len(input) && input[pos] == '(' {
+				_, close, ok := readReadCallBody(input, pos)
+				if ok {
+					b.WriteByte('1')
+					i = close + 1
+					continue
+				}
+			}
+		}
+		if isReadReservedToken(token) {
+			b.WriteString(token)
+		} else {
+			b.WriteByte('1')
+		}
+		i = end
+	}
+	return b.String()
+}
+
+func normalizeTemplateExprBody(body string) (string, bool) {
+	trimmed := strings.TrimSpace(body)
+	if isReadReservedName(trimmed) {
+		return "", true
+	}
+	lower := strings.ToLower(trimmed)
+	if strings.Contains(lower, `build("where")`) || strings.Contains(lower, "build('where')") {
+		return " WHERE 1 ", false
+	}
+	if strings.Contains(lower, `build("and")`) || strings.Contains(lower, "build('and')") {
+		return " AND 1 ", false
+	}
+	return "1", false
+}
+
+func readReadTemplateExpr(input string, openBrace int) (string, int, bool) {
+	if openBrace <= 0 || openBrace >= len(input) || input[openBrace] != '{' || input[openBrace-1] != '$' {
+		return "", -1, false
+	}
+	for i := openBrace + 1; i < len(input); i++ {
+		if input[i] == '}' {
+			return input[openBrace+1 : i], i, true
+		}
+	}
+	return "", -1, false
+}
+
+func readReadSelector(input string, start int) (string, int, bool) {
+	if start < 0 || start >= len(input) || input[start] != '$' {
+		return "", start, false
+	}
+	i := start + 1
+	if i >= len(input) || !isReadIdentifierStart(input[i]) {
+		return "", start, false
+	}
+	i++
+	for i < len(input) && isReadIdentifierPart(input[i]) {
+		i++
+	}
+	for i < len(input) && input[i] == '.' {
+		i++
+		if i >= len(input) || !isReadIdentifierStart(input[i]) {
+			return "", start, false
+		}
+		i++
+		for i < len(input) && isReadIdentifierPart(input[i]) {
+			i++
+		}
+	}
+	return input[start:i], i, true
+}
+
+func readReadCallBody(input string, openParen int) (string, int, bool) {
+	depth := 0
+	quote := byte(0)
+	for i := openParen; i < len(input); i++ {
+		ch := input[i]
+		if quote != 0 {
+			if ch == '\\' && i+1 < len(input) {
+				i++
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			quote = ch
+			continue
+		}
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			depth--
+			if depth == 0 {
+				return input[openParen+1 : i], i, true
+			}
+		}
+	}
+	return "", -1, false
+}
+
+func isReadReservedToken(token string) bool {
+	if len(token) > 0 && token[0] == '$' {
+		token = token[1:]
+	}
+	return isReadReservedName(token)
+}
+
+func isReadReservedName(name string) bool {
+	return name == "sql.Insert" || name == "sql.Update" || name == "Nop"
+}
+
+func skipReadSpaces(input string, index int) int {
+	for index < len(input) {
+		switch input[index] {
+		case ' ', '\t', '\n', '\r':
+			index++
+		default:
+			return index
+		}
+	}
+	return index
+}
+
+func isReadIdentifierStart(ch byte) bool {
+	return ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+}
+
+func isReadIdentifierPart(ch byte) bool {
+	return isReadIdentifierStart(ch) || (ch >= '0' && ch <= '9')
 }

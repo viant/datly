@@ -1,19 +1,12 @@
 package preprocess
 
 import (
-	"regexp"
 	"strings"
 
 	dqlopt "github.com/viant/datly/repository/shape/dql/optimize"
 	dqlsanitize "github.com/viant/datly/repository/shape/dql/sanitize"
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/typectx"
-)
-
-var (
-	decoratorLine   = regexp.MustCompile(`(?i)^\s*(use_connector|allow_nulls?)\s*\([^)]*\)\s*,?\s*$`)
-	commaBeforeFrom = regexp.MustCompile(`(?i),\s*(\r?\n\s*from\b)`)
-	doubleCommaExpr = regexp.MustCompile(`,\s*,`)
 )
 
 type Result struct {
@@ -61,15 +54,48 @@ func stripDecorators(sql string) string {
 	lines := strings.Split(sql, "\n")
 	filtered := make([]string, 0, len(lines))
 	for _, line := range lines {
-		if decoratorLine.MatchString(strings.TrimSpace(line)) {
+		if isStandaloneDecoratorLine(line) {
 			continue
 		}
 		filtered = append(filtered, line)
 	}
-	joined := strings.Join(filtered, "\n")
-	joined = doubleCommaExpr.ReplaceAllString(joined, ",")
-	joined = commaBeforeFrom.ReplaceAllString(joined, "$1")
-	return joined
+	return cleanupLineCommaArtifacts(filtered)
+}
+
+func isStandaloneDecoratorLine(line string) bool {
+	trimmed := strings.TrimSpace(strings.TrimSuffix(line, ","))
+	if trimmed == "" {
+		return false
+	}
+	open := strings.Index(trimmed, "(")
+	close := strings.LastIndex(trimmed, ")")
+	if open <= 0 || close <= open {
+		return false
+	}
+	name := strings.ToLower(strings.TrimSpace(trimmed[:open]))
+	switch name {
+	case "use_connector", "allow_nulls", "allownulls", "tag", "cast", "required", "cardinality", "set_limit":
+		return true
+	default:
+		return false
+	}
+}
+
+func cleanupLineCommaArtifacts(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	result := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if len(result) > 0 && strings.HasPrefix(strings.ToLower(trimmed), "from ") {
+			prev := strings.TrimRight(result[len(result)-1], " \t")
+			prev = strings.TrimSuffix(prev, ",")
+			result[len(result)-1] = prev
+		}
+		result = append(result, line)
+	}
+	return strings.Join(result, "\n")
 }
 
 func normalizeTypeContext(ctx *typectx.Context) *typectx.Context {

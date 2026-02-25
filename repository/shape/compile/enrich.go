@@ -4,22 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/viant/datly/repository/shape"
 	"github.com/viant/datly/repository/shape/compile/pipeline"
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/plan"
-)
-
-var (
-	ruleHeaderExpr  = regexp.MustCompile(`(?s)^\s*/\*\s*(\{.*?\})\s*\*/`)
-	embedExpr       = regexp.MustCompile(`(?is)\$\{\s*embed:\s*([^}]+)\}`)
-	fromTableExpr   = regexp.MustCompile(`(?is)\bfrom\s+([a-zA-Z_$][a-zA-Z0-9_$.{}/]*)`)
-	summaryJoinExpr = regexp.MustCompile(`(?is)\bjoin\s*\((.*?)\)\s*summary\s+on\s+1\s*=\s*1`)
-	joinEmbedExpr   = regexp.MustCompile(`(?is)\bjoin\s*\(\s*\$\{\s*embed:\s*([^}]+)\}\s*\)\s*(?:as\s+)?([a-zA-Z_][a-zA-Z0-9_]*)`)
-	joinBodyExpr    = regexp.MustCompile(`(?is)\bjoin\s*\((.*?)\)\s*(?:as\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s+on\b`)
 )
 
 type ruleSettings struct {
@@ -163,11 +153,11 @@ func extractSummarySQL(sqlText string) string {
 	if sqlText == "" || !strings.Contains(sqlText, "$View.") {
 		return ""
 	}
-	matches := summaryJoinExpr.FindStringSubmatch(sqlText)
-	if len(matches) < 2 {
+	body, ok := findSummaryJoinBody(sqlText)
+	if !ok {
 		return ""
 	}
-	return strings.TrimSpace(matches[1])
+	return strings.TrimSpace(body)
 }
 
 func extractRuleSettings(source *shape.Source, directives *dqlshape.Directives) *ruleSettings {
@@ -175,9 +165,7 @@ func extractRuleSettings(source *shape.Source, directives *dqlshape.Directives) 
 		return &ruleSettings{}
 	}
 	ret := &ruleSettings{}
-	matches := ruleHeaderExpr.FindStringSubmatch(source.DQL)
-	if len(matches) >= 2 {
-		rawJSON := strings.TrimSpace(matches[1])
+	if rawJSON, ok := extractLeadingRuleHeaderJSON(source.DQL); ok {
 		_ = json.Unmarshal([]byte(rawJSON), ret)
 	}
 	if directives != nil && directives.Route != nil {
@@ -208,10 +196,6 @@ func sourceSQLBaseDir(source *shape.Source) string {
 		return ""
 	}
 	return stem
-}
-
-func sourceModule(source *shape.Source) string {
-	return sourceModuleWithLayout(source, defaultCompilePathLayout())
 }
 
 func sourceModuleWithLayout(source *shape.Source, layout compilePathLayout) string {
@@ -349,11 +333,6 @@ func inferTableFromSQL(sqlText string, source *shape.Source) string {
 			return table
 		}
 	}
-	cleaned := embedExpr.ReplaceAllString(sqlText, " ")
-	match := fromTableExpr.FindStringSubmatch(cleaned)
-	if len(match) >= 2 {
-		return strings.Trim(match[1], "`\"")
-	}
 	if table := inferFromEmbeddedSQL(sqlText, source); table != "" {
 		return table
 	}
@@ -361,11 +340,10 @@ func inferTableFromSQL(sqlText string, source *shape.Source) string {
 }
 
 func inferFromEmbeddedSQL(sqlText string, source *shape.Source) string {
-	matches := embedExpr.FindStringSubmatch(sqlText)
-	if len(matches) < 2 {
+	ref, ok := findFirstEmbedRef(sqlText)
+	if !ok {
 		return ""
 	}
-	ref := strings.TrimSpace(matches[1])
 	ref = strings.Trim(ref, `"'`)
 	if ref == "" {
 		return ""
@@ -380,11 +358,10 @@ func inferFromEmbeddedSQL(sqlText string, source *shape.Source) string {
 	}
 	queryNode, _, err := pipeline.ParseSelectWithDiagnostic(string(embedded))
 	if err != nil || queryNode == nil {
-		fallback := fromTableExpr.FindStringSubmatch(string(embedded))
-		if len(fallback) < 2 {
-			return ""
+		if table := pipeline.InferTableFromSQL(string(embedded)); table != "" && !strings.EqualFold(table, "DQLView") {
+			return strings.Trim(table, "`\"")
 		}
-		return strings.Trim(fallback[1], "`\"")
+		return ""
 	}
 	_, table, err := pipeline.InferRoot(queryNode, "")
 	if err != nil || strings.TrimSpace(table) == "" {
@@ -619,16 +596,12 @@ func extractJoinEmbedRefs(sqlText string) map[string]string {
 	if strings.TrimSpace(sqlText) == "" {
 		return result
 	}
-	for _, m := range joinEmbedExpr.FindAllStringSubmatch(sqlText, -1) {
-		if len(m) < 3 {
+	for _, item := range scanJoinSubqueries(sqlText) {
+		ref, ok := parseJoinEmbedRef(item.body)
+		if !ok || ref == "" || item.alias == "" {
 			continue
 		}
-		ref := strings.TrimSpace(m[1])
-		alias := strings.TrimSpace(m[2])
-		if ref == "" || alias == "" {
-			continue
-		}
-		result[alias] = ref
+		result[item.alias] = ref
 	}
 	return result
 }
@@ -638,16 +611,211 @@ func extractJoinSubqueryBodies(sqlText string) map[string]string {
 	if strings.TrimSpace(sqlText) == "" {
 		return result
 	}
-	for _, m := range joinBodyExpr.FindAllStringSubmatch(sqlText, -1) {
-		if len(m) < 3 {
+	for _, item := range scanJoinSubqueries(sqlText) {
+		body := strings.TrimSpace(item.body)
+		if body == "" || item.alias == "" {
 			continue
 		}
-		body := strings.TrimSpace(m[1])
-		alias := strings.TrimSpace(m[2])
-		if body == "" || alias == "" {
-			continue
-		}
-		result[alias] = body
+		result[item.alias] = body
 	}
 	return result
+}
+
+func findSummaryJoinBody(input string) (string, bool) {
+	lower := strings.ToLower(input)
+	for i := 0; i < len(input); i++ {
+		if !hasCompileWordAt(lower, i, "join") {
+			continue
+		}
+		pos := skipCompileSpaces(input, i+len("join"))
+		if pos >= len(input) || input[pos] != '(' {
+			continue
+		}
+		body, end, ok := readCompileParenBody(input, pos)
+		if !ok {
+			continue
+		}
+		rest := strings.ToLower(input[end+1:])
+		rest = strings.Join(strings.Fields(rest), " ")
+		if strings.HasPrefix(rest, "summary on 1=1") || strings.HasPrefix(rest, "summary on 1 = 1") {
+			return body, true
+		}
+	}
+	return "", false
+}
+
+func extractLeadingRuleHeaderJSON(input string) (string, bool) {
+	index := skipCompileSpaces(input, 0)
+	if index+2 > len(input) || input[index:index+2] != "/*" {
+		return "", false
+	}
+	end := strings.Index(input[index+2:], "*/")
+	if end < 0 {
+		return "", false
+	}
+	body := strings.TrimSpace(input[index+2 : index+2+end])
+	if body == "" || body[0] != '{' || body[len(body)-1] != '}' {
+		return "", false
+	}
+	return body, true
+}
+
+func findFirstEmbedRef(input string) (string, bool) {
+	for i := 0; i < len(input); i++ {
+		if input[i] != '$' || i+1 >= len(input) || input[i+1] != '{' {
+			continue
+		}
+		body, end, ok := readCompileTemplateExpr(input, i+1)
+		if !ok {
+			continue
+		}
+		_ = end
+		trimmed := strings.TrimSpace(body)
+		if len(trimmed) < len("embed:") || !strings.HasPrefix(strings.ToLower(trimmed), "embed:") {
+			continue
+		}
+		ref := strings.TrimSpace(trimmed[len("embed:"):])
+		if ref == "" {
+			continue
+		}
+		return ref, true
+	}
+	return "", false
+}
+
+type joinSubquery struct {
+	body  string
+	alias string
+}
+
+func scanJoinSubqueries(input string) []joinSubquery {
+	result := make([]joinSubquery, 0)
+	lower := strings.ToLower(input)
+	for i := 0; i < len(input); i++ {
+		if !hasCompileWordAt(lower, i, "join") {
+			continue
+		}
+		pos := skipCompileSpaces(input, i+len("join"))
+		if pos >= len(input) || input[pos] != '(' {
+			continue
+		}
+		body, end, ok := readCompileParenBody(input, pos)
+		if !ok {
+			continue
+		}
+		pos = skipCompileSpaces(input, end+1)
+		if hasCompileWordAt(lower, pos, "as") {
+			pos = skipCompileSpaces(input, pos+len("as"))
+		}
+		aliasStart := pos
+		if aliasStart >= len(input) || !isCompileWordStart(input[aliasStart]) {
+			i = end
+			continue
+		}
+		pos++
+		for pos < len(input) && isCompileWordPart(input[pos]) {
+			pos++
+		}
+		alias := strings.TrimSpace(input[aliasStart:pos])
+		if alias != "" {
+			result = append(result, joinSubquery{body: body, alias: alias})
+		}
+		i = end
+	}
+	return result
+}
+
+func parseJoinEmbedRef(body string) (string, bool) {
+	trimmed := strings.TrimSpace(body)
+	if !strings.HasPrefix(trimmed, "${") || !strings.HasSuffix(trimmed, "}") {
+		return "", false
+	}
+	inner := strings.TrimSpace(trimmed[2 : len(trimmed)-1])
+	if len(inner) < len("embed:") || !strings.HasPrefix(strings.ToLower(inner), "embed:") {
+		return "", false
+	}
+	ref := strings.TrimSpace(inner[len("embed:"):])
+	return ref, ref != ""
+}
+
+func readCompileTemplateExpr(input string, openBrace int) (string, int, bool) {
+	if openBrace <= 0 || openBrace >= len(input) || input[openBrace] != '{' || input[openBrace-1] != '$' {
+		return "", -1, false
+	}
+	for i := openBrace + 1; i < len(input); i++ {
+		if input[i] == '}' {
+			return input[openBrace+1 : i], i, true
+		}
+	}
+	return "", -1, false
+}
+
+func readCompileParenBody(input string, openParen int) (string, int, bool) {
+	depth := 0
+	quote := byte(0)
+	for i := openParen; i < len(input); i++ {
+		ch := input[i]
+		if quote != 0 {
+			if ch == '\\' && i+1 < len(input) {
+				i++
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			quote = ch
+			continue
+		}
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			depth--
+			if depth == 0 {
+				return input[openParen+1 : i], i, true
+			}
+		}
+	}
+	return "", -1, false
+}
+
+func hasCompileWordAt(lower string, pos int, word string) bool {
+	if pos < 0 || pos+len(word) > len(lower) {
+		return false
+	}
+	if lower[pos:pos+len(word)] != word {
+		return false
+	}
+	if pos > 0 && isCompileWordPart(lower[pos-1]) {
+		return false
+	}
+	next := pos + len(word)
+	if next < len(lower) && isCompileWordPart(lower[next]) {
+		return false
+	}
+	return true
+}
+
+func skipCompileSpaces(input string, index int) int {
+	for index < len(input) {
+		switch input[index] {
+		case ' ', '\t', '\n', '\r':
+			index++
+		default:
+			return index
+		}
+	}
+	return index
+}
+
+func isCompileWordStart(ch byte) bool {
+	return ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+}
+
+func isCompileWordPart(ch byte) bool {
+	return isCompileWordStart(ch) || (ch >= '0' && ch <= '9')
 }

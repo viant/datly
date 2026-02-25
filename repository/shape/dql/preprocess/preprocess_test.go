@@ -167,3 +167,40 @@ func TestPrepare_PackageImportInSettings_UnsupportedDiagnostic(t *testing.T) {
 	assert.Equal(t, dqldiag.CodeDirUnsupported, pre.Diagnostics[0].Code)
 	assert.Equal(t, 1, pre.Diagnostics[0].Span.Start.Line)
 }
+
+func TestPrepare_TypeContext_CaseInsensitive(t *testing.T) {
+	dql := "#Package('a/b')\n#Import('x','github.com/acme/x')\nSELECT id FROM t"
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	require.NotNil(t, pre.TypeCtx)
+	assert.Equal(t, "a/b", pre.TypeCtx.DefaultPackage)
+	require.Len(t, pre.TypeCtx.Imports, 1)
+	assert.Equal(t, "x", pre.TypeCtx.Imports[0].Alias)
+	assert.Equal(t, "github.com/acme/x", pre.TypeCtx.Imports[0].Package)
+}
+
+func TestExtractLegacyTypeImports_BlockAndLine(t *testing.T) {
+	dql := "import (\n" +
+		"  \"github.com/acme/a.TypeA\"\n" +
+		"  \"github.com/acme/b.TypeB\" alias \"b\"\n" +
+		")\n" +
+		"import \"github.com/acme/c.TypeC\"\n"
+
+	imports, ranges, diags := extractLegacyTypeImports(dql)
+	require.Empty(t, diags)
+	require.Len(t, ranges, 2)
+	require.Len(t, imports, 3)
+	assert.Equal(t, "a", imports[0].Alias)
+	assert.Equal(t, "github.com/acme/a", imports[0].Package)
+	assert.Equal(t, "b", imports[1].Alias)
+	assert.Equal(t, "github.com/acme/b", imports[1].Package)
+	assert.Equal(t, "c", imports[2].Alias)
+	assert.Equal(t, "github.com/acme/c", imports[2].Package)
+}
+
+func TestExtractLegacyTypeImports_InvalidBlockDiagnostic(t *testing.T) {
+	dql := "import (\n  alias \"oops\"\n)\nSELECT 1"
+	_, _, diags := extractLegacyTypeImports(dql)
+	require.NotEmpty(t, diags)
+	assert.Equal(t, dqldiag.CodeDirImport, diags[0].Code)
+}

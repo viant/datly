@@ -2,7 +2,6 @@ package preprocess
 
 import (
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/viant/datly/repository/content"
@@ -12,17 +11,16 @@ import (
 )
 
 var (
-	metaDirective       = regexp.MustCompile(`(?i)\$meta\s*\(\s*['\"]([^'\"]+)['\"]\s*\)`)
-	connectorDirective  = regexp.MustCompile(`(?i)\$connector\s*\(\s*['\"]([^'\"]+)['\"]\s*\)`)
-	cacheDirective      = regexp.MustCompile(`(?i)\$cache\s*\(\s*(true|false)\s*(?:,\s*['\"]([^'\"]+)['\"]\s*)?\)`)
-	mcpDirective        = regexp.MustCompile(`(?i)\$mcp\s*\(\s*['\"]([^'\"]+)['\"]\s*(?:,\s*['\"]([^'\"]*)['\"]\s*)?(?:,\s*['\"]([^'\"]*)['\"]\s*)?\)`)
-	routeDirective      = regexp.MustCompile(`(?i)\$route\s*\(([^)]*)\)`)
-	marshalDirective    = regexp.MustCompile(`(?i)\$marshal\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)`)
-	unmarshalDirective  = regexp.MustCompile(`(?i)\$unmarshal\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)`)
-	formatDirective     = regexp.MustCompile(`(?i)\$format\s*\(\s*['\"]([^'\"]+)['\"]\s*\)`)
-	dateFormatDirective = regexp.MustCompile(`(?i)\$date_format\s*\(\s*['\"]([^'\"]+)['\"]\s*\)`)
-	caseFormatDirective = regexp.MustCompile(`(?i)\$case_format\s*\(\s*['\"]([^'\"]+)['\"]\s*\)`)
-	quotedArgDirective  = regexp.MustCompile(`['\"]([^'\"]*)['\"]`)
+	metaDirectiveName       = map[string]bool{"meta": true}
+	connectorDirectiveName  = map[string]bool{"connector": true}
+	cacheDirectiveName      = map[string]bool{"cache": true}
+	mcpDirectiveName        = map[string]bool{"mcp": true}
+	routeDirectiveName      = map[string]bool{"route": true}
+	marshalDirectiveName    = map[string]bool{"marshal": true}
+	unmarshalDirectiveName  = map[string]bool{"unmarshal": true}
+	formatDirectiveName     = map[string]bool{"format": true}
+	dateFormatDirectiveName = map[string]bool{"date_format": true}
+	caseFormatDirectiveName = map[string]bool{"case_format": true}
 )
 
 func parseSettingsDirectives(input, fullDQL string, diagnosticOffset int, directives *dqlshape.Directives) []*dqlshape.Diagnostic {
@@ -130,13 +128,17 @@ func parseSettingsDirectives(input, fullDQL string, diagnosticOffset int, direct
 }
 
 func parseMetaDirectives(input string) []string {
-	matches := metaDirective.FindAllStringSubmatch(input, -1)
-	result := make([]string, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
+	calls := scanDollarCalls(input, metaDirectiveName)
+	result := make([]string, 0, len(calls))
+	for _, call := range calls {
+		if len(call.args) != 1 {
 			continue
 		}
-		if value := strings.TrimSpace(match[1]); value != "" {
+		value, ok := parseQuotedLiteral(call.args[0])
+		if !ok {
+			continue
+		}
+		if value = strings.TrimSpace(value); value != "" {
 			result = append(result, value)
 		}
 	}
@@ -144,13 +146,17 @@ func parseMetaDirectives(input string) []string {
 }
 
 func parseConnectorDirectives(input string) []string {
-	matches := connectorDirective.FindAllStringSubmatch(input, -1)
-	result := make([]string, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
+	calls := scanDollarCalls(input, connectorDirectiveName)
+	result := make([]string, 0, len(calls))
+	for _, call := range calls {
+		if len(call.args) != 1 {
 			continue
 		}
-		if value := strings.TrimSpace(match[1]); value != "" {
+		value, ok := parseQuotedLiteral(call.args[0])
+		if !ok {
+			continue
+		}
+		if value = strings.TrimSpace(value); value != "" {
 			result = append(result, value)
 		}
 	}
@@ -158,16 +164,29 @@ func parseConnectorDirectives(input string) []string {
 }
 
 func parseCacheDirectives(input string) []*dqlshape.CacheDirective {
-	matches := cacheDirective.FindAllStringSubmatch(input, -1)
-	result := make([]*dqlshape.CacheDirective, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
+	calls := scanDollarCalls(input, cacheDirectiveName)
+	result := make([]*dqlshape.CacheDirective, 0, len(calls))
+	for _, call := range calls {
+		if len(call.args) == 0 || len(call.args) > 2 {
 			continue
 		}
-		enabled := strings.EqualFold(strings.TrimSpace(match[1]), "true")
+		enabledRaw := strings.TrimSpace(call.args[0])
+		var enabled bool
+		switch {
+		case strings.EqualFold(enabledRaw, "true"):
+			enabled = true
+		case strings.EqualFold(enabledRaw, "false"):
+			enabled = false
+		default:
+			continue
+		}
 		ttl := ""
-		if len(match) > 2 {
-			ttl = strings.TrimSpace(match[2])
+		if len(call.args) == 2 {
+			value, ok := parseQuotedLiteral(call.args[1])
+			if !ok {
+				continue
+			}
+			ttl = strings.TrimSpace(value)
 		}
 		result = append(result, &dqlshape.CacheDirective{Enabled: enabled, TTL: ttl})
 	}
@@ -175,23 +194,35 @@ func parseCacheDirectives(input string) []*dqlshape.CacheDirective {
 }
 
 func parseMCPDirectives(input string) []*dqlshape.MCPDirective {
-	matches := mcpDirective.FindAllStringSubmatch(input, -1)
-	result := make([]*dqlshape.MCPDirective, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
+	calls := scanDollarCalls(input, mcpDirectiveName)
+	result := make([]*dqlshape.MCPDirective, 0, len(calls))
+	for _, call := range calls {
+		if len(call.args) < 1 || len(call.args) > 3 {
 			continue
 		}
-		name := strings.TrimSpace(match[1])
+		name, ok := parseQuotedLiteral(call.args[0])
+		if !ok {
+			continue
+		}
+		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
 		description := ""
-		if len(match) > 2 {
-			description = strings.TrimSpace(match[2])
+		if len(call.args) > 1 {
+			value, ok := parseQuotedLiteral(call.args[1])
+			if !ok {
+				continue
+			}
+			description = strings.TrimSpace(value)
 		}
 		descriptionPath := ""
-		if len(match) > 3 {
-			descriptionPath = strings.TrimSpace(match[3])
+		if len(call.args) > 2 {
+			value, ok := parseQuotedLiteral(call.args[2])
+			if !ok {
+				continue
+			}
+			descriptionPath = strings.TrimSpace(value)
 		}
 		result = append(result, &dqlshape.MCPDirective{
 			Name:            name,
@@ -203,21 +234,33 @@ func parseMCPDirectives(input string) []*dqlshape.MCPDirective {
 }
 
 func parseRouteDirectives(input string) []*dqlshape.RouteDirective {
-	matches := routeDirective.FindAllStringSubmatch(input, -1)
-	result := make([]*dqlshape.RouteDirective, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
+	calls := scanDollarCalls(input, routeDirectiveName)
+	result := make([]*dqlshape.RouteDirective, 0, len(calls))
+	for _, call := range calls {
+		if len(call.args) == 0 {
 			continue
 		}
-		args := parseQuotedArgs(match[1])
-		if len(args) == 0 {
+		uri, ok := parseQuotedLiteral(call.args[0])
+		if !ok {
 			continue
 		}
-		uri := strings.TrimSpace(args[0])
+		uri = strings.TrimSpace(uri)
 		if !strings.HasPrefix(uri, "/") {
 			continue
 		}
-		methods, ok := normalizeHTTPMethods(args[1:])
+		methodsRaw := make([]string, 0, len(call.args)-1)
+		for _, arg := range call.args[1:] {
+			method, ok := parseQuotedLiteral(arg)
+			if !ok {
+				methodsRaw = nil
+				break
+			}
+			methodsRaw = append(methodsRaw, method)
+		}
+		if methodsRaw == nil {
+			continue
+		}
+		methods, ok := normalizeHTTPMethods(methodsRaw)
 		if !ok {
 			continue
 		}
@@ -225,18 +268,6 @@ func parseRouteDirectives(input string) []*dqlshape.RouteDirective {
 			URI:     uri,
 			Methods: methods,
 		})
-	}
-	return result
-}
-
-func parseQuotedArgs(input string) []string {
-	matches := quotedArgDirective.FindAllStringSubmatch(input, -1)
-	result := make([]string, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
-		}
-		result = append(result, strings.TrimSpace(match[1]))
 	}
 	return result
 }
@@ -276,17 +307,25 @@ func normalizeHTTPMethods(input []string) ([]string, bool) {
 }
 
 func parseMarshalDirectives(input string) []string {
-	matches := marshalDirective.FindAllStringSubmatch(input, -1)
-	result := make([]string, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 3 {
+	calls := scanDollarCalls(input, marshalDirectiveName)
+	result := make([]string, 0, len(calls))
+	for _, call := range calls {
+		if len(call.args) != 2 {
 			continue
 		}
-		mimeType := strings.ToLower(strings.TrimSpace(match[1]))
+		mimeType, ok := parseQuotedLiteral(call.args[0])
+		if !ok {
+			continue
+		}
+		mimeType = strings.ToLower(strings.TrimSpace(mimeType))
 		if mimeType != content.JSONContentType {
 			continue
 		}
-		if typeName := strings.TrimSpace(match[2]); typeName != "" {
+		typeName, ok := parseQuotedLiteral(call.args[1])
+		if !ok {
+			continue
+		}
+		if typeName = strings.TrimSpace(typeName); typeName != "" {
 			result = append(result, typeName)
 		}
 	}
@@ -299,14 +338,22 @@ type unmarshalDirectiveValue struct {
 }
 
 func parseUnmarshalDirectives(input string) []unmarshalDirectiveValue {
-	matches := unmarshalDirective.FindAllStringSubmatch(input, -1)
-	result := make([]unmarshalDirectiveValue, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 3 {
+	calls := scanDollarCalls(input, unmarshalDirectiveName)
+	result := make([]unmarshalDirectiveValue, 0, len(calls))
+	for _, call := range calls {
+		if len(call.args) != 2 {
 			continue
 		}
-		mimeType := strings.ToLower(strings.TrimSpace(match[1]))
-		typeName := strings.TrimSpace(match[2])
+		mimeType, ok := parseQuotedLiteral(call.args[0])
+		if !ok {
+			continue
+		}
+		typeName, ok := parseQuotedLiteral(call.args[1])
+		if !ok {
+			continue
+		}
+		mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+		typeName = strings.TrimSpace(typeName)
 		if typeName == "" {
 			continue
 		}
@@ -325,13 +372,17 @@ func parseUnmarshalDirectives(input string) []unmarshalDirectiveValue {
 }
 
 func parseFormatDirectives(input string) []string {
-	matches := formatDirective.FindAllStringSubmatch(input, -1)
-	result := make([]string, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
+	calls := scanDollarCalls(input, formatDirectiveName)
+	result := make([]string, 0, len(calls))
+	for _, call := range calls {
+		if len(call.args) != 1 {
 			continue
 		}
-		raw := strings.ToLower(strings.TrimSpace(match[1]))
+		raw, ok := parseQuotedLiteral(call.args[0])
+		if !ok {
+			continue
+		}
+		raw = strings.ToLower(strings.TrimSpace(raw))
 		switch raw {
 		case "tabular_json":
 			result = append(result, content.JSONDataFormatTabular)
@@ -343,13 +394,17 @@ func parseFormatDirectives(input string) []string {
 }
 
 func parseDateFormatDirectives(input string) []string {
-	matches := dateFormatDirective.FindAllStringSubmatch(input, -1)
-	result := make([]string, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
+	calls := scanDollarCalls(input, dateFormatDirectiveName)
+	result := make([]string, 0, len(calls))
+	for _, call := range calls {
+		if len(call.args) != 1 {
 			continue
 		}
-		if value := strings.TrimSpace(match[1]); value != "" {
+		value, ok := parseQuotedLiteral(call.args[0])
+		if !ok {
+			continue
+		}
+		if value = strings.TrimSpace(value); value != "" {
 			result = append(result, value)
 		}
 	}
@@ -357,13 +412,17 @@ func parseDateFormatDirectives(input string) []string {
 }
 
 func parseCaseFormatDirectives(input string) []string {
-	matches := caseFormatDirective.FindAllStringSubmatch(input, -1)
-	result := make([]string, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
+	calls := scanDollarCalls(input, caseFormatDirectiveName)
+	result := make([]string, 0, len(calls))
+	for _, call := range calls {
+		if len(call.args) != 1 {
 			continue
 		}
-		value := strings.TrimSpace(match[1])
+		value, ok := parseQuotedLiteral(call.args[0])
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
 		if value == "" {
 			continue
 		}

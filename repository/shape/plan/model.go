@@ -130,23 +130,26 @@ type RelationLink struct {
 
 // State is a normalized parameter field plan.
 type State struct {
-	Path          string
-	Name          string
-	Kind          string
-	In            string
-	QuerySelector string
-	When          string
-	Scope         string
-	DataType      string
-	Value         string
-	Required      *bool
-	Async         bool
-	Cacheable     *bool
-	With          string
-	URI           string
-	ErrorCode     int
-	ErrorMessage  string
-	Predicates    []*StatePredicate
+	Path           string
+	Name           string
+	Kind           string
+	In             string
+	Codec          string
+	CodecArgs      []string
+	QuerySelector  string
+	When           string
+	Scope          string
+	DataType       string
+	OutputDataType string
+	Value          string
+	Required       *bool
+	Async          bool
+	Cacheable      *bool
+	With           string
+	URI            string
+	ErrorCode      int
+	ErrorMessage   string
+	Predicates     []*StatePredicate
 
 	TagType       reflect.Type
 	EffectiveType reflect.Type

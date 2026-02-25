@@ -2,7 +2,6 @@ package sanitize
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/viant/velty"
@@ -21,22 +20,113 @@ type RewriteResult struct {
 	TrimPrefix int
 }
 
-var declarationHolderExpr = regexp.MustCompile(`(?i)#set\s*\(\s*\$_\s*=\s*\$([a-zA-Z_][a-zA-Z0-9_]*)`)
-
 func Declared(input string) map[string]bool {
 	ret := map[string]bool{}
 	listener := &declaredListener{declared: ret}
 	_, _, _ = velty.New(velty.Listener(listener)).Compile([]byte(input))
-	for _, match := range declarationHolderExpr.FindAllStringSubmatch(input, -1) {
-		if len(match) < 2 {
-			continue
-		}
-		name := strings.TrimSpace(match[1])
+	for _, name := range scanSetDeclaredHolders(input) {
 		if name != "" {
 			ret[name] = true
 		}
 	}
 	return ret
+}
+
+func scanSetDeclaredHolders(input string) []string {
+	result := make([]string, 0)
+	lower := strings.ToLower(input)
+	for i := 0; i < len(input); i++ {
+		if input[i] != '#' {
+			continue
+		}
+		if !strings.HasPrefix(lower[i:], "#set") {
+			continue
+		}
+		j := i + len("#set")
+		for j < len(input) && (input[j] == ' ' || input[j] == '\t' || input[j] == '\r' || input[j] == '\n') {
+			j++
+		}
+		if j >= len(input) || input[j] != '(' {
+			continue
+		}
+		body, end, ok := readSetDirectiveBody(input, j)
+		if !ok {
+			continue
+		}
+		if name, ok := parseSetDeclaredHolder(body); ok {
+			result = append(result, name)
+		}
+		i = end
+	}
+	return result
+}
+
+func parseSetDeclaredHolder(body string) (string, bool) {
+	text := strings.TrimSpace(body)
+	if text == "" {
+		return "", false
+	}
+	if !strings.HasPrefix(text, "$_") {
+		return "", false
+	}
+	text = strings.TrimSpace(text[len("$_"):])
+	if !strings.HasPrefix(text, "=") {
+		return "", false
+	}
+	text = strings.TrimSpace(text[1:])
+	if !strings.HasPrefix(text, "$") || len(text) < 2 {
+		return "", false
+	}
+	name := text[1:]
+	if !isSanitizeIdentifierStart(name[0]) {
+		return "", false
+	}
+	end := 1
+	for end < len(name) && isSanitizeIdentifierPart(name[end]) {
+		end++
+	}
+	return strings.TrimSpace(name[:end]), true
+}
+
+func readSetDirectiveBody(input string, openParen int) (string, int, bool) {
+	depth := 0
+	quote := byte(0)
+	for i := openParen; i < len(input); i++ {
+		ch := input[i]
+		if quote != 0 {
+			if ch == '\\' && i+1 < len(input) {
+				i++
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '"' || ch == '\'' {
+			quote = ch
+			continue
+		}
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			depth--
+			if depth == 0 {
+				return input[openParen+1 : i], i, true
+			}
+		}
+	}
+	return "", -1, false
+}
+
+func isSanitizeIdentifierStart(ch byte) bool {
+	return ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+}
+
+func isSanitizeIdentifierPart(ch byte) bool {
+	return isSanitizeIdentifierStart(ch) || (ch >= '0' && ch <= '9')
 }
 
 func SQL(input string, opts Options) string {

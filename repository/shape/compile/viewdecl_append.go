@@ -2,15 +2,12 @@ package compile
 
 import (
 	"reflect"
-	"regexp"
 	"strings"
 
 	"github.com/viant/datly/repository/shape/compile/pipeline"
 	"github.com/viant/datly/repository/shape/plan"
 	"github.com/viant/sqlparser"
 )
-
-var summaryParentRefExpr = regexp.MustCompile(`(?i)\$View\.([a-zA-Z_][a-zA-Z0-9_]*)\.SQL\b`)
 
 func appendDeclaredViews(rawDQL string, result *plan.Result) {
 	if result == nil {
@@ -73,12 +70,8 @@ func lookupSummaryParentView(result *plan.Result, sqlText string) *plan.View {
 	if result == nil || strings.TrimSpace(sqlText) == "" {
 		return nil
 	}
-	matches := summaryParentRefExpr.FindStringSubmatch(sqlText)
-	if len(matches) < 2 {
-		return nil
-	}
-	parent := strings.TrimSpace(matches[1])
-	if parent == "" {
+	parent, ok := findSummaryParentReference(sqlText)
+	if !ok {
 		return nil
 	}
 	if view, ok := result.ViewsByName[parent]; ok && view != nil {
@@ -107,6 +100,46 @@ func lookupSummaryParentView(result *plan.Result, sqlText string) *plan.View {
 		}
 	}
 	return nil
+}
+
+func findSummaryParentReference(input string) (string, bool) {
+	if strings.TrimSpace(input) == "" {
+		return "", false
+	}
+	lower := strings.ToLower(input)
+	for i := 0; i+len("$view.") < len(lower); i++ {
+		if lower[i] != '$' {
+			continue
+		}
+		if !strings.HasPrefix(lower[i:], "$view.") {
+			continue
+		}
+		start := i + len("$view.")
+		if start >= len(input) || !isCompileIdentifierStart(input[start]) {
+			continue
+		}
+		end := start + 1
+		for end < len(input) && isCompileIdentifierPart(input[end]) {
+			end++
+		}
+		if !strings.HasPrefix(lower[end:], ".sql") {
+			continue
+		}
+		parent := strings.TrimSpace(input[start:end])
+		if parent == "" {
+			continue
+		}
+		return parent, true
+	}
+	return "", false
+}
+
+func isCompileIdentifierStart(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+}
+
+func isCompileIdentifierPart(ch byte) bool {
+	return isCompileIdentifierStart(ch) || (ch >= '0' && ch <= '9')
 }
 
 func buildViewDeclaration(item *declaredView) *plan.ViewDeclaration {

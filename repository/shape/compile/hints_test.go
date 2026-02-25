@@ -20,6 +20,17 @@ func TestExtractViewHints_WithQuotedConnector(t *testing.T) {
 	assert.True(t, *hints["match"].NoLimit)
 }
 
+func TestExtractViewHints_MixedCaseAndUnquotedConnector(t *testing.T) {
+	dql := "SELECT USE_CONNECTOR(match, ci_ads), Allow_Nulls(match), set_limit(match, -1)"
+	hints := extractViewHints(dql)
+	require.Contains(t, hints, "match")
+	assert.Equal(t, "ci_ads", hints["match"].Connector)
+	require.NotNil(t, hints["match"].AllowNulls)
+	assert.True(t, *hints["match"].AllowNulls)
+	require.NotNil(t, hints["match"].NoLimit)
+	assert.False(t, *hints["match"].NoLimit)
+}
+
 func TestApplyViewHints_Metadata(t *testing.T) {
 	trueValue := true
 	result := &plan.Result{

@@ -1,17 +1,11 @@
 package preprocess
 
 import (
-	"regexp"
 	"strings"
 
 	dqldiag "github.com/viant/datly/repository/shape/dql/diag"
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/typectx"
-)
-
-var (
-	packageLinePattern = regexp.MustCompile(`(?i)^\s*#package\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*$`)
-	importLinePattern  = regexp.MustCompile(`(?i)^\s*#import\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)\s*$`)
 )
 
 func parseTypeContextDirective(line, fullDQL string, offset int, ctx *typectx.Context) []*dqlshape.Diagnostic {
@@ -47,11 +41,15 @@ func parseTypeContextDirective(line, fullDQL string, offset int, ctx *typectx.Co
 }
 
 func parsePackageLineDirective(line string) (string, bool) {
-	matches := packageLinePattern.FindStringSubmatch(line)
-	if len(matches) != 2 {
+	args, ok := parseExactHashDirectiveCall(line, "package")
+	if !ok || len(args) != 1 {
 		return "", false
 	}
-	value := strings.TrimSpace(matches[1])
+	value, ok := parseQuotedLiteral(args[0])
+	if !ok {
+		return "", false
+	}
+	value = strings.TrimSpace(value)
 	if value == "" {
 		return "", false
 	}
@@ -59,12 +57,20 @@ func parsePackageLineDirective(line string) (string, bool) {
 }
 
 func parseImportLineDirective(line string) (string, string, bool) {
-	matches := importLinePattern.FindStringSubmatch(line)
-	if len(matches) != 3 {
+	args, ok := parseExactHashDirectiveCall(line, "import")
+	if !ok || len(args) != 2 {
 		return "", "", false
 	}
-	alias := strings.TrimSpace(matches[1])
-	pkg := strings.TrimSpace(matches[2])
+	alias, ok := parseQuotedLiteral(args[0])
+	if !ok {
+		return "", "", false
+	}
+	pkg, ok := parseQuotedLiteral(args[1])
+	if !ok {
+		return "", "", false
+	}
+	alias = strings.TrimSpace(alias)
+	pkg = strings.TrimSpace(pkg)
 	if alias == "" || pkg == "" {
 		return "", "", false
 	}
@@ -72,7 +78,7 @@ func parseImportLineDirective(line string) (string, string, bool) {
 }
 
 func isTypeContextDirectiveLine(line string) bool {
-	line = strings.TrimSpace(line)
+	line = strings.ToLower(strings.TrimSpace(line))
 	switch {
 	case strings.HasPrefix(line, "#package("), strings.HasPrefix(line, "#package ("):
 		return true
@@ -81,4 +87,35 @@ func isTypeContextDirectiveLine(line string) bool {
 	default:
 		return false
 	}
+}
+
+func parseExactHashDirectiveCall(line, directive string) ([]string, bool) {
+	input := strings.TrimSpace(line)
+	if input == "" || input[0] != '#' {
+		return nil, false
+	}
+	index := skipSpaces(input, 1)
+	start := index
+	for index < len(input) && isIdentifierPart(input[index]) {
+		index++
+	}
+	if start == index {
+		return nil, false
+	}
+	if !strings.EqualFold(input[start:index], directive) {
+		return nil, false
+	}
+	index = skipSpaces(input, index)
+	if index >= len(input) || input[index] != '(' {
+		return nil, false
+	}
+	body, end, ok := readCallBody(input, index)
+	if !ok {
+		return nil, false
+	}
+	index = skipSpaces(input, end+1)
+	if index != len(input) {
+		return nil, false
+	}
+	return splitCallArgs(body), true
 }
