@@ -3,6 +3,7 @@ package load
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/viant/datly/repository/shape"
 	dqlplan "github.com/viant/datly/repository/shape/dql/plan"
@@ -69,8 +70,8 @@ func FromHolderStruct(ctx context.Context, holder any) (*Artifact, error) {
 		if item.SQL != "" {
 			entry["SQL"] = item.SQL
 		}
-		if len(item.Links) > 0 {
-			entry["Links"] = append([]string(nil), item.Links...)
+		if links := relationLinks(item); len(links) > 0 {
+			entry["Links"] = links
 		}
 		views = append(views, entry)
 	}
@@ -81,4 +82,44 @@ func FromHolderStruct(ctx context.Context, holder any) (*Artifact, error) {
 			},
 		},
 	}, nil
+}
+
+func relationLinks(item *shapeplan.View) []string {
+	if item == nil || len(item.Relations) == 0 {
+		return nil
+	}
+	var result []string
+	for _, relation := range item.Relations {
+		if relation == nil || len(relation.On) == 0 {
+			continue
+		}
+		for _, on := range relation.On {
+			if on == nil {
+				continue
+			}
+			expr := strings.TrimSpace(on.Expression)
+			if expr == "" {
+				left := selector(on.ParentNamespace, on.ParentColumn)
+				right := selector(on.RefNamespace, on.RefColumn)
+				if left == "" || right == "" {
+					continue
+				}
+				expr = left + "=" + right
+			}
+			result = append(result, expr)
+		}
+	}
+	return result
+}
+
+func selector(namespace, column string) string {
+	column = strings.TrimSpace(column)
+	if column == "" {
+		return ""
+	}
+	namespace = strings.TrimSpace(namespace)
+	if namespace == "" {
+		return column
+	}
+	return namespace + "." + column
 }

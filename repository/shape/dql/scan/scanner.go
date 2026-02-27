@@ -105,11 +105,7 @@ func (s *Scanner) Scan(ctx context.Context, req *Request) (result *Result, err e
 		return nil, loadErr
 	}
 	translate.Rule.NormalizeComponent(&dsql)
-	if data, sanitizeErr := sanitize.SanitizeDQL([]byte(dsql)); sanitizeErr == nil {
-		dsql = string(data)
-	} else {
-		return nil, sanitizeErr
-	}
+	dsql = sanitize.SQL(dsql, sanitize.Options{Declared: sanitize.Declared(dsql)})
 	top := &options.Options{Translate: translate}
 	if initErr = svc.Translate(ctx, &translate.Rule, dsql, top); initErr != nil {
 		return nil, initErr
@@ -147,7 +143,9 @@ func (s *Scanner) result(ruleName string, routeYAML []byte, dql string, req *Req
 	}
 	if parsed, parseErr := parse.New().Parse(dql); parseErr == nil && parsed != nil && parsed.TypeContext != nil {
 		shapeDoc.TypeContext = parsed.TypeContext
-		if resolutions, resolveErr := resolveTypeProvenance(parsed, fromYAML, req); resolveErr != nil {
+	}
+	if declarations, declErr := decl.Parse(dql); declErr == nil && len(declarations) > 0 {
+		if resolutions, resolveErr := resolveTypeProvenance(declarations, shapeDoc.TypeContext, fromYAML, req); resolveErr != nil {
 			return nil, resolveErr
 		} else {
 			shapeDoc.TypeResolutions = resolutions
@@ -160,19 +158,19 @@ func (s *Scanner) result(ruleName string, routeYAML []byte, dql string, req *Req
 	return &Result{RuleName: ruleName, Shape: shapeDoc, IR: rebuiltIR}, nil
 }
 
-func resolveTypeProvenance(parsed *parse.Result, doc *ir.Document, req *Request) ([]typectx.Resolution, error) {
-	if parsed == nil || len(parsed.Declarations) == 0 {
+func resolveTypeProvenance(declarations []*decl.Declaration, ctx *typectx.Context, doc *ir.Document, req *Request) ([]typectx.Resolution, error) {
+	if len(declarations) == 0 {
 		return nil, nil
 	}
 	registry, provenance := registryFromIR(doc)
-	resolver := typectx.NewResolverWithProvenance(registry, parsed.TypeContext, provenance)
+	resolver := typectx.NewResolverWithProvenance(registry, ctx, provenance)
 	policy := newProvenancePolicy(req)
 	srcResolver, srcErr := newSourceResolver(policy, req)
 	if srcErr != nil && policy.Strict {
 		return nil, srcErr
 	}
 	var result []typectx.Resolution
-	for _, declaration := range parsed.Declarations {
+	for _, declaration := range declarations {
 		if declaration == nil || declaration.Kind != decl.KindCast {
 			continue
 		}

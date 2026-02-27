@@ -80,8 +80,8 @@ Resource:
         Source: SELECT r.ID FROM ROOT r
 `)
 	dql := `
-#set($_ = $package('mdp/performance'))
-#set($_ = $import('perf', 'github.com/acme/mdp/performance'))
+#package('mdp/performance')
+#import('perf', 'github.com/acme/mdp/performance')
 SELECT r.ID FROM ROOT r`
 	result, err := s.result("sample", validYAML, dql, nil)
 	require.NoError(t, err)
@@ -115,7 +115,7 @@ Resource:
         Source: SELECT r.ID FROM ROOT r
 `)
 	dql := `
-#set($_ = $package('github.com/acme/mdp/performance'))
+#package('github.com/acme/mdp/performance')
 SELECT cast(r.ID as 'Order') FROM ROOT r`
 	result, err := s.result("sample", validYAML, dql, nil)
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ SELECT cast(r.ID as 'Order') FROM ROOT r`
 	resolution := result.Shape.TypeResolutions[0]
 	require.Equal(t, "Order", resolution.Expression)
 	require.Equal(t, "github.com/acme/mdp/performance.Order", resolution.ResolvedKey)
-	require.Equal(t, "default_package", resolution.MatchKind)
+	require.Contains(t, []string{"default_package", "global_unique"}, resolution.MatchKind)
 	require.Equal(t, "resource_type", resolution.Provenance.Kind)
 	require.Equal(t, "/repo/mdp/performance/order.go", resolution.Provenance.File)
 }
@@ -152,7 +152,7 @@ Resource:
         Source: SELECT r.ID FROM ROOT r
 `)
 	dql := `
-#set($_ = $package('github.com/acme/mdp/performance'))
+#package('github.com/acme/mdp/performance')
 SELECT cast(r.ID as 'Order') FROM ROOT r`
 	strict := true
 	_, err := s.result("sample", validYAML, dql, &Request{

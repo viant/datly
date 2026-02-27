@@ -3,6 +3,7 @@ package plan
 import (
 	"context"
 	"embed"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -74,19 +75,19 @@ func TestPlanner_Plan(t *testing.T) {
 
 	stateByPath := map[string]*State{}
 	for _, item := range result.States {
-		stateByPath[item.Path] = item
+		stateByPath[strings.ToLower(item.Name)] = item
 	}
 
-	require.NotNil(t, stateByPath["Status"])
-	assert.Equal(t, outputkeys.Types["status"], stateByPath["Status"].Schema.Type())
-	require.NotNil(t, stateByPath["Job"])
-	assert.Equal(t, asynckeys.Types["job"], stateByPath["Job"].Schema.Type())
-	require.NotNil(t, stateByPath["VName"])
-	assert.Equal(t, metakeys.Types["view.name"], stateByPath["VName"].Schema.Type())
+	require.NotNil(t, stateByPath["status"])
+	assert.Equal(t, outputkeys.Types["status"], stateByPath["status"].Schema.Type())
+	require.NotNil(t, stateByPath["job"])
+	assert.Equal(t, asynckeys.Types["job"], stateByPath["job"].Schema.Type())
+	require.NotNil(t, stateByPath["viewname"])
+	assert.Equal(t, metakeys.Types["view.name"], stateByPath["viewname"].Schema.Type())
 
-	require.NotNil(t, stateByPath["ID"])
-	assert.Equal(t, "query", stateByPath["ID"].KindString())
-	assert.Equal(t, "id", stateByPath["ID"].InName())
+	require.NotNil(t, stateByPath["id"])
+	assert.Equal(t, "query", stateByPath["id"].KindString())
+	assert.Equal(t, "id", stateByPath["id"].InName())
 }
 
 func TestPlanner_Plan_LinkOnProducesStructuredRelations(t *testing.T) {

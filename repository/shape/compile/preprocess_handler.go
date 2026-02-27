@@ -62,6 +62,12 @@ func buildGeneratedFallbackIfNeeded(ret *handlerPreprocessResult, source *shape.
 	return true
 }
 
+// buildHandlerFromContractIfNeeded is kept as a legacy no-op shim for tests
+// and callers migrated to buildHandlerIfNeeded/buildGeneratedFallbackIfNeeded.
+func buildHandlerFromContractIfNeeded(_ *handlerPreprocessResult, _ *shape.Source, _ compilePathLayout) bool {
+	return false
+}
+
 func resolveGeneratedLegacySource(source *shape.Source) *shape.Source {
 	if source == nil || strings.TrimSpace(source.Path) == "" {
 		return nil

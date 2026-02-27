@@ -1083,10 +1083,10 @@ func normalizeShapeTypes(planned *plan.Result, sourcePath string) []typeIR {
 	}
 
 	for _, item := range planned.States {
-		if item == nil || strings.TrimSpace(item.DataType) == "" {
+		if item == nil || item.Schema == nil || strings.TrimSpace(item.Schema.DataType) == "" {
 			continue
 		}
-		dataType := strings.TrimSpace(item.DataType)
+		dataType := strings.TrimSpace(item.Schema.DataType)
 		name := typeNameFromDataType(dataType)
 		if name == "" {
 			continue
