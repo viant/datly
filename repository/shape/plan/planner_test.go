@@ -58,7 +58,7 @@ func TestPlanner_Plan(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, planned)
 
-	result, ok := planned.Plan.(*Result)
+	result, ok := ResultFrom(planned)
 	require.True(t, ok)
 	require.NotNil(t, result)
 	require.NotNil(t, result.EmbedFS)
@@ -99,7 +99,7 @@ func TestPlanner_Plan_LinkOnProducesStructuredRelations(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, planned)
 
-	result, ok := planned.Plan.(*Result)
+	result, ok := ResultFrom(planned)
 	require.True(t, ok)
 	require.Len(t, result.Views, 1)
 	viewPlan := result.Views[0]
@@ -122,7 +122,7 @@ func TestPlanner_Plan_LinkOnPreservesFieldSelectors(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, planned)
 
-	result, ok := planned.Plan.(*Result)
+	result, ok := ResultFrom(planned)
 	require.True(t, ok)
 	require.Len(t, result.Views, 1)
 	viewPlan := result.Views[0]
@@ -137,9 +137,15 @@ func TestPlanner_Plan_LinkOnPreservesFieldSelectors(t *testing.T) {
 	assert.Equal(t, "id", relation.On[0].RefColumn)
 }
 
+// stubScanSpec is a non-scan-Result implementation of shape.ScanSpec used to
+// verify that Plan() returns an error when given an unexpected descriptor type.
+type stubScanSpec struct{}
+
+func (s *stubScanSpec) ShapeSpecKind() string { return "stub" }
+
 func TestPlanner_Plan_InvalidDescriptors(t *testing.T) {
 	planner := New()
-	_, err := planner.Plan(context.Background(), &shape.ScanResult{Source: &shape.Source{Name: "x"}, Descriptors: "invalid"})
+	_, err := planner.Plan(context.Background(), &shape.ScanResult{Source: &shape.Source{Name: "x"}, Descriptors: &stubScanSpec{}})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported descriptors type")
+	assert.Contains(t, err.Error(), "unsupported descriptors kind")
 }

@@ -69,11 +69,17 @@ func TestLoader_LoadViews(t *testing.T) {
 	require.NotNil(t, artifacts.Resource.EmbedFS())
 }
 
+// stubPlanSpec is a non-plan-Result implementation of shape.PlanSpec used to
+// verify that LoadViews() returns an error when given an unexpected plan type.
+type stubPlanSpec struct{}
+
+func (s *stubPlanSpec) ShapeSpecKind() string { return "stub" }
+
 func TestLoader_LoadViews_InvalidPlanType(t *testing.T) {
 	loader := New()
-	_, err := loader.LoadViews(context.Background(), &shape.PlanResult{Source: &shape.Source{Name: "x"}, Plan: "invalid"})
+	_, err := loader.LoadViews(context.Background(), &shape.PlanResult{Source: &shape.Source{Name: "x"}, Plan: &stubPlanSpec{}})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported plan type")
+	assert.Contains(t, err.Error(), "unsupported plan kind")
 }
 
 func TestLoader_LoadViews_Metadata(t *testing.T) {
@@ -125,7 +131,7 @@ func TestLoader_LoadComponent(t *testing.T) {
 	planner := plan.New()
 	planned, err := planner.Plan(context.Background(), scanned)
 	require.NoError(t, err)
-	actualPlan, ok := planned.Plan.(*plan.Result)
+	actualPlan, ok := plan.ResultFrom(planned)
 	require.True(t, ok)
 	actualPlan.ColumnsDiscovery = true
 	actualPlan.TypeContext = &typectx.Context{
@@ -155,7 +161,7 @@ func TestLoader_LoadComponent(t *testing.T) {
 	require.NotNil(t, artifact.Resource)
 	require.NotNil(t, artifact.Component)
 
-	component, ok := artifact.Component.(*Component)
+	component, ok := ComponentFrom(artifact)
 	require.True(t, ok)
 	assert.Equal(t, "/v1/api/report", component.Name)
 	assert.Equal(t, "/v1/api/report", component.URI)
@@ -221,7 +227,7 @@ func TestLoader_LoadComponent_RelationFieldsPreserved(t *testing.T) {
 	loader := New()
 	artifact, err := loader.LoadComponent(context.Background(), planned)
 	require.NoError(t, err)
-	component, ok := artifact.Component.(*Component)
+	component, ok := ComponentFrom(artifact)
 	require.True(t, ok)
 	require.Len(t, component.ViewRelations, 1)
 	require.Len(t, component.ViewRelations[0].On, 1)

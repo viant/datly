@@ -38,7 +38,7 @@ func TestStructScanner_Scan(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	descriptors, ok := result.Descriptors.(*Result)
+	descriptors, ok := DescriptorsFrom(result)
 	require.True(t, ok)
 	require.NotNil(t, descriptors)
 	require.NotNil(t, descriptors.EmbedFS)
@@ -77,7 +77,7 @@ func TestStructScanner_Scan_WithRegistryType(t *testing.T) {
 		TypeRegistry: registry,
 	})
 	require.NoError(t, err)
-	descriptors, ok := result.Descriptors.(*Result)
+	descriptors, ok := DescriptorsFrom(result)
 	require.True(t, ok)
 	assert.Equal(t, reflect.TypeOf(reportSource{}), descriptors.RootType)
 }

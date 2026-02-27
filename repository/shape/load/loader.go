@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/viant/datly/repository/shape"
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
@@ -13,6 +14,7 @@ import (
 	shapevalidate "github.com/viant/datly/repository/shape/validate"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 )
 
@@ -25,7 +27,10 @@ func New() *Loader {
 }
 
 // LoadViews implements shape.Loader.
-func (l *Loader) LoadViews(_ context.Context, planned *shape.PlanResult, _ ...shape.LoadOption) (*shape.ViewArtifacts, error) {
+func (l *Loader) LoadViews(ctx context.Context, planned *shape.PlanResult, _ ...shape.LoadOption) (*shape.ViewArtifacts, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	pResult, resource, err := l.materialize(planned)
 	if err != nil {
 		return nil, err
@@ -37,7 +42,10 @@ func (l *Loader) LoadViews(_ context.Context, planned *shape.PlanResult, _ ...sh
 }
 
 // LoadComponent implements shape.Loader.
-func (l *Loader) LoadComponent(_ context.Context, planned *shape.PlanResult, _ ...shape.LoadOption) (*shape.ComponentArtifact, error) {
+func (l *Loader) LoadComponent(ctx context.Context, planned *shape.PlanResult, _ ...shape.LoadOption) (*shape.ComponentArtifact, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	pResult, resource, err := l.materialize(planned)
 	if err != nil {
 		return nil, err
@@ -56,9 +64,9 @@ func (l *Loader) materialize(planned *shape.PlanResult) (*plan.Result, *view.Res
 	if planned == nil || planned.Source == nil {
 		return nil, nil, shape.ErrNilSource
 	}
-	pResult, ok := planned.Plan.(*plan.Result)
-	if !ok || pResult == nil {
-		return nil, nil, fmt.Errorf("shape load: unsupported plan type %T", planned.Plan)
+	pResult, ok := plan.ResultFrom(planned)
+	if !ok {
+		return nil, nil, fmt.Errorf("shape load: unsupported plan kind %q", planned.Plan.ShapeSpecKind())
 	}
 	resource := view.EmptyResource()
 	if pResult.EmbedFS != nil {
@@ -74,77 +82,157 @@ func (l *Loader) materialize(planned *shape.PlanResult) (*plan.Result, *view.Res
 	if err := shapevalidate.ValidateRelations(resource, resource.Views...); err != nil {
 		return nil, nil, err
 	}
+	// Gap 7: apply global cache TTL directive to root view.
+	if pResult.Directives != nil && pResult.Directives.Cache != nil {
+		if ttl := strings.TrimSpace(pResult.Directives.Cache.TTL); ttl != "" {
+			if dur, err := time.ParseDuration(ttl); err == nil && dur > 0 {
+				ttlMs := int(dur.Milliseconds())
+				if rootPlan := pickRootView(pResult.Views); rootPlan != nil {
+					for _, rv := range resource.Views {
+						if rv != nil && rv.Name == rootPlan.Name {
+							if rv.Cache == nil {
+								rv.Cache = &view.Cache{}
+							}
+							rv.Cache.TimeToLiveMs = ttlMs
+							break
+						}
+					}
+				}
+			}
+		}
+	}
 	return pResult, resource, nil
 }
 
 func buildComponent(source *shape.Source, pResult *plan.Result) *Component {
-	ret := &Component{Method: "GET"}
+	component := &Component{Method: "GET"}
 	if source != nil {
-		ret.Name = source.Name
-		ret.URI = source.Name
+		component.Name = source.Name
+		component.URI = source.Name
 	}
-	for _, aView := range pResult.Views {
+	applyViewMeta(component, pResult.Views)
+	applyStateBuckets(component, pResult.States)
+	component.Input = append(component.Input, synthesizePredicateStates(component.Input, component.Predicates)...)
+	component.TypeContext = cloneTypeContext(pResult.TypeContext)
+	component.Directives = cloneDirectives(pResult.Directives)
+	component.ColumnsDiscovery = pResult.ColumnsDiscovery
+	return component
+}
+
+// applyViewMeta populates the component with view names, declarations, relations,
+// query selectors, predicate maps, and root view from the plan view list.
+func applyViewMeta(component *Component, views []*plan.View) {
+	for _, aView := range views {
 		if aView == nil {
 			continue
 		}
-		ret.Views = append(ret.Views, aView.Name)
+		component.Views = append(component.Views, aView.Name)
 		if aView.Declaration != nil {
-			if ret.Declarations == nil {
-				ret.Declarations = map[string]*plan.ViewDeclaration{}
-			}
-			ret.Declarations[aView.Name] = aView.Declaration
-			if selector := strings.TrimSpace(aView.Declaration.QuerySelector); selector != "" {
-				if ret.QuerySelectors == nil {
-					ret.QuerySelectors = map[string][]string{}
-				}
-				ret.QuerySelectors[selector] = append(ret.QuerySelectors[selector], aView.Name)
-			}
-			if len(aView.Declaration.Predicates) > 0 {
-				if ret.Predicates == nil {
-					ret.Predicates = map[string][]*plan.ViewPredicate{}
-				}
-				ret.Predicates[aView.Name] = append(ret.Predicates[aView.Name], aView.Declaration.Predicates...)
-			}
+			indexViewDeclaration(component, aView.Name, aView.Declaration)
 		}
 		if len(aView.Relations) > 0 {
-			ret.Relations = append(ret.Relations, aView.Relations...)
-			ret.ViewRelations = append(ret.ViewRelations, toViewRelations(aView.Relations)...)
+			component.Relations = append(component.Relations, aView.Relations...)
+			component.ViewRelations = append(component.ViewRelations, toViewRelations(aView.Relations)...)
 		}
 	}
-	rootView := pickRootView(pResult.Views)
-	if rootView != nil {
-		ret.RootView = rootView.Name
-		if ret.Name == "" {
-			ret.Name = rootView.Name
+	if rootView := pickRootView(views); rootView != nil {
+		component.RootView = rootView.Name
+		if component.Name == "" {
+			component.Name = rootView.Name
 		}
 	}
-	for _, item := range pResult.States {
+}
+
+// indexViewDeclaration registers the declaration's query selector and predicates
+// on the component index maps, creating them on demand.
+func indexViewDeclaration(component *Component, viewName string, decl *plan.ViewDeclaration) {
+	if component.Declarations == nil {
+		component.Declarations = map[string]*plan.ViewDeclaration{}
+	}
+	component.Declarations[viewName] = decl
+	if selector := strings.TrimSpace(decl.QuerySelector); selector != "" {
+		if component.QuerySelectors == nil {
+			component.QuerySelectors = map[string][]string{}
+		}
+		component.QuerySelectors[selector] = append(component.QuerySelectors[selector], viewName)
+	}
+	if len(decl.Predicates) > 0 {
+		if component.Predicates == nil {
+			component.Predicates = map[string][]*plan.ViewPredicate{}
+		}
+		component.Predicates[viewName] = append(component.Predicates[viewName], decl.Predicates...)
+	}
+}
+
+// applyStateBuckets sorts plan states into the typed buckets on the component
+// (Input, Output, Meta, Async, Other) based on the state's location kind.
+func applyStateBuckets(component *Component, states []*plan.State) {
+	for _, item := range states {
 		if item == nil {
 			continue
 		}
-		kind := strings.ToLower(item.KindString())
+		kind := state.Kind(strings.ToLower(item.KindString()))
 		inName := item.InName()
 		if kind == "" && inName == "" {
-			ret.Other = append(ret.Other, item)
+			component.Other = append(component.Other, item)
 			continue
 		}
 		switch kind {
-		case "query", "path", "header", "body", "form", "cookie", "request", "":
-			ret.Input = append(ret.Input, item)
-		case "output":
-			ret.Output = append(ret.Output, item)
-		case "meta":
-			ret.Meta = append(ret.Meta, item)
-		case "async":
-			ret.Async = append(ret.Async, item)
+		case state.KindQuery, state.KindPath, state.KindHeader, state.KindRequestBody,
+			state.KindForm, state.KindCookie, state.KindRequest, "":
+			component.Input = append(component.Input, item)
+		case state.KindOutput:
+			component.Output = append(component.Output, item)
+		case state.KindMeta:
+			component.Meta = append(component.Meta, item)
+		case state.KindAsync:
+			component.Async = append(component.Async, item)
 		default:
-			ret.Other = append(ret.Other, item)
+			component.Other = append(component.Other, item)
 		}
 	}
-	ret.TypeContext = cloneTypeContext(pResult.TypeContext)
-	ret.Directives = cloneDirectives(pResult.Directives)
-	ret.ColumnsDiscovery = pResult.ColumnsDiscovery
-	return ret
+}
+
+// synthesizePredicateStates creates query parameters for view-level predicates whose
+// source parameter is not already present in the input state list.
+func synthesizePredicateStates(input []*plan.State, predicates map[string][]*plan.ViewPredicate) []*plan.State {
+	if len(predicates) == 0 {
+		return nil
+	}
+	declared := make(map[string]bool, len(input))
+	for _, s := range input {
+		if s != nil {
+			declared[strings.ToLower(strings.TrimPrefix(strings.TrimSpace(s.Name), "$"))] = true
+		}
+	}
+	var result []*plan.State
+	for _, viewPredicates := range predicates {
+		for _, vp := range viewPredicates {
+			if vp == nil {
+				continue
+			}
+			src := strings.TrimPrefix(strings.TrimSpace(vp.Source), "$")
+			if src == "" || declared[strings.ToLower(src)] {
+				continue
+			}
+			result = append(result, &plan.State{
+				Parameter: state.Parameter{
+					Name:   src,
+					In:     state.NewQueryLocation(src),
+					Schema: &state.Schema{DataType: "string"},
+					Predicates: []*extension.PredicateConfig{
+						{
+							Name:   vp.Name,
+							Ensure: vp.Ensure,
+							Args:   append([]string{}, vp.Arguments...),
+						},
+					},
+				},
+			})
+			declared[strings.ToLower(src)] = true
+		}
+	}
+	return result
 }
 
 func cloneTypeContext(input *typectx.Context) *typectx.Context {
@@ -282,6 +370,10 @@ func materializeView(item *plan.View) (*view.View, error) {
 	aView.Ref = item.Ref
 	aView.Module = item.Module
 	aView.AllowNulls = item.AllowNulls
+	// Gap 6: forward view-level tag from declaration.
+	if item.Declaration != nil && strings.TrimSpace(item.Declaration.Tag) != "" {
+		aView.Tag = strings.TrimSpace(item.Declaration.Tag)
+	}
 	if strings.TrimSpace(item.SelectorNamespace) != "" || item.SelectorNoLimit != nil {
 		if aView.Selector == nil {
 			aView.Selector = &view.Config{}
@@ -299,6 +391,14 @@ func materializeView(item *plan.View) (*view.View, error) {
 		}
 		if aView.Schema.Name == "" {
 			aView.Schema.Name = strings.Trim(strings.TrimSpace(item.SchemaType), "*")
+		}
+	}
+	// Populate columns from statically-inferred struct type so that xgen can
+	// generate accurate Go struct definitions during bootstrap. Only applied when
+	// the view has no columns yet (avoids overwriting explicit column config).
+	if len(aView.Columns) == 0 {
+		if cols := inferColumnsFromType(item.ElementType); len(cols) > 0 {
+			aView.Columns = cols
 		}
 	}
 	return aView, nil

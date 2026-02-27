@@ -20,7 +20,7 @@ func TestDQLCompiler_Compile(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.Len(t, planned.Views, 1)
 	view := planned.Views[0]
@@ -49,7 +49,7 @@ SELECT id
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.Len(t, planned.Views, 1)
 	assert.Equal(t, "sample_report", planned.Views[0].Name)
@@ -66,7 +66,7 @@ SELECT id FROM ORDERS t`
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotNil(t, planned.TypeContext)
 	assert.Equal(t, "mdp/performance", planned.TypeContext.DefaultPackage)
@@ -86,7 +86,7 @@ func TestDQLCompiler_Compile_PropagatesImportedTypeContextWithModuleNormalizatio
 	}
 	res, err := compiler.Compile(context.Background(), source)
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotNil(t, planned.TypeContext)
 	require.Len(t, planned.TypeContext.Imports, 1)
@@ -112,7 +112,7 @@ SELECT id FROM ORDERS o
 `
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotNil(t, planned.Directives)
 	assert.Equal(t, "docs/orders.md", planned.Directives.Meta)
@@ -141,7 +141,7 @@ func TestDQLCompiler_Compile_ColumnDiscoveryAutoForWildcard(t *testing.T) {
 	compiler := New()
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: "SELECT * FROM ORDERS o"})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.True(t, planned.ColumnsDiscovery)
 	require.NotEmpty(t, planned.Views)
@@ -166,7 +166,7 @@ func TestDQLCompiler_Compile_TypeContextValidationWarnsInCompat(t *testing.T) {
 SELECT id FROM ORDERS t`
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql}, shape.WithTypeContextPackageName("bad/name"))
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Diagnostics)
 	assert.Equal(t, dqldiag.CodeTypeCtxInvalid, planned.Diagnostics[0].Code)
@@ -211,7 +211,7 @@ func TestDQLCompiler_Compile_SyntaxError_RemapsAfterSanitize(t *testing.T) {
 		require.NotEmpty(t, compileErr.Diagnostics)
 		diagnostics = compileErr.Diagnostics
 	} else {
-		planned, ok := res.Plan.(*plan.Result)
+		planned, ok := plan.ResultFrom(res)
 		require.True(t, ok)
 		diagnostics = planned.Diagnostics
 	}
@@ -263,7 +263,7 @@ func TestDQLCompiler_Compile_ExtractsJoinLinks(t *testing.T) {
 	dql := "SELECT o.id, i.sku FROM orders o JOIN order_items i ON o.id = i.order_id"
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	root := planned.ViewsByName["o"]
 	require.NotNil(t, root)
@@ -281,7 +281,7 @@ func TestDQLCompiler_Compile_JoinDiagnostics(t *testing.T) {
 	dql := "SELECT o.id FROM orders o JOIN order_items i ON o.id > i.order_id"
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Diagnostics)
 	assert.Equal(t, dqldiag.CodeRelUnsupported, planned.Diagnostics[0].Code)
@@ -325,7 +325,7 @@ func TestDQLCompiler_Compile_SQLInjectionDiagnostic(t *testing.T) {
 	dql := "SELECT id FROM ORDERS t WHERE t.id = $Unsafe.Id"
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Diagnostics)
 	assert.Equal(t, dqldiag.CodeSQLIRawSelector, planned.Diagnostics[0].Code)
@@ -338,7 +338,7 @@ func TestDQLCompiler_Compile_SanitizesBindings(t *testing.T) {
 	dql := "SELECT id FROM ORDERS t WHERE t.id = $Id"
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Views)
 	assert.Contains(t, planned.Views[0].SQL, "$criteria.AppendBinding($Unsafe.Id)")
@@ -351,7 +351,7 @@ func TestDQLCompiler_Compile_ParameterDerivedView(t *testing.T) {
 SELECT id FROM ORDERS t`
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.Len(t, planned.Views, 2)
 	extra := planned.ViewsByName["e"]
@@ -367,7 +367,7 @@ func TestDQLCompiler_Compile_ParameterDerivedView_Options(t *testing.T) {
 SELECT id FROM ORDERS t`
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	extra := planned.ViewsByName["e"]
 	require.NotNil(t, extra)
@@ -383,7 +383,7 @@ func TestDQLCompiler_Compile_ParameterDerivedView_MissingSQLHint(t *testing.T) {
 SELECT id FROM ORDERS t`
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Diagnostics)
 	assert.Equal(t, dqldiag.CodeViewMissingSQL, planned.Diagnostics[len(planned.Diagnostics)-1].Code)
@@ -396,7 +396,7 @@ func TestDQLCompiler_Compile_ParameterDerivedView_InvalidCardinalityDiagnostic(t
 SELECT id FROM ORDERS t`
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: dql})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Diagnostics)
 	assert.Equal(t, dqldiag.CodeViewCardinality, planned.Diagnostics[len(planned.Diagnostics)-1].Code)
@@ -420,7 +420,7 @@ func TestDQLCompiler_Compile_DMLInsert(t *testing.T) {
 		DQL:  "INSERT INTO ORDERS(id) VALUES (1)",
 	})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.Len(t, planned.Views, 1)
 	assert.Equal(t, "ORDERS", planned.Views[0].Table)
@@ -478,7 +478,7 @@ func TestDQLCompiler_Compile_MixedReadExec_Warning(t *testing.T) {
 		DQL:  "SELECT id FROM ORDERS\nUPDATE ORDERS SET id = 2",
 	})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Diagnostics)
 	assert.Equal(t, dqldiag.CodeDMLMixed, planned.Diagnostics[len(planned.Diagnostics)-1].Code)
@@ -491,7 +491,7 @@ func TestDQLCompiler_Compile_MixedMode_ExecWins(t *testing.T) {
 		DQL:  "SELECT o.id FROM ORDERS o\nUPDATE ORDERS SET id = 2",
 	}, shape.WithMixedMode(shape.CompileMixedModeExecWins))
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Views)
 	assert.Equal(t, "ORDERS", planned.Views[0].Table)
@@ -506,7 +506,7 @@ func TestDQLCompiler_Compile_MixedMode_ReadWins(t *testing.T) {
 		DQL:  "SELECT o.id FROM ORDERS o\nUPDATE ORDERS SET id = 2",
 	}, shape.WithMixedMode(shape.CompileMixedModeReadWins))
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Views)
 	assert.Equal(t, "o", planned.Views[0].Name)
@@ -538,7 +538,7 @@ func TestDQLCompiler_Compile_UnknownNonRead_Warn(t *testing.T) {
 		DQL:  "$Foo.Bar($x)",
 	})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Diagnostics)
 	var found *dqlshape.Diagnostic
@@ -603,7 +603,7 @@ func TestDQLCompiler_Compile_UnknownNonRead_UsesGeneratedCompanion(t *testing.T)
 	compiler := New()
 	res, err := compiler.Compile(context.Background(), source)
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotNil(t, planned.ViewsByName["o"])
 	require.NotNil(t, planned.ViewsByName["i"])
@@ -663,7 +663,7 @@ func TestDQLCompiler_Compile_HandlerNop_NoSQLiEscalation(t *testing.T) {
 		DQL:  "$Nop($Unsafe.Id)",
 	}, shape.WithCompileStrict(true))
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	for _, item := range planned.Diagnostics {
 		if item == nil {
@@ -685,7 +685,7 @@ JOIN (SELECT * FROM session/attributes) attribute ON attribute.user_id = session
 `
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "system/session", DQL: dql})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	root := planned.ViewsByName["session"]
 	require.NotNil(t, root)
@@ -732,7 +732,7 @@ func TestDQLCompiler_Compile_GeneratedHandler_NoBodyInput_DoesNotLoadLegacyContr
 	compiler := New()
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "delete", Path: genPath, DQL: `/* {"Method":"DELETE","URI":"/v1/api/system/upload"} */`})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 
 	require.NotEmpty(t, planned.Views)
@@ -797,7 +797,7 @@ func TestDQLCompiler_Compile_HandlerLegacyTypes_NotLoadedFromLegacyRouteYAML(t *
 		DQL:  `/* {"URI":"/v1/api/platform/campaign","Method":"POST","Type":"campaign/patch.Handler"} */`,
 	})
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 
 	assert.Empty(t, planned.Types)
@@ -829,7 +829,7 @@ func TestDQLCompiler_Compile_CustomPathLayout_NoLegacyHandlerFallback(t *testing
 		DQL:  `/* {"URI":"/v1/api/platform/campaign","Method":"POST","Type":"campaign/patch.Handler","Connector":"ci_ads"} */`,
 	}, shape.WithDQLPathMarker("sqlsrc"), shape.WithRoutesRelativePath("config/routes"))
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Views)
 	assert.Equal(t, "post", planned.Views[0].Name)

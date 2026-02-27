@@ -19,6 +19,7 @@ import (
 	datlyservice "github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"gopkg.in/yaml.v3"
 )
 
@@ -56,8 +57,8 @@ func (s *Service) translateShapeIR(ctx context.Context, opts *options.Options) e
 		if err != nil {
 			return fmt.Errorf("failed to load %s: %w", sourceURL, err)
 		}
-		component, ok := componentArtifact.Component.(*shapeLoad.Component)
-		if !ok || component == nil {
+		component, ok := shapeLoad.ComponentFrom(componentArtifact)
+		if !ok {
 			return fmt.Errorf("unexpected component artifact for %s", sourceURL)
 		}
 
@@ -86,6 +87,7 @@ func (s *Service) translateShapeIR(ctx context.Context, opts *options.Options) e
 		if err = s.fs.Upload(ctx, irPath, file.DefaultFileOsMode, strings.NewReader(string(encoded))); err != nil {
 			return fmt.Errorf("failed to persist route ir %s: %w", irPath, err)
 		}
+		generateShapeTypes(url.Path(sourceURL), payload, component)
 	}
 	return nil
 }
@@ -100,6 +102,18 @@ func buildShapeRulePayload(opts *options.Options, dql string, resource *view.Res
 		rootView = resource.Views[0].Name
 	}
 	method, uri := parseShapeRulePath(dql, rule.RuleName(), opts.Repository().APIPrefix)
+	// Gap 3: RouteDirective overrides method/URI when explicitly declared in DQL.
+	if component != nil && component.Directives != nil && component.Directives.Route != nil {
+		rd := component.Directives.Route
+		if u := strings.TrimSpace(rd.URI); u != "" {
+			uri = u
+		}
+		if len(rd.Methods) > 0 {
+			if m := strings.TrimSpace(strings.ToUpper(rd.Methods[0])); m != "" {
+				method = m
+			}
+		}
+	}
 	route := &repository.Component{
 		Path: contract.Path{
 			Method: method,
@@ -116,6 +130,24 @@ func buildShapeRulePayload(opts *options.Options, dql string, resource *view.Res
 			route.Name = strings.TrimSpace(component.Directives.MCP.Name)
 			route.Description = strings.TrimSpace(component.Directives.MCP.Description)
 			route.DescriptionURI = strings.TrimSpace(component.Directives.MCP.DescriptionPath)
+		}
+	}
+	if component != nil && (len(component.Input) > 0 || len(component.Meta) > 0) {
+		params := make(state.Parameters, 0, len(component.Input)+len(component.Meta))
+		for _, s := range component.Input {
+			if s != nil {
+				p := s.Parameter
+				params = append(params, &p)
+			}
+		}
+		for _, s := range component.Meta {
+			if s != nil {
+				p := s.Parameter
+				params = append(params, &p)
+			}
+		}
+		if len(params) > 0 {
+			route.Contract.Input.Type.Parameters = params
 		}
 	}
 	payload := &shapeRuleFile{

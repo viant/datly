@@ -40,11 +40,11 @@ func appendDeclaredStates(rawDQL string, result *plan.Result) {
 			ensureStateSchema(state).DataType = inType
 			state.OutputDataType = outType
 		}
-		switch strings.ToLower(kind) {
-		case "query":
+		switch st.Kind(strings.ToLower(kind)) {
+		case st.KindQuery:
 			required := false
 			state.Required = &required
-		case "header":
+		case st.KindHeader:
 			required := true
 			state.Required = &required
 		}

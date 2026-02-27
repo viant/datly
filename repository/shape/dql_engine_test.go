@@ -35,7 +35,7 @@ func TestEngine_LoadDQLComponent(t *testing.T) {
 	require.NotNil(t, artifact)
 	require.NotNil(t, artifact.Component)
 
-	component, ok := artifact.Component.(*shapeLoad.Component)
+	component, ok := shapeLoad.ComponentFrom(artifact)
 	require.True(t, ok)
 	assert.Equal(t, "/v1/api/reports/orders", component.Name)
 	assert.Equal(t, "t", component.RootView)
@@ -53,7 +53,7 @@ SELECT id FROM ORDERS t`
 	artifact, err := engine.LoadDQLComponent(context.Background(), dql)
 	require.NoError(t, err)
 	require.NotNil(t, artifact)
-	component, ok := artifact.Component.(*shapeLoad.Component)
+	component, ok := shapeLoad.ComponentFrom(artifact)
 	require.True(t, ok)
 	require.NotNil(t, component.Declarations)
 	require.NotNil(t, component.QuerySelectors)

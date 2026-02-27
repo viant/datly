@@ -32,20 +32,10 @@ func buildHandlerIfNeeded(source *shape.Source, pre *dqlpre.Result, statements d
 	if !unknownOnly && !isHandlerSignal(source) {
 		return ret
 	}
-	if buildHandlerFromContractIfNeeded(ret, source, layout) {
-		return ret
-	}
 	if buildGeneratedFallbackIfNeeded(ret, source, layout) {
 		return ret
 	}
 	return ret
-}
-
-func buildHandlerFromContractIfNeeded(ret *handlerPreprocessResult, source *shape.Source, layout compilePathLayout) bool {
-	_ = ret
-	_ = source
-	_ = layout
-	return false
 }
 
 func buildGeneratedFallbackIfNeeded(ret *handlerPreprocessResult, source *shape.Source, layout compilePathLayout) bool {

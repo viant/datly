@@ -476,7 +476,7 @@ func evaluateParityEntry(platformRoot, routesRoot string, entry parityRule, comp
 		return out
 	}
 
-	planned, _ := planResult.Plan.(*plan.Result)
+	planned, _ := plan.ResultFrom(planResult)
 	if planned != nil {
 		out.Output.ShapeMeta = &resourceMetaIR{}
 		if sourcePath != "" {

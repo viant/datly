@@ -23,14 +23,17 @@ func New() *Planner {
 }
 
 // Plan implements shape.Planner.
-func (p *Planner) Plan(_ context.Context, scanned *shape.ScanResult, _ ...shape.PlanOption) (*shape.PlanResult, error) {
+func (p *Planner) Plan(ctx context.Context, scanned *shape.ScanResult, _ ...shape.PlanOption) (*shape.PlanResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if scanned == nil || scanned.Source == nil {
 		return nil, shape.ErrNilSource
 	}
 
-	scanResult, ok := scanned.Descriptors.(*scan.Result)
-	if !ok || scanResult == nil {
-		return nil, fmt.Errorf("shape plan: unsupported descriptors type %T", scanned.Descriptors)
+	scanResult, ok := scan.DescriptorsFrom(scanned)
+	if !ok {
+		return nil, fmt.Errorf("shape plan: unsupported descriptors kind %q", scanned.Descriptors.ShapeSpecKind())
 	}
 
 	result := &Result{
@@ -203,16 +206,16 @@ func resolveStateType(item *State, fallback reflect.Type) reflect.Type {
 		return fallback
 	}
 	key := strings.ToLower(strings.TrimSpace(firstNonEmpty(item.In.Name, item.Name)))
-	switch strings.ToLower(strings.TrimSpace(string(item.In.Kind))) {
-	case "output":
+	switch item.In.Kind {
+	case state.KindOutput:
 		if rType, ok := outputkeys.Types[key]; ok {
 			return rType
 		}
-	case "meta":
+	case state.KindMeta:
 		if rType, ok := metakeys.Types[key]; ok {
 			return rType
 		}
-	case "async":
+	case state.KindAsync:
 		if rType, ok := keys.Types[key]; ok {
 			return rType
 		}

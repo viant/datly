@@ -91,7 +91,7 @@ func TestEngineParity_Component_SourceTagFieldJoin(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, artifact)
 
-	component, ok := artifact.Component.(*shapeLoad.Component)
+	component, ok := shapeLoad.ComponentFrom(artifact)
 	require.True(t, ok)
 	require.Len(t, component.ViewRelations, 1)
 	require.Len(t, component.ViewRelations[0].On, 1)

@@ -40,33 +40,69 @@ func (e *CompileError) Error() string {
 }
 
 // Compile implements shape.DQLCompiler.
-func (c *DQLCompiler) Compile(_ context.Context, source *shape.Source, opts ...shape.CompileOption) (*shape.PlanResult, error) {
+func (c *DQLCompiler) Compile(ctx context.Context, source *shape.Source, opts ...shape.CompileOption) (*shape.PlanResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if source == nil {
 		return nil, shape.ErrNilSource
 	}
 	compileOptions := applyCompileOptions(opts)
 	pathLayout := newCompilePathLayout(compileOptions)
-	compileProfile := normalizeCompileProfile(compileOptions.Profile)
-	enforceStrict := compileOptions.Strict || compileProfile == shape.CompileProfileStrict
-	if strings.TrimSpace(source.DQL) == "" {
-		return nil, shape.ErrNilDQL
+	enforceStrict := compileOptions.Strict || normalizeCompileProfile(compileOptions.Profile) == shape.CompileProfileStrict
+
+	prepared, allDiags, err := c.preprocessSource(source, compileOptions, pathLayout, enforceStrict)
+	if err != nil {
+		return nil, err
 	}
 
+	root, compileDiags, err := c.compileRoot(
+		source.Name, prepared.Pre.SQL, prepared.Statements, prepared.Decision,
+		compileOptions.MixedMode, compileOptions.UnknownNonReadMode,
+	)
+	if err != nil {
+		return nil, err
+	}
+	prepared.Pre.Mapper.Remap(compileDiags)
+	allDiags = append(allDiags, compileDiags...)
+	if root == nil {
+		return nil, &CompileError{Diagnostics: allDiags}
+	}
+
+	result := c.assembleResult(source, root, prepared, compileOptions, pathLayout, allDiags)
+	if enforceStrict && hasEscalationWarnings(result.Diagnostics) {
+		return nil, &CompileError{Diagnostics: filterEscalationDiagnostics(result.Diagnostics)}
+	}
+	if hasErrorDiagnostics(result.Diagnostics) {
+		return nil, &CompileError{Diagnostics: result.Diagnostics}
+	}
+	return &shape.PlanResult{Source: source, Plan: result}, nil
+}
+
+// preprocessSource runs DQL preprocessing (type context, directives, handler
+// detection) and returns a ready-to-compile prepared result with accumulated
+// diagnostics. Returns an error only for fatal early failures.
+func (c *DQLCompiler) preprocessSource(
+	source *shape.Source,
+	compileOptions *shape.CompileOptions,
+	pathLayout compilePathLayout,
+	enforceStrict bool,
+) (*handlerPreprocessResult, []*dqlshape.Diagnostic, error) {
+	if strings.TrimSpace(source.DQL) == "" {
+		return nil, nil, shape.ErrNilDQL
+	}
 	pre := dqlpre.Prepare(source.DQL)
 	pre.TypeCtx = applyTypeContextDefaults(pre.TypeCtx, source, compileOptions, pathLayout)
 	pre.Diagnostics = append(pre.Diagnostics, typeContextDiagnostics(pre.TypeCtx, enforceStrict)...)
 	allDiags := append([]*dqlshape.Diagnostic{}, pre.Diagnostics...)
 	if hasErrorDiagnostics(allDiags) {
-		return nil, &CompileError{Diagnostics: allDiags}
+		return nil, nil, &CompileError{Diagnostics: allDiags}
 	}
 
 	statements := dqlstmt.New(pre.SQL)
 	decision := pipeline.Classify(statements)
 	prepared := buildHandlerIfNeeded(source, pre, statements, decision, pathLayout)
-	pre = prepared.Pre
-	statements = prepared.Statements
-	decision = prepared.Decision
-	if strings.TrimSpace(pre.SQL) == "" {
+	if strings.TrimSpace(prepared.Pre.SQL) == "" {
 		allDiags = append(allDiags, &dqlshape.Diagnostic{
 			Code:     dqldiag.CodeParseEmpty,
 			Severity: dqlshape.SeverityError,
@@ -77,43 +113,36 @@ func (c *DQLCompiler) Compile(_ context.Context, source *shape.Source, opts ...s
 				End:   dqlshape.Position{Line: 1, Char: 1},
 			},
 		})
-		return nil, &CompileError{Diagnostics: allDiags}
+		return nil, nil, &CompileError{Diagnostics: allDiags}
 	}
-	var root *plan.View
-	var compileDiags []*dqlshape.Diagnostic
-	var err error
-	root, compileDiags, err = c.compileRoot(source.Name, pre.SQL, statements, decision, compileOptions.MixedMode, compileOptions.UnknownNonReadMode)
-	if err != nil {
-		return nil, err
-	}
-	pre.Mapper.Remap(compileDiags)
-	allDiags = append(allDiags, compileDiags...)
-	if root == nil {
-		return nil, &CompileError{Diagnostics: allDiags}
-	}
+	return prepared, allDiags, nil
+}
 
+// assembleResult builds the plan.Result from the compiled root view, attaches
+// declared relations/views/states, applies enrichment, and computes the final
+// column-discovery policy diagnostics.
+func (c *DQLCompiler) assembleResult(
+	source *shape.Source,
+	root *plan.View,
+	prepared *handlerPreprocessResult,
+	compileOptions *shape.CompileOptions,
+	pathLayout compilePathLayout,
+	diags []*dqlshape.Diagnostic,
+) *plan.Result {
 	result := newPlanResult(root)
-	result.Diagnostics = allDiags
-	result.TypeContext = pre.TypeCtx
-	result.Directives = pre.Directives
+	result.Diagnostics = diags
+	result.TypeContext = prepared.Pre.TypeCtx
+	result.Directives = prepared.Pre.Directives
 	applyDefaultConnectorDirective(result)
 	hints := extractViewHints(source.DQL)
 	appendRelationViews(result, root, hints)
 	appendDeclaredViews(source.DQL, result)
 	appendDeclaredStates(source.DQL, result)
-	_ = prepared
 	applyViewHints(result, hints)
 	applySourceParityEnrichmentWithLayout(result, source, pathLayout)
 	applyLinkedTypeSupport(result, source)
 	result.Diagnostics = append(result.Diagnostics, applyColumnDiscoveryPolicy(result, compileOptions)...)
-
-	if enforceStrict && hasEscalationWarnings(result.Diagnostics) {
-		return nil, &CompileError{Diagnostics: filterEscalationDiagnostics(result.Diagnostics)}
-	}
-	if hasErrorDiagnostics(result.Diagnostics) {
-		return nil, &CompileError{Diagnostics: result.Diagnostics}
-	}
-	return &shape.PlanResult{Source: source, Plan: result}, nil
+	return result
 }
 
 func applyDefaultConnectorDirective(result *plan.Result) {

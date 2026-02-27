@@ -48,7 +48,7 @@ func appendComponentTypesWithLayout(source *shape.Source, result *plan.Result, l
 	}
 
 	for _, stateItem := range result.States {
-		if stateItem == nil || !strings.EqualFold(stateItem.KindString(), "component") {
+		if stateItem == nil || state.Kind(strings.ToLower(stateItem.KindString())) != state.KindComponent {
 			continue
 		}
 		ref := stateItem.InName()
@@ -77,11 +77,7 @@ func appendComponentTypesWithLayout(source *shape.Source, result *plan.Result, l
 		}
 	}
 
-	names := make([]string, 0, len(collector.typesByName))
-	for name := range collector.typesByName {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	sort.Strings(collector.typeOrder)
 	existing := map[string]bool{}
 	reportedCollision := map[string]bool{}
 	for _, item := range result.Types {
@@ -90,7 +86,7 @@ func appendComponentTypesWithLayout(source *shape.Source, result *plan.Result, l
 		}
 		existing[strings.ToLower(strings.TrimSpace(item.Name))] = true
 	}
-	for _, name := range names {
+	for _, name := range collector.typeOrder {
 		keyName := strings.ToLower(strings.TrimSpace(name))
 		if existing[keyName] {
 			if !reportedCollision[keyName] {
@@ -116,10 +112,13 @@ type componentCollector struct {
 	routesRoot    string
 	visited       map[string]componentVisitState
 	outputByRoute map[string]string
-	typesByName   map[string]*plan.Type
-	payloadCache  map[string]routePayloadLookup
-	reportedDiag  map[string]bool
-	diags         []*dqlshape.Diagnostic
+	// typesByName provides O(1) dedup; typeOrder tracks insertion sequence
+	// so the final list can be sorted once rather than extracted from the map.
+	typesByName  map[string]*plan.Type
+	typeOrder    []string
+	payloadCache map[string]routePayloadLookup
+	reportedDiag map[string]bool
+	diags        []*dqlshape.Diagnostic
 }
 
 type routePayloadLookup struct {
@@ -175,6 +174,7 @@ func (c *componentCollector) collect(namespace string, span dqlshape.Span, requi
 		if _, exists := c.typesByName[keyName]; exists {
 			continue
 		}
+		c.typeOrder = append(c.typeOrder, keyName)
 		c.typesByName[keyName] = &plan.Type{
 			Name:        name,
 			Alias:       strings.TrimSpace(item.Alias),
@@ -189,7 +189,7 @@ func (c *componentCollector) collect(namespace string, span dqlshape.Span, requi
 	c.outputByRoute[key] = outputType
 
 	for _, param := range payload.Resource.Parameters {
-		if !strings.EqualFold(strings.TrimSpace(param.In.Kind), "component") {
+		if !strings.EqualFold(strings.TrimSpace(param.In.Kind), string(state.KindComponent)) {
 			continue
 		}
 		nextNS := resolveComponentNamespaceFromRoute(strings.TrimSpace(param.In.Name), namespace)
@@ -449,7 +449,7 @@ func routeOutputType(payload *routePayload) string {
 		}
 	}
 	for _, param := range payload.Resource.Parameters {
-		if strings.EqualFold(strings.TrimSpace(param.In.Kind), "output") {
+		if strings.EqualFold(strings.TrimSpace(param.In.Kind), string(state.KindOutput)) {
 			if dataType := strings.TrimSpace(param.Schema.DataType); dataType != "" {
 				return dataType
 			}
@@ -462,7 +462,7 @@ func routeOutputType(payload *routePayload) string {
 		}
 	}
 	for _, item := range payload.Resource.Types {
-		if strings.EqualFold(strings.TrimSpace(item.Name), "output") {
+		if strings.EqualFold(strings.TrimSpace(item.Name), string(state.KindOutput)) {
 			if dataType := strings.TrimSpace(item.DataType); dataType != "" {
 				return dataType
 			}

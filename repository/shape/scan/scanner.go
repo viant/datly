@@ -20,7 +20,10 @@ func New() *StructScanner {
 }
 
 // Scan implements shape.Scanner.
-func (s *StructScanner) Scan(_ context.Context, source *shape.Source, _ ...shape.ScanOption) (*shape.ScanResult, error) {
+func (s *StructScanner) Scan(ctx context.Context, source *shape.Source, _ ...shape.ScanOption) (*shape.ScanResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if source == nil {
 		return nil, shape.ErrNilSource
 	}

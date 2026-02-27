@@ -35,9 +35,9 @@ func FromHolderStruct(ctx context.Context, holder any) (*Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
-	shapeResult, ok := planned.Plan.(*shapeplan.Result)
-	if !ok || shapeResult == nil {
-		return nil, fmt.Errorf("dql load: unsupported shape plan type %T", planned.Plan)
+	shapeResult, ok := shapeplan.ResultFrom(planned)
+	if !ok {
+		return nil, fmt.Errorf("dql load: unsupported shape plan kind %q", planned.Plan.ShapeSpecKind())
 	}
 	views := make([]any, 0, len(shapeResult.Views))
 	for _, item := range shapeResult.Views {

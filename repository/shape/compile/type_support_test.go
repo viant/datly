@@ -31,7 +31,7 @@ func TestDQLCompiler_Compile_UsesLinkedRootTypeForSchemaType(t *testing.T) {
 
 	res, err := compiler.Compile(context.Background(), source)
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Views)
 	assert.Equal(t, "*compile.linkedRootType", planned.Views[0].SchemaType)
@@ -52,7 +52,7 @@ func TestDQLCompiler_Compile_UsesLinkedRegistryTypeForNamedView(t *testing.T) {
 
 	res, err := compiler.Compile(context.Background(), source)
 	require.NoError(t, err)
-	planned, ok := res.Plan.(*plan.Result)
+	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.NotEmpty(t, planned.Views)
 	assert.Equal(t, "*compile.OrdersView", planned.Views[0].SchemaType)
