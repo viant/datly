@@ -29,7 +29,8 @@ func (s *Service) Translate(ctx context.Context, opts *options.Options) (err err
 	if err = s.translate(ctx, opts); err != nil {
 		return err
 	}
-	if opts.Rule().EffectiveEngine() == options.EngineShape {
+	engine := opts.Rule().EffectiveEngine()
+	if engine == options.EngineShape || engine == options.EngineShapeIR {
 		return nil
 	}
 	return s.persistRepository(ctx)
@@ -52,8 +53,11 @@ func (s *Service) persistRepository(ctx context.Context) error {
 }
 
 func (s *Service) translate(ctx context.Context, opts *options.Options) error {
-	if opts.Rule().EffectiveEngine() == options.EngineShape {
+	switch opts.Rule().EffectiveEngine() {
+	case options.EngineShape:
 		return s.translateShape(ctx, opts)
+	case options.EngineShapeIR:
+		return s.translateShapeIR(ctx, opts)
 	}
 	if err := s.ensureTranslator(opts); err != nil {
 		return fmt.Errorf("failed to create translator: %v", err)

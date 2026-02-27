@@ -69,6 +69,25 @@ type RouteDirective struct {
 	Methods []string
 }
 
+type Route struct {
+	Name        string
+	URI         string
+	Method      string
+	ViewRef     string
+	Description string
+}
+
+type Resource struct {
+	Views []*View
+}
+
+type View struct {
+	Name         string
+	Table        string
+	Module       string
+	ConnectorRef string
+}
+
 // Document represents parsed DQL model used by shape compiler and xgen.
 type Document struct {
 	Raw             string
@@ -76,6 +95,8 @@ type Document struct {
 	Query           *query.Select
 	TypeContext     *typectx.Context
 	Directives      *Directives
+	Routes          []*Route
+	Resource        *Resource
 	Root            map[string]any
 	TypeResolutions []typectx.Resolution
 	Diagnostics     []*Diagnostic

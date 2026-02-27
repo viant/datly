@@ -78,16 +78,15 @@ func TestPlanner_Plan(t *testing.T) {
 	}
 
 	require.NotNil(t, stateByPath["Status"])
-	assert.Equal(t, outputkeys.Types["status"], stateByPath["Status"].EffectiveType)
+	assert.Equal(t, outputkeys.Types["status"], stateByPath["Status"].Schema.Type())
 	require.NotNil(t, stateByPath["Job"])
-	assert.Equal(t, asynckeys.Types["job"], stateByPath["Job"].EffectiveType)
+	assert.Equal(t, asynckeys.Types["job"], stateByPath["Job"].Schema.Type())
 	require.NotNil(t, stateByPath["VName"])
-	assert.Equal(t, metakeys.Types["view.name"], stateByPath["VName"].EffectiveType)
+	assert.Equal(t, metakeys.Types["view.name"], stateByPath["VName"].Schema.Type())
 
 	require.NotNil(t, stateByPath["ID"])
-	assert.Equal(t, "query", stateByPath["ID"].Kind)
-	assert.Equal(t, "id", stateByPath["ID"].In)
-	assert.Equal(t, stateByPath["ID"].TagType, stateByPath["ID"].EffectiveType)
+	assert.Equal(t, "query", stateByPath["ID"].KindString())
+	assert.Equal(t, "id", stateByPath["ID"].InName())
 }
 
 func TestPlanner_Plan_LinkOnProducesStructuredRelations(t *testing.T) {

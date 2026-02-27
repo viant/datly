@@ -3,9 +3,11 @@ package plan
 import (
 	"embed"
 	"reflect"
+	"strings"
 
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/typectx"
+	"github.com/viant/datly/view/state"
 )
 
 // Result is normalized shape plan produced from scan descriptors.
@@ -130,35 +132,21 @@ type RelationLink struct {
 
 // State is a normalized parameter field plan.
 type State struct {
-	Path           string
-	Name           string
-	Kind           string
-	In             string
-	Codec          string
-	CodecArgs      []string
-	QuerySelector  string
-	When           string
-	Scope          string
-	DataType       string
-	OutputDataType string
-	Value          string
-	Required       *bool
-	Async          bool
-	Cacheable      *bool
-	With           string
-	URI            string
-	ErrorCode      int
-	ErrorMessage   string
-	Predicates     []*StatePredicate
-
-	TagType       reflect.Type
-	EffectiveType reflect.Type
+	state.Parameter `yaml:",inline"`
+	QuerySelector   string
+	OutputDataType  string
 }
 
-// StatePredicate captures parameter predicate semantics from DQL declarations.
-type StatePredicate struct {
-	Group     int
-	Name      string
-	Ensure    bool
-	Arguments []string
+func (s *State) KindString() string {
+	if s == nil || s.In == nil {
+		return ""
+	}
+	return strings.TrimSpace(string(s.In.Kind))
+}
+
+func (s *State) InName() string {
+	if s == nil || s.In == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.In.Name)
 }

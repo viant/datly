@@ -10,6 +10,7 @@ import (
 	dqldiag "github.com/viant/datly/repository/shape/dql/diag"
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/plan"
+	"github.com/viant/datly/view/state"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,10 +48,10 @@ func appendComponentTypesWithLayout(source *shape.Source, result *plan.Result, l
 	}
 
 	for _, stateItem := range result.States {
-		if stateItem == nil || !strings.EqualFold(strings.TrimSpace(stateItem.Kind), "component") {
+		if stateItem == nil || !strings.EqualFold(stateItem.KindString(), "component") {
 			continue
 		}
-		ref := strings.TrimSpace(stateItem.In)
+		ref := stateItem.InName()
 		if ref == "" {
 			continue
 		}
@@ -66,8 +67,13 @@ func appendComponentTypesWithLayout(source *shape.Source, result *plan.Result, l
 			continue
 		}
 		outputType, ok := collector.collect(namespace, componentRefSpan(source.DQL, ref), true)
-		if ok && strings.TrimSpace(stateItem.DataType) == "" {
-			stateItem.DataType = strings.TrimSpace(outputType)
+		if ok && strings.TrimSpace(outputType) != "" {
+			if stateItem.Schema == nil {
+				stateItem.Schema = &state.Schema{}
+			}
+			if strings.TrimSpace(stateItem.Schema.DataType) == "" {
+				stateItem.Schema.DataType = strings.TrimSpace(outputType)
+			}
 		}
 	}
 

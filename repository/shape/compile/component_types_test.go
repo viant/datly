@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/repository/shape"
 	dqldiag "github.com/viant/datly/repository/shape/dql/diag"
 	"github.com/viant/datly/repository/shape/plan"
+	"github.com/viant/datly/view/state"
 )
 
 func TestResolveComponentNamespace(t *testing.T) {
@@ -78,7 +79,7 @@ Routes:
 
 	result := &plan.Result{
 		States: []*plan.State{
-			{Name: "Auth", Kind: "component", In: "../acl/auth"},
+			{Name: "Auth", In: &state.Location{Kind: state.KindComponent, Name: "../acl/auth"}},
 		},
 	}
 	appendComponentTypes(&shape.Source{Path: sourcePath, DQL: "#set($Auth = $component<../acl/auth>())"}, result)
@@ -89,7 +90,7 @@ Routes:
 	}
 	assert.True(t, names["Input"])
 	assert.True(t, names["UserView"])
-	assert.Equal(t, "*Output", result.States[0].DataType)
+	assert.Equal(t, "*Output", result.States[0].Schema.DataType)
 }
 
 func TestAppendComponentTypes_MissingComponentRoute(t *testing.T) {
@@ -100,7 +101,7 @@ func TestAppendComponentTypes_MissingComponentRoute(t *testing.T) {
 	dql := "#set($Auth = $component<../acl/missing>())\nSELECT 1"
 	require.NoError(t, os.WriteFile(sourcePath, []byte(dql), 0o644))
 	result := &plan.Result{
-		States: []*plan.State{{Name: "Auth", Kind: "component", In: "../acl/missing"}},
+		States: []*plan.State{{Name: "Auth", In: &state.Location{Kind: state.KindComponent, Name: "../acl/missing"}}},
 	}
 	diags := appendComponentTypes(&shape.Source{Path: sourcePath, DQL: dql}, result)
 	require.NotEmpty(t, diags)
@@ -129,7 +130,7 @@ func TestAppendComponentTypes_TypeCollisionEmitsDiagnostic(t *testing.T) {
 
 	result := &plan.Result{
 		States: []*plan.State{
-			{Name: "Auth", Kind: "component", In: "../acl/auth"},
+			{Name: "Auth", In: &state.Location{Kind: state.KindComponent, Name: "../acl/auth"}},
 		},
 		Types: []*plan.Type{
 			{
@@ -167,7 +168,7 @@ func TestAppendComponentTypes_InvalidRouteYAMLEmitsDiagnostic(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(routesDir, "auth", "auth.yaml"), []byte("Resource:\n  Types: ["), 0o644))
 
 	result := &plan.Result{
-		States: []*plan.State{{Name: "Auth", Kind: "component", In: "../acl/auth"}},
+		States: []*plan.State{{Name: "Auth", In: &state.Location{Kind: state.KindComponent, Name: "../acl/auth"}}},
 	}
 	diags := appendComponentTypes(&shape.Source{Path: sourcePath, DQL: dql}, result)
 	require.NotEmpty(t, diags)
@@ -188,8 +189,8 @@ func TestAppendComponentTypes_InvalidRouteYAMLDedupedForRepeatedStates(t *testin
 
 	result := &plan.Result{
 		States: []*plan.State{
-			{Name: "Auth1", Kind: "component", In: "../acl/auth"},
-			{Name: "Auth2", Kind: "component", In: "../acl/auth"},
+			{Name: "Auth1", In: &state.Location{Kind: state.KindComponent, Name: "../acl/auth"}},
+			{Name: "Auth2", In: &state.Location{Kind: state.KindComponent, Name: "../acl/auth"}},
 		},
 	}
 	diags := appendComponentTypes(&shape.Source{Path: sourcePath, DQL: dql}, result)

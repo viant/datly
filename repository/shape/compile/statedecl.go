@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/viant/datly/repository/shape/plan"
+	"github.com/viant/datly/view/extension"
+	st "github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
 )
 
@@ -26,13 +28,16 @@ func appendDeclaredStates(rawDQL string, result *plan.Result) {
 			continue
 		}
 		state := &plan.State{
-			Path: holder,
-			Name: holder,
-			Kind: kind,
-			In:   location,
+			Parameter: st.Parameter{
+				Name: holder,
+				In: &st.Location{
+					Kind: st.Kind(kind),
+					Name: location,
+				},
+			},
 		}
 		if inType, outType := parseSetDeclarationTypes(block.Body); inType != "" || outType != "" {
-			state.DataType = inType
+			ensureStateSchema(state).DataType = inType
 			state.OutputDataType = outType
 		}
 		switch strings.ToLower(kind) {
@@ -101,17 +106,19 @@ func applyDeclaredStateOptions(state *plan.State, tail string) {
 			}
 		case strings.EqualFold(name, "WithType"):
 			if len(args) == 1 {
-				state.DataType = trimQuote(args[0])
+				ensureStateSchema(state).DataType = trimQuote(args[0])
 			}
 		case strings.EqualFold(name, "WithCodec"):
 			if len(args) >= 1 {
-				state.Codec = trimQuote(args[0])
-				state.CodecArgs = append([]string{}, trimQuotedArgs(args[1:])...)
+				state.Output = &st.Codec{
+					Name: trimQuote(args[0]),
+					Args: append([]string{}, trimQuotedArgs(args[1:])...),
+				}
 			}
 		case strings.EqualFold(name, "WithStatusCode"):
 			if len(args) == 1 {
 				if value, err := strconv.Atoi(strings.TrimSpace(trimQuote(args[0]))); err == nil {
-					state.ErrorCode = value
+					state.ErrorStatusCode = value
 				}
 			}
 		case strings.EqualFold(name, "WithErrorMessage"):
@@ -193,16 +200,23 @@ func appendStatePredicate(state *plan.State, args []string, ensure bool) {
 	if len(args) <= nameIdx {
 		return
 	}
-	predicate := &plan.StatePredicate{
-		Group:     group,
-		Name:      trimQuote(args[nameIdx]),
-		Ensure:    ensure,
-		Arguments: []string{},
+	predicate := &extension.PredicateConfig{
+		Group:  group,
+		Name:   trimQuote(args[nameIdx]),
+		Ensure: ensure,
+		Args:   []string{},
 	}
 	for _, arg := range args[nameIdx+1:] {
-		predicate.Arguments = append(predicate.Arguments, trimQuote(arg))
+		predicate.Args = append(predicate.Args, trimQuote(arg))
 	}
 	state.Predicates = append(state.Predicates, predicate)
+}
+
+func ensureStateSchema(state *plan.State) *st.Schema {
+	if state.Schema == nil {
+		state.Schema = &st.Schema{}
+	}
+	return state.Schema
 }
 
 type optionCursor struct {

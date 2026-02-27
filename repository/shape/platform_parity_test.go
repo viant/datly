@@ -2,6 +2,7 @@ package shape_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1303,19 +1304,19 @@ func normalizeShapeParams(planned *plan.Result) []paramIR {
 		}
 		item := paramIR{
 			Name:          strings.TrimSpace(s.Name),
-			Kind:          strings.TrimSpace(s.Kind),
-			In:            strings.TrimSpace(s.In),
+			Kind:          strings.TrimSpace(s.KindString()),
+			In:            strings.TrimSpace(s.InName()),
 			Required:      s.Required,
 			Cacheable:     s.Cacheable,
 			URI:           strings.TrimSpace(s.URI),
-			Value:         strings.TrimSpace(s.Value),
+			Value:         strings.TrimSpace(fmt.Sprint(s.Value)),
 			QuerySelector: strings.TrimSpace(s.QuerySelector),
 		}
 		for _, pred := range s.Predicates {
 			if pred == nil {
 				continue
 			}
-			item.Predicates = append(item.Predicates, normalizePredicateSig(pred.Group, pred.Name, pred.Ensure, pred.Arguments))
+			item.Predicates = append(item.Predicates, normalizePredicateSig(pred.Group, pred.Name, pred.Ensure, pred.Args))
 		}
 		sort.Strings(item.Predicates)
 		result = append(result, item)

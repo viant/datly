@@ -11,6 +11,7 @@ import (
 	outputkeys "github.com/viant/datly/repository/locator/output/keys"
 	"github.com/viant/datly/repository/shape"
 	"github.com/viant/datly/repository/shape/scan"
+	"github.com/viant/datly/view/state"
 )
 
 // Planner normalizes scan descriptors into shape plan.
@@ -163,35 +164,46 @@ func splitTagSelector(value string) (string, string, string) {
 }
 
 func normalizeState(field *scan.Field) *State {
-	result := &State{Path: field.Path, TagType: field.Type}
+	result := &State{
+		Parameter: state.Parameter{
+			Name: field.Name,
+			In:   &state.Location{},
+		},
+	}
 	if field.StateTag == nil || field.StateTag.Parameter == nil {
-		result.Name = field.Name
-		result.EffectiveType = field.Type
+		result.Schema = state.NewSchema(field.Type)
 		return result
 	}
 
 	pTag := field.StateTag.Parameter
 	result.Name = firstNonEmpty(pTag.Name, field.Name)
-	result.Kind = strings.ToLower(strings.TrimSpace(pTag.Kind))
-	result.In = strings.TrimSpace(pTag.In)
+	result.In = &state.Location{
+		Kind: state.Kind(strings.ToLower(strings.TrimSpace(pTag.Kind))),
+		Name: strings.TrimSpace(pTag.In),
+	}
 	result.When = pTag.When
 	result.Scope = pTag.Scope
-	result.DataType = pTag.DataType
 	result.Required = pTag.Required
 	result.Async = pTag.Async
 	result.Cacheable = pTag.Cacheable
 	result.With = pTag.With
 	result.URI = pTag.URI
-	result.ErrorCode = pTag.ErrorCode
+	result.ErrorStatusCode = pTag.ErrorCode
 	result.ErrorMessage = pTag.ErrorMessage
 
-	result.EffectiveType = resolveStateType(result, field.Type)
+	result.Schema = state.NewSchema(resolveStateType(result, field.Type))
+	if dataType := strings.TrimSpace(pTag.DataType); dataType != "" {
+		result.Schema.DataType = dataType
+	}
 	return result
 }
 
 func resolveStateType(item *State, fallback reflect.Type) reflect.Type {
-	key := strings.ToLower(strings.TrimSpace(firstNonEmpty(item.In, item.Name)))
-	switch item.Kind {
+	if item.In == nil {
+		return fallback
+	}
+	key := strings.ToLower(strings.TrimSpace(firstNonEmpty(item.In.Name, item.Name)))
+	switch strings.ToLower(strings.TrimSpace(string(item.In.Kind))) {
 	case "output":
 		if rType, ok := outputkeys.Types[key]; ok {
 			return rType

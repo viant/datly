@@ -578,12 +578,87 @@ func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Reso
 	resource := &Resource{}
 	err = toolbox.DefaultConverter.AssignConverted(resource, aMap)
 	if err != nil {
-		return nil, err
+		if docs, ok := parseDocumentationOnlyResource(aMap); ok {
+			resource.Docs = &Documentation{Docs: docs}
+			err = nil
+		} else {
+			return nil, err
+		}
 	}
 	resource.fs = fs
 	resource.SourceURL = URL
 	resource.modTime = object.ModTime()
 	return resource, err
+}
+
+func parseDocumentationOnlyResource(source map[string]interface{}) (*state.Docs, bool) {
+	if len(source) == 0 {
+		return nil, false
+	}
+
+	// Route-like YAML should never be treated as dependency docs.
+	for _, key := range []string{"Routes", "Method", "URI", "Input", "Output", "View", "Handler", "Resource"} {
+		if _, ok := source[key]; ok {
+			return nil, false
+		}
+	}
+
+	// If clear resource keys exist, keep regular conversion semantics.
+	for _, key := range []string{"Connectors", "Views", "Types", "Substitutes", "MessageBuses", "CacheProviders", "Loggers", "Predicates", "Docs", "FSEmbedder", "Imports"} {
+		if _, ok := source[key]; ok {
+			return nil, false
+		}
+	}
+
+	ret := &state.Docs{}
+	found := false
+	for _, section := range []struct {
+		name string
+		dest *state.Documentation
+	}{
+		{name: "Parameters", dest: &ret.Parameters},
+		{name: "Columns", dest: &ret.Columns},
+		{name: "Paths", dest: &ret.Paths},
+		{name: "Filter", dest: &ret.Filter},
+	} {
+		raw, ok := source[section.name]
+		if !ok {
+			continue
+		}
+		doc, ok := asDocumentation(raw)
+		if !ok {
+			return nil, false
+		}
+		*section.dest = doc
+		found = true
+	}
+	if !found {
+		return nil, false
+	}
+	return ret, true
+}
+
+func asDocumentation(raw interface{}) (state.Documentation, bool) {
+	aMap, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+	ret := state.Documentation{}
+	for key, value := range aMap {
+		switch actual := value.(type) {
+		case string:
+			ret[key] = actual
+		case map[string]interface{}:
+			nested, ok := asDocumentation(actual)
+			if !ok {
+				return nil, false
+			}
+			ret[key] = nested
+		default:
+			return nil, false
+		}
+	}
+	return ret, true
 }
 
 func (r *Resource) FindConnector(view *View) (*Connector, error) {

@@ -122,11 +122,13 @@ func buildComponent(source *shape.Source, pResult *plan.Result) *Component {
 		if item == nil {
 			continue
 		}
-		if strings.TrimSpace(item.Kind) == "" && strings.TrimSpace(item.In) == "" {
+		kind := strings.ToLower(item.KindString())
+		inName := item.InName()
+		if kind == "" && inName == "" {
 			ret.Other = append(ret.Other, item)
 			continue
 		}
-		switch strings.ToLower(item.Kind) {
+		switch kind {
 		case "query", "path", "header", "body", "form", "cookie", "request", "":
 			ret.Input = append(ret.Input, item)
 		case "output":

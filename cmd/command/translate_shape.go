@@ -16,7 +16,6 @@ import (
 	"github.com/viant/datly/repository/shape"
 	shapeCompile "github.com/viant/datly/repository/shape/compile"
 	shapeLoad "github.com/viant/datly/repository/shape/load"
-	datlyservice "github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"gopkg.in/yaml.v3"
@@ -112,7 +111,7 @@ func (s *Service) persistShapeRoute(ctx context.Context, opts *options.Options, 
 			URI:    uri,
 		},
 		Contract: contract.Contract{
-			Service: serviceForMethod(method),
+			Service: serviceTypeForMethod(method),
 		},
 		View: &view.View{Reference: shared.Reference{Ref: rootView}},
 	}
@@ -187,11 +186,4 @@ func parseShapeRulePath(dql, ruleName, apiPrefix string) (string, string) {
 		}
 	}
 	return method, uri
-}
-
-func serviceForMethod(method string) datlyservice.Type {
-	if strings.EqualFold(method, "GET") {
-		return datlyservice.TypeReader
-	}
-	return datlyservice.TypeExecutor
 }
