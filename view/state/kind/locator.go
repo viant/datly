@@ -2,6 +2,8 @@ package kind
 
 import (
 	"context"
+	"reflect"
+
 	"github.com/viant/datly/view/state"
 )
 
@@ -9,7 +11,7 @@ import (
 type Locator interface {
 
 	//Value returns parameter value
-	Value(ctx context.Context, name string) (interface{}, bool, error)
+	Value(ctx context.Context, rType reflect.Type, name string) (interface{}, bool, error)
 
 	//Names returns names of supported parameters
 	Names() []string

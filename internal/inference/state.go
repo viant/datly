@@ -3,6 +3,12 @@ package inference
 import (
 	"context"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"path"
+	"reflect"
+	"strings"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/embed"
 	"github.com/viant/afs/file"
@@ -19,11 +25,6 @@ import (
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"go/ast"
-	"go/parser"
-	"path"
-	"reflect"
-	"strings"
 )
 
 // State defines datly view/resource parameters
@@ -490,7 +491,13 @@ func (s State) EnsureReflectTypes(modulePath string, pkg string, registry *xrefl
 		if err != nil {
 			rType, err = types.LookupType(typeRegistry.Lookup, dataType, xreflect.WithPackage(pkg))
 			if err != nil {
-				return err
+				rType = reflect.TypeOf((*interface{})(nil)).Elem()
+				if param.Schema.DataType == "" {
+					param.Schema.DataType = "interface{}"
+				}
+				if param.Schema.Package == "" {
+					param.Schema.Package = pkg
+				}
 			}
 		}
 		param.Schema.SetType(rType)
@@ -691,12 +698,20 @@ func NewState(packageLocation, dataType string, types *xreflect.Types) (State, e
 		}
 		state.BuildPredicate(aTag, &param.Parameter)
 		state.BuildCodec(aTag, &param.Parameter)
+
 		if param.Schema.DataType == "" {
 			compType := param.Schema.CompType()
+			paramTypeName := compType.String()
+
 			if compType.Kind() == reflect.Pointer {
 				compType = compType.Elem()
+				paramTypeName := compType.String()
+
+				if compType.Kind() == reflect.Struct {
+					paramTypeName = "*" + paramTypeName
+				}
 			}
-			param.Schema.DataType = compType.String()
+			param.Schema.DataType = paramTypeName
 			param.Schema.PackagePath = compType.PkgPath()
 		}
 		//}
@@ -776,6 +791,13 @@ func discoverStateType(baseDir string, types *xreflect.Types, dataType string, p
 		return nil, err
 	}
 	var rType = xunsafe.LookupType(dirTypes.ModulePath + "/" + dataType)
+
+	if rType == nil && types != nil && strings.Count(pkg, "/") > 1 { //the last resort fallback collission protection
+		pkg = strings.Replace(pkg, "pkg/", "", 1)
+		rType, _ = types.Lookup(dataType, xreflect.WithPackage(pkg))
+
+	}
+
 	if rType == nil && len(stateTypeFields) > 0 {
 		rType = reflect.StructOf(stateTypeFields)
 	}

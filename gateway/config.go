@@ -29,6 +29,7 @@ type (
 	ExposableConfig struct {
 		APIPrefix       string //like /v1/api/
 		RouteURL        string
+		DQLBootstrap    *DQLBootstrap
 		ContentURL      string
 		PluginsURL      string
 		DependencyURL   string
@@ -63,6 +64,25 @@ type (
 		RetryIntervalInS int
 		_retry           time.Duration
 	}
+
+	DQLBootstrap struct {
+		Sources             []string
+		Exclude             []string
+		FailFast            *bool
+		Precedence          string
+		CompileProfile      string
+		MixedMode           string
+		UnknownNonReadMode  string
+		ColumnDiscoveryMode string
+		DQLPathMarker       string
+		RoutesRelativePath  string
+	}
+)
+
+const (
+	DQLBootstrapPrecedenceRoutesWins   = "routes_wins"
+	DQLBootstrapPrecedenceDQLWins      = "dql_wins"
+	DQLBootstrapPrecedenceErrorOnMixed = "error_on_conflict"
 )
 
 func (d *ChangeDetection) Init() {
@@ -78,10 +98,36 @@ func (d *ChangeDetection) Init() {
 }
 
 func (c *Config) Validate() error {
-	if c.RouteURL == "" {
+	if c.DQLBootstrap != nil && len(c.DQLBootstrap.Sources) == 0 {
+		return fmt.Errorf("DQLBootstrap.Sources was empty")
+	}
+	if c.RouteURL == "" && !c.hasDQLBootstrap() {
 		return fmt.Errorf("RouteURL was empty")
 	}
 	return nil
+}
+
+func (c *Config) hasDQLBootstrap() bool {
+	return c != nil && c.DQLBootstrap != nil && len(c.DQLBootstrap.Sources) > 0
+}
+
+func (d *DQLBootstrap) ShouldFailFast() bool {
+	if d == nil || d.FailFast == nil {
+		return true
+	}
+	return *d.FailFast
+}
+
+func (d *DQLBootstrap) EffectivePrecedence() string {
+	if d == nil {
+		return DQLBootstrapPrecedenceRoutesWins
+	}
+	switch strings.TrimSpace(strings.ToLower(d.Precedence)) {
+	case DQLBootstrapPrecedenceRoutesWins, DQLBootstrapPrecedenceDQLWins, DQLBootstrapPrecedenceErrorOnMixed:
+		return strings.TrimSpace(strings.ToLower(d.Precedence))
+	default:
+		return DQLBootstrapPrecedenceRoutesWins
+	}
 }
 
 func (c *Config) Discovery() bool {

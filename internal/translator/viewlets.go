@@ -76,7 +76,7 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 	if err := n.Each(func(viewlet *Viewlet) error {
 		n.ensureConnector(viewlet, rootConnector)
 		if err := initFn(ctx, viewlet); err != nil {
-			return fmt.Errorf("failed to init viewlet: %ns, %w", viewlet.Name, err)
+			return fmt.Errorf("failed to init viewlet: %s, %w", viewlet.Name, err)
 		}
 		return nil
 	}); err != nil {
@@ -138,6 +138,9 @@ func (n *Viewlets) addRelations(query *query.Select) error {
 		parentNs := inference.ParentAlias(join)
 		parentViewlet := n.Lookup(parentNs)
 
+		if parentViewlet == nil {
+			return fmt.Errorf("parent viewlet %v doesn't exist", parentNs)
+		}
 		relation.Spec.Parent = parentViewlet.Spec
 		cardinality := state.Many
 		if inference.IsToOne(join) || relation.OutputSettings.IsToOne() {

@@ -2,7 +2,9 @@ package session
 
 import (
 	"context"
+	"database/sql"
 	"embed"
+
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/view"
@@ -32,6 +34,8 @@ type (
 		scope               string
 		embeddedFS          *embed.FS
 		auth                *auth.Service
+		preseedCache        bool
+		sqlTx               *sql.Tx
 	}
 
 	Option func(o *Options)
@@ -43,6 +47,11 @@ func (o *Options) Logger() logger.Logger {
 
 func (o *Options) Registry() *repository.Registry {
 	return o.registry
+}
+
+// SqlTx returns associated SQL transaction (if any)
+func (o *Options) SqlTx() *sql.Tx {
+	return o.sqlTx
 }
 
 func (o *Options) HasInputParameters() bool {
@@ -154,6 +163,20 @@ func WithAuth(auth *auth.Service) Option {
 	}
 }
 
+// WithSQLTx associates an existing SQL transaction with the session
+func WithSQLTx(tx *sql.Tx) Option {
+	return func(s *Options) {
+		s.sqlTx = tx
+	}
+}
+
+// WithPreseedCache controls whether NewSession should pre-seed child cache from parent (default false)
+func WithPreseedCache(flag bool) Option {
+	return func(s *Options) {
+		s.preseedCache = flag
+	}
+}
+
 func WithComponent(component *repository.Component) Option {
 	return func(s *Options) {
 		s.component = component
@@ -181,5 +204,11 @@ func WithOperate(operate func(ctx context.Context, aSession *Session, aComponent
 func WithRegistry(registry *repository.Registry) Option {
 	return func(s *Options) {
 		s.registry = registry
+	}
+}
+
+func WithLogger(logger logger.Logger) Option {
+	return func(s *Options) {
+		s.logger = logger
 	}
 }

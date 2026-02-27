@@ -113,26 +113,6 @@ func NewMarshaller(rType reflect.Type, config *Config) (*Marshaller, error) {
 }
 
 func ensureSlice(rType reflect.Type) reflect.Type {
-	destType := rType
-	if destType.Kind() == reflect.Ptr {
-		destType = destType.Elem()
-	}
-	switch destType.Kind() {
-	case reflect.Struct:
-		for i := 0; i < destType.NumField(); i++ {
-			field := destType.Field(i)
-			fieldType := field.Type
-			if fieldType.Kind() == reflect.Ptr {
-				fieldType = fieldType.Elem()
-			}
-			if fieldType.Kind() == reflect.Slice {
-				candidate := fieldType.Elem()
-				if candidate.Kind() == reflect.Struct || (candidate.Kind() == reflect.Ptr && candidate.Elem().Kind() == reflect.Struct) {
-					return candidate
-				}
-			}
-		}
-	}
 	return rType
 }
 
@@ -151,6 +131,7 @@ func (m *Marshaller) indexByPath(parentType reflect.Type, path string, excluded 
 		return
 	}
 	m.uniqueTypes[parentType] = true
+	defer delete(m.uniqueTypes, parentType)
 
 	numField := elemParentType.NumField()
 	m.pathAccessors[path] = parentAccessor

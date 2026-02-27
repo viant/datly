@@ -10,6 +10,7 @@ pipeline:
     commands:
       - mkdir -p ${appPath}/e2e/local/autogen
       - rm -rf ${appPath}/e2e/local/autogen
+      - rm -f ${appPath}/e2e/local/regression/paths.yaml
 
 
   loop:

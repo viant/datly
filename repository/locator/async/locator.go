@@ -9,13 +9,14 @@ import (
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
+	"reflect"
 	"strings"
 	"time"
 )
 
 type Locator struct{}
 
-func (l *Locator) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (l *Locator) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	name = strings.ToLower(name)
 
 	if name == keys.JobError {

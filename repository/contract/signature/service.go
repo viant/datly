@@ -58,6 +58,9 @@ func (s *Service) init(ctx context.Context) error {
 func (s *Service) Signature(method, URI string) (*Signature, error) {
 	URI = strings.ReplaceAll(URI, "[]", "..")
 	matchable, err := s.matcher.MatchOne(method, URI)
+	if err != nil && !strings.HasPrefix(URI, "/") {
+		matchable, err = s.matcher.MatchOne(method, "/"+URI)
+	}
 	if err != nil && s.APIPrefix != "" { //fallback to full URI
 		matchable, err = s.matcher.MatchOne(method, s.buildURI(URI))
 	}
@@ -106,17 +109,42 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 }
 
 func (s *Service) buildURI(URI string) string {
-	APIPrefix := strings.Split(s.APIPrefix, "/")
-	URIs := strings.Split(URI, "/")
-	var suffix []string
-	for _, item := range URIs {
-		if item == ".." {
-			APIPrefix = APIPrefix[:len(APIPrefix)-1]
+	URI = strings.TrimSpace(URI)
+	if URI == "" {
+		return strings.TrimRight(s.APIPrefix, "/")
+	}
+	if strings.HasPrefix(URI, "/") {
+		return URI
+	}
+
+	prefixParts := splitPathParts(s.APIPrefix)
+	uriParts := splitPathParts(URI)
+	for _, part := range uriParts {
+		switch part {
+		case ".", "":
+			continue
+		case "..":
+			if len(prefixParts) > 0 {
+				prefixParts = prefixParts[:len(prefixParts)-1]
+			}
+		default:
+			prefixParts = append(prefixParts, part)
+		}
+	}
+	return "/" + strings.Join(prefixParts, "/")
+}
+
+func splitPathParts(input string) []string {
+	raw := strings.Split(input, "/")
+	result := make([]string, 0, len(raw))
+	for _, item := range raw {
+		item = strings.TrimSpace(item)
+		if item == "" || item == "." {
 			continue
 		}
-		suffix = append(suffix, item)
+		result = append(result, item)
 	}
-	return strings.Join(append(APIPrefix, suffix...), "/")
+	return result
 }
 
 func (s *Service) loadSignatures(ctx context.Context, URL string, isRoot bool) error {

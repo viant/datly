@@ -3,12 +3,13 @@ package view
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
-	"reflect"
-	"strings"
 )
 
 const (
@@ -88,6 +89,11 @@ func (c *Config) GetContentFormatParameter() *state.Parameter {
 		return c.ContentFormatParameter
 	}
 	return QueryStateParameters.ContentFormatParameter
+}
+
+func (c *Constraints) HasOrderByColumn(name string) bool {
+	_, ok := c.OrderByColumn[name]
+	return ok
 }
 
 func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) error {

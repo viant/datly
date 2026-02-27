@@ -10,8 +10,6 @@ tmp/
 *.gz
 .DS_Store
 autogen
-dql
-dql
 *.iml
 *.so
 logs

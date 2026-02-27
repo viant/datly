@@ -3,14 +3,15 @@ package reader
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/reader/metadata"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io/read/cache"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -44,19 +45,36 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	options := newBuilderOptions(opts...)
 	aView := options.view
 	statelet := options.statelet
-	batchData := *options.batchData
+	// guard against nil batchData passed by callers
+	var batchData view.BatchData
+	if options.batchData != nil {
+		batchData = *options.batchData
+	}
 	relation := options.relation
 	exclude := options.exclude
 	parent := options.parent
 	partitions := options.partition
 	expander := options.expander
+
+	// ensure non-nil statelet to avoid nil deref on Template usage
+	if statelet == nil {
+		statelet = view.NewStatelet()
+		statelet.Init(aView)
+	}
+
 	state, err := aView.Template.EvaluateSource(ctx, statelet.Template, parent, &batchData, expander)
 
 	if err != nil {
 		return nil, err
 	}
+	if state == nil {
+		return nil, fmt.Errorf("failed to evaluate state for view %v, state was nil", aView.Name)
+	}
+	if state.Expanded == "" {
+		return nil, fmt.Errorf("failed to evaluate expanded for view %vm statelet was nil", aView.Name)
+	}
 	if len(state.Filters) > 0 {
-		statelet.Filters = append(statelet.Filters, state.Filters...)
+		statelet.AppendFilters(state.Filters)
 	}
 	if aView.Template.IsActualTemplate() && aView.ShouldTryDiscover() {
 		state.Expanded = metadata.EnrichWithDiscover(state.Expanded, true)
@@ -323,7 +341,7 @@ func (b *Builder) updateColumnsIn(params *view.CriteriaParam, batchData *view.Ba
 	params.ColumnsIn = sb.String()
 }
 
-func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *view.Statelet) error {
+func (b *Builder) appendOrderBy(sb *strings.Builder, aView *view.View, selector *view.Statelet) error {
 	if selector.OrderBy != "" {
 		fragment := strings.Builder{}
 		items := strings.Split(strings.ReplaceAll(selector.OrderBy, ":", " "), ",")
@@ -344,12 +362,23 @@ func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *
 			switch strings.ToLower(sortDirection) {
 			case "asc", "desc", "":
 			default:
-				return fmt.Errorf("invalid sort direction %v for column %v at view %v", sortDirection, column, view.Name)
+				return fmt.Errorf("invalid sort direction %v for column %v at aView %v", sortDirection, column, aView.Name)
 			}
 
-			col, ok := view.ColumnByName(column)
+			col, ok := aView.ColumnByName(column)
 			if !ok {
-				return fmt.Errorf("not found column %v at view %v", column, view.Name)
+
+				if aView.Selector.Constraints.HasOrderByColumn(column) {
+					mapped := aView.Selector.Constraints.OrderByColumn[column]
+					col = &view.Column{
+						Name: mapped,
+					}
+					ok = true
+				}
+
+			}
+			if !ok {
+				return fmt.Errorf("not found column %v at aView %v", column, aView.Name)
 			}
 			fragment.WriteString(col.Name)
 			if sortDirection != "" {
@@ -362,9 +391,9 @@ func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *
 		return nil
 	}
 
-	if view.Selector.OrderBy != "" {
+	if aView.Selector.OrderBy != "" {
 		sb.WriteString(orderByFragment)
-		sb.WriteString(strings.ReplaceAll(view.Selector.OrderBy, ":", " "))
+		sb.WriteString(strings.ReplaceAll(aView.Selector.OrderBy, ":", " "))
 		return nil
 	}
 

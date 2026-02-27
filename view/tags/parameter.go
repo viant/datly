@@ -88,7 +88,7 @@ func (p *Parameter) Tag() *tags.Tag {
 		if *p.Cacheable {
 			value = "true"
 		}
-		appendNonEmpty(builder, "cachable", value)
+		appendNonEmpty(builder, "cacheable", value)
 	}
 
 	if p.Cardinality == "One" {

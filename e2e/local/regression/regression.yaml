@@ -2,10 +2,10 @@ init:
   v1: abc
   v2: def
 pipeline:
-  set_sdk:
-    action: sdk.set
-    target: $target
-    sdk: go:1.23
+#  set_sdk:
+#    action: sdk.set
+#    target: $target
+#    sdk: go:1.25.1
 
   database:
     action: run
@@ -30,7 +30,7 @@ pipeline:
         '[]gen': '@gen'
 
       subPath: 'cases/${index}_*'
-      #range: 1..007
+      range: 11..020
       template:
         checkSkip:
           action: nop
@@ -39,5 +39,3 @@ pipeline:
         test:
           action: run
           request: '@test'
-
-

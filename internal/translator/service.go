@@ -4,6 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
+	spath "path"
+	"reflect"
+	"strings"
+	"time"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
@@ -14,7 +20,7 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
-	signature "github.com/viant/datly/repository/contract/signature"
+	"github.com/viant/datly/repository/contract/signature"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
@@ -27,11 +33,6 @@ import (
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 	"gopkg.in/yaml.v3"
-	"net/http"
-	spath "path"
-	"reflect"
-	"strings"
-	"time"
 )
 
 type Service struct {
@@ -116,9 +117,12 @@ func (s *Service) discoverComponentContract(ctx context.Context, resource *Resou
 			return nil, err
 		}
 	}
-	location.Name = strings.ReplaceAll(location.Name, "..", "[]")
-	location.Name = strings.ReplaceAll(location.Name, ".", "/")
-	method, URI := shared.ExtractPath(location.Name)
+	locationName := strings.TrimSpace(location.Name)
+	if !strings.Contains(locationName, "/") {
+		locationName = strings.ReplaceAll(locationName, "..", "[]")
+		locationName = strings.ReplaceAll(locationName, ".", "/")
+	}
+	method, URI := shared.ExtractPath(locationName)
 	return s.signature.Signature(method, URI)
 }
 
@@ -328,6 +332,15 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	}
 
 	route.Component.Meta = resource.Rule.Meta
+	if route.Component.Meta.DescriptionURI != "" {
+		URL := url.Join(baseRuleURL, route.Component.Meta.DescriptionURI)
+		description, err := s.fs.DownloadWithURL(ctx, URL)
+		if err != nil {
+			return fmt.Errorf("failed to download meta description: %v %w", URL, err)
+		}
+		route.Component.Meta.Description = string(description)
+	}
+
 	route.ModelContextProtocol = resource.Rule.ModelContextProtocol
 	if route.Handler != nil {
 		if route.Component.Output.Type.Schema == nil {
@@ -361,7 +374,10 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	if resource.Rule.XMLUnmarshalType != "" {
 		route.Content.Marshaller.XML.TypeName = resource.Rule.XMLUnmarshalType
 	}
-	if resource.Rule.JSONUnmarshalType != "" {
+	// JSON marshaller/unmarshaller customization: prefer MarshalType if provided, fallback to UnmarshalType.
+	if resource.Rule.JSONMarshalType != "" {
+		route.Content.Marshaller.JSON.TypeName = resource.Rule.JSONMarshalType
+	} else if resource.Rule.JSONUnmarshalType != "" {
 		route.Content.Marshaller.JSON.TypeName = resource.Rule.JSONUnmarshalType
 	}
 	route.Component.Output.DataFormat = resource.Rule.DataFormat
@@ -435,7 +451,7 @@ func (s *Service) persistDocumentation(ctx context.Context, resource *Resource, 
 }
 
 func extractTypeNameWithPackage(outputName string) (string, string) {
-	if index := strings.Index(outputName, "."); index != -1 {
+	if index := strings.LastIndex(outputName, "."); index != -1 {
 		return outputName[:index], outputName[index+1:]
 	}
 	return outputName, ""
@@ -449,6 +465,9 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 	}
 	if viewlet.TypeDefinition != nil {
 		if viewlet.TypeDefinition.Cardinality == state.Many {
+			if viewlet.View.View.Schema == nil {
+				viewlet.View.View.Schema = &state.Schema{}
+			}
 			viewlet.View.View.Schema.Cardinality = viewlet.TypeDefinition.Cardinality
 		}
 		viewlet.TypeDefinition.Cardinality = ""
@@ -473,7 +492,12 @@ func (s *Service) adjustView(viewlet *Viewlet, resource *Resource, mode view.Mod
 
 	if len(resource.Declarations.QuerySelectors) > 0 {
 		for key, state := range resource.Declarations.QuerySelectors {
-			return fmt.Errorf("unknown query selector view %v, %v", key, state[0].Name)
+			switch strings.ToLower(state[0].Name) {
+			case "limit", "page", "offset", "fields", "orderby", "criteria":
+			default:
+				return fmt.Errorf("unknown query selector view %v, %v", key, state[0].In.Name)
+
+			}
 		}
 	}
 
@@ -561,7 +585,8 @@ func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet) e
 func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Viewlet) (err error) {
 
 	shared.EnsureArgs(viewlet.Expanded.Query, &viewlet.Expanded.Args)
-	if viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.ColumnConfig, viewlet.Expanded.Query, viewlet.Expanded.Args...); err != nil {
+	viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.ColumnConfig, viewlet.Expanded.Query, viewlet.Expanded.Args...)
+	if err != nil {
 		return fmt.Errorf("failed to create spec for %v, %w", viewlet.Name, err)
 	}
 
