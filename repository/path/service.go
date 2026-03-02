@@ -198,7 +198,8 @@ func (s *Service) buildPaths(ctx context.Context, candidate storage.Object, root
 	}
 	sourceURL := candidate.URL()
 	if index := strings.Index(sourceURL, rootPath); index != -1 {
-		sourceURL = sourceURL[1+index+len(rootPath):]
+		sourceURL = sourceURL[index+len(rootPath):]
+		sourceURL = strings.TrimPrefix(sourceURL, "/")
 	}
 	anItem := &Item{
 		SourceURL: sourceURL,

@@ -6,11 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"reflect"
+	"time"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/datly/repository"
 	rasync "github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/content"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
@@ -25,13 +30,12 @@ import (
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/exec"
+	xhttp "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
+	xstate "github.com/viant/xdatly/handler/state"
 	"google.golang.org/api/googleapi"
-	"net/http"
-	"reflect"
-	"time"
 )
 
 type Service struct {
@@ -84,6 +88,7 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 
 func (s *Service) operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	var err error
+
 	ctx, err = s.EnsureContext(ctx, aSession, aComponent)
 	if err != nil {
 		return nil, err
@@ -118,13 +123,26 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 			}
 
 		}
-		return s.finalize(ctx, ret, err)
+		return s.finalize(ctx, ret, err, aSession)
 	}
 	return nil, response.NewError(500, fmt.Sprintf("unsupported Type %v", aComponent.Service))
 }
 
-func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (interface{}, error) {
+func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSession *session.Session) (interface{}, error) {
 
+	if injectorFinalizer, ok := ret.(state.InjectorFinalizer); ok {
+
+		lookup := func(ctx context.Context, route xhttp.Route) (xstate.Injector, error) {
+			aComponent, err := aSession.Registry().Lookup(ctx, contract.NewPath(route.Method, route.URL))
+			if err != nil {
+				return nil, err
+			}
+			return aSession.NewSession(aComponent), nil
+		}
+
+		err = injectorFinalizer.Finalize(ctx, lookup)
+		return ret, err
+	}
 	if err != nil {
 		return ret, err
 	}

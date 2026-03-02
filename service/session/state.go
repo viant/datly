@@ -13,6 +13,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
+	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
@@ -41,6 +42,42 @@ type (
 		Request *http.Request
 	}
 )
+
+func (s *Session) NewSession(component *repository.Component) *Session {
+	ret := *s
+	// set component and view on the child session (do not mutate receiver)
+	ret.component = component
+	ret.Options.component = component
+	ret.view = component.View
+	if ret.locatorOpt != nil {
+		if _, ok := ret.locatorOpt.Views[component.View.Name]; !ok {
+			ret.locatorOpt.Views.Register(component.View)
+		}
+	}
+
+	// create a fresh cache and optionally pre-populate from parent cache values
+	parent := s.cache
+	ret.cache = newCache()
+	if ret.Options.preseedCache && parent != nil {
+		parent.RWMutex.RLock()
+		for k, v := range parent.values {
+			ret.cache.values[k] = v
+		}
+		parent.RWMutex.RUnlock()
+	}
+
+	// reset predicates (filters) on the child session state
+	if ret.Options.state != nil {
+		ret.Options.state.RWMutex.Lock()
+		for _, st := range ret.Options.state.Views {
+			if st != nil {
+				st.Filters = nil
+			}
+		}
+		ret.Options.state.RWMutex.Unlock()
+	}
+	return &ret
+}
 
 func (s *Session) SetView(view *view.View) {
 	s.view = view
@@ -168,6 +205,7 @@ func (s *Session) viewLookupOptions(aView *view.View, parameters state.NamedPara
 	if !opts.HasInputParameters() {
 		result = append(result, locator.WithInputParameters(parameters))
 	}
+	result = append(result, locator.WithLogger(s.logger))
 	result = append(result, locator.WithReadInto(s.ReadInto))
 	viewState := s.state.Lookup(aView)
 	result = append(result, locator.WithState(viewState.Template))
@@ -202,7 +240,7 @@ func (s *Session) setTemplateState(ctx context.Context, aView *view.View, opts *
 	aState := s.state.Lookup(aView)
 	if template := aView.Template; template != nil {
 		stateType := template.StateType()
-		if stateType.IsDefined() {
+		if stateType != nil && stateType.IsDefined() {
 			templateState := aState.Template
 			templateState.EnsureMarker()
 			err := s.SetState(ctx, template.Parameters, templateState, opts)
@@ -247,6 +285,52 @@ func (s *Session) populateParameterInBackground(ctx context.Context, parameter *
 	}
 }
 
+// The function below causes SIGBUS when template parameters are rebound.
+//E.g. a predicate builder velty expression is located in an embedded SQL, outside main DQL
+//func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
+//	value, has, err := s.LookupValue(ctx, parameter, options)
+//	if err != nil {
+//		return err
+//	}
+//	if !has {
+//		if parameter.IsRequired() {
+//			return fmt.Errorf("parameter %v is required", parameter.Name)
+//		}
+//		return nil
+//	}
+//
+//	parameterSelector := parameter.Selector()
+//	if options.indirectState || parameterSelector == nil { //p
+//		parameterSelector, err = aState.Selector(parameter.Name)
+//		if parameterSelector == nil {
+//			switch parameter.In.Kind {
+//			case state.KindConst:
+//				return nil
+//			}
+//		}
+//		if err != nil {
+//			return err
+//		}
+//	}
+//
+//	if value, err = s.ensureValidValue(value, parameter, parameterSelector, options); err != nil {
+//		return err
+//	}
+//	err = parameterSelector.SetValue(aState.Pointer(), value)
+//
+//	//ensure last written can be shared
+//	if err == nil {
+//
+//		switch parameterSelector.Type().Kind() {
+//		case reflect.Ptr:
+//			if parameter.Schema.Type() == parameterSelector.Type() {
+//				s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
+//			}
+//		}
+//	}
+//	return err
+//}
+
 func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
 	value, has, err := s.LookupValue(ctx, parameter, options)
 	if err != nil {
@@ -258,29 +342,25 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 		}
 		return nil
 	}
-	parameterSelector := parameter.Selector()
-	if options.indirectState || parameterSelector == nil { //p
-		parameterSelector, err = aState.Selector(parameter.Name)
-		if parameterSelector == nil && parameter.In.Kind == state.KindConst { // TODO do we really need it?
-			return nil
-		}
-		if err != nil {
-			return err
-		}
+
+	//  Resolve selector strictly from the state's layout
+	//    Treat "not found" as a no-op (skip), since this view doesn't declare that parameter.
+	parameterSelector, err := aState.Selector(parameter.Name)
+	if err != nil || parameterSelector == nil {
+		return nil
 	}
+
 	if value, err = s.ensureValidValue(value, parameter, parameterSelector, options); err != nil {
 		return err
 	}
-	err = parameterSelector.SetValue(aState.Pointer(), value)
-
-	//ensure last written can be shared
-	if err == nil {
-		switch parameterSelector.Type().Kind() {
-		case reflect.Ptr:
-			s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
-		}
+	if err = parameterSelector.SetValue(aState.Pointer(), value); err != nil {
+		return err
 	}
-	return err
+
+	if parameterSelector.Type().Kind() == reflect.Ptr {
+		s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
+	}
+	return nil
 }
 
 func (s *Session) canRead(ctx context.Context, parameter *state.Parameter, opts *Options) (bool, error) {
@@ -346,16 +426,22 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		if valueType.Elem().Kind() == reflect.Struct && parameter.Schema.Type().Kind() == reflect.Slice {
 			if parameter.Schema.CompType() == valueType {
 				sliceValuePtr := reflect.New(parameterType)
+
+				if isNil(value) {
+					empty := reflect.MakeSlice(parameterType, 0, 0)
+					sliceValuePtr.Elem().Set(empty)
+					return sliceValuePtr.Interface(), nil // []T{}
+				}
+
 				sliceValue := reflect.MakeSlice(parameterType, 1, 1)
 				sliceValuePtr.Elem().Set(sliceValue)
 				sliceValue.Index(0).Set(reflect.ValueOf(value))
-				return sliceValuePtr.Interface(), nil
+				return sliceValuePtr.Interface(), nil // []T{value}`
 			}
 		}
 	case reflect.Slice:
-		ptr := xunsafe.AsPointer(value)
-		slice := parameter.Schema.Slice()
-		sliceLen := slice.Len(ptr)
+		rSlice := reflect.ValueOf(value)
+		sliceLen := rSlice.Len()
 		if errorMessage := validateSliceParameter(parameter, sliceLen); errorMessage != "" {
 			return nil, errors.New(errorMessage)
 		}
@@ -366,11 +452,45 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		default:
 			switch sliceLen {
 			case 0:
-				value = reflect.New(parameter.OutputType().Elem()).Elem().Interface()
+				switch outputType.Kind() {
+				case reflect.Ptr:
+					value = reflect.New(outputType.Elem()).Elem().Interface()
+				case reflect.Struct:
+					value = reflect.New(outputType).Elem().Interface()
+				default:
+					value = reflect.New(outputType).Elem().Interface()
+				}
 				valueType = reflect.TypeOf(value)
 			case 1:
-				value = slice.ValuePointerAt(ptr, 0)
-				valueType = reflect.TypeOf(value)
+				elem := rSlice.Index(0)
+				rawType := elem.Type()
+				if rawType.Kind() == reflect.Ptr {
+					rawType = rawType.Elem()
+				}
+				if rawType.Kind() == reflect.Interface {
+					rawType = rawType.Elem()
+				}
+
+				if elem.Kind() == reflect.Interface && !elem.IsNil() {
+					elem = elem.Elem()
+				}
+				if rawType.Kind() != reflect.Struct {
+					value = elem.Interface()
+					valueType = reflect.TypeOf(value)
+					break
+				}
+				if elem.Kind() == reflect.Ptr {
+					value = elem.Interface()
+					valueType = elem.Type()
+					break
+				}
+				if elem.CanAddr() {
+					value = elem.Addr().Interface()
+					valueType = elem.Addr().Type()
+					break
+				}
+				value = elem.Interface()
+				valueType = elem.Type()
 			default:
 				return nil, fmt.Errorf("parameter %v return more than one value, len: %v rows ", parameter.Name, sliceLen)
 			}
@@ -388,53 +508,55 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	}
 
 	if parameter.Schema.IsStruct() && !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
-
-		rawSelectorType := selector.Type()
-		isSelectorPtr := false
-		if rawSelectorType.Kind() == reflect.Ptr {
-			rawSelectorType = rawSelectorType.Elem()
-			isSelectorPtr = true
-		}
-		isValuePtr := false
-		rawValueType := valueType
-		if rawValueType.Kind() == reflect.Ptr {
-			rawValueType = valueType.Elem()
-			isValuePtr = true
+		destType := selector.Type()
+		rawDestType := destType
+		destIsPtr := false
+		if rawDestType.Kind() == reflect.Ptr {
+			rawDestType = rawDestType.Elem()
+			destIsPtr = true
 		}
 
-		if rawSelectorType.Kind() == reflect.Struct && isSelectorPtr {
-			if rawValueType.ConvertibleTo(rawSelectorType) {
-				ptrValue := reflect.ValueOf(value)
-				if isValuePtr && ptrValue.IsNil() {
+		rawSrcType := valueType
+		srcIsPtr := false
+		if rawSrcType.Kind() == reflect.Ptr {
+			rawSrcType = rawSrcType.Elem()
+			srcIsPtr = true
+		}
+
+		if rawDestType.Kind() == reflect.Struct && rawSrcType.Kind() == reflect.Struct && rawSrcType.ConvertibleTo(rawDestType) {
+			srcValue := reflect.ValueOf(value)
+			if srcIsPtr {
+				if srcValue.IsNil() {
 					return nil, nil
 				}
-				var destValue reflect.Value
-				if isValuePtr {
-					destValue = ptrValue.Elem().Convert(rawSelectorType)
-				} else {
-					destValue = ptrValue.Convert(rawSelectorType)
-				}
-				if isSelectorPtr {
-					destPtrType := reflect.New(valueType)
-					destPtrType.Elem().Set(destValue)
-					return destPtrType.Interface(), nil
-				} else {
-					return destValue.Interface(), nil
-				}
+				srcValue = srcValue.Elem()
 			}
+			converted := srcValue.Convert(rawDestType)
+			if destIsPtr {
+				out := reflect.New(rawDestType)
+				out.Elem().Set(converted)
+				return out.Interface(), nil
+			}
+			return converted.Interface(), nil
 		}
 
 		if options.shallReportNotAssignable() {
-			//if !ensureAssignable(parameter.Name, selector.Type(), valueType) {
-			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
-			//}
+			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), destType.String())
 		}
 
-		reflectValue := reflect.New(valueType) //TODO replace with fast xreflect copy
-		valuePtr := reflectValue.Interface()
+		var target reflect.Value
+		if destIsPtr {
+			target = reflect.New(rawDestType) // *T where destType is *T
+		} else {
+			target = reflect.New(destType) // *T where destType is T
+		}
 		if data, err := json.Marshal(value); err == nil {
-			if err = json.Unmarshal(data, valuePtr); err == nil {
-				value = reflectValue.Elem().Interface()
+			if err = json.Unmarshal(data, target.Interface()); err == nil {
+				if destIsPtr {
+					value = target.Interface()
+				} else {
+					value = target.Elem().Interface()
+				}
 			}
 		}
 	}
@@ -519,8 +641,8 @@ func (s *Session) lookupFirstValue(ctx context.Context, parameters []*state.Para
 }
 
 func (s *Session) LookupValue(ctx context.Context, parameter *state.Parameter, opts *Options) (value interface{}, has bool, err error) {
-
-	if value, has, err = s.lookupValue(ctx, parameter, opts); err != nil {
+	value, has, err = s.lookupValue(ctx, parameter, opts)
+	if err != nil {
 		err = response.NewParameterError("", parameter.Name, err, response.WithObject(value), response.WithErrorStatusCode(parameter.ErrorStatusCode))
 	}
 	return value, has, err
@@ -573,7 +695,8 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", parameter.Name, err)
 	}
-	if value, has, err = parameterLocator.Value(ctx, parameter.In.Name); err != nil {
+
+	if value, has, err = parameterLocator.Value(ctx, parameter.OutputType(), parameter.In.Name); err != nil {
 		return nil, false, err
 	}
 	if parameter.In.Kind == state.KindConst && !has { //if parameter is const and has no value, use default value
@@ -588,7 +711,7 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 				if err != nil {
 					return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", baseParameter.Name, err)
 				}
-				if value, has, err = parameterLocator.Value(ctx, baseParameter.In.Name); err != nil {
+				if value, has, err = parameterLocator.Value(ctx, baseParameter.OutputType(), baseParameter.In.Name); err != nil {
 					return nil, false, err
 				}
 			}
@@ -610,6 +733,13 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 		return nil, false, err
 	}
 	if parameter.Output != nil {
+		// Defensive: ensure codec is initialized before Transform.
+		if !parameter.Output.Initialized() {
+			// Initialize using session resource and current parameter input type.
+			if initErr := parameter.Output.Init(s.resource, parameter.Schema.Type()); initErr != nil {
+				return nil, false, initErr
+			}
+		}
 		transformed, err := parameter.Output.Transform(ctx, value, opts.codecOptions...)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to transform %s with %s: %v, %w", parameter.Name, parameter.Output.Name, value, err)
@@ -700,7 +830,42 @@ func New(aView *view.View, opts ...Option) *Session {
 	return ret
 }
 
-func (s *Session) LoadState(parameters state.Parameters, aState interface{}) error {
+type loadStateOptions struct {
+	skipKind        map[state.Kind]bool
+	hasSkipKind     bool
+	useHasMarker    bool
+	fallbackOnValue bool
+}
+
+type LoadStateOption func(o *loadStateOptions)
+
+func WithHasMarker() LoadStateOption {
+	return func(o *loadStateOptions) {
+		o.useHasMarker = true
+	}
+}
+
+// WithValuePresenceFallback treats non-zero values as present when no Has marker is available.
+// This is opt-in to avoid changing behavior for existing inputs that intentionally omit markers.
+func WithValuePresenceFallback() LoadStateOption {
+	return func(o *loadStateOptions) {
+		o.fallbackOnValue = true
+	}
+}
+func WithLoadStateSkipKind(kinds ...state.Kind) LoadStateOption {
+	return func(o *loadStateOptions) {
+		for _, kind := range kinds {
+			o.skipKind[kind] = true
+		}
+	}
+}
+
+func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opts ...LoadStateOption) error {
+	options := &loadStateOptions{skipKind: map[state.Kind]bool{}}
+	for _, opt := range opts {
+		opt(options)
+	}
+	options.hasSkipKind = len(options.skipKind) > 0
 	rType := reflect.TypeOf(aState)
 	sType := structology.NewStateType(rType, structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
 		stateTag, _ := tags.ParseStateTags(tag, nil)
@@ -711,29 +876,46 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 	}))
 	inputState := sType.WithValue(aState)
 	ptr := xunsafe.AsPointer(aState)
+	// Use presence markers only if enabled and supported by the input state
+	hasMarker := options.useHasMarker && inputState.HasMarker()
 	for _, parameter := range parameters {
+
 		if parameter.Scope != "" {
+			continue
+		}
+
+		if options.hasSkipKind && options.skipKind[parameter.In.Kind] {
+			continue
+		}
+
+		// Only warm cache for cacheable parameters; LookupValue only reads cache when cacheable
+		if !parameter.IsCacheable() {
 			continue
 		}
 		selector, _ := inputState.Selector(parameter.Name)
 		if selector == nil {
 			continue
 		}
-		if !selector.Has(ptr) {
+		// Only use selector.Has when input supports presence markers
+		if hasMarker && !selector.Has(ptr) {
 			continue
 		}
+
 		value := selector.Value(ptr)
+		if !hasMarker && options.fallbackOnValue && isZeroValue(value) {
+			continue
+		}
 		switch parameter.In.Kind {
 		case state.KindView, state.KindParam, state.KindState:
 			if value == nil {
-				return nil
+				continue
 			}
 
 			rType := parameter.OutputType()
 			if rType.Kind() == reflect.Ptr {
 				ptr := (*unsafe.Pointer)(xunsafe.AsPointer(value))
 				if ptr == nil || *ptr == nil {
-					return nil
+					continue
 				}
 			}
 		}
@@ -743,10 +925,28 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}) err
 	return nil
 }
 
+func isZeroValue(value interface{}) bool {
+	if value == nil {
+		return true
+	}
+	v := reflect.ValueOf(value)
+	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return true
+		}
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Slice, reflect.Map, reflect.Array:
+		return v.Len() == 0
+	}
+	return v.IsZero()
+}
+
 func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *response.Errors) {
 	if parameter.ErrorMessage != "" && err != nil {
 		msg := strings.ReplaceAll(parameter.ErrorMessage, "${error}", err.Error())
-		err = fmt.Errorf(msg)
+		err = fmt.Errorf("%s", msg)
 	}
 	if pErr, ok := err.(*response.Error); ok {
 		pErr.Code = parameter.ErrorStatusCode

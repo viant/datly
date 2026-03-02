@@ -4,6 +4,12 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"go/ast"
+	"path"
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
@@ -15,11 +21,6 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"go/ast"
-	"path"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 type (
@@ -34,6 +35,7 @@ type (
 		AssumedType bool
 		Connector   string
 		Cache       string
+		Limit       *int
 		InOutput    bool
 		Of          string
 	}
@@ -78,18 +80,19 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	case state.KindParam:
 		builder.WriteString("?")
 	default:
+		isPtr := strings.HasPrefix(p.Schema.DataType, "*")
 		if p.Schema.Cardinality == state.Many {
 			builder.WriteString("[]")
-
 			switch p.In.Kind {
 			case "query", "form", "header":
 			default:
-				if !p.IsRequired() {
+				if !p.IsRequired() && !isPtr {
+					isPtr = true
 					builder.WriteString("*")
 				}
 			}
 
-		} else if !p.IsRequired() {
+		} else if !p.IsRequired() && !isPtr {
 			builder.WriteString("*")
 		}
 		builder.WriteString(p.Schema.DataType)
@@ -115,12 +118,20 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 		builder.WriteString(".WithCache('" + p.Cache + "')")
 	}
 
+	if p.Limit != nil {
+		builder.WriteString(".WithLimit('" + strconv.Itoa(*p.Limit) + "')")
+	}
+
 	if p.Required != nil {
 		if !*p.Required {
 			builder.WriteString(".Optional()")
 		} else {
 			builder.WriteString(".Required()")
 		}
+	}
+
+	if p.Cacheable != nil {
+		builder.WriteString(".Cacheable('" + strconv.FormatBool(*p.Cacheable) + "')")
 	}
 	if p.Connector != "" {
 		builder.WriteString(".WithConnector('" + p.Connector + "')")
@@ -304,6 +315,9 @@ func buildParameter(field *xunsafe.Field, aTag *tags.Tag, types *xreflect.Types,
 		if aTag.View.Cache != "" {
 			param.Cache = aTag.View.Cache
 		}
+		if aTag.View.Limit != nil {
+			param.Limit = aTag.View.Limit
+		}
 	}
 
 	fType := field.Type
@@ -340,16 +354,9 @@ func ParentAlias(join *query.Join) string {
 	result := ""
 	sqlparser.Traverse(join.On, func(n node.Node) bool {
 		switch actual := n.(type) {
-		case *qexpr.Binary:
-			if xSel, ok := actual.X.(*qexpr.Selector); ok {
-				if xSel.Name != join.Alias {
-					result = xSel.Name
-				}
-			}
-			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
-				if ySel.Name != join.Alias {
-					result = ySel.Name
-				}
+		case *qexpr.Selector:
+			if actual.Name != "" && actual.Name != join.Alias {
+				result = actual.Name
 			}
 			return true
 		}
@@ -363,20 +370,14 @@ func ExtractRelationColumns(join *query.Join) (string, string) {
 	refColumn := ""
 	sqlparser.Traverse(join.On, func(n node.Node) bool {
 		switch actual := n.(type) {
-		case *qexpr.Binary:
-			if xSel, ok := actual.X.(*qexpr.Selector); ok {
-				if xSel.Name == join.Alias {
-					refColumn = sqlparser.Stringify(xSel.X)
-				} else if relColumn == "" {
-					relColumn = sqlparser.Stringify(xSel.X)
+		case *qexpr.Selector:
+			column := sqlparser.Stringify(actual.X)
+			if actual.Name == join.Alias {
+				if refColumn == "" {
+					refColumn = column
 				}
-			}
-			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
-				if ySel.Name == join.Alias {
-					refColumn = sqlparser.Stringify(ySel.X)
-				} else if relColumn == "" {
-					relColumn = sqlparser.Stringify(ySel.X)
-				}
+			} else if relColumn == "" {
+				relColumn = column
 			}
 			return true
 		}

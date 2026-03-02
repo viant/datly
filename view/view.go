@@ -4,6 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
+	"path"
+	"reflect"
+	"strings"
+	"time"
+
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/setter"
@@ -23,11 +29,6 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"net/http"
-	"path"
-	"reflect"
-	"strings"
-	"time"
 )
 
 const (
@@ -154,15 +155,16 @@ func (v *View) Context(ctx context.Context) context.Context {
 // Constraints configure what can be selected by Statelet
 // For each _field, default value is `false`
 type Constraints struct {
-	Criteria    bool
-	OrderBy     bool
-	Limit       bool
-	Offset      bool
-	Projection  bool //enables columns projection from client (default ${NS}_fields= query param)
-	Filterable  []string
-	SQLMethods  []*Method `json:",omitempty"`
-	_sqlMethods map[string]*Method
-	Page        *bool
+	Criteria      bool
+	OrderBy       bool
+	OrderByColumn map[string]string
+	Limit         bool
+	Offset        bool
+	Projection    bool //enables columns projection from client (default ${NS}_fields= query param)
+	Filterable    []string
+	SQLMethods    []*Method `json:",omitempty"`
+	_sqlMethods   map[string]*Method
+	Page          *bool
 }
 
 func (v *View) Resource() state.Resource {
@@ -400,6 +402,10 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 			refViewOptions = append(refViewOptions, WithCache(aCache))
 		}
 
+		if viewTag.Limit != nil {
+			viewOptions = append(viewOptions, WithLimit(viewTag.Limit))
+		}
+
 		if viewTag.PublishParent {
 			refViewOptions = append(refViewOptions, WithViewPublishParent(viewTag.PublishParent))
 		}
@@ -473,6 +479,9 @@ func WithLimit(limit *int) Option {
 		}
 		view.Selector.Constraints.Limit = true
 		view.Selector.Limit = *limit
+		if limit != nil {
+			view.Selector.NoLimit = *limit == 0
+		}
 		return nil
 	}
 }
@@ -1289,7 +1298,7 @@ func (v *View) markColumnsAsFilterable() error {
 	for _, colName := range v.Selector.Constraints.Filterable {
 		column, err := v._columns.Lookup(colName)
 		if err != nil {
-			return fmt.Errorf("criteria column %v, on view has not been defined, %w", colName, v.Name, err)
+			return fmt.Errorf("criteria column %v on view %v has not been defined: %w", colName, v.Name, err)
 		}
 		column.Filterable = true
 	}

@@ -35,16 +35,30 @@ func (p *parameterStruct) Add(name string, parameter *Parameter) {
 }
 
 func (p *parameterStruct) reflectType() reflect.Type {
-	return p.structField().Type
+	field := p.structField()
+	return field.Type
 
 }
 func (p *parameterStruct) structField() reflect.StructField {
-	if p.Parameter != nil && (p.Parameter.In.Kind != state.KindObject) {
+	if p == nil {
+		return reflect.StructField{}
+	}
+	if p.Parameter != nil && (p.Parameter.In == nil || p.Parameter.In.Kind != state.KindObject) {
 		return reflect.StructField{Name: p.name, Type: p.Parameter.Schema.Type(), Tag: reflect.StructTag(p.Parameter.Tag), PkgPath: xreflect.PkgPath(p.Parameter.Name, p.Parameter.Schema.Package)}
 	}
 	var fields []reflect.StructField
 	for _, f := range p.fields {
-		fields = append(fields, f.structField())
+		if f == nil {
+			continue
+		}
+		field := f.structField()
+		if field.Name == "" || field.Type == nil {
+			continue
+		}
+		fields = append(fields, field)
+	}
+	if len(fields) == 0 {
+		return reflect.StructField{Name: p.name, Type: reflect.TypeOf(struct{}{})}
 	}
 	pkgPath := ""
 	if p.name != "" {

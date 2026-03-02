@@ -156,10 +156,10 @@ func (c *Config) NormalizeURL(repositoryURL string) {
 		cfg.ContentURL = url.Join(baseURL, cfg.ContentURL)
 	}
 	if url.IsRelative(cfg.PluginsURL) {
-		cfg.RouteURL = url.Join(baseURL, cfg.PluginsURL)
+		cfg.PluginsURL = url.Join(baseURL, cfg.PluginsURL)
 	}
 	if url.IsRelative(cfg.DependencyURL) {
-		cfg.RouteURL = url.Join(baseURL, cfg.DependencyURL)
+		cfg.DependencyURL = url.Join(baseURL, cfg.DependencyURL)
 	}
 	cfg.URL = url.Join(baseURL, "config.json")
 }

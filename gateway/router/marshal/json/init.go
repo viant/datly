@@ -13,6 +13,8 @@ import (
 
 var rawMessageType = reflect.TypeOf(json.RawMessage{})
 var unmarshallerIntoType = reflect.TypeOf((*UnmarshalerInto)(nil)).Elem()
+var marshalerJSONObjectType = reflect.TypeOf((*gojay.MarshalerJSONObject)(nil)).Elem()
+var unmarshalerJSONObjectType = reflect.TypeOf((*gojay.UnmarshalerJSONObject)(nil)).Elem()
 var mapStringIfaceType = reflect.TypeOf(map[string]interface{}{})
 var decData *xunsafe.Field
 var decCur *xunsafe.Field

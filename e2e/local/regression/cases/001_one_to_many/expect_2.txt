@@ -18,7 +18,7 @@ type GeneratedStruct struct {
 type Products struct {
 	Id          int        `sqlx:"ID" velty:"names=ID|Id"`
 	Name        *string    `sqlx:"NAME" velty:"names=NAME|Name"`
-	VendorId    *int       `sqlx:"VENDOR_ID" velty:"names=VENDOR_ID|VendorId"`
+	VendorId    *int       `sqlx:"VENDOR_ID"  internal:"true" velty:"names=VENDOR_ID|VendorId"`
 	Status      *int       `sqlx:"STATUS" velty:"names=STATUS|Status"`
 	Created     *time.Time `sqlx:"CREATED" velty:"names=CREATED|Created"`
 	UserCreated *int       `sqlx:"USER_CREATED" velty:"names=USER_CREATED|UserCreated"`

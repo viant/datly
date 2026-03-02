@@ -7,7 +7,10 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/handler"
+	"github.com/viant/xreflect"
+	"github.com/viant/xunsafe"
 	"reflect"
+	"strings"
 )
 
 var Type = reflect.TypeOf((*handler.Handler)(nil)).Elem()
@@ -36,7 +39,9 @@ func (h *Handler) Init(ctx context.Context, resource *view.Resource) (err error)
 		h.resource = resource
 		aType, err = h.resource.TypeRegistry().Lookup(h.Type)
 		if err != nil {
-			return fmt.Errorf("couldn't parse Handler type due to %w", err)
+			if aType = lookupByPackagePathAlias(h.resource.TypeRegistry().Lookup, h.Type); aType == nil {
+				return fmt.Errorf("couldn't parse Handler type due to %w", err)
+			}
 		}
 	}
 	if aType.Kind() != reflect.Ptr {
@@ -124,4 +129,35 @@ func (h *Handler) buildFactoryOptions() ([]handler.Option, error) {
 func NewHandler(handler handler.Handler) *Handler {
 	rType := reflect.TypeOf(handler)
 	return &Handler{Type: rType.Name(), _type: rType}
+}
+
+func lookupByPackagePathAlias(lookup xreflect.LookupType, typeName string) reflect.Type {
+	typeName = strings.TrimSpace(typeName)
+	index := strings.LastIndex(typeName, ".")
+	if index == -1 || index == len(typeName)-1 {
+		return nil
+	}
+	pkgPath := typeName[:index]
+	name := typeName[index+1:]
+	if !strings.Contains(pkgPath, "/") {
+		return nil
+	}
+	segments := strings.Split(pkgPath, "/")
+	var candidates []string
+	if len(segments) >= 2 {
+		candidates = append(candidates, strings.Join(segments[len(segments)-2:], "/"))
+	}
+	candidates = append(candidates, segments[len(segments)-1])
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if rType, err := lookup(name, xreflect.WithPackage(candidate)); err == nil && rType != nil {
+			return rType
+		}
+	}
+	if rType := xunsafe.LookupType(pkgPath + "/" + name); rType != nil {
+		return rType
+	}
+	return nil
 }

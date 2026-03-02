@@ -29,7 +29,7 @@ func TestTag_updateView(t *testing.T) {
 			description: "basic view",
 			tag:         `view:"foo,connector=dev"  sql:"uri=testdata/foo.sql"`,
 			expectView:  &View{Name: "foo", Connector: "dev"},
-			expectSQL:   ViewSQL{SQL: "SELECT * FROM FOO"},
+			expectSQL:   ViewSQL{SQL: "SELECT * FROM FOO", URI: "testdata/foo.sql"},
 			expectTag:   "foo,connector=dev",
 		},
 		{

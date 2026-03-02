@@ -41,7 +41,7 @@ func (n *newer) NewResultType(call *expr.Call) (reflect.Type, error) {
 
 	expression, ok := call.Args[0].(*expr.Literal)
 	if !ok {
-		return nil, fmt.Errorf("expected arg to be type of %T but was %T", expression, call.Args[1])
+		return nil, fmt.Errorf("expected arg to be type of %T but was %T", expression, call.Args[0])
 	}
 
 	return types.LookupType(n.lookup, expression.Value)

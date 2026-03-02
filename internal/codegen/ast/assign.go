@@ -54,7 +54,7 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 			return nil
 		}
 
-		if err = builder.WriteString("\n"); err != nil {
+		if err = builder.WriteIndentedString("\n"); err != nil {
 			return err
 		}
 		asIdent, ok := s.Holder.(*Ident)
@@ -84,7 +84,6 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 		if err = s.Expression.Generate(builder); err != nil {
 			return err
 		}
-		builder.WriteString("\n")
 		if !wasDeclared {
 			builder.State.DeclareVariable(asIdent.Name)
 		}
