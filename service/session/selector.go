@@ -14,6 +14,56 @@ import (
 	hstate "github.com/viant/xdatly/handler/state"
 )
 
+func normalizeSelectorName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, "_", "")
+	name = strings.ReplaceAll(name, "-", "")
+	name = strings.ReplaceAll(name, ".", "")
+	return name
+}
+
+func resolveInjectedQuerySelector(ns *view.NamespaceView, selectors hstate.QuerySelectors) *hstate.NamedQuerySelector {
+	if len(selectors) == 0 || ns == nil || ns.View == nil {
+		return nil
+	}
+	if selector := selectors.Find(ns.View.Name); selector != nil {
+		return selector
+	}
+	viewName := normalizeSelectorName(ns.View.Name)
+	for _, selector := range selectors {
+		if selector == nil {
+			continue
+		}
+		if normalizeSelectorName(selector.Name) == viewName {
+			return selector
+		}
+	}
+	for _, namespace := range ns.Namespaces {
+		if namespace == "" {
+			continue
+		}
+		if selector := selectors.Find(namespace); selector != nil {
+			return selector
+		}
+		nsName := normalizeSelectorName(namespace)
+		for _, selector := range selectors {
+			if selector == nil {
+				continue
+			}
+			if normalizeSelectorName(selector.Name) == nsName {
+				return selector
+			}
+		}
+	}
+	// Backward-compatible fallback: a single unnamed selector applies to root view.
+	if ns.Root && len(selectors) == 1 {
+		if sel := selectors[0]; sel != nil && strings.TrimSpace(sel.Name) == "" {
+			return sel
+		}
+	}
+	return nil
+}
+
 func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) (err error) {
 	selectorParameters := ns.View.Selector
 	if selectorParameters == nil {
@@ -24,7 +74,7 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 
 	var injected *hstate.NamedQuerySelector
 	if opts != nil && opts.locatorOpt != nil && opts.locatorOpt.QuerySelectors != nil {
-		injected = opts.locatorOpt.QuerySelectors.Find(ns.View.Name)
+		injected = resolveInjectedQuerySelector(ns, opts.locatorOpt.QuerySelectors)
 	}
 	if err = s.populateFieldQuerySelector(ctx, ns, opts); err != nil {
 		return response.NewParameterError(ns.View.Name, selectorParameters.FieldsParameter.Name, err)

@@ -75,6 +75,75 @@ type (
 	OperateOption func(o *operateOptions)
 )
 
+func normalizeSelectorName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, "_", "")
+	name = strings.ReplaceAll(name, "-", "")
+	name = strings.ReplaceAll(name, ".", "")
+	return name
+}
+
+func resolveSelectorForView(nsView *view.NamespaceView, selectors []*hstate.NamedQuerySelector) *hstate.NamedQuerySelector {
+	if nsView == nil || nsView.View == nil || len(selectors) == 0 {
+		return nil
+	}
+	viewName := normalizeSelectorName(nsView.View.Name)
+	for _, selector := range selectors {
+		if selector == nil {
+			continue
+		}
+		if normalizeSelectorName(selector.Name) == viewName {
+			return selector
+		}
+	}
+	for _, namespace := range nsView.Namespaces {
+		nsName := normalizeSelectorName(namespace)
+		if nsName == "" {
+			continue
+		}
+		for _, selector := range selectors {
+			if selector == nil {
+				continue
+			}
+			if normalizeSelectorName(selector.Name) == nsName {
+				return selector
+			}
+		}
+	}
+	if nsView.Root && len(selectors) == 1 && selectors[0] != nil && strings.TrimSpace(selectors[0].Name) == "" {
+		return selectors[0]
+	}
+	return nil
+}
+
+func applySessionQuerySelectors(component *repository.Component, aSession *session.Session, selectors []*hstate.NamedQuerySelector) {
+	if component == nil || aSession == nil || len(selectors) == 0 {
+		return
+	}
+	views := component.NamespacedView
+	if views == nil {
+		views = view.IndexViews(component.View, "")
+	}
+	for _, nsView := range views.Views {
+		injected := resolveSelectorForView(nsView, selectors)
+		if injected == nil || nsView == nil || nsView.View == nil {
+			continue
+		}
+		statelet := aSession.State().Lookup(nsView.View)
+		statelet.QuerySelector = injected.QuerySelector
+		if statelet.Page > 0 && statelet.Offset == 0 {
+			actualLimit := statelet.Limit
+			if actualLimit == 0 && nsView.View.Selector != nil {
+				actualLimit = nsView.View.Selector.Limit
+			}
+			if actualLimit > 0 {
+				statelet.Offset = actualLimit * (statelet.Page - 1)
+				statelet.Limit = actualLimit
+			}
+		}
+	}
+}
+
 func newOperateOptions(opts []OperateOption) *operateOptions {
 	ret := &operateOptions{}
 	for _, opt := range opts {
@@ -240,6 +309,9 @@ func (s *Service) Operate(ctx context.Context, opts ...OperateOption) (interface
 	if options.session == nil {
 		sOptions := append(options.sessionOptions, WithStateResource(options.component.View.Resource()))
 		options.session = s.NewComponentSession(options.component, sOptions...)
+	}
+	if sessionOpt := newSessionOptions(options.sessionOptions); len(sessionOpt.querySelectors) > 0 {
+		applySessionQuerySelectors(options.component, options.session, sessionOpt.querySelectors)
 	}
 	if input := options.input; input != nil {
 		if err = LoadInput(ctx, options.session, options.component, input); err != nil {

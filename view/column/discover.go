@@ -300,7 +300,7 @@ func asColumn(column sink.Column) *sqlparser.Column {
 
 func RewriteWithQueryIfNeeded(SQL string, query *query.Select) (*query.Select, error) {
 	var err error
-	if strings.HasPrefix(strings.ToLower(SQL[:5]), "with") {
+	if len(SQL) >= 5 && strings.HasPrefix(strings.ToLower(SQL[:5]), "with") {
 		SQL = sqlparser.Stringify(query)
 		query, err = sqlparser.ParseQuery(SQL)
 	}

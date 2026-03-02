@@ -3,12 +3,14 @@ package session
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"reflect"
 	"testing"
 
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/view"
 	vstate "github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind/locator"
 	hstate "github.com/viant/xdatly/handler/state"
 )
 
@@ -85,5 +87,58 @@ func TestSessionBind_QuerySelectorOverride_PageComputesOffset(t *testing.T) {
 	}
 	if selector.Offset != 5 {
 		t.Fatalf("expected Offset=5, got %d", selector.Offset)
+	}
+}
+
+func TestSessionSetViewState_QuerySelectorFromLocatorOptions(t *testing.T) {
+	ctx := context.Background()
+
+	resource := view.NewResource(nil)
+	aView := &view.View{
+		Name: "QueuedTurns",
+		Mode: view.ModeQuery,
+		Selector: func() *view.Config {
+			cfg := view.QueryStateParameters.Clone()
+			cfg.Constraints = &view.Constraints{
+				Criteria:   true,
+				OrderBy:    true,
+				Limit:      true,
+				Offset:     true,
+				Projection: true,
+			}
+			return cfg
+		}(),
+	}
+	aView.SetResource(resource)
+	aView.Template = &view.Template{Schema: vstate.NewSchema(reflect.TypeOf(struct{ Dummy int }{}))}
+	if err := aView.Template.Init(ctx, resource, aView); err != nil {
+		t.Fatalf("failed to init template: %v", err)
+	}
+	if err := aView.Selector.Init(ctx, resource, aView); err != nil {
+		t.Fatalf("failed to init selector: %v", err)
+	}
+
+	sess := New(
+		aView,
+		WithLocatorOptions(locator.WithQuerySelectors(hstate.QuerySelectors{
+			&hstate.NamedQuerySelector{
+				Name: "QueuedTurns",
+				QuerySelector: hstate.QuerySelector{
+					Limit:  1,
+					Offset: 1,
+				},
+			},
+		}), locator.WithRequest(&http.Request{Method: http.MethodGet, URL: &url.URL{Scheme: "http", Host: "127.0.0.1"}})),
+	)
+
+	if err := sess.SetViewState(ctx, aView); err != nil {
+		t.Fatalf("SetViewState() error: %v", err)
+	}
+	selector := sess.State().Lookup(aView)
+	if selector.Limit != 1 {
+		t.Fatalf("expected Limit=1, got %d", selector.Limit)
+	}
+	if selector.Offset != 1 {
+		t.Fatalf("expected Offset=1, got %d", selector.Offset)
 	}
 }
