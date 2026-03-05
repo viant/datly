@@ -45,6 +45,7 @@ type Directives struct {
 	Cache             *CacheDirective
 	MCP               *MCPDirective
 	Route             *RouteDirective
+	Const             map[string]string
 	JSONMarshalType   string
 	JSONUnmarshalType string
 	XMLUnmarshalType  string

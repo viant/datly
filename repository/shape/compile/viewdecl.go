@@ -81,7 +81,7 @@ func extractDeclaredViews(dql string) ([]*declaredView, []*dqlshape.Diagnostic) 
 		if kind != "view" && kind != "data_view" {
 			continue
 		}
-		sqlText := extractDeclarationSQL(tail)
+		sqlText, errorStatusCode := extractDeclarationSQLWithStatus(tail)
 		if sqlText == "" {
 			diags = append(diags, &dqlshape.Diagnostic{
 				Code:     dqldiag.CodeViewMissingSQL,
@@ -100,6 +100,9 @@ func extractDeclaredViews(dql string) ([]*declaredView, []*dqlshape.Diagnostic) 
 			continue
 		}
 		view := &declaredView{Name: name, SQL: strings.TrimSpace(sqlText)}
+		if errorStatusCode != nil {
+			view.StatusCode = errorStatusCode
+		}
 		applyDeclaredViewOptions(view, tail, dql, block.Offset, &diags)
 		views = append(views, view)
 	}

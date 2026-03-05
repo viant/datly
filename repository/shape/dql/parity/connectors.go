@@ -8,6 +8,18 @@ import (
 
 // resolveConnectors returns connectors from env override, or defaults.
 // When DATLY_PARITY_SQLITE_DSN is set, all default connector names are mapped to sqlite3.
+func splitNonEmpty(csv string) []string {
+	var ret []string
+	for _, item := range strings.Split(csv, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		ret = append(ret, item)
+	}
+	return ret
+}
+
 func resolveConnectors(defaults []string) []string {
 	if override := splitNonEmpty(os.Getenv("DATLY_PARITY_CONNECTORS")); len(override) > 0 {
 		return override

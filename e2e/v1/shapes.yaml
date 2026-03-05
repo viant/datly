@@ -1,0 +1,72 @@
+init:
+  shapePath: ${v1Path}/shape
+  repoPath: ${v1Path}/autogen
+  conn: -c='dev|mysql|root:dev@tcp(${dbIP.mysql}:3306)/dev${qMark}parseTime=true'
+
+pipeline:
+
+  cleanup:
+    action: exec:run
+    description: clean up generated shapes and routes
+    target: '$target'
+    checkError: true
+    commands:
+      - mkdir -p ${repoPath}
+      - rm -rf ${repoPath}
+      - mkdir -p ${shapePath}
+      - rm -rf ${shapePath}
+
+  vendor:
+    action: exec:run
+    TimeoutMs: 120000
+    checkError: true
+    commands:
+      - cd ${v1Path}
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_list.dql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_details.sql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_auth.sql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/product_update.sql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_meta.sql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/child_meta.sql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_apikey.sql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendors_codec.sql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_col_in.dql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/header_vendors.dql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/environment.dql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/meta_format.dql
+
+  user:
+    action: exec:run
+    TimeoutMs: 120000
+    checkError: true
+    commands:
+      - cd ${v1Path}
+      - /tmp/datly transcribe -u dev/user -m ${shapePath} -r ${repoPath} $conn -s dql/dev/user/user_tree.sql
+
+  district:
+    action: exec:run
+    TimeoutMs: 120000
+    checkError: true
+    commands:
+      - cd ${v1Path}
+      - /tmp/datly transcribe -u dev/district -m ${shapePath} -r ${repoPath} $conn -s dql/dev/district/district_pagination.sql
+
+  events:
+    action: exec:run
+    TimeoutMs: 120000
+    checkError: true
+    commands:
+      - cd ${v1Path}
+      - /tmp/datly transcribe -u dev/events -m ${shapePath} -r ${repoPath} $conn -s dql/dev/events/post_basic_one.dql
+      - /tmp/datly transcribe -u dev/events -m ${shapePath} -r ${repoPath} $conn -s dql/dev/events/post_basic_many.dql
+      - /tmp/datly transcribe -u dev/events -m ${shapePath} -r ${repoPath} $conn -s dql/dev/events/post_comprehensive_many.dql
+      - /tmp/datly transcribe -u dev/events -m ${shapePath} -r ${repoPath} $conn -s dql/dev/events/post_except.dql
+
+  team:
+    action: exec:run
+    TimeoutMs: 120000
+    checkError: true
+    commands:
+      - cd ${v1Path}
+      - /tmp/datly transcribe -u dev/team -m ${shapePath} -r ${repoPath} $conn -s dql/dev/team/team.dql
+      - /tmp/datly transcribe -u dev/team -m ${shapePath} -r ${repoPath} $conn -s dql/dev/team/user_team.dql

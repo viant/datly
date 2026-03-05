@@ -1,0 +1,18 @@
+[
+  {},
+  {
+    "ID": 1,
+    "TEAM_ID": 1,
+    "USER_ID": 1
+  },
+  {
+    "ID": 2,
+    "TEAM_ID": 1,
+    "USER_ID": 2
+  },
+  {
+    "ID": 3,
+    "TEAM_ID": 2,
+    "USER_ID": 1
+  }
+]

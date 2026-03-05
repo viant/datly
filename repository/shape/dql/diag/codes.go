@@ -17,6 +17,7 @@ const (
 	CodeDirFormat      = "DQL-DIR-FORMAT"
 	CodeDirDateFormat  = "DQL-DIR-DATE-FORMAT"
 	CodeDirCaseFormat  = "DQL-DIR-CASE-FORMAT"
+	CodeDirConst       = "DQL-DIR-CONST"
 	CodeDirUnsupported = "DQL-DIR-UNSUPPORTED"
 
 	CodeOptParse          = "DQL-OPT-PARSE"

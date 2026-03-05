@@ -1,0 +1,29 @@
+init:
+
+pipeline:
+  deploy:
+    setPath:
+      action: exec:run
+      target: $target
+      checkError: true
+      commands:
+        - export GOPATH=${env.GOPATH}
+        - export PATH=/usr/local/go/bin:$PATH
+
+    set_sdk:
+      action: sdk.set
+      target: $target
+      sdk: go:1.25.5
+
+    package:
+      action: exec:run
+      comments: build datly binary
+      target: $target
+      checkError: true
+      commands:
+        - export GO111MODULE=on
+        - cd ${appPath}/cmd/datly
+        - go mod tidy
+        - go mod download
+        - go build -ldflags "-X main.BuildTimeInS=`date +%s`"
+        - mv datly /tmp/datly

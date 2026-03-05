@@ -134,15 +134,27 @@ func (c *DQLCompiler) assembleResult(
 	result.TypeContext = prepared.Pre.TypeCtx
 	result.Directives = prepared.Pre.Directives
 	applyDefaultConnectorDirective(result)
+	applyConstDirective(result)
 	hints := extractViewHints(source.DQL)
 	appendRelationViews(result, root, hints)
 	appendDeclaredViews(source.DQL, result)
 	appendDeclaredStates(source.DQL, result)
 	applyViewHints(result, hints)
+	applyInlineParamHints(source.DQL, result)
 	applySourceParityEnrichmentWithLayout(result, source, pathLayout)
 	applyLinkedTypeSupport(result, source)
 	result.Diagnostics = append(result.Diagnostics, applyColumnDiscoveryPolicy(result, compileOptions)...)
 	return result
+}
+
+func applyConstDirective(result *plan.Result) {
+	if result == nil || result.Directives == nil || len(result.Directives.Const) == 0 {
+		return
+	}
+	result.Const = make(map[string]string, len(result.Directives.Const))
+	for k, v := range result.Directives.Const {
+		result.Const[k] = v
+	}
 }
 
 func applyDefaultConnectorDirective(result *plan.Result) {

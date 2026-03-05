@@ -22,6 +22,7 @@ type Result struct {
 	States           []*State
 	Types            []*Type
 	ColumnsDiscovery bool
+	Const            map[string]string
 	TypeContext      *typectx.Context
 	Directives       *dqlshape.Directives
 	Diagnostics      []*dqlshape.Diagnostic
@@ -66,9 +67,11 @@ type View struct {
 
 	AllowNulls        *bool
 	SelectorNamespace string
+	SelectorLimit     *int
 	SelectorNoLimit   *bool
 	SchemaType        string
 	ColumnsDiscovery  bool
+	Self              *SelfReference
 
 	Cardinality string
 	ElementType reflect.Type
@@ -128,6 +131,13 @@ type RelationLink struct {
 	RefNamespace    string
 	RefColumn       string
 	Expression      string
+}
+
+// SelfReference captures self-join tree metadata parsed from DQL.
+type SelfReference struct {
+	Holder string
+	Child  string
+	Parent string
 }
 
 // State is a normalized parameter field plan.

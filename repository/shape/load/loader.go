@@ -82,6 +82,16 @@ func (l *Loader) materialize(planned *shape.PlanResult) (*plan.Result, *view.Res
 	if err := shapevalidate.ValidateRelations(resource, resource.Views...); err != nil {
 		return nil, nil, err
 	}
+	if len(pResult.Const) > 0 {
+		for k, v := range pResult.Const {
+			constParam := &state.Parameter{
+				Name:  k,
+				In:    state.NewConstLocation(k),
+				Value: v,
+			}
+			resource.AddParameters(constParam)
+		}
+	}
 	// Gap 7: apply global cache TTL directive to root view.
 	if pResult.Directives != nil && pResult.Directives.Cache != nil {
 		if ttl := strings.TrimSpace(pResult.Directives.Cache.TTL); ttl != "" {
@@ -286,7 +296,23 @@ func cloneDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 			DescriptionPath: strings.TrimSpace(input.MCP.DescriptionPath),
 		}
 	}
-	if ret.Meta == "" && ret.DefaultConnector == "" && ret.Cache == nil && ret.MCP == nil {
+	if input.Const != nil {
+		ret.Const = make(map[string]string, len(input.Const))
+		for k, v := range input.Const {
+			ret.Const[k] = v
+		}
+	}
+	if input.Route != nil {
+		ret.Route = &dqlshape.RouteDirective{
+			URI: strings.TrimSpace(input.Route.URI),
+		}
+		for _, m := range input.Route.Methods {
+			if m = strings.TrimSpace(m); m != "" {
+				ret.Route.Methods = append(ret.Route.Methods, m)
+			}
+		}
+	}
+	if ret.Meta == "" && ret.DefaultConnector == "" && ret.Cache == nil && ret.MCP == nil && ret.Route == nil && len(ret.Const) == 0 {
 		return nil
 	}
 	return ret
@@ -374,7 +400,7 @@ func materializeView(item *plan.View) (*view.View, error) {
 	if item.Declaration != nil && strings.TrimSpace(item.Declaration.Tag) != "" {
 		aView.Tag = strings.TrimSpace(item.Declaration.Tag)
 	}
-	if strings.TrimSpace(item.SelectorNamespace) != "" || item.SelectorNoLimit != nil {
+	if strings.TrimSpace(item.SelectorNamespace) != "" || item.SelectorNoLimit != nil || item.SelectorLimit != nil {
 		if aView.Selector == nil {
 			aView.Selector = &view.Config{}
 		}
@@ -383,6 +409,16 @@ func materializeView(item *plan.View) (*view.View, error) {
 		}
 		if item.SelectorNoLimit != nil {
 			aView.Selector.NoLimit = *item.SelectorNoLimit
+		}
+		if item.SelectorLimit != nil {
+			aView.Selector.Limit = *item.SelectorLimit
+		}
+	}
+	if item.Self != nil {
+		aView.SelfReference = &view.SelfReference{
+			Holder: item.Self.Holder,
+			Child:  item.Self.Child,
+			Parent: item.Self.Parent,
 		}
 	}
 	if aView.Schema != nil && strings.TrimSpace(item.SchemaType) != "" {

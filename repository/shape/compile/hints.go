@@ -12,6 +12,9 @@ type viewHint struct {
 	Connector  string
 	AllowNulls *bool
 	NoLimit    *bool
+	CacheRef   string
+	Limit      *int
+	Self       *plan.SelfReference
 }
 
 func extractViewHints(dql string) map[string]viewHint {
@@ -58,6 +61,35 @@ func extractViewHints(dql string) map[string]viewHint {
 			hint := result[alias]
 			noLimit := limit == 0
 			hint.NoLimit = &noLimit
+			if limit > 0 {
+				hint.Limit = &limit
+			}
+			result[alias] = hint
+		case "set_cache":
+			if len(call.args) != 2 {
+				continue
+			}
+			alias := strings.TrimSpace(call.args[0])
+			ref := unquote(strings.TrimSpace(call.args[1]))
+			if !isIdentifier(alias) || ref == "" {
+				continue
+			}
+			hint := result[alias]
+			hint.CacheRef = ref
+			result[alias] = hint
+		case "self_ref":
+			if len(call.args) != 4 {
+				continue
+			}
+			alias := strings.TrimSpace(call.args[0])
+			holder := unquote(strings.TrimSpace(call.args[1]))
+			child := unquote(strings.TrimSpace(call.args[2]))
+			parent := unquote(strings.TrimSpace(call.args[3]))
+			if alias == "" || holder == "" || child == "" || parent == "" {
+				continue
+			}
+			hint := result[alias]
+			hint.Self = &plan.SelfReference{Holder: holder, Child: child, Parent: parent}
 			result[alias] = hint
 		}
 	}
@@ -82,7 +114,7 @@ func scanHintCalls(input string) []hintCall {
 			i++
 		}
 		name := strings.ToLower(input[start:i])
-		if name != "use_connector" && name != "allow_nulls" && name != "set_limit" {
+		if name != "use_connector" && name != "allow_nulls" && name != "set_limit" && name != "set_cache" && name != "self_ref" {
 			continue
 		}
 		j := skipSpaces(input, i)
@@ -295,6 +327,16 @@ func applyViewHints(result *plan.Result, hints map[string]viewHint) {
 			if item.SelectorNoLimit == nil && hint.NoLimit != nil {
 				value := *hint.NoLimit
 				item.SelectorNoLimit = &value
+			}
+			if item.SelectorLimit == nil && hint.Limit != nil {
+				value := *hint.Limit
+				item.SelectorLimit = &value
+			}
+			if item.CacheRef == "" && hint.CacheRef != "" {
+				item.CacheRef = hint.CacheRef
+			}
+			if item.Self == nil && hint.Self != nil {
+				item.Self = hint.Self
 			}
 		}
 	}

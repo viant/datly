@@ -23,6 +23,7 @@ type (
 	Type struct {
 		*Schema
 		Parameters   Parameters `json:",omitempty" yaml:"Parameters"`
+		Package      string     `json:",omitempty" yaml:",omitempty"`
 		withMarker   bool
 		stateType    *structology.StateType
 		resource     Resource
@@ -135,6 +136,15 @@ func (t *Type) SetType(rType reflect.Type) {
 	t.stateType = structology.NewStateType(rType)
 }
 
+// PkgPath returns the effective package path for type generation.
+// Uses the explicit Package field when set, otherwise falls back to the default.
+func (t *Type) PkgPath() string {
+	if p := strings.TrimSpace(t.Package); p != "" {
+		return p
+	}
+	return pkgPath
+}
+
 func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 	hasBodyParam := false
 	for _, parameter := range t.Parameters {
@@ -148,9 +158,10 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 	if t.withBodyType && !hasBodyParam {
 		t.withBodyType = hasBodyParam
 	}
+	effectivePkgPath := t.PkgPath()
 	var rType reflect.Type
 	if t.withBodyType {
-		rType, err = t.Parameters.BuildBodyType(pkgPath, t.resource.LookupType())
+		rType, err = t.Parameters.BuildBodyType(effectivePkgPath, t.resource.LookupType())
 	} else {
 		var opts []ReflectOption
 		if withMarker {
@@ -159,7 +170,7 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 		if t.Schema != nil && t.Schema.Name != "" {
 			opts = append(opts, WithTypeName(t.Name))
 		}
-		rType, err = t.Parameters.ReflectType(pkgPath, t.resource.LookupType(), opts...)
+		rType, err = t.Parameters.ReflectType(effectivePkgPath, t.resource.LookupType(), opts...)
 	}
 	if err != nil {
 		return err

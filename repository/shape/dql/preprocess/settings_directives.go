@@ -16,6 +16,7 @@ var (
 	cacheDirectiveName      = map[string]bool{"cache": true}
 	mcpDirectiveName        = map[string]bool{"mcp": true}
 	routeDirectiveName      = map[string]bool{"route": true}
+	constDirectiveName      = map[string]bool{"const": true}
 	marshalDirectiveName    = map[string]bool{"marshal": true}
 	unmarshalDirectiveName  = map[string]bool{"unmarshal": true}
 	formatDirectiveName     = map[string]bool{"format": true}
@@ -76,6 +77,19 @@ func parseSettingsDirectives(input, fullDQL string, diagnosticOffset int, direct
 			diagnostics = append(diagnostics, directiveDiagnostic(dqldiag.CodeDirRoute, "invalid $route directive", "expected: #settings($_ = $route('/v1/api/path','GET','POST'))", fullDQL, diagnosticOffset))
 		} else {
 			directives.Route = values[len(values)-1]
+		}
+	}
+	if strings.Contains(lower, "$const") {
+		values := parseConstDirectives(input)
+		if len(values) == 0 {
+			diagnostics = append(diagnostics, directiveDiagnostic(dqldiag.CodeDirConst, "invalid $const directive", "expected: #settings($_ = $const('Name','VALUE'))", fullDQL, diagnosticOffset))
+		} else {
+			if directives.Const == nil {
+				directives.Const = map[string]string{}
+			}
+			for _, kv := range values {
+				directives.Const[kv[0]] = kv[1]
+			}
 		}
 	}
 	if strings.Contains(lower, "$marshal") {
@@ -430,6 +444,30 @@ func parseCaseFormatDirectives(input string) []string {
 			continue
 		}
 		result = append(result, value)
+	}
+	return result
+}
+
+func parseConstDirectives(input string) [][2]string {
+	calls := scanDollarCalls(input, constDirectiveName)
+	var result [][2]string
+	for _, call := range calls {
+		if len(call.args) != 2 {
+			continue
+		}
+		name, ok := parseQuotedLiteral(call.args[0])
+		if !ok {
+			continue
+		}
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		value, ok := parseQuotedLiteral(call.args[1])
+		if !ok {
+			continue
+		}
+		result = append(result, [2]string{name, strings.TrimSpace(value)})
 	}
 	return result
 }

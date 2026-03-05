@@ -147,9 +147,15 @@ func normalizeDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 			Methods: normalizedMethods,
 		}
 	}
+	if len(input.Const) > 0 {
+		ret.Const = make(map[string]string, len(input.Const))
+		for k, v := range input.Const {
+			ret.Const[k] = v
+		}
+	}
 	if ret.Meta == "" && ret.DefaultConnector == "" && ret.Cache == nil && ret.MCP == nil && ret.Route == nil &&
 		ret.JSONMarshalType == "" && ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" && ret.Format == "" &&
-		ret.DateFormat == "" && ret.CaseFormat == "" {
+		ret.DateFormat == "" && ret.CaseFormat == "" && len(ret.Const) == 0 {
 		return nil
 	}
 	return ret

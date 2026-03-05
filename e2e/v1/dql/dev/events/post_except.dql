@@ -1,0 +1,11 @@
+#package('github.com/viant/datly/e2e/v1/shape/dev/events')
+#setting($_ = $connector('dev'))
+#setting($_ = $route('/v1/api/shape/dev/basic/events-except', 'POST'))
+
+#set($_ = $Events<?>(body/).Cardinality('One').Tag('anonymous:"true"'))
+#set($_ = $Events<?>(body/).Output().Tag('anonymous:"true"'))
+
+
+
+SELECT events.* EXCEPT NAME
+FROM (SELECT * FROM EVENTS) events

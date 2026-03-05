@@ -11,25 +11,35 @@ import (
 )
 
 func extractDeclarationSQL(fragment string) string {
+	sql, _ := extractDeclarationSQLWithStatus(fragment)
+	return sql
+}
+
+func extractDeclarationSQLWithStatus(fragment string) (string, *int) {
 	cursor := parsly.NewCursor("", []byte(fragment), 0)
 	for cursor.Pos < cursor.InputSize {
 		match := cursor.MatchAfterOptional(vdWhitespaceMatcher, vdCommentMatcher)
 		if match.Code == vdCommentToken {
 			text := match.Text(cursor)
 			if len(text) < 4 {
-				return ""
+				return "", nil
 			}
-			return normalizeHintSQL(text[2 : len(text)-2])
+			return normalizeHintSQLWithStatus(text[2 : len(text)-2])
 		}
 		cursor.Pos++
 	}
-	return ""
+	return "", nil
 }
 
 func normalizeHintSQL(body string) string {
+	sql, _ := normalizeHintSQLWithStatus(body)
+	return sql
+}
+
+func normalizeHintSQLWithStatus(body string) (string, *int) {
 	body = strings.TrimSpace(body)
 	if body == "" {
-		return ""
+		return "", nil
 	}
 	if strings.HasPrefix(body, "{") {
 		if closeIdx := strings.Index(body, "}"); closeIdx != -1 {
@@ -37,8 +47,9 @@ func normalizeHintSQL(body string) string {
 		}
 	}
 	if body == "" {
-		return ""
+		return "", nil
 	}
+	var statusCode *int
 	switch body[0] {
 	case '?':
 		body = strings.TrimSpace(body[1:])
@@ -50,11 +61,12 @@ func normalizeHintSQL(body string) string {
 		if len(body) >= 3 {
 			var status int
 			if _, err := fmt.Sscanf(body[:3], "%d", &status); err == nil {
+				statusCode = &status
 				body = strings.TrimSpace(body[3:])
 			}
 		}
 	}
-	return strings.TrimSpace(body)
+	return strings.TrimSpace(body), statusCode
 }
 
 func applyDeclaredViewOptions(view *declaredView, tail, dql string, offset int, diags *[]*dqlshape.Diagnostic) {

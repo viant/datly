@@ -1,0 +1,46 @@
+{
+  "status": "ok",
+  "data": [
+    {"@indexBy@": "id"},
+    {
+      "id": 1,
+      "name": "User 1",
+      "accountId": 100,
+      "team": [
+        {"@indexBy@": "id"},
+        {
+          "id": 3,
+          "name": "User 3",
+          "accountId": 100,
+          "team": [
+            {
+              "id": 5,
+              "name": "User 1",
+              "accountId": 100,
+              "team": []
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "name": "User 2",
+          "accountId": 101,
+          "team": []
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "User 2",
+      "accountId": 101,
+      "team": [
+        {
+          "id": 6,
+          "name": "User 2",
+          "accountId": 101,
+          "team": []
+        }
+      ]
+    }
+  ]
+}

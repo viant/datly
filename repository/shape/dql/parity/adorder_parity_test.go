@@ -9,6 +9,7 @@ import (
 	dqlplan "github.com/viant/datly/repository/shape/dql/plan"
 	dqlyaml "github.com/viant/datly/repository/shape/dql/render/yaml"
 	dqlscan "github.com/viant/datly/repository/shape/dql/scan"
+	"github.com/viant/datly/testutil/shapeparity"
 )
 
 func TestAdorderDQL_CanonicalParityWithYAML(t *testing.T) {
@@ -26,12 +27,11 @@ func TestAdorderDQL_CanonicalParityWithYAML(t *testing.T) {
 		t.Skipf("missing fixture yaml file: %v", err)
 	}
 
-	scanner := dqlscan.New()
 	connectors := resolveConnectors([]string{
 		"ci_ads|mysql|root:dev@tcp(127.0.0.1:3307)/ci_ads?parseTime=true&charset=utf8mb4&collation=utf8mb4_bin",
 		"ci_logs|mysql|root:dev@tcp(127.0.0.1:3307)/ci_logs?parseTime=true",
 	})
-	scanned, err := scanner.Scan(context.Background(), &dqlscan.Request{
+	scanned, err := shapeparity.ScanDQL(context.Background(), &dqlscan.Request{
 		DQLURL:       dqlPath,
 		Repository:   repoPath,
 		ModulePrefix: "platform/adorder",

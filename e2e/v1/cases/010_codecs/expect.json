@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "name": "Vendor 1",
+    "accountId": 100,
+    "userCreated": 1
+  },
+  {
+    "id": 2,
+    "name": "Vendor 2",
+    "accountId": 101,
+    "userCreated": 2
+  }
+]
