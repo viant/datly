@@ -32,7 +32,7 @@ var QueryStateParameters = &Config{
 	PageParameter:          &state.Parameter{Name: "Page", In: state.NewQueryLocation(PageQuery), Schema: state.NewSchema(xreflect.IntType)},
 	FieldsParameter:        &state.Parameter{Name: "Fields", In: state.NewQueryLocation(FieldsQuery), Schema: state.NewSchema(stringsType)},
 	OrderByParameter:       &state.Parameter{Name: "OrderBy", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(stringsType)},
-	CriteriaParameter:      &state.Parameter{Name: "Criteria", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(xreflect.StringType)},
+	CriteriaParameter:      &state.Parameter{Name: "Criteria", In: state.NewQueryLocation(CriteriaQuery), Schema: state.NewSchema(xreflect.StringType)},
 	SyncFlagParameter:      &state.Parameter{Name: "SyncFlag", Cacheable: &trueValue, In: state.NewState(SyncFlag), Schema: state.NewSchema(boolType)},
 	ContentFormatParameter: &state.Parameter{Name: "ContentFormat", In: state.NewQueryLocation(ContentFormat), Schema: state.NewSchema(xreflect.StringType)},
 }

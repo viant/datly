@@ -217,6 +217,12 @@ func NewViewlet(name, SQL string, join *query.Join, resource *Resource) *Viewlet
 
 func (v *Viewlet) discoverTables(ctx context.Context, db *sql.DB, SQL string) (err error) {
 	v.Table, err = inference.NewTable(ctx, db, SQL)
+	groupableColumns := map[string]bool{}
+	if v.Table != nil {
+		if parsed, parseErr := sqlparser.ParseQuery(inference.TrimParenthesis(SQL)); parseErr == nil {
+			groupableColumns = inference.GroupableColumns(parsed, v.Table.QueryColumns)
+		}
+	}
 	if v.Table != nil {
 		for _, column := range v.Table.QueryColumns {
 			name := column.Alias
@@ -224,7 +230,7 @@ func (v *Viewlet) discoverTables(ctx context.Context, db *sql.DB, SQL string) (e
 				name = column.Name
 			}
 			v.Whitelisted = append(v.Whitelisted, strings.ToLower(name))
-			columnConfig, err := inference.ExtractColumnConfig(column)
+			columnConfig, err := inference.ExtractColumnConfig(column, groupableColumns[column.Identity()])
 			if err != nil {
 				return err
 			}

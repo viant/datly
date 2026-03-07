@@ -1,0 +1,37 @@
+init:
+  parentPath: $parent.path
+
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-grouping?vendorIDs=1,2,3&_fields=accountId,totalId,maxId&_orderby=accountId
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_account_totals.json')
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-grouping?vendorIDs=1,2,3&_fields=accountId,userCreated,totalId,maxId&_orderby=accountId
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_account_user_totals.json')
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-grouping?vendorIDs=1,2,3&_fields=userCreated,totalId,maxId&_orderby=userCreated
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_user_totals.json')
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-grouping?vendorIDs=1,2,3&_fields=totalId,maxId
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_totals.json')
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-grouping?vendorIDs=1,2,3&_fields=accountId,totalId,maxId&_orderby=accountId&_limit=1&_offset=2
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_empty.json')

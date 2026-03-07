@@ -8,6 +8,7 @@ import (
 
 	"github.com/viant/datly/service/session/criteria"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/response"
@@ -77,22 +78,22 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 		injected = resolveInjectedQuerySelector(ns, opts.locatorOpt.QuerySelectors)
 	}
 	if err = s.populateFieldQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.FieldsParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.FieldsParameter, view.QueryStateParameters.FieldsParameter), err)
 	}
 	if err = s.populateLimitQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.LimitParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.LimitParameter, view.QueryStateParameters.LimitParameter), err)
 	}
 	if err = s.populateOffsetQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.OffsetParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.OffsetParameter, view.QueryStateParameters.OffsetParameter), err)
 	}
 	if err = s.populateOrderByQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.OrderByParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.OrderByParameter, view.QueryStateParameters.OrderByParameter), err)
 	}
 	if err = s.populateCriteriaQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.CriteriaParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.CriteriaParameter, view.QueryStateParameters.CriteriaParameter), err)
 	}
 	if err = s.populatePageQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.PageParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.PageParameter, view.QueryStateParameters.PageParameter), err)
 	}
 
 	// Apply injected selector last so it takes precedence over request-derived values,
@@ -111,6 +112,16 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 		return fmt.Errorf("can't use offset without limit - view: %v", ns.View.Name)
 	}
 	return nil
+}
+
+func selectorParameterName(parameter, fallback *state.Parameter) string {
+	if parameter != nil && parameter.Name != "" {
+		return parameter.Name
+	}
+	if fallback != nil && fallback.Name != "" {
+		return fallback.Name
+	}
+	return ""
 }
 
 func (s *Session) applyInjectedQuerySelector(ns *view.NamespaceView, selector *view.Statelet, injected *hstate.NamedQuerySelector) error {

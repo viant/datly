@@ -64,6 +64,7 @@ type (
 		PublishParent bool       `json:",omitempty"`
 		Partitioned   *Partitioned
 		Criteria      string `json:",omitempty"`
+		Groupable     bool   `json:",omitempty"`
 
 		Selector *Config   `json:",omitempty"`
 		Template *Template `json:",omitempty"`
@@ -1098,6 +1099,7 @@ func (v *View) inherit(view *View) error {
 	setter.SetStringIfEmpty(&v.Module, view.Module)
 	setter.SetStringIfEmpty(&v.Tag, view.Tag)
 	setter.SetBoolIfFalse(&v.PublishParent, view.PublishParent)
+	setter.SetBoolIfFalse(&v.Groupable, view.Groupable)
 
 	setter.SetStringIfEmpty(&v.Description, view.Description)
 
@@ -1284,6 +1286,18 @@ func (v *View) CanUseSelectorProjection() bool {
 // IndexedColumns returns Columns
 func (v *View) IndexedColumns() NamedColumns {
 	return v._columns
+}
+
+// IsGroupable reports whether the supplied field or column name resolves to a groupable column.
+func (v *View) IsGroupable(name string) bool {
+	if v == nil || len(v._columns) == 0 {
+		return false
+	}
+	column, err := v._columns.Lookup(name)
+	if err != nil {
+		return false
+	}
+	return column.Groupable
 }
 
 func (v *View) markColumnsAsFilterable() error {
