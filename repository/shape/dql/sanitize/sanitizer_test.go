@@ -39,6 +39,20 @@ func TestSQL_ParityWithLegacySanitizer(t *testing.T) {
 				&inference.Parameter{Parameter: vstate.Parameter{Name: "ConstId", In: vstate.NewConstLocation("ConstId")}},
 			},
 		},
+		{
+			name: "exec foreach and logger hooks",
+			sql: "#foreach($rec in $Unsafe.Records)\n" +
+				"#if($rec.IS_AUTH == 0)\n" +
+				"  $logger.Fatal(\"Unauthorized access to product: %v\", $rec.ID)\n" +
+				"#end\n" +
+				"UPDATE PRODUCT SET STATUS = $Status WHERE ID = $rec.ID\n" +
+				"#end",
+		},
+		{
+			name: "predicate and sql hooks",
+			sql: "SELECT * FROM PRODUCT t WHERE 1=1 ${predicate.Builder().CombineOr($predicate.FilterGroup(0, \"AND\")).Build(\"AND\")} " +
+				"AND $sql.Eq(\"ID\", $VendorID)",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -50,6 +64,7 @@ func TestSQL_ParityWithLegacySanitizer(t *testing.T) {
 
 			actual := SQL(testCase.sql, Options{
 				Declared: tpl.Declared,
+				Foreach:  ForeachDeclared(testCase.sql),
 				Consts:   constNames(state),
 			})
 			assert.Equal(t, expected, actual)
@@ -82,6 +97,20 @@ func TestSQL_ParityWithLegacySanitizer_RuntimeExpansion(t *testing.T) {
 				&inference.Parameter{Parameter: vstate.Parameter{Name: "ConstId", In: vstate.NewConstLocation("ConstId")}},
 			},
 		},
+		{
+			name: "exec foreach and logger hooks",
+			sql: "#foreach($rec in $Unsafe.Records)\n" +
+				"#if($rec.IS_AUTH == 0)\n" +
+				"  $logger.Fatal(\"Unauthorized access to product: %v\", $rec.ID)\n" +
+				"#end\n" +
+				"UPDATE PRODUCT SET STATUS = $Status WHERE ID = $rec.ID\n" +
+				"#end",
+		},
+		{
+			name: "predicate and sql hooks",
+			sql: "SELECT * FROM PRODUCT t WHERE 1=1 ${predicate.Builder().CombineOr($predicate.FilterGroup(0, \"AND\")).Build(\"AND\")} " +
+				"AND $sql.Eq(\"ID\", $VendorID)",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -93,6 +122,7 @@ func TestSQL_ParityWithLegacySanitizer_RuntimeExpansion(t *testing.T) {
 
 			shapeSQL := SQL(testCase.sql, Options{
 				Declared: tpl.Declared,
+				Foreach:  ForeachDeclared(testCase.sql),
 				Consts:   constNames(state),
 			})
 			require.Equal(t, legacySQL, shapeSQL)
@@ -154,6 +184,11 @@ func TestDeclared(t *testing.T) {
 func TestDeclared_ParameterDeclarationStyle(t *testing.T) {
 	declared := Declared("#set($_ = $Jwt<string>(header/Authorization))\nSELECT $Jwt.UserID")
 	assert.True(t, declared["Jwt"])
+}
+
+func TestDeclared_ForeachVariable(t *testing.T) {
+	declared := Declared("#foreach($rec in $Unsafe.Records)\nUPDATE t SET v = $rec.ID\n#end")
+	assert.True(t, declared["rec"])
 }
 
 func TestDeclaredListener_OnEventBranches(t *testing.T) {
@@ -218,9 +253,57 @@ func (c criteriaMock) AppendBinding(value interface{}) string {
 }
 
 type unsafeMock struct {
-	Id      int
-	Name    string
-	ConstId int
+	Id       int
+	Name     string
+	ConstId  int
+	VendorID int
+	Status   int
+	Records  []recordMock
+}
+
+type recordMock struct {
+	ID      int
+	IS_AUTH int
+}
+
+type sqlMock struct{}
+
+func (s sqlMock) Eq(column string, value interface{}) string {
+	return fmt.Sprintf("%s = %v", column, value)
+}
+
+type predicateMock struct{}
+
+func (p predicateMock) Builder() *predicateBuilderMock {
+	return &predicateBuilderMock{}
+}
+
+func (p predicateMock) FilterGroup(group int, op string) string {
+	return fmt.Sprintf("P%d:%s", group, op)
+}
+
+type predicateBuilderMock struct {
+	value string
+}
+
+func (b *predicateBuilderMock) CombineOr(group string) *predicateBuilderMock {
+	b.value = group
+	return b
+}
+
+func (b *predicateBuilderMock) Build(kind string) string {
+	switch kind {
+	case "AND":
+		return " AND (" + b.value + ") "
+	default:
+		return ""
+	}
+}
+
+type loggerMock struct{}
+
+func (l loggerMock) Fatal(_ string, _ ...interface{}) string {
+	return ""
 }
 
 func renderVeltySQL(t *testing.T, template string) string {
@@ -228,18 +311,35 @@ func renderVeltySQL(t *testing.T, template string) string {
 	planner := velty.New()
 	require.NoError(t, planner.DefineVariable("criteria", criteriaMock{}))
 	require.NoError(t, planner.DefineVariable("Unsafe", unsafeMock{}))
+	require.NoError(t, planner.DefineVariable("sql", sqlMock{}))
+	require.NoError(t, planner.DefineVariable("predicate", predicateMock{}))
+	require.NoError(t, planner.DefineVariable("logger", loggerMock{}))
 	require.NoError(t, planner.DefineVariable("Id", 0))
 	require.NoError(t, planner.DefineVariable("Name", ""))
 	require.NoError(t, planner.DefineVariable("ConstId", 0))
+	require.NoError(t, planner.DefineVariable("VendorID", 0))
+	require.NoError(t, planner.DefineVariable("Status", 0))
 
 	exec, newState, err := planner.Compile([]byte(template))
 	require.NoError(t, err)
 	state := newState()
 	require.NoError(t, state.SetValue("criteria", criteriaMock{}))
-	require.NoError(t, state.SetValue("Unsafe", unsafeMock{Id: 10, Name: "ann", ConstId: 77}))
+	require.NoError(t, state.SetValue("Unsafe", unsafeMock{
+		Id:       10,
+		Name:     "ann",
+		ConstId:  77,
+		VendorID: 101,
+		Status:   1,
+		Records:  []recordMock{{ID: 10, IS_AUTH: 1}},
+	}))
+	require.NoError(t, state.SetValue("sql", sqlMock{}))
+	require.NoError(t, state.SetValue("predicate", predicateMock{}))
+	require.NoError(t, state.SetValue("logger", loggerMock{}))
 	require.NoError(t, state.SetValue("Id", 10))
 	require.NoError(t, state.SetValue("Name", "ann"))
 	require.NoError(t, state.SetValue("ConstId", 77))
+	require.NoError(t, state.SetValue("VendorID", 101))
+	require.NoError(t, state.SetValue("Status", 1))
 	require.NoError(t, exec.Exec(state))
 	return state.Buffer.String()
 }

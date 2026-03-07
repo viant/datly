@@ -1,9 +1,13 @@
 package compile
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
+	dqldiag "github.com/viant/datly/repository/shape/dql/diag"
+	dqlpre "github.com/viant/datly/repository/shape/dql/preprocess"
+	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/plan"
 	"github.com/viant/datly/view/extension"
 	st "github.com/viant/datly/view/state"
@@ -16,23 +20,29 @@ func appendDeclaredStates(rawDQL string, result *plan.Result) {
 	}
 	seen := map[string]bool{}
 	for _, block := range extractSetBlocks(rawDQL) {
-		holder, kind, location, tail, ok := parseSetDeclarationBody(block.Body)
+		holder, kind, location, tail, tailOffset, ok := parseSetDeclarationBody(block.Body)
 		if !ok {
-			continue
-		}
-		if kind == "view" || kind == "data_view" {
 			continue
 		}
 		key := declaredStateKey(holder, kind, location)
 		if seen[key] {
 			continue
 		}
+		inName := location
+		if kind == "view" || kind == "data_view" {
+			if isAttachedSummaryState(result, holder) {
+				continue
+			}
+			// Keep parity with legacy translator: view declarations are addressed
+			// by declaration holder name (e.g. $Authorization(view/authorization)).
+			inName = holder
+		}
 		state := &plan.State{
 			Parameter: st.Parameter{
 				Name: holder,
 				In: &st.Location{
 					Kind: st.Kind(kind),
-					Name: location,
+					Name: inName,
 				},
 			},
 		}
@@ -48,10 +58,85 @@ func appendDeclaredStates(rawDQL string, result *plan.Result) {
 			required := true
 			state.Required = &required
 		}
-		applyDeclaredStateOptions(state, tail)
+		applyDeclaredStateOptions(state, tail, rawDQL, block.BodyOffset+tailOffset, &result.Diagnostics)
 		result.States = append(result.States, state)
 		seen[key] = true
 	}
+	appendInferredPathStates(rawDQL, result, seen)
+}
+
+func appendInferredPathStates(rawDQL string, result *plan.Result, seen map[string]bool) {
+	if result == nil || strings.TrimSpace(rawDQL) == "" {
+		return
+	}
+	prepared := dqlpre.Prepare(rawDQL)
+	if prepared.Directives == nil || prepared.Directives.Route == nil {
+		return
+	}
+	for _, name := range extractRoutePathParams(prepared.Directives.Route.URI) {
+		key := declaredStateKey(name, string(st.KindPath), name)
+		if seen[key] {
+			continue
+		}
+		result.States = append(result.States, &plan.State{
+			Parameter: st.Parameter{
+				Name: name,
+				In:   st.NewPathLocation(name),
+				Schema: &st.Schema{
+					DataType:    "string",
+					Cardinality: st.One,
+				},
+			},
+		})
+		seen[key] = true
+	}
+}
+
+func extractRoutePathParams(uri string) []string {
+	uri = strings.TrimSpace(uri)
+	if uri == "" {
+		return nil
+	}
+	var result []string
+	seen := map[string]bool{}
+	for {
+		start := strings.IndexByte(uri, '{')
+		if start == -1 {
+			break
+		}
+		uri = uri[start+1:]
+		end := strings.IndexByte(uri, '}')
+		if end == -1 {
+			break
+		}
+		name := strings.TrimSpace(uri[:end])
+		uri = uri[end+1:]
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, name)
+	}
+	return result
+}
+
+func isAttachedSummaryState(result *plan.Result, holder string) bool {
+	if result == nil || strings.TrimSpace(holder) == "" {
+		return false
+	}
+	for _, item := range result.Views {
+		if item == nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(item.SummaryName), strings.TrimSpace(holder)) {
+			return true
+		}
+	}
+	return false
 }
 
 func declaredStateKey(name, kind, in string) string {
@@ -60,77 +145,156 @@ func declaredStateKey(name, kind, in string) string {
 		strings.ToLower(strings.TrimSpace(in))
 }
 
-func applyDeclaredStateOptions(state *plan.State, tail string) {
+func applyDeclaredStateOptions(state *plan.State, tail, dql string, baseOffset int, diags *[]*dqlshape.Diagnostic) {
 	if state == nil || strings.TrimSpace(tail) == "" {
 		return
 	}
 	cursor := newOptionCursor(tail)
 	for cursor.next() {
 		name, args := cursor.option()
+		optionOffset := baseOffset + cursor.start
 		switch {
 		case strings.EqualFold(name, "WithURI"):
-			if len(args) == 1 {
-				state.URI = trimQuote(args[0])
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
 			}
+			state.URI = trimQuote(args[0])
+		case strings.EqualFold(name, "WithTag"), strings.EqualFold(name, "Tag"):
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
+			}
+			state.Tag = trimQuote(args[0])
 		case strings.EqualFold(name, "Optional"):
+			if !expectStateArgs(state, name, args, 0, 0, dql, optionOffset, diags) {
+				continue
+			}
 			required := false
 			state.Required = &required
 		case strings.EqualFold(name, "Required"):
+			if !expectStateArgs(state, name, args, 0, 0, dql, optionOffset, diags) {
+				continue
+			}
 			required := true
 			state.Required = &required
 		case strings.EqualFold(name, "Cacheable"):
-			if len(args) == 1 {
-				if value, err := strconv.ParseBool(strings.TrimSpace(trimQuote(args[0]))); err == nil {
-					state.Cacheable = &value
-				}
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
 			}
+			value, err := strconv.ParseBool(strings.TrimSpace(trimQuote(args[0])))
+			if err != nil {
+				appendStateOptionDiagnostic(state, name, fmt.Sprintf("invalid bool cacheable %q", args[0]), dql, optionOffset, diags)
+				continue
+			}
+			state.Cacheable = &value
 		case strings.EqualFold(name, "QuerySelector"):
-			if len(args) == 1 {
-				state.QuerySelector = trimQuote(args[0])
-				if state.Cacheable == nil {
-					cacheable := false
-					state.Cacheable = &cacheable
-				}
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
+			}
+			state.QuerySelector = trimQuote(args[0])
+			if state.Cacheable == nil {
+				cacheable := false
+				state.Cacheable = &cacheable
 			}
 		case strings.EqualFold(name, "WithPredicate"), strings.EqualFold(name, "Predicate"):
+			if !expectStateArgs(state, name, args, 1, -1, dql, optionOffset, diags) {
+				continue
+			}
 			appendStatePredicate(state, args, false)
 		case strings.EqualFold(name, "EnsurePredicate"):
+			if !expectStateArgs(state, name, args, 1, -1, dql, optionOffset, diags) {
+				continue
+			}
 			appendStatePredicate(state, args, true)
 		case strings.EqualFold(name, "When"):
-			if len(args) == 1 {
-				state.When = trimQuote(args[0])
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
 			}
+			state.When = trimQuote(args[0])
 		case strings.EqualFold(name, "Scope"):
-			if len(args) == 1 {
-				state.Scope = trimQuote(args[0])
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
 			}
+			state.Scope = trimQuote(args[0])
 		case strings.EqualFold(name, "WithType"):
-			if len(args) == 1 {
-				ensureStateSchema(state).DataType = trimQuote(args[0])
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
 			}
+			ensureStateSchema(state).DataType = trimQuote(args[0])
 		case strings.EqualFold(name, "WithCodec"):
-			if len(args) >= 1 {
-				state.Output = &st.Codec{
-					Name: trimQuote(args[0]),
-					Args: append([]string{}, trimQuotedArgs(args[1:])...),
-				}
+			if !expectStateArgs(state, name, args, 1, -1, dql, optionOffset, diags) {
+				continue
+			}
+			state.Output = &st.Codec{
+				Name: trimQuote(args[0]),
+				Args: append([]string{}, trimQuotedArgs(args[1:])...),
 			}
 		case strings.EqualFold(name, "WithStatusCode"):
-			if len(args) == 1 {
-				if value, err := strconv.Atoi(strings.TrimSpace(trimQuote(args[0]))); err == nil {
-					state.ErrorStatusCode = value
-				}
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
 			}
+			value, err := strconv.Atoi(strings.TrimSpace(trimQuote(args[0])))
+			if err != nil {
+				appendStateOptionDiagnostic(state, name, fmt.Sprintf("invalid status code %q", args[0]), dql, optionOffset, diags)
+				continue
+			}
+			state.ErrorStatusCode = value
 		case strings.EqualFold(name, "WithErrorMessage"):
-			if len(args) == 1 {
-				state.ErrorMessage = trimQuote(args[0])
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
 			}
+			state.ErrorMessage = trimQuote(args[0])
 		case strings.EqualFold(name, "Value"):
-			if len(args) == 1 {
-				state.Value = trimQuote(args[0])
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
+			}
+			state.Value = trimQuote(args[0])
+		case strings.EqualFold(name, "Embed"):
+			if !expectStateArgs(state, name, args, 0, 0, dql, optionOffset, diags) {
+				continue
+			}
+			if !strings.Contains(state.Tag, `anonymous:"true"`) {
+				if strings.TrimSpace(state.Tag) != "" {
+					state.Tag += " "
+				}
+				state.Tag += `anonymous:"true"`
+			}
+		case strings.EqualFold(name, "Cardinality"):
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
+			}
+			card := strings.ToLower(strings.TrimSpace(trimQuote(args[0])))
+			switch card {
+			case "one":
+				ensureStateSchema(state).Cardinality = st.One
+			case "many":
+				ensureStateSchema(state).Cardinality = st.Many
+			default:
+				if state != nil && state.In != nil {
+					kind := strings.ToLower(state.KindString())
+					if kind == "view" || kind == "data_view" {
+						// Declared views already validate cardinality with DQL-VIEW-CARDINALITY.
+						// Avoid duplicating that diagnostic on the shadow state projection.
+						continue
+					}
+				}
+				appendStateOptionDiagnostic(state, name, fmt.Sprintf("unsupported cardinality %q", args[0]), dql, optionOffset, diags)
 			}
 		case strings.EqualFold(name, "Async"):
+			if !expectStateArgs(state, name, args, 0, 0, dql, optionOffset, diags) {
+				continue
+			}
 			state.Async = true
+		default:
+			if state != nil && state.In != nil {
+				kind := strings.ToLower(state.KindString())
+				if kind == "view" || kind == "data_view" {
+					// View declarations carry many view-level options (e.g. Cardinality,
+					// WithURI, WithColumnType). Those are handled by declared-view parsing
+					// and should not emit state-option diagnostics.
+					continue
+				}
+			}
+			appendStateOptionDiagnostic(state, name, "unknown option", dql, optionOffset, diags)
 		}
 	}
 }
@@ -222,6 +386,7 @@ func ensureStateSchema(state *plan.State) *st.Schema {
 type optionCursor struct {
 	raw    string
 	cursor int
+	start  int
 	name   string
 	args   []string
 }
@@ -233,12 +398,14 @@ func newOptionCursor(raw string) *optionCursor {
 func (o *optionCursor) next() bool {
 	o.name = ""
 	o.args = nil
+	o.start = 0
 	for o.cursor < len(o.raw) && (o.raw[o.cursor] == ' ' || o.raw[o.cursor] == '\n' || o.raw[o.cursor] == '\t' || o.raw[o.cursor] == '\r') {
 		o.cursor++
 	}
 	if o.cursor >= len(o.raw) || o.raw[o.cursor] != '.' {
 		return false
 	}
+	o.start = o.cursor
 	o.cursor++
 	start := o.cursor
 	for o.cursor < len(o.raw) {
@@ -304,4 +471,30 @@ func (o *optionCursor) next() bool {
 
 func (o *optionCursor) option() (string, []string) {
 	return o.name, o.args
+}
+
+func expectStateArgs(state *plan.State, option string, args []string, min, max int, dql string, offset int, diags *[]*dqlshape.Diagnostic) bool {
+	if len(args) < min {
+		appendStateOptionDiagnostic(state, option, fmt.Sprintf("expected at least %d args, got %d", min, len(args)), dql, offset, diags)
+		return false
+	}
+	if max >= 0 && len(args) > max {
+		appendStateOptionDiagnostic(state, option, fmt.Sprintf("expected at most %d args, got %d", max, len(args)), dql, offset, diags)
+		return false
+	}
+	return true
+}
+
+func appendStateOptionDiagnostic(state *plan.State, option, detail, dql string, offset int, diags *[]*dqlshape.Diagnostic) {
+	stateName := ""
+	if state != nil {
+		stateName = state.Name
+	}
+	*diags = append(*diags, &dqlshape.Diagnostic{
+		Code:     dqldiag.CodeDeclOptionArgs,
+		Severity: dqlshape.SeverityWarning,
+		Message:  fmt.Sprintf("invalid %s declaration for state %q: %s", option, stateName, detail),
+		Hint:     "check option name, arity and argument formatting",
+		Span:     relationSpan(dql, offset),
+	})
 }

@@ -11,7 +11,8 @@ import (
 )
 
 func ParseSelectWithDiagnostic(sqlText string) (*query.Select, *dqlshape.Diagnostic, error) {
-	sqlText = trimLeadingBlockComments(sqlText)
+	original := sqlText
+	sqlText, trimPrefix := trimLeadingBlockComments(sqlText)
 	var diagnostic *dqlshape.Diagnostic
 	onError := func(err error, cur *parsly.Cursor, _ interface{}) error {
 		offset := 0
@@ -26,7 +27,7 @@ func ParseSelectWithDiagnostic(sqlText string) (*query.Select, *dqlshape.Diagnos
 			Severity: dqlshape.SeverityError,
 			Message:  strings.TrimSpace(err.Error()),
 			Hint:     "check SQL syntax near the reported location",
-			Span:     pointSpan(sqlText, offset),
+			Span:     pointSpan(original, offset+trimPrefix),
 		}
 		return err
 	}
@@ -38,7 +39,7 @@ func ParseSelectWithDiagnostic(sqlText string) (*query.Select, *dqlshape.Diagnos
 				Severity: dqlshape.SeverityError,
 				Message:  strings.TrimSpace(err.Error()),
 				Hint:     "check SQL syntax near the reported location",
-				Span:     pointSpan(sqlText, 0),
+				Span:     pointSpan(original, trimPrefix),
 			}
 		}
 		return nil, diagnostic, err
@@ -49,14 +50,16 @@ func ParseSelectWithDiagnostic(sqlText string) (*query.Select, *dqlshape.Diagnos
 	return result, nil, nil
 }
 
-func trimLeadingBlockComments(sqlText string) string {
+func trimLeadingBlockComments(sqlText string) (string, int) {
 	remaining := strings.TrimLeft(sqlText, " \t\r\n")
+	trimPrefix := len(sqlText) - len(remaining)
 	for strings.HasPrefix(remaining, "/*") {
 		end := strings.Index(remaining, "*/")
 		if end == -1 {
-			return remaining
+			return remaining, trimPrefix
 		}
 		remaining = strings.TrimLeft(remaining[end+2:], " \t\r\n")
+		trimPrefix = len(sqlText) - len(remaining)
 	}
-	return remaining
+	return remaining, trimPrefix
 }

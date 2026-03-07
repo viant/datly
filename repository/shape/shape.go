@@ -35,9 +35,11 @@ type (
 		RegisterComponent(ctx context.Context, artifacts *ComponentArtifact) error
 	}
 
-	ScanOptions    struct{}
-	PlanOptions    struct{}
-	LoadOptions    struct{}
+	ScanOptions struct{}
+	PlanOptions struct{}
+	LoadOptions struct {
+		UseTypeContextPackages bool
+	}
 	CompileOptions struct {
 		Strict              bool
 		Profile             CompileProfile
@@ -50,6 +52,7 @@ type (
 		TypePackageName     string
 		TypePackagePath     string
 		InferTypeContext    *bool
+		UseLinkedTypes      *bool
 	}
 
 	ScanOption    func(*ScanOptions)
@@ -57,6 +60,15 @@ type (
 	LoadOption    func(*LoadOptions)
 	CompileOption func(*CompileOptions)
 )
+
+func WithLoadTypeContextPackages(enabled bool) LoadOption {
+	return func(o *LoadOptions) {
+		if o == nil {
+			return
+		}
+		o.UseTypeContextPackages = enabled
+	}
+}
 
 const (
 	CompileMixedModeExecWins     CompileMixedMode = "exec_wins"

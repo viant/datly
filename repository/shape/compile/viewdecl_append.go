@@ -21,9 +21,17 @@ func appendDeclaredViews(rawDQL string, result *plan.Result) {
 		if item == nil || strings.TrimSpace(item.Name) == "" || strings.TrimSpace(item.SQL) == "" {
 			continue
 		}
+		if item.VirtualSummary {
+			if root := lookupRootView(result); root != nil && strings.TrimSpace(root.Summary) == "" {
+				root.Summary = strings.TrimSpace(item.SQL)
+				root.SummaryName = strings.TrimSpace(item.Name)
+			}
+			continue
+		}
 		if parent := lookupSummaryParentView(result, item.SQL); parent != nil {
 			if strings.TrimSpace(parent.Summary) == "" {
-				parent.Summary = strings.TrimSpace(item.SQL)
+				parent.Summary = normalizeSummarySQLForParent(parent, item.SQL)
+				parent.SummaryName = strings.TrimSpace(item.Name)
 			}
 			continue
 		}
@@ -43,20 +51,23 @@ func appendDeclaredViews(rawDQL string, result *plan.Result) {
 			ElementType: reflect.TypeOf(map[string]interface{}{}),
 			Declaration: buildViewDeclaration(item),
 		}
+		if item.Required && !item.CardinalitySet {
+			view.Cardinality = "one"
+		}
 		if item.Cardinality != "" {
 			view.Cardinality = item.Cardinality
 		}
 		if queryNode, err := sqlparser.ParseQuery(item.SQL); err == nil && queryNode != nil {
 			if inferredName, inferredTable, err := pipeline.InferRoot(queryNode, item.Name); err == nil {
-				view.Name = inferredName
-				view.Holder = inferredName
-				view.Path = inferredName
-				view.Table = inferredTable
+				_ = inferredName
+				if strings.TrimSpace(inferredTable) != "" {
+					view.Table = inferredTable
+				}
 			}
 			if fType, eType, card := pipeline.InferProjectionType(queryNode); fType != nil && eType != nil {
 				view.FieldType = fType
 				view.ElementType = eType
-				if item.Cardinality == "" {
+				if item.Cardinality == "" && !(item.Required && !item.CardinalitySet) {
 					view.Cardinality = card
 				}
 			}
@@ -66,9 +77,47 @@ func appendDeclaredViews(rawDQL string, result *plan.Result) {
 	}
 }
 
+func normalizeSummarySQLForParent(parent *plan.View, sqlText string) string {
+	normalized := strings.TrimSpace(sqlText)
+	if parent == nil || normalized == "" {
+		return normalized
+	}
+	parentName := strings.TrimSpace(parent.Name)
+	if parentName == "" {
+		return normalized
+	}
+	for _, candidate := range []string{
+		"$View." + parentName + ".SQL",
+		"$view." + strings.ToLower(parentName) + ".sql",
+	} {
+		normalized = strings.ReplaceAll(normalized, candidate, "$View.NonWindowSQL")
+	}
+	return normalized
+}
+
+func lookupRootView(result *plan.Result) *plan.View {
+	if result == nil {
+		return nil
+	}
+	if len(result.Views) > 0 && result.Views[0] != nil {
+		return result.Views[0]
+	}
+	for _, item := range result.ViewsByName {
+		if item != nil {
+			return item
+		}
+	}
+	return nil
+}
+
 func lookupSummaryParentView(result *plan.Result, sqlText string) *plan.View {
 	if result == nil || strings.TrimSpace(sqlText) == "" {
 		return nil
+	}
+	if hasRootSummaryReference(sqlText) {
+		if len(result.Views) > 0 && result.Views[0] != nil {
+			return result.Views[0]
+		}
 	}
 	parent, ok := findSummaryParentReference(sqlText)
 	if !ok {
@@ -134,6 +183,13 @@ func findSummaryParentReference(input string) (string, bool) {
 	return "", false
 }
 
+func hasRootSummaryReference(input string) bool {
+	if strings.TrimSpace(input) == "" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(input), "$view.nonwindowsql")
+}
+
 func isCompileIdentifierStart(ch byte) bool {
 	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
 }
@@ -148,6 +204,8 @@ func buildViewDeclaration(item *declaredView) *plan.ViewDeclaration {
 	}
 	ret := &plan.ViewDeclaration{
 		Tag:           item.Tag,
+		TypeName:      item.TypeName,
+		Dest:          item.Dest,
 		Codec:         item.Codec,
 		CodecArgs:     append([]string{}, item.CodecArgs...),
 		HandlerName:   item.HandlerName,
@@ -177,11 +235,27 @@ func buildViewDeclaration(item *declaredView) *plan.ViewDeclaration {
 			})
 		}
 	}
-	if ret.Tag == "" && ret.Codec == "" && len(ret.CodecArgs) == 0 && ret.HandlerName == "" &&
+	if len(item.ColumnsConfig) > 0 {
+		ret.ColumnsConfig = map[string]*plan.ViewColumnConfig{}
+		for name, cfg := range item.ColumnsConfig {
+			if strings.TrimSpace(name) == "" || cfg == nil {
+				continue
+			}
+			ret.ColumnsConfig[name] = &plan.ViewColumnConfig{
+				DataType: strings.TrimSpace(cfg.DataType),
+				Tag:      strings.TrimSpace(cfg.Tag),
+			}
+		}
+		if len(ret.ColumnsConfig) == 0 {
+			ret.ColumnsConfig = nil
+		}
+	}
+	if ret.Tag == "" && ret.TypeName == "" && ret.Dest == "" &&
+		ret.Codec == "" && len(ret.CodecArgs) == 0 && ret.HandlerName == "" &&
 		len(ret.HandlerArgs) == 0 && ret.StatusCode == nil && ret.ErrorMessage == "" &&
 		ret.QuerySelector == "" && ret.CacheRef == "" && ret.Limit == nil && ret.Cacheable == nil &&
 		ret.When == "" && ret.Scope == "" && ret.DataType == "" && ret.Of == "" && ret.Value == "" &&
-		!ret.Async && !ret.Output && len(ret.Predicates) == 0 {
+		!ret.Async && !ret.Output && len(ret.Predicates) == 0 && len(ret.ColumnsConfig) == 0 {
 		return nil
 	}
 	return ret

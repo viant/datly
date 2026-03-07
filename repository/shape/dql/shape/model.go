@@ -42,6 +42,12 @@ type Diagnostic struct {
 type Directives struct {
 	Meta              string
 	DefaultConnector  string
+	Dest              string
+	InputDest         string
+	OutputDest        string
+	RouterDest        string
+	InputType         string
+	OutputType        string
 	Cache             *CacheDirective
 	MCP               *MCPDirective
 	Route             *RouteDirective
@@ -55,8 +61,12 @@ type Directives struct {
 }
 
 type CacheDirective struct {
-	Enabled bool
-	TTL     string
+	Enabled      bool
+	TTL          string
+	Name         string
+	Provider     string
+	Location     string
+	TimeToLiveMs int
 }
 
 type MCPDirective struct {

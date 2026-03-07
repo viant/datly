@@ -66,6 +66,9 @@ func buildParityEnrichmentContext(result *plan.Result, source *shape.Source, lay
 		joinEmbedRefs:      map[string]string{},
 		joinSubqueryBodies: map[string]string{},
 	}
+	if rootBaseDir := resultRootSQLBaseDir(result); rootBaseDir != "" {
+		ctx.baseDir = rootBaseDir
+	}
 	if len(result.Views) == 0 || result.Views[0] == nil {
 		return ctx
 	}
@@ -76,6 +79,17 @@ func buildParityEnrichmentContext(result *plan.Result, source *shape.Source, lay
 	ctx.joinEmbedRefs = extractJoinEmbedRefs(sqlForJoinExtract)
 	ctx.joinSubqueryBodies = extractJoinSubqueryBodies(sqlForJoinExtract)
 	return ctx
+}
+
+func resultRootSQLBaseDir(result *plan.Result) string {
+	if result == nil || len(result.Views) == 0 || result.Views[0] == nil {
+		return ""
+	}
+	rootName := strings.TrimSpace(result.Views[0].Name)
+	if rootName == "" {
+		return ""
+	}
+	return rootName
 }
 
 func applyViewDefaults(item *plan.View, root bool, ctx *parityEnrichmentContext) {

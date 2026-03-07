@@ -1,11 +1,13 @@
 package column
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 )
 
 func TestStripTemplateVariables(t *testing.T) {
@@ -32,7 +34,7 @@ func TestStripTemplateVariables(t *testing.T) {
 		{
 			name:   "variable with method call",
 			input:  "SELECT * FROM PRODUCT WHERE 1=1 $View.ParentJoinOn(\"AND\",\"VENDOR_ID\")",
-			expect: "SELECT * FROM PRODUCT WHERE 1=1 ''",
+			expect: "SELECT * FROM PRODUCT WHERE 1=1 ",
 		},
 		{
 			name:   "criteria binding",
@@ -67,7 +69,7 @@ func TestStripTemplateVariables(t *testing.T) {
 		{
 			name:   "UNION ALL with templates",
 			input:  "SELECT ID, NAME, VENDOR_ID FROM PRODUCT t WHERE 1=1 $View.ParentJoinOn(\"AND\",\"VENDOR_ID\") UNION ALL SELECT ID, NAME, VENDOR_ID FROM PRODUCT t WHERE 1=1 $View.ParentJoinOn(\"AND\",\"VENDOR_ID\")",
-			expect: "SELECT ID, NAME, VENDOR_ID FROM PRODUCT t WHERE 1=1 '' UNION ALL SELECT ID, NAME, VENDOR_ID FROM PRODUCT t WHERE 1=1 ''",
+			expect: "SELECT ID, NAME, VENDOR_ID FROM PRODUCT t WHERE 1=1  UNION ALL SELECT ID, NAME, VENDOR_ID FROM PRODUCT t WHERE 1=1 ",
 		},
 		{
 			name:   "nested if",
@@ -201,6 +203,16 @@ func TestDiscoverySQL_Strategy(t *testing.T) {
 			desc:     "template variables → table fallback (safe for all backends)",
 		},
 		{
+			name:  "explicit projection with templates — preserves projection",
+			table: "VENDOR",
+			sql:   "SELECT ID FROM VENDOR t WHERE t.ID = $VendorID",
+			desc:  "explicit select list should not widen to table columns",
+			assertions: func(t *testing.T, result string) {
+				assert.NotEqual(t, "VENDOR", result)
+				assert.Contains(t, strings.ToUpper(result), "SELECT ID")
+			},
+		},
+		{
 			name:     "wildcard with EXCEPT — uses table fallback",
 			table:    "VENDOR",
 			sql:      "SELECT vendor.* EXCEPT VENDOR_ID FROM VENDOR vendor",
@@ -242,7 +254,7 @@ func TestDiscoverySQL_Strategy(t *testing.T) {
 			if tt.sql != "" {
 				v.Template = &view.Template{Source: tt.sql}
 			}
-			got := discoverySQL(v)
+			got := discoverySQL(v, nil)
 			if tt.assertions != nil {
 				tt.assertions(t, got)
 			} else {
@@ -291,4 +303,16 @@ func TestNeedsDiscovery(t *testing.T) {
 			assert.Equal(t, tt.expect, needsDiscovery(tt.view))
 		})
 	}
+}
+
+type placeholderSchemaRow struct {
+	Col1 string `sqlx:"name=col_1"`
+	Col2 string `sqlx:"name=col_2"`
+}
+
+func TestColumnsFromSchema_IgnoresPlaceholderTypes(t *testing.T) {
+	aView := &view.View{
+		Schema: state.NewSchema(reflect.TypeOf([]*placeholderSchemaRow{}), state.WithMany()),
+	}
+	assert.Nil(t, columnsFromSchema(aView))
 }

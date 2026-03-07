@@ -18,6 +18,7 @@ type Component struct {
 	Name             string
 	URI              string
 	Method           string
+	ComponentRoutes  []*plan.ComponentRoute
 	RootView         string
 	Views            []string
 	Relations        []*plan.Relation
@@ -28,12 +29,31 @@ type Component struct {
 	TypeContext      *typectx.Context
 	Directives       *dqlshape.Directives
 	ColumnsDiscovery bool
+	TypeSpecs        map[string]*TypeSpec
 
 	Input  []*plan.State
 	Output []*plan.State
 	Meta   []*plan.State
 	Async  []*plan.State
 	Other  []*plan.State
+}
+
+type TypeRole string
+
+const (
+	TypeRoleInput  TypeRole = "input"
+	TypeRoleOutput TypeRole = "output"
+	TypeRoleView   TypeRole = "view"
+)
+
+type TypeSpec struct {
+	Key       string
+	Role      TypeRole
+	Alias     string
+	TypeName  string
+	Dest      string
+	Inherited bool
+	Source    string
 }
 
 // ShapeSpecKind implements shape.ComponentSpec.

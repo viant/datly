@@ -11,6 +11,7 @@ const (
 	doubleQuotedToken
 	commentBlockToken
 	parenthesesBlockToken
+	dollarIdentifierToken
 	identifierToken
 	anyToken
 )
@@ -21,6 +22,7 @@ var doubleQuotedMatcher = parsly.NewToken(doubleQuotedToken, "DoubleQuote", matc
 var commentBlockMatcher = parsly.NewToken(commentBlockToken, "CommentBlock", matcher.NewSeqBlock("/*", "*/"))
 var parenthesesBlockMatcher = parsly.NewToken(parenthesesBlockToken, "Parentheses", matcher.NewBlock('(', ')', '\\'))
 
+var dollarIdentifierMatcher = parsly.NewToken(dollarIdentifierToken, "DollarIdentifier", &dollarIdentifierMatch{})
 var identifierMatcher = parsly.NewToken(identifierToken, "Identifier", &identifierMatch{})
 var anyMatcher = parsly.NewToken(anyToken, "Any", &anyMatch{})
 
@@ -34,6 +36,29 @@ func (a *anyMatch) Match(cursor *parsly.Cursor) int {
 }
 
 type identifierMatch struct{}
+
+type dollarIdentifierMatch struct{}
+
+func (d *dollarIdentifierMatch) Match(cursor *parsly.Cursor) int {
+	if cursor.Pos >= cursor.InputSize {
+		return 0
+	}
+	if cursor.Input[cursor.Pos] != '$' {
+		return 0
+	}
+	next := cursor.Pos + 1
+	if next >= cursor.InputSize {
+		return 0
+	}
+	if !isIdentifierStart(cursor.Input[next]) {
+		return 0
+	}
+	pos := next + 1
+	for pos < cursor.InputSize && isIdentifierPart(cursor.Input[pos]) {
+		pos++
+	}
+	return pos - cursor.Pos
+}
 
 func (i *identifierMatch) Match(cursor *parsly.Cursor) int {
 	if cursor.Pos >= cursor.InputSize {

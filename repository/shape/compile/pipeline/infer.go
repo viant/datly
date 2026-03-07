@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"unicode"
 
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
@@ -152,10 +153,14 @@ func InferProjectionType(queryNode *query.Select) (reflect.Type, reflect.Type, s
 		used[fieldName]++
 
 		typ := parseColumnType(column.Type)
+		veltyNames := []string{columnName}
+		if fieldName != "" && fieldName != columnName {
+			veltyNames = append(veltyNames, fieldName)
+		}
 		fields = append(fields, reflect.StructField{
 			Name: fieldName,
 			Type: typ,
-			Tag:  reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" sqlx:"name=%s"`, strings.ToLower(fieldName), columnName)),
+			Tag:  reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" sqlx:"name=%s" velty:"names=%s"`, strings.ToLower(fieldName), columnName, strings.Join(veltyNames, "|"))),
 		})
 	}
 	element := reflect.StructOf(fields)
@@ -182,7 +187,11 @@ func SanitizeName(value string) string {
 }
 
 func ExportedName(value string) string {
-	value = replaceNonWordWithUnderscore(strings.TrimSpace(value))
+	value = strings.TrimSpace(value)
+	if preserved := preserveMixedCaseIdentifier(value); preserved != "" {
+		return preserved
+	}
+	value = replaceNonWordWithUnderscore(value)
 	value = strings.Trim(value, "_")
 	if value == "" {
 		return ""
@@ -202,6 +211,37 @@ func ExportedName(value string) string {
 		name = "N" + name
 	}
 	return name
+}
+
+func preserveMixedCaseIdentifier(value string) string {
+	if value == "" {
+		return ""
+	}
+	hasLower := false
+	hasUpperAfterFirst := false
+	for i, r := range value {
+		if !(unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			return ""
+		}
+		if unicode.IsLower(r) {
+			hasLower = true
+		}
+		if i > 0 && unicode.IsUpper(r) {
+			hasUpperAfterFirst = true
+		}
+	}
+	if !hasLower || !hasUpperAfterFirst {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) == 0 {
+		return ""
+	}
+	if unicode.IsDigit(runes[0]) {
+		return "N" + value
+	}
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }
 
 func replaceNonWordWithUnderscore(value string) string {

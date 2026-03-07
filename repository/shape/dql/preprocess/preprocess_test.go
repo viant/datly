@@ -1,6 +1,7 @@
 package preprocess
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -53,6 +54,58 @@ FROM t`
 	assert.NotContains(t, pre.DirectSQL, ",\nFROM")
 }
 
+func TestPrepare_PreservesSQLCastProjection(t *testing.T) {
+	dql := `SELECT
+    CAST($Var3 AS SIGNED) AS Key3,
+    cast(status, 'int')
+FROM t`
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	assert.Contains(t, pre.DirectSQL, "CAST($Var3 AS SIGNED) AS Key3")
+	assert.NotContains(t, pre.DirectSQL, "cast(status, 'int')")
+}
+
+func TestPrepare_PreservesExecControlDirectives(t *testing.T) {
+	dql := "#define($_ = $Ids<[]int>(body/Ids))\n" +
+		"#foreach($rec in $Unsafe.Records)\n" +
+		"#if($rec.IS_AUTH == 0)\n" +
+		"$logger.Fatal('x')\n" +
+		"#else\n" +
+		"UPDATE PRODUCT SET STATUS = $Status WHERE ID = $rec.ID;\n" +
+		"#end\n" +
+		"#end"
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	assert.Contains(t, pre.SQL, "#foreach($rec in $Unsafe.Records)")
+	assert.Contains(t, pre.SQL, "#if($rec.IS_AUTH == 0)")
+	assert.Contains(t, pre.SQL, "#else")
+	assert.Contains(t, pre.SQL, "#end")
+}
+
+func TestPrepare_PreservesLocalSetDirectivesInExecTemplate(t *testing.T) {
+	dql := "#define($_ = $Ids<[]int>(query/Ids))\n" +
+		"#set($byID = $Unsafe.Rows.IndexBy(\"ID\"))\n" +
+		"#foreach($id in $Unsafe.Ids)\n" +
+		"  #set($row = $byID[$id])\n" +
+		"  UPDATE T SET ACTIVE = 0 WHERE ID = $id;\n" +
+		"#end"
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	assert.Contains(t, pre.SQL, "#set($byID = $Unsafe.Rows.IndexBy(\"ID\"))")
+	assert.Contains(t, pre.SQL, "#set($row = $byID[$id])")
+	assert.NotContains(t, pre.SQL, "#define($_ = $Ids<[]int>(query/Ids))")
+}
+
+func TestPrepare_ConstDirective_UsesUnsafeSelectors(t *testing.T) {
+	dql := "#setting($_ = $const('Vendor','VENDOR'))\n" +
+		"SELECT * FROM ${Vendor} t WHERE t.ID = $id"
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	assert.Contains(t, pre.SQL, "FROM ${Unsafe.Vendor} t")
+	assert.Contains(t, pre.SQL, "$criteria.AppendBinding($Unsafe.id)")
+	assert.NotContains(t, pre.SQL, "${criteria.AppendBinding($Unsafe.Vendor)}")
+}
+
 func TestPrepare_MultilineSetDirective_TypeContext(t *testing.T) {
 	dql := "#package('a/b')\n#import('x','github.com/acme/x')\nSELECT id FROM t"
 	pre := Prepare(dql)
@@ -78,6 +131,12 @@ func TestPrepare_InvalidMultilineImportDiagnostic(t *testing.T) {
 func TestPrepare_SpecialDirectives(t *testing.T) {
 	dql := "#settings($_ = $meta('docs/orders.md'))\n" +
 		"#setting($_ = $connector('analytics'))\n" +
+		"#setting($_ = $dest('vendor.go'))\n" +
+		"#setting($_ = $input_dest('vendor_input.go'))\n" +
+		"#setting($_ = $output_dest('vendor_output.go'))\n" +
+		"#setting($_ = $router_dest('vendor_router.go'))\n" +
+		"#setting($_ = $input_type('VendorInput'))\n" +
+		"#setting($_ = $output_type('VendorOutput'))\n" +
 		"#settings($_ = $cache(true, '5m'))\n" +
 		"#settings($_ = $mcp('orders.search', 'Search orders', 'docs/mcp/orders.md'))\n" +
 		"#settings($_ = $marshal('application/json','pkg.OrderJSON'))\n" +
@@ -92,6 +151,12 @@ func TestPrepare_SpecialDirectives(t *testing.T) {
 	require.NotNil(t, pre.Directives)
 	assert.Equal(t, "docs/orders.md", pre.Directives.Meta)
 	assert.Equal(t, "analytics", pre.Directives.DefaultConnector)
+	assert.Equal(t, "vendor.go", pre.Directives.Dest)
+	assert.Equal(t, "vendor_input.go", pre.Directives.InputDest)
+	assert.Equal(t, "vendor_output.go", pre.Directives.OutputDest)
+	assert.Equal(t, "vendor_router.go", pre.Directives.RouterDest)
+	assert.Equal(t, "VendorInput", pre.Directives.InputType)
+	assert.Equal(t, "VendorOutput", pre.Directives.OutputType)
 	require.NotNil(t, pre.Directives.Cache)
 	assert.True(t, pre.Directives.Cache.Enabled)
 	assert.Equal(t, "5m", pre.Directives.Cache.TTL)
@@ -105,6 +170,27 @@ func TestPrepare_SpecialDirectives(t *testing.T) {
 	assert.Equal(t, "tabular", pre.Directives.Format)
 	assert.Equal(t, "2006-01-02", pre.Directives.DateFormat)
 	assert.Equal(t, "lc", pre.Directives.CaseFormat)
+}
+
+func TestPrepare_InvalidDestDirectiveDiagnostic(t *testing.T) {
+	dql := "SELECT 1\n#settings($_ = $dest())"
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	require.NotEmpty(t, pre.Diagnostics)
+	assert.Equal(t, dqldiag.CodeDirDest, pre.Diagnostics[0].Code)
+	assert.Equal(t, 2, pre.Diagnostics[0].Span.Start.Line)
+}
+
+func TestPrepare_CacheProviderDirective(t *testing.T) {
+	dql := "#setting($_ = $cache('aerospike').WithProvider('aerospike://127.0.0.1:3000/test').WithLocation('${view.Name}').WithTimeToLiveMs(3600000))\nSELECT 1"
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	require.NotNil(t, pre.Directives)
+	require.NotNil(t, pre.Directives.Cache)
+	assert.Equal(t, "aerospike", pre.Directives.Cache.Name)
+	assert.Equal(t, "aerospike://127.0.0.1:3000/test", pre.Directives.Cache.Provider)
+	assert.Equal(t, "${view.Name}", pre.Directives.Cache.Location)
+	assert.Equal(t, 3600000, pre.Directives.Cache.TimeToLiveMs)
 }
 
 func TestPrepare_InvalidSpecialDirectiveDiagnostic(t *testing.T) {
@@ -123,6 +209,28 @@ func TestPrepare_InvalidConnectorDirectiveDiagnostic(t *testing.T) {
 	require.NotEmpty(t, pre.Diagnostics)
 	assert.Equal(t, dqldiag.CodeDirConnector, pre.Diagnostics[0].Code)
 	assert.Equal(t, 2, pre.Diagnostics[0].Span.Start.Line)
+}
+
+func TestPrepare_InvalidDirective_UsesExactCallSpan(t *testing.T) {
+	lineText := "#settings($_ = $dest())"
+	dql := "SELECT 1\n" + lineText
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	require.NotEmpty(t, pre.Diagnostics)
+	assert.Equal(t, dqldiag.CodeDirDest, pre.Diagnostics[0].Code)
+	assert.Equal(t, 2, pre.Diagnostics[0].Span.Start.Line)
+	assert.Equal(t, strings.Index(lineText, "$dest(")+1, pre.Diagnostics[0].Span.Start.Char)
+}
+
+func TestPrepare_MalformedDirective_UsesExactCallSpan(t *testing.T) {
+	lineText := "#settings($_ = $dest('x'"
+	dql := "SELECT 1\n" + lineText
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	require.NotEmpty(t, pre.Diagnostics)
+	assert.Equal(t, dqldiag.CodeDirDest, pre.Diagnostics[0].Code)
+	assert.Equal(t, 2, pre.Diagnostics[0].Span.Start.Line)
+	assert.Equal(t, strings.Index(lineText, "$dest(")+1, pre.Diagnostics[0].Span.Start.Char)
 }
 
 func TestPrepare_RouteDirective(t *testing.T) {

@@ -41,10 +41,28 @@ func Prepare(dql string) *Result {
 	ret.Optimized = optimized
 	sanitized := dqlsanitize.Rewrite(optimized, dqlsanitize.Options{
 		Declared: dqlsanitize.Declared(optimized),
+		Foreach:  dqlsanitize.ForeachDeclared(optimized),
+		Consts:   constNames(ret.Directives),
 	})
 	ret.SQL = sanitized.SQL
 	ret.Mapper = newMapper(len(optimized), sanitized.Patches, sanitized.TrimPrefix, dql)
 	return ret
+}
+
+func constNames(directives *dqlshape.Directives) map[string]bool {
+	if directives == nil || len(directives.Const) == 0 {
+		return nil
+	}
+	result := make(map[string]bool, len(directives.Const))
+	for name := range directives.Const {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			result[trimmed] = true
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func stripDecorators(sql string) string {
@@ -70,6 +88,9 @@ func isStandaloneDecoratorLine(line string) bool {
 	open := strings.Index(trimmed, "(")
 	close := strings.LastIndex(trimmed, ")")
 	if open <= 0 || close <= open {
+		return false
+	}
+	if strings.TrimSpace(trimmed[close+1:]) != "" {
 		return false
 	}
 	name := strings.ToLower(strings.TrimSpace(trimmed[:open]))
@@ -115,6 +136,12 @@ func normalizeDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 	ret := &dqlshape.Directives{
 		Meta:              strings.TrimSpace(input.Meta),
 		DefaultConnector:  strings.TrimSpace(input.DefaultConnector),
+		Dest:              strings.TrimSpace(input.Dest),
+		InputDest:         strings.TrimSpace(input.InputDest),
+		OutputDest:        strings.TrimSpace(input.OutputDest),
+		RouterDest:        strings.TrimSpace(input.RouterDest),
+		InputType:         strings.TrimSpace(input.InputType),
+		OutputType:        strings.TrimSpace(input.OutputType),
 		JSONMarshalType:   strings.TrimSpace(input.JSONMarshalType),
 		JSONUnmarshalType: strings.TrimSpace(input.JSONUnmarshalType),
 		XMLUnmarshalType:  strings.TrimSpace(input.XMLUnmarshalType),
@@ -124,8 +151,12 @@ func normalizeDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 	}
 	if input.Cache != nil {
 		ret.Cache = &dqlshape.CacheDirective{
-			Enabled: input.Cache.Enabled,
-			TTL:     strings.TrimSpace(input.Cache.TTL),
+			Enabled:      input.Cache.Enabled,
+			TTL:          strings.TrimSpace(input.Cache.TTL),
+			Name:         strings.TrimSpace(input.Cache.Name),
+			Provider:     strings.TrimSpace(input.Cache.Provider),
+			Location:     strings.TrimSpace(input.Cache.Location),
+			TimeToLiveMs: input.Cache.TimeToLiveMs,
 		}
 	}
 	if input.MCP != nil {
@@ -153,7 +184,10 @@ func normalizeDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 			ret.Const[k] = v
 		}
 	}
-	if ret.Meta == "" && ret.DefaultConnector == "" && ret.Cache == nil && ret.MCP == nil && ret.Route == nil &&
+	if ret.Meta == "" && ret.DefaultConnector == "" &&
+		ret.Dest == "" && ret.InputDest == "" && ret.OutputDest == "" && ret.RouterDest == "" &&
+		ret.InputType == "" && ret.OutputType == "" &&
+		ret.Cache == nil && ret.MCP == nil && ret.Route == nil &&
 		ret.JSONMarshalType == "" && ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" && ret.Format == "" &&
 		ret.DateFormat == "" && ret.CaseFormat == "" && len(ret.Const) == 0 {
 		return nil

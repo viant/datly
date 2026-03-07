@@ -5,16 +5,20 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/viant/datly/repository/shape/dql/decl"
 	"github.com/viant/datly/repository/shape/plan"
 )
 
 type viewHint struct {
-	Connector  string
-	AllowNulls *bool
-	NoLimit    *bool
-	CacheRef   string
-	Limit      *int
-	Self       *plan.SelfReference
+	Connector   string
+	AllowNulls  *bool
+	NoLimit     *bool
+	CacheRef    string
+	Limit       *int
+	Cardinality string
+	Dest        string
+	TypeName    string
+	Self        *plan.SelfReference
 }
 
 func extractViewHints(dql string) map[string]viewHint {
@@ -25,7 +29,7 @@ func extractViewHints(dql string) map[string]viewHint {
 			if len(call.args) != 2 {
 				continue
 			}
-			alias := strings.TrimSpace(call.args[0])
+			alias := normalizeHintAlias(call.args[0])
 			connector := unquote(strings.TrimSpace(call.args[1]))
 			if !isIdentifier(alias) || !isIdentifier(connector) {
 				continue
@@ -37,7 +41,7 @@ func extractViewHints(dql string) map[string]viewHint {
 			if len(call.args) != 1 {
 				continue
 			}
-			alias := strings.TrimSpace(call.args[0])
+			alias := normalizeHintAlias(call.args[0])
 			if !isIdentifier(alias) {
 				continue
 			}
@@ -49,7 +53,7 @@ func extractViewHints(dql string) map[string]viewHint {
 			if len(call.args) != 2 {
 				continue
 			}
-			alias := strings.TrimSpace(call.args[0])
+			alias := normalizeHintAlias(call.args[0])
 			limitRaw := strings.TrimSpace(call.args[1])
 			if !isIdentifier(alias) || limitRaw == "" {
 				continue
@@ -69,7 +73,7 @@ func extractViewHints(dql string) map[string]viewHint {
 			if len(call.args) != 2 {
 				continue
 			}
-			alias := strings.TrimSpace(call.args[0])
+			alias := normalizeHintAlias(call.args[0])
 			ref := unquote(strings.TrimSpace(call.args[1]))
 			if !isIdentifier(alias) || ref == "" {
 				continue
@@ -77,11 +81,26 @@ func extractViewHints(dql string) map[string]viewHint {
 			hint := result[alias]
 			hint.CacheRef = ref
 			result[alias] = hint
+		case "cardinality":
+			if len(call.args) != 2 {
+				continue
+			}
+			alias := normalizeHintAlias(call.args[0])
+			value := strings.ToLower(strings.TrimSpace(unquote(strings.TrimSpace(call.args[1]))))
+			if !isIdentifier(alias) {
+				continue
+			}
+			if value != "one" && value != "many" {
+				continue
+			}
+			hint := result[alias]
+			hint.Cardinality = value
+			result[alias] = hint
 		case "self_ref":
 			if len(call.args) != 4 {
 				continue
 			}
-			alias := strings.TrimSpace(call.args[0])
+			alias := normalizeHintAlias(call.args[0])
 			holder := unquote(strings.TrimSpace(call.args[1]))
 			child := unquote(strings.TrimSpace(call.args[2]))
 			parent := unquote(strings.TrimSpace(call.args[3]))
@@ -90,6 +109,30 @@ func extractViewHints(dql string) map[string]viewHint {
 			}
 			hint := result[alias]
 			hint.Self = &plan.SelfReference{Holder: holder, Child: child, Parent: parent}
+			result[alias] = hint
+		case "dest":
+			if len(call.args) != 2 {
+				continue
+			}
+			alias := normalizeHintAlias(call.args[0])
+			dest := strings.TrimSpace(unquote(strings.TrimSpace(call.args[1])))
+			if !isIdentifier(alias) || dest == "" {
+				continue
+			}
+			hint := result[alias]
+			hint.Dest = dest
+			result[alias] = hint
+		case "type":
+			if len(call.args) != 2 {
+				continue
+			}
+			alias := normalizeHintAlias(call.args[0])
+			typeName := strings.TrimSpace(unquote(strings.TrimSpace(call.args[1])))
+			if !isIdentifier(alias) || typeName == "" {
+				continue
+			}
+			hint := result[alias]
+			hint.TypeName = typeName
 			result[alias] = hint
 		}
 	}
@@ -102,115 +145,27 @@ type hintCall struct {
 }
 
 func scanHintCalls(input string) []hintCall {
-	result := make([]hintCall, 0)
-	for i := 0; i < len(input); {
-		if !isIdentifierStart(input[i]) {
-			i++
-			continue
-		}
-		start := i
-		i++
-		for i < len(input) && isIdentifierPart(input[i]) {
-			i++
-		}
-		name := strings.ToLower(input[start:i])
-		if name != "use_connector" && name != "allow_nulls" && name != "set_limit" && name != "set_cache" && name != "self_ref" {
-			continue
-		}
-		j := skipSpaces(input, i)
-		if j >= len(input) || input[j] != '(' {
-			continue
-		}
-		body, end, ok := readCallBody(input, j)
-		if !ok {
-			continue
-		}
-		result = append(result, hintCall{name: name, args: splitCallArgs(body)})
-		i = end + 1
+	names := map[string]bool{
+		"use_connector": true,
+		"allow_nulls":   true,
+		"set_limit":     true,
+		"set_cache":     true,
+		"cardinality":   true,
+		"self_ref":      true,
+		"dest":          true,
+		"type":          true,
+	}
+	parsed, _ := decl.ScanCalls(input, decl.CallScanOptions{
+		AllowedNames:  names,
+		RequireDollar: false,
+		AllowDollar:   false,
+		Strict:        false,
+	})
+	result := make([]hintCall, 0, len(parsed))
+	for _, call := range parsed {
+		result = append(result, hintCall{name: call.Name, args: call.Args})
 	}
 	return result
-}
-
-func readCallBody(input string, openParen int) (string, int, bool) {
-	depth := 0
-	quote := byte(0)
-	for i := openParen; i < len(input); i++ {
-		ch := input[i]
-		if quote != 0 {
-			if ch == '\\' && i+1 < len(input) {
-				i++
-				continue
-			}
-			if ch == quote {
-				quote = 0
-			}
-			continue
-		}
-		if ch == '\'' || ch == '"' {
-			quote = ch
-			continue
-		}
-		if ch == '(' {
-			depth++
-			continue
-		}
-		if ch == ')' {
-			depth--
-			if depth == 0 {
-				return input[openParen+1 : i], i, true
-			}
-		}
-	}
-	return "", -1, false
-}
-
-func splitCallArgs(input string) []string {
-	args := make([]string, 0)
-	current := strings.Builder{}
-	depth := 0
-	quote := byte(0)
-	for i := 0; i < len(input); i++ {
-		ch := input[i]
-		if quote != 0 {
-			current.WriteByte(ch)
-			if ch == '\\' && i+1 < len(input) {
-				i++
-				current.WriteByte(input[i])
-				continue
-			}
-			if ch == quote {
-				quote = 0
-			}
-			continue
-		}
-		if ch == '\'' || ch == '"' {
-			quote = ch
-			current.WriteByte(ch)
-			continue
-		}
-		if ch == '(' {
-			depth++
-			current.WriteByte(ch)
-			continue
-		}
-		if ch == ')' {
-			if depth > 0 {
-				depth--
-			}
-			current.WriteByte(ch)
-			continue
-		}
-		if ch == ',' && depth == 0 {
-			args = append(args, strings.TrimSpace(current.String()))
-			current.Reset()
-			continue
-		}
-		current.WriteByte(ch)
-	}
-	if value := strings.TrimSpace(current.String()); value != "" {
-		args = append(args, value)
-	}
-	return args
 }
 
 func isIdentifierStart(ch byte) bool {
@@ -245,21 +200,18 @@ func unquote(value string) string {
 	return value
 }
 
-func skipSpaces(input string, index int) int {
-	for index < len(input) {
-		switch input[index] {
-		case ' ', '\t', '\n', '\r':
-			index++
-		default:
-			return index
-		}
-	}
-	return index
-}
-
-func appendRelationViews(result *plan.Result, root *plan.View, hints map[string]viewHint) {
+func appendRelationViews(result *plan.Result, root *plan.View, hints map[string]viewHint, rawDQL string) {
 	if result == nil || root == nil || len(root.Relations) == 0 {
 		return
+	}
+	joinSQLByAlias := map[string]string{}
+	for _, item := range scanJoinSubqueries(rawDQL) {
+		alias := strings.TrimSpace(item.alias)
+		body := strings.TrimSpace(item.body)
+		if alias == "" || body == "" {
+			continue
+		}
+		joinSQLByAlias[strings.ToLower(alias)] = body
 	}
 	for _, relation := range root.Relations {
 		if relation == nil {
@@ -279,6 +231,10 @@ func appendRelationViews(result *plan.Result, root *plan.View, hints map[string]
 			continue
 		}
 		table := strings.TrimSpace(relation.Table)
+		sqlText := strings.TrimSpace(joinSQLByAlias[strings.ToLower(name)])
+		if sqlText == "" {
+			sqlText = relationSQLText(table)
+		}
 		if table == "" {
 			table = name
 		}
@@ -288,9 +244,13 @@ func appendRelationViews(result *plan.Result, root *plan.View, hints map[string]
 			Holder:      name,
 			Name:        name,
 			Table:       table,
+			SQL:         sqlText,
 			Cardinality: "many",
 			FieldType:   reflect.TypeOf([]map[string]interface{}{}),
 			ElementType: reflect.TypeOf(map[string]interface{}{}),
+		}
+		if len(relation.ColumnsConfig) > 0 {
+			view.Declaration = &plan.ViewDeclaration{ColumnsConfig: relation.ColumnsConfig}
 		}
 		result.Views = append(result.Views, view)
 		result.ViewsByName[name] = view
@@ -309,11 +269,7 @@ func applyViewHints(result *plan.Result, hints map[string]viewHint) {
 			continue
 		}
 		for _, key := range []string{item.Name, item.Holder} {
-			key = strings.TrimSpace(key)
-			if key == "" {
-				continue
-			}
-			hint, ok := hints[key]
+			hint, ok := lookupViewHint(hints, key)
 			if !ok {
 				continue
 			}
@@ -335,11 +291,38 @@ func applyViewHints(result *plan.Result, hints map[string]viewHint) {
 			if item.CacheRef == "" && hint.CacheRef != "" {
 				item.CacheRef = hint.CacheRef
 			}
+			if hint.Cardinality != "" {
+				item.Cardinality = hint.Cardinality
+			}
 			if item.Self == nil && hint.Self != nil {
 				item.Self = hint.Self
 			}
+			if hint.Dest != "" || hint.TypeName != "" {
+				if item.Declaration == nil {
+					item.Declaration = &plan.ViewDeclaration{}
+				}
+				if item.Declaration.Dest == "" && hint.Dest != "" {
+					item.Declaration.Dest = hint.Dest
+				}
+				if item.Declaration.TypeName == "" && hint.TypeName != "" {
+					item.Declaration.TypeName = hint.TypeName
+				}
+			}
 		}
 	}
+}
+
+func normalizeHintAlias(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func lookupViewHint(hints map[string]viewHint, key string) (viewHint, bool) {
+	key = normalizeHintAlias(key)
+	if key == "" {
+		return viewHint{}, false
+	}
+	hint, ok := hints[key]
+	return hint, ok
 }
 
 func normalizeRelationTable(table string) string {
@@ -373,4 +356,66 @@ func normalizeRelationTable(table string) string {
 		return table
 	}
 	return normalized
+}
+
+func relationSQLText(table string) string {
+	trimmed := strings.TrimSpace(table)
+	if trimmed == "" {
+		return ""
+	}
+	normalized := strings.ToLower(trimmed)
+	if strings.HasPrefix(normalized, "select ") {
+		return trimmed
+	}
+	if strings.HasPrefix(trimmed, "(") {
+		unwrapped := unwrapRelationParens(trimmed)
+		unwrappedLower := strings.ToLower(strings.TrimSpace(unwrapped))
+		if strings.HasPrefix(unwrappedLower, "select ") {
+			return strings.TrimSpace(unwrapped)
+		}
+	}
+	return ""
+}
+
+func unwrapRelationParens(input string) string {
+	input = strings.TrimSpace(input)
+	if len(input) < 2 || input[0] != '(' || input[len(input)-1] != ')' {
+		return input
+	}
+	depth := 0
+	quote := byte(0)
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		if quote != 0 {
+			if ch == '\\' && i+1 < len(input) {
+				i++
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			quote = ch
+			continue
+		}
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 && i != len(input)-1 {
+				return input
+			}
+		}
+	}
+	if depth != 0 {
+		return input
+	}
+	inner := strings.TrimSpace(input[1 : len(input)-1])
+	if inner == "" {
+		return input
+	}
+	return inner
 }

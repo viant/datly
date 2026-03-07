@@ -58,7 +58,7 @@ func (c *DQLCompiler) Compile(ctx context.Context, source *shape.Source, opts ..
 
 	root, compileDiags, err := c.compileRoot(
 		source.Name, prepared.Pre.SQL, prepared.Statements, prepared.Decision,
-		compileOptions.MixedMode, compileOptions.UnknownNonReadMode,
+		compileOptions.MixedMode, compileOptions.UnknownNonReadMode, prepared.Pre.Directives,
 	)
 	if err != nil {
 		return nil, err
@@ -136,13 +136,26 @@ func (c *DQLCompiler) assembleResult(
 	applyDefaultConnectorDirective(result)
 	applyConstDirective(result)
 	hints := extractViewHints(source.DQL)
-	appendRelationViews(result, root, hints)
+	relationSQLSource := prepared.Pre.SQL
+	if strings.TrimSpace(relationSQLSource) == "" {
+		relationSQLSource = source.DQL
+	}
+	appendRelationViews(result, root, hints, relationSQLSource)
 	appendDeclaredViews(source.DQL, result)
 	appendDeclaredStates(source.DQL, result)
 	applyViewHints(result, hints)
+	result.Diagnostics = append(result.Diagnostics, appendComponentTypesWithLayout(source, result, pathLayout)...)
+	for _, item := range result.Views {
+		if item == nil || strings.TrimSpace(item.SQL) == "" {
+			continue
+		}
+		item.SQL = stripProjectionHintCalls(item.SQL)
+	}
 	applyInlineParamHints(source.DQL, result)
 	applySourceParityEnrichmentWithLayout(result, source, pathLayout)
-	applyLinkedTypeSupport(result, source)
+	if compileOptions.UseLinkedTypes == nil || *compileOptions.UseLinkedTypes {
+		applyLinkedTypeSupport(result, source)
+	}
 	result.Diagnostics = append(result.Diagnostics, applyColumnDiscoveryPolicy(result, compileOptions)...)
 	return result
 }
@@ -173,9 +186,13 @@ func applyDefaultConnectorDirective(result *plan.Result) {
 	}
 }
 
-func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt.Statements, decision pipeline.Decision, mode shape.CompileMixedMode, unknownMode shape.CompileUnknownNonReadMode) (*plan.View, []*dqlshape.Diagnostic, error) {
+func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt.Statements, decision pipeline.Decision, mode shape.CompileMixedMode, unknownMode shape.CompileUnknownNonReadMode, directives *dqlshape.Directives) (*plan.View, []*dqlshape.Diagnostic, error) {
 	mode = normalizeMixedMode(mode)
 	unknownMode = normalizeUnknownNonReadMode(unknownMode)
+	consts := map[string]string(nil)
+	if directives != nil && len(directives.Const) > 0 {
+		consts = directives.Const
+	}
 	if !decision.HasRead && !decision.HasExec && decision.HasUnknown {
 		diag := &dqlshape.Diagnostic{
 			Code:     dqldiag.CodeParseUnknownNonRead,
@@ -211,7 +228,7 @@ func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt
 					break
 				}
 			}
-			view, diags, err := pipeline.BuildRead(sourceName, readSQL)
+			view, diags, err := pipeline.BuildReadWithConsts(sourceName, readSQL, consts)
 			diags = append(diags, &dqlshape.Diagnostic{
 				Code:     dqldiag.CodeDMLMixed,
 				Severity: dqlshape.SeverityWarning,
@@ -235,7 +252,7 @@ func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt
 		}
 		return view, diags, nil
 	}
-	return pipeline.BuildRead(sourceName, sqlText)
+	return pipeline.BuildReadWithConsts(sourceName, sqlText, consts)
 }
 
 func normalizeMixedMode(mode shape.CompileMixedMode) shape.CompileMixedMode {

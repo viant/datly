@@ -18,11 +18,13 @@ func extractSQLAndContext(dql string) (string, *typectx.Context, *dqlshape.Direc
 
 	blocks := extractSetDirectiveBlocks(dql)
 	for _, block := range blocks {
-		applyMask(mask, dql, block.start, block.end)
+		if shouldMaskDirectiveBlock(block) {
+			applyMask(mask, dql, block.start, block.end)
+		}
 		if block.kind != directiveSettings {
 			continue
 		}
-		diagnostics = append(diagnostics, parseSettingsDirectives(block.body, dql, block.start, directives)...)
+		diagnostics = append(diagnostics, parseSettingsDirectives(block.body, dql, block.bodyStart, directives)...)
 	}
 
 	lines := strings.SplitAfter(dql, "\n")
@@ -43,6 +45,10 @@ func extractSQLAndContext(dql string) (string, *typectx.Context, *dqlshape.Direc
 		}
 		if kind := lineDirectiveKind(trimmed); kind != directiveUnknown {
 			if !hasMasked(mask, lineStart, lineEnd) {
+				if kind != directiveSettings && !shouldMaskDirectiveLine(kind, trimmed) {
+					offset += len(line)
+					continue
+				}
 				if kind != directiveSettings {
 					applyMask(mask, dql, lineStart, lineEnd)
 					offset += len(line)
@@ -70,6 +76,38 @@ func extractSQLAndContext(dql string) (string, *typectx.Context, *dqlshape.Direc
 		masked[i] = ' '
 	}
 	return string(masked), ctx, directives, diagnostics
+}
+
+func shouldMaskDirectiveBlock(block setDirectiveBlock) bool {
+	switch block.kind {
+	case directiveSettings, directiveDefine:
+		return true
+	case directiveSet:
+		return isDeclarationDirectiveBody(block.body)
+	default:
+		return false
+	}
+}
+
+func shouldMaskDirectiveLine(kind directiveKind, line string) bool {
+	switch kind {
+	case directiveSettings, directiveDefine:
+		return true
+	case directiveSet:
+		start := strings.Index(line, "(")
+		end := strings.LastIndex(line, ")")
+		if start == -1 || end <= start {
+			return false
+		}
+		return isDeclarationDirectiveBody(line[start+1 : end])
+	default:
+		return false
+	}
+}
+
+func isDeclarationDirectiveBody(body string) bool {
+	text := strings.TrimSpace(body)
+	return strings.HasPrefix(text, "$_")
 }
 
 func applyMask(mask []bool, text string, start, end int) {

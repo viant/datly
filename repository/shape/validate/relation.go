@@ -36,6 +36,11 @@ func ValidateRelations(resource *view.Resource, targets ...*view.View) error {
 				}
 			}
 			refIndex := view.Columns(ref.Columns).Index(ref.CaseFormat)
+			// Shape load runs before DB-backed column discovery in transcribe.
+			// When either side has no columns yet, defer strict relation checks.
+			if len(parent.Columns) == 0 || len(ref.Columns) == 0 {
+				continue
+			}
 			pairCount := len(rel.On)
 			if len(rel.Of.On) > pairCount {
 				pairCount = len(rel.Of.On)

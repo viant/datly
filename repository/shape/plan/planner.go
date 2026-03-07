@@ -61,9 +61,14 @@ func (p *Planner) Plan(ctx context.Context, scanned *shape.ScanResult, _ ...shap
 			result.ViewsByName[v.Name] = v
 		}
 	}
+	assignNestedRelationParents(result.Views)
 
 	for _, item := range scanResult.StateFields {
 		result.States = append(result.States, normalizeState(item))
+	}
+
+	for _, item := range scanResult.ComponentFields {
+		result.Components = append(result.Components, normalizeComponent(item))
 	}
 
 	return &shape.PlanResult{Source: scanned.Source, Plan: result}, nil
@@ -85,6 +90,13 @@ func normalizeView(field *scan.Field) *View {
 			result.Partitioner = tag.View.PartitionerType
 			result.PartitionedConcurrency = tag.View.PartitionedConcurrency
 			result.RelationalConcurrency = tag.View.RelationalConcurrency
+			if strings.TrimSpace(tag.View.CustomTag) != "" || strings.TrimSpace(field.ViewTypeName) != "" || strings.TrimSpace(field.ViewDest) != "" {
+				result.Declaration = &ViewDeclaration{
+					Tag:      strings.TrimSpace(tag.View.CustomTag),
+					TypeName: strings.TrimSpace(field.ViewTypeName),
+					Dest:     strings.TrimSpace(field.ViewDest),
+				}
+			}
 		}
 		result.SQL = tag.SQL.SQL
 		result.SQLURI = tag.SQL.URI
@@ -195,10 +207,118 @@ func normalizeState(field *scan.Field) *State {
 	result.ErrorMessage = pTag.ErrorMessage
 
 	result.Schema = state.NewSchema(resolveStateType(result, field.Type))
+	if typeName := strings.TrimSpace(field.StateTag.TypeName); typeName != "" {
+		applyStateTypeName(result.Schema, typeName)
+	}
+	state.BuildCodec(field.StateTag, &result.Parameter)
+	state.BuildHandler(field.StateTag, &result.Parameter)
+	if value, err := field.StateTag.GetValue(result.Schema.Type()); err == nil && value != nil {
+		result.Value = normalizeStateValue(value)
+	}
 	if dataType := strings.TrimSpace(pTag.DataType); dataType != "" {
 		result.Schema.DataType = dataType
 	}
 	return result
+}
+
+func normalizeStateValue(value interface{}) interface{} {
+	switch actual := value.(type) {
+	case *string:
+		if actual == nil {
+			return nil
+		}
+		return *actual
+	}
+	return value
+}
+
+func applyStateTypeName(schema *state.Schema, typeName string) {
+	if schema == nil {
+		return
+	}
+	typeName = strings.TrimSpace(strings.TrimPrefix(typeName, "*"))
+	if typeName == "" {
+		return
+	}
+	if idx := strings.LastIndex(typeName, "."); idx != -1 {
+		schema.Package = strings.TrimSpace(typeName[:idx])
+		schema.PackagePath = schema.Package
+		schema.Name = strings.TrimSpace(typeName[idx+1:])
+		return
+	}
+	schema.Name = typeName
+}
+
+func normalizeComponent(field *scan.Field) *ComponentRoute {
+	result := &ComponentRoute{
+		Path:       field.Path,
+		FieldName:  field.Name,
+		Type:       field.Type,
+		InputType:  field.ComponentInputType,
+		OutputType: field.ComponentOutputType,
+		InputName:  field.ComponentInputName,
+		OutputName: field.ComponentOutputName,
+		Name:       field.Name,
+	}
+	if field.ComponentTag != nil && field.ComponentTag.Component != nil {
+		tag := field.ComponentTag.Component
+		if strings.TrimSpace(tag.Name) != "" {
+			result.Name = strings.TrimSpace(tag.Name)
+		}
+		result.RoutePath = strings.TrimSpace(tag.Path)
+		result.Method = strings.TrimSpace(tag.Method)
+		result.Connector = strings.TrimSpace(tag.Connector)
+		result.Marshaller = strings.TrimSpace(tag.Marshaller)
+		result.Handler = strings.TrimSpace(tag.Handler)
+		result.ViewName = strings.TrimSpace(tag.View)
+		result.SourceURL = strings.TrimSpace(tag.Source)
+		result.SummaryURL = strings.TrimSpace(tag.Summary)
+	}
+	return result
+}
+
+func assignNestedRelationParents(views []*View) {
+	if len(views) == 0 {
+		return
+	}
+	byPath := map[string]*View{}
+	for _, item := range views {
+		if item == nil || strings.TrimSpace(item.Path) == "" {
+			continue
+		}
+		byPath[strings.TrimSpace(item.Path)] = item
+	}
+	for _, item := range views {
+		if item == nil || len(item.Relations) == 0 {
+			continue
+		}
+		parentPath := parentViewPath(item.Path)
+		if parentPath == "" {
+			continue
+		}
+		parent := byPath[parentPath]
+		if parent == nil || strings.TrimSpace(parent.Name) == "" {
+			continue
+		}
+		for _, rel := range item.Relations {
+			if rel == nil || strings.TrimSpace(rel.Parent) != "" {
+				continue
+			}
+			rel.Parent = parent.Name
+		}
+	}
+}
+
+func parentViewPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	index := strings.LastIndex(path, ".")
+	if index == -1 {
+		return ""
+	}
+	return strings.TrimSpace(path[:index])
 }
 
 func resolveStateType(item *State, fallback reflect.Type) reflect.Type {

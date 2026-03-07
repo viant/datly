@@ -64,3 +64,23 @@ SELECT id FROM ORDERS t`
 	require.NotEmpty(t, component.Predicates["o"])
 	assert.Equal(t, "ByID", component.Predicates["o"][0].Name)
 }
+
+func TestEngine_LoadDQLComponent_PreservesExplicitOutputViewOneCardinality(t *testing.T) {
+	engine := shape.New(
+		shape.WithCompiler(shapeCompile.New()),
+		shape.WithLoader(shapeLoad.New()),
+		shape.WithName("/v1/api/shape/dev/auth/user-acl"),
+	)
+	dql := `
+#define($_ = $Data<?>(output/view).Cardinality('One').Embed())
+SELECT 1 AS UserID`
+	artifact, err := engine.LoadDQLComponent(context.Background(), dql)
+	require.NoError(t, err)
+	require.NotNil(t, artifact)
+
+	component, ok := shapeLoad.ComponentFrom(artifact)
+	require.True(t, ok)
+	require.Len(t, component.Output, 1)
+	require.NotNil(t, component.Output[0].Schema)
+	assert.Equal(t, "One", string(component.Output[0].Schema.Cardinality))
+}

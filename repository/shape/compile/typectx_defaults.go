@@ -5,6 +5,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/viant/datly/repository/shape"
 	"github.com/viant/datly/repository/shape/typectx"
@@ -13,6 +14,7 @@ import (
 
 func applyTypeContextDefaults(ctx *typectx.Context, source *shape.Source, opts *shape.CompileOptions, layout compilePathLayout) *typectx.Context {
 	ret := cloneTypeContext(ctx)
+	ret = hydrateExplicitTypeContext(ret, source, layout)
 	if shouldInferTypeContext(opts) {
 		ret = mergeTypeContext(ret, inferDatlyGenTypeContext(source, layout))
 	}
@@ -32,6 +34,75 @@ func applyTypeContextDefaults(ctx *typectx.Context, source *shape.Source, opts *
 	}
 	ret = normalizeRelativeImports(ret, source, layout)
 	return normalizeTypeContext(ret)
+}
+
+func hydrateExplicitTypeContext(ctx *typectx.Context, source *shape.Source, layout compilePathLayout) *typectx.Context {
+	if ctx == nil {
+		return nil
+	}
+	if strings.TrimSpace(ctx.PackagePath) == "" && strings.TrimSpace(ctx.DefaultPackage) != "" {
+		ctx.PackagePath = strings.TrimSpace(ctx.DefaultPackage)
+	}
+	if strings.TrimSpace(ctx.PackageName) == "" {
+		base := path.Base(strings.TrimSpace(ctx.PackagePath))
+		if base == "." || base == "/" || base == "" {
+			base = path.Base(strings.TrimSpace(ctx.DefaultPackage))
+		}
+		ctx.PackageName = sanitizePackageName(base)
+	}
+	if strings.TrimSpace(ctx.PackageDir) == "" {
+		parsed, ok := parseSourceLayout(source, layout)
+		if ok {
+			modulePath := detectModulePath(parsed.projectRoot)
+			pkgPath := strings.TrimSpace(ctx.PackagePath)
+			if modulePath != "" && pkgPath != "" {
+				if rel, ok := packagePathRelative(modulePath, pkgPath); ok {
+					ctx.PackageDir = rel
+				}
+			}
+		}
+	}
+	return ctx
+}
+
+func packagePathRelative(modulePath, packagePath string) (string, bool) {
+	modulePath = strings.Trim(strings.TrimSpace(modulePath), "/")
+	packagePath = strings.Trim(strings.TrimSpace(packagePath), "/")
+	if modulePath == "" || packagePath == "" {
+		return "", false
+	}
+	if packagePath == modulePath {
+		return "", true
+	}
+	prefix := modulePath + "/"
+	if !strings.HasPrefix(packagePath, prefix) {
+		return "", false
+	}
+	return strings.TrimPrefix(packagePath, prefix), true
+}
+
+func sanitizePackageName(name string) string {
+	name = strings.TrimSpace(strings.ToLower(name))
+	if name == "" {
+		return ""
+	}
+	var out strings.Builder
+	for _, r := range name {
+		switch {
+		case r == '_' || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			out.WriteRune(r)
+		case r == '-' || unicode.IsSpace(r):
+			out.WriteRune('_')
+		}
+	}
+	result := strings.Trim(out.String(), "_")
+	if result == "" {
+		return ""
+	}
+	if result[0] >= '0' && result[0] <= '9' {
+		return "p" + result
+	}
+	return result
 }
 
 func shouldInferTypeContext(opts *shape.CompileOptions) bool {

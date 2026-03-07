@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/typectx"
 	"github.com/viant/datly/repository/shape/typectx/source"
+	"github.com/viant/datly/view"
 	"github.com/viant/x"
 	xreflectloader "github.com/viant/x/loader/xreflect"
 	"github.com/viant/x/syntetic"
@@ -53,12 +54,13 @@ func GenerateFromDQLShape(doc *shape.Document, cfg *Config) (*Result, error) {
 	}
 	typeNames := make([]string, 0, len(views)+len(routeTypes))
 	registered := map[string]bool{}
+	includeVelty := documentUsesVelty(doc)
 	for _, view := range views {
 		typeName := viewTypeName(cfg, view)
 		if registered[typeName] {
 			continue
 		}
-		structType := buildStructType(view.columns)
+		structType := buildStructType(view.columns, includeVelty)
 		if structType == nil {
 			continue
 		}
@@ -88,7 +90,7 @@ func GenerateFromDQLShape(doc *shape.Document, cfg *Config) (*Result, error) {
 		if typeName == "" || registered[typeName] {
 			continue
 		}
-		structType := buildStructType(ioType.fields)
+		structType := buildStructType(ioType.fields, includeVelty)
 		if structType == nil {
 			continue
 		}
@@ -627,7 +629,15 @@ func hasExplicitTypeOverride(field reflect.StructField) bool {
 	return false
 }
 
-func buildStructType(columns []columnDescriptor) reflect.Type {
+func buildStructType(columns []columnDescriptor, includeVelty bool) reflect.Type {
+	fields := buildStructFields(columns, includeVelty)
+	if len(fields) == 0 {
+		return nil
+	}
+	return reflect.StructOf(fields)
+}
+
+func buildStructFields(columns []columnDescriptor, includeVelty bool) []reflect.StructField {
 	if len(columns) == 0 {
 		return nil
 	}
@@ -660,13 +670,49 @@ func buildStructType(columns []columnDescriptor) reflect.Type {
 		if isPK || isAutoInc {
 			tag = fmt.Sprintf(`sqlx:"%s"`, sqlxTag)
 		}
+		if includeVelty {
+			veltyNames := []string{column.name}
+			if fieldName != "" && fieldName != column.name {
+				veltyNames = append(veltyNames, fieldName)
+			}
+			veltyTag := fmt.Sprintf(`velty:"names=%s"`, strings.Join(veltyNames, "|"))
+			tag = tag + " " + veltyTag
+		}
 		fields = append(fields, reflect.StructField{
 			Name: fieldName,
 			Type: fieldType,
 			Tag:  reflect.StructTag(tag),
 		})
 	}
-	return reflect.StructOf(fields)
+	return fields
+}
+
+func documentUsesVelty(doc *shape.Document) bool {
+	if doc == nil || doc.Root == nil {
+		return false
+	}
+	var visit func(value any) bool
+	visit = func(value any) bool {
+		switch actual := value.(type) {
+		case map[string]any:
+			if mode := strings.TrimSpace(asString(actual["Mode"])); mode == string(view.ModeExec) {
+				return true
+			}
+			for _, item := range actual {
+				if visit(item) {
+					return true
+				}
+			}
+		case []any:
+			for _, item := range actual {
+				if visit(item) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return visit(doc.Root)
 }
 
 // buildHasType creates a marker struct with bool fields for each column.

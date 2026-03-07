@@ -154,6 +154,9 @@ func normalizeTemplateExprBody(body string) (string, bool) {
 	if isReadReservedName(trimmed) {
 		return "", true
 	}
+	if selector := normalizeTemplateSelector(trimmed); selector != "" {
+		return selector, false
+	}
 	lower := strings.ToLower(trimmed)
 	if strings.Contains(lower, `build("where")`) || strings.Contains(lower, "build('where')") {
 		return " WHERE 1 ", false
@@ -162,6 +165,38 @@ func normalizeTemplateExprBody(body string) (string, bool) {
 		return " AND 1 ", false
 	}
 	return "1", false
+}
+
+func normalizeTemplateSelector(input string) string {
+	if input == "" {
+		return ""
+	}
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		if !(isReadIdentifierPart(ch) || ch == '.') {
+			return ""
+		}
+	}
+	parts := strings.Split(input, ".")
+	builder := strings.Builder{}
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if builder.Len() > 0 {
+			builder.WriteByte('_')
+		}
+		builder.WriteString(part)
+	}
+	result := builder.String()
+	if result == "" {
+		return ""
+	}
+	if !isReadIdentifierStart(result[0]) {
+		return ""
+	}
+	return result
 }
 
 func readReadTemplateExpr(input string, openBrace int) (string, int, bool) {

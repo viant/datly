@@ -16,10 +16,11 @@ var (
 )
 
 type setDirectiveBlock struct {
-	start int
-	end   int
-	body  string
-	kind  directiveKind
+	start     int
+	end       int
+	bodyStart int
+	body      string
+	kind      directiveKind
 }
 
 type directiveKind int
@@ -39,9 +40,6 @@ func isDirectiveLine(line string) bool {
 		return true
 	}
 	if isSetLine(line) {
-		return true
-	}
-	if strings.HasPrefix(line, "#if(") || strings.HasPrefix(line, "#elseif(") || strings.HasPrefix(line, "#else") || strings.HasPrefix(line, "#end") {
 		return true
 	}
 	return false
@@ -76,10 +74,11 @@ func extractSetDirectiveBlocks(dql string) []setDirectiveBlock {
 		}
 		end := cursor.Pos
 		result = append(result, setDirectiveBlock{
-			start: start,
-			end:   end,
-			body:  groupText[1 : len(groupText)-1],
-			kind:  kind,
+			start:     start,
+			end:       end,
+			bodyStart: group.Offset + 1,
+			body:      groupText[1 : len(groupText)-1],
+			kind:      kind,
 		})
 	}
 	return result

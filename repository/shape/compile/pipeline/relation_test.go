@@ -49,6 +49,9 @@ func TestExtractJoinRelations_NonRootParentChain(t *testing.T) {
 	require.NoError(t, err)
 	relations, diags := ExtractJoinRelations(sqlText, queryNode)
 	require.Len(t, relations, 3)
+	assert.Equal(t, "sl", relations[0].Parent)
+	assert.Equal(t, "m", relations[1].Parent)
+	assert.Equal(t, "s", relations[2].Parent)
 
 	require.Len(t, relations[0].On, 1)
 	assert.Equal(t, "sl", relations[0].On[0].ParentNamespace)
@@ -68,6 +71,56 @@ func TestExtractJoinRelations_NonRootParentChain(t *testing.T) {
 	assert.Equal(t, "p", relations[2].On[0].RefNamespace)
 	assert.Equal(t, "id", relations[2].On[0].RefColumn)
 	assert.Empty(t, diags)
+}
+
+func TestExtractJoinRelations_ParentAliasMatrix(t *testing.T) {
+	testCases := []struct {
+		name     string
+		sqlText  string
+		expected map[string]string
+	}{
+		{
+			name:    "root parent",
+			sqlText: "SELECT o.id FROM orders o JOIN order_items i ON o.id = i.order_id",
+			expected: map[string]string{
+				"i": "o",
+			},
+		},
+		{
+			name:    "multi level chain",
+			sqlText: "SELECT sl.id FROM site_list sl JOIN site_list_match m ON m.site_list_id = sl.id JOIN ci_site s ON s.id = m.site_id JOIN ci_publisher p ON p.id = s.publisher_id",
+			expected: map[string]string{
+				"m": "sl",
+				"s": "m",
+				"p": "s",
+			},
+		},
+		{
+			name:    "left join child of child",
+			sqlText: "SELECT a.id FROM alpha a LEFT JOIN beta b ON b.a_id = a.id LEFT JOIN gamma g ON g.b_id = b.id",
+			expected: map[string]string{
+				"b": "a",
+				"g": "b",
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			queryNode, err := sqlparser.ParseQuery(testCase.sqlText)
+			require.NoError(t, err)
+			relations, diags := ExtractJoinRelations(testCase.sqlText, queryNode)
+			assert.Empty(t, diags)
+			got := map[string]string{}
+			for _, relation := range relations {
+				if relation == nil {
+					continue
+				}
+				got[relation.Ref] = relation.Parent
+			}
+			assert.Equal(t, testCase.expected, got)
+		})
+	}
 }
 
 func TestExtractJoinRelations_DoesNotFallbackForComplexRawPredicate(t *testing.T) {

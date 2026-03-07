@@ -20,12 +20,32 @@ type Result struct {
 	Views            []*View
 	ViewsByName      map[string]*View
 	States           []*State
+	Components       []*ComponentRoute
 	Types            []*Type
 	ColumnsDiscovery bool
 	Const            map[string]string
 	TypeContext      *typectx.Context
 	Directives       *dqlshape.Directives
 	Diagnostics      []*dqlshape.Diagnostic
+}
+
+type ComponentRoute struct {
+	Path       string
+	FieldName  string
+	Type       reflect.Type
+	InputType  reflect.Type
+	OutputType reflect.Type
+	InputName  string
+	OutputName string
+	ViewName   string
+	SourceURL  string
+	SummaryURL string
+	Name       string
+	RoutePath  string
+	Method     string
+	Connector  string
+	Marshaller string
+	Handler    string
 }
 
 // Type is normalized type metadata collected during compile.
@@ -62,6 +82,7 @@ type View struct {
 	SQL                    string
 	SQLURI                 string
 	Summary                string
+	SummaryName            string
 	Relations              []*Relation
 	Holder                 string
 
@@ -82,6 +103,8 @@ type View struct {
 // ViewDeclaration captures declaration options used to derive a view from DQL directives.
 type ViewDeclaration struct {
 	Tag           string
+	TypeName      string
+	Dest          string
 	Codec         string
 	CodecArgs     []string
 	HandlerName   string
@@ -100,6 +123,7 @@ type ViewDeclaration struct {
 	Async         bool
 	Output        bool
 	Predicates    []*ViewPredicate
+	ColumnsConfig map[string]*ViewColumnConfig
 }
 
 // ViewPredicate captures WithPredicate / EnsurePredicate metadata.
@@ -110,16 +134,24 @@ type ViewPredicate struct {
 	Arguments []string
 }
 
+// ViewColumnConfig captures declaration-level per-column overrides.
+type ViewColumnConfig struct {
+	DataType string
+	Tag      string
+}
+
 // Relation is normalized relation metadata extracted from DQL joins.
 type Relation struct {
-	Name     string
-	Holder   string
-	Ref      string
-	Table    string
-	Kind     string
-	Raw      string
-	On       []*RelationLink
-	Warnings []string
+	Name          string
+	Parent        string
+	Holder        string
+	Ref           string
+	Table         string
+	Kind          string
+	Raw           string
+	ColumnsConfig map[string]*ViewColumnConfig
+	On            []*RelationLink
+	Warnings      []string
 }
 
 // RelationLink represents one parent/ref join predicate.
