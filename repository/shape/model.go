@@ -89,6 +89,11 @@ type ViewArtifacts struct {
 	Views    view.Views
 }
 
+// ResourceArtifacts is the runtime resource payload produced by Loader.
+type ResourceArtifacts struct {
+	Resource *view.Resource
+}
+
 // ComponentArtifact is the runtime component payload produced by Loader.
 type ComponentArtifact struct {
 	Resource  *view.Resource

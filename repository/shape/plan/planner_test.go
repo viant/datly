@@ -99,6 +99,19 @@ type codecStateSource struct {
 	Run string `parameter:",kind=body,in=run" handler:"Exec"`
 }
 
+type selectorHolderSource struct {
+	Route      xdatly.Component[typedRouteInput, typedRouteOutput] `component:",path=/v1/api/dev/report,method=GET"`
+	ViewSelect struct {
+		Fields []string `parameter:"fields,kind=query,in=_fields"`
+		Page   int      `parameter:"page,kind=query,in=_page"`
+	} `querySelector:"rows"`
+}
+
+type summaryViewSource struct {
+	embeddedFS
+	Rows []relationRow `view:"rows,table=REPORT,summaryURI=testdata/report_summary.sql" sql:"uri=testdata/report.sql"`
+}
+
 func TestPlanner_Plan(t *testing.T) {
 	scanner := scan.New()
 	scanned, err := scanner.Scan(context.Background(), &shape.Source{Struct: &reportSource{}})
@@ -138,12 +151,45 @@ func TestPlanner_Plan(t *testing.T) {
 	require.NotNil(t, stateByPath["id"])
 	assert.Equal(t, "query", stateByPath["id"].KindString())
 	assert.Equal(t, "id", stateByPath["id"].InName())
-
 	require.Len(t, result.Components, 1)
 	assert.Equal(t, "Route", result.Components[0].FieldName)
 	assert.Equal(t, "/v1/api/dev/report", result.Components[0].RoutePath)
 	assert.Equal(t, "GET", result.Components[0].Method)
 	assert.Equal(t, "dev", result.Components[0].Connector)
+}
+
+func TestPlanner_Plan_QuerySelectorHolder(t *testing.T) {
+	scanner := scan.New()
+	scanned, err := scanner.Scan(context.Background(), &shape.Source{Struct: &selectorHolderSource{}})
+	require.NoError(t, err)
+
+	planned, err := New().Plan(context.Background(), scanned)
+	require.NoError(t, err)
+
+	result, ok := ResultFrom(planned)
+	require.True(t, ok)
+
+	byName := map[string]*State{}
+	for _, item := range result.States {
+		byName[item.Name] = item
+	}
+	require.NotNil(t, byName["fields"])
+	assert.Equal(t, "rows", byName["fields"].QuerySelector)
+	require.NotNil(t, byName["page"])
+	assert.Equal(t, "rows", byName["page"].QuerySelector)
+}
+
+func TestPlanner_Plan_ViewSummaryURI(t *testing.T) {
+	scanned, err := scan.New().Scan(context.Background(), &shape.Source{Struct: &summaryViewSource{}})
+	require.NoError(t, err)
+
+	planned, err := New().Plan(context.Background(), scanned)
+	require.NoError(t, err)
+
+	result, ok := ResultFrom(planned)
+	require.True(t, ok)
+	require.Len(t, result.Views, 1)
+	assert.Equal(t, "testdata/report_summary.sql", result.Views[0].SummaryURL)
 }
 
 func TestPlanner_Plan_LinkOnProducesStructuredRelations(t *testing.T) {

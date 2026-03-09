@@ -25,6 +25,7 @@ type Field struct {
 	Name                string
 	Index               []int
 	Type                reflect.Type
+	QuerySelector       string
 	ComponentInputType  reflect.Type
 	ComponentOutputType reflect.Type
 	ComponentInputName  string

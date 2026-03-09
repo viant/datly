@@ -136,6 +136,7 @@ func normalizeDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 	ret := &dqlshape.Directives{
 		Meta:              strings.TrimSpace(input.Meta),
 		DefaultConnector:  strings.TrimSpace(input.DefaultConnector),
+		TemplateType:      strings.TrimSpace(input.TemplateType),
 		Dest:              strings.TrimSpace(input.Dest),
 		InputDest:         strings.TrimSpace(input.InputDest),
 		OutputDest:        strings.TrimSpace(input.OutputDest),
@@ -184,7 +185,7 @@ func normalizeDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 			ret.Const[k] = v
 		}
 	}
-	if ret.Meta == "" && ret.DefaultConnector == "" &&
+	if ret.Meta == "" && ret.DefaultConnector == "" && ret.TemplateType == "" &&
 		ret.Dest == "" && ret.InputDest == "" && ret.OutputDest == "" && ret.RouterDest == "" &&
 		ret.InputType == "" && ret.OutputType == "" &&
 		ret.Cache == nil && ret.MCP == nil && ret.Route == nil &&

@@ -13,26 +13,27 @@ import (
 )
 
 var (
-	metaDirectiveName       = map[string]bool{"meta": true}
-	connectorDirectiveName  = map[string]bool{"connector": true}
-	cacheDirectiveName      = map[string]bool{"cache": true}
-	mcpDirectiveName        = map[string]bool{"mcp": true}
-	routeDirectiveName      = map[string]bool{"route": true}
-	constDirectiveName      = map[string]bool{"const": true}
-	marshalDirectiveName    = map[string]bool{"marshal": true}
-	unmarshalDirectiveName  = map[string]bool{"unmarshal": true}
-	formatDirectiveName     = map[string]bool{"format": true}
-	dateFormatDirectiveName = map[string]bool{"date_format": true}
-	caseFormatDirectiveName = map[string]bool{"case_format": true}
-	destDirectiveName       = map[string]bool{"dest": true}
-	inputDestDirectiveName  = map[string]bool{"input_dest": true}
-	outputDestDirectiveName = map[string]bool{"output_dest": true}
-	routerDestDirectiveName = map[string]bool{"router_dest": true}
-	inputTypeDirectiveName  = map[string]bool{"input_type": true}
-	outputTypeDirectiveName = map[string]bool{"output_type": true}
-	cacheProviderExpr       = regexp.MustCompile(`(?i)\.withprovider\s*\(\s*['"]([^'"]+)['"]\s*\)`)
-	cacheLocationExpr       = regexp.MustCompile(`(?i)\.withlocation\s*\(\s*['"]([^'"]+)['"]\s*\)`)
-	cacheTTLMsExpr          = regexp.MustCompile(`(?i)\.withtimetolivems\s*\(\s*([0-9]+)\s*\)`)
+	metaDirectiveName        = map[string]bool{"meta": true}
+	connectorDirectiveName   = map[string]bool{"connector": true}
+	cacheDirectiveName       = map[string]bool{"cache": true}
+	mcpDirectiveName         = map[string]bool{"mcp": true}
+	routeDirectiveName       = map[string]bool{"route": true}
+	constDirectiveName       = map[string]bool{"const": true}
+	marshalDirectiveName     = map[string]bool{"marshal": true}
+	unmarshalDirectiveName   = map[string]bool{"unmarshal": true}
+	formatDirectiveName      = map[string]bool{"format": true}
+	dateFormatDirectiveName  = map[string]bool{"date_format": true}
+	caseFormatDirectiveName  = map[string]bool{"case_format": true}
+	useTemplateDirectiveName = map[string]bool{"usetemplate": true}
+	destDirectiveName        = map[string]bool{"dest": true}
+	inputDestDirectiveName   = map[string]bool{"input_dest": true}
+	outputDestDirectiveName  = map[string]bool{"output_dest": true}
+	routerDestDirectiveName  = map[string]bool{"router_dest": true}
+	inputTypeDirectiveName   = map[string]bool{"input_type": true}
+	outputTypeDirectiveName  = map[string]bool{"output_type": true}
+	cacheProviderExpr        = regexp.MustCompile(`(?i)\.withprovider\s*\(\s*['"]([^'"]+)['"]\s*\)`)
+	cacheLocationExpr        = regexp.MustCompile(`(?i)\.withlocation\s*\(\s*['"]([^'"]+)['"]\s*\)`)
+	cacheTTLMsExpr           = regexp.MustCompile(`(?i)\.withtimetolivems\s*\(\s*([0-9]+)\s*\)`)
 )
 
 func parseSettingsDirectives(input, fullDQL string, diagnosticOffset int, directives *dqlshape.Directives) []*dqlshape.Diagnostic {
@@ -191,6 +192,18 @@ func parseSettingsDirectives(input, fullDQL string, diagnosticOffset int, direct
 			}
 		} else {
 			directives.CaseFormat = values[len(values)-1]
+		}
+	}
+	if strings.Contains(lower, "$usetemplate") {
+		calls, parseErrors := scanDollarCallsStrict(input, useTemplateDirectiveName)
+		diagnostics = appendDirectiveParseErrors(diagnostics, parseErrors, dqldiag.CodeDirUnsupported, fullDQL, diagnosticOffset)
+		values := parseSingleArgQuotedDirectiveCalls(calls)
+		if len(values) == 0 {
+			if len(calls) > 0 {
+				diagnostics = append(diagnostics, directiveDiagnostic(dqldiag.CodeDirUnsupported, "invalid $useTemplate directive", "expected: #settings($_ = $useTemplate('patch'))", fullDQL, lastDirectiveCallOffset(calls, diagnosticOffset)))
+			}
+		} else {
+			directives.TemplateType = values[len(values)-1]
 		}
 	}
 	if strings.Contains(lower, "$dest") {

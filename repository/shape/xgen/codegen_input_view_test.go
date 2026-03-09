@@ -46,6 +46,7 @@ func TestComponentCodegen_ViewInput_UsesResolvedViewType(t *testing.T) {
 			Columns: []*view.Column{
 				{Name: "ID", DataType: "int"},
 				{Name: "STATUS", DataType: "int", Nullable: true},
+				{Name: "IS_AUTH", DataType: "int", Nullable: true},
 			},
 		},
 	)
@@ -83,6 +84,9 @@ func TestComponentCodegen_ViewInput_UsesResolvedViewType(t *testing.T) {
 	}
 	if !strings.Contains(generated, `Status *int `+"`"+`sqlx:"STATUS" velty:"names=STATUS|Status"`+"`") {
 		t.Fatalf("expected exec view input helper type to retain velty aliases:\n%s", generated)
+	}
+	if !strings.Contains(generated, `IsAuth *int `+"`"+`sqlx:"IS_AUTH" velty:"names=IS_AUTH|IsAuth"`+"`") {
+		t.Fatalf("expected exec view input helper type to retain SQL alias velty names:\n%s", generated)
 	}
 }
 
@@ -764,5 +768,103 @@ func TestComponentCodegen_ExecWithoutStatusDoesNotImportResponse(t *testing.T) {
 
 	if strings.Contains(generated, `"github.com/viant/xdatly/handler/response"`) {
 		t.Fatalf("did not expect response import for empty exec output:\n%s", generated)
+	}
+}
+
+func TestComponentCodegen_MutableView_EmbedsHasMarker(t *testing.T) {
+	projectDir := t.TempDir()
+	packageDir := filepath.Join(projectDir, "shape", "dev", "events", "patch_basic_one")
+
+	component := &shapeload.Component{
+		Method:   "PATCH",
+		URI:      "/v1/api/shape/dev/basic/foos",
+		RootView: "foos",
+		Input: []*shapeplan.State{
+			{
+				Parameter: state.Parameter{
+					Name: "Foos",
+					In:   state.NewBodyLocation(""),
+					Schema: &state.Schema{
+						Name:        "FoosView",
+						DataType:    "*FoosView",
+						Cardinality: state.One,
+					},
+					Tag: `anonymous:"true" typeName:"FoosView"`,
+				},
+			},
+			{
+				Parameter: state.Parameter{
+					Name: "CurFoos",
+					In:   state.NewViewLocation("CurFoos"),
+					Schema: &state.Schema{
+						Name:        "FoosView",
+						DataType:    "*FoosView",
+						Cardinality: state.One,
+					},
+				},
+			},
+		},
+	}
+
+	resource := view.EmptyResource()
+	resource.Views = append(resource.Views,
+		&view.View{
+			Name: "foos",
+			Mode: view.ModeExec,
+			Template: &view.Template{
+				Source: "#set($_ = $Foos<?>(body/).Required())",
+			},
+			Schema: &state.Schema{Name: "FoosView", Cardinality: state.Many},
+			Columns: []*view.Column{
+				{Name: "ID", DataType: "int"},
+				{Name: "NAME", DataType: "string", Nullable: true},
+				{Name: "QUANTITY", DataType: "int", Nullable: true},
+			},
+		},
+		&view.View{
+			Name:   "CurFoos",
+			Mode:   view.ModeQuery,
+			Schema: &state.Schema{Name: "FoosView", Cardinality: state.Many},
+			Columns: []*view.Column{
+				{Name: "ID", DataType: "int"},
+				{Name: "NAME", DataType: "string", Nullable: true},
+				{Name: "QUANTITY", DataType: "int", Nullable: true},
+			},
+		},
+	)
+
+	ctx := &typectx.Context{
+		PackageDir:  packageDir,
+		PackageName: "patch_basic_one",
+		PackagePath: "github.com/acme/project/shape/dev/events/patch_basic_one",
+	}
+
+	codegen := &ComponentCodegen{
+		Component:    component,
+		Resource:     resource,
+		TypeContext:  ctx,
+		ProjectDir:   projectDir,
+		WithEmbed:    true,
+		WithContract: true,
+	}
+
+	result, err := codegen.Generate()
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	data, err := os.ReadFile(result.FilePath)
+	if err != nil {
+		t.Fatalf("read generated file: %v", err)
+	}
+	generated := string(data)
+
+	if !strings.Contains(generated, "type FoosViewHas struct") {
+		t.Fatalf("expected mutable helper type declaration:\n%s", generated)
+	}
+	if !strings.Contains(generated, `Has *FoosViewHas `+"`"+`setMarker:"true" format:"-" sqlx:"-" diff:"-" json:"-" typeName:"FoosViewHas"`+"`") {
+		t.Fatalf("expected mutable view to embed Has marker:\n%s", generated)
+	}
+	if !strings.Contains(generated, `Foos *FoosView `+"`"+`parameter:",kind=body" typeName:"FoosView" anonymous:"true"`+"`") {
+		t.Fatalf("expected mutable body input to stay pointer typed:\n%s", generated)
 	}
 }

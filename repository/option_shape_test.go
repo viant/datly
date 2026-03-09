@@ -27,3 +27,14 @@ func TestWithLegacyTypeContext(t *testing.T) {
 	WithLegacyTypeContext(false)(opts)
 	assert.False(t, opts.legacyTypeContext)
 }
+
+func TestWithRefreshDisabled(t *testing.T) {
+	opts := NewOptions(nil)
+	assert.False(t, opts.refreshDisabled)
+
+	WithRefreshDisabled(true)(opts)
+	assert.True(t, opts.refreshDisabled)
+
+	WithRefreshDisabled(false)(opts)
+	assert.False(t, opts.refreshDisabled)
+}

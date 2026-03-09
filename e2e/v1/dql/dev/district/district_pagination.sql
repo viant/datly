@@ -1,9 +1,10 @@
-#package('github.com/viant/datly/e2e/v1/shape/dev/district')
+#package('github.com/viant/datly/e2e/v1/shape/dev/district/pagination')
 #setting($_ = $connector('dev'))
 #setting($_ = $route('/v1/api/shape/dev/meta/districts', 'GET'))
 
-#set( $_ = $Page<int>(query/page).Optional().QuerySelector('districts'))
-#set( $_ = $Data<?>(output/view).Embed())
+#define($_ = $IDs<[]int>(query/IDs))
+#define($_ = $Page<int>(query/page).Optional().QuerySelector('districts'))
+#define($_ = $Data<?>(output/view).Embed())
 
 
 SELECT districts.*,

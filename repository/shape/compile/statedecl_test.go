@@ -144,6 +144,37 @@ SELECT id FROM USERS u`
 	assert.Contains(t, result.States[0].Tag, `anonymous:"true"`)
 }
 
+func TestAppendDeclaredStates_OutputOptionMarksStateForOutput(t *testing.T) {
+	dql := `
+#set($_ = $Foos<?>(body/).Output().Tag('anonymous:"true"'))
+SELECT * FROM FOOS`
+	result := &plan.Result{}
+
+	appendDeclaredStates(dql, result)
+
+	require.Len(t, result.States, 1)
+	assert.Equal(t, "Foos", result.States[0].Name)
+	assert.Equal(t, "body", result.States[0].KindString())
+	assert.True(t, result.States[0].EmitOutput)
+}
+
+func TestAppendDeclaredStates_DuplicateDeclarationMergesOutputMarker(t *testing.T) {
+	dql := `
+#set($_ = $Foos<?>(body/).Cardinality('One').Tag('anonymous:"true"'))
+#set($_ = $Foos<?>(body/).Output().Tag('anonymous:"true"'))
+SELECT * FROM FOOS`
+	result := &plan.Result{}
+
+	appendDeclaredStates(dql, result)
+
+	require.Len(t, result.States, 1)
+	assert.Equal(t, "Foos", result.States[0].Name)
+	assert.Equal(t, "body", result.States[0].KindString())
+	assert.True(t, result.States[0].EmitOutput)
+	require.NotNil(t, result.States[0].Schema)
+	assert.Equal(t, "One", string(result.States[0].Schema.Cardinality))
+}
+
 func TestAppendDeclaredStates_InvalidOption_ReportsExactSpan(t *testing.T) {
 	dql := `
 #set($_ = $Auth<string>(header/Authorization).Cacheable('x').UnknownFlag())

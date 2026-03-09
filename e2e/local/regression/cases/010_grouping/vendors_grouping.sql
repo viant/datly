@@ -1,6 +1,7 @@
 /* {"URI":"vendors-grouping/"} */
 
 #set( $_ = $Data<?>(output/view).Embed())
+#set( $_ = $ID<[]int>(query/id)..WithPredicate(0, 'equal', 't', 'ID'))
 
 SELECT vendor.*,
        groupable(vendor),
@@ -14,3 +15,5 @@ FROM (
     WHERE t.ID IN ($vendorIDs)
     GROUP BY 1, 2
 ) vendor
+
+

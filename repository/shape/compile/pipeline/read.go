@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/internal/inference"
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/plan"
 	"github.com/viant/sqlparser"
@@ -19,10 +20,14 @@ import (
 // It applies multiple parse strategies and gracefully degrades to a
 // loose (schema-less) view for template-driven SQL that cannot be fully parsed.
 func BuildRead(sourceName, sqlText string) (*plan.View, []*dqlshape.Diagnostic, error) {
-	return BuildReadWithConsts(sourceName, sqlText, nil)
+	return BuildReadWithOptions(sourceName, sqlText, nil, nil)
 }
 
 func BuildReadWithConsts(sourceName, sqlText string, consts map[string]string) (*plan.View, []*dqlshape.Diagnostic, error) {
+	return BuildReadWithOptions(sourceName, sqlText, consts, nil)
+}
+
+func BuildReadWithOptions(sourceName, sqlText string, consts map[string]string, groupableAliases map[string]bool) (*plan.View, []*dqlshape.Diagnostic, error) {
 	queryNode, parseDiag, parserSQL, err := resolveQueryNode(sqlText)
 
 	// Template-driven SQL may legitimately fail strict parsing; treat as warning.
@@ -91,10 +96,17 @@ func BuildReadWithConsts(sourceName, sqlText string, consts map[string]string) (
 		Relations:   relations,
 	}
 	exceptByAlias := extractExceptColumnsByNamespace(queryNode)
-	if except := lookupExceptColumns(exceptByAlias, name); len(except) > 0 {
-		view.Declaration = &plan.ViewDeclaration{ColumnsConfig: except}
+	groupableByAlias := extractGroupableColumnsByNamespace(queryNode, name, groupableAliases)
+	rootConfig := mergeColumnConfigs(
+		lookupExceptColumns(exceptByAlias, name),
+		lookupColumnConfigs(groupableByAlias, name),
+		extractRootGroupedColumnConfigs(rootSQL, name, groupableAliases),
+	)
+	if len(rootConfig) > 0 {
+		view.Declaration = &plan.ViewDeclaration{ColumnsConfig: rootConfig}
 	}
 	applyRelationExceptColumns(relations, exceptByAlias)
+	applyRelationGroupableColumns(relations, groupableByAlias)
 	applyConstTables(view, consts)
 	return view, diags, nil
 }
@@ -289,23 +301,145 @@ func applyRelationExceptColumns(relations []*plan.Relation, exceptByAlias map[st
 	}
 }
 
+func applyRelationGroupableColumns(relations []*plan.Relation, groupableByAlias map[string]map[string]*plan.ViewColumnConfig) {
+	if len(relations) == 0 || len(groupableByAlias) == 0 {
+		return
+	}
+	for _, relation := range relations {
+		if relation == nil {
+			continue
+		}
+		relation.ColumnsConfig = mergeColumnConfigs(relation.ColumnsConfig, lookupColumnConfigs(groupableByAlias, relation.Ref))
+	}
+}
+
 func lookupExceptColumns(exceptByAlias map[string]map[string]*plan.ViewColumnConfig, alias string) map[string]*plan.ViewColumnConfig {
-	if len(exceptByAlias) == 0 {
+	return lookupColumnConfigs(exceptByAlias, alias)
+}
+
+func lookupColumnConfigs(byAlias map[string]map[string]*plan.ViewColumnConfig, alias string) map[string]*plan.ViewColumnConfig {
+	if len(byAlias) == 0 {
 		return nil
 	}
 	alias = strings.ToLower(strings.TrimSpace(alias))
 	if alias == "" {
 		return nil
 	}
-	result := exceptByAlias[alias]
+	result := byAlias[alias]
 	if len(result) == 0 {
 		return nil
 	}
 	ret := make(map[string]*plan.ViewColumnConfig, len(result))
 	for key, cfg := range result {
-		ret[key] = cfg
+		if cfg == nil {
+			continue
+		}
+		cloned := *cfg
+		if cfg.Groupable != nil {
+			value := *cfg.Groupable
+			cloned.Groupable = &value
+		}
+		ret[key] = &cloned
+	}
+	if len(ret) == 0 {
+		return nil
 	}
 	return ret
+}
+
+func mergeColumnConfigs(base map[string]*plan.ViewColumnConfig, overlays ...map[string]*plan.ViewColumnConfig) map[string]*plan.ViewColumnConfig {
+	var result map[string]*plan.ViewColumnConfig
+	if len(base) > 0 {
+		result = lookupColumnConfigs(map[string]map[string]*plan.ViewColumnConfig{"_": base}, "_")
+	}
+	for _, overlay := range overlays {
+		for name, cfg := range overlay {
+			name = strings.TrimSpace(name)
+			if name == "" || cfg == nil {
+				continue
+			}
+			if result == nil {
+				result = map[string]*plan.ViewColumnConfig{}
+			}
+			target := result[name]
+			if target == nil {
+				target = &plan.ViewColumnConfig{}
+				result[name] = target
+			}
+			if dataType := strings.TrimSpace(cfg.DataType); dataType != "" && target.DataType == "" {
+				target.DataType = dataType
+			}
+			if tag := strings.TrimSpace(cfg.Tag); tag != "" && target.Tag == "" {
+				target.Tag = tag
+			}
+			if target.Groupable == nil && cfg.Groupable != nil {
+				value := *cfg.Groupable
+				target.Groupable = &value
+			}
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func extractGroupableColumnsByNamespace(queryNode *query.Select, rootName string, enabledAliases map[string]bool) map[string]map[string]*plan.ViewColumnConfig {
+	if queryNode == nil || len(enabledAliases) == 0 {
+		return nil
+	}
+	columns := sqlparser.NewColumns(queryNode.List)
+	groupable := inference.GroupableColumns(queryNode, columns)
+	if len(groupable) == 0 {
+		return nil
+	}
+	rootName = strings.ToLower(strings.TrimSpace(rootName))
+	result := map[string]map[string]*plan.ViewColumnConfig{}
+	for _, column := range columns {
+		if column == nil || !groupable[column.Identity()] {
+			continue
+		}
+		name := strings.TrimSpace(column.Identity())
+		if name == "" {
+			continue
+		}
+		namespace := strings.ToLower(strings.TrimSpace(column.Namespace))
+		if namespace == "" {
+			namespace = rootName
+		}
+		if namespace == "" || !enabledAliases[namespace] {
+			continue
+		}
+		columnsConfig := result[namespace]
+		if columnsConfig == nil {
+			columnsConfig = map[string]*plan.ViewColumnConfig{}
+			result[namespace] = columnsConfig
+		}
+		if columnsConfig[name] == nil {
+			value := true
+			columnsConfig[name] = &plan.ViewColumnConfig{Groupable: &value}
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func extractRootGroupedColumnConfigs(sqlText, rootName string, enabledAliases map[string]bool) map[string]*plan.ViewColumnConfig {
+	sqlText = strings.TrimSpace(sqlText)
+	if sqlText == "" {
+		return nil
+	}
+	rootName = strings.ToLower(strings.TrimSpace(rootName))
+	if len(enabledAliases) == 0 || !enabledAliases[rootName] {
+		return nil
+	}
+	queryNode, _, _, err := resolveQueryNode(sqlText)
+	if err != nil || queryNode == nil {
+		return nil
+	}
+	return lookupColumnConfigs(extractGroupableColumnsByNamespace(queryNode, rootName, enabledAliases), rootName)
 }
 
 func extractExceptColumnsByNamespace(queryNode *query.Select) map[string]map[string]*plan.ViewColumnConfig {

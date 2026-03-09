@@ -29,7 +29,7 @@ func TestComponentCodegen_BuildMutableVeltyBlock_PatchOne(t *testing.T) {
 	actual := renderMutableBlock(t, codegen, inputType, support)
 	for _, fragment := range []string{
 		`$sequencer.Allocate("FOOS", $Foos, "Id")`,
-		`#set($CurFoosById = $CurFoos.IndexBy("Id"))`,
+		`#set($CurFoosById<map[int]*Foos> = $CurFoos.IndexBy("Id"))`,
 		`#if($Foos)`,
 		`#if($CurFoosById.HasKey($Foos.Id) == true)`,
 		`$sql.Update($Foos, "FOOS");`,
@@ -46,7 +46,7 @@ func TestComponentCodegen_BuildMutableVeltyBlock_PatchMany(t *testing.T) {
 	actual := renderMutableBlock(t, codegen, inputType, support)
 	for _, fragment := range []string{
 		`$sequencer.Allocate("FOOS", $Foos, "Id")`,
-		`#set($CurFoosById = $CurFoos.IndexBy("Id"))`,
+		`#set($CurFoosById<map[int]*Foos> = $CurFoos.IndexBy("Id"))`,
 		`#foreach($RecFoos in $Foos)`,
 		`#if($CurFoosById.HasKey($RecFoos.Id) == true)`,
 		`$sql.Update($RecFoos, "FOOS");`,
@@ -68,7 +68,7 @@ func TestComponentCodegen_BuildMutableVeltyBlock_PutOne(t *testing.T) {
 		t.Fatalf("did not expect insert branch in PUT body:\n%s", actual)
 	}
 	for _, fragment := range []string{
-		`#set($CurFoosById = $CurFoos.IndexBy("Id"))`,
+		`#set($CurFoosById<map[int]*Foos> = $CurFoos.IndexBy("Id"))`,
 		`#if($Foos)`,
 		`#if($CurFoosById.HasKey($Foos.Id) == true)`,
 		`$sql.Update($Foos, "FOOS");`,
@@ -87,7 +87,7 @@ func TestComponentCodegen_BuildMutableVeltyBlock_PostMany(t *testing.T) {
 	}
 	for _, fragment := range []string{
 		`$sequencer.Allocate("FOOS", $Foos, "Id")`,
-		`#set($CurFoosById = $CurFoos.IndexBy("Id"))`,
+		`#set($CurFoosById<map[int]*Foos> = $CurFoos.IndexBy("Id"))`,
 		`#foreach($RecFoos in $Foos)`,
 		`$sql.Insert($RecFoos, "FOOS");`,
 	} {
@@ -161,14 +161,20 @@ func newMutableBodyFixture(method string, many bool) (*ComponentCodegen, reflect
 				ViewFieldName: "CurFoos",
 				MapFieldName:  "CurFoosById",
 				KeyFieldName:  "Id",
+				KeyFieldType:  "int",
+				TypeName:      "Foos",
 				ItemTypeExpr:  "*xgen.mutableBodyFoos",
+				ItemIsPointer: true,
 			},
 			{
 				ViewParamName: "CurFoosPerformance",
 				ViewFieldName: "CurFoosPerformance",
 				MapFieldName:  "CurFoosPerformanceById",
 				KeyFieldName:  "Id",
+				KeyFieldType:  "int",
+				TypeName:      "FoosPerformance",
 				ItemTypeExpr:  "*xgen.mutableBodyFoosPerformance",
+				ItemIsPointer: true,
 			},
 		},
 	}

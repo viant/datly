@@ -1,4 +1,4 @@
-#package('github.com/viant/datly/e2e/v1/shape/dev/events')
+#package('github.com/viant/datly/e2e/v1/shape/dev/events/comprehensive_many')
 #setting($_ = $connector('dev'))
 #setting($_ = $route('/v1/api/shape/dev/comprehensive/events-many', 'POST'))
 

@@ -260,6 +260,22 @@ func applyDeclaredViewOptions(view *declaredView, tail, dql string, offset int, 
 			}
 			cfg := ensureDeclaredColumnConfig(view, columnName)
 			cfg.Tag = tag
+		case strings.EqualFold(name, "WithColumnGroupable"), strings.EqualFold(name, "ColumnGroupable"):
+			if !expectArgs(view, name, args, 2, 2, dql, optionOffset, diags) {
+				continue
+			}
+			columnName := strings.TrimSpace(trimQuote(args[0]))
+			if columnName == "" {
+				appendOptionArgDiagnostic(view, name, "column name must be non-empty", dql, optionOffset, diags)
+				continue
+			}
+			groupable, err := strconv.ParseBool(strings.TrimSpace(trimQuote(args[1])))
+			if err != nil {
+				appendOptionArgDiagnostic(view, name, fmt.Sprintf("invalid bool groupable %q", args[1]), dql, optionOffset, diags)
+				continue
+			}
+			cfg := ensureDeclaredColumnConfig(view, columnName)
+			cfg.Groupable = &groupable
 		case strings.EqualFold(name, "Of"):
 			if !expectArgs(view, name, args, 1, 1, dql, optionOffset, diags) {
 				continue

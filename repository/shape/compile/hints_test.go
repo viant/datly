@@ -10,15 +10,32 @@ import (
 )
 
 func TestExtractViewHints_WithQuotedConnector(t *testing.T) {
-	dql := "SELECT use_connector(match, 'bq_sitemgmt_match'), use_connector(site, \"ci_ads\"), allow_nulls(match), set_limit(match, 0)"
+	dql := "SELECT use_connector(match, 'bq_sitemgmt_match'), use_connector(site, \"ci_ads\"), allow_nulls(match), groupable(match), set_limit(match, 0)"
 	hints := extractViewHints(dql)
 	require.Len(t, hints, 2)
 	assert.Equal(t, "bq_sitemgmt_match", hints["match"].Connector)
 	assert.Equal(t, "ci_ads", hints["site"].Connector)
 	require.NotNil(t, hints["match"].AllowNulls)
 	assert.True(t, *hints["match"].AllowNulls)
+	require.NotNil(t, hints["match"].Groupable)
+	assert.True(t, *hints["match"].Groupable)
 	require.NotNil(t, hints["match"].NoLimit)
 	assert.True(t, *hints["match"].NoLimit)
+}
+
+func TestExtractViewHints_AllowedOrderByColumns(t *testing.T) {
+	dql := "SELECT allowed_order_by_columns(vendor, 'accountId:ACCOUNT_ID,vendor.userCreated:USER_CREATED,totalId:TOTAL_ID')"
+	hints := extractViewHints(dql)
+	require.Contains(t, hints, "vendor")
+	require.NotNil(t, hints["vendor"].SelectorOrderBy)
+	assert.True(t, *hints["vendor"].SelectorOrderBy)
+	assert.Equal(t, "ACCOUNT_ID", hints["vendor"].SelectorOrderByNames["accountId"])
+	assert.Equal(t, "ACCOUNT_ID", hints["vendor"].SelectorOrderByNames["accountid"])
+	assert.Equal(t, "USER_CREATED", hints["vendor"].SelectorOrderByNames["vendor.userCreated"])
+	assert.Equal(t, "USER_CREATED", hints["vendor"].SelectorOrderByNames["vendor.usercreated"])
+	assert.Equal(t, "USER_CREATED", hints["vendor"].SelectorOrderByNames["userCreated"])
+	assert.Equal(t, "TOTAL_ID", hints["vendor"].SelectorOrderByNames["totalId"])
+	assert.Equal(t, "TOTAL_ID", hints["vendor"].SelectorOrderByNames["totalid"])
 }
 
 func TestExtractViewHints_MixedCaseAndUnquotedConnector(t *testing.T) {
@@ -61,20 +78,30 @@ func TestApplyViewHints_Metadata(t *testing.T) {
 	}
 	applyViewHints(result, map[string]viewHint{
 		"match": {
-			Connector:   "ci_ads",
-			AllowNulls:  &trueValue,
-			NoLimit:     &trueValue,
-			Cardinality: "one",
-			Dest:        "match.go",
-			TypeName:    "Match",
+			Connector:       "ci_ads",
+			AllowNulls:      &trueValue,
+			Groupable:       &trueValue,
+			NoLimit:         &trueValue,
+			Cardinality:     "one",
+			Dest:            "match.go",
+			TypeName:        "Match",
+			SelectorOrderBy: &trueValue,
+			SelectorOrderByNames: map[string]string{
+				"accountId": "ACCOUNT_ID",
+			},
 		},
 	})
 	require.Len(t, result.Views, 1)
 	assert.Equal(t, "ci_ads", result.Views[0].Connector)
 	require.NotNil(t, result.Views[0].AllowNulls)
 	assert.True(t, *result.Views[0].AllowNulls)
+	require.NotNil(t, result.Views[0].Groupable)
+	assert.True(t, *result.Views[0].Groupable)
 	require.NotNil(t, result.Views[0].SelectorNoLimit)
 	assert.True(t, *result.Views[0].SelectorNoLimit)
+	require.NotNil(t, result.Views[0].SelectorOrderBy)
+	assert.True(t, *result.Views[0].SelectorOrderBy)
+	assert.Equal(t, "ACCOUNT_ID", result.Views[0].SelectorOrderByColumns["accountId"])
 	assert.Equal(t, "one", strings.ToLower(result.Views[0].Cardinality))
 	require.NotNil(t, result.Views[0].Declaration)
 	assert.Equal(t, "match.go", result.Views[0].Declaration.Dest)
@@ -102,10 +129,12 @@ func TestApplyViewHints_MetadataCaseInsensitiveAlias(t *testing.T) {
 }
 
 func TestStripProjectionHintCalls_RemovesSelfRefFromSQL(t *testing.T) {
-	sqlText := "SELECT user.* EXCEPT MGR_ID, self_ref(user, 'Team', 'ID', 'MGR_ID'), cardinality(user, 'one') FROM (SELECT t.* FROM USER t) user"
+	sqlText := "SELECT user.* EXCEPT MGR_ID, self_ref(user, 'Team', 'ID', 'MGR_ID'), cardinality(user, 'one'), groupable(user), allowed_order_by_columns(user, 'id:ID') FROM (SELECT t.* FROM USER t) user"
 	actual := stripProjectionHintCalls(sqlText)
 	assert.NotContains(t, strings.ToLower(actual), "self_ref(")
 	assert.NotContains(t, strings.ToLower(actual), "cardinality(")
+	assert.NotContains(t, strings.ToLower(actual), "groupable(")
+	assert.NotContains(t, strings.ToLower(actual), "allowed_order_by_columns(")
 	assert.Contains(t, strings.ToLower(actual), "user.* except mgr_id")
 }
 

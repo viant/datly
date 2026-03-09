@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/viant/datly/repository/shape"
+	"github.com/viant/datly/repository/shape/compile/pipeline"
 	"github.com/viant/datly/repository/shape/plan"
 	"github.com/viant/datly/repository/shape/typectx"
 	"github.com/viant/x"
@@ -36,6 +38,9 @@ func applyLinkedTypeSupport(result *plan.Result, source *shape.Source) {
 		}
 		rType := unwrapResolvedType(resolvedType.Type)
 		if rType == nil {
+			continue
+		}
+		if isPlaceholderLinkedViewType(rType) {
 			continue
 		}
 		item.ElementType = rType
@@ -65,6 +70,257 @@ func applyLinkedTypeSupport(result *plan.Result, source *shape.Source) {
 		})
 		existing[key] = true
 	}
+}
+
+func isPlaceholderLinkedViewType(rType reflect.Type) bool {
+	rType = unwrapResolvedType(rType)
+	if rType == nil || rType.Kind() != reflect.Struct {
+		return false
+	}
+	hasScalars := false
+	for i := 0; i < rType.NumField(); i++ {
+		field := rType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		rawTag := string(field.Tag)
+		if strings.Contains(rawTag, `view:"`) || strings.Contains(rawTag, `on:"`) || strings.Contains(rawTag, `sqlx:"-"`) {
+			continue
+		}
+		hasScalars = true
+		if !isPlaceholderFieldName(field.Name, summaryTagName(field.Tag.Get("sqlx"))) {
+			return false
+		}
+	}
+	return hasScalars
+}
+
+func isPlaceholderFieldName(fieldName, sqlxName string) bool {
+	return isPlaceholderName(fieldName) || isPlaceholderName(sqlxName)
+}
+
+func isPlaceholderName(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	name = strings.TrimPrefix(strings.TrimPrefix(name, "name="), "*")
+	lower := strings.ToLower(strings.ReplaceAll(name, "_", ""))
+	if !strings.HasPrefix(lower, "col") || len(lower) == len("col") {
+		return false
+	}
+	_, err := strconv.Atoi(lower[len("col"):])
+	return err == nil
+}
+
+func applySummaryTypeSupport(result *plan.Result, source *shape.Source) {
+	if result == nil || source == nil {
+		return
+	}
+	registry := source.EnsureTypeRegistry()
+	if registry == nil {
+		return
+	}
+	resolver := typectx.NewResolver(registry, result.TypeContext)
+	existing := existingTypesByName(result.Types)
+	applySummaryTypeSupportWithResolver(result, source, resolver, registry, existing)
+}
+
+func applySummaryTypeSupportWithResolver(result *plan.Result, source *shape.Source, resolver *typectx.Resolver, registry *x.Registry, existing map[string]bool) {
+	if result == nil || source == nil || registry == nil {
+		return
+	}
+	for _, item := range result.Views {
+		if item == nil {
+			continue
+		}
+		summaryName := strings.TrimSpace(item.SummaryName)
+		summarySQL := strings.TrimSpace(item.Summary)
+		if summaryName == "" || summarySQL == "" {
+			continue
+		}
+		typeName := summaryTypeName(summaryName)
+		if typeName == "" {
+			continue
+		}
+		queryNode, _, err := pipeline.ParseSelectWithDiagnostic(pipeline.NormalizeParserSQL(summarySQL))
+		if err == nil && queryNode != nil {
+			_, elementType, _ := pipeline.InferProjectionType(queryNode)
+			elementType = unwrapResolvedType(elementType)
+			elementType = refineSummaryProjectionType(elementType, item, result.TypeContext, source)
+			if elementType != nil {
+				registerOpts := []x.Option{x.WithName(typeName), x.WithForceFlag()}
+				if ctx := result.TypeContext; ctx != nil {
+					if pkgPath := strings.TrimSpace(ctx.PackagePath); pkgPath != "" {
+						registerOpts = append(registerOpts, x.WithPkgPath(pkgPath))
+					}
+				}
+				registry.Register(x.NewType(elementType, registerOpts...))
+				appendResolvedType(result, elementType, typeName, existing, result.TypeContext)
+				continue
+			}
+		}
+		if key := resolveTypeKey(typeName, resolver, registry); key != "" {
+			if resolved := registry.Lookup(key); resolved != nil && resolved.Type != nil {
+				appendResolvedType(result, resolved.Type, typeName, existing, result.TypeContext)
+				continue
+			}
+		}
+	}
+}
+
+func refineSummaryProjectionType(summaryType reflect.Type, item *plan.View, ctx *typectx.Context, source *shape.Source) reflect.Type {
+	summaryType = unwrapResolvedType(summaryType)
+	if summaryType == nil || summaryType.Kind() != reflect.Struct || item == nil {
+		return summaryType
+	}
+	ownerType := unwrapResolvedType(item.ElementType)
+	if ownerType == nil {
+		ownerType = unwrapResolvedType(item.FieldType)
+	}
+	if ownerType == nil || ownerType.Kind() != reflect.Struct {
+		ownerType = resolveSummaryOwnerType(item, ctx, source)
+	}
+	if ownerType == nil || ownerType.Kind() != reflect.Struct {
+		return summaryType
+	}
+	ownerFields := map[string]reflect.StructField{}
+	for i := 0; i < ownerType.NumField(); i++ {
+		field := ownerType.Field(i)
+		ownerFields[strings.ToUpper(strings.TrimSpace(field.Name))] = field
+		if sqlxName := summaryTagName(field.Tag.Get("sqlx")); sqlxName != "" {
+			ownerFields[strings.ToUpper(sqlxName)] = field
+		}
+	}
+	fields := make([]reflect.StructField, 0, summaryType.NumField())
+	changed := false
+	for i := 0; i < summaryType.NumField(); i++ {
+		field := summaryType.Field(i)
+		if ownerField, ok := ownerFields[strings.ToUpper(summaryLookupName(field))]; ok && ownerField.Type != nil && ownerField.Type != field.Type {
+			field.Type = ownerField.Type
+			changed = true
+		}
+		fields = append(fields, field)
+	}
+	if !changed {
+		return summaryType
+	}
+	return reflect.StructOf(fields)
+}
+
+func resolveSummaryOwnerType(item *plan.View, ctx *typectx.Context, source *shape.Source) reflect.Type {
+	if item == nil {
+		return nil
+	}
+	for _, candidate := range summaryOwnerTypeCandidates(item) {
+		if linked := lookupLinkedType(candidate, ctx, source); linked != nil {
+			linked = unwrapResolvedType(linked)
+			if linked != nil && linked.Kind() == reflect.Struct {
+				return linked
+			}
+		}
+	}
+	return nil
+}
+
+func summaryOwnerTypeCandidates(item *plan.View) []string {
+	if item == nil {
+		return nil
+	}
+	result := make([]string, 0, 6)
+	seen := map[string]bool{}
+	appendCandidate := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			return
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	if item.Declaration != nil {
+		appendCandidate(item.Declaration.DataType)
+		appendCandidate(item.Declaration.Of)
+	}
+	appendCandidate(item.SchemaType)
+	name := toExportedTypeName(item.Name)
+	if name != "" {
+		appendCandidate(name + "View")
+		appendCandidate(name)
+	}
+	return result
+}
+
+func summaryLookupName(field reflect.StructField) string {
+	if sqlxName := summaryTagName(field.Tag.Get("sqlx")); sqlxName != "" {
+		return sqlxName
+	}
+	return strings.TrimSpace(field.Name)
+}
+
+func summaryTagName(tag string) string {
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return ""
+	}
+	if strings.HasPrefix(tag, "name=") {
+		tag = strings.TrimPrefix(tag, "name=")
+	}
+	if idx := strings.Index(tag, ","); idx != -1 {
+		tag = tag[:idx]
+	}
+	return strings.TrimSpace(tag)
+}
+
+func appendResolvedType(result *plan.Result, rType reflect.Type, typeName string, existing map[string]bool, ctx *typectx.Context) {
+	rType = unwrapResolvedType(rType)
+	typeName = strings.TrimSpace(typeName)
+	if result == nil || rType == nil || typeName == "" {
+		return
+	}
+	key := strings.ToLower(typeName)
+	if existing[key] {
+		return
+	}
+	typeExpr, typePkg := summarySchemaTypeExpression(typeName, ctx)
+	result.Types = append(result.Types, &plan.Type{
+		Name:        typeName,
+		DataType:    typeExpr,
+		Cardinality: string(planStateOne()),
+		Package:     typePkg,
+		ModulePath:  strings.TrimSpace(rType.PkgPath()),
+	})
+	existing[key] = true
+}
+
+func summaryTypeName(summaryName string) string {
+	summaryName = strings.TrimSpace(summaryName)
+	if summaryName == "" {
+		return ""
+	}
+	if strings.HasSuffix(summaryName, "View") {
+		return summaryName
+	}
+	return toExportedTypeName(summaryName) + "View"
+}
+
+func summarySchemaTypeExpression(typeName string, ctx *typectx.Context) (string, string) {
+	typeName = strings.TrimSpace(typeName)
+	if typeName == "" {
+		return "", ""
+	}
+	if ctx != nil {
+		if pkgAlias := strings.TrimSpace(ctx.PackageName); pkgAlias != "" {
+			return "*" + pkgAlias + "." + typeName, pkgAlias
+		}
+		if pkgPath := strings.TrimSpace(ctx.PackagePath); pkgPath != "" {
+			return "*" + packageAlias(pkgPath, ctx) + "." + typeName, packageAlias(pkgPath, ctx)
+		}
+	}
+	return "*" + typeName, ""
+}
+
+func planStateOne() string {
+	return "one"
 }
 
 func resolveViewType(item *plan.View, root bool, rootTypeKey string, resolver *typectx.Resolver, registry *x.Registry, ctx *typectx.Context, source *shape.Source) *x.Type {

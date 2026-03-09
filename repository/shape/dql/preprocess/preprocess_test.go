@@ -145,6 +145,7 @@ func TestPrepare_SpecialDirectives(t *testing.T) {
 		"#settings($_ = $format('tabular_json'))\n" +
 		"#settings($_ = $date_format('2006-01-02'))\n" +
 		"#settings($_ = $case_format('lc'))\n" +
+		"#settings($_ = $useTemplate('patch'))\n" +
 		"SELECT id FROM ORDERS o"
 	pre := Prepare(dql)
 	require.NotNil(t, pre)
@@ -170,6 +171,7 @@ func TestPrepare_SpecialDirectives(t *testing.T) {
 	assert.Equal(t, "tabular", pre.Directives.Format)
 	assert.Equal(t, "2006-01-02", pre.Directives.DateFormat)
 	assert.Equal(t, "lc", pre.Directives.CaseFormat)
+	assert.Equal(t, "patch", pre.Directives.TemplateType)
 }
 
 func TestPrepare_InvalidDestDirectiveDiagnostic(t *testing.T) {

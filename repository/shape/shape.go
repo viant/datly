@@ -21,6 +21,7 @@ type (
 	// Loader materializes runtime artifacts from normalized plan.
 	Loader interface {
 		LoadViews(ctx context.Context, plan *PlanResult, opts ...LoadOption) (*ViewArtifacts, error)
+		LoadResource(ctx context.Context, plan *PlanResult, opts ...LoadOption) (*ResourceArtifacts, error)
 		LoadComponent(ctx context.Context, plan *PlanResult, opts ...LoadOption) (*ComponentArtifact, error)
 	}
 
@@ -106,9 +107,19 @@ func LoadComponent(ctx context.Context, src any, opts ...Option) (*ComponentArti
 	return New(opts...).LoadComponent(ctx, src)
 }
 
+// LoadResource is a package-level helper for struct source resource loading.
+func LoadResource(ctx context.Context, src any, opts ...Option) (*ResourceArtifacts, error) {
+	return New(opts...).LoadResource(ctx, src)
+}
+
 // LoadDQLViews is a package-level helper for DQL source view loading.
 func LoadDQLViews(ctx context.Context, dql string, opts ...Option) (*ViewArtifacts, error) {
 	return New(opts...).LoadDQLViews(ctx, dql)
+}
+
+// LoadDQLResource is a package-level helper for DQL source resource loading.
+func LoadDQLResource(ctx context.Context, dql string, opts ...Option) (*ResourceArtifacts, error) {
+	return New(opts...).LoadDQLResource(ctx, dql)
 }
 
 // LoadDQLComponent is a package-level helper for DQL source component loading.
@@ -130,6 +141,22 @@ func (e *Engine) LoadViews(ctx context.Context, src any) (*ViewArtifacts, error)
 		return nil, ErrLoaderNotConfigured
 	}
 	return e.options.Loader.LoadViews(ctx, plan)
+}
+
+// LoadResource executes scan -> plan -> load for struct source.
+func (e *Engine) LoadResource(ctx context.Context, src any) (*ResourceArtifacts, error) {
+	source, err := e.structSource(src)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := e.scanAndPlan(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	if e.options.Loader == nil {
+		return nil, ErrLoaderNotConfigured
+	}
+	return e.options.Loader.LoadResource(ctx, plan)
 }
 
 // LoadComponent executes scan -> plan -> load for struct source.
@@ -162,6 +189,22 @@ func (e *Engine) LoadDQLViews(ctx context.Context, dql string) (*ViewArtifacts, 
 		return nil, ErrLoaderNotConfigured
 	}
 	return e.options.Loader.LoadViews(ctx, plan)
+}
+
+// LoadDQLResource executes compile -> load for DQL source.
+func (e *Engine) LoadDQLResource(ctx context.Context, dql string) (*ResourceArtifacts, error) {
+	source, err := e.dqlSource(dql)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := e.compile(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	if e.options.Loader == nil {
+		return nil, ErrLoaderNotConfigured
+	}
+	return e.options.Loader.LoadResource(ctx, plan)
 }
 
 // LoadDQLComponent executes compile -> load for DQL source.

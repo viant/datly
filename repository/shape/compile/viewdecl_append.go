@@ -13,6 +13,7 @@ func appendDeclaredViews(rawDQL string, result *plan.Result) {
 	if result == nil {
 		return
 	}
+	appendRootOutputViewDeclaration(rawDQL, result)
 	declared, diags := extractDeclaredViews(rawDQL)
 	if len(diags) > 0 {
 		result.Diagnostics = append(result.Diagnostics, diags...)
@@ -74,6 +75,116 @@ func appendDeclaredViews(rawDQL string, result *plan.Result) {
 		}
 		result.Views = append(result.Views, view)
 		result.ViewsByName[view.Name] = view
+	}
+}
+
+func appendRootOutputViewDeclaration(rawDQL string, result *plan.Result) {
+	if result == nil {
+		return
+	}
+	root := lookupRootView(result)
+	if root == nil {
+		return
+	}
+	for _, block := range extractSetBlocks(rawDQL) {
+		_, kind, location, tail, tailOffset, ok := parseSetDeclarationBody(block.Body)
+		if !ok || !strings.EqualFold(strings.TrimSpace(kind), "output") || !strings.EqualFold(strings.TrimSpace(location), "view") {
+			continue
+		}
+		view := &declaredView{}
+		applyDeclaredViewOptions(view, tail, rawDQL, block.BodyOffset+tailOffset, &result.Diagnostics)
+		mergeViewDeclaration(root, buildViewDeclaration(view))
+		if view.Required && !view.CardinalitySet {
+			root.Cardinality = "one"
+		}
+		if view.Cardinality != "" {
+			root.Cardinality = view.Cardinality
+		}
+	}
+}
+
+func mergeViewDeclaration(target *plan.View, declared *plan.ViewDeclaration) {
+	if target == nil || declared == nil {
+		return
+	}
+	if target.Declaration == nil {
+		target.Declaration = declared
+		return
+	}
+	dst := target.Declaration
+	if strings.TrimSpace(dst.Tag) == "" {
+		dst.Tag = declared.Tag
+	}
+	if strings.TrimSpace(dst.TypeName) == "" {
+		dst.TypeName = declared.TypeName
+	}
+	if strings.TrimSpace(dst.Dest) == "" {
+		dst.Dest = declared.Dest
+	}
+	if strings.TrimSpace(dst.Codec) == "" {
+		dst.Codec = declared.Codec
+		if len(dst.CodecArgs) == 0 {
+			dst.CodecArgs = append([]string{}, declared.CodecArgs...)
+		}
+	}
+	if strings.TrimSpace(dst.HandlerName) == "" {
+		dst.HandlerName = declared.HandlerName
+		if len(dst.HandlerArgs) == 0 {
+			dst.HandlerArgs = append([]string{}, declared.HandlerArgs...)
+		}
+	}
+	if dst.StatusCode == nil {
+		dst.StatusCode = declared.StatusCode
+	}
+	if strings.TrimSpace(dst.ErrorMessage) == "" {
+		dst.ErrorMessage = declared.ErrorMessage
+	}
+	if strings.TrimSpace(dst.QuerySelector) == "" {
+		dst.QuerySelector = declared.QuerySelector
+	}
+	if strings.TrimSpace(dst.CacheRef) == "" {
+		dst.CacheRef = declared.CacheRef
+	}
+	if dst.Limit == nil {
+		dst.Limit = declared.Limit
+	}
+	if dst.Cacheable == nil {
+		dst.Cacheable = declared.Cacheable
+	}
+	if strings.TrimSpace(dst.When) == "" {
+		dst.When = declared.When
+	}
+	if strings.TrimSpace(dst.Scope) == "" {
+		dst.Scope = declared.Scope
+	}
+	if strings.TrimSpace(dst.DataType) == "" {
+		dst.DataType = declared.DataType
+	}
+	if strings.TrimSpace(dst.Of) == "" {
+		dst.Of = declared.Of
+	}
+	if strings.TrimSpace(dst.Value) == "" {
+		dst.Value = declared.Value
+	}
+	dst.Async = dst.Async || declared.Async
+	dst.Output = dst.Output || declared.Output
+	if len(dst.Predicates) == 0 && len(declared.Predicates) > 0 {
+		dst.Predicates = append([]*plan.ViewPredicate{}, declared.Predicates...)
+	}
+	if len(declared.ColumnsConfig) > 0 {
+		if dst.ColumnsConfig == nil {
+			dst.ColumnsConfig = map[string]*plan.ViewColumnConfig{}
+		}
+		for name, cfg := range declared.ColumnsConfig {
+			if strings.TrimSpace(name) == "" || cfg == nil {
+				continue
+			}
+			dst.ColumnsConfig[name] = &plan.ViewColumnConfig{
+				DataType:  strings.TrimSpace(cfg.DataType),
+				Tag:       strings.TrimSpace(cfg.Tag),
+				Groupable: cloneBoolPtr(cfg.Groupable),
+			}
+		}
 	}
 }
 
@@ -242,8 +353,9 @@ func buildViewDeclaration(item *declaredView) *plan.ViewDeclaration {
 				continue
 			}
 			ret.ColumnsConfig[name] = &plan.ViewColumnConfig{
-				DataType: strings.TrimSpace(cfg.DataType),
-				Tag:      strings.TrimSpace(cfg.Tag),
+				DataType:  strings.TrimSpace(cfg.DataType),
+				Tag:       strings.TrimSpace(cfg.Tag),
+				Groupable: cloneBoolPtr(cfg.Groupable),
 			}
 		}
 		if len(ret.ColumnsConfig) == 0 {
@@ -259,4 +371,12 @@ func buildViewDeclaration(item *declaredView) *plan.ViewDeclaration {
 		return nil
 	}
 	return ret
+}
+
+func cloneBoolPtr(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+	ret := *value
+	return &ret
 }

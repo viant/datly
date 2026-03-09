@@ -82,17 +82,26 @@ type View struct {
 	SQL                    string
 	SQLURI                 string
 	Summary                string
+	SummaryURL             string
 	SummaryName            string
 	Relations              []*Relation
 	Holder                 string
 
-	AllowNulls        *bool
-	SelectorNamespace string
-	SelectorLimit     *int
-	SelectorNoLimit   *bool
-	SchemaType        string
-	ColumnsDiscovery  bool
-	Self              *SelfReference
+	AllowNulls             *bool
+	Groupable              *bool
+	SelectorNamespace      string
+	SelectorLimit          *int
+	SelectorNoLimit        *bool
+	SelectorCriteria       *bool
+	SelectorProjection     *bool
+	SelectorOrderBy        *bool
+	SelectorOffset         *bool
+	SelectorPage           *bool
+	SelectorFilterable     []string
+	SelectorOrderByColumns map[string]string
+	SchemaType             string
+	ColumnsDiscovery       bool
+	Self                   *SelfReference
 
 	Cardinality string
 	ElementType reflect.Type
@@ -136,8 +145,9 @@ type ViewPredicate struct {
 
 // ViewColumnConfig captures declaration-level per-column overrides.
 type ViewColumnConfig struct {
-	DataType string
-	Tag      string
+	DataType  string
+	Tag       string
+	Groupable *bool
 }
 
 // Relation is normalized relation metadata extracted from DQL joins.
@@ -177,6 +187,7 @@ type State struct {
 	state.Parameter `yaml:",inline"`
 	QuerySelector   string
 	OutputDataType  string
+	EmitOutput      bool
 }
 
 func (s *State) KindString() string {

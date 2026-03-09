@@ -70,10 +70,11 @@ func (s *Service) translateShape(ctx context.Context, opts *options.Options) err
 type shapeRuleFile struct {
 	Resource    *view.Resource          `yaml:"Resource,omitempty"`
 	Routes      []*repository.Component `yaml:"Routes,omitempty"`
+	With        []string                `yaml:"With,omitempty"`
 	TypeContext any                     `yaml:"TypeContext,omitempty"`
 }
 
-func (s *Service) persistShapeRoute(ctx context.Context, opts *options.Options, sourceURL, dql string, resource *view.Resource, component *shapeLoad.Component) error {
+func (s *Service) persistShapeRoute(ctx context.Context, opts *options.Options, sourceURL, _ string, resource *view.Resource, component *shapeLoad.Component) error {
 	rule := opts.Rule()
 	routeYAML, routeRoot, relDir, stem, err := routePathForShape(rule, opts.Repository().RepositoryURL, sourceURL)
 	if err != nil {
@@ -105,18 +106,9 @@ func (s *Service) persistShapeRoute(ctx context.Context, opts *options.Options, 
 	if rootView == "" && resource != nil && len(resource.Views) > 0 && resource.Views[0] != nil {
 		rootView = resource.Views[0].Name
 	}
-	method, uri := parseShapeRulePath(dql, rule.RuleName(), opts.Repository().APIPrefix)
-	// Gap 3: RouteDirective overrides method/URI when explicitly declared in DQL.
-	if component != nil && component.Directives != nil && component.Directives.Route != nil {
-		rd := component.Directives.Route
-		if u := strings.TrimSpace(rd.URI); u != "" {
-			uri = u
-		}
-		if len(rd.Methods) > 0 {
-			if m := strings.TrimSpace(strings.ToUpper(rd.Methods[0])); m != "" {
-				method = m
-			}
-		}
+	method, uri, err := shapeComponentPath(component)
+	if err != nil {
+		return err
 	}
 	route := &repository.Component{
 		Path: contract.Path{
@@ -170,6 +162,27 @@ func (s *Service) persistShapeRoute(ctx context.Context, opts *options.Options, 
 	}
 	generateShapeTypes(url.Path(sourceURL), payload, component)
 	return nil
+}
+
+func shapeComponentPath(component *shapeLoad.Component) (string, string, error) {
+	if component == nil {
+		return "", "", fmt.Errorf("shape component was nil")
+	}
+	method := strings.TrimSpace(strings.ToUpper(component.Method))
+	uri := strings.TrimSpace(component.URI)
+	if method == "" && len(component.ComponentRoutes) > 0 && component.ComponentRoutes[0] != nil {
+		method = strings.TrimSpace(strings.ToUpper(component.ComponentRoutes[0].Method))
+	}
+	if uri == "" && len(component.ComponentRoutes) > 0 && component.ComponentRoutes[0] != nil {
+		uri = strings.TrimSpace(component.ComponentRoutes[0].RoutePath)
+	}
+	if method == "" {
+		method = "GET"
+	}
+	if uri == "" {
+		return "", "", fmt.Errorf("shape component route URI was empty")
+	}
+	return method, uri, nil
 }
 
 func routePathForShape(rule *options.Rule, repoURL, sourceURL string) (routeYAML string, routeRoot string, relDir string, stem string, err error) {

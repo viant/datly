@@ -462,6 +462,9 @@ func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option
 		for _, name := range vTag.Parameters {
 			parameters = append(parameters, state.NewRefParameter(name))
 		}
+		if vTag.SummaryURI != "" {
+			options = append(options, WithSummaryURI(vTag.SummaryURI))
+		}
 	}
 	if SQL := tag.SQL; SQL.SQL != "" {
 		tmpl := NewTemplate(string(SQL.SQL), WithTemplateParameters(parameters...))

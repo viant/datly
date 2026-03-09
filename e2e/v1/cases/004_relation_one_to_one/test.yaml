@@ -1,0 +1,9 @@
+pipeline:
+  test:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        description: one-to-one relation via JOIN ... AND 1=1 hint
+        URL: http://127.0.0.1:8080/v1/api/shape/dev/basic/events-one-one
+        Expect:
+          Code: 200

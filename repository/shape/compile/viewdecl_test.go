@@ -72,7 +72,7 @@ func TestViewDecl_ApplyOptions_Extended(t *testing.T) {
 		"WithStatusCode(422).WithErrorMessage('bad req').WithPredicate('ByID','id = ?', 101)." +
 		"EnsurePredicate('Tenant','tenant_id = ?', 7).QuerySelector('qs').WithCache('c1').WithLimit(10)." +
 		"Cacheable(true).When('x > 1').Scope('team').Type('OrderView').Dest('orders.go').WithType('[]Order')." +
-		"WithColumnType('Authorized','bool').WithColumnTag('Authorized','internal:\"true\"').Of('list').Value('abc').Async().Output()"
+		"WithColumnType('Authorized','bool').WithColumnTag('Authorized','internal:\"true\"').WithColumnGroupable('Authorized', true).Of('list').Value('abc').Async().Output()"
 	applyDeclaredViewOptions(view, tail, "SELECT 1", 0, &diags)
 
 	require.Empty(t, diags)
@@ -107,6 +107,8 @@ func TestViewDecl_ApplyOptions_Extended(t *testing.T) {
 	require.Contains(t, view.ColumnsConfig, "Authorized")
 	assert.Equal(t, "bool", view.ColumnsConfig["Authorized"].DataType)
 	assert.Equal(t, `internal:"true"`, view.ColumnsConfig["Authorized"].Tag)
+	require.NotNil(t, view.ColumnsConfig["Authorized"].Groupable)
+	assert.True(t, *view.ColumnsConfig["Authorized"].Groupable)
 	assert.Equal(t, "list", view.Of)
 	assert.Equal(t, "abc", view.Value)
 	assert.True(t, view.Async)
@@ -156,7 +158,7 @@ func TestViewDecl_AppendDeclaredViews_ExtendedDeclarationMetadata(t *testing.T) 
 		"WithStatusCode(409).WithErrorMessage('conflict').WithPredicate('ByID','id=?',1)." +
 		"EnsurePredicate('Tenant','tenant=?',2).QuerySelector('items').WithCache('c1').WithLimit(5)." +
 		"Cacheable(false).When('x').Scope('s').Type('OrderView').Dest('order.go').WithType('Order')." +
-		"WithColumnType('Authorized','bool').WithColumnTag('Authorized','internal:\"true\"').Of('o').Value('v').Async().Output() /* SELECT id FROM EXTRA e */)"
+		"WithColumnType('Authorized','bool').WithColumnTag('Authorized','internal:\"true\"').WithColumnGroupable('Authorized', true).Of('o').Value('v').Async().Output() /* SELECT id FROM EXTRA e */)"
 	result := &plan.Result{
 		ViewsByName: map[string]*plan.View{},
 		ByPath:      map[string]*plan.Field{},
@@ -193,6 +195,8 @@ func TestViewDecl_AppendDeclaredViews_ExtendedDeclarationMetadata(t *testing.T) 
 	require.Contains(t, target.Declaration.ColumnsConfig, "Authorized")
 	assert.Equal(t, "bool", target.Declaration.ColumnsConfig["Authorized"].DataType)
 	assert.Equal(t, `internal:"true"`, target.Declaration.ColumnsConfig["Authorized"].Tag)
+	require.NotNil(t, target.Declaration.ColumnsConfig["Authorized"].Groupable)
+	assert.True(t, *target.Declaration.ColumnsConfig["Authorized"].Groupable)
 	assert.Equal(t, "o", target.Declaration.Of)
 	assert.Equal(t, "v", target.Declaration.Value)
 	assert.True(t, target.Declaration.Async)

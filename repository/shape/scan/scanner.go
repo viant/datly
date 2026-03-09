@@ -49,7 +49,7 @@ func (s *StructScanner) Scan(ctx context.Context, source *shape.Source, _ ...sha
 		ByPath:   map[string]*Field{},
 	}
 
-	if err = s.scanStruct(source, root, rootValue, "", nil, embedder, baseDir, result, map[reflect.Type]bool{}); err != nil {
+	if err = s.scanStruct(source, root, rootValue, "", nil, "", embedder, baseDir, result, map[reflect.Type]bool{}); err != nil {
 		return nil, err
 	}
 
@@ -116,6 +116,7 @@ func (s *StructScanner) scanStruct(
 	rootValue reflect.Value,
 	prefix string,
 	indexPrefix []int,
+	inheritedQuerySelector string,
 	embedder *state.FSEmbedder,
 	baseDir string,
 	result *Result,
@@ -136,12 +137,16 @@ func (s *StructScanner) scanStruct(
 		combinedIndex := append(append([]int{}, indexPrefix...), field.Index...)
 
 		descriptor := &Field{
-			Path:      path,
-			Name:      field.Name,
-			Index:     combinedIndex,
-			Type:      field.Type,
-			Tag:       field.Tag,
-			Anonymous: field.Anonymous,
+			Path:          path,
+			Name:          field.Name,
+			Index:         combinedIndex,
+			Type:          field.Type,
+			QuerySelector: inheritedQuerySelector,
+			Tag:           field.Tag,
+			Anonymous:     field.Anonymous,
+		}
+		if querySelector := tags.ParseQuerySelector(field.Tag.Get(tags.QuerySelectorTag)); querySelector != "" {
+			descriptor.QuerySelector = querySelector
 		}
 
 		fieldFS := parseFS(field.Tag, embedder.EmbedFS(), baseDir)
@@ -195,7 +200,7 @@ func (s *StructScanner) scanStruct(
 
 		nextType := nestedStructType(field.Type)
 		if nextType != nil && shouldRecurseIntoField(field, descriptor, nextType) {
-			if err := s.scanStruct(source, nextType, rootValue, path, combinedIndex, embedder, baseDir, result, visited); err != nil {
+			if err := s.scanStruct(source, nextType, rootValue, path, combinedIndex, descriptor.QuerySelector, embedder, baseDir, result, visited); err != nil {
 				return err
 			}
 		}
@@ -230,6 +235,9 @@ func shouldRecurseIntoField(field reflect.StructField, descriptor *Field, nextTy
 		// They still need recursive scanning so nested relation views are preserved.
 		return true
 	}
+	if descriptor != nil && strings.TrimSpace(descriptor.QuerySelector) != "" {
+		return true
+	}
 	return false
 }
 
@@ -248,14 +256,14 @@ func (s *StructScanner) scanComponentContracts(
 	if contract.InputType != nil {
 		embedder := state.NewFSEmbedder(nil)
 		embedder.SetType(contract.InputType)
-		if err := s.scanStruct(source, contractInputRoot(contract.InputType), componentFieldValue(fieldValue, "Inout"), prefix+".Inout", nil, embedder, baseDir, result, visited); err != nil {
+		if err := s.scanStruct(source, contractInputRoot(contract.InputType), componentFieldValue(fieldValue, "Inout"), prefix+".Inout", nil, "", embedder, baseDir, result, visited); err != nil {
 			return err
 		}
 	}
 	if contract.OutputType != nil {
 		embedder := state.NewFSEmbedder(nil)
 		embedder.SetType(contract.OutputType)
-		if err := s.scanStruct(source, contractInputRoot(contract.OutputType), componentFieldValue(fieldValue, "Output"), prefix+".Output", nil, embedder, baseDir, result, visited); err != nil {
+		if err := s.scanStruct(source, contractInputRoot(contract.OutputType), componentFieldValue(fieldValue, "Output"), prefix+".Output", nil, "", embedder, baseDir, result, visited); err != nil {
 			return err
 		}
 	}
@@ -363,6 +371,8 @@ func parseShapeViewHints(tag reflect.StructTag) (string, string) {
 	var typeName, dest string
 	_ = values.MatchPairs(func(key, value string) error {
 		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "type":
+			typeName = strings.TrimSpace(value)
 		case "typename":
 			typeName = strings.TrimSpace(value)
 		case "dest":

@@ -9,14 +9,16 @@ import (
 )
 
 var projectionHintCalls = map[string]bool{
-	"useconnector": true,
-	"allownulls":   true,
-	"setlimit":     true,
-	"setcache":     true,
-	"cardinality":  true,
-	"selfref":      true,
-	"dest":         true,
-	"type":         true,
+	"useconnector":          true,
+	"allownulls":            true,
+	"groupable":             true,
+	"allowedorderbycolumns": true,
+	"setlimit":              true,
+	"setcache":              true,
+	"cardinality":           true,
+	"selfref":               true,
+	"dest":                  true,
+	"type":                  true,
 }
 
 // stripProjectionHintCalls removes hint-only projection functions (e.g. self_ref, dest)

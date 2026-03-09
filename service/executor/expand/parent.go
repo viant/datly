@@ -2,8 +2,10 @@ package expand
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/xunsafe"
+	"os"
 	"reflect"
 	"strings"
 )
@@ -247,10 +249,16 @@ func NotZeroOf(values ...int) int {
 }
 
 func (c *DataUnit) Insert(data interface{}, tableName string) (string, error) {
+	if os.Getenv("DATLY_DEBUG_MUTABLE") == "1" {
+		fmt.Printf("[MUTABLE DEBUG] Insert table=%s dataType=%T data=%#v\n", tableName, data, data)
+	}
 	return c.Statements.InsertWithMarker(tableName, data), nil
 }
 
 func (c *DataUnit) Update(data interface{}, tableName string) (string, error) {
+	if os.Getenv("DATLY_DEBUG_MUTABLE") == "1" {
+		fmt.Printf("[MUTABLE DEBUG] Update table=%s dataType=%T data=%#v\n", tableName, data, data)
+	}
 	return c.Statements.UpdateWithMarker(tableName, data), nil
 }
 

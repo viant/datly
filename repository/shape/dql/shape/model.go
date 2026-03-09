@@ -42,6 +42,7 @@ type Diagnostic struct {
 type Directives struct {
 	Meta              string
 	DefaultConnector  string
+	TemplateType      string
 	Dest              string
 	InputDest         string
 	OutputDest        string

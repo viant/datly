@@ -90,6 +90,27 @@ func normalizeView(field *scan.Field) *View {
 			result.Partitioner = tag.View.PartitionerType
 			result.PartitionedConcurrency = tag.View.PartitionedConcurrency
 			result.RelationalConcurrency = tag.View.RelationalConcurrency
+			result.Groupable = tag.View.Groupable
+			result.SelectorNamespace = strings.TrimSpace(tag.View.SelectorNamespace)
+			result.SelectorLimit = tag.View.Limit
+			if tag.View.Limit != nil {
+				noLimit := *tag.View.Limit == 0
+				result.SelectorNoLimit = &noLimit
+			}
+			result.SelectorCriteria = tag.View.SelectorCriteria
+			result.SelectorProjection = tag.View.SelectorProjection
+			result.SelectorOrderBy = tag.View.SelectorOrderBy
+			result.SelectorOffset = tag.View.SelectorOffset
+			result.SelectorPage = tag.View.SelectorPage
+			if len(tag.View.SelectorFilterable) > 0 {
+				result.SelectorFilterable = append([]string(nil), tag.View.SelectorFilterable...)
+			}
+			if len(tag.View.SelectorOrderByColumns) > 0 {
+				result.SelectorOrderByColumns = map[string]string{}
+				for key, value := range tag.View.SelectorOrderByColumns {
+					result.SelectorOrderByColumns[key] = value
+				}
+			}
 			if strings.TrimSpace(tag.View.CustomTag) != "" || strings.TrimSpace(field.ViewTypeName) != "" || strings.TrimSpace(field.ViewDest) != "" {
 				result.Declaration = &ViewDeclaration{
 					Tag:      strings.TrimSpace(tag.View.CustomTag),
@@ -101,6 +122,11 @@ func normalizeView(field *scan.Field) *View {
 		result.SQL = tag.SQL.SQL
 		result.SQLURI = tag.SQL.URI
 		result.Summary = tag.SummarySQL.SQL
+		if tag.View != nil && strings.TrimSpace(tag.View.SummaryURI) != "" {
+			result.SummaryURL = strings.TrimSpace(tag.View.SummaryURI)
+		} else {
+			result.SummaryURL = tag.SummarySQL.URI
+		}
 		if len(tag.LinkOn) > 0 {
 			result.Relations = append(result.Relations, relationFromTagLinks(field.Name, tag.LinkOn))
 		}
@@ -184,13 +210,18 @@ func normalizeState(field *scan.Field) *State {
 			Name: field.Name,
 			In:   &state.Location{},
 		},
+		QuerySelector: strings.TrimSpace(field.QuerySelector),
 	}
-	if field.StateTag == nil || field.StateTag.Parameter == nil {
+	if field.StateTag == nil {
 		result.Schema = state.NewSchema(field.Type)
 		return result
 	}
 
 	pTag := field.StateTag.Parameter
+	if pTag == nil {
+		result.Schema = state.NewSchema(field.Type)
+		return result
+	}
 	result.Name = firstNonEmpty(pTag.Name, field.Name)
 	result.In = &state.Location{
 		Kind: state.Kind(strings.ToLower(strings.TrimSpace(pTag.Kind))),
@@ -205,7 +236,6 @@ func normalizeState(field *scan.Field) *State {
 	result.URI = pTag.URI
 	result.ErrorStatusCode = pTag.ErrorCode
 	result.ErrorMessage = pTag.ErrorMessage
-
 	result.Schema = state.NewSchema(resolveStateType(result, field.Type))
 	if typeName := strings.TrimSpace(field.StateTag.TypeName); typeName != "" {
 		applyStateTypeName(result.Schema, typeName)

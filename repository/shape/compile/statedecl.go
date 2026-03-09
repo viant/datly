@@ -18,16 +18,13 @@ func appendDeclaredStates(rawDQL string, result *plan.Result) {
 	if result == nil || strings.TrimSpace(rawDQL) == "" {
 		return
 	}
-	seen := map[string]bool{}
+	seen := map[string]*plan.State{}
 	for _, block := range extractSetBlocks(rawDQL) {
 		holder, kind, location, tail, tailOffset, ok := parseSetDeclarationBody(block.Body)
 		if !ok {
 			continue
 		}
 		key := declaredStateKey(holder, kind, location)
-		if seen[key] {
-			continue
-		}
 		inName := location
 		if kind == "view" || kind == "data_view" {
 			if isAttachedSummaryState(result, holder) {
@@ -59,13 +56,17 @@ func appendDeclaredStates(rawDQL string, result *plan.Result) {
 			state.Required = &required
 		}
 		applyDeclaredStateOptions(state, tail, rawDQL, block.BodyOffset+tailOffset, &result.Diagnostics)
+		if existing := seen[key]; existing != nil {
+			mergeDeclaredState(existing, state)
+			continue
+		}
 		result.States = append(result.States, state)
-		seen[key] = true
+		seen[key] = state
 	}
 	appendInferredPathStates(rawDQL, result, seen)
 }
 
-func appendInferredPathStates(rawDQL string, result *plan.Result, seen map[string]bool) {
+func appendInferredPathStates(rawDQL string, result *plan.Result, seen map[string]*plan.State) {
 	if result == nil || strings.TrimSpace(rawDQL) == "" {
 		return
 	}
@@ -75,7 +76,7 @@ func appendInferredPathStates(rawDQL string, result *plan.Result, seen map[strin
 	}
 	for _, name := range extractRoutePathParams(prepared.Directives.Route.URI) {
 		key := declaredStateKey(name, string(st.KindPath), name)
-		if seen[key] {
+		if seen[key] != nil {
 			continue
 		}
 		result.States = append(result.States, &plan.State{
@@ -88,7 +89,42 @@ func appendInferredPathStates(rawDQL string, result *plan.Result, seen map[strin
 				},
 			},
 		})
-		seen[key] = true
+		seen[key] = result.States[len(result.States)-1]
+	}
+}
+
+func mergeDeclaredState(dst, src *plan.State) {
+	if dst == nil || src == nil {
+		return
+	}
+	dst.EmitOutput = dst.EmitOutput || src.EmitOutput
+	dst.Async = dst.Async || src.Async
+	if dst.QuerySelector == "" {
+		dst.QuerySelector = src.QuerySelector
+	}
+	if dst.OutputDataType == "" {
+		dst.OutputDataType = src.OutputDataType
+	}
+	if dst.Tag == "" {
+		dst.Tag = src.Tag
+	}
+	if dst.Required == nil {
+		dst.Required = src.Required
+	}
+	if dst.Cacheable == nil {
+		dst.Cacheable = src.Cacheable
+	}
+	if dst.Schema == nil && src.Schema != nil {
+		schema := *src.Schema
+		dst.Schema = &schema
+	}
+	if dst.Schema != nil && src.Schema != nil {
+		if dst.Schema.DataType == "" {
+			dst.Schema.DataType = src.Schema.DataType
+		}
+		if dst.Schema.Cardinality == "" {
+			dst.Schema.Cardinality = src.Schema.Cardinality
+		}
 	}
 }
 
@@ -284,6 +320,11 @@ func applyDeclaredStateOptions(state *plan.State, tail, dql string, baseOffset i
 				continue
 			}
 			state.Async = true
+		case strings.EqualFold(name, "Output"):
+			if !expectStateArgs(state, name, args, 0, 0, dql, optionOffset, diags) {
+				continue
+			}
+			state.EmitOutput = true
 		default:
 			if state != nil && state.In != nil {
 				kind := strings.ToLower(state.KindString())

@@ -14,6 +14,11 @@ func normalizeParserSQL(sqlText string) string {
 	return rewritePrivateShorthand(replaceTemplateTokens(sqlText))
 }
 
+// NormalizeParserSQL exposes the parser-safe SQL normalization used by read compilation.
+func NormalizeParserSQL(sqlText string) string {
+	return normalizeParserSQL(sqlText)
+}
+
 func rewritePrivateShorthand(input string) string {
 	var b strings.Builder
 	b.Grow(len(input))

@@ -64,6 +64,14 @@ type namedReportOutput struct {
 	Data []reportRow `parameter:"data,kind=output,in=view"`
 }
 
+type selectorHolderSource struct {
+	Route      xdatly.Component[reportInput, reportOutput] `component:",path=/v1/api/dev/report,method=GET"`
+	ViewSelect struct {
+		Fields []string `parameter:"fields,kind=query,in=_fields"`
+		Page   int      `parameter:"page,kind=query,in=_page"`
+	} `querySelector:"rows"`
+}
+
 func TestStructScanner_Scan(t *testing.T) {
 	scanner := New()
 	result, err := scanner.Scan(context.Background(), &shape.Source{Struct: &reportSource{}})
@@ -81,8 +89,8 @@ func TestStructScanner_Scan(t *testing.T) {
 	require.True(t, rows.HasViewTag)
 	require.NotNil(t, rows.ViewTag)
 	assert.Equal(t, "rows", rows.ViewTag.View.Name)
-	assert.Equal(t, "ReportRow", rows.ViewTag.View.TypeName)
-	assert.Equal(t, "rows.go", rows.ViewTag.View.Dest)
+	assert.Equal(t, "ReportRow", rows.ViewTypeName)
+	assert.Equal(t, "rows.go", rows.ViewDest)
 	assert.Contains(t, rows.ViewTag.SQL.SQL, "SELECT ID, NAME FROM REPORT")
 
 	idField := descriptors.ByPath["ID"]
@@ -125,6 +133,23 @@ func TestStructScanner_Scan_ComponentHolderTypes(t *testing.T) {
 	assert.Equal(t, reflect.TypeOf(reportOutput{}), route.ComponentOutputType)
 	assert.Empty(t, route.ComponentInputName)
 	assert.Empty(t, route.ComponentOutputName)
+}
+
+func TestStructScanner_Scan_QuerySelectorHolder(t *testing.T) {
+	scanner := New()
+	result, err := scanner.Scan(context.Background(), &shape.Source{Struct: &selectorHolderSource{}})
+	require.NoError(t, err)
+
+	descriptors, ok := DescriptorsFrom(result)
+	require.True(t, ok)
+
+	fields := descriptors.ByPath["ViewSelect.Fields"]
+	require.NotNil(t, fields)
+	assert.Equal(t, "rows", fields.QuerySelector)
+
+	page := descriptors.ByPath["ViewSelect.Page"]
+	require.NotNil(t, page)
+	assert.Equal(t, "rows", page.QuerySelector)
 }
 
 func TestStructScanner_Scan_DynamicComponentHolderTypes(t *testing.T) {

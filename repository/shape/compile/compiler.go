@@ -133,7 +133,6 @@ func (c *DQLCompiler) assembleResult(
 	result.Diagnostics = diags
 	result.TypeContext = prepared.Pre.TypeCtx
 	result.Directives = prepared.Pre.Directives
-	applyDefaultConnectorDirective(result)
 	applyConstDirective(result)
 	hints := extractViewHints(source.DQL)
 	relationSQLSource := prepared.Pre.SQL
@@ -142,6 +141,7 @@ func (c *DQLCompiler) assembleResult(
 	}
 	appendRelationViews(result, root, hints, relationSQLSource)
 	appendDeclaredViews(source.DQL, result)
+	applyDefaultConnectorDirective(result)
 	appendDeclaredStates(source.DQL, result)
 	applyViewHints(result, hints)
 	result.Diagnostics = append(result.Diagnostics, appendComponentTypesWithLayout(source, result, pathLayout)...)
@@ -153,6 +153,8 @@ func (c *DQLCompiler) assembleResult(
 	}
 	applyInlineParamHints(source.DQL, result)
 	applySourceParityEnrichmentWithLayout(result, source, pathLayout)
+	ensureDQLComponentRouteWithLayout(result, source, pathLayout)
+	applySummaryTypeSupport(result, source)
 	if compileOptions.UseLinkedTypes == nil || *compileOptions.UseLinkedTypes {
 		applyLinkedTypeSupport(result, source)
 	}
@@ -190,6 +192,7 @@ func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt
 	mode = normalizeMixedMode(mode)
 	unknownMode = normalizeUnknownNonReadMode(unknownMode)
 	consts := map[string]string(nil)
+	groupableAliases := explicitGroupableAliases(extractViewHints(sqlText))
 	if directives != nil && len(directives.Const) > 0 {
 		consts = directives.Const
 	}
@@ -228,7 +231,7 @@ func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt
 					break
 				}
 			}
-			view, diags, err := pipeline.BuildReadWithConsts(sourceName, readSQL, consts)
+			view, diags, err := pipeline.BuildReadWithOptions(sourceName, readSQL, consts, groupableAliases)
 			diags = append(diags, &dqlshape.Diagnostic{
 				Code:     dqldiag.CodeDMLMixed,
 				Severity: dqlshape.SeverityWarning,
@@ -252,7 +255,28 @@ func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt
 		}
 		return view, diags, nil
 	}
-	return pipeline.BuildReadWithConsts(sourceName, sqlText, consts)
+	return pipeline.BuildReadWithOptions(sourceName, sqlText, consts, groupableAliases)
+}
+
+func explicitGroupableAliases(hints map[string]viewHint) map[string]bool {
+	if len(hints) == 0 {
+		return nil
+	}
+	result := map[string]bool{}
+	for alias, hint := range hints {
+		if hint.Groupable == nil || !*hint.Groupable {
+			continue
+		}
+		alias = strings.ToLower(strings.TrimSpace(alias))
+		if alias == "" {
+			continue
+		}
+		result[alias] = true
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func normalizeMixedMode(mode shape.CompileMixedMode) shape.CompileMixedMode {

@@ -9,11 +9,10 @@ import (
 	"github.com/viant/afs/url"
 )
 
-// Transcribe defines options for the transcribe command which uses
-// the shape pipeline exclusively (compile → plan → load) without
-// depending on internal/translator.
+// Transcribe defines options for the shape-only DQL -> code/config pipeline.
 type Transcribe struct {
 	Connector
+	Auth
 	Source     []string `short:"s" long:"src" description:"DQL source file(s)"`
 	Repository string   `short:"r" long:"repo" description:"output repository location" default:"repo/dev"`
 	Namespace  string   `short:"u" long:"namespace" description:"route namespace" default:"dev"`
@@ -23,9 +22,9 @@ type Transcribe struct {
 	TypeFile   string   `long:"type-file" description:"generated go file name (default: dql filename or main view in lower_underscore)"`
 	Project    string   `short:"p" long:"proj" description:"project location"`
 	APIPrefix  string   `short:"a" long:"api" description:"api prefix" default:"/v1/api"`
+	SkipYAML   bool     `long:"skip-yaml" description:"generate bootstrap config and shapes without route yaml"`
 }
 
-// DefaultConnectorName returns the first connector name from the -c flags.
 func (t *Transcribe) DefaultConnectorName() string {
 	if len(t.Connectors) == 0 {
 		return ""
@@ -38,11 +37,13 @@ func (t *Transcribe) DefaultConnectorName() string {
 }
 
 func (t *Transcribe) Init(ctx context.Context) error {
+	_ = ctx
 	if t.Project == "" {
 		t.Project, _ = os.Getwd()
 	}
 	t.Project = ensureAbsPath(t.Project)
 	t.Connector.Init()
+	t.Auth.Init()
 	if url.IsRelative(t.Repository) {
 		t.Repository = url.Join(t.Project, t.Repository)
 	}

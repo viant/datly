@@ -45,6 +45,7 @@ type Options struct {
 	authConfig           aconfig.Config
 	shapePipeline        bool
 	legacyTypeContext    bool
+	refreshDisabled      bool
 }
 
 func (o *Options) UseColumn() bool {
@@ -192,6 +193,14 @@ func WithNamedResources(names ...string) ComponentOption {
 func WithRefreshFrequency(refreshFrequency time.Duration) Option {
 	return func(o *Options) {
 		o.refreshFrequency = refreshFrequency
+	}
+}
+
+// WithRefreshDisabled suppresses repository change polling and lazy hot-reload.
+// Disabled by default to preserve existing behavior.
+func WithRefreshDisabled(enabled bool) Option {
+	return func(o *Options) {
+		o.refreshDisabled = enabled
 	}
 }
 

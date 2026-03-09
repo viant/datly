@@ -1,5 +1,3 @@
-init:
-
 pipeline:
   deploy:
     setPath:
@@ -17,13 +15,11 @@ pipeline:
 
     package:
       action: exec:run
-      comments: build datly binary
+      comments: build plain datly binary for pure DQL bootstrap tests
       target: $target
       checkError: true
       commands:
         - export GO111MODULE=on
-        - cd ${appPath}/cmd/datly
-        - go mod tidy
-        - go mod download
-        - go build -ldflags "-X main.BuildTimeInS=`date +%s`"
-        - mv datly /tmp/datly
+        - export GOFLAGS=-mod=mod
+        - cd ${appPath}
+        - go build -ldflags "-X main.BuildTimeInS=`date +%s`" -o /tmp/datly ./cmd/datly

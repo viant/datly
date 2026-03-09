@@ -10,15 +10,18 @@ import (
 )
 
 type viewHint struct {
-	Connector   string
-	AllowNulls  *bool
-	NoLimit     *bool
-	CacheRef    string
-	Limit       *int
-	Cardinality string
-	Dest        string
-	TypeName    string
-	Self        *plan.SelfReference
+	Connector            string
+	AllowNulls           *bool
+	Groupable            *bool
+	NoLimit              *bool
+	CacheRef             string
+	Limit                *int
+	Cardinality          string
+	Dest                 string
+	TypeName             string
+	Self                 *plan.SelfReference
+	SelectorOrderBy      *bool
+	SelectorOrderByNames map[string]string
 }
 
 func extractViewHints(dql string) map[string]viewHint {
@@ -48,6 +51,35 @@ func extractViewHints(dql string) map[string]viewHint {
 			hint := result[alias]
 			value := true
 			hint.AllowNulls = &value
+			result[alias] = hint
+		case "groupable":
+			if len(call.args) != 1 {
+				continue
+			}
+			alias := normalizeHintAlias(call.args[0])
+			if !isIdentifier(alias) {
+				continue
+			}
+			hint := result[alias]
+			value := true
+			hint.Groupable = &value
+			result[alias] = hint
+		case "allowed_order_by_columns":
+			if len(call.args) != 2 {
+				continue
+			}
+			alias := normalizeHintAlias(call.args[0])
+			columns := strings.TrimSpace(unquote(strings.TrimSpace(call.args[1])))
+			if !isIdentifier(alias) || columns == "" {
+				continue
+			}
+			hint := result[alias]
+			value := true
+			hint.SelectorOrderBy = &value
+			if hint.SelectorOrderByNames == nil {
+				hint.SelectorOrderByNames = map[string]string{}
+			}
+			appendAllowedOrderByColumns(hint.SelectorOrderByNames, columns)
 			result[alias] = hint
 		case "set_limit":
 			if len(call.args) != 2 {
@@ -146,14 +178,16 @@ type hintCall struct {
 
 func scanHintCalls(input string) []hintCall {
 	names := map[string]bool{
-		"use_connector": true,
-		"allow_nulls":   true,
-		"set_limit":     true,
-		"set_cache":     true,
-		"cardinality":   true,
-		"self_ref":      true,
-		"dest":          true,
-		"type":          true,
+		"use_connector":            true,
+		"allow_nulls":              true,
+		"groupable":                true,
+		"allowed_order_by_columns": true,
+		"set_limit":                true,
+		"set_cache":                true,
+		"cardinality":              true,
+		"self_ref":                 true,
+		"dest":                     true,
+		"type":                     true,
 	}
 	parsed, _ := decl.ScanCalls(input, decl.CallScanOptions{
 		AllowedNames:  names,
@@ -280,9 +314,23 @@ func applyViewHints(result *plan.Result, hints map[string]viewHint) {
 				value := *hint.AllowNulls
 				item.AllowNulls = &value
 			}
+			if item.Groupable == nil && hint.Groupable != nil {
+				value := *hint.Groupable
+				item.Groupable = &value
+			}
 			if item.SelectorNoLimit == nil && hint.NoLimit != nil {
 				value := *hint.NoLimit
 				item.SelectorNoLimit = &value
+			}
+			if item.SelectorOrderBy == nil && hint.SelectorOrderBy != nil {
+				value := *hint.SelectorOrderBy
+				item.SelectorOrderBy = &value
+			}
+			if len(item.SelectorOrderByColumns) == 0 && len(hint.SelectorOrderByNames) > 0 {
+				item.SelectorOrderByColumns = map[string]string{}
+				for key, value := range hint.SelectorOrderByNames {
+					item.SelectorOrderByColumns[key] = value
+				}
 			}
 			if item.SelectorLimit == nil && hint.Limit != nil {
 				value := *hint.Limit
@@ -314,6 +362,33 @@ func applyViewHints(result *plan.Result, hints map[string]viewHint) {
 
 func normalizeHintAlias(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func appendAllowedOrderByColumns(target map[string]string, columns string) {
+	for _, expression := range strings.Split(columns, ",") {
+		expression = strings.TrimSpace(expression)
+		if expression == "" {
+			continue
+		}
+		key := expression
+		value := expression
+		if strings.Contains(expression, ":") {
+			parts := strings.SplitN(expression, ":", 2)
+			key = strings.TrimSpace(parts[0])
+			value = strings.TrimSpace(parts[1])
+		}
+		if key == "" || value == "" {
+			continue
+		}
+		target[key] = value
+		lcKey := strings.ToLower(key)
+		if lcKey != key {
+			target[lcKey] = value
+		}
+		if index := strings.Index(key, "."); index != -1 && index+1 < len(key) {
+			target[key[index+1:]] = value
+		}
+	}
 }
 
 func lookupViewHint(hints map[string]viewHint, key string) (viewHint, bool) {

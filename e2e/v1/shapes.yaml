@@ -1,7 +1,12 @@
 init:
   shapePath: ${v1Path}/shape
+  shapeDevPath: ${shapePath}/dev
   repoPath: ${v1Path}/autogen
+  routerImports: ${v1Path}/routerapp/imports_gen.go
   conn: -c='dev|mysql|root:dev@tcp(${dbIP.mysql}:3306)/dev${qMark}parseTime=true'
+  jwt: -J='${appPath}/e2e/local/jwt/public.enc|blowfish://default'
+  api: -a='/v1/api/shape'
+  mode: --skip-yaml
 
 pipeline:
 
@@ -14,7 +19,9 @@ pipeline:
       - mkdir -p ${repoPath}
       - rm -rf ${repoPath}
       - mkdir -p ${shapePath}
+      - rm -rf ${shapeDevPath}
       - rm -rf ${shapePath}
+      - rm -f ${routerImports}
 
   vendor:
     action: exec:run
@@ -22,51 +29,26 @@ pipeline:
     checkError: true
     commands:
       - cd ${v1Path}
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_list.dql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_details.sql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_auth.sql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/product_update.sql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_meta.sql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/child_meta.sql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_apikey.sql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendors_codec.sql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/vendor_col_in.dql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/header_vendors.dql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/environment.dql
-      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn -s dql/dev/vendor/meta_format.dql
-
-  user:
-    action: exec:run
-    TimeoutMs: 120000
-    checkError: true
-    commands:
-      - cd ${v1Path}
-      - /tmp/datly transcribe -u dev/user -m ${shapePath} -r ${repoPath} $conn -s dql/dev/user/user_tree.sql
-
-  district:
-    action: exec:run
-    TimeoutMs: 120000
-    checkError: true
-    commands:
-      - cd ${v1Path}
-      - /tmp/datly transcribe -u dev/district -m ${shapePath} -r ${repoPath} $conn -s dql/dev/district/district_pagination.sql
-
-  events:
-    action: exec:run
-    TimeoutMs: 120000
-    checkError: true
-    commands:
-      - cd ${v1Path}
-      - /tmp/datly transcribe -u dev/events -m ${shapePath} -r ${repoPath} $conn -s dql/dev/events/post_basic_one.dql
-      - /tmp/datly transcribe -u dev/events -m ${shapePath} -r ${repoPath} $conn -s dql/dev/events/post_basic_many.dql
-      - /tmp/datly transcribe -u dev/events -m ${shapePath} -r ${repoPath} $conn -s dql/dev/events/post_comprehensive_many.dql
-      - /tmp/datly transcribe -u dev/events -m ${shapePath} -r ${repoPath} $conn -s dql/dev/events/post_except.dql
-
-  team:
-    action: exec:run
-    TimeoutMs: 120000
-    checkError: true
-    commands:
-      - cd ${v1Path}
-      - /tmp/datly transcribe -u dev/team -m ${shapePath} -r ${repoPath} $conn -s dql/dev/team/team.dql
-      - /tmp/datly transcribe -u dev/team -m ${shapePath} -r ${repoPath} $conn -s dql/dev/team/user_team.dql
+      - /tmp/datly transcribe -u dev/vendor -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/vendor_list.dql
+      - /tmp/datly transcribe -u dev/vendor/details -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/vendor_details.dql
+      - /tmp/datly transcribe -u dev/vendor/col -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/vendor_col_in.dql
+      - /tmp/datly transcribe -u dev/vendor/auth -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/vendor_auth.dql
+      - /tmp/datly transcribe -u dev/vendor/secured -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/vendor_apikey.dql
+      - /tmp/datly transcribe -u dev/vendor/update -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/product_update.dql
+      - /tmp/datly transcribe -u dev/vendor/meta -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/vendor_meta.dql
+      - /tmp/datly transcribe -u dev/vendor/meta-nested -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/child_meta.dql
+      - /tmp/datly transcribe -u dev/vendor/meta-format -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/meta_format.dql
+      - /tmp/datly transcribe -u dev/vendor/header -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/header_vendors.dql
+      - /tmp/datly transcribe -u dev/vendor/env -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/const.dql
+      - /tmp/datly transcribe -u dev/vendor/variables -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/vars.dql
+      - /tmp/datly transcribe -u dev/vendor/user_acl -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/user_acl.dql
+      - /tmp/datly transcribe -u dev/vendor/component_acl -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/component_acl/vendor_acl.dql
+      - /tmp/datly transcribe -u dev/vendor/grouping -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/vendorsrv/vendors_grouping.dql
+      - /tmp/datly transcribe -u dev/district/meta -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/district/district_pagination.sql
+      - /tmp/datly transcribe -u dev/user/metadata -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/user/user_metadata.dql
+      - /tmp/datly transcribe -u dev/user -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/user/user_tree.sql
+      - /tmp/datly transcribe -u dev/basic/events-one-one -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/events/basic_one_one.dql
+      - /tmp/datly transcribe -u dev/basic/foos -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/events/patch_basic_one.dql
+      - /tmp/datly transcribe -u dev/basic/foos-many -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/events/patch_basic_many.dql
+      - /tmp/datly transcribe -u dev/team/user_team -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/team/user_team.dql
+      - /tmp/datly transcribe -u dev/team/delete -m ${shapePath} -r ${repoPath} $conn $jwt $api $mode -s dql/dev/team/team.dql

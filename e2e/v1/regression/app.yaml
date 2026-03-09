@@ -14,4 +14,4 @@ pipeline:
       immuneToHangups: true
       env:
         TEST: 1
-      command: ulimit -Sn 10000 && ./datly -c=${v1Path}/autogen/Datly/config.json -z=/tmp/jobs/datly_v1 > /tmp/datly_v1.out 2>&1
+      command: pkill -f '${v1Path}/autogen/Datly/config.json -z=/tmp/jobs/datly_v1' >/dev/null 2>&1 || true; ulimit -Sn 10000 && ./datly -c=${v1Path}/autogen/Datly/config.json -z=/tmp/jobs/datly_v1 > /tmp/datly_v1.out 2>&1

@@ -130,12 +130,15 @@ func TestComponentCodegen_MutableComponent_GeneratesPatchHelpers(t *testing.T) {
 	}
 
 	inputSource := mustReadCodegenFile(t, result.InputFilePath)
-	if !strings.Contains(inputSource, `CurFoosById map[int]*Foos`) {
+	if !strings.Contains(inputSource, `CurFoosById map[int]Foos`) {
 		t.Fatalf("expected generated input to include indexed helper map:\n%s", inputSource)
+	}
+	if !strings.Contains(inputSource, "CurFoosId *struct {") || !strings.Contains(inputSource, "Values []int") {
+		t.Fatalf("expected generated input to preserve helper ids struct type:\n%s", inputSource)
 	}
 
 	initSource := mustReadCodegenFile(t, filepath.Join(packageDir, "input_init.go"))
-	if !strings.Contains(initSource, `i.CurFoosById = make(map[int]*Foos, len(i.CurFoos))`) {
+	if !strings.Contains(initSource, `i.CurFoosById = make(map[int]Foos, len(i.CurFoos))`) {
 		t.Fatalf("expected generated init helper to allocate CurFoosById:\n%s", initSource)
 	}
 	if !strings.Contains(initSource, `if item.Id == nil {`) || !strings.Contains(initSource, `i.CurFoosById[*item.Id] = item`) {
@@ -146,7 +149,7 @@ func TestComponentCodegen_MutableComponent_GeneratesPatchHelpers(t *testing.T) {
 	if !strings.Contains(validateSource, `_, err := aValidator.Validate(ctx, value, append(options, validator.WithValidation(validation))...)`) {
 		t.Fatalf("expected generated validate helper to call validator service:\n%s", validateSource)
 	}
-	if !strings.Contains(validateSource, `case *Foos:`) || !strings.Contains(validateSource, `if actual.Id == nil {`) || !strings.Contains(validateSource, `_, ok := i.CurFoosById[*actual.Id]`) {
+	if !strings.Contains(validateSource, `case Foos:`) || !strings.Contains(validateSource, `if actual.Id == nil {`) || !strings.Contains(validateSource, `_, ok := i.CurFoosById[*actual.Id]`) {
 		t.Fatalf("expected generated validate helper to use CurFoosById marker provider:\n%s", validateSource)
 	}
 
@@ -167,7 +170,8 @@ func TestComponentCodegen_MutableComponent_GeneratesPatchHelpers(t *testing.T) {
 	veltySource := mustReadCodegenFile(t, result.VeltyFilePath)
 	for _, fragment := range []string{
 		`$sequencer.Allocate("FOOS", $Foos, "Id")`,
-		`#set($CurFoosById = $CurFoos.IndexBy("Id"))`,
+		`#set($_ = $CurFoos<[]Foos>(view/CurFoos) /*`,
+		`#set($CurFoosById<map[int]Foos> = $CurFoos.IndexBy("Id"))`,
 		`$sql.Update($Foos, "FOOS");`,
 		`$sql.Insert($Foos, "FOOS");`,
 	} {
@@ -225,7 +229,7 @@ func TestComponentCodegen_MutableComponent_DSQLParity_BasicOne(t *testing.T) {
 			{
 				Name:     "CurFoos",
 				Mode:     view.ModeQuery,
-				Template: &view.Template{Source: "SELECT * FROM FOOS\nWHERE $criteria.In(\"ID\", $CurFoosId.Values)"},
+				Template: &view.Template{Source: "SELECT * FROM FOOS\nWHERE $criteria.In(\"ID\", $Unsafe.CurFoosId.Values)"},
 				Schema: func() *state.Schema {
 					s := state.NewSchema(reflect.TypeOf(&BasicFoos{}))
 					s.Name, s.DataType, s.Cardinality = "Foos", "*Foos", state.Many
@@ -280,7 +284,7 @@ func TestComponentCodegen_MutableComponent_DSQLParity_BasicMany(t *testing.T) {
 			{
 				Name:     "CurFoos",
 				Mode:     view.ModeQuery,
-				Template: &view.Template{Source: "SELECT * FROM FOOS\nWHERE $criteria.In(\"ID\", $CurFoosId.Values)"},
+				Template: &view.Template{Source: "SELECT * FROM FOOS\nWHERE $criteria.In(\"ID\", $Unsafe.CurFoosId.Values)"},
 				Schema: func() *state.Schema {
 					s := state.NewSchema(reflect.TypeOf(&BasicFoos{}))
 					s.Name, s.DataType, s.Cardinality = "Foos", "*Foos", state.Many
@@ -335,7 +339,7 @@ func TestComponentCodegen_MutableComponent_DSQLParity_ManyMany(t *testing.T) {
 			{
 				Name:     "CurFoos",
 				Mode:     view.ModeQuery,
-				Template: &view.Template{Source: "SELECT * FROM FOOS\nWHERE $criteria.In(\"ID\", $CurFoosId.Values)"},
+				Template: &view.Template{Source: "SELECT * FROM FOOS\nWHERE $criteria.In(\"ID\", $Unsafe.CurFoosId.Values)"},
 				Schema: func() *state.Schema {
 					s := state.NewSchema(reflect.TypeOf(&Foos{}))
 					s.Name, s.DataType, s.Cardinality = "Foos", "*Foos", state.Many
@@ -346,7 +350,7 @@ func TestComponentCodegen_MutableComponent_DSQLParity_ManyMany(t *testing.T) {
 			{
 				Name:     "CurFoosPerformance",
 				Mode:     view.ModeQuery,
-				Template: &view.Template{Source: "SELECT * FROM FOOS_PERFORMANCE\nWHERE $criteria.In(\"ID\", $CurFoosFoosPerformanceId.Values)"},
+				Template: &view.Template{Source: "SELECT * FROM FOOS_PERFORMANCE\nWHERE $criteria.In(\"ID\", $Unsafe.CurFoosFoosPerformanceId.Values)"},
 				Schema: func() *state.Schema {
 					s := state.NewSchema(reflect.TypeOf(&FoosPerformance{}))
 					s.Name, s.DataType, s.Cardinality = "FoosPerformance", "*FoosPerformance", state.Many
@@ -504,4 +508,127 @@ func normalizeMutableSQL(value string) string {
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+func TestComponentCodegen_MutableComponent_MergesRootTemplateHelpersIntoInput(t *testing.T) {
+	projectDir := t.TempDir()
+	packageDir := filepath.Join(projectDir, "shape", "dev", "patch_basic_one")
+
+	component := &shapeload.Component{
+		Method:   "PATCH",
+		URI:      "/v1/api/shape/dev/basic/foos",
+		RootView: "Foos",
+		Input: []*shapeplan.State{
+			{
+				Parameter: state.Parameter{
+					Name:   "Foos",
+					In:     state.NewBodyLocation(""),
+					Tag:    `anonymous:"true"`,
+					Schema: &state.Schema{Name: "FoosView", DataType: "*FoosView", Cardinality: state.One},
+				},
+			},
+		},
+		Output: []*shapeplan.State{
+			{
+				Parameter: state.Parameter{
+					Name:   "Foos",
+					In:     state.NewOutputLocation("body"),
+					Tag:    `anonymous:"true"`,
+					Schema: &state.Schema{Name: "FoosView", DataType: "*FoosView", Cardinality: state.One},
+				},
+			},
+		},
+	}
+
+	resource := view.EmptyResource()
+	resource.Views = append(resource.Views,
+		&view.View{
+			Name: "Foos",
+			Mode: view.ModeExec,
+			Schema: &state.Schema{
+				Name:        "FoosView",
+				DataType:    "*FoosView",
+				Cardinality: state.One,
+			},
+			Columns: []*view.Column{
+				{Name: "ID", DataType: "int"},
+				{Name: "NAME", DataType: "string", Nullable: true},
+				{Name: "QUANTITY", DataType: "int", Nullable: true},
+			},
+			Template: &view.Template{
+				UseParameterStateType: true,
+				Parameters: state.Parameters{
+					{
+						Name:   "Foos",
+						In:     state.NewBodyLocation(""),
+						Tag:    `anonymous:"true"`,
+						Schema: &state.Schema{Name: "FoosView", DataType: "*FoosView", Cardinality: state.One},
+					},
+					{
+						Name:   "CurFoosId",
+						In:     state.NewParameterLocation("Foos"),
+						Schema: state.NewSchema(reflect.TypeOf(&struct{ Values []int }{})),
+						Tag:    `codec:"structql,uri=foos/cur_foos_id.sql"`,
+					},
+					{
+						Name:   "CurFoos",
+						In:     state.NewViewLocation("CurFoos"),
+						Tag:    `view:"CurFoos" sql:"uri=foos/cur_foos.sql"`,
+						Schema: &state.Schema{Name: "FoosView", DataType: "*FoosView", Cardinality: state.Many},
+					},
+				},
+			},
+		},
+		&view.View{
+			Name: "CurFoos",
+			Mode: view.ModeQuery,
+			Schema: &state.Schema{
+				Name:        "FoosView",
+				DataType:    "*FoosView",
+				Cardinality: state.Many,
+			},
+			Columns: []*view.Column{
+				{Name: "ID", DataType: "int"},
+				{Name: "NAME", DataType: "string", Nullable: true},
+				{Name: "QUANTITY", DataType: "int", Nullable: true},
+			},
+		},
+	)
+
+	ctx := &typectx.Context{
+		PackageDir:  packageDir,
+		PackageName: "patch_basic_one",
+		PackagePath: "github.com/acme/project/shape/dev/patch_basic_one",
+	}
+
+	codegen := &ComponentCodegen{
+		Component:    component,
+		Resource:     resource,
+		TypeContext:  ctx,
+		ProjectDir:   projectDir,
+		WithEmbed:    true,
+		WithContract: true,
+	}
+
+	result, err := codegen.Generate()
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	inputSource := mustReadCodegenFile(t, result.InputFilePath)
+	for _, fragment := range []string{
+		`CurFoosId *struct {`,
+		`Values []int`,
+		`CurFoos `,
+		`CurFoosById map[int]`,
+	} {
+		if !strings.Contains(inputSource, fragment) {
+			t.Fatalf("expected generated input to include %q:\n%s", fragment, inputSource)
+		}
+	}
+
+	initSource := mustReadCodegenFile(t, filepath.Join(packageDir, "input_init.go"))
+	if !strings.Contains(initSource, `i.CurFoosById = make(map[int]FoosView, len(i.CurFoos))`) {
+		t.Fatalf("expected generated init helper to index CurFoos:\n%s", initSource)
+	}
 }

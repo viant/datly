@@ -144,6 +144,77 @@ JOIN (SELECT * FROM PRODUCT t) products ON products.VENDOR_ID = wrapper.ID`
 	assert.Equal(t, `internal:"true"`, settingCfg["ID"].Tag)
 }
 
+func TestBuildRead_GroupByDoesNotMarkColumnsWithoutExplicitGrouping(t *testing.T) {
+	sqlText := `SELECT t.REGION AS REGION, COUNT(*) AS TOTAL FROM SALES t GROUP BY REGION`
+	view, _, err := BuildRead("sales_report", sqlText)
+	require.NoError(t, err)
+	require.NotNil(t, view)
+	if view.Declaration != nil {
+		assert.Empty(t, view.Declaration.ColumnsConfig)
+	}
+}
+
+func TestBuildRead_GroupByMarksRootGroupedColumnsWithExplicitGrouping(t *testing.T) {
+	sqlText := `SELECT t.REGION AS REGION, COUNT(*) AS TOTAL FROM SALES t GROUP BY REGION`
+	view, _, err := BuildReadWithOptions("sales_report", sqlText, nil, map[string]bool{"t": true})
+	require.NoError(t, err)
+	require.NotNil(t, view)
+	require.NotNil(t, view.Declaration)
+	require.NotNil(t, view.Declaration.ColumnsConfig)
+	cfg, ok := view.Declaration.ColumnsConfig["REGION"]
+	require.True(t, ok)
+	require.NotNil(t, cfg)
+	require.NotNil(t, cfg.Groupable)
+	assert.True(t, *cfg.Groupable)
+	_, ok = view.Declaration.ColumnsConfig["TOTAL"]
+	assert.False(t, ok)
+}
+
+func TestBuildRead_GroupByMarksRelationGroupedColumnsWithExplicitGrouping(t *testing.T) {
+	sqlText := `SELECT vendor.REGION AS REGION, products.CATEGORY AS CATEGORY, COUNT(*) AS TOTAL
+FROM VENDOR vendor
+JOIN PRODUCT products ON products.VENDOR_ID = vendor.ID
+GROUP BY vendor.REGION, products.CATEGORY`
+	view, _, err := BuildReadWithOptions("vendor_products", sqlText, nil, map[string]bool{"vendor": true, "products": true})
+	require.NoError(t, err)
+	require.NotNil(t, view)
+	require.NotNil(t, view.Declaration)
+	require.Contains(t, view.Declaration.ColumnsConfig, "REGION")
+	require.NotNil(t, view.Declaration.ColumnsConfig["REGION"].Groupable)
+	assert.True(t, *view.Declaration.ColumnsConfig["REGION"].Groupable)
+	require.Len(t, view.Relations, 1)
+	require.Contains(t, view.Relations[0].ColumnsConfig, "CATEGORY")
+	require.NotNil(t, view.Relations[0].ColumnsConfig["CATEGORY"].Groupable)
+	assert.True(t, *view.Relations[0].ColumnsConfig["CATEGORY"].Groupable)
+	_, ok := view.Relations[0].ColumnsConfig["TOTAL"]
+	assert.False(t, ok)
+}
+
+func TestBuildRead_GroupByInRootSubqueryMarksGroupedColumnsWithExplicitGrouping(t *testing.T) {
+	sqlText := `SELECT vendor.*
+FROM (
+    SELECT ACCOUNT_ID,
+           USER_CREATED,
+           SUM(ID) AS TOTAL_ID,
+           MAX(ID) AS MAX_ID
+    FROM VENDOR t
+    GROUP BY 1, 2
+) vendor`
+	view, _, err := BuildReadWithOptions("vendors_grouping", sqlText, nil, map[string]bool{"vendor": true})
+	require.NoError(t, err)
+	require.NotNil(t, view)
+	require.NotNil(t, view.Declaration)
+	require.NotNil(t, view.Declaration.ColumnsConfig)
+	require.Contains(t, view.Declaration.ColumnsConfig, "ACCOUNT_ID")
+	require.NotNil(t, view.Declaration.ColumnsConfig["ACCOUNT_ID"].Groupable)
+	assert.True(t, *view.Declaration.ColumnsConfig["ACCOUNT_ID"].Groupable)
+	require.Contains(t, view.Declaration.ColumnsConfig, "USER_CREATED")
+	require.NotNil(t, view.Declaration.ColumnsConfig["USER_CREATED"].Groupable)
+	assert.True(t, *view.Declaration.ColumnsConfig["USER_CREATED"].Groupable)
+	_, ok := view.Declaration.ColumnsConfig["TOTAL_ID"]
+	assert.False(t, ok)
+}
+
 func TestBuildRead_TemplateTableSelector_PreservesRelations(t *testing.T) {
 	sqlText := `SELECT vendor.*, products.*
 FROM (SELECT * FROM ${Unsafe.Vendor} t WHERE t.ID IN ($criteria.AppendBinding($Unsafe.vendorIDs))) vendor

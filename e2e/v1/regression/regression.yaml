@@ -3,7 +3,7 @@ init:
 pipeline:
   database:
     action: run
-    request: '@db'
+    request: '@db.yaml'
 
   app:
     when: $debugger!=on
@@ -16,8 +16,8 @@ pipeline:
     data:
       '[]dev_dbsetup': '@dbsetup/dev'
 
-    subPath: 'cases/${index}_*'
-    range: 001..020
+    subPath: '../cases/${index}_*'
+    range: 1..022
     template:
       checkSkip:
         action: nop

@@ -34,6 +34,7 @@ type (
 		auth             *auth.Service
 		plugins          *plugin.Service
 		refreshFrequency time.Duration
+		refreshDisabled  bool
 		options          *Options
 	}
 
@@ -68,6 +69,9 @@ func (s *Service) Container() *path.Container {
 // SyncChanges checks if resource, plugin or components have changes
 // if so it would increase individual or all component/paths version number resulting in lazy reload
 func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
+	if s == nil || s.refreshDisabled {
+		return false, nil
+	}
 	now := time.Now()
 	//fmt.Printf("[INFO] sync changes started\n")
 	snap := &snapshot{}
@@ -346,6 +350,7 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 	ret := &Service{
 		options:          options,
 		refreshFrequency: options.refreshFrequency,
+		refreshDisabled:  options.refreshDisabled,
 		resources:        options.resources,
 		extensions:       options.extensions,
 	}

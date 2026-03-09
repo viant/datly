@@ -135,6 +135,11 @@ func InferProjectionType(queryNode *query.Select) (reflect.Type, reflect.Type, s
 	if queryNode == nil || len(queryNode.List) == 0 || queryNode.List.IsStarExpr() {
 		return reflect.TypeOf([]map[string]interface{}{}), reflect.TypeOf(map[string]interface{}{}), "many"
 	}
+	for _, item := range queryNode.List {
+		if requiresDeferredProjectionType(sqlparser.Stringify(item)) {
+			return reflect.TypeOf([]map[string]interface{}{}), reflect.TypeOf(map[string]interface{}{}), "many"
+		}
+	}
 	fields := make([]reflect.StructField, 0, len(queryNode.List))
 	used := map[string]int{}
 	for index, item := range queryNode.List {
@@ -152,7 +157,7 @@ func InferProjectionType(queryNode *query.Select) (reflect.Type, reflect.Type, s
 		}
 		used[fieldName]++
 
-		typ := parseColumnType(column.Type)
+		typ := inferColumnType(sqlparser.Stringify(item), column.Type)
 		veltyNames := []string{columnName}
 		if fieldName != "" && fieldName != columnName {
 			veltyNames = append(veltyNames, fieldName)
@@ -160,11 +165,37 @@ func InferProjectionType(queryNode *query.Select) (reflect.Type, reflect.Type, s
 		fields = append(fields, reflect.StructField{
 			Name: fieldName,
 			Type: typ,
-			Tag:  reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" sqlx:"name=%s" velty:"names=%s"`, strings.ToLower(fieldName), columnName, strings.Join(veltyNames, "|"))),
+			Tag:  reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" sqlx:"name=%s" velty:"names=%s"`, lowerCamel(fieldName), columnName, strings.Join(veltyNames, "|"))),
 		})
 	}
 	element := reflect.StructOf(fields)
 	return reflect.SliceOf(element), element, "many"
+}
+
+func requiresDeferredProjectionType(expression string) bool {
+	expression = strings.ToLower(strings.TrimSpace(expression))
+	if expression == "" {
+		return false
+	}
+	if strings.Contains(expression, ".*") {
+		return true
+	}
+	if strings.Contains(expression, " except ") {
+		return true
+	}
+	if strings.HasPrefix(expression, "allow_nulls(") {
+		return true
+	}
+	return false
+}
+
+func lowerCamel(value string) string {
+	if value == "" {
+		return ""
+	}
+	runes := []rune(value)
+	runes[0] = unicode.ToLower(runes[0])
+	return string(runes)
 }
 
 func SanitizeName(value string) string {
@@ -273,7 +304,7 @@ func parseColumnType(dataType string) reflect.Type {
 		return reflect.TypeOf("")
 	case "bool", "boolean":
 		return reflect.TypeOf(false)
-	case "int", "int32", "smallint", "integer":
+	case "int", "int32", "smallint", "integer", "signed":
 		return reflect.TypeOf(int(0))
 	case "int64", "bigint":
 		return reflect.TypeOf(int64(0))
@@ -284,4 +315,55 @@ func parseColumnType(dataType string) reflect.Type {
 	default:
 		return reflect.TypeOf("")
 	}
+}
+
+func inferColumnType(expression, dataType string) reflect.Type {
+	lower := strings.ToLower(strings.TrimSpace(expression))
+	switch {
+	case isPureAggregateProjection(lower, "count("):
+		return reflect.TypeOf(int(0))
+	case strings.Contains(lower, " as signed"), strings.Contains(lower, " as integer"), strings.Contains(lower, " as int)"), strings.Contains(lower, " as int "):
+		if isComputedNumericProjection(lower) {
+			return reflect.TypeOf((*int)(nil))
+		}
+		return reflect.TypeOf(int(0))
+	case strings.Contains(lower, " as bigint"):
+		if isComputedNumericProjection(lower) {
+			return reflect.TypeOf((*int64)(nil))
+		}
+		return reflect.TypeOf(int64(0))
+	case strings.Contains(lower, "sum("), strings.Contains(lower, "avg("):
+		return reflect.TypeOf(float64(0))
+	default:
+		dataType = strings.TrimSpace(dataType)
+		return parseColumnType(dataType)
+	}
+}
+
+func isPureAggregateProjection(expression string, aggregate string) bool {
+	idx := strings.Index(expression, aggregate)
+	if idx == -1 {
+		return false
+	}
+	return strings.TrimSpace(expression[:idx]) == ""
+}
+
+func isComputedNumericProjection(expression string) bool {
+	expression = strings.ToLower(strings.TrimSpace(expression))
+	switch {
+	case strings.Contains(expression, "count("):
+		return !isPureAggregateProjection(expression, "count(")
+	case strings.Contains(expression, "sum("):
+		return !isPureAggregateProjection(expression, "sum(")
+	case strings.Contains(expression, "avg("):
+		return !isPureAggregateProjection(expression, "avg(")
+	}
+	return strings.Contains(expression, " + ") ||
+		strings.Contains(expression, " - ") ||
+		strings.Contains(expression, " * ") ||
+		strings.Contains(expression, " / ") ||
+		strings.Contains(expression, "case ") ||
+		strings.Contains(expression, "coalesce(") ||
+		strings.Contains(expression, "nullif(") ||
+		strings.Contains(expression, "cast(")
 }

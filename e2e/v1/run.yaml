@@ -41,3 +41,8 @@ pipeline:
     action: run
     description: run v1 regression test
     request: '@regression/regression'
+
+  goBootstrap:
+    action: run
+    description: run linked Go router bootstrap regression test
+    request: '@go_bootstrap'

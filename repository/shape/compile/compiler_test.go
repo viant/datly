@@ -138,6 +138,26 @@ SELECT id FROM ORDERS o
 	assert.Equal(t, "analytics", planned.Views[0].Connector)
 }
 
+func TestDQLCompiler_Compile_AppliesDefaultConnectorToDeclaredViews(t *testing.T) {
+	compiler := New()
+	dqlPath := filepath.Join("..", "..", "..", "e2e", "v1", "dql", "dev", "team", "user_team.dql")
+	dql, err := os.ReadFile(dqlPath)
+	require.NoError(t, err)
+	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "user_team", Path: dqlPath, DQL: string(dql)})
+	require.NoError(t, err)
+	planned, ok := plan.ResultFrom(res)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, len(planned.Views), 2)
+	connectors := map[string]string{}
+	for _, candidate := range planned.Views {
+		if candidate != nil {
+			connectors[candidate.Name] = candidate.Connector
+		}
+	}
+	assert.Equal(t, "dev", connectors["user_team"])
+	assert.Equal(t, "dev", connectors["TeamStats"])
+}
+
 func TestDQLCompiler_Compile_ColumnDiscoveryAutoForWildcard(t *testing.T) {
 	compiler := New()
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: "SELECT * FROM ORDERS o"})
@@ -259,6 +279,23 @@ JOIN (SELECT * FROM PRODUCT t) products ON products.VENDOR_ID = vendor.ID`
 	require.NotNil(t, planned.ViewsByName["products"].Declaration)
 	require.Contains(t, planned.ViewsByName["products"].Declaration.ColumnsConfig, "VENDOR_ID")
 	assert.Equal(t, `internal:"true"`, planned.ViewsByName["products"].Declaration.ColumnsConfig["VENDOR_ID"].Tag)
+}
+
+func TestDQLCompiler_Compile_PopulatesComponentRouteFromDirective(t *testing.T) {
+	compiler := New()
+	dql := `
+#setting($_ = $route('/v1/api/shape/dev/vendors/{vendorID}', 'DELETE'))
+#define($_ = $VendorID<int>(path/vendorID))
+SELECT ID FROM VENDOR WHERE ID = $VendorID`
+
+	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "vendor_delete", DQL: dql})
+	require.NoError(t, err)
+	planned, ok := plan.ResultFrom(res)
+	require.True(t, ok)
+	require.Len(t, planned.Components, 1)
+	assert.Equal(t, "DELETE", planned.Components[0].Method)
+	assert.Equal(t, "/v1/api/shape/dev/vendors/{vendorID}", planned.Components[0].RoutePath)
+	assert.Equal(t, planned.Views[0].Name, planned.Components[0].ViewName)
 }
 
 func TestDQLCompiler_Compile_DirectiveOnly_HasLineAndChar(t *testing.T) {

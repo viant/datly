@@ -3,7 +3,9 @@ package expand
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -64,6 +66,9 @@ func (c *DataUnit) Validate(dest interface{}, opts ...interface{}) (*validator.V
 }
 
 func (c *DataUnit) Allocate(tableName string, dest interface{}, selector string) (string, error) {
+	if os.Getenv("DATLY_DEBUG_MUTABLE") == "1" {
+		fmt.Printf("[MUTABLE DEBUG] Allocate table=%s selector=%s destType=%T dest=%#v\n", tableName, selector, dest, dest)
+	}
 	db, err := c.MetaSource.Db()
 	if err != nil {
 		fmt.Printf("error occured while connecting to DB %v\n", err.Error())
@@ -208,6 +213,15 @@ func (c *DataUnit) FilterExecutables(statements []string, stopOnNonExec bool) []
 }
 
 func (c *DataUnit) In(columnName string, args interface{}) (string, error) {
+	if os.Getenv("DATLY_DEBUG_DATAUNIT") == "1" {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[DATAUNIT DEBUG] In panic column=%q argsType=%T args=%#v err=%v\n%s\n", columnName, args, args, r, debug.Stack())
+				panic(r)
+			}
+		}()
+		fmt.Printf("[DATAUNIT DEBUG] In column=%q argsType=%T args=%#v\n", columnName, args, args)
+	}
 	return c.in(columnName, args, true)
 }
 

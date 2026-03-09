@@ -113,6 +113,7 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 			repository.WithFirebaseAuth(aConfig.Firebase),
 			repository.WithDependencyURL(aConfig.DependencyURL),
 			repository.WithRefreshFrequency(aConfig.SyncFrequency()),
+			repository.WithRefreshDisabled(options.refreshDisabled),
 			repository.WithDispatcher(dispatcher.New),
 		)
 		if err != nil {

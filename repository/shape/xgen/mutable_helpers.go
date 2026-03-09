@@ -5,13 +5,13 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/viant/datly/repository/shape/plan"
 	"github.com/viant/datly/view/state"
 )
 
 type mutableComponentSupport struct {
 	BodyFieldName string
 	BodyTypeName  string
+	BodyMany      bool
 	Helpers       []mutableIndexHelper
 }
 
@@ -56,10 +56,11 @@ func (g *ComponentCodegen) mutableSupport(inputType reflect.Type) *mutableCompon
 			if bodyTypeName := strings.TrimSpace(input.Schema.Name); bodyTypeName != "" {
 				support.BodyTypeName = bodyTypeName
 			}
+			support.BodyMany = input.Schema.Cardinality == state.Many
 		}
 		break
 	}
-	for _, input := range g.Component.Input {
+	for _, input := range g.mutableHelperParametersForCodegen() {
 		if input == nil || input.In == nil || input.In.Kind != state.KindView {
 			continue
 		}
@@ -75,7 +76,7 @@ func (g *ComponentCodegen) mutableSupport(inputType reflect.Type) *mutableCompon
 	return support
 }
 
-func (g *ComponentCodegen) mutableIndexHelper(inputType reflect.Type, bodyFieldName string, param *plan.State) (mutableIndexHelper, bool) {
+func (g *ComponentCodegen) mutableIndexHelper(inputType reflect.Type, bodyFieldName string, param *state.Parameter) (mutableIndexHelper, bool) {
 	fieldName := exportedCodegenParamName(param.Name)
 	if fieldName == "" {
 		return mutableIndexHelper{}, false
@@ -128,6 +129,21 @@ func (g *ComponentCodegen) mutableIndexHelper(inputType reflect.Type, bodyFieldN
 		RelationPath:  mutableRelationPath(inputType, itemStructType, bodyFieldName),
 		ItemStruct:    itemStructType,
 	}, true
+}
+
+func (g *ComponentCodegen) mutableHelperParametersForCodegen() []*state.Parameter {
+	params := g.codegenInputParameters()
+	if len(params) == 0 {
+		return nil
+	}
+	result := make([]*state.Parameter, 0, len(params))
+	for _, item := range params {
+		if item == nil {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
 }
 
 func mutableRelationPath(inputType reflect.Type, itemType reflect.Type, bodyFieldName string) string {

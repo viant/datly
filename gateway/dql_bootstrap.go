@@ -2,11 +2,11 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -17,6 +17,8 @@ import (
 	shapeLoad "github.com/viant/datly/repository/shape/load"
 	datlyservice "github.com/viant/datly/service"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
+	"github.com/viant/tagly/format/text"
 )
 
 func (r *Service) applyDQLBootstrap(ctx context.Context, repo *repository.Service, cfg *DQLBootstrap) error {
@@ -72,7 +74,7 @@ func (r *Service) applyDQLBootstrap(ctx context.Context, repo *repository.Servic
 	return nil
 }
 
-func compileBootstrapComponent(ctx context.Context, compiler *shapeCompile.DQLCompiler, loader *shapeLoad.Loader, repo *repository.Service, sourcePath string, cfg *DQLBootstrap, apiPrefix string) (*repository.Component, error) {
+func compileBootstrapComponent(ctx context.Context, compiler *shapeCompile.DQLCompiler, loader *shapeLoad.Loader, repo *repository.Service, sourcePath string, cfg *DQLBootstrap, _ string) (*repository.Component, error) {
 	data, err := os.ReadFile(sourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read DQL bootstrap source %s: %w", sourcePath, err)
@@ -101,21 +103,62 @@ func compileBootstrapComponent(ctx context.Context, compiler *shapeCompile.DQLCo
 	if !ok || loaded == nil {
 		return nil, fmt.Errorf("unexpected shape component artifact for %s", sourcePath)
 	}
+	bootstrapMetadata := snapshotBootstrapViewMetadata(componentArtifact.Resource)
 	rootView := lookupRootView(componentArtifact.Resource, loaded.RootView)
 	if rootView == nil {
 		return nil, fmt.Errorf("missing root view %q for %s", loaded.RootView, sourcePath)
 	}
-	method, uri := resolvePathSettings(sourcePath, dql, apiPrefix)
+	method := strings.TrimSpace(strings.ToUpper(loaded.Method))
+	uri := strings.TrimSpace(loaded.URI)
+	if method == "" && len(loaded.ComponentRoutes) > 0 && loaded.ComponentRoutes[0] != nil {
+		method = strings.TrimSpace(strings.ToUpper(loaded.ComponentRoutes[0].Method))
+	}
+	if uri == "" && len(loaded.ComponentRoutes) > 0 && loaded.ComponentRoutes[0] != nil {
+		uri = strings.TrimSpace(loaded.ComponentRoutes[0].RoutePath)
+	}
+	if method == "" {
+		method = "GET"
+	}
+	if uri == "" {
+		return nil, fmt.Errorf("missing shape component route for %s", sourcePath)
+	}
+	var outputType reflect.Type
+	if shouldMaterializeBootstrapOutputType(loaded, rootView) {
+		pkgPath := bootstrapTypePackage(loaded)
+		lookupType := componentArtifact.Resource.LookupType()
+		outputType, err = loaded.OutputReflectType(pkgPath, lookupType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to materialize bootstrap output type for %s: %w", sourcePath, err)
+		}
+	}
 	componentModel := &repository.Component{
 		Path: contract.Path{
 			Method: method,
 			URI:    uri,
 		},
 		Contract: contract.Contract{
+			Input: contract.Input{
+				Type: state.Type{
+					Parameters: loaded.InputParameters(),
+				},
+			},
+			Output: contract.Output{
+				CaseFormat:  bootstrapOutputCaseFormat(loaded),
+				Cardinality: bootstrapOutputCardinality(loaded, rootView),
+				Type: state.Type{
+					Parameters: loaded.OutputParameters(),
+				},
+			},
 			Service: defaultServiceForMethod(method, rootView),
 		},
 		View:        rootView,
 		TypeContext: loaded.TypeContext,
+	}
+	if outputType != nil {
+		if componentModel.Contract.Output.Type.Schema == nil {
+			componentModel.Contract.Output.Type.Schema = state.NewSchema(nil)
+		}
+		componentModel.Contract.Output.Type.SetType(outputType)
 	}
 	loadOptions := []repository.Option{}
 	if repo != nil {
@@ -129,13 +172,41 @@ func compileBootstrapComponent(ctx context.Context, compiler *shapeCompile.DQLCo
 	if err != nil {
 		return nil, fmt.Errorf("failed to materialize bootstrap component for %s: %w", sourcePath, err)
 	}
+	mergeBootstrapViewMetadata(components.Resource, bootstrapMetadata)
 	if err = components.Init(ctx); err != nil {
 		return nil, fmt.Errorf("failed to initialize bootstrap component for %s: %w", sourcePath, err)
 	}
 	if len(components.Components) == 0 || components.Components[0] == nil {
 		return nil, fmt.Errorf("empty initialized bootstrap component for %s", sourcePath)
 	}
+	mergeBootstrapView(components.Components[0].View, lookupRootView(bootstrapMetadata, loaded.RootView))
 	return components.Components[0], nil
+}
+
+func bootstrapTypePackage(component *shapeLoad.Component) string {
+	if component == nil || component.TypeContext == nil {
+		return ""
+	}
+	if pkgPath := strings.TrimSpace(component.TypeContext.PackagePath); pkgPath != "" {
+		return pkgPath
+	}
+	return strings.TrimSpace(component.TypeContext.DefaultPackage)
+}
+
+func shouldMaterializeBootstrapOutputType(component *shapeLoad.Component, rootView *view.View) bool {
+	if component == nil || rootView == nil || rootView.Schema == nil || rootView.Schema.Cardinality != state.One {
+		return false
+	}
+	for _, item := range component.Output {
+		if item == nil || item.In == nil || item.In.Kind != state.KindOutput || item.In.Name != "view" {
+			continue
+		}
+		if !strings.Contains(item.Tag, "anonymous") || item.Schema == nil {
+			return false
+		}
+		return item.Schema.Cardinality == state.One
+	}
+	return false
 }
 
 func mergeBootstrapSharedResources(target *view.Resource, repo *repository.Service) {
@@ -180,7 +251,7 @@ func hasRepositoryProvider(ctx context.Context, repo *repository.Service, path *
 	_, err := repo.Registry().LookupProvider(ctx, path)
 	if err != nil {
 		message := strings.ToLower(strings.TrimSpace(err.Error()))
-		if strings.Contains(message, "not found") {
+		if strings.Contains(message, "not found") || strings.Contains(message, "couldn't match uri") {
 			return false, nil
 		}
 		return false, err
@@ -410,44 +481,128 @@ func lookupRootView(resource *view.Resource, root string) *view.View {
 	return nil
 }
 
-type bootstrapRuleSettings struct {
-	Method string `json:"Method"`
-	URI    string `json:"URI"`
-}
-
-func resolvePathSettings(sourcePath, dql, apiPrefix string) (string, string) {
-	method := "GET"
-	uri := ""
-	settings := parseBootstrapRuleSettings(dql)
-	if settings != nil {
-		if candidate := strings.TrimSpace(strings.ToUpper(settings.Method)); candidate != "" {
-			method = candidate
-		}
-		uri = strings.TrimSpace(settings.URI)
-	}
-	if uri == "" {
-		stem := strings.TrimSuffix(filepath.Base(sourcePath), filepath.Ext(sourcePath))
-		uri = "/" + strings.Trim(stem, "/")
-		if prefix := strings.TrimSpace(apiPrefix); prefix != "" {
-			uri = strings.TrimRight(prefix, "/") + uri
+func bootstrapOutputCardinality(component *shapeLoad.Component, rootView *view.View) state.Cardinality {
+	if component != nil {
+		if output := component.OutputParameters(); len(output) > 0 {
+			if parameter := output.LookupByLocation(state.KindOutput, "view"); parameter != nil && parameter.Schema != nil && parameter.Schema.Cardinality != "" {
+				return parameter.Schema.Cardinality
+			}
 		}
 	}
-	return method, uri
+	if rootView != nil && rootView.Schema != nil && rootView.Schema.Cardinality != "" {
+		return rootView.Schema.Cardinality
+	}
+	return ""
 }
 
-func parseBootstrapRuleSettings(dql string) *bootstrapRuleSettings {
-	start := strings.Index(dql, "/*")
-	end := strings.Index(dql, "*/")
-	if start == -1 || end == -1 || end <= start+2 {
+func bootstrapOutputCaseFormat(component *shapeLoad.Component) text.CaseFormat {
+	if component != nil && component.Directives != nil {
+		if value := strings.TrimSpace(component.Directives.CaseFormat); value != "" {
+			return text.CaseFormat(value)
+		}
+	}
+	return text.CaseFormatLowerCamel
+}
+
+func mergeBootstrapViewMetadata(target, source *view.Resource) {
+	if target == nil || source == nil {
+		return
+	}
+	sourceViews := source.Views.Index()
+	for _, candidate := range target.Views {
+		if candidate == nil {
+			continue
+		}
+		original, _ := sourceViews.Lookup(candidate.Name)
+		if original == nil {
+			continue
+		}
+		mergeBootstrapView(candidate, original)
+	}
+}
+
+func mergeBootstrapView(target, source *view.View) {
+	if target == nil || source == nil {
+		return
+	}
+	if source.AllowNulls != nil {
+		value := *source.AllowNulls
+		target.AllowNulls = &value
+	}
+	if source.Groupable {
+		target.Groupable = true
+	}
+	if source.Selector != nil {
+		target.Selector = source.Selector
+	}
+	if len(source.ColumnsConfig) > 0 {
+		target.ColumnsConfig = map[string]*view.ColumnConfig{}
+		for key, cfg := range source.ColumnsConfig {
+			if cfg == nil {
+				continue
+			}
+			cloned := *cfg
+			if cfg.DataType != nil {
+				value := *cfg.DataType
+				cloned.DataType = &value
+			}
+			if cfg.Tag != nil {
+				value := *cfg.Tag
+				cloned.Tag = &value
+			}
+			if cfg.Groupable != nil {
+				value := *cfg.Groupable
+				cloned.Groupable = &value
+			}
+			target.ColumnsConfig[key] = &cloned
+		}
+	}
+}
+
+func snapshotBootstrapViewMetadata(resource *view.Resource) *view.Resource {
+	if resource == nil {
 		return nil
 	}
-	raw := strings.TrimSpace(dql[start+2 : end])
-	if !strings.HasPrefix(raw, "{") || !strings.HasSuffix(raw, "}") {
-		return nil
+	result := &view.Resource{}
+	for _, item := range resource.Views {
+		if item == nil {
+			continue
+		}
+		cloned := &view.View{
+			Name:      item.Name,
+			Groupable: item.Groupable,
+		}
+		cloned.Reference.Ref = item.Ref
+		if item.AllowNulls != nil {
+			value := *item.AllowNulls
+			cloned.AllowNulls = &value
+		}
+		if item.Selector != nil {
+			cloned.Selector = item.Selector
+		}
+		if len(item.ColumnsConfig) > 0 {
+			cloned.ColumnsConfig = map[string]*view.ColumnConfig{}
+			for key, cfg := range item.ColumnsConfig {
+				if cfg == nil {
+					continue
+				}
+				copied := *cfg
+				if cfg.DataType != nil {
+					value := *cfg.DataType
+					copied.DataType = &value
+				}
+				if cfg.Tag != nil {
+					value := *cfg.Tag
+					copied.Tag = &value
+				}
+				if cfg.Groupable != nil {
+					value := *cfg.Groupable
+					copied.Groupable = &value
+				}
+				cloned.ColumnsConfig[key] = &copied
+			}
+		}
+		result.Views = append(result.Views, cloned)
 	}
-	ret := &bootstrapRuleSettings{}
-	if err := json.Unmarshal([]byte(raw), ret); err != nil {
-		return nil
-	}
-	return ret
+	return result
 }

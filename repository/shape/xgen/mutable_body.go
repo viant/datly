@@ -3,6 +3,7 @@ package xgen
 import (
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -35,7 +36,9 @@ func (g *ComponentCodegen) renderMutableVeltyBody(inputType reflect.Type) (strin
 	if err = block.Generate(builder); err != nil {
 		return "", false, err
 	}
-	return strings.TrimSpace(builder.String()) + "\n", true, nil
+	body := strings.TrimSpace(builder.String())
+	body = g.normalizeMutableBodyReferences(body, support)
+	return body + "\n", true, nil
 }
 
 func (g *ComponentCodegen) renderMutableDSQL(inputType reflect.Type) (string, bool, error) {
@@ -43,34 +46,7 @@ func (g *ComponentCodegen) renderMutableDSQL(inputType reflect.Type) (string, bo
 	if err != nil || !ok {
 		return "", ok, err
 	}
-	support := g.mutableSupport(inputType)
-	if support == nil {
-		return "", false, nil
-	}
-	var builder strings.Builder
-	builder.WriteString("/* ")
-	builder.WriteString(g.mutableRouteOptionJSON())
-	builder.WriteString(" */\n\n\n")
-	if imports := g.mutableTypeImports(support, inputType); len(imports) > 0 {
-		builder.WriteString("import (\n")
-		for _, item := range imports {
-			builder.WriteString("\t")
-			builder.WriteString(strconvQuote(item))
-			builder.WriteString("\n")
-		}
-		builder.WriteString("\t)\n\n\n")
-	}
-	builder.WriteString(g.mutableBodyDeclaration(inputType, support))
-	for _, helper := range g.mutableIDHelpers(support) {
-		builder.WriteString(g.mutableIDsDeclaration(helper))
-	}
-	for _, helper := range g.mutableViewHelpers(support) {
-		builder.WriteString(g.mutableViewDeclaration(helper))
-	}
-	builder.WriteString(g.mutableOutputDeclaration(inputType, support))
-	builder.WriteString("\n\n")
-	builder.WriteString(body)
-	return builder.String(), true, nil
+	return strings.TrimSpace(body) + "\n", true, nil
 }
 
 func (g *ComponentCodegen) mutableTypeImports(support *mutableComponentSupport, inputType reflect.Type) []string {
@@ -80,14 +56,14 @@ func (g *ComponentCodegen) mutableTypeImports(support *mutableComponentSupport, 
 		if typeName == "" {
 			return
 		}
-		pkg := strings.TrimSpace(g.PackageName)
+		pkg := strings.TrimSpace(g.PackagePath)
 		if pkg == "" && g.TypeContext != nil {
-			pkg = strings.TrimSpace(g.TypeContext.PackageName)
+			pkg = strings.TrimSpace(g.TypeContext.PackagePath)
 		}
 		if pkg == "" {
 			return
 		}
-		items[pkg+"."+typeName] = struct{}{}
+		items[pkg] = struct{}{}
 	}
 	if bodyField, ok := inputType.FieldByName(support.BodyFieldName); ok {
 		if itemType, _ := mutableBodyItemType(bodyField.Type); itemType != nil {
@@ -132,19 +108,11 @@ func (g *ComponentCodegen) mutableBodyDeclaration(inputType reflect.Type, suppor
 	if !ok {
 		return ""
 	}
-	itemType, many := mutableBodyItemType(bodyField.Type)
-	if itemType == nil {
-		return ""
+	cardinality := ""
+	if g.mutableBodyMany(bodyField, support) {
+		cardinality = ".Cardinality('Many')"
 	}
-	typeName := strings.TrimSpace(support.BodyTypeName)
-	if typeName == "" {
-		typeName = itemType.Name()
-	}
-	typeExpr := typeName
-	if many {
-		typeExpr = "[]" + typeName
-	}
-	return "#set($_ = $" + support.BodyFieldName + "<" + typeExpr + ">(body/).WithTag('anonymous:\"true\"').Required())\n"
+	return "#set($_ = $" + support.BodyFieldName + "<?>(body/)" + cardinality + ".WithTag('anonymous:\"true\"').Required())\n"
 }
 
 func (g *ComponentCodegen) mutableIDsDeclaration(helper mutableIndexHelper) string {
@@ -157,19 +125,66 @@ func (g *ComponentCodegen) mutableIDsDeclaration(helper mutableIndexHelper) stri
 }
 
 func (g *ComponentCodegen) mutableViewDeclaration(helper mutableIndexHelper) string {
-	typeName := strings.TrimSpace(helper.TypeName)
-	if typeName == "" && helper.ItemStruct != nil {
-		typeName = strings.TrimSpace(helper.ItemStruct.Name())
-	}
-	viewType := "[]*" + typeName
-	if typeName == "" || helper.ViewFieldName == "" {
+	viewName := strings.TrimSpace(helper.ViewFieldName)
+	if viewName == "" {
 		return ""
 	}
 	sqlText := g.mutableDeclarationViewSQL(helper)
 	if sqlText == "" {
 		return ""
 	}
-	return "\t#set($_ = $" + helper.ViewFieldName + "<" + viewType + ">(view/" + helper.ViewFieldName + ") /*\n" + sqlText + "\n*/\n)\n"
+	typeExpr := strings.TrimSpace(helper.ItemTypeExpr)
+	if typeExpr == "" {
+		return ""
+	}
+	if g.mutableHelperUsesMany(helper) && !strings.HasPrefix(typeExpr, "[]") {
+		typeExpr = "[]" + typeExpr
+	}
+	return "\t#set($_ = $" + viewName + "<" + typeExpr + ">(view/" + viewName + ") /*\n" + sqlText + "\n*/\n)\n"
+}
+
+func (g *ComponentCodegen) mutableHelperUsesMany(helper mutableIndexHelper) bool {
+	if g == nil {
+		return true
+	}
+	lookup := func(params state.Parameters) (bool, bool) {
+		for _, input := range params {
+			if input == nil || input.In == nil || input.In.Kind != state.KindView {
+				continue
+			}
+			if !strings.EqualFold(strings.TrimSpace(input.Name), strings.TrimSpace(helper.ViewParamName)) {
+				continue
+			}
+			if input.Schema == nil {
+				return true, true
+			}
+			return input.Schema.Cardinality == state.Many, true
+		}
+		return false, false
+	}
+	if g.Component != nil {
+		componentInputs := make(state.Parameters, 0, len(g.Component.Input))
+		for _, input := range g.Component.Input {
+			if input == nil {
+				continue
+			}
+			componentInputs = append(componentInputs, &input.Parameter)
+		}
+		if many, ok := lookup(componentInputs); ok {
+			return many
+		}
+	}
+	if root := g.rootResourceView(); root != nil && root.Template != nil {
+		if many, ok := lookup(root.Template.Parameters); ok {
+			return many
+		}
+	}
+	if g.Resource != nil {
+		if many, ok := lookup(g.Resource.Parameters); ok {
+			return many
+		}
+	}
+	return true
 }
 
 func (g *ComponentCodegen) mutableOutputDeclaration(inputType reflect.Type, support *mutableComponentSupport) string {
@@ -177,22 +192,29 @@ func (g *ComponentCodegen) mutableOutputDeclaration(inputType reflect.Type, supp
 	if !ok {
 		return ""
 	}
-	_, many := mutableBodyItemType(bodyField.Type)
-	typeExpr := ""
-	if many {
-		typeExpr = "[]"
+	cardinality := ""
+	if g.mutableBodyMany(bodyField, support) {
+		cardinality = ".Cardinality('Many')"
 	}
+	tag := `anonymous:"true"`
 	typeName := strings.TrimSpace(support.BodyTypeName)
 	if typeName == "" {
 		if itemType, _ := mutableBodyItemType(bodyField.Type); itemType != nil {
 			typeName = itemType.Name()
 		}
 	}
-	tag := `anonymous:"true"`
 	if typeName != "" {
 		tag += `  typeName:"` + typeName + `"`
 	}
-	return "#set($_ = $" + support.BodyFieldName + "<" + typeExpr + ">(body/).WithTag('" + tag + "').Required().Output())\n"
+	return "#set($_ = $" + support.BodyFieldName + "<?>(body/)" + cardinality + ".WithTag('" + tag + "').Required().Output())\n"
+}
+
+func (g *ComponentCodegen) mutableQualifiedTypeName(typeName string) string {
+	typeName = strings.TrimSpace(typeName)
+	if typeName == "" {
+		return ""
+	}
+	return typeName
 }
 
 func (g *ComponentCodegen) mutableIDSQL(helper mutableIndexHelper) string {
@@ -209,22 +231,22 @@ func (g *ComponentCodegen) mutableIDSQL(helper mutableIndexHelper) string {
 
 func (g *ComponentCodegen) mutableViewSQL(helper mutableIndexHelper) string {
 	if g == nil || g.Resource == nil {
-		return g.mutableFallbackViewSQL(helper)
+		return g.normalizeMutableViewSQL(helper, g.mutableFallbackViewSQL(helper))
 	}
 	for _, aView := range g.Resource.Views {
 		if aView == nil || !strings.EqualFold(strings.TrimSpace(aView.Name), strings.TrimSpace(helper.ViewParamName)) {
 			continue
 		}
 		if aView.Template == nil {
-			return g.mutableFallbackViewSQL(helper)
+			return g.normalizeMutableViewSQL(helper, g.mutableFallbackViewSQL(helper))
 		}
 		sqlText := strings.TrimSpace(aView.Template.Source)
 		if sqlText != "" {
-			return sqlText
+			return g.normalizeMutableViewSQL(helper, sqlText)
 		}
-		return g.mutableFallbackViewSQL(helper)
+		return g.normalizeMutableViewSQL(helper, g.mutableFallbackViewSQL(helper))
 	}
-	return g.mutableFallbackViewSQL(helper)
+	return g.normalizeMutableViewSQL(helper, g.mutableFallbackViewSQL(helper))
 }
 
 func (g *ComponentCodegen) mutableDeclarationViewSQL(helper mutableIndexHelper) string {
@@ -255,7 +277,48 @@ func (g *ComponentCodegen) mutableFallbackViewSQL(helper mutableIndexHelper) str
 	if key == "" {
 		key = "Id"
 	}
-	return "SELECT * FROM " + tableName + "\nWHERE $criteria.In(\"" + key + "\", $" + idParam + ".Values)"
+	return "SELECT * FROM " + tableName + "\nWHERE $criteria.In(\"" + key + "\", $Unsafe." + idParam + ".Values)"
+}
+
+func (g *ComponentCodegen) normalizeMutableViewSQL(helper mutableIndexHelper, sqlText string) string {
+	sqlText = strings.TrimSpace(sqlText)
+	if sqlText == "" {
+		return ""
+	}
+	idParam := strings.TrimSpace(g.mutableIDsParamName(helper))
+	if idParam == "" {
+		return sqlText
+	}
+	legacy := "$" + idParam + ".Values"
+	normalized := "$Unsafe." + idParam + ".Values"
+	if strings.Contains(sqlText, legacy) && !strings.Contains(sqlText, normalized) {
+		sqlText = strings.ReplaceAll(sqlText, legacy, normalized)
+	}
+	return sqlText
+}
+
+func (g *ComponentCodegen) normalizeMutableBodyReferences(body string, support *mutableComponentSupport) string {
+	body = strings.TrimSpace(body)
+	if body == "" || support == nil {
+		return body
+	}
+	names := []string{strings.TrimSpace(support.BodyFieldName)}
+	for _, helper := range support.Helpers {
+		if name := strings.TrimSpace(helper.ViewFieldName); name != "" {
+			names = append(names, name)
+		}
+	}
+	for _, name := range names {
+		if name == "" {
+			continue
+		}
+		pattern := regexp.MustCompile(`\$` + regexp.QuoteMeta(name) + `\b`)
+		body = pattern.ReplaceAllStringFunc(body, func(string) string {
+			return "$Unsafe." + name
+		})
+	}
+	body = regexp.MustCompile(`#set\(\$([A-Za-z0-9_]+)<map\[[^\n]+?> =`).ReplaceAllString(body, `#set($$1 =`)
+	return body
 }
 
 func (g *ComponentCodegen) supportBodyFieldName(helper mutableIndexHelper) string {
@@ -473,7 +536,7 @@ func (g *ComponentCodegen) mutableInputType() (reflect.Type, error) {
 	if g == nil || g.Component == nil {
 		return nil, nil
 	}
-	params := normalizeInputParametersForCodegen(g.Component.InputParameters(), g.Resource, g.Component.URI)
+	params := g.codegenInputParameters()
 	opts := []state.ReflectOption{state.WithSetMarker(), state.WithTypeName(g.inputTypeName(g.componentName()))}
 	if g.componentUsesVelty() {
 		opts = append(opts, state.WithVelty(true))
@@ -491,7 +554,7 @@ func (g *ComponentCodegen) buildMutableVeltyBlock(inputType reflect.Type, suppor
 	if !ok {
 		return nil, nil
 	}
-	bodyItemType, bodyIsMany := mutableBodyItemType(bodyField.Type)
+	bodyItemType, _ := mutableBodyItemType(bodyField.Type)
 	if bodyItemType == nil {
 		return nil, nil
 	}
@@ -509,7 +572,7 @@ func (g *ComponentCodegen) buildMutableVeltyBlock(inputType reflect.Type, suppor
 
 	for _, helper := range support.Helpers {
 		block.Append(shapeast.NewAssign(
-			shapeast.NewIdent(helper.MapFieldName),
+			g.mutableHelperMapHolder(helper),
 			shapeast.NewCallExpr(shapeast.NewIdent(helper.ViewFieldName), "IndexBy", shapeast.NewQuotedLiteral(helper.KeyFieldName)),
 		))
 	}
@@ -519,7 +582,7 @@ func (g *ComponentCodegen) buildMutableVeltyBlock(inputType reflect.Type, suppor
 
 	rootHelper := support.rootHelper()
 	bodyExpr := shapeast.NewIdent(support.BodyFieldName)
-	if bodyIsMany {
+	if g.mutableBodyMany(bodyField, support) {
 		recordName := mutableRecordName(support.BodyFieldName)
 		forEach := shapeast.NewForEach(shapeast.NewIdent(recordName), bodyExpr, shapeast.Block{})
 		g.appendMutableWriteLogic(&forEach.Body, shapeast.NewIdent(recordName), "", bodyItemType, bodyTable, support, rootHelper, bodyKeyField)
@@ -527,10 +590,36 @@ func (g *ComponentCodegen) buildMutableVeltyBlock(inputType reflect.Type, suppor
 		return block, nil
 	}
 
-	condition := shapeast.NewCondition(bodyExpr, shapeast.Block{}, nil)
-	g.appendMutableWriteLogic(&condition.IFBlock, bodyExpr, "", bodyItemType, bodyTable, support, rootHelper, bodyKeyField)
-	block.Append(condition)
+	g.appendMutableWriteLogic(&block, bodyExpr, "", bodyItemType, bodyTable, support, rootHelper, bodyKeyField)
 	return block, nil
+}
+
+func (g *ComponentCodegen) mutableHelperMapHolder(helper mutableIndexHelper) shapeast.Expression {
+	return shapeast.NewIdent(helper.MapFieldName)
+}
+
+func mutableItemExprIsPointer(itemTypeExpr string) bool {
+	itemTypeExpr = strings.TrimSpace(itemTypeExpr)
+	return strings.HasPrefix(itemTypeExpr, "*") || strings.HasPrefix(itemTypeExpr, "[]*")
+}
+
+func (g *ComponentCodegen) mutableBodyMany(bodyField reflect.StructField, support *mutableComponentSupport) bool {
+	if support != nil && support.BodyMany {
+		return true
+	}
+	if g != nil && g.Component != nil {
+		for _, input := range g.Component.Input {
+			if input == nil || input.In == nil || input.In.Kind != state.KindRequestBody {
+				continue
+			}
+			if input.Schema != nil && input.Schema.Cardinality != "" {
+				return input.Schema.Cardinality == state.Many
+			}
+			break
+		}
+	}
+	_, many := mutableBodyItemType(bodyField.Type)
+	return many
 }
 
 func (g *ComponentCodegen) appendMutableWriteLogic(block *shapeast.Block, recordExpr *shapeast.Ident, logicalPath string, recordType reflect.Type, tableName string, support *mutableComponentSupport, rootHelper *mutableIndexHelper, keyField reflect.StructField) {

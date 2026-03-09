@@ -2,6 +2,7 @@ package xgen
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -63,6 +64,12 @@ type ComponentCodegenResult struct {
 	RouterFilePath string
 	VeltyFilePath  string
 	Embeds         map[string]string // SQL file name → SQL content
+}
+
+type codegenSelectorHolder struct {
+	FieldName     string
+	QuerySelector string
+	Type          reflect.Type
 }
 
 // Generate produces the component Go source file.
@@ -129,13 +136,17 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 	lookupType := g.componentLookupType(packagePath)
 
 	var inputType, outputType reflect.Type
-	if params := g.Component.InputParameters(); len(params) > 0 || strings.TrimSpace(g.Component.URI) != "" {
-		normalized := normalizeInputParametersForCodegen(params, g.Resource, g.Component.URI)
+	var selectorHolders []codegenSelectorHolder
+	inputParams := state.Parameters(nil)
+	if params := g.codegenInputParameters(); len(params) > 0 || strings.TrimSpace(g.Component.URI) != "" {
+		normalized := params
+		inputParams, selectorHolders = g.partitionInputParametersForCodegen(normalized, packagePath, lookupType)
+		normalizeBodyInputTypesForCodegen(inputParams, packagePath, lookupType)
 		inputOpts := []state.ReflectOption{state.WithSetMarker(), state.WithTypeName(inputTypeName)}
 		if g.componentUsesVelty() {
 			inputOpts = append(inputOpts, state.WithVelty(true))
 		}
-		rt, err := normalized.ReflectType(packagePath, lookupType, inputOpts...)
+		rt, err := inputParams.ReflectType(packagePath, lookupType, inputOpts...)
 		if err == nil && rt != nil {
 			inputType = rt
 		}
@@ -146,6 +157,7 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 	if !hasExplicitOutput {
 		outputParams = g.defaultOutputParameters(componentName)
 	}
+	g.syncOutputSummarySchemasForCodegen(outputParams)
 	// Resolve wildcard output types to the view entity type
 	g.resolveOutputWildcardTypes(outputParams, componentName)
 	if len(outputParams) > 0 {
@@ -166,6 +178,15 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 	}
 
 	inputHelpers := collectNamedHelperTypes(inputType, packagePath, shapeTypeNames)
+	selectorHelpers := []namedHelperType{}
+	selectorTypeImports := []string{}
+	for _, holder := range selectorHolders {
+		if holder.Type == nil {
+			continue
+		}
+		selectorHelpers = append(selectorHelpers, collectNamedHelperTypes(holder.Type, packagePath, shapeTypeNames)...)
+		selectorTypeImports = mergeImportPaths(selectorTypeImports, collectTypeImports(holder.Type, packagePath))
+	}
 	outputHelpers := collectNamedHelperTypes(outputType, packagePath, shapeTypeNames)
 	mutableSupport := g.mutableSupport(inputType)
 	emitResponseImport := g.outputUsesResponse(outputParams) || mutableSupport != nil
@@ -218,6 +239,14 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 				registryPackage, helper.TypeName, helper.TypeName))
 			registered[helper.TypeName] = true
 		}
+		for _, helper := range selectorHelpers {
+			if helper.TypeName == "" || registered[helper.TypeName] {
+				continue
+			}
+			initBuilder.WriteString(fmt.Sprintf("\tcore.RegisterType(%q, %q, reflect.TypeOf(%s{}), checksum.GeneratedTime)\n",
+				registryPackage, helper.TypeName, helper.TypeName))
+			registered[helper.TypeName] = true
+		}
 	}
 	initBuilder.WriteString("}\n\n")
 
@@ -257,7 +286,10 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 		outputBuilder.WriteString(helper.Decl)
 	}
 	if g.WithContract {
-		g.renderComponentHolder(&routerBuilder, componentName, inputTypeName, outputTypeName)
+		g.renderComponentHolder(&routerBuilder, componentName, inputTypeName, outputTypeName, selectorHolders)
+		for _, helper := range selectorHelpers {
+			routerBuilder.WriteString(helper.Decl)
+		}
 		g.renderDefineComponent(&outputBuilder, componentName, inputTypeName, outputTypeName)
 	}
 
@@ -337,7 +369,9 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 			viewImports,
 			collectTypeImports(inputType, packagePath),
 			collectTypeImports(outputType, packagePath),
+			selectorTypeImports,
 			helperImports(inputHelpers),
+			helperImports(selectorHelpers),
 			helperImports(outputHelpers),
 			mutableOutputImports,
 		)
@@ -354,6 +388,9 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 			helperImports(outputHelpers),
 			mutableOutputImports,
 		)
+		if routerFileName == "" || routerFileName == outputFileName {
+			outputImports = mergeImportPaths(outputImports, selectorTypeImports, helperImports(selectorHelpers))
+		}
 		if viewFileName == outputFileName {
 			outputImports = mergeImportPaths(outputImports, viewImports)
 		}
@@ -403,7 +440,8 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 			}
 		}
 		if len(routerParts) > 0 {
-			if writeErr = g.writeSectionFile(routerDest, packageName, g.buildRouterImports(), routerParts...); writeErr != nil {
+			routerImports := mergeImportPaths(g.buildRouterImports(), selectorTypeImports, helperImports(selectorHelpers))
+			if writeErr = g.writeSectionFile(routerDest, packageName, routerImports, routerParts...); writeErr != nil {
 				return nil, writeErr
 			}
 			appendGenerated(routerDest)
@@ -481,6 +519,67 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 	}, nil
 }
 
+func normalizeBodyInputTypesForCodegen(params state.Parameters, pkgPath string, lookupType xreflect.LookupType) {
+	for _, param := range params {
+		if param == nil || param.In == nil || param.In.Kind != state.KindRequestBody || param.Schema == nil {
+			continue
+		}
+		if param.Schema.Cardinality != state.One {
+			continue
+		}
+		rType := param.Schema.Type()
+		if rType == nil {
+			if resolved, err := utypes.LookupType(lookupType, param.Schema.DataType, xreflect.WithPackage(param.Schema.Package)); err == nil && resolved != nil {
+				rType = resolved
+			} else if resolved, err := utypes.LookupType(lookupType, param.Schema.DataType, xreflect.WithPackage(pkgPath)); err == nil && resolved != nil {
+				rType = resolved
+			}
+		}
+		if rType != nil && rType.Kind() == reflect.Struct {
+			param.Schema.SetType(reflect.PtrTo(rType))
+		}
+	}
+}
+
+func (g *ComponentCodegen) refreshSummarySchemasForCodegen() {
+	if g == nil || g.Resource == nil {
+		return
+	}
+	visited := map[*view.View]bool{}
+	for _, aView := range g.Resource.Views {
+		g.refreshViewSummarySchemasForCodegen(context.Background(), aView, visited)
+	}
+}
+
+func (g *ComponentCodegen) refreshViewSummarySchemasForCodegen(ctx context.Context, aView *view.View, visited map[*view.View]bool) {
+	if aView == nil || visited[aView] {
+		return
+	}
+	visited[aView] = true
+	if aView.Template != nil && aView.Template.Summary != nil {
+		_ = aView.Template.Init(ctx, g.Resource, aView)
+	}
+	for _, rel := range aView.With {
+		if rel == nil || rel.Of == nil {
+			continue
+		}
+		g.refreshViewSummarySchemasForCodegen(ctx, &rel.Of.View, visited)
+	}
+}
+
+func (g *ComponentCodegen) syncOutputSummarySchemasForCodegen(params state.Parameters) {
+	root := g.rootResourceView()
+	if root == nil || root.Template == nil || root.Template.Summary == nil || root.Template.Summary.Schema == nil {
+		return
+	}
+	for _, param := range params {
+		if param == nil || param.In == nil || param.In.Name != "summary" {
+			continue
+		}
+		param.Schema = root.Template.Summary.Schema.Clone()
+	}
+}
+
 func normalizeInputParametersForCodegen(params state.Parameters, resource *view.Resource, uri string) state.Parameters {
 	result := make(state.Parameters, 0, len(params)+4)
 	seenPath := map[string]bool{}
@@ -497,6 +596,9 @@ func normalizeInputParametersForCodegen(params state.Parameters, resource *view.
 		cloned.Schema = schema
 		if cloned.Schema != nil && stateResource != nil {
 			_ = cloned.Schema.Init(stateResource)
+			if cloned.In != nil && cloned.In.Kind == state.KindRequestBody && cloned.Schema.Cardinality == state.One {
+				normalizeBodySchemaPointerForCodegen(cloned.Schema)
+			}
 		}
 		if cloned.Output != nil {
 			output := *cloned.Output
@@ -516,8 +618,8 @@ func normalizeInputParametersForCodegen(params state.Parameters, resource *view.
 			if v := lookupInputView(resource, viewName); v != nil {
 				cloned.Tag = mergeViewSQLTag(cloned.Tag, v)
 			}
-			cloned.Tag = removeTagKeys(cloned.Tag, "typeName")
 		}
+		cloned.Tag = ensureCodegenTypeNameTag(cloned.Tag, cloned.Schema)
 		if in := cloned.In; in != nil && in.Kind == state.KindPath {
 			key := strings.ToLower(strings.TrimSpace(in.Name))
 			if key == "" {
@@ -544,6 +646,56 @@ func normalizeInputParametersForCodegen(params state.Parameters, resource *view.
 			},
 		})
 		seenPath[key] = true
+	}
+	return result
+}
+
+func (g *ComponentCodegen) codegenInputParameters() state.Parameters {
+	if g == nil || g.Component == nil {
+		return nil
+	}
+	params := cloneCodegenParameters(g.Component.InputParameters())
+	params = g.mergeMutableTemplateInputParametersForCodegen(params)
+	return normalizeInputParametersForCodegen(params, g.Resource, g.Component.URI)
+}
+
+func (g *ComponentCodegen) mergeMutableTemplateInputParametersForCodegen(params state.Parameters) state.Parameters {
+	if g == nil || !g.componentUsesVelty() {
+		return params
+	}
+	root := g.rootResourceView()
+	if root == nil || root.Template == nil || !root.Template.UseParameterStateType || len(root.Template.Parameters) == 0 {
+		return params
+	}
+	result := cloneCodegenParameters(params)
+	seen := map[string]bool{}
+	for _, item := range result {
+		if item == nil {
+			continue
+		}
+		seen[codegenParameterKey(item)] = true
+	}
+	for _, item := range root.Template.Parameters {
+		if item == nil {
+			continue
+		}
+		key := codegenParameterKey(item)
+		if seen[key] {
+			continue
+		}
+		cloned := *item
+		if item.Schema != nil {
+			cloned.Schema = item.Schema.Clone()
+		}
+		if item.Output != nil {
+			output := *item.Output
+			if item.Output.Schema != nil {
+				output.Schema = item.Output.Schema.Clone()
+			}
+			cloned.Output = &output
+		}
+		result = append(result, &cloned)
+		seen[key] = true
 	}
 	return result
 }
@@ -613,6 +765,94 @@ func cloneCodegenParameters(params state.Parameters) state.Parameters {
 	return result
 }
 
+func (g *ComponentCodegen) partitionInputParametersForCodegen(params state.Parameters, packagePath string, lookupType xreflect.LookupType) (state.Parameters, []codegenSelectorHolder) {
+	if len(params) == 0 {
+		return nil, nil
+	}
+	selectorByKey := map[string]string{}
+	if g != nil && g.Component != nil {
+		for _, item := range g.Component.Input {
+			if item == nil || strings.TrimSpace(item.QuerySelector) == "" {
+				continue
+			}
+			selectorByKey[codegenParameterKey(&item.Parameter)] = strings.TrimSpace(item.QuerySelector)
+		}
+	}
+
+	business := make(state.Parameters, 0, len(params))
+	grouped := map[string]state.Parameters{}
+	order := []string{}
+	for _, item := range params {
+		if item == nil {
+			continue
+		}
+		querySelector := selectorByKey[codegenParameterKey(item)]
+		if querySelector == "" {
+			business = append(business, item)
+			continue
+		}
+		if _, ok := grouped[querySelector]; !ok {
+			order = append(order, querySelector)
+		}
+		grouped[querySelector] = append(grouped[querySelector], item)
+	}
+
+	if len(order) == 0 {
+		return business, nil
+	}
+
+	holders := make([]codegenSelectorHolder, 0, len(order))
+	usedNames := map[string]bool{}
+	for i, querySelector := range order {
+		group := grouped[querySelector]
+		holderType, err := group.ReflectType(packagePath, lookupType)
+		if err != nil || holderType == nil {
+			business = append(business, group...)
+			continue
+		}
+		holders = append(holders, codegenSelectorHolder{
+			FieldName:     selectorHolderFieldName(querySelector, i, len(order), usedNames),
+			QuerySelector: querySelector,
+			Type:          holderType,
+		})
+	}
+	return business, holders
+}
+
+func codegenParameterKey(param *state.Parameter) string {
+	if param == nil {
+		return ""
+	}
+	kind := ""
+	inName := ""
+	if param.In != nil {
+		kind = strings.ToLower(strings.TrimSpace(string(param.In.Kind)))
+		inName = strings.ToLower(strings.TrimSpace(param.In.Name))
+	}
+	return strings.ToLower(strings.TrimSpace(param.Name)) + "|" + kind + "|" + inName
+}
+
+func selectorHolderFieldName(querySelector string, index, total int, used map[string]bool) string {
+	name := "ViewSelect"
+	if total > 1 {
+		base := toUpperCamel(querySelector)
+		if base != "" {
+			name = base + "Select"
+		} else {
+			name = fmt.Sprintf("ViewSelect%d", index+1)
+		}
+	}
+	candidate := name
+	if used == nil {
+		return candidate
+	}
+	for suffix := 2; used[candidate]; suffix++ {
+		candidate = fmt.Sprintf("%s%d", name, suffix)
+	}
+	used[candidate] = true
+	return candidate
+}
+
 func normalizeInputSchemaForCodegen(paramName string, in *state.Location, required bool, schema *state.Schema, resource *view.Resource) *state.Schema {
 	var cloned state.Schema
 	if schema != nil {
@@ -660,14 +900,42 @@ func normalizeInputSchemaForCodegen(paramName string, in *state.Location, requir
 	if kind != state.KindView && strings.TrimSpace(cloned.DataType) == "" {
 		cloned.DataType = "string"
 	}
+	if kind == state.KindRequestBody && cloned.Cardinality == state.One {
+		normalizeBodySchemaPointerForCodegen(&cloned)
+	}
 	return &cloned
+}
+
+func normalizeBodySchemaPointerForCodegen(schema *state.Schema) {
+	if schema == nil {
+		return
+	}
+	if rType := schema.Type(); rType != nil {
+		for rType.Kind() == reflect.Slice || rType.Kind() == reflect.Array {
+			return
+		}
+		if rType.Kind() == reflect.Ptr {
+			return
+		}
+		if rType.Kind() == reflect.Struct {
+			schema.SetType(reflect.PtrTo(rType))
+		}
+	}
+	dataType := strings.TrimSpace(schema.DataType)
+	if dataType == "" || strings.HasPrefix(dataType, "*") || strings.HasPrefix(dataType, "[]") {
+		return
+	}
+	if strings.HasPrefix(dataType, "struct {") || strings.HasPrefix(dataType, "interface{") || dataType == "string" || dataType == "int" || dataType == "bool" || dataType == "float64" {
+		return
+	}
+	schema.DataType = "*" + dataType
 }
 
 func exportedSchemaCopy(schema *state.Schema) state.Schema {
 	if schema == nil {
 		return state.Schema{}
 	}
-	return state.Schema{
+	result := state.Schema{
 		Package:     schema.Package,
 		PackagePath: schema.PackagePath,
 		ModulePath:  schema.ModulePath,
@@ -676,6 +944,19 @@ func exportedSchemaCopy(schema *state.Schema) state.Schema {
 		Cardinality: schema.Cardinality,
 		Methods:     append([]reflect.Method(nil), schema.Methods...),
 	}
+	if rType := schema.Type(); rType != nil {
+		result.SetType(rType)
+		if schema.Package != "" {
+			result.Package = schema.Package
+		}
+		if schema.PackagePath != "" {
+			result.PackagePath = schema.PackagePath
+		}
+		if schema.ModulePath != "" {
+			result.ModulePath = schema.ModulePath
+		}
+	}
+	return result
 }
 
 func lookupViewSchemaForInput(resource *view.Resource, in *state.Location, paramName string) *state.Schema {
@@ -734,28 +1015,114 @@ func normalizeViewLookupName(value string) string {
 }
 
 func mergeViewSQLTag(existing string, aView *view.View) string {
-	if aView == nil || aView.Template == nil {
+	tag := buildViewMetadataTag(aView, true, true)
+	if tag == nil {
 		return existing
 	}
-	viewName := strings.TrimSpace(aView.Name)
-	sourceURL := strings.TrimSpace(aView.Template.SourceURL)
-	if viewName == "" && sourceURL == "" {
-		return existing
+	return string(tag.UpdateTag(reflect.StructTag(existing)))
+}
+
+func buildViewMetadataTag(aView *view.View, includeName bool, includeSQL bool) *viewtags.Tag {
+	if aView == nil {
+		return nil
 	}
-	updated := strings.TrimSpace(existing)
-	if viewName != "" && !strings.Contains(updated, `view:"`) {
-		if updated != "" {
-			updated += " "
+	result := &viewtags.Tag{}
+	tagView := &viewtags.View{}
+	if includeName {
+		tagView.Name = strings.TrimSpace(aView.Name)
+	}
+	if table := strings.TrimSpace(aView.Table); isStableTableName(table) {
+		tagView.Table = table
+	}
+	if aView.Template != nil && aView.Template.Summary != nil {
+		tagView.SummaryURI = strings.TrimSpace(aView.Template.Summary.SourceURL)
+	}
+	if aView.Groupable {
+		value := true
+		tagView.Groupable = &value
+	}
+	if aView.Batch != nil && aView.Batch.Size > 0 && aView.Batch.Size != 10000 {
+		tagView.Batch = aView.Batch.Size
+	}
+	if aView.RelationalConcurrency != nil && aView.RelationalConcurrency.Number > 0 && aView.RelationalConcurrency.Number != 1 {
+		tagView.RelationalConcurrency = aView.RelationalConcurrency.Number
+	}
+	if aView.PublishParent {
+		tagView.PublishParent = true
+	}
+	if aView.Partitioned != nil {
+		tagView.PartitionerType = aView.Partitioned.DataType
+		tagView.PartitionedConcurrency = aView.Partitioned.Concurrency
+	}
+	if aView.MatchStrategy != "" && aView.MatchStrategy != view.ReadMatched {
+		tagView.Match = string(aView.MatchStrategy)
+	}
+	if aView.Cache != nil {
+		tagView.Cache = strings.TrimSpace(aView.Cache.Reference.Ref)
+	}
+	if aView.Connector != nil && aView.Connector.Ref != "" {
+		tagView.Connector = aView.Connector.Ref
+	}
+	if selector := aView.Selector; selector != nil {
+		if ns := strings.TrimSpace(selector.Namespace); ns != "" {
+			tagView.SelectorNamespace = ns
 		}
-		updated += fmt.Sprintf(`view:"%s"`, viewName)
-	}
-	if sourceURL != "" && !strings.Contains(updated, `sql:"`) {
-		if updated != "" {
-			updated += " "
+		if selector.NoLimit || selector.Limit != 0 {
+			limit := selector.Limit
+			tagView.Limit = &limit
 		}
-		updated += fmt.Sprintf(`sql:"uri=%s"`, sourceURL)
+		if constraints := selector.Constraints; constraints != nil {
+			if constraints.Criteria {
+				value := true
+				tagView.SelectorCriteria = &value
+			}
+			if constraints.Projection {
+				value := true
+				tagView.SelectorProjection = &value
+			}
+			if constraints.OrderBy {
+				value := true
+				tagView.SelectorOrderBy = &value
+			}
+			if constraints.Offset {
+				value := true
+				tagView.SelectorOffset = &value
+			}
+			if constraints.Page != nil {
+				value := *constraints.Page
+				tagView.SelectorPage = &value
+			}
+			if len(constraints.Filterable) > 0 {
+				tagView.SelectorFilterable = append([]string(nil), constraints.Filterable...)
+			}
+			if len(constraints.OrderByColumn) > 0 {
+				tagView.SelectorOrderByColumns = map[string]string{}
+				for key, value := range constraints.OrderByColumn {
+					tagView.SelectorOrderByColumns[key] = value
+				}
+			}
+		}
 	}
-	return updated
+	if aView.Tag != "" {
+		tagView.CustomTag = aView.Tag
+	}
+	if tagView.Name != "" || tagView.Table != "" || tagView.SummaryURI != "" || tagView.CustomTag != "" || tagView.Connector != "" ||
+		tagView.Cache != "" || tagView.Limit != nil || tagView.Match != "" || tagView.Batch > 0 ||
+		tagView.PublishParent || tagView.PartitionerType != "" || tagView.RelationalConcurrency > 0 ||
+		tagView.Groupable != nil || tagView.SelectorNamespace != "" || tagView.SelectorCriteria != nil ||
+		tagView.SelectorProjection != nil || tagView.SelectorOrderBy != nil || tagView.SelectorOffset != nil ||
+		tagView.SelectorPage != nil || len(tagView.SelectorFilterable) > 0 || len(tagView.SelectorOrderByColumns) > 0 {
+		result.View = tagView
+	}
+	if includeSQL && aView.Template != nil {
+		if sourceURL := strings.TrimSpace(aView.Template.SourceURL); sourceURL != "" {
+			result.SQL = viewtags.NewViewSQL("", sourceURL)
+		}
+	}
+	if result.View == nil && result.SQL.URI == "" && result.SQL.SQL == "" {
+		return nil
+	}
+	return result
 }
 
 func removeTagKeys(tag string, keys ...string) string {
@@ -769,6 +1136,22 @@ func removeTagKeys(tag string, keys ...string) string {
 		tag = strings.TrimSpace(updated)
 	}
 	return tag
+}
+
+func ensureCodegenTypeNameTag(tag string, schema *state.Schema) string {
+	if schema == nil {
+		return strings.TrimSpace(tag)
+	}
+	typeName := strings.TrimSpace(schema.Name)
+	if typeName == "" {
+		return strings.TrimSpace(tag)
+	}
+	tag = removeTagKeys(tag, "typeName")
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return fmt.Sprintf(`typeName:"%s"`, typeName)
+	}
+	return tag + ` typeName:"` + typeName + `"`
 }
 
 func isDynamicTypeName(name string) bool {
@@ -810,6 +1193,17 @@ func (g *ComponentCodegen) componentLookupType(packagePath string) xreflect.Look
 			}
 			key := strings.ToLower(typeName)
 			localTypes[key] = rType
+			if summary := summaryTemplateOf(aView); summary != nil && summary.Schema != nil {
+				if summaryType := summary.Schema.Type(); summaryType != nil {
+					summaryName := strings.TrimSpace(summary.Schema.Name)
+					if summaryName == "" {
+						summaryName = strings.TrimSpace(summary.Name)
+					}
+					if summaryName != "" {
+						localTypes[strings.ToLower(summaryName)] = summaryType
+					}
+				}
+			}
 		}
 	}
 	return func(name string, opts ...xreflect.Option) (reflect.Type, error) {
@@ -946,7 +1340,7 @@ func (g *ComponentCodegen) generateShapeFragment(projectDir, packageDir, package
 	if g == nil || g.Resource == nil || len(g.Resource.Views) == 0 {
 		return &shapeFragment{}, nil
 	}
-	shapeDoc := resourceToCodegenDoc(g.Resource, g.TypeContext)
+	shapeDoc := resourceToShapeDocument(g.Resource, g.TypeContext)
 	applyShapeDocViewTypeOverrides(shapeDoc.Root, g.Component)
 	shapeCfg := &Config{
 		ProjectDir:  projectDir,
@@ -969,7 +1363,7 @@ func (g *ComponentCodegen) generateShapeFragment(projectDir, packageDir, package
 
 func (g *ComponentCodegen) renderSemanticShapeFragment(shapeCfg *Config, packagePath string) (*shapeFragment, error) {
 	viewDescriptorsByName := map[string]viewDescriptor{}
-	shapeDoc := resourceToCodegenDoc(g.Resource, g.TypeContext)
+	shapeDoc := resourceToShapeDocument(g.Resource, g.TypeContext)
 	for _, item := range extractViews(shapeDoc.Root) {
 		viewDescriptorsByName[strings.ToLower(strings.TrimSpace(asString(item.name)))] = item
 	}
@@ -985,7 +1379,11 @@ func (g *ComponentCodegen) renderSemanticShapeFragment(shapeCfg *Config, package
 		if typeName == "" || registered[typeName] {
 			continue
 		}
-		viewDecl, viewImports, err := g.renderSemanticViewDecl(shapeCfg, aView, packagePath)
+		mutable := false
+		if descriptor, ok := viewDescriptorsByName[strings.ToLower(strings.TrimSpace(aView.Name))]; ok {
+			mutable = descriptor.mutable
+		}
+		viewDecl, viewImports, err := g.renderSemanticViewDecl(shapeCfg, aView, packagePath, mutable)
 		if err != nil {
 			return nil, err
 		}
@@ -998,6 +1396,18 @@ func (g *ComponentCodegen) renderSemanticShapeFragment(shapeCfg *Config, package
 		decls.WriteString("\n")
 		for _, imp := range viewImports {
 			imports[imp] = true
+		}
+		for _, summary := range g.summaryTypeDecls(aView, packagePath) {
+			if registered[summary.name] {
+				continue
+			}
+			registered[summary.name] = true
+			typeNames = append(typeNames, summary.name)
+			decls.WriteString(summary.decl)
+			decls.WriteString("\n")
+			for _, imp := range summary.imports {
+				imports[imp] = true
+			}
 		}
 
 		if descriptor, ok := viewDescriptorsByName[strings.ToLower(strings.TrimSpace(aView.Name))]; ok && descriptor.mutable {
@@ -1026,6 +1436,49 @@ func (g *ComponentCodegen) renderSemanticShapeFragment(shapeCfg *Config, package
 	}, nil
 }
 
+type emittedTypeDecl struct {
+	name    string
+	decl    string
+	imports []string
+}
+
+func (g *ComponentCodegen) summaryTypeDecls(aView *view.View, currentPackage string) []emittedTypeDecl {
+	if aView == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var result []emittedTypeDecl
+	appendSummary := func(summary *view.TemplateSummary) {
+		if summary == nil || summary.Schema == nil {
+			return
+		}
+		name := strings.TrimSpace(summary.Schema.Name)
+		rType := ensureCodegenStructType(summary.Schema.Type())
+		if name == "" || rType == nil || seen[name] {
+			return
+		}
+		seen[name] = true
+		result = append(result, emittedTypeDecl{
+			name:    name,
+			decl:    fmt.Sprintf("type %s struct {\n%s}\n\n", name, structFieldsSource(rType)),
+			imports: collectTypeImports(rType, currentPackage),
+		})
+	}
+	appendSummary(summaryTemplateOf(aView))
+	for _, rel := range aView.With {
+		child := g.semanticView(g.resolveRelationView(rel))
+		appendSummary(summaryTemplateOf(child))
+	}
+	return result
+}
+
+func summaryTemplateOf(aView *view.View) *view.TemplateSummary {
+	if aView == nil || aView.Template == nil {
+		return nil
+	}
+	return aView.Template.Summary
+}
+
 func (g *ComponentCodegen) resourceViewTypeName(shapeCfg *Config, aView *view.View) string {
 	if aView == nil {
 		return ""
@@ -1041,7 +1494,7 @@ func (g *ComponentCodegen) resourceViewTypeName(shapeCfg *Config, aView *view.Vi
 	return viewTypeName(shapeCfg, descriptor)
 }
 
-func (g *ComponentCodegen) renderSemanticViewDecl(shapeCfg *Config, aView *view.View, currentPackage string) (string, []string, error) {
+func (g *ComponentCodegen) renderSemanticViewDecl(shapeCfg *Config, aView *view.View, currentPackage string, mutable bool) (string, []string, error) {
 	aView = g.semanticView(aView)
 	typeName := g.resourceViewTypeName(shapeCfg, aView)
 	if typeName == "" {
@@ -1098,6 +1551,10 @@ func (g *ComponentCodegen) renderSemanticViewDecl(shapeCfg *Config, aView *view.
 		if holder := strings.TrimSpace(aView.SelfReference.Holder); holder != "" {
 			builder.WriteString(fmt.Sprintf("\t%s []interface{} `sqlx:\"-\"`\n", holder))
 		}
+	}
+	if mutable {
+		hasTypeName := typeName + "Has"
+		builder.WriteString(fmt.Sprintf("\tHas *%s `setMarker:\"true\" format:\"-\" sqlx:\"-\" diff:\"-\" json:\"-\" typeName:\"%s\"`\n", hasTypeName, hasTypeName))
 	}
 	builder.WriteString("}\n\n")
 	resultImports := make([]string, 0, len(imports))
@@ -1166,10 +1623,11 @@ func (g *ComponentCodegen) renderRelationField(shapeCfg *Config, parent *view.Vi
 }
 
 func (g *ComponentCodegen) renderRelationSummaryField(shapeCfg *Config, rel *view.Relation, currentPackage string) (string, []string) {
-	if rel == nil || rel.Of.Template == nil || rel.Of.Template.Summary == nil || rel.Of.Template.Summary.Schema == nil {
+	child := g.semanticView(g.resolveRelationView(rel))
+	if child == nil || child.Template == nil || child.Template.Summary == nil || child.Template.Summary.Schema == nil {
 		return "", nil
 	}
-	meta := rel.Of.Template.Summary
+	meta := child.Template.Summary
 	fieldName := state.StructFieldName(text.CaseFormatUpperCamel, meta.Name)
 	if strings.TrimSpace(fieldName) == "" {
 		return "", nil
@@ -1213,14 +1671,22 @@ func (g *ComponentCodegen) relationTypeName(shapeCfg *Config, rel *view.Relation
 
 func (g *ComponentCodegen) columnFieldTag(aView *view.View, column *view.Column) string {
 	tag := strings.TrimSpace(column.Tag)
+	cleaned, _ := xreflect.RemoveTag(tag, "velty")
+	tag = strings.TrimSpace(cleaned)
+	groupable := column.Groupable
 	if aView != nil && aView.ColumnsConfig != nil {
-		if cfg := aView.ColumnsConfig[column.Name]; cfg != nil && cfg.Tag != nil {
-			configTag := strings.TrimSpace(strings.Trim(*cfg.Tag, ` `))
-			if configTag != "" && !strings.Contains(tag, configTag) {
-				if tag != "" {
-					tag += " "
+		if cfg := aView.ColumnsConfig[column.Name]; cfg != nil {
+			if cfg.Groupable != nil {
+				groupable = *cfg.Groupable
+			}
+			if cfg.Tag != nil {
+				configTag := strings.TrimSpace(strings.Trim(*cfg.Tag, ` `))
+				if configTag != "" && !strings.Contains(tag, configTag) {
+					if tag != "" {
+						tag += " "
+					}
+					tag += configTag
 				}
-				tag += configTag
 			}
 		}
 	}
@@ -1229,6 +1695,12 @@ func (g *ComponentCodegen) columnFieldTag(aView *view.View, column *view.Column)
 			tag += " "
 		}
 		tag += `internal:"true"`
+	}
+	if groupable && !strings.Contains(tag, `groupable:"`) {
+		if tag != "" {
+			tag += " "
+		}
+		tag += `groupable:"true"`
 	}
 	sqlxValue := strings.TrimSpace(column.Name)
 	if column.Codec != nil && strings.TrimSpace(column.DataType) != "" {
@@ -1266,25 +1738,49 @@ func (g *ComponentCodegen) viewUsesVelty(aView *view.View) bool {
 }
 
 func (g *ComponentCodegen) resourceViewUsesVelty(aView *view.View) bool {
+	if aView == nil || g == nil || g.Component == nil || !g.componentUsesVelty() || g.componentUsesHandler() {
+		return false
+	}
 	if g.viewUsesVelty(aView) {
 		return true
 	}
-	if g == nil || aView == nil || !g.componentUsesVelty() || g.Component == nil {
-		return false
-	}
-	target := strings.TrimSpace(aView.Name)
-	if target == "" {
-		return false
+	matches := func(value string) bool {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return false
+		}
+		return strings.EqualFold(strings.TrimSpace(aView.Name), value) ||
+			strings.EqualFold(strings.TrimSpace(aView.Reference.Ref), value)
 	}
 	for _, input := range g.Component.Input {
 		if input == nil || input.In == nil || input.In.Kind != state.KindView {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(input.In.Name), target) {
+		if matches(input.In.Name) || matches(input.Name) {
 			return true
 		}
 	}
 	return false
+}
+
+func (g *ComponentCodegen) componentUsesMutableHelpers() bool {
+	if g == nil || g.Component == nil || !g.componentUsesVelty() || g.componentUsesHandler() {
+		return false
+	}
+	hasBody := false
+	hasView := false
+	for _, input := range g.Component.Input {
+		if input == nil || input.In == nil {
+			continue
+		}
+		switch input.In.Kind {
+		case state.KindRequestBody:
+			hasBody = true
+		case state.KindView:
+			hasView = true
+		}
+	}
+	return hasBody && hasView
 }
 
 func (g *ComponentCodegen) componentUsesVelty() bool {
@@ -1334,7 +1830,7 @@ func normalizeGeneratedTagOrder(tag string) string {
 		return tag
 	}
 	ordered := make([]string, 0, 4)
-	for _, key := range []string{"sqlx", "internal", "velty", "json"} {
+	for _, key := range []string{"sqlx", "internal", "groupable", "velty", "json"} {
 		value := reflect.StructTag(tag).Get(key)
 		if value == "" {
 			continue
@@ -1352,46 +1848,18 @@ func normalizeGeneratedTagOrder(tag string) string {
 
 func (g *ComponentCodegen) relationFieldTag(parent *view.View, rel *view.Relation) string {
 	child := g.semanticView(g.resolveRelationView(rel))
+	if child == nil {
+		return ""
+	}
 	tag := &viewtags.Tag{}
-	if table := strings.TrimSpace(child.Table); isStableTableName(table) {
-		tag.View = &viewtags.View{Table: table}
+	if metadata := buildViewMetadataTag(child, false, false); metadata != nil {
+		tag.View = metadata.View
 	}
 	if relTag := strings.TrimSpace(child.Tag); relTag != "" {
 		if tag.View == nil {
 			tag.View = &viewtags.View{}
 		}
 		tag.View.CustomTag = relTag
-	}
-	if child.Batch != nil && child.Batch.Size > 0 && child.Batch.Size != 10000 {
-		if tag.View == nil {
-			tag.View = &viewtags.View{}
-		}
-		tag.View.Batch = child.Batch.Size
-	}
-	if child.RelationalConcurrency != nil && child.RelationalConcurrency.Number > 0 && child.RelationalConcurrency.Number != 1 {
-		if tag.View == nil {
-			tag.View = &viewtags.View{}
-		}
-		tag.View.RelationalConcurrency = child.RelationalConcurrency.Number
-	}
-	if child.PublishParent {
-		if tag.View == nil {
-			tag.View = &viewtags.View{}
-		}
-		tag.View.PublishParent = true
-	}
-	if child.Partitioned != nil {
-		if tag.View == nil {
-			tag.View = &viewtags.View{}
-		}
-		tag.View.PartitionerType = child.Partitioned.DataType
-		tag.View.PartitionedConcurrency = child.Partitioned.Concurrency
-	}
-	if child.MatchStrategy != "" && child.MatchStrategy != view.ReadMatched {
-		if tag.View == nil {
-			tag.View = &viewtags.View{}
-		}
-		tag.View.Match = string(child.MatchStrategy)
 	}
 	if parent != nil && parent.Cache != nil {
 		if tag.View == nil {
@@ -1572,8 +2040,37 @@ func (g *ComponentCodegen) mergeViewSemantics(dst, src *view.View) {
 			dst.ColumnsConfig[key] = cfg
 		}
 	}
-	if (dst.Template == nil || strings.TrimSpace(dst.Template.SourceURL) == "") && src.Template != nil {
+	if dst.Template == nil && src.Template != nil {
 		dst.Template = src.Template
+	}
+	if dst.Template != nil && src.Template != nil {
+		if strings.TrimSpace(dst.Template.Source) == "" {
+			dst.Template.Source = src.Template.Source
+		}
+		if strings.TrimSpace(dst.Template.SourceURL) == "" {
+			dst.Template.SourceURL = src.Template.SourceURL
+		}
+		if src.Template.Summary != nil {
+			if dst.Template.Summary == nil {
+				dst.Template.Summary = src.Template.Summary
+			} else {
+				if strings.TrimSpace(dst.Template.Summary.Name) == "" {
+					dst.Template.Summary.Name = src.Template.Summary.Name
+				}
+				if dst.Template.Summary.Kind == "" {
+					dst.Template.Summary.Kind = src.Template.Summary.Kind
+				}
+				if strings.TrimSpace(dst.Template.Summary.Source) == "" {
+					dst.Template.Summary.Source = src.Template.Summary.Source
+				}
+				if strings.TrimSpace(dst.Template.Summary.SourceURL) == "" {
+					dst.Template.Summary.SourceURL = src.Template.Summary.SourceURL
+				}
+				if src.Template.Summary.Schema != nil && (dst.Template.Summary.Schema == nil || dst.Template.Summary.Schema.Type() == nil) {
+					dst.Template.Summary.Schema = src.Template.Summary.Schema
+				}
+			}
+		}
 	}
 	if !isStableTableName(dst.Table) && isStableTableName(src.Table) {
 		dst.Table = src.Table
@@ -1902,6 +2399,9 @@ func resourceViewNeedsRebuild(rType reflect.Type, columns []columnDescriptor, in
 		if includeVelty && field.Tag.Get("sqlx") != "" && field.Tag.Get("sqlx") != "-" && field.Tag.Get("velty") == "" {
 			return true
 		}
+		if !includeVelty && field.Tag.Get("velty") != "" {
+			return true
+		}
 	}
 	return false
 }
@@ -2093,6 +2593,7 @@ func extractTypeDeclsAndImports(source string) ([]string, string, error) {
 //	}
 func (g *ComponentCodegen) renderOutputStruct(builder *strings.Builder, outputTypeName, viewTypeName, embedURI string, outputParams state.Parameters, outputType reflect.Type, mutableSupport *mutableComponentSupport) {
 	rootView := g.Component.RootView
+	rootViewMetadata := g.rootResourceView()
 
 	builder.WriteString(fmt.Sprintf("type %s struct {\n", outputTypeName))
 
@@ -2129,9 +2630,20 @@ func (g *ComponentCodegen) renderOutputStruct(builder *strings.Builder, outputTy
 			if fieldName == "" || fieldName == "Output" {
 				fieldName = "Data"
 			}
-			tag := fmt.Sprintf(`parameter:",kind=output,in=view" view:"%s" sql:"uri=%s/%s.sql"`,
-				rootView, embedURI, rootView)
-			if p.Tag != "" && strings.Contains(p.Tag, "anonymous") {
+			tag := strings.TrimSpace(p.Tag)
+			if !strings.Contains(tag, `parameter:"`) {
+				tag = strings.TrimSpace(tag + ` parameter:",kind=output,in=view"`)
+			}
+			if !strings.Contains(tag, `view:"`) {
+				tag = strings.TrimSpace(tag + fmt.Sprintf(` view:"%s"`, rootView))
+			}
+			if !strings.Contains(tag, `sql:"`) {
+				tag = strings.TrimSpace(tag + fmt.Sprintf(` sql:"uri=%s/%s.sql"`, embedURI, rootView))
+			}
+			if rootViewMetadata != nil {
+				tag = mergeViewSQLTag(tag, rootViewMetadata)
+			}
+			if !strings.Contains(tag, `anonymous:"`) && p.Tag != "" && strings.Contains(p.Tag, "anonymous") {
 				tag += ` anonymous:"true"`
 			}
 			builder.WriteString(fmt.Sprintf("\t%s %s%s `%s`\n", fieldName, typePrefix, viewTypeName, tag))
@@ -2163,6 +2675,7 @@ func (g *ComponentCodegen) renderOutputStruct(builder *strings.Builder, outputTy
 // schema to the view entity type. The legacy translator does this in updateParameterWithComponentOutputType.
 func (g *ComponentCodegen) resolveOutputWildcardTypes(params state.Parameters, componentName string) {
 	viewType := componentName + "View"
+	rootView := g.rootResourceView()
 	for _, p := range params {
 		if p == nil || p.In == nil {
 			continue
@@ -2173,8 +2686,9 @@ func (g *ComponentCodegen) resolveOutputWildcardTypes(params state.Parameters, c
 		if p.Schema == nil {
 			p.Schema = &state.Schema{}
 		}
-		// If schema type is wildcard or empty, resolve to the view type
-		if p.Schema.Name == "" || p.Schema.DataType == "" || p.Schema.DataType == "?" {
+		// Only view outputs default to the root view shape. Summary/status outputs
+		// must keep their own materialized schema types.
+		if p.In.Name == "view" && (p.Schema.Name == "" || p.Schema.DataType == "" || p.Schema.DataType == "?") {
 			p.Schema.Name = viewType
 			p.Schema.DataType = "*" + viewType
 			if p.Schema.Cardinality == "" {
@@ -2183,8 +2697,11 @@ func (g *ComponentCodegen) resolveOutputWildcardTypes(params state.Parameters, c
 		}
 		// Add view tag if missing
 		if p.In.Name == "view" && !strings.Contains(p.Tag, "view:") {
-			rootView := g.Component.RootView
-			p.Tag += fmt.Sprintf(` view:"%s"`, rootView)
+			rootViewName := g.Component.RootView
+			p.Tag += fmt.Sprintf(` view:"%s"`, rootViewName)
+		}
+		if p.In.Name == "view" && rootView != nil {
+			p.Tag = mergeViewSQLTag(p.Tag, rootView)
 		}
 	}
 }
@@ -2299,6 +2816,25 @@ func (g *ComponentCodegen) rootViewSourceURL() string {
 		return ""
 	}
 	return strings.TrimSpace(g.Resource.Views[0].Template.SourceURL)
+}
+
+func (g *ComponentCodegen) rootResourceView() *view.View {
+	if g == nil || g.Resource == nil {
+		return nil
+	}
+	rootView := ""
+	if g.Component != nil {
+		rootView = strings.TrimSpace(g.Component.RootView)
+	}
+	if rootView != "" {
+		if aView, _ := g.Resource.View(rootView); aView != nil {
+			return aView
+		}
+	}
+	if len(g.Resource.Views) == 0 {
+		return nil
+	}
+	return g.Resource.Views[0]
 }
 
 func (g *ComponentCodegen) rootSummarySourceURL() string {
@@ -2693,7 +3229,7 @@ func (g *ComponentCodegen) buildRouterImports() []string {
 	return []string{"github.com/viant/xdatly"}
 }
 
-func (g *ComponentCodegen) renderComponentHolder(builder *strings.Builder, componentName, inputTypeName, outputTypeName string) {
+func (g *ComponentCodegen) renderComponentHolder(builder *strings.Builder, componentName, inputTypeName, outputTypeName string, selectorHolders []codegenSelectorHolder) {
 	method := strings.TrimSpace(g.Component.Method)
 	if method == "" {
 		method = "GET"
@@ -2724,6 +3260,14 @@ func (g *ComponentCodegen) renderComponentHolder(builder *strings.Builder, compo
 	tag += `"`
 	builder.WriteString(fmt.Sprintf("type %sRouter struct {\n", componentName))
 	builder.WriteString(fmt.Sprintf("\t%s xdatly.Component[%s, %s] `%s`\n", componentName, inputTypeName, outputTypeName, tag))
+	for _, holder := range selectorHolders {
+		if holder.Type == nil || strings.TrimSpace(holder.QuerySelector) == "" || strings.TrimSpace(holder.FieldName) == "" {
+			continue
+		}
+		builder.WriteString(fmt.Sprintf("\t%s struct {\n", holder.FieldName))
+		builder.WriteString(indentSource(structFieldsSource(holder.Type), "\t\t"))
+		builder.WriteString(fmt.Sprintf("\t} `querySelector:%q`\n", holder.QuerySelector))
+	}
 	builder.WriteString("}\n\n")
 }
 
@@ -2846,6 +3390,18 @@ func structFieldsSource(rType reflect.Type) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+func indentSource(source, prefix string) string {
+	source = strings.TrimRight(source, "\n")
+	if source == "" {
+		return ""
+	}
+	lines := strings.Split(source, "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func sourceFieldTypeExpr(field reflect.StructField) string {

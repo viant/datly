@@ -2,6 +2,8 @@ module github.com/viant/datly
 
 go 1.25.0
 
+replace github.com/viant/xdatly => ../xdatly
+
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
@@ -53,7 +55,7 @@ require (
 	github.com/viant/mcp-protocol v0.11.0
 	github.com/viant/structology v0.8.0
 	github.com/viant/tagly v0.3.0
-	github.com/viant/x v0.4.0
+	github.com/viant/x v0.4.1-0.20260306005005-975ded1e1bef
 	github.com/viant/xdatly v0.5.4-0.20251113181159-0ac8b8b0ff3a
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20251208172928-dd34b7f09fd5
@@ -190,4 +192,3 @@ require (
 	modernc.org/strutil v1.1.3 // indirect
 	modernc.org/token v1.0.0 // indirect
 )
-replace github.com/viant/x => /Users/awitas/go/src/github.com/viant/x

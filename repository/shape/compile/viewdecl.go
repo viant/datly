@@ -52,8 +52,9 @@ type declaredPredicate struct {
 }
 
 type declaredColumnConfig struct {
-	DataType string
-	Tag      string
+	DataType  string
+	Tag       string
+	Groupable *bool
 }
 
 const (
