@@ -5,7 +5,6 @@ import (
 	"embed"
 	"fmt"
 	"net/http"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -43,9 +42,6 @@ func (s *Service) appendReportProvider(ctx context.Context, item *path.Item, rou
 	}
 	item.Paths = append(item.Paths, reportPath)
 	providers = append(providers, reportProvider)
-	if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-		fmt.Printf("[DATLY_REPORT] appended_lazy source=%s original=%s report=%s\n", item.SourceURL, routePath.Path.Key(), reportPath.Path.Key())
-	}
 	return providers, nil
 }
 
@@ -69,9 +65,6 @@ func BuildReportComponent(dispatcher contract.Dispatcher, original *Component) (
 }
 
 func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, original *Component, routePath *path.Path) (*Component, *path.Path, error) {
-	if os.Getenv("DATLY_DEBUG_REPORT_GEN") != "" {
-		debugReportComponent("before_build_report", original)
-	}
 	config := original.Report.normalize()
 	metadata, err := buildReportMetadata(original, config)
 	if err != nil {
@@ -80,24 +73,6 @@ func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, o
 	inputType, err := buildReportInputType(original, metadata, config)
 	if err != nil {
 		return nil, nil, err
-	}
-	if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-		inputSchemaType := "<nil>"
-		if inputType != nil && inputType.Schema != nil && inputType.Schema.Type() != nil {
-			inputSchemaType = inputType.Schema.Type().String()
-		}
-		paramName, paramIn, paramSchema := "<nil>", "<nil>", "<nil>"
-		if inputType != nil && len(inputType.Parameters) > 0 && inputType.Parameters[0] != nil {
-			paramName = inputType.Parameters[0].Name
-			if inputType.Parameters[0].In != nil {
-				paramIn = string(inputType.Parameters[0].In.Kind) + ":" + inputType.Parameters[0].In.Name
-			}
-			if inputType.Parameters[0].Schema != nil && inputType.Parameters[0].Schema.Type() != nil {
-				paramSchema = inputType.Parameters[0].Schema.Type().String()
-			}
-		}
-		fmt.Printf("[DATLY_REPORT] built_input uri=%s input_schema=%s body_field=%q param_name=%s in=%s param_schema=%s\n",
-			original.URI, inputSchemaType, metadata.BodyFieldName, paramName, paramIn, paramSchema)
 	}
 	reportURI := strings.TrimSuffix(original.URI, "/") + "/report"
 	ret := *original
@@ -134,48 +109,7 @@ func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, o
 		}
 		reportPath = &pathCopy
 	}
-	if os.Getenv("DATLY_DEBUG_REPORT_GEN") != "" {
-		debugReportComponent("after_build_report_original", original)
-		debugReportComponent("after_build_report_report", &ret)
-	}
 	return &ret, reportPath, nil
-}
-
-func debugReportComponent(label string, component *Component) {
-	if component == nil {
-		fmt.Printf("[DATLY_REPORT_GEN] %s component=nil\n", label)
-		return
-	}
-	viewName := "<nil>"
-	viewSchemaName := "<nil>"
-	viewSchemaType := "<nil>"
-	viewDefs := 0
-	if component.View != nil {
-		viewName = component.View.Name
-		viewDefs = len(component.View.TypeDefinitions())
-		if component.View.Schema != nil {
-			viewSchemaName = component.View.Schema.Name
-			if component.View.Schema.Type() != nil {
-				viewSchemaType = component.View.Schema.Type().String()
-			}
-		}
-	}
-	outputSchemaName := "<nil>"
-	outputSchemaType := "<nil>"
-	outputTag := "<nil>"
-	if component.Output.Type.Parameters != nil {
-		if param := component.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); param != nil {
-			outputTag = param.Tag
-			if param.Schema != nil {
-				outputSchemaName = param.Schema.Name
-				if param.Schema.Type() != nil {
-					outputSchemaType = param.Schema.Type().String()
-				}
-			}
-		}
-	}
-	fmt.Printf("[DATLY_REPORT_GEN] %s uri=%s method=%s view=%s viewSchema=%s viewSchemaType=%s viewDefs=%d outputSchema=%s outputSchemaType=%s outputTag=%s\n",
-		label, component.URI, component.Method, viewName, viewSchemaName, viewSchemaType, viewDefs, outputSchemaName, outputSchemaType, outputTag)
 }
 
 func buildReportWrapperView(original *view.View) *view.View {
@@ -273,13 +207,6 @@ func buildReportMetadata(component *Component, report *Report) (*ReportMetadata,
 	}
 	if err := result.validateSelection(); err != nil {
 		return nil, err
-	}
-	if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-		var filters []string
-		for _, filter := range result.Filters {
-			filters = append(filters, filter.Name+":"+filter.FieldName)
-		}
-		fmt.Printf("[DATLY_REPORT] metadata input=%s dimensions=%d measures=%d filters=%v\n", result.InputName, len(result.Dimensions), len(result.Measures), filters)
 	}
 	return result, nil
 }

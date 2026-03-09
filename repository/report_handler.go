@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -42,17 +41,6 @@ func (r *reportHandler) Exec(ctx context.Context, session xhandler.Session) (int
 	if err != nil {
 		return nil, err
 	}
-	if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-		viewName := "<nil>"
-		namespacedNil := true
-		if r.Original.View != nil {
-			viewName = r.Original.View.Name
-		}
-		if r.Original.NamespacedView != nil {
-			namespacedNil = false
-		}
-		fmt.Printf("[DATLY_REPORT_HANDLER] original=%s method=%s target=%s view=%s namespaced_nil=%v query=%s\n", r.Original.Path.Key(), r.Path.Method, r.Path.URI, viewName, namespacedNil, query.Encode())
-	}
 	internalReq := request.Clone(ctx)
 	internalReq.Method = r.Path.Method
 	internalReq.URL = cloneURL(request.URL)
@@ -60,9 +48,6 @@ func (r *reportHandler) Exec(ctx context.Context, session xhandler.Session) (int
 	internalReq.URL.RawPath = internalReq.URL.Path
 	internalReq.URL.RawQuery = query.Encode()
 	internalReq.RequestURI = internalReq.URL.RequestURI()
-	if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-		fmt.Printf("[DATLY_REPORT_HANDLER] dispatch request_uri=%s header_auth=%q\n", internalReq.RequestURI, internalReq.Header.Get("Authorization"))
-	}
 	redirect := &xdhttp.Route{URL: r.Path.URI, Method: r.Path.Method}
 	return nil, session.Http().Redirect(ctx, redirect, internalReq)
 }
@@ -73,9 +58,6 @@ func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) 
 		payload, err := io.ReadAll(request.Body)
 		if err != nil {
 			return nil, err
-		}
-		if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-			fmt.Printf("[DATLY_REPORT_HANDLER] raw_body=%q\n", string(payload))
 		}
 		if len(payload) > 0 {
 			targetType := r.BodyType
@@ -90,12 +72,6 @@ func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) 
 		}
 	}
 	if input != nil {
-		if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-			fmt.Printf("[DATLY_REPORT_HANDLER] bound_input_type=%T\n", input)
-			if data, err := json.Marshal(input); err == nil {
-				fmt.Printf("[DATLY_REPORT_HANDLER] bound_input_json=%s\n", string(data))
-			}
-		}
 		return input, nil
 	}
 	if input == nil {
