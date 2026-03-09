@@ -77,6 +77,9 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 			aTag.SummarySQL = tags.ViewSQLSummary(tags.NewViewSQL(tmpl.Summary.Source, ""))
 		}
 		viewParameter.Tag = string(aTag.UpdateTag(reflect.StructTag(viewParameter.Tag)))
+		if c.View != nil && c.View.Schema != nil && c.View.Schema.Name != "" && !strings.Contains(viewParameter.Tag, `typeName:"`) {
+			viewParameter.Tag = strings.TrimSpace(viewParameter.Tag + ` typeName:"` + c.View.Schema.Name + `"`)
+		}
 	}
 
 	output, _ := c.Output.Type.Parameters.ReflectType("", registry.Lookup, state.WithRelation(), state.WithSQL(), state.WithVelty(false))
