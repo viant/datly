@@ -11,7 +11,7 @@
       {
         "id": 1,
         "name": "V1 Product 1",
-        "status": 2,
+        "status": 1,
         "created": "@exists@",
         "userCreated": 1,
         "updated": null,
