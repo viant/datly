@@ -81,6 +81,24 @@ func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, o
 	if err != nil {
 		return nil, nil, err
 	}
+	if os.Getenv("DATLY_DEBUG_REPORT") != "" {
+		inputSchemaType := "<nil>"
+		if inputType != nil && inputType.Schema != nil && inputType.Schema.Type() != nil {
+			inputSchemaType = inputType.Schema.Type().String()
+		}
+		paramName, paramIn, paramSchema := "<nil>", "<nil>", "<nil>"
+		if inputType != nil && len(inputType.Parameters) > 0 && inputType.Parameters[0] != nil {
+			paramName = inputType.Parameters[0].Name
+			if inputType.Parameters[0].In != nil {
+				paramIn = string(inputType.Parameters[0].In.Kind) + ":" + inputType.Parameters[0].In.Name
+			}
+			if inputType.Parameters[0].Schema != nil && inputType.Parameters[0].Schema.Type() != nil {
+				paramSchema = inputType.Parameters[0].Schema.Type().String()
+			}
+		}
+		fmt.Printf("[DATLY_REPORT] built_input uri=%s input_schema=%s body_field=%q param_name=%s in=%s param_schema=%s\n",
+			original.URI, inputSchemaType, metadata.BodyFieldName, paramName, paramIn, paramSchema)
+	}
 	reportURI := strings.TrimSuffix(original.URI, "/") + "/report"
 	ret := *original
 	ret.Path = contract.Path{Method: http.MethodPost, URI: reportURI}
@@ -282,7 +300,7 @@ func buildReportInputType(component *Component, metadata *ReportMetadata, report
 	bodyType := reflect.PtrTo(synthesizeReportBodyType(metadata))
 	bodySchema := state.NewSchema(bodyType)
 	bodySchema.Name = metadata.InputName
-	bodyParam := state.NewParameter(metadata.BodyFieldName, state.NewBodyLocation(""), state.WithParameterSchema(bodySchema))
+	bodyParam := state.NewParameter("Report", state.NewBodyLocation(""), state.WithParameterSchema(bodySchema))
 	bodyParam.Tag = `anonymous:"true"`
 	bodyParam.SetTypeNameTag()
 	// Synthetic report input must not initialize against the original component resource.
