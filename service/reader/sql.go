@@ -257,6 +257,20 @@ func (b *Builder) rewriteGroupBy(SQL string, allColumns []*view.Column, projecte
 		return SQL, err
 	}
 
+	selectedPositions := projectedColumnPositions(allColumns, projectedColumns)
+	if len(selectedPositions) > 0 {
+		items := make(query.List, 0, len(selectedPositions))
+		for _, position := range selectedPositions {
+			if position <= 0 || position > len(parsed.List) {
+				continue
+			}
+			items = append(items, parsed.List[position-1])
+		}
+		if len(items) > 0 {
+			parsed.List = items
+		}
+	}
+
 	positions := projectedGroupByPositions(allColumns, projectedColumns)
 	groupBy := make(query.List, 0, len(positions))
 	for _, position := range positions {
@@ -271,8 +285,34 @@ func (b *Builder) rewriteGroupBy(SQL string, allColumns []*view.Column, projecte
 	return rewritten, nil
 }
 
+func projectedColumnPositions(allColumns []*view.Column, projectedColumns []*view.Column) []int {
+	index := make(map[*view.Column]int, len(allColumns))
+	for i, column := range allColumns {
+		index[column] = i + 1
+	}
+	result := make([]int, 0, len(projectedColumns))
+	seen := map[int]bool{}
+	for _, column := range projectedColumns {
+		if column == nil {
+			continue
+		}
+		position, ok := index[column]
+		if !ok || seen[position] {
+			continue
+		}
+		seen[position] = true
+		result = append(result, position)
+	}
+	return result
+}
+
 func projectedGroupByPositions(allColumns []*view.Column, projectedColumns []*view.Column) []int {
 	index := make(map[*view.Column]int, len(allColumns))
+	selected := projectedColumnPositions(allColumns, projectedColumns)
+	positionIndex := make(map[int]bool, len(selected))
+	for _, position := range selected {
+		positionIndex[position] = true
+	}
 	for i, column := range allColumns {
 		index[column] = i + 1
 	}
@@ -282,6 +322,9 @@ func projectedGroupByPositions(allColumns []*view.Column, projectedColumns []*vi
 			continue
 		}
 		if position, ok := index[column]; ok {
+			if !positionIndex[position] {
+				continue
+			}
 			result = append(result, position)
 		}
 	}

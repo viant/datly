@@ -215,6 +215,56 @@ FROM (
 	assert.False(t, ok)
 }
 
+func TestBuildRead_GroupByWithQualifiedColumnsAndTemplatePredicateMarksPublisherID(t *testing.T) {
+	sqlText := `SELECT
+    p.event_date,
+    p.agency_id,
+    p.advertiser_id,
+    p.campaign_id,
+    p.ad_order_id,
+    p.audience_id,
+    p.deal_id,
+    p.publisher_id,
+    p.channel_id,
+    p.country,
+    p.site_type,
+    SUM(p.bids) AS bids,
+    SUM(p.impressions) AS impressions,
+    SUM(p.clicks) AS clicks,
+    SUM(p.conversions) AS conversions,
+    SUM(p.total_spend) AS total_spend
+FROM
+     ` + "`viant-mediator.forecaster.fact_perf_daily_mv`" + ` p
+WHERE p.event_date BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL $DateInterval DAY)
+AND DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
+    ${predicate.Builder().CombineOr($predicate.FilterGroup(0, "AND")).Build("AND")}
+GROUP BY
+    p.event_date,
+    p.agency_id,
+    p.advertiser_id,
+    p.campaign_id,
+    p.ad_order_id,
+    p.audience_id,
+    p.deal_id,
+    p.publisher_id,
+    p.channel_id,
+    p.country,
+    p.site_type`
+	view, diags, err := BuildReadWithOptions("fact_perf_daily_mv", sqlText, nil, map[string]bool{"p": true})
+	require.NoError(t, err)
+	require.NotNil(t, view)
+	require.Empty(t, diags)
+	require.NotNil(t, view.Declaration)
+	require.NotNil(t, view.Declaration.ColumnsConfig)
+	cfg, ok := view.Declaration.ColumnsConfig["publisher_id"]
+	require.True(t, ok)
+	require.NotNil(t, cfg)
+	require.NotNil(t, cfg.Groupable)
+	assert.True(t, *cfg.Groupable)
+	_, ok = view.Declaration.ColumnsConfig["total_spend"]
+	assert.False(t, ok)
+}
+
 func TestBuildRead_TemplateTableSelector_PreservesRelations(t *testing.T) {
 	sqlText := `SELECT vendor.*, products.*
 FROM (SELECT * FROM ${Unsafe.Vendor} t WHERE t.ID IN ($criteria.AppendBinding($Unsafe.vendorIDs))) vendor
