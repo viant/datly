@@ -4,7 +4,7 @@
 #set( $_ = $ID<[]int>(query/id)..WithPredicate(0, 'equal', 't', 'ID'))
 
 SELECT vendor.*,
-       groupingEnabled(vendor),
+       grouping_enabled(vendor),
        allowed_order_by_columns(vendor, 'accountId:ACCOUNT_ID,userCreated:USER_CREATED,totalId:TOTAL_ID,maxId:MAX_ID')
 FROM (
     SELECT ACCOUNT_ID,
@@ -15,4 +15,3 @@ FROM (
     WHERE t.ID IN ($vendorIDs)
     GROUP BY 1, 2
 ) vendor
-
