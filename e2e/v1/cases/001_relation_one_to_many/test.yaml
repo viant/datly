@@ -1,5 +1,6 @@
 init:
   parentPath: $parent.path
+  created: $FormatTime('nowInUTC', 'yyyy-MM-ddT00:00:00Z')
 pipeline:
 
   test:
@@ -9,7 +10,7 @@ pipeline:
         URL: http://127.0.0.1:8080/v1/api/shape/dev/vendors/
         Expect:
           Code: 200
-          JSONBody: $LoadJSON('${parentPath}/expect.json')
+          JSONBody: $LoadData('${parentPath}/expect.json')
 
 
       - Method: GET

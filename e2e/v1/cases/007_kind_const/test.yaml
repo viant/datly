@@ -1,6 +1,7 @@
 init:
   parentPath: $parent.path
-  expect: $LoadJSON('${parentPath}/expect.json')
+  created: $FormatTime('nowInUTC', 'yyyy-MM-ddT00:00:00Z')
+  expect: $LoadData('${parentPath}/expect.json')
 
 pipeline:
   printHello:

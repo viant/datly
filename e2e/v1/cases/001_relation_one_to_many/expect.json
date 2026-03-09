@@ -3,7 +3,7 @@
     "id": 1,
     "name": "Vendor 1",
     "accountId": 100,
-    "created": "2026-03-07T00:00:00Z",
+    "created": "${created}",
     "userCreated": 1,
     "updated": null,
     "userUpdated": null,
@@ -11,7 +11,8 @@
       {
         "id": 1,
         "name": "V1 Product 1",
-        "created": "2026-03-07T00:00:00Z",
+        "status": 2,
+        "created": "${created}",
         "userCreated": 1,
         "updated": null,
         "userUpdated": null
@@ -20,7 +21,7 @@
         "id": 2,
         "name": "V1 Product 2",
         "status": 1,
-        "created": "2026-03-07T00:00:00Z",
+        "created": "${created}",
         "userCreated": 1,
         "updated": null,
         "userUpdated": null
@@ -31,7 +32,7 @@
     "id": 2,
     "name": "Vendor 2",
     "accountId": 101,
-    "created": "2026-03-07T00:00:00Z",
+    "created": "${created}",
     "userCreated": 2,
     "updated": null,
     "userUpdated": null,
@@ -40,7 +41,7 @@
         "id": 3,
         "name": "V2 Product 1",
         "status": 1,
-        "created": "2026-03-07T00:00:00Z",
+        "created": "${created}",
         "userCreated": 2,
         "updated": null,
         "userUpdated": null
@@ -49,7 +50,7 @@
         "id": 4,
         "name": "V2 Product 2",
         "status": 1,
-        "created": "2026-03-07T00:00:00Z",
+        "created": "${created}",
         "userCreated": 2,
         "updated": null,
         "userUpdated": null
@@ -58,7 +59,7 @@
         "id": 5,
         "name": "V2 Product 3",
         "status": 1,
-        "created": "2026-03-07T00:00:00Z",
+        "created": "${created}",
         "userCreated": 2,
         "updated": null,
         "userUpdated": null
@@ -69,7 +70,7 @@
     "id": 3,
     "name": "Vendor 3",
     "accountId": 100,
-    "created": "2026-03-07T00:00:00Z",
+    "created": "${created}",
     "userCreated": 1,
     "updated": null,
     "userUpdated": null

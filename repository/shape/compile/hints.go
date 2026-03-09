@@ -52,7 +52,7 @@ func extractViewHints(dql string) map[string]viewHint {
 			value := true
 			hint.AllowNulls = &value
 			result[alias] = hint
-		case "groupable":
+		case "groupable", "grouping_enabled":
 			if len(call.args) != 1 {
 				continue
 			}
@@ -181,6 +181,7 @@ func scanHintCalls(input string) []hintCall {
 		"use_connector":            true,
 		"allow_nulls":              true,
 		"groupable":                true,
+		"grouping_enabled":         true,
 		"allowed_order_by_columns": true,
 		"set_limit":                true,
 		"set_cache":                true,

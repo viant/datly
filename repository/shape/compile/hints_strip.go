@@ -12,6 +12,7 @@ var projectionHintCalls = map[string]bool{
 	"useconnector":          true,
 	"allownulls":            true,
 	"groupable":             true,
+	"groupingenabled":       true,
 	"allowedorderbycolumns": true,
 	"setlimit":              true,
 	"setcache":              true,

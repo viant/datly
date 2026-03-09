@@ -23,6 +23,14 @@ func TestExtractViewHints_WithQuotedConnector(t *testing.T) {
 	assert.True(t, *hints["match"].NoLimit)
 }
 
+func TestExtractViewHints_GroupingEnabledAlias(t *testing.T) {
+	dql := "SELECT grouping_enabled(match), set_limit(match, 0)"
+	hints := extractViewHints(dql)
+	require.Contains(t, hints, "match")
+	require.NotNil(t, hints["match"].Groupable)
+	assert.True(t, *hints["match"].Groupable)
+}
+
 func TestExtractViewHints_AllowedOrderByColumns(t *testing.T) {
 	dql := "SELECT allowed_order_by_columns(vendor, 'accountId:ACCOUNT_ID,vendor.userCreated:USER_CREATED,totalId:TOTAL_ID')"
 	hints := extractViewHints(dql)
@@ -136,6 +144,13 @@ func TestStripProjectionHintCalls_RemovesSelfRefFromSQL(t *testing.T) {
 	assert.NotContains(t, strings.ToLower(actual), "groupable(")
 	assert.NotContains(t, strings.ToLower(actual), "allowed_order_by_columns(")
 	assert.Contains(t, strings.ToLower(actual), "user.* except mgr_id")
+}
+
+func TestStripProjectionHintCalls_RemovesGroupingEnabledAlias(t *testing.T) {
+	sqlText := "SELECT user.*, grouping_enabled(user) FROM (SELECT t.* FROM USER t) user"
+	actual := stripProjectionHintCalls(sqlText)
+	assert.NotContains(t, strings.ToLower(actual), "grouping_enabled(")
+	assert.Contains(t, strings.ToLower(actual), "user.*")
 }
 
 func TestAppendRelationViews_SQLSelection(t *testing.T) {

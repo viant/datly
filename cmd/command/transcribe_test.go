@@ -433,17 +433,11 @@ func TestTranscribe_PatchBasicOneRouteYAMLPreservesNamedHelperParamTypes(t *test
 	curFoosID := payload.Resource.Parameters.Lookup("CurFoosId")
 	require.NotNil(t, curFoosID)
 	require.NotNil(t, curFoosID.Schema)
-	require.Equal(t, "CurFoosId", curFoosID.Schema.DataType)
+	require.Equal(t, "*patch_basic_one.FoosView", curFoosID.Schema.DataType)
 
-	var helperType *view.TypeDefinition
-	for _, item := range payload.Resource.Types {
-		if item != nil && item.Name == "CurFoosId" {
-			helperType = item
-			break
-		}
-	}
-	require.NotNil(t, helperType)
-	require.Equal(t, "struct { Values []int }", helperType.DataType)
+	require.NotNil(t, curFoosID.Output)
+	require.NotNil(t, curFoosID.Output.Schema)
+	require.Equal(t, `*struct { Values []int "json:\",omitempty\"" }`, curFoosID.Output.Schema.DataType)
 
 	curFoos := lookupNamedView(payload.Resource, "CurFoos")
 	require.NotNil(t, curFoos)
@@ -451,7 +445,7 @@ func TestTranscribe_PatchBasicOneRouteYAMLPreservesNamedHelperParamTypes(t *test
 	curFoosParam := curFoos.Template.Parameters.Lookup("CurFoosId")
 	require.NotNil(t, curFoosParam)
 	require.NotNil(t, curFoosParam.Schema)
-	require.Equal(t, "CurFoosId", curFoosParam.Schema.DataType)
+	require.Equal(t, "*patch_basic_one.FoosView", curFoosParam.Schema.DataType)
 }
 
 func TestGenerateTranscribeTypes_MetaFormatPreservesChildSummaryType(t *testing.T) {

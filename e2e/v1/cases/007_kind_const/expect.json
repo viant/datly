@@ -1,12 +1,13 @@
 [
   {
     "accountId": 100,
-    "created": "2026-03-07T00:00:00Z",
+    "created": "${created}",
     "id": 1,
     "name": "Vendor 1",
     "products": [
       {
-        "created": "2026-03-07T00:00:00Z",
+        "created": "${created}",
+        "status": 2,
         "id": 1,
         "name": "V1 Product 1",
         "updated": null,
@@ -15,7 +16,7 @@
         "vendorId": 1
       },
       {
-        "created": "2026-03-07T00:00:00Z",
+        "created": "${created}",
         "id": 2,
         "name": "V1 Product 2",
         "status": 1,
@@ -31,12 +32,12 @@
   },
   {
     "accountId": 101,
-    "created": "2026-03-07T00:00:00Z",
+    "created": "${created}",
     "id": 2,
     "name": "Vendor 2",
     "products": [
       {
-        "created": "2026-03-07T00:00:00Z",
+        "created": "${created}",
         "id": 3,
         "name": "V2 Product 1",
         "status": 1,
@@ -46,7 +47,7 @@
         "vendorId": 2
       },
       {
-        "created": "2026-03-07T00:00:00Z",
+        "created": "${created}",
         "id": 4,
         "name": "V2 Product 2",
         "status": 1,
@@ -56,7 +57,7 @@
         "vendorId": 2
       },
       {
-        "created": "2026-03-07T00:00:00Z",
+        "created": "${created}",
         "id": 5,
         "name": "V2 Product 3",
         "status": 1,

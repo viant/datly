@@ -370,10 +370,17 @@ func synthesizeMutableExecHelpers(component *Component, resource *view.Resource)
 	if helperIDsSchema != nil && strings.TrimSpace(helperIDsSchema.DataType) == "" {
 		helperIDsSchema.DataType = loaderSchemaTypeExpr(reflect.PtrTo(valuesType))
 	}
+	helperSourceSchema := body.Schema
+	if helperSourceSchema == nil && rootView.Schema != nil {
+		helperSourceSchema = rootView.Schema.Clone()
+	}
+	if helperSourceSchema != nil {
+		helperSourceSchema = helperSourceSchema.Clone()
+	}
 	helperIDsParam := &state.Parameter{
 		Name:           helperIDsName,
 		In:             state.NewParameterLocation(bodyName),
-		Schema:         helperIDsSchema.Clone(),
+		Schema:         helperSourceSchema,
 		Output:         &state.Codec{Name: "structql", Body: fmt.Sprintf(" SELECT ARRAY_AGG(%s) AS Values FROM  `/` LIMIT 1", keyFieldName), Schema: helperIDsSchema.Clone()},
 		PreserveSchema: true,
 	}
