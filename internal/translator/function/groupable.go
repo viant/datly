@@ -6,6 +6,9 @@ import (
 )
 
 type groupable struct{}
+type groupingEnabled struct {
+	groupable
+}
 
 func (c *groupable) Apply(args []string, column *sqlparser.Column, resource *view.Resource, aView *view.View) error {
 	values, err := convertArguments(c, args)
@@ -18,6 +21,10 @@ func (c *groupable) Apply(args []string, column *sqlparser.Column, resource *vie
 
 func (c *groupable) Name() string {
 	return "groupable"
+}
+
+func (c *groupingEnabled) Name() string {
+	return "grouping_enabled"
 }
 
 func (c *groupable) Description() string {

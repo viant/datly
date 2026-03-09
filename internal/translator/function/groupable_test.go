@@ -36,3 +36,13 @@ func TestGroupable_Apply(t *testing.T) {
 		})
 	}
 }
+
+func TestGroupingEnabledAlias_Apply(t *testing.T) {
+	aView := &view.View{}
+	fn := &groupingEnabled{}
+
+	err := fn.Apply(nil, nil, nil, aView)
+	require.NoError(t, err)
+	require.True(t, aView.Groupable)
+	require.Equal(t, "grouping_enabled", fn.Name())
+}
