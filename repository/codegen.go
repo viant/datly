@@ -13,6 +13,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
+	"os"
 	"path"
 	"reflect"
 	"strconv"
@@ -29,6 +30,36 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 	builder := strings.Builder{}
 	input := c.Input.Type.Type()
 	registry := c.TypeRegistry()
+	if os.Getenv("DATLY_DEBUG_REPORT_GEN") != "" {
+		outputViewSchema := "<nil>"
+		outputViewType := "<nil>"
+		outputViewTag := "<nil>"
+		if viewParameter := c.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil {
+			outputViewTag = viewParameter.Tag
+			if viewParameter.Schema != nil {
+				outputViewSchema = viewParameter.Schema.Name
+				if viewParameter.Schema.Type() != nil {
+					outputViewType = viewParameter.Schema.Type().String()
+				}
+			}
+		}
+		defs := 0
+		viewName := "<nil>"
+		viewSchemaName := "<nil>"
+		viewSchemaType := "<nil>"
+		if c.View != nil {
+			viewName = c.View.Name
+			defs = len(c.View.TypeDefinitions())
+			if c.View.Schema != nil {
+				viewSchemaName = c.View.Schema.Name
+				if c.View.Schema.Type() != nil {
+					viewSchemaType = c.View.Schema.Type().String()
+				}
+			}
+		}
+		fmt.Printf("[DATLY_CODEGEN] uri=%s method=%s view=%s viewSchema=%s viewSchemaType=%s defs=%d outputViewSchema=%s outputViewType=%s outputViewTag=%s package=%s\n",
+			c.URI, c.Method, viewName, viewSchemaName, viewSchemaType, defs, outputViewSchema, outputViewType, outputViewTag, c.Output.Type.Package)
+	}
 
 	if viewParameter := c.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil {
 		aTag := &tags.Tag{}

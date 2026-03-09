@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"net/http"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/xdatly/codec"
+	"github.com/viant/xreflect"
 )
 
 func (s *Service) appendReportProvider(ctx context.Context, item *path.Item, routePath *path.Path, providers []*Provider, provider *Provider) ([]*Provider, error) {
@@ -93,6 +96,9 @@ func BuildReportComponent(dispatcher contract.Dispatcher, original *Component) (
 }
 
 func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, original *Component, routePath *path.Path) (*Component, *path.Path, error) {
+	if os.Getenv("DATLY_DEBUG_REPORT_GEN") != "" {
+		debugReportComponent("before_build_report", original)
+	}
 	config := original.Report.normalize()
 	metadata, err := buildReportMetadata(original, config)
 	if err != nil {
@@ -137,7 +143,48 @@ func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, o
 		}
 		reportPath = &pathCopy
 	}
+	if os.Getenv("DATLY_DEBUG_REPORT_GEN") != "" {
+		debugReportComponent("after_build_report_original", original)
+		debugReportComponent("after_build_report_report", &ret)
+	}
 	return &ret, reportPath, nil
+}
+
+func debugReportComponent(label string, component *Component) {
+	if component == nil {
+		fmt.Printf("[DATLY_REPORT_GEN] %s component=nil\n", label)
+		return
+	}
+	viewName := "<nil>"
+	viewSchemaName := "<nil>"
+	viewSchemaType := "<nil>"
+	viewDefs := 0
+	if component.View != nil {
+		viewName = component.View.Name
+		viewDefs = len(component.View.TypeDefinitions())
+		if component.View.Schema != nil {
+			viewSchemaName = component.View.Schema.Name
+			if component.View.Schema.Type() != nil {
+				viewSchemaType = component.View.Schema.Type().String()
+			}
+		}
+	}
+	outputSchemaName := "<nil>"
+	outputSchemaType := "<nil>"
+	outputTag := "<nil>"
+	if component.Output.Type.Parameters != nil {
+		if param := component.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); param != nil {
+			outputTag = param.Tag
+			if param.Schema != nil {
+				outputSchemaName = param.Schema.Name
+				if param.Schema.Type() != nil {
+					outputSchemaType = param.Schema.Type().String()
+				}
+			}
+		}
+	}
+	fmt.Printf("[DATLY_REPORT_GEN] %s uri=%s method=%s view=%s viewSchema=%s viewSchemaType=%s viewDefs=%d outputSchema=%s outputSchemaType=%s outputTag=%s\n",
+		label, component.URI, component.Method, viewName, viewSchemaName, viewSchemaType, viewDefs, outputSchemaName, outputSchemaType, outputTag)
 }
 
 func buildReportWrapperView(original *view.View) *view.View {
@@ -240,11 +287,15 @@ func buildReportInputType(component *Component, metadata *ReportMetadata, report
 	bodyParam := state.NewParameter(metadata.BodyFieldName, state.NewBodyLocation(""), state.WithParameterSchema(bodySchema))
 	bodyParam.Tag = `anonymous:"true"`
 	bodyParam.SetTypeNameTag()
+	// Synthetic report input must not initialize against the original component resource.
+	// Using the shared resource resolves linked named types and mutates the original
+	// component generation state, which breaks repeated code generation.
+	inputResource := newReportInputResource(component.View.Resource())
 	inputType, err := state.NewType(
 		state.WithParameters(state.Parameters{bodyParam}),
 		state.WithBodyType(true),
 		state.WithSchema(state.NewSchema(bodyType)),
-		state.WithResource(component.View.Resource()),
+		state.WithResource(inputResource),
 	)
 	if err != nil {
 		return nil, err
@@ -398,3 +449,50 @@ func reflectTypeOfState(rType reflect.Type) reflect.Type {
 	}
 	return rType
 }
+
+type reportInputResource struct {
+	base state.Resource
+}
+
+func newReportInputResource(base state.Resource) state.Resource {
+	return &reportInputResource{base: base}
+}
+
+func (r *reportInputResource) LookupParameter(name string) (*state.Parameter, error) { return nil, nil }
+func (r *reportInputResource) AppendParameter(parameter *state.Parameter)            {}
+func (r *reportInputResource) ViewSchema(ctx context.Context, name string) (*state.Schema, error) {
+	return nil, nil
+}
+func (r *reportInputResource) ViewSchemaPointer(ctx context.Context, name string) (*state.Schema, error) {
+	return nil, nil
+}
+func (r *reportInputResource) LookupType() xreflect.LookupType { return nil }
+func (r *reportInputResource) LoadText(ctx context.Context, URL string) (string, error) {
+	return "", nil
+}
+func (r *reportInputResource) Codecs() *codec.Registry {
+	if r.base != nil && r.base.Codecs() != nil {
+		return r.base.Codecs()
+	}
+	return codec.New()
+}
+func (r *reportInputResource) CodecOptions() *codec.Options {
+	if r.base != nil && r.base.CodecOptions() != nil {
+		return r.base.CodecOptions()
+	}
+	return codec.NewOptions(nil)
+}
+func (r *reportInputResource) ExpandSubstitutes(value string) string {
+	if r.base != nil {
+		return r.base.ExpandSubstitutes(value)
+	}
+	return value
+}
+func (r *reportInputResource) ReverseSubstitutes(value string) string {
+	if r.base != nil {
+		return r.base.ReverseSubstitutes(value)
+	}
+	return value
+}
+func (r *reportInputResource) EmbedFS() *embed.FS                       { return nil }
+func (r *reportInputResource) SetFSEmbedder(embedder *state.FSEmbedder) {}
