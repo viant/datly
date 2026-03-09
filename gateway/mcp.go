@@ -276,6 +276,9 @@ func (r *Router) newToolHTTPRequest(method, URL string, body io.Reader) (*http.R
 	if err != nil {
 		return nil, jsonrpc.NewInvalidRequest(err.Error(), nil)
 	}
+	if body != nil {
+		httpRequest.Header.Set("Content-Type", "application/json")
+	}
 	return httpRequest, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -225,6 +226,13 @@ func TestRouter_mcpToolCallHandler_PassesAuthorizationToReportRoute(t *testing.T
 		"filters":{"VendorIDs":[1,2]},
 		"orderBy":["accountId"]
 	}`, actualBody)
+}
+
+func TestRouter_newToolHTTPRequest_SetsJSONContentTypeForBody(t *testing.T) {
+	req, rpcErr := (&Router{}).newToolHTTPRequest(http.MethodPost, "http://localhost/v1/api/dev/vendors-grouping/report", strings.NewReader(`{"dimensions":{"accountId":true}}`))
+	require.Nil(t, rpcErr)
+	require.NotNil(t, req)
+	assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
 }
 
 func TestRouter_buildToolsIntegration_RegistersReportTool(t *testing.T) {

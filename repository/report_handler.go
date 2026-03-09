@@ -73,6 +73,9 @@ func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) 
 		if err != nil {
 			return nil, err
 		}
+		if os.Getenv("DATLY_DEBUG_REPORT") != "" {
+			fmt.Printf("[DATLY_REPORT_HANDLER] raw_body=%q\n", string(payload))
+		}
 		if len(payload) > 0 {
 			target := reflect.New(r.BodyType)
 			if err := json.Unmarshal(payload, target.Interface()); err != nil {
