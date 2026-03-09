@@ -1,10 +1,14 @@
 package repository
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -99,10 +103,6 @@ type reportHandlerBody struct {
 	Offset     *int
 }
 
-type reportHandlerInput struct {
-	Report reportHandlerBody
-}
-
 func (s *reportTestSession) Validator() *validator.Service                 { return nil }
 func (s *reportTestSession) Differ() *differ.Service                       { return nil }
 func (s *reportTestSession) MessageBus() *mbus.Service                     { return nil }
@@ -121,7 +121,7 @@ func testReportHandler() *reportHandler {
 		Dispatcher: &captureDispatcher{},
 		Path:       &contract.Path{Method: http.MethodGet, URI: "/v1/api/vendors"},
 		Metadata: &ReportMetadata{
-			BodyFieldName: "Report",
+			BodyFieldName: "",
 			DimensionsKey: "Dimensions",
 			MeasuresKey:   "Measures",
 			FiltersKey:    "Filters",
@@ -145,17 +145,15 @@ func testReportHandler() *reportHandler {
 	}
 }
 
-func testReportInput() reportHandlerInput {
+func testReportInput() reportHandlerBody {
 	accountID := 101
 	limit := 25
-	return reportHandlerInput{
-		Report: reportHandlerBody{
-			Dimensions: reportHandlerDimensions{AccountID: true},
-			Measures:   reportHandlerMeasures{TotalSpend: true},
-			Filters:    reportHandlerFilters{AccountID: &accountID},
-			OrderBy:    []string{"AccountID"},
-			Limit:      &limit,
-		},
+	return reportHandlerBody{
+		Dimensions: reportHandlerDimensions{AccountID: true},
+		Measures:   reportHandlerMeasures{TotalSpend: true},
+		Filters:    reportHandlerFilters{AccountID: &accountID},
+		OrderBy:    []string{"AccountID"},
+		Limit:      &limit,
 	}
 }
 
@@ -196,4 +194,18 @@ func TestReportHandler_Exec_PreservesAuthorizationHeader(t *testing.T) {
 	assert.Equal(t, "AccountID", query.Get("_orderby"))
 	assert.Equal(t, "25", query.Get("_limit"))
 	assert.Equal(t, "101", query.Get("accountID"))
+}
+
+func TestReportHandler_ReportInput_AcceptsUnwrappedBody(t *testing.T) {
+	handler := testReportHandler()
+	handler.BodyType = reflect.TypeOf(&reportHandlerBody{})
+	payload, err := json.Marshal(testReportInput())
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "http://localhost/v1/api/vendors/report", io.NopCloser(bytes.NewReader(payload)))
+	input, err := handler.reportInput(context.Background(), req)
+	require.NoError(t, err)
+	body, ok := input.(*reportHandlerBody)
+	require.True(t, ok)
+	require.True(t, body.Dimensions.AccountID)
+	require.True(t, body.Measures.TotalSpend)
 }

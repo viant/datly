@@ -215,7 +215,7 @@ func buildReportMetadata(component *Component, report *Report) (*ReportMetadata,
 	}
 	result := &ReportMetadata{
 		InputName:     report.inputTypeName(component.Name, component.Input.Type.Name, viewRef.Name),
-		BodyFieldName: "Report",
+		BodyFieldName: "",
 		DimensionsKey: report.Dimensions,
 		MeasuresKey:   report.Measures,
 		FiltersKey:    report.Filters,
@@ -279,7 +279,7 @@ func buildReportInputType(component *Component, metadata *ReportMetadata, report
 		}
 		return inputType, validateExplicitReportInput(inputType, metadata)
 	}
-	bodyType := synthesizeReportBodyType(metadata)
+	bodyType := reflect.PtrTo(synthesizeReportBodyType(metadata))
 	bodySchema := state.NewSchema(bodyType)
 	bodySchema.Name = metadata.InputName
 	bodyParam := state.NewParameter(metadata.BodyFieldName, state.NewBodyLocation(""), state.WithParameterSchema(bodySchema))

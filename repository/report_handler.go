@@ -77,7 +77,11 @@ func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) 
 			fmt.Printf("[DATLY_REPORT_HANDLER] raw_body=%q\n", string(payload))
 		}
 		if len(payload) > 0 {
-			target := reflect.New(r.BodyType)
+			targetType := r.BodyType
+			for targetType.Kind() == reflect.Ptr {
+				targetType = targetType.Elem()
+			}
+			target := reflect.New(targetType)
 			if err := json.Unmarshal(payload, target.Interface()); err != nil {
 				return nil, err
 			}
