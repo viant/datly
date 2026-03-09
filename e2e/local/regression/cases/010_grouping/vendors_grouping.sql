@@ -1,7 +1,7 @@
 /* {"URI":"vendors-grouping/"} */
 
 #set( $_ = $Data<?>(output/view).Embed())
-#set( $_ = $ID<[]int>(query/id)..WithPredicate(0, 'equal', 't', 'ID'))
+#set( $_ = $ID<[]int>(query/id).WithPredicate(0, 'equal', 't', 'ID'))
 
 SELECT vendor.*,
        grouping_enabled(vendor),
