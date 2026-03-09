@@ -70,8 +70,7 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 
 		// 2) Apply parameters to request URL/query/body
 		for _, p := range allParams {
-			name := strings.Title(p.Name)
-			value := params.Arguments[name]
+			value := toolArgumentValue(p, params.Arguments)
 			pType := p.Schema.Type()
 			if pType.Kind() == reflect.Ptr {
 				pType = pType.Elem()
@@ -404,6 +403,10 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 			}
 			appendField(name, parameter.Schema.Type(), tag)
 		case state.KindRequestBody:
+			if parameter.IsAnonymous() {
+				appendAnonymousBodyFields(&inputFields, uniqueFieldName, parameter.Schema.Type())
+				continue
+			}
 			// If body is a slice, mark optional in schema.
 			var tag reflect.StructTag
 			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
@@ -443,6 +446,74 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 	}
 
 	return reflect.StructOf(inputFields)
+}
+
+func toolArgumentValue(parameter *state.Parameter, arguments map[string]interface{}) interface{} {
+	if parameter == nil {
+		return nil
+	}
+	if parameter.In != nil && parameter.In.Kind == state.KindRequestBody && parameter.IsAnonymous() && parameter.Schema != nil {
+		return anonymousBodyArgumentValue(arguments, parameter.Schema.Type())
+	}
+	return arguments[strings.Title(parameter.Name)]
+}
+
+func appendAnonymousBodyFields(fields *[]reflect.StructField, unique map[string]bool, bodyType reflect.Type) {
+	bodyType = indirectType(bodyType)
+	if bodyType == nil || bodyType.Kind() != reflect.Struct {
+		return
+	}
+	for i := 0; i < bodyType.NumField(); i++ {
+		field := bodyType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		if unique[field.Name] {
+			continue
+		}
+		unique[field.Name] = true
+		*fields = append(*fields, field)
+	}
+}
+
+func anonymousBodyArgumentValue(arguments map[string]interface{}, bodyType reflect.Type) interface{} {
+	bodyType = indirectType(bodyType)
+	if bodyType == nil || bodyType.Kind() != reflect.Struct {
+		return nil
+	}
+	payload := map[string]interface{}{}
+	for i := 0; i < bodyType.NumField(); i++ {
+		field := bodyType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		value, ok := arguments[field.Name]
+		if !ok {
+			continue
+		}
+		payload[jsonFieldName(field)] = value
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	return payload
+}
+
+func jsonFieldName(field reflect.StructField) string {
+	if tag := field.Tag.Get("json"); tag != "" {
+		parts := strings.Split(tag, ",")
+		if parts[0] != "" && parts[0] != "-" {
+			return parts[0]
+		}
+	}
+	return strings.ToLower(field.Name[:1]) + field.Name[1:]
+}
+
+func indirectType(rType reflect.Type) reflect.Type {
+	for rType != nil && rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	return rType
 }
 
 func (r *Router) buildTemplateResourceIntegration(item *dpath.Item, aPath *dpath.Path, aRoute *Route, provider *repository.Provider) error {
