@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/internal/setter"
 	tparser "github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/content"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
@@ -39,6 +40,7 @@ var (
 	handlerSettingsLineExpr    = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$handler\s*\(([^)]*)\)\s*\)\s*$`)
 	inputSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$input\s*\(([^)]*)\)\s*\)\s*$`)
 	outputSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$output\s*\(([^)]*)\)\s*\)\s*$`)
+	reportSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$report\s*\(([^)]*)\)\s*\)\s*$`)
 	marshalSettingsLineExpr    = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$marshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
 	unmarshalSettingsLineExpr  = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$unmarshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
 	formatSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
@@ -61,6 +63,7 @@ type routeSettingsDirective struct {
 	Format            string
 	DateFormat        string
 	CaseFormat        string
+	Report            *repository.Report
 }
 
 type (
@@ -486,6 +489,9 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 		if directive.CaseFormat != "" {
 			r.Rule.Route.Output.CaseFormat = text.CaseFormat(directive.CaseFormat)
 		}
+		if directive.Report != nil {
+			r.Rule.Report = directive.Report
+		}
 		*dSQL = removeSettingsDirectives(*dSQL)
 	}
 	r.Rule.applyShortHands()
@@ -573,6 +579,12 @@ func parseSettingsDirectives(dSQL string) (*routeSettingsDirective, bool, error)
 			return nil, false, fmt.Errorf("invalid $output directive")
 		}
 		ret.OutputType = value
+	}
+	matches = reportSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		ret.Report = parseReportSettings(last[1])
 	}
 
 	matches = marshalSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
@@ -722,12 +734,48 @@ func removeSettingsDirectives(dSQL string) string {
 	dSQL = handlerSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = inputSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = outputSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = reportSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = marshalSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = unmarshalSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = formatSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = dateFormatSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = caseFormatSettingsLineExpr.ReplaceAllString(dSQL, "")
 	return dSQL
+}
+
+func parseReportSettings(input string) *repository.Report {
+	args := parseQuotedArgs(input)
+	ret := &repository.Report{
+		Enabled:    true,
+		Dimensions: "Dimensions",
+		Measures:   "Measures",
+		Filters:    "Filters",
+		OrderBy:    "OrderBy",
+		Limit:      "Limit",
+		Offset:     "Offset",
+	}
+	if len(args) > 0 {
+		ret.Input = args[0]
+	}
+	if len(args) > 1 {
+		ret.Dimensions = args[1]
+	}
+	if len(args) > 2 {
+		ret.Measures = args[2]
+	}
+	if len(args) > 3 {
+		ret.Filters = args[3]
+	}
+	if len(args) > 4 {
+		ret.OrderBy = args[4]
+	}
+	if len(args) > 5 {
+		ret.Limit = args[5]
+	}
+	if len(args) > 6 {
+		ret.Offset = args[6]
+	}
+	return ret
 }
 
 func removeHashImportDirectives(dSQL string) string {

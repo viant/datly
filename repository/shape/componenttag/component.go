@@ -11,17 +11,25 @@ import (
 const TagName = "component"
 
 type Component struct {
-	Name       string
-	Path       string
-	Method     string
-	Connector  string
-	Marshaller string
-	Handler    string
-	Input      string
-	Output     string
-	View       string
-	Source     string
-	Summary    string
+	Name             string
+	Path             string
+	Method           string
+	Connector        string
+	Marshaller       string
+	Handler          string
+	Input            string
+	Output           string
+	View             string
+	Source           string
+	Summary          string
+	Report           bool
+	ReportInput      string
+	ReportDimensions string
+	ReportMeasures   string
+	ReportFilters    string
+	ReportOrderBy    string
+	ReportLimit      string
+	ReportOffset     string
 }
 
 type Tag struct {
@@ -44,6 +52,16 @@ func (c *Component) Tag() *tagtags.Tag {
 	appendNonEmpty(builder, "view", c.View)
 	appendNonEmpty(builder, "source", c.Source)
 	appendNonEmpty(builder, "summary", c.Summary)
+	if c.Report {
+		appendNonEmpty(builder, "report", "true")
+	}
+	appendNonEmpty(builder, "reportInput", c.ReportInput)
+	appendNonEmpty(builder, "reportDimensions", c.ReportDimensions)
+	appendNonEmpty(builder, "reportMeasures", c.ReportMeasures)
+	appendNonEmpty(builder, "reportFilters", c.ReportFilters)
+	appendNonEmpty(builder, "reportOrderBy", c.ReportOrderBy)
+	appendNonEmpty(builder, "reportLimit", c.ReportLimit)
+	appendNonEmpty(builder, "reportOffset", c.ReportOffset)
 	return &tagtags.Tag{Name: TagName, Values: tagtags.Values(builder.String())}
 }
 
@@ -78,6 +96,22 @@ func Parse(tag reflect.StructTag) (*Tag, error) {
 			component.Source = strings.TrimSpace(value)
 		case "summary":
 			component.Summary = strings.TrimSpace(value)
+		case "report":
+			component.Report = strings.EqualFold(strings.TrimSpace(value), "true")
+		case "reportinput":
+			component.ReportInput = strings.TrimSpace(value)
+		case "reportdimensions":
+			component.ReportDimensions = strings.TrimSpace(value)
+		case "reportmeasures":
+			component.ReportMeasures = strings.TrimSpace(value)
+		case "reportfilters":
+			component.ReportFilters = strings.TrimSpace(value)
+		case "reportorderby":
+			component.ReportOrderBy = strings.TrimSpace(value)
+		case "reportlimit":
+			component.ReportLimit = strings.TrimSpace(value)
+		case "reportoffset":
+			component.ReportOffset = strings.TrimSpace(value)
 		default:
 			return fmt.Errorf("unsupported component tag option: '%s'", key)
 		}

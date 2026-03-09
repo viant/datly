@@ -18,6 +18,7 @@ var (
 	cacheDirectiveName       = map[string]bool{"cache": true}
 	mcpDirectiveName         = map[string]bool{"mcp": true}
 	routeDirectiveName       = map[string]bool{"route": true}
+	reportDirectiveName      = map[string]bool{"report": true}
 	constDirectiveName       = map[string]bool{"const": true}
 	marshalDirectiveName     = map[string]bool{"marshal": true}
 	unmarshalDirectiveName   = map[string]bool{"unmarshal": true}
@@ -109,6 +110,18 @@ func parseSettingsDirectives(input, fullDQL string, diagnosticOffset int, direct
 			}
 		} else {
 			directives.Route = values[len(values)-1]
+		}
+	}
+	if strings.Contains(lower, "$report") {
+		calls, parseErrors := scanDollarCallsStrict(input, reportDirectiveName)
+		diagnostics = appendDirectiveParseErrors(diagnostics, parseErrors, dqldiag.CodeDirRoute, fullDQL, diagnosticOffset)
+		values := parseReportDirectiveCalls(calls)
+		if len(values) == 0 {
+			if len(calls) > 0 {
+				diagnostics = append(diagnostics, directiveDiagnostic(dqldiag.CodeDirRoute, "invalid $report directive", "expected: #settings($_ = $report()) or #settings($_ = $report('InputType','Dimensions','Measures','Filters','OrderBy','Limit','Offset'))", fullDQL, lastDirectiveCallOffset(calls, diagnosticOffset)))
+			}
+		} else {
+			directives.Report = values[len(values)-1]
 		}
 	}
 	if strings.Contains(lower, "$const") {
@@ -544,6 +557,49 @@ func parseRouteDirectiveCalls(calls []directiveCall) []*dqlshape.RouteDirective 
 			URI:     uri,
 			Methods: methods,
 		})
+	}
+	return result
+}
+
+func parseReportDirectiveCalls(calls []directiveCall) []*dqlshape.ReportDirective {
+	result := make([]*dqlshape.ReportDirective, 0, len(calls))
+	for _, call := range calls {
+		args := make([]string, 0, len(call.args))
+		valid := true
+		for _, raw := range call.args {
+			value, ok := parseQuotedLiteral(raw)
+			if !ok {
+				valid = false
+				break
+			}
+			args = append(args, strings.TrimSpace(value))
+		}
+		if !valid {
+			continue
+		}
+		directive := &dqlshape.ReportDirective{Enabled: true}
+		if len(args) > 0 {
+			directive.Input = strings.TrimSpace(args[0])
+		}
+		if len(args) > 1 {
+			directive.Dimensions = strings.TrimSpace(args[1])
+		}
+		if len(args) > 2 {
+			directive.Measures = strings.TrimSpace(args[2])
+		}
+		if len(args) > 3 {
+			directive.Filters = strings.TrimSpace(args[3])
+		}
+		if len(args) > 4 {
+			directive.OrderBy = strings.TrimSpace(args[4])
+		}
+		if len(args) > 5 {
+			directive.Limit = strings.TrimSpace(args[5])
+		}
+		if len(args) > 6 {
+			directive.Offset = strings.TrimSpace(args[6])
+		}
+		result = append(result, directive)
 	}
 	return result
 }

@@ -70,6 +70,10 @@ type typedRouteSource struct {
 	Route xdatly.Component[typedRouteInput, typedRouteOutput] `component:",path=/v1/api/dev/report,method=GET"`
 }
 
+type reportRouteSource struct {
+	Route xdatly.Component[typedRouteInput, typedRouteOutput] `component:",path=/v1/api/dev/report,method=GET,report=true,reportInput=NamedReportInput,reportDimensions=Dims,reportMeasures=Metrics,reportFilters=Predicates,reportOrderBy=Sort,reportLimit=Take,reportOffset=Skip"`
+}
+
 type dynamicRouteInput struct {
 	Name string
 }
@@ -231,6 +235,28 @@ func TestPlanner_Plan_ComponentHolderTypes(t *testing.T) {
 	assert.Equal(t, reflect.TypeOf(typedRouteOutput{}), result.Components[0].OutputType)
 	assert.Empty(t, result.Components[0].InputName)
 	assert.Empty(t, result.Components[0].OutputName)
+}
+
+func TestPlanner_Plan_ComponentReportTags(t *testing.T) {
+	scanner := scan.New()
+	scanned, err := scanner.Scan(context.Background(), &shape.Source{Struct: &reportRouteSource{}})
+	require.NoError(t, err)
+
+	planned, err := New().Plan(context.Background(), scanned)
+	require.NoError(t, err)
+
+	result, ok := ResultFrom(planned)
+	require.True(t, ok)
+	require.Len(t, result.Components, 1)
+	require.NotNil(t, result.Components[0].Report)
+	assert.True(t, result.Components[0].Report.Enabled)
+	assert.Equal(t, "NamedReportInput", result.Components[0].Report.Input)
+	assert.Equal(t, "Dims", result.Components[0].Report.Dimensions)
+	assert.Equal(t, "Metrics", result.Components[0].Report.Measures)
+	assert.Equal(t, "Predicates", result.Components[0].Report.Filters)
+	assert.Equal(t, "Sort", result.Components[0].Report.OrderBy)
+	assert.Equal(t, "Take", result.Components[0].Report.Limit)
+	assert.Equal(t, "Skip", result.Components[0].Report.Offset)
 }
 
 func TestPlanner_Plan_DynamicComponentHolderTypes(t *testing.T) {

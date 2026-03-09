@@ -52,6 +52,7 @@ type Directives struct {
 	Cache             *CacheDirective
 	MCP               *MCPDirective
 	Route             *RouteDirective
+	Report            *ReportDirective
 	Const             map[string]string
 	JSONMarshalType   string
 	JSONUnmarshalType string
@@ -79,6 +80,17 @@ type MCPDirective struct {
 type RouteDirective struct {
 	URI     string
 	Methods []string
+}
+
+type ReportDirective struct {
+	Enabled    bool
+	Input      string
+	Dimensions string
+	Measures   string
+	Filters    string
+	OrderBy    string
+	Limit      string
+	Offset     string
 }
 
 type Route struct {

@@ -131,6 +131,7 @@ func TestPrepare_InvalidMultilineImportDiagnostic(t *testing.T) {
 func TestPrepare_SpecialDirectives(t *testing.T) {
 	dql := "#settings($_ = $meta('docs/orders.md'))\n" +
 		"#setting($_ = $connector('analytics'))\n" +
+		"#setting($_ = $report('OrderReportInput','Dims','Metrics','Predicates','Sort','Take','Skip'))\n" +
 		"#setting($_ = $dest('vendor.go'))\n" +
 		"#setting($_ = $input_dest('vendor_input.go'))\n" +
 		"#setting($_ = $output_dest('vendor_output.go'))\n" +
@@ -152,6 +153,15 @@ func TestPrepare_SpecialDirectives(t *testing.T) {
 	require.NotNil(t, pre.Directives)
 	assert.Equal(t, "docs/orders.md", pre.Directives.Meta)
 	assert.Equal(t, "analytics", pre.Directives.DefaultConnector)
+	require.NotNil(t, pre.Directives.Report)
+	assert.True(t, pre.Directives.Report.Enabled)
+	assert.Equal(t, "OrderReportInput", pre.Directives.Report.Input)
+	assert.Equal(t, "Dims", pre.Directives.Report.Dimensions)
+	assert.Equal(t, "Metrics", pre.Directives.Report.Measures)
+	assert.Equal(t, "Predicates", pre.Directives.Report.Filters)
+	assert.Equal(t, "Sort", pre.Directives.Report.OrderBy)
+	assert.Equal(t, "Take", pre.Directives.Report.Limit)
+	assert.Equal(t, "Skip", pre.Directives.Report.Offset)
 	assert.Equal(t, "vendor.go", pre.Directives.Dest)
 	assert.Equal(t, "vendor_input.go", pre.Directives.InputDest)
 	assert.Equal(t, "vendor_output.go", pre.Directives.OutputDest)

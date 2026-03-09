@@ -35,3 +35,79 @@ pipeline:
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_empty.json')
+
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-grouping/report
+        JSONBody:
+          dimensions:
+            accountId: true
+          measures:
+            totalId: true
+            maxId: true
+          filters:
+            vendorIDs:
+              - 1
+              - 2
+              - 3
+          orderBy:
+            - accountId
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_account_totals.json')
+
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-grouping/report
+        JSONBody:
+          dimensions:
+            accountId: true
+            userCreated: true
+          measures:
+            totalId: true
+            maxId: true
+          filters:
+            vendorIDs:
+              - 1
+              - 2
+              - 3
+          orderBy:
+            - accountId
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_account_user_totals.json')
+
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-grouping/report
+        JSONBody:
+          dimensions: {}
+          measures:
+            totalId: true
+            maxId: true
+          filters:
+            vendorIDs:
+              - 1
+              - 2
+              - 3
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_totals.json')
+
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-grouping/report
+        JSONBody:
+          dimensions:
+            accountId: true
+          measures:
+            totalId: true
+            maxId: true
+          filters:
+            vendorIDs:
+              - 1
+              - 2
+              - 3
+          orderBy:
+            - accountId
+          limit: 1
+          offset: 2
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_empty.json')

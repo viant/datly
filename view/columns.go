@@ -197,6 +197,8 @@ func NewColumns(columns sqlparser.Columns, config map[string]*ColumnConfig) Colu
 		}
 		name = item.Identity()
 		column := NewColumn(name, item.Type, item.RawType, item.IsNullable, WithColumnTag(item.Tag))
+		column.Expression = item.Expression
+		column.Aggregate = isAggregateProjection(item.Expression)
 		if item.Name != item.Alias && item.Alias != "" && item.Name != "" {
 			column.Tag += fmt.Sprintf(`source:"%v"`, item.Name)
 		}
@@ -209,4 +211,18 @@ func NewColumns(columns sqlparser.Columns, config map[string]*ColumnConfig) Colu
 		result = append(result, column)
 	}
 	return result
+}
+
+func isAggregateProjection(expression string) bool {
+	expression = strings.ToLower(strings.TrimSpace(expression))
+	switch {
+	case strings.Contains(expression, "count("),
+		strings.Contains(expression, "sum("),
+		strings.Contains(expression, "avg("),
+		strings.Contains(expression, "min("),
+		strings.Contains(expression, "max("):
+		return true
+	default:
+		return false
+	}
 }

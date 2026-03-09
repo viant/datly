@@ -37,6 +37,17 @@ type (
 		With       []string
 	}
 
+	Report struct {
+		Enabled    bool   `json:",omitempty" yaml:"Enabled,omitempty"`
+		Input      string `json:",omitempty" yaml:"Input,omitempty"`
+		Dimensions string `json:",omitempty" yaml:"Dimensions,omitempty"`
+		Measures   string `json:",omitempty" yaml:"Measures,omitempty"`
+		Filters    string `json:",omitempty" yaml:"Filters,omitempty"`
+		OrderBy    string `json:",omitempty" yaml:"OrderBy,omitempty"`
+		Limit      string `json:",omitempty" yaml:"Limit,omitempty"`
+		Offset     string `json:",omitempty" yaml:"Offset,omitempty"`
+	}
+
 	ViewRef struct {
 		Ref string `yaml:"Ref" json:"Ref"` // Ref is the reference to the view definition
 	}
@@ -47,6 +58,7 @@ type (
 		contract.Meta                 `yaml:",inline"`
 		contract.ModelContextProtocol `yaml:",inline"`
 		Handler                       *Handler         `yaml:"Handler" json:"Handler"`
+		Report                        *Report          `yaml:"Report,omitempty" json:"Report,omitempty"`
 		Internal                      bool             `json:"Internal,omitempty" yaml:"Internal,omitempty" `
 		Connector                     string           `json:",omitempty"`
 		ContentURL                    string           `json:"ContentURL,omitempty" yaml:"ContentURL,omitempty" `

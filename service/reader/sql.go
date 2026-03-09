@@ -209,11 +209,33 @@ func (b *Builder) appendSelectorColumns(sb *strings.Builder, aView *view.View, s
 		}
 
 		sb.WriteString(" ")
-		sb.WriteString(viewColumn.SqlExpression())
+		if aView.Groupable {
+			sb.WriteString(groupedProjectionExpression(viewColumn))
+		} else {
+			sb.WriteString(viewColumn.SqlExpression())
+		}
 		result = append(result, viewColumn)
 	}
 
 	return result, nil
+}
+
+func groupedProjectionExpression(column *view.Column) string {
+	if column == nil {
+		return ""
+	}
+	expr := column.Name
+	if defaultValue := columnDefaultValue(column); defaultValue != "" {
+		return "COALESCE(" + expr + "," + defaultValue + ") AS " + column.Name
+	}
+	return expr
+}
+
+func columnDefaultValue(column *view.Column) string {
+	if column == nil {
+		return ""
+	}
+	return column.DefaultValue()
 }
 
 func (b *Builder) viewAlias(view *view.View) string {

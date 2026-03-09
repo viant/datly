@@ -48,6 +48,10 @@ type typedComponentSource struct {
 	Route xdatly.Component[reportInput, reportOutput] `component:",path=/v1/api/dev/report,method=GET"`
 }
 
+type reportEnabledSource struct {
+	Route xdatly.Component[reportInput, reportOutput] `component:",path=/v1/api/dev/report,method=GET,report=true,reportInput=NamedReportInput,reportDimensions=Dims,reportMeasures=Metrics,reportFilters=Predicates,reportOrderBy=Sort,reportLimit=Take,reportOffset=Skip"`
+}
+
 type dynamicReportInput struct {
 	Name string
 }
@@ -133,6 +137,28 @@ func TestStructScanner_Scan_ComponentHolderTypes(t *testing.T) {
 	assert.Equal(t, reflect.TypeOf(reportOutput{}), route.ComponentOutputType)
 	assert.Empty(t, route.ComponentInputName)
 	assert.Empty(t, route.ComponentOutputName)
+}
+
+func TestStructScanner_Scan_ComponentReportTags(t *testing.T) {
+	scanner := New()
+	result, err := scanner.Scan(context.Background(), &shape.Source{Struct: &reportEnabledSource{}})
+	require.NoError(t, err)
+
+	descriptors, ok := DescriptorsFrom(result)
+	require.True(t, ok)
+	require.Len(t, descriptors.ComponentFields, 1)
+	route := descriptors.ComponentFields[0]
+	require.NotNil(t, route)
+	require.NotNil(t, route.ComponentTag)
+	require.NotNil(t, route.ComponentTag.Component)
+	assert.True(t, route.ComponentTag.Component.Report)
+	assert.Equal(t, "NamedReportInput", route.ComponentTag.Component.ReportInput)
+	assert.Equal(t, "Dims", route.ComponentTag.Component.ReportDimensions)
+	assert.Equal(t, "Metrics", route.ComponentTag.Component.ReportMeasures)
+	assert.Equal(t, "Predicates", route.ComponentTag.Component.ReportFilters)
+	assert.Equal(t, "Sort", route.ComponentTag.Component.ReportOrderBy)
+	assert.Equal(t, "Take", route.ComponentTag.Component.ReportLimit)
+	assert.Equal(t, "Skip", route.ComponentTag.Component.ReportOffset)
 }
 
 func TestStructScanner_Scan_QuerySelectorHolder(t *testing.T) {

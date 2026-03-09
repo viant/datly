@@ -46,6 +46,7 @@ type ComponentRoute struct {
 	Connector  string
 	Marshaller string
 	Handler    string
+	Report     *dqlshape.ReportDirective
 }
 
 // Type is normalized type metadata collected during compile.

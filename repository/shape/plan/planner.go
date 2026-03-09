@@ -10,6 +10,7 @@ import (
 	metakeys "github.com/viant/datly/repository/locator/meta/keys"
 	outputkeys "github.com/viant/datly/repository/locator/output/keys"
 	"github.com/viant/datly/repository/shape"
+	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/scan"
 	"github.com/viant/datly/view/state"
 )
@@ -303,6 +304,18 @@ func normalizeComponent(field *scan.Field) *ComponentRoute {
 		result.ViewName = strings.TrimSpace(tag.View)
 		result.SourceURL = strings.TrimSpace(tag.Source)
 		result.SummaryURL = strings.TrimSpace(tag.Summary)
+		if tag.Report || tag.ReportInput != "" {
+			result.Report = &dqlshape.ReportDirective{
+				Enabled:    tag.Report,
+				Input:      strings.TrimSpace(tag.ReportInput),
+				Dimensions: strings.TrimSpace(tag.ReportDimensions),
+				Measures:   strings.TrimSpace(tag.ReportMeasures),
+				Filters:    strings.TrimSpace(tag.ReportFilters),
+				OrderBy:    strings.TrimSpace(tag.ReportOrderBy),
+				Limit:      strings.TrimSpace(tag.ReportLimit),
+				Offset:     strings.TrimSpace(tag.ReportOffset),
+			}
+		}
 	}
 	return result
 }

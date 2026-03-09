@@ -126,6 +126,12 @@ type typedRouteSource struct {
 	Route xdatly.Component[typedRouteInput, typedRouteOutput] `component:",path=/v1/api/dev/report,method=GET"`
 }
 
+type reportEnabledLoadSource struct {
+	embeddedFS
+	Rows  []reportRow                                         `view:"rows,table=REPORT" sql:"uri=testdata/report.sql"`
+	Route xdatly.Component[typedRouteInput, typedRouteOutput] `component:",path=/v1/api/dev/report,method=GET,report=true,reportInput=NamedReportInput,reportDimensions=Dims,reportMeasures=Metrics,reportFilters=Predicates,reportOrderBy=Sort,reportLimit=Take,reportOffset=Skip"`
+}
+
 type dynamicRouteInput struct {
 	Name string
 }
@@ -202,6 +208,29 @@ func TestLoader_LoadViews(t *testing.T) {
 	require.NotNil(t, aView.Cache)
 	assert.Equal(t, "c1", aView.Cache.Ref)
 	require.NotNil(t, artifacts.Resource.EmbedFS())
+}
+
+func TestLoader_LoadComponent_PreservesReportConfig(t *testing.T) {
+	scanned, err := scan.New().Scan(context.Background(), &shape.Source{Struct: &reportEnabledLoadSource{}})
+	require.NoError(t, err)
+
+	planned, err := plan.New().Plan(context.Background(), scanned)
+	require.NoError(t, err)
+
+	artifact, err := New().LoadComponent(context.Background(), planned)
+	require.NoError(t, err)
+
+	component, ok := ComponentFrom(artifact)
+	require.True(t, ok)
+	require.NotNil(t, component.Report)
+	assert.True(t, component.Report.Enabled)
+	assert.Equal(t, "NamedReportInput", component.Report.Input)
+	assert.Equal(t, "Dims", component.Report.Dimensions)
+	assert.Equal(t, "Metrics", component.Report.Measures)
+	assert.Equal(t, "Predicates", component.Report.Filters)
+	assert.Equal(t, "Sort", component.Report.OrderBy)
+	assert.Equal(t, "Take", component.Report.Limit)
+	assert.Equal(t, "Skip", component.Report.Offset)
 }
 
 func TestLoader_LoadResource(t *testing.T) {

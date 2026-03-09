@@ -3313,6 +3313,9 @@ func (g *ComponentCodegen) renderComponentHolder(builder *strings.Builder, compo
 	if summaryURL := strings.TrimSpace(g.rootSummarySourceURL()); summaryURL != "" {
 		tag += fmt.Sprintf(`,summary=%s`, summaryURL)
 	}
+	if reportTag := g.reportComponentTag(); reportTag != "" {
+		tag += reportTag
+	}
 	tag += `"`
 	builder.WriteString(fmt.Sprintf("type %sRouter struct {\n", componentName))
 	builder.WriteString(fmt.Sprintf("\t%s xdatly.Component[%s, %s] `%s`\n", componentName, inputTypeName, outputTypeName, tag))
@@ -3354,7 +3357,14 @@ func (g *ComponentCodegen) renderDefineComponent(builder *strings.Builder, compo
 	if connectorRef != "" {
 		builder.WriteString(fmt.Sprintf(`, view.WithConnectorRef(%q)`, connectorRef))
 	}
-	builder.WriteString("))\n\n")
+	builder.WriteString(")")
+	builder.WriteString(")")
+	if reportOption := g.reportComponentOption(); reportOption != "" {
+		builder.WriteString(",\n")
+		builder.WriteString("\t\t")
+		builder.WriteString(reportOption)
+	}
+	builder.WriteString(")\n\n")
 	builder.WriteString("\tif err != nil {\n")
 	builder.WriteString(fmt.Sprintf("\t\treturn fmt.Errorf(\"failed to create %s component: %%w\", err)\n", componentName))
 	builder.WriteString("\t}\n")
@@ -3363,6 +3373,66 @@ func (g *ComponentCodegen) renderDefineComponent(builder *strings.Builder, compo
 	builder.WriteString("\t}\n")
 	builder.WriteString("\treturn nil\n")
 	builder.WriteString("}\n\n")
+}
+
+func (g *ComponentCodegen) reportComponentTag() string {
+	if g.Component == nil || g.Component.Report == nil || !g.Component.Report.Enabled {
+		return ""
+	}
+	report := g.Component.Report
+	tag := ",report=true"
+	if value := strings.TrimSpace(report.Input); value != "" {
+		tag += fmt.Sprintf(",reportInput=%s", value)
+	}
+	if value := strings.TrimSpace(report.Dimensions); value != "" {
+		tag += fmt.Sprintf(",reportDimensions=%s", value)
+	}
+	if value := strings.TrimSpace(report.Measures); value != "" {
+		tag += fmt.Sprintf(",reportMeasures=%s", value)
+	}
+	if value := strings.TrimSpace(report.Filters); value != "" {
+		tag += fmt.Sprintf(",reportFilters=%s", value)
+	}
+	if value := strings.TrimSpace(report.OrderBy); value != "" {
+		tag += fmt.Sprintf(",reportOrderBy=%s", value)
+	}
+	if value := strings.TrimSpace(report.Limit); value != "" {
+		tag += fmt.Sprintf(",reportLimit=%s", value)
+	}
+	if value := strings.TrimSpace(report.Offset); value != "" {
+		tag += fmt.Sprintf(",reportOffset=%s", value)
+	}
+	return tag
+}
+
+func (g *ComponentCodegen) reportComponentOption() string {
+	if g.Component == nil || g.Component.Report == nil || !g.Component.Report.Enabled {
+		return ""
+	}
+	report := g.Component.Report
+	parts := []string{"Enabled: true"}
+	if value := strings.TrimSpace(report.Input); value != "" {
+		parts = append(parts, fmt.Sprintf("Input: %q", value))
+	}
+	if value := strings.TrimSpace(report.Dimensions); value != "" {
+		parts = append(parts, fmt.Sprintf("Dimensions: %q", value))
+	}
+	if value := strings.TrimSpace(report.Measures); value != "" {
+		parts = append(parts, fmt.Sprintf("Measures: %q", value))
+	}
+	if value := strings.TrimSpace(report.Filters); value != "" {
+		parts = append(parts, fmt.Sprintf("Filters: %q", value))
+	}
+	if value := strings.TrimSpace(report.OrderBy); value != "" {
+		parts = append(parts, fmt.Sprintf("OrderBy: %q", value))
+	}
+	if value := strings.TrimSpace(report.Limit); value != "" {
+		parts = append(parts, fmt.Sprintf("Limit: %q", value))
+	}
+	if value := strings.TrimSpace(report.Offset); value != "" {
+		parts = append(parts, fmt.Sprintf("Offset: %q", value))
+	}
+	return fmt.Sprintf("repository.WithReport(&repository.Report{%s})", strings.Join(parts, ", "))
 }
 
 func (g *ComponentCodegen) rootConnectorRef() string {

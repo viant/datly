@@ -22,6 +22,7 @@ type (
 		Tag      string `json:",omitempty"`
 
 		Expression     string       `json:",omitempty"`
+		Aggregate      bool         `json:",omitempty"`
 		Filterable     bool         `json:",omitempty"`
 		Groupable      bool         `json:",omitempty"`
 		Nullable       bool         `json:",omitempty"`
@@ -185,6 +186,10 @@ func (c *Column) defaultValue(rType reflect.Type) string {
 	default:
 		return c.Default
 	}
+}
+
+func (c *Column) DefaultValue() string {
+	return c.defaultValue(c.rType)
 }
 
 func (c *Column) FieldName() string {

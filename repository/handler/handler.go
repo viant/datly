@@ -128,7 +128,7 @@ func (h *Handler) buildFactoryOptions() ([]handler.Option, error) {
 
 func NewHandler(handler handler.Handler) *Handler {
 	rType := reflect.TypeOf(handler)
-	return &Handler{Type: rType.Name(), _type: rType}
+	return &Handler{Type: rType.Name(), _type: rType, handler: handler}
 }
 
 func lookupByPackagePathAlias(lookup xreflect.LookupType, typeName string) reflect.Type {

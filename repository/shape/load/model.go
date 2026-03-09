@@ -28,6 +28,7 @@ type Component struct {
 	Predicates       map[string][]*plan.ViewPredicate
 	TypeContext      *typectx.Context
 	Directives       *dqlshape.Directives
+	Report           *dqlshape.ReportDirective
 	ColumnsDiscovery bool
 	TypeSpecs        map[string]*TypeSpec
 

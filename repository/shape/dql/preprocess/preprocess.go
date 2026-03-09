@@ -179,6 +179,18 @@ func normalizeDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 			Methods: normalizedMethods,
 		}
 	}
+	if input.Report != nil {
+		ret.Report = &dqlshape.ReportDirective{
+			Enabled:    input.Report.Enabled,
+			Input:      strings.TrimSpace(input.Report.Input),
+			Dimensions: strings.TrimSpace(input.Report.Dimensions),
+			Measures:   strings.TrimSpace(input.Report.Measures),
+			Filters:    strings.TrimSpace(input.Report.Filters),
+			OrderBy:    strings.TrimSpace(input.Report.OrderBy),
+			Limit:      strings.TrimSpace(input.Report.Limit),
+			Offset:     strings.TrimSpace(input.Report.Offset),
+		}
+	}
 	if len(input.Const) > 0 {
 		ret.Const = make(map[string]string, len(input.Const))
 		for k, v := range input.Const {
@@ -188,7 +200,7 @@ func normalizeDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 	if ret.Meta == "" && ret.DefaultConnector == "" && ret.TemplateType == "" &&
 		ret.Dest == "" && ret.InputDest == "" && ret.OutputDest == "" && ret.RouterDest == "" &&
 		ret.InputType == "" && ret.OutputType == "" &&
-		ret.Cache == nil && ret.MCP == nil && ret.Route == nil &&
+		ret.Cache == nil && ret.MCP == nil && ret.Route == nil && ret.Report == nil &&
 		ret.JSONMarshalType == "" && ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" && ret.Format == "" &&
 		ret.DateFormat == "" && ret.CaseFormat == "" && len(ret.Const) == 0 {
 		return nil

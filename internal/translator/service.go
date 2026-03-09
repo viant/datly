@@ -332,6 +332,9 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	}
 
 	route.Component.Meta = resource.Rule.Meta
+	if resource.Rule.Report != nil {
+		route.Component.Report = resource.Rule.Report.Clone()
+	}
 	if route.Component.Meta.DescriptionURI != "" {
 		URL := url.Join(baseRuleURL, route.Component.Meta.DescriptionURI)
 		description, err := s.fs.DownloadWithURL(ctx, URL)

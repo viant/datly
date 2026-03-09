@@ -245,6 +245,29 @@ func buildComponent(source *shape.Source, pResult *plan.Result, resource *view.R
 	synthesizeMutableExecHelpers(component, resource)
 	component.Input = append(component.Input, synthesizePredicateStates(component.Input, component.Predicates)...)
 	component.Directives = cloneDirectives(pResult.Directives)
+	if primary := firstComponentRoute(pResult.Components); primary != nil && primary.Report != nil {
+		component.Report = &dqlshape.ReportDirective{
+			Enabled:    primary.Report.Enabled,
+			Input:      strings.TrimSpace(primary.Report.Input),
+			Dimensions: strings.TrimSpace(primary.Report.Dimensions),
+			Measures:   strings.TrimSpace(primary.Report.Measures),
+			Filters:    strings.TrimSpace(primary.Report.Filters),
+			OrderBy:    strings.TrimSpace(primary.Report.OrderBy),
+			Limit:      strings.TrimSpace(primary.Report.Limit),
+			Offset:     strings.TrimSpace(primary.Report.Offset),
+		}
+	} else if component.Directives != nil && component.Directives.Report != nil {
+		component.Report = &dqlshape.ReportDirective{
+			Enabled:    component.Directives.Report.Enabled,
+			Input:      strings.TrimSpace(component.Directives.Report.Input),
+			Dimensions: strings.TrimSpace(component.Directives.Report.Dimensions),
+			Measures:   strings.TrimSpace(component.Directives.Report.Measures),
+			Filters:    strings.TrimSpace(component.Directives.Report.Filters),
+			OrderBy:    strings.TrimSpace(component.Directives.Report.OrderBy),
+			Limit:      strings.TrimSpace(component.Directives.Report.Limit),
+			Offset:     strings.TrimSpace(component.Directives.Report.Offset),
+		}
+	}
 	component.ColumnsDiscovery = pResult.ColumnsDiscovery
 	component.TypeSpecs = resolveTypeSpecs(pResult)
 	return component
@@ -1444,10 +1467,22 @@ func cloneDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 			}
 		}
 	}
+	if input.Report != nil {
+		ret.Report = &dqlshape.ReportDirective{
+			Enabled:    input.Report.Enabled,
+			Input:      strings.TrimSpace(input.Report.Input),
+			Dimensions: strings.TrimSpace(input.Report.Dimensions),
+			Measures:   strings.TrimSpace(input.Report.Measures),
+			Filters:    strings.TrimSpace(input.Report.Filters),
+			OrderBy:    strings.TrimSpace(input.Report.OrderBy),
+			Limit:      strings.TrimSpace(input.Report.Limit),
+			Offset:     strings.TrimSpace(input.Report.Offset),
+		}
+	}
 	if ret.Meta == "" && ret.DefaultConnector == "" && ret.TemplateType == "" &&
 		ret.Dest == "" && ret.InputDest == "" && ret.OutputDest == "" && ret.RouterDest == "" &&
 		ret.InputType == "" && ret.OutputType == "" &&
-		ret.Cache == nil && ret.MCP == nil && ret.Route == nil && len(ret.Const) == 0 {
+		ret.Cache == nil && ret.MCP == nil && ret.Route == nil && ret.Report == nil && len(ret.Const) == 0 {
 		return nil
 	}
 	return ret

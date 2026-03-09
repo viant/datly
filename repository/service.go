@@ -247,6 +247,7 @@ func (s *Service) initComponentProviders(ctx context.Context) error {
 	paths := s.paths.GetPaths()
 	pathsLen := len(paths.Items)
 	var providers []*Provider
+	var err error
 	for i := 0; i < pathsLen; i++ {
 		route := paths.Items[i]
 		sourceURL := route.SourceURL
@@ -263,6 +264,10 @@ func (s *Service) initComponentProviders(ctx context.Context) error {
 				return nil, fmt.Errorf("no component for path: %s", aPath.Path.Key())
 			})
 			providers = append(providers, provider)
+			providers, err = s.appendReportProvider(ctx, route, aPath, providers, provider)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	s.registry.SetProviders(providers)

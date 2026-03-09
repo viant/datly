@@ -48,6 +48,7 @@ type (
 		View            *view.View    `json:",omitempty"`
 		NamespacedView  *view.NamespacedView
 		Handler         *handler.Handler `json:",omitempty"`
+		Report          *Report          `json:",omitempty" yaml:"Report,omitempty"`
 		TypeContext     *typectx.Context `json:",omitempty" yaml:",omitempty"`
 		indexedView     view.NamedViews
 		SourceURL       string
@@ -557,6 +558,13 @@ func NewComponent(path *contract.Path, options ...ComponentOption) (*Component, 
 func WithView(aView *view.View) ComponentOption {
 	return func(c *Component) error {
 		c.View = aView
+		return nil
+	}
+}
+
+func WithReport(report *Report) ComponentOption {
+	return func(c *Component) error {
+		c.Report = report.Clone()
 		return nil
 	}
 }

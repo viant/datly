@@ -61,6 +61,16 @@ func TestComponentCodegen_GeneratesSelectorHolderOutsideBusinessInput(t *testing
 		Method:   "GET",
 		URI:      "/v1/api/dev/vendors-grouping",
 		RootView: "Vendor",
+		Report: &dqlshape.ReportDirective{
+			Enabled:    true,
+			Input:      "VendorReportInput",
+			Dimensions: "Dims",
+			Measures:   "Metrics",
+			Filters:    "Predicates",
+			OrderBy:    "Sort",
+			Limit:      "Take",
+			Offset:     "Skip",
+		},
 		Directives: &dqlshape.Directives{
 			InputDest:  "vendor_input.go",
 			OutputDest: "vendor_output.go",
@@ -114,6 +124,9 @@ func TestComponentCodegen_GeneratesSelectorHolderOutsideBusinessInput(t *testing
 	require.NoError(t, err)
 	assert.Contains(t, string(routerSource), "ViewSelect struct {")
 	assert.Contains(t, string(routerSource), `querySelector:"vendor"`)
+	assert.Contains(t, string(routerSource), `report=true`)
+	assert.Contains(t, string(routerSource), `reportInput=VendorReportInput`)
+	assert.Contains(t, string(routerSource), `reportDimensions=Dims`)
 	assert.Contains(t, string(routerSource), `Fields []string `+"`"+`parameter:"`)
 	assert.Contains(t, string(routerSource), `in=_fields`)
 	assert.Contains(t, string(routerSource), `OrderBy string `+"`"+`parameter:"`)
@@ -121,6 +134,7 @@ func TestComponentCodegen_GeneratesSelectorHolderOutsideBusinessInput(t *testing
 
 	outputSource, err := os.ReadFile(result.OutputFilePath)
 	require.NoError(t, err)
+	assert.Contains(t, string(outputSource), `repository.WithReport(&repository.Report{Enabled: true, Input: "VendorReportInput", Dimensions: "Dims", Measures: "Metrics", Filters: "Predicates", OrderBy: "Sort", Limit: "Take", Offset: "Skip"})`)
 	assert.Contains(t, string(outputSource), `view:"Vendor,groupable=true`)
 	assert.Contains(t, string(outputSource), `selectorOrderBy=true`)
 	assert.Contains(t, string(outputSource), `selectorOrderByColumns={accountId:ACCOUNT_ID}`)
