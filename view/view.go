@@ -940,6 +940,11 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	if len(v.Columns) != 0 {
 		return nil
 	}
+	if v.Schema != nil {
+		if err := v.Schema.LoadTypeIfNeeded(resource.LookupType()); err != nil {
+			return err
+		}
+	}
 	//if scheme type defines sqlx tag, use it as source for column instead of detection
 	if rType := v.Schema.Type(); rType != nil {
 		sType := types.EnsureStruct(rType)

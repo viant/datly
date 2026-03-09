@@ -218,7 +218,7 @@ func NewViewlet(name, SQL string, join *query.Join, resource *Resource) *Viewlet
 func (v *Viewlet) discoverTables(ctx context.Context, db *sql.DB, SQL string) (err error) {
 	v.Table, err = inference.NewTable(ctx, db, SQL)
 	groupableColumns := map[string]bool{}
-	if v.Table != nil {
+	if v.Table != nil && v.View != nil && v.View.Groupable {
 		if parsed, parseErr := sqlparser.ParseQuery(inference.TrimParenthesis(SQL)); parseErr == nil {
 			groupableColumns = inference.GroupableColumns(parsed, v.Table.QueryColumns)
 		}

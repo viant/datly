@@ -23,11 +23,13 @@ func TestViewlet_discoverTables_GroupableColumnConfig(t *testing.T) {
 	useCases := []struct {
 		description string
 		sql         string
+		groupable   bool
 		expect      map[string]bool
 	}{
 		{
 			description: "flags groupable columns from ordinal group by",
 			sql:         `SELECT region_id, SUM(total_sales) AS total_sales, country_id FROM sales GROUP BY 1, 3`,
+			groupable:   true,
 			expect: map[string]bool{
 				"region_id":  true,
 				"country_id": true,
@@ -36,16 +38,25 @@ func TestViewlet_discoverTables_GroupableColumnConfig(t *testing.T) {
 		{
 			description: "flags groupable columns from alias and name group by",
 			sql:         `SELECT region_id AS region, SUM(total_sales) AS total_sales, country_id FROM sales GROUP BY region, country_id`,
+			groupable:   true,
 			expect: map[string]bool{
 				"region":     true,
 				"country_id": true,
 			},
+		},
+		{
+			description: "does not infer groupable columns without explicit view grouping",
+			sql:         `SELECT region_id, SUM(total_sales) AS total_sales, country_id FROM sales GROUP BY 1, 3`,
+			groupable:   false,
+			expect:      map[string]bool{},
 		},
 	}
 
 	for _, useCase := range useCases {
 		t.Run(useCase.description, func(t *testing.T) {
 			viewlet := NewViewlet("sales", useCase.sql, nil, &Resource{})
+			viewlet.View = &View{}
+			viewlet.View.Groupable = useCase.groupable
 			err := viewlet.discoverTables(ctx, db, useCase.sql)
 			require.NoError(t, err)
 
