@@ -233,7 +233,7 @@ func buildReportMetadata(component *Component, report *Report) (*ReportMetadata,
 	}
 	result := &ReportMetadata{
 		InputName:     report.inputTypeName(component.Name, component.Input.Type.Name, viewRef.Name),
-		BodyFieldName: "",
+		BodyFieldName: "Report",
 		DimensionsKey: report.Dimensions,
 		MeasuresKey:   report.Measures,
 		FiltersKey:    report.Filters,
