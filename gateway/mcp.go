@@ -489,6 +489,9 @@ func anonymousBodyArgumentValue(arguments map[string]interface{}, bodyType refle
 		}
 		value, ok := arguments[field.Name]
 		if !ok {
+			value, ok = arguments[jsonFieldName(field)]
+		}
+		if !ok {
 			continue
 		}
 		payload[jsonFieldName(field)] = value

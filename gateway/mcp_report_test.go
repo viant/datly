@@ -122,6 +122,25 @@ func TestAnonymousBodyArgumentValue_UsesJSONFieldNames(t *testing.T) {
 	}`, string(data))
 }
 
+func TestAnonymousBodyArgumentValue_AcceptsJSONStyleTopLevelArgumentNames(t *testing.T) {
+	bodyType := reflect.StructOf([]reflect.StructField{
+		{Name: "Dimensions", Type: reflect.StructOf([]reflect.StructField{{Name: "AdOrderId", Type: reflect.TypeOf(false), Tag: `json:"adOrderId,omitempty"`}}), Tag: `json:"dimensions,omitempty"`},
+		{Name: "Measures", Type: reflect.StructOf([]reflect.StructField{{Name: "Bids", Type: reflect.TypeOf(false), Tag: `json:"bids,omitempty"`}}), Tag: `json:"measures,omitempty"`},
+	})
+
+	value := anonymousBodyArgumentValue(map[string]interface{}{
+		"dimensions": map[string]interface{}{"adOrderId": true},
+		"measures":   map[string]interface{}{"bids": true},
+	}, bodyType)
+
+	data, err := json.Marshal(value)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+	  "dimensions":{"adOrderId":true},
+	  "measures":{"bids":true}
+	}`, string(data))
+}
+
 func TestRouter_addAuthTokenIfPresent_AddsBearerToken(t *testing.T) {
 	router := &Router{}
 	req, err := http.NewRequest(http.MethodPost, "http://localhost/v1/api/dev/vendors-grouping/report", nil)
