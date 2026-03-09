@@ -1036,7 +1036,10 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 
 // ColumnByName returns Column by Column.Name
 func (v *View) ColumnByName(name string) (*Column, bool) {
-	if column, ok := v._columns[name]; ok {
+	if v == nil || v._columns == nil {
+		return nil, false
+	}
+	if column, err := v._columns.Lookup(name); err == nil {
 		return column, true
 	}
 
