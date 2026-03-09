@@ -271,7 +271,7 @@ func (b *Builder) rewriteGroupBy(SQL string, allColumns []*view.Column, projecte
 		}
 	}
 
-	positions := projectedGroupByPositions(projectedColumns)
+	positions := projectedGroupByPositions(parsed.List, projectedColumns)
 	groupBy := make(query.List, 0, len(positions))
 	for _, position := range positions {
 		groupBy = append(groupBy, query.NewItem(expr.NewIntLiteral(strconv.Itoa(position))))
@@ -306,15 +306,49 @@ func projectedColumnPositions(allColumns []*view.Column, projectedColumns []*vie
 	return result
 }
 
-func projectedGroupByPositions(projectedColumns []*view.Column) []int {
-	result := make([]int, 0, len(projectedColumns))
-	for i, column := range projectedColumns {
-		if column == nil || !column.Groupable {
+func projectedGroupByPositions(items query.List, projectedColumns []*view.Column) []int {
+	maxLen := len(items)
+	if len(projectedColumns) < maxLen {
+		maxLen = len(projectedColumns)
+	}
+	result := make([]int, 0, maxLen)
+	for i := 0; i < maxLen; i++ {
+		column := projectedColumns[i]
+		if column != nil && column.Groupable {
+			result = append(result, i+1)
 			continue
 		}
-		result = append(result, i+1)
+		if !isAggregateSelectItem(items[i]) {
+			result = append(result, i+1)
+		}
 	}
 	return result
+}
+
+func isAggregateSelectItem(item *query.Item) bool {
+	if item == nil || item.Expr == nil {
+		return false
+	}
+	call, ok := item.Expr.(*expr.Call)
+	if !ok || call.X == nil {
+		return false
+	}
+	switch actual := call.X.(type) {
+	case *expr.Ident:
+		return isAggregateFunction(actual.Name)
+	case *expr.Selector:
+		return isAggregateFunction(actual.Name)
+	}
+	return false
+}
+
+func isAggregateFunction(name string) bool {
+	switch strings.ToUpper(strings.TrimSpace(name)) {
+	case "SUM", "COUNT", "AVG", "MIN", "MAX", "ARRAY_AGG", "STRING_AGG", "ANY_VALUE":
+		return true
+	default:
+		return false
+	}
 }
 
 func (b *Builder) appendViewAlias(sb *strings.Builder, view *view.View) {

@@ -12,7 +12,7 @@ type GeneratedStruct struct {
 	UserCreated *int        `sqlx:"USER_CREATED"`
 	Updated     *time.Time  `sqlx:"UPDATED"`
 	UserUpdated *int        `sqlx:"USER_UPDATED"`
-	Products    []*Products `view:",table=PRODUCT" json:",omitempty" sqlx:"-"`
+	Products    []*Products `view:",table=PRODUCT,connector=dev,selectorNamespace=pr"`
 }
 
 type Products struct {

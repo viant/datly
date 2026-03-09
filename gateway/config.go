@@ -29,6 +29,7 @@ type (
 	ExposableConfig struct {
 		APIPrefix       string //like /v1/api/
 		RouteURL        string
+		GoBootstrap     *GoBootstrap
 		DQLBootstrap    *DQLBootstrap
 		ContentURL      string
 		PluginsURL      string
@@ -77,6 +78,11 @@ type (
 		DQLPathMarker       string
 		RoutesRelativePath  string
 	}
+
+	GoBootstrap struct {
+		Packages []string
+		Exclude  []string
+	}
 )
 
 const (
@@ -101,7 +107,7 @@ func (c *Config) Validate() error {
 	if c.DQLBootstrap != nil && len(c.DQLBootstrap.Sources) == 0 {
 		return fmt.Errorf("DQLBootstrap.Sources was empty")
 	}
-	if c.RouteURL == "" && !c.hasDQLBootstrap() {
+	if c.RouteURL == "" && !c.hasDQLBootstrap() && !c.hasGoBootstrap() {
 		return fmt.Errorf("RouteURL was empty")
 	}
 	return nil
@@ -109,6 +115,10 @@ func (c *Config) Validate() error {
 
 func (c *Config) hasDQLBootstrap() bool {
 	return c != nil && c.DQLBootstrap != nil && len(c.DQLBootstrap.Sources) > 0
+}
+
+func (c *Config) hasGoBootstrap() bool {
+	return c != nil && c.GoBootstrap != nil && len(c.GoBootstrap.Packages) > 0
 }
 
 func (d *DQLBootstrap) ShouldFailFast() bool {

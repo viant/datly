@@ -123,6 +123,9 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 	if err = (&Service{Config: aConfig}).applyDQLBootstrap(ctx, componentRepository, aConfig.DQLBootstrap); err != nil {
 		return nil, fmt.Errorf("failed to apply DQL bootstrap: %w", err)
 	}
+	if err = (&Service{Config: aConfig}).applyGoBootstrap(ctx, componentRepository, aConfig.GoBootstrap); err != nil {
+		return nil, fmt.Errorf("failed to apply Go bootstrap: %w", err)
+	}
 
 	var mcpRegistry *serverproto.Registry
 	if aConfig.MCP != nil {
