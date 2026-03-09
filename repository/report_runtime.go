@@ -25,53 +25,26 @@ func (s *Service) appendReportProvider(ctx context.Context, item *path.Item, rou
 	if routePath == nil || routePath.Report == nil || !routePath.Report.Enabled {
 		return providers, nil
 	}
-	component, err := provider.Component(ctx)
-	if err != nil || component == nil {
-		if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-			fmt.Printf("[DATLY_REPORT] skip source=%s path=%s err=%v component_nil=%v\n", item.SourceURL, routePath.Path.Key(), err, component == nil)
-		}
-		return providers, err
-	}
-	if !isReportEligible(component) {
-		if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-			viewName := "<nil>"
-			groupable := false
-			if component.View != nil {
-				viewName = component.View.Name
-				groupable = component.View.Groupable
-			}
-			reportEnabled := false
-			if component.Report != nil {
-				reportEnabled = component.Report.Enabled
-			}
-			fmt.Printf("[DATLY_REPORT] ineligible source=%s uri=%s method=%s report=%v groupable=%v view=%s\n", item.SourceURL, component.URI, component.Method, reportEnabled, groupable, viewName)
-		}
-		return providers, nil
-	}
-	reportComponent, reportPath, err := buildReportArtifacts(ctx, s.registry.Dispatcher(), component, routePath)
-	if err != nil {
-		if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-			fmt.Printf("[DATLY_REPORT] build_failed source=%s uri=%s err=%v\n", item.SourceURL, component.URI, err)
-		}
-		return nil, err
-	}
+	reportPath := buildReportPath(routePath)
 	reportProvider := &Provider{
-		path:    contract.Path{Method: reportComponent.Method, URI: reportComponent.URI},
+		path:    reportPath.Path,
 		control: routePath.Version,
 		newComponent: func(ctx context.Context, opts ...Option) (*Component, error) {
 			original, err := provider.Component(ctx, opts...)
 			if err != nil || original == nil {
 				return nil, err
 			}
+			if !isReportEligible(original) {
+				return nil, nil
+			}
 			component, _, err := buildReportArtifacts(ctx, s.registry.Dispatcher(), original, routePath)
 			return component, err
 		},
-		component: reportComponent,
 	}
 	item.Paths = append(item.Paths, reportPath)
 	providers = append(providers, reportProvider)
 	if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-		fmt.Printf("[DATLY_REPORT] appended source=%s original=%s report=%s\n", item.SourceURL, component.Path.Key(), reportPath.Path.Key())
+		fmt.Printf("[DATLY_REPORT] appended_lazy source=%s original=%s report=%s\n", item.SourceURL, routePath.Path.Key(), reportPath.Path.Key())
 	}
 	return providers, nil
 }
@@ -207,6 +180,31 @@ func buildReportWrapperView(original *view.View) *view.View {
 	}
 	ret.SetResource(original.GetResource())
 	return ret
+}
+
+func buildReportPath(routePath *path.Path) *path.Path {
+	pathCopy := *routePath
+	pathCopy.Path = contract.Path{
+		Method: http.MethodPost,
+		URI:    strings.TrimSuffix(routePath.URI, "/") + "/report",
+	}
+	pathCopy.MCPTool = reportPathMCPToolEnabled(routePath.Report)
+	pathCopy.MCPResource = false
+	pathCopy.MCPTemplateResource = false
+	if pathCopy.Name != "" {
+		pathCopy.Name += " Report"
+	}
+	if pathCopy.Description != "" {
+		pathCopy.Description += " report"
+	}
+	return &pathCopy
+}
+
+func reportPathMCPToolEnabled(report *path.Report) bool {
+	if report == nil || report.MCPTool == nil {
+		return true
+	}
+	return *report.MCPTool
 }
 
 func buildReportMetadata(component *Component, report *Report) (*ReportMetadata, error) {
