@@ -299,6 +299,7 @@ func (b *Builder) rewriteGroupBy(SQL string, allColumns []*view.Column, projecte
 		groupBy = append(groupBy, query.NewItem(expr.NewIntLiteral(strconv.Itoa(position))))
 	}
 	parsed.GroupBy = groupBy
+	parsed.OrderBy = filterGroupedOrderBy(parsed.OrderBy, parsed.List)
 
 	rewritten := sqlparser.Stringify(parsed)
 	if wrapped {
@@ -326,6 +327,38 @@ func projectedColumnPositions(allColumns []*view.Column, projectedColumns []*vie
 		result = append(result, position)
 	}
 	return result
+}
+
+func filterGroupedOrderBy(orderBy query.List, items query.List) query.List {
+	if len(orderBy) == 0 || len(items) == 0 {
+		return orderBy
+	}
+	allowed := map[string]bool{}
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		if item.Expr != nil {
+			allowed[normalizeExpression(sqlparser.Stringify(item.Expr))] = true
+		}
+		if item.Alias != "" {
+			allowed[normalizeExpression(item.Alias)] = true
+		}
+	}
+	result := make(query.List, 0, len(orderBy))
+	for _, item := range orderBy {
+		if item == nil || item.Expr == nil {
+			continue
+		}
+		if allowed[normalizeExpression(sqlparser.Stringify(item.Expr))] {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func normalizeExpression(value string) string {
+	return strings.ToUpper(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
 }
 
 func projectedGroupByPositions(items query.List, projectedColumns []*view.Column) []int {

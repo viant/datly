@@ -69,12 +69,6 @@ func (r *reportHandler) Exec(ctx context.Context, session xhandler.Session) (int
 
 func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) (interface{}, error) {
 	input := ctx.Value(xhandler.InputKey)
-	if input != nil {
-		if os.Getenv("DATLY_DEBUG_REPORT") != "" {
-			fmt.Printf("[DATLY_REPORT_HANDLER] bound_input_type=%T\n", input)
-		}
-		return input, nil
-	}
 	if request != nil && request.Body != nil && r.BodyType != nil {
 		payload, err := io.ReadAll(request.Body)
 		if err != nil {
@@ -94,6 +88,15 @@ func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) 
 			}
 			return target.Interface(), nil
 		}
+	}
+	if input != nil {
+		if os.Getenv("DATLY_DEBUG_REPORT") != "" {
+			fmt.Printf("[DATLY_REPORT_HANDLER] bound_input_type=%T\n", input)
+			if data, err := json.Marshal(input); err == nil {
+				fmt.Printf("[DATLY_REPORT_HANDLER] bound_input_json=%s\n", string(data))
+			}
+		}
+		return input, nil
 	}
 	if input == nil {
 		return nil, fmt.Errorf("report input was empty")
