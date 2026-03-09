@@ -12,10 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
+	dpath "github.com/viant/datly/repository/path"
+	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/mcp-protocol/schema"
+	serverproto "github.com/viant/mcp-protocol/server"
 )
 
 func TestRouter_buildToolInputType_FlattensAnonymousBody(t *testing.T) {
@@ -175,4 +178,75 @@ func TestRouter_mcpToolCallHandler_PassesAuthorizationToReportRoute(t *testing.T
 		"filters":{"VendorIDs":[1,2]},
 		"orderBy":["accountId"]
 	}`, actualBody)
+}
+
+func TestRouter_buildToolsIntegration_RegistersReportTool(t *testing.T) {
+	bodyType := reflect.StructOf([]reflect.StructField{
+		{
+			Name: "Dimensions",
+			Type: reflect.StructOf([]reflect.StructField{
+				{Name: "AccountId", Type: reflect.TypeOf(false), Tag: `json:"accountId,omitempty" desc:"Account identifier"`},
+			}),
+			Tag: `json:"dimensions,omitempty" desc:"Selected grouping dimensions"`,
+		},
+		{
+			Name: "Measures",
+			Type: reflect.StructOf([]reflect.StructField{
+				{Name: "TotalId", Type: reflect.TypeOf(false), Tag: `json:"totalId,omitempty" desc:"Total identifier"`},
+			}),
+			Tag: `json:"measures,omitempty" desc:"Selected aggregate measures"`,
+		},
+		{
+			Name: "Filters",
+			Type: reflect.StructOf([]reflect.StructField{
+				{Name: "VendorIDs", Type: reflect.TypeOf([]int{}), Tag: `json:"vendorIDs,omitempty" desc:"Vendor IDs to include"`},
+			}),
+			Tag: `json:"filters,omitempty" desc:"Report filters derived from original predicate parameters"`,
+		},
+		{Name: "OrderBy", Type: reflect.TypeOf([]string{}), Tag: `json:"orderBy,omitempty"`},
+	})
+	bodyParam := state.NewParameter("Report", state.NewBodyLocation(""), state.WithParameterSchema(state.NewSchema(bodyType)))
+	bodyParam.Tag = `anonymous:"true"`
+	component := &repository.Component{
+		Path: contract.Path{Method: http.MethodPost, URI: "/v1/api/dev/vendors-grouping/report"},
+		View: &view.View{Name: "vendor"},
+		Contract: contract.Contract{
+			Input: contract.Input{
+				Type: state.Type{Parameters: state.Parameters{bodyParam}},
+			},
+		},
+	}
+	provider := repository.NewProvider(
+		contract.Path{Method: http.MethodPost, URI: "/v1/api/dev/vendors-grouping/report"},
+		&version.Control{},
+		func(ctx context.Context, opts ...repository.Option) (*repository.Component, error) {
+			return component, nil
+		},
+	)
+	route := &Route{
+		Path: &contract.Path{Method: http.MethodPost, URI: "/v1/api/dev/vendors-grouping/report"},
+		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+			response.WriteHeader(http.StatusOK)
+		},
+	}
+	registry := serverproto.NewRegistry()
+	router := &Router{mcpRegistry: registry}
+
+	err := router.buildToolsIntegration(&dpath.Item{}, &dpath.Path{
+		Path: contract.Path{Method: http.MethodPost, URI: "/v1/api/dev/vendors-grouping/report"},
+		Meta: contract.Meta{Name: "vendors grouping report", Description: "Vendor grouping report"},
+		ModelContextProtocol: contract.ModelContextProtocol{
+			MCPTool: true,
+		},
+		View: &dpath.ViewRef{Ref: "vendor"},
+	}, route, provider)
+	require.NoError(t, err)
+
+	tools := registry.ListRegisteredTools()
+	require.Len(t, tools, 1)
+	tool := tools[0]
+	assert.Equal(t, "vendorsgroupingreport", tool.Name)
+	require.Contains(t, tool.InputSchema.Properties, "dimensions")
+	require.Contains(t, tool.InputSchema.Properties, "measures")
+	require.Contains(t, tool.InputSchema.Properties, "filters")
 }
