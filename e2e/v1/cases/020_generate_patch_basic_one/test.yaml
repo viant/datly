@@ -37,5 +37,5 @@ pipeline:
     expect:
       - UPDATED_ROW: true
         INSERTED_ROW: true
-        TOTAL_ROWS: 5
+        TOTAL_ROWS: 12
         INSERTED_COUNT: 1

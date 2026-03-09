@@ -271,7 +271,7 @@ func (b *Builder) rewriteGroupBy(SQL string, allColumns []*view.Column, projecte
 		}
 	}
 
-	positions := projectedGroupByPositions(allColumns, projectedColumns)
+	positions := projectedGroupByPositions(projectedColumns)
 	groupBy := make(query.List, 0, len(positions))
 	for _, position := range positions {
 		groupBy = append(groupBy, query.NewItem(expr.NewIntLiteral(strconv.Itoa(position))))
@@ -306,27 +306,13 @@ func projectedColumnPositions(allColumns []*view.Column, projectedColumns []*vie
 	return result
 }
 
-func projectedGroupByPositions(allColumns []*view.Column, projectedColumns []*view.Column) []int {
-	index := make(map[*view.Column]int, len(allColumns))
-	selected := projectedColumnPositions(allColumns, projectedColumns)
-	positionIndex := make(map[int]bool, len(selected))
-	for _, position := range selected {
-		positionIndex[position] = true
-	}
-	for i, column := range allColumns {
-		index[column] = i + 1
-	}
+func projectedGroupByPositions(projectedColumns []*view.Column) []int {
 	result := make([]int, 0, len(projectedColumns))
-	for _, column := range projectedColumns {
+	for i, column := range projectedColumns {
 		if column == nil || !column.Groupable {
 			continue
 		}
-		if position, ok := index[column]; ok {
-			if !positionIndex[position] {
-				continue
-			}
-			result = append(result, position)
-		}
+		result = append(result, i+1)
 	}
 	return result
 }
