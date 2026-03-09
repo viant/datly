@@ -1645,6 +1645,24 @@ func (g *ComponentCodegen) relationTypeName(shapeCfg *Config, rel *view.Relation
 	if rel == nil {
 		return ""
 	}
+	for _, name := range []string{
+		strings.TrimSpace(rel.Of.View.Name),
+		strings.TrimSpace(rel.Of.View.Reference.Ref),
+		strings.TrimSpace(rel.Name),
+		strings.TrimSpace(rel.Holder),
+	} {
+		if name == "" {
+			continue
+		}
+		if spec := g.typeSpec("view:" + strings.ToLower(strings.TrimSpace(name))); spec != nil && strings.TrimSpace(spec.TypeName) != "" {
+			return strings.TrimSpace(spec.TypeName)
+		}
+	}
+	if candidate := g.semanticView(g.resolveRelationView(rel)); candidate != nil {
+		if typeName := strings.TrimSpace(g.resourceViewTypeName(shapeCfg, candidate)); typeName != "" {
+			return typeName
+		}
+	}
 	if rel.Of.Schema != nil && strings.TrimSpace(rel.Of.Schema.Name) != "" {
 		return strings.TrimSpace(rel.Of.Schema.Name)
 	}
@@ -1667,6 +1685,44 @@ func (g *ComponentCodegen) relationTypeName(shapeCfg *Config, rel *view.Relation
 		}
 	}
 	return ""
+}
+
+func (g *ComponentCodegen) generatedIndexColumn(aView *view.View) (*view.Column, string, reflect.Type, bool) {
+	if aView == nil {
+		return nil, "", nil, false
+	}
+	var candidate *view.Column
+	for _, column := range aView.Columns {
+		if column == nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(column.FieldName()), "Id") || strings.EqualFold(strings.TrimSpace(column.Name), "ID") {
+			candidate = column
+			break
+		}
+	}
+	if candidate == nil {
+		return nil, "", nil, false
+	}
+	fieldName := strings.TrimSpace(candidate.FieldName())
+	if fieldName == "" {
+		caseFormat := aView.CaseFormat
+		if !caseFormat.IsDefined() {
+			caseFormat = text.CaseFormatLowerUnderscore
+		}
+		fieldName = state.StructFieldName(caseFormat, candidate.Name)
+	}
+	rType := candidate.ColumnType()
+	if rType == nil {
+		if builtin, ok := builtinTypeByName(candidate.DataType); ok {
+			rType = builtin
+		}
+	}
+	if rType == nil {
+		return nil, "", nil, false
+	}
+	rType = g.normalizeColumnType(candidate, rType)
+	return candidate, fieldName, rType, true
 }
 
 func (g *ComponentCodegen) columnFieldTag(aView *view.View, column *view.Column) string {

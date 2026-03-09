@@ -99,3 +99,85 @@ func TestComponentCodegen_UsesMaterializedViewTypeForRelationHolders(t *testing.
 		t.Fatalf("expected no raw subquery text in relation view tag, got:\n%s", generated)
 	}
 }
+
+func TestComponentCodegen_RelationHolderUsesGeneratedResolvedTypeName(t *testing.T) {
+	projectDir := t.TempDir()
+	packageDir := filepath.Join(projectDir, "shape", "dev", "vendor", "list")
+
+	component := &shapeload.Component{
+		Method:   "GET",
+		URI:      "/v1/api/shape/dev/vendors/",
+		RootView: "vendor",
+		TypeSpecs: map[string]*shapeload.TypeSpec{
+			"view:products": {Key: "view:products", Role: shapeload.TypeRoleView, Alias: "products", TypeName: "Products"},
+		},
+		Output: []*shapeplan.State{
+			{Parameter: state.Parameter{Name: "Data", In: state.NewOutputLocation("view"), Schema: &state.Schema{Cardinality: state.Many}}},
+		},
+	}
+
+	resource := view.EmptyResource()
+	resource.Views = append(resource.Views,
+		&view.View{
+			Name:     "vendor",
+			Table:    "VENDOR",
+			Template: &view.Template{SourceURL: "vendor/vendor.sql"},
+			Schema:   &state.Schema{Name: "Vendor", DataType: "*Vendor", Cardinality: state.Many},
+			Columns:  []*view.Column{{Name: "ID", DataType: "int"}},
+			With: []*view.Relation{
+				{
+					Holder:      "Products",
+					Cardinality: state.Many,
+					On:          view.Links{&view.Link{Field: "Id", Column: "ID"}},
+					Of: &view.ReferenceView{
+						View: view.View{
+							Name:     "products",
+							Table:    "PRODUCT",
+							Template: &view.Template{SourceURL: "vendor/products.sql"},
+							Schema:   &state.Schema{Name: "ProductsView", DataType: "*ProductsView", Cardinality: state.Many},
+						},
+						On: view.Links{&view.Link{Field: "VendorId", Column: "VENDOR_ID"}},
+					},
+				},
+			},
+		},
+		&view.View{
+			Name:     "products",
+			Table:    "PRODUCT",
+			Template: &view.Template{SourceURL: "vendor/products.sql"},
+			Schema:   &state.Schema{Name: "ProductsView", DataType: "*ProductsView", Cardinality: state.Many},
+			Columns: []*view.Column{
+				{Name: "ID", DataType: "int"},
+				{Name: "VENDOR_ID", DataType: "*int", Tag: `internal:"true"`},
+			},
+		},
+	)
+
+	ctx := &typectx.Context{
+		PackageDir:  packageDir,
+		PackageName: "list",
+		PackagePath: "github.com/acme/project/shape/dev/vendor/list",
+	}
+
+	codegen := &ComponentCodegen{
+		Component:    component,
+		Resource:     resource,
+		TypeContext:  ctx,
+		ProjectDir:   projectDir,
+		WithEmbed:    false,
+		WithContract: false,
+	}
+
+	result, err := codegen.Generate()
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	data, err := os.ReadFile(result.FilePath)
+	if err != nil {
+		t.Fatalf("read generated file: %v", err)
+	}
+	generated := string(data)
+	if !strings.Contains(generated, "Products []*Products `view:") {
+		t.Fatalf("expected generated relation holder to use resolved generated child type, got:\n%s", generated)
+	}
+}

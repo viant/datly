@@ -89,23 +89,63 @@ func (g *ComponentCodegen) mutableIndexHelper(inputType reflect.Type, bodyFieldN
 	if itemStructType == nil {
 		return mutableIndexHelper{}, false
 	}
-	keyField, ok := lookupGeneratedIndexField(itemStructType)
-	if !ok {
-		return mutableIndexHelper{}, false
+	itemIsPointer := viewField.Type.Kind() == reflect.Slice && viewField.Type.Elem().Kind() == reflect.Ptr
+	if namedItemTypeExpr := generatedMutableItemTypeExpr(param, itemIsPointer); namedItemTypeExpr != "" {
+		itemTypeExpr = namedItemTypeExpr
 	}
-	keyType := keyField.Type
-	keyReadExpr := fmt.Sprintf("item.%s", keyField.Name)
+	keyFieldName := ""
+	keyType := reflect.Type(nil)
+	keyReadExpr := ""
 	needNilCheck := false
-	if keyType.Kind() == reflect.Ptr {
-		needNilCheck = true
-		keyReadExpr = "*" + keyReadExpr
-		keyType = keyType.Elem()
+	if g != nil {
+		if g.Resource != nil {
+			if inputView := lookupInputView(g.Resource, strings.TrimSpace(param.Name)); inputView != nil {
+				if _, resolvedFieldName, resolvedType, ok := g.generatedIndexColumn(g.semanticView(inputView)); ok {
+					keyFieldName = resolvedFieldName
+					keyType = resolvedType
+					keyReadExpr = fmt.Sprintf("item.%s", keyFieldName)
+					if keyType.Kind() == reflect.Ptr {
+						needNilCheck = true
+						keyReadExpr = "*" + keyReadExpr
+						keyType = keyType.Elem()
+					}
+				}
+			}
+		}
+		if keyType == nil {
+			if resourceType := g.resourceViewStructType(strings.TrimSpace(param.Name)); resourceType != nil {
+				if keyField, ok := lookupGeneratedIndexField(resourceType); ok {
+					keyFieldName = keyField.Name
+					keyType = keyField.Type
+					keyReadExpr = fmt.Sprintf("item.%s", keyFieldName)
+					if keyType.Kind() == reflect.Ptr {
+						needNilCheck = true
+						keyReadExpr = "*" + keyReadExpr
+						keyType = keyType.Elem()
+					}
+				}
+			}
+		}
+	}
+	if keyType == nil {
+		keyField, ok := lookupGeneratedIndexField(itemStructType)
+		if !ok {
+			return mutableIndexHelper{}, false
+		}
+		keyFieldName = keyField.Name
+		keyType = keyField.Type
+		keyReadExpr = fmt.Sprintf("item.%s", keyFieldName)
+		if keyType.Kind() == reflect.Ptr {
+			needNilCheck = true
+			keyReadExpr = "*" + keyReadExpr
+			keyType = keyType.Elem()
+		}
 	}
 	keyTypeExpr := sourceTypeExpr(keyType, "")
 	if keyTypeExpr == "" {
 		return mutableIndexHelper{}, false
 	}
-	mapFieldName := fieldName + "By" + keyField.Name
+	mapFieldName := fieldName + "By" + keyFieldName
 	if _, exists := inputType.FieldByName(mapFieldName); exists {
 		return mutableIndexHelper{}, false
 	}
@@ -121,14 +161,28 @@ func (g *ComponentCodegen) mutableIndexHelper(inputType reflect.Type, bodyFieldN
 		MapFieldName:  mapFieldName,
 		ItemTypeExpr:  itemTypeExpr,
 		MapTypeExpr:   fmt.Sprintf("map[%s]%s", keyTypeExpr, itemTypeExpr),
-		KeyFieldName:  keyField.Name,
+		KeyFieldName:  keyFieldName,
 		KeyFieldType:  keyTypeExpr,
 		KeyReadExpr:   keyReadExpr,
 		NeedNilCheck:  needNilCheck,
-		ItemIsPointer: viewField.Type.Kind() == reflect.Slice && viewField.Type.Elem().Kind() == reflect.Ptr,
+		ItemIsPointer: itemIsPointer,
 		RelationPath:  mutableRelationPath(inputType, itemStructType, bodyFieldName),
 		ItemStruct:    itemStructType,
 	}, true
+}
+
+func generatedMutableItemTypeExpr(param *state.Parameter, itemIsPointer bool) string {
+	if param == nil || param.Schema == nil {
+		return ""
+	}
+	typeName := strings.TrimSpace(param.Schema.Name)
+	if typeName == "" {
+		return ""
+	}
+	if itemIsPointer {
+		return "*" + typeName
+	}
+	return typeName
 }
 
 func (g *ComponentCodegen) mutableHelperParametersForCodegen() []*state.Parameter {

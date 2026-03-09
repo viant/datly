@@ -141,7 +141,7 @@ func TestComponentCodegen_MutableComponent_GeneratesPatchHelpers(t *testing.T) {
 	if !strings.Contains(initSource, `i.CurFoosById = make(map[int]Foos, len(i.CurFoos))`) {
 		t.Fatalf("expected generated init helper to allocate CurFoosById:\n%s", initSource)
 	}
-	if !strings.Contains(initSource, `if item.Id == nil {`) || !strings.Contains(initSource, `i.CurFoosById[*item.Id] = item`) {
+	if !strings.Contains(initSource, `i.CurFoosById[item.Id] = item`) {
 		t.Fatalf("expected generated init helper to populate CurFoosById:\n%s", initSource)
 	}
 
@@ -149,7 +149,7 @@ func TestComponentCodegen_MutableComponent_GeneratesPatchHelpers(t *testing.T) {
 	if !strings.Contains(validateSource, `_, err := aValidator.Validate(ctx, value, append(options, validator.WithValidation(validation))...)`) {
 		t.Fatalf("expected generated validate helper to call validator service:\n%s", validateSource)
 	}
-	if !strings.Contains(validateSource, `case Foos:`) || !strings.Contains(validateSource, `if actual.Id == nil {`) || !strings.Contains(validateSource, `_, ok := i.CurFoosById[*actual.Id]`) {
+	if !strings.Contains(validateSource, `case Foos:`) || !strings.Contains(validateSource, `_, ok := i.CurFoosById[actual.Id]`) {
 		t.Fatalf("expected generated validate helper to use CurFoosById marker provider:\n%s", validateSource)
 	}
 
@@ -169,11 +169,10 @@ func TestComponentCodegen_MutableComponent_GeneratesPatchHelpers(t *testing.T) {
 	}
 	veltySource := mustReadCodegenFile(t, result.VeltyFilePath)
 	for _, fragment := range []string{
-		`$sequencer.Allocate("FOOS", $Foos, "Id")`,
-		`#set($_ = $CurFoos<[]Foos>(view/CurFoos) /*`,
-		`#set($CurFoosById<map[int]Foos> = $CurFoos.IndexBy("Id"))`,
-		`$sql.Update($Foos, "FOOS");`,
-		`$sql.Insert($Foos, "FOOS");`,
+		`$sequencer.Allocate("FOOS", $Unsafe.Foos, "Id")`,
+		`#set($CurFoosById = $Unsafe.CurFoos.IndexBy("Id"))`,
+		`$sql.Update($Unsafe.Foos, "FOOS");`,
+		`$sql.Insert($Unsafe.Foos, "FOOS");`,
 	} {
 		if !strings.Contains(veltySource, fragment) {
 			t.Fatalf("expected generated velty body to include %q:\n%s", fragment, veltySource)
@@ -402,6 +401,103 @@ func TestComponentCodegen_MutableComponent_DSQLParity_ManyMany(t *testing.T) {
 	}
 	if !strings.Contains(mustReadCodegenFile(t, filepath.Join(packageDir, "foos", "cur_foos_performance.sql")), "SELECT * FROM FOOS_PERFORMANCE") {
 		t.Fatalf("expected nested current-view helper SQL")
+	}
+}
+
+func TestComponentCodegen_MutableComponent_UsesResourceViewKeyTypeForIndexMap(t *testing.T) {
+	projectDir := t.TempDir()
+	packageDir := filepath.Join(projectDir, "shape", "dev", "vendorsvc", "update")
+
+	type legacyRecords struct {
+		Id string
+	}
+
+	component := &shapeload.Component{
+		Method:   "POST",
+		URI:      "/v1/api/shape/dev/auth/products/",
+		RootView: "ProductUpdate",
+		Input: []*shapeplan.State{
+			{
+				Parameter: state.Parameter{
+					Name:   "Ids",
+					In:     state.NewBodyLocation("Ids"),
+					Schema: state.NewSchema(reflect.TypeOf([]int{})),
+				},
+			},
+			{
+				Parameter: state.Parameter{
+					Name:   "Records",
+					In:     state.NewViewLocation("Records"),
+					Tag:    `view:"Records" sql:"uri=product_update/Records.sql"`,
+					Schema: &state.Schema{Name: "RecordsView", DataType: "*RecordsView", Cardinality: state.Many},
+				},
+			},
+		},
+		Output: []*shapeplan.State{
+			{
+				Parameter: state.Parameter{
+					Name:   "Status",
+					In:     state.NewOutputLocation("status"),
+					Schema: state.NewSchema(reflect.TypeOf("")),
+				},
+			},
+		},
+	}
+
+	resource := view.EmptyResource()
+	resource.Views = append(resource.Views,
+		&view.View{
+			Name: "ProductUpdate",
+			Mode: view.ModeExec,
+			Schema: func() *state.Schema {
+				s := state.NewSchema(reflect.TypeOf(struct{}{}))
+				s.Name, s.DataType = "ProductUpdateView", "*ProductUpdateView"
+				return s
+			}(),
+		},
+		&view.View{
+			Name: "Records",
+			Mode: view.ModeQuery,
+			Schema: func() *state.Schema {
+				s := state.NewSchema(reflect.TypeOf([]*legacyRecords{}))
+				s.Name, s.DataType, s.Cardinality = "RecordsView", "*RecordsView", state.Many
+				return s
+			}(),
+			Columns: []*view.Column{
+				{Name: "ID", DataType: "int"},
+			},
+		},
+	)
+
+	ctx := &typectx.Context{
+		PackageDir:  packageDir,
+		PackageName: "update",
+		PackagePath: "github.com/acme/project/shape/dev/vendorsvc/update",
+	}
+
+	codegen := &ComponentCodegen{
+		Component:    component,
+		Resource:     resource,
+		TypeContext:  ctx,
+		ProjectDir:   projectDir,
+		WithEmbed:    false,
+		WithContract: false,
+	}
+
+	result, err := codegen.Generate()
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	inputSource := mustReadCodegenFile(t, result.InputFilePath)
+	if !strings.Contains(inputSource, `RecordsById map[int]*RecordsView`) {
+		t.Fatalf("expected generated input to use resource view key type for index map:\n%s", inputSource)
+	}
+	initSource := mustReadCodegenFile(t, filepath.Join(packageDir, "input_init.go"))
+	if !strings.Contains(initSource, `i.RecordsById = make(map[int]*RecordsView, len(i.Records))`) {
+		t.Fatalf("expected generated init helper to use int map key:\n%s", initSource)
+	}
+	if !strings.Contains(initSource, `i.RecordsById[item.Id] = item`) {
+		t.Fatalf("expected generated init helper to index by int key:\n%s", initSource)
 	}
 }
 
