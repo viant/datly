@@ -68,6 +68,10 @@ func (r *reportHandler) Exec(ctx context.Context, session xhandler.Session) (int
 }
 
 func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) (interface{}, error) {
+	input := ctx.Value(xhandler.InputKey)
+	if input != nil {
+		return input, nil
+	}
 	if request != nil && request.Body != nil && r.BodyType != nil {
 		payload, err := io.ReadAll(request.Body)
 		if err != nil {
@@ -88,7 +92,6 @@ func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) 
 			return target.Interface(), nil
 		}
 	}
-	input := ctx.Value(xhandler.InputKey)
 	if input == nil {
 		return nil, fmt.Errorf("report input was empty")
 	}
