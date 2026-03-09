@@ -126,6 +126,9 @@ func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, o
 		pathCopy.Internal = routePath.Internal
 		pathCopy.Meta = routePath.Meta
 		pathCopy.ModelContextProtocol = routePath.ModelContextProtocol
+		pathCopy.MCPTool = config.mcpToolEnabled()
+		pathCopy.MCPResource = false
+		pathCopy.MCPTemplateResource = false
 		pathCopy.Report = routePath.Report
 		if pathCopy.Name != "" {
 			pathCopy.Name += " Report"

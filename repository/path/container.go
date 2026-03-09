@@ -39,6 +39,7 @@ type (
 
 	Report struct {
 		Enabled    bool   `json:",omitempty" yaml:"Enabled,omitempty"`
+		MCPTool    *bool  `json:",omitempty" yaml:"MCPTool,omitempty"`
 		Input      string `json:",omitempty" yaml:"Input,omitempty"`
 		Dimensions string `json:",omitempty" yaml:"Dimensions,omitempty"`
 		Measures   string `json:",omitempty" yaml:"Measures,omitempty"`

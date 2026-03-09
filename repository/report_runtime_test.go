@@ -147,6 +147,118 @@ func TestBuildReportMetadataAndComponent(t *testing.T) {
 	assert.True(t, strings.Contains(string(filterField.Tag), `desc:"Account identifier filter"`))
 }
 
+func TestBuildReportComponent_EnablesMCPToolOnSiblingRoute(t *testing.T) {
+	resource := view.EmptyResource()
+	rootView := view.NewView("vendor", "VENDOR")
+	rootView.Groupable = true
+	rootView.Columns = []*view.Column{
+		view.NewColumn("AccountID", "int", reflect.TypeOf(0), false),
+		view.NewColumn("TotalSpend", "float64", reflect.TypeOf(float64(0)), false),
+	}
+	rootView.Columns[0].Groupable = true
+	rootView.Columns[1].Aggregate = true
+	for _, column := range rootView.Columns {
+		require.NoError(t, column.Init(&reportTestResource{}, text.CaseFormatUndefined, false))
+	}
+	rootView.SetResource(resource)
+	resource.AddViews(rootView)
+
+	inputType, err := state.NewType(state.WithParameters(state.Parameters{
+		&state.Parameter{Name: "accountID", In: state.NewQueryLocation("accountID"), Schema: state.NewSchema(reflect.TypeOf(0)), Predicates: []*extension.PredicateConfig{{Name: "ByAccount"}}, Description: "Account identifier filter"},
+	}), state.WithResource(&reportTestResource{}))
+	require.NoError(t, err)
+	inputType.Name = "VendorInput"
+
+	component := &Component{
+		Path:   contract.Path{Method: "GET", URI: "/v1/api/vendors"},
+		Meta:   contract.Meta{Name: "vendors"},
+		View:   rootView,
+		Report: (&Report{Enabled: true}).normalize(),
+		Contract: contract.Contract{
+			Input: contract.Input{Type: *inputType},
+		},
+	}
+
+	service := &Service{registry: NewRegistry("", nil, nil)}
+	_, reportPath, err := service.buildReportComponent(component, &path.Path{
+		Path: component.Path,
+		View: &path.ViewRef{Ref: rootView.Name},
+		ModelContextProtocol: contract.ModelContextProtocol{
+			MCPTool:             false,
+			MCPResource:         true,
+			MCPTemplateResource: true,
+		},
+		Meta: contract.Meta{
+			Name:        "vendors",
+			Description: "Vendor listing",
+		},
+		Report: &path.Report{Enabled: true},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, reportPath)
+	assert.True(t, reportPath.MCPTool)
+	assert.False(t, reportPath.MCPResource)
+	assert.False(t, reportPath.MCPTemplateResource)
+}
+
+func TestBuildReportComponent_DisablesMCPToolWhenReportFlagIsFalse(t *testing.T) {
+	resource := view.EmptyResource()
+	rootView := view.NewView("vendor", "VENDOR")
+	rootView.Groupable = true
+	rootView.Columns = []*view.Column{
+		view.NewColumn("AccountID", "int", reflect.TypeOf(0), false),
+		view.NewColumn("TotalSpend", "float64", reflect.TypeOf(float64(0)), false),
+	}
+	rootView.Columns[0].Groupable = true
+	rootView.Columns[1].Aggregate = true
+	for _, column := range rootView.Columns {
+		require.NoError(t, column.Init(&reportTestResource{}, text.CaseFormatUndefined, false))
+	}
+	rootView.SetResource(resource)
+	resource.AddViews(rootView)
+
+	inputType, err := state.NewType(state.WithParameters(state.Parameters{
+		&state.Parameter{Name: "accountID", In: state.NewQueryLocation("accountID"), Schema: state.NewSchema(reflect.TypeOf(0)), Predicates: []*extension.PredicateConfig{{Name: "ByAccount"}}, Description: "Account identifier filter"},
+	}), state.WithResource(&reportTestResource{}))
+	require.NoError(t, err)
+	inputType.Name = "VendorInput"
+
+	disabled := false
+	component := &Component{
+		Path: contract.Path{Method: "GET", URI: "/v1/api/vendors"},
+		Meta: contract.Meta{Name: "vendors"},
+		View: rootView,
+		Report: (&Report{
+			Enabled: true,
+			MCPTool: &disabled,
+		}).normalize(),
+		Contract: contract.Contract{
+			Input: contract.Input{Type: *inputType},
+		},
+	}
+
+	service := &Service{registry: NewRegistry("", nil, nil)}
+	_, reportPath, err := service.buildReportComponent(component, &path.Path{
+		Path: component.Path,
+		View: &path.ViewRef{Ref: rootView.Name},
+		ModelContextProtocol: contract.ModelContextProtocol{
+			MCPTool:             true,
+			MCPResource:         true,
+			MCPTemplateResource: true,
+		},
+		Meta: contract.Meta{
+			Name:        "vendors",
+			Description: "Vendor listing",
+		},
+		Report: &path.Report{Enabled: true, MCPTool: &disabled},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, reportPath)
+	assert.False(t, reportPath.MCPTool)
+	assert.False(t, reportPath.MCPResource)
+	assert.False(t, reportPath.MCPTemplateResource)
+}
+
 func TestService_InitComponentProviders_RegistersLocalGroupingReportRoute(t *testing.T) {
 	ctx := context.Background()
 	baseDir := filepath.Join("..", "e2e", "local", "regression")

@@ -10,6 +10,7 @@ import (
 
 type Report struct {
 	Enabled    bool   `json:",omitempty" yaml:"Enabled,omitempty"`
+	MCPTool    *bool  `json:",omitempty" yaml:"MCPTool,omitempty"`
 	Input      string `json:",omitempty" yaml:"Input,omitempty"`
 	Dimensions string `json:",omitempty" yaml:"Dimensions,omitempty"`
 	Measures   string `json:",omitempty" yaml:"Measures,omitempty"`
@@ -69,6 +70,13 @@ func (r *Report) normalize() *Report {
 	ret.Limit = defaultString(ret.Limit, "Limit")
 	ret.Offset = defaultString(ret.Offset, "Offset")
 	return ret
+}
+
+func (r *Report) mcpToolEnabled() bool {
+	if r == nil || r.MCPTool == nil {
+		return true
+	}
+	return *r.MCPTool
 }
 
 func (r *Report) inputTypeName(componentName, inputName, viewName string) string {
