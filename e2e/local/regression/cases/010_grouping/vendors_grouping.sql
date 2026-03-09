@@ -1,4 +1,4 @@
-/* {"URI":"vendors-grouping/"} */
+/* {"URI":"vendors-grouping/","Name":"vendors grouping","MCPTool":true} */
 
 #set( $_ = $report())
 #set( $_ = $Data<?>(output/view).Embed())
