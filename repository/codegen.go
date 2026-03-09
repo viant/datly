@@ -13,6 +13,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
+	"os"
 	"path"
 	"reflect"
 	"strconv"
@@ -29,6 +30,27 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 	builder := strings.Builder{}
 	input := c.Input.Type.Type()
 	registry := c.TypeRegistry()
+	if os.Getenv("DATLY_DEBUG_CODEGEN") != "" {
+		outputViewSchema := "<nil>"
+		outputViewType := "<nil>"
+		if viewParameter := c.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil && viewParameter.Schema != nil {
+			outputViewSchema = viewParameter.Schema.Name
+			if viewParameter.Schema.Type() != nil {
+				outputViewType = viewParameter.Schema.Type().String()
+			}
+		}
+		defs := 0
+		if c.View != nil {
+			defs = len(c.View.TypeDefinitions())
+		}
+		fmt.Printf("[DATLY_CODEGEN] uri=%s method=%s view=%s defs=%d outputViewSchema=%s outputViewType=%s package=%s\n",
+			c.URI, c.Method, func() string {
+				if c.View == nil {
+					return "<nil>"
+				}
+				return c.View.Name
+			}(), defs, outputViewSchema, outputViewType, c.Output.Type.Package)
+	}
 
 	if viewParameter := c.Output.Type.Parameters.LookupByLocation(state.KindOutput, "view"); viewParameter != nil {
 		aTag := &tags.Tag{}

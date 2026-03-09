@@ -119,6 +119,8 @@ func TestBuildReportMetadataAndComponent(t *testing.T) {
 	assert.NotSame(t, component.View, reportComponent.View)
 	assert.Equal(t, view.ModeHandler, reportComponent.View.Mode)
 	assert.Nil(t, reportComponent.View.Template)
+	require.Len(t, reportComponent.Input.Type.Parameters, 1)
+	assert.True(t, reportComponent.Input.Type.Parameters[0].IsAnonymous())
 	assert.Equal(t, "/v1/api/vendors/report", reportPath.URI)
 	assert.Equal(t, "POST", reportPath.Method)
 	assert.True(t, reportPath.MCPTool)
@@ -283,4 +285,68 @@ func TestService_InitComponentProviders_RegistersLocalGroupingReportRoute(t *tes
 	assert.True(t, component.Report.Enabled)
 	assert.Equal(t, "POST", component.Method)
 	assert.Equal(t, "/v1/api/shape/dev/vendors-grouping/report", component.URI)
+}
+
+func TestBuildReportComponent_DoesNotStripOriginalViewTypeDefinitionsFromCodegen(t *testing.T) {
+	resource := view.EmptyResource()
+	rootView := view.NewView("metrics_view", "metrics_view")
+	rootView.Groupable = true
+	rootView.Template = &view.Template{Source: "SELECT agency_id, SUM(total_spend) AS total_spend FROM metrics_view GROUP BY 1"}
+	rootView.Schema = state.NewSchema(reflect.TypeOf([]*struct {
+		AgencyId   *int     `sqlx:"agency_id"`
+		TotalSpend *float64 `sqlx:"total_spend"`
+	}{}))
+	rootView.Columns = []*view.Column{
+		view.NewColumn("AgencyId", "int", reflect.TypeOf(0), false),
+		view.NewColumn("TotalSpend", "float64", reflect.TypeOf(float64(0)), false),
+	}
+	rootView.Columns[0].Groupable = true
+	rootView.Columns[1].Aggregate = true
+	for _, column := range rootView.Columns {
+		require.NoError(t, column.Init(&reportTestResource{}, text.CaseFormatUndefined, false))
+	}
+	resource.Types = []*view.TypeDefinition{
+		{Name: "MetricsViewView", Package: "metrics", DataType: `struct{AgencyId *int ` + "`sqlx:\"agency_id\"`" + `; TotalSpend *float64 ` + "`sqlx:\"total_spend\"`" + `;}`},
+	}
+	rootView.SetResource(resource)
+	resource.AddViews(rootView)
+
+	inputType, err := state.NewType(state.WithParameters(state.Parameters{
+		&state.Parameter{Name: "agencyID", In: state.NewQueryLocation("agency_id"), Schema: state.NewSchema(reflect.TypeOf(0)), Predicates: []*extension.PredicateConfig{{Name: "ByAgency"}}, Description: "Agency filter"},
+	}), state.WithResource(&reportTestResource{}))
+	require.NoError(t, err)
+	inputType.Name = "MetricsViewInput"
+
+	outputType, err := state.NewType(state.WithParameters(state.Parameters{
+		&state.Parameter{Name: "Data", In: state.NewOutputLocation("view"), Schema: &state.Schema{Name: "MetricsViewView", Package: "metrics", Cardinality: state.Many}},
+	}))
+	require.NoError(t, err)
+	outputType.Name = "MetricsViewOutput"
+
+	component := &Component{
+		Path:   contract.Path{Method: "GET", URI: "/v1/api/core/metrics/performance_summary"},
+		Meta:   contract.Meta{Name: "MetricsPerformance"},
+		View:   rootView,
+		Report: (&Report{Enabled: true}).normalize(),
+		Contract: contract.Contract{
+			Input:  contract.Input{Type: *inputType},
+			Output: contract.Output{Type: *outputType},
+		},
+	}
+
+	before := component.GenerateOutputCode(context.Background(), true, false, nil)
+	require.Contains(t, before, "type MetricsViewView struct")
+
+	service := &Service{registry: NewRegistry("", nil, nil)}
+	_, _, err = service.buildReportComponent(component, &path.Path{
+		Path: component.Path,
+		View: &path.ViewRef{Ref: rootView.Name},
+		Report: &path.Report{
+			Enabled: true,
+		},
+	})
+	require.NoError(t, err)
+
+	after := component.GenerateOutputCode(context.Background(), true, false, nil)
+	require.Contains(t, after, "type MetricsViewView struct")
 }

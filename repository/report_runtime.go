@@ -117,7 +117,6 @@ func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, o
 	ret.View = buildReportWrapperView(original.View)
 	ret.Async = nil
 	ret.Input.Type = *inputType
-	ret.Input.Type.Parameters = nil
 	var reportPath *path.Path
 	if routePath != nil {
 		pathCopy := *routePath

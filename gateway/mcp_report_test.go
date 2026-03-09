@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -15,11 +16,38 @@ import (
 	dpath "github.com/viant/datly/repository/path"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/mcp-protocol/schema"
 	serverproto "github.com/viant/mcp-protocol/server"
+	"github.com/viant/tagly/format/text"
+	"github.com/viant/xdatly/codec"
+	"github.com/viant/xreflect"
 )
+
+type repositoryReportTestResource struct{}
+
+func (r *repositoryReportTestResource) LookupParameter(name string) (*state.Parameter, error) {
+	return nil, nil
+}
+func (r *repositoryReportTestResource) AppendParameter(parameter *state.Parameter) {}
+func (r *repositoryReportTestResource) ViewSchema(ctx context.Context, name string) (*state.Schema, error) {
+	return nil, nil
+}
+func (r *repositoryReportTestResource) ViewSchemaPointer(ctx context.Context, name string) (*state.Schema, error) {
+	return nil, nil
+}
+func (r *repositoryReportTestResource) LookupType() xreflect.LookupType { return nil }
+func (r *repositoryReportTestResource) LoadText(ctx context.Context, URL string) (string, error) {
+	return "", nil
+}
+func (r *repositoryReportTestResource) Codecs() *codec.Registry                  { return codec.New() }
+func (r *repositoryReportTestResource) CodecOptions() *codec.Options             { return codec.NewOptions(nil) }
+func (r *repositoryReportTestResource) ExpandSubstitutes(value string) string    { return value }
+func (r *repositoryReportTestResource) ReverseSubstitutes(value string) string   { return value }
+func (r *repositoryReportTestResource) EmbedFS() *embed.FS                       { return nil }
+func (r *repositoryReportTestResource) SetFSEmbedder(embedder *state.FSEmbedder) {}
 
 func TestRouter_buildToolInputType_FlattensAnonymousBody(t *testing.T) {
 	bodyType := reflect.StructOf([]reflect.StructField{
@@ -249,4 +277,51 @@ func TestRouter_buildToolsIntegration_RegistersReportTool(t *testing.T) {
 	require.Contains(t, tool.InputSchema.Properties, "dimensions")
 	require.Contains(t, tool.InputSchema.Properties, "measures")
 	require.Contains(t, tool.InputSchema.Properties, "filters")
+}
+
+func TestRouter_buildToolInputType_UsesBuiltReportComponentParameters(t *testing.T) {
+	resource := view.EmptyResource()
+	rootView := view.NewView("vendor", "VENDOR")
+	rootView.Groupable = true
+	rootView.Columns = []*view.Column{
+		view.NewColumn("AccountID", "int", reflect.TypeOf(0), false),
+		view.NewColumn("TotalSpend", "float64", reflect.TypeOf(float64(0)), false),
+	}
+	rootView.Columns[0].Groupable = true
+	rootView.Columns[1].Aggregate = true
+	for _, column := range rootView.Columns {
+		require.NoError(t, column.Init(&repositoryReportTestResource{}, text.CaseFormatUndefined, false))
+	}
+	rootView.SetResource(resource)
+	resource.AddViews(rootView)
+
+	inputType, err := state.NewType(state.WithParameters(state.Parameters{
+		&state.Parameter{Name: "vendorIDs", In: state.NewQueryLocation("vendorIDs"), Schema: state.NewSchema(reflect.TypeOf([]int{})), Predicates: []*extension.PredicateConfig{{Name: "ByVendor"}}, Description: "Vendor IDs to include"},
+	}), state.WithResource(&repositoryReportTestResource{}))
+	require.NoError(t, err)
+	inputType.Name = "VendorInput"
+
+	component := &repository.Component{
+		Path:   contract.Path{Method: http.MethodGet, URI: "/v1/api/vendors"},
+		Meta:   contract.Meta{Name: "vendors"},
+		View:   rootView,
+		Report: &repository.Report{Enabled: true},
+		Contract: contract.Contract{
+			Input: contract.Input{Type: *inputType},
+		},
+	}
+
+	reportComponent, err := repository.BuildReportComponent(nil, component)
+	require.NoError(t, err)
+	require.NotNil(t, reportComponent)
+	require.Len(t, reportComponent.Input.Type.Parameters, 1)
+
+	rType := (&Router{}).buildToolInputType(reportComponent)
+	require.Equal(t, reflect.Struct, rType.Kind())
+	_, ok := rType.FieldByName("Report")
+	assert.False(t, ok)
+	for _, name := range []string{"Dimensions", "Measures", "Filters", "OrderBy", "Limit", "Offset"} {
+		_, ok = rType.FieldByName(name)
+		assert.True(t, ok, name)
+	}
 }
