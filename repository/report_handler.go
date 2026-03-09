@@ -70,6 +70,9 @@ func (r *reportHandler) Exec(ctx context.Context, session xhandler.Session) (int
 func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) (interface{}, error) {
 	input := ctx.Value(xhandler.InputKey)
 	if input != nil {
+		if os.Getenv("DATLY_DEBUG_REPORT") != "" {
+			fmt.Printf("[DATLY_REPORT_HANDLER] bound_input_type=%T\n", input)
+		}
 		return input, nil
 	}
 	if request != nil && request.Body != nil && r.BodyType != nil {
