@@ -288,4 +288,36 @@ func TestSessionEnsureValidValue_Transitions(t *testing.T) {
 			t.Fatalf("expected B=%d, got %d", *original.B, gotB.Elem().Int())
 		}
 	})
+
+	t.Run("component_result_wraps_into_data_holder", func(t *testing.T) {
+		type componentRow struct {
+			IsReadOnly int
+		}
+		type componentHolder struct {
+			Data *componentRow
+		}
+
+		value := &componentRow{IsReadOnly: 1}
+		parameter := &state.Parameter{
+			Name:   "Auth",
+			In:     state.NewComponent("GET:/auth"),
+			Schema: state.NewSchema(reflect.TypeOf(componentHolder{})),
+		}
+		selector := newSelector(t, reflect.TypeOf(componentHolder{}))
+		sess := &Session{}
+		opts := NewOptions(WithReportNotAssignable(false))
+
+		got, err := sess.ensureValidValue(value, parameter, selector, opts)
+		if err != nil {
+			t.Fatalf("ensureValidValue error: %v", err)
+		}
+
+		holder, ok := got.(componentHolder)
+		if !ok {
+			t.Fatalf("expected componentHolder, got %T", got)
+		}
+		if holder.Data == nil || holder.Data.IsReadOnly != 1 {
+			t.Fatalf("expected wrapped component result, got %#v", got)
+		}
+	})
 }

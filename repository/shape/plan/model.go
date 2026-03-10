@@ -20,11 +20,33 @@ type Result struct {
 	Views            []*View
 	ViewsByName      map[string]*View
 	States           []*State
+	Components       []*ComponentRoute
 	Types            []*Type
 	ColumnsDiscovery bool
+	Const            map[string]string
 	TypeContext      *typectx.Context
 	Directives       *dqlshape.Directives
 	Diagnostics      []*dqlshape.Diagnostic
+}
+
+type ComponentRoute struct {
+	Path       string
+	FieldName  string
+	Type       reflect.Type
+	InputType  reflect.Type
+	OutputType reflect.Type
+	InputName  string
+	OutputName string
+	ViewName   string
+	SourceURL  string
+	SummaryURL string
+	Name       string
+	RoutePath  string
+	Method     string
+	Connector  string
+	Marshaller string
+	Handler    string
+	Report     *dqlshape.ReportDirective
 }
 
 // Type is normalized type metadata collected during compile.
@@ -61,14 +83,26 @@ type View struct {
 	SQL                    string
 	SQLURI                 string
 	Summary                string
+	SummaryURL             string
+	SummaryName            string
 	Relations              []*Relation
 	Holder                 string
 
-	AllowNulls        *bool
-	SelectorNamespace string
-	SelectorNoLimit   *bool
-	SchemaType        string
-	ColumnsDiscovery  bool
+	AllowNulls             *bool
+	Groupable              *bool
+	SelectorNamespace      string
+	SelectorLimit          *int
+	SelectorNoLimit        *bool
+	SelectorCriteria       *bool
+	SelectorProjection     *bool
+	SelectorOrderBy        *bool
+	SelectorOffset         *bool
+	SelectorPage           *bool
+	SelectorFilterable     []string
+	SelectorOrderByColumns map[string]string
+	SchemaType             string
+	ColumnsDiscovery       bool
+	Self                   *SelfReference
 
 	Cardinality string
 	ElementType reflect.Type
@@ -79,6 +113,8 @@ type View struct {
 // ViewDeclaration captures declaration options used to derive a view from DQL directives.
 type ViewDeclaration struct {
 	Tag           string
+	TypeName      string
+	Dest          string
 	Codec         string
 	CodecArgs     []string
 	HandlerName   string
@@ -97,6 +133,7 @@ type ViewDeclaration struct {
 	Async         bool
 	Output        bool
 	Predicates    []*ViewPredicate
+	ColumnsConfig map[string]*ViewColumnConfig
 }
 
 // ViewPredicate captures WithPredicate / EnsurePredicate metadata.
@@ -107,16 +144,25 @@ type ViewPredicate struct {
 	Arguments []string
 }
 
+// ViewColumnConfig captures declaration-level per-column overrides.
+type ViewColumnConfig struct {
+	DataType  string
+	Tag       string
+	Groupable *bool
+}
+
 // Relation is normalized relation metadata extracted from DQL joins.
 type Relation struct {
-	Name     string
-	Holder   string
-	Ref      string
-	Table    string
-	Kind     string
-	Raw      string
-	On       []*RelationLink
-	Warnings []string
+	Name          string
+	Parent        string
+	Holder        string
+	Ref           string
+	Table         string
+	Kind          string
+	Raw           string
+	ColumnsConfig map[string]*ViewColumnConfig
+	On            []*RelationLink
+	Warnings      []string
 }
 
 // RelationLink represents one parent/ref join predicate.
@@ -130,11 +176,19 @@ type RelationLink struct {
 	Expression      string
 }
 
+// SelfReference captures self-join tree metadata parsed from DQL.
+type SelfReference struct {
+	Holder string
+	Child  string
+	Parent string
+}
+
 // State is a normalized parameter field plan.
 type State struct {
 	state.Parameter `yaml:",inline"`
 	QuerySelector   string
 	OutputDataType  string
+	EmitOutput      bool
 }
 
 func (s *State) KindString() string {

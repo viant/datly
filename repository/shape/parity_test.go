@@ -75,6 +75,24 @@ func TestEngineParity_StructPipeline(t *testing.T) {
 	assert.Equal(t, reflect.TypeOf(mv.Schema.CompType()), reflect.TypeOf(ev.Schema.CompType()))
 }
 
+func TestEngineParity_LoadResource(t *testing.T) {
+	source := &paritySource{}
+	engine := shape.New(
+		shape.WithName("/v1/api/parity"),
+		shape.WithScanner(shapeScan.New()),
+		shape.WithPlanner(shapePlan.New()),
+		shape.WithLoader(shapeLoad.New()),
+	)
+
+	artifact, err := engine.LoadResource(context.Background(), source)
+	require.NoError(t, err)
+	require.NotNil(t, artifact)
+	require.NotNil(t, artifact.Resource)
+	require.Len(t, artifact.Resource.Views, 1)
+	assert.Equal(t, "rows", artifact.Resource.Views[0].Name)
+	assert.Equal(t, "REPORT", artifact.Resource.Views[0].Table)
+}
+
 func TestEngineParity_Component_SourceTagFieldJoin(t *testing.T) {
 	source := &parityJoinSource{}
 	scanner := shapeScan.New()

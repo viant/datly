@@ -1,45 +1,54 @@
 package preprocess
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/viant/datly/repository/shape/dql/decl"
+)
 
 type directiveCall struct {
 	name  string
 	args  []string
 	start int
+	end   int
+}
+
+type directiveParseError struct {
+	name    string
+	start   int
+	message string
 }
 
 func scanDollarCalls(input string, names map[string]bool) []directiveCall {
+	calls, _ := scanDollarCallsStrict(input, names)
+	return calls
+}
+
+func scanDollarCallsStrict(input string, names map[string]bool) ([]directiveCall, []directiveParseError) {
+	parsed, parseErrors := decl.ScanCalls(input, decl.CallScanOptions{
+		AllowedNames:  names,
+		RequireDollar: true,
+		AllowDollar:   true,
+		Strict:        true,
+	})
 	result := make([]directiveCall, 0)
-	for i := 0; i < len(input); {
-		if input[i] != '$' || i+1 >= len(input) || !isIdentifierStart(input[i+1]) {
-			i++
-			continue
-		}
-		start := i + 1
-		i += 2
-		for i < len(input) && isIdentifierPart(input[i]) {
-			i++
-		}
-		name := strings.ToLower(input[start:i])
-		if !names[name] {
-			continue
-		}
-		j := skipSpaces(input, i)
-		if j >= len(input) || input[j] != '(' {
-			continue
-		}
-		body, end, ok := readCallBody(input, j)
-		if !ok {
-			continue
-		}
+	for _, call := range parsed {
 		result = append(result, directiveCall{
-			name:  name,
-			args:  splitCallArgs(body),
-			start: start - 1,
+			name:  call.Name,
+			args:  call.Args,
+			start: call.Offset,
+			end:   call.EndOffset,
 		})
-		i = end + 1
 	}
-	return result
+	errs := make([]directiveParseError, 0, len(parseErrors))
+	for _, parseErr := range parseErrors {
+		errs = append(errs, directiveParseError{
+			name:    parseErr.Name,
+			start:   parseErr.Offset,
+			message: parseErr.Message,
+		})
+	}
+	return result, errs
 }
 
 func readCallBody(input string, openParen int) (string, int, bool) {

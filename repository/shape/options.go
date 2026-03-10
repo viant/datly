@@ -238,3 +238,13 @@ func WithInferTypeContextDefaults(enabled bool) CompileOption {
 		o.InferTypeContext = &enabled
 	}
 }
+
+// WithLinkedTypes enables/disables linked Go type support during compile.
+func WithLinkedTypes(enabled bool) CompileOption {
+	return func(o *CompileOptions) {
+		if o == nil {
+			return
+		}
+		o.UseLinkedTypes = &enabled
+	}
+}

@@ -64,6 +64,7 @@ type (
 		PublishParent bool       `json:",omitempty"`
 		Partitioned   *Partitioned
 		Criteria      string `json:",omitempty"`
+		Groupable     bool   `json:",omitempty"`
 
 		Selector *Config   `json:",omitempty"`
 		Template *Template `json:",omitempty"`
@@ -460,6 +461,9 @@ func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option
 		}
 		for _, name := range vTag.Parameters {
 			parameters = append(parameters, state.NewRefParameter(name))
+		}
+		if vTag.SummaryURI != "" {
+			options = append(options, WithSummaryURI(vTag.SummaryURI))
 		}
 	}
 	if SQL := tag.SQL; SQL.SQL != "" {
@@ -936,6 +940,11 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	if len(v.Columns) != 0 {
 		return nil
 	}
+	if v.Schema != nil {
+		if err := v.Schema.LoadTypeIfNeeded(resource.LookupType()); err != nil {
+			return err
+		}
+	}
 	//if scheme type defines sqlx tag, use it as source for column instead of detection
 	if rType := v.Schema.Type(); rType != nil {
 		sType := types.EnsureStruct(rType)
@@ -1032,7 +1041,10 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 
 // ColumnByName returns Column by Column.Name
 func (v *View) ColumnByName(name string) (*Column, bool) {
-	if column, ok := v._columns[name]; ok {
+	if v == nil || v._columns == nil {
+		return nil, false
+	}
+	if column, err := v._columns.Lookup(name); err == nil {
 		return column, true
 	}
 
@@ -1098,6 +1110,7 @@ func (v *View) inherit(view *View) error {
 	setter.SetStringIfEmpty(&v.Module, view.Module)
 	setter.SetStringIfEmpty(&v.Tag, view.Tag)
 	setter.SetBoolIfFalse(&v.PublishParent, view.PublishParent)
+	setter.SetBoolIfFalse(&v.Groupable, view.Groupable)
 
 	setter.SetStringIfEmpty(&v.Description, view.Description)
 
@@ -1284,6 +1297,18 @@ func (v *View) CanUseSelectorProjection() bool {
 // IndexedColumns returns Columns
 func (v *View) IndexedColumns() NamedColumns {
 	return v._columns
+}
+
+// IsGroupable reports whether the supplied field or column name resolves to a groupable column.
+func (v *View) IsGroupable(name string) bool {
+	if v == nil || len(v._columns) == 0 {
+		return false
+	}
+	column, err := v._columns.Lookup(name)
+	if err != nil {
+		return false
+	}
+	return column.Groupable
 }
 
 func (v *View) markColumnsAsFilterable() error {

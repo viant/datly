@@ -1,13 +1,19 @@
 package sanitize
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/viant/velty"
+)
 
 func TestRewritePolicy_Rewrite(t *testing.T) {
 	testCases := []struct {
 		name     string
 		raw      string
 		declared map[string]bool
+		foreach  map[string]bool
 		consts   map[string]bool
+		kind     velty.ExprContextKind
 		expect   string
 	}{
 		{
@@ -27,6 +33,32 @@ func TestRewritePolicy_Rewrite(t *testing.T) {
 			expect:   "$criteria.AppendBinding($x)",
 		},
 		{
+			name:     "declared foreach variable in body uses placeholder",
+			raw:      "$rec.ID",
+			declared: map[string]bool{"rec": true},
+			foreach:  map[string]bool{"rec": true},
+			kind:     velty.CtxForEachBody,
+			expect:   "$criteria.AppendBinding($rec.ID)",
+		},
+		{
+			name:     "declared dotted parameter uses unsafe placeholder in append context",
+			raw:      "$Jwt.UserID",
+			declared: map[string]bool{"Jwt": true},
+			expect:   "$criteria.AppendBinding($Unsafe.Jwt.UserID)",
+		},
+		{
+			name:   "function arg gets unsafe prefix",
+			raw:    "$VendorID",
+			kind:   velty.CtxFuncArg,
+			expect: "$Unsafe.VendorID",
+		},
+		{
+			name:   "prefixed function arg is preserved",
+			raw:    "$sql.Eq",
+			kind:   velty.CtxFuncArg,
+			expect: "$sql.Eq",
+		},
+		{
 			name:   "const selector keeps raw unsafe path",
 			raw:    "$ConstID",
 			consts: map[string]bool{"ConstID": true},
@@ -40,8 +72,8 @@ func TestRewritePolicy_Rewrite(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			policy := newRewritePolicy(testCase.declared, testCase.consts)
-			if actual := policy.rewrite(testCase.raw); actual != testCase.expect {
+			policy := newRewritePolicy(testCase.declared, testCase.foreach, testCase.consts)
+			if actual := policy.rewrite(testCase.raw, testCase.kind); actual != testCase.expect {
 				t.Fatalf("unexpected rewrite: %s", actual)
 			}
 		})

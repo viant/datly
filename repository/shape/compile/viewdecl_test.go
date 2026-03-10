@@ -1,11 +1,13 @@
 package compile
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	dqldiag "github.com/viant/datly/repository/shape/dql/diag"
+	dqlpre "github.com/viant/datly/repository/shape/dql/preprocess"
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/plan"
 )
@@ -21,12 +23,13 @@ func TestViewDecl_ExtractSetBlocks(t *testing.T) {
 }
 
 func TestViewDecl_ParseSetDeclarationBody(t *testing.T) {
-	holder, kind, location, tail, ok := parseSetDeclarationBody("$_ = $Extra<?>(view/extra_view).WithURI('/x')")
+	holder, kind, location, tail, tailOffset, ok := parseSetDeclarationBody("$_ = $Extra<?>(view/extra_view).WithURI('/x')")
 	require.True(t, ok)
 	assert.Equal(t, "Extra", holder)
 	assert.Equal(t, "view", kind)
 	assert.Equal(t, "extra_view", location)
 	assert.Contains(t, tail, ".WithURI('/x')")
+	assert.Greater(t, tailOffset, 0)
 }
 
 func TestViewDecl_ApplyOptions_InvalidCardinality(t *testing.T) {
@@ -55,13 +58,21 @@ func TestViewDecl_AppendDeclaredViews(t *testing.T) {
 	assert.True(t, found)
 }
 
+func TestViewDecl_ExtractDeclarationSQLWithLegacyStatusPrefix(t *testing.T) {
+	sqlText, status := extractDeclarationSQLWithStatus("/* !!403 SELECT id FROM EXTRA e */")
+	assert.Equal(t, "SELECT id FROM EXTRA e", sqlText)
+	require.NotNil(t, status)
+	assert.Equal(t, 403, *status)
+}
+
 func TestViewDecl_ApplyOptions_Extended(t *testing.T) {
 	view := &declaredView{Name: "limit"}
 	var diags []*dqlshape.Diagnostic
 	tail := ".WithTag('json:\"id\"').WithCodec(AsJSON,'x').WithHandler('Build',a,b)." +
 		"WithStatusCode(422).WithErrorMessage('bad req').WithPredicate('ByID','id = ?', 101)." +
 		"EnsurePredicate('Tenant','tenant_id = ?', 7).QuerySelector('qs').WithCache('c1').WithLimit(10)." +
-		"Cacheable(true).When('x > 1').Scope('team').WithType('[]Order').Of('list').Value('abc').Async().Output()"
+		"Cacheable(true).When('x > 1').Scope('team').Type('OrderView').Dest('orders.go').WithType('[]Order')." +
+		"WithColumnType('Authorized','bool').WithColumnTag('Authorized','internal:\"true\"').WithColumnGroupable('Authorized', true).Of('list').Value('abc').Async().Output()"
 	applyDeclaredViewOptions(view, tail, "SELECT 1", 0, &diags)
 
 	require.Empty(t, diags)
@@ -89,7 +100,15 @@ func TestViewDecl_ApplyOptions_Extended(t *testing.T) {
 	assert.True(t, *view.Cacheable)
 	assert.Equal(t, "x > 1", view.When)
 	assert.Equal(t, "team", view.Scope)
+	assert.Equal(t, "OrderView", view.TypeName)
+	assert.Equal(t, "orders.go", view.Dest)
 	assert.Equal(t, "[]Order", view.DataType)
+	require.NotNil(t, view.ColumnsConfig)
+	require.Contains(t, view.ColumnsConfig, "Authorized")
+	assert.Equal(t, "bool", view.ColumnsConfig["Authorized"].DataType)
+	assert.Equal(t, `internal:"true"`, view.ColumnsConfig["Authorized"].Tag)
+	require.NotNil(t, view.ColumnsConfig["Authorized"].Groupable)
+	assert.True(t, *view.ColumnsConfig["Authorized"].Groupable)
 	assert.Equal(t, "list", view.Of)
 	assert.Equal(t, "abc", view.Value)
 	assert.True(t, view.Async)
@@ -102,6 +121,27 @@ func TestViewDecl_ApplyOptions_QuerySelectorValidation(t *testing.T) {
 	applyDeclaredViewOptions(view, ".QuerySelector('q')", "SELECT 1", 0, &diags)
 	require.NotEmpty(t, diags)
 	assert.Equal(t, dqldiag.CodeDeclQuerySelector, diags[0].Code)
+}
+
+func TestViewDecl_ApplyOptions_ExactSpanAndUnknownOption(t *testing.T) {
+	dql := "#set($_ = $Extra<?>(view/extra).UnknownOpt('x').WithLimit('x') /* SELECT id FROM EXTRA e */)"
+	declared, diags := extractDeclaredViews(dql)
+	require.NotEmpty(t, declared)
+	require.Len(t, diags, 2)
+	assert.Equal(t, dqldiag.CodeDeclOptionArgs, diags[0].Code)
+	assert.Equal(t, dqldiag.CodeDeclOptionArgs, diags[1].Code)
+
+	unknownOffset := strings.Index(dql, ".UnknownOpt")
+	require.GreaterOrEqual(t, unknownOffset, 0)
+	unknownPos := dqlpre.PointSpan(dql, unknownOffset).Start
+	assert.Equal(t, unknownPos.Line, diags[0].Span.Start.Line)
+	assert.Equal(t, unknownPos.Char, diags[0].Span.Start.Char)
+
+	limitOffset := strings.Index(dql, ".WithLimit")
+	require.GreaterOrEqual(t, limitOffset, 0)
+	limitPos := dqlpre.PointSpan(dql, limitOffset).Start
+	assert.Equal(t, limitPos.Line, diags[1].Span.Start.Line)
+	assert.Equal(t, limitPos.Char, diags[1].Span.Start.Char)
 }
 
 func TestViewDecl_SplitArgs_Nested(t *testing.T) {
@@ -117,7 +157,8 @@ func TestViewDecl_AppendDeclaredViews_ExtendedDeclarationMetadata(t *testing.T) 
 	dql := "#set($_ = $limit<?>(view/limit).WithTag('json:\"id\"').WithCodec(AsJSON).WithHandler('Build',a)." +
 		"WithStatusCode(409).WithErrorMessage('conflict').WithPredicate('ByID','id=?',1)." +
 		"EnsurePredicate('Tenant','tenant=?',2).QuerySelector('items').WithCache('c1').WithLimit(5)." +
-		"Cacheable(false).When('x').Scope('s').WithType('Order').Of('o').Value('v').Async().Output() /* SELECT id FROM EXTRA e */)"
+		"Cacheable(false).When('x').Scope('s').Type('OrderView').Dest('order.go').WithType('Order')." +
+		"WithColumnType('Authorized','bool').WithColumnTag('Authorized','internal:\"true\"').WithColumnGroupable('Authorized', true).Of('o').Value('v').Async().Output() /* SELECT id FROM EXTRA e */)"
 	result := &plan.Result{
 		ViewsByName: map[string]*plan.View{},
 		ByPath:      map[string]*plan.Field{},
@@ -126,7 +167,7 @@ func TestViewDecl_AppendDeclaredViews_ExtendedDeclarationMetadata(t *testing.T) 
 	require.NotEmpty(t, result.Views)
 	var target *plan.View
 	for _, item := range result.Views {
-		if item != nil && item.Name == "e" {
+		if item != nil && item.Name == "limit" {
 			target = item
 			break
 		}
@@ -147,7 +188,15 @@ func TestViewDecl_AppendDeclaredViews_ExtendedDeclarationMetadata(t *testing.T) 
 	assert.False(t, *target.Declaration.Cacheable)
 	assert.Equal(t, "x", target.Declaration.When)
 	assert.Equal(t, "s", target.Declaration.Scope)
+	assert.Equal(t, "OrderView", target.Declaration.TypeName)
+	assert.Equal(t, "order.go", target.Declaration.Dest)
 	assert.Equal(t, "Order", target.Declaration.DataType)
+	require.NotNil(t, target.Declaration.ColumnsConfig)
+	require.Contains(t, target.Declaration.ColumnsConfig, "Authorized")
+	assert.Equal(t, "bool", target.Declaration.ColumnsConfig["Authorized"].DataType)
+	assert.Equal(t, `internal:"true"`, target.Declaration.ColumnsConfig["Authorized"].Tag)
+	require.NotNil(t, target.Declaration.ColumnsConfig["Authorized"].Groupable)
+	assert.True(t, *target.Declaration.ColumnsConfig["Authorized"].Groupable)
 	assert.Equal(t, "o", target.Declaration.Of)
 	assert.Equal(t, "v", target.Declaration.Value)
 	assert.True(t, target.Declaration.Async)
@@ -170,6 +219,99 @@ func TestViewDecl_AppendDeclaredViews_AttachSummaryFromMetaViewSQL(t *testing.T)
 	require.NotNil(t, root)
 	assert.Contains(t, root.Summary, "COUNT(1)")
 	assert.Contains(t, root.Summary, "$View.browser.SQL")
+}
+
+func TestViewDecl_AppendDeclaredViews_AttachSummaryFromOutputSummarySQL(t *testing.T) {
+	root := &plan.View{Name: "Vendor", Path: "Vendor", Holder: "Vendor"}
+	result := &plan.Result{
+		Views:       []*plan.View{root},
+		ViewsByName: map[string]*plan.View{"Vendor": root},
+		ByPath:      map[string]*plan.Field{},
+	}
+	dql := "#define($_ = $Meta<?>(output/summary) /* SELECT COUNT(1) CNT FROM ($View.vendor.SQL) t */)"
+
+	appendDeclaredViews(dql, result)
+
+	require.Len(t, result.Views, 1)
+	require.NotNil(t, root)
+	assert.Contains(t, root.Summary, "COUNT(1)")
+	assert.Contains(t, root.Summary, "$View.vendor.SQL")
+}
+
+func TestViewDecl_AppendDeclaredViews_AttachSummaryFromOutputSummaryNonWindowSQL(t *testing.T) {
+	root := &plan.View{Name: "Vendor", Path: "Vendor", Holder: "Vendor"}
+	result := &plan.Result{
+		Views:       []*plan.View{root},
+		ViewsByName: map[string]*plan.View{"Vendor": root},
+		ByPath:      map[string]*plan.Field{},
+	}
+	dql := "#define($_ = $Meta<?>(output/summary) /* SELECT COUNT(1) CNT FROM ($View.NonWindowSQL) t */)"
+
+	appendDeclaredViews(dql, result)
+
+	require.Len(t, result.Views, 1)
+	require.NotNil(t, root)
+	assert.Contains(t, root.Summary, "COUNT(1)")
+	assert.Contains(t, root.Summary, "$View.NonWindowSQL")
+}
+
+func TestViewDecl_AppendDeclaredViews_AttachSummaryToReferencedChildView(t *testing.T) {
+	root := &plan.View{Name: "Vendor", Path: "Vendor", Holder: "Vendor"}
+	child := &plan.View{Name: "products", Path: "products", Holder: "Products"}
+	result := &plan.Result{
+		Views: []*plan.View{root, child},
+		ViewsByName: map[string]*plan.View{
+			"Vendor":   root,
+			"products": child,
+		},
+		ByPath: map[string]*plan.Field{},
+	}
+	dql := "#define($_ = $ProductsMeta<?>(view/products_meta) /* SELECT COUNT(1) CNT FROM ($View.products.SQL) t */)"
+
+	appendDeclaredViews(dql, result)
+
+	require.Len(t, result.Views, 2)
+	require.NotNil(t, child)
+	assert.Equal(t, "ProductsMeta", child.SummaryName)
+	assert.Contains(t, child.Summary, "COUNT(1)")
+	assert.Contains(t, child.Summary, "$View.NonWindowSQL")
+	assert.Empty(t, root.Summary)
+}
+
+func TestViewDecl_AppendDeclaredViews_OutputSummaryWithoutRoot_DoesNotCreateView(t *testing.T) {
+	result := &plan.Result{
+		ViewsByName: map[string]*plan.View{},
+		ByPath:      map[string]*plan.Field{},
+	}
+	dql := "#define($_ = $Meta<?>(output/summary) /* SELECT COUNT(1) CNT FROM ($View.NonWindowSQL) t */)"
+
+	appendDeclaredViews(dql, result)
+
+	assert.Empty(t, result.Views)
+}
+
+func TestViewDecl_RequiredImpliesOneCardinalityByDefault(t *testing.T) {
+	dql := "#define($_ = $Authorization<?>(view/authorization).Required() /* SELECT Authorized FROM AUTH */)"
+	result := &plan.Result{
+		ViewsByName: map[string]*plan.View{},
+		ByPath:      map[string]*plan.Field{},
+	}
+	appendDeclaredViews(dql, result)
+
+	require.Len(t, result.Views, 1)
+	assert.Equal(t, "one", strings.ToLower(result.Views[0].Cardinality))
+}
+
+func TestViewDecl_ExplicitCardinalityOverridesRequiredDefault(t *testing.T) {
+	dql := "#define($_ = $Authorization<?>(view/authorization).Required().Cardinality('many') /* SELECT Authorized FROM AUTH */)"
+	result := &plan.Result{
+		ViewsByName: map[string]*plan.View{},
+		ByPath:      map[string]*plan.Field{},
+	}
+	appendDeclaredViews(dql, result)
+
+	require.Len(t, result.Views, 1)
+	assert.Equal(t, "many", strings.ToLower(result.Views[0].Cardinality))
 }
 
 func TestViewDecl_AppendDeclaredViews_MetaViewSQL_NoParentFallbackToView(t *testing.T) {

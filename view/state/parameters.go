@@ -604,7 +604,9 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	}
 	if p.Output != nil && p.Output.Schema != nil {
 		if p.Output.Schema.TypeName() != p.Schema.TypeName() {
-			aTag.Parameter.DataType = p.Schema.TypeName()
+			if p.In == nil || p.In.Kind != KindParam {
+				aTag.Parameter.DataType = p.Schema.TypeName()
+			}
 		}
 	}
 	if p.Handler != nil {

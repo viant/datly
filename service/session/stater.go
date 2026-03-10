@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"runtime/debug"
 
@@ -46,6 +47,9 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 	defer func() {
 		if r := recover(); r != nil {
 			panicMsg := fmt.Sprintf("Panic occurred: %v, Stack trace: %v", r, string(debug.Stack()))
+			if os.Getenv("DATLY_DEBUG_BIND") == "1" {
+				fmt.Printf("[BIND DEBUG] %s\n", panicMsg)
+			}
 			logger := s.Logger()
 			if logger == nil {
 				panic(panicMsg)

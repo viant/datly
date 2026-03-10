@@ -30,6 +30,7 @@ func ExtractJoinRelations(raw string, queryNode *query.Select) ([]*plan.Relation
 		ref, table := relationRef(join, idx+1)
 		relation := &plan.Relation{
 			Name:   ref,
+			Parent: relationParentAlias(join, rootAlias),
 			Holder: ExportedName(ref),
 			Ref:    ref,
 			Table:  table,
@@ -344,6 +345,31 @@ func rootNamespace(queryNode *query.Select) string {
 		root = root[idx+1:]
 	}
 	return root
+}
+
+func relationParentAlias(join *query.Join, rootAlias string) string {
+	if join == nil || join.On == nil {
+		return strings.TrimSpace(rootAlias)
+	}
+	parent := ""
+	sqlparser.Traverse(join.On, func(n node.Node) bool {
+		selector, ok := n.(*expr.Selector)
+		if !ok {
+			return true
+		}
+		name := strings.TrimSpace(selector.Name)
+		if name == "" || strings.EqualFold(name, strings.TrimSpace(join.Alias)) {
+			return true
+		}
+		if parent == "" {
+			parent = name
+		}
+		return true
+	})
+	if parent != "" {
+		return parent
+	}
+	return strings.TrimSpace(rootAlias)
 }
 
 func relationRef(join *query.Join, ordinal int) (string, string) {

@@ -587,7 +587,14 @@ func (s *Service) AddComponent(ctx context.Context, component *repository.Compon
 		return err
 	}
 
-	s.repository.Register(components.Components...)
+	registerComponents := append([]*repository.Component{}, components.Components...)
+	if reportComponent, err := repository.BuildReportComponent(s.repository.Registry().Dispatcher(), components.Components[0]); err != nil {
+		return err
+	} else if reportComponent != nil {
+		registerComponents = append(registerComponents, reportComponent)
+	}
+
+	s.repository.Register(registerComponents...)
 
 	return nil
 }

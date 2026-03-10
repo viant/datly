@@ -113,6 +113,7 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 			repository.WithFirebaseAuth(aConfig.Firebase),
 			repository.WithDependencyURL(aConfig.DependencyURL),
 			repository.WithRefreshFrequency(aConfig.SyncFrequency()),
+			repository.WithRefreshDisabled(options.refreshDisabled),
 			repository.WithDispatcher(dispatcher.New),
 		)
 		if err != nil {
@@ -121,6 +122,9 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 	}
 	if err = (&Service{Config: aConfig}).applyDQLBootstrap(ctx, componentRepository, aConfig.DQLBootstrap); err != nil {
 		return nil, fmt.Errorf("failed to apply DQL bootstrap: %w", err)
+	}
+	if err = (&Service{Config: aConfig}).applyGoBootstrap(ctx, componentRepository, aConfig.GoBootstrap); err != nil {
+		return nil, fmt.Errorf("failed to apply Go bootstrap: %w", err)
 	}
 
 	var mcpRegistry *serverproto.Registry

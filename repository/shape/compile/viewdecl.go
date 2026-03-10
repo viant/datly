@@ -12,30 +12,36 @@ import (
 )
 
 type declaredView struct {
-	Name          string
-	SQL           string
-	URI           string
-	Connector     string
-	Cardinality   string
-	Tag           string
-	Codec         string
-	CodecArgs     []string
-	HandlerName   string
-	HandlerArgs   []string
-	StatusCode    *int
-	ErrorMessage  string
-	QuerySelector string
-	CacheRef      string
-	Limit         *int
-	Cacheable     *bool
-	When          string
-	Scope         string
-	DataType      string
-	Of            string
-	Value         string
-	Async         bool
-	Output        bool
-	Predicates    []declaredPredicate
+	Name           string
+	VirtualSummary bool
+	SQL            string
+	URI            string
+	Connector      string
+	Cardinality    string
+	Required       bool
+	CardinalitySet bool
+	Tag            string
+	TypeName       string
+	Dest           string
+	Codec          string
+	CodecArgs      []string
+	HandlerName    string
+	HandlerArgs    []string
+	StatusCode     *int
+	ErrorMessage   string
+	QuerySelector  string
+	CacheRef       string
+	Limit          *int
+	Cacheable      *bool
+	When           string
+	Scope          string
+	DataType       string
+	Of             string
+	Value          string
+	Async          bool
+	Output         bool
+	Predicates     []declaredPredicate
+	ColumnsConfig  map[string]*declaredColumnConfig
 }
 
 type declaredPredicate struct {
@@ -43,6 +49,12 @@ type declaredPredicate struct {
 	Source    string
 	Ensure    bool
 	Arguments []string
+}
+
+type declaredColumnConfig struct {
+	DataType  string
+	Tag       string
+	Groupable *bool
 }
 
 const (
@@ -74,14 +86,14 @@ func extractDeclaredViews(dql string) ([]*declaredView, []*dqlshape.Diagnostic) 
 	var views []*declaredView
 	var diags []*dqlshape.Diagnostic
 	for _, block := range extractSetBlocks(dql) {
-		holder, kind, location, tail, ok := parseSetDeclarationBody(block.Body)
+		holder, kind, location, tail, tailOffset, ok := parseSetDeclarationBody(block.Body)
 		if !ok {
 			continue
 		}
-		if kind != "view" && kind != "data_view" {
+		if kind != "view" && kind != "data_view" && !isOutputSummaryDeclaration(kind, location) {
 			continue
 		}
-		sqlText := extractDeclarationSQL(tail)
+		sqlText, errorStatusCode := extractDeclarationSQLWithStatus(tail)
 		if sqlText == "" {
 			diags = append(diags, &dqlshape.Diagnostic{
 				Code:     dqldiag.CodeViewMissingSQL,
@@ -92,16 +104,28 @@ func extractDeclaredViews(dql string) ([]*declaredView, []*dqlshape.Diagnostic) 
 			})
 			continue
 		}
-		name := pipeline.SanitizeName(location)
+		name := pipeline.SanitizeName(holder)
 		if name == "" {
-			name = pipeline.SanitizeName(holder)
+			name = pipeline.SanitizeName(location)
 		}
 		if name == "" {
 			continue
 		}
-		view := &declaredView{Name: name, SQL: strings.TrimSpace(sqlText)}
-		applyDeclaredViewOptions(view, tail, dql, block.Offset, &diags)
+		view := &declaredView{
+			Name:           name,
+			SQL:            strings.TrimSpace(sqlText),
+			VirtualSummary: isOutputSummaryDeclaration(kind, location),
+		}
+		if errorStatusCode != nil {
+			view.StatusCode = errorStatusCode
+		}
+		applyDeclaredViewOptions(view, tail, dql, block.BodyOffset+tailOffset, &diags)
 		views = append(views, view)
 	}
 	return views, diags
+}
+
+func isOutputSummaryDeclaration(kind, location string) bool {
+	return strings.EqualFold(strings.TrimSpace(kind), "output") &&
+		strings.EqualFold(strings.TrimSpace(location), "summary")
 }

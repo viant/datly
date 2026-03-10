@@ -32,6 +32,9 @@ func inferColumnsFromType(rType reflect.Type) []*view.Column {
 		if !f.IsExported() {
 			continue
 		}
+		if shouldSkipInferredField(f) {
+			continue
+		}
 		colName := sqlxColumnName(f)
 		if colName == "" {
 			colName = f.Name
@@ -44,6 +47,46 @@ func inferColumnsFromType(rType reflect.Type) []*view.Column {
 	return cols
 }
 
+func shouldSkipInferredField(field reflect.StructField) bool {
+	if field.Name == "-" {
+		return true
+	}
+	rawTag := string(field.Tag)
+	if strings.Contains(rawTag, `view:"`) || strings.Contains(rawTag, `on:"`) {
+		return true
+	}
+	if strings.Contains(rawTag, `sqlx:"-"`) {
+		return true
+	}
+	return false
+}
+
+func inferredColumnsArePlaceholders(columns []*view.Column) bool {
+	if len(columns) == 0 {
+		return false
+	}
+	for _, column := range columns {
+		if column == nil || !isPlaceholderColumnName(column.Name) {
+			return false
+		}
+	}
+	return true
+}
+
+func isPlaceholderColumnName(name string) bool {
+	name = strings.TrimSpace(strings.ToLower(name))
+	name = strings.ReplaceAll(name, "_", "")
+	if !strings.HasPrefix(name, "col") || len(name) == len("col") {
+		return false
+	}
+	for i := len("col"); i < len(name); i++ {
+		if name[i] < '0' || name[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // sqlxColumnName reads the sqlx struct tag to get the database column name.
 func sqlxColumnName(f reflect.StructField) string {
 	tag := f.Tag.Get("sqlx")
@@ -52,8 +95,14 @@ func sqlxColumnName(f reflect.StructField) string {
 	}
 	for _, part := range strings.Split(tag, ",") {
 		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
 		if strings.HasPrefix(part, "name=") {
 			return strings.TrimPrefix(part, "name=")
+		}
+		if !strings.Contains(part, "=") {
+			return part
 		}
 	}
 	return ""

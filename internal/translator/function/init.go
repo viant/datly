@@ -8,6 +8,8 @@ func init() {
 	_registry.Register(&allowedOrderByColumns{})
 	_registry.Register(&cardinality{})
 	_registry.Register(&allownulls{})
+	_registry.Register(&groupable{})
+	_registry.Register(&groupingEnabled{})
 	_registry.Register(&matchStrategy{})
 	_registry.Register(&batchSize{})
 	_registry.Register(&partitioner{})

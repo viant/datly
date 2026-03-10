@@ -37,6 +37,29 @@ func TestTag_updateView(t *testing.T) {
 			tag:         `view:"foo,table=FOO,connector=dev,parameters={P1,P2}"`,
 			expectView:  &View{Name: "foo", Table: "FOO", Connector: "dev", Parameters: []string{"P1", "P2"}},
 		},
+		{
+			description: "selector metadata view",
+			tag:         `view:"foo,table=FOO,groupable=true,selectorNamespace=ve,selectorCriteria=true,selectorProjection=true,selectorOrderBy=true,selectorOffset=true,selectorFilterable={*},selectorOrderByColumns={accountId:ACCOUNT_ID,userCreated:USER_CREATED}"`,
+			expectView: &View{
+				Name:                   "foo",
+				Table:                  "FOO",
+				Groupable:              boolPtr(true),
+				SelectorNamespace:      "ve",
+				SelectorCriteria:       boolPtr(true),
+				SelectorProjection:     boolPtr(true),
+				SelectorOrderBy:        boolPtr(true),
+				SelectorOffset:         boolPtr(true),
+				SelectorFilterable:     []string{"*"},
+				SelectorOrderByColumns: map[string]string{"accountId": "ACCOUNT_ID", "userCreated": "USER_CREATED"},
+			},
+			expectTag: "foo,table=FOO,groupable=true,selectorNamespace=ve,selectorCriteria=true,selectorProjection=true,selectorOrderBy=true,selectorOffset=true,selectorFilterable={*},selectorOrderByColumns={accountId:ACCOUNT_ID,userCreated:USER_CREATED}",
+		},
+		{
+			description: "summary uri view",
+			tag:         `view:"foo,table=FOO,summaryURI=testdata/foo_summary.sql"`,
+			expectView:  &View{Name: "foo", Table: "FOO", SummaryURI: "testdata/foo_summary.sql"},
+			expectTag:   "foo,table=FOO,summaryURI=testdata/foo_summary.sql",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -54,4 +77,8 @@ func TestTag_updateView(t *testing.T) {
 		}
 		assert.EqualValues(t, expectTag, string(actual.View.Tag().Values), testCase.description)
 	}
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }

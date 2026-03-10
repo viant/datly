@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,6 +37,14 @@ type Service struct {
 
 // ReadInto reads Data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
 func (s *Service) ReadInto(ctx context.Context, dest interface{}, aView *view.View, opts ...Option) error {
+	if os.Getenv("DATLY_DEBUG_READER") == "1" {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[READER DEBUG] panic view=%s dest=%T err=%v\n%s\n", aView.Name, dest, r, debug.Stack())
+				panic(r)
+			}
+		}()
+	}
 	session, err := NewSession(dest, aView, opts...)
 	if err != nil {
 		return err
@@ -408,6 +418,9 @@ func (s *Service) BuildCriteria(ctx context.Context, value interface{}, options 
 }
 
 func (s *Service) queryInBatches(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *response.SQLExecutions, batchData *view.BatchData, selector *view.Statelet) error {
+	if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+		fmt.Printf("[QUERY DEBUG] queryInBatches view=%s selectorTemplateNil=%v batchValues=%d\n", aView.Name, selector == nil || selector.Template == nil, len(batchData.ValuesBatch))
+	}
 	wg := &sync.WaitGroup{}
 	db, err := aView.Db()
 	if err != nil {
@@ -446,9 +459,18 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		return s.queryWithPartitions(ctx, session, aView, selector, batchData, db, collector, visitor, partitioned)
 	}
 	readData := 0
+	if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+		fmt.Printf("[QUERY DEBUG] queryObjects view=%s schema=%v slice=%v collectorView=%s\n", aView.Name, aView.Schema.Type(), aView.Schema.SliceType(), collector.View().Name)
+	}
 	parametrizedSQL, columnInMatcher, err := s.buildParametrizedSQL(ctx, aView, selector, batchData, collector, session, nil)
 	if err != nil {
+		if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+			fmt.Printf("[QUERY DEBUG] buildParametrizedSQL error view=%s err=%v\n", aView.Name, err)
+		}
 		return nil, err
+	}
+	if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+		fmt.Printf("[QUERY DEBUG] builtSQL view=%s sql=%s args=%#v\n", aView.Name, parametrizedSQL.SQL, parametrizedSQL.Args)
 	}
 
 	var parentProvider func(value interface{}) (interface{}, error)
@@ -514,6 +536,9 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 
 	stats, onDone := NewExecutionInfo(parametrizedSQL, cacheStats, collector)
 	defer onDone()
+	if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+		fmt.Printf("[QUERY HANDLER] view=%s sql=%s args=%#v\n", aView.Name, parametrizedSQL.SQL, parametrizedSQL.Args)
+	}
 	if session.DryRun {
 		return []*response.SQLExecution{stats}, nil
 	}
@@ -543,7 +568,16 @@ BEGIN:
 		}
 		_ = stmt.Close()
 	}()
-	err = reader.QueryAll(ctx, handler, parametrizedSQL.Args...)
+	debugHandler := handler
+	if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+		debugHandler = func(row interface{}) error {
+			fmt.Printf("[QUERY HANDLER] view=%s before unwrap row=%T readData=%d\n", aView.Name, row, *readData)
+			err := handler(row)
+			fmt.Printf("[QUERY HANDLER] view=%s after handler row=%T readData=%d err=%v\n", aView.Name, row, *readData, err)
+			return err
+		}
+	}
+	err = reader.QueryAll(ctx, debugHandler, parametrizedSQL.Args...)
 
 	isInvalidConnection = err != nil && strings.Contains(err.Error(), "invalid connection")
 	if isInvalidConnection && atomic.AddUint32(&retires, 1) < 3 {

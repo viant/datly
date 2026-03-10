@@ -43,6 +43,17 @@ func TestApplyTypeContextDefaults_Matrix(t *testing.T) {
 		require.Equal(t, "github.com/acme/manual", got.DefaultPackage)
 	})
 
+	t.Run("default package hydrates package path dir and sanitized name", func(t *testing.T) {
+		input := &typectx.Context{
+			DefaultPackage: "github.vianttech.com/viant/platform/pkg/dev/events-one-one",
+		}
+		got := applyTypeContextDefaults(input, source, nil, layout)
+		require.NotNil(t, got)
+		require.Equal(t, "pkg/dev/events-one-one", got.PackageDir)
+		require.Equal(t, "events_one_one", got.PackageName)
+		require.Equal(t, "github.vianttech.com/viant/platform/pkg/dev/events-one-one", got.PackagePath)
+	})
+
 	t.Run("compile override wins over both", func(t *testing.T) {
 		input := &typectx.Context{
 			PackageDir:  "pkg/manual",

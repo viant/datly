@@ -100,6 +100,38 @@ func (t *Tags) buildSqlxTag(source *Spec, field *Field) {
 		tagValue.Append("table=" + source.Table)
 	}
 	field.Tags.Set("sqlx", tagValue)
+	if _, ok := t.tags["source"]; !ok {
+		if sourceName := sourceColumnName(column); sourceName != "" {
+			field.Tags.Set("source", TagValue{sourceName})
+		}
+	}
+}
+
+func sourceColumnName(column *sqlparser.Column) string {
+	if column == nil {
+		return ""
+	}
+	if column.Alias != "" && column.Name != "" && !strings.EqualFold(column.Alias, column.Name) {
+		return column.Name
+	}
+	expression := strings.TrimSpace(column.Expression)
+	if expression == "" {
+		return ""
+	}
+	if index := strings.LastIndex(expression, "."); index != -1 {
+		expression = expression[index+1:]
+	}
+	expression = strings.Trim(expression, "` ")
+	if expression == "" {
+		return ""
+	}
+	if column.Alias != "" && strings.EqualFold(expression, column.Alias) {
+		return ""
+	}
+	if column.Name != "" && strings.EqualFold(expression, column.Name) {
+		return ""
+	}
+	return expression
 }
 
 func (t *Tags) buildJSONTag(field *Field) {

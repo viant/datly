@@ -45,6 +45,24 @@ func TestApplySourceParityEnrichment_InferTableFromSubquery(t *testing.T) {
 	require.Equal(t, "advertiser/advertiser.sql", result.Views[0].SQLURI)
 }
 
+func TestApplySourceParityEnrichment_UsesRootViewNameForSQLBaseDir(t *testing.T) {
+	source := &shape.Source{
+		Path: "/repo/dql/dev/vendor/child_meta.dql",
+		DQL:  `SELECT vendor.*, products.* FROM VENDOR vendor JOIN PRODUCT products ON products.VENDOR_ID = vendor.ID`,
+	}
+	result := &plan.Result{
+		Views: []*plan.View{
+			{Name: "vendor", Table: "VENDOR", SQL: "SELECT * FROM VENDOR"},
+			{Name: "products", Table: "PRODUCT", SQL: "SELECT * FROM PRODUCT"},
+		},
+	}
+
+	applySourceParityEnrichment(result, source)
+
+	require.Equal(t, "vendor/vendor.sql", result.Views[0].SQLURI)
+	require.Equal(t, "vendor/products.sql", result.Views[1].SQLURI)
+}
+
 func TestApplySourceParityEnrichment_InferTableFromEmbed(t *testing.T) {
 	tempDir := t.TempDir()
 	dqlDir := filepath.Join(tempDir, "dql", "platform", "timezone")

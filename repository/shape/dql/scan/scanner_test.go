@@ -31,7 +31,7 @@ Resource:
       Template:
         Source: SELECT c.ID FROM T2 c
 `)
-	_, err := s.result("x", invalidYAML, "", nil)
+	_, err := s.Result("x", invalidYAML, "", nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "dql scan relation validation failed")
 	require.Contains(t, err.Error(), "column=\"MISSING_COL\"")
@@ -54,7 +54,7 @@ Resource:
       Template:
         Source: SELECT r.ID FROM ROOT r
 `)
-	result, err := s.result("sample", validYAML, "", nil)
+	result, err := s.Result("sample", validYAML, "", nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Shape)
@@ -83,7 +83,7 @@ Resource:
 #package('mdp/performance')
 #import('perf', 'github.com/acme/mdp/performance')
 SELECT r.ID FROM ROOT r`
-	result, err := s.result("sample", validYAML, dql, nil)
+	result, err := s.Result("sample", validYAML, dql, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Shape)
@@ -117,7 +117,7 @@ Resource:
 	dql := `
 #package('github.com/acme/mdp/performance')
 SELECT cast(r.ID as 'Order') FROM ROOT r`
-	result, err := s.result("sample", validYAML, dql, nil)
+	result, err := s.Result("sample", validYAML, dql, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Shape)
@@ -155,7 +155,7 @@ Resource:
 #package('github.com/acme/mdp/performance')
 SELECT cast(r.ID as 'Order') FROM ROOT r`
 	strict := true
-	_, err := s.result("sample", validYAML, dql, &Request{
+	_, err := s.Result("sample", validYAML, dql, &Request{
 		Repository:       filepath.Clean(t.TempDir()),
 		StrictProvenance: &strict,
 	})

@@ -3,14 +3,19 @@ package reader
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
+	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/reader/metadata"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/io/read/cache"
 )
 
@@ -76,14 +81,20 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	if len(state.Filters) > 0 {
 		statelet.AppendFilters(state.Filters)
 	}
-	if aView.Template.IsActualTemplate() && aView.ShouldTryDiscover() {
-		state.Expanded = metadata.EnrichWithDiscover(state.Expanded, true)
-	}
 
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
-	if err = b.appendColumns(&sb, aView, statelet); err != nil {
+	projectedColumns, err := b.appendColumns(&sb, aView, statelet)
+	if err != nil {
 		return nil, err
+	}
+	if aView.Groupable {
+		if state.Expanded, err = b.rewriteGroupBy(state.Expanded, aView.Columns, projectedColumns); err != nil {
+			return nil, err
+		}
+	}
+	if aView.Template.IsActualTemplate() && aView.ShouldTryDiscover() {
+		state.Expanded = metadata.EnrichWithDiscover(state.Expanded, true)
 	}
 
 	if err = b.appendRelationColumn(&sb, aView, statelet, relation); err != nil {
@@ -159,6 +170,9 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 		SQL:  SQL,
 		Args: placeholders,
 	}
+	if os.Getenv("DATLY_DEBUG_SQL_BUILDER") == "1" {
+		fmt.Printf("[SQL BUILDER] view=%s sql=%s args=%#v state=%s\n", aView.Name, SQL, placeholders, state.Expanded)
+	}
 
 	if exclude.ColumnsIn && relation != nil {
 		parametrizedQuery.By = shared.FirstNotEmpty(relation.Of.On[0].Field, relation.Of.On[0].Column)
@@ -173,20 +187,21 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	return parametrizedQuery, err
 }
 
-func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector *view.Statelet) error {
+func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector *view.Statelet) ([]*view.Column, error) {
 	if len(selector.Columns) == 0 {
 		b.appendViewColumns(sb, aView)
-		return nil
+		return nil, nil
 	}
 
 	return b.appendSelectorColumns(sb, aView, selector)
 }
 
-func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *view.View, selector *view.Statelet) error {
+func (b *Builder) appendSelectorColumns(sb *strings.Builder, aView *view.View, selector *view.Statelet) ([]*view.Column, error) {
+	result := make([]*view.Column, 0, len(selector.Columns))
 	for i, column := range selector.Columns {
-		viewColumn, ok := view.ColumnByName(column)
+		viewColumn, ok := aView.ColumnByName(column)
 		if !ok {
-			return fmt.Errorf("not found column %v at view %v", column, view.Name)
+			return nil, fmt.Errorf("not found column %v at view %v", column, aView.Name)
 		}
 
 		if i != 0 {
@@ -194,10 +209,33 @@ func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *view.View, se
 		}
 
 		sb.WriteString(" ")
-		sb.WriteString(viewColumn.SqlExpression())
+		if aView.Groupable {
+			sb.WriteString(groupedProjectionExpression(viewColumn))
+		} else {
+			sb.WriteString(viewColumn.SqlExpression())
+		}
+		result = append(result, viewColumn)
 	}
 
-	return nil
+	return result, nil
+}
+
+func groupedProjectionExpression(column *view.Column) string {
+	if column == nil {
+		return ""
+	}
+	expr := column.Name
+	if defaultValue := columnDefaultValue(column); defaultValue != "" {
+		return "COALESCE(" + expr + "," + defaultValue + ") AS " + column.Name
+	}
+	return expr
+}
+
+func columnDefaultValue(column *view.Column) string {
+	if column == nil {
+		return ""
+	}
+	return column.DefaultValue()
 }
 
 func (b *Builder) viewAlias(view *view.View) string {
@@ -222,6 +260,149 @@ func (b *Builder) appendViewColumns(sb *strings.Builder, view *view.View) {
 		}
 
 		sb.WriteString(column.SqlExpression())
+	}
+}
+
+func (b *Builder) rewriteGroupBy(SQL string, allColumns []*view.Column, projectedColumns []*view.Column) (string, error) {
+	if len(projectedColumns) == 0 {
+		return SQL, nil
+	}
+
+	trimmed := strings.TrimSpace(SQL)
+	if trimmed == "" {
+		return SQL, nil
+	}
+	wrapped := strings.HasPrefix(trimmed, "(") && strings.HasSuffix(trimmed, ")")
+	querySQL := inference.TrimParenthesis(trimmed)
+	parsed, err := sqlparser.ParseQuery(querySQL)
+	if err != nil || parsed == nil {
+		return SQL, err
+	}
+
+	selectedPositions := projectedColumnPositions(allColumns, projectedColumns)
+	if len(selectedPositions) > 0 {
+		items := make(query.List, 0, len(selectedPositions))
+		for _, position := range selectedPositions {
+			if position <= 0 || position > len(parsed.List) {
+				continue
+			}
+			items = append(items, parsed.List[position-1])
+		}
+		if len(items) > 0 {
+			parsed.List = items
+		}
+	}
+
+	positions := projectedGroupByPositions(parsed.List, projectedColumns)
+	groupBy := make(query.List, 0, len(positions))
+	for _, position := range positions {
+		groupBy = append(groupBy, query.NewItem(expr.NewIntLiteral(strconv.Itoa(position))))
+	}
+	parsed.GroupBy = groupBy
+	parsed.OrderBy = filterGroupedOrderBy(parsed.OrderBy, parsed.List)
+
+	rewritten := sqlparser.Stringify(parsed)
+	if wrapped {
+		rewritten = "(" + rewritten + ")"
+	}
+	return rewritten, nil
+}
+
+func projectedColumnPositions(allColumns []*view.Column, projectedColumns []*view.Column) []int {
+	index := make(map[*view.Column]int, len(allColumns))
+	for i, column := range allColumns {
+		index[column] = i + 1
+	}
+	result := make([]int, 0, len(projectedColumns))
+	seen := map[int]bool{}
+	for _, column := range projectedColumns {
+		if column == nil {
+			continue
+		}
+		position, ok := index[column]
+		if !ok || seen[position] {
+			continue
+		}
+		seen[position] = true
+		result = append(result, position)
+	}
+	return result
+}
+
+func filterGroupedOrderBy(orderBy query.List, items query.List) query.List {
+	if len(orderBy) == 0 || len(items) == 0 {
+		return orderBy
+	}
+	allowed := map[string]bool{}
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		if item.Expr != nil {
+			allowed[normalizeExpression(sqlparser.Stringify(item.Expr))] = true
+		}
+		if item.Alias != "" {
+			allowed[normalizeExpression(item.Alias)] = true
+		}
+	}
+	result := make(query.List, 0, len(orderBy))
+	for _, item := range orderBy {
+		if item == nil || item.Expr == nil {
+			continue
+		}
+		if allowed[normalizeExpression(sqlparser.Stringify(item.Expr))] {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func normalizeExpression(value string) string {
+	return strings.ToUpper(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
+}
+
+func projectedGroupByPositions(items query.List, projectedColumns []*view.Column) []int {
+	maxLen := len(items)
+	if len(projectedColumns) < maxLen {
+		maxLen = len(projectedColumns)
+	}
+	result := make([]int, 0, maxLen)
+	for i := 0; i < maxLen; i++ {
+		column := projectedColumns[i]
+		if column != nil && column.Groupable {
+			result = append(result, i+1)
+			continue
+		}
+		if !isAggregateSelectItem(items[i]) {
+			result = append(result, i+1)
+		}
+	}
+	return result
+}
+
+func isAggregateSelectItem(item *query.Item) bool {
+	if item == nil || item.Expr == nil {
+		return false
+	}
+	call, ok := item.Expr.(*expr.Call)
+	if !ok || call.X == nil {
+		return false
+	}
+	switch actual := call.X.(type) {
+	case *expr.Ident:
+		return isAggregateFunction(actual.Name)
+	case *expr.Selector:
+		return isAggregateFunction(actual.Name)
+	}
+	return false
+}
+
+func isAggregateFunction(name string) bool {
+	switch strings.ToUpper(strings.TrimSpace(name)) {
+	case "SUM", "COUNT", "AVG", "MIN", "MAX", "ARRAY_AGG", "STRING_AGG", "ANY_VALUE":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -413,7 +594,7 @@ func (b *Builder) appendRelationColumn(sb *strings.Builder, aView *view.View, se
 }
 
 func (b *Builder) checkViewAndAppendRelColumn(sb *strings.Builder, aView *view.View, relation *view.Relation) error {
-	if _, ok := aView.ColumnByName(relation.Of.On[0].Column); ok {
+	if _, _, ok := b.lookupRelationColumn(aView, relation); ok {
 		return nil
 	}
 
@@ -431,13 +612,16 @@ func (b *Builder) checkViewAndAppendRelColumn(sb *strings.Builder, aView *view.V
 }
 
 func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *view.View, selector *view.Statelet, relation *view.Relation) error {
-	if relation == nil || selector.Has(relation.Of.On[0].Column) || aView.Template.IsActualTemplate() {
+	if relation == nil || aView.Template.IsActualTemplate() {
+		return nil
+	}
+	if b.selectorHasRelationColumn(selector, aView, relation) {
 		return nil
 	}
 
 	sb.WriteString(separatorFragment)
 	sb.WriteString(" ")
-	col, ok := aView.ColumnByName(relation.Of.On[0].Column)
+	col, _, ok := b.lookupRelationColumn(aView, relation)
 	if !ok {
 		sb.WriteString(relation.Of.On[0].Column)
 	} else {
@@ -445,6 +629,46 @@ func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *vi
 	}
 
 	return nil
+}
+
+func (b *Builder) selectorHasRelationColumn(selector *view.Statelet, aView *view.View, relation *view.Relation) bool {
+	if selector == nil || relation == nil || relation.Of == nil || len(relation.Of.On) == 0 {
+		return false
+	}
+	link := relation.Of.On[0]
+	if selector.Has(link.Column) {
+		return true
+	}
+	if link.Field != "" && selector.Has(link.Field) {
+		return true
+	}
+	if column, _, ok := b.lookupRelationColumn(aView, relation); ok {
+		if selector.Has(column.Name) {
+			return true
+		}
+		if field := column.Field(); field != nil && selector.Has(field.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *Builder) lookupRelationColumn(aView *view.View, relation *view.Relation) (*view.Column, string, bool) {
+	if aView == nil || relation == nil || relation.Of == nil || len(relation.Of.On) == 0 {
+		return nil, "", false
+	}
+	link := relation.Of.On[0]
+	if link.Field != "" {
+		if column, ok := aView.ColumnByName(link.Field); ok {
+			return column, link.Field, true
+		}
+	}
+	if link.Column != "" {
+		if column, ok := aView.ColumnByName(link.Column); ok {
+			return column, link.Column, true
+		}
+	}
+	return nil, "", false
 }
 
 func actualLimit(aView *view.View, selector *view.Statelet) int {

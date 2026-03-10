@@ -42,9 +42,18 @@ type Diagnostic struct {
 type Directives struct {
 	Meta              string
 	DefaultConnector  string
+	TemplateType      string
+	Dest              string
+	InputDest         string
+	OutputDest        string
+	RouterDest        string
+	InputType         string
+	OutputType        string
 	Cache             *CacheDirective
 	MCP               *MCPDirective
 	Route             *RouteDirective
+	Report            *ReportDirective
+	Const             map[string]string
 	JSONMarshalType   string
 	JSONUnmarshalType string
 	XMLUnmarshalType  string
@@ -54,8 +63,12 @@ type Directives struct {
 }
 
 type CacheDirective struct {
-	Enabled bool
-	TTL     string
+	Enabled      bool
+	TTL          string
+	Name         string
+	Provider     string
+	Location     string
+	TimeToLiveMs int
 }
 
 type MCPDirective struct {
@@ -67,6 +80,17 @@ type MCPDirective struct {
 type RouteDirective struct {
 	URI     string
 	Methods []string
+}
+
+type ReportDirective struct {
+	Enabled    bool
+	Input      string
+	Dimensions string
+	Measures   string
+	Filters    string
+	OrderBy    string
+	Limit      string
+	Offset     string
 }
 
 type Route struct {

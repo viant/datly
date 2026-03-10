@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -137,6 +138,26 @@ SELECT id FROM ORDERS o
 	assert.Equal(t, "analytics", planned.Views[0].Connector)
 }
 
+func TestDQLCompiler_Compile_AppliesDefaultConnectorToDeclaredViews(t *testing.T) {
+	compiler := New()
+	dqlPath := filepath.Join("..", "..", "..", "e2e", "v1", "dql", "dev", "team", "user_team.dql")
+	dql, err := os.ReadFile(dqlPath)
+	require.NoError(t, err)
+	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "user_team", Path: dqlPath, DQL: string(dql)})
+	require.NoError(t, err)
+	planned, ok := plan.ResultFrom(res)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, len(planned.Views), 2)
+	connectors := map[string]string{}
+	for _, candidate := range planned.Views {
+		if candidate != nil {
+			connectors[candidate.Name] = candidate.Connector
+		}
+	}
+	assert.Equal(t, "dev", connectors["user_team"])
+	assert.Equal(t, "dev", connectors["TeamStats"])
+}
+
 func TestDQLCompiler_Compile_ColumnDiscoveryAutoForWildcard(t *testing.T) {
 	compiler := New()
 	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: "SELECT * FROM ORDERS o"})
@@ -229,6 +250,54 @@ func TestDQLCompiler_Compile_SyntaxError_RemapsAfterSanitize(t *testing.T) {
 	}
 }
 
+func TestDQLCompiler_Compile_RelationSQLUsesSanitizedVeltyOutput(t *testing.T) {
+	compiler := New()
+	dql := `
+#setting($_ = $route('/v1/api/shape/dev/vendors/{vendorID}', 'GET'))
+#define($_ = $VendorID<int>(path/vendorID))
+SELECT wrapper.* EXCEPT ID,
+       vendor.*,
+       products.* EXCEPT VENDOR_ID,
+       setting.* EXCEPT ID
+FROM (SELECT ID FROM VENDOR WHERE ID = $VendorID) wrapper
+JOIN (SELECT * FROM VENDOR t WHERE t.ID = $VendorID) vendor ON vendor.ID = wrapper.ID
+JOIN (SELECT * FROM (SELECT (1) AS IS_ACTIVE, (3) AS CHANNEL, CAST($VendorID AS SIGNED) AS ID) t) setting ON setting.ID = wrapper.ID
+JOIN (SELECT * FROM PRODUCT t) products ON products.VENDOR_ID = vendor.ID`
+
+	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "vendor_details", DQL: dql})
+	require.NoError(t, err)
+	planned, ok := plan.ResultFrom(res)
+	require.True(t, ok)
+	require.Contains(t, planned.ViewsByName, "vendor")
+	require.Contains(t, planned.ViewsByName, "setting")
+	require.Contains(t, planned.ViewsByName, "products")
+	assert.Contains(t, planned.ViewsByName["vendor"].SQL, "$criteria.AppendBinding($Unsafe.VendorID)")
+	assert.Contains(t, planned.ViewsByName["setting"].SQL, "CAST($criteria.AppendBinding($Unsafe.VendorID) AS SIGNED)")
+	require.NotNil(t, planned.ViewsByName["setting"].Declaration)
+	require.Contains(t, planned.ViewsByName["setting"].Declaration.ColumnsConfig, "ID")
+	assert.Equal(t, `internal:"true"`, planned.ViewsByName["setting"].Declaration.ColumnsConfig["ID"].Tag)
+	require.NotNil(t, planned.ViewsByName["products"].Declaration)
+	require.Contains(t, planned.ViewsByName["products"].Declaration.ColumnsConfig, "VENDOR_ID")
+	assert.Equal(t, `internal:"true"`, planned.ViewsByName["products"].Declaration.ColumnsConfig["VENDOR_ID"].Tag)
+}
+
+func TestDQLCompiler_Compile_PopulatesComponentRouteFromDirective(t *testing.T) {
+	compiler := New()
+	dql := `
+#setting($_ = $route('/v1/api/shape/dev/vendors/{vendorID}', 'DELETE'))
+#define($_ = $VendorID<int>(path/vendorID))
+SELECT ID FROM VENDOR WHERE ID = $VendorID`
+
+	res, err := compiler.Compile(context.Background(), &shape.Source{Name: "vendor_delete", DQL: dql})
+	require.NoError(t, err)
+	planned, ok := plan.ResultFrom(res)
+	require.True(t, ok)
+	require.Len(t, planned.Components, 1)
+	assert.Equal(t, "DELETE", planned.Components[0].Method)
+	assert.Equal(t, "/v1/api/shape/dev/vendors/{vendorID}", planned.Components[0].RoutePath)
+	assert.Equal(t, planned.Views[0].Name, planned.Components[0].ViewName)
+}
+
 func TestDQLCompiler_Compile_DirectiveOnly_HasLineAndChar(t *testing.T) {
 	compiler := New()
 	_, err := compiler.Compile(context.Background(), &shape.Source{Name: "orders_report", DQL: "#package('x')"})
@@ -256,6 +325,22 @@ func TestDQLCompiler_Compile_InvalidDirective_HasLineAndChar(t *testing.T) {
 	assert.Equal(t, dqldiag.CodeDirImport, d.Code)
 	assert.Equal(t, 2, d.Span.Start.Line)
 	assert.Equal(t, 1, d.Span.Start.Char)
+}
+
+func TestDQLCompiler_Compile_SQLSyntaxWithDirective_HasExactLineAndChar(t *testing.T) {
+	compiler := New()
+	_, err := compiler.Compile(context.Background(), &shape.Source{
+		Name: "orders_report",
+		DQL:  "#setting($_ = $route('/x', 'GET'))\nSELECT id FROM ORDERS WHERE (",
+	})
+	require.Error(t, err)
+	compileErr, ok := err.(*CompileError)
+	require.True(t, ok)
+	require.NotEmpty(t, compileErr.Diagnostics)
+	d := compileErr.Diagnostics[0]
+	assert.Equal(t, dqldiag.CodeParseSyntax, d.Code)
+	assert.Equal(t, 2, d.Span.Start.Line)
+	assert.Equal(t, 29, d.Span.Start.Char)
 }
 
 func TestDQLCompiler_Compile_ExtractsJoinLinks(t *testing.T) {
@@ -354,8 +439,15 @@ SELECT id FROM ORDERS t`
 	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
 	require.Len(t, planned.Views, 2)
-	extra := planned.ViewsByName["e"]
+	var extra *plan.View
+	for _, item := range planned.Views {
+		if item != nil && strings.Contains(item.SQL, "SELECT code FROM EXTRA e") {
+			extra = item
+			break
+		}
+	}
 	require.NotNil(t, extra)
+	assert.Equal(t, "Extra", extra.Name)
 	assert.Equal(t, "EXTRA", extra.Table)
 	assert.Contains(t, extra.SQL, "SELECT code FROM EXTRA e")
 }
@@ -369,8 +461,15 @@ SELECT id FROM ORDERS t`
 	require.NoError(t, err)
 	planned, ok := plan.ResultFrom(res)
 	require.True(t, ok)
-	extra := planned.ViewsByName["e"]
+	var extra *plan.View
+	for _, item := range planned.Views {
+		if item != nil && strings.Contains(item.SQL, "SELECT code FROM EXTRA e") {
+			extra = item
+			break
+		}
+	}
 	require.NotNil(t, extra)
+	assert.Equal(t, "Extra", extra.Name)
 	assert.Equal(t, "/v1/extra", extra.SQLURI)
 	assert.Equal(t, "analytics", extra.Connector)
 	assert.Equal(t, "one", extra.Cardinality)
@@ -511,7 +610,7 @@ func TestDQLCompiler_Compile_MixedMode_ReadWins(t *testing.T) {
 	require.NotEmpty(t, planned.Views)
 	assert.Equal(t, "o", planned.Views[0].Name)
 	assert.Equal(t, "ORDERS", planned.Views[0].Table)
-	assert.Contains(t, planned.Views[0].SQL, "SELECT o.id FROM ORDERS o")
+	assert.Contains(t, planned.Views[0].SQL, "SELECT * FROM ORDERS o")
 	assert.NotContains(t, planned.Views[0].SQL, "UPDATE ORDERS")
 	require.NotEmpty(t, planned.Diagnostics)
 	assert.Equal(t, dqldiag.CodeDMLMixed, planned.Diagnostics[len(planned.Diagnostics)-1].Code)

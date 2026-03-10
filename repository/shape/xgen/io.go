@@ -223,6 +223,13 @@ func mergeGeneratedShapes(dest string, generated []byte, typeNames []string) ([]
 	return out.Bytes(), nil
 }
 
+// TODO: Field order preservation should be done at the viant/x registry level:
+// 1. Check linked-in types first (runtime reflect.Type from registered types)
+// 2. Fall back to viant/x/loader/ast.LoadPackageFS to load existing .go file
+// 3. Extract field order from loaded types
+// 4. When building new types, preserve existing field order and append new fields
+// This avoids raw AST manipulation and handles complex type graphs (nested structs, relations).
+
 func generatedShapeDecls(file *ast.File, typeNameSet map[string]bool) []ast.Decl {
 	var result []ast.Decl
 	for _, decl := range file.Decls {

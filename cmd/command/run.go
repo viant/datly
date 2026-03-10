@@ -5,6 +5,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/internal/setter"
 )
@@ -42,5 +43,16 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 		_ = s.fs.Copy(ctx, parent, s.config.Config.PluginsURL)
 	}
 	s.config.Version = run.Version
+	if run.MCPPort != nil || run.MCPAuthURL != "" || run.MCPIssuerURL != "" || run.MCPAuthMode != "" {
+		if s.config.Config.MCP == nil {
+			s.config.Config.MCP = &gateway.ModelContextProtocol{}
+		}
+		if run.MCPPort != nil {
+			s.config.Config.MCP.Port = run.MCPPort
+		}
+		setter.SetStringIfEmpty(&s.config.Config.MCP.OAuth2ConfigURL, run.MCPAuthURL)
+		setter.SetStringIfEmpty(&s.config.Config.MCP.IssuerURL, run.MCPIssuerURL)
+		setter.SetStringIfEmpty(&s.config.Config.MCP.AuthorizerMode, run.MCPAuthMode)
+	}
 	return standalone.New(ctx, standalone.WithConfig(s.config))
 }

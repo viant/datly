@@ -2,7 +2,7 @@
 secrets.json
 *.db
 local_test.go
-vendor
+vendor/
 datly
 other
 mydb
@@ -16,4 +16,4 @@ logs
 .extension
 .datly
 *.zip
-local
+v1/

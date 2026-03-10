@@ -203,3 +203,32 @@ func TestAppendComponentTypes_InvalidRouteYAMLDedupedForRepeatedStates(t *testin
 	}
 	assert.Equal(t, 1, invalidCount)
 }
+
+func TestAppendComponentTypes_FallsBackToSiblingDQLComponent(t *testing.T) {
+	temp := t.TempDir()
+	sourceDir := filepath.Join(temp, "dql", "dev", "vendor")
+	refDir := filepath.Join(temp, "dql", "dev")
+	require.NoError(t, os.MkdirAll(sourceDir, 0o755))
+	require.NoError(t, os.MkdirAll(refDir, 0o755))
+
+	sourcePath := filepath.Join(sourceDir, "vendors.dql")
+	refPath := filepath.Join(refDir, "user_acl.dql")
+	sourceDQL := "#define($_ = $Auth<?>(component/../user_acl))\nSELECT 1"
+	refDQL := "#package('github.com/viant/datly/e2e/v1/shape/dev/vendor/user_acl')\n#setting($_ = $route('/v1/api/dev/user-acl', 'GET'))\n#define($_ = $Auth<?, *UserACL>(output/view).Embed())\nSELECT 1 AS UserID, TRUE AS IsReadOnly, TRUE AS Feature1"
+	require.NoError(t, os.WriteFile(sourcePath, []byte(sourceDQL), 0o644))
+	require.NoError(t, os.WriteFile(refPath, []byte(refDQL), 0o644))
+
+	result := &plan.Result{
+		States: []*plan.State{
+			{Parameter: state.Parameter{Name: "Auth", In: &state.Location{Kind: state.KindComponent, Name: "../user_acl"}}},
+		},
+	}
+	diags := appendComponentTypes(&shape.Source{Path: sourcePath, DQL: sourceDQL}, result)
+	for _, item := range diags {
+		require.NotEqual(t, dqldiag.CodeCompRouteMissing, item.Code)
+	}
+	require.NotNil(t, result.States[0].Schema)
+	assert.Equal(t, "*UserAclOutput", result.States[0].Schema.DataType)
+	assert.Equal(t, "github.com/viant/datly/e2e/v1/shape/dev/vendor/user_acl", result.States[0].Schema.Package)
+	assert.Equal(t, "GET:/v1/api/dev/user-acl", result.States[0].In.Name)
+}

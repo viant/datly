@@ -1,24 +1,16 @@
 package scan
 
 import (
-	"context"
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/viant/afs"
-	"github.com/viant/afs/file"
-	"github.com/viant/afs/url"
-	"github.com/viant/datly/cmd/options"
-	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/repository/shape/dql/decl"
 	"github.com/viant/datly/repository/shape/dql/ir"
 	"github.com/viant/datly/repository/shape/dql/parse"
 	dqlplan "github.com/viant/datly/repository/shape/dql/plan"
-	"github.com/viant/datly/repository/shape/dql/sanitize"
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/typectx"
 	"github.com/viant/datly/repository/shape/typectx/source"
@@ -49,87 +41,16 @@ type Result struct {
 }
 
 // Scanner translates DQL to Datly route YAML in-memory.
-type Scanner struct {
-	fs afs.Service
-}
+type Scanner struct{}
 
 func New() *Scanner {
-	return &Scanner{fs: afs.New()}
+	return &Scanner{}
 }
 
-func (s *Scanner) Scan(ctx context.Context, req *Request) (result *Result, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("dql scan panic: %v", r)
-			result = nil
-		}
-	}()
-	if req == nil || req.DQLURL == "" {
-		return nil, fmt.Errorf("dql scan: DQLURL was empty")
-	}
-	sourceURL := req.DQLURL
-	project := inferProject(req.DQLURL)
-	translate := &options.Translate{}
-	translate.Rule.Project = project
-	translate.Rule.Source = []string{sourceURL}
-	translate.Rule.ModulePrefix = req.ModulePrefix
-	translate.Repository.RepositoryURL = req.Repository
-	translate.Repository.APIPrefix = req.APIPrefix
-	if len(req.Connectors) > 0 {
-		translate.Repository.Connectors = append(translate.Repository.Connectors, req.Connectors...)
-	}
-	if req.ConfigURL != "" {
-		translate.Repository.Configs.Append(req.ConfigURL)
-	}
-	var initErr error
-	if initErr = translate.Init(ctx); initErr != nil {
-		return nil, initErr
-	}
-	if req.ConfigURL == "" {
-		// Force in-memory translator config to avoid stale absolute paths from discovered config.json.
-		translate.Repository.Configs = nil
-	}
-	if translate.Rule.ModulePrefix == "" {
-		translate.Rule.ModulePrefix = "platform"
-	}
-
-	svc := translator.New(translator.NewConfig(&translate.Repository), s.fs)
-	if initErr := svc.Init(ctx); initErr != nil {
-		return nil, initErr
-	}
-	if initErr := svc.InitSignature(ctx, &translate.Rule); initErr != nil {
-		return nil, initErr
-	}
-	dsql, loadErr := translate.Rule.LoadSource(ctx, s.fs, translate.Rule.SourceURL())
-	if loadErr != nil {
-		return nil, loadErr
-	}
-	translate.Rule.NormalizeComponent(&dsql)
-	dsql = sanitize.SQL(dsql, sanitize.Options{Declared: sanitize.Declared(dsql)})
-	top := &options.Options{Translate: translate}
-	if initErr = svc.Translate(ctx, &translate.Rule, dsql, top); initErr != nil {
-		return nil, initErr
-	}
-	ruleName := svc.Repository.RuleName(&translate.Rule)
-	targetSuffix := "/" + ruleName + ".yaml"
-	for _, item := range svc.Repository.Files {
-		if !strings.HasSuffix(item.URL, targetSuffix) {
-			continue
-		}
-		if strings.Contains(item.URL, "/.meta/") {
-			continue
-		}
-		return s.result(ruleName, []byte(item.Content), dsql, req)
-	}
-	for _, item := range svc.Repository.Files {
-		if strings.HasSuffix(item.URL, targetSuffix) {
-			return s.result(ruleName, []byte(item.Content), dsql, req)
-		}
-	}
-	return nil, fmt.Errorf("dql scan: generated YAML not found for %s", ruleName)
-}
-
-func (s *Scanner) result(ruleName string, routeYAML []byte, dql string, req *Request) (*Result, error) {
+// Result builds a scan Result from route YAML bytes. Exported so that bridge
+// packages (e.g. testutil/shapeparity) can call it after running the legacy
+// translator pipeline externally.
+func (s *Scanner) Result(ruleName string, routeYAML []byte, dql string, req *Request) (*Result, error) {
 	if err := dqlplan.ValidateRelations(routeYAML); err != nil {
 		return nil, fmt.Errorf("dql scan relation validation failed (%s): %w", ruleName, err)
 	}
@@ -420,12 +341,4 @@ func validateResolutionPolicy(resolution typectx.Resolution, policy provenancePo
 		return fmt.Sprintf("expression=%q source=%q outside trusted roots", resolution.Expression, filePath)
 	}
 	return ""
-}
-
-func inferProject(dqlURL string) string {
-	base, _ := url.Split(dqlURL, file.Scheme)
-	if idx := strings.Index(base, "/dql/"); idx != -1 {
-		return filepath.Clean(base[:idx])
-	}
-	return filepath.Clean(base)
 }

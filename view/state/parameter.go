@@ -53,6 +53,7 @@ type (
 		URI             string `json:",omitempty" yaml:"URI"`
 		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
 		Async           bool   `json:",omitempty" yaml:"Async"`
+		PreserveSchema  bool   `json:",omitempty" yaml:"PreserveSchema"`
 		isOutputType    bool
 		_timeLayout     string
 		_selector       *structology.Selector
@@ -546,6 +547,11 @@ func (p *Parameter) OutputType() reflect.Type {
 }
 
 func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resource) error {
+	if p.Schema != nil {
+		if p.Schema.Type() != nil {
+			return nil
+		}
+	}
 	if p.Schema.Type() != nil {
 		return nil
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
@@ -65,9 +66,10 @@ type (
 		Include           []string                   `json:",omitempty"`
 		indexNamespaces
 		IsGeneratation    bool
-		XMLUnmarshalType  string `json:",omitempty"`
-		JSONUnmarshalType string `json:",omitempty"`
-		JSONMarshalType   string `json:",omitempty"`
+		XMLUnmarshalType  string             `json:",omitempty"`
+		JSONUnmarshalType string             `json:",omitempty"`
+		JSONMarshalType   string             `json:",omitempty"`
+		Report            *repository.Report `json:",omitempty" yaml:"Report,omitempty"`
 
 		OutputParameter *inference.Parameter
 	}
@@ -123,18 +125,19 @@ func (r *Rule) DSQLSetting() interface{} {
 	return struct {
 		URI               string
 		Method            string
-		Type              string   `json:",omitempty"`
-		InputType         string   `json:",omitempty"`
-		OutputType        string   `json:",omitempty"`
-		MessageBus        string   `json:",omitempty"`
-		CompressAboveSize int      `json:",omitempty"`
-		HandlerArgs       []string `json:",omitempty"`
-		DocURL            string   `json:",omitempty"`
-		DocURLs           []string `json:",omitempty"`
-		Internal          bool     `json:",omitempty"`
-		JSONUnmarshalType string   `json:",omitempty"`
-		JSONMarshalType   string   `json:",omitempty"`
-		Connector         string   `json:",omitempty"`
+		Type              string             `json:",omitempty"`
+		InputType         string             `json:",omitempty"`
+		OutputType        string             `json:",omitempty"`
+		MessageBus        string             `json:",omitempty"`
+		CompressAboveSize int                `json:",omitempty"`
+		HandlerArgs       []string           `json:",omitempty"`
+		DocURL            string             `json:",omitempty"`
+		DocURLs           []string           `json:",omitempty"`
+		Internal          bool               `json:",omitempty"`
+		JSONUnmarshalType string             `json:",omitempty"`
+		JSONMarshalType   string             `json:",omitempty"`
+		Connector         string             `json:",omitempty"`
+		Report            *repository.Report `json:",omitempty"`
 		contract.ModelContextProtocol
 		contract.Meta
 	}{
@@ -152,6 +155,7 @@ func (r *Rule) DSQLSetting() interface{} {
 		JSONUnmarshalType:    r.JSONUnmarshalType,
 		JSONMarshalType:      r.JSONMarshalType,
 		Connector:            r.Connector,
+		Report:               r.Report,
 		ModelContextProtocol: r.ModelContextProtocol,
 		Meta:                 r.Meta,
 	}

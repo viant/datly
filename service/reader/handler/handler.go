@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/viant/datly/gateway/router/status"
 	_ "github.com/viant/datly/repository/locator/async"
@@ -12,7 +13,9 @@ import (
 	_ "github.com/viant/datly/service/executor/handler/locator"
 
 	"net/http"
+	"os"
 	"reflect"
+	"runtime/debug"
 
 	reader "github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
@@ -96,6 +99,14 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, aSession *sessio
 }
 
 func (h *Handler) readData(ctx context.Context, aView *view.View, aState *session.Session, ret *Response, opts []reader.Option) error {
+	if os.Getenv("DATLY_DEBUG_HANDLER_READ") == "1" {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[HANDLER READ DEBUG] panic view=%s err=%v\n%s\n", aView.Name, r, debug.Stack())
+				panic(r)
+			}
+		}()
+	}
 	destValue := reflect.New(aView.Schema.SliceType())
 	dest := destValue.Interface()
 	aSession, err := reader.NewSession(dest, aView)

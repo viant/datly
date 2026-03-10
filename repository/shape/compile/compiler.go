@@ -58,7 +58,7 @@ func (c *DQLCompiler) Compile(ctx context.Context, source *shape.Source, opts ..
 
 	root, compileDiags, err := c.compileRoot(
 		source.Name, prepared.Pre.SQL, prepared.Statements, prepared.Decision,
-		compileOptions.MixedMode, compileOptions.UnknownNonReadMode,
+		compileOptions.MixedMode, compileOptions.UnknownNonReadMode, prepared.Pre.Directives,
 	)
 	if err != nil {
 		return nil, err
@@ -133,16 +133,43 @@ func (c *DQLCompiler) assembleResult(
 	result.Diagnostics = diags
 	result.TypeContext = prepared.Pre.TypeCtx
 	result.Directives = prepared.Pre.Directives
-	applyDefaultConnectorDirective(result)
+	applyConstDirective(result)
 	hints := extractViewHints(source.DQL)
-	appendRelationViews(result, root, hints)
+	relationSQLSource := prepared.Pre.SQL
+	if strings.TrimSpace(relationSQLSource) == "" {
+		relationSQLSource = source.DQL
+	}
+	appendRelationViews(result, root, hints, relationSQLSource)
 	appendDeclaredViews(source.DQL, result)
+	applyDefaultConnectorDirective(result)
 	appendDeclaredStates(source.DQL, result)
 	applyViewHints(result, hints)
+	result.Diagnostics = append(result.Diagnostics, appendComponentTypesWithLayout(source, result, pathLayout)...)
+	for _, item := range result.Views {
+		if item == nil || strings.TrimSpace(item.SQL) == "" {
+			continue
+		}
+		item.SQL = stripProjectionHintCalls(item.SQL)
+	}
+	applyInlineParamHints(source.DQL, result)
 	applySourceParityEnrichmentWithLayout(result, source, pathLayout)
-	applyLinkedTypeSupport(result, source)
+	ensureDQLComponentRouteWithLayout(result, source, pathLayout)
+	applySummaryTypeSupport(result, source)
+	if compileOptions.UseLinkedTypes == nil || *compileOptions.UseLinkedTypes {
+		applyLinkedTypeSupport(result, source)
+	}
 	result.Diagnostics = append(result.Diagnostics, applyColumnDiscoveryPolicy(result, compileOptions)...)
 	return result
+}
+
+func applyConstDirective(result *plan.Result) {
+	if result == nil || result.Directives == nil || len(result.Directives.Const) == 0 {
+		return
+	}
+	result.Const = make(map[string]string, len(result.Directives.Const))
+	for k, v := range result.Directives.Const {
+		result.Const[k] = v
+	}
 }
 
 func applyDefaultConnectorDirective(result *plan.Result) {
@@ -161,9 +188,14 @@ func applyDefaultConnectorDirective(result *plan.Result) {
 	}
 }
 
-func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt.Statements, decision pipeline.Decision, mode shape.CompileMixedMode, unknownMode shape.CompileUnknownNonReadMode) (*plan.View, []*dqlshape.Diagnostic, error) {
+func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt.Statements, decision pipeline.Decision, mode shape.CompileMixedMode, unknownMode shape.CompileUnknownNonReadMode, directives *dqlshape.Directives) (*plan.View, []*dqlshape.Diagnostic, error) {
 	mode = normalizeMixedMode(mode)
 	unknownMode = normalizeUnknownNonReadMode(unknownMode)
+	consts := map[string]string(nil)
+	groupableAliases := explicitGroupableAliases(extractViewHints(sqlText))
+	if directives != nil && len(directives.Const) > 0 {
+		consts = directives.Const
+	}
 	if !decision.HasRead && !decision.HasExec && decision.HasUnknown {
 		diag := &dqlshape.Diagnostic{
 			Code:     dqldiag.CodeParseUnknownNonRead,
@@ -199,7 +231,7 @@ func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt
 					break
 				}
 			}
-			view, diags, err := pipeline.BuildRead(sourceName, readSQL)
+			view, diags, err := pipeline.BuildReadWithOptions(sourceName, readSQL, consts, groupableAliases)
 			diags = append(diags, &dqlshape.Diagnostic{
 				Code:     dqldiag.CodeDMLMixed,
 				Severity: dqlshape.SeverityWarning,
@@ -223,7 +255,28 @@ func (c *DQLCompiler) compileRoot(sourceName, sqlText string, statements dqlstmt
 		}
 		return view, diags, nil
 	}
-	return pipeline.BuildRead(sourceName, sqlText)
+	return pipeline.BuildReadWithOptions(sourceName, sqlText, consts, groupableAliases)
+}
+
+func explicitGroupableAliases(hints map[string]viewHint) map[string]bool {
+	if len(hints) == 0 {
+		return nil
+	}
+	result := map[string]bool{}
+	for alias, hint := range hints {
+		if hint.Groupable == nil || !*hint.Groupable {
+			continue
+		}
+		alias = strings.ToLower(strings.TrimSpace(alias))
+		if alias == "" {
+			continue
+		}
+		result[alias] = true
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func normalizeMixedMode(mode shape.CompileMixedMode) shape.CompileMixedMode {

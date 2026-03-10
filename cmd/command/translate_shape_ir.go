@@ -92,8 +92,7 @@ func (s *Service) translateShapeIR(ctx context.Context, opts *options.Options) e
 	return nil
 }
 
-func buildShapeRulePayload(opts *options.Options, dql string, resource *view.Resource, component *shapeLoad.Component) (*shapeRuleFile, error) {
-	rule := opts.Rule()
+func buildShapeRulePayload(_ *options.Options, _ string, resource *view.Resource, component *shapeLoad.Component) (*shapeRuleFile, error) {
 	rootView := ""
 	if component != nil {
 		rootView = strings.TrimSpace(component.RootView)
@@ -101,18 +100,9 @@ func buildShapeRulePayload(opts *options.Options, dql string, resource *view.Res
 	if rootView == "" && resource != nil && len(resource.Views) > 0 && resource.Views[0] != nil {
 		rootView = resource.Views[0].Name
 	}
-	method, uri := parseShapeRulePath(dql, rule.RuleName(), opts.Repository().APIPrefix)
-	// Gap 3: RouteDirective overrides method/URI when explicitly declared in DQL.
-	if component != nil && component.Directives != nil && component.Directives.Route != nil {
-		rd := component.Directives.Route
-		if u := strings.TrimSpace(rd.URI); u != "" {
-			uri = u
-		}
-		if len(rd.Methods) > 0 {
-			if m := strings.TrimSpace(strings.ToUpper(rd.Methods[0])); m != "" {
-				method = m
-			}
-		}
+	method, uri, err := shapeComponentPath(component)
+	if err != nil {
+		return nil, err
 	}
 	route := &repository.Component{
 		Path: contract.Path{

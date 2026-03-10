@@ -1,6 +1,8 @@
 package shape
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 
 	"github.com/viant/datly/view"
@@ -26,6 +28,26 @@ type Source struct {
 	TypeName     string
 	TypeRegistry *x.Registry
 	DQL          string
+}
+
+func (s *Source) BaseDir() string {
+	if s == nil {
+		return ""
+	}
+	location := filepath.Clean(s.Path)
+	if location == "" || location == "." {
+		return ""
+	}
+	if info, err := os.Stat(location); err == nil {
+		if info.IsDir() {
+			return location
+		}
+		return filepath.Dir(location)
+	}
+	if ext := filepath.Ext(location); ext != "" {
+		return filepath.Dir(location)
+	}
+	return location
 }
 
 // ScanSpec is implemented by every scan-pipeline descriptor result.
@@ -65,6 +87,11 @@ type PlanResult struct {
 type ViewArtifacts struct {
 	Resource *view.Resource
 	Views    view.Views
+}
+
+// ResourceArtifacts is the runtime resource payload produced by Loader.
+type ResourceArtifacts struct {
+	Resource *view.Resource
 }
 
 // ComponentArtifact is the runtime component payload produced by Loader.

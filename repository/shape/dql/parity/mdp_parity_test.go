@@ -9,6 +9,7 @@ import (
 
 	dqlplan "github.com/viant/datly/repository/shape/dql/plan"
 	dqlscan "github.com/viant/datly/repository/shape/dql/scan"
+	"github.com/viant/datly/testutil/shapeparity"
 )
 
 func TestMDPDQL_CanonicalParityWithRoutes(t *testing.T) {
@@ -41,7 +42,6 @@ func TestMDPDQL_CanonicalParityWithRoutes(t *testing.T) {
 		msg   string
 	}
 	var issues []issue
-	scanner := dqlscan.New()
 	_ = filepath.WalkDir(routesRoot, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil || d.IsDir() {
 			return walkErr
@@ -69,7 +69,7 @@ func TestMDPDQL_CanonicalParityWithRoutes(t *testing.T) {
 			return nil
 		}
 		modulePrefix := filepath.ToSlash(filepath.Join("mdp", ruleDir))
-		scanned, err := scanner.Scan(context.Background(), &dqlscan.Request{
+		scanned, err := shapeparity.ScanDQL(context.Background(), &dqlscan.Request{
 			DQLURL:       dqlFile,
 			Repository:   repoRoot,
 			ModulePrefix: modulePrefix,
@@ -145,16 +145,4 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-func splitNonEmpty(csv string) []string {
-	var ret []string
-	for _, item := range strings.Split(csv, ",") {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-		ret = append(ret, item)
-	}
-	return ret
 }
