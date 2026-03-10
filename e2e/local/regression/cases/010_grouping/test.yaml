@@ -111,3 +111,76 @@ pipeline:
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_empty.json')
+
+  mcpInitialize:
+    action: http/runner:send
+    requests:
+      - Method: POST
+        URL: http://127.0.0.1:8281/mcp
+        Header:
+          Content-Type:
+            - application/json
+        JSONBody:
+          jsonrpc: "2.0"
+          id: 1
+          method: initialize
+          params:
+            protocolVersion: "2025-06-18"
+            capabilities: {}
+            clientInfo:
+              name: endly
+              version: "1.0"
+        Expect:
+          Code: 200
+    post:
+      protocolVersion: ${Responses[0].JSONBody.result.protocolVersion}
+
+  mcpListTools:
+    action: http/runner:send
+    requests:
+      - Method: POST
+        URL: http://127.0.0.1:8281/mcp
+        Header:
+          Content-Type:
+            - application/json
+          MCP-Protocol-Version:
+            - ${protocolVersion}
+        JSONBody:
+          jsonrpc: "2.0"
+          id: 2
+          method: tools/list
+          params: {}
+        Expect:
+          Code: 200
+
+  mcpCallReport:
+    action: http/runner:send
+    requests:
+      - Method: POST
+        URL: http://127.0.0.1:8281/mcp
+        Header:
+          Content-Type:
+            - application/json
+          MCP-Protocol-Version:
+            - ${protocolVersion}
+        JSONBody:
+          jsonrpc: "2.0"
+          id: 3
+          method: tools/call
+          params:
+            name: vendorsgroupingReport
+            arguments:
+              dimensions:
+                accountId: true
+              measures:
+                totalId: true
+                maxId: true
+              filters:
+                vendorIDs:
+                  - 1
+                  - 2
+                  - 3
+              orderBy:
+                - accountId
+        Expect:
+          Code: 200
