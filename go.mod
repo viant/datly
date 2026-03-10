@@ -2,8 +2,6 @@ module github.com/viant/datly
 
 go 1.25.0
 
-replace github.com/viant/xdatly => ../xdatly
-
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
@@ -56,7 +54,7 @@ require (
 	github.com/viant/structology v0.8.0
 	github.com/viant/tagly v0.3.0
 	github.com/viant/x v0.4.1-0.20260306005005-975ded1e1bef
-	github.com/viant/xdatly v0.5.4-0.20251113181159-0ac8b8b0ff3a
+	github.com/viant/xdatly v0.5.4-0.20260306062123-17850ac34977
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20251208172928-dd34b7f09fd5
 	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
