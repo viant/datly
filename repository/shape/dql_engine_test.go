@@ -355,6 +355,51 @@ func TestDQLCompileLoad_MetaFormatPreservesSummariesWithoutLinkedTypes(t *testin
 	require.NoError(t, err)
 }
 
+func TestDQLCompileLoad_DistrictPaginationInheritsNestedRelationTypeContextPackages(t *testing.T) {
+	dqlPath := filepath.Join("..", "..", "e2e", "v1", "dql", "dev", "district", "district_pagination.sql")
+	dqlPath, err := filepath.Abs(dqlPath)
+	require.NoError(t, err)
+	dqlBytes, err := os.ReadFile(dqlPath)
+	require.NoError(t, err)
+
+	source := &shape.Source{
+		Name: "district_pagination",
+		Path: dqlPath,
+		DQL:  string(dqlBytes),
+	}
+	planResult, err := shapeCompile.New().Compile(
+		context.Background(),
+		source,
+		shape.WithLinkedTypes(false),
+		shape.WithTypeContextPackageDir(filepath.Join("e2e", "v1", "shape", "dev", "district", "pagination")),
+		shape.WithTypeContextPackageName("pagination"),
+	)
+	require.NoError(t, err)
+
+	componentArtifact, err := shapeLoad.New().LoadComponent(context.Background(), planResult, shape.WithLoadTypeContextPackages(true))
+	require.NoError(t, err)
+
+	component, ok := shapeLoad.ComponentFrom(componentArtifact)
+	require.True(t, ok)
+	require.NotNil(t, component)
+
+	root, err := componentArtifact.Resource.Views.Index().Lookup(component.RootView)
+	require.NoError(t, err)
+	require.NotNil(t, root)
+	require.NotNil(t, root.Schema)
+	assert.Equal(t, "pagination", root.Schema.Package)
+	assert.Equal(t, "github.com/viant/datly/e2e/v1/shape/dev/district/pagination", root.Schema.PackagePath)
+
+	require.Len(t, root.With, 1)
+	child := &root.With[0].Of.View
+	require.NotNil(t, child.Schema)
+	assert.Equal(t, "pagination", child.Schema.Package)
+	assert.Equal(t, "github.com/viant/datly/e2e/v1/shape/dev/district/pagination", child.Schema.PackagePath)
+
+	_, err = initTypeRegistryForResource(componentArtifact.Resource)
+	require.NoError(t, err)
+}
+
 func initTypeRegistryForResource(resource *view.Resource) (*xreflect.Types, error) {
 	registry := extension.NewRegistry()
 	imports := view.Imports{}

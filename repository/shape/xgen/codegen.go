@@ -3358,7 +3358,6 @@ func (g *ComponentCodegen) renderDefineComponent(builder *strings.Builder, compo
 		builder.WriteString(fmt.Sprintf(`, view.WithConnectorRef(%q)`, connectorRef))
 	}
 	builder.WriteString(")")
-	builder.WriteString(")")
 	if reportOption := g.reportComponentOption(); reportOption != "" {
 		builder.WriteString(",\n")
 		builder.WriteString("\t\t")

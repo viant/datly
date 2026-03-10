@@ -79,7 +79,7 @@ func TestBuildReportMetadataAndComponent(t *testing.T) {
 		Path:   contract.Path{Method: "GET", URI: "/v1/api/vendors"},
 		Meta:   contract.Meta{Name: "vendors"},
 		View:   rootView,
-		Report: (&Report{Enabled: true}).normalize(),
+		Report: (&Report{Enabled: true}).Normalize(),
 		Contract: contract.Contract{
 			Input: contract.Input{Type: *inputType},
 		},
@@ -175,7 +175,7 @@ func TestBuildReportComponent_EnablesMCPToolOnSiblingRoute(t *testing.T) {
 		Path:   contract.Path{Method: "GET", URI: "/v1/api/vendors"},
 		Meta:   contract.Meta{Name: "vendors"},
 		View:   rootView,
-		Report: (&Report{Enabled: true}).normalize(),
+		Report: (&Report{Enabled: true}).Normalize(),
 		Contract: contract.Contract{
 			Input: contract.Input{Type: *inputType},
 		},
@@ -233,7 +233,7 @@ func TestBuildReportComponent_DisablesMCPToolWhenReportFlagIsFalse(t *testing.T)
 		Report: (&Report{
 			Enabled: true,
 			MCPTool: &disabled,
-		}).normalize(),
+		}).Normalize(),
 		Contract: contract.Contract{
 			Input: contract.Input{Type: *inputType},
 		},
@@ -263,7 +263,8 @@ func TestBuildReportComponent_DisablesMCPToolWhenReportFlagIsFalse(t *testing.T)
 
 func TestService_InitComponentProviders_RegistersLocalGroupingReportRoute(t *testing.T) {
 	ctx := context.Background()
-	baseDir := filepath.Join("..", "e2e", "local", "regression")
+	baseDir, err := filepath.Abs(filepath.Join("..", "e2e", "local", "regression"))
+	require.NoError(t, err)
 	if _, err := os.Stat(filepath.Join(baseDir, "paths.yaml")); err != nil {
 		t.Skipf("missing local regression fixture: %v", err)
 	}
@@ -274,7 +275,7 @@ func TestService_InitComponentProviders_RegistersLocalGroupingReportRoute(t *tes
 		WithRefreshDisabled(true),
 	)
 	require.NoError(t, err)
-	reportPath := &contract.Path{Method: "POST", URI: "/v1/api/shape/dev/vendors-grouping/report"}
+	reportPath := &contract.Path{Method: "POST", URI: "/v1/api/dev/vendors-grouping/report"}
 	provider, err := service.Registry().LookupProvider(ctx, reportPath)
 	require.NoError(t, err)
 	require.NotNil(t, provider)
@@ -284,13 +285,14 @@ func TestService_InitComponentProviders_RegistersLocalGroupingReportRoute(t *tes
 	require.NotNil(t, component.Report)
 	assert.True(t, component.Report.Enabled)
 	assert.Equal(t, "POST", component.Method)
-	assert.Equal(t, "/v1/api/shape/dev/vendors-grouping/report", component.URI)
+	assert.Equal(t, "/v1/api/dev/vendors-grouping/report", component.URI)
 }
 
 func TestBuildReportComponent_DoesNotStripOriginalViewTypeDefinitionsFromCodegen(t *testing.T) {
 	resource := view.EmptyResource()
 	rootView := view.NewView("metrics_view", "metrics_view")
 	rootView.Groupable = true
+	rootView.Connector = &view.Connector{Connection: view.Connection{DBConfig: view.DBConfig{Name: "dev"}}}
 	rootView.Template = &view.Template{Source: "SELECT agency_id, SUM(total_spend) AS total_spend FROM metrics_view GROUP BY 1"}
 	rootView.Schema = state.NewSchema(reflect.TypeOf([]*struct {
 		AgencyId   *int     `sqlx:"agency_id"`
@@ -308,6 +310,10 @@ func TestBuildReportComponent_DoesNotStripOriginalViewTypeDefinitionsFromCodegen
 	resource.Types = []*view.TypeDefinition{
 		{Name: "MetricsViewView", Package: "metrics", DataType: `struct{AgencyId *int ` + "`sqlx:\"agency_id\"`" + `; TotalSpend *float64 ` + "`sqlx:\"total_spend\"`" + `;}`},
 	}
+	require.NoError(t, resource.TypeRegistry().Register("MetricsViewView", xreflect.WithPackage("metrics"), xreflect.WithReflectType(reflect.TypeOf(struct {
+		AgencyId   *int     `sqlx:"agency_id"`
+		TotalSpend *float64 `sqlx:"total_spend"`
+	}{}))))
 	rootView.SetResource(resource)
 	resource.AddViews(rootView)
 
@@ -319,7 +325,7 @@ func TestBuildReportComponent_DoesNotStripOriginalViewTypeDefinitionsFromCodegen
 
 	outputType, err := state.NewType(state.WithParameters(state.Parameters{
 		&state.Parameter{Name: "Data", In: state.NewOutputLocation("view"), Schema: &state.Schema{Name: "MetricsViewView", Package: "metrics", Cardinality: state.Many}},
-	}))
+	}), state.WithResource(rootView.Resource()))
 	require.NoError(t, err)
 	outputType.Name = "MetricsViewOutput"
 
@@ -327,7 +333,7 @@ func TestBuildReportComponent_DoesNotStripOriginalViewTypeDefinitionsFromCodegen
 		Path:   contract.Path{Method: "GET", URI: "/v1/api/core/metrics/performance_summary"},
 		Meta:   contract.Meta{Name: "MetricsPerformance"},
 		View:   rootView,
-		Report: (&Report{Enabled: true}).normalize(),
+		Report: (&Report{Enabled: true}).Normalize(),
 		Contract: contract.Contract{
 			Input:  contract.Input{Type: *inputType},
 			Output: contract.Output{Type: *outputType},
@@ -335,7 +341,7 @@ func TestBuildReportComponent_DoesNotStripOriginalViewTypeDefinitionsFromCodegen
 	}
 
 	before := component.GenerateOutputCode(context.Background(), true, false, nil)
-	require.Contains(t, before, "type MetricsViewView struct")
+	require.Contains(t, before, "type Data struct")
 
 	service := &Service{registry: NewRegistry("", nil, nil)}
 	_, _, err = service.buildReportComponent(component, &path.Path{
@@ -348,5 +354,6 @@ func TestBuildReportComponent_DoesNotStripOriginalViewTypeDefinitionsFromCodegen
 	require.NoError(t, err)
 
 	after := component.GenerateOutputCode(context.Background(), true, false, nil)
-	require.Contains(t, after, "type MetricsViewView struct")
+	require.Contains(t, after, "type Data struct")
+	assert.Equal(t, before, after)
 }

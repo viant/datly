@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/repository/contract"
 	rephandler "github.com/viant/datly/repository/handler"
 	"github.com/viant/datly/repository/path"
+	reportmodel "github.com/viant/datly/repository/report"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -65,7 +66,7 @@ func BuildReportComponent(dispatcher contract.Dispatcher, original *Component) (
 }
 
 func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, original *Component, routePath *path.Path) (*Component, *path.Path, error) {
-	config := original.Report.normalize()
+	config := original.Report.Normalize()
 	metadata, err := buildReportMetadata(original, config)
 	if err != nil {
 		return nil, nil, err
@@ -97,7 +98,7 @@ func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, o
 		pathCopy.Internal = routePath.Internal
 		pathCopy.Meta = routePath.Meta
 		pathCopy.ModelContextProtocol = routePath.ModelContextProtocol
-		pathCopy.MCPTool = config.mcpToolEnabled()
+		pathCopy.MCPTool = config.MCPToolEnabled()
 		pathCopy.MCPResource = false
 		pathCopy.MCPTemplateResource = false
 		pathCopy.Report = routePath.Report
@@ -160,94 +161,27 @@ func reportPathMCPToolEnabled(report *path.Report) bool {
 }
 
 func buildReportMetadata(component *Component, report *Report) (*ReportMetadata, error) {
-	report = report.normalize()
-	viewRef := component.View
-	if viewRef == nil {
-		return nil, fmt.Errorf("report component view was empty")
+	source := &reportmodel.Component{
+		Name:       component.Name,
+		InputName:  component.Input.Type.Name,
+		Parameters: component.Input.Type.Parameters,
+		View:       component.View,
+		Resource:   component.View.Resource(),
+		Report:     report,
 	}
-	result := &ReportMetadata{
-		InputName:     report.inputTypeName(component.Name, component.Input.Type.Name, viewRef.Name),
-		BodyFieldName: "",
-		DimensionsKey: report.Dimensions,
-		MeasuresKey:   report.Measures,
-		FiltersKey:    report.Filters,
-		OrderBy:       report.OrderBy,
-		Limit:         report.Limit,
-		Offset:        report.Offset,
-	}
-	for _, column := range viewRef.Columns {
-		if column == nil || column.FieldName() == "" {
-			continue
-		}
-		fieldName := exportedReportFieldName(column.FieldName())
-		field := &ReportField{Name: column.FieldName(), FieldName: fieldName, Description: column.Name}
-		switch {
-		case column.Groupable:
-			field.Section = report.Dimensions
-			result.Dimensions = append(result.Dimensions, field)
-		case column.Aggregate || (viewRef.Groupable && !column.Groupable):
-			field.Section = report.Measures
-			result.Measures = append(result.Measures, field)
-		}
-	}
-	for _, parameter := range component.Input.Type.Parameters {
-		if parameter == nil || len(parameter.Predicates) == 0 || parameter.In == nil {
-			continue
-		}
-		if isSelectorParameter(parameter, viewRef) {
-			continue
-		}
-		result.Filters = append(result.Filters, &ReportFilter{
-			Name:        parameter.Name,
-			FieldName:   exportedReportFieldName(parameter.Name),
-			Section:     report.Filters,
-			Description: parameter.Description,
-			Parameter:   parameter,
-		})
-	}
-	if err := result.validateSelection(); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return reportmodel.AssembleMetadata(source, report)
 }
 
 func buildReportInputType(component *Component, metadata *ReportMetadata, report *Report) (*state.Type, error) {
-	if report != nil && report.Input != "" {
-		schema := state.NewSchema(nil, state.WithSchemaPackage(""), state.WithModulePath(""))
-		schema.Name = strings.TrimSpace(report.Input)
-		inputType, err := state.NewType(state.WithSchema(schema), state.WithResource(component.View.Resource()))
-		if err != nil {
-			return nil, err
-		}
-		if err := inputType.Init(); err != nil {
-			return nil, err
-		}
-		return inputType, validateExplicitReportInput(inputType, metadata)
+	source := &reportmodel.Component{
+		Name:       component.Name,
+		InputName:  component.Input.Type.Name,
+		Parameters: component.Input.Type.Parameters,
+		View:       component.View,
+		Resource:   component.View.Resource(),
+		Report:     report,
 	}
-	bodyType := reflect.PtrTo(synthesizeReportBodyType(metadata))
-	bodySchema := state.NewSchema(bodyType)
-	bodySchema.Name = metadata.InputName
-	bodyParam := state.NewParameter("Report", state.NewBodyLocation(""), state.WithParameterSchema(bodySchema))
-	bodyParam.Tag = `anonymous:"true"`
-	bodyParam.SetTypeNameTag()
-	// Synthetic report input must not initialize against the original component resource.
-	// Using the shared resource resolves linked named types and mutates the original
-	// component generation state, which breaks repeated code generation.
-	inputResource := newReportInputResource(component.View.Resource())
-	inputType, err := state.NewType(
-		state.WithParameters(state.Parameters{bodyParam}),
-		state.WithBodyType(true),
-		state.WithSchema(state.NewSchema(bodyType)),
-		state.WithResource(inputResource),
-	)
-	if err != nil {
-		return nil, err
-	}
-	if err := inputType.Init(); err != nil {
-		return nil, err
-	}
-	inputType.Name = metadata.InputName
-	return inputType, nil
+	return reportmodel.BuildInputType(source, metadata, report)
 }
 
 func validateExplicitReportInput(inputType *state.Type, metadata *ReportMetadata) error {
@@ -327,7 +261,7 @@ func filterStructType(filters []*ReportFilter) reflect.Type {
 	structFields := make([]reflect.StructField, 0, len(filters))
 	for _, filter := range filters {
 		rType := reflect.TypeOf("")
-		if schemaType := filter.schemaType(); schemaType != nil {
+		if schemaType := filter.SchemaType(); schemaType != nil {
 			rType = schemaType
 		}
 		structFields = append(structFields, reflect.StructField{
