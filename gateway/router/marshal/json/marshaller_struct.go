@@ -41,13 +41,15 @@ type (
 	}
 
 	marshallerMetadata struct {
-		fieldName  string
-		jsonName   string
-		path       string
-		comparable bool
-		zeroValue  interface{}
-		outputPath string
-		omitEmpty  bool
+		fieldName      string
+		jsonName       string
+		path           string
+		loadPath       string
+		comparable     bool
+		zeroValue      interface{}
+		outputPath     string
+		loadOutputPath string
+		omitEmpty      bool
 	}
 
 	structDecoder struct {
@@ -266,15 +268,8 @@ func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path s
 				}
 			}
 
-			elemType := field.Type
-			// Unwrap nested pointers/slices to detect self-references like []*T or [][]*T
-			for elemType.Kind() == reflect.Ptr || elemType.Kind() == reflect.Slice {
-				elemType = elemType.Elem()
-			}
-			if elemType == fields.owner {
-				continue
-			}
-			if err = s.newFieldMarshaller(&marshallers, field, path, outputPath, dTag); err != nil {
+			isRecursive := isRecursiveFieldType(field.Type, fields.owner)
+			if err = s.newFieldMarshaller(&marshallers, field, path, outputPath, dTag, isRecursive); err != nil {
 				return nil, err
 			}
 		}
@@ -283,7 +278,7 @@ func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path s
 	return marshallers, nil
 }
 
-func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithField, field reflect.StructField, path string, outputPath string, dTag *format.Tag) error {
+func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithField, field reflect.StructField, path string, outputPath string, dTag *format.Tag, isRecursive bool) error {
 	if field.Anonymous {
 		rType, ptrSize := field.Type, 0
 		for rType.Kind() == reflect.Ptr {
@@ -328,17 +323,23 @@ func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithFiel
 	}
 
 	path, outputPath = addToPath(path, field.Name), addToPath(outputPath, jsonName)
+	loadPath, loadOutputPath := path, outputPath
+	if isRecursive {
+		loadPath, loadOutputPath = s.path, s.outputPath
+	}
 
 	xField := xunsafe.NewField(field)
 	marshaller := &marshallerWithField{
 		xField: xField,
 		tag:    dTag,
 		marshallerMetadata: marshallerMetadata{
-			path:       path,
-			outputPath: outputPath,
-			omitEmpty:  dTag.Omitempty || s.config.OmitEmpty,
-			jsonName:   jsonName,
-			fieldName:  field.Name,
+			path:           path,
+			loadPath:       loadPath,
+			outputPath:     outputPath,
+			loadOutputPath: loadOutputPath,
+			omitEmpty:      dTag.Omitempty || s.config.OmitEmpty,
+			jsonName:       jsonName,
+			fieldName:      field.Name,
 		},
 	}
 
@@ -402,9 +403,16 @@ func (f *marshallerWithField) init(field reflect.StructField, config *config.IOC
 	f.comparable = rType.Comparable()
 	f.zeroValue = reflect.Zero(field.Type).Interface()
 
-	marshaller, err := cache.loadMarshaller(field.Type, config, f.path, f.outputPath, defaultTag)
+	marshaller, err := cache.loadMarshaller(field.Type, config, f.loadPath, f.loadOutputPath, defaultTag)
 	f.marshaller = marshaller
 	return err
+}
+
+func isRecursiveFieldType(rType, owner reflect.Type) bool {
+	for rType.Kind() == reflect.Ptr || rType.Kind() == reflect.Slice {
+		rType = rType.Elem()
+	}
+	return rType == owner
 }
 
 func isZeroValue(ptr unsafe.Pointer, stringifier *marshallerWithField, value interface{}) bool {

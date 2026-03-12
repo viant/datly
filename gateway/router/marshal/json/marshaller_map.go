@@ -150,6 +150,11 @@ func (m *mapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) 
 		}
 		return nil
 	}
+	mapType := m.mapType(aMap.Type())
+	if err := sb.enterVisit(aMap.Pointer(), mapType); err != nil {
+		return err
+	}
+	defer sb.leaveVisit(aMap.Pointer(), mapType)
 
 	if !m.isEmbedded {
 		sb.WriteString("{")
@@ -202,6 +207,14 @@ func (m *mapMarshaller) mapStringIfaceMarshaller() func(pointer unsafe.Pointer, 
 		if mapPtr == nil {
 			return nil
 		}
+		mapValue := reflect.ValueOf(*mapPtr)
+		if mapValue.IsValid() && !mapValue.IsNil() {
+			mapType := m.mapType(mapValue.Type())
+			if err := sb.enterVisit(mapValue.Pointer(), mapType); err != nil {
+				return err
+			}
+			defer sb.leaveVisit(mapValue.Pointer(), mapType)
+		}
 
 		// Ensure JSON special characters in keys are escaped
 		replacer := getReplacer()
@@ -232,4 +245,11 @@ func (m *mapMarshaller) mapStringIfaceMarshaller() func(pointer unsafe.Pointer, 
 
 		return nil
 	}
+}
+
+func (m *mapMarshaller) mapType(fallback reflect.Type) reflect.Type {
+	if m != nil && m.xType != nil {
+		return m.xType.Type()
+	}
+	return fallback
 }

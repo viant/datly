@@ -89,6 +89,10 @@ func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession
 		sb.WriteString("[]")
 		return nil
 	}
+	if err := sb.enterVisit(sliceHeader.Data, s.xslice.Type); err != nil {
+		return err
+	}
+	defer sb.leaveVisit(sliceHeader.Data, s.xslice.Type)
 
 	sb.WriteByte('[')
 	sliceLen := s.xslice.Len(ptr)

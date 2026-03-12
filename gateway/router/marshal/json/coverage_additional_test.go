@@ -1006,18 +1006,20 @@ func TestCoverage_AdditionalLowBranches(t *testing.T) {
 	_, err = m.Marshal(HolderOmit{Name: "y"}) // nil embed with omitempty -> skip path
 	require.NoError(t, err)
 
-	// createStructMarshallers self-reference skip branch
+	// Recursive fields should be marshalled when populated.
 	type Self struct {
-		Child []*Self
+		Child []*Self `json:",omitempty"`
 		Name  string
 	}
-	s, err := newStructMarshaller(&config.IOConfig{}, reflect.TypeOf(Self{}), "", "", &format.Tag{}, newCache())
+	payload := Self{
+		Name: "parent",
+		Child: []*Self{
+			{Name: "child"},
+		},
+	}
+	encoded, err := m.Marshal(payload)
 	require.NoError(t, err)
-	gf := groupFields(reflect.TypeOf(Self{}))
-	mrs, err := s.createStructMarshallers(gf, "", "", &format.Tag{})
-	require.NoError(t, err)
-	// only Name should remain (Child is self-reference and skipped)
-	require.Len(t, mrs, 1)
+	require.JSONEq(t, `{"Child":[{"Name":"child"}],"Name":"parent"}`, string(encoded))
 
 	// enc.go error path: decoder exhausted
 	bufBytes := []byte{}
@@ -1048,6 +1050,245 @@ func TestCoverage_AdditionalLowBranches(t *testing.T) {
 	// formatName remaining ID branch variants
 	require.Equal(t, "ID", formatName("ID", text.CaseFormatUpper))
 	require.Equal(t, "id", formatName("ID", text.CaseFormatLower))
+}
+
+func TestMarshaller_RecursiveFieldRobustness(t *testing.T) {
+	m := New(&config.IOConfig{})
+
+	// These cases intentionally cover only acyclic recursive graphs.
+	type NodeSlicePtr struct {
+		Children []*NodeSlicePtr `json:",omitempty"`
+		Name     string
+	}
+	type NodePtr struct {
+		Child *NodePtr `json:",omitempty"`
+		Name  string
+	}
+	type NodeSliceValue struct {
+		Children []NodeSliceValue `json:",omitempty"`
+		Name     string
+	}
+	type NodeMatrix struct {
+		Groups [][]*NodeMatrix `json:",omitempty"`
+		Name   string
+	}
+	type Dimension struct {
+		Namespace      string
+		DimensionGroup []*Dimension `json:"dimensionGroup,omitempty"`
+	}
+	type Meta struct {
+		Label string
+	}
+	type Mixed struct {
+		Name     string
+		Attrs    map[string]string
+		Tags     []string
+		Meta     Meta
+		Children []*Mixed `json:",omitempty"`
+	}
+
+	testCases := []struct {
+		name    string
+		payload interface{}
+		want    string
+	}{
+		{
+			name: "slice ptr one child",
+			payload: NodeSlicePtr{
+				Name: "parent",
+				Children: []*NodeSlicePtr{
+					{Name: "child"},
+				},
+			},
+			want: `{"Children":[{"Name":"child"}],"Name":"parent"}`,
+		},
+		{
+			name: "slice ptr multiple children",
+			payload: NodeSlicePtr{
+				Name: "parent",
+				Children: []*NodeSlicePtr{
+					{Name: "left"},
+					{Name: "right"},
+				},
+			},
+			want: `{"Children":[{"Name":"left"},{"Name":"right"}],"Name":"parent"}`,
+		},
+		{
+			name: "slice ptr multilevel nesting",
+			payload: NodeSlicePtr{
+				Name: "root",
+				Children: []*NodeSlicePtr{
+					{
+						Name: "child",
+						Children: []*NodeSlicePtr{
+							{Name: "grandchild"},
+						},
+					},
+				},
+			},
+			want: `{"Children":[{"Children":[{"Name":"grandchild"}],"Name":"child"}],"Name":"root"}`,
+		},
+		{
+			name:    "slice ptr nil omitted",
+			payload: NodeSlicePtr{Name: "root"},
+			want:    `{"Name":"root"}`,
+		},
+		{
+			name:    "slice ptr empty omitted",
+			payload: NodeSlicePtr{Name: "root", Children: []*NodeSlicePtr{}},
+			want:    `{"Name":"root"}`,
+		},
+		{
+			name: "ptr child populated",
+			payload: NodePtr{
+				Name:  "root",
+				Child: &NodePtr{Name: "leaf"},
+			},
+			want: `{"Child":{"Name":"leaf"},"Name":"root"}`,
+		},
+		{
+			name: "slice value populated",
+			payload: NodeSliceValue{
+				Name: "root",
+				Children: []NodeSliceValue{
+					{Name: "leaf"},
+				},
+			},
+			want: `{"Children":[{"Name":"leaf"}],"Name":"root"}`,
+		},
+		{
+			name: "matrix recursive populated",
+			payload: NodeMatrix{
+				Name: "root",
+				Groups: [][]*NodeMatrix{
+					{
+						{Name: "leaf-a"},
+						{Name: "leaf-b"},
+					},
+				},
+			},
+			want: `{"Groups":[[{"Name":"leaf-a"},{"Name":"leaf-b"}]],"Name":"root"}`,
+		},
+		{
+			name: "explicit json name recursive field",
+			payload: Dimension{
+				Namespace: "ns",
+				DimensionGroup: []*Dimension{
+					{Namespace: "child"},
+				},
+			},
+			want: `{"Namespace":"ns","dimensionGroup":[{"Namespace":"child"}]}`,
+		},
+		{
+			name: "mixed siblings with recursive children",
+			payload: Mixed{
+				Name:  "root",
+				Attrs: map[string]string{"kind": "demo"},
+				Tags:  []string{"x", "y"},
+				Meta:  Meta{Label: "top"},
+				Children: []*Mixed{
+					{
+						Name:  "child",
+						Attrs: map[string]string{"kind": "leaf"},
+						Tags:  []string{"z"},
+						Meta:  Meta{Label: "nested"},
+					},
+				},
+			},
+			want: `{"Name":"root","Attrs":{"kind":"demo"},"Tags":["x","y"],"Meta":{"Label":"top"},"Children":[{"Name":"child","Attrs":{"kind":"leaf"},"Tags":["z"],"Meta":{"Label":"nested"}}]}`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			encoded, err := m.Marshal(testCase.payload)
+			require.NoError(t, err)
+			require.JSONEq(t, testCase.want, string(encoded))
+		})
+	}
+}
+
+func TestMarshaller_RecursiveFieldRepeatedMarshalUsesStableCache(t *testing.T) {
+	type Recursive struct {
+		Children []*Recursive `json:",omitempty"`
+		Name     string
+	}
+
+	m := New(&config.IOConfig{})
+	payloads := []Recursive{
+		{
+			Name: "first",
+			Children: []*Recursive{
+				{Name: "child-a"},
+			},
+		},
+		{
+			Name: "second",
+			Children: []*Recursive{
+				{
+					Name: "child-b",
+					Children: []*Recursive{
+						{Name: "grandchild"},
+					},
+				},
+			},
+		},
+		{
+			Name: "third",
+		},
+	}
+
+	expected := []string{
+		`{"Children":[{"Name":"child-a"}],"Name":"first"}`,
+		`{"Children":[{"Children":[{"Name":"grandchild"}],"Name":"child-b"}],"Name":"second"}`,
+		`{"Name":"third"}`,
+	}
+
+	for i, payload := range payloads {
+		encoded, err := m.Marshal(payload)
+		require.NoError(t, err)
+		require.JSONEq(t, expected[i], string(encoded))
+	}
+}
+
+func TestMarshaller_CycleDetectionReturnsError(t *testing.T) {
+	type Node struct {
+		Child *Node `json:",omitempty"`
+		Name  string
+	}
+
+	t.Run("direct self cycle", func(t *testing.T) {
+		root := &Node{Name: "root"}
+		root.Child = root
+
+		_, err := New(&config.IOConfig{}).Marshal(root)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cycle")
+	})
+
+	t.Run("indirect long cycle", func(t *testing.T) {
+		a := &Node{Name: "a"}
+		b := &Node{Name: "b"}
+		c := &Node{Name: "c"}
+		d := &Node{Name: "d"}
+		a.Child = b
+		b.Child = c
+		c.Child = d
+		d.Child = a
+
+		_, err := New(&config.IOConfig{}).Marshal(a)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cycle")
+	})
+
+	t.Run("map interface self cycle", func(t *testing.T) {
+		payload := map[string]interface{}{}
+		payload["self"] = payload
+
+		_, err := New(&config.IOConfig{}).Marshal(payload)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cycle")
+	})
 }
 
 func TestCoverage_StructHeavyBranches(t *testing.T) {
@@ -1353,7 +1594,7 @@ func TestCoverage_TargetedReachableBranches(t *testing.T) {
 	sstruct, err := newStructMarshaller(&config.IOConfig{}, reflect.TypeOf(struct{ A int }{}), "", "", &format.Tag{}, newCache())
 	require.NoError(t, err)
 	listMarshallers := make([]*marshallerWithField, 0)
-	require.NoError(t, sstruct.newFieldMarshaller(&listMarshallers, reflect.StructField{Name: "1bad", Type: reflect.TypeOf(0)}, "", "", &format.Tag{}))
+	require.NoError(t, sstruct.newFieldMarshaller(&listMarshallers, reflect.StructField{Name: "1bad", Type: reflect.TypeOf(0)}, "", "", &format.Tag{}, false))
 	require.Empty(t, listMarshallers)
 
 	mwf := &marshallerWithField{}

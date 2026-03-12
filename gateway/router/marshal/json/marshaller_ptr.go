@@ -42,6 +42,10 @@ func (i *ptrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) 
 		sb.Write(nullBytes)
 		return nil
 	}
+	if err := sb.enterVisit(uintptr(ptr), i.rType); err != nil {
+		return err
+	}
+	defer sb.leaveVisit(uintptr(ptr), i.rType)
 
 	return i.marshaler.MarshallObject(ptr, sb)
 }
