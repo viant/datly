@@ -750,9 +750,35 @@ func parseType(dataType string) reflect.Type {
 		return reflect.SliceOf(parseType(strings.TrimPrefix(dataType, "[]")))
 	case strings.HasPrefix(dataType, "*"):
 		return reflect.PointerTo(parseType(strings.TrimPrefix(dataType, "*")))
+	case strings.HasPrefix(dataType, "map["):
+		inner := strings.TrimPrefix(dataType, "map[")
+		depth := 1
+		end := -1
+		for i, r := range inner {
+			switch r {
+			case '[':
+				depth++
+			case ']':
+				depth--
+				if depth == 0 {
+					end = i
+					goto done
+				}
+			}
+		}
+	done:
+		if end > 0 {
+			keyType := strings.TrimSpace(inner[:end])
+			valueType := strings.TrimSpace(inner[end+1:])
+			if keyType != "" && valueType != "" {
+				return reflect.MapOf(parseType(keyType), parseType(valueType))
+			}
+		}
 	}
 	lowered := strings.ToLower(dataType)
 	switch lowered {
+	case "interface{}", "any":
+		return reflect.TypeOf((*interface{})(nil)).Elem()
 	case "string", "varchar", "text":
 		return reflect.TypeOf("")
 	case "bool", "boolean":

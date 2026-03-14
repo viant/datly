@@ -16,6 +16,10 @@ func (r *Service) watchAsyncJob(ctx context.Context) {
 	if r.Config.JobURL == "" {
 		return
 	}
+	if err := validateAsyncJobPaths(r.Config.JobURL, r.Config.FailedJobURL); err != nil {
+		log.Printf("datly async watcher disabled: %v", err)
+		return
+	}
 	var limiter chan bool
 	if r.Config.MaxJobs > 0 {
 		limiter = make(chan bool, r.Config.MaxJobs)

@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/google/gops/agent"
 	"github.com/viant/datly"
 	"github.com/viant/datly/cmd"
 	"github.com/viant/datly/cmd/env"
+	"github.com/viant/datly/internal/debugruntime"
 	"log"
 	"os"
 	"strconv"
@@ -36,11 +36,7 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 }
 
 func main() {
-	go func() {
-		if err := agent.Listen(agent.Options{}); err != nil {
-			log.Fatal(err)
-		}
-	}()
+	debugruntime.StartGopsFromEnv()
 	err := cmd.RunApp(datly.Version, os.Args[1:])
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)

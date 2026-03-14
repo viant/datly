@@ -1,0 +1,384 @@
+Items:
+    - SourceURL: db.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: app.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: rule.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: connections.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: regression.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: dev/vendors_grouping.yaml
+      Routes:
+        - URI: /v1/api/dev/vendors-grouping
+          Method: GET
+          revealmetric: null
+          With: []
+          Name: vendors grouping
+          Description: ""
+          DescriptionURI: ""
+          MCPTool: true
+          MCPResource: false
+          MCPTemplateResource: false
+          Handler: null
+          Report:
+            Enabled: true
+            Dimensions: Dimensions
+            Measures: Measures
+            Filters: Filters
+            OrderBy: OrderBy
+            Limit: Limit
+            Offset: Offset
+          connector: ""
+          View:
+            Ref: vendor
+      revealmetric: null
+      With:
+        - connections
+      Resource:
+        Parameters:
+            - Name: VendorIDs
+              In:
+                Kind: query
+                Name: vendorIDs
+              Schema:
+                DataType: int
+                Cardinality: Many
+                methods: []
+              Predicates:
+                - parent: ""
+                  Name: in
+                  Group: 0
+                  Ensure: false
+                  Args:
+                    - t
+                    - ID
+        Types:
+            - reference: {}
+              Name: VendorInputHas
+              alias: ""
+              fields: []
+              schema: null
+              DataType: struct{VendorIDs bool; }
+              Cardinality: ""
+              Package: grouping
+              ModulePath: ""
+              Ptr: false
+              customtype: false
+            - reference: {}
+              Name: VendorInput
+              alias: ""
+              fields: []
+              schema: null
+              DataType: struct{VendorIDs []int `parameter:",kind=query,in=vendorIDs" predicate:"in,group=0,t,ID"`; Has *VendorInputHas `setMarker:"true" format:"-" sqlx:"-" diff:"-" json:"-"`; }
+              Cardinality: ""
+              Package: grouping
+              ModulePath: ""
+              Ptr: false
+              customtype: false
+            - reference: {}
+              Name: VendorView
+              alias: ""
+              fields: []
+              schema: null
+              DataType: struct{AccountId *int `sqlx:"ACCOUNT_ID" velty:"names=ACCOUNT_ID|AccountId"`; UserCreated *int `sqlx:"USER_CREATED" velty:"names=USER_CREATED|UserCreated"`; TotalId *float64 `sqlx:"TOTAL_ID" velty:"names=TOTAL_ID|TotalId"`; MaxId *int `sqlx:"MAX_ID" velty:"names=MAX_ID|MaxId"`; }
+              Cardinality: ""
+              Package: grouping
+              ModulePath: ""
+              Ptr: false
+              customtype: false
+    - SourceURL: cases/055_variables/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/056_custom_patch/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/065_encode_struct/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/039_generate_post_comprehensive_one/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/057_patch_types/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/011_env/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/058_tabjson_one_to_many/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/036_differ/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/068_xml_one_to_many/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/062_predicates/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/052_json_persist/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/016_team_delete/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/050_redirect/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/033_generate_patch_many_many/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/042_json_codec/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/010_grouping/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/028_generate_put_basic_many/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/018_generate_post_basic_many/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/059_tabjson_basic/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/012_meta_format/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/030_insert_acl/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/001_one_to_many/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/037_plugins/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/064_params_group/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/064_params_group/templates.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/005_sumary/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/051_redirect_vendors/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/017_generate_post_basic_one/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/002_uri_param/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/002_uri_param/doc.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/049_oauth_hmac/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/003_oauth/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/026_transform_service/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/063_external_parameters/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/069_encode_struct_pkg/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/007_child_meta/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/022_generate_post_one_one/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/038_mysql_boolean/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/024_validator_codec/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/067_xml_basic/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/019_generate_post_comprehensive_many/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/045_raw_json/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/043_json_codec_single/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/015_index_by/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/054_persist_inlined_json/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/061_read_async/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/006_tree/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/031_generate_patch_basic_one/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/020_generate_post_except/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/044_inline_json_codec/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/013_col_in/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/048_json_persist_with_type/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/023_generate_post_one_many/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/027_generate_put_basic_one/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/035_updater/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/060_tabjson_comprehensive/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/008_record_pagination/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/041_custom_response/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/004_update/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/021_generate_post_explicit_columns/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/047_raw_json_tag/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/040_parameters_order/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/025_structql_velocity/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/046_raw_json_expr/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/014_header_params/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/066_xls_output/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/009_apikey/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/032_generate_patch_basic_many/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/034_inserter/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/029_generate_put_one_many/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []
+    - SourceURL: cases/053_dql_persist/test.yaml
+      Routes: []
+      revealmetric: null
+      With: []

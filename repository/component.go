@@ -42,6 +42,7 @@ type (
 	Component struct {
 		version.Version `json:"-" yaml:"-"`
 		contract.Meta
+		contract.ModelContextProtocol
 		contract.Path
 		contract.Contract
 		content.Content `json:",omitempty" yaml:",inline"`

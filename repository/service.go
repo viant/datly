@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/async/mbus"
+	"github.com/viant/datly/internal/debuglog"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/repository/plugin"
 	"github.com/viant/datly/repository/resource"
+	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
@@ -111,17 +113,29 @@ func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
 
 func (s *Service) init(ctx context.Context, options *Options) (err error) {
 	if s.paths, err = path.New(ctx, options.fs, options.componentURL, options.refreshFrequency); err != nil {
+		debuglog.JSON("repository.init.path_new_error", map[string]any{
+			"componentURL": options.componentURL,
+			"error":        err.Error(),
+		})
 		return err
 	}
 	s.auth = auth.New(&options.authConfig)
 	err = s.auth.Init(ctx)
 	if err != nil {
+		debuglog.JSON("repository.init.auth_error", map[string]any{
+			"dependencyURL": options.authConfig.DependencyURL,
+			"error":         err.Error(),
+		})
 		return fmt.Errorf("failed to initialize auth: %v", err)
 	}
 	s.registry = NewRegistry(options.apiPrefix, s.auth, options.dispatcher)
 
 	if s.resources == nil && options.resourceURL != "" {
 		if s.resources, err = resource.New(ctx, options.fs, options.resourceURL, options.refreshFrequency); err != nil {
+			debuglog.JSON("repository.init.resource_new_error", map[string]any{
+				"resourceURL": options.resourceURL,
+				"error":       err.Error(),
+			})
 			return err
 		}
 	}
@@ -333,13 +347,58 @@ func (s *Service) Register(components ...*Component) {
 			s.paths.Container.Items = append(s.paths.Container.Items, pathItem)
 			paths[component.Path.Key()] = pathItem
 		}
-		pathItem.Paths = append([]*path.Path{}, &path.Path{
+		registeredPath := &path.Path{
 			Settings: path.Settings{
 				Cors: path.DefaultCors(),
 			},
-			Path: component.Path,
-		})
+			Path:                 component.Path,
+			Meta:                 component.Meta,
+			ModelContextProtocol: component.ModelContextProtocol,
+			Report:               componentPathReport(component),
+			Version:              &version.Control{},
+		}
+		pathItem.Paths = append([]*path.Path{}, registeredPath)
+		s.registerReportProvider(pathItem, registeredPath, component)
 	}
+}
+
+func componentPathReport(component *Component) *path.Report {
+	if component == nil || component.Report == nil || !component.Report.Enabled {
+		return nil
+	}
+	return &path.Report{
+		Enabled:    component.Report.Enabled,
+		MCPTool:    component.Report.MCPTool,
+		Input:      strings.TrimSpace(component.Report.Input),
+		Dimensions: strings.TrimSpace(component.Report.Dimensions),
+		Measures:   strings.TrimSpace(component.Report.Measures),
+		Filters:    strings.TrimSpace(component.Report.Filters),
+		OrderBy:    strings.TrimSpace(component.Report.OrderBy),
+		Limit:      strings.TrimSpace(component.Report.Limit),
+		Offset:     strings.TrimSpace(component.Report.Offset),
+	}
+}
+
+func (s *Service) registerReportProvider(item *path.Item, routePath *path.Path, component *Component) {
+	if s == nil || s.registry == nil || item == nil || routePath == nil || component == nil {
+		return
+	}
+	if routePath.Report == nil || !routePath.Report.Enabled {
+		return
+	}
+	reportPath := buildReportPath(routePath)
+	if _, err := s.registry.LookupProvider(context.Background(), &reportPath.Path); err == nil {
+		return
+	}
+	provider, err := s.registry.LookupProvider(context.Background(), &component.Path)
+	if err != nil || provider == nil {
+		return
+	}
+	providers := append([]*Provider{}, s.registry.providers...)
+	if providers, err = s.appendReportProvider(context.Background(), item, routePath, providers, provider); err != nil {
+		return
+	}
+	s.registry.SetProviders(providers)
 }
 
 func (s *Service) Constants() []*state.Parameter {

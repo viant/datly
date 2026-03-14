@@ -10,16 +10,21 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/viant/afs"
+	furl "github.com/viant/afs/url"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/shape"
 	shapeCompile "github.com/viant/datly/repository/shape/compile"
 	shapeLoad "github.com/viant/datly/repository/shape/load"
 	datlyservice "github.com/viant/datly/service"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
 )
+
+var bootstrapFS = afs.New()
 
 func (r *Service) applyDQLBootstrap(ctx context.Context, repo *repository.Service, cfg *DQLBootstrap) error {
 	if cfg == nil || len(cfg.Sources) == 0 {
@@ -75,7 +80,7 @@ func (r *Service) applyDQLBootstrap(ctx context.Context, repo *repository.Servic
 }
 
 func compileBootstrapComponent(ctx context.Context, compiler *shapeCompile.DQLCompiler, loader *shapeLoad.Loader, repo *repository.Service, sourcePath string, cfg *DQLBootstrap, _ string) (*repository.Component, error) {
-	data, err := os.ReadFile(sourcePath)
+	data, err := bootstrapFS.DownloadWithURL(ctx, sourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read DQL bootstrap source %s: %w", sourcePath, err)
 	}
@@ -83,7 +88,7 @@ func compileBootstrapComponent(ctx context.Context, compiler *shapeCompile.DQLCo
 	if dql == "" {
 		return nil, fmt.Errorf("empty DQL bootstrap source: %s", sourcePath)
 	}
-	sourceName := strings.TrimSuffix(filepath.Base(sourcePath), filepath.Ext(sourcePath))
+	sourceName := bootstrapSourceName(sourcePath)
 	source := &shape.Source{
 		Name: sourceName,
 		Path: sourcePath,
@@ -99,14 +104,20 @@ func compileBootstrapComponent(ctx context.Context, compiler *shapeCompile.DQLCo
 	}
 	normalizeBootstrapInlineSQL(componentArtifact.Resource)
 	mergeBootstrapSharedResources(componentArtifact.Resource, repo)
+	normalizeBootstrapTemplateParameters(componentArtifact.Resource)
+	normalizeBootstrapViewAliases(componentArtifact.Resource)
+	normalizeBootstrapCaches(componentArtifact.Resource)
 	loaded, ok := componentArtifact.Component.(*shapeLoad.Component)
 	if !ok || loaded == nil {
 		return nil, fmt.Errorf("unexpected shape component artifact for %s", sourcePath)
 	}
 	bootstrapMetadata := snapshotBootstrapViewMetadata(componentArtifact.Resource)
 	rootView := lookupRootView(componentArtifact.Resource, loaded.RootView)
-	if rootView == nil {
+	if rootView == nil && bootstrapRequiresRootView(loaded) {
 		return nil, fmt.Errorf("missing root view %q for %s", loaded.RootView, sourcePath)
+	}
+	if rootView == nil {
+		rootView = bootstrapHandlerView(componentArtifact.Resource, loaded, sourcePath)
 	}
 	method := strings.TrimSpace(strings.ToUpper(loaded.Method))
 	uri := strings.TrimSpace(loaded.URI)
@@ -122,6 +133,21 @@ func compileBootstrapComponent(ctx context.Context, compiler *shapeCompile.DQLCo
 	if uri == "" {
 		return nil, fmt.Errorf("missing shape component route for %s", sourcePath)
 	}
+	reportConfig := bootstrapReport(loaded)
+	if reportConfig == nil && rootView != nil && rootView.Groupable && strings.EqualFold(method, "GET") {
+		reportConfig = (&repository.Report{Enabled: true}).Normalize()
+	}
+	componentMeta := contract.Meta{}
+	if len(loaded.ComponentRoutes) > 0 && loaded.ComponentRoutes[0] != nil {
+		componentMeta.Name = strings.TrimSpace(loaded.ComponentRoutes[0].Name)
+	}
+	componentMCP := contract.ModelContextProtocol{}
+	if loaded.Directives != nil && loaded.Directives.MCP != nil {
+		componentMeta.Name = strings.TrimSpace(loaded.Directives.MCP.Name)
+		componentMeta.Description = strings.TrimSpace(loaded.Directives.MCP.Description)
+		componentMeta.DescriptionURI = strings.TrimSpace(loaded.Directives.MCP.DescriptionPath)
+		componentMCP.MCPTool = true
+	}
 	var outputType reflect.Type
 	if shouldMaterializeBootstrapOutputType(loaded, rootView) {
 		pkgPath := bootstrapTypePackage(loaded)
@@ -132,6 +158,8 @@ func compileBootstrapComponent(ctx context.Context, compiler *shapeCompile.DQLCo
 		}
 	}
 	componentModel := &repository.Component{
+		Meta:                 componentMeta,
+		ModelContextProtocol: componentMCP,
 		Path: contract.Path{
 			Method: method,
 			URI:    uri,
@@ -152,6 +180,7 @@ func compileBootstrapComponent(ctx context.Context, compiler *shapeCompile.DQLCo
 			Service: defaultServiceForMethod(method, rootView),
 		},
 		View:        rootView,
+		Report:      reportConfig,
 		TypeContext: loaded.TypeContext,
 	}
 	if outputType != nil {
@@ -235,13 +264,189 @@ func normalizeBootstrapInlineSQL(resource *view.Resource) {
 }
 
 func defaultServiceForMethod(method string, rootView *view.View) datlyservice.Type {
-	if strings.EqualFold(method, "GET") {
+	if strings.EqualFold(method, "GET") && rootView != nil {
 		return datlyservice.TypeReader
 	}
 	if rootView != nil && rootView.Mode == view.ModeQuery {
 		return datlyservice.TypeReader
 	}
 	return datlyservice.TypeExecutor
+}
+
+func bootstrapRequiresRootView(component *shapeLoad.Component) bool {
+	if component == nil {
+		return false
+	}
+	if strings.TrimSpace(component.RootView) != "" {
+		return true
+	}
+	if len(component.Views) > 0 {
+		return true
+	}
+	return component.Report != nil && component.Report.Enabled
+}
+
+func bootstrapHandlerView(resource *view.Resource, component *shapeLoad.Component, fallbackName string) *view.View {
+	if component == nil {
+		return nil
+	}
+	name := strings.TrimSpace(component.RootView)
+	if name == "" {
+		name = strings.TrimSpace(component.Name)
+	}
+	if name == "" {
+		name = strings.TrimSpace(fallbackName)
+	}
+	if name == "" {
+		name = "handler"
+	}
+	ret := &view.View{
+		Name: name,
+		Mode: view.ModeHandler,
+	}
+	if resource != nil && len(resource.Connectors) > 0 && resource.Connectors[0] != nil {
+		ret.Connector = &view.Connector{
+			Connection: view.Connection{
+				DBConfig: view.DBConfig{
+					Reference: shared.Reference{Ref: resource.Connectors[0].Name},
+				},
+			},
+		}
+	}
+	if output := component.OutputParameters(); len(output) > 0 {
+		if holder := output.LookupByLocation(state.KindOutput, "view"); holder != nil && holder.Schema != nil {
+			ret.Schema = holder.Schema.Clone()
+		}
+	}
+	return ret
+}
+
+func normalizeBootstrapTemplateParameters(resource *view.Resource) {
+	if resource == nil || len(resource.Parameters) == 0 {
+		return
+	}
+	params := make(state.Parameters, 0, len(resource.Parameters))
+	for _, param := range resource.Parameters {
+		if param == nil || param.In == nil {
+			continue
+		}
+		switch param.In.Kind {
+		case state.KindOutput, state.KindMeta, state.KindAsync:
+			continue
+		}
+		params = append(params, param)
+	}
+	if len(params) == 0 {
+		return
+	}
+	for _, item := range resource.Views {
+		normalizeBootstrapViewTemplate(item, params)
+	}
+}
+
+func normalizeBootstrapViewTemplate(aView *view.View, params state.Parameters) {
+	if aView == nil {
+		return
+	}
+	if aView.Template != nil {
+		seen := map[string]bool{}
+		for _, item := range aView.Template.Parameters {
+			if item == nil || strings.TrimSpace(item.Name) == "" {
+				continue
+			}
+			seen[strings.ToLower(strings.TrimSpace(item.Name))] = true
+		}
+		for _, param := range params {
+			if param == nil || param.In == nil || strings.TrimSpace(param.Name) == "" {
+				continue
+			}
+			if param.In.Kind == state.KindView && strings.EqualFold(strings.TrimSpace(param.In.Name), strings.TrimSpace(aView.Name)) {
+				continue
+			}
+			key := strings.ToLower(strings.TrimSpace(param.Name))
+			if seen[key] {
+				continue
+			}
+			aView.Template.Parameters = append(aView.Template.Parameters, param)
+			seen[key] = true
+		}
+		if len(aView.Template.Parameters) > 0 {
+			aView.Template.UseParameterStateType = true
+			aView.Template.UseResourceParameterLookup = true
+		}
+	}
+	for _, rel := range aView.With {
+		if rel == nil || rel.Of == nil {
+			continue
+		}
+		normalizeBootstrapViewTemplate(&rel.Of.View, params)
+	}
+}
+
+func normalizeBootstrapViewAliases(resource *view.Resource) {
+	if resource == nil || len(resource.Parameters) == 0 {
+		return
+	}
+	existing := resource.Views.Index()
+	for _, param := range resource.Parameters {
+		if param == nil || param.In == nil || param.In.Kind != state.KindView || param.Schema == nil {
+			continue
+		}
+		alias := strings.TrimSpace(param.Schema.Name)
+		if alias == "" {
+			continue
+		}
+		if _, err := existing.Lookup(alias); err == nil {
+			continue
+		}
+		sourceName := strings.TrimSpace(param.In.Name)
+		if sourceName == "" {
+			sourceName = strings.TrimSpace(param.Name)
+		}
+		sourceView, err := existing.Lookup(sourceName)
+		if err != nil || sourceView == nil {
+			continue
+		}
+		cloned := *sourceView
+		cloned.Name = alias
+		cloned.Ref = ""
+		resource.Views = append(resource.Views, &cloned)
+		existing.Register(&cloned)
+	}
+}
+
+func normalizeBootstrapCaches(resource *view.Resource) {
+	if resource == nil {
+		return
+	}
+	available := map[string]bool{}
+	for _, provider := range resource.CacheProviders {
+		if provider == nil || strings.TrimSpace(provider.Name) == "" {
+			continue
+		}
+		available[strings.ToLower(strings.TrimSpace(provider.Name))] = true
+	}
+	for _, item := range resource.Views {
+		normalizeBootstrapViewCache(item, available)
+	}
+}
+
+func normalizeBootstrapViewCache(aView *view.View, available map[string]bool) {
+	if aView == nil {
+		return
+	}
+	if aView.Cache != nil {
+		ref := strings.ToLower(strings.TrimSpace(aView.Cache.Ref))
+		if ref != "" && !available[ref] {
+			aView.Cache = nil
+		}
+	}
+	for _, rel := range aView.With {
+		if rel == nil || rel.Of == nil {
+			continue
+		}
+		normalizeBootstrapViewCache(&rel.Of.View, available)
+	}
 }
 
 func hasRepositoryProvider(ctx context.Context, repo *repository.Service, path *contract.Path) (bool, error) {
@@ -332,6 +537,9 @@ func discoverDQLBootstrapSources(includes, excludes []string) ([]string, error) 
 }
 
 func expandBootstrapPattern(pattern string) ([]string, error) {
+	if hasNonFileScheme(pattern) && !hasGlobMeta(pattern) {
+		return []string{pattern}, nil
+	}
 	pattern = filepath.Clean(pattern)
 	if strings.Contains(pattern, "**") {
 		return expandDoubleStarPattern(pattern)
@@ -351,6 +559,16 @@ func flattenPaths(items []string) ([]string, error) {
 	for _, item := range items {
 		item = strings.TrimSpace(item)
 		if item == "" {
+			continue
+		}
+		if hasNonFileScheme(item) {
+			exists, err := bootstrapFS.Exists(context.Background(), item)
+			if err != nil {
+				return nil, err
+			}
+			if exists {
+				result = append(result, item)
+			}
 			continue
 		}
 		info, err := os.Stat(item)
@@ -434,6 +652,18 @@ func globMatch(pattern, candidate string) bool {
 	}
 	ok, _ := path.Match(pattern, candidate)
 	return ok
+}
+
+func hasNonFileScheme(URL string) bool {
+	scheme := furl.Scheme(URL, "file")
+	return scheme != "file"
+}
+
+func bootstrapSourceName(sourcePath string) string {
+	_, URLPath := furl.Base(sourcePath, "file")
+	baseName := path.Base(URLPath)
+	ext := path.Ext(baseName)
+	return strings.TrimSuffix(baseName, ext)
 }
 
 func matchDoubleStar(pattern, candidate []string) bool {
@@ -557,6 +787,7 @@ func mergeBootstrapView(target, source *view.View) {
 			target.ColumnsConfig[key] = &cloned
 		}
 	}
+	mergeBootstrapColumns(target, source)
 }
 
 func snapshotBootstrapViewMetadata(resource *view.Resource) *view.Resource {
@@ -602,7 +833,59 @@ func snapshotBootstrapViewMetadata(resource *view.Resource) *view.Resource {
 				cloned.ColumnsConfig[key] = &copied
 			}
 		}
+		if len(item.Columns) > 0 {
+			cloned.Columns = make([]*view.Column, 0, len(item.Columns))
+			for _, column := range item.Columns {
+				if column == nil {
+					continue
+				}
+				copied := *column
+				cloned.Columns = append(cloned.Columns, &copied)
+			}
+		}
 		result.Views = append(result.Views, cloned)
 	}
 	return result
+}
+
+func mergeBootstrapColumns(target, source *view.View) {
+	if target == nil || source == nil || len(target.Columns) == 0 || len(source.Columns) == 0 {
+		return
+	}
+	sourceColumns := map[string]*view.Column{}
+	for _, column := range source.Columns {
+		if column == nil {
+			continue
+		}
+		for _, key := range []string{column.Name, column.DatabaseColumn, column.FieldName()} {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			sourceColumns[strings.ToLower(key)] = column
+		}
+	}
+	for _, column := range target.Columns {
+		if column == nil {
+			continue
+		}
+		for _, key := range []string{column.Name, column.DatabaseColumn, column.FieldName()} {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			if sourceColumn, ok := sourceColumns[strings.ToLower(key)]; ok {
+				if sourceColumn.Groupable {
+					column.Groupable = true
+				}
+				if sourceColumn.Aggregate {
+					column.Aggregate = true
+				}
+				if strings.TrimSpace(column.Tag) == "" {
+					column.Tag = sourceColumn.Tag
+				}
+				break
+			}
+		}
+	}
 }

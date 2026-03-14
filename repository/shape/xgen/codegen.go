@@ -492,6 +492,9 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 			}
 		}
 	}
+	if writeErr = g.writeGeneratedSQLFiles(packageDir, appendGenerated); writeErr != nil {
+		return nil, writeErr
+	}
 
 	var typeNames []string
 	if inputType != nil {
@@ -517,6 +520,116 @@ func (g *ComponentCodegen) Generate() (*ComponentCodegenResult, error) {
 		RouterFilePath: routerDest,
 		VeltyFilePath:  veltyDest,
 	}, nil
+}
+
+func (g *ComponentCodegen) writeGeneratedSQLFiles(packageDir string, appendGenerated func(dest string)) error {
+	if g == nil || g.Resource == nil {
+		return nil
+	}
+	written := map[string]bool{}
+	visited := map[*view.View]bool{}
+	var visitView func(aView *view.View) error
+	visitView = func(aView *view.View) error {
+		if aView == nil || visited[aView] {
+			return nil
+		}
+		visited[aView] = true
+		if err := g.writeGeneratedSQLFile(packageDir, aView.Template, appendGenerated, written); err != nil {
+			return err
+		}
+		if aView.Template != nil && aView.Template.Summary != nil {
+			if err := g.writeGeneratedSummarySQLFile(packageDir, aView.Template.Summary, appendGenerated, written); err != nil {
+				return err
+			}
+		}
+		for _, relation := range aView.With {
+			if relation == nil || relation.Of == nil {
+				continue
+			}
+			if err := visitView(&relation.Of.View); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if root := g.rootResourceView(); root != nil {
+		return visitView(root)
+	}
+	for _, candidate := range g.Resource.Views {
+		if err := visitView(candidate); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (g *ComponentCodegen) writeGeneratedSQLFile(packageDir string, tmpl *view.Template, appendGenerated func(dest string), written map[string]bool) error {
+	if tmpl == nil {
+		return nil
+	}
+	sqlURI := strings.TrimSpace(tmpl.SourceURL)
+	if sqlURI == "" {
+		return nil
+	}
+	content, err := g.resolveSQLContent(sqlURI, tmpl.Source)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+	return writeGeneratedSQLFile(packageDir, sqlURI, content, appendGenerated, written)
+}
+
+func (g *ComponentCodegen) writeGeneratedSummarySQLFile(packageDir string, summary *view.TemplateSummary, appendGenerated func(dest string), written map[string]bool) error {
+	if summary == nil {
+		return nil
+	}
+	sqlURI := strings.TrimSpace(summary.SourceURL)
+	if sqlURI == "" {
+		return nil
+	}
+	content, err := g.resolveSQLContent(sqlURI, summary.Source)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+	return writeGeneratedSQLFile(packageDir, sqlURI, content, appendGenerated, written)
+}
+
+func writeGeneratedSQLFile(packageDir, sqlURI, content string, appendGenerated func(dest string), written map[string]bool) error {
+	sqlURI = strings.TrimSpace(sqlURI)
+	if sqlURI == "" || strings.Contains(sqlURI, "://") || strings.HasPrefix(sqlURI, "/") {
+		return nil
+	}
+	dest := filepath.Join(packageDir, filepath.FromSlash(sqlURI))
+	if written[dest] {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(dest, []byte(content), 0o644); err != nil {
+		return err
+	}
+	written[dest] = true
+	appendGenerated(dest)
+	return nil
+}
+
+func (g *ComponentCodegen) resolveSQLContent(sqlURI, fallback string) (string, error) {
+	if g != nil && g.Resource != nil {
+		if content, err := g.Resource.LoadText(context.Background(), sqlURI); err == nil && strings.TrimSpace(content) != "" {
+			return content, nil
+		}
+	}
+	fallback = strings.TrimSpace(fallback)
+	if fallback != "" {
+		return fallback, nil
+	}
+	return "", nil
 }
 
 func normalizeBodyInputTypesForCodegen(params state.Parameters, pkgPath string, lookupType xreflect.LookupType) {
@@ -1599,6 +1712,10 @@ func (g *ComponentCodegen) renderColumnField(aView *view.View, column *view.Colu
 	}
 	rType = g.normalizeColumnType(column, rType)
 	tag := g.columnFieldTag(aView, column)
+	explicitType := strings.TrimSpace(column.DataType)
+	if strings.HasPrefix(explicitType, "map[") || strings.HasPrefix(explicitType, "[]map[") {
+		return fmt.Sprintf("\t%s %s `%s`\n", fieldName, explicitType, tag), nil
+	}
 	return fmt.Sprintf("\t%s %s `%s`\n", fieldName, goTypeString(rType), tag), collectTypeImports(rType, currentPackage)
 }
 

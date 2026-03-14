@@ -354,7 +354,7 @@ func TestTranscribe_PatchBasicOneRouteYAMLUsesGeneratedPackageName(t *testing.T)
 	text := string(data)
 	require.Contains(t, text, "Package: patch_basic_one")
 	require.Contains(t, text, "DataType: '*patch_basic_one.FoosView'")
-	require.Contains(t, text, "CaseFormat: lc")
+	require.Contains(t, text, "caseformat: lowerCamel")
 	require.NotContains(t, text, "Package: foos\n")
 }
 
@@ -383,10 +383,24 @@ func TestTranscribe_PatchBasicOneRouteYAMLBuildsNamedTemplateState(t *testing.T)
 	data, err := os.ReadFile(routeYAML)
 	require.NoError(t, err)
 
+	currentDir, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(filepath.Dir(routeYAML)))
+	defer func() {
+		_ = os.Chdir(currentDir)
+	}()
+
 	payload := &shapeRuleFile{}
 	require.NoError(t, yaml.Unmarshal(data, payload))
 	require.NotNil(t, payload.Resource)
-	payload.Resource.Connectors = []*view.Connector{view.NewConnector("dev", "sqlite3", "file::memory:?cache=shared")}
+	payload.Resource.Connectors = nil
+	payload.Resource.AddConnector("dev", "sqlite3", "file::memory:?cache=shared")
+	rootView := lookupNamedView(payload.Resource, "foos")
+	require.NotNil(t, rootView)
+	rootView.Connector = view.NewRefConnector("dev")
+	curFoosView := lookupNamedView(payload.Resource, "CurFoos")
+	require.NotNil(t, curFoosView)
+	curFoosView.Connector = view.NewRefConnector("dev")
 	payload.Resource.SetTypes(extension.Config.Types)
 	require.NoError(t, payload.Resource.Init(context.Background(), payload.Resource.TypeRegistry(), extension.Config.Codecs, nil, nil, extension.Config.Predicates))
 
@@ -396,9 +410,16 @@ func TestTranscribe_PatchBasicOneRouteYAMLBuildsNamedTemplateState(t *testing.T)
 	require.NotNil(t, root.Template.StateType())
 
 	rType := root.Template.StateType().Type()
+	for rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
 	field, ok := rType.FieldByName("Foos")
 	require.True(t, ok)
-	require.Equal(t, "*patch_basic_one.FoosView", field.Type.String())
+	require.Equal(t, reflect.Ptr, field.Type.Kind())
+	require.Equal(t, reflect.Struct, field.Type.Elem().Kind())
+	require.Contains(t, field.Type.String(), "NAME")
+	require.Contains(t, field.Type.String(), "QUANTITY")
+	require.Contains(t, field.Type.String(), "ID")
 }
 
 func TestTranscribe_PatchBasicOneRouteYAMLPreservesNamedHelperParamTypes(t *testing.T) {

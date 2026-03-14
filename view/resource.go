@@ -10,6 +10,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/gateway/router/marshal"
+	"github.com/viant/datly/internal/debuglog"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
@@ -567,11 +568,13 @@ func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Reso
 	}
 
 	if err := yaml.Unmarshal(data, &transient); err != nil {
+		debuglog.YAMLFailure("view.LoadResourceFromURL.transient", URL, data, err)
 		return nil, err
 	}
 
 	aMap := map[string]interface{}{}
 	if err := yaml.Unmarshal(data, &aMap); err != nil {
+		debuglog.YAMLFailure("view.LoadResourceFromURL.map", URL, data, err)
 		return nil, err
 	}
 

@@ -1,0 +1,125 @@
+ColumnsDiscovery: true
+Resource:
+    Parameters:
+        - In:
+            Kind: query
+            Name: vendorIDs
+          Name: VendorIDs
+          Predicates:
+            - Args:
+                - t
+                - ID
+              Ensure: false
+              Group: 0
+              Name: in
+          Schema:
+            Cardinality: Many
+            DataType: int
+    Types:
+        - DataType: struct{VendorIDs bool; }
+          Name: VendorInputHas
+          Package: grouping
+        - DataType: struct{VendorIDs []int `parameter:",kind=query,in=vendorIDs" predicate:"in,group=0,t,ID"`; Has *VendorInputHas `setMarker:"true" format:"-" sqlx:"-" diff:"-" json:"-"`; }
+          Name: VendorInput
+          Package: grouping
+        - DataType: struct{AccountId *int `sqlx:"ACCOUNT_ID" velty:"names=ACCOUNT_ID|AccountId"`; UserCreated *int `sqlx:"USER_CREATED" velty:"names=USER_CREATED|UserCreated"`; TotalId *float64 `sqlx:"TOTAL_ID" velty:"names=TOTAL_ID|TotalId"`; MaxId *int `sqlx:"MAX_ID" velty:"names=MAX_ID|MaxId"`; }
+          Name: VendorView
+          Package: grouping
+    Views:
+        - ColumnsConfig:
+            ACCOUNT_ID:
+                Groupable: true
+                Name: ACCOUNT_ID
+            USER_CREATED:
+                Groupable: true
+                Name: USER_CREATED
+          Connector:
+            Ref: dev
+          Groupable: true
+          Mode: SQLQuery
+          Module: dev
+          Name: vendor
+          Schema:
+            Cardinality: Many
+            DataType: '*VendorView'
+            Name: VendorView
+            Package: grouping
+          Selector:
+            Constraints:
+                Criteria: true
+                Filterable:
+                    - '*'
+                Limit: true
+                Offset: true
+                OrderBy: true
+                OrderByColumn:
+                    accountId: ACCOUNT_ID
+                    accountid: ACCOUNT_ID
+                    maxId: MAX_ID
+                    maxid: MAX_ID
+                    totalId: TOTAL_ID
+                    totalid: TOTAL_ID
+                    userCreated: USER_CREATED
+                    usercreated: USER_CREATED
+                Projection: true
+            Limit: 25
+            Namespace: ve
+          Table: VENDOR
+          Template:
+            Parameters:
+                - Ref: VendorIDs
+            SourceURL: vendors_grouping/vendor.sql
+Routes:
+    - Input:
+        Type:
+            Cardinality: One
+            Name: VendorInput
+            Package: grouping
+            Parameters:
+                - In:
+                    Kind: query
+                    Name: vendorIDs
+                  Name: VendorIDs
+                  Predicates:
+                    - Args:
+                        - t
+                        - ID
+                      Ensure: false
+                      Group: 0
+                      Name: in
+                  Schema:
+                    Cardinality: Many
+                    DataType: int
+      MCPTool: true
+      Method: GET
+      Name: vendors grouping
+      Output:
+        Cardinality: Many
+        CaseFormat: lc
+        Type:
+            Package: grouping
+            Parameters:
+                - In:
+                    Kind: output
+                    Name: view
+                  Name: Data
+                  Schema:
+                    Cardinality: Many
+                    DataType: '*VendorView'
+                    Name: VendorView
+                    Package: grouping
+                  Tag: ' anonymous:"true" typeName:"VendorView"'
+      Report:
+        Dimensions: Dimensions
+        Enabled: true
+        Filters: Filters
+        Limit: Limit
+        Measures: Measures
+        Offset: Offset
+        OrderBy: OrderBy
+      Service: Reader
+      URI: /v1/api/dev/vendors-grouping
+      View:
+        Ref: vendor
+With:
+    - connections

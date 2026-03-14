@@ -4,9 +4,11 @@ init:
   routerAppDir: ${v1Path}/routerapp
   routerPkgDir: ${v1Path}/routerpkg
   routerImports: ${routerAppDir}/imports_gen.go
-  goBootstrapPort: 8081
+  goBootstrapPort: 18081
   wildcardExpect: $LoadData('${v1Path}/cases/001_relation_one_to_many/expect.json')
   adminExpect: $LoadData('${v1Path}/cases/019_component_dependency/expect_admin.json')
+  wildcardExpectFile: ${v1Path}/cases/001_relation_one_to_many/expect.json
+  adminExpectFile: ${v1Path}/cases/019_component_dependency/expect_admin.json
 
 pipeline:
   prepare:
@@ -133,20 +135,13 @@ pipeline:
 
   wildcardApp:
     stop:
-      action: process:stop
+      action: exec:run
       target: $target
-      input: datly_go_router
-
-    start:
-      action: process:start
-      sleepTimeMs: 6000
-      target: $target
-      directory: /tmp/
       checkError: true
-      immuneToHangups: true
-      env:
-        TEST: 1
-      command: ulimit -Sn 10000 && ./datly_go_router -c=${wildcardConfig} > /tmp/datly_v1_go_all.out 2>&1
+      commands:
+        - pkill -f '/tmp/datly_go_router -c=/Users/awitas/go/src/github.com/viant/datly/e2e/v1/autogen/Datly/config_go_all.json' >/dev/null 2>&1 || true
+        - pkill -f '/tmp/datly_go_router -c=/Users/awitas/go/src/github.com/viant/datly/e2e/v1/autogen/Datly/config_go_vendor_list.json' >/dev/null 2>&1 || true
+        - pkill -f 'datly_go_router' >/dev/null 2>&1 || true
 
   wildcardJWT:
     action: secret:signJWT
@@ -159,69 +154,86 @@ pipeline:
       email: dev@viantint.com
 
   wildcardTest:
-    action: http/runner:send
-    requests:
-      - Method: GET
-        description: wildcard GoBootstrap loads vendor list route from generated router packages
-        URL: http://127.0.0.1:${goBootstrapPort}/v1/api/shape/dev/vendors/
-        Expect:
-          Code: 200
-          JSONBody: $wildcardExpect
-      - Method: GET
-        description: wildcard GoBootstrap loads cross-package component dependency route
-        URL: http://127.0.0.1:${goBootstrapPort}/v1/api/shape/dev/vendors/component-acl?name=2
-        Header:
-          Authorization: Bearer ${wildcardJWT.TokenString}
-        Expect:
-          Code: 200
-          JSONBody: $adminExpect
-      - Method: GET
-        description: wildcard GoBootstrap loads linked handler route from linked Go package
-        URL: http://127.0.0.1:${goBootstrapPort}/v1/api/shape/dev/linked/auth?echo=hello
-        Header:
-          Authorization: Bearer ${wildcardJWT.TokenString}
-        Expect:
-          Code: 200
-          JSONBody:
-            status: ok
-            data:
-              userID: 2
-              firstName: Developer
-              echo: hello
+    action: exec:run
+    target: $target
+    checkError: true
+    commands:
+      - |
+        set -e
+        cd /tmp
+        rm -f /tmp/datly_v1_go_all.out /tmp/datly_v1_go_all.pid /tmp/datly_v1_go_all_actual.json /tmp/datly_v1_go_admin_actual.json /tmp/datly_v1_go_linked_actual.json
+        export TEST=1
+        setsid ./datly_go_router -c=${wildcardConfig} >/tmp/datly_v1_go_all.out 2>&1 < /dev/null &
+        echo $! >/tmp/datly_v1_go_all.pid
+        cleanup() {
+          if [ -f /tmp/datly_v1_go_all.pid ]; then
+            kill "$(cat /tmp/datly_v1_go_all.pid)" >/dev/null 2>&1 || true
+          fi
+        }
+        trap cleanup EXIT
+        for i in $(seq 1 30); do
+          if curl -sf http://127.0.0.1:${goBootstrapPort}/v1/api/status >/dev/null; then
+            break
+          fi
+          sleep 1
+        done
+        curl -sf http://127.0.0.1:${goBootstrapPort}/v1/api/shape/dev/vendors/ >/tmp/datly_v1_go_all_actual.json
+        jq -S . /tmp/datly_v1_go_all_actual.json >/tmp/datly_v1_go_all_actual.norm
+        jq -S . ${wildcardExpectFile} >/tmp/datly_v1_go_all_expect.norm
+        diff -u /tmp/datly_v1_go_all_expect.norm /tmp/datly_v1_go_all_actual.norm
+        curl -sf -H 'Authorization: Bearer ${wildcardJWT.TokenString}' 'http://127.0.0.1:${goBootstrapPort}/v1/api/shape/dev/vendors/component-acl?name=2' >/tmp/datly_v1_go_admin_actual.json
+        jq -S . /tmp/datly_v1_go_admin_actual.json >/tmp/datly_v1_go_admin_actual.norm
+        jq -S . ${adminExpectFile} >/tmp/datly_v1_go_admin_expect.norm
+        diff -u /tmp/datly_v1_go_admin_expect.norm /tmp/datly_v1_go_admin_actual.norm
+        curl -sf -H 'Authorization: Bearer ${wildcardJWT.TokenString}' 'http://127.0.0.1:${goBootstrapPort}/v1/api/shape/dev/linked/auth?echo=hello' >/tmp/datly_v1_go_linked_actual.json
+        jq -e '.status == "ok" and .data.userID == 2 and .data.firstName == "Developer" and .data.echo == "hello"' /tmp/datly_v1_go_linked_actual.json >/dev/null
 
   singleApp:
     stop:
-      action: process:stop
+      action: exec:run
       target: $target
-      input: datly_go_router
-
-    start:
-      action: process:start
-      sleepTimeMs: 6000
-      target: $target
-      directory: /tmp/
       checkError: true
-      immuneToHangups: true
-      env:
-        TEST: 1
-      command: ulimit -Sn 10000 && ./datly_go_router -c=${singleConfig} > /tmp/datly_v1_go_one.out 2>&1
+      commands:
+        - pkill -f '/tmp/datly_go_router -c=/Users/awitas/go/src/github.com/viant/datly/e2e/v1/autogen/Datly/config_go_all.json' >/dev/null 2>&1 || true
+        - pkill -f '/tmp/datly_go_router -c=/Users/awitas/go/src/github.com/viant/datly/e2e/v1/autogen/Datly/config_go_vendor_list.json' >/dev/null 2>&1 || true
+        - pkill -f 'datly_go_router' >/dev/null 2>&1 || true
 
   singleTest:
-    action: http/runner:send
-    requests:
-      - Method: GET
-        description: single-package GoBootstrap loads only the requested vendor/list package
-        URL: http://127.0.0.1:${goBootstrapPort}/v1/api/shape/dev/vendors/
-        Expect:
-          Code: 200
-          JSONBody: $wildcardExpect
-      - Method: GET
-        description: single-package GoBootstrap does not load unrelated user ACL route
-        URL: http://127.0.0.1:${goBootstrapPort}/v1/api/shape/dev/auth/user-acl
-        Expect:
-          Code: 404
+    action: exec:run
+    target: $target
+    checkError: true
+    commands:
+      - |
+        set -e
+        cd /tmp
+        rm -f /tmp/datly_v1_go_one.out /tmp/datly_v1_go_one.pid /tmp/datly_v1_go_one_actual.json
+        export TEST=1
+        setsid ./datly_go_router -c=${singleConfig} >/tmp/datly_v1_go_one.out 2>&1 < /dev/null &
+        echo $! >/tmp/datly_v1_go_one.pid
+        cleanup() {
+          if [ -f /tmp/datly_v1_go_one.pid ]; then
+            kill "$(cat /tmp/datly_v1_go_one.pid)" >/dev/null 2>&1 || true
+          fi
+        }
+        trap cleanup EXIT
+        for i in $(seq 1 30); do
+          if curl -sf http://127.0.0.1:${goBootstrapPort}/v1/api/status >/dev/null; then
+            break
+          fi
+          sleep 1
+        done
+        curl -sf http://127.0.0.1:${goBootstrapPort}/v1/api/shape/dev/vendors/ >/tmp/datly_v1_go_one_actual.json
+        jq -S . /tmp/datly_v1_go_one_actual.json >/tmp/datly_v1_go_one_actual.norm
+        jq -S . ${wildcardExpectFile} >/tmp/datly_v1_go_one_expect.norm
+        diff -u /tmp/datly_v1_go_one_expect.norm /tmp/datly_v1_go_one_actual.norm
+        code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:${goBootstrapPort}/v1/api/shape/dev/auth/user-acl)
+        test "$code" = "404"
 
   cleanup:
-    action: process:stop
+    action: exec:run
     target: $target
-    input: datly_go_router
+    checkError: true
+    commands:
+      - pkill -f '/tmp/datly_go_router -c=/Users/awitas/go/src/github.com/viant/datly/e2e/v1/autogen/Datly/config_go_all.json' >/dev/null 2>&1 || true
+      - pkill -f '/tmp/datly_go_router -c=/Users/awitas/go/src/github.com/viant/datly/e2e/v1/autogen/Datly/config_go_vendor_list.json' >/dev/null 2>&1 || true
+      - pkill -f 'datly_go_router' >/dev/null 2>&1 || true

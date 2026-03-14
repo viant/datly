@@ -34,6 +34,12 @@ type explicitReportInput struct {
 	Offset  *int
 }
 
+type schemaTaggedReportView struct {
+	AccountId   *int `groupable:"true"`
+	UserCreated *int `groupable:"true"`
+	TotalSpend  *float64
+}
+
 func (r *testResource) LookupParameter(name string) (*state.Parameter, error) { return nil, nil }
 func (r *testResource) AppendParameter(parameter *state.Parameter)            {}
 func (r *testResource) ViewSchema(ctx context.Context, name string) (*state.Schema, error) {
@@ -73,12 +79,14 @@ func TestAssembleMetadata(t *testing.T) {
 				assert.Equal(t, "Filters", got.FiltersKey)
 				require.Len(t, got.Dimensions, 2)
 				require.Len(t, got.Measures, 1)
-				require.Len(t, got.Filters, 1)
+				require.Len(t, got.Filters, 2)
 				assert.Equal(t, "AccountID", got.Dimensions[0].Name)
 				assert.Equal(t, "UserCreated", got.Dimensions[1].Name)
 				assert.Equal(t, "TotalSpend", got.Measures[0].Name)
-				assert.Equal(t, "accountID", got.Filters[0].Name)
-				assert.Equal(t, "AccountId", got.Filters[0].FieldName)
+				assert.Equal(t, "vendorIDs", got.Filters[0].Name)
+				assert.Equal(t, "VendorIdS", got.Filters[0].FieldName)
+				assert.Equal(t, "accountID", got.Filters[1].Name)
+				assert.Equal(t, "AccountId", got.Filters[1].FieldName)
 			},
 		},
 		{
@@ -196,6 +204,82 @@ func TestBuildInputType(t *testing.T) {
 			test.assertion(t, got, err)
 		})
 	}
+}
+
+func TestAssembleMetadata_UsesGroupableConfigAndNonPredicateQueryFilters(t *testing.T) {
+	resource := view.EmptyResource()
+	rootView := view.NewView("vendor", "VENDOR")
+	rootView.Groupable = true
+	groupable := true
+	rootView.ColumnsConfig = map[string]*view.ColumnConfig{
+		"AccountID":   {Groupable: &groupable},
+		"UserCreated": {Groupable: &groupable},
+	}
+	rootView.Columns = []*view.Column{
+		view.NewColumn("AccountID", "int", reflect.TypeOf(0), false),
+		view.NewColumn("UserCreated", "int", reflect.TypeOf(0), false),
+		view.NewColumn("TotalSpend", "float64", reflect.TypeOf(float64(0)), false),
+	}
+	rootView.Columns[2].Aggregate = true
+	for _, column := range rootView.Columns {
+		require.NoError(t, column.Init(&testResource{}, text.CaseFormatUndefined, false))
+	}
+	rootView.SetResource(resource)
+	resource.AddViews(rootView)
+
+	component := &Component{
+		Name:      "vendors",
+		InputName: "VendorInput",
+		Parameters: state.Parameters{
+			&state.Parameter{Name: "vendorIDs", In: state.NewQueryLocation("vendorIDs"), Schema: state.NewSchema(reflect.TypeOf([]int{})), Description: "Vendor IDs to include"},
+			&state.Parameter{Name: "fields", In: state.NewQueryLocation("_fields"), Schema: state.NewSchema(reflect.TypeOf([]string{}))},
+		},
+		View:     rootView,
+		Resource: &testResource{},
+		Report:   (&Config{Enabled: true}).Normalize(),
+	}
+
+	metadata, err := AssembleMetadata(component, component.Report)
+	require.NoError(t, err)
+	require.Len(t, metadata.Dimensions, 2)
+	require.Len(t, metadata.Measures, 1)
+	require.Len(t, metadata.Filters, 1)
+	assert.Equal(t, "AccountID", metadata.Dimensions[0].Name)
+	assert.Equal(t, "UserCreated", metadata.Dimensions[1].Name)
+	assert.Equal(t, "TotalSpend", metadata.Measures[0].Name)
+	assert.Equal(t, "vendorIDs", metadata.Filters[0].Name)
+}
+
+func TestAssembleMetadata_UsesSchemaGroupableTags(t *testing.T) {
+	resource := view.EmptyResource()
+	rootView := view.NewView("vendor", "VENDOR")
+	rootView.Groupable = true
+	rootView.Schema = state.NewSchema(reflect.TypeOf(schemaTaggedReportView{}))
+	rootView.Columns = []*view.Column{
+		view.NewColumn("AccountID", "int", reflect.TypeOf(0), false),
+		view.NewColumn("UserCreated", "int", reflect.TypeOf(0), false),
+		view.NewColumn("TotalSpend", "float64", reflect.TypeOf(float64(0)), false),
+	}
+	rootView.Columns[2].Aggregate = true
+	for _, column := range rootView.Columns {
+		require.NoError(t, column.Init(&testResource{}, text.CaseFormatUndefined, false))
+	}
+	rootView.SetResource(resource)
+	resource.AddViews(rootView)
+
+	component := &Component{
+		Name:      "vendors",
+		InputName: "VendorInput",
+		View:      rootView,
+		Resource:  &testResource{},
+		Report:    (&Config{Enabled: true}).Normalize(),
+	}
+
+	metadata, err := AssembleMetadata(component, component.Report)
+	require.NoError(t, err)
+	require.Len(t, metadata.Dimensions, 2)
+	assert.Equal(t, "AccountID", metadata.Dimensions[0].Name)
+	assert.Equal(t, "UserCreated", metadata.Dimensions[1].Name)
 }
 
 func newComponentFixture(t *testing.T, reportCfg *Config) *Component {

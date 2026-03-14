@@ -27,20 +27,25 @@ pipeline:
       request: '@datastore'
       tasks: '*'
 
-  shapes:
-    description: generate Go types and route YAML from DQL
-    action: run
-    request: '@shapes'
-
   build:
     action: run
     request: '@build'
     tasks: 'deploy'
 
+  shapes:
+    description: generate Go types and route YAML from DQL
+    action: run
+    request: '@shapes'
+
   test:
     action: run
     description: run v1 regression test
     request: '@regression/regression'
+
+  dqlBootstrap:
+    action: run
+    description: run isolated DQL bootstrap regression test
+    request: '@dql_bootstrap/regression/regression'
 
   goBootstrap:
     action: run

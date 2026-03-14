@@ -135,6 +135,10 @@ func reflectDataType(t reflect.Type) string {
 			return "[]byte"
 		}
 		return "[]" + reflectDataType(t.Elem())
+	case reflect.Map:
+		return "map[" + reflectDataType(t.Key()) + "]" + reflectDataType(t.Elem())
+	case reflect.Interface:
+		return "interface{}"
 	default:
 		return "string"
 	}

@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -49,20 +50,27 @@ func AssembleMetadata(component *Component, cfg *Config) (*Metadata, error) {
 		}
 		fieldName := exportedFieldName(column.FieldName())
 		field := &Field{Name: column.FieldName(), FieldName: fieldName, Description: column.Name}
+		groupable := column.Groupable
+		if !groupable {
+			groupable = isGroupableColumn(viewRef, column)
+		}
 		switch {
-		case column.Groupable:
+		case groupable:
 			field.Section = cfg.Dimensions
 			result.Dimensions = append(result.Dimensions, field)
-		case column.Aggregate || (viewRef.Groupable && !column.Groupable):
+		case column.Aggregate || (viewRef.Groupable && !groupable):
 			field.Section = cfg.Measures
 			result.Measures = append(result.Measures, field)
 		}
 	}
 	for _, parameter := range component.Parameters {
-		if parameter == nil || len(parameter.Predicates) == 0 || parameter.In == nil {
+		if parameter == nil || parameter.In == nil {
 			continue
 		}
 		if isSelectorParameter(parameter, viewRef) {
+			continue
+		}
+		if !isReportFilterParameter(parameter) {
 			continue
 		}
 		result.Filters = append(result.Filters, &Filter{
@@ -206,6 +214,99 @@ func isSelectorParameter(parameter *state.Parameter, aView *view.View) bool {
 	}
 	name := strings.ToLower(parameter.In.Name)
 	return name == "_fields" || name == "_orderby" || name == "_limit" || name == "_offset" || name == "_page" || name == "criteria"
+}
+
+func isReportFilterParameter(parameter *state.Parameter) bool {
+	if parameter == nil || parameter.In == nil {
+		return false
+	}
+	if len(parameter.Predicates) > 0 {
+		return true
+	}
+	if strings.HasPrefix(parameter.In.Name, "_") {
+		return false
+	}
+	switch parameter.In.Kind {
+	case state.KindQuery, state.KindPath, state.KindHeader, state.KindCookie:
+		return true
+	}
+	return false
+}
+
+func isGroupableColumn(aView *view.View, column *view.Column) bool {
+	if aView == nil || column == nil {
+		return false
+	}
+	if aView.IsGroupable(column.FieldName()) || aView.IsGroupable(column.Name) {
+		return true
+	}
+	if len(aView.ColumnsConfig) == 0 {
+		return schemaFieldGroupable(aView, column)
+	}
+	for _, key := range []string{column.Name, column.FieldName()} {
+		if cfg, ok := aView.ColumnsConfig[key]; ok && cfg != nil && cfg.Groupable != nil {
+			return *cfg.Groupable
+		}
+	}
+	return schemaFieldGroupable(aView, column)
+}
+
+func schemaFieldGroupable(aView *view.View, column *view.Column) bool {
+	if aView == nil || aView.Schema == nil {
+		return false
+	}
+	rType := aView.Schema.CompType()
+	if rType == nil {
+		rType = aView.Schema.Type()
+	}
+	for rType != nil && (rType.Kind() == reflect.Ptr || rType.Kind() == reflect.Slice || rType.Kind() == reflect.Array) {
+		rType = rType.Elem()
+	}
+	if rType == nil || rType.Kind() != reflect.Struct {
+		return false
+	}
+	candidates := []string{column.FieldName(), exportedFieldName(column.FieldName()), exportedFieldName(column.Name), column.Name}
+	for i := 0; i < rType.NumField(); i++ {
+		field := rType.Field(i)
+		if !matchesAnyFieldName(field.Name, candidates...) {
+			continue
+		}
+		value, ok := field.Tag.Lookup("groupable")
+		if !ok {
+			return false
+		}
+		groupable, err := strconv.ParseBool(value)
+		return err == nil && groupable
+	}
+	return false
+}
+
+func matchesAnyFieldName(actual string, candidates ...string) bool {
+	actual = normalizeIdentifier(actual)
+	if actual == "" {
+		return false
+	}
+	for _, candidate := range candidates {
+		if normalizeIdentifier(candidate) == actual {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeIdentifier(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var builder strings.Builder
+	builder.Grow(len(value))
+	for _, r := range value {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			builder.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return builder.String()
 }
 
 func validateExplicitInput(inputType *state.Type, metadata *Metadata) error {

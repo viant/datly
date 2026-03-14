@@ -41,7 +41,13 @@ func (c *Config) Init(ctx context.Context) {
 
 // Validate validates config
 func (c *Config) Validate() error {
-	return nil
+	if c == nil {
+		return nil
+	}
+	if c.Config == nil {
+		c.Config = &gateway.Config{}
+	}
+	return c.Config.Validate()
 }
 
 func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
@@ -78,16 +84,19 @@ func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
 }
 
 func (c *Config) normalizeURLs(baseURL string) {
-	if url.IsRelative(c.RouteURL) {
+	if c.Config == nil {
+		c.Config = &gateway.Config{}
+	}
+	if c.RouteURL != "" && url.IsRelative(c.RouteURL) {
 		c.RouteURL = url.Join(baseURL, c.RouteURL)
 	}
-	if url.IsRelative(c.ContentURL) {
+	if c.ContentURL != "" && url.IsRelative(c.ContentURL) {
 		c.ContentURL = url.Join(baseURL, c.ContentURL)
 	}
-	if url.IsRelative(c.PluginsURL) {
+	if c.PluginsURL != "" && url.IsRelative(c.PluginsURL) {
 		c.PluginsURL = url.Join(baseURL, c.PluginsURL)
 	}
-	if url.IsRelative(c.DependencyURL) {
+	if c.DependencyURL != "" && url.IsRelative(c.DependencyURL) {
 		c.DependencyURL = url.Join(baseURL, c.DependencyURL)
 	}
 	if c.JobURL != "" && url.IsRelative(c.JobURL) {

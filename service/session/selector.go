@@ -168,10 +168,10 @@ func (s *Session) setQuerySettings(ctx context.Context, ns *view.NamespaceView, 
 		return nil
 	}
 	if err = s.populateSyncFlag(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.SyncFlagParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.SyncFlagParameter, view.QueryStateParameters.SyncFlagParameter), err)
 	}
 	if err = s.populateContentFormat(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.ContentFormatParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.ContentFormatParameter, view.QueryStateParameters.ContentFormatParameter), err)
 	}
 	return nil
 }
@@ -188,6 +188,9 @@ func (s *Session) populatePageQuerySelector(ctx context.Context, ns *view.Namesp
 
 func (s *Session) populateSyncFlag(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
+	if selectorParameters == nil || selectorParameters.SyncFlagParameter == nil {
+		return nil
+	}
 	syncFlagParameter := ns.SelectorParameters(selectorParameters.SyncFlagParameter, view.QueryStateParameters.SyncFlagParameter)
 	value, has, err := s.lookupFirstValue(ctx, syncFlagParameter, opts)
 	if has && err == nil {
@@ -201,6 +204,9 @@ func (s *Session) populateSyncFlag(ctx context.Context, ns *view.NamespaceView, 
 
 func (s *Session) populateContentFormat(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
+	if selectorParameters == nil || selectorParameters.ContentFormatParameter == nil {
+		return nil
+	}
 	syncFlagParameter := ns.SelectorParameters(selectorParameters.ContentFormatParameter, view.QueryStateParameters.ContentFormatParameter)
 	value, has, err := s.lookupFirstValue(ctx, syncFlagParameter, opts)
 	if has && err == nil {

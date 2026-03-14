@@ -306,6 +306,11 @@ func TestRouter_buildToolsIntegration_RegistersReportTool(t *testing.T) {
 	require.Contains(t, tool.InputSchema.Properties, "filters")
 }
 
+func TestNormalizeMCPToolName(t *testing.T) {
+	assert.Equal(t, "vendorsgroupingReport", normalizeMCPToolName("vendors_grouping Report"))
+	assert.Equal(t, "vendorsgroupingreport", normalizeMCPToolName("vendors-grouping report"))
+}
+
 func TestRouter_buildToolInputType_UsesBuiltReportComponentParameters(t *testing.T) {
 	resource := view.EmptyResource()
 	rootView := view.NewView("vendor", "VENDOR")

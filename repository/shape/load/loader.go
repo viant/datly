@@ -148,7 +148,7 @@ func (l *Loader) materialize(ctx context.Context, planned *shape.PlanResult, loa
 		resource.SetFSEmbedder(state.NewFSEmbedder(pResult.EmbedFS))
 	}
 	for _, item := range pResult.Views {
-		aView, err := materializeView(item)
+		aView, err := materializeView(planned.Source, item)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1512,7 +1512,7 @@ func pickRootView(views []*plan.View) *plan.View {
 	return nil
 }
 
-func materializeView(item *plan.View) (*view.View, error) {
+func materializeView(source *shape.Source, item *plan.View) (*view.View, error) {
 	if item == nil {
 		return nil, fmt.Errorf("shape load: nil view plan item")
 	}
@@ -1545,7 +1545,7 @@ func materializeView(item *plan.View) (*view.View, error) {
 	}
 	if item.SQL != "" || item.SQLURI != "" {
 		tmpl := view.NewTemplate(item.SQL)
-		tmpl.SourceURL = item.SQLURI
+		tmpl.SourceURL = absolutizeRouteAssetURL(source, item.SQLURI)
 		opts = append(opts, view.WithTemplate(tmpl))
 	}
 	if strings.TrimSpace(item.Summary) != "" || strings.TrimSpace(item.SummaryURL) != "" {
@@ -1556,7 +1556,7 @@ func materializeView(item *plan.View) (*view.View, error) {
 		opts = append(opts, view.WithSummary(&view.TemplateSummary{
 			Name:      name,
 			Source:    item.Summary,
-			SourceURL: item.SummaryURL,
+			SourceURL: absolutizeRouteAssetURL(source, item.SummaryURL),
 			Kind:      view.MetaKindRecord,
 		}))
 	}
@@ -2550,10 +2550,57 @@ func addViewTypeDefinition(resource *view.Resource, aView *view.View, seen map[s
 		}
 	}
 	if len(def.Fields) == 0 {
+		if schema := unresolvedViewTypeSchema(aView, plannedByName); schema != nil {
+			resource.Types = append(resource.Types, &view.TypeDefinition{
+				Name:        def.Name,
+				Package:     def.Package,
+				ModulePath:  def.ModulePath,
+				Ptr:         def.Ptr,
+				Cardinality: schema.Cardinality,
+				Schema:      schema,
+			})
+			seen[key] = true
+		}
 		return
 	}
 	resource.Types = append(resource.Types, def)
 	seen[key] = true
+}
+
+func unresolvedViewTypeSchema(aView *view.View, plannedByName map[string]*plan.View) *state.Schema {
+	if aView == nil {
+		return nil
+	}
+	if schema := aView.Schema; schema != nil && schema.Type() != nil {
+		candidate := schema.Clone()
+		candidate.SetType(fallbackViewDefinitionType(candidate.Type()))
+		return candidate
+	}
+	planned := plannedViewFor(aView, plannedByName)
+	if planned == nil {
+		return nil
+	}
+	if rType := bestSchemaType(planned); rType != nil {
+		return state.NewSchema(fallbackViewDefinitionType(rType))
+	}
+	return nil
+}
+
+func fallbackViewDefinitionType(rType reflect.Type) reflect.Type {
+	if rType == nil {
+		return nil
+	}
+	for rType.Kind() == reflect.Ptr || rType.Kind() == reflect.Slice || rType.Kind() == reflect.Array {
+		rType = rType.Elem()
+	}
+	switch rType.Kind() {
+	case reflect.Struct:
+		return rType
+	case reflect.Map, reflect.Interface:
+		return reflect.StructOf(nil)
+	default:
+		return rType
+	}
 }
 
 func collectTypedViewDefinitionFields(aView *view.View, plannedByName map[string]*plan.View, source *shape.Source, ctx *typectx.Context, typeName string) []*view.Field {
@@ -3898,6 +3945,27 @@ func enrichRelationHolderTypes(resource *view.Resource, planned []*plan.View) er
 			if err != nil || parent == nil || parent.Schema == nil {
 				continue
 			}
+			refName := strings.TrimSpace(rel.Ref)
+			if refName == "" {
+				continue
+			}
+			refView, err := index.Lookup(refName)
+			if err == nil && refView != nil && refView.Schema != nil {
+				parentAugmented, changed, err := ensureRelationJoinFields(parent.ComponentType(), rel, true, refView.ComponentType())
+				if err != nil {
+					return err
+				}
+				if changed && parentAugmented != nil {
+					applyViewComponentType(parent, parentAugmented)
+				}
+				childAugmented, changed, err := ensureRelationJoinFields(refView.ComponentType(), rel, false, parent.ComponentType())
+				if err != nil {
+					return err
+				}
+				if changed && childAugmented != nil {
+					applyViewComponentType(refView, childAugmented)
+				}
+			}
 			parentType := parent.ComponentType()
 			if parentType == nil {
 				continue
@@ -3929,6 +3997,117 @@ func enrichRelationHolderTypes(resource *view.Resource, planned []*plan.View) er
 		}
 	}
 	return nil
+}
+
+func ensureRelationJoinFields(baseType reflect.Type, rel *plan.Relation, parent bool, counterpartType reflect.Type) (reflect.Type, bool, error) {
+	if rel == nil || len(rel.On) == 0 {
+		return ensureStructType(baseType), false, nil
+	}
+	baseType = ensureStructType(baseType)
+	fields := make([]reflect.StructField, 0)
+	if baseType != nil {
+		fields = make([]reflect.StructField, 0, baseType.NumField()+len(rel.On))
+		for i := 0; i < baseType.NumField(); i++ {
+			fields = append(fields, baseType.Field(i))
+		}
+	}
+	changed := false
+	for _, link := range rel.On {
+		if link == nil {
+			continue
+		}
+		fieldName := strings.TrimSpace(link.RefField)
+		columnName := strings.TrimSpace(link.RefColumn)
+		counterpartField := strings.TrimSpace(link.ParentField)
+		if parent {
+			fieldName = strings.TrimSpace(link.ParentField)
+			columnName = strings.TrimSpace(link.ParentColumn)
+			counterpartField = strings.TrimSpace(link.RefField)
+		}
+		if fieldName == "" {
+			fieldName = pipeline.ExportedName(columnName)
+		}
+		if fieldName == "" || fieldNameInSlice(fields, fieldName) {
+			continue
+		}
+		fieldType := relationJoinFieldType(counterpartType, counterpartField)
+		fields = append(fields, reflect.StructField{
+			Name: fieldName,
+			Type: fieldType,
+			Tag:  reflect.StructTag(buildRelationJoinFieldTag(columnName)),
+		})
+		changed = true
+	}
+	if !changed {
+		return baseType, false, nil
+	}
+	return reflect.StructOf(fields), true, nil
+}
+
+func relationJoinFieldType(counterpartType reflect.Type, counterpartField string) reflect.Type {
+	counterpartType = ensureStructType(counterpartType)
+	if counterpartType != nil && strings.TrimSpace(counterpartField) != "" {
+		if field, ok := counterpartType.FieldByName(counterpartField); ok {
+			return normalizeRelationJoinFieldType(field.Type)
+		}
+	}
+	return reflect.TypeOf((*interface{})(nil)).Elem()
+}
+
+func normalizeRelationJoinFieldType(rType reflect.Type) reflect.Type {
+	if rType == nil {
+		return reflect.TypeOf((*interface{})(nil)).Elem()
+	}
+	for rType.Kind() == reflect.Ptr || rType.Kind() == reflect.Slice || rType.Kind() == reflect.Array {
+		rType = rType.Elem()
+	}
+	if rType.Kind() == reflect.Invalid {
+		return reflect.TypeOf((*interface{})(nil)).Elem()
+	}
+	return rType
+}
+
+func buildRelationJoinFieldTag(columnName string) string {
+	columnName = strings.TrimSpace(columnName)
+	if columnName == "" {
+		return `json:",omitempty"`
+	}
+	return fmt.Sprintf(`json:",omitempty" sqlx:"%s"`, columnName)
+}
+
+func applyViewComponentType(aView *view.View, componentType reflect.Type) {
+	if aView == nil || aView.Schema == nil || componentType == nil {
+		return
+	}
+	if aView.Schema.Cardinality == state.Many {
+		if schemaWantsPointer(aView.Schema) {
+			aView.Schema.SetType(reflect.SliceOf(reflect.PtrTo(componentType)))
+			return
+		}
+		aView.Schema.SetType(reflect.SliceOf(componentType))
+		return
+	}
+	if schemaWantsPointer(aView.Schema) {
+		aView.Schema.SetType(reflect.PtrTo(componentType))
+		return
+	}
+	aView.Schema.SetType(componentType)
+}
+
+func schemaWantsPointer(schema *state.Schema) bool {
+	if schema == nil {
+		return false
+	}
+	if schema.Type() != nil {
+		switch schema.Type().Kind() {
+		case reflect.Ptr:
+			return true
+		case reflect.Slice, reflect.Array:
+			return schema.Type().Elem().Kind() == reflect.Ptr
+		}
+	}
+	typeName := strings.TrimSpace(firstNonEmpty(schema.DataType, schema.Name))
+	return strings.HasPrefix(typeName, "*")
 }
 
 func ensureRelationHolderFields(parentType reflect.Type, item *plan.View, byName map[string]*plan.View, index view.NamedViews) (reflect.Type, bool, error) {

@@ -6,10 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/viant/afs"
+	"github.com/viant/afs/file"
 	marshalconfig "github.com/viant/datly/gateway/router/marshal/config"
 	marshaljson "github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/repository"
@@ -67,6 +70,17 @@ func TestDiscoverDQLBootstrapSources(t *testing.T) {
 	assert.Contains(t, sources, filepath.Join(root, "sql", "nested", "b.sql"))
 }
 
+func TestDiscoverDQLBootstrapSources_MemFS(t *testing.T) {
+	ctx := context.Background()
+	fs := afs.New()
+	source := "mem://bootstrap/test/vendor_list.dql"
+	require.NoError(t, fs.Upload(ctx, source, file.DefaultFileOsMode, strings.NewReader("SELECT 1 AS id")))
+
+	sources, err := discoverDQLBootstrapSources([]string{source}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{source}, sources)
+}
+
 func TestCompileBootstrapComponent_UsesShapeRouteMetadata(t *testing.T) {
 	ctx := context.Background()
 	repo, err := repository.New(ctx, repository.WithComponentURL(""), repository.WithNoPlugin())
@@ -95,10 +109,43 @@ func TestCompileBootstrapComponent_UsesShapeRouteMetadata(t *testing.T) {
 	assert.Equal(t, "/v1/api/orders", component.URI)
 }
 
+func TestCompileBootstrapComponent_MemFS(t *testing.T) {
+	ctx := context.Background()
+	repo, err := repository.New(ctx, repository.WithComponentURL(""), repository.WithNoPlugin())
+	require.NoError(t, err)
+	connectors, err := repo.Resources().Lookup(view.ResourceConnectors)
+	require.NoError(t, err)
+	connectors.Connectors = append(connectors.Connectors, &view.Connector{
+		Connection: view.Connection{
+			DBConfig: view.DBConfig{
+				Name:   "test_conn",
+				Driver: "sqlite3",
+				DSN:    ":memory:",
+			},
+		},
+	})
+
+	fs := afs.New()
+	source := "mem://bootstrap/test/orders.dql"
+	dql := "#setting($_ = $connector('test_conn'))\n#setting($_ = $route('/v1/api/orders', 'POST'))\nSELECT 1 AS id"
+	require.NoError(t, fs.Upload(ctx, source, file.DefaultFileOsMode, strings.NewReader(dql)))
+
+	component, err := compileBootstrapComponent(ctx, shapeCompile.New(), shapeLoad.New(), repo, source, &DQLBootstrap{}, "/v1/api")
+	require.NoError(t, err)
+	require.NotNil(t, component)
+	assert.Equal(t, "POST", component.Method)
+	assert.Equal(t, "/v1/api/orders", component.URI)
+}
+
 func TestDQLBootstrapEffectivePrecedence(t *testing.T) {
 	assert.Equal(t, DQLBootstrapPrecedenceRoutesWins, (&DQLBootstrap{}).EffectivePrecedence())
 	assert.Equal(t, DQLBootstrapPrecedenceDQLWins, (&DQLBootstrap{Precedence: "dql_wins"}).EffectivePrecedence())
 	assert.Equal(t, DQLBootstrapPrecedenceRoutesWins, (&DQLBootstrap{Precedence: "unknown"}).EffectivePrecedence())
+}
+
+func TestEffectiveRouteURL_UsesMemFSForBootstrapOnlyConfigs(t *testing.T) {
+	cfg := &Config{ExposableConfig: ExposableConfig{DQLBootstrap: &DQLBootstrap{Sources: []string{"mem://bootstrap/test.dql"}}}}
+	assert.Equal(t, "mem://datly/routes", effectiveRouteURL(cfg))
 }
 
 func TestApplyDQLBootstrap_Precedence(t *testing.T) {
@@ -151,6 +198,42 @@ func TestApplyDQLBootstrap_Precedence(t *testing.T) {
 	assert.Equal(t, "test", component.View.Name)
 }
 
+func TestServiceReloadDQLSources_MemFS(t *testing.T) {
+	ctx := context.Background()
+	fs := afs.New()
+	source := "mem://bootstrap/test/reload_vendor.dql"
+	dql := "#setting($_ = $connector('test_conn'))\n#setting($_ = $route('/v1/api/reload/vendors', 'GET'))\nSELECT 1 AS id"
+	require.NoError(t, fs.Upload(ctx, source, file.DefaultFileOsMode, strings.NewReader(dql)))
+
+	repo, err := repository.New(ctx, repository.WithComponentURL(""), repository.WithNoPlugin())
+	require.NoError(t, err)
+	connectors, err := repo.Resources().Lookup(view.ResourceConnectors)
+	require.NoError(t, err)
+	connectors.Connectors = append(connectors.Connectors, &view.Connector{
+		Connection: view.Connection{
+			DBConfig: view.DBConfig{
+				Name:   "test_conn",
+				Driver: "sqlite3",
+				DSN:    ":memory:",
+			},
+		},
+	})
+
+	svc, err := New(ctx, WithConfig(&Config{
+		ExposableConfig: ExposableConfig{
+			APIPrefix: "/v1/api",
+		},
+	}), WithRepository(repo), WithRefreshDisabled(true))
+	require.NoError(t, err)
+
+	require.NoError(t, svc.ReloadDQLSources(ctx, []string{source}))
+	router, ok := svc.Router()
+	require.True(t, ok)
+	route, err := router.Match(http.MethodGet, "/v1/api/reload/vendors", nil)
+	require.NoError(t, err)
+	require.NotNil(t, route)
+}
+
 func TestCompileBootstrapComponent_PreservesShapeIOAndGroupingMetadata(t *testing.T) {
 	ctx := context.Background()
 	repo, err := repository.New(ctx, repository.WithComponentURL(""), repository.WithNoPlugin())
@@ -173,6 +256,7 @@ func TestCompileBootstrapComponent_PreservesShapeIOAndGroupingMetadata(t *testin
 	dql := `
 #setting($_ = $connector('dev'))
 #setting($_ = $route('/v1/api/shape/dev/vendors-grouping', 'GET'))
+#setting($_ = $report())
 #define($_ = $VendorIDs<[]int>(query/vendorIDs))
 #define($_ = $Fields<[]string>(query/_fields).Optional().QuerySelector('vendor'))
 #define($_ = $OrderBy<string>(query/_orderby).Optional().QuerySelector('vendor'))
@@ -211,6 +295,9 @@ FROM (
 	require.NoError(t, err)
 	require.NotNil(t, component)
 	require.NotNil(t, component.View)
+	require.NotNil(t, component.Report)
+	assert.True(t, component.Report.Enabled)
+	assert.Equal(t, "vendors_grouping", component.Name)
 	require.True(t, component.View.Groupable)
 	require.NotNil(t, component.View.Selector)
 	require.NotNil(t, component.View.Selector.Constraints)
@@ -236,6 +323,60 @@ FROM (
 	require.NotNil(t, outputView)
 	assert.Contains(t, outputView.Tag, `anonymous:"true"`)
 	assert.Equal(t, state.Many, component.Output.Cardinality)
+}
+
+func TestServiceReloadDQLSources_MemFS_RegistersGroupingReportTool(t *testing.T) {
+	ctx := context.Background()
+	fs := afs.New()
+	source := "mem://bootstrap/test/reload_grouping.dql"
+	dql := `
+#setting($_ = $connector('dev'))
+#setting($_ = $route('/v1/api/shape/dev/vendors-grouping', 'GET'))
+#setting($_ = $report())
+#define($_ = $VendorIDs<[]int>(query/vendorIDs))
+#define($_ = $Fields<[]string>(query/_fields).Optional().QuerySelector('vendor'))
+SELECT vendor.*,
+       groupable(vendor)
+FROM (
+    SELECT ACCOUNT_ID,
+           SUM(ID) AS TOTAL_ID
+    FROM VENDOR t
+    WHERE t.ID IN ($VendorIDs)
+    GROUP BY 1
+) vendor`
+	require.NoError(t, fs.Upload(ctx, source, file.DefaultFileOsMode, strings.NewReader(dql)))
+
+	repo, err := repository.New(ctx, repository.WithComponentURL(""), repository.WithNoPlugin())
+	require.NoError(t, err)
+	connectors, err := repo.Resources().Lookup(view.ResourceConnectors)
+	require.NoError(t, err)
+	connectors.Connectors = append(connectors.Connectors, &view.Connector{
+		Connection: view.Connection{
+			DBConfig: view.DBConfig{
+				Name:   "dev",
+				Driver: "mysql",
+				DSN:    "root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
+			},
+		},
+	})
+
+	svc, err := New(ctx, WithConfig(&Config{
+		ExposableConfig: ExposableConfig{
+			APIPrefix: "/v1/api/shape",
+			MCP:       &ModelContextProtocol{},
+		},
+	}), WithRepository(repo), WithRefreshDisabled(true))
+	require.NoError(t, err)
+
+	require.NoError(t, svc.ReloadDQLSources(ctx, []string{source}))
+	require.NotNil(t, svc.MCP())
+	tools := svc.MCP().ListRegisteredTools()
+	require.NotEmpty(t, tools)
+	var names []string
+	for _, tool := range tools {
+		names = append(names, tool.Name)
+	}
+	assert.Contains(t, names, "reloadgroupingReport")
 }
 
 func TestCompileBootstrapComponent_MetaFormatOutputTypeMatchesRootView(t *testing.T) {

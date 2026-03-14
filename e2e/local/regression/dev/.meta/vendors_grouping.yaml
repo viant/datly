@@ -1,0 +1,55 @@
+items:
+    vendor:
+        - name: ACCOUNT_ID
+          datatype: int
+          tag: ""
+          expression: ""
+          aggregate: false
+          filterable: false
+          groupable: false
+          nullable: true
+          default: ""
+          formattag: null
+          codec: null
+          databasecolumn: ""
+          indexedby: ""
+        - name: USER_CREATED
+          datatype: int
+          tag: ""
+          expression: ""
+          aggregate: false
+          filterable: false
+          groupable: false
+          nullable: true
+          default: ""
+          formattag: null
+          codec: null
+          databasecolumn: ""
+          indexedby: ""
+        - name: TOTAL_ID
+          datatype: DECIMAL
+          tag: ""
+          expression: ""
+          aggregate: true
+          filterable: false
+          groupable: false
+          nullable: true
+          default: ""
+          formattag: null
+          codec: null
+          databasecolumn: ""
+          indexedby: ""
+        - name: MAX_ID
+          datatype: INT
+          tag: ""
+          expression: ""
+          aggregate: true
+          filterable: false
+          groupable: false
+          nullable: true
+          default: ""
+          formattag: null
+          codec: null
+          databasecolumn: ""
+          indexedby: ""
+sourceurl: ""

@@ -1,0 +1,7 @@
+Connectors:
+    - DSN: root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true
+      Driver: mysql
+      Name: dev
+    - DSN: dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy
+      Driver: dynamodb
+      Name: dyndb

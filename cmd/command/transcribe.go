@@ -23,6 +23,7 @@ import (
 	shapeCompile "github.com/viant/datly/repository/shape/compile"
 	shapeLoad "github.com/viant/datly/repository/shape/load"
 	"github.com/viant/datly/repository/shape/plan"
+	shapetranscriber "github.com/viant/datly/repository/shape/transcriber"
 	"github.com/viant/datly/repository/shape/xgen"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -72,7 +73,7 @@ func (s *Service) Transcribe(ctx context.Context, opts *options.Options) error {
 			discoverColumns(ctx, componentArtifact.Resource)
 			shapeLoad.RefineSummarySchemas(componentArtifact.Resource)
 		}
-		prepareResourceForTranscribeCodegen(componentArtifact.Resource, component)
+		shapetranscriber.PrepareResourceForCodegen(componentArtifact.Resource, component)
 		codegenResult, err := s.generateTranscribeTypes(sourceURL, dql, transcribe, componentArtifact.Resource, component)
 		if err != nil {
 			return err
@@ -482,32 +483,12 @@ func transcribeSharedResourceRefs(resource *view.Resource) []string {
 }
 
 func (s *Service) generateTranscribeTypes(sourceAbsPath, dql string, transcribe *options.Transcribe, resource *view.Resource, component *shapeLoad.Component) (*xgen.ComponentCodegenResult, error) {
-	if component == nil || component.TypeContext == nil || resource == nil {
-		return nil, nil
-	}
-	ctx := component.TypeContext
-	projectDir := findProjectDir(sourceAbsPath)
-	if projectDir == "" {
-		projectDir = transcribe.Project
-	}
-	codegen := &xgen.ComponentCodegen{
-		Component:    component,
-		Resource:     resource,
-		TypeContext:  ctx,
-		ProjectDir:   projectDir,
-		WithEmbed:    !transcribe.SkipYAML,
-		WithContract: true,
-	}
-	if pkgPath, pkgDir, pkgName := resolvedTranscribeTypeOutput(projectDir, ctx.PackagePath); pkgPath != "" {
-		codegen.PackagePath = pkgPath
-		codegen.PackageDir = pkgDir
-		codegen.PackageName = pkgName
-	}
-	if method, uri := resolvedTranscribeRoute(sourceAbsPath, dql, transcribe.APIPrefix); uri != "" {
-		component.Method = method
-		component.URI = uri
-	}
-	return codegen.Generate()
+	return shapetranscriber.GenerateComponentCodegen(shapetranscriber.CodegenConfig{
+		SourcePath: sourceAbsPath,
+		DQL:        dql,
+		ProjectDir: transcribe.Project,
+		APIPrefix:  transcribe.APIPrefix,
+	}, resource, component)
 }
 
 func (s *Service) applyGeneratedMutableArtifacts(ctx context.Context, routeRoot string, resource *view.Resource, component *shapeLoad.Component, codegenResult *xgen.ComponentCodegenResult) error {

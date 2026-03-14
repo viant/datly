@@ -395,6 +395,15 @@ func TestDQLCompileLoad_DistrictPaginationInheritsNestedRelationTypeContextPacka
 	require.NotNil(t, child.Schema)
 	assert.Equal(t, "pagination", child.Schema.Package)
 	assert.Equal(t, "github.com/viant/datly/e2e/v1/shape/dev/district/pagination", child.Schema.PackagePath)
+	typeNames := map[string]bool{}
+	for _, definition := range componentArtifact.Resource.Types {
+		if definition == nil {
+			continue
+		}
+		typeNames[definition.Name] = true
+	}
+	assert.True(t, typeNames["DistrictsView"])
+	assert.True(t, typeNames["CitiesView"])
 
 	_, err = initTypeRegistryForResource(componentArtifact.Resource)
 	require.NoError(t, err)

@@ -50,9 +50,6 @@ func isReportEligible(component *Component) bool {
 	if component == nil || component.Report == nil || !component.Report.Enabled {
 		return false
 	}
-	if component.View == nil || !component.View.Groupable {
-		return false
-	}
 	return strings.EqualFold(component.Method, http.MethodGet)
 }
 

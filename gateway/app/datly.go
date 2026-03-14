@@ -7,6 +7,7 @@ import (
 	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/cmd/env"
 	"github.com/viant/datly/gateway/runtime/standalone"
+	"github.com/viant/datly/internal/debugruntime"
 	"os"
 	"strconv"
 	"time"
@@ -30,5 +31,6 @@ func init() {
 }
 
 func main() {
+	debugruntime.StartGopsFromEnv()
 	standalone.RunApp(Version, os.Args[1:])
 }

@@ -349,3 +349,68 @@ func TestComponentCodegen_PrefersStandaloneChildSummarySchemaOverStaleRelationCo
 	assert.Contains(t, source, `VendorId *int`)
 	assert.NotContains(t, source, `VendorId string`)
 }
+
+func TestComponentCodegen_WritesReferencedSQLArtifacts(t *testing.T) {
+	projectDir := t.TempDir()
+	packageDir := filepath.Join(projectDir, "pkg", "dev", "vendor")
+	component := &load.Component{
+		Name:     "Vendor",
+		Method:   "GET",
+		URI:      "/v1/api/dev/vendors",
+		RootView: "vendor",
+	}
+	resource := &view.Resource{
+		Views: []*view.View{
+			{
+				Name: "vendor",
+				Template: &view.Template{
+					SourceURL: "vendor/vendor.sql",
+					Source:    "SELECT * FROM VENDOR",
+					Summary: &view.TemplateSummary{
+						Name:      "Meta",
+						SourceURL: "vendor/vendor_summary.sql",
+						Source:    "SELECT COUNT(*) AS TOTAL",
+					},
+				},
+				With: []*view.Relation{
+					{
+						Of: &view.ReferenceView{
+							View: view.View{
+								Name: "products",
+								Template: &view.Template{
+									SourceURL: "vendor/products.sql",
+									Source:    "SELECT * FROM PRODUCT",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	ctx := &typectx.Context{
+		PackageDir:  packageDir,
+		PackageName: "vendor",
+		PackagePath: "github.com/acme/project/pkg/dev/vendor",
+	}
+
+	result, err := (&ComponentCodegen{
+		Component:    component,
+		Resource:     resource,
+		TypeContext:  ctx,
+		ProjectDir:   projectDir,
+		WithContract: true,
+	}).Generate()
+	require.NoError(t, err)
+
+	for path, expected := range map[string]string{
+		filepath.Join(packageDir, "vendor", "vendor.sql"):         "SELECT * FROM VENDOR",
+		filepath.Join(packageDir, "vendor", "vendor_summary.sql"): "SELECT COUNT(*) AS TOTAL",
+		filepath.Join(packageDir, "vendor", "products.sql"):       "SELECT * FROM PRODUCT",
+	} {
+		data, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		assert.Equal(t, expected, string(data))
+		assert.Contains(t, result.GeneratedFiles, path)
+	}
+}

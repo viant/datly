@@ -123,6 +123,9 @@ func compileGoBootstrapComponent(ctx context.Context, scanner *shapeScan.StructS
 		return nil, fmt.Errorf("failed to load Go bootstrap route %s: %w", route.Name, err)
 	}
 	mergeBootstrapSharedResources(componentArtifact.Resource, repo)
+	normalizeBootstrapTemplateParameters(componentArtifact.Resource)
+	normalizeBootstrapViewAliases(componentArtifact.Resource)
+	normalizeBootstrapCaches(componentArtifact.Resource)
 	loaded, ok := componentArtifact.Component.(*shapeLoad.Component)
 	if !ok || loaded == nil {
 		return nil, fmt.Errorf("unexpected Go bootstrap component artifact for %s", route.Name)
@@ -133,8 +136,11 @@ func compileGoBootstrapComponent(ctx context.Context, scanner *shapeScan.StructS
 func materializeBootstrapComponent(ctx context.Context, repo *repository.Service, componentArtifact *shape.ComponentArtifact, loaded *shapeLoad.Component, sourceName string) (*repository.Component, error) {
 	bootstrapMetadata := snapshotBootstrapViewMetadata(componentArtifact.Resource)
 	rootView := lookupRootView(componentArtifact.Resource, loaded.RootView)
-	if rootView == nil {
+	if rootView == nil && bootstrapRequiresRootView(loaded) {
 		return nil, fmt.Errorf("missing root view %q for %s", loaded.RootView, sourceName)
+	}
+	if rootView == nil {
+		rootView = bootstrapHandlerView(componentArtifact.Resource, loaded, sourceName)
 	}
 	method := strings.TrimSpace(strings.ToUpper(loaded.Method))
 	uri := strings.TrimSpace(loaded.URI)
@@ -159,7 +165,24 @@ func materializeBootstrapComponent(ctx context.Context, repo *repository.Service
 			return nil, fmt.Errorf("failed to materialize bootstrap output type for %s: %w", sourceName, err)
 		}
 	}
+	reportConfig := bootstrapReport(loaded)
+	if reportConfig == nil && rootView != nil && rootView.Groupable && strings.EqualFold(method, "GET") {
+		reportConfig = (&repository.Report{Enabled: true}).Normalize()
+	}
+	componentMeta := contract.Meta{}
+	if len(loaded.ComponentRoutes) > 0 && loaded.ComponentRoutes[0] != nil {
+		componentMeta.Name = strings.TrimSpace(loaded.ComponentRoutes[0].Name)
+	}
+	componentMCP := contract.ModelContextProtocol{}
+	if loaded.Directives != nil && loaded.Directives.MCP != nil {
+		componentMeta.Name = strings.TrimSpace(loaded.Directives.MCP.Name)
+		componentMeta.Description = strings.TrimSpace(loaded.Directives.MCP.Description)
+		componentMeta.DescriptionURI = strings.TrimSpace(loaded.Directives.MCP.DescriptionPath)
+		componentMCP.MCPTool = true
+	}
 	componentModel := &repository.Component{
+		Meta:                 componentMeta,
+		ModelContextProtocol: componentMCP,
 		Path: contract.Path{
 			Method: method,
 			URI:    uri,
@@ -180,6 +203,7 @@ func materializeBootstrapComponent(ctx context.Context, repo *repository.Service
 			Service: defaultServiceForMethod(method, rootView),
 		},
 		View:        rootView,
+		Report:      reportConfig,
 		TypeContext: loaded.TypeContext,
 	}
 	if outputType != nil {
@@ -208,5 +232,24 @@ func materializeBootstrapComponent(ctx context.Context, repo *repository.Service
 		return nil, fmt.Errorf("empty initialized bootstrap component for %s", sourceName)
 	}
 	mergeBootstrapView(components.Components[0].View, lookupRootView(bootstrapMetadata, loaded.RootView))
+	if loaded.Report != nil && loaded.Report.Enabled && components.Components[0].View != nil {
+		components.Components[0].View.Groupable = true
+	}
 	return components.Components[0], nil
+}
+
+func bootstrapReport(loaded *shapeLoad.Component) *repository.Report {
+	if loaded == nil || loaded.Report == nil || !loaded.Report.Enabled {
+		return nil
+	}
+	return (&repository.Report{
+		Enabled:    loaded.Report.Enabled,
+		Input:      strings.TrimSpace(loaded.Report.Input),
+		Dimensions: strings.TrimSpace(loaded.Report.Dimensions),
+		Measures:   strings.TrimSpace(loaded.Report.Measures),
+		Filters:    strings.TrimSpace(loaded.Report.Filters),
+		OrderBy:    strings.TrimSpace(loaded.Report.OrderBy),
+		Limit:      strings.TrimSpace(loaded.Report.Limit),
+		Offset:     strings.TrimSpace(loaded.Report.Offset),
+	}).Normalize()
 }

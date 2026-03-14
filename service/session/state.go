@@ -170,6 +170,9 @@ func (s *Session) setViewState(ctx context.Context, aView *view.View) (err error
 	}
 
 	if aView.Mode == view.ModeQuery {
+		// Rebuild view options after template state initialization so state-backed
+		// selector settings (for example SyncFlag) see a populated state locator.
+		opts = s.ViewOptions(aView)
 		ns := s.viewNamespace(aView)
 		if err = s.setQuerySettings(ctx, ns, opts); err != nil {
 			return err

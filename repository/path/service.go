@@ -9,6 +9,7 @@ import (
 	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
+	"github.com/viant/datly/internal/debuglog"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
 	"gopkg.in/yaml.v3"
@@ -194,6 +195,7 @@ func (s *Service) buildPaths(ctx context.Context, candidate storage.Object, root
 	}
 	temp := &Item{}
 	if err := yaml.Unmarshal(data, temp); err != nil {
+		debuglog.YAMLFailure("repository.path.buildPaths", candidate.URL(), data, err)
 		return nil, err
 	}
 	sourceURL := candidate.URL()
@@ -230,6 +232,7 @@ func (s *Service) load(ctx context.Context) error {
 		return err
 	}
 	if err = yaml.Unmarshal(data, temp); err != nil {
+		debuglog.YAMLFailure("repository.path.load", pathFile, data, err)
 		return err
 	}
 	for _, elem := range temp.Items {

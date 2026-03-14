@@ -235,6 +235,12 @@ func WithComponentURL(componentURL string) Option {
 	}
 }
 
+func WithFS(fs afs.Service) Option {
+	return func(o *Options) {
+		o.fs = fs
+	}
+}
+
 func WithDependencyURL(URL string) Option {
 	return func(o *Options) {
 		o.authConfig.DependencyURL = URL

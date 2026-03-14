@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/cache"
+	"github.com/viant/afs/file"
 	"github.com/viant/afs/matcher"
 	"github.com/viant/afs/option"
 	furl "github.com/viant/afs/url"
+	"github.com/viant/datly/internal/debuglog"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/locator/component/dispatcher"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/gmetric"
 	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/scy/auth/jwt/signer"
@@ -94,44 +97,23 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 	if err := aConfig.Init(ctx); err != nil {
 		return nil, err
 	}
+	if options.repository == nil {
+		if err := aConfig.Validate(); err != nil {
+			return nil, err
+		}
+	} else {
+		if aConfig.DQLBootstrap != nil && len(aConfig.DQLBootstrap.Sources) == 0 {
+			return nil, fmt.Errorf("DQLBootstrap.Sources was empty")
+		}
+		if err := validateAsyncJobPaths(aConfig.JobURL, aConfig.FailedJobURL); err != nil {
+			return nil, err
+		}
+	}
 	fs, err := newFileService(aConfig)
 	if err != nil {
 		return nil, err
 	}
-	componentRepository := options.repository
-	if componentRepository == nil {
-
-		componentRepository, err = repository.New(ctx, repository.WithComponentURL(aConfig.RouteURL),
-			repository.WithResourceURL(aConfig.DependencyURL),
-			repository.WithPluginURL(aConfig.PluginsURL),
-			repository.WithApiPrefix(aConfig.APIPrefix),
-			repository.WithExtensions(options.extensions),
-			repository.WithMetrics(options.metrics),
-			repository.WithJWTSigner(aConfig.JwtSigner),
-			repository.WithJWTVerifier(aConfig.JWTValidator),
-			repository.WithCognitoAuth(aConfig.Cognito),
-			repository.WithFirebaseAuth(aConfig.Firebase),
-			repository.WithDependencyURL(aConfig.DependencyURL),
-			repository.WithRefreshFrequency(aConfig.SyncFrequency()),
-			repository.WithRefreshDisabled(options.refreshDisabled),
-			repository.WithDispatcher(dispatcher.New),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialise component service: %w", err)
-		}
-	}
-	if err = (&Service{Config: aConfig}).applyDQLBootstrap(ctx, componentRepository, aConfig.DQLBootstrap); err != nil {
-		return nil, fmt.Errorf("failed to apply DQL bootstrap: %w", err)
-	}
-	if err = (&Service{Config: aConfig}).applyGoBootstrap(ctx, componentRepository, aConfig.GoBootstrap); err != nil {
-		return nil, fmt.Errorf("failed to apply Go bootstrap: %w", err)
-	}
-
-	var mcpRegistry *serverproto.Registry
-	if aConfig.MCP != nil {
-		mcpRegistry = serverproto.NewRegistry()
-	}
-	mainRouter, err := NewRouter(ctx, componentRepository, aConfig, options.metrics, options.statusHandler, mcpRegistry)
+	componentRepository, mainRouter, mcpRegistry, err := buildServiceRuntime(ctx, aConfig, options.repository, nil, options.extensions, options.metrics, options.statusHandler, options.refreshDisabled)
 	if err != nil {
 		return nil, err
 	}
@@ -149,6 +131,28 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 	go srv.watchAsyncJob(context.Background())
 	//fmt.Printf("[INFO]: started gatweay after: %s\n", time.Since(start))
 	return srv, err
+}
+
+func (r *Service) ReloadDQLSources(ctx context.Context, sources []string) error {
+	if r == nil {
+		return fmt.Errorf("gateway service: nil")
+	}
+	cfg := cloneConfig(r.Config)
+	if cfg.DQLBootstrap == nil {
+		cfg.DQLBootstrap = &DQLBootstrap{}
+	}
+	cfg.DQLBootstrap.Sources = append([]string{}, sources...)
+	componentRepository, mainRouter, mcpRegistry, err := buildServiceRuntime(ctx, cfg, nil, r.repository.Resources(), r.repository.Extensions(), r.metrics, r.statusHandler, true)
+	if err != nil {
+		return err
+	}
+	r.mux.Lock()
+	r.Config = cfg
+	r.repository = componentRepository
+	r.mainRouter = mainRouter
+	r.mcpRegistry = mcpRegistry
+	r.mux.Unlock()
+	return nil
 }
 
 const (
@@ -243,6 +247,107 @@ func (r *Service) syncChanges(ctx context.Context, metrics *gmetric.Service, sta
 	r.mux.Unlock()
 	fmt.Printf("[INFO]: routers rebuild completed after: %s\n", time.Since(start))
 	return nil
+}
+
+func buildServiceRuntime(ctx context.Context, cfg *Config, repo *repository.Service, resources repository.Resources, extensions *extension.Registry, metrics *gmetric.Service, statusHandler http.Handler, refreshDisabled bool) (*repository.Service, *Router, *serverproto.Registry, error) {
+	componentRepository := repo
+	var err error
+	if componentRepository == nil {
+		componentURL := effectiveRouteURL(cfg)
+		var repoFS afs.Service
+		if hasNonFileScheme(componentURL) {
+			repoFS = afs.New()
+			if createErr := repoFS.Create(ctx, componentURL, file.DefaultDirOsMode, true); createErr != nil {
+				return nil, nil, nil, fmt.Errorf("failed to initialize bootstrap route store %s: %w", componentURL, createErr)
+			}
+		}
+		options := []repository.Option{
+			repository.WithComponentURL(componentURL),
+			repository.WithResourceURL(cfg.DependencyURL),
+			repository.WithPluginURL(cfg.PluginsURL),
+			repository.WithApiPrefix(cfg.APIPrefix),
+			repository.WithResources(resources),
+			repository.WithExtensions(extensions),
+			repository.WithMetrics(metrics),
+			repository.WithJWTSigner(cfg.JwtSigner),
+			repository.WithJWTVerifier(cfg.JWTValidator),
+			repository.WithCognitoAuth(cfg.Cognito),
+			repository.WithFirebaseAuth(cfg.Firebase),
+			repository.WithDependencyURL(cfg.DependencyURL),
+			repository.WithRefreshFrequency(cfg.SyncFrequency()),
+			repository.WithRefreshDisabled(refreshDisabled),
+			repository.WithDispatcher(dispatcher.New),
+		}
+		if repoFS != nil {
+			options = append(options, repository.WithFS(repoFS))
+		}
+		componentRepository, err = repository.New(ctx, options...)
+		if err != nil {
+			debuglog.JSON("gateway.build_service_runtime.repository_new_error", map[string]any{
+				"routeURL":        componentURL,
+				"dependencyURL":   cfg.DependencyURL,
+				"pluginsURL":      cfg.PluginsURL,
+				"apiPrefix":       cfg.APIPrefix,
+				"hasDQL":          cfg.hasDQLBootstrap(),
+				"hasGo":           cfg.hasGoBootstrap(),
+				"refreshDisabled": refreshDisabled,
+				"error":           err.Error(),
+			})
+			return nil, nil, nil, fmt.Errorf("failed to initialise component service: %w", err)
+		}
+	}
+	if err = (&Service{Config: cfg}).applyDQLBootstrap(ctx, componentRepository, cfg.DQLBootstrap); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to apply DQL bootstrap: %w", err)
+	}
+	if err = (&Service{Config: cfg}).applyGoBootstrap(ctx, componentRepository, cfg.GoBootstrap); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to apply Go bootstrap: %w", err)
+	}
+	var mcpRegistry *serverproto.Registry
+	if cfg.MCP != nil {
+		mcpRegistry = serverproto.NewRegistry()
+	}
+	mainRouter, err := NewRouter(ctx, componentRepository, cfg, metrics, statusHandler, mcpRegistry)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return componentRepository, mainRouter, mcpRegistry, nil
+}
+
+func effectiveRouteURL(cfg *Config) string {
+	if cfg == nil {
+		return ""
+	}
+	if cfg.RouteURL != "" {
+		return cfg.RouteURL
+	}
+	if cfg.hasDQLBootstrap() || cfg.hasGoBootstrap() {
+		return "mem://datly/routes"
+	}
+	return ""
+}
+
+func cloneConfig(cfg *Config) *Config {
+	if cfg == nil {
+		return &Config{}
+	}
+	cloned := *cfg
+	if cfg.DQLBootstrap != nil {
+		boot := *cfg.DQLBootstrap
+		boot.Sources = append([]string{}, cfg.DQLBootstrap.Sources...)
+		boot.Exclude = append([]string{}, cfg.DQLBootstrap.Exclude...)
+		cloned.DQLBootstrap = &boot
+	}
+	if cfg.GoBootstrap != nil {
+		boot := *cfg.GoBootstrap
+		boot.Packages = append([]string{}, cfg.GoBootstrap.Packages...)
+		boot.Exclude = append([]string{}, cfg.GoBootstrap.Exclude...)
+		cloned.GoBootstrap = &boot
+	}
+	if cfg.MCP != nil {
+		mcp := *cfg.MCP
+		cloned.MCP = &mcp
+	}
+	return &cloned
 }
 
 func (r *Service) combineErrors(resourceType string, errors []error) error {

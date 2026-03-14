@@ -8,6 +8,7 @@ import (
 	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/cmd"
 	"github.com/viant/datly/cmd/env"
+	"github.com/viant/datly/internal/debugruntime"
 	"github.com/viant/datly/service/executor/expand"
 	_ "github.com/viant/scy/kms/blowfish"
 	_ "github.com/viant/sqlx/metadata/product/mysql"
@@ -37,6 +38,7 @@ func init() {
 }
 
 func main() {
+	debugruntime.StartGopsFromEnv()
 	if err := cmd.RunApp(Version, os.Args[1:]); err != nil {
 		panic(err)
 	}

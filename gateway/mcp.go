@@ -34,7 +34,7 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 	toolInputType := r.buildToolInputType(component)
 	meta := aPath.Meta.Build(component.View.Name, component.View.Table, &aPath.Path)
 	mcpTool := schema.Tool{
-		Name:        strings.ReplaceAll(meta.Name, " ", ""),
+		Name:        normalizeMCPToolName(meta.Name),
 		Description: &meta.Description,
 		InputSchema: schema.ToolInputSchema{},
 	}
@@ -52,6 +52,11 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 	}
 	r.mcpRegistry.RegisterTool(tool)
 	return nil
+}
+
+func normalizeMCPToolName(name string) string {
+	replacer := strings.NewReplacer(" ", "", "_", "", "-", "", "#", "")
+	return replacer.Replace(name)
 }
 
 func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Route) serverproto.ToolHandlerFunc {

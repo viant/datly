@@ -110,6 +110,9 @@ func (c *Config) Validate() error {
 	if c.RouteURL == "" && !c.hasDQLBootstrap() && !c.hasGoBootstrap() {
 		return fmt.Errorf("RouteURL was empty")
 	}
+	if err := validateAsyncJobPaths(c.JobURL, c.FailedJobURL); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -2965,6 +2965,36 @@ func TestLoader_LoadComponent_SynthesizesRootViewFromComponentRoute(t *testing.T
 	require.Equal(t, filepath.Join(baseDir, "report", "report.sql"), artifact.Resource.Views[0].Template.SourceURL)
 }
 
+func TestLoader_LoadComponent_AbsolutizesViewSQLURLs(t *testing.T) {
+	baseDir := t.TempDir()
+	artifact, err := New().LoadComponent(context.Background(), &shape.PlanResult{
+		Source: &shape.Source{
+			Path: filepath.Join(baseDir, "router.go"),
+		},
+		Plan: &plan.Result{
+			Views: []*plan.View{
+				{
+					Name:       "Report",
+					SQLURI:     "report/report.sql",
+					SummaryURL: "report/report_summary.sql",
+				},
+			},
+			Components: []*plan.ComponentRoute{{
+				Name:      "Report",
+				RoutePath: "/v1/api/report",
+				Method:    "GET",
+				ViewName:  "Report",
+			}},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, artifact.Resource.Views, 1)
+	require.NotNil(t, artifact.Resource.Views[0].Template)
+	require.Equal(t, filepath.Join(baseDir, "report", "report.sql"), artifact.Resource.Views[0].Template.SourceURL)
+	require.NotNil(t, artifact.Resource.Views[0].Template.Summary)
+	require.Equal(t, filepath.Join(baseDir, "report", "report_summary.sql"), artifact.Resource.Views[0].Template.Summary.SourceURL)
+}
+
 func TestLoader_LoadComponent_AllowsViewlessComponentRoute(t *testing.T) {
 	artifact, err := New().LoadComponent(context.Background(), &shape.PlanResult{
 		Source: &shape.Source{Name: "delete_team"},
