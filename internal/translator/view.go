@@ -2,15 +2,17 @@ package translator
 
 import (
 	"fmt"
+
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 
+	"path"
+
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
-	"path"
 )
 
 type (
@@ -180,9 +182,13 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 			Offset:     true,
 			Projection: true,
 		}
-		if !v.ParameterDerived {
-			selector.Constraints.Filterable = []string{"*"}
-		}
+	}
+	setter.SetBoolIfFalse(&selector.Constraints.Criteria, true)
+	setter.SetBoolIfFalse(&selector.Constraints.Limit, true)
+	setter.SetBoolIfFalse(&selector.Constraints.Offset, true)
+	setter.SetBoolIfFalse(&selector.Constraints.Projection, true)
+	if len(selector.Constraints.Filterable) == 0 && !v.ParameterDerived {
+		selector.Constraints.Filterable = []string{"*"}
 	}
 
 	if querySelectors, ok := namespace.Resource.Declarations.QuerySelectors[namespace.Name]; ok {
@@ -212,7 +218,8 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 			selector.PageParameter = &parameter.Parameter
 			selector.Constraints.Page = &enabled
 		}
-		delete(namespace.Resource.Declarations.QuerySelectors, namespace.Name)
+
+		//delete(namespace.Resource.Declarations.QuerySelectors, namespace.Name)
 	}
 
 }

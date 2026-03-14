@@ -53,9 +53,10 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	c.columns = columns
 	codecStructFields := make([]reflect.StructField, len(columns))
 	for i, column := range columns {
+		scanType := columnDatabaseScanType(column)
 		codecStructFields[i] = reflect.StructField{
 			Name: "Col" + strconv.Itoa(i),
-			Type: column.ColumnType(),
+			Type: scanType,
 			Tag:  reflect.StructTag(fmt.Sprintf(`sqlx:"%v"`, column.Name)),
 		}
 	}
@@ -92,6 +93,16 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 		c.selectors = append(c.selectors, stateType.Lookup(actualFieldName+"."+column.Name))
 	}
 	return nil
+}
+
+func columnDatabaseScanType(column *Column) reflect.Type {
+	if column == nil {
+		return reflect.TypeOf([]byte{})
+	}
+	if column.Codec != nil && column.Codec.Name == codec2.JSON {
+		return reflect.TypeOf([]byte{})
+	}
+	return column.ColumnType()
 }
 
 func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, record *codec2.ParentValue) error {

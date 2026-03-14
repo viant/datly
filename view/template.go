@@ -24,6 +24,15 @@ type (
 		Source    string        `json:",omitempty" yaml:"source,omitempty"`
 		SourceURL string        `json:",omitempty" yaml:"sourceURL,omitempty"`
 		Schema    *state.Schema `json:",omitempty" yaml:"schema,omitempty"`
+		// UseParameterStateType makes Velty compile against template parameters
+		// instead of the view schema when helper state exists outside the named IO type.
+		UseParameterStateType bool `json:",omitempty" yaml:"useParameterStateType,omitempty"`
+		// DeclaredParametersOnly prevents global resource parameter binding from
+		// appending undeclared parameters to this template.
+		DeclaredParametersOnly bool `json:",omitempty" yaml:"declaredParametersOnly,omitempty"`
+		// UseResourceParameterLookup allows param/state source lookup to resolve
+		// against resource parameters in addition to the declared template params.
+		UseResourceParameterLookup bool `json:",omitempty" yaml:"useResourceParameterLookup,omitempty"`
 
 		stateType *structology.StateType
 
@@ -92,7 +101,16 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	if err = t.initTypes(ctx, resource); err != nil {
 		return err
 	}
-	if rType := t.Schema.Type(); rType != nil {
+	if t.UseParameterStateType && len(t.Parameters) > 0 {
+		rType, err := t.Parameters.ReflectType(t.Package(), resource.LookupType(), state.WithSetMarker())
+		if err != nil {
+			return fmt.Errorf("failed to build template parameter state for %s: %w", t._view.Name, err)
+		}
+		if rType.Kind() == reflect.Struct {
+			rType = reflect.PtrTo(rType)
+		}
+		t.stateType = structology.NewStateType(rType)
+	} else if rType := t.Schema.Type(); rType != nil {
 		t.stateType = structology.NewStateType(rType)
 	}
 
@@ -231,6 +249,10 @@ func (t *Template) EvaluateState(ctx context.Context, parameterState *structolog
 }
 
 func (t *Template) EvaluateStateWithSession(ctx context.Context, parameterState *structology.State, parentParam *expand.ViewContext, batchData *BatchData, sess *extension.Session, options ...interface{}) (*expand.State, error) {
+	// Ensure parameter state is initialized when absent, but never override an existing one.
+	if parameterState == nil && t.stateType != nil {
+		parameterState = t.stateType.NewState()
+	}
 	var expander expand.Expander
 	var dataUnit *expand.DataUnit
 	for _, option := range options {
@@ -262,6 +284,30 @@ func (t *Template) EvaluateStateWithSession(ctx context.Context, parameterState 
 func WithTemplateParameters(parameters ...*state.Parameter) TemplateOption {
 	return func(t *Template) {
 		t.Parameters = append(t.Parameters, parameters...)
+	}
+}
+
+// WithTemplateUnsafeStateFromParameters configures template evaluation to derive
+// the Velty Unsafe state from template parameters rather than the named view schema.
+func WithTemplateUnsafeStateFromParameters(enabled bool) TemplateOption {
+	return func(t *Template) {
+		t.UseParameterStateType = enabled
+	}
+}
+
+// WithTemplateDeclaredParametersOnly preserves only explicitly declared
+// template parameters during later resource binding.
+func WithTemplateDeclaredParametersOnly(enabled bool) TemplateOption {
+	return func(t *Template) {
+		t.DeclaredParametersOnly = enabled
+	}
+}
+
+// WithTemplateResourceParameterLookup allows template parameter source lookup
+// to resolve from resource parameters while keeping the declared template state minimal.
+func WithTemplateResourceParameterLookup(enabled bool) TemplateOption {
+	return func(t *Template) {
+		t.UseResourceParameterLookup = enabled
 	}
 }
 
@@ -372,8 +418,7 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sta
 		if value.Key == "?" {
 			placeholder, err := sanitized.Next()
 			if err != nil {
-				return "", fmt.Errorf("failed to get placeholder: %w, SQL: %v, values: %v\n", err, SQL, values)
-
+				return "", fmt.Errorf("failed to get placeholder: %w, SQL: %v, values: %+v\n", err, SQL, values)
 			}
 			*placeholders = append(*placeholders, placeholder)
 			continue

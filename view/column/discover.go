@@ -248,7 +248,9 @@ func parseQuery(SQL string) (string, string, sqlparser.Columns) {
 		if sqlQuery.From.X != nil {
 			table = sqlparser.Stringify(sqlQuery.From.X)
 		}
-		if sqlQuery.List.IsStarExpr() && !strings.Contains(table, "SELECT") {
+		// For CTE-backed queries (WITH ...), SELECT * FROM cte_alias must still be
+		// resolved via SQL execution; the alias is not a physical table.
+		if sqlQuery.List.IsStarExpr() && !strings.Contains(table, "SELECT") && len(sqlQuery.WithSelects) == 0 {
 			return table, "", nil //use table metadata
 		}
 		sqlQuery.Limit = nil
@@ -298,7 +300,7 @@ func asColumn(column sink.Column) *sqlparser.Column {
 
 func RewriteWithQueryIfNeeded(SQL string, query *query.Select) (*query.Select, error) {
 	var err error
-	if strings.HasPrefix(strings.ToLower(SQL[:5]), "with") {
+	if len(SQL) >= 5 && strings.HasPrefix(strings.ToLower(SQL[:5]), "with") {
 		SQL = sqlparser.Stringify(query)
 		query, err = sqlparser.ParseQuery(SQL)
 	}

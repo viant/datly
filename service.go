@@ -4,21 +4,32 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/repository"
+	rcontent "github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/locator/component/dispatcher"
+	srv "github.com/viant/datly/service"
 	sjwt "github.com/viant/datly/service/auth/jwt"
 	"github.com/viant/datly/service/auth/mock"
 	"github.com/viant/datly/service/executor"
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/state/kind/locator"
 	verifier2 "github.com/viant/scy/auth/jwt/verifier"
 	hstate "github.com/viant/xdatly/handler/state"
+
+	"net/http"
+	nurl "net/url"
+	"reflect"
+	"strings"
+	"time"
 
 	"github.com/viant/datly/view/state"
 	"github.com/viant/scy/auth/jwt"
@@ -26,15 +37,12 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	xhandler "github.com/viant/xdatly/handler"
-	"net/http"
-	nurl "net/url"
-	"reflect"
-	"strings"
-	"time"
 )
 
 //go:embed Version
 var Version string
+
+const reportSelectionErr = "report metadata had no selectable dimensions or measures"
 
 type (
 	Service struct {
@@ -50,22 +58,93 @@ type (
 	}
 
 	sessionOptions struct {
-		request  *http.Request
-		resource state.Resource
-		form     *hstate.Form
+		request        *http.Request
+		resource       state.Resource
+		form           *hstate.Form
+		querySelectors []*hstate.NamedQuerySelector
 	}
 	SessionOption func(o *sessionOptions)
 
 	operateOptions struct {
-		path           *contract.Path
-		component      *repository.Component
-		session        *session.Session
+		path      *contract.Path
+		component *repository.Component
+		session   *session.Session
+
 		output         interface{}
 		input          interface{}
 		sessionOptions []SessionOption
 	}
 	OperateOption func(o *operateOptions)
 )
+
+func normalizeSelectorName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, "_", "")
+	name = strings.ReplaceAll(name, "-", "")
+	name = strings.ReplaceAll(name, ".", "")
+	return name
+}
+
+func resolveSelectorForView(nsView *view.NamespaceView, selectors []*hstate.NamedQuerySelector) *hstate.NamedQuerySelector {
+	if nsView == nil || nsView.View == nil || len(selectors) == 0 {
+		return nil
+	}
+	viewName := normalizeSelectorName(nsView.View.Name)
+	for _, selector := range selectors {
+		if selector == nil {
+			continue
+		}
+		if normalizeSelectorName(selector.Name) == viewName {
+			return selector
+		}
+	}
+	for _, namespace := range nsView.Namespaces {
+		nsName := normalizeSelectorName(namespace)
+		if nsName == "" {
+			continue
+		}
+		for _, selector := range selectors {
+			if selector == nil {
+				continue
+			}
+			if normalizeSelectorName(selector.Name) == nsName {
+				return selector
+			}
+		}
+	}
+	if nsView.Root && len(selectors) == 1 && selectors[0] != nil && strings.TrimSpace(selectors[0].Name) == "" {
+		return selectors[0]
+	}
+	return nil
+}
+
+func applySessionQuerySelectors(component *repository.Component, aSession *session.Session, selectors []*hstate.NamedQuerySelector) {
+	if component == nil || aSession == nil || len(selectors) == 0 {
+		return
+	}
+	views := component.NamespacedView
+	if views == nil {
+		views = view.IndexViews(component.View, "")
+	}
+	for _, nsView := range views.Views {
+		injected := resolveSelectorForView(nsView, selectors)
+		if injected == nil || nsView == nil || nsView.View == nil {
+			continue
+		}
+		statelet := aSession.State().Lookup(nsView.View)
+		statelet.QuerySelector = injected.QuerySelector
+		if statelet.Page > 0 && statelet.Offset == 0 {
+			actualLimit := statelet.Limit
+			if actualLimit == 0 && nsView.View.Selector != nil {
+				actualLimit = nsView.View.Selector.Limit
+			}
+			if actualLimit > 0 {
+				statelet.Offset = actualLimit * (statelet.Page - 1)
+				statelet.Limit = actualLimit
+			}
+		}
+	}
+}
 
 func newOperateOptions(opts []OperateOption) *operateOptions {
 	ret := &operateOptions{}
@@ -151,6 +230,12 @@ func WithForm(form *hstate.Form) SessionOption {
 	}
 }
 
+func WithQuerySelectors(selectors ...*hstate.NamedQuerySelector) SessionOption {
+	return func(o *sessionOptions) {
+		o.querySelectors = selectors
+	}
+}
+
 func WithStateResource(resource state.Resource) SessionOption {
 	return func(o *sessionOptions) {
 		o.resource = resource
@@ -160,8 +245,12 @@ func WithStateResource(resource state.Resource) SessionOption {
 func (s *Service) NewComponentSession(aComponent *repository.Component, opts ...SessionOption) *session.Session {
 	sessionOpt := newSessionOptions(opts)
 	options := aComponent.LocatorOptions(sessionOpt.request, sessionOpt.form, aComponent.UnmarshalFunc(sessionOpt.request))
+	if sessionOpt.querySelectors != nil {
+		options = append(options, locator.WithQuerySelectors(sessionOpt.querySelectors))
+	}
 	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...),
 		session.WithAuth(s.repository.Auth()),
+		session.WithComponent(aComponent),
 		session.WithStateResource(sessionOpt.resource), session.WithOperate(s.operator.Operate))
 	return aSession
 }
@@ -193,7 +282,12 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 
 func LoadInput(ctx context.Context, aSession *session.Session, aComponent *repository.Component, input interface{}) error {
 	ctx = aSession.Context(ctx, false)
-	if err := aSession.LoadState(aComponent.Input.Type.Parameters, input); err != nil {
+	if err := aSession.LoadState(
+		aComponent.Input.Type.Parameters,
+		input,
+		session.WithHasMarker(),
+		session.WithValuePresenceFallback(),
+	); err != nil {
 		return err
 	}
 	if err := aSession.Populate(ctx); err != nil {
@@ -217,6 +311,9 @@ func (s *Service) Operate(ctx context.Context, opts ...OperateOption) (interface
 	if options.session == nil {
 		sOptions := append(options.sessionOptions, WithStateResource(options.component.View.Resource()))
 		options.session = s.NewComponentSession(options.component, sOptions...)
+	}
+	if sessionOpt := newSessionOptions(options.sessionOptions); len(sessionOpt.querySelectors) > 0 {
+		applySessionQuerySelectors(options.component, options.session, sessionOpt.querySelectors)
 	}
 	if input := options.input; input != nil {
 		if err = LoadInput(ctx, options.session, options.component, input); err != nil {
@@ -265,6 +362,115 @@ func (s *Service) PopulateInput(ctx context.Context, aComponent *repository.Comp
 		return err
 	}
 	inputValue.Elem().Set(reflect.ValueOf(aState.State()))
+	return nil
+}
+
+func (s *Service) GetInjector(r *http.Request, comp *repository.Component) (hstate.Injector, error) {
+	if err := s.ensureComponentInitialized(comp); err != nil {
+		return nil, err
+	}
+	// Build component session to populate state (for exclusion filters)
+	sess := s.NewComponentSession(comp, WithRequest(r), WithStateResource(comp.View.Resource()))
+	return sess, nil
+}
+
+// GetMarshaller prepares a request-scoped marshaller closure and resolved content type for the given component path.
+// It preserves existing behavior for readers (format derived from query) and defaults to JSON otherwise.
+func (s *Service) GetMarshaller(r *http.Request, methodAndPath string, extra ...repository.MarshalOption) (marshal shared.Marshal, contentType string, comp *repository.Component, err error) {
+	comp, err = s.Component(r.Context(), methodAndPath)
+	if err != nil || comp == nil {
+		if err == nil {
+			err = fmt.Errorf("component not found: %s", methodAndPath)
+		}
+		return nil, "", nil, err
+	}
+	return s.getMarshaller(r, comp, extra...)
+}
+
+func (s *Service) getMarshaller(r *http.Request, comp *repository.Component, extra ...repository.MarshalOption) (shared.Marshal, string, *repository.Component, error) {
+	// Ensure component content marshallers are initialized (defensive when invoked outside router lifecycle)
+	if err := s.ensureComponentInitialized(comp); err != nil {
+		return nil, "", nil, err
+	}
+
+	// Build component session to populate state (for exclusion filters)
+	sess := s.NewComponentSession(comp, WithRequest(r), WithStateResource(comp.View.Resource()))
+	// Compute JSON field filters from populated state
+	filters := comp.Exclusion(sess.State())
+
+	// Optional format override from query parameter `format`
+	override := strings.TrimSpace(r.URL.Query().Get("format"))
+
+	var opts []repository.MarshalOption
+	opts = append(opts, repository.WithRequest(r), repository.WithFilters(filters))
+	if override != "" {
+		opts = append(opts, repository.WithFormat(override))
+	}
+	if len(extra) > 0 {
+		opts = append(opts, extra...)
+	}
+
+	// Prepare marshaller closure
+	marshal := comp.MarshalFunc(opts...)
+
+	// Resolve content type for headers
+	resolved := override
+	if resolved == "" && comp.Service == srv.TypeReader {
+		resolved = comp.Output.Format(r.URL.Query())
+	}
+	if resolved == "" {
+		resolved = rcontent.JSONFormat
+	}
+	contentType := comp.Output.ContentType(resolved)
+	return marshal, contentType, comp, nil
+}
+
+// GetUnmarshaller prepares a request-scoped unmarshaller for the given component path.
+func (s *Service) GetUnmarshaller(r *http.Request, methodAndPath string, extra ...repository.UnmarshalOption) (unmarshal shared.Unmarshal, comp *repository.Component, err error) {
+	comp, err = s.Component(r.Context(), methodAndPath)
+	if err != nil || comp == nil {
+		if err == nil {
+			err = fmt.Errorf("component not found: %s", methodAndPath)
+		}
+		return nil, nil, err
+	}
+	return s.getUnmarshaller(r, comp, extra...)
+}
+
+func (s *Service) getUnmarshaller(r *http.Request, comp *repository.Component, extra ...repository.UnmarshalOption) (shared.Unmarshal, *repository.Component, error) {
+	// Ensure component content marshallers are initialized (defensive)
+	if err := s.ensureComponentInitialized(comp); err != nil {
+		return nil, nil, err
+	}
+	var opts []repository.UnmarshalOption
+	opts = append(opts, repository.WithUnmarshalRequest(r))
+	if len(extra) > 0 {
+		opts = append(opts, extra...)
+	}
+	unmarshal := comp.UnmarshalFor(opts...)
+	return unmarshal, comp, nil
+}
+
+// ensureComponentInitialized defensively initializes component content marshallers when called from external contexts.
+func (s *Service) ensureComponentInitialized(comp *repository.Component) error {
+	if comp == nil {
+		return fmt.Errorf("component was nil")
+	}
+	res := comp.View.GetResource()
+	if res == nil {
+		return nil
+	}
+	// If JSON marshaller already present, assume initialized.
+	if comp.Content.Marshaller.JSON.JsonMarshaller != nil {
+		return nil
+	}
+	// Initialize content marshallers as in Component.Init
+	if err := comp.Content.InitMarshaller(comp.IOConfig(), comp.Output.Exclude, comp.BodyType(), comp.OutputType()); err != nil {
+		return err
+	}
+	if err := comp.Content.Marshaller.Init(res.LookupType()); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -383,7 +589,16 @@ func (s *Service) AddComponent(ctx context.Context, component *repository.Compon
 		return err
 	}
 
-	s.repository.Register(components.Components...)
+	registerComponents := append([]*repository.Component{}, components.Components...)
+	if reportComponent, err := repository.BuildReportComponent(s.repository.Registry().Dispatcher(), components.Components[0]); err != nil {
+		if !strings.Contains(err.Error(), reportSelectionErr) {
+			return err
+		}
+	} else if reportComponent != nil {
+		registerComponents = append(registerComponents, reportComponent)
+	}
+
+	s.repository.Register(registerComponents...)
 
 	return nil
 }
@@ -517,7 +732,7 @@ func (s *Service) HTTPHandler(ctx context.Context, options ...gateway.Option) (h
 	return s.handler, nil
 }
 
-// New creates a datly service, repository allows you to bootstrap empty or existing yaml repository
+// New creates a dao dao, repository allows you to bootstrap empty or existing yaml repository
 func New(ctx context.Context, options ...repository.Option) (*Service, error) {
 	options = append([]repository.Option{
 		repository.WithJWTSigner(mock.HmacJwtSigner()),
