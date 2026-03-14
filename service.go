@@ -42,6 +42,8 @@ import (
 //go:embed Version
 var Version string
 
+const reportSelectionErr = "report metadata had no selectable dimensions or measures"
+
 type (
 	Service struct {
 		repository  *repository.Service
@@ -589,7 +591,9 @@ func (s *Service) AddComponent(ctx context.Context, component *repository.Compon
 
 	registerComponents := append([]*repository.Component{}, components.Components...)
 	if reportComponent, err := repository.BuildReportComponent(s.repository.Registry().Dispatcher(), components.Components[0]); err != nil {
-		return err
+		if !strings.Contains(err.Error(), reportSelectionErr) {
+			return err
+		}
 	} else if reportComponent != nil {
 		registerComponents = append(registerComponents, reportComponent)
 	}
