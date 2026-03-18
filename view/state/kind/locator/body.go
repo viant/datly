@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/viant/datly/shared"
@@ -69,7 +70,7 @@ func (r *Body) Value(ctx context.Context, rType reflect.Type, name string) (inte
 	if name == "" {
 		return requestState.State(), true, nil
 	}
-	sel, err := requestState.Selector(name)
+	sel, err := r.selectorByName(requestState, name)
 	if err != nil {
 		return nil, false, err
 	}
@@ -199,6 +200,32 @@ func (r *Body) ensureRequest(rType reflect.Type) (*structology.State, error) {
 		requestState.Sync()
 	}
 	return requestState, err
+}
+
+func (r *Body) selectorByName(requestState *structology.State, name string) (*structology.Selector, error) {
+	sel, err := requestState.Selector(name)
+	if err == nil {
+		return sel, nil
+	}
+	stateType := requestState.Type()
+	for _, candidate := range stateType.RootSelectors() {
+		if jsonFieldName(candidate.Tag()) == name {
+			return candidate, nil
+		}
+	}
+	return nil, err
+}
+
+func jsonFieldName(tag reflect.StructTag) string {
+	jsonTag := tag.Get("json")
+	if jsonTag == "" {
+		return ""
+	}
+	name := strings.SplitN(jsonTag, ",", 2)[0]
+	if name == "-" {
+		return ""
+	}
+	return name
 }
 
 func (r *Body) updateQueryString(ctx context.Context, body interface{}) {

@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 
+	rcontent "github.com/viant/datly/repository/content"
 	dcodec "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/extension/handler"
 	"github.com/viant/datly/view/extension/marshaller"
@@ -81,6 +82,8 @@ func InitRegistry() {
 			xreflect.NewType("auth.Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("time.Location", xreflect.WithReflectType(reflect.TypeOf(&time.Location{}))),
+			xreflect.NewType("content.StructologyJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.StructologyJSONRuntime{}))),
+			xreflect.NewType("content.LegacyJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.LegacyJSONRuntime{}))),
 			xreflect.NewType("marshaller.JSON", xreflect.WithReflectType(reflect.TypeOf(marshaller.JSON{}))),
 			xreflect.NewType("marshaller.Gojay", xreflect.WithReflectType(reflect.TypeOf(marshaller.Gojay{}))),
 		)),

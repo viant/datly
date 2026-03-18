@@ -3,6 +3,11 @@ package translator
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router"
@@ -19,10 +24,6 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"os"
-	"path"
-	"path/filepath"
-	"strings"
 )
 
 type (
@@ -325,13 +326,15 @@ func (r *Rule) applyDefaults() {
 	setter.SetCaseFormatIfEmpty(&r.Route.Output.CaseFormat, "lc")
 	setter.SetBoolIfFalse(&r.Input.IgnoreEmptyQueryParameters, r.IgnoreEmptyQueryParameters)
 	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.Type != "")
+	setter.SetStringIfEmpty(&r.Route.Content.Marshaller.JSON.Engine, content.DefaultJSONEngineTypeName)
 	if r.XMLUnmarshalType != "" {
 		r.Route.Content.Marshaller.XML.TypeName = r.XMLUnmarshalType
 	}
 	if r.JSONMarshalType != "" {
-		r.Route.Content.Marshaller.JSON.TypeName = r.JSONMarshalType
-	} else if r.JSONUnmarshalType != "" {
-		r.Route.Content.Marshaller.JSON.TypeName = r.JSONUnmarshalType
+		r.Route.Content.Marshaller.JSON.MarshalTypeName = r.JSONMarshalType
+	}
+	if r.JSONUnmarshalType != "" {
+		r.Route.Content.Marshaller.JSON.UnmarshalTypeName = r.JSONUnmarshalType
 	}
 }
 

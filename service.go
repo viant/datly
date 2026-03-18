@@ -463,10 +463,7 @@ func (s *Service) ensureComponentInitialized(comp *repository.Component) error {
 		return nil
 	}
 	// Initialize content marshallers as in Component.Init
-	if err := comp.Content.InitMarshaller(comp.IOConfig(), comp.Output.Exclude, comp.BodyType(), comp.OutputType()); err != nil {
-		return err
-	}
-	if err := comp.Content.Marshaller.Init(res.LookupType()); err != nil {
+	if err := comp.Content.InitMarshaller(comp.IOConfig(), comp.Output.Exclude, comp.BodyType(), comp.OutputType(), res.LookupType()); err != nil {
 		return err
 	}
 	return nil
