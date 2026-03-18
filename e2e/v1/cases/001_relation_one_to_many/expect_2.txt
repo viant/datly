@@ -5,14 +5,15 @@ import (
 )
 
 type GeneratedStruct struct {
-	Id          int         `sqlx:"ID"`
-	Name        *string     `sqlx:"NAME"`
-	AccountId   *int        `sqlx:"ACCOUNT_ID"`
-	Created     *time.Time  `sqlx:"CREATED"`
-	UserCreated *int        `sqlx:"USER_CREATED"`
-	Updated     *time.Time  `sqlx:"UPDATED"`
-	UserUpdated *int        `sqlx:"USER_UPDATED"`
-	Products    []*Products `view:",table=PRODUCT,connector=dev,selectorNamespace=pr"`
+	Xmap        map[string]interface{} `sqlx:"xmap,type=map[string]interface{}" codec:"JSON"`
+	Id          int                    `sqlx:"ID"`
+	Name        *string                `sqlx:"NAME"`
+	AccountId   *int                   `sqlx:"ACCOUNT_ID"`
+	Created     *time.Time             `sqlx:"CREATED"`
+	UserCreated *int                   `sqlx:"USER_CREATED"`
+	Updated     *time.Time             `sqlx:"UPDATED"`
+	UserUpdated *int                   `sqlx:"USER_UPDATED"`
+	Products    []*Products            `view:",table=PRODUCT,connector=dev,selectorNamespace=pr"`
 }
 
 type Products struct {

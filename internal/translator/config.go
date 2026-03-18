@@ -13,8 +13,11 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	dpath "github.com/viant/datly/repository/path"
+	"github.com/viant/toolbox"
+	"gopkg.in/yaml.v3"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -26,10 +29,11 @@ type Config struct {
 }
 
 func (c *Config) Init(ctx context.Context) error {
-	if len(c.repository.Configs) == 0 {
-		c.Config = c.inMemoryConfig()
-	} else if err := c.loadConfig(ctx); err != nil {
-		return err
+	c.Config = c.inMemoryConfig()
+	if len(c.repository.Configs) > 0 {
+		if err := c.loadConfig(ctx); err != nil {
+			return err
+		}
 	}
 	if err := c.updateURIs(); err != nil {
 		return err
@@ -109,8 +113,9 @@ func (c *Config) updateURIs() error {
 
 func (c *Config) loadConfig(ctx context.Context) error {
 	var configs []interface{}
+	configs = append(configs, c.Config)
 	for _, URL := range c.repository.Configs.URLs() {
-		config, err := standalone.NewConfigFromURL(ctx, URL)
+		config, err := loadConfigFragment(ctx, URL)
 		if err != nil {
 			return err
 		}
@@ -122,6 +127,58 @@ func (c *Config) loadConfig(ctx context.Context) error {
 	}
 	c.Config = &standalone.Config{}
 	return json.Unmarshal(merged, c.Config)
+}
+
+func loadConfigFragment(ctx context.Context, URL string) (*standalone.Config, error) {
+	data, err := fs.DownloadWithURL(ctx, URL)
+	if err != nil {
+		return nil, err
+	}
+	aMap := map[string]interface{}{}
+	if strings.HasSuffix(URL, "yaml") || strings.HasSuffix(URL, "yml") {
+		if err = yaml.Unmarshal(data, &aMap); err != nil {
+			return nil, err
+		}
+	} else {
+		if err = json.Unmarshal(data, &aMap); err != nil {
+			return nil, err
+		}
+	}
+	cfg := &standalone.Config{}
+	if err = toolbox.DefaultConverter.AssignConverted(cfg, aMap); err != nil {
+		return nil, err
+	}
+	normalizeConfigURLs(cfg, configBaseDir(URL))
+	return cfg, nil
+}
+
+func normalizeConfigURLs(cfg *standalone.Config, baseURL string) {
+	if url.IsRelative(cfg.RouteURL) {
+		cfg.RouteURL = url.Join(baseURL, cfg.RouteURL)
+	}
+	if url.IsRelative(cfg.ContentURL) {
+		cfg.ContentURL = url.Join(baseURL, cfg.ContentURL)
+	}
+	if url.IsRelative(cfg.PluginsURL) {
+		cfg.PluginsURL = url.Join(baseURL, cfg.PluginsURL)
+	}
+	if url.IsRelative(cfg.DependencyURL) {
+		cfg.DependencyURL = url.Join(baseURL, cfg.DependencyURL)
+	}
+	if cfg.JobURL != "" && url.IsRelative(cfg.JobURL) {
+		cfg.JobURL = url.Join(baseURL, cfg.JobURL)
+	}
+	if cfg.FailedJobURL != "" && url.IsRelative(cfg.FailedJobURL) {
+		cfg.FailedJobURL = url.Join(baseURL, cfg.FailedJobURL)
+	}
+}
+
+func configBaseDir(URL string) string {
+	if strings.Contains(URL, "://") {
+		parent, _ := url.Split(URL, "file")
+		return parent
+	}
+	return filepath.Dir(URL)
 }
 
 func (c *Config) inMemoryConfig() *standalone.Config {

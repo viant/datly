@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/internal/translator/function"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
+	dcodec "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"reflect"
@@ -145,5 +146,23 @@ func (v *Viewlet) applyExplicitCast(column *sqlparser.Column, funcArgs []string)
 		return true, nil
 	}
 	column.RawType = rType
+	if shouldAttachJSONCodecForCast(rType) && columnConfig.Codec == nil {
+		columnConfig.Codec = &state.Codec{Name: dcodec.JSON, OutputType: funcArgs[1]}
+	}
 	return true, nil
+}
+
+func shouldAttachJSONCodecForCast(rType reflect.Type) bool {
+	if rType == nil {
+		return false
+	}
+	for rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	switch rType.Kind() {
+	case reflect.Map:
+		return true
+	default:
+		return false
+	}
 }
