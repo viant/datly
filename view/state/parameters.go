@@ -409,6 +409,10 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 		schema.rType = rType
 	}
 	fieldName := p.Name
+	tagFieldName := fieldName
+	if p.In != nil && p.In.Kind == KindRequestBody && p.In.Name != "" {
+		tagFieldName = p.In.Name
+	}
 	p.Schema.Cardinality = schema.Cardinality
 	if p.Schema.Cardinality == Many && (rType.Kind() != reflect.Slice && rType.Kind() != reflect.Map) {
 		rType = reflect.SliceOf(rType)
@@ -417,11 +421,17 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 		if index := strings.LastIndex(fieldName, "."); index != -1 {
 			fieldName = fieldName[index+1:]
 		}
+		if p.In != nil && p.In.Kind == KindRequestBody && p.In.Name != "" && fieldName == p.In.Name {
+			fieldName = SanitizeTypeName(fieldName)
+		}
 
 		structField = reflect.StructField{Name: fieldName,
 			Type:    rType,
 			PkgPath: xreflect.PkgPath(fieldName, pkgPath),
-			Tag:     p.buildTag(fieldName),
+			Tag:     p.buildTag(tagFieldName),
+		}
+		if p.In != nil && p.In.Kind == KindRequestBody && p.In.Name != "" && structField.Tag.Get("json") == "" {
+			structField.Tag = appendStructTag(structField.Tag, `json:"`+p.In.Name+`,omitempty"`)
 		}
 
 		if fieldName == rType.Name() && strings.Contains(p.Tag, "anonymous") {
@@ -445,13 +455,20 @@ func buildMarkerFieldTag(structField reflect.StructField) stags.Tags {
 	return updated
 }
 
+func appendStructTag(tag reflect.StructTag, value string) reflect.StructTag {
+	if tag == "" {
+		return reflect.StructTag(value)
+	}
+	return reflect.StructTag(string(tag) + " " + value)
+}
+
 func (p Parameters) BuildBodyType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
 	candidates := p.FilterByKind(KindRequestBody)
 	bodyLeafParameters := make(Parameters, 0, len(candidates))
 	for i, candidate := range candidates {
 		if candidate.In.Name != "" {
 			bodyParameter := *candidates[i]
-			bodyParameter.Name = candidate.In.Name
+			bodyParameter.Name = SanitizeTypeName(candidate.In.Name)
 			bodyLeafParameters = append(bodyLeafParameters, &bodyParameter)
 			continue
 		}
