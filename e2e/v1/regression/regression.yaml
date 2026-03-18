@@ -1,0 +1,36 @@
+init:
+
+pipeline:
+  database:
+    action: run
+    request: '@db.yaml'
+
+  app:
+    when: $debugger!=on
+    description: start datly app (DQLBootstrap loads DQL from dql/ folder)
+    action: run
+    request: '@app'
+
+  test:
+    tag: $pathMatch
+    data:
+      '[]dev_dbsetup': '@dbsetup/dev'
+
+    subPath: '../cases/${index}_*'
+    range: 1..022
+    template:
+      checkSkip:
+        action: nop
+        comments: use case init
+        skip: $HasResource(${path}/skip.txt)
+
+      dbsetup:
+        when: $Len($dev_dbsetup) > 0
+        action: 'dsunit:prepare'
+        datastore: dev
+        expand: true
+        data: $dev_dbsetup
+
+      test:
+        action: run
+        request: '@test'

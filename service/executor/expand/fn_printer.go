@@ -61,7 +61,7 @@ func (p *Printer) Println(args ...interface{}) string {
 func (p *Printer) Printf(format string, args ...interface{}) string {
 	p.derefArgs(args)
 
-	fmt.Printf(p.Sprintf(format, args...))
+	fmt.Print(p.Sprintf(format, args...))
 	return ""
 }
 
@@ -107,12 +107,12 @@ func (p *Printer) Fatal(any interface{}, args ...interface{}) (string, error) {
 
 	format, ok := any.(string)
 	if ok {
-		return "", fmt.Errorf(p.Sprintf(format, args...))
+		return "", fmt.Errorf("%s", p.Sprintf(format, args...))
 	}
 	if err, ok := any.(error); ok {
 		return "", err
 	}
-	return "", fmt.Errorf(p.Sprintf("%+v", any))
+	return "", fmt.Errorf("%s", p.Sprintf("%+v", any))
 }
 
 // Fatalf fatal with formatting
@@ -124,7 +124,7 @@ func (p *Printer) Fatalf(any interface{}, args ...interface{}) (string, error) {
 func (p *Printer) FatalfWithCode(code int, any interface{}, args ...interface{}) (string, error) {
 	format, ok := any.(string)
 	if ok {
-		return "", response.NewError(code, fmt.Sprintf(p.Sprintf(format, args...)))
+		return "", response.NewError(code, p.Sprintf(format, args...))
 	}
 	if err, ok := any.(error); ok {
 		return "", response.NewError(code, err.Error(), response.WithError(err))

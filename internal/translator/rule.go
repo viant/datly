@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
@@ -65,8 +66,10 @@ type (
 		Include           []string                   `json:",omitempty"`
 		indexNamespaces
 		IsGeneratation    bool
-		XMLUnmarshalType  string `json:",omitempty"`
-		JSONUnmarshalType string `json:",omitempty"`
+		XMLUnmarshalType  string             `json:",omitempty"`
+		JSONUnmarshalType string             `json:",omitempty"`
+		JSONMarshalType   string             `json:",omitempty"`
+		Report            *repository.Report `json:",omitempty" yaml:"Report,omitempty"`
 
 		OutputParameter *inference.Parameter
 	}
@@ -122,17 +125,19 @@ func (r *Rule) DSQLSetting() interface{} {
 	return struct {
 		URI               string
 		Method            string
-		Type              string   `json:",omitempty"`
-		InputType         string   `json:",omitempty"`
-		OutputType        string   `json:",omitempty"`
-		MessageBus        string   `json:",omitempty"`
-		CompressAboveSize int      `json:",omitempty"`
-		HandlerArgs       []string `json:",omitempty"`
-		DocURL            string   `json:",omitempty"`
-		DocURLs           []string `json:",omitempty"`
-		Internal          bool     `json:",omitempty"`
-		JSONUnmarshalType string   `json:",omitempty"`
-		Connector         string   `json:",omitempty"`
+		Type              string             `json:",omitempty"`
+		InputType         string             `json:",omitempty"`
+		OutputType        string             `json:",omitempty"`
+		MessageBus        string             `json:",omitempty"`
+		CompressAboveSize int                `json:",omitempty"`
+		HandlerArgs       []string           `json:",omitempty"`
+		DocURL            string             `json:",omitempty"`
+		DocURLs           []string           `json:",omitempty"`
+		Internal          bool               `json:",omitempty"`
+		JSONUnmarshalType string             `json:",omitempty"`
+		JSONMarshalType   string             `json:",omitempty"`
+		Connector         string             `json:",omitempty"`
+		Report            *repository.Report `json:",omitempty"`
 		contract.ModelContextProtocol
 		contract.Meta
 	}{
@@ -148,7 +153,9 @@ func (r *Rule) DSQLSetting() interface{} {
 		DocURLs:              r.DocURLs,
 		Internal:             r.Internal,
 		JSONUnmarshalType:    r.JSONUnmarshalType,
+		JSONMarshalType:      r.JSONMarshalType,
 		Connector:            r.Connector,
+		Report:               r.Report,
 		ModelContextProtocol: r.ModelContextProtocol,
 		Meta:                 r.Meta,
 	}
@@ -190,7 +197,7 @@ func (r *Resource) initRule(ctx context.Context, fs afs.Service, dSQL *string) e
 	rule := r.Rule
 	rule.applyDefaults()
 	if err := r.loadData(ctx, fs, rule.ConstURL, &rule.Const); err != nil {
-		r.messages.AddWarning(r.rule.RuleName(), "const", fmt.Sprintf("failed to load constant : %v %w", rule.ConstURL, err))
+		r.messages.AddWarning(r.rule.RuleName(), "const", fmt.Sprintf("failed to load constant : %v %v", rule.ConstURL, err))
 	}
 	r.State.AppendConst(rule.Const)
 	return r.loadDocumentation(ctx, fs, rule)
@@ -321,7 +328,9 @@ func (r *Rule) applyDefaults() {
 	if r.XMLUnmarshalType != "" {
 		r.Route.Content.Marshaller.XML.TypeName = r.XMLUnmarshalType
 	}
-	if r.JSONUnmarshalType != "" {
+	if r.JSONMarshalType != "" {
+		r.Route.Content.Marshaller.JSON.TypeName = r.JSONMarshalType
+	} else if r.JSONUnmarshalType != "" {
 		r.Route.Content.Marshaller.JSON.TypeName = r.JSONUnmarshalType
 	}
 }
