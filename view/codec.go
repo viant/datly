@@ -21,11 +21,12 @@ const (
 
 type (
 	columnsCodec struct {
-		fields     []*xunsafe.Field
-		selectors  []*structology.Selector
-		unwrapper  *xunsafe.Field
-		actualType reflect.Type
-		columns    []*Column
+		fields      []*xunsafe.Field        // promoted Raw.Col{i} fields on the OUTER wrapper
+		selectors   []*structology.Selector // selectors built against the Actual type
+		unwrapper   *xunsafe.Field          // points to OUTER.Actual
+		actualType  reflect.Type            // OUTER wrapper reflect type
+		actualState *structology.StateType  // structology state built for the Actual type
+		columns     []*Column
 	}
 )
 
@@ -49,7 +50,7 @@ func newColumnsCodec(viewType reflect.Type, columns []*Column) (*columnsCodec, e
 func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	c.columns = columns
 
-	// Build Raw holder: Col0..ColN with sqlx tags derived from column names.
+	// Build Raw holder with promoted Col0..ColN having sqlx tags that match result set column names.
 	codecStructFields := make([]reflect.StructField, len(columns))
 	for i, column := range columns {
 		scanType := columnDatabaseScanType(column)
@@ -61,9 +62,9 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	}
 	rawType := reflect.StructOf(codecStructFields)
 
-	// Build outer type with:
-	// - Raw embedded FIRST (no methods; keeps Col* promoted and offsets valid)
-	// - Actual as a named (non-embedded) field to avoid reflect method-embedding panic
+	// OUTER wrapper:
+	// - Raw embedded FIRST (no methods) so Col{i} remain promoted and offsets valid.
+	// - Actual as a named (non-embedded) field to avoid reflect panic for method-bearing types.
 	c.actualType = reflect.StructOf([]reflect.StructField{
 		{
 			Name:      rawFieldName,
@@ -77,21 +78,21 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 		},
 	})
 
-	// Access Raw's Col{i} by promoted name on the OUTER type.
+	// Access Raw.Col{i} by promoted name on the OUTER wrapper.
 	c.fields = make([]*xunsafe.Field, len(columns))
 	for i := 0; i < len(columns); i++ {
 		colName := "Col" + strconv.Itoa(i)
 		c.fields[i] = xunsafe.FieldByName(c.actualType, colName)
 	}
 
-	// Unwrapper points to Actual field (index 1).
+	// OUTER.Actual field (index 1)
 	c.unwrapper = xunsafe.FieldByIndex(c.actualType, 1)
 
-	// State type on OUTER for consistent selector addressing.
-	stateType := structology.NewStateType(
-		c.actualType,
+	// Build structology state for the Actual type itself so its field tags (e.g., sqlx:"...") are honored.
+	c.actualState = structology.NewStateType(
+		viewType,
 		structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
-			// Use sqlx tag for Raw Col fields to match incoming column names.
+			// Respect sqlx tag on Actual fields (can be "COL" or "COL|ALT")
 			sqlxTag := io.ParseTag(tag)
 			if sqlxTag.Column == "" {
 				return []string{name}
@@ -100,14 +101,14 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 		}),
 	)
 
-	// Build selectors into Actual.<Field>. Try exact column name first,
-	// then snake_case -> UpperCamel fallback.
+	// Build selectors directly against the Actual state.
 	for _, column := range columns {
-		// Prefer explicit path into the Actual field.
-		sel := stateType.Lookup(actualFieldName + "." + column.Name)
+		// Try sqlx/explicit name first (e.g., "AD_ORDERS_DATA_INDEX").
+		sel := c.actualState.Lookup(column.Name)
 		if sel == nil {
+			// Fallback: snake_case -> UpperCamel field name.
 			if goName := toUpperCamel(column.Name); goName != column.Name {
-				sel = stateType.Lookup(actualFieldName + "." + goName)
+				sel = c.actualState.Lookup(goName)
 			}
 		}
 		c.selectors = append(c.selectors, sel)
@@ -127,25 +128,22 @@ func columnDatabaseScanType(column *Column) reflect.Type {
 }
 
 func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, record *codec2.ParentValue) error {
-	asPtr := xunsafe.AsPointer(value)
-	// Point to the nested Actual field so structology selector matches that root.
-	actualPtr := c.unwrapper.Pointer(asPtr)
+	outerPtr := xunsafe.AsPointer(value)
+	actualPtr := c.unwrapper.Pointer(outerPtr) // pointer to the Actual value
 
 	for i, column := range c.columns {
 		if c.fields[i] == nil {
 			return fmt.Errorf("codec raw field not found for column %q", column.Name)
 		}
 		if c.selectors[i] == nil {
-			return fmt.Errorf("codec selector not found for column %q (tried Actual.%s and camel-cased variant)", column.Name, column.Name)
+			return fmt.Errorf("codec selector not found for column %q (tried sqlx tag and camel-cased name)", column.Name)
 		}
-		// Read raw DB value from promoted Col{i} field on the outer struct.
-		fieldValue := c.fields[i].Value(asPtr)
+		rawFieldValue := c.fields[i].Value(outerPtr)
 
-		decoded, err := column.Codec.Transform(ctx, fieldValue, codec.WithOptions(record))
+		decoded, err := column.Codec.Transform(ctx, rawFieldValue, codec.WithOptions(record))
 		if err != nil {
 			return err
 		}
-		// Set decoded value into the nested Actual field using selector.
 		if err = c.selectors[i].SetValue(actualPtr, decoded); err != nil {
 			return err
 		}
