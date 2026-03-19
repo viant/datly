@@ -88,7 +88,7 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	// OUTER.Actual field (index 1)
 	c.unwrapper = xunsafe.FieldByIndex(c.actualType, 1)
 
-	// Build structology state for the Actual type itself so its field tags (e.g., sqlx:"...") are honored.
+	// Build structology state for the Actual type so its field tags (e.g., sqlx:"...") are honored.
 	c.actualState = structology.NewStateType(
 		viewType,
 		structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
@@ -101,14 +101,21 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 		}),
 	)
 
-	// Build selectors directly against the Actual state.
+	// Build selectors directly against the Actual state, trying several name variants.
 	for _, column := range columns {
-		// Try sqlx/explicit name first (e.g., "AD_ORDERS_DATA_INDEX").
-		sel := c.actualState.Lookup(column.Name)
-		if sel == nil {
-			// Fallback: snake_case -> UpperCamel field name.
-			if goName := toUpperCamel(column.Name); goName != column.Name {
-				sel = c.actualState.Lookup(goName)
+		var sel *structology.Selector
+		candidates := []string{
+			column.Name,                  // exact alias (e.g., AD_ORDERS_DATA_INDEX)
+			strings.ToLower(column.Name), // lowercase alias for tags using lowercase
+			toUpperCamel(column.Name),    // Go field name (AdOrdersDataIndex)
+		}
+		for _, cand := range candidates {
+			if cand == "" {
+				continue
+			}
+			sel = c.actualState.Lookup(cand)
+			if sel != nil {
+				break
 			}
 		}
 		c.selectors = append(c.selectors, sel)
@@ -136,7 +143,7 @@ func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, recor
 			return fmt.Errorf("codec raw field not found for column %q", column.Name)
 		}
 		if c.selectors[i] == nil {
-			return fmt.Errorf("codec selector not found for column %q (tried sqlx tag and camel-cased name)", column.Name)
+			return fmt.Errorf("codec selector not found for column %q (tried sqlx tag, lowercase tag, and camel-cased name)", column.Name)
 		}
 		rawFieldValue := c.fields[i].Value(outerPtr)
 
@@ -151,21 +158,37 @@ func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, recor
 	return nil
 }
 
-// toUpperCamel converts snake_case or mixed separators to UpperCamel (Go field style).
+// toUpperCamel converts snake/space/hyphen/dot separated names to UpperCamel (Go field style).
+// "AD_ORDERS_DATA_INDEX" -> "AdOrdersDataIndex"
 func toUpperCamel(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	capNext := true
+	if s == "" {
+		return s
+	}
+	// Normalize separators to space
+	normalized := make([]rune, 0, len(s))
 	for _, r := range s {
-		if r == '_' || r == '-' || r == ' ' || r == '.' {
-			capNext = true
+		switch r {
+		case '_', '-', ' ', '.':
+			normalized = append(normalized, ' ')
+		default:
+			normalized = append(normalized, r)
+		}
+	}
+	parts := strings.Fields(strings.ToLower(string(normalized)))
+	if len(parts) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, p := range parts {
+		if len(p) == 0 {
 			continue
 		}
-		if capNext {
-			b.WriteRune(unicode.ToUpper(r))
-			capNext = false
-		} else {
-			b.WriteRune(r)
+		for i, r := range p {
+			if i == 0 {
+				b.WriteRune(unicode.ToUpper(r))
+			} else {
+				b.WriteRune(r)
+			}
 		}
 	}
 	return b.String()
