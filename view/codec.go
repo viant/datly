@@ -3,14 +3,15 @@ package view
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
+
 	codec2 "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -71,7 +72,7 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 		{
 			Name:      actualFieldName,
 			Type:      viewType,
-			Anonymous: true,
+			Anonymous: false,
 		},
 	})
 
