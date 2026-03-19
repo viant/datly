@@ -3,15 +3,14 @@ package view
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"strconv"
-	"strings"
-
 	codec2 "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
+	"reflect"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -63,25 +62,32 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	}
 
 	rawType := reflect.StructOf(codecStructFields)
+
+	// Embed Actual first (anonymous) to satisfy reflect rules when the type has methods.
+	// Keep Raw embedded (anonymous) as well; we will resolve its Col* fields by promoted names.
 	c.actualType = reflect.StructOf([]reflect.StructField{
+		{
+			Name:      actualFieldName,
+			Type:      viewType,
+			Anonymous: true,
+		},
 		{
 			Name:      rawFieldName,
 			Type:      rawType,
 			Anonymous: true,
 		},
-		{
-			Name:      actualFieldName,
-			Type:      viewType,
-			Anonymous: false,
-		},
 	})
 
+	// Resolve Raw's Col{i} fields by promoted name on the OUTER type (since Raw is embedded).
 	c.fields = make([]*xunsafe.Field, len(columns))
 	for i := 0; i < len(columns); i++ {
-		c.fields[i] = xunsafe.FieldByIndex(rawType, i)
+		colName := "Col" + strconv.Itoa(i)
+		c.fields[i] = xunsafe.FieldByName(c.actualType, colName)
 	}
 
-	c.unwrapper = xunsafe.FieldByIndex(c.actualType, 1)
+	// Actual is at index 0 now.
+	c.unwrapper = xunsafe.FieldByIndex(c.actualType, 0)
+
 	stateType := structology.NewStateType(c.actualType, structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
 		sqlxTag := io.ParseTag(tag)
 		if sqlxTag.Column == "" {
@@ -91,7 +97,12 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	}))
 
 	for _, column := range columns {
-		c.selectors = append(c.selectors, stateType.Lookup(actualFieldName+"."+column.Name))
+		// Prefer explicit "Actual.<Field>" selector; fall back to promoted "<Field>" if applicable.
+		sel := stateType.Lookup(actualFieldName + "." + column.Name)
+		if sel == nil {
+			sel = stateType.Lookup(column.Name)
+		}
+		c.selectors = append(c.selectors, sel)
 	}
 	return nil
 }
@@ -109,6 +120,12 @@ func columnDatabaseScanType(column *Column) reflect.Type {
 func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, record *codec2.ParentValue) error {
 	asPtr := xunsafe.AsPointer(value)
 	for i, column := range c.columns {
+		if c.fields[i] == nil {
+			return fmt.Errorf("codec raw field not found for column %q", column.Name)
+		}
+		if c.selectors[i] == nil {
+			return fmt.Errorf("codec selector not found for column %q", column.Name)
+		}
 		fieldValue := c.fields[i].Value(asPtr)
 		decoded, err := column.Codec.Transform(ctx, fieldValue, codec.WithOptions(record))
 		if err != nil {
