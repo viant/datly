@@ -47,7 +47,11 @@ func (r *Output) syncData(cardinality state.Cardinality) {
 	if r.DataPtr == nil {
 		return
 	}
-	slice := reflect.ValueOf(r.DataPtr).Elem()
+	dest := reflect.ValueOf(r.DataPtr).Elem()
+	slice := compactNilSlice(dest)
+	if slice.IsValid() && slice.Kind() == reflect.Slice && slice.Pointer() != dest.Pointer() {
+		dest.Set(slice)
+	}
 	if cardinality == state.One { //TODO uncomment is here move to one cardinality handling here
 		switch slice.Len() {
 		case 0:
@@ -64,6 +68,33 @@ func (r *Output) syncData(cardinality state.Cardinality) {
 		}
 	}
 	r.Data = slice.Interface()
+}
+
+func compactNilSlice(slice reflect.Value) reflect.Value {
+	if !slice.IsValid() || slice.Kind() != reflect.Slice {
+		return slice
+	}
+	if slice.IsNil() {
+		return slice
+	}
+	elemType := slice.Type().Elem()
+	switch elemType.Kind() {
+	case reflect.Ptr, reflect.Interface:
+	default:
+		return slice
+	}
+	compacted := reflect.MakeSlice(slice.Type(), 0, slice.Len())
+	for i := 0; i < slice.Len(); i++ {
+		item := slice.Index(i)
+		if item.Kind() == reflect.Interface && !item.IsNil() {
+			item = item.Elem()
+		}
+		if (item.Kind() == reflect.Ptr || item.Kind() == reflect.Interface) && item.IsNil() {
+			continue
+		}
+		compacted = reflect.Append(compacted, slice.Index(i))
+	}
+	return compacted
 }
 
 // Init initializes session
