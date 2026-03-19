@@ -104,7 +104,6 @@ func marshallString(asString string, sb *MarshallSession, _ *strings.Replacer) {
 func getReplacer() *strings.Replacer {
 	return strings.NewReplacer(`\`, `\\`,
 		`"`, `\"`,
-		`/`, `\/`,
 		"\b", `\b`,
 		"\f", `\f`,
 		"\n", `\n`,

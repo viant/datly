@@ -247,7 +247,8 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config *config.IOConfig, p
 
 		// Allow custom unmarshaller on structs if defined and not ignored (only if no gojay used).
 		if (aConfig == nil || !aConfig.IgnoreCustomUnmarshaller) && rType.Implements(unmarshallerIntoType) {
-			return newCustomUnmarshaller(rType, config, path, outputPath, tag, c.parent)
+			// Avoid self-referential lookup through placeholder for the same type.
+			return newCustomUnmarshallerWithMarshaller(rType, config, path, outputPath, tag, c.parent, base), nil
 		}
 
 		return base, nil

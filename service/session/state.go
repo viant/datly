@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -219,6 +220,16 @@ func (s *Session) ViewOptions(aView *view.View, opts ...Option) *Options {
 	var parameters state.NamedParameters
 	if aView.Template != nil {
 		parameters = aView.Template.Parameters.Index()
+		if aView.Template.UseResourceParameterLookup && aView.GetResource() != nil {
+			merged := state.NamedParameters{}
+			for k, v := range aView.GetResource().NamedParameters() {
+				merged[k] = v
+			}
+			for k, v := range parameters {
+				merged[k] = v
+			}
+			parameters = merged
+		}
 	}
 
 	viewOptions.kindLocator = s.kindLocator.With(s.viewLookupOptions(aView, parameters, viewOptions)...)
@@ -240,7 +251,7 @@ func (s *Session) setTemplateState(ctx context.Context, aView *view.View, opts *
 	aState := s.state.Lookup(aView)
 	if template := aView.Template; template != nil {
 		stateType := template.StateType()
-		if stateType.IsDefined() {
+		if stateType != nil && stateType.IsDefined() {
 			templateState := aState.Template
 			templateState.EnsureMarker()
 			err := s.SetState(ctx, template.Parameters, templateState, opts)
@@ -471,12 +482,13 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 					rawType = rawType.Elem()
 				}
 
-				if rawType.Kind() != reflect.Struct {
-					break
-				}
-
 				if elem.Kind() == reflect.Interface && !elem.IsNil() {
 					elem = elem.Elem()
+				}
+				if rawType.Kind() != reflect.Struct {
+					value = elem.Interface()
+					valueType = reflect.TypeOf(value)
+					break
 				}
 				if elem.Kind() == reflect.Ptr {
 					value = elem.Interface()
@@ -538,6 +550,9 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 			}
 			return converted.Interface(), nil
 		}
+		if wrapped, ok := wrapComponentResult(parameter, value, valueType, rawSrcType, rawDestType, destIsPtr); ok {
+			return wrapped, nil
+		}
 
 		if options.shallReportNotAssignable() {
 			fmt.Printf("parameter %v is not directly assignable from %s:(%s)\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), destType.String())
@@ -560,6 +575,43 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		}
 	}
 	return value, nil
+}
+
+func wrapComponentResult(parameter *state.Parameter, value interface{}, valueType, rawSrcType, rawDestType reflect.Type, destIsPtr bool) (interface{}, bool) {
+	if parameter == nil || parameter.In == nil || parameter.In.Kind != state.KindComponent {
+		return nil, false
+	}
+	if rawSrcType.Kind() != reflect.Struct || rawDestType.Kind() != reflect.Struct {
+		return nil, false
+	}
+	field, ok := rawDestType.FieldByName("Data")
+	if !ok {
+		return nil, false
+	}
+	fieldType := field.Type
+	srcValue := reflect.ValueOf(value)
+	if valueType.Kind() == reflect.Ptr {
+		if srcValue.IsNil() {
+			return nil, true
+		}
+	}
+	if !valueType.AssignableTo(fieldType) {
+		if valueType.Kind() == reflect.Ptr && valueType.Elem().AssignableTo(fieldType) {
+			srcValue = srcValue.Elem()
+		} else if valueType.Kind() != reflect.Ptr && reflect.PointerTo(valueType).AssignableTo(fieldType) {
+			ptr := reflect.New(valueType)
+			ptr.Elem().Set(srcValue)
+			srcValue = ptr
+		} else {
+			return nil, false
+		}
+	}
+	target := reflect.New(rawDestType)
+	target.Elem().FieldByIndex(field.Index).Set(srcValue)
+	if destIsPtr {
+		return target.Interface(), true
+	}
+	return target.Elem().Interface(), true
 }
 
 func ensureAssignable(fieldName string, destFieldType reflect.Type, srcFieldType reflect.Type) bool {
@@ -721,6 +773,15 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 
 func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter, opts *Options, has bool, value interface{}, cachable bool) (interface{}, bool, error) {
 	var err error
+	if os.Getenv("DATLY_DEBUG_ADJUST") == "1" {
+		fmt.Printf("[ADJUST DEBUG][start] param=%s kind=%s has=%v value=%T outputType=%v schemaType=%v\n",
+			parameter.Name, parameter.In.Kind, has, value, parameter.OutputType(), func() reflect.Type {
+				if parameter.Schema == nil {
+					return nil
+				}
+				return parameter.Schema.Type()
+			}())
+	}
 	if !has && parameter.Value != nil {
 		has = true
 		value = parameter.Value
@@ -730,6 +791,9 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 	}
 	if value, err = s.adjustValue(parameter, value); err != nil {
 		return nil, false, err
+	}
+	if os.Getenv("DATLY_DEBUG_ADJUST") == "1" {
+		fmt.Printf("[ADJUST DEBUG][post-adjust] param=%s value=%T\n", parameter.Name, value)
 	}
 	if parameter.Output != nil {
 		// Defensive: ensure codec is initialized before Transform.
@@ -744,6 +808,9 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 			return nil, false, fmt.Errorf("failed to transform %s with %s: %v, %w", parameter.Name, parameter.Output.Name, value, err)
 		}
 		value = transformed
+		if os.Getenv("DATLY_DEBUG_ADJUST") == "1" {
+			fmt.Printf("[ADJUST DEBUG][post-transform] param=%s value=%T\n", parameter.Name, value)
+		}
 	}
 	if has && err == nil && cachable {
 		s.setValue(parameter, value)
@@ -830,9 +897,10 @@ func New(aView *view.View, opts ...Option) *Session {
 }
 
 type loadStateOptions struct {
-	skipKind     map[state.Kind]bool
-	hasSkipKind  bool
-	useHasMarker bool
+	skipKind        map[state.Kind]bool
+	hasSkipKind     bool
+	useHasMarker    bool
+	fallbackOnValue bool
 }
 
 type LoadStateOption func(o *loadStateOptions)
@@ -840,6 +908,14 @@ type LoadStateOption func(o *loadStateOptions)
 func WithHasMarker() LoadStateOption {
 	return func(o *loadStateOptions) {
 		o.useHasMarker = true
+	}
+}
+
+// WithValuePresenceFallback treats non-zero values as present when no Has marker is available.
+// This is opt-in to avoid changing behavior for existing inputs that intentionally omit markers.
+func WithValuePresenceFallback() LoadStateOption {
+	return func(o *loadStateOptions) {
+		o.fallbackOnValue = true
 	}
 }
 func WithLoadStateSkipKind(kinds ...state.Kind) LoadStateOption {
@@ -869,6 +945,7 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 	// Use presence markers only if enabled and supported by the input state
 	hasMarker := options.useHasMarker && inputState.HasMarker()
 	for _, parameter := range parameters {
+
 		if parameter.Scope != "" {
 			continue
 		}
@@ -889,7 +966,11 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 		if hasMarker && !selector.Has(ptr) {
 			continue
 		}
+
 		value := selector.Value(ptr)
+		if !hasMarker && options.fallbackOnValue && isZeroValue(value) {
+			continue
+		}
 		switch parameter.In.Kind {
 		case state.KindView, state.KindParam, state.KindState:
 			if value == nil {
@@ -908,6 +989,24 @@ func (s *Session) LoadState(parameters state.Parameters, aState interface{}, opt
 	}
 
 	return nil
+}
+
+func isZeroValue(value interface{}) bool {
+	if value == nil {
+		return true
+	}
+	v := reflect.ValueOf(value)
+	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return true
+		}
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Slice, reflect.Map, reflect.Array:
+		return v.Len() == 0
+	}
+	return v.IsZero()
 }
 
 func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *response.Errors) {

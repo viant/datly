@@ -35,7 +35,12 @@ type (
 
 func WithCustomContexts(ctx ...*Variable) EvaluatorOption {
 	return func(c *config) {
-		c.embededTypes = append(c.embededTypes, ctx...)
+		for _, item := range ctx {
+			if item == nil {
+				continue
+			}
+			c.embededTypes = append(c.embededTypes, item)
+		}
 	}
 }
 
@@ -47,7 +52,12 @@ func WithContext(ctx context.Context) EvaluatorOption {
 
 func WithVariable(namedVariable ...*NamedVariable) EvaluatorOption {
 	return func(c *config) {
-		c.namedVariables = append(c.namedVariables, namedVariable...)
+		for _, item := range namedVariable {
+			if item == nil {
+				continue
+			}
+			c.namedVariables = append(c.namedVariables, item)
+		}
 	}
 }
 
@@ -65,6 +75,9 @@ func WithSetLiteral(setLiterals func(state *structology.State) error) EvaluatorO
 
 func WithTypeLookup(lookup xreflect.LookupType) EvaluatorOption {
 	return func(c *config) {
+		if lookup == nil {
+			return
+		}
 		c.typeLookup = lookup
 	}
 }
@@ -141,12 +154,18 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 	}
 
 	for _, valueType := range aConfig.embededTypes {
+		if valueType == nil {
+			continue
+		}
 		if err = evaluator.planner.EmbedVariable(valueType.Type); err != nil {
 			return nil, err
 		}
 	}
 
 	for _, variable := range aConfig.namedVariables {
+		if variable == nil {
+			continue
+		}
 		if err = evaluator.planner.DefineVariable(variable.Name, variable.Type); err != nil {
 			return nil, err
 		}
@@ -181,6 +200,9 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 func createConfig(options []EvaluatorOption) *config {
 	instance := newConfig()
 	for _, option := range options {
+		if option == nil {
+			continue
+		}
 		option(instance)
 	}
 

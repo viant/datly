@@ -123,6 +123,7 @@ func InitRegistry() {
 				PredicateGreaterOrEqual:    NewGreaterOrEqualPredicate(),
 				PredicateGreaterThan:       NewGreaterThanPredicate(),
 				PredicateLike:              NewLikePredicate(),
+				PredicateLiteralIn:         NewLiteralInPredicate(),
 				PredicateExpr:              NewExprPredicate(),
 				PredicateNotLike:           NewNotLikePredicate(),
 				PredicateHandler:           NewPredicateHandler(),

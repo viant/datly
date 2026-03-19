@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/reader"
@@ -23,6 +24,9 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 	defer func() {
 		if r := recover(); r != nil {
 			panicMsg := fmt.Sprintf("Panic occurred: %v, Stack trace: %v", r, string(debug.Stack()))
+			if os.Getenv("DATLY_DEBUG_OPERATOR") == "1" {
+				fmt.Printf("[OPERATOR DEBUG] %s\n", panicMsg)
+			}
 			logger := aSession.Logger()
 			if logger == nil {
 				panic(panicMsg)

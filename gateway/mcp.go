@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
+	oauthmeta "github.com/viant/mcp-protocol/oauth2/meta"
 	"github.com/viant/mcp-protocol/schema"
 	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/toolbox"
@@ -69,8 +70,7 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 
 		// 2) Apply parameters to request URL/query/body
 		for _, p := range allParams {
-			name := strings.Title(p.Name)
-			value := params.Arguments[name]
+			value := toolArgumentValue(p, params.Arguments)
 			pType := p.Schema.Type()
 			if pType.Kind() == reflect.Ptr {
 				pType = pType.Elem()
@@ -111,6 +111,10 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 		}
 		rw := proxy.NewWriter()
 		aRoute.Handle(rw, httpReq)
+
+		if rw.Code == http.StatusUnauthorized {
+			return nil, r.mcpUnauthorizedError()
+		}
 
 		// 5) Build tool result (text + structured on error)
 		return r.buildToolCallResult(rw, finalURL, aRoute.Path.Method), nil
@@ -272,6 +276,9 @@ func (r *Router) newToolHTTPRequest(method, URL string, body io.Reader) (*http.R
 	if err != nil {
 		return nil, jsonrpc.NewInvalidRequest(err.Error(), nil)
 	}
+	if body != nil {
+		httpRequest.Header.Set("Content-Type", "application/json")
+	}
 	return httpRequest, nil
 }
 
@@ -283,11 +290,12 @@ func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method s
 		mimeType = "application/json"
 	}
 	data := responseWriter.Body.Bytes()
-	result.Content = append(result.Content, schema.CallToolResultContentElem{
-		MimeType: mimeType,
-		Type:     "text",
-		Text:     string(data),
-	})
+	result.Content = append(result.Content, schema.CallToolResultContentElem(
+		schema.TextContent{
+			Type: "text",
+			Text: string(data),
+		},
+	))
 	_ = json.Unmarshal(data, &result.StructuredContent)
 	if responseWriter.Code >= http.StatusBadRequest {
 		isErr := true
@@ -332,10 +340,41 @@ func (r *Router) addAuthTokenIfPresent(ctx context.Context, httpRequest *http.Re
 	}
 }
 
+const defaultMCPProtectedResource = "https://datly.viantinc.com"
+
+func (r *Router) mcpUnauthorizedError() *jsonrpc.Error {
+	if r == nil || r.config == nil || r.config.MCP == nil {
+		return jsonrpc.NewError(schema.Unauthorized, "Unauthorized", nil)
+	}
+	issuerURL := strings.TrimSpace(r.config.MCP.IssuerURL)
+	if issuerURL == "" {
+		return jsonrpc.NewError(schema.Unauthorized, "Unauthorized", nil)
+	}
+	return jsonrpc.NewError(schema.Unauthorized, "Unauthorized", &authorization.Authorization{
+		RequiredScopes: []string{},
+		UseIdToken:     true,
+		ProtectedResourceMetadata: &oauthmeta.ProtectedResourceMetadata{
+			Resource:             defaultMCPProtectedResource,
+			AuthorizationServers: []string{issuerURL},
+		},
+	})
+}
+
 func (r *Router) buildToolInputType(components *repository.Component) reflect.Type {
 	var inputFields []reflect.StructField
+	var uniqueFieldName = make(map[string]bool)
 	var uniqueQuery = make(map[string]bool)
 	var uniquePath = make(map[string]bool)
+	appendField := func(name string, fieldType reflect.Type, tag reflect.StructTag) {
+		if name == "" || fieldType == nil {
+			return
+		}
+		if uniqueFieldName[name] {
+			return
+		}
+		uniqueFieldName[name] = true
+		inputFields = append(inputFields, reflect.StructField{Name: name, Type: fieldType, Tag: tag})
+	}
 	// Include component input parameters
 	for _, parameter := range components.Input.Type.Parameters {
 		name := strings.Title(parameter.Name)
@@ -350,7 +389,7 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
 				tag = `json:",omitempty" optional:"true"`
 			}
-			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type(), Tag: tag})
+			appendField(name, parameter.Schema.Type(), tag)
 		case state.KindQuery, state.KindForm:
 
 			if uniqueQuery[parameter.In.Name] {
@@ -365,14 +404,18 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 			} else if !strings.Contains(parameter.Tag, "required") {
 				tag = `json:",omitempty"`
 			}
-			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type(), Tag: tag})
+			appendField(name, parameter.Schema.Type(), tag)
 		case state.KindRequestBody:
+			if parameter.IsAnonymous() {
+				appendAnonymousBodyFields(&inputFields, uniqueFieldName, parameter.Schema.Type())
+				continue
+			}
 			// If body is a slice, mark optional in schema.
 			var tag reflect.StructTag
 			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
 				tag = `json:",omitempty" optional:"true"`
 			}
-			inputFields = append(inputFields, reflect.StructField{Name: name, Type: parameter.Schema.Type(), Tag: tag})
+			appendField(name, parameter.Schema.Type(), tag)
 		}
 	}
 
@@ -381,31 +424,102 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 		if p := components.View.Selector.LimitParameter; p != nil && p.In != nil && p.In.Name != "" {
 			if !uniqueQuery[p.In.Name] { // avoid duplicates
 				uniqueQuery[p.In.Name] = true
-				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty"`})
+				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty"`)
 			}
 		}
 		if p := components.View.Selector.OffsetParameter; p != nil && p.In != nil && p.In.Name != "" {
 			if !uniqueQuery[p.In.Name] {
 				uniqueQuery[p.In.Name] = true
-				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty"`})
+				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty"`)
 			}
 		}
 		if p := components.View.Selector.FieldsParameter; p != nil && p.In != nil && p.In.Name != "" {
 			if !uniqueQuery[p.In.Name] {
 				uniqueQuery[p.In.Name] = true
 				// Fields is a []string – ensure optional in schema
-				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty" optional:"true"`})
+				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty" optional:"true"`)
 			}
 		}
 		if p := components.View.Selector.PageParameter; p != nil && p.In != nil && p.In.Name != "" {
 			if !uniqueQuery[p.In.Name] {
 				uniqueQuery[p.In.Name] = true
-				inputFields = append(inputFields, reflect.StructField{Name: strings.Title(p.Name), Type: p.Schema.Type(), Tag: `json:",omitempty"`})
+				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty"`)
 			}
 		}
 	}
 
 	return reflect.StructOf(inputFields)
+}
+
+func toolArgumentValue(parameter *state.Parameter, arguments map[string]interface{}) interface{} {
+	if parameter == nil {
+		return nil
+	}
+	if parameter.In != nil && parameter.In.Kind == state.KindRequestBody && parameter.IsAnonymous() && parameter.Schema != nil {
+		return anonymousBodyArgumentValue(arguments, parameter.Schema.Type())
+	}
+	return arguments[strings.Title(parameter.Name)]
+}
+
+func appendAnonymousBodyFields(fields *[]reflect.StructField, unique map[string]bool, bodyType reflect.Type) {
+	bodyType = indirectType(bodyType)
+	if bodyType == nil || bodyType.Kind() != reflect.Struct {
+		return
+	}
+	for i := 0; i < bodyType.NumField(); i++ {
+		field := bodyType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		if unique[field.Name] {
+			continue
+		}
+		unique[field.Name] = true
+		*fields = append(*fields, field)
+	}
+}
+
+func anonymousBodyArgumentValue(arguments map[string]interface{}, bodyType reflect.Type) interface{} {
+	bodyType = indirectType(bodyType)
+	if bodyType == nil || bodyType.Kind() != reflect.Struct {
+		return nil
+	}
+	payload := map[string]interface{}{}
+	for i := 0; i < bodyType.NumField(); i++ {
+		field := bodyType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		value, ok := arguments[field.Name]
+		if !ok {
+			value, ok = arguments[jsonFieldName(field)]
+		}
+		if !ok {
+			continue
+		}
+		payload[jsonFieldName(field)] = value
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	return payload
+}
+
+func jsonFieldName(field reflect.StructField) string {
+	if tag := field.Tag.Get("json"); tag != "" {
+		parts := strings.Split(tag, ",")
+		if parts[0] != "" && parts[0] != "-" {
+			return parts[0]
+		}
+	}
+	return strings.ToLower(field.Name[:1]) + field.Name[1:]
+}
+
+func indirectType(rType reflect.Type) reflect.Type {
+	for rType != nil && rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	return rType
 }
 
 func (r *Router) buildTemplateResourceIntegration(item *dpath.Item, aPath *dpath.Path, aRoute *Route, provider *repository.Provider) error {
@@ -468,9 +582,9 @@ func (r *Router) buildTemplateResourceIntegration(item *dpath.Item, aPath *dpath
 
 func (r *Router) reactMcpResourceHandler(mcpResourceTemplate schema.ResourceTemplate, aRoute *Route, provider *repository.Provider) func(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {
 	handler := func(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {
-		result, err := r.handleMcpRead(ctx, &request.Params, &mcpResourceTemplate, aRoute, provider)
-		if err != nil {
-			return nil, jsonrpc.NewInternalError(err.Error(), nil)
+		result, rpcErr := r.handleMcpRead(ctx, &request.Params, &mcpResourceTemplate, aRoute, provider)
+		if rpcErr != nil {
+			return nil, rpcErr
 		}
 		if len(result) == 0 {
 			return &schema.ReadResourceResult{Contents: []schema.ReadResourceResultContentsElem{}}, nil
@@ -532,12 +646,12 @@ func (r *Router) hasMcpResource(URI string) bool {
 	return false
 }
 
-func (r *Router) handleMcpRead(ctx context.Context, params *schema.ReadResourceRequestParams, template *schema.ResourceTemplate, aRoute *Route, provider *repository.Provider) ([]schema.ReadResourceResultContentsElem, error) {
+func (r *Router) handleMcpRead(ctx context.Context, params *schema.ReadResourceRequestParams, template *schema.ResourceTemplate, aRoute *Route, provider *repository.Provider) ([]schema.ReadResourceResultContentsElem, *jsonrpc.Error) {
 	URI := furl.Path(params.Uri)
 	URL := fmt.Sprintf("http://localhost/%v", URI) // fallback to a local URL for now, this should be replaced with the actual service URL
 	component, err := provider.Component(ctx)      // ensure the provider is initialized
 	if err != nil {
-		return nil, fmt.Errorf("failed to get component from provider: %w", err)
+		return nil, jsonrpc.NewInternalError(fmt.Errorf("failed to get component from provider: %w", err).Error(), nil)
 	}
 	byLoc := make(map[string]*state.Parameter)
 	for _, param := range component.View.GetResource().Parameters {
@@ -551,6 +665,9 @@ func (r *Router) handleMcpRead(ctx context.Context, params *schema.ReadResourceR
 	}
 	r.addAuthTokenIfPresent(ctx, httpRequest)
 	aRoute.Handle(responseWriter, httpRequest) // route the request to the actual handler
+	if responseWriter.Code == http.StatusUnauthorized {
+		return nil, r.mcpUnauthorizedError()
+	}
 	var result []schema.ReadResourceResultContentsElem
 	mimeType := ""
 	if template.MimeType != nil {

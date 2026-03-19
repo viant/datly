@@ -220,9 +220,17 @@ func (p Parameters) Groups() []Parameters {
 }
 
 func (p Parameters) SetLiterals(state *structology.State) (err error) {
+	if state == nil {
+		return nil
+	}
+	stateType := state.Type()
 	for _, parameter := range p.FilterByKind(KindConst) {
-		if parameter._selector == nil {
-			parameter._selector = state.Type().Lookup(parameter.Name)
+		// Selector must be resolved against the provided state type.
+		// Caching it on the parameter is unsafe because the same parameter instance
+		// can be used with multiple dynamically-generated state types (e.g. during translation).
+		selector := stateType.Lookup(parameter.Name)
+		if selector == nil {
+			return fmt.Errorf("failed to lookup selector for const parameter %q", parameter.Name)
 		}
 		if parameter.Value == nil {
 			switch parameter.Schema.rType.Kind() {
@@ -237,7 +245,7 @@ func (p Parameters) SetLiterals(state *structology.State) (err error) {
 
 			}
 		}
-		if err = parameter._selector.SetValue(state.Pointer(), parameter.Value); err != nil {
+		if err = selector.SetValue(state.Pointer(), parameter.Value); err != nil {
 			return err
 		}
 	}
@@ -393,7 +401,9 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 		if err != nil {
 			rType, err = types.LookupType(lookupType, schema.DataType, xreflect.WithPackage(pkgPath))
 			if err != nil {
-				return structField, markerField, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", p.Name, schema.TypeName(), err)
+				// Keep unresolved custom parameter types as dynamic `interface{}` so
+				// scan/planning can continue while preserving declared schema metadata.
+				rType = reflect.TypeOf((*interface{})(nil)).Elem()
 			}
 		}
 		schema.rType = rType
@@ -594,7 +604,9 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	}
 	if p.Output != nil && p.Output.Schema != nil {
 		if p.Output.Schema.TypeName() != p.Schema.TypeName() {
-			aTag.Parameter.DataType = p.Schema.TypeName()
+			if p.In == nil || p.In.Kind != KindParam {
+				aTag.Parameter.DataType = p.Schema.TypeName()
+			}
 		}
 	}
 	if p.Handler != nil {

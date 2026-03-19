@@ -57,6 +57,7 @@ func (s *Server) init() error {
 			}
 			if issuerURL == "" && oauth2Config != nil {
 				issuerURL, _ = url.Base(oauth2Config.Endpoint.AuthURL, http.SecureScheme)
+				s.config.IssuerURL = issuerURL
 			}
 		}
 		authPolicy := &authorization.Policy{

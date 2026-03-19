@@ -33,6 +33,7 @@ const (
 	PredicateExists      = "exists"
 	PredicateNotExists   = "not_exists"
 
+	PredicateLiteralIn         = "literal_in"
 	PredicateExpr              = "expr"
 	PredicateCriteriaExists    = "exists_criteria"
 	PredicateCriteriaNotExists = "not_exists_criteria"
@@ -337,6 +338,23 @@ func newInPredicate(name string, withCriteria bool, equal bool, multi bool) *Pre
 
 func NewLikePredicate() *Predicate {
 	return newLikePredicate(PredicateLike, true)
+}
+
+func NewLiteralInPredicate() *Predicate {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "Literal",
+			Position: 0,
+		},
+	}
+	criteria := `$criteria.In($Literal, $FilterValue)`
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   PredicateLiteralIn,
+			Source: " " + criteria,
+			Args:   args,
+		},
+	}
 }
 
 func NewExprPredicate() *Predicate {

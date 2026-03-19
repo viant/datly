@@ -50,7 +50,7 @@ func (v Violations) MergeErrors(errors []*response.Error) validator.Violations {
 		aViolation := &validator.Violation{
 			Location: anError.View + "/" + anError.Parameter,
 			Value:    anError.Object,
-			Check:    fmt.Sprint("%T", anError.Error()),
+			Check:    fmt.Sprintf("%T", anError.Error()),
 			Message:  anError.Message,
 		}
 		ret = append(ret, aViolation)

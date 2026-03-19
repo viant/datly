@@ -42,6 +42,8 @@ import (
 //go:embed Version
 var Version string
 
+const reportSelectionErr = "report metadata had no selectable dimensions or measures"
+
 type (
 	Service struct {
 		repository  *repository.Service
@@ -74,6 +76,75 @@ type (
 	}
 	OperateOption func(o *operateOptions)
 )
+
+func normalizeSelectorName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, "_", "")
+	name = strings.ReplaceAll(name, "-", "")
+	name = strings.ReplaceAll(name, ".", "")
+	return name
+}
+
+func resolveSelectorForView(nsView *view.NamespaceView, selectors []*hstate.NamedQuerySelector) *hstate.NamedQuerySelector {
+	if nsView == nil || nsView.View == nil || len(selectors) == 0 {
+		return nil
+	}
+	viewName := normalizeSelectorName(nsView.View.Name)
+	for _, selector := range selectors {
+		if selector == nil {
+			continue
+		}
+		if normalizeSelectorName(selector.Name) == viewName {
+			return selector
+		}
+	}
+	for _, namespace := range nsView.Namespaces {
+		nsName := normalizeSelectorName(namespace)
+		if nsName == "" {
+			continue
+		}
+		for _, selector := range selectors {
+			if selector == nil {
+				continue
+			}
+			if normalizeSelectorName(selector.Name) == nsName {
+				return selector
+			}
+		}
+	}
+	if nsView.Root && len(selectors) == 1 && selectors[0] != nil && strings.TrimSpace(selectors[0].Name) == "" {
+		return selectors[0]
+	}
+	return nil
+}
+
+func applySessionQuerySelectors(component *repository.Component, aSession *session.Session, selectors []*hstate.NamedQuerySelector) {
+	if component == nil || aSession == nil || len(selectors) == 0 {
+		return
+	}
+	views := component.NamespacedView
+	if views == nil {
+		views = view.IndexViews(component.View, "")
+	}
+	for _, nsView := range views.Views {
+		injected := resolveSelectorForView(nsView, selectors)
+		if injected == nil || nsView == nil || nsView.View == nil {
+			continue
+		}
+		statelet := aSession.State().Lookup(nsView.View)
+		statelet.QuerySelector = injected.QuerySelector
+		if statelet.Page > 0 && statelet.Offset == 0 {
+			actualLimit := statelet.Limit
+			if actualLimit == 0 && nsView.View.Selector != nil {
+				actualLimit = nsView.View.Selector.Limit
+			}
+			if actualLimit > 0 {
+				statelet.Offset = actualLimit * (statelet.Page - 1)
+				statelet.Limit = actualLimit
+			}
+		}
+	}
+}
 
 func newOperateOptions(opts []OperateOption) *operateOptions {
 	ret := &operateOptions{}
@@ -211,7 +282,12 @@ func (s *Service) SignRequest(request *http.Request, claims *jwt.Claims) error {
 
 func LoadInput(ctx context.Context, aSession *session.Session, aComponent *repository.Component, input interface{}) error {
 	ctx = aSession.Context(ctx, false)
-	if err := aSession.LoadState(aComponent.Input.Type.Parameters, input); err != nil {
+	if err := aSession.LoadState(
+		aComponent.Input.Type.Parameters,
+		input,
+		session.WithHasMarker(),
+		session.WithValuePresenceFallback(),
+	); err != nil {
 		return err
 	}
 	if err := aSession.Populate(ctx); err != nil {
@@ -235,6 +311,9 @@ func (s *Service) Operate(ctx context.Context, opts ...OperateOption) (interface
 	if options.session == nil {
 		sOptions := append(options.sessionOptions, WithStateResource(options.component.View.Resource()))
 		options.session = s.NewComponentSession(options.component, sOptions...)
+	}
+	if sessionOpt := newSessionOptions(options.sessionOptions); len(sessionOpt.querySelectors) > 0 {
+		applySessionQuerySelectors(options.component, options.session, sessionOpt.querySelectors)
 	}
 	if input := options.input; input != nil {
 		if err = LoadInput(ctx, options.session, options.component, input); err != nil {
@@ -510,7 +589,16 @@ func (s *Service) AddComponent(ctx context.Context, component *repository.Compon
 		return err
 	}
 
-	s.repository.Register(components.Components...)
+	registerComponents := append([]*repository.Component{}, components.Components...)
+	if reportComponent, err := repository.BuildReportComponent(s.repository.Registry().Dispatcher(), components.Components[0]); err != nil {
+		if !strings.Contains(err.Error(), reportSelectionErr) {
+			return err
+		}
+	} else if reportComponent != nil {
+		registerComponents = append(registerComponents, reportComponent)
+	}
+
+	s.repository.Register(registerComponents...)
 
 	return nil
 }

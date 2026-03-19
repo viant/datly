@@ -354,16 +354,9 @@ func ParentAlias(join *query.Join) string {
 	result := ""
 	sqlparser.Traverse(join.On, func(n node.Node) bool {
 		switch actual := n.(type) {
-		case *qexpr.Binary:
-			if xSel, ok := actual.X.(*qexpr.Selector); ok {
-				if xSel.Name != join.Alias {
-					result = xSel.Name
-				}
-			}
-			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
-				if ySel.Name != join.Alias {
-					result = ySel.Name
-				}
+		case *qexpr.Selector:
+			if actual.Name != "" && actual.Name != join.Alias {
+				result = actual.Name
 			}
 			return true
 		}
@@ -377,20 +370,14 @@ func ExtractRelationColumns(join *query.Join) (string, string) {
 	refColumn := ""
 	sqlparser.Traverse(join.On, func(n node.Node) bool {
 		switch actual := n.(type) {
-		case *qexpr.Binary:
-			if xSel, ok := actual.X.(*qexpr.Selector); ok {
-				if xSel.Name == join.Alias {
-					refColumn = sqlparser.Stringify(xSel.X)
-				} else if relColumn == "" {
-					relColumn = sqlparser.Stringify(xSel.X)
+		case *qexpr.Selector:
+			column := sqlparser.Stringify(actual.X)
+			if actual.Name == join.Alias {
+				if refColumn == "" {
+					refColumn = column
 				}
-			}
-			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
-				if ySel.Name == join.Alias {
-					refColumn = sqlparser.Stringify(ySel.X)
-				} else if relColumn == "" {
-					relColumn = sqlparser.Stringify(ySel.X)
-				}
+			} else if relColumn == "" {
+				relColumn = column
 			}
 			return true
 		}

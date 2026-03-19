@@ -14,7 +14,7 @@ pipeline:
     set_sdk:
       action: sdk.set
       target: $target
-      sdk: go:1.25.1
+      sdk: go:1.25.5
 
     buildValidator:
       action: exec:run

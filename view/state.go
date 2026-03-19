@@ -39,7 +39,7 @@ type (
 
 // Init initializes Statelet
 func (s *Statelet) Init(aView *View) {
-	if aView != nil && s.Template == nil && aView.Template.stateType != nil {
+	if aView != nil && s.Template == nil && aView.Template != nil && aView.Template.stateType != nil {
 		s.Template = aView.Template.stateType.NewState()
 	}
 	if s.initialized {

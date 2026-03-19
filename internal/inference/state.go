@@ -491,7 +491,13 @@ func (s State) EnsureReflectTypes(modulePath string, pkg string, registry *xrefl
 		if err != nil {
 			rType, err = types.LookupType(typeRegistry.Lookup, dataType, xreflect.WithPackage(pkg))
 			if err != nil {
-				return err
+				rType = reflect.TypeOf((*interface{})(nil)).Elem()
+				if param.Schema.DataType == "" {
+					param.Schema.DataType = "interface{}"
+				}
+				if param.Schema.Package == "" {
+					param.Schema.Package = pkg
+				}
 			}
 		}
 		param.Schema.SetType(rType)

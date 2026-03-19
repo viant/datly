@@ -182,9 +182,13 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 			Offset:     true,
 			Projection: true,
 		}
-		if !v.ParameterDerived {
-			selector.Constraints.Filterable = []string{"*"}
-		}
+	}
+	setter.SetBoolIfFalse(&selector.Constraints.Criteria, true)
+	setter.SetBoolIfFalse(&selector.Constraints.Limit, true)
+	setter.SetBoolIfFalse(&selector.Constraints.Offset, true)
+	setter.SetBoolIfFalse(&selector.Constraints.Projection, true)
+	if len(selector.Constraints.Filterable) == 0 && !v.ParameterDerived {
+		selector.Constraints.Filterable = []string{"*"}
 	}
 
 	if querySelectors, ok := namespace.Resource.Declarations.QuerySelectors[namespace.Name]; ok {

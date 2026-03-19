@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"embed"
+	stdjson "encoding/json"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -18,6 +19,7 @@ import (
 	content "github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/handler"
+	"github.com/viant/datly/repository/shape/typectx"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
@@ -47,6 +49,8 @@ type (
 		View            *view.View    `json:",omitempty"`
 		NamespacedView  *view.NamespacedView
 		Handler         *handler.Handler `json:",omitempty"`
+		Report          *Report          `json:",omitempty" yaml:"Report,omitempty"`
+		TypeContext     *typectx.Context `json:",omitempty" yaml:",omitempty"`
 		indexedView     view.NamedViews
 		SourceURL       string
 
@@ -438,6 +442,13 @@ func (c *Component) UnmarshalFor(opts ...UnmarshalOption) shared.Unmarshal {
 	}
 
 	req := options.request // capture for closure
+	if c != nil && c.Report != nil && c.Report.Enabled && c.Handler != nil {
+		if parameter := c.Input.Type.AnonymousParameters(); parameter != nil && parameter.In != nil && parameter.In.Kind == state.KindRequestBody {
+			return func(data []byte, dest interface{}) error {
+				return stdjson.Unmarshal(data, dest)
+			}
+		}
+	}
 	return func(data []byte, dest interface{}) error {
 		if len(interceptors) > 0 || req != nil {
 			return c.Content.Marshaller.JSON.JsonMarshaller.Unmarshal(data, dest, interceptors, req)
@@ -555,6 +566,13 @@ func NewComponent(path *contract.Path, options ...ComponentOption) (*Component, 
 func WithView(aView *view.View) ComponentOption {
 	return func(c *Component) error {
 		c.View = aView
+		return nil
+	}
+}
+
+func WithReport(report *Report) ComponentOption {
+	return func(c *Component) error {
+		c.Report = report.Clone()
 		return nil
 	}
 }

@@ -147,7 +147,11 @@ func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Sel
 			declaration.Kind = segments[0]
 			location := ""
 			if len(segments) > 1 {
-				location = strings.Join(segments[1:], ".")
+				joiner := "."
+				if declaration.Kind == string(state.KindComponent) {
+					joiner = "/"
+				}
+				location = strings.Join(segments[1:], joiner)
 			}
 			declaration.Location = &location
 			declaration.InOutput = declaration.Kind == string(state.KindOutput)
@@ -207,7 +211,7 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 		dataType = strings.Replace(dataType, typeName, "interface{}", 1)
 	}
 
-	if dataType != "" {
+	if dataType != "" && d.lookup != nil {
 		if schema, _ := d.lookup(dataType); schema != nil {
 			schema.Cardinality = declaration.Cardinality
 			if rType := schema.Type(); rType != nil && schema.Cardinality == state.Many {

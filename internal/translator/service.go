@@ -117,9 +117,12 @@ func (s *Service) discoverComponentContract(ctx context.Context, resource *Resou
 			return nil, err
 		}
 	}
-	location.Name = strings.ReplaceAll(location.Name, "..", "[]")
-	location.Name = strings.ReplaceAll(location.Name, ".", "/")
-	method, URI := shared.ExtractPath(location.Name)
+	locationName := strings.TrimSpace(location.Name)
+	if !strings.Contains(locationName, "/") {
+		locationName = strings.ReplaceAll(locationName, "..", "[]")
+		locationName = strings.ReplaceAll(locationName, ".", "/")
+	}
+	method, URI := shared.ExtractPath(locationName)
 	return s.signature.Signature(method, URI)
 }
 
@@ -329,6 +332,9 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	}
 
 	route.Component.Meta = resource.Rule.Meta
+	if resource.Rule.Report != nil {
+		route.Component.Report = resource.Rule.Report.Clone()
+	}
 	if route.Component.Meta.DescriptionURI != "" {
 		URL := url.Join(baseRuleURL, route.Component.Meta.DescriptionURI)
 		description, err := s.fs.DownloadWithURL(ctx, URL)
@@ -448,7 +454,7 @@ func (s *Service) persistDocumentation(ctx context.Context, resource *Resource, 
 }
 
 func extractTypeNameWithPackage(outputName string) (string, string) {
-	if index := strings.Index(outputName, "."); index != -1 {
+	if index := strings.LastIndex(outputName, "."); index != -1 {
 		return outputName[:index], outputName[index+1:]
 	}
 	return outputName, ""

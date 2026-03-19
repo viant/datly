@@ -76,7 +76,7 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 	if err := n.Each(func(viewlet *Viewlet) error {
 		n.ensureConnector(viewlet, rootConnector)
 		if err := initFn(ctx, viewlet); err != nil {
-			return fmt.Errorf("failed to init viewlet: %ns, %w", viewlet.Name, err)
+			return fmt.Errorf("failed to init viewlet: %s, %w", viewlet.Name, err)
 		}
 		return nil
 	}); err != nil {

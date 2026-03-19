@@ -15,7 +15,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.11.1
-	github.com/viant/afs v1.26.2
+	github.com/viant/afs v1.29.0
 	github.com/viant/afsc v1.16.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.4.1
@@ -31,8 +31,8 @@ require (
 	github.com/viant/sqlx v0.21.0
 	github.com/viant/structql v0.5.4
 	github.com/viant/toolbox v0.37.0
-	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85
-	github.com/viant/xreflect v0.7.3
+	github.com/viant/velty v0.4.0
+	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.10.3
 	golang.org/x/mod v0.28.0
 	golang.org/x/oauth2 v0.32.0
@@ -42,18 +42,19 @@ require (
 
 require (
 	github.com/viant/govalidator v0.3.1
-	github.com/viant/sqlparser v0.8.1
+	github.com/viant/sqlparser v0.11.1-0.20260224194657-0470849e3588
 )
 
 require (
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
-	github.com/viant/jsonrpc v0.15.0
-	github.com/viant/mcp v0.8.0
-	github.com/viant/mcp-protocol v0.5.10
+	github.com/viant/jsonrpc v0.17.0
+	github.com/viant/mcp v0.11.0
+	github.com/viant/mcp-protocol v0.11.0
 	github.com/viant/structology v0.8.0
 	github.com/viant/tagly v0.3.0
-	github.com/viant/xdatly v0.5.4-0.20251113181159-0ac8b8b0ff3a
+	github.com/viant/x v0.4.1-0.20260306005005-975ded1e1bef
+	github.com/viant/xdatly v0.5.4-0.20260306062123-17850ac34977
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20251208172928-dd34b7f09fd5
 	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
@@ -123,9 +124,10 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
@@ -150,7 +152,6 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/viant/gosh v0.2.1 // indirect
 	github.com/viant/igo v0.2.0 // indirect
-	github.com/viant/x v0.3.0 // indirect
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
 	github.com/xuri/excelize/v2 v2.8.0 // indirect
 	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect

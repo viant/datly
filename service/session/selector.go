@@ -8,10 +8,62 @@ import (
 
 	"github.com/viant/datly/service/session/criteria"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/response"
+	hstate "github.com/viant/xdatly/handler/state"
 )
+
+func normalizeSelectorName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, "_", "")
+	name = strings.ReplaceAll(name, "-", "")
+	name = strings.ReplaceAll(name, ".", "")
+	return name
+}
+
+func resolveInjectedQuerySelector(ns *view.NamespaceView, selectors hstate.QuerySelectors) *hstate.NamedQuerySelector {
+	if len(selectors) == 0 || ns == nil || ns.View == nil {
+		return nil
+	}
+	if selector := selectors.Find(ns.View.Name); selector != nil {
+		return selector
+	}
+	viewName := normalizeSelectorName(ns.View.Name)
+	for _, selector := range selectors {
+		if selector == nil {
+			continue
+		}
+		if normalizeSelectorName(selector.Name) == viewName {
+			return selector
+		}
+	}
+	for _, namespace := range ns.Namespaces {
+		if namespace == "" {
+			continue
+		}
+		if selector := selectors.Find(namespace); selector != nil {
+			return selector
+		}
+		nsName := normalizeSelectorName(namespace)
+		for _, selector := range selectors {
+			if selector == nil {
+				continue
+			}
+			if normalizeSelectorName(selector.Name) == nsName {
+				return selector
+			}
+		}
+	}
+	// Backward-compatible fallback: a single unnamed selector applies to root view.
+	if ns.Root && len(selectors) == 1 {
+		if sel := selectors[0]; sel != nil && strings.TrimSpace(sel.Name) == "" {
+			return sel
+		}
+	}
+	return nil
+}
 
 func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) (err error) {
 	selectorParameters := ns.View.Selector
@@ -21,32 +73,91 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 
 	selector := s.state.Lookup(ns.View)
 
-	if opts != nil && opts.locatorOpt != nil && opts.locatorOpt.QuerySelectors != nil { //override selector
-		querySelectors := opts.locatorOpt.QuerySelectors
-		if namedSelector := querySelectors.Find(ns.View.Name); namedSelector != nil {
-			selector.QuerySelector = namedSelector.QuerySelector
-		}
+	var injected *hstate.NamedQuerySelector
+	if opts != nil && opts.locatorOpt != nil && opts.locatorOpt.QuerySelectors != nil {
+		injected = resolveInjectedQuerySelector(ns, opts.locatorOpt.QuerySelectors)
 	}
 	if err = s.populateFieldQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.FieldsParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.FieldsParameter, view.QueryStateParameters.FieldsParameter), err)
 	}
 	if err = s.populateLimitQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.LimitParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.LimitParameter, view.QueryStateParameters.LimitParameter), err)
 	}
 	if err = s.populateOffsetQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.OffsetParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.OffsetParameter, view.QueryStateParameters.OffsetParameter), err)
 	}
 	if err = s.populateOrderByQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.OrderByParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.OrderByParameter, view.QueryStateParameters.OrderByParameter), err)
 	}
 	if err = s.populateCriteriaQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.CriteriaParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.CriteriaParameter, view.QueryStateParameters.CriteriaParameter), err)
 	}
 	if err = s.populatePageQuerySelector(ctx, ns, opts); err != nil {
-		return response.NewParameterError(ns.View.Name, selectorParameters.PageParameter.Name, err)
+		return response.NewParameterError(ns.View.Name, selectorParameterName(selectorParameters.PageParameter, view.QueryStateParameters.PageParameter), err)
+	}
+
+	// Apply injected selector last so it takes precedence over request-derived values,
+	// but still validate against view selector constraints.
+	if injected != nil {
+		selector.QuerySelector = injected.QuerySelector
+		if err := s.applyInjectedQuerySelector(ns, selector, injected); err != nil {
+			return err
+		}
+	} else if selector.Page > 0 && selector.Offset == 0 {
+		// If selector was pre-set (e.g. from non-query sources) without an explicit page parameter,
+		// apply Page semantics to compute Offset/Limit.
+		_ = s.setPageQuerySelector(selector.Page, ns)
 	}
 	if selector.Limit == 0 && selector.Offset != 0 {
 		return fmt.Errorf("can't use offset without limit - view: %v", ns.View.Name)
+	}
+	return nil
+}
+
+func selectorParameterName(parameter, fallback *state.Parameter) string {
+	if parameter != nil && parameter.Name != "" {
+		return parameter.Name
+	}
+	if fallback != nil && fallback.Name != "" {
+		return fallback.Name
+	}
+	return ""
+}
+
+func (s *Session) applyInjectedQuerySelector(ns *view.NamespaceView, selector *view.Statelet, injected *hstate.NamedQuerySelector) error {
+	if injected == nil || selector == nil {
+		return nil
+	}
+	if len(injected.Fields) > 0 {
+		if err := s.setFieldsQuerySelector(injected.Fields, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Limit != 0 {
+		if err := s.setLimitQuerySelector(injected.Limit, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Offset != 0 {
+		if err := s.setOffsetQuerySelector(injected.Offset, ns); err != nil {
+			return err
+		}
+	}
+	if injected.OrderBy != "" {
+		items := strings.Split(injected.OrderBy, ",")
+		if err := s.setOrderByQuerySelector(items, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Criteria != "" {
+		if err := s.setCriteriaQuerySelector(injected.Criteria, ns); err != nil {
+			return err
+		}
+	}
+	if injected.Page != 0 {
+		if err := s.setPageQuerySelector(injected.Page, ns); err != nil {
+			return err
+		}
 	}
 	return nil
 }
