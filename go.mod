@@ -32,8 +32,9 @@ require (
 	github.com/viant/structql v0.5.4
 	github.com/viant/toolbox v0.37.0
 	github.com/viant/velty v0.4.0
+	github.com/viant/xunsafe v0.10.4-0.20260223225257-275a15956559
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
-	github.com/viant/xunsafe v0.10.3
+
 	golang.org/x/mod v0.28.0
 	golang.org/x/oauth2 v0.32.0
 	google.golang.org/api v0.201.0
@@ -51,7 +52,7 @@ require (
 	github.com/viant/jsonrpc v0.17.0
 	github.com/viant/mcp v0.11.0
 	github.com/viant/mcp-protocol v0.11.0
-	github.com/viant/structology v0.8.0
+	github.com/viant/structology v0.8.1-0.20260318224343-dcb808a9bd76
 	github.com/viant/tagly v0.3.0
 	github.com/viant/x v0.4.1-0.20260306005005-975ded1e1bef
 	github.com/viant/xdatly v0.5.4-0.20260306062123-17850ac34977

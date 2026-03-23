@@ -377,11 +377,11 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	if resource.Rule.XMLUnmarshalType != "" {
 		route.Content.Marshaller.XML.TypeName = resource.Rule.XMLUnmarshalType
 	}
-	// JSON marshaller/unmarshaller customization: prefer MarshalType if provided, fallback to UnmarshalType.
 	if resource.Rule.JSONMarshalType != "" {
-		route.Content.Marshaller.JSON.TypeName = resource.Rule.JSONMarshalType
-	} else if resource.Rule.JSONUnmarshalType != "" {
-		route.Content.Marshaller.JSON.TypeName = resource.Rule.JSONUnmarshalType
+		route.Content.Marshaller.JSON.MarshalTypeName = resource.Rule.JSONMarshalType
+	}
+	if resource.Rule.JSONUnmarshalType != "" {
+		route.Content.Marshaller.JSON.UnmarshalTypeName = resource.Rule.JSONUnmarshalType
 	}
 	route.Component.Output.DataFormat = resource.Rule.DataFormat
 

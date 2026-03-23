@@ -121,11 +121,8 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	if err := c.initTransforms(ctx); err != nil {
 		return nil
 	}
-	if err := c.Content.InitMarshaller(c.IOConfig(), c.Output.Exclude, c.BodyType(), c.OutputType()); err != nil {
-		return err
-	}
 	lookupType := resource.LookupType()
-	if err := c.Content.Marshaller.Init(lookupType); err != nil {
+	if err := c.Content.InitMarshaller(c.IOConfig(), c.Output.Exclude, c.BodyType(), c.OutputType(), lookupType); err != nil {
 		return err
 	}
 	if err = c.Async.Init(ctx, resource, c.View); err != nil {
@@ -450,10 +447,13 @@ func (c *Component) UnmarshalFor(opts ...UnmarshalOption) shared.Unmarshal {
 		}
 	}
 	return func(data []byte, dest interface{}) error {
-		if len(interceptors) > 0 || req != nil {
-			return c.Content.Marshaller.JSON.JsonMarshaller.Unmarshal(data, dest, interceptors, req)
+		if c.Content.Marshaller.JSON.CanUnmarshal() {
+			return c.Content.Marshaller.JSON.Unmarshal(data, dest)
 		}
-		return c.Content.Marshaller.JSON.JsonMarshaller.Unmarshal(data, dest)
+		if len(interceptors) > 0 || req != nil {
+			return c.Content.Marshaller.JSON.RuntimeUnmarshallerEngine().Unmarshal(data, dest, interceptors, req)
+		}
+		return c.Content.Marshaller.JSON.RuntimeUnmarshallerEngine().Unmarshal(data, dest)
 	}
 }
 
