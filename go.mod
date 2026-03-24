@@ -51,7 +51,7 @@ require (
 	github.com/viant/jsonrpc v0.17.0
 	github.com/viant/mcp v0.11.0
 	github.com/viant/mcp-protocol v0.11.0
-	github.com/viant/structology v0.8.1-0.20260324183544-a0a56cb4c800
+	github.com/viant/structology v0.9.0
 	github.com/viant/tagly v0.3.0
 	github.com/viant/x v0.4.1-0.20260306005005-975ded1e1bef
 	github.com/viant/xdatly v0.5.4-0.20260306062123-17850ac34977
