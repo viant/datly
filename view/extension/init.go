@@ -84,6 +84,8 @@ func InitRegistry() {
 			xreflect.NewType("time.Location", xreflect.WithReflectType(reflect.TypeOf(&time.Location{}))),
 			xreflect.NewType("content.StructologyJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.StructologyJSONRuntime{}))),
 			xreflect.NewType("content.LegacyJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.LegacyJSONRuntime{}))),
+			xreflect.NewType("content.StructologyTabularJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.StructologyTabularJSONRuntime{}))),
+			xreflect.NewType("content.LegacyTabularJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.LegacyTabularJSONRuntime{}))),
 			xreflect.NewType("marshaller.JSON", xreflect.WithReflectType(reflect.TypeOf(marshaller.JSON{}))),
 			xreflect.NewType("marshaller.Gojay", xreflect.WithReflectType(reflect.TypeOf(marshaller.Gojay{}))),
 		)),
