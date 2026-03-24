@@ -40,9 +40,10 @@ type (
 
 	TabularJSONConfig struct {
 		FloatPrecision   string
+		Engine           string `json:",omitempty" yaml:",omitempty"`
 		_config          *tabjson.Config
-		InputMarhsaller  *tabjson.Marshaller
-		OutputMarshaller *tabjson.Marshaller
+		InputMarhsaller  TabularJSONUnmarshallerEngine `json:"-" yaml:"-"`
+		OutputMarshaller TabularJSONMarshallerEngine   `json:"-" yaml:"-"`
 	}
 
 	XMLConfig struct {
@@ -258,7 +259,7 @@ func (c *Content) InitMarshaller(config *config.IOConfig, exclude []string, inpu
 	if err := c.initCSVIfNeeded(inputType, outputType); err != nil {
 		return err
 	}
-	if err := c.initTabJSONIfNeeded(exclude, inputType, outputType); err != nil {
+	if err := c.initTabJSONIfNeeded(exclude, inputType, outputType, lookupType); err != nil {
 		return err
 	}
 	if err := c.initXMLIfNeeded(exclude, inputType, outputType); err != nil {
@@ -307,50 +308,18 @@ func (c *Content) ensureCSV() {
 	c.CSV = &CSVConfig{Separator: ","}
 }
 
-func (c *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.Type, outputType reflect.Type) error {
-
-	if c.TabularJSON == nil {
-		c.TabularJSON = &TabularJSONConfig{}
-	}
-
-	if c.TabularJSON._config == nil {
-		c.TabularJSON._config = &tabjson.Config{}
-	}
-
-	if c.TabularJSON._config.FieldSeparator == "" {
-		c.TabularJSON._config.FieldSeparator = ","
-	}
-
+func (c *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.Type, outputType reflect.Type, lookupType xreflect.LookupType) error {
+	c.TabularJSON = ensureTabularJSONConfig(c.TabularJSON, excludedPaths)
 	if len(c.TabularJSON._config.FieldSeparator) != 1 {
 		return fmt.Errorf("separator has to be a single char, but was %v", c.TabularJSON._config.FieldSeparator)
 	}
-
-	if c.TabularJSON._config.NullValue == "" {
-		c.TabularJSON._config.NullValue = "null"
-	}
-
-	if c.TabularJSON.FloatPrecision != "" {
-		c.TabularJSON._config.StringifierConfig.StringifierFloat32Config.Precision = c.TabularJSON.FloatPrecision
-		c.TabularJSON._config.StringifierConfig.StringifierFloat64Config.Precision = c.TabularJSON.FloatPrecision
-	}
-
-	c.TabularJSON._config.ExcludedPaths = excludedPaths
-
-	if outputType.Kind() == reflect.Ptr {
-		outputType = outputType.Elem()
-	}
-
-	var err error
-	c.TabularJSON.OutputMarshaller, err = tabjson.NewMarshaller(outputType, c.TabularJSON._config)
+	outputMarshaller, inputMarshaller, err := newTabularJSONMarshaller(c.TabularJSON, inputType, outputType, excludedPaths, lookupType)
 	if err != nil {
 		return err
 	}
-
-	if outputType == nil {
-		return nil
-	}
-	c.TabularJSON.InputMarhsaller, err = tabjson.NewMarshaller(inputType, nil)
-	return err
+	c.TabularJSON.OutputMarshaller = outputMarshaller
+	c.TabularJSON.InputMarhsaller = inputMarshaller
+	return nil
 }
 
 // func (c *Content) initXMLIfNeeded(excludedPaths []string, outputType reflect.Type, inputType reflect.Type) error {
