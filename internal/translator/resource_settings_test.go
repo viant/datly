@@ -79,3 +79,22 @@ func TestResource_extractRuleSetting_PackageQualifiesTypes(t *testing.T) {
 	assert.NotContains(t, dSQL, "$input(")
 	assert.NotContains(t, dSQL, "$output(")
 }
+
+func TestResource_extractRuleSetting_CubeDirectiveAlias(t *testing.T) {
+	resource := &Resource{Rule: NewRule(), rule: &options.Rule{}}
+	dSQL := "#settings($_ = $cube('OrderReportInput','Dims','Metrics','Predicates','Sort','Take','Skip'))\n" +
+		"SELECT 1"
+
+	err := resource.extractRuleSetting(&dSQL)
+	require.NoError(t, err)
+	require.NotNil(t, resource.Rule.Report)
+	assert.True(t, resource.Rule.Report.Enabled)
+	assert.Equal(t, "OrderReportInput", resource.Rule.Report.Input)
+	assert.Equal(t, "Dims", resource.Rule.Report.Dimensions)
+	assert.Equal(t, "Metrics", resource.Rule.Report.Measures)
+	assert.Equal(t, "Predicates", resource.Rule.Report.Filters)
+	assert.Equal(t, "Sort", resource.Rule.Report.OrderBy)
+	assert.Equal(t, "Take", resource.Rule.Report.Limit)
+	assert.Equal(t, "Skip", resource.Rule.Report.Offset)
+	assert.NotContains(t, dSQL, "$cube(")
+}

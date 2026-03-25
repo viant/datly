@@ -238,6 +238,36 @@ FROM (
 	assert.Equal(t, state.Many, component.Output.Cardinality)
 }
 
+func TestShapeLoadComponent_CubeDirectiveAlias(t *testing.T) {
+	ctx := context.Background()
+	dql := `
+#setting($_ = $connector('dev'))
+#setting($_ = $route('/v1/api/shape/dev/vendors-cube', 'GET'))
+#setting($_ = $cube())
+SELECT vendor.*,
+       groupable(vendor)
+FROM (
+    SELECT ACCOUNT_ID,
+           SUM(ID) AS TOTAL_ID
+    FROM VENDOR
+    GROUP BY 1
+) vendor`
+
+	planResult, err := shapeCompile.New().Compile(ctx, &shape.Source{
+		Name: "vendors_cube",
+		Path: "vendors_cube.dql",
+		DQL:  dql,
+	})
+	require.NoError(t, err)
+
+	artifact, err := shapeLoad.New().LoadComponent(ctx, planResult)
+	require.NoError(t, err)
+	loaded, ok := artifact.Component.(*shapeLoad.Component)
+	require.True(t, ok)
+	require.NotNil(t, loaded.Report)
+	assert.True(t, loaded.Report.Enabled)
+}
+
 func TestCompileBootstrapComponent_MetaFormatOutputTypeMatchesRootView(t *testing.T) {
 	ctx := context.Background()
 	repo, err := repository.New(ctx, repository.WithComponentURL(""), repository.WithNoPlugin())

@@ -235,7 +235,7 @@ func TestRouter_newToolHTTPRequest_SetsJSONContentTypeForBody(t *testing.T) {
 	assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
 }
 
-func TestRouter_buildToolsIntegration_RegistersReportTool(t *testing.T) {
+func TestRouter_buildToolsIntegration_RegistersCubeTool(t *testing.T) {
 	bodyType := reflect.StructOf([]reflect.StructField{
 		{
 			Name: "Dimensions",
@@ -289,7 +289,7 @@ func TestRouter_buildToolsIntegration_RegistersReportTool(t *testing.T) {
 
 	err := router.buildToolsIntegration(&dpath.Item{}, &dpath.Path{
 		Path: contract.Path{Method: http.MethodPost, URI: "/v1/api/dev/vendors-grouping/report"},
-		Meta: contract.Meta{Name: "vendors grouping report", Description: "Vendor grouping report"},
+		Meta: contract.Meta{Name: "vendors grouping cube", Description: "Vendor grouping cube"},
 		ModelContextProtocol: contract.ModelContextProtocol{
 			MCPTool: true,
 		},
@@ -300,7 +300,7 @@ func TestRouter_buildToolsIntegration_RegistersReportTool(t *testing.T) {
 	tools := registry.ListRegisteredTools()
 	require.Len(t, tools, 1)
 	tool := tools[0]
-	assert.Equal(t, "vendorsgroupingreport", tool.Name)
+	assert.Equal(t, "vendorsgroupingcube", tool.Name)
 	require.Contains(t, tool.InputSchema.Properties, "dimensions")
 	require.Contains(t, tool.InputSchema.Properties, "measures")
 	require.Contains(t, tool.InputSchema.Properties, "filters")

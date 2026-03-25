@@ -40,7 +40,7 @@ var (
 	handlerSettingsLineExpr    = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$handler\s*\(([^)]*)\)\s*\)\s*$`)
 	inputSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$input\s*\(([^)]*)\)\s*\)\s*$`)
 	outputSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$output\s*\(([^)]*)\)\s*\)\s*$`)
-	reportSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$report\s*\(([^)]*)\)\s*\)\s*$`)
+	reportSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$(?:report|cube)\s*\(([^)]*)\)\s*\)\s*$`)
 	marshalSettingsLineExpr    = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$marshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
 	unmarshalSettingsLineExpr  = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$unmarshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
 	formatSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)

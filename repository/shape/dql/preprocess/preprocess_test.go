@@ -184,6 +184,23 @@ func TestPrepare_SpecialDirectives(t *testing.T) {
 	assert.Equal(t, "patch", pre.Directives.TemplateType)
 }
 
+func TestPrepare_CubeDirectiveAlias(t *testing.T) {
+	dql := "#setting($_ = $cube('OrderReportInput','Dims','Metrics','Predicates','Sort','Take','Skip'))\n" +
+		"SELECT id FROM ORDERS o"
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	require.NotNil(t, pre.Directives)
+	require.NotNil(t, pre.Directives.Report)
+	assert.True(t, pre.Directives.Report.Enabled)
+	assert.Equal(t, "OrderReportInput", pre.Directives.Report.Input)
+	assert.Equal(t, "Dims", pre.Directives.Report.Dimensions)
+	assert.Equal(t, "Metrics", pre.Directives.Report.Measures)
+	assert.Equal(t, "Predicates", pre.Directives.Report.Filters)
+	assert.Equal(t, "Sort", pre.Directives.Report.OrderBy)
+	assert.Equal(t, "Take", pre.Directives.Report.Limit)
+	assert.Equal(t, "Skip", pre.Directives.Report.Offset)
+}
+
 func TestPrepare_InvalidDestDirectiveDiagnostic(t *testing.T) {
 	dql := "SELECT 1\n#settings($_ = $dest())"
 	pre := Prepare(dql)

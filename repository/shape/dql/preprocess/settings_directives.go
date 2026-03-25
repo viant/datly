@@ -18,7 +18,7 @@ var (
 	cacheDirectiveName       = map[string]bool{"cache": true}
 	mcpDirectiveName         = map[string]bool{"mcp": true}
 	routeDirectiveName       = map[string]bool{"route": true}
-	reportDirectiveName      = map[string]bool{"report": true}
+	reportDirectiveName      = map[string]bool{"report": true, "cube": true}
 	constDirectiveName       = map[string]bool{"const": true}
 	marshalDirectiveName     = map[string]bool{"marshal": true}
 	unmarshalDirectiveName   = map[string]bool{"unmarshal": true}
@@ -112,13 +112,13 @@ func parseSettingsDirectives(input, fullDQL string, diagnosticOffset int, direct
 			directives.Route = values[len(values)-1]
 		}
 	}
-	if strings.Contains(lower, "$report") {
+	if strings.Contains(lower, "$report") || strings.Contains(lower, "$cube") {
 		calls, parseErrors := scanDollarCallsStrict(input, reportDirectiveName)
 		diagnostics = appendDirectiveParseErrors(diagnostics, parseErrors, dqldiag.CodeDirRoute, fullDQL, diagnosticOffset)
 		values := parseReportDirectiveCalls(calls)
 		if len(values) == 0 {
 			if len(calls) > 0 {
-				diagnostics = append(diagnostics, directiveDiagnostic(dqldiag.CodeDirRoute, "invalid $report directive", "expected: #settings($_ = $report()) or #settings($_ = $report('InputType','Dimensions','Measures','Filters','OrderBy','Limit','Offset'))", fullDQL, lastDirectiveCallOffset(calls, diagnosticOffset)))
+				diagnostics = append(diagnostics, directiveDiagnostic(dqldiag.CodeDirRoute, "invalid $report/$cube directive", "expected: #settings($_ = $report()) or #settings($_ = $cube()) or #settings($_ = $report('InputType','Dimensions','Measures','Filters','OrderBy','Limit','Offset'))", fullDQL, lastDirectiveCallOffset(calls, diagnosticOffset)))
 			}
 		} else {
 			directives.Report = values[len(values)-1]

@@ -103,10 +103,10 @@ func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, o
 		pathCopy.MCPTemplateResource = false
 		pathCopy.Report = routePath.Report
 		if pathCopy.Name != "" {
-			pathCopy.Name += " Report"
+			pathCopy.Name += " Cube"
 		}
 		if pathCopy.Description != "" {
-			pathCopy.Description += " report"
+			pathCopy.Description += " cube"
 		}
 		reportPath = &pathCopy
 	}
@@ -118,7 +118,7 @@ func buildReportWrapperView(original *view.View) *view.View {
 		return nil
 	}
 	ret := &view.View{
-		Name:        original.Name + "#report",
+		Name:        original.Name + "#cube",
 		Description: original.Description,
 		Module:      original.Module,
 		Alias:       original.Alias,
@@ -145,10 +145,10 @@ func buildReportPath(routePath *path.Path) *path.Path {
 	pathCopy.MCPResource = false
 	pathCopy.MCPTemplateResource = false
 	if pathCopy.Name != "" {
-		pathCopy.Name += " Report"
+		pathCopy.Name += " Cube"
 	}
 	if pathCopy.Description != "" {
-		pathCopy.Description += " report"
+		pathCopy.Description += " cube"
 	}
 	return &pathCopy
 }
