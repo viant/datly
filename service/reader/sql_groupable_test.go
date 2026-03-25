@@ -116,6 +116,26 @@ func TestBuilder_rewriteGroupBy(t *testing.T) {
 			expected:    "(SELECT account_id, SUM(id) AS total_id, MAX(id) AS max_id FROM vendor GROUP BY 1)",
 		},
 		{
+			description: "rewrite grouped aggregates does not group by nested aggregate expressions",
+			sql:         "(SELECT p.channel_id, p.agency_id, ROUND(SUM(p.total_spend), 4) AS total_spend FROM last_n p GROUP BY 1, 2, 3 ORDER BY total_spend DESC LIMIT 200)",
+			allColumns: func() []*view.Column {
+				return []*view.Column{
+					{Name: "channel_id", Groupable: true},
+					{Name: "agency_id", Groupable: true},
+					{Name: "total_spend"},
+				}
+			}(),
+			projected: func() []*view.Column {
+				columns := []*view.Column{
+					{Name: "channel_id", Groupable: true},
+					{Name: "agency_id", Groupable: true},
+					{Name: "total_spend"},
+				}
+				return columns
+			}(),
+			expected: "(SELECT p.channel_id, p.agency_id, ROUND(SUM(p.total_spend), 4) AS total_spend FROM last_n p GROUP BY 1, 2 ORDER BY total_spend DESC)",
+		},
+		{
 			description: "rewrite grouped metrics query prunes unselected dimensions from select list",
 			sql:         "(SELECT p.event_date, p.agency_id, p.advertiser_id, p.campaign_id, p.ad_order_id, p.audience_id, p.deal_id, p.publisher_id, p.channel_id, p.country, p.site_type, SUM(p.bids) AS bids, SUM(p.impressions) AS impressions, SUM(p.clicks) AS clicks, SUM(p.conversions) AS conversions, SUM(p.total_spend) AS total_spend FROM `viant-mediator.forecaster.fact_perf_daily_mv` p WHERE p.event_date BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL ? DAY) AND DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY) AND (((p.agency_id = ?))) GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 LIMIT 1000)",
 			allColumns:  groupedMetrics,

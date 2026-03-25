@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/io/read/cache"
 )
@@ -384,15 +385,60 @@ func isAggregateSelectItem(item *query.Item) bool {
 	if item == nil || item.Expr == nil {
 		return false
 	}
-	call, ok := item.Expr.(*expr.Call)
-	if !ok || call.X == nil {
+	return containsAggregateNode(item.Expr)
+}
+
+func containsAggregateNode(n node.Node) bool {
+	switch actual := n.(type) {
+	case nil:
 		return false
-	}
-	switch actual := call.X.(type) {
+	case *expr.Call:
+		if actual.X != nil {
+			switch ident := actual.X.(type) {
+			case *expr.Ident:
+				if isAggregateFunction(ident.Name) {
+					return true
+				}
+			case *expr.Selector:
+				if isAggregateFunction(ident.Name) {
+					return true
+				}
+			}
+			if containsAggregateNode(actual.X) {
+				return true
+			}
+		}
+		for _, arg := range actual.Args {
+			if containsAggregateNode(arg) {
+				return true
+			}
+		}
+		return false
+	case *expr.Parenthesis:
+		return containsAggregateNode(actual.X)
+	case *expr.Unary:
+		return containsAggregateNode(actual.X)
+	case *expr.Binary:
+		return containsAggregateNode(actual.X) || containsAggregateNode(actual.Y)
+	case *expr.Switch:
+		if containsAggregateNode(&actual.Ident) {
+			return true
+		}
+		for _, item := range actual.Cases {
+			if item == nil {
+				continue
+			}
+			if containsAggregateNode(item.X) || containsAggregateNode(item.Y) {
+				return true
+			}
+		}
+		return false
 	case *expr.Ident:
 		return isAggregateFunction(actual.Name)
 	case *expr.Selector:
 		return isAggregateFunction(actual.Name)
+	case *expr.Qualify:
+		return containsAggregateNode(actual.X)
 	}
 	return false
 }
