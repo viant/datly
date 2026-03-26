@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/repository/shape/discoverysql"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	dconfig "github.com/viant/datly/view/extension"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
@@ -20,16 +22,28 @@ import (
 )
 
 func Discover(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...interface{}) (sqlparser.Columns, error) {
+	originalSQL := SQL
 	SQL = strings.ReplaceAll(SQL, "$AND_CRITERIA", "")
 	SQL = strings.ReplaceAll(SQL, "$WHERE_CRITERIA", "")
+	sanitizedSQL := SQL
 	var columns sqlparser.Columns
 	var err error
 	if table == SQL && !strings.Contains(strings.ToLower(SQL), "select") {
 		SQL = "SELECT * FROM " + table + " WHERE 1 = 0"
+	} else {
+		if prepared, ok := discoverysql.PrepareDiscoverySQL(SQL); strings.TrimSpace(prepared) != "" {
+			sanitizedSQL = prepared
+			if ok {
+				SQL = prepared
+			}
+		}
+	}
+	if sanitizedSQL == "" {
+		sanitizedSQL = SQL
 	}
 	if SQL != "" {
 		if columns, err = detectColumns(ctx, db, SQL, table, SQLArgs...); err != nil {
-			return columns, err
+			return columns, fmt.Errorf("%w\noriginal SQL: %s\nsanitized SQL: %s", err, originalSQL, sanitizedSQL)
 		}
 	}
 	if len(columns) == 0 && table != "" { //TODO mere column types
@@ -244,9 +258,9 @@ func parseQuery(SQL string) (string, string, sqlparser.Columns) {
 	var table string
 	var queryColumn sqlparser.Columns
 	if sqlQuery != nil {
-		queryColumn = sqlparser.NewColumns(sqlQuery.List)
+		queryColumn, _ = safeNewColumns(sqlQuery.List)
 		if sqlQuery.From.X != nil {
-			table = sqlparser.Stringify(sqlQuery.From.X)
+			table, _ = safeStringify(sqlQuery.From.X)
 		}
 		// For CTE-backed queries (WITH ...), SELECT * FROM cte_alias must still be
 		// resolved via SQL execution; the alias is not a physical table.
@@ -272,12 +286,34 @@ func parseQuery(SQL string) (string, string, sqlparser.Columns) {
 				sqlQuery.From.Alias = "t"
 			}
 		}
-		SQL = sqlparser.Stringify(sqlQuery)
+		var ok bool
+		SQL, ok = safeStringify(sqlQuery)
+		if !ok {
+			return table, "", queryColumn
+		}
 		if table != "" {
 			SQL += " LIMIT 1"
 		}
 	}
 	return table, SQL, queryColumn
+}
+
+func safeNewColumns(list query.List) (_ sqlparser.Columns, ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	return sqlparser.NewColumns(list), true
+}
+
+func safeStringify(n node.Node) (_ string, ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	return sqlparser.Stringify(n), true
 }
 
 func falsePredicate() *expr.Binary {

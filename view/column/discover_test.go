@@ -17,3 +17,12 @@ func TestParseQuery_WithCTEStar_DoesNotShortCircuitToTableMetadata(t *testing.T)
 	require.Contains(t, strings.ToUpper(discoveredSQL), "WITH CTE AS")
 	require.Contains(t, discoveredSQL, "LIMIT 1")
 }
+
+func TestParseQuery_WithCaseExpression_DoesNotPanic(t *testing.T) {
+	table, discoveredSQL, cols := parseQuery(
+		`SELECT CASE WHEN status_flag = 1 THEN 'active' ELSE 'inactive' END AS status_bucket FROM account_window`,
+	)
+	require.Equal(t, "account_window", strings.TrimSpace(table))
+	require.Len(t, cols, 0)
+	require.Equal(t, "", discoveredSQL)
+}
