@@ -326,7 +326,6 @@ func (r *Rule) applyDefaults() {
 	setter.SetCaseFormatIfEmpty(&r.Route.Output.CaseFormat, "lc")
 	setter.SetBoolIfFalse(&r.Input.IgnoreEmptyQueryParameters, r.IgnoreEmptyQueryParameters)
 	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.Type != "")
-	setter.SetStringIfEmpty(&r.Route.Content.Marshaller.JSON.Engine, content.DefaultJSONEngineTypeName)
 	if r.XMLUnmarshalType != "" {
 		r.Route.Content.Marshaller.XML.TypeName = r.XMLUnmarshalType
 	}
