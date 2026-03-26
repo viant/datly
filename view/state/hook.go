@@ -17,6 +17,11 @@ type Finalizer interface {
 	Finalize(ctx context.Context) error
 }
 
+// FinaliserWithError is an error-aware finalizer that receives an error from previous steps.
+type FinalizerWithError interface {
+	Finalize(ctx context.Context, err error) error
+}
+
 type InjectorFinalizer interface {
 	Finalize(ctx context.Context, getInjector func(ctx context.Context, path http.Route) (state.Injector, error)) error
 }
