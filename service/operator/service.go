@@ -143,6 +143,16 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 		err = injectorFinalizer.Finalize(ctx, lookup)
 		return ret, err
 	}
+	if finalizer, ok := ret.(state.FinalizerWithError); ok {
+		finalizeErr := finalizer.Finalize(ctx, err)
+		if err != nil {
+			if finalizeErr != nil {
+				return ret, errors.Join(err, finalizeErr)
+			}
+			return ret, err
+		}
+		return ret, finalizeErr
+	}
 	if err != nil {
 		return ret, err
 	}
