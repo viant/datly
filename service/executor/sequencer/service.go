@@ -32,9 +32,12 @@ func (s *Service) next(table string, any interface{}, selector string) error {
 	if err != nil || emptyRecordCount == 0 {
 		return err
 	}
-	record, err := aWalker.Leaf(any)
+	record, err := aWalker.EmptyLeaf(any)
 	if err != nil {
 		return err
+	}
+	if record == nil {
+		return nil
 	}
 	inserter, err := insert.New(s.ctx, s.db, table)
 	if err != nil {
