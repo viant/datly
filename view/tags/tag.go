@@ -147,10 +147,14 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 func normalizeCustomTag(tag string) string {
 	tag = strings.TrimSpace(tag)
 	tag = strings.Trim(tag, "`")
-	if len(tag) >= 2 {
-		if (tag[0] == '\'' && tag[len(tag)-1] == '\'') || (tag[0] == '"' && tag[len(tag)-1] == '"') {
-			tag = tag[1 : len(tag)-1]
-		}
+	if strings.HasPrefix(tag, "'") {
+		tag = tag[1:]
+	}
+	if strings.HasSuffix(tag, "'") {
+		tag = tag[:len(tag)-1]
+	}
+	if len(tag) >= 2 && strings.HasPrefix(tag, "\"") && strings.HasSuffix(tag, "\"") {
+		tag = tag[1 : len(tag)-1]
 	}
 	return strings.TrimSpace(tag)
 }
