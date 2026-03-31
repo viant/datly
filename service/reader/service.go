@@ -235,8 +235,12 @@ func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *view.Colle
 
 func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 	batchData := &view.BatchData{}
-	batchData.Values, batchData.ColumnNames = collector.ParentPlaceholders()
-	batchData.ParentReadSize = len(batchData.Values)
+	batchData.Values, batchData.CompositeValues, batchData.ColumnNames = collector.ParentPlaceholders()
+	if batchData.HasComposite() {
+		batchData.ParentReadSize = len(batchData.CompositeValues)
+	} else {
+		batchData.ParentReadSize = len(batchData.Values)
+	}
 	return batchData
 }
 
@@ -257,7 +261,11 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 }
 
 func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Statelet, info *response.SQLExecutions) error {
-	batchData.ValuesBatch, batchData.Size = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+	if batchData.HasComposite() {
+		batchData.CompositeValuesBatch, batchData.Size = sliceCompositeWithLimit(batchData.CompositeValues, batchData.Size, batchData.Size+view.Batch.Size)
+	} else {
+		batchData.ValuesBatch, batchData.Size = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+	}
 	visitor := collector.Visitor(ctx)
 	for {
 		err := s.queryInBatches(ctx, session, view, collector, visitor, info, batchData, selector)
@@ -268,7 +276,11 @@ func (s *Service) readObjects(ctx context.Context, session *Session, batchData *
 			break
 		}
 		var nextParents int
-		batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+		if batchData.HasComposite() {
+			batchData.CompositeValuesBatch, nextParents = sliceCompositeWithLimit(batchData.CompositeValues, batchData.Size, batchData.Size+view.Batch.Size)
+		} else {
+			batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+		}
 		batchData.Size += nextParents
 	}
 	return nil

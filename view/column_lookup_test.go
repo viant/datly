@@ -25,3 +25,22 @@ func TestView_ColumnByName_UsesIndexedLookup(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "TAXONOMY_ID", column.Name)
 }
+
+func TestView_ColumnByName_UsesUnqualifiedSourceLookup(t *testing.T) {
+	aView := NewView("comscore", "comscore",
+		WithConnector(NewConnector("test", "sqlite3", ":memory:")),
+		WithColumns(Columns{
+			&Column{Name: "COMSCORE_CONTEXTUAL_VALUE", DataType: "string", Tag: `source:"t2.SEGMENT_ID"`},
+			&Column{Name: "NAME", DataType: "string"},
+		}),
+	)
+	require.NoError(t, aView.Init(context.Background(), EmptyResource()))
+
+	column, ok := aView.ColumnByName("t2.SEGMENT_ID")
+	require.True(t, ok)
+	require.Equal(t, "COMSCORE_CONTEXTUAL_VALUE", column.Name)
+
+	column, ok = aView.ColumnByName("SEGMENT_ID")
+	require.True(t, ok)
+	require.Equal(t, "COMSCORE_CONTEXTUAL_VALUE", column.Name)
+}

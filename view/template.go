@@ -460,7 +460,13 @@ func (t *Template) replacementEntry(key string, params CriteriaParam, selector *
 
 		return key, criteriaExpanded, nil
 	case keywords.ColumnsIn[1:]:
-		*placeholders = append(*placeholders, batchData.ValuesBatch...)
+		if batchData != nil && batchData.HasComposite() {
+			for _, row := range batchData.CompositeValuesBatch {
+				*placeholders = append(*placeholders, row...)
+			}
+		} else {
+			*placeholders = append(*placeholders, batchData.ValuesBatch...)
+		}
 		return key, params.ColumnsIn, nil
 	case keywords.SelectorCriteria[1:]:
 		*placeholders = append(*placeholders, selector.Placeholders...)
