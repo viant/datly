@@ -180,19 +180,29 @@ func (t *Tags) buildRelation(spec *Spec, relation *Relation) {
 		Table: spec.Table,
 	}
 	joinTag := tags.LinkOn{}
-
-	parentColumn := relation.ParentField.Column.Name
-	if ns := relation.ParentField.Column.Namespace; ns != "" {
-		parentColumn = ns + "." + parentColumn
+	if len(relation.Pairs) == 0 {
+		relation.Pairs = []*RelationPair{{
+			ParentField: relation.ParentField,
+			KeyField:    relation.KeyField,
+		}}
 	}
-	keyColumn := relation.KeyField.Column.Name
-	if ns := relation.KeyField.Column.Namespace; ns != "" {
-		keyColumn = ns + "." + keyColumn
+	for _, pair := range relation.Pairs {
+		if pair == nil || pair.ParentField == nil || pair.KeyField == nil {
+			continue
+		}
+		parentColumn := pair.ParentField.Column.Name
+		if ns := pair.ParentField.Column.Namespace; ns != "" {
+			parentColumn = ns + "." + parentColumn
+		}
+		keyColumn := pair.KeyField.Column.Name
+		if ns := pair.KeyField.Column.Namespace; ns != "" {
+			keyColumn = ns + "." + keyColumn
+		}
+		joinTag = joinTag.Append(
+			tags.WithRelLink(pair.ParentField.Name, parentColumn, nil),
+			tags.WithRefLink(pair.KeyField.Name, keyColumn),
+		)
 	}
-	joinTag = joinTag.Append(
-		tags.WithRelLink(relation.ParentField.Name, parentColumn, nil),
-		tags.WithRefLink(relation.KeyField.Name, keyColumn),
-	)
 	sqlTag := TagValue{}
 	if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {
 		rawSQL = strings.Replace(rawSQL, "("+spec.Table+")", spec.Table, 1)

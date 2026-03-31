@@ -20,12 +20,18 @@ import (
 )
 
 type (
+	RelationPair struct {
+		ParentField *Field
+		KeyField    *Field
+	}
+
 	//Relation defines relation
 	Relation struct {
 		Name        string
 		Join        *query.Join
 		ParentField *Field
 		KeyField    *Field
+		Pairs       []*RelationPair
 		Cardinality state.Cardinality
 		*Spec
 	}
@@ -163,28 +169,35 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 	if IsToOne(join) {
 		cardinality = state.One
 	}
-	relColumn, refColumn := ExtractRelationColumns(join)
-	parentField := s.Type.ByColumn(relColumn)
-	if parentField == nil {
-		var available []string
-		for _, item := range s.Type.columnFields {
-			available = append(available, item.Column.Name)
-		}
-		return fmt.Errorf("failed to match rel field for %v, available: %v %v", relColumn, s.Type.Name, available)
+	pairColumns := ExtractRelationColumnPairs(join)
+	if len(pairColumns) == 0 {
+		return fmt.Errorf("failed to extract relation columns for %v", join.Alias)
 	}
-
-	keyField := spec.Type.ByColumn(refColumn)
-	if keyField == nil {
-		var available []string
-		for _, item := range spec.Type.columnFields {
-			available = append(available, item.Column.Name)
+	pairs := make([]*RelationPair, 0, len(pairColumns))
+	for _, pair := range pairColumns {
+		parentField := s.Type.ByColumn(pair[0])
+		if parentField == nil {
+			var available []string
+			for _, item := range s.Type.columnFields {
+				available = append(available, item.Column.Name)
+			}
+			return fmt.Errorf("failed to match rel field for %v, available: %v %v", pair[0], s.Type.Name, available)
 		}
-		return fmt.Errorf("failed to ref field for %v, available: %v on  %v", refColumn, available, join.Alias)
+		keyField := spec.Type.ByColumn(pair[1])
+		if keyField == nil {
+			var available []string
+			for _, item := range spec.Type.columnFields {
+				available = append(available, item.Column.Name)
+			}
+			return fmt.Errorf("failed to ref field for %v, available: %v on  %v", pair[1], available, join.Alias)
+		}
+		pairs = append(pairs, &RelationPair{ParentField: parentField, KeyField: keyField})
 	}
 
 	rel := &Relation{Spec: spec,
-		KeyField:    keyField,
-		ParentField: parentField,
+		KeyField:    pairs[0].KeyField,
+		ParentField: pairs[0].ParentField,
+		Pairs:       pairs,
 		Name:        name,
 		Join:        join,
 		Cardinality: cardinality}

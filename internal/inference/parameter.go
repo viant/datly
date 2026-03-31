@@ -366,24 +366,69 @@ func ParentAlias(join *query.Join) string {
 }
 
 func ExtractRelationColumns(join *query.Join) (string, string) {
-	relColumn := ""
-	refColumn := ""
-	sqlparser.Traverse(join.On, func(n node.Node) bool {
-		switch actual := n.(type) {
-		case *qexpr.Selector:
-			column := sqlparser.Stringify(actual.X)
-			if actual.Name == join.Alias {
-				if refColumn == "" {
-					refColumn = column
-				}
-			} else if relColumn == "" {
-				relColumn = column
-			}
-			return true
+	pairs := ExtractRelationColumnPairs(join)
+	if len(pairs) == 0 {
+		return "", ""
+	}
+	return pairs[0][0], pairs[0][1]
+}
+
+func ExtractRelationColumnPairs(join *query.Join) [][2]string {
+	if join == nil || join.On == nil || join.On.X == nil {
+		return nil
+	}
+	return collectRelationColumnPairs(join.On.X, join.Alias)
+}
+
+func collectRelationColumnPairs(n node.Node, refAlias string) [][2]string {
+	switch actual := n.(type) {
+	case *qexpr.Binary:
+		actual = actual.Normalize()
+		op := strings.ToUpper(strings.TrimSpace(actual.Op))
+		if op == "AND" {
+			left := collectRelationColumnPairs(actual.X, refAlias)
+			right := collectRelationColumnPairs(actual.Y, refAlias)
+			return append(left, right...)
 		}
-		return true
-	})
-	return relColumn, refColumn
+		if op != "=" {
+			return nil
+		}
+		leftAlias, leftColumn, leftOK := selectorParts(actual.X)
+		rightAlias, rightColumn, rightOK := selectorParts(actual.Y)
+		if !leftOK || !rightOK {
+			return nil
+		}
+		switch {
+		case leftAlias == refAlias:
+			return [][2]string{{rightColumn, leftColumn}}
+		case rightAlias == refAlias:
+			return [][2]string{{leftColumn, rightColumn}}
+		}
+	case *qexpr.Parenthesis:
+		return collectRelationColumnPairs(actual.X, refAlias)
+	}
+	return nil
+}
+
+func selectorParts(n node.Node) (string, string, bool) {
+	switch actual := n.(type) {
+	case *qexpr.Selector:
+		return actual.Name, sqlparser.Stringify(actual.X), true
+	case *qexpr.Parenthesis:
+		return selectorParts(actual.X)
+	case *qexpr.Collate:
+		return selectorParts(actual.X)
+	case *qexpr.Call:
+		if alias, column, ok := selectorParts(actual.X); ok {
+			return alias, column, true
+		}
+		for _, arg := range actual.Args {
+			if alias, column, ok := selectorParts(arg); ok {
+				return alias, column, true
+			}
+		}
+	}
+	return "", "", false
 }
 
 func (p *Parameter) EnsureCodec() {

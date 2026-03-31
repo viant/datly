@@ -327,6 +327,13 @@ func removeBuilinExpr(query string) string {
 		}
 		query = strings.ReplaceAll(query, fragment, "")
 	}
+	if index := strings.Index(query, "$View.ParentCompositeJoinOn"); index != -1 {
+		fragment := query[index:]
+		if endIndex := strings.Index(fragment, ")"); endIndex != -1 {
+			fragment = fragment[:endIndex+1]
+		}
+		query = strings.ReplaceAll(query, fragment, "")
+	}
 
 	if !strings.Contains(query, "${predicate.") {
 		return query

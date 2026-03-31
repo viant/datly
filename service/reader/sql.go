@@ -18,6 +18,7 @@ import (
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/io/read/cache"
+	"github.com/viant/sqlx/metadata/info"
 )
 
 const (
@@ -44,6 +45,47 @@ type (
 // NewBuilder creates Builder instance
 func NewBuilder() *Builder {
 	return &Builder{}
+}
+
+func compositeDialect(ctx context.Context, aView *view.View) (*info.Dialect, error) {
+	if aView == nil || aView.Connector == nil {
+		return nil, nil
+	}
+	return aView.Connector.Dialect(ctx)
+}
+
+func defaultCompositeIn(columns []string, rowCount int) string {
+	if len(columns) == 0 || rowCount <= 0 {
+		return "1 = 0"
+	}
+	builder := &strings.Builder{}
+	builder.WriteByte('(')
+	builder.WriteString(strings.Join(columns, ", "))
+	builder.WriteString(") IN (")
+	for row := 0; row < rowCount; row++ {
+		if row > 0 {
+			builder.WriteString(", ")
+		}
+		builder.WriteByte('(')
+		for col := range columns {
+			if col > 0 {
+				builder.WriteString(", ")
+			}
+			builder.WriteByte('?')
+		}
+		builder.WriteByte(')')
+	}
+	builder.WriteByte(')')
+	return builder.String()
+}
+
+func renderCompositeIn(dialect *info.Dialect, columns []string, rowCount int) string {
+	if renderer, ok := any(dialect).(interface {
+		CompositeIn([]string, int) string
+	}); ok {
+		return renderer.CompositeIn(columns, rowCount)
+	}
+	return defaultCompositeIn(columns, rowCount)
 }
 
 // Build builds SQL Select statement
@@ -112,7 +154,9 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	criteriaMeta := hasKeyword(state.Expanded, keywords.Criteria)
 	hasCriteria := criteriaMeta.has()
 
-	b.updateColumnsIn(&commonParams, &batchData, exclude)
+	if err = b.updateColumnsIn(ctx, aView, &commonParams, &batchData, exclude); err != nil {
+		return nil, err
+	}
 
 	if err = b.updatePagination(&commonParams, aView, statelet, exclude); err != nil {
 		return nil, err
@@ -520,17 +564,32 @@ func (b *Builder) appendCriteria(sb *strings.Builder, criteria string, addAnd bo
 	}
 }
 
-func (b *Builder) updateColumnsIn(params *view.CriteriaParam, batchData *view.BatchData, exclude *Exclude) {
+func (b *Builder) updateColumnsIn(ctx context.Context, aView *view.View, params *view.CriteriaParam, batchData *view.BatchData, exclude *Exclude) error {
 	if exclude.ColumnsIn {
-		return
+		return nil
 	}
 	if batchData == nil || len(batchData.ColumnNames) == 0 {
-		return
+		return nil
 	}
 
 	sb := strings.Builder{}
 	sb.WriteString(" ")
 	columns := len(batchData.ColumnNames)
+
+	if batchData.HasComposite() {
+		rowCount := len(batchData.CompositeValuesBatch)
+		if rowCount == 0 {
+			params.ColumnsIn = " 1 = 0"
+			return nil
+		}
+		dialect, err := compositeDialect(ctx, aView)
+		if err != nil {
+			return err
+		}
+		sb.WriteString(renderCompositeIn(dialect, batchData.ColumnNames, rowCount))
+		params.ColumnsIn = sb.String()
+		return nil
+	}
 
 	switch columns {
 	case 1:
@@ -539,7 +598,7 @@ func (b *Builder) updateColumnsIn(params *view.CriteriaParam, batchData *view.Ba
 		sb.WriteString("(")
 		for i, column := range batchData.ColumnNames {
 			if i > 0 {
-				sb.WriteString(",")
+				sb.WriteString(", ")
 			}
 			sb.WriteString(column)
 		}
@@ -566,6 +625,7 @@ func (b *Builder) updateColumnsIn(params *view.CriteriaParam, batchData *view.Ba
 	}
 	sb.WriteString(encloseFragment)
 	params.ColumnsIn = sb.String()
+	return nil
 }
 
 func (b *Builder) appendOrderBy(sb *strings.Builder, aView *view.View, selector *view.Statelet) error {
