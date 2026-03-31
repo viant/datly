@@ -190,11 +190,11 @@ func (t *Tags) buildRelation(spec *Spec, relation *Relation) {
 		if pair == nil || pair.ParentField == nil || pair.KeyField == nil {
 			continue
 		}
-		parentColumn := pair.ParentField.Column.Name
+		parentColumn := relationColumnName(pair.ParentField.Column)
 		if ns := pair.ParentField.Column.Namespace; ns != "" {
 			parentColumn = ns + "." + parentColumn
 		}
-		keyColumn := pair.KeyField.Column.Name
+		keyColumn := relationColumnName(pair.KeyField.Column)
 		if ns := pair.KeyField.Column.Namespace; ns != "" {
 			keyColumn = ns + "." + keyColumn
 		}
@@ -213,6 +213,16 @@ func (t *Tags) buildRelation(spec *Spec, relation *Relation) {
 
 	t.Set(tags.ViewTag, []string{string(viewTag.Tag().Values)})
 	t.Set(tags.SQLTag, sqlTag)
+}
+
+func relationColumnName(column *sqlparser.Column) string {
+	if column == nil {
+		return ""
+	}
+	if column.Name != "" {
+		return column.Name
+	}
+	return column.Alias
 }
 
 // Stringify return text representation of struct tag

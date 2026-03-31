@@ -299,6 +299,9 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		relNamespace.Holder = viewRelation.Holder
 		refViewName := relNamespace.View.Name
 		refColumn := relation.KeyField.Column.Name
+		if refColumn == "" {
+			refColumn = relation.KeyField.Column.Alias
+		}
 		if ns := relation.KeyField.Column.Namespace; ns != "" {
 			refColumn = ns + "." + refColumn
 		}
