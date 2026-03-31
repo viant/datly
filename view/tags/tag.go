@@ -114,7 +114,7 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 	if t.View != nil {
 		t.appendTag(t.View, &ret)
 		if t.View.CustomTag != "" {
-			rawTag = t.View.CustomTag
+			rawTag = normalizeCustomTag(t.View.CustomTag)
 		}
 	}
 	t.appendTag(t.LinkOn, &ret)
@@ -142,6 +142,17 @@ func (t *Tag) UpdateTag(tag reflect.StructTag) reflect.StructTag {
 		structTag = structTag + " " + rawTag
 	}
 	return reflect.StructTag(structTag)
+}
+
+func normalizeCustomTag(tag string) string {
+	tag = strings.TrimSpace(tag)
+	tag = strings.Trim(tag, "`")
+	if len(tag) >= 2 {
+		if (tag[0] == '\'' && tag[len(tag)-1] == '\'') || (tag[0] == '"' && tag[len(tag)-1] == '"') {
+			tag = tag[1 : len(tag)-1]
+		}
+	}
+	return strings.TrimSpace(tag)
 }
 
 func getTagPriority(tag *tags.Tag) int {
