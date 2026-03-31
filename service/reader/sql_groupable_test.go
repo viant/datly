@@ -264,6 +264,43 @@ func TestBuilder_appendRelationColumn_UsesProjectedRelationAliasForGroupedDerive
 	})
 }
 
+func TestBuilder_appendRelationColumn_UsesProjectedAliasForQualifiedSourceRelation(t *testing.T) {
+	builder := NewBuilder()
+	aView := view.NewView("comscoreContextual", "comscoreContextual",
+		view.WithConnector(view.NewConnector("test", "sqlite3", ":memory:")),
+		view.WithColumns(view.Columns{
+			&view.Column{Name: "COMSCORE_CONTEXTUAL_VALUE", DataType: "string", Tag: `source:"t2.SEGMENT_ID"`},
+			&view.Column{Name: "NAME", DataType: "string"},
+		}),
+	)
+	require.NoError(t, aView.Init(context.Background(), view.EmptyResource()))
+
+	relation := &view.Relation{
+		Of: &view.ReferenceView{
+			On: view.Links{
+				&view.Link{Field: "ComscoreContextualValue", Column: "t2.SEGMENT_ID"},
+			},
+		},
+	}
+
+	require.NoError(t, relation.Of.On.Init("comscoreContextual", aView))
+
+	t.Run("default projection does not append raw unqualified source column", func(t *testing.T) {
+		sb := &strings.Builder{}
+		require.NoError(t, builder.checkViewAndAppendRelColumn(sb, aView, relation))
+		require.Equal(t, "", sb.String())
+	})
+
+	t.Run("selector projection appends projected alias instead of raw source column", func(t *testing.T) {
+		sb := &strings.Builder{}
+		selector := view.NewStatelet()
+		selector.Columns = []string{"NAME"}
+		selector.Init(aView)
+		require.NoError(t, builder.checkSelectorAndAppendRelColumn(sb, aView, selector, relation))
+		require.Equal(t, ",  COMSCORE_CONTEXTUAL_VALUE", sb.String())
+	})
+}
+
 func newGroupableTestView(t *testing.T) *view.View {
 	t.Helper()
 	trueValue := true

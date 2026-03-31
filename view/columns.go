@@ -23,6 +23,9 @@ func (c Columns) Index(formatCase text.CaseFormat) NamedColumns {
 		if aTag := c[i].Tag; aTag != "" {
 			if src := reflect.StructTag(aTag).Get("source"); src != "" {
 				result[strings.ToLower(src)] = c[i]
+				if index := strings.LastIndex(src, "."); index != -1 && index+1 < len(src) {
+					result.RegisterWithName(src[index+1:], c[i])
+				}
 			}
 		}
 		result.Register(formatCase, c[i])
