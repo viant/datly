@@ -251,8 +251,8 @@ func (v *View) buildTemplate(namespace *Viewlet, rule *Rule) {
 	isRoot := rule.Root == v.Name
 	resource := namespace.Resource
 	v.EnsureTemplate()
-	v.Template.Source = namespace.SanitizedSQL
-	v.Template.Parameters = v.matchParameters(namespace.SanitizedSQL, resource.State, isRoot)
+	v.Template.Source = namespace.SQL
+	v.Template.Parameters = v.matchParameters(namespace.SQL, resource.State, isRoot)
 }
 
 // matchParameters matches parameter used by SQL, and add explicit parameter for root view

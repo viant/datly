@@ -42,11 +42,14 @@ func (n *Viewlets) Append(viewlet *Viewlet) {
 	n.registry[viewlet.Name] = viewlet
 	n.keys = append(n.keys, viewlet.Name)
 }
-func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Resource, initFn, setType func(ctx context.Context, n *Viewlet) error) error {
+func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, rootSQL string, resource *Resource, initFn, setType func(ctx context.Context, n *Viewlet) error) error {
 
 	SQL, err := SafeQueryStringify(aQuery)
 	if err != nil {
 		return err
+	}
+	if extracted := extractRootViewletSQL(rootSQL, aQuery.From.Alias); extracted != "" {
+		SQL = extracted
 	}
 	root := NewViewlet(aQuery.From.Alias, SQL, nil, resource)
 	root.ViewJSONHint = aQuery.From.Comments
@@ -121,6 +124,51 @@ func SafeQueryStringify(aQuery *query.Select) (SQL string, err error) {
 	}()
 	SQL = sqlparser.Stringify(aQuery.From.X)
 	return SQL, err
+}
+
+func extractRootViewletSQL(SQL, alias string) string {
+	SQL = strings.TrimSpace(SQL)
+	alias = strings.TrimSpace(alias)
+	if SQL == "" || alias == "" {
+		return ""
+	}
+	lowerSQL := strings.ToLower(SQL)
+	lowerAlias := strings.ToLower(alias)
+	aliasPos := strings.LastIndex(lowerSQL, lowerAlias)
+	if aliasPos == -1 {
+		return ""
+	}
+	closePos := aliasPos - 1
+	for closePos >= 0 {
+		switch SQL[closePos] {
+		case ' ', '\n', '\t', '\r':
+			closePos--
+			continue
+		case ')':
+			goto scan
+		default:
+			return ""
+		}
+	}
+	return ""
+
+scan:
+	if closePos < 0 {
+		return ""
+	}
+	depth := 1
+	for i := closePos - 1; i >= 0; i-- {
+		switch SQL[i] {
+		case ')':
+			depth++
+		case '(':
+			depth--
+			if depth == 0 {
+				return strings.TrimSpace(SQL[i : closePos+1])
+			}
+		}
+	}
+	return ""
 }
 
 func (n *Viewlets) applyViewHintSettings() error {

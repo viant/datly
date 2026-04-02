@@ -194,7 +194,8 @@ func (s *Service) buildExecutorView(ctx context.Context, resource *Resource, DSQ
 }
 
 func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, dSQL string) error {
-	aQuery, err := sqlparser.ParseQuery(dSQL, parser.OnVeltyExpression())
+	parseSQL := resource.State.Expand(dSQL)
+	aQuery, err := sqlparser.ParseQuery(parseSQL, parser.OnVeltyExpression())
 	if err != nil {
 		return err
 	}
@@ -206,7 +207,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if err = s.updateCodecParameters(ctx, resource); err != nil {
 		return err
 	}
-	if err = resource.Rule.Viewlets.Init(ctx, aQuery, resource, s.initReaderViewlet, s.buildQueryViewletType); err != nil {
+	if err = resource.Rule.Viewlets.Init(ctx, aQuery, dSQL, resource, s.initReaderViewlet, s.buildQueryViewletType); err != nil {
 		return err
 	}
 
@@ -586,7 +587,6 @@ func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet) e
 }
 
 func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Viewlet) (err error) {
-
 	shared.EnsureArgs(viewlet.Expanded.Query, &viewlet.Expanded.Args)
 	viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.ColumnConfig, viewlet.Expanded.Query, viewlet.Expanded.Args...)
 	if err != nil {
