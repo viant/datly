@@ -1,0 +1,48 @@
+init:
+  yesterday: $FormatTime('yesterdayInUTC', 'yyyy-MM-dd HH:mm:ss')
+  today: $FormatTime('nowInUTC', 'yyyy-MM-dd HH:mm:ss')
+  debugger: '$params.debugger?$params.debugger:0'
+
+  target:
+    URL: ssh://localhost/
+    credentials: localhost
+  appPath: $WorkingDirectory(../..)
+  v1Path: ${appPath}/e2e/v1
+  mysqlCredentials: mysql-e2e
+  dbIP:
+    mysql: localhost
+  qMark: '?'
+  connectors: --connector 'dev|mysql|root:dev@tcp(${dbIP.mysql}:3306)/dev${qMark}parseTime=true'
+
+pipeline:
+  init:
+    description: initialise test (docker, database)
+    system:
+      action: run
+      request: '@system'
+      tasks: '*'
+
+    datastore:
+      action: run
+      request: '@datastore'
+      tasks: '*'
+
+  shapes:
+    description: generate Go types and route YAML from DQL
+    action: run
+    request: '@shapes'
+
+  build:
+    action: run
+    request: '@build'
+    tasks: 'deploy'
+
+  test:
+    action: run
+    description: run v1 regression test
+    request: '@regression/regression'
+
+  goBootstrap:
+    action: run
+    description: run linked Go router bootstrap regression test
+    request: '@go_bootstrap'

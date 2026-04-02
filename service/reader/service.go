@@ -4,6 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"reflect"
+	"runtime/debug"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+	"unsafe"
+
 	"github.com/google/uuid"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
@@ -19,10 +28,6 @@ import (
 	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
-	"reflect"
-	"sync"
-	"time"
-	"unsafe"
 )
 
 // Service represents reader service
@@ -32,6 +37,14 @@ type Service struct {
 
 // ReadInto reads Data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
 func (s *Service) ReadInto(ctx context.Context, dest interface{}, aView *view.View, opts ...Option) error {
+	if os.Getenv("DATLY_DEBUG_READER") == "1" {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[READER DEBUG] panic view=%s dest=%T err=%v\n%s\n", aView.Name, dest, r, debug.Stack())
+				panic(r)
+			}
+		}()
+	}
 	session, err := NewSession(dest, aView, opts...)
 	if err != nil {
 		return err
@@ -101,7 +114,7 @@ func (s *Service) afterRead(ctx context.Context, aSession *Session, collector *v
 	onFinish(end)
 	if value := ctx.Value(exec.ContextKey); value != nil {
 		if exeCtx := value.(*exec.Context); exeCtx != nil {
-			exeCtx.Metrics.Append(metrics)
+			exeCtx.AppendMetrics(metrics)
 		}
 	}
 }
@@ -183,6 +196,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 		}
 		return
 	}
+
 	// if onRelationalConcurrency > 1 , then only we call it concurrently
 	concurrencyLimit := make(chan struct{}, onRelationerConcurrency)
 	var onRelationWaitGroup sync.WaitGroup
@@ -221,8 +235,12 @@ func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *view.Colle
 
 func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 	batchData := &view.BatchData{}
-	batchData.Values, batchData.ColumnNames = collector.ParentPlaceholders()
-	batchData.ParentReadSize = len(batchData.Values)
+	batchData.Values, batchData.CompositeValues, batchData.ColumnNames = collector.ParentPlaceholders()
+	if batchData.HasComposite() {
+		batchData.ParentReadSize = len(batchData.CompositeValues)
+	} else {
+		batchData.ParentReadSize = len(batchData.Values)
+	}
 	return batchData
 }
 
@@ -243,7 +261,11 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 }
 
 func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Statelet, info *response.SQLExecutions) error {
-	batchData.ValuesBatch, batchData.Size = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+	if batchData.HasComposite() {
+		batchData.CompositeValuesBatch, batchData.Size = sliceCompositeWithLimit(batchData.CompositeValues, batchData.Size, batchData.Size+view.Batch.Size)
+	} else {
+		batchData.ValuesBatch, batchData.Size = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+	}
 	visitor := collector.Visitor(ctx)
 	for {
 		err := s.queryInBatches(ctx, session, view, collector, visitor, info, batchData, selector)
@@ -254,7 +276,11 @@ func (s *Service) readObjects(ctx context.Context, session *Session, batchData *
 			break
 		}
 		var nextParents int
-		batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+		if batchData.HasComposite() {
+			batchData.CompositeValuesBatch, nextParents = sliceCompositeWithLimit(batchData.CompositeValues, batchData.Size, batchData.Size+view.Batch.Size)
+		} else {
+			batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+		}
 		batchData.Size += nextParents
 	}
 	return nil
@@ -404,6 +430,9 @@ func (s *Service) BuildCriteria(ctx context.Context, value interface{}, options 
 }
 
 func (s *Service) queryInBatches(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *response.SQLExecutions, batchData *view.BatchData, selector *view.Statelet) error {
+	if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+		fmt.Printf("[QUERY DEBUG] queryInBatches view=%s selectorTemplateNil=%v batchValues=%d\n", aView.Name, selector == nil || selector.Template == nil, len(batchData.ValuesBatch))
+	}
 	wg := &sync.WaitGroup{}
 	db, err := aView.Db()
 	if err != nil {
@@ -442,9 +471,18 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		return s.queryWithPartitions(ctx, session, aView, selector, batchData, db, collector, visitor, partitioned)
 	}
 	readData := 0
+	if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+		fmt.Printf("[QUERY DEBUG] queryObjects view=%s schema=%v slice=%v collectorView=%s\n", aView.Name, aView.Schema.Type(), aView.Schema.SliceType(), collector.View().Name)
+	}
 	parametrizedSQL, columnInMatcher, err := s.buildParametrizedSQL(ctx, aView, selector, batchData, collector, session, nil)
 	if err != nil {
+		if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+			fmt.Printf("[QUERY DEBUG] buildParametrizedSQL error view=%s err=%v\n", aView.Name, err)
+		}
 		return nil, err
+	}
+	if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+		fmt.Printf("[QUERY DEBUG] builtSQL view=%s sql=%s args=%#v\n", aView.Name, parametrizedSQL.SQL, parametrizedSQL.Args)
 	}
 
 	var parentProvider func(value interface{}) (interface{}, error)
@@ -510,15 +548,31 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 
 	stats, onDone := NewExecutionInfo(parametrizedSQL, cacheStats, collector)
 	defer onDone()
+	if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+		fmt.Printf("[QUERY HANDLER] view=%s sql=%s args=%#v\n", aView.Name, parametrizedSQL.SQL, parametrizedSQL.Args)
+	}
 	if session.DryRun {
 		return []*response.SQLExecution{stats}, nil
 	}
+
+	retires := uint32(0)
+BEGIN:
 	reader, err := read.New(ctx, db, parametrizedSQL.SQL, collector.NewItem(), options...)
+
+	isInvalidConnection := err != nil && strings.Contains(err.Error(), "invalid connection")
+	if isInvalidConnection && atomic.AddUint32(&retires, 1) < 3 {
+		db, err = aView.Connector.DB()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to db: %w", err)
+		}
+		goto BEGIN
+	}
 	if err != nil {
 		stats.SetError(err)
 		anExec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
 		return []*response.SQLExecution{anExec}, err
 	}
+
 	defer func() {
 		stmt := reader.Stmt()
 		if stmt == nil {
@@ -526,8 +580,27 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 		}
 		_ = stmt.Close()
 	}()
-	err = reader.QueryAll(ctx, handler, parametrizedSQL.Args...)
+	debugHandler := handler
+	if os.Getenv("DATLY_DEBUG_QUERY_HANDLER") == "1" {
+		debugHandler = func(row interface{}) error {
+			fmt.Printf("[QUERY HANDLER] view=%s before unwrap row=%T readData=%d\n", aView.Name, row, *readData)
+			err := handler(row)
+			fmt.Printf("[QUERY HANDLER] view=%s after handler row=%T readData=%d err=%v\n", aView.Name, row, *readData, err)
+			return err
+		}
+	}
+	err = reader.QueryAll(ctx, debugHandler, parametrizedSQL.Args...)
+
+	isInvalidConnection = err != nil && strings.Contains(err.Error(), "invalid connection")
+	if isInvalidConnection && atomic.AddUint32(&retires, 1) < 3 {
+		db, err = aView.Connector.DB()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to db: %w", err)
+		}
+		goto BEGIN
+	}
 	end := time.Now()
+
 	aView.Logger.ReadingData(end.Sub(begin), parametrizedSQL.SQL, *readData, parametrizedSQL.Args, err)
 	if err != nil {
 		stats.SetError(err)

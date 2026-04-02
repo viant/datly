@@ -42,11 +42,14 @@ func (n *Viewlets) Append(viewlet *Viewlet) {
 	n.registry[viewlet.Name] = viewlet
 	n.keys = append(n.keys, viewlet.Name)
 }
-func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Resource, initFn, setType func(ctx context.Context, n *Viewlet) error) error {
+func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, rootSQL string, resource *Resource, initFn, setType func(ctx context.Context, n *Viewlet) error) error {
 
 	SQL, err := SafeQueryStringify(aQuery)
 	if err != nil {
 		return err
+	}
+	if extracted := extractRootViewletSQL(rootSQL, aQuery.From.Alias); extracted != "" {
+		SQL = extracted
 	}
 	root := NewViewlet(aQuery.From.Alias, SQL, nil, resource)
 	root.ViewJSONHint = aQuery.From.Comments
@@ -76,7 +79,7 @@ func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Res
 	if err := n.Each(func(viewlet *Viewlet) error {
 		n.ensureConnector(viewlet, rootConnector)
 		if err := initFn(ctx, viewlet); err != nil {
-			return fmt.Errorf("failed to init viewlet: %ns, %w", viewlet.Name, err)
+			return fmt.Errorf("failed to init viewlet: %s, %w", viewlet.Name, err)
 		}
 		return nil
 	}); err != nil {
@@ -123,6 +126,51 @@ func SafeQueryStringify(aQuery *query.Select) (SQL string, err error) {
 	return SQL, err
 }
 
+func extractRootViewletSQL(SQL, alias string) string {
+	SQL = strings.TrimSpace(SQL)
+	alias = strings.TrimSpace(alias)
+	if SQL == "" || alias == "" {
+		return ""
+	}
+	lowerSQL := strings.ToLower(SQL)
+	lowerAlias := strings.ToLower(alias)
+	aliasPos := strings.LastIndex(lowerSQL, lowerAlias)
+	if aliasPos == -1 {
+		return ""
+	}
+	closePos := aliasPos - 1
+	for closePos >= 0 {
+		switch SQL[closePos] {
+		case ' ', '\n', '\t', '\r':
+			closePos--
+			continue
+		case ')':
+			goto scan
+		default:
+			return ""
+		}
+	}
+	return ""
+
+scan:
+	if closePos < 0 {
+		return ""
+	}
+	depth := 1
+	for i := closePos - 1; i >= 0; i-- {
+		switch SQL[i] {
+		case ')':
+			depth++
+		case '(':
+			depth--
+			if depth == 0 {
+				return strings.TrimSpace(SQL[i : closePos+1])
+			}
+		}
+	}
+	return ""
+}
+
 func (n *Viewlets) applyViewHintSettings() error {
 	return n.Each(func(namespace *Viewlet) error {
 		return namespace.View.applyHintSettings(namespace)
@@ -138,6 +186,9 @@ func (n *Viewlets) addRelations(query *query.Select) error {
 		parentNs := inference.ParentAlias(join)
 		parentViewlet := n.Lookup(parentNs)
 
+		if parentViewlet == nil {
+			return fmt.Errorf("parent viewlet %v doesn't exist", parentNs)
+		}
 		relation.Spec.Parent = parentViewlet.Spec
 		cardinality := state.Many
 		if inference.IsToOne(join) || relation.OutputSettings.IsToOne() {

@@ -4,6 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
+	"path"
+	"reflect"
+	"strings"
+	"time"
+
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/setter"
@@ -23,11 +29,6 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"net/http"
-	"path"
-	"reflect"
-	"strings"
-	"time"
 )
 
 const (
@@ -63,6 +64,7 @@ type (
 		PublishParent bool       `json:",omitempty"`
 		Partitioned   *Partitioned
 		Criteria      string `json:",omitempty"`
+		Groupable     bool   `json:",omitempty"`
 
 		Selector *Config   `json:",omitempty"`
 		Template *Template `json:",omitempty"`
@@ -154,15 +156,16 @@ func (v *View) Context(ctx context.Context) context.Context {
 // Constraints configure what can be selected by Statelet
 // For each _field, default value is `false`
 type Constraints struct {
-	Criteria    bool
-	OrderBy     bool
-	Limit       bool
-	Offset      bool
-	Projection  bool //enables columns projection from client (default ${NS}_fields= query param)
-	Filterable  []string
-	SQLMethods  []*Method `json:",omitempty"`
-	_sqlMethods map[string]*Method
-	Page        *bool
+	Criteria      bool
+	OrderBy       bool
+	OrderByColumn map[string]string
+	Limit         bool
+	Offset        bool
+	Projection    bool //enables columns projection from client (default ${NS}_fields= query param)
+	Filterable    []string
+	SQLMethods    []*Method `json:",omitempty"`
+	_sqlMethods   map[string]*Method
+	Page          *bool
 }
 
 func (v *View) Resource() state.Resource {
@@ -400,6 +403,10 @@ func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 			refViewOptions = append(refViewOptions, WithCache(aCache))
 		}
 
+		if viewTag.Limit != nil {
+			viewOptions = append(viewOptions, WithLimit(viewTag.Limit))
+		}
+
 		if viewTag.PublishParent {
 			refViewOptions = append(refViewOptions, WithViewPublishParent(viewTag.PublishParent))
 		}
@@ -455,6 +462,9 @@ func (v *View) buildViewOptions(aViewType reflect.Type, tag *tags.Tag) ([]Option
 		for _, name := range vTag.Parameters {
 			parameters = append(parameters, state.NewRefParameter(name))
 		}
+		if vTag.SummaryURI != "" {
+			options = append(options, WithSummaryURI(vTag.SummaryURI))
+		}
 	}
 	if SQL := tag.SQL; SQL.SQL != "" {
 		tmpl := NewTemplate(string(SQL.SQL), WithTemplateParameters(parameters...))
@@ -473,6 +483,9 @@ func WithLimit(limit *int) Option {
 		}
 		view.Selector.Constraints.Limit = true
 		view.Selector.Limit = *limit
+		if limit != nil {
+			view.Selector.NoLimit = *limit == 0
+		}
 		return nil
 	}
 }
@@ -927,6 +940,11 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	if len(v.Columns) != 0 {
 		return nil
 	}
+	if v.Schema != nil {
+		if err := v.Schema.LoadTypeIfNeeded(resource.LookupType()); err != nil {
+			return err
+		}
+	}
 	//if scheme type defines sqlx tag, use it as source for column instead of detection
 	if rType := v.Schema.Type(); rType != nil {
 		sType := types.EnsureStruct(rType)
@@ -1023,7 +1041,10 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 
 // ColumnByName returns Column by Column.Name
 func (v *View) ColumnByName(name string) (*Column, bool) {
-	if column, ok := v._columns[name]; ok {
+	if v == nil || v._columns == nil {
+		return nil, false
+	}
+	if column, err := v._columns.Lookup(name); err == nil {
 		return column, true
 	}
 
@@ -1089,6 +1110,7 @@ func (v *View) inherit(view *View) error {
 	setter.SetStringIfEmpty(&v.Module, view.Module)
 	setter.SetStringIfEmpty(&v.Tag, view.Tag)
 	setter.SetBoolIfFalse(&v.PublishParent, view.PublishParent)
+	setter.SetBoolIfFalse(&v.Groupable, view.Groupable)
 
 	setter.SetStringIfEmpty(&v.Description, view.Description)
 
@@ -1277,6 +1299,18 @@ func (v *View) IndexedColumns() NamedColumns {
 	return v._columns
 }
 
+// IsGroupable reports whether the supplied field or column name resolves to a groupable column.
+func (v *View) IsGroupable(name string) bool {
+	if v == nil || len(v._columns) == 0 {
+		return false
+	}
+	column, err := v._columns.Lookup(name)
+	if err != nil {
+		return false
+	}
+	return column.Groupable
+}
+
 func (v *View) markColumnsAsFilterable() error {
 	if len(v.Selector.Constraints.Filterable) == 1 && strings.TrimSpace(v.Selector.Constraints.Filterable[0]) == "*" {
 		for _, column := range v.Columns {
@@ -1289,7 +1323,7 @@ func (v *View) markColumnsAsFilterable() error {
 	for _, colName := range v.Selector.Constraints.Filterable {
 		column, err := v._columns.Lookup(colName)
 		if err != nil {
-			return fmt.Errorf("criteria column %v, on view has not been defined, %w", colName, v.Name, err)
+			return fmt.Errorf("criteria column %v on view %v has not been defined: %w", colName, v.Name, err)
 		}
 		column.Filterable = true
 	}

@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/column"
@@ -14,17 +17,21 @@ import (
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/sqlx/option"
-	"reflect"
-	"strings"
 )
 
 type (
+	RelationPair struct {
+		ParentField *Field
+		KeyField    *Field
+	}
+
 	//Relation defines relation
 	Relation struct {
 		Name        string
 		Join        *query.Join
 		ParentField *Field
 		KeyField    *Field
+		Pairs       []*RelationPair
 		Cardinality state.Cardinality
 		*Spec
 	}
@@ -162,28 +169,35 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 	if IsToOne(join) {
 		cardinality = state.One
 	}
-	relColumn, refColumn := ExtractRelationColumns(join)
-	parentField := s.Type.ByColumn(relColumn)
-	if parentField == nil {
-		var available []string
-		for _, item := range s.Type.columnFields {
-			available = append(available, item.Column.Name)
-		}
-		return fmt.Errorf("failed to match rel field for %v, available: %v %v", relColumn, s.Type.Name, available)
+	pairColumns := ExtractRelationColumnPairs(join)
+	if len(pairColumns) == 0 {
+		return fmt.Errorf("failed to extract relation columns for %v", join.Alias)
 	}
-
-	keyField := spec.Type.ByColumn(refColumn)
-	if keyField == nil {
-		var available []string
-		for _, item := range spec.Type.columnFields {
-			available = append(available, item.Column.Name)
+	pairs := make([]*RelationPair, 0, len(pairColumns))
+	for _, pair := range pairColumns {
+		parentField := s.Type.ByColumn(pair[0])
+		if parentField == nil {
+			var available []string
+			for _, item := range s.Type.columnFields {
+				available = append(available, item.Column.Name)
+			}
+			return fmt.Errorf("failed to match rel field for %v, available: %v %v", pair[0], s.Type.Name, available)
 		}
-		return fmt.Errorf("failed to ref field for %v, available: %v on  %v", refColumn, available, join.Alias)
+		keyField := spec.Type.ByColumn(pair[1])
+		if keyField == nil {
+			var available []string
+			for _, item := range spec.Type.columnFields {
+				available = append(available, item.Column.Name)
+			}
+			return fmt.Errorf("failed to ref field for %v, available: %v on  %v", pair[1], available, join.Alias)
+		}
+		pairs = append(pairs, &RelationPair{ParentField: parentField, KeyField: keyField})
 	}
 
 	rel := &Relation{Spec: spec,
-		KeyField:    keyField,
-		ParentField: parentField,
+		KeyField:    pairs[0].KeyField,
+		ParentField: pairs[0].ParentField,
+		Pairs:       pairs,
 		Name:        name,
 		Join:        join,
 		Cardinality: cardinality}
@@ -246,7 +260,13 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table stri
 	var result = &Spec{Table: table, SQL: SQL, SQLArgs: SQLArgs, IsAuxiliary: isAuxiliary}
 	columns, err := column.Discover(ctx, db, table, SQL, SQLArgs...)
 	if err != nil {
-		return nil, err
+		columns = bestEffortColumnsFromSQL(SQL, columnsConfig)
+		if len(columns) == 0 {
+			return nil, err
+		}
+		if messages != nil {
+			messages.AddWarning(result.Table, "detection", fmt.Sprintf("using best-effort SQL column inference due to discovery error: %v", err))
+		}
 	}
 	result.Columns = columns
 	byName := result.Columns.ByName()
@@ -283,6 +303,56 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table stri
 	}
 
 	return result, nil
+}
+
+func bestEffortColumnsFromSQL(SQL string, columnsConfig view.ColumnConfigs) sqlparser.Columns {
+	if strings.TrimSpace(SQL) == "" {
+		return nil
+	}
+	query, err := sqlparser.ParseQuery(SQL)
+	if err != nil || query == nil {
+		return nil
+	}
+	queryColumns := sqlparser.NewColumns(query.List)
+	if len(queryColumns) == 0 {
+		return nil
+	}
+	cfgByLower := map[string]*view.ColumnConfig{}
+	for _, cfg := range columnsConfig {
+		if cfg == nil || cfg.Name == "" {
+			continue
+		}
+		cfgByLower[strings.ToLower(cfg.Name)] = cfg
+	}
+	var result sqlparser.Columns
+	for _, candidate := range queryColumns {
+		if candidate == nil {
+			continue
+		}
+		expression := strings.TrimSpace(candidate.Expression)
+		if expression == "*" || strings.HasSuffix(expression, ".*") {
+			continue
+		}
+		name := strings.TrimSpace(candidate.Alias)
+		if name == "" {
+			name = strings.TrimSpace(candidate.Name)
+		}
+		if name == "" {
+			continue
+		}
+		if candidate.Type == "" {
+			if cfg, ok := cfgByLower[strings.ToLower(name)]; ok && cfg.DataType != nil && *cfg.DataType != "" {
+				candidate.Type = *cfg.DataType
+			} else if cfg, ok = cfgByLower[strings.ToLower(candidate.Name)]; ok && cfg.DataType != nil && *cfg.DataType != "" {
+				candidate.Type = *cfg.DataType
+			}
+		}
+		if candidate.Type == "" {
+			candidate.Type = "string"
+		}
+		result = append(result, candidate)
+	}
+	return result
 }
 
 func isAuxiliary(SQL *string) bool {
