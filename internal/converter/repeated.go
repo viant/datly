@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unsafe"
 )
 
 type Repeated []string
+
+var intIs64Bit = unsafe.Sizeof(int(0)) == unsafe.Sizeof(uint64(0))
 
 func (r Repeated) AsInts() ([]int, error) {
 	var result = make([]int, 0, len(r))
@@ -31,6 +34,9 @@ func (r Repeated) AsUInts() ([]uint, error) {
 	if err != nil {
 		return nil, err
 	}
+	if intIs64Bit {
+		return *(*[]uint)(unsafe.Pointer(&v)), nil
+	}
 	result := make([]uint, len(v))
 	for i, item := range v {
 		result[i] = uint(item)
@@ -43,6 +49,9 @@ func (r Repeated) AsInt64s() ([]int64, error) {
 	if err != nil {
 		return nil, err
 	}
+	if intIs64Bit {
+		return *(*[]int64)(unsafe.Pointer(&v)), nil
+	}
 	result := make([]int64, len(v))
 	for i, item := range v {
 		result[i] = int64(item)
@@ -54,6 +63,9 @@ func (r Repeated) AsUInt64s() ([]uint64, error) {
 	v, err := r.AsInts()
 	if err != nil {
 		return nil, err
+	}
+	if intIs64Bit {
+		return *(*[]uint64)(unsafe.Pointer(&v)), nil
 	}
 	result := make([]uint64, len(v))
 	for i, item := range v {
