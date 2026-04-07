@@ -1115,8 +1115,8 @@ func (r *Collector) Fetched() {
 }
 
 func (r *Collector) Len() int {
-	if r.DestPtr() != nil {
-		return (*reflect.SliceHeader)(xunsafe.AsPointer(r.DestPtr())).Len
+	if r.DestPtr() != nil && r.slice != nil {
+		return r.slice.Len(xunsafe.AsPointer(r.DestPtr()))
 	}
 	return 0
 }
