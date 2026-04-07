@@ -2,7 +2,6 @@ module github.com/viant/datly
 
 go 1.25.0
 
-
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
@@ -34,7 +33,7 @@ require (
 	github.com/viant/toolbox v0.37.0
 	github.com/viant/velty v0.4.0
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
-	github.com/viant/xunsafe v0.10.4-0.20260223225257-275a15956559
+	github.com/viant/xunsafe v0.11.0
 	golang.org/x/mod v0.28.0
 	golang.org/x/oauth2 v0.32.0
 	google.golang.org/api v0.201.0
