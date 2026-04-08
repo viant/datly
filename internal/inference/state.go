@@ -298,6 +298,14 @@ func (s State) Explicit() State {
 }
 
 func (s State) Expand(text string) string {
+	return s.expand(text, false)
+}
+
+func (s State) ExpandPreserveBuiltins(text string) string {
+	return s.expand(text, true)
+}
+
+func (s State) expand(text string, preserveBuiltins bool) string {
 	expander := data.Map{}
 	if parameters := s.FilterByKind(state.KindConst); len(parameters) > 0 {
 		for _, literal := range parameters {
@@ -305,7 +313,9 @@ func (s State) Expand(text string) string {
 		}
 	}
 
-	text = removeBuilinExpr(text)
+	if !preserveBuiltins {
+		text = removeBuilinExpr(text)
+	}
 	return expander.ExpandAsText(text)
 }
 
