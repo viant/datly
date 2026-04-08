@@ -3,6 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
+	"reflect"
 	"unsafe"
 )
 
@@ -34,7 +35,7 @@ func (g *gojayObjectMarshaller) MarshallObject(ptr unsafe.Pointer, session *Mars
 
 	if g.useMarshal {
 		// Prefer pointer receiver if (*T) implements MarshalerJSONObject
-		if m, ok := g.addrType.Value(ptr).(gojay.MarshalerJSONObject); ok {
+		if m, ok := reflect.NewAt(g.valueType.Type(), ptr).Interface().(gojay.MarshalerJSONObject); ok {
 			enc := gojay.NewEncoder(session.Buffer)
 			return enc.EncodeObject(m)
 		}
@@ -59,7 +60,7 @@ func (g *gojayObjectMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder
 	}
 
 	// Prefer pointer receiver only; value receiver cannot mutate destination reliably.
-	if u, ok := g.addrType.Value(pointer).(gojay.UnmarshalerJSONObject); ok {
+	if u, ok := reflect.NewAt(g.valueType.Type(), pointer).Interface().(gojay.UnmarshalerJSONObject); ok {
 		return d.Object(u)
 	}
 

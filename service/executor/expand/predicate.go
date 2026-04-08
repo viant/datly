@@ -80,6 +80,12 @@ func (b *PredicateBuilder) CombineAnd(fragments ...string) *PredicateBuilder {
 }
 
 func (b *PredicateBuilder) combine(keyword string, fragments []string) *PredicateBuilder {
+	if b == nil {
+		b = &PredicateBuilder{}
+	}
+	if b.output == nil {
+		b.output = &strings.Builder{}
+	}
 	builder := &strings.Builder{}
 	for _, fragment := range fragments {
 		if strings.TrimSpace(fragment) == "" {
@@ -117,10 +123,9 @@ func (b *PredicateBuilder) combine(keyword string, fragments []string) *Predicat
 }
 
 func (b *PredicateBuilder) Build(keyword string) string {
-	if b.output.Len() == 0 {
+	if b == nil || b.output == nil || b.output.Len() == 0 {
 		return ""
 	}
-
 	return " " + keyword + " " + b.output.String()
 }
 
@@ -206,11 +211,17 @@ func (p *Predicate) appendFilter(selector *structology.Selector, value []interfa
 }
 
 func (b *PredicateBuilder) And() *PredicateBuilder {
+	if b == nil {
+		b = &PredicateBuilder{}
+	}
 	b.lastKeyword = "AND"
 	return b
 }
 
 func (b *PredicateBuilder) Or() *PredicateBuilder {
+	if b == nil {
+		b = &PredicateBuilder{}
+	}
 	b.lastKeyword = "OR"
 	return b
 }

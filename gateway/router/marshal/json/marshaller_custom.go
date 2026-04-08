@@ -50,7 +50,7 @@ func (c *customMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *goj
 	value := c.valueType.Interface(pointer)
 	asUnmarshaler, ok := value.(UnmarshalerInto)
 	if ok {
-		dst := c.addrType.Value(pointer)
+		dst := reflect.NewAt(c.valueType.Type(), pointer).Interface()
 		return asUnmarshaler.UnmarshalJSONWithOptions(dst, decoder, session.Options...)
 	}
 
