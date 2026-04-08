@@ -251,12 +251,20 @@ func (s *Session) handleComponentOutputType(ctx context.Context, dest interface{
 		return err
 	}
 	s.Options = sessionOpt
-	reflectDestValue := reflect.ValueOf(destValue)
-
-	if reflectDestValue.Kind() == reflect.Ptr {
-		destPtr.Elem().Set(reflectDestValue.Elem())
-	} else {
-		destPtr.Elem().Set(reflectDestValue)
+	if destValue != nil {
+		reflectDestValue := reflect.ValueOf(destValue)
+		if reflectDestValue.Kind() == reflect.Ptr {
+			destPtr.Elem().Set(reflectDestValue.Elem())
+		} else {
+			destPtr.Elem().Set(reflectDestValue)
+		}
+	}
+	if err != nil {
+		if errorSetter, ok := dest.(response.StatusSetter); ok {
+			errorSetter.SetError(err)
+			return nil
+		}
+		return err
 	}
 	return nil
 }

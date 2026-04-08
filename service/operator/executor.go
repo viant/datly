@@ -41,7 +41,7 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 			onDone(time.Now(), err)
 		}
 		if err != nil {
-			return nil, err
+			return response, err
 		}
 		return response, nil
 	}
