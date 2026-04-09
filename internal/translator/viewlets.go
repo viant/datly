@@ -134,41 +134,69 @@ func extractRootViewletSQL(SQL, alias string) string {
 	}
 	lowerSQL := strings.ToLower(SQL)
 	lowerAlias := strings.ToLower(alias)
-	aliasPos := strings.LastIndex(lowerSQL, lowerAlias)
-	if aliasPos == -1 {
-		return ""
-	}
-	closePos := aliasPos - 1
-	for closePos >= 0 {
-		switch SQL[closePos] {
-		case ' ', '\n', '\t', '\r':
-			closePos--
-			continue
-		case ')':
-			goto scan
-		default:
+	searchFrom := 0
+	for {
+		fromPos := strings.Index(lowerSQL[searchFrom:], "from")
+		if fromPos == -1 {
 			return ""
 		}
+		fromPos += searchFrom
+		afterFrom := fromPos + len("from")
+		for afterFrom < len(SQL) && isSQLWhitespace(SQL[afterFrom]) {
+			afterFrom++
+		}
+		if afterFrom >= len(SQL) || SQL[afterFrom] != '(' {
+			searchFrom = afterFrom
+			continue
+		}
+		closePos := matchClosingParen(SQL, afterFrom)
+		if closePos == -1 {
+			return ""
+		}
+		aliasPos := closePos + 1
+		for aliasPos < len(SQL) && isSQLWhitespace(SQL[aliasPos]) {
+			aliasPos++
+		}
+		if aliasPos >= len(SQL) {
+			return ""
+		}
+		aliasEnd := aliasPos
+		for aliasEnd < len(SQL) && isSQLIdentifierChar(SQL[aliasEnd]) {
+			aliasEnd++
+		}
+		if strings.EqualFold(lowerAlias, strings.ToLower(SQL[aliasPos:aliasEnd])) {
+			return strings.TrimSpace(SQL[afterFrom : closePos+1])
+		}
+		searchFrom = aliasEnd
 	}
-	return ""
+}
 
-scan:
-	if closePos < 0 {
-		return ""
-	}
-	depth := 1
-	for i := closePos - 1; i >= 0; i-- {
+func matchClosingParen(SQL string, openPos int) int {
+	depth := 0
+	for i := openPos; i < len(SQL); i++ {
 		switch SQL[i] {
-		case ')':
-			depth++
 		case '(':
+			depth++
+		case ')':
 			depth--
 			if depth == 0 {
-				return strings.TrimSpace(SQL[i : closePos+1])
+				return i
 			}
 		}
 	}
-	return ""
+	return -1
+}
+
+func isSQLWhitespace(b byte) bool {
+	switch b {
+	case ' ', '\n', '\t', '\r':
+		return true
+	}
+	return false
+}
+
+func isSQLIdentifierChar(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_' || b == '$'
 }
 
 func (n *Viewlets) applyViewHintSettings() error {

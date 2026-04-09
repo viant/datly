@@ -194,7 +194,7 @@ func (s *Service) buildExecutorView(ctx context.Context, resource *Resource, DSQ
 }
 
 func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, dSQL string) error {
-	parseSQL := resource.State.ExpandPreserveBuiltins(dSQL)
+	parseSQL := resource.State.Expand(dSQL)
 	aQuery, err := sqlparser.ParseQuery(parseSQL, parser.OnVeltyExpression())
 	if err != nil {
 		return err
@@ -588,7 +588,8 @@ func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet) e
 
 func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Viewlet) (err error) {
 	shared.EnsureArgs(viewlet.Expanded.Query, &viewlet.Expanded.Args)
-	viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.ColumnConfig, viewlet.Expanded.Query, viewlet.Expanded.Args...)
+	queryForSpec := viewlet.Resource.State.Expand(viewlet.Expanded.Query)
+	viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.ColumnConfig, queryForSpec, viewlet.Expanded.Args...)
 	if err != nil {
 		return fmt.Errorf("failed to create spec for %v, %w", viewlet.Name, err)
 	}

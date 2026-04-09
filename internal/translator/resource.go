@@ -859,7 +859,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		sourceView.Summary = viewlet
 	}
 
-	sourceSQL = viewlet.Resource.State.ExpandPreserveBuiltins(sourceSQL)
+	sourceSQL = viewlet.Resource.State.Expand(sourceSQL)
 	templateParameters := sqlState.Parameters()
 	if strings.Contains(sourceSQL, "$View.ParentJoinOn") {
 		//TODO adjust parameter value type

@@ -135,6 +135,9 @@ func ensureSelectStatement(evaluation *TemplateEvaluation, v *View) string {
 
 	source := evaluation.SQL
 	if source != v.Name && source != v.Table {
+		if strings.Contains(source, "${predicate.") {
+			return source
+		}
 		if query, _ := sqlparser.ParseQuery(source); query != nil && query.From.X == nil {
 			return wrapWithSelect(v, source)
 		}
