@@ -71,18 +71,23 @@ func (r *Form) Value(ctx context.Context, rType reflect.Type, name string) (inte
 			}
 			return nil, false, nil
 		}
-		// Non-multipart: use standard FormValue fallback
+		// Non-multipart: parse form/query values and preserve repeated values.
 		r.form.Mutex().Lock()
 		defer r.form.Mutex().Unlock()
-		value := r.request.FormValue(name)
-		if value == "" {
-			if r.request.Form == nil {
-				return nil, false, nil
-			}
-			_, ok := r.request.Form[name]
-			return "", ok, nil
+		if err := r.request.ParseForm(); err != nil {
+			return nil, false, err
 		}
-		return value, true, nil
+		values, ok := r.request.Form[name]
+		if !ok {
+			return nil, false, nil
+		}
+		if len(values) > 1 {
+			return values, true, nil
+		}
+		if len(values) == 1 {
+			return values[0], true, nil
+		}
+		return "", true, nil
 	}
 	if len(values) > 1 {
 		return values, true, nil
