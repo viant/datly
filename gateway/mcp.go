@@ -1,6 +1,8 @@
 package gateway
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 
 	furl "github.com/viant/afs/url"
@@ -236,10 +239,11 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 		}
 		baseURL = strings.ReplaceAll(baseURL, "{"+p.In.Name+"}", fmt.Sprintf("%v", value))
 	case state.KindQuery, state.KindForm:
-		if uniqueQuery[p.In.Name] {
+		queryName := requestParamName(p)
+		if uniqueQuery[queryName] {
 			return baseURL, body, nil
 		}
-		uniqueQuery[p.In.Name] = true
+		uniqueQuery[queryName] = true
 		if value == nil || value == "" {
 			return baseURL, body, nil
 		}
@@ -252,9 +256,9 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 					items = append(items, fmt.Sprintf("%v", item))
 				}
 			}
-			values.Add(p.In.Name, strings.Join(items, ","))
+			values.Add(queryName, strings.Join(items, ","))
 		} else {
-			values.Add(p.In.Name, fmt.Sprintf("%v", value))
+			values.Add(queryName, fmt.Sprintf("%v", value))
 		}
 	case state.KindRequestBody:
 		if text, ok := value.(string); ok {
@@ -270,6 +274,34 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 	return baseURL, body, nil
 }
 
+func requestParamName(p *state.Parameter) string {
+	if p == nil || p.In == nil {
+		return ""
+	}
+	if public, ok := selectorPublicParamName(p); ok {
+		return public
+	}
+	return p.In.Name
+}
+
+func selectorPublicParamName(p *state.Parameter) (string, bool) {
+	switch strings.TrimSpace(p.Name) {
+	case "Limit":
+		return "limit", true
+	case "Offset":
+		return "offset", true
+	case "Page":
+		return "page", true
+	case "Fields":
+		return "fields", true
+	case "OrderBy":
+		return "orderBy", true
+	case "Criteria":
+		return "criteria", true
+	}
+	return "", false
+}
+
 // newToolHTTPRequest constructs an HTTP request for routed tool invocation.
 func (r *Router) newToolHTTPRequest(method, URL string, body io.Reader) (*http.Request, *jsonrpc.Error) {
 	httpRequest, err := http.NewRequest(method, URL, body)
@@ -282,6 +314,24 @@ func (r *Router) newToolHTTPRequest(method, URL string, body io.Reader) (*http.R
 	return httpRequest, nil
 }
 
+func decodeToolResponseBody(responseWriter *proxy.Writer) ([]byte, error) {
+	data := responseWriter.Body.Bytes()
+	encoding := strings.TrimSpace(responseWriter.HeaderMap.Get("Content-Encoding"))
+	if !strings.EqualFold(encoding, "gzip") {
+		return data, nil
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer reader.Close()
+	decoded, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress gzip body: %w", err)
+	}
+	return decoded, nil
+}
+
 // buildToolCallResult composes a CallToolResult with text content and structured error info if status is not OK.
 func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method string) *schema.CallToolResult {
 	var result = &schema.CallToolResult{}
@@ -289,7 +339,10 @@ func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method s
 	if mimeType == "" {
 		mimeType = "application/json"
 	}
-	data := responseWriter.Body.Bytes()
+	data, err := decodeToolResponseBody(responseWriter)
+	if err != nil {
+		data = []byte(err.Error())
+	}
 	result.Content = append(result.Content, schema.CallToolResultContentElem(
 		schema.TextContent{
 			Type: "text",
@@ -303,7 +356,7 @@ func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method s
 		result.StructuredContent = map[string]interface{}{
 			"status":  responseWriter.Code,
 			"error":   true,
-			"message": responseWriter.Body.String(),
+			"message": string(data),
 			"headers": responseWriter.HeaderMap,
 			"uri":     URL,
 			"method":  method,
@@ -384,11 +437,7 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 				continue
 			}
 			uniquePath[parameter.In.Name] = true
-			// If parameter is a slice, make it optional in schema via `omitempty` and optional:"true".
-			var tag reflect.StructTag
-			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
-				tag = `json:",omitempty" optional:"true"`
-			}
+			tag := buildMCPFieldTag(parameter, false)
 			appendField(name, parameter.Schema.Type(), tag)
 		case state.KindQuery, state.KindForm:
 
@@ -396,25 +445,14 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 				continue
 			}
 			uniqueQuery[parameter.In.Name] = true
-			// Repeated (slice) params are optional regardless of "required" tag.
-			// Otherwise, respect explicit required; default to optional.
-			tag := reflect.StructTag(parameter.Tag)
-			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
-				tag = `json:",omitempty" optional:"true"`
-			} else if !strings.Contains(parameter.Tag, "required") {
-				tag = `json:",omitempty"`
-			}
+			tag := buildMCPFieldTag(parameter, true)
 			appendField(name, parameter.Schema.Type(), tag)
 		case state.KindRequestBody:
 			if parameter.IsAnonymous() {
 				appendAnonymousBodyFields(&inputFields, uniqueFieldName, parameter.Schema.Type())
 				continue
 			}
-			// If body is a slice, mark optional in schema.
-			var tag reflect.StructTag
-			if parameter.Schema != nil && parameter.Schema.Type().Kind() == reflect.Slice {
-				tag = `json:",omitempty" optional:"true"`
-			}
+			tag := buildMCPFieldTag(parameter, false)
 			appendField(name, parameter.Schema.Type(), tag)
 		}
 	}
@@ -449,6 +487,29 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 	}
 
 	return reflect.StructOf(inputFields)
+}
+
+func buildMCPFieldTag(parameter *state.Parameter, defaultOptional bool) reflect.StructTag {
+	if parameter == nil {
+		return reflect.StructTag(`json:",omitempty"`)
+	}
+	var parts []string
+	jsonTag := `json:",omitempty"`
+	if parameter.Schema != nil && parameter.Schema.Type() != nil && parameter.Schema.Type().Kind() == reflect.Slice {
+		parts = append(parts, jsonTag, `optional:"true"`)
+	} else {
+		parts = append(parts, jsonTag)
+		if strings.Contains(parameter.Tag, "optional") || strings.Contains(parameter.Tag, `required:"false"`) || defaultOptional {
+			parts = append(parts, `optional:"true"`)
+		}
+	}
+	if description := strings.TrimSpace(parameter.Description); description != "" {
+		parts = append(parts, `description:`+strconv.Quote(description))
+	}
+	if example := strings.TrimSpace(parameter.Example); example != "" {
+		parts = append(parts, `example:`+strconv.Quote(example))
+	}
+	return reflect.StructTag(strings.Join(parts, " "))
 }
 
 func toolArgumentValue(parameter *state.Parameter, arguments map[string]interface{}) interface{} {

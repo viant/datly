@@ -1,17 +1,21 @@
 package gateway
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"embed"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/viant/datly/gateway/router/proxy"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	dpath "github.com/viant/datly/repository/path"
@@ -304,6 +308,77 @@ func TestRouter_buildToolsIntegration_RegistersCubeTool(t *testing.T) {
 	require.Contains(t, tool.InputSchema.Properties, "dimensions")
 	require.Contains(t, tool.InputSchema.Properties, "measures")
 	require.Contains(t, tool.InputSchema.Properties, "filters")
+}
+
+func TestRouter_buildToolCallResult_DecompressesGzipBody(t *testing.T) {
+	var compressed bytes.Buffer
+	gzw := gzip.NewWriter(&compressed)
+	_, err := gzw.Write([]byte(`{"data":{"rows":[1,2,3]},"status":"ok"}`))
+	require.NoError(t, err)
+	require.NoError(t, gzw.Close())
+
+	writer := proxy.NewWriter()
+	writer.Code = http.StatusOK
+	writer.HeaderMap.Set("Content-Type", "application/json")
+	writer.HeaderMap.Set("Content-Encoding", "gzip")
+	_, err = writer.Body.Write(compressed.Bytes())
+	require.NoError(t, err)
+
+	result := (&Router{}).buildToolCallResult(writer, "http://localhost/test", http.MethodPost)
+	require.NotNil(t, result)
+	require.Len(t, result.Content, 1)
+
+	text, ok := result.Content[0].(schema.TextContent)
+	require.True(t, ok)
+	assert.JSONEq(t, `{"data":{"rows":[1,2,3]},"status":"ok"}`, text.Text)
+	assert.Equal(t, map[string]interface{}{
+		"data":   map[string]interface{}{"rows": []interface{}{float64(1), float64(2), float64(3)}},
+		"status": "ok",
+	}, result.StructuredContent)
+}
+
+func TestRouter_buildToolInputType_UsesParameterMetadataTags(t *testing.T) {
+	fieldParam := state.NewParameter("Field", state.NewPathLocation("field"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf(""))))
+	fieldParam.Description = "Targeting field key."
+	fieldParam.Example = "IRIS_SEGMENTS"
+
+	operationParam := state.NewParameter("Operation", state.NewPathLocation("operation"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf(""))))
+	operationParam.Description = "Targeting tree operation."
+	operationParam.Example = "children"
+
+	component := &repository.Component{
+		Path: contract.Path{Method: http.MethodPost, URI: "/v1/api/platform/targeting/tree/{field}/{operation}"},
+		View: &view.View{},
+		Contract: contract.Contract{
+			Input: contract.Input{
+				Type: state.Type{Parameters: state.Parameters{fieldParam, operationParam}},
+			},
+		},
+	}
+
+	rType := (&Router{}).buildToolInputType(component)
+	field, ok := rType.FieldByName("Field")
+	require.True(t, ok)
+	assert.Equal(t, "Targeting field key.", field.Tag.Get("description"))
+	assert.Equal(t, "IRIS_SEGMENTS", field.Tag.Get("example"))
+
+	operation, ok := rType.FieldByName("Operation")
+	require.True(t, ok)
+	assert.Equal(t, "Targeting tree operation.", operation.Tag.Get("description"))
+	assert.Equal(t, "children", operation.Tag.Get("example"))
+}
+
+func TestRouter_applyParamToRequest_UsesPublicSelectorQueryNames(t *testing.T) {
+	router := &Router{}
+	values := url.Values{}
+	param := state.NewParameter("Limit", state.NewQueryLocation("lm_limit"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf(0))))
+
+	baseURL, body, rpcErr := router.applyParamToRequest("http://localhost/test", values, param, 20, map[string]bool{}, map[string]bool{}, nil)
+	require.Nil(t, rpcErr)
+	assert.Equal(t, "http://localhost/test", baseURL)
+	assert.Nil(t, body)
+	assert.Equal(t, "20", values.Get("limit"))
+	assert.Empty(t, values.Get("lm_limit"))
 }
 
 func TestRouter_buildToolInputType_UsesBuiltReportComponentParameters(t *testing.T) {
