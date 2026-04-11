@@ -146,6 +146,71 @@ func TestAnonymousBodyArgumentValue_AcceptsJSONStyleTopLevelArgumentNames(t *tes
 	}`, string(data))
 }
 
+func TestToolArgumentValue_AcceptsSnakeCaseAliases(t *testing.T) {
+	parameter := state.NewParameter("audience_id", state.NewQueryLocation("audience_id"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf([]int{}))))
+
+	testCases := []struct {
+		name      string
+		arguments map[string]interface{}
+	}{
+		{
+			name:      "title alias",
+			arguments: map[string]interface{}{"Audience_id": []interface{}{7180287.0}},
+		},
+		{
+			name:      "raw query name",
+			arguments: map[string]interface{}{"audience_id": []interface{}{7180287.0}},
+		},
+		{
+			name:      "pascal case alias",
+			arguments: map[string]interface{}{"AudienceId": []interface{}{7180287.0}},
+		},
+		{
+			name:      "lower camel alias",
+			arguments: map[string]interface{}{"audienceId": []interface{}{7180287.0}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			value := toolArgumentValue(parameter, testCase.arguments)
+			require.Equal(t, []interface{}{7180287.0}, value)
+		})
+	}
+}
+
+func TestToolArgumentValue_AcceptsSelectorAliases(t *testing.T) {
+	parameter := &state.Parameter{
+		Name:   "Limit",
+		In:     state.NewQueryLocation("limit"),
+		Schema: state.NewSchema(reflect.TypeOf(0)),
+	}
+
+	testCases := []struct {
+		name      string
+		arguments map[string]interface{}
+		want      interface{}
+	}{
+		{
+			name:      "exported field name",
+			arguments: map[string]interface{}{"Limit": 25.0},
+			want:      25.0,
+		},
+		{
+			name:      "public query name",
+			arguments: map[string]interface{}{"limit": 25.0},
+			want:      25.0,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			value := toolArgumentValue(parameter, testCase.arguments)
+			require.Equal(t, testCase.want, value)
+		})
+	}
+}
+
 func TestRouter_addAuthTokenIfPresent_AddsBearerToken(t *testing.T) {
 	router := &Router{}
 	req, err := http.NewRequest(http.MethodPost, "http://localhost/v1/api/dev/vendors-grouping/report", nil)
@@ -230,6 +295,49 @@ func TestRouter_mcpToolCallHandler_PassesAuthorizationToReportRoute(t *testing.T
 		"filters":{"VendorIDs":[1,2]},
 		"orderBy":["accountId"]
 	}`, actualBody)
+}
+
+func TestRouter_mcpToolCallHandler_MapsComponentAndSelectorArgumentsToHTTPQuery(t *testing.T) {
+	component := &repository.Component{
+		Path: contract.Path{Method: http.MethodGet, URI: "/v1/api/steward/metadata/ad_profile"},
+		Contract: contract.Contract{
+			Input: contract.Input{
+				Type: state.Type{Parameters: state.Parameters{
+					state.NewParameter("AudienceId", state.NewFormLocation("audience_id"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf([]int{})))),
+					state.NewParameter("Limit", state.NewQueryLocation("lm_limit"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf(0)))),
+				}},
+			},
+		},
+	}
+
+	var actualQuery string
+	route := &Route{
+		Path: &contract.Path{Method: http.MethodGet, URI: "/v1/api/steward/metadata/ad_profile"},
+		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+			actualQuery = req.URL.RawQuery
+			response.WriteHeader(http.StatusOK)
+			_, _ = response.Write([]byte(`{"ok":true}`))
+		},
+	}
+
+	handler := (&Router{}).mcpToolCallHandler(component, route)
+	result, rpcErr := handler(context.Background(), &schema.CallToolRequest{
+		Params: schema.CallToolRequestParams{
+			Arguments: map[string]interface{}{
+				"AudienceId": []interface{}{7180287.0},
+				"limit":      25.0,
+			},
+		},
+	})
+
+	require.Nil(t, rpcErr)
+	require.NotNil(t, result)
+	values, err := url.ParseQuery(actualQuery)
+	require.NoError(t, err)
+	assert.Equal(t, "7180287", values.Get("audience_id"))
+	assert.Equal(t, "25", values.Get("limit"))
+	assert.Empty(t, values.Get("AudienceId"))
+	assert.Empty(t, values.Get("lm_limit"))
 }
 
 func TestRouter_newToolHTTPRequest_SetsJSONContentTypeForBody(t *testing.T) {

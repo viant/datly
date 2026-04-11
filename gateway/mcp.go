@@ -519,7 +519,88 @@ func toolArgumentValue(parameter *state.Parameter, arguments map[string]interfac
 	if parameter.In != nil && parameter.In.Kind == state.KindRequestBody && parameter.IsAnonymous() && parameter.Schema != nil {
 		return anonymousBodyArgumentValue(arguments, parameter.Schema.Type())
 	}
-	return arguments[strings.Title(parameter.Name)]
+	for _, candidate := range toolArgumentCandidates(parameter) {
+		if value, ok := arguments[candidate]; ok {
+			return value
+		}
+	}
+	return nil
+}
+
+func toolArgumentCandidates(parameter *state.Parameter) []string {
+	if parameter == nil {
+		return nil
+	}
+	var result []string
+	seen := map[string]bool{}
+	appendCandidate := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			return
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+
+	appendCandidate(strings.Title(parameter.Name))
+	appendCandidate(parameter.Name)
+	appendCandidate(toPascalIdentifier(parameter.Name))
+	appendCandidate(toLowerCamelIdentifier(parameter.Name))
+	if public := requestParamName(parameter); public != "" {
+		appendCandidate(public)
+		appendCandidate(strings.Title(public))
+		appendCandidate(toPascalIdentifier(public))
+		appendCandidate(toLowerCamelIdentifier(public))
+	}
+	return result
+}
+
+func toPascalIdentifier(value string) string {
+	parts := splitIdentifierParts(value)
+	for i, part := range parts {
+		parts[i] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
+	}
+	return strings.Join(parts, "")
+}
+
+func toLowerCamelIdentifier(value string) string {
+	pascal := toPascalIdentifier(value)
+	if pascal == "" {
+		return ""
+	}
+	return strings.ToLower(pascal[:1]) + pascal[1:]
+}
+
+func splitIdentifierParts(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	var result []string
+	var current []rune
+	flush := func() {
+		if len(current) == 0 {
+			return
+		}
+		result = append(result, string(current))
+		current = current[:0]
+	}
+	for i, r := range value {
+		switch {
+		case r == '_' || r == '-' || r == ' ':
+			flush()
+		case i > 0 && r >= 'A' && r <= 'Z':
+			prev := rune(value[i-1])
+			if (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9') {
+				flush()
+			}
+			current = append(current, r)
+		default:
+			current = append(current, r)
+		}
+	}
+	flush()
+	return result
 }
 
 func appendAnonymousBodyFields(fields *[]reflect.StructField, unique map[string]bool, bodyType reflect.Type) {
