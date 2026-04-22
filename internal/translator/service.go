@@ -32,6 +32,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
+	"gopkg.in/yaml.v3"
 )
 
 type Service struct {
