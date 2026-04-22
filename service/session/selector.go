@@ -210,7 +210,10 @@ func (s *Session) populateContentFormat(ctx context.Context, ns *view.NamespaceV
 }
 
 func (s *Session) setPageQuerySelector(value interface{}, ns *view.NamespaceView) error {
-	page := value.(int)
+	page, err := toInt(value)
+	if err != nil {
+		return fmt.Errorf("invalid page value: %v", err)
+	}
 	selector := s.state.Lookup(ns.View)
 	actualLimit := selector.Limit
 	if actualLimit == 0 {
@@ -301,7 +304,10 @@ func (s *Session) setOffsetQuerySelector(value interface{}, ns *view.NamespaceVi
 		return fmt.Errorf("can't use Offset on view %v", ns.View.Name)
 	}
 	selector := s.state.Lookup(ns.View)
-	offset := value.(int)
+	offset, err := toInt(value)
+	if err != nil {
+		return fmt.Errorf("invalid offset value: %v", err)
+	}
 	if offset <= ns.View.Selector.Limit || ns.View.Selector.Limit == 0 {
 		selector.Offset = offset
 	}
