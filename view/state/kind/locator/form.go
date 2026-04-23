@@ -5,6 +5,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"reflect"
 	"sync"
 
@@ -129,10 +130,13 @@ func (r *Form) seedFormFromMultipart() {
 	if r.request.MultipartForm == nil {
 		return
 	}
+	if r.form.Values == nil {
+		r.form.Values = url.Values{}
+	}
 	for k, vs := range r.request.MultipartForm.Value {
 		if len(vs) == 0 {
 			continue
 		}
-		r.form.Set(k, append([]string(nil), vs...)...)
+		r.form.Values[k] = append([]string(nil), vs...)
 	}
 }

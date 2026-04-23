@@ -151,3 +151,44 @@ func (s *State) Init(aView *View) {
 func (s *Statelet) IgnoreRead() {
 	s.Ignore = true
 }
+
+// CloneForSummary creates a lock-safe copy of Statelet state for summary/meta work.
+// It intentionally does not copy mutex or lock-owner bookkeeping.
+func (s *Statelet) CloneForSummary() *Statelet {
+	if s == nil {
+		return NewStatelet()
+	}
+
+	ret := &Statelet{
+		DatabaseFormat: s.DatabaseFormat,
+		OutputFormat:   s.OutputFormat,
+		Template:       s.Template,
+		QuerySelector:  s.QuerySelector,
+		QuerySettings:  s.QuerySettings,
+		initialized:    s.initialized,
+		result:         s.result,
+		Ignore:         s.Ignore,
+	}
+
+	if s._columnNames != nil {
+		ret._columnNames = make(map[string]bool, len(s._columnNames))
+		for k, v := range s._columnNames {
+			ret._columnNames[k] = v
+		}
+	} else {
+		ret._columnNames = map[string]bool{}
+	}
+
+	if len(s.Filters) > 0 {
+		ret.Filters = append(predicate.Filters(nil), s.Filters...)
+	}
+
+	if len(s.Fields) > 0 {
+		ret.Fields = append([]string(nil), s.Fields...)
+	}
+	if len(s.Columns) > 0 {
+		ret.Columns = append([]string(nil), s.Columns...)
+	}
+
+	return ret
+}
