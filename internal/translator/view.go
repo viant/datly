@@ -251,8 +251,18 @@ func (v *View) buildTemplate(namespace *Viewlet, rule *Rule) {
 	isRoot := rule.Root == v.Name
 	resource := namespace.Resource
 	v.EnsureTemplate()
-	v.Template.Source = namespace.SQL
-	v.Template.Parameters = v.matchParameters(namespace.SQL, resource.State, isRoot)
+	// Emit sanitized SQL as the runtime template so SQL fragments stay inline;
+	// matching still uses raw SQL to preserve the post-5e41c4ee root/predicate detection.
+	sourceSQL := namespace.SanitizedSQL
+	if sourceSQL == "" {
+		sourceSQL = namespace.SQL
+	}
+	matchSQL := namespace.SQL
+	if matchSQL == "" {
+		matchSQL = sourceSQL
+	}
+	v.Template.Source = sourceSQL
+	v.Template.Parameters = v.matchParameters(matchSQL, resource.State, isRoot)
 }
 
 // matchParameters matches parameter used by SQL, and add explicit parameter for root view
