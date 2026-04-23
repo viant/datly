@@ -77,7 +77,7 @@ func (r *Form) Value(ctx context.Context, rType reflect.Type, name string) (inte
 		if err := r.request.ParseForm(); err != nil {
 			return nil, false, err
 		}
-		values, ok := r.request.Form[name]
+		values, ok = r.request.Form[name]
 		if !ok {
 			return nil, false, nil
 		}
@@ -102,18 +102,26 @@ func NewForm(opts ...Option) (kind.Locator, error) {
 	return ret, nil
 }
 
-// seedFormFromMultipart parses multipart/form-data and copies values into shared maps.
-// Mutex is required because multiple Form locators (one per parameter) can call this
-// concurrently on the same request. Uses form.Values directly instead of form.Set to
-// avoid deadlock (form.Set locks the same mutex).
+// seedFormFromMultipart parses multipart/form-data (if needed) and copies textual values to the shared form
 func (r *Form) seedFormFromMultipart() {
 	if r.request == nil || r.form == nil {
 		return
 	}
+
+	// Session parameter binding runs in parallel. Multipart seeding mutates the
+	// shared form and request maps, so serialize that work under the form mutex.
+	mu := r.form.Mutex()
+	mu.Lock()
+	defer mu.Unlock()
+
 	if r.request.MultipartForm == nil && len(r.form.Values) == 0 {
+		// Only ParseMultipartForm for form-data; other multipart types aren't
+		// supported by ParseMultipartForm. If the shared form already has
+		// values, treat it as authoritative and avoid parsing.
 		ct := r.request.Header.Get("Content-Type")
 		if ct != "" {
 			if mediaType, _, err := mime.ParseMediaType(ct); err == nil && shared.IsFormData(mediaType) {
+				// Use the same default memory threshold as Body locator
 				const maxMultipartMemory = 32 << 20 // 32 MiB
 				_ = r.request.ParseMultipartForm(maxMultipartMemory)
 			}
@@ -122,18 +130,13 @@ func (r *Form) seedFormFromMultipart() {
 	if r.request.MultipartForm == nil {
 		return
 	}
-	// BUG FIX (concurrent map writes):
-	mu := r.form.Mutex()
-	mu.Lock()
-	defer mu.Unlock()
-	if r.request.Form == nil {
-		r.request.Form = url.Values{}
+	if r.form.Values == nil {
+		r.form.Values = url.Values{}
 	}
 	for k, vs := range r.request.MultipartForm.Value {
 		if len(vs) == 0 {
 			continue
 		}
-		r.form.Values[k] = vs
-		r.request.Form[k] = vs
+		r.form.Values[k] = append([]string(nil), vs...)
 	}
 }
