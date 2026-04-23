@@ -10,6 +10,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -21,7 +22,9 @@ type (
 		Tag      string `json:",omitempty"`
 
 		Expression     string       `json:",omitempty"`
+		Aggregate      bool         `json:",omitempty"`
 		Filterable     bool         `json:",omitempty"`
+		Groupable      bool         `json:",omitempty"`
 		Nullable       bool         `json:",omitempty"`
 		Default        string       `json:",omitempty"`
 		FormatTag      *format.Tag  `json:",omitempty"`
@@ -34,6 +37,7 @@ type (
 		field         *reflect.StructField
 		_initialized  bool
 		_fieldName    string
+		_groupableSet bool
 	}
 	ColumnOption func(c *Column)
 )
@@ -79,6 +83,9 @@ func (c *Column) Init(resource state.Resource, caseFormat text.CaseFormat, allow
 	if c.Name == "" {
 		return fmt.Errorf("column name was empty")
 	}
+	if err := c.initGroupable(); err != nil {
+		return err
+	}
 	err := c.EnsureType(resource.LookupType())
 	if err != nil {
 		return err
@@ -97,6 +104,23 @@ func (c *Column) Init(resource state.Resource, caseFormat text.CaseFormat, allow
 			return err
 		}
 	}
+	return nil
+}
+
+func (c *Column) initGroupable() error {
+	if c._groupableSet || c.Tag == "" {
+		return nil
+	}
+	value, ok := reflect.StructTag(c.Tag).Lookup("groupable")
+	if !ok {
+		return nil
+	}
+	groupable, err := strconv.ParseBool(value)
+	if err != nil {
+		return fmt.Errorf("invalid groupable tag for column %s: %w", c.Name, err)
+	}
+	c.Groupable = groupable
+	c._groupableSet = true
 	return nil
 }
 
@@ -164,6 +188,10 @@ func (c *Column) defaultValue(rType reflect.Type) string {
 	}
 }
 
+func (c *Column) DefaultValue() string {
+	return c.defaultValue(c.rType)
+}
+
 func (c *Column) FieldName() string {
 	return c._fieldName
 }
@@ -198,6 +226,10 @@ func (c *Column) ApplyConfig(config *ColumnConfig) {
 	}
 	if config.Default != nil {
 		c.Default = *config.Default
+	}
+	if config.Groupable != nil {
+		c.Groupable = *config.Groupable
+		c._groupableSet = true
 	}
 	c._initialized = false
 }
@@ -237,6 +269,7 @@ type (
 		Codec               *state.Codec `json:",omitempty"`
 		DataType            *string      `json:",omitempty"`
 		Required            *bool        `json:",omitempty"`
+		Groupable           *bool        `json:",omitempty"`
 		Format              *string      `json:",omitempty"`
 		Tag                 *string      `json:",omitempty"`
 		Default             *string      `json:",omitempty"`

@@ -1,4 +1,20 @@
-package expand_test
+package expand
+
+import "testing"
+
+func TestPredicateBuilder_NilReceiver(t *testing.T) {
+	var builder *PredicateBuilder
+
+	got := builder.CombineOr("x = ?").Build("WHERE")
+	if got == "" {
+		t.Fatalf("expected combined predicate, got empty string")
+	}
+
+	got = builder.And().CombineAnd("y = ?").Build("WHERE")
+	if got == "" {
+		t.Fatalf("expected predicate after And on nil receiver, got empty string")
+	}
+}
 
 //func TestPredicate(t *testing.T) {
 //	type Foo struct {

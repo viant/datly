@@ -39,8 +39,8 @@ type Validation struct {
 	IsValid bool
 }
 
-// Example_ComponentDebugging show how to programmatically execute executor rule
-func Example_ComponentDebugging() {
+// Example shows how to programmatically execute executor rule.
+func Example() {
 	//Uncomment various additional debugging and troubleshuting
 	// expand.SetPanicOnError(false)
 	// read.ShowSQL(true)

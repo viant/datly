@@ -10,6 +10,7 @@ import (
 	"github.com/viant/xdatly/handler"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -17,20 +18,23 @@ import (
 // VisitorFn represents visitor function
 type VisitorFn func(value interface{}) error
 
+type compositeKey string
+
 // Collector collects and build result from View fetched from Database
 // If View or any of the View.With MatchStrategy support Parallel fetching, it is important to call MergeData
 // when all needed View was fetched
 type Collector struct {
-	Id            string
-	mutex         sync.Mutex
-	parent        *Collector
-	destValue     reflect.Value
-	appender      *xunsafe.Appender
-	valuePosition map[string]map[string]map[interface{}][]int //stores positions in main slice, based on _field name, indexed by _field value.
-	types         map[string]*xunsafe.Type
-	relation      *Relation
-	dataSync      *handler.DataSync
-	values        map[string]*[]interface{} //acts like a buffer. Output resolved with Resolve method can't be put to the value position map
+	Id                     string
+	mutex                  sync.Mutex
+	parent                 *Collector
+	destValue              reflect.Value
+	appender               *xunsafe.Appender
+	valuePosition          map[string]map[string]map[interface{}][]int //stores positions in main slice, based on _field name, indexed by _field value.
+	compositeValuePosition map[string]map[compositeKey][]int
+	types                  map[string]*xunsafe.Type
+	relation               *Relation
+	dataSync               *handler.DataSync
+	values                 map[string]*[]interface{} //acts like a buffer. Output resolved with Resolve method can't be put to the value position map
 	// because value fetched from database was not scanned into yet. Putting value to the map as a key, would create key as a pointer to the zero value.
 
 	slice     *xunsafe.Slice
@@ -49,6 +53,80 @@ type Collector struct {
 	viewMetaHandler viewSummaryHandlerFn
 }
 
+func relationCompositeSignature(links Links) string {
+	parts := make([]string, 0, len(links))
+	for _, link := range links {
+		if link == nil {
+			continue
+		}
+		parts = append(parts, link.Namespace+"."+link.Column)
+	}
+	return strings.Join(parts, "|")
+}
+
+func buildCompositeKey(values []interface{}) compositeKey {
+	parts := make([]string, len(values))
+	for i, value := range values {
+		parts[i] = fmt.Sprintf("%#v", io.NormalizeKey(value))
+	}
+	return compositeKey(strings.Join(parts, "\x1f"))
+}
+
+func normalizeValues(value interface{}) []interface{} {
+	switch actual := value.(type) {
+	case []int:
+		result := make([]interface{}, 0, len(actual))
+		for _, item := range actual {
+			result = append(result, io.NormalizeKey(item))
+		}
+		return result
+	case []*int64:
+		result := make([]interface{}, 0, len(actual))
+		for _, item := range actual {
+			if item == nil {
+				continue
+			}
+			result = append(result, io.NormalizeKey(int(*item)))
+		}
+		return result
+	case []int64:
+		result := make([]interface{}, 0, len(actual))
+		for _, item := range actual {
+			result = append(result, io.NormalizeKey(int(item)))
+		}
+		return result
+	case []string:
+		result := make([]interface{}, 0, len(actual))
+		for _, item := range actual {
+			result = append(result, io.NormalizeKey(item))
+		}
+		return result
+	default:
+		return []interface{}{io.NormalizeKey(value)}
+	}
+}
+
+func compositeRows(parts [][]interface{}) [][]interface{} {
+	if len(parts) == 0 {
+		return nil
+	}
+	result := make([][]interface{}, 1)
+	for _, values := range parts {
+		if len(values) == 0 {
+			return nil
+		}
+		next := make([][]interface{}, 0, len(result)*len(values))
+		for _, existing := range result {
+			for _, value := range values {
+				row := append(append([]interface{}{}, existing...), value)
+				next = append(next, row)
+			}
+		}
+		result = next
+	}
+	return result
+}
+
 func (r *Collector) SetDest(dest interface{}) {
 	destValue := reflect.ValueOf(dest)
 	if destValue.Kind() == reflect.Ptr {
@@ -63,27 +141,28 @@ func (r *Collector) Clone() *Collector {
 	dest := reflect.MakeSlice(r.view.Schema.SliceType(), 0, 1)
 	slicePtrValue.Elem().Set(dest)
 	return &Collector{
-		Id:              uuid.New().String(),
-		parent:          r.parent,
-		destValue:       slicePtrValue,
-		appender:        r.slice.Appender(xunsafe.ValuePointer(&slicePtrValue)),
-		valuePosition:   r.valuePosition,
-		types:           r.types,
-		relation:        r.relation,
-		values:          r.values,
-		slice:           r.slice,
-		view:            r.view,
-		relations:       r.relations,
-		dataSync:        r.dataSync,
-		wg:              r.wg,
-		readAll:         r.readAll,
-		wgDelta:         r.wgDelta,
-		indexCounter:    r.indexCounter,
-		manyCounter:     r.manyCounter,
-		codecSlice:      r.codecSlice,
-		codecSliceDest:  r.codecSliceDest,
-		codecAppender:   r.codecAppender,
-		viewMetaHandler: r.viewMetaHandler,
+		Id:                     uuid.New().String(),
+		parent:                 r.parent,
+		destValue:              slicePtrValue,
+		appender:               r.slice.Appender(xunsafe.ValuePointer(&slicePtrValue)),
+		valuePosition:          r.valuePosition,
+		compositeValuePosition: r.compositeValuePosition,
+		types:                  r.types,
+		relation:               r.relation,
+		values:                 r.values,
+		slice:                  r.slice,
+		view:                   r.view,
+		relations:              r.relations,
+		dataSync:               r.dataSync,
+		wg:                     r.wg,
+		readAll:                r.readAll,
+		wgDelta:                r.wgDelta,
+		indexCounter:           r.indexCounter,
+		manyCounter:            r.manyCounter,
+		codecSlice:             r.codecSlice,
+		codecSliceDest:         r.codecSliceDest,
+		codecAppender:          r.codecAppender,
+		viewMetaHandler:        r.viewMetaHandler,
 	}
 }
 
@@ -150,25 +229,36 @@ func (r *Collector) parentValuesPositions(ns string, columnName string) map[inte
 	return result
 }
 
+func (r *Collector) parentCompositePositions(relation *Relation) map[compositeKey][]int {
+	signature := relationCompositeSignature(relation.On)
+	result, ok := r.parent.compositeValuePosition[signature]
+	if !ok || len(result) == 0 {
+		r.indexParentCompositePositions(relation)
+		result = r.parent.compositeValuePosition[signature]
+	}
+	return result
+}
+
 // NewCollector creates a collector
 func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHandler viewSummaryHandlerFn, readAll bool) *Collector {
 	ensuredDest := ensureDest(dest, view)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	return &Collector{
-		Id:              uuid.New().String(),
-		destValue:       reflect.ValueOf(ensuredDest),
-		valuePosition:   make(map[string]map[string]map[interface{}][]int),
-		appender:        slice.Appender(xunsafe.AsPointer(ensuredDest)),
-		slice:           slice,
-		view:            view,
-		types:           make(map[string]*xunsafe.Type),
-		values:          make(map[string]*[]interface{}),
-		readAll:         readAll,
-		wg:              &wg,
-		dataSync:        handler.NewDataSync(),
-		wgDelta:         1,
-		viewMetaHandler: viewMetaHandler,
+		Id:                     uuid.New().String(),
+		destValue:              reflect.ValueOf(ensuredDest),
+		valuePosition:          make(map[string]map[string]map[interface{}][]int),
+		compositeValuePosition: make(map[string]map[compositeKey][]int),
+		appender:               slice.Appender(xunsafe.AsPointer(ensuredDest)),
+		slice:                  slice,
+		view:                   view,
+		types:                  make(map[string]*xunsafe.Type),
+		values:                 make(map[string]*[]interface{}),
+		readAll:                readAll,
+		wg:                     &wg,
+		dataSync:               handler.NewDataSync(),
+		wgDelta:                1,
+		viewMetaHandler:        viewMetaHandler,
 	}
 }
 
@@ -186,6 +276,13 @@ func (r *Collector) Visitor(ctx context.Context) VisitorFn {
 	relation := r.relation
 	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
 	for _, rel := range visitorRelations {
+		if rel.IsComposite() {
+			signature := relationCompositeSignature(rel.On)
+			if _, ok := r.compositeValuePosition[signature]; !ok {
+				r.compositeValuePosition[signature] = map[compositeKey][]int{}
+			}
+			continue
+		}
 		for _, item := range rel.On {
 			if _, ok := r.valuePosition[item.Namespace]; !ok {
 				r.valuePosition[item.Namespace] = map[string]map[interface{}][]int{}
@@ -219,8 +316,18 @@ func (r *Collector) Visitor(ctx context.Context) VisitorFn {
 func (r *Collector) valueIndexer(ctx context.Context, visitorRelations []*Relation) func(value interface{}) error {
 	distinctRelations := make([]*Relation, 0)
 	presenceMap := map[string]map[string]bool{}
+	compositePresence := map[string]bool{}
 
 	for i := range visitorRelations {
+		if visitorRelations[i].IsComposite() {
+			signature := relationCompositeSignature(visitorRelations[i].On)
+			if compositePresence[signature] {
+				continue
+			}
+			distinctRelations = append(distinctRelations, visitorRelations[i])
+			compositePresence[signature] = true
+			continue
+		}
 		for _, item := range visitorRelations[i].On {
 			if _, ok := presenceMap[item.Namespace]; !ok {
 				presenceMap[item.Namespace] = map[string]bool{}
@@ -236,6 +343,10 @@ func (r *Collector) valueIndexer(ctx context.Context, visitorRelations []*Relati
 	return func(value interface{}) error {
 		ptr := xunsafe.AsPointer(value)
 		for _, rel := range distinctRelations {
+			if rel.IsComposite() {
+				r.indexCompositeValueByRel(ptr, rel, r.indexCounter)
+				continue
+			}
 			for _, link := range rel.On {
 				if field := link.xField; field != nil {
 					fieldValue := field.Value(ptr)
@@ -249,6 +360,25 @@ func (r *Collector) valueIndexer(ctx context.Context, visitorRelations []*Relati
 		}
 
 		return nil
+	}
+}
+
+func (r *Collector) indexCompositeValueByRel(ptr unsafe.Pointer, rel *Relation, counter int) {
+	signature := relationCompositeSignature(rel.On)
+	index := r.compositeValuePosition[signature]
+	if index == nil {
+		index = map[compositeKey][]int{}
+		r.compositeValuePosition[signature] = index
+	}
+	valueSets := make([][]interface{}, 0, len(rel.On))
+	for _, link := range rel.On {
+		if link == nil || link.xField == nil {
+			return
+		}
+		valueSets = append(valueSets, normalizeValues(link.xField.Value(ptr)))
+	}
+	for _, row := range compositeRows(valueSets) {
+		index[buildCompositeKey(row)] = append(index[buildCompositeKey(row)], counter)
 	}
 }
 
@@ -307,6 +437,24 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 	var aKey interface{}
 
 	return func(owner interface{}) error {
+		if relation.IsComposite() {
+			keyParts := make([]interface{}, 0, len(links))
+			for _, link := range links {
+				if link.xField == nil {
+					return fmt.Errorf("link %v field %v is not found", relation.Name, link.Column)
+				}
+				keyParts = append(keyParts, io.NormalizeKey(link.xField.Interface(xunsafe.AsPointer(owner))))
+			}
+			positions, ok := r.parentCompositePositions(relation)[buildCompositeKey(keyParts)]
+			if !ok {
+				return nil
+			}
+			for _, index := range positions {
+				item := r.parent.slice.ValuePointerAt(destPtr, index)
+				holderField.SetValue(xunsafe.AsPointer(item), owner)
+			}
+			return nil
+		}
 		for j, link := range links {
 			if link.xField == nil {
 				return fmt.Errorf("link %v field %v is not found", relation.Name, link.Column)
@@ -374,6 +522,31 @@ func (r *Collector) ParentRow(relation *Relation) func(value interface{}) (inter
 	}
 
 	return func(child interface{}) (interface{}, error) {
+		if relation.IsComposite() {
+			keyParts := make([]interface{}, 0, len(links))
+			for _, link := range links {
+				keyField := link.xField
+				if keyField == nil && xType == nil {
+					xType = r.types[link.Column]
+					values = r.values[link.Column]
+				}
+				var key interface{}
+				if keyField != nil {
+					key = keyField.Interface(xunsafe.AsPointer(child))
+				} else {
+					key = xType.Deref((*values)[r.manyCounter])
+				}
+				keyParts = append(keyParts, io.NormalizeKey(key))
+			}
+			positions, ok := r.parentCompositePositions(relation)[buildCompositeKey(keyParts)]
+			if !ok {
+				return nil, fmt.Errorf(`composite key "%v" is not found`, keyParts)
+			}
+			if len(positions) > 1 {
+				return nil, fmt.Errorf(`composite key "%v" has more than one value`, keyParts)
+			}
+			return r.parent.slice.ValuePointerAt(destPtr, positions[0]), nil
+		}
 		var key interface{}
 		var parentPosition int
 		for i, link := range links {
@@ -413,6 +586,39 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 	destPtr := xunsafe.AsPointer(dest)
 
 	return func(owner interface{}) error {
+		if relation.IsComposite() {
+			keyParts := make([]interface{}, 0, len(links))
+			for _, link := range links {
+				keyField := link.xField
+				if keyField == nil && xType == nil {
+					xType = r.types[link.Column]
+					values = r.values[link.Column]
+				}
+				var key interface{}
+				if keyField != nil {
+					key = keyField.Interface(xunsafe.AsPointer(owner))
+				} else {
+					key = xType.Deref((*values)[r.manyCounter])
+					r.manyCounter++
+				}
+				keyParts = append(keyParts, io.NormalizeKey(key))
+			}
+			positions, ok := r.parentCompositePositions(relation)[buildCompositeKey(keyParts)]
+			if !ok {
+				return nil
+			}
+			for _, index := range positions {
+				parentItem := r.parent.slice.ValuePointerAt(destPtr, index)
+				r.Lock().Lock()
+				sliceAddPtr := holderField.Pointer(xunsafe.AsPointer(parentItem))
+				slice := relation.Of.Schema.Slice()
+				appender := slice.Appender(sliceAddPtr)
+				appender.Append(owner)
+				r.Lock().Unlock()
+				r.view.Logger.ObjectReconciling(dest, owner, parentItem, index)
+			}
+			return nil
+		}
 		var key interface{}
 		for i, link := range links {
 			keyField := link.xField
@@ -476,6 +682,13 @@ func (r *Collector) indexParentPositions(ns, name string) {
 	r.parent.indexPositions(ns, name)
 }
 
+func (r *Collector) indexParentCompositePositions(relation *Relation) {
+	if r.parent == nil || relation == nil {
+		return
+	}
+	r.parent.indexCompositePositions(relation)
+}
+
 func (r *Collector) indexPositions(ns, name string) {
 	values := r.values[name]
 	if values == nil {
@@ -505,6 +718,46 @@ func (r *Collector) indexPositions(ns, name string) {
 		}
 
 		columnValues[name][val] = append(columnValues[name][val], position)
+	}
+}
+
+func (r *Collector) indexCompositePositions(relation *Relation) {
+	if relation == nil {
+		return
+	}
+	signature := relationCompositeSignature(relation.On)
+	index := r.compositeValuePosition[signature]
+	if index == nil {
+		index = map[compositeKey][]int{}
+		r.compositeValuePosition[signature] = index
+	}
+	destPtr := xunsafe.AsPointer(r.DestPtr())
+	for position := 0; position < r.slice.Len(destPtr); position++ {
+		parent := r.slice.ValuePointerAt(destPtr, position)
+		valueSets := make([][]interface{}, 0, len(relation.On))
+		for _, link := range relation.On {
+			if link == nil {
+				continue
+			}
+			if link.xField != nil {
+				valueSets = append(valueSets, normalizeValues(link.xField.Value(xunsafe.AsPointer(parent))))
+				continue
+			}
+			values := r.values[link.Column]
+			if values == nil || position >= len(*values) {
+				valueSets = nil
+				break
+			}
+			xType := r.types[link.Column]
+			if xType == nil {
+				valueSets = nil
+				break
+			}
+			valueSets = append(valueSets, normalizeValues(xType.Deref((*values)[position])))
+		}
+		for _, row := range compositeRows(valueSets) {
+			index[buildCompositeKey(row)] = append(index[buildCompositeKey(row)], position)
+		}
 	}
 }
 
@@ -539,21 +792,22 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 			return nil, err
 		}
 		result[counter] = &Collector{
-			Id:              uuid.New().String(),
-			parent:          r,
-			viewMetaHandler: aHandler,
-			destValue:       destPtr,
-			dataSync:        handler.NewDataSync(),
-			appender:        slice.Appender(xunsafe.ValuePointer(&destPtr)),
-			valuePosition:   make(map[string]map[string]map[interface{}][]int),
-			types:           make(map[string]*xunsafe.Type),
-			values:          make(map[string]*[]interface{}),
-			slice:           slice,
-			view:            &r.view.With[i].Of.View,
-			relation:        r.view.With[i],
-			readAll:         r.view.With[i].Of.MatchStrategy.ReadAll(),
-			wg:              &wg,
-			wgDelta:         delta,
+			Id:                     uuid.New().String(),
+			parent:                 r,
+			viewMetaHandler:        aHandler,
+			destValue:              destPtr,
+			dataSync:               handler.NewDataSync(),
+			appender:               slice.Appender(xunsafe.ValuePointer(&destPtr)),
+			valuePosition:          make(map[string]map[string]map[interface{}][]int),
+			compositeValuePosition: make(map[string]map[compositeKey][]int),
+			types:                  make(map[string]*xunsafe.Type),
+			values:                 make(map[string]*[]interface{}),
+			slice:                  slice,
+			view:                   &r.view.With[i].Of.View,
+			relation:               r.view.With[i],
+			readAll:                r.view.With[i].Of.MatchStrategy.ReadAll(),
+			wg:                     &wg,
+			wgDelta:                delta,
 		}
 		counter++
 	}
@@ -661,6 +915,40 @@ func (r *Collector) MergeData() {
 func (r *Collector) mergeToParent() {
 	links := r.relation.Of.On
 
+	if r.relation.IsComposite() {
+		destPtr := xunsafe.AsPointer(r.DestPtr())
+		holderField := r.relation.holderField
+		parentSlice := r.parent.slice
+		parentDestPtr := xunsafe.AsPointer(r.parent.DestPtr())
+		valuePositions := r.parentCompositePositions(r.relation)
+
+		for i := 0; i < r.slice.Len(destPtr); i++ {
+			value := r.slice.ValuePointerAt(destPtr, i)
+			keyParts := make([]interface{}, 0, len(links))
+			for _, link := range links {
+				keyParts = append(keyParts, io.NormalizeKey(link.xField.Value(xunsafe.AsPointer(value))))
+			}
+			positions, ok := valuePositions[buildCompositeKey(keyParts)]
+			if !ok {
+				continue
+			}
+			for _, position := range positions {
+				parentValue := parentSlice.ValuePointerAt(parentDestPtr, position)
+				if r.relation.Cardinality == state.One {
+					at := r.slice.ValuePointerAt(destPtr, i)
+					holderField.SetValue(xunsafe.AsPointer(parentValue), at)
+				} else if r.relation.Cardinality == state.Many {
+					r.Lock().Lock()
+					appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
+					appender.Append(value)
+					r.Lock().Unlock()
+					r.view.Logger.ObjectReconciling(r.Dest(), value, parentValue, position)
+				}
+			}
+		}
+		return
+	}
+
 	for i, link := range links {
 		valuePositions := r.parentValuesPositions(r.relation.On[i].Namespace, r.relation.On[i].Column)
 		destPtr := xunsafe.AsPointer(r.DestPtr())
@@ -698,12 +986,46 @@ func (r *Collector) mergeToParent() {
 // that the relation was created from, otherwise empty slice and empty string
 // i.e. if locators Collector collects Employee{AccountId: int}, Column.Name is account_id and Collector collects Account
 // it will extract and return all the AccountId that were accumulated and account_id
-func (r *Collector) ParentPlaceholders() ([]interface{}, []string) {
+func (r *Collector) ParentPlaceholders() ([]interface{}, [][]interface{}, []string) {
 	if r.parent == nil || r.ReadAll() {
-		return []interface{}{}, nil
+		return []interface{}{}, nil, nil
 	}
 	destPtr := xunsafe.AsPointer(r.parent.DestPtr())
 	sliceLen := r.parent.slice.Len(destPtr)
+	if r.relation.IsComposite() {
+		result := make([][]interface{}, 0)
+		unique := map[compositeKey]bool{}
+		for i := 0; i < sliceLen; i++ {
+			parent := r.parent.slice.ValuePointerAt(destPtr, i)
+			valueSets := make([][]interface{}, 0, len(r.relation.On))
+			for _, link := range r.relation.On {
+				field := link.xField
+				if field != nil {
+					valueSets = append(valueSets, normalizeValues(field.Value(xunsafe.AsPointer(parent))))
+					continue
+				}
+				positions := r.parentValuesPositions(link.Namespace, link.Column)
+				if len(positions) == 0 {
+					valueSets = nil
+					break
+				}
+				values := make([]interface{}, 0, len(positions))
+				for key := range positions {
+					values = append(values, key)
+				}
+				valueSets = append(valueSets, values)
+			}
+			for _, row := range compositeRows(valueSets) {
+				key := buildCompositeKey(row)
+				if unique[key] {
+					continue
+				}
+				unique[key] = true
+				result = append(result, row)
+			}
+		}
+		return nil, result, r.relation.Of.On.InColumnExpression()
+	}
 	result := make([]interface{}, 0)
 	var unique = make(map[any]bool)
 outer:
@@ -772,7 +1094,7 @@ outer:
 			continue outer
 		}
 	}
-	return result, r.relation.Of.On.InColumnExpression()
+	return result, nil, r.relation.Of.On.InColumnExpression()
 }
 
 func (r *Collector) WaitIfNeeded() {
@@ -793,8 +1115,8 @@ func (r *Collector) Fetched() {
 }
 
 func (r *Collector) Len() int {
-	if r.DestPtr() != nil {
-		return (*reflect.SliceHeader)(xunsafe.AsPointer(r.DestPtr())).Len
+	if r.DestPtr() != nil && r.slice != nil {
+		return r.slice.Len(xunsafe.AsPointer(r.DestPtr()))
 	}
 	return 0
 }

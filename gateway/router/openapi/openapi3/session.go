@@ -38,7 +38,7 @@ func (s *Session) RegisterComponents(location string, components *Components) {
 		components.RequestBodies = map[string]*RequestBody{}
 	}
 	if len(components.Responses) == 0 {
-		components.Responses = map[interface{}]*Response{}
+		components.Responses = map[string]*Response{}
 	}
 	if len(components.SecuritySchemes) == 0 {
 		components.SecuritySchemes = map[string]*SecurityScheme{}
@@ -60,8 +60,7 @@ func (s *Session) RegisterComponents(location string, components *Components) {
 
 // LookupSchema lookups schema
 func (s *Session) LookupSchema(location string, ref string) (*Schema, error) {
-	switch ref[0] {
-	case '#':
+	if len(ref) > 0 && ref[0] == '#' {
 		id := s.normalizeRef(ref[1:], "/components/schemas/")
 		components, ok := s.components[location]
 		if !ok {
@@ -74,20 +73,13 @@ func (s *Session) LookupSchema(location string, ref string) (*Schema, error) {
 		result := *value
 		result.Ref = ref
 		return &result, nil
-	case '.':
-
-	case '/':
-
-	default:
-
 	}
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
 // LookupParameter lookup parameters
 func (s *Session) LookupParameter(location string, ref string) (*Parameter, error) {
-	switch ref[0] {
-	case '#':
+	if len(ref) > 0 && ref[0] == '#' {
 		id := s.normalizeRef(ref[1:], "/components/parameters/")
 		components, ok := s.components[location]
 		if !ok {
@@ -100,20 +92,13 @@ func (s *Session) LookupParameter(location string, ref string) (*Parameter, erro
 		result := *value
 		result.Ref = ref
 		return &result, nil
-	case '.':
-
-	case '/':
-
-	default:
-
 	}
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
 // LookupHeaders lookup headers
 func (s *Session) LookupHeaders(location string, ref string) (*Parameter, error) {
-	switch ref[0] {
-	case '#':
+	if len(ref) > 0 && ref[0] == '#' {
 		components, ok := s.components[location]
 		if !ok {
 			return nil, fmt.Errorf("failed to lookup location: %v", location)
@@ -125,20 +110,13 @@ func (s *Session) LookupHeaders(location string, ref string) (*Parameter, error)
 		result := *value
 		result.Ref = ref
 		return &result, nil
-	case '.':
-
-	case '/':
-
-	default:
-
 	}
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
 // LookupRequestBody lookup request body
 func (s *Session) LookupRequestBody(location string, ref string) (*RequestBody, error) {
-	switch ref[0] {
-	case '#':
+	if len(ref) > 0 && ref[0] == '#' {
 		components, ok := s.components[location]
 		if !ok {
 			return nil, fmt.Errorf("failed to lookup location: %v", location)
@@ -150,20 +128,13 @@ func (s *Session) LookupRequestBody(location string, ref string) (*RequestBody, 
 		result := *value
 		result.Ref = ref
 		return &result, nil
-	case '.':
-
-	case '/':
-
-	default:
-
 	}
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
 // LookupResponse lookup response
 func (s *Session) LookupResponse(location string, ref string) (*Response, error) {
-	switch ref[0] {
-	case '#':
+	if len(ref) > 0 && ref[0] == '#' {
 		components, ok := s.components[location]
 		if !ok {
 			return nil, fmt.Errorf("failed to lookup location: %v", location)
@@ -175,20 +146,13 @@ func (s *Session) LookupResponse(location string, ref string) (*Response, error)
 		result := *value
 		result.Ref = ref
 		return &result, nil
-	case '.':
-
-	case '/':
-
-	default:
-
 	}
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
 // LookupSecurityScheme lookup security scheme
 func (s *Session) LookupSecurityScheme(location string, ref string) (*SecurityScheme, error) {
-	switch ref[0] {
-	case '#':
+	if len(ref) > 0 && ref[0] == '#' {
 		components, ok := s.components[location]
 		if !ok {
 			return nil, fmt.Errorf("failed to lookup location: %v", location)
@@ -200,20 +164,13 @@ func (s *Session) LookupSecurityScheme(location string, ref string) (*SecuritySc
 		result := *value
 		result.Ref = ref
 		return &result, nil
-	case '.':
-
-	case '/':
-
-	default:
-
 	}
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
 // LookupExample lookup example
 func (s *Session) LookupExample(location string, ref string) (*Example, error) {
-	switch ref[0] {
-	case '#':
+	if len(ref) > 0 && ref[0] == '#' {
 		components, ok := s.components[location]
 		if !ok {
 			return nil, fmt.Errorf("failed to lookup location: %v", location)
@@ -225,20 +182,13 @@ func (s *Session) LookupExample(location string, ref string) (*Example, error) {
 		result := *value
 		result.Ref = ref
 		return &result, nil
-	case '.':
-
-	case '/':
-
-	default:
-
 	}
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
 // LookupLink lookup link
 func (s *Session) LookupLink(location string, ref string) (*Link, error) {
-	switch ref[0] {
-	case '#':
+	if len(ref) > 0 && ref[0] == '#' {
 		components, ok := s.components[location]
 		if !ok {
 			return nil, fmt.Errorf("failed to lookup location: %v", location)
@@ -250,20 +200,13 @@ func (s *Session) LookupLink(location string, ref string) (*Link, error) {
 		result := *value
 		result.Ref = ref
 		return &result, nil
-	case '.':
-
-	case '/':
-
-	default:
-
 	}
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
 
 // LookupLink lookup callback
 func (s *Session) LookupCallback(location string, ref string) (*CallbackRef, error) {
-	switch ref[0] {
-	case '#':
+	if len(ref) > 0 && ref[0] == '#' {
 		components, ok := s.components[location]
 		if !ok {
 			return nil, fmt.Errorf("failed to lookup location: %v", location)
@@ -275,12 +218,6 @@ func (s *Session) LookupCallback(location string, ref string) (*CallbackRef, err
 		result := *value
 		result.Ref = ref
 		return &result, nil
-	case '.':
-
-	case '/':
-
-	default:
-
 	}
 	return nil, fmt.Errorf("unsupported: %v, at %v", ref, location)
 }
