@@ -12,6 +12,7 @@ import (
 	"github.com/viant/sqlx/io/config"
 	rdata "github.com/viant/toolbox/data"
 	"reflect"
+	"regexp"
 	"strings"
 )
 
@@ -108,9 +109,17 @@ func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Colu
 func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interface{}, error) {
 	SQL := ensureSelectStatement(evaluation, v)
 
+	if evaluation.Expander != nil {
+		SQL = neutralizePredicateBuilderForDiscovery(SQL)
+		SQL = stripVeltyConditionalsForDiscovery(SQL)
+		SQL = stripDanglingSelectorsForDiscovery(SQL)
+		SQL = ExpandWithFalseCondition(SQL)
+		SQL = strings.ReplaceAll(SQL, keywords.Pagination, "")
+		return SQL, evaluation.Args, nil
+	}
+
 	var placeholders []interface{}
 	var err error
-
 	if evaluation.Expander != nil {
 		SQL, err = v.Expand(&placeholders, SQL, &Statelet{}, CriteriaParam{}, &BatchData{}, NewMockSanitizer())
 		if err != nil {
@@ -129,6 +138,35 @@ func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interf
 	}
 
 	return SQL, placeholders, nil
+}
+
+var predicateBuilderBlock = regexp.MustCompile(`(?s)\$\{predicate\.Builder\(\).*?Build\("([A-Z]+)"\)\}`)
+var veltyIfBlock = regexp.MustCompile(`(?s)#if\([^\n]*\)\s*.*?#end`)
+var danglingSelectorLine = regexp.MustCompile(`(?m)^[ \t]*\$[A-Za-z0-9_.]+[ \t]*\n?`)
+
+func neutralizePredicateBuilderForDiscovery(SQL string) string {
+	return predicateBuilderBlock.ReplaceAllStringFunc(SQL, func(fragment string) string {
+		match := predicateBuilderBlock.FindStringSubmatch(fragment)
+		if len(match) != 2 {
+			return " AND 1=0 "
+		}
+		switch match[1] {
+		case "WHERE":
+			return " WHERE 1=0 "
+		case "HAVING":
+			return " HAVING 1=0 "
+		default:
+			return " AND 1=0 "
+		}
+	})
+}
+
+func stripVeltyConditionalsForDiscovery(SQL string) string {
+	return veltyIfBlock.ReplaceAllString(SQL, "")
+}
+
+func stripDanglingSelectorsForDiscovery(SQL string) string {
+	return danglingSelectorLine.ReplaceAllString(SQL, "")
 }
 
 func ensureSelectStatement(evaluation *TemplateEvaluation, v *View) string {

@@ -973,6 +973,16 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 }
 
 func (v *View) detectColumns(ctx context.Context, resource *Resource) error {
+	defer func() {
+		if r := recover(); r != nil {
+			panic(fmt.Errorf("detectColumns panic for view=%s ref=%s table=%s source=%s templateURL=%s: %v", v.Name, v.Ref, v.Table, v.Source(), func() string {
+				if v.Template == nil {
+					return ""
+				}
+				return v.Template.SourceURL
+			}(), r))
+		}
+	}()
 	SQL := v.Source()
 	var aState state.Parameters
 	if v.Template != nil {
@@ -990,10 +1000,13 @@ func (v *View) detectColumns(ctx context.Context, resource *Resource) error {
 		options = append(options, expand2.WithViewParam(&expand2.ViewContext{ParentValues: []interface{}{0}, DataUnit: &expand2.DataUnit{}}))
 	}
 	query, err := v.BuildParametrizedSQL(aState, resource.TypeRegistry(), SQL, bindingArguments, options...)
-	v.Logger.ColumnsDetection(query.Query, v.Source())
 	if err != nil {
 		return fmt.Errorf("failed to build parameterized query: %v due to %w", SQL, err)
 	}
+	if query == nil {
+		return fmt.Errorf("failed to build parameterized query: %v produced nil query", SQL)
+	}
+	v.Logger.ColumnsDetection(query.Query, v.Source())
 	db, err := v.Connector.DB()
 	if err != nil {
 		return err
