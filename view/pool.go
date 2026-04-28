@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	as "github.com/aerospike/aerospike-client-go"
-	"github.com/aerospike/aerospike-client-go/types"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	as "github.com/aerospike/aerospike-client-go"
+	"github.com/aerospike/aerospike-client-go/types"
 )
 
 var (
@@ -226,7 +227,12 @@ func (d *db) keepConnectionAlive(driver string, dsn string, config *DBConfig) {
 				}
 
 				if err != nil || aDb == nil {
+					fmt.Printf("[INFO] %v database connection lost, reconnecting\n", driver)
 					newDb, err := sql.Open(driver, dsn)
+					if err != nil {
+						fmt.Printf("[INFO] couldn't open new %v database \n", driver)
+						continue
+					}
 					d.mutex.Lock()
 					d.actual = newDb
 					if newDb != nil {
@@ -234,10 +240,11 @@ func (d *db) keepConnectionAlive(driver string, dsn string, config *DBConfig) {
 					}
 					d.mutex.Unlock()
 
-					ctx, timeout := d.ctxWithTimeout(time.Duration(5) * time.Second)
+					toSecs := 5
+					ctx, timeout := d.ctxWithTimeout(time.Duration(toSecs) * time.Second)
 					err = newDb.PingContext(ctx)
 					if err != nil {
-						fmt.Printf("[INFO] couldn't connect to one of %v database \n", driver)
+						fmt.Printf("[INFO] couldn't ping new %v database after %d seconds\n", driver, toSecs)
 					}
 
 					timeout()
