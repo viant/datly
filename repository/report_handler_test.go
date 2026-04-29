@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -103,6 +105,30 @@ type reportHandlerBody struct {
 	Offset     *int
 }
 
+type reportHandlerAdvancedFilters struct {
+	Created  *time.Time `format:"dateFormat=YYYY-MM-DD"`
+	Enabled  *bool
+	Count    *int
+	Code     reportHandlerStringerFilter
+	Metadata *reportHandlerUnsupportedFilter
+}
+
+type reportHandlerAdvancedBody struct {
+	Dimensions reportHandlerDimensions
+	Measures   reportHandlerMeasures
+	Filters    reportHandlerAdvancedFilters
+}
+
+type reportHandlerStringerFilter string
+
+func (f reportHandlerStringerFilter) String() string {
+	return "stringer:" + string(f)
+}
+
+type reportHandlerUnsupportedFilter struct {
+	Value string
+}
+
 func (s *reportTestSession) Validator() *validator.Service                 { return nil }
 func (s *reportTestSession) Differ() *differ.Service                       { return nil }
 func (s *reportTestSession) MessageBus() *mbus.Service                     { return nil }
@@ -160,7 +186,8 @@ func testReportInput() reportHandlerBody {
 func TestReportHandler_BuildQuery_FromPostBody(t *testing.T) {
 	handler := testReportHandler()
 	handler.Metadata.Filters[0].Parameter = &state.Parameter{In: state.NewQueryLocation("accountID")}
-	query, err := handler.buildQuery(testReportInput())
+	req := httptest.NewRequest(http.MethodPost, "http://localhost/v1/api/vendors/cube", nil)
+	query, err := handler.buildQuery(testReportInput(), req)
 	require.NoError(t, err)
 	assert.Equal(t, "AccountID,TotalSpend", query.Get("_fields"))
 	assert.Equal(t, "AccountID", query.Get("_orderby"))
@@ -172,7 +199,7 @@ func TestReportHandler_Exec_PreservesAuthorizationHeader(t *testing.T) {
 	handler := testReportHandler()
 	handler.Metadata.Filters[0].Parameter = &state.Parameter{In: state.NewQueryLocation("accountID")}
 
-	req := httptest.NewRequest(http.MethodPost, "http://localhost/v1/api/vendors/report", nil)
+	req := httptest.NewRequest(http.MethodPost, "http://localhost/v1/api/vendors/cube", nil)
 	req.Header.Set("Authorization", "Bearer test-token")
 	httpSession := &reportTestHTTP{request: req}
 	session := &reportTestSession{
@@ -208,4 +235,96 @@ func TestReportHandler_ReportInput_AcceptsUnwrappedBody(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, body.Dimensions.AccountID)
 	require.True(t, body.Measures.TotalSpend)
+}
+
+func TestReportHandler_BuildQuery_FilterSerialization_DataDriven(t *testing.T) {
+	created := time.Date(2026, time.April, 29, 14, 30, 0, 0, time.UTC)
+	enabled := false
+	count := 0
+	cases := []struct {
+		name          string
+		filter        *ReportFilter
+		filters       reportHandlerAdvancedFilters
+		wantQuery     map[string]string
+		wantMissing   []string
+		wantErrSubstr string
+	}{
+		{
+			name:   "formats time with field format tag",
+			filter: &ReportFilter{Name: "created", FieldName: "Created", Parameter: &state.Parameter{In: state.NewQueryLocation("created")}},
+			filters: reportHandlerAdvancedFilters{
+				Created: &created,
+			},
+			wantQuery: map[string]string{"created": "2026-04-29"},
+		},
+		{
+			name:   "preserves explicit false pointer",
+			filter: &ReportFilter{Name: "enabled", FieldName: "Enabled", Parameter: &state.Parameter{In: state.NewQueryLocation("enabled")}},
+			filters: reportHandlerAdvancedFilters{
+				Enabled: &enabled,
+			},
+			wantQuery: map[string]string{"enabled": "false"},
+		},
+		{
+			name:   "preserves explicit zero pointer",
+			filter: &ReportFilter{Name: "count", FieldName: "Count", Parameter: &state.Parameter{In: state.NewQueryLocation("count")}},
+			filters: reportHandlerAdvancedFilters{
+				Count: &count,
+			},
+			wantQuery: map[string]string{"count": "0"},
+		},
+		{
+			name:   "uses stringer for named value",
+			filter: &ReportFilter{Name: "code", FieldName: "Code", Parameter: &state.Parameter{In: state.NewQueryLocation("code")}},
+			filters: reportHandlerAdvancedFilters{
+				Code: reportHandlerStringerFilter("A1"),
+			},
+			wantQuery: map[string]string{"code": "stringer:A1"},
+		},
+		{
+			name:   "omits nil pointer filter",
+			filter: &ReportFilter{Name: "created", FieldName: "Created", Parameter: &state.Parameter{In: state.NewQueryLocation("created")}},
+			filters: reportHandlerAdvancedFilters{
+				Created: nil,
+			},
+			wantMissing: []string{"created"},
+		},
+		{
+			name:   "errors on unsupported present struct",
+			filter: &ReportFilter{Name: "metadata", FieldName: "Metadata", Parameter: &state.Parameter{In: state.NewQueryLocation("metadata")}},
+			filters: reportHandlerAdvancedFilters{
+				Metadata: &reportHandlerUnsupportedFilter{Value: "x"},
+			},
+			wantErrSubstr: `report filter "Metadata"`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := testReportHandler()
+			handler.Metadata.Filters = []*ReportFilter{tc.filter}
+
+			input := reportHandlerAdvancedBody{
+				Dimensions: reportHandlerDimensions{AccountID: true},
+				Filters:    tc.filters,
+			}
+
+			req := httptest.NewRequest(http.MethodPost, "http://localhost/v1/api/vendors/cube", nil)
+			query, err := handler.buildQuery(input, req)
+			if tc.wantErrSubstr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErrSubstr)
+				assert.Contains(t, err.Error(), fmt.Sprintf(`query param %q`, tc.filter.Parameter.In.Name))
+				return
+			}
+
+			require.NoError(t, err)
+			for key, want := range tc.wantQuery {
+				assert.Equal(t, want, query.Get(key))
+			}
+			for _, key := range tc.wantMissing {
+				assert.Empty(t, query.Get(key))
+			}
+		})
+	}
 }

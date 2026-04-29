@@ -442,6 +442,10 @@ func (c *Component) UnmarshalFor(opts ...UnmarshalOption) shared.Unmarshal {
 	if c != nil && c.Report != nil && c.Report.Enabled && c.Handler != nil {
 		if parameter := c.Input.Type.AnonymousParameters(); parameter != nil && parameter.In != nil && parameter.In.Kind == state.KindRequestBody {
 			return func(data []byte, dest interface{}) error {
+
+				if c.Content.Marshaller.JSON.RuntimeUnmarshaller != nil {
+					return c.Content.Marshaller.JSON.RuntimeUnmarshaller.Unmarshal(data, dest)
+				}
 				return stdjson.Unmarshal(data, dest)
 			}
 		}

@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
+	"encoding"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,11 +10,22 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/viant/structology/encoding/json"
+	tagformat "github.com/viant/tagly/format"
+	ftime "github.com/viant/tagly/format/time"
 
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/view/state"
 	xhandler "github.com/viant/xdatly/handler"
 	xdhttp "github.com/viant/xdatly/handler/http"
+)
+
+var (
+	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+	stringerType      = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
+	timeType          = reflect.TypeOf(time.Time{})
 )
 
 type cubeHandler struct {
@@ -44,6 +55,7 @@ func (r *cubeHandler) Exec(ctx context.Context, session xhandler.Session) (inter
 	internalReq := request.Clone(ctx)
 	internalReq.Method = r.Path.Method
 	internalReq.URL = cloneURL(request.URL)
+	internalReq.Form = query
 	internalReq.URL.Path = strings.TrimSuffix(request.URL.Path, "/cube")
 	internalReq.URL.RawPath = internalReq.URL.Path
 	internalReq.URL.RawQuery = query.Encode()
@@ -152,14 +164,20 @@ func (r *cubeHandler) collectFilters(root reflect.Value, query url.Values) error
 	}
 	filters = indirectValue(filters)
 	for _, filter := range r.Metadata.Filters {
-		value := fieldByName(filters, filter.FieldName)
-		if !value.IsValid() || isEmptyValue(value) {
+		value, field, ok := fieldByNameDetails(filters, filter.FieldName)
+		if !ok || shouldOmitFilterValue(value) {
 			continue
 		}
 		if filter.Parameter == nil || filter.Parameter.In == nil {
 			continue
 		}
-		appendQueryValue(query, filter.Parameter.In.Name, value)
+		formatTag, err := resolveFilterFormatTag(filter, field)
+		if err != nil {
+			return err
+		}
+		if err := appendQueryValue(query, filter.Parameter.In.Name, value, filter, formatTag); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -208,26 +226,70 @@ func (r *cubeHandler) collectInts(root reflect.Value, fieldName string, query ur
 	return nil
 }
 
-func appendQueryValue(query url.Values, key string, value reflect.Value) {
-	value = indirectValue(value)
+func appendQueryValue(query url.Values, key string, value reflect.Value, filter *ReportFilter, formatTag *tagformat.Tag) error {
+	for value.IsValid() && value.Kind() == reflect.Interface {
+		if value.IsNil() {
+			return nil
+		}
+		value = value.Elem()
+	}
+	if !value.IsValid() {
+		return nil
+	}
+	if value.Kind() == reflect.Ptr {
+		if value.IsNil() {
+			return nil
+		}
+		return appendQueryValue(query, key, value.Elem(), filter, formatTag)
+	}
+	if value.Kind() == reflect.Struct && value.Type() == timeType {
+		aTime := value.Interface().(time.Time)
+		if aTime.IsZero() {
+			return nil
+		}
+		query.Add(key, normalizeTimeFormatTag(formatTag).FormatTime(&aTime))
+		return nil
+	}
+
+	if text, ok, err := marshalTextQueryValue(value); ok || err != nil {
+		if err != nil {
+			return wrapUnsupportedFilterValue(filter, key, value, err)
+		}
+		query.Add(key, text)
+		return nil
+	}
+	if text, ok := stringifyQueryValue(value); ok {
+		query.Add(key, text)
+		return nil
+	}
+
 	switch value.Kind() {
 	case reflect.String:
 		if value.String() != "" {
 			query.Add(key, value.String())
 		}
+		return nil
 	case reflect.Bool:
 		query.Add(key, strconv.FormatBool(value.Bool()))
+		return nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		query.Add(key, strconv.FormatInt(value.Int(), 10))
+		return nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		query.Add(key, strconv.FormatUint(value.Uint(), 10))
+		return nil
 	case reflect.Float32, reflect.Float64:
 		query.Add(key, strconv.FormatFloat(value.Float(), 'f', -1, 64))
+		return nil
 	case reflect.Slice, reflect.Array:
 		for i := 0; i < value.Len(); i++ {
-			appendQueryValue(query, key, value.Index(i))
+			if err := appendQueryValue(query, key, value.Index(i), filter, formatTag); err != nil {
+				return err
+			}
 		}
+		return nil
 	}
+	return wrapUnsupportedFilterValue(filter, key, value, nil)
 }
 
 func fieldByName(root reflect.Value, name string) reflect.Value {
@@ -236,6 +298,18 @@ func fieldByName(root reflect.Value, name string) reflect.Value {
 		return reflect.Value{}
 	}
 	return root.FieldByName(name)
+}
+
+func fieldByNameDetails(root reflect.Value, name string) (reflect.Value, reflect.StructField, bool) {
+	root = indirectValue(root)
+	if !root.IsValid() || root.Kind() != reflect.Struct || name == "" {
+		return reflect.Value{}, reflect.StructField{}, false
+	}
+	field, ok := root.Type().FieldByName(name)
+	if !ok {
+		return reflect.Value{}, reflect.StructField{}, false
+	}
+	return root.FieldByName(name), field, true
 }
 
 func indirectValue(value reflect.Value) reflect.Value {
@@ -248,10 +322,18 @@ func indirectValue(value reflect.Value) reflect.Value {
 	return value
 }
 
-func isEmptyValue(value reflect.Value) bool {
-	value = indirectValue(value)
+func shouldOmitFilterValue(value reflect.Value) bool {
+	for value.IsValid() && value.Kind() == reflect.Interface {
+		if value.IsNil() {
+			return true
+		}
+		value = value.Elem()
+	}
 	if !value.IsValid() {
 		return true
+	}
+	if value.Kind() == reflect.Ptr {
+		return value.IsNil()
 	}
 	switch value.Kind() {
 	case reflect.String, reflect.Array, reflect.Slice, reflect.Map:
@@ -264,6 +346,11 @@ func isEmptyValue(value reflect.Value) bool {
 		return value.Uint() == 0
 	case reflect.Float32, reflect.Float64:
 		return value.Float() == 0
+	case reflect.Struct:
+		if value.Type() == timeType {
+			return value.Interface().(time.Time).IsZero()
+		}
+		return value.IsZero()
 	}
 	return false
 }
@@ -289,4 +376,110 @@ func bodyRoot(root reflect.Value, bodyField string) reflect.Value {
 		return root
 	}
 	return body
+}
+
+func resolveFilterFormatTag(filter *ReportFilter, field reflect.StructField) (*tagformat.Tag, error) {
+	if field.Tag != "" {
+		parsed, err := tagformat.Parse(field.Tag)
+		if err != nil {
+			return nil, fmt.Errorf("invalid format tag on report filter field %s: %w", field.Name, err)
+		}
+		if hasTimeFormat(parsed) {
+			return normalizeTimeFormatTag(parsed), nil
+		}
+	}
+	if filter == nil || filter.Parameter == nil {
+		return normalizeTimeFormatTag(nil), nil
+	}
+	if strings.TrimSpace(filter.Parameter.Tag) != "" {
+		parsed, err := tagformat.Parse(reflect.StructTag(filter.Parameter.Tag))
+		if err != nil {
+			return nil, fmt.Errorf("invalid format tag on report filter parameter %s: %w", filter.FieldName, err)
+		}
+		if hasTimeFormat(parsed) {
+			return normalizeTimeFormatTag(parsed), nil
+		}
+	}
+	if dateFormat := strings.TrimSpace(filter.Parameter.DateFormat); dateFormat != "" {
+		return &tagformat.Tag{
+			DateFormat: dateFormat,
+			TimeLayout: ftime.DateFormatToTimeLayout(dateFormat),
+		}, nil
+	}
+	return normalizeTimeFormatTag(nil), nil
+}
+
+func hasTimeFormat(tag *tagformat.Tag) bool {
+	if tag == nil {
+		return false
+	}
+	return strings.TrimSpace(tag.DateFormat) != "" || strings.TrimSpace(tag.TimeLayout) != "" || strings.TrimSpace(tag.Timezone) != ""
+}
+
+func normalizeTimeFormatTag(tag *tagformat.Tag) *tagformat.Tag {
+	if tag == nil {
+		return &tagformat.Tag{}
+	}
+	if tag.TimeLayout == "" && tag.DateFormat != "" {
+		tag.TimeLayout = ftime.DateFormatToTimeLayout(tag.DateFormat)
+	}
+	return tag
+}
+
+func marshalTextQueryValue(value reflect.Value) (string, bool, error) {
+	if !value.IsValid() {
+		return "", false, nil
+	}
+	if value.Type().Implements(textMarshalerType) && value.CanInterface() {
+		text, err := value.Interface().(encoding.TextMarshaler).MarshalText()
+		return string(text), true, err
+	}
+	if value.CanAddr() && value.Addr().Type().Implements(textMarshalerType) {
+		text, err := value.Addr().Interface().(encoding.TextMarshaler).MarshalText()
+		return string(text), true, err
+	}
+	if value.Type().Kind() != reflect.Ptr {
+		ptr := reflect.New(value.Type())
+		ptr.Elem().Set(value)
+		if ptr.Type().Implements(textMarshalerType) {
+			text, err := ptr.Interface().(encoding.TextMarshaler).MarshalText()
+			return string(text), true, err
+		}
+	}
+	return "", false, nil
+}
+
+func stringifyQueryValue(value reflect.Value) (string, bool) {
+	if !value.IsValid() {
+		return "", false
+	}
+	if value.Type().Implements(stringerType) && value.CanInterface() {
+		return value.Interface().(fmt.Stringer).String(), true
+	}
+	if value.CanAddr() && value.Addr().Type().Implements(stringerType) {
+		return value.Addr().Interface().(fmt.Stringer).String(), true
+	}
+	if value.Type().Kind() != reflect.Ptr {
+		ptr := reflect.New(value.Type())
+		ptr.Elem().Set(value)
+		if ptr.Type().Implements(stringerType) {
+			return ptr.Interface().(fmt.Stringer).String(), true
+		}
+	}
+	return "", false
+}
+
+func wrapUnsupportedFilterValue(filter *ReportFilter, key string, value reflect.Value, cause error) error {
+	filterName := ""
+	if filter != nil {
+		filterName = filter.FieldName
+	}
+	if filterName == "" {
+		filterName = key
+	}
+	err := fmt.Errorf("unable to serialize report filter %q as query param %q: unsupported value type %s (kind=%s)", filterName, key, value.Type().String(), value.Kind())
+	if cause != nil {
+		return fmt.Errorf("%w: %v", err, cause)
+	}
+	return err
 }
