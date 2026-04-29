@@ -75,10 +75,10 @@ func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, o
 	if err != nil {
 		return nil, nil, err
 	}
-	reportURI := strings.TrimSuffix(original.URI, "/") + "/report"
+	reportURI := strings.TrimSuffix(original.URI, "/") + "/cube"
 	ret := *original
 	ret.Path = contract.Path{Method: http.MethodPost, URI: reportURI}
-	ret.Handler = rephandler.NewHandler(&reportHandler{
+	ret.Handler = rephandler.NewHandler(&cubeHandler{
 		Dispatcher: dispatcher,
 		Path:       &original.Path,
 		Metadata:   metadata,
@@ -139,7 +139,7 @@ func buildReportPath(routePath *path.Path) *path.Path {
 	pathCopy := *routePath
 	pathCopy.Path = contract.Path{
 		Method: http.MethodPost,
-		URI:    strings.TrimSuffix(routePath.URI, "/") + "/report",
+		URI:    strings.TrimSuffix(routePath.URI, "/") + "/cube",
 	}
 	pathCopy.MCPTool = reportPathMCPToolEnabled(routePath.Report)
 	pathCopy.MCPResource = false

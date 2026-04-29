@@ -116,8 +116,8 @@ func (s *reportTestSession) Http() xdhttp.Http       { return s.http }
 func (s *reportTestSession) Auth() xdauth.Auth       { return nil }
 func (s *reportTestSession) Logger() xdlogger.Logger { return s.logger }
 
-func testReportHandler() *reportHandler {
-	return &reportHandler{
+func testReportHandler() *cubeHandler {
+	return &cubeHandler{
 		Dispatcher: &captureDispatcher{},
 		Path:       &contract.Path{Method: http.MethodGet, URI: "/v1/api/vendors"},
 		Metadata: &ReportMetadata{

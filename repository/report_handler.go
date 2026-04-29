@@ -17,7 +17,7 @@ import (
 	xdhttp "github.com/viant/xdatly/handler/http"
 )
 
-type reportHandler struct {
+type cubeHandler struct {
 	Dispatcher contract.Dispatcher
 	Path       *contract.Path
 	Metadata   *ReportMetadata
@@ -25,7 +25,7 @@ type reportHandler struct {
 	BodyType   reflect.Type
 }
 
-func (r *reportHandler) Exec(ctx context.Context, session xhandler.Session) (interface{}, error) {
+func (r *cubeHandler) Exec(ctx context.Context, session xhandler.Session) (interface{}, error) {
 	if r == nil || r.Dispatcher == nil || r.Path == nil || r.Metadata == nil || r.Original == nil {
 		return nil, fmt.Errorf("report handler was not initialized")
 	}
@@ -37,14 +37,14 @@ func (r *reportHandler) Exec(ctx context.Context, session xhandler.Session) (int
 	if err != nil {
 		return nil, err
 	}
-	query, err := r.buildQuery(input)
+	query, err := r.buildQuery(input, request)
 	if err != nil {
 		return nil, err
 	}
 	internalReq := request.Clone(ctx)
 	internalReq.Method = r.Path.Method
 	internalReq.URL = cloneURL(request.URL)
-	internalReq.URL.Path = strings.TrimSuffix(request.URL.Path, "/report")
+	internalReq.URL.Path = strings.TrimSuffix(request.URL.Path, "/cube")
 	internalReq.URL.RawPath = internalReq.URL.Path
 	internalReq.URL.RawQuery = query.Encode()
 	internalReq.RequestURI = internalReq.URL.RequestURI()
@@ -52,7 +52,7 @@ func (r *reportHandler) Exec(ctx context.Context, session xhandler.Session) (int
 	return nil, session.Http().Redirect(ctx, redirect, internalReq)
 }
 
-func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) (interface{}, error) {
+func (r *cubeHandler) reportInput(ctx context.Context, request *http.Request) (interface{}, error) {
 	input := ctx.Value(xhandler.InputKey)
 	if request != nil && request.Body != nil && r.BodyType != nil {
 		payload, err := io.ReadAll(request.Body)
@@ -80,13 +80,19 @@ func (r *reportHandler) reportInput(ctx context.Context, request *http.Request) 
 	return input, nil
 }
 
-func (r *reportHandler) buildQuery(input interface{}) (url.Values, error) {
+func (r *cubeHandler) buildQuery(input interface{}, request *http.Request) (url.Values, error) {
 	root := indirectValue(reflect.ValueOf(input))
 	if !root.IsValid() || root.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("unsupported report input type %T", input)
 	}
+
+	_ = request.ParseForm()
+
 	root = bodyRoot(root, r.Metadata.BodyFieldName)
 	query := url.Values{}
+	for k, v := range request.Form {
+		query[k] = v
+	}
 	fields, err := r.collectSelections(root, r.Metadata.Dimensions, r.Metadata.Measures)
 	if err != nil {
 		return nil, err
@@ -112,14 +118,14 @@ func (r *reportHandler) buildQuery(input interface{}) (url.Values, error) {
 	return query, nil
 }
 
-func (r *reportHandler) selectorName(parameter *state.Parameter, fallback string) string {
+func (r *cubeHandler) selectorName(parameter *state.Parameter, fallback string) string {
 	if parameter != nil && parameter.In != nil && strings.TrimSpace(parameter.In.Name) != "" {
 		return parameter.In.Name
 	}
 	return fallback
 }
 
-func (r *reportHandler) collectSelections(root reflect.Value, groups ...[]*ReportField) ([]string, error) {
+func (r *cubeHandler) collectSelections(root reflect.Value, groups ...[]*ReportField) ([]string, error) {
 	var result []string
 	for _, group := range groups {
 		for _, field := range group {
@@ -139,7 +145,7 @@ func (r *reportHandler) collectSelections(root reflect.Value, groups ...[]*Repor
 	return result, nil
 }
 
-func (r *reportHandler) collectFilters(root reflect.Value, query url.Values) error {
+func (r *cubeHandler) collectFilters(root reflect.Value, query url.Values) error {
 	filters := fieldByName(root, r.Metadata.FiltersKey)
 	if !filters.IsValid() {
 		return nil
@@ -158,7 +164,7 @@ func (r *reportHandler) collectFilters(root reflect.Value, query url.Values) err
 	return nil
 }
 
-func (r *reportHandler) collectStrings(root reflect.Value, fieldName string, query url.Values, key string) error {
+func (r *cubeHandler) collectStrings(root reflect.Value, fieldName string, query url.Values, key string) error {
 	if fieldName == "" {
 		return nil
 	}
@@ -183,7 +189,7 @@ func (r *reportHandler) collectStrings(root reflect.Value, fieldName string, que
 	return nil
 }
 
-func (r *reportHandler) collectInts(root reflect.Value, fieldName string, query url.Values, key string) error {
+func (r *cubeHandler) collectInts(root reflect.Value, fieldName string, query url.Values, key string) error {
 	if fieldName == "" {
 		return nil
 	}
