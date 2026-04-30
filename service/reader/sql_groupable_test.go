@@ -136,6 +136,46 @@ func TestBuilder_rewriteGroupBy(t *testing.T) {
 			expected: "(SELECT p.channel_id, p.agency_id, ROUND(SUM(p.total_spend), 4) AS total_spend FROM last_n p GROUP BY 1, 2 ORDER BY total_spend DESC)",
 		},
 		{
+			description: "rewrite grouped aggregates recognizes approx_count_distinct as aggregate",
+			sql:         "(SELECT (9100 * APPROX_COUNT_DISTINCT(IF(avails = 100, COALESCE(alias_ip, IF(hhip_flag = 1, ip, NULL)), NULL))) AS hh_uniqs FROM audience_event_v1 v GROUP BY 1 LIMIT 200)",
+			allColumns: []*view.Column{
+				{Name: "hh_uniqs"},
+			},
+			projected: []*view.Column{
+				{Name: "hh_uniqs"},
+			},
+			expected: "(SELECT (9100 * APPROX_COUNT_DISTINCT(IF(avails = 100, COALESCE(alias_ip, IF(hhip_flag = 1, ip, NULL)), NULL))) AS hh_uniqs FROM audience_event_v1 v)",
+		},
+		{
+			description: "rewrite grouped aggregates removes group by for active forecasting measures",
+			sql: "(SELECT IFNULL(STRING_AGG(DISTINCT IAB[SAFE_OFFSET(0)], ', ' LIMIT 20), '') AS iab_cats, " +
+				"(99 * SUM(avails)) + MOD(SUM(avails), 99) AS avails, " +
+				"(9100 * APPROX_COUNT_DISTINCT(IF(avails = 100, COALESCE(alias_ip, IF(hhip_flag = 1, ip, NULL)), NULL))) AS hh_uniqs, " +
+				"(101 * SUM(IF(avails != 100, avails, 0))) AS bids, " +
+				"(9100 * APPROX_COUNT_DISTINCT(uid)) AS device_uniqs " +
+				"FROM audience_event_v1 v GROUP BY 1, 2, 3, 4, 5 LIMIT 200)",
+			allColumns: []*view.Column{
+				{Name: "iab_cats"},
+				{Name: "avails"},
+				{Name: "hh_uniqs"},
+				{Name: "bids"},
+				{Name: "device_uniqs"},
+			},
+			projected: []*view.Column{
+				{Name: "iab_cats"},
+				{Name: "avails"},
+				{Name: "hh_uniqs"},
+				{Name: "bids"},
+				{Name: "device_uniqs"},
+			},
+			expected: "(SELECT IFNULL(STRING_AGG(DISTINCT IAB[SAFE_OFFSET(0)], ', ' LIMIT 20), '') AS iab_cats, " +
+				"(99 * SUM(avails)) + MOD(SUM(avails), 99) AS avails, " +
+				"(9100 * APPROX_COUNT_DISTINCT(IF(avails = 100, COALESCE(alias_ip, IF(hhip_flag = 1, ip, NULL)), NULL))) AS hh_uniqs, " +
+				"(101 * SUM(IF(avails != 100, avails, 0))) AS bids, " +
+				"(9100 * APPROX_COUNT_DISTINCT(uid)) AS device_uniqs " +
+				"FROM audience_event_v1 v)",
+		},
+		{
 			description: "rewrite grouped metrics query prunes unselected dimensions from select list",
 			sql:         "(SELECT p.event_date, p.agency_id, p.advertiser_id, p.campaign_id, p.ad_order_id, p.audience_id, p.deal_id, p.publisher_id, p.channel_id, p.country, p.site_type, SUM(p.bids) AS bids, SUM(p.impressions) AS impressions, SUM(p.clicks) AS clicks, SUM(p.conversions) AS conversions, SUM(p.total_spend) AS total_spend FROM `viant-mediator.forecaster.fact_perf_daily_mv` p WHERE p.event_date BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL ? DAY) AND DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY) AND (((p.agency_id = ?))) GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 LIMIT 1000)",
 			allColumns:  groupedMetrics,

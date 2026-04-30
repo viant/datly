@@ -464,6 +464,11 @@ func containsAggregateNode(n node.Node) bool {
 		return containsAggregateNode(actual.X)
 	case *expr.Binary:
 		return containsAggregateNode(actual.X) || containsAggregateNode(actual.Y)
+	case *expr.Raw:
+		if containsAggregateNode(actual.X) {
+			return true
+		}
+		return containsAggregateText(actual.Raw) || containsAggregateText(actual.Unparsed)
 	case *expr.Switch:
 		if containsAggregateNode(&actual.Ident) {
 			return true
@@ -487,9 +492,32 @@ func containsAggregateNode(n node.Node) bool {
 	return false
 }
 
+func containsAggregateText(text string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(text))
+	if upper == "" {
+		return false
+	}
+	for _, name := range []string{
+		"SUM",
+		"COUNT",
+		"AVG",
+		"MIN",
+		"MAX",
+		"ARRAY_AGG",
+		"STRING_AGG",
+		"ANY_VALUE",
+		"APPROX_COUNT_DISTINCT",
+	} {
+		if strings.Contains(upper, name+"(") {
+			return true
+		}
+	}
+	return false
+}
+
 func isAggregateFunction(name string) bool {
 	switch strings.ToUpper(strings.TrimSpace(name)) {
-	case "SUM", "COUNT", "AVG", "MIN", "MAX", "ARRAY_AGG", "STRING_AGG", "ANY_VALUE":
+	case "SUM", "COUNT", "AVG", "MIN", "MAX", "ARRAY_AGG", "STRING_AGG", "ANY_VALUE", "APPROX_COUNT_DISTINCT":
 		return true
 	default:
 		return false
