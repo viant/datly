@@ -150,7 +150,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	}
 
 	batchData := s.batchData(collector)
-	if len(batchData.ColumnNames) != 0 && len(batchData.Values) == 0 {
+	if len(batchData.ColumnNames) != 0 && len(batchData.Values) == 0 && len(batchData.CompositeValues) == 0 {
 		return
 	}
 
