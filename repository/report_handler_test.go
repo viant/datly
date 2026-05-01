@@ -92,6 +92,14 @@ type reportHandlerMeasures struct {
 	TotalSpend bool
 }
 
+type reportHandlerForecastingDimensions struct {
+	AgegroupId bool
+}
+
+type reportHandlerForecastingMeasures struct {
+	Avails bool
+}
+
 type reportHandlerFilters struct {
 	AccountID *int
 }
@@ -193,6 +201,53 @@ func TestReportHandler_BuildQuery_FromPostBody(t *testing.T) {
 	assert.Equal(t, "AccountID", query.Get("_orderby"))
 	assert.Equal(t, "25", query.Get("_limit"))
 	assert.Equal(t, "101", query.Get("accountID"))
+}
+
+func TestReportHandler_BuildQuery_AutoIncludesRelationHolderForSelectedDimension(t *testing.T) {
+	handler := &cubeHandler{
+		Metadata: &ReportMetadata{
+			DimensionsKey: "Dimensions",
+			MeasuresKey:   "Measures",
+			FiltersKey:    "Filters",
+			OrderBy:       "OrderBy",
+			Limit:         "Limit",
+			Offset:        "Offset",
+			Dimensions: []*ReportField{
+				{Name: "AgegroupId", FieldName: "AgegroupId", Section: "Dimensions"},
+			},
+			Measures: []*ReportField{
+				{Name: "Avails", FieldName: "Avails", Section: "Measures"},
+			},
+		},
+		Original: &Component{
+			View: &view.View{
+				With: []*view.Relation{
+					{
+						Holder: "AgeGroup",
+						On: view.Links{
+							&view.Link{Field: "AgegroupId", Column: "agegroup_id"},
+						},
+					},
+				},
+				Selector: &view.Config{
+					FieldsParameter: &state.Parameter{In: state.NewQueryLocation("_fields")},
+				},
+			},
+		},
+	}
+
+	input := struct {
+		Dimensions reportHandlerForecastingDimensions
+		Measures   reportHandlerForecastingMeasures
+	}{
+		Dimensions: reportHandlerForecastingDimensions{AgegroupId: true},
+		Measures:   reportHandlerForecastingMeasures{Avails: true},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "http://localhost/v1/api/steward/inventory/forecasting/cube", nil)
+	query, err := handler.buildQuery(input, req)
+	require.NoError(t, err)
+	assert.Equal(t, "AgegroupId,Avails,AgeGroup", query.Get("_fields"))
 }
 
 func TestReportHandler_Exec_PreservesAuthorizationHeader(t *testing.T) {

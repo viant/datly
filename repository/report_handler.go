@@ -17,6 +17,7 @@ import (
 	ftime "github.com/viant/tagly/format/time"
 
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	xhandler "github.com/viant/xdatly/handler"
 	xdhttp "github.com/viant/xdatly/handler/http"
@@ -105,10 +106,16 @@ func (r *cubeHandler) buildQuery(input interface{}, request *http.Request) (url.
 	for k, v := range request.Form {
 		query[k] = v
 	}
-	fields, err := r.collectSelections(root, r.Metadata.Dimensions, r.Metadata.Measures)
+	dimensions, err := r.collectSelections(root, r.Metadata.Dimensions)
 	if err != nil {
 		return nil, err
 	}
+	measures, err := r.collectSelections(root, r.Metadata.Measures)
+	if err != nil {
+		return nil, err
+	}
+	fields := append(append([]string{}, dimensions...), measures...)
+	fields = appendAutoIncludedRelationHolders(r.Original.View, fields, dimensions)
 	if len(fields) == 0 {
 		return nil, fmt.Errorf("report requires at least one dimension or measure")
 	}
@@ -128,6 +135,59 @@ func (r *cubeHandler) buildQuery(input interface{}, request *http.Request) (url.
 		return nil, err
 	}
 	return query, nil
+}
+
+func appendAutoIncludedRelationHolders(rootView *view.View, fields, dimensions []string) []string {
+	if rootView == nil || len(rootView.With) == 0 || len(dimensions) == 0 {
+		return fields
+	}
+	selected := make(map[string]bool, len(dimensions))
+	for _, dimension := range dimensions {
+		selected[normalizeRelationSelectionKey(dimension)] = true
+	}
+
+	seen := make(map[string]bool, len(fields))
+	for _, field := range fields {
+		seen[field] = true
+	}
+
+	for _, relation := range rootView.With {
+		if relation == nil || strings.TrimSpace(relation.Holder) == "" {
+			continue
+		}
+		if seen[relation.Holder] {
+			continue
+		}
+		if relationMatchesSelectedDimensions(relation, selected) {
+			fields = append(fields, relation.Holder)
+			seen[relation.Holder] = true
+		}
+	}
+	return fields
+}
+
+func relationMatchesSelectedDimensions(relation *view.Relation, selected map[string]bool) bool {
+	if relation == nil {
+		return false
+	}
+	for _, link := range relation.On {
+		if link == nil {
+			continue
+		}
+		if link.Field != "" && selected[normalizeRelationSelectionKey(link.Field)] {
+			return true
+		}
+		if link.Column != "" && selected[normalizeRelationSelectionKey(link.Column)] {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeRelationSelectionKey(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	replacer := strings.NewReplacer("_", "", ".", "", "-", "", " ", "")
+	return replacer.Replace(value)
 }
 
 func (r *cubeHandler) selectorName(parameter *state.Parameter, fallback string) string {
