@@ -292,41 +292,60 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		if relation.KeyField == nil {
 			return fmt.Errorf("failed to add relation: %v, unknown reference", relation.Name)
 		}
-		columnName := relation.ParentField.Column.Name
-		if columnName == "" {
-			columnName = relation.ParentField.Column.Alias
-		}
-
-		viewRelation.On = append(viewRelation.On, &view.Link{
-			Column:    columnName,
-			Namespace: relation.ParentField.Column.Namespace,
-			Field:     relation.ParentField.Name,
-		})
-
 		holderFormat := text.DetectCaseFormat(relNamespace.Name)
 		viewRelation.Holder = holderFormat.Format(relNamespace.Name, text.CaseFormatUpperCamel)
 		viewRelation.IncludeColumn = true
 		relNamespace.Holder = viewRelation.Holder
 		refViewName := relNamespace.View.Name
-		refColumn := relation.KeyField.Column.Name
-		if refColumn == "" {
-			refColumn = relation.KeyField.Column.Alias
-		}
-		if ns := relation.KeyField.Column.Namespace; ns != "" {
-			refColumn = ns + "." + refColumn
-		}
 		if relNamespace.View.AllowNulls == nil {
 			relNamespace.View.AllowNulls = v.View.AllowNulls
 		}
-
-		refField := relation.KeyField.Name
 		aRefView := view.NewRefView(refViewName)
 		aRefView.Name = refViewName + "#"
-		viewRelation.Of = view.NewReferenceView(view.JoinOn(view.WithLink(refField, refColumn)), aRefView)
+		relLinks, refLinks := relationLinks(relation)
+		viewRelation.On = relLinks
+		viewRelation.Of = view.NewReferenceView(refLinks, aRefView)
 		viewRelation.Cardinality = relation.Cardinality
 		v.View.With = append(v.View.With, viewRelation)
 	}
 	return nil
+}
+
+func relationLinks(relation *inference.Relation) (view.Links, view.Links) {
+	pairs := relation.Pairs
+	if len(pairs) == 0 && relation.ParentField != nil && relation.KeyField != nil {
+		pairs = []*inference.RelationPair{{
+			ParentField: relation.ParentField,
+			KeyField:    relation.KeyField,
+		}}
+	}
+
+	var relLinks view.Links
+	var refLinks view.Links
+	for _, pair := range pairs {
+		if pair == nil || pair.ParentField == nil || pair.KeyField == nil {
+			continue
+		}
+		columnName := pair.ParentField.Column.Name
+		if columnName == "" {
+			columnName = pair.ParentField.Column.Alias
+		}
+		relLinks = append(relLinks, &view.Link{
+			Column:    columnName,
+			Namespace: pair.ParentField.Column.Namespace,
+			Field:     pair.ParentField.Name,
+		})
+
+		refColumn := pair.KeyField.Column.Name
+		if refColumn == "" {
+			refColumn = pair.KeyField.Column.Alias
+		}
+		if ns := pair.KeyField.Column.Namespace; ns != "" {
+			refColumn = ns + "." + refColumn
+		}
+		refLinks = append(refLinks, view.WithLink(pair.KeyField.Name, refColumn))
+	}
+	return relLinks, refLinks
 }
 
 func (v *View) GenerateFiles(baseURL string, ruleName string, files *asset.Files, substitutes view.Substitutes) {
