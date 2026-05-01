@@ -890,6 +890,82 @@ func (r *Collector) ReadAll() bool {
 	return r.readAll
 }
 
+// BootstrapFromParentHolder seeds this collector from already-materialized parent holder data.
+// This is useful when parent OnFetch/OnRelation hooks populate a virtual relation in-memory,
+// and nested relations still need a real collector source to continue fetching.
+func (r *Collector) BootstrapFromParentHolder() bool {
+	if r == nil || r.parent == nil || r.relation == nil || r.relation.holderField == nil {
+		return false
+	}
+	if r.Len() > 0 {
+		return false
+	}
+
+	parentPtr := xunsafe.AsPointer(r.parent.DestPtr())
+	if parentPtr == nil {
+		return false
+	}
+	parentLen := r.parent.slice.Len(parentPtr)
+	if parentLen == 0 {
+		return false
+	}
+
+	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
+	indexer := r.valueIndexer(context.Background(), visitorRelations)
+	appended := 0
+
+	for i := 0; i < parentLen; i++ {
+		parentItem := r.parent.slice.ValuePointerAt(parentPtr, i)
+		if parentItem == nil {
+			continue
+		}
+		holderValue := r.relation.holderField.Value(xunsafe.AsPointer(parentItem))
+		appended += r.appendBootstrapHolder(holderValue, indexer)
+	}
+
+	return appended > 0
+}
+
+func (r *Collector) appendBootstrapHolder(holderValue interface{}, indexer func(value interface{}) error) int {
+	if holderValue == nil {
+		return 0
+	}
+
+	value := reflect.ValueOf(holderValue)
+	if !value.IsValid() {
+		return 0
+	}
+
+	for value.Kind() == reflect.Interface || value.Kind() == reflect.Ptr {
+		if value.IsNil() {
+			return 0
+		}
+		value = value.Elem()
+	}
+
+	switch value.Kind() {
+	case reflect.Slice, reflect.Array:
+		appended := 0
+		for i := 0; i < value.Len(); i++ {
+			item := value.Index(i)
+			if !item.IsValid() {
+				continue
+			}
+			if item.Kind() == reflect.Ptr && item.IsNil() {
+				continue
+			}
+			r.appender.Append(item.Interface())
+			_ = indexer(item.Interface())
+			appended++
+		}
+		return appended
+	default:
+		r.appender.Append(holderValue)
+		_ = indexer(holderValue)
+		return 1
+	}
+}
+
 func (r *Collector) Unlock() {
 	if r.parent == nil {
 		return

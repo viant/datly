@@ -166,6 +166,8 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 		return
 	}
 
+	collector.BootstrapFromParentHolder()
+
 	collectorFetchEmitted = true
 	collector.Fetched()
 	relationGroup.Wait()
