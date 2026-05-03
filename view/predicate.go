@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -44,6 +45,8 @@ type (
 		valueState    *expand.NamedVariable
 		hasValueState *expand.NamedVariable
 		stateType     *structology.StateType
+		name          string
+		args          []string
 	}
 )
 
@@ -51,6 +54,9 @@ func (e *PredicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 	cuxtomCtx, ok := ctx.Value(expand.PredicateCtx).(*expand.Context)
 	if !ok {
 		panic("not found custom ctx")
+	}
+	if err := validatePredicateArgs(e.name, value, e.args); err != nil {
+		return nil, err
 	}
 
 	val := ctx.Value(expand.PredicateState)
@@ -122,6 +128,23 @@ func (c *predicateCache) get(resource *Resource, predicateConfig *extension.Pred
 	return provider.new(predicateConfig)
 }
 
+func validatePredicateArgs(name string, value interface{}, args []string) error {
+	if name != extension.PredicateDuration {
+		return nil
+	}
+	filterValue := strings.TrimSpace(strings.ToLower(fmt.Sprint(value)))
+	if filterValue == "" || filterValue == "<nil>" {
+		return nil
+	}
+	switch filterValue {
+	case "month", "thirty_days":
+		if len(args) < 7 || strings.TrimSpace(args[6]) == "" {
+			return errors.New("duration predicate requires MonthDayExpression argument for month/thirty_days")
+		}
+	}
+	return nil
+}
+
 func isCustomPredicate(keyName string) bool {
 	return keyName == "handler"
 }
@@ -168,6 +191,8 @@ func (p *predicateEvaluatorProvider) new(predicateConfig *extension.PredicateCon
 		valueState:    p.state,
 		hasValueState: p.hasStateName,
 		stateType:     p.stateType,
+		name:          predicateConfig.Name,
+		args:          append([]string{}, predicateConfig.Args...),
 	}, nil
 }
 
