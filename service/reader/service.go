@@ -377,6 +377,10 @@ func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, st
 		defer wg.Done()
 		if (aView.Cache != nil && aView.Cache.Warmup != nil) || relation != nil {
 			data, _ := session.ParentData()
+			if relation == nil && aView.Cache != nil && aView.Cache.Warmup != nil {
+				columnInMatcher, cacheErr = s.topLevelWarmupMatcher(ctx, aView, statelet, data.AsParam())
+				return
+			}
 			columnInMatcher, cacheErr = s.sqlBuilder.CacheSQLWithOptions(ctx, aView, statelet, batchData, relation, data.AsParam())
 		}
 	}()
@@ -389,6 +393,129 @@ func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, st
 	}
 	wg.Wait()
 	return parametrizedSQL, columnInMatcher, cacheErr
+}
+
+func normalizeWarmupName(input string) string {
+	input = strings.ToLower(strings.TrimSpace(input))
+	input = strings.ReplaceAll(input, "_", "")
+	input = strings.ReplaceAll(input, "-", "")
+	input = strings.ReplaceAll(input, ".", "")
+	return input
+}
+
+func cloneStructologyState(src *structology.State) *structology.State {
+	if src == nil {
+		return nil
+	}
+	cloned := src.Type().NewState()
+	dstStatePtr := reflect.ValueOf(cloned.StatePtr())
+	srcType := src.Type().Type()
+	if dstStatePtr.IsValid() {
+		if srcType.Kind() == reflect.Ptr {
+			srcStatePtr := reflect.ValueOf(src.StatePtr())
+			if srcStatePtr.IsValid() && srcStatePtr.Kind() == reflect.Ptr && !srcStatePtr.IsNil() {
+				dstStatePtr.Elem().Set(srcStatePtr.Elem())
+			}
+		} else {
+			currentValue := reflect.NewAt(srcType, src.Pointer()).Elem()
+			dstStatePtr.Elem().Set(currentValue)
+		}
+	}
+	if holder := src.MarkerHolder(); holder != nil {
+		holderVal := reflect.ValueOf(holder)
+		if holderVal.IsValid() && holderVal.Kind() == reflect.Ptr && !holderVal.IsNil() {
+			holderCopy := reflect.New(holderVal.Elem().Type())
+			holderCopy.Elem().Set(holderVal.Elem())
+			if dstStatePtr.IsValid() && dstStatePtr.Kind() == reflect.Ptr && !dstStatePtr.IsNil() {
+				hasField := dstStatePtr.Elem().FieldByName("Has")
+				if hasField.IsValid() && hasField.CanSet() {
+					hasField.Set(holderCopy)
+				}
+			}
+		}
+	}
+	cloned.Sync()
+	return cloned
+}
+
+func warmupParamValues(value interface{}) []interface{} {
+	if value == nil {
+		return nil
+	}
+	switch actual := value.(type) {
+	case []interface{}:
+		return actual
+	}
+	rType := reflect.TypeOf(value)
+	if rType.Kind() == reflect.Slice {
+		rValue := reflect.ValueOf(value)
+		ret := make([]interface{}, rValue.Len())
+		for i := 0; i < rValue.Len(); i++ {
+			ret[i] = rValue.Index(i).Interface()
+		}
+		return ret
+	}
+	return []interface{}{value}
+}
+
+func (s *Service) topLevelWarmupMatcher(ctx context.Context, aView *view.View, statelet *view.Statelet, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {
+	if aView == nil || aView.Cache == nil || aView.Cache.Warmup == nil || statelet == nil || statelet.Template == nil {
+		return nil, nil
+	}
+	indexColumn := strings.TrimSpace(aView.Cache.Warmup.IndexColumn)
+	if indexColumn == "" {
+		return nil, nil
+	}
+	target := normalizeWarmupName(indexColumn)
+	var matchParam *state.Parameter
+	for _, candidate := range aView.Template.Parameters {
+		if candidate == nil {
+			continue
+		}
+		if normalizeWarmupName(candidate.Name) == target {
+			matchParam = candidate
+			break
+		}
+	}
+	if matchParam == nil {
+		return nil, nil
+	}
+	liveSelector, selErr := statelet.Template.Selector(matchParam.Name)
+	if selErr != nil || liveSelector == nil {
+		return nil, selErr
+	}
+	value := liveSelector.Value(statelet.Template.Pointer())
+	values := warmupParamValues(value)
+	if len(values) == 0 {
+		return nil, nil
+	}
+	clonedTemplate := cloneStructologyState(statelet.Template)
+	if clonedTemplate == nil {
+		return nil, nil
+	}
+	if clonedSelector, err := clonedTemplate.Selector(matchParam.Name); err == nil && clonedSelector != nil {
+		zero := reflect.Zero(clonedSelector.Type()).Interface()
+		_ = clonedSelector.SetValue(clonedTemplate.Pointer(), zero)
+	}
+	if marker := clonedTemplate.Type().Marker(); marker != nil {
+		clonedTemplate.EnsureMarker()
+		if idx := marker.Index(matchParam.Name); idx != -1 {
+			_ = marker.Set(clonedTemplate.Pointer(), idx, false)
+		}
+	}
+	cloned := *statelet
+	cloned.Template = clonedTemplate
+
+	matcher, err := s.sqlBuilder.CacheSQLWithOptions(ctx, aView, &cloned, nil, nil, parent)
+	if err != nil {
+		return nil, err
+	}
+	if matcher == nil {
+		return nil, nil
+	}
+	matcher.By = indexColumn
+	matcher.In = values
+	return matcher, nil
 }
 
 func (s *Service) BuildCriteria(ctx context.Context, value interface{}, options *codec.CriteriaBuilderOptions) (*codec.Criteria, error) {
@@ -684,20 +811,9 @@ func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, 
 }
 
 func NewExecutionInfo(index *cache.ParmetrizedQuery, cacheStats *cache.Stats, collector *view.Collector) (*response.SQLExecution, func()) {
-	var cache *response.CacheStats
+	var cacheInfo *response.CacheStats
 	if cacheStats != nil {
-		cache = &response.CacheStats{
-			Type:           string(cacheStats.Type),
-			RecordsCounter: cacheStats.RecordsCounter,
-			Key:            cacheStats.Key,
-			Dataset:        cacheStats.Dataset,
-			Namespace:      cacheStats.Namespace,
-			FoundWarmup:    cacheStats.FoundWarmup,
-			FoundLazy:      cacheStats.FoundLazy,
-			ErrorType:      cacheStats.ErrorType,
-			ErrorCode:      int(cacheStats.ErrorCode),
-			ExpiryTime:     cacheStats.ExpiryTime,
-		}
+		cacheInfo = &response.CacheStats{}
 	}
 	var parentId string
 	if parent := collector.Parent(); parent != nil {
@@ -712,13 +828,25 @@ func NewExecutionInfo(index *cache.ParmetrizedQuery, cacheStats *cache.Stats, co
 		EndTime:    now,
 		SQL:        index.SQL,
 		Args:       index.Args,
-		CacheStats: cache,
+		CacheStats: cacheInfo,
 	}
 
 	return ret, func() {
 		now := time.Now()
 		ret.EndTime = now
 		ret.Rows = collector.Len()
+		if cacheStats != nil && ret.CacheStats != nil {
+			ret.CacheStats.Type = string(cacheStats.Type)
+			ret.CacheStats.RecordsCounter = cacheStats.RecordsCounter
+			ret.CacheStats.Key = cacheStats.Key
+			ret.CacheStats.Dataset = cacheStats.Dataset
+			ret.CacheStats.Namespace = cacheStats.Namespace
+			ret.CacheStats.FoundWarmup = cacheStats.FoundWarmup
+			ret.CacheStats.FoundLazy = cacheStats.FoundLazy
+			ret.CacheStats.ErrorType = cacheStats.ErrorType
+			ret.CacheStats.ErrorCode = int(cacheStats.ErrorCode)
+			ret.CacheStats.ExpiryTime = cacheStats.ExpiryTime
+		}
 	}
 }
 

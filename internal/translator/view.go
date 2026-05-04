@@ -2,14 +2,13 @@ package translator
 
 import (
 	"fmt"
+	"path"
+	"strings"
 
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
-
-	"path"
-
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
@@ -85,14 +84,26 @@ func (v *View) applyShorthands(viewlet *Viewlet) {
 }
 
 func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet) *view.Warmup {
-	if warmup == nil || viewlet.Join == nil {
+	if warmup == nil {
 		return nil
 	}
 	warmup = copyWarmup(warmup)
 
-	_, refColumn := inference.ExtractRelationColumns(viewlet.Join)
+	explicitIndex, _ := warmup["IndexColumn"]
+	delete(warmup, "IndexColumn")
+	var refColumn string
+	if viewlet.Join != nil {
+		_, refColumn = inference.ExtractRelationColumns(viewlet.Join)
+	}
+
 	result := &view.Warmup{
 		IndexColumn: refColumn,
+	}
+	if explicit := strings.TrimSpace(fmt.Sprint(explicitIndex)); explicit != "" && explicit != "<nil>" {
+		result.IndexColumn = explicit
+	}
+	if result.IndexColumn == "" {
+		return nil
 	}
 
 	multiSet := &view.CacheParameters{}

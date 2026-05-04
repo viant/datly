@@ -367,7 +367,6 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 	if err = parameterSelector.SetValue(aState.Pointer(), value); err != nil {
 		return err
 	}
-
 	if parameterSelector.Type().Kind() == reflect.Ptr {
 		s.cache.put(parameter, parameterSelector.Value(aState.Pointer()))
 	}
