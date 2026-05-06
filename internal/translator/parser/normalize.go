@@ -1,22 +1,19 @@
-package pipeline
+package parser
 
-// read_normalize.go — SQL normalization and template-token replacement used
-// by BuildRead to produce parser-friendly SQL from raw DQL.
+import (
+	"strings"
 
-import "strings"
+	"github.com/viant/datly/internal/inference"
+)
 
-// normalizeParserSQL rewrites private(…) shorthands and template tokens into
-// plain SQL that the parser can handle.
-func normalizeParserSQL(sqlText string) string {
-	if sqlText == "" {
-		return sqlText
+// NormalizeSQLForParse builds a parser-safe SQL copy for translation-time shape discovery.
+// It expands constants while preserving template builtins, then rewrites template fragments
+// such as predicate builders into concrete SQL tokens so the SQL parser can recover clause boundaries.
+func NormalizeSQLForParse(SQL string, state *inference.State) string {
+	if state != nil {
+		SQL = state.ExpandPreserveBuiltins(SQL)
 	}
-	return rewritePrivateShorthand(replaceTemplateTokens(sqlText))
-}
-
-// NormalizeParserSQL exposes the parser-safe SQL normalization used by read compilation.
-func NormalizeParserSQL(sqlText string) string {
-	return normalizeParserSQL(sqlText)
+	return rewritePrivateShorthand(replaceTemplateTokens(SQL))
 }
 
 func rewritePrivateShorthand(input string) string {
@@ -28,19 +25,19 @@ func rewritePrivateShorthand(input string) string {
 			i++
 			continue
 		}
-		if i > 0 && isReadIdentifierPart(input[i-1]) {
+		if i > 0 && isParseIdentifierPart(input[i-1]) {
 			b.WriteByte(input[i])
 			i++
 			continue
 		}
 		pos := i + len("private")
-		pos = skipReadSpaces(input, pos)
+		pos = skipParseSpaces(input, pos)
 		if pos >= len(input) || input[pos] != '(' {
 			b.WriteByte(input[i])
 			i++
 			continue
 		}
-		body, closeIdx, ok := readReadCallBody(input, pos)
+		body, closeIdx, ok := readParseCallBody(input, pos)
 		if !ok {
 			b.WriteByte(input[i])
 			i++
@@ -112,7 +109,7 @@ func replaceTemplateTokens(input string) string {
 			continue
 		}
 		if i+1 < len(input) && input[i+1] == '{' {
-			body, end, ok := readReadTemplateExpr(input, i+1)
+			body, end, ok := readParseTemplateExpr(input, i+1)
 			if !ok {
 				b.WriteByte(input[i])
 				i++
@@ -127,16 +124,16 @@ func replaceTemplateTokens(input string) string {
 			i = end + 1
 			continue
 		}
-		token, end, ok := readReadSelector(input, i)
+		token, end, ok := readParseSelector(input, i)
 		if !ok {
 			b.WriteByte(input[i])
 			i++
 			continue
 		}
 		if strings.EqualFold(token, "$criteria.AppendBinding") {
-			pos := skipReadSpaces(input, end)
+			pos := skipParseSpaces(input, end)
 			if pos < len(input) && input[pos] == '(' {
-				_, close, ok := readReadCallBody(input, pos)
+				_, close, ok := readParseCallBody(input, pos)
 				if ok {
 					b.WriteByte('1')
 					i = close + 1
@@ -144,7 +141,12 @@ func replaceTemplateTokens(input string) string {
 				}
 			}
 		}
-		if isReadReservedToken(token) {
+		if shouldPreserveParseSelector(token) {
+			b.WriteString(token)
+			i = end
+			continue
+		}
+		if isParseReservedToken(token) {
 			b.WriteString(token)
 		} else {
 			b.WriteByte('1')
@@ -156,7 +158,7 @@ func replaceTemplateTokens(input string) string {
 
 func normalizeTemplateExprBody(body string) (string, bool) {
 	trimmed := strings.TrimSpace(body)
-	if isReadReservedName(trimmed) {
+	if isParseReservedName(trimmed) {
 		return "", true
 	}
 	if selector := normalizeTemplateSelector(trimmed); selector != "" {
@@ -184,7 +186,7 @@ func normalizeTemplateSelector(input string) string {
 	}
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
-		if !(isReadIdentifierPart(ch) || ch == '.') {
+		if !(isParseIdentifierPart(ch) || ch == '.') {
 			return ""
 		}
 	}
@@ -204,13 +206,13 @@ func normalizeTemplateSelector(input string) string {
 	if result == "" {
 		return ""
 	}
-	if !isReadIdentifierStart(result[0]) {
+	if !isParseIdentifierStart(result[0]) {
 		return ""
 	}
 	return result
 }
 
-func readReadTemplateExpr(input string, openBrace int) (string, int, bool) {
+func readParseTemplateExpr(input string, openBrace int) (string, int, bool) {
 	if openBrace <= 0 || openBrace >= len(input) || input[openBrace] != '{' || input[openBrace-1] != '$' {
 		return "", -1, false
 	}
@@ -222,32 +224,32 @@ func readReadTemplateExpr(input string, openBrace int) (string, int, bool) {
 	return "", -1, false
 }
 
-func readReadSelector(input string, start int) (string, int, bool) {
+func readParseSelector(input string, start int) (string, int, bool) {
 	if start < 0 || start >= len(input) || input[start] != '$' {
 		return "", start, false
 	}
 	i := start + 1
-	if i >= len(input) || !isReadIdentifierStart(input[i]) {
+	if i >= len(input) || !isParseIdentifierStart(input[i]) {
 		return "", start, false
 	}
 	i++
-	for i < len(input) && isReadIdentifierPart(input[i]) {
+	for i < len(input) && isParseIdentifierPart(input[i]) {
 		i++
 	}
 	for i < len(input) && input[i] == '.' {
 		i++
-		if i >= len(input) || !isReadIdentifierStart(input[i]) {
+		if i >= len(input) || !isParseIdentifierStart(input[i]) {
 			return "", start, false
 		}
 		i++
-		for i < len(input) && isReadIdentifierPart(input[i]) {
+		for i < len(input) && isParseIdentifierPart(input[i]) {
 			i++
 		}
 	}
 	return input[start:i], i, true
 }
 
-func readReadCallBody(input string, openParen int) (string, int, bool) {
+func readParseCallBody(input string, openParen int) (string, int, bool) {
 	depth := 0
 	quote := byte(0)
 	for i := openParen; i < len(input); i++ {
@@ -280,18 +282,22 @@ func readReadCallBody(input string, openParen int) (string, int, bool) {
 	return "", -1, false
 }
 
-func isReadReservedToken(token string) bool {
+func shouldPreserveParseSelector(token string) bool {
+	return strings.HasPrefix(token, "$View.")
+}
+
+func isParseReservedToken(token string) bool {
 	if len(token) > 0 && token[0] == '$' {
 		token = token[1:]
 	}
-	return isReadReservedName(token)
+	return isParseReservedName(token)
 }
 
-func isReadReservedName(name string) bool {
+func isParseReservedName(name string) bool {
 	return name == "sql.Insert" || name == "sql.Update" || name == "Nop"
 }
 
-func skipReadSpaces(input string, index int) int {
+func skipParseSpaces(input string, index int) int {
 	for index < len(input) {
 		switch input[index] {
 		case ' ', '\t', '\n', '\r':
@@ -303,10 +309,10 @@ func skipReadSpaces(input string, index int) int {
 	return index
 }
 
-func isReadIdentifierStart(ch byte) bool {
+func isParseIdentifierStart(ch byte) bool {
 	return ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
 }
 
-func isReadIdentifierPart(ch byte) bool {
-	return isReadIdentifierStart(ch) || (ch >= '0' && ch <= '9')
+func isParseIdentifierPart(ch byte) bool {
+	return isParseIdentifierStart(ch) || (ch >= '0' && ch <= '9')
 }

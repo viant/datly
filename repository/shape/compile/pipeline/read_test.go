@@ -67,6 +67,40 @@ func TestNormalizeParserSQL_VeltyBlockExpression(t *testing.T) {
 	assert.Contains(t, actual, "SELECT b.* FROM CI_BROWSER b  WHERE 1  AND b.ARCHIVED = 0")
 }
 
+func TestNormalizeParserSQL_PredicateBuildersAcrossClauses(t *testing.T) {
+	input := `SELECT
+  t.ID,
+  COUNT(*) AS CNT
+FROM CI_SITE t
+${predicate.Builder().CombineOr($predicate.FilterGroup(0, "AND")).Build("WHERE")}
+AND t.ACTIVE = 1
+GROUP BY t.ID
+${predicate.Builder().CombineOr($predicate.FilterGroup(1, "HAVING")).Build("HAVING")}
+AND COUNT(*) > 0`
+
+	actual := normalizeParserSQL(input)
+
+	assert.NotContains(t, actual, "${predicate.Builder()")
+	assert.Contains(t, actual, " WHERE 1 ")
+	assert.Contains(t, actual, "\nAND t.ACTIVE = 1")
+	assert.Contains(t, actual, " HAVING 1 ")
+	assert.Contains(t, actual, "\nAND COUNT(*) > 0")
+}
+
+func TestNormalizeParserSQL_OrPredicateBuilder(t *testing.T) {
+	input := `SELECT *
+FROM CI_SITE t
+WHERE 1=1
+${predicate.Builder().CombineOr($predicate.FilterGroup(0, "OR")).Build("OR")}
+OR t.ID = 1`
+
+	actual := normalizeParserSQL(input)
+
+	assert.NotContains(t, actual, "${predicate.Builder()")
+	assert.Contains(t, actual, " OR 1 ")
+	assert.Contains(t, actual, "\nOR t.ID = 1")
+}
+
 func TestNormalizeParserSQL_TemplateSelector(t *testing.T) {
 	input := `SELECT * FROM ${Unsafe.Vendor} t WHERE t.ID = ${Unsafe.VendorID}`
 	actual := normalizeParserSQL(input)

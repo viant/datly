@@ -1,0 +1,6 @@
+/* {"URI":"/foo-report","Name":"FooReport"} */
+
+#set($_ = $cube())
+
+SELECT foo_report.*
+FROM (${embed:sql/supply_performance.sql}) foo_report

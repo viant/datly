@@ -2,6 +2,7 @@ package inference
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -37,7 +38,7 @@ func TestStateExpandStripsBuiltins(t *testing.T) {
 }
 
 func TestStateExpand_StripsSupplyPerformancePredicateBuilders(t *testing.T) {
-	data, err := os.ReadFile("/Users/awitas/go/src/github.vianttech.com/viant/steward/dql/inventory/sql/supply_performance.sql")
+	data, err := os.ReadFile(filepath.Join("testdata", "supply_performance.sql"))
 	if err != nil {
 		t.Fatalf("read sql: %v", err)
 	}
@@ -52,11 +53,11 @@ func TestStateExpand_StripsSupplyPerformancePredicateBuilders(t *testing.T) {
 }
 
 func TestStateExpand_StripsPredicateBuildersInWrappedSupplyPerformanceDQL(t *testing.T) {
-	sqlData, err := os.ReadFile("/Users/awitas/go/src/github.vianttech.com/viant/steward/dql/inventory/sql/supply_performance.sql")
+	sqlData, err := os.ReadFile(filepath.Join("testdata", "supply_performance.sql"))
 	if err != nil {
 		t.Fatalf("read sql: %v", err)
 	}
-	dqlData, err := os.ReadFile("/Users/awitas/go/src/github.vianttech.com/viant/steward/dql/inventory/supply_performance.dql")
+	dqlData, err := os.ReadFile(filepath.Join("testdata", "supply_performance.dql"))
 	if err != nil {
 		t.Fatalf("read dql: %v", err)
 	}

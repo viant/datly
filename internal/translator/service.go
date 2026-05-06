@@ -194,7 +194,8 @@ func (s *Service) buildExecutorView(ctx context.Context, resource *Resource, DSQ
 }
 
 func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, dSQL string) error {
-	aQuery, err := sqlparser.ParseQuery(dSQL, parser.OnVeltyExpression())
+	parseSQL := parser.NormalizeSQLForParse(dSQL, &resource.State)
+	aQuery, err := sqlparser.ParseQuery(parseSQL, parser.OnVeltyExpression())
 	if err != nil {
 		return err
 	}

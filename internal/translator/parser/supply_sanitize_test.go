@@ -2,6 +2,7 @@ package parser
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 )
 
 func TestTemplate_Sanitize_SupplyPerformancePredicateBuilderPreserved(t *testing.T) {
-	data, err := os.ReadFile("/Users/awitas/go/src/github.vianttech.com/viant/steward/dql/inventory/sql/supply_performance.sql")
+	data, err := os.ReadFile(filepath.Join("testdata", "supply_performance.sql"))
 	if err != nil {
 		t.Fatalf("read sql: %v", err)
 	}
@@ -22,7 +23,8 @@ func TestTemplate_Sanitize_SupplyPerformancePredicateBuilderPreserved(t *testing
 	if !strings.Contains(actual, `${predicate.Builder().CombineOr($predicate.FilterGroup(0, "AND")).Build("WHERE")}`) {
 		t.Fatalf("expected WHERE predicate builder to survive sanitize, got: %s", actual)
 	}
-	if !strings.Contains(actual, `${predicate.Builder().CombineOr($predicate.FilterGroup(1, "HAVING")).Build("HAVING")}`) {
+	//  ${predicate.Builder().CombineOr($predicate.FilterGroup(1, "AND")).Build("HAVING")}
+	if !strings.Contains(actual, `${predicate.Builder().CombineOr($predicate.FilterGroup(1, "AND")).Build("HAVING")}`) {
 		t.Fatalf("expected HAVING predicate builder to survive sanitize, got: %s", actual)
 	}
 }
