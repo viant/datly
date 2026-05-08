@@ -137,7 +137,29 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 			if err != nil {
 				return nil, err
 			}
-			return aSession.NewSession(aComponent), nil
+			originalRequest, _ := aSession.HttpRequest(ctx, aSession.Clone())
+			request, _ := http.NewRequest(route.Method, route.URL, nil)
+			if originalRequest != nil {
+				request.Header = originalRequest.Header
+			}
+			unmarshal := aComponent.UnmarshalFunc(request)
+			locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+			childSession := session.New(aComponent.View,
+				session.WithAuth(aSession.Auth()),
+				session.WithLocatorOptions(locatorOptions...),
+				session.WithOperate(aSession.Options.Operate()),
+				session.WithTypes(&aComponent.Contract.Input.Type, &aComponent.Contract.Output.Type),
+				session.WithComponent(aComponent),
+				session.WithLogger(aSession.Logger()),
+				session.WithRegistry(aSession.Registry()),
+			)
+			if tx := aSession.Options.SqlTx(); tx != nil {
+				childSession.Apply(session.WithSQLTx(tx))
+			}
+			if err := childSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery); err != nil {
+				return nil, err
+			}
+			return childSession, nil
 		}
 
 		err = injectorFinalizer.Finalize(ctx, lookup)
