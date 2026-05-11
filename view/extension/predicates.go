@@ -199,16 +199,39 @@ func NewDurationPredicate() *Predicate {
 		},
 	}
 	clause := `
-#if($FilterValue == "hour" || $FilterValue == "HOUR")
+#if($FilterValue == "hour")
 	   ${DayExpression} = ${CurrentDayExpression}
 	  AND ${HourExpression} = ${CurrentHourExpression}
-#elseif($FilterValue == "day" || $FilterValue == "DAY" || $FilterValue == "today" || $FilterValue == "TODAY")
+#elseif($FilterValue == "HOUR")
+	   ${DayExpression} = ${CurrentDayExpression}
+	  AND ${HourExpression} = ${CurrentHourExpression}
+#elseif($FilterValue == "day")
 	 ${DayExpression} = ${CurrentDayExpression}
-#elseif($FilterValue == "yesterday" || $FilterValue == "YESTERDAY")
+#elseif($FilterValue == "DAY")
+	 ${DayExpression} = ${CurrentDayExpression}
+#elseif($FilterValue == "today")
+	 ${DayExpression} = ${CurrentDayExpression}
+#elseif($FilterValue == "TODAY")
+	 ${DayExpression} = ${CurrentDayExpression}
+#elseif($FilterValue == "yesterday")
  	 ${DayExpression} = ${YesterdayDayExpression}
- #elseif($FilterValue == "week" || $FilterValue == "WEEK" || $FilterValue == "seven_days" || $FilterValue == "SEVEN_DAYS")
+#elseif($FilterValue == "YESTERDAY")
+ 	 ${DayExpression} = ${YesterdayDayExpression}
+#elseif($FilterValue == "week")
  	 ${DayExpression} BETWEEN ${WeekDayExpression}  AND ${CurrentDayExpression}
- #elseif($FilterValue == "month" || $FilterValue == "MONTH" || $FilterValue == "thirty_days" || $FilterValue == "THIRTY_DAYS")
+#elseif($FilterValue == "WEEK")
+ 	 ${DayExpression} BETWEEN ${WeekDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "seven_days")
+ 	 ${DayExpression} BETWEEN ${WeekDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "SEVEN_DAYS")
+ 	 ${DayExpression} BETWEEN ${WeekDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "month")
+ 	 ${DayExpression} BETWEEN ${MonthDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "MONTH")
+ 	 ${DayExpression} BETWEEN ${MonthDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "thirty_days")
+ 	 ${DayExpression} BETWEEN ${MonthDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "THIRTY_DAYS")
  	 ${DayExpression} BETWEEN ${MonthDayExpression}  AND ${CurrentDayExpression}
 #end
 `
