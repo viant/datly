@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -324,18 +325,10 @@ func (b *Builder) rewriteGroupBy(SQL string, allColumns []*view.Column, projecte
 		return SQL, err
 	}
 
-	selectedPositions := projectedColumnPositions(allColumns, projectedColumns)
-	if len(selectedPositions) > 0 {
-		items := make(query.List, 0, len(selectedPositions))
-		for _, position := range selectedPositions {
-			if position <= 0 || position > len(parsed.List) {
-				continue
-			}
-			items = append(items, parsed.List[position-1])
-		}
-		if len(items) > 0 {
-			parsed.List = items
-		}
+	selectedItems, matchedColumns := projectedSelectItems(parsed.List, projectedColumns)
+	if len(selectedItems) > 0 {
+		parsed.List = selectedItems
+		projectedColumns = matchedColumns
 	}
 
 	positions := projectedGroupByPositions(parsed.List, projectedColumns)
@@ -372,6 +365,118 @@ func projectedColumnPositions(allColumns []*view.Column, projectedColumns []*vie
 		result = append(result, position)
 	}
 	return result
+}
+
+func projectedSelectItems(items query.List, projectedColumns []*view.Column) (query.List, []*view.Column) {
+	if len(items) == 0 || len(projectedColumns) == 0 {
+		return nil, nil
+	}
+	resultItems := make(query.List, 0, len(projectedColumns))
+	resultColumns := make([]*view.Column, 0, len(projectedColumns))
+	used := map[int]bool{}
+	for _, column := range projectedColumns {
+		position := projectedSelectItemPosition(items, column, used)
+		if position <= 0 || position > len(items) {
+			continue
+		}
+		used[position] = true
+		resultItems = append(resultItems, items[position-1])
+		resultColumns = append(resultColumns, column)
+	}
+	return resultItems, resultColumns
+}
+
+func projectedSelectItemPosition(items query.List, column *view.Column, used map[int]bool) int {
+	if column == nil {
+		return 0
+	}
+	keys := projectedColumnLookupKeys(column)
+	if len(keys) == 0 {
+		return 0
+	}
+	for i, item := range items {
+		position := i + 1
+		if used[position] || item == nil {
+			continue
+		}
+		if selectItemMatchesColumn(item, keys) {
+			return position
+		}
+	}
+	return 0
+}
+
+func projectedColumnLookupKeys(column *view.Column) map[string]bool {
+	result := map[string]bool{}
+	appendKey := func(value string) {
+		value = normalizeSelectItemName(value)
+		if value == "" {
+			return
+		}
+		result[value] = true
+	}
+	appendKey(column.Name)
+	appendKey(column.DatabaseColumn)
+	appendKey(column.FieldName())
+	if field := column.Field(); field != nil {
+		appendKey(field.Name)
+		if source := reflect.StructTag(field.Tag).Get("source"); source != "" {
+			appendKey(source)
+		}
+	}
+	if source := reflect.StructTag(column.Tag).Get("source"); source != "" {
+		appendKey(source)
+	}
+	return result
+}
+
+func selectItemMatchesColumn(item *query.Item, keys map[string]bool) bool {
+	for _, candidate := range selectItemLookupNames(item) {
+		if keys[candidate] {
+			return true
+		}
+	}
+	return false
+}
+
+func selectItemLookupNames(item *query.Item) []string {
+	if item == nil {
+		return nil
+	}
+	var result []string
+	appendKey := func(value string) {
+		value = normalizeSelectItemName(value)
+		if value == "" {
+			return
+		}
+		for _, existing := range result {
+			if existing == value {
+				return
+			}
+		}
+		result = append(result, value)
+	}
+	appendKey(item.Alias)
+	if item.Expr != nil {
+		exprText := strings.TrimSpace(sqlparser.Stringify(item.Expr))
+		appendKey(exprText)
+		if idx := strings.LastIndex(exprText, "."); idx != -1 && idx+1 < len(exprText) {
+			appendKey(exprText[idx+1:])
+		}
+	}
+	return result
+}
+
+func normalizeSelectItemName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = strings.Trim(value, "`")
+	if idx := strings.LastIndex(value, "."); idx != -1 && idx+1 < len(value) {
+		value = value[idx+1:]
+	}
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func filterGroupedOrderBy(orderBy query.List, items query.List) query.List {
