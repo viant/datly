@@ -91,6 +91,10 @@ func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet)
 
 	explicitIndex, _ := warmup["IndexColumn"]
 	delete(warmup, "IndexColumn")
+	indexParameter, _ := warmup["IndexParameter"]
+	delete(warmup, "IndexParameter")
+	connector, _ := warmup["Connector"]
+	delete(warmup, "Connector")
 	var refColumn string
 	if viewlet.Join != nil {
 		_, refColumn = inference.ExtractRelationColumns(viewlet.Join)
@@ -104,6 +108,12 @@ func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet)
 	}
 	if result.IndexColumn == "" {
 		return nil
+	}
+	if parameterName := strings.TrimSpace(fmt.Sprint(indexParameter)); parameterName != "" && parameterName != "<nil>" {
+		result.IndexParameter = parameterName
+	}
+	if connectorName := strings.TrimSpace(fmt.Sprint(connector)); connectorName != "" && connectorName != "<nil>" {
+		result.Connector = view.NewRefConnector(connectorName)
 	}
 
 	multiSet := &view.CacheParameters{}

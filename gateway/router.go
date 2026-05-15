@@ -402,10 +402,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 					routes = append(routes, r.NewMetricRoute(r.metricURL(r.config.Meta.MetricURI, aPath.URI)))
 				}
 
-				//TODO extend path.Path with cache info to pre exract cacheable view
-				//if views := router.ExtractCacheableViews(route); len(views) > 0 {
-				//	routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Build.CacheWarmURI, route.URI), route))
-				//}
+				routes = r.appendCacheWarmupRoute(routes, aPath, provider)
 			}
 			if len(apiKeys) > 0 { //update keys to all path derived routes
 				for i := offset; i < len(routes); i++ {
@@ -442,6 +439,17 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	}
 	return matcher.NewMatcher(matchables), paths, nil
 }
+
+func (r *Router) appendCacheWarmupRoute(routes []*Route, aPath *path.Path, provider *repository.Provider) []*Route {
+	if aPath.Method != http.MethodGet {
+		return routes
+	}
+	if strings.TrimSpace(r.config.Meta.CacheWarmURI) == "" {
+		return routes
+	}
+	return append(routes, r.NewWarmupRoute(r.routeURL(r.config.Meta.CacheWarmURI, aPath.URI), provider))
+}
+
 func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 	if !strings.HasSuffix(aPath.Path.URI, "/") && !strings.HasSuffix(aPath.Path.URI, "*") {
 		aPath.Path.URI += "/"

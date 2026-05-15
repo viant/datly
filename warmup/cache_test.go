@@ -85,6 +85,45 @@ func TestPopulateCache(t *testing.T) {
 	}
 }
 
+func TestWarmupConnectorLabelUsesExplicitWarmupConnector(t *testing.T) {
+	aView := &view.View{
+		Connector: view.NewRefConnector("bq_metrics"),
+		Cache: &view.Cache{
+			Warmup: &view.Warmup{
+				Connector: view.NewRefConnector("bq_metrics_prewarm"),
+			},
+		},
+	}
+
+	assert.Equal(t, "bq_metrics_prewarm", warmupConnectorLabel(aView))
+}
+
+func TestWarmupConnectorLabelFallsBackToViewConnector(t *testing.T) {
+	aView := &view.View{
+		Connector: view.NewRefConnector("bq_metrics"),
+		Cache:     &view.Cache{Warmup: &view.Warmup{}},
+	}
+
+	assert.Equal(t, "bq_metrics", warmupConnectorLabel(aView))
+}
+
+func TestDBUsesExplicitWarmupConnector(t *testing.T) {
+	entry := &warmupEntry{
+		view: &view.View{
+			Connector: view.NewConnector("runtime", "runtime_missing_driver", "runtime_dsn"),
+			Cache: &view.Cache{
+				Warmup: &view.Warmup{
+					Connector: view.NewConnector("prewarm", "prewarm_missing_driver", "prewarm_dsn"),
+				},
+			},
+		},
+	}
+
+	_, err := DB(entry)
+
+	assert.ErrorContains(t, err, "prewarm_missing_driver")
+}
+
 func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCase struct {
 	description      string
 	URL              string
