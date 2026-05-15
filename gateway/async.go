@@ -76,7 +76,7 @@ func (r *Service) watchAsyncJob(ctx context.Context) {
 						err = fs.Move(ctx, object.URL(), destURL)
 					}
 					if err != nil {
-						log.Println(err)
+						log.Printf("datly async post-process failed: source=%q err=%v", object.URL(), err)
 					}
 
 				} else {

@@ -18,11 +18,14 @@ import (
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/session"
+	"github.com/viant/datly/shared/logging"
 	"github.com/viant/datly/view"
 	vcontext "github.com/viant/datly/view/context"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/gmetric"
 	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/xdatly/handler/async"
+	"github.com/viant/xdatly/handler/logger"
 	hstate "github.com/viant/xdatly/handler/state"
 
 	"net/http"
@@ -38,6 +41,7 @@ type (
 		repository    *repository.Service
 		operator      *operator.Service
 		config        *Config
+		logger        logger.Logger
 		OpenAPIInfo   openapi3.Info
 		metrics       *gmetric.Service
 		statusHandler http.Handler
@@ -78,6 +82,7 @@ func NewRouter(ctx context.Context, components *repository.Service, config *Conf
 		operator:      operator.New(),
 		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
 		mcpRegistry:   mcpRegistry,
+		logger:        logging.New(logging.INFO, nil),
 	}
 	return r, r.init(ctx)
 }
@@ -154,8 +159,10 @@ func (r *Router) HandleJob(ctx context.Context, aJob *async.Job) error {
 	request := &http.Request{Method: aJob.Method, URL: URL, RequestURI: aPath.URI}
 	unmarshal := aComponent.UnmarshalFunc(request)
 	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+	locatorOptions = append(locatorOptions, locator.WithLogger(r.logger))
 	aSession := session.New(aComponent.View,
 		session.WithAuth(r.repository.Auth()),
+		session.WithLogger(r.logger),
 		session.WithComponent(aComponent),
 		session.WithLocatorOptions(locatorOptions...),
 		session.WithOperate(r.operator.Operate))
@@ -342,7 +349,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				}
 
 				r.EnsureCors(aPath)
-				aRoute := r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth(), r.config.Version, r.config.Logging))
+				aRoute := r.NewRouteHandler(router.New(aPath, provider, r.repository.Registry(), r.repository.Auth(), r.config.Version, r.config.Logging, r.logger))
 				routes = append(routes, aRoute)
 				if aPath.Cors != nil {
 					optionsPaths[aPath.URI] = append(optionsPaths[aPath.URI], aPath)
@@ -395,10 +402,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 					routes = append(routes, r.NewMetricRoute(r.metricURL(r.config.Meta.MetricURI, aPath.URI)))
 				}
 
-				//TODO extend path.Path with cache info to pre exract cacheable view
-				//if views := router.ExtractCacheableViews(route); len(views) > 0 {
-				//	routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Build.CacheWarmURI, route.URI), route))
-				//}
+				routes = r.appendCacheWarmupRoute(routes, aPath, provider)
 			}
 			if len(apiKeys) > 0 { //update keys to all path derived routes
 				for i := offset; i < len(routes); i++ {
@@ -435,6 +439,17 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	}
 	return matcher.NewMatcher(matchables), paths, nil
 }
+
+func (r *Router) appendCacheWarmupRoute(routes []*Route, aPath *path.Path, provider *repository.Provider) []*Route {
+	if aPath.Method != http.MethodGet {
+		return routes
+	}
+	if strings.TrimSpace(r.config.Meta.CacheWarmURI) == "" {
+		return routes
+	}
+	return append(routes, r.NewWarmupRoute(r.routeURL(r.config.Meta.CacheWarmURI, aPath.URI), provider))
+}
+
 func (r *Router) NewContentRoute(aPath *path.Path) []*Route {
 	if !strings.HasSuffix(aPath.Path.URI, "/") && !strings.HasSuffix(aPath.Path.URI, "*") {
 		aPath.Path.URI += "/"

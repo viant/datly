@@ -62,6 +62,12 @@ func (s *Service) Exec(ctx context.Context, opts *options.Options) error {
 	if opts.Translate != nil {
 		return s.Translate(ctx, opts)
 	}
+	if opts.Transcribe != nil {
+		return s.Transcribe(ctx, opts)
+	}
+	if opts.Validate != nil {
+		return s.Validate(ctx, opts)
+	}
 
 	if opts.Mcp != nil {
 		return s.Mcp(ctx, opts)

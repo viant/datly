@@ -2,13 +2,20 @@ package handler
 
 import (
 	"context"
-	goJson "github.com/goccy/go-json"
+	"encoding/json"
+	"fmt"
+
 	"github.com/viant/datly/gateway/router/status"
 	_ "github.com/viant/datly/repository/locator/async"
 	_ "github.com/viant/datly/repository/locator/component"
 	_ "github.com/viant/datly/repository/locator/meta"
 	_ "github.com/viant/datly/repository/locator/output"
 	_ "github.com/viant/datly/service/executor/handler/locator"
+
+	"net/http"
+	"os"
+	"reflect"
+	"runtime/debug"
 
 	reader "github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
@@ -18,8 +25,6 @@ import (
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/handler/response"
-	"net/http"
-	"reflect"
 )
 
 type (
@@ -65,7 +70,9 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, aSession *sessio
 	resultState := h.output.NewState()
 	statelet := aSession.State().Lookup(aView)
 
-	var locatorOptions []locator.Option
+	var locatorOptions = []locator.Option{
+		locator.WithLogger(aSession.Logger()),
+	}
 	locatorOptions = append(locatorOptions, locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
 		return aSession.LookupValue(ctx, parameter, aSession.Indirect(true, locatorOptions...))
 	}),
@@ -92,6 +99,14 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, aSession *sessio
 }
 
 func (h *Handler) readData(ctx context.Context, aView *view.View, aState *session.Session, ret *Response, opts []reader.Option) error {
+	if os.Getenv("DATLY_DEBUG_HANDLER_READ") == "1" {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[HANDLER READ DEBUG] panic view=%s err=%v\n%s\n", aView.Name, r, debug.Stack())
+				panic(r)
+			}
+		}()
+	}
 	destValue := reflect.New(aView.Schema.SliceType())
 	dest := destValue.Interface()
 	aSession, err := reader.NewSession(dest, aView)
@@ -135,7 +150,11 @@ func (h *Handler) publishViewSummaryIfNeeded(aView *view.View, ret *Response) {
 	if templateMeta.Kind != view.MetaKindHeader {
 		return
 	}
-	data, err := goJson.Marshal(ret.Reader.DataSummary)
+	var data []byte
+	var err error
+	if ret.Reader.DataSummary != nil {
+		data, err = json.Marshal(ret.Reader.DataSummary)
+	}
 	if err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Status.Status = "error"
@@ -153,7 +172,7 @@ func (h *Handler) publishMetricsIfNeeded(aSession *reader.Session, ret *Response
 		if info.Executions == nil {
 			continue
 		}
-		data, err := goJson.Marshal(info)
+		data, err := json.Marshal(info)
 		if err != nil {
 			continue
 		}

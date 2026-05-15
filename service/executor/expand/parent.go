@@ -1,9 +1,14 @@
 package expand
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"github.com/viant/datly/utils/types"
+	sqlxconfig "github.com/viant/sqlx/io/config"
+	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/xunsafe"
+	"os"
 	"reflect"
 	"strings"
 )
@@ -19,6 +24,7 @@ type (
 		ColIn(prefix, column string) (string, error)
 		In(prefix string) (string, error)
 		ParentJoinOn(column string, prepend ...string) (string, error)
+		ParentCompositeJoinOn(prefix string, columns ...string) (string, error)
 		AndParentJoinOn(column string) (string, error)
 	}
 
@@ -43,18 +49,22 @@ type (
 	ParentBatch interface {
 		ColIn() []interface{}
 		ColInBatch() []interface{}
+		CompositeIn() [][]interface{}
+		CompositeInBatch() [][]interface{}
+		HasComposite() bool
 	}
 
 	ViewContext struct {
-		Name         string
-		Alias        string
-		Table        string
-		Limit        int
-		Offset       int
-		Page         int
-		Args         []interface{}
-		NonWindowSQL string
-		ParentValues []interface{}
+		Name                  string
+		Alias                 string
+		Table                 string
+		Limit                 int
+		Offset                int
+		Page                  int
+		Args                  []interface{}
+		NonWindowSQL          string
+		ParentValues          []interface{}
+		ParentCompositeValues [][]interface{}
 
 		expander Expander  `velty:"-"`
 		DataUnit *DataUnit `velty:"-"`
@@ -100,6 +110,10 @@ func (e *MockExpander) AndParentJoinOn(column string) (string, error) {
 	return e.ColIn("", column)
 }
 
+func (e *MockExpander) ParentCompositeJoinOn(prefix string, columns ...string) (string, error) {
+	return "", nil
+}
+
 func (e *MockExpander) ColIn(prefix, column string) (string, error) {
 	return "", nil
 }
@@ -109,14 +123,46 @@ func (e *MockExpander) In(prefix string) (string, error) {
 }
 
 func (m *ViewContext) ParentJoinOn(column string, prepend ...string) (string, error) {
+	prefix := "AND"
+	columns := []string{column}
 	if len(prepend) > 0 {
-		return m.ColIn(column, prepend[0])
+		prefix = column
+		columns = prepend
 	}
-	return m.ColIn("AND", column)
+	if len(columns) > 1 {
+		return m.parentCompositeJoinOn(prefix, columns...)
+	}
+	return m.ColIn(prefix, columns[0])
 }
 
 func (m *ViewContext) AndParentJoinOn(column string) (string, error) {
 	return m.ColIn("AND", column)
+}
+
+func (m *ViewContext) ParentCompositeJoinOn(prefix string, columns ...string) (string, error) {
+	return m.parentCompositeJoinOn(prefix, columns...)
+}
+
+func (m *ViewContext) parentCompositeJoinOn(prefix string, columns ...string) (string, error) {
+	if len(columns) == 0 {
+		return prefix + " 1 = 0 ", nil
+	}
+	if m.expander != nil {
+		return m.expander.ParentCompositeJoinOn(prefix, columns...)
+	}
+	rowCount := len(m.ParentCompositeValues)
+	if rowCount == 0 {
+		return prefix + " 1 = 0 ", nil
+	}
+	dialect, err := m.dialect()
+	if err != nil {
+		return "", err
+	}
+	if prefix != "" && !strings.HasSuffix(prefix, " ") {
+		prefix += " "
+	}
+	m.addCompositeBindings(m.ParentCompositeValues)
+	return prefix + renderCompositePredicate(dialect, columns, rowCount), nil
 }
 
 func (m *ViewContext) ColIn(prefix, column string) (string, error) {
@@ -140,6 +186,26 @@ func (m *ViewContext) addBindings(args []interface{}) string {
 	_, bindings := AsBindings("", args)
 	m.DataUnit.addAll(args...)
 	return bindings
+}
+
+func (m *ViewContext) addCompositeBindings(rows [][]interface{}) {
+	for _, row := range rows {
+		m.DataUnit.addAll(row...)
+	}
+}
+
+func (m *ViewContext) dialect() (*info.Dialect, error) {
+	if m == nil || m.DataUnit == nil || m.DataUnit.MetaSource == nil {
+		return nil, nil
+	}
+	db, err := m.DataUnit.MetaSource.Db()
+	if err != nil {
+		return nil, err
+	}
+	if db == nil {
+		return nil, nil
+	}
+	return sqlxconfig.Dialect(context.Background(), db)
 }
 
 func (m *ViewContext) In(prefix string) (string, error) {
@@ -175,6 +241,40 @@ func AsBindings(key string, values []interface{}) (column string, bindings strin
 	}
 }
 
+func defaultCompositePredicate(columns []string, rowCount int) string {
+	if len(columns) == 0 || rowCount <= 0 {
+		return "1 = 0"
+	}
+	builder := &strings.Builder{}
+	builder.WriteByte('(')
+	builder.WriteString(strings.Join(columns, ", "))
+	builder.WriteString(") IN (")
+	for row := 0; row < rowCount; row++ {
+		if row > 0 {
+			builder.WriteString(", ")
+		}
+		builder.WriteByte('(')
+		for col := range columns {
+			if col > 0 {
+				builder.WriteString(", ")
+			}
+			builder.WriteByte('?')
+		}
+		builder.WriteByte(')')
+	}
+	builder.WriteByte(')')
+	return builder.String()
+}
+
+func renderCompositePredicate(dialect *info.Dialect, columns []string, rowCount int) string {
+	if renderer, ok := any(dialect).(interface {
+		CompositeIn([]string, int) string
+	}); ok {
+		return renderer.CompositeIn(columns, rowCount)
+	}
+	return defaultCompositePredicate(columns, rowCount)
+}
+
 func NewViewContext(metaSource ParentSource, aSelector ParentExtras, batchData ParentBatch, options ...interface{}) *ViewContext {
 	if metaSource == nil {
 		return nil
@@ -183,6 +283,7 @@ func NewViewContext(metaSource ParentSource, aSelector ParentExtras, batchData P
 	var sanitizer *DataUnit
 	var expander Expander
 	var colInArgs []interface{}
+	var compositeArgs [][]interface{}
 
 	for _, option := range options {
 		switch actual := option.(type) {
@@ -195,6 +296,7 @@ func NewViewContext(metaSource ParentSource, aSelector ParentExtras, batchData P
 
 	if batchData != nil {
 		colInArgs = batchData.ColInBatch()
+		compositeArgs = batchData.CompositeInBatch()
 	}
 	limit := metaSource.ResultLimit()
 	offset := 0
@@ -213,17 +315,18 @@ func NewViewContext(metaSource ParentSource, aSelector ParentExtras, batchData P
 		SQLExec = sanitizer.TemplateSQL
 	}
 	result := &ViewContext{
-		expander:     expander,
-		Name:         metaSource.ViewName(),
-		Alias:        metaSource.TableAlias(),
-		Table:        metaSource.TableName(),
-		Limit:        limit,
-		Page:         page,
-		Offset:       offset,
-		Args:         args,
-		NonWindowSQL: SQLExec,
-		DataUnit:     NewDataUnit(metaSource),
-		ParentValues: colInArgs,
+		expander:              expander,
+		Name:                  metaSource.ViewName(),
+		Alias:                 metaSource.TableAlias(),
+		Table:                 metaSource.TableName(),
+		Limit:                 limit,
+		Page:                  page,
+		Offset:                offset,
+		Args:                  args,
+		NonWindowSQL:          SQLExec,
+		DataUnit:              NewDataUnit(metaSource),
+		ParentValues:          colInArgs,
+		ParentCompositeValues: compositeArgs,
 	}
 
 	return result
@@ -247,10 +350,16 @@ func NotZeroOf(values ...int) int {
 }
 
 func (c *DataUnit) Insert(data interface{}, tableName string) (string, error) {
+	if os.Getenv("DATLY_DEBUG_MUTABLE") == "1" {
+		fmt.Printf("[MUTABLE DEBUG] Insert table=%s dataType=%T data=%#v\n", tableName, data, data)
+	}
 	return c.Statements.InsertWithMarker(tableName, data), nil
 }
 
 func (c *DataUnit) Update(data interface{}, tableName string) (string, error) {
+	if os.Getenv("DATLY_DEBUG_MUTABLE") == "1" {
+		fmt.Printf("[MUTABLE DEBUG] Update table=%s dataType=%T data=%#v\n", tableName, data, data)
+	}
 	return c.Statements.UpdateWithMarker(tableName, data), nil
 }
 

@@ -4,6 +4,12 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"go/ast"
+	"path"
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
@@ -15,11 +21,6 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"go/ast"
-	"path"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 type (
@@ -34,6 +35,7 @@ type (
 		AssumedType bool
 		Connector   string
 		Cache       string
+		Limit       *int
 		InOutput    bool
 		Of          string
 	}
@@ -78,18 +80,19 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 	case state.KindParam:
 		builder.WriteString("?")
 	default:
+		isPtr := strings.HasPrefix(p.Schema.DataType, "*")
 		if p.Schema.Cardinality == state.Many {
 			builder.WriteString("[]")
-
 			switch p.In.Kind {
 			case "query", "form", "header":
 			default:
-				if !p.IsRequired() {
+				if !p.IsRequired() && !isPtr {
+					isPtr = true
 					builder.WriteString("*")
 				}
 			}
 
-		} else if !p.IsRequired() {
+		} else if !p.IsRequired() && !isPtr {
 			builder.WriteString("*")
 		}
 		builder.WriteString(p.Schema.DataType)
@@ -115,12 +118,20 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 		builder.WriteString(".WithCache('" + p.Cache + "')")
 	}
 
+	if p.Limit != nil {
+		builder.WriteString(".WithLimit('" + strconv.Itoa(*p.Limit) + "')")
+	}
+
 	if p.Required != nil {
 		if !*p.Required {
 			builder.WriteString(".Optional()")
 		} else {
 			builder.WriteString(".Required()")
 		}
+	}
+
+	if p.Cacheable != nil {
+		builder.WriteString(".Cacheable('" + strconv.FormatBool(*p.Cacheable) + "')")
 	}
 	if p.Connector != "" {
 		builder.WriteString(".WithConnector('" + p.Connector + "')")
@@ -304,6 +315,9 @@ func buildParameter(field *xunsafe.Field, aTag *tags.Tag, types *xreflect.Types,
 		if aTag.View.Cache != "" {
 			param.Cache = aTag.View.Cache
 		}
+		if aTag.View.Limit != nil {
+			param.Limit = aTag.View.Limit
+		}
 	}
 
 	fType := field.Type
@@ -340,16 +354,9 @@ func ParentAlias(join *query.Join) string {
 	result := ""
 	sqlparser.Traverse(join.On, func(n node.Node) bool {
 		switch actual := n.(type) {
-		case *qexpr.Binary:
-			if xSel, ok := actual.X.(*qexpr.Selector); ok {
-				if xSel.Name != join.Alias {
-					result = xSel.Name
-				}
-			}
-			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
-				if ySel.Name != join.Alias {
-					result = ySel.Name
-				}
+		case *qexpr.Selector:
+			if actual.Name != "" && actual.Name != join.Alias {
+				result = actual.Name
 			}
 			return true
 		}
@@ -359,30 +366,69 @@ func ParentAlias(join *query.Join) string {
 }
 
 func ExtractRelationColumns(join *query.Join) (string, string) {
-	relColumn := ""
-	refColumn := ""
-	sqlparser.Traverse(join.On, func(n node.Node) bool {
-		switch actual := n.(type) {
-		case *qexpr.Binary:
-			if xSel, ok := actual.X.(*qexpr.Selector); ok {
-				if xSel.Name == join.Alias {
-					refColumn = sqlparser.Stringify(xSel.X)
-				} else if relColumn == "" {
-					relColumn = sqlparser.Stringify(xSel.X)
-				}
-			}
-			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
-				if ySel.Name == join.Alias {
-					refColumn = sqlparser.Stringify(ySel.X)
-				} else if relColumn == "" {
-					relColumn = sqlparser.Stringify(ySel.X)
-				}
-			}
-			return true
+	pairs := ExtractRelationColumnPairs(join)
+	if len(pairs) == 0 {
+		return "", ""
+	}
+	return pairs[0][0], pairs[0][1]
+}
+
+func ExtractRelationColumnPairs(join *query.Join) [][2]string {
+	if join == nil || join.On == nil || join.On.X == nil {
+		return nil
+	}
+	return collectRelationColumnPairs(join.On.X, join.Alias)
+}
+
+func collectRelationColumnPairs(n node.Node, refAlias string) [][2]string {
+	switch actual := n.(type) {
+	case *qexpr.Binary:
+		actual = actual.Normalize()
+		op := strings.ToUpper(strings.TrimSpace(actual.Op))
+		if op == "AND" {
+			left := collectRelationColumnPairs(actual.X, refAlias)
+			right := collectRelationColumnPairs(actual.Y, refAlias)
+			return append(left, right...)
 		}
-		return true
-	})
-	return relColumn, refColumn
+		if op != "=" {
+			return nil
+		}
+		leftAlias, leftColumn, leftOK := selectorParts(actual.X)
+		rightAlias, rightColumn, rightOK := selectorParts(actual.Y)
+		if !leftOK || !rightOK {
+			return nil
+		}
+		switch {
+		case leftAlias == refAlias:
+			return [][2]string{{rightColumn, leftColumn}}
+		case rightAlias == refAlias:
+			return [][2]string{{leftColumn, rightColumn}}
+		}
+	case *qexpr.Parenthesis:
+		return collectRelationColumnPairs(actual.X, refAlias)
+	}
+	return nil
+}
+
+func selectorParts(n node.Node) (string, string, bool) {
+	switch actual := n.(type) {
+	case *qexpr.Selector:
+		return actual.Name, sqlparser.Stringify(actual.X), true
+	case *qexpr.Parenthesis:
+		return selectorParts(actual.X)
+	case *qexpr.Collate:
+		return selectorParts(actual.X)
+	case *qexpr.Call:
+		if alias, column, ok := selectorParts(actual.X); ok {
+			return alias, column, true
+		}
+		for _, arg := range actual.Args {
+			if alias, column, ok := selectorParts(arg); ok {
+				return alias, column, true
+			}
+		}
+	}
+	return "", "", false
 }
 
 func (p *Parameter) EnsureCodec() {

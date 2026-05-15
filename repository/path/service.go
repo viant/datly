@@ -198,7 +198,8 @@ func (s *Service) buildPaths(ctx context.Context, candidate storage.Object, root
 	}
 	sourceURL := candidate.URL()
 	if index := strings.Index(sourceURL, rootPath); index != -1 {
-		sourceURL = sourceURL[1+index+len(rootPath):]
+		sourceURL = sourceURL[index+len(rootPath):]
+		sourceURL = strings.TrimPrefix(sourceURL, "/")
 	}
 	anItem := &Item{
 		SourceURL: sourceURL,
@@ -239,8 +240,11 @@ func (s *Service) load(ctx context.Context) error {
 }
 
 func (s *Service) onModify(ctx context.Context, object storage.Object) error {
-	path := url.Path(object.URL())
-	prev := s.lookupRouteBySourceURL(path)
+	sourceURL := object.URL()
+	prev := s.lookupRouteBySourceURL(sourceURL)
+	if prev == nil {
+		prev = s.lookupRouteBySourceURL(url.Path(sourceURL))
+	}
 	if prev != nil && prev.Version.HasChanged(object.ModTime()) {
 		return nil
 	}
@@ -262,8 +266,11 @@ func (s *Service) onModify(ctx context.Context, object storage.Object) error {
 }
 
 func (s *Service) onDelete(ctx context.Context, object storage.Object) error {
-	path := url.Path(object.URL())
-	prev := s.lookupRouteBySourceURL(path)
+	sourceURL := object.URL()
+	prev := s.lookupRouteBySourceURL(sourceURL)
+	if prev == nil {
+		prev = s.lookupRouteBySourceURL(url.Path(sourceURL))
+	}
 	if prev == nil {
 		return nil
 	}
@@ -271,7 +278,7 @@ func (s *Service) onDelete(ctx context.Context, object storage.Object) error {
 	prev.Version.Increase()
 
 	// TODO delete works fine but after adding back rule file we get panic
-	//s.delete(prev, path)
+	//s.delete(prev, sourceURL)
 	return nil
 }
 

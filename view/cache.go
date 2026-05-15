@@ -49,10 +49,11 @@ type (
 	}
 
 	Warmup struct {
-		IndexColumn string
-		IndexMeta   bool       `json:",omitempty"`
-		Connector   *Connector `json:",omitempty"`
-		Cases       []*CacheParameters
+		IndexColumn    string
+		IndexParameter string     `json:",omitempty" yaml:",omitempty"`
+		IndexMeta      bool       `json:",omitempty"`
+		Connector      *Connector `json:",omitempty"`
+		Cases          []*CacheParameters
 	}
 
 	CacheParameters struct {
@@ -62,6 +63,8 @@ type (
 	ParamValue struct {
 		Name   string
 		Values []interface{}
+		// ExcludeDefault keeps explicitly declared warmup cases from adding an extra nil/default selector.
+		ExcludeDefault bool `json:",omitempty" yaml:",omitempty"`
 
 		_param *state.Parameter
 	}
@@ -71,6 +74,7 @@ type (
 		Column     string
 		MetaColumn string
 		IndexMeta  bool
+		Label      string
 	}
 
 	CacheInputFn func() ([]*CacheInput, error)
@@ -393,7 +397,7 @@ func (c *Cache) getParamValues(ctx context.Context, paramValue *ParamValue) ([]i
 		result[i] = converted
 	}
 
-	if !paramValue._param.IsRequired() {
+	if !paramValue._param.IsRequired() && !paramValue.ExcludeDefault {
 		result = append(result, nil)
 	}
 
@@ -483,9 +487,11 @@ outer:
 	for {
 		selector := &Statelet{}
 		selector.Init(c.owner)
+		debugParams := make([]string, 0, len(paramValues))
 
 		for i, possibleValues := range paramValues {
 			actualValue := possibleValues[indexes[i]]
+			debugParams = append(debugParams, fmt.Sprintf("%s=%v", set.Set[i].Name, actualValue))
 			if actualValue == nil {
 				continue
 			}
@@ -495,7 +501,11 @@ outer:
 			}
 		}
 
-		*selectors = append(*selectors, c.NewInput(selector))
+		label := strings.Join(debugParams, ",")
+		input := c.NewInput(selector)
+		input.Label = label
+		*selectors = append(*selectors, input)
+		fmt.Printf("[INFO] cache warmup selector view=%s index_column=%s params=%s\n", c.owner.Name, c.Warmup.IndexColumn, label)
 
 		for i := len(indexes) - 1; i >= 0; i-- {
 			if indexes[i] < len(paramValues[i])-1 {

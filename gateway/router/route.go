@@ -92,7 +92,10 @@ func (r *Route) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 	}
 
 	return func(bytes []byte, i interface{}) error {
-		return r.Marshaller.JSON.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
+		if r.Marshaller.JSON.CanUnmarshal() {
+			return r.Marshaller.JSON.Unmarshal(bytes, i)
+		}
+		return r.Marshaller.JSON.RuntimeUnmarshallerEngine().Unmarshal(bytes, i, jsonPathInterceptor, request)
 	}
 }
 
@@ -113,7 +116,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return nil
 	}
 	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
-	if err := r.Component.Content.InitMarshaller(r.Component.IOConfig(), r.Output.Exclude, r.BodyType(), r.OutputType()); err != nil {
+	if err := r.Component.Content.InitMarshaller(r.Component.IOConfig(), r.Output.Exclude, r.BodyType(), r.OutputType(), resource.Resource.LookupType()); err != nil {
 		return err
 	}
 	if r.APIKey != nil {

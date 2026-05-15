@@ -3,12 +3,13 @@ package locator
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/view/state"
-	"github.com/viant/datly/view/state/kind"
-	"github.com/viant/xunsafe"
 	"reflect"
 	"sync"
 	"sync/atomic"
+
+	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind"
+	"github.com/viant/xunsafe"
 )
 
 type Repeated struct {
@@ -27,7 +28,7 @@ func (p *Repeated) Names() []string {
 	return nil
 }
 
-func (p *Repeated) Value(ctx context.Context, names string) (interface{}, bool, error) {
+func (p *Repeated) Value(ctx context.Context, _ reflect.Type, names string) (interface{}, bool, error) {
 	parameter := p.matchByLocation(names)
 	if parameter == nil {
 		return nil, false, fmt.Errorf("failed to match parameter by location: %v", names)

@@ -10,6 +10,8 @@ type Options struct {
 	Plugin      *Plugin      `command:"plugin" description:"build custom datly rule plugin"  `
 	Generate    *Generate    `command:"gen" description:"generate dql for put,patch or post operation" `
 	Translate   *Translate   `command:"translate" description:"translate dql into datly repository rule"`
+	Transcribe  *Transcribe  `command:"transcribe" description:"compile dql with shape pipeline and generate bootstrap artifacts"`
+	Validate    *Validate    `command:"validate" description:"validate DQL and referenced SQL assets with the shape pipeline"`
 	Cache       *CacheWarmup `command:"cache" description:"warmup cache"`
 	Run         *Run         `command:"run" description:"start datly in standalone mode"`
 	Mcp         *Mcp         `command:"mcp" description:"run mcp"`
@@ -72,6 +74,12 @@ func (o *Options) Init(ctx context.Context) error {
 	if o.Translate != nil {
 		return o.Translate.Init(ctx)
 	}
+	if o.Transcribe != nil {
+		return o.Transcribe.Init(ctx)
+	}
+	if o.Validate != nil {
+		return o.Validate.Init(ctx)
+	}
 	if o.Run != nil {
 		return o.Run.Init()
 	}
@@ -105,6 +113,10 @@ func NewOptions(args Arguments) *Options {
 		ret.InitCmd = &Init{}
 	case "dsql", "translate", "dql":
 		ret.Translate = &Translate{}
+	case "transcribe":
+		ret.Transcribe = &Transcribe{}
+	case "validate":
+		ret.Validate = &Validate{}
 	case "cache":
 		ret.Cache = &CacheWarmup{}
 	case "run":

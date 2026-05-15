@@ -2,17 +2,21 @@ package warmup
 
 import (
 	"context"
+	"os"
+	"path"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
-	"github.com/viant/afs"
-	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
-	"path"
-	"testing"
 )
 
 func TestPopulateCache(t *testing.T) {
+	if os.Getenv("DATLY_RUN_WARMUP_TESTS") == "" {
+		t.Skip("set DATLY_RUN_WARMUP_TESTS=1 to run warmup integration test")
+	}
+
 	testCases := []struct {
 		description      string
 		URL              string
@@ -59,14 +63,14 @@ func TestPopulateCache(t *testing.T) {
 
 		resourcePath := path.Join("testdata", testCase.URL, "resource.yaml")
 
-		resource, err := router.NewResourceFromURL(context.TODO(), afs.New(), resourcePath, false)
+		resource, err := view.NewResourceFromURL(context.TODO(), resourcePath, nil, nil)
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}
 
 		var views []*view.View
-		for _, route := range resource.Routes {
-			views = append(views, route.View)
+		for _, item := range resource.Views {
+			views = append(views, item)
 		}
 
 		inserted, err := PopulateCache(views)
@@ -79,6 +83,45 @@ func TestPopulateCache(t *testing.T) {
 			assert.Nil(t, checkIfCached(t, cache, ctx, testCase, aView), testCase.description)
 		}
 	}
+}
+
+func TestWarmupConnectorLabelUsesExplicitWarmupConnector(t *testing.T) {
+	aView := &view.View{
+		Connector: view.NewRefConnector("bq_metrics"),
+		Cache: &view.Cache{
+			Warmup: &view.Warmup{
+				Connector: view.NewRefConnector("bq_metrics_prewarm"),
+			},
+		},
+	}
+
+	assert.Equal(t, "bq_metrics_prewarm", warmupConnectorLabel(aView))
+}
+
+func TestWarmupConnectorLabelFallsBackToViewConnector(t *testing.T) {
+	aView := &view.View{
+		Connector: view.NewRefConnector("bq_metrics"),
+		Cache:     &view.Cache{Warmup: &view.Warmup{}},
+	}
+
+	assert.Equal(t, "bq_metrics", warmupConnectorLabel(aView))
+}
+
+func TestDBUsesExplicitWarmupConnector(t *testing.T) {
+	entry := &warmupEntry{
+		view: &view.View{
+			Connector: view.NewConnector("runtime", "runtime_missing_driver", "runtime_dsn"),
+			Cache: &view.Cache{
+				Warmup: &view.Warmup{
+					Connector: view.NewConnector("prewarm", "prewarm_missing_driver", "prewarm_dsn"),
+				},
+			},
+		},
+	}
+
+	_, err := DB(entry)
+
+	assert.ErrorContains(t, err, "prewarm_missing_driver")
 }
 
 func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCase struct {
@@ -100,7 +143,7 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 	builder := reader.NewBuilder()
 
 	for _, cacheInput := range input {
-		build, err := builder.CacheSQL(aView, cacheInput.Selector)
+		build, err := builder.CacheSQL(ctx, aView, cacheInput.Selector)
 		if err != nil {
 			return err
 		}
@@ -116,7 +159,7 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 		}
 
 		if cacheInput.IndexMeta && aView.Template.Summary != nil {
-			metaIndex, err := builder.CacheMetaSQL(aView, cacheInput.Selector, &view.BatchData{
+			metaIndex, err := builder.CacheMetaSQL(ctx, aView, cacheInput.Selector, &view.BatchData{
 				ValuesBatch: testCase.metaIndexed,
 				Values:      testCase.metaIndexed,
 			}, nil, nil)

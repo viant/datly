@@ -2,12 +2,13 @@ package extension
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/viant/datly/utils/types"
 	codec2 "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
-	"sync"
 )
 
 const (
@@ -32,6 +33,8 @@ const (
 	PredicateExists      = "exists"
 	PredicateNotExists   = "not_exists"
 
+	PredicateLiteralIn         = "literal_in"
+	PredicateExpr              = "expr"
 	PredicateCriteriaExists    = "exists_criteria"
 	PredicateCriteriaNotExists = "not_exists_criteria"
 	PredicateCriteriaIn        = "in_criteria"
@@ -190,18 +193,46 @@ func NewDurationPredicate() *Predicate {
 		}, {
 			Name:     "WeekDayExpression",
 			Position: 5,
+		}, {
+			Name:     "MonthDayExpression",
+			Position: 6,
 		},
 	}
 	clause := `
 #if($FilterValue == "hour")
 	   ${DayExpression} = ${CurrentDayExpression}
 	  AND ${HourExpression} = ${CurrentHourExpression}
+#elseif($FilterValue == "HOUR")
+	   ${DayExpression} = ${CurrentDayExpression}
+	  AND ${HourExpression} = ${CurrentHourExpression}
 #elseif($FilterValue == "day")
+	 ${DayExpression} = ${CurrentDayExpression}
+#elseif($FilterValue == "DAY")
+	 ${DayExpression} = ${CurrentDayExpression}
+#elseif($FilterValue == "today")
+	 ${DayExpression} = ${CurrentDayExpression}
+#elseif($FilterValue == "TODAY")
 	 ${DayExpression} = ${CurrentDayExpression}
 #elseif($FilterValue == "yesterday")
  	 ${DayExpression} = ${YesterdayDayExpression}
- #elseif($FilterValue == "week")
+#elseif($FilterValue == "YESTERDAY")
+ 	 ${DayExpression} = ${YesterdayDayExpression}
+#elseif($FilterValue == "week")
  	 ${DayExpression} BETWEEN ${WeekDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "WEEK")
+ 	 ${DayExpression} BETWEEN ${WeekDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "seven_days")
+ 	 ${DayExpression} BETWEEN ${WeekDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "SEVEN_DAYS")
+ 	 ${DayExpression} BETWEEN ${WeekDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "month")
+ 	 ${DayExpression} BETWEEN ${MonthDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "MONTH")
+ 	 ${DayExpression} BETWEEN ${MonthDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "thirty_days")
+ 	 ${DayExpression} BETWEEN ${MonthDayExpression}  AND ${CurrentDayExpression}
+#elseif($FilterValue == "THIRTY_DAYS")
+ 	 ${DayExpression} BETWEEN ${MonthDayExpression}  AND ${CurrentDayExpression}
 #end
 `
 	return &Predicate{
@@ -222,6 +253,10 @@ func NewIsNotNullPredicate() *Predicate {
 }
 
 func NewEqualPredicate() *Predicate {
+	return binaryPredicate(PredicateEqual, "=")
+}
+
+func NewColumnExpressionPredicate() *Predicate {
 	return binaryPredicate(PredicateEqual, "=")
 }
 
@@ -333,6 +368,27 @@ func NewLikePredicate() *Predicate {
 	return newLikePredicate(PredicateLike, true)
 }
 
+func NewLiteralInPredicate() *Predicate {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "Literal",
+			Position: 0,
+		},
+	}
+	criteria := `$criteria.In($Literal, $FilterValue)`
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   PredicateLiteralIn,
+			Source: " " + criteria,
+			Args:   args,
+		},
+	}
+}
+
+func NewExprPredicate() *Predicate {
+	return newExprPredicate(PredicateExpr)
+}
+
 func NewNotLikePredicate() *Predicate {
 	return newLikePredicate(PredicateNotLike, false)
 }
@@ -356,6 +412,23 @@ func newLikePredicate(name string, inclusive bool) *Predicate {
 	return &Predicate{
 		Template: &predicate.Template{
 			Name:   name,
+			Source: " " + criteria,
+			Args:   args,
+		},
+	}
+}
+
+func newExprPredicate(expr string) *Predicate {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "Expression",
+			Position: 0,
+		},
+	}
+	criteria := fmt.Sprintf(`$criteria.Expression($Expression, $FilterValue)`)
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   expr,
 			Source: " " + criteria,
 			Args:   args,
 		},
