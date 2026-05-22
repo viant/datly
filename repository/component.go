@@ -417,6 +417,18 @@ func (c *Component) UnmarshalFor(opts ...UnmarshalOption) shared.Unmarshal {
 	}
 
 	switch contentType {
+	case content.XLSContentType:
+		if c.Content.Marshaller.XLS.CanUnmarshal() {
+			return c.Content.Marshaller.XLS.Unmarshal
+		}
+		req := options.request
+		return func(data []byte, dest interface{}) error {
+			ctx := context.Background()
+			if req != nil {
+				ctx = req.Context()
+			}
+			return shared.DecodeXLS(ctx, data, dest)
+		}
 	case content.XMLContentType:
 		return c.Content.Marshaller.XML.Unmarshal
 	case content.CSVContentType:

@@ -7,9 +7,12 @@ import (
 	"os"
 	"reflect"
 	"runtime/debug"
+	"strings"
 
 	"embed"
 
+	"github.com/viant/datly/repository/content"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -170,6 +173,10 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 	options := s.Indirect(true, stateOptions...)
 	options.scope = hOptions.Scope()
 
+	if err = s.populateTopLevelXLSBody(ctx, dest, stateType, options); err != nil {
+		return err
+	}
+
 	if err = s.SetState(ctx, stateType.Parameters, aState, options); err != nil {
 		return err
 	}
@@ -178,6 +185,82 @@ func (s *Session) Bind(ctx context.Context, dest interface{}, opts ...hstate.Opt
 		err = initializer.Init(ctx)
 	}
 	return err
+}
+
+func (s *Session) populateTopLevelXLSBody(ctx context.Context, dest interface{}, stateType *state.Type, opts *Options) error {
+	if dest == nil || stateType == nil || opts == nil || opts.kindLocator == nil {
+		return nil
+	}
+	if len(stateType.Parameters.FilterByKind(state.KindRequestBody)) > 0 {
+		return nil
+	}
+
+	destType := reflect.TypeOf(dest)
+	if !implementsSessionXLSUnmarshaller(destType) {
+		return nil
+	}
+
+	request, err := s.HttpRequest(ctx, opts)
+	if err != nil || request == nil {
+		return err
+	}
+	if !isXLSContentType(request.Header.Get(content.HeaderContentType)) {
+		return nil
+	}
+
+	bodyLocator, err := opts.kindLocator.Lookup(state.KindRequestBody)
+	if err != nil {
+		return nil
+	}
+	value, has, err := bodyLocator.Value(ctx, destType, "")
+	if err != nil || !has || value == nil {
+		return err
+	}
+	return assignBoundBody(dest, value)
+}
+
+func assignBoundBody(dest interface{}, value interface{}) error {
+	dst := reflect.ValueOf(dest)
+	if dst.Kind() != reflect.Ptr || dst.IsNil() {
+		return fmt.Errorf("destination must be a non-nil pointer, but had %T", dest)
+	}
+	src := reflect.ValueOf(value)
+	if !src.IsValid() {
+		return nil
+	}
+	if src.Type() == dst.Type() {
+		dst.Elem().Set(src.Elem())
+		return nil
+	}
+	if src.Type().AssignableTo(dst.Elem().Type()) {
+		dst.Elem().Set(src)
+		return nil
+	}
+	if src.Kind() == reflect.Ptr && !src.IsNil() && src.Elem().Type().AssignableTo(dst.Elem().Type()) {
+		dst.Elem().Set(src.Elem())
+		return nil
+	}
+	return fmt.Errorf("unable to assign request body value of type %T into %T", value, dest)
+}
+
+var sessionXLSUnmarshallerType = reflect.TypeOf((*shared.XLSUnmarshaller)(nil)).Elem()
+
+func implementsSessionXLSUnmarshaller(rType reflect.Type) bool {
+	if rType == nil {
+		return false
+	}
+	if rType.Implements(sessionXLSUnmarshallerType) {
+		return true
+	}
+	return rType.Kind() != reflect.Ptr && reflect.PtrTo(rType).Implements(sessionXLSUnmarshallerType)
+}
+
+func isXLSContentType(contentType string) bool {
+	if contentType == "" {
+		return false
+	}
+	mediaType := strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0])
+	return mediaType == content.XLSContentType
 }
 
 func (s *Session) handleInputState(ctx context.Context, hOptions *hstate.Options, embedFs *embed.FS) error {
