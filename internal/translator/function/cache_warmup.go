@@ -35,6 +35,13 @@ func (c *cacheWarmup) Apply(args []string, column *sqlparser.Column, resource *v
 			warmup.IndexParameter = indexParameter
 			continue
 		}
+		if fieldNames, ok, err := parseWarmupFieldNames(raw); ok || err != nil {
+			if err != nil {
+				return err
+			}
+			warmup.FieldNames = fieldNames
+			continue
+		}
 		param, err := parseWarmupParam(raw)
 		if err != nil {
 			return err
@@ -84,6 +91,34 @@ func parseWarmupIndexParameter(raw string) (string, bool, error) {
 		return "", true, fmt.Errorf("warmup index parameter %q must be a single parameter name", value)
 	}
 	return value, true, nil
+}
+
+func parseWarmupFieldNames(raw string) ([]string, bool, error) {
+	name, value, ok := splitWarmupOption(raw)
+	if !ok {
+		return nil, false, nil
+	}
+	switch strings.ToLower(name) {
+	case "fieldnames", "field_names", "fields", "filednames":
+	default:
+		return nil, false, nil
+	}
+	if value == "" {
+		return nil, true, fmt.Errorf("warmup fieldNames was empty")
+	}
+	values := strings.Split(value, ",")
+	result := make([]string, 0, len(values))
+	for _, candidate := range values {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		result = append(result, candidate)
+	}
+	if len(result) == 0 {
+		return nil, true, fmt.Errorf("warmup fieldNames has no values")
+	}
+	return result, true, nil
 }
 
 func parseWarmupParam(raw string) (*view.ParamValue, error) {

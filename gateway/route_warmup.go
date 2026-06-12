@@ -34,17 +34,19 @@ func (r *Router) handleCacheWarmup(ctx context.Context, writer http.ResponseWrit
 }
 
 func (r *Router) handleCacheWarmupWithErr(ctx context.Context, providers []*repository.Provider) (int, []byte) {
+	// HTTP-triggered warmup should survive client/LB timeout cancellation.
+	warmupCtx := context.Background()
 	viewsByURI := make(map[string][]*view.View, len(providers))
 	URIs := make([]string, 0, len(providers))
 	for _, provider := range providers {
-		aComponent, err := provider.Component(ctx)
+		aComponent, err := provider.Component(warmupCtx)
 		if err != nil {
 			return http.StatusInternalServerError, []byte(err.Error())
 		}
 		if aComponent == nil {
 			return http.StatusNotFound, []byte("component was not found")
 		}
-		views, err := router.ExtractCacheableViews(ctx, aComponent)
+		views, err := router.ExtractCacheableViews(warmupCtx, aComponent)
 		if err != nil {
 			return http.StatusInternalServerError, []byte(err.Error())
 		}
@@ -57,7 +59,7 @@ func (r *Router) handleCacheWarmupWithErr(ctx context.Context, providers []*repo
 	lookup := func(_ context.Context, _, matchingURI string) ([]*view.View, error) {
 		return viewsByURI[matchingURI], nil
 	}
-	response := warmup.PreCache(ctx, lookup, URIs...)
+	response := warmup.PreCache(warmupCtx, lookup, URIs...)
 	data, err := json.Marshal(response)
 	if err != nil {
 		return http.StatusInternalServerError, []byte(err.Error())

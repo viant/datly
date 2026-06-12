@@ -52,12 +52,14 @@ type (
 		IndexColumn    string
 		IndexParameter string     `json:",omitempty" yaml:",omitempty"`
 		IndexMeta      bool       `json:",omitempty"`
+		FieldNames     []string   `json:",omitempty" yaml:",omitempty"`
 		Connector      *Connector `json:",omitempty"`
 		Cases          []*CacheParameters
 	}
 
 	CacheParameters struct {
-		Set []*ParamValue
+		Set        []*ParamValue
+		FieldNames []string `json:",omitempty" yaml:",omitempty"`
 	}
 
 	ParamValue struct {
@@ -75,6 +77,7 @@ type (
 		MetaColumn string
 		IndexMeta  bool
 		Label      string
+		FieldNames []string
 	}
 
 	CacheInputFn func() ([]*CacheInput, error)
@@ -431,6 +434,15 @@ func (c *Cache) initWarmup(ctx context.Context, resource *Resource) error {
 		}
 	}
 
+	if err := c.validateWarmupFieldNames(c.Warmup.FieldNames); err != nil {
+		return err
+	}
+	for _, dataset := range c.Warmup.Cases {
+		if err := c.validateWarmupFieldNames(dataset.FieldNames); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -480,6 +492,9 @@ func (c *Cache) appendSelectors(set *CacheParameters, paramValues [][]interface{
 
 	indexes := make([]int, len(paramValues))
 	if len(indexes) == 0 {
+		input := c.newInput(NewStatelet(), set)
+		*selectors = append(*selectors, input)
+		fmt.Printf("[INFO] cache warmup selector view=%s index_column=%s params= field_names=%s\n", c.owner.Name, c.Warmup.IndexColumn, strings.Join(input.FieldNames, ","))
 		return nil
 	}
 
@@ -502,10 +517,10 @@ outer:
 		}
 
 		label := strings.Join(debugParams, ",")
-		input := c.NewInput(selector)
+		input := c.newInput(selector, set)
 		input.Label = label
 		*selectors = append(*selectors, input)
-		fmt.Printf("[INFO] cache warmup selector view=%s index_column=%s params=%s\n", c.owner.Name, c.Warmup.IndexColumn, label)
+		fmt.Printf("[INFO] cache warmup selector view=%s index_column=%s params=%s field_names=%s\n", c.owner.Name, c.Warmup.IndexColumn, label, strings.Join(input.FieldNames, ","))
 
 		for i := len(indexes) - 1; i >= 0; i-- {
 			if indexes[i] < len(paramValues[i])-1 {
@@ -525,11 +540,83 @@ outer:
 }
 
 func (c *Cache) NewInput(selector *Statelet) *CacheInput {
+	return c.newInput(selector, nil)
+}
+
+func (c *Cache) newInput(selector *Statelet, set *CacheParameters) *CacheInput {
+	fieldNames := c.fieldNamesFor(set)
+	c.applyWarmupFieldNames(selector, fieldNames)
 	return &CacheInput{
 		Selector:   selector,
 		Column:     c.Warmup.IndexColumn,
 		MetaColumn: c.Warmup.IndexColumn,
 		IndexMeta:  (c.Warmup.IndexMeta || c.Warmup.IndexColumn != "") && c.owner.Template.Summary != nil,
+		FieldNames: append([]string(nil), fieldNames...),
+	}
+}
+
+func (c *Cache) fieldNamesFor(set *CacheParameters) []string {
+	if set != nil && len(set.FieldNames) > 0 {
+		return set.FieldNames
+	}
+	if c.Warmup == nil {
+		return nil
+	}
+	return c.Warmup.FieldNames
+}
+
+func (c *Cache) validateWarmupFieldNames(fieldNames []string) error {
+	if len(fieldNames) == 0 {
+		return nil
+	}
+	viewName := ""
+	if c.owner != nil {
+		viewName = c.owner.Name
+	}
+	if c.owner == nil || c.owner.Selector == nil || c.owner.Selector.Constraints == nil || !c.owner.Selector.Constraints.Projection {
+		return fmt.Errorf("warmup fieldNames require projection selector on view %v", viewName)
+	}
+	for _, fieldName := range fieldNames {
+		fieldName = strings.TrimSpace(fieldName)
+		if fieldName == "" {
+			return fmt.Errorf("warmup fieldNames contains empty field on view %v", viewName)
+		}
+		if _, ok := c.owner.ColumnByName(fieldName); !ok {
+			return fmt.Errorf("not found warmup fieldName %v at View %v", fieldName, viewName)
+		}
+	}
+	return nil
+}
+
+func (c *Cache) applyWarmupFieldNames(selector *Statelet, fieldNames []string) {
+	if selector == nil || c.owner == nil || len(fieldNames) == 0 {
+		return
+	}
+	if selector._columnNames == nil {
+		selector._columnNames = map[string]bool{}
+	}
+	for _, fieldName := range fieldNames {
+		fieldName = strings.TrimSpace(fieldName)
+		if fieldName == "" {
+			continue
+		}
+		column, ok := c.owner.ColumnByName(fieldName)
+		if !ok {
+			continue
+		}
+		columnName := column.Name
+		outputName := column.FieldName()
+		if outputName == "" {
+			outputName = columnName
+		}
+		if selector.Has(columnName) || selector.Has(outputName) {
+			continue
+		}
+		selector._columnNames[columnName] = true
+		selector._columnNames[strings.ToLower(columnName)] = true
+		selector._columnNames[outputName] = true
+		selector.Columns = append(selector.Columns, columnName)
+		selector.Fields = append(selector.Fields, outputName)
 	}
 }
 

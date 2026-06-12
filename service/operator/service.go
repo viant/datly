@@ -148,6 +148,7 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 				session.WithAuth(aSession.Auth()),
 				session.WithLocatorOptions(locatorOptions...),
 				session.WithOperate(aSession.Options.Operate()),
+				session.WithCacheDisabled(aSession.Options.CacheDisabled()),
 				session.WithTypes(&aComponent.Contract.Input.Type, &aComponent.Contract.Output.Type),
 				session.WithComponent(aComponent),
 				session.WithLogger(aSession.Logger()),

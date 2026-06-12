@@ -418,6 +418,7 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 		session.WithAuth(r.auth),
 		session.WithLogger(r.logger),
 		session.WithComponent(aComponent),
+		session.WithCacheDisabled(isCacheDisabled(request)),
 		session.WithLocatorOptions(locatorOptions...),
 		session.WithRegistry(r.registry),
 
@@ -491,6 +492,14 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 		return r.compressIfNeeded(data, options)
 	}
 	return r.marshalComponentOutput(output, aComponent, options)
+}
+
+func isCacheDisabled(request *http.Request) bool {
+	if request == nil {
+		return false
+	}
+	return request.Header.Get(httputils.DatlyRequestDisableCacheHeader) != "" ||
+		request.Header.Get(strings.ToLower(httputils.DatlyRequestDisableCacheHeader)) != ""
 }
 
 func createRequest(ctx context.Context, redirect *session.Redirect) (*http.Request, error) {

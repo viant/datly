@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -71,4 +72,27 @@ func TestRouterHandleCacheWarmupWithErr_NoCacheViews(t *testing.T) {
 	require.NoError(t, json.Unmarshal(body, response))
 	require.Equal(t, "ok", response.Status)
 	require.Empty(t, response.PreCached)
+}
+
+func TestRouterHandleCacheWarmupWithErr_DetachesRequestContext(t *testing.T) {
+	router := &Router{}
+	provider := repository.NewProvider(
+		*contract.NewPath(http.MethodGet, "/v1/api/order"),
+		&version.Control{},
+		func(ctx context.Context, opts ...repository.Option) (*repository.Component, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, fmt.Errorf("warmup context should not be request-canceled: %w", err)
+			}
+			return &repository.Component{
+				Path: *contract.NewPath(http.MethodGet, "/v1/api/order"),
+				View: &view.View{Name: "order"},
+			}, nil
+		},
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	statusCode, body := router.handleCacheWarmupWithErr(ctx, []*repository.Provider{provider})
+
+	require.Equal(t, http.StatusOK, statusCode, string(body))
 }

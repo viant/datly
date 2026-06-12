@@ -13,13 +13,15 @@ import (
 
 type PreCachables func(ctx context.Context, method, matchingURI string) ([]*view.View, error)
 type PreCached struct {
-	URI       string
-	View      string
-	Column    string
-	Params    string
-	Elapsed   string
-	TimeTaken time.Duration
-	Rows      int
+	URI        string
+	View       string
+	Column     string
+	Params     string
+	CacheKey   string
+	FieldNames string `json:",omitempty"`
+	Elapsed    string
+	TimeTaken  time.Duration
+	Rows       int
 }
 
 type Response struct {
@@ -57,7 +59,7 @@ func PreCache(ctx context.Context, lookup PreCachables, warmupURIs ...string) *R
 			}
 			fmt.Printf("[INFO] cache warmup uri views uri=%s count=%d views=%s elapsed=%s\n", URI, len(views), viewNames(views), time.Since(startTime))
 			var result *warmup.Result
-			if result, e = warmup.PopulateCacheWithDetails(views); e != nil {
+			if result, e = warmup.PopulateCacheWithDetailsContext(ctx, views); e != nil {
 				fmt.Printf("[INFO] cache warmup uri populate error uri=%s elapsed=%s error=%v\n", URI, time.Since(startTime), e)
 				setErr(e)
 			}
@@ -93,13 +95,15 @@ func appendPreCached(response *Response, URI string, result *warmup.Result) {
 			continue
 		}
 		response.PreCached = append(response.PreCached, &PreCached{
-			URI:       URI,
-			View:      entry.View,
-			Column:    entry.Column,
-			Params:    entry.Params,
-			Elapsed:   entry.Elapsed,
-			TimeTaken: entry.TimeTaken,
-			Rows:      entry.Rows,
+			URI:        URI,
+			View:       entry.View,
+			Column:     entry.Column,
+			Params:     entry.Params,
+			CacheKey:   entry.CacheKey,
+			FieldNames: entry.FieldNames,
+			Elapsed:    entry.Elapsed,
+			TimeTaken:  entry.TimeTaken,
+			Rows:       entry.Rows,
 		})
 	}
 }

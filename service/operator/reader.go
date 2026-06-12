@@ -39,7 +39,7 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 
 	readerHandler := handler.New(component.Output.Type.Type(), &component.Output.Type)
 	var options = []reader.Option{
-		reader.WithCacheDisabled(false),
+		reader.WithCacheDisabled(aSession.Options.CacheDisabled()),
 	}
 	startTime := time.Now()
 	s.adjustAsyncOptions(ctx, aSession, component.View, &options)

@@ -14,6 +14,7 @@ func TestCacheWarmupApply(t *testing.T) {
 		"order_id",
 		"Connector=bq_metrics_prewarm",
 		"IndexParameter=OrderId",
+		"FieldNames=Id,Name",
 		"Period=today,yesterday",
 		"Granularity=hour,day",
 	}, nil, &view.Resource{}, aView)
@@ -28,6 +29,9 @@ func TestCacheWarmupApply(t *testing.T) {
 	}
 	if aView.Cache.Warmup.IndexParameter != "OrderId" {
 		t.Fatalf("unexpected index parameter: %v", aView.Cache.Warmup.IndexParameter)
+	}
+	if len(aView.Cache.Warmup.FieldNames) != 2 || aView.Cache.Warmup.FieldNames[0] != "Id" || aView.Cache.Warmup.FieldNames[1] != "Name" {
+		t.Fatalf("unexpected field names: %#v", aView.Cache.Warmup.FieldNames)
 	}
 	if len(aView.Cache.Warmup.Cases) != 1 {
 		t.Fatalf("unexpected cases count: %v", len(aView.Cache.Warmup.Cases))
@@ -58,6 +62,14 @@ func TestCacheWarmupApplyRejectsEmptyConnector(t *testing.T) {
 func TestCacheWarmupApplyRejectsEmptyIndexParameter(t *testing.T) {
 	aView := &view.View{Cache: view.NewRefCache("aerospike")}
 	err := (&cacheWarmup{}).Apply([]string{"order_id", "IndexParameter="}, nil, &view.Resource{}, aView)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestCacheWarmupApplyRejectsEmptyFieldNames(t *testing.T) {
+	aView := &view.View{Cache: view.NewRefCache("aerospike")}
+	err := (&cacheWarmup{}).Apply([]string{"order_id", "FieldNames="}, nil, &view.Resource{}, aView)
 	if err == nil {
 		t.Fatalf("expected error")
 	}

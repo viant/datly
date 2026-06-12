@@ -4,12 +4,16 @@ import (
 	"context"
 	"os"
 	"path"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
+	sqlcache "github.com/viant/sqlx/io/read/cache"
 )
 
 func TestPopulateCache(t *testing.T) {
@@ -122,6 +126,120 @@ func TestDBUsesExplicitWarmupConnector(t *testing.T) {
 	_, err := DB(entry)
 
 	assert.ErrorContains(t, err, "prewarm_missing_driver")
+}
+
+func TestWarmupWithLimitCapsConcurrency(t *testing.T) {
+	entries := make([]*warmupEntry, 50)
+	for i := range entries {
+		entries[i] = &warmupEntry{}
+	}
+	var active int64
+	var maxActive int64
+	read := func(ctx context.Context, entry *warmupEntry) (*EntryResult, error) {
+		current := atomic.AddInt64(&active, 1)
+		for {
+			max := atomic.LoadInt64(&maxActive)
+			if current <= max || atomic.CompareAndSwapInt64(&maxActive, max, current) {
+				break
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+		atomic.AddInt64(&active, -1)
+		return &EntryResult{Rows: 1}, nil
+	}
+
+	notifier := make(chan func() (*EntryResult, error))
+	warmupWithLimit(context.Background(), entries, notifier, maxWarmupConcurrency, read)
+
+	total := 0
+	for i := 0; i < len(entries); i++ {
+		actual := <-notifier
+		result, err := actual()
+		assert.Nil(t, err)
+		total += result.Rows
+	}
+
+	assert.Equal(t, len(entries), total)
+	assert.LessOrEqual(t, atomic.LoadInt64(&maxActive), int64(maxWarmupConcurrency))
+}
+
+func TestWarmupCacheKeyNormalizesNilArgs(t *testing.T) {
+	nilArgsKey, err := warmupCacheKey(&sqlcache.ParmetrizedQuery{SQL: "SELECT * FROM events", Args: nil})
+	assert.Nil(t, err)
+
+	emptyArgsKey, err := warmupCacheKey(&sqlcache.ParmetrizedQuery{SQL: "SELECT * FROM events", Args: []interface{}{}})
+	assert.Nil(t, err)
+
+	assert.Equal(t, emptyArgsKey, nilArgsKey)
+
+	_, err = warmupCacheKey(nil)
+	assert.ErrorContains(t, err, "query was nil")
+}
+
+func TestWarmupFieldNamesAffectGeneratedCacheKey(t *testing.T) {
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: ":memory:"
+
+Views:
+  - Name: events
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+      - Name: quantity
+        DataType: int
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+    Selector:
+      Constraints:
+        Projection: true
+    Template:
+      Source: SELECT * FROM EVENTS
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+	aView := resource.Views[0]
+
+	input, err := aView.Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, input)
+
+	builder := reader.NewBuilder()
+	fullQuery, err := builder.CacheSQL(context.Background(), aView, input[0].Selector)
+	require.NoError(t, err)
+	fullKey, err := warmupCacheKey(fullQuery)
+	require.NoError(t, err)
+
+	aView.Cache.Warmup.FieldNames = []string{"Quantity"}
+	fieldInput, err := aView.Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, fieldInput)
+	assert.Equal(t, []string{"Quantity"}, fieldInput[0].FieldNames)
+
+	fieldQuery, err := builder.CacheSQL(context.Background(), aView, fieldInput[0].Selector)
+	require.NoError(t, err)
+	fieldKey, err := warmupCacheKey(fieldQuery)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, fullQuery.SQL, fieldQuery.SQL)
+	assert.NotEqual(t, fullKey, fieldKey)
+	assert.Contains(t, fieldQuery.SQL, "quantity")
 }
 
 func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCase struct {

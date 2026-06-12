@@ -35,6 +35,7 @@ type (
 		embeddedFS          *embed.FS
 		auth                *auth.Service
 		preseedCache        bool
+		cacheDisabled       bool
 		sqlTx               *sql.Tx
 	}
 
@@ -52,6 +53,10 @@ func (o *Options) Registry() *repository.Registry {
 // SqlTx returns associated SQL transaction (if any)
 func (o *Options) SqlTx() *sql.Tx {
 	return o.sqlTx
+}
+
+func (o *Options) CacheDisabled() bool {
+	return o.cacheDisabled
 }
 
 func (o *Options) HasInputParameters() bool {
@@ -174,6 +179,12 @@ func WithSQLTx(tx *sql.Tx) Option {
 func WithPreseedCache(flag bool) Option {
 	return func(s *Options) {
 		s.preseedCache = flag
+	}
+}
+
+func WithCacheDisabled(flag bool) Option {
+	return func(s *Options) {
+		s.cacheDisabled = flag
 	}
 }
 
