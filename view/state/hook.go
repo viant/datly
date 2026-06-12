@@ -4,8 +4,9 @@ import (
 	"context"
 
 	"github.com/viant/mcp-protocol/schema"
+	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/http"
-	"github.com/viant/xdatly/handler/state"
+	hstate "github.com/viant/xdatly/handler/state"
 )
 
 // Initializer is an interface that should be implemented by any type that needs to be initialized
@@ -24,7 +25,7 @@ type FinalizerWithError interface {
 }
 
 type InjectorFinalizer interface {
-	Finalize(ctx context.Context, getInjector func(ctx context.Context, path http.Route) (state.Injector, error)) error
+	Finalize(ctx context.Context, getInjector func(ctx context.Context, path http.Route) (hstate.Injector, error)) error
 }
 
 // MCPClient exposes the MCP client-side capabilities that a server-side output
@@ -43,10 +44,13 @@ type MCPContext interface {
 	Client() MCPClient
 }
 
+// BinderProvider resolves a handler session for an HTTP route on demand.
+type BinderProvider func(ctx context.Context, path http.Route) (xhandler.Session, error)
+
 // MCPFinalizer is an MCP-aware finalizer that runs only when MCP context is
 // available on the current request path.
 type MCPFinalizer interface {
-	FinalizeMCP(ctx context.Context, mcp MCPContext) error
+	FinalizeMCP(ctx context.Context, mcp MCPContext, getBinder BinderProvider) error
 }
 
 type mcpContextKey struct{}

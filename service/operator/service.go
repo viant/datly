@@ -166,7 +166,7 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 		if err != nil {
 			return ret, err
 		}
-		if err = finalizeMCPOutput(ctx, ret); err != nil {
+		if err = s.finalizeMCPOutput(ctx, ret, aSession); err != nil {
 			return ret, err
 		}
 		return ret, err
@@ -182,7 +182,7 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 		if finalizeErr != nil {
 			return ret, finalizeErr
 		}
-		if err = finalizeMCPOutput(ctx, ret); err != nil {
+		if err = s.finalizeMCPOutput(ctx, ret, aSession); err != nil {
 			return ret, err
 		}
 		return ret, nil
@@ -196,13 +196,13 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 	if err != nil {
 		return ret, err
 	}
-	if err = finalizeMCPOutput(ctx, ret); err != nil {
+	if err = s.finalizeMCPOutput(ctx, ret, aSession); err != nil {
 		return ret, err
 	}
 	return ret, err
 }
 
-func finalizeMCPOutput(ctx context.Context, ret interface{}) error {
+func (s *Service) finalizeMCPOutput(ctx context.Context, ret interface{}, aSession *session.Session) error {
 	finalizer, ok := ret.(state.MCPFinalizer)
 	if !ok {
 		return nil
@@ -211,7 +211,39 @@ func finalizeMCPOutput(ctx context.Context, ret interface{}) error {
 	if !ok {
 		return nil
 	}
-	return finalizer.FinalizeMCP(ctx, mcp)
+	getBinder := func(ctx context.Context, route xhttp.Route) (xhandler.Session, error) {
+		if aSession == nil || aSession.Registry() == nil {
+			return nil, fmt.Errorf("session registry unavailable")
+		}
+		aComponent, err := aSession.Registry().Lookup(ctx, contract.NewPath(route.Method, route.URL))
+		if err != nil {
+			return nil, err
+		}
+		originalRequest, _ := aSession.HttpRequest(ctx, aSession.Clone())
+		request, _ := http.NewRequest(route.Method, route.URL, nil)
+		if originalRequest != nil {
+			request.Header = originalRequest.Header
+		}
+		unmarshal := aComponent.UnmarshalFunc(request)
+		locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+		childSession := session.New(aComponent.View,
+			session.WithAuth(aSession.Auth()),
+			session.WithLocatorOptions(locatorOptions...),
+			session.WithOperate(aSession.Options.Operate()),
+			session.WithTypes(&aComponent.Contract.Input.Type, &aComponent.Contract.Output.Type),
+			session.WithComponent(aComponent),
+			session.WithLogger(aSession.Logger()),
+			session.WithRegistry(aSession.Registry()),
+		)
+		if tx := aSession.Options.SqlTx(); tx != nil {
+			childSession.Apply(session.WithSQLTx(tx))
+		}
+		if err := childSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery); err != nil {
+			return nil, err
+		}
+		return s.HandlerSession(ctx, aComponent, childSession)
+	}
+	return finalizer.FinalizeMCP(ctx, mcp, getBinder)
 }
 
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
