@@ -79,6 +79,10 @@ func (r *Route) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 	contentType := request.Header.Get(HeaderContentType)
 	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(HeaderContentType)))
 	switch contentType {
+	case content.XLSContentType:
+		return func(data []byte, dest interface{}) error {
+			return shared.DecodeXLS(request.Context(), data, dest)
+		}
 	case content.XMLContentType:
 		return r.Marshaller.XML.Unmarshal
 	case content.CSVContentType:

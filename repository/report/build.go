@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -259,7 +260,11 @@ func filterStructType(filters []*Filter) reflect.Type {
 	for _, filter := range filters {
 		rType := reflect.TypeOf("")
 		if schemaType := filter.SchemaType(); schemaType != nil {
-			rType = schemaType
+			if schemaType == timeType || (schemaType.Kind() == reflect.Ptr && schemaType.Elem() == timeType) {
+				rType = reflect.TypeOf("")
+			} else {
+				rType = schemaType
+			}
 		}
 		structFields = append(structFields, reflect.StructField{
 			Name: filter.FieldName,
@@ -269,6 +274,8 @@ func filterStructType(filters []*Filter) reflect.Type {
 	}
 	return reflect.StructOf(structFields)
 }
+
+var timeType = reflect.TypeOf(time.Time{})
 
 func buildTag(jsonName, description string) reflect.StructTag {
 	result := fmt.Sprintf(`json:"%s,omitempty"`, jsonName)

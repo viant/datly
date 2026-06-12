@@ -261,10 +261,16 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 			values.Add(queryName, fmt.Sprintf("%v", value))
 		}
 	case state.KindRequestBody:
-		if text, ok := value.(string); ok {
+		bodyValue := value
+		if p != nil && !p.IsAnonymous() {
+			if bodyName := strings.TrimSpace(p.In.Name); bodyName != "" {
+				bodyValue = map[string]interface{}{bodyName: value}
+			}
+		}
+		if text, ok := bodyValue.(string); ok {
 			body = strings.NewReader(text)
 		} else {
-			data, err := json.Marshal(value)
+			data, err := json.Marshal(bodyValue)
 			if err != nil {
 				return baseURL, body, jsonrpc.NewInvalidParamsError("failed to marshal request body", nil)
 			}

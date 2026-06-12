@@ -66,6 +66,7 @@ func (r *cubeHandler) Exec(ctx context.Context, session xhandler.Session) (inter
 }
 
 func (r *cubeHandler) reportInput(ctx context.Context, request *http.Request) (interface{}, error) {
+
 	input := ctx.Value(xhandler.InputKey)
 	if request != nil && request.Body != nil && r.BodyType != nil {
 		payload, err := io.ReadAll(request.Body)

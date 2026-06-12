@@ -305,6 +305,59 @@ func TestRouter_mcpToolCallHandler_PassesAuthorizationToReportRoute(t *testing.T
 	}`, actualBody)
 }
 
+func TestRouter_mcpToolCallHandler_WrapsNamedBodyParameter(t *testing.T) {
+	bodyType := reflect.StructOf([]reflect.StructField{
+		{Name: "AudienceId", Type: reflect.TypeOf(0), Tag: `json:"audience_id,omitempty"`},
+		{Name: "Mode", Type: reflect.TypeOf(""), Tag: `json:"mode,omitempty"`},
+		{Name: "ApplyStatus", Type: reflect.TypeOf(""), Tag: `json:"apply_status,omitempty"`},
+	})
+	bodyParam := state.NewParameter("Recommendation", state.NewBodyLocation("recommendation"), state.WithParameterSchema(state.NewSchema(bodyType)))
+	component := &repository.Component{
+		Path: contract.Path{Method: http.MethodPatch, URI: "/v1/api/steward/recommendation"},
+		Contract: contract.Contract{
+			Input: contract.Input{
+				Type: state.Type{Parameters: state.Parameters{bodyParam}},
+			},
+		},
+	}
+
+	var actualBody string
+	route := &Route{
+		Path: &contract.Path{Method: http.MethodPatch, URI: "/v1/api/steward/recommendation"},
+		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+			if req.Body != nil {
+				payload, _ := io.ReadAll(req.Body)
+				actualBody = string(payload)
+			}
+			response.WriteHeader(http.StatusOK)
+			_, _ = response.Write([]byte(`{"ok":true}`))
+		},
+	}
+
+	handler := (&Router{}).mcpToolCallHandler(component, route)
+	result, rpcErr := handler(context.Background(), &schema.CallToolRequest{
+		Params: schema.CallToolRequestParams{
+			Arguments: map[string]interface{}{
+				"Recommendation": map[string]interface{}{
+					"audience_id":  7193466,
+					"mode":         "ADD",
+					"apply_status": "APPROVED",
+				},
+			},
+		},
+	})
+
+	require.Nil(t, rpcErr)
+	require.NotNil(t, result)
+	assert.JSONEq(t, `{
+		"recommendation": {
+			"audience_id": 7193466,
+			"mode": "ADD",
+			"apply_status": "APPROVED"
+		}
+	}`, actualBody)
+}
+
 func TestRouter_mcpToolCallHandler_MapsComponentAndSelectorArgumentsToHTTPQuery(t *testing.T) {
 	component := &repository.Component{
 		Path: contract.Path{Method: http.MethodGet, URI: "/v1/api/steward/metadata/ad_profile"},
