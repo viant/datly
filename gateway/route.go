@@ -47,9 +47,13 @@ func (r *Route) Handle(res http.ResponseWriter, req *http.Request) int {
 	if !r.CanHandle(req) {
 		write(res, http.StatusForbidden, nil)
 	}
-	ctx := context.Background()
+	ctx := req.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	execContext := exec.NewContext(req.Method, req.RequestURI, req.Header, r.Version)
 	ctx = vcontext.WithValue(ctx, exec.ContextKey, execContext)
+	req = req.WithContext(ctx)
 	var onDone func(time.Time, ...interface{}) int64 = nil
 	var start time.Time
 	if r.Counter != nil {

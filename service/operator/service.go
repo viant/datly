@@ -163,6 +163,12 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 		}
 
 		err = injectorFinalizer.Finalize(ctx, lookup)
+		if err != nil {
+			return ret, err
+		}
+		if err = finalizeMCPOutput(ctx, ret); err != nil {
+			return ret, err
+		}
 		return ret, err
 	}
 	if finalizer, ok := ret.(state.FinalizerWithError); ok {
@@ -173,7 +179,13 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 			}
 			return ret, err
 		}
-		return ret, finalizeErr
+		if finalizeErr != nil {
+			return ret, finalizeErr
+		}
+		if err = finalizeMCPOutput(ctx, ret); err != nil {
+			return ret, err
+		}
+		return ret, nil
 	}
 	if err != nil {
 		return ret, err
@@ -181,7 +193,25 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 	if finalizer, ok := ret.(state.Finalizer); ok {
 		err = finalizer.Finalize(ctx)
 	}
+	if err != nil {
+		return ret, err
+	}
+	if err = finalizeMCPOutput(ctx, ret); err != nil {
+		return ret, err
+	}
 	return ret, err
+}
+
+func finalizeMCPOutput(ctx context.Context, ret interface{}) error {
+	finalizer, ok := ret.(state.MCPFinalizer)
+	if !ok {
+		return nil
+	}
+	mcp, ok := state.LookupMCPContext(ctx)
+	if !ok {
+		return nil
+	}
+	return finalizer.FinalizeMCP(ctx, mcp)
 }
 
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {

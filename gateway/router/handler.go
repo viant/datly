@@ -172,9 +172,13 @@ func (r *Handler) Serve(serverPath string) error {
 }
 
 func (r *Handler) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
-	ctx := context.Background()
+	ctx := req.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	execContext := exec.NewContext(req.Method, req.RequestURI, req.Header, r.Version)
 	ctx = vcontext.WithValue(ctx, exec.ContextKey, execContext)
+	req = req.WithContext(ctx)
 	r.HandleRequest(ctx, writer, req)
 	if execContext.StatusCode == 0 {
 		execContext.StatusCode = http.StatusOK

@@ -97,7 +97,7 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 		}
 
 		// 4) Build HTTP request and route
-		httpReq, rpcErr := r.newToolHTTPRequest(aRoute.Path.Method, finalURL, body)
+		httpReq, rpcErr := r.newToolHTTPRequest(ctx, aRoute.Path.Method, finalURL, body)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -303,8 +303,8 @@ func selectorPublicParamName(p *state.Parameter) (string, bool) {
 }
 
 // newToolHTTPRequest constructs an HTTP request for routed tool invocation.
-func (r *Router) newToolHTTPRequest(method, URL string, body io.Reader) (*http.Request, *jsonrpc.Error) {
-	httpRequest, err := http.NewRequest(method, URL, body)
+func (r *Router) newToolHTTPRequest(ctx context.Context, method, URL string, body io.Reader) (*http.Request, *jsonrpc.Error) {
+	httpRequest, err := http.NewRequestWithContext(ctx, method, URL, body)
 	if err != nil {
 		return nil, jsonrpc.NewInvalidRequest(err.Error(), nil)
 	}
@@ -801,7 +801,7 @@ func (r *Router) handleMcpRead(ctx context.Context, params *schema.ReadResourceR
 	}
 
 	responseWriter := proxy.NewWriter()
-	httpRequest, err := http.NewRequest(http.MethodGet, URL, nil)
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, URL, nil)
 	if err != nil {
 		return nil, jsonrpc.NewInvalidRequest(err.Error(), nil)
 	}

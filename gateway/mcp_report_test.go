@@ -33,6 +33,14 @@ import (
 
 type repositoryReportTestResource struct{}
 
+type gatewayTestMCPContext struct {
+	Name string
+}
+
+func (g *gatewayTestMCPContext) Client() state.MCPClient {
+	return nil
+}
+
 func (r *repositoryReportTestResource) LookupParameter(name string) (*state.Parameter, error) {
 	return nil, nil
 }
@@ -341,10 +349,40 @@ func TestRouter_mcpToolCallHandler_MapsComponentAndSelectorArgumentsToHTTPQuery(
 }
 
 func TestRouter_newToolHTTPRequest_SetsJSONContentTypeForBody(t *testing.T) {
-	req, rpcErr := (&Router{}).newToolHTTPRequest(http.MethodPost, "http://localhost/v1/api/dev/vendors-grouping/report", strings.NewReader(`{"dimensions":{"accountId":true}}`))
+	req, rpcErr := (&Router{}).newToolHTTPRequest(context.Background(), http.MethodPost, "http://localhost/v1/api/dev/vendors-grouping/report", strings.NewReader(`{"dimensions":{"accountId":true}}`))
 	require.Nil(t, rpcErr)
 	require.NotNil(t, req)
 	assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
+}
+
+func TestRouter_mcpToolCallHandler_PropagatesMCPContextToRoute(t *testing.T) {
+	component := &repository.Component{
+		Path: contract.Path{Method: http.MethodGet, URI: "/v1/api/test"},
+		View: &view.View{},
+	}
+
+	var ctxHasMCP bool
+	var reqCtxHasMCP bool
+	route := &Route{
+		Path: &contract.Path{Method: http.MethodGet, URI: "/v1/api/test"},
+		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+			_, ctxHasMCP = state.LookupMCPContext(ctx)
+			_, reqCtxHasMCP = state.LookupMCPContext(req.Context())
+			response.WriteHeader(http.StatusOK)
+			_, _ = response.Write([]byte(`{"ok":true}`))
+		},
+	}
+
+	mcpCtx := &gatewayTestMCPContext{Name: "gateway-mcp"}
+	handler := (&Router{}).mcpToolCallHandler(component, route)
+	result, rpcErr := handler(state.WithMCPContext(context.Background(), mcpCtx), &schema.CallToolRequest{
+		Params: schema.CallToolRequestParams{},
+	})
+
+	require.Nil(t, rpcErr)
+	require.NotNil(t, result)
+	assert.True(t, ctxHasMCP)
+	assert.True(t, reqCtxHasMCP)
 }
 
 func TestRouter_buildToolsIntegration_RegistersCubeTool(t *testing.T) {
