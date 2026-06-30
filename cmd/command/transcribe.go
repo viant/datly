@@ -174,8 +174,12 @@ func applyAuth(cfg *gateway.Config, auth *options.Auth) {
 		return
 	}
 	if strings.TrimSpace(auth.RSA) != "" {
-		cfg.JWTValidator = &verifier.Config{RSA: getScyResources(auth.RSA)}
-		cfg.JwtSigner = &signer.Config{RSA: getScyResource(strings.Split(auth.RSA, ";")[0])}
+		publicRes, privateRes := splitAuthResourcePair(auth.RSA)
+		cfg.JWTValidator = &verifier.Config{RSA: getScyResources(publicRes)}
+		if privateRes == "" {
+			privateRes = publicRes
+		}
+		cfg.JwtSigner = &signer.Config{RSA: getScyResource(privateRes)}
 	}
 	if strings.TrimSpace(auth.HMAC) != "" {
 		cfg.JWTValidator = &verifier.Config{HMAC: getScyResource(auth.HMAC)}
@@ -195,7 +199,7 @@ func getScyResource(location string) *scy.Resource {
 
 func getScyResources(location string) []*scy.Resource {
 	var result []*scy.Resource
-	for _, item := range strings.Split(location, "-") {
+	for _, item := range strings.Split(location, ";") {
 		item = strings.TrimSpace(item)
 		if item == "" {
 			continue
@@ -203,6 +207,19 @@ func getScyResources(location string) []*scy.Resource {
 		result = append(result, getScyResource(item))
 	}
 	return result
+}
+
+func splitAuthResourcePair(location string) (string, string) {
+	location = strings.TrimSpace(location)
+	if location == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(location, ";", 2)
+	publicRes := strings.TrimSpace(parts[0])
+	if len(parts) == 1 {
+		return publicRes, ""
+	}
+	return publicRes, strings.TrimSpace(parts[1])
 }
 
 func existingBootstrapSources(ctx context.Context, fs afs.Service, cfgURL string) []string {
