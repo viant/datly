@@ -242,6 +242,106 @@ Views:
 	assert.Contains(t, fieldQuery.SQL, "quantity")
 }
 
+func TestGenerateCacheInput_AppliesWarmupLimitOverride(t *testing.T) {
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: ":memory:"
+
+Views:
+  - Name: events
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+      - Name: quantity
+        DataType: int
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+        Limit: 25
+    Selector:
+      Constraints:
+        Limit: true
+      Limit: 1
+    Template:
+      Source: SELECT * FROM EVENTS
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+	aView := resource.Views[0]
+
+	input, err := aView.Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.Len(t, input, 1)
+	require.NotNil(t, input[0].Selector)
+	assert.Equal(t, 25, input[0].Selector.Limit)
+	assert.False(t, input[0].Selector.WarmupNoLimit)
+}
+
+func TestGenerateCacheInput_ZeroWarmupLimitSetsNoLimit(t *testing.T) {
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: ":memory:"
+
+Views:
+  - Name: events
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+      - Name: quantity
+        DataType: int
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+        Limit: 0
+    Selector:
+      Constraints:
+        Limit: true
+      Limit: 1
+    Template:
+      Source: SELECT * FROM EVENTS
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+	aView := resource.Views[0]
+
+	input, err := aView.Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.Len(t, input, 1)
+	require.NotNil(t, input[0].Selector)
+	assert.Equal(t, 0, input[0].Selector.Limit)
+	assert.True(t, input[0].Selector.WarmupNoLimit)
+}
+
 func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCase struct {
 	description      string
 	URL              string

@@ -911,6 +911,9 @@ func (b *Builder) lookupRelationColumn(aView *view.View, relation *view.Relation
 }
 
 func actualLimit(aView *view.View, selector *view.Statelet) int {
+	if selector.WarmupNoLimit {
+		return 0
+	}
 	if selector.Limit != 0 {
 		return selector.Limit
 	}
