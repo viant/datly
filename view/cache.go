@@ -12,7 +12,9 @@ import (
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/sqlx/io/read/cache/aerospike"
 	"github.com/viant/sqlx/io/read/cache/afs"
+	"github.com/viant/tagly/format"
 	rdata "github.com/viant/toolbox/data"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,6 +54,7 @@ type (
 		IndexColumn    string
 		IndexParameter string     `json:",omitempty" yaml:",omitempty"`
 		IndexMeta      bool       `json:",omitempty"`
+		Limit          *int       `json:",omitempty" yaml:",omitempty"`
 		FieldNames     []string   `json:",omitempty" yaml:",omitempty"`
 		Connector      *Connector `json:",omitempty"`
 		Cases          []*CacheParameters
@@ -68,7 +71,9 @@ type (
 		// ExcludeDefault keeps explicitly declared warmup cases from adding an extra nil/default selector.
 		ExcludeDefault bool `json:",omitempty" yaml:",omitempty"`
 
-		_param *state.Parameter
+		_param        *state.Parameter
+		_location     *time.Location
+		_locationInit bool
 	}
 
 	CacheInput struct {
@@ -88,6 +93,8 @@ const (
 	afsType       = "afs"
 	aerospikeType = "aerospike"
 )
+
+var warmupNow = time.Now
 
 func (c Caches) Has(name string) bool {
 	for _, candidate := range c {
@@ -392,6 +399,7 @@ func (c *Cache) generateDatasetSelectorsErr(ctx context.Context, set *CacheParam
 func (c *Cache) getParamValues(ctx context.Context, paramValue *ParamValue) ([]interface{}, error) {
 	result := make([]interface{}, len(paramValue.Values), len(paramValue.Values)+1)
 	for i, value := range paramValue.Values {
+		value = resolveWarmupValue(value, paramValue._param, paramValue._location)
 		marshal := fmt.Sprintf("%v", value)
 		converted, _, err := converter.Convert(marshal, paramValue._param.Schema.Type(), false, paramValue._param.DateFormat)
 		if err != nil {
@@ -405,6 +413,65 @@ func (c *Cache) getParamValues(ctx context.Context, paramValue *ParamValue) ([]i
 	}
 
 	return result, nil
+}
+
+func resolveWarmupValue(value interface{}, param *state.Parameter, location *time.Location) interface{} {
+	raw, ok := value.(string)
+	if !ok {
+		return value
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" || !strings.HasPrefix(raw, "@") {
+		return value
+	}
+	now := warmupReferenceTime(location)
+	switch strings.ToLower(raw) {
+	case "@today":
+		return formatWarmupDate(now, param)
+	case "@yesterday":
+		return formatWarmupDate(now.AddDate(0, 0, -1), param)
+	default:
+		return value
+	}
+}
+
+func warmupReferenceTime(location *time.Location) time.Time {
+	now := warmupNow()
+	if location == nil {
+		return now.UTC()
+	}
+	return now.In(location)
+}
+
+func warmupLocation(param *state.Parameter) (*time.Location, error) {
+	if param == nil || strings.TrimSpace(param.Tag) == "" {
+		return nil, nil
+	}
+	parsed, err := format.Parse(reflect.StructTag(param.Tag))
+	if err != nil {
+		return nil, fmt.Errorf("invalid warmup format tag on parameter %s: %w", param.Name, err)
+	}
+	if parsed == nil || strings.TrimSpace(parsed.Timezone) == "" {
+		return nil, nil
+	}
+	switch timezone := strings.TrimSpace(parsed.Timezone); timezone {
+	case "UTC", "utc":
+		return time.UTC, nil
+	default:
+		location, loadErr := time.LoadLocation(timezone)
+		if loadErr != nil {
+			return nil, fmt.Errorf("invalid warmup timezone %q on parameter %s: %w", timezone, param.Name, loadErr)
+		}
+		return location, nil
+	}
+}
+
+func formatWarmupDate(value time.Time, param *state.Parameter) string {
+	layout := "2006-01-02"
+	if param != nil && strings.TrimSpace(param.DateFormat) != "" {
+		layout = param.DateFormat
+	}
+	return value.Format(layout)
 }
 
 func (c *Cache) initWarmup(ctx context.Context, resource *Resource) error {
@@ -447,16 +514,24 @@ func (c *Cache) initWarmup(ctx context.Context, resource *Resource) error {
 }
 
 func (c *Cache) ensureParam(paramValue *ParamValue) error {
-	if paramValue._param != nil {
-		return nil
+	param := paramValue._param
+	if param == nil {
+		var err error
+		param, err = c.owner.Template._parametersIndex.Lookup(paramValue.Name)
+		if err != nil {
+			return err
+		}
+		paramValue._param = param
 	}
 
-	param, err := c.owner.Template._parametersIndex.Lookup(paramValue.Name)
-	if err != nil {
-		return err
+	if !paramValue._locationInit {
+		location, err := warmupLocation(param)
+		if err != nil {
+			return err
+		}
+		paramValue._location = location
+		paramValue._locationInit = true
 	}
-
-	paramValue._param = param
 	return nil
 }
 
@@ -545,6 +620,10 @@ func (c *Cache) NewInput(selector *Statelet) *CacheInput {
 
 func (c *Cache) newInput(selector *Statelet, set *CacheParameters) *CacheInput {
 	fieldNames := c.fieldNamesFor(set)
+	if selector != nil && c.Warmup != nil && c.Warmup.Limit != nil {
+		selector.Limit = *c.Warmup.Limit
+		selector.WarmupNoLimit = *c.Warmup.Limit == 0
+	}
 	c.applyWarmupFieldNames(selector, fieldNames)
 	return &CacheInput{
 		Selector:   selector,

@@ -2,6 +2,7 @@ package function
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/viant/datly/view"
@@ -40,6 +41,13 @@ func (c *cacheWarmup) Apply(args []string, column *sqlparser.Column, resource *v
 				return err
 			}
 			warmup.FieldNames = fieldNames
+			continue
+		}
+		if limit, ok, err := parseWarmupLimit(raw); ok || err != nil {
+			if err != nil {
+				return err
+			}
+			warmup.Limit = limit
 			continue
 		}
 		param, err := parseWarmupParam(raw)
@@ -119,6 +127,29 @@ func parseWarmupFieldNames(raw string) ([]string, bool, error) {
 		return nil, true, fmt.Errorf("warmup fieldNames has no values")
 	}
 	return result, true, nil
+}
+
+func parseWarmupLimit(raw string) (*int, bool, error) {
+	name, value, ok := splitWarmupOption(raw)
+	if !ok {
+		return nil, false, nil
+	}
+	switch strings.ToLower(name) {
+	case "limit":
+	default:
+		return nil, false, nil
+	}
+	if value == "" {
+		return nil, true, fmt.Errorf("warmup limit was empty")
+	}
+	limit, err := strconv.Atoi(value)
+	if err != nil {
+		return nil, true, fmt.Errorf("warmup limit %q was invalid: %w", value, err)
+	}
+	if limit < 0 {
+		return nil, true, fmt.Errorf("warmup limit %q must be zero or greater", value)
+	}
+	return &limit, true, nil
 }
 
 func parseWarmupParam(raw string) (*view.ParamValue, error) {

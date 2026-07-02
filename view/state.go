@@ -22,10 +22,11 @@ type (
 		Template       *structology.State
 		state.QuerySelector
 		QuerySettings
-		filtersMu    sync.Mutex
-		initialized  bool
-		_columnNames map[string]bool
-		result       *cache.ParmetrizedQuery
+		filtersMu     sync.Mutex
+		initialized   bool
+		WarmupNoLimit bool
+		_columnNames  map[string]bool
+		result        *cache.ParmetrizedQuery
 		predicate.Filters
 		Ignore bool
 	}
@@ -166,6 +167,7 @@ func (s *Statelet) CloneForSummary() *Statelet {
 		QuerySelector:  s.QuerySelector,
 		QuerySettings:  s.QuerySettings,
 		initialized:    s.initialized,
+		WarmupNoLimit:  s.WarmupNoLimit,
 		result:         s.result,
 		Ignore:         s.Ignore,
 	}

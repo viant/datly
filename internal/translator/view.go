@@ -3,6 +3,7 @@ package translator
 import (
 	"fmt"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/viant/datly/internal/asset"
@@ -43,11 +44,10 @@ func (v *View) applyHintSettings(namespace *Viewlet) error {
 		return fmt.Errorf("invalid view %v hint, %w, %s", v, err, viewJSONHint)
 	}
 
-	v.applyShorthands(namespace)
-	return nil
+	return v.applyShorthands(namespace)
 }
 
-func (v *View) applyShorthands(viewlet *Viewlet) {
+func (v *View) applyShorthands(viewlet *Viewlet) error {
 	if v.Self != nil {
 		v.SelfReference = v.Self
 	}
@@ -79,13 +79,18 @@ func (v *View) applyShorthands(viewlet *Viewlet) {
 	}
 
 	if len(v.Warmup) > 0 {
-		v.View.Cache.Warmup = v.buildCacheWarmup(v.Warmup, viewlet)
+		warmup, err := v.buildCacheWarmup(v.Warmup, viewlet)
+		if err != nil {
+			return err
+		}
+		v.View.Cache.Warmup = warmup
 	}
+	return nil
 }
 
-func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet) *view.Warmup {
+func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet) (*view.Warmup, error) {
 	if warmup == nil {
-		return nil
+		return nil, nil
 	}
 	warmup = copyWarmup(warmup)
 
@@ -93,6 +98,8 @@ func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet)
 	delete(warmup, "IndexColumn")
 	indexParameter, _ := warmup["IndexParameter"]
 	delete(warmup, "IndexParameter")
+	limit, hasLimit := warmup["Limit"]
+	delete(warmup, "Limit")
 	connector, _ := warmup["Connector"]
 	delete(warmup, "Connector")
 	var refColumn string
@@ -107,10 +114,23 @@ func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet)
 		result.IndexColumn = explicit
 	}
 	if result.IndexColumn == "" {
-		return nil
+		return nil, nil
 	}
 	if parameterName := strings.TrimSpace(fmt.Sprint(indexParameter)); parameterName != "" && parameterName != "<nil>" {
 		result.IndexParameter = parameterName
+	}
+	if hasLimit {
+		limitValue := strings.TrimSpace(fmt.Sprint(limit))
+		if limitValue != "" && limitValue != "<nil>" {
+			parsed, err := strconv.Atoi(limitValue)
+			if err != nil {
+				return nil, fmt.Errorf("invalid warmup limit %q: %w", limitValue, err)
+			}
+			if parsed < 0 {
+				return nil, fmt.Errorf("invalid warmup limit %q: must be zero or greater", limitValue)
+			}
+			result.Limit = &parsed
+		}
 	}
 	if connectorName := strings.TrimSpace(fmt.Sprint(connector)); connectorName != "" && connectorName != "<nil>" {
 		result.Connector = view.NewRefConnector(connectorName)
@@ -127,7 +147,7 @@ func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet)
 	}
 
 	result.Cases = append(result.Cases, multiSet)
-	return result
+	return result, nil
 }
 
 func copyWarmup(warmup map[string]interface{}) map[string]interface{} {
