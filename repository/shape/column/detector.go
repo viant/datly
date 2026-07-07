@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	viewcolumn "github.com/viant/datly/view/column"
 	"github.com/viant/datly/view/state"
@@ -110,6 +111,9 @@ func discoverySQL(aView *view.View, resource *view.Resource) string {
 		}
 		return cleaned
 	}
+	// A view whose SQL is a derived table is wrapped in ( ... ); the balanced
+	// pair confuses the falsifier's parser, so trim it before falsifying.
+	cleaned = strings.TrimSpace(shared.TrimPair(cleaned, '(', ')'))
 	if falsified, ok := falsifyQuery(cleaned); ok {
 		return falsified
 	}
@@ -473,6 +477,21 @@ func needsDiscovery(aView *view.View) bool {
 	return usesWildcard(aView)
 }
 
+// discoveryReplacementFor keeps a discovery query valid once a ${...} template
+// is removed. A predicate builder that opens a WHERE clause is replaced with a
+// tautology so any trailing AND still binds; any other builder is dropped; a
+// plain value expression becomes an empty string literal.
+func discoveryReplacementFor(expr string) string {
+	if !strings.Contains(expr, ".Build(") {
+		return "''"
+	}
+	lower := strings.ToLower(expr)
+	if strings.Contains(lower, `build("where")`) || strings.Contains(lower, `build('where')`) {
+		return " WHERE 1 = 1 "
+	}
+	return ""
+}
+
 // stripTemplateVariables removes velocity/velty template constructs from SQL
 // so it can be parsed and executed for column discovery.
 // Handles: $variable, ${expression}, #if...#end, #foreach...#end, #set(...)
@@ -508,8 +527,10 @@ func stripTemplateVariables(sql string) string {
 					}
 					j++
 				}
-				// Replace with empty string or placeholder
-				b.WriteString("''")
+				// Predicate builders emit SQL clauses (e.g. Build("WHERE")); replace
+				// them with a valid stand-in so the discovery query stays parseable.
+				// Plain value expressions fall back to an empty string literal.
+				b.WriteString(discoveryReplacementFor(sql[i+2 : j-1]))
 				i = j
 				continue
 			}

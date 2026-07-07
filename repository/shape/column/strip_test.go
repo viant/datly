@@ -44,7 +44,7 @@ func TestStripTemplateVariables(t *testing.T) {
 		{
 			name:   "expression in braces",
 			input:  "SELECT * FROM VENDOR WHERE ${predicate.Build(\"AND\")}",
-			expect: "SELECT * FROM VENDOR WHERE ''",
+			expect: "SELECT * FROM VENDOR WHERE ",
 		},
 		{
 			name:   "if directive",
@@ -64,7 +64,7 @@ func TestStripTemplateVariables(t *testing.T) {
 		{
 			name:   "mixed templates and SQL",
 			input:  "SELECT vendor.*, products.* FROM (SELECT * FROM VENDOR t) vendor JOIN (SELECT * FROM PRODUCT t WHERE 1=1 ${predicate.Builder().CombineOr($predicate.FilterGroup(0, \"AND\")).Build(\"AND\")}) products ON products.VENDOR_ID = vendor.ID",
-			expect: "SELECT vendor.*, products.* FROM (SELECT * FROM VENDOR t) vendor JOIN (SELECT * FROM PRODUCT t WHERE 1=1 '') products ON products.VENDOR_ID = vendor.ID",
+			expect: "SELECT vendor.*, products.* FROM (SELECT * FROM VENDOR t) vendor JOIN (SELECT * FROM PRODUCT t WHERE 1=1 ) products ON products.VENDOR_ID = vendor.ID",
 		},
 		{
 			name:   "UNION ALL with templates",
@@ -94,7 +94,7 @@ func TestStripTemplateVariables(t *testing.T) {
 		{
 			name:   "complex predicate builder",
 			input:  "WHERE ${predicate.Builder().CombineOr($predicate.FilterGroup(0, \"AND\")).Build(\"AND\")}",
-			expect: "WHERE ''",
+			expect: "WHERE ",
 		},
 		{
 			name:   "dollar at end",
@@ -156,7 +156,7 @@ perf AS (
     FROM fact_performance p
     JOIN params prm ON TRUE
     WHERE p.event_date BETWEEN prm.start_date AND prm.end_date
-      ''
+      
     GROUP BY 1
 )
 SELECT v.* FROM perf v ORDER BY v.agency_id`,
