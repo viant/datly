@@ -15,6 +15,7 @@ func TestCacheWarmupApply(t *testing.T) {
 		"Connector=bq_metrics_prewarm",
 		"IndexParameter=OrderId",
 		"Limit=0",
+		"MaxCases=3",
 		"FieldNames=Id,Name",
 		"Period=today,yesterday",
 		"Granularity=hour,day",
@@ -33,6 +34,9 @@ func TestCacheWarmupApply(t *testing.T) {
 	}
 	if aView.Cache.Warmup.Limit == nil || *aView.Cache.Warmup.Limit != 0 {
 		t.Fatalf("unexpected warmup limit: %#v", aView.Cache.Warmup.Limit)
+	}
+	if aView.Cache.Warmup.MaxCases == nil || *aView.Cache.Warmup.MaxCases != 3 {
+		t.Fatalf("unexpected warmup maxCases: %#v", aView.Cache.Warmup.MaxCases)
 	}
 	if len(aView.Cache.Warmup.FieldNames) != 2 || aView.Cache.Warmup.FieldNames[0] != "Id" || aView.Cache.Warmup.FieldNames[1] != "Name" {
 		t.Fatalf("unexpected field names: %#v", aView.Cache.Warmup.FieldNames)
@@ -90,6 +94,14 @@ func TestCacheWarmupApplyRejectsInvalidLimit(t *testing.T) {
 func TestCacheWarmupApplyRejectsNegativeLimit(t *testing.T) {
 	aView := &view.View{Cache: view.NewRefCache("aerospike")}
 	err := (&cacheWarmup{}).Apply([]string{"order_id", "Limit=-1"}, nil, &view.Resource{}, aView)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestCacheWarmupApplyRejectsNegativeMaxCases(t *testing.T) {
+	aView := &view.View{Cache: view.NewRefCache("aerospike")}
+	err := (&cacheWarmup{}).Apply([]string{"order_id", "MaxCases=-1"}, nil, &view.Resource{}, aView)
 	if err == nil {
 		t.Fatalf("expected error")
 	}
