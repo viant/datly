@@ -50,6 +50,13 @@ func (c *cacheWarmup) Apply(args []string, column *sqlparser.Column, resource *v
 			warmup.Limit = limit
 			continue
 		}
+		if maxCases, ok, err := parseWarmupMaxCases(raw); ok || err != nil {
+			if err != nil {
+				return err
+			}
+			warmup.MaxCases = maxCases
+			continue
+		}
 		param, err := parseWarmupParam(raw)
 		if err != nil {
 			return err
@@ -130,24 +137,37 @@ func parseWarmupFieldNames(raw string) ([]string, bool, error) {
 }
 
 func parseWarmupLimit(raw string) (*int, bool, error) {
+	return parseWarmupNonNegativeInt(raw, []string{"limit"}, "warmup limit")
+}
+
+func parseWarmupMaxCases(raw string) (*int, bool, error) {
+	return parseWarmupNonNegativeInt(raw, []string{"maxcases", "max_cases"}, "warmup maxCases")
+}
+
+func parseWarmupNonNegativeInt(raw string, options []string, description string) (*int, bool, error) {
 	name, value, ok := splitWarmupOption(raw)
 	if !ok {
 		return nil, false, nil
 	}
-	switch strings.ToLower(name) {
-	case "limit":
-	default:
+	matched := false
+	for _, option := range options {
+		if strings.EqualFold(name, option) {
+			matched = true
+			break
+		}
+	}
+	if !matched {
 		return nil, false, nil
 	}
 	if value == "" {
-		return nil, true, fmt.Errorf("warmup limit was empty")
+		return nil, true, fmt.Errorf("%s was empty", description)
 	}
 	limit, err := strconv.Atoi(value)
 	if err != nil {
-		return nil, true, fmt.Errorf("warmup limit %q was invalid: %w", value, err)
+		return nil, true, fmt.Errorf("%s %q was invalid: %w", description, value, err)
 	}
 	if limit < 0 {
-		return nil, true, fmt.Errorf("warmup limit %q must be zero or greater", value)
+		return nil, true, fmt.Errorf("%s %q must be zero or greater", description, value)
 	}
 	return &limit, true, nil
 }

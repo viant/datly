@@ -71,6 +71,7 @@ func (r *Route) Handle(res http.ResponseWriter, req *http.Request) int {
 		if statusCode == 0 {
 			statusCode = http.StatusOK
 		}
+		r.Counter.IncrementValue("Request")
 		// Increment error/success buckets
 		if statusCode >= 200 && statusCode < 300 {
 			r.Counter.IncrementValue("Success")

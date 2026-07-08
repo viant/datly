@@ -872,6 +872,7 @@ func logCacheRead(aView *view.View, stats *cache.Stats, elapsed time.Duration, r
 	if stats == nil {
 		return
 	}
+	recordCacheReadMetrics(aView, stats)
 	fmt.Printf("[INFO] datly cache read view=%s source=%s type=%s found_warmup=%t found_lazy=%t records=%d rows=%d namespace=%s set=%s elapsed=%s args=%v\n",
 		aView.Name,
 		cacheReadSource(stats),
@@ -884,6 +885,32 @@ func logCacheRead(aView *view.View, stats *cache.Stats, elapsed time.Duration, r
 		stats.Dataset,
 		elapsed,
 		args)
+}
+
+func recordCacheReadMetrics(aView *view.View, stats *cache.Stats) {
+	if aView == nil || aView.Counter == nil || stats == nil {
+		return
+	}
+	if stats.ErrorType != "" {
+		aView.Counter.IncrementValue("cache:error")
+		return
+	}
+	if stats.FoundWarmup {
+		aView.Counter.IncrementValue("cache:hit")
+		aView.Counter.IncrementValue("cache:warmup_hit")
+		return
+	}
+	if stats.FoundLazy {
+		aView.Counter.IncrementValue("cache:hit")
+		aView.Counter.IncrementValue("cache:lazy_hit")
+		return
+	}
+	if stats.Type == cache.TypeWrite {
+		aView.Counter.IncrementValue("cache:miss")
+		aView.Counter.IncrementValue("cache:miss_write")
+		return
+	}
+	aView.Counter.IncrementValue("cache:miss")
 }
 
 func cacheReadSource(stats *cache.Stats) string {

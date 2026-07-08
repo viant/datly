@@ -2,6 +2,7 @@ package warmup
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path"
 	"sync/atomic"
@@ -176,6 +177,57 @@ func TestWarmupCacheKeyNormalizesNilArgs(t *testing.T) {
 	assert.ErrorContains(t, err, "query was nil")
 }
 
+func TestIndexProgressContext(t *testing.T) {
+	aView := &view.View{
+		Name:     "performanceTimeline",
+		Template: &view.Template{},
+		Selector: &view.Config{},
+		Cache: &view.Cache{
+			Location: "${View.Name}_dataset",
+			Provider: "aerospike://127.0.0.1:3000/ns_memory",
+		},
+	}
+	entry := &warmupEntry{
+		view:  aView,
+		label: "Period=today,Granularity=hour",
+	}
+
+	ctx := indexProgressContext(context.Background(), entry)
+	progress, ok := sqlcache.IndexProgressFromContext(ctx)
+	require.True(t, ok)
+	require.NotNil(t, progress)
+	require.Equal(t, "performanceTimeline", progress.View)
+	require.Equal(t, "ns_memory/performanceTimeline_dataset", progress.Dataset)
+	require.Equal(t, "Period=today,Granularity=hour", progress.Case)
+
+	callback, ok := sqlcache.IndexProgressCallbackFromContext(ctx)
+	require.True(t, ok)
+	require.NotNil(t, callback)
+
+	var actual *sqlcache.IndexProgressEvent
+	ctx = sqlcache.WithIndexProgressCallback(ctx, func(event *sqlcache.IndexProgressEvent) {
+		if event == nil {
+			return
+		}
+		cloned := *event
+		actual = &cloned
+	})
+	sqlcache.EmitIndexProgress(ctx, &sqlcache.IndexProgressEvent{
+		Column:  "order_id",
+		Rows:    42,
+		Elapsed: 3 * time.Second,
+		Done:    true,
+	})
+	require.NotNil(t, actual)
+	require.Equal(t, "performanceTimeline", actual.View)
+	require.Equal(t, "ns_memory/performanceTimeline_dataset", actual.Dataset)
+	require.Equal(t, "Period=today,Granularity=hour", actual.Case)
+	require.Equal(t, "order_id", actual.Column)
+	require.Equal(t, 42, actual.Rows)
+	require.Equal(t, 3*time.Second, actual.Elapsed)
+	require.True(t, actual.Done)
+}
+
 func TestWarmupFieldNamesAffectGeneratedCacheKey(t *testing.T) {
 	resourcePath := path.Join(t.TempDir(), "resource.yaml")
 	require.NoError(t, os.WriteFile(resourcePath, []byte(`
@@ -340,6 +392,294 @@ Views:
 	require.NotNil(t, input[0].Selector)
 	assert.Equal(t, 0, input[0].Selector.Limit)
 	assert.True(t, input[0].Selector.WarmupNoLimit)
+}
+
+func TestGenerateCacheInput_AppliesMaxCases(t *testing.T) {
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: ":memory:"
+
+Views:
+  - Name: events
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+        MaxCases: 2
+        Cases:
+          - Set:
+              - Name: EventTypeId
+                Values: [1, 2, 3, 4]
+    Template:
+      Source: SELECT * FROM EVENTS WHERE event_type_id = $EventTypeId
+      Parameters:
+        - Name: EventTypeId
+          Required: true
+          In:
+            Kind: query
+            Name: event_type_id
+          Schema:
+            DataType: int
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+
+	input, err := resource.Views[0].Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.Len(t, input, 2)
+	require.Equal(t, "EventTypeId=1", input[0].Label)
+	require.Equal(t, "EventTypeId=2", input[1].Label)
+}
+
+func TestGenerateCacheInput_AppliesMaxCasesAcrossDatasets(t *testing.T) {
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: ":memory:"
+
+Views:
+  - Name: events
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+        MaxCases: 3
+        Cases:
+          - Set:
+              - Name: EventTypeId
+                Values: [1, 2]
+          - Set:
+              - Name: EventTypeId
+                Values: [3, 4]
+    Template:
+      Source: SELECT * FROM EVENTS WHERE event_type_id = $EventTypeId
+      Parameters:
+        - Name: EventTypeId
+          Required: true
+          In:
+            Kind: query
+            Name: event_type_id
+          Schema:
+            DataType: int
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+
+	input, err := resource.Views[0].Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.Len(t, input, 3)
+	require.Equal(t, "EventTypeId=1", input[0].Label)
+	require.Equal(t, "EventTypeId=2", input[1].Label)
+	require.Equal(t, "EventTypeId=3", input[2].Label)
+}
+
+func TestGenerateCacheInput_MaxCasesZeroMeansUnlimited(t *testing.T) {
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: ":memory:"
+
+Views:
+  - Name: events
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+        MaxCases: 0
+        Cases:
+          - Set:
+              - Name: EventTypeId
+                Values: [1, 2, 3, 4]
+    Template:
+      Source: SELECT * FROM EVENTS WHERE event_type_id = $EventTypeId
+      Parameters:
+        - Name: EventTypeId
+          Required: true
+          In:
+            Kind: query
+            Name: event_type_id
+          Schema:
+            DataType: int
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+
+	input, err := resource.Views[0].Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.Len(t, input, 4)
+}
+
+func TestGenerateCacheInput_MaxCasesCountsIndexMetaExecutions(t *testing.T) {
+	dbPath := path.Join(t.TempDir(), "events.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, db.Close())
+	})
+	_, err = db.Exec(`CREATE TABLE EVENTS (event_type_id INTEGER)`)
+	require.NoError(t, err)
+
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: "`+dbPath+`"
+
+Views:
+  - Name: events
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+        MaxCases: 3
+        Cases:
+          - Set:
+              - Name: EventTypeId
+                Values: [1, 2, 3]
+    Selector:
+      Constraints:
+        Projection: true
+    Template:
+      Summary:
+        Name: EventsMeta
+        Source: 'SELECT COUNT(*) AS TOTAL_RECORDS, event_type_id FROM ($View.Expand($criteria)) GROUP BY event_type_id'
+      Source: SELECT * FROM EVENTS
+      Parameters:
+        - Name: EventTypeId
+          Required: true
+          In:
+            Kind: query
+            Name: event_type_id
+          Schema:
+            DataType: int
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+
+	input, err := resource.Views[0].Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.Len(t, input, 1)
+	require.True(t, input[0].IndexMeta)
+	require.Equal(t, "EventTypeId=1", input[0].Label)
+}
+
+func TestGenerateCacheInput_MaxCasesAppliesWithoutExplicitCases(t *testing.T) {
+	dbPath := path.Join(t.TempDir(), "events.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, db.Close())
+	})
+	_, err = db.Exec(`CREATE TABLE EVENTS (event_type_id INTEGER)`)
+	require.NoError(t, err)
+
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: "`+dbPath+`"
+
+Views:
+  - Name: events
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+        MaxCases: 1
+    Selector:
+      Constraints:
+        Projection: true
+    Template:
+      Summary:
+        Name: EventsMeta
+        Source: 'SELECT COUNT(*) AS TOTAL_RECORDS, event_type_id FROM ($View.Expand($criteria)) GROUP BY event_type_id'
+      Source: SELECT * FROM EVENTS
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+
+	input, err := resource.Views[0].Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, input)
 }
 
 func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCase struct {
