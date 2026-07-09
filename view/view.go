@@ -13,6 +13,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/setter"
+	"github.com/viant/datly/internal/gmetricx"
 	"github.com/viant/datly/logger"
 	expand2 "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
@@ -22,7 +23,7 @@ import (
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
-	"github.com/viant/gmetric/provider"
+	"github.com/viant/gmetric"
 	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/structology"
@@ -853,7 +854,6 @@ func (v *View) ensureCounter() {
 	if v.Counter != nil {
 		return
 	}
-	var counter logger.Counter
 	if metric := v._resource.Metrics; metric != nil {
 		name := v.Name
 
@@ -863,16 +863,12 @@ func (v *View) ensureCounter() {
 			metricName = metric.Method + ":" + metricName
 		}
 		metricName = strings.ReplaceAll(metricName, "/", ".")
-		cnt := metric.Service.LookupOperation(metricName)
-
-		if cnt == nil {
-			counter = metric.Service.MultiOperationCounter(pkg, metricName, name+" performance", time.Millisecond, time.Minute, 2, provider.NewBasic())
-		} else {
-			counter = cnt
-		}
+		v.Counter = logger.NewCounter(gmetricx.NewCounter(metric.Service, metricName, func() *gmetric.Operation {
+			return metric.Service.MultiOperationCounter(pkg, metricName, name+" performance", time.Millisecond, time.Minute, 2, newViewMetricProvider())
+		}))
+		return
 	}
-
-	v.Counter = logger.NewCounter(counter)
+	v.Counter = logger.NewCounter(nil)
 
 }
 

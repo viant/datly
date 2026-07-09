@@ -3,6 +3,7 @@ package warmup
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/internal/gmetricx"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/warmup"
 	"github.com/viant/gmetric"
@@ -269,7 +270,7 @@ func recordWarmupViewMetrics(aView *view.View, summary *viewSummary) {
 	}
 }
 
-func warmupMetricOperation(aView *view.View) *gmetric.Operation {
+func warmupMetricOperation(aView *view.View) *gmetricx.OperationRef {
 	if aView == nil {
 		return nil
 	}
@@ -278,18 +279,17 @@ func warmupMetricOperation(aView *view.View) *gmetric.Operation {
 		return nil
 	}
 	metricName := warmupMetricName(aView)
-	if counter := resource.Metrics.Service.LookupOperation(metricName); counter != nil {
-		return counter
-	}
 	pkg := warmupMetricPackage(aView)
 	title := aView.Name + " warmup"
-	return resource.Metrics.Service.MultiOperationCounter(pkg, metricName, title, time.Millisecond, time.Minute, warmupMetricRecentBuckets, base.NewProvider(
-		warmupRunOKKey,
-		warmupRunErrorKey,
-		warmupCasesCompletedKey,
-		warmupCasesFailedKey,
-		warmupRowsKey,
-	))
+	return gmetricx.NewOperationRef(resource.Metrics.Service, metricName, func() *gmetric.Operation {
+		return resource.Metrics.Service.MultiOperationCounter(pkg, metricName, title, time.Millisecond, time.Minute, warmupMetricRecentBuckets, base.NewProvider(
+			warmupRunOKKey,
+			warmupRunErrorKey,
+			warmupCasesCompletedKey,
+			warmupCasesFailedKey,
+			warmupRowsKey,
+		))
+	})
 }
 
 func warmupMetricName(aView *view.View) string {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
@@ -53,6 +54,7 @@ func (r *Route) Handle(res http.ResponseWriter, req *http.Request) int {
 	}
 	execContext := exec.NewContext(req.Method, req.RequestURI, req.Header, r.Version)
 	ctx = vcontext.WithValue(ctx, exec.ContextKey, execContext)
+	ctx = requesttrace.Ensure(ctx, execContext.TraceID)
 	req = req.WithContext(ctx)
 	var onDone func(time.Time, ...interface{}) int64 = nil
 	var start time.Time

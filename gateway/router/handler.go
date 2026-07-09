@@ -11,6 +11,7 @@ import (
 	"github.com/viant/afs/option"
 	acontent "github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/gateway/router/openapi"
 	"github.com/viant/datly/gateway/router/status"
 	"github.com/viant/datly/repository"
@@ -178,6 +179,7 @@ func (r *Handler) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
 	}
 	execContext := exec.NewContext(req.Method, req.RequestURI, req.Header, r.Version)
 	ctx = vcontext.WithValue(ctx, exec.ContextKey, execContext)
+	ctx = requesttrace.Ensure(ctx, execContext.TraceID)
 	req = req.WithContext(ctx)
 	r.HandleRequest(ctx, writer, req)
 	if execContext.StatusCode == 0 {

@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/google/uuid"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -96,12 +97,24 @@ func (s *Service) afterRead(ctx context.Context, aSession *Session, collector *v
 		Rows:       collector.Len(),
 	}
 	aSession.AddMetric(metrics)
+	status := Success
 	if err != nil {
-		aSession.View.Counter.IncrementValue(Error)
-	} else {
-		aSession.View.Counter.IncrementValue(Success)
+		status = Error
 	}
-	onFinish(end)
+	statusText := "ok"
+	if err != nil {
+		statusText = "error"
+	}
+	onFinish(end, status)
+	if aSession.DryRun {
+		aSession.View.Counter.IncrementValue(status)
+	}
+	fmt.Printf("[INFO] datly view read reqTraceId=%s view=%s rows=%d elapsed=%s status=%s\n",
+		reqTraceID(ctx),
+		viewName,
+		collector.Len(),
+		elapsed,
+		statusText)
 	if value := ctx.Value(exec.ContextKey); value != nil {
 		if exeCtx := value.(*exec.Context); exeCtx != nil {
 			exeCtx.AppendMetrics(metrics)
@@ -363,7 +376,7 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 	}
 	finished := Now()
 	aView.Logger.Log("reading view %v meta took %v, SQL: %v , Args: %v\n", aView.Name, finished.Sub(now).String(), SQL, args)
-	logCacheRead(aView, cacheStats, finished.Sub(now), collector.Len(), args)
+	logCacheRead(ctx, aView, cacheStats, finished.Sub(now), collector.Len(), args)
 	return execInfo, nil
 }
 
@@ -754,7 +767,7 @@ BEGIN:
 	end := time.Now()
 
 	aView.Logger.ReadingData(end.Sub(begin), parametrizedSQL.SQL, *readData, parametrizedSQL.Args, err)
-	logCacheRead(aView, cacheStats, end.Sub(begin), *readData, parametrizedSQL.Args)
+	logCacheRead(ctx, aView, cacheStats, end.Sub(begin), *readData, parametrizedSQL.Args)
 	if err != nil {
 		stats.SetError(err)
 		anExec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
@@ -868,12 +881,13 @@ func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, 
 	return stats, fmt.Errorf("database error occured while fetching Data for view %v %w", aView.Name, err)
 }
 
-func logCacheRead(aView *view.View, stats *cache.Stats, elapsed time.Duration, rows int, args []interface{}) {
+func logCacheRead(ctx context.Context, aView *view.View, stats *cache.Stats, elapsed time.Duration, rows int, args []interface{}) {
 	if stats == nil {
 		return
 	}
 	recordCacheReadMetrics(aView, stats)
-	fmt.Printf("[INFO] datly cache read view=%s source=%s type=%s found_warmup=%t found_lazy=%t records=%d rows=%d namespace=%s set=%s elapsed=%s args=%v\n",
+	fmt.Printf("[INFO] datly cache read reqTraceId=%s view=%s source=%s type=%s found_warmup=%t found_lazy=%t records=%d rows=%d namespace=%s set=%s elapsed=%s args=%v\n",
+		reqTraceID(ctx),
 		aView.Name,
 		cacheReadSource(stats),
 		stats.Type,
@@ -885,6 +899,13 @@ func logCacheRead(aView *view.View, stats *cache.Stats, elapsed time.Duration, r
 		stats.Dataset,
 		elapsed,
 		args)
+}
+
+func reqTraceID(ctx context.Context) string {
+	if traceID := requesttrace.Current(ctx); traceID != "" {
+		return traceID
+	}
+	return "unknown"
 }
 
 func recordCacheReadMetrics(aView *view.View, stats *cache.Stats) {
