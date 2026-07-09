@@ -432,6 +432,9 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 		routes,
 		r.NewConfigRoute(),
 	)
+	if strings.TrimSpace(r.config.Meta.MetricURI) != "" {
+		routes = append(routes, r.NewGlobalMetricRoutes(r.config.Meta.MetricURI)...)
+	}
 
 	matchables := make([]matcher.Matchable, 0, len(routes))
 	for _, route := range routes {

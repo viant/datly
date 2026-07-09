@@ -12,6 +12,7 @@ import (
 
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/repository"
 	rasync "github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/content"
@@ -262,6 +263,7 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 	} else {
 		info = infoValue.(*exec.Context)
 	}
+	ctx = requesttrace.Ensure(ctx, info.TraceID)
 	provider := ctx.Value(hstate.DBProviderKey)
 	if provider == nil {
 		if aView := aComponent.View; aView != nil {

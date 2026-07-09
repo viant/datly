@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/viant/datly/internal/gmetricx"
 	dlogger "github.com/viant/datly/logger"
 	"github.com/viant/datly/repository"
-	gprovider "github.com/viant/gmetric/provider"
+	"github.com/viant/gmetric"
 )
 
 // ensureRouteCounter pre-registers a per-route counter and returns a logger-compatible adapter.
@@ -45,13 +46,10 @@ func (r *Router) ensureRouteCounter(ctx context.Context, prov *repository.Provid
 	}
 	metricName = strings.ReplaceAll(metricName, "/", ".")
 
-	cnt := r.metrics.LookupOperation(metricName)
-	if cnt == nil {
-		// Title: human-friendly
-		title := v.Name + " request"
-		cnt = r.metrics.MultiOperationCounter(pkg, metricName, title, time.Millisecond, time.Minute, 2, gprovider.NewBasic())
-	}
-	return dlogger.NewCounter(cnt)
+	title := v.Name + " request"
+	return dlogger.NewCounter(gmetricx.NewCounter(r.metrics, metricName, func() *gmetric.Operation {
+		return r.metrics.MultiOperationCounter(pkg, metricName, title, time.Millisecond, time.Minute, 2, newRouteMetricProvider())
+	}))
 }
 
 // normalizeURI replaces path parameters like {id} with a constant token to limit cardinality.
