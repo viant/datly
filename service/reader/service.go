@@ -651,11 +651,39 @@ func warmupIndexParameter(aView *view.View) *state.Parameter {
 		if candidate == nil {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(candidate.Name), parameterName) {
+		if matchesWarmupParameter(candidate, parameterName) {
 			return candidate
 		}
 	}
 	return nil
+}
+
+func matchesWarmupParameter(candidate *state.Parameter, configured string) bool {
+	if candidate == nil {
+		return false
+	}
+	configured = strings.TrimSpace(configured)
+	if configured == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(candidate.Name), configured) {
+		return true
+	}
+	if candidate.In != nil && strings.EqualFold(strings.TrimSpace(candidate.In.Name), configured) {
+		return true
+	}
+
+	fieldName := warmupIndexFieldName(configured)
+	if fieldName == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(candidate.Name), fieldName) {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(candidate.Name), fieldName+"s") {
+		return true
+	}
+	return false
 }
 
 func (s *Service) BuildCriteria(ctx context.Context, value interface{}, options *codec.CriteriaBuilderOptions) (*codec.Criteria, error) {
