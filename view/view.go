@@ -12,8 +12,8 @@ import (
 
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/marshal"
-	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/gmetricx"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/logger"
 	expand2 "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
@@ -1184,8 +1184,7 @@ func (v *View) inherit(view *View) error {
 	}
 
 	if v.Cache == nil && view.Cache != nil {
-		shallowCopy := *view.Cache
-		v.Cache = &shallowCopy
+		v.Cache = view.Cache.cloneForInheritance()
 	}
 
 	if v.ColumnsConfig == nil {

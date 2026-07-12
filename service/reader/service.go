@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -415,7 +416,21 @@ func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, st
 		return nil, nil, err
 	}
 	wg.Wait()
+	applyWarmupIdentity(parametrizedSQL, columnInMatcher)
 	return parametrizedSQL, columnInMatcher, cacheErr
+}
+
+func applyWarmupIdentity(target *cache.ParmetrizedQuery, identity *cache.ParmetrizedQuery) {
+	if target == nil || identity == nil {
+		return
+	}
+	if identity.IdentitySQL != "" {
+		target.IdentitySQL = identity.IdentitySQL
+		target.IdentityArgs = append([]interface{}{}, identity.IdentityArgs...)
+		return
+	}
+	target.IdentitySQL = identity.SQL
+	target.IdentityArgs = append([]interface{}{}, identity.Args...)
 }
 
 func (s *Service) relationWarmupMatcher(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, relation *view.Relation) (*cache.ParmetrizedQuery, error) {
@@ -426,16 +441,71 @@ func (s *Service) relationWarmupMatcher(ctx context.Context, aView *view.View, s
 	if indexColumn == "" || len(batchData.ValuesBatch) == 0 || batchData.HasComposite() || len(batchData.ColumnNames) != 1 {
 		return nil, nil
 	}
-	if !matchesWarmupIndexColumn(indexColumn, relation.Of.On[0], batchData.ColumnNames[0]) {
+	if !matchesWarmupIndex(aView, indexColumn, relation.Of.On[0], batchData.ColumnNames[0]) {
 		return nil, nil
 	}
 	matcher, err := s.warmupMatcher(ctx, aView, statelet, nil)
 	if err != nil || matcher == nil {
 		return matcher, err
 	}
-	matcher.By = indexColumn
+	matcher.By = warmupMarkerColumn(indexColumn, relation, batchData)
 	matcher.In = batchData.ValuesBatch
 	return matcher, nil
+}
+
+func warmupMarkerColumn(indexColumn string, relation *view.Relation, batchData *view.BatchData) string {
+	if column := normalizeWarmupColumnName(indexColumn); column != "" {
+		return column
+	}
+	if batchData != nil && len(batchData.ColumnNames) > 0 {
+		if column := normalizeWarmupColumnName(batchData.ColumnNames[0]); column != "" {
+			return column
+		}
+	}
+	if relation != nil && relation.Of != nil && len(relation.Of.On) > 0 && relation.Of.On[0] != nil {
+		if column := normalizeWarmupColumnName(relation.Of.On[0].Column); column != "" {
+			return column
+		}
+	}
+	return normalizeWarmupColumnName(indexColumn)
+}
+
+func matchesWarmupIndex(aView *view.View, indexColumn string, link *view.Link, batchColumn string) bool {
+	if matchesWarmupIndexColumn(indexColumn, link, batchColumn) {
+		return true
+	}
+	if aView == nil || link == nil {
+		return false
+	}
+	if !strings.EqualFold(normalizeWarmupColumnName(batchColumn), normalizeWarmupColumnName(link.Column)) {
+		return false
+	}
+	warmupField := warmupIndexFieldName(indexColumn)
+	if warmupField == "" {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(link.Field), strings.TrimSpace(warmupField))
+}
+
+var warmupFieldAliasPattern = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+
+func warmupIndexFieldName(indexColumn string) string {
+	normalized := strings.TrimSpace(normalizeWarmupColumnName(indexColumn))
+	if normalized == "" {
+		return ""
+	}
+	parts := warmupFieldAliasPattern.Split(strings.ToLower(normalized), -1)
+	builder := strings.Builder{}
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		builder.WriteString(strings.ToUpper(part[:1]))
+		if len(part) > 1 {
+			builder.WriteString(part[1:])
+		}
+	}
+	return builder.String()
 }
 
 func matchesWarmupIndexColumn(indexColumn string, link *view.Link, batchColumn string) bool {
