@@ -159,28 +159,45 @@ func TestWarmupIndexParameterUsesExplicitParameter(t *testing.T) {
 	require.Equal(t, "OrderId", parameter.Name)
 }
 
-func TestWarmupIndexParameterDoesNotInferCamelCase(t *testing.T) {
+func TestWarmupIndexParameterMatchesCanonicalQueryLocation(t *testing.T) {
 	aView := &view.View{
 		Cache: &view.Cache{
-			Warmup: &view.Warmup{IndexColumn: "order_id"},
+			Warmup: &view.Warmup{IndexColumn: "ad_order_id", IndexParameter: "order_id"},
 		},
 		Template: view.NewTemplate("",
-			view.WithTemplateParameters(state.NewParameter("OrderId", state.NewQueryLocation("order_id"))),
+			view.WithTemplateParameters(state.NewParameter("OrderIds", state.NewQueryLocation("order_id"))),
 		),
 	}
 
 	parameter := warmupIndexParameter(aView)
 
-	require.Nil(t, parameter)
+	require.NotNil(t, parameter)
+	require.Equal(t, "OrderIds", parameter.Name)
 }
 
-func TestWarmupIndexParameterDoesNotFallbackToMatchingColumnName(t *testing.T) {
+func TestWarmupIndexParameterMatchesFieldAliasPlural(t *testing.T) {
 	aView := &view.View{
 		Cache: &view.Cache{
-			Warmup: &view.Warmup{IndexColumn: "order_id"},
+			Warmup: &view.Warmup{IndexColumn: "ad_order_id", IndexParameter: "order_id"},
 		},
 		Template: view.NewTemplate("",
-			view.WithTemplateParameters(state.NewParameter("order_id", state.NewQueryLocation("order_id"))),
+			view.WithTemplateParameters(state.NewParameter("OrderIds", nil)),
+		),
+	}
+
+	parameter := warmupIndexParameter(aView)
+
+	require.NotNil(t, parameter)
+	require.Equal(t, "OrderIds", parameter.Name)
+}
+
+func TestWarmupIndexParameterDoesNotMatchUnrelatedParameter(t *testing.T) {
+	aView := &view.View{
+		Cache: &view.Cache{
+			Warmup: &view.Warmup{IndexColumn: "ad_order_id", IndexParameter: "order_id"},
+		},
+		Template: view.NewTemplate("",
+			view.WithTemplateParameters(state.NewParameter("CampaignIds", state.NewQueryLocation("campaign_id"))),
 		),
 	}
 
