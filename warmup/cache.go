@@ -254,7 +254,7 @@ func readWithErr(ctx context.Context, entry *warmupEntry) (*EntryResult, error) 
 	}
 
 	matcher := entry.matcher
-	indexed, err := service.IndexBy(indexProgressContext(ctx, entry), db, entry.column, matcher.SQL, matcher.Args)
+	indexed, err := service.IndexBy(indexProgressContext(ctx, entry), db, entry.column, matcher.SQL, matcher.Args, matcher)
 	elapsed := time.Since(started)
 	if err != nil {
 		fmt.Printf("[INFO] cache warmup query error view=%s cache_key=%s column=%s params=%s field_names=%s rows=%d elapsed=%s cache_write=error error=%v\n", entry.view.Name, entry.key, entry.column, entry.label, entry.fields, indexed, elapsed, err)
@@ -300,11 +300,18 @@ func warmupCacheKey(query *cache.ParmetrizedQuery) (string, error) {
 	if query == nil {
 		return "", fmt.Errorf("warmup cache key query was nil")
 	}
-	args := query.Args
-	if args == nil {
-		args = []interface{}{}
+	return warmupIdentityURL(query)
+}
+
+func warmupIdentityURL(query *cache.ParmetrizedQuery) (string, error) {
+	if query == nil {
+		return "", fmt.Errorf("warmup identity query was nil")
 	}
-	return cachehash.GenerateURL(query.SQL, "", "", args)
+	SQL, _, argsMarshal, err := query.WarmupIdentity()
+	if err != nil {
+		return "", err
+	}
+	return cachehash.GenerateWithMarshal(SQL, "", "", argsMarshal)
 }
 
 func DB(entry *warmupEntry) (*sql.DB, error) {

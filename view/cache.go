@@ -351,6 +351,83 @@ func (c *Cache) inherit(source *Cache) error {
 	return nil
 }
 
+func (c *Cache) cloneForInheritance() *Cache {
+	if c == nil {
+		return nil
+	}
+
+	cloned := &Cache{
+		Reference:       c.Reference,
+		Name:            c.Name,
+		Location:        c.Location,
+		Provider:        c.Provider,
+		TimeToLiveMs:    c.TimeToLiveMs,
+		PartSize:        c.PartSize,
+		AerospikeConfig: c.AerospikeConfig,
+		Warmup:          c.Warmup.clone(),
+	}
+
+	return cloned
+}
+
+func (w *Warmup) clone() *Warmup {
+	if w == nil {
+		return nil
+	}
+
+	cloned := &Warmup{
+		IndexColumn:    w.IndexColumn,
+		IndexParameter: w.IndexParameter,
+		IndexMeta:      w.IndexMeta,
+		FieldNames:     append([]string(nil), w.FieldNames...),
+		Cases:          make([]*CacheParameters, 0, len(w.Cases)),
+	}
+	if w.Limit != nil {
+		limit := *w.Limit
+		cloned.Limit = &limit
+	}
+	if w.MaxCases != nil {
+		maxCases := *w.MaxCases
+		cloned.MaxCases = &maxCases
+	}
+	cloned.Connector = w.Connector.clone()
+	for _, item := range w.Cases {
+		cloned.Cases = append(cloned.Cases, item.clone())
+	}
+
+	return cloned
+}
+
+func (c *CacheParameters) clone() *CacheParameters {
+	if c == nil {
+		return nil
+	}
+
+	cloned := &CacheParameters{
+		FieldNames: append([]string(nil), c.FieldNames...),
+		Set:        make([]*ParamValue, 0, len(c.Set)),
+	}
+	for _, item := range c.Set {
+		cloned.Set = append(cloned.Set, item.clone())
+	}
+
+	return cloned
+}
+
+func (p *ParamValue) clone() *ParamValue {
+	if p == nil {
+		return nil
+	}
+
+	cloned := &ParamValue{
+		Name:           p.Name,
+		ExcludeDefault: p.ExcludeDefault,
+	}
+	cloned.Values = append([]interface{}(nil), p.Values...)
+
+	return cloned
+}
+
 func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
 	if len(c.Warmup.Cases) == 0 {
 		input := c.NewInput(NewStatelet())

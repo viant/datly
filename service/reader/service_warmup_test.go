@@ -101,6 +101,48 @@ func TestMatchesWarmupIndexColumnRejectsCollapsedIdentifier(t *testing.T) {
 	require.False(t, matched)
 }
 
+func TestWarmupMarkerColumnPrefersBatchColumnToken(t *testing.T) {
+	relation := &view.Relation{
+		Of: &view.ReferenceView{
+			On: view.JoinOn(view.WithLink("CampaignId", "t.campaign_id")),
+		},
+	}
+	batchData := &view.BatchData{
+		ColumnNames: []string{"Campaign_Id"},
+	}
+
+	actual := warmupMarkerColumn("CampaignId", relation, batchData)
+
+	require.Equal(t, "CampaignId", actual)
+}
+
+func TestWarmupMarkerColumnFallsBackToRelationColumnToken(t *testing.T) {
+	relation := &view.Relation{
+		Of: &view.ReferenceView{
+			On: view.JoinOn(view.WithLink("CampaignId", "t.campaign_id")),
+		},
+	}
+
+	actual := warmupMarkerColumn("CampaignId", relation, nil)
+
+	require.Equal(t, "CampaignId", actual)
+}
+
+func TestWarmupMarkerColumnFallsBackToConfiguredIndexColumn(t *testing.T) {
+	actual := warmupMarkerColumn("t.campaign_id", nil, nil)
+
+	require.Equal(t, "campaign_id", actual)
+}
+
+func TestMatchesWarmupIndexAcceptsWarmupAliasForRelationField(t *testing.T) {
+	aView := &view.View{}
+	link := view.WithLink("CampaignId", "ID")
+
+	matched := matchesWarmupIndex(aView, "CAMPAIGN_ID", link, "ID")
+
+	require.True(t, matched)
+}
+
 func TestWarmupIndexParameterUsesExplicitParameter(t *testing.T) {
 	aView := &view.View{
 		Cache: &view.Cache{
