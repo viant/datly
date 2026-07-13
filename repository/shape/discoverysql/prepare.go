@@ -3,6 +3,7 @@ package discoverysql
 import (
 	"strings"
 
+	"github.com/viant/datly/shared"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
@@ -22,10 +23,28 @@ func PrepareDiscoverySQL(sql string) (string, bool) {
 	if cleaned == "" || !strings.Contains(strings.ToLower(cleaned), "select") {
 		return cleaned, false
 	}
+	// A view whose SQL is a derived table is wrapped in ( ... ); the balanced
+	// pair confuses the falsifier's parser, so trim it before falsifying.
+	cleaned = strings.TrimSpace(shared.TrimPair(cleaned, '(', ')'))
 	if rewritten, ok := falsifyQuery(cleaned); ok {
 		return rewritten, true
 	}
 	return falsifyQueryText(cleaned)
+}
+
+// discoveryReplacementFor keeps a discovery query valid once a ${...} template
+// is removed. A predicate builder that opens a WHERE clause is replaced with a
+// tautology so any trailing AND still binds; any other builder is dropped; a
+// plain value expression becomes an empty string literal.
+func discoveryReplacementFor(expr string) string {
+	if !strings.Contains(expr, ".Build(") {
+		return "''"
+	}
+	lower := strings.ToLower(expr)
+	if strings.Contains(lower, `build("where")`) || strings.Contains(lower, `build('where')`) {
+		return " WHERE 1 = 1 "
+	}
+	return ""
 }
 
 func falsifyQuery(sql string) (string, bool) {
@@ -573,7 +592,15 @@ func stripTemplateVariables(sql string) string {
 					}
 					j++
 				}
-				b.WriteString("''")
+				// Predicate builders emit SQL clauses (e.g. Build("WHERE")); replace
+				// them with a valid stand-in so the discovery query stays parseable.
+				// Plain value expressions fall back to an empty string literal.
+				exprEnd := j - 1
+				if exprEnd < i+2 {
+					// Unterminated "${" at end of input: no expression body.
+					exprEnd = i + 2
+				}
+				b.WriteString(discoveryReplacementFor(sql[i+2 : exprEnd]))
 				i = j
 				continue
 			}

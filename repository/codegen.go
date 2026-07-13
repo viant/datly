@@ -13,6 +13,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
+	"go/format"
 	"path"
 	"reflect"
 	"strconv"
@@ -198,6 +199,12 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 
 	result := builder.String()
 	result = c.View.Resource().ReverseSubstitutes(result)
+	// Normalize the generated source with gofmt so appended snippets (e.g. the
+	// EmbedFS method) are properly indented and the file ends with a newline.
+	// Fall back to the unformatted source if it is not yet valid Go.
+	if formatted, formatErr := format.Source([]byte(result)); formatErr == nil {
+		result = string(formatted)
+	}
 	return result
 }
 

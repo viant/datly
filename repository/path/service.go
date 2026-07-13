@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/repository/version"
 	"gopkg.in/yaml.v3"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -151,6 +152,11 @@ func (s *Service) createPathFiles(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Sort candidates by URL so paths.yaml is written in a deterministic
+	// order regardless of the underlying filesystem listing order.
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].URL() < candidates[j].URL()
+	})
 	rootPath := url.Path(s.URL)
 	for _, candidate := range candidates {
 		if candidate.IsDir() {
