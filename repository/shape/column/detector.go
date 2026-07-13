@@ -530,7 +530,12 @@ func stripTemplateVariables(sql string) string {
 				// Predicate builders emit SQL clauses (e.g. Build("WHERE")); replace
 				// them with a valid stand-in so the discovery query stays parseable.
 				// Plain value expressions fall back to an empty string literal.
-				b.WriteString(discoveryReplacementFor(sql[i+2 : j-1]))
+				exprEnd := j - 1
+				if exprEnd < i+2 {
+					// Unterminated "${" at end of input: no expression body.
+					exprEnd = i + 2
+				}
+				b.WriteString(discoveryReplacementFor(sql[i+2 : exprEnd]))
 				i = j
 				continue
 			}
