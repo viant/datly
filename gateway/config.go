@@ -27,18 +27,19 @@ type (
 	}
 
 	ExposableConfig struct {
-		APIPrefix       string //like /v1/api/
-		RouteURL        string
-		GoBootstrap     *GoBootstrap
-		DQLBootstrap    *DQLBootstrap
-		ContentURL      string
-		PluginsURL      string
-		DependencyURL   string
-		JobURL          string
-		FailedJobURL    string
-		MaxJobs         int
-		UseCacheFS      bool
-		SyncFrequencyMs int
+		APIPrefix           string //like /v1/api/
+		RouteURL            string
+		ShowAvailableRoutes *bool
+		GoBootstrap         *GoBootstrap
+		DQLBootstrap        *DQLBootstrap
+		ContentURL          string
+		PluginsURL          string
+		DependencyURL       string
+		JobURL              string
+		FailedJobURL        string
+		MaxJobs             int
+		UseCacheFS          bool
+		SyncFrequencyMs     int
 		config.Config
 		Logging              logging.Config
 		Meta                 meta.Config
@@ -142,6 +143,10 @@ func (d *DQLBootstrap) EffectivePrecedence() string {
 
 func (c *Config) Discovery() bool {
 	return c.AutoDiscovery == nil || *c.AutoDiscovery
+}
+
+func (c *Config) ShouldShowAvailableRoutes() bool {
+	return c != nil && c.ShowAvailableRoutes != nil && *c.ShowAvailableRoutes
 }
 
 func (c *Config) Init(ctx context.Context) error {
