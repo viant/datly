@@ -287,6 +287,13 @@ func (r *Router) PreCacheables(ctx context.Context, method string, uri string) (
 }
 
 func (r *Router) availableRoutesErr(statusCode int, err error) error {
+	if r == nil || r.config == nil || !r.config.ShouldShowAvailableRoutes() {
+		return &HttpError{
+			Code: statusCode,
+			Err:  err,
+		}
+	}
+
 	return &HttpError{
 		Code: statusCode,
 		Err: &AvailableRoutesError{
