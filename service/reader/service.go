@@ -416,21 +416,16 @@ func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, st
 		return nil, nil, err
 	}
 	wg.Wait()
-	applyWarmupIdentity(parametrizedSQL, columnInMatcher)
+	ensureWarmupIdentity(columnInMatcher)
 	return parametrizedSQL, columnInMatcher, cacheErr
 }
 
-func applyWarmupIdentity(target *cache.ParmetrizedQuery, identity *cache.ParmetrizedQuery) {
-	if target == nil || identity == nil {
+func ensureWarmupIdentity(matcher *cache.ParmetrizedQuery) {
+	if matcher == nil || matcher.IdentitySQL != "" {
 		return
 	}
-	if identity.IdentitySQL != "" {
-		target.IdentitySQL = identity.IdentitySQL
-		target.IdentityArgs = append([]interface{}{}, identity.IdentityArgs...)
-		return
-	}
-	target.IdentitySQL = identity.SQL
-	target.IdentityArgs = append([]interface{}{}, identity.Args...)
+	matcher.IdentitySQL = matcher.SQL
+	matcher.IdentityArgs = append([]interface{}{}, matcher.Args...)
 }
 
 func (s *Service) relationWarmupMatcher(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, relation *view.Relation) (*cache.ParmetrizedQuery, error) {
