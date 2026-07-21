@@ -102,6 +102,22 @@ func (e *Executable) MarkAsExecuted() {
 	e.executed = true
 }
 
+// TableName returns the executable's mutation table.
+func (e *Executable) TableName() string {
+	if e == nil {
+		return ""
+	}
+	return e.Table
+}
+
+// BatchKey groups only contiguous compatible mutations.
+func (e *Executable) BatchKey() string {
+	if e == nil {
+		return ""
+	}
+	return e.ExecType.String() + ":" + e.Table
+}
+
 func (e *MockExpander) ParentJoinOn(column string, prepend ...string) (string, error) {
 	return "", nil
 }

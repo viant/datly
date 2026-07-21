@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service/executor/handler"
+	"github.com/viant/datly/service/executor/uow"
 	"github.com/viant/gmetric/counter"
 	xhandler "github.com/viant/xdatly/handler"
 
@@ -17,6 +18,13 @@ import (
 
 // HandlerSession returns a handler session
 func (s *Service) HandlerSession(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (xhandler.Session, error) {
+	if _, _, scoped := uow.FromContext(ctx); scoped {
+		var err error
+		ctx, _, _, _, err = uow.Enter(ctx, aComponent.Method+" "+aComponent.URI)
+		if err != nil {
+			return nil, err
+		}
+	}
 	anExecutor := handler.NewExecutor(aComponent.View, aSession)
 	return anExecutor.NewHandlerSession(ctx, handler.WithTypes(aComponent.Types()...), handler.WithAuth(aSession.Auth()))
 }

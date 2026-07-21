@@ -9,6 +9,7 @@ import (
 	"reflect"
 
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/service/executor/uow"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
@@ -37,6 +38,11 @@ func (l *componentLocator) Names() []string {
 }
 
 func (l *componentLocator) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
+	order := uow.BindingOrder(ctx)
+	if _, _, scoped := uow.FromContext(ctx); scoped && order == "" {
+		return nil, false, fmt.Errorf("component binding %q has no reserved declaration slot", name)
+	}
+	ctx = uow.PrepareChild(ctx, uow.RelationBinding, order)
 	method, URI := shared.ExtractPath(name)
 	request, err := l.getRequest()
 	if err != nil {
@@ -90,19 +96,12 @@ func tryExtractResponseStatus(value interface{}) (*response.Status, bool) {
 	return (*response.Status)(uPtr), true
 }
 
-// TODO passed locator options to dispatcher so that this wil not be nil
-var dispatcher contract.Dispatcher
-
 // newComponentLocator returns component locator
 func newComponentLocator(opts ...locator.Option) (kind.Locator, error) {
 	options := locator.NewOptions(opts)
 	if options.Dispatcher == nil {
-		options.Dispatcher = dispatcher
-	}
-	if options.Dispatcher == nil {
 		return nil, fmt.Errorf("dispatcher was empty")
 	}
-	dispatcher = options.Dispatcher
 	ret := &componentLocator{
 		custom:     options.Custom,
 		dispatch:   options.Dispatcher,
