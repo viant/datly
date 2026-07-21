@@ -262,6 +262,31 @@ func TestGeneratorHelpersMore_Table(t *testing.T) {
 		}
 	})
 
+	t.Run("path parameter is emitted and required", func(t *testing.T) {
+		g := &generator{
+			_parametersIndex: map[string]*openapi3.Parameter{},
+			commonParameters: map[string]*openapi3.Parameter{},
+		}
+		comp := newTestComponent(t)
+		comp.View = &view.View{Template: &view.Template{}, Selector: &view.Config{}}
+		cSchema := &ComponentSchema{component: comp, schemas: NewContainer()}
+		param := &state.Parameter{Name: "ID", In: &state.Location{Kind: state.KindPath, Name: "id"}, Schema: state.NewSchema(reflect.TypeOf(1))}
+
+		converted, ok, err := g.convertParam(context.Background(), cSchema, param, "")
+		if err != nil || !ok || len(converted) != 1 {
+			t.Fatalf("unexpected convert result: ok=%v err=%v n=%d", ok, err, len(converted))
+		}
+		if converted[0].In != "path" {
+			t.Fatalf("expected in=path, got %q", converted[0].In)
+		}
+		if converted[0].Name != "id" {
+			t.Fatalf("expected name=id, got %q", converted[0].Name)
+		}
+		if !converted[0].Required {
+			t.Fatalf("expected path parameter to be required")
+		}
+	})
+
 	t.Run("authorization header becomes security scheme", func(t *testing.T) {
 		g := &generator{
 			_parametersIndex: map[string]*openapi3.Parameter{},
@@ -298,8 +323,8 @@ func TestGeneratorHelpersMore_Table(t *testing.T) {
 			{name: "header", kind: state.KindHeader, expectKeep: true},
 			{name: "query", kind: state.KindQuery, expectKeep: true},
 			{name: "form", kind: state.KindForm, expectKeep: true},
+			{name: "path", kind: state.KindPath, expectKeep: true},
 			{name: "body skipped in parameter list", kind: state.KindRequestBody, expectKeep: false},
-			{name: "path skipped", kind: state.KindPath, expectKeep: false},
 			{name: "cookie skipped", kind: state.KindCookie, expectKeep: false},
 			{name: "state skipped", kind: state.KindState, expectKeep: false},
 		}

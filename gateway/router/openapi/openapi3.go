@@ -57,7 +57,7 @@ type (
 
 func isRequestDerivedInputKind(kind state.Kind) bool {
 	switch kind {
-	case state.KindHeader, state.KindRequestBody, state.KindQuery, state.KindForm:
+	case state.KindHeader, state.KindRequestBody, state.KindQuery, state.KindForm, state.KindPath:
 		return true
 	default:
 		return false
@@ -66,7 +66,7 @@ func isRequestDerivedInputKind(kind state.Kind) bool {
 
 func isOpenAPIParameterKind(kind state.Kind) bool {
 	switch kind {
-	case state.KindHeader, state.KindQuery, state.KindForm:
+	case state.KindHeader, state.KindQuery, state.KindForm, state.KindPath:
 		return true
 	default:
 		return false
@@ -318,8 +318,9 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		In:          string(param.In.Kind),
 		Description: description,
 		Style:       param.Style,
-		Required:    param.IsRequired(),
-		Schema:      schema,
+		// OpenAPI requires path parameters to always be required.
+		Required: param.IsRequired() || param.In.Kind == state.KindPath,
+		Schema:   schema,
 	}
 
 	g._parametersIndex[param.Name] = convertedParam
