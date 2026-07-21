@@ -83,6 +83,10 @@ func NewRouter(ctx context.Context, components *repository.Service, config *Conf
 		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
 		mcpRegistry:   mcpRegistry,
 		logger:        logging.New(logging.INFO, nil),
+		OpenAPIInfo: openapi3.Info{
+			Title:   "Datly API",
+			Version: config.Version,
+		},
 	}
 	return r, r.init(ctx)
 }
@@ -333,6 +337,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 
 	unique := map[string]bool{}
 	var openAPIs = map[string][]*repository.Provider{}
+	var allProviders []*repository.Provider
 	var optionsPaths = map[string][]*path.Path{}
 	for _, anItem := range container.Items {
 		for _, aPath := range anItem.Paths {
@@ -400,6 +405,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.Meta.ViewURI, aPath.URI), provider))
 				key := r.routeURL(r.config.Meta.OpenApiURI, aPath.URI)
 				openAPIs[key] = append(openAPIs[key], provider)
+				allProviders = append(allProviders, provider)
 
 				if !unique[aPath.URI] {
 					unique[aPath.URI] = true
@@ -424,6 +430,13 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 
 	for key, providers := range openAPIs {
 		routes = append(routes, r.NewOpenAPIRoute(key, r.repository, providers...))
+	}
+
+	if strings.TrimSpace(r.config.Meta.OpenApiURI) != "" {
+		routes = append(routes, r.NewOpenAPIAggregateRoute(r.config.Meta.OpenApiURI, r.repository, allProviders...))
+		if strings.TrimSpace(r.config.Meta.DocURI) != "" {
+			routes = append(routes, r.NewOpenAPIDocRoute(r.config.Meta.DocURI, r.config.Meta.OpenApiURI))
+		}
 	}
 
 	for uri, paths := range optionsPaths {

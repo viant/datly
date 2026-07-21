@@ -56,6 +56,30 @@ func TestSchemaBuildHelpers_Table(t *testing.T) {
 		}
 	})
 
+	t.Run("example value for type", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			rType    reflect.Type
+			provided string
+			expect   interface{}
+		}{
+			{name: "string default", rType: reflect.TypeOf(""), expect: "string"},
+			{name: "bool default", rType: reflect.TypeOf(false), expect: false},
+			{name: "int default", rType: reflect.TypeOf(0), expect: 0},
+			{name: "int64 default", rType: reflect.TypeOf(int64(0)), expect: 0},
+			{name: "float default", rType: reflect.TypeOf(0.0), expect: 0.0},
+			{name: "pointer int default", rType: reflect.TypeOf(new(int)), expect: 0},
+			{name: "provided overrides", rType: reflect.TypeOf(""), provided: "abc", expect: "abc"},
+			{name: "provided on int", rType: reflect.TypeOf(0), provided: "42", expect: "42"},
+			{name: "unsupported returns nil", rType: reflect.TypeOf(struct{}{}), expect: nil},
+		}
+		for _, tc := range cases {
+			if got := exampleValueForType(tc.rType, tc.provided); got != tc.expect {
+				t.Fatalf("%s: expected %v (%T), got %v (%T)", tc.name, tc.expect, tc.expect, got, got)
+			}
+		}
+	})
+
 	t.Run("root table", func(t *testing.T) {
 		queryComp := &ComponentSchema{component: &repository.Component{View: &view.View{Mode: view.ModeQuery, Table: "users"}}}
 		if got := rootTable(queryComp); got != "users" {

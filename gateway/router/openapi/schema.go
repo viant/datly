@@ -13,6 +13,7 @@ import (
 	"github.com/viant/xdatly/docs"
 	"github.com/viant/xreflect"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -49,6 +50,12 @@ type (
 		index            map[string]int
 		generatedSchemas map[string]*openapi3.Schema
 		visitingTypes    map[string]int
+		// typeNameByKey maps a unique type identity (import path + name) to the
+		// schema name assigned to it, and keyByName is the reverse mapping used
+		// to detect and disambiguate collisions between same-named types from
+		// different packages within a single (aggregate) spec.
+		typeNameByKey map[string]string
+		keyByName     map[string]string
 	}
 )
 
@@ -92,6 +99,8 @@ func NewContainer() *SchemaContainer {
 		index:            map[string]int{},
 		generatedSchemas: map[string]*openapi3.Schema{},
 		visitingTypes:    map[string]int{},
+		typeNameByKey:    map[string]string{},
+		keyByName:        map[string]string{},
 	}
 }
 
@@ -110,14 +119,27 @@ func NewComponentSchema(components *repository.Service, component *repository.Co
 }
 
 func (c *ComponentSchema) RequestBody(ctx context.Context) (*Schema, error) {
-	inputType := c.component.Input.Type
-
-	name := inputType.SimpleTypeName()
-	if name == "" {
-		name = "Input"
+	// Generate the request body schema from the actual body type (what the
+	// server unmarshals the payload into) rather than the whole input state,
+	// which may resolve to an opaque scalar for named body parameters.
+	bodyType := c.component.Input.Body
+	if bodyType.Schema == nil || bodyType.Schema.Type() == nil {
+		bodyType = c.component.Input.Type
 	}
 
-	result, err := c.TypedSchema(ctx, inputType, name, c.component.IOConfig(), true)
+	// A unique, deterministic name is required because the aggregate spec shares
+	// one schema container across all routes; a constant fallback would make
+	// every request body collide on a single "RequestBody" schema.
+	name := bodyType.SimpleTypeName()
+	if name == "" {
+		if base := bodyTypeName(bodyType.Schema.Type()); base != "" {
+			name = base + "RequestBody"
+		} else {
+			name = c.pathDerivedName("RequestBody")
+		}
+	}
+
+	result, err := c.TypedSchema(ctx, bodyType, name, c.component.IOConfig(), true)
 	if err != nil {
 		return nil, err
 	}
@@ -126,11 +148,58 @@ func (c *ComponentSchema) RequestBody(ctx context.Context) (*Schema, error) {
 	return result, nil
 }
 
+// bodyTypeName derives a representative type name from a (possibly wrapped)
+// request body type, e.g. struct{ Data []*patch.Campaign } -> "Campaign".
+func bodyTypeName(rType reflect.Type) string {
+	if rType == nil {
+		return ""
+	}
+	for rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	switch rType.Kind() {
+	case reflect.Slice, reflect.Array:
+		return bodyTypeName(rType.Elem())
+	case reflect.Struct:
+		if rType.Name() != "" {
+			return rType.Name()
+		}
+		for i := 0; i < rType.NumField(); i++ {
+			if rType.Field(i).PkgPath != "" {
+				continue
+			}
+			if name := bodyTypeName(rType.Field(i).Type); name != "" {
+				return name
+			}
+		}
+	}
+	return ""
+}
+
+// pathDerivedName builds a unique schema name from the route URI, used as a last
+// resort when a body type has no resolvable name.
+func (c *ComponentSchema) pathDerivedName(suffix string) string {
+	uri := strings.Trim(c.component.Path.URI, "/")
+	base := state.SanitizeTypeName(strings.ReplaceAll(uri, "/", "_"))
+	if base == "" {
+		return suffix
+	}
+	return base + suffix
+}
+
 func (c *ComponentSchema) ResponseBody(ctx context.Context) (*Schema, error) {
 
 	name := c.component.Output.Type.SimpleTypeName()
 	if name == "" {
-		name = "Output"
+		var base string
+		if c.component.Output.Type.Schema != nil {
+			base = bodyTypeName(c.component.Output.Type.Schema.Type())
+		}
+		if base != "" {
+			name = base + "Output"
+		} else {
+			name = c.pathDerivedName("Output")
+		}
 	}
 	schema, err := c.TypedSchema(ctx, c.component.Output.Type, name, c.component.IOConfig(), false)
 	if err != nil {
@@ -265,7 +334,9 @@ func (c *ComponentSchema) GenerateSchema(ctx context.Context, schema *Schema) (*
 		ReadOnly:     schema.tag.ReadOnly,
 		MaxItems:     schema.tag.MaxItems,
 		Default:      schema.tag.Default,
-		Example:      schema.tag.Example,
+	}
+	if schema.tag.Example != "" {
+		result.Example = schema.tag.Example
 	}
 
 	if err := c.schemas.addToSchema(ctx, c, result, schema); err != nil {
