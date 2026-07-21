@@ -10,6 +10,8 @@ import (
 )
 
 func (g *generator) generateOperation(ctx context.Context, component *ComponentSchema) (*openapi.Operation, error) {
+	g.authSchemeName = ""
+
 	body, err := g.requestBody(ctx, component)
 	if err != nil {
 		return nil, err
@@ -25,11 +27,16 @@ func (g *generator) generateOperation(ctx context.Context, component *ComponentS
 		return nil, err
 	}
 
-	return &openapi.Operation{
+	operation := &openapi.Operation{
 		Parameters:  dedupe(parameters),
 		RequestBody: body,
 		Responses:   responses,
-	}, nil
+	}
+	if g.authSchemeName != "" {
+		security := openapi.SecurityRequirements{openapi.SecurityRequirement{g.authSchemeName: []string{}}}
+		operation.Security = &security
+	}
+	return operation, nil
 }
 
 func (g *generator) operationParameters(ctx context.Context, component *ComponentSchema) ([]*openapi.Parameter, error) {

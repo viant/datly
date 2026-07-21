@@ -262,6 +262,33 @@ func TestGeneratorHelpersMore_Table(t *testing.T) {
 		}
 	})
 
+	t.Run("authorization header becomes security scheme", func(t *testing.T) {
+		g := &generator{
+			_parametersIndex: map[string]*openapi3.Parameter{},
+			commonParameters: map[string]*openapi3.Parameter{},
+			securitySchemes:  map[string]*openapi3.SecurityScheme{},
+		}
+		comp := newTestComponent(t)
+		comp.View = &view.View{Template: &view.Template{}, Selector: &view.Config{}}
+		cSchema := &ComponentSchema{component: comp, schemas: NewContainer()}
+		param := &state.Parameter{Name: "Jwt", In: &state.Location{Kind: state.KindHeader, Name: "Authorization"}, Schema: state.NewSchema(reflect.TypeOf(""))}
+
+		converted, ok, err := g.convertParam(context.Background(), cSchema, param, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if ok || len(converted) != 0 {
+			t.Fatalf("expected Authorization header to be skipped as a parameter, got ok=%v n=%d", ok, len(converted))
+		}
+		if g.authSchemeName != bearerAuthSchemeName {
+			t.Fatalf("expected auth scheme %q, got %q", bearerAuthSchemeName, g.authSchemeName)
+		}
+		scheme := g.securitySchemes[bearerAuthSchemeName]
+		if scheme == nil || scheme.Type != "http" || scheme.Scheme != "bearer" || scheme.BearerFormat != "JWT" {
+			t.Fatalf("unexpected security scheme: %+v", scheme)
+		}
+	})
+
 	t.Run("convert param kind whitelist", func(t *testing.T) {
 		testCases := []struct {
 			name       string
