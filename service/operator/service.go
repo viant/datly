@@ -60,7 +60,7 @@ func (s *Service) Operate(ctx context.Context, aSession *session.Session, aCompo
 		// close the root while its handler still has mutations to dispatch.
 		sealCreatedFrame(createdFrame, frame)
 		if owner {
-			err = scope.Finish(ctx, err)
+			result, err = finishOperation(ctx, scope, result, err)
 		}
 	}()
 	if tx := aSession.Options.SqlTx(); tx != nil && aComponent.View != nil && aComponent.View.Connector != nil {
@@ -82,6 +82,28 @@ func sealCreatedFrame(created bool, frame *uow.Frame) {
 	if created {
 		frame.Seal()
 	}
+}
+
+// finishOperation preserves structured output for an operation that already
+// failed, while preventing output produced before a flush or commit failure
+// from being returned as a successful response.
+func finishOperation(ctx context.Context, scope *uow.Scope, result interface{}, operationErr error) (interface{}, error) {
+	finishErr := scope.Finish(ctx, operationErr)
+	if operationErr != nil {
+		// scope.Finish reports the original cause combined (via errors.Join) with any
+		// rollback error. That join erases the concrete error type the gateway relies
+		// on for status-code and nested-error propagation (e.g. a 401 Jwt error nested
+		// under an Auth component parameter). Prefer the original typed error and only
+		// fall back to Finish's error when it surfaced an additional rollback failure.
+		if finishErr != nil && !errors.Is(finishErr, operationErr) {
+			return result, finishErr
+		}
+		return result, operationErr
+	}
+	if finishErr != nil {
+		return nil, finishErr
+	}
+	return result, nil
 }
 
 // HandleError processes output with error

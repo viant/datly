@@ -1023,23 +1023,60 @@ func isZeroValue(value interface{}) bool {
 	return v.IsZero()
 }
 
-func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *response.Errors) {
+func (s *Session) handleParameterError(parameter *state.Parameter, err error, result *response.Errors) {
 	if parameter.ErrorMessage != "" && err != nil {
 		msg := strings.ReplaceAll(parameter.ErrorMessage, "${error}", err.Error())
 		err = fmt.Errorf("%s", msg)
 	}
+	// Directly-typed *response.Error (the common parameter-binding path): reset its
+	// status to the parameter's configured code. When the parameter has no explicit
+	// code (e.g. an object parameter such as Auth), this leaves Code=0 so the router's
+	// NormalizeErr can recurse into the wrapped cause (e.g. a nested Jwt error) to
+	// derive the real status code (401) and build the nested object payload.
 	if pErr, ok := err.(*response.Error); ok {
 		pErr.Code = parameter.ErrorStatusCode
-		errors.Append(pErr)
-	} else {
-		errors.AddError("", parameter.Name, err, response.WithErrorStatusCode(parameter.ErrorStatusCode))
-	}
-	if parameter.ErrorStatusCode != 0 {
-		errors.SetStatusCode(parameter.ErrorStatusCode)
-	} else if asErrors, ok := err.(*response.Errors); ok && asErrors.StatusCode() != http.StatusBadRequest {
-		errors.SetStatusCode(asErrors.StatusCode())
+		result.Append(pErr)
+		if parameter.ErrorStatusCode != 0 {
+			result.SetStatusCode(parameter.ErrorStatusCode)
+		}
+		return
 	}
 
+	result.AddError("", parameter.Name, err, response.WithErrorStatusCode(parameter.ErrorStatusCode))
+
+	if parameter.ErrorStatusCode != 0 {
+		result.SetStatusCode(parameter.ErrorStatusCode)
+		return
+	}
+
+	// Directly-typed *response.Errors: preserve an aggregated status that is more
+	// specific than a generic 400.
+	if asErrors, ok := err.(*response.Errors); ok {
+		if code := asErrors.StatusCode(); code != 0 && code != http.StatusBadRequest {
+			result.SetStatusCode(code)
+		}
+		return
+	}
+
+	// Fallback: the error may be wrapped (fmt.Errorf %w / errors.Join). Resolve a
+	// meaningful status via errors.As so wrapped response errors keep their status.
+	var statusCoder response.StatusCoder
+	if errors.As(err, &statusCoder) {
+		if code := statusCoder.StatusCode(); code != 0 {
+			result.SetStatusCode(code)
+			if last := lastError(result); last != nil && last.Code == 0 {
+				last.Code = code
+			}
+		}
+	}
+}
+
+// lastError returns the most recently appended error, or nil when empty.
+func lastError(result *response.Errors) *response.Error {
+	if result == nil || len(result.Errors) == 0 {
+		return nil
+	}
+	return result.Errors[len(result.Errors)-1]
 }
 
 func (s *Session) InitKinds(kinds ...state.Kind) error {
