@@ -12,6 +12,7 @@ import (
 	"github.com/viant/xdatly/handler/response"
 	"net/http"
 	"reflect"
+	"strings"
 )
 
 const (
@@ -41,6 +42,11 @@ type (
 		_schemasIndex    map[string]*openapi.Schema
 		commonParameters openapi.ParametersMap
 		_parametersIndex map[string]*openapi.Parameter
+		securitySchemes  map[string]*openapi.SecurityScheme
+		// authSchemeName is set transiently while building a single operation
+		// when it declares an Authorization header, so the operation can require
+		// the corresponding security scheme.
+		authSchemeName string
 	}
 
 	paramLocation struct {
@@ -51,7 +57,7 @@ type (
 
 func isRequestDerivedInputKind(kind state.Kind) bool {
 	switch kind {
-	case state.KindHeader, state.KindRequestBody, state.KindQuery, state.KindForm:
+	case state.KindHeader, state.KindRequestBody, state.KindQuery, state.KindForm, state.KindPath:
 		return true
 	default:
 		return false
@@ -60,7 +66,7 @@ func isRequestDerivedInputKind(kind state.Kind) bool {
 
 func isOpenAPIParameterKind(kind state.Kind) bool {
 	switch kind {
-	case state.KindHeader, state.KindQuery, state.KindForm:
+	case state.KindHeader, state.KindQuery, state.KindForm, state.KindPath:
 		return true
 	default:
 		return false
@@ -77,6 +83,9 @@ func (g *generator) GenerateSpec(ctx context.Context, repoComponents *repository
 
 	components.Schemas = schemas.generatedSchemas
 	components.Parameters = g.commonParameters
+	if len(g.securitySchemes) > 0 {
+		components.SecuritySchemes = g.securitySchemes
+	}
 
 	return &openapi.OpenAPI{
 		OpenAPI:    "3.0.1",
@@ -91,7 +100,30 @@ func GenerateOpenAPI3Spec(ctx context.Context, components *repository.Service, i
 		_schemasIndex:    map[string]*openapi.Schema{},
 		commonParameters: map[string]*openapi.Parameter{},
 		_parametersIndex: map[string]*openapi.Parameter{},
+		securitySchemes:  map[string]*openapi.SecurityScheme{},
 	}).GenerateSpec(ctx, components, info, providers...)
+}
+
+// bearerAuthSchemeName is the name of the JWT bearer security scheme emitted
+// for routes that declare an Authorization header.
+const bearerAuthSchemeName = "BearerAuth"
+
+// ensureBearerScheme registers (once) an HTTP bearer JWT security scheme and
+// returns its name. datly's JWT codec accepts both a raw token and a
+// "Bearer <token>" value, so the bearer scheme is safe.
+func (g *generator) ensureBearerScheme() string {
+	if g.securitySchemes == nil {
+		g.securitySchemes = map[string]*openapi.SecurityScheme{}
+	}
+	if _, ok := g.securitySchemes[bearerAuthSchemeName]; !ok {
+		g.securitySchemes[bearerAuthSchemeName] = &openapi.SecurityScheme{
+			Type:         "http",
+			Scheme:       "bearer",
+			BearerFormat: "JWT",
+			Description:  "JWT bearer token sent in the Authorization header. Paste the token only; the 'Bearer ' prefix is added automatically.",
+		}
+	}
+	return bearerAuthSchemeName
 }
 
 func dedupe(parameters []*openapi.Parameter) openapi.Parameters {
@@ -228,6 +260,13 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		return result, true, nil
 	}
 
+	// Represent the Authorization header as a security scheme (Swagger UI
+	// "Authorize" button) instead of a plain header parameter.
+	if param.In.Kind == state.KindHeader && strings.EqualFold(param.In.Name, "Authorization") {
+		g.authSchemeName = g.ensureBearerScheme()
+		return nil, false, nil
+	}
+
 	if !isOpenAPIParameterKind(param.In.Kind) {
 		return nil, false, nil
 	}
@@ -279,8 +318,9 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		In:          string(param.In.Kind),
 		Description: description,
 		Style:       param.Style,
-		Required:    param.IsRequired(),
-		Schema:      schema,
+		// OpenAPI requires path parameters to always be required.
+		Required: param.IsRequired() || param.In.Kind == state.KindPath,
+		Schema:   schema,
 	}
 
 	g._parametersIndex[param.Name] = convertedParam

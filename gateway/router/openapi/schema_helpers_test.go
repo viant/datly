@@ -81,6 +81,125 @@ func TestSchemaField(t *testing.T) {
 	}
 }
 
+type sampleBody struct {
+	Name    string
+	Age     int
+	Score   float64
+	Active  bool
+	Comment string `json:"comment" example:"looks good"`
+}
+
+func TestGeneratedPrimitiveExamples(t *testing.T) {
+	container := NewContainer()
+	component := &ComponentSchema{component: &repository.Component{View: &view.View{}}, schemas: container}
+
+	generated, err := container.createSchema(context.Background(), component, &Schema{
+		rType:    reflect.TypeOf(sampleBody{}),
+		tag:      Tag{TypeName: "SampleBody"},
+		isInput:  true,
+		ioConfig: component.component.IOConfig(),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Named types resolve to a $ref; find the concrete schema in the container.
+	var body *openapi3.Schema
+	for _, s := range container.schemas {
+		if s != nil && len(s.Properties) > 0 {
+			body = s
+			break
+		}
+	}
+	if body == nil {
+		if generated != nil && len(generated.Properties) > 0 {
+			body = generated
+		} else {
+			t.Fatalf("expected a generated object schema with properties")
+		}
+	}
+
+	expect := map[string]interface{}{
+		"Name":    "string",
+		"Age":     0,
+		"Score":   0.0,
+		"Active":  false,
+		"comment": "looks good",
+	}
+	for name, want := range expect {
+		prop, ok := body.Properties[name]
+		if !ok {
+			t.Fatalf("missing property %q; have %v", name, keysOf(body.Properties))
+		}
+		if prop.Example != want {
+			t.Fatalf("property %q: expected example %v (%T), got %v (%T)", name, want, want, prop.Example, prop.Example)
+		}
+	}
+}
+
+func keysOf(m openapi3.Schemas) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+type namedCampaign struct {
+	ID   int
+	Name string
+}
+
+func TestBodyTypeName(t *testing.T) {
+	cases := []struct {
+		name   string
+		rType  reflect.Type
+		expect string
+	}{
+		{name: "named struct", rType: reflect.TypeOf(namedCampaign{}), expect: "namedCampaign"},
+		{name: "pointer struct", rType: reflect.TypeOf(&namedCampaign{}), expect: "namedCampaign"},
+		{name: "slice of pointer", rType: reflect.TypeOf([]*namedCampaign{}), expect: "namedCampaign"},
+		{name: "wrapped named body", rType: reflect.TypeOf(struct{ Data []*namedCampaign }{}), expect: "namedCampaign"},
+		{name: "anonymous scalar wrapper", rType: reflect.TypeOf(struct{ Data string }{}), expect: ""},
+		{name: "nil", rType: nil, expect: ""},
+	}
+	for _, tc := range cases {
+		if got := bodyTypeName(tc.rType); got != tc.expect {
+			t.Fatalf("%s: expected %q, got %q", tc.name, tc.expect, got)
+		}
+	}
+}
+
+func TestResolveSchemaName(t *testing.T) {
+	container := NewContainer()
+
+	type outputA struct{ A int }
+	type outputB struct{ B int }
+
+	// Same requested name "Output" for two distinct types must disambiguate.
+	n1 := container.resolveSchemaName("Output", reflect.TypeOf(outputA{}))
+	n2 := container.resolveSchemaName("Output", reflect.TypeOf(outputB{}))
+	if n1 != "Output" {
+		t.Fatalf("expected first type to keep name Output, got %q", n1)
+	}
+	if n2 == n1 {
+		t.Fatalf("expected distinct name for second type, got %q for both", n2)
+	}
+
+	// Idempotent: same type resolves to the same name.
+	if again := container.resolveSchemaName("Output", reflect.TypeOf(outputA{})); again != n1 {
+		t.Fatalf("expected stable name %q, got %q", n1, again)
+	}
+	if againB := container.resolveSchemaName("Output", reflect.TypeOf(&outputB{})); againB != n2 {
+		t.Fatalf("expected stable name %q for pointer of same type, got %q", n2, againB)
+	}
+
+	// Empty type name yields empty (inline schema).
+	if got := container.resolveSchemaName("", reflect.TypeOf(outputA{})); got != "" {
+		t.Fatalf("expected empty name, got %q", got)
+	}
+}
+
 func TestContainsAny(t *testing.T) {
 	tests := []struct {
 		name   string

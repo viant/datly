@@ -12,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -142,6 +143,9 @@ func (c *SchemaContainer) addDefaultSchema(ctx context.Context, component *Compo
 		}
 		dst.Type = apiType
 		dst.Format = format
+		if dst.Example == nil {
+			dst.Example = exampleValueForType(rType, "")
+		}
 		return nil
 	}
 }
@@ -314,9 +318,13 @@ func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *Com
 		return nil, err
 	}
 
-	if fieldSchema.tag.TypeName != "" {
-		if _, ok := c.generatedSchemas[fieldSchema.tag.TypeName]; ok {
-			return c.SchemaRef(fieldSchema.tag.TypeName, description), nil
+	// Resolve a schema name that is unique per type identity so same-named types
+	// from different packages do not collide in a shared (aggregate) spec.
+	schemaName := c.resolveSchemaName(fieldSchema.tag.TypeName, fieldSchema.rType)
+
+	if schemaName != "" {
+		if _, ok := c.generatedSchemas[schemaName]; ok {
+			return c.SchemaRef(schemaName, description), nil
 		}
 	}
 
@@ -325,30 +333,86 @@ func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *Com
 			Type:        apiType,
 			Format:      format,
 			Description: description,
-			Example:     example,
+			Example:     exampleValueForType(fieldSchema.rType, example),
 		}, nil
 	}
 
 	// Mark named schemas as in-progress before generation so recursive graphs
 	// (for example polymorphic self references) resolve to $ref instead of looping.
-	if fieldSchema.tag.TypeName != "" {
-		c.generatedSchemas[fieldSchema.tag.TypeName] = nil
+	if schemaName != "" {
+		c.generatedSchemas[schemaName] = nil
 	}
 	schema, err := componentSchema.GenerateSchema(ctx, fieldSchema)
 	if err != nil {
-		if fieldSchema.tag.TypeName != "" {
-			delete(c.generatedSchemas, fieldSchema.tag.TypeName)
+		if schemaName != "" {
+			delete(c.generatedSchemas, schemaName)
 		}
 		return nil, err
 	}
 
-	if fieldSchema.tag.TypeName != "" {
-		c.generatedSchemas[fieldSchema.tag.TypeName] = schema
+	if schemaName != "" {
+		c.generatedSchemas[schemaName] = schema
 		c.schemas = append(c.schemas, schema)
-		schema = c.SchemaRef(fieldSchema.tag.TypeName, description)
+		schema = c.SchemaRef(schemaName, description)
 	}
 
 	return schema, nil
+}
+
+// schemaTypeKey returns a globally-unique identity for a type. It recurses
+// through pointers, slices, arrays and maps and uses the full import path for
+// named types so that composite types whose reflect.String() collapses to the
+// same short package name (e.g. []*campaign/patch.Campaign vs
+// []*adorder/patch.Campaign, both "[]*patch.Campaign") do not collide.
+func schemaTypeKey(rType reflect.Type) string {
+	if rType == nil {
+		return ""
+	}
+	for rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	switch rType.Kind() {
+	case reflect.Slice:
+		return "[]" + schemaTypeKey(rType.Elem())
+	case reflect.Array:
+		return "[" + strconv.Itoa(rType.Len()) + "]" + schemaTypeKey(rType.Elem())
+	case reflect.Map:
+		return "map[" + schemaTypeKey(rType.Key()) + "]" + schemaTypeKey(rType.Elem())
+	}
+	if rType.Name() != "" {
+		if pkg := rType.PkgPath(); pkg != "" {
+			return pkg + "." + rType.Name()
+		}
+		return rType.Name()
+	}
+	return rType.String()
+}
+
+// resolveSchemaName maps a requested type name to a container-unique schema name
+// keyed by the type's true identity. The first type to claim a name keeps it;
+// subsequent distinct types with the same requested name get a numeric suffix.
+func (c *SchemaContainer) resolveSchemaName(typeName string, rType reflect.Type) string {
+	if typeName == "" {
+		return ""
+	}
+	key := schemaTypeKey(rType)
+	if key == "" {
+		return typeName
+	}
+	if name, ok := c.typeNameByKey[key]; ok {
+		return name
+	}
+	name := typeName
+	for i := 2; ; i++ {
+		boundKey, taken := c.keyByName[name]
+		if !taken || boundKey == key {
+			break
+		}
+		name = typeName + strconv.Itoa(i)
+	}
+	c.typeNameByKey[key] = name
+	c.keyByName[name] = key
+	return name
 }
 
 func (c *SchemaContainer) SchemaRef(schemaName string, description string) *openapi3.Schema {
@@ -470,6 +534,28 @@ func applySchemaExample(dst *openapi3.Schema, schema *Schema) {
 	if schema.tag.Example != "" {
 		dst.Example = schema.tag.Example
 	}
+}
+
+// exampleValueForType returns a sample value for a primitive rType. When an
+// explicit example is provided it is used as-is; otherwise a type-appropriate
+// default is returned so tools such as Swagger UI render meaningful sample
+// values (e.g. "string", 0, false) instead of empty double quotes.
+func exampleValueForType(rType reflect.Type, provided string) interface{} {
+	if provided != "" {
+		return provided
+	}
+	switch dereferenceType(rType).Kind() {
+	case reflect.String:
+		return "string"
+	case reflect.Bool:
+		return false
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return 0
+	case reflect.Float32, reflect.Float64:
+		return 0.0
+	}
+	return nil
 }
 
 func addTimeSchema(dst *openapi3.Schema, schema *Schema) {
