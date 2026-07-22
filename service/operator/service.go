@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-	"sync"
 	"time"
 
 	"github.com/viant/afs"
@@ -48,12 +47,18 @@ type Service struct {
 // Operate processes data component with data session
 func (s *Service) Operate(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (result interface{}, err error) {
 	identity := aComponent.Method + " " + aComponent.URI
+	_, previousFrame, hadFrame := uow.FromContext(ctx)
 	ctx, scope, frame, owner, err := uow.Enter(ctx, identity)
 	if err != nil {
 		return nil, err
 	}
+	createdFrame := !hadFrame || previousFrame != frame
 	defer func() {
-		frame.Seal()
+		// A backward-compatible nested Operate call can arrive without an
+		// explicit child marker and therefore borrow the current frame. Only the
+		// operation that created a frame may seal it; otherwise a nested read can
+		// close the root while its handler still has mutations to dispatch.
+		sealCreatedFrame(createdFrame, frame)
 		if owner {
 			err = scope.Finish(ctx, err)
 		}
@@ -71,6 +76,12 @@ func (s *Service) Operate(ctx context.Context, aSession *session.Session, aCompo
 		return nil, err
 	}
 	return s.operate(ctx, aComponent, aSession)
+}
+
+func sealCreatedFrame(created bool, frame *uow.Frame) {
+	if created {
+		frame.Seal()
+	}
 }
 
 // HandleError processes output with error
@@ -154,12 +165,8 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSession *session.Session) (interface{}, error) {
 
 	if injectorFinalizer, ok := ret.(state.InjectorFinalizer); ok {
-		var childFramesMu sync.Mutex
-		var childFrames []*uow.Frame
-
 		lookup := func(lookupCtx context.Context, route xhttp.Route) (xstate.Injector, error) {
 			lookupCtx = uow.Propagate(ctx, lookupCtx)
-			lookupCtx = uow.PrepareChild(lookupCtx, uow.RelationImperative, "")
 			aComponent, err := aSession.Registry().Lookup(lookupCtx, contract.NewPath(route.Method, route.URL))
 			if err != nil {
 				return nil, err
@@ -187,23 +194,15 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 			if err := childSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery); err != nil {
 				return nil, err
 			}
-			childCtx, _, childFrame, _, enterErr := uow.Enter(lookupCtx, route.Method+" "+route.URL)
-			if enterErr != nil {
-				return nil, enterErr
-			}
-			childFramesMu.Lock()
-			childFrames = append(childFrames, childFrame)
-			childFramesMu.Unlock()
-			childCtx = childSession.Context(childCtx, true)
-			return &invocationInjector{ctx: childCtx, delegate: childSession}, nil
+			childCtx := childSession.Context(lookupCtx, true)
+			return &invocationInjector{
+				ctx:      childCtx,
+				name:     route.Method + " " + route.URL,
+				delegate: childSession,
+			}, nil
 		}
 
 		err = injectorFinalizer.Finalize(ctx, lookup)
-		childFramesMu.Lock()
-		for _, childFrame := range childFrames {
-			childFrame.Seal()
-		}
-		childFramesMu.Unlock()
 		if err != nil {
 			return ret, err
 		}

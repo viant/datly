@@ -66,6 +66,15 @@ type Frame struct {
 	nextBinding uint64
 }
 
+// DebugLabel identifies a frame in diagnostics without exposing its mutable
+// timeline or ownership internals.
+func (f *Frame) DebugLabel() string {
+	if f == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("%d:%s", f.id, f.name)
+}
+
 type timelineEntry struct {
 	operation *Operation
 	child     *Frame
@@ -143,6 +152,16 @@ func PrepareChild(ctx context.Context, relation Relation, order string) context.
 	if !ok {
 		return ctx
 	}
+	// A dispatcher/session may outlive the component frame in which it was
+	// created. A subsequent explicit child dispatch is a sibling of that sealed
+	// invocation, not an attempt to reopen it. Attach it to the nearest open
+	// ancestor so repeated imperative dispatch remains ordered in the shared
+	// scope. Enter called directly with the stale context still rejects reuse.
+	scope.mu.Lock()
+	for frame != nil && !frame.open && frame.parent != nil {
+		frame = frame.parent
+	}
+	scope.mu.Unlock()
 	return context.WithValue(ctx, contextKey{}, &carrier{scope: scope, frame: frame, relation: relation, order: order})
 }
 
@@ -444,6 +463,40 @@ func (b *Buffer) UseTransaction(ctx context.Context, fn func(*sql.Tx) error) err
 		b.scope.mu.Unlock()
 	}
 	return err
+}
+
+// Transaction returns the database transaction owned by the invocation scope.
+// The caller may issue work through it, but must not commit or roll it back;
+// completion remains the responsibility of the root scope.
+func (b *Buffer) Transaction(ctx context.Context) (*sql.Tx, error) {
+	if b == nil || b.scope == nil {
+		return nil, fmt.Errorf("mutation buffer is not configured")
+	}
+	b.scope.mu.Lock()
+	if b.scope.completed {
+		b.scope.mu.Unlock()
+		return nil, ErrCompleted
+	}
+	if b.scope.failed != nil {
+		err := b.scope.failed
+		b.scope.mu.Unlock()
+		return nil, errors.Join(ErrFailed, err)
+	}
+	b.scope.mu.Unlock()
+	db, err := b.resolveDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+	unit, err := b.scope.database(ctx, db, b.externalTx)
+	if err != nil {
+		return nil, err
+	}
+	unit.mu.Lock()
+	defer unit.mu.Unlock()
+	if unit.failed != nil {
+		return nil, errors.Join(ErrFailed, unit.failed)
+	}
+	return unit.tx, nil
 }
 
 // Finish drains and completes locally owned transactions at the root boundary.

@@ -2,6 +2,7 @@ package extension
 
 import (
 	"context"
+	"database/sql"
 	"sync"
 
 	"github.com/viant/cloudless/async/mbus"
@@ -30,6 +31,7 @@ type (
 		http            HttpFn
 		auth            AuthFn
 		logger          logger.Logger
+		transaction     TransactionFn
 	}
 
 	SqlServiceFn    func(options *sqlx.Options) (sqlx.Sqlx, error)
@@ -38,7 +40,17 @@ type (
 	RouterFn        func(ctx context.Context, route *http.Route) (handler.Session, error)
 	HttpFn          func() http.Http
 	AuthFn          func() hauth.Auth
+	TransactionFn   func(context.Context) (*sql.Tx, error)
 )
+
+// Transaction returns the transaction owned by the current Datly invocation.
+// Commit and rollback remain the responsibility of the root invocation.
+func (s *Session) Transaction(ctx context.Context) (*sql.Tx, error) {
+	if s.transaction == nil {
+		return nil, nil
+	}
+	return s.transaction(ctx)
+}
 
 func (s *Session) Session(ctx context.Context, route *http.Route, opts ...state.Option) (handler.Session, error) {
 	return s.redirect(ctx, route, opts...)

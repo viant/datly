@@ -45,14 +45,7 @@ func (s *Service) next(table string, any interface{}, selector string) error {
 	if err != nil {
 		return err
 	}
-	strategy := dialect.PresetIDWithTransientTransaction
-	if s.tx != nil {
-		// The transient strategy opens and completes its own transaction on
-		// some products (notably MySQL). Invocation mode must remain inside
-		// the root transaction, so use the transaction-aware MAX strategy.
-		strategy = dialect.PresetIDWithMax
-	}
-	options := []option.Option{strategy}
+	options := []option.Option{dialect.PresetIDWithTransientTransaction}
 	if s.tx != nil {
 		options = append(options, s.tx)
 	}

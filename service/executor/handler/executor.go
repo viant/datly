@@ -160,15 +160,72 @@ func (e *Executor) newSession(aSession *session.Session, opts ...Option) *extens
 		extension.WithTemplateFlush(func(ctx context.Context) error {
 			return e.flushTemplate(ctx)
 		}),
-		extension.WithStater(aSession),
+		extension.WithStater(&sessionInjector{executor: e, session: aSession}),
 		extension.WithRedirect(e.redirect),
 		extension.WithSql(e.newSqlService),
+		extension.WithTransaction(e.transaction),
 		extension.WithHttp(e.newHttp),
 		extension.WithLogger(e.logger),
 		extension.WithAuth(e.newAuth),
 		extension.WithMessageBus(res.MessageBuses),
 	)
 	return sess
+}
+
+// sessionInjector restores the invocation context captured by the handler
+// session before delegating state operations. Public handler APIs accept a
+// context supplied by the caller, which can still identify the parent frame;
+// component binding must run in the child frame owned by this session.
+type sessionInjector struct {
+	executor *Executor
+	session  *session.Session
+}
+
+func (i *sessionInjector) context(ctx context.Context) context.Context {
+	if i.executor != nil {
+		ctx = i.executor.invocationContext(ctx)
+	}
+	if i.session != nil {
+		ctx = i.session.Context(ctx, true)
+	}
+	return ctx
+}
+
+// invocationContext keeps public handler facades on the component frame that
+// created them. Legacy handlers commonly pass their outer request context to a
+// child session's Stater or Http facade; that context must not move the child
+// executor back to the parent frame.
+func (e *Executor) invocationContext(ctx context.Context) context.Context {
+	if e == nil {
+		return ctx
+	}
+	return uow.Propagate(e.ctx, ctx)
+}
+
+func (i *sessionInjector) Into(ctx context.Context, value interface{}, opts ...hstate.Option) error {
+	return i.session.Into(i.context(ctx), value, opts...)
+}
+
+func (i *sessionInjector) Bind(ctx context.Context, value interface{}, opts ...hstate.Option) error {
+	return i.session.Bind(i.context(ctx), value, opts...)
+}
+
+func (i *sessionInjector) Value(ctx context.Context, key string) (interface{}, bool, error) {
+	return i.session.Value(i.context(ctx), key)
+}
+
+func (i *sessionInjector) ValuesOf(ctx context.Context, value interface{}) (map[string]interface{}, error) {
+	return i.session.ValuesOf(i.context(ctx), value)
+}
+
+func (e *Executor) transaction(ctx context.Context) (*sql.Tx, error) {
+	e.unitMu.Lock()
+	buffer := e.buffers[e.dataUnit]
+	e.unitMu.Unlock()
+	if buffer == nil {
+		return nil, fmt.Errorf("invocation transaction is unavailable")
+	}
+	return buffer.Transaction(ctx)
 }
 
 func (e *Executor) newValidator() *validator.Service {
@@ -392,17 +449,30 @@ func (e *Executor) bufferFor(unit *expand.DataUnit) *uow.Buffer {
 }
 
 func (e *Executor) ensureUnitOfWork(ctx context.Context) error {
-	e.ctx = ctx
 	scope, frame, ok := uow.FromContext(ctx)
 	if !ok {
+		// Backward-compatible callers may invoke a returned handler session with
+		// an unscoped context. Once this executor belongs to a unit of work, keep
+		// its captured invocation context so subsequent nested dispatches remain
+		// children of this component rather than falling back to an ancestor.
+		if e.scope != nil {
+			return e.getBufferErr()
+		}
+		e.ctx = ctx
 		return nil
 	}
 	if e.scope != nil {
 		if e.scope != scope || e.frame != frame {
-			return fmt.Errorf("executor mutation scope mismatch")
+			viewName := ""
+			if e.view != nil {
+				viewName = e.view.Name
+			}
+			return fmt.Errorf("executor mutation scope mismatch: view=%s executor scope=%p frame=%s, context scope=%p frame=%s", viewName, e.scope, e.frame.DebugLabel(), scope, frame.DebugLabel())
 		}
+		e.ctx = ctx
 		return e.getBufferErr()
 	}
+	e.ctx = ctx
 	e.scope, e.frame = scope, frame
 	if e.tx == nil && e.session != nil {
 		e.tx = e.session.Options.SqlTx()

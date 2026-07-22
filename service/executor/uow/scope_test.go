@@ -558,6 +558,38 @@ func TestSealedFrameRejectsReuseAndAppendBeforeRootCompletion(t *testing.T) {
 	}
 }
 
+func TestPrepareChildFromSealedFrameUsesOpenAncestor(t *testing.T) {
+	ctx, scope, root := NewRoot(context.Background(), "root")
+	firstCtx := PrepareChild(ctx, RelationImperative, "")
+	firstCtx, _, first, _, err := Enter(firstCtx, "first")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Seal()
+
+	// The captured child context is stale, but PrepareChild explicitly starts a
+	// new invocation. It must create a sibling under the still-open root.
+	secondCtx := PrepareChild(firstCtx, RelationImperative, "")
+	_, gotScope, second, _, err := Enter(secondCtx, "second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotScope != scope {
+		t.Fatal("new child did not retain the invocation scope")
+	}
+	if second.parent != root {
+		t.Fatalf("second parent=%v, want root", second.parent)
+	}
+	if second == first {
+		t.Fatal("sealed frame was reused")
+	}
+	second.Seal()
+	root.Seal()
+	if err = scope.Finish(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestFailureIsTerminalForAppendFlushAndFinish(t *testing.T) {
 	db, _ := sql.Open("sqlite3", ":memory:")
 	defer db.Close()
