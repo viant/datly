@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"sync"
 
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
@@ -21,12 +22,14 @@ import (
 // Options represents locator options
 type (
 	Options struct {
-		request *http.Request
-		Form    *hstate.Form
-		Path    map[string]string
-		Query   url.Values
-		Header  http.Header
-		Body    []byte
+		mu             sync.RWMutex
+		request        *http.Request
+		Form           *hstate.Form
+		QuerySelectors hstate.QuerySelectors
+		Path           map[string]string
+		Query          url.Values
+		Header         http.Header
+		Body           []byte
 
 		fromError         error
 		Parent            *KindLocator
@@ -56,6 +59,9 @@ type (
 )
 
 func (o Options) LookupParameters(name string) *state.Parameter {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
 	if len(o.InputParameters) > 0 {
 		if ret, ok := o.InputParameters[name]; ok {
 			return ret
@@ -70,10 +76,17 @@ func (o Options) LookupParameters(name string) *state.Parameter {
 }
 
 func (o *Options) GetRequest() (*http.Request, error) {
-	return shared.CloneHTTPRequest(o.request)
+	o.mu.RLock()
+	req := o.request
+	o.mu.RUnlock()
+
+	return shared.CloneHTTPRequest(req)
 }
 
 func (o *Options) UnmarshalFunc() Unmarshal {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
 	if o.Unmarshal != nil {
 		return o.Unmarshal
 	}
@@ -100,6 +113,9 @@ var defaultURL, _ = url.Parse("http://localhost:8080/")
 // WithRequest create http requestState option
 func WithRequest(request *http.Request) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		ensureValueRequest(request)
 		o.request = request
 	}
@@ -117,6 +133,9 @@ func ensureValueRequest(request *http.Request) {
 // WithCustom creates custom options
 func WithCustom(options ...interface{}) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Custom = options
 	}
 }
@@ -124,6 +143,9 @@ func WithCustom(options ...interface{}) Option {
 // WithURIPattern create Path pattern requestState
 func WithURIPattern(URI string) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.URIPattern = URI
 	}
 }
@@ -131,6 +153,9 @@ func WithURIPattern(URI string) Option {
 // WithBodyType create Body Type option
 func WithBodyType(rType reflect.Type) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.BodyType = rType
 	}
 }
@@ -138,6 +163,9 @@ func WithBodyType(rType reflect.Type) Option {
 // WithUnmarshal creates with unmarshal options
 func WithUnmarshal(fn func([]byte, interface{}) error) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Unmarshal = fn
 	}
 }
@@ -145,6 +173,9 @@ func WithUnmarshal(fn func([]byte, interface{}) error) Option {
 // WithParent creates with parent options
 func WithParent(locators *KindLocator) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Parent = locators
 	}
 }
@@ -152,12 +183,18 @@ func WithParent(locators *KindLocator) Option {
 // WithParameterLookup creates with parameter options
 func WithParameterLookup(lookupFn ParameterLookup) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.ParameterLookup = lookupFn
 	}
 }
 
 func WithIOConfig(config *config.IOConfig) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.IOConfig = config
 	}
 }
@@ -165,6 +202,9 @@ func WithIOConfig(config *config.IOConfig) Option {
 // WithInputParameters creates with parameter options
 func WithInputParameters(parameters state.NamedParameters) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		if len(o.resourceConstants) == 0 {
 			o.resourceConstants = make(map[string]interface{})
 		}
@@ -181,15 +221,30 @@ func WithInputParameters(parameters state.NamedParameters) Option {
 	}
 }
 
+func WithQuerySelectors(selectors hstate.QuerySelectors) Option {
+	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
+		o.QuerySelectors = selectors
+	}
+}
+
 // WithPathParameters create with path parameters options
 func WithPathParameters(parameters map[string]string) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Path = parameters
 	}
 }
 
 func WithReadInto(fn ReadInto) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.ReadInto = fn
 	}
 }
@@ -197,6 +252,9 @@ func WithReadInto(fn ReadInto) Option {
 // WithViews returns with views options
 func WithViews(views view.NamedViews) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Views = views
 	}
 }
@@ -204,12 +262,18 @@ func WithViews(views view.NamedViews) Option {
 // WithState returns with satte options
 func WithState(state *structology.State) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.State = state
 	}
 }
 
 func WithOutputParameters(parameters state.Parameters) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.OutputParameters = parameters.Index()
 	}
 }
@@ -217,6 +281,9 @@ func WithOutputParameters(parameters state.Parameters) Option {
 // WithDispatcher returns options to set dispatcher
 func WithDispatcher(dispatcher contract.Dispatcher) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Dispatcher = dispatcher
 	}
 }
@@ -224,6 +291,9 @@ func WithDispatcher(dispatcher contract.Dispatcher) Option {
 // WithView returns options to set view
 func WithView(aView *view.View) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.View = aView
 	}
 }
@@ -231,6 +301,9 @@ func WithView(aView *view.View) Option {
 // WithForm return form option
 func WithForm(form *hstate.Form) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		if o.Form == nil {
 			o.Form = form
 		} else if form != nil {
@@ -242,6 +315,9 @@ func WithForm(form *hstate.Form) Option {
 // WithQuery return query parameters option
 func WithQuery(parameters url.Values) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		if o.Query == nil {
 			o.Query = parameters
 		} else {
@@ -254,6 +330,9 @@ func WithQuery(parameters url.Values) Option {
 
 func WithLogger(logger logger.Logger) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Logger = logger
 	}
 }
@@ -261,6 +340,9 @@ func WithLogger(logger logger.Logger) Option {
 // WithQueryParameter return query parameter option
 func WithQueryParameter(name, value string) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		if o.Query == nil {
 			o.Query = make(url.Values)
 		}
@@ -271,6 +353,9 @@ func WithQueryParameter(name, value string) Option {
 // WithHeader return header option
 func WithHeader(name, value string) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		if o.Header == nil {
 			o.Header = make(http.Header)
 		}
@@ -281,6 +366,9 @@ func WithHeader(name, value string) Option {
 // WithHeaders return headers option
 func WithHeaders(header http.Header) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		if o.Header == nil {
 			o.Header = header
 		}
@@ -293,6 +381,9 @@ func WithHeaders(header http.Header) Option {
 // WithMetrics return metrics option
 func WithMetrics(metrics response.Metrics) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Metrics = metrics
 	}
 }
@@ -300,6 +391,9 @@ func WithMetrics(metrics response.Metrics) Option {
 // WithResource return resource option
 func WithResource(resource *view.Resource) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Resource = resource
 	}
 }
@@ -307,6 +401,9 @@ func WithResource(resource *view.Resource) Option {
 // WithConstants return Constants option
 func WithConstants(constants map[string]interface{}) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Constants = constants
 	}
 }
@@ -314,6 +411,9 @@ func WithConstants(constants map[string]interface{}) Option {
 // WithTypes return types option
 func WithTypes(types ...*state.Type) Option {
 	return func(o *Options) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+
 		o.Types = types
 	}
 }

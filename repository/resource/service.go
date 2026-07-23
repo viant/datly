@@ -3,6 +3,10 @@ package resource
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/storage"
@@ -10,9 +14,6 @@ import (
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/view"
-	"strings"
-	"sync"
-	"time"
 )
 
 type (

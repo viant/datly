@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -10,6 +11,16 @@ func LookupType(lookup xreflect.LookupType, typeName string, opts ...xreflect.Op
 	rType, ok := io.ParseType(typeName)
 	if ok {
 		return rType, nil
+	}
+	parseOptions := append([]xreflect.Option{}, opts...)
+	if lookup != nil {
+		parseOptions = append(parseOptions, xreflect.WithTypeLookup(lookup))
+	}
+	if rType, err := xreflect.Parse(typeName, parseOptions...); err == nil && rType != nil {
+		return rType, nil
+	}
+	if lookup == nil {
+		return nil, fmt.Errorf("type %q was not found and no lookup resolver is configured", typeName)
 	}
 	return lookup(typeName, opts...)
 }

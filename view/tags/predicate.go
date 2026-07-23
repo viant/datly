@@ -2,9 +2,10 @@ package tags
 
 import (
 	"fmt"
-	"github.com/viant/tagly/tags"
 	"strconv"
 	"strings"
+
+	"github.com/viant/tagly/tags"
 )
 
 // PredicateTag Predicate tag
@@ -70,10 +71,11 @@ func (t *Tag) updatedPredicate(key string, value string) (err error) {
 			return fmt.Errorf("invalid predicate ensure: %s %w", value, err)
 		}
 	default:
+		expr := key
 		if value != "" {
-			return fmt.Errorf("invalid argument %s", value)
+			expr = key + "=" + value
 		}
-		tag.Arguments = append(tag.Arguments, key)
+		tag.Arguments = append(tag.Arguments, expr)
 	}
 	return err
 }

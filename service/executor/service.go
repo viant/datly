@@ -4,6 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync/atomic"
+	"time"
+
 	"github.com/viant/datly/logger"
 	expand2 "github.com/viant/datly/service/executor/expand"
 	vsession "github.com/viant/datly/service/session"
@@ -13,8 +18,6 @@ import (
 	"github.com/viant/sqlx/option"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
-	"reflect"
-	"time"
 )
 
 type (
@@ -31,6 +34,8 @@ type (
 		dbSource    DBSource
 		collections map[string]*batcher.Collection
 		logger      *logger.Adapter
+		inserted    int32
+		updated     int32
 	}
 
 	DBOption  func(options *DBOptions)
@@ -94,6 +99,30 @@ func (e *Executor) Exec(ctx context.Context, sess *Session, options ...DBOption)
 	return state.Flush(expand2.StatusSuccess)
 }
 
+// BuildBuffered materializes a template execution sequence without executing
+// its DML. Root-owned units of work use the returned order at final completion.
+func (e *Executor) BuildBuffered(ctx context.Context, sess *Session) ([]any, error) {
+	state, data, err := e.sqlBuilder.Build(ctx, sess.View, sess.Lookup(sess.View), sess.SessionHandler, sess.DataUnit)
+	if state != nil {
+		sess.TemplateState = state
+	}
+	if err != nil {
+		if state != nil {
+			_ = state.Flush(expand2.StatusFailure)
+		}
+		return nil, err
+	}
+	iterator := NewTemplateStmtIterator(state.DataUnit, data)
+	var result []any
+	for iterator.HasNext() {
+		result = append(result, iterator.Next())
+	}
+	if err = state.Flush(expand2.StatusSuccess); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtIterator, options ...DBOption) error {
 	if !it.HasAny() {
 		return nil
@@ -133,20 +162,24 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 		if actual.Executed() {
 			return nil
 		}
-		actual.MarkAsExecuted()
+		var err error
 		switch actual.ExecType {
 		case expand2.ExecTypeInsert:
-			return e.handleInsert(ctx, sess, actual, db)
+			err = e.handleInsert(ctx, sess, actual, db)
 		case expand2.ExecTypeUpdate:
-			return e.handleUpdate(ctx, sess, db, actual)
+			err = e.handleUpdate(ctx, sess, db, actual)
 		case expand2.ExecTypeDelete:
-			return e.handleDelete(ctx, sess, db, actual)
+			err = e.handleDelete(ctx, sess, db, actual)
 		default:
 			return fmt.Errorf("unsupported '%v' db operation\n", actual.ExecType.String())
 		}
+		if err == nil {
+			actual.MarkAsExecuted()
+		}
+		return err
 
 	case *expand2.SQLStatment:
-		if len(actual.SQL) == 0 {
+		if actual.Executed() || len(actual.SQL) == 0 {
 			return nil
 		}
 
@@ -155,7 +188,11 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 			return err
 		}
 
-		return e.executeStatement(ctx, tx, actual, sess)
+		err = e.executeStatement(ctx, tx, actual, sess)
+		if err == nil {
+			actual.MarkAsExecuted()
+		}
+		return err
 	}
 	return fmt.Errorf("unsupported query type %T", data)
 }
@@ -190,6 +227,9 @@ func (e *Executor) handleUpdate(ctx context.Context, sess *dbSession, db *sql.DB
 	options = append(options, db)
 
 	updated, err := service.Exec(ctx, executable.Data, options...)
+	if err == nil {
+		atomic.AddInt32(&sess.updated, int32(updated))
+	}
 	e.logMetrics(ctx, executable.Table, "UPDATE", updated, now, err)
 	return err
 }
@@ -212,7 +252,7 @@ func (e *Executor) logMetrics(ctx context.Context, table string, operation strin
 	if err != nil {
 		metric.Error = err.Error()
 	}
-	value.(*exec.Context).Metrics.Append(&metric)
+	value.(*exec.Context).AppendMetrics(&metric)
 }
 
 func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable *expand2.Executable, db *sql.DB) error {
@@ -233,6 +273,9 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 		}
 		options = append(options, tx)
 		inserted, _, err = service.Exec(ctx, executable.Data, options...)
+		if err == nil {
+			atomic.AddInt32(&sess.inserted, int32(inserted))
+		}
 		e.logMetrics(ctx, executable.Table, "INSERT", inserted, started, err)
 		return err
 	}
@@ -252,6 +295,23 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 	options = append(options, option.BatchSize(batchSize))
 	options = append(options, e.dbOptions(db, sess))
 	inserted, _, err = service.Exec(ctx, executable.Data, options...)
+	if err == nil {
+		atomic.AddInt32(&sess.inserted, int32(inserted))
+	}
+	isInvalidConnection := err != nil && strings.Contains(err.Error(), "invalid connection")
+	if isInvalidConnection && atomic.LoadInt32(&sess.inserted) == 0 && atomic.LoadInt32(&sess.updated) == 0 {
+		var dErr error
+		db, dErr = sess.dbSource.Db(ctx)
+		if dErr != nil {
+			return fmt.Errorf("failed after retry: %w", err)
+		}
+		sess.tx.db = db
+		sess.tx.tx = nil
+		if _, err = sess.tx.Tx(); err != nil {
+			return err
+		}
+		inserted, _, err = service.Exec(ctx, executable.Data, options...)
+	}
 	e.logMetrics(ctx, executable.Table, "INSERT", inserted, started, err)
 	return err
 }

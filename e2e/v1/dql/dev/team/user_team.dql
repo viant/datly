@@ -1,0 +1,40 @@
+#package('github.com/viant/datly/e2e/v1/shape/dev/team/user_team')
+#setting($_ = $connector('dev'))
+#setting($_ = $route('/v1/api/shape/dev/teams', 'PUT'))
+
+#define($_ = $TeamIDs<[]int>(query/TeamIDs))
+
+#set($teamStatsIndex = $Unsafe.TeamStats.IndexBy("Id"))
+
+#define($_ = $TeamStats<?>(view/team_stats).
+    WithColumnType('ID', 'int').
+    WithColumnType('TEAM_MEMBERS', 'int').
+    WithColumnType('NAME', 'string') /*
+    SELECT
+        t.ID,
+        (
+            CASE
+            WHEN ut.TEAM_ID IS NULL THEN 0
+            ELSE COUNT(1)
+            END
+        )  as TEAM_MEMBERS,
+        t.NAME as NAME
+    FROM TEAM t
+    LEFT JOIN USER_TEAM ut ON t.ID = ut.TEAM_ID
+    WHERE t.ID IN ($TeamIDs)
+    GROUP BY t.ID
+*/) 
+
+#foreach($teamID in $Unsafe.TeamIDs)
+   #if($teamStatsIndex.HasKey($teamID) == false)
+    $logger.FatalfWithCode(400, "not found team with ID %v", $teamID)
+   #end
+
+   #set($aTeam = $teamStatsIndex[$teamID])
+   #if($aTeam.TeamMembers != 0)
+    $logger.FatalfWithCode(400, "can't deactivate team %v with %v members", $aTeam.Name, $aTeam.TeamMembers)
+   #end
+UPDATE TEAM
+SET ACTIVE = false
+WHERE ID = $teamID;
+#end

@@ -23,6 +23,9 @@ func (c Columns) Index(formatCase text.CaseFormat) NamedColumns {
 		if aTag := c[i].Tag; aTag != "" {
 			if src := reflect.StructTag(aTag).Get("source"); src != "" {
 				result[strings.ToLower(src)] = c[i]
+				if index := strings.LastIndex(src, "."); index != -1 && index+1 < len(src) {
+					result.RegisterWithName(src[index+1:], c[i])
+				}
 			}
 		}
 		result.Register(formatCase, c[i])
@@ -197,6 +200,7 @@ func NewColumns(columns sqlparser.Columns, config map[string]*ColumnConfig) Colu
 		}
 		name = item.Identity()
 		column := NewColumn(name, item.Type, item.RawType, item.IsNullable, WithColumnTag(item.Tag))
+		column.Aggregate = isAggregateProjection(item.Expression)
 		if item.Name != item.Alias && item.Alias != "" && item.Name != "" {
 			column.Tag += fmt.Sprintf(`source:"%v"`, item.Name)
 		}
@@ -209,4 +213,18 @@ func NewColumns(columns sqlparser.Columns, config map[string]*ColumnConfig) Colu
 		result = append(result, column)
 	}
 	return result
+}
+
+func isAggregateProjection(expression string) bool {
+	expression = strings.ToLower(strings.TrimSpace(expression))
+	switch {
+	case strings.Contains(expression, "count("),
+		strings.Contains(expression, "sum("),
+		strings.Contains(expression, "avg("),
+		strings.Contains(expression, "min("),
+		strings.Contains(expression, "max("):
+		return true
+	default:
+		return false
+	}
 }

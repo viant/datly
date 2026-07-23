@@ -203,6 +203,9 @@ func (m *mapMarshaller) mapStringIfaceMarshaller() func(pointer unsafe.Pointer, 
 			return nil
 		}
 
+		// Ensure JSON special characters in keys are escaped
+		replacer := getReplacer()
+
 		if !m.isEmbedded {
 			sb.WriteString("{")
 		}
@@ -214,9 +217,9 @@ func (m *mapMarshaller) mapStringIfaceMarshaller() func(pointer unsafe.Pointer, 
 				sb.WriteString(",")
 			}
 			counter++
-			sb.WriteString(`"`)
-			sb.WriteString(namesIndex.formatTo(aKey, m.config.CaseFormat))
-			sb.WriteString(`":`)
+			// Write escaped key
+			marshallString(namesIndex.formatTo(aKey, m.config.CaseFormat), sb, replacer)
+			sb.WriteString(`:`)
 
 			if err := m.valueMarshaller.MarshallObject(AsPtr(aValue, m.valueType), sb); err != nil {
 				return err

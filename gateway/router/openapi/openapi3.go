@@ -5,7 +5,6 @@ import (
 	"fmt"
 	openapi "github.com/viant/datly/gateway/router/openapi/openapi3"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -13,6 +12,7 @@ import (
 	"github.com/viant/xdatly/handler/response"
 	"net/http"
 	"reflect"
+	"strings"
 )
 
 const (
@@ -42,6 +42,11 @@ type (
 		_schemasIndex    map[string]*openapi.Schema
 		commonParameters openapi.ParametersMap
 		_parametersIndex map[string]*openapi.Parameter
+		securitySchemes  map[string]*openapi.SecurityScheme
+		// authSchemeName is set transiently while building a single operation
+		// when it declares an Authorization header, so the operation can require
+		// the corresponding security scheme.
+		authSchemeName string
 	}
 
 	paramLocation struct {
@@ -49,6 +54,24 @@ type (
 		in   string
 	}
 )
+
+func isRequestDerivedInputKind(kind state.Kind) bool {
+	switch kind {
+	case state.KindHeader, state.KindRequestBody, state.KindQuery, state.KindForm, state.KindPath:
+		return true
+	default:
+		return false
+	}
+}
+
+func isOpenAPIParameterKind(kind state.Kind) bool {
+	switch kind {
+	case state.KindHeader, state.KindQuery, state.KindForm, state.KindPath:
+		return true
+	default:
+		return false
+	}
+}
 
 func (g *generator) GenerateSpec(ctx context.Context, repoComponents *repository.Service, info openapi.Info, providers ...*repository.Provider) (*openapi.OpenAPI, error) {
 	components := &openapi.Components{}
@@ -60,6 +83,9 @@ func (g *generator) GenerateSpec(ctx context.Context, repoComponents *repository
 
 	components.Schemas = schemas.generatedSchemas
 	components.Parameters = g.commonParameters
+	if len(g.securitySchemes) > 0 {
+		components.SecuritySchemes = g.securitySchemes
+	}
 
 	return &openapi.OpenAPI{
 		OpenAPI:    "3.0.1",
@@ -74,100 +100,30 @@ func GenerateOpenAPI3Spec(ctx context.Context, components *repository.Service, i
 		_schemasIndex:    map[string]*openapi.Schema{},
 		commonParameters: map[string]*openapi.Parameter{},
 		_parametersIndex: map[string]*openapi.Parameter{},
+		securitySchemes:  map[string]*openapi.SecurityScheme{},
 	}).GenerateSpec(ctx, components, info, providers...)
 }
 
-func (g *generator) generatePaths(ctx context.Context, components *repository.Service, providers []*repository.Provider) (*SchemaContainer, openapi.Paths, error) {
-	container := NewContainer()
-	builder := &PathsBuilder{paths: openapi.Paths{}}
-	var retErr error
-	pathItem := &openapi.PathItem{}
-	for _, provider := range providers {
-		component, err := provider.Component(ctx)
-		if err != nil {
-			retErr = err
+// bearerAuthSchemeName is the name of the JWT bearer security scheme emitted
+// for routes that declare an Authorization header.
+const bearerAuthSchemeName = "BearerAuth"
+
+// ensureBearerScheme registers (once) an HTTP bearer JWT security scheme and
+// returns its name. datly's JWT codec accepts both a raw token and a
+// "Bearer <token>" value, so the bearer scheme is safe.
+func (g *generator) ensureBearerScheme() string {
+	if g.securitySchemes == nil {
+		g.securitySchemes = map[string]*openapi.SecurityScheme{}
+	}
+	if _, ok := g.securitySchemes[bearerAuthSchemeName]; !ok {
+		g.securitySchemes[bearerAuthSchemeName] = &openapi.SecurityScheme{
+			Type:         "http",
+			Scheme:       "bearer",
+			BearerFormat: "JWT",
+			Description:  "JWT bearer token sent in the Authorization header. Paste the token only; the 'Bearer ' prefix is added automatically.",
 		}
-		if component == nil {
-			fmt.Printf("provider.Component(ctx) returned nil\n")
-			continue
-		}
-		componentSchema := NewComponentSchema(components, component, container)
-		operation, err := g.generateOperation(ctx, componentSchema)
-		if err != nil {
-			retErr = err
-		}
-		switch component.Method {
-		case http.MethodGet:
-			pathItem.Get = operation
-		case http.MethodPost:
-			pathItem.Post = operation
-		case http.MethodDelete:
-			pathItem.Delete = operation
-		case http.MethodPut:
-			pathItem.Put = operation
-		case http.MethodPatch:
-			pathItem.Patch = operation
-		}
-		builder.AddPath(component.URI, pathItem)
 	}
-
-	return container, builder.paths, retErr
-}
-
-func (g *generator) generateOperation(ctx context.Context, component *ComponentSchema) (*openapi.Operation, error) {
-	body, err := g.requestBody(ctx, component)
-	if err != nil {
-		return nil, err
-	}
-
-	parameters, err := g.getAllViewsParameters(ctx, component, component.component.View)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if err := g.forEachParam(component.component.Output.Type.Parameters, func(parameter *state.Parameter) (bool, error) {
-		if parameter.In.Kind == state.KindComponent {
-			method, URI := shared.ExtractPath(parameter.In.Name)
-			provider, err := component.components.Registry().LookupProvider(ctx, &contract.Path{
-				URI:    URI,
-				Method: method,
-			})
-
-			if err != nil {
-				return false, err
-			}
-
-			paramComponent, err := provider.Component(ctx)
-			if err != nil {
-				return false, err
-			}
-
-			viewsParameters, err := g.getAllViewsParameters(ctx, NewComponentSchema(component.components, paramComponent, component.schemas), paramComponent.View)
-			if err != nil {
-				return false, err
-			}
-
-			parameters = append(parameters, viewsParameters...)
-		}
-
-		return true, nil
-	}); err != nil {
-		return nil, err
-	}
-
-	responses, err := g.responses(ctx, component)
-	if err != nil {
-		return nil, err
-	}
-
-	operation := &openapi.Operation{
-		Parameters:  dedupe(parameters),
-		RequestBody: body,
-		Responses:   responses,
-	}
-
-	return operation, nil
+	return bearerAuthSchemeName
 }
 
 func dedupe(parameters []*openapi.Parameter) openapi.Parameters {
@@ -282,6 +238,9 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 	}
 	if param.In.Kind == state.KindParam {
 		baseParam := component.component.LookupParameter(param.In.Name)
+		if baseParam == nil || !isRequestDerivedInputKind(baseParam.In.Kind) {
+			return nil, false, nil
+		}
 		return g.convertParam(ctx, component, baseParam, description)
 	}
 
@@ -301,7 +260,14 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		return result, true, nil
 	}
 
-	if !param.IsHTTPParameter() {
+	// Represent the Authorization header as a security scheme (Swagger UI
+	// "Authorize" button) instead of a plain header parameter.
+	if param.In.Kind == state.KindHeader && strings.EqualFold(param.In.Name, "Authorization") {
+		g.authSchemeName = g.ensureBearerScheme()
+		return nil, false, nil
+	}
+
+	if !isOpenAPIParameterKind(param.In.Kind) {
 		return nil, false, nil
 	}
 
@@ -318,16 +284,21 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 	}
 
 	table := ""
+	var parameterTag *tags.Parameter
 	if param.Tag != "" {
-		if datlyTags, _ := tags.Parse(reflect.StructTag(param.Tag), nil, tags.ViewTag); datlyTags != nil && datlyTags.View != nil {
-			table = datlyTags.View.Table
+		if datlyTags, _ := tags.Parse(reflect.StructTag(param.Tag), nil, tags.ViewTag, tags.ParameterTag); datlyTags != nil {
+			parameterTag = datlyTags.Parameter
+			if datlyTags.View != nil {
+				table = datlyTags.View.Table
+			}
 		}
-
 	}
 	schema, err := component.GenerateSchema(ctx, component.SchemaWithTag(param.Name, param.Schema.Type(), "Parameter "+param.Name+" schema", component.component.IOConfig(), Tag{
 		Format:     param.DateFormat,
 		IsNullable: !param.IsRequired(),
 		Table:      table,
+		Parameter:  parameterTag,
+		IsInput:    true,
 	}))
 
 	if err != nil {
@@ -347,8 +318,9 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		In:          string(param.In.Kind),
 		Description: description,
 		Style:       param.Style,
-		Required:    param.IsRequired(),
-		Schema:      schema,
+		// OpenAPI requires path parameters to always be required.
+		Required: param.IsRequired() || param.In.Kind == state.KindPath,
+		Schema:   schema,
 	}
 
 	g._parametersIndex[param.Name] = convertedParam
@@ -407,7 +379,7 @@ func (g *generator) requestBody(ctx context.Context, component *ComponentSchema)
 func (g *generator) responses(ctx context.Context, component *ComponentSchema) (openapi.Responses, error) {
 	method := component.component.Method
 	if method == http.MethodOptions {
-		return nil, nil
+		return openapi.Responses{}, nil
 	}
 
 	responseSchema, err := component.ResponseBody(ctx)
@@ -421,27 +393,27 @@ func (g *generator) responses(ctx context.Context, component *ComponentSchema) (
 	}
 
 	responses := openapi.Responses{}
-	responses[200] = &openapi.Response{
+	openapi.SetResponse(responses, openapi.ResponseOK, &openapi.Response{
 		Description: stringPtr("Success response"),
 		Content: map[string]*openapi.MediaType{
 			ApplicationJson: {
 				Schema: schema,
 			},
 		},
-	}
+	})
 
 	errorSchema, err := component.GetOrGenerateSchema(ctx, component.ReflectSchema("ErrorResponse", errorType, errorSchemaDescription, component.component.IOConfig()))
 	if err != nil {
 		return nil, err
 	}
 
-	responses["default"] = &openapi.Response{
+	openapi.SetResponse(responses, openapi.ResponseDefault, &openapi.Response{
 		Description: stringPtr("Error response. The view and param may be empty, but one of the message or object should be specified"),
 		Content: map[string]*openapi.MediaType{
 			ApplicationJson: {
 				Schema: errorSchema,
 			},
-		}}
+		}})
 
 	return responses, nil
 }

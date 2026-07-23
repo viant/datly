@@ -152,3 +152,68 @@ func TestWalker_Leaf(t *testing.T) {
 	}
 
 }
+
+func TestWalker_EmptyLeaf(t *testing.T) {
+	type Foo struct {
+		ID   int
+		Name string
+	}
+
+	type Bar struct {
+		ID   int
+		Foos []Foo
+	}
+
+	testCases := []struct {
+		description string
+		value       interface{}
+		selectors   []string
+		expect      interface{}
+	}{
+		{
+			description: "nested selector returns first empty leaf owner",
+			value: []*Bar{
+				{
+					ID: 1,
+					Foos: []Foo{
+						{ID: 10, Name: "keep"},
+						{ID: 0, Name: "allocate-me"},
+					},
+				},
+			},
+			selectors: []string{"Foos", "ID"},
+			expect:    &Foo{ID: 0, Name: "allocate-me"},
+		},
+		{
+			description: "slice selector skips non-empty ids",
+			value: []*Foo{
+				{ID: 101, Name: "already-set"},
+				{ID: 0, Name: "needs-id"},
+				{ID: 0, Name: "also-needs-id"},
+			},
+			selectors: []string{"ID"},
+			expect:    &Foo{ID: 0, Name: "needs-id"},
+		},
+		{
+			description: "returns nil when there are no empty ids",
+			value: []*Foo{
+				{ID: 101, Name: "already-set"},
+				{ID: 102, Name: "also-set"},
+			},
+			selectors: []string{"ID"},
+			expect:    nil,
+		},
+	}
+
+	for _, testCase := range testCases {
+		aWalker, err := NewWalker(testCase.value, testCase.selectors)
+		if !assert.Nil(t, err, testCase.description) {
+			continue
+		}
+		actual, err := aWalker.EmptyLeaf(testCase.value)
+		if !assert.Nil(t, err, testCase.description) {
+			continue
+		}
+		assert.EqualValues(t, testCase.expect, actual, testCase.description)
+	}
+}

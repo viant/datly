@@ -29,10 +29,10 @@ type (
 // Types returns all types
 func (c *Contract) Types() []*state.Type {
 	var types []*state.Type
-	if c.Input.Type.Type().IsDefined() {
+	if inputType := c.Input.Type.Type(); inputType != nil && inputType.IsDefined() {
 		types = append(types, &c.Input.Type)
 	}
-	if c.Output.Type.Type().IsDefined() {
+	if outputType := c.Output.Type.Type(); outputType != nil && outputType.IsDefined() {
 		types = append(types, &c.Output.Type)
 	}
 	return types
