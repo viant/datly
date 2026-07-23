@@ -28,7 +28,7 @@ require (
 	github.com/viant/parsly v0.3.3
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.33.1
-	github.com/viant/sqlx v0.23.1-0.20260712191511-2534f58bdccc
+	github.com/viant/sqlx v0.23.1-0.20260721202550-583cf232e734
 	github.com/viant/structql v0.5.4
 	github.com/viant/toolbox v0.37.0
 	github.com/viant/velty v0.4.1-0.20260408224432-5a1c31e1bd87
@@ -46,6 +46,7 @@ require (
 )
 
 require (
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
 	github.com/viant/jsonrpc v0.17.0
@@ -126,7 +127,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
