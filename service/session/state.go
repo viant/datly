@@ -16,8 +16,10 @@ import (
 	"github.com/viant/datly/internal/converter"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/auth"
+	"github.com/viant/datly/service/executor/uow"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	dcodec "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/datly/view/tags"
@@ -278,8 +280,12 @@ func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aSt
 			if parameter.Scope != opts.scope {
 				continue
 			}
+			order, reserveErr := uow.ReserveBindingOrder(ctx)
+			if reserveErr != nil {
+				return reserveErr
+			}
 			wg.Add(1)
-			go s.populateParameterInBackground(ctx, parameter, aState, opts, err, &wg)
+			go s.populateParameterInBackground(ctx, parameter, aState, opts, err, &wg, order)
 		}
 		wg.Wait()
 		if err.HasError() {
@@ -289,8 +295,9 @@ func (s *Session) SetState(ctx context.Context, parameters state.Parameters, aSt
 	return nil
 }
 
-func (s *Session) populateParameterInBackground(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options, errors *response.Errors, wg *sync.WaitGroup) {
+func (s *Session) populateParameterInBackground(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options, errors *response.Errors, wg *sync.WaitGroup, order string) {
 	defer wg.Done()
+	ctx = uow.WithBindingOrder(ctx, order)
 	if err := s.populateParameter(ctx, parameter, aState, options); err != nil {
 		s.handleParameterError(parameter, err, errors)
 	}
@@ -802,7 +809,7 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 				return nil, false, initErr
 			}
 		}
-		transformed, err := parameter.Output.Transform(ctx, value, opts.codecOptions...)
+		transformed, err := parameter.Output.Transform(ctx, value, opts.codecOptionsWithAuth()...)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to transform %s with %s: %v, %w", parameter.Name, parameter.Output.Name, value, err)
 		}
@@ -815,6 +822,14 @@ func (s *Session) adjustAndCache(ctx context.Context, parameter *state.Parameter
 		s.setValue(parameter, value)
 	}
 	return value, has, err
+}
+
+func (o *Options) codecOptionsWithAuth() []codec.Option {
+	result := append([]codec.Option(nil), o.codecOptions...)
+	if o.auth != nil && o.auth.Verifier() != nil {
+		result = append(result, dcodec.WithJWTVerifier(o.auth.Verifier()))
+	}
+	return result
 }
 
 // SetValue sets value to session cache
@@ -1008,23 +1023,60 @@ func isZeroValue(value interface{}) bool {
 	return v.IsZero()
 }
 
-func (s *Session) handleParameterError(parameter *state.Parameter, err error, errors *response.Errors) {
+func (s *Session) handleParameterError(parameter *state.Parameter, err error, result *response.Errors) {
 	if parameter.ErrorMessage != "" && err != nil {
 		msg := strings.ReplaceAll(parameter.ErrorMessage, "${error}", err.Error())
 		err = fmt.Errorf("%s", msg)
 	}
+	// Directly-typed *response.Error (the common parameter-binding path): reset its
+	// status to the parameter's configured code. When the parameter has no explicit
+	// code (e.g. an object parameter such as Auth), this leaves Code=0 so the router's
+	// NormalizeErr can recurse into the wrapped cause (e.g. a nested Jwt error) to
+	// derive the real status code (401) and build the nested object payload.
 	if pErr, ok := err.(*response.Error); ok {
 		pErr.Code = parameter.ErrorStatusCode
-		errors.Append(pErr)
-	} else {
-		errors.AddError("", parameter.Name, err, response.WithErrorStatusCode(parameter.ErrorStatusCode))
-	}
-	if parameter.ErrorStatusCode != 0 {
-		errors.SetStatusCode(parameter.ErrorStatusCode)
-	} else if asErrors, ok := err.(*response.Errors); ok && asErrors.StatusCode() != http.StatusBadRequest {
-		errors.SetStatusCode(asErrors.StatusCode())
+		result.Append(pErr)
+		if parameter.ErrorStatusCode != 0 {
+			result.SetStatusCode(parameter.ErrorStatusCode)
+		}
+		return
 	}
 
+	result.AddError("", parameter.Name, err, response.WithErrorStatusCode(parameter.ErrorStatusCode))
+
+	if parameter.ErrorStatusCode != 0 {
+		result.SetStatusCode(parameter.ErrorStatusCode)
+		return
+	}
+
+	// Directly-typed *response.Errors: preserve an aggregated status that is more
+	// specific than a generic 400.
+	if asErrors, ok := err.(*response.Errors); ok {
+		if code := asErrors.StatusCode(); code != 0 && code != http.StatusBadRequest {
+			result.SetStatusCode(code)
+		}
+		return
+	}
+
+	// Fallback: the error may be wrapped (fmt.Errorf %w / errors.Join). Resolve a
+	// meaningful status via errors.As so wrapped response errors keep their status.
+	var statusCoder response.StatusCoder
+	if errors.As(err, &statusCoder) {
+		if code := statusCoder.StatusCode(); code != 0 {
+			result.SetStatusCode(code)
+			if last := lastError(result); last != nil && last.Code == 0 {
+				last.Code = code
+			}
+		}
+	}
+}
+
+// lastError returns the most recently appended error, or nil when empty.
+func lastError(result *response.Errors) *response.Error {
+	if result == nil || len(result.Errors) == 0 {
+		return nil
+	}
+	return result.Errors[len(result.Errors)-1]
 }
 
 func (s *Session) InitKinds(kinds ...state.Kind) error {

@@ -2,6 +2,7 @@ package expand
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"reflect"
@@ -30,6 +31,7 @@ type (
 		sqlxValidator      *validator.Service              `velty:"-"`
 		sliceIndex         map[reflect.Type]*xunsafe.Slice `velty:"-"`
 		ctx                context.Context                 `velty:"-"`
+		transactionRunner  func(func(*sql.Tx) error) error `velty:"-"`
 		EvalLock           sync.Mutex
 	}
 
@@ -75,8 +77,22 @@ func (c *DataUnit) Allocate(tableName string, dest interface{}, selector string)
 		return "", fmt.Errorf("error occurred while connecting to DB")
 	}
 
-	service := sequencer.New(context.Background(), db)
-	return "", service.Next(tableName, dest, selector)
+	ctx := context.Background()
+	if c.ctx != nil {
+		ctx = c.ctx
+	}
+	if c.transactionRunner != nil {
+		return "", c.transactionRunner(func(tx *sql.Tx) error {
+			return sequencer.New(ctx, db, tx).Next(tableName, dest, selector)
+		})
+	}
+	return "", sequencer.New(ctx, db).Next(tableName, dest, selector)
+}
+
+// SetTransactionRunner binds sequencing to the same serialized transaction as DML.
+func (c *DataUnit) SetTransactionRunner(ctx context.Context, runner func(func(*sql.Tx) error) error) {
+	c.ctx = ctx
+	c.transactionRunner = runner
 }
 
 func (c *DataUnit) AsBinding(value interface{}) (string, error) {

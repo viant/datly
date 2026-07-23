@@ -99,6 +99,30 @@ func (e *Executor) Exec(ctx context.Context, sess *Session, options ...DBOption)
 	return state.Flush(expand2.StatusSuccess)
 }
 
+// BuildBuffered materializes a template execution sequence without executing
+// its DML. Root-owned units of work use the returned order at final completion.
+func (e *Executor) BuildBuffered(ctx context.Context, sess *Session) ([]any, error) {
+	state, data, err := e.sqlBuilder.Build(ctx, sess.View, sess.Lookup(sess.View), sess.SessionHandler, sess.DataUnit)
+	if state != nil {
+		sess.TemplateState = state
+	}
+	if err != nil {
+		if state != nil {
+			_ = state.Flush(expand2.StatusFailure)
+		}
+		return nil, err
+	}
+	iterator := NewTemplateStmtIterator(state.DataUnit, data)
+	var result []any
+	for iterator.HasNext() {
+		result = append(result, iterator.Next())
+	}
+	if err = state.Flush(expand2.StatusSuccess); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtIterator, options ...DBOption) error {
 	if !it.HasAny() {
 		return nil
@@ -138,20 +162,24 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 		if actual.Executed() {
 			return nil
 		}
-		actual.MarkAsExecuted()
+		var err error
 		switch actual.ExecType {
 		case expand2.ExecTypeInsert:
-			return e.handleInsert(ctx, sess, actual, db)
+			err = e.handleInsert(ctx, sess, actual, db)
 		case expand2.ExecTypeUpdate:
-			return e.handleUpdate(ctx, sess, db, actual)
+			err = e.handleUpdate(ctx, sess, db, actual)
 		case expand2.ExecTypeDelete:
-			return e.handleDelete(ctx, sess, db, actual)
+			err = e.handleDelete(ctx, sess, db, actual)
 		default:
 			return fmt.Errorf("unsupported '%v' db operation\n", actual.ExecType.String())
 		}
+		if err == nil {
+			actual.MarkAsExecuted()
+		}
+		return err
 
 	case *expand2.SQLStatment:
-		if len(actual.SQL) == 0 {
+		if actual.Executed() || len(actual.SQL) == 0 {
 			return nil
 		}
 
@@ -160,7 +188,11 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 			return err
 		}
 
-		return e.executeStatement(ctx, tx, actual, sess)
+		err = e.executeStatement(ctx, tx, actual, sess)
+		if err == nil {
+			actual.MarkAsExecuted()
+		}
+		return err
 	}
 	return fmt.Errorf("unsupported query type %T", data)
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service"
+	"github.com/viant/datly/service/executor/uow"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/types"
@@ -44,11 +45,65 @@ type Service struct {
 }
 
 // Operate processes data component with data session
-func (s *Service) Operate(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (interface{}, error) {
-	if err := s.updateBackgroundJob(ctx, aComponent); err != nil {
+func (s *Service) Operate(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (result interface{}, err error) {
+	identity := aComponent.Method + " " + aComponent.URI
+	_, previousFrame, hadFrame := uow.FromContext(ctx)
+	ctx, scope, frame, owner, err := uow.Enter(ctx, identity)
+	if err != nil {
+		return nil, err
+	}
+	createdFrame := !hadFrame || previousFrame != frame
+	defer func() {
+		// A backward-compatible nested Operate call can arrive without an
+		// explicit child marker and therefore borrow the current frame. Only the
+		// operation that created a frame may seal it; otherwise a nested read can
+		// close the root while its handler still has mutations to dispatch.
+		sealCreatedFrame(createdFrame, frame)
+		if owner {
+			result, err = finishOperation(ctx, scope, result, err)
+		}
+	}()
+	if tx := aSession.Options.SqlTx(); tx != nil && aComponent.View != nil && aComponent.View.Connector != nil {
+		db, dbErr := aComponent.View.Connector.DB()
+		if dbErr != nil {
+			return nil, dbErr
+		}
+		if err = scope.AdoptTransaction(db, tx); err != nil {
+			return nil, err
+		}
+	}
+	if err = s.updateBackgroundJob(ctx, aComponent); err != nil {
 		return nil, err
 	}
 	return s.operate(ctx, aComponent, aSession)
+}
+
+func sealCreatedFrame(created bool, frame *uow.Frame) {
+	if created {
+		frame.Seal()
+	}
+}
+
+// finishOperation preserves structured output for an operation that already
+// failed, while preventing output produced before a flush or commit failure
+// from being returned as a successful response.
+func finishOperation(ctx context.Context, scope *uow.Scope, result interface{}, operationErr error) (interface{}, error) {
+	finishErr := scope.Finish(ctx, operationErr)
+	if operationErr != nil {
+		// scope.Finish reports the original cause combined (via errors.Join) with any
+		// rollback error. That join erases the concrete error type the gateway relies
+		// on for status-code and nested-error propagation (e.g. a 401 Jwt error nested
+		// under an Auth component parameter). Prefer the original typed error and only
+		// fall back to Finish's error when it surfaced an additional rollback failure.
+		if finishErr != nil && !errors.Is(finishErr, operationErr) {
+			return result, finishErr
+		}
+		return result, operationErr
+	}
+	if finishErr != nil {
+		return nil, finishErr
+	}
+	return result, nil
 }
 
 // HandleError processes output with error
@@ -132,19 +187,19 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSession *session.Session) (interface{}, error) {
 
 	if injectorFinalizer, ok := ret.(state.InjectorFinalizer); ok {
-
-		lookup := func(ctx context.Context, route xhttp.Route) (xstate.Injector, error) {
-			aComponent, err := aSession.Registry().Lookup(ctx, contract.NewPath(route.Method, route.URL))
+		lookup := func(lookupCtx context.Context, route xhttp.Route) (xstate.Injector, error) {
+			lookupCtx = uow.Propagate(ctx, lookupCtx)
+			aComponent, err := aSession.Registry().Lookup(lookupCtx, contract.NewPath(route.Method, route.URL))
 			if err != nil {
 				return nil, err
 			}
-			originalRequest, _ := aSession.HttpRequest(ctx, aSession.Clone())
+			originalRequest, _ := aSession.HttpRequest(lookupCtx, aSession.Clone())
 			request, _ := http.NewRequest(route.Method, route.URL, nil)
 			if originalRequest != nil {
 				request.Header = originalRequest.Header
 			}
 			unmarshal := aComponent.UnmarshalFunc(request)
-			locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+			locatorOptions := aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal)
 			childSession := session.New(aComponent.View,
 				session.WithAuth(aSession.Auth()),
 				session.WithLocatorOptions(locatorOptions...),
@@ -161,7 +216,12 @@ func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSes
 			if err := childSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery); err != nil {
 				return nil, err
 			}
-			return childSession, nil
+			childCtx := childSession.Context(lookupCtx, true)
+			return &invocationInjector{
+				ctx:      childCtx,
+				name:     route.Method + " " + route.URL,
+				delegate: childSession,
+			}, nil
 		}
 
 		err = injectorFinalizer.Finalize(ctx, lookup)
@@ -213,21 +273,23 @@ func (s *Service) finalizeMCPOutput(ctx context.Context, ret interface{}, aSessi
 	if !ok {
 		return nil
 	}
-	getBinder := func(ctx context.Context, route xhttp.Route) (xhandler.Session, error) {
+	getBinder := func(binderCtx context.Context, route xhttp.Route) (xhandler.Session, error) {
+		binderCtx = uow.Propagate(ctx, binderCtx)
+		binderCtx = uow.PrepareChild(binderCtx, uow.RelationImperative, "")
 		if aSession == nil || aSession.Registry() == nil {
 			return nil, fmt.Errorf("session registry unavailable")
 		}
-		aComponent, err := aSession.Registry().Lookup(ctx, contract.NewPath(route.Method, route.URL))
+		aComponent, err := aSession.Registry().Lookup(binderCtx, contract.NewPath(route.Method, route.URL))
 		if err != nil {
 			return nil, err
 		}
-		originalRequest, _ := aSession.HttpRequest(ctx, aSession.Clone())
+		originalRequest, _ := aSession.HttpRequest(binderCtx, aSession.Clone())
 		request, _ := http.NewRequest(route.Method, route.URL, nil)
 		if originalRequest != nil {
 			request.Header = originalRequest.Header
 		}
 		unmarshal := aComponent.UnmarshalFunc(request)
-		locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+		locatorOptions := aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal)
 		childSession := session.New(aComponent.View,
 			session.WithAuth(aSession.Auth()),
 			session.WithLocatorOptions(locatorOptions...),
@@ -243,7 +305,7 @@ func (s *Service) finalizeMCPOutput(ctx context.Context, ret interface{}, aSessi
 		if err := childSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery); err != nil {
 			return nil, err
 		}
-		return s.HandlerSession(ctx, aComponent, childSession)
+		return s.HandlerSession(binderCtx, aComponent, childSession)
 	}
 	return finalizer.FinalizeMCP(ctx, mcp, getBinder)
 }
