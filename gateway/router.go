@@ -342,6 +342,24 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 	for _, anItem := range container.Items {
 		for _, aPath := range anItem.Paths {
 			if aPath.Internal {
+				if aPath.ContentURL == "" {
+					var apiKeys []*path.APIKey
+					if matched := r.config.APIKeys.Match(aPath.URI); matched != nil {
+						aPath.APIKey = matched
+						apiKeys = append(apiKeys, matched)
+					}
+					offset := len(routes)
+					provider, err := r.repository.Registry().LookupProvider(ctx, &aPath.Path)
+					if err != nil {
+						return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
+					}
+					routes = r.appendCacheWarmupRoute(routes, aPath, provider)
+					if len(apiKeys) > 0 {
+						for i := offset; i < len(routes); i++ {
+							routes[i].ApiKeys = apiKeys
+						}
+					}
+				}
 				continue
 			}
 			var apiKeys []*path.APIKey
