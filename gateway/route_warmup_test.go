@@ -52,6 +52,35 @@ func TestRouterAppendCacheWarmupRoute_NonGET(t *testing.T) {
 	require.Empty(t, routes)
 }
 
+func TestRouterInternalGETAllowsWarmupRouteOnly(t *testing.T) {
+	aPath := &path.Path{
+		Path:     *contract.NewPath(http.MethodGet, "/v1/api/internal/order"),
+		Internal: true,
+	}
+	router := newWarmupTestRouter(t, aPath)
+
+	_, err := router.Match(http.MethodGet, "/v1/api/internal/order", nil)
+	require.Error(t, err)
+
+	route, err := router.Match(http.MethodPost, "/v1/api/cache/warmup/internal/order", nil)
+	require.NoError(t, err)
+	require.Equal(t, RouteWarmupKind, route.Kind)
+}
+
+func TestRouterInternalPOSTDoesNotAllowWarmupRoute(t *testing.T) {
+	aPath := &path.Path{
+		Path:     *contract.NewPath(http.MethodPost, "/v1/api/internal/order"),
+		Internal: true,
+	}
+	router := newWarmupTestRouter(t, aPath)
+
+	_, err := router.Match(http.MethodPost, "/v1/api/internal/order", nil)
+	require.Error(t, err)
+
+	_, err = router.Match(http.MethodPost, "/v1/api/cache/warmup/internal/order", nil)
+	require.Error(t, err)
+}
+
 func TestRouterHandleCacheWarmupWithErr_NoCacheViews(t *testing.T) {
 	router := &Router{}
 	provider := repository.NewProvider(
@@ -95,4 +124,34 @@ func TestRouterHandleCacheWarmupWithErr_DetachesRequestContext(t *testing.T) {
 	statusCode, body := router.handleCacheWarmupWithErr(ctx, []*repository.Provider{provider})
 
 	require.Equal(t, http.StatusOK, statusCode, string(body))
+}
+
+func newWarmupTestRouter(t *testing.T, routes ...*path.Path) *Router {
+	t.Helper()
+	ctx := context.Background()
+	repo, err := repository.New(ctx, repository.WithComponentURL(""), repository.WithNoPlugin())
+	require.NoError(t, err)
+
+	item := &path.Item{Paths: routes}
+	repo.Container().Items = []*path.Item{item}
+
+	providers := make([]*repository.Provider, 0, len(routes))
+	for _, routePath := range routes {
+		routePath := routePath
+		component, err := repository.NewComponent(&routePath.Path, repository.WithView(&view.View{Name: "order"}))
+		require.NoError(t, err)
+		providers = append(providers, repository.NewProvider(routePath.Path, &version.Control{}, func(ctx context.Context, opts ...repository.Option) (*repository.Component, error) {
+			return component, nil
+		}))
+	}
+	repo.Registry().SetProviders(providers)
+
+	router, err := NewRouter(ctx, repo, &Config{
+		ExposableConfig: ExposableConfig{
+			APIPrefix: "/v1/api",
+			Meta:      meta.Config{CacheWarmURI: "/v1/api/cache/warmup"},
+		},
+	}, nil, nil, nil)
+	require.NoError(t, err)
+	return router
 }
