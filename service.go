@@ -186,6 +186,14 @@ func WithOutput(output interface{}) OperateOption {
 	}
 }
 
+func ContextWithOutputProjection(ctx context.Context, output interface{}) context.Context {
+	return session.ContextWithOutputProjection(ctx, output)
+}
+
+func ContextWithViewOutputProjection(ctx context.Context, viewName string, output interface{}) context.Context {
+	return session.ContextWithViewOutputProjection(ctx, viewName, output)
+}
+
 func WithSession(session *session.Session) OperateOption {
 	return func(o *operateOptions) {
 		o.session = session

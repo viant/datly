@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"reflect"
@@ -177,7 +178,70 @@ func (s *Session) setViewState(ctx context.Context, aView *view.View) (err error
 			return err
 		}
 	}
+	s.applyViewProjection(aView)
 	return err
+}
+
+func (s *Session) applyViewProjection(aView *view.View) {
+	if s == nil || aView == nil || len(s.viewProjections) == 0 {
+		return
+	}
+	columns, ok := s.viewProjections[aView.Name]
+	if !ok {
+		normalizedViewName := normalizeViewProjectionName(aView.Name)
+		for name, candidate := range s.viewProjections {
+			if normalizeViewProjectionName(name) == normalizedViewName {
+				columns = candidate
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok || len(columns) == 0 {
+		return
+	}
+	statelet := s.state.Lookup(aView)
+	statelet.SetColumns(columns)
+}
+
+func (s *Session) ApplyOutputProjection(ctx context.Context, aView *view.View) error {
+	var output interface{}
+	if s.outputProjection != nil {
+		output = projectionOutputForView(*s.outputProjection, aView.Name)
+	}
+	if output == nil {
+		output = OutputProjectionFromContext(ctx, aView.Name)
+	}
+	if output == nil {
+		return nil
+	}
+	columns, err := view.ProjectionColumnsForOutput(aView, output)
+	if err != nil {
+		return err
+	}
+	if columns == nil {
+		return nil
+	}
+	log.Printf("[PROJECTION] view=%s columns=%v", aView.Name, columns)
+	s.Apply(WithViewProjectionColumns(aView.Name, columns))
+	statelet := s.state.Lookup(aView)
+	statelet.SetColumns(columns)
+	return nil
+}
+
+func projectionOutputForView(projection OutputProjection, viewName string) interface{} {
+	if projection.View != "" && normalizeViewProjectionName(projection.View) != normalizeViewProjectionName(viewName) {
+		return nil
+	}
+	return projection.Output
+}
+
+func normalizeViewProjectionName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, "_", "")
+	name = strings.ReplaceAll(name, "-", "")
+	name = strings.ReplaceAll(name, ".", "")
+	return name
 }
 
 func (s *Session) viewNamespace(aView *view.View) *view.NamespaceView {
