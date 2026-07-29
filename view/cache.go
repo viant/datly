@@ -78,12 +78,13 @@ type (
 	}
 
 	CacheInput struct {
-		Selector   *Statelet
-		Column     string
-		MetaColumn string
-		IndexMeta  bool
-		Label      string
-		FieldNames []string
+		Selector     *Statelet
+		Column       string
+		MetaColumn   string
+		IndexMeta    bool
+		Label        string
+		FieldNames   []string
+		StoredFields []ProjectionField
 	}
 
 	CacheInputFn func() ([]*CacheInput, error)
@@ -430,7 +431,10 @@ func (p *ParamValue) clone() *ParamValue {
 
 func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
 	if len(c.Warmup.Cases) == 0 {
-		input := c.NewInput(NewStatelet())
+		input, err := c.newInputWithError(NewStatelet(), nil)
+		if err != nil {
+			return nil, err
+		}
 		if c.maxCasesExceeded(0, 0, input) {
 			if maxCases := c.maxCases(); maxCases > 0 {
 				fmt.Printf("[INFO] cache warmup selector cap view=%s max_cases=%d selected_entries=0 selected_selectors=0\n", c.owner.Name, maxCases)
@@ -673,7 +677,10 @@ func (c *Cache) appendSelectors(set *CacheParameters, paramValues [][]interface{
 	indexes := make([]int, len(paramValues))
 	generatedEntries := 0
 	if len(indexes) == 0 {
-		input := c.newInput(NewStatelet(), set)
+		input, err := c.newInputWithError(NewStatelet(), set)
+		if err != nil {
+			return err
+		}
 		if c.maxCasesExceeded(selectedEntries, generatedEntries, input) {
 			return nil
 		}
@@ -702,7 +709,10 @@ outer:
 		}
 
 		label := strings.Join(debugParams, ",")
-		input := c.newInput(selector, set)
+		input, err := c.newInputWithError(selector, set)
+		if err != nil {
+			return err
+		}
 		input.Label = label
 		if c.maxCasesExceeded(selectedEntries, generatedEntries, input) {
 			return nil
@@ -733,18 +743,41 @@ func (c *Cache) NewInput(selector *Statelet) *CacheInput {
 }
 
 func (c *Cache) newInput(selector *Statelet, set *CacheParameters) *CacheInput {
+	input, err := c.newInputWithError(selector, set)
+	if err == nil {
+		return input
+	}
+	if c != nil && c.owner != nil {
+		fmt.Printf("[INFO] cache warmup projection metadata error view=%s field_names=%v error=%v\n", c.owner.Name, c.fieldNamesFor(set), err)
+	}
+	return c.newInputWithoutStoredFields(selector, set)
+}
+
+func (c *Cache) newInputWithError(selector *Statelet, set *CacheParameters) (*CacheInput, error) {
 	fieldNames := c.fieldNamesFor(set)
 	if selector != nil && c.Warmup != nil && c.Warmup.Limit != nil {
 		selector.Limit = *c.Warmup.Limit
 		selector.WarmupNoLimit = *c.Warmup.Limit == 0
 	}
 	c.applyWarmupFieldNames(selector, fieldNames)
+	storedFields, err := ProjectionFieldsForNames(c.owner, fieldNames)
+	if err != nil {
+		return nil, err
+	}
+	input := c.newInputWithoutStoredFields(selector, set)
+	input.StoredFields = append([]ProjectionField(nil), storedFields...)
+	return input, nil
+}
+
+func (c *Cache) newInputWithoutStoredFields(selector *Statelet, set *CacheParameters) *CacheInput {
+	fieldNames := c.fieldNamesFor(set)
 	return &CacheInput{
-		Selector:   selector,
-		Column:     c.Warmup.IndexColumn,
-		MetaColumn: c.Warmup.IndexColumn,
-		IndexMeta:  (c.Warmup.IndexMeta || c.Warmup.IndexColumn != "") && c.owner.Template.Summary != nil,
-		FieldNames: append([]string(nil), fieldNames...),
+		Selector:     selector,
+		Column:       c.Warmup.IndexColumn,
+		MetaColumn:   c.Warmup.IndexColumn,
+		IndexMeta:    (c.Warmup.IndexMeta || c.Warmup.IndexColumn != "") && c.owner.Template.Summary != nil,
+		FieldNames:   append([]string(nil), fieldNames...),
+		StoredFields: nil,
 	}
 }
 
@@ -756,6 +789,150 @@ func (c *Cache) fieldNamesFor(set *CacheParameters) []string {
 		return nil
 	}
 	return c.Warmup.FieldNames
+}
+
+func (c *Cache) WarmupFieldNamesForSelector(selector *Statelet) ([]string, bool) {
+	if c == nil || c.Warmup == nil {
+		return nil, true
+	}
+	matchedAny := false
+	var matchedColumns []string
+	for _, candidate := range c.Warmup.Cases {
+		if candidate == nil || len(candidate.FieldNames) == 0 || !c.warmupCaseMatchesSelector(candidate, selector) {
+			continue
+		}
+		columns, ok := c.warmupProjectionColumns(candidate.FieldNames)
+		if !ok {
+			return nil, false
+		}
+		if !matchedAny {
+			matchedAny = true
+			matchedColumns = columns
+			continue
+		}
+		if !stringSlicesEqual(matchedColumns, columns) {
+			return nil, false
+		}
+	}
+	if matchedAny {
+		return matchedColumns, true
+	}
+	return c.Warmup.FieldNames, true
+}
+
+func (c *Cache) warmupProjectionColumns(fieldNames []string) ([]string, bool) {
+	if len(fieldNames) == 0 {
+		return nil, true
+	}
+	if c == nil || c.owner == nil {
+		return fieldNames, true
+	}
+	columns, err := ProjectionColumnsForNames(c.owner, fieldNames)
+	if err == nil {
+		return columns, true
+	}
+	columns = make([]string, 0, len(fieldNames))
+	for _, fieldName := range fieldNames {
+		column, ok := c.owner.ColumnByName(fieldName)
+		if !ok {
+			column, ok = c.warmupColumnByNormalizedName(fieldName)
+		}
+		if !ok {
+			return nil, false
+		}
+		columns = append(columns, column.Name)
+	}
+	return columns, true
+}
+
+func (c *Cache) warmupColumnByNormalizedName(name string) (*Column, bool) {
+	if c == nil || c.owner == nil {
+		return nil, false
+	}
+	normalized := normalizeProjectionFieldName(name)
+	for _, column := range c.owner.Columns {
+		if column == nil {
+			continue
+		}
+		if normalizeProjectionFieldName(column.Name) == normalized ||
+			normalizeProjectionFieldName(column.FieldName()) == normalized ||
+			normalizeProjectionFieldName(column.DatabaseColumn) == normalized {
+			return column, true
+		}
+	}
+	return nil, false
+}
+
+func stringSlicesEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if normalizeProjectionFieldName(left[i]) != normalizeProjectionFieldName(right[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Cache) warmupCaseMatchesSelector(candidate *CacheParameters, selector *Statelet) bool {
+	if candidate == nil || selector == nil || selector.Template == nil {
+		return false
+	}
+	for _, paramValue := range candidate.Set {
+		if paramValue == nil {
+			return false
+		}
+		actual, ok := warmupSelectorValue(selector, paramValue)
+		if !ok {
+			return false
+		}
+		candidates := paramValue.Values
+		if paramValue._param != nil {
+			var err error
+			candidates, err = c.getParamValues(context.Background(), paramValue)
+			if err != nil {
+				return false
+			}
+		}
+		if !warmupValueMatches(actual, candidates) {
+			return false
+		}
+	}
+	return true
+}
+
+func warmupSelectorValue(selector *Statelet, paramValue *ParamValue) (interface{}, bool) {
+	if selector == nil || selector.Template == nil || paramValue == nil {
+		return nil, false
+	}
+	if paramValue._param != nil && paramValue._param.Selector() != nil {
+		stateSelector := paramValue._param.Selector()
+		if !stateSelector.Has(selector.Template.Pointer()) {
+			return nil, true
+		}
+		return stateSelector.Value(selector.Template.Pointer()), true
+	}
+	stateSelector, err := selector.Template.Selector(paramValue.Name)
+	if err != nil || stateSelector == nil {
+		return nil, false
+	}
+	if !stateSelector.Has(selector.Template.Pointer()) {
+		return nil, true
+	}
+	return stateSelector.Value(selector.Template.Pointer()), true
+}
+
+func warmupValueMatches(actual interface{}, candidates []interface{}) bool {
+	if len(candidates) == 0 {
+		return actual == nil || reflect.ValueOf(actual).IsZero()
+	}
+	for _, candidate := range candidates {
+		if reflect.DeepEqual(actual, candidate) || fmt.Sprint(actual) == fmt.Sprint(candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Cache) maxCases() int {

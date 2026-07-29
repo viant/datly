@@ -73,6 +73,11 @@ func (s *Statelet) Add(fieldName string, isHolder bool) {
 	}
 }
 
+func (s *Statelet) SetColumns(columns []string) {
+	s.Columns = append([]string(nil), columns...)
+	s._columnNames = Names(s.Columns).Index()
+}
+
 // AppendFilters safely appends filters to the selector's Filters to avoid data races.
 func (s *Statelet) AppendFilters(filters predicate.Filters) {
 	if len(filters) == 0 {

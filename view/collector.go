@@ -98,12 +98,24 @@ func normalizeValues(value interface{}) []interface{} {
 	case []string:
 		result := make([]interface{}, 0, len(actual))
 		for _, item := range actual {
+			if isBlankStringKey(item) {
+				continue
+			}
 			result = append(result, io.NormalizeKey(item))
 		}
 		return result
+	case string:
+		if isBlankStringKey(actual) {
+			return nil
+		}
+		return []interface{}{io.NormalizeKey(value)}
 	default:
 		return []interface{}{io.NormalizeKey(value)}
 	}
+}
+
+func isBlankStringKey(value string) bool {
+	return strings.TrimSpace(value) == ""
 }
 
 func compositeRows(parts [][]interface{}) [][]interface{} {
@@ -1143,6 +1155,9 @@ outer:
 				case []string:
 
 					for j := range actual {
+						if isBlankStringKey(actual[j]) {
+							continue
+						}
 						if _, ok := unique[actual[j]]; ok {
 							continue
 						}
@@ -1150,6 +1165,9 @@ outer:
 						result = append(result, actual[j])
 					}
 				default:
+					if actual, ok := fieldValue.(string); ok && isBlankStringKey(actual) {
+						continue
+					}
 					if count := len(result); count > 0 {
 						if result[count-1] == fieldValue { //value already added
 							continue

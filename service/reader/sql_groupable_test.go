@@ -194,6 +194,59 @@ func TestBuilder_rewriteGroupBy(t *testing.T) {
 			expected: "(SELECT (99 * SUM(avails)) + MOD(SUM(avails), 99) AS avails FROM audience_event_v1 v)",
 		},
 		{
+			description: "rewrite site cube shared diagnostic projection",
+			sql: "(SELECT ao.event_date, ao.advertiser_date, ao.agency_id, ao.advertiser_id, ao.campaign_id, " +
+				"ao.ad_order_id, ao.audience_id, ao.creative_id, ao.deal_id, ao.publisher_id, ao.channel_id, " +
+				"ao.country, ao.site_type, ao.site_id, SUM(ao.bids) AS bids, SUM(ao.impressions) AS impressions, " +
+				"SUM(ao.clicks) AS clicks, SUM(ao.conversions) AS conversions, SUM(ao.view_conversions) AS view_conversions, " +
+				"SUM(ao.total_spend) AS total_spend, SUM(ao.v_start) AS v_start, SUM(ao.v_100) AS v_100 " +
+				"FROM fact_perf_site_daily_v ao GROUP BY ao.event_date, ao.advertiser_date, ao.agency_id, ao.advertiser_id, " +
+				"ao.campaign_id, ao.ad_order_id, ao.audience_id, ao.creative_id, ao.deal_id, ao.external_deal_id, " +
+				"ao.publisher_id, ao.channel_id, ao.country, ao.site_type, ao.is_pg, ao.media_execution_id, ao.site_id)",
+			allColumns: []*view.Column{
+				{Name: "event_date", Groupable: true},
+				{Name: "advertiser_date", Groupable: true},
+				{Name: "agency_id", Groupable: true},
+				{Name: "advertiser_id", Groupable: true},
+				{Name: "campaign_id", Groupable: true},
+				{Name: "ad_order_id", Groupable: true},
+				{Name: "audience_id", Groupable: true},
+				{Name: "creative_id", Groupable: true},
+				{Name: "deal_id", Groupable: true},
+				{Name: "publisher_id", Groupable: true},
+				{Name: "channel_id", Groupable: true},
+				{Name: "country", Groupable: true},
+				{Name: "site_type", Groupable: true},
+				{Name: "site_id", Groupable: true},
+				{Name: "bids"},
+				{Name: "impressions"},
+				{Name: "clicks"},
+				{Name: "conversions"},
+				{Name: "view_conversions"},
+				{Name: "total_spend"},
+				{Name: "v_start"},
+				{Name: "v_100"},
+			},
+			projected: []*view.Column{
+				{Name: "event_date", Groupable: true},
+				{Name: "advertiser_date", Groupable: true},
+				{Name: "site_id", Groupable: true},
+				{Name: "site_type", Groupable: true},
+				{Name: "bids"},
+				{Name: "impressions"},
+				{Name: "clicks"},
+				{Name: "conversions"},
+				{Name: "view_conversions"},
+				{Name: "total_spend"},
+				{Name: "v_start"},
+				{Name: "v_100"},
+			},
+			expected: "(SELECT ao.event_date, ao.advertiser_date, ao.site_id, ao.site_type, SUM(ao.bids) AS bids, SUM(ao.impressions) AS impressions, " +
+				"SUM(ao.clicks) AS clicks, SUM(ao.conversions) AS conversions, SUM(ao.view_conversions) AS view_conversions, " +
+				"SUM(ao.total_spend) AS total_spend, SUM(ao.v_start) AS v_start, SUM(ao.v_100) AS v_100 " +
+				"FROM fact_perf_site_daily_v ao GROUP BY 1, 2, 3, 4)",
+		},
+		{
 			description: "rewrite grouped aggregates matches reordered forecasting measures by alias not metadata order",
 			sql: "(SELECT IFNULL(STRING_AGG(DISTINCT IAB[SAFE_OFFSET(0)], ', ' LIMIT 20), '') AS iab_cats, " +
 				"(99 * SUM(avails)) + MOD(SUM(avails), 99) AS avails, " +
@@ -221,11 +274,11 @@ func TestBuilder_rewriteGroupBy(t *testing.T) {
 				{Name: "hh_uniqs"},
 				{Name: "device_uniqs"},
 			},
-			expected: "(SELECT (99 * SUM(avails)) + MOD(SUM(avails), 99) AS avails, " +
+			expected: "(SELECT AVG(v.clearing_price) AS min_clearing_price, " +
+				"MAX(v.clearing_price) AS max_clearing_price, " +
+				"(99 * SUM(avails)) + MOD(SUM(avails), 99) AS avails, " +
 				"(9100 * APPROX_COUNT_DISTINCT(IF(avails = 100, COALESCE(alias_ip, IF(hhip_flag = 1, ip, NULL)), NULL))) AS hh_uniqs, " +
-				"(9100 * APPROX_COUNT_DISTINCT(uid)) AS device_uniqs, " +
-				"AVG(v.clearing_price) AS min_clearing_price, " +
-				"MAX(v.clearing_price) AS max_clearing_price " +
+				"(9100 * APPROX_COUNT_DISTINCT(uid)) AS device_uniqs " +
 				"FROM audience_event_v1 v)",
 		},
 		{

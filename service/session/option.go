@@ -37,6 +37,8 @@ type (
 		preseedCache        bool
 		cacheDisabled       bool
 		sqlTx               *sql.Tx
+		viewProjections     map[string][]string
+		outputProjection    *OutputProjection
 	}
 
 	Option func(o *Options)
@@ -135,6 +137,38 @@ func WithLocatorOptions(options ...locator.Option) Option {
 	return func(s *Options) {
 		s.locatorOptions = options
 		s.locatorOpt = locator.NewOptions(options)
+	}
+}
+
+func WithViewProjectionColumns(viewName string, columns []string) Option {
+	return func(s *Options) {
+		if len(columns) == 0 {
+			return
+		}
+		if s.viewProjections == nil {
+			s.viewProjections = map[string][]string{}
+		}
+		s.viewProjections[viewName] = append([]string(nil), columns...)
+	}
+}
+
+func WithOutputProjection(output interface{}) Option {
+	return WithViewOutputProjection("", output)
+}
+
+func WithViewOutputProjection(viewName string, output interface{}) Option {
+	return func(s *Options) {
+		s.outputProjection = &OutputProjection{View: viewName, Output: output}
+	}
+}
+
+func WithOutputFields(fields ...string) Option {
+	return WithViewOutputFields("", fields...)
+}
+
+func WithViewOutputFields(viewName string, fields ...string) Option {
+	return func(s *Options) {
+		s.outputProjection = &OutputProjection{View: viewName, Fields: append([]string(nil), fields...), FieldsHint: true}
 	}
 }
 

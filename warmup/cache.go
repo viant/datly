@@ -171,6 +171,7 @@ func (c *matchersCollector) createIndexWarmupEntry(ctx context.Context, aView *v
 		}
 		return
 	}
+	build.StoredFields = view.SQLXProjectionFields(cacheInput.StoredFields)
 
 	aChan <- func() (*warmupEntry, error) {
 		return &warmupEntry{

@@ -100,6 +100,9 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 	// but still validate against view selector constraints.
 	if injected != nil {
 		selector.QuerySelector = injected.QuerySelector
+		if len(injected.Columns) > 0 {
+			selector.SetColumns(injected.Columns)
+		}
 		if err := s.applyInjectedQuerySelector(ns, selector, injected); err != nil {
 			return err
 		}

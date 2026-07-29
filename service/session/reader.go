@@ -18,6 +18,9 @@ func (s *Session) ReadInto(ctx context.Context, dest interface{}, aView *view.Vi
 			}
 		}()
 	}
+	if err := s.ApplyOutputProjection(ctx, aView); err != nil {
+		return err
+	}
 	if err := s.SetViewState(ctx, aView); err != nil {
 		return err
 	}
