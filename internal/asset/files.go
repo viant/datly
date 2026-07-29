@@ -5,6 +5,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
+	"go/format"
 	"strings"
 )
 
@@ -35,6 +36,13 @@ func (f Files) uploadContent(ctx context.Context, fs afs.Service, URL string, co
 	baseURL, _ := url.Split(URL, file.Scheme)
 	if ok, _ := fs.Exists(ctx, baseURL); !ok {
 		_ = fs.Create(ctx, baseURL, file.DefaultDirOsMode, true)
+	}
+	// gofmt generated Go files so their layout is stable across regenerations.
+	// Non-Go files and not-yet-valid Go are written through unchanged.
+	if strings.HasSuffix(URL, ".go") {
+		if formatted, err := format.Source([]byte(content)); err == nil {
+			content = string(formatted)
+		}
 	}
 	return fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(content))
 }
