@@ -630,8 +630,83 @@ func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, statelet 
 	}
 	cloned := *statelet
 	cloned.Template = clonedTemplate
+	ok, err := applyWarmupIdentityProjection(aView, &cloned)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
 
-	return s.sqlBuilder.CacheSQLWithOptions(ctx, aView, &cloned, nil, nil, parent)
+	matcher, err := s.sqlBuilder.CacheSQLWithOptions(ctx, aView, &cloned, nil, nil, parent)
+	if err != nil || matcher == nil {
+		return matcher, err
+	}
+	if err = applyRequestedFields(aView, statelet, matcher); err != nil {
+		fmt.Printf("[INFO] datly warmup projection metadata error view=%s fields=%v error=%v\n", aView.Name, requestedFieldNames(statelet), err)
+		return nil, nil
+	}
+	return matcher, nil
+}
+
+func applyWarmupIdentityProjection(aView *view.View, statelet *view.Statelet) (bool, error) {
+	if aView == nil || aView.Cache == nil || aView.Cache.Warmup == nil || statelet == nil {
+		return true, nil
+	}
+	fieldNames, ok := aView.Cache.WarmupFieldNamesForSelector(statelet)
+	if !ok {
+		return false, nil
+	}
+	if len(fieldNames) == 0 {
+		statelet.SetColumns(nil)
+		statelet.Fields = nil
+		return true, nil
+	}
+	columns, err := view.ProjectionColumnsForNames(aView, fieldNames)
+	if err != nil {
+		return false, err
+	}
+	fields := make([]string, 0, len(columns))
+	for _, columnName := range columns {
+		column, ok := aView.ColumnByName(columnName)
+		if !ok {
+			return false, fmt.Errorf("failed to map warmup identity column %s to view %s column", columnName, aView.Name)
+		}
+		fieldName := column.FieldName()
+		if fieldName == "" {
+			fieldName = column.Name
+		}
+		fields = append(fields, fieldName)
+	}
+	statelet.SetColumns(columns)
+	statelet.Fields = fields
+	return true, nil
+}
+
+func applyRequestedFields(aView *view.View, statelet *view.Statelet, matcher *cache.ParmetrizedQuery) error {
+	if aView == nil || statelet == nil || matcher == nil {
+		return nil
+	}
+	names := statelet.Columns
+	if len(names) == 0 {
+		names = statelet.Fields
+	}
+	fields, err := view.ProjectionFieldsForNames(aView, names)
+	if err != nil {
+		return err
+	}
+	matcher.RequestedFields = view.SQLXProjectionFields(fields)
+	return nil
+}
+
+func requestedFieldNames(statelet *view.Statelet) []string {
+	if statelet == nil {
+		return nil
+	}
+	if len(statelet.Columns) != 0 {
+		return statelet.Columns
+	}
+	return statelet.Fields
 }
 
 func warmupIndexParameter(aView *view.View) *state.Parameter {

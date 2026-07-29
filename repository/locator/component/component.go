@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service/executor/uow"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -48,17 +50,73 @@ func (l *componentLocator) Value(ctx context.Context, _ reflect.Type, name strin
 	if err != nil {
 		return nil, false, err
 	}
+	request = sanitizeSelectorRequest(request)
 	form := l.form
 	value, err := l.dispatch.Dispatch(ctx, &contract.Path{Method: method, URI: URI}, contract.WithRequest(request),
 		contract.WithConstants(l.constants),
 		contract.WithPath(l.path),
-		contract.WithQuery(l.query),
+		contract.WithQuery(sanitizeSelectorQuery(l.query)),
 		contract.WithForm(form),
 		contract.WithLogger(l.logger),
 		contract.WithHeader(l.header),
 	)
 	err = updateErrWithResponseStatus(err, value)
 	return value, err == nil, err
+}
+
+func sanitizeSelectorQuery(query url.Values) url.Values {
+	sanitized, _ := sanitizeSelectorQueryWithRemoval(query)
+	return sanitized
+}
+
+func sanitizeSelectorQueryWithRemoval(query url.Values) (url.Values, bool) {
+	if len(query) == 0 {
+		return query, false
+	}
+	removed := false
+	result := make(url.Values, len(query))
+	for key, values := range query {
+		if isSelectorQueryKey(key) {
+			removed = true
+			continue
+		}
+		result[key] = append([]string(nil), values...)
+	}
+	if !removed {
+		return query, false
+	}
+	return result, true
+}
+
+func sanitizeSelectorRequest(request *http.Request) *http.Request {
+	if request == nil || request.URL == nil || request.URL.RawQuery == "" {
+		return request
+	}
+	sanitized, removed := sanitizeSelectorQueryWithRemoval(request.URL.Query())
+	if !removed {
+		return request
+	}
+	cloned := request.Clone(request.Context())
+	cloned.URL = cloneURL(request.URL)
+	cloned.URL.RawQuery = sanitized.Encode()
+	return cloned
+}
+
+func cloneURL(src *url.URL) *url.URL {
+	if src == nil {
+		return nil
+	}
+	cloned := *src
+	return &cloned
+}
+
+func isSelectorQueryKey(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case view.FieldsQuery, view.OrderByQuery, view.LimitQuery, view.OffsetQuery, view.PageQuery, view.CriteriaQuery:
+		return true
+	default:
+		return false
+	}
 }
 
 func updateErrWithResponseStatus(err error, response interface{}) error {

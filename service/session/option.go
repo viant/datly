@@ -162,6 +162,16 @@ func WithViewOutputProjection(viewName string, output interface{}) Option {
 	}
 }
 
+func WithOutputFields(fields ...string) Option {
+	return WithViewOutputFields("", fields...)
+}
+
+func WithViewOutputFields(viewName string, fields ...string) Option {
+	return func(s *Options) {
+		s.outputProjection = &OutputProjection{View: viewName, Fields: append([]string(nil), fields...), FieldsHint: true}
+	}
+}
+
 func WithStateResource(resource state.Resource) Option {
 	return func(s *Options) {
 		s.resource = resource

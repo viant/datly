@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"reflect"
@@ -205,6 +204,18 @@ func (s *Session) applyViewProjection(aView *view.View) {
 }
 
 func (s *Session) ApplyOutputProjection(ctx context.Context, aView *view.View) error {
+	if hasFieldsHint := s.outputFieldsHintForView(ctx, aView.Name); hasFieldsHint {
+		fields := s.outputFieldsForView(ctx, aView.Name)
+		if len(fields) == 0 {
+			return EmptyOutputFieldsError(aView.Name)
+		}
+		columns, err := view.ProjectionColumnsForNames(aView, fields)
+		if err != nil {
+			return err
+		}
+		s.applyProjectionColumns(aView, columns)
+		return nil
+	}
 	var output interface{}
 	if s.outputProjection != nil {
 		output = projectionOutputForView(*s.outputProjection, aView.Name)
@@ -222,11 +233,31 @@ func (s *Session) ApplyOutputProjection(ctx context.Context, aView *view.View) e
 	if columns == nil {
 		return nil
 	}
-	log.Printf("[PROJECTION] view=%s columns=%v", aView.Name, columns)
+	s.applyProjectionColumns(aView, columns)
+	return nil
+}
+
+func (s *Session) outputFieldsForView(ctx context.Context, viewName string) []string {
+	if s.outputProjection != nil && len(s.outputProjection.Fields) > 0 {
+		return projectionFieldsForView(*s.outputProjection, viewName)
+	}
+	return OutputFieldsFromContext(ctx, viewName)
+}
+
+func (s *Session) outputFieldsHintForView(ctx context.Context, viewName string) bool {
+	if s.outputProjection != nil && s.outputProjection.FieldsHint {
+		return projectionFieldsHintForView(*s.outputProjection, viewName)
+	}
+	return OutputFieldsHintFromContext(ctx, viewName)
+}
+
+func (s *Session) applyProjectionColumns(aView *view.View, columns []string) {
+	if len(columns) == 0 {
+		return
+	}
 	s.Apply(WithViewProjectionColumns(aView.Name, columns))
 	statelet := s.state.Lookup(aView)
 	statelet.SetColumns(columns)
-	return nil
 }
 
 func projectionOutputForView(projection OutputProjection, viewName string) interface{} {
@@ -234,6 +265,20 @@ func projectionOutputForView(projection OutputProjection, viewName string) inter
 		return nil
 	}
 	return projection.Output
+}
+
+func projectionFieldsForView(projection OutputProjection, viewName string) []string {
+	if projection.View != "" && normalizeViewProjectionName(projection.View) != normalizeViewProjectionName(viewName) {
+		return nil
+	}
+	return append([]string(nil), projection.Fields...)
+}
+
+func projectionFieldsHintForView(projection OutputProjection, viewName string) bool {
+	if projection.View != "" && normalizeViewProjectionName(projection.View) != normalizeViewProjectionName(viewName) {
+		return false
+	}
+	return projection.FieldsHint
 }
 
 func normalizeViewProjectionName(name string) string {

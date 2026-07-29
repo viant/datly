@@ -244,6 +244,7 @@ Connectors:
 
 Views:
   - Name: events
+    Groupable: true
     Connector:
       Ref: db
     Table: events
@@ -283,6 +284,10 @@ Views:
 	require.NoError(t, err)
 	require.NotEmpty(t, fieldInput)
 	assert.Equal(t, []string{"Quantity"}, fieldInput[0].FieldNames)
+	require.Len(t, fieldInput[0].StoredFields, 1)
+	assert.Equal(t, "quantity", fieldInput[0].StoredFields[0].Name)
+	assert.Equal(t, "quantity", fieldInput[0].StoredFields[0].FieldName)
+	assert.Contains(t, fieldInput[0].StoredFields[0].Lookup, "quantity")
 
 	fieldQuery, err := builder.CacheSQL(context.Background(), aView, fieldInput[0].Selector)
 	require.NoError(t, err)
@@ -292,6 +297,321 @@ Views:
 	assert.NotEqual(t, fullQuery.SQL, fieldQuery.SQL)
 	assert.NotEqual(t, fullKey, fieldKey)
 	assert.Contains(t, fieldQuery.SQL, "quantity")
+}
+
+func TestGenerateCacheInput_StoresDefaultProjectionFieldMetadata(t *testing.T) {
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: ":memory:"
+
+Views:
+  - Name: events
+    Groupable: true
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+        Tag: 'source:"e.event_type_id"'
+        Groupable: true
+      - Name: quantity
+        DataType: int
+        Aggregate: true
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+    Selector:
+      Constraints:
+        Projection: true
+    Template:
+      Source: SELECT * FROM EVENTS
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+	aView := resource.Views[0]
+
+	input, err := aView.Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, input)
+	require.Len(t, input[0].StoredFields, 2)
+
+	assert.Equal(t, "event_type_id", input[0].StoredFields[0].Name)
+	assert.Equal(t, "event_type_id", input[0].StoredFields[0].DimensionKey)
+	assert.Empty(t, input[0].StoredFields[0].MeasureKey)
+	assert.NotContains(t, input[0].StoredFields[0].Lookup, "e.event_type_id")
+	assert.Contains(t, input[0].StoredFields[0].Lookup, "event_type_id")
+
+	assert.Equal(t, "quantity", input[0].StoredFields[1].Name)
+	assert.Empty(t, input[0].StoredFields[1].DimensionKey)
+	assert.Equal(t, "quantity", input[0].StoredFields[1].MeasureKey)
+}
+
+func TestGenerateCacheInput_ReturnsStoredFieldMetadataError(t *testing.T) {
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: ":memory:"
+
+Views:
+  - Name: events
+    Groupable: true
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+      - Name: quantity
+        DataType: int
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+    Selector:
+      Constraints:
+        Projection: true
+    Template:
+      Source: SELECT * FROM EVENTS
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+	aView := resource.Views[0]
+
+	aView.Cache.Warmup.FieldNames = []string{"missing"}
+	_, err = aView.Cache.GenerateCacheInput(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to map output field missing")
+}
+
+func TestCacheNewInput_ReturnsInputWhenStoredFieldMetadataFails(t *testing.T) {
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: ":memory:"
+
+Views:
+  - Name: events
+    Groupable: true
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+    Selector:
+      Constraints:
+        Projection: true
+    Template:
+      Source: SELECT * FROM EVENTS
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+	aView := resource.Views[0]
+	aView.Cache.Warmup.FieldNames = []string{"missing"}
+
+	input := aView.Cache.NewInput(view.NewStatelet())
+
+	require.NotNil(t, input)
+	assert.Equal(t, []string{"missing"}, input.FieldNames)
+	assert.Empty(t, input.StoredFields)
+}
+
+func TestSQLXProjectionFieldsCopiesStoredFieldMetadata(t *testing.T) {
+	actual := view.SQLXProjectionFields([]view.ProjectionField{
+		{
+			Name:         "order_id",
+			FieldName:    "OrderId",
+			ColumnName:   "order_id",
+			Source:       "o.order_id",
+			DimensionKey: "order_id",
+			Lookup:       []string{"order_id", "OrderId", "orderid"},
+		},
+		{
+			Name:       "bids",
+			FieldName:  "Bids",
+			MeasureKey: "bids",
+			Lookup:     []string{"bids", "Bids"},
+		},
+	})
+
+	require.Len(t, actual, 2)
+	assert.Equal(t, "order_id", actual[0].Name)
+	assert.Equal(t, "OrderId", actual[0].FieldName)
+	assert.Equal(t, "order_id", actual[0].ColumnName)
+	assert.Equal(t, "o.order_id", actual[0].Source)
+	assert.Equal(t, "order_id", actual[0].DimensionKey)
+	assert.Empty(t, actual[0].MeasureKey)
+	assert.Equal(t, []string{"order_id", "OrderId", "orderid"}, actual[0].Lookup)
+
+	assert.Equal(t, "bids", actual[1].Name)
+	assert.Empty(t, actual[1].DimensionKey)
+	assert.Equal(t, "bids", actual[1].MeasureKey)
+}
+
+func TestCreateIndexWarmupEntrySetsMatcherStoredFields(t *testing.T) {
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: ":memory:"
+
+Views:
+  - Name: events
+    Groupable: true
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+        Groupable: true
+      - Name: quantity
+        DataType: int
+        Aggregate: true
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+        FieldNames:
+          - quantity
+    Selector:
+      Constraints:
+        Projection: true
+    Template:
+      Source: SELECT * FROM EVENTS
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+	aView := resource.Views[0]
+	inputs, err := aView.Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, inputs)
+
+	collector := make(chan warmupEntryFn, 1)
+	(&matchersCollector{builder: reader.NewBuilder(), view: aView}).createIndexWarmupEntry(context.Background(), aView, collector, inputs[0])
+	entry, err := (<-collector)()
+
+	require.NoError(t, err)
+	require.NotNil(t, entry.matcher)
+	require.Len(t, entry.matcher.StoredFields, 1)
+	assert.Equal(t, "quantity", entry.matcher.StoredFields[0].Name)
+	assert.Equal(t, "quantity", entry.matcher.StoredFields[0].MeasureKey)
+}
+
+func TestCreateMetaWarmupEntryDoesNotSetDataStoredFields(t *testing.T) {
+	dbPath := path.Join(t.TempDir(), "events.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, db.Close())
+	})
+	_, err = db.Exec(`CREATE TABLE EVENTS (event_type_id INTEGER, quantity INTEGER)`)
+	require.NoError(t, err)
+
+	resourcePath := path.Join(t.TempDir(), "resource.yaml")
+	require.NoError(t, os.WriteFile(resourcePath, []byte(`
+CacheProviders:
+  - Name: aerospike
+    Location: ${view.Name}
+    Provider: 'aerospike://127.0.0.1:3000/test'
+    TimeToLiveMs: 3600000
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: "`+dbPath+`"
+
+Views:
+  - Name: events
+    Connector:
+      Ref: db
+    Table: events
+    Columns:
+      - Name: event_type_id
+        DataType: int
+        Groupable: true
+      - Name: quantity
+        DataType: int
+        Aggregate: true
+    Cache:
+      Ref: aerospike
+      Warmup:
+        IndexColumn: event_type_id
+        FieldNames:
+          - quantity
+    Selector:
+      Constraints:
+        Projection: true
+    Template:
+      Summary:
+        Name: EventsMeta
+        Source: 'SELECT COUNT(*) AS TOTAL_RECORDS, event_type_id FROM ($View.Expand($criteria)) GROUP BY event_type_id'
+      Source: SELECT * FROM EVENTS
+`), 0644))
+
+	resource, err := view.NewResourceFromURL(context.Background(), resourcePath, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, resource.Views)
+	aView := resource.Views[0]
+	inputs, err := aView.Cache.GenerateCacheInput(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, inputs)
+	require.NotEmpty(t, inputs[0].StoredFields)
+
+	collector := make(chan warmupEntryFn, 1)
+	(&matchersCollector{builder: reader.NewBuilder(), view: aView}).createMetaWarmupEntry(context.Background(), aView, collector, inputs[0])
+	entry, err := (<-collector)()
+
+	require.NoError(t, err)
+	require.NotNil(t, entry.matcher)
+	assert.Empty(t, entry.matcher.StoredFields)
 }
 
 func TestGenerateCacheInput_AppliesWarmupLimitOverride(t *testing.T) {

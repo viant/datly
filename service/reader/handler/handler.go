@@ -118,6 +118,9 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 			return err
 		}
 	}
+	if err = aState.ApplyOutputProjection(ctx, aView); err != nil {
+		return err
+	}
 	if err = aState.Populate(ctx); err != nil {
 		return err
 	}

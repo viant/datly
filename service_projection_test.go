@@ -166,6 +166,36 @@ func TestSessionApplyOutputProjectionFromScopedContext_OnlyAppliesToMatchingView
 	require.Equal(t, []string{"account_id", "bids"}, statelet.Columns)
 }
 
+func TestSessionApplyOutputFieldsFromContext_NarrowsChildView(t *testing.T) {
+	aComponent := groupableProjectionTestComponent(t)
+	aSession := session.New(aComponent.View)
+	ctx := ContextWithOutputFields(context.Background(), "account_id", "bids")
+
+	err := aSession.ApplyOutputProjection(ctx, aComponent.View)
+	require.NoError(t, err)
+	statelet := aSession.State().Lookup(aComponent.View)
+	require.Equal(t, []string{"account_id", "bids"}, statelet.Columns)
+	require.True(t, statelet.Has("account_id"))
+	require.True(t, statelet.Has("bids"))
+	require.False(t, statelet.Has("campaign_id"))
+}
+
+func TestSessionApplyOutputFieldsFromScopedContext_OnlyAppliesToMatchingView(t *testing.T) {
+	aComponent := groupableProjectionTestComponent(t)
+	aSession := session.New(aComponent.View)
+	ctx := ContextWithViewOutputFields(context.Background(), "other_view", "account_id", "bids")
+
+	err := aSession.ApplyOutputProjection(ctx, aComponent.View)
+	require.NoError(t, err)
+	statelet := aSession.State().Lookup(aComponent.View)
+	require.Empty(t, statelet.Columns)
+
+	ctx = ContextWithViewOutputFields(context.Background(), aComponent.View.Name, "account_id", "bids")
+	err = aSession.ApplyOutputProjection(ctx, aComponent.View)
+	require.NoError(t, err)
+	require.Equal(t, []string{"account_id", "bids"}, statelet.Columns)
+}
+
 func TestSessionApplyOutputProjectionFromOption_NarrowsChildView(t *testing.T) {
 	aComponent := groupableProjectionTestComponent(t)
 	var output []struct {
@@ -173,6 +203,16 @@ func TestSessionApplyOutputProjectionFromOption_NarrowsChildView(t *testing.T) {
 		Bids      int `json:"bids"`
 	}
 	aSession := session.New(aComponent.View, session.WithOutputProjection(&output))
+
+	err := aSession.ApplyOutputProjection(context.Background(), aComponent.View)
+	require.NoError(t, err)
+	statelet := aSession.State().Lookup(aComponent.View)
+	require.Equal(t, []string{"account_id", "bids"}, statelet.Columns)
+}
+
+func TestSessionApplyOutputFieldsFromOption_NarrowsChildView(t *testing.T) {
+	aComponent := groupableProjectionTestComponent(t)
+	aSession := session.New(aComponent.View, session.WithOutputFields("account_id", "bids"))
 
 	err := aSession.ApplyOutputProjection(context.Background(), aComponent.View)
 	require.NoError(t, err)
@@ -194,6 +234,21 @@ func TestSessionApplyOutputProjectionFromScopedOption_OnlyAppliesToMatchingView(
 	require.Empty(t, statelet.Columns)
 
 	aSession.Apply(session.WithViewOutputProjection(aComponent.View.Name, &output))
+	err = aSession.ApplyOutputProjection(context.Background(), aComponent.View)
+	require.NoError(t, err)
+	require.Equal(t, []string{"account_id", "bids"}, statelet.Columns)
+}
+
+func TestSessionApplyOutputFieldsFromScopedOption_OnlyAppliesToMatchingView(t *testing.T) {
+	aComponent := groupableProjectionTestComponent(t)
+	aSession := session.New(aComponent.View, session.WithViewOutputFields("other_view", "account_id", "bids"))
+
+	err := aSession.ApplyOutputProjection(context.Background(), aComponent.View)
+	require.NoError(t, err)
+	statelet := aSession.State().Lookup(aComponent.View)
+	require.Empty(t, statelet.Columns)
+
+	aSession.Apply(session.WithViewOutputFields(aComponent.View.Name, "account_id", "bids"))
 	err = aSession.ApplyOutputProjection(context.Background(), aComponent.View)
 	require.NoError(t, err)
 	require.Equal(t, []string{"account_id", "bids"}, statelet.Columns)
@@ -255,6 +310,50 @@ func TestSessionApplyOutputProjectionFromContext_FailsForUnknownField(t *testing
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to map output field Unknown")
+}
+
+func TestSessionApplyOutputFieldsFromContext_FailsForUnknownField(t *testing.T) {
+	aComponent := groupableProjectionTestComponent(t)
+	aSession := session.New(aComponent.View)
+	ctx := ContextWithOutputFields(context.Background(), "unknown")
+
+	err := aSession.ApplyOutputProjection(ctx, aComponent.View)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to map output field unknown")
+}
+
+func TestSessionApplyOutputFieldsFromContext_FailsForEmptyFields(t *testing.T) {
+	aComponent := groupableProjectionTestComponent(t)
+	aSession := session.New(aComponent.View)
+	ctx := ContextWithOutputFields(context.Background())
+
+	err := aSession.ApplyOutputProjection(ctx, aComponent.View)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "did not specify any field names")
+}
+
+func TestSessionApplyOutputFieldsFromOption_FailsForEmptyFields(t *testing.T) {
+	aComponent := groupableProjectionTestComponent(t)
+	aSession := session.New(aComponent.View, session.WithOutputFields())
+
+	err := aSession.ApplyOutputProjection(context.Background(), aComponent.View)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "did not specify any field names")
+}
+
+func TestSessionApplyOutputFieldsFromScopedContext_IgnoresEmptyFieldsForNonMatchingView(t *testing.T) {
+	aComponent := groupableProjectionTestComponent(t)
+	aSession := session.New(aComponent.View)
+	ctx := ContextWithViewOutputFields(context.Background(), "other_view")
+
+	err := aSession.ApplyOutputProjection(ctx, aComponent.View)
+
+	require.NoError(t, err)
+	statelet := aSession.State().Lookup(aComponent.View)
+	require.Empty(t, statelet.Columns)
 }
 
 func TestWithOutput_DoesNotEnableProjection(t *testing.T) {
