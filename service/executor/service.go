@@ -333,13 +333,21 @@ func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *expan
 	_, err := tx.ExecContext(ctx, stmt.SQL, stmt.Args...)
 	if err != nil {
 		if sess.logger != nil {
-			sess.logger.LogDatabaseErr(stmt.SQL, err, stmt.Args...)
+			sess.logger.LogDatabaseErr(ctx, databaseLogView(ctx), stmt.SQL, err, stmt.Args...)
 		}
 
 		err = fmt.Errorf("error occured while connecting to database")
 	}
 
 	return err
+}
+
+func databaseLogView(ctx context.Context) string {
+	aView := view.Context(ctx)
+	if aView == nil {
+		return ""
+	}
+	return aView.Name
 }
 
 func (s *dbSession) collection(executable *expand2.Executable) *batcher.Collection {

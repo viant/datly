@@ -911,7 +911,7 @@ BEGIN:
 	}
 	if err != nil {
 		stats.SetError(err)
-		anExec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
+		anExec, err := s.HandleSQLError(ctx, err, aView, parametrizedSQL, stats)
 		return []*response.SQLExecution{anExec}, err
 	}
 
@@ -938,7 +938,7 @@ BEGIN:
 	logCacheRead(ctx, aView, cacheStats, end.Sub(begin), *readData, parametrizedSQL.Args)
 	if err != nil {
 		stats.SetError(err)
-		anExec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
+		anExec, err := s.HandleSQLError(ctx, err, aView, parametrizedSQL, stats)
 		return []*response.SQLExecution{anExec}, err
 	}
 	return []*response.SQLExecution{stats}, nil
@@ -1043,8 +1043,8 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 	return executions, err
 }
 
-func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.ParmetrizedQuery, stats *response.SQLExecution) (*response.SQLExecution, error) {
-	aView.Logger.LogDatabaseErr(matcher.SQL, err, matcher.Args...)
+func (s *Service) HandleSQLError(ctx context.Context, err error, aView *view.View, matcher *cache.ParmetrizedQuery, stats *response.SQLExecution) (*response.SQLExecution, error) {
+	aView.Logger.LogDatabaseErr(ctx, aView.Name, matcher.SQL, err, matcher.Args...)
 	stats.Error = err.Error()
 	return stats, fmt.Errorf("database error occured while fetching Data for view %v %w", aView.Name, err)
 }
