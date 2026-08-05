@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/repository/version"
 	"gopkg.in/yaml.v3"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -151,6 +152,7 @@ func (s *Service) createPathFiles(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	sortByURL(candidates)
 	rootPath := url.Path(s.URL)
 	for _, candidate := range candidates {
 		if candidate.IsDir() {
@@ -185,6 +187,18 @@ func (s *Service) createPathFiles(ctx context.Context) error {
 	}
 	s.Container.setModTime(object.ModTime())
 	return nil
+}
+
+// sortByURL gives paths.yaml a stable entry order. The recursive listing that
+// feeds it reflects directory enumeration order, which differs between
+// filesystems and shifts whenever route files are rewritten - so without this
+// the same repository yields a different paths.yaml on every machine, and any
+// partial regeneration reshuffles thousands of lines. Route lookup itself is
+// order independent: the matcher builds a trie and prefers exact matches.
+func sortByURL(candidates []storage.Object) {
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].URL() < candidates[j].URL()
+	})
 }
 
 func (s *Service) buildPaths(ctx context.Context, candidate storage.Object, rootPath string) (*Item, error) {

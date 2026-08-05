@@ -15,6 +15,7 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
 	"reflect"
+	"sort"
 
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/xreflect"
@@ -250,7 +251,25 @@ func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Colu
 	if len(columns) == 0 {
 		return nil, vErr
 	}
+	sortByPosition(columns)
 	return columns, err
+}
+
+// sortByPosition orders columns by their ordinal position in the table.
+// The information_schema queries behind config.Columns carry no ORDER BY, so
+// the driver may return columns in any order - which would otherwise leak into
+// generated struct field order and produce spurious diffs between machines.
+// Columns inferred from a result set carry no position; leaving them stable
+// preserves the projection order the query already established.
+func sortByPosition(columns []sink.Column) {
+	for _, column := range columns {
+		if column.Position == 0 {
+			return
+		}
+	}
+	sort.SliceStable(columns, func(i, j int) bool {
+		return columns[i].Position < columns[j].Position
+	})
 }
 
 func parseQuery(SQL string) (string, string, sqlparser.Columns) {
