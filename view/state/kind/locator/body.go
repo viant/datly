@@ -58,11 +58,11 @@ func (r *Body) Value(ctx context.Context, rType reflect.Type, name string) (inte
 		}
 	}
 
-	if len(r.body) == 0 {
-		return nil, false, nil
-	}
 	if r.err != nil {
 		return nil, false, r.err
+	}
+	if len(r.body) == 0 {
+		return nil, false, nil
 	}
 	if r.bodyType.Kind() == reflect.Map {
 		return r.decodeBodyMap(ctx)
@@ -100,6 +100,9 @@ func (r *Body) initOnce() {
 		// Non-multipart: clone and read body safely
 		var request *http.Request
 		request, r.err = shared.CloneHTTPRequest(r.request)
+		if r.err != nil {
+			return
+		}
 		r.body, r.err = readRequestBody(request)
 	})
 }
