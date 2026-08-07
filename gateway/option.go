@@ -10,14 +10,15 @@ import (
 )
 
 type options struct {
-	config        *Config
-	initializers  []func(config *Config, fs *embed.FS) error
-	extensions    *extension.Registry
-	metrics       *gmetric.Service
-	repository    *repository.Service
-	statusHandler http.Handler
-	embedFs       *embed.FS
-	configURL     string
+	config          *Config
+	initializers    []func(config *Config, fs *embed.FS) error
+	extensions      *extension.Registry
+	metrics         *gmetric.Service
+	repository      *repository.Service
+	statusHandler   http.Handler
+	embedFs         *embed.FS
+	configURL       string
+	refreshDisabled bool
 }
 
 func newOptions(ctx context.Context, opts ...Option) (*options, error) {
@@ -101,5 +102,11 @@ func WithInitializer(initializer func(config *Config, fs *embed.FS) error) Optio
 func WithConfigURL(configURL string) Option {
 	return func(o *options) {
 		o.configURL = configURL
+	}
+}
+
+func WithRefreshDisabled(enabled bool) Option {
+	return func(o *options) {
+		o.refreshDisabled = enabled
 	}
 }

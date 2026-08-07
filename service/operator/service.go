@@ -6,12 +6,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"reflect"
+	"time"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/repository"
 	rasync "github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/content"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service"
+	"github.com/viant/datly/service/executor/uow"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/types"
@@ -25,13 +32,12 @@ import (
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/exec"
+	xhttp "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
+	xstate "github.com/viant/xdatly/handler/state"
 	"google.golang.org/api/googleapi"
-	"net/http"
-	"reflect"
-	"time"
 )
 
 type Service struct {
@@ -39,11 +45,65 @@ type Service struct {
 }
 
 // Operate processes data component with data session
-func (s *Service) Operate(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (interface{}, error) {
-	if err := s.updateBackgroundJob(ctx, aComponent); err != nil {
+func (s *Service) Operate(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (result interface{}, err error) {
+	identity := aComponent.Method + " " + aComponent.URI
+	_, previousFrame, hadFrame := uow.FromContext(ctx)
+	ctx, scope, frame, owner, err := uow.Enter(ctx, identity)
+	if err != nil {
+		return nil, err
+	}
+	createdFrame := !hadFrame || previousFrame != frame
+	defer func() {
+		// A backward-compatible nested Operate call can arrive without an
+		// explicit child marker and therefore borrow the current frame. Only the
+		// operation that created a frame may seal it; otherwise a nested read can
+		// close the root while its handler still has mutations to dispatch.
+		sealCreatedFrame(createdFrame, frame)
+		if owner {
+			result, err = finishOperation(ctx, scope, result, err)
+		}
+	}()
+	if tx := aSession.Options.SqlTx(); tx != nil && aComponent.View != nil && aComponent.View.Connector != nil {
+		db, dbErr := aComponent.View.Connector.DB()
+		if dbErr != nil {
+			return nil, dbErr
+		}
+		if err = scope.AdoptTransaction(db, tx); err != nil {
+			return nil, err
+		}
+	}
+	if err = s.updateBackgroundJob(ctx, aComponent); err != nil {
 		return nil, err
 	}
 	return s.operate(ctx, aComponent, aSession)
+}
+
+func sealCreatedFrame(created bool, frame *uow.Frame) {
+	if created {
+		frame.Seal()
+	}
+}
+
+// finishOperation preserves structured output for an operation that already
+// failed, while preventing output produced before a flush or commit failure
+// from being returned as a successful response.
+func finishOperation(ctx context.Context, scope *uow.Scope, result interface{}, operationErr error) (interface{}, error) {
+	finishErr := scope.Finish(ctx, operationErr)
+	if operationErr != nil {
+		// scope.Finish reports the original cause combined (via errors.Join) with any
+		// rollback error. That join erases the concrete error type the gateway relies
+		// on for status-code and nested-error propagation (e.g. a 401 Jwt error nested
+		// under an Auth component parameter). Prefer the original typed error and only
+		// fall back to Finish's error when it surfaced an additional rollback failure.
+		if finishErr != nil && !errors.Is(finishErr, operationErr) {
+			return result, finishErr
+		}
+		return result, operationErr
+	}
+	if finishErr != nil {
+		return nil, finishErr
+	}
+	return result, nil
 }
 
 // HandleError processes output with error
@@ -84,6 +144,7 @@ func (s *Service) HandleError(ctx context.Context, aSession *session.Session, aC
 
 func (s *Service) operate(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	var err error
+
 	ctx, err = s.EnsureContext(ctx, aSession, aComponent)
 	if err != nil {
 		return nil, err
@@ -118,20 +179,135 @@ func (s *Service) operate(ctx context.Context, aComponent *repository.Component,
 			}
 
 		}
-		return s.finalize(ctx, ret, err)
+		return s.finalize(ctx, ret, err, aSession)
 	}
 	return nil, response.NewError(500, fmt.Sprintf("unsupported Type %v", aComponent.Service))
 }
 
-func (s *Service) finalize(ctx context.Context, ret interface{}, err error) (interface{}, error) {
+func (s *Service) finalize(ctx context.Context, ret interface{}, err error, aSession *session.Session) (interface{}, error) {
 
+	if injectorFinalizer, ok := ret.(state.InjectorFinalizer); ok {
+		lookup := func(lookupCtx context.Context, route xhttp.Route) (xstate.Injector, error) {
+			lookupCtx = uow.Propagate(ctx, lookupCtx)
+			aComponent, err := aSession.Registry().Lookup(lookupCtx, contract.NewPath(route.Method, route.URL))
+			if err != nil {
+				return nil, err
+			}
+			originalRequest, _ := aSession.HttpRequest(lookupCtx, aSession.Clone())
+			request, _ := http.NewRequest(route.Method, route.URL, nil)
+			if originalRequest != nil {
+				request.Header = originalRequest.Header
+			}
+			unmarshal := aComponent.UnmarshalFunc(request)
+			locatorOptions := aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal)
+			childSession := session.New(aComponent.View,
+				session.WithAuth(aSession.Auth()),
+				session.WithLocatorOptions(locatorOptions...),
+				session.WithOperate(aSession.Options.Operate()),
+				session.WithCacheDisabled(aSession.Options.CacheDisabled()),
+				session.WithTypes(&aComponent.Contract.Input.Type, &aComponent.Contract.Output.Type),
+				session.WithComponent(aComponent),
+				session.WithLogger(aSession.Logger()),
+				session.WithRegistry(aSession.Registry()),
+			)
+			if tx := aSession.Options.SqlTx(); tx != nil {
+				childSession.Apply(session.WithSQLTx(tx))
+			}
+			if err := childSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery); err != nil {
+				return nil, err
+			}
+			childCtx := childSession.Context(lookupCtx, true)
+			return &invocationInjector{
+				ctx:      childCtx,
+				name:     route.Method + " " + route.URL,
+				delegate: childSession,
+			}, nil
+		}
+
+		err = injectorFinalizer.Finalize(ctx, lookup)
+		if err != nil {
+			return ret, err
+		}
+		if err = s.finalizeMCPOutput(ctx, ret, aSession); err != nil {
+			return ret, err
+		}
+		return ret, err
+	}
+	if finalizer, ok := ret.(state.FinalizerWithError); ok {
+		finalizeErr := finalizer.Finalize(ctx, err)
+		if err != nil {
+			if finalizeErr != nil {
+				return ret, errors.Join(err, finalizeErr)
+			}
+			return ret, err
+		}
+		if finalizeErr != nil {
+			return ret, finalizeErr
+		}
+		if err = s.finalizeMCPOutput(ctx, ret, aSession); err != nil {
+			return ret, err
+		}
+		return ret, nil
+	}
 	if err != nil {
 		return ret, err
 	}
 	if finalizer, ok := ret.(state.Finalizer); ok {
 		err = finalizer.Finalize(ctx)
 	}
+	if err != nil {
+		return ret, err
+	}
+	if err = s.finalizeMCPOutput(ctx, ret, aSession); err != nil {
+		return ret, err
+	}
 	return ret, err
+}
+
+func (s *Service) finalizeMCPOutput(ctx context.Context, ret interface{}, aSession *session.Session) error {
+	finalizer, ok := ret.(state.MCPFinalizer)
+	if !ok {
+		return nil
+	}
+	mcp, ok := state.LookupMCPContext(ctx)
+	if !ok {
+		return nil
+	}
+	getBinder := func(binderCtx context.Context, route xhttp.Route) (xhandler.Session, error) {
+		binderCtx = uow.Propagate(ctx, binderCtx)
+		binderCtx = uow.PrepareChild(binderCtx, uow.RelationImperative, "")
+		if aSession == nil || aSession.Registry() == nil {
+			return nil, fmt.Errorf("session registry unavailable")
+		}
+		aComponent, err := aSession.Registry().Lookup(binderCtx, contract.NewPath(route.Method, route.URL))
+		if err != nil {
+			return nil, err
+		}
+		originalRequest, _ := aSession.HttpRequest(binderCtx, aSession.Clone())
+		request, _ := http.NewRequest(route.Method, route.URL, nil)
+		if originalRequest != nil {
+			request.Header = originalRequest.Header
+		}
+		unmarshal := aComponent.UnmarshalFunc(request)
+		locatorOptions := aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal)
+		childSession := session.New(aComponent.View,
+			session.WithAuth(aSession.Auth()),
+			session.WithLocatorOptions(locatorOptions...),
+			session.WithOperate(aSession.Options.Operate()),
+			session.WithTypes(&aComponent.Contract.Input.Type, &aComponent.Contract.Output.Type),
+			session.WithComponent(aComponent),
+			session.WithLogger(aSession.Logger()),
+			session.WithRegistry(aSession.Registry()),
+		)
+		if tx := aSession.Options.SqlTx(); tx != nil {
+			childSession.Apply(session.WithSQLTx(tx))
+		}
+		if err := childSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery); err != nil {
+			return nil, err
+		}
+		return s.HandlerSession(binderCtx, aComponent, childSession)
+	}
+	return finalizer.FinalizeMCP(ctx, mcp, getBinder)
 }
 
 func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, aComponent *repository.Component) (context.Context, error) {
@@ -149,6 +325,7 @@ func (s *Service) EnsureContext(ctx context.Context, aSession *session.Session, 
 	} else {
 		info = infoValue.(*exec.Context)
 	}
+	ctx = requesttrace.Ensure(ctx, info.TraceID)
 	provider := ctx.Value(hstate.DBProviderKey)
 	if provider == nil {
 		if aView := aComponent.View; aView != nil {

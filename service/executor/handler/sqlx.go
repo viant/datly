@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/service/executor"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/executor/sequencer"
+	"github.com/viant/datly/service/executor/uow"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/io/read"
@@ -34,6 +35,7 @@ type (
 		request    *http.Request
 		txNotifier func(tx *sql.Tx)
 		tx         *sql.Tx
+		buffer     *uow.Buffer
 	}
 
 	sqlxIterator struct {
@@ -61,23 +63,38 @@ func (s *sqlxIterator) HasAny() bool {
 }
 
 func (s *Service) Flush(ctx context.Context, tableName string) error {
+	if s.buffer != nil {
+		return s.buffer.Flush(ctx, tableName)
+	}
 	var options []executor.DBOption
 	tx := s.options.WithTx
+	owned := false
 	if tx == nil {
-		var err error
-		tx, err = s.Tx(ctx)
+		tx = s.tx
+	}
+	if tx == nil {
+		db, err := s.Db(ctx)
 		if err != nil {
 			return err
 		}
+		tx, err = db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		owned = true
 	}
-
 	options = append(options, executor.WithTx(tx))
-
 	exec := executor.New()
 	if err := exec.ExecuteStmts(ctx, s, &sqlxIterator{
-		toExecute: s.dataUnit.Statements.FilterByTableName(tableName),
+		toExecute: s.dataUnit.Statements.CausalPrefixByTableName(tableName),
 	}, options...); err != nil {
+		if owned {
+			_ = tx.Rollback()
+		}
 		return err
+	}
+	if owned {
+		return tx.Commit()
 	}
 	return nil
 }
@@ -179,6 +196,9 @@ func (s *Service) openDBConnection() (*sql.DB, error) {
 }
 
 func (s *Service) Tx(ctx context.Context) (*sql.Tx, error) {
+	if s.buffer != nil {
+		return nil, uow.ErrTransactionAccess
+	}
 	if s.tx != nil {
 		return s.tx, nil
 	}
@@ -230,8 +250,16 @@ func (s *Service) Allocate(ctx context.Context, tableName string, dest interface
 	if err != nil {
 		return err
 	}
-	service := sequencer.New(context.Background(), db)
-	return service.Next(tableName, dest, selector)
+	if s.buffer != nil {
+		return s.buffer.UseTransaction(ctx, func(tx *sql.Tx) error {
+			return sequencer.New(ctx, db, tx).Next(tableName, dest, selector)
+		})
+	}
+	tx := s.options.WithTx
+	if tx == nil {
+		tx = s.tx
+	}
+	return sequencer.New(ctx, db, tx).Next(tableName, dest, selector)
 }
 
 func (s *Service) CanBatchGlobally() bool {

@@ -1,0 +1,23 @@
+[
+  {},
+  {
+    "ID": 1,
+    "NAME": "foo 1",
+    "QUANTITY": 100
+  },
+  {
+    "ID": 2,
+    "NAME": "foo 2",
+    "QUANTITY": 200
+  },
+  {
+    "ID": 3,
+    "NAME": "foo 3",
+    "QUANTITY": 300
+  },
+  {
+    "ID": 4,
+    "NAME": "foo 4",
+    "QUANTITY": 400
+  }
+]

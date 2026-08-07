@@ -24,10 +24,7 @@ func (s *Service) mcp(ctx context.Context, mcpOption *options.Mcp) error {
 	setter.SetStringIfEmpty(&s.config.JobURL, mcpOption.JobURL)
 	setter.SetStringIfEmpty(&s.config.FailedJobURL, mcpOption.FailedJobURL)
 	setter.SetIntIfZero(&s.config.MaxJobs, mcpOption.MaxJobs)
-	if s.config.FailedJobURL == "" && s.config.JobURL != "" {
-		parent, _ := url.Split(s.config.JobURL, file.Scheme)
-		s.config.FailedJobURL = url.Join(parent, "failed", "jobs")
-	}
+	applyAsyncJobDefaults(s.config)
 	if mcpOption.LoadPlugin && s.config.Config.PluginsURL != "" {
 		parent, _ := url.Split(mcpOption.PluginInfo, file.Scheme)
 		_ = s.fs.Copy(ctx, parent, s.config.Config.PluginsURL)

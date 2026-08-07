@@ -69,7 +69,7 @@ func convertArguments(signature Signature, args []string) ([]interface{}, error)
 			result = append(result, v)
 
 		default:
-			return nil, fmt.Errorf("unsupported %v data type", argument.Name, argument.DataType)
+			return nil, fmt.Errorf("unsupported %v data type: %s", argument.Name, argument.DataType)
 		}
 	}
 	return result, nil

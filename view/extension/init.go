@@ -3,6 +3,10 @@ package extension
 import (
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
+	"net/http"
+
+	rcontent "github.com/viant/datly/repository/content"
 	dcodec "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/extension/handler"
 	"github.com/viant/datly/view/extension/marshaller"
@@ -17,14 +21,14 @@ import (
 	"github.com/viant/xdatly/handler/response/tabular/tjson"
 	"github.com/viant/xdatly/handler/response/tabular/xml"
 	"github.com/viant/xdatly/handler/validator"
-	"net/http"
+
+	"reflect"
+	"time"
 
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xdatly/types/core"
 	_ "github.com/viant/xdatly/types/custom"
 	"github.com/viant/xreflect"
-	"reflect"
-	"time"
 )
 
 const (
@@ -50,7 +54,8 @@ func InitRegistry() {
 			xreflect.NewType("validator.Violation", xreflect.WithReflectType(reflect.TypeOf(validator.Violation{}))),
 			xreflect.NewType("RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
 			xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
-			xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
+			xreflect.NewType("FileHeader", xreflect.WithReflectType(reflect.TypeOf(multipart.FileHeader{}))),
+			xreflect.NewType("multipart.FileHeader", xreflect.WithReflectType(reflect.TypeOf(multipart.FileHeader{}))),
 			xreflect.NewType("types.BitBool", xreflect.WithReflectType(reflect.TypeOf(types.BitBool(true)))),
 			xreflect.NewType("time.Time", xreflect.WithReflectType(xreflect.TimeType)),
 			xreflect.NewType("response.Status", xreflect.WithReflectType(reflect.TypeOf(response.Status{}))),
@@ -77,6 +82,10 @@ func InitRegistry() {
 			xreflect.NewType("auth.Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("time.Location", xreflect.WithReflectType(reflect.TypeOf(&time.Location{}))),
+			xreflect.NewType("content.StructologyJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.StructologyJSONRuntime{}))),
+			xreflect.NewType("content.LegacyJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.LegacyJSONRuntime{}))),
+			xreflect.NewType("content.StructologyTabularJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.StructologyTabularJSONRuntime{}))),
+			xreflect.NewType("content.LegacyTabularJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.LegacyTabularJSONRuntime{}))),
 			xreflect.NewType("marshaller.JSON", xreflect.WithReflectType(reflect.TypeOf(marshaller.JSON{}))),
 			xreflect.NewType("marshaller.Gojay", xreflect.WithReflectType(reflect.TypeOf(marshaller.Gojay{}))),
 		)),
@@ -119,6 +128,8 @@ func InitRegistry() {
 				PredicateGreaterOrEqual:    NewGreaterOrEqualPredicate(),
 				PredicateGreaterThan:       NewGreaterThanPredicate(),
 				PredicateLike:              NewLikePredicate(),
+				PredicateLiteralIn:         NewLiteralInPredicate(),
+				PredicateExpr:              NewExprPredicate(),
 				PredicateNotLike:           NewNotLikePredicate(),
 				PredicateHandler:           NewPredicateHandler(),
 				PredicateContains:          NewContainsPredicate(),

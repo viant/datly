@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
 	"github.com/viant/datly/gateway/runtime/serverless"
 	"net/http"
-	"time"
 )
 
 func HandleRequest(ctx context.Context, request *adapter.Request) (*events.LambdaFunctionURLResponse, error) {

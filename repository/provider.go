@@ -26,7 +26,9 @@ func (p *Provider) Component(ctx context.Context, opts ...Option) (*Component, e
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	if p.control.ChangeKind() == version.ChangeKindDeleted {
-		//TODO maybe return 404 error
+		if p.component != nil {
+			return p.component, nil
+		}
 		return nil, nil
 	}
 	aComponent, err := p.newComponent(ctx, opts...)
