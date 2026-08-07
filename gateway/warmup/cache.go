@@ -23,36 +23,37 @@ const (
 	warmupRunErrorKey         = "run.error"
 	warmupCasesCompletedKey   = "cases.completed"
 	warmupCasesFailedKey      = "cases.failed"
-	warmupRowsKey             = "rows"
+	warmupGroupsWrittenKey    = "groupsWritten"
 	warmupMetricFallbackPkg   = "datly"
 	warmupMetricRecentBuckets = 2
 )
 
 type PreCachables func(ctx context.Context, method, matchingURI string) ([]*view.View, error)
 type PreCached struct {
-	URI        string
-	View       string
-	Column     string
-	Params     string
-	CacheKey   string
-	FieldNames string `json:",omitempty"`
-	Elapsed    string
-	TimeTaken  time.Duration
-	Rows       int
-	Error      string `json:"error,omitempty"`
+	URI           string
+	View          string
+	Column        string
+	Params        string
+	WarmupKey     string
+	MarkerKey     string `json:",omitempty"`
+	FieldNames    string `json:",omitempty"`
+	Elapsed       string
+	TimeTaken     time.Duration
+	GroupsWritten int    `json:"groupsWritten,omitempty"`
+	Error         string `json:"error,omitempty"`
 }
 
 type Summary struct {
 	CompletedCases int `json:"completedCases"`
 	FailedCases    int `json:"failedCases"`
-	WarmedRows     int `json:"warmedRows"`
+	GroupsWritten  int `json:"groupsWritten,omitempty"`
 }
 
 type viewSummary struct {
 	View           string
 	CompletedCases int
 	FailedCases    int
-	WarmedRows     int
+	GroupsWritten  int
 	Elapsed        time.Duration
 }
 
@@ -106,11 +107,11 @@ func PreCache(ctx context.Context, lookup PreCachables, warmupURIs ...string) *R
 				setErr(e)
 			}
 			elapsed := time.Now().Sub(startTime)
-			rows := 0
+			groupsWritten := 0
 			if result != nil {
-				rows = result.Rows
+				groupsWritten = result.GroupsWritten
 			}
-			fmt.Printf("[INFO] cache warmup uri done uri=%s rows=%d elapsed=%s\n", URI, rows, elapsed)
+			fmt.Printf("[INFO] cache warmup uri done uri=%s groups_written=%d elapsed=%s\n", URI, groupsWritten, elapsed)
 			if result == nil {
 				return
 			}
@@ -139,16 +140,17 @@ func appendPreCached(response *Response, URI string, result *warmup.Result) {
 			continue
 		}
 		response.PreCached = append(response.PreCached, &PreCached{
-			URI:        URI,
-			View:       entry.View,
-			Column:     entry.Column,
-			Params:     entry.Params,
-			CacheKey:   entry.CacheKey,
-			FieldNames: entry.FieldNames,
-			Elapsed:    entry.Elapsed,
-			TimeTaken:  entry.TimeTaken,
-			Rows:       entry.Rows,
-			Error:      entry.Error,
+			URI:           URI,
+			View:          entry.View,
+			Column:        entry.Column,
+			Params:        entry.Params,
+			WarmupKey:     entry.WarmupKey,
+			MarkerKey:     entry.MarkerKey,
+			FieldNames:    entry.FieldNames,
+			Elapsed:       entry.Elapsed,
+			TimeTaken:     entry.TimeTaken,
+			GroupsWritten: entry.GroupsWritten,
+			Error:         entry.Error,
 		})
 	}
 }
@@ -167,7 +169,7 @@ func summarize(entries []*PreCached) *Summary {
 			continue
 		}
 		summary.CompletedCases++
-		summary.WarmedRows += entry.Rows
+		summary.GroupsWritten += entry.GroupsWritten
 	}
 	return summary
 }
@@ -192,7 +194,7 @@ func summarizeByView(entries []*warmup.EntryResult) []*viewSummary {
 			continue
 		}
 		current.CompletedCases++
-		current.WarmedRows += entry.Rows
+		current.GroupsWritten += entry.GroupsWritten
 	}
 	result := make([]*viewSummary, 0, len(index))
 	for _, item := range index {
@@ -210,12 +212,12 @@ func logViewSummaries(uri string, views []*view.View, result *warmup.Result) {
 	}
 	viewsIndex := indexViewsByName(views)
 	for _, summary := range summarizeByView(result.Entries) {
-		fmt.Printf("[INFO] cache warmup view summary uri=%s view=%s completed_cases=%d failed_cases=%d warmed_rows=%d elapsed=%s\n",
+		fmt.Printf("[INFO] cache warmup view summary uri=%s view=%s completed_cases=%d failed_cases=%d groups_written=%d elapsed=%s\n",
 			uri,
 			summary.View,
 			summary.CompletedCases,
 			summary.FailedCases,
-			summary.WarmedRows,
+			summary.GroupsWritten,
 			summary.Elapsed)
 		recordWarmupViewMetrics(viewsIndex[summary.View], summary)
 	}
@@ -265,8 +267,8 @@ func recordWarmupViewMetrics(aView *view.View, summary *viewSummary) {
 	if summary.FailedCases > 0 {
 		operation.IncrementValueBy(warmupCasesFailedKey, int64(summary.FailedCases))
 	}
-	if summary.WarmedRows > 0 {
-		operation.IncrementValueBy(warmupRowsKey, int64(summary.WarmedRows))
+	if summary.GroupsWritten > 0 {
+		operation.IncrementValueBy(warmupGroupsWrittenKey, int64(summary.GroupsWritten))
 	}
 }
 
@@ -287,7 +289,7 @@ func warmupMetricOperation(aView *view.View) *gmetricx.OperationRef {
 			warmupRunErrorKey,
 			warmupCasesCompletedKey,
 			warmupCasesFailedKey,
-			warmupRowsKey,
+			warmupGroupsWrittenKey,
 		))
 	})
 }
