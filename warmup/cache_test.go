@@ -17,7 +17,7 @@ import (
 	sqlcache "github.com/viant/sqlx/io/read/cache"
 )
 
-func TestPopulateCache(t *testing.T) {
+func TestPopulateCacheWithDetails(t *testing.T) {
 	if os.Getenv("DATLY_RUN_WARMUP_TESTS") == "" {
 		t.Skip("set DATLY_RUN_WARMUP_TESTS=1 to run warmup integration test")
 	}
@@ -78,9 +78,10 @@ func TestPopulateCache(t *testing.T) {
 			views = append(views, item)
 		}
 
-		inserted, err := PopulateCache(views)
+		result, err := PopulateCacheWithDetails(views)
 		assert.Nil(t, err, testCase.description)
-		assert.Equal(t, testCase.expectedInserted, inserted, testCase.description)
+		require.NotNil(t, result, testCase.description)
+		assert.Equal(t, testCase.expectedInserted, result.GroupsWritten, testCase.description)
 
 		for _, aView := range views {
 			cache := aView.Cache
@@ -146,7 +147,7 @@ func TestWarmupWithLimitCapsConcurrency(t *testing.T) {
 		}
 		time.Sleep(5 * time.Millisecond)
 		atomic.AddInt64(&active, -1)
-		return &EntryResult{Rows: 1}, nil
+		return &EntryResult{GroupsWritten: 1}, nil
 	}
 
 	notifier := make(chan func() (*EntryResult, error))
@@ -157,24 +158,11 @@ func TestWarmupWithLimitCapsConcurrency(t *testing.T) {
 		actual := <-notifier
 		result, err := actual()
 		assert.Nil(t, err)
-		total += result.Rows
+		total += result.GroupsWritten
 	}
 
 	assert.Equal(t, len(entries), total)
 	assert.LessOrEqual(t, atomic.LoadInt64(&maxActive), int64(maxWarmupConcurrency))
-}
-
-func TestWarmupCacheKeyNormalizesNilArgs(t *testing.T) {
-	nilArgsKey, err := warmupCacheKey(&sqlcache.ParmetrizedQuery{SQL: "SELECT * FROM events", Args: nil})
-	assert.Nil(t, err)
-
-	emptyArgsKey, err := warmupCacheKey(&sqlcache.ParmetrizedQuery{SQL: "SELECT * FROM events", Args: []interface{}{}})
-	assert.Nil(t, err)
-
-	assert.Equal(t, emptyArgsKey, nilArgsKey)
-
-	_, err = warmupCacheKey(nil)
-	assert.ErrorContains(t, err, "query was nil")
 }
 
 func TestIndexProgressContext(t *testing.T) {
@@ -228,7 +216,7 @@ func TestIndexProgressContext(t *testing.T) {
 	require.True(t, actual.Done)
 }
 
-func TestWarmupFieldNamesAffectGeneratedCacheKey(t *testing.T) {
+func TestWarmupFieldNamesAffectGeneratedProjection(t *testing.T) {
 	resourcePath := path.Join(t.TempDir(), "resource.yaml")
 	require.NoError(t, os.WriteFile(resourcePath, []byte(`
 CacheProviders:
@@ -276,8 +264,6 @@ Views:
 	builder := reader.NewBuilder()
 	fullQuery, err := builder.CacheSQL(context.Background(), aView, input[0].Selector)
 	require.NoError(t, err)
-	fullKey, err := warmupCacheKey(fullQuery)
-	require.NoError(t, err)
 
 	aView.Cache.Warmup.FieldNames = []string{"Quantity"}
 	fieldInput, err := aView.Cache.GenerateCacheInput(context.Background())
@@ -291,11 +277,8 @@ Views:
 
 	fieldQuery, err := builder.CacheSQL(context.Background(), aView, fieldInput[0].Selector)
 	require.NoError(t, err)
-	fieldKey, err := warmupCacheKey(fieldQuery)
-	require.NoError(t, err)
 
 	assert.NotEqual(t, fullQuery.SQL, fieldQuery.SQL)
-	assert.NotEqual(t, fullKey, fieldKey)
 	assert.Contains(t, fieldQuery.SQL, "quantity")
 }
 

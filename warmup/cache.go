@@ -9,7 +9,6 @@ import (
 	errUtils "github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/read/cache"
-	cachehash "github.com/viant/sqlx/io/read/cache/hash"
 	"strings"
 	"sync"
 	"time"
@@ -34,27 +33,27 @@ type (
 		column  string
 		label   string
 		fields  string
-		key     string
 	}
 
 	warmupEntryFn func() (*warmupEntry, error)
 	notifierFn    func() (int, *EntryResult, error)
 
 	EntryResult struct {
-		View       string
-		Column     string
-		Params     string
-		CacheKey   string
-		FieldNames string
-		Elapsed    string
-		TimeTaken  time.Duration
-		Rows       int
-		Error      string `json:",omitempty"`
+		View          string
+		Column        string
+		Params        string
+		WarmupKey     string
+		MarkerKey     string
+		FieldNames    string
+		Elapsed       string
+		TimeTaken     time.Duration
+		GroupsWritten int
+		Error         string `json:",omitempty"`
 	}
 
 	Result struct {
-		Rows    int
-		Entries []*EntryResult
+		GroupsWritten int
+		Entries       []*EntryResult
 	}
 )
 
@@ -66,7 +65,7 @@ func (c *matchersCollector) populate(ctx context.Context, collector chan warmupE
 			if err == nil {
 				return size, nil, nil
 			}
-			return size, failedEntryResult(&warmupEntry{view: c.view}, 0, 0, err), err
+			return size, failedEntryResult(&warmupEntry{view: c.view}, 0, err), err
 		}
 	}()
 }
@@ -118,20 +117,6 @@ func (c *matchersCollector) createMetaWarmupEntry(ctx context.Context, aView *vi
 		}
 		return
 	}
-	cacheKey, err := warmupCacheKey(cacheIndex)
-	if err != nil {
-		fmt.Printf("[INFO] cache warmup entry build error view=%s type=meta column=%s field_names=%s error=%v\n", aView.Name, input.MetaColumn, strings.Join(input.FieldNames, ","), err)
-		aChan <- func() (*warmupEntry, error) {
-			return &warmupEntry{
-				view:   aView,
-				column: input.MetaColumn,
-				label:  input.Label,
-				fields: strings.Join(input.FieldNames, ","),
-			}, err
-		}
-		return
-	}
-
 	aChan <- func() (*warmupEntry, error) {
 		return &warmupEntry{
 			matcher: cacheIndex,
@@ -139,26 +124,12 @@ func (c *matchersCollector) createMetaWarmupEntry(ctx context.Context, aView *vi
 			column:  input.MetaColumn,
 			label:   input.Label,
 			fields:  strings.Join(input.FieldNames, ","),
-			key:     cacheKey,
 		}, nil
 	}
 }
 
 func (c *matchersCollector) createIndexWarmupEntry(ctx context.Context, aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
 	build, err := c.builder.CacheSQL(ctx, c.view, cacheInput.Selector)
-	if err != nil {
-		fmt.Printf("[INFO] cache warmup entry build error view=%s type=index column=%s field_names=%s error=%v\n", aView.Name, cacheInput.Column, strings.Join(cacheInput.FieldNames, ","), err)
-		aChan <- func() (*warmupEntry, error) {
-			return &warmupEntry{
-				view:   aView,
-				column: cacheInput.Column,
-				label:  cacheInput.Label,
-				fields: strings.Join(cacheInput.FieldNames, ","),
-			}, err
-		}
-		return
-	}
-	cacheKey, err := warmupCacheKey(build)
 	if err != nil {
 		fmt.Printf("[INFO] cache warmup entry build error view=%s type=index column=%s field_names=%s error=%v\n", aView.Name, cacheInput.Column, strings.Join(cacheInput.FieldNames, ","), err)
 		aChan <- func() (*warmupEntry, error) {
@@ -180,7 +151,6 @@ func (c *matchersCollector) createIndexWarmupEntry(ctx context.Context, aView *v
 			column:  cacheInput.Column,
 			label:   cacheInput.Label,
 			fields:  strings.Join(cacheInput.FieldNames, ","),
-			key:     cacheKey,
 		}, nil
 	}
 }
@@ -239,39 +209,68 @@ func readWithChan(ctx context.Context, entry *warmupEntry, notifier chan func() 
 
 func readWithErr(ctx context.Context, entry *warmupEntry) (*EntryResult, error) {
 	started := time.Now()
-	fmt.Printf("[INFO] cache warmup query start start_time=%s view=%s cache=%s cache_key=%s db_connector=%s column=%s params=%s field_names=%s args=%v sql=%q\n", started.Format(time.RFC3339), entry.view.Name, cacheLabel(entry.view), entry.key, warmupConnectorLabel(entry.view), entry.column, entry.label, entry.fields, entry.matcher.Args, truncateSQL(entry.matcher.SQL))
+	fmt.Printf("[INFO] cache warmup query start start_time=%s view=%s cache=%s db_connector=%s column=%s params=%s field_names=%s args=%v sql=%q\n", started.Format(time.RFC3339), entry.view.Name, cacheLabel(entry.view), warmupConnectorLabel(entry.view), entry.column, entry.label, entry.fields, entry.matcher.Args, truncateSQL(entry.matcher.SQL))
 	db, err := DB(entry)
 	if err != nil {
 		elapsed := time.Since(started)
-		fmt.Printf("[INFO] cache warmup query error view=%s cache_key=%s column=%s params=%s field_names=%s elapsed=%s cache_write=skipped error=%v\n", entry.view.Name, entry.key, entry.column, entry.label, entry.fields, elapsed, err)
-		return failedEntryResult(entry, elapsed, 0, err), err
+		fmt.Printf("[INFO] cache warmup query error view=%s column=%s params=%s field_names=%s elapsed=%s cache_write=skipped error=%v\n", entry.view.Name, entry.column, entry.label, entry.fields, elapsed, err)
+		return failedEntryResult(entry, elapsed, err), err
 	}
 
 	service, err := entry.view.Cache.Service()
 	if err != nil {
 		elapsed := time.Since(started)
-		fmt.Printf("[INFO] cache warmup query error view=%s cache_key=%s column=%s params=%s field_names=%s elapsed=%s cache_write=skipped error=%v\n", entry.view.Name, entry.key, entry.column, entry.label, entry.fields, elapsed, err)
-		return failedEntryResult(entry, elapsed, 0, err), err
+		fmt.Printf("[INFO] cache warmup query error view=%s column=%s params=%s field_names=%s elapsed=%s cache_write=skipped error=%v\n", entry.view.Name, entry.column, entry.label, entry.fields, elapsed, err)
+		return failedEntryResult(entry, elapsed, err), err
 	}
 
 	matcher := entry.matcher
-	indexed, err := service.IndexBy(indexProgressContext(ctx, entry), db, entry.column, matcher.SQL, matcher.Args, matcher)
+	indexResult, err := indexByWithResult(indexProgressContext(ctx, entry), service, db, entry.column, matcher.SQL, matcher.Args, matcher)
 	elapsed := time.Since(started)
+	if indexResult == nil {
+		indexResult = &indexByResult{}
+	}
 	if err != nil {
-		fmt.Printf("[INFO] cache warmup query error view=%s cache_key=%s column=%s params=%s field_names=%s rows=%d elapsed=%s cache_write=error error=%v\n", entry.view.Name, entry.key, entry.column, entry.label, entry.fields, indexed, elapsed, err)
+		fmt.Printf("[INFO] cache warmup query error view=%s warmup_key=%s marker_key=%s column=%s params=%s field_names=%s groups_written=%d elapsed=%s cache_write=error error=%v\n", entry.view.Name, indexResult.warmupKey, indexResult.markerKey, entry.column, entry.label, entry.fields, indexResult.groupsWritten, elapsed, err)
 		indexErr := fmt.Errorf("failed to index: %w", err)
-		return failedEntryResult(entry, elapsed, indexed, indexErr), indexErr
+		result := failedEntryResult(entry, elapsed, indexErr)
+		result.WarmupKey = indexResult.warmupKey
+		result.MarkerKey = indexResult.markerKey
+		result.GroupsWritten = indexResult.groupsWritten
+		return result, indexErr
 	}
 
-	fmt.Printf("[INFO] cache warmup query done view=%s cache=%s cache_key=%s db_connector=%s column=%s params=%s field_names=%s rows=%d elapsed=%s cache_write=success\n", entry.view.Name, cacheLabel(entry.view), entry.key, warmupConnectorLabel(entry.view), entry.column, entry.label, entry.fields, indexed, elapsed)
-	return &EntryResult{View: entry.view.Name, Column: entry.column, Params: entry.label, CacheKey: entry.key, FieldNames: entry.fields, Elapsed: elapsed.String(), TimeTaken: elapsed, Rows: indexed}, nil
+	fmt.Printf("[INFO] cache warmup query done view=%s cache=%s warmup_key=%s marker_key=%s db_connector=%s column=%s params=%s field_names=%s groups_written=%d elapsed=%s cache_write=success\n", entry.view.Name, cacheLabel(entry.view), indexResult.warmupKey, indexResult.markerKey, warmupConnectorLabel(entry.view), entry.column, entry.label, entry.fields, indexResult.groupsWritten, elapsed)
+	return &EntryResult{View: entry.view.Name, Column: entry.column, Params: entry.label, WarmupKey: indexResult.warmupKey, MarkerKey: indexResult.markerKey, FieldNames: entry.fields, Elapsed: elapsed.String(), TimeTaken: elapsed, GroupsWritten: indexResult.groupsWritten}, nil
 }
 
-func failedEntryResult(entry *warmupEntry, elapsed time.Duration, rows int, err error) *EntryResult {
+type indexByResult struct {
+	groupsWritten int
+	warmupKey     string
+	markerKey     string
+}
+
+func indexByWithResult(ctx context.Context, service cache.Cache, db *sql.DB, column, SQL string, args []interface{}, matcher *cache.ParmetrizedQuery) (*indexByResult, error) {
+	if indexer, ok := service.(cache.WarmupIndexer); ok {
+		result, err := indexer.IndexByWithResult(ctx, db, column, SQL, args, matcher)
+		if result == nil {
+			return nil, err
+		}
+		return &indexByResult{
+			groupsWritten: result.GroupsWritten,
+			warmupKey:     result.WarmupKey,
+			markerKey:     result.MarkerKey,
+		}, err
+	}
+
+	groupsWritten, err := service.IndexBy(ctx, db, column, SQL, args, matcher)
+	return &indexByResult{groupsWritten: groupsWritten}, err
+}
+
+func failedEntryResult(entry *warmupEntry, elapsed time.Duration, err error) *EntryResult {
 	result := &EntryResult{
 		Elapsed:   elapsed.String(),
 		TimeTaken: elapsed,
-		Rows:      rows,
 	}
 	if entry != nil {
 		if entry.view != nil {
@@ -279,7 +278,6 @@ func failedEntryResult(entry *warmupEntry, elapsed time.Duration, rows int, err 
 		}
 		result.Column = entry.column
 		result.Params = entry.label
-		result.CacheKey = entry.key
 		result.FieldNames = entry.fields
 	}
 	if err != nil {
@@ -297,24 +295,6 @@ func firstError(errors []error) error {
 	return nil
 }
 
-func warmupCacheKey(query *cache.ParmetrizedQuery) (string, error) {
-	if query == nil {
-		return "", fmt.Errorf("warmup cache key query was nil")
-	}
-	return warmupIdentityURL(query)
-}
-
-func warmupIdentityURL(query *cache.ParmetrizedQuery) (string, error) {
-	if query == nil {
-		return "", fmt.Errorf("warmup identity query was nil")
-	}
-	SQL, _, argsMarshal, err := query.WarmupIdentity()
-	if err != nil {
-		return "", err
-	}
-	return cachehash.GenerateWithMarshal(SQL, "", "", argsMarshal)
-}
-
 func DB(entry *warmupEntry) (*sql.DB, error) {
 	if entry.view.Cache.Warmup.Connector != nil {
 		return entry.view.Cache.Warmup.Connector.DB()
@@ -328,7 +308,7 @@ func PopulateCache(views []*view.View) (int, error) {
 	if result == nil {
 		return 0, err
 	}
-	return result.Rows, err
+	return result.GroupsWritten, err
 }
 
 func PopulateCacheWithDetails(views []*view.View) (*Result, error) {
@@ -342,7 +322,7 @@ func PopulateCacheWithDetailsContext(ctx context.Context, views []*view.View) (*
 	result := &Result{}
 
 	if len(viewsWithCache) == 0 {
-		fmt.Printf("[INFO] cache warmup populate done rows=0 elapsed=%s\n", time.Since(started))
+		fmt.Printf("[INFO] cache warmup populate done groups_written=0 elapsed=%s\n", time.Since(started))
 		return result, nil
 	}
 
@@ -376,7 +356,7 @@ func PopulateCacheWithDetailsContext(ctx context.Context, views []*view.View) (*
 	}
 
 	if collectorSize == 0 {
-		fmt.Printf("[INFO] cache warmup populate done rows=0 entries=0 elapsed=%s\n", time.Since(started))
+		fmt.Printf("[INFO] cache warmup populate done groups_written=0 entries=0 elapsed=%s\n", time.Since(started))
 		err := errUtils.CombineErrors("errors while populating cache: ", errors)
 		if err != nil {
 			return result, err
@@ -391,7 +371,7 @@ func PopulateCacheWithDetailsContext(ctx context.Context, views []*view.View) (*
 		entry, err := fn()
 		if err != nil {
 			errors = append(errors, err)
-			result.Entries = append(result.Entries, failedEntryResult(entry, 0, 0, err))
+			result.Entries = append(result.Entries, failedEntryResult(entry, 0, err))
 		} else {
 			warmupEntries = append(warmupEntries, entry)
 		}
@@ -419,7 +399,7 @@ func PopulateCacheWithDetailsContext(ctx context.Context, views []*view.View) (*
 		entryResult, err := actual()
 		if entryResult != nil {
 			result.Entries = append(result.Entries, entryResult)
-			result.Rows += entryResult.Rows
+			result.GroupsWritten += entryResult.GroupsWritten
 		}
 		if err != nil {
 			errors = append(errors, err)
@@ -429,10 +409,10 @@ func PopulateCacheWithDetailsContext(ctx context.Context, views []*view.View) (*
 	close(notifier)
 	err := errUtils.CombineErrors("errors while populating cache: ", errors)
 	if err != nil {
-		fmt.Printf("[INFO] cache warmup populate error rows=%d entries=%d failures=%d elapsed=%s first_error=%v\n", result.Rows, len(warmupEntries), len(errors), time.Since(started), firstError(errors))
+		fmt.Printf("[INFO] cache warmup populate error groups_written=%d entries=%d failures=%d elapsed=%s first_error=%v\n", result.GroupsWritten, len(warmupEntries), len(errors), time.Since(started), firstError(errors))
 		return result, err
 	}
-	fmt.Printf("[INFO] cache warmup populate done rows=%d entries=%d elapsed=%s\n", result.Rows, len(warmupEntries), time.Since(started))
+	fmt.Printf("[INFO] cache warmup populate done groups_written=%d entries=%d elapsed=%s\n", result.GroupsWritten, len(warmupEntries), time.Since(started))
 	return result, nil
 }
 

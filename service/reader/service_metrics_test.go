@@ -99,6 +99,45 @@ func TestRecordCacheReadMetrics(t *testing.T) {
 	}
 }
 
+func TestWarmupReadKeysSuffix(t *testing.T) {
+	testCases := []struct {
+		description string
+		stats       *cache.Stats
+		expected    string
+	}{
+		{
+			description: "nil stats",
+			expected:    "",
+		},
+		{
+			description: "empty stats",
+			stats:       &cache.Stats{},
+			expected:    "",
+		},
+		{
+			description: "warmup key only",
+			stats:       &cache.Stats{WarmupKey: "warmup-123"},
+			expected:    " warmup_key=warmup-123",
+		},
+		{
+			description: "marker key only",
+			stats:       &cache.Stats{MarkerKey: "order_id#warmup-123"},
+			expected:    " marker_key=order_id#warmup-123",
+		},
+		{
+			description: "warmup and marker keys",
+			stats:       &cache.Stats{WarmupKey: "warmup-123", MarkerKey: "order_id#warmup-123"},
+			expected:    " warmup_key=warmup-123 marker_key=order_id#warmup-123",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.description, func(t *testing.T) {
+			require.Equal(t, testCase.expected, warmupReadKeysSuffix(testCase.stats))
+		})
+	}
+}
+
 type metricsTestRow struct {
 	ID int
 }

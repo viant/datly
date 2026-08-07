@@ -1054,7 +1054,7 @@ func logCacheRead(ctx context.Context, aView *view.View, stats *cache.Stats, ela
 		return
 	}
 	recordCacheReadMetrics(aView, stats)
-	fmt.Printf("[INFO] datly cache read reqTraceId=%s view=%s source=%s type=%s found_warmup=%t found_lazy=%t records=%d rows=%d namespace=%s set=%s elapsed=%s args=%v\n",
+	fmt.Printf("[INFO] datly cache read reqTraceId=%s view=%s source=%s type=%s found_warmup=%t found_lazy=%t records=%d rows=%d namespace=%s set=%s elapsed=%s args=%v%s\n",
 		reqTraceID(ctx),
 		aView.Name,
 		cacheReadSource(stats),
@@ -1066,7 +1066,22 @@ func logCacheRead(ctx context.Context, aView *view.View, stats *cache.Stats, ela
 		stats.Namespace,
 		stats.Dataset,
 		elapsed,
-		args)
+		args,
+		warmupReadKeysSuffix(stats))
+}
+
+func warmupReadKeysSuffix(stats *cache.Stats) string {
+	if stats == nil {
+		return ""
+	}
+	var result string
+	if stats.WarmupKey != "" {
+		result += " warmup_key=" + stats.WarmupKey
+	}
+	if stats.MarkerKey != "" {
+		result += " marker_key=" + stats.MarkerKey
+	}
+	return result
 }
 
 func reqTraceID(ctx context.Context) string {
