@@ -61,6 +61,9 @@ func NewHttpRequest(opts ...Option) (kind.Locator, error) {
 }
 
 func readRequestBody(request *http.Request) ([]byte, error) {
+	if request == nil {
+		return nil, fmt.Errorf("request was empty")
+	}
 	if request.Body == nil {
 		return nil, nil
 	}

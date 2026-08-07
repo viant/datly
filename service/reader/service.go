@@ -628,9 +628,9 @@ func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, statelet 
 			}
 		}
 	}
-	cloned := *statelet
+	cloned := statelet.CloneForSummary()
 	cloned.Template = clonedTemplate
-	ok, err := applyWarmupIdentityProjection(aView, &cloned)
+	ok, err := applyWarmupIdentityProjection(aView, cloned)
 	if err != nil {
 		return nil, err
 	}
@@ -638,7 +638,7 @@ func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, statelet 
 		return nil, nil
 	}
 
-	matcher, err := s.sqlBuilder.CacheSQLWithOptions(ctx, aView, &cloned, nil, nil, parent)
+	matcher, err := s.sqlBuilder.CacheSQLWithOptions(ctx, aView, cloned, nil, nil, parent)
 	if err != nil || matcher == nil {
 		return matcher, err
 	}
