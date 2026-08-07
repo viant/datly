@@ -73,9 +73,7 @@ func (s *Session) NewSession(component *repository.Component) *Session {
 	if ret.Options.state != nil {
 		ret.Options.state.RWMutex.Lock()
 		for _, st := range ret.Options.state.Views {
-			if st != nil {
-				st.Filters = nil
-			}
+			st.ClearFilters()
 		}
 		ret.Options.state.RWMutex.Unlock()
 	}
