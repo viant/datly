@@ -88,6 +88,16 @@ func (s *Statelet) AppendFilters(filters predicate.Filters) {
 	s.filtersMu.Unlock()
 }
 
+// ClearFilters safely clears the selector's filters.
+func (s *Statelet) ClearFilters() {
+	if s == nil {
+		return
+	}
+	s.filtersMu.Lock()
+	s.Filters = nil
+	s.filtersMu.Unlock()
+}
+
 // NewStatelet creates a selector
 func NewStatelet() *Statelet {
 	return &Statelet{
@@ -186,9 +196,9 @@ func (s *Statelet) CloneForSummary() *Statelet {
 		ret._columnNames = map[string]bool{}
 	}
 
-	if len(s.Filters) > 0 {
-		ret.Filters = append(predicate.Filters(nil), s.Filters...)
-	}
+	s.filtersMu.Lock()
+	ret.Filters = append(predicate.Filters(nil), s.Filters...)
+	s.filtersMu.Unlock()
 
 	if len(s.Fields) > 0 {
 		ret.Fields = append([]string(nil), s.Fields...)
