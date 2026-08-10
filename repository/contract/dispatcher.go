@@ -18,6 +18,9 @@ type (
 		Form           *hstate.Form
 		Request        *http.Request
 		Logger         logger.Logger
+		//CacheDisabled overrides the dispatching session's view cache setting;
+		//when nil the dispatched component inherits it from that session.
+		CacheDisabled *bool
 	}
 	//Option represents a dispatcher option
 	Option func(o *Options)
@@ -84,5 +87,13 @@ func WithRequest(request *http.Request) Option {
 func WithLogger(loger logger.Logger) Option {
 	return func(o *Options) {
 		o.Logger = loger
+	}
+}
+
+// WithCacheDisabled forces the dispatched component to bypass (or use) its view cache,
+// regardless of the dispatching session's setting. Without it the flag is inherited.
+func WithCacheDisabled(flag bool) Option {
+	return func(o *Options) {
+		o.CacheDisabled = &flag
 	}
 }

@@ -18,7 +18,6 @@ type Dispatcher struct {
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, opts ...contract.Option) (interface{}, error) {
-	//TODO maybe extract and pass session cache value
 	aComponent, err := d.registry.Lookup(ctx, path)
 	if err != nil {
 		return nil, err
@@ -44,15 +43,36 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, opts ...
 		options = append(options, locator.WithHeaders(cOptions.Header))
 	}
 
-	aSession := session.New(aComponent.View, session.WithLocatorOptions(options...),
+	sessionOptions := []session.Option{session.WithLocatorOptions(options...),
 		session.WithAuth(d.auth),
 		session.WithRegistry(d.registry),
 		session.WithLogger(cOptions.Logger),
 		session.WithComponent(aComponent),
-		session.WithOperate(d.service.Operate))
+		session.WithOperate(d.service.Operate)}
+	//resolved before the child session replaces the dispatching one in ctx
+	if cacheDisabled, ok := resolveCacheDisabled(ctx, cOptions); ok {
+		sessionOptions = append(sessionOptions, session.WithCacheDisabled(cacheDisabled))
+	}
+
+	aSession := session.New(aComponent.View, sessionOptions...)
 	ctx = aSession.Context(ctx, true)
 	value, err := d.service.Operate(ctx, aSession, aComponent)
 	return value, err
+}
+
+// resolveCacheDisabled reports whether the dispatched component should bypass its view
+// cache, and whether the setting is known at all. An explicit contract option wins;
+// otherwise it is inherited from the dispatching session, so a request level
+// Datly-Disable-Cache also reaches components resolved as kind=component parameters
+// (the same inheritance operator.finalize applies to injector based invocations).
+func resolveCacheDisabled(ctx context.Context, options *contract.Options) (bool, bool) {
+	if options != nil && options.CacheDisabled != nil {
+		return *options.CacheDisabled, true
+	}
+	if parent := session.Context(ctx); parent != nil {
+		return parent.Options.CacheDisabled(), true
+	}
+	return false, false
 }
 
 // New creates a dispatcher
