@@ -399,8 +399,6 @@ func (r *Router) addAuthTokenIfPresent(ctx context.Context, httpRequest *http.Re
 	}
 }
 
-const defaultMCPProtectedResource = "https://datly.viantinc.com"
-
 func (r *Router) mcpUnauthorizedError() *jsonrpc.Error {
 	if r == nil || r.config == nil || r.config.MCP == nil {
 		return jsonrpc.NewError(schema.Unauthorized, "Unauthorized", nil)
@@ -413,7 +411,7 @@ func (r *Router) mcpUnauthorizedError() *jsonrpc.Error {
 		RequiredScopes: []string{},
 		UseIdToken:     true,
 		ProtectedResourceMetadata: &oauthmeta.ProtectedResourceMetadata{
-			Resource:             defaultMCPProtectedResource,
+			Resource:             r.config.MCP.ProtectedResourceURL(),
 			AuthorizationServers: []string{issuerURL},
 		},
 	})

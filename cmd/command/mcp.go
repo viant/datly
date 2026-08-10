@@ -46,6 +46,7 @@ func (s *Service) mcp(ctx context.Context, mcpOption *options.Mcp) error {
 		Port:            mcpOption.Port,
 		OAuth2ConfigURL: mcpOption.OAuth2ConfigURL,
 		IssuerURL:       mcpOption.IssuerURL,
+		ResourceURL:     mcpOption.ResourceURL,
 		AuthorizerMode:  mcpOption.AuthorizerMode,
 	})
 	if err != nil {

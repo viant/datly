@@ -56,6 +56,7 @@ type (
 		Port              *int
 		OAuth2ConfigURL   string
 		IssuerURL         string
+		ResourceURL       string
 		AuthorizerMode    string
 		BFFExchangeHeader string
 		BFFRedirectURI    string
@@ -85,6 +86,19 @@ type (
 		Exclude  []string
 	}
 )
+
+const defaultMCPProtectedResource = "https://datly.viantinc.com"
+
+// ProtectedResourceURL returns the RFC 9728 resource-server identifier used
+// in MCP authorization challenges and protected-resource metadata.
+func (m *ModelContextProtocol) ProtectedResourceURL() string {
+	if m != nil {
+		if resourceURL := strings.TrimSpace(m.ResourceURL); resourceURL != "" {
+			return resourceURL
+		}
+	}
+	return defaultMCPProtectedResource
+}
 
 const (
 	DQLBootstrapPrecedenceRoutesWins   = "routes_wins"

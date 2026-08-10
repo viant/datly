@@ -64,7 +64,7 @@ func (s *Server) init() error {
 			ExcludeURI: "/sse",
 			Global: &authorization.Authorization{
 				ProtectedResourceMetadata: &meta.ProtectedResourceMetadata{
-					Resource:             "https://datly.viantinc.com",
+					Resource:             s.config.ProtectedResourceURL(),
 					AuthorizationServers: []string{issuerURL},
 				},
 				UseIdToken: true,

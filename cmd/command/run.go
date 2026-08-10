@@ -43,7 +43,7 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 		_ = s.fs.Copy(ctx, parent, s.config.Config.PluginsURL)
 	}
 	s.config.Version = run.Version
-	if run.MCPPort != nil || run.MCPAuthURL != "" || run.MCPIssuerURL != "" || run.MCPAuthMode != "" {
+	if run.MCPPort != nil || run.MCPAuthURL != "" || run.MCPIssuerURL != "" || run.MCPResourceURL != "" || run.MCPAuthMode != "" {
 		if s.config.Config.MCP == nil {
 			s.config.Config.MCP = &gateway.ModelContextProtocol{}
 		}
@@ -52,6 +52,7 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 		}
 		setter.SetStringIfEmpty(&s.config.Config.MCP.OAuth2ConfigURL, run.MCPAuthURL)
 		setter.SetStringIfEmpty(&s.config.Config.MCP.IssuerURL, run.MCPIssuerURL)
+		setter.SetStringIfEmpty(&s.config.Config.MCP.ResourceURL, run.MCPResourceURL)
 		setter.SetStringIfEmpty(&s.config.Config.MCP.AuthorizerMode, run.MCPAuthMode)
 	}
 	return standalone.New(ctx, standalone.WithConfig(s.config))
