@@ -2,7 +2,9 @@ package logger
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
+
+	"github.com/viant/datly/internal/contextinfo"
 	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/debug"
@@ -90,12 +92,18 @@ func (l *Adapter) Inherit(adapter *Adapter) {
 
 func (l *Adapter) LogDatabaseErr(ctx context.Context, view string, SQL string, err error, args ...interface{}) {
 	SQL = shared.ExpandSQL(SQL, args)
-	fmt.Printf("[ERROR] datly sql reqTraceId=%s view=%s error=%q sql=%q params=%v\n",
-		reqTraceID(ctx),
-		view,
-		normalizeDatabaseError(err),
-		strings.ReplaceAll(SQL, "\n", "\\n"),
-		args)
+	details := contextinfo.Snapshot(ctx)
+	slog.LogAttrs(ctx, slog.LevelError, "datly sql",
+		slog.String("reqTraceId", reqTraceID(ctx)),
+		slog.String("view", view),
+		slog.String("error", normalizeDatabaseError(err)),
+		slog.String("ctxErr", details.Err),
+		slog.String("cause", details.Cause),
+		slog.Bool("hasDeadline", details.HasDeadline),
+		slog.String("deadline", details.Deadline),
+		slog.String("remaining", details.Remaining),
+		slog.String("sql", strings.ReplaceAll(SQL, "\n", "\\n")),
+		slog.Any("params", args))
 }
 
 func reqTraceID(ctx context.Context) string {

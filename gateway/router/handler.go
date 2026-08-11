@@ -11,9 +11,10 @@ import (
 	"github.com/viant/afs/option"
 	acontent "github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/gateway/router/openapi"
 	"github.com/viant/datly/gateway/router/status"
+	"github.com/viant/datly/internal/contextinfo"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
@@ -34,11 +35,13 @@ import (
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
 	"io"
+	"log/slog"
 	"net/http"
 	nurl "net/url"
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ContextHandler http handler with context
@@ -173,6 +176,7 @@ func (r *Handler) Serve(serverPath string) error {
 }
 
 func (r *Handler) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
+	started := time.Now()
 	ctx := req.Context()
 	if ctx == nil {
 		ctx = context.Background()
@@ -181,6 +185,44 @@ func (r *Handler) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
 	ctx = vcontext.WithValue(ctx, exec.ContextKey, execContext)
 	ctx = requesttrace.Ensure(ctx, execContext.TraceID)
 	req = req.WithContext(ctx)
+
+	// net/http cancels a request context after ServeHTTP returns. Stop the
+	// observer before returning so it reports only cancellation that occurs
+	// while Datly is still handling the request.
+	method := req.Method
+	requestURI := req.RequestURI
+	protocol := req.Proto
+	remoteAddr := req.RemoteAddr
+	forwardedFor := req.Header.Get("X-Forwarded-For")
+	contentLength := req.ContentLength
+	amznTraceID := req.Header.Get("X-Amzn-Trace-Id")
+	traceID := execContext.TraceID
+	stopCancellationLog := context.AfterFunc(ctx, func() {
+		details := contextinfo.Snapshot(ctx)
+		args := []any{
+			"reqTraceId", traceID,
+			"method", method,
+			"uri", requestURI,
+			"proto", protocol,
+			"remoteAddr", remoteAddr,
+			"forwardedFor", forwardedFor,
+			"contentLength", contentLength,
+			"xAmznTraceId", amznTraceID,
+			"elapsed", time.Since(started),
+			"ctxErr", details.Err,
+			"cause", details.Cause,
+			"hasDeadline", details.HasDeadline,
+			"deadline", details.Deadline,
+			"remaining", details.Remaining,
+		}
+		if r.logger != nil {
+			r.logger.Errorc(ctx, "datly request context canceled", args...)
+			return
+		}
+		slog.ErrorContext(ctx, "datly request context canceled", args...)
+	})
+	defer stopCancellationLog()
+
 	r.HandleRequest(ctx, writer, req)
 	if execContext.StatusCode == 0 {
 		execContext.StatusCode = http.StatusOK
