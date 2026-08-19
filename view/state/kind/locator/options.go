@@ -314,18 +314,29 @@ func WithForm(form *hstate.Form) Option {
 
 // WithQuery return query parameters option
 func WithQuery(parameters url.Values) Option {
+	parameters = cloneURLValues(parameters)
 	return func(o *Options) {
 		o.mu.Lock()
 		defer o.mu.Unlock()
 
-		if o.Query == nil {
-			o.Query = parameters
-		} else {
-			for k, v := range parameters {
-				o.Query[k] = v
-			}
+		if o.Query == nil && parameters != nil {
+			o.Query = make(url.Values, len(parameters))
+		}
+		for k, v := range parameters {
+			o.Query[k] = append([]string(nil), v...)
 		}
 	}
+}
+
+func cloneURLValues(values url.Values) url.Values {
+	if values == nil {
+		return nil
+	}
+	result := make(url.Values, len(values))
+	for key, value := range values {
+		result[key] = append([]string(nil), value...)
+	}
+	return result
 }
 
 func WithLogger(logger logger.Logger) Option {
@@ -365,15 +376,16 @@ func WithHeader(name, value string) Option {
 
 // WithHeaders return headers option
 func WithHeaders(header http.Header) Option {
+	header = header.Clone()
 	return func(o *Options) {
 		o.mu.Lock()
 		defer o.mu.Unlock()
 
-		if o.Header == nil {
-			o.Header = header
+		if o.Header == nil && header != nil {
+			o.Header = make(http.Header, len(header))
 		}
 		for name, value := range header {
-			o.Header[name] = value
+			o.Header[name] = append([]string(nil), value...)
 		}
 	}
 }
