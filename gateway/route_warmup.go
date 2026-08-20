@@ -29,29 +29,37 @@ func (r *Router) NewWarmupRoute(URL string, providers ...*repository.Provider) *
 
 func (r *Router) handleCacheWarmup(ctx context.Context, writer http.ResponseWriter, provider []*repository.Provider) {
 	statusCode, content := r.handleCacheWarmupWithErr(ctx, provider)
+	setContentType(writer, statusCode, "application/json")
 	write(writer, statusCode, content)
 }
 
 func (r *Router) handleCacheWarmupWithErr(ctx context.Context, providers []*repository.Provider) (int, []byte) {
-	var views []*view.View
-	URIs := make([]string, len(providers))
-	for i, provider := range providers {
-		aComponent, err := provider.Component(ctx)
+	// HTTP-triggered warmup should survive client/LB timeout cancellation.
+	warmupCtx := context.Background()
+	viewsByURI := make(map[string][]*view.View, len(providers))
+	URIs := make([]string, 0, len(providers))
+	for _, provider := range providers {
+		aComponent, err := provider.Component(warmupCtx)
 		if err != nil {
 			return http.StatusInternalServerError, []byte(err.Error())
 		}
-		views, err := router.ExtractCacheableViews(ctx, aComponent)
+		if aComponent == nil {
+			return http.StatusNotFound, []byte("component was not found")
+		}
+		views, err := router.ExtractCacheableViews(warmupCtx, aComponent)
 		if err != nil {
 			return http.StatusInternalServerError, []byte(err.Error())
 		}
-		views = append(views, views...)
-		URIs[i] = aComponent.URI
+		if _, ok := viewsByURI[aComponent.URI]; !ok {
+			URIs = append(URIs, aComponent.URI)
+		}
+		viewsByURI[aComponent.URI] = append(viewsByURI[aComponent.URI], views...)
 	}
 
-	lookup := func(_ context.Context, _, _ string) ([]*view.View, error) {
-		return views, nil
+	lookup := func(_ context.Context, _, matchingURI string) ([]*view.View, error) {
+		return viewsByURI[matchingURI], nil
 	}
-	response := warmup.PreCache(ctx, lookup, URIs...)
+	response := warmup.PreCache(warmupCtx, lookup, URIs...)
 	data, err := json.Marshal(response)
 	if err != nil {
 		return http.StatusInternalServerError, []byte(err.Error())

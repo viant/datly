@@ -1,0 +1,44 @@
+{
+  "data": [
+    {
+      "accountId": 100,
+      "id": 1,
+      "name": "User 1",
+      "team": [
+        {
+          "accountId": 100,
+          "id": 3,
+          "name": "User 3",
+          "team": [
+            {
+              "accountId": 100,
+              "id": 5,
+              "name": "User 1",
+              "team": []
+            }
+          ]
+        },
+        {
+          "accountId": 101,
+          "id": 4,
+          "name": "User 2",
+          "team": []
+        }
+      ]
+    },
+    {
+      "accountId": 101,
+      "id": 2,
+      "name": "User 2",
+      "team": [
+        {
+          "accountId": 101,
+          "id": 6,
+          "name": "User 2",
+          "team": []
+        }
+      ]
+    }
+  ],
+  "status": "ok"
+}

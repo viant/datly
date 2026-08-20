@@ -1,0 +1,17 @@
+[
+  {
+    "@indexBy@": "id"
+  },
+  {
+    "id": 1,
+    "userId": 1,
+    "isEnabled": true,
+    "isActivated": false
+  },
+  {
+    "id": 2,
+    "userId": 2,
+    "isEnabled": false,
+    "isActivated": true
+  }
+]

@@ -151,7 +151,15 @@ func (s *sliceInterfaceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Marsha
 			sb.WriteByte(',')
 		}
 
+		if iface == nil {
+			sb.Write(nullBytes)
+			continue
+		}
 		ifaceType := reflect.TypeOf(iface)
+		if ifaceType == nil {
+			sb.Write(nullBytes)
+			continue
+		}
 
 		marshaller, err := s.cache.loadMarshaller(ifaceType, s.config, s.path, s.outputPath, s.tag)
 		if err != nil {

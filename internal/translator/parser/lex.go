@@ -60,8 +60,8 @@ const (
 
 var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
 var exprGroupMatcher = parsly.NewToken(exprGroupToken, "( .... )", matcher.NewBlock('(', ')', '\\'))
-var setTerminatedMatcher = parsly.NewToken(setTerminatedToken, "#set", imatchers.NewStringTerminator("#set"))
-var setMatcher = parsly.NewToken(setToken, "#set", matcher.NewFragments([]byte("#set")))
+var setTerminatedMatcher = parsly.NewToken(setTerminatedToken, "#set/#define/#settings", imatchers.NewAnyStringTerminator("#set", "#define", "#settings"))
+var setMatcher = parsly.NewToken(setToken, "#set", matcher.NewFragments([]byte("#settings"), []byte("#define"), []byte("#set")))
 var parameterDeclarationMatcher = parsly.NewToken(parameterDeclarationToken, "$_", matcher.NewSpacedSet([]string{"$_ = $"}))
 var commentMatcher = parsly.NewToken(commentToken, "/**/", matcher.NewSeqBlock("/*", "*/"))
 var typeMatcher = parsly.NewToken(typeToken, "<T>", matcher.NewSeqBlock("<", ">"))
@@ -70,7 +70,7 @@ var selectMatcher = parsly.NewToken(selectToken, "Applier call", imatchers.NewId
 
 var execStmtMatcher = parsly.NewToken(execStmtToken, "Exec statement", matcher.NewFragmentsFold([]byte("insert"), []byte("update"), []byte("delete"), []byte("call"), []byte("begin")))
 var readStmtMatcher = parsly.NewToken(readStmtToken, "Select statement", matcher.NewFragmentsFold([]byte("select")))
-var exprMatcher = parsly.NewToken(exprToken, "Expression", matcher.NewFragments([]byte("#set"), []byte("#foreach"), []byte("#if")))
+var exprMatcher = parsly.NewToken(exprToken, "Expression", matcher.NewFragments([]byte("#settings"), []byte("#define"), []byte("#set"), []byte("#foreach"), []byte("#if")))
 var anyMatcher = parsly.NewToken(anyToken, "Any", imatchers.NewAny())
 var exprEndMatcher = parsly.NewToken(exprEndToken, "#end", matcher.NewFragmentsFold([]byte("#end")))
 
@@ -91,7 +91,7 @@ var ParenthesesBlockMatcher = parsly.NewToken(ParenthesesBlockToken, "Parenthese
 var endMatcher = parsly.NewToken(endToken, "End", matcher.NewFragment("#end"))
 var elseMatcher = parsly.NewToken(elseToken, "Else", matcher.NewFragment("#else"))
 var elseIfMatcher = parsly.NewToken(elseToken, "ElseIf", matcher.NewFragment("#elseif"))
-var assignMatcher = parsly.NewToken(assignToken, "Set", matcher.NewFragment("#set"))
+var assignMatcher = parsly.NewToken(assignToken, "Set", matcher.NewFragments([]byte("#settings"), []byte("#define"), []byte("#set")))
 var forEachMatcher = parsly.NewToken(forEachToken, "ForEach", matcher.NewFragment("#foreach"))
 var ifMatcher = parsly.NewToken(ifToken, "If", matcher.NewFragment("#if"))
 

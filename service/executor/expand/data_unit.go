@@ -2,8 +2,11 @@ package expand
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"os"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -17,22 +20,25 @@ import (
 
 type (
 	DataUnit struct {
-		Columns     codec.ColumnsSource
-		ParamsGroup []interface{}
-		Mock        bool
-		TemplateSQL string
-		MetaSource  Dber        `velty:"-"`
-		Statements  *Statements `velty:"-"`
-
+		Columns            codec.ColumnsSource
+		ParamsGroup        []interface{}
+		Mock               bool
+		TemplateSQL        string
+		MetaSource         Dber                            `velty:"-"`
+		Statements         *Statements                     `velty:"-"`
 		mu                 sync.Mutex                      `velty:"-"`
 		placeholderCounter int                             `velty:"-"`
 		sqlxValidator      *validator.Service              `velty:"-"`
 		sliceIndex         map[reflect.Type]*xunsafe.Slice `velty:"-"`
 		ctx                context.Context                 `velty:"-"`
+		transactionRunner  func(func(*sql.Tx) error) error `velty:"-"`
+		EvalLock           sync.Mutex
 	}
 
 	ExecutablesIndex map[string]*Executable
 )
+
+//
 
 func (c *DataUnit) WithPresence() interface{} {
 	var opt interface{} = validator.WithSetMarker()
@@ -41,17 +47,6 @@ func (c *DataUnit) WithPresence() interface{} {
 func (c *DataUnit) WithLocation(loc string) interface{} {
 	var opt interface{} = validator.WithLocation(loc)
 	return opt
-}
-
-// Reset clears binding-related state so DataUnit can be safely reused for a new evaluation
-func (c *DataUnit) Reset() {
-	c.mu.Lock()
-	c.placeholderCounter = 0
-	if len(c.ParamsGroup) > 0 {
-		c.ParamsGroup = c.ParamsGroup[:0]
-	}
-	c.TemplateSQL = ""
-	c.mu.Unlock()
 }
 
 func (c *DataUnit) Validate(dest interface{}, opts ...interface{}) (*validator.Validation, error) {
@@ -73,14 +68,31 @@ func (c *DataUnit) Validate(dest interface{}, opts ...interface{}) (*validator.V
 }
 
 func (c *DataUnit) Allocate(tableName string, dest interface{}, selector string) (string, error) {
+	if os.Getenv("DATLY_DEBUG_MUTABLE") == "1" {
+		fmt.Printf("[MUTABLE DEBUG] Allocate table=%s selector=%s destType=%T dest=%#v\n", tableName, selector, dest, dest)
+	}
 	db, err := c.MetaSource.Db()
 	if err != nil {
 		fmt.Printf("error occured while connecting to DB %v\n", err.Error())
 		return "", fmt.Errorf("error occurred while connecting to DB")
 	}
 
-	service := sequencer.New(context.Background(), db)
-	return "", service.Next(tableName, dest, selector)
+	ctx := context.Background()
+	if c.ctx != nil {
+		ctx = c.ctx
+	}
+	if c.transactionRunner != nil {
+		return "", c.transactionRunner(func(tx *sql.Tx) error {
+			return sequencer.New(ctx, db, tx).Next(tableName, dest, selector)
+		})
+	}
+	return "", sequencer.New(ctx, db).Next(tableName, dest, selector)
+}
+
+// SetTransactionRunner binds sequencing to the same serialized transaction as DML.
+func (c *DataUnit) SetTransactionRunner(ctx context.Context, runner func(func(*sql.Tx) error) error) {
+	c.ctx = ctx
+	c.transactionRunner = runner
 }
 
 func (c *DataUnit) AsBinding(value interface{}) (string, error) {
@@ -157,7 +169,7 @@ func (c *DataUnit) Next() (interface{}, error) {
 		return c.ParamsGroup[index], nil
 	}
 
-	return nil, fmt.Errorf("expected to get binding parameter, but noone was found, ParamsGroup: %v, placeholderCounter: %v", c.ParamsGroup, c.placeholderCounter)
+	return nil, fmt.Errorf("expected to get binding parameter, but none was found, ParamsGroup: %v, placeholderCounter: %v", c.ParamsGroup, c.placeholderCounter)
 }
 
 func (c *DataUnit) ensureSliceIndex() {
@@ -187,6 +199,12 @@ func (c *DataUnit) addAll(args ...interface{}) {
 	c.mu.Unlock()
 }
 
+func (c *DataUnit) Shrink(offset int) {
+	c.mu.Lock()
+	c.ParamsGroup = c.ParamsGroup[:offset]
+	c.mu.Unlock()
+}
+
 func (c *DataUnit) IsServiceExec(SQL string) (*Executable, bool) {
 	return c.Statements.LookupExecutable(SQL)
 }
@@ -211,6 +229,15 @@ func (c *DataUnit) FilterExecutables(statements []string, stopOnNonExec bool) []
 }
 
 func (c *DataUnit) In(columnName string, args interface{}) (string, error) {
+	if os.Getenv("DATLY_DEBUG_DATAUNIT") == "1" {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[DATAUNIT DEBUG] In panic column=%q argsType=%T args=%#v err=%v\n%s\n", columnName, args, args, r, debug.Stack())
+				panic(r)
+			}
+		}()
+		fmt.Printf("[DATAUNIT DEBUG] In column=%q argsType=%T args=%#v\n", columnName, args, args)
+	}
 	return c.in(columnName, args, true)
 }
 
@@ -277,6 +304,17 @@ func (c *DataUnit) Like(columnName string, args interface{}) (string, error) {
 
 func (c *DataUnit) NotLike(columnName string, args interface{}) (string, error) {
 	return c.like(columnName, args, false)
+}
+func (c *DataUnit) Expression(expr string, value interface{}) (string, error) {
+	return c.expression(expr, value)
+}
+
+func (c *DataUnit) expression(expr string, value interface{}) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	c.addAll(value)
+	return expr, nil
 }
 
 func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (string, error) {

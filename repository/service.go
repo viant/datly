@@ -34,6 +34,7 @@ type (
 		auth             *auth.Service
 		plugins          *plugin.Service
 		refreshFrequency time.Duration
+		refreshDisabled  bool
 		options          *Options
 	}
 
@@ -68,6 +69,9 @@ func (s *Service) Container() *path.Container {
 // SyncChanges checks if resource, plugin or components have changes
 // if so it would increase individual or all component/paths version number resulting in lazy reload
 func (s *Service) SyncChanges(ctx context.Context) (bool, error) {
+	if s == nil || s.refreshDisabled {
+		return false, nil
+	}
 	now := time.Now()
 	//fmt.Printf("[INFO] sync changes started\n")
 	snap := &snapshot{}
@@ -243,6 +247,7 @@ func (s *Service) initComponentProviders(ctx context.Context) error {
 	paths := s.paths.GetPaths()
 	pathsLen := len(paths.Items)
 	var providers []*Provider
+	var err error
 	for i := 0; i < pathsLen; i++ {
 		route := paths.Items[i]
 		sourceURL := route.SourceURL
@@ -259,6 +264,10 @@ func (s *Service) initComponentProviders(ctx context.Context) error {
 				return nil, fmt.Errorf("no component for path: %s", aPath.Path.Key())
 			})
 			providers = append(providers, provider)
+			providers, err = s.appendReportProvider(ctx, route, aPath, providers, provider)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	s.registry.SetProviders(providers)
@@ -346,6 +355,7 @@ func New(ctx context.Context, opts ...Option) (*Service, error) {
 	ret := &Service{
 		options:          options,
 		refreshFrequency: options.refreshFrequency,
+		refreshDisabled:  options.refreshDisabled,
 		resources:        options.resources,
 		extensions:       options.extensions,
 	}

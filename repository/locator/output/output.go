@@ -3,6 +3,7 @@ package output
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/repository/locator/output/keys"
@@ -25,7 +26,7 @@ func (l *Locator) Names() []string {
 	return nil
 }
 
-func (l *Locator) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (l *Locator) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	aName := strings.ToLower(name)
 	switch aName {
 	case keys.ViewData:

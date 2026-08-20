@@ -2,7 +2,9 @@ package session
 
 import (
 	"context"
+	"database/sql"
 	"embed"
+
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/auth"
 	"github.com/viant/datly/view"
@@ -32,6 +34,11 @@ type (
 		scope               string
 		embeddedFS          *embed.FS
 		auth                *auth.Service
+		preseedCache        bool
+		cacheDisabled       bool
+		sqlTx               *sql.Tx
+		viewProjections     map[string][]string
+		outputProjection    *OutputProjection
 	}
 
 	Option func(o *Options)
@@ -43,6 +50,15 @@ func (o *Options) Logger() logger.Logger {
 
 func (o *Options) Registry() *repository.Registry {
 	return o.registry
+}
+
+// SqlTx returns associated SQL transaction (if any)
+func (o *Options) SqlTx() *sql.Tx {
+	return o.sqlTx
+}
+
+func (o *Options) CacheDisabled() bool {
+	return o.cacheDisabled
 }
 
 func (o *Options) HasInputParameters() bool {
@@ -124,6 +140,38 @@ func WithLocatorOptions(options ...locator.Option) Option {
 	}
 }
 
+func WithViewProjectionColumns(viewName string, columns []string) Option {
+	return func(s *Options) {
+		if len(columns) == 0 {
+			return
+		}
+		if s.viewProjections == nil {
+			s.viewProjections = map[string][]string{}
+		}
+		s.viewProjections[viewName] = append([]string(nil), columns...)
+	}
+}
+
+func WithOutputProjection(output interface{}) Option {
+	return WithViewOutputProjection("", output)
+}
+
+func WithViewOutputProjection(viewName string, output interface{}) Option {
+	return func(s *Options) {
+		s.outputProjection = &OutputProjection{View: viewName, Output: output}
+	}
+}
+
+func WithOutputFields(fields ...string) Option {
+	return WithViewOutputFields("", fields...)
+}
+
+func WithViewOutputFields(viewName string, fields ...string) Option {
+	return func(s *Options) {
+		s.outputProjection = &OutputProjection{View: viewName, Fields: append([]string(nil), fields...), FieldsHint: true}
+	}
+}
+
 func WithStateResource(resource state.Resource) Option {
 	return func(s *Options) {
 		s.resource = resource
@@ -154,6 +202,26 @@ func WithAuth(auth *auth.Service) Option {
 	}
 }
 
+// WithSQLTx associates an existing SQL transaction with the session
+func WithSQLTx(tx *sql.Tx) Option {
+	return func(s *Options) {
+		s.sqlTx = tx
+	}
+}
+
+// WithPreseedCache controls whether NewSession should pre-seed child cache from parent (default false)
+func WithPreseedCache(flag bool) Option {
+	return func(s *Options) {
+		s.preseedCache = flag
+	}
+}
+
+func WithCacheDisabled(flag bool) Option {
+	return func(s *Options) {
+		s.cacheDisabled = flag
+	}
+}
+
 func WithComponent(component *repository.Component) Option {
 	return func(s *Options) {
 		s.component = component
@@ -181,5 +249,11 @@ func WithOperate(operate func(ctx context.Context, aSession *Session, aComponent
 func WithRegistry(registry *repository.Registry) Option {
 	return func(s *Options) {
 		s.registry = registry
+	}
+}
+
+func WithLogger(logger logger.Logger) Option {
+	return func(s *Options) {
+		s.logger = logger
 	}
 }

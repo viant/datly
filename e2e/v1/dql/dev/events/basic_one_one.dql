@@ -1,0 +1,12 @@
+#package('github.com/viant/datly/e2e/v1/shape/dev/events/relation_one_one')
+#setting($_ = $connector('dev'))
+#setting($_ = $route('/v1/api/shape/dev/basic/events-one-one', 'GET'))
+
+
+#set( $_ = $Data<?>(output/view).Embed())
+
+
+SELECT EVENTS.*,
+       EVENTS_PERFORMANCE.*
+FROM (SELECT ID, QUANTITY FROM EVENTS) EVENTS
+JOIN (SELECT * FROM EVENTS_PERFORMANCE) EVENTS_PERFORMANCE ON EVENTS.ID = EVENTS_PERFORMANCE.EVENT_ID AND 1=1

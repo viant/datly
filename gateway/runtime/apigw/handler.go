@@ -5,7 +5,6 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/viant/datly/gateway/runtime/serverless"
 	"net/http"
-	"time"
 
 	"github.com/viant/datly/gateway/router/proxy"
 	"github.com/viant/datly/gateway/runtime/apigw/adapter"

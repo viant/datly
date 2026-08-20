@@ -26,6 +26,7 @@ type (
 )
 
 func (h *Httper) rawRequest(ctx context.Context, opts ...state.Option) (*http.Request, error) {
+	ctx = h.invocationContext(ctx)
 	aSession, err := h.executor.Session(ctx)
 	if err != nil {
 		return nil, err
@@ -70,6 +71,7 @@ func (h *Httper) NewRequest(ctx context.Context, opts ...hstate.Option) (*http.R
 }
 
 func (h *Httper) Redirect(ctx context.Context, route *dhttp.Route, request *http.Request) error {
+	ctx = h.invocationContext(ctx)
 	aSession, err := h.executor.Session(ctx)
 	if err != nil {
 		return err
@@ -86,6 +88,7 @@ func (h *Httper) FailWithCode(statusCode int, err error) error {
 }
 
 func (h *Httper) buildRequestOptions(ctx context.Context, params []*state.Parameter) ([]hstate.Option, error) {
+	ctx = h.invocationContext(ctx)
 	aSession, err := h.executor.Session(ctx)
 	if err != nil {
 		return nil, err
@@ -177,6 +180,13 @@ func (h *Httper) buildRequestOptions(ctx context.Context, params []*state.Parame
 	}
 
 	return opts, nil
+}
+
+func (h *Httper) invocationContext(ctx context.Context) context.Context {
+	if h == nil || h.executor == nil {
+		return ctx
+	}
+	return h.executor.invocationContext(ctx)
 }
 
 func mergeOptionsIntoRequest(req *http.Request, opts *hstate.Options) {

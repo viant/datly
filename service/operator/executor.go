@@ -3,12 +3,14 @@ package operator
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service/executor/handler"
+	"github.com/viant/datly/service/executor/uow"
 	"github.com/viant/gmetric/counter"
 	xhandler "github.com/viant/xdatly/handler"
-	"time"
 
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -16,6 +18,13 @@ import (
 
 // HandlerSession returns a handler session
 func (s *Service) HandlerSession(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (xhandler.Session, error) {
+	if _, _, scoped := uow.FromContext(ctx); scoped {
+		var err error
+		ctx, _, _, _, err = uow.Enter(ctx, aComponent.Method+" "+aComponent.URI)
+		if err != nil {
+			return nil, err
+		}
+	}
 	anExecutor := handler.NewExecutor(aComponent.View, aSession)
 	return anExecutor.NewHandlerSession(ctx, handler.WithTypes(aComponent.Types()...), handler.WithAuth(aSession.Auth()))
 }
@@ -25,6 +34,7 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 	if aComponent.Handler != nil {
 		aSession.SetView(aComponent.View)
 		sessionHandler, err := anExecutor.NewHandlerSession(ctx,
+			handler.WithLogger(aSession.Logger()),
 			handler.WithTypes(aComponent.Types()...), handler.WithAuth(aSession.Auth()))
 		if err != nil {
 			return nil, err
@@ -39,7 +49,7 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 			onDone(time.Now(), err)
 		}
 		if err != nil {
-			return nil, err
+			return response, err
 		}
 		return response, nil
 	}
@@ -59,6 +69,8 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 		status := contract.StatusSuccess(executorSession.TemplateState)
 		if err := aSession.SetState(ctx, aComponent.Output.Type.Parameters, responseState, aSession.Indirect(true,
 			locator.WithCustom(&status),
+			locator.WithLogger(aSession.Logger()),
+
 			locator.WithState(statelet.Template))); err != nil {
 			return nil, fmt.Errorf("failed to set response %w", err)
 		}

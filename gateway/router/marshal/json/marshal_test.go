@@ -179,7 +179,7 @@ func TestJson_Marshal(t *testing.T) {
 		},
 		{
 			description: "escaping special characters",
-			expect:      `{"escaped":"\\__\"__\/__\b__\f__\n__\r__\t__"}`,
+			expect:      `{"escaped":"\\__\"__\/__\\b__\\f__\n__\\r__\t__"}`,
 			data: func() interface{} {
 				type Member struct {
 					escaped string
