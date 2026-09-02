@@ -580,6 +580,55 @@ func TestRouter_applyParamToRequest_UsesPublicSelectorQueryNames(t *testing.T) {
 	assert.Empty(t, values.Get("lm_limit"))
 }
 
+func TestRouter_applyParamToRequest_FormatsSlicePathParameter(t *testing.T) {
+	router := &Router{}
+	param := state.NewParameter("Id", state.NewPathLocation("id"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf([]int{}))))
+
+	baseURL, body, rpcErr := router.applyParamToRequest(
+		"http://localhost/v1/api/platform/advertiser/{id}", url.Values{}, param,
+		[]interface{}{float64(85141)}, map[string]bool{}, map[string]bool{}, nil,
+	)
+
+	require.Nil(t, rpcErr)
+	assert.Nil(t, body)
+	assert.Equal(t, "http://localhost/v1/api/platform/advertiser/85141", baseURL)
+}
+
+func TestMCPPathArgumentString(t *testing.T) {
+	tests := []struct {
+		name  string
+		value interface{}
+		want  string
+		ok    bool
+	}{
+		{name: "scalar", value: 85141, want: "85141", ok: true},
+		{name: "single JSON number", value: []interface{}{float64(85141)}, want: "85141", ok: true},
+		{name: "multiple IDs", value: []int{85141, 90900}, want: "85141,90900", ok: true},
+		{name: "empty", value: []int{}, ok: false},
+		{name: "nil", value: nil, ok: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual, ok := mcpPathArgumentString(test.value)
+			assert.Equal(t, test.ok, ok)
+			assert.Equal(t, test.want, actual)
+		})
+	}
+}
+
+func TestRouter_matchToolCallComponentURI_UsesNormalizedArgumentName(t *testing.T) {
+	param := state.NewParameter("advertiser_id", state.NewPathLocation("id"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf([]int{}))))
+	param.URI = "/v1/api/platform/advertiser/{id}"
+	component := &repository.Component{Contract: contract.Contract{Input: contract.Input{Type: state.Type{Parameters: state.Parameters{param}}}}}
+	route := &Route{Path: &contract.Path{URI: "/v1/api/platform/advertiser"}}
+
+	actual := (&Router{}).matchToolCallComponentURI(route, component, schema.CallToolRequestParams{
+		Arguments: map[string]interface{}{"AdvertiserId": []interface{}{float64(85141)}},
+	})
+
+	assert.Equal(t, "/v1/api/platform/advertiser/{id}", actual)
+}
+
 func TestRouter_buildToolInputType_UsesBuiltReportComponentParameters(t *testing.T) {
 	resource := view.EmptyResource()
 	rootView := view.NewView("vendor", "VENDOR")

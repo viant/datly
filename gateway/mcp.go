@@ -237,7 +237,11 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 			}
 			return baseURL, body, jsonrpc.NewInvalidRequest("missing path parameter: "+p.In.Name, nil)
 		}
-		baseURL = strings.ReplaceAll(baseURL, "{"+p.In.Name+"}", fmt.Sprintf("%v", value))
+		pathValue, ok := mcpPathArgumentString(value)
+		if !ok {
+			return baseURL, body, jsonrpc.NewInvalidRequest("missing path parameter: "+p.In.Name, nil)
+		}
+		baseURL = strings.ReplaceAll(baseURL, "{"+p.In.Name+"}", pathValue)
 	case state.KindQuery, state.KindForm:
 		queryName := requestParamName(p)
 		if uniqueQuery[queryName] {
@@ -288,6 +292,43 @@ func requestParamName(p *state.Parameter) string {
 		return public
 	}
 	return p.In.Name
+}
+
+func mcpPathArgumentString(value interface{}) (string, bool) {
+	if value == nil {
+		return "", false
+	}
+	rValue := reflect.ValueOf(value)
+	for rValue.IsValid() && (rValue.Kind() == reflect.Interface || rValue.Kind() == reflect.Ptr) {
+		if rValue.IsNil() {
+			return "", false
+		}
+		rValue = rValue.Elem()
+	}
+	if !rValue.IsValid() {
+		return "", false
+	}
+	if rValue.Kind() != reflect.Slice && rValue.Kind() != reflect.Array {
+		result := strings.TrimSpace(fmt.Sprintf("%v", rValue.Interface()))
+		return result, result != ""
+	}
+	items := make([]string, 0, rValue.Len())
+	for i := 0; i < rValue.Len(); i++ {
+		item := rValue.Index(i)
+		for item.IsValid() && (item.Kind() == reflect.Interface || item.Kind() == reflect.Ptr) {
+			if item.IsNil() {
+				item = reflect.Value{}
+				break
+			}
+			item = item.Elem()
+		}
+		if item.IsValid() {
+			if text := strings.TrimSpace(fmt.Sprintf("%v", item.Interface())); text != "" {
+				items = append(items, text)
+			}
+		}
+	}
+	return strings.Join(items, ","), len(items) > 0
 }
 
 func selectorPublicParamName(p *state.Parameter) (string, bool) {
@@ -377,9 +418,8 @@ func (r *Router) matchToolCallComponentURI(aRoute *Route, component *repository.
 		if parameter.URI == "" {
 			continue
 		}
-		paramName := strings.Title(parameter.Name)
-		value, ok := params.Arguments[paramName]
-		if !ok || value == nil || value == "" {
+		value := toolArgumentValue(parameter, params.Arguments)
+		if _, ok := mcpPathArgumentString(value); !ok {
 			continue
 		}
 		URI = furl.Path(parameter.URI)
