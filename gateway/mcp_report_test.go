@@ -398,7 +398,7 @@ func TestRouter_mcpToolCallHandler_MapsComponentAndSelectorArgumentsToHTTPQuery(
 	assert.Equal(t, "7180287", values.Get("audience_id"))
 	assert.Equal(t, "25", values.Get("limit"))
 	assert.Empty(t, values.Get("AudienceId"))
-	assert.Empty(t, values.Get("lm_limit"))
+	assert.Equal(t, "25", values.Get("lm_limit"))
 }
 
 func TestRouter_newToolHTTPRequest_SetsJSONContentTypeForBody(t *testing.T) {
@@ -567,7 +567,7 @@ func TestRouter_buildToolInputType_UsesParameterMetadataTags(t *testing.T) {
 	assert.Equal(t, "children", operation.Tag.Get("example"))
 }
 
-func TestRouter_applyParamToRequest_UsesPublicSelectorQueryNames(t *testing.T) {
+func TestRouter_applyParamToRequest_UsesPublicAndBoundSelectorQueryNames(t *testing.T) {
 	router := &Router{}
 	values := url.Values{}
 	param := state.NewParameter("Limit", state.NewQueryLocation("lm_limit"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf(0))))
@@ -577,7 +577,28 @@ func TestRouter_applyParamToRequest_UsesPublicSelectorQueryNames(t *testing.T) {
 	assert.Equal(t, "http://localhost/test", baseURL)
 	assert.Nil(t, body)
 	assert.Equal(t, "20", values.Get("limit"))
-	assert.Empty(t, values.Get("lm_limit"))
+	assert.Equal(t, "20", values.Get("lm_limit"))
+}
+
+func TestRouter_applyParamToRequest_MapsDefaultSelectorAliases(t *testing.T) {
+	router := &Router{}
+	values := url.Values{}
+	limit := state.NewParameter("Limit", state.NewQueryLocation("_limit"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf(0))))
+	offset := state.NewParameter("Offset", state.NewQueryLocation("_offset"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf(0))))
+	orderBy := state.NewParameter("OrderBy", state.NewQueryLocation("_orderby"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf([]string{}))))
+
+	_, _, rpcErr := router.applyParamToRequest("http://localhost/test", values, limit, 20, map[string]bool{}, map[string]bool{}, nil)
+	require.Nil(t, rpcErr)
+	_, _, rpcErr = router.applyParamToRequest("http://localhost/test", values, offset, 40, map[string]bool{}, map[string]bool{}, nil)
+	require.Nil(t, rpcErr)
+	_, _, rpcErr = router.applyParamToRequest("http://localhost/test", values, orderBy, []interface{}{"id:desc"}, map[string]bool{}, map[string]bool{}, nil)
+	require.Nil(t, rpcErr)
+	assert.Equal(t, "20", values.Get("limit"))
+	assert.Equal(t, "20", values.Get("_limit"))
+	assert.Equal(t, "40", values.Get("offset"))
+	assert.Equal(t, "40", values.Get("_offset"))
+	assert.Equal(t, "id:desc", values.Get("orderBy"))
+	assert.Equal(t, "id:desc", values.Get("_orderby"))
 }
 
 func TestRouter_applyParamToRequest_FormatsSlicePathParameter(t *testing.T) {

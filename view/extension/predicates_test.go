@@ -26,8 +26,7 @@ func TestNewNopPredicateProducesEmptyTemplate(t *testing.T) {
 }
 
 func TestDefaultExtensionRegistersNopPredicate(t *testing.T) {
-	extension := New()
-	predicate, err := extension.Predicates.Lookup(PredicateNop)
+	predicate, err := Config.Predicates.Lookup(PredicateNop)
 	if err != nil {
 		t.Fatal(err)
 	}

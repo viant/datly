@@ -60,6 +60,11 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Route) serverproto.ToolHandlerFunc {
 	return func(ctx context.Context, req *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {
 		params := req.Params
+		arguments, err := initializeToolArguments(ctx, component, params.Arguments)
+		if err != nil {
+			return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
+		}
+		params.Arguments = arguments
 		uri := r.matchToolCallComponentURI(aRoute, component, params)
 		baseURL := fmt.Sprintf("http://localhost/%v", strings.TrimLeft(uri, "/")) // replace with actual service URL when available
 
@@ -70,7 +75,6 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 
 		// 1) Collect parameters (component + selector pagination)
 		allParams := r.collectToolParameters(component)
-
 		// 2) Apply parameters to request URL/query/body
 		for _, p := range allParams {
 			value := toolArgumentValue(p, params.Arguments)
@@ -122,6 +126,65 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 		// 5) Build tool result (text + structured on error)
 		return r.buildToolCallResult(rw, finalURL, aRoute.Path.Method), nil
 	}
+}
+
+func initializeToolArguments(ctx context.Context, component *repository.Component, arguments map[string]interface{}) (map[string]interface{}, error) {
+	result := make(map[string]interface{}, len(arguments))
+	for key, value := range arguments {
+		result[key] = value
+	}
+	if component == nil || component.Input.Type.Type() == nil {
+		return result, nil
+	}
+	inputType := component.Input.Type.Type().Type()
+	if inputType == nil {
+		return result, nil
+	}
+	if inputType.Kind() == reflect.Ptr {
+		inputType = inputType.Elem()
+	}
+	if inputType.Kind() != reflect.Struct {
+		return result, nil
+	}
+	holder := reflect.New(inputType)
+	encoded, err := json.Marshal(arguments)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(encoded, holder.Interface()); err != nil {
+		return nil, err
+	}
+	initializer, ok := holder.Interface().(state.Initializer)
+	if !ok {
+		return result, nil
+	}
+	if err = initializer.Init(ctx); err != nil {
+		return nil, err
+	}
+	value := holder.Elem()
+	var marker reflect.Value
+	if has := value.FieldByName("Has"); has.IsValid() && has.Kind() == reflect.Ptr && !has.IsNil() {
+		marker = has.Elem()
+	}
+	for _, parameter := range component.Input.Type.Parameters {
+		if parameter == nil {
+			continue
+		}
+		field := value.FieldByName(parameter.Name)
+		if !field.IsValid() || !field.CanInterface() {
+			continue
+		}
+		present := toolArgumentValue(parameter, arguments) != nil
+		if marker.IsValid() {
+			if hasField := marker.FieldByName(parameter.Name); hasField.IsValid() && hasField.Kind() == reflect.Bool && hasField.Bool() {
+				present = true
+			}
+		}
+		if present {
+			result[strings.Title(parameter.Name)] = field.Interface()
+		}
+	}
+	return result, nil
 }
 
 func (r *Router) addSyncReadHeaderIfPresent(
@@ -201,6 +264,9 @@ func (r *Router) collectToolParameters(component *repository.Component) []*state
 		if p := component.View.Selector.FieldsParameter; p != nil {
 			all = append(all, p)
 		}
+		if p := component.View.Selector.OrderByParameter; p != nil {
+			all = append(all, p)
+		}
 		if p := component.View.Selector.PageParameter; p != nil {
 			all = append(all, p)
 		}
@@ -251,6 +317,7 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 		if value == nil || value == "" {
 			return baseURL, body, nil
 		}
+		var encodedValue string
 		if slice, ok := value.([]interface{}); ok {
 			var items []string
 			for _, item := range slice {
@@ -260,9 +327,17 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 					items = append(items, fmt.Sprintf("%v", item))
 				}
 			}
-			values.Add(queryName, strings.Join(items, ","))
+			encodedValue = strings.Join(items, ",")
 		} else {
-			values.Add(queryName, fmt.Sprintf("%v", value))
+			encodedValue = fmt.Sprintf("%v", value)
+		}
+		values.Add(queryName, encodedValue)
+		// MCP exposes stable public selector names (limit/offset/etc.), while
+		// Datly's uncustomized HTTP selector bindings use _limit/_offset/etc.
+		// Send both when they differ so the routed request reaches the actual
+		// bound parameter without breaking integrations that read the public alias.
+		if boundName := strings.TrimSpace(p.In.Name); boundName != "" && boundName != queryName {
+			values.Add(boundName, encodedValue)
 		}
 	case state.KindRequestBody:
 		bodyValue := value
@@ -522,6 +597,12 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty" optional:"true"`)
 			}
 		}
+		if p := components.View.Selector.OrderByParameter; p != nil && p.In != nil && p.In.Name != "" {
+			if !uniqueQuery[p.In.Name] {
+				uniqueQuery[p.In.Name] = true
+				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty" optional:"true"`)
+			}
+		}
 		if p := components.View.Selector.PageParameter; p != nil && p.In != nil && p.In.Name != "" {
 			if !uniqueQuery[p.In.Name] {
 				uniqueQuery[p.In.Name] = true
@@ -729,6 +810,9 @@ func (r *Router) buildTemplateResourceIntegration(item *dpath.Item, aPath *dpath
 				parameterNames = append(parameterNames, p.In.Name)
 			}
 			if p := comp.View.Selector.FieldsParameter; p != nil && p.In != nil && p.In.Name != "" {
+				parameterNames = append(parameterNames, p.In.Name)
+			}
+			if p := comp.View.Selector.OrderByParameter; p != nil && p.In != nil && p.In.Name != "" {
 				parameterNames = append(parameterNames, p.In.Name)
 			}
 			if p := comp.View.Selector.PageParameter; p != nil && p.In != nil && p.In.Name != "" {

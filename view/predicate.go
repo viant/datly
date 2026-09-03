@@ -108,14 +108,21 @@ func (e *PredicateEvaluator) Evaluate(ctx *expand.Context, state *structology.St
 			hasValue = actual != nil
 		}
 	}
-	return e.evaluator.Evaluate(ctx,
-		expand.WithParameterState(state),
+	options := []expand.StateOption{
 		expand.WithNamedVariables(
 			e.valueState.New(value),
 			e.hasValueState.New(hasValue),
 		),
 		expand.WithCustomContext(e.ctx),
-	)
+	}
+	// The built-in expr predicate depends only on FilterValue and its configured
+	// expression. Its owning parameter state may be a generated projection that
+	// intentionally excludes non-predicate inputs, so binding that state can
+	// create a false type mismatch without contributing to the expression.
+	if e.name != extension.PredicateExpr {
+		options = append(options, expand.WithParameterState(state))
+	}
+	return e.evaluator.Evaluate(ctx, options...)
 }
 
 func (c *predicateCache) get(resource *Resource, predicateConfig *extension.PredicateConfig, param *state.Parameter, registry *extension.PredicateRegistry, stateType *structology.StateType) (codec.PredicateHandler, error) {

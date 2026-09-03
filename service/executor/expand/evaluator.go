@@ -221,7 +221,7 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 
 		externalType := state.ParametersState.Type().Type()
 		if e.stateType.Type() != externalType {
-			return nil, fmt.Errorf("inompactible types, wanted %v got %T", e.stateType.Type().String(), externalType.String())
+			return nil, fmt.Errorf("incompatible types, wanted %v got %v", e.stateType.Type(), externalType)
 		}
 
 		if err := state.SetValue(e.stateName, state.ParametersState.State()); err != nil {
