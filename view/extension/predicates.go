@@ -35,6 +35,7 @@ const (
 
 	PredicateLiteralIn         = "literal_in"
 	PredicateExpr              = "expr"
+	PredicateNop               = "nop"
 	PredicateCriteriaExists    = "exists_criteria"
 	PredicateCriteriaNotExists = "not_exists_criteria"
 	PredicateCriteriaIn        = "in_criteria"
@@ -387,6 +388,13 @@ func NewLiteralInPredicate() *Predicate {
 
 func NewExprPredicate() *Predicate {
 	return newExprPredicate(PredicateExpr)
+}
+
+// NewNopPredicate retains an input as a declared predicate state without
+// contributing SQL. This is useful for initialization and cache identity
+// parameters whose value is translated into other predicate fields.
+func NewNopPredicate() *Predicate {
+	return &Predicate{Template: &predicate.Template{Name: PredicateNop, Source: ""}}
 }
 
 func NewNotLikePredicate() *Predicate {
