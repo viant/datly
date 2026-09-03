@@ -27,6 +27,7 @@ type (
 	predicateKey struct {
 		name      string
 		paramType reflect.Type
+		stateType reflect.Type
 	}
 
 	predicateEvaluatorProvider struct {
@@ -123,7 +124,11 @@ func (c *predicateCache) get(resource *Resource, predicateConfig *extension.Pred
 		keyName += strings.Join(predicateConfig.Args, ",")
 	}
 	outputType := param.OutputType()
-	aKey := predicateKey{name: keyName, paramType: outputType}
+	var ownerType reflect.Type
+	if stateType != nil {
+		ownerType = stateType.Type()
+	}
+	aKey := predicateKey{name: keyName, paramType: outputType, stateType: ownerType}
 	var provider, err = c.getEvaluatorProvider(resource, predicateConfig, outputType, registry, aKey, stateType)
 	if err != nil {
 		return nil, err
