@@ -168,8 +168,8 @@ func (s *Statelet) IgnoreRead() {
 	s.Ignore = true
 }
 
-// CloneForSummary creates a lock-safe copy of Statelet state for summary/meta work.
-// It intentionally does not copy mutex or lock-owner bookkeeping.
+// CloneForSummary returns a copy of the Statelet for summary/meta work.
+// Filters is read under filtersMu to avoid racing with AppendFilters.
 func (s *Statelet) CloneForSummary() *Statelet {
 	if s == nil {
 		return NewStatelet()
