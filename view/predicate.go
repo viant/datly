@@ -51,6 +51,9 @@ type (
 )
 
 func (e *PredicateEvaluator) Compute(ctx context.Context, value interface{}) (*codec.Criteria, error) {
+	if e.name == extension.PredicateNop {
+		return &codec.Criteria{Expression: ""}, nil
+	}
 	cuxtomCtx, ok := ctx.Value(expand.PredicateCtx).(*expand.Context)
 	if !ok {
 		panic("not found custom ctx")
