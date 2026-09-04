@@ -373,6 +373,11 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 		locatorOptions := aComponent.LocatorOptions(nil, nil, nil)
 		options := aSession.ViewOptions(aComponent.View, session.WithLocatorOptions(locatorOptions...))
 		options = options.Indirect(true)
+		if populateView {
+			if err := aSession.Populate(ctx); err != nil {
+				return ctx, err
+			}
+		}
 		if input != nil {
 			if initer, ok := input.(state.Initializer); ok {
 				if err := initer.Init(ctx); err != nil {
@@ -399,11 +404,6 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 				ctx = vcontext.WithValue(ctx, xhandler.InputKey, anInput)
 			}
 			ctx = vcontext.WithValue(ctx, reflect.TypeOf(anInput), anInput)
-		}
-		if populateView {
-			if err := aSession.Populate(ctx); err != nil {
-				return ctx, err
-			}
 		}
 	}
 	return ctx, nil
