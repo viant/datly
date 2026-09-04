@@ -348,6 +348,13 @@ func (s *Service) EnsureInput(ctx context.Context, aComponent *repository.Compon
 	if inputType := aComponent.Input.Type; inputType.Type() != nil {
 		var inputState *structology.State
 		input := ctx.Value(xhandler.InputKey)
+		if input != nil {
+			inputValue := reflect.ValueOf(input)
+			if inputValue.Kind() == reflect.Ptr && inputValue.IsNil() {
+				input = nil
+			}
+		}
+
 		hasInputKey := input != nil
 		if input != nil {
 			if reflect.TypeOf(input).AssignableTo(inputType.Type().Type()) {
