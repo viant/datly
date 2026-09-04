@@ -19,16 +19,29 @@ type Columns []*Column
 
 func (c Columns) Index(formatCase text.CaseFormat) NamedColumns {
 	result := NamedColumns{}
-	for i, _ := range c {
+	// Register authoritative column/field names first. Source aliases are useful
+	// fallbacks, but they must not overwrite an explicit column when multiple
+	// projected fields originate from the same database column (for example,
+	// campaign.name and advertiser_name both sourced from NAME).
+	for i := range c {
+		result.Register(formatCase, c[i])
+	}
+	for i := range c {
 		if aTag := c[i].Tag; aTag != "" {
 			if src := reflect.StructTag(aTag).Get("source"); src != "" {
-				result[strings.ToLower(src)] = c[i]
+				sourceKey := strings.ToLower(src)
+				if _, exists := result[sourceKey]; !exists {
+					result[sourceKey] = c[i]
+				}
 				if index := strings.LastIndex(src, "."); index != -1 && index+1 < len(src) {
-					result.RegisterWithName(src[index+1:], c[i])
+					for _, key := range shared.KeysOf(src[index+1:], true) {
+						if _, exists := result[key]; !exists {
+							result[key] = c[i]
+						}
+					}
 				}
 			}
 		}
-		result.Register(formatCase, c[i])
 	}
 	return result
 }
