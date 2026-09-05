@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
 	"sync"
@@ -34,6 +35,9 @@ func (p *Provider) Component(ctx context.Context, opts ...Option) (*Component, e
 	aComponent, err := p.newComponent(ctx, opts...)
 	if err != nil {
 		return nil, err
+	}
+	if aComponent == nil {
+		return nil, fmt.Errorf("component factory returned nil for %s:%s", p.path.Method, p.path.URI)
 	}
 	aComponent.Version.SCN = p.control.SCN
 	p.component = aComponent
