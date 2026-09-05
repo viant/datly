@@ -98,7 +98,7 @@ func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, o
 		pathCopy.Internal = routePath.Internal
 		pathCopy.Meta = routePath.Meta
 		pathCopy.ModelContextProtocol = routePath.ModelContextProtocol
-		pathCopy.MCPTool = config.MCPToolEnabled()
+		pathCopy.MCPTool = reportMCPToolEnabled(config.MCPTool, routePath.MCPTool)
 		pathCopy.MCPResource = false
 		pathCopy.MCPTemplateResource = false
 		pathCopy.Report = routePath.Report
@@ -141,7 +141,7 @@ func buildReportPath(routePath *path.Path) *path.Path {
 		Method: http.MethodPost,
 		URI:    strings.TrimSuffix(routePath.URI, "/") + "/cube",
 	}
-	pathCopy.MCPTool = reportPathMCPToolEnabled(routePath.Report)
+	pathCopy.MCPTool = reportPathMCPToolEnabled(routePath.Report, routePath.MCPTool)
 	pathCopy.MCPResource = false
 	pathCopy.MCPTemplateResource = false
 	if pathCopy.Name != "" {
@@ -153,11 +153,18 @@ func buildReportPath(routePath *path.Path) *path.Path {
 	return &pathCopy
 }
 
-func reportPathMCPToolEnabled(report *path.Report) bool {
-	if report == nil || report.MCPTool == nil {
+func reportPathMCPToolEnabled(report *path.Report, parentEnabled bool) bool {
+	if report == nil {
 		return false
 	}
-	return *report.MCPTool
+	return reportMCPToolEnabled(report.MCPTool, parentEnabled)
+}
+
+func reportMCPToolEnabled(explicit *bool, parentEnabled bool) bool {
+	if explicit == nil {
+		return parentEnabled
+	}
+	return *explicit
 }
 
 func buildReportMetadata(component *Component, report *Report) (*ReportMetadata, error) {

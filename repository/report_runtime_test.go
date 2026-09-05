@@ -204,6 +204,16 @@ func TestBuildReportComponent_DefaultsMCPToolOffOnSiblingRoute(t *testing.T) {
 	assert.False(t, reportPath.MCPTemplateResource)
 }
 
+func TestReportPathMCPToolEnabledInheritsEnabledParentWhenUnset(t *testing.T) {
+	assert.True(t, reportPathMCPToolEnabled(&path.Report{Enabled: true}, true))
+	assert.False(t, reportPathMCPToolEnabled(&path.Report{Enabled: true}, false))
+
+	disabled := false
+	assert.False(t, reportPathMCPToolEnabled(&path.Report{Enabled: true, MCPTool: &disabled}, true))
+	enabled := true
+	assert.True(t, reportPathMCPToolEnabled(&path.Report{Enabled: true, MCPTool: &enabled}, false))
+}
+
 func TestBuildReportComponent_DisablesMCPToolWhenReportFlagIsFalse(t *testing.T) {
 	resource := view.EmptyResource()
 	rootView := view.NewView("vendor", "VENDOR")
