@@ -71,12 +71,19 @@ func (r *cubeHandler) Exec(ctx context.Context, session xhandler.Session) (inter
 	if outputType == nil || !outputType.IsDefined() {
 		return nil, fmt.Errorf("report destination output type was empty")
 	}
-	outputState := outputType.NewState()
-	output := outputState.State()
-	if err := componentSession.Stater().Bind(ctx, output); err != nil {
+	resultType := outputType.Type()
+	destType := resultType
+	if destType.Kind() == reflect.Ptr {
+		destType = destType.Elem()
+	}
+	destination := reflect.New(destType).Interface()
+	if err := componentSession.Stater().Bind(ctx, destination); err != nil {
 		return nil, err
 	}
-	return output, nil
+	if resultType.Kind() == reflect.Ptr {
+		return destination, nil
+	}
+	return reflect.ValueOf(destination).Elem().Interface(), nil
 }
 
 // buildInvocation translates the cube's dedicated input contract into an
