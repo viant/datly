@@ -13,7 +13,7 @@ type Meta struct {
 }
 
 type ModelContextProtocol struct {
-	MCPTool             bool `json:",omitempty" yaml:"MCPTool"`
+	MCPTool             bool `json:"MCPTool" yaml:"MCPTool"`
 	MCPResource         bool `json:",omitempty" yaml:"MCPResource"`
 	MCPTemplateResource bool `json:",omitempty" yaml:"MCPTemplateResource"`
 }
