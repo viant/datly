@@ -55,8 +55,13 @@ func (r *cubeHandler) Exec(ctx context.Context, session xhandler.Session) (inter
 		return nil, err
 	}
 	redirect := &xdhttp.Route{URL: r.Path.URI, Method: r.Path.Method}
+	formValues := make(url.Values, len(query))
+	for key, values := range query {
+		formValues[key] = append([]string(nil), values...)
+	}
 	componentSession, err := session.Session(ctx, redirect,
 		hstate.WithQuery(query),
+		hstate.WithForm(&hstate.Form{Values: formValues}),
 		hstate.WithQuerySelector(selector),
 	)
 	if err != nil {

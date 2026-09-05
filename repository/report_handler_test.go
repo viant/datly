@@ -314,6 +314,8 @@ func TestReportHandler_Exec_DelegatesWithQuerySelector(t *testing.T) {
 	assert.Equal(t, 25, selectors[0].Limit)
 	query := session.childOptions.Query()
 	assert.Equal(t, "101", query.Get("accountID"))
+	require.NotNil(t, session.childOptions.Form())
+	assert.Equal(t, "101", session.childOptions.Form().Get("accountID"))
 	assert.Empty(t, query.Get("_fields"))
 	assert.Empty(t, query.Get("_orderby"))
 	assert.Empty(t, query.Get("_limit"))
