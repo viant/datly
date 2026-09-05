@@ -80,8 +80,29 @@ func (l *reportTestLogger) Warns(ctx context.Context, msg string, attrs ...slog.
 func (l *reportTestLogger) Errors(ctx context.Context, msg string, attrs ...slog.Attr) {}
 
 type reportTestSession struct {
-	http   *reportTestHTTP
-	logger xdlogger.Logger
+	http         *reportTestHTTP
+	logger       xdlogger.Logger
+	childRoute   *xdhttp.Route
+	childOptions *xdstate.Options
+	childStater  *xdstate.Service
+}
+
+type reportTestInjector struct {
+	bound interface{}
+}
+
+func (i *reportTestInjector) Into(ctx context.Context, value interface{}, opts ...xdstate.Option) error {
+	return i.Bind(ctx, value, opts...)
+}
+func (i *reportTestInjector) Bind(ctx context.Context, value interface{}, opts ...xdstate.Option) error {
+	i.bound = value
+	return nil
+}
+func (i *reportTestInjector) Value(ctx context.Context, key string) (interface{}, bool, error) {
+	return nil, false, nil
+}
+func (i *reportTestInjector) ValuesOf(ctx context.Context, value interface{}) (map[string]interface{}, error) {
+	return nil, nil
 }
 
 type reportHandlerDimensions struct {
@@ -113,6 +134,10 @@ type reportHandlerBody struct {
 	Offset     *int
 }
 
+type reportHandlerOutput struct {
+	Data []map[string]interface{}
+}
+
 type reportHandlerAdvancedFilters struct {
 	Created  *time.Time `format:"dateFormat=YYYY-MM-DD"`
 	Enabled  *bool
@@ -141,9 +166,11 @@ func (s *reportTestSession) Validator() *validator.Service                 { ret
 func (s *reportTestSession) Differ() *differ.Service                       { return nil }
 func (s *reportTestSession) MessageBus() *mbus.Service                     { return nil }
 func (s *reportTestSession) Db(opts ...sqlx.Option) (*sqlx.Service, error) { return nil, nil }
-func (s *reportTestSession) Stater() *xdstate.Service                      { return nil }
+func (s *reportTestSession) Stater() *xdstate.Service                      { return s.childStater }
 func (s *reportTestSession) FlushTemplate(ctx context.Context) error       { return nil }
 func (s *reportTestSession) Session(ctx context.Context, route *xdhttp.Route, opts ...xdstate.Option) (xhandler.Session, error) {
+	s.childRoute = route
+	s.childOptions = xdstate.NewOptions(opts...)
 	return s, nil
 }
 func (s *reportTestSession) Http() xdhttp.Http       { return s.http }
@@ -151,6 +178,10 @@ func (s *reportTestSession) Auth() xdauth.Auth       { return nil }
 func (s *reportTestSession) Logger() xdlogger.Logger { return s.logger }
 
 func testReportHandler() *cubeHandler {
+	outputType, err := state.NewType(state.WithSchema(state.NewSchema(reflect.TypeOf(reportHandlerOutput{}))))
+	if err != nil {
+		panic(err)
+	}
 	return &cubeHandler{
 		Dispatcher: &captureDispatcher{},
 		Path:       &contract.Path{Method: http.MethodGet, URI: "/v1/api/vendors"},
@@ -167,7 +198,9 @@ func testReportHandler() *cubeHandler {
 			Filters:       []*ReportFilter{{Name: "accountID", FieldName: "AccountID"}},
 		},
 		Original: &Component{
+			Contract: contract.Contract{Output: contract.Output{Type: *outputType}},
 			View: &view.View{
+				Name: "vendor",
 				Selector: &view.Config{
 					FieldsParameter:  &state.Parameter{In: state.NewQueryLocation("_fields")},
 					OrderByParameter: &state.Parameter{In: state.NewQueryLocation("_orderby")},
@@ -250,32 +283,40 @@ func TestReportHandler_BuildQuery_AutoIncludesRelationHolderForSelectedDimension
 	assert.Equal(t, "AgegroupId,Avails,AgeGroup", query.Get("_fields"))
 }
 
-func TestReportHandler_Exec_PreservesAuthorizationHeader(t *testing.T) {
+func TestReportHandler_Exec_DelegatesWithQuerySelector(t *testing.T) {
 	handler := testReportHandler()
 	handler.Metadata.Filters[0].Parameter = &state.Parameter{In: state.NewQueryLocation("accountID")}
 
 	req := httptest.NewRequest(http.MethodPost, "http://localhost/v1/api/vendors/cube", nil)
 	req.Header.Set("Authorization", "Bearer test-token")
 	httpSession := &reportTestHTTP{request: req}
+	injector := &reportTestInjector{}
 	session := &reportTestSession{
-		http:   httpSession,
-		logger: &reportTestLogger{},
+		http:        httpSession,
+		logger:      &reportTestLogger{},
+		childStater: xdstate.New(injector),
 	}
 
 	ctx := context.WithValue(context.Background(), xhandler.InputKey, testReportInput())
-	_, err := handler.Exec(ctx, session)
+	result, err := handler.Exec(ctx, session)
 	require.NoError(t, err)
-	require.NotNil(t, httpSession.redirectRoute)
-	require.NotNil(t, httpSession.redirectRequest)
-	assert.Equal(t, "Bearer test-token", httpSession.redirectRequest.Header.Get("Authorization"))
-	assert.Equal(t, "/v1/api/vendors", httpSession.redirectRequest.URL.Path)
-	assert.Equal(t, http.MethodGet, httpSession.redirectRoute.Method)
-	assert.Equal(t, "/v1/api/vendors", httpSession.redirectRoute.URL)
-	query := httpSession.redirectRequest.URL.Query()
-	assert.Equal(t, "AccountID,TotalSpend", query.Get("_fields"))
-	assert.Equal(t, "AccountID", query.Get("_orderby"))
-	assert.Equal(t, "25", query.Get("_limit"))
+	require.NotNil(t, result)
+	require.NotNil(t, injector.bound)
+	require.NotNil(t, session.childRoute)
+	assert.Equal(t, http.MethodGet, session.childRoute.Method)
+	assert.Equal(t, "/v1/api/vendors", session.childRoute.URL)
+	require.NotNil(t, session.childOptions)
+	selectors := session.childOptions.QuerySelectors()
+	require.Len(t, selectors, 1)
+	assert.Equal(t, "vendor", selectors[0].Name)
+	assert.Equal(t, []string{"AccountID", "TotalSpend"}, selectors[0].Fields)
+	assert.Equal(t, "AccountID", selectors[0].OrderBy)
+	assert.Equal(t, 25, selectors[0].Limit)
+	query := session.childOptions.Query()
 	assert.Equal(t, "101", query.Get("accountID"))
+	assert.Empty(t, query.Get("_fields"))
+	assert.Empty(t, query.Get("_orderby"))
+	assert.Empty(t, query.Get("_limit"))
 }
 
 func TestReportHandler_ReportInput_AcceptsUnwrappedBody(t *testing.T) {

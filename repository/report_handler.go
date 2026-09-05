@@ -21,6 +21,7 @@ import (
 	"github.com/viant/datly/view/state"
 	xhandler "github.com/viant/xdatly/handler"
 	xdhttp "github.com/viant/xdatly/handler/http"
+	hstate "github.com/viant/xdatly/handler/state"
 )
 
 var (
@@ -49,20 +50,71 @@ func (r *cubeHandler) Exec(ctx context.Context, session xhandler.Session) (inter
 	if err != nil {
 		return nil, err
 	}
-	query, err := r.buildQuery(input, request)
+	query, selector, err := r.buildInvocation(input, request)
 	if err != nil {
 		return nil, err
 	}
-	internalReq := request.Clone(ctx)
-	internalReq.Method = r.Path.Method
-	internalReq.URL = cloneURL(request.URL)
-	internalReq.Form = query
-	internalReq.URL.Path = strings.TrimSuffix(request.URL.Path, "/cube")
-	internalReq.URL.RawPath = internalReq.URL.Path
-	internalReq.URL.RawQuery = query.Encode()
-	internalReq.RequestURI = internalReq.URL.RequestURI()
 	redirect := &xdhttp.Route{URL: r.Path.URI, Method: r.Path.Method}
-	return nil, session.Http().Redirect(ctx, redirect, internalReq)
+	componentSession, err := session.Session(ctx, redirect,
+		hstate.WithQuery(query),
+		hstate.WithQuerySelector(selector),
+	)
+	if err != nil {
+		return nil, err
+	}
+	outputType := r.Original.Output.Type.Type()
+	if outputType == nil || !outputType.IsDefined() {
+		return nil, fmt.Errorf("report destination output type was empty")
+	}
+	outputState := outputType.NewState()
+	output := outputState.State()
+	if err := componentSession.Stater().Bind(ctx, output); err != nil {
+		return nil, err
+	}
+	return output, nil
+}
+
+// buildInvocation translates the cube's dedicated input contract into an
+// in-process query selector for the destination component. Only predicate
+// inputs remain in query; fields/order/paging travel as typed selector state so
+// the destination component owns projection, caching, authorization and SQL.
+func (r *cubeHandler) buildInvocation(input interface{}, request *http.Request) (url.Values, *hstate.NamedQuerySelector, error) {
+	query, err := r.buildQuery(input, request)
+	if err != nil {
+		return nil, nil, err
+	}
+	selector := &hstate.NamedQuerySelector{Name: r.Original.View.Name}
+	selector.Fields = takeQueryList(query, r.selectorName(r.Original.View.Selector.FieldsParameter, "_fields"))
+	selector.OrderBy = strings.Join(takeQueryList(query, r.selectorName(r.Original.View.Selector.OrderByParameter, "_orderby")), ",")
+	selector.Limit = takeQueryInt(query, r.selectorName(r.Original.View.Selector.LimitParameter, "_limit"))
+	selector.Offset = takeQueryInt(query, r.selectorName(r.Original.View.Selector.OffsetParameter, "_offset"))
+	return query, selector, nil
+}
+
+func takeQueryList(query url.Values, key string) []string {
+	value := query.Get(key)
+	query.Del(key)
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	items := strings.Split(value, ",")
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if item = strings.TrimSpace(item); item != "" {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func takeQueryInt(query url.Values, key string) int {
+	value := strings.TrimSpace(query.Get(key))
+	query.Del(key)
+	if value == "" {
+		return 0
+	}
+	result, _ := strconv.Atoi(value)
+	return result
 }
 
 func (r *cubeHandler) reportInput(ctx context.Context, request *http.Request) (interface{}, error) {
