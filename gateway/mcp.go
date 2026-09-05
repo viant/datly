@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -17,7 +21,9 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/proxy"
 	"github.com/viant/datly/repository"
+	"github.com/viant/datly/repository/content"
 	dpath "github.com/viant/datly/repository/path"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
@@ -217,8 +223,27 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 
 		// 1) Collect parameters (component + selector pagination)
 		allParams := r.collectToolParameters(component)
+		rawBlobBody, rpcErr := buildMCPRawBlobBody(component, params.Arguments)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		multipartBody, rpcErr := buildMCPMultipartBody(allParams, params.Arguments)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		if rawBlobBody != nil {
+			body = rawBlobBody
+		} else if multipartBody != nil {
+			body = multipartBody
+		}
 		// 2) Apply parameters to request URL/query/body
 		for _, p := range allParams {
+			if rawBlobBody != nil && p.In.Kind == state.KindRequestBody {
+				continue
+			}
+			if multipartBody != nil && (p.In.Kind == state.KindForm || p.In.Kind == state.KindRequestBody) {
+				continue
+			}
 			value := toolArgumentValue(p, params.Arguments)
 			pType := p.Schema.Type()
 			if pType.Kind() == reflect.Ptr {
@@ -289,7 +314,19 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 		return result, nil
 	}
 	holder := reflect.New(inputType)
-	encoded, err := json.Marshal(arguments)
+	initializableArguments := make(map[string]interface{}, len(arguments))
+	for key, value := range arguments {
+		initializableArguments[key] = value
+	}
+	for _, parameter := range component.Input.Type.Parameters {
+		if !isMCPMultipartFileParameter(parameter) {
+			continue
+		}
+		for _, candidate := range toolArgumentCandidates(parameter) {
+			delete(initializableArguments, candidate)
+		}
+	}
+	encoded, err := json.Marshal(initializableArguments)
 	if err != nil {
 		return nil, err
 	}
@@ -310,6 +347,12 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 	}
 	for _, parameter := range component.Input.Type.Parameters {
 		if parameter == nil {
+			continue
+		}
+		if isMCPMultipartFileParameter(parameter) {
+			// The MCP wire value is an encoded blob descriptor, not a
+			// multipart.FileHeader. Preserve the original argument for the
+			// request encoder instead of decoding it into the component type.
 			continue
 		}
 		field := value.FieldByName(parameter.Name)
@@ -566,6 +609,233 @@ func selectorPublicParamName(p *state.Parameter) (string, bool) {
 	return "", false
 }
 
+type mcpBlob struct {
+	Data     string `json:"data" description:"Base64-encoded blob data"`
+	Filename string `json:"filename,omitempty" description:"Multipart filename" optional:"true"`
+	MIMEType string `json:"mimeType,omitempty" description:"Blob media type" optional:"true"`
+}
+
+type mcpEncodedBody struct {
+	io.Reader
+	contentType string
+}
+
+var multipartFileHeaderType = reflect.TypeOf(multipart.FileHeader{})
+var xlsUnmarshallerType = reflect.TypeOf((*shared.XLSUnmarshaller)(nil)).Elem()
+
+func componentSupportsMCPRawBlob(component *repository.Component) bool {
+	if component == nil {
+		return false
+	}
+	for _, parameter := range component.Input.Type.Parameters {
+		if parameter == nil || parameter.In == nil || parameter.In.Kind != state.KindRequestBody || parameter.Schema == nil {
+			continue
+		}
+		rType := parameter.Schema.Type()
+		if rType == nil {
+			continue
+		}
+		if rType.Implements(xlsUnmarshallerType) || (rType.Kind() != reflect.Ptr && reflect.PointerTo(rType).Implements(xlsUnmarshallerType)) {
+			return true
+		}
+	}
+	return false
+}
+
+func buildMCPRawBlobBody(component *repository.Component, arguments map[string]interface{}) (*mcpEncodedBody, *jsonrpc.Error) {
+	if !componentSupportsMCPRawBlob(component) {
+		return nil, nil
+	}
+	value, ok := arguments["Blob"]
+	if !ok {
+		value, ok = arguments["blob"]
+	}
+	if !ok || value == nil {
+		return nil, nil
+	}
+	blobs, err := decodeMCPBlobs(value)
+	if err != nil || len(blobs) != 1 {
+		return nil, jsonrpc.NewInvalidParamsError("Blob must be one base64-encoded blob descriptor", nil)
+	}
+	data, err := decodeMCPBlobData(blobs[0].Data)
+	if err != nil {
+		return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
+	}
+	mediaType := strings.TrimSpace(blobs[0].MIMEType)
+	if mediaType == "" {
+		mediaType = content.XLSContentType
+	}
+	return &mcpEncodedBody{Reader: bytes.NewReader(data), contentType: mediaType}, nil
+}
+
+func isMCPMultipartFileParameter(parameter *state.Parameter) bool {
+	if parameter == nil || parameter.In == nil || parameter.In.Kind != state.KindForm || parameter.Schema == nil {
+		return false
+	}
+	rType := parameter.Schema.Type()
+	for rType != nil && rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	if rType == multipartFileHeaderType {
+		return true
+	}
+	return rType != nil && rType.Kind() == reflect.Slice && rType.Elem() == reflect.PointerTo(multipartFileHeaderType)
+}
+
+func mcpToolParameterType(parameter *state.Parameter) reflect.Type {
+	if !isMCPMultipartFileParameter(parameter) {
+		return parameter.Schema.Type()
+	}
+	rType := parameter.Schema.Type()
+	if rType.Kind() == reflect.Slice {
+		return reflect.SliceOf(reflect.TypeOf(mcpBlob{}))
+	}
+	return reflect.TypeOf(mcpBlob{})
+}
+
+func buildMCPMultipartBody(parameters []*state.Parameter, arguments map[string]interface{}) (*mcpEncodedBody, *jsonrpc.Error) {
+	hasBlob := false
+	for _, parameter := range parameters {
+		if isMCPMultipartFileParameter(parameter) && toolArgumentValue(parameter, arguments) != nil {
+			hasBlob = true
+			break
+		}
+	}
+	if !hasBlob {
+		return nil, nil
+	}
+
+	buffer := &bytes.Buffer{}
+	writer := multipart.NewWriter(buffer)
+	for _, parameter := range parameters {
+		if parameter == nil || parameter.In == nil {
+			continue
+		}
+		value := toolArgumentValue(parameter, arguments)
+		if value == nil {
+			continue
+		}
+		switch parameter.In.Kind {
+		case state.KindForm:
+			if isMCPMultipartFileParameter(parameter) {
+				if err := writeMCPBlobParts(writer, parameter.In.Name, value); err != nil {
+					_ = writer.Close()
+					return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
+				}
+				continue
+			}
+			if err := writeMCPFormValues(writer, requestParamName(parameter), value); err != nil {
+				_ = writer.Close()
+				return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
+			}
+		case state.KindRequestBody:
+			name := strings.TrimSpace(parameter.In.Name)
+			if name == "" {
+				name = "json"
+			}
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				_ = writer.Close()
+				return nil, jsonrpc.NewInvalidParamsError("failed to marshal multipart JSON body", nil)
+			}
+			if err = writer.WriteField(name, string(encoded)); err != nil {
+				_ = writer.Close()
+				return nil, jsonrpc.NewInvalidParamsError("failed to write multipart JSON body", nil)
+			}
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, jsonrpc.NewInvalidParamsError("failed to finalize multipart body", nil)
+	}
+	return &mcpEncodedBody{Reader: bytes.NewReader(buffer.Bytes()), contentType: writer.FormDataContentType()}, nil
+}
+
+func writeMCPFormValues(writer *multipart.Writer, name string, value interface{}) error {
+	rValue := reflect.ValueOf(value)
+	for rValue.IsValid() && (rValue.Kind() == reflect.Interface || rValue.Kind() == reflect.Ptr) {
+		if rValue.IsNil() {
+			return nil
+		}
+		rValue = rValue.Elem()
+	}
+	if rValue.IsValid() && (rValue.Kind() == reflect.Slice || rValue.Kind() == reflect.Array) {
+		for i := 0; i < rValue.Len(); i++ {
+			if err := writer.WriteField(name, fmt.Sprint(rValue.Index(i).Interface())); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return writer.WriteField(name, fmt.Sprint(value))
+}
+
+func writeMCPBlobParts(writer *multipart.Writer, fieldName string, value interface{}) error {
+	blobs, err := decodeMCPBlobs(value)
+	if err != nil {
+		return err
+	}
+	for index, blob := range blobs {
+		data, err := decodeMCPBlobData(blob.Data)
+		if err != nil {
+			return fmt.Errorf("invalid %s blob %d: %w", fieldName, index, err)
+		}
+		filename := strings.TrimSpace(blob.Filename)
+		if filename == "" {
+			filename = "blob"
+		}
+		mediaType := strings.TrimSpace(blob.MIMEType)
+		if mediaType == "" {
+			mediaType = "application/octet-stream"
+		}
+		header := textproto.MIMEHeader{}
+		header.Set("Content-Disposition", mime.FormatMediaType("form-data", map[string]string{"name": fieldName, "filename": filename}))
+		header.Set("Content-Type", mediaType)
+		part, err := writer.CreatePart(header)
+		if err != nil {
+			return err
+		}
+		if _, err = part.Write(data); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func decodeMCPBlobs(value interface{}) ([]mcpBlob, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	if len(encoded) > 0 && encoded[0] == '[' {
+		var result []mcpBlob
+		if err = json.Unmarshal(encoded, &result); err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+	if text, ok := value.(string); ok {
+		return []mcpBlob{{Data: text}}, nil
+	}
+	var result mcpBlob
+	if err = json.Unmarshal(encoded, &result); err != nil {
+		return nil, err
+	}
+	return []mcpBlob{result}, nil
+}
+
+func decodeMCPBlobData(value string) ([]byte, error) {
+	data := strings.TrimSpace(value)
+	if comma := strings.IndexByte(data, ','); strings.HasPrefix(data, "data:") && comma >= 0 {
+		data = data[comma+1:]
+	}
+	for _, encoding := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.RawURLEncoding} {
+		if decoded, err := encoding.DecodeString(data); err == nil {
+			return decoded, nil
+		}
+	}
+	return nil, fmt.Errorf("data must be base64 encoded")
+}
+
 // newToolHTTPRequest constructs an HTTP request for routed tool invocation.
 func (r *Router) newToolHTTPRequest(ctx context.Context, method, URL string, body io.Reader) (*http.Request, *jsonrpc.Error) {
 	httpRequest, err := http.NewRequestWithContext(ctx, method, URL, body)
@@ -573,7 +843,11 @@ func (r *Router) newToolHTTPRequest(ctx context.Context, method, URL string, bod
 		return nil, jsonrpc.NewInvalidRequest(err.Error(), nil)
 	}
 	if body != nil {
-		httpRequest.Header.Set("Content-Type", "application/json")
+		contentType := "application/json"
+		if encoded, ok := body.(*mcpEncodedBody); ok && encoded.contentType != "" {
+			contentType = encoded.contentType
+		}
+		httpRequest.Header.Set("Content-Type", contentType)
 	}
 	return httpRequest, nil
 }
@@ -683,6 +957,14 @@ func (r *Router) buildToolInputTypeForPath(components *repository.Component, too
 	var uniqueFieldName = make(map[string]bool)
 	var uniqueQuery = make(map[string]bool)
 	var uniquePath = make(map[string]bool)
+	hasMultipartFiles := false
+	hasRawBlobBody := componentSupportsMCPRawBlob(components)
+	for _, parameter := range components.Input.Type.Parameters {
+		if isMCPMultipartFileParameter(parameter) {
+			hasMultipartFiles = true
+			break
+		}
+	}
 	appendField := func(name string, fieldType reflect.Type, tag reflect.StructTag) {
 		if name == "" || fieldType == nil {
 			return
@@ -718,15 +1000,18 @@ func (r *Router) buildToolInputTypeForPath(components *repository.Component, too
 			}
 			uniqueQuery[parameter.In.Name] = true
 			tag := buildMCPFieldTag(parameter, true)
-			appendField(name, parameter.Schema.Type(), tag)
+			appendField(name, mcpToolParameterType(parameter), tag)
 		case state.KindRequestBody:
 			if parameter.IsAnonymous() {
-				appendAnonymousBodyFields(&inputFields, uniqueFieldName, parameter.Schema.Type())
+				appendAnonymousBodyFields(&inputFields, uniqueFieldName, parameter.Schema.Type(), hasMultipartFiles || hasRawBlobBody)
 				continue
 			}
-			tag := buildMCPFieldTag(parameter, false)
+			tag := buildMCPFieldTag(parameter, hasMultipartFiles || hasRawBlobBody)
 			appendField(name, parameter.Schema.Type(), tag)
 		}
+	}
+	if hasRawBlobBody {
+		appendField("Blob", reflect.TypeOf(mcpBlob{}), reflect.StructTag(`json:",omitempty" optional:"true" description:"Base64-encoded binary request body; use instead of JSON when supported"`))
 	}
 
 	// Include selector (limit/offset/fields/page) for read components when available
@@ -906,7 +1191,7 @@ func splitIdentifierParts(value string) []string {
 	return result
 }
 
-func appendAnonymousBodyFields(fields *[]reflect.StructField, unique map[string]bool, bodyType reflect.Type) {
+func appendAnonymousBodyFields(fields *[]reflect.StructField, unique map[string]bool, bodyType reflect.Type, optional bool) {
 	bodyType = indirectType(bodyType)
 	if bodyType == nil || bodyType.Kind() != reflect.Struct {
 		return
@@ -918,6 +1203,9 @@ func appendAnonymousBodyFields(fields *[]reflect.StructField, unique map[string]
 		}
 		if unique[field.Name] {
 			continue
+		}
+		if optional && !strings.Contains(string(field.Tag), `optional:"true"`) {
+			field.Tag = reflect.StructTag(strings.TrimSpace(string(field.Tag) + ` optional:"true"`))
 		}
 		unique[field.Name] = true
 		*fields = append(*fields, field)
