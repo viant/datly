@@ -225,6 +225,7 @@ func newComponentFixture(t *testing.T, reportCfg *Config) *Component {
 	resource.AddViews(rootView)
 
 	inputType, err := state.NewType(state.WithParameters(state.Parameters{
+		&state.Parameter{Name: "Auth", In: state.NewComponent("GET:/v1/api/auth"), Schema: state.NewSchema(reflect.TypeOf(struct{}{})), Predicates: []*extension.PredicateConfig{{Name: "Authorization"}}},
 		&state.Parameter{Name: "vendorIDs", In: state.NewQueryLocation("vendorIDs"), Schema: state.NewSchema(reflect.TypeOf([]int{})), Description: "Vendor IDs to include"},
 		&state.Parameter{Name: "accountID", In: state.NewQueryLocation("accountID"), Schema: state.NewSchema(reflect.TypeOf(0)), Predicates: []*extension.PredicateConfig{{Name: "ByAccount"}}, Description: "Account identifier filter"},
 		&state.Parameter{Name: "fields", In: state.NewQueryLocation("_fields"), Schema: state.NewSchema(reflect.TypeOf([]string{}))},
