@@ -600,12 +600,9 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 	}
 	stateOptions := hstate.NewOptions(opts...)
 	unmarshal := aComponent.UnmarshalFunc(request)
-	locatorOptions := aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal)
+	locatorOptions := aComponent.LocatorOptions(request, redirectForm(stateOptions), unmarshal)
 	if stateOptions.Query() != nil {
 		locatorOptions = append(locatorOptions, locator.WithQuery(stateOptions.Query()))
-	}
-	if stateOptions.Form() != nil {
-		locatorOptions = append(locatorOptions, locator.WithForm(stateOptions.Form()))
 	}
 	if stateOptions.Headers() != nil {
 		locatorOptions = append(locatorOptions, locator.WithHeaders(stateOptions.Headers()))
@@ -641,6 +638,13 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 		anExecutor.tx = tx
 	}
 	return anExecutor.NewHandlerSession(ctx, WithLogger(aSession.Logger()))
+}
+
+func redirectForm(options *hstate.Options) *hstate.Form {
+	if options != nil && options.Form() != nil {
+		return options.Form()
+	}
+	return hstate.NewForm()
 }
 
 func (e *Executor) newHttp() http2.Http {

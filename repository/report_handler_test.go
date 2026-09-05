@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -333,6 +334,25 @@ func TestReportHandler_ReportInput_AcceptsUnwrappedBody(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, body.Dimensions.AccountID)
 	require.True(t, body.Measures.TotalSpend)
+}
+
+func TestReportHandler_ReportInput_AcceptsSynthesizedLowerCamelBody(t *testing.T) {
+	handler := testReportHandler()
+	handler.Metadata.Filters[0].Parameter = &state.Parameter{In: state.NewFormLocation("account_id"), Schema: state.NewSchema(reflect.TypeOf(0))}
+	handler.BodyType = synthesizeReportBodyType(handler.Metadata)
+	req := httptest.NewRequest(http.MethodPost, "http://localhost/v1/api/vendors/report", strings.NewReader(`{
+		"dimensions":{"accountID":true},
+		"measures":{"totalSpend":true},
+		"filters":{"accountID":101},
+		"limit":25
+	}`))
+	input, err := handler.reportInput(context.Background(), req)
+	require.NoError(t, err)
+	query, err := handler.buildQuery(input, req)
+	require.NoError(t, err)
+	assert.Equal(t, "AccountID,TotalSpend", query.Get("_fields"))
+	assert.Equal(t, "101", query.Get("account_id"))
+	assert.Equal(t, "25", query.Get("_limit"))
 }
 
 func TestReportHandler_BuildQuery_FilterSerialization_DataDriven(t *testing.T) {
