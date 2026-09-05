@@ -1,0 +1,12 @@
+#package('github.com/viant/datly/e2e/v1/shape/dev/events/patch_basic_one')
+#setting($_ = $connector('dev'))
+#setting($_ = $route('/v1/api/shape/dev/basic/foos', 'PATCH'))
+#setting($_ = $useTemplate('patch'))
+
+
+#set($_ = $Foos<?>(body/).Cardinality('One').Tag('anonymous:"true"'))
+#set($_ = $Foos<?>(body/).Output().Tag('anonymous:"true"'))
+
+
+SELECT foos.*
+FROM (SELECT * FROM FOOS) foos

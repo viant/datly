@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/toolbox"
+	"reflect"
 )
 
 type Path struct {
@@ -20,7 +21,7 @@ func (v *Path) Names() []string {
 	return result
 }
 
-func (v *Path) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (v *Path) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	if name == "" {
 		return v.path, true, nil
 	}

@@ -12,6 +12,43 @@ import (
 	"testing"
 )
 
+func TestServiceNextUsesSuppliedTransaction(t *testing.T) {
+	db, err := sql.Open("sqlite3", t.TempDir()+"/sequence_tx.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err = db.Exec("CREATE TABLE EMP (ID INTEGER PRIMARY KEY AUTOINCREMENT, NAME TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type Emp struct {
+		ID   int64  `sqlx:"ID,primaryKey=true"`
+		Name string `sqlx:"NAME"`
+	}
+	values := []*Emp{{Name: "reserved"}}
+	if err = New(context.Background(), db, tx).Next("EMP", values, "ID"); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	result, err := db.Exec("INSERT INTO EMP(NAME) VALUES ('actual')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != 1 {
+		t.Fatalf("sequence allocation escaped supplied transaction: next id=%d", id)
+	}
+}
+
 func TestService_Next(t *testing.T) {
 
 	_ = os.Remove("/tmp/datly_sequnece_test.db")
