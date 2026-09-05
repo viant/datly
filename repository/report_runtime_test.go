@@ -124,7 +124,7 @@ func TestBuildReportMetadataAndComponent(t *testing.T) {
 	assert.True(t, reportComponent.Input.Type.Parameters[0].IsAnonymous())
 	assert.Equal(t, "/v1/api/vendors/report", reportPath.URI)
 	assert.Equal(t, "POST", reportPath.Method)
-	assert.True(t, reportPath.MCPTool)
+	assert.False(t, reportPath.MCPTool)
 	assert.Equal(t, "vendors Cube", reportPath.Name)
 	assert.Equal(t, "Vendor listing cube", reportPath.Description)
 	reportInputType, err := buildReportInputType(component, metadata, component.Report)
@@ -150,7 +150,7 @@ func TestBuildReportMetadataAndComponent(t *testing.T) {
 	assert.True(t, strings.Contains(string(filterField.Tag), `desc:"Account identifier filter"`))
 }
 
-func TestBuildReportComponent_EnablesMCPToolOnSiblingRoute(t *testing.T) {
+func TestBuildReportComponent_DefaultsMCPToolOffOnSiblingRoute(t *testing.T) {
 	resource := view.EmptyResource()
 	rootView := view.NewView("vendor", "VENDOR")
 	rootView.Groupable = true
@@ -199,7 +199,7 @@ func TestBuildReportComponent_EnablesMCPToolOnSiblingRoute(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, reportPath)
-	assert.True(t, reportPath.MCPTool)
+	assert.False(t, reportPath.MCPTool)
 	assert.False(t, reportPath.MCPResource)
 	assert.False(t, reportPath.MCPTemplateResource)
 }

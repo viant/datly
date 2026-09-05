@@ -155,7 +155,7 @@ func buildReportPath(routePath *path.Path) *path.Path {
 
 func reportPathMCPToolEnabled(report *path.Report) bool {
 	if report == nil || report.MCPTool == nil {
-		return true
+		return false
 	}
 	return *report.MCPTool
 }
