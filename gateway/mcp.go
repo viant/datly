@@ -700,7 +700,7 @@ func (r *Router) buildToolInputTypeForPath(components *repository.Component, too
 		case state.KindPath:
 			forceRequired := false
 			if toolPath != nil && parameter.URI != "" {
-				if strings.TrimRight(parameter.URI, "/") != strings.TrimRight(toolPath.URI, "/") {
+				if !mcpParameterURIPathMatches(parameter.URI, toolPath.URI) {
 					continue
 				}
 				forceRequired = true
@@ -765,6 +765,24 @@ func (r *Router) buildToolInputTypeForPath(components *repository.Component, too
 	}
 
 	return reflect.StructOf(inputFields)
+}
+
+func mcpParameterURIPathMatches(parameterURI, routeURI string) bool {
+	parameterPath := strings.TrimRight(strings.TrimSpace(parameterURI), "/")
+	routePath := strings.TrimRight(strings.TrimSpace(routeURI), "/")
+	if parameterPath == "" || routePath == "" {
+		return false
+	}
+	if parameterPath == routePath {
+		return true
+	}
+	// WithURI accepts a relative route suffix (for example "/{id}") as well
+	// as a fully-qualified component path. Generated route paths are always
+	// qualified, so retain the path parameter when the qualified route ends in
+	// the declared suffix at a segment boundary.
+	return strings.HasPrefix(parameterPath, "/") &&
+		strings.HasSuffix(routePath, parameterPath) &&
+		len(routePath) > len(parameterPath)
 }
 
 func buildMCPFieldTag(parameter *state.Parameter, defaultOptional bool) reflect.StructTag {

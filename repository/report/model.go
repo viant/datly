@@ -74,7 +74,7 @@ func (c *Config) Normalize() *Config {
 
 func (c *Config) MCPToolEnabled() bool {
 	if c == nil || c.MCPTool == nil {
-		return true
+		return false
 	}
 	return *c.MCPTool
 }

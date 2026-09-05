@@ -71,6 +71,40 @@ func TestRouterBuildToolsIntegrationRegistersWithURIAlternate(t *testing.T) {
 	assert.Contains(t, tools["ThingsById"].properties, "Search")
 }
 
+func TestRouterBuildToolsIntegrationRegistersRelativeWithURIAlternate(t *testing.T) {
+	id := state.NewParameter("Id", state.NewPathLocation("id"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf([]int{}))))
+	id.URI = "/{id}"
+	component := &repository.Component{
+		Path:     contract.Path{Method: http.MethodGet, URI: "/v1/api/things"},
+		View:     &view.View{Name: "thing"},
+		Contract: contract.Contract{Input: contract.Input{Type: state.Type{Parameters: state.Parameters{id}}}},
+	}
+	provider := repository.NewProvider(component.Path, &version.Control{}, func(context.Context, ...repository.Option) (*repository.Component, error) {
+		return component, nil
+	})
+	base := &dpath.Path{Path: component.Path, Meta: contract.Meta{Name: "Things"}, ModelContextProtocol: contract.ModelContextProtocol{MCPTool: true}, View: &dpath.ViewRef{Ref: "thing"}}
+	byID := &dpath.Path{Path: contract.Path{Method: http.MethodGet, URI: "/v1/api/things/{id}"}, Meta: contract.Meta{Name: "Things"}, ModelContextProtocol: contract.ModelContextProtocol{MCPTool: true}, View: &dpath.ViewRef{Ref: "thing"}}
+	item := &dpath.Item{Paths: []*dpath.Path{base, byID}}
+	registry := serverproto.NewRegistry()
+	router := &Router{mcpRegistry: registry}
+	newRoute := func(path *dpath.Path) *Route {
+		return &Route{Path: &path.Path, Handler: func(context.Context, http.ResponseWriter, *http.Request) {}}
+	}
+
+	require.NoError(t, router.buildToolsIntegration(item, base, newRoute(base), provider))
+	require.NoError(t, router.buildToolsIntegration(item, byID, newRoute(byID), provider))
+
+	tools := registry.ListRegisteredTools()
+	require.Len(t, tools, 2)
+	byIDTool := tools[0]
+	if byIDTool.Name != "ThingsById" {
+		byIDTool = tools[1]
+	}
+	require.Equal(t, "ThingsById", byIDTool.Name)
+	assert.Contains(t, byIDTool.InputSchema.Properties, "Id")
+	assert.Contains(t, byIDTool.InputSchema.Required, "Id")
+}
+
 func TestRouterBuildToolsIntegrationCanHideWithURIAlternate(t *testing.T) {
 	id := state.NewParameter("Id", state.NewPathLocation("id"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf([]int{}))))
 	id.URI = "/v1/api/things/{id}"
