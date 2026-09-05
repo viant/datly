@@ -56,6 +56,20 @@ SELECT id FROM SITE_LIST sl`
 	assert.False(t, *byName["Fields"].Cacheable)
 }
 
+func TestAppendDeclaredStatesParsesMCPRouteControls(t *testing.T) {
+	dql := `#set($_ = $Id<[]int>(path/id).WithURI('/things/{id}').WithMcp(false).WithPathMcp(false))
+SELECT 1`
+	result := &plan.Result{}
+	appendDeclaredStates(dql, result)
+	require.Len(t, result.States, 1)
+	parameter := result.States[0]
+	assert.Equal(t, "/things/{id}", parameter.URI)
+	require.NotNil(t, parameter.MCP)
+	assert.False(t, *parameter.MCP)
+	require.NotNil(t, parameter.PathMCP)
+	assert.False(t, *parameter.PathMCP)
+}
+
 func TestAppendDeclaredStates_DuplicateDeclaration_FirstWins(t *testing.T) {
 	dql := `
 #set($_ = $Active<boolean>(query/active).WithPredicate(0,'equal','tas','IS_TARGETABLE').Optional())

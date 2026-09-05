@@ -256,6 +256,24 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 
 		case "WithURI":
 			declaration.URI = strings.Trim(args[0], "'")
+		case "WithMcp", "WithMCP":
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithMcp to have one arg, but got %v", len(args))
+			}
+			value, err := strconv.ParseBool(strings.Trim(args[0], `"'`))
+			if err != nil {
+				return fmt.Errorf("invalid WithMcp value %q: %w", args[0], err)
+			}
+			declaration.MCP = &value
+		case "WithPathMcp", "WithPathMCP":
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithPathMcp to have one arg, but got %v", len(args))
+			}
+			value, err := strconv.ParseBool(strings.Trim(args[0], `"'`))
+			if err != nil {
+				return fmt.Errorf("invalid WithPathMcp value %q: %w", args[0], err)
+			}
+			declaration.PathMCP = &value
 		case "WithTag", "Tag":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithTag to have one args, but got %v", len(args))

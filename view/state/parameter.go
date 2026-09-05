@@ -51,6 +51,8 @@ type (
 		When            string `json:",omitempty" yaml:"When"`
 		With            string `json:",omitempty" yaml:"With"`
 		URI             string `json:",omitempty" yaml:"URI"`
+		MCP             *bool  `json:",omitempty" yaml:"MCP"`
+		PathMCP         *bool  `json:",omitempty" yaml:"PathMCP"`
 		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
 		Async           bool   `json:",omitempty" yaml:"Async"`
 		PreserveSchema  bool   `json:",omitempty" yaml:"PreserveSchema"`

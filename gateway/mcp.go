@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode"
 
 	furl "github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/proxy"
@@ -34,10 +35,15 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 	if err != nil {
 		return fmt.Errorf("failed to get component from provider: %w", err)
 	}
-	toolInputType := r.buildToolInputType(component)
 	meta := aPath.Meta.Build(component.View.Name, component.View.Table, &aPath.Path)
+	baseToolName := strings.ReplaceAll(meta.Name, " ", "")
+	toolName, alternateRoute := mcpToolName(item, aPath, baseToolName)
+	if !mcpRouteEnabled(component, aPath, alternateRoute) {
+		return nil
+	}
+	toolInputType := r.buildToolInputTypeForPath(component, aPath)
 	mcpTool := schema.Tool{
-		Name:        strings.ReplaceAll(meta.Name, " ", ""),
+		Name:        toolName,
 		Description: &meta.Description,
 		InputSchema: schema.ToolInputSchema{},
 	}
@@ -55,6 +61,142 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 	}
 	r.mcpRegistry.RegisterTool(tool)
 	return nil
+}
+
+// mcpRouteEnabled applies MCP-only controls declared on the parameter that
+// owns WithURI. Both the base and derived tools default to enabled.
+func mcpRouteEnabled(component *repository.Component, toolPath *dpath.Path, alternateRoute bool) bool {
+	if component == nil || toolPath == nil {
+		return true
+	}
+	toolURI := strings.TrimRight(toolPath.URI, "/")
+	for _, parameter := range component.Input.Type.Parameters {
+		if parameter == nil {
+			continue
+		}
+		if !alternateRoute && parameter.MCP != nil && !*parameter.MCP {
+			return false
+		}
+		if alternateRoute && parameter.URI != "" && strings.TrimRight(parameter.URI, "/") == toolURI && parameter.PathMCP != nil && !*parameter.PathMCP {
+			return false
+		}
+	}
+	return true
+}
+
+// mcpToolName keeps the first/base HTTP route name and gives
+// each additional route emitted by WithURI a stable MCP name. For example,
+// /advertiser/{id} becomes AdvertisersById while /advertiser remains
+// Advertisers. The HTTP route model itself is unchanged.
+func mcpToolName(item *dpath.Item, current *dpath.Path, baseName string) (string, bool) {
+	base := mcpBasePath(item, current, baseName)
+	if base == nil || base == current {
+		return baseName, false
+	}
+	return baseName + mcpAlternateRouteSuffix(base.URI, current.URI), true
+}
+
+func mcpBasePath(item *dpath.Item, current *dpath.Path, baseName string) *dpath.Path {
+	if item == nil || len(item.Paths) == 0 {
+		return nil
+	}
+	var result *dpath.Path
+	for _, candidate := range item.Paths {
+		if candidate == nil || !candidate.MCPTool || candidate.Method != current.Method {
+			continue
+		}
+		candidateName := strings.ReplaceAll(strings.TrimSpace(candidate.Name), " ", "")
+		if candidateName == "" {
+			candidateName = baseName
+		}
+		if candidateName != baseName {
+			continue
+		}
+		if result == nil || mcpPathRank(candidate.URI) < mcpPathRank(result.URI) {
+			result = candidate
+		}
+	}
+	return result
+}
+
+func mcpPathRank(uri string) int {
+	return len(mcpPathPlaceholders(uri))*10000 + len(strings.TrimRight(uri, "/"))
+}
+
+func mcpAlternateRouteSuffix(baseURI, alternateURI string) string {
+	baseParams := map[string]bool{}
+	for _, name := range mcpPathPlaceholders(baseURI) {
+		baseParams[name] = true
+	}
+	var tokens []string
+	for _, name := range mcpPathPlaceholders(alternateURI) {
+		if !baseParams[name] {
+			tokens = append(tokens, mcpUpperCamelToken(name))
+		}
+	}
+	if len(tokens) == 0 {
+		baseParts := splitMCPURIPath(baseURI)
+		alternateParts := splitMCPURIPath(alternateURI)
+		common := 0
+		for common < len(baseParts) && common < len(alternateParts) && baseParts[common] == alternateParts[common] {
+			common++
+		}
+		for _, part := range alternateParts[common:] {
+			if !strings.HasPrefix(part, "{") {
+				tokens = append(tokens, mcpUpperCamelToken(part))
+			}
+		}
+	}
+	if len(tokens) == 0 {
+		tokens = []string{"Route"}
+	}
+	return "By" + strings.Join(tokens, "And")
+}
+
+func mcpPathPlaceholders(uri string) []string {
+	var result []string
+	for offset := 0; offset < len(uri); {
+		start := strings.IndexByte(uri[offset:], '{')
+		if start == -1 {
+			break
+		}
+		start += offset
+		end := strings.IndexByte(uri[start+1:], '}')
+		if end == -1 {
+			break
+		}
+		end += start + 1
+		if name := strings.TrimSpace(uri[start+1 : end]); name != "" {
+			result = append(result, name)
+		}
+		offset = end + 1
+	}
+	return result
+}
+
+func splitMCPURIPath(uri string) []string {
+	var result []string
+	for _, part := range strings.Split(strings.Trim(uri, "/"), "/") {
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
+}
+
+func mcpUpperCamelToken(value string) string {
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return r == '-' || r == '_' || unicode.IsSpace(r)
+	})
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		runes := []rune(part)
+		runes[0] = unicode.ToUpper(runes[0])
+		parts[i] = string(runes)
+	}
+	return strings.Join(parts, "")
 }
 
 func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Route) serverproto.ToolHandlerFunc {
@@ -533,6 +675,10 @@ func (r *Router) mcpUnauthorizedError() *jsonrpc.Error {
 }
 
 func (r *Router) buildToolInputType(components *repository.Component) reflect.Type {
+	return r.buildToolInputTypeForPath(components, nil)
+}
+
+func (r *Router) buildToolInputTypeForPath(components *repository.Component, toolPath *dpath.Path) reflect.Type {
 	var inputFields []reflect.StructField
 	var uniqueFieldName = make(map[string]bool)
 	var uniqueQuery = make(map[string]bool)
@@ -552,11 +698,18 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 		name := strings.Title(parameter.Name)
 		switch parameter.In.Kind {
 		case state.KindPath:
+			forceRequired := false
+			if toolPath != nil && parameter.URI != "" {
+				if strings.TrimRight(parameter.URI, "/") != strings.TrimRight(toolPath.URI, "/") {
+					continue
+				}
+				forceRequired = true
+			}
 			if uniquePath[parameter.In.Name] {
 				continue
 			}
 			uniquePath[parameter.In.Name] = true
-			tag := buildMCPFieldTag(parameter, false)
+			tag := buildMCPFieldTagWithRequired(parameter, false, forceRequired)
 			appendField(name, parameter.Schema.Type(), tag)
 		case state.KindQuery, state.KindForm:
 
@@ -615,16 +768,23 @@ func (r *Router) buildToolInputType(components *repository.Component) reflect.Ty
 }
 
 func buildMCPFieldTag(parameter *state.Parameter, defaultOptional bool) reflect.StructTag {
+	return buildMCPFieldTagWithRequired(parameter, defaultOptional, false)
+}
+
+func buildMCPFieldTagWithRequired(parameter *state.Parameter, defaultOptional, forceRequired bool) reflect.StructTag {
 	if parameter == nil {
 		return reflect.StructTag(`json:",omitempty"`)
 	}
 	var parts []string
 	jsonTag := `json:",omitempty"`
-	if parameter.Schema != nil && parameter.Schema.Type() != nil && parameter.Schema.Type().Kind() == reflect.Slice {
+	if forceRequired {
+		jsonTag = `json:""`
+	}
+	if !forceRequired && parameter.Schema != nil && parameter.Schema.Type() != nil && parameter.Schema.Type().Kind() == reflect.Slice {
 		parts = append(parts, jsonTag, `optional:"true"`)
 	} else {
 		parts = append(parts, jsonTag)
-		if strings.Contains(parameter.Tag, "optional") || strings.Contains(parameter.Tag, `required:"false"`) || defaultOptional {
+		if !forceRequired && (strings.Contains(parameter.Tag, "optional") || strings.Contains(parameter.Tag, `required:"false"`) || defaultOptional) {
 			parts = append(parts, `optional:"true"`)
 		}
 	}

@@ -114,6 +114,12 @@ func mergeDeclaredState(dst, src *plan.State) {
 	if dst.Cacheable == nil {
 		dst.Cacheable = src.Cacheable
 	}
+	if dst.MCP == nil {
+		dst.MCP = src.MCP
+	}
+	if dst.PathMCP == nil {
+		dst.PathMCP = src.PathMCP
+	}
 	if dst.Schema == nil && src.Schema != nil {
 		schema := *src.Schema
 		dst.Schema = &schema
@@ -195,6 +201,26 @@ func applyDeclaredStateOptions(state *plan.State, tail, dql string, baseOffset i
 				continue
 			}
 			state.URI = trimQuote(args[0])
+		case strings.EqualFold(name, "WithMcp"):
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
+			}
+			value, err := strconv.ParseBool(strings.TrimSpace(trimQuote(args[0])))
+			if err != nil {
+				appendStateOptionDiagnostic(state, name, fmt.Sprintf("invalid bool MCP value %q", args[0]), dql, optionOffset, diags)
+				continue
+			}
+			state.MCP = &value
+		case strings.EqualFold(name, "WithPathMcp"):
+			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
+				continue
+			}
+			value, err := strconv.ParseBool(strings.TrimSpace(trimQuote(args[0])))
+			if err != nil {
+				appendStateOptionDiagnostic(state, name, fmt.Sprintf("invalid bool path MCP value %q", args[0]), dql, optionOffset, diags)
+				continue
+			}
+			state.PathMCP = &value
 		case strings.EqualFold(name, "WithTag"), strings.EqualFold(name, "Tag"):
 			if !expectStateArgs(state, name, args, 1, 1, dql, optionOffset, diags) {
 				continue

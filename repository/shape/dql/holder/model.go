@@ -54,6 +54,8 @@ type ParameterShape struct {
 	CodecArgs       []string          `shape:"param.codec.args"`
 	ErrorStatusCode int               `shape:"param.errorStatusCode"`
 	Cacheable       *bool             `shape:"param.cacheable"`
+	MCP             *bool             `shape:"param.mcp"`
+	PathMCP         *bool             `shape:"param.pathMcp"`
 	Scope           string            `shape:"param.scope"`
 	Connector       string            `shape:"param.connector"`
 	Limit           *int              `shape:"param.limit"`

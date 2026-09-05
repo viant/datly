@@ -121,3 +121,20 @@ SELECT 1 FROM t WHERE ID IN($TeamIDs)
 	}
 
 }
+
+func TestNewDeclarationsParsesMCPRouteControls(t *testing.T) {
+	dql := `#set($_ = $Id<[]int>(path/id).WithURI('/things/{id}').WithMcp(false).WithPathMcp(false))
+SELECT 1`
+	declarations, err := NewDeclarations(dql, nil)
+	assert.NoError(t, err)
+	if assert.Len(t, declarations.State, 1) {
+		parameter := declarations.State[0]
+		assert.Equal(t, "/things/{id}", parameter.URI)
+		if assert.NotNil(t, parameter.MCP) {
+			assert.False(t, *parameter.MCP)
+		}
+		if assert.NotNil(t, parameter.PathMCP) {
+			assert.False(t, *parameter.PathMCP)
+		}
+	}
+}

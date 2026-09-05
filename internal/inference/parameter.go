@@ -106,7 +106,13 @@ func (p *Parameter) veltyDeclaration(builder *strings.Builder) {
 		builder.WriteString(".WithStatusCode(" + strconv.Itoa(p.ErrorStatusCode) + ")")
 	}
 	if p.URI != "" {
-		builder.WriteString(".Scope('" + p.Scope + "')")
+		builder.WriteString(".WithURI('" + p.URI + "')")
+	}
+	if p.MCP != nil {
+		builder.WriteString(".WithMcp(" + strconv.FormatBool(*p.MCP) + ")")
+	}
+	if p.PathMCP != nil {
+		builder.WriteString(".WithPathMcp(" + strconv.FormatBool(*p.PathMCP) + ")")
 	}
 	if p.Scope != "" {
 		builder.WriteString(".Scope('" + p.Scope + "')")

@@ -13,7 +13,7 @@ var (
 	routeFields       = []string{"Name", "URI", "Method", "Description", "MCPTool", "Service"}
 	routeInputFields  = []string{"Type", "Parameters"}
 	routeOutputFields = []string{"Type", "Parameters", "Exclude", "CaseFormat", "Tag"}
-	parameterFields   = []string{"Name", "Required", "Tag", "ErrorStatusCode", "Cacheable", "Scope", "Connector", "Value", "Limit"}
+	parameterFields   = []string{"Name", "Required", "Tag", "ErrorStatusCode", "Cacheable", "MCP", "PathMCP", "Scope", "Connector", "Value", "Limit"}
 	viewFields        = []string{"Name", "Table", "Mode", "AllowNulls", "RelationalConcurrency"}
 	selectorFields    = []string{"Constraints", "Limit", "Namespace"}
 	templateFields    = []string{"SourceURL", "Source", "Summary"}
