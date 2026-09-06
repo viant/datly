@@ -63,6 +63,12 @@ func AssembleMetadata(component *Component, cfg *Config) (*Metadata, error) {
 		if parameter == nil || len(parameter.Predicates) == 0 || parameter.In == nil {
 			continue
 		}
+		// Component inputs are resolved internally by the destination route
+		// (authorization is the common case). They are not caller-controlled
+		// report filters and must never leak into the cube body or MCP schema.
+		if parameter.In.Kind == state.KindComponent {
+			continue
+		}
 		if isSelectorParameter(parameter, viewRef) {
 			continue
 		}
