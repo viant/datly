@@ -201,6 +201,27 @@ func TestPrepare_CubeDirectiveAlias(t *testing.T) {
 	assert.Equal(t, "Skip", pre.Directives.Report.Offset)
 }
 
+func TestPrepare_CubeComposeDirective(t *testing.T) {
+	dql := "#set($_ = $cube())\n" +
+		"#set($_ = $cubeCompose(true))\n" +
+		"SELECT id FROM ORDERS o"
+	pre := Prepare(dql)
+	require.NotNil(t, pre)
+	require.NotNil(t, pre.Directives)
+	require.NotNil(t, pre.Directives.Report)
+	require.NotNil(t, pre.Directives.Report.Compose)
+	assert.True(t, pre.Directives.Report.Enabled)
+	assert.True(t, pre.Directives.Report.Compose.Enabled)
+	assert.NotContains(t, pre.SQL, "$cubeCompose")
+}
+
+func TestPrepare_InvalidCubeComposeDirective(t *testing.T) {
+	pre := Prepare("#set($_ = $cubeCompose('yes'))\nSELECT id FROM ORDERS o")
+	require.NotNil(t, pre)
+	require.NotEmpty(t, pre.Diagnostics)
+	assert.Contains(t, pre.Diagnostics[0].Message, "invalid $cubeCompose directive")
+}
+
 func TestPrepare_InvalidDestDirectiveDiagnostic(t *testing.T) {
 	dql := "SELECT 1\n#settings($_ = $dest())"
 	pre := Prepare(dql)

@@ -1,6 +1,21 @@
 package expand
 
-import "testing"
+import (
+	"context"
+	"reflect"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/viant/structology"
+	"github.com/viant/xdatly/codec"
+)
+
+type renderGroupPredicateHandler struct{}
+
+func (r *renderGroupPredicateHandler) Compute(_ context.Context, value interface{}) (*codec.Criteria, error) {
+	return &codec.Criteria{Expression: "t.ACCOUNT_ID = ?", Placeholders: []interface{}{value}}, nil
+}
 
 func TestPredicateBuilder_NilReceiver(t *testing.T) {
 	var builder *PredicateBuilder
@@ -14,6 +29,29 @@ func TestPredicateBuilder_NilReceiver(t *testing.T) {
 	if got == "" {
 		t.Fatalf("expected predicate after And on nil receiver, got empty string")
 	}
+}
+
+func TestPredicateRenderGroup_DoesNotMutateExpansionState(t *testing.T) {
+	type input struct {
+		AccountID int
+	}
+	stateType := structology.NewStateType(reflect.TypeOf(input{}))
+	parameterState := stateType.NewState()
+	require.NoError(t, parameterState.SetInt("AccountID", 29))
+	dataUnit := NewDataUnit(nil)
+	expandContext := &Context{Context: context.Background(), DataUnit: dataUnit}
+	predicate := NewPredicate(expandContext, parameterState, []*PredicateConfig{{
+		Group:    7,
+		Selector: stateType.Lookup("AccountID"),
+		Expander: &renderGroupPredicateHandler{},
+	}}, stateType)
+
+	actual, err := predicate.RenderGroup(7, "AND")
+	require.NoError(t, err)
+	assert.Equal(t, "(t.ACCOUNT_ID = ?)", actual.Expression)
+	assert.Equal(t, []interface{}{29}, actual.Args)
+	assert.Empty(t, dataUnit.ParamsGroup)
+	assert.Empty(t, expandContext.Filters)
 }
 
 //func TestPredicate(t *testing.T) {

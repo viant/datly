@@ -190,6 +190,10 @@ func normalizeDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 			Limit:      strings.TrimSpace(input.Report.Limit),
 			Offset:     strings.TrimSpace(input.Report.Offset),
 		}
+		if input.Report.Compose != nil {
+			compose := *input.Report.Compose
+			ret.Report.Compose = &compose
+		}
 	}
 	if len(input.Const) > 0 {
 		ret.Const = make(map[string]string, len(input.Const))

@@ -98,3 +98,26 @@ func TestResource_extractRuleSetting_CubeDirectiveAlias(t *testing.T) {
 	assert.Equal(t, "Skip", resource.Rule.Report.Offset)
 	assert.NotContains(t, dSQL, "$cube(")
 }
+
+func TestResource_extractRuleSetting_CubeComposeDirective(t *testing.T) {
+	resource := &Resource{Rule: NewRule(), rule: &options.Rule{}}
+	dSQL := "#set($_ = $cube())\n" +
+		"#set($_ = $cubeCompose(true))\n" +
+		"SELECT 1"
+
+	err := resource.extractRuleSetting(&dSQL)
+	require.NoError(t, err)
+	require.NotNil(t, resource.Rule.Report)
+	require.NotNil(t, resource.Rule.Report.Compose)
+	assert.True(t, resource.Rule.Report.Compose.Enabled)
+	assert.NotContains(t, dSQL, "$cubeCompose(")
+}
+
+func TestResource_extractRuleSetting_InvalidCubeComposeDirective(t *testing.T) {
+	resource := &Resource{Rule: NewRule(), rule: &options.Rule{}}
+	dSQL := "#set($_ = $cubeCompose('yes'))\nSELECT 1"
+
+	err := resource.extractRuleSetting(&dSQL)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid $cubeCompose directive")
+}

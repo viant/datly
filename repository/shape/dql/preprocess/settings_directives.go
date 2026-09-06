@@ -19,6 +19,7 @@ var (
 	mcpDirectiveName         = map[string]bool{"mcp": true}
 	routeDirectiveName       = map[string]bool{"route": true}
 	reportDirectiveName      = map[string]bool{"report": true, "cube": true}
+	cubeComposeDirectiveName = map[string]bool{"cubecompose": true}
 	constDirectiveName       = map[string]bool{"const": true}
 	marshalDirectiveName     = map[string]bool{"marshal": true}
 	unmarshalDirectiveName   = map[string]bool{"unmarshal": true}
@@ -122,6 +123,19 @@ func parseSettingsDirectives(input, fullDQL string, diagnosticOffset int, direct
 			}
 		} else {
 			directives.Report = values[len(values)-1]
+		}
+	}
+	if strings.Contains(lower, "$cubecompose") {
+		calls, parseErrors := scanDollarCallsStrict(input, cubeComposeDirectiveName)
+		diagnostics = appendDirectiveParseErrors(diagnostics, parseErrors, dqldiag.CodeDirRoute, fullDQL, diagnosticOffset)
+		compose, ok := parseCubeComposeDirectiveCalls(calls)
+		if !ok {
+			diagnostics = append(diagnostics, directiveDiagnostic(dqldiag.CodeDirRoute, "invalid $cubeCompose directive", "expected: #set($_ = $cubeCompose(true))", fullDQL, lastDirectiveCallOffset(calls, diagnosticOffset)))
+		} else {
+			if directives.Report == nil {
+				directives.Report = &dqlshape.ReportDirective{Enabled: true}
+			}
+			directives.Report.Compose = compose
 		}
 	}
 	if strings.Contains(lower, "$const") {
@@ -602,6 +616,21 @@ func parseReportDirectiveCalls(calls []directiveCall) []*dqlshape.ReportDirectiv
 		result = append(result, directive)
 	}
 	return result
+}
+
+func parseCubeComposeDirectiveCalls(calls []directiveCall) (*dqlshape.CubeComposeDirective, bool) {
+	if len(calls) == 0 {
+		return nil, false
+	}
+	call := calls[len(calls)-1]
+	if len(call.args) != 1 {
+		return nil, false
+	}
+	enabled, err := strconv.ParseBool(strings.TrimSpace(call.args[0]))
+	if err != nil {
+		return nil, false
+	}
+	return &dqlshape.CubeComposeDirective{Enabled: enabled}, true
 }
 
 func normalizeHTTPMethods(input []string) ([]string, bool) {

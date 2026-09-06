@@ -46,6 +46,31 @@ func (s *Service) appendReportProvider(ctx context.Context, item *path.Item, rou
 	return providers, nil
 }
 
+func (s *Service) appendCubeComposeProvider(ctx context.Context, item *path.Item, routePath *path.Path, providers []*Provider, provider *Provider) ([]*Provider, error) {
+	if routePath == nil || routePath.Report == nil || routePath.Report.Compose == nil || !routePath.Report.Compose.Enabled {
+		return providers, nil
+	}
+	composePath := buildCubeComposePath(routePath)
+	composeProvider := &Provider{
+		path:    composePath.Path,
+		control: routePath.Version,
+		newComponent: func(ctx context.Context, opts ...Option) (*Component, error) {
+			original, err := provider.Component(ctx, opts...)
+			if err != nil || original == nil {
+				return nil, err
+			}
+			if !isCubeComposeEligible(original) {
+				return nil, nil
+			}
+			component, _, err := buildCubeComposeArtifacts(ctx, s.registry.Dispatcher(), original, routePath)
+			return component, err
+		},
+	}
+	item.Paths = append(item.Paths, composePath)
+	providers = append(providers, composeProvider)
+	return providers, nil
+}
+
 func isReportEligible(component *Component) bool {
 	if component == nil || component.Report == nil || !component.Report.Enabled {
 		return false
@@ -56,6 +81,10 @@ func isReportEligible(component *Component) bool {
 	return strings.EqualFold(component.Method, http.MethodGet)
 }
 
+func isCubeComposeEligible(component *Component) bool {
+	return isReportEligible(component) && component.Report.Compose != nil && component.Report.Compose.Enabled
+}
+
 func (s *Service) buildReportComponent(original *Component, routePath *path.Path) (*Component, *path.Path, error) {
 	return buildReportArtifacts(context.Background(), s.registry.Dispatcher(), original, routePath)
 }
@@ -63,6 +92,65 @@ func (s *Service) buildReportComponent(original *Component, routePath *path.Path
 func BuildReportComponent(dispatcher contract.Dispatcher, original *Component) (*Component, error) {
 	component, _, err := buildReportArtifacts(context.Background(), dispatcher, original, nil)
 	return component, err
+}
+
+func BuildCubeComposeComponent(dispatcher contract.Dispatcher, original *Component) (*Component, error) {
+	component, _, err := buildCubeComposeArtifacts(context.Background(), dispatcher, original, nil)
+	return component, err
+}
+
+func buildCubeComposeArtifacts(ctx context.Context, dispatcher contract.Dispatcher, original *Component, routePath *path.Path) (*Component, *path.Path, error) {
+	if !isCubeComposeEligible(original) {
+		return nil, nil, fmt.Errorf("cube compose requires an enabled groupable report cube")
+	}
+	config := original.Report.Normalize()
+	metadata, err := buildReportMetadata(original, config)
+	if err != nil {
+		return nil, nil, err
+	}
+	inputType, bodyType, err := buildCubeComposeInputType(original, metadata)
+	if err != nil {
+		return nil, nil, err
+	}
+	outputType, err := buildCubeComposeOutputType(original)
+	if err != nil {
+		return nil, nil, err
+	}
+	composeURI := strings.TrimSuffix(original.URI, "/") + "/cube/compose"
+	ret := *original
+	ret.Path = contract.Path{Method: http.MethodPost, URI: composeURI}
+	ret.Handler = rephandler.NewHandler(&cubeComposeHandler{
+		Dispatcher: dispatcher,
+		Path:       &original.Path,
+		Metadata:   metadata,
+		Original:   original,
+		BodyType:   bodyType,
+		Config:     config.Compose,
+	})
+	ret.Service = service.TypeExecutor
+	ret.Report = config
+	ret.View = buildReportWrapperView(original.View)
+	ret.View.Name = original.View.Name + "#cubeCompose"
+	ret.Async = nil
+	ret.Input.Type = *inputType
+	ret.Output.Type = *outputType
+	var composePath *path.Path
+	if routePath != nil {
+		composePath = buildCubeComposePath(routePath)
+	}
+	return &ret, composePath, nil
+}
+
+func buildCubeComposeOutputType(component *Component) (*state.Type, error) {
+	outputType, err := state.NewType(
+		state.WithSchema(state.NewSchema(reflect.TypeOf(&cubeComposeResponse{}))),
+		state.WithResource(newReportInputResource(component.View.Resource())),
+	)
+	if err != nil {
+		return nil, err
+	}
+	outputType.Name = state.SanitizeTypeName(component.Name + "CubeComposeOutput")
+	return outputType, nil
 }
 
 func buildReportArtifacts(ctx context.Context, dispatcher contract.Dispatcher, original *Component, routePath *path.Path) (*Component, *path.Path, error) {
@@ -153,6 +241,39 @@ func buildReportPath(routePath *path.Path) *path.Path {
 	return &pathCopy
 }
 
+func buildCubeComposePath(routePath *path.Path) *path.Path {
+	pathCopy := *routePath
+	pathCopy.Path = contract.Path{
+		Method: http.MethodPost,
+		URI:    strings.TrimSuffix(routePath.URI, "/") + "/cube/compose",
+	}
+	pathCopy.MCPTool = routePath.Report != nil && routePath.Report.Compose != nil && cubeComposePathMCPToolEnabled(routePath.Report.Compose)
+	pathCopy.MCPResource = false
+	pathCopy.MCPTemplateResource = false
+	if pathCopy.Name != "" {
+		pathCopy.Name += " Cube Compose"
+	}
+	pathCopy.Description = cubeComposeToolDescription(pathCopy.Description)
+	return &pathCopy
+}
+
+func cubeComposeToolDescription(base string) string {
+	description := "Compose two filtered projections of this cube with caller-selected guarded SQL over $CubeSQL1 AS t1 and $CubeSQL2 AS t2. Use JOIN or LEFT JOIN on matching dimensions, ORDER BY, and a bounded LIMIT. The SQL projection defines a new request-local result shape: Datly returns a dynamically typed Go-struct collection as data through the regular view reader, without view caching; dictionaries and outer-view enrichment from the source cube are not applied. Basic example (replace <dimension> and <measure> with names exposed by this tool): " + cubeComposeBasicSQLExample
+	if base = strings.TrimSpace(base); base != "" {
+		return base + ". " + description
+	}
+	return description
+}
+
+const cubeComposeBasicSQLExample = "SELECT t1.<dimension>, t1.<measure> AS left_value, t2.<measure> AS right_value, t1.<measure> - t2.<measure> AS value_diff FROM $CubeSQL1 AS t1 JOIN $CubeSQL2 AS t2 ON t1.<dimension> = t2.<dimension> ORDER BY value_diff DESC LIMIT 10"
+
+func cubeComposePathMCPToolEnabled(compose *path.CubeCompose) bool {
+	if compose == nil || compose.MCPTool == nil {
+		return true
+	}
+	return *compose.MCPTool
+}
+
 func reportPathMCPToolEnabled(report *path.Report) bool {
 	if report == nil || report.MCPTool == nil {
 		return false
@@ -182,6 +303,74 @@ func buildReportInputType(component *Component, metadata *ReportMetadata, report
 		Report:     report,
 	}
 	return reportmodel.BuildInputType(source, metadata, report)
+}
+
+func buildCubeComposeInputType(component *Component, metadata *ReportMetadata) (*state.Type, reflect.Type, error) {
+	filterType := composeFilterStructType(metadata.Filters)
+	frameType := reflect.StructOf([]reflect.StructField{
+		{Name: "Inherit", Type: reflect.TypeOf(false), Tag: buildReportTag("inherit", "Inherit filters omitted from this frame from cube1; valid for cube2")},
+		{Name: "Align", Type: reflect.TypeOf(""), Tag: buildReportTag("align", "Optional frame alignment: elapsed")},
+		{Name: "Filters", Type: filterType, Tag: buildReportTag("filters", "Typed filters from the source cube")},
+	})
+	bodyType := reflect.StructOf([]reflect.StructField{
+		{Name: "Cube1", Type: frameType, Tag: buildReportTag("cube1", "Left cube frame")},
+		{Name: "Cube2", Type: frameType, Tag: buildReportTag("cube2", "Right cube frame")},
+		{Name: "SQL", Type: reflect.TypeOf(""), Tag: buildReportTag("sql", cubeComposeSQLDescription(metadata))},
+	})
+	bodyPtr := reflect.PtrTo(bodyType)
+	bodySchema := state.NewSchema(bodyPtr)
+	bodySchema.Name = state.SanitizeTypeName(component.Name + "CubeComposeInput")
+	bodyParam := state.NewParameter("CubeCompose", state.NewBodyLocation(""), state.WithParameterSchema(bodySchema))
+	bodyParam.Tag = `anonymous:"true"`
+	bodyParam.SetTypeNameTag()
+	inputType, err := state.NewType(
+		state.WithParameters(state.Parameters{bodyParam}),
+		state.WithBodyType(true),
+		state.WithSchema(state.NewSchema(bodyPtr)),
+		state.WithResource(newReportInputResource(component.View.Resource())),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := inputType.Init(); err != nil {
+		return nil, nil, err
+	}
+	inputType.Name = bodySchema.Name
+	return inputType, bodyType, nil
+}
+
+func cubeComposeSQLDescription(metadata *ReportMetadata) string {
+	dimensions := make([]string, 0, len(metadata.Dimensions))
+	for _, field := range metadata.Dimensions {
+		dimensions = append(dimensions, field.Name)
+	}
+	measures := make([]string, 0, len(metadata.Measures))
+	for _, field := range metadata.Measures {
+		measures = append(measures, field.Name)
+	}
+	return fmt.Sprintf("Guarded SELECT chosen by the caller over $CubeSQL1 AS t1 and $CubeSQL2 AS t2. JOIN or LEFT JOIN on matching dimensions; qualify all cube fields; computed aliases, WHERE/HAVING, ORDER BY, and bounded LIMIT are supported. Swap frame order for the opposite missing-member direction. The projection is returned as a request-local dynamic Go-struct collection in data through the regular Datly view reader; source dictionaries and outer-view enrichment are not applied, and no view cache is used. Basic SQL example (replace <dimension> and <measure> with names listed below): %s. Dimensions: %s. Measures: %s", cubeComposeBasicSQLExample, strings.Join(dimensions, ", "), strings.Join(measures, ", "))
+}
+
+func composeFilterStructType(filters []*ReportFilter) reflect.Type {
+	if len(filters) == 0 {
+		return reflect.TypeOf(struct{}{})
+	}
+	fields := make([]reflect.StructField, 0, len(filters))
+	for _, filter := range filters {
+		rType := reflect.TypeOf("")
+		if schemaType := filter.SchemaType(); schemaType != nil {
+			rType = schemaType
+		}
+		if rType.Kind() != reflect.Ptr {
+			rType = reflect.PtrTo(rType)
+		}
+		fields = append(fields, reflect.StructField{
+			Name: filter.FieldName,
+			Type: rType,
+			Tag:  buildReportTag(lowerCamel(filter.Name), filter.Description),
+		})
+	}
+	return reflect.StructOf(fields)
 }
 
 func validateExplicitReportInput(inputType *state.Type, metadata *ReportMetadata) error {

@@ -610,6 +610,15 @@ func (s *Service) AddComponent(ctx context.Context, component *repository.Compon
 	} else if reportComponent != nil {
 		registerComponents = append(registerComponents, reportComponent)
 	}
+	if original := components.Components[0]; original.Report != nil && original.Report.Compose != nil && original.Report.Compose.Enabled {
+		composeComponent, err := repository.BuildCubeComposeComponent(s.repository.Registry().Dispatcher(), original)
+		if err != nil {
+			return err
+		}
+		if composeComponent != nil {
+			registerComponents = append(registerComponents, composeComponent)
+		}
+	}
 
 	s.repository.Register(registerComponents...)
 

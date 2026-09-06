@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"embed"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -202,6 +203,108 @@ func TestBuildReportComponent_DefaultsMCPToolOffOnSiblingRoute(t *testing.T) {
 	assert.False(t, reportPath.MCPTool)
 	assert.False(t, reportPath.MCPResource)
 	assert.False(t, reportPath.MCPTemplateResource)
+}
+
+func TestBuildCubeComposeArtifacts_OptInContract(t *testing.T) {
+	resource := view.EmptyResource()
+	rootView := view.NewView("performance", "PERFORMANCE")
+	rootView.Groupable = true
+	rootView.Selector = &view.Config{
+		FieldsParameter: &state.Parameter{Name: "fields", In: state.NewQueryLocation("_fields")},
+	}
+	rootView.Columns = []*view.Column{
+		view.NewColumn("AdOrderID", "int", reflect.TypeOf(0), false),
+		view.NewColumn("TotalSpend", "float64", reflect.TypeOf(float64(0)), false),
+	}
+	rootView.Columns[0].Groupable = true
+	rootView.Columns[1].Aggregate = true
+	for _, column := range rootView.Columns {
+		require.NoError(t, column.Init(&reportTestResource{}, text.CaseFormatUndefined, false))
+	}
+	rootView.SetResource(resource)
+	resource.AddViews(rootView)
+
+	inputType, err := state.NewType(state.WithParameters(state.Parameters{
+		&state.Parameter{
+			Name:        "advertiserID",
+			In:          state.NewQueryLocation("advertiserId"),
+			Schema:      state.NewSchema(reflect.TypeOf(0)),
+			Predicates:  []*extension.PredicateConfig{{Name: "ByAdvertiser"}},
+			Description: "Advertiser identifier",
+		},
+	}), state.WithResource(&reportTestResource{}))
+	require.NoError(t, err)
+	inputType.Name = "PerformanceInput"
+
+	component := &Component{
+		Path: contract.Path{Method: http.MethodGet, URI: "/v1/api/performance"},
+		Meta: contract.Meta{Name: "performance", Description: "Performance metrics"},
+		View: rootView,
+		Report: (&Report{
+			Enabled: true,
+			Compose: &CubeCompose{Enabled: true, MaxLimit: 25},
+		}).Normalize(),
+		Contract: contract.Contract{Input: contract.Input{Type: *inputType}},
+	}
+	routePath := &path.Path{
+		Path: component.Path,
+		View: &path.ViewRef{Ref: rootView.Name},
+		Meta: component.Meta,
+		Report: &path.Report{
+			Enabled: true,
+			Compose: &path.CubeCompose{Enabled: true, MaxLimit: 25},
+		},
+	}
+
+	composeComponent, composePath, err := buildCubeComposeArtifacts(context.Background(), nil, component, routePath)
+	require.NoError(t, err)
+	require.NotNil(t, composeComponent)
+	require.NotNil(t, composePath)
+	assert.Equal(t, http.MethodPost, composeComponent.Method)
+	assert.Equal(t, "/v1/api/performance/cube/compose", composeComponent.URI)
+	assert.Equal(t, "/v1/api/performance/cube/compose", composePath.URI)
+	assert.True(t, composePath.MCPTool, "compose MCP exposure defaults on after explicit feature opt-in")
+	assert.Equal(t, "performance Cube Compose", composePath.Name)
+	assert.Contains(t, composePath.Description, "Basic example")
+	assert.Contains(t, composePath.Description, "SELECT t1.<dimension>")
+	assert.Contains(t, composePath.Description, "dynamically typed Go-struct collection as data")
+	assert.Contains(t, composePath.Description, "dictionaries and outer-view enrichment")
+	assert.Contains(t, composePath.Description, "without view caching")
+	assert.NotContains(t, strings.ToLower(composePath.Description), "advertiser")
+
+	bodyType := composeComponent.Input.Type.Schema.Type()
+	for bodyType.Kind() == reflect.Ptr {
+		bodyType = bodyType.Elem()
+	}
+	require.Equal(t, reflect.Struct, bodyType.Kind())
+	SQL, ok := bodyType.FieldByName("SQL")
+	require.True(t, ok)
+	assert.Contains(t, SQL.Tag.Get("desc"), "$CubeSQL1 AS t1")
+	assert.Contains(t, SQL.Tag.Get("desc"), "Basic SQL example")
+	assert.Contains(t, SQL.Tag.Get("desc"), "ORDER BY value_diff DESC LIMIT 10")
+	assert.Contains(t, SQL.Tag.Get("desc"), "Dimensions: AdOrderID")
+	assert.Contains(t, SQL.Tag.Get("desc"), "Measures: TotalSpend")
+	assert.Contains(t, SQL.Tag.Get("desc"), "dynamic Go-struct collection in data")
+	assert.Contains(t, SQL.Tag.Get("desc"), "source dictionaries and outer-view enrichment are not applied")
+	cube2, ok := bodyType.FieldByName("Cube2")
+	require.True(t, ok)
+	align, ok := cube2.Type.FieldByName("Align")
+	require.True(t, ok)
+	assert.Equal(t, "align,omitempty", align.Tag.Get("json"))
+	filters, ok := cube2.Type.FieldByName("Filters")
+	require.True(t, ok)
+	require.Equal(t, 1, filters.Type.NumField())
+	advertiserID := filters.Type.Field(0)
+	assert.Equal(t, reflect.Ptr, advertiserID.Type.Kind(), "frame filters must preserve omitted versus explicit zero")
+
+	outputType := composeComponent.Output.Type.Schema.Type()
+	for outputType.Kind() == reflect.Ptr {
+		outputType = outputType.Elem()
+	}
+	require.Equal(t, reflect.Struct, outputType.Kind())
+	data, ok := outputType.FieldByName("Data")
+	require.True(t, ok)
+	assert.Equal(t, reflect.Interface, data.Type.Kind())
 }
 
 func TestBuildReportComponent_DisablesMCPToolWhenReportFlagIsFalse(t *testing.T) {
