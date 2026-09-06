@@ -318,6 +318,7 @@ func normalizeComponent(field *scan.Field) *ComponentRoute {
 			if tag.ReportCompose {
 				result.Report.Compose = &dqlshape.CubeComposeDirective{
 					Enabled:  true,
+					MaxCubes: tag.ReportComposeMaxCubes,
 					MaxLimit: tag.ReportComposeMaxLimit,
 				}
 				if tag.ReportComposeMCP {

@@ -3406,6 +3406,9 @@ func (g *ComponentCodegen) reportComponentTag() string {
 		if report.Compose.MCPTool != nil && *report.Compose.MCPTool {
 			tag += ",reportComposeMCP=true"
 		}
+		if report.Compose.MaxCubes > 0 {
+			tag += fmt.Sprintf(",reportComposeMaxCubes=%d", report.Compose.MaxCubes)
+		}
 		if report.Compose.MaxLimit > 0 {
 			tag += fmt.Sprintf(",reportComposeMaxLimit=%d", report.Compose.MaxLimit)
 		}
@@ -3442,6 +3445,9 @@ func (g *ComponentCodegen) reportComponentOption() string {
 	}
 	if report.Compose != nil && report.Compose.Enabled {
 		composeParts := []string{"Enabled: true"}
+		if report.Compose.MaxCubes > 0 {
+			composeParts = append(composeParts, fmt.Sprintf("MaxCubes: %d", report.Compose.MaxCubes))
+		}
 		if report.Compose.MaxLimit > 0 {
 			composeParts = append(composeParts, fmt.Sprintf("MaxLimit: %d", report.Compose.MaxLimit))
 		}

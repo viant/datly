@@ -97,6 +97,7 @@ type ReportDirective struct {
 type CubeComposeDirective struct {
 	Enabled   bool
 	MCPTool   *bool
+	MaxCubes  int
 	MaxLimit  int
 	TimeoutMs int
 }

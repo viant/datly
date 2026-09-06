@@ -242,7 +242,7 @@ func TestBuildCubeComposeArtifacts_OptInContract(t *testing.T) {
 		View: rootView,
 		Report: (&Report{
 			Enabled: true,
-			Compose: &CubeCompose{Enabled: true, MaxLimit: 25},
+			Compose: &CubeCompose{Enabled: true, MaxCubes: 6, MaxLimit: 25},
 		}).Normalize(),
 		Contract: contract.Contract{Input: contract.Input{Type: *inputType}},
 	}
@@ -252,7 +252,7 @@ func TestBuildCubeComposeArtifacts_OptInContract(t *testing.T) {
 		Meta: component.Meta,
 		Report: &path.Report{
 			Enabled: true,
-			Compose: &path.CubeCompose{Enabled: true, MaxLimit: 25},
+			Compose: &path.CubeCompose{Enabled: true, MaxCubes: 6, MaxLimit: 25},
 		},
 	}
 
@@ -265,11 +265,18 @@ func TestBuildCubeComposeArtifacts_OptInContract(t *testing.T) {
 	assert.Equal(t, "/v1/api/performance/cube/compose", composePath.URI)
 	assert.True(t, composePath.MCPTool, "compose MCP exposure defaults on after explicit feature opt-in")
 	assert.Equal(t, "performance Cube Compose", composePath.Name)
-	assert.Contains(t, composePath.Description, "Basic example")
+	assert.Contains(t, composePath.Description, "Three-cube SQL example")
+	assert.Contains(t, composePath.Description, "Submit 1 to 6 entries in cubes")
 	assert.Contains(t, composePath.Description, "SELECT t1.<dimension>")
-	assert.Contains(t, composePath.Description, "dynamically typed Go-struct collection as data")
-	assert.Contains(t, composePath.Description, "dictionaries and outer-view enrichment")
-	assert.Contains(t, composePath.Description, "without view caching")
+	assert.Contains(t, composePath.Description, "$CubeSQL3 AS t3")
+	assert.Contains(t, composePath.Description, "Each cubes entry is prepared independently with its own typed filters and preserved bind arguments")
+	assert.Contains(t, composePath.Description, `"inheritFrom":1`)
+	assert.Contains(t, composePath.Description, `"<period-filter>":"<period-3>"`)
+	assert.Contains(t, composePath.Description, "Do not submit SQL placeholders")
+	assert.Contains(t, composePath.Description, "ORDER BY difference DESC LIMIT 10")
+	assert.Contains(t, composePath.Description, "dynamically typed Go-struct collection in data")
+	assert.Contains(t, composePath.Description, "source dictionaries, and outer-view enrichment are not applied")
+	assert.Contains(t, composePath.Description, "View caching")
 	assert.NotContains(t, strings.ToLower(composePath.Description), "advertiser")
 
 	bodyType := composeComponent.Input.Type.Schema.Type()
@@ -277,21 +284,31 @@ func TestBuildCubeComposeArtifacts_OptInContract(t *testing.T) {
 		bodyType = bodyType.Elem()
 	}
 	require.Equal(t, reflect.Struct, bodyType.Kind())
+	assert.Equal(t, 6, composeComponent.Report.Compose.MaxCubes)
 	SQL, ok := bodyType.FieldByName("SQL")
 	require.True(t, ok)
 	assert.Contains(t, SQL.Tag.Get("desc"), "$CubeSQL1 AS t1")
-	assert.Contains(t, SQL.Tag.Get("desc"), "Basic SQL example")
-	assert.Contains(t, SQL.Tag.Get("desc"), "ORDER BY value_diff DESC LIMIT 10")
+	assert.Contains(t, SQL.Tag.Get("desc"), "Three-cube SQL example")
+	assert.Contains(t, SQL.Tag.Get("desc"), "$CubeSQLN AS tN")
+	assert.Contains(t, SQL.Tag.Get("desc"), "ORDER BY difference DESC LIMIT 10")
+	assert.Contains(t, SQL.Tag.Get("desc"), "Do not use ?, named bind parameters")
+	assert.Contains(t, SQL.Tag.Get("desc"), "preserves each cube projection's generated bind arguments")
+	assert.Contains(t, SQL.Tag.Get("desc"), `"<scope-filter>":"<scope>"`)
 	assert.Contains(t, SQL.Tag.Get("desc"), "Dimensions: AdOrderID")
 	assert.Contains(t, SQL.Tag.Get("desc"), "Measures: TotalSpend")
 	assert.Contains(t, SQL.Tag.Get("desc"), "dynamic Go-struct collection in data")
 	assert.Contains(t, SQL.Tag.Get("desc"), "source dictionaries and outer-view enrichment are not applied")
-	cube2, ok := bodyType.FieldByName("Cube2")
+	cubes, ok := bodyType.FieldByName("Cubes")
 	require.True(t, ok)
-	align, ok := cube2.Type.FieldByName("Align")
+	require.Equal(t, reflect.Slice, cubes.Type.Kind())
+	frameType := cubes.Type.Elem()
+	align, ok := frameType.FieldByName("Align")
 	require.True(t, ok)
 	assert.Equal(t, "align,omitempty", align.Tag.Get("json"))
-	filters, ok := cube2.Type.FieldByName("Filters")
+	inheritFrom, ok := frameType.FieldByName("InheritFrom")
+	require.True(t, ok)
+	assert.Equal(t, reflect.Ptr, inheritFrom.Type.Kind())
+	filters, ok := frameType.FieldByName("Filters")
 	require.True(t, ok)
 	require.Equal(t, 1, filters.Type.NumField())
 	advertiserID := filters.Type.Field(0)
@@ -305,6 +322,22 @@ func TestBuildCubeComposeArtifacts_OptInContract(t *testing.T) {
 	data, ok := outputType.FieldByName("Data")
 	require.True(t, ok)
 	assert.Equal(t, reflect.Interface, data.Type.Kind())
+}
+
+func TestCubeComposeSQLExample_RespectsConfiguredCubeLimit(t *testing.T) {
+	oneLabel, one := cubeComposeSQLExample(1)
+	assert.Equal(t, "One-cube", oneLabel)
+	assert.Contains(t, one, "$CubeSQL1 AS t1")
+	assert.NotContains(t, one, "$CubeSQL2")
+
+	twoLabel, two := cubeComposeSQLExample(2)
+	assert.Equal(t, "Two-cube", twoLabel)
+	assert.Contains(t, two, "$CubeSQL2 AS t2")
+	assert.NotContains(t, two, "$CubeSQL3")
+
+	threeLabel, three := cubeComposeSQLExample(8)
+	assert.Equal(t, "Three-cube", threeLabel)
+	assert.Contains(t, three, "$CubeSQL3 AS t3")
 }
 
 func TestBuildReportComponent_DisablesMCPToolWhenReportFlagIsFalse(t *testing.T) {

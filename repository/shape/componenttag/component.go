@@ -33,6 +33,7 @@ type Component struct {
 	ReportOffset          string
 	ReportCompose         bool
 	ReportComposeMCP      bool
+	ReportComposeMaxCubes int
 	ReportComposeMaxLimit int
 }
 
@@ -71,6 +72,9 @@ func (c *Component) Tag() *tagtags.Tag {
 	}
 	if c.ReportComposeMCP {
 		appendNonEmpty(builder, "reportComposeMCP", "true")
+	}
+	if c.ReportComposeMaxCubes > 0 {
+		appendNonEmpty(builder, "reportComposeMaxCubes", strconv.Itoa(c.ReportComposeMaxCubes))
 	}
 	if c.ReportComposeMaxLimit > 0 {
 		appendNonEmpty(builder, "reportComposeMaxLimit", strconv.Itoa(c.ReportComposeMaxLimit))
@@ -129,6 +133,12 @@ func Parse(tag reflect.StructTag) (*Tag, error) {
 			component.ReportCompose = strings.EqualFold(strings.TrimSpace(value), "true")
 		case "reportcomposemcp":
 			component.ReportComposeMCP = strings.EqualFold(strings.TrimSpace(value), "true")
+		case "reportcomposemaxcubes":
+			parsed, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil {
+				return fmt.Errorf("invalid reportComposeMaxCubes: %w", err)
+			}
+			component.ReportComposeMaxCubes = parsed
 		case "reportcomposemaxlimit":
 			parsed, err := strconv.Atoi(strings.TrimSpace(value))
 			if err != nil {

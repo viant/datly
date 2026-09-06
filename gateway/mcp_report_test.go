@@ -735,17 +735,25 @@ func TestRouter_buildToolInputType_UsesBuiltCubeComposeContract(t *testing.T) {
 	rType := (&Router{}).buildToolInputType(composeComponent)
 	require.Equal(t, reflect.Struct, rType.Kind())
 
-	for _, name := range []string{"Cube1", "Cube2", "SQL"} {
+	for _, name := range []string{"Cubes", "SQL"} {
 		_, ok := rType.FieldByName(name)
 		assert.True(t, ok, name)
 	}
-	cube2, ok := rType.FieldByName("Cube2")
+	sqlField, ok := rType.FieldByName("SQL")
 	require.True(t, ok)
-	for _, name := range []string{"Inherit", "Align", "Filters"} {
-		_, ok = cube2.Type.FieldByName(name)
+	assert.Contains(t, sqlField.Tag.Get("desc"), "cubes[N-1] maps exactly to $CubeSQLN AS tN")
+	assert.Contains(t, sqlField.Tag.Get("desc"), "Do not use ?, named bind parameters")
+	assert.Contains(t, sqlField.Tag.Get("desc"), `"cubes":[`)
+	assert.Contains(t, sqlField.Tag.Get("desc"), "ORDER BY difference DESC LIMIT 10")
+	cubes, ok := rType.FieldByName("Cubes")
+	require.True(t, ok)
+	require.Equal(t, reflect.Slice, cubes.Type.Kind())
+	frameType := cubes.Type.Elem()
+	for _, name := range []string{"InheritFrom", "Align", "Filters"} {
+		_, ok = frameType.FieldByName(name)
 		assert.True(t, ok, name)
 	}
-	filters, ok := cube2.Type.FieldByName("Filters")
+	filters, ok := frameType.FieldByName("Filters")
 	require.True(t, ok)
 	advertiserID, ok := filters.Type.FieldByName("AdvertiserId")
 	require.True(t, ok)

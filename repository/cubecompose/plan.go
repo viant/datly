@@ -14,12 +14,7 @@ import (
 	"github.com/viant/sqlparser/query"
 )
 
-const (
-	CubeSQL1 = "$CubeSQL1"
-	CubeSQL2 = "$CubeSQL2"
-	source1  = "DATLYCUBESQLONE"
-	source2  = "DATLYCUBESQLTWO"
-)
+const sourcePrefix = "DATLYCUBESQL"
 
 type Role string
 
@@ -50,9 +45,15 @@ type Plan struct {
 	selectQuery *query.Select
 	catalog     *Catalog
 	Columns     []Column
-	Fields1     []string
-	Fields2     []string
+	Fields      [][]string
+	FrameCount  int
 	Limit       int
+}
+
+// Frame is one trusted, parameterized cube projection supplied to Render.
+type Frame struct {
+	SQL  string
+	Args []interface{}
 }
 
 type renderer struct {
@@ -89,9 +90,12 @@ func (c *Catalog) Lookup(name string) (Field, bool) {
 	return field, ok
 }
 
-func Compile(SQL string, catalog *Catalog, maxLimit int) (*Plan, error) {
+func Compile(SQL string, catalog *Catalog, frameCount, maxLimit int) (*Plan, error) {
 	if catalog == nil || len(catalog.fields) == 0 {
 		return nil, fmt.Errorf("cube compose field catalog was empty")
+	}
+	if frameCount <= 0 {
+		return nil, fmt.Errorf("cube compose requires at least one cube")
 	}
 	if maxLimit <= 0 {
 		maxLimit = 100
@@ -99,11 +103,15 @@ func Compile(SQL string, catalog *Catalog, maxLimit int) (*Plan, error) {
 	if strings.TrimSpace(SQL) == "" {
 		return nil, fmt.Errorf("cube compose SQL was empty")
 	}
-	parsed, err := sqlparser.ParseQuery(strings.NewReplacer(CubeSQL1, source1, CubeSQL2, source2).Replace(SQL))
+	normalizedSQL, err := replaceCubeMacros(SQL, frameCount)
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := sqlparser.ParseQuery(normalizedSQL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid cube compose SQL: %w", err)
 	}
-	plan := &Plan{selectQuery: parsed, catalog: catalog}
+	plan := &Plan{selectQuery: parsed, catalog: catalog, FrameCount: frameCount}
 	if err := plan.validate(maxLimit); err != nil {
 		return nil, err
 	}
@@ -132,37 +140,43 @@ func (p *Plan) validate(maxLimit int) error {
 	if q.Kind != "" {
 		return fmt.Errorf("cube compose selection modifier %q is not allowed", q.Kind)
 	}
-	if sourceName(q.From.X) != source1 || !strings.EqualFold(q.From.Alias, "t1") {
-		return fmt.Errorf("cube compose FROM must be %s AS t1", CubeSQL1)
+	if sourceFrame(q.From.X, p.FrameCount) != 1 || !strings.EqualFold(q.From.Alias, "t1") {
+		return fmt.Errorf("cube compose FROM must be %s AS t1", cubeMacro(1))
 	}
-	if q.From.Comments != "" || q.From.Unparsed != "" || len(q.Joins) != 1 {
-		return fmt.Errorf("cube compose requires exactly one explicit join")
-	}
-	join := q.Joins[0]
-	if sourceName(join.With) != source2 || !strings.EqualFold(join.Alias, "t2") {
-		return fmt.Errorf("cube compose JOIN must target %s AS t2", CubeSQL2)
-	}
-	if join.Comments != "" || join.On == nil || join.On.X == nil {
-		return fmt.Errorf("cube compose join requires an ON expression")
-	}
-	if _, err := normalizeJoin(join.Raw); err != nil {
-		return err
-	}
-	joinCount, err := p.validateJoin(join.On.X)
-	if err != nil {
-		return err
-	}
-	if joinCount == 0 {
-		return fmt.Errorf("cube compose join requires at least one matching dimension key")
-	}
-	joinRefs, err := p.validateNode(join.On.X, nil)
-	if err != nil {
-		return err
+	if q.From.Comments != "" || q.From.Unparsed != "" || len(q.Joins) != p.FrameCount-1 {
+		return fmt.Errorf("cube compose requires exactly %d explicit joins for %d cubes", p.FrameCount-1, p.FrameCount)
 	}
 
 	aliases := map[string]Column{}
-	seen1, seen2 := map[string]bool{}, map[string]bool{}
-	appendRefs(joinRefs, seen1, seen2)
+	seen := make([]map[string]bool, p.FrameCount)
+	for i := range seen {
+		seen[i] = map[string]bool{}
+	}
+	for i, join := range q.Joins {
+		frame := i + 2
+		alias := cubeAlias(frame)
+		if sourceFrame(join.With, p.FrameCount) != frame || !strings.EqualFold(join.Alias, alias) {
+			return fmt.Errorf("cube compose join %d must target %s AS %s", i+1, cubeMacro(frame), alias)
+		}
+		if join.Comments != "" || join.On == nil || join.On.X == nil {
+			return fmt.Errorf("cube compose join %d requires an ON expression", i+1)
+		}
+		if _, err := normalizeJoin(join.Raw); err != nil {
+			return err
+		}
+		joinCount, err := p.validateJoin(join.On.X, frame)
+		if err != nil {
+			return err
+		}
+		if joinCount == 0 {
+			return fmt.Errorf("cube compose join %d requires at least one matching dimension key", i+1)
+		}
+		joinRefs, err := p.validateNode(join.On.X, nil)
+		if err != nil {
+			return err
+		}
+		appendRefs(joinRefs, seen)
+	}
 	for _, item := range q.List {
 		if item == nil || item.Expr == nil {
 			return fmt.Errorf("cube compose projection contains an empty expression")
@@ -171,7 +185,7 @@ func (p *Plan) validate(maxLimit int) error {
 		if err != nil {
 			return fmt.Errorf("invalid cube compose projection: %w", err)
 		}
-		appendRefs(refs, seen1, seen2)
+		appendRefs(refs, seen)
 		name, role, rType, err := p.outputColumn(item)
 		if err != nil {
 			return err
@@ -194,12 +208,12 @@ func (p *Plan) validate(maxLimit int) error {
 	if err != nil {
 		return err
 	}
-	appendRefs(refs, seen1, seen2)
+	appendRefs(refs, seen)
 	refs, err = p.validateNode(qualifyNode(q.Having), aliases)
 	if err != nil {
 		return err
 	}
-	appendRefs(refs, seen1, seen2)
+	appendRefs(refs, seen)
 	for _, list := range []query.List{q.GroupBy, q.OrderBy} {
 		for _, item := range list {
 			if item == nil {
@@ -212,11 +226,13 @@ func (p *Plan) validate(maxLimit int) error {
 			if err != nil {
 				return err
 			}
-			appendRefs(refs, seen1, seen2)
+			appendRefs(refs, seen)
 		}
 	}
-	p.Fields1 = sortedFields(seen1)
-	p.Fields2 = sortedFields(seen2)
+	p.Fields = make([][]string, p.FrameCount)
+	for i := range seen {
+		p.Fields[i] = sortedFields(seen[i])
+	}
 
 	if q.Limit == nil {
 		p.Limit = maxLimit
@@ -268,17 +284,17 @@ type fieldRef struct {
 	field Field
 }
 
-func (p *Plan) validateJoin(n node.Node) (int, error) {
+func (p *Plan) validateJoin(n node.Node, frame int) (int, error) {
 	binary, ok := n.(*expr.Binary)
 	if !ok {
 		return 0, fmt.Errorf("cube compose ON supports dimension equality joined with AND")
 	}
 	if strings.EqualFold(strings.TrimSpace(binary.Op), "AND") {
-		left, err := p.validateJoin(binary.X)
+		left, err := p.validateJoin(binary.X, frame)
 		if err != nil {
 			return 0, err
 		}
-		right, err := p.validateJoin(binary.Y)
+		right, err := p.validateJoin(binary.Y, frame)
 		return left + right, err
 	}
 	if strings.TrimSpace(binary.Op) != "=" {
@@ -295,11 +311,13 @@ func (p *Plan) validateJoin(n node.Node) (int, error) {
 	if left.field.Role != Dimension || right.field.Role != Dimension {
 		return 0, fmt.Errorf("cube compose join keys must be dimensions")
 	}
-	if left.alias == right.alias || left.alias != "t1" || right.alias != "t2" {
-		return 0, fmt.Errorf("cube compose join must join a t1 dimension to a t2 dimension")
+	leftFrame, _ := aliasFrame(left.alias, p.FrameCount)
+	rightFrame, _ := aliasFrame(right.alias, p.FrameCount)
+	if leftFrame == rightFrame || !joinsNewFrame(leftFrame, rightFrame, frame) {
+		return 0, fmt.Errorf("cube compose join for %s must match one of its dimensions to an earlier cube", cubeAlias(frame))
 	}
 	if left.field.Name != right.field.Name {
-		return 0, fmt.Errorf("cube compose v1 join dimensions must match, got %s and %s", left.field.Name, right.field.Name)
+		return 0, fmt.Errorf("cube compose join dimensions must match, got %s and %s", left.field.Name, right.field.Name)
 	}
 	return 1, nil
 }
@@ -414,8 +432,11 @@ func (p *Plan) resolveSelector(n node.Node) (fieldRef, error) {
 		return fieldRef{}, fmt.Errorf("expected qualified cube field, got %T", n)
 	}
 	parts := selectorParts(selector)
-	if len(parts) != 2 || (parts[0] != "t1" && parts[0] != "t2") {
-		return fieldRef{}, fmt.Errorf("cube fields must be qualified as t1.<field> or t2.<field>")
+	if len(parts) != 2 {
+		return fieldRef{}, fmt.Errorf("cube fields must be qualified as tN.<field>")
+	}
+	if _, ok := aliasFrame(parts[0], p.FrameCount); !ok {
+		return fieldRef{}, fmt.Errorf("cube alias %q does not identify one of the %d submitted cubes", parts[0], p.FrameCount)
 	}
 	field, ok := p.catalog.Lookup(parts[1])
 	if !ok {
@@ -424,9 +445,14 @@ func (p *Plan) resolveSelector(n node.Node) (fieldRef, error) {
 	return fieldRef{alias: parts[0], field: field}, nil
 }
 
-func (p *Plan) Render(frame1SQL, frame2SQL string, frame1Args, frame2Args []interface{}) (string, []interface{}, error) {
-	if strings.TrimSpace(frame1SQL) == "" || strings.TrimSpace(frame2SQL) == "" {
-		return "", nil, fmt.Errorf("cube compose frame SQL was empty")
+func (p *Plan) Render(frames []Frame) (string, []interface{}, error) {
+	if len(frames) != p.FrameCount {
+		return "", nil, fmt.Errorf("cube compose plan requires %d prepared cubes, got %d", p.FrameCount, len(frames))
+	}
+	for i, frame := range frames {
+		if strings.TrimSpace(frame.SQL) == "" {
+			return "", nil, fmt.Errorf("cube compose cube %d SQL was empty", i+1)
+		}
 	}
 	r := &renderer{catalog: p.catalog, aliases: map[string]Column{}}
 	for _, column := range p.Columns {
@@ -437,22 +463,28 @@ func (p *Plan) Render(frame1SQL, frame2SQL string, frame1Args, frame2Args []inte
 	if err != nil {
 		return "", nil, err
 	}
-	projectionArgs := append([]interface{}{}, r.args...)
-	r.args = nil
+	args := r.takeArgs()
 	parts := []string{"SELECT " + projection}
-	parts = append(parts, "FROM ("+frame1SQL+") AS t1")
-	joinKind, _ := normalizeJoin(q.Joins[0].Raw)
-	on, err := r.renderNode(q.Joins[0].On.X)
-	if err != nil {
-		return "", nil, err
+	parts = append(parts, "FROM ("+frames[0].SQL+") AS t1")
+	args = append(args, frames[0].Args...)
+	for i, join := range q.Joins {
+		frame := frames[i+1]
+		joinKind, _ := normalizeJoin(join.Raw)
+		on, err := r.renderNode(join.On.X)
+		if err != nil {
+			return "", nil, err
+		}
+		parts = append(parts, joinKind+" ("+frame.SQL+") AS "+cubeAlias(i+2)+" ON "+on)
+		args = append(args, frame.Args...)
+		args = append(args, r.takeArgs()...)
 	}
-	parts = append(parts, joinKind+" ("+frame2SQL+") AS t2 ON "+on)
 	if q.Qualify != nil && q.Qualify.X != nil {
 		value, err := r.renderNode(q.Qualify.X)
 		if err != nil {
 			return "", nil, err
 		}
 		parts = append(parts, "WHERE "+value)
+		args = append(args, r.takeArgs()...)
 	}
 	if len(q.GroupBy) > 0 {
 		groupBy, err := r.renderList(q.GroupBy)
@@ -460,6 +492,7 @@ func (p *Plan) Render(frame1SQL, frame2SQL string, frame1Args, frame2Args []inte
 			return "", nil, err
 		}
 		parts = append(parts, "GROUP BY "+groupBy)
+		args = append(args, r.takeArgs()...)
 	}
 	if q.Having != nil && q.Having.X != nil {
 		value, err := r.renderNode(q.Having.X)
@@ -467,6 +500,7 @@ func (p *Plan) Render(frame1SQL, frame2SQL string, frame1Args, frame2Args []inte
 			return "", nil, err
 		}
 		parts = append(parts, "HAVING "+value)
+		args = append(args, r.takeArgs()...)
 	}
 	if len(q.OrderBy) > 0 {
 		orderBy, err := r.renderList(q.OrderBy)
@@ -474,15 +508,16 @@ func (p *Plan) Render(frame1SQL, frame2SQL string, frame1Args, frame2Args []inte
 			return "", nil, err
 		}
 		parts = append(parts, "ORDER BY "+orderBy)
+		args = append(args, r.takeArgs()...)
 	}
 	parts = append(parts, "LIMIT "+strconv.Itoa(p.Limit))
-	// Bind values in the same lexical order as placeholders in finalSQL:
-	// projection, first frame, second frame, then ON/WHERE/GROUP/HAVING/ORDER.
-	args := append([]interface{}{}, projectionArgs...)
-	args = append(args, frame1Args...)
-	args = append(args, frame2Args...)
-	args = append(args, r.args...)
 	return strings.Join(parts, "\n"), args, nil
+}
+
+func (r *renderer) takeArgs() []interface{} {
+	result := append([]interface{}{}, r.args...)
+	r.args = nil
+	return result
 }
 
 func (r *renderer) renderList(list query.List) (string, error) {
@@ -608,6 +643,121 @@ func sourceName(n node.Node) string {
 	return ""
 }
 
+func cubeMacro(frame int) string {
+	return "$CubeSQL" + strconv.Itoa(frame)
+}
+
+func cubeSource(frame int) string {
+	return sourcePrefix + strconv.Itoa(frame)
+}
+
+func cubeAlias(frame int) string {
+	return "t" + strconv.Itoa(frame)
+}
+
+func replaceCubeMacros(SQL string, frameCount int) (string, error) {
+	var result strings.Builder
+	result.Grow(len(SQL))
+	for i := 0; i < len(SQL); {
+		switch {
+		case SQL[i] == '\'' || SQL[i] == '"' || SQL[i] == '`':
+			next, err := copyQuotedSQL(&result, SQL, i, SQL[i])
+			if err != nil {
+				return "", err
+			}
+			i = next
+		case i+1 < len(SQL) && SQL[i:i+2] == "--":
+			next := strings.IndexByte(SQL[i+2:], '\n')
+			if next == -1 {
+				result.WriteString(SQL[i:])
+				return result.String(), nil
+			}
+			next += i + 3
+			result.WriteString(SQL[i:next])
+			i = next
+		case i+1 < len(SQL) && SQL[i:i+2] == "/*":
+			next := strings.Index(SQL[i+2:], "*/")
+			if next == -1 {
+				return "", fmt.Errorf("invalid cube compose SQL: unterminated block comment")
+			}
+			next += i + 4
+			result.WriteString(SQL[i:next])
+			i = next
+		case strings.HasPrefix(SQL[i:], "$CubeSQL"):
+			end := i + len("$CubeSQL")
+			for end < len(SQL) && SQL[end] >= '0' && SQL[end] <= '9' {
+				end++
+			}
+			token := SQL[i:end]
+			if end == i+len("$CubeSQL") || end < len(SQL) && isIdentifierByte(SQL[end]) {
+				return "", fmt.Errorf("invalid cube compose macro %q", token)
+			}
+			frame, err := strconv.Atoi(SQL[i+len("$CubeSQL") : end])
+			if err != nil || frame < 1 || frame > frameCount || token != cubeMacro(frame) {
+				return "", fmt.Errorf("cube compose macro %q does not identify one of the %d submitted cubes", token, frameCount)
+			}
+			result.WriteString(cubeSource(frame))
+			i = end
+		default:
+			result.WriteByte(SQL[i])
+			i++
+		}
+	}
+	return result.String(), nil
+}
+
+func copyQuotedSQL(result *strings.Builder, SQL string, start int, quote byte) (int, error) {
+	result.WriteByte(quote)
+	for i := start + 1; i < len(SQL); i++ {
+		result.WriteByte(SQL[i])
+		if SQL[i] == '\\' && i+1 < len(SQL) {
+			i++
+			result.WriteByte(SQL[i])
+			continue
+		}
+		if SQL[i] != quote {
+			continue
+		}
+		if i+1 < len(SQL) && SQL[i+1] == quote {
+			i++
+			result.WriteByte(SQL[i])
+			continue
+		}
+		return i + 1, nil
+	}
+	return 0, fmt.Errorf("invalid cube compose SQL: unterminated quoted value")
+}
+
+func isIdentifierByte(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z' || value >= '0' && value <= '9' || value == '_'
+}
+
+func sourceFrame(n node.Node, frameCount int) int {
+	name := sourceName(n)
+	for frame := 1; frame <= frameCount; frame++ {
+		if name == cubeSource(frame) {
+			return frame
+		}
+	}
+	return 0
+}
+
+func aliasFrame(alias string, frameCount int) (int, bool) {
+	alias = normalize(alias)
+	if len(alias) < 2 || alias[0] != 't' {
+		return 0, false
+	}
+	frame, err := strconv.Atoi(alias[1:])
+	if err != nil || frame < 1 || frame > frameCount || cubeAlias(frame) != alias {
+		return 0, false
+	}
+	return frame, true
+}
+
+func joinsNewFrame(left, right, frame int) bool {
+	return left == frame && right > 0 && right < frame || right == frame && left > 0 && left < frame
+}
+
 func normalizeJoin(raw string) (string, error) {
 	value := strings.ToUpper(strings.Join(strings.Fields(raw), " "))
 	switch value {
@@ -627,12 +777,11 @@ func qualifyNode(value *expr.Qualify) node.Node {
 	return value.X
 }
 
-func appendRefs(refs []fieldRef, one, two map[string]bool) {
+func appendRefs(refs []fieldRef, fields []map[string]bool) {
 	for _, ref := range refs {
-		if ref.alias == "t1" {
-			one[ref.field.Name] = true
-		} else if ref.alias == "t2" {
-			two[ref.field.Name] = true
+		frame, ok := aliasFrame(ref.alias, len(fields))
+		if ok {
+			fields[frame-1][ref.field.Name] = true
 		}
 	}
 }

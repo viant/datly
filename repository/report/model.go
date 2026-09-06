@@ -8,6 +8,8 @@ import (
 	"github.com/viant/datly/view/state"
 )
 
+const DefaultCubeComposeMaxCubes = 8
+
 type Config struct {
 	Enabled    bool
 	MCPTool    *bool
@@ -21,11 +23,12 @@ type Config struct {
 	Compose    *CubeComposeConfig
 }
 
-// CubeComposeConfig controls the generated two-source cube composition endpoint.
+// CubeComposeConfig controls the generated multi-source cube composition endpoint.
 // It is deliberately opt-in so existing cube routes retain their current surface.
 type CubeComposeConfig struct {
 	Enabled   bool
 	MCPTool   *bool
+	MaxCubes  int
 	MaxLimit  int
 	TimeoutMs int
 }
@@ -81,6 +84,9 @@ func (c *CubeComposeConfig) Normalize() *CubeComposeConfig {
 		return nil
 	}
 	ret := c.Clone()
+	if ret.MaxCubes <= 0 {
+		ret.MaxCubes = DefaultCubeComposeMaxCubes
+	}
 	if ret.MaxLimit <= 0 {
 		ret.MaxLimit = 100
 	}

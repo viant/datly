@@ -72,6 +72,7 @@ func TestComponentCodegen_GeneratesSelectorHolderOutsideBusinessInput(t *testing
 			Offset:     "Skip",
 			Compose: &dqlshape.CubeComposeDirective{
 				Enabled:  true,
+				MaxCubes: 6,
 				MaxLimit: 25,
 			},
 		},
@@ -131,6 +132,7 @@ func TestComponentCodegen_GeneratesSelectorHolderOutsideBusinessInput(t *testing
 	assert.Contains(t, string(routerSource), `report=true`)
 	assert.Contains(t, string(routerSource), `reportInput=VendorReportInput`)
 	assert.Contains(t, string(routerSource), `reportCompose=true`)
+	assert.Contains(t, string(routerSource), `reportComposeMaxCubes=6`)
 	assert.Contains(t, string(routerSource), `reportComposeMaxLimit=25`)
 	assert.Contains(t, string(routerSource), `reportDimensions=Dims`)
 	assert.Contains(t, string(routerSource), `Fields []string `+"`"+`parameter:"`)
@@ -140,7 +142,7 @@ func TestComponentCodegen_GeneratesSelectorHolderOutsideBusinessInput(t *testing
 
 	outputSource, err := os.ReadFile(result.OutputFilePath)
 	require.NoError(t, err)
-	assert.Contains(t, string(outputSource), `repository.WithReport(&repository.Report{Enabled: true, Input: "VendorReportInput", Dimensions: "Dims", Measures: "Metrics", Filters: "Predicates", OrderBy: "Sort", Limit: "Take", Offset: "Skip", Compose: &repository.CubeCompose{Enabled: true, MaxLimit: 25}})`)
+	assert.Contains(t, string(outputSource), `repository.WithReport(&repository.Report{Enabled: true, Input: "VendorReportInput", Dimensions: "Dims", Measures: "Metrics", Filters: "Predicates", OrderBy: "Sort", Limit: "Take", Offset: "Skip", Compose: &repository.CubeCompose{Enabled: true, MaxCubes: 6, MaxLimit: 25}})`)
 	assert.Contains(t, string(outputSource), `view:"Vendor,groupable=true`)
 	assert.Contains(t, string(outputSource), `selectorOrderBy=true`)
 	assert.Contains(t, string(outputSource), `selectorOrderByColumns={accountId:ACCOUNT_ID}`)

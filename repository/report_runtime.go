@@ -108,7 +108,7 @@ func buildCubeComposeArtifacts(ctx context.Context, dispatcher contract.Dispatch
 	if err != nil {
 		return nil, nil, err
 	}
-	inputType, bodyType, err := buildCubeComposeInputType(original, metadata)
+	inputType, bodyType, err := buildCubeComposeInputType(original, metadata, config.Compose)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -253,19 +253,53 @@ func buildCubeComposePath(routePath *path.Path) *path.Path {
 	if pathCopy.Name != "" {
 		pathCopy.Name += " Cube Compose"
 	}
-	pathCopy.Description = cubeComposeToolDescription(pathCopy.Description)
+	pathCopy.Description = cubeComposeToolDescription(pathCopy.Description, cubeComposeMaxCubes(routePath.Report.Compose.MaxCubes))
 	return &pathCopy
 }
 
-func cubeComposeToolDescription(base string) string {
-	description := "Compose two filtered projections of this cube with caller-selected guarded SQL over $CubeSQL1 AS t1 and $CubeSQL2 AS t2. Use JOIN or LEFT JOIN on matching dimensions, ORDER BY, and a bounded LIMIT. The SQL projection defines a new request-local result shape: Datly returns a dynamically typed Go-struct collection as data through the regular view reader, without view caching; dictionaries and outer-view enrichment from the source cube are not applied. Basic example (replace <dimension> and <measure> with names exposed by this tool): " + cubeComposeBasicSQLExample
+func cubeComposeToolDescription(base string, maxCubes int) string {
+	label, example := cubeComposeSQLExample(maxCubes)
+	description := fmt.Sprintf("Use Cube Compose when the answer requires calculations, filtering, grouping, or ranking across independently filtered projections of this cube, or a new projection over one cube. Submit 1 to %d entries in cubes and guarded SQL in sql. Each cubes entry is prepared independently with its own typed filters and preserved bind arguments; wrapper query parameters do not become cube filters. A later entry may set inheritFrom to the one-based index of a preceding entry: omitted filters inherit and explicitly supplied filters override. align may be elapsed when the cube's time predicates support elapsed-period alignment. %s SQL must start with FROM $CubeSQL1 AS t1 and introduce every other submitted cube exactly once, in array order, using JOIN or LEFT JOIN. Join each new cube to an earlier cube with equality on exposed, same-name dimensions. Only qualified exposed dimensions and measures may be referenced. Computed projections require aliases; WHERE, GROUP BY, HAVING, ORDER BY, and a bounded LIMIT are supported. Do not submit SQL placeholders: literal values are validated and bound by Datly. Request shape example: %s. %s SQL example (replace placeholders with fields and filters exposed by this tool): %s. The SQL projection defines a request-local result shape returned as a dynamically typed Go-struct collection in data through the regular view reader. View caching, source dictionaries, and outer-view enrichment are not applied.", maxCubes, cubeComposeMappingDescription(maxCubes), cubeComposeRequestExample(maxCubes), label, example)
 	if base = strings.TrimSpace(base); base != "" {
 		return base + ". " + description
 	}
 	return description
 }
 
-const cubeComposeBasicSQLExample = "SELECT t1.<dimension>, t1.<measure> AS left_value, t2.<measure> AS right_value, t1.<measure> - t2.<measure> AS value_diff FROM $CubeSQL1 AS t1 JOIN $CubeSQL2 AS t2 ON t1.<dimension> = t2.<dimension> ORDER BY value_diff DESC LIMIT 10"
+func cubeComposeMappingDescription(maxCubes int) string {
+	if maxCubes == 1 {
+		return "cubes[0] is $CubeSQL1 AS t1."
+	}
+	return "cubes[0] is $CubeSQL1 AS t1, cubes[1] is $CubeSQL2 AS t2, and so on."
+}
+
+const (
+	cubeComposeOneSQLExample   = "SELECT t1.<dimension>, t1.<measure> AS value_1 FROM $CubeSQL1 AS t1 ORDER BY value_1 DESC LIMIT 10"
+	cubeComposeTwoSQLExample   = "SELECT t1.<dimension>, t1.<measure> AS value_1, t2.<measure> AS value_2, t1.<measure> - t2.<measure> AS difference FROM $CubeSQL1 AS t1 LEFT JOIN $CubeSQL2 AS t2 ON t1.<dimension> = t2.<dimension> ORDER BY difference DESC LIMIT 10"
+	cubeComposeThreeSQLExample = "SELECT t1.<dimension>, t1.<measure> AS value_1, t2.<measure> AS value_2, t3.<measure> AS value_3, t1.<measure> - t2.<measure> AS difference FROM $CubeSQL1 AS t1 LEFT JOIN $CubeSQL2 AS t2 ON t1.<dimension> = t2.<dimension> LEFT JOIN $CubeSQL3 AS t3 ON t1.<dimension> = t3.<dimension> ORDER BY difference DESC LIMIT 10"
+)
+
+func cubeComposeRequestExample(maxCubes int) string {
+	switch maxCubes {
+	case 1:
+		return `{"cubes":[{"filters":{"<filter>":"<value>"}}],"sql":"` + cubeComposeOneSQLExample + `"}`
+	case 2:
+		return `{"cubes":[{"filters":{"<period-filter>":"<period-1>","<scope-filter>":"<scope>"}},{"filters":{"<period-filter>":"<period-2>","<scope-filter>":"<scope>"}}],"sql":"` + cubeComposeTwoSQLExample + `"}`
+	default:
+		return `{"cubes":[{"filters":{"<period-filter>":"<period-1>","<scope-filter>":"<scope>"}},{"filters":{"<period-filter>":"<period-2>","<scope-filter>":"<scope>"}},{"inheritFrom":1,"filters":{"<period-filter>":"<period-3>"}}],"sql":"` + cubeComposeThreeSQLExample + `"}`
+	}
+}
+
+func cubeComposeSQLExample(maxCubes int) (string, string) {
+	switch maxCubes {
+	case 1:
+		return "One-cube", cubeComposeOneSQLExample
+	case 2:
+		return "Two-cube", cubeComposeTwoSQLExample
+	default:
+		return "Three-cube", cubeComposeThreeSQLExample
+	}
+}
 
 func cubeComposePathMCPToolEnabled(compose *path.CubeCompose) bool {
 	if compose == nil || compose.MCPTool == nil {
@@ -305,17 +339,16 @@ func buildReportInputType(component *Component, metadata *ReportMetadata, report
 	return reportmodel.BuildInputType(source, metadata, report)
 }
 
-func buildCubeComposeInputType(component *Component, metadata *ReportMetadata) (*state.Type, reflect.Type, error) {
+func buildCubeComposeInputType(component *Component, metadata *ReportMetadata, config *CubeCompose) (*state.Type, reflect.Type, error) {
 	filterType := composeFilterStructType(metadata.Filters)
 	frameType := reflect.StructOf([]reflect.StructField{
-		{Name: "Inherit", Type: reflect.TypeOf(false), Tag: buildReportTag("inherit", "Inherit filters omitted from this frame from cube1; valid for cube2")},
+		{Name: "InheritFrom", Type: reflect.TypeOf((*int)(nil)), Tag: buildReportTag("inheritFrom", "Optional one-based index of a preceding cube whose omitted filters this cube inherits")},
 		{Name: "Align", Type: reflect.TypeOf(""), Tag: buildReportTag("align", "Optional frame alignment: elapsed")},
 		{Name: "Filters", Type: filterType, Tag: buildReportTag("filters", "Typed filters from the source cube")},
 	})
 	bodyType := reflect.StructOf([]reflect.StructField{
-		{Name: "Cube1", Type: frameType, Tag: buildReportTag("cube1", "Left cube frame")},
-		{Name: "Cube2", Type: frameType, Tag: buildReportTag("cube2", "Right cube frame")},
-		{Name: "SQL", Type: reflect.TypeOf(""), Tag: buildReportTag("sql", cubeComposeSQLDescription(metadata))},
+		{Name: "Cubes", Type: reflect.SliceOf(frameType), Tag: buildReportTag("cubes", fmt.Sprintf("Ordered cube projections; requires 1 to %d entries and maps entry N to $CubeSQLN AS tN", config.MaxCubes))},
+		{Name: "SQL", Type: reflect.TypeOf(""), Tag: buildReportTag("sql", cubeComposeSQLDescription(metadata, config.MaxCubes))},
 	})
 	bodyPtr := reflect.PtrTo(bodyType)
 	bodySchema := state.NewSchema(bodyPtr)
@@ -339,7 +372,7 @@ func buildCubeComposeInputType(component *Component, metadata *ReportMetadata) (
 	return inputType, bodyType, nil
 }
 
-func cubeComposeSQLDescription(metadata *ReportMetadata) string {
+func cubeComposeSQLDescription(metadata *ReportMetadata, maxCubes int) string {
 	dimensions := make([]string, 0, len(metadata.Dimensions))
 	for _, field := range metadata.Dimensions {
 		dimensions = append(dimensions, field.Name)
@@ -348,7 +381,15 @@ func cubeComposeSQLDescription(metadata *ReportMetadata) string {
 	for _, field := range metadata.Measures {
 		measures = append(measures, field.Name)
 	}
-	return fmt.Sprintf("Guarded SELECT chosen by the caller over $CubeSQL1 AS t1 and $CubeSQL2 AS t2. JOIN or LEFT JOIN on matching dimensions; qualify all cube fields; computed aliases, WHERE/HAVING, ORDER BY, and bounded LIMIT are supported. Swap frame order for the opposite missing-member direction. The projection is returned as a request-local dynamic Go-struct collection in data through the regular Datly view reader; source dictionaries and outer-view enrichment are not applied, and no view cache is used. Basic SQL example (replace <dimension> and <measure> with names listed below): %s. Dimensions: %s. Measures: %s", cubeComposeBasicSQLExample, strings.Join(dimensions, ", "), strings.Join(measures, ", "))
+	label, example := cubeComposeSQLExample(maxCubes)
+	return fmt.Sprintf("Guarded SELECT over the 1 to %d ordered cubes in this request. cubes[N-1] maps exactly to $CubeSQLN AS tN. Start FROM $CubeSQL1 AS t1 and introduce every additional submitted cube exactly once, in order, with JOIN or LEFT JOIN. Each new cube must join an earlier cube using equality between exposed, same-name dimensions. Qualify every cube field with tN. You may project exposed dimensions and measures and use them in validated expressions, WHERE, GROUP BY, HAVING, and ORDER BY; every computed projection needs a safe alias. LIMIT is added automatically or must be within the configured bound. Do not use ?, named bind parameters, WITH, UNION, OFFSET, wildcard projections, arbitrary tables, or unlisted fields/functions. Datly preserves each cube projection's generated bind arguments and binds validated wrapper literals in SQL order. The result is a request-local dynamic Go-struct collection in data through the regular Datly view reader; no view cache is used, and source dictionaries and outer-view enrichment are not applied. Request shape example: %s. %s SQL example: %s. Dimensions: %s. Measures: %s", maxCubes, cubeComposeRequestExample(maxCubes), label, example, strings.Join(dimensions, ", "), strings.Join(measures, ", "))
+}
+
+func cubeComposeMaxCubes(value int) int {
+	if value <= 0 {
+		return reportmodel.DefaultCubeComposeMaxCubes
+	}
+	return value
 }
 
 func composeFilterStructType(filters []*ReportFilter) reflect.Type {

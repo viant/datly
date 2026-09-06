@@ -28,7 +28,7 @@ func TestCubeComposeReadRows_UsesDynamicStructCollection(t *testing.T) {
  t1.total - t2.total AS value_delta
  FROM $CubeSQL1 AS t1
  JOIN $CubeSQL2 AS t2 ON t1.account_id = t2.account_id
- LIMIT 5`, catalog, 10)
+ LIMIT 5`, catalog, 2, 10)
 	require.NoError(t, err)
 
 	resource := view.EmptyResource()
@@ -110,24 +110,47 @@ func TestCubeComposeFrameRequest_UsesOnlyTypedFrameFilters(t *testing.T) {
 	assert.Empty(t, query.Get("criteria"))
 }
 
-func TestInheritComposeFrame_CopiesOnlyOmittedFilters(t *testing.T) {
+func TestResolveComposeFrames_InheritsOnlyOmittedFiltersFromSelectedCube(t *testing.T) {
 	type filters struct {
 		AdvertiserID *int
 		Period       *string
 	}
 	type frame struct {
-		Inherit bool
-		Filters filters
+		InheritFrom *int
+		Filters     filters
 	}
 	advertiserID := 29
 	yesterday := "yesterday"
 	today := "today"
-	cube1 := frame{Filters: filters{AdvertiserID: &advertiserID, Period: &yesterday}}
-	cube2 := frame{Inherit: true, Filters: filters{Period: &today}}
+	first := 1
+	cubes := []frame{
+		{Filters: filters{AdvertiserID: &advertiserID, Period: &yesterday}},
+		{InheritFrom: &first, Filters: filters{Period: &today}},
+		{InheritFrom: &first},
+	}
 
-	actual := inheritComposeFrame(reflect.ValueOf(cube1), reflect.ValueOf(cube2)).Interface().(frame)
-	require.NotNil(t, actual.Filters.AdvertiserID)
-	assert.Equal(t, 29, *actual.Filters.AdvertiserID)
-	require.NotNil(t, actual.Filters.Period)
-	assert.Equal(t, "today", *actual.Filters.Period)
+	actual, err := resolveComposeFrames(reflect.ValueOf(cubes))
+	require.NoError(t, err)
+	require.Len(t, actual, 3)
+	second := actual[1].Interface().(frame)
+	require.NotNil(t, second.Filters.AdvertiserID)
+	assert.Equal(t, 29, *second.Filters.AdvertiserID)
+	require.NotNil(t, second.Filters.Period)
+	assert.Equal(t, "today", *second.Filters.Period)
+	third := actual[2].Interface().(frame)
+	require.NotNil(t, third.Filters.AdvertiserID)
+	assert.Equal(t, 29, *third.Filters.AdvertiserID)
+	require.NotNil(t, third.Filters.Period)
+	assert.Equal(t, "yesterday", *third.Filters.Period)
+}
+
+func TestResolveComposeFrames_RejectsForwardInheritance(t *testing.T) {
+	type frame struct {
+		InheritFrom *int
+		Filters     struct{}
+	}
+	third := 3
+	_, err := resolveComposeFrames(reflect.ValueOf([]frame{{}, {InheritFrom: &third}, {}}))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "preceding cube")
 }

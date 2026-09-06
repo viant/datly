@@ -53,6 +53,7 @@ type (
 	CubeCompose struct {
 		Enabled   bool  `json:",omitempty" yaml:"Enabled,omitempty"`
 		MCPTool   *bool `json:",omitempty" yaml:"MCPTool,omitempty"`
+		MaxCubes  int   `json:",omitempty" yaml:"MaxCubes,omitempty"`
 		MaxLimit  int   `json:",omitempty" yaml:"MaxLimit,omitempty"`
 		TimeoutMs int   `json:",omitempty" yaml:"TimeoutMs,omitempty"`
 	}

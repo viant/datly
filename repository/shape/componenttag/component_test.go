@@ -14,6 +14,7 @@ func TestCubeComposeOptionsRoundTrip(t *testing.T) {
 		Report:                true,
 		ReportCompose:         true,
 		ReportComposeMCP:      true,
+		ReportComposeMaxCubes: 6,
 		ReportComposeMaxLimit: 25,
 	}
 	tag := source.Tag()
@@ -23,5 +24,6 @@ func TestCubeComposeOptionsRoundTrip(t *testing.T) {
 	require.NotNil(t, parsed.Component)
 	assert.True(t, parsed.Component.ReportCompose)
 	assert.True(t, parsed.Component.ReportComposeMCP)
+	assert.Equal(t, 6, parsed.Component.ReportComposeMaxCubes)
 	assert.Equal(t, 25, parsed.Component.ReportComposeMaxLimit)
 }

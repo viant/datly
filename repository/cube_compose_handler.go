@@ -59,42 +59,39 @@ func (h *cubeComposeHandler) Exec(ctx context.Context, session xhandler.Session)
 	if err != nil {
 		return nil, err
 	}
-	plan, err := cubecompose.Compile(sqlValue.String(), catalog, h.Config.MaxLimit)
+	cubes := indirectValue(fieldByName(root, "Cubes"))
+	if !cubes.IsValid() || cubes.Kind() != reflect.Slice || cubes.Len() == 0 {
+		return nil, fmt.Errorf("cube compose requires at least one cube")
+	}
+	if cubes.Len() > h.Config.MaxCubes {
+		return nil, fmt.Errorf("cube compose accepts at most %d cubes", h.Config.MaxCubes)
+	}
+	plan, err := cubecompose.Compile(sqlValue.String(), catalog, cubes.Len(), h.Config.MaxLimit)
 	if err != nil {
 		return nil, err
 	}
-	cube1 := fieldByName(root, "Cube1")
-	cube2 := fieldByName(root, "Cube2")
-	if !cube1.IsValid() || !cube2.IsValid() {
-		return nil, fmt.Errorf("cube compose requires cube1 and cube2")
+	frames, err := resolveComposeFrames(cubes)
+	if err != nil {
+		return nil, err
 	}
-	cube2 = inheritComposeFrame(cube1, cube2)
 	snapshot := time.Now().UTC()
-	frame1Context, err := composeFrameContext(ctx, cube1, 1, snapshot)
-	if err != nil {
-		return nil, err
+	prepared := make([]cubecompose.Frame, len(frames))
+	for i, frame := range frames {
+		frameCtx, err := composeFrameContext(ctx, frame, i+1, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		frameRequest, err := h.frameRequest(request, frame, plan.Fields[i])
+		if err != nil {
+			return nil, err
+		}
+		query, err := preparer.PrepareQuery(frameCtx, h.Path, frameRequest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to prepare cube %d: %w", i+1, err)
+		}
+		prepared[i] = cubecompose.Frame{SQL: query.SQL, Args: query.Args}
 	}
-	frame2Context, err := composeFrameContext(ctx, cube2, 2, snapshot)
-	if err != nil {
-		return nil, err
-	}
-	frame1Request, err := h.frameRequest(request, cube1, plan.Fields1)
-	if err != nil {
-		return nil, err
-	}
-	frame2Request, err := h.frameRequest(request, cube2, plan.Fields2)
-	if err != nil {
-		return nil, err
-	}
-	frame1, err := preparer.PrepareQuery(frame1Context, h.Path, frame1Request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare cube1: %w", err)
-	}
-	frame2, err := preparer.PrepareQuery(frame2Context, h.Path, frame2Request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare cube2: %w", err)
-	}
-	finalSQL, args, err := plan.Render(frame1.SQL, frame2.SQL, frame1.Args, frame2.Args)
+	finalSQL, args, err := plan.Render(prepared)
 	if err != nil {
 		return nil, err
 	}
@@ -226,16 +223,33 @@ func (h *cubeComposeHandler) frameRequest(source *http.Request, frame reflect.Va
 	return request, nil
 }
 
-func inheritComposeFrame(cube1, cube2 reflect.Value) reflect.Value {
-	cube1 = indirectValue(cube1)
-	cube2 = indirectValue(cube2)
-	inherit := fieldByName(cube2, "Inherit")
-	if !inherit.IsValid() || inherit.Kind() != reflect.Bool || !inherit.Bool() {
-		return cube2
+func resolveComposeFrames(cubes reflect.Value) ([]reflect.Value, error) {
+	result := make([]reflect.Value, cubes.Len())
+	for i := 0; i < cubes.Len(); i++ {
+		frame := indirectValue(cubes.Index(i))
+		if !frame.IsValid() || frame.Kind() != reflect.Struct {
+			return nil, fmt.Errorf("cube compose cube %d was invalid", i+1)
+		}
+		inheritFrom := fieldByName(frame, "InheritFrom")
+		if !inheritFrom.IsValid() || inheritFrom.Kind() != reflect.Ptr || inheritFrom.IsNil() {
+			result[i] = frame
+			continue
+		}
+		parent := int(inheritFrom.Elem().Int())
+		if parent < 1 || parent > i {
+			return nil, fmt.Errorf("cube %d inheritFrom must reference a preceding cube between 1 and %d", i+1, i)
+		}
+		result[i] = inheritComposeFrame(result[parent-1], frame)
 	}
-	result := reflect.New(cube2.Type()).Elem()
-	result.Set(cube2)
-	left := fieldByName(cube1, "Filters")
+	return result, nil
+}
+
+func inheritComposeFrame(parent, frame reflect.Value) reflect.Value {
+	parent = indirectValue(parent)
+	frame = indirectValue(frame)
+	result := reflect.New(frame.Type()).Elem()
+	result.Set(frame)
+	left := fieldByName(parent, "Filters")
 	right := fieldByName(result, "Filters")
 	left = indirectValue(left)
 	if !left.IsValid() || !right.IsValid() {
