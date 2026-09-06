@@ -268,6 +268,10 @@ func (s *Service) initComponentProviders(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			providers, err = s.appendCubeComposeProvider(ctx, route, aPath, providers, provider)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	s.registry.SetProviders(providers)

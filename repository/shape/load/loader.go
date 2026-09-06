@@ -256,6 +256,7 @@ func buildComponent(source *shape.Source, pResult *plan.Result, resource *view.R
 			Limit:      strings.TrimSpace(primary.Report.Limit),
 			Offset:     strings.TrimSpace(primary.Report.Offset),
 		}
+		component.Report.Compose = cloneCubeComposeDirective(primary.Report.Compose)
 	} else if component.Directives != nil && component.Directives.Report != nil {
 		component.Report = &dqlshape.ReportDirective{
 			Enabled:    component.Directives.Report.Enabled,
@@ -267,6 +268,7 @@ func buildComponent(source *shape.Source, pResult *plan.Result, resource *view.R
 			Limit:      strings.TrimSpace(component.Directives.Report.Limit),
 			Offset:     strings.TrimSpace(component.Directives.Report.Offset),
 		}
+		component.Report.Compose = cloneCubeComposeDirective(component.Directives.Report.Compose)
 	}
 	component.ColumnsDiscovery = pResult.ColumnsDiscovery
 	component.TypeSpecs = resolveTypeSpecs(pResult)
@@ -1478,6 +1480,7 @@ func cloneDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 			Limit:      strings.TrimSpace(input.Report.Limit),
 			Offset:     strings.TrimSpace(input.Report.Offset),
 		}
+		ret.Report.Compose = cloneCubeComposeDirective(input.Report.Compose)
 	}
 	if ret.Meta == "" && ret.DefaultConnector == "" && ret.TemplateType == "" &&
 		ret.Dest == "" && ret.InputDest == "" && ret.OutputDest == "" && ret.RouterDest == "" &&
@@ -1486,6 +1489,14 @@ func cloneDirectives(input *dqlshape.Directives) *dqlshape.Directives {
 		return nil
 	}
 	return ret
+}
+
+func cloneCubeComposeDirective(input *dqlshape.CubeComposeDirective) *dqlshape.CubeComposeDirective {
+	if input == nil {
+		return nil
+	}
+	ret := *input
+	return &ret
 }
 
 func pickRootView(views []*plan.View) *plan.View {

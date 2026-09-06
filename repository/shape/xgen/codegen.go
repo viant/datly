@@ -3401,6 +3401,15 @@ func (g *ComponentCodegen) reportComponentTag() string {
 	if value := strings.TrimSpace(report.Offset); value != "" {
 		tag += fmt.Sprintf(",reportOffset=%s", value)
 	}
+	if report.Compose != nil && report.Compose.Enabled {
+		tag += ",reportCompose=true"
+		if report.Compose.MCPTool != nil && *report.Compose.MCPTool {
+			tag += ",reportComposeMCP=true"
+		}
+		if report.Compose.MaxLimit > 0 {
+			tag += fmt.Sprintf(",reportComposeMaxLimit=%d", report.Compose.MaxLimit)
+		}
+	}
 	return tag
 }
 
@@ -3430,6 +3439,16 @@ func (g *ComponentCodegen) reportComponentOption() string {
 	}
 	if value := strings.TrimSpace(report.Offset); value != "" {
 		parts = append(parts, fmt.Sprintf("Offset: %q", value))
+	}
+	if report.Compose != nil && report.Compose.Enabled {
+		composeParts := []string{"Enabled: true"}
+		if report.Compose.MaxLimit > 0 {
+			composeParts = append(composeParts, fmt.Sprintf("MaxLimit: %d", report.Compose.MaxLimit))
+		}
+		if report.Compose.TimeoutMs > 0 {
+			composeParts = append(composeParts, fmt.Sprintf("TimeoutMs: %d", report.Compose.TimeoutMs))
+		}
+		parts = append(parts, fmt.Sprintf("Compose: &repository.CubeCompose{%s}", strings.Join(composeParts, ", ")))
 	}
 	return fmt.Sprintf("repository.WithReport(&repository.Report{%s})", strings.Join(parts, ", "))
 }

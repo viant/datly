@@ -21,7 +21,7 @@ func extractSQLAndContext(dql string) (string, *typectx.Context, *dqlshape.Direc
 		if shouldMaskDirectiveBlock(block) {
 			applyMask(mask, dql, block.start, block.end)
 		}
-		if block.kind != directiveSettings {
+		if block.kind != directiveSettings && !isCubeComposeSetDirective(block) {
 			continue
 		}
 		diagnostics = append(diagnostics, parseSettingsDirectives(block.body, dql, block.bodyStart, directives)...)
@@ -76,6 +76,13 @@ func extractSQLAndContext(dql string) (string, *typectx.Context, *dqlshape.Direc
 		masked[i] = ' '
 	}
 	return string(masked), ctx, directives, diagnostics
+}
+
+func isCubeComposeSetDirective(block setDirectiveBlock) bool {
+	if block.kind != directiveSet && block.kind != directiveDefine {
+		return false
+	}
+	return strings.Contains(strings.ToLower(block.body), "$cubecompose")
 }
 
 func shouldMaskDirectiveBlock(block setDirectiveBlock) bool {

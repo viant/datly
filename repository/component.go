@@ -593,6 +593,18 @@ func WithReport(report *Report) ComponentOption {
 	}
 }
 
+// WithCubeCompose enables the generated cube composition endpoint for a
+// groupable component. The component must also opt in to Report/cube support.
+func WithCubeCompose(compose *CubeCompose) ComponentOption {
+	return func(c *Component) error {
+		if c.Report == nil || !c.Report.Enabled {
+			return fmt.Errorf("cube compose requires an enabled report cube")
+		}
+		c.Report.Compose = compose.Clone()
+		return nil
+	}
+}
+
 func WithHandler(aHandler xhandler.Handler) ComponentOption {
 	return func(c *Component) error {
 		c.Handler = handler.NewHandler(aHandler)

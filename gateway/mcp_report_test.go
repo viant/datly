@@ -696,3 +696,58 @@ func TestRouter_buildToolInputType_UsesBuiltReportComponentParameters(t *testing
 		assert.True(t, ok, name)
 	}
 }
+
+func TestRouter_buildToolInputType_UsesBuiltCubeComposeContract(t *testing.T) {
+	resource := view.EmptyResource()
+	rootView := view.NewView("performance", "PERFORMANCE")
+	rootView.Groupable = true
+	rootView.Columns = []*view.Column{
+		view.NewColumn("AdOrderID", "int", reflect.TypeOf(0), false),
+		view.NewColumn("TotalSpend", "float64", reflect.TypeOf(float64(0)), false),
+	}
+	rootView.Columns[0].Groupable = true
+	rootView.Columns[1].Aggregate = true
+	for _, column := range rootView.Columns {
+		require.NoError(t, column.Init(&repositoryReportTestResource{}, text.CaseFormatUndefined, false))
+	}
+	rootView.SetResource(resource)
+	resource.AddViews(rootView)
+
+	inputType, err := state.NewType(state.WithParameters(state.Parameters{
+		&state.Parameter{Name: "advertiserID", In: state.NewQueryLocation("advertiserID"), Schema: state.NewSchema(reflect.TypeOf(0)), Predicates: []*extension.PredicateConfig{{Name: "ByAdvertiser"}}, Description: "Advertiser identifier"},
+	}), state.WithResource(&repositoryReportTestResource{}))
+	require.NoError(t, err)
+	inputType.Name = "PerformanceInput"
+
+	component := &repository.Component{
+		Path:   contract.Path{Method: http.MethodGet, URI: "/v1/api/performance"},
+		Meta:   contract.Meta{Name: "performance"},
+		View:   rootView,
+		Report: &repository.Report{Enabled: true, Compose: &repository.CubeCompose{Enabled: true}},
+		Contract: contract.Contract{
+			Input: contract.Input{Type: *inputType},
+		},
+	}
+
+	composeComponent, err := repository.BuildCubeComposeComponent(nil, component)
+	require.NoError(t, err)
+	require.NotNil(t, composeComponent)
+	rType := (&Router{}).buildToolInputType(composeComponent)
+	require.Equal(t, reflect.Struct, rType.Kind())
+
+	for _, name := range []string{"Cube1", "Cube2", "SQL"} {
+		_, ok := rType.FieldByName(name)
+		assert.True(t, ok, name)
+	}
+	cube2, ok := rType.FieldByName("Cube2")
+	require.True(t, ok)
+	for _, name := range []string{"Inherit", "Align", "Filters"} {
+		_, ok = cube2.Type.FieldByName(name)
+		assert.True(t, ok, name)
+	}
+	filters, ok := cube2.Type.FieldByName("Filters")
+	require.True(t, ok)
+	advertiserID, ok := filters.Type.FieldByName("AdvertiserId")
+	require.True(t, ok)
+	assert.Equal(t, reflect.Ptr, advertiserID.Type.Kind())
+}

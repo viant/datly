@@ -1,0 +1,33 @@
+init:
+  parentPath: $parent.path
+
+pipeline:
+  compose:
+    action: http/runner:send
+    requests:
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-cube-compose/cube/compose
+        JSONBody:
+          cube1:
+            filters:
+              vendorIDs:
+                - 1
+                - 2
+                - 3
+          cube2:
+            filters:
+              vendorIDs:
+                - 1
+          sql: |
+            SELECT t1.accountId AS account_id,
+                   COALESCE(t2.totalId, 0) AS current_total,
+                   t1.totalId AS previous_total,
+                   t1.totalId - COALESCE(t2.totalId, 0) AS total_drop
+            FROM $CubeSQL1 AS t1
+            LEFT JOIN $CubeSQL2 AS t2 ON t1.accountId = t2.accountId
+            WHERE COALESCE(t2.totalId, 0) < t1.totalId
+            ORDER BY total_drop DESC
+            LIMIT 5
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect.json')

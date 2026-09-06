@@ -382,6 +382,15 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 }
 
 func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session, partitions *view.Partition) (parametrizedSQL *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
+	if session.Query != nil && aView == session.View {
+		if partitions != nil || collector.Relation() != nil {
+			return nil, nil, fmt.Errorf("an explicit reader query is only supported for a root, non-partitioned view")
+		}
+		return &cache.ParmetrizedQuery{
+			SQL:  session.Query.SQL,
+			Args: append([]interface{}{}, session.Query.Args...),
+		}, nil, nil
+	}
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 

@@ -315,6 +315,16 @@ func normalizeComponent(field *scan.Field) *ComponentRoute {
 				Limit:      strings.TrimSpace(tag.ReportLimit),
 				Offset:     strings.TrimSpace(tag.ReportOffset),
 			}
+			if tag.ReportCompose {
+				result.Report.Compose = &dqlshape.CubeComposeDirective{
+					Enabled:  true,
+					MaxLimit: tag.ReportComposeMaxLimit,
+				}
+				if tag.ReportComposeMCP {
+					enabled := true
+					result.Report.Compose.MCPTool = &enabled
+				}
+			}
 		}
 	}
 	return result

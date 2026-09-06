@@ -7,6 +7,7 @@ import (
 	"path"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/viant/afs"
@@ -33,20 +34,21 @@ import (
 )
 
 var (
-	routeSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$route\s*\(([^)]*)\)\s*\)\s*$`)
-	packageLineExpr            = regexp.MustCompile(`(?im)^\s*#package\s*\(\s*['"]([^'"]+)['"]\s*\)\s*$`)
-	hashImportLineExpr         = regexp.MustCompile(`(?im)^\s*#import\s*\(([^)]*)\)\s*$`)
-	connectorSettingsLineExpr  = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$connector\s*\(([^)]*)\)\s*\)\s*$`)
-	handlerSettingsLineExpr    = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$handler\s*\(([^)]*)\)\s*\)\s*$`)
-	inputSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$input\s*\(([^)]*)\)\s*\)\s*$`)
-	outputSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$output\s*\(([^)]*)\)\s*\)\s*$`)
-	reportSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$(?:report|cube)\s*\(([^)]*)\)\s*\)\s*$`)
-	marshalSettingsLineExpr    = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$marshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
-	unmarshalSettingsLineExpr  = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$unmarshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
-	formatSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
-	dateFormatSettingsLineExpr = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$date_format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
-	caseFormatSettingsLineExpr = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$case_format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
-	quotedArgExpr              = regexp.MustCompile(`['"]([^'"]*)['"]`)
+	routeSettingsLineExpr       = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$route\s*\(([^)]*)\)\s*\)\s*$`)
+	packageLineExpr             = regexp.MustCompile(`(?im)^\s*#package\s*\(\s*['"]([^'"]+)['"]\s*\)\s*$`)
+	hashImportLineExpr          = regexp.MustCompile(`(?im)^\s*#import\s*\(([^)]*)\)\s*$`)
+	connectorSettingsLineExpr   = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$connector\s*\(([^)]*)\)\s*\)\s*$`)
+	handlerSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$handler\s*\(([^)]*)\)\s*\)\s*$`)
+	inputSettingsLineExpr       = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$input\s*\(([^)]*)\)\s*\)\s*$`)
+	outputSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$output\s*\(([^)]*)\)\s*\)\s*$`)
+	reportSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$(?:report|cube)\s*\(([^)]*)\)\s*\)\s*$`)
+	cubeComposeSettingsLineExpr = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$cubeCompose\s*\(([^)]*)\)\s*\)\s*$`)
+	marshalSettingsLineExpr     = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$marshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	unmarshalSettingsLineExpr   = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$unmarshal\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	formatSettingsLineExpr      = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	dateFormatSettingsLineExpr  = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$date_format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	caseFormatSettingsLineExpr  = regexp.MustCompile(`(?im)^\s*#(?:settings|define|set)\s*\(\s*\$_\s*=\s*\$case_format\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*$`)
+	quotedArgExpr               = regexp.MustCompile(`['"]([^'"]*)['"]`)
 )
 
 type routeSettingsDirective struct {
@@ -586,6 +588,22 @@ func parseSettingsDirectives(dSQL string) (*routeSettingsDirective, bool, error)
 		last := matches[len(matches)-1]
 		ret.Report = parseReportSettings(last[1])
 	}
+	matches = cubeComposeSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
+	if len(matches) > 0 {
+		found = true
+		last := matches[len(matches)-1]
+		if len(last) < 2 {
+			return nil, false, fmt.Errorf("invalid $cubeCompose directive")
+		}
+		enabled, err := strconv.ParseBool(strings.TrimSpace(last[1]))
+		if err != nil {
+			return nil, false, fmt.Errorf("invalid $cubeCompose directive: expected true or false")
+		}
+		if ret.Report == nil {
+			ret.Report = parseReportSettings("")
+		}
+		ret.Report.Compose = &repository.CubeCompose{Enabled: enabled}
+	}
 
 	matches = marshalSettingsLineExpr.FindAllStringSubmatch(dSQL, -1)
 	if len(matches) > 0 {
@@ -735,6 +753,7 @@ func removeSettingsDirectives(dSQL string) string {
 	dSQL = inputSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = outputSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = reportSettingsLineExpr.ReplaceAllString(dSQL, "")
+	dSQL = cubeComposeSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = marshalSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = unmarshalSettingsLineExpr.ReplaceAllString(dSQL, "")
 	dSQL = formatSettingsLineExpr.ReplaceAllString(dSQL, "")

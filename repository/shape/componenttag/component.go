@@ -3,6 +3,7 @@ package componenttag
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	tagtags "github.com/viant/tagly/tags"
@@ -11,25 +12,28 @@ import (
 const TagName = "component"
 
 type Component struct {
-	Name             string
-	Path             string
-	Method           string
-	Connector        string
-	Marshaller       string
-	Handler          string
-	Input            string
-	Output           string
-	View             string
-	Source           string
-	Summary          string
-	Report           bool
-	ReportInput      string
-	ReportDimensions string
-	ReportMeasures   string
-	ReportFilters    string
-	ReportOrderBy    string
-	ReportLimit      string
-	ReportOffset     string
+	Name                  string
+	Path                  string
+	Method                string
+	Connector             string
+	Marshaller            string
+	Handler               string
+	Input                 string
+	Output                string
+	View                  string
+	Source                string
+	Summary               string
+	Report                bool
+	ReportInput           string
+	ReportDimensions      string
+	ReportMeasures        string
+	ReportFilters         string
+	ReportOrderBy         string
+	ReportLimit           string
+	ReportOffset          string
+	ReportCompose         bool
+	ReportComposeMCP      bool
+	ReportComposeMaxLimit int
 }
 
 type Tag struct {
@@ -62,6 +66,15 @@ func (c *Component) Tag() *tagtags.Tag {
 	appendNonEmpty(builder, "reportOrderBy", c.ReportOrderBy)
 	appendNonEmpty(builder, "reportLimit", c.ReportLimit)
 	appendNonEmpty(builder, "reportOffset", c.ReportOffset)
+	if c.ReportCompose {
+		appendNonEmpty(builder, "reportCompose", "true")
+	}
+	if c.ReportComposeMCP {
+		appendNonEmpty(builder, "reportComposeMCP", "true")
+	}
+	if c.ReportComposeMaxLimit > 0 {
+		appendNonEmpty(builder, "reportComposeMaxLimit", strconv.Itoa(c.ReportComposeMaxLimit))
+	}
 	return &tagtags.Tag{Name: TagName, Values: tagtags.Values(builder.String())}
 }
 
@@ -112,6 +125,16 @@ func Parse(tag reflect.StructTag) (*Tag, error) {
 			component.ReportLimit = strings.TrimSpace(value)
 		case "reportoffset":
 			component.ReportOffset = strings.TrimSpace(value)
+		case "reportcompose":
+			component.ReportCompose = strings.EqualFold(strings.TrimSpace(value), "true")
+		case "reportcomposemcp":
+			component.ReportComposeMCP = strings.EqualFold(strings.TrimSpace(value), "true")
+		case "reportcomposemaxlimit":
+			parsed, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil {
+				return fmt.Errorf("invalid reportComposeMaxLimit: %w", err)
+			}
+			component.ReportComposeMaxLimit = parsed
 		default:
 			return fmt.Errorf("unsupported component tag option: '%s'", key)
 		}

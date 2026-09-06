@@ -18,6 +18,16 @@ type Config struct {
 	OrderBy    string
 	Limit      string
 	Offset     string
+	Compose    *CubeComposeConfig
+}
+
+// CubeComposeConfig controls the generated two-source cube composition endpoint.
+// It is deliberately opt-in so existing cube routes retain their current surface.
+type CubeComposeConfig struct {
+	Enabled   bool
+	MCPTool   *bool
+	MaxLimit  int
+	TimeoutMs int
 }
 
 type Metadata struct {
@@ -54,7 +64,37 @@ func (c *Config) Clone() *Config {
 		return nil
 	}
 	ret := *c
+	ret.Compose = c.Compose.Clone()
 	return &ret
+}
+
+func (c *CubeComposeConfig) Clone() *CubeComposeConfig {
+	if c == nil {
+		return nil
+	}
+	ret := *c
+	return &ret
+}
+
+func (c *CubeComposeConfig) Normalize() *CubeComposeConfig {
+	if c == nil {
+		return nil
+	}
+	ret := c.Clone()
+	if ret.MaxLimit <= 0 {
+		ret.MaxLimit = 100
+	}
+	if ret.TimeoutMs <= 0 {
+		ret.TimeoutMs = 30000
+	}
+	return ret
+}
+
+func (c *CubeComposeConfig) MCPToolEnabled() bool {
+	if c == nil || c.MCPTool == nil {
+		return true
+	}
+	return *c.MCPTool
 }
 
 func (c *Config) Normalize() *Config {
@@ -69,6 +109,7 @@ func (c *Config) Normalize() *Config {
 	ret.OrderBy = defaultString(ret.OrderBy, "OrderBy")
 	ret.Limit = defaultString(ret.Limit, "Limit")
 	ret.Offset = defaultString(ret.Offset, "Offset")
+	ret.Compose = ret.Compose.Normalize()
 	return ret
 }
 

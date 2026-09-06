@@ -91,6 +91,14 @@ type ReportDirective struct {
 	OrderBy    string
 	Limit      string
 	Offset     string
+	Compose    *CubeComposeDirective
+}
+
+type CubeComposeDirective struct {
+	Enabled   bool
+	MCPTool   *bool
+	MaxLimit  int
+	TimeoutMs int
 }
 
 type Route struct {

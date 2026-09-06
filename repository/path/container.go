@@ -38,15 +38,23 @@ type (
 	}
 
 	Report struct {
-		Enabled    bool   `json:",omitempty" yaml:"Enabled,omitempty"`
-		MCPTool    *bool  `json:",omitempty" yaml:"MCPTool,omitempty"`
-		Input      string `json:",omitempty" yaml:"Input,omitempty"`
-		Dimensions string `json:",omitempty" yaml:"Dimensions,omitempty"`
-		Measures   string `json:",omitempty" yaml:"Measures,omitempty"`
-		Filters    string `json:",omitempty" yaml:"Filters,omitempty"`
-		OrderBy    string `json:",omitempty" yaml:"OrderBy,omitempty"`
-		Limit      string `json:",omitempty" yaml:"Limit,omitempty"`
-		Offset     string `json:",omitempty" yaml:"Offset,omitempty"`
+		Enabled    bool         `json:",omitempty" yaml:"Enabled,omitempty"`
+		MCPTool    *bool        `json:",omitempty" yaml:"MCPTool,omitempty"`
+		Input      string       `json:",omitempty" yaml:"Input,omitempty"`
+		Dimensions string       `json:",omitempty" yaml:"Dimensions,omitempty"`
+		Measures   string       `json:",omitempty" yaml:"Measures,omitempty"`
+		Filters    string       `json:",omitempty" yaml:"Filters,omitempty"`
+		OrderBy    string       `json:",omitempty" yaml:"OrderBy,omitempty"`
+		Limit      string       `json:",omitempty" yaml:"Limit,omitempty"`
+		Offset     string       `json:",omitempty" yaml:"Offset,omitempty"`
+		Compose    *CubeCompose `json:",omitempty" yaml:"Compose,omitempty"`
+	}
+
+	CubeCompose struct {
+		Enabled   bool  `json:",omitempty" yaml:"Enabled,omitempty"`
+		MCPTool   *bool `json:",omitempty" yaml:"MCPTool,omitempty"`
+		MaxLimit  int   `json:",omitempty" yaml:"MaxLimit,omitempty"`
+		TimeoutMs int   `json:",omitempty" yaml:"TimeoutMs,omitempty"`
 	}
 
 	ViewRef struct {
