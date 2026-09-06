@@ -44,6 +44,7 @@ type Column struct {
 type Plan struct {
 	selectQuery *query.Select
 	catalog     *Catalog
+	nullable    []bool
 	Columns     []Column
 	Fields      [][]string
 	FrameCount  int
@@ -148,6 +149,7 @@ func (p *Plan) validate(maxLimit int) error {
 	}
 
 	aliases := map[string]Column{}
+	p.nullable = make([]bool, p.FrameCount)
 	seen := make([]map[string]bool, p.FrameCount)
 	for i := range seen {
 		seen[i] = map[string]bool{}
@@ -161,9 +163,11 @@ func (p *Plan) validate(maxLimit int) error {
 		if join.Comments != "" || join.On == nil || join.On.X == nil {
 			return fmt.Errorf("cube compose join %d requires an ON expression", i+1)
 		}
-		if _, err := normalizeJoin(join.Raw); err != nil {
+		joinKind, err := normalizeJoin(join.Raw)
+		if err != nil {
 			return err
 		}
+		p.nullable[frame-1] = joinKind == "LEFT JOIN"
 		joinCount, err := p.validateJoin(join.On.X, frame)
 		if err != nil {
 			return err
@@ -331,7 +335,11 @@ func (p *Plan) outputColumn(item *query.Item) (string, Role, reflect.Type, error
 		if !safeIdentifier.MatchString(name) {
 			return "", "", nil, fmt.Errorf("invalid cube compose output name %q", name)
 		}
-		return name, ref.field.Role, ref.field.Type, nil
+		rType := ref.field.Type
+		if frame, ok := aliasFrame(ref.alias, p.FrameCount); ok && p.nullable[frame-1] && rType != nil && rType.Kind() != reflect.Ptr {
+			rType = reflect.PtrTo(rType)
+		}
+		return name, ref.field.Role, rType, nil
 	}
 	if item.Alias == "" || !safeIdentifier.MatchString(item.Alias) {
 		return "", "", nil, fmt.Errorf("computed cube compose projections require a safe explicit alias")
@@ -809,7 +817,7 @@ func normalize(value string) string {
 
 func typeName(rType reflect.Type) string {
 	if rType == nil {
-		return "number"
+		return "any"
 	}
 	for rType.Kind() == reflect.Ptr {
 		rType = rType.Elem()

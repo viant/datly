@@ -44,3 +44,22 @@ func TestView_ColumnByName_UsesUnqualifiedSourceLookup(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "COMSCORE_CONTEXTUAL_VALUE", column.Name)
 }
+
+func TestView_ColumnByName_ExplicitNameWinsOverDuplicateSourceAlias(t *testing.T) {
+	aView := NewView("campaign", "campaign",
+		WithConnector(NewConnector("test", "sqlite3", ":memory:")),
+		WithColumns(Columns{
+			&Column{Name: "name", DataType: "string", Tag: `source:"NAME"`},
+			&Column{Name: "advertiser_name", DataType: "string", Tag: `source:"NAME"`},
+		}),
+	)
+	require.NoError(t, aView.Init(context.Background(), EmptyResource()))
+
+	column, ok := aView.ColumnByName("name")
+	require.True(t, ok)
+	require.Equal(t, "name", column.Name)
+
+	column, ok = aView.ColumnByName("advertiser_name")
+	require.True(t, ok)
+	require.Equal(t, "advertiser_name", column.Name)
+}

@@ -358,6 +358,21 @@ func TestPlanRowTypeBuildsStructForProjection(t *testing.T) {
 	assert.Equal(t, "SpendDelta", rowType.Field(1).Name)
 	assert.Equal(t, reflect.TypeOf((*interface{})(nil)).Elem(), rowType.Field(1).Type)
 	assert.Equal(t, `spend_delta`, rowType.Field(1).Tag.Get("sqlx"))
+	assert.Equal(t, "any", plan.Columns[1].Type)
+}
+
+func TestPlanRowTypeMakesLeftJoinedDirectFieldsNullable(t *testing.T) {
+	plan, err := Compile(`SELECT t1.ad_order_id AS current_id,
+ t2.ad_order_id AS previous_id
+ FROM $CubeSQL1 AS t1
+ LEFT JOIN $CubeSQL2 AS t2 ON t1.ad_order_id = t2.ad_order_id
+ LIMIT 5`, testCatalog(t), 2, 100)
+	require.NoError(t, err)
+
+	rowType, err := plan.RowType()
+	require.NoError(t, err)
+	assert.Equal(t, reflect.TypeOf(int(0)), rowType.Field(0).Type)
+	assert.Equal(t, reflect.TypeOf((*int)(nil)), rowType.Field(1).Type)
 }
 
 func TestPlanRowTypeFollowsEachSQLProjection(t *testing.T) {

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,19 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 )
+
+type deadlineCapturePreparer struct {
+	hasDeadline bool
+}
+
+func (d *deadlineCapturePreparer) Dispatch(context.Context, *contract.Path, ...contract.Option) (interface{}, error) {
+	return nil, nil
+}
+
+func (d *deadlineCapturePreparer) PrepareQuery(ctx context.Context, _ *contract.Path, _ *http.Request) (*contract.PreparedQuery, error) {
+	_, d.hasDeadline = ctx.Deadline()
+	return nil, context.Canceled
+}
 
 func TestCubeComposeReadRows_UsesDynamicStructCollection(t *testing.T) {
 	catalog, err := cubecompose.NewCatalog(
@@ -50,6 +64,71 @@ SELECT 2 AS account_id, -3.0 AS value_delta`, nil)
 	require.Equal(t, reflect.Struct, rows.Type().Elem().Elem().Kind())
 	assert.Equal(t, int64(1), rows.Index(0).Elem().FieldByName("AccountId").Int())
 	assert.Equal(t, float64(12.5), rows.Index(0).Elem().FieldByName("ValueDelta").Interface())
+}
+
+func TestCubeComposeReadRows_AllowsNullFromLeftJoinedFrame(t *testing.T) {
+	catalog, err := cubecompose.NewCatalog(
+		cubecompose.Field{Name: "account_id", Type: reflect.TypeOf(int64(0)), Role: cubecompose.Dimension},
+		cubecompose.Field{Name: "total", Type: reflect.TypeOf(float64(0)), Role: cubecompose.Measure},
+	)
+	require.NoError(t, err)
+	plan, err := cubecompose.Compile(`SELECT t1.account_id,
+ t2.total AS previous_total
+ FROM $CubeSQL1 AS t1
+ LEFT JOIN $CubeSQL2 AS t2 ON t1.account_id = t2.account_id
+ LIMIT 5`, catalog, 2, 10)
+	require.NoError(t, err)
+
+	resource := view.EmptyResource()
+	connector := view.NewConnector("compose-null", "sqlite3", ":memory:")
+	require.NoError(t, connector.Init(context.Background(), nil))
+	rootView := &view.View{Name: "metrics", Connector: connector}
+	rootView.SetResource(resource)
+	handler := &cubeComposeHandler{Original: &Component{View: rootView}}
+
+	data, err := handler.readRows(context.Background(), plan, `SELECT 1 AS account_id, NULL AS previous_total`, nil)
+	require.NoError(t, err)
+	rows := reflect.ValueOf(data)
+	require.Len(t, data, 1)
+	assert.True(t, rows.Index(0).Elem().FieldByName("PreviousTotal").IsNil())
+}
+
+func TestCubeComposeExecAppliesTimeoutDuringFramePreparation(t *testing.T) {
+	type frame struct {
+		Filters struct{} `json:"filters"`
+	}
+	type body struct {
+		Cubes []frame `json:"cubes"`
+		SQL   string  `json:"sql"`
+	}
+
+	resource := view.EmptyResource()
+	connector := view.NewConnector("compose-timeout", "sqlite3", ":memory:")
+	require.NoError(t, connector.Init(context.Background(), nil))
+	rootView := view.NewView("metrics", "METRICS")
+	rootView.Connector = connector
+	rootView.Selector = &view.Config{}
+	rootView.Columns = []*view.Column{view.NewColumn("AccountID", "int64", reflect.TypeOf(int64(0)), false)}
+	rootView.SetResource(resource)
+	require.NoError(t, rootView.Init(context.Background(), resource))
+
+	dispatcher := &deadlineCapturePreparer{}
+	request := httptest.NewRequest(http.MethodPost, "http://localhost/v1/api/metrics/cube/compose", bytes.NewBufferString(
+		`{"cubes":[{"filters":{}}],"sql":"SELECT t1.AccountID FROM $CubeSQL1 AS t1 LIMIT 1"}`,
+	))
+	handler := &cubeComposeHandler{
+		Dispatcher: dispatcher,
+		Path:       &contract.Path{Method: http.MethodGet, URI: "/v1/api/metrics"},
+		Metadata:   &ReportMetadata{Dimensions: []*ReportField{{Name: "AccountID"}}},
+		Original:   &Component{View: rootView},
+		BodyType:   reflect.TypeOf(body{}),
+		Config:     &CubeCompose{Enabled: true, MaxCubes: 1, MaxLimit: 10, TimeoutMs: 1000},
+	}
+	session := &reportTestSession{http: &reportTestHTTP{request: request}}
+
+	_, err := handler.Exec(context.Background(), session)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.True(t, dispatcher.hasDeadline)
 }
 
 func TestComposeFrameContext_UsesSharedSnapshot(t *testing.T) {

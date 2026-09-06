@@ -35,15 +35,21 @@ func (h *cubeComposeHandler) Exec(ctx context.Context, session xhandler.Session)
 	if h == nil || h.Dispatcher == nil || h.Path == nil || h.Metadata == nil || h.Original == nil || h.Config == nil {
 		return nil, fmt.Errorf("cube compose handler was not initialized")
 	}
+	timeout := time.Duration(h.Config.TimeoutMs) * time.Millisecond
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	execCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	preparer, ok := h.Dispatcher.(contract.QueryPreparer)
 	if !ok {
 		return nil, fmt.Errorf("Datly dispatcher does not support cube SQL preparation")
 	}
-	request, err := session.Http().NewRequest(ctx)
+	request, err := session.Http().NewRequest(execCtx)
 	if err != nil {
 		return nil, err
 	}
-	input, err := readReportBody(ctx, request, h.BodyType)
+	input, err := readReportBody(execCtx, request, h.BodyType)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +83,7 @@ func (h *cubeComposeHandler) Exec(ctx context.Context, session xhandler.Session)
 	snapshot := time.Now().UTC()
 	prepared := make([]cubecompose.Frame, len(frames))
 	for i, frame := range frames {
-		frameCtx, err := composeFrameContext(ctx, frame, i+1, snapshot)
+		frameCtx, err := composeFrameContext(execCtx, frame, i+1, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -95,12 +101,6 @@ func (h *cubeComposeHandler) Exec(ctx context.Context, session xhandler.Session)
 	if err != nil {
 		return nil, err
 	}
-	timeout := time.Duration(h.Config.TimeoutMs) * time.Millisecond
-	if timeout <= 0 {
-		timeout = 30 * time.Second
-	}
-	execCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 	rows, err := h.readRows(execCtx, plan, finalSQL, args)
 	if err != nil {
 		return nil, err
