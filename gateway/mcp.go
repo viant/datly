@@ -371,10 +371,115 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 			}
 		}
 		if present {
-			result[strings.Title(parameter.Name)] = field.Interface()
+			initialized := field.Interface()
+			if parameter.In != nil && parameter.In.Kind == state.KindRequestBody {
+				initialized = preserveMCPExplicitNulls(toolArgumentValue(parameter, arguments), initialized)
+			}
+			result[strings.Title(parameter.Name)] = initialized
 		}
 	}
 	return result, nil
+}
+
+var jsonMarshalerType = reflect.TypeOf((*json.Marshaler)(nil)).Elem()
+
+// preserveMCPExplicitNulls retains only null members explicitly supplied by an MCP
+// caller after typed initialization. Typed bodies remain authoritative for non-null
+// and initializer-derived values. Custom JSON marshalers keep their bespoke wire
+// shape and are never converted to generic maps.
+func preserveMCPExplicitNulls(original, initialized interface{}) interface{} {
+	if original == nil || initialized == nil || !containsMCPExplicitNull(original) || implementsMCPJSONMarshaler(initialized) {
+		return initialized
+	}
+	encoded, err := json.Marshal(initialized)
+	if err != nil {
+		return initialized
+	}
+	var normalized interface{}
+	if err = json.Unmarshal(encoded, &normalized); err != nil {
+		return initialized
+	}
+	return overlayMCPExplicitNulls(normalized, original)
+}
+
+func implementsMCPJSONMarshaler(value interface{}) bool {
+	typ := reflect.TypeOf(value)
+	if typ == nil {
+		return false
+	}
+	if typ.Implements(jsonMarshalerType) {
+		return true
+	}
+	return typ.Kind() != reflect.Ptr && reflect.PointerTo(typ).Implements(jsonMarshalerType)
+}
+
+func containsMCPExplicitNull(value interface{}) bool {
+	switch actual := value.(type) {
+	case map[string]interface{}:
+		for _, item := range actual {
+			if item == nil || containsMCPExplicitNull(item) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, item := range actual {
+			if item == nil || containsMCPExplicitNull(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func overlayMCPExplicitNulls(initialized, original interface{}) interface{} {
+	switch source := original.(type) {
+	case map[string]interface{}:
+		target, ok := initialized.(map[string]interface{})
+		if !ok {
+			target = map[string]interface{}{}
+		}
+		for sourceKey, sourceValue := range source {
+			targetKey := mcpMatchingMapKey(target, sourceKey)
+			if sourceValue == nil {
+				target[targetKey] = nil
+				continue
+			}
+			if !containsMCPExplicitNull(sourceValue) {
+				continue
+			}
+			target[targetKey] = overlayMCPExplicitNulls(target[targetKey], sourceValue)
+		}
+		return target
+	case []interface{}:
+		target, _ := initialized.([]interface{})
+		if len(target) < len(source) {
+			target = append(target, make([]interface{}, len(source)-len(target))...)
+		}
+		for index, sourceValue := range source {
+			if sourceValue == nil {
+				target[index] = nil
+				continue
+			}
+			if containsMCPExplicitNull(sourceValue) {
+				target[index] = overlayMCPExplicitNulls(target[index], sourceValue)
+			}
+		}
+		return target
+	default:
+		return initialized
+	}
+}
+
+func mcpMatchingMapKey(target map[string]interface{}, requested string) string {
+	if _, ok := target[requested]; ok {
+		return requested
+	}
+	for candidate := range target {
+		if strings.EqualFold(candidate, requested) {
+			return candidate
+		}
+	}
+	return requested
 }
 
 func populateMCPInputFields(target reflect.Value, parameters state.Parameters, arguments map[string]interface{}) error {
