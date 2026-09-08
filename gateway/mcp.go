@@ -331,14 +331,19 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 		return nil, err
 	}
 	if err = json.Unmarshal(encoded, holder.Interface()); err != nil {
-		return nil, err
+		// A component body may intentionally implement json.Marshaler and use a
+		// wire shape different from its exported MCP schema (for example, an
+		// object {Ids:[...]} marshaled to a legacy bare array). Populate the
+		// advertised object fields without invoking the parent custom decoder,
+		// then let applyParamToRequest invoke its Marshaler for the HTTP body.
+		if fallbackErr := populateMCPInputFields(holder.Elem(), component.Input.Type.Parameters, initializableArguments); fallbackErr != nil {
+			return nil, err
+		}
 	}
-	initializer, ok := holder.Interface().(state.Initializer)
-	if !ok {
-		return result, nil
-	}
-	if err = initializer.Init(ctx); err != nil {
-		return nil, err
+	if initializer, ok := holder.Interface().(state.Initializer); ok {
+		if err = initializer.Init(ctx); err != nil {
+			return nil, err
+		}
 	}
 	value := holder.Elem()
 	var marker reflect.Value
@@ -370,6 +375,88 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 		}
 	}
 	return result, nil
+}
+
+func populateMCPInputFields(target reflect.Value, parameters state.Parameters, arguments map[string]interface{}) error {
+	if target.Kind() == reflect.Ptr {
+		if target.IsNil() {
+			target.Set(reflect.New(target.Type().Elem()))
+		}
+		target = target.Elem()
+	}
+	if target.Kind() != reflect.Struct {
+		return fmt.Errorf("MCP input fallback requires a struct, got %s", target.Kind())
+	}
+	for _, parameter := range parameters {
+		if parameter == nil || isMCPMultipartFileParameter(parameter) {
+			continue
+		}
+		raw, present := mcpArgument(parameter, arguments)
+		if !present {
+			continue
+		}
+		field := target.FieldByName(parameter.Name)
+		if !field.IsValid() || !field.CanSet() {
+			continue
+		}
+		if err := populateMCPValue(field, raw); err != nil {
+			return fmt.Errorf("failed to populate MCP argument %s: %w", parameter.Name, err)
+		}
+	}
+	return nil
+}
+
+func mcpArgument(parameter *state.Parameter, arguments map[string]interface{}) (interface{}, bool) {
+	for _, candidate := range toolArgumentCandidates(parameter) {
+		if value, ok := arguments[candidate]; ok {
+			return value, true
+		}
+	}
+	return nil, false
+}
+
+func populateMCPValue(target reflect.Value, raw interface{}) error {
+	if target.Kind() == reflect.Ptr {
+		if target.IsNil() {
+			target.Set(reflect.New(target.Type().Elem()))
+		}
+		return populateMCPValue(target.Elem(), raw)
+	}
+	if rawMap, ok := raw.(map[string]interface{}); ok && target.Kind() == reflect.Struct {
+		for i := 0; i < target.NumField(); i++ {
+			fieldInfo := target.Type().Field(i)
+			field := target.Field(i)
+			if !fieldInfo.IsExported() || !field.CanSet() {
+				continue
+			}
+			jsonName := strings.Split(fieldInfo.Tag.Get("json"), ",")[0]
+			if jsonName == "" {
+				jsonName = fieldInfo.Name
+			}
+			var value interface{}
+			var found bool
+			for key, candidate := range rawMap {
+				if strings.EqualFold(key, fieldInfo.Name) || strings.EqualFold(key, jsonName) {
+					value, found = candidate, true
+					break
+				}
+			}
+			if found {
+				if err := populateMCPValue(field, value); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	if target.CanAddr() {
+		return json.Unmarshal(encoded, target.Addr().Interface())
+	}
+	return fmt.Errorf("target %s is not addressable", target.Type())
 }
 
 func (r *Router) addSyncReadHeaderIfPresent(
@@ -913,7 +1000,16 @@ func (r *Router) matchToolCallComponentURI(aRoute *Route, component *repository.
 		if _, ok := mcpPathArgumentString(value); !ok {
 			continue
 		}
-		URI = furl.Path(parameter.URI)
+		// WithURI may declare only a relative suffix (for example /{id})
+		// while the generated alternate route is fully qualified. Keep the
+		// matched route URI in that case; otherwise the MCP proxy would issue
+		// /<id>, bypass the intended route predicate, and return an unrelated
+		// first row.
+		if mcpParameterURIPathMatches(parameter.URI, aRoute.Path.URI) {
+			URI = furl.Path(aRoute.Path.URI)
+		} else {
+			URI = furl.Path(parameter.URI)
+		}
 		break
 	}
 	return URI

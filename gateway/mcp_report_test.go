@@ -650,6 +650,22 @@ func TestRouter_matchToolCallComponentURI_UsesNormalizedArgumentName(t *testing.
 	assert.Equal(t, "/v1/api/platform/advertiser/{id}", actual)
 }
 
+func TestRouter_matchToolCallComponentURI_PreservesQualifiedAlternateForRelativeWithURI(t *testing.T) {
+	param := state.NewParameter("Id", state.NewPathLocation("id"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf([]int{}))))
+	param.URI = "/{id}"
+	component := &repository.Component{
+		Path:     contract.Path{URI: "/v1/api/platform/creative"},
+		Contract: contract.Contract{Input: contract.Input{Type: state.Type{Parameters: state.Parameters{param}}}},
+	}
+	route := &Route{Path: &contract.Path{URI: "/v1/api/platform/creative/{id}"}}
+
+	actual := (&Router{}).matchToolCallComponentURI(route, component, schema.CallToolRequestParams{
+		Arguments: map[string]interface{}{"Id": []interface{}{float64(24965775)}},
+	})
+
+	assert.Equal(t, "/v1/api/platform/creative/{id}", actual)
+}
+
 func TestRouter_buildToolInputType_UsesBuiltReportComponentParameters(t *testing.T) {
 	resource := view.EmptyResource()
 	rootView := view.NewView("vendor", "VENDOR")
