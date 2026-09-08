@@ -373,12 +373,109 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 		if present {
 			initialized := field.Interface()
 			if parameter.In != nil && parameter.In.Kind == state.KindRequestBody {
-				initialized = preserveMCPExplicitNulls(toolArgumentValue(parameter, arguments), initialized)
+				initialized = preserveMCPBodyPresence(toolArgumentValue(parameter, arguments), initialized)
 			}
 			result[strings.Title(parameter.Name)] = initialized
 		}
 	}
 	return result, nil
+}
+
+// preserveMCPBodyPresence prevents a sparse MCP request body from becoming a
+// full zero-valued PATCH when its typed model exposes nested set markers. Types
+// without markers retain the existing initialized-body behavior.
+func preserveMCPBodyPresence(original, initialized interface{}) interface{} {
+	if initialized == nil || implementsMCPJSONMarshaler(initialized) {
+		return initialized
+	}
+	if projected, marked := projectMCPMarkedValue(reflect.ValueOf(initialized)); marked {
+		return projected
+	}
+	return preserveMCPExplicitNulls(original, initialized)
+}
+
+func projectMCPMarkedValue(value reflect.Value) (interface{}, bool) {
+	if !value.IsValid() {
+		return nil, false
+	}
+	if value.Kind() == reflect.Interface {
+		if value.IsNil() {
+			return nil, false
+		}
+		return projectMCPMarkedValue(value.Elem())
+	}
+	if value.Kind() == reflect.Ptr {
+		if value.IsNil() {
+			return nil, false
+		}
+		return projectMCPMarkedValue(value.Elem())
+	}
+	if value.Kind() == reflect.Slice || value.Kind() == reflect.Array {
+		result := make([]interface{}, value.Len())
+		marked := false
+		for index := 0; index < value.Len(); index++ {
+			projected, itemMarked := projectMCPMarkedValue(value.Index(index))
+			if itemMarked {
+				marked = true
+				result[index] = projected
+				continue
+			}
+			result[index] = mcpJSONValue(value.Index(index))
+		}
+		return result, marked
+	}
+	if value.Kind() != reflect.Struct {
+		return mcpJSONValue(value), false
+	}
+	marker := value.FieldByName("Has")
+	if !marker.IsValid() || marker.Kind() != reflect.Ptr || marker.IsNil() || marker.Elem().Kind() != reflect.Struct {
+		return mcpJSONValue(value), false
+	}
+	marker = marker.Elem()
+	result := map[string]interface{}{}
+	typeInfo := value.Type()
+	for index := 0; index < value.NumField(); index++ {
+		fieldInfo := typeInfo.Field(index)
+		if !fieldInfo.IsExported() || fieldInfo.Name == "Has" {
+			continue
+		}
+		hasField := marker.FieldByName(fieldInfo.Name)
+		if !hasField.IsValid() || hasField.Kind() != reflect.Bool || !hasField.Bool() {
+			continue
+		}
+		name := strings.Split(fieldInfo.Tag.Get("json"), ",")[0]
+		if name == "-" {
+			continue
+		}
+		if name == "" {
+			name = fieldInfo.Name
+		}
+		projected, nestedMarked := projectMCPMarkedValue(value.Field(index))
+		if nestedMarked {
+			result[name] = projected
+		} else {
+			result[name] = mcpJSONValue(value.Field(index))
+		}
+	}
+	return result, true
+}
+
+func mcpJSONValue(value reflect.Value) interface{} {
+	if !value.IsValid() || ((value.Kind() == reflect.Ptr || value.Kind() == reflect.Interface) && value.IsNil()) {
+		return nil
+	}
+	if !value.CanInterface() {
+		return nil
+	}
+	encoded, err := json.Marshal(value.Interface())
+	if err != nil {
+		return value.Interface()
+	}
+	var result interface{}
+	if json.Unmarshal(encoded, &result) != nil {
+		return value.Interface()
+	}
+	return result
 }
 
 var jsonMarshalerType = reflect.TypeOf((*json.Marshaler)(nil)).Elem()

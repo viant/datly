@@ -48,6 +48,19 @@ type mcpNullableBodyInput struct {
 	Body *mcpNullableBody
 }
 
+type mcpSparseItemHas struct {
+	ID    bool
+	Name  bool
+	Count bool
+}
+
+type mcpSparseItem struct {
+	ID    int               `json:"ID"`
+	Name  string            `json:"Name"`
+	Count int               `json:"Count"`
+	Has   *mcpSparseItemHas `json:"-"`
+}
+
 func (i *mcpNullableBodyInput) Init(context.Context) error {
 	if i.Body != nil {
 		i.Body.Derived = "initialized"
@@ -109,6 +122,21 @@ func TestPreserveMCPExplicitNullsSupportsRootBodyArrays(t *testing.T) {
 	value, present := item["value"]
 	assert.True(t, present)
 	assert.Nil(t, value)
+}
+
+func TestPreserveMCPBodyPresenceProjectsNestedSetMarkers(t *testing.T) {
+	initialized := []*mcpSparseItem{{
+		ID: 7, Name: "Sparse", Count: 0,
+		Has: &mcpSparseItemHas{ID: true, Name: true},
+	}}
+	actual, ok := preserveMCPBodyPresence([]interface{}{map[string]interface{}{"ID": 7, "Name": "Sparse"}}, initialized).([]interface{})
+	require.True(t, ok)
+	require.Len(t, actual, 1)
+	row, ok := actual[0].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, float64(7), row["ID"])
+	assert.Equal(t, "Sparse", row["Name"])
+	assert.NotContains(t, row, "Count", "omitted zero-value fields must not be fabricated")
 }
 
 func TestInitializeToolArgumentsSupportsAdvertisedObjectWithCustomBodyMarshaler(t *testing.T) {
