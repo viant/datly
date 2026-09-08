@@ -343,6 +343,7 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 			return nil, err
 		}
 	}
+	initializeMCPPresenceMarkers(holder.Elem(), component.Input.Type.Parameters, initializableArguments)
 	if initializer, ok := holder.Interface().(state.Initializer); ok {
 		if err = initializer.Init(ctx); err != nil {
 			return nil, err
@@ -382,6 +383,129 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 		}
 	}
 	return result, nil
+}
+
+func initializeMCPPresenceMarkers(target reflect.Value, parameters state.Parameters, arguments map[string]interface{}) {
+	if target.Kind() == reflect.Ptr {
+		if target.IsNil() {
+			target.Set(reflect.New(target.Type().Elem()))
+		}
+		target = target.Elem()
+	}
+	if target.Kind() != reflect.Struct {
+		return
+	}
+	marker := target.FieldByName("Has")
+	if marker.IsValid() && marker.CanSet() && marker.Kind() == reflect.Ptr {
+		if marker.IsNil() {
+			marker.Set(reflect.New(marker.Type().Elem()))
+		}
+		if marker.Elem().Kind() != reflect.Struct {
+			marker = reflect.Value{}
+		} else {
+			marker = marker.Elem()
+		}
+	} else {
+		marker = reflect.Value{}
+	}
+	for _, parameter := range parameters {
+		if parameter == nil || isMCPMultipartFileParameter(parameter) {
+			continue
+		}
+		raw, present := mcpArgument(parameter, arguments)
+		if !present {
+			continue
+		}
+		if marker.IsValid() {
+			if hasField := marker.FieldByName(parameter.Name); hasField.IsValid() && hasField.CanSet() && hasField.Kind() == reflect.Bool {
+				hasField.SetBool(true)
+			}
+		}
+		field := target.FieldByName(parameter.Name)
+		if field.IsValid() {
+			initializeMCPNestedPresence(field, raw)
+		}
+	}
+}
+
+func initializeMCPNestedPresence(target reflect.Value, raw interface{}) {
+	if !target.IsValid() || raw == nil {
+		return
+	}
+	if target.Kind() == reflect.Interface {
+		if target.IsNil() {
+			return
+		}
+		target = target.Elem()
+	}
+	if target.Kind() == reflect.Ptr {
+		if target.IsNil() {
+			return
+		}
+		target = target.Elem()
+	}
+	switch target.Kind() {
+	case reflect.Slice, reflect.Array:
+		rawItems, ok := raw.([]interface{})
+		if !ok {
+			return
+		}
+		for index := 0; index < target.Len() && index < len(rawItems); index++ {
+			initializeMCPNestedPresence(target.Index(index), rawItems[index])
+		}
+	case reflect.Struct:
+		rawMap, ok := raw.(map[string]interface{})
+		if !ok {
+			return
+		}
+		marker := target.FieldByName("Has")
+		if marker.IsValid() && marker.CanSet() && marker.Kind() == reflect.Ptr {
+			if marker.IsNil() {
+				marker.Set(reflect.New(marker.Type().Elem()))
+			}
+			if marker.Elem().Kind() == reflect.Struct {
+				marker = marker.Elem()
+			} else {
+				marker = reflect.Value{}
+			}
+		} else {
+			marker = reflect.Value{}
+		}
+		for index := 0; index < target.NumField(); index++ {
+			fieldInfo := target.Type().Field(index)
+			if !fieldInfo.IsExported() || fieldInfo.Name == "Has" {
+				continue
+			}
+			jsonName := strings.Split(fieldInfo.Tag.Get("json"), ",")[0]
+			if jsonName == "-" {
+				continue
+			}
+			if jsonName == "" {
+				jsonName = fieldInfo.Name
+			}
+			rawValue, present := mcpMapValue(rawMap, fieldInfo.Name, jsonName)
+			if !present {
+				continue
+			}
+			if marker.IsValid() {
+				if hasField := marker.FieldByName(fieldInfo.Name); hasField.IsValid() && hasField.CanSet() && hasField.Kind() == reflect.Bool {
+					hasField.SetBool(true)
+				}
+			}
+			initializeMCPNestedPresence(target.Field(index), rawValue)
+		}
+	}
+}
+
+func mcpMapValue(values map[string]interface{}, names ...string) (interface{}, bool) {
+	for _, name := range names {
+		for candidate, value := range values {
+			if strings.EqualFold(candidate, name) {
+				return value, true
+			}
+		}
+	}
+	return nil, false
 }
 
 // preserveMCPBodyPresence prevents a sparse MCP request body from becoming a

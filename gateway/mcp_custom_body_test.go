@@ -61,6 +61,27 @@ type mcpSparseItem struct {
 	Has   *mcpSparseItemHas `json:"-"`
 }
 
+type mcpPresenceInputHas struct {
+	Name bool
+	Body bool
+}
+
+type mcpPresenceInput struct {
+	Name string               `json:"name,omitempty"`
+	Body []*mcpSparseItem     `json:"body,omitempty"`
+	Has  *mcpPresenceInputHas `json:"-" setMarker:"true"`
+}
+
+func (i *mcpPresenceInput) Init(context.Context) error {
+	if i.Has == nil || !i.Has.Name || !i.Has.Body {
+		return fmt.Errorf("missing MCP input presence markers")
+	}
+	if len(i.Body) != 1 || i.Body[0].Has == nil || !i.Body[0].Has.ID || !i.Body[0].Has.Name || i.Body[0].Has.Count {
+		return fmt.Errorf("incorrect nested MCP body presence markers")
+	}
+	return nil
+}
+
 func (i *mcpNullableBodyInput) Init(context.Context) error {
 	if i.Body != nil {
 		i.Body.Derived = "initialized"
@@ -109,6 +130,29 @@ func TestInitializeToolArgumentsPreservesExplicitNullsInTypedBody(t *testing.T) 
 	require.True(t, ok)
 	assert.Equal(t, "kept", second["value"])
 	assert.Nil(t, items[2], "explicit null array element was not preserved")
+}
+
+func TestInitializeToolArgumentsPopulatesPresenceMarkersBeforeInitializer(t *testing.T) {
+	name := state.NewParameter("Name", state.NewQueryLocation("name"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf(""))))
+	body := state.NewParameter("Body", state.NewBodyLocation(""), state.WithParameterSchema(state.NewSchema(reflect.TypeOf([]*mcpSparseItem{}))))
+	inputType := state.Type{Schema: state.NewSchema(reflect.TypeOf(mcpPresenceInput{})), Parameters: state.Parameters{name, body}}
+	inputType.SetType(reflect.TypeOf(mcpPresenceInput{}))
+	component := &repository.Component{Contract: contract.Contract{Input: contract.Input{Type: inputType}}}
+
+	arguments, err := initializeToolArguments(context.Background(), component, map[string]interface{}{
+		"Name": "present",
+		"Body": []interface{}{map[string]interface{}{"ID": float64(7), "Name": "sparse"}},
+	})
+
+	require.NoError(t, err)
+	actual, ok := arguments["Body"].([]interface{})
+	require.True(t, ok, "expected sparse marked body projection, got %T", arguments["Body"])
+	require.Len(t, actual, 1)
+	row, ok := actual[0].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, float64(7), row["ID"])
+	assert.Equal(t, "sparse", row["Name"])
+	assert.NotContains(t, row, "Count")
 }
 
 func TestPreserveMCPExplicitNullsSupportsRootBodyArrays(t *testing.T) {
