@@ -1031,6 +1031,8 @@ type mcpBlob struct {
 	MIMEType string `json:"mimeType,omitempty" description:"Blob media type" optional:"true"`
 }
 
+type mcpMultipartPayload map[string]interface{}
+
 type mcpEncodedBody struct {
 	io.Reader
 	contentType string
@@ -1160,10 +1162,73 @@ func buildMCPMultipartBody(parameters []*state.Parameter, arguments map[string]i
 			}
 		}
 	}
+	if err := writeMCPMultipartPayload(writer, parameters, arguments["Payload"]); err != nil {
+		_ = writer.Close()
+		return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
+	}
 	if err := writer.Close(); err != nil {
 		return nil, jsonrpc.NewInvalidParamsError("failed to finalize multipart body", nil)
 	}
 	return &mcpEncodedBody{Reader: bytes.NewReader(buffer.Bytes()), contentType: writer.FormDataContentType()}, nil
+}
+
+func writeMCPMultipartPayload(writer *multipart.Writer, parameters []*state.Parameter, value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("failed to encode multipart Payload: %w", err)
+	}
+	payload := map[string]interface{}{}
+	if err = json.Unmarshal(encoded, &payload); err != nil {
+		return fmt.Errorf("multipart Payload must be an object")
+	}
+	reserved := map[string]bool{}
+	for _, parameter := range parameters {
+		if parameter == nil || parameter.In == nil || parameter.In.Kind != state.KindForm {
+			continue
+		}
+		name := requestParamName(parameter)
+		if isMCPMultipartFileParameter(parameter) {
+			name = parameter.In.Name
+		}
+		reserved[strings.ToLower(strings.TrimSpace(name))] = true
+	}
+	for name, item := range payload {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return fmt.Errorf("multipart Payload contains an empty field name")
+		}
+		if reserved[strings.ToLower(name)] {
+			return fmt.Errorf("multipart Payload field %q conflicts with a declared form parameter", name)
+		}
+		if err = writeMCPDynamicFormValue(writer, name, item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeMCPDynamicFormValue(writer *multipart.Writer, name string, value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	rValue := reflect.ValueOf(value)
+	for rValue.IsValid() && (rValue.Kind() == reflect.Interface || rValue.Kind() == reflect.Ptr) {
+		if rValue.IsNil() {
+			return nil
+		}
+		rValue = rValue.Elem()
+	}
+	if rValue.IsValid() && (rValue.Kind() == reflect.Map || rValue.Kind() == reflect.Struct) {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return fmt.Errorf("failed to encode multipart Payload field %q: %w", name, err)
+		}
+		return writer.WriteField(name, string(encoded))
+	}
+	return writeMCPFormValues(writer, name, value)
 }
 
 func writeMCPFormValues(writer *multipart.Writer, name string, value interface{}) error {
@@ -1437,6 +1502,9 @@ func (r *Router) buildToolInputTypeForPath(components *repository.Component, too
 	}
 	if hasRawBlobBody {
 		appendField("Blob", reflect.TypeOf(mcpBlob{}), reflect.StructTag(`json:",omitempty" optional:"true" description:"Base64-encoded binary request body; use instead of JSON when supported"`))
+	}
+	if hasMultipartFiles {
+		appendField("Payload", reflect.TypeOf(mcpMultipartPayload{}), reflect.StructTag(`json:",omitempty" optional:"true" description:"Optional action-specific multipart form fields. Each member is written as a separate form field alongside Files."`))
 	}
 
 	// Include selector (limit/offset/fields/page) for read components when available
