@@ -24,6 +24,7 @@ import (
 	"github.com/viant/datly/repository/content"
 	dpath "github.com/viant/datly/repository/path"
 	"github.com/viant/datly/shared"
+	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
@@ -31,6 +32,7 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/toolbox"
+	"github.com/viant/xdatly/handler/logger"
 )
 
 func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRoute *Route, provider *repository.Provider) error {
@@ -207,6 +209,7 @@ func mcpUpperCamelToken(value string) string {
 
 func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Route) serverproto.ToolHandlerFunc {
 	return func(ctx context.Context, req *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {
+		ctx = vcontext.WithValue(ctx, logger.ContextKey, r.logger)
 		params := req.Params
 		arguments, err := initializeToolArguments(ctx, component, params.Arguments)
 		if err != nil {

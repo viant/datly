@@ -6,6 +6,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 	"github.com/viant/datly/repository/contract"
 	dpath "github.com/viant/datly/repository/path"
 	"github.com/viant/datly/repository/version"
+	"github.com/viant/datly/shared/logging"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
@@ -28,6 +30,7 @@ import (
 	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xreflect"
 )
 
@@ -35,6 +38,15 @@ type repositoryReportTestResource struct{}
 
 type gatewayTestMCPContext struct {
 	Name string
+}
+
+type gatewayLoggerInitializerInput struct{}
+
+func (i *gatewayLoggerInitializerInput) Init(ctx context.Context) error {
+	if ctx.Value(logger.ContextKey) == nil {
+		return fmt.Errorf("MCP initializer context is missing the router logger")
+	}
+	return nil
 }
 
 func (g *gatewayTestMCPContext) Client() state.MCPClient {
@@ -436,6 +448,29 @@ func TestRouter_mcpToolCallHandler_PropagatesMCPContextToRoute(t *testing.T) {
 	require.NotNil(t, result)
 	assert.True(t, ctxHasMCP)
 	assert.True(t, reqCtxHasMCP)
+}
+
+func TestRouter_mcpToolCallHandler_ProvidesLoggerToInputInitializer(t *testing.T) {
+	inputType := state.Type{Schema: state.NewSchema(reflect.TypeOf(gatewayLoggerInitializerInput{}))}
+	inputType.SetType(reflect.TypeOf(gatewayLoggerInitializerInput{}))
+	component := &repository.Component{
+		Path:     contract.Path{Method: http.MethodGet, URI: "/v1/api/test/logger-initializer"},
+		View:     &view.View{},
+		Contract: contract.Contract{Input: contract.Input{Type: inputType}},
+	}
+	route := &Route{
+		Path: &contract.Path{Method: http.MethodGet, URI: "/v1/api/test/logger-initializer"},
+		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
+			response.WriteHeader(http.StatusOK)
+			_, _ = response.Write([]byte(`{"ok":true}`))
+		},
+	}
+
+	router := &Router{logger: logging.New(logging.INFO, io.Discard)}
+	result, rpcErr := router.mcpToolCallHandler(component, route)(context.Background(), &schema.CallToolRequest{})
+
+	require.Nil(t, rpcErr)
+	require.NotNil(t, result)
 }
 
 func TestRouter_buildToolsIntegration_RegistersCubeTool(t *testing.T) {
