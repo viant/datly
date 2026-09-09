@@ -613,6 +613,7 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 	if stateOptions.HttpRequest() != nil {
 		locatorOptions = append(locatorOptions, locator.WithRequest(stateOptions.HttpRequest()))
 	}
+	locatorOptions = appendRedirectQuerySelectorOptions(locatorOptions, stateOptions)
 	aSession := session.New(aComponent.View,
 		session.WithAuth(e.auth),
 		session.WithLocatorOptions(locatorOptions...),
@@ -645,6 +646,16 @@ func redirectForm(options *hstate.Options) *hstate.Form {
 		return options.Form()
 	}
 	return hstate.NewForm()
+}
+
+func appendRedirectQuerySelectorOptions(options []locator.Option, stateOptions *hstate.Options) []locator.Option {
+	if stateOptions == nil {
+		return options
+	}
+	if selectors := stateOptions.QuerySelectors(); len(selectors) > 0 {
+		options = append(options, locator.WithQuerySelectors(selectors))
+	}
+	return options
 }
 
 func (e *Executor) newHttp() http2.Http {
