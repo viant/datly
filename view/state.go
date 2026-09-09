@@ -23,6 +23,7 @@ type (
 		state.QuerySelector
 		QuerySettings
 		filtersMu     sync.Mutex
+		columnNamesMu sync.Mutex
 		initialized   bool
 		WarmupNoLimit bool
 		_columnNames  map[string]bool
@@ -46,21 +47,30 @@ func (s *Statelet) Init(aView *View) {
 	if s.initialized {
 		return
 	}
+	s.columnNamesMu.Lock()
 	s._columnNames = Names(s.Columns).Index()
+	s.columnNamesMu.Unlock()
 }
 
 // Has checks if Field is present in Template.Columns
 func (s *Statelet) Has(field string) bool {
+	s.columnNamesMu.Lock()
+	defer s.columnNamesMu.Unlock()
 	_, ok := s._columnNames[field]
 	return ok
 }
 
 func (s *Statelet) Add(fieldName string, isHolder bool) {
 	toLower := strings.ToLower(fieldName)
+	s.columnNamesMu.Lock()
+	defer s.columnNamesMu.Unlock()
 	if _, ok := s._columnNames[toLower]; ok {
 		return
 	}
 
+	if s._columnNames == nil {
+		s._columnNames = map[string]bool{}
+	}
 	s._columnNames[toLower] = true
 	s._columnNames[fieldName] = true
 
@@ -74,6 +84,8 @@ func (s *Statelet) Add(fieldName string, isHolder bool) {
 }
 
 func (s *Statelet) SetColumns(columns []string) {
+	s.columnNamesMu.Lock()
+	defer s.columnNamesMu.Unlock()
 	s.Columns = append([]string(nil), columns...)
 	s._columnNames = Names(s.Columns).Index()
 }
@@ -187,6 +199,7 @@ func (s *Statelet) CloneForSummary() *Statelet {
 		Ignore:         s.Ignore,
 	}
 
+	s.columnNamesMu.Lock()
 	if s._columnNames != nil {
 		ret._columnNames = make(map[string]bool, len(s._columnNames))
 		for k, v := range s._columnNames {
@@ -195,17 +208,17 @@ func (s *Statelet) CloneForSummary() *Statelet {
 	} else {
 		ret._columnNames = map[string]bool{}
 	}
-
-	s.filtersMu.Lock()
-	ret.Filters = append(predicate.Filters(nil), s.Filters...)
-	s.filtersMu.Unlock()
-
 	if len(s.Fields) > 0 {
 		ret.Fields = append([]string(nil), s.Fields...)
 	}
 	if len(s.Columns) > 0 {
 		ret.Columns = append([]string(nil), s.Columns...)
 	}
+	s.columnNamesMu.Unlock()
+
+	s.filtersMu.Lock()
+	ret.Filters = append(predicate.Filters(nil), s.Filters...)
+	s.filtersMu.Unlock()
 
 	return ret
 }

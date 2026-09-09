@@ -26,6 +26,8 @@ type compositeKey string
 type Collector struct {
 	Id                     string
 	mutex                  sync.Mutex
+	indexOnce              sync.Once
+	indexMu                *sync.Mutex
 	parent                 *Collector
 	destValue              reflect.Value
 	appender               *xunsafe.Appender
@@ -154,6 +156,7 @@ func (r *Collector) Clone() *Collector {
 	slicePtrValue.Elem().Set(dest)
 	return &Collector{
 		Id:                     uuid.New().String(),
+		indexMu:                r.indexMu,
 		parent:                 r.parent,
 		destValue:              slicePtrValue,
 		appender:               r.slice.Appender(xunsafe.ValuePointer(&slicePtrValue)),
@@ -187,6 +190,7 @@ func (r *Collector) Lock() *sync.Mutex {
 
 // Resolve resolved unmapped column
 func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface{} {
+	r.lockIndex()
 	buffer, ok := r.values[column.Name()]
 	if !ok {
 		localSlice := make([]interface{}, 0)
@@ -201,6 +205,7 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 		scanType = reflect.TypeOf(0)
 	}
 	r.types[column.Name()] = xunsafe.NewType(scanType)
+	r.unlockIndex()
 	return func(ptr unsafe.Pointer) interface{} {
 		var valuePtr interface{}
 		switch kind {
@@ -228,6 +233,8 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 // parentValuesPositions returns positions in the parent main slice by given column name
 // After first use, it is not possible to index new resolved column indexes by Resolve method
 func (r *Collector) parentValuesPositions(ns string, columnName string) map[interface{}][]int {
+	r.parent.lockIndex()
+	defer r.parent.unlockIndex()
 	columnValues, ok := r.parent.valuePosition[ns]
 	if !ok {
 		columnValues = map[string]map[interface{}][]int{}
@@ -242,6 +249,8 @@ func (r *Collector) parentValuesPositions(ns string, columnName string) map[inte
 }
 
 func (r *Collector) parentCompositePositions(relation *Relation) map[compositeKey][]int {
+	r.parent.lockIndex()
+	defer r.parent.unlockIndex()
 	signature := relationCompositeSignature(relation.On)
 	result, ok := r.parent.compositeValuePosition[signature]
 	if !ok || len(result) == 0 {
@@ -251,6 +260,23 @@ func (r *Collector) parentCompositePositions(relation *Relation) map[compositeKe
 	return result
 }
 
+func (r *Collector) indexLocker() *sync.Mutex {
+	r.indexOnce.Do(func() {
+		if r.indexMu == nil {
+			r.indexMu = &sync.Mutex{}
+		}
+	})
+	return r.indexMu
+}
+
+func (r *Collector) lockIndex() {
+	r.indexLocker().Lock()
+}
+
+func (r *Collector) unlockIndex() {
+	r.indexLocker().Unlock()
+}
+
 // NewCollector creates a collector
 func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHandler viewSummaryHandlerFn, readAll bool) *Collector {
 	ensuredDest := ensureDest(dest, view)
@@ -258,6 +284,7 @@ func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHa
 	wg.Add(1)
 	return &Collector{
 		Id:                     uuid.New().String(),
+		indexMu:                &sync.Mutex{},
 		destValue:              reflect.ValueOf(ensuredDest),
 		valuePosition:          make(map[string]map[string]map[interface{}][]int),
 		compositeValuePosition: make(map[string]map[compositeKey][]int),
@@ -376,6 +403,8 @@ func (r *Collector) valueIndexer(ctx context.Context, visitorRelations []*Relati
 }
 
 func (r *Collector) indexCompositeValueByRel(ptr unsafe.Pointer, rel *Relation, counter int) {
+	r.lockIndex()
+	defer r.unlockIndex()
 	signature := relationCompositeSignature(rel.On)
 	index := r.compositeValuePosition[signature]
 	if index == nil {
@@ -424,7 +453,8 @@ func (r *Collector) indexValueByRel(fieldValue interface{}, rel *Relation, count
 
 // 6c0d0
 func (r *Collector) indexValueToPosition(rel *Relation, fieldValue interface{}, counter int) {
-
+	r.lockIndex()
+	defer r.unlockIndex()
 	for _, item := range rel.On {
 		columnValues, ok := r.valuePosition[item.Namespace]
 		if !ok {
@@ -805,6 +835,7 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 		}
 		result[counter] = &Collector{
 			Id:                     uuid.New().String(),
+			indexMu:                &sync.Mutex{},
 			parent:                 r,
 			viewMetaHandler:        aHandler,
 			destValue:              destPtr,

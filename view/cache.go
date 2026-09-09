@@ -1002,6 +1002,8 @@ func (c *Cache) applyWarmupFieldNames(selector *Statelet, fieldNames []string) {
 	if selector == nil || c.owner == nil || len(fieldNames) == 0 {
 		return
 	}
+	selector.columnNamesMu.Lock()
+	defer selector.columnNamesMu.Unlock()
 	if selector._columnNames == nil {
 		selector._columnNames = map[string]bool{}
 	}
@@ -1019,7 +1021,7 @@ func (c *Cache) applyWarmupFieldNames(selector *Statelet, fieldNames []string) {
 		if outputName == "" {
 			outputName = columnName
 		}
-		if selector.Has(columnName) || selector.Has(outputName) {
+		if selector._columnNames[columnName] || selector._columnNames[outputName] {
 			continue
 		}
 		selector._columnNames[columnName] = true
