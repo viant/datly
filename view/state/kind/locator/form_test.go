@@ -2,6 +2,7 @@ package locator
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
@@ -21,4 +22,15 @@ func TestForm_Value_PreservesRepeatedQueryValues(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, []string{"1", "2", "3"}, value)
+}
+
+func TestNewForm_ValueInitializesMissingFormState(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/test?period=yesterday", nil)
+	aLocator, err := NewForm(WithRequest(req))
+	require.NoError(t, err)
+
+	value, ok, err := aLocator.Value(context.Background(), reflect.TypeOf(""), "period")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "yesterday", value)
 }

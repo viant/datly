@@ -98,7 +98,11 @@ func (r *Form) Value(ctx context.Context, rType reflect.Type, name string) (inte
 // NewForm returns body locator
 func NewForm(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
-	var ret = &Form{form: options.Form, request: options.request}
+	form := options.Form
+	if form == nil {
+		form = state.NewForm()
+	}
+	var ret = &Form{form: form, request: options.request}
 	return ret, nil
 }
 
