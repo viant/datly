@@ -99,7 +99,10 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 	// Apply injected selector last so it takes precedence over request-derived values,
 	// but still validate against view selector constraints.
 	if injected != nil {
-		selector.QuerySelector = injected.QuerySelector
+		querySelector := injected.QuerySelector
+		querySelector.Fields = nil
+		querySelector.Columns = nil
+		selector.QuerySelector = querySelector
 		if len(injected.Columns) > 0 {
 			selector.SetColumns(injected.Columns)
 		}

@@ -162,6 +162,46 @@ func TestComponentLocatorDropsSelectorQueryParamsForChildDispatch(t *testing.T) 
 	}
 }
 
+func TestComponentLocatorPreservesBusinessQueryParamsForChildDispatch(t *testing.T) {
+	dispatcher := &componentQueryDispatcher{}
+	request, _ := http.NewRequest(http.MethodGet, "/?audience_id=123&order_id=456&from=2026-07-01&to=2026-07-02", nil)
+	query := url.Values{
+		"audience_id": {"123"},
+		"order_id":    {"456"},
+		"from":        {"2026-07-01"},
+		"to":          {"2026-07-02"},
+	}
+	componentLocator := &componentLocator{
+		dispatch: dispatcher,
+		query:    query,
+		getRequest: func() (*http.Request, error) {
+			return request, nil
+		},
+	}
+
+	_, found, err := componentLocator.Value(context.Background(), reflect.TypeOf(""), "GET:/child")
+	if err != nil || !found {
+		t.Fatalf("Value() found=%v err=%v", found, err)
+	}
+
+	for key, want := range map[string]string{
+		"audience_id": "123",
+		"order_id":    "456",
+		"from":        "2026-07-01",
+		"to":          "2026-07-02",
+	} {
+		if got := dispatcher.query.Get(key); got != want {
+			t.Fatalf("query[%s]=%q want %q; query=%v", key, got, want, dispatcher.query)
+		}
+		if got := dispatcher.request.URL.Query().Get(key); got != want {
+			t.Fatalf("request query[%s]=%q want %q; raw=%s", key, got, want, dispatcher.request.URL.RawQuery)
+		}
+	}
+	if dispatcher.request != request {
+		t.Fatal("expected original request when no selector params are present")
+	}
+}
+
 func TestSanitizeSelectorQueryClonesForwardedValues(t *testing.T) {
 	query := url.Values{"_fields": {"AudienceId"}, "order_id": {"456"}}
 	sanitized := sanitizeSelectorQuery(query)

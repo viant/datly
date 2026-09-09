@@ -604,6 +604,9 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route, opts ...hst
 	if stateOptions.Query() != nil {
 		locatorOptions = append(locatorOptions, locator.WithQuery(stateOptions.Query()))
 	}
+	if selectors := stateOptions.QuerySelectors(); len(selectors) > 0 {
+		locatorOptions = append(locatorOptions, locator.WithQuerySelectors(selectors))
+	}
 	if stateOptions.Headers() != nil {
 		locatorOptions = append(locatorOptions, locator.WithHeaders(stateOptions.Headers()))
 	}
