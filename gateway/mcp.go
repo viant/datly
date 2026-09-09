@@ -429,6 +429,10 @@ func initializeMCPPresenceMarkers(target reflect.Value, parameters state.Paramet
 }
 
 func initializeMCPNestedPresence(target reflect.Value, raw interface{}) {
+	initializeMCPNestedPresenceWithMarker(target, raw, reflect.Value{})
+}
+
+func initializeMCPNestedPresenceWithMarker(target reflect.Value, raw interface{}, inheritedMarker reflect.Value) {
 	if !target.IsValid() || raw == nil {
 		return
 	}
@@ -440,7 +444,10 @@ func initializeMCPNestedPresence(target reflect.Value, raw interface{}) {
 	}
 	if target.Kind() == reflect.Ptr {
 		if target.IsNil() {
-			return
+			if !target.CanSet() {
+				return
+			}
+			target.Set(reflect.New(target.Type().Elem()))
 		}
 		target = target.Elem()
 	}
@@ -451,25 +458,24 @@ func initializeMCPNestedPresence(target reflect.Value, raw interface{}) {
 			return
 		}
 		for index := 0; index < target.Len() && index < len(rawItems); index++ {
-			initializeMCPNestedPresence(target.Index(index), rawItems[index])
+			initializeMCPNestedPresenceWithMarker(target.Index(index), rawItems[index], reflect.Value{})
 		}
 	case reflect.Struct:
 		rawMap, ok := raw.(map[string]interface{})
 		if !ok {
 			return
 		}
-		marker := target.FieldByName("Has")
-		if marker.IsValid() && marker.CanSet() && marker.Kind() == reflect.Ptr {
-			if marker.IsNil() {
-				marker.Set(reflect.New(marker.Type().Elem()))
+		markerField := target.FieldByName("Has")
+		marker := inheritedMarker
+		if markerField.IsValid() && markerField.CanSet() && markerField.Kind() == reflect.Ptr {
+			if markerField.IsNil() {
+				markerField.Set(reflect.New(markerField.Type().Elem()))
 			}
-			if marker.Elem().Kind() == reflect.Struct {
-				marker = marker.Elem()
+			if markerField.Elem().Kind() == reflect.Struct {
+				marker = markerField.Elem()
 			} else {
 				marker = reflect.Value{}
 			}
-		} else {
-			marker = reflect.Value{}
 		}
 		for index := 0; index < target.NumField(); index++ {
 			fieldInfo := target.Type().Field(index)
@@ -478,6 +484,13 @@ func initializeMCPNestedPresence(target reflect.Value, raw interface{}) {
 			}
 			jsonName := strings.Split(fieldInfo.Tag.Get("json"), ",")[0]
 			if jsonName == "-" {
+				continue
+			}
+			if fieldInfo.Anonymous && jsonName == "" {
+				// encoding/json promotes fields from an anonymous embedded value into
+				// the containing object. MCP presence tracking and sparse projection
+				// must use the same flat wire contract and the containing Has marker.
+				initializeMCPNestedPresenceWithMarker(target.Field(index), rawMap, marker)
 				continue
 			}
 			if jsonName == "" {
@@ -492,7 +505,7 @@ func initializeMCPNestedPresence(target reflect.Value, raw interface{}) {
 					hasField.SetBool(true)
 				}
 			}
-			initializeMCPNestedPresence(target.Field(index), rawValue)
+			initializeMCPNestedPresenceWithMarker(target.Field(index), rawValue, reflect.Value{})
 		}
 	}
 }
@@ -559,6 +572,10 @@ func projectMCPMarkedValue(value reflect.Value) (interface{}, bool) {
 		return mcpJSONValue(value), false
 	}
 	marker = marker.Elem()
+	return projectMCPMarkedStruct(value, marker), true
+}
+
+func projectMCPMarkedStruct(value reflect.Value, marker reflect.Value) map[string]interface{} {
 	result := map[string]interface{}{}
 	typeInfo := value.Type()
 	for index := 0; index < value.NumField(); index++ {
@@ -566,25 +583,41 @@ func projectMCPMarkedValue(value reflect.Value) (interface{}, bool) {
 		if !fieldInfo.IsExported() || fieldInfo.Name == "Has" {
 			continue
 		}
+		jsonName := strings.Split(fieldInfo.Tag.Get("json"), ",")[0]
+		if jsonName == "-" {
+			continue
+		}
+		if fieldInfo.Anonymous && jsonName == "" {
+			embedded := value.Field(index)
+			for embedded.Kind() == reflect.Interface || embedded.Kind() == reflect.Ptr {
+				if embedded.IsNil() {
+					embedded = reflect.Value{}
+					break
+				}
+				embedded = embedded.Elem()
+			}
+			if embedded.IsValid() && embedded.Kind() == reflect.Struct {
+				for name, projected := range projectMCPMarkedStruct(embedded, marker) {
+					result[name] = projected
+				}
+			}
+			continue
+		}
 		hasField := marker.FieldByName(fieldInfo.Name)
 		if !hasField.IsValid() || hasField.Kind() != reflect.Bool || !hasField.Bool() {
 			continue
 		}
-		name := strings.Split(fieldInfo.Tag.Get("json"), ",")[0]
-		if name == "-" {
-			continue
-		}
-		if name == "" {
-			name = fieldInfo.Name
+		if jsonName == "" {
+			jsonName = fieldInfo.Name
 		}
 		projected, nestedMarked := projectMCPMarkedValue(value.Field(index))
 		if nestedMarked {
-			result[name] = projected
+			result[jsonName] = projected
 		} else {
-			result[name] = mcpJSONValue(value.Field(index))
+			result[jsonName] = mcpJSONValue(value.Field(index))
 		}
 	}
-	return result, true
+	return result
 }
 
 func mcpJSONValue(value reflect.Value) interface{} {
@@ -942,7 +975,7 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 		}
 	case state.KindRequestBody:
 		bodyValue := value
-		if p != nil && !p.IsAnonymous() {
+		if p != nil && !isMCPAnonymousBody(p) {
 			if bodyName := strings.TrimSpace(p.In.Name); bodyName != "" {
 				bodyValue = map[string]interface{}{bodyName: value}
 			}
@@ -958,6 +991,11 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 		}
 	}
 	return baseURL, body, nil
+}
+
+func isMCPAnonymousBody(parameter *state.Parameter) bool {
+	return parameter != nil && parameter.In != nil && parameter.In.Kind == state.KindRequestBody &&
+		(parameter.IsAnonymous() || strings.TrimSpace(parameter.In.Name) == "")
 }
 
 func requestParamName(p *state.Parameter) string {
@@ -1120,6 +1158,9 @@ func buildMCPMultipartBody(parameters []*state.Parameter, arguments map[string]i
 		}
 	}
 	if !hasBlob {
+		if arguments["Payload"] != nil {
+			return nil, jsonrpc.NewInvalidParamsError("multipart Payload requires Files", nil)
+		}
 		return nil, nil
 	}
 
@@ -1369,9 +1410,11 @@ func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method s
 		},
 	))
 	_ = json.Unmarshal(data, &result.StructuredContent)
-	if responseWriter.Code >= http.StatusBadRequest {
+	if responseWriter.Code >= http.StatusBadRequest || toolPayloadReportsError(result.StructuredContent) {
 		isErr := true
 		result.IsError = &isErr
+	}
+	if responseWriter.Code >= http.StatusBadRequest {
 		result.StructuredContent = map[string]interface{}{
 			"status":  responseWriter.Code,
 			"error":   true,
@@ -1382,6 +1425,15 @@ func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method s
 		}
 	}
 	return result
+}
+
+func toolPayloadReportsError(value interface{}) bool {
+	payload, ok := value.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	status, ok := payload["status"].(string)
+	return ok && strings.EqualFold(strings.TrimSpace(status), "error")
 }
 
 func (r *Router) matchToolCallComponentURI(aRoute *Route, component *repository.Component, params schema.CallToolRequestParams) string {
@@ -1492,7 +1544,7 @@ func (r *Router) buildToolInputTypeForPath(components *repository.Component, too
 			tag := buildMCPFieldTag(parameter, true)
 			appendField(name, mcpToolParameterType(parameter), tag)
 		case state.KindRequestBody:
-			if parameter.IsAnonymous() {
+			if isMCPAnonymousBody(parameter) {
 				appendAnonymousBodyFields(&inputFields, uniqueFieldName, parameter.Schema.Type(), hasMultipartFiles || hasRawBlobBody)
 				continue
 			}
@@ -1597,7 +1649,7 @@ func toolArgumentValue(parameter *state.Parameter, arguments map[string]interfac
 	if parameter == nil {
 		return nil
 	}
-	if parameter.In != nil && parameter.In.Kind == state.KindRequestBody && parameter.IsAnonymous() && parameter.Schema != nil {
+	if isMCPAnonymousBody(parameter) && parameter.Schema != nil {
 		return anonymousBodyArgumentValue(arguments, parameter.Schema.Type())
 	}
 	for _, candidate := range toolArgumentCandidates(parameter) {
