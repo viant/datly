@@ -880,24 +880,27 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 		return nil, fmt.Errorf("not found holder field %v at %v", templateMeta.Name, templateMeta.Schema.Type().String())
 	}
 
-	var valuesPosition map[interface{}][]int
 	return func(viewMeta interface{}) error {
+		viewMetaPtr := xunsafe.AsPointer(viewMeta)
+		if viewMetaPtr == nil {
+			return nil
+		}
+		value := io.NormalizeKey(metaChildKeyField.Value(viewMetaPtr))
+
 		for _, item := range rel.On {
-			if valuesPosition == nil {
-				if r.valuePosition[item.Namespace] == nil {
-					r.valuePosition[item.Namespace] = map[string]map[interface{}][]int{}
-				}
-				valuesPosition = r.valuePosition[item.Namespace][item.Column]
+			r.lockIndex()
+			namespaceIndex := r.valuePosition[item.Namespace]
+			if namespaceIndex == nil {
+				namespaceIndex = map[string]map[interface{}][]int{}
+				r.valuePosition[item.Namespace] = namespaceIndex
 			}
-
-			viewMetaPtr := xunsafe.AsPointer(viewMeta)
-			if viewMetaPtr == nil {
-				return nil
+			columnIndex := namespaceIndex[item.Column]
+			var positions []int
+			if found, ok := columnIndex[value]; ok {
+				positions = append([]int(nil), found...)
 			}
-
-			value := io.NormalizeKey(metaChildKeyField.Value(viewMetaPtr))
-			positions, ok := valuesPosition[value]
-			if !ok {
+			r.unlockIndex()
+			if len(positions) == 0 {
 				return nil
 			}
 

@@ -191,12 +191,21 @@ func (s *Statelet) CloneForSummary() *Statelet {
 		DatabaseFormat: s.DatabaseFormat,
 		OutputFormat:   s.OutputFormat,
 		Template:       s.Template,
-		QuerySelector:  s.QuerySelector,
 		QuerySettings:  s.QuerySettings,
 		initialized:    s.initialized,
 		WarmupNoLimit:  s.WarmupNoLimit,
 		result:         s.result,
 		Ignore:         s.Ignore,
+		QuerySelector: state.QuerySelector{
+			OrderBy:  s.OrderBy,
+			Offset:   s.Offset,
+			Limit:    s.Limit,
+			Page:     s.Page,
+			Criteria: s.Criteria,
+		},
+	}
+	if len(s.Placeholders) > 0 {
+		ret.Placeholders = append([]interface{}(nil), s.Placeholders...)
 	}
 
 	s.columnNamesMu.Lock()
