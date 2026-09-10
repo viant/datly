@@ -173,6 +173,8 @@ func (c *DataUnit) Next() (interface{}, error) {
 }
 
 func (c *DataUnit) ensureSliceIndex() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.sliceIndex != nil {
 		return
 	}
@@ -181,6 +183,11 @@ func (c *DataUnit) ensureSliceIndex() {
 }
 
 func (c *DataUnit) xunsafeSlice(valueType reflect.Type) *xunsafe.Slice {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.sliceIndex == nil {
+		c.sliceIndex = map[reflect.Type]*xunsafe.Slice{}
+	}
 	slice, ok := c.sliceIndex[valueType]
 	if !ok {
 		slice = xunsafe.NewSlice(reflect.SliceOf(valueType))
