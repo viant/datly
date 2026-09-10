@@ -230,11 +230,8 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 	}
 }
 
-// parentValuesPositions returns positions in the parent main slice by given column name
-// After first use, it is not possible to index new resolved column indexes by Resolve method
-func (r *Collector) parentValuesPositions(ns string, columnName string) map[interface{}][]int {
-	r.parent.lockIndex()
-	defer r.parent.unlockIndex()
+// parentColumnIndex returns the live parent column index. Caller must hold the parent index lock.
+func (r *Collector) parentColumnIndex(ns string, columnName string) map[interface{}][]int {
 	columnValues, ok := r.parent.valuePosition[ns]
 	if !ok {
 		columnValues = map[string]map[interface{}][]int{}
@@ -248,9 +245,33 @@ func (r *Collector) parentValuesPositions(ns string, columnName string) map[inte
 	return result
 }
 
-func (r *Collector) parentCompositePositions(relation *Relation) map[compositeKey][]int {
+// parentPositionsFor copies parent slice positions for a key while the parent index lock is held.
+func (r *Collector) parentPositionsFor(ns string, columnName string, key interface{}) []int {
 	r.parent.lockIndex()
 	defer r.parent.unlockIndex()
+	found, ok := r.parentColumnIndex(ns, columnName)[key]
+	if !ok {
+		return nil
+	}
+	return append([]int(nil), found...)
+}
+
+// parentPositionKeys copies parent index keys for a column while the parent index lock is held.
+func (r *Collector) parentPositionKeys(ns string, columnName string) []interface{} {
+	r.parent.lockIndex()
+	defer r.parent.unlockIndex()
+	index := r.parentColumnIndex(ns, columnName)
+	if len(index) == 0 {
+		return nil
+	}
+	keys := make([]interface{}, 0, len(index))
+	for key := range index {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func (r *Collector) parentCompositeIndex(relation *Relation) map[compositeKey][]int {
 	signature := relationCompositeSignature(relation.On)
 	result, ok := r.parent.compositeValuePosition[signature]
 	if !ok || len(result) == 0 {
@@ -258,6 +279,17 @@ func (r *Collector) parentCompositePositions(relation *Relation) map[compositeKe
 		result = r.parent.compositeValuePosition[signature]
 	}
 	return result
+}
+
+// parentCompositePositionsFor copies parent slice positions for a composite key under the parent index lock.
+func (r *Collector) parentCompositePositionsFor(relation *Relation, key compositeKey) []int {
+	r.parent.lockIndex()
+	defer r.parent.unlockIndex()
+	found, ok := r.parentCompositeIndex(relation)[key]
+	if !ok {
+		return nil
+	}
+	return append([]int(nil), found...)
 }
 
 func (r *Collector) indexLocker() *sync.Mutex {
@@ -487,8 +519,8 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 				}
 				keyParts = append(keyParts, io.NormalizeKey(link.xField.Interface(xunsafe.AsPointer(owner))))
 			}
-			positions, ok := r.parentCompositePositions(relation)[buildCompositeKey(keyParts)]
-			if !ok {
+			positions := r.parentCompositePositionsFor(relation, buildCompositeKey(keyParts))
+			if len(positions) == 0 {
 				return nil
 			}
 			for _, index := range positions {
@@ -505,9 +537,8 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 			aKey = io.NormalizeKey(aKey)
 
 			parentLink := relation.On[j]
-			valuePosition := r.parentValuesPositions(parentLink.Namespace, parentLink.Column)
-			positions, ok := valuePosition[aKey]
-			if !ok {
+			positions := r.parentPositionsFor(parentLink.Namespace, parentLink.Column, aKey)
+			if len(positions) == 0 {
 				return nil
 			}
 			for _, index := range positions {
@@ -549,10 +580,9 @@ func (r *Collector) ParentRow(relation *Relation) func(value interface{}) (inter
 			} else {
 				key = xType.Deref((*values)[r.manyCounter])
 			}
-			valuePosition := r.parentValuesPositions(namespace, column)
 			key = io.NormalizeKey(key)
-			positions, ok := valuePosition[key]
-			if !ok {
+			positions := r.parentPositionsFor(namespace, column, key)
+			if len(positions) == 0 {
 				return nil, fmt.Errorf(`key "%v" is not found`, key)
 			}
 			if len(positions) > 1 {
@@ -580,8 +610,8 @@ func (r *Collector) ParentRow(relation *Relation) func(value interface{}) (inter
 				}
 				keyParts = append(keyParts, io.NormalizeKey(key))
 			}
-			positions, ok := r.parentCompositePositions(relation)[buildCompositeKey(keyParts)]
-			if !ok {
+			positions := r.parentCompositePositionsFor(relation, buildCompositeKey(keyParts))
+			if len(positions) == 0 {
 				return nil, fmt.Errorf(`composite key "%v" is not found`, keyParts)
 			}
 			if len(positions) > 1 {
@@ -603,10 +633,9 @@ func (r *Collector) ParentRow(relation *Relation) func(value interface{}) (inter
 			} else {
 				key = xType.Deref((*values)[r.manyCounter])
 			}
-			valuePosition := r.parentValuesPositions(relation.On[i].Namespace, relation.On[i].Column)
 			key = io.NormalizeKey(key)
-			positions, ok := valuePosition[key]
-			if !ok {
+			positions := r.parentPositionsFor(relation.On[i].Namespace, relation.On[i].Column, key)
+			if len(positions) == 0 {
 				return nil, fmt.Errorf(`key "%v" is not found`, key)
 			}
 			if len(positions) > 1 {
@@ -645,8 +674,8 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 				}
 				keyParts = append(keyParts, io.NormalizeKey(key))
 			}
-			positions, ok := r.parentCompositePositions(relation)[buildCompositeKey(keyParts)]
-			if !ok {
+			positions := r.parentCompositePositionsFor(relation, buildCompositeKey(keyParts))
+			if len(positions) == 0 {
 				return nil
 			}
 			for _, index := range positions {
@@ -675,10 +704,9 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 				key = xType.Deref((*values)[r.manyCounter])
 				r.manyCounter++
 			}
-			valuePosition := r.parentValuesPositions(relation.On[i].Namespace, relation.On[i].Column)
 			key = io.NormalizeKey(key)
-			positions, ok := valuePosition[key]
-			if !ok {
+			positions := r.parentPositionsFor(relation.On[i].Namespace, relation.On[i].Column, key)
+			if len(positions) == 0 {
 				return nil
 			}
 			for _, index := range positions {
@@ -1042,16 +1070,14 @@ func (r *Collector) mergeToParent() {
 		holderField := r.relation.holderField
 		parentSlice := r.parent.slice
 		parentDestPtr := xunsafe.AsPointer(r.parent.DestPtr())
-		valuePositions := r.parentCompositePositions(r.relation)
-
 		for i := 0; i < r.slice.Len(destPtr); i++ {
 			value := r.slice.ValuePointerAt(destPtr, i)
 			keyParts := make([]interface{}, 0, len(links))
 			for _, link := range links {
 				keyParts = append(keyParts, io.NormalizeKey(link.xField.Value(xunsafe.AsPointer(value))))
 			}
-			positions, ok := valuePositions[buildCompositeKey(keyParts)]
-			if !ok {
+			positions := r.parentCompositePositionsFor(r.relation, buildCompositeKey(keyParts))
+			if len(positions) == 0 {
 				continue
 			}
 			for _, position := range positions {
@@ -1072,18 +1098,19 @@ func (r *Collector) mergeToParent() {
 	}
 
 	for i, link := range links {
-		valuePositions := r.parentValuesPositions(r.relation.On[i].Namespace, r.relation.On[i].Column)
 		destPtr := xunsafe.AsPointer(r.DestPtr())
 		holderField := r.relation.holderField
 		parentSlice := r.parent.slice
 		parentDestPtr := xunsafe.AsPointer(r.parent.DestPtr())
+		namespace := r.relation.On[i].Namespace
+		column := r.relation.On[i].Column
 
 		field := link.xField
 		for i := 0; i < r.slice.Len(destPtr); i++ {
 			value := r.slice.ValuePointerAt(destPtr, i)
 			key := io.NormalizeKey(field.Value(xunsafe.AsPointer(value)))
-			positions, ok := valuePositions[key]
-			if !ok {
+			positions := r.parentPositionsFor(namespace, column, key)
+			if len(positions) == 0 {
 				continue
 			}
 
@@ -1126,16 +1153,12 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, [][]interface{}, []stri
 					valueSets = append(valueSets, normalizeValues(field.Value(xunsafe.AsPointer(parent))))
 					continue
 				}
-				positions := r.parentValuesPositions(link.Namespace, link.Column)
-				if len(positions) == 0 {
+				keys := r.parentPositionKeys(link.Namespace, link.Column)
+				if len(keys) == 0 {
 					valueSets = nil
 					break
 				}
-				values := make([]interface{}, 0, len(positions))
-				for key := range positions {
-					values = append(values, key)
-				}
-				valueSets = append(valueSets, values)
+				valueSets = append(valueSets, keys)
 			}
 			for _, row := range compositeRows(valueSets) {
 				key := buildCompositeKey(row)
@@ -1212,10 +1235,10 @@ outer:
 				continue
 			}
 
-			positions := r.parentValuesPositions(r.relation.On[k].Namespace, r.relation.On[k].Column)
-			result := make([]interface{}, len(positions))
+			keys := r.parentPositionKeys(r.relation.On[k].Namespace, r.relation.On[k].Column)
+			result := make([]interface{}, len(keys))
 			counter := 0
-			for key := range positions {
+			for _, key := range keys {
 				result[counter] = key
 				counter++
 			}
