@@ -405,6 +405,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	if aType != nil {
 		tmpl.EnsureImports(aType)
 	}
+	addLocalHandlerParameterTypes(&tmpl.Imports, rule.InputType, aState)
 
 	tmpl.State = aState
 	handlerDSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
@@ -422,6 +423,44 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	handlerDSQL += fmt.Sprintf("$Nop($%v)", name)
 	*dSQL = handlerDSQL
 	return nil
+}
+
+func addLocalHandlerParameterTypes(imports *inference.Imports, inputType string, inputState inference.State) {
+	// A handler input can reference local named structs outside its request body.
+	// Import them explicitly so they are available to runtime type discovery.
+	inputType = state.RawComponentType(inputType)
+	separator := strings.LastIndex(inputType, ".")
+	if separator == -1 {
+		return
+	}
+	inputPackage := strings.Trim(inputType[:separator], "/")
+	if inputPackage == "" {
+		return
+	}
+
+	for _, parameter := range inputState {
+		if parameter == nil || parameter.Schema == nil || parameter.Output != nil {
+			continue
+		}
+
+		parameterType := parameter.Schema.Type()
+		for parameterType != nil && (parameterType.Kind() == reflect.Ptr || parameterType.Kind() == reflect.Slice) {
+			parameterType = parameterType.Elem()
+		}
+		if parameterType == nil || parameterType.Kind() != reflect.Struct || parameterType.Name() == "" {
+			continue
+		}
+
+		packagePath := strings.Trim(parameter.Schema.PackagePath, "/")
+		if packagePath == "" {
+			packagePath = strings.Trim(parameterType.PkgPath(), "/")
+		}
+		if packagePath != inputPackage && !strings.HasSuffix(packagePath, "/"+inputPackage) {
+			continue
+		}
+
+		imports.AddType(inputPackage + "." + parameterType.Name())
+	}
 }
 
 func (s *Service) updateImportPath(path string, file *modfile.Module) string {
