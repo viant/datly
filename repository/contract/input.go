@@ -3,8 +3,10 @@ package contract
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"reflect"
 )
 
 type Input struct {
@@ -41,6 +43,9 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 			}
 		}
 	}
+	if i.Body.Schema == nil && len(i.Type.Parameters.FilterByKind(state.KindRequestBody)) == 0 && implementsXLSUnmarshaller(i.Type.Schema) {
+		i.Body.Schema = i.Type.Schema.Clone()
+	}
 
 	pkg := pkgPath
 	if i.Type.Schema != nil && i.Type.Package != "" {
@@ -76,4 +81,20 @@ func (i *Input) Init(ctx context.Context, aView *view.View) error {
 	}
 
 	return nil
+}
+
+var xlsUnmarshallerType = reflect.TypeOf((*shared.XLSUnmarshaller)(nil)).Elem()
+
+func implementsXLSUnmarshaller(schema *state.Schema) bool {
+	if schema == nil {
+		return false
+	}
+	rType := schema.Type()
+	if rType == nil {
+		return false
+	}
+	if rType.Implements(xlsUnmarshallerType) {
+		return true
+	}
+	return rType.Kind() != reflect.Ptr && reflect.PtrTo(rType).Implements(xlsUnmarshallerType)
 }

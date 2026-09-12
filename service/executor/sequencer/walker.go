@@ -19,6 +19,11 @@ func (w *Walker) Leaf(value interface{}) (interface{}, error) {
 	return w.leaf(w.root, value)
 }
 
+// EmptyLeaf returns the first record whose leaf selector currently has a zero value.
+func (w *Walker) EmptyLeaf(value interface{}) (interface{}, error) {
+	return w.emptyLeaf(w.root, value)
+}
+
 // Allocate allocate sequence
 func (w *Walker) Allocate(value interface{}, seq *Sequence) error {
 	return w.allocate(w.root, value, seq)
@@ -106,9 +111,43 @@ func (w *Walker) leaf(aNode *node, value interface{}) (interface{}, error) {
 		return value, nil
 	case nodeKindArray:
 		sliceLen := aNode.xSlice.Len(ptr)
-		for i := 0; i < sliceLen; {
+		for i := 0; i < sliceLen; i++ {
 			item := aNode.xSlice.ValuePointerAt(ptr, i)
 			first, err := w.leaf(aNode.children, item)
+			if err != nil {
+				return nil, err
+			}
+			if first != nil {
+				return first, nil
+			}
+		}
+		return nil, nil
+	}
+	return item, nil
+}
+
+func (w *Walker) emptyLeaf(aNode *node, value interface{}) (interface{}, error) {
+	ptr := xunsafe.AsPointer(value)
+	var item interface{}
+	switch aNode.kind {
+	case nodeKindObject:
+		item = aNode.xField.Interface(ptr)
+		return w.emptyLeaf(aNode.children, item)
+	case nodeKindLeaf:
+		item = aNode.xField.Addr(ptr)
+		intPtr, err := int64Ptr(item)
+		if err != nil {
+			return nil, err
+		}
+		if *intPtr == 0 {
+			return value, nil
+		}
+		return nil, nil
+	case nodeKindArray:
+		sliceLen := aNode.xSlice.Len(ptr)
+		for i := 0; i < sliceLen; i++ {
+			item := aNode.xSlice.ValuePointerAt(ptr, i)
+			first, err := w.emptyLeaf(aNode.children, item)
 			if err != nil {
 				return nil, err
 			}

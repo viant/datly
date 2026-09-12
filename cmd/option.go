@@ -35,12 +35,17 @@ type (
 		Plugins
 		Package
 		Module
-		AssetsURL     string `short:"a" long:"assetsURL" description:"assets destination"`
-		ConstURL      string `long:"constURL" description:"path where const files are stored"`
-		Legacy        bool   `short:"l"`
-		cache         *view.Cache
-		SubstituesURL []string `long:"substituesURL" description:"substitues URL, expands template before processing"`
-		JobURL        string   `short:"z" long:"joburl" description:"job url"`
+		AssetsURL      string `short:"a" long:"assetsURL" description:"assets destination"`
+		ConstURL       string `long:"constURL" description:"path where const files are stored"`
+		Legacy         bool   `short:"l"`
+		cache          *view.Cache
+		SubstituesURL  []string `long:"substituesURL" description:"substitues URL, expands template before processing"`
+		JobURL         string   `short:"z" long:"joburl" description:"job url"`
+		MCPPort        int      `long:"mcpPort" description:"enable MCP HTTP server on the specified port"`
+		MCPAuthURL     string   `long:"mcpAuthClient" description:"auth client url for MCP server"`
+		MCPIssuerURL   string   `long:"mcpIssuerURL" description:"issuer url for MCP server"`
+		MCPResourceURL string   `long:"mcpResourceURL" description:"protected resource identifier for MCP server"`
+		MCPAuthMode    string   `long:"mcpAuth" description:"authorizer S - server authorizer, F fallback authorizer"`
 	}
 
 	Package struct {
@@ -166,7 +171,10 @@ func (o *Options) BuildOption() *options.Options {
 	}
 
 	if o.ConfigURL != "" && repo == nil {
-		result.Run = &options.Run{ConfigURL: o.ConfigURL, JobURL: o.JobURL}
+		result.Run = &options.Run{ConfigURL: o.ConfigURL, JobURL: o.JobURL, MCPAuthURL: o.MCPAuthURL, MCPIssuerURL: o.MCPIssuerURL, MCPResourceURL: o.MCPResourceURL, MCPAuthMode: o.MCPAuthMode}
+		if o.MCPPort > 0 {
+			result.Run.MCPPort = &o.MCPPort
+		}
 	}
 	return result
 }

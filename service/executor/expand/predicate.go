@@ -36,9 +36,26 @@ type (
 		lastKeyword string
 		output      *strings.Builder
 	}
+
+	// PredicateGroupSQL is the composable, parameterized result of rendering one
+	// predicate group. Rendering does not mutate the parent DataUnit or filters.
+	PredicateGroupSQL struct {
+		Group      int
+		Expression string
+		Args       []interface{}
+	}
+
+	renderedPredicate struct {
+		selector *structology.Selector
+		args     []interface{}
+	}
 )
 
-func NewPredicate(ctx *Context, state *structology.State, config []*PredicateConfig) *Predicate {
+func NewPredicate(ctx *Context, state *structology.State, config []*PredicateConfig, stateType *structology.StateType) *Predicate {
+	// Initialize state if not provided, but never override an existing state
+	if state == nil && stateType != nil {
+		state = stateType.NewState()
+	}
 	return &Predicate{
 		ctx:    ctx,
 		config: config,
@@ -63,6 +80,13 @@ func (p *Predicate) FilterGroup(group int, keyword string) (string, error) {
 	return p.expand(group, keyword)
 }
 
+// RenderGroup renders a predicate group without applying its placeholders or
+// filter bookkeeping to the active expansion state.
+func (p *Predicate) RenderGroup(group int, operator string) (*PredicateGroupSQL, error) {
+	result, _, err := p.renderGroup(group, operator)
+	return result, err
+}
+
 func (b *PredicateBuilder) Combine(fragments ...string) *PredicateBuilder {
 	return b.combine("AND", fragments)
 }
@@ -76,6 +100,12 @@ func (b *PredicateBuilder) CombineAnd(fragments ...string) *PredicateBuilder {
 }
 
 func (b *PredicateBuilder) combine(keyword string, fragments []string) *PredicateBuilder {
+	if b == nil {
+		b = &PredicateBuilder{}
+	}
+	if b.output == nil {
+		b.output = &strings.Builder{}
+	}
 	builder := &strings.Builder{}
 	for _, fragment := range fragments {
 		if strings.TrimSpace(fragment) == "" {
@@ -113,15 +143,32 @@ func (b *PredicateBuilder) combine(keyword string, fragments []string) *Predicat
 }
 
 func (b *PredicateBuilder) Build(keyword string) string {
-	if b.output.Len() == 0 {
+	if b == nil || b.output == nil || b.output.Len() == 0 {
 		return ""
 	}
-
 	return " " + keyword + " " + b.output.String()
 }
 
 func (p *Predicate) expand(group int, operator string) (string, error) {
+	result, rendered, err := p.renderGroup(group, operator)
+	if err != nil {
+		return "", err
+	}
+	for _, item := range rendered {
+		if err := p.appendFilter(item.selector, item.args); err != nil {
+			return "", fmt.Errorf("failed to append filter predicate parameter: %w", err)
+		}
+	}
+	if len(result.Args) > 0 {
+		p.ctx.DataUnit.addAll(result.Args...)
+	}
+	return result.Expression, nil
+}
+
+func (p *Predicate) renderGroup(group int, operator string) (*PredicateGroupSQL, []renderedPredicate, error) {
 	result := &strings.Builder{}
+	var args []interface{}
+	var rendered []renderedPredicate
 
 	ctx := p.ctx.Context
 	if ctx == nil {
@@ -129,6 +176,10 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 	}
 	ctx = vcontext.WithValue(ctx, PredicateCtx, p.ctx)
 	ctx = vcontext.WithValue(ctx, PredicateState, p.state)
+
+	p.ctx.DataUnit.EvalLock.Lock()
+	defer p.ctx.DataUnit.EvalLock.Unlock()
+
 	if p.ctx.Session != nil {
 		aLogger := p.ctx.Session.Logger()
 		ctx = vcontext.WithValue(ctx, logger.ContextKey, aLogger)
@@ -150,17 +201,14 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 
 		criteria, err := predicateConfig.Expander.Compute(ctx, value)
 		if err != nil {
-			return "", err
+			return nil, nil, err
 		}
 
 		if criteria == nil || strings.TrimSpace(criteria.Expression) == "" {
 			continue
 		}
 
-		err = p.appendFilter(selector, criteria.Placeholders)
-		if err != nil {
-			return "", fmt.Errorf("failed to append filter predicate parameter: %w", err)
-		}
+		rendered = append(rendered, renderedPredicate{selector: selector, args: append([]interface{}{}, criteria.Placeholders...)})
 		if result.Len() != 0 {
 			result.WriteString(" ")
 			result.WriteString(operator)
@@ -170,12 +218,10 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 		result.WriteByte('(')
 		result.WriteString(criteria.Expression)
 		result.WriteByte(')')
-		if len(criteria.Placeholders) > 0 {
-			p.ctx.DataUnit.addAll(criteria.Placeholders...)
-		}
+		args = append(args, criteria.Placeholders...)
 	}
 
-	return result.String(), nil
+	return &PredicateGroupSQL{Group: group, Expression: result.String(), Args: args}, rendered, nil
 }
 
 func (p *Predicate) appendFilter(selector *structology.Selector, value []interface{}) error {
@@ -198,11 +244,17 @@ func (p *Predicate) appendFilter(selector *structology.Selector, value []interfa
 }
 
 func (b *PredicateBuilder) And() *PredicateBuilder {
+	if b == nil {
+		b = &PredicateBuilder{}
+	}
 	b.lastKeyword = "AND"
 	return b
 }
 
 func (b *PredicateBuilder) Or() *PredicateBuilder {
+	if b == nil {
+		b = &PredicateBuilder{}
+	}
 	b.lastKeyword = "OR"
 	return b
 }

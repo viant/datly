@@ -1,0 +1,25 @@
+pipeline:
+  deploy:
+    setPath:
+      action: exec:run
+      target: $target
+      checkError: true
+      commands:
+        - export GOPATH=${env.GOPATH}
+        - export PATH=/usr/local/go/bin:$PATH
+
+    set_sdk:
+      action: sdk.set
+      target: $target
+      sdk: go:1.25.5
+
+    package:
+      action: exec:run
+      comments: build plain datly binary for pure DQL bootstrap tests
+      target: $target
+      checkError: true
+      commands:
+        - export GO111MODULE=on
+        - export GOFLAGS=-mod=mod
+        - cd ${appPath}
+        - go build -ldflags "-X main.BuildTimeInS=`date +%s`" -o /tmp/datly ./cmd/datly

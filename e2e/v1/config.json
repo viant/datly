@@ -1,0 +1,18 @@
+{
+  "APIPrefix": "/v1/api",
+  "APIKeys": [
+    {
+      "Header": "App-Secret-Id",
+      "URI": "/v1/api/shape/dev/secured",
+      "Value": "changeme"
+    }
+  ],
+  "Endpoint": {
+    "Port": 8080
+  },
+  "Meta": {
+    "StatusURI": "/v1/api/status",
+    "StructURI": "/v1/api/meta/struct"
+  },
+  "SyncFrequencyMs": 3600000
+}

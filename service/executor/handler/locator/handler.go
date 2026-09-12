@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"github.com/viant/datly/repository/handler"
 	ehandler "github.com/viant/datly/service/executor/handler"
+	"github.com/viant/datly/service/executor/uow"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
+	"reflect"
 )
 
 type Handler struct {
@@ -22,7 +24,7 @@ func (v *Handler) Names() []string {
 	return nil
 }
 
-func (v *Handler) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (v *Handler) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	resource := v.options.Resource
 	if resource == nil {
 		return nil, false, fmt.Errorf("failed to lookup handler resource: %v", name)
@@ -46,6 +48,16 @@ func (v *Handler) Value(ctx context.Context, name string) (interface{}, bool, er
 		aView.Connector = resource.Connectors[0]
 	}
 	aSession := session.Context(ctx)
+	var frame *uow.Frame
+	_, _, scoped := uow.FromContext(ctx)
+	if scoped {
+		ctx = uow.PrepareChild(ctx, uow.RelationBinding, uow.BindingOrder(ctx))
+		ctx, _, frame, _, err = uow.Enter(ctx, "handler "+name)
+		if err != nil {
+			return nil, false, err
+		}
+		defer frame.Seal()
+	}
 	anExecutor := ehandler.NewExecutor(aView, aSession)
 
 	handlerSession, err := anExecutor.NewHandlerSession(ctx, ehandler.WithTypes(v.types...), ehandler.WithAuth(aSession.Auth()))
@@ -53,6 +65,9 @@ func (v *Handler) Value(ctx context.Context, name string) (interface{}, bool, er
 		return nil, false, fmt.Errorf("failed to create handler session: %w", err)
 	}
 	result, err := anHandler.Call(ctx, handlerSession)
+	if err == nil && !scoped {
+		err = anExecutor.Execute(ctx)
+	}
 	return result, err == nil, err
 }
 

@@ -3,13 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
+
 	"github.com/jessevdk/go-flags"
 	"github.com/viant/datly/cmd/command"
 	soptions "github.com/viant/datly/cmd/options"
 )
 
 func RunApp(version string, args soptions.Arguments) error {
-
 	options, err := buildOptions(args)
 	if err != nil {
 		return err

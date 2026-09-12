@@ -1,7 +1,9 @@
 package logger
 
 import (
+	"context"
 	"fmt"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/debug"
 	"strings"
@@ -86,9 +88,41 @@ func (l *Adapter) Inherit(adapter *Adapter) {
 	l.log = adapter.log
 }
 
-func (l *Adapter) LogDatabaseErr(SQL string, err error, args ...interface{}) {
+func (l *Adapter) LogDatabaseErr(ctx context.Context, view string, SQL string, err error, args ...interface{}) {
 	SQL = shared.ExpandSQL(SQL, args)
-	fmt.Printf(fmt.Sprintf("error occured while executing SQL: %v, SQL: %v, params: %v\n", err, strings.ReplaceAll(SQL, "\n", "\\n"), args))
+	fmt.Printf("[ERROR] datly sql reqTraceId=%s view=%s error=%q sql=%q params=%v\n",
+		reqTraceID(ctx),
+		view,
+		normalizeDatabaseError(err),
+		strings.ReplaceAll(SQL, "\n", "\\n"),
+		args)
+}
+
+func reqTraceID(ctx context.Context) string {
+	if traceID := requesttrace.Current(ctx); traceID != "" {
+		return traceID
+	}
+	return "unknown"
+}
+
+func normalizeDatabaseError(err error) string {
+	if err == nil {
+		return ""
+	}
+	message := err.Error()
+	if idx := strings.LastIndex(message, ", due to "); idx >= 0 {
+		return strings.TrimSpace(message[idx+len(", due to "):])
+	}
+	if idx := strings.LastIndex(message, " due to "); idx >= 0 {
+		return strings.TrimSpace(message[idx+len(" due to "):])
+	}
+	if idx := strings.LastIndex(message, " failed to run query: "); idx >= 0 {
+		return strings.TrimSpace(message[:idx])
+	}
+	if strings.HasPrefix(message, "failed to run query: ") {
+		return "failed to run query"
+	}
+	return message
 }
 
 func NewLogger(name string, logger Logger) *Adapter {

@@ -1,0 +1,10 @@
+#package('github.com/viant/datly/e2e/v1/shape/dev/user/mysql_boolean')
+#setting($_ = $connector('dev'))
+#setting($_ = $route('/v1/api/shape/dev/user-metadata', 'GET'))
+
+#define($_ = $Fields<[]string>(query/fields).Optional().QuerySelector('user_metadata'))
+#define($_ = $Page<int>(query/page).Optional().QuerySelector('user_metadata'))
+#define($_ = $UserMetadata<?>(output/view).Embed())
+
+SELECT user_metadata.*
+FROM (SELECT * FROM USER_METADATA t) user_metadata
