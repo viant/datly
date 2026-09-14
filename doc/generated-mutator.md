@@ -104,18 +104,18 @@ error, marker changes are not partially applied. See the
 
 ## Invariants and sparse updates
 
-An invariant groups fields that must be considered together. Suppose `Start` and
-`End` define an interval, but a PATCH supplies only Start:
+An invariant groups fields that must be considered together. Suppose `StartDate` and
+`EndDate` define an interval, but a PATCH supplies only StartDate:
 
 ```go
-Start *int64 `invariant:"Window"`
-End   *int64 `invariant:"Window"`
+StartDate *time.Time `invariant:"Window"`
+EndDate   *time.Time `invariant:"Window"`
 ```
 
 After presence synchronization, invariant backfill supplies missing group values
 from the authoritative Previous row where the compiled policy permits it. Business
 validation can then check the complete interval. Backfill must not claim that the
-client supplied End, and missing Previous field evidence cannot be treated as a
+client supplied EndDate, and missing Previous field evidence cannot be treated as a
 loaded zero. New inserts have no previous row to borrow.
 
 For DQL-generated fields, field tags are authored through supported `tag(...)`

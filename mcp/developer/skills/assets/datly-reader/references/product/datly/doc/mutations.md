@@ -275,6 +275,27 @@ cannot borrow a nonexistent Previous row. Missing read evidence must not be
 interpreted as a loaded default. Invariant preparation and database constraints
 are complementary: SQL NOT NULL rejects null, not every zero or false value.
 
+### Start/end date example
+
+For date/time fields, the invariant is chronological. Suppose the database has:
+
+```json
+{"id": 1, "windowStart": "2026-09-14T09:00:00Z", "windowEnd": "2026-09-16T17:00:00Z"}
+```
+
+A sparse entity update supplies only the new start:
+
+```json
+{"id": 1, "windowStart": "2026-09-15T09:00:00Z"}
+```
+
+Invariant backfill supplies the known Previous WindowEnd for validation. The
+working interval is valid, and Original.Has("WindowEnd") remains false. Moving
+the start to `2026-09-17T09:00:00Z` instead must fail validation and leave the
+stored interval unchanged. With pointer-valued `time.Time` fields, compare using
+`row.WindowStart.After(*row.WindowEnd)`, not numeric ordering operators.
+The GEN PATCH acceptance gate must verify the actual generated date shape and setters.
+
 ## Customize the writing hooks
 
 An authored root hook can have this shape, with application Order/Input types:
@@ -294,7 +315,7 @@ func (h *OrderHooks) Init(ctx context.Context, row *Order,
 func (h *OrderHooks) Validate(ctx context.Context, row *Order,
     state handler.EntityState[Order, handler.NoParent]) error {
     if row.WindowStart != nil && row.WindowEnd != nil &&
-        *row.WindowStart > *row.WindowEnd {
+        row.WindowStart.After(*row.WindowEnd) {
         return fmt.Errorf("start must not exceed end")
     }
     return nil

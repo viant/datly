@@ -215,7 +215,7 @@ StructQL derives typed projections/index helpers from an input graph rather than
 
 Use the actual declared graph path and supported StructQL conventions. Nested /Rows/Children paths are not database table names. Preserve explicit projection aliases, all composite-key parts and package/type identity.
 
-Compatibility declaration comments may begin with ?, !, !!/digits and a JSON datatype hint before SELECT. Do not use JSON comments as an alternative binding schema; use fluent Required/Optional/status/type options.
+Declaration queries contain plain SQL or StructQL. Express requiredness with `.Required()` or `.Optional()`, and type authority with the declaration type/fluent options; do not prefix SELECT with optional/required markers.
 
 ## Velty and executable writers
 

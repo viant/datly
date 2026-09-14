@@ -32,9 +32,7 @@ option_name = "Required" | "Optional" | "WithType" | "WithTag" | "Tag"
  | "WithDest" | "Dest" | "WithCache" | "WithLimit"
  | "WithColumnType" | "ColumnType" | "WithColumnTag" | "ColumnTag"
  | "WithColumnGroupable" | "ColumnGroupable" ;
-declaration_query = "/*", [hint_prefix], [datatype_hint], declaration_sql, "*/" ;
-hint_prefix = "?" | "!", ["!"], {digit} ;
-datatype_hint = ? supported JSON datatype hint, not arbitrary binding metadata ? ;
+declaration_query = "/*", declaration_sql, "*/" ;
 declaration_sql = sql_query | structql_query ;
 structql_query = ? StructQL SELECT over a declared Go data path ? ;
 executable = cube_set | sql_statement, [";"] | template_statement | comment ;
