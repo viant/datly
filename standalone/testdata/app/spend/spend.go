@@ -16,15 +16,17 @@ type Access struct {
 	Tenant string `sqlx:"tenant"`
 }
 
+type FilterFields struct {
+	Tenant  string  `parameter:"Tenant,kind=header,in=X-Tenant,required" predicate:"equal,s,tenant"`
+	Channel *string `parameter:"Channel,kind=cookie,in=channel" predicate:"equal,s,channel"`
+}
 type Input struct {
+	FilterFields
 	Allowed []*Access `parameter:"Allowed,kind=view,in=Allowed,required" view:"Allowed,table=report_access" sql:"SELECT tenant FROM report_access WHERE tenant=:Tenant"`
-	Tenant  string    `parameter:"Tenant,kind=header,in=X-Tenant,required" predicate:"equal,s,tenant"`
-	Channel *string   `parameter:"Channel,kind=cookie,in=channel" predicate:"equal,s,channel"`
 }
 type AuthInput struct {
+	FilterFields
 	Allowed []*Access   `parameter:"Allowed,kind=view,in=Allowed,required" view:"Allowed,table=report_access" sql:"SELECT tenant FROM report_access WHERE tenant=:Tenant"`
-	Tenant  string      `parameter:"Tenant,kind=header,in=X-Tenant,required" predicate:"equal,s,tenant"`
-	Channel *string     `parameter:"Channel,kind=cookie,in=channel" predicate:"equal,s,channel"`
 	JWT     *jwt.Claims `parameter:"JWT,kind=header,in=Authorization,dataType=string,required,errorCode=401" codec:"JwtClaim" json:"-"`
 }
 

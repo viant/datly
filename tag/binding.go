@@ -8,6 +8,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
+	xshape "github.com/viant/x/shape"
 )
 
 type BindingField struct {
@@ -29,9 +30,17 @@ func NewBindingIndex(structType reflect.Type) (*BindingIndex, error) {
 	if structType == nil || structType.Kind() != reflect.Struct {
 		return &BindingIndex{typeOf: structType}, nil
 	}
-	result := &BindingIndex{typeOf: structType, fields: make([]BindingField, 0, structType.NumField())}
-	for i := 0; i < structType.NumField(); i++ {
-		field := structType.Field(i)
+	shape := xshape.Linked(structType)
+	visible, err := shape.Fields()
+	if err != nil {
+		return nil, err
+	}
+	result := &BindingIndex{typeOf: structType, fields: make([]BindingField, 0, len(visible))}
+	for _, candidate := range visible {
+		field, err := shape.StructField(candidate.Name)
+		if err != nil {
+			return nil, err
+		}
 		if !field.IsExported() {
 			continue
 		}
