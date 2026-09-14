@@ -3,19 +3,25 @@
 [All guides](README.md) · [Coverage](feature-skill-coverage.md)
 
 The canonical `llm` source contains three application-authoring skills:
-[datly-reader](../../llm/datly-reader/SKILL.md),
-[datly-writer](../../llm/datly-writer/SKILL.md), and
-[datly-custom-component](../../llm/datly-custom-component/SKILL.md).
+[datly-reader](../llm/datly-reader/SKILL.md),
+[datly-writer](../llm/datly-writer/SKILL.md), and
+[datly-custom-component](../llm/datly-custom-component/SKILL.md).
 Short entrypoints route to grammar, contracts, examples and operational references.
 They describe the integrated authoring rules and explicitly documented remaining
 gaps. See [release status](status.md) for the current validation boundaries.
 
 ## Source and product inputs
 
-Source documentation uses a workspace with `datly/`, `xdatly/` and `llm/` as sibling
-directories. Publish or copy those source roots together to preserve canonical-skill
-links. Materialized skill bundles carry their referenced files within each skill
-root and do not require that source workspace layout.
+Canonical release sources are distributed in this repository's `llm/` directory.
+The sibling release staging copy is not required to build or install the published
+bundle. Edit the repository sources and product guides, then regenerate.
+
+Product inputs use `datly/` and `xdatly/` sibling checkouts. Check out xdatly at
+`08752d9972c16da25047f5f0ad979c2894f7d5ff`, matching the published SDK version in
+`go.mod`. The exact approved SDK references are read-only packaging inputs.
+Clone or copy this repository as `datly` in that workspace; no sibling `llm`
+directory is needed. Materialized bundles contain their references and need
+neither checkout at installation or runtime.
 
 All links inside a canonical skill, including supporting references, resolve from
 that skill's root. Preserve this convention; do not convert reference links to
@@ -26,11 +32,13 @@ imports or inclusion of maintainer history.
 From the matching Datly module, with your canonical source and product workspace:
 
 ```sh
-go run ./internal/cmd/skillpack -source ../llm -products .. -out ../skill-bundle -write
-go run ./internal/cmd/skillpack -source ../llm -products .. -out ../skill-bundle
+go run ./internal/cmd/skillpack -source llm -products .. -out /tmp/datly-skill-bundle -write
+go run ./internal/cmd/skillpack -source llm -products .. -out /tmp/datly-skill-bundle
 ```
 
-These paths use the release sibling layout. For the embedded bundle, run
+Canonical skills live in this repository under `llm/`. The `-products ..` path
+selects sibling Datly and xdatly product checkouts; no sibling llm checkout is
+required. For the embedded bundle, run
 `go run ./internal/cmd/skillpack -write`, then omit `-write` to check it. The output is disposable generation, not a live
 installation. Canonical `llm/` imports come from `-source`; product `datly/` and
 `xdatly/` imports come from `-products`. Retain the declared source files and

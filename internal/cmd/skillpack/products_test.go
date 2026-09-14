@@ -128,3 +128,51 @@ func TestSkillpackPublicExportBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestSkillpackDistributedSourcesUseSelectedRoot(t *testing.T) {
+	source, products, out := t.TempDir(), t.TempDir(), filepath.Join(t.TempDir(), "bundle")
+	for _, skill := range []string{"datly-reader", "datly-writer", "datly-custom-component"} {
+		if err := os.MkdirAll(filepath.Join(source, skill), 0755); err != nil {
+			t.Fatal(err)
+		}
+		data := "---\nname: " + skill + "\ndescription: Example.\n---\n# Canonical source\n[guide](references/product/datly/doc/guide.md)\n"
+		if err := os.WriteFile(filepath.Join(source, skill, "SKILL.md"), []byte(data), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, data := range map[string]string{
+		"datly/doc/guide.md":              "# Guide\n[reader](../llm/datly-reader/SKILL.md)\n",
+		"datly/llm/datly-reader/SKILL.md": "SHADOW SOURCE MUST NOT BE READ",
+	} {
+		filename := filepath.Join(products, name)
+		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filename, []byte(data), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	declaration, err := json.Marshal(productDeclaration{Files: []string{"datly/doc/guide.md", "llm/datly-reader/SKILL.md"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(source, "packaging.json"), declaration, 0644); err != nil {
+		t.Fatal(err)
+	}
+	p := packager{source: source, productsRoot: products, destination: out, write: true}
+	if err = p.run(); err != nil {
+		t.Fatal(err)
+	}
+	p.write = false
+	if err = p.run(); err != nil {
+		t.Fatal(err)
+	}
+	guide, err := os.ReadFile(filepath.Join(out, "datly-reader/references/product/datly/doc/guide.md"))
+	if err != nil || !bytes.Contains(guide, []byte("](SKILL.md)")) {
+		t.Fatalf("distributed link: %s %v", guide, err)
+	}
+	imported, err := os.ReadFile(filepath.Join(out, "datly-writer/references/product/llm/datly-reader/SKILL.reference.md"))
+	if err != nil || !bytes.Contains(imported, []byte("# Canonical source")) || bytes.Contains(imported, []byte("SHADOW")) {
+		t.Fatalf("source authority: %s %v", imported, err)
+	}
+}

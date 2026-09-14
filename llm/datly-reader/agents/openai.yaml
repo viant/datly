@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datly Reader Components"
+  short_description: "Author typed Datly reader APIs"
+  default_prompt: "Use $datly-reader to create a typed Datly component from my requirements."

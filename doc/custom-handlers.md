@@ -13,7 +13,7 @@ The public Go contract is `handler.Contract[I, O]`; `Exec` receives context,
 `handler.Session`, `*I` and `*O`. A named factory belongs in component metadata.
 The custom project build discovers and links its typed factory bridge and input/output types internally.
 
-The [greeting example](../../llm/datly-custom-component/references/custom-examples.md#typed-application-owned-handler)
+The [greeting example](../llm/datly-custom-component/references/custom-examples.md#typed-application-owned-handler)
 shows complete Go source, explicit validator injection and error handling. The
 [project fixture](../project/build/testdata/app/hooks/write.go) shows a DML handler
 that the custom build discovers internally. Choose narrow `Validator`, `DML`, `Sequencer` or
@@ -29,7 +29,7 @@ separate patch engine or raw transaction facade.
 
 Bind a declared component dependency through the existing component provider,
 or explicitly invoke a typed target through the scoped `exec.ComponentInvoker`.
-The [forwarding example](../../llm/datly-custom-component/references/custom-examples.md#explicit-typed-forwarding-and-trusted-service-registration)
+The [forwarding example](../llm/datly-custom-component/references/custom-examples.md#explicit-typed-forwarding-and-trusted-service-registration)
 shows a public POST forwarding an exact typed input to a private reader. It
 preserves internal visibility, authorization and the root transaction owner.
 Supplied zero remains supplied, and arbitrary body fields cannot replace a

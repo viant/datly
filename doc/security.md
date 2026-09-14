@@ -55,7 +55,7 @@ func (p *Authorization) Compute(ctx context.Context, _ any) (*predicate.Criteria
 Register the predicate and codec through the application's existing typed
 registration owners, and use a query that consumes its predicate group. The
 component declaration and query are deliberately omitted here: these ownership
-columns are application-specific. The [full authored reference](../../llm/datly-reader/references/tags-and-interfaces.md#jwt-input-and-authorization-predicates)
+columns are application-specific. The [full authored reference](../llm/datly-reader/references/tags-and-interfaces.md#jwt-input-and-authorization-predicates)
 explains the expected scope.
 
 `Subject` is the native registered claim; `UserID` is a custom claim whose

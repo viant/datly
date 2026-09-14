@@ -33,9 +33,9 @@ explicitly configured external services. Record actual commands, skipped cases
 and environmental restrictions. Do not equate a compile check with runtime proof.
 The final release gate includes complete regression and affected race tests.
 
-Update public guides when behavior changes. Authoring skill sources belong to the
-sibling `llm` release copy; product references read sibling `datly` and `xdatly`
-checkouts. Follow [skill packaging](doc/authoring-skills.md), regenerate with
+Update public guides when behavior changes. Authoring skill sources are distributed in this repository
+under `llm/`; product references read sibling `datly` and `xdatly` checkouts.
+Use the exact SDK commit documented in the packaging guide. Follow [skill packaging](doc/authoring-skills.md), regenerate with
 `go run ./internal/cmd/skillpack -write`, then run the same command without
 `-write` to check exact reproducibility. Never edit generated embedded copies.
 Preserve licenses and notices, and keep internal working histories, local

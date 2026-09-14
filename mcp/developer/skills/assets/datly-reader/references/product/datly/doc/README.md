@@ -9,12 +9,17 @@ provide a runnable feature switch.
 
 | Your task | Read |
 | --- | --- |
+| Understand DAO/service responsibilities, components, DQL, StructQL and generated code | [Programming model](references/product/datly/doc/programming-model.md) |
 | Run the SQLite demo and understand its contract | [Quickstart](references/product/datly/doc/quickstart.md) |
 | Understand the execution model and ownership | [Architecture](references/product/datly/doc/architecture.md) |
-| Author DQL, import types, generate Go/Velty and preserve edits | [Authoring](references/product/datly/doc/authoring.md) |
+| Write DQL declarations, parameters, JOIN controls and typed CASTs | [DQL syntax and grammar](references/product/datly/doc/dql.md) · [EBNF](references/product/datly/doc/dql.ebnf) |
+| Transcribe DQL, import types and preserve generated edits | [Authoring](references/product/datly/doc/authoring.md) |
+| Understand reader/writer hook order, sparse updates and invariants | [Hook flow diagrams](references/product/datly/doc/hooks.md) |
 | Build nested reads and paginated outputs | [Readers](references/product/datly/doc/readers.md) |
 | Build analytical reports or compare query frames | [Reports](references/product/datly/doc/reports.md) |
+| Generate a mutator and understand Has markers, SyncPresence and invariants | [Generated mutators](references/product/datly/doc/generated-mutator.md) |
 | Write sparse updates and related inserts | [Mutations](references/product/datly/doc/mutations.md) |
+| Return business errors or shape a typed/raw response | [Errors and custom output](references/product/datly/doc/errors-and-output.md) |
 | Enforce verified identity and row access | [Security](references/product/datly/doc/security.md) |
 | Register custom behavior, return bytes or finalize output | [Custom handlers](references/product/datly/doc/custom-handlers.md) |
 | Expose HTTP and MCP | [Protocols](references/product/datly/doc/protocols.md) |

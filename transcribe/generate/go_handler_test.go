@@ -75,7 +75,7 @@ func TestGeneratorEmitsAcceptedCustomHandler(t *testing.T) {
 	if err != nil || len(tags) != 2 || tags[0].Handler != "HandleOrders" || tags[1].Handler != "HandleOrders" {
 		t.Fatalf("component route tags = %+v, %v", tags, err)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "test", "-mod=mod", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated module does not compile: %v\n%s", runErr, output)

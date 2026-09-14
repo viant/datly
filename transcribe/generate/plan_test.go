@@ -429,7 +429,7 @@ func TestResolvePlan_GeneratesNestedRelationViewTypes(t *testing.T) {
 	if _, err = EmitScaffold(generatedDir, plan); err != nil {
 		t.Fatalf("EmitScaffold() error = %v", err)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "test", "-mod=mod", "./...")
 	command.Dir = rootDir
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("nested generated module does not compile: %v\n%s", runErr, output)
@@ -504,7 +504,7 @@ func TestResolvePlan_EmitsExplicitViewTypesAndDestinations(t *testing.T) {
 		!strings.Contains(string(productsSource), "type ProductRow struct") || !strings.Contains(string(productsSource), `time "time"`) {
 		t.Fatalf("orders source:\n%s\nproducts source:\n%s", ordersSource, productsSource)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "test", "-mod=mod", "./...")
 	command.Dir = dir
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("split generated views do not compile: %v\n%s", runErr, output)
@@ -1559,7 +1559,7 @@ SELECT 1`
 	if result.Plan.Input.Type != "VendorInput" || result.Plan.Output.Type != "VendorOutput" {
 		t.Fatalf("unexpected generated type names: %#v", result.Plan)
 	}
-	cmd := exec.Command("go", "test", "./...")
+	cmd := exec.Command("go", "test", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1608,7 +1608,7 @@ func TestGeneratePackageWithLinkedContractsProducesBuildablePackage(t *testing.T
 			t.Fatalf("linked contract file %s was emitted: %v", name, err)
 		}
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "test", "-mod=mod", "./...")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("linked generated package did not compile: %v\n%s", err, output)
@@ -1634,7 +1634,7 @@ SELECT 1`
 	}
 	assertly.AssertValues(t, "VendorCatalog", result.Plan.ComponentName)
 
-	cmd := exec.Command("go", "test", "./...")
+	cmd := exec.Command("go", "test", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1696,7 +1696,7 @@ SELECT 1`
 		t.Fatalf("expected generation result with plan")
 	}
 
-	cmd := exec.Command("go", "test", "./...")
+	cmd := exec.Command("go", "test", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1746,7 +1746,7 @@ SELECT 1`
 		t.Fatalf("expected concrete imported type, got:\n%s", content)
 	}
 
-	cmd := exec.Command("go", "test", "./...")
+	cmd := exec.Command("go", "test", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1790,7 +1790,7 @@ SELECT 1`
 		t.Fatalf("expected concrete imported type, got:\n%s", content)
 	}
 
-	cmd := exec.Command("go", "test", "./...")
+	cmd := exec.Command("go", "test", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -2034,7 +2034,7 @@ SELECT 1`
 	if strings.Contains(string(viewBytes), "type Foo struct{}") {
 		t.Fatalf("resolved default-package type leaked a local placeholder:\n%s", viewBytes)
 	}
-	cmd := exec.Command("go", "test", "./...")
+	cmd := exec.Command("go", "test", "-mod=mod", "./...")
 	cmd.Dir = root
 	if output, runErr := cmd.CombinedOutput(); runErr != nil {
 		t.Fatalf("default-package generated module did not compile: %v\n%s", runErr, output)
@@ -2419,7 +2419,7 @@ func TestGeneratePackageFromSource_ArrayAggHelperFieldIsUsable(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(pkgDir, "consumer_test_helper.go"), []byte(consumer), 0o644); err != nil {
 		t.Fatalf("failed to write consumer: %v", err)
 	}
-	cmd := exec.Command("go", "build", "./...")
+	cmd := exec.Command("go", "build", "-mod=mod", "./...")
 	cmd.Dir = root
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("generated ARRAY_AGG helper field is not usable (compile failed): %v\n%s", err, out)

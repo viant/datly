@@ -27,6 +27,21 @@ without local dependency replacements. No published Datly 1.0 version is claimed
 | Mutation/schema boundary | Integrated relation-produced FK deferral is restricted to captured parent INSERTs and validates final values before Queue. Main SQLite ordinary/self/composite acceptance passes. Direct recursive Velty DTO registration exposes a native selector-expansion bug still being corrected; adapter-based acceptance does not prove that direct path. Complete schema constraint discovery and automatic UNIQUE inference are not promised. |
 | DQL package destinations | Project root remains the external destination. The extension that lets existing DQL directives control separate component/shape packages is under correction: generated entity methods must follow their owning shape package. It is not yet integrated or accepted. |
 
+## Dependency tooling
+
+The pinned Structology module still has a dependency test that imports original
+Datly's removed `gateway/router/marshal/tabjson` package. `go mod tidy` traverses
+that test and currently fails against this canonical v1 module. The runtime build
+and targeted generated tests do not require that package. This native dependency
+needs a separately published correction before the tidy release gate can pass;
+do not restore the obsolete Datly package to satisfy a dependency's test.
+
+For the local quickstart, `go list -mod=mod -deps ./...` resolves the application's
+build graph after initialization. Go may raise its locally replaced Datly
+requirement from `v0.0.0` to `v0.37.0`, as requested by the native dependency graph;
+the replacement still selects this v1 checkout. That version is not a Datly 1.0
+release claim. Datly's release `go.mod` itself retains its published native pins.
+
 ## Verification meaning
 
 Source links and existing harness cases identify owners and practical examples.

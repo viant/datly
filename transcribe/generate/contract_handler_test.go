@@ -1,15 +1,15 @@
 package generate
 
 import (
-	"github.com/viant/datly/internal/testharness"
 	"go/parser"
 	"go/token"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/viant/datly/internal/testharness"
 )
 
 func parseContractHandlerAsset(t *testing.T, factory, source string) *ContractHandlerAsset {
@@ -25,7 +25,6 @@ func validContractHandlerSource() string {
 	return `package transcribed
 
 import (
-	"github.com/viant/datly/internal/testharness"
 	"context"
 	xhandler "github.com/viant/xdatly/handler"
 )

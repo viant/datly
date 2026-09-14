@@ -143,6 +143,12 @@ func (p packager) products(contents map[string][]byte) (map[string]string, error
 							}
 						}
 					}
+					// Product guides link to the repository's distributed source
+					// tree. Canonical imports keep the logical llm/ authority and
+					// are always read from the explicitly selected -source root.
+					if strings.HasPrefix(sourceRef, "datly/llm/") {
+						sourceRef = strings.TrimPrefix(sourceRef, "datly/")
+					}
 					target := targets[sourceRef]
 					if strings.HasPrefix(sourceRef, "llm/"+skill+"/") {
 						target = strings.TrimPrefix(sourceRef, "llm/"+skill+"/")

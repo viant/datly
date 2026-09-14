@@ -62,8 +62,10 @@ optionally with `error`. Discovery does not execute factories or initializers.
 Native compilation validates typed bridges; runtime registration checks dynamic
 handler contracts and factory failures.
 
-After adding dependencies, run ordinary `go mod tidy` in the correct module or
-workspace. Build preserves module choices and reports Go's errors. Add/remove
+After adding dependencies, resolve the build graph with
+`go list -mod=mod -deps ./...` in the application module. The pinned Structology
+dependency currently blocks `go mod tidy` through one of its own test imports;
+see [dependency tooling](status.md#dependency-tooling). Build preserves module choices and reports Go's errors. Add/remove
 component packages and rebuild to refresh linking. Previous output is retained
 on ordinary compile failure; edited generated-linker conflicts fail explicitly.
 

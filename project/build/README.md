@@ -29,6 +29,11 @@ setup script copies the exact dependency graph and sums and maps only the main
 Datly module to its checkout. Changed native/SDK checkouts may be selected for
 explicit development, but release validation uses the published graph.
 
+The pinned Structology module currently prevents `go mod tidy` because a native
+dependency test imports an original Datly package removed in v1. See the public
+[dependency tooling status](../../doc/status.md#dependency-tooling). The build
+graph resolution command below does not traverse that dependency test.
+
 The scaffold contains `cmd/datly`, `dql`, `generated`, `hooks`, `resources`, and
 `datly.yaml`. Existing files are left byte-for-byte intact. Put generated Go
 components under `generated` (or any normal Go package), and authored lifecycle
@@ -40,7 +45,7 @@ this build service does not implicitly regenerate authored DQL.
 ```sh
 # After adding imports, update dependency metadata using ordinary Go tooling.
 cd /path/to/app
-go mod tidy
+go list -mod=mod -deps ./... > /dev/null
 datly build -dir . -o bin/app -tags production
 ./bin/app run -conf datly.yaml
 ```

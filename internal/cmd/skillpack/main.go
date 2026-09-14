@@ -22,7 +22,7 @@ type packager struct {
 
 func main() {
 	p := packager{}
-	flag.StringVar(&p.source, "source", "../llm", "canonical skill root")
+	flag.StringVar(&p.source, "source", "llm", "canonical skill root distributed with Datly")
 	flag.StringVar(&p.destination, "out", "mcp/developer/skills/assets", "generated embedded tree")
 	flag.BoolVar(&p.write, "write", false, "synchronize instead of checking")
 	flag.StringVar(&p.productsRoot, "products", "..", "authoritative product workspace for exact declared imports")

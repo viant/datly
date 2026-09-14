@@ -1,5 +1,7 @@
 # Typed readers, relations and projections
 
+
+See [DQL syntax and grammar](references/product/datly/doc/dql.md) and [reader/writer hook flow diagrams](references/product/datly/doc/hooks.md).
 [All guides](references/product/datly/doc/README.md) · [Cubes and reports](references/product/datly/doc/reports.md)
 
 A reader maps a declared query graph into your public result shape. Use it for

@@ -1,16 +1,74 @@
-**Turn SQL and Go into APIs for applications and AI agents.**
+**High-performance data APIs, graphs and workflows.**
 
-Datly is a data application platform for building typed APIs, transactional
-workflows and analytical services. Define your inputs, SQL, relationships and
-outputs once, then expose the same application contracts through HTTP and MCP.
+**Keep database schemas, generated code and API contracts aligned.** Datly's
+schema-aware transcription turns DQL and database metadata into typed Go shapes,
+resources and component contracts. Regenerate as projections and schemas evolve:
+carry type/nullability changes forward, remove generator-owned fields no longer
+projected, and preserve authored hooks and protected edits.
 
-Build rich relational reads, orchestrate mutations with typed business hooks,
-and compose analytical cubes. Datly brings input binding, validation, authorization
-predicates, caching, asynchronous jobs and observability into the execution path,
-while your Go and Velty handlers define the application behavior.
+Datly is a programmable data application platform that connects databases,
+business logic and delivery. Compose typed data graphs across databases,
+orchestrate reads and mutations with scoped dependency injection, and expose
+the same application contracts through HTTP APIs and MCP tools for AI agents.
 
-From a single query to a data service powering dashboards, applications and AI
-agents, Datly gives your data a typed, programmable interface.
+Build rich relational views, transactional workflows and composable analytical
+cubes. Extend their behavior with Go and Velty handlers, row-reading hooks,
+typed mutation hooks and lifecycle finalizers. Inputs, authorization predicates,
+validation and invocation capabilities flow through a shared execution model.
+
+Datly's execution path combines compiled metadata, typed row processing and
+native SQLX readers with configurable caching, dedicated cache warmup and
+asynchronous jobs. Native timing records and optional OpenTelemetry export help
+you measure the workloads you actually run.
+
+From a single endpoint to a data-driven service spanning multiple databases,
+Datly brings query execution, dependency injection, business workflows, analytics
+and API delivery into one programmable platform.
+
+**Start here:** [Programming model: DAO/service → components](references/product/datly/doc/programming-model.md) · [DQL and grammar](references/product/datly/doc/dql.md) · [Reader/writer hook flows](references/product/datly/doc/hooks.md) · [Generated mutators](references/product/datly/doc/generated-mutator.md) · [Errors and output](references/product/datly/doc/errors-and-output.md) · [Transcription](references/product/datly/doc/authoring.md) · [All guides](references/product/datly/doc/README.md)
+
+## From DAO/service layers to generated components
+
+A conventional application coordinates controllers, services, DAOs, SQL and DTOs.
+Datly makes the data contract and execution plan explicit, then generates the
+selected component artifacts while keeping business behavior in Go/Velty and
+scoped services.
+
+```mermaid
+flowchart LR
+    subgraph Traditional[Traditional application]
+        A[HTTP controller] --> B[Application service]
+        B --> C[DAO or repository]
+        C --> D[SQL and database]
+        B --> E[Hand-maintained DTOs and mapping]
+    end
+    subgraph Datly[Datly application]
+        F[DQL plus schema and Go types] --> G[Transcription]
+        G --> H[Generated reader OR writer component]
+        I[HTTP or MCP] --> J[Binding and scoped DI]
+        J --> H
+        H --> K[Typed execution and configured databases]
+        H --> L[Business services and typed hooks]
+    end
+```
+
+| Concern | Conventional DAO/service application | Datly component model |
+| --- | --- | --- |
+| Data contract | SQL, DTOs and request mapping maintained across layers | DQL/schema/type authority drives typed generation and regeneration |
+| Reads | DAO mapping plus service-side relationship assembly | Declared views, typed data graphs and per-view query controls |
+| Writes | Application-managed comparison and persistence orchestration | Explicit generated mutation policy or custom Go/Velty orchestration |
+| Business behavior | Services and callbacks | Reusable services, scoped DI and typed hooks at defined phases |
+| Database changes | Manually reconcile query and DTO changes | Re-transcribe, inspect protected generated diffs, rebuild and publish |
+| Delivery | Controller-specific endpoint integration | Shared component contract exposed through HTTP and MCP |
+
+**Reader and writer generation are separate choices.** Datly does not automatically
+put both into one generated struct. Share domain contracts where appropriate and
+author each component for its own operation.
+
+[Explore the programming model](references/product/datly/doc/programming-model.md) ·
+[Read the DQL grammar](references/product/datly/doc/dql.md) ·
+[See reader and writer execution flows](references/product/datly/doc/hooks.md) ·
+[Understand generated mutators and Has markers](references/product/datly/doc/generated-mutator.md)
 
 Use it to:
 
@@ -54,6 +112,7 @@ export GOWORK=off
 export GOTOOLCHAIN=go1.25.8
 export DATLY_DEMO_DIR="$(python3 doc/examples/prepare-demo.py)"
 go run ./cmd/datly init -dir "$DATLY_DEMO_DIR"
+go -C "$DATLY_DEMO_DIR" list -mod=mod -deps ./... > /dev/null
 go run ./cmd/datly build -dir "$DATLY_DEMO_DIR" -o bin/records
 "$DATLY_DEMO_DIR/bin/records" run -conf "$DATLY_DEMO_DIR/config.json"
 ```
@@ -62,7 +121,9 @@ The [setup script](references/product/datly/doc/examples/prepare-demo.py) copies
 fixture to a new disposable directory, preserves exact dependency requirements
 and maps the unpublished Datly main module to this checkout. Its `v0.0.0` main-module
 requirement is a local-only placeholder paired with an explicit replacement,
-not a downloadable version. Configuration selects a package pattern for route
+not a downloadable version. The `go list` step resolves the application build
+graph; Go may raise that placeholder to satisfy dependency requirements while
+the explicit replacement continues to select this checkout. Configuration selects a package pattern for route
 exposure; component discovery and linking remain build-owned.
 
 Leave the server running. In another terminal:
