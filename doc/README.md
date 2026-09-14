@@ -11,7 +11,9 @@ provide a runnable feature switch.
 | --- | --- |
 | Run the SQLite demo and understand its contract | [Quickstart](quickstart.md) |
 | Understand the execution model and ownership | [Architecture](architecture.md) |
-| Author DQL, import types, generate Go/Velty and preserve edits | [Authoring](authoring.md) |
+| Write DQL declarations, parameters, JOIN controls and typed CASTs | [DQL syntax and grammar](dql.md) · [EBNF](dql.ebnf) |
+| Transcribe DQL, import types and preserve generated edits | [Authoring](authoring.md) |
+| Understand reader/writer hook order, sparse updates and invariants | [Hook flow diagrams](hooks.md) |
 | Build nested reads and paginated outputs | [Readers](readers.md) |
 | Build analytical reports or compare query frames | [Reports](reports.md) |
 | Write sparse updates and related inserts | [Mutations](mutations.md) |

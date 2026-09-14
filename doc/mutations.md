@@ -1,5 +1,7 @@
 # Mutations, validation and stable identity
 
+
+See [DQL syntax and grammar](dql.md) and [reader/writer hook flow diagrams](hooks.md).
 [All guides](README.md) · [Custom handlers](custom-handlers.md)
 
 Choose a generated mutation policy when a declared write graph and typed hooks
@@ -25,8 +27,8 @@ payloads. An ID supplied as zero is still supplied. A newly allocated ID does
 not turn an originally new entity into an update. Composite identity matching
 must compare the complete tuple, never an incidental prefix.
 
-The [writer examples](../../llm/datly-writer/references/writer-examples.md) and
-[writer contract](../../llm/datly-writer/references/writer-contract.md) carry the
+The [writer examples](../llm/datly-writer/references/writer-examples.md) and
+[writer contract](../llm/datly-writer/references/writer-contract.md) carry the
 maintained authored policy patterns. They also include required behaviors still
 under development; use the status boundaries below when selecting a build.
 
@@ -102,7 +104,7 @@ Import `handler` from `github.com/viant/xdatly/handler`. The host must supply
 the bus; the tag does not create it. Save business event intent during the
 appropriate phase and publish a commit-dependent message only after
 `outcome.CommitConfirmed()`. Build its identity after sequencing/reconciliation
-if the original entity had no allocated ID. The [complete message-hook pattern](../../llm/datly-writer/references/mutation-messages.md)
+if the original entity had no allocated ID. The [complete message-hook pattern](../llm/datly-writer/references/mutation-messages.md)
 shows the typed finalizer and failure semantics.
 
 ## Transactions and failure

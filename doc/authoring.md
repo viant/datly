@@ -1,5 +1,7 @@
 # Author source, generate typed artifacts
 
+
+See [DQL syntax and grammar](dql.md) and [reader/writer hook flow diagrams](hooks.md).
 [All guides](README.md) · [Architecture](architecture.md)
 
 Choose Go shapes when your domain types already exist. Choose DQL when SQL is
@@ -105,8 +107,8 @@ column, an internal backing column or a logical hook-built value matters:
 - NULL is distinct from zero; use an appropriate nullable shape and verify the
   reader's NULL policy.
 
-See the [maintained grammar](../../llm/datly-reader/references/dql-grammar.md)
-and [rich-shape examples](../../llm/datly-reader/references/reader-examples.md#rich-public-shape).
+See the [maintained grammar](../llm/datly-reader/references/dql-grammar.md)
+and [rich-shape examples](../llm/datly-reader/references/reader-examples.md#rich-public-shape).
 Those references include required patterns with incomplete acceptance. Do not
 infer every imported CAST/codec/hook combination works from a tag parse alone.
 

@@ -26,6 +26,8 @@ From a single endpoint to a data-driven service spanning multiple databases,
 Datly brings query execution, dependency injection, business workflows, analytics
 and API delivery into one programmable platform.
 
+**Start here:** [DQL and grammar](doc/dql.md) · [Reader/writer hook flows](doc/hooks.md) · [Transcription](doc/authoring.md) · [All guides](doc/README.md)
+
 Use it to:
 
 - **Turn database queries into useful API responses.** Return typed records,
@@ -68,6 +70,7 @@ export GOWORK=off
 export GOTOOLCHAIN=go1.25.8
 export DATLY_DEMO_DIR="$(python3 doc/examples/prepare-demo.py)"
 go run ./cmd/datly init -dir "$DATLY_DEMO_DIR"
+go -C "$DATLY_DEMO_DIR" list -mod=mod -deps ./... > /dev/null
 go run ./cmd/datly build -dir "$DATLY_DEMO_DIR" -o bin/records
 "$DATLY_DEMO_DIR/bin/records" run -conf "$DATLY_DEMO_DIR/config.json"
 ```
@@ -76,7 +79,9 @@ The [setup script](doc/examples/prepare-demo.py) copies the checked-in project
 fixture to a new disposable directory, preserves exact dependency requirements
 and maps the unpublished Datly main module to this checkout. Its `v0.0.0` main-module
 requirement is a local-only placeholder paired with an explicit replacement,
-not a downloadable version. Configuration selects a package pattern for route
+not a downloadable version. The `go list` step resolves the application build
+graph; Go may raise that placeholder to satisfy dependency requirements while
+the explicit replacement continues to select this checkout. Configuration selects a package pattern for route
 exposure; component discovery and linking remain build-owned.
 
 Leave the server running. In another terminal:

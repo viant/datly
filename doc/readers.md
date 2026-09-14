@@ -1,5 +1,7 @@
 # Typed readers, relations and projections
 
+
+See [DQL syntax and grammar](dql.md) and [reader/writer hook flow diagrams](hooks.md).
 [All guides](README.md) · [Cubes and reports](reports.md)
 
 A reader maps a declared query graph into your public result shape. Use it for
@@ -41,7 +43,7 @@ fixtures and NULL/zero-key controls are useful acceptance cases.
 Ordinary relations populate nested typed collections or objects. SelfReference
 connects recursive entities; it does not produce an aggregate output. DerivedView
 is an ordinary relation of kind `derived` whose query derives from another view.
-See the [reader contract](../../llm/datly-reader/references/reader-contract.md)
+See the [reader contract](../llm/datly-reader/references/reader-contract.md)
 for authoring choices, matching modes and imported shapes.
 
 `batch` controls parent-key batches. `batchConcurrency`, `relationalConcurrency`
@@ -67,7 +69,7 @@ type Bounds struct {
 
 For three matching IDs with page size one, offset ten returns no page rows while
 the count remains three and bounds remain 1–3. With no matching rows, count is
-zero and nullable bounds are NULL. The [complete Go and DQL examples](../../llm/datly-reader/references/reader-examples.md#complete-go-shape-pattern-one-row-pages-full-match-count-and-bounds)
+zero and nullable bounds are NULL. The [complete Go and DQL examples](../llm/datly-reader/references/reader-examples.md#complete-go-shape-pattern-one-row-pages-full-match-count-and-bounds)
 show both independent holders and their SQLite expectations.
 
 `NonWindowSQL` removes selector/view pagination, including `set_limit`; it keeps
