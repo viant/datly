@@ -80,41 +80,17 @@ before compiling. Inspect diagnostics and generated contracts before persistence
 then use [project build](project-build.md) to discover and link the resulting Go packages internally.
 Generated Go packages must be built and linked before their component can run.
 
-## Select a handler product programmatically
+## Generate from the CLI
 
-With a canonical `*transcribe.Source` (including its package/type/resource
-context), the current API is:
+Use the operation-based CLI workflow described in [the writer guide](mutations.md#cli-generation-and-generated-code).
+Author an explicit `#package` in each reader/writer DQL, select the source package
+and project root, and choose the operation. Standard writers are generated Go;
+application code belongs in the generated customization points.
 
-```go
-// Embedding fragment: ctx, source and destination are application-owned.
-generated, err := transcribe.NewCompiler().Transcribe(ctx, transcribe.Request{
-    Source: source,
-    Destination: destination,
-    Options: transcribe.Options{
-        Handler: transcribe.HandlerOptions{
-            Target: transcribe.HandlerGo,
-            Operation: transcribe.WritePost,
-            Go: transcribe.GoHandlerOptions{Execution: transcribe.GoExecutionMutation},
-        },
-    },
-})
-// Handle err, inspect generated artifacts, then build/link them before serving.
-```
-
-Import `github.com/viant/datly/transcribe`. This persists to the requested
-destination; use a new isolated destination until reviewed. The source must
-actually declare the body/output/write graph appropriate to the operation.
-PATCH/PUT also need their authored Current binding and identity policy. The
-[transcribed mutation fixture](../transcribe/handler_program_runtime_test.go)
-shows complete source plus schema refinement and generated SQLite execution.
-
-The Go target selects direct orchestration with `GoExecutionDirect`, or the
-explicit generic policy with `GoExecutionMutation`. **Mutation is a Go execution
-choice within the Go target.** `HandlerNone` preserves supplied/authored authority.
-Do not silently select a handler policy from the HTTP verb. Create-once hook
-scaffolding is opt-in through `HookOptions`, preserving authored hook ownership.
-Tooling must expose the actual API choices; an installed developer MCP server
-may offer a narrower interface.
+The high-level command is undergoing integration and verification in this branch.
+Do not replace a missing `gen` command with a programmatic compiler tutorial or
+manually reconstructed body/Current plumbing. The command reference must match
+the installed build's help output.
 
 ## Imported types, field tags and SQL macros
 

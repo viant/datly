@@ -14,7 +14,7 @@ generate a combined reader/writer component in one struct.
 
 1. [Choose the writer product](#choose-the-writer-product)
 2. [Describe the writable graph](#describe-the-writable-graph)
-3. [Transcribe and inspect generated code](#transcribe-and-inspect-generated-code)
+3. [CLI generation and generated code](#cli-generation-and-generated-code)
 4. [Understand the complete lifecycle](#understand-the-complete-lifecycle)
 5. [Separate the four kinds of state](#separate-the-four-kinds-of-state)
 6. [Use Has markers for sparse requests](#use-has-markers-for-sparse-requests)
@@ -65,6 +65,7 @@ Body contracts, key projections and Current-state declarations belong to the
 **generated output**, not to the minimum hand-authored input:
 
 ```sql
+#package('example.com/shop/orders/write')
 #setting($_ = $route('/orders', 'PATCH'))
 #setting($_ = $connector('main'))
 SELECT o.*, Items.*, Kind.*,
@@ -86,7 +87,32 @@ to write a template loop to load Current rows.
 key equality. ITEMS remains many. The generator must not infer that every joined
 table is writable. Foreign-key constraints still belong to the database.
 
-## Transcribe and inspect generated code
+## CLI generation and generated code
+
+Start each writer DQL with an explicit destination package declaration. The reader
+uses its own package, for example `example.com/shop/orders/read`; the writer uses
+`example.com/shop/orders/write`. The project root is the filesystem argument, while
+DQL owns the Go package and shape declarations.
+
+The tested high-level generation command has this form (CLI integration is still
+under review in this development branch):
+
+```sh
+datly gen -op patch \
+  -dir "$PROJECT" \
+  -schema -connector main -driver sqlite3 -dsn "$PROJECT/orders.db" \
+  example.com/shop/orders/source
+```
+
+`-dir` selects the existing project/module root. The final argument selects the
+source package containing the DQL. `-op` selects the operation; `-schema` and the
+connector options select the database metadata used for generation. The generator
+emits pure Go into the package declared by DQL. Use separately authored reader DQL
+and `-op get` for the reader; do not generate a combined reader/writer declaration.
+
+This is a command-line workflow. Application authors should not need to construct
+compiler objects, metadata registries, body contracts or Current queries in Go.
+
 
 Original Datly separates `gen` from `translate`. The `gen` PATCH workflow
 starts from the graph description, constructs the write contract and logic, then
