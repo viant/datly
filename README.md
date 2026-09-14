@@ -1,168 +1,161 @@
-# Datly - Modern flexible ORM for rapid development
+# Datly 1.0
 
-[![GoReportCard](https://goreportcard.com/badge/github.com/viant/datly)](https://goreportcard.com/report/github.com/viant/datly)
-[![GoDoc](https://godoc.org/github.com/viant/datly?status.svg)](https://godoc.org/github.com/viant/datly)
+[![Go Reference](https://pkg.go.dev/badge/github.com/viant/datly.svg)](https://pkg.go.dev/github.com/viant/datly)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Go 1.25.8](https://img.shields.io/badge/Go-1.25.8-00ADD8.svg)](go.mod)
+[![Version: v1 branch](https://img.shields.io/badge/Version-v1_branch_(prerelease)-orange.svg)](RELEASING.md)
 
+**High-performance data APIs, graphs and workflows.**
 
-This library is compatible with Go 1.11+
+Datly is a programmable data application platform that connects databases,
+business logic and delivery. Compose typed data graphs across databases,
+orchestrate reads and mutations with scoped dependency injection, and expose
+the same application contracts through HTTP APIs and MCP tools for AI agents.
 
-Please refer to [`CHANGELOG.md`](../CHANGELOG.md) if you encounter breaking changes.
+Build rich relational views, transactional workflows and composable analytical
+cubes. Extend their behavior with Go and Velty handlers, row-reading hooks,
+typed mutation hooks and lifecycle finalizers. Inputs, authorization predicates,
+validation and invocation capabilities flow through a shared execution model.
 
-- [Motivation](#motivation)
-- [Usage](#usage)
-- [License](#license)
+Datly's execution path combines compiled metadata, typed row processing and
+native SQLX readers with configurable caching, dedicated cache warmup and
+asynchronous jobs. Native timing records and optional OpenTelemetry export help
+you measure the workloads you actually run.
 
-## Motivation
+From a single endpoint to a data-driven service spanning multiple databases,
+Datly brings query execution, dependency injection, business workflows, analytics
+and API delivery into one programmable platform.
 
-The goal of this project is to simplify and speed up data layer prototyping and development.
-It can be used as golang ORM or purely rule based.
-This is achieved by utilising rules to govern data mapping and binding for all data interaction.
+Use it to:
 
-## Introduction
+- **Turn database queries into useful API responses.** Return typed records,
+  assembled child collections, and separate counts or bounds without writing a
+  DAO and transport adapter for each endpoint.
+- **Expose analytical views with controlled flexibility.** Declare dimensions,
+  measures, filters and selection rules; compose bounded cube queries for
+  comparisons such as current versus previous spend.
+- **Keep write behavior explicit.** Combine sparse input, original identities,
+  validation, sequencing, hooks and buffered DML in generated policies or custom
+  handlers.
+- **Reuse application contracts across HTTP and MCP.** Select public packages,
+  keep dependencies private, and describe the same input/output types in API
+  metadata.
+- **Make operational choices deliberately.** Use native SQLX read caching,
+  separately configured warmup queries, durable async services and native
+  execution capture, with optional OpenTelemetry export.
 
-Datly is a modern and flexible ORM and data management platform designed with three principles in mind: **performance**, **productivity**, and **security**.
-Datly is SQL-centric, where data comes first.
+**Release preparation on the local `v1` branch.** This checkout uses the canonical
+`github.com/viant/datly` module and published `github.com/viant/xdatly` SDK
+`v0.5.4-0.20260914204318-08752d9972c1`, with pinned native dependencies.
+No Datly 1.0 release tag or published CLI version is claimed. The Go Reference
+badge links to the public module index; it may show an earlier published version.
+[Status](doc/status.md) records integrated behavior and remaining release gates,
+including separate DQL destination and native recursive Velty work.
 
-**Productivity** is achieved by using a higher 4th generation language called DSQL (Datly SQL dialect) to address common problems of manipulating data, 
-allowing developers to focus on addressing business requirements. 
-In addition, more complex cases can be easily delegated to pure Golang, where Datly intermediates with data access and modification. 
-Higher abstraction languages promotes development consistency, offload developers from writing the same code over and over again, which includes routing, struct mapping, batching, 
-security handling, common validation, pagination, dynamic field selection, dynamic criteria, data encoding: json,json-tabular, csv, caching, scaling, runtime/platform independence, sending 
-notification vi universal message bus (sqs/sns/kafka/pubsub) and more.
+## Try a typed API locally
 
-Datly promotes data cohesion with grouping/batching operation. 
-For example  to boostrap your patch operation you would first  analyze all inputs driving business logic, 
-then define patch source generation SQL  with only needed data points to generate initial patch rule, for example
+This SQLite demo builds a custom application with a reader, a writer, input
+initialization and output finalization. `datly build` discovers components and
+links their types and factories internally. Authors do not maintain registration
+or import lists.
 
+Prerequisites: this `v1` checkout, Go 1.25.8, a C compiler for SQLite, Python 3
+and curl. Dependencies use the exact published versions in [go.mod](go.mod).
+Run from `datly`:
 
-```sql
-SELECT  Products.* /* { "Cardinality": "One", "Field":"Entity" } */,
-        ProductFlights.*,
-        Vendor.*,
-        Acl.*,
-        Features.*
-FROM (SELECT * FROM PRODUCTS) Products,
-LEFT JOIN (SELECT * FROM PRODUCT_FLIGHTS) ProductFlights WHERE ProductFlights.PRODUCT_ID = Products.ID
-LEFT JOIN (SELECT ID, 
-                CURRENCY_ID,
-                (SELECT ctz.IANA_TIMEZONE FROM TIME_ZONE ctz WHERE v.TIME_ZONE_ID = ctz.ID) AS IANA_TIMEZONE
-            FROM Vendor v
-) Vendor  ON Vendor.ID = Product.VENDOR_ID AND 1=1
-LEFT JOIN (
-    SELECT ID USER_ID,
-           HasUserRole(ID, 'ROLE_READ_ONLY') AS IS_READ_ONLY,
-           HasUserRole(ID, 'ADMIN') AS IS_ADMIN
-    FROM (USERS)
-) Acl ON Acl.USER_ID = Products.USER_ID AND 1=1
-LEFT JOIN (SELECT
-         ID USER_ID,
-         HasFeatureEnabled(ID, 'EXPOSE_FEATURE_1') AS FEATURE_1,
-        HasFeatureEnabled(ID, 'EXPOSE_FEATURE_2') AS FEATURE_2
-        FROM (USERS)
-) Features ON Features.USER_ID = Products.USER_ID AND 1=1
+```sh
+export GOWORK=off
+export GOTOOLCHAIN=go1.25.8
+export DATLY_DEMO_DIR="$(python3 doc/examples/prepare-demo.py)"
+go run ./cmd/datly init -dir "$DATLY_DEMO_DIR"
+go run ./cmd/datly build -dir "$DATLY_DEMO_DIR" -o bin/records
+"$DATLY_DEMO_DIR/bin/records" run -conf "$DATLY_DEMO_DIR/config.json"
 ```
 
-In the example above Products, Flights and Vendor represents previous state, Acl defines access-control list, 
-and Features represents feature activator in the UI application.
+The [setup script](doc/examples/prepare-demo.py) copies the checked-in project
+fixture to a new disposable directory, preserves exact dependency requirements
+and maps the unpublished Datly main module to this checkout. Its `v0.0.0` main-module
+requirement is a local-only placeholder paired with an explicit replacement,
+not a downloadable version. Configuration selects a package pattern for route
+exposure; component discovery and linking remain build-owned.
 
+Leave the server running. In another terminal:
 
-While Datly in autonomous mode purely uses a meta-driven approach, custom Datly allows blending Go-developed code into rules.
-As opposed to the purely meta-driven approach, Datly allows both modes to be debugged and troubleshooted with traditional debuggers.
-Datly automatically generates openAPI documentation allowing any programing languages integrated seamlessly with Datly based micro/rest services.
-Datly is runtime agnostic, and it can be deployed as standalone, serverless (lambda, cloud function), or Dockerized.
-Datly is deployment time optimized, allowing rule and logic deployment with powerful Go plugins under seconds on Lambda and other serverless cloud platform.
-
-
-**Performance** is achieved by utilizing Go with GoLang structs (never maps), while other frameworks manipulating data use Go reflection, 
-which is around 100x slower than natively typed code,  Datly uses [xunsafe](https://github.com/viant/xunsafe) custom Go reflection, which is only around 5x slower than natively typed code.
-Datly has the ability to read and assemble data from various database vendors at once and provides powerful optimization techniques like seamless smart caching, 
-driving both client performance and substantially reducing cost. 
-Datly uses Velocity inspired [velty](https://github.com/viant/velty) templating language which is one of the fastest in the whole Go echo system.
-On average velty is 20x faster than go Text/template and 8-15x faster than JDK Apache Velocity
-
-Datly can operate on both SQL and NoSQL databases. Large datasets (e.g., BigQuery) can be cached pre-warmed up without engineers writing a single line of code. 
-Datly comes with powerful metrics that provide execution time breakdowns for each data access operation.
-
-When it comes to data modification, Datly can leverage seamless batch and load operations, speeding up data ingestion by 25-50x compared to traditional insert techniques. 
-Datly provides an easy way to build POST/PUT/DELETE and truly performant PATCH operations.
-Datly use modification marker to distinct input state, allowing handling user input effectively, ensuring data integrity, and improving the security of applications.
-
-
-**Security**
-Datly is secure. It's resilient against SQL injection attacks. 
-On top of that, it promotes secure secrets storage natively with all database/sql drivers. 
-Finally, it's integrated with OAuth, which provides a convenient way for both controlling authentication and row and column based authorization.
-
-See more [Datly secutity](doc/security/README.md)
-
-
-Datly use [dql](doc/README.md#datly-sql--dql-) to auto generate struct or internal datly rule
-
-
-**dept.sql**
-```sql
-SELECT 
-    dept.* EXCEPT ORG_ID
-    employee.* EXCEPT DEPT_ID, 
-    organization.* 
-FROM (SELECT * FROM DEPARMENT t) dept
-JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_ID
-JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+```sh
+curl --fail-with-body http://127.0.0.1:8080/records/1
+curl --fail-with-body -H 'Content-Type: application/json' \
+  -d '{"data":{"id":2,"name":"second"}}' http://127.0.0.1:8080/records
+curl --fail-with-body http://127.0.0.1:8080/records/2
+curl --fail-with-body http://127.0.0.1:8080/v1/api/meta/openapi
 ```
 
-To test dql vi reset endpoint run the following command
-```bash
-datly translate -c='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true' -s=dept.sql -P=8080
-open http://127.0.0.1:8080/v1/api/dev/dept    
-```
+GET returns `rows` containing the seeded record and then the inserted record.
+POST returns the record under `data` and `finalized: true`. Stop with Ctrl-C;
+the printed demo directory retains the source, configuration and database.
+The demo is an unauthenticated loopback application. Add your
+[declared authorization policy](doc/security.md) before exposing business data.
 
-To persist rule and then run datly run the following
-```bash
-datly translate -c='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -s=dept.sql -r=reop/dev
-datly run -c=proj/Datly/config.json
-```
+Keep the source and resources available while running this executable: custom
+builds are source-backed. Embedding selected assets does not make the entire
+application a relocatable, source-free deployment. [Quickstart details](doc/quickstart.md)
+and [project builds](doc/project-build.md) explain authoring and deployment.
 
-To see go struct generated for the view run the following
-```bash
-open http://127.0.0.1:8080/v1/api/meta/struct/dev/dept
-```
+The source baseline's integration acceptance covers real TCP reader/mutation
+endpoints and add/remove package rebuilds for the custom-build fixture. Release
+validation must repeat these paths against the selected published dependencies.
 
-To see go openapi for the view run the following
-```bash
-open http://127.0.0.1:8080/v1/api/meta/openapi/dev/dept
-```
+## Choose how to author
 
+| Approach | Best fit | Start here |
+| --- | --- | --- |
+| Go shapes and tags | Existing domain types and compiled application hooks | [Readers](doc/readers.md), [custom handlers](doc/custom-handlers.md) |
+| DQL with imported Go types | SQL-centered authoring with reusable named contracts | [Source and generation](doc/authoring.md) |
+| DQL with generated shapes and Go/Velty handlers | A declared query or write graph that should produce typed artifacts | [Generation](doc/authoring.md), [mutations](doc/mutations.md) |
+| Embedded application manager | Application-owned service wiring and atomic reload | [Architecture](doc/architecture.md), [configuration](doc/configuration.md) |
 
+A component has typed input/output contracts and registered behavior. A view is
+one query-shaped dataset; relations connect datasets. A DerivedView computes
+another output from a parent query, while SelfReference describes an entity
+tree. [Learn the model](doc/architecture.md).
 
+## Guides
 
-## Usage
+| Build an API | Operate and integrate |
+| --- | --- |
+| [Quickstart](doc/quickstart.md) | [Configuration and linked CLI](doc/configuration.md) |
+| [DQL, types, Go/Velty generation and regeneration](doc/authoring.md) | [AFS/Aerospike caching and warmup](doc/cache-and-warmup.md) |
+| [Readers, relations, projections and hooks](doc/readers.md) | [Async jobs, storage events and completion](doc/async.md) |
+| [Cubes, reports and composition](doc/reports.md) | [Native observability and optional OTel](doc/observability.md) |
+| [Mutations, validation, IDs and foreign keys](doc/mutations.md) | [HTTP and MCP](doc/protocols.md) |
+| [JWT inputs and authorization predicates](doc/security.md) | [OpenAPI and documentation resources](doc/api-documentation.md) |
+| [Custom handlers, bytes and finalizers](doc/custom-handlers.md) | [Static content](doc/static-content.md) |
+| [Feature-to-skill coverage checklist](doc/feature-skill-coverage.md) | [Implementation status](doc/status.md) |
 
-#### Managed mode
+The [documentation index](doc/README.md) includes reading paths. The
+[status and evidence guide](doc/status.md) explains what each example proves
+and which requested features still need implementation or integration.
 
-For reader usage, see: [how to use reader](service/reader/README.md) 
+## Develop with Datly
 
-For executor usage, see: [how to use executor](service/executor/README.md)
+The [authoring skills](doc/authoring-skills.md) provide focused reader, writer
+and custom-component workflows, with grammar, examples and acceptance references.
+They describe both current behavior and requested contracts; pending capabilities
+must be checked against the connected build.
 
-#### Autonomus mode
+Public authoring contracts belong to the matching `xdatly` SDK. Datly reuses
+Bindly for binding, `viant/x` for canonical type mechanics, and SQLX for typed
+reads, native caches and database primitives. Original Datly is the behavior and
+service-boundary reference; the 1.0 implementation separates immutable metadata
+from invocation state. [Architecture and ownership](doc/architecture.md) explains
+these boundaries.
 
-## Contributing to datly
+For contribution scope and quality rules, read [CONTRIBUTING.md](CONTRIBUTING.md).
+Review and release evidence is maintained separately from these product guides.
 
-Datly is an open source project and contributors are welcome!
+## License and notices
 
-See [TODO](./TODO.md) list
-
-## License
-
-The source code is made available under the terms of the Apache License, Version 2, as stated in the file `LICENSE`.
-
-Individual files may be made available under their own specific license,
-all compatible with Apache License, Version 2. Please see individual files for details.
-
-<a name="Credits-and-Acknowledgements"></a>
-
-## Credits and Acknowledgements
-
-**Library Authors:** 
-- Kamil Larysz
-- Adrian Witas
+Datly is licensed under the [Apache License 2.0](LICENSE). Preserve [NOTICE](NOTICE)
+and the attribution files described in [third-party notices](THIRD_PARTY_NOTICES.md)
+when redistributing source, binaries or generated authoring bundles. The separate
+xdatly SDK and native dependencies retain their own licenses.
 
