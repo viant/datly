@@ -34,6 +34,49 @@ and API delivery into one programmable platform.
 
 **Start here:** [Programming model: DAO/service → components](doc/programming-model.md) · [DQL and grammar](doc/dql.md) · [Reader/writer hook flows](doc/hooks.md) · [Generated mutators](doc/generated-mutator.md) · [Errors and output](doc/errors-and-output.md) · [Transcription](doc/authoring.md) · [All guides](doc/README.md)
 
+## From DAO/service layers to generated components
+
+A conventional application coordinates controllers, services, DAOs, SQL and DTOs.
+Datly makes the data contract and execution plan explicit, then generates the
+selected component artifacts while keeping business behavior in Go/Velty and
+scoped services.
+
+```mermaid
+flowchart LR
+    subgraph Traditional[Traditional application]
+        A[HTTP controller] --> B[Application service]
+        B --> C[DAO or repository]
+        C --> D[SQL and database]
+        B --> E[Hand-maintained DTOs and mapping]
+    end
+    subgraph Datly[Datly application]
+        F[DQL plus schema and Go types] --> G[Transcription]
+        G --> H[Generated reader OR writer component]
+        I[HTTP or MCP] --> J[Binding and scoped DI]
+        J --> H
+        H --> K[Typed execution and configured databases]
+        H --> L[Business services and typed hooks]
+    end
+```
+
+| Concern | Conventional DAO/service application | Datly component model |
+| --- | --- | --- |
+| Data contract | SQL, DTOs and request mapping maintained across layers | DQL/schema/type authority drives typed generation and regeneration |
+| Reads | DAO mapping plus service-side relationship assembly | Declared views, typed data graphs and per-view query controls |
+| Writes | Application-managed comparison and persistence orchestration | Explicit generated mutation policy or custom Go/Velty orchestration |
+| Business behavior | Services and callbacks | Reusable services, scoped DI and typed hooks at defined phases |
+| Database changes | Manually reconcile query and DTO changes | Re-transcribe, inspect protected generated diffs, rebuild and publish |
+| Delivery | Controller-specific endpoint integration | Shared component contract exposed through HTTP and MCP |
+
+**Reader and writer generation are separate choices.** Datly does not automatically
+put both into one generated struct. Share domain contracts where appropriate and
+author each component for its own operation.
+
+[Explore the programming model](doc/programming-model.md) ·
+[Read the DQL grammar](doc/dql.md) ·
+[See reader and writer execution flows](doc/hooks.md) ·
+[Understand generated mutators and Has markers](doc/generated-mutator.md)
+
 Use it to:
 
 - **Turn database queries into useful API responses.** Return typed records,
