@@ -1,0 +1,157 @@
+package records
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http/httptest"
+	"reflect"
+	"sort"
+	"testing"
+
+	"github.com/viant/datly/application"
+	mcpserver "github.com/viant/datly/mcp/server"
+	"github.com/viant/jsonrpc"
+	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/mcp/client"
+)
+
+type exposurePublic struct {
+	manager  *application.Manager
+	ctx      context.Context
+	native   *client.Client
+	registry bool
+	fixed    bool
+}
+
+func (c exposurePublic) check(t *testing.T, selection exposureSelection, id int) {
+	t.Helper()
+	if c.native != nil || c.registry {
+		c.catalog(t, selection)
+	}
+	for _, endpoint := range []struct {
+		path, tool string
+		exposed    bool
+	}{{"/records", "records.public", selection.app}, {"/internal-records", "records.lookup", selection.private}} {
+		for _, tenant := range []int{7, 8} {
+			var body []byte
+			if c.native == nil && !c.registry {
+				response := httptest.NewRecorder()
+				c.manager.ServeHTTP(response, httptest.NewRequest("GET", fmt.Sprintf("%s?tenant=%d", endpoint.path, tenant), nil).WithContext(c.ctx))
+				status := 404
+				if endpoint.exposed {
+					status = 200
+				}
+				if response.Code != status {
+					t.Fatalf("%s HTTP %d: %s", endpoint.path, response.Code, response.Body.String())
+				}
+				if !endpoint.exposed {
+					continue
+				}
+				body = response.Body.Bytes()
+			} else {
+				result, err := c.call(&schema.CallToolRequestParams{Name: endpoint.tool, Arguments: map[string]any{"tenant": tenant}})
+				if !endpoint.exposed {
+					var rpcErr *jsonrpc.Error
+					if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.MethodNotFound || result != nil {
+						t.Fatalf("hidden %s result=%+v error=%v", endpoint.tool, result, err)
+					}
+					continue
+				}
+				if err != nil || result == nil || result.IsError != nil && *result.IsError {
+					t.Fatalf("%s result=%+v error=%v", endpoint.tool, result, err)
+				}
+				body, err = json.Marshal(result.StructuredContent)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			var actual any
+			if err := json.Unmarshal(body, &actual); err != nil {
+				t.Fatal(err)
+			}
+			var want any
+			if err := json.Unmarshal([]byte(fmt.Sprintf(`{"Status":"","Data":[{"Id":%d}]}`, id+10*(tenant-7))), &want); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(actual, want) {
+				t.Fatalf("%s output=%s want=%v", endpoint.path, body, want)
+			}
+		}
+	}
+}
+
+func (c exposurePublic) catalog(t *testing.T, selection exposureSelection) {
+	t.Helper()
+	listed, err := c.list()
+	if !selection.app && !selection.private && c.native != nil && c.fixed {
+		var rpcErr *jsonrpc.Error
+		if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.MethodNotFound || listed != nil {
+			t.Fatalf("empty tools: %+v %v", listed, err)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{}
+	if selection.app {
+		want = append(want, "records.public")
+	}
+	if selection.private {
+		want = append(want, "records.lookup")
+	}
+	sort.Strings(want)
+	got := []string{}
+	for _, tool := range listed.Tools {
+		got = append(got, tool.Name)
+		input := tool.InputSchema
+		// Native decoding represents absent extension fields by an empty map.
+		if extension, ok := input.AdditionalProperties.(map[string]any); ok && len(extension) == 0 {
+			input.AdditionalProperties = nil
+		}
+		expected := schema.ToolInputSchema{Type: "object", Required: []string{"tenant"}, Properties: map[string]map[string]any{"tenant": {"type": "integer"}}}
+		if !reflect.DeepEqual(input, expected) {
+			t.Fatalf("%s business schema=%+v", tool.Name, tool.InputSchema)
+		}
+	}
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("tools/list=%v want=%v", got, want)
+	}
+}
+
+// Registry mode is separately named evidence, never a fallback for wire denial.
+func (c exposurePublic) list() (*schema.ListToolsResult, error) {
+	if c.native != nil {
+		return c.native.ListTools(c.ctx, nil)
+	}
+	_, service, err := c.manager.Pin(c.ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &schema.ListToolsResult{Tools: service.Registry().ListRegisteredTools()}, nil
+}
+func (c exposurePublic) call(params *schema.CallToolRequestParams) (*schema.CallToolResult, error) {
+	if c.native != nil {
+		return c.native.CallTool(c.ctx, params)
+	}
+	ctx, service, err := c.manager.Pin(c.ctx)
+	if err != nil {
+		return nil, err
+	}
+	factory, err := mcpserver.NewHandler(service)
+	if err != nil {
+		return nil, err
+	}
+	handler, err := factory(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	result, rpcErr := handler.CallTool(ctx, &jsonrpc.TypedRequest[*schema.CallToolRequest]{Request: &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: *params}})
+	if rpcErr != nil {
+		return result, rpcErr
+	}
+	return result, nil
+}

@@ -1,0 +1,7 @@
+Model declarations adapted from github.com/viant/datly,
+gateway/router/openapi/openapi3, inspected 2026-09-13 at commit
+54ae48e3a4649d32aa3018051932fab2ad5f6b38 (working tree read-only).
+Original work: Viant, Inc. Licensed under Apache License 2.0 (LICENSE).
+Changes: generation-only model declarations; removed mutable loading sessions,
+custom extension serialization and non-standard CONNECT operation; fixed
+additionalProperties JSON/YAML serialization. No original runtime imports.

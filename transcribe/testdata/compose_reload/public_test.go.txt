@@ -1,0 +1,299 @@
+package spend
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http/httptest"
+	"reflect"
+	"sort"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/viant/datly/application"
+	"github.com/viant/jsonrpc"
+	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/mcp/client"
+)
+
+type composeClient struct {
+	registry bool
+	ctx      context.Context
+	manager  *application.Manager
+	native   *client.Client
+}
+
+const dimensionOutput = "account_id"
+const measureOutput = "total_spend"
+const rejectedDimension = "AccountId"
+const rejectedMeasure = "TotalSpend"
+
+const composition = `SELECT t1.account_id AS AccountId, t1.total_spend AS web, t2.total_spend AS store FROM $CubeSQL1 AS t1 JOIN $CubeSQL2 AS t2 ON t1.account_id = t2.account_id ORDER BY t1.account_id LIMIT 8`
+
+func (c composeClient) arguments(channel string) map[string]any {
+	return map[string]any{"cubes": []any{map[string]any{"filters": map[string]any{"tenant": "acme", "channel": channel}}, map[string]any{"inheritFrom": 1, "align": "elapsed", "filters": map[string]any{"channel": "store"}}}, "sql": composition}
+}
+
+func (c composeClient) call(args map[string]any) ([]byte, bool, error) {
+ return c.callEndpoint("SpendCubeCompose", "/spend/cube/compose", args)
+}
+
+func (c composeClient) callEndpoint(tool, path string, args map[string]any) ([]byte, bool, error) {
+	if c.native != nil || c.registry {
+		result, err := c.callTool(&schema.CallToolRequestParams{Name: tool, Arguments: args})
+		if err != nil {
+			return nil, true, err
+		}
+		if result == nil {
+			return nil, true, fmt.Errorf("nil MCP result")
+		}
+		data, err := json.Marshal(result.StructuredContent)
+		return data, result.IsError != nil && *result.IsError, err
+	}
+	data, err := json.Marshal(args)
+	if err != nil {
+		return nil, true, err
+	}
+	request := httptest.NewRequest("POST", path+"?tenant=other&channel=wrong", strings.NewReader(string(data))).WithContext(c.ctx)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	c.manager.ServeHTTP(response, request)
+	return response.Body.Bytes(), response.Code != 200, nil
+}
+
+func (c composeClient) check(t *testing.T, revision int) {
+	t.Helper()
+	c.schemas(t)
+	observations.Lock()
+	observations.values = nil
+	observations.entered = nil
+	observations.Unlock()
+	start := time.Now()
+	data, failed, err := c.call(c.arguments("web"))
+	if err != nil || failed {
+		t.Fatalf("compose rows: %s failed=%v err=%v", data, failed, err)
+	}
+	type row struct {
+		AccountID int     `json:"AccountId"`
+		Web       float64 `json:"web"`
+		Store     float64 `json:"store"`
+	}
+	var result struct {
+		Data    []row `json:"data"`
+		Columns []struct {
+			Name string `json:"name"`
+		} `json:"columns"`
+	}
+	if err = json.Unmarshal(data, &result); err != nil {
+		t.Fatal(err)
+	}
+	want := []row{{1, 150, 2000}, {2, 70, 30}}
+	if revision == 2 {
+		want = []row{{1, 160, 2000}, {2, 70, 50}}
+	}
+	if !reflect.DeepEqual(result.Data, want) {
+		t.Fatalf("revision=%d rows=%+v want=%+v body=%s", revision, result.Data, want, data)
+	}
+	columns := []string{}
+	for _, column := range result.Columns {
+		columns = append(columns, column.Name)
+	}
+	if !reflect.DeepEqual(columns, []string{"AccountId", "web", "store"}) {
+		t.Fatalf("columns=%v body=%s", columns, data)
+	}
+	observations.Lock()
+	events := append([]frameObservation(nil), observations.values...)
+	observations.Unlock()
+	if len(events) != 2 {
+		t.Fatalf("frame observations=%+v", events)
+	}
+	for i, event := range events {
+		alignment := ""
+		if i == 1 {
+			alignment = "elapsed"
+		}
+		if event.Frame.Frame != i+1 || event.Frame.Alignment != alignment || event.Tenant != "acme" || event.Channel != []string{"web", "store"}[i] || !event.Frame.Snapshot.Equal(events[0].Frame.Snapshot) || event.Frame.Snapshot.Before(start) || event.Err != nil {
+			t.Fatalf("frame %d=%+v", i, event)
+		}
+		if remaining := event.Deadline.Sub(start); remaining < 29*time.Second || remaining > 31*time.Second {
+			t.Fatalf("configured deadline lost: %v", remaining)
+		}
+	}
+	c.limits(t)
+ c.cube(t, revision)
+}
+
+func (c composeClient) limits(t *testing.T) {
+	t.Helper()
+	for _, tc := range []struct {
+		name   string
+		change func(map[string]any)
+	}{
+		{"too many frames", func(a map[string]any) {
+			frames := make([]any, 9)
+			for i := range frames {
+				frames[i] = map[string]any{}
+			}
+			a["cubes"] = frames
+		}},
+		{"outer limit", func(a map[string]any) { a["sql"] = strings.Replace(composition, "LIMIT 8", "LIMIT 101", 1) }},
+		{"self inheritance", func(a map[string]any) { a["cubes"].([]any)[0].(map[string]any)["inheritFrom"] = 1 }},
+		{"forward inheritance", func(a map[string]any) { a["cubes"].([]any)[0].(map[string]any)["inheritFrom"] = 2 }},
+		{"unknown alignment", func(a map[string]any) { a["cubes"].([]any)[0].(map[string]any)["align"] = "calendar" }},
+		{"inferred dimension", func(a map[string]any) { a["sql"] = strings.ReplaceAll(composition, "t1."+dimensionOutput, "t1."+rejectedDimension) }},
+        {"inferred measure", func(a map[string]any) { a["sql"] = strings.ReplaceAll(composition, "t1."+measureOutput, "t1."+rejectedMeasure) }},
+        {"squashed measure", func(a map[string]any) { a["sql"] = strings.ReplaceAll(composition, "t1."+measureOutput, "t1.totalSpendWrong") }},
+        {"duplicate output", func(a map[string]any) { a["sql"] = strings.Replace(composition, "AS store", "AS web", 1) }},
+        {"physical table", func(a map[string]any) { a["sql"] = "SELECT * FROM spend" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := c.arguments("web")
+			tc.change(args)
+			data, failed, err := c.call(args)
+			if err != nil || !failed {
+				t.Fatalf("invalid compose accepted: body=%s failed=%v err=%v", data, failed, err)
+			}
+			var body map[string]any
+			if err = json.Unmarshal(data, &body); err != nil {
+				t.Fatal(err)
+			}
+			if body["data"] != nil {
+				t.Fatalf("partial data on failure: %s", data)
+			}
+		})
+	}
+}
+
+func (c composeClient) schemas(t *testing.T) {
+	t.Helper()
+	if c.native == nil && !c.registry {
+		return
+	}
+	listed, err := c.listTools()
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{}
+	for _, tool := range listed.Tools {
+		names = append(names, tool.Name)
+        if tool.Name == "SpendCube" {
+            data, err := json.Marshal(tool.InputSchema)
+            if err != nil { t.Fatal(err) }
+            var cube businessSchema
+            if err := json.Unmarshal(data, &cube); err != nil { t.Fatal(err) }
+            dimensions, measures := cube.Properties["dimensions"], cube.Properties["measures"]
+            if len(dimensions.Properties) != 1 || dimensions.Properties["accountId"].Type != "boolean" || len(measures.Properties) != 1 || measures.Properties["totalSpend"].Type != "boolean" { t.Fatalf("public cube schema changed: %s", data) }
+        }
+		if tool.Name != "SpendCubeCompose" {
+			continue
+		}
+		data, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var actual struct {
+			Type       string
+			Required   []string
+			Properties map[string]businessSchema
+		}
+		if err = json.Unmarshal(data, &actual); err != nil {
+			t.Fatal(err)
+		}
+		sort.Strings(actual.Required)
+		if actual.Type != "object" || len(actual.Properties) != 2 || !reflect.DeepEqual(actual.Required, []string{"cubes", "sql"}) {
+			t.Fatalf("business input schema: %s", data)
+		}
+		if actual.Properties["sql"].Type != "string" {
+			t.Fatalf("SQL schema: %s", data)
+		}
+		cubes := actual.Properties["cubes"]
+		if cubes.Type != "array" || cubes.Items == nil || cubes.Items.Type != "object" {
+			t.Fatalf("cubes schema: %s", data)
+		}
+		fields := cubes.Items.Properties
+		if len(fields) != 3 || len(cubes.Items.Required) != 0 || fields["align"].Type != "string" || !reflect.DeepEqual(fields["inheritFrom"].Type, []any{"integer", "null"}) {
+			t.Fatalf("frame schema: %s", data)
+		}
+		filters := fields["filters"]
+		if filters.Type != "object" || len(filters.Properties) != 2 || len(filters.Required) != 0 {
+			t.Fatalf("filter schema: %s", data)
+		}
+		for _, name := range []string{"tenant", "channel"} {
+			if !reflect.DeepEqual(filters.Properties[name].Type, []any{"string", "null"}) {
+				t.Fatalf("%s filter schema: %s", name, data)
+			}
+		}
+
+	}
+	sort.Strings(names)
+	if !reflect.DeepEqual(names, []string{"SpendCube", "SpendCubeCompose"}) {
+		t.Fatalf("base visibility/derived tools=%v", names)
+	}
+	// Only a native wire call proves the protocol missing-tool rejection.
+	if c.native == nil {
+		return
+	}
+	// The authored base has no MCP exposure; derived reports have their own tools.
+	result, err := c.callTool(&schema.CallToolRequestParams{Name: "Spend", Arguments: map[string]any{}})
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.MethodNotFound || rpcErr.Message != "tool Spend not found" || result != nil {
+		t.Fatalf("hidden base result=%+v err=%v", result, err)
+	}
+}
+
+// Decode only the public schema vocabulary asserted here. Exact property sets
+// reject leaked generated presence holders and ambient transport arguments.
+type businessSchema struct {
+	Type       any                       `json:"type"`
+	Required   []string                  `json:"required"`
+	Properties map[string]businessSchema `json:"properties"`
+	Items      *businessSchema           `json:"items"`
+}
+
+// Registry is an independently named acceptance mode, never a native fallback.
+func (c composeClient) callTool(params *schema.CallToolRequestParams) (*schema.CallToolResult, error) {
+	if c.native != nil {
+		return c.native.CallTool(c.ctx, params)
+	}
+	pinned, service, err := c.manager.Pin(c.ctx)
+	if err != nil {
+		return nil, err
+	}
+	entry, ok := service.Registry().ToolRegistry.Get(params.Name)
+	if !ok {
+		return nil, fmt.Errorf("missing registry tool %s", params.Name)
+	}
+	result, rpcErr := entry.Handler(pinned, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: *params})
+	if rpcErr != nil {
+		return result, rpcErr
+	}
+	return result, nil
+}
+func (c composeClient) listTools() (*schema.ListToolsResult, error) {
+	if c.native != nil {
+		return c.native.ListTools(c.ctx, nil)
+	}
+	_, service, err := c.manager.Pin(c.ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &schema.ListToolsResult{Tools: service.Registry().ListRegisteredTools()}, nil
+}
+
+// Public cube field names remain stable while their selectors use SQL outputs.
+func (c composeClient) cube(t *testing.T, revision int) {
+ t.Helper()
+ args := map[string]any{"dimensions": map[string]any{"accountId": true}, "measures": map[string]any{"totalSpend": true}, "filters": map[string]any{"tenant": "acme", "channel": "web"}, "orderBy": []string{dimensionOutput}}
+ data, failed, err := c.callEndpoint("SpendCube", "/spend/cube", args)
+ if err != nil || failed { t.Fatalf("cube rows: %s failed=%v err=%v", data, failed, err) }
+ var result struct { Data []struct { AccountId int; TotalSpend float64 } }
+ if err := json.Unmarshal(data, &result); err != nil { t.Fatal(err) }
+ expected := 150.0
+ if revision == 2 { expected = 160 }
+ if len(result.Data) != 2 || result.Data[0].AccountId != 1 || result.Data[0].TotalSpend != expected || result.Data[1].AccountId != 2 || result.Data[1].TotalSpend != 70 { t.Fatalf("cube revision %d: %s", revision, data) }
+ args["orderBy"] = []string{rejectedDimension}
+ data, failed, err = c.callEndpoint("SpendCube", "/spend/cube", args)
+ if err != nil || !failed { t.Fatalf("cube inferred order accepted: %s failed=%v err=%v", data, failed, err) }
+}

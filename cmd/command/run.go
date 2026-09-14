@@ -1,59 +1,64 @@
+// Package command provides executable standalone commands for stock and linked applications.
 package command
 
 import (
 	"context"
-	"github.com/viant/afs/file"
-	"github.com/viant/afs/url"
-	"github.com/viant/datly/cmd/options"
-	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/gateway/runtime/standalone"
-	"github.com/viant/datly/internal/setter"
+	"flag"
+	"fmt"
+	"io"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/viant/datly/standalone"
+	"github.com/viant/datly/standalone/config"
+	"github.com/viant/x"
+	xmodule "github.com/viant/x/module"
 )
 
-func (s *Service) Run(ctx context.Context, options *options.Options) (err error) {
-	loc, err := s.loadPlugin(ctx, options)
-	if err != nil {
-		return err
-	}
-	options.Run.PluginInfo = loc
-	options.Run.Version = options.Version
-	srv, err := s.run(ctx, options.Run)
-	if err != nil {
-		return err
-	}
-	if srv.MCP != nil {
-		go func() {
-			srv.MCP.ListenAndServe()
-		}()
-	}
-	return srv.ListenAndServe()
+type Service struct {
+	Workspace *xmodule.Workspace
+	Registry  *x.Registry
+	Version   string
 }
 
-func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server, error) {
-	var err error
-	if s.config, err = standalone.NewConfigFromURL(ctx, run.ConfigURL); err != nil {
-		return nil, err
+func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 || args[0] != "run" && args[0] != "start" {
+		fmt.Fprintln(stderr, "usage: datly run|start -conf configuration-URL")
+		return 2
 	}
-	setter.SetStringIfEmpty(&s.config.JobURL, run.JobURL)
-	setter.SetStringIfEmpty(&s.config.FailedJobURL, run.FailedJobURL)
-	setter.SetIntIfZero(&s.config.MaxJobs, run.MaxJobs)
-	applyAsyncJobDefaults(s.config)
-	if run.LoadPlugin && s.config.Config.PluginsURL != "" {
-		parent, _ := url.Split(run.PluginInfo, file.Scheme)
-		_ = s.fs.Copy(ctx, parent, s.config.Config.PluginsURL)
-	}
-	s.config.Version = run.Version
-	if run.MCPPort != nil || run.MCPAuthURL != "" || run.MCPIssuerURL != "" || run.MCPResourceURL != "" || run.MCPAuthMode != "" {
-		if s.config.Config.MCP == nil {
-			s.config.Config.MCP = &gateway.ModelContextProtocol{}
+	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	var location string
+	flags.StringVar(&location, "conf", "", "standalone JSON/YAML configuration URL")
+	flags.StringVar(&location, "c", "", "standalone JSON/YAML configuration URL")
+	if err := flags.Parse(args[1:]); err != nil {
+		if err == flag.ErrHelp {
+			return 0
 		}
-		if run.MCPPort != nil {
-			s.config.Config.MCP.Port = run.MCPPort
-		}
-		setter.SetStringIfEmpty(&s.config.Config.MCP.OAuth2ConfigURL, run.MCPAuthURL)
-		setter.SetStringIfEmpty(&s.config.Config.MCP.IssuerURL, run.MCPIssuerURL)
-		setter.SetStringIfEmpty(&s.config.Config.MCP.ResourceURL, run.MCPResourceURL)
-		setter.SetStringIfEmpty(&s.config.Config.MCP.AuthorizerMode, run.MCPAuthMode)
+		return 2
 	}
-	return standalone.New(ctx, standalone.WithConfig(s.config))
+	if location == "" || flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "a configuration URL and no positional arguments are required")
+		return 2
+	}
+	cfg, err := (config.Loader{}).Load(ctx, location)
+	if err == nil {
+		if s.Version != "" {
+			cfg.Version = s.Version
+		}
+		err = cfg.Validate()
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Diagnostics: stderr})
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	if err = server.Serve(ctx, stdout); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
 }

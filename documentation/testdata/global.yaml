@@ -1,0 +1,18 @@
+Columns:
+  users:
+    _: Users holder
+    id: User identifier
+    id$example: '7'
+    name: User name
+  orders:
+    id: Order identifier
+  id: Bare identifier
+  users.code: User code
+Parameters:
+  Search: Global search
+  Search$example: needle
+Filter:
+  Limit: Maximum rows
+Paths:
+  /records: Global records
+  Payload.Note: Payload note

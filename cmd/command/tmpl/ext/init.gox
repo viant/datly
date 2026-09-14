@@ -1,4 +1,0 @@
-package extension
-
-
-import _ "$module"

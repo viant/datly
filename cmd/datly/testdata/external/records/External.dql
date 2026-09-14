@@ -1,0 +1,2 @@
+#setting($_ = $route('/v1/external', 'GET'))
+SELECT 2 AS ID

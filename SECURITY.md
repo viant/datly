@@ -1,21 +1,15 @@
-# Security Policy
+# Security reports
 
-## Supported Versions
+Do not post credentials, personal data, production data, or exploit details in a
+public issue. Check the repository's Security tab for a private vulnerability
+reporting option. If private reporting is available, use it. If it is unavailable,
+open a minimal issue asking maintainers to establish a private reporting channel,
+without disclosing vulnerability details.
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Include the affected module version or commit, configuration, impact and a minimal
+reproduction in the private report. This repository does not promise a response
+SLA, a supported-version matrix, or a dedicated security email address.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
-
-## Reporting a Vulnerability
-
-Use this section to tell people how to report a vulnerability.
-
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+For application authorization and exposure configuration, see
+[the security guide](doc/security.md). Release readiness and known implementation
+limits are tracked in [status](doc/status.md).

@@ -1,0 +1,116 @@
+(* Datly-specific grammar plus explicitly delegated host languages.
+   Whitespace/comments are allowed between tokens unless a line directive says otherwise.
+   Arity/type/uniqueness rules are in dql-grammar.md. *)
+document = {package_line | import_line | setting | declaration | executable} ;
+package_line = "#package", "(", string, ")", line_end ;
+import_line = "#import", "(", string, ",", string, ")", line_end ;
+setting = ("#setting" | "#settings"), "(", assignment_prefix, setting_call, ")" ;
+assignment_prefix = "$_", "=" ;
+setting_call = "$", setting_name, arguments, {".", cache_option, arguments} ;
+setting_name = "route" | "api_key" | "connector" | "useTemplate"
+ | "input_type" | "output_type" | "dest" | "input_dest" | "output_dest"
+ | "router_dest" | "meta" | "mcp" | "report" | "cube" | "cubeCompose"
+ | "cache" | "cache_warmup" | "marshal" | "unmarshal" | "format"
+ | "date_format" | "case_format" | "ignoreEmptyQueryParameters"
+ | "output_exclude" | "output_omit_empty" | "output_title" | "const" ;
+cache_option = "WithProvider" | "WithLocation" | "WithTimeToLiveMs" ;
+cube_set = "#set", "(", assignment_prefix, "$", ("cube" | "cubeCompose"), arguments, ")" ;
+declaration = ("#define" | "#set"), "(", assignment_prefix, "$", parameter_name,
+ [type_annotation], [binding], {declaration_option}, [declaration_query], ")" ;
+type_annotation = "<", ("?" | go_type), [",", go_type], ">" ;
+binding = "(", provider_kind, "/", location, ")" ;
+provider_kind = identifier ;
+location = ? provider location text, possibly empty, up to matching ')' ? ;
+declaration_option = ".", option_name, arguments ;
+option_name = "Required" | "Optional" | "WithType" | "WithTag" | "Tag"
+ | "WithCodec" | "WithStatusCode" | "WithErrorMessage" | "Cacheable"
+ | "QuerySelector" | "WithPredicate" | "Predicate" | "ApplyWhenAbsentPredicate"
+ | "When" | "Scope" | "Of" | "Value" | "Embed" | "Cardinality" | "Async"
+ | "Output" | "WithURI" | "WithMCP" | "WithPathMCP"
+ | "MinAllowedRecords" | "MaxAllowedRecords" | "ExpectedReturned"
+ | "WithConnector" | "Connector" | "WithTypeName" | "TypeName" | "Type"
+ | "WithDest" | "Dest" | "WithCache" | "WithLimit"
+ | "WithColumnType" | "ColumnType" | "WithColumnTag" | "ColumnTag"
+ | "WithColumnGroupable" | "ColumnGroupable" ;
+declaration_query = "/*", [hint_prefix], [datatype_hint], declaration_sql, "*/" ;
+hint_prefix = "?" | "!", ["!"], {digit} ;
+datatype_hint = ? supported JSON datatype hint, not arbitrary binding metadata ? ;
+declaration_sql = sql_query | structql_query ;
+structql_query = ? StructQL SELECT over a declared Go data path ? ;
+executable = cube_set | sql_statement, [";"] | template_statement | comment ;
+sql_statement = sql_query | sql_mutation ;
+sql_query = [with_clause], select_core, {set_operation, select_core},
+ [order_clause], [window_clause], [limit_clause], [offset_clause] ;
+with_clause = "WITH", ["RECURSIVE"], cte, {",", cte} ;
+cte = sql_identifier, [column_names], "AS", "(", sql_query, ")" ;
+column_names = "(", sql_identifier, {",", sql_identifier}, ")" ;
+select_core = "SELECT", ["DISTINCT" | "ALL"], projection, {",", projection},
+ ["FROM", table_source, {join_clause}], ["WHERE", sql_expression],
+ ["GROUP BY", expression_list], ["HAVING", sql_expression] ;
+projection = star_projection | view_control | rich_type_declaration
+ | column_tag_declaration | sql_expression, [sql_alias] ;
+star_projection = [sql_identifier, "."], "*", ["EXCEPT", identifier_list] ;
+table_source = sql_identifier, [sql_alias] | "(", sql_query, ")", [sql_alias]
+ | "(", sql_identifier, ")", [sql_alias] | embedded_sql, [sql_alias]
+ | ? supported dialect table expression ? ;
+join_clause = [join_kind], "JOIN", table_source,
+ [("ON", sql_expression) | ("USING", column_names)] ;
+join_kind = "INNER" | "LEFT", ["OUTER"] | "RIGHT", ["OUTER"]
+ | "FULL", ["OUTER"] | "CROSS" ;
+set_operation = "UNION", ["ALL" | "DISTINCT"] | ? dialect set operator ? ;
+order_clause = "ORDER BY", order_item, {",", order_item} ;
+order_item = sql_expression, ["ASC" | "DESC"], ["NULLS FIRST" | "NULLS LAST"] ;
+window_clause = ? dialect WINDOW clause ? ;
+limit_clause = "LIMIT", sql_expression, [",", sql_expression] ;
+offset_clause = "OFFSET", sql_expression ;
+sql_alias = ["AS"], sql_identifier ;
+expression_list = sql_expression, {",", sql_expression} ;
+identifier_list = sql_identifier, {",", sql_identifier} ;
+sql_expression = ? SQLparser/dialect expression: literals, identifiers, bound parameters,
+ operators, predicates, CASE, functions, CAST, windows and subqueries;
+ supported template fragments are parsed by Velty and emitted values are bound ? ;
+sql_mutation = ? backend INSERT, UPDATE, DELETE or supported executable SQL ? ;
+view_control = control_name, "(", identifier, {",", control_argument}, ")" ;
+control_name = "use_connector" | "use_cache" | "cache_warmup" | "order_by"
+ | "set_limit" | "allow_nulls" | "groupable" | "grouping_enabled"
+ | "allowed_order_by_columns" | "cardinality" | "self_ref" | "type" | "dest"
+ | "batch_size" | "batch_concurrency" | "relational_concurrency"
+ | "publish_parent" | "set_partitioner" | "match_strategy" | "entity_hooks" ;
+control_argument = string | integer | identifier ;
+rich_type_declaration = "CAST", "(", column_ref, "AS", go_type, ")" ;
+column_tag_declaration = "tag", "(", column_ref, ",", string, ")" ;
+column_ref = identifier, ".", sql_identifier ;
+embedded_sql = "$", "{embed:", resource_reference, "}" ;
+resource_reference = ? fs resource path, optionally namespace:path ? ;
+bound_parameter = ":", identifier, {".", identifier} ;
+template_statement = template_assignment | template_if | template_foreach
+ | template_for | "#evaluate", "(", template_expression, ")" | "#break" | template_value ;
+template_assignment = "#set", "(", template_selector, "=", template_expression, ")" ;
+template_if = "#if", "(", template_expression, ")", {template_content},
+ {"#elseif", "(", template_expression, ")", {template_content}},
+ ["#else", {template_content}], "#end" ;
+template_foreach = "#foreach", "(", template_selector, "in",
+ template_expression, ")", {template_content}, "#end" ;
+template_for = "#for", "(", template_selector, "=", template_expression, ";",
+ template_expression, ";", template_selector, ("++" | "--"), ")",
+ {template_content}, "#end" ;
+template_content = template_statement | sql_statement | ? literal template text ? ;
+template_value = template_selector | "$", "{", template_expression, "}" ;
+template_selector = "$", identifier, {".", identifier | "[", template_expression, "]"
+ | "(", [template_expression, {",", template_expression}], ")"} ;
+template_expression = ? Velty expression grammar and registered method signatures ? ;
+go_type = ? Go type expression using declared package aliases: named type, pointer,
+ slice, array, map, struct, interface, function/channel or generic instantiation;
+ component suitability is a semantic check ? ;
+arguments = "(", [argument, {",", argument}], ")" ;
+argument = string | integer | boolean | go_type | template_expression ;
+parameter_name = letter, {letter | digit | "_"} ;
+identifier = (letter | "_"), {letter | digit | "_"} ;
+sql_identifier = identifier, {".", identifier} | ? dialect-quoted identifier ? ;
+integer = ["-"], digit, {digit} ;
+boolean = "true" | "false" ;
+string = ? balanced single- or double-quoted DQL argument ? ;
+comment = ? SQL/Velty line or balanced block comment ? ;
+letter = ? ASCII A-Z or a-z ? ;
+digit = ? ASCII 0-9 ? ;
+line_end = ? newline or end of input ? ;

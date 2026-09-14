@@ -1,0 +1,166 @@
+# Author source, generate typed artifacts
+
+[All guides](references/product/datly/doc/README.md) · [Architecture](references/product/datly/doc/architecture.md)
+
+Choose Go shapes when your domain types already exist. Choose DQL when SQL is
+the natural starting point, importing existing Go types where appropriate.
+Generated shapes are useful when the projection itself defines the contract.
+All three choices must preserve type/package authority and authored behavior.
+
+## A small DQL reader
+
+This is an authoring example for a package containing `Records.dql`; configure
+the `main` connector and provide `records(id, tenant_id, name)` before executing:
+
+```sql
+#setting($_ = $route('/v1/records', 'GET'))
+#setting($_ = $connector('main'))
+#define($_ = $TenantID<int>(query/tenantId).Required())
+SELECT r.id, r.tenant_id, r.name, set_limit(r, 100)
+FROM records r
+WHERE r.tenant_id = :TenantID
+```
+
+`#setting` declares component metadata. `#define` declares typed binding.
+`set_limit` is a view control removed from executable SQL and mapped into query
+configuration. `:TenantID` becomes a bound argument. This example filters by a
+caller parameter; it does **not** prove that the caller may access that tenant.
+Add a [verified authorization predicate](references/product/datly/doc/security.md).
+
+After the README setup, the supported CLI validates module-qualified packages:
+
+```sh
+go run ./cmd/datly validate -dir "$DATLY_DEMO_DIR" example.com/buildapp/records
+```
+
+For your application, substitute its local source directory and actual package
+path. Repeat `-module-dir` for additional local modules and `-exclude` for
+packages that should not contribute components. Private type dependencies can
+remain available without exposing their routes. `validate` reports skipped
+checks; it does not build and deploy an application.
+
+## Compilation and persistence are separate
+
+The programmatic source pipeline uses `transcribe.Discovery.Compile` for package
+selection and `transcribe.Compiler.Compile` for canonical source compilation.
+`transcribe.ProjectGeneration` and `transcribe/generate` own artifact generation
+and persistence. The candidate CLI has `init`, `build`, `validate`, `run` and `start`; do not assume
+`generate`, `deploy`, `watch` or plugin-loading commands exist.
+
+Use the existing [generation integration examples](references/product/datly/transcribe/generate_test.go.txt)
+and [project owner](references/product/datly/transcribe/project.go.txt) when embedding the compiler.
+Provide package/type/resource authority and resolve declared SQL resources
+before compiling. Inspect diagnostics and generated contracts before persistence,
+then use [project build](references/product/datly/doc/project-build.md) to discover and link the resulting Go packages internally.
+A generated Velty program still needs the registered runtime contract and
+capabilities for that program.
+
+## Select a handler product programmatically
+
+With a canonical `*transcribe.Source` (including its package/type/resource
+context), the current API is:
+
+```go
+// Embedding fragment: ctx, source and destination are application-owned.
+generated, err := transcribe.NewCompiler().Transcribe(ctx, transcribe.Request{
+    Source: source,
+    Destination: destination,
+    Options: transcribe.Options{
+        Handler: transcribe.HandlerOptions{
+            Target: transcribe.HandlerGo,
+            Operation: transcribe.WritePost,
+            Go: transcribe.GoHandlerOptions{Execution: transcribe.GoExecutionMutation},
+        },
+    },
+})
+// Handle err, inspect generated artifacts, then build/link them before serving.
+```
+
+Import `github.com/viant/datly/transcribe`. This persists to the requested
+destination; use a new isolated destination until reviewed. The source must
+actually declare the body/output/write graph appropriate to the operation.
+PATCH/PUT also need their authored Current binding and identity policy. The
+[transcribed mutation fixture](references/product/datly/transcribe/handler_program_runtime_test.go.txt)
+shows complete source plus schema refinement and generated SQLite execution.
+
+The Go target selects direct orchestration with `GoExecutionDirect`, or the
+explicit generic policy with `GoExecutionMutation`. **Mutation is a Go execution
+choice, not a fourth handler target.** A Velty product uses `HandlerVelty` and
+its `VeltyHandlerOptions`; `HandlerNone` preserves supplied/authored authority.
+Do not silently select a handler policy from the HTTP verb. Create-once hook
+scaffolding is opt-in through `HookOptions`, preserving authored hook ownership.
+Tooling must expose the actual API choices; an installed developer MCP server
+may offer a narrower interface.
+
+## Imported types, field tags and SQL macros
+
+Use full module/package identities and declared import aliases. Rich projections
+can refer to an imported type with `CAST(view.field AS alias.Type)` and refine
+metadata through `tag(view.column, '...')`. Whether a field is a physical JSON
+column, an internal backing column or a logical hook-built value matters:
+
+- A physical field retains its SQL mapping and codec behavior.
+- `internal:"true"` hides application-facing data without meaning `sqlx:"-"`.
+- A logical non-DML value needs its explicit mapping policy and backing fields.
+- NULL is distinct from zero; use an appropriate nullable shape and verify the
+  reader's NULL policy.
+
+See the [maintained grammar](references/dql-grammar.md)
+and [rich-shape examples](references/reader-examples.md#rich-public-shape).
+Those references include required patterns with incomplete acceptance. Do not
+infer every imported CAST/codec/hook combination works from a tag parse alone.
+
+View controls such as `use_connector`, `use_cache`, `cache_warmup`, `order_by`
+and `set_limit` feed typed query settings. Builder helpers such as
+`$View.ParentJoinOn(...)` and `$View.Name.NonWindowSQL` feed SQL expansion. They
+are different mechanisms; neither is permission to interpolate client SQL.
+
+## Regenerate without losing authored code
+
+Generation tracks ownership and fingerprints. Existing fields retain order;
+new generated fields append. Proven generated fields can change type or be
+removed when the owned projection changes. Unrelated authored fields, methods,
+tags and comments remain protected. An older file without sufficient ownership
+evidence is not automatically safe to overwrite or delete.
+
+Put business logic in authored handlers/hooks and keep generated orchestration
+owned by generation. If persistence rejects an edit conflict, inspect the
+conflicting ownership; do not erase hand edits just to force regeneration.
+[Regeneration rules](references/product/datly/transcribe/generate/REGENERATION.md) explain the evidence.
+
+## Resource and reload rules
+
+Use standard `fs.FS`, including `embed.FS`, through the canonical resource store.
+Preserve full `${embed:<resource-ref>}` references. Named stores require explicit
+`namespace:path`; registration order must not choose an implicit default. Missing
+SQL/template resources fail before runtime execution.
+
+Publish a coherent new generation only after source, contracts and resources
+validate. Reload can change supported metadata/DQL against linked contracts;
+Go method or shape changes require rebuilding. [Configuration](references/product/datly/doc/configuration.md)
+explains this boundary for standalone applications.
+
+## CAST, pointers, column drop and to-one regeneration
+
+Use the imported type's full package identity, with only explicitly declared
+import aliases. A standalone `CAST(r.amount AS *float64)` refines the Go shape;
+removing the pointer changes nullability again. SQL `CAST(expr AS SQLType) AS name`
+remains executable SQL. Physical JSON/custom typed fields retain SQL mapping and
+codecs; logical pseudo fields need their explicit non-DML policy.
+
+Regeneration must propagate reader and writer pointer/value changes and remove
+only proven generated columns that disappeared from the owned projection. Keep
+field order stable, append additions, protect authored methods/tags/comments and
+reject edited generated-field conflicts. Never infer a new output alias to
+resolve duplicate column names; follow the integrated
+[naming rules](references/product/datly/doc/selectors-and-formats.md).
+
+A relation join such as `LEFT JOIN detail d ON p.id = d.parent_id AND 1=1`
+adds the supported to-one cardinality hint while retaining the actual join key.
+It is not an authorization condition and does not enforce database uniqueness.
+The reader/writer shape uses a pointer holder for One and a slice for Many.
+Adding the hint must regenerate a generated Many holder to One; removing it must
+regenerate One back to Many, including generated access/presence and writer
+traversal. Explicit cardinality controls retain precedence over the hint. Authored holder edits remain
+protected in either direction. Check both transitions through generation,
+reload and real query/write behavior, not just a parsed cardinality flag.

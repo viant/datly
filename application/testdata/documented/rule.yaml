@@ -1,0 +1,8 @@
+Columns:
+  users:
+    id: Rule identifier
+    id$example: '9'
+Parameters:
+  Search: Rule search
+Paths:
+  /records: Rule records

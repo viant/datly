@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datly Custom Components"
+  short_description: "Author typed Datly custom handlers"
+  default_prompt: "Use $datly-custom-component to create a typed Datly component from my requirements."

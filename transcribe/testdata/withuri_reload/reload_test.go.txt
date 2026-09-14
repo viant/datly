@@ -1,0 +1,305 @@
+package records
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/viant/datly/application"
+	"github.com/viant/datly/bootstrap"
+	packageresources "github.com/viant/datly/bootstrap/resources"
+	"github.com/viant/datly/internal/testharness/mcpclient"
+	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
+	"github.com/viant/datly/typecatalog"
+	"github.com/viant/jsonrpc"
+	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/mcp/client"
+	"github.com/viant/x"
+	xmodule "github.com/viant/x/module"
+)
+
+const packagePath = "github.com/viant/datly/testfixture/withurireload/records"
+
+type withURIFixture struct {
+	db    *sqlite.Harness
+	stage string
+}
+
+// Link the actual emitted Go contracts once. Each stage rediscovers persisted
+// holders and resources; no runtime Go compilation or interpretation is used.
+func (f *withURIFixture) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
+	workspace, err := (xmodule.LocalWorkspace{BaseDir: f.stage}).Resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	routes, err := (bootstrap.PackageDiscovery{Workspace: workspace, Include: []string{packagePath}}).Discover(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(routes) != 2 {
+		return nil, fmt.Errorf("generated holder routes=%d, want 2", len(routes))
+	}
+	for i, route := range routes {
+		if err = route.ValidateContractTypes(reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{})); err != nil {
+			return nil, err
+		}
+		want := []string{"/records", "/records/{id}"}[i]
+		if route.Tag.Path != want || route.Tag.Method != "GET" {
+			return nil, fmt.Errorf("holder %d route=%s %s, want GET %s", i, route.Tag.Method, route.Tag.Path, want)
+		}
+	}
+	resolver, err := typecatalog.NewResolver(types, typecatalog.PackageAuthority, &typecatalog.ResolutionContext{PackagePath: packagePath})
+	if err != nil {
+		return nil, err
+	}
+	groups, err := bootstrap.GroupPackageComponentSources(routes, resolver)
+	if err != nil {
+		return nil, err
+	}
+	if len(groups) != 1 {
+		return nil, fmt.Errorf("holder components=%d, want 1", len(groups))
+	}
+	component, err := groups[0].ResolveDescriptors(resolver)
+	if err != nil {
+		return nil, err
+	}
+	if len(component.Routes) != 2 {
+		return nil, fmt.Errorf("reloaded component routes=%d, want 2 (no duplicate WithURI expansion)", len(component.Routes))
+	}
+	assets, err := (packageresources.Loader{Workspace: workspace, Packages: []string{packagePath}}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, Types: types, Resources: assets.Store, InputType: reflect.TypeOf(RecordsInput{}), OutputType: reflect.TypeOf(RecordsOutput{})})
+	if err != nil {
+		return nil, err
+	}
+	if len(artifact.Component.Routes) != 2 {
+		return nil, fmt.Errorf("bootstrapped routes=%d, want 2", len(artifact.Component.Routes))
+	}
+	for _, tc := range []struct {
+		path   string
+		fields int
+	}{{"/records", 0}, {"/records/{id}", 1}} {
+		plan, ok := artifact.Input.ForRoute(spec.RouteRef{Method: "GET", Path: tc.path})
+		if !ok || len(plan.Fields()) != tc.fields {
+			return nil, fmt.Errorf("route %s input plan=%+v, want %d fields", tc.path, plan, tc.fields)
+		}
+	}
+	execution, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: f.db.DB}})
+	if err != nil {
+		return nil, err
+	}
+	return &application.Build{Types: types, Resources: assets.Store, Components: []*registry.RegisteredComponent{{Component: artifact.Component, Input: artifact.Input, Output: artifact.Output, OutputType: reflect.TypeOf(RecordsOutput{}), Reader: execution}}}, nil
+}
+
+type withURIAcceptance struct {
+	manager    *application.Manager
+	native     *client.Client
+	ctx        context.Context
+	visibility string
+}
+
+func (c withURIAcceptance) check(t *testing.T, maximum int) {
+	t.Helper()
+	if c.native != nil {
+		c.schemas(t)
+	}
+	for _, tc := range []struct {
+		path, tool string
+		args       map[string]any
+		want       []int
+	}{
+		{"/records", "Records", map[string]any{}, []int{1, 2, 3}},
+		{"/records/2", "RecordsById", map[string]any{"id": 2}, []int{2}},
+		{"/records/4", "RecordsById", map[string]any{"id": 4}, []int{}},
+		{"/records/0", "RecordsById", map[string]any{"id": 0}, []int{}},
+		{"/records/99", "RecordsById", map[string]any{"id": 99}, []int{}},
+	} {
+		if maximum == 4 {
+			if tc.path == "/records" {
+				tc.want = []int{1, 2, 3, 4}
+			}
+			if tc.path == "/records/4" {
+				tc.want = []int{4}
+			}
+		}
+		var body []byte
+		if c.native == nil {
+			response := httptest.NewRecorder()
+			c.manager.ServeHTTP(response, httptest.NewRequest("GET", tc.path, nil).WithContext(c.ctx))
+			if response.Code != 200 {
+				t.Fatalf("HTTP %s: %d %s", tc.path, response.Code, response.Body.String())
+			}
+			body = response.Body.Bytes()
+		} else {
+			result, err := c.native.CallTool(c.ctx, &schema.CallToolRequestParams{Name: tc.tool, Arguments: tc.args})
+			hidden := tc.tool == "Records" && c.visibility == "hidden-base" || tc.tool == "RecordsById" && c.visibility == "private-alternative"
+			if hidden {
+				var rpcErr *jsonrpc.Error
+				if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.MethodNotFound || rpcErr.Message != fmt.Sprintf("tool %s not found", tc.tool) || result != nil {
+					t.Fatalf("hidden tool %s: result=%+v error=%v", tc.tool, result, err)
+				}
+				continue
+			}
+			if err != nil || result == nil || result.IsError != nil && *result.IsError {
+				t.Fatalf("MCP %s: %+v %v", tc.tool, result, err)
+			}
+			body, err = json.Marshal(result.StructuredContent)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		var actual struct {
+			Data []struct {
+				ID int `json:"id"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(body, &actual); err != nil {
+			t.Fatal(err)
+		}
+		got := []int{}
+		for _, row := range actual.Data {
+			got = append(got, row.ID)
+		}
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("%s rows=%v want=%v body=%s", tc.path, got, tc.want, body)
+		}
+	}
+	if c.native != nil && c.visibility != "private-alternative" {
+		result, err := c.native.CallTool(c.ctx, &schema.CallToolRequestParams{Name: "RecordsById", Arguments: map[string]any{}})
+		var rpcErr *jsonrpc.Error
+		if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.InvalidParams || rpcErr.Message != `missing required MCP argument "id"` || result != nil {
+			t.Fatalf("alternate required argument: result=%+v error=%v", result, err)
+		}
+	}
+}
+
+func (c withURIAcceptance) schemas(t *testing.T) {
+	t.Helper()
+	listed, err := c.native.ListTools(c.ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{}
+	for _, tool := range listed.Tools {
+		names = append(names, tool.Name)
+		// Empty properties are omitted by the native wire schema serializer.
+		want := schema.ToolInputSchema{Type: "object"}
+		if tool.Name == "RecordsById" {
+			want.Required = []string{"id"}
+			want.Properties = map[string]map[string]any{"id": {"type": "integer"}}
+		}
+		actual := tool.InputSchema
+		// Native decoding retains absent extension keys as an empty map.
+		if extensions, ok := actual.AdditionalProperties.(map[string]interface{}); ok && len(extensions) == 0 {
+			actual.AdditionalProperties = nil
+		}
+		if !reflect.DeepEqual(actual, want) {
+			t.Fatalf("%s business schema=%+v want=%+v", tool.Name, tool.InputSchema, want)
+		}
+	}
+	sort.Strings(names)
+	want := []string{"Records", "RecordsById"}
+	if c.visibility == "hidden-base" {
+		want = []string{"RecordsById"}
+	}
+	if c.visibility == "private-alternative" {
+		want = []string{"Records"}
+	}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("tools/list names=%v want=%v", names, want)
+	}
+}
+
+func TestWithURIReload(t *testing.T) {
+	stage1, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage2 := os.Getenv("DATLY_WITHURI_STAGE")
+	if stage2 == "" {
+		t.Fatal("second generated stage required")
+	}
+	for _, protocol := range []struct{ name, version string }{{"http", ""}, {"mcp-session", schema.LegacyProtocolVersion}, {"mcp-stateless", schema.LatestProtocolVersion}} {
+		t.Run(protocol.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			defer cancel()
+			db := sqlite.New(t)
+			if err := db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER PRIMARY KEY)", "INSERT INTO records VALUES(1),(2),(3),(4)"); err != nil {
+				t.Fatal(err)
+			}
+			types := typecatalog.NewCatalog()
+			for _, typ := range []reflect.Type{reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{})} {
+				if err := types.Register(typecatalog.TypeOriginPackage, x.NewType(typ)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			manager, err := application.New(types)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture := &withURIFixture{db: db, stage: stage1}
+			if err = manager.Reload(ctx, application.Request{Revision: 1, Compile: fixture.compile}); err != nil {
+				t.Fatal(err)
+			}
+			current := withURIAcceptance{manager: manager, ctx: ctx, visibility: os.Getenv("DATLY_WITHURI_VISIBILITY")}
+			if protocol.version != "" {
+				current.native = (mcpclient.Config{Source: manager, ProtocolVersion: protocol.version}).New(t)
+			}
+			current.check(t, 3)
+			pinned, service, err := manager.Pin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			old := withURIAcceptance{manager: manager, ctx: pinned, visibility: current.visibility}
+			if protocol.version != "" {
+				old.native = (mcpclient.Config{Service: service, ProtocolVersion: protocol.version}).New(t)
+			}
+			fixture.stage = stage2
+			if err = manager.Reload(ctx, application.Request{Revision: 2, Compile: fixture.compile}); err != nil {
+				t.Fatal(err)
+			}
+			if manager.Revision() != 2 {
+				t.Fatal("revision 2 not published")
+			}
+			current.check(t, 4)
+			old.check(t, 3)
+			// WithMCP/WithPathMCP affect tools only: the HTTP branch above
+			// deliberately executes both routes for both visibility variants.
+			files, err := fs.Glob(DatlyResources, "datly_sql/*.sql")
+			if err != nil || len(files) != 1 {
+				t.Fatalf("generated SQL resources=%v error=%v", files, err)
+			}
+			bad := t.TempDir()
+			if err = os.CopyFS(bad, os.DirFS(stage2)); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Remove(filepath.Join(bad, "records", files[0])); err != nil {
+				t.Fatal(err)
+			}
+			fixture.stage = bad
+			if err = manager.Reload(ctx, application.Request{Revision: 3, Compile: fixture.compile}); err == nil || !strings.Contains(err.Error(), files[0]) {
+				t.Fatalf("missing generated SQL stage error=%v", err)
+			}
+			if manager.Revision() != 2 {
+				t.Fatal("failed stage replaced current revision")
+			}
+			current.check(t, 4)
+			old.check(t, 3)
+		})
+	}
+}

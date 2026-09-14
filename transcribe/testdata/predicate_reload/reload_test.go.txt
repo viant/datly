@@ -1,0 +1,337 @@
+package records
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/application"
+	"github.com/viant/datly/bootstrap"
+	packageresources "github.com/viant/datly/bootstrap/resources"
+	"github.com/viant/datly/internal/testharness/mcpclient"
+	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/runtime/registry"
+	dsql "github.com/viant/datly/sql"
+	"github.com/viant/datly/transcribe"
+	"github.com/viant/datly/typecatalog"
+	"github.com/viant/jsonrpc"
+	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/mcp/client"
+	"github.com/viant/x"
+	xmodule "github.com/viant/x/module"
+)
+
+const packagePath = "github.com/viant/datly/testfixture/predicatereload/records"
+
+type reloadFixture struct {
+	db        *sqlite.Harness
+	stage     string
+	resources []*resource.Store
+}
+
+// Discovery reads the emitted holder and manifest. Reflection below links only
+// types compiled by go test from that emitted package; it constructs no types.
+func (f *reloadFixture) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
+	workspace, err := (xmodule.LocalWorkspace{BaseDir: f.stage}).Resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	routes, err := (bootstrap.PackageDiscovery{Workspace: workspace, Include: []string{packagePath}}).Discover(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(routes) != 1 {
+		return nil, fmt.Errorf("discovered %d routes", len(routes))
+	}
+	if err = routes[0].ValidateContractTypes(reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{})); err != nil {
+		return nil, err
+	}
+	component, err := routes[0].Resolve(reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{}))
+	if err != nil {
+		return nil, err
+	}
+	assets, err := (packageresources.Loader{Workspace: workspace, Packages: []string{packagePath}}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, Types: types, Resources: assets.Store, InputType: reflect.TypeOf(RecordsInput{}), OutputType: reflect.TypeOf(RecordsOutput{})})
+	if err != nil {
+		return nil, err
+	}
+	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: f.db.DB}})
+	if err != nil {
+		return nil, err
+	}
+	f.resources = append(f.resources, assets.Store)
+	return &application.Build{Types: types, Resources: assets.Store, Components: []*registry.RegisteredComponent{{Component: artifact.Component, Input: artifact.Input, Output: artifact.Output, OutputType: reflect.TypeOf(RecordsOutput{}), Reader: reader}}}, nil
+}
+
+type publicClient struct {
+	manager  *application.Manager
+	native   *client.Client
+	ctx      context.Context
+	registry bool
+}
+
+func (c publicClient) rows(t *testing.T, maximum int) {
+	t.Helper()
+	for _, minimum := range []int{0, 2, 4, 5} {
+		var body []byte
+		if !c.registry && c.native == nil {
+			response := httptest.NewRecorder()
+			c.manager.ServeHTTP(response, httptest.NewRequest("GET", fmt.Sprintf("/records?min=%d", minimum), nil).WithContext(c.ctx))
+			if response.Code != 200 {
+				t.Fatalf("HTTP %d: %s", response.Code, response.Body.String())
+			}
+			body = response.Body.Bytes()
+		} else {
+			result, err := c.callTool(&schema.CallToolRequestParams{Name: "records.query", Arguments: map[string]any{"minimum": minimum}})
+			if err != nil || result == nil || result.IsError != nil && *result.IsError {
+				t.Fatalf("MCP result=%+v err=%v", result, err)
+			}
+			body, err = json.Marshal(result.StructuredContent)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		var actual struct {
+			Data []struct {
+				ID int `json:"id"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(body, &actual); err != nil {
+			t.Fatal(err)
+		}
+		want := []int{}
+		got := []int{}
+		for id := 1; id <= maximum; id++ {
+			if id >= minimum {
+				want = append(want, id)
+			}
+		}
+		for _, row := range actual.Data {
+			got = append(got, row.ID)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("minimum=%d rows=%v want=%v body=%s", minimum, got, want, body)
+		}
+	}
+}
+
+func (c publicClient) required(t *testing.T) {
+	t.Helper()
+	if !c.registry && c.native == nil {
+		response := httptest.NewRecorder()
+		c.manager.ServeHTTP(response, httptest.NewRequest("GET", "/records", nil).WithContext(c.ctx))
+		if response.Code != 422 || !strings.Contains(response.Body.String(), "minimum required") {
+			t.Fatalf("required HTTP: %d %s", response.Code, response.Body.String())
+		}
+		return
+	}
+	result, err := c.callTool(&schema.CallToolRequestParams{Name: "records.query", Arguments: map[string]any{}})
+	// Missing business arguments are rejected by MCP's schema/input boundary,
+	// before the HTTP/Bindly required-message path can execute.
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.InvalidParams || rpcErr.Message != `missing required MCP argument "minimum"` || result != nil {
+		t.Fatalf("required MCP: %+v %v", result, err)
+	}
+}
+
+func (c publicClient) schema(t *testing.T) {
+	t.Helper()
+	if !c.registry && c.native == nil {
+		return
+	}
+	listed, err := c.listTools()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Tools) != 1 || listed.Tools[0].Name != "records.query" {
+		t.Fatalf("business tools: %+v", listed.Tools)
+	}
+	tool := listed.Tools[0]
+	want := schema.ToolInputSchema{Type: "object", Required: []string{"minimum"}, Properties: map[string]map[string]any{"minimum": {"type": "integer"}}}
+	actual := tool.InputSchema
+	// The native decoder retains absent extension keys as an empty map;
+	// direct registry values use nil. Preserve all nonempty extensions.
+	if extensions, ok := actual.AdditionalProperties.(map[string]interface{}); ok && len(extensions) == 0 {
+		actual.AdditionalProperties = nil
+	}
+	if !reflect.DeepEqual(actual, want) {
+		t.Fatalf("business input schema: %+v", tool.InputSchema)
+	}
+	// Business tooling currently advertises the input schema. The runtime
+	// output is checked as exact rows; no output-schema/annotation claim is made.
+}
+
+// This is an explicitly separate registry check, never a wire fallback.
+func (c publicClient) callTool(params *schema.CallToolRequestParams) (*schema.CallToolResult, error) {
+	if c.native != nil {
+		return c.native.CallTool(c.ctx, params)
+	}
+	pinned, service, err := c.manager.Pin(c.ctx)
+	if err != nil {
+		return nil, err
+	}
+	entry, ok := service.Registry().ToolRegistry.Get(params.Name)
+	if !ok {
+		return nil, fmt.Errorf("missing tool %s", params.Name)
+	}
+	result, rpcErr := entry.Handler(pinned, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: *params})
+	if rpcErr != nil {
+		return result, rpcErr
+	}
+	return result, nil
+}
+
+func (c publicClient) listTools() (*schema.ListToolsResult, error) {
+	if c.native != nil {
+		return c.native.ListTools(c.ctx, nil)
+	}
+	_, service, err := c.manager.Pin(c.ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &schema.ListToolsResult{Tools: service.Registry().ListRegisteredTools()}, nil
+}
+
+func TestPublicReload(t *testing.T) {
+	stage1, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage2 := os.Getenv("DATLY_RELOAD_STAGE")
+	if stage2 == "" {
+		t.Fatal("second emitted generation is required")
+	}
+	// Static validation has a read-only contract and explicitly reports checks it
+	// does not perform. Runtime/public assertions below are separate evidence.
+	for _, stage := range []string{stage1, stage2} {
+		var snapshots [2]map[string]string
+		for pass := range snapshots {
+			snapshots[pass] = map[string]string{}
+			if err = filepath.WalkDir(stage, func(path string, entry fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if !entry.IsDir() {
+					data, err := os.ReadFile(path)
+					if err != nil {
+						return err
+					}
+					snapshots[pass][path] = string(data)
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if pass == 0 {
+				report, err := (&transcribe.Validator{BaseDir: stage, Include: []string{packagePath}}).Validate(context.Background())
+				if err != nil || !report.Valid || len(report.Components) != 1 || len(report.Completed) != 3 || len(report.Skipped) == 0 || len(report.Schema) != 0 {
+					t.Fatalf("static validation report=%+v err=%v", report, err)
+				}
+			}
+		}
+		if !reflect.DeepEqual(snapshots[0], snapshots[1]) {
+			t.Fatal("static validation changed emitted workspace")
+		}
+	}
+	for _, protocol := range []struct{ name, version string }{{"http", ""}, {"mcp-registry", ""}, {"mcp-session", schema.LegacyProtocolVersion}, {"mcp-stateless", schema.LatestProtocolVersion}} {
+		t.Run(protocol.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			db := sqlite.New(t)
+			if err := db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER PRIMARY KEY)", "INSERT INTO records VALUES(1),(2),(3),(4)"); err != nil {
+				t.Fatal(err)
+			}
+			types := typecatalog.NewCatalog()
+			for _, typ := range []reflect.Type{reflect.TypeOf(Threshold{}), reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{})} {
+				if err := types.Register(typecatalog.TypeOriginPackage, x.NewType(typ)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			manager, err := application.New(types)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture := &reloadFixture{db: db, stage: stage1}
+			if err = manager.Reload(ctx, application.Request{Revision: 1, Compile: fixture.compile}); err != nil {
+				t.Fatal(err)
+			}
+			current := publicClient{ctx: ctx, manager: manager, registry: protocol.name == "mcp-registry"}
+			if protocol.version != "" {
+				current.native = (mcpclient.Config{Source: manager, ProtocolVersion: protocol.version}).New(t)
+			}
+			current.schema(t)
+			current.rows(t, 3)
+			current.required(t)
+			pinned, service, err := manager.Pin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			old := publicClient{ctx: pinned, manager: manager, registry: protocol.name == "mcp-registry"}
+			if protocol.version != "" {
+				old.native = (mcpclient.Config{Service: service, ProtocolVersion: protocol.version}).New(t)
+			}
+			fixture.stage = stage2
+			if err = manager.Reload(ctx, application.Request{Revision: 2, Compile: fixture.compile}); err != nil {
+				t.Fatal(err)
+			}
+			if manager.Revision() != 2 {
+				t.Fatal("revision not published")
+			}
+			current.schema(t)
+			current.rows(t, 4)
+			current.required(t)
+			old.schema(t)
+			old.rows(t, 3)
+			old.required(t)
+			files, err := fs.Glob(DatlyResources, "datly_sql/*.sql")
+			if err != nil || len(files) != 1 {
+				t.Fatalf("emitted resources=%v err=%v", files, err)
+			}
+			embedded, err := DatlyResources.ReadFile(files[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			for index, store := range fixture.resources {
+				data, err := store.ReadFile(DatlyResourceNamespace + ":" + files[0])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(string(data), fmt.Sprintf("id <= %d", index+3)) || index == 0 && string(data) != string(embedded) {
+					t.Fatalf("resource snapshot %d: %s", index, data)
+				}
+			}
+			bad := t.TempDir()
+			if err = os.CopyFS(bad, os.DirFS(stage2)); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Remove(filepath.Join(bad, "records", files[0])); err != nil {
+				t.Fatal(err)
+			}
+			fixture.stage = bad
+			if err = manager.Reload(ctx, application.Request{Revision: 3, Compile: fixture.compile}); err == nil || !strings.Contains(err.Error(), files[0]) {
+				t.Fatalf("missing-resource stage: %v", err)
+			}
+			if manager.Revision() != 2 || len(fixture.resources) != 2 {
+				t.Fatal("failed stage changed publication")
+			}
+			current.schema(t)
+			current.rows(t, 4)
+			current.required(t)
+			old.rows(t, 3)
+			db.AssertQuery(t, ctx, sqlite.Query{SQL: "SELECT id FROM records ORDER BY id"}, []struct{ ID int }{{1}, {2}, {3}, {4}})
+		})
+	}
+}

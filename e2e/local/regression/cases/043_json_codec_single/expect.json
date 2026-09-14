@@ -1,8 +1,0 @@
-{
-  "preferences": {
-    "id": 1,
-    "name": "Foo",
-    "price": 125.5
-  },
-  "className": "com.class.abc.Foo"
-}

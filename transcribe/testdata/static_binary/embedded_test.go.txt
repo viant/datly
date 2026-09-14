@@ -1,0 +1,63 @@
+package generated
+
+import (
+ "context"
+ "bufio"
+ "io"
+ "net/http"
+ "strings"
+ "time"
+ "net/http/httptest"
+ "testing"
+ "github.com/viant/bindly/resource"
+ gateway "github.com/viant/datly/gateway/http"
+ "github.com/viant/datly/spec"
+ "github.com/viant/datly/standalone"
+ "github.com/viant/datly/standalone/config"
+)
+
+func TestEmbeddedStaticHTTP(t *testing.T) {
+ ctx:=context.Background();store:=resource.New()
+ if err:=store.Register(DatlyResourceNamespace,DatlyResources);err!=nil{t.Fatal(err)}
+ cfg:=&config.Config{Config:gateway.Config{StaticContent:[]*spec.StaticContent{DatlyStaticContent()},APIKeys:gateway.APIKeys{{URI:"/site/private",Header:"X-Private",Value:"private"}}}}
+ server,err:=standalone.New(ctx,standalone.Options{Config:cfg,Resources:store});if err!=nil{t.Fatal(err)};defer server.Shutdown(ctx)
+ for revision:=uint64(1);revision<=2;revision++ {
+  if err=server.Reload(ctx,revision);err!=nil{t.Fatal(err)}
+  for _,tc:=range []struct{method,target,key,private,rangeHeader string;status int;body string}{
+   {"GET","/site/","secret","","",200,"<html>embedded</html>"},
+   {"GET","/site/nested/data.txt","secret","","",200,"abcdef"},
+   {"GET","/site/nested/data.txt","secret","","bytes=1-3",206,"bcd"},
+   {"HEAD","/site/nested/data.txt","secret","","",200,""},
+   {"GET","/site/.well-known/resource","secret","","",200,"hidden-file"},
+   {"GET","/site/binary.bin","secret","","",200,"\x00\xff\x01"},
+   {"GET","/site/","","","",403,""},
+   {"GET","/site/private/secret.txt","secret","","",403,""},
+   {"GET","/site/private/secret.txt","","private","",200,"private-data"},
+   {"GET","/site/%2e%2e/outside.txt","secret","","",404,""},
+   {"GET","/site/missing","secret","","",404,""},
+  } {
+   r:=httptest.NewRequest(tc.method,tc.target,nil);r.Header.Set("X-Static",tc.key);r.Header.Set("X-Private",tc.private);r.Header.Set("Range",tc.rangeHeader)
+   w:=httptest.NewRecorder();server.ServeHTTP(w,r)
+   if w.Code!=tc.status || tc.status<300&&w.Body.String()!=tc.body {t.Fatalf("generation %d %s %s: %d %q",revision,tc.method,tc.target,w.Code,w.Body.String())}
+  }
+ }
+}
+
+// Parent TCP acceptance uses this same executable after its source tree is gone.
+func TestEmbeddedStaticListener(t *testing.T) {
+ ctx,cancel:=context.WithTimeout(context.Background(),15*time.Second);defer cancel()
+ store:=resource.New();if err:=store.Register(DatlyResourceNamespace,DatlyResources);err!=nil{t.Fatal(err)}
+ server,err:=standalone.New(ctx,standalone.Options{Resources:store,Config:&config.Config{Endpoint:config.Endpoint{Address:"127.0.0.1:0"},Config:gateway.Config{StaticContent:[]*spec.StaticContent{DatlyStaticContent()}}}})
+ if err!=nil{t.Fatal(err)};defer server.Shutdown(context.Background())
+ reader,writer:=io.Pipe();defer reader.Close();done:=make(chan error,1)
+ go func(){err:=server.Serve(ctx,writer);writer.CloseWithError(err);done<-err}()
+ line,err:=bufio.NewReader(reader).ReadString('\n');if err!=nil{t.Fatalf("embedded listener startup: %v",err)}
+ address:=strings.TrimSpace(strings.TrimPrefix(line,"HTTP listening on "))
+ client:=&http.Client{Timeout:3*time.Second}
+ for _,tc:=range []struct{method,path,key,rangeHeader string;status int;body string}{{"GET","/site/","secret","",200,"<html>embedded</html>"},{"GET","/site/nested/data.txt","secret","bytes=1-3",206,"bcd"},{"HEAD","/site/nested/data.txt","secret","",200,""},{"GET","/site/","","",403,""}}{
+  request,err:=http.NewRequest(tc.method,"http://"+address+tc.path,nil);if err!=nil{t.Fatal(err)};request.Header.Set("X-Static",tc.key);request.Header.Set("Range",tc.rangeHeader)
+  response,err:=client.Do(request);if err!=nil{t.Fatal(err)};body,err:=io.ReadAll(response.Body);response.Body.Close();if err!=nil{t.Fatal(err)}
+  if response.StatusCode!=tc.status||string(body)!=tc.body{t.Fatalf("%s %s: %d %q",tc.method,tc.path,response.StatusCode,body)}
+ }
+ cancel();if err=<-done;err!=nil{t.Fatal(err)}
+}

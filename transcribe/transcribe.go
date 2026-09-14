@@ -1,0 +1,146 @@
+package transcribe
+
+import (
+	"context"
+	"fmt"
+	"github.com/viant/bindly/resource"
+	"os"
+	"path/filepath"
+
+	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/typecatalog"
+	loaderast "github.com/viant/x/loader/ast"
+	xmodule "github.com/viant/x/module"
+	smodel "github.com/viant/x/syntetic/model"
+)
+
+// GeneratedPackage holds transcribed package artifacts for package bootstrap.
+type GeneratedPackage struct {
+	Result  *gen.Result
+	Package *smodel.Package
+	Types   *typecatalog.Catalog
+}
+
+// Transcribe compiles one authored source under normalized options, emits its
+// package artifacts, and loads the generated package.
+func (c *Compiler) Transcribe(ctx context.Context, request Request) (*GeneratedPackage, error) {
+	if request.Component != nil {
+		var types *typecatalog.Catalog
+		if request.Source != nil {
+			types = request.Source.Types
+		}
+		return (&PackageCompilation{Source: request.Source, Component: request.Component, InputType: request.InputType, OutputType: request.OutputType, Options: request.Options, Types: types}).Transcribe(ctx, request.Destination)
+	}
+	options, err := normalizeOptions(request.Options)
+	if err != nil {
+		return nil, err
+	}
+	compileSource := request.Source
+	if request.Source != nil && request.Source.Types == nil {
+		copy := *request.Source
+		copy.Types = typecatalog.NewCatalog()
+		compileSource = &copy
+	}
+	compiled, err := c.Compile(ctx, compileSource)
+	if err != nil {
+		return nil, err
+	}
+	input, packageDir, err := generationInput(request.Destination, "generated", compiled)
+	if err != nil {
+		return nil, err
+	}
+	if compiled.Component.Static != nil {
+		if options.Handler.Target != HandlerNone || options.Contracts != ContractsAuto {
+			return nil, fmt.Errorf("static content does not accept handler or contract generation options")
+		}
+		return c.generateInputAt(ctx, request.Destination, packageDir, compiled, input)
+	}
+	handlers := newHandlerGeneration(compiled, &input, options)
+	handlers.directory = filepath.Join(request.Destination, packageDir)
+	if err = handlers.prepare(); err != nil {
+		return nil, handlers.diagnostic(err)
+	}
+	return c.generateInputAt(ctx, request.Destination, packageDir, compiled, input)
+}
+
+func (c *Compiler) generateCompiled(ctx context.Context, rootDir string, compiled *Result) (*GeneratedPackage, error) {
+	return c.generateCompiledAt(ctx, rootDir, "generated", compiled)
+}
+
+func (c *Compiler) generateCompiledAt(ctx context.Context, rootDir, packageDir string, compiled *Result) (*GeneratedPackage, error) {
+	input, packageDir, err := generationInput(rootDir, packageDir, compiled)
+	if err != nil {
+		return nil, err
+	}
+	return c.generateInputAt(ctx, rootDir, packageDir, compiled, input)
+}
+
+func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir string, compiled *Result, input gen.Input) (*GeneratedPackage, error) {
+	pkgDir := filepath.Join(rootDir, packageDir)
+	result, err := gen.New(input).Generate(pkgDir)
+	if err != nil {
+		return nil, err
+	}
+	pkg, err := loaderast.LoadPackageFS(ctx, os.DirFS(rootDir), filepath.ToSlash(packageDir))
+	if err != nil {
+		return nil, err
+	}
+	if err := compiled.Source.Types.RegisterPackage(typecatalog.TypeOriginGenerated, pkg); err != nil {
+		return nil, err
+	}
+	return &GeneratedPackage{
+		Result:  result,
+		Package: pkg,
+		Types:   compiled.Source.Types,
+	}, nil
+}
+
+func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, string, error) {
+	if compiled == nil || compiled.Source == nil || compiled.Component == nil {
+		return gen.Input{}, "", fmt.Errorf("compiled transcribe result is required")
+	}
+	if compiled.Source.Types == nil {
+		return gen.Input{}, "", fmt.Errorf("compiled transcribe result requires type catalog")
+	}
+	packageDir, err := managedProjectPath(packageDir)
+	if err != nil {
+		return gen.Input{}, "", fmt.Errorf("generated package path: %w", err)
+	}
+	pkgDir := filepath.Join(rootDir, packageDir)
+	moduleInfo, err := xmodule.LocateLocal(pkgDir)
+	if err != nil {
+		return gen.Input{}, "", err
+	}
+	targetPackage, err := xmodule.ImportPathLocal(moduleInfo.Dir, moduleInfo.Path, pkgDir)
+	if err != nil {
+		return gen.Input{}, "", err
+	}
+	component := compiled.Component.Clone()
+	if err = resolveComponentSources(component, compiled.Source.Resources); err != nil {
+		return gen.Input{}, "", err
+	}
+	resources := compiled.Source.Resources
+	if base := compiled.Source.BaseDir(); base != "" {
+		if resources == nil {
+			resources = resource.New()
+		}
+		if _, ok := resources.Lookup(""); !ok {
+			resources, err = resources.WithDefault(os.DirFS(base))
+			if err != nil {
+				return gen.Input{}, "", err
+			}
+		}
+	}
+	input := gen.Input{Resources: resources,
+		Component: component, Declarations: compiled.Declarations,
+		SQLResources: true,
+		TargetPackage: targetPackage, Contracts: compiled.Contracts, Views: compiled.Views, ViewBindings: compiled.ViewBindings,
+		GeneratedTypes: compiled.GeneratedTypes,
+		GoHandler:      compiled.GoHandler,
+		VeltyHandler:   compiled.VeltyHandler,
+	}
+	if compiled.TypeResolver != nil {
+		input.TypeResolver = compiled.TypeResolver
+	}
+	return input, packageDir, nil
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datly Writer Components"
+  short_description: "Author typed Datly writer APIs"
+  default_prompt: "Use $datly-writer to create a typed Datly component from my requirements."

@@ -1,0 +1,7 @@
+Columns:
+  users:
+    id: Rule user identifier
+Parameters:
+  Search: Rule search
+Paths:
+  /records: Rule records

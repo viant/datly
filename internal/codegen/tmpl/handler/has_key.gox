@@ -1,4 +1,0 @@
-func (c $IndexType) Has(key $KeyType) bool {
-	_, ok := c[key]
-	return ok
-}

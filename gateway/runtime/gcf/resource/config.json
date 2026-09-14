@@ -1,7 +1,0 @@
-{
-  "APIPrefix": "/v1/api/",
-  "RouteURL": "gs://${configBucket}/${appName}/routes/",
-  "DependencyURL": "gs://${configBucket}/${appName}/dependencies/",
-  "UseCacheFS": true,
-  "SyncFrequencyMs": 2000
-}

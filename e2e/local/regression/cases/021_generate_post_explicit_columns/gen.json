@@ -1,5 +1,0 @@
-{
-  "Name": "$tagId",
-  "URL": "$path/post_explicit.sql",
-  "Args": "-G=post"
-}

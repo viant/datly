@@ -1,0 +1,40 @@
+package sqlite
+
+// DatlyJobsSchema is the original DATLY_JOBS column set, adapted only for SQLite
+// storage types. Schema creation is explicit; existing tables are never migrated.
+const DatlyJobsSchema = `CREATE TABLE IF NOT EXISTS DATLY_JOBS (
+ ID TEXT PRIMARY KEY,
+ MatchKey TEXT,
+ Status TEXT,
+ Metrics TEXT,
+ Connector TEXT,
+ TableName TEXT,
+ TableDataset TEXT,
+ TableSchema TEXT,
+ CreateDisposition TEXT,
+ Template TEXT,
+ WriteDisposition TEXT,
+ Cache TEXT,
+ CacheKey TEXT,
+ CacheSet TEXT,
+ CacheNamespace TEXT,
+ Method TEXT,
+ URI TEXT,
+ State TEXT,
+ UserEmail TEXT,
+ UserID TEXT,
+ MainView TEXT,
+ Module TEXT,
+ Labels TEXT,
+ JobType TEXT,
+ EventURL TEXT,
+ Error TEXT,
+ CreationTime DATETIME,
+ StartTime DATETIME,
+ EndTime DATETIME,
+ ExpiryTime DATETIME,
+ WaitTimeInMcs INTEGER,
+ RunTimeInMcs INTEGER,
+ SQLQuery TEXT,
+ Deactivated BOOLEAN
+)`

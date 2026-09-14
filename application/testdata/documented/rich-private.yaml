@@ -1,0 +1,7 @@
+Parameters:
+  Query: Private query
+  Query$example: needle
+Paths:
+  Payload.ID: Private input identifier
+  Payload.ID$example: '7'
+  Payload.Next: Next input node

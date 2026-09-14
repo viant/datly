@@ -1,0 +1,92 @@
+package spend
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"testing"
+	"time"
+)
+
+func (c composeClient) deadlines(t *testing.T) {
+	for _, mode := range []string{"configured-timeout", "caller-deadline", "caller-cancel"} {
+		// A native client's context is a wire-client deadline, not a server context
+		// injection. Configured timeout below runs on the actual native server.
+		if c.native != nil && mode != "configured-timeout" {
+			continue
+		}
+		t.Run(mode, func(t *testing.T) {
+			call := c
+			stop := func() {}
+			expected := error(context.DeadlineExceeded)
+			duration := 30 * time.Second
+			if mode == "caller-deadline" {
+				duration = 100 * time.Millisecond
+				call.ctx, stop = context.WithTimeout(c.ctx, duration)
+			}
+			if mode == "caller-cancel" {
+				expected = context.Canceled
+				call.ctx, stop = context.WithCancel(c.ctx)
+			}
+			defer stop()
+			entered := make(chan struct{}, 1)
+			observations.Lock()
+			observations.values = nil
+			observations.entered = entered
+			observations.Unlock()
+			type response struct {
+				data   []byte
+				failed bool
+				err    error
+			}
+			done := make(chan response, 1)
+			start := time.Now()
+			go func() { data, failed, err := call.call(call.arguments("wait")); done <- response{data, failed, err} }()
+			select {
+			case <-entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("predicate not entered")
+			}
+			if mode == "caller-cancel" {
+				stop()
+			}
+			var result response
+			select {
+			case result = <-done:
+			case <-time.After(35 * time.Second):
+				t.Fatal("compose ignored deadline/cancellation")
+			}
+			if result.err != nil || !result.failed {
+				t.Fatalf("expected finalized timeout: body=%s failed=%v err=%v", result.data, result.failed, result.err)
+			}
+			var body map[string]any
+			if err := json.Unmarshal(result.data, &body); err != nil {
+				t.Fatal(err)
+			}
+			if body["data"] != nil {
+				t.Fatalf("partial data after timeout/cancellation: %s", result.data)
+			}
+			elapsed := time.Since(start)
+			if mode != "caller-cancel" && elapsed < duration-20*time.Millisecond {
+				t.Fatalf("returned before configured deadline: %v", elapsed)
+			}
+			if mode != "configured-timeout" && elapsed > 3*time.Second {
+				t.Fatalf("caller context lost: %v", elapsed)
+			}
+			observations.Lock()
+			events := append([]frameObservation(nil), observations.values...)
+			observations.entered = nil
+			observations.Unlock()
+			if len(events) != 1 || events[0].Frame.Frame != 1 || !errors.Is(events[0].Err, expected) {
+				t.Fatalf("timeout frame evidence=%+v expected=%v", events, expected)
+			}
+			if mode == "caller-deadline" {
+				deadline, _ := call.ctx.Deadline()
+				if !events[0].Deadline.Equal(deadline) {
+					t.Fatalf("earlier deadline replaced: %s want=%s", events[0].Deadline, deadline)
+				}
+			}
+			t.Logf("%s reached authored predicate, stopped before frame 2 with %v after %v", mode, events[0].Err, elapsed)
+		})
+	}
+}

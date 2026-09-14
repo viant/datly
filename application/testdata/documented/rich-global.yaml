@@ -1,0 +1,15 @@
+Columns:
+  users:
+    id: Global user identifier
+    id$example: '7'
+  orders:
+    _: Order records
+    id: Order identifier
+    id$example: '90'
+  archived_orders:
+    id: Archived identifier
+    _: Archived records
+Parameters:
+  Query: Global query
+Paths:
+  /rich: Global joined records

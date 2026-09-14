@@ -1,0 +1,7 @@
+The optional UI template in openapi_ui.go is adapted from Viant Datly
+(gateway/route_doc.go), original HEAD 54ae48e3a4649d32aa3018051932fab2ad5f6b38,
+inspected read-only. Original work is licensed under Apache License 2.0;
+see ../openapi/openapi3/LICENSE. The template now uses contextual html/template
+escaping and generation-owned snapshots. External Swagger UI 5 CDN assets are
+referenced, not redistributed. Metadata routing follows the original gateway
+route_openapi.go/router.go behavior, adapted to the immutable application owner.

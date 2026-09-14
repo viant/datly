@@ -1,0 +1,12 @@
+Columns:
+  users:
+    id: Global identifier
+    id$example: '7'
+    name: Dictionary name
+Parameters:
+  Search: Global search
+  Search$example: needle
+  Explicit: Ignored parameter override
+  Explicit$example: ignored-example
+Paths:
+  /records: Global records

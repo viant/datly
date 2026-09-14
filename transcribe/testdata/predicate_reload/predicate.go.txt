@@ -1,0 +1,15 @@
+package records
+
+import (
+	"context"
+	xpredicate "github.com/viant/xdatly/predicate"
+)
+
+// Threshold consumes the actual generated invocation input through scoped DI.
+type Threshold struct {
+	Input *RecordsInput `bind:"kind=input,required"`
+}
+
+func (p *Threshold) Compute(_ context.Context, _ any) (*xpredicate.Criteria, error) {
+	return &xpredicate.Criteria{Expression: "id >= ?", Placeholders: []any{p.Input.Minimum}}, nil
+}

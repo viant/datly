@@ -1,0 +1,95 @@
+// Package invocation adapts MCP calls to the protocol-neutral component port.
+package invocation
+
+import (
+	"context"
+	"strings"
+
+	"github.com/viant/bindly/locator"
+	requestprovider "github.com/viant/bindly/provider/request"
+	"github.com/viant/datly/exec"
+	"github.com/viant/jsonrpc"
+	"github.com/viant/mcp-protocol/authorization"
+	xexec "github.com/viant/xdatly/exec"
+	xmcp "github.com/viant/xdatly/handler/mcp"
+)
+
+type Config struct {
+	Invoker exec.ComponentInvoker
+	Client  xmcp.Client
+}
+
+type Request struct {
+	Target exec.ComponentTarget
+	Scope  *requestprovider.Scope
+	Method string
+	URI    string
+}
+
+type Invoker struct {
+	component exec.ComponentInvoker
+	mcp       xmcp.Context
+}
+
+func New(config Config) *Invoker {
+	return &Invoker{component: config.Invoker, mcp: &requestContext{client: config.Client}}
+}
+
+func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *jsonrpc.Error) {
+	if i == nil || i.component == nil {
+		return nil, jsonrpc.NewInternalError("MCP component invoker is unavailable", nil)
+	}
+	if request.Target.Component.Kind == "" || request.Target.Route.String() == "" {
+		return nil, jsonrpc.NewInvalidParamsError("MCP component target is incomplete", nil)
+	}
+	if strings.TrimSpace(request.Method) == "" || strings.TrimSpace(request.URI) == "" {
+		return nil, jsonrpc.NewInternalError("MCP invocation identity is incomplete", nil)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx = exec.CaptureOutputSelection(ctx)
+	execContext := xexec.New(xexec.WithMethod(request.Method), xexec.WithURI(request.URI))
+	ctx = xexec.WithContext(ctx, execContext)
+	if _, ok := xmcp.LookupContext(ctx); !ok {
+		ctx = xmcp.WithContext(ctx, i.mcp)
+	}
+	scope := request.Scope
+	if header := authorizationHeader(ctx); header != "" {
+		scope = scope.WithHeader("Authorization", header)
+	}
+	var providers []locator.Provider
+	if scope != nil {
+		providers = scope.Providers()
+	}
+	result, err := i.component.InvokeComponent(ctx, exec.ComponentRequest{
+		Target: request.Target, Providers: providers,
+	})
+	return &Execution{value: result, err: err, context: execContext, selection: exec.SelectedOutputFields(ctx, result)}, nil
+}
+
+func authorizationHeader(ctx context.Context) string {
+	var value string
+	switch token := ctx.Value(authorization.TokenKey).(type) {
+	case *authorization.Token:
+		if token != nil {
+			value = token.Token
+		}
+	case authorization.Token:
+		value = token.Token
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if len(strings.Fields(value)) > 1 {
+		return value
+	}
+	return "Bearer " + value
+}
+
+type requestContext struct {
+	client xmcp.Client
+}
+
+func (c *requestContext) Client() xmcp.Client { return c.client }

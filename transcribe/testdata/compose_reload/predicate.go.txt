@@ -1,0 +1,65 @@
+package spend
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/viant/datly/report/cubecompose"
+	xpredicate "github.com/viant/xdatly/predicate"
+)
+
+// The authored predicate consumes the emitted canonical input. Observation is
+// local to this compiled acceptance package, never a production invocation seam.
+type ChannelPredicate struct {
+	Input *SpendInput `bind:"kind=input,required"`
+}
+type frameObservation struct {
+	Frame           cubecompose.FrameContext
+	Channel, Tenant string
+	Deadline        time.Time
+	Err             error
+}
+
+var observations struct {
+	sync.Mutex
+	values  []frameObservation
+	entered chan struct{}
+}
+
+func (p *ChannelPredicate) Compute(ctx context.Context, value any) (*xpredicate.Criteria, error) {
+	if p.Input == nil || value != p.Input.Channel {
+        return nil, fmt.Errorf("missing canonical generated input")
+    }
+    frame, ok := cubecompose.FrameContextFrom(ctx)
+    // Ordinary cube selection executes the same predicate without a compose frame.
+    if !ok {
+        return &xpredicate.Criteria{Expression: "s.channel = ?", Placeholders: []any{p.Input.Channel}}, nil
+    }
+    if frame.Snapshot.IsZero() {
+		return nil, fmt.Errorf("missing frame or canonical generated input")
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return nil, fmt.Errorf("compose deadline missing")
+	}
+	event := frameObservation{Frame: frame, Channel: p.Input.Channel, Tenant: p.Input.Tenant, Deadline: deadline}
+	observations.Lock()
+	entered := observations.entered
+	observations.Unlock()
+	if p.Input.Channel == "wait" {
+		if entered != nil {
+			entered <- struct{}{}
+		}
+		<-ctx.Done()
+		event.Err = ctx.Err()
+	}
+	observations.Lock()
+	observations.values = append(observations.values, event)
+	observations.Unlock()
+	if event.Err != nil {
+		return nil, event.Err
+	}
+	return &xpredicate.Criteria{Expression: "s.channel = ?", Placeholders: []any{p.Input.Channel}}, nil
+}

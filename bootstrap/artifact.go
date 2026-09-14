@@ -1,0 +1,161 @@
+package bootstrap
+
+import (
+	"context"
+	documentation "github.com/viant/datly/documentation"
+	xdocs "github.com/viant/xdatly/docs"
+	"reflect"
+
+	"github.com/viant/bindly/resource"
+	rhandler "github.com/viant/datly/runtime/handler"
+	handlercompiler "github.com/viant/datly/runtime/handler/compiler"
+	"github.com/viant/datly/runtime/output"
+	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
+	runtimeRegistry "github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
+	sqlreader "github.com/viant/datly/sql/reader"
+	readercompiler "github.com/viant/datly/sql/reader/compiler"
+	"github.com/viant/datly/typecatalog"
+	"github.com/viant/x"
+	xshape "github.com/viant/x/shape"
+	xcodec "github.com/viant/xdatly/codec"
+)
+
+// ArtifactInput is resolved bootstrap input. Authored DQL parsing belongs to
+// transcribe; this stage only compiles runtime plans from spec and Go types.
+type ArtifactInput struct {
+	Documentation   xdocs.Source
+	Component       *spec.Component
+	InputType       reflect.Type
+	OutputType      reflect.Type
+	CodecFactory    xcodec.Factory
+	Types           *typecatalog.Catalog
+	DirectViewField string
+	// Resources is the same Bindly store supplied to runtime composition. SQL,
+	// reader, and codec compilers consume it only through the fs.FS contract.
+	Resources *resource.Store
+}
+
+// Artifact is bootstrap's compiled output before runtime registration binds a
+// concrete SQL reader execution to its connections and caches.
+type Artifact struct {
+	Documentation    *documentation.Snapshot
+	Handler          rhandler.TypedHandler
+	Component        *spec.Component
+	Input            *runtimeRegistry.InputContract
+	Output           *runtimeRegistry.OutputContract
+	Reader           *sqlreader.Plan
+	ViewDependencies []*sqlreader.ViewDependency
+	inputType        reflect.Type
+	outputType       reflect.Type
+}
+
+// BuildArtifact composes the handler-input and reader-plan compilers. Registry
+// receives the completed artifact and performs no compilation.
+func BuildArtifact(input ArtifactInput) (*Artifact, error) {
+	builder, err := NewArtifactBuilder(nil)
+	if err != nil {
+		return nil, err
+	}
+	return builder.Build(input)
+}
+
+type artifactCompiler struct {
+	input ArtifactInput
+}
+
+func (c *artifactCompiler) compile() (*Artifact, error) {
+	input := c.input
+	component, err := (ContractResolver{
+		Component: input.Component, InputType: linkedContractType(input.InputType), OutputType: linkedContractType(input.OutputType),
+	}).Resolve()
+	if err != nil {
+		return nil, err
+	}
+	if err = c.compileOutputColumns(component); err != nil {
+		return nil, err
+	}
+	input.Component = component
+	factory := newCodecFactory(input.CodecFactory)
+	compiledInput, err := handlercompiler.New(handlercompiler.Input{
+		Component: input.Component, InputType: input.InputType,
+		CodecFactory: factory, Resources: input.Resources, TypeLookup: c.lookupType,
+	}).Compile()
+	if err != nil {
+		return nil, err
+	}
+	predicate, err := readerpredicate.Compile(readerpredicate.CompileInput{
+		Component: input.Component, InputType: input.InputType, Bindings: compiledInput.Bindings, Lookup: c.lookupType,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var readerPlan *sqlreader.Plan
+	var viewDependencies []*sqlreader.ViewDependency
+	if input.Component.RootView != nil || len(input.Component.Views) > 0 {
+		readerPlan, err = readercompiler.Compile(readercompiler.Input{
+			CodecFactory: factory,
+			Component:    input.Component, InputType: input.InputType, OutputType: input.OutputType,
+			Bindings:  compiledInput.Bindings,
+			Predicate: predicate, TypeLookup: c.lookupType,
+			DirectViewField: input.DirectViewField, Resources: input.Resources,
+		})
+		if err != nil {
+			return nil, err
+		}
+		viewDependencies, err = readercompiler.CompileViewDependencies(readercompiler.Input{
+			CodecFactory: factory,
+			Component:    input.Component, InputType: input.InputType, OutputType: input.OutputType,
+			Bindings:  compiledInput.Bindings,
+			Predicate: predicate, TypeLookup: c.lookupType,
+			Resources: input.Resources,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	dataField := ""
+	if readerPlan != nil {
+		dataField = readerPlan.OutputViewField
+	}
+	outputContract, err := (output.Compiler{Lookup: c.lookupType}).Compile(output.CompileInput{Component: component, Type: input.OutputType, DataField: dataField})
+	if err != nil {
+		return nil, err
+	}
+	docs, err := (documentation.Loader{Resources: input.Resources}).Load(context.Background(), input.Documentation, component.Documentation)
+	if err != nil {
+		return nil, err
+	}
+	docs, err = docs.ForComponent(component, input.OutputType)
+	if err != nil {
+		return nil, err
+	}
+	return &Artifact{Documentation: docs,
+		Component: component, Input: compiledInput.Input.WithDocumentation(docs),
+		Output: outputContract,
+		Reader: readerPlan, ViewDependencies: viewDependencies,
+		inputType: input.InputType, outputType: input.OutputType,
+	}, nil
+}
+
+func linkedContractType(typeOf reflect.Type) *x.Type {
+	shape := xshape.Linked(typeOf)
+	if shape == nil {
+		return nil
+	}
+	return shape.Descriptor()
+}
+
+func (c *artifactCompiler) lookupType(name string) (reflect.Type, error) {
+	if c == nil || c.input.Types == nil {
+		return nil, nil
+	}
+	typ, ok, err := c.input.Types.Resolve(typecatalog.PackageAuthority, name)
+	if err != nil {
+		return nil, err
+	}
+	if !ok || typ == nil {
+		return nil, nil
+	}
+	return typ.Type, nil
+}

@@ -1,8 +1,0 @@
-[
-  {},
-  {
-    "subject": "Kamil",
-    "criteria": "ROLE IN ('ADMIN')",
-    "data_view": "users_accounts"
-  }
-]

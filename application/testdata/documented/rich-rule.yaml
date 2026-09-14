@@ -1,0 +1,7 @@
+Columns:
+  users:
+    id: Rule user identifier
+    id$example: '8'
+Paths:
+  /rich: Joined user records
+  Payload.ID: Must not replace private annotation

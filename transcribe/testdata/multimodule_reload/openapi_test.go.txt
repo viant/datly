@@ -1,0 +1,177 @@
+package records
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/viant/datly/application"
+	gateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/gateway/openapi"
+	"github.com/viant/datly/gateway/openapi/openapi3"
+	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/typecatalog"
+	xshape "github.com/viant/x/shape"
+	"gopkg.in/yaml.v3"
+)
+
+type documentProbe struct {
+	t       *testing.T
+	manager *application.Manager
+	ctx     context.Context
+	key     string
+}
+
+func (p documentProbe) get(path, method, accept string, status int) *httptest.ResponseRecorder {
+	p.t.Helper()
+	req := httptest.NewRequest(method, path, nil).WithContext(p.ctx)
+	req.Header.Set("Accept", accept)
+	if p.key != "" {
+		req.Header.Set("X-Docs", p.key)
+	}
+	response := httptest.NewRecorder()
+	p.manager.ServeHTTP(response, req)
+	require.Equal(p.t, status, response.Code, response.Body.String())
+	return response
+}
+func (p documentProbe) decode(response *httptest.ResponseRecorder) *openapi3.OpenAPI {
+	p.t.Helper()
+	var doc openapi3.OpenAPI
+	if strings.Contains(response.Header().Get("Content-Type"), "yaml") {
+		require.NoError(p.t, yaml.Unmarshal(response.Body.Bytes(), &doc))
+	} else {
+		require.NoError(p.t, json.Unmarshal(response.Body.Bytes(), &doc))
+	}
+	require.Equal(p.t, "3.0.1", doc.OpenAPI)
+	return &doc
+}
+func (p documentProbe) object(doc *openapi3.OpenAPI, schema *openapi3.Schema) *openapi3.Schema {
+	p.t.Helper()
+	if len(schema.AnyOf) > 0 {
+		schema = schema.AnyOf[0]
+	}
+	if schema.Ref != "" {
+		schema = doc.Components.Schemas[strings.TrimPrefix(schema.Ref, "#/components/schemas/")]
+	}
+	require.NotNil(p.t, schema)
+	return schema
+}
+
+func TestOpenAPIReload(t *testing.T) {
+	ctx := context.Background()
+	first, err := filepath.Abs("../..")
+	require.NoError(t, err)
+	second := os.Getenv("DATLY_EXPOSURE_STAGE")
+	require.NotEmpty(t, second)
+	db := sqlite.New(t)
+	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER PRIMARY KEY,tenant INTEGER)", "INSERT INTO records VALUES(1,7),(2,7),(11,8),(12,8)"))
+	// These are actual contracts compiled from the DQL-emitted modules, not schema overrides.
+	types := newExposureCatalog(t)
+	_, found := xshape.Linked(reflect.TypeOf(RecordsInput{})).FirstStructField("Tenant")
+	require.False(t, found, "tenant exists only in the private dependency's authored input")
+	config := gateway.Config{Meta: gateway.Meta{CacheWarmURI: " ", DocURI: "/docs"}, OpenAPI: &gateway.OpenAPIConfig{Info: openapi3.Info{Title: "Generated API", Version: "one"}}}
+	fixture := &exposureReload{db: db, stage: first, selection: exposureSelection{include: []string{appPackage}, app: true}, http: &config}
+	manager, err := application.New(types)
+	require.NoError(t, err)
+	defer manager.Shutdown(ctx)
+	require.NoError(t, manager.Reload(ctx, application.Request{Revision: 1, Compile: fixture.compile}))
+	pinned, _, err := manager.Pin(ctx)
+	require.NoError(t, err)
+	old := documentProbe{t: t, manager: manager, ctx: pinned}
+	initial := old.get(gateway.DefaultOpenAPIURI, "GET", "", 200)
+	doc := old.decode(initial)
+	require.Len(t, doc.Paths, 1)
+	require.Contains(t, doc.Paths, "/records")
+	require.NotContains(t, doc.Paths, "/internal-records")
+	require.Len(t, doc.Paths["/records"].Get.Parameters, 1)
+	require.Equal(t, "tenant", doc.Paths["/records"].Get.Parameters[0].Name)
+	require.True(t, doc.Paths["/records"].Get.Parameters[0].Required)
+	old.get(gateway.DefaultOpenAPIURI+"/internal-records", "GET", "", 404)
+	old.get(gateway.DefaultOpenAPIURI+"/records", "GET", "", 200)
+	missing := old.get("/records", "GET", "", 500)
+	require.Contains(t, missing.Body.String(), "tenant")
+	require.JSONEq(t, `{"Status":"","Data":[{"Id":1}]}`, old.get("/records?tenant=7", "GET", "", 200).Body.String())
+	export, err := manager.ExportOpenAPI(pinned, openapi.ExportRequest{})
+	require.NoError(t, err)
+	require.Equal(t, initial.Body.Bytes(), export)
+	for _, tc := range []struct{ suffix, accept, media string }{{"", "", "application/json"}, {"?format=yaml", "", "text/yaml"}, {"?format=yml", "application/json", "text/yaml"}, {"", "application/yaml", "text/yaml"}, {"?format=json", "application/yaml", "application/json"}} {
+		response := old.get(gateway.DefaultOpenAPIURI+tc.suffix, "GET", tc.accept, 200)
+		require.Equal(t, tc.media, response.Header().Get("Content-Type"))
+		require.Equal(t, doc, old.decode(response))
+		head := old.get(gateway.DefaultOpenAPIURI+tc.suffix, "HEAD", tc.accept, 200)
+		require.Empty(t, head.Body.Bytes())
+		require.Equal(t, response.Header().Get("Content-Length"), head.Header().Get("Content-Length"))
+	}
+	perPath := old.get(gateway.DefaultOpenAPIURI+"/records?format=json", "GET", "application/json", 200)
+	require.Equal(t, "text/yaml", perPath.Header().Get("Content-Type"), "original per-path encoding is fixed YAML")
+	require.Len(t, old.decode(perPath).Paths, 1)
+	old.get(gateway.DefaultOpenAPIURI, "POST", "", 405)
+	require.Contains(t, old.get("/docs", "GET", "", 200).Body.String(), "swagger-ui")
+	require.Empty(t, old.get("/docs", "HEAD", "", 200).Body.Bytes())
+
+	config.OpenAPI.Info.Version = "two"
+	config.OpenAPI.AggregateAccess = &gateway.DocumentAccess{APIKeyHeader: "X-Docs", APIKeyValue: "v2"}
+	fixture.stage = second
+	fixture.selection = exposureSelection{include: []string{appPackage, privatePackage}, app: true, private: true}
+	require.NoError(t, manager.Reload(ctx, application.Request{Revision: 2, Compile: fixture.compile}))
+	current := documentProbe{t: t, manager: manager, ctx: ctx, key: "v2"}
+	(documentProbe{t: t, manager: manager, ctx: ctx}).get(gateway.DefaultOpenAPIURI, "GET", "", 403)
+	actual := current.decode(current.get(gateway.DefaultOpenAPIURI, "GET", "", 200))
+	require.Equal(t, "two", actual.Info.Version)
+	require.Len(t, actual.Paths, 2)
+	parentSchema := actual.Paths["/records"].Get.Responses["200"].Content["application/json"].Schema
+	childSchema := actual.Paths["/internal-records"].Get.Responses["200"].Content["application/json"].Schema
+	require.NotEqual(t, parentSchema.Ref, childSchema.Ref, "same short-name output identities remain distinct")
+	parentRow := current.object(actual, current.object(actual, parentSchema).Properties["Data"].Items)
+	childRow := current.object(actual, current.object(actual, childSchema).Properties["Data"].Items)
+	require.NotSame(t, parentRow, childRow)
+	require.NotContains(t, parentRow.Properties, "Tenant")
+	require.Equal(t, "integer", childRow.Properties["Tenant"].Type)
+	// Document administration keys do not become component API security requirements.
+	require.Empty(t, actual.Components.SecuritySchemes)
+	require.JSONEq(t, `{"Status":"","Data":[{"Id":2}]}`, current.get("/records?tenant=7", "GET", "", 200).Body.String())
+	require.Equal(t, initial.Body.String(), old.get(gateway.DefaultOpenAPIURI, "GET", "", 200).Body.String())
+	require.JSONEq(t, `{"Status":"","Data":[{"Id":1}]}`, old.get("/records?tenant=7", "GET", "", 200).Body.String())
+	oldExport, err := manager.ExportOpenAPI(pinned, openapi.ExportRequest{})
+	require.NoError(t, err)
+	require.Equal(t, export, oldExport)
+	currentBytes, err := manager.ExportOpenAPI(ctx, openapi.ExportRequest{})
+	require.NoError(t, err)
+	// Both schema and policy failures happen after real package discovery/build,
+	// and neither can replace the published or pinned generation.
+	for i, kind := range []string{"schema", "policy"} {
+		fixture.stage = second
+		if kind == "schema" {
+			fixture.stage = os.Getenv("DATLY_EXPOSURE_INVALID_STAGE")
+			require.NotEmpty(t, fixture.stage)
+		}
+		err = manager.Reload(ctx, application.Request{Revision: uint64(3 + i), Compile: func(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
+			built, err := fixture.compile(ctx, types)
+			if err != nil {
+				return nil, err
+			}
+			policy := *built.HTTP.OpenAPI
+			built.HTTP.OpenAPI = &policy
+			if kind == "policy" {
+				policy.AggregateAccess = &gateway.DocumentAccess{APIKeyHeader: "Bad Header", APIKeyValue: "x"}
+			}
+			return built, nil
+		}})
+		require.Error(t, err, fmt.Sprint(kind))
+		if kind == "schema" {
+			require.ErrorContains(t, err, "wire schema projection")
+		}
+		require.EqualValues(t, 2, manager.Revision())
+		bytes, err := manager.ExportOpenAPI(ctx, openapi.ExportRequest{})
+		require.NoError(t, err)
+		require.Equal(t, currentBytes, bytes)
+		require.Equal(t, initial.Body.String(), old.get(gateway.DefaultOpenAPIURI, "GET", "", 200).Body.String())
+	}
+}

@@ -1,0 +1,259 @@
+package records
+
+import (
+	"context"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/application"
+	"github.com/viant/datly/bootstrap"
+	packageresources "github.com/viant/datly/bootstrap/resources"
+	gateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/internal/testharness/mcpclient"
+	"github.com/viant/datly/internal/testharness/sqlite"
+	druntime "github.com/viant/datly/runtime"
+	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
+	private "github.com/viant/datly/testfixture/exposure/private/records"
+	"github.com/viant/datly/typecatalog"
+	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/x"
+	xmodule "github.com/viant/x/module"
+)
+
+const appPackage = "github.com/viant/datly/testfixture/exposure/app/records"
+const privatePackage = "github.com/viant/datly/testfixture/exposure/private/records"
+
+type exposureSelection struct {
+	include, exclude []string
+	app, private     bool
+}
+
+type exposureReload struct {
+	http      *gateway.Config
+	db        *sqlite.Harness
+	stage     string
+	selection exposureSelection
+	resources []*resource.Store
+}
+
+// Reflected types here are the actual Go contracts compiled from both emitted
+// modules. The discovered holder supplies all component and route metadata.
+func (f *exposureReload) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
+	workspace, err := (xmodule.LocalWorkspace{BaseDir: filepath.Join(f.stage, "app"), ModuleDirs: []string{filepath.Join(f.stage, "private")}}).Resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	routes, err := (bootstrap.PackageDiscovery{Workspace: workspace, Include: []string{appPackage, privatePackage}}).Discover(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(routes) != 2 {
+		return nil, fmt.Errorf("discovered %d holders, want two", len(routes))
+	}
+	assets, err := (packageresources.Loader{Workspace: workspace, Packages: []string{appPackage, privatePackage}}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var components []*registry.RegisteredComponent
+	for index, route := range routes {
+		input, output := reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{})
+		packagePath, path := appPackage, "/records"
+		if index == 1 {
+			input, output = reflect.TypeOf(private.RecordsInput{}), reflect.TypeOf(private.RecordsOutput{})
+			packagePath, path = privatePackage, "/internal-records"
+		}
+		if route.PackagePath != packagePath || route.PackageName != "records" || route.InputType != "RecordsInput" || route.OutputType != "RecordsOutput" || route.Tag.Path != path || route.Tag.Method != "GET" {
+			return nil, fmt.Errorf("holder authority: %+v", route)
+		}
+		if err = route.ValidateContractTypes(input, output); err != nil {
+			return nil, err
+		}
+		other := reflect.TypeOf(private.RecordsInput{})
+		if index == 1 {
+			other = reflect.TypeOf(RecordsInput{})
+		}
+		if err = route.ValidateContractTypes(other, output); err == nil {
+			return nil, fmt.Errorf("same short-name contract accepted from wrong module")
+		}
+		component, err := route.Resolve(input, output)
+		if err != nil {
+			return nil, err
+		}
+		want := spec.Key{Kind: spec.KindComponent, Scope: packagePath, Name: "Records"}
+		if component.Key != want {
+			return nil, fmt.Errorf("component key=%+v want=%+v", component.Key, want)
+		}
+		artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, Types: types, Resources: assets.Store, InputType: input, OutputType: output})
+		if err != nil {
+			return nil, err
+		}
+		reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: f.db.DB}})
+		if err != nil {
+			return nil, err
+		}
+		components = append(components, &registry.RegisteredComponent{Component: artifact.Component, Input: artifact.Input, Output: artifact.Output, OutputType: output, Reader: reader})
+	}
+	f.resources = append(f.resources, assets.Store)
+	httpConfig := gateway.Config{}
+	if f.http != nil {
+		httpConfig = *f.http
+	}
+	return &application.Build{HTTP: httpConfig, Types: types, Resources: assets.Store, Components: components, RuntimeOptions: []druntime.Option{druntime.WithExposedPackages(f.selection.include, f.selection.exclude)}}, nil
+}
+
+func (f *exposureReload) authority(t *testing.T, manager *application.Manager, current, old context.Context) string {
+	t.Helper()
+	for _, ctx := range []context.Context{current, old} {
+		types, err := manager.Types(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, typ := range []reflect.Type{reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{}), reflect.TypeOf(private.RecordsInput{}), reflect.TypeOf(private.RecordsOutput{}), reflect.TypeOf(RecordsView{}), reflect.TypeOf(private.RecordsView{})} {
+			descriptor, found, err := types.Resolve(typecatalog.PackageAuthority, typ.PkgPath()+"."+typ.Name())
+			if err != nil || !found || descriptor.Type != typ {
+				t.Fatalf("contract authority %s: %+v %t %v", typ, descriptor, found, err)
+			}
+		}
+	}
+	if DatlyResourceNamespace == private.DatlyResourceNamespace {
+		t.Fatal("same short-name packages share a resource namespace")
+	}
+	var childFile string
+	for _, asset := range []struct {
+		namespace string
+		embedded  fs.FS
+		child     bool
+	}{{DatlyResourceNamespace, DatlyResources, false}, {private.DatlyResourceNamespace, private.DatlyResources, true}} {
+		files, err := fs.Glob(asset.embedded, "datly_sql/*.sql")
+		if err != nil || len(files) != 1 {
+			t.Fatalf("emitted SQL files=%v err=%v", files, err)
+		}
+		embedded, err := fs.ReadFile(asset.embedded, files[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		for revision, store := range f.resources {
+			data, err := store.ReadFile(asset.namespace + ":" + files[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if revision == 0 && string(data) != string(embedded) {
+				t.Fatal("stage one differs from compiled embed.FS authority")
+			}
+			if asset.child && !strings.Contains(string(data), fmt.Sprintf("id = %d", revision+1)) {
+				t.Fatalf("resource snapshot %d: %s", revision, data)
+			}
+			if _, err = store.ReadFile(files[0]); err == nil {
+				t.Fatal("named package resource acquired an implicit default")
+			}
+		}
+		if asset.child {
+			childFile = files[0]
+		}
+	}
+	return childFile
+}
+
+func TestSelectiveReload(t *testing.T) {
+	stage1, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage2 := os.Getenv("DATLY_EXPOSURE_STAGE")
+	if stage2 == "" {
+		t.Fatal("second emitted stage required")
+	}
+	app := exposureSelection{include: []string{appPackage + "/..."}, app: true}
+	privateOnly := exposureSelection{include: []string{privatePackage}, private: true}
+	both := exposureSelection{include: []string{appPackage, privatePackage}, app: true, private: true}
+	excluded := exposureSelection{include: []string{"..."}, exclude: []string{privatePackage}, app: true}
+	none := exposureSelection{include: []string{}}
+	for _, protocol := range []struct{ name, version string }{{"http", ""}, {"mcp-registry", ""}, {"mcp-session", schema.LegacyProtocolVersion}, {"mcp-stateless", schema.LatestProtocolVersion}} {
+		t.Run(protocol.name, func(t *testing.T) {
+			for _, selection := range []struct {
+				name          string
+				first, second exposureSelection
+			}{{"only-app", app, app}, {"only-private", privateOnly, privateOnly}, {"both", both, both}, {"excluded-private", excluded, excluded}, {"none", none, none}, {"catalog-addition", app, both}, {"catalog-removal", both, app}} {
+				t.Run(selection.name, func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
+					db := sqlite.New(t)
+					if err := db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER PRIMARY KEY, tenant INTEGER)", "INSERT INTO records VALUES(1,7),(2,7),(3,9),(11,8),(12,8)"); err != nil {
+						t.Fatal(err)
+					}
+					types := newExposureCatalog(t)
+					manager, err := application.New(types)
+					if err != nil {
+						t.Fatal(err)
+					}
+					fixture := &exposureReload{db: db, stage: stage1, selection: selection.first}
+					if err = manager.Reload(ctx, application.Request{Revision: 1, Compile: fixture.compile}); err != nil {
+						t.Fatal(err)
+					}
+					current := exposurePublic{manager: manager, ctx: ctx, registry: protocol.name == "mcp-registry"}
+					if protocol.version != "" {
+						current.native = (mcpclient.Config{Source: manager, ProtocolVersion: protocol.version}).New(t)
+					}
+					current.check(t, selection.first, 1)
+					pinned, service, err := manager.Pin(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					old := exposurePublic{manager: manager, ctx: pinned, fixed: true, registry: protocol.name == "mcp-registry"}
+					if protocol.version != "" {
+						old.native = (mcpclient.Config{Service: service, ProtocolVersion: protocol.version}).New(t)
+					}
+					fixture.stage, fixture.selection = stage2, selection.second
+					if err = manager.Reload(ctx, application.Request{Revision: 2, Compile: fixture.compile}); err != nil {
+						t.Fatal(err)
+					}
+					if manager.Revision() != 2 {
+						t.Fatal("revision two not published")
+					}
+					current.check(t, selection.second, 2)
+					old.check(t, selection.first, 1)
+					childFile := fixture.authority(t, manager, ctx, pinned)
+					bad := t.TempDir()
+					if err = os.CopyFS(bad, os.DirFS(stage2)); err != nil {
+						t.Fatal(err)
+					}
+					if err = os.Remove(filepath.Join(bad, "private", "records", childFile)); err != nil {
+						t.Fatal(err)
+					}
+					fixture.stage, fixture.selection = bad, none
+					if err = manager.Reload(ctx, application.Request{Revision: 3, Compile: fixture.compile}); err == nil || !strings.Contains(err.Error(), childFile) {
+						t.Fatalf("invalid stage: %v", err)
+					}
+					if manager.Revision() != 2 || len(fixture.resources) != 2 {
+						t.Fatal("invalid reload changed publication")
+					}
+					current.check(t, selection.second, 2)
+					old.check(t, selection.first, 1)
+					fixture.authority(t, manager, ctx, pinned)
+					db.AssertQuery(t, ctx, sqlite.Query{SQL: "SELECT id, tenant FROM records ORDER BY id"}, []struct{ ID, Tenant int }{{1, 7}, {2, 7}, {3, 9}, {11, 8}, {12, 8}})
+				})
+			}
+		})
+	}
+}
+
+// One fixture owner registers the actual linked contracts from both emitted modules.
+func newExposureCatalog(t *testing.T) *typecatalog.Catalog {
+	t.Helper()
+	types := typecatalog.NewCatalog()
+	for _, typ := range []reflect.Type{reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{}), reflect.TypeOf(private.RecordsInput{}), reflect.TypeOf(private.RecordsOutput{}), reflect.TypeOf(RecordsView{}), reflect.TypeOf(private.RecordsView{})} {
+		if err := types.Register(typecatalog.TypeOriginPackage, x.NewType(typ)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return types
+}

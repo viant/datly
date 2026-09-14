@@ -1,0 +1,198 @@
+package spend
+
+import (
+	"context"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/application"
+	"github.com/viant/datly/bootstrap"
+	packageresources "github.com/viant/datly/bootstrap/resources"
+	"github.com/viant/datly/internal/testharness/mcpclient"
+	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/report"
+	dsql "github.com/viant/datly/sql"
+	"github.com/viant/datly/typecatalog"
+	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/x"
+	xmodule "github.com/viant/x/module"
+)
+
+const packagePath = "github.com/viant/datly/testfixture/composereload/spend"
+
+type composeFixture struct {
+	db        *sqlite.Harness
+	stage     string
+	resources []*resource.Store
+}
+
+func (f *composeFixture) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
+	workspace, err := (xmodule.LocalWorkspace{BaseDir: f.stage}).Resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	routes, err := (bootstrap.PackageDiscovery{Workspace: workspace, Include: []string{packagePath}}).Discover(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(routes) != 1 {
+		return nil, fmt.Errorf("emitted base holders=%d, want 1", len(routes))
+	}
+	if err = routes[0].ValidateContractTypes(reflect.TypeOf(SpendInput{}), reflect.TypeOf(SpendOutput{})); err != nil {
+		return nil, err
+	}
+	component, err := routes[0].Resolve(reflect.TypeOf(SpendInput{}), reflect.TypeOf(SpendOutput{}))
+	if err != nil {
+		return nil, err
+	}
+	if component.Settings.Report == nil || component.Settings.Report.Compose == nil {
+		return nil, fmt.Errorf("emitted cube/compose metadata missing")
+	}
+	settings := component.Settings.Report.Compose.Normalize()
+	if !settings.Enabled || settings.MaxCubes != 8 || settings.MaxLimit != 100 || settings.TimeoutMs != 30000 {
+		return nil, fmt.Errorf("reloaded defaults=%+v", settings)
+	}
+	assets, err := (packageresources.Loader{Workspace: workspace, Packages: []string{packagePath}}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	compilation, err := report.NewProjectCompiler(report.ProjectConfig{Types: types}).CompileArtifacts([]bootstrap.ArtifactInput{{Component: component, Resources: assets.Store, InputType: reflect.TypeOf(SpendInput{}), OutputType: reflect.TypeOf(SpendOutput{})}})
+	if err != nil {
+		return nil, fmt.Errorf("derive report from emitted holder (canonical columns=%d, generated output=%v): %w", len(component.RootView.Columns), reflect.TypeOf(SpendOutput{}), err)
+	}
+	got := map[string]string{}
+	for _, artifact := range compilation.Artifacts() {
+		c := artifact.Component()
+		if len(c.Routes) != 1 {
+			return nil, fmt.Errorf("component %s routes=%d", c.Name, len(c.Routes))
+		}
+		got[c.Name] = c.Routes[0].Method + " " + c.Routes[0].Path
+	}
+	want := map[string]string{"Spend": "GET /spend", "SpendCube": "POST /spend/cube", "SpendCubeCompose": "POST /spend/cube/compose"}
+	if !reflect.DeepEqual(got, want) {
+		return nil, fmt.Errorf("report-derived endpoints=%v want=%v", got, want)
+	}
+	registered, err := compilation.RuntimeComponents(ctx, report.RuntimeConfigureFunc(func(_ context.Context, a *report.ComponentArtifact) (report.RuntimeCapabilities, error) {
+		if a.IsReport() {
+			return report.RuntimeCapabilities{}, nil
+		}
+		reader, err := a.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: f.db.DB}})
+		return report.RuntimeCapabilities{Reader: reader}, err
+	}))
+	if err != nil {
+		return nil, err
+	}
+	types, err = compilation.Types()
+	if err != nil {
+		return nil, err
+	}
+	f.resources = append(f.resources, assets.Store)
+	return &application.Build{Types: types, Resources: assets.Store, Components: registered}, nil
+}
+
+func TestComposeReload(t *testing.T) {
+	stage1, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage2 := os.Getenv("DATLY_COMPOSE_STAGE")
+	if stage2 == "" {
+		t.Fatal("second emitted generation required")
+	}
+	for _, protocol := range []struct{ name, version string }{{"http", ""}, {"mcp-registry", ""}, {"mcp-session", schema.LegacyProtocolVersion}, {"mcp-stateless", schema.LatestProtocolVersion}} {
+		t.Run(protocol.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+			defer cancel()
+			db := sqlite.New(t)
+			if err := db.ExecStatements(ctx,
+				`CREATE TABLE spend(tenant TEXT,account_id INTEGER,channel TEXT,amount REAL,version INTEGER)`,
+				`INSERT INTO spend VALUES ('acme',1,'web',100,1),('acme',1,'web',50,1),('acme',1,'store',2000,1),('acme',2,'web',70,1),('acme',2,'store',30,1),('other',1,'web',9000,1),('other',2,'store',8000,1),('acme',1,'web',10,2),('acme',2,'store',20,2)`); err != nil {
+				t.Fatal(err)
+			}
+			types := typecatalog.NewCatalog()
+			for _, typ := range []reflect.Type{reflect.TypeOf(SpendInput{}), reflect.TypeOf(SpendOutput{}), reflect.TypeOf(ChannelPredicate{})} {
+				if err := types.Register(typecatalog.TypeOriginPackage, x.NewType(typ)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			manager, err := application.New(types)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture := &composeFixture{db: db, stage: stage1}
+			if err = manager.Reload(ctx, application.Request{Revision: 1, Compile: fixture.compile}); err != nil {
+				t.Fatal(err)
+			}
+			current := composeClient{ctx: ctx, manager: manager, registry: protocol.name == "mcp-registry"}
+			if protocol.version != "" {
+				current.native = (mcpclient.Config{Source: manager, ProtocolVersion: protocol.version}).New(t)
+			}
+			current.check(t, 1)
+			pinned, service, err := manager.Pin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			old := composeClient{ctx: pinned, manager: manager, registry: current.registry}
+			if protocol.version != "" {
+				old.native = (mcpclient.Config{Service: service, ProtocolVersion: protocol.version}).New(t)
+			}
+			fixture.stage = stage2
+			if err = manager.Reload(ctx, application.Request{Revision: 2, Compile: fixture.compile}); err != nil {
+				t.Fatal(err)
+			}
+			if manager.Revision() != 2 {
+				t.Fatal("generation 2 not published")
+			}
+			current.check(t, 2)
+			old.check(t, 1)
+			files, err := fs.Glob(DatlyResources, "datly_sql/*.sql")
+			if err != nil || len(files) != 1 {
+				t.Fatalf("emitted SQL=%v err=%v", files, err)
+			}
+			embedded, err := DatlyResources.ReadFile(files[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, store := range fixture.resources {
+				data, err := store.ReadFile(DatlyResourceNamespace + ":" + files[0])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(string(data), fmt.Sprintf("s.version <= %d", i+1)) || i == 0 && string(data) != string(embedded) {
+					t.Fatalf("resource generation %d: %s", i+1, data)
+				}
+			}
+			bad := t.TempDir()
+			if err = os.CopyFS(bad, os.DirFS(stage2)); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Remove(filepath.Join(bad, "spend", files[0])); err != nil {
+				t.Fatal(err)
+			}
+			fixture.stage = bad
+			if err = manager.Reload(ctx, application.Request{Revision: 3, Compile: fixture.compile}); err == nil || !strings.Contains(err.Error(), files[0]) {
+				t.Fatalf("missing-resource stage=%v", err)
+			}
+			if manager.Revision() != 2 || len(fixture.resources) != 2 {
+				t.Fatal("failed stage replaced generation")
+			}
+			current.check(t, 2)
+			old.check(t, 1)
+			// A complete configured timeout is exercised on both retained generations.
+			// HTTP also proves a shorter caller deadline and active cancellation.
+			for _, generation := range []struct {
+				name   string
+				client composeClient
+			}{{"current", current}, {"pinned-old", old}} {
+				t.Run(generation.name, func(t *testing.T) { generation.client.deadlines(t) })
+			}
+		})
+	}
+}
