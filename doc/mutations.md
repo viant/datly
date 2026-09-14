@@ -223,10 +223,9 @@ flowchart LR
     E --> F[Invocation completion and selected output hooks]
 ```
 
-The SDK also declares `WriteHook.BeforeWrite`. Do not assume every public hook
-interface is automatically invoked by every target. Inspect the selected
-product's generated code and supported hook bindings; the fixed mutation Program
-flow above explicitly delegates EntityHooks and its sequence/queue observations.
+The SDK also declares `WriteHook.BeforeWrite`; the current generated mutation
+Program does not dispatch it. Use the supported EntityHooks Init/Validate and
+sequence/queue observations shown above, or explicitly author custom orchestration.
 
 ## Separate the four kinds of state
 
@@ -244,18 +243,19 @@ and self-referencing graphs.
 
 ## Use Has markers for sparse requests
 
-These requests have different meanings:
+These order-entity fragments have different meanings:
 
 ```json
 {"id": 1}
 ```
 
 ```json
-{"id": 1, "note": null, "quantity": 0, "enabled": false}
+{"id": 1, "note": null, "items": [{"id": 11, "quantity": 0}]}
 ```
 
-The first omits the three business values. The second supplies all three.
-Go values alone cannot preserve that distinction, so the generated shape carries
+The first does not request a Note or child update. The second explicitly supplies
+a null Note and a zero Quantity for item 11. Go values alone cannot preserve
+that distinction, so the generated shape carries
 Has/set-marker information alongside the working fields.
 
 - Omitted means the client did not request replacement of that field.
@@ -400,7 +400,9 @@ See [errors and custom output](errors-and-output.md) for complete response examp
 
 ## Understand finalizer selection
 
-Finalizers are selected contracts, not a list that always runs for every result:
+Finalizers are selected contracts, not a list that always runs for every result.
+The different output `Finalize` signatures are alternatives on a Go type;
+`FinalizeMCP` is a separately named capability:
 
 | Contract | Position and responsibility |
 | --- | --- |
