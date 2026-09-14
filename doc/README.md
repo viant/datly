@@ -16,7 +16,9 @@ provide a runnable feature switch.
 | Understand reader/writer hook order, sparse updates and invariants | [Hook flow diagrams](hooks.md) |
 | Build nested reads and paginated outputs | [Readers](readers.md) |
 | Build analytical reports or compare query frames | [Reports](reports.md) |
+| Generate a mutator and understand Has markers, SyncPresence and invariants | [Generated mutators](generated-mutator.md) |
 | Write sparse updates and related inserts | [Mutations](mutations.md) |
+| Return business errors or shape a typed/raw response | [Errors and custom output](errors-and-output.md) |
 | Enforce verified identity and row access | [Security](security.md) |
 | Register custom behavior, return bytes or finalize output | [Custom handlers](custom-handlers.md) |
 | Expose HTTP and MCP | [Protocols](protocols.md) |

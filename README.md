@@ -32,7 +32,7 @@ From a single endpoint to a data-driven service spanning multiple databases,
 Datly brings query execution, dependency injection, business workflows, analytics
 and API delivery into one programmable platform.
 
-**Start here:** [DQL and grammar](doc/dql.md) · [Reader/writer hook flows](doc/hooks.md) · [Transcription](doc/authoring.md) · [All guides](doc/README.md)
+**Start here:** [DQL and grammar](doc/dql.md) · [Reader/writer hook flows](doc/hooks.md) · [Generated mutators](doc/generated-mutator.md) · [Errors and output](doc/errors-and-output.md) · [Transcription](doc/authoring.md) · [All guides](doc/README.md)
 
 Use it to:
 
