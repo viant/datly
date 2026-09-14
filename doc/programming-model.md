@@ -86,7 +86,7 @@ flowchart TD
     A[DQL plus database metadata plus linked Go types] --> B[Compile canonical component and typed plan]
     B --> C{Selected generation product}
     C -->|Reader| R[Reader shapes, component metadata and query resources]
-    C -->|Writer| W[Writer shapes, selected Go or Velty handler and support code]
+    C -->|Writer| W[Writer shapes, selected Go handler and support code]
     R --> RB[Build and link reader component]
     W --> WH[Add application hooks when requested]
     WH --> WB[Build and link writer component]
@@ -100,7 +100,7 @@ Generated artifacts can include:
 - Input/output contracts and view/entity types, when those are generator-owned.
 - Component metadata connecting the authored routes to the typed contract.
 - SQL, template and other declared resources, with generated embedding support.
-- A selected Go/Velty writer handler and typed mutation support.
+- A selected Go writer handler and typed mutation support.
 - Create-once application hook scaffolds when requested.
 - Ownership/fingerprint information used to protect regeneration.
 
@@ -127,7 +127,7 @@ Request-time data changes and writer Previous-state comparison are separate conc
 | --- | --- | --- |
 | SQL | Configured database | Fetch current records, joins, aggregates and reference data |
 | StructQL | An already available typed Go object graph | Project keys/values and prepare typed lookup or comparison data |
-| Velty | A compiled template with declared values/capabilities | Expand parameterized query fragments or orchestrate explicitly supplied services |
+| SQL template expressions | Declared inputs and compiled query context | Build parameterized query fragments |
 | Generated Go | Typed compiled application artifacts | Execute the selected reader/writer support with normal Go type checking |
 
 For example, StructQL can project order IDs from an incoming Orders graph:

@@ -4,9 +4,10 @@
 
 This guide follows a writer from authored DQL through generated code, request
 binding, database comparison, hooks, transactions and response delivery. The
-optional generated mutation policy is one writer execution product. Direct Go
-and Velty writers use the same invocation capabilities with different authored
-orchestration. Reader generation is a separate choice; Datly does not automatically
+generated mutation policy emits pure Go code. Its typed handler, capture,
+validation, sequencing and DML support execute as Go. Direct generated Go and
+authored Go handlers use the same invocation capabilities with explicitly
+selected orchestration. Reader generation is a separate choice; Datly does not automatically
 generate a combined reader/writer component in one struct.
 
 ## Contents
@@ -36,7 +37,6 @@ Choose the target and write operation through transcription options:
 | --- | --- | --- |
 | Generated Go mutation policy | `HandlerGo` + `GoExecutionMutation` | Typed EntityHooks, invariants and outcome finalization |
 | Generated direct Go writer | `HandlerGo` + `GoExecutionDirect` | Generated orchestration, row InitWrite/ValidateWrite, input/output lifecycle |
-| Generated Velty writer | `HandlerVelty` | Compiled template and supplied scoped capabilities |
 | Existing authored handler | Preserve authored/package handler authority | Application-defined orchestration through the same engine |
 
 `WritePost`, `WritePut` and `WritePatch` are explicit operation choices. A sparse
@@ -205,7 +205,7 @@ The order is implemented by the [mutation adapter](../runtime/handler/mutation/a
 and [generated policy phases](../transcribe/handler/golang/mutation_program.go).
 
 
-### Direct Go/Velty row writing hooks
+### Direct generated Go row writing hooks
 
 The direct generated row-writing path can call
 `InitWrite(context.Context) error` and `ValidateWrite(context.Context) error` on
@@ -483,6 +483,6 @@ Test the behavior the API promises:
 The implementation references are the [canonical engine](../runtime/handler/engine/engine.go),
 [mutation adapter](../runtime/handler/mutation/adapter.go),
 [generated program](../transcribe/handler/golang/mutation_program.go) and
-[Go/Velty write-hook parity tests](../transcribe/write_hooks_parity_test.go).
+[generated write-hook tests](../transcribe/write_hooks_parity_test.go).
 Check [release status](status.md) for open integration gates; a grammar parse or
 successful build alone does not establish every runtime behavior.

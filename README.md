@@ -19,7 +19,7 @@ orchestrate reads and mutations with scoped dependency injection, and expose
 the same application contracts through HTTP APIs and MCP tools for AI agents.
 
 Build rich relational views, transactional workflows and composable analytical
-cubes. Extend their behavior with Go and Velty handlers, row-reading hooks,
+cubes. Extend their behavior with Go handlers, row-reading hooks,
 typed mutation hooks and lifecycle finalizers. Inputs, authorization predicates,
 validation and invocation capabilities flow through a shared execution model.
 
@@ -38,7 +38,7 @@ and API delivery into one programmable platform.
 
 A conventional application coordinates controllers, services, DAOs, SQL and DTOs.
 Datly makes the data contract and execution plan explicit, then generates the
-selected component artifacts while keeping business behavior in Go/Velty and
+selected component artifacts while keeping business behavior in Go and
 scoped services.
 
 ```mermaid
@@ -63,7 +63,7 @@ flowchart LR
 | --- | --- | --- |
 | Data contract | SQL, DTOs and request mapping maintained across layers | DQL/schema/type authority drives typed generation and regeneration |
 | Reads | DAO mapping plus service-side relationship assembly | Declared views, typed data graphs and per-view query controls |
-| Writes | Application-managed comparison and persistence orchestration | Explicit generated mutation policy or custom Go/Velty orchestration |
+| Writes | Application-managed comparison and persistence orchestration | Explicit generated mutation policy or custom Go orchestration |
 | Business behavior | Services and callbacks | Reusable services, scoped DI and typed hooks at defined phases |
 | Database changes | Manually reconcile query and DTO changes | Re-transcribe, inspect protected generated diffs, rebuild and publish |
 | Delivery | Controller-specific endpoint integration | Shared component contract exposed through HTTP and MCP |
