@@ -101,7 +101,7 @@ Use it to:
 No Datly 1.0 release tag or published CLI version is claimed. The Go Reference
 badge links to the public module index; it may show an earlier published version.
 [Status](doc/status.md) records integrated behavior and remaining release gates,
-including separate DQL destination and native recursive Velty work.
+including separate DQL destination and native dependency integration.
 
 ## Try a typed API locally
 
@@ -164,7 +164,7 @@ validation must repeat these paths against the selected published dependencies.
 | --- | --- | --- |
 | Go shapes and tags | Existing domain types and compiled application hooks | [Readers](doc/readers.md), [custom handlers](doc/custom-handlers.md) |
 | DQL with imported Go types | SQL-centered authoring with reusable named contracts | [Source and generation](doc/authoring.md) |
-| DQL with generated shapes and Go/Velty handlers | A declared query or write graph that should produce typed artifacts | [Generation](doc/authoring.md), [mutations](doc/mutations.md) |
+| DQL with generated shapes and Go handlers | A declared query or write graph that should produce typed artifacts | [Generation](doc/authoring.md), [mutations](doc/mutations.md) |
 | Embedded application manager | Application-owned service wiring and atomic reload | [Architecture](doc/architecture.md), [configuration](doc/configuration.md) |
 
 A component has typed input/output contracts and registered behavior. A view is
@@ -177,7 +177,7 @@ tree. [Learn the model](doc/architecture.md).
 | Build an API | Operate and integrate |
 | --- | --- |
 | [Quickstart](doc/quickstart.md) | [Configuration and linked CLI](doc/configuration.md) |
-| [DQL, types, Go/Velty generation and regeneration](doc/authoring.md) | [AFS/Aerospike caching and warmup](doc/cache-and-warmup.md) |
+| [DQL, types, Go generation and regeneration](doc/authoring.md) | [AFS/Aerospike caching and warmup](doc/cache-and-warmup.md) |
 | [Readers, relations, projections and hooks](doc/readers.md) | [Async jobs, storage events and completion](doc/async.md) |
 | [Cubes, reports and composition](doc/reports.md) | [Native observability and optional OTel](doc/observability.md) |
 | [Mutations, validation, IDs and foreign keys](doc/mutations.md) | [HTTP and MCP](doc/protocols.md) |

@@ -78,8 +78,7 @@ and [project owner](../transcribe/project.go) when embedding the compiler.
 Provide package/type/resource authority and resolve declared SQL resources
 before compiling. Inspect diagnostics and generated contracts before persistence,
 then use [project build](project-build.md) to discover and link the resulting Go packages internally.
-A generated Velty program still needs the registered runtime contract and
-capabilities for that program.
+Generated Go packages must be built and linked before their component can run.
 
 ## Select a handler product programmatically
 
@@ -111,8 +110,7 @@ shows complete source plus schema refinement and generated SQLite execution.
 
 The Go target selects direct orchestration with `GoExecutionDirect`, or the
 explicit generic policy with `GoExecutionMutation`. **Mutation is a Go execution
-choice, not a fourth handler target.** A Velty product uses `HandlerVelty` and
-its `VeltyHandlerOptions`; `HandlerNone` preserves supplied/authored authority.
+choice within the Go target.** `HandlerNone` preserves supplied/authored authority.
 Do not silently select a handler policy from the HTTP verb. Create-once hook
 scaffolding is opt-in through `HookOptions`, preserving authored hook ownership.
 Tooling must expose the actual API choices; an installed developer MCP server

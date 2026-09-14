@@ -170,7 +170,7 @@ its immutable Definition can be shared by the runtime.
 ### Generated mutation policy
 
 
-This is the optional generated mutation policy. Custom Go/Velty handlers can
+This is the optional generated mutation policy. Custom Go handlers can
 compose the same capabilities with explicitly authored orchestration; the HTTP
 verb alone does not install this policy.
 
