@@ -9,6 +9,30 @@ the natural starting point, importing existing Go types where appropriate.
 Generated shapes are useful when the projection itself defines the contract.
 All three choices must preserve type/package authority and authored behavior.
 
+## The schema-to-code synchronization cycle
+
+```mermaid
+flowchart LR
+    A[Database schema and metadata] --> C[Transcribe DQL]
+    B[Authored DQL and linked Go types] --> C
+    C --> D[Generated shapes, resources and component contracts]
+    D --> E[Application hooks and build]
+    E --> F[Schema or projection changes]
+    F --> C
+```
+
+Transcription/refinement reads the configured metadata authority. Regeneration
+updates generator-owned shapes as the authored projection changes, including
+pointer/value changes and dropped columns. Explicit DQL types and names retain
+their authority; ambiguous output columns are errors. Protected application edits
+and hook files must survive repeated generation.
+
+This is the generation/update cycle, not an implicit database watcher. Re-run
+transcription after a schema or DQL change, inspect its diagnostics and generated
+diff, then build or publish the new generation. In-flight invocations retain their
+admitted generation. Writer Current/Previous reads are a separate state-comparison
+mechanism for sparse mutation policy; see [mutations](mutations.md).
+
 ## A small DQL reader
 
 This is an authoring example for a package containing `Records.dql`; configure

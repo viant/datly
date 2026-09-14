@@ -7,6 +7,12 @@
 
 **High-performance data APIs, graphs and workflows.**
 
+**Keep database schemas, generated code and API contracts aligned.** Datly's
+schema-aware transcription turns DQL and database metadata into typed Go shapes,
+resources and component contracts. Regenerate as projections and schemas evolve:
+carry type/nullability changes forward, remove generator-owned fields no longer
+projected, and preserve authored hooks and protected edits.
+
 Datly is a programmable data application platform that connects databases,
 business logic and delivery. Compose typed data graphs across databases,
 orchestrate reads and mutations with scoped dependency injection, and expose
