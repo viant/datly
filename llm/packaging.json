@@ -2,168 +2,67 @@
   "Files": [
     "datly/LICENSE",
     "datly/NOTICE",
-    "datly/README.md",
     "datly/THIRD_PARTY_NOTICES.md",
-    "datly/application/async.go",
-    "datly/application/openapi.go",
-    "datly/application/openapi_test.go",
-    "datly/bootstrap/cacheconfig/cache.go",
-    "datly/bootstrap/connector/config.go",
-    "datly/bootstrap/reader.go",
-    "datly/doc/README.md",
     "datly/doc/api-documentation.md",
-    "datly/doc/architecture.md",
-    "datly/doc/async.md",
-    "datly/doc/authoring-skills.md",
-    "datly/doc/authoring.md",
     "datly/doc/cache-and-warmup.md",
-    "datly/doc/configuration.md",
-    "datly/doc/custom-handlers.md",
-    "datly/doc/dql.ebnf",
-    "datly/doc/dql.md",
-    "datly/doc/errors-and-output.md",
-    "datly/doc/examples/prepare-demo.py",
-    "datly/doc/feature-skill-coverage.md",
-    "datly/doc/generated-mutator.md",
-    "datly/doc/hooks.md",
-    "datly/doc/mutations.md",
     "datly/doc/observability.md",
-    "datly/doc/programming-model.md",
-    "datly/doc/project-build.md",
-    "datly/doc/protocols.md",
-    "datly/doc/quickstart.md",
-    "datly/doc/readers.md",
     "datly/doc/reports.md",
-    "datly/doc/security.md",
     "datly/doc/selectors-and-formats.md",
     "datly/doc/static-content.md",
-    "datly/doc/status.md",
     "datly/gateway/http/OPENAPI_NOTICE",
-    "datly/gateway/http/handler.go",
-    "datly/gateway/http/response.go",
-    "datly/gateway/http/warmup_jwt_sqlite_test.go",
-    "datly/gateway/http/warmup_policy_test.go",
     "datly/gateway/openapi/openapi3/LICENSE",
     "datly/gateway/openapi/openapi3/NOTICE",
-    "datly/go.mod",
-    "datly/internal/testharness/sqlite/jobs_schema.go",
-    "datly/mcp/developer/README.md",
-    "datly/mcp/server/config.go",
-    "datly/observability/otel/adapter.go",
-    "datly/observability/otel/benchmark_test.go",
-    "datly/project/build/README.md",
-    "datly/project/build/testdata/app/hooks/write.go",
-    "datly/project/build/testdata/app/models/record.go",
-    "datly/project/build/testdata/app/records/component.go",
-    "datly/report/compose_integration_test.go",
-    "datly/report/cubecompose/sqlite_test.go",
-    "datly/report/grouped_sqlite_test.go",
-    "datly/report/registration_test.go",
-    "datly/runtime/auth/service.go",
-    "datly/runtime/handler/engine/engine.go",
-    "datly/runtime/handler/mutation/adapter.go",
-    "datly/runtime/injector_finalizer_sqlite_test.go",
-    "datly/runtime/observability.go",
-    "datly/sql/builder/builder.go",
-    "datly/sql/reader/batch_runtime_sqlite_test.go",
-    "datly/sql/reader/execution.go",
-    "datly/sql/reader/hooks.go",
-    "datly/sql/reader/service.go",
-    "datly/sql/reader/warmup.go",
-    "datly/standalone/ASYNC.md",
-    "datly/standalone/README.md",
-    "datly/standalone/SERVICES.md",
-    "datly/standalone/config/config.go",
-    "datly/standalone/services_test.go",
-    "datly/standalone/source_test.go",
-    "datly/standalone/testdata/app/cmd/main.go",
-    "datly/standalone/testdata/app/records/queries/read.sql",
-    "datly/standalone/testdata/app/records/records.go",
-    "datly/transcribe/compiler.go",
-    "datly/transcribe/description.go",
-    "datly/transcribe/dql/parse_test.go",
-    "datly/transcribe/generate/REGENERATION.md",
-    "datly/transcribe/generate_test.go",
-    "datly/transcribe/handler/golang/entity_sync.go",
-    "datly/transcribe/handler/golang/mutation_program.go",
-    "datly/transcribe/handler_program_runtime_test.go",
-    "datly/transcribe/project.go",
-    "datly/transcribe/testdata/mutationhooks/model.go",
-    "datly/transcribe/write_hooks_parity_test.go",
-    "datly/typecatalog/catalog.go",
-    "llm/datly-custom-component/SKILL.md",
-    "llm/datly-custom-component/references/acceptance.md",
-    "llm/datly-custom-component/references/concepts.md",
-    "llm/datly-custom-component/references/custom-contract.md",
     "llm/datly-custom-component/references/custom-examples.md",
     "llm/datly-custom-component/references/developer-mcp.md",
-    "llm/datly-custom-component/references/dql-grammar.md",
-    "llm/datly-custom-component/references/dql.ebnf",
     "llm/datly-custom-component/references/output-and-operations.md",
     "llm/datly-custom-component/references/project-build.md",
     "llm/datly-custom-component/references/tags-and-interfaces.md",
-    "llm/datly-reader/SKILL.md",
-    "llm/datly-reader/references/acceptance.md",
     "llm/datly-reader/references/cache-and-operations.md",
-    "llm/datly-reader/references/concepts.md",
     "llm/datly-reader/references/developer-mcp.md",
-    "llm/datly-reader/references/dql-grammar.md",
-    "llm/datly-reader/references/dql.ebnf",
     "llm/datly-reader/references/project-build.md",
-    "llm/datly-reader/references/reader-contract.md",
     "llm/datly-reader/references/reader-examples.md",
     "llm/datly-reader/references/tags-and-interfaces.md",
-    "llm/datly-writer/SKILL.md",
-    "llm/datly-writer/references/acceptance.md",
     "llm/datly-writer/references/availability-and-operations.md",
-    "llm/datly-writer/references/concepts.md",
     "llm/datly-writer/references/developer-mcp.md",
-    "llm/datly-writer/references/dql-grammar.md",
-    "llm/datly-writer/references/dql.ebnf",
     "llm/datly-writer/references/mutation-messages.md",
     "llm/datly-writer/references/project-build.md",
     "llm/datly-writer/references/tags-and-interfaces.md",
     "llm/datly-writer/references/writer-contract.md",
     "llm/datly-writer/references/writer-examples.md",
     "xdatly/LICENSE",
-    "xdatly/handler/injector_finalizer.md",
-    "xdatly/handler/mutation/program.go",
-    "xdatly/response/buffered.go"
+    "xdatly/handler/injector_finalizer.md"
   ],
-  "Directories": {
-    "datly/application": [
-      "datly/application/async.go"
-    ],
-    "datly/gateway": [
-      "datly/gateway/http/handler.go"
-    ],
-    "datly/mcp": [
-      "datly/mcp/server/config.go"
-    ],
-    "datly/sql/builder": [
-      "datly/sql/builder/builder.go"
-    ],
-    "datly/sql/reader": [
-      "datly/sql/reader/execution.go"
-    ],
-    "datly/typecatalog": [
-      "datly/typecatalog/catalog.go"
-    ],
-    "datly/transcribe/generate": [
-      "datly/transcribe/generate/REGENERATION.md"
-    ],
-    "datly/transcribe/handler": [
-      "datly/transcribe/handler_program_runtime_test.go"
-    ],
-    "xdatly/handler/mutation": [
-      "xdatly/handler/mutation/program.go"
-    ]
-  },
+  "Directories": {},
   "Exports": {
-    "datly/README.md": {
-      "EndBefore": "For contribution scope and quality rules",
-      "Reason": "This public guide export omits website badges and contributor workflow navigation. License and attribution files are included separately as exact product imports.",
-      "StartAt": "**High-performance data APIs, graphs and workflows.**"
+    "datly/doc/cache-and-warmup.md": {
+      "StartAt": "## Warmup query cases",
+      "EndBefore": "## A separate connector for prewarming",
+      "Reason": "Exact maintained author-facing section: includes declarative configuration and behavior; excludes repository navigation, implementation/test evidence and unrelated authoring workflows. Other feature contracts remain in the canonical skill references."
+    },
+    "datly/doc/selectors-and-formats.md": {
+      "StartAt": "Selectors resolve authored column names",
+      "EndBefore": "## Acceptance",
+      "Reason": "Exact maintained author-facing section: includes declarative configuration and behavior; excludes repository navigation, implementation/test evidence and unrelated authoring workflows. Other feature contracts remain in the canonical skill references."
+    },
+    "datly/doc/api-documentation.md": {
+      "StartAt": "## Shared YAML dictionary and response schemas",
+      "EndBefore": "## Generic response documentation",
+      "Reason": "Exact maintained author-facing section: includes declarative configuration and behavior; excludes repository navigation, implementation/test evidence and unrelated authoring workflows. Other feature contracts remain in the canonical skill references."
+    },
+    "datly/doc/static-content.md": {
+      "StartAt": "## Declare content",
+      "EndBefore": "## Deployment and verification",
+      "Reason": "Exact maintained author-facing section: includes declarative configuration and behavior; excludes repository navigation, implementation/test evidence and unrelated authoring workflows. Other feature contracts remain in the canonical skill references."
+    },
+    "datly/doc/reports.md": {
+      "StartAt": "## Enable reports in component metadata",
+      "EndBefore": "Embedding uses",
+      "Reason": "Exact maintained author-facing section: includes declarative configuration and behavior; excludes repository navigation, implementation/test evidence and unrelated authoring workflows. Other feature contracts remain in the canonical skill references."
+    },
+    "datly/doc/observability.md": {
+      "StartAt": "## Capture, export and privacy",
+      "EndBefore": "## Performance claims and measurement",
+      "Reason": "Exact maintained author-facing section: includes declarative configuration and behavior; excludes repository navigation, implementation/test evidence and unrelated authoring workflows. Other feature contracts remain in the canonical skill references."
     }
   }
 }

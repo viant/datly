@@ -147,6 +147,29 @@ The imported model.Bounds may contain Unit and Cap. OnFetch builds it from the i
 
 Declare cube/report input layout and enable composition. Callers supply a frame list and validated wrapper using $CubeSQL1 ... $CubeSQLN. Preserve frame parameters and selector rules. Inspect configured cube/limit/timeout budgets: the design is list-based, not fixed two/three-cube slots, but deployed operational limits apply.
 
+For a declared Spend report with these SQL output aliases, a two-frame request
+can compare web and store totals:
+
+```json
+{
+  "cubes": [
+    {"filters": {"accountIDs": "1,2", "tenant": "acme", "region": "EU", "channel": "web", "status": "active"}},
+    {"inheritFrom": 1, "filters": {"channel": "store"}}
+  ],
+  "sql": "SELECT t1.AccountID, t1.TotalSpend AS web, COALESCE(t2.TotalSpend, 0) AS store FROM $CubeSQL1 AS t1 LEFT JOIN $CubeSQL2 AS t2 ON t1.AccountID = t2.AccountID ORDER BY t1.AccountID LIMIT 8"
+}
+```
+
+This requires that application contract; it is not a call against an installed
+demo. `inheritFrom` is one-based and refers to a prior frame. Each frame retains
+its authorized inputs and ordered SQL bindings; wrapper SQL cannot name arbitrary
+source tables. Configured defaults are 8 cubes, result limit 100 and timeout
+30000 ms; zero selects defaults. Check the connected configuration and total
+placeholder budget. Multi-key composition joins need their own parser acceptance.
+Verify inherited/omitted filters, nullable joins, aliases, exceeded budgets and
+HTTP/MCP denial. Automatic linking of JWT embedded types needs its own build
+acceptance beyond manually linked runtime tests.
+
 ## Dynamic source
 
 For mutable DQL/resources, validate and atomically activate the matching component/types/resources. Failed staging leaves the previous generation active. Persisted shapes retain field order and append new fields; authored hooks survive regeneration.

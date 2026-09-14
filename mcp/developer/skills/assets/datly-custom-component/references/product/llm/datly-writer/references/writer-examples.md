@@ -2,40 +2,50 @@
 
 Select mutation behavior explicitly; the HTTP verb alone is not the generated policy.
 
-## PATCH intent and linked types
+## PATCH graph and application hooks
 
-~~~~sql
+```sql
 #package('example.com/app/records')
-#import('model', 'example.com/app/model')
 #import('hooks', 'example.com/app/recordhooks')
 #setting($_ = $route('/v1/records', 'PATCH'))
 #setting($_ = $connector('main'))
-#define($_ = $TenantID<int>(query/tenantId).Required())
-#define($_ = $Body<[]*model.Record>(body/))
-#define($_ = $Existing<[]*model.Record>(view/Existing) /*
- SELECT id, tenant_id, name FROM records WHERE tenant_id=:TenantID
-*/)
-#define($_ = $Data<[]*model.Record>(output/view))
-SELECT r.*, entity_hooks(r, 'hooks.RecordHooks')
+SELECT r.*, children.*, lookup.*,
+       entity_hooks(r, 'hooks.RecordHooks'),
+       tag(r.START, 'invariant:"Schedule"'),
+       tag(r.END, 'invariant:"Schedule" validate:"gtfield(Start)"')
 FROM records r
-~~~~
+JOIN record_children children ON children.record_id = r.id
+JOIN (lookup_values) lookup ON lookup.id = r.lookup_id
+```
 
-This illustrates intent grammar, not a deployment-ready authorization policy. Select generated PATCH mode and bind Body/Existing/Data through the developer server. A production Previous read must completely cover requested original identities without accidental pagination/truncation. Generate a safe original-key restriction with supported typed helpers. A tenant-only read is appropriate only when deliberately loading the complete bounded fixture/tenant set.
+Select `gen` operation `patch` with pure Go output; for a build advertising the
+reviewed interface:
 
-Auxiliary data remains readable but is not mutated:
+```sh
+datly gen -op patch -lang go -dir /path/to/application example.com/app/records
+```
 
-~~~~sql
-SELECT r.*, l.*
-FROM records r
-JOIN (lookup_values) l ON l.id=r.lookup_id
-~~~~
+The high-level implementation is delivered in an isolated review worktree and
+under review, not established in the release CLI. Discover connected support as
+specified in [developer-mcp.md](references/product/llm/datly-writer/references/developer-mcp.md); report missing `gen`
+without substituting translation.
 
-## Go-shape declaration and marker
+The generator owns Body/Existing/Data binding, original identity tuple extraction,
+authorized complete Previous reads, Has/SyncPresence, sparse validation, sequencing,
+parent links, writes and completion. Authors declare the graph and Go hook metadata.
+`(lookup_values)` is auxiliary read-only data. Ordinary joins declare writable
+relations; composite links must include every key part. Schema discovery supplies
+actual identities, constraints and date types. Bind authorization explicitly using
+the [JWT input pattern](references/product/llm/datly-writer/references/tags-and-interfaces.md#jwt-input-and-authorization-predicates).
+No tenant-wide scan or manually paginated Existing view is needed for this workflow.
+
+Use `post` for insertion, `put` for the declared update policy, and `get` for a
+reader; align each DQL route method with the chosen operation. Keep independently
+exposed reader and writer components in distinct packages/routes as appropriate.
+
+## Generated or linked Go shape and marker
 
 ~~~~go
-type Components struct {
-    Patch xdatly.Component[Input, Output] `component:"Patch,path=/v1/records,method=PATCH,connector=main,handler=NewRecordPatch,view=Records"`
-}
 type Record struct {
     ID   *int64 `json:"id,omitempty" sqlx:"id,primaryKey"`
     Name string `json:"name" sqlx:"name" validate:"required"`
@@ -46,18 +56,19 @@ type RecordHas struct { ID, Name bool }
 
 Clients send business data, not Has. Omitted Name is skipped in sparse required checks and is not cleared. Supplied empty Name fails if the application's required rule forbids empty text. Do not equate every DB NOT NULL column with a nonzero business requirement.
 
-## Cohesive invariant fields
+## Cohesive date invariants
 
 ~~~~go
 type Window struct {
-    Start *int64 `json:"start" invariant:"Range"`
-    End   *int64 `json:"end" invariant:"Range"`
+    Start *time.Time `json:"start" invariant:"Schedule"`
+    End   *time.Time `json:"end" invariant:"Schedule" validate:"gtfield(Start)"`
     Has   *WindowHas `json:"-" sqlx:"-" setMarker:"true"`
 }
 type WindowHas struct { Start, End bool }
 ~~~~
 
-For an existing row with only End supplied, backfill Start from loaded Previous without setting its marker, then validate the group. New rows receive complete checks. Unknown/unselected previous values are not known zeros; failed backfill must not partially mutate the group.
+Import `time` for the linked Go field fragment. The DQL tags above generate the
+same group metadata. For an existing row with only End supplied, the generator backfills Start from loaded Previous without setting its marker, then validates the effective Start/End dates, including an end-before-start failure. New rows receive complete checks. Unknown/unselected previous values are not known zeros; failed backfill must not partially mutate the group.
 
 ## Hook responsibilities
 

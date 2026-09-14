@@ -1,5 +1,31 @@
 # Developer MCP authoring workflow
 
+## Operation-based generation to pure Go
+
+**Generation availability.** The high-level `gen` implementation is delivered in
+an isolated review worktree and is under review; it is not established as part
+of the release CLI. Discover the connected developer server and installed CLI
+capabilities before generation. If operation-based `gen` with pure Go output is
+missing, return the DQL and application hook contract and report that gap. Do not
+substitute `translate`, lower-level transcription, or manual writer plumbing.
+
+The reviewed CLI interface is shown below only for a build whose help advertises
+it; it is not a release-install instruction:
+
+```sh
+datly gen -op patch -lang go -dir /path/to/application example.com/application/records
+```
+
+Use `post`, `put` or `get` for the corresponding operation. Select one component
+in a module-qualified package; flags precede the package. DQL/package metadata
+owns destinations. Keep the authored route method consistent with the operation.
+The graph supplies writable/auxiliary roles, complete relation keys, hooks and
+invariants. Schema discovery uses an explicitly selected read-only connector.
+Require generated pure Go and preview derived input/output, Previous lookups,
+presence and validation policy before building. Go hooks are create-once
+application files; regeneration preserves their edits. A transcribe capability
+does not establish availability of this high-level operation.
+
 ## Datly validation command
 
 `datly validate` uses the shared authoring Validator, with static checks by default and explicitly enabled schema discovery. Discover installed command help before using it; older builds may lack these options. The opt-in `mcp/developer` service exposes the same Validator and diagnostics through `datly.validate`; it does not add separate language rules. Discover the connected server's actual tools before calling it.
@@ -94,9 +120,9 @@ Use project conventions and existing shapes when clear. Ask about ambiguous writ
 ## Safe authoring loop
 
 1. Inspect the current package, schema, shapes and tool capabilities.
-2. Draft the DQL or Go-shape contract with explicit mappings and hooks.
+2. Draft the declarative DQL graph and application Go hooks (or preserve an explicitly requested existing Go contract).
 3. Parse and validate. Resolve unknown types/aliases/columns/providers instead of fabricating substitutes.
-4. Preview the resulting files, public schema, SQL, parameter binding, dependencies and exposure.
+4. Discover and select the `gen` operation with pure Go output. Preview the resulting files, public schema, generated binding/Previous reads, dependencies and exposure. If `gen` is absent, report it and keep the authoring artifacts; do not substitute translation.
 5. Exercise data-driven SQLite fixtures and inspect actual responses/DB state. For a vendor-sensitive feature also validate that vendor's dialect and limits.
 6. Apply the approved development change using expected revision/hash where supported.
 7. Re-read the resulting component and verify generation, schema and route/tool visibility.
@@ -151,6 +177,7 @@ Optional directory support is not advertised. Reading resources grants no tools.
 Canonical links, including those inside references, are skill-root-relative.
 Keep exact product imports in `packaging.json`; use the native skillpack generator
 for both filesystem and embedded copies. Never hand-edit generated copies or
-install raw source folders with unresolved product dependencies. See
-[publication](references/product/datly/doc/authoring-skills.md) and
-[candidate status](references/product/datly/doc/status.md).
+install raw source folders with unresolved product dependencies. The canonical
+packaging profile records exact maintained imports and excludes implementation
+and test-source trees. Generation availability is described at the start of this
+reference; inspect the connected build independently.

@@ -1,7 +1,3 @@
-# View selectors, exact names and response formats
-
-[All guides](references/product/datly/doc/README.md) · [Readers](references/product/datly/doc/readers.md) · [Caches](references/product/datly/doc/cache-and-warmup.md)
-
 Selectors resolve authored column names and explicit mappings. Identifier comparison
 is case-insensitive; punctuation and identifier parts remain distinct. The framework
 does not invent snake/camel spellings, suffixes or join aliases. Duplicate output
@@ -74,10 +70,5 @@ fields must not cause a child collection to be mistaken for the root result.
 JSON envelope shape is preserved. The scoped singleton/body approval covers
 these reader-versus-codec authority rules.
 
-## Acceptance
 
-Check exact valid names, rejected spelling variants, explicit aliases and duplicate
-output errors after the correction is accepted. Exercise two views sharing Go
-row types, independent selectors, complete keys, zero/null/empty relations and
-concurrent requests with different projections. Validate native cache hits with
-the source unavailable and cube measure narrowing with every dimension retained.
+> Packaging boundary: Exact maintained author-facing section: includes declarative configuration and behavior; excludes repository navigation, implementation/test evidence and unrelated authoring workflows. Other feature contracts remain in the canonical skill references.

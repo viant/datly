@@ -1,6 +1,6 @@
 ---
 name: datly-writer
-description: Create and modify Datly PATCH, POST, and PUT components with DQL or Go shapes, sparse presence, database validation, typed hooks, transactions, and generated mutation policies.
+description: Author Datly PATCH, POST, and PUT components with declarative DQL graphs and operation-based gen to pure Go, preserving sparse presence, validation, application Go hooks, and transactions.
 ---
 
 # Datly Writer Components
@@ -13,17 +13,19 @@ This skill is for application developers, not Datly framework contributors. Expl
 
 The references describe the **required Datly 1.0 authoring contract**, including features under development. Those features remain part of the requested design. A capability missing from the connected build is an implementation gap, not permission to drop a requirement, invent syntax, or silently choose another architecture. Compile/validate against the connected developer server and report a missing capability precisely.
 
-**Release validation in progress.** The local `v1` release copy enforces exact
-authored names, explicit user-defined aliases and duplicate output-name errors.
-Do not infer spelling variations. Check the connected build and the product
-status guide for pending DQL destination and native recursive Velty work.
+**Generation availability.** The high-level `gen` implementation is delivered in
+an isolated review worktree and is under review; it is not established as part
+of the release CLI. Discover the connected developer server and installed CLI
+capabilities before generation. If operation-based `gen` with pure Go output is
+missing, return the DQL and application hook contract and report that gap. Do not
+substitute `translate`, lower-level transcription, or manual writer plumbing.
 
 ## Read what the task needs
 
 - For project init/build and deployment, read [project-build.md](references/project-build.md). Custom builds discover/link internally; no mandatory user init/Register/import list.
 - Start with [concepts.md](references/concepts.md) for terminology, philosophy, base types, and authoring choices.
 - Read [developer-mcp.md](references/developer-mcp.md) before using a developer MCP server. Its operations are conceptual capabilities, not assumed tool names.
-- Use [dql-grammar.md](references/dql-grammar.md) and [dql.ebnf](references/dql.ebnf) for DQL, directives, options, SQL/Velty boundaries, CAST, and tag customization.
+- Use [dql-grammar.md](references/dql-grammar.md) and [dql.ebnf](references/dql.ebnf) for DQL, directives, options, declarative SQL graphs, CAST, and tag customization.
 - Use [tags-and-interfaces.md](references/tags-and-interfaces.md) for Go shapes, binding tags, SQL mapping, predicates, validation, and public APIs.
 - For JWT-based authorization, use the [explicit input and predicate pattern](references/tags-and-interfaces.md#jwt-input-and-authorization-predicates); preserve original certificate/public-key verification and do not inject ambient claims.
 - Read [writer-contract.md](references/writer-contract.md) for this component's behavior and decisions.
@@ -34,9 +36,15 @@ status guide for pending DQL destination and native recursive Velty work.
 
 ## Authoring workflow
 
+The standard workflow is **reader-like declarative DQL graph + explicit `gen`
+operation (`get`, `patch`, `post`, `put`) → generated pure Go**. Declare auxiliary
+tables in parentheses, entity hooks and invariant tags in DQL. The generator owns
+binding, Previous reads, presence, validation and write orchestration; application
+Go hooks own business rules. Existing linked Go types keep their authority.
+
 - Establish operation, input/output shapes, writable tables, full identity tuples, parent links, auxiliary read-only joins, validation rules, and authorization/error policy.
 - Preserve the distinction between original supplied identity, current values, database Previous, and Has markers. An ID supplied as zero is still supplied; a sequenced ID never changes insert/update classification.
-- Use the canonical lifecycle: capture before input initialization; SyncPresence; invariant backfill; entity Init; framework Go/database validation; custom Validate; begin/join transaction; Sequence; AfterSequence; Diff; Reconcile; Queue; AfterQueue; outcome-aware finalization.
+- Verify the generator supplies the canonical lifecycle: capture before input initialization; SyncPresence; invariant backfill; entity Init; framework Go/database validation; custom Validate; begin/join transaction; Sequence; AfterSequence; Diff; Reconcile; Queue; AfterQueue; outcome-aware finalization.
 - New entities get complete checks; sparse existing entities use Has-gated checks. Backfill does not mark client presence. Framework/database violations stop custom validation and mutation.
 - Generate Go tags from authoritative constraints and refine them with tag(view.column, 'validate:...'). Do not manufacture constraints from missing metadata or make false/zero invalid merely because a column is NOT NULL.
 - Keep business data fixed after validation. Identity/link reconciliation follows the original tuple and explicit relation producers. Verify graph structure before actions and queued values after observation hooks.

@@ -1,6 +1,6 @@
 ---
 name: datly-custom-component
-description: Create Datly components with custom Go or Velty handlers, typed inputs and outputs, scoped capabilities, validation, component dependencies, and controlled HTTP/MCP responses.
+description: Create Datly components with custom Go handlers, typed inputs and outputs, scoped capabilities, validation, component dependencies, and controlled HTTP/MCP responses.
 ---
 
 # Datly Custom Components
@@ -13,22 +13,24 @@ This skill is for application developers, not Datly framework contributors. Expl
 
 The references describe the **required Datly 1.0 authoring contract**, including features under development. Those features remain part of the requested design. A capability missing from the connected build is an implementation gap, not permission to drop a requirement, invent syntax, or silently choose another architecture. Compile/validate against the connected developer server and report a missing capability precisely.
 
-**Release validation in progress.** The local `v1` release copy enforces exact
-authored names, explicit user-defined aliases and duplicate output-name errors.
-Do not infer spelling variations. Check the connected build and the product
-status guide for pending DQL destination and native recursive Velty work.
+**Generation availability for requested graph generation.** The high-level `gen` implementation is delivered in
+an isolated review worktree and is under review; it is not established as part
+of the release CLI. Discover the connected developer server and installed CLI
+capabilities before generation. If operation-based `gen` with pure Go output is
+missing, return the DQL and application hook contract and report that gap. Do not
+substitute `translate`, lower-level transcription, or manual writer plumbing.
 
 Configured standalone/custom builds can expose report-enabled groupable readers
 and opt-in cube composition from selected linked packages. Preserve source auth,
 explicit SQL aliases and every warmed grouping dimension when reusing cube caches;
-see [reports](references/product/datly/doc/reports.md) for requirements and tests.
+see [reports](references/product/datly/doc/reports.md) for declared configuration and authorization requirements.
 
 ## Read what the task needs
 
 - For project init/build and deployment, read [project-build.md](references/project-build.md). Custom builds discover/link internally; no mandatory user init/Register/import list.
 - Start with [concepts.md](references/concepts.md) for terminology, philosophy, base types, and authoring choices.
 - Read [developer-mcp.md](references/developer-mcp.md) before using a developer MCP server. Its operations are conceptual capabilities, not assumed tool names.
-- Use [dql-grammar.md](references/dql-grammar.md) and [dql.ebnf](references/dql.ebnf) for DQL, directives, options, SQL/Velty boundaries, CAST, and tag customization.
+- Use [dql-grammar.md](references/dql-grammar.md) and [dql.ebnf](references/dql.ebnf) for DQL, directives, options, declarative SQL graphs, CAST, and tag customization.
 - Use [tags-and-interfaces.md](references/tags-and-interfaces.md) for Go shapes, binding tags, SQL mapping, predicates, validation, and public APIs.
 - For JWT-based authorization, use the [explicit input and predicate pattern](references/tags-and-interfaces.md#jwt-input-and-authorization-predicates); preserve original certificate/public-key verification and do not inject ambient claims.
 - Read [custom-contract.md](references/custom-contract.md) for this component's behavior and decisions.

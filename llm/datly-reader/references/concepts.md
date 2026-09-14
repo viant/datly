@@ -8,7 +8,15 @@ Do not recreate a DAO/service/controller stack just to forward a query. Declare 
 
 DQL and Go shapes are complementary. DQL expresses data intent and metadata. Go shapes express typed application contracts and reusable behavior. Neither requires the other for every component.
 
-## Choose an authoring mode
+## Standard authoring workflow
+
+Author a reader-like DQL graph and select `gen` operation `get`, `patch`, `post`
+or `put` with pure Go output. Parenthesized physical tables are auxiliary;
+`entity_hooks` and `tag(..., 'invariant:"Group"')` declare business seams. The
+generator derives plumbing; application Go hooks hold business rules. Discover
+capabilities as described in [developer-mcp.md](references/developer-mcp.md).
+
+## Contract ownership modes
 
 | Mode | Use when | What the developer owns |
 | --- | --- | --- |
@@ -16,7 +24,7 @@ DQL and Go shapes are complementary. DQL expresses data intent and metadata. Go 
 | DQL + linked Go shapes | Queries evolve but application types are established | DQL, imports, selected existing types, application hooks |
 | Dynamic DQL + persisted shapes | Generate a package from DQL and keep Go source | DQL and authored hook files; review owned projection additions, CAST type changes and removals |
 | Dynamic DQL + runtime shapes | DQL is loaded dynamically, possibly from a DB | DQL version, resource/type bindings, validation and atomic reload workflow |
-| Custom Go or Velty component | Application orchestration is not a standard reader/writer | Handler, typed contract, scoped capabilities and explicit side-effect policy |
+| Custom Go component | Application orchestration is not a standard reader/writer | Handler, typed contract, scoped capabilities and explicit side-effect policy |
 
 Runtime-only generation is a required authoring mode; ask the developer MCP server to confirm its support. Persisted Go generation is not a silent substitute if runtime-only behavior was requested.
 

@@ -4,9 +4,9 @@
 
 ## Scope
 
-DQL combines Datly declarations and view controls with SQL, Go type expressions, StructQL declaration queries and Velty templates. This reference and dql.ebnf cover the Datly-specific authoring grammar. SQL expressions/vendor extensions, Go type syntax and Velty expressions are delegated to their actual parsers: this is not a claim that one small EBNF implements every SQL dialect.
+DQL declares a typed SQL view graph, request bindings, view controls, Go types and business hook metadata. This is the high-level authoring grammar. SQL dialect expressions and Go types are delegated to their parsers; the EBNF does not implement every SQL dialect. Application behavior belongs in Go hooks.
 
-Use this reference to author declarations and view controls, then validate and transcribe with the matching Datly build. Syntax, installed capabilities and execution are separate checks; see [release status](status.md) for current boundaries.
+Use this reference to author declarations and view controls, then validate and generate pure Go with the matching Datly build. Syntax, installed capabilities and execution are separate checks; see [release status](status.md) for current boundaries.
 
 ## Lexical conventions
 
@@ -17,7 +17,7 @@ Use this reference to author declarations and view controls, then validate and t
 - Never interpolate parameter values inside SQL quotes/comments.
 - #package and #import are complete line directives. Prefer one directive per line.
 - Use canonical #setting declarations; do not invent directive spellings.
-- A semicolon separates executable statements; metadata declarations are not DB commands.
+- A semicolon terminates a query; metadata declarations are not DB commands.
 - A successfully parsed token is not proof its provider/type/codec is installed.
 
 ## Package and import grammar
@@ -42,7 +42,6 @@ Canonical form:
 | route | quoted absolute path, zero or more quoted HTTP methods; default GET |
 | api_key | configured header and value; no real secrets in examples |
 | connector | connector name |
-| useTemplate | named generation template |
 | input_type, output_type | Go type expression |
 | dest, input_dest, output_dest, router_dest | generated destination |
 | meta | description resource path |
@@ -60,6 +59,10 @@ Canonical form:
 | output_omit_empty | one boolean |
 | output_title | one title |
 | const | explicit identifier and value; reject conflicting declarations |
+| DocGlobalURLs, DocURLs | ordered quoted documentation resource paths |
+| DocURL, DocBaseURL | one quoted rule resource or base URL |
+| static_resource, static_content | quoted resource/prefix or content URL/root |
+| mcp_folder | quoted folder, name and resource URI |
 
 One route can list multiple methods. Conflicting multiple route directives are not a route list. Placeholder names occupy entire segments, for example /records/{id}, not /records/prefix-{id}.
 
@@ -69,6 +72,8 @@ Cache modifiers: .WithProvider(value), .WithLocation(value), .WithTimeToLiveMs(i
 Warmup options: connector=..., indexParameter=... (also index_param/indexparam), indexMeta=true|false (also index_meta), and parameter value lists. Discover installed providers.
 
 ## Parameter and view declarations
+
+Explicit declarations are available when the application needs a custom binding. Standard GEN writer workflows derive body and Current bindings automatically; do not add them as required boilerplate.
 
 ~~~~sql
 #define($_ = $ID<int>(path/id).Required())
@@ -83,7 +88,7 @@ Warmup options: connector=..., indexParameter=... (also index_param/indexparam),
 Head: `$_ = $Name[<InputType[,OutputType]>](kind/location)`.
 Question mark means infer a type, not Go any. The second type is meaningful for conversion/codec authoring.
 
-#define establishes declared authority. #set can supply compatible declarations/defaults and also belongs to Velty. Do not rely on duplicate conflicting definitions.
+#define establishes declared authority. Use `.Value(...)` for declared defaults. Reject conflicting definitions.
 
 Common sources: query, path, header, cookie, form, body, http_request, view/data_view, param, const and output. Additional kinds must be registered and advertised. Header parameters default required, query parameters optional; write explicit requirements where important.
 
@@ -189,21 +194,17 @@ A standalone custom Go CAST is a type declaration. Ordinary CAST(expression AS S
 
 Internal physical columns remain SQL/DML-mapped and hidden from clients. The logical pseudo field is populated by OnFetch, translated by writer Init, and omitted from physical DML. Nested Has flags decide which backing fields change.
 
-## SQL parameters and template fragments
+## Bound SQL values and declarative query context
 
 - Named values: :ID, :Name with declared bindings.
-- Template selectors: $Input.Rows, $Name and supported member/index paths.
-- Emitted values become bound parameters. Do not quote or concatenate them into SQL.
+- Declared input references such as $Name resolve to bound values.
+- Input values become bound parameters. Do not quote or concatenate them into SQL.
 - Embedded SQL uses ${embed:sql/shared.sql} or ${embed:namespace:path}; resources must exist before execution.
-- $View.ParentJoinOn('child_key') or $View.ParentJoinOn('AND','child_key').
-- $View.ParentCompositeJoinOn('AND','tenant_id','record_id').
-- $View.AndParentJoinOn('child_key').
-- $View.ColIn('WHERE','child_key').
 - $View.NonWindowSQL preserves the parent query without view pagination, including its arguments.
 - $View.Limit, $View.Offset and $View.Page are scoped values.
 - Composition uses $CubeSQL1 through $CubeSQLN for requested frames. Validate all references and resource/parameter budgets.
 
-These SQL-building helpers are not view-control metadata functions.
+These fixed query-context references preserve bindings and pagination semantics. Declare optional filters through typed predicates and relation membership through JOIN keys; the generator derives parent membership and all bound query fragments.
 
 ## StructQL declaration queries
 
@@ -219,23 +220,40 @@ Use the actual declared graph path and supported StructQL conventions. Nested /R
 
 Declaration queries contain plain SQL or StructQL. Express requiredness with `.Required()` or `.Optional()`, and type authority with the declaration type/fluent options; do not prefix SELECT with optional/required markers.
 
-## Velty and executable writers
+## Operation-based graph generation
 
-Velty provides assignments, selectors/calls, if/elseif/else/end, foreach, supported for loops, break and expression evaluation. A SQL template and a writer service program have different capability allowlists.
+Use the same reader-like graph for `gen` operation `get`, `patch`, `post` or
+`put`, selecting pure Go output. Operation is explicit and must agree with route
+metadata. Generation derives request/output shapes, original-key Previous reads,
+internal Has markers, SyncPresence, validation, sequencing, relation links and
+transaction orchestration. Authors supply graph metadata and application Go hooks.
 
-~~~~text
-#if($Has.Name)
-  AND name = $Name
-#end
+```sql
+#import('hooks', 'example.com/app/recordhooks')
+#setting($_ = $route('/records', 'PATCH'))
+#setting($_ = $connector('main'))
+SELECT r.*, c.*, lookup.*,
+       entity_hooks(r, 'hooks.RecordHooks'),
+       tag(r.START, 'invariant:"Schedule"'),
+       tag(r.END, 'invariant:"Schedule" validate:"gtfield(Start)"')
+FROM records r
+JOIN children c ON c.record_id = r.id
+JOIN (lookup_values) lookup ON lookup.id = r.lookup_id
+```
 
-#foreach($record in $Input.Records)
-  $dml.Update("records", $record);
-#end
-~~~~
+`tag` places Start and End in one cohesive invariant group; the comparison rule
+uses the exact generated Go field name `Start`. Use schema-resolved date/time
+columns, or explicit linked Go date types. For sparse updates, the generator
+backfills omitted group members from authorized Previous values without setting
+Has, then validates the effective date interval. Application Go `Init` and
+`Validate` hooks express additional business rules. Auxiliary rows remain readable
+and never enter mutation traversal. The generator owns Body/Existing/Data
+plumbing; authors do not construct it for standard generation.
 
-Custom writer programs can use supplied $dml.Insert/Update/Delete/Execute, $sequencer.Allocate, $validator.Check and registered helpers. A variable reference does not install a capability. Use typed StructQL identity helpers, not a raw-map row architecture.
-
-Raw INSERT/UPDATE/DELETE are executable SQL, not reader metadata. Do not mix raw SQL, service calls and reader statements and expect automatic handler selection.
+High-level `gen` is delivered in an isolated review worktree and under review.
+Do not claim it is in the released CLI. Discover the connected operation/schema
+first; if absent, deliver the graph/hooks and report missing `gen` rather than
+substituting `translate` or lower-level transcription.
 
 ## Semantic checks after grammar
 

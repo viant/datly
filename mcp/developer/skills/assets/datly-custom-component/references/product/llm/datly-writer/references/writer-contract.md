@@ -23,28 +23,36 @@ Datly supplies typed binding, reads, sequencing, validation, buffered writes, an
 
 Keep authorization filters and current-row lookups scoped to the caller. A record existing in the database is not, by itself, authorization to update it.
 
-## 2. Choose an authoring style
+## 2. Select graph generation and contract ownership
 
-Go-only application packages are supported: declare a package-level `Components` struct using `xdatly.Component[Input, Output]`, annotate fields, and name an application handler factory. DQL is not required merely to declare a component, bind a body, attach a SQL resource, enable route variants, or identify typed hooks.
+The standard authoring surface is a reader-like DQL graph plus an explicit `gen`
+operation and pure Go output. Link authoritative application types when they
+exist; otherwise generate owned shapes. Application Go hooks carry business
+rules. Generation owns binding, Previous reads and mutation orchestration.
+See [writer-examples.md](references/product/llm/datly-writer/references/writer-examples.md) for the primary graph.
 
-DQL is useful when query/view structure and parameter derivation are the primary authoring surface. Keep two ownership modes distinct:
+Existing Go-only components remain supported for explicitly chosen application
+contracts. Preserve their types and authored methods. In generated shapes,
+update only owned projections: append fields, propagate CAST type changes and
+remove dropped owned columns without rewriting unrelated authored content.
 
-- Existing Go shapes remain authoritative when linking DQL to application types.
-- Dynamic DQL updates fields that the generated projection manifest owns: add new projected fields, change their declared CAST types, and remove fields no longer projected. Preserve the order of retained fields and unrelated authored content.
+| Operation | Policy |
+| --- | --- |
+| `post` | Insert intended writable records. |
+| `put` | Update under the declared policy; do not infer insert-on-miss. |
+| `patch` | Match original supplied tuples and apply declared existing/missing actions. |
+| `get` | Generate the reader graph; no mutation traversal. |
 
-Select write intent explicitly. An HTTP method alone must not silently choose a generated handler policy.
-
-| Operation | Write policy |
-|---|---|
-| POST | Insert the intended writable records. |
-| PUT | Update records under the declared update policy; do not infer insert-on-miss. |
-| PATCH | Match using original supplied identity; choose the declared existing/missing action. A supplied but unmatched key may legitimately take the allowed insert action. |
-
-Custom Go and authored Velty handlers remain valid choices for application-specific orchestration. The generic writer contract below is not automatically imposed on every custom handler.
+Route method and operation must agree. Custom Go orchestration is an explicit
+application choice; it is not a replacement for missing high-level generation.
+Discover connected `gen` support as described in
+[developer-mcp.md](references/product/llm/datly-writer/references/developer-mcp.md).
 
 ## 3. Go shapes and tags
 
-This is the supported component/body/presence syntax, adapted from the package-authored Record example. Supply the actual schema, connector, input/output fields, and handler implementation for the application.
+Inspect the generated row shape or link an existing authoritative application type.
+The fragment below explains SQL mapping and internal presence; standard `gen`
+derives component/body/output binding and its handler from the DQL graph.
 
 ```go
 type Record struct {
@@ -59,20 +67,12 @@ type RecordHas struct {
     Name bool
 }
 
-type RecordInput struct {
-    Records []*Record `parameter:"Records,kind=body,in=data,cardinality=Many,required"`
-}
-
-type RecordOutput struct {
-    Data []*Record `json:"data,omitempty" parameter:"Data,kind=output,in=view,cardinality=Many" view:"Record,type=Record,table=RECORDS,connector=main"`
-}
-
-type Components struct {
-    RecordPatch xdatly.Component[RecordInput, RecordOutput] `component:"RecordPatch,path=/v1/api/records,method=PATCH,connector=main,handler=NewRecordPatchHandler,view=Record"`
-}
 ```
 
-Import `xdatly` from `github.com/viant/xdatly`. The handler factory uses the public contract described below. Do not copy `ID int` or an autoincrement policy into schemas whose actual identity type/policy differs.
+Do not copy `ID int` or an autoincrement policy into schemas whose actual identity
+type/policy differs. Go component/binding tags below describe generated metadata
+and explicitly existing Go-only contracts; they are not an additional writer
+plumbing step.
 
 Relevant authoring tags:
 
@@ -106,45 +106,31 @@ An MCP tool's argument object follows its published schema. Do not assume it is 
 
 Report/cube composition and DerivedViews are reader/report features. Enabling them, or enabling a URI variant, does not make their data writable.
 
-## 4. DQL writer intent and current lookup
+## 4. DQL graph and generated Previous reads
 
-Declare body input, derived parameters, current views, and output explicitly. A current view is not an implicit global table scan. Bind its lookup to the request's identity tuples and authorization scope.
+Declare writable tables and relation keys in the reader-like graph. Parenthesized
+physical tables, such as `JOIN (LOOKUP_TABLE) lookup ON lookup.ID=r.LOOKUP_ID`,
+are auxiliary: readable by business logic and excluded from sequencing, mutation
+hooks, relinking and DML. A parenthesized physical root is also auxiliary.
+A real `(SELECT ...)` subquery retains its declared query meaning.
 
-This tuple-preserving pattern is exercised by generated Go and Velty SQLite tests:
+Attach `entity_hooks(r, 'hooks.RecordHooks')` using a declared package import.
+Attach validation and cohesive groups with column `tag` annotations, for example
+`tag(r.START, 'invariant:"Schedule"')` and
+`tag(r.END, 'invariant:"Schedule" validate:"gtfield(Start)"')`.
+Use exact resolved Go field names in cross-field validation rules.
 
-```sql
-#setting($_ = $route('/records','PATCH'))
-#define($_ = $Records<[]*RecordsView>(body/Data).Cardinality('Many').Required())
-#define($_ = $RecordKeys<?>(param/Records).Cardinality('Many') /* ? SELECT TenantId AS TENANT_ID, Id AS ID FROM `/` */)
-#define($_ = $CurrentRecords<?>(view/CurrentRecords).Cardinality('Many') /* SELECT r.TENANT_ID,r.ID,r.NAME,r.ACTIVE,r.QUANTITY FROM RECORDS r WHERE $criteria.CompositeIn("r", $RecordKeys) ORDER BY r.TENANT_ID,r.ID */)
-#define($_ = $Data<[]*RecordsView>(output/body))
-SELECT TENANT_ID,ID,NAME,ACTIVE,QUANTITY FROM RECORDS
-```
+The generator derives body/output bindings and typed Previous reads restricted to
+all requested original identity tuples and declared authorization. Check the
+preview for complete composite keys, authorized scope and no accidental
+pagination/truncation. Do not author manual Body/Existing/Data or key-extraction
+plumbing for standard `gen`. The generator must report unsupported metadata or
+capabilities instead of producing a broader table scan.
 
-The write operation and the `CurrentRecords` binding must also be selected through the authoring tool's actual handler-generation options. Do not invent an option name merely because it appears convenient.
+## 5. Required generated mutation lifecycle
 
-Parenthesized table intent matters:
-
-```sql
-SELECT r.*, lookup.*
-FROM RECORDS r
-JOIN (LOOKUP_TABLE) lookup ON lookup.RECORD_ID = r.ID
-```
-
-`(LOOKUP_TABLE)` marks the table reference auxiliary. Its records remain available to business logic, but generated mutation traversal must not sequence, relink, validate through mutation hooks, or write that auxiliary subtree. A parenthesized root table similarly declares an auxiliary root. `(SELECT ... )` is a real SQL subquery, not the same auxiliary-table notation.
-
-Typed hook metadata has the DQL form:
-
-```sql
-SELECT r.*, entity_hooks(r, 'app.RecordHooks')
-FROM RECORDS r
-```
-
-The target validation customization surface is `tag(view.column, 'validate:...')`. It must attach the authored Go validation metadata to that exact column. Use rule strings from the actual validation owner; do not invent rule names, reinterpret a SQL function as metadata, or claim that preserving a tag proves its execution. The shared DQL grammar describes the complete syntax and its implementation status.
-
-## 5. Required generic mutation lifecycle
-
-The target order is fixed because changing it changes sparse-update meaning:
+The generator supplies this order. Use it to review hooks and observable behavior;
+do not implement these phases as an authored DQL program:
 
 1. Bind the component input and completed current reads. Capture immutable original presence/identity and a detached processing baseline **before** input `Init` and `InitMCP`.
 2. Run input `Init`, then `InitMCP` when MCP context is present. `InitMCP` remains supported.
@@ -260,7 +246,7 @@ Validate the complete effective invariant after backfill and initialization, eve
 
 Use typed tuples for compound identity. Do not concatenate strings or replace `(tenant,id)` membership with independent `tenant IN (...) AND id IN (...)` lists: that admits cross-product rows.
 
-StructQL must project the full ordered key tuple from the request. `$criteria.CompositeIn(alias, rows)` uses typed SQL-column metadata and the SQLX dialect's composite-IN renderer. Do not hardcode row-value-IN syntax or placeholder numbering; dialects may use different rendering. Bind values and account for all query arguments when applying placeholder/batch limits.
+The generator must derive the full ordered key tuple from the request, using typed SQL-column metadata and the native dialect's composite membership support. Do not hardcode row-value-IN syntax or placeholder numbering; dialects may use different rendering. Bind values and account for all query arguments when applying placeholder/batch limits.
 
 Current reads can be partitioned or fetched in bounded batches. Supported read controls include Go `batch` / `batchConcurrency` and DQL `batch_size(alias,n)` / `batch_concurrency(alias,n)`. Serial is the default. This controls current/relation fetching, not concurrent mutation commits. Hooks consuming a completed relation must see the full assembled relation, not a fetch-batch prefix.
 
@@ -312,27 +298,13 @@ Queueing, flushing into a caller-owned transaction, and committing are different
 
 Use the same root hook object for finalization where configured. An explicit definition-level finalizer may also cover pre-capture failures and must be safe for concurrent invocations. Cancellation must not suppress outcome notification. An outbox can be an application design choice, but Datly must not silently create an unrequested durable messaging subsystem.
 
-## 12. Custom Go and Velty handlers
+## 12. Explicit custom Go orchestration
 
-A normal Go factory may return:
-
-```go
-func NewRecordPatchHandler() handler.Contract[RecordInput, RecordOutput]
-```
-
-Its implementation supplies:
-
-```go
-Exec(ctx context.Context, session handler.Session, input *RecordInput, output *RecordOutput) error
-```
-
-`Session` exposes only the binder and response writer. The handler owns its explicit business orchestration. If it needs original identity semantics, capture them before input initialization through the supported capture contract; do not replace that with a later copy of already mutated records.
-
-Authored/generated Velty uses the same scoped capabilities. Verified primitives include `$dml.Insert(table,value)`, `$dml.Update(table,value)`, `$dml.Delete(table,value)`, `$dml.Execute(statement,args...)`, `$sequencer.Allocate(table,dest,selector)`, and `$validator.Check(value)`. The capability must actually be configured. A capability error must fail execution rather than render an error as successful output.
-
-Do not publish commit-dependent messages from a normal template merely because `$dml.Insert` returned. The template message-bus API exists, but queue success is not a commit guarantee.
-
-Keep the older `InitWrite` / `ValidateWrite` entity contract and typed relation-write hooks distinct from the generic `EntityHooks[T,P]` phases. They are supported custom/generated-handler lifecycle surfaces with different timing. Do not silently apply both orchestration models to one handler.
+Use the custom-component skill only for an explicitly application-owned workflow.
+Its typed Go handler supplies `handler.Contract[I,O]` and receives scoped services.
+It must own any custom identity, validation and completion policy. The standard
+writer remains a declarative graph with generated pure Go and application hooks.
+Do not combine legacy row-writing callbacks with the generated entity lifecycle.
 
 ## 13. Output and error control
 
@@ -356,9 +328,9 @@ For scoped message-bus hook examples and the original async job/dry-run boundary
 
 ## 14. Regeneration and delivery checks
 
-Persisted dynamic shapes follow the current SQL projection for fields proven to be generated-owned. For example, changing `CAST(view.column AS int)` to `CAST(view.column AS *int)` changes the existing Go field to `*int`; reversing the CAST restores `int`. Removing a projected column removes its owned field and corresponding generated presence/accessor support. This applies to readers, Go writers, Velty writers, and generic mutation generation, including repeated generation with the same catalog.
+Persisted dynamic shapes follow the current SQL projection for fields proven to be generated-owned. For example, changing `CAST(view.column AS int)` to `CAST(view.column AS *int)` changes the existing Go field to `*int`; reversing the CAST restores `int`. Removing a projected column removes its owned field and corresponding generated presence/accessor support. This applies to readers and generated Go mutation components, including repeated generation with the same catalog.
 
-Retain the order of surviving fields, append new fields, and preserve unrelated authored fields, comments, methods and tags. The projection inventory and fingerprints establish edit/removal authority; an older incomplete inventory must not authorize deletion of unproven fields. Reject conflicts with authored changes explicitly. Regenerate handlers/templates/router artifacts under their ownership checks. Do not delete unknown files, remove manifests to bypass protection, or overwrite edited generated artifacts to make a run pass.
+Retain the order of surviving fields, append new fields, and preserve unrelated authored fields, comments, methods and tags. The projection inventory and fingerprints establish edit/removal authority; an older incomplete inventory must not authorize deletion of unproven fields. Reject conflicts with authored changes explicitly. Regenerate Go handlers and router artifacts under their ownership checks. Do not delete unknown files, remove manifests to bypass protection, or overwrite edited generated artifacts to make a run pass.
 
 SQL text may be maintained as stable named resources while Go tags remain stable. Register compiled `embed.FS` resources explicitly with the shared Bindly store, or use the configured package loader's resource discovery. Missing namespaces/resources are errors, not a reason to substitute unrelated inline SQL. Preserve old resource/shape ownership when views disappear or are renamed.
 
@@ -382,9 +354,8 @@ This section is a delivery warning, not a reduction of the target contract above
 
 | Area | Current checkout status |
 |---|---|
-| Go components, binding/resource tags, explicit custom handlers, generated Go/Velty writers | Implemented and exercised. Use the actual public authoring options. |
-| Generic original snapshots, recursive sync, typed hooks, invariant helpers, typed Previous evidence, sequencing/diff/reconcile/queue, output/finalization | Implemented as explicit generated policy/program products with SQLite proofs. Current transcription selects `HandlerGo` with `Go.Execution=GoExecutionMutation`; connected developer-tool activation must expose that choice. Relation-produced FK validation is integrated; direct recursive Velty DTO registration still has an unresolved native selector-expansion bug. |
-| Selecting a generic writer through ordinary transcription | Use the existing Go target plus `GoHandlerOptions{Execution: GoExecutionMutation}`; `mutation` is not a new handler target. Discover whether the connected developer server exposes this current transcription API. If not, report its tooling gap; do not ask application developers to patch the framework. |
+| High-level graph + operation `gen` to pure Go | Implementation delivered in an isolated review worktree; under review. Release CLI availability is not established. Discover connected support; missing `gen` remains a reported capability gap. |
+| Original snapshots, recursive sync, typed hooks, invariant helpers, typed Previous evidence, sequencing/diff/reconcile/queue, output/finalization | Required generated behavior. Verify generated Go fixtures and hook preservation on the connected build; parser or metadata acceptance alone does not establish it. |
 | Framework Go + DB validation, schema-to-validate tags, and DQL validation customization execution | Current framework Go/database validation and generated NOT NULL/customization paths have native/generated SQLite tests. Complete UNIQUE/reference discovery is not established; authored native UNIQUE tags remain explicit. Relation-produced FK deferral is restricted to captured parent INSERTs and final validation runs before Queue. Never substitute custom-hook-only validation or infer constraint absence from missing metadata. |
 | Native `OnInsert` / `OnUpdate` callbacks and native default generators inside the generic post-validation write path | Explicitly rejected by generic policy until moved to a safe earlier phase. Ordinary custom handlers retain native behavior. |
 | Generic primary-key-changing updates | Unsupported; existing identities are restored. Use explicitly custom orchestration for a different policy. |

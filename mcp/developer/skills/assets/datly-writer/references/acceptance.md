@@ -2,6 +2,18 @@
 
 Choose fixtures relevant to the component; this is a behavioral checklist, not permission to mutate production.
 
+## Generation contract
+
+Start from a reader-like DQL graph with no hand-authored body/current/output
+plumbing. Select each requested `gen` operation with pure Go output after
+capability discovery. Inspect the generated artifact, not just parsed DQL:
+authorized tuple-restricted Previous reads, auxiliary exclusion, Has/SyncPresence,
+DQL hook/invariant metadata and preserved application Go hook files. If `gen` is
+missing, retain the graph and hook contract and report that gap; translation
+success does not satisfy this check. For dates, change only End and verify Start
+backfill without Has, valid intervals, reversed dates, missing Previous evidence
+and new-row completeness.
+
 ## Shared contract
 
 - Correct public names/types, aliases resolved to the intended full package.

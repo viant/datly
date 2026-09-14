@@ -161,13 +161,3 @@ Request Data or narrow DML/Sequencer capabilities per invocation. Validate befor
 Custom orchestration must explicitly preserve sparse identity, validation and transaction semantics. It is not automatically protected by all generated writer phases.
 
 Use outcome-aware finalization for commit-dependent publication. Ordinary output Finalize(ctx) and Finalize(ctx,error) are separate supported contracts, not interchangeable signatures.
-
-## Velty alternative
-
-~~~~text
-$validator.Check($Input.Record)
-$dml.Update("records", $Input.Record);
-#set($Output.Data = $Input.Record)
-~~~~
-
-This requires supplied capabilities and a deliberately prepared sparse record. It is not a complete mixed insert/update policy, original-key classifier or transaction proof. Use the writer skill when a generated reusable mutation policy is intended.

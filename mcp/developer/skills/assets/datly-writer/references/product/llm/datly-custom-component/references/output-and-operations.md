@@ -13,8 +13,24 @@ not create another responseBuffer type or marshal/unmarshal already-shaped bytes
 into an entity. The existing HTTP writer detects the canonical Response before
 normal encoding and copies Body directly.
 
-The [SDK example and scope](references/product/datly/doc/custom-handlers.md#return-already-shaped-bytes)
-show what exists. The candidate includes authored generic output and static media/schema
+A Go function can construct a direct response with the public SDK:
+
+```go
+// Import "github.com/viant/xdatly/response".
+func CSV() response.Response {
+    return response.NewBuffered(
+        response.WithStatusCode(200),
+        response.WithHeader("Content-Type", "text/csv; charset=utf-8"),
+        response.WithBytes([]byte("id,name\n1,first\n")),
+    )
+}
+```
+
+`WithBuffer` accepts an existing `*bytes.Buffer`. Do not mutate backing bytes
+after transferring ownership. This constructs an SDK response; verify the linked
+component's declared output registration independently.
+
+The candidate includes authored generic output and static media/schema
 documentation. Use the documented response contract and validate the exact
 handler output shape; arbitrary interface output is not inferred from bytes.
 MCP must retain an explicit protocol content/result representation.
@@ -22,7 +38,9 @@ MCP must retain an explicit protocol content/result representation.
 Document arbitrary output using authored media types, status codes, headers,
 body schema/reference and examples. Never invoke a handler or inspect runtime
 payload bytes to infer a schema. Shared OpenAPI/MCP descriptions are a separate
-metadata concern.
+metadata concern. HTTP response documentation is carried in MCP metadata under
+`datly/httpResponses` and schema definitions under `datly/httpSchemas`; ordinary
+typed MCP output retains its structured-content contract.
 
 ## Conditional injector finalizer
 
@@ -54,7 +72,12 @@ before presenting an application recipe as runnable.
 
 ## Documentation and static files
 
-Current OpenAPI and MCP metadata consume declared types/descriptions. The shared
+Current OpenAPI and MCP metadata consume declared types/descriptions. Only exposed
+components enter public documents. Use `Info` or `OpenAPI` host configuration,
+never both. Document-route access is a separate policy from endpoint auth; the
+default aggregate route is `/v1/api/meta/openapi`, controlled by `Meta.OpenApiURI`.
+Named resources use explicit namespaces and must resolve before staging succeeds.
+Internal fields, Has markers and private error causes stay out of public schemas. The shared
 YAML table/column dictionary with ordered global then per-rule overrides,
 embedded/AFS resources, `Responses`, response schema resources and consistent
 metadata-only reload is present in the candidate. DQL settings
@@ -79,23 +102,23 @@ manual copies in generated assets.
 
 ## Services: use the actual host surface
 
-- [Linked configuration](references/product/datly/doc/configuration.md): `run`/`start` need
+- [Linked configuration](references/product/llm/datly-custom-component/references/project-build.md): `run`/`start` need
   compiled application exports. The stock binary does not execute arbitrary Go
   from source; `validate` is not generation/deployment. Current standalone
   services include CORS, APIKeys, warmup admin, OpenAPI startup exports and
   Observation/OTel. No invented watch command.
-- [Async](references/product/datly/doc/async.md): original DATLY_JOBS schema, AFS events,
+- [Async](references/mutation-messages.md#async-and-dry-run): original DATLY_JOBS schema, AFS events,
   explicit authorizer, native cache/metrics and known completion. Explicit HTTP async and canonical source/provenance replay are present in the
   candidate; standalone declarative async still needs authorization integration. Retain
   RUNNING/event state on pending/unknown completion; no blind retries.
-- [Cache/warmup](references/product/datly/doc/cache-and-warmup.md): AFS/Aerospike are
+- [Cache/warmup](references/product/llm/datly-reader/references/cache-and-operations.md): AFS/Aerospike are
   independent choices with explicit TTL. Warmup can use a dedicated connector
   while retaining the regular cache service. No threshold switching or handler
   invalidation architecture. Parent race acceptance passes AFS and live Docker Aerospike narrowing, regular/cube, groups, pagination and table-drop replay. Earlier author sandbox denial is not a capability blocker; no production-scale qualification is implied.
 - [Observability](references/product/datly/doc/observability.md): native capture plus an
   optional bounded application-owned OTel exporter, with no fabricated performance
   or capacity claims. Export failure is not business transaction failure.
-- [Mutation limits](references/product/datly/doc/mutations.md): stable IDs precede Queue;
+- [Mutation limits](references/writer-contract.md): stable IDs precede Queue;
   relation-produced FK deferral applies only to captured parent INSERTs, with final validation before Queue. Custom handlers must own
   their validation/sparse policy explicitly.
 
@@ -121,6 +144,7 @@ filters retain source binding. Composition masks omitted frame filters so they
 cannot inherit unrelated outer request values. Composition uses declared SQL output aliases or explicit authored mappings,
 not inferred Go/JSON name variants. Cache reuse must retain every warmed grouping
 dimension and may narrow measures. Source/URI reload publishes the complete report
-set atomically. API-key-only HTTP routes must disable both report MCP exposures.
+set atomically. API-key-only HTTP routes must set `reportMCPTool=false` and
+`reportComposeMCPTool=false`, or declare an MCP-compatible authorization policy.
 Verify actual configured HTTP and native MCP execution; metadata discovery alone
 is not runtime proof.

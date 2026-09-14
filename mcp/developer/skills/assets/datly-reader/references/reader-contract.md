@@ -123,14 +123,7 @@ allowed public fields, keep join keys available to the reader when needed, and
 hide selected-away internal keys from payloads. The parent source-membership
 guard is separate; do not duplicate or claim it until its review is merged.
 
-Bind values as SQL arguments; do not interpolate user input. Given declared typed inputs, criteria helpers include:
-
-```text
-$criteria.In("id", $IDs.Values)
-$criteria.CompositeIn("orders", $Keys.Values)
-```
-
-The compound form matches complete typed tuples. Independent tenant-IN and ID-IN clauses admit combinations the caller never requested. Custom predicate handlers should be request-specific and use normal dependency binding.
+Declare typed predicates and bind values as SQL arguments. Composite membership must match complete typed tuples. Independent tenant-IN and ID-IN clauses admit combinations the caller never requested. Custom predicate handlers should be request-specific and use normal dependency binding.
 
 ## Cache, codecs, and loaded fields
 
@@ -166,7 +159,7 @@ For persisted generated projections, a changed CAST updates the owned Go field
 (for example, `int` to `*int`), and removing a selected column removes its owned
 field and generated support. Retained fields keep their order; unrelated authored
 fields, methods, tags and comments stay protected. This regeneration behavior
-also applies to Go, Velty and generic mutation writers. Ownership inventory and
+also applies to generated Go mutation writers. Ownership inventory and
 fingerprints must prove that an existing field can be changed or removed; an
 unproven older field is not safe to delete. Preserve SQL NULL separately from a
 non-null zero when a pointer CAST is selected.

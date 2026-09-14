@@ -1,21 +1,22 @@
 (* Datly-specific grammar plus explicitly delegated host languages.
    Whitespace/comments are allowed between tokens unless a line directive says otherwise.
    Arity/type/uniqueness rules are in dql.md. *)
-document = {package_line | import_line | setting | declaration | executable} ;
+document = {package_line | import_line | setting | declaration | query | comment} ;
 package_line = "#package", "(", string, ")", line_end ;
 import_line = "#import", "(", string, ",", string, ")", line_end ;
-setting = ("#setting" | "#settings"), "(", assignment_prefix, setting_call, ")" ;
+setting = "#setting", "(", assignment_prefix, setting_call, ")" ;
 assignment_prefix = "$_", "=" ;
 setting_call = "$", setting_name, arguments, {".", cache_option, arguments} ;
-setting_name = "route" | "api_key" | "connector" | "useTemplate"
+setting_name = "route" | "api_key" | "connector"
  | "input_type" | "output_type" | "dest" | "input_dest" | "output_dest"
  | "router_dest" | "meta" | "mcp" | "report" | "cube" | "cubeCompose"
  | "cache" | "cache_warmup" | "marshal" | "unmarshal" | "format"
  | "date_format" | "case_format" | "ignoreEmptyQueryParameters"
- | "output_exclude" | "output_omit_empty" | "output_title" | "const" ;
+ | "output_exclude" | "output_omit_empty" | "output_title" | "const"
+ | "DocGlobalURLs" | "DocURLs" | "DocURL" | "DocBaseURL"
+ | "static_resource" | "static_content" | "mcp_folder" ;
 cache_option = "WithProvider" | "WithLocation" | "WithTimeToLiveMs" ;
-cube_set = "#set", "(", assignment_prefix, "$", ("cube" | "cubeCompose"), arguments, ")" ;
-declaration = ("#define" | "#set"), "(", assignment_prefix, "$", parameter_name,
+declaration = "#define", "(", assignment_prefix, "$", parameter_name,
  [type_annotation], [binding], {declaration_option}, [declaration_query], ")" ;
 type_annotation = "<", ("?" | go_type), [",", go_type], ">" ;
 binding = "(", provider_kind, "/", location, ")" ;
@@ -35,8 +36,7 @@ option_name = "Required" | "Optional" | "WithType" | "WithTag" | "Tag"
 declaration_query = "/*", declaration_sql, "*/" ;
 declaration_sql = sql_query | structql_query ;
 structql_query = ? StructQL SELECT over a declared Go data path ? ;
-executable = cube_set | sql_statement, [";"] | template_statement | comment ;
-sql_statement = sql_query | sql_mutation ;
+query = sql_query, [";"] ;
 sql_query = [with_clause], select_core, {set_operation, select_core},
  [order_clause], [window_clause], [limit_clause], [offset_clause] ;
 with_clause = "WITH", ["RECURSIVE"], cte, {",", cte} ;
@@ -66,8 +66,7 @@ expression_list = sql_expression, {",", sql_expression} ;
 identifier_list = sql_identifier, {",", sql_identifier} ;
 sql_expression = ? SQLparser/dialect expression: literals, identifiers, bound parameters,
  operators, predicates, CASE, functions, CAST, windows and subqueries;
- supported template fragments are parsed by Velty and emitted values are bound ? ;
-sql_mutation = ? backend INSERT, UPDATE, DELETE or supported executable SQL ? ;
+ declared input values and fixed query-context operators preserve bound arguments ? ;
 view_control = control_name, "(", identifier, {",", control_argument}, ")" ;
 control_name = "use_connector" | "use_cache" | "cache_warmup" | "order_by"
  | "set_limit" | "allow_nulls" | "groupable" | "grouping_enabled"
@@ -81,34 +80,21 @@ column_ref = identifier, ".", sql_identifier ;
 embedded_sql = "$", "{embed:", resource_reference, "}" ;
 resource_reference = ? fs resource path, optionally namespace:path ? ;
 bound_parameter = ":", identifier, {".", identifier} ;
-template_statement = template_assignment | template_if | template_foreach
- | template_for | "#evaluate", "(", template_expression, ")" | "#break" | template_value ;
-template_assignment = "#set", "(", template_selector, "=", template_expression, ")" ;
-template_if = "#if", "(", template_expression, ")", {template_content},
- {"#elseif", "(", template_expression, ")", {template_content}},
- ["#else", {template_content}], "#end" ;
-template_foreach = "#foreach", "(", template_selector, "in",
- template_expression, ")", {template_content}, "#end" ;
-template_for = "#for", "(", template_selector, "=", template_expression, ";",
- template_expression, ";", template_selector, ("++" | "--"), ")",
- {template_content}, "#end" ;
-template_content = template_statement | sql_statement | ? literal template text ? ;
-template_value = template_selector | "$", "{", template_expression, "}" ;
-template_selector = "$", identifier, {".", identifier | "[", template_expression, "]"
- | "(", [template_expression, {",", template_expression}], ")"} ;
-template_expression = ? Velty expression grammar and registered method signatures ? ;
+input_reference = "$", identifier, {".", identifier} ;
+query_context = ? fixed View pagination references and CubeSQL frame references ? ;
+declaration_value = input_reference | ? supported declarative provider/activation value ? ;
 go_type = ? Go type expression using declared package aliases: named type, pointer,
  slice, array, map, struct, interface, function/channel or generic instantiation;
  component suitability is a semantic check ? ;
 arguments = "(", [argument, {",", argument}], ")" ;
-argument = string | integer | boolean | go_type | template_expression ;
+argument = string | integer | boolean | go_type | declaration_value ;
 parameter_name = letter, {letter | digit | "_"} ;
 identifier = (letter | "_"), {letter | digit | "_"} ;
 sql_identifier = identifier, {".", identifier} | ? dialect-quoted identifier ? ;
 integer = ["-"], digit, {digit} ;
 boolean = "true" | "false" ;
 string = ? balanced single- or double-quoted DQL argument ? ;
-comment = ? SQL/Velty line or balanced block comment ? ;
+comment = ? SQL line or balanced block comment ? ;
 letter = ? ASCII A-Z or a-z ? ;
 digit = ? ASCII 0-9 ? ;
 line_end = ? newline or end of input ? ;

@@ -84,7 +84,6 @@ querySelector:"view=Records" (or querySelector:"Records") attaches a supported F
 | desc:"...", example:"..." | documentation |
 | groupable:"true" | grouping capability |
 | codec:"name,...args..." | registered typed conversion |
-| velty:"names=NAME|Name" | explicit template aliases |
 | validate:"..." | declared validation rules |
 | invariant:"GroupName" | membership in a cohesive validation/backfill group |
 | setMarker:"true" | internal presence marker holder |
@@ -270,10 +269,7 @@ error. Never interpolate claim strings into SQL. Missing/invalid/expired tokens
 and predicate denial must stop protected SQL. Authorization lookups are distinct
 from the protected business query.
 
-A predicate template's value scope is `FilterValue`; if attached to the JWT
-input, it can address that value's claims. Do not assume an unrelated template
-has a global `$JWT` variable or gains access to all component inputs. Typed Go
-predicates use the explicit `kind=input` field above.
+Typed Go predicates use the explicit `kind=input` field above. Claims are available only through that declared input; unrelated parameters never acquire ambient JWT authority.
 
 Acceptance should verify valid UserID/Subject filtering, wrong signature,
 expiry, missing credential, denied business identity, and zero protected-table

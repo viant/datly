@@ -6,7 +6,7 @@ For current enablement and pending integration boundaries, consult [output-and-o
 
 Use a custom component for business orchestration, external integrations, specialized transformations, or an explicitly application-owned workflow. A custom component still has typed input/output, parameter bindings, dependencies, validation and exposure. It does not require a parallel DAO/controller layer.
 
-Choose Go when behavior benefits from typed services and normal Go methods/tests. Choose Velty for a supported data-oriented template workflow. Generated readers/writers remain the simpler choice when they already express the task. Never downgrade a requested generated writer to custom code without saying why.
+Use Go for typed services and normal Go methods/tests. Generated readers/writers remain the simpler choice when they already express the task. Never downgrade a requested generated writer to custom code without saying why.
 
 ## Go workflow
 

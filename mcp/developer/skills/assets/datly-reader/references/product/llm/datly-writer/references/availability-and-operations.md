@@ -7,14 +7,14 @@ and the explicit [JWT pattern](references/product/llm/datly-writer/references/ta
 as the authored baseline. Required behavior is not automatically available in
 every connected build.
 
-## Select the current generated policy
+## Select high-level generation
 
-Current transcription supports `HandlerGo` with
-`GoHandlerOptions{Execution: GoExecutionMutation}`. The handler targets remain
-none/Go/Velty; do not invent a separate mutation target. Provide the authored
-body/output/Current graph and actual operation. See
-[the exact API fragment](references/product/datly/doc/authoring.md#select-a-handler-product-programmatically).
-Developer MCP exposure may be narrower than this embedding API, so discover it.
+Use a reader-like DQL graph, auxiliary tables in parentheses, DQL entity hooks
+and invariant tags, and explicit `gen` operation with pure Go output. The
+implementation is delivered in an isolated review worktree and is under review;
+release CLI availability is not established. Discover the connected capability
+using [developer-mcp.md](references/product/llm/datly-writer/references/developer-mcp.md). Missing `gen` is a reported
+gap, not a reason to author body/output/Current plumbing or use translation.
 
 ## Stable IDs and relation-produced validation
 
@@ -23,10 +23,9 @@ insert/update classification or original presence. Pending supplied IDs must be
 visible to sequencing. Complete original tuples determine identity; do not match
 Previous by a prefix, current zero values or child position.
 
-Relation-produced validation is pending at the current checkpoint. The supplied
-normal/self-relation acceptance cases fail NOT NULL for an absent child FK before
-custom validation, sequencing or Queue. Local sequence producers and a native
-reference adapter are not proof of successful parent/child production.
+Verify relation-produced validation on the connected build with normal, self and
+composite parent/child cases. Metadata acceptance or local sequence support alone
+does not prove that generated children receive valid foreign keys before Queue.
 
 Preserve the required contract: only an originally absent field on an exact
 captured authorized INSERT edge may await production, with verified parent INSERT,
@@ -34,7 +33,7 @@ matching native target/columns/values, same transaction and correct queue order.
 Supplied nil/zero, UPDATE, unrelated roots or same-Go-type roles must not inherit
 that permission. Final Go/NULL/UNIQUE/reference checks see reconciled values before
 Queue. Do not disable database FK checks, flush early or broaden deferral to make
-a fixture pass. Use [mutation status](references/product/datly/doc/mutations.md).
+a fixture pass. Use [mutation status](references/product/llm/datly-writer/references/writer-contract.md).
 
 Schema metadata absence means unknown. NOT NULL support does not establish full
 UNIQUE/reference discovery. Authored native UNIQUE tags remain the explicit
@@ -56,13 +55,13 @@ Current/Previous read provenance, and native differ/output integration. Standalo
 declarative async still requires an explicit authorization integration. Pending or
 unknown completion retains RUNNING/event state; never advise blind replay.
 
-Read [async](references/product/datly/doc/async.md) for enablement, defaults, publication
+Read [async](references/product/llm/datly-writer/references/mutation-messages.md#async-and-dry-run) for enablement, defaults, publication
 failure, terminal write-back failure and shutdown. Reader dry run is not a mutation
 or external-side-effect sandbox.
 
 ## Supporting services and publication
 
-- [Configuration](references/product/datly/doc/configuration.md): linked Go factories and
+- [Configuration](references/product/llm/datly-writer/references/project-build.md): linked Go factories and
   contracts must be compiled into the executable. Preserve exact accepted CLI
   flags. Current standalone service configuration includes CORS, APIKeys,
   warmup admin, OpenAPI startup exports and Observation/OTel. Parent custom-build
@@ -70,7 +69,7 @@ or external-side-effect sandbox.
 - [Observability](references/product/datly/doc/observability.md): native capture exists;
   optional OTel has an application-owned bounded exporter. No performance numbers
   or zero-cost claim without workload measurements.
-- [Cache/warmup](references/product/datly/doc/cache-and-warmup.md): independent AFS/Aerospike
+- [Cache/warmup](references/cache-and-operations.md): independent AFS/Aerospike
   choice and explicit TTL; generated mutations do not own read-cache invalidation.
   Parent race acceptance passes AFS and live Docker Aerospike narrowing, regular/cube, groups, pagination and table-drop replay. Earlier author sandbox denial is not a capability blocker; no production-scale qualification is implied.
 - [API documentation](references/product/datly/doc/api-documentation.md): preserve explicit
@@ -78,7 +77,7 @@ or external-side-effect sandbox.
   publication to OpenAPI/MCP is present in the candidate, pending release integration. Settings
   are `$DocGlobalURLs(...)`, `$DocURL(...)`, `$DocURLs(...)` and `$DocBaseURL(...)`;
   YAML sections are `Columns`, `Filter`, `Parameters`, `Paths` and `Responses`.
-- [Custom output/finalizers](references/product/datly/doc/custom-handlers.md): candidate SDK
+- [Custom output/finalizers](references/product/llm/datly-custom-component/references/output-and-operations.md): candidate SDK
   direct HTTP bytes have independently authored media/schema documentation. Current
   SDK/runtime injector finalizer uses `handler.InjectorFinalizer`,
   `handler.InjectorLookup`, `kind=caller_output` child inputs and destination
@@ -94,7 +93,7 @@ inputs and the pinned release dependency graph.
 
 Reader/writer regeneration must propagate CAST pointer/value changes, generated
 column removal and `AND 1=1` Many-to-One and One-to-Many holder changes while
-preserving authored hooks, tags, methods and order. See [generation](references/product/datly/doc/authoring.md).
+preserving authored hooks, tags, methods and order. See [generation](references/product/llm/datly-writer/references/developer-mcp.md#operation-based-generation-to-pure-go).
 The release copy enforces exact names, user-defined aliases only,
 and duplicate output-column errors. Never invent an alias to repair a collision.
 

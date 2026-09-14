@@ -1,11 +1,3 @@
-# Static content from an explicit resource root
-
-[All guides](references/product/datly/doc/README.md) · [Configuration](references/product/datly/doc/configuration.md)
-
-The candidate maps local or embedded resource folders to HTTP prefixes through
-immutable Manager generations. External content uses the existing AFS owner.
-This feature is integrated in the local `v1` release copy; final release regression remains required.
-
 ## Declare content
 
 ```sql
@@ -48,13 +40,5 @@ The programmatic root is configured by trusted application bootstrap. Existing H
 precedence, API keys, CORS, GET/HEAD, ranges and errors. Failed snapshot/reload
 leaves the prior generation serving. File edits do not mutate published bytes.
 
-## Deployment and verification
 
-Generated static resource tests serve nested/binary/hidden files after removing
-source and generated asset directories. This proves those generated embedded
-assets; [source-backed project builds](references/product/datly/doc/project-build.md#deployment-contract)
-still need their metadata/source deployment inputs.
-
-Verify index/media behavior, GET/HEAD/ranges, missing files, escaped paths,
-symlinks, policy denial, route collisions and failed/successful reload. Test the
-actual AFS provider and credentials before claiming remote-content deployment.
+> Packaging boundary: Exact maintained author-facing section: includes declarative configuration and behavior; excludes repository navigation, implementation/test evidence and unrelated authoring workflows. Other feature contracts remain in the canonical skill references.
