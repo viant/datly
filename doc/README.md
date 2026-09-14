@@ -9,6 +9,7 @@ provide a runnable feature switch.
 
 | Your task | Read |
 | --- | --- |
+| Understand DAO/service responsibilities, components, DQL, StructQL and generated code | [Programming model](programming-model.md) |
 | Run the SQLite demo and understand its contract | [Quickstart](quickstart.md) |
 | Understand the execution model and ownership | [Architecture](architecture.md) |
 | Write DQL declarations, parameters, JOIN controls and typed CASTs | [DQL syntax and grammar](dql.md) · [EBNF](dql.ebnf) |
