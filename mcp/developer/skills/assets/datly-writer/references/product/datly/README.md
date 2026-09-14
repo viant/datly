@@ -12,7 +12,7 @@ orchestrate reads and mutations with scoped dependency injection, and expose
 the same application contracts through HTTP APIs and MCP tools for AI agents.
 
 Build rich relational views, transactional workflows and composable analytical
-cubes. Extend their behavior with Go and Velty handlers, row-reading hooks,
+cubes. Extend their behavior with Go handlers, row-reading hooks,
 typed mutation hooks and lifecycle finalizers. Inputs, authorization predicates,
 validation and invocation capabilities flow through a shared execution model.
 
@@ -31,7 +31,7 @@ and API delivery into one programmable platform.
 
 A conventional application coordinates controllers, services, DAOs, SQL and DTOs.
 Datly makes the data contract and execution plan explicit, then generates the
-selected component artifacts while keeping business behavior in Go/Velty and
+selected component artifacts while keeping business behavior in Go and
 scoped services.
 
 ```mermaid
@@ -56,7 +56,7 @@ flowchart LR
 | --- | --- | --- |
 | Data contract | SQL, DTOs and request mapping maintained across layers | DQL/schema/type authority drives typed generation and regeneration |
 | Reads | DAO mapping plus service-side relationship assembly | Declared views, typed data graphs and per-view query controls |
-| Writes | Application-managed comparison and persistence orchestration | Explicit generated mutation policy or custom Go/Velty orchestration |
+| Writes | Application-managed comparison and persistence orchestration | Explicit generated mutation policy or custom Go orchestration |
 | Business behavior | Services and callbacks | Reusable services, scoped DI and typed hooks at defined phases |
 | Database changes | Manually reconcile query and DTO changes | Re-transcribe, inspect protected generated diffs, rebuild and publish |
 | Delivery | Controller-specific endpoint integration | Shared component contract exposed through HTTP and MCP |
@@ -94,7 +94,7 @@ Use it to:
 No Datly 1.0 release tag or published CLI version is claimed. The Go Reference
 badge links to the public module index; it may show an earlier published version.
 [Status](references/product/datly/doc/status.md) records integrated behavior and remaining release gates,
-including separate DQL destination and native recursive Velty work.
+including separate DQL destination and native dependency integration.
 
 ## Try a typed API locally
 
@@ -157,7 +157,7 @@ validation must repeat these paths against the selected published dependencies.
 | --- | --- | --- |
 | Go shapes and tags | Existing domain types and compiled application hooks | [Readers](references/product/datly/doc/readers.md), [custom handlers](references/product/datly/doc/custom-handlers.md) |
 | DQL with imported Go types | SQL-centered authoring with reusable named contracts | [Source and generation](references/product/datly/doc/authoring.md) |
-| DQL with generated shapes and Go/Velty handlers | A declared query or write graph that should produce typed artifacts | [Generation](references/product/datly/doc/authoring.md), [mutations](references/product/datly/doc/mutations.md) |
+| DQL with generated shapes and Go handlers | A declared query or write graph that should produce typed artifacts | [Generation](references/product/datly/doc/authoring.md), [mutations](references/product/datly/doc/mutations.md) |
 | Embedded application manager | Application-owned service wiring and atomic reload | [Architecture](references/product/datly/doc/architecture.md), [configuration](references/product/datly/doc/configuration.md) |
 
 A component has typed input/output contracts and registered behavior. A view is
@@ -170,7 +170,7 @@ tree. [Learn the model](references/product/datly/doc/architecture.md).
 | Build an API | Operate and integrate |
 | --- | --- |
 | [Quickstart](references/product/datly/doc/quickstart.md) | [Configuration and linked CLI](references/product/datly/doc/configuration.md) |
-| [DQL, types, Go/Velty generation and regeneration](references/product/datly/doc/authoring.md) | [AFS/Aerospike caching and warmup](references/product/datly/doc/cache-and-warmup.md) |
+| [DQL, types, Go generation and regeneration](references/product/datly/doc/authoring.md) | [AFS/Aerospike caching and warmup](references/product/datly/doc/cache-and-warmup.md) |
 | [Readers, relations, projections and hooks](references/product/datly/doc/readers.md) | [Async jobs, storage events and completion](references/product/datly/doc/async.md) |
 | [Cubes, reports and composition](references/product/datly/doc/reports.md) | [Native observability and optional OTel](references/product/datly/doc/observability.md) |
 | [Mutations, validation, IDs and foreign keys](references/product/datly/doc/mutations.md) | [HTTP and MCP](references/product/datly/doc/protocols.md) |

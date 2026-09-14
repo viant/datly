@@ -24,13 +24,16 @@ import (
 // ArtifactInput is resolved bootstrap input. Authored DQL parsing belongs to
 // transcribe; this stage only compiles runtime plans from spec and Go types.
 type ArtifactInput struct {
-	Documentation   xdocs.Source
-	Component       *spec.Component
-	InputType       reflect.Type
-	OutputType      reflect.Type
-	CodecFactory    xcodec.Factory
-	Types           *typecatalog.Catalog
-	DirectViewField string
+	Documentation xdocs.Source
+	Component     *spec.Component
+	InputType     reflect.Type
+	OutputType    reflect.Type
+	CodecFactory  xcodec.Factory
+	Types         *typecatalog.Catalog
+	// HandlerOwnedOutput preserves the output type/schema without importing its
+	// reader declarations into a component whose handler produces that output.
+	HandlerOwnedOutput bool
+	DirectViewField    string
 	// Resources is the same Bindly store supplied to runtime composition. SQL,
 	// reader, and codec compilers consume it only through the fs.FS contract.
 	Resources *resource.Store
@@ -66,8 +69,12 @@ type artifactCompiler struct {
 
 func (c *artifactCompiler) compile() (*Artifact, error) {
 	input := c.input
+	outputDescriptor := linkedContractType(input.OutputType)
+	if input.HandlerOwnedOutput {
+		outputDescriptor = nil
+	}
 	component, err := (ContractResolver{
-		Component: input.Component, InputType: linkedContractType(input.InputType), OutputType: linkedContractType(input.OutputType),
+		Component: input.Component, InputType: linkedContractType(input.InputType), OutputType: outputDescriptor,
 	}).Resolve()
 	if err != nil {
 		return nil, err

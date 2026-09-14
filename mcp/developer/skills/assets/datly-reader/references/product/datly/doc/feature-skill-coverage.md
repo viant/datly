@@ -30,3 +30,8 @@ are delivered separately from public product prose.
 | datly init/build automatic traversal | [project-build.md](references/product/datly/doc/project-build.md) | project-build.md | Parent real-TCP read/mutation and add/remove rebuild pass; no user registration list |
 | Source-backed deployment and release pins | [project-build.md](references/product/datly/doc/project-build.md) | project-build.md | Published SDK/native graph, local Datly mapping; source/resource runtime needs |
 | Reproducible canonical skill bundle | [authoring-skills.md](references/product/datly/doc/authoring-skills.md) | developer-mcp.md | Exact packaging.json imports, root-relative links, generated-only embedded copies |
+
+Configured standalone report discovery now uses the canonical report compiler and
+registration path. See [reports](references/product/datly/doc/reports.md) for linked contract requirements,
+source authorization, explicit aliases, grouping-safe cache reuse, and bounded
+HTTP/native MCP evidence.

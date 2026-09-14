@@ -40,7 +40,7 @@ See the implemented [reader hook dispatch](references/product/datly/sql/reader/h
 
 ## Generated writer flow
 
-This is the optional generated mutation policy. Custom Go/Velty handlers can
+This is the optional generated mutation policy. Custom Go handlers can
 compose the same capabilities with explicitly authored orchestration; the HTTP
 verb alone does not install this policy.
 

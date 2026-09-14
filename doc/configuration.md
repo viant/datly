@@ -106,8 +106,9 @@ services remain the external owner's responsibility.
 
 ## Configuration that is not available here yet
 
-The candidate host rejects `RouteURL` and `PluginsURL` deployment and report
-derivation. Do not copy unsupported fields from original Datly and assume they
+The candidate host rejects `RouteURL` and `PluginsURL` deployment.
+Selected linked packages support [report/cube and composition](reports.md)
+derivation through the same configured publication as ordinary readers. Do not copy unsupported fields from original Datly and assume they
 took effect.
 
 Programmatic and explicitly wired HTTP [async](async.md) are present in the

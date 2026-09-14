@@ -159,6 +159,12 @@ func (b scopeBinder) Bind(ctx context.Context, target any) error {
 }
 
 func (b scopeBinder) Lookup(ctx context.Context, key xhandler.ValueKey) (any, bool, error) {
+	// An independent input view is not part of the component's output graph.
+	// Source-root projections (including report selectors) must not be applied
+	// to its unrelated columns. Its own compiled selector bindings still apply.
+	if key == xhandler.SelectorsKey {
+		return nil, false, nil
+	}
 	if b.scope == nil {
 		return nil, false, fmt.Errorf("binding scope is required")
 	}

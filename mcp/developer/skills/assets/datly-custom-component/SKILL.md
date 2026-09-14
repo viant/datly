@@ -18,6 +18,11 @@ authored names, explicit user-defined aliases and duplicate output-name errors.
 Do not infer spelling variations. Check the connected build and the product
 status guide for pending DQL destination and native recursive Velty work.
 
+Configured standalone/custom builds can expose report-enabled groupable readers
+and opt-in cube composition from selected linked packages. Preserve source auth,
+explicit SQL aliases and every warmed grouping dimension when reusing cube caches;
+see [reports](references/product/datly/doc/reports.md) for requirements and tests.
+
 ## Read what the task needs
 
 - For project init/build and deployment, read [project-build.md](references/project-build.md). Custom builds discover/link internally; no mandatory user init/Register/import list.

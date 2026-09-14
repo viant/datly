@@ -122,7 +122,14 @@ func (c *ProjectCompiler) CompileArtifacts(inputs []bootstrap.ArtifactInput) (*C
 		result.artifacts = append(result.artifacts, &ComponentArtifact{
 			artifact: artifact, inputType: input.InputType, outputType: input.OutputType,
 		})
-		sources = append(sources, Source{Component: artifact.Component, Input: artifact.Input, OutputType: input.OutputType})
+		// Derivation must inspect the source already resolved by the reader
+		// compiler (including SQL URI/embed resources), not reopen resources or
+		// change the base artifact's authored SQL/cache metadata.
+		sourceComponent := artifact.Component.Clone()
+		if sourceComponent.RootView != nil && artifact.Reader != nil && artifact.Reader.Root != nil {
+			sourceComponent.RootView.Source = artifact.Reader.Root.View.Spec.Source.Clone()
+		}
+		sources = append(sources, Source{Component: sourceComponent, Input: artifact.Input, OutputType: input.OutputType})
 		sourceInputs[artifact.Component.Key.String()] = input
 	}
 	project, err := NewProjectCompiler(ProjectConfig{Types: types, Authority: c.config.Authority}).Compile(sources)
@@ -135,7 +142,7 @@ func (c *ProjectCompiler) CompileArtifacts(inputs []bootstrap.ArtifactInput) (*C
 			return nil, fmt.Errorf("report source input is unavailable for %s", derived.Plan.Target().Component.String())
 		}
 		artifact, buildErr := builder.Build(bootstrap.ArtifactInput{
-			Component: derived.Component, InputType: derived.InputType, OutputType: derived.OutputType,
+			Component: derived.Component, InputType: derived.InputType, OutputType: derived.OutputType, HandlerOwnedOutput: true,
 			CodecFactory: sourceInput.CodecFactory, Types: types, Resources: sourceInput.Resources,
 		})
 		if buildErr != nil {

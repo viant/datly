@@ -111,3 +111,16 @@ Public selectors use exact authored names: no inferred spelling variants, only
 user-defined aliases, and duplicate output column names are errors. See
 [developer MCP](references/product/llm/datly-custom-component/references/developer-mcp.md) for declared Final SEP-2640 skills,
 list/get/read consistency and reproducible canonical bundle generation.
+
+## Configured reports
+
+Selected linked packages can enable `report=true` on groupable GET readers and
+`reportCompose=true` for composition. Keep the source reader and its declared
+JWT/non-query inputs. Explicit cube filters override source values; omitted cube
+filters retain source binding. Composition masks omitted frame filters so they
+cannot inherit unrelated outer request values. Composition uses declared SQL output aliases or explicit authored mappings,
+not inferred Go/JSON name variants. Cache reuse must retain every warmed grouping
+dimension and may narrow measures. Source/URI reload publishes the complete report
+set atomically. API-key-only HTTP routes must disable both report MCP exposures.
+Verify actual configured HTTP and native MCP execution; metadata discovery alone
+is not runtime proof.

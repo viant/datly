@@ -4,9 +4,10 @@
 
 This guide follows a writer from authored DQL through generated code, request
 binding, database comparison, hooks, transactions and response delivery. The
-optional generated mutation policy is one writer execution product. Direct Go
-and Velty writers use the same invocation capabilities with different authored
-orchestration. Reader generation is a separate choice; Datly does not automatically
+generated mutation policy emits pure Go code. Its typed handler, capture,
+validation, sequencing and DML support execute as Go. Direct generated Go and
+authored Go handlers use the same invocation capabilities with explicitly
+selected orchestration. Reader generation is a separate choice; Datly does not automatically
 generate a combined reader/writer component in one struct.
 
 ## Contents
@@ -36,7 +37,6 @@ Choose the target and write operation through transcription options:
 | --- | --- | --- |
 | Generated Go mutation policy | `HandlerGo` + `GoExecutionMutation` | Typed EntityHooks, invariants and outcome finalization |
 | Generated direct Go writer | `HandlerGo` + `GoExecutionDirect` | Generated orchestration, row InitWrite/ValidateWrite, input/output lifecycle |
-| Generated Velty writer | `HandlerVelty` | Compiled template and supplied scoped capabilities |
 | Existing authored handler | Preserve authored/package handler authority | Application-defined orchestration through the same engine |
 
 `WritePost`, `WritePut` and `WritePatch` are explicit operation choices. A sparse
@@ -60,38 +60,26 @@ flowchart LR
     O --> I[ITEMS - writable children, many]
 ```
 
-The write DQL declares a sparse body, derives its keys with StructQL, loads
-Previous data from SQL, and marks the auxiliary source explicitly:
+The high-level PATCH generation input describes the graph and its field policies.
+Body contracts, key projections and Current-state declarations belong to the
+**generated output**, not to the minimum hand-authored input:
 
 ```sql
 #setting($_ = $route('/orders', 'PATCH'))
-#define($_ = $Orders<[]*WriteOrdersView>(body/Data).Cardinality('Many').Required())
-#define($_ = $OrderKeys<?>(param/Orders) /*
-? SELECT ARRAY_AGG(Id) AS IDs FROM `/` LIMIT 1
-*/)
-#define($_ = $CurrentOrders<?>(view/CurrentOrders).Cardinality('Many') /*
-SELECT ID, KIND_ID, NAME, WINDOW_START, WINDOW_END, NOTE FROM ORDERS o
-WHERE o.ID IN (#foreach($id in $OrderKeys.IDs)$id#if($foreach.HasNext),#end#end)
-*/)
-#define($_ = $CurrentItems<?>(view/CurrentItems).Cardinality('Many') /*
-SELECT ID, ORDER_ID, SKU, QUANTITY FROM ITEMS i
-WHERE i.ORDER_ID IN (#foreach($id in $OrderKeys.IDs)$id#if($foreach.HasNext),#end#end)
-*/)
-#define($_ = $Data<[]*WriteOrdersView>(output/body))
-#define($_ = $ChangedCount<int>(output/changedCount).Output())
+#setting($_ = $connector('main'))
 SELECT o.*, Items.*, Kind.*,
        tag(o.WINDOW_START, 'invariant:"DeliveryWindow"'),
        tag(o.WINDOW_END, 'invariant:"DeliveryWindow"')
 FROM ORDERS o
 LEFT JOIN ITEMS Items ON Items.ORDER_ID = o.ID
 LEFT JOIN (ORDER_KINDS) Kind ON Kind.ID = o.KIND_ID AND 1=1
-
 ```
 
-`OrderKeys` operates on the typed Orders input graph. `CurrentOrders` and
-`CurrentItems` query the database. These are different data sources and different
-responsibilities. The generated policy's Current bindings must associate each
-read with the corresponding writable view's canonical identity.
+The database metadata supplies the real column types and keys. Use a start/end
+date pair for WINDOW_START/WINDOW_END. The generator derives the request graph,
+Previous reads and typed Go write support for the selected PATCH operation.
+StructQL key projection is generated plumbing; the application should not need
+to write a template loop to load Current rows.
 
 `LEFT JOIN (ORDER_KINDS)` is auxiliary/nonmutating source syntax.
 `AND 1=1` marks that joined relation as a single holder while keeping its real
@@ -100,34 +88,21 @@ table is writable. Foreign-key constraints still belong to the database.
 
 ## Transcribe and inspect generated code
 
-Use the public `transcribe.Source` with its SQL text, scope, type catalog and
-column refiner. The refiner supplies metadata from the configured database.
-The following is the writer-selection part of a transcription request; `source`,
-`projectRoot` and `itemsIdentity` are resolved application values:
+Original Datly separates `gen` from `translate`. The `gen` PATCH workflow
+starts from the graph description, constructs the write contract and logic, then
+passes its generated result through compilation/translation. Translating an
+already-complete writer declaration is a lower-level operation.
 
-```go
-result, err := transcribe.NewCompiler().Transcribe(ctx, transcribe.Request{
-    Source: source,
-    Destination: projectRoot,
-    Options: transcribe.Options{Handler: transcribe.HandlerOptions{
-        Target: transcribe.HandlerGo,
-        Operation: transcribe.WritePatch,
-        Current: "CurrentOrders",
-        Currents: []transcribe.CurrentBinding{
-            {ViewIdentity: itemsIdentity, Param: "CurrentItems"},
-        },
-        Go: transcribe.GoHandlerOptions{Execution: transcribe.GoExecutionMutation},
-        Hooks: transcribe.HookOptions{Scaffold: true},
-    }},
-})
-```
+The v1 high-level `gen` command is being restored and verified against that
+workflow. Until it is ready, the existing `transcribe.Request` API must not be
+presented as an equivalent convenience command: it requires lower-level inputs.
+The step-by-step CLI walkthrough will use the verified generation path, with
+pure Go as its primary output.
 
-Import `github.com/viant/datly/transcribe`. Resolve `itemsIdentity` from the
-compiled relation's `Identity()`; do not guess it from a Go type or SQL alias.
-Inspect `result.Result.Files` and the generation plan before building the output.
-The current CLI's documented commands do not include a standalone `transcribe`
-command; use this public API or the developer MCP transcription tool exposed by
-the connected build. Do not invent CLI flags.
+After generation, inspect the returned plan/file list, add business behavior to
+the create-once Go hook file, build/link the component and run it. Do not create
+a combined reader/writer component or manually recreate generated matching and
+Current-state support.
 
 The generated writer contains more than a request struct:
 
@@ -170,7 +145,7 @@ its immutable Definition can be shared by the runtime.
 ### Generated mutation policy
 
 
-This is the optional generated mutation policy. Custom Go/Velty handlers can
+This is the optional generated mutation policy. Custom Go handlers can
 compose the same capabilities with explicitly authored orchestration; the HTTP
 verb alone does not install this policy.
 
@@ -205,7 +180,7 @@ The order is implemented by the [mutation adapter](references/product/datly/runt
 and [generated policy phases](references/product/datly/transcribe/handler/golang/mutation_program.go.txt).
 
 
-### Direct Go/Velty row writing hooks
+### Direct generated Go row writing hooks
 
 The direct generated row-writing path can call
 `InitWrite(context.Context) error` and `ValidateWrite(context.Context) error` on
@@ -483,6 +458,6 @@ Test the behavior the API promises:
 The implementation references are the [canonical engine](references/product/datly/runtime/handler/engine/engine.go.txt),
 [mutation adapter](references/product/datly/runtime/handler/mutation/adapter.go.txt),
 [generated program](references/product/datly/transcribe/handler/golang/mutation_program.go.txt) and
-[Go/Velty write-hook parity tests](references/product/datly/transcribe/write_hooks_parity_test.go.txt).
+[generated write-hook tests](references/product/datly/transcribe/write_hooks_parity_test.go.txt).
 Check [release status](references/product/datly/doc/status.md) for open integration gates; a grammar parse or
 successful build alone does not establish every runtime behavior.

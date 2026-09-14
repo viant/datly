@@ -68,3 +68,16 @@ for null, envelope and format-specific limitations.
 - [API documentation](references/product/datly/doc/api-documentation.md): `$DocGlobalURLs`, `$DocURL`, `$DocURLs`, `$DocBaseURL`; global then rule YAML, explicit annotation precedence and shared embedded OpenAPI/MCP schemas.
 - [Static content](references/product/datly/doc/static-content.md): `$static_resource('site','public')` or `$static_content('content-url','root')`, resource manifests, explicit filesystem authority and CORS.
 - [Developer MCP](references/product/llm/datly-reader/references/developer-mcp.md): seven authoring tools versus business tools, folder publication, declared Final SEP-2640 skills/list/get and canonical bundle generation.
+
+## Configured reports
+
+Selected linked packages can enable `report=true` on groupable GET readers and
+`reportCompose=true` for composition. Keep the source reader and its declared
+JWT/non-query inputs. Explicit cube filters override source values; omitted cube
+filters retain source binding. Composition masks omitted frame filters so they
+cannot inherit unrelated outer request values. Composition uses declared SQL output aliases or explicit authored mappings,
+not inferred Go/JSON name variants. Cache reuse must retain every warmed grouping
+dimension and may narrow measures. Source/URI reload publishes the complete report
+set atomically. API-key-only HTTP routes must disable both report MCP exposures.
+Verify actual configured HTTP and native MCP execution; metadata discovery alone
+is not runtime proof.

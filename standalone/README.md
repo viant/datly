@@ -21,6 +21,12 @@ private type dependencies and resource snapshots. DQL changes requiring new
 runtime contract types or generated handlers are rejected. An explicit linked
 `input_type` / `output_type` can retain authored contract authority in an overlay.
 
+Report-enabled groupable GET readers register their source, POST `/cube`, and
+opt-in `/cube/compose` endpoints in the same generation. Runtime MCP exposes the
+derived tools when enabled. [Report guidance](../doc/reports.md) covers linked
+contracts, SQL aliases, source authorization and cache grouping. URI/embed SQL
+resources are resolved by the reader compiler and reload atomically with reports.
+
 Example configuration, beside the local application's `go.mod`:
 
 ```json
@@ -76,8 +82,7 @@ there is no CLI file watcher or SIGHUP reload yet.
 Unsupported config fields fail instead of being ignored. Remaining original
 contracts include plugin build/load/checksum/ABI policy, RouteURL/ContentURL
 deployment, DQLBootstrap mode policies, watched dependencies, unlinked CLI application authorization, original logging policy,
-auth signer/provider/secret-to-environment options, extended metadata endpoints, and report
-derivation. [Configured async](ASYNC.md) starts existing application job services
+auth signer/provider/secret-to-environment options and extended metadata endpoints. [Configured async](ASYNC.md) starts existing application job services
 with an explicit linked `Options.Async.Authorize` policy. Without it, Jobs
 configuration fails closed; no permissive CLI default is installed.
 
@@ -90,3 +95,8 @@ source-to-Manager read/mutation, resource snapshots, DQL overlays, JWT, OpenAPI,
 CORS, MCP metadata, failed publication and shutdown retention. The real CLI TCP
 and process-signal tests remain mandatory; a sandbox that forbids binds cannot
 establish those claims.
+
+Configured report tests also prove native MCP over stdio, required non-query
+filters, independent view providers, JWT/API-key denial, and native AFS cache
+replay with all warmed grouping dimensions retained. They do not establish TCP
+listener acceptance in a sandbox that denies binds.

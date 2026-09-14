@@ -68,7 +68,12 @@ func (s *Session) Init() error {
 	if s.SQL == nil {
 		return fmt.Errorf("reader session SQL component is required")
 	}
-	source := s.Component.RootSource()
+	// Resources are resolved once in the compiled plan. The component retains
+	// authored URI/embed metadata and is not the executable source authority.
+	if s.Artifact.Root == nil || s.Artifact.Root.View == nil {
+		return fmt.Errorf("reader plan root view is required")
+	}
+	source := s.Artifact.Root.View.Spec.Source
 	if source == nil || (source.SQL == "" && source.Table == "") {
 		return fmt.Errorf("reader session root SQL or table is required")
 	}
