@@ -4,8 +4,7 @@ import (
 	"fmt"
 
 	"github.com/viant/bindly/locator"
-	dsql "github.com/viant/datly/sql"
-	viewprovider "github.com/viant/datly/sql/reader/provider"
+	"github.com/viant/datly/bootstrap"
 )
 
 // HasLinkedHandler reports whether bootstrap resolved an authored handler factory.
@@ -17,12 +16,9 @@ func (a *ComponentArtifact) HasLinkedHandler() bool {
 // NewViewProvider attaches SQL to compiled independent views without exposing
 // their plans or moving canonical input binding into the host.
 // Components without independent views return nil.
-func (a *ComponentArtifact) NewViewProvider(sql *dsql.SQLComponent) (locator.Provider, error) {
+func (a *ComponentArtifact) NewViewProvider(config bootstrap.ViewRuntimeConfig) (locator.Provider, error) {
 	if a == nil || a.artifact == nil {
 		return nil, fmt.Errorf("compiled component artifact is required")
 	}
-	if len(a.artifact.ViewDependencies) == 0 {
-		return nil, nil
-	}
-	return viewprovider.New(viewprovider.Config{Dependencies: a.artifact.ViewDependencies, Input: a.artifact.Input, SQL: sql})
+	return a.artifact.NewViewProvider(config)
 }

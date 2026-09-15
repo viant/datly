@@ -44,7 +44,7 @@ func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.
 
 func (c *sourceComponent) Configure(ctx context.Context, artifact *report.ComponentArtifact) (report.RuntimeCapabilities, error) {
 	result := report.RuntimeCapabilities{}
-	views, err := artifact.NewViewProvider(c.source.connections.SQL)
+	views, err := artifact.NewViewProvider(bootstrap.ViewRuntimeConfig{SQL: c.source.connections.SQL})
 	if err != nil {
 		return result, err
 	}
