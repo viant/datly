@@ -50,7 +50,7 @@ flowchart LR
         B --> E[Hand-maintained DTOs and mapping]
     end
     subgraph Datly[Datly application]
-        F[DQL plus schema and Go types] --> G[Transcription]
+        F[DQL plus schema and/or Go types] --> G[Transcription]
         G --> H[Generated reader OR writer component]
         I[HTTP or MCP] --> J[Binding and scoped DI]
         J --> H
@@ -212,4 +212,3 @@ Datly is licensed under the [Apache License 2.0](LICENSE). Preserve [NOTICE](NOT
 and the attribution files described in [third-party notices](THIRD_PARTY_NOTICES.md)
 when redistributing source, binaries or generated authoring bundles. The separate
 xdatly SDK and native dependencies retain their own licenses.
-
