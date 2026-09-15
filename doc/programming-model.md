@@ -59,12 +59,16 @@ DQL combines SQL with Datly-specific declarations. SQL selects data; DQL supplie
 route, binding, type, relationship and generation authority around it.
 
 ```sql
+#package('example.com/shop/orders/read')
 #setting($_ = $route('/orders', 'GET'))
 #setting($_ = $connector('main'))
 #define($_ = $CustomerID<int>(query/customerId).Required())
-SELECT o.ID, o.CUSTOMER_ID, o.TOTAL
-FROM ORDERS o
-WHERE o.CUSTOMER_ID = :CustomerID
+SELECT orders.*
+FROM (
+    SELECT o.ID, o.CUSTOMER_ID, o.TOTAL
+    FROM ORDERS o
+    WHERE o.CUSTOMER_ID = :CustomerID
+) orders
 ```
 
 This reader fragment declares an input binding and a parameterized query. It
@@ -83,7 +87,7 @@ Reader and writer generation must be selected and explained separately:
 
 ```mermaid
 flowchart TD
-    A[DQL plus database metadata plus linked Go types] --> B[Compile canonical component and typed plan]
+    A[DQL plus schema and/or Go types] --> B[Compile canonical component and typed plan]
     B --> C{Selected generation product}
     C -->|Reader| R[Reader shapes, component metadata and query resources]
     C -->|Writer| W[Writer shapes, selected Go handler and support code]

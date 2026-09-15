@@ -10,18 +10,28 @@ mutation hooks have different phases and contracts.
 ## Reader flow
 
 ```mermaid
-flowchart TD
-    A[HTTP or MCP invocation] --> B[Bind declared input and verify declared credentials]
-    B --> C[Input Init or InitMCP]
-    C --> D[Prepare selected views and execute typed reads]
-    D --> E[Populate each row]
-    E --> F[OnFetch - may return an error]
-    F --> G[Index rows and fetch selected child relations]
-    G --> H[Assemble selected relations]
-    H --> I[OnRelation notification]
-    I --> J[Build output and run applicable finalizers]
-    J --> K[Encode HTTP or MCP result]
-    F -->|error| L[Invocation error handling and applicable finalization]
+sequenceDiagram
+    participant Request as HTTP / MCP
+    participant Reader as Reader component
+    participant Hooks as Application hooks
+    participant DB as Database / cache
+    Request->>Reader: Bind input and declared credentials
+    Reader->>Hooks: Input Init / InitMCP
+    Reader->>DB: Read the selected view
+    DB-->>Reader: Populate typed rows
+    loop Each fetched row
+        Reader->>Hooks: OnFetch(ctx)
+        Hooks-->>Reader: Success or error
+    end
+    opt Selected child relations
+        Reader->>DB: Fetch children in batches
+        DB-->>Reader: Child rows
+        Note over Reader,Hooks: Child rows run their own fetch hooks
+        Reader->>Reader: Assemble relations
+        Reader->>Hooks: OnRelation(ctx)
+    end
+    Reader->>Hooks: Applicable output finalizers
+    Reader-->>Request: Encoded result or error
 ```
 
 `OnFetch(context.Context) error` runs after SQLX fills the typed row, before
@@ -45,25 +55,29 @@ compose the same capabilities with explicitly authored orchestration; the HTTP
 verb alone does not install this policy.
 
 ```mermaid
-flowchart TD
-    A[Bind typed input and dependency reads] --> B[Capture original identity, presence and topology]
-    B --> C[Input Init or InitMCP]
-    C --> D[Prepare invocation dependencies and typed hook objects]
-    D --> E[SyncPresence]
-    E --> F[Invariant backfill from authoritative Previous]
-    F --> G[EntityHooks.Init]
-    G --> H[Framework Go and database validation]
-    H --> I[EntityHooks.Validate]
-    I --> J[Sequence stable IDs]
-    J --> K[AfterSequence]
-    K --> L[Diff using captured original identity]
-    L --> M[Reconcile IDs and parent foreign keys]
-    M --> N[Final produced-value validation]
-    N --> O[Queue buffered DML in dependency order]
-    O --> P[AfterQueue]
-    P --> Q[Invocation Data owner flushes and completes owned transactions]
-    Q --> R[Outcome-aware Finalize]
-    R --> S[Return output or completion error]
+sequenceDiagram
+    participant Request as HTTP / MCP
+    participant Writer as Generated writer
+    participant Lifecycle as OrderLifecycle
+    participant Data as Invocation data owner
+    Request->>Writer: Bind input and dependency reads
+    Writer->>Writer: Capture original identity, presence and topology
+    Note over Writer: Input Init / InitMCP, scoped DI, SyncPresence
+    Writer->>Writer: Backfill invariant groups from Previous
+    Writer->>Lifecycle: Init(ctx, order, state)
+    Writer->>Writer: Framework validation
+    Writer->>Lifecycle: Validate(ctx, order, state)
+    Writer->>Data: Sequence stable IDs
+    Data-->>Writer: Assigned identities
+    Writer->>Lifecycle: AfterSequence(ctx, order, state)
+    Writer->>Writer: Diff, reconcile links, validate produced values
+    Writer->>Data: Queue DML in dependency order
+    Writer->>Lifecycle: AfterQueue(ctx, order, state)
+    Data->>Data: Flush and complete owned transactions
+    Data-->>Writer: Outcome
+    Writer->>Lifecycle: Finalize(ctx, input, output, outcome)
+    Writer-->>Request: Output or completion error
+    Note over Writer,Lifecycle: A failed phase stops later write phases. Failure finalization still applies
 ```
 
 Any failing phase stops later write phases. The invocation owner resolves failure
@@ -94,8 +108,8 @@ Declare an authored hook on a DQL view with:
 
 ```sql
 #import('hooks', 'example.com/app/hooks')
-SELECT o.*, entity_hooks(o, 'hooks.OrderHooks')
-FROM orders o
+SELECT orders.*, entity_hooks(orders, 'hooks.OrderLifecycle')
+FROM (SELECT o.* FROM ORDERS o) orders
 ```
 
 The hook methods must match the actual entity and parent types. See

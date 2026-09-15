@@ -41,23 +41,41 @@ Datly makes the data contract and execution plan explicit, then generates the
 selected component artifacts while keeping business behavior in Go and
 scoped services.
 
+**Conventional application**
+
 ```mermaid
-flowchart LR
-    subgraph Traditional[Traditional application]
-        A[HTTP controller] --> B[Application service]
-        B --> C[DAO or repository]
-        C --> D[SQL and database]
-        B --> E[Hand-maintained DTOs and mapping]
-    end
-    subgraph Datly[Datly application]
-        F[DQL plus schema and/or Go types] --> G[Transcription]
-        G --> H[Generated reader OR writer component]
-        I[HTTP or MCP] --> J[Binding and scoped DI]
-        J --> H
-        H --> K[Typed execution and configured databases]
-        H --> L[Business services and typed hooks]
-    end
+sequenceDiagram
+    participant API as HTTP controller
+    participant Service as Application service
+    participant DAO as DAO / repository
+    participant DB as Database
+    API->>Service: Map request and invoke business logic
+    Service->>DAO: Request data or persist changes
+    DAO->>DB: Execute SQL
+    DB-->>DAO: Rows / write result
+    DAO-->>Service: Map domain objects
+    Service-->>API: Assemble response
 ```
+
+**Datly component**
+
+```mermaid
+sequenceDiagram
+    participant API as HTTP / MCP
+    participant Component as Generated component
+    participant Lifecycle as Application lifecycle
+    participant DB as Configured databases
+    Note over Component: Generated from DQL plus schema and/or Go types
+    API->>Component: Bind typed input and scoped dependencies
+    Component->>Lifecycle: Invoke callbacks for the selected operation
+    Lifecycle-->>Component: Application behavior / validation
+    Component->>DB: Execute the declared data graph
+    DB-->>Component: Typed results / write outcome
+    Component-->>API: Finalize and deliver output
+```
+
+The Datly diagram summarizes responsibilities; the reader and writer guides below
+show the exact callback order for each operation.
 
 | Concern | Conventional DAO/service application | Datly component model |
 | --- | --- | --- |

@@ -58,9 +58,9 @@ Consider three tables:
 | `ORDER_KINDS` | Auxiliary lookup | Supplies kind data; never a DML target |
 
 ```mermaid
-flowchart LR
-    K[ORDER_KINDS - auxiliary lookup] --> O[ORDERS - writable parent]
-    O --> I[ITEMS - writable children, many]
+erDiagram
+    ORDER_KINDS ||--o{ ORDERS : "lookup only"
+    ORDERS ||--o{ ITEMS : "mutable children"
 ```
 
 The high-level PATCH generation input describes the graph and its field policies.
@@ -196,25 +196,29 @@ compose the same capabilities with explicitly authored orchestration; the HTTP
 verb alone does not install this policy.
 
 ```mermaid
-flowchart TD
-    A[Bind typed input and dependency reads] --> B[Capture original identity, presence and topology]
-    B --> C[Input Init or InitMCP]
-    C --> D[Prepare invocation dependencies and typed hook objects]
-    D --> E[SyncPresence]
-    E --> F[Invariant backfill from authoritative Previous]
-    F --> G[EntityHooks.Init]
-    G --> H[Framework Go and database validation]
-    H --> I[EntityHooks.Validate]
-    I --> J[Sequence stable IDs]
-    J --> K[AfterSequence]
-    K --> L[Diff using captured original identity]
-    L --> M[Reconcile IDs and parent foreign keys]
-    M --> N[Final produced-value validation]
-    N --> O[Queue buffered DML in dependency order]
-    O --> P[AfterQueue]
-    P --> Q[Invocation Data owner flushes and completes owned transactions]
-    Q --> R[Outcome-aware Finalize]
-    R --> S[Return output or completion error]
+sequenceDiagram
+    participant Request as HTTP / MCP
+    participant Writer as Generated writer
+    participant Lifecycle as OrderLifecycle
+    participant Data as Invocation data owner
+    Request->>Writer: Bind input and dependency reads
+    Writer->>Writer: Capture original identity, presence and topology
+    Note over Writer: Input Init / InitMCP, scoped DI, SyncPresence
+    Writer->>Writer: Backfill invariant groups from Previous
+    Writer->>Lifecycle: Init(ctx, order, state)
+    Writer->>Writer: Framework validation
+    Writer->>Lifecycle: Validate(ctx, order, state)
+    Writer->>Data: Sequence stable IDs
+    Data-->>Writer: Assigned identities
+    Writer->>Lifecycle: AfterSequence(ctx, order, state)
+    Writer->>Writer: Diff, reconcile links, validate produced values
+    Writer->>Data: Queue DML in dependency order
+    Writer->>Lifecycle: AfterQueue(ctx, order, state)
+    Data->>Data: Flush and complete owned transactions
+    Data-->>Writer: Outcome
+    Writer->>Lifecycle: Finalize(ctx, input, output, outcome)
+    Writer-->>Request: Output or completion error
+    Note over Writer,Lifecycle: A failed phase stops later write phases. Failure finalization still applies
 ```
 
 Any failing phase stops later write phases. The invocation owner resolves failure
@@ -355,7 +359,6 @@ The struct name is application-defined, not a required framework suffix.
 | `Init` | Apply application defaults or normalize business values using marker-aware setters. |
 | `Validate` | Check the effective row, including invariant backfill, without changing it. |
 | `AfterSequence` | Run after IDs have been assigned and before diffing; preserve validated business values. |
-| `BeforeWrite` | Customize business values in the supported pre-validation phase, with the planned action. |
 | `AfterQueue` | Observe successfully queued work; this does not mean the transaction committed. |
 
 `Init` and `Validate` form the current required contract. The other methods are
@@ -483,16 +486,27 @@ The different output `Finalize` signatures are alternatives on a Go type;
 | Definition `FinalizeFailure` | Handles failure when a generated Program is unavailable; input/output may be nil |
 
 ```mermaid
-flowchart TD
-    A[Handler returns result and error] --> B{Outcome-aware handler?}
-    B -->|yes| C[Resolve Data outcome]
-    C --> D[Program Finalize or Definition FinalizeFailure]
-    B -->|no| E[Applicable injector-aware output finalization]
-    E --> F[Applicable error-aware output finalization]
-    F --> G[Resolve owned or caller-pending completion]
-    G --> H{Successful ordinary output?}
-    H -->|yes| I[Applicable success and MCP finalization]
-    H -->|no| J[Return error]
+sequenceDiagram
+    participant Handler
+    participant Runtime
+    participant Data as Data owner
+    participant Finalizer as Selected finalizer
+    Handler-->>Runtime: Result and operation error
+    alt Outcome-aware handler
+        Runtime->>Data: Resolve transaction outcome
+        Data-->>Runtime: Outcome
+        Runtime->>Finalizer: Program Finalize / FinalizeFailure
+    else Ordinary output lifecycle
+        opt Selected injector-aware or error-aware finalizer
+            Runtime->>Finalizer: Finalize before completion
+            Finalizer-->>Runtime: Result or error
+        end
+        Runtime->>Data: Resolve owned / caller-pending completion
+        Data-->>Runtime: Outcome
+        opt Successful output and applicable success hook
+            Runtime->>Finalizer: Success / MCP finalization
+        end
+    end
 ```
 
 An injector can resolve a specific component and bind its result conditionally.
