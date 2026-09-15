@@ -65,6 +65,16 @@ packages that should not contribute components. Private type dependencies can
 remain available without exposing their routes. `validate` reports skipped
 checks; it does not build and deploy an application.
 
+## Filename layout
+
+A component in `orders/` uses prefix-free names such as `input.go`, `output.go`,
+`router.go`, `mutation.go` and create-once `lifecycle.go`. Generated files have no
+`_gen` suffix. Optional `$file_prefix('orders_')` applies only to default filenames;
+exact DQL file overrides win. The supported commands are
+`datly transcribe get|patch|post|put`; the `gen` alias is removed.
+
+See [filename settings, support roles and safe migration](dql.md#generated-filenames-and-destinations).
+
 ## Compilation and persistence are separate
 
 The programmatic source pipeline uses `transcribe.Discovery.Compile` for package

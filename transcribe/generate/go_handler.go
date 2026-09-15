@@ -58,8 +58,11 @@ func resolveGoHandler(plan *Plan, asset *GoHandlerAsset, targetPackage string) e
 		return fmt.Errorf("custom handler entry %q must be an exported Go identifier", entry)
 	}
 	destination := strings.TrimSpace(asset.Destination)
+	if override := plan.Generation.File("handler", ""); override != "" {
+		destination = override
+	}
 	if destination == "" {
-		destination = lowerSnake(plan.ComponentName) + "_handler.go"
+		destination = plan.Generation.File("handler", "handler.go")
 	}
 	relative, err := managedRelativePath(destination)
 	if err != nil {

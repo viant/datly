@@ -112,7 +112,7 @@ func (p *scaffoldPersistence) retainShapes(target, existing string, manifest *sc
 		if err != nil {
 			return nil, nil, err
 		}
-		if _, found := roles[relative]; found || removals[relative] {
+		if _, found := roles[relative]; found || removals[relative] || p.renames[relative] {
 			continue
 		}
 		role := manifest.Roles[relative]

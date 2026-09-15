@@ -96,7 +96,7 @@ func (r *planResolver) resolve() (*Plan, error) {
 	if err = resolveVeltyHandler(r.plan, r.input.VeltyHandler); err != nil {
 		return nil, err
 	}
-	r.plan.GeneratedTypes, err = resolveGeneratedTypes(r.input.GeneratedTypes, r.input.TargetPackage, r.types)
+	r.plan.GeneratedTypes, err = r.resolveGeneratedTypes()
 	if err != nil {
 		return nil, err
 	}

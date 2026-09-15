@@ -41,6 +41,7 @@ type scaffoldPersistence struct {
 	userFiles        []EmittedFile
 	removals         []string
 	plan             *Plan
+	renames          map[string]bool
 	customizedShapes map[string]bool
 	fieldOwnership   map[string]*projectionFieldOwnership
 	proposal         []EmittedFile
@@ -252,12 +253,8 @@ func (p *scaffoldPersistence) validateExisting(_, existing string, manifest *sca
 	if manifest == nil {
 		return fmt.Errorf("scaffold manifest is required")
 	}
-	if p.plan != nil {
-		for role, previous := range manifest.Destinations {
-			if next := p.plan.Destinations[role]; next != "" && next != previous {
-				return fmt.Errorf("shape %s destination changed from %s to %s; explicit migration is required", role, previous, next)
-			}
-		}
+	if err := p.prepareRenames(existing, manifest); err != nil {
+		return err
 	}
 	if err := p.validateForeignFiles(manifest); err != nil {
 		return err

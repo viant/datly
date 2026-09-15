@@ -60,8 +60,11 @@ func resolveVeltyHandler(plan *Plan, asset *VeltyHandlerAsset) error {
 		return fmt.Errorf("Velty handler factory %q must be an exported Go identifier", factory)
 	}
 	goDestination := strings.TrimSpace(asset.GoDestination)
+	if override := plan.Generation.File("handler", ""); override != "" {
+		goDestination = override
+	}
 	if goDestination == "" {
-		goDestination = lowerSnake(plan.ComponentName) + "_velty.go"
+		goDestination = plan.Generation.File("handler", "handler.go")
 	}
 	goDestination, err := managedRelativePath(goDestination)
 	if err != nil {
@@ -71,8 +74,11 @@ func resolveVeltyHandler(plan *Plan, asset *VeltyHandlerAsset) error {
 		return fmt.Errorf("Velty handler Go destination %q must be a package-local .go file", goDestination)
 	}
 	resourceDestination := strings.TrimSpace(asset.ResourceDestination)
+	if override := plan.Generation.File("template", ""); override != "" {
+		resourceDestination = override
+	}
 	if resourceDestination == "" {
-		resourceDestination = filepath.Join(lowerSnake(plan.ComponentName), "handler.velty")
+		resourceDestination = plan.Generation.File("template", "handler.velty")
 	}
 	resourceDestination, err = managedRelativePath(resourceDestination)
 	if err != nil {

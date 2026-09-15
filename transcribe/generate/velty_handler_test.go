@@ -49,12 +49,12 @@ func TestGeneratorEmitsExecutableVeltyHandlerArtifact(t *testing.T) {
 	if err != nil || len(tags) != 2 || tags[0].Handler != "NewOrdersHandler" || tags[1].Handler != "NewOrdersHandler" {
 		t.Fatalf("component route tags = %+v, %v", tags, err)
 	}
-	factory, err := os.ReadFile(filepath.Join(dir, "orders_velty.go"))
+	factory, err := os.ReadFile(filepath.Join(dir, "handler.go"))
 	if err != nil || !strings.Contains(string(factory), "func NewOrdersHandler()") ||
-		!strings.Contains(string(factory), `//go:embed "orders/handler.velty"`) {
+		!strings.Contains(string(factory), `//go:embed "handler.velty"`) {
 		t.Fatalf("factory source = %q, %v", factory, err)
 	}
-	template, err := os.ReadFile(filepath.Join(dir, "orders", "handler.velty"))
+	template, err := os.ReadFile(filepath.Join(dir, "handler.velty"))
 	if err != nil || string(template) != asset.Template {
 		t.Fatalf("template = %q, %v", template, err)
 	}
@@ -132,7 +132,7 @@ func TestGeneratorEmitsExecutableVeltyHandlerWithLinkedContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	factory, err := os.ReadFile(filepath.Join(packageDir, "orders_velty.go"))
+	factory, err := os.ReadFile(filepath.Join(packageDir, "handler.go"))
 	if err != nil || !strings.Contains(string(factory), `error2 "example.com/generated/error"`) ||
 		!strings.Contains(string(factory), `error2.Input, error2.Output`) {
 		t.Fatalf("factory source = %q, %v", factory, err)
@@ -187,8 +187,8 @@ func TestGeneratorVeltyHandlerRejectsInvalidAssets(t *testing.T) {
 			component.Routes[0].Handler = "HandleOrders"
 		}, match: "conflicts with Velty handler factory"},
 		{name: "factory name collision", asset: &VeltyHandlerAsset{Template: "$Input", Factory: "Component"}, match: `generated type "Component" is shared`},
-		{name: "Go destination collision", asset: &VeltyHandlerAsset{Template: "$Input", GoDestination: "orders_router.go"}, match: "shared by component holder and Velty handler factory"},
-		{name: "resource ancestor collision", asset: &VeltyHandlerAsset{Template: "$Input", ResourceDestination: "orders_router.go/handler.velty"}, match: "overlap"},
+		{name: "Go destination collision", asset: &VeltyHandlerAsset{Template: "$Input", GoDestination: "router.go"}, match: "shared by component holder and Velty handler factory"},
+		{name: "resource ancestor collision", asset: &VeltyHandlerAsset{Template: "$Input", ResourceDestination: "router.go/handler.velty"}, match: "overlap"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -265,7 +265,7 @@ func TestGeneratorVeltyHandlerClonesAndRemovesManagedArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	templatePath := filepath.Join(dir, "orders", "handler.velty")
+	templatePath := filepath.Join(dir, "handler.velty")
 	content, err := os.ReadFile(templatePath)
 	if err != nil || string(content) != `$Output.Result = "original"` {
 		t.Fatalf("isolated template = %q, %v", content, err)
@@ -276,7 +276,7 @@ func TestGeneratorVeltyHandlerClonesAndRemovesManagedArtifacts(t *testing.T) {
 	if _, err = EmitScaffold(dir, result.Plan); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{filepath.Join(dir, "orders_velty.go"), templatePath} {
+	for _, path := range []string{filepath.Join(dir, "handler.go"), templatePath} {
 		if _, err = os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("stale Velty artifact %s remains: %v", path, err)
 		}

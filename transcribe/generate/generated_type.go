@@ -32,7 +32,8 @@ type GeneratedTypePlan struct {
 	Imports     []spec.ImportSpec
 }
 
-func resolveGeneratedTypes(references []GeneratedTypeReference, targetPackage string, resolver typeResolver) ([]GeneratedTypePlan, error) {
+func (r *planResolver) resolveGeneratedTypes() ([]GeneratedTypePlan, error) {
+	references, targetPackage, resolver := r.input.GeneratedTypes, r.input.TargetPackage, r.types
 	if len(references) == 0 {
 		return nil, nil
 	}
@@ -59,6 +60,15 @@ func resolveGeneratedTypes(references []GeneratedTypeReference, targetPackage st
 		plan, err := generatedTypePlan(descriptor, targetPackage, reference.Destination)
 		if err != nil {
 			return nil, fmt.Errorf("resolve generated type %q: %w", key, err)
+		}
+		if r.plan.Generation != nil {
+			fallback := ""
+			if reference.Destination == "" {
+				fallback = plan.Destination
+			}
+			if file := r.plan.Generation.File("type:"+plan.Name, fallback); file != "" {
+				plan.Destination = file
+			}
 		}
 		result = append(result, plan)
 	}

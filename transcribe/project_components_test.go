@@ -53,7 +53,7 @@ SELECT 1 AS ID`)
 		t.Fatal(err)
 	}
 	parentEntry := projectEntryByName(t, generated.Manifest, "Vendors")
-	input, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(parentEntry.Package), "vendors_input.go"))
+	input, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(parentEntry.Package), "input.go"))
 	if err != nil || !strings.Contains(string(input), "kind=component") ||
 		!strings.Contains(string(input), "in=GET:/v1/api/dev/user-acl") {
 		t.Fatalf("generated parent input = %q, %v", input, err)
@@ -88,7 +88,7 @@ SELECT 1 AS ID`)
 		t.Fatalf("partial manifest = %+v", partial.Manifest)
 	}
 	parentEntry := projectEntryByName(t, partial.Manifest, "Vendors")
-	input, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(parentEntry.Package), "vendors_input.go"))
+	input, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(parentEntry.Package), "input.go"))
 	if err != nil || !strings.Contains(string(input), "kind=component") ||
 		!strings.Contains(string(input), "in=GET:/v1/api/dev/user-acl") ||
 		!strings.Contains(string(input), "UserAclOutput") {
@@ -240,7 +240,7 @@ SELECT 1 AS ID`)
 			t.Fatal(generateErr)
 		}
 		parentEntry := projectEntryByName(t, partial.Manifest, "LinkedParent")
-		input, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(parentEntry.Package), "linked_parent_input.go"))
+		input, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(parentEntry.Package), "input.go"))
 		if readErr != nil || !strings.Contains(string(input), "linkedcontract.ComponentOutput") {
 			t.Fatalf("persisted linked parent input = %q, %v", input, readErr)
 		}

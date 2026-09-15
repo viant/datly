@@ -3,7 +3,6 @@ package generate
 import (
 	"fmt"
 	"go/ast"
-	"path/filepath"
 	"strings"
 
 	xshape "github.com/viant/x/shape"
@@ -12,6 +11,7 @@ import (
 // MutationSource keeps generated policy support concerns in separate,
 // package-local files under the same ownership and persistence transaction.
 type MutationSource struct {
+	Role        string
 	Destination string
 	File        *ast.File
 }
@@ -21,19 +21,19 @@ func (s MutationSource) clone() (MutationSource, error) {
 	if err != nil {
 		return MutationSource{}, fmt.Errorf("clone mutation support %q: %w", s.Destination, err)
 	}
-	return MutationSource{Destination: s.Destination, File: file}, nil
+	return MutationSource{Role: s.Role, Destination: s.Destination, File: file}, nil
 }
 
 func (s MutationSource) resolve(plan *Plan, targetPackage string) (MutationSource, error) {
 	if s.File == nil {
 		return MutationSource{}, fmt.Errorf("mutation support %q AST is required", s.Destination)
 	}
-	destination, err := managedRelativePath(strings.TrimSpace(s.Destination))
+	if s.Role != "" {
+		s.Destination = plan.Generation.File(s.Role, s.Destination)
+	}
+	destination, err := packageGoDestination(s.Destination, "mutation support")
 	if err != nil {
 		return MutationSource{}, fmt.Errorf("mutation support destination: %w", err)
-	}
-	if filepath.Base(destination) != destination || filepath.Ext(destination) != ".go" {
-		return MutationSource{}, fmt.Errorf("mutation support destination %q must be a package-local .go file", s.Destination)
 	}
 	if err = validateHandlerComments(s.File); err != nil {
 		return MutationSource{}, err

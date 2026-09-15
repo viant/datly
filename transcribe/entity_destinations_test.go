@@ -82,7 +82,7 @@ func TestGeneratedEntityDestinations(t *testing.T) {
 				if tc.name == "GoSplit" {
 					lifecycleDir = "requests"
 				}
-				lifecyclePath = filepath.Join(root, lifecycleDir, "events_hooks.go")
+				lifecyclePath = filepath.Join(root, lifecycleDir, "lifecycle.go")
 				data, err := os.ReadFile(lifecyclePath)
 				if err != nil {
 					t.Fatal(err)
@@ -218,7 +218,7 @@ func TestEntityMethods(t *testing.T){e:=&Event{};e.SetName("changed");if e.GetNa
 				}
 			}
 			if tc.options.Target != "" {
-				methodFile := filepath.Join(root, "entities/events_entity_methods_gen.go")
+				methodFile := filepath.Join(root, "entities/entity_methods.go")
 				generatedBytes, err := os.ReadFile(methodFile)
 				if err != nil {
 					t.Fatal(err)

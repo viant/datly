@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/internal/packageasset"
+	"github.com/viant/datly/spec"
 	"go/format"
 	"io/fs"
 	"strings"
@@ -11,14 +12,23 @@ import (
 
 func (r *planResolver) resolveStatic() (*Plan, error) {
 	component := r.input.Component
-	if component.RootView != nil || len(component.Views) > 0 || len(component.Parameters) > 0 || len(component.Routes) > 0 || component.Settings != nil || r.input.GoHandler != nil || r.input.VeltyHandler != nil || r.input.ContractHandler != nil || r.input.MutationHandler != nil {
+	runtimeSettings := component.Settings.Clone()
+	var generation *spec.GenerationSettings
+	if runtimeSettings != nil {
+		generation = runtimeSettings.Generation
+		runtimeSettings.Generation = nil
+	}
+	if component.RootView != nil || len(component.Views) > 0 || len(component.Parameters) > 0 || len(component.Routes) > 0 || !runtimeSettings.IsZero() || r.input.GoHandler != nil || r.input.VeltyHandler != nil || r.input.ContractHandler != nil || r.input.MutationHandler != nil {
 		return nil, fmt.Errorf("static generation cannot include executable component metadata")
 	}
 	content := component.Static.Clone()
 	if err := content.Validate(); err != nil {
 		return nil, err
 	}
-	r.plan = &Plan{Package: r.input.TargetPackage, GoPackage: r.input.PackageName, ProjectRoot: r.input.ProjectRoot, ComponentName: r.input.Component.Name, Static: content, RouterDest: lowerSnake(r.input.Component.Name) + "_static.go"}
+	r.plan = &Plan{Package: r.input.TargetPackage, GoPackage: r.input.PackageName, ProjectRoot: r.input.ProjectRoot, ComponentName: r.input.Component.Name, Static: content, Generation: generation.Clone(), RouterDest: generation.File("router", "router.go")}
+	if err := r.plan.validateFilenameSettings(); err != nil {
+		return nil, err
+	}
 	var err error
 	r.plan.Resources, err = r.prepareResources()
 	return r.plan, err

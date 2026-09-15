@@ -177,6 +177,9 @@ func (plan *Plan) validateGeneratedDestinations() error {
 	if plan == nil {
 		return nil
 	}
+	if err := plan.validateFilenameSettings(); err != nil {
+		return err
+	}
 	routerDest, err := componentHolderDestination(plan.RouterDest)
 	if err != nil {
 		return err
@@ -184,6 +187,11 @@ func (plan *Plan) validateGeneratedDestinations() error {
 	plan.RouterDest = routerDest
 	owners := map[string]string{}
 	reserve := func(destination, owner string, shareViews bool) error {
+		if filepath.Ext(destination) == ".go" {
+			if _, err := packageGoDestination(destination, owner); err != nil {
+				return err
+			}
+		}
 		destination = filepath.Clean(strings.TrimSpace(destination))
 		if destination == "." || destination == "" {
 			return fmt.Errorf("%s destination is required", owner)
@@ -224,7 +232,7 @@ func (plan *Plan) validateGeneratedDestinations() error {
 		}
 	}
 	if len(plan.Aliases) > 0 {
-		if err := reserve(lowerSnake(plan.ComponentName)+"_types_gen.go", "shape aliases", false); err != nil {
+		if err := reserve(plan.Generation.File("types", "types.go"), "shape aliases", false); err != nil {
 			return err
 		}
 	}
@@ -310,6 +318,9 @@ func componentHolderDestination(destination string) (string, error) {
 }
 
 func packageGoDestination(destination, owner string) (string, error) {
+	if strings.TrimSpace(destination) != destination || strings.ContainsAny(destination, "/\\") || strings.HasPrefix(destination, ".") || strings.HasPrefix(destination, "_") || strings.HasSuffix(destination, "_test.go") {
+		return "", fmt.Errorf("%s destination %q must be a package-local .go file with a visible, non-test filename", owner, destination)
+	}
 	relative, err := managedRelativePath(destination)
 	if err != nil {
 		return "", fmt.Errorf("%s destination %q must be a package-local .go file: %w", owner, destination, err)

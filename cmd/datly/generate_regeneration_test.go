@@ -35,7 +35,7 @@ func TestGenExecutableNamedGraphRegeneration(t *testing.T) {
 				t.Fatal(err)
 			}
 			sourcePath := filepath.Join(root, "source", "Orders.dql")
-			shapePath, owner := filepath.Join(root, "api/orders/orders.go"), "OrdersView"
+			shapePath, owner := filepath.Join(root, "api/orders/views.go"), "OrdersView"
 			base := genpatch.NamedGraphDQL
 			if split {
 				base = `#import('requests','` + module + `/requests')
@@ -101,7 +101,7 @@ func TestGenExecutableNamedGraphRegeneration(t *testing.T) {
 			}
 			write(sourcePath, base)
 			run(t, false)
-			hookPath := filepath.Join(root, "api/orders/orders_hooks.go")
+			hookPath := filepath.Join(root, "api/orders/lifecycle.go")
 			hooks := strings.Replace(read(hookPath), "return nil", "// authored lifecycle\n\tlifecycleCalls++\n\treturn nil", 1) + "\nvar lifecycleCalls int\n"
 			write(hookPath, hooks)
 			write(filepath.Join(root, "api/orders/regeneration_test.go"), `package orders
@@ -169,7 +169,7 @@ func TestAuthoredLifecycle(t *testing.T) {
 							}
 						}
 					}
-					invariantPath := filepath.Join(root, "api/orders/NewOrdersHandler_invariants_gen.go")
+					invariantPath := filepath.Join(root, "api/orders/invariants.go")
 					if step.group != "" {
 						if !strings.Contains(read(invariantPath), "Backfill"+step.group+"IfNeeded") {
 							t.Fatal("invariant implementation did not follow DQL")

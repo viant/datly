@@ -49,7 +49,7 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 					t.Fatal(err)
 				}
 			}
-			for _, file := range []string{"entities/events_entity_methods_gen.go", "items/events_entity_methods_gen.go"} {
+			for _, file := range []string{"entities/entity_methods.go", "items/entity_methods.go"} {
 				if _, err := os.Stat(filepath.Join(root, file)); err != nil {
 					t.Fatal(err)
 				}

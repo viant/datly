@@ -74,10 +74,10 @@ func (c HookScaffoldContract) clone() HookScaffoldContract {
 }
 
 // Filename resolves the create-once destination without requiring emission.
-func (a *HookScaffoldAsset) Filename(component string) (string, error) {
+func (a *HookScaffoldAsset) Filename() (string, error) {
 	destination := strings.TrimSpace(a.Destination)
 	if destination == "" {
-		destination = lowerSnake(component) + "_hooks.go"
+		destination = "lifecycle.go"
 	}
 	relative, err := managedRelativePath(destination)
 	if err != nil || filepath.Base(relative) != relative || filepath.Ext(relative) != ".go" {
@@ -90,7 +90,14 @@ func resolveHookScaffold(plan *Plan, asset *HookScaffoldAsset) error {
 	if asset == nil {
 		return nil
 	}
-	destination, err := asset.Filename(plan.ComponentName)
+	copy := *asset
+	if override := plan.Generation.File("lifecycle", ""); override != "" {
+		copy.Destination = override
+	}
+	if copy.Destination == "" {
+		copy.Destination = plan.Generation.File("lifecycle", "lifecycle.go")
+	}
+	destination, err := copy.Filename()
 	if err != nil {
 		return err
 	}

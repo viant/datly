@@ -73,7 +73,7 @@ func (r *planResolver) resolveEntitySupport() error {
 	if asset.File == nil || !token.IsIdentifier(asset.CaptureFunction) {
 		return fmt.Errorf("generated entity support requires a source file and capture function")
 	}
-	r.plan.EntitySupport = &EntitySupportPlan{File: asset.File, Destination: lowerSnake(r.plan.ComponentName) + "_entities_gen.go", CaptureFunction: asset.CaptureFunction, Methods: append([]EntityMethod(nil), asset.Methods...), SnapshotType: asset.SnapshotType, SyncContextType: asset.SyncContextType, SyncMethod: asset.SyncMethod, Associations: append([]EntityAssociation(nil), asset.Associations...)}
+	r.plan.EntitySupport = &EntitySupportPlan{File: asset.File, Destination: r.plan.Generation.File("entities", "entities.go"), CaptureFunction: asset.CaptureFunction, Methods: append([]EntityMethod(nil), asset.Methods...), SnapshotType: asset.SnapshotType, SyncContextType: asset.SyncContextType, SyncMethod: asset.SyncMethod, Associations: append([]EntityAssociation(nil), asset.Associations...)}
 	for index := range r.plan.EntitySupport.Associations {
 		r.plan.EntitySupport.Associations[index].Path = append([]string(nil), asset.Associations[index].Path...)
 	}

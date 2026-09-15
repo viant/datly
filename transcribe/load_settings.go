@@ -68,6 +68,21 @@ func (l *settingsLoader) mergeGeneration(base, authored *spec.GenerationSettings
 	l.setString(&base.InputFile, authored.InputFile)
 	l.setString(&base.OutputFile, authored.OutputFile)
 	l.setString(&base.RouterFile, authored.RouterFile)
+	l.setString(&base.FilePrefix, authored.FilePrefix)
+	l.setString(&base.HandlerFile, authored.HandlerFile)
+	l.setString(&base.LifecycleFile, authored.LifecycleFile)
+	l.setString(&base.MutationFile, authored.MutationFile)
+	l.setString(&base.ResourcesFile, authored.ResourcesFile)
+	l.setString(&base.LinksFile, authored.LinksFile)
+	l.setString(&base.TemplateFile, authored.TemplateFile)
+	if len(authored.SupportFiles) > 0 {
+		if base.SupportFiles == nil {
+			base.SupportFiles = map[string]string{}
+		}
+		for role, file := range authored.SupportFiles {
+			base.SupportFiles[role] = file
+		}
+	}
 	if base.IsZero() {
 		return nil
 	}

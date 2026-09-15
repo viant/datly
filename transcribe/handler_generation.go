@@ -33,6 +33,14 @@ func (g *handlerGeneration) prepare() error {
 	if g == nil || g.compiled == nil || g.compiled.Component == nil || g.input == nil {
 		return fmt.Errorf("compiled transcribe result and generation input are required")
 	}
+	if settings := g.compiled.Component.Settings; settings != nil {
+		if override := settings.Generation.File("lifecycle", ""); override != "" {
+			g.options.Handler.Hooks.Destination = override
+		}
+		if g.options.Handler.Hooks.Destination == "" {
+			g.options.Handler.Hooks.Destination = settings.Generation.File("lifecycle", "lifecycle.go")
+		}
+	}
 	if err := g.applyContractOption(); err != nil {
 		return err
 	}

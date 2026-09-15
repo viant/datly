@@ -12,7 +12,7 @@ func TestEmitScaffoldUpdatesShapesAppendOnly(t *testing.T) {
 	for _, conflict := range []string{"", "type", "tag"} {
 		t.Run(conflict, func(t *testing.T) {
 			dir := t.TempDir()
-			plan := &Plan{ComponentName: "Records", ViewDest: "records.go", RouterDest: "records_router.go", Input: generatedContract("Input", "input.go"), Output: generatedContract("Output", "output.go")}
+			plan := &Plan{ComponentName: "Records", ViewDest: "records.go", RouterDest: "router.go", Input: generatedContract("Input", "input.go"), Output: generatedContract("Output", "output.go")}
 			plan.Output.Fields = []Field{{Name: "Z", Type: "string", Tag: `json:"z"`}, {Name: "A", Type: "int"}}
 			if _, err := EmitScaffold(dir, plan); err != nil {
 				t.Fatal(err)

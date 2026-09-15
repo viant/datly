@@ -106,10 +106,10 @@ func TestResolvePlan_UsesDefaults(t *testing.T) {
 	if plan == nil {
 		t.Fatalf("expected plan")
 	}
-	assertly.AssertValues(t, "vendor_catalog.go", plan.ViewDest)
-	assertly.AssertValues(t, "vendor_catalog_input.go", plan.Input.Destination)
-	assertly.AssertValues(t, "vendor_catalog_output.go", plan.Output.Destination)
-	assertly.AssertValues(t, "vendor_catalog_router.go", plan.RouterDest)
+	assertly.AssertValues(t, "views.go", plan.ViewDest)
+	assertly.AssertValues(t, "input.go", plan.Input.Destination)
+	assertly.AssertValues(t, "output.go", plan.Output.Destination)
+	assertly.AssertValues(t, "router.go", plan.RouterDest)
 	assertly.AssertValues(t, "VendorCatalogInput", plan.Input.Type)
 	assertly.AssertValues(t, "VendorCatalogOutput", plan.Output.Type)
 }
@@ -584,8 +584,8 @@ func TestResolvePlan_ValidatesComponentHolderDestination(t *testing.T) {
 func TestEmitScaffoldValidatesComponentHolderDestination(t *testing.T) {
 	plan := &Plan{
 		ComponentName: "Orders", RouterDest: "routes/orders.go",
-		Input:  generatedContract("OrdersInput", "orders_input.go"),
-		Output: generatedContract("OrdersOutput", "orders_output.go"),
+		Input:  generatedContract("OrdersInput", "input.go"),
+		Output: generatedContract("OrdersOutput", "output.go"),
 	}
 	if _, err := EmitScaffold(t.TempDir(), plan); err == nil || !strings.Contains(err.Error(), "must be a package-local .go file") {
 		t.Fatalf("EmitScaffold() error = %v", err)
@@ -701,7 +701,7 @@ func TestComponentFilePreservesCanonicalHolderMetadata(t *testing.T) {
 				OrderBy: "Sort", Limit: "Take", Offset: "Skip",
 			},
 		},
-		Input: generatedContract("OrdersInput", "orders_input.go"), Output: generatedContract("OrdersOutput", "orders_output.go"),
+		Input: generatedContract("OrdersInput", "input.go"), Output: generatedContract("OrdersOutput", "output.go"),
 	}
 	source, err := componentFileText("orders", plan)
 	if err != nil {
@@ -750,7 +750,7 @@ func TestComponentFilePreservesDisabledReportFacets(t *testing.T) {
 	plan := &Plan{
 		ComponentName: "Orders", Routes: []RoutePlan{{Method: "GET", Path: "/orders"}},
 		Report: &spec.ReportSettings{LinkedInputType: "CubeInput"},
-		Input:  generatedContract("OrdersInput", "orders_input.go"), Output: generatedContract("OrdersOutput", "orders_output.go"),
+		Input:  generatedContract("OrdersInput", "input.go"), Output: generatedContract("OrdersOutput", "output.go"),
 	}
 	source, err := componentFileText("orders", plan)
 	if err != nil {
@@ -768,13 +768,13 @@ func TestComponentFilePreservesDisabledReportFacets(t *testing.T) {
 func TestEmitScaffoldFailureLeavesPreviousPackageIntact(t *testing.T) {
 	dir := t.TempDir()
 	plan := &Plan{
-		ComponentName: "Users", ViewDest: "users.go", RouterDest: "users_router.go",
-		Input: generatedContract("UsersInput", "users_input.go"), Output: generatedContract("UsersOutput", "users_output.go"),
+		ComponentName: "Users", ViewDest: "users.go", RouterDest: "router.go",
+		Input: generatedContract("UsersInput", "input.go"), Output: generatedContract("UsersOutput", "output.go"),
 	}
 	if _, err := EmitScaffold(dir, plan); err != nil {
 		t.Fatal(err)
 	}
-	original, err := os.ReadFile(filepath.Join(dir, "users_router.go"))
+	original, err := os.ReadFile(filepath.Join(dir, "router.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -788,7 +788,7 @@ func TestEmitScaffoldFailureLeavesPreviousPackageIntact(t *testing.T) {
 	if _, err = EmitScaffold(dir, &failed); err == nil {
 		t.Fatal("expected staged write failure")
 	}
-	after, err := os.ReadFile(filepath.Join(dir, "users_router.go"))
+	after, err := os.ReadFile(filepath.Join(dir, "router.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -812,8 +812,8 @@ func TestEmitScaffoldRejectsTargetSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := &Plan{
-		ComponentName: "Users", ViewDest: "users.go", RouterDest: "users_router.go",
-		Input: generatedContract("UsersInput", "users_input.go"), Output: generatedContract("UsersOutput", "users_output.go"),
+		ComponentName: "Users", ViewDest: "users.go", RouterDest: "router.go",
+		Input: generatedContract("UsersInput", "input.go"), Output: generatedContract("UsersOutput", "output.go"),
 	}
 	if _, err := EmitScaffold(target, plan); err == nil || !strings.Contains(err.Error(), "unsupported symlink") {
 		t.Fatalf("EmitScaffold() error = %v", err)
@@ -831,8 +831,8 @@ func TestEmitScaffoldRejectsNestedSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := &Plan{
-		ComponentName: "Users", ViewDest: "users.go", RouterDest: "users_router.go",
-		Input: generatedContract("UsersInput", "users_input.go"), Output: generatedContract("UsersOutput", "users_output.go"),
+		ComponentName: "Users", ViewDest: "users.go", RouterDest: "router.go",
+		Input: generatedContract("UsersInput", "input.go"), Output: generatedContract("UsersOutput", "output.go"),
 	}
 	if _, err := EmitScaffold(dir, plan); err == nil || !strings.Contains(err.Error(), "unsupported symlink") {
 		t.Fatalf("EmitScaffold() error = %v", err)
@@ -885,17 +885,17 @@ func TestEmitScaffoldSerializesConcurrentTargetWriters(t *testing.T) {
 
 func TestEmitScaffoldRejectsUnownedGeneratedFileCollision(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "users_router.go"), []byte("package userowned\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "router.go"), []byte("package userowned\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	plan := &Plan{
-		ComponentName: "Users", ViewDest: "users.go", RouterDest: "users_router.go",
-		Input: generatedContract("UsersInput", "users_input.go"), Output: generatedContract("UsersOutput", "users_output.go"),
+		ComponentName: "Users", ViewDest: "users.go", RouterDest: "router.go",
+		Input: generatedContract("UsersInput", "input.go"), Output: generatedContract("UsersOutput", "output.go"),
 	}
-	if _, err := EmitScaffold(dir, plan); err == nil || !strings.Contains(err.Error(), `generated file "users_router.go" collides with an unowned package file`) {
+	if _, err := EmitScaffold(dir, plan); err == nil || !strings.Contains(err.Error(), `generated file "router.go" collides with an unowned package file`) {
 		t.Fatalf("EmitScaffold() error = %v", err)
 	}
-	content, err := os.ReadFile(filepath.Join(dir, "users_router.go"))
+	content, err := os.ReadFile(filepath.Join(dir, "router.go"))
 	if err != nil || string(content) != "package userowned\n" {
 		t.Fatalf("unowned file changed: %q, %v", content, err)
 	}
@@ -903,18 +903,18 @@ func TestEmitScaffoldRejectsUnownedGeneratedFileCollision(t *testing.T) {
 
 func TestEmitScaffoldRejectsUnownedLinkedContractRemoval(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "users_input.go"), []byte("package userowned\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "input.go"), []byte("package userowned\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	plan := &Plan{
-		ComponentName: "Users", ViewDest: "users.go", RouterDest: "users_router.go",
-		Input:  ContractPlan{Type: "contracts.Input", Destination: "users_input.go", Ownership: ContractLinked},
-		Output: generatedContract("UsersOutput", "users_output.go"),
+		ComponentName: "Users", ViewDest: "users.go", RouterDest: "router.go",
+		Input:  ContractPlan{Type: "contracts.Input", Destination: "input.go", Ownership: ContractLinked},
+		Output: generatedContract("UsersOutput", "output.go"),
 	}
-	if _, err := EmitScaffold(dir, plan); err == nil || !strings.Contains(err.Error(), `generated file "users_input.go" collides with an unowned package file`) {
+	if _, err := EmitScaffold(dir, plan); err == nil || !strings.Contains(err.Error(), `generated file "input.go" collides with an unowned package file`) {
 		t.Fatalf("EmitScaffold() error = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "users_input.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "input.go")); err != nil {
 		t.Fatalf("unowned linked contract was removed: %v", err)
 	}
 }
@@ -922,8 +922,8 @@ func TestEmitScaffoldRejectsUnownedLinkedContractRemoval(t *testing.T) {
 func TestEmitScaffoldRejectsUntrackedFileInOwnedPackage(t *testing.T) {
 	dir := t.TempDir()
 	initial := &Plan{
-		ComponentName: "Users", ViewDest: "users.go", RouterDest: "users_router.go",
-		Input: generatedContract("UsersInput", "users_input.go"), Output: generatedContract("UsersOutput", "users_output.go"),
+		ComponentName: "Users", ViewDest: "users.go", RouterDest: "router.go",
+		Input: generatedContract("UsersInput", "input.go"), Output: generatedContract("UsersOutput", "output.go"),
 	}
 	if _, err := EmitScaffold(dir, initial); err != nil {
 		t.Fatal(err)
@@ -946,19 +946,19 @@ func TestEmitScaffoldRejectsUntrackedFileInOwnedPackage(t *testing.T) {
 func TestEmitScaffoldRejectsUntrackedRemovalInOwnedPackage(t *testing.T) {
 	dir := t.TempDir()
 	initial := &Plan{
-		ComponentName: "Users", ViewDest: "users.go", RouterDest: "users_router.go",
-		Input: generatedContract("UsersInput", "generated_input.go"), Output: generatedContract("UsersOutput", "users_output.go"),
+		ComponentName: "Users", ViewDest: "users.go", RouterDest: "router.go",
+		Input: generatedContract("UsersInput", "generated_input.go"), Output: generatedContract("UsersOutput", "output.go"),
 	}
 	if _, err := EmitScaffold(dir, initial); err != nil {
 		t.Fatal(err)
 	}
-	untracked := filepath.Join(dir, "users_input.go")
+	untracked := filepath.Join(dir, "input.go")
 	if err := os.WriteFile(untracked, []byte("package users\n\ntype UsersInput struct{}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	changed := *initial
-	changed.Input = ContractPlan{Type: "contracts.Input", Destination: "users_input.go", Ownership: ContractLinked}
-	if _, err := EmitScaffold(dir, &changed); err == nil || !strings.Contains(err.Error(), `generated file "users_input.go" collides with an unowned package file`) {
+	changed.Input = ContractPlan{Type: "contracts.Input", Destination: "input.go", Ownership: ContractLinked}
+	if _, err := EmitScaffold(dir, &changed); err == nil || !strings.Contains(err.Error(), `generated file "input.go" collides with an unowned package file`) {
 		t.Fatalf("EmitScaffold() error = %v", err)
 	}
 	content, err := os.ReadFile(untracked)
@@ -1066,7 +1066,7 @@ func TestComponentFileEmitsAllCanonicalRoutes(t *testing.T) {
 			{Name: "List", Method: "GET", Path: "/orders", Marshaller: "json", APIKeyHeader: "X-Key", APIKeyValue: "read-key"},
 			{Name: "Create", Method: "POST", Path: "/orders", Marshaller: "tabular", APIKeyHeader: "X-Key", APIKeyValue: "write-key"},
 		},
-		Input: generatedContract("OrdersInput", "orders_input.go"), Output: generatedContract("OrdersOutput", "orders_output.go"),
+		Input: generatedContract("OrdersInput", "input.go"), Output: generatedContract("OrdersOutput", "output.go"),
 	}
 	source, err := componentFileText("orders", plan)
 	if err != nil {
@@ -1146,19 +1146,19 @@ func TestEmitScaffoldMigratesOwnedDuplicateComponentHolder(t *testing.T) {
 	fingerprints := map[string]string{}
 	for name, content := range map[string]string{
 		"component.go":    "package users\n\ntype Component struct{}\n",
-		"users_router.go": "package users\n\ntype Route struct{}\n",
+		"router.go": "package users\n\ntype Route struct{}\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		fingerprints[name] = scaffoldFingerprint([]byte(content))
 	}
-	if err := writeScaffoldManifest(dir, "Users", []string{"component.go", "users_router.go"}, &scaffoldManifest{Roles: map[string]string{"component.go": "artifact", "users_router.go": "artifact"}, Fingerprints: fingerprints}); err != nil {
+	if err := writeScaffoldManifest(dir, "Users", []string{"component.go", "router.go"}, &scaffoldManifest{Roles: map[string]string{"component.go": "artifact", "router.go": "artifact"}, Fingerprints: fingerprints}); err != nil {
 		t.Fatal(err)
 	}
 	plan := &Plan{
 		ComponentName: "Users", Routes: []RoutePlan{{Method: "GET", Path: "/users"}},
-		RouterDest: "users_router.go",
+		RouterDest: "router.go",
 		Input:      ContractPlan{Type: "Input", Ownership: ContractLinked},
 		Output:     ContractPlan{Type: "Output", Ownership: ContractLinked},
 	}
@@ -1168,7 +1168,7 @@ func TestEmitScaffoldMigratesOwnedDuplicateComponentHolder(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "component.go")); !os.IsNotExist(err) {
 		t.Fatalf("stale component.go was not removed: %v", err)
 	}
-	holder, err := os.ReadFile(filepath.Join(dir, "users_router.go"))
+	holder, err := os.ReadFile(filepath.Join(dir, "router.go"))
 	if err != nil {
 		t.Fatalf("router holder = %q, %v", holder, err)
 	}
@@ -1422,7 +1422,7 @@ func TestEmitScaffold_WritesNestedPatchBodyOutputField(t *testing.T) {
 		ComponentName: "NestedPatchBodyOut",
 		ViewDest:      "nested_patch_body_out.go",
 		RouterDest:    "nested_patch_body_out_router.go",
-		Input: generatedContract("NestedPatchBodyOutInput", "nested_patch_body_out_input.go",
+		Input: generatedContract("NestedPatchBodyOutInput", "nested_patch_input.go",
 			Field{Name: "Foos", Type: "Foos", Tag: `parameter:"Foos,kind=body,in="`},
 		),
 		Output: generatedContract("NestedPatchBodyOutOutput", "nested_patch_body_out_output.go",
@@ -1603,7 +1603,7 @@ func TestGeneratePackageWithLinkedContractsProducesBuildablePackage(t *testing.T
 	if len(result.Files) != 1 {
 		t.Fatalf("linked generation files = %+v", result.Files)
 	}
-	for _, name := range []string{"users_input.go", "users_output.go"} {
+	for _, name := range []string{"input.go", "output.go"} {
 		if _, err = os.Stat(filepath.Join(packageDir, name)); !os.IsNotExist(err) {
 			t.Fatalf("linked contract file %s was emitted: %v", name, err)
 		}
@@ -1734,7 +1734,7 @@ SELECT 1`
 	if result == nil || result.Plan == nil {
 		t.Fatalf("expected generation result with plan")
 	}
-	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "body_out_input.go"))
+	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "input.go"))
 	if err != nil {
 		t.Fatalf("failed to read generated input file: %v", err)
 	}
@@ -1778,7 +1778,7 @@ SELECT 1`
 	if result == nil || result.Plan == nil {
 		t.Fatalf("expected generation result with plan")
 	}
-	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "body_out_module_input.go"))
+	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "input.go"))
 	if err != nil {
 		t.Fatalf("failed to read generated input file: %v", err)
 	}
@@ -1840,7 +1840,7 @@ SELECT 1`
 	if result == nil || result.Plan == nil {
 		t.Fatalf("expected generation result with plan")
 	}
-	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "body_out_default_module_input.go"))
+	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "input.go"))
 	if err != nil {
 		t.Fatalf("failed to read generated input file: %v", err)
 	}
@@ -1946,7 +1946,7 @@ SELECT 1`
 	if result == nil || result.Plan == nil {
 		t.Fatalf("expected generation result with plan")
 	}
-	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "body_out_wrapped_input.go"))
+	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "input.go"))
 	if err != nil {
 		t.Fatalf("failed to read generated input file: %v", err)
 	}
@@ -2010,7 +2010,7 @@ SELECT 1`
 	if result == nil || result.Plan == nil {
 		t.Fatalf("expected generation result with plan")
 	}
-	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "body_out_default_package_input.go"))
+	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "input.go"))
 	if err != nil {
 		t.Fatalf("failed to read generated input file: %v", err)
 	}
@@ -2027,7 +2027,7 @@ SELECT 1`
 	if !strings.Contains(content, "C []*models.Foo") {
 		t.Fatalf("expected default-package slice pointer type resolution, got:\n%s", content)
 	}
-	viewBytes, err := os.ReadFile(filepath.Join(pkgDir, "body_out_default_package.go"))
+	viewBytes, err := os.ReadFile(filepath.Join(pkgDir, "views.go"))
 	if err != nil {
 		t.Fatalf("failed to read generated view file: %v", err)
 	}
@@ -2065,7 +2065,7 @@ SELECT 1`
 	if result == nil || result.Plan == nil {
 		t.Fatalf("expected generation result with plan")
 	}
-	outputBytes, err := os.ReadFile(filepath.Join(pkgDir, "nested_patch_child_type_output.go"))
+	outputBytes, err := os.ReadFile(filepath.Join(pkgDir, "output.go"))
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
@@ -2407,7 +2407,7 @@ func TestGeneratePackageFromSource_ArrayAggHelperFieldIsUsable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected generate-from-source error: %v", err)
 	}
-	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "events_agg_input.go"))
+	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "input.go"))
 	if err != nil {
 		t.Fatalf("failed to read generated input file: %v", err)
 	}
@@ -2484,7 +2484,7 @@ SELECT 1`
 	if result == nil || result.Plan == nil {
 		t.Fatalf("expected generation result with plan")
 	}
-	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "vendors_auth_input.go"))
+	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "input.go"))
 	if err != nil {
 		t.Fatalf("failed to read generated input file: %v", err)
 	}

@@ -9,6 +9,8 @@ assignment_prefix = "$_", "=" ;
 setting_call = "$", setting_name, arguments, {".", cache_option, arguments} ;
 setting_name = "route" | "api_key" | "connector"
  | "input_type" | "output_type" | "dest" | "input_dest" | "output_dest"
+ | "file_prefix" | "handler_dest" | "lifecycle_dest" | "mutation_dest"
+ | "resources_dest" | "links_dest" | "template_dest" | "support_dest"
  | "router_dest" | "meta" | "mcp" | "report" | "cube" | "cubeCompose"
  | "cache" | "cache_warmup" | "marshal" | "unmarshal" | "format"
  | "date_format" | "case_format" | "ignoreEmptyQueryParameters"

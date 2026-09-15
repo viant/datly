@@ -63,7 +63,7 @@ func (d *shapeDestinations) relocateEntityMethods(p *Plan, groups map[string]*Pl
 		if err != nil {
 			return err
 		}
-		moved := &EntitySupportPlan{File: methodsFile, Destination: lowerSnake(p.ComponentName) + "_entity_methods_gen.go"}
+		moved := &EntitySupportPlan{File: methodsFile, Destination: p.Generation.File("entity_methods", "entity_methods.go")}
 		remaining := make([]EntityMethod, 0, len(support.Methods))
 		for _, method := range support.Methods {
 			if !receivers[pkg][method.Receiver] {

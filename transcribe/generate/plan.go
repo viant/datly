@@ -11,6 +11,7 @@ import (
 )
 
 type Plan struct {
+	Generation       *spec.GenerationSettings
 	OwnerIdentity    string
 	ComponentPackage string
 	Destinations     map[string]string
@@ -187,7 +188,6 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 	if name == "" {
 		name = strings.TrimSpace(component.Key.Name)
 	}
-	snake := lowerSnake(name)
 	settings := component.Settings
 	var generation *spec.GenerationSettings
 	if settings != nil {
@@ -218,7 +218,7 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 	}
 
 	plan := &Plan{
-		ComponentName: name,
+		ComponentName: name, Generation: generation.Clone(),
 		OwnerIdentity: component.Key.String(), ComponentPackage: r.input.TargetPackage,
 		Package: r.input.TargetPackage, GoPackage: r.input.PackageName, ProjectRoot: r.input.ProjectRoot,
 		Documentation: component.Documentation.Clone(),
@@ -228,14 +228,14 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 		RootViewName:  component.RootView.CanonicalName(),
 		RootViewType:  rootViewType,
 		RootSource:    r.rootSource(),
-		ViewDest:      snake + ".go",
-		RouterDest:    snake + "_router.go",
+		ViewDest:      generation.File("view", "views.go"),
+		RouterDest:    generation.File("router", "router.go"),
 		Input: ContractPlan{
-			Type: upperCamel(name) + "Input", Destination: snake + "_input.go",
+			Type: upperCamel(name) + "Input", Destination: generation.File("input", "input.go"),
 			Fields: inputFields, Ownership: ContractGenerated,
 		},
 		Output: ContractPlan{
-			Type: upperCamel(name) + "Output", Destination: snake + "_output.go",
+			Type: upperCamel(name) + "Output", Destination: generation.File("output", "output.go"),
 			Fields: outputFields, Ownership: ContractGenerated,
 		},
 		HelperTypes: resolveHelperTypes(component, declarations),

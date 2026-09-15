@@ -23,7 +23,7 @@ func (g *handlerGeneration) prepareMutationScaffold(semantic *plan.Plan, config 
 		return proposal.Plan, nil
 	}
 	asset := &gen.HookScaffoldAsset{Destination: g.options.Handler.Hooks.Destination, File: proposal.File, PackagePath: config.PackagePath, Catalog: g.compiled.Source.Types}
-	asset.Destination, err = asset.Filename(g.compiled.Component.Name)
+	asset.Destination, err = asset.Filename()
 	if err != nil {
 		return nil, err
 	}

@@ -82,7 +82,7 @@ SELECT id FROM users`)
 		t.Fatalf("unrelated component changed: %q, %v", content, err)
 	}
 	usersEntry := projectEntryByName(t, partial.Manifest, "Users")
-	input, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(usersEntry.Package), "users_input.go"))
+	input, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(usersEntry.Package), "input.go"))
 	if err != nil || !strings.Contains(string(input), "Search string") {
 		t.Fatalf("updated component input = %q, %v", input, err)
 	}
@@ -225,7 +225,7 @@ func TestProjectGenerationPreflightsAllPackageOwnersBeforeEmission(t *testing.T)
 	}
 	usersEntry := projectEntryByName(t, initial.Manifest, "Users")
 	ordersEntry := projectEntryByName(t, initial.Manifest, "Orders")
-	usersInput := filepath.Join(root, filepath.FromSlash(usersEntry.Package), "users_input.go")
+	usersInput := filepath.Join(root, filepath.FromSlash(usersEntry.Package), "input.go")
 	before, err := os.ReadFile(usersInput)
 	if err != nil {
 		t.Fatal(err)
@@ -257,7 +257,7 @@ func TestProjectGenerationPreflightsUnownedPackageFilesBeforeEmission(t *testing
 	}
 	usersEntry := projectEntryByName(t, initial.Manifest, "Users")
 	ordersEntry := projectEntryByName(t, initial.Manifest, "Orders")
-	usersInput := filepath.Join(root, filepath.FromSlash(usersEntry.Package), "users_input.go")
+	usersInput := filepath.Join(root, filepath.FromSlash(usersEntry.Package), "input.go")
 	before, err := os.ReadFile(usersInput)
 	if err != nil {
 		t.Fatal(err)
@@ -289,13 +289,13 @@ func TestProjectGenerationPreflightsUntrackedFileInOwnedPackage(t *testing.T) {
 	}
 	usersEntry := projectEntryByName(t, initial.Manifest, "Users")
 	ordersEntry := projectEntryByName(t, initial.Manifest, "Orders")
-	usersInput := filepath.Join(root, filepath.FromSlash(usersEntry.Package), "users_input.go")
+	usersInput := filepath.Join(root, filepath.FromSlash(usersEntry.Package), "input.go")
 	before, err := os.ReadFile(usersInput)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ordersPackage := filepath.Join(root, filepath.FromSlash(ordersEntry.Package))
-	untracked := filepath.Join(ordersPackage, "orders_input.go")
+	untracked := filepath.Join(ordersPackage, "input.go")
 	manifestPath := filepath.Join(ordersPackage, ".datly-gen.json")
 	manifestData, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -311,7 +311,7 @@ func TestProjectGenerationPreflightsUntrackedFileInOwnedPackage(t *testing.T) {
 	}
 	retained := manifest.Files[:0]
 	for _, path := range manifest.Files {
-		if path != "orders_input.go" {
+		if path != "input.go" {
 			retained = append(retained, path)
 		}
 	}

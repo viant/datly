@@ -57,8 +57,11 @@ func (a *MutationHandlerAsset) resolve(plan *Plan, targetPackage string) error {
 		return fmt.Errorf("mutation definition factory %q must be an exported Go identifier", factory)
 	}
 	destination := strings.TrimSpace(a.Destination)
+	if override := plan.Generation.File("mutation", ""); override != "" {
+		destination = override
+	}
 	if destination == "" {
-		destination = lowerSnake(plan.ComponentName) + "_mutation_gen.go"
+		destination = plan.Generation.File("mutation", "mutation.go")
 	}
 	resolved, err := (MutationSource{Destination: destination, File: a.File}).resolve(plan, targetPackage)
 	if err != nil {

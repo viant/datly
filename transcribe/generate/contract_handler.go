@@ -55,8 +55,11 @@ func resolveContractHandler(plan *Plan, asset *ContractHandlerAsset, targetPacka
 		return fmt.Errorf("generated contract handler factory %q must be an exported Go identifier", factory)
 	}
 	destination := strings.TrimSpace(asset.Destination)
+	if override := plan.Generation.File("handler", ""); override != "" {
+		destination = override
+	}
 	if destination == "" {
-		destination = lowerSnake(plan.ComponentName) + "_handler_gen.go"
+		destination = plan.Generation.File("handler", "handler.go")
 	}
 	relative, err := managedRelativePath(destination)
 	if err != nil {

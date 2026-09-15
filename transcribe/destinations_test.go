@@ -71,7 +71,7 @@ func TestDQLDestinationsSingleAndProject(t *testing.T) {
 					inputDir = "contracts"
 					viewDir = "models"
 				}
-				for _, file := range []string{inputDir + "/request.go", inputDir + "/response.go", viewDir + "/rows.go", "api/records/records_router.go"} {
+				for _, file := range []string{inputDir + "/request.go", inputDir + "/response.go", viewDir + "/rows.go", "api/records/router.go"} {
 					if _, err := os.Stat(filepath.Join(root, file)); err != nil {
 						t.Fatal(err)
 					}
@@ -130,7 +130,7 @@ func TestDQLDestinationsSharedPackageAndCollisions(t *testing.T) {
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	source := func(name string) *Result {
-		return compileProjectSource(t, name, "/"+strings.ToLower(name), "#package('example.com/generated/api/shared')\nSELECT id FROM "+strings.ToLower(name))
+		return compileProjectSource(t, name, "/"+strings.ToLower(name), "#package('example.com/generated/api/shared')\n#setting($_ = $file_prefix('"+strings.ToLower(name)+"_'))\nSELECT id FROM "+strings.ToLower(name))
 	}
 	first, second := source("Users"), source("Orders")
 	initial, err := (&ProjectGeneration{Components: []*Result{first, second}}).Generate(ctx, root)
@@ -317,7 +317,7 @@ func HandleOrders(ctx context.Context,input *dto.Request)(*dto.Response,error){r
 					t.Fatal(err)
 				}
 			}
-			for _, file := range []string{"contracts/request.go", "contracts/response.go", "api/orders/orders_router.go"} {
+			for _, file := range []string{"contracts/request.go", "contracts/response.go", "api/orders/router.go"} {
 				if _, err := os.Stat(filepath.Join(root, file)); err != nil {
 					t.Fatal(err)
 				}

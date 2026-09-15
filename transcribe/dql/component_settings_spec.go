@@ -27,7 +27,7 @@ func toSpecSettings(input *componentSettings) *spec.Settings {
 		Output:                     (&spec.Settings{Output: input.Output}).Clone().Output,
 		Const:                      cloneStringMap(input.Const),
 	}
-	generation := input.Generation
+	generation := input.Generation.Clone()
 	for i := range ret.MCPFolders {
 		ret.MCPFolders[i] = ret.MCPFolders[i].Clone()
 	}
@@ -38,13 +38,9 @@ func toSpecSettings(input *componentSettings) *spec.Settings {
 	generation.OutputFile = strings.TrimSpace(generation.OutputFile)
 	generation.RouterFile = strings.TrimSpace(generation.RouterFile)
 	if !generation.IsZero() {
-		ret.Generation = &generation
+		ret.Generation = generation
 	}
-	if len(ret.MCPFolders) == 0 && ret.Generation == nil && ret.DefaultConnector == "" && ret.Report == nil && ret.Cache == nil &&
-		ret.InputType == "" && ret.OutputType == "" &&
-		ret.JSONMarshalType == "" && ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&
-		ret.Format == "" && ret.DateFormat == "" && ret.CaseFormat == "" && ret.Output == nil &&
-		len(ret.Const) == 0 && ret.IgnoreEmptyQueryParameters == nil {
+	if ret.IsZero() {
 		return nil
 	}
 	return ret

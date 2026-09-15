@@ -52,7 +52,7 @@ func TestGenExecutableRequiresPackage(t *testing.T) {
 					if err != nil {
 						t.Fatalf("gen %s: %v\n%s", operation, err, output)
 					}
-					if _, err := os.Stat(filepath.Join(root, "api", operation, "records_router.go")); err != nil {
+					if _, err := os.Stat(filepath.Join(root, "api", operation, "router.go")); err != nil {
 						t.Fatal(err)
 					}
 					if _, err := os.Stat(filepath.Join(root, "generated")); !os.IsNotExist(err) {

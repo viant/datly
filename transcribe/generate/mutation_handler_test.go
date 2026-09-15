@@ -52,7 +52,7 @@ func TestMutationDefinitionArtifactExplicitComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if generated.Plan.MutationHandler == nil || generated.Plan.MutationHandler.Destination != "orders_mutation_gen.go" || generated.Plan.ContractHandler != nil || generated.Plan.Handler != "NewOrdersDefinition" {
+	if generated.Plan.MutationHandler == nil || generated.Plan.MutationHandler.Destination != "mutation.go" || generated.Plan.ContractHandler != nil || generated.Plan.Handler != "NewOrdersDefinition" {
 		t.Fatalf("plan=%+v", generated.Plan)
 	}
 	const smoke = `package orders
@@ -146,7 +146,7 @@ func TestMutationDefinitionAssetOwnershipAndSelection(t *testing.T) {
 	if len(second.MutationHandler.File.Decls) == 0 {
 		t.Fatal("returned plan mutated generator authority")
 	}
-	for _, destination := range []string{"../escape.go", "nested/definition.go", "orders_input.go"} {
+	for _, destination := range []string{"../escape.go", "nested/definition.go", "input.go"} {
 		t.Run(destination, func(t *testing.T) {
 			asset := mutationAsset(t, mutationDefinitionFixture)
 			asset.Destination = destination

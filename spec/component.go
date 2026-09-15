@@ -60,17 +60,27 @@ type OutputSettings struct {
 // GenerationSettings contains transcription controls that are consumed while
 // producing a Go package and are not part of runtime component behavior.
 type GenerationSettings struct {
-	Template            string `json:"template,omitempty"`
-	DescriptionResource string `json:"descriptionResource,omitempty"`
-	ViewFile            string `json:"viewFile,omitempty"`
-	InputFile           string `json:"inputFile,omitempty"`
-	OutputFile          string `json:"outputFile,omitempty"`
-	RouterFile          string `json:"routerFile,omitempty"`
+	FilePrefix          string            `json:"filePrefix,omitempty"`
+	Template            string            `json:"template,omitempty"`
+	DescriptionResource string            `json:"descriptionResource,omitempty"`
+	ViewFile            string            `json:"viewFile,omitempty"`
+	InputFile           string            `json:"inputFile,omitempty"`
+	OutputFile          string            `json:"outputFile,omitempty"`
+	RouterFile          string            `json:"routerFile,omitempty"`
+	HandlerFile         string            `json:"handlerFile,omitempty"`
+	LifecycleFile       string            `json:"lifecycleFile,omitempty"`
+	MutationFile        string            `json:"mutationFile,omitempty"`
+	ResourcesFile       string            `json:"resourcesFile,omitempty"`
+	LinksFile           string            `json:"linksFile,omitempty"`
+	TemplateFile        string            `json:"templateFile,omitempty"`
+	SupportFiles        map[string]string `json:"supportFiles,omitempty"`
 }
 
 func (s GenerationSettings) IsZero() bool {
-	return s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
-		s.InputFile == "" && s.OutputFile == "" && s.RouterFile == ""
+	return s.FilePrefix == "" && s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
+		s.InputFile == "" && s.OutputFile == "" && s.RouterFile == "" &&
+		s.HandlerFile == "" && s.LifecycleFile == "" && s.MutationFile == "" &&
+		s.ResourcesFile == "" && s.LinksFile == "" && s.TemplateFile == "" && len(s.SupportFiles) == 0
 }
 
 type ReportSettings struct {
@@ -140,4 +150,16 @@ type Route struct {
 	APIKeyHeader string         `json:"apiKeyHeader,omitempty"`
 	APIKeyValue  string         `json:"apiKeyValue,omitempty"`
 	MCP          []*MCPExposure `json:"mcp,omitempty"`
+}
+
+// IsZero reports whether any component settings are configured.
+func (s *Settings) IsZero() bool {
+	if s == nil {
+		return true
+	}
+	return len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
+		s.DefaultConnector == "" && s.Report == nil && s.Cache == nil &&
+		(s.Generation == nil || s.Generation.IsZero()) && s.InputType == "" && s.OutputType == "" &&
+		s.JSONMarshalType == "" && s.JSONUnmarshalType == "" && s.XMLUnmarshalType == "" &&
+		s.Format == "" && s.DateFormat == "" && s.Output == nil && s.CaseFormat == "" && len(s.Const) == 0
 }

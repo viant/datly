@@ -32,7 +32,7 @@ func (g *handlerGeneration) prepareMutation(semantic *plan.Plan, config handlerg
 		{"previous", program.Frames.Previous.File},
 		{"layout", program.Frames.Layout.File},
 		{"actions", program.Actions.File},
-		{"output", program.Output.File},
+		{"mutation_output", program.Output.File},
 		{"validation", program.Validation.File},
 	}
 	if program.Hooks != nil {
@@ -48,7 +48,7 @@ func (g *handlerGeneration) prepareMutation(semantic *plan.Plan, config handlerg
 		}{"invariants", program.Invariants.File})
 	}
 	for _, source := range sources {
-		asset.Support = append(asset.Support, gen.MutationSource{Destination: program.Factory + "_" + source.role + "_gen.go", File: source.file})
+		asset.Support = append(asset.Support, gen.MutationSource{Role: source.role, Destination: source.role + ".go", File: source.file})
 	}
 	g.input.MutationHandler = asset
 	return nil

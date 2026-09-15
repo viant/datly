@@ -33,7 +33,7 @@ func TestGeneratedFactoryExportsLinkAutomatically(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if generated.Plan.FactoryLink == nil || generated.Plan.FactoryLink.Name != "RegisterOrdersFactories" || generated.Plan.FactoryLink.Destination != "orders_link_gen.go" {
+			if generated.Plan.FactoryLink == nil || generated.Plan.FactoryLink.Name != "RegisterOrdersFactories" || generated.Plan.FactoryLink.Destination != "links.go" {
 				t.Fatalf("link=%+v", generated.Plan.FactoryLink)
 			}
 			source := strings.ReplaceAll(factoryLinkSmoke, "{{FAIL}}", map[string]string{"contract": "false", "mutation": "true"}[kind])
@@ -152,7 +152,7 @@ func TestFactoryLinkNamesAndAliases(t *testing.T) {
 		}
 	}
 	asset := mutationAsset(t, mutationDefinitionFixture)
-	asset.Destination = "orders_link_gen.go"
+	asset.Destination = "links.go"
 	if _, err := New(Input{Component: customHandlerComponent(), TargetPackage: "example.com/orders", MutationHandler: asset}).Plan(); err == nil {
 		t.Fatal("link destination collision accepted")
 	}

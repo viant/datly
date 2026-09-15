@@ -45,7 +45,12 @@ func ParsePreparedComponentSource(scope, name string, prepared *PreparedSource) 
 		return nil, fmt.Errorf("missing route metadata in source")
 	}
 	if static := prepared.Directives.Static; static != nil {
-		if strings.TrimSpace(prepared.SQL) != "" || len(prepared.Directives.Params) != 0 || len(prepared.Directives.Views) != 0 || prepared.Directives.MCP != nil || prepared.Directives.Settings != nil {
+		runtimeSettings := prepared.Directives.Settings.Clone()
+		if runtimeSettings != nil {
+			runtimeSettings.Generation = nil
+		}
+
+		if strings.TrimSpace(prepared.SQL) != "" || len(prepared.Directives.Params) != 0 || len(prepared.Directives.Views) != 0 || prepared.Directives.MCP != nil || !runtimeSettings.IsZero() {
 			return nil, fmt.Errorf("static declarations cannot contain SQL, handler, parameter or component settings")
 		}
 		for _, method := range methods {
@@ -60,7 +65,7 @@ func ParsePreparedComponentSource(scope, name string, prepared *PreparedSource) 
 		if err := static.Validate(); err != nil {
 			return nil, err
 		}
-		return &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: scope, Name: name}, Name: name, Static: static}, nil
+		return &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: scope, Name: name}, Name: name, Static: static, Settings: prepared.Directives.Settings.Clone()}, nil
 	}
 	viewSQL := prepared.SQL
 	component := &spec.Component{

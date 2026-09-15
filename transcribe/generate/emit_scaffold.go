@@ -102,7 +102,7 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.RouterDest), Content: componentContent})
 	}
 	if len(plan.Aliases) > 0 {
-		files = append(files, EmittedFile{Path: filepath.Join(dir, lowerSnake(plan.ComponentName)+"_types_gen.go"), Content: plan.aliasSource()})
+		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.Generation.File("types", "types.go")), Content: plan.aliasSource()})
 	}
 	if plan.Input.Ownership == ContractGenerated && plan.localShape(plan.Input.Package) {
 		files = append(files, EmittedFile{

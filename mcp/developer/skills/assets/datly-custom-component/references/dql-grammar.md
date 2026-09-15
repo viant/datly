@@ -279,3 +279,74 @@ Regeneration updates generator-owned holders between `*Child` and `[]*Child`
 when their recorded type and tags remain unchanged. Edited fields, changed child
 identity, or untrustworthy ownership require an explicit migration; do not delete
 authored code to bypass that guard.
+
+## Generated filenames and destinations
+
+Use `datly transcribe get|patch|post|put` with a DQL `#package('api/orders')`
+destination. Defaults are prefix-free and have no `_gen` suffix. Only roles
+needed by the component are emitted; transcription does not create empty files.
+
+| Role | Default | DQL setting |
+| --- | --- | --- |
+| View and helper shapes | `views.go` | `$dest('rows.go')`; individual `dest(alias,'row.go')` remains supported |
+| Input / output contracts | `input.go` / `output.go` | `$input_dest('request.go')` / `$output_dest('response.go')` |
+| Component routes | `router.go` | `$router_dest('routes.go')` |
+| Generated Go handler or Velty factory, when present | `handler.go` | `$handler_dest('execute.go')` |
+| Create-once application lifecycle, when requested | `lifecycle.go` | `$lifecycle_dest('custom.go')` |
+| Generated mutation definition | `mutation.go` | `$mutation_dest('policy.go')` |
+| Embedded resource filesystem, when needed | `resources.go` | `$resources_dest('sql_resources.go')` |
+| Factory registration, when needed | `links.go` | `$links_dest('register.go')` |
+| Velty template, when selected | `handler.velty` | `$template_dest('templates/main.velty')` |
+
+Optional `$file_prefix('orders_')` applies to default filenames for both readers
+and writers: `orders_input.go`, `orders_router.go`, `orders_mutation.go`, etc.
+The prefix must start with an ASCII letter and contain only ASCII letters,
+digits, underscores or hyphens. Without this setting the prefix is empty.
+Exact per-file overrides take precedence and are never prefixed:
+
+```sql
+#package('api/orders')
+#setting($_ = $file_prefix('orders_'))
+#setting($_ = $input_dest('contracts/request.go'))
+#setting($_ = $lifecycle_dest('business.go'))
+#setting($_ = $support_dest('frames','state.go'))
+```
+
+This emits `request.go` in `contracts`, `business.go` in the component package,
+and `state.go` for mutation frames. Other emitted roles use the explicit prefix.
+`dest`, `input_dest`, and `output_dest` retain their package-splitting behavior.
+Other Go destinations are visible package-local `.go` filenames; directory
+traversal, hidden files and `_test.go` destinations are rejected. Template
+resources may use a relative subdirectory. New settings require nonempty quoted
+arguments; duplicate role settings and unknown support roles are errors.
+
+Use `$support_dest('role','filename.go')` for separate support products. Supported
+roles are `entities`, `entity_methods`, `types` (cross-package shape aliases),
+`frames`, `previous`, `layout`, `actions`, `mutation_output`, `validation`, `hooks`,
+and `invariants`. Their defaults are `<role>.go`. Generated `hooks.go` contains
+mutation hook adapters; application edits belong in create-once `lifecycle.go`.
+`mutation_output.go` contains mutation result logic; `output.go` owns the output
+contract. `$support_dest('type:CubeInput','cube.go')` selects the filename for a
+separately generated named type; otherwise its snake-case type name supplies the
+default filename. Support overrides apply in each package that owns that role,
+including relocated entity methods.
+
+Multiple components in one Go package must explicitly choose distinct prefixes
+or per-file destinations when files conflict. There is no inferred prefix or
+collision fallback. Distinct filenames also do not resolve Go declaration-name
+conflicts.
+
+The `.datly-gen.json` manifest owns generated paths and fingerprints. Filenames
+and suffixes do not establish ownership. Regeneration removes replaced,
+manifest-owned files only with trusted unchanged contents; edited or unowned
+files cause an error before publication. Existing shapes with authored edits
+retain the normal field-merge rules at the same destination. A filename move
+requires the old file to be unchanged and its declarations to have destinations.
+Cross-package moves still require explicit migration. Application lifecycle
+files never enter generated ownership and are never removed or overwritten.
+When migrating an existing `orders_hooks.go`, keep it with
+`$lifecycle_dest('orders_hooks.go')`, or move it yourself and select its new name.
+
+Readers using the registered reader need no generated handler or lifecycle.
+Mutation handlers and custom handlers retain their separate implementation roles.
+SQL resource files are emitted only when the component needs packaged resources.

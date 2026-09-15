@@ -668,7 +668,7 @@ SELECT 1`,
 	if err == nil || !strings.Contains(err.Error(), "path placeholder \"order-id\"") {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(root, "generated", "orders_input.go")); !os.IsNotExist(statErr) {
+	if _, statErr := os.Stat(filepath.Join(root, "generated", "input.go")); !os.IsNotExist(statErr) {
 		t.Fatalf("invalid route must fail before generation, stat error = %v", statErr)
 	}
 }

@@ -88,6 +88,12 @@ func (s *GenerationSettings) Clone() *GenerationSettings {
 		return nil
 	}
 	result := *s
+	if s.SupportFiles != nil {
+		result.SupportFiles = map[string]string{}
+		for role, file := range s.SupportFiles {
+			result.SupportFiles[role] = file
+		}
+	}
 	return &result
 }
 

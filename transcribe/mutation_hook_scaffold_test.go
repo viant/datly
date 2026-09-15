@@ -25,7 +25,7 @@ func TestMutationHookScaffoldCreateOnceSQLite(t *testing.T) {
 		name, destination, filename string
 		existing                    bool
 	}{
-		{name: "fresh default destination", filename: "events_hooks.go"},
+		{name: "fresh default destination", filename: "lifecycle.go"},
 		{name: "enable on existing package", destination: "entity_hooks.go", filename: "entity_hooks.go", existing: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

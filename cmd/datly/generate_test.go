@@ -54,15 +54,15 @@ func TestGenCommandSQLite(t *testing.T) {
 	if content, err := os.ReadFile(sourcePath); err != nil || string(content) != dql {
 		t.Fatal("authored source changed", err)
 	}
-	if matches, err := filepath.Glob(filepath.Join(root, "api", "orders", "orders_hooks.go")); err != nil || len(matches) != 1 {
+	if matches, err := filepath.Glob(filepath.Join(root, "api", "orders", "lifecycle.go")); err != nil || len(matches) != 1 {
 		t.Fatal("missing generated hook", matches, err)
 	}
-	hookPath := filepath.Join(root, "api", "orders", "orders_hooks.go")
+	hookPath := filepath.Join(root, "api", "orders", "lifecycle.go")
 	assertGeneratedCommentPlacement(t, hookPath, map[string]string{
 		"OrderLifecycle": "customizes role Input.Orders",
 		"ItemLifecycle":  "customizes role Input.Orders.Items",
 	}, "")
-	assertGeneratedCommentPlacement(t, filepath.Join(root, "api", "orders", "orders_entities_gen.go"), nil, "BackfillIntervalIfNeeded")
+	assertGeneratedCommentPlacement(t, filepath.Join(root, "api", "orders", "entities.go"), nil, "BackfillIntervalIfNeeded")
 	hookEdited, err := os.ReadFile(hookPath)
 	if err != nil {
 		t.Fatal(err)
@@ -185,44 +185,128 @@ func TestGenExecutableDestinations(t *testing.T) {
 
 func TestTranscribeOperationsSQLite(t *testing.T) {
 	ctx := context.Background()
+	binary := filepath.Join(t.TempDir(), "datly")
+	if output, err := exec.CommandContext(ctx, "go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v\n%s", err, output)
+	}
 	db := sqlite.New(t)
 	if err := db.ExecStatements(ctx, genpatch.Schema...); err != nil {
 		t.Fatal(err)
 	}
 	for _, operation := range []string{"get", "patch", "post", "put"} {
-		t.Run(operation, func(t *testing.T) {
-			root := t.TempDir()
-			const module = "github.com/viant/datly/transcribecommand"
-			(testharness.GeneratedModule{Path: module}).Write(t, root)
-			sourceDir := filepath.Join(root, "source")
-			if err := os.Mkdir(sourceDir, 0755); err != nil {
-				t.Fatal(err)
-			}
-			source := strings.Replace(genpatch.DQL, "'PATCH'", "'"+strings.ToUpper(operation)+"'", 1)
-			if err := os.WriteFile(filepath.Join(sourceDir, "Orders.dql"), []byte(source), 0644); err != nil {
-				t.Fatal(err)
-			}
-			var out, diagnostic bytes.Buffer
-			args := []string{"transcribe", operation, "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module + "/source"}
-			if code := run(ctx, args, &out, &diagnostic); code != 0 {
-				t.Fatalf("exit %d: %s", code, &diagnostic)
-			}
-			if !strings.Contains(out.String(), "Generated go "+operation) {
-				t.Fatal(&out)
-			}
-			_, err := os.Stat(filepath.Join(root, "api", "orders", "orders_hooks.go"))
-			if operation == "get" {
-				if !os.IsNotExist(err) {
-					t.Fatalf("reader generated mutation hooks: %v", err)
+		for _, layout := range []string{"defaults", "prefix", "overrides"} {
+			t.Run(operation+"/"+layout, func(t *testing.T) {
+				root := t.TempDir()
+				const module = "github.com/viant/datly/transcribecommand"
+				(testharness.GeneratedModule{Path: module}).Write(t, root)
+				sourceDir := filepath.Join(root, "source")
+				if err := os.Mkdir(sourceDir, 0755); err != nil {
+					t.Fatal(err)
 				}
-			} else if err != nil {
-				t.Fatal(err)
-			}
-			command := exec.CommandContext(ctx, "go", "test", "-mod=mod", "./api/orders")
-			command.Dir = root
-			if output, err := command.CombinedOutput(); err != nil {
-				t.Fatalf("generated %s compile: %v\n%s", operation, err, output)
-			}
-		})
+				source := strings.Replace(genpatch.DQL, "'PATCH'", "'"+strings.ToUpper(operation)+"'", 1)
+				roles := []string{"input", "output", "router", "view"}
+				support := []string{}
+				if operation == "get" {
+					// Readers use the registered reader; no handler wrapper is emitted.
+				} else {
+					roles = append(roles, "mutation", "lifecycle", "links")
+					if operation != "post" {
+						roles = append(roles, "resources")
+					}
+					support = []string{"entities", "frames", "previous", "layout", "actions", "mutation_output", "validation", "hooks", "invariants"}
+				}
+				if layout != "defaults" {
+					source = "#setting($_ = $file_prefix('orders_'))\n" + source
+				}
+				filenames := map[string]string{}
+				for _, role := range append(append([]string{}, roles...), support...) {
+					name := role + ".go"
+					if role == "view" {
+						name = "views.go"
+					}
+					if layout == "prefix" {
+						name = "orders_" + name
+					}
+					if layout == "overrides" {
+						name = "chosen_" + name
+					}
+					filenames[role] = name
+				}
+				if layout == "overrides" {
+					for _, role := range roles {
+						directive := role + "_dest"
+						if role == "view" {
+							directive = "dest"
+						}
+						source = "#setting($_ = $" + directive + "('" + filenames[role] + "'))\n" + source
+					}
+					for _, role := range support {
+						source = "#setting($_ = $support_dest('" + role + "','" + filenames[role] + "'))\n" + source
+					}
+				}
+				if err := os.WriteFile(filepath.Join(sourceDir, "Orders.dql"), []byte(source), 0644); err != nil {
+					t.Fatal(err)
+				}
+				args := []string{"transcribe", operation, "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module + "/source"}
+				generate := func() {
+					t.Helper()
+					output, err := exec.CommandContext(ctx, binary, args...).CombinedOutput()
+					if err != nil || !strings.Contains(string(output), "Generated go "+operation) {
+						t.Fatalf("CLI: %v\n%s", err, output)
+					}
+				}
+				generate()
+				directory := filepath.Join(root, "api", "orders")
+				for role, filename := range filenames {
+					content, err := os.ReadFile(filepath.Join(directory, filename))
+					if err != nil || len(content) == 0 {
+						t.Fatalf("%s file %s: %v", role, filename, err)
+					}
+				}
+				files, err := os.ReadDir(directory)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, file := range files {
+					name := file.Name()
+					if !strings.HasSuffix(name, ".go") {
+						continue
+					}
+					if strings.HasSuffix(name, "_gen.go") || strings.HasPrefix(name, "NewOrders") {
+						t.Fatalf("unexpected generated filename %s", name)
+					}
+					if layout == "defaults" && strings.HasPrefix(name, "orders_") {
+						t.Fatalf("implicit prefix: %s", name)
+					}
+					if layout == "prefix" && !strings.HasPrefix(name, "orders_") {
+						t.Fatalf("prefix missing: %s", name)
+					}
+				}
+				var hooks []byte
+				if operation != "get" {
+					path := filepath.Join(directory, filenames["lifecycle"])
+					hooks, err = os.ReadFile(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					hooks = append(hooks, []byte("\n// application-owned lifecycle edit\nconst LifecycleEdit = true\n")...)
+					if err := os.WriteFile(path, hooks, 0644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				generate()
+				if hooks != nil {
+					after, err := os.ReadFile(filepath.Join(directory, filenames["lifecycle"]))
+					if err != nil || !bytes.Equal(hooks, after) {
+						t.Fatalf("lifecycle changed: %v", err)
+					}
+				}
+				command := exec.CommandContext(ctx, "go", "test", "-mod=mod", "./api/orders")
+				command.Dir = root
+				if output, err := command.CombinedOutput(); err != nil {
+					t.Fatalf("generated %s compile: %v\n%s", operation, err, output)
+				}
+			})
+		}
 	}
 }

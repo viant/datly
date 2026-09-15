@@ -29,7 +29,7 @@ func TestGeneratorPatchDerivesState(t *testing.T) {
 		t.Fatal("Go mutation generation missing")
 	}
 	pkgDir := filepath.Join(root, strings.TrimPrefix(got.Package.PkgPath, "github.com/viant/datly/genfixture/"))
-	hooks := filepath.Join(pkgDir, "orders_hooks.go")
+	hooks := filepath.Join(pkgDir, "lifecycle.go")
 	edited := genpatch.ObserveHooks(t, pkgDir)
 	if _, err = (Generator{Operation: "patch"}).Generate(ctx, request); err != nil {
 		t.Fatalf("regenerate: %v", err)
@@ -106,6 +106,7 @@ func TestGeneratorPreservesDQLAuthority(t *testing.T) {
 		{"authored", `#setting($_ = $input_type('PatchRequest'))
 #setting($_ = $output_type('PatchResponse'))
 #setting($_ = $dest('entities.go'))
+#setting($_ = $support_dest('entities','entity_support.go'))
 #setting($_ = $input_dest('request.go'))
 #setting($_ = $output_dest('response.go'))
 #define($_ = $Payload<[]*OrdersView>(body/changes).Cardinality('Many'))

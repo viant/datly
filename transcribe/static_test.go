@@ -123,3 +123,29 @@ func TestStaticRegenerationRemovesObsoleteAssets(t *testing.T) {
 		t.Fatalf("obsolete asset retained: %v", err)
 	}
 }
+
+func TestStaticFilenameControls(t *testing.T) {
+	for _, tc := range []struct{ name, settings, router, resources string }{
+		{"default", "", "router.go", "resources.go"},
+		{"prefix", "#setting($_ = $file_prefix('site_'))", "site_router.go", "site_resources.go"},
+		{"override", "#setting($_ = $file_prefix('site_'))\n#setting($_ = $router_dest('routes.go'))\n#setting($_ = $resources_dest('assets.go'))", "routes.go", "assets.go"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			testharness.WriteGeneratedGoMod(t, root)
+			store := resource.New()
+			if err := store.Register("site", fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("content")}}); err != nil {
+				t.Fatal(err)
+			}
+			source := &Source{Name: "Site", Resources: store, Text: "#setting($_ = $route('/site','GET'))\n#setting($_ = $static_resource('site','.'))\n" + tc.settings}
+			if _, err := NewCompiler().Transcribe(context.Background(), Request{Source: source, Destination: root}); err != nil {
+				t.Fatal(err)
+			}
+			for _, file := range []string{tc.router, tc.resources} {
+				if _, err := os.Stat(filepath.Join(root, "generated", file)); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}

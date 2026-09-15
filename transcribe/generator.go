@@ -28,7 +28,7 @@ type GenerationRequest struct {
 
 func (g Generator) Generate(ctx context.Context, request GenerationRequest) (*GeneratedPackage, error) {
 	if (request.Source == nil) == (request.Compiled == nil) {
-		return nil, fmt.Errorf("gen requires exactly one authored source or compiled component")
+		return nil, fmt.Errorf("transcribe requires exactly one authored source or compiled component")
 	}
 	compiled := request.Compiled
 	var err error
@@ -64,7 +64,7 @@ func (g Generator) Generate(ctx context.Context, request GenerationRequest) (*Ge
 	if linkedGo {
 		fallback = filepath.Join("generated", projectComponentSlug(key))
 	} else if compiled.Component.TypeContext == nil || strings.TrimSpace(compiled.Component.TypeContext.PackagePath) == "" {
-		return nil, fmt.Errorf("gen requires an explicit #package('path/to/package') destination in DQL")
+		return nil, fmt.Errorf("transcribe requires an explicit #package('path/to/package') destination in DQL")
 	}
 	return g.generate(ctx, request.Destination, fallback, compiled)
 }
@@ -76,14 +76,14 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		language = HandlerGo
 	}
 	if operation != "get" && operation != "patch" && operation != "post" && operation != "put" {
-		return nil, fmt.Errorf("gen operation must be get, patch, post or put")
+		return nil, fmt.Errorf("transcribe operation must be get, patch, post or put")
 	}
 	if language != HandlerGo && language != HandlerVelty {
-		return nil, fmt.Errorf("unsupported gen language %q", language)
+		return nil, fmt.Errorf("unsupported transcribe language %q", language)
 	}
 	for _, route := range compiled.Component.Routes {
 		if route != nil && route.Method != "" && !strings.EqualFold(route.Method, operation) {
-			return nil, fmt.Errorf("gen operation %q conflicts with authored route method %q", operation, route.Method)
+			return nil, fmt.Errorf("transcribe operation %q conflicts with authored route method %q", operation, route.Method)
 		}
 	}
 	if operation == "get" {

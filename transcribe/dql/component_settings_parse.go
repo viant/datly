@@ -174,6 +174,50 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			if ret.Generation.RouterFile == "" {
 				return nil, fmt.Errorf("invalid router_dest directive: empty destination")
 			}
+		case strings.EqualFold(name, "file_prefix"), strings.EqualFold(name, "handler_dest"), strings.EqualFold(name, "lifecycle_dest"), strings.EqualFold(name, "mutation_dest"), strings.EqualFold(name, "resources_dest"), strings.EqualFold(name, "links_dest"), strings.EqualFold(name, "template_dest"), strings.EqualFold(name, "support_dest"):
+			expected := 1
+			if strings.EqualFold(name, "support_dest") {
+				expected = 2
+			}
+			if len(args) != expected || tail != "" {
+				return nil, fmt.Errorf("%s requires exactly %d quoted arguments", name, expected)
+			}
+			values := make([]string, len(args))
+			for i, arg := range args {
+				value, ok := parseQuotedLiteral(arg)
+				if !ok || strings.TrimSpace(value) == "" {
+					return nil, fmt.Errorf("%s requires nonempty quoted arguments", name)
+				}
+				values[i] = value
+			}
+			generation := &ret.Generation
+			var destination *string
+			switch strings.ToLower(name) {
+			case "file_prefix":
+				destination = &generation.FilePrefix
+			case "handler_dest":
+				destination = &generation.HandlerFile
+			case "lifecycle_dest":
+				destination = &generation.LifecycleFile
+			case "mutation_dest":
+				destination = &generation.MutationFile
+			case "resources_dest":
+				destination = &generation.ResourcesFile
+			case "links_dest":
+				destination = &generation.LinksFile
+			case "template_dest":
+				destination = &generation.TemplateFile
+			case "support_dest":
+				if err := generation.SetSupportFile(values[0], values[1]); err != nil {
+					return nil, err
+				}
+			}
+			if destination != nil {
+				if *destination != "" {
+					return nil, fmt.Errorf("duplicate %s directive", name)
+				}
+				*destination = values[0]
+			}
 		case strings.EqualFold(name, "input_type"):
 			if len(args) == 0 {
 				return nil, fmt.Errorf("invalid input_type directive: missing type")
@@ -277,6 +321,9 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			ret.Const[constantName] = trimQuote(args[1])
 			ret.constSpans[canonicalName] = SourceSpan{Start: block.start, End: block.end}
 		}
+	}
+	if err := ret.Generation.ValidateFilePrefix(); err != nil {
+		return nil, err
 	}
 	if ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&

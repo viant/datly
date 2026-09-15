@@ -70,7 +70,7 @@ func TestDeveloperHighLevelGenerationNativeMCP(t *testing.T) {
 		t.Fatalf("PATCH response did not report generation mode: %+v", patchResult)
 	}
 	patchDir := filepath.Join(root, "api/orders/patch")
-	hooks := readFile(t, filepath.Join(patchDir, "orders_hooks.go"))
+	hooks := readFile(t, filepath.Join(patchDir, "lifecycle.go"))
 	for _, want := range []string{"type OrdersViewLifecycle struct", "func (hooks *OrdersViewLifecycle) Init", "return nil"} {
 		if !strings.Contains(hooks, want) {
 			t.Fatalf("generated lifecycle missing %q:\n%s", want, hooks)

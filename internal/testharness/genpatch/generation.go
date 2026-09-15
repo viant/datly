@@ -11,7 +11,7 @@ import (
 // ObserveHooks edits only the generator's create-once application hook file.
 func ObserveHooks(t testing.TB, directory string) string {
 	t.Helper()
-	path := filepath.Join(directory, "orders_hooks.go")
+	path := filepath.Join(directory, "lifecycle.go")
 	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

@@ -174,8 +174,8 @@ func TestGeneratorPlansLinkedContractsWithoutDuplicateEmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.Input.Ownership != ContractLinked || plan.Input.Type != "*contracts.Input" || plan.Input.Destination != "users_input.go" ||
-		plan.Output.Ownership != ContractLinked || plan.Output.Type != "[]*contracts.Output" || plan.Output.Destination != "users_output.go" {
+	if plan.Input.Ownership != ContractLinked || plan.Input.Type != "*contracts.Input" || plan.Input.Destination != "input.go" ||
+		plan.Output.Ownership != ContractLinked || plan.Output.Type != "[]*contracts.Output" || plan.Output.Destination != "output.go" {
 		t.Fatalf("linked contracts = input:%+v output:%+v", plan.Input, plan.Output)
 	}
 	content, err := componentFileText("users", plan)
@@ -196,7 +196,7 @@ func TestGeneratorRemovesStaleGeneratedContractsWhenRolesBecomeLinked(t *testing
 	if _, err := New(Input{Component: component}).Generate(dir); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"users_input.go", "users_output.go"} {
+	for _, name := range []string{"input.go", "output.go"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Fatalf("generated contract %s missing: %v", name, err)
 		}
@@ -220,7 +220,7 @@ func TestGeneratorRemovesStaleGeneratedContractsWhenRolesBecomeLinked(t *testing
 	}).Generate(dir); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"users_input.go", "users_output.go"} {
+	for _, name := range []string{"input.go", "output.go"} {
 		if _, err = os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
 			t.Fatalf("stale generated contract %s remains: %v", name, err)
 		}
@@ -252,7 +252,7 @@ func TestGeneratorEmitsOnlyDivergedContractRole(t *testing.T) {
 		t.Fatalf("partial contract result = %+v", result)
 	}
 	for _, file := range result.Files {
-		if strings.HasSuffix(file.Path, "users_output.go") {
+		if strings.HasSuffix(file.Path, "output.go") {
 			t.Fatalf("linked output was emitted: %s", file.Path)
 		}
 	}
@@ -288,7 +288,7 @@ func TestGeneratorLinksPackageOwnedRootViewWithoutDuplicateEmission(t *testing.T
 	if _, err = New(Input{Component: component}).Generate(packageDir); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = os.Stat(filepath.Join(packageDir, "users.go")); err != nil {
+	if _, err = os.Stat(filepath.Join(packageDir, "views.go")); err != nil {
 		t.Fatalf("initial generated view missing: %v", err)
 	}
 
@@ -308,11 +308,11 @@ func TestGeneratorLinksPackageOwnedRootViewWithoutDuplicateEmission(t *testing.T
 		result.Plan.RootViewType != "contracts.Row" {
 		t.Fatalf("linked view plan = %+v", result.Plan.Views)
 	}
-	if _, err = os.Stat(filepath.Join(packageDir, "users.go")); err != nil {
+	if _, err = os.Stat(filepath.Join(packageDir, "views.go")); err != nil {
 		t.Fatalf("previous generated shape was removed: %v", err)
 	}
 	for _, file := range result.Files {
-		if strings.HasSuffix(file.Path, "users.go") || strings.Contains(file.Content, "type Row struct") {
+		if strings.HasSuffix(file.Path, "views.go") || strings.Contains(file.Content, "type Row struct") {
 			t.Fatalf("linked view was emitted: %+v", file)
 		}
 	}

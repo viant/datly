@@ -312,7 +312,7 @@ SELECT * FROM (${embed:sql/users.sql}) users`)
 	if entry.Key.Name == "" {
 		t.Fatalf("users component missing from manifest: %+v", generated.Manifest.Components)
 	}
-	if _, err = os.Stat(filepath.Join(base, filepath.FromSlash(entry.Package), "users_router.go")); err != nil {
+	if _, err = os.Stat(filepath.Join(base, filepath.FromSlash(entry.Package), "router.go")); err != nil {
 		t.Fatalf("generated component missing: %v", err)
 	}
 }

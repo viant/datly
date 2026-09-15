@@ -198,8 +198,11 @@ prefix applies to defaults; explicit DQL filename overrides take precedence:
 | `input.go`, `output.go` | The generated request and response contracts. |
 | `lifecycle.go` | Create-once application lifecycle placeholders: edit this file. |
 | `entities.go` | Setters, presence synchronization and invariant helpers. |
-| `handler.go`, `mutation.go` and their support files | Generated orchestration, capture, Previous matching, validation and queued actions. |
+| `mutation.go`, `frames.go`, `previous.go`, `layout.go`, `actions.go`, `mutation_output.go`, `validation.go`, `hooks.go`, `invariants.go` | Generated orchestration, capture, Previous matching, validation and queued actions. |
 | `router.go`, `links.go`, `resources.go`, `datly_sql/` | Component registration, linked types and embedded SQL resources. |
+
+Optional `$file_prefix('orders_')` prefixes defaults; explicit DQL file overrides
+remain exact. See [filename settings](dql.md#generated-filenames-and-destinations).
 
 The generator derives the needed current-state reads and key projections.
 Auxiliary `kind` remains available as data, but receives no mutation lifecycle

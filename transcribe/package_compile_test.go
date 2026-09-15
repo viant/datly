@@ -750,10 +750,10 @@ func TestPackageCompilationGenerateOwnsReaderOutputMissingFromPackageContract(t 
 	if generated.Package.HasType("PackageCompileInput") || !generated.Package.HasType("UsersOutput") {
 		t.Fatalf("contract ownership was not preserved: %+v", generated.Package.Types)
 	}
-	if _, err = os.Stat(filepath.Join(root, "generated", "users_input.go")); !os.IsNotExist(err) {
+	if _, err = os.Stat(filepath.Join(root, "generated", "input.go")); !os.IsNotExist(err) {
 		t.Fatalf("linked input file was emitted: %v", err)
 	}
-	output, err := os.ReadFile(filepath.Join(root, "generated", "users_output.go"))
+	output, err := os.ReadFile(filepath.Join(root, "generated", "output.go"))
 	if err != nil || !strings.Contains(string(output), "Data []*UsersView") {
 		t.Fatalf("generated reader output = %v\n%s", err, output)
 	}

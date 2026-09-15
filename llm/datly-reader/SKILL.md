@@ -65,3 +65,12 @@ Go hooks own business rules. Existing linked Go types keep their authority.
 ## Deliver
 
 Return the component's purpose, public input/output contract, DQL/Go files, hook responsibilities, exposure choice, validation/error behavior, tests run, and any unresolved capability. Do not claim production registration or database mutation unless it actually occurred and was authorized.
+
+## Filename controls
+
+Use prefix-free default filenames with no `_gen` suffix. Application lifecycle
+edits belong in create-once `lifecycle.go`; generated support remains separate.
+Use explicit `$file_prefix('orders_')` only when requested or needed for chosen
+same-package destinations. Exact per-file overrides win and are never prefixed.
+Read [filename roles and override syntax](references/dql-grammar.md#generated-filenames-and-destinations)
+for support files, split destinations, collision rules and safe regeneration.

@@ -52,7 +52,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 	if strings.TrimSpace(r.input.TargetPackage) == "" {
 		return nil, fmt.Errorf("package resource generation requires a target package")
 	}
-	result := &ResourcePlan{Namespace: fmt.Sprintf("datly_%x", sha256.Sum256([]byte(identity))), Destination: lowerSnake(r.input.Component.Name) + "_resources.go"}
+	result := &ResourcePlan{Namespace: fmt.Sprintf("datly_%x", sha256.Sum256([]byte(identity))), Destination: r.plan.Generation.File("resources", "resources.go")}
 	if r.input.PackageName != "" {
 		result.Symbol = upperCamel(r.input.Component.Name)
 	}

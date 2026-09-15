@@ -57,7 +57,7 @@ func TestGeneratorEmitsAcceptedCustomHandler(t *testing.T) {
 	if result.Plan.Handler != "HandleOrders" || result.Plan.GoHandler == nil {
 		t.Fatalf("handler plan = %+v", result.Plan)
 	}
-	content, err := os.ReadFile(filepath.Join(dir, "orders_handler.go"))
+	content, err := os.ReadFile(filepath.Join(dir, "handler.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestGeneratorCustomHandlerRejectsOwnershipCollisions(t *testing.T) {
 			component.Routes[0].Handler = "OtherHandler"
 		}, match: "conflicts with custom handler"},
 		{name: "destination", prepare: func(_ *spec.Component, asset *GoHandlerAsset) {
-			asset.Destination = "orders_router.go"
+			asset.Destination = "router.go"
 		}, match: "shared by component holder and custom handler"},
 		{name: "generated declaration", prepare: func(_ *spec.Component, asset *GoHandlerAsset) {
 			asset.File.Decls = append(asset.File.Decls, &ast.GenDecl{
@@ -169,14 +169,14 @@ func TestGeneratorCustomHandlerOwnsIsolatedASTAndRemovesStaleFile(t *testing.T) 
 	if _, err := generator.Generate(dir); err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	content, err := os.ReadFile(filepath.Join(dir, "orders_handler.go"))
+	content, err := os.ReadFile(filepath.Join(dir, "handler.go"))
 	if err != nil || !strings.Contains(string(content), "HandleOrders") || strings.Contains(string(content), "Changed") {
 		t.Fatalf("isolated handler source = %q, %v", content, err)
 	}
 	if _, err = New(Input{Component: customHandlerComponent(), TargetPackage: "example.com/generated/orders"}).Generate(dir); err != nil {
 		t.Fatalf("Generate() without handler error = %v", err)
 	}
-	if _, err = os.Stat(filepath.Join(dir, "orders_handler.go")); !os.IsNotExist(err) {
+	if _, err = os.Stat(filepath.Join(dir, "handler.go")); !os.IsNotExist(err) {
 		t.Fatalf("stale handler file remains: %v", err)
 	}
 }

@@ -16,9 +16,10 @@ import (
 // packageSet preflights all authored destinations and the import graph before
 // handing each package to the existing transactional persistence owner.
 type packageSet struct {
-	plans []*Plan
-	dirs  []string
-	files [][]EmittedFile
+	plans    []*Plan
+	dirs     []string
+	files    [][]EmittedFile
+	removals []map[string]bool
 }
 
 func (p *Plan) packages(dir string) (*packageSet, error) {
@@ -47,6 +48,7 @@ func (p *Plan) packages(dir string) (*packageSet, error) {
 	return result, nil
 }
 func (s *packageSet) validate() error {
+	s.removals = make([]map[string]bool, len(s.plans))
 	for i, p := range s.plans {
 		files, user, removals, err := scaffoldArtifacts(s.dirs[i], p)
 		if err != nil {
@@ -58,6 +60,7 @@ func (s *packageSet) validate() error {
 			return err
 		}
 		s.files[i] = preview.files
+		s.removals[i] = preview.renames
 		for _, file := range preview.userFiles {
 			if _, err := os.Stat(file.Path); os.IsNotExist(err) {
 				s.files[i] = append(s.files[i], file)
@@ -108,7 +111,7 @@ func (s *packageSet) sources(index int) (map[string]string, error) {
 		return nil, err
 	}
 	for _, name := range manifest.Files {
-		if manifest.Roles[name] != "artifact" {
+		if manifest.Roles[name] != "artifact" && (index >= len(s.removals) || !s.removals[index][name]) {
 			continue
 		}
 		proposed := false

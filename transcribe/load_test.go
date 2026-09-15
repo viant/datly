@@ -351,7 +351,7 @@ SELECT id FROM users`,
 
 func TestSettingsLoaderOverlaysNestedSettingsWithoutAliasing(t *testing.T) {
 	base := &spec.Settings{
-		Generation: &spec.GenerationSettings{Template: "reader", ViewFile: "package.go", InputFile: "package_input.go"},
+		Generation: &spec.GenerationSettings{Template: "reader", ViewFile: "package.go", InputFile: "package_input.go", FilePrefix: "base_", SupportFiles: map[string]string{"frames": "base_frames.go", "entities": "base_entities.go"}},
 		Report: &spec.ReportSettings{Enabled: true, LinkedInputType: "PackageInput", InputLayout: &spec.ReportInputLayout{
 			Dimensions: "PackageDimensions", Measures: "PackageMeasures",
 		}},
@@ -361,7 +361,7 @@ func TestSettingsLoaderOverlaysNestedSettingsWithoutAliasing(t *testing.T) {
 		Const: map[string]string{"shared": "package", "package": "only"},
 	}
 	authored := &spec.Settings{
-		Generation: &spec.GenerationSettings{Template: "patch", ViewFile: "dql.go"},
+		Generation: &spec.GenerationSettings{Template: "patch", ViewFile: "dql.go", FilePrefix: "authored_", HandlerFile: "execute.go", LifecycleFile: "hooks.go", MutationFile: "policy.go", ResourcesFile: "sql.go", LinksFile: "links.go", TemplateFile: "main.velty", SupportFiles: map[string]string{"frames": "state.go"}},
 		Report: &spec.ReportSettings{Enabled: true, InputLayout: &spec.ReportInputLayout{
 			Dimensions: "DQLDimensions",
 		}},
@@ -377,6 +377,18 @@ func TestSettingsLoaderOverlaysNestedSettingsWithoutAliasing(t *testing.T) {
 		t.Fatalf("settings = %+v", actual)
 	}
 	actual.Const["package"] = "changed"
+	for role, want := range map[string]string{"handler": "execute.go", "lifecycle": "hooks.go", "mutation": "policy.go", "resources": "sql.go", "links": "links.go", "template": "main.velty", "frames": "state.go", "entities": "base_entities.go"} {
+		if got := actual.Generation.File(role, "fallback.go"); got != want {
+			t.Fatalf("merged %s=%s", role, got)
+		}
+	}
+	if actual.Generation.FilePrefix != "authored_" {
+		t.Fatal("authored prefix lost")
+	}
+	actual.Generation.SupportFiles["entities"] = "changed.go"
+	if base.Generation.SupportFiles["entities"] != "base_entities.go" || authored.Generation.SupportFiles["frames"] != "state.go" {
+		t.Fatal("generation map aliases source")
+	}
 	actual.Generation.InputFile = "changed.go"
 	actual.Report.InputLayout.Measures = "changed"
 	if base.Cache.Warmup.Cases[0].Set[0].Values[0] != "1" || base.Const["package"] != "only" {

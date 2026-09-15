@@ -91,7 +91,7 @@ func TestGeneratorRejectsInvalidGeneratedTypeAuthorityAndCollisions(t *testing.T
 			want:          "exact catalog key",
 		},
 		{name: "input name collision", descriptor: generatedTypeDescriptor(targetPackage, "SpendInput"), want: "shared by input contract and generated type"},
-		{name: "destination collision", descriptor: generatedTypeDescriptor(targetPackage, "CubeInput"), reference: GeneratedTypeReference{Destination: "spend_input.go"}, want: "shared by input contract and generated type"},
+		{name: "destination collision", descriptor: generatedTypeDescriptor(targetPackage, "CubeInput"), reference: GeneratedTypeReference{Destination: "input.go"}, want: "shared by input contract and generated type"},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -146,5 +146,41 @@ func generatedTypeDescriptor(packagePath, name string) *x.Type {
 			TypeSpec: &ast.TypeSpec{Name: ast.NewIdent(name), Type: &ast.StructType{Fields: &ast.FieldList{List: []*ast.Field{field}}}},
 			Imports:  map[string]*smodel.ImportRef{"time": {Path: "time", Alias: "time"}},
 		},
+	}
+}
+
+func TestGeneratedTypeFilenamePrefixAndOverride(t *testing.T) {
+	const target = "example.com/generated/reporting"
+	catalog := typecatalog.NewCatalog()
+	descriptor := generatedTypeDescriptor(target, "CubeInput")
+	if err := catalog.Register(typecatalog.TypeOriginGenerated, descriptor); err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := typecatalog.NewResolver(catalog, typecatalog.TranscribeAuthority, &typecatalog.ResolutionContext{PackagePath: target})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, prefix, explicit, override, want string }{
+		{"default", "", "", "", "cube_input.go"},
+		{"prefix", "orders_", "", "", "orders_cube_input.go"},
+		{"explicit API", "orders_", "selected.go", "", "selected.go"},
+		{"DQL override", "orders_", "selected.go", "chosen.go", "chosen.go"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			component := generatedTypeComponent()
+			component.Settings = &spec.Settings{Generation: &spec.GenerationSettings{FilePrefix: tc.prefix}}
+			if tc.override != "" {
+				if err := component.Settings.Generation.SetSupportFile("type:CubeInput", tc.override); err != nil {
+					t.Fatal(err)
+				}
+			}
+			plan, err := New(Input{Component: component, TargetPackage: target, TypeResolver: resolver, GeneratedTypes: []GeneratedTypeReference{{DescriptorKey: descriptor.Key(), Destination: tc.explicit}}}).Plan()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(plan.GeneratedTypes) != 1 || plan.GeneratedTypes[0].Destination != tc.want {
+				t.Fatal(plan.GeneratedTypes)
+			}
+		})
 	}
 }

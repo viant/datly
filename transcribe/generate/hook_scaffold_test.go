@@ -54,7 +54,7 @@ func TestHookScaffoldFileTextPlacesPositionlessDocsOnDeclarations(t *testing.T) 
 	if strings.Contains(source, "package //") || !strings.Contains(source, "package orders\n\n// OrderLifecycle customizes role Input.Orders.\ntype OrderLifecycle struct") {
 		t.Fatalf("misplaced hook scaffold comment:\n%s", source)
 	}
-	if _, err = parser.ParseFile(token.NewFileSet(), "orders_hooks.go", source, parser.ParseComments); err != nil {
+	if _, err = parser.ParseFile(token.NewFileSet(), "lifecycle.go", source, parser.ParseComments); err != nil {
 		t.Fatalf("generated hook source does not parse: %v\n%s", err, source)
 	}
 }
@@ -77,7 +77,7 @@ func TestResolveHookScaffoldRejectsLinkedContracts(t *testing.T) {
 func TestGeneratorRejectsHookScaffoldDestinationCollision(t *testing.T) {
 	handler := parseContractHandlerAsset(t, "NewOrdersHandler", validContractHandlerSource())
 	hooks := testHookScaffoldAsset(t)
-	hooks.Destination = "orders_input.go"
+	hooks.Destination = "input.go"
 	_, err := New(Input{
 		Component: customHandlerComponent(), TargetPackage: "example.com/generated/orders",
 		ContractHandler: handler, HookScaffold: hooks,
@@ -163,7 +163,7 @@ func TestRegenerationRejectsStaleUserHookSignatureWithoutFileLoss(t *testing.T) 
 	if _, err := New(input).Generate(dir); err != nil {
 		t.Fatalf("initial Generate() error = %v", err)
 	}
-	hookPath := filepath.Join(dir, "orders_hooks.go")
+	hookPath := filepath.Join(dir, "lifecycle.go")
 	hookSource, err := os.ReadFile(hookPath)
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +177,7 @@ func TestRegenerationRejectsStaleUserHookSignatureWithoutFileLoss(t *testing.T) 
 	if err = os.WriteFile(hookPath, []byte(staleSource), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	routerPath := filepath.Join(dir, "orders_router.go")
+	routerPath := filepath.Join(dir, "router.go")
 	routerBefore, err := os.ReadFile(routerPath)
 	if err != nil {
 		t.Fatal(err)
@@ -190,7 +190,7 @@ func TestRegenerationRejectsStaleUserHookSignatureWithoutFileLoss(t *testing.T) 
 		t.Fatalf("Plan() error = %v", err)
 	}
 	if err = plan.ValidateDestination(dir); err == nil ||
-		!strings.Contains(err.Error(), `user-owned hook scaffold "orders_hooks.go"`) ||
+		!strings.Contains(err.Error(), `user-owned hook scaffold "lifecycle.go"`) ||
 		!strings.Contains(err.Error(), "lifecycle contract changed: output hook Finalize") {
 		t.Fatalf("ValidateDestination() error = %v", err)
 	}

@@ -28,7 +28,7 @@ func (r *planResolver) resolveFactoryLink() {
 	if factory == "" {
 		return
 	}
-	r.plan.FactoryLink = &FactoryLinkPlan{Name: "Register" + exportedName(r.plan.ComponentName) + "Factories", Destination: lowerSnake(r.plan.ComponentName) + "_link_gen.go", PackagePath: r.input.TargetPackage, Factory: factory, Adapter: adapter}
+	r.plan.FactoryLink = &FactoryLinkPlan{Name: "Register" + exportedName(r.plan.ComponentName) + "Factories", Destination: r.plan.Generation.File("links", "links.go"), PackagePath: r.input.TargetPackage, Factory: factory, Adapter: adapter}
 }
 
 func (p *FactoryLinkPlan) source(packageName string, plan *Plan) (string, error) {

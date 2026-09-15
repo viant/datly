@@ -12,7 +12,7 @@ func TestMutationSupportRejectsConflicts(t *testing.T) {
 	for _, test := range []struct{ name, destination, source string }{
 		{"parent-path", "../support.go", "const extra = 1"},
 		{"nested-package", "nested/support.go", "const extra = 1"},
-		{"main-destination", "orders_mutation_gen.go", "const extra = 1"},
+		{"main-destination", "mutation.go", "const extra = 1"},
 		{"main-symbol", "support.go", "type ordersDefinition struct{}"},
 		{"contract-symbol", "support.go", "type OrdersInput struct{}"},
 		{"implicit-init", "support.go", "func init(){}"},

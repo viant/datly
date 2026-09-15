@@ -55,7 +55,7 @@ func TestGeneratorEmitsGeneratedContractHandler(t *testing.T) {
 		t.Fatalf("Generate() error = %v", err)
 	}
 	if result.Plan.Handler != "NewOrdersHandler" || result.Plan.ContractHandler == nil ||
-		result.Plan.ContractHandler.Destination != "orders_handler_gen.go" {
+		result.Plan.ContractHandler.Destination != "handler.go" {
 		t.Fatalf("generated contract handler plan = %+v, handler = %q", result.Plan.ContractHandler, result.Plan.Handler)
 	}
 	command := exec.Command("go", "test", "-mod=mod", "./...")

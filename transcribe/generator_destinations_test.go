@@ -40,7 +40,7 @@ func TestGeneratorDestinationAuthority(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	text := genpatch.DestinationDQL("github.com/viant/datly/genfixture")
+	text := "#setting($_ = $file_prefix('orders_'))\n#setting($_ = $support_dest('entity_methods','methods.go'))\n#setting($_ = $support_dest('types','contracts.go'))\n" + genpatch.DestinationDQL("github.com/viant/datly/genfixture")
 	request := GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Scope: "source", Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB}), Text: text, Types: catalog}}
 	got, err := (Generator{Operation: "patch"}).Generate(ctx, request)
 	if err != nil {
@@ -52,6 +52,11 @@ func TestGeneratorDestinationAuthority(t *testing.T) {
 	for _, directory := range []string{"requests", "responses", "entities", "items", "api/orders"} {
 		if _, err := os.Stat(filepath.Join(root, directory)); err != nil {
 			t.Fatal(err)
+		}
+	}
+	for _, file := range []string{"api/orders/contracts.go", "entities/methods.go", "items/methods.go"} {
+		if _, err := os.Stat(filepath.Join(root, file)); err != nil {
+			t.Fatal("exact support override", err)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(root, "generated")); !os.IsNotExist(err) {
