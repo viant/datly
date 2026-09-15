@@ -115,8 +115,7 @@ uses its own package, for example `example.com/shop/orders/read`; the writer use
 `example.com/shop/orders/write`. The project root is the filesystem argument, while
 DQL owns the Go package and shape declarations.
 
-The tested high-level generation command has this form (CLI integration is still
-under review in this development branch):
+The high-level generation command is available in the `v1` source tree:
 
 ```sh
 datly gen -op patch \
@@ -140,11 +139,9 @@ starts from the graph description, constructs the write contract and logic, then
 passes its generated result through compilation/translation. Translating an
 already-complete writer declaration is a lower-level operation.
 
-The v1 high-level `gen` command is being restored and verified against that
-workflow. Until it is ready, the existing `transcribe.Request` API must not be
-presented as an equivalent convenience command: it requires lower-level inputs.
-The step-by-step CLI walkthrough will use the verified generation path, with
-pure Go as its primary output.
+Use `datly gen` for this high-level workflow. Lower-level transcription accepts
+already-authored contracts and is a separate API; application authors do not need
+to recreate those contracts to generate a standard writer.
 
 After generation, inspect the returned plan/file list, add business behavior to
 the create-once Go hook file, build/link the component and run it. Do not create

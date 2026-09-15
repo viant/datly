@@ -287,10 +287,10 @@ Has, then validates the effective date interval. Application Go `Init` and
 and never enter mutation traversal. The generator owns Body/Existing/Data
 plumbing; authors do not construct it for standard generation.
 
-High-level `gen` is delivered in an isolated review worktree and under review.
-Do not claim it is in the released CLI. Discover the connected operation/schema
-first; if absent, deliver the graph/hooks and report missing `gen` rather than
-substituting `translate` or lower-level transcription.
+High-level `gen` is available in the `v1` source tree. Check the installed CLI
+or connected developer MCP capabilities before invoking it; an older release or
+unconfigured server may not expose this workflow. Do not substitute lower-level
+translation or hand-authored writer plumbing when generation is unavailable.
 
 ## Semantic checks after grammar
 

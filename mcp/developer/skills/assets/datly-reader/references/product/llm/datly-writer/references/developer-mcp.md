@@ -2,15 +2,13 @@
 
 ## Operation-based generation to pure Go
 
-**Generation availability.** The high-level `gen` implementation is delivered in
-an isolated review worktree and is under review; it is not established as part
-of the release CLI. Discover the connected developer server and installed CLI
-capabilities before generation. If operation-based `gen` with pure Go output is
-missing, return the DQL and application hook contract and report that gap. Do not
-substitute `translate`, lower-level transcription, or manual writer plumbing.
+**Generation availability.** Operation-based Go generation is available in the
+`v1` source CLI. Check the installed CLI and connected developer server separately:
+older releases and unconfigured servers may not expose high-level generation.
+If unavailable, report that gap with the DQL and lifecycle contract; do not
+substitute lower-level translation or manual writer plumbing.
 
-The reviewed CLI interface is shown below only for a build whose help advertises
-it; it is not a release-install instruction:
+For a matching `v1` CLI:
 
 ```sh
 datly gen -op patch -lang go -dir /path/to/application example.com/application/records

@@ -26,10 +26,9 @@ reviewed interface:
 datly gen -op patch -lang go -dir /path/to/application example.com/app/records
 ```
 
-The high-level implementation is delivered in an isolated review worktree and
-under review, not established in the release CLI. Discover connected support as
-specified in [developer-mcp.md](references/developer-mcp.md); report missing `gen`
-without substituting translation.
+High-level generation is available in the `v1` source CLI. Discover connected
+server support as described in [developer-mcp.md](references/developer-mcp.md); report a
+missing capability without substituting translation.
 
 The generator owns Body/Existing/Data binding, original identity tuple extraction,
 authorized complete Previous reads, Has/SyncPresence, sparse validation, sequencing,

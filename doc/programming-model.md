@@ -188,9 +188,9 @@ datly gen -op patch \
   example.com/shop/source
 ```
 
-The high-level CLI restoration is under review in this development branch; see
-[the writer guide](mutations.md#cli-generation-and-generated-code) for its current
-status and complete workflow.
+The high-level CLI is available in the `v1` source tree. See
+[the writer guide](mutations.md#cli-generation-and-generated-code) for project
+setup, emitted artifacts and lifecycle customization.
 
 The graph describes intent. Generated Go derives request contracts and authorized
 Previous reads, tracks supplied fields, compares existing rows, sequences new IDs,
