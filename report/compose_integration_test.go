@@ -89,7 +89,7 @@ func TestCubeComposeCombinedDialectBudgetTransports(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			httpgateway.NewHandler(h.runtime, nil, "").ServeHTTP(recorder, request)
 			if test.fail {
-				if recorder.Code == 200 || !strings.Contains(recorder.Body.String(), "exceeding dialect limit") {
+				if recorder.Code != 500 || strings.Contains(recorder.Body.String(), "exceeding dialect limit") || !strings.Contains(recorder.Body.String(), "Internal Server Error") {
 					t.Fatalf("expected composed budget error, HTTP %d: %s", recorder.Code, recorder.Body.String())
 				}
 			} else if recorder.Code != 200 {

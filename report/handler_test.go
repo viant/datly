@@ -3,7 +3,6 @@ package report
 import (
 	"context"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/viant/bindly/locator"
@@ -16,6 +15,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	xhandler "github.com/viant/xdatly/handler"
+	xresponse "github.com/viant/xdatly/response"
 	xstate "github.com/viant/xdatly/state"
 )
 
@@ -159,7 +159,7 @@ func TestHandlerLeavesRequiredFilterFailureToSourceBinding(t *testing.T) {
 		},
 		Input: input.Interface(),
 	})
-	if err == nil || !strings.Contains(err.Error(), `missing required query value "accountID"`) {
+	if err == nil || xresponse.ErrorStatusCode(err, 500) != 400 || err.Error() != "Bad Request" {
 		t.Fatalf("InvokeComponent() error = %v, want required source filter failure", err)
 	}
 }
