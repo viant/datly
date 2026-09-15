@@ -60,8 +60,12 @@ func TestRequiredConstraintRetrofitPreservesOwnership(t *testing.T) {
 				t.Fatal("manifest does not describe generated constraint")
 			}
 			plan.Views[0].Fields[0].Tag = `sqlx:"enabled"`
-			if err = plan.ValidateDestination(dir); err == nil {
-				t.Fatal("constraint removal silently accepted")
+			if _, err = EmitScaffold(dir, plan); err != nil {
+				t.Fatal("generated constraint removal rejected", err)
+			}
+			after, err = os.ReadFile(path)
+			if err != nil || strings.Contains(string(after), "required=true") {
+				t.Fatal("removed constraint persisted", err)
 			}
 		})
 	}

@@ -284,8 +284,9 @@ also requires regeneration and rebuilding so the compiled bindings stay current.
 
 The example's generated package and date-validation tests were executed, and an
 identical second generation preserved the edited lifecycle file byte-for-byte.
-Changing DQL-owned field tags during regeneration is a separate known correction
-in progress; do not overwrite a reported source conflict to force regeneration.
+DQL-owned field tags and types can change through regeneration when the existing
+field still matches its recorded generated version. Conflicting manual field edits
+stop generation before publication; resolve that ownership conflict explicitly.
 
 For an existing lifecycle type instead of a default scaffold, declare its package
 with `#import` and attach it to the outer view using `entity_hooks`. That explicit

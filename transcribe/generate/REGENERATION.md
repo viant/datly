@@ -9,20 +9,28 @@ set and its source table. This does not change an explicit Go CAST type: a
 Missing table metadata is not interpreted as a NOT NULL constraint. Authored
 `sqlx:"...,required=false"` and transient mappings retain their authority.
 
-When a previously generated field gains this constraint, regeneration may add
-`required=true` only if the manifest proves the prior generated tag and all
-other proposed tag content is unchanged. The native source editor checks that
-the destination still matches that prior tag before applying the change.
-Customized or unproven tags, conflicting required options, and removal of a
-required constraint fail preflight and require explicit tag reconciliation.
-The CAST type-edit exception cannot silently omit a required-tag change while
-recording it in the manifest.
+Generated projection metadata follows the current canonical DQL/schema proposal.
+Regeneration may add, change or remove invariant, validation and SQLX tags only
+when the manifest records that field's prior generated type and tag, and the
+current destination still matches both. Even a hand edit equal to the new
+proposal is not accepted as previous generated source. Missing trustworthy field
+ownership retains conflict protection. Authored `required=false` in the current
+DQL remains authoritative; removing a generated constraint is now supported.
+
+The same field evidence permits inferred type changes, including removing a
+CAST and returning to discovered nullability. A changed generated type must
+still match the prior emitted type. Existing explicit CAST policy preserves
+unrelated authored tags when DQL has not changed those generated tags. It cannot
+silently omit a requested metadata update or overwrite a conflicting edited type.
+The native `x/shape.SourceParser` performs all exact type/tag edits, import
+rewrites, and removals; Datly supplies only source-ownership authorization.
+Relation holder tags retain their separate destination/cardinality protections.
 
 Automatic UNIQUE discovery is not being expanded across drivers, per user
 direction. Authored native UNIQUE tags remain the explicit contract; missing
 driver metadata does not prove that a database constraint is absent.
 
-`.datly-gen.json` version 4 records `sha256:` content fingerprints and exact
+`.datly-gen.json` version 5 records `sha256:` content fingerprints and exact
 generated projection-field ownership for emitted files. A generated filename alone is not permission to overwrite its contents.
 
 Regeneration replaces or removes an artifact only when its current bytes match
@@ -32,8 +40,8 @@ safe to retain, even if an older fingerprint is unavailable. Conflict validation
 runs during project preflight and again against the staged package before any
 generated files are published.
 
-Generated shapes keep unrelated type/tag conflict protection. Explicit user
-authorities supersede unconditional append-only behavior across reader, Go,
+Generated shapes keep unowned and customized type/tag conflict protection.
+Canonical field ownership and explicit user authorities apply across reader, Go,
 Velty and generic mutation writer transcription:
 
 - Standalone `CAST(view.column AS *int)` changes that exact generated-owned
@@ -57,7 +65,7 @@ Velty and generic mutation writer transcription:
 
 `spec.Column.ExplicitType` flows through generated fields and typed projection
 helpers. Persistence passes exact type changes, obsolete owned fields, and
-narrow helper codec-reference changes to native `viant/x/shape.SourceParser`.
+guarded projection metadata changes and narrow helper codec-reference changes to native `viant/x/shape.SourceParser`.
 `EditStructFields` accepts exact requests; `AppendStructFields` and the existing
 `UpdateStructFields` API keep their default behavior. No Datly source AST merger
 or deletion walker is involved. Imports are adjusted only as required by these

@@ -151,9 +151,9 @@ func (p *scaffoldPersistence) retainShapes(target, existing string, manifest *sc
 	return desired, roles, nil
 }
 
-// shapeTypeUpdates carries CAST and canonical relation authority only to their
-// generated-owned destination, type and field. Relation changes additionally
-// require the exact prior generated type and tag; CAST keeps its authored policy.
+// shapeTypeUpdates applies canonical field types only at generated destinations.
+// Recorded field ownership guards schema changes; explicit CAST retains its
+// existing authority over unowned fields and unrelated authored tags.
 func (p *scaffoldPersistence) shapeTypeUpdates(destination string, existing, owned map[string]projectionField) ([]xshape.SourceFieldTypeUpdate, error) {
 	if p.plan == nil {
 		return nil, nil
@@ -188,19 +188,48 @@ func (p *scaffoldPersistence) shapeTypeUpdates(destination string, existing, own
 				result = append(result, xshape.SourceFieldTypeUpdate{Owner: view.Name, Field: field.Name, TypeExpr: field.Type})
 				continue
 			}
-			if field.ExplicitType {
-				result = append(result, xshape.SourceFieldTypeUpdate{Owner: view.Name, Field: field.Name, TypeExpr: field.Type})
+			update, err := p.projectionTypeUpdate(destination, view.Name, field, existing, owned)
+			if err != nil {
+				return nil, err
+			}
+			if update != nil {
+				result = append(result, *update)
 			}
 		}
 	}
 	if destination == p.plan.ViewDest {
 		for _, helper := range p.plan.HelperTypes {
 			for _, field := range helper.Fields {
-				if field.ExplicitType {
-					result = append(result, xshape.SourceFieldTypeUpdate{Owner: helper.Name, Field: field.Name, TypeExpr: field.Type})
+				update, err := p.projectionTypeUpdate(destination, helper.Name, field, existing, owned)
+				if err != nil {
+					return nil, err
+				}
+				if update != nil {
+					result = append(result, *update)
 				}
 			}
 		}
 	}
 	return result, nil
+}
+
+// projectionTypeUpdate distinguishes current DQL changes from customized source.
+// The native source editor owns type parsing, import rewriting and exact edits.
+func (p *scaffoldPersistence) projectionTypeUpdate(destination, owner string, field Field, existing, owned map[string]projectionField) (*xshape.SourceFieldTypeUpdate, error) {
+	key := owner + "." + field.Name
+	prior, trusted := owned[key]
+	canonical, err := p.plan.CanonicalType("", field.Type)
+	if err != nil {
+		return nil, err
+	}
+	changed := trusted && canonical != prior.Type
+	if before, present := existing[key]; present && trusted && (changed || field.ExplicitType) {
+		if before.Type != prior.Type || !field.ExplicitType && before.Tag != prior.Tag {
+			return nil, fmt.Errorf("shape %s field %s has customized type or tag: explicit migration required before type change", destination, key)
+		}
+	}
+	if !field.ExplicitType && !changed {
+		return nil, nil
+	}
+	return &xshape.SourceFieldTypeUpdate{Owner: owner, Field: field.Name, TypeExpr: field.Type}, nil
 }

@@ -3,9 +3,7 @@ package generate
 import (
 	"bytes"
 	"fmt"
-	"reflect"
 
-	sqlio "github.com/viant/sqlx/io"
 	"github.com/viant/tagly/tags"
 
 	xshape "github.com/viant/x/shape"
@@ -174,28 +172,31 @@ func (p *scaffoldPersistence) projectionChanges(destination string, previous, pr
 		return xshape.SourceFieldEdits{}, err
 	}
 	edits := xshape.SourceFieldEdits{Types: updates}
+	relations := map[string]bool{}
+	if p.plan != nil {
+		for _, view := range p.plan.Views {
+			if view.Destination == destination {
+				for _, field := range view.Fields {
+					if field.RelationHolder {
+						relations[view.Name+"."+field.Name] = true
+					}
+				}
+			}
+		}
+	}
 	for _, candidate := range desired {
 		before, present := existing[candidate.key()]
 		if !present {
 			continue
 		}
-		requested := sqlio.ParseTag(reflect.StructTag(candidate.Tag)).Required
-		actual := sqlio.ParseTag(reflect.StructTag(before.Tag)).Required
-		if requested == actual {
+		prior, trusted := owned[candidate.key()]
+		if !owners[candidate.Owner] || relations[candidate.key()] || !trusted || candidate.Tag == prior.Tag {
 			continue
 		}
-		prior, trusted := owned[candidate.key()]
-		if !trusted || !requested {
-			return xshape.SourceFieldEdits{}, fmt.Errorf("shape %s field %s requires explicit required-constraint tag migration", destination, candidate.key())
-		}
-		updated := tags.NewTags(prior.Tag)
-		sqlxTag := updated.Lookup(sqlio.TagSqlx)
-		if sqlxTag == nil || hasSQLXOption(sqlxTag.Values, "required") {
-			return xshape.SourceFieldEdits{}, fmt.Errorf("shape %s field %s has conflicting required-constraint tag authority", destination, candidate.key())
-		}
-		sqlxTag.Append("required=true")
-		if updated.Stringify() != candidate.Tag {
-			return xshape.SourceFieldEdits{}, fmt.Errorf("shape %s field %s changes unrelated tags with its required constraint", destination, candidate.key())
+		// DQL controls generated projection metadata, but never adopts a
+		// destination edit, even when that edit happens to equal the proposal.
+		if before.Type != prior.Type || before.Tag != prior.Tag {
+			return xshape.SourceFieldEdits{}, fmt.Errorf("shape %s field %s has customized type or tag: explicit migration required before metadata change", destination, candidate.key())
 		}
 		edits.Tags = append(edits.Tags, xshape.SourceFieldTagUpdate{Owner: candidate.Owner, Field: candidate.Name, Previous: prior.Tag, Tag: candidate.Tag})
 	}
