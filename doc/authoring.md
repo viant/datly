@@ -140,6 +140,11 @@ validate. Reload can change supported metadata/DQL against linked contracts;
 Go method or shape changes require rebuilding. [Configuration](configuration.md)
 explains this boundary for standalone applications.
 
+For a generated component loaded from its Go package, the ownership manifest
+retains its destination and linked SQL resources. Static validation and reload
+preserve those resources and do not adopt edited SQL as a fresh generator
+baseline. Later transcription still protects authored changes.
+
 ## CAST, pointers, column drop and to-one regeneration
 
 Use the imported type's full package identity, with only explicitly declared

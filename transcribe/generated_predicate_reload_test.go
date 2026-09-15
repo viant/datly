@@ -28,6 +28,8 @@ func TestGeneratedCustomPredicatePublicReloadSQLite(t *testing.T) {
 			t.Fatal(err)
 		}
 		(testharness.GeneratedModule{Path: module}).Write(t, stage)
+		// No #package or persisted DQL: reload must recover the emitted
+		// Go package's destination from its existing ownership manifest.
 		source := &Source{Scope: module + "/records", Name: "Records", Connector: "main", Types: typecatalog.NewCatalog(), Text: fmt.Sprintf(`#setting($_ = $route('/records','GET'))
 #setting($_ = $mcp('records.query'))
 #define($_ = $Minimum<int>(query/min).WithTag('json:"minimum"').Required().WithStatusCode(422).WithErrorMessage('minimum required').WithPredicate(0,'handler','%s/records.Threshold'))

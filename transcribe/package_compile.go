@@ -150,6 +150,20 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("complete package compilation authority is required")
 	}
 	component := a.component.Clone()
+	// Go-only discovery has no DQL destination directive. Recover only an
+	// existing generated owner's destination, never infer one from type imports.
+	if strings.TrimSpace(a.source.Text) == "" && a.route.Dir != "" {
+		destination, err := (gen.PackageOwnership{Directory: a.route.Dir}).Destination(component.Key)
+		if err != nil {
+			return nil, err
+		}
+		if destination != "" {
+			if component.TypeContext == nil {
+				component.TypeContext = &spec.TypeContext{}
+			}
+			component.TypeContext.PackagePath = destination
+		}
+	}
 	if _, err := (&componentLoader{}).normalizeIndependentViewParams(component, nil); err != nil {
 		return nil, fmt.Errorf("normalize package view contracts: %w", err)
 	}

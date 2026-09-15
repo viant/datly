@@ -76,6 +76,11 @@ func (p *scaffoldPersistence) protectArtifacts(target, existing string, previous
 		}
 	}
 	for relative, content := range proposed {
+		// Linked resources are retained source bytes, not a fresh generator
+		// proposal. Keep their prior baseline so edits cannot acquire ownership.
+		if p.plan != nil && p.plan.Resources.retained(relative) {
+			continue
+		}
 		// Exact generated-field edits must not grant deletion rights over
 		// previously authored shape content. Retain its last trusted baseline.
 		if shapes[relative] && p.customizedShapes[relative] {

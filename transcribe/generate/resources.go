@@ -22,11 +22,27 @@ type ResourcePlan struct {
 	Destination string
 	Symbol      string
 	Files       []EmittedFile
+	sourceText  string
 }
 
 // ResourceManifest is persisted beside generated package ownership metadata.
 // Paths are relative to the generated package directory.
 type ResourceManifest = packageasset.Resources
+
+func (r *ResourcePlan) retained(file string) bool {
+	if r == nil || r.sourceText == "" {
+		return false
+	}
+	if file == r.Destination {
+		return true
+	}
+	for _, asset := range r.Files {
+		if file == asset.Path {
+			return true
+		}
+	}
+	return false
+}
 
 func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 	if !r.input.SQLResources && r.plan.Static == nil && r.plan.Documentation.IsZero() && len(r.plan.Settings.MCPFolders) == 0 {
@@ -136,12 +152,15 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 	}
 	sort.Slice(result.Files, func(i, j int) bool { return result.Files[i].Path < result.Files[j].Path })
 	if len(result.Files) == 0 {
-		return nil, nil
+		return r.linkedResources(result)
 	}
 	return result, nil
 }
 
 func (r *ResourcePlan) source(packageName string) string {
+	if r.sourceText != "" {
+		return r.sourceText
+	}
 	var source strings.Builder
 	source.WriteString("package " + packageName + "\n\nimport \"embed\"\n\n")
 	source.WriteString("// DatlyResourceNamespace identifies this package's generated resource filesystem.\nconst " + r.Symbol + "DatlyResourceNamespace = " + strconv.Quote(r.Namespace) + "\n\n")

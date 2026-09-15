@@ -236,6 +236,14 @@ func TestPublicReload(t *testing.T) {
 				t.Fatal(err)
 			}
 			if pass == 0 {
+				project, err := (&transcribe.Discovery{BaseDir: stage, Include: []string{packagePath}}).Compile(context.Background())
+				if err != nil || len(project.Components) != 1 {
+					t.Fatalf("Go-only discovery: project=%+v err=%v", project, err)
+				}
+				compiled := project.Components[0]
+				if compiled.Source.Text != "" || compiled.Source.PackageComponent == nil || compiled.Component.TypeContext == nil || compiled.Component.TypeContext.PackagePath != packagePath {
+					t.Fatal("Go-only discovery lost generated destination authority")
+				}
 				report, err := (&transcribe.Validator{BaseDir: stage, Include: []string{packagePath}}).Validate(context.Background())
 				if err != nil || !report.Valid || len(report.Components) != 1 || len(report.Completed) != 3 || len(report.Skipped) == 0 || len(report.Schema) != 0 {
 					t.Fatalf("static validation report=%+v err=%v", report, err)
