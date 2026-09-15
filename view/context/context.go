@@ -26,15 +26,18 @@ type Context struct {
 }
 
 func (vc *Context) Deadline() (deadline time.Time, ok bool) {
-	return vc.parent.Deadline()
+	parent := vc.parentContext()
+	return parent.Deadline()
 }
 
 func (vc *Context) Done() <-chan struct{} {
-	return vc.parent.Done()
+	parent := vc.parentContext()
+	return parent.Done()
 }
 
 func (vc *Context) Err() error {
-	return vc.parent.Err()
+	parent := vc.parentContext()
+	return parent.Err()
 }
 
 func (vc *Context) Value(key interface{}) interface{} {
@@ -52,34 +55,53 @@ func (vc *Context) Value(key interface{}) interface{} {
 
 	switch key {
 	case state.DBProviderKey:
-		if vc.dbProvider == nil {
+		vc.RLock()
+		dbProvider := vc.dbProvider
+		vc.RUnlock()
+		if dbProvider == nil {
 			return nil
 		}
-		return vc.dbProvider
+		return dbProvider
 	case handler.InputKey:
-		if vc.input == nil {
+		vc.RLock()
+		input := vc.input
+		vc.RUnlock()
+		if input == nil {
 			return nil
 		}
-		return vc.input
+		return input
 	case logger.ContextKey:
-		if vc.logger == nil {
+		vc.RLock()
+		aLogger := vc.logger
+		vc.RUnlock()
+		if aLogger == nil {
 			return nil
 		}
-		return vc.logger
+		return aLogger
 	case handler.DataSyncKey:
-		if vc.dataSync == nil {
+		vc.RLock()
+		dataSync := vc.dataSync
+		vc.RUnlock()
+		if dataSync == nil {
 			return nil
 		}
-		return vc.dataSync
+		return dataSync
 	case async.JobKey:
-		if vc.job == nil {
+		vc.RLock()
+		job := vc.job
+		vc.RUnlock()
+		if job == nil {
 			return nil
 		}
-		return vc.job
+		return job
 	case async.InvocationTypeKey:
-		return vc.invocationType
+		vc.RLock()
+		invocationType := vc.invocationType
+		vc.RUnlock()
+		return invocationType
 	default:
-		return vc.parent.Value(key)
+		parent := vc.parentContext()
+		return parent.Value(key)
 	}
 }
 
@@ -96,23 +118,46 @@ func (vc *Context) WithValue(key interface{}, value interface{}) context.Context
 	}
 	switch key {
 	case state.DBProviderKey:
+		vc.Lock()
+		defer vc.Unlock()
 		vc.dbProvider = value.(state.DBProvider)
 	case handler.InputKey:
+		vc.Lock()
+		defer vc.Unlock()
 		vc.input = value
 	case logger.ContextKey:
 		if value != nil {
+			vc.Lock()
+			defer vc.Unlock()
 			vc.logger = value.(logger.Logger)
 		}
 	case handler.DataSyncKey:
+		vc.Lock()
+		defer vc.Unlock()
 		vc.dataSync = value.(*handler.DataSync)
 	case async.JobKey:
+		vc.Lock()
+		defer vc.Unlock()
 		vc.job = value.(*async.Job)
 	case async.InvocationTypeKey:
+		vc.Lock()
+		defer vc.Unlock()
 		vc.invocationType = value.(async.InvocationType)
 	default:
+		vc.Lock()
+		defer vc.Unlock()
 		vc.parent = context.WithValue(vc.parent, key, value)
 	}
 	return vc
+}
+
+func (vc *Context) parentContext() context.Context {
+	vc.RLock()
+	defer vc.RUnlock()
+	if vc.parent == nil {
+		return context.Background()
+	}
+	return vc.parent
 }
 
 func NewContext(parent context.Context) *Context {
