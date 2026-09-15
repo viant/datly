@@ -62,14 +62,12 @@ route, binding, type, relationship and generation authority around it.
 #package('example.com/shop/orders/read')
 #setting($_ = $input_type('OrdersInput'))
 #setting($_ = $output_type('OrdersOutput'))
+#setting($_ = $case_format('lc'))
 #setting($_ = $route('/orders', 'GET'))
 #setting($_ = $connector('main'))
 #define($_ = $CustomerID<int>(query/customerId).Required())
-#define($_ = $Orders<[]*Order>(output/view).WithTag('json:"orders"'))
-SELECT orders.*, type(orders, 'Order'),
-       tag(orders.ID, 'json:"id"'),
-       tag(orders.CUSTOMER_ID, 'json:"customerId"'),
-       tag(orders.TOTAL, 'json:"total"')
+#define($_ = $Orders<[]*Order>(output/view))
+SELECT orders.*, type(orders, 'Order')
 FROM (
     SELECT o.ID, o.CUSTOMER_ID, o.TOTAL
     FROM ORDERS o
@@ -81,14 +79,16 @@ FROM (
 specify a result field. The explicit `Orders<[]*Order>(output/view)` declaration
 binds the main query result—the `orders` root view—to its `Orders` field.
 `type(orders, 'Order')` names each row's Go shape; `[]*Order` makes the result a
-collection. The field's JSON tag names the public envelope property `orders`.
+collection. The component-wide `case_format('lc')` policy makes the holder
+`orders` and applies lower-camel casing to nested row fields through the
+Structology JSON marshaler. No per-field JSON tags are needed.
 
 The public shape is equivalent to the following; the generated `output.go` also
 contains the binding, view, and SQL-resource tags used to populate it:
 
 ```go
 type OrdersOutput struct {
-    Orders []*Order `json:"orders"`
+    Orders []*Order
 }
 ```
 
@@ -100,12 +100,13 @@ For one matching row, the response is:
 
 Shape the response explicitly at two levels:
 
-- Change the output field's JSON tag to change its envelope key; for example,
-  `WithTag('json:"data"')` produces a `data` property without changing the Go field.
-- Select the desired row columns and set their JSON tags in the outer DQL. For
-  example, selecting only `orders.ID` and `orders.TOTAL` creates a narrower row
-  shape; retain only the corresponding type/tag annotations. The inner query
-  can still use `CUSTOMER_ID` for filtering.
+- Choose the output holder in DQL. Declaring `Data<[]*Order>(output/view)` instead
+  of `Orders<[]*Order>(output/view)` creates a `Data` field and a `data` envelope
+  under the same lower-camel policy.
+- Select the desired row columns in the outer DQL. Selecting only `orders.ID`
+  and `orders.TOTAL` creates a narrower row shape; the inner query can still use
+  `CUSTOMER_ID` for filtering. Use the global case policy for consistent wire
+  names rather than annotating every column with a JSON tag.
 
 The named input and output types also identify the reader's request/output hook
 receivers: `OrdersInput.Init` and `OrdersOutput.Finalize`. Row processing such as

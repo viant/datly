@@ -53,17 +53,20 @@ For a reader, name the output holder as well as the output type:
 
 ```sql
 #setting($_ = $output_type('OrdersOutput'))
-#define($_ = $Orders<[]*Order>(output/view).WithTag('json:"orders"'))
+#setting($_ = $case_format('lc'))
+#define($_ = $Orders<[]*Order>(output/view))
 ```
 
 `output/view` binds the main reader result to `OrdersOutput.Orders`. The `Order`
 row shape is declared by `type(orders, 'Order')` in the outer query. This yields
 an object with an `orders` collection; the output type setting alone does not
 express that association. The [complete reader example](programming-model.md#dql-describes-the-data-operation)
-shows the query, row JSON tags, generated public shape and resulting JSON.
+shows the query, global case policy, generated public shape and resulting JSON.
 
-Use JSON tags, explicit output holders and supported selector/exclusion settings
-to define the public shape. Custom handlers can fill a typed output directly.
+Use explicit output holders, the selected projection, `case_format('lc')`, and
+supported selector/exclusion settings to define the public shape. The case policy
+is passed to the native Structology JSON marshaler and applies to the envelope
+and nested fields; routine per-field JSON tags are unnecessary. Custom handlers can fill a typed output directly.
 Output finalizers can enrich it at the supported lifecycle point. Do not expose
 internal Has markers or read-provenance metadata as user data.
 

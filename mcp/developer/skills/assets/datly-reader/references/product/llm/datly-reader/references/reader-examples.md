@@ -8,14 +8,16 @@ contract; `output/view` binds the main root-view result into that contract:
 ~~~~sql
 #setting($_ = $input_type('OrdersInput'))
 #setting($_ = $output_type('OrdersOutput'))
-#define($_ = $Orders<[]*Order>(output/view).WithTag('json:"orders"'))
+#setting($_ = $case_format('lc'))
+#define($_ = $Orders<[]*Order>(output/view))
 ~~~~
 
 In the complete DQL, declare `#package`, route and connector, and name the root
 row with `type(orders, 'Order')` in the outer SELECT. The generated public shape
-is `OrdersOutput.Orders []*Order`; the JSON envelope key is `orders`. Row columns
-come from the selected projection, and outer `tag(orders.ID, 'json:"id"')`
-annotations control their JSON names. Do not imply that the output type setting
+is `OrdersOutput.Orders []*Order`; `case_format('lc')` makes the envelope key
+`orders` and uniformly shapes nested field names using the Structology JSON
+marshaler. Row columns come from the selected projection. Do not add JSON tags
+merely to obtain lower-camel casing. Do not imply that the output type setting
 alone specifies a holder, or that reader and writer contracts are automatically
 combined. Request initialization belongs to the explicitly named input contract;
 row `OnFetch` processing and output finalization are separate lifecycle points.
