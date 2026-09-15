@@ -79,8 +79,8 @@ func (d *jobDispatcher) contract(record *jobs.Record) (dexec.ComponentTarget, *r
 		return dexec.ComponentTarget{}, nil, fmt.Errorf("async route metadata not found")
 	}
 	target := dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: route.Method, Path: route.Path}}
-	registered := d.runtime.registered[component.Key.String()]
-	if registered == nil || registered.Input == nil || (registered.Reader == nil && registered.Handler == nil) {
+	registered, loadErr := d.runtime.registeredComponent(context.Background(), component.Key)
+	if loadErr != nil || registered == nil || registered.Input == nil || (registered.Reader == nil && registered.Handler == nil) {
 		return target, nil, fmt.Errorf("async registered component execution is unavailable")
 	}
 	contract, ok := registered.Input.ForRoute(target.Route)
@@ -143,7 +143,11 @@ func (d *jobDispatcher) Capture(ctx context.Context, record *jobs.Record, submis
 	if err != nil {
 		return nil, err
 	}
-	if settings := d.runtime.registered[target.Component.String()].Component.Settings; settings != nil && settings.IgnoreEmptyQueryParameters != nil {
+	registered, err := d.runtime.registeredComponent(ctx, target.Component)
+	if err != nil {
+		return nil, err
+	}
+	if settings := registered.Component.Settings; settings != nil && settings.IgnoreEmptyQueryParameters != nil {
 		ctx = requestprovider.WithQueryPolicy(ctx, requestprovider.QueryPolicy{IgnoreEmptyParameters: *settings.IgnoreEmptyQueryParameters})
 	}
 	codec, err := jobs.NewStateCodec(contract)
@@ -172,7 +176,7 @@ func (d *jobDispatcher) Capture(ctx context.Context, record *jobs.Record, submis
 	if err != nil {
 		return nil, err
 	}
-	if submission.Source != nil || captured.Controls.JobID != "" || d.runtime.registered[target.Component.String()].Handler != nil {
+	if submission.Source != nil || captured.Controls.JobID != "" || registered.Handler != nil {
 		return captured, nil
 	}
 	providers, err := replay.Providers()

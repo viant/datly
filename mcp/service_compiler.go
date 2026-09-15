@@ -62,11 +62,26 @@ func (c *serviceCompiler) Compile(ctx context.Context) (*Service, error) {
 		return nil, err
 	}
 	catalog := newCatalog(plans.tools, resources)
-	policy, err := compileAuthorizationPolicy(c.config.Authorization, catalog)
+	var policy *authorization.Policy
+	if len(c.config.Indexed) == 0 {
+		policy, err = compileAuthorizationPolicy(c.config.Authorization, catalog)
+	} else {
+		policy, err = compileIndexedAuthorizationPolicy(c.config.Authorization, catalog, c.config.Indexed)
+	}
 	if err != nil {
 		return nil, err
 	}
-	return c.publish(catalog, policy)
+	service, err := c.publish(catalog, policy)
+	if err != nil {
+		return nil, err
+	}
+	if len(c.config.Indexed) > 0 {
+		service.lazy, err = newLazyCatalog(c.config, service)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return service, nil
 }
 
 func (c *serviceCompiler) components() ([]*registry.RegisteredComponent, error) {

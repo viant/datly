@@ -22,6 +22,10 @@ func (r *Runtime) ExposesComponent(key spec.Key) bool {
 		return false
 	}
 	_, ok := r.publicRoutes().ComponentByKey(key)
+	if ok {
+		return true
+	}
+	_, ok = r.relatedExposure.Load(key.String())
 	return ok
 }
 

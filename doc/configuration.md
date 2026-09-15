@@ -61,7 +61,8 @@ DSNs and Scy secret content are not rewritten as relative file locations.
 
 | Setting | Current meaning |
 | --- | --- |
-| `GoBootstrap.Packages` / `Exclude` | Canonical component package selection; source must match linked types and factories. |
+| `GoBootstrap.Packages` / `Exclude` | Canonical component package selection. Bootstrap scans these packages once into an in-memory route/MCP/source index; no `paths.yaml` or other sidecar is required. Executable components load on first use and are cached for that generation. |
+| `GoBootstrap.EagerComponents` | Explicitly compile every selected component at startup. The default is `false`; use this only when an operator intentionally accepts eager startup work. |
 | `Connector` | Exact default connector name. Unknown names fail. |
 | `Connectors` | Named DB configuration: driver, DSN, optional Scy secret and SQL pool settings. SQLite is linked by the command; other drivers must be linked by the app. |
 | `Endpoint.Port` | Zero/absent defaults to 8080. |
@@ -78,6 +79,15 @@ DSNs and Scy secret content are not rewritten as relative file locations.
 | `OpenAPI.StartupExports` | Current JSON/YAML file snapshot export before listener admission. It is not a file watcher or multi-file transaction. |
 | `Metrics` | Absent disables diagnostic response headers. `{}` enables SQL-redacted metrics; `AllowSQL: true` enables SQL/arguments for debug requests. |
 | `Observation` | Current native capture summaries and optional bounded OTLP/HTTP export. Export failure is telemetry loss, not business failure. |
+
+Ordinary route lookup, API-key checks, CORS, and MCP identity lookup use the
+bootstrap index without loading executable components. A first HTTP or direct
+MCP call loads only its owner. MCP tool listing loads MCP-exposed owners so it
+can return the same complete input schemas as eager compilation. OpenAPI loads
+component contracts when the document is first requested; startup exports are
+an explicit startup use of that document. Reload builds and atomically publishes
+a fresh index, and source fingerprints prevent an older indexed source from
+materializing after it changes.
 
 Read/write timeouts and SQL pool limits preserve their existing nonpositive
 semantics. Read-header and idle timeouts now have safe zero defaults; use negative

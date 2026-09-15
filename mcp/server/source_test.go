@@ -13,6 +13,21 @@ type testSource struct {
 	nilContext bool
 }
 
+type ownedTestSource struct {
+	testSource
+	ownedCalls, snapshotCalls int
+}
+
+func (s *ownedTestSource) PinOwned(ctx context.Context) (context.Context, ServerService, error) {
+	s.ownedCalls++
+	return ctx, s.service, s.err
+}
+
+func (s *ownedTestSource) PinSnapshot(ctx context.Context) (context.Context, ServerService, error) {
+	s.snapshotCalls++
+	return ctx, s.service, s.err
+}
+
 func (s *testSource) Pin(ctx context.Context) (context.Context, ServerService, error) {
 	s.calls++
 	if s.nilContext {
@@ -55,5 +70,20 @@ func TestSourceRejectsIncompleteSnapshot(t *testing.T) {
 				t.Fatal("incomplete snapshot accepted")
 			}
 		})
+	}
+}
+
+func TestSourceSeparatesSnapshotSelectionFromRequestOwnership(t *testing.T) {
+	source := &ownedTestSource{testSource: testSource{service: newTransportTestService(nil)}}
+	binding := &sourceBinding{source: source}
+	ctx, err := binding.pin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source.snapshotCalls != 1 || source.ownedCalls != 0 || source.calls != 0 {
+		t.Fatalf("snapshot pins=%d owned pins=%d ordinary pins=%d", source.snapshotCalls, source.ownedCalls, source.calls)
+	}
+	if service, ok := binding.service(ctx); !ok || service != source.service {
+		t.Fatal("owned pin did not publish its snapshot")
 	}
 }

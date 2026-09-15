@@ -78,15 +78,29 @@ func (d PackageDiscovery) Discover(ctx context.Context) ([]*RouteSource, error) 
 			return nil, err
 		}
 	}
-	var sources []*RouteSource
+	var files []xmodule.File
 	walkErr := workspace.Walk(ctx, d.Include, d.Exclude, func(file xmodule.File) error {
+		files = append(files, file)
+		return nil
+	})
+	if walkErr != nil {
+		return nil, walkErr
+	}
+	return d.DiscoverFiles(files)
+}
+
+// DiscoverFiles scans an already selected workspace file set. Bootstrap index
+// builders use it to share one package walk with source fingerprinting.
+func (d PackageDiscovery) DiscoverFiles(files []xmodule.File) ([]*RouteSource, error) {
+	var sources []*RouteSource
+	for _, file := range files {
 		name := filepath.Base(file.Path)
 		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			return nil
+			continue
 		}
 		holders, err := scanFileHolders(file.Path)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for ordinal, field := range holders.fields {
 			sources = append(sources, &RouteSource{
@@ -103,10 +117,6 @@ func (d PackageDiscovery) Discover(ctx context.Context) ([]*RouteSource, error) 
 				ordinal:     ordinal,
 			})
 		}
-		return nil
-	})
-	if walkErr != nil {
-		return nil, walkErr
 	}
 	sort.SliceStable(sources, func(i, j int) bool {
 		if sources[i].PackagePath != sources[j].PackagePath {

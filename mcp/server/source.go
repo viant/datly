@@ -27,7 +27,16 @@ func (b *sourceBinding) pin(ctx context.Context) (context.Context, error) {
 	if _, ok := b.service(ctx); ok {
 		return ctx, nil
 	}
-	prepared, service, err := b.source.Pin(ctx)
+	var prepared context.Context
+	var service ServerService
+	var err error
+	if snapshot, ok := b.source.(interface {
+		PinSnapshot(context.Context) (context.Context, ServerService, error)
+	}); ok {
+		prepared, service, err = snapshot.PinSnapshot(ctx)
+	} else {
+		prepared, service, err = b.source.Pin(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}

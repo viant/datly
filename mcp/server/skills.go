@@ -11,6 +11,7 @@ func (h *Handler) ListSkills(ctx context.Context, request *jsonrpc.TypedRequest[
 	if err != nil {
 		return nil, err
 	}
+	defer releasePinned(ctx)
 	return snapshot.DefaultHandler.ListSkills(ctx, request)
 }
 
@@ -19,5 +20,6 @@ func (h *Handler) GetSkill(ctx context.Context, request *jsonrpc.TypedRequest[*s
 	if err != nil {
 		return nil, err
 	}
+	defer releasePinned(ctx)
 	return snapshot.DefaultHandler.GetSkill(ctx, request)
 }

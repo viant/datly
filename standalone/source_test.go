@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/viant/datly/application"
+	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/standalone/config"
 	fixture "github.com/viant/datly/standalone/testdata/app"
 	"github.com/viant/datly/standalone/testdata/app/records"
@@ -145,11 +147,15 @@ func TestSourceDQLOverlayAndFailures(t *testing.T) {
 	if err = os.WriteFile(overlay, []byte("#setting($_ = $route('/alias/{id}', 'GET'))\n#set($bad = )"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err = server.Reload(context.Background(), 2); err == nil {
-		t.Fatal("invalid DQL published")
+	if err = server.Reload(context.Background(), 2); err != nil {
+		t.Fatalf("route-valid lazy source did not publish: %v", err)
 	}
-	if server.manager.Revision() != 1 {
-		t.Fatal("failed stage changed revision")
+	_, err = server.manager.InvokeComponent(context.Background(), dexec.ComponentRequest{Target: dexec.ComponentTarget{Component: spec.Key{Kind: spec.KindComponent, Scope: fixture.Module + "/records", Name: "Read"}, Route: spec.RouteRef{Method: "GET", Path: "/alias/{id}"}}})
+	if err == nil {
+		t.Fatal("invalid DQL materialized on first use")
+	}
+	if server.manager.Revision() != 2 {
+		t.Fatal("lazy source generation was not published")
 	}
 }
 

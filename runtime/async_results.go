@@ -19,7 +19,10 @@ func (d *jobDispatcher) ReadResult(ctx context.Context, request jobs.ResultReque
 	if err != nil {
 		return nil, err
 	}
-	registered := d.runtime.registered[target.Component.String()]
+	registered, err := d.runtime.registeredComponent(ctx, target.Component)
+	if err != nil {
+		return nil, err
+	}
 	if registered.Handler != nil || registered.Reader == nil || !d.runtime.ExposesComponent(target.Component) {
 		return nil, jobs.ErrResultUnavailable
 	}

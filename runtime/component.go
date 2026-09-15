@@ -107,8 +107,11 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		return nil, err
 	}
 	identity := request.Target.Component.String()
-	registered, ok := r.registered[identity]
-	if !ok || registered == nil || registered.Component == nil {
+	registered, err := r.registeredComponent(ctx, request.Target.Component)
+	if err != nil {
+		return nil, err
+	}
+	if registered == nil || registered.Component == nil {
 		return nil, fmt.Errorf("registered component not found: %s", identity)
 	}
 	if !componentOwnsRoute(registered.Component, route) {

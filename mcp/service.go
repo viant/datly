@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/exec"
 	mcpresource "github.com/viant/datly/mcp/resource"
 	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/mcp-protocol/schema"
@@ -25,6 +26,13 @@ type Config struct {
 	Resources       *bindresource.Store
 	ResourceBaseURI string
 	Authorization   *authorization.Policy
+	// Indexed publishes tool identities without eager component contracts.
+	Indexed []*spec.Component
+	Loader  ComponentLoader
+}
+
+type ComponentLoader interface {
+	LoadComponent(context.Context, spec.Key) (*registry.RegisteredComponent, error)
 }
 
 type Service struct {
@@ -32,9 +40,13 @@ type Service struct {
 	registry  *mcpserver.Registry
 	resources *mcpresource.Handler
 	policy    *authorization.Policy
+	lazy      *lazyCatalog
 }
 
 func (s *Service) ReadResource(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {
+	if s != nil && s.lazy != nil {
+		return s.lazy.service().ReadResource(ctx, request)
+	}
 	if s == nil || s.resources == nil {
 		return nil, jsonrpc.NewInternalError("MCP resource service is unavailable", nil)
 	}
@@ -57,6 +69,9 @@ func (s *Service) Catalog() *Catalog {
 	if s == nil {
 		return nil
 	}
+	if s.lazy != nil {
+		return s.lazy.service().Catalog()
+	}
 	return s.catalog
 }
 
@@ -64,7 +79,24 @@ func (s *Service) Registry() *mcpserver.Registry {
 	if s == nil {
 		return nil
 	}
+	if s.lazy != nil {
+		return s.lazy.service().Registry()
+	}
 	return s.registry
+}
+
+func (s *Service) PrepareTool(ctx context.Context, name string) error {
+	if s == nil || s.lazy == nil {
+		return nil
+	}
+	return s.lazy.prepareTool(ctx, name)
+}
+
+func (s *Service) PrepareTools(ctx context.Context) error {
+	if s == nil || s.lazy == nil {
+		return nil
+	}
+	return s.lazy.prepareAll(ctx)
 }
 
 // Authorization returns a detached copy of the validated transport policy.

@@ -45,7 +45,12 @@ type Config struct {
 	MaxJobs       int
 }
 
-type Packages struct{ Packages, Exclude []string }
+type Packages struct {
+	Packages, Exclude []string
+	// EagerComponents explicitly opts into compiling every selected component
+	// at startup, for example when exporting complete OpenAPI schemas.
+	EagerComponents bool
+}
 
 type Endpoint struct {
 	Port int

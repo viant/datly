@@ -57,6 +57,13 @@ configuration form. DSNs and Scy secret settings retain their content and are
 not treated as location fields. SQLite is linked by the command; other database
 drivers must be linked by the application.
 
+`GoBootstrap.Packages`, `BaseDir`, and `ModuleDirs` also define the bootstrap
+component index. Startup scans selected package authority and route metadata;
+normal component compilation is deferred until the first matching HTTP or MCP
+use and cached until reload. This default creates no `paths.yaml` or persistent
+cache. Set `GoBootstrap.EagerComponents` only when the deployment explicitly
+wants every component compiled during startup.
+
 HTTP policy is the existing `gateway/http.Config`: CORS defaults and presence,
 DisableCors, APIPrefix, Meta and OpenAPI retain their owner. `Info` selects
 OpenAPI generation; configuring both Info and OpenAPI fails. JWTValidator

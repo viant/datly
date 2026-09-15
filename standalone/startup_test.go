@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	dexec "github.com/viant/datly/exec"
 	mcpserver "github.com/viant/datly/mcp/server"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/standalone/config"
@@ -21,17 +22,18 @@ import (
 func TestSourceStartupFailuresAndCleanup(t *testing.T) {
 	for _, tc := range []struct {
 		name, match string
+		firstUse    bool
 		change      func(*testing.T, *fixture.Fixture, *config.Config)
 	}{
-		{"missing package", "no authored components", func(t *testing.T, f *fixture.Fixture, c *config.Config) {
+		{name: "missing package", match: "no authored components", change: func(t *testing.T, f *fixture.Fixture, c *config.Config) {
 			c.GoBootstrap.Packages = []string{fixture.Module + "/absent"}
 		}},
-		{"missing resource", "read.sql", func(t *testing.T, f *fixture.Fixture, c *config.Config) {
+		{name: "missing resource", match: "read.sql", change: func(t *testing.T, f *fixture.Fixture, c *config.Config) {
 			if err := os.Remove(filepath.Join(f.Root, "records/queries/read.sql")); err != nil {
 				t.Fatal(err)
 			}
 		}},
-		{"unknown factory", "not registered", func(t *testing.T, f *fixture.Fixture, c *config.Config) {
+		{name: "unknown factory", match: "not registered", firstUse: true, change: func(t *testing.T, f *fixture.Fixture, c *config.Config) {
 			path := filepath.Join(f.Root, "records/records.go")
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -41,7 +43,7 @@ func TestSourceStartupFailuresAndCleanup(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"invalid CORS", "CORS", func(t *testing.T, f *fixture.Fixture, c *config.Config) {
+		{name: "invalid CORS", match: "CORS", change: func(t *testing.T, f *fixture.Fixture, c *config.Config) {
 			age := int64(-1)
 			c.CORS = &spec.CORS{MaxAge: &age}
 		}},
@@ -62,11 +64,27 @@ func TestSourceStartupFailuresAndCleanup(t *testing.T) {
 				t.Fatal(err)
 			}
 			err = server.Reload(context.Background(), 1)
-			if err == nil || !strings.Contains(err.Error(), tc.match) {
-				t.Errorf("expected %q, got %v", tc.match, err)
-			}
-			if server.manager.Revision() != 0 {
-				t.Error("failed startup published routes")
+			if tc.firstUse {
+				if err != nil {
+					t.Fatalf("indexed publication failed: %v", err)
+				}
+				_, err = server.manager.InvokeComponent(context.Background(), dexec.ComponentRequest{Target: dexec.ComponentTarget{
+					Component: spec.Key{Kind: spec.KindComponent, Scope: fixture.Module + "/records", Name: "Write"},
+					Route:     spec.RouteRef{Method: "POST", Path: "/records"},
+				}})
+				if err == nil || !strings.Contains(err.Error(), tc.match) {
+					t.Errorf("expected first-use %q, got %v", tc.match, err)
+				}
+				if server.manager.Revision() != 1 {
+					t.Error("indexed source generation was not published")
+				}
+			} else {
+				if err == nil || !strings.Contains(err.Error(), tc.match) {
+					t.Errorf("expected %q, got %v", tc.match, err)
+				}
+				if server.manager.Revision() != 0 {
+					t.Error("failed startup published routes")
+				}
 			}
 			if err = server.Shutdown(context.Background()); err != nil {
 				t.Fatal(err)

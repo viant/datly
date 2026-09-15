@@ -63,6 +63,15 @@ func (h *Handler) CallTool(ctx context.Context, request *jsonrpc.TypedRequest[*s
 	if err != nil {
 		return nil, err
 	}
+	defer releasePinned(ctx)
+	if preparer, ok := h.service.(interface {
+		PrepareTool(context.Context, string) error
+	}); ok && request != nil && request.Request != nil {
+		if prepareErr := preparer.PrepareTool(ctx, request.Request.Params.Name); prepareErr != nil {
+			return nil, jsonrpc.NewInternalError("MCP tool is unavailable", nil)
+		}
+		h.DefaultHandler.Registry = h.service.Registry()
+	}
 	return h.DefaultHandler.CallTool(h.withContext(ctx), request)
 }
 
@@ -71,6 +80,7 @@ func (h *Handler) ListTools(ctx context.Context, request *jsonrpc.TypedRequest[*
 	if err != nil {
 		return nil, err
 	}
+	defer releasePinned(ctx)
 	if request == nil {
 		request = &jsonrpc.TypedRequest[*schema.ListToolsRequest]{}
 	}
@@ -78,6 +88,12 @@ func (h *Handler) ListTools(ctx context.Context, request *jsonrpc.TypedRequest[*
 		copy := *request
 		copy.Request = &schema.ListToolsRequest{}
 		request = &copy
+	}
+	if preparer, ok := h.service.(interface{ PrepareTools(context.Context) error }); ok {
+		if prepareErr := preparer.PrepareTools(ctx); prepareErr != nil {
+			return nil, jsonrpc.NewInternalError("MCP tools are unavailable", nil)
+		}
+		h.DefaultHandler.Registry = h.service.Registry()
 	}
 	result, protocolErr := h.DefaultHandler.ListTools(ctx, request)
 	if result != nil {
@@ -91,6 +107,7 @@ func (h *Handler) ListResources(ctx context.Context, request *jsonrpc.TypedReque
 	if err != nil {
 		return nil, err
 	}
+	defer releasePinned(ctx)
 	result, protocolErr := h.DefaultHandler.ListResources(ctx, request)
 	if result != nil {
 		sort.SliceStable(result.Resources, func(i, j int) bool { return result.Resources[i].Uri < result.Resources[j].Uri })
@@ -103,6 +120,7 @@ func (h *Handler) ListResourceTemplates(ctx context.Context, request *jsonrpc.Ty
 	if err != nil {
 		return nil, err
 	}
+	defer releasePinned(ctx)
 	result, protocolErr := h.DefaultHandler.ListResourceTemplates(ctx, request)
 	if result != nil {
 		sort.SliceStable(result.ResourceTemplates, func(i, j int) bool {
@@ -117,6 +135,7 @@ func (h *Handler) ReadResource(ctx context.Context, request *jsonrpc.TypedReques
 	if err != nil {
 		return nil, err
 	}
+	defer releasePinned(ctx)
 	if request == nil {
 		return h.service.ReadResource(h.withContext(ctx), nil)
 	}

@@ -11,9 +11,10 @@ type Metadata struct {
 }
 
 func (m *Manager) Metadata(ctx context.Context) (*Metadata, error) {
-	_, current, err := m.pin(ctx)
+	_, current, release, err := m.pinOwned(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	return &Metadata{Revision: current.revision, Components: current.runtime.Components()}, nil
 }

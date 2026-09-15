@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/observability"
 	"io/fs"
+	"sync"
 
 	"github.com/viant/bindly"
 	"github.com/viant/bindly/locator"
@@ -27,9 +28,19 @@ type Runtime struct {
 	bundle             *rroute.Bundle
 	publicBundle       *rroute.Bundle
 	registered         map[string]*RegisteredComponent
+	metadata           map[string]*spec.Component
+	loader             ComponentLoader
+	relatedExposure    sync.Map
+	relatedMetadata    sync.Map
 	canonicalConstants map[string]locator.Provider
 	invoker            *handlerengine.Engine
 	injector           *bindly.Injector
+}
+
+// ComponentLoader materializes one indexed component inside the currently
+// pinned application generation.
+type ComponentLoader interface {
+	LoadComponent(context.Context, spec.Key) (*RegisteredComponent, error)
 }
 
 // Resources returns the shared package resource store used by this runtime.
@@ -55,6 +66,7 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 	}
 	specs := make([]*spec.Component, 0, len(components))
 	registered := make(map[string]*RegisteredComponent, len(components))
+	metadata := make(map[string]*spec.Component, len(components))
 	canonicalConstants := make(map[string]locator.Provider, len(components))
 	for _, component := range components {
 		if component == nil || component.Component == nil {
@@ -99,6 +111,7 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 			canonicalConstants[component.Component.Key.String()] = provider
 		}
 		registered[component.Component.Key.String()] = &entry
+		metadata[component.Component.Key.String()] = component.Component
 	}
 	bundle, err := rroute.NewBundle(specs)
 	if err != nil {
@@ -129,8 +142,117 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 	return &Runtime{
 		observability: observation, ownsObservability: options.managedObservability == nil,
 		bundle: bundle, publicBundle: publicBundle, registered: registered, canonicalConstants: canonicalConstants,
-		invoker: handlerengine.New(), injector: injector,
+		metadata: metadata,
+		invoker:  handlerengine.New(), injector: injector,
 	}, nil
+}
+
+// NewIndexedRuntime publishes route metadata immediately and resolves each
+// executable registration through loader on first invocation.
+func NewIndexedRuntime(components []*spec.Component, preloaded []*RegisteredComponent, loader ComponentLoader, runtimeOptions ...Option) (*Runtime, error) {
+	if loader == nil {
+		return nil, fmt.Errorf("indexed runtime component loader is required")
+	}
+	r, err := NewRuntime(preloaded, runtimeOptions...)
+	if err != nil {
+		return nil, err
+	}
+	options := &options{}
+	for _, configure := range runtimeOptions {
+		if configure != nil {
+			if err := configure(options); err != nil {
+				return nil, err
+			}
+		}
+	}
+	specs := make([]*spec.Component, 0, len(components))
+	r.metadata = make(map[string]*spec.Component, len(components))
+	for _, component := range components {
+		if component == nil {
+			return nil, fmt.Errorf("indexed runtime component metadata is required")
+		}
+		clone := component.Clone()
+		identity := clone.Key.String()
+		if r.metadata[identity] != nil {
+			return nil, fmt.Errorf("duplicate indexed runtime component %s", identity)
+		}
+		r.metadata[identity] = clone
+		specs = append(specs, clone)
+	}
+	for _, component := range preloaded {
+		if component == nil || component.Component == nil || r.metadata[component.Component.Key.String()] != nil {
+			continue
+		}
+		clone := component.Component.Clone()
+		r.metadata[clone.Key.String()] = clone
+		specs = append(specs, clone)
+	}
+	r.bundle, err = rroute.NewBundle(specs)
+	if err != nil {
+		return nil, err
+	}
+	r.publicBundle = r.bundle
+	if options.exposure != nil {
+		var public []*spec.Component
+		for _, component := range specs {
+			if options.exposure.Allows(component.Key.Scope) {
+				public = append(public, component)
+			}
+		}
+		r.publicBundle, err = rroute.NewBundle(public)
+		if err != nil {
+			return nil, err
+		}
+	}
+	r.loader = loader
+	return r, nil
+}
+
+func (r *Runtime) registeredComponent(ctx context.Context, key spec.Key) (*RegisteredComponent, error) {
+	if r == nil {
+		return nil, fmt.Errorf("runtime is not configured")
+	}
+	if registered := r.registered[key.String()]; registered != nil {
+		return registered, nil
+	}
+	if r.loader == nil {
+		return nil, fmt.Errorf("registered component not found: %s", key.String())
+	}
+	registered, err := r.loader.LoadComponent(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if registered == nil || registered.Component == nil || registered.Component.Key != key {
+		return nil, fmt.Errorf("loaded component does not match indexed component %s", key.String())
+	}
+	return registered, nil
+}
+
+// LoadComponent exposes generation-scoped lazy resolution to protocol owners.
+func (r *Runtime) LoadComponent(ctx context.Context, key spec.Key) (*RegisteredComponent, error) {
+	return r.registeredComponent(ctx, key)
+}
+
+func (r *Runtime) LoadComponents(ctx context.Context, key spec.Key) ([]*RegisteredComponent, error) {
+	if family, ok := r.loader.(interface {
+		LoadComponents(context.Context, spec.Key) ([]*RegisteredComponent, error)
+	}); ok {
+		components, err := family.LoadComponents(ctx, key)
+		if err == nil && r.ExposesComponent(key) {
+			for _, component := range components {
+				if component != nil && component.Component != nil && component.Component.Key != key {
+					r.relatedExposure.Store(component.Component.Key.String(), true)
+					r.relatedMetadata.Store(component.Component.Key.String(), component.Component.Clone())
+				}
+			}
+		}
+		return components, err
+	}
+	component, err := r.registeredComponent(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	return []*RegisteredComponent{component}, nil
 }
 
 // ResourceFS returns the original package filesystem registered under name.

@@ -12,11 +12,11 @@ func (r *Runtime) Routes() []*spec.Route {
 	if r == nil {
 		return result
 	}
-	for _, entry := range r.registered {
-		if !r.ExposesComponent(entry.Component.Key) {
+	for _, component := range r.metadata {
+		if !r.ExposesComponent(component.Key) {
 			continue
 		}
-		for _, endpoint := range entry.Component.Routes {
+		for _, endpoint := range component.Routes {
 			if endpoint != nil {
 				result = append(result, endpoint.Clone())
 			}
