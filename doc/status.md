@@ -49,7 +49,7 @@ Lifecycle type selection is explicit through the outer DQL
 `lifecycle_type(view, 'TypeName')` declaration. This change replaces the older
 `entity_hooks` spelling and removes inferred lifecycle struct names. Focused
 generation, regeneration, hookless-operation and unsupported-target checks pass;
-the full affected-owner regression run remains in progress. Reader request initialization remains on the declared input
+the full affected-owner regression run also passes. Reader request initialization remains on the declared input
 contract; reader row hooks and output finalization are separate concerns.
 
 Complete reader examples explicitly declare output holders and global casing.
@@ -57,6 +57,7 @@ The published Structology correction applies global casing to `format` names
 while preserving exact nonempty JSON names; output and wire-schema tests pass.
 Skill packaging now validates links relative to their containing documents.
 
-Expanded grouped/custom predicate examples and the comprehensive DQL grammar
-reference are still being completed. Release publication and version tags remain
+Grouped/custom predicate examples and imported handler aliases are integrated.
+The comprehensive grammar reference and per-instance constant expansion from
+YAML/JSON files are still being completed. Release publication and version tags remain
 separate from local commits and verification.

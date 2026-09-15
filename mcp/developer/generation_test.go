@@ -211,8 +211,12 @@ func generationRequest(root, operation string) transcribe.Request {
 }
 
 func namedGenerationDQL(method, pkg string) string {
+	lifecycle := ""
+	if method == "PATCH" {
+		lifecycle = "lifecycle_type(orders, 'OrdersViewLifecycle'),\n"
+	}
 	return "#package('" + pkg + "')\n#setting($_ = $route('/orders','" + method + "'))\n" +
-		`SELECT orders.*, Items.*, Kinds.*,
+		"SELECT orders.*, Items.*, Kinds.*,\n" + lifecycle + `
  tag(orders.START,'invariant:"Interval"'),
  tag(orders.END,'invariant:"Interval" validate:"gtfield(Start)"')
 FROM (SELECT o.* FROM ORDERS o) orders

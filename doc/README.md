@@ -13,9 +13,11 @@ provide a runnable feature switch.
 | Run the SQLite demo and understand its contract | [Quickstart](quickstart.md) |
 | Understand the execution model and ownership | [Architecture](architecture.md) |
 | Write DQL declarations, parameters, JOIN controls and typed CASTs | [DQL syntax and grammar](dql.md) · [EBNF](dql.ebnf) |
+| Declare constants and understand substitution-file support | [Constants and substitutions](constants-and-substitutions.md) |
 | Transcribe DQL, import types and preserve generated edits | [Authoring](authoring.md) |
 | Understand reader/writer hook order, sparse updates and invariants | [Hook flow diagrams](hooks.md) |
 | Build nested reads and paginated outputs | [Readers](readers.md) |
+| Combine optional reader filters and scoped AND/OR groups | [Reader predicates](reader-predicates.md) |
 | Build analytical reports or compare query frames | [Reports](reports.md) |
 | Generate a mutator and understand Has markers, SyncPresence and invariants | [Generated mutators](generated-mutator.md) |
 | Resolve PATCH identities and select automatic versus optional read indexes | [Go PATCH indexes](go-patch-indexes.md) |

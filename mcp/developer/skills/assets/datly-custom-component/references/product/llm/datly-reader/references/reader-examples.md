@@ -242,3 +242,7 @@ acceptance beyond manually linked runtime tests.
 ## Dynamic source
 
 For mutable DQL/resources, validate and atomically activate the matching component/types/resources. Failed staging leaves the previous generation active. Persisted shapes retain field order and append new fields; authored hooks survive regeneration.
+
+## Optional predicates and multiple groups
+
+Use [reader predicates](reader-predicates.md) for complete scoped readers with `FilterGroup`, Builder chaining, empty WHERE/AND clauses, present-zero markers and repeated parameters. The dedicated guide also covers SDK custom handlers, ordered placeholders, declared verified JWT inputs, scoped/component injection and mixed custom/built-in SQLite examples.

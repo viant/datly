@@ -6,6 +6,7 @@
     "datly/doc/api-documentation.md",
     "datly/doc/cache-and-warmup.md",
     "datly/doc/observability.md",
+    "datly/doc/reader-predicates.md",
     "datly/doc/reports.md",
     "datly/doc/selectors-and-formats.md",
     "datly/doc/static-content.md",
@@ -21,6 +22,7 @@
     "llm/datly-reader/references/developer-mcp.md",
     "llm/datly-reader/references/project-build.md",
     "llm/datly-reader/references/reader-examples.md",
+    "llm/datly-reader/references/reader-predicates.md",
     "llm/datly-reader/references/tags-and-interfaces.md",
     "llm/datly-writer/references/availability-and-operations.md",
     "llm/datly-writer/references/developer-mcp.md",
@@ -63,6 +65,11 @@
       "StartAt": "## Capture, export and privacy",
       "EndBefore": "## Performance claims and measurement",
       "Reason": "Exact maintained author-facing section: includes declarative configuration and behavior; excludes repository navigation, implementation/test evidence and unrelated authoring workflows. Other feature contracts remain in the canonical skill references."
+    },
+    "datly/doc/reader-predicates.md": {
+      "StartAt": "# Reader predicates and groups",
+      "EndBefore": "## Verification",
+      "Reason": "Maintained reader authoring examples and predicate composition semantics; excludes repository test navigation."
     }
   },
   "SkillRootLinks": [

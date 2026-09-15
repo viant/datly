@@ -8,6 +8,7 @@ import (
 	"path"
 	"strings"
 
+	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/dql"
@@ -129,6 +130,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
 	}
 	compiledTypeContext := compileTypeContext(source, component.TypeContext)
+	if err = (readerpredicate.DefinitionCompiler{Context: compiledTypeContext}).Compile(component); err != nil {
+		return nil, err
+	}
 	var typeResolver *typecatalog.Resolver
 	if source.Types != nil {
 		typeResolver, err = typecatalog.NewResolver(source.Types, typecatalog.TranscribeAuthority, compiledTypeContext)

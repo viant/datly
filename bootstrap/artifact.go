@@ -82,6 +82,16 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if err = c.compileOutputColumns(component); err != nil {
 		return nil, err
 	}
+	typeContext := &typecatalog.ResolutionContext{PackagePath: component.Key.Scope}
+	if authored := component.TypeContext; authored != nil {
+		typeContext.DefaultPackage = authored.DefaultPackage
+		for _, item := range authored.Imports {
+			typeContext.Imports = append(typeContext.Imports, typecatalog.PackageImport{Alias: item.Alias, Package: item.Package})
+		}
+	}
+	if err = (readerpredicate.DefinitionCompiler{Context: typeContext}).Compile(component); err != nil {
+		return nil, err
+	}
 	input.Component = component
 	factory := newCodecFactory(input.CodecFactory)
 	compiledInput, err := handlercompiler.New(handlercompiler.Input{

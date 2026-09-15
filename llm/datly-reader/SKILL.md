@@ -25,6 +25,8 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 
 ## Read what the task needs
 
+- For typed constants, identifier expansion and the substitution-file migration boundary, read [constants and substitutions](references/constants-and-substitutions.md).
+
 - For project init/build and deployment, read [project-build.md](references/project-build.md). Custom builds discover/link internally; no mandatory user init/Register/import list.
 - Start with [concepts.md](references/concepts.md) for terminology, philosophy, base types, and authoring choices.
 - Read [developer-mcp.md](references/developer-mcp.md) before using a developer MCP server. Its operations are conceptual capabilities, not assumed tool names.
@@ -32,6 +34,7 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 - Use [tags-and-interfaces.md](references/tags-and-interfaces.md) for Go shapes, binding tags, SQL mapping, predicates, validation, and public APIs.
 - For JWT-based authorization, use the [explicit input and predicate pattern](references/tags-and-interfaces.md#jwt-input-and-authorization-predicates); preserve original certificate/public-key verification and do not inject ambient claims.
 - Read [reader-contract.md](references/reader-contract.md) for this component's behavior and decisions.
+- For optional predicates and multiple AND/OR groups, read [reader predicates](references/reader-predicates.md), including custom SDK handlers, explicit verified JWT input and scoped component dependencies. Preserve required scope outside optional OR groups and retain presence markers and ordered bind arguments.
 - Adapt [reader-examples.md](references/reader-examples.md); examples are patterns, not authorization to access a live database.
 - For cache/warmup, multiview selectors, YAML docs, static/MCP resources, deployment, async and telemetry status, read [cache-and-operations.md](references/cache-and-operations.md). Separate current APIs from pending authoring/integration contracts.
 - Use [acceptance.md](references/acceptance.md) to verify observable application behavior. Framework maintenance is outside this skill.

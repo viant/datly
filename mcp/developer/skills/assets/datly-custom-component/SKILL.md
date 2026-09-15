@@ -25,6 +25,8 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 
 ## Read what the task needs
 
+- For typed constants, identifier expansion and the substitution-file migration boundary, read [constants and substitutions](references/constants-and-substitutions.md).
+
 - For project init/build and deployment, read [project-build.md](references/project-build.md). Custom builds discover/link internally; no mandatory user init/Register/import list.
 - Start with [concepts.md](references/concepts.md) for terminology, philosophy, base types, and authoring choices.
 - Read [developer-mcp.md](references/developer-mcp.md) before using a developer MCP server. Its operations are conceptual capabilities, not assumed tool names.
