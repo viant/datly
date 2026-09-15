@@ -34,7 +34,7 @@ func TestDQLImportDiscoveryCLIWithGeneratedDestinationDirectories(t *testing.T) 
 					}
 				}
 			}
-			runDatlyGenCLI(t, root.dir, root.module, filepath.Join(db.TempDir, "test.db"), true)
+			runDatlyTranscribeCLI(t, root.dir, root.module, filepath.Join(db.TempDir, "test.db"), true)
 		})
 	}
 }
@@ -72,7 +72,7 @@ func TestDQLImportDiscoveryCLIPreservesAuthoredPackageFailures(t *testing.T) {
 			if test.setup != nil {
 				test.setup(t, root)
 			}
-			output := runDatlyGenCLI(t, root.dir, root.module, filepath.Join(db.TempDir, "test.db"), false)
+			output := runDatlyTranscribeCLI(t, root.dir, root.module, filepath.Join(db.TempDir, "test.db"), false)
 			if !strings.Contains(output, test.want) {
 				t.Fatalf("CLI error did not preserve %q boundary:\n%s", test.want, output)
 			}
@@ -104,19 +104,19 @@ func writeDQLImportCLIProject(t *testing.T, source func(string) string) cliProje
 	return cliProject{dir: root, module: module}
 }
 
-func runDatlyGenCLI(t *testing.T, root, module, dsn string, wantSuccess bool) string {
+func runDatlyTranscribeCLI(t *testing.T, root, module, dsn string, wantSuccess bool) string {
 	t.Helper()
-	command := exec.Command("go", "run", "./cmd/datly", "gen", "-dir", root, "-op", "patch", "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", dsn, module+"/source")
+	command := exec.Command("go", "run", "./cmd/datly", "transcribe", "patch", "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", dsn, module+"/source")
 	command.Dir = repoRoot(t)
 	command.Env = os.Environ()
 	output, err := command.CombinedOutput()
 	if wantSuccess {
 		if err != nil {
-			t.Fatalf("datly gen CLI: %v\n%s", err, output)
+			t.Fatalf("datly transcribe CLI: %v\n%s", err, output)
 		}
 		compileGeneratedCLIProject(t, root)
 	} else if err == nil {
-		t.Fatalf("datly gen CLI succeeded unexpectedly:\n%s", output)
+		t.Fatalf("datly transcribe CLI succeeded unexpectedly:\n%s", output)
 	}
 	return string(output)
 }
