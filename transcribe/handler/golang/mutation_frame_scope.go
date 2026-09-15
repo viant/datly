@@ -53,16 +53,38 @@ func (e *frameEmitter) matchedScope(record *recordLowering) ([]ast.Stmt, error) 
 		body = append(body, &ast.IfStmt{Cond: present, Body: &ast.BlockStmt{List: block}})
 		return nil
 	}
-	if parent, relation := e.entities.identity.parent(e.l, record); parent != nil && !relation.AllowReparent {
-		if err := add(parent, relation.Links, id("parent"), nil); err != nil {
+	if parent, relation := e.entities.identity.parent(e.l, record); parent != nil {
+		var condition ast.Expr
+		if relation.AllowReparent {
+			statements, flag, err := e.deletionScope(record)
+			if err != nil {
+				return nil, err
+			}
+			body = append(body, statements...)
+			condition = flag
+		}
+		if err := add(parent, relation.Links, id("parent"), condition); err != nil {
 			return nil, err
 		}
 	}
 	for _, relation := range record.plan.SelfRelations {
+		condition := &ast.BinaryExpr{X: &ast.BinaryExpr{X: id("selfParent"), Op: token.NEQ, Y: id("nil")}, Op: token.LAND, Y: &ast.BinaryExpr{X: id("selfHolder"), Op: token.EQL, Y: stringExpr(strings.Join(relation.FieldPath, "."))}}
+
 		if relation.AllowReparent {
+			statements, flag, err := e.deletionScope(record)
+			if err != nil {
+				return nil, err
+			}
+			// Each recursive holder owns its scoped variable declaration.
+			condition = &ast.BinaryExpr{X: condition, Op: token.LAND, Y: flag}
+			before := len(body)
+			if err := add(record, relation.Links, id("selfParent"), condition); err != nil {
+				return nil, err
+			}
+			scoped := append(statements, body[before:]...)
+			body = append(body[:before], &ast.BlockStmt{List: scoped})
 			continue
 		}
-		condition := &ast.BinaryExpr{X: &ast.BinaryExpr{X: id("selfParent"), Op: token.NEQ, Y: id("nil")}, Op: token.LAND, Y: &ast.BinaryExpr{X: id("selfHolder"), Op: token.EQL, Y: stringExpr(strings.Join(relation.FieldPath, "."))}}
 		if err := add(record, relation.Links, id("selfParent"), condition); err != nil {
 			return nil, err
 		}

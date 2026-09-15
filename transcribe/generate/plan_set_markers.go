@@ -145,7 +145,7 @@ func addViewSetMarker(plan *ViewPlan, view *spec.View) error {
 		if !ok {
 			return fmt.Errorf("generated view %q set marker column %q has no field", plan.Name, column.Name)
 		}
-		if ignoredSQLXField(field.Tag) {
+		if ignoredSQLXField(field.Tag) && !column.DeleteMarker {
 			continue
 		}
 		markerFields = append(markerFields, name)

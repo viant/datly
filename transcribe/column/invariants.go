@@ -27,6 +27,10 @@ func ValidateProjectionAnnotations(view *spec.View, projected []string) error {
 			if _, err := tag.ParseInvariant(value); err != nil {
 				return err
 			}
+		} else if column.DeleteMarker {
+			label = "delete_marker"
+		} else if column.ConcurrencyToken {
+			label = "concurrency_token"
 		} else if column.ExplicitType {
 			label = "CAST"
 		} else {
@@ -65,7 +69,7 @@ func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources
 		annotated := false
 		for _, column := range view.Columns {
 			if column != nil {
-				if _, ok := reflect.StructTag(column.Tag).Lookup(tag.InvariantName); ok || column.ExplicitType {
+				if _, ok := reflect.StructTag(column.Tag).Lookup(tag.InvariantName); ok || column.ExplicitType || column.DeleteMarker || column.ConcurrencyToken {
 					annotated = true
 					break
 				}

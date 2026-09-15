@@ -11,7 +11,7 @@ import (
 )
 
 func (e *actionEmitter) reconcileLinks(role actionRole) ([]ast.Stmt, error) {
-	body := []ast.Stmt{}
+	body := []ast.Stmt{&ast.IfStmt{Cond: &ast.BinaryExpr{X: selectExpr(ast.NewIdent("entry"), "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteDelete")}, Body: &ast.BlockStmt{List: []ast.Stmt{&ast.BranchStmt{Tok: token.CONTINUE}}}}}
 	if parent, relation := e.parent(role); parent != nil {
 		links, err := e.linkAssignments(role, *parent, relation.Links)
 		if err != nil {

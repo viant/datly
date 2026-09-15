@@ -478,3 +478,98 @@ This section is a delivery warning, not a reduction of the target contract above
 | Ambiguous value associations or conflicting parent/self-holder contexts | Explicit errors, not guessed matches or arbitrary truncation. |
 
 Use the public interfaces and examples in [tags-and-interfaces.md](tags-and-interfaces.md) and [writer-examples.md](writer-examples.md). Application authoring does not require framework source access.
+
+## Explicit deletion and token validation
+
+Generated PATCH and PUT writers accept two optional outer annotations. Names
+belong to the application; neither annotation creates a field implicitly.
+
+```sql
+#package('example.com/shop/orders/write')
+#setting($_ = $input_type('OrdersInput'))
+#setting($_ = $output_type('OrdersOutput'))
+#setting($_ = $case_format('lc'))
+#define($_ = $Data<[]*Order>(output/body))
+#setting($_ = $route('/orders', 'PATCH'))
+#setting($_ = $connector('main'))
+SELECT orders.*, items.*,
+       type(orders, 'Order'), type(items, 'Item'),
+       lifecycle_type(items, 'ChildLifecycle'),
+       concurrency_token(orders.VERSION),
+       CAST(items.should_delete AS bool),
+       delete_marker(items.should_delete)
+FROM (SELECT o.* FROM ORDERS o) orders
+LEFT JOIN (SELECT i.*, '' AS should_delete FROM ITEMS i) items
+    ON items.ORDER_ID = orders.ID
+```
+
+Generate from the source package in an existing project:
+
+```sh
+datly transcribe patch -dir "$PROJECT" \
+  -schema -connector main -driver sqlite3 -dsn "$PROJECT/orders.db" \
+  example.com/shop/orders/source
+```
+
+Keep the existing authorization filters in the inner SQL. Generated Previous
+reads preserve them. `delete_marker` designates a logical boolean pseudo field;
+outer CAST supplies its Go type when the inner expression has another type.
+It stays in the request and Original snapshot, and is excluded from physical
+INSERT/UPDATE mappings and generated Previous projections. An application-owned
+linked row must declare its logical field with `sqlx:"-"` and a Has marker.
+
+For example, with the names above:
+
+```json
+{"data":[{"id":1,"version":0,"items":[
+  {"id":11,"shouldDelete":true},
+  {"id":12,"name":"updated"},
+  {"name":"new"}
+]}]}
+```
+
+Only the supplied row 11 is a deletion request. Every identity part must be
+supplied, and the complete tuple must match an authorized Previous row under
+that captured parent. Missing, unknown, out-of-scope, or incomplete composite
+identities fail before sequencing; initialization cannot supply missing delete
+identity parts. Zero identity parts retain their normal Has-based meaning.
+An omitted row, omitted collection, empty collection, or false flag never
+requests deletion. Other supplied rows retain the normal insert/update policy.
+
+The child lifecycle receives `EntityState[Item, Order]`: `state.Parent` is typed,
+`state.Previous` is the matched child, and `item.ShouldDelete` is available to
+business validation. Delete payloads may contain only identity and flag; framework
+INSERT/UPDATE required/reference checks do not require business fields on them.
+`Validate` remains read-only. Deleting a parent does not generate child actions.
+Explicitly marked descendants queue before their marked ancestors; a supplied
+unflagged child below a marked parent fails. Database constraints still apply.
+All actions use the invocation's buffered DML and existing transaction owner;
+a supplied transaction remains caller-owned.
+
+`concurrency_token` is **validation-only**. For updates, its check runs first in
+the validation phase, before framework constraints and application Validate
+callbacks. It compares the captured, client-supplied expected token with the
+loaded authorized Previous token. Missing Has presence, a null token, missing
+Previous evidence, or a mismatch returns `*handler.Conflict` (status 409) before
+sequencing or queuing mutations. Inserts and explicitly marked deletes do not
+perform the update-token check.
+
+Numeric tokens compare in their canonical Go numeric type. `time.Time` tokens
+compare instants with `Time.Equal`, including equal instants expressed in
+different time zones. Presence is independent of the value: a supplied numeric
+zero is an expected token; an omitted numeric zero is missing.
+
+The expected token is captured before input/entity initialization. Init may
+explicitly prepare the next working token using a setter; that does not change
+the captured expected value. Token advancement is an application or database
+concern. The framework never increments or rewrites a version automatically.
+
+There is a race window between loading Previous, validating it, and executing
+DML. Another writer can change the row during that window. This annotation adds
+no token predicate to UPDATE/DELETE WHERE clauses, no vendor locks, and no
+row-count conflict machinery. It does **not** provide atomic race prevention.
+
+Regenerate through the same high-level command and preserve create-once lifecycle
+edits. Verify mixed mutations, identity-only deletes, omissions/false flags,
+parent/composite scope, token presence and instant equality, validation order,
+rollback/caller-owned transactions, and regeneration in the generated package.

@@ -29,6 +29,26 @@ func (e *actionEmitter) actionValue(role actionRole, action plan.Action) (ast.Ex
 // the immutable operation policy and the already identity-matched Previous row,
 // never current identifier values or zero tests.
 func (e *actionEmitter) actionSelection(role actionRole) ([]ast.Stmt, ast.Expr, error) {
+	body, action, err := e.normalActionSelection(role)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, field := range role.record.plan.Entity.Fields {
+		if !field.DeleteMarker {
+			continue
+		}
+		body = append(body, defineStmt("selectedAction", action))
+		action = ast.NewIdent("selectedAction")
+		selection, err := e.deleteSelection(role, action)
+		if err != nil {
+			return nil, nil, err
+		}
+		body = append(body, selection...)
+	}
+	return body, action, nil
+}
+
+func (e *actionEmitter) normalActionSelection(role actionRole) ([]ast.Stmt, ast.Expr, error) {
 	switch e.l.plan.Operation {
 	case plan.OperationPost:
 		action, err := e.actionValue(role, role.record.plan.Write.Missing)

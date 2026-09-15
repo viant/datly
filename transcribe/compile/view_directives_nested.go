@@ -80,7 +80,17 @@ func validateDatabaseSQL(parsed *query.Select) error {
 	if parsed == nil {
 		return nil
 	}
-	if containsViewDirective(parsed) || containsSQLCall(parsed, func(name string) bool { return name == tag.InvariantName || name == "tag" }) {
+	marker := ""
+	if containsViewDirective(parsed) || containsSQLCall(parsed, func(name string) bool {
+		if name == "delete_marker" || name == "concurrency_token" {
+			marker = name
+			return true
+		}
+		return name == tag.InvariantName || name == "tag"
+	}) {
+		if marker != "" {
+			return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s belongs on the outer view projection, not inside database SQL", marker)}
+		}
 		return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("Datly view controls, tag and invariant annotations belong on the outer view projection, not inside database SQL")}
 	}
 	return validateNestedViewSQL(parsed)

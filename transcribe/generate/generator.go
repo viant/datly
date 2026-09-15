@@ -178,6 +178,9 @@ func (g *Generator) Generate(dir string) (*Result, error) {
 	if g == nil {
 		return nil, fmt.Errorf("generator is required")
 	}
+	if g.initErr != nil {
+		return nil, g.initErr
+	}
 	if err := g.input.ValidateLifecycleTarget(g.input.MutationHandler != nil); err != nil {
 		return nil, err
 	}

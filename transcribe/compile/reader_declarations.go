@@ -32,10 +32,10 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			continue
 		}
 		name := strings.ToLower(strings.TrimSpace(sqlparser.Stringify(call.X)))
-		if name == tag.InvariantName && item.Alias != "" {
-			return false, fmt.Errorf("invariant must be a standalone SELECT annotation without an alias")
+		if (name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token") && item.Alias != "" {
+			return false, fmt.Errorf("%s must be a standalone SELECT annotation without an alias", name)
 		}
-		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName) {
+		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token") {
 			filtered = append(filtered, item)
 			continue
 		}
@@ -46,6 +46,11 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 				return false, err
 			}
 			target, typeName = cast.Operand, cast.Type
+		} else if name == "delete_marker" || name == "concurrency_token" {
+			if len(call.Args) != 1 {
+				return false, fmt.Errorf("%s requires one qualified view column", name)
+			}
+			target = sqlparser.Stringify(call.Args[0])
 		} else {
 			if len(call.Args) != 2 {
 				return false, fmt.Errorf("%s requires a column and a string literal", name)
@@ -85,6 +90,19 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 		if column == nil {
 			column = &spec.Column{Name: parts[1], Source: parts[1]}
 			view.Columns = append(view.Columns, column)
+		}
+
+		if name == "delete_marker" || name == "concurrency_token" {
+			for _, other := range view.Columns {
+				if name == "delete_marker" && other.DeleteMarker || name == "concurrency_token" && other.ConcurrencyToken {
+					return false, fmt.Errorf("%s is declared more than once for view %s", name, view.Namespace)
+				}
+			}
+			if name == "delete_marker" {
+				column.DeleteMarker = true
+			} else {
+				column.ConcurrencyToken = true
+			}
 		}
 		if typeName != "" {
 			typeRef, err := dql.ColumnType(typeName, typeContext)
@@ -144,8 +162,15 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 	if err := validateDeclaredProjectionTargets(parsed, root, targets); err != nil {
 		return false, err
 	}
-	if containsSQLCall(parsed, func(name string) bool { return name == tag.InvariantName }) {
-		return false, fmt.Errorf("invariant must be a standalone outer SELECT annotation")
+	misplaced := ""
+	if containsSQLCall(parsed, func(name string) bool {
+		if name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" {
+			misplaced = name
+			return true
+		}
+		return false
+	}) {
+		return false, fmt.Errorf("%s must be a standalone outer SELECT annotation", misplaced)
 	}
 	if err := validateInvariantProjections(parsed, root); err != nil {
 		return false, err

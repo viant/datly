@@ -1012,3 +1012,22 @@ syntax. See [Reader predicates](reader-predicates.md) for the reader catalog.
 The EBNF's final extension delegates template bodies to Velty explicitly. It is
 not an exhaustive Velty grammar, just as the main grammar is not an exhaustive
 database SQL grammar.
+
+## Generated mutation markers
+
+`delete_marker(view.column)` and `concurrency_token(view.column)` are standalone
+outer SELECT annotations, with one qualified projected column argument and no
+SQL alias. Each mutable view may declare at most one of each. They require the
+generated Go PATCH/PUT policy; readers, auxiliary views, and POST reject them.
+
+A delete marker is a logical boolean (for example inner `'' AS should_delete`,
+outer `CAST(items.should_delete AS bool), delete_marker(items.should_delete)`).
+Only explicitly supplied true flags with complete, authorized, parent-scoped
+identities request deletion. Omitted rows and collections never imply deletion.
+
+A concurrency token is numeric or `time.Time`, optionally pointer-valued. Its
+validation compares captured expected presence/value with loaded Previous before
+other validation. It does not add a SQL predicate, advance tokens, lock rows, or
+provide atomic race prevention. Init may explicitly prepare a next working token
+without changing the captured expectation. Missing/mismatched update tokens fail
+with a typed conflict before mutations proceed.

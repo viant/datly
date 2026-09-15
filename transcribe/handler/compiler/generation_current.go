@@ -91,6 +91,15 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	current.TypeName = ""
 	current.Dest = ""
 	current.EntityHooks = ""
+	current.Columns = nil
+	for _, column := range view.Columns {
+		if column == nil || column.DeleteMarker {
+			continue
+		}
+		projected := column.Clone()
+		projected.ConcurrencyToken = false
+		current.Columns = append(current.Columns, projected)
+	}
 	current.Relations = nil
 	current.SelfReference = nil
 	current.Cardinality = spec.CardinalityMany
@@ -104,7 +113,7 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	// Preserve authored WHERE, joins and projections inside the derived table.
 	// CompositeIn narrows that read; it must never replace authored row scope.
 	var columns []string
-	for _, col := range view.Columns {
+	for _, col := range current.Columns {
 		if col != nil {
 			columns = append(columns, `r."`+strings.ReplaceAll(col.Name, `"`, `""`)+`"`)
 		}

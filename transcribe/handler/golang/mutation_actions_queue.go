@@ -65,17 +65,31 @@ func (e *actionEmitter) queue() (ast.Decl, error) {
 		block = append(block, &ast.RangeStmt{Key: ast.NewIdent("index"), Value: ast.NewIdent("entry"), Tok: token.DEFINE, X: entries, Body: &ast.BlockStmt{List: loop}})
 		body = append(body, &ast.BlockStmt{List: block})
 	}
-	cases := []ast.Stmt{}
-	for _, role := range e.roles {
-		payload := &ast.IndexExpr{X: ast.NewIdent(role.field + "Queued"), Index: selectExpr(ast.NewIdent("visit"), "Index")}
-		entry := &ast.IndexExpr{X: selectExpr(ast.NewIdent("actions"), role.field), Index: selectExpr(ast.NewIdent("visit"), "Index")}
-		operations := []ast.Stmt{}
-		for _, action := range []struct{ name, method string }{{"WriteInsert", "Insert"}, {"WriteUpdate", "Update"}} {
-			operations = append(operations, &ast.CaseClause{List: []ast.Expr{selectExpr(ast.NewIdent(e.l.handlerAlias), action.name)}, Body: []ast.Stmt{errorGuard(callExpr(selectExpr(selectExpr(ast.NewIdent("actions"), "DML"), action.method), stringExpr(role.record.plan.Table), payload))}})
+	for _, deleting := range []bool{true, false} {
+		cases := []ast.Stmt{}
+		for _, role := range e.roles {
+			payload := &ast.IndexExpr{X: ast.NewIdent(role.field + "Queued"), Index: selectExpr(ast.NewIdent("visit"), "Index")}
+			entry := &ast.IndexExpr{X: selectExpr(ast.NewIdent("actions"), role.field), Index: selectExpr(ast.NewIdent("visit"), "Index")}
+			operations := []ast.Stmt{}
+			for _, action := range []struct{ name, method string }{{"WriteInsert", "Insert"}, {"WriteUpdate", "Update"}, {"WriteDelete", "Delete"}} {
+				if deleting != (action.name == "WriteDelete") {
+					continue
+				}
+				operations = append(operations, &ast.CaseClause{List: []ast.Expr{selectExpr(ast.NewIdent(e.l.handlerAlias), action.name)}, Body: []ast.Stmt{errorGuard(callExpr(selectExpr(selectExpr(ast.NewIdent("actions"), "DML"), action.method), stringExpr(role.record.plan.Table), payload))}})
+			}
+			operations = append(operations, &ast.CaseClause{Body: []ast.Stmt{&ast.BranchStmt{Tok: token.CONTINUE}}})
+			cases = append(cases, &ast.CaseClause{List: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(role.record.order)}}, Body: []ast.Stmt{&ast.SwitchStmt{Tag: selectExpr(entry, "Action"), Body: &ast.BlockStmt{List: operations}}}})
 		}
-		operations = append(operations, &ast.CaseClause{Body: []ast.Stmt{returnStmt(e.errorExpr("mutation action changed after diff"))}})
-		cases = append(cases, &ast.CaseClause{List: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(role.record.order)}}, Body: []ast.Stmt{&ast.SwitchStmt{Tag: selectExpr(entry, "Action"), Body: &ast.BlockStmt{List: operations}}}})
+
+		order := selectExpr(ast.NewIdent("frames"), e.frames.OrderField)
+		loopBody := []ast.Stmt{errorGuard(callExpr(selectExpr(ast.NewIdent("ctx"), "Err"))), &ast.SwitchStmt{Tag: selectExpr(ast.NewIdent("visit"), "Role"), Body: &ast.BlockStmt{List: cases}}}
+		if deleting {
+			loopBody = append([]ast.Stmt{defineStmt("visit", &ast.IndexExpr{X: order, Index: ast.NewIdent("i")})}, loopBody...)
+			body = append(body, &ast.ForStmt{Init: defineStmt("i", &ast.BinaryExpr{X: callExpr(ast.NewIdent("len"), order), Op: token.SUB, Y: &ast.BasicLit{Kind: token.INT, Value: "1"}}), Cond: &ast.BinaryExpr{X: ast.NewIdent("i"), Op: token.GEQ, Y: &ast.BasicLit{Kind: token.INT, Value: "0"}}, Post: &ast.IncDecStmt{X: ast.NewIdent("i"), Tok: token.DEC}, Body: &ast.BlockStmt{List: loopBody}})
+		} else {
+			body = append(body, &ast.RangeStmt{Key: ast.NewIdent("_"), Value: ast.NewIdent("visit"), Tok: token.DEFINE, X: order, Body: &ast.BlockStmt{List: loopBody}})
+		}
 	}
-	body = append(body, &ast.RangeStmt{Key: ast.NewIdent("_"), Value: ast.NewIdent("visit"), Tok: token.DEFINE, X: selectExpr(ast.NewIdent("frames"), e.frames.OrderField), Body: &ast.BlockStmt{List: []ast.Stmt{errorGuard(callExpr(selectExpr(ast.NewIdent("ctx"), "Err"))), &ast.SwitchStmt{Tag: selectExpr(ast.NewIdent("visit"), "Role"), Body: &ast.BlockStmt{List: cases}}}}})
+
 	return e.phase("Queue", 4, body), nil
 }

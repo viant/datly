@@ -142,6 +142,9 @@ func (c *compiler) compileChildRecord(current recordContext) (*plan.RecordPlan, 
 			return nil, err
 		}
 	}
+	if err := c.mutationMarkers(record, current.view, current.operation); err != nil {
+		return nil, err
+	}
 	return record, nil
 }
 

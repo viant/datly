@@ -227,6 +227,9 @@ func (c *compiler) compileRoot(request Request, operation plan.Operation, input 
 	if err != nil {
 		return nil, err
 	}
+	if err := c.mutationMarkers(root, view, operation); err != nil {
+		return nil, err
+	}
 	return root, nil
 }
 

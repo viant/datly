@@ -5,14 +5,16 @@ import "github.com/viant/datly/spec"
 // EntityField describes a canonical field whose presence is owned by the
 // mutable entity contract. Identity presence does not authorize an UPDATE SET.
 type EntityField struct {
-	Name      string
-	Path      FieldPath
-	Type      spec.TypeRef
-	Identity  bool
-	Relation  bool
-	Self      bool
-	Writable  bool
-	Invariant string
+	Name             string
+	Path             FieldPath
+	Type             spec.TypeRef
+	Identity         bool
+	Relation         bool
+	Self             bool
+	Writable         bool
+	Invariant        string
+	DeleteMarker     bool
+	ConcurrencyToken bool
 }
 
 // InvariantGroup is a normalized group of business fields whose omitted values

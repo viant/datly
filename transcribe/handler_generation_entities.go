@@ -1,11 +1,13 @@
 package transcribe
 
 import (
+	"fmt"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	gen "github.com/viant/datly/transcribe/generate"
 	handlerplan "github.com/viant/datly/transcribe/handler/ast"
 	handlergo "github.com/viant/datly/transcribe/handler/golang"
+	sqlio "github.com/viant/sqlx/io"
 	xshape "github.com/viant/x/shape"
 	"reflect"
 	"strings"
@@ -123,6 +125,9 @@ func (g *handlerGeneration) refineLinkedEntity(record *handlerplan.RecordPlan, b
 						}
 					}
 					planned := handlerplan.EntityField{Name: business.Name, Path: handlerplan.FieldPath{business.Name}, Type: spec.TypeRef{Name: expression}, Writable: true}
+					if record.Write.DeleteMarker.Field == business.Name && !sqlio.ParseTag(reflect.StructTag(business.Tag)).Transient {
+						return fmt.Errorf("delete_marker linked field %s must declare sqlx:\"-\"", business.Name)
+					}
 					for _, key := range entity.Keys {
 						if key.Field == business.Name {
 							planned.Identity = true

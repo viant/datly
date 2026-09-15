@@ -20,6 +20,7 @@ func (e *actionEmitter) verifyOrder() []ast.Stmt {
 		entry := &ast.IndexExpr{X: entries, Index: index}
 		statements := []ast.Stmt{&ast.IfStmt{Cond: invalid, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("mutation order has an invalid row index"))}}}, &ast.IfStmt{Cond: seen, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("mutation order repeats a row"))}}}, assignStmt(seen, ast.NewIdent("true")), &ast.IfStmt{Cond: &ast.BinaryExpr{X: entry, Op: token.EQL, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("mutation decision is missing"))}}}}
 		validAction := &ast.BinaryExpr{X: &ast.BinaryExpr{X: selectExpr(entry, "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteInsert")}, Op: token.LOR, Y: &ast.BinaryExpr{X: selectExpr(entry, "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteUpdate")}}
+		validAction = &ast.BinaryExpr{X: validAction, Op: token.LOR, Y: &ast.BinaryExpr{X: selectExpr(entry, "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteDelete")}}
 		statements = append(statements, &ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: &ast.ParenExpr{X: validAction}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("mutation decision has an invalid action"))}}})
 		cases = append(cases, &ast.CaseClause{List: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(role.record.order)}}, Body: statements})
 	}

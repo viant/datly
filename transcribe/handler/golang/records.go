@@ -238,6 +238,14 @@ func validateRecordPolicy(operation plan.Operation, record *plan.RecordPlan) err
 		}
 		return nil
 	}
+
+	markerActions := 0
+	if record.Write.DeleteMarker.Field != "" {
+		if !containsAction(record.Write.Allowed, plan.ActionDelete) {
+			return fmt.Errorf("delete_marker requires an allowed delete action")
+		}
+		markerActions = 1
+	}
 	switch operation {
 	case plan.OperationPost:
 		if record.Write.Existing != "" || record.Write.Missing != plan.ActionInsert ||
@@ -247,7 +255,7 @@ func validateRecordPolicy(operation plan.Operation, record *plan.RecordPlan) err
 		return nil
 	case plan.OperationPut:
 		if record.Write.Missing != "" || record.Write.Existing != plan.ActionUpdate ||
-			len(record.Write.Allowed) != 1 || !containsAction(record.Write.Allowed, plan.ActionUpdate) {
+			len(record.Write.Allowed) != 1+markerActions || !containsAction(record.Write.Allowed, plan.ActionUpdate) {
 			return fmt.Errorf("generated Go PUT record %q requires update-only write policy", record.Identity)
 		}
 		return nil
@@ -266,7 +274,7 @@ func validateRecordPolicy(operation plan.Operation, record *plan.RecordPlan) err
 			return fmt.Errorf("Go PATCH record %q action %q is not allowed by the semantic write policy", record.Identity, action)
 		}
 	}
-	if record.Write.Existing != plan.ActionUpdate || record.Write.Missing != plan.ActionInsert || len(record.Write.Allowed) != 2 {
+	if record.Write.Existing != plan.ActionUpdate || record.Write.Missing != plan.ActionInsert || len(record.Write.Allowed) != 2+markerActions {
 		return fmt.Errorf("Go PATCH record %q requires update-or-insert write policy", record.Identity)
 	}
 	return nil

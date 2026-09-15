@@ -40,6 +40,7 @@ func MutationValidationSupport(value *plan.Plan, config Config, entities *Entity
 	}
 	e.reflectAlias = a.l.availableAlias("reflect")
 	a.l.pathsByAlias[e.reflectAlias] = "reflect"
+	a.l.importsByPath["reflect"] = e.reflectAlias
 	file, err := e.file()
 	if err != nil {
 		return nil, err
@@ -142,6 +143,19 @@ func (e *validationEmitter) validate(final bool) (ast.Decl, error) {
 	if final {
 		body = append(body, e.guard(&ast.BinaryExpr{X: id("actions"), Op: token.EQL, Y: id("nil")}, "final validation requires reconciled actions"), errorGuard(callExpr(selectExpr(id("actions"), "VerifyRelations"), id("ctx"), id("frames"))))
 	}
+
+	if !final {
+		concurrency, err := e.concurrency()
+		if err != nil {
+			return nil, err
+		}
+		body = append(body, concurrency...)
+		graph, err := e.deletionGraph()
+		if err != nil {
+			return nil, err
+		}
+		body = append(body, graph...)
+	}
 	batches := e.batches()
 	for _, batch := range batches {
 		body = append(body, e.declareBatch(batch)...)
@@ -159,6 +173,7 @@ func (e *validationEmitter) validate(final bool) (ast.Decl, error) {
 			return nil, err
 		}
 		loop = append(loop, selection...)
+		loop = append(loop, &ast.IfStmt{Cond: &ast.BinaryExpr{X: action, Op: token.EQL, Y: selectExpr(id(a.l.handlerAlias), "WriteDelete")}, Body: &ast.BlockStmt{List: []ast.Stmt{&ast.BranchStmt{Tok: token.CONTINUE}}}})
 		missingPrevious := &ast.BinaryExpr{X: &ast.BinaryExpr{X: action, Op: token.EQL, Y: selectExpr(id(a.l.handlerAlias), "WriteUpdate")}, Op: token.LAND, Y: &ast.BinaryExpr{X: selectExpr(selectExpr(id("frame"), "State"), "Previous"), Op: token.EQL, Y: id("nil")}}
 		loop = append(loop, e.guard(missingPrevious, "framework validation of update requires a matched Previous row"))
 		loop = append(loop, e.coverage(role)...)

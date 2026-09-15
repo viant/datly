@@ -47,6 +47,9 @@ func newMutationActionEmitter(value *plan.Plan, config Config, entities *EntityA
 		if record.plan.Entity == nil {
 			return nil, fmt.Errorf("mutation role %s requires entity metadata", record.plan.Identity)
 		}
+		if err := e.validateMarkers(record.plan); err != nil {
+			return nil, err
+		}
 		if record.plan.Entity.LateWrite.Unresolved != "" {
 			return nil, fmt.Errorf("generic mutation native policy for %s is unresolved: %s", record.plan.Identity, record.plan.Entity.LateWrite.Unresolved)
 		}
@@ -76,7 +79,7 @@ func newMutationActionEmitter(value *plan.Plan, config Config, entities *EntityA
 			return nil, fmt.Errorf("mutation sequence for %s requires canonical local field authority", record.plan.Identity)
 		}
 		for _, action := range record.plan.Write.Allowed {
-			if action != plan.ActionInsert && action != plan.ActionUpdate {
+			if action != plan.ActionInsert && action != plan.ActionUpdate && action != plan.ActionDelete {
 				return nil, fmt.Errorf("mutation action %s is unsupported", action)
 			}
 		}

@@ -134,3 +134,11 @@ Use 401 for the application's chosen authorization response; other validation ma
 ## Fixtures
 
 Cover existing/new/supplied-zero identities, partial composite keys, same ID across tenants, mixed rows, reordered children, omitted/empty/null/false values, DB unique/reference failures, custom failures, cancellation, repeated sequence allocation, rollback, pending caller transactions and regeneration.
+
+## Explicit child deletion and expected tokens
+
+Use the complete DQL, JSON and high-level `datly transcribe patch` example in
+[the mutation marker contract](writer-contract.md#explicit-deletion-and-token-validation).
+Choose entity, lifecycle, token and flag names in DQL. Keep logical flags in the
+inner projection and annotate their outer view column; never replace generation
+with hand-written Velty loops, manual Current reads, or missing-child deletion.

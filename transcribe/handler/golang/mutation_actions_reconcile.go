@@ -91,7 +91,7 @@ func (e *actionEmitter) reconcile() (ast.Decl, error) {
 		}
 		original := &ast.TypeAssertExpr{X: selectExpr(selectExpr(selectExpr(ast.NewIdent("entry"), "Frame"), "State"), "Original"), Type: &ast.StarExpr{X: ast.NewIdent(role.association.StateType)}}
 		loop := []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("key"), ast.NewIdent("valid"), ast.NewIdent("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(ast.NewIdent(role.association.CurrentKeyFunction), selectExpr(ast.NewIdent("entry"), "Payload"), original)}}, &ast.IfStmt{Cond: &ast.BinaryExpr{X: ast.NewIdent("err"), Op: token.NEQ, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(ast.NewIdent("err"))}}}, &ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent("valid")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("reconciled mutation identity is missing"))}}}}
-		changed := &ast.BinaryExpr{X: &ast.BinaryExpr{X: selectExpr(ast.NewIdent("entry"), "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteUpdate")}, Op: token.LAND, Y: &ast.BinaryExpr{X: ast.NewIdent("key"), Op: token.NEQ, Y: selectExpr(ast.NewIdent("entry"), "IdentityKey")}}
+		changed := &ast.BinaryExpr{X: &ast.BinaryExpr{X: selectExpr(ast.NewIdent("entry"), "Action"), Op: token.NEQ, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteInsert")}, Op: token.LAND, Y: &ast.BinaryExpr{X: ast.NewIdent("key"), Op: token.NEQ, Y: selectExpr(ast.NewIdent("entry"), "IdentityKey")}}
 		loop = append(loop, &ast.IfStmt{Cond: changed, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("parent linking cannot change an existing identity"))}}})
 		if e.entities.identity != nil {
 			for _, part := range role.record.plan.IdentityKeys() {
@@ -121,7 +121,7 @@ func (e *actionEmitter) decisionLoop(role actionRole, body []ast.Stmt) ast.Stmt 
 }
 
 func (e *actionEmitter) restoreIdentity(role actionRole) ([]ast.Stmt, error) {
-	update := &ast.BinaryExpr{X: selectExpr(ast.NewIdent("entry"), "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteUpdate")}
+	update := &ast.BinaryExpr{X: selectExpr(ast.NewIdent("entry"), "Action"), Op: token.NEQ, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteInsert")}
 	statements := []ast.Stmt{&ast.IfStmt{Cond: &ast.BinaryExpr{X: update, Op: token.LAND, Y: &ast.UnaryExpr{Op: token.NOT, X: selectExpr(ast.NewIdent("entry"), "IdentityAssigned")}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("update requires a resolved identity"))}}}}
 	if e.entities.identity != nil {
 		return statements, nil

@@ -19,6 +19,7 @@ type Action string
 const (
 	ActionInsert Action = "insert"
 	ActionUpdate Action = "update"
+	ActionDelete Action = "delete"
 )
 
 // FieldPath is a prevalidated generated-contract selector path.
@@ -116,11 +117,13 @@ type CurrentField struct {
 
 // WritePolicy makes every root DML decision explicit for target lowering.
 type WritePolicy struct {
-	ValuePath FieldPath
-	Existing  Action
-	Missing   Action
-	Allowed   []Action
-	Order     int
+	DeleteMarker     FieldRef
+	ConcurrencyToken FieldRef
+	ValuePath        FieldPath
+	Existing         Action
+	Missing          Action
+	Allowed          []Action
+	Order            int
 }
 
 // RelationPlan describes one typed child traversal from a parent record.

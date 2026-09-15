@@ -30,6 +30,11 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 			return nil
 		}
 		visited[view] = true
+		for _, column := range view.Columns {
+			if column != nil && (column.DeleteMarker || column.ConcurrencyToken) {
+				return fmt.Errorf("view %s: mutation markers require the generated Go mutation lifecycle", view.Name)
+			}
+		}
 		if strings.TrimSpace(view.EntityHooks) != "" {
 			return fmt.Errorf("view %s: lifecycle_type(%s, %q) requires the generated Go mutation lifecycle; readers use input_type OrdersInput.Init and output_type OrdersOutput.Finalize, with row OnFetch separate", view.Name, view.Name, view.EntityHooks)
 		}

@@ -439,6 +439,9 @@ func (g *handlerGeneration) appendRecordType(result *[]handlergo.RecordType, sem
 	if err := g.refineCurrentProjection(record, generated, valueType, currentType); err != nil {
 		return err
 	}
+	if err := g.refineMutationMarkers(record, generated, valueType); err != nil {
+		return err
+	}
 	if err := g.refineMutationFields(record, generated, valueType); err != nil {
 		return err
 	}

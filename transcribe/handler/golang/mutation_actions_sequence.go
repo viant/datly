@@ -66,6 +66,9 @@ func (e *actionEmitter) sequence() (ast.Decl, error) {
 // sequenceReservations exposes supplied and explicitly resolved IDs from every
 // role in the allocation domain before the first Allocate call;
 // detached payload clones keep optional custom reservation code away from them.
+// Only explicitly selected deletes are excluded: their IDs already require
+// matched Previous. Supplied insert/update IDs remain reserved even without
+// local allocation candidates, because nested/custom work may allocate later.
 func (e *actionEmitter) sequenceReservations() ([]ast.Stmt, error) {
 	id := ast.NewIdent
 	var body []ast.Stmt
@@ -77,6 +80,16 @@ func (e *actionEmitter) sequenceReservations() ([]ast.Stmt, error) {
 			}
 			block := []ast.Stmt{defineStmt("reserved", &ast.CompositeLit{Type: &ast.ArrayType{Elt: role.record.value.pointerExpr()}})}
 			loop := e.original(role)
+			if role.record.plan.Write.DeleteMarker.Field != "" {
+				loop = append(loop, e.decisionIdentity(role, "_", "supplied")...)
+				loop = append(loop, assignStmt(id("_"), id("supplied")))
+				selection, action, err := e.actionSelection(role)
+				if err != nil {
+					return nil, err
+				}
+				loop = append(loop, selection...)
+				loop = append(loop, &ast.IfStmt{Cond: &ast.BinaryExpr{X: action, Op: token.EQL, Y: selectExpr(id(e.l.handlerAlias), "WriteDelete")}, Body: &ast.BlockStmt{List: []ast.Stmt{&ast.BranchStmt{Tok: token.CONTINUE}}}})
+			}
 			clone := e.runtimeCall("CloneValue", selectExpr(id("original"), "original"), id(role.field+"Options"))
 			capture := []ast.Stmt{
 				&ast.AssignStmt{Lhs: []ast.Expr{id("cloned"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{clone}},
