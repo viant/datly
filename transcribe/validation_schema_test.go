@@ -23,7 +23,8 @@ func TestValidatorSchemaDQLSQLite(t *testing.T) {
 	}{
 		{name: "table", query: "SELECT r.id FROM records r", connector: "main"},
 		{name: "authored connector", query: "#setting($_ = $connector('main'))\nSELECT r.id FROM records r", connector: "fallback"},
-		{name: "query only", query: "SELECT r.id FROM (SELECT id FROM records) r", connector: "main"},
+		{name: "derived table", query: "SELECT r.id FROM (SELECT id FROM records) r", connector: "main"},
+		{name: "query only", query: "SELECT r.id FROM (SELECT id FROM records UNION SELECT id FROM records) r", connector: "main"},
 		{name: "missing table", query: "SELECT r.id FROM absent r", connector: "main", failure: "no such table"},
 		{name: "missing column", query: "SELECT r.absent FROM records r", connector: "main", failure: "no such column"},
 		{name: "missing connector", query: "SELECT r.id FROM records r", connector: "absent", failure: "connector"},
@@ -68,7 +69,7 @@ func TestValidatorSchemaDQLSQLite(t *testing.T) {
 					if tc.name == "query only" && (report.Schema[0].Table != "" || len(report.Schema[0].Completed) != 2 || strings.Contains(strings.Join(report.Schema[0].Completed, ";"), "metadata")) {
 						t.Fatalf("query-only discovery claimed table metadata: %+v", report.Schema)
 					}
-					if tc.name == "table" && (report.Schema[0].Table != "records" || len(report.Schema[0].Completed) != 4) {
+					if (tc.name == "table" || tc.name == "derived table") && (report.Schema[0].Table != "records" || len(report.Schema[0].Completed) != 4) {
 						t.Fatalf("explicit table discovery missing: %+v", report.Schema)
 					}
 				}
