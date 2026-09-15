@@ -60,6 +60,9 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 		if component == nil || component.Component == nil {
 			continue
 		}
+		if err := component.Component.Settings.ValidateSequenceStrategy(); err != nil {
+			return nil, err
+		}
 		if component.Input == nil {
 			return nil, fmt.Errorf("component %s input contract is required", component.Component.Key.String())
 		}

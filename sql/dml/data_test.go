@@ -197,7 +197,7 @@ func TestDataFlushRetainsBufferedOperationsAfterFailure(t *testing.T) {
 	}
 }
 
-func TestDataAllocateUsesTransientTransaction(t *testing.T) {
+func TestDataAllocateUsesNativeReservation(t *testing.T) {
 	h := testharness.NewSQLiteHarness(t)
 	err := h.ExecStatements(context.Background(),
 		`CREATE TABLE IF NOT EXISTS users (ID INTEGER PRIMARY KEY AUTOINCREMENT, NAME TEXT);`,

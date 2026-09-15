@@ -59,6 +59,19 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			if ret.Generation.Template == "" {
 				return nil, fmt.Errorf("invalid useTemplate directive: empty template type")
 			}
+		case strings.EqualFold(name, "sequence_strategy"):
+			if len(args) != 1 || tail != "" || ret.SequenceStrategy != "" {
+				return nil, fmt.Errorf("sequence_strategy requires exactly one quoted value, once, without modifiers")
+			}
+			value, quoted := parseQuotedLiteral(args[0])
+			if !quoted || value == "" {
+				return nil, fmt.Errorf("sequence_strategy requires a nonempty quoted value")
+			}
+			value = strings.ToLower(value)
+			if err := (&spec.Settings{SequenceStrategy: value}).ValidateSequenceStrategy(); err != nil {
+				return nil, err
+			}
+			ret.SequenceStrategy = value
 		case strings.EqualFold(name, "connector"):
 			if len(args) == 0 {
 				return nil, fmt.Errorf("invalid connector directive: missing connector name")
@@ -342,7 +355,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	if err := ret.Generation.ValidateFilePrefix(); err != nil {
 		return nil, err
 	}
-	if ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.Report == nil && ret.Cache == nil &&
+	if ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
 		ret.MCP == nil && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&

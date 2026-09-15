@@ -12,6 +12,7 @@ import (
 	"github.com/viant/sqlx/io/insert"
 	"github.com/viant/sqlx/io/update"
 	"github.com/viant/sqlx/metadata/info"
+	"github.com/viant/sqlx/metadata/info/dialect"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -49,20 +50,22 @@ type Data struct {
 	updateServices     map[string]*update.Service
 	deleteServices     map[string]*delete.Service
 	sequencer          *sequencer.Service
+	sequenceStrategy   dialect.PresetIDStrategy
 	frameworkValidator *validation.Service
 }
 
 func NewData(db *sql.DB, opts ...Option) *Data {
 	options := collectOptions(opts...)
 	return &Data{
-		db:             db,
-		tx:             options.Tx,
-		externalTx:     options.Tx != nil,
-		onCommit:       options.OnCommit,
-		insertServices: map[string]*insert.Service{},
-		updateServices: map[string]*update.Service{},
-		deleteServices: map[string]*delete.Service{},
-		open:           true,
+		db:               db,
+		tx:               options.Tx,
+		externalTx:       options.Tx != nil,
+		onCommit:         options.OnCommit,
+		sequenceStrategy: options.SequenceStrategy,
+		insertServices:   map[string]*insert.Service{},
+		updateServices:   map[string]*update.Service{},
+		deleteServices:   map[string]*delete.Service{},
+		open:             true,
 	}
 }
 
@@ -89,7 +92,7 @@ func (d *Data) sequence(ctx context.Context, run func(*sequencer.Service) error)
 	owner.mu.Unlock()
 	if !invocation {
 		if owner.sequencer == nil {
-			owner.sequencer = sequencer.New(db)
+			owner.sequencer = sequencer.New(db, owner.tx).WithStrategy(owner.sequenceStrategy)
 		}
 		return run(owner.sequencer)
 	}
@@ -109,7 +112,7 @@ func (d *Data) sequence(ctx context.Context, run func(*sequencer.Service) error)
 		return err
 	}
 	if owner.sequencer == nil {
-		owner.sequencer = sequencer.New(db, tx)
+		owner.sequencer = sequencer.New(db, tx).WithStrategy(owner.sequenceStrategy)
 	}
 	err = run(owner.sequencer)
 	if err != nil {
@@ -133,7 +136,7 @@ func (d *Data) BeginInvocation() error {
 		return errors.New("DML data is already attached to an invocation")
 	}
 	owner.invocation = true
-	// Standalone reservations used a different transaction strategy.
+	// Pending supplied identities belong to the scope in which they were recorded.
 	owner.sequencer = nil
 	return nil
 }

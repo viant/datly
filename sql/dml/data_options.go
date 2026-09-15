@@ -3,11 +3,13 @@ package dml
 import (
 	"context"
 	"database/sql"
+	"github.com/viant/sqlx/metadata/info/dialect"
 )
 
 type options struct {
-	Tx       *sql.Tx
-	OnCommit func(context.Context)
+	Tx               *sql.Tx
+	SequenceStrategy dialect.PresetIDStrategy
+	OnCommit         func(context.Context)
 }
 
 // Option configures an invocation SQL DML capability.
@@ -35,4 +37,10 @@ func collectOptions(opts ...Option) options {
 		}
 	}
 	return options
+}
+
+// WithSequenceStrategy selects a native allocation strategy for this data owner.
+// Empty/undefined retains the native product default.
+func WithSequenceStrategy(strategy dialect.PresetIDStrategy) Option {
+	return func(o *options) { o.SequenceStrategy = strategy }
 }

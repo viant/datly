@@ -59,6 +59,9 @@ func (d *Data) inserter(ctx context.Context, db *sql.DB, table string) (*insert.
 	if err != nil {
 		return nil, err
 	}
+	if strategy := d.owner().sequenceStrategy; strategy != "" {
+		options = append(options, strategy)
+	}
 	service, err = insert.New(ctx, db, table, options...)
 	if err != nil {
 		return nil, err

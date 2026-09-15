@@ -798,6 +798,9 @@ for their parent outcome rather than announcing success at a child seal.
 
 ## Sequence IDs and reconcile foreign keys
 
+See [numeric ID reservations](sequencing.md) for supported dialects, SQLite
+concurrency, native allocator storage and caller transaction ownership.
+
 Stable identities are allocated before Queue. Pending supplied identities must
 be visible to allocation so generated IDs do not collide with the request.
 AfterSequence observes allocated IDs. Diffing follows the frozen mutation decision
@@ -820,6 +823,20 @@ Composite identities compare the complete tuple. Native metadata support is not
 universal constraint discovery; authored UNIQUE/reference constraints remain
 important when a driver cannot report them. Do not infer the absence of a database
 constraint from missing discovery metadata.
+
+### Select a sequencing strategy
+
+Omit the setting to use the native default: original MySQL transient transaction,
+PostgreSQL 10+ exact nextval values, or SQLite native reservation. To select it
+explicitly, use `#setting($_ = $sequence_strategy('transient'))` or
+`#setting($_ = $sequence_strategy('reservation'))`. The latter is a provisioned,
+optional table allocator on MySQL. Transcription rejects other values, including
+`maxid`; the setting is not an instruction to replace a failing native mechanism.
+
+The root database unit owns the strategy; children inherit it and explicit
+conflicts fail. Original MySQL requires an allocator connection and can wait on
+caller-held locks. Its transient source INSERTs execute defaults/triggers even
+though transactional rows roll back. See [strategy defaults and constraints](sequencing.md).
 
 ## Transactions and async execution
 

@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	SequenceStrategyTag = "sequenceStrategy"
 	CaseFormatTag       = "caseFormat"
 	CacheTag            = "cache"
 	JSONMarshalTag      = "jsonMarshal"
@@ -27,6 +28,7 @@ const (
 // constants are deliberately excluded because transcription consumes or
 // materializes them before package bootstrap.
 type Settings struct {
+	SequenceStrategy           string
 	MCPFolders                 []spec.ResourceFolder
 	IgnoreEmptyQueryParameters *bool
 	CaseFormat                 string
@@ -45,6 +47,7 @@ func SettingsFromSpec(source *spec.Settings) Settings {
 	}
 	cloned := source.Clone()
 	return Settings{
+		SequenceStrategy:           cloned.SequenceStrategy,
 		MCPFolders:                 cloned.MCPFolders,
 		IgnoreEmptyQueryParameters: cloned.IgnoreEmptyQueryParameters,
 		CaseFormat:                 cloned.CaseFormat, Cache: cloned.Cache,
@@ -58,6 +61,7 @@ func (s Settings) Apply(target *spec.Settings) {
 	if target == nil {
 		return
 	}
+	target.SequenceStrategy = s.SequenceStrategy
 	target.CaseFormat = s.CaseFormat
 	target.MCPFolders = append([]spec.ResourceFolder(nil), s.MCPFolders...)
 	for i := range target.MCPFolders {
@@ -81,12 +85,16 @@ func (s Settings) Apply(target *spec.Settings) {
 }
 
 func (s Settings) StructTag() (string, error) {
+	if err := (&spec.Settings{SequenceStrategy: s.SequenceStrategy}).ValidateSequenceStrategy(); err != nil {
+		return "", err
+	}
 	var tags []string
 	appendValue := func(name, value string) {
 		if value != "" {
 			tags = append(tags, name+":"+strconv.Quote(value))
 		}
 	}
+	appendValue(SequenceStrategyTag, s.SequenceStrategy)
 	appendValue(CaseFormatTag, s.CaseFormat)
 	if len(s.MCPFolders) > 0 {
 		data, err := json.Marshal(s.MCPFolders)
@@ -122,7 +130,8 @@ func (s Settings) StructTag() (string, error) {
 
 func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 	result := Settings{
-		CaseFormat: structTag.Get(CaseFormatTag), JSONMarshalType: structTag.Get(JSONMarshalTag),
+		SequenceStrategy: structTag.Get(SequenceStrategyTag),
+		CaseFormat:       structTag.Get(CaseFormatTag), JSONMarshalType: structTag.Get(JSONMarshalTag),
 		JSONUnmarshalType: structTag.Get(JSONUnmarshalTag), XMLUnmarshalType: structTag.Get(XMLUnmarshalTag),
 		Format: structTag.Get(FormatTag), DateFormat: structTag.Get(DateFormatTag),
 	}
@@ -154,6 +163,9 @@ func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 		if err := json.Unmarshal([]byte(value), result.Output); err != nil {
 			return Settings{}, fmt.Errorf("parse output tag: %w", err)
 		}
+	}
+	if err := (&spec.Settings{SequenceStrategy: result.SequenceStrategy}).ValidateSequenceStrategy(); err != nil {
+		return Settings{}, err
 	}
 	return result, nil
 }

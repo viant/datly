@@ -16,6 +16,11 @@ import (
 type dataScopeContextKey struct{}
 
 type dataScope struct {
+	sequenceOnce      sync.Once
+	sequenceSource    dexec.DataSource
+	sequenceResolved  string
+	sequenceError     error
+	sequenceStrategy  string
 	mu                sync.Mutex
 	source            dexec.DataSource
 	root              *dataScope
@@ -240,7 +245,7 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 					s.err = ErrUnknownDatabaseIdentity
 					return
 				}
-				unit, err := s.root.databaseUnit(s.source, key)
+				unit, err := s.root.databaseUnit(ctx, s.source, key, s.sequenceStrategy)
 				if err != nil {
 					s.err = err
 					return
@@ -265,7 +270,7 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 				}
 			}
 			if key != nil && parentKey != nil && key != parentKey {
-				unit, unitErr := s.root.databaseUnit(s.source, key)
+				unit, unitErr := s.root.databaseUnit(ctx, s.source, key, s.sequenceStrategy)
 				if unitErr != nil {
 					s.err = unitErr
 					return
@@ -282,6 +287,10 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 				}
 				return
 			}
+			if err := parentUnit.checkSequenceStrategy(ctx, s.source, s.sequenceStrategy); err != nil {
+				s.err = err
+				return
+			}
 			s.unit = parentUnit
 			s.data = parentData
 			if scoped, ok := parentData.(componentData); ok {
@@ -292,7 +301,12 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 		if s.source == nil {
 			return
 		} // neutral outcome-aware root; no implicit DB
-		s.data, s.err = s.source.Open(ctx)
+		_, err := s.effectiveSequenceStrategy(ctx)
+		if err != nil {
+			s.err = err
+			return
+		}
+		s.data, s.err = s.sequenceSource.Open(ctx)
 		if s.err == nil {
 			if lifecycle, ok := s.data.(invocationData); ok {
 				s.err = lifecycle.BeginInvocation()
@@ -336,22 +350,29 @@ func sameIdentity(a, b any) bool {
 	return aType == bType && aType.Comparable() && a == b
 }
 
-func (s *dataScope) databaseUnit(source dexec.DataSource, key any) (*dataScope, error) {
+func (s *dataScope) databaseUnit(ctx context.Context, source dexec.DataSource, key any, strategy string) (*dataScope, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.completionStarted {
+		s.mu.Unlock()
 		return nil, fmt.Errorf("invocation completion has already started")
 	}
 	if unit := s.bySource[key]; unit != nil {
 		if childTx := sourceTransactionKey(source); childTx != nil && !sameIdentity(childTx, sourceTransactionKey(unit.source)) {
+			s.mu.Unlock()
 			return nil, ErrTransactionConflict
+		}
+		s.mu.Unlock()
+		// Native metadata resolution may perform I/O; never hold the root map lock.
+		if err := unit.checkSequenceStrategy(ctx, source, strategy); err != nil {
+			return nil, err
 		}
 		return unit, nil
 	}
-	unit := &dataScope{source: source, root: s}
+	unit := &dataScope{source: source, root: s, sequenceStrategy: strategy}
 	unit.unit = unit
 	s.bySource[key] = unit
 	s.units = append(s.units, unit)
+	s.mu.Unlock()
 	return unit, nil
 }
 

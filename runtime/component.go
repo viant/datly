@@ -195,7 +195,12 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			)
 		}
 	}
+	sequenceStrategy := ""
+	if registered.Component.Settings != nil {
+		sequenceStrategy = registered.Component.Settings.SequenceStrategy
+	}
 	return r.invoker.Execute(ctx, handlerengine.Request{
+		SequenceStrategy: sequenceStrategy,
 		Injector:         r.injector,
 		Input:            inputRoute,
 		OutputType:       registered.OutputType,

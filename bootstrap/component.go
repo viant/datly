@@ -141,7 +141,7 @@ func (s *RouteSource) canonicalComponent() (*spec.Component, error) {
 			settings.Report.MCPTool = &enabled
 		}
 	}
-	if len(settings.MCPFolders) > 0 || settings.DefaultConnector != "" || settings.InputType != "" || settings.OutputType != "" || settings.Report != nil ||
+	if len(settings.MCPFolders) > 0 || settings.SequenceStrategy != "" || settings.DefaultConnector != "" || settings.InputType != "" || settings.OutputType != "" || settings.Report != nil ||
 		settings.Cache != nil || settings.CaseFormat != "" || settings.JSONMarshalType != "" ||
 		settings.JSONUnmarshalType != "" || settings.XMLUnmarshalType != "" || settings.Format != "" || settings.DateFormat != "" || settings.Output != nil || settings.IgnoreEmptyQueryParameters != nil {
 		component.Settings = settings

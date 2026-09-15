@@ -13,8 +13,14 @@ document = { metadata }, [ outer_query, [ ";" ] ] ;
 metadata = package_line | import_line | setting | declaration | comment ;
 package_line = "#package", "(", string, ")", line_end ;
 import_line = "#import", "(", string, ",", string, ")", line_end ;
-setting = setting_keyword, "(", assignment_prefix, "$", setting_name,
-          arguments, { cache_modifier }, ")" ;
+setting = setting_keyword, "(", assignment_prefix, "$",
+          (setting_name, arguments, { cache_modifier }
+           | "sequence_strategy", "(", sequence_strategy_literal, ")"), ")" ;
+sequence_strategy_literal = "'transient'" | '"transient"'
+                          | "'reservation'" | '"reservation"' ;
+(* sequence_strategy is a singleton with no modifiers. Omitted: native dialect
+   default (MySQL original transient; PostgreSQL 10+ exact reservation; SQLite
+   reservation). Other values, including maxid, fail transcription. *)
 setting_keyword = "#setting" | "#settings" ;
 assignment_prefix = "$_", "=" ;
 setting_name = "route" | "api_key" | "connector"

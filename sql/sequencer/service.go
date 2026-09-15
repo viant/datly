@@ -9,26 +9,27 @@ import (
 
 	"github.com/viant/sqlx/io/insert"
 	"github.com/viant/sqlx/metadata/info/dialect"
-	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/sqlx/option"
 )
 
 type Service struct {
-	db           *sql.DB
-	tx           *sql.Tx
-	mu           sync.Mutex
-	reservations map[reservationKey]sink.Sequence
-	pending      map[reservationKey]map[int64]bool
+	db       *sql.DB
+	tx       *sql.Tx
+	mu       sync.Mutex
+	pending  map[reservationKey]map[int64]bool
+	strategy dialect.PresetIDStrategy
 }
 
 // Reserve records supplied values before the first allocation for a table. It
 // does not allocate, change the destination, or advance a database sequence.
 // Callers with original-presence evidence pass only originally supplied rows.
-// Native read-only metadata unifies supplied-only aliases before allocation.
+// Native metadata unifies supplied-only aliases before allocation. A supplied
+// transaction acquires native write intent before reading sequence identity.
 func (s *Service) Reserve(ctx context.Context, table string, dest any, selector string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	walker, err := NewWalker(dest, strings.Split(selector, "/"))
+	parts := strings.Split(selector, "/")
+	walker, err := NewWalker(dest, parts)
 	if err != nil {
 		return err
 	}
@@ -47,7 +48,7 @@ func (s *Service) Reserve(ctx context.Context, table string, dest any, selector 
 	if err != nil {
 		return err
 	}
-	key, err := s.nativeIdentity(ctx, inserter, record)
+	key, err := s.nativeIdentity(ctx, inserter, record, parts[len(parts)-1])
 	if err != nil {
 		return err
 	}
@@ -55,8 +56,8 @@ func (s *Service) Reserve(ctx context.Context, table string, dest any, selector 
 	return nil
 }
 
-func (s *Service) nativeIdentity(ctx context.Context, inserter *insert.Service, record any) (reservationKey, error) {
-	var options []option.Option
+func (s *Service) nativeIdentity(ctx context.Context, inserter *insert.Service, record any, field string) (reservationKey, error) {
+	options := s.options(field)
 	if s.tx != nil {
 		options = append(options, s.tx)
 	}
@@ -136,7 +137,7 @@ func (s *Service) allocate(ctx context.Context, table string, dest any, selector
 	if err != nil {
 		return err
 	}
-	key, err := s.nativeIdentity(ctx, inserter, record)
+	key, err := s.nativeIdentity(ctx, inserter, record, parts[len(parts)-1])
 	if err != nil {
 		return err
 	}
@@ -148,51 +149,31 @@ func (s *Service) allocate(ctx context.Context, table string, dest any, selector
 	if err != nil {
 		return err
 	}
-	strategy := dialect.PresetIDWithTransientTransaction
-	if s.tx != nil {
-		strategy = dialect.PresetIDWithMax
-	}
-	options := []option.Option{strategy}
+	options := s.options(parts[len(parts)-1])
 	if s.tx != nil {
 		options = append(options, s.tx)
 	}
 	values := make([]int64, 0, len(empty))
 	count := len(empty)
-	var previousRange *sink.Sequence
+
 	for len(values) < len(empty) {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		nextSeq, err := inserter.NextSequence(ctx, record, count, options...)
+		reservation, err := inserter.ReserveSequence(ctx, record, count, options...)
 		if err != nil {
 			return err
 		}
-		if nextSeq == nil || (reservationKey{nextSeq.Catalog, nextSeq.Schema, nextSeq.Name}) != key {
+		if reservation == nil || (reservationKey{reservation.Sequence.Catalog, reservation.Sequence.Schema, reservation.Sequence.Name}) != key {
 			return fmt.Errorf("native sequence identity changed before allocation")
 		}
-		if s.tx != nil {
-			nextSeq, err = s.reserve(table, nextSeq, count)
-		} else {
-			err = s.validateRange(nextSeq, count)
-		}
-		if err != nil {
+		if err := reservation.Validate(count); err != nil {
 			return err
 		}
-		if previousRange != nil && nextSeq.Value <= previousRange.Value {
-			return fmt.Errorf("native sequence reservation did not advance")
-		}
-		currentRange := *nextSeq
-		previousRange = &currentRange
-		// Consume only values inside this native reservation. Collisions require
-		// another native range, not a jump past its exclusive high-water mark.
-		value := nextSeq.MinValue(int64(count))
-		for i := 0; i < count && len(values) < len(empty); i++ {
+		for _, value := range reservation.Values {
 			if !pending[value] {
 				values = append(values, value)
 				pending[value] = true
-			}
-			if i+1 < count {
-				value += nextSeq.IncrementBy
 			}
 		}
 		count = len(empty) - len(values)
@@ -219,4 +200,20 @@ func New(db *sql.DB, tx ...*sql.Tx) *Service {
 		ret.tx = tx[0]
 	}
 	return ret
+}
+
+// WithStrategy explicitly selects a native strategy. Empty means the product
+// default; Datly never substitutes a strategy based on transaction presence.
+// Configure before the service is first used.
+func (s *Service) WithStrategy(strategy dialect.PresetIDStrategy) *Service {
+	s.strategy = strategy
+	return s
+}
+
+func (s *Service) options(field string) []option.Option {
+	result := []option.Option{option.SequenceField(field), option.SequenceReservationIntent(true)}
+	if s.strategy != "" && s.strategy != dialect.PresetIDStrategyUndefined {
+		result = append(result, s.strategy)
+	}
+	return result
 }

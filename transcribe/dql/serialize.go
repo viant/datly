@@ -47,6 +47,7 @@ func (Serializer) Export(component *spec.Component, authored string) SourceExpor
 	if s := component.Settings; s != nil {
 		copy := s.Clone()
 		copy.DefaultConnector = ""
+		copy.SequenceStrategy = ""
 		if copy.InputType != "" || copy.OutputType != "" || copy.Cache != nil || copy.Report != nil || copy.Generation != nil || len(copy.MCPFolders) > 0 || copy.Output != nil || len(copy.Const) > 0 || copy.Format != "" || copy.CaseFormat != "" || copy.DateFormat != "" || copy.JSONMarshalType != "" || copy.JSONUnmarshalType != "" || copy.XMLUnmarshalType != "" || copy.IgnoreEmptyQueryParameters != nil {
 			result.Limitations = append(result.Limitations, "settings beyond the connector are not reconstructed")
 		}
@@ -59,6 +60,9 @@ func (Serializer) Export(component *spec.Component, authored string) SourceExpor
 	fmt.Fprintf(&text, "#setting($_ = $route(%s, %s))\n", strconv.Quote(route.Path), strconv.Quote(route.Method))
 	if component.Settings != nil && component.Settings.DefaultConnector != "" {
 		fmt.Fprintf(&text, "#setting($_ = $connector(%s))\n", strconv.Quote(component.Settings.DefaultConnector))
+	}
+	if component.Settings != nil && component.Settings.SequenceStrategy != "" {
+		fmt.Fprintf(&text, "#setting($_ = $sequence_strategy(%s))\n", strconv.Quote(component.Settings.SequenceStrategy))
 	}
 	text.WriteString(component.RootView.Source.SQL)
 	result.Source = text.String()

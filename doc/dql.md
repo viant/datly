@@ -137,6 +137,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `route` | 1+ | absolute quoted URI, then quoted HTTP methods; default GET; one route only |
 | `api_key` | 2+ | header, value; further arguments ignored |
 | `connector` | 1+ | last argument is default connector |
+| `sequence_strategy` | exactly 1 | quoted `transient` or `reservation`; singleton, no modifiers; omitted selects native dialect default |
 | `input_type`, `output_type` | 1+ | last argument is contract type |
 | `dest`, `input_dest`, `output_dest`, `router_dest` | 1+ | last argument is nonempty destination |
 | `file_prefix`, `handler_dest`, `lifecycle_dest`, `mutation_dest`, `resources_dest`, `links_dest` | exactly 1 | nonempty quoted value; no fluent tail; duplicate setting fails |
@@ -159,6 +160,14 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `DocGlobalURLs`, `DocURLs` | 1+ | all nonempty documentation resource references; no tail |
 | `DocURL`, `DocBaseURL` | exactly 1 | nonempty rule reference or base URL; no tail |
 | `static_resource`, `static_content` | exactly 2 | quoted namespace/root or content URL/root; one static declaration; no tail |
+
+Sequence defaults are original MySQL transient allocation, PostgreSQL 10+ exact
+native nextval values, and SQLite native reservation. The MySQL allocator table
+is available only with explicit `reservation`. `maxid` and unrecognized values
+are rejected during transcription. Generated settings configure the root Data
+owner; nested components inherit it and conflicting overrides fail. Original
+MySQL allocation needs a separate connection, can wait on caller-held locks,
+and executes source defaults/triggers before rolling its own transaction back.
 
 Target-specific settings `useTemplate` and `template_dest` are documented only
 in the [final DQL + Velty section](#dql--velty-separate-language-layer).

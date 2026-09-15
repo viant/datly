@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/viant/datly/internal/testharness/sqlite"
-	"github.com/viant/sqlx/metadata/sink"
 )
 
 type pendingRow struct {
@@ -101,27 +100,6 @@ func TestPendingAllocationCancelAndOverflowAreNotPublished(t *testing.T) {
 	}
 	if rows[0].ID != nil || rows[1].ID != nil {
 		t.Fatal("partial allocation escaped overflow preflight")
-	}
-}
-
-func TestReservationPreservesNativeIncrementAndStart(t *testing.T) {
-	s := New(nil)
-	for _, want := range []int64{7, 17, 27} {
-		native := &sink.Sequence{Name: "records", StartValue: 7, IncrementBy: 5, Value: 17}
-		got, err := s.reserve("records", native, 2)
-		if err != nil || got.MinValue(2) != want || got.Value != want+10 {
-			t.Fatalf("range=%+v err=%v want min=%d", got, err, want)
-		}
-	}
-	for _, invalid := range []*sink.Sequence{
-		{StartValue: -1, IncrementBy: 1, Value: math.MaxInt64},
-		{StartValue: 7, IncrementBy: 5, Value: 7},
-		{StartValue: 7, IncrementBy: 5, Value: 17, MaxValue: 10},
-		{StartValue: math.MinInt64, IncrementBy: 2, Value: math.MinInt64 + 1},
-	} {
-		if err := s.validateRange(invalid, 2); err == nil {
-			t.Fatalf("accepted invalid range %+v", invalid)
-		}
 	}
 }
 

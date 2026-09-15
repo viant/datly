@@ -20,16 +20,18 @@ import (
 )
 
 type Request struct {
-	OutputType    reflect.Type
-	Injector      *bindly.Injector
-	Input         *registry.RouteInputContract
-	BoundInput    any
-	Replay        *bindly.ReplayBinding
-	BindingOutput any
-	Injectors     func(context.Context, any, xhandler.Route) (xhandler.Binder, error)
-	Scope         dexec.ProviderScope
-	Capabilities  rhandler.InvocationCapabilities
-	Providers     []locator.Provider
+	// SequenceStrategy is canonical component metadata, not a client-bound value.
+	SequenceStrategy string
+	OutputType       reflect.Type
+	Injector         *bindly.Injector
+	Input            *registry.RouteInputContract
+	BoundInput       any
+	Replay           *bindly.ReplayBinding
+	BindingOutput    any
+	Injectors        func(context.Context, any, xhandler.Route) (xhandler.Binder, error)
+	Scope            dexec.ProviderScope
+	Capabilities     rhandler.InvocationCapabilities
+	Providers        []locator.Provider
 	// Constants is runtime-derived canonical constant authority. It remains
 	// separate from caller-controlled providers so authority cannot be forged.
 	Constants locator.Provider
@@ -95,6 +97,11 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		protocolProviders = request.Scope.Providers()
 	}
 	data, ownsData := invocationDataScope(ctx, request.DataSource)
+	if data != nil {
+		data.sequenceStrategy = request.SequenceStrategy
+	} else if request.SequenceStrategy != "" {
+		return nil, fmt.Errorf("sequence_strategy requires a data source")
+	}
 	runtimeProviders = append(runtimeProviders, data.frameworkValidatorProvider())
 	outcomeFinalizer, outcomeAware := request.Handler.(rhandler.OutcomeFinalizer)
 	// Opted-in outputs need a neutral root even when their handler has no DB.

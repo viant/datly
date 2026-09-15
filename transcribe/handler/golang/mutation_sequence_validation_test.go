@@ -317,6 +317,7 @@ func TestSequenceValidation(t *testing.T){
   ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel();cancelFinal=cancel
   h:=sqlite.New(t);h.DB.SetMaxOpenConns(1);h.DB.SetMaxIdleConns(1)
   if err:=h.ExecStatements(ctx,"CREATE TABLE records(tenant_id INTEGER NOT NULL,id INTEGER NOT NULL UNIQUE,parent_id INTEGER,name TEXT,PRIMARY KEY(tenant_id,id))","INSERT INTO records VALUES(5,10,NULL,'stored')");err!=nil{t.Fatal(err)}
+  businessWrites:=h.ObserveWrites(t,ctx,"records")
   bindings:=[]bindly.BindingSpec{{Path:"Events",Name:"Events",Location:bindstate.Location{Kind:"test",In:"events"}},{Path:"Mode",Name:"Mode",Location:bindstate.Location{Kind:"test",In:"mode"}}}
   seed,err:=bindly.NewInjector();if err!=nil{t.Fatal(err)};inputType:=reflect.TypeOf(Input{})
   bound,err:=seed.CompilePlan(inputType,bindings...);if err!=nil{t.Fatal(err)};projection,err:=bound.Projection();if err!=nil{t.Fatal(err)}
@@ -375,8 +376,9 @@ func TestSequenceValidation(t *testing.T){
   queryCtx:=context.Background();want:=1;if success{want=3;if queueCalls!=2||finalCalls!=2{t.Fatalf("final context checks/queue=%d/%d",finalCalls,queueCalls)};if first.Context==""||len(first.Labels)==0{t.Fatal("logical context dropped")};if mode=="explicit zero"&&*first.Id!=0{t.Fatal("supplied zero allocated")}}
   h.AssertQuery(t,queryCtx,sqlite.Query{SQL:"SELECT COUNT(*) AS n FROM records"},[]struct{N int}{{want}})
   if success&&(first.Details!=details||second.Details!=details||first.Links[0]!=link||second.Links[0]!=link||first.Has!=firstMarker||second.Has!=secondMarker||first.Service!=service||first.Signal!=signal||first.Callback()==0){t.Fatal("context aliases, holders or opaque services were changed")}
-  // Cancellation may discard the driver's connection and reset this counter.
-  if mode!="final cancellation"{h.AssertQuery(t,queryCtx,sqlite.Query{SQL:"SELECT total_changes() AS n"},[]struct{N int}{{want}})}
+  // Observe business rows directly: durable native reservations also write
+  // metadata, and must not be confused with early entity writes.
+  if got:=businessWrites.Load();got!=int64(want-1){t.Fatalf("business writes=%d want=%d",got,want-1)}
  })}
 }
 type noopSequencer struct{calls int}

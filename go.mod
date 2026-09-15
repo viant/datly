@@ -15,7 +15,7 @@ require (
 	github.com/viant/mcp-protocol v0.17.1-0.20260914185636-cba084cedb3d
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20260915061102-65308eabace8
-	github.com/viant/sqlx v0.26.1-0.20260915052314-24e180f5c1e5
+	github.com/viant/sqlx v0.26.1-0.20260915193124-0d3431bef010
 	github.com/viant/structology v0.10.1-0.20260915165514-89d421971772
 	github.com/viant/structql v0.5.4
 	github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630
@@ -53,6 +53,7 @@ require (
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
 	github.com/lestrrat-go/iter v1.0.2 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
+	github.com/lib/pq v1.10.6 // indirect
 	github.com/mazznoer/csscolorparser v0.1.3 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
@@ -83,7 +84,6 @@ require (
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
-	github.com/onsi/gomega v1.41.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
 	github.com/viant/bindly v0.2.1-0.20260915164201-7cf35da5bd9a

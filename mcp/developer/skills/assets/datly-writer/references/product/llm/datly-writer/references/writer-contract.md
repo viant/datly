@@ -171,6 +171,27 @@ do not implement these phases as an authored DQL program:
 13. Run observational `AfterQueue`, verify that queued working values/markers/topology did not change, and populate the output from the working body.
 14. Let the existing invocation owner flush/complete its transactions. Invoke one outcome-aware finalization path.
 
+### Sequencing strategy and native ownership
+
+Use `#setting($_ = $sequence_strategy('transient'))` or
+`#setting($_ = $sequence_strategy('reservation'))` only when selecting an explicit
+policy. Omit it for the native default: original MySQL transient transaction,
+PostgreSQL 10+ exact nextval values, or SQLite native reservation. The MySQL table
+allocator is optional and must be provisioned before choosing `reservation`.
+Never suggest `maxid` or a process-local counter for concurrent managed writers.
+The parser rejects unsupported values; this setting survives generated tags and
+is applied to the real invocation Data source.
+
+The root database unit resolves and freezes the version-matched native default
+before Data opens, and owns policy and transaction/capability identity. Children
+inherit policy; explicitly naming that same default succeeds, while a differing
+explicit setting fails without switching the open root. The original MySQL algorithm
+is unchanged: it needs an allocator connection, may wait on caller-held locks,
+and its transient source INSERTs execute defaults/triggers. Transactional rows
+roll back; external or nontransactional effects need not. Do not silently switch
+to an allocator table to hide these constraints. PostgreSQL batches must retain
+their actual values, including cache/interleaving gaps and descending sequences.
+
 The sequencer owns ID reservation and allocation. Generated reconciliation owns foreign-key population. IDs and links must be ready before Queue; neither allocation during INSERT/Flush nor relationship backfill after execution satisfies this lifecycle. Supplied-ID collision handling must use native sequence identity and reservation semantics. Final duplicate checks remain safeguards.
 
 There is no automatic second `SyncPresence` between entity `Init` and `Validate`. Setters provide the presence signal for `Init` changes. Graph membership, ordering, parent edges, and self holders must not change after initial synchronization/frame preparation; reject such changes rather than silently ignoring added records. Construct the graph before capture or use an explicitly custom orchestration policy.

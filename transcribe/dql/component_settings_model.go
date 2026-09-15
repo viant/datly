@@ -6,6 +6,7 @@ import (
 )
 
 type componentSettings struct {
+	SequenceStrategy           string
 	MCPFolders                 []spec.ResourceFolder
 	Documentation              xdocs.Source
 	Static                     *spec.StaticContent

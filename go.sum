@@ -895,6 +895,8 @@ github.com/lestrrat-go/jwx v1.2.29/go.mod h1:hU8k2l6WF0ncx20uQdOmik/Gjg6E3/wIRtX
 github.com/lestrrat-go/option v1.0.0/go.mod h1:5ZHFbivi4xwXxhxY9XHDe2FHo6/Z7WWmtT7T5nBBp3I=
 github.com/lestrrat-go/option v1.0.1 h1:oAzP2fvZGQKWkvHa1/SAcFolBEca1oN+mQ7eooNBEYU=
 github.com/lestrrat-go/option v1.0.1/go.mod h1:5ZHFbivi4xwXxhxY9XHDe2FHo6/Z7WWmtT7T5nBBp3I=
+github.com/lib/pq v1.10.6 h1:jbk+ZieJ0D7EVGJYpL9QTz7/YW6UHbmdnZWYyK5cdBs=
+github.com/lib/pq v1.10.6/go.mod h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=
 github.com/lunixbochs/vtclean v1.0.0/go.mod h1:pHhQNgMf3btfWnGBVipUOjRYhoOsdGqdm/+2c2E2WMI=
 github.com/lyft/protoc-gen-star v0.6.0/go.mod h1:TGAoBVkt8w7MPG72TrKIu85MIdXwDuzJYeZuUPFPNwA=
 github.com/lyft/protoc-gen-star v0.6.1/go.mod h1:TGAoBVkt8w7MPG72TrKIu85MIdXwDuzJYeZuUPFPNwA=
@@ -1038,8 +1040,8 @@ github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726 h1:vXZewpcbOqVvj1yNxw
 github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726/go.mod h1:g0VcBa8khWhEZcqdIucss4irMGL+qpbRMnjr5IvB7Bw=
 github.com/viant/sqlparser v0.13.1-0.20260915061102-65308eabace8 h1:eONDIpiWrweD8G3dKxTPZ8isV3PbGfJmV666Ih/oPJA=
 github.com/viant/sqlparser v0.13.1-0.20260915061102-65308eabace8/go.mod h1:2QRGiGZYk2/pjhORGG1zLVQ9JO+bXFhqIVi31mkCRPg=
-github.com/viant/sqlx v0.26.1-0.20260915052314-24e180f5c1e5 h1:sUqg/d2SkARQ1YdqLsxnahBjPwbGoIgR7KcRwbpd2pQ=
-github.com/viant/sqlx v0.26.1-0.20260915052314-24e180f5c1e5/go.mod h1:yz4VT1+FvXKuTJ8GOXaiTaNeCX9wgCX0dHhNyYZHnhs=
+github.com/viant/sqlx v0.26.1-0.20260915193124-0d3431bef010 h1:pfxnbszqqOO6IxCcg3vvbu+mWu7LkkNdQlzk6wG0QP0=
+github.com/viant/sqlx v0.26.1-0.20260915193124-0d3431bef010/go.mod h1:ARfc4a51XKytyIaKChLBEokBdQphhXxpaVPCuhIlf14=
 github.com/viant/structology v0.10.1-0.20260915165514-89d421971772 h1:98TEsZlEurUCExZJ3kpYqcwxqi2tnlo8LiB/Ut6xUsM=
 github.com/viant/structology v0.10.1-0.20260915165514-89d421971772/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
 github.com/viant/structql v0.5.4 h1:bMdcOpzU8UMoe5OBcyJVRxLAndvU1oj3ysvPUgBckCI=

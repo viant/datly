@@ -81,8 +81,16 @@ Pagination rejects negative values and overflowing page/limit products before SQ
 execution. OpenAPI supports custom JSON fields conservatively and text-serialized
 fields where their wire representation is known, without invoking user codecs.
 
-Sequencer dialect/concurrency corrections and generated delete-marker/token-validation
-policies are still being integrated. MySQL must retain the unchanged original
-transient-transaction mechanism by default; the table-based allocator is an explicit
-option. Native dependency publication and final combined verification remain release
-gates; a passing earlier test baseline does not close them.
+Sequencer dialect/concurrency corrections are integrated against the published SQLX
+dependency. MySQL retains the unchanged original transient-transaction mechanism by
+default; the table-based allocator is an explicit option. Generated delete-marker and
+token-validation policies remain a separate release gate with their SDK dependency.
+
+## Numeric sequencing
+
+MySQL defaults to the original SQLX transient transaction mechanism. The three
+original implementation files remain unchanged; the allocator table is explicit
+opt-in. The canonical `sequence_strategy` DQL setting is carried through generated
+metadata to the root invocation Data source. PostgreSQL 10+ exact values and
+SQLite native reservations retain their native defaults. See
+[numeric sequencing strategies](sequencing.md) for options and observed limits.

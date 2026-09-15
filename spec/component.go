@@ -32,6 +32,7 @@ type ImportSpec struct {
 }
 
 type Settings struct {
+	SequenceStrategy           string              `json:"sequenceStrategy,omitempty"`
 	MCPFolders                 []ResourceFolder    `json:"mcpFolders,omitempty"`
 	IgnoreEmptyQueryParameters *bool               `json:"ignoreEmptyQueryParameters,omitempty"`
 	DefaultConnector           string              `json:"defaultConnector,omitempty"`
@@ -158,7 +159,7 @@ func (s *Settings) IsZero() bool {
 		return true
 	}
 	return len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
-		s.DefaultConnector == "" && s.Report == nil && s.Cache == nil &&
+		s.DefaultConnector == "" && s.SequenceStrategy == "" && s.Report == nil && s.Cache == nil &&
 		(s.Generation == nil || s.Generation.IsZero()) && s.InputType == "" && s.OutputType == "" &&
 		s.JSONMarshalType == "" && s.JSONUnmarshalType == "" && s.XMLUnmarshalType == "" &&
 		s.Format == "" && s.DateFormat == "" && s.Output == nil && s.CaseFormat == "" && len(s.Const) == 0
