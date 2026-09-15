@@ -10,6 +10,7 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
+	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/metadata/sink"
 )
@@ -78,13 +79,37 @@ func directProjectionLineage(source *spec.ViewSource) (*projectionLineage, error
 	if err != nil {
 		return nil, fmt.Errorf("parse table projection lineage: %w", err)
 	}
-	if parsed == nil || parsed.Union != nil || !sameTable(sqlparser.TableName(parsed), source.Table) {
+	return (projectionLineageResolver{table: source.Table}).query(parsed)
+}
+
+type projectionLineageResolver struct {
+	table string
+	withs query.WithSelects
+	depth int
+}
+
+func (r projectionLineageResolver) query(parsed *query.Select) (*projectionLineage, error) {
+	result := &projectionLineage{direct: map[string]string{}, blocked: map[string]bool{}}
+	if parsed == nil || parsed.Union != nil {
 		return result, nil
+	}
+	if r.depth > 32 {
+		return nil, fmt.Errorf("projection lineage is recursive")
+	}
+	r.depth++
+	r.withs = append(append(query.WithSelects(nil), parsed.WithSelects...), r.withs...)
+	source, err := r.source(parsed.From.X)
+	if err != nil {
+		return nil, err
 	}
 	allowedNamespaces := map[string]bool{}
 	rootNamespaces := []string{parsed.From.Alias}
 	if strings.TrimSpace(parsed.From.Alias) == "" {
-		rootNamespaces = []string{source.Table, tableBase(source.Table)}
+		table, _, err := sqlparser.SourceTable(parsed.From.X)
+		if err != nil {
+			return nil, err
+		}
+		rootNamespaces = []string{table, tableBase(table)}
 	}
 	for _, namespace := range rootNamespaces {
 		if namespace = normalizedName(namespace); namespace != "" {
@@ -98,42 +123,106 @@ func directProjectionLineage(source *spec.ViewSource) (*projectionLineage, error
 		}
 		namespace, wildcard := projectionWildcard(item.Expr)
 		if wildcard && lineageNamespaceAllowed(namespace, allowedNamespaces, requireQualifier) {
-			result.wildcard = true
+			result.wildcard = source.wildcard
+			for output, name := range source.direct {
+				result.direct[output] = name
+			}
+			for output := range source.blocked {
+				result.blocked[output] = true
+			}
 		}
 	}
-	for _, column := range sqlparser.NewColumns(parsed.List) {
-		if column == nil {
+	for _, item := range parsed.List {
+		if item == nil {
 			continue
 		}
+		if _, wildcard := projectionWildcard(item.Expr); wildcard {
+			continue
+		}
+		column := sqlparser.NewColumn(item)
 		output := normalizedName(column.Identity())
 		if output == "" {
 			continue
 		}
-		if !lineageNamespaceAllowed(column.Namespace, allowedNamespaces, requireQualifier) {
+		if !lineageNamespaceAllowed(column.Namespace, allowedNamespaces, requireQualifier) || strings.TrimSpace(column.Expression) != "" {
 			result.blocked[output] = true
+			delete(result.direct, output)
 			continue
 		}
-		if strings.TrimSpace(column.Name) == "*" {
-			result.wildcard = true
-			continue
+		name := normalizedName(column.Name)
+		physical, found := source.direct[name]
+		if !found && source.wildcard && !source.blocked[name] {
+			physical, found = name, name != ""
 		}
-		if strings.TrimSpace(column.Expression) != "" {
+		if !found || source.blocked[name] {
 			result.blocked[output] = true
+			delete(result.direct, output)
 			continue
 		}
-		sourceName := normalizedName(column.Name)
-		if sourceName == "" {
-			result.blocked[output] = true
-			continue
-		}
-		result.direct[output] = sourceName
+		result.direct[output] = physical
 	}
 	return result, nil
+}
+
+func (r projectionLineageResolver) source(value node.Node) (*projectionLineage, error) {
+	empty := &projectionLineage{direct: map[string]string{}, blocked: map[string]bool{}}
+	if identifier, ok := value.(*expr.Ident); ok {
+		for _, with := range r.withs {
+			if with == nil || !strings.EqualFold(with.Alias, identifier.Name) {
+				continue
+			}
+			if with.X != nil {
+				return r.query(with.X)
+			}
+			parsed, err := sqlparser.ParseQuery(trimParentheses(with.Raw))
+			if err != nil {
+				return nil, err
+			}
+			return r.query(parsed)
+		}
+	}
+	if table, _, err := sqlparser.SourceTable(value); err != nil {
+		return nil, err
+	} else if table != "" {
+		empty.wildcard = sameTable(table, r.table)
+		return empty, nil
+	}
+	var raw string
+	switch actual := value.(type) {
+	case *query.Select:
+		return r.query(actual)
+	case *expr.Raw:
+		raw = actual.Raw
+	case *expr.Parenthesis:
+		raw = actual.Raw
+	default:
+		return empty, nil
+	}
+	if strings.TrimSpace(raw) == "" {
+		return empty, nil
+	}
+	parsed, err := sqlparser.ParseQuery(trimParentheses(raw))
+	if err != nil {
+		return nil, err
+	}
+	return r.query(parsed)
 }
 
 func projectionWildcard(projection node.Node) (string, bool) {
 	switch actual := projection.(type) {
 	case *expr.Star:
+		switch qualifier := actual.X.(type) {
+		case *expr.Selector:
+			if qualifier.Name == "*" {
+				return "", true
+			}
+			return qualifier.Name, true
+		case *expr.Ident:
+			if qualifier.Name == "*" {
+				return "", true
+			}
+			return qualifier.Name, true
+		}
 		return "", true
 	case *expr.Selector:
 		_, wildcard := actual.X.(*expr.Star)

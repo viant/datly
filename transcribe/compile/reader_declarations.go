@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlparser"
@@ -17,6 +18,7 @@ import (
 // lowerColumnDeclarations consumes standalone authoring annotations. An
 // SQL-aliased CAST remains executable, and type authority never implies a
 // transient SQL mapping: that is an explicitly authored tag decision.
+// Invariants lower to the existing Go field tag on the targeted outer view.
 func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typecatalog.Resolver, typeContext *spec.TypeContext) (bool, error) {
 	views := canonicalViews(root)
 	filtered := make(query.List, 0, len(parsed.List))
@@ -24,12 +26,15 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 	casts := map[*spec.Column]spec.TypeRef{}
 	for _, item := range parsed.List {
 		call, ok := item.Expr.(*expr.Call)
-		if !ok || item.Alias != "" {
+		if !ok {
 			filtered = append(filtered, item)
 			continue
 		}
 		name := strings.ToLower(strings.TrimSpace(sqlparser.Stringify(call.X)))
-		if name != "cast" && name != "tag" {
+		if name == tag.InvariantName && item.Alias != "" {
+			return false, fmt.Errorf("invariant must be a standalone SELECT annotation without an alias")
+		}
+		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName) {
 			filtered = append(filtered, item)
 			continue
 		}
@@ -42,14 +47,21 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			target, typeName = cast.Operand, cast.Type
 		} else {
 			if len(call.Args) != 2 {
-				return false, fmt.Errorf("tag requires column and tag literal")
+				return false, fmt.Errorf("%s requires a column and a string literal", name)
 			}
 			target = sqlparser.Stringify(call.Args[0])
-			value, ok := viewDirectiveValue("tag", 1, call.Args[1])
+			value, ok := viewDirectiveValue(name, 1, call.Args[1])
 			if !ok {
-				return false, fmt.Errorf("tag requires a non-empty string literal")
+				return false, fmt.Errorf("%s requires a non-empty string literal", name)
 			}
 			rawTag = value
+			if name == tag.InvariantName {
+				group, err := tag.ParseInvariant(value)
+				if err != nil {
+					return false, err
+				}
+				rawTag = (tags.Tags{&tags.Tag{Name: tag.InvariantName, Values: tags.Values(group)}}).Literal()
+			}
 		}
 		parts, err := sqlparser.TableIdentifierParts(target)
 		if err != nil || len(parts) != 2 {
@@ -127,5 +139,11 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 		return false, fmt.Errorf("column declarations cannot be the entire SELECT projection")
 	}
 	parsed.List = filtered
+	if containsSQLCall(parsed, func(name string) bool { return name == tag.InvariantName }) {
+		return false, fmt.Errorf("invariant must be a standalone outer SELECT annotation")
+	}
+	if err := validateInvariantProjections(parsed, root); err != nil {
+		return false, err
+	}
 	return changed, nil
 }

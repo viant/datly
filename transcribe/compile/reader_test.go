@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/sqlparser/expr"
 )
 
 func TestReaderCompileBuildsCompoundRelationChain(t *testing.T) {
@@ -75,11 +76,11 @@ JOIN (SELECT order_id, tenant_id, name FROM items WHERE archived = 0) items
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)
 	}
-	if strings.Join(strings.Fields(actual.Source.SQL), " ") != "SELECT * FROM (SELECT id, tenant_id FROM orders WHERE active = 1) orders" || actual.Source.Table != "" {
+	if strings.Join(strings.Fields(actual.Source.SQL), " ") != "SELECT * FROM (SELECT id, tenant_id FROM orders WHERE active = 1) orders" || actual.Source.Table != "orders" {
 		t.Fatalf("root source = %+v", actual.Source)
 	}
 	child := actual.Relations[0].View
-	if strings.Join(strings.Fields(child.Source.SQL), " ") != "SELECT * FROM (SELECT order_id, tenant_id, name FROM items WHERE archived = 0) items" || child.Source.Table != "" {
+	if strings.Join(strings.Fields(child.Source.SQL), " ") != "SELECT * FROM (SELECT order_id, tenant_id, name FROM items WHERE archived = 0) items" || child.Source.Table != "items" {
 		t.Fatalf("child source = %+v", child.Source)
 	}
 }
@@ -438,68 +439,36 @@ func TestReaderCompileRejectsInvalidViewDirective(t *testing.T) {
 	}
 }
 
-func TestReaderCompileLowersNestedSourceViewDirectives(t *testing.T) {
-	actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Orders", Source: &spec.ViewSource{}}, SQL: `
-SELECT wrapper.*, items.*
-FROM (SELECT o.*, set_limit(o, 50) FROM orders o) wrapper
-JOIN (SELECT i.*, use_cache(i, 'items'), use_connector(i, 'analytics') FROM items i) items
-  ON items.order_id = wrapper.id`})
-
-	if err != nil {
-		t.Fatalf("Compile() error = %v", err)
+func TestReaderCompileRejectsNestedSourceViewDirectives(t *testing.T) {
+	for _, SQL := range []string{
+		`SELECT wrapper.*, items.* FROM (SELECT o.*, set_limit(o, 50) FROM orders o) wrapper JOIN (SELECT i.*, use_cache(i, 'items'), use_connector(i, 'analytics') FROM items i) items ON items.order_id = wrapper.id`,
+		`SELECT orders.*, items.* FROM orders orders JOIN (SELECT i.*, use_cache(i, 'items') FROM (${embed:sql/items.sql}) i) items ON items.order_id = orders.id`,
+		`WITH source AS (SELECT o.*, use_cache(o, 'orders') FROM orders o) SELECT wrapper.*, set_limit(wrapper, 10) FROM source wrapper`,
+		`SELECT wrapper.* FROM orders wrapper UNION ALL SELECT archived.*, allow_nulls(archived) FROM archived_orders archived`,
+	} {
+		_, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Orders", Source: &spec.ViewSource{}}, SQL: SQL})
+		var compileError *Error
+		if !errors.As(err, &compileError) || compileError.Code != CodeViewDirective || !strings.Contains(err.Error(), "inside database SQL") {
+			t.Fatalf("Compile(%q) error = %v", SQL, err)
+		}
 	}
+}
+
+func TestReaderCompileOuterControlsPreserveNestedSQL(t *testing.T) {
+	const SQL = `SELECT orders.*, items.*, set_limit(orders,50),use_cache(items,'items'),use_connector(items,'analytics') FROM (SELECT o.* FROM orders o WHERE o.active=1) orders JOIN (SELECT i.* FROM (${embed:sql/items.sql}) i) items ON items.order_id=orders.id`
+	actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Orders", Source: &spec.ViewSource{SQL: SQL}}, SQL: SQL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := actual.Relations[0].View
 	if actual.Source.Controls == nil || actual.Source.Controls.Limit == nil || *actual.Source.Controls.Limit != 50 {
-		t.Fatalf("root controls = %+v", actual.Source.Controls)
+		t.Fatalf("root controls=%+v", actual.Source.Controls)
 	}
-	child := actual.Relations[0].View
-	if child.Source == nil || child.Source.Bindings == nil || child.Source.Bindings.CacheName != "items" || child.Source.Bindings.Connector != "analytics" {
-		t.Fatalf("child source = %+v", child.Source)
+	if child.Source.Bindings == nil || child.Source.Bindings.CacheName != "items" || child.Source.Bindings.Connector != "analytics" || len(child.Source.Embeds) != 1 || !strings.Contains(child.Source.SQL, "${embed:sql/items.sql}") {
+		t.Fatalf("child=%+v", child.Source)
 	}
-	for _, source := range []string{actual.Source.SQL, child.Source.SQL} {
-		for _, name := range []string{"set_limit", "use_cache", "use_connector"} {
-			if strings.Contains(strings.ToLower(source), name+"(") {
-				t.Fatalf("executable SQL retains %s: %s", name, source)
-			}
-		}
-	}
-}
-
-func TestReaderCompileLowersNestedEmbeddedSourceViewDirectives(t *testing.T) {
-	actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Orders", Source: &spec.ViewSource{}}, SQL: `
-SELECT orders.*, items.*
-FROM orders orders
-JOIN (SELECT i.*, use_cache(i, 'items') FROM (${embed:sql/items.sql}) i) items
-  ON items.order_id = orders.id`})
-
-	if err != nil {
-		t.Fatalf("Compile() error = %v", err)
-	}
-	child := actual.Relations[0].View
-	if child.Source == nil || child.Source.Bindings == nil || child.Source.Bindings.CacheName != "items" ||
-		len(child.Source.Embeds) != 1 || child.Source.Embeds[0].Raw != "${embed:sql/items.sql}" ||
-		!strings.Contains(child.Source.SQL, child.Source.Embeds[0].Raw) || strings.Contains(strings.ToLower(child.Source.SQL), "use_cache(") {
-		t.Fatalf("child source = %+v", child.Source)
-	}
-}
-
-func TestReaderCompileLowersCTEAndUnionViewDirectives(t *testing.T) {
-	actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Orders", Source: &spec.ViewSource{}}, SQL: `
-WITH source AS (SELECT o.*, use_cache(o, 'orders') FROM orders o)
-SELECT wrapper.*, set_limit(wrapper, 10) FROM source wrapper
-UNION ALL SELECT archived.*, allow_nulls(archived) FROM archived_orders archived`})
-
-	if err != nil {
-		t.Fatalf("Compile() error = %v", err)
-	}
-	if actual.Source.Bindings == nil || actual.Source.Bindings.CacheName != "orders" ||
-		actual.Source.Controls == nil || actual.Source.Controls.Limit == nil || *actual.Source.Controls.Limit != 10 ||
-		actual.AllowNulls == nil || !*actual.AllowNulls {
-		t.Fatalf("root = %+v", actual)
-	}
-	for _, name := range []string{"use_cache", "set_limit", "allow_nulls"} {
-		if strings.Contains(strings.ToLower(actual.Source.SQL), name+"(") {
-			t.Fatalf("executable SQL retains %s: %s", name, actual.Source.SQL)
-		}
+	if !strings.Contains(actual.Source.SQL, "o.active=1") {
+		t.Fatal(actual.Source.SQL)
 	}
 }
 
@@ -510,16 +479,16 @@ func TestReaderCompileKeepsUnionBranchScopesInternal(t *testing.T) {
 	}{
 		{
 			name: "branch local CTE shadows outer CTE",
-			SQL: `WITH source AS (SELECT a.*, use_cache(a, 'outer') FROM audit a)
-SELECT left_source.* FROM source left_source
+			SQL: `WITH source AS (SELECT a.* FROM audit a)
+SELECT left_source.*, use_cache(left_source, 'outer') FROM source left_source
 UNION ALL
 WITH source AS (SELECT b.* FROM backup b)
 SELECT right_source.* FROM source right_source`,
 		},
 		{
 			name: "branch join remains internal",
-			SQL: `WITH source AS (SELECT a.*, use_cache(a, 'outer') FROM audit a)
-SELECT left_source.* FROM source left_source
+			SQL: `WITH source AS (SELECT a.* FROM audit a)
+SELECT left_source.*, use_cache(left_source, 'outer') FROM source left_source
 UNION ALL
 SELECT archived.* FROM archived archived
 JOIN source internal_source ON internal_source.id = archived.id`,
@@ -555,11 +524,11 @@ func TestReaderCompileRejectsInvalidNestedViewDirectivePlacement(t *testing.T) {
 	}
 }
 
-func TestRewriteSubqueryViewDirectivesRejectsUnparseableSource(t *testing.T) {
-	_, _, err := rewriteSubqueryViewDirectives(`(SELECT i.*, use_cache(i, 'items') FROM items i WHERE ')`, "items")
+func TestDatabaseSourceRejectsUnparseableSQL(t *testing.T) {
+	err := validateDatabaseSource(&expr.Raw{Raw: `(SELECT i.* FROM items i WHERE ')`})
 	var compileError *Error
 	if !errors.As(err, &compileError) || compileError.Code != CodeSQLParse {
-		t.Fatalf("rewriteSubqueryViewDirectives() error = %#v", err)
+		t.Fatalf("validateDatabaseSource() error = %#v", err)
 	}
 }
 
@@ -608,7 +577,7 @@ func TestReaderCompilePreservesSubquerySource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)
 	}
-	if actual.Namespace != "o" || actual.Source.Table != "" {
+	if actual.Namespace != "o" || actual.Source.Table != "orders" {
 		t.Fatalf("root = %+v", actual)
 	}
 	child := actual.Relations[0].View
@@ -757,5 +726,38 @@ func TestReaderCompileToOneHintLeavesPhysicalJoinSQL(t *testing.T) {
 				t.Fatalf("physical join changed: %s", SQL)
 			}
 		}
+	}
+}
+
+func TestReaderRejectsDatabaseScopeAnnotations(t *testing.T) {
+	for _, annotation := range []string{
+		`set_limit(o,10)`, `use_cache(o,'orders')`, `use_connector(o,'main')`, `cache_warmup(o,'orders')`,
+		`cardinality(o,'One')`, `allow_nulls(o)`, `entity_hooks(o,'Hooks')`, `tag(o.ID,'json:"id"')`, `invariant(o.ID,'Identity')`,
+	} {
+		t.Run(annotation, func(t *testing.T) {
+			SQL := `SELECT orders.* FROM (SELECT o.*,` + annotation + ` FROM ORDERS o) orders`
+			_, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Orders", Source: &spec.ViewSource{SQL: SQL}}, SQL: SQL})
+			var compileErr *Error
+			if !errors.As(err, &compileErr) || compileErr.Code != CodeViewDirective {
+				t.Fatalf("error=%v", err)
+			}
+		})
+	}
+}
+
+func TestReaderPreservesDatabaseExpressions(t *testing.T) {
+	for _, expression := range []string{
+		`CAST(o.ID AS INTEGER)`, `CAST(o.ID AS DECIMAL(10,2))`, `COALESCE(o.ID,0)`, `ABS(o.ID)`, `CASE WHEN o.ID>0 THEN o.ID ELSE 0 END`,
+	} {
+		t.Run(expression, func(t *testing.T) {
+			SQL := `SELECT orders.*,set_limit(orders,10) FROM (SELECT ` + expression + ` AS value FROM ORDERS o WHERE o.ID>0) orders`
+			got, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Orders", Source: &spec.ViewSource{SQL: SQL}}, SQL: SQL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(got.Source.SQL, expression) || !strings.Contains(got.Source.SQL, "WHERE o.ID>0") {
+				t.Fatalf("database SQL changed: %s", got.Source.SQL)
+			}
+		})
 	}
 }

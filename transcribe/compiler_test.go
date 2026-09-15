@@ -289,13 +289,13 @@ FROM events events`,
 	}
 }
 
-func TestCompilerCompileLowersNestedSourceViewDirectives(t *testing.T) {
+func TestCompilerCompileLowersOuterNamedViewDirectives(t *testing.T) {
 	result, err := NewCompiler().Compile(context.Background(), &Source{
 		Name: "Orders",
 		Text: `#setting($_ = $route('/orders', 'GET'))
-SELECT wrapper.*, items.*
-FROM (SELECT o.*, set_limit(o, 50) FROM orders o) wrapper
-JOIN (SELECT i.*, use_cache(i, 'items') FROM items i) items
+SELECT wrapper.*, items.*, set_limit(wrapper, 50), use_cache(items, 'items')
+FROM (SELECT o.* FROM orders o) wrapper
+JOIN (SELECT i.* FROM items i) items
   ON items.order_id = wrapper.id`,
 	})
 	if err != nil {
@@ -344,7 +344,7 @@ SELECT 1`,
 	}
 }
 
-func TestCompilerCompileRejectsControlledCTEWithoutSingleCanonicalUse(t *testing.T) {
+func TestCompilerCompileRejectsControlsInsideDatabaseSQL(t *testing.T) {
 	tests := []string{
 		`WITH unused AS (SELECT a.*, use_cache(a, 'audit') FROM audit a) SELECT orders.* FROM orders orders`,
 		`WITH source AS (SELECT a.*, use_cache(a, 'audit') FROM audit a) SELECT left_source.*, right_source.* FROM source left_source JOIN source right_source ON right_source.id = left_source.id`,
@@ -369,9 +369,9 @@ func TestCompilerCompilePreservesNestedEmbedWhileLoweringDirective(t *testing.T)
 	result, err := NewCompiler().Compile(context.Background(), &Source{
 		Name: "Orders",
 		Text: `#setting($_ = $route('/orders', 'GET'))
-SELECT orders.*, items.*
+SELECT orders.*, items.*, use_cache(items, 'items')
 FROM orders orders
-JOIN (SELECT i.*, use_cache(i, 'items') FROM (${embed:sql/items.sql}) i) items
+JOIN (SELECT i.* FROM (${embed:sql/items.sql}) i) items
   ON items.order_id = orders.id`,
 	})
 	if err != nil {
@@ -403,13 +403,13 @@ JOIN (SELECT i.*, use_cache(i, 'items') FROM items i WHERE ') items
 
 func TestCompilerCompileKeepsUnionBranchScopesInternal(t *testing.T) {
 	tests := []string{
-		`WITH source AS (SELECT a.*, use_cache(a, 'outer') FROM audit a)
-SELECT left_source.* FROM source left_source
+		`WITH source AS (SELECT a.* FROM audit a)
+SELECT left_source.*, use_cache(left_source, 'outer') FROM source left_source
 UNION ALL
 WITH source AS (SELECT b.* FROM backup b)
 SELECT right_source.* FROM source right_source`,
-		`WITH source AS (SELECT a.*, use_cache(a, 'outer') FROM audit a)
-SELECT left_source.* FROM source left_source
+		`WITH source AS (SELECT a.* FROM audit a)
+SELECT left_source.*, use_cache(left_source, 'outer') FROM source left_source
 UNION ALL
 SELECT archived.* FROM archived archived
 JOIN source internal_source ON internal_source.id = archived.id`,

@@ -18,7 +18,7 @@ func TestReaderRetainsPredicateExpressions(t *testing.T) {
 		{"and suffix", "SELECT id FROM records r WHERE 1=1 " + and + " ORDER BY id", and, false},
 		{"rewritten where", "SELECT id, use_connector(r, 'main') FROM records r " + where + " ORDER BY id", where, true},
 		{"rewritten and", "SELECT id, use_connector(r, 'main') FROM records r WHERE 1=1 " + and + " ORDER BY id", and, true},
-		{"nested rewritten where", "SELECT r.* FROM (SELECT id, use_connector(r, 'main') FROM records r " + where + " ORDER BY id) r", where, true},
+		{"nested SQL with outer control", "SELECT r.*, use_connector(r, 'main') FROM (SELECT id FROM records r " + where + " ORDER BY id) r", where, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Records", Source: &spec.ViewSource{SQL: tt.sql}}, SQL: tt.sql})

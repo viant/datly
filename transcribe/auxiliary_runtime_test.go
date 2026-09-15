@@ -15,9 +15,9 @@ import (
 )
 
 var auxiliarySchema = []string{
-	"CREATE TABLE ORDERS(ID INTEGER PRIMARY KEY AUTOINCREMENT, NAME TEXT NOT NULL)",
+	"CREATE TABLE ORDERS(ID INTEGER PRIMARY KEY AUTOINCREMENT, NAME TEXT NOT NULL, WINDOW_START INTEGER, WINDOW_END INTEGER)",
 	"CREATE TABLE AUXILIARY(ID INTEGER PRIMARY KEY AUTOINCREMENT, ORDER_ID INTEGER NOT NULL, NAME TEXT NOT NULL)",
-	"INSERT INTO ORDERS VALUES(1,'before')",
+	"INSERT INTO ORDERS VALUES(1,'before',3,9)",
 	"INSERT INTO AUXILIARY VALUES(7,1,'lookup')",
 	"CREATE TRIGGER no_aux_insert BEFORE INSERT ON AUXILIARY BEGIN SELECT RAISE(ABORT,'auxiliary insert forbidden'); END",
 	"CREATE TRIGGER no_aux_update BEFORE UPDATE ON AUXILIARY BEGIN SELECT RAISE(ABORT,'auxiliary update forbidden'); END",
@@ -44,12 +44,12 @@ func TestAuxiliaryRelationsGenerateAndRegenerateWithoutMutationSQLite(t *testing
 					(testharness.GeneratedModule{Path: "github.com/viant/datly/auxfixture"}).Write(t, root)
 					text := fmt.Sprintf(`#setting($_ = $route('/orders','%s'))
 #define($_ = $Orders<[]*OrdersView>(body/Data).Cardinality('Many').Required())
-#define($_ = $CurrentOrders<?>(view/CurrentOrders).Cardinality('Many') /* SELECT ID,NAME FROM ORDERS */)
+#define($_ = $CurrentOrders<?>(view/CurrentOrders).Cardinality('Many') /* SELECT current_orders.* FROM (SELECT ID,NAME,WINDOW_START,WINDOW_END FROM ORDERS) current_orders */)
 #define($_ = $CurrentAux<?>(view/CurrentAux).Cardinality('Many') /* SELECT ID,ORDER_ID,NAME FROM (AUXILIARY) */)
 #define($_ = $Data<[]*OrdersView>(output/body))
-SELECT o.*, Aux.* FROM ORDERS o JOIN (AUXILIARY) Aux ON Aux.ORDER_ID = o.ID`, strings.ToUpper(string(operation)))
+SELECT orders.*, Aux.*, invariant(orders.WINDOW_START, 'DeliveryWindow'), invariant(orders.WINDOW_END, 'DeliveryWindow') FROM (SELECT o.* FROM ORDERS o WHERE o.ID > 0) orders JOIN (SELECT a.* FROM (AUXILIARY) a WHERE a.ID = 7) Aux ON Aux.ORDER_ID = orders.ID`, strings.ToUpper(string(operation)))
 					if auxRoot {
-						text = strings.Replace(text, "FROM ORDERS o JOIN", "FROM (ORDERS) o JOIN", 1)
+						text = strings.Replace(text, "FROM ORDERS o WHERE", "FROM (ORDERS) o WHERE", 1)
 					}
 					source := &Source{Scope: "github.com/viant/datly/auxfixture/generated", Name: "Orders", Connector: "main", Text: text, Types: typecatalog.NewCatalog(), ColumnRefiner: column.New(column.Connections{"main": db.DB})}
 					compiled, err := NewCompiler().Compile(ctx, source)

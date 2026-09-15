@@ -136,3 +136,33 @@ func TestApplyTableConstraintsPreservesAuthoredDefault(t *testing.T) {
 		t.Fatalf("default = %+v", columns[0].Default)
 	}
 }
+
+func TestNamedViewProjectionLineage(t *testing.T) {
+	for _, tc := range []struct {
+		name, SQL string
+		key       string
+		blocked   string
+	}{
+		{"auxiliary table", `SELECT named.* FROM (SELECT e.* FROM (events) e WHERE e.id>0) named`, "id", ""},
+		{"derived aliases", `SELECT named.* FROM (SELECT e.id AS event_id,e.score+1 AS score FROM (events) e WHERE e.id>0) named`, "event_id", "score"},
+		{"nested aliases", `SELECT named.* FROM (SELECT inner_view.event_id AS event_key FROM (SELECT e.id AS event_id FROM (events) e) inner_view) named`, "event_key", ""},
+		{"CTE aliases", `WITH selected_events AS (SELECT e.id AS event_id FROM (events) e) SELECT selected_events.* FROM selected_events`, "event_id", ""},
+		{"joined qualified star", `SELECT e.* FROM events e JOIN other o ON o.id=e.id`, "id", ""},
+		{"joined other star", `SELECT o.* FROM events e JOIN other o ON o.id=e.id`, "", "id"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lineage, err := directProjectionLineage(&spec.ViewSource{Table: "events", SQL: tc.SQL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			columns := []*spec.Column{{Name: tc.key}, {Name: tc.blocked}}
+			applyTableConstraints(columns, map[string]tableConstraint{"id": {primaryKey: true}, "score": {unique: true}}, lineage)
+			if tc.key != "" && !columns[0].PrimaryKey {
+				t.Fatalf("key authority lost: %+v", lineage)
+			}
+			if tc.blocked != "" && (columns[1].PrimaryKey || columns[1].Unique) {
+				t.Fatalf("invented table authority: %+v", lineage)
+			}
+		})
+	}
+}

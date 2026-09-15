@@ -290,3 +290,19 @@ func TestMergeColumnsPreservesAuthoredTypeAndExplicitGroupable(t *testing.T) {
 		t.Fatalf("merge mutated authored column = %+v", base)
 	}
 }
+
+func TestRefinerInvariantCanonicalSourceAlias(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := h.ExecStatements(ctx, `CREATE TABLE ORDERS(WINDOW_START INTEGER)`); err != nil {
+		t.Fatal(err)
+	}
+	component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: &spec.View{Name: "Orders", Namespace: "orders", Source: &spec.ViewSource{SQL: `SELECT o.WINDOW_START FROM ORDERS o`}, Columns: []*spec.Column{{Name: "Start", Source: "WINDOW_START", Tag: `invariant:"Window"`}}}}
+	if err := New(Connections{"main": h.DB}).Refine(ctx, component, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	columns := component.RootView.Columns
+	if len(columns) != 1 || columns[0].Name != "Start" || columns[0].Source != "WINDOW_START" || columns[0].Type.Name != "int" || columns[0].Tag != `invariant:"Window"` {
+		t.Fatalf("columns=%+v", columns)
+	}
+}

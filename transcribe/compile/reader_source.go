@@ -29,7 +29,9 @@ func decomposeReadSources(parsed *query.Select, root *spec.View, frame TemplateF
 	if source == nil || (strings.TrimSpace(source.Table) == "" && strings.TrimSpace(source.SQL) == "") {
 		return false, &Error{Code: CodeRelationUnsupported, Cause: fmt.Errorf("multi-view root source is not independently executable")}
 	}
-	root.Source.Table = source.Table
+	if source.Table != "" {
+		root.Source.Table = source.Table
+	}
 	root.Source.SQL = source.SQL
 	root.Source.Embeds = source.Embeds
 	return true, nil
@@ -214,4 +216,59 @@ func referencesCTE(source node.Node, withs query.WithSelects) bool {
 		}
 	}
 	return false
+}
+
+// readSourceTable follows the primary FROM source for table/auxiliary metadata.
+// It never substitutes that table for the authored executable SQL.
+func readSourceTable(source node.Node, withs query.WithSelects, depth int) (string, bool, error) {
+	if depth > 32 {
+		return "", false, nil
+	}
+	if identifier, ok := source.(*expr.Ident); ok {
+		for _, with := range withs {
+			if with == nil || !strings.EqualFold(with.Alias, identifier.Name) {
+				continue
+			}
+			if with.X != nil {
+				return readSourceTable(with.X, withs, depth+1)
+			}
+			return readSourceTable(&expr.Raw{Raw: with.Raw}, withs, depth+1)
+		}
+	}
+	if table, auxiliary, err := sqlparser.SourceTable(source); err != nil || table != "" {
+		return table, auxiliary, err
+	}
+	var parsed *query.Select
+	var raw string
+	switch actual := source.(type) {
+	case *query.Select:
+		parsed = actual
+	case *expr.Raw:
+		raw = actual.Raw
+	case *expr.Parenthesis:
+		raw = actual.Raw
+	default:
+		return "", false, nil
+	}
+	if parsed == nil && strings.TrimSpace(raw) != "" {
+		prepared, err := prepareSubquery(raw)
+		if err != nil {
+			return "", false, err
+		}
+		if prepared != nil {
+			if len(prepared.embeds) > 0 {
+				return "", false, nil
+			}
+			parsed = prepared.query
+		}
+	}
+	if parsed == nil {
+		return "", false, nil
+	}
+	// Set operations do not establish one writable table.
+	if parsed.Union != nil {
+		return "", false, nil
+	}
+	scoped := append(append(query.WithSelects(nil), parsed.WithSelects...), withs...)
+	return readSourceTable(parsed.From.X, scoped, depth+1)
 }

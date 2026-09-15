@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/dql/statement"
 	gen "github.com/viant/datly/transcribe/generate"
@@ -201,6 +202,8 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		if err = source.ColumnRefiner.RefineViews(ctx, component, source.Resources, templateInput); err != nil {
 			return nil, err
 		}
+	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources); err != nil {
+		return nil, err
 	}
 	enrichDescription(ctx, component, source.Docs)
 	goHandler, err := source.GoHandler.Clone()

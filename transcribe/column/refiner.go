@@ -182,6 +182,13 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	if err != nil {
 		return nil, err
 	}
+	projected := make([]string, 0, len(columns))
+	for _, column := range columns {
+		projected = append(projected, column.Name)
+	}
+	if err := ValidateInvariants(view, projected); err != nil {
+		return nil, err
+	}
 	view.Columns = mergeColumns(view.Columns, columns)
 	if table := strings.TrimSpace(source.Table); table != "" {
 		constraints, err := loadTableConstraints(ctx, db, table)
@@ -338,7 +345,12 @@ func mergeColumns(base, discovered []*spec.Column) []*spec.Column {
 		}
 		cloned := column.Clone()
 		key := strings.ToLower(strings.TrimSpace(column.Name))
-		if fresh := byName[key]; fresh != nil {
+		fresh := byName[key]
+		if fresh == nil && column.Source != "" {
+			key = strings.ToLower(strings.TrimSpace(column.Source))
+			fresh = byName[key]
+		}
+		if fresh != nil {
 			cloned.Source = firstValue(cloned.Source, fresh.Source)
 			cloned.DatabaseType = firstValue(fresh.DatabaseType, cloned.DatabaseType)
 			if cloned.Type.IsZero() {

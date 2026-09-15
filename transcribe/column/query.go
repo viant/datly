@@ -77,6 +77,11 @@ func falsifySelect(selectNode *query.Select) error {
 }
 
 func falsifySubquery(source node.Node) error {
+	if table, _, err := sqlparser.SourceTable(source); err != nil {
+		return err
+	} else if table != "" {
+		return nil
+	}
 	var raw string
 	var update func(string, *query.Select)
 	switch actual := source.(type) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
@@ -11,189 +12,83 @@ import (
 	"github.com/viant/sqlparser/query"
 )
 
-// extractNestedViewDirectives removes controls from parser-owned subqueries
-// and returns them for one canonical application after the relation tree exists.
-func extractNestedViewDirectives(parsed *query.Select) ([]viewDirective, error) {
+// validateNestedViewSQL keeps Datly annotations on the outer named-view graph.
+// Nested statements are database SQL and are inspected without rewriting them.
+func validateNestedViewSQL(parsed *query.Select) error {
 	if parsed == nil {
-		return nil, nil
+		return nil
 	}
-	result := make([]viewDirective, 0)
-	uses := directCTEUses(parsed)
 	for _, with := range parsed.WithSelects {
 		if with == nil {
 			continue
 		}
-		publicTargets := uses[strings.ToLower(strings.TrimSpace(with.Alias))]
-		publicTarget := strings.TrimSpace(with.Alias)
-		if len(publicTargets) == 1 {
-			publicTarget = publicTargets[0]
-		}
-		var directives []viewDirective
-		var err error
-		switch {
-		case with.X != nil:
-			directives, err = extractQueryViewDirectives(with.X, publicTarget)
-			if len(directives) > 0 {
-				with.Raw = ""
+		if with.X != nil {
+			if err := validateDatabaseSQL(with.X); err != nil {
+				return err
 			}
-		case strings.TrimSpace(with.Raw) != "":
-			var rewritten string
-			rewritten, directives, err = rewriteSubqueryViewDirectives(with.Raw, publicTarget)
-			if len(directives) > 0 {
-				with.Raw = rewritten
-			}
+		} else if err := validateDatabaseSource(&expr.Raw{Raw: with.Raw}); err != nil {
+			return err
 		}
-		if err != nil {
-			return nil, err
-		}
-		if len(directives) > 0 && len(publicTargets) == 0 {
-			return nil, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("CTE %q contains view controls but is not a direct canonical view source", with.Alias)}
-		}
-		if len(directives) > 0 && len(publicTargets) > 1 {
-			return nil, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("CTE %q with view controls is used by more than one canonical view", with.Alias)}
-		}
-		result = append(result, directives...)
 	}
-
-	rootTarget := queryNamespace(parsed)
-	directives, err := rewriteSourceViewDirectives(parsed.From.X, rootTarget)
-	if err != nil {
-		return nil, err
+	if err := validateDatabaseSource(parsed.From.X); err != nil {
+		return err
 	}
-	result = append(result, directives...)
 	for _, join := range parsed.Joins {
-		if join == nil {
-			continue
+		if join != nil {
+			if err := validateDatabaseSource(join.With); err != nil {
+				return err
+			}
 		}
-		target := strings.TrimSpace(join.Alias)
-		if target == "" {
-			target = terminalName(join.With)
-		}
-		directives, err = rewriteSourceViewDirectives(join.With, target)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, directives...)
 	}
-	if parsed.Union != nil && parsed.Union.X != nil {
-		directives, err = extractQueryViewDirectives(parsed.Union.X, rootTarget)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, directives...)
+	if parsed.Union != nil {
+		return validateDatabaseSQL(parsed.Union.X)
 	}
-	return result, nil
+	return nil
 }
 
-func directCTEUses(parsed *query.Select) map[string][]string {
-	result := map[string][]string{}
-	aliases := map[string]bool{}
-	for _, with := range parsed.WithSelects {
-		if with != nil && strings.TrimSpace(with.Alias) != "" {
-			aliases[strings.ToLower(strings.TrimSpace(with.Alias))] = true
-		}
+func validateDatabaseSource(source node.Node) error {
+	if table, _, err := sqlparser.SourceTable(source); err != nil {
+		return err
+	} else if table != "" {
+		return nil
 	}
-	add := func(source node.Node, publicTarget string, shadowed map[string]bool) {
-		identifier, ok := source.(*expr.Ident)
-		if !ok {
-			return
-		}
-		key := strings.ToLower(strings.TrimSpace(identifier.Name))
-		if !aliases[key] || shadowed[key] {
-			return
-		}
-		result[key] = append(result[key], publicTarget)
-	}
-	rootTarget := queryNamespace(parsed)
-	add(parsed.From.X, rootTarget, nil)
-	for _, join := range parsed.Joins {
-		if join == nil {
-			continue
-		}
-		target := strings.TrimSpace(join.Alias)
-		if target == "" {
-			target = terminalName(join.With)
-		}
-		add(join.With, target, nil)
-	}
-	for branch := parsed.Union; branch != nil && branch.X != nil; branch = branch.X.Union {
-		shadowed := map[string]bool{}
-		for _, with := range branch.X.WithSelects {
-			if with != nil && strings.TrimSpace(with.Alias) != "" {
-				shadowed[strings.ToLower(strings.TrimSpace(with.Alias))] = true
-			}
-		}
-		// A UNION branch contributes to the same canonical root view. Its joins
-		// remain internal to that branch and never become canonical relations.
-		add(branch.X.From.X, rootTarget, shadowed)
-	}
-	return result
-}
-
-func rewriteSourceViewDirectives(source node.Node, publicTarget string) ([]viewDirective, error) {
+	var raw string
 	switch actual := source.(type) {
 	case *expr.Raw:
-		rewritten, directives, err := rewriteSubqueryViewDirectives(actual.Raw, publicTarget)
-		if err != nil {
-			return nil, err
-		}
-		if len(directives) > 0 {
-			actual.Raw = rewritten
-			actual.X = nil
-		}
-		return directives, nil
+		raw = actual.Raw
 	case *expr.Parenthesis:
-		rewritten, directives, err := rewriteSubqueryViewDirectives(actual.Raw, publicTarget)
-		if err != nil {
-			return nil, err
-		}
-		if len(directives) > 0 {
-			actual.Raw = rewritten
-			actual.X = nil
-		}
-		return directives, nil
+		raw = actual.Raw
+	case *query.Select:
+		return validateDatabaseSQL(actual)
 	default:
-		return nil, nil
+		return nil
 	}
-}
-
-func rewriteSubqueryViewDirectives(source, publicTarget string) (string, []viewDirective, error) {
-	if strings.TrimSpace(source) == "" {
-		return source, nil, nil
+	if strings.TrimSpace(raw) == "" {
+		return nil
 	}
-	prepared, err := prepareSubquery(source)
+	prepared, err := prepareSubquery(raw)
 	if err != nil {
-		return "", nil, &Error{Code: CodeSQLParse, Cause: fmt.Errorf("parse nested view source: %w", err)}
+		return &Error{Code: CodeSQLParse, Cause: fmt.Errorf("parse nested view source: %w", err)}
 	}
 	if prepared == nil {
-		return source, nil, nil
+		return nil
 	}
-	directives, err := extractQueryViewDirectives(prepared.query, publicTarget)
-	if err != nil {
-		return "", nil, err
+	return validateDatabaseSQL(prepared.query)
+}
+
+func validateDatabaseSQL(parsed *query.Select) error {
+	if parsed == nil {
+		return nil
 	}
-	if len(directives) == 0 {
-		return source, nil, nil
+	if containsViewDirective(parsed) || containsSQLCall(parsed, func(name string) bool { return name == tag.InvariantName || name == "tag" }) {
+		return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("Datly view controls, tag and invariant annotations belong on the outer view projection, not inside database SQL")}
 	}
-	rewritten := strings.TrimSpace((sqlparser.Stringifier{PreserveWindow: true}).String(prepared.query))
-	for _, embed := range prepared.embeds {
-		rewritten = strings.ReplaceAll(rewritten, embed.placeholder, embed.raw)
-	}
-	if prepared.wrapped {
-		rewritten = "(" + rewritten + ")"
-	}
-	return rewritten, directives, nil
+	return validateNestedViewSQL(parsed)
 }
 
 type preparedSubquery struct {
-	query   *query.Select
-	wrapped bool
-	embeds  []embedPlaceholder
-}
-
-type embedPlaceholder struct {
-	placeholder string
-	raw         string
+	query  *query.Select
+	embeds []string
 }
 
 func prepareSubquery(source string) (*preparedSubquery, error) {
@@ -206,14 +101,14 @@ func prepareSubquery(source string) (*preparedSubquery, error) {
 	if len(refs) == 1 && strings.TrimSpace(trimmed) == refs[0].Raw {
 		return nil, nil
 	}
-	prepared := &preparedSubquery{wrapped: wrapped}
+	prepared := &preparedSubquery{}
 	for index, ref := range refs {
 		if ref == nil || ref.Raw == "" {
 			continue
 		}
 		placeholder := embedPlaceholderName(trimmed, index)
 		trimmed = strings.ReplaceAll(trimmed, ref.Raw, placeholder)
-		prepared.embeds = append(prepared.embeds, embedPlaceholder{placeholder: placeholder, raw: ref.Raw})
+		prepared.embeds = append(prepared.embeds, placeholder)
 	}
 	parsed, err := parseReadSQL(trimmed)
 	if err != nil {
@@ -234,30 +129,4 @@ func embedPlaceholderName(source string, index int) string {
 		}
 		index++
 	}
-}
-
-func extractQueryViewDirectives(parsed *query.Select, publicTarget string) ([]viewDirective, error) {
-	nested, err := extractNestedViewDirectives(parsed)
-	if err != nil {
-		return nil, err
-	}
-	directives, err := extractViewDirectives(parsed)
-	if err != nil {
-		return nil, err
-	}
-	directives = append(nested, directives...)
-	localTarget := queryNamespace(parsed)
-	for _, directive := range directives {
-		if localTarget == "" || !strings.EqualFold(directive.target, localTarget) {
-			return nil, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s target %q is internal to nested source %q; nested source controls may target only its root view", directive.name, directive.target, localTarget)}
-		}
-	}
-	if publicTarget != "" && localTarget != "" && !strings.EqualFold(publicTarget, localTarget) {
-		for index := range directives {
-			if strings.EqualFold(directives[index].target, localTarget) {
-				directives[index].target = publicTarget
-			}
-		}
-	}
-	return directives, nil
 }

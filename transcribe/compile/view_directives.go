@@ -139,60 +139,8 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 }
 
 func containsViewDirective(source node.Node) bool {
-	switch actual := source.(type) {
-	case *query.Select:
-		if containsViewDirective(actual.List) || containsViewDirective(&actual.From) {
-			return true
-		}
-		for _, with := range actual.WithSelects {
-			if with != nil && containsViewDirective(with.X) {
-				return true
-			}
-		}
-		for _, join := range actual.Joins {
-			if containsViewDirective(join) {
-				return true
-			}
-		}
-		if actual.Qualify != nil && containsViewDirective(actual.Qualify) {
-			return true
-		}
-		for _, item := range actual.GroupBy {
-			if containsViewDirective(item) {
-				return true
-			}
-		}
-		if actual.Having != nil && containsViewDirective(actual.Having) {
-			return true
-		}
-		for _, item := range actual.OrderBy {
-			if containsViewDirective(item) {
-				return true
-			}
-		}
-		return actual.Union != nil && containsViewDirective(actual.Union.X)
-	case query.List:
-		for _, item := range actual {
-			if containsViewDirective(item) {
-				return true
-			}
-		}
-	case []node.Node:
-		for _, item := range actual {
-			if containsViewDirective(item) {
-				return true
-			}
-		}
-	case *query.Item:
-		return containsViewDirective(actual.Expr)
-	case *query.From:
-		return containsViewDirective(actual.X)
-	case *query.Join:
-		return containsViewDirective(actual.With) || containsViewDirective(actual.On)
-	case *expr.Qualify:
-		return containsViewDirective(actual.X)
-	case *expr.Call:
-		switch normalizeViewDirectiveName(sqlparser.Stringify(actual.X)) {
+	return containsSQLCall(source, func(name string) bool {
+		switch name {
 		case spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
 			spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 			spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
@@ -202,30 +150,97 @@ func containsViewDirective(source node.Node) bool {
 			spec.ViewControlConcurrency, spec.ViewControlEntityHooks:
 			return true
 		}
-		if containsViewDirective(actual.X) {
+		return false
+	})
+}
+
+func containsSQLCall(source node.Node, matches func(string) bool) bool {
+	switch actual := source.(type) {
+	case *query.Select:
+		if containsSQLCall(actual.List, matches) || containsSQLCall(&actual.From, matches) {
+			return true
+		}
+		for _, with := range actual.WithSelects {
+			if with != nil && containsSQLCall(with.X, matches) {
+				return true
+			}
+		}
+		for _, join := range actual.Joins {
+			if containsSQLCall(join, matches) {
+				return true
+			}
+		}
+		if actual.Qualify != nil && containsSQLCall(actual.Qualify, matches) {
+			return true
+		}
+		for _, item := range actual.GroupBy {
+			if containsSQLCall(item, matches) {
+				return true
+			}
+		}
+		if actual.Having != nil && containsSQLCall(actual.Having, matches) {
+			return true
+		}
+		for _, item := range actual.OrderBy {
+			if containsSQLCall(item, matches) {
+				return true
+			}
+		}
+		return actual.Union != nil && containsSQLCall(actual.Union.X, matches)
+	case query.List:
+		for _, item := range actual {
+			if containsSQLCall(item, matches) {
+				return true
+			}
+		}
+	case []node.Node:
+		for _, item := range actual {
+			if containsSQLCall(item, matches) {
+				return true
+			}
+		}
+	case *query.Item:
+		return containsSQLCall(actual.Expr, matches)
+	case *query.From:
+		return containsSQLCall(actual.X, matches)
+	case *query.Join:
+		return containsSQLCall(actual.With, matches) || containsSQLCall(actual.On, matches)
+	case *expr.Qualify:
+		return containsSQLCall(actual.X, matches)
+	case *expr.Call:
+		if matches(normalizeViewDirectiveName(sqlparser.Stringify(actual.X))) {
+			return true
+		}
+		if containsSQLCall(actual.X, matches) {
 			return true
 		}
 		for _, argument := range actual.Args {
-			if containsViewDirective(argument) {
+			if containsSQLCall(argument, matches) {
 				return true
 			}
 		}
 	case *expr.Binary:
-		return containsViewDirective(actual.X) || containsViewDirective(actual.Y)
+		return containsSQLCall(actual.X, matches) || containsSQLCall(actual.Y, matches)
 	case *expr.Unary:
-		return containsViewDirective(actual.X)
+		return containsSQLCall(actual.X, matches)
+	case *expr.Switch:
+		for _, branch := range actual.Cases {
+			if branch != nil && (containsSQLCall(&branch.X, matches) || containsSQLCall(branch.Y, matches)) {
+				return true
+			}
+		}
 	case *expr.Parenthesis:
-		return containsViewDirective(actual.X)
+		return containsSQLCall(actual.X, matches)
 	case *expr.Collate:
-		return containsViewDirective(actual.X)
+		return containsSQLCall(actual.X, matches)
 	case *expr.Range:
-		return containsViewDirective(actual.Min) || containsViewDirective(actual.Max)
+		return containsSQLCall(actual.Min, matches) || containsSQLCall(actual.Max, matches)
 	case *expr.Selector:
-		return containsViewDirective(actual.X)
+		return containsSQLCall(actual.X, matches)
 	case *expr.Star:
-		return containsViewDirective(actual.X)
+		return containsSQLCall(actual.X, matches)
 	case *expr.Raw:
-		return containsViewDirective(actual.X)
+		return containsSQLCall(actual.X, matches)
 	}
 	return false
 }

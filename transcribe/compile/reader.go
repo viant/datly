@@ -62,7 +62,7 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if root.Source == nil {
 		root.Source = &spec.ViewSource{}
 	}
-	table, auxiliary, err := sqlparser.SourceTable(parsed.From.X)
+	table, directAuxiliary, err := sqlparser.SourceTable(parsed.From.X)
 	if err != nil {
 		return nil, err
 	}
@@ -75,23 +75,28 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 			table = strings.TrimSpace(sqlparser.Stringify(parsed.From.X))
 		}
 	}
-	root.Source.Table = table
+	sourceTable, auxiliary, err := readSourceTable(parsed.From.X, parsed.WithSelects, 0)
+	if err != nil {
+		return nil, err
+	}
+	root.Source.Table = sourceTable
+	if root.Source.Table == "" && !referencesCTE(parsed.From.X, parsed.WithSelects) {
+		root.Source.Table = table
+	}
 	root.Auxiliary = root.Auxiliary || auxiliary
-	if auxiliary {
+	if directAuxiliary {
 		// Mutation intent is retained on canonical metadata; executable SQL
 		// uses the underlying table, avoiding a synthetic empty subquery.
 		parsed.From.X = expr.NewSelector(table)
 		root.Namespace = queryNamespace(parsed)
 	}
-	nestedDirectives, err := extractNestedViewDirectives(parsed)
-	if err != nil {
+	if err := validateNestedViewSQL(parsed); err != nil {
 		return nil, err
 	}
 	directives, err := extractViewDirectives(parsed)
 	if err != nil {
 		return nil, err
 	}
-	directives = append(nestedDirectives, directives...)
 	relations, err := r.compileRelations(parsed, root, input.Template)
 	if err != nil {
 		return nil, err
@@ -115,7 +120,7 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err := applyViewDirectives(root, directives); err != nil {
 		return nil, err
 	}
-	if !sourceDecomposed && (projectionRewritten || columnsRewritten || len(directives) > 0 || auxiliary) {
+	if !sourceDecomposed && (projectionRewritten || columnsRewritten || len(directives) > 0 || directAuxiliary) {
 		root.Source.SQL = wrapReadProgram(input.Template, strings.TrimSpace((sqlparser.Stringifier{PreserveWindow: true}).String(parsed)))
 	}
 	if err := validateView(root, map[*spec.View]bool{}); err != nil {
@@ -199,7 +204,7 @@ func (r *Reader) compileRelation(join *query.Join, index int, withs query.WithSe
 		Name: childNamespace, Namespace: childNamespace,
 		Source: childSource,
 	}
-	_, child.Auxiliary, err = sqlparser.SourceTable(join.With)
+	child.Source.Table, child.Auxiliary, err = readSourceTable(join.With, withs, 0)
 	if err != nil {
 		return nil, relationError(CodeRelationUnsupported, err, join.Span)
 	}

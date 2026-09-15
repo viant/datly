@@ -66,3 +66,37 @@ JOIN (SELECT order_id, name FROM items) i ON i.order_id = o.id`})
 		t.Fatalf("rewritten nested SQL is invalid: %v\n%s", err, actual)
 	}
 }
+
+func TestDiscoveryPreservesParenthesizedTablesAndRestrictions(t *testing.T) {
+	h := sqlite.New(t)
+	ctx := context.Background()
+	if err := h.ExecStatements(ctx, `CREATE TABLE VENDOR(ID INTEGER)`, `INSERT INTO VENDOR VALUES(2)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, SQL := range []string{
+		`SELECT * FROM (VENDOR) v WHERE v.ID=2`,
+		`SELECT vendor.* FROM (SELECT v.* FROM (VENDOR) v WHERE v.ID=2) vendor`,
+		`WITH selected_vendor AS (SELECT v.* FROM (VENDOR) v WHERE v.ID=2) SELECT * FROM selected_vendor`,
+	} {
+		t.Run(SQL, func(t *testing.T) {
+			actual, err := discoveryQuery(&spec.ViewSource{SQL: SQL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(actual, "(VENDOR)") || !strings.Contains(actual, "v.ID") {
+				t.Fatalf("source restrictions lost: %s", actual)
+			}
+			rows, err := h.DB.QueryContext(ctx, actual)
+			if err != nil {
+				t.Fatalf("SQL %s: %v", actual, err)
+			}
+			defer rows.Close()
+			if rows.Next() {
+				t.Fatal("discovery executed a data-producing query")
+			}
+			if err = rows.Err(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
