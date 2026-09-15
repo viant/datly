@@ -81,7 +81,7 @@ view controls, rich CASTs, hooks, auxiliary joins and template fragments.
 
 ## Transcription turns the contract into code and resources
 
-Transcription resolves the authored DQL, Go types and database column metadata,
+Transcription resolves the authored DQL with database schema and/or Go types,
 checks the structural contract, and creates the selected generation product.
 Reader and writer generation must be selected and explained separately:
 
@@ -91,8 +91,9 @@ flowchart TD
     B --> C{Selected generation product}
     C -->|Reader| R[Reader shapes, component metadata and query resources]
     C -->|Writer| W[Writer shapes, selected Go handler and support code]
-    R --> RB[Build and link reader component]
-    W --> WH[Add application hooks when requested]
+    R --> RH[Add reader hooks when needed]
+    RH --> RB[Build and link reader component]
+    W --> WH[Implement writer lifecycle hooks when needed]
     WH --> WB[Build and link writer component]
 ```
 
@@ -112,6 +113,36 @@ Linked application types retain their existing owner. The exact files depend on
 the selected product and DQL names/destinations. Transcription, compiling the Go
 program and publishing a runtime generation are separate steps.
 
+## Application hooks on readers and writers
+
+Both component kinds provide application extension points. Add reader hooks when
+fetched rows or assembled relations need application behavior, just as writer
+lifecycle methods supply behavior around a mutation.
+
+| Component | Application hook | When it runs |
+| --- | --- | --- |
+| Reader | `OnFetch(ctx) error` | After a typed row is populated, before indexing and relation assembly. An error fails the fetch. |
+| Reader | `OnRelation(ctx)` | After selected child relations are assembled. This notification has no error return. |
+| Writer | `OrderLifecycle.Init` / `Validate` | During initialization and validation of the effective mutation state. |
+| Writer | `AfterSequence` / `AfterQueue` | After ID sequencing or after DML is queued; queueing does not confirm commit. |
+
+Reader row hooks are methods on the row type. Keep application methods in a
+separate authored Go file in that type's package:
+
+```go
+func (order *Order) OnFetch(ctx context.Context) error {
+    return nil
+}
+
+func (order *Order) OnRelation(ctx context.Context) {
+}
+```
+
+The generated writer uses its separate, typed lifecycle struct. Both readers and
+writers can also use the applicable input initialization and output finalization
+hooks. Their method contracts and execution order reflect the operation; see the
+[reader and writer sequence diagrams](hooks.md).
+
 ## Schema-to-code synchronization
 
 Database metadata refines the generated shape; DQL retains explicit authority for
@@ -125,27 +156,53 @@ contracts. It is not an implicit database schema watcher. Inspect diagnostics
 and generated diffs, rebuild/link the code, then publish the new generation.
 Request-time data changes and writer Previous-state comparison are separate concerns.
 
-## SQL and StructQL have different jobs
+## From a DQL graph to generated DML
 
-| Mechanism | Data source | Typical purpose |
-| --- | --- | --- |
-| SQL | Configured database | Fetch current records, joins, aggregates and reference data |
-| StructQL | An already available typed Go object graph | Project keys/values and prepare typed lookup or comparison data |
-| SQL template expressions | Declared inputs and compiled query context | Build parameterized query fragments |
-| Generated Go | Typed compiled application artifacts | Execute the selected reader/writer support with normal Go type checking |
-
-For example, StructQL can project order IDs from an incoming Orders graph:
+For a PATCH component, describe the writable views and their relationships in the
+outer query. Keep each view's database SQL inside its subquery:
 
 ```sql
-#define($_ = $OrderKeys<?>(param/OrderKeys) /*
- SELECT Id FROM /Orders
-*/)
+#package('example.com/shop/orders/write')
+#setting($_ = $route('/orders', 'PATCH'))
+#setting($_ = $connector('main'))
+SELECT orders.*, items.*, kind.*,
+       invariant(orders.WINDOW_START, 'DeliveryWindow'),
+       invariant(orders.WINDOW_END, 'DeliveryWindow')
+FROM (
+    SELECT o.* FROM ORDERS o
+) orders
+LEFT JOIN (
+    SELECT i.* FROM ITEMS i
+) items ON items.ORDER_ID = orders.ID
+LEFT JOIN (
+    SELECT k.* FROM (ORDER_KINDS) k
+) kind ON kind.ID = orders.KIND_ID AND 1=1
 ```
 
-`/Orders` is a declared object-graph path, not a database table. That projection
-can help an authored database Current query fetch the relevant previous rows.
-The actual graph field names and supported StructQL types must match the input.
-StructQL does not replace SQL or create another database-access layer.
+Generate the Go writer from the source package containing that DQL:
+
+```sh
+datly gen -op patch \
+  -dir "$PROJECT" \
+  -schema -connector main -driver sqlite3 -dsn "$PROJECT/orders.db" \
+  example.com/shop/source
+```
+
+The high-level CLI restoration is under review in this development branch; see
+[the writer guide](mutations.md#cli-generation-and-generated-code) for its current
+status and complete workflow.
+
+The graph describes intent. Generated Go derives request contracts and authorized
+Previous reads, tracks supplied fields, compares existing rows, sequences new IDs,
+and queues the necessary INSERT/UPDATE operations. ORDERS and ITEMS are mutable;
+ORDER_KINDS is auxiliary data for application logic and receives no DML. Sparse
+updates preserve omitted values, while the DeliveryWindow invariant supplies the
+effective start/end pair for validation.
+
+Add business behavior to the generated `OrderLifecycle` and child lifecycle
+scaffolds. Their methods initially return `nil`, and regeneration preserves the
+application's edits. Authors do not hand-write key-extraction queries, Current
+bindings, template loops or mutation orchestration for this standard workflow.
 
 ## What happens to service and DAO responsibilities?
 
