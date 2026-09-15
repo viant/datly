@@ -60,8 +60,12 @@ Skill packaging now validates links relative to their containing documents.
 Grouped/custom predicate examples and imported handler aliases are integrated.
 The comprehensive grammar reference and EBNF are integrated, with the DQL +
 Velty extension documented separately at the end. Per-instance constant expansion
-from YAML/JSON files is still being completed. Release publication and version tags remain
-separate from local commits and verification.
+from YAML/JSON files is integrated for discovery, execution and configured resource
+paths, with immutable authored sources. CLI and generated-code regression checks
+pass. Unquoted `${project}.dataset.table` parsing still awaits the published native
+parser update; supported quoted forms and `$project.dataset.table` are documented
+in [instance constants](constants-and-substitutions.md). Release publication and
+version tags remain separate from local commits and verification.
 
 ## Production review follow-up
 
@@ -77,6 +81,8 @@ Pagination rejects negative values and overflowing page/limit products before SQ
 execution. OpenAPI supports custom JSON fields conservatively and text-serialized
 fields where their wire representation is known, without invoking user codecs.
 
-Sequencer dialect/concurrency corrections, instance constant-file expansion, and
-generated delete-marker/version-validation policies are still being completed.
-These remain release gates; a passing earlier test baseline does not close them.
+Sequencer dialect/concurrency corrections and generated delete-marker/token-validation
+policies are still being integrated. MySQL must retain the unchanged original
+transient-transaction mechanism by default; the table-based allocator is an explicit
+option. Native dependency publication and final combined verification remain release
+gates; a passing earlier test baseline does not close them.
