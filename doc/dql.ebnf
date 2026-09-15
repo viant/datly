@@ -46,7 +46,7 @@ select_core = "SELECT", ["DISTINCT" | "ALL"], projection, {",", projection},
  ["FROM", table_source, {join_clause}], ["WHERE", sql_expression],
  ["GROUP BY", expression_list], ["HAVING", sql_expression] ;
 projection = star_projection | view_control | rich_type_declaration
- | column_tag_declaration | sql_expression, [sql_alias] ;
+ | column_tag_declaration | invariant_declaration | sql_expression, [sql_alias] ;
 star_projection = [sql_identifier, "."], "*", ["EXCEPT", identifier_list] ;
 table_source = sql_identifier, [sql_alias] | "(", sql_query, ")", [sql_alias]
  | "(", sql_identifier, ")", [sql_alias] | embedded_sql, [sql_alias]
@@ -76,6 +76,12 @@ control_name = "use_connector" | "use_cache" | "cache_warmup" | "order_by"
 control_argument = string | integer | identifier ;
 rich_type_declaration = "CAST", "(", column_ref, "AS", go_type, ")" ;
 column_tag_declaration = "tag", "(", column_ref, ",", string, ")" ;
+invariant_declaration = "invariant", "(", column_ref, ",", string, ")" ;
+(* view_control, rich_type_declaration, column_tag_declaration and
+   invariant_declaration are Datly outer-projection annotations only.
+   View subqueries contain database SQL; a database CAST remains an SQL
+   expression, not a Go rich_type_declaration. column_ref addresses a named
+   outer view and one of its projected columns, never its inner table alias. *)
 column_ref = identifier, ".", sql_identifier ;
 embedded_sql = "$", "{embed:", resource_reference, "}" ;
 resource_reference = ? fs resource path, optionally namespace:path ? ;

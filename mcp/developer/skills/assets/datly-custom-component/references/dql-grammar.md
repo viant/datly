@@ -230,16 +230,17 @@ transaction orchestration. Authors supply graph metadata and application Go hook
 #import('hooks', 'example.com/app/recordhooks')
 #setting($_ = $route('/records', 'PATCH'))
 #setting($_ = $connector('main'))
-SELECT r.*, c.*, lookup.*,
-       entity_hooks(r, 'hooks.RecordHooks'),
-       tag(r.START, 'invariant:"Schedule"'),
-       tag(r.END, 'invariant:"Schedule" validate:"gtfield(Start)"')
-FROM records r
-JOIN children c ON c.record_id = r.id
-JOIN (lookup_values) lookup ON lookup.id = r.lookup_id
+SELECT records.*, children.*, lookup.*,
+       entity_hooks(records, 'hooks.RecordLifecycle'),
+       invariant(records.START, 'Schedule'),
+       invariant(records.END, 'Schedule'),
+       tag(records.END, 'validate:"gtfield(Start)"')
+FROM (SELECT r.* FROM records r) records
+JOIN (SELECT c.* FROM children c) children ON children.record_id = records.id
+JOIN (SELECT l.* FROM (lookup_values) l) lookup ON lookup.id = records.lookup_id
 ```
 
-`tag` places Start and End in one cohesive invariant group; the comparison rule
+`invariant` places Start and End in one cohesive invariant group; the comparison rule
 uses the exact generated Go field name `Start`. Use schema-resolved date/time
 columns, or explicit linked Go date types. For sparse updates, the generator
 backfills omitted group members from authorized Previous values without setting

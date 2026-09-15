@@ -8,6 +8,37 @@ DQL declares a typed SQL view graph, request bindings, view controls, Go types a
 
 Use this reference to author declarations and view controls, then validate and generate pure Go with the matching Datly build. Syntax, installed capabilities and execution are separate checks; see [release status](status.md) for current boundaries.
 
+## A shared view structure for readers and writers
+
+Readers and writers use the same DQL structure, but each component owns its own
+DQL. Their projections, relations, filters and destination packages may differ.
+The outer query declares named
+Datly views and their relationships. Each view subquery contains its database SQL:
+
+```sql
+#package('example.com/shop/orders/read')
+#setting($_ = $route('/orders', 'GET'))
+#setting($_ = $connector('main'))
+SELECT orders.*, items.*
+FROM (
+    SELECT o.ID, o.WINDOW_START, o.WINDOW_END FROM ORDERS o
+) orders
+LEFT JOIN (
+    SELECT i.ID, i.ORDER_ID, i.QUANTITY FROM ITEMS i
+) items ON items.ORDER_ID = orders.ID
+```
+
+`orders` and `items` are the view names. `o` and `i` are local table aliases
+inside their respective SQL queries. Datly annotations such as `set_limit`,
+Go-type `cast` and invariant declarations belong in the outer projection and
+address those named views or their projected columns. Keep them out of the SQL
+inside each view. Ordinary database expressions, including a database SQL
+`CAST`, remain part of the inner SQL.
+
+For a writer, author the graph needed by that operation, using this view structure
+with its own destination package. Writer hook and invariant annotations extend the outer
+metadata; they do not introduce a different query language inside the views.
+
 ## Lexical conventions
 
 - Parameter names start with an ASCII letter, followed by letters/digits/underscore. Leading underscore is reserved for declaration machinery.
@@ -143,7 +174,10 @@ Predicate catalogs define actual argument contracts. Common families include equ
 
 The SQL layer supports ordinary SELECT projections, tables/subqueries, CTEs/recursive CTEs, JOIN/ON, WHERE, GROUP BY/HAVING, ORDER BY, LIMIT/OFFSET, UNION and dialect expressions. Validate actual parser/dialect support; an opaque vendor expression is not necessarily valid structural metadata.
 
-Controls target SQL aliases, not arbitrary metadata names. They must be standalone SELECT projection items, not WHERE terms or nested function arguments, and cannot be the entire projection.
+Controls target the named views in the outer DQL graph, not local table aliases
+inside their SQL. They must be standalone outer SELECT projection items, not
+WHERE terms, inner SQL annotations or nested function arguments, and cannot be
+the entire projection.
 
 | Control | Syntax |
 | --- | --- |
@@ -159,14 +193,16 @@ Controls target SQL aliases, not arbitrary metadata names. They must be standalo
 | parent publication | publish_parent(alias) |
 | partitioning | set_partitioner(alias,'Type'[,integer]) |
 | match policy | match_strategy(alias,'read_all'|'read_matched'|'read_derived'); related view only |
-| mutation hooks | entity_hooks(alias,'package.Hooks') |
+| mutation lifecycle | entity_hooks(view,'package.OrderLifecycle') |
+| invariant group | invariant(view.column,'GroupName') |
 
 Numeric control arguments are unquoted, nonnegative integer literals. set_limit(alias,0) removes the view limit; it does not erase an explicitly authored SQL LIMIT. Controls are consumed as metadata rather than sent to the DB. Allowed-order declarations can repeat without ambiguous mappings.
 
 ~~~~sql
-SELECT r.*, c.*, batch_size(c,100), batch_concurrency(c,2)
-FROM records r
-JOIN children c ON c.record_id=r.id AND c.tenant_id=r.tenant_id
+SELECT records.*, children.*, batch_size(children,100), batch_concurrency(children,2)
+FROM (SELECT r.* FROM records r) records
+JOIN (SELECT c.* FROM children c) children
+  ON children.record_id=records.id AND children.tenant_id=records.tenant_id
 ~~~~
 
 Use explicit equalities for composite links. Parenthesized physical sources in mutation intent, such as JOIN (lookup_table) l ON ..., represent auxiliary/nonmutating data. This is distinct from a writable table and from (SELECT ...).
@@ -232,16 +268,17 @@ transaction orchestration. Authors supply graph metadata and application Go hook
 #import('hooks', 'example.com/app/recordhooks')
 #setting($_ = $route('/records', 'PATCH'))
 #setting($_ = $connector('main'))
-SELECT r.*, c.*, lookup.*,
-       entity_hooks(r, 'hooks.RecordHooks'),
-       tag(r.START, 'invariant:"Schedule"'),
-       tag(r.END, 'invariant:"Schedule" validate:"gtfield(Start)"')
-FROM records r
-JOIN children c ON c.record_id = r.id
-JOIN (lookup_values) lookup ON lookup.id = r.lookup_id
+SELECT records.*, children.*, lookup.*,
+       entity_hooks(records, 'hooks.RecordLifecycle'),
+       invariant(records.START, 'Schedule'),
+       invariant(records.END, 'Schedule'),
+       tag(records.END, 'validate:"gtfield(Start)"')
+FROM (SELECT r.* FROM records r) records
+JOIN (SELECT c.* FROM children c) children ON children.record_id = records.id
+JOIN (SELECT l.* FROM (lookup_values) l) lookup ON lookup.id = records.lookup_id
 ```
 
-`tag` places Start and End in one cohesive invariant group; the comparison rule
+`invariant` places Start and End in one cohesive invariant group; the comparison rule
 uses the exact generated Go field name `Start`. Use schema-resolved date/time
 columns, or explicit linked Go date types. For sparse updates, the generator
 backfills omitted group members from authorized Previous values without setting

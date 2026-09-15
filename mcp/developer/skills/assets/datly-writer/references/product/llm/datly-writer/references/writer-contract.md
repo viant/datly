@@ -114,10 +114,11 @@ are auxiliary: readable by business logic and excluded from sequencing, mutation
 hooks, relinking and DML. A parenthesized physical root is also auxiliary.
 A real `(SELECT ...)` subquery retains its declared query meaning.
 
-Attach `entity_hooks(r, 'hooks.RecordHooks')` using a declared package import.
-Attach validation and cohesive groups with column `tag` annotations, for example
-`tag(r.START, 'invariant:"Schedule"')` and
-`tag(r.END, 'invariant:"Schedule" validate:"gtfield(Start)"')`.
+Attach `entity_hooks(records, 'hooks.RecordLifecycle')` to the named outer view,
+using a declared package import. Declare cohesive groups with
+`invariant(records.START, 'Schedule')` and
+`invariant(records.END, 'Schedule')`. Add the separate validation annotation
+`tag(records.END, 'validate:"gtfield(Start)"')` in the outer projection.
 Use exact resolved Go field names in cross-field validation rules.
 
 The generator derives body/output bindings and typed Previous reads restricted to

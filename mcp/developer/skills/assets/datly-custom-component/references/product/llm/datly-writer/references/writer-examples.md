@@ -9,13 +9,14 @@ Select mutation behavior explicitly; the HTTP verb alone is not the generated po
 #import('hooks', 'example.com/app/recordhooks')
 #setting($_ = $route('/v1/records', 'PATCH'))
 #setting($_ = $connector('main'))
-SELECT r.*, children.*, lookup.*,
-       entity_hooks(r, 'hooks.RecordHooks'),
-       tag(r.START, 'invariant:"Schedule"'),
-       tag(r.END, 'invariant:"Schedule" validate:"gtfield(Start)"')
-FROM records r
-JOIN record_children children ON children.record_id = r.id
-JOIN (lookup_values) lookup ON lookup.id = r.lookup_id
+SELECT records.*, children.*, lookup.*,
+       entity_hooks(records, 'hooks.RecordLifecycle'),
+       invariant(records.START, 'Schedule'),
+       invariant(records.END, 'Schedule'),
+       tag(records.END, 'validate:"gtfield(Start)"')
+FROM (SELECT r.* FROM records r) records
+JOIN (SELECT c.* FROM record_children c) children ON children.record_id = records.id
+JOIN (SELECT l.* FROM (lookup_values) l) lookup ON lookup.id = records.lookup_id
 ```
 
 Select `gen` operation `patch` with pure Go output; for a build advertising the

@@ -30,19 +30,22 @@ generate a combined reader/writer component in one struct.
 
 ## Choose the writer product
 
-A route method expresses an HTTP operation; it does not select an implementation.
-Choose the target and write operation through transcription options:
+Select the write operation in the CLI and declare its matching HTTP route in DQL:
 
-| Product | Selection | Main customization |
+| CLI operation | Route method | Intent |
 | --- | --- | --- |
-| Generated Go mutation policy | `HandlerGo` + `GoExecutionMutation` | Typed EntityHooks, invariants and outcome finalization |
-| Generated direct Go writer | `HandlerGo` + `GoExecutionDirect` | Generated orchestration, row InitWrite/ValidateWrite, input/output lifecycle |
-| Existing authored handler | Preserve authored/package handler authority | Application-defined orchestration through the same engine |
+| `-op patch` | `PATCH` | Apply supplied fields while preserving omitted values. |
+| `-op post` | `POST` | Insert the writable graph. |
+| `-op put` | `PUT` | Apply the generated update policy for the writable graph. |
 
-`WritePost`, `WritePut` and `WritePatch` are explicit operation choices. A sparse
-update needs an authored current-state read and complete identity matching. The
-SDK's public interfaces describe contracts; importing an interface does not
-install a handler, provider, message bus or transaction implementation.
+Generation emits Go and creates the request/output contracts and state reads
+needed by the operation. The route method alone does not generate that code.
+For a sparse update, Datly matches the authorized previous database rows using
+complete identities; the application authors the graph and lifecycle behavior.
+
+A reader is generated separately with `-op get` and its own DQL/package. An
+existing application handler remains an explicit alternative with its own
+orchestration; it is not required for this generated-writer workflow.
 
 ## Describe the writable graph
 
@@ -61,19 +64,31 @@ flowchart LR
 ```
 
 The high-level PATCH generation input describes the graph and its field policies.
+This is the same outer-view structure used for a reader. The selected operation
+controls generation; writer annotations add behavior to its graph. Reader and
+writer DQL are authored independently and can select different fields, relations
+and filters.
 Body contracts, key projections and Current-state declarations belong to the
 **generated output**, not to the minimum hand-authored input:
 
 ```sql
 #package('example.com/shop/orders/write')
+#import('hooks', 'example.com/shop/hooks')
 #setting($_ = $route('/orders', 'PATCH'))
 #setting($_ = $connector('main'))
-SELECT o.*, Items.*, Kind.*,
-       tag(o.WINDOW_START, 'invariant:"DeliveryWindow"'),
-       tag(o.WINDOW_END, 'invariant:"DeliveryWindow"')
-FROM ORDERS o
-LEFT JOIN ITEMS Items ON Items.ORDER_ID = o.ID
-LEFT JOIN (ORDER_KINDS) Kind ON Kind.ID = o.KIND_ID AND 1=1
+SELECT orders.*, items.*, kind.*,
+       entity_hooks(orders, 'hooks.OrderLifecycle'),
+       invariant(orders.WINDOW_START, 'DeliveryWindow'),
+       invariant(orders.WINDOW_END, 'DeliveryWindow')
+FROM (
+    SELECT o.* FROM ORDERS o
+) orders
+LEFT JOIN (
+    SELECT i.* FROM ITEMS i
+) items ON items.ORDER_ID = orders.ID
+LEFT JOIN (
+    SELECT k.* FROM (ORDER_KINDS) k
+) kind ON kind.ID = orders.KIND_ID AND 1=1
 ```
 
 The database metadata supplies the real column types and keys. Use a start/end
@@ -82,9 +97,14 @@ Previous reads and typed Go write support for the selected PATCH operation.
 StructQL key projection is generated plumbing; the application should not need
 to write a template loop to load Current rows.
 
-`LEFT JOIN (ORDER_KINDS)` is auxiliary/nonmutating source syntax.
+The outer query defines the view graph: `orders`, `items` and `kind` are named
+views, each supplied by its own subquery. The inner aliases `o`, `i` and `k` are
+local to those SQL queries. Outer annotations address a view's projected column,
+for example `orders.WINDOW_START`.
+
+`FROM (ORDER_KINDS)` inside the `kind` view marks its source as auxiliary/nonmutating.
 `AND 1=1` marks that joined relation as a single holder while keeping its real
-key equality. ITEMS remains many. The generator must not infer that every joined
+key equality. The `items` view remains many. The generator must not infer that every joined
 table is writable. Foreign-key constraints still belong to the database.
 
 ## CLI generation and generated code
@@ -291,7 +311,8 @@ do not expect a later hidden SyncPresence pass to repair arbitrary direct writes
 
 ## Backfill invariant groups
 
-The example tags WINDOW_START and WINDOW_END with `invariant:"DeliveryWindow"`.
+The outer `invariant` annotations place WINDOW_START and WINDOW_END in the
+DeliveryWindow group; generated Go fields carry `invariant:"DeliveryWindow"`.
 A PATCH may supply only WindowStart, but validation needs a complete interval.
 Invariant backfill restores missing group values from the authoritative Previous
 row where the policy allows it, before EntityHooks.Init and Validate.
@@ -324,21 +345,38 @@ The GEN PATCH acceptance gate must verify the actual generated date shape and se
 
 ## Customize the writing hooks
 
+The attached Go struct holds application business rules for one view's rows.
+Datly invokes its methods during generated write processing; Datly continues to
+own snapshot matching, sequencing, diffing, queued SQL and transaction handling.
+The struct name is application-defined, not a required framework suffix.
+
+| Method | Purpose |
+| --- | --- |
+| `Init` | Apply application defaults or normalize business values using marker-aware setters. |
+| `Validate` | Check the effective row, including invariant backfill, without changing it. |
+| `AfterSequence` | Run after IDs have been assigned and before diffing; preserve validated business values. |
+| `BeforeWrite` | Customize business values in the supported pre-validation phase, with the planned action. |
+| `AfterQueue` | Observe successfully queued work; this does not mean the transaction committed. |
+
+`Init` and `Validate` form the current required contract. The other methods are
+optional capabilities on the same invocation-scoped object. Commit-dependent
+side effects belong in outcome-aware finalization.
+
 An authored root hook can have this shape, with application Order/Input types:
 
 ```go
-type OrderHooks struct {
+type OrderLifecycle struct {
     Input *Input `bind:"kind=input,required"`
     Bus handler.MessageBus `bind:"kind=mbus,required"`
 }
 
-func (h *OrderHooks) Init(ctx context.Context, row *Order,
+func (h *OrderLifecycle) Init(ctx context.Context, row *Order,
     state handler.EntityState[Order, handler.NoParent]) error {
     // Apply defaults with generated marker-aware setters.
     return nil
 }
 
-func (h *OrderHooks) Validate(ctx context.Context, row *Order,
+func (h *OrderLifecycle) Validate(ctx context.Context, row *Order,
     state handler.EntityState[Order, handler.NoParent]) error {
     if row.WindowStart != nil && row.WindowEnd != nil &&
         row.WindowStart.After(*row.WindowEnd) {
@@ -348,9 +386,18 @@ func (h *OrderHooks) Validate(ctx context.Context, row *Order,
 }
 ```
 
-For a generated create-once scaffold, keep its actual generated type names and
+The default scaffold uses an entity-based name such as `OrderLifecycle` and
+contains empty lifecycle methods, each with only `return nil`. It supplies the
+signatures; application code supplies the behavior. Auxiliary views do not receive
+mutation lifecycle scaffolds. If one entity type appears in different parent roles,
+the generated names must distinguish their different typed contracts.
+
+Scaffold files are create-once: regeneration preserves application edits. An
+explicitly supplied lifecycle type takes precedence. Keep the scaffold's actual
 method signatures. For an existing application hook type, declare
-`entity_hooks(viewAlias, 'hooks.OrderHooks')` with its package import. Child hooks
+`entity_hooks(orders, 'hooks.OrderLifecycle')` in the outer projection, with
+`#import('hooks', 'example.com/shop/hooks')` declaring the package. The import
+identifies the Go package; `hooks.OrderLifecycle` identifies its hook struct. Child hooks
 use `EntityState[Child, Parent]`; root hooks use `NoParent`. SelfParent identifies
 a recursive parent independently of the enclosing relation Parent.
 
@@ -369,7 +416,7 @@ The same mechanism can supply configured input, logger and other scoped services
 The root typed hook can implement the outcome finalizer:
 
 ```go
-func (h *OrderHooks) Finalize(ctx context.Context, input *Input,
+func (h *OrderLifecycle) Finalize(ctx context.Context, input *Input,
     output *Output, outcome handler.Outcome) error {
     if !outcome.CommitConfirmed() {
         return nil
