@@ -65,6 +65,11 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	resolvedConfig, resolveErr := options.Config.ResolveConstants()
+	if resolveErr != nil {
+		return nil, resolveErr
+	}
+	options.Config = resolvedConfig
 	if err := options.Config.Validate(); err != nil {
 		return nil, err
 	}
@@ -74,11 +79,21 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 	if options.Config.Jobs == nil && options.Async != nil {
 		return nil, fmt.Errorf("linked Async options require Jobs configuration")
 	}
+	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
+	types, err := s.source.init(ctx, options.Registry)
+	if err != nil {
+		return nil, err
+	}
+	if options.Config.Const != nil {
+		if err = s.source.validateConstants(ctx, types); err != nil {
+			return nil, err
+		}
+	}
 	connections, err := connector.Open(ctx, options.Config.Connectors, options.Config.Connector)
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, connections: connections, resources: options.Resources}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
+	s.source.connections = connections
 	defer func() {
 		if err != nil {
 			if s.manager != nil {
@@ -88,10 +103,6 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 			_ = connections.Close()
 		}
 	}()
-	types, err := s.source.init(ctx, options.Registry)
-	if err != nil {
-		return nil, err
-	}
 	logger := serviceLogger(options.Diagnostics)
 	async, err := s.source.async(ctx, options.Async, logger)
 	if err != nil {

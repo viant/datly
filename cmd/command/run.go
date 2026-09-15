@@ -27,7 +27,8 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	var location string
+	var location, constantURL string
+	flags.StringVar(&constantURL, "const", "", "instance constants YAML/JSON file (overrides ConstURL)")
 	flags.StringVar(&location, "conf", "", "standalone JSON/YAML configuration URL")
 	flags.StringVar(&location, "c", "", "standalone JSON/YAML configuration URL")
 	if err := flags.Parse(args[1:]); err != nil {
@@ -40,12 +41,16 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		fmt.Fprintln(stderr, "a configuration URL and no positional arguments are required")
 		return 2
 	}
-	cfg, err := (config.Loader{}).Load(ctx, location)
+	cfg, err := (config.Loader{ConstURL: constantURL}).Load(ctx, location)
 	if err == nil {
 		if s.Version != "" {
 			cfg.Version = s.Version
 		}
-		err = cfg.Validate()
+		access, resolveErr := cfg.ResolveConstants()
+		err = resolveErr
+		if err == nil {
+			err = access.Validate()
+		}
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)

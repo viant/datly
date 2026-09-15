@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,7 @@ import (
 // schemaOptions composes one explicitly named authoring connection. Opening is
 // lazy so connector errors are reported by Validator's normal diagnostics.
 type schemaOptions struct {
+	Const     *constant.Values
 	enabled   bool
 	connector string
 	driver    string
@@ -51,10 +53,15 @@ func (o *schemaOptions) ResolveDB(ctx context.Context, name string) (*sql.DB, er
 		return nil, fmt.Errorf("schema connector %q is not configured", name)
 	}
 	if o.db == nil {
-		dsn := o.dsn
+		dsn, err := o.Const.Path(o.dsn)
+		if err != nil {
+			return nil, fmt.Errorf("discovery DSN: %w", err)
+		}
 		if o.driver == "sqlite3" {
 			var err error
-			dsn, err = o.sqliteDSN()
+			access := *o
+			access.dsn = dsn
+			dsn, err = access.sqliteDSN()
 			if err != nil {
 				return nil, err
 			}

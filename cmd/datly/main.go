@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/viant/datly/cmd/command"
+	"github.com/viant/datly/constant"
 	"io"
 	"os"
 	"os/signal"
@@ -39,6 +40,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	constantURL := flags.String("const", "", "instance constants YAML/JSON file")
 	base := flags.String("dir", ".", "project directory")
 	format := flags.String("format", "text", "output format: text or json")
 	var schema schemaOptions
@@ -66,7 +68,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 2
 	}
-	validator := &transcribe.Validator{BaseDir: *base, Include: flags.Args(), ModuleDirs: modules, Exclude: excludes}
+	instance, err := (constant.Loader{}).Load(ctx, *constantURL)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	schema.Const = instance
+	validator := &transcribe.Validator{Const: instance, BaseDir: *base, Include: flags.Args(), ModuleDirs: modules, Exclude: excludes}
 	if schema.enabled {
 		validator.Connector, validator.ColumnRefiner = schema.connector, column.New(&schema)
 		defer schema.close()

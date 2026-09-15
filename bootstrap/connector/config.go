@@ -3,9 +3,11 @@ package connector
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -28,8 +30,9 @@ type Config struct {
 // Set owns only handles opened for this application lifetime. Reader, dialect,
 // transaction and row mapping ownership remains with SQLComponent and SQLX.
 type Set struct {
-	SQL     *dsql.SQLComponent
-	handles []*sql.DB
+	identities map[string]string
+	SQL        *dsql.SQLComponent
+	handles    []*sql.DB
 }
 
 func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, err error) {
@@ -40,7 +43,7 @@ func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, er
 		return nil, err
 	}
 	defaultName = strings.TrimSpace(defaultName)
-	set := &Set{SQL: &dsql.SQLComponent{}}
+	set := &Set{SQL: &dsql.SQLComponent{}, identities: map[string]string{}}
 	defer func() {
 		if err != nil {
 			_ = set.Close()
@@ -73,6 +76,7 @@ func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, er
 			}
 			dsn = secret.Expand(dsn)
 		}
+		set.identities[config.Name] = fmt.Sprintf("%x", sha256.Sum256([]byte(config.Driver+"\x00"+dsn)))
 		db, openErr := sql.Open(config.Driver, dsn)
 		if openErr != nil {
 			return nil, fmt.Errorf("connector opening failed (driver must be linked in the executable)")
@@ -125,4 +129,21 @@ func (s *Set) Close() error {
 		result = errors.Join(result, db.Close())
 	}
 	return result
+}
+
+// CacheIdentity fingerprints resolved connection targets; it contains no DSNs.
+func (s *Set) CacheIdentity() string {
+	if s == nil {
+		return ""
+	}
+	names := make([]string, 0, len(s.identities))
+	for name := range s.identities {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, name := range names {
+		fmt.Fprintf(h, "%d:%s%s", len(name), name, s.identities[name])
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
 }

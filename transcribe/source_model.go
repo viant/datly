@@ -1,6 +1,7 @@
 package transcribe
 
 import (
+	"github.com/viant/datly/constant"
 	"os"
 	"path/filepath"
 
@@ -15,6 +16,7 @@ import (
 // Source is the transcribe-owned authored source/config model used to assemble
 // canonical components and generated package artifacts for package bootstrap.
 type Source struct {
+	Const     *constant.Values
 	Scope     string
 	Name      string
 	Path      string

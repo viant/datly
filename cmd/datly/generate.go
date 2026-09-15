@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"io"
 
 	"github.com/viant/datly/transcribe"
@@ -35,6 +36,7 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 			flags.PrintDefaults()
 		}
 	}
+	constantURL := flags.String("const", "", "instance constants YAML/JSON file")
 	directory := flags.String("dir", ".", "project root; DQL/package metadata controls artifact destinations")
 	operation := &operationValue
 	language := flags.String("lang", "go", "handler language: go or velty")
@@ -54,7 +56,18 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 		fmt.Fprintln(stderr, err)
 		return 2
 	}
-	discovery := &transcribe.Discovery{BaseDir: *directory, Include: flags.Args()}
+	instance, err := (constant.Loader{}).Load(ctx, *constantURL)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	resolvedDirectory, err := instance.Path(*directory)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	schema.Const = instance
+	discovery := &transcribe.Discovery{Const: instance, BaseDir: resolvedDirectory, Include: flags.Args()}
 	if schema.enabled {
 		discovery.Connector = schema.connector
 		discovery.ColumnRefiner = column.New(&schema)
@@ -69,7 +82,7 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 		fmt.Fprintf(stderr, "transcribe requires exactly one component in the selected source package; found %d\n", len(project.Components))
 		return 1
 	}
-	generated, err := (transcribe.Generator{Operation: *operation, Language: transcribe.HandlerTarget(*language)}).Generate(ctx, transcribe.GenerationRequest{Compiled: project.Components[0], Destination: *directory})
+	generated, err := (transcribe.Generator{Operation: *operation, Language: transcribe.HandlerTarget(*language)}).Generate(ctx, transcribe.GenerationRequest{Compiled: project.Components[0], Destination: resolvedDirectory})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

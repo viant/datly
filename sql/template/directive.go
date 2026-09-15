@@ -16,7 +16,7 @@ func protectContextVariables(source string, variables ...string) string {
 		position := offset + relative
 		next := position + 1
 		for _, variable := range variables {
-			if !isTemplateVariable(source, position, variable) {
+			if !isTemplateVariable(source, position, variable, true) {
 				continue
 			}
 			if _, end, kind := sqltext.ProtectedRangeAt(source, position); kind != "" {
@@ -60,7 +60,7 @@ func hasTemplateCode(source string, variables ...string) bool {
 			}
 		case '$':
 			for _, variable := range variables {
-				if isTemplateVariable(source, position, variable) {
+				if isTemplateVariable(source, position, variable, false) {
 					return true
 				}
 			}
@@ -69,7 +69,7 @@ func hasTemplateCode(source string, variables ...string) bool {
 	return false
 }
 
-func isTemplateVariable(source string, offset int, expected string) bool {
+func isTemplateVariable(source string, offset int, expected string, fold bool) bool {
 	i := offset + 1
 	if i < len(source) && source[i] == '!' {
 		i++
@@ -82,7 +82,7 @@ func isTemplateVariable(source string, offset int, expected string) bool {
 	for i < len(source) && isIdentifierPart(source[i]) {
 		i++
 	}
-	if source[start:i] != expected {
+	if source[start:i] != expected && (!fold || !strings.EqualFold(source[start:i], expected)) {
 		return false
 	}
 	if braced {

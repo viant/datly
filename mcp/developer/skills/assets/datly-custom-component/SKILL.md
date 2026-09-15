@@ -25,7 +25,7 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 
 ## Read what the task needs
 
-- For typed constants, identifier expansion and the substitution-file migration boundary, read [constants and substitutions](references/constants-and-substitutions.md).
+- For YAML/JSON instance constants (`-const` / `ConstURL`), typed defaults, DB-only identifier rendering and source preservation, read [constants and substitutions](references/constants-and-substitutions.md).
 
 - For project init/build and deployment, read [project-build.md](references/project-build.md). Custom builds discover/link internally; no mandatory user init/Register/import list.
 - Start with [concepts.md](references/concepts.md) for terminology, philosophy, base types, and authoring choices.

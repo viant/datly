@@ -30,7 +30,7 @@ func (c *discoveryCompilation) compilePackages(ctx context.Context, project *Pro
 		if err != nil {
 			return err
 		}
-		source := &Source{Scope: route.PackagePath, Name: pkg.ComponentName(), Path: route.SourceFile,
+		source := &Source{Const: c.discovery.Const, Scope: route.PackagePath, Name: pkg.ComponentName(), Path: route.SourceFile,
 			Connector: c.discovery.Connector, Resources: resources, Types: c.catalog, ColumnRefiner: c.discovery.ColumnRefiner}
 		result, err := (&descriptorPackageCompilation{source: source, packageSource: pkg, catalog: c.catalog}).compile(ctx)
 		if err != nil {

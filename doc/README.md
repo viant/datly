@@ -13,7 +13,7 @@ provide a runnable feature switch.
 | Run the SQLite demo and understand its contract | [Quickstart](quickstart.md) |
 | Understand the execution model and ownership | [Architecture](architecture.md) |
 | Write DQL declarations, parameters, JOIN controls and typed CASTs | [DQL syntax and grammar](dql.md) · [EBNF](dql.ebnf) |
-| Declare constants and understand substitution-file support | [Constants and substitutions](constants-and-substitutions.md) |
+| Configure instance constants and preserve authored SQL | [Constants and substitutions](constants-and-substitutions.md) |
 | Transcribe DQL, import types and preserve generated edits | [Authoring](authoring.md) |
 | Understand reader/writer hook order, sparse updates and invariants | [Hook flow diagrams](hooks.md) |
 | Build nested reads and paginated outputs | [Readers](readers.md) |

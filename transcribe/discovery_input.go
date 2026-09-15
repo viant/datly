@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/viant/bindly"
+	"github.com/viant/bindly/xform/conv"
+	"github.com/viant/datly/constant"
 	"github.com/viant/datly/spec"
 	sqltemplate "github.com/viant/datly/sql/template"
 	"github.com/viant/datly/tag"
@@ -25,6 +27,19 @@ type discoveryInputCompiler struct {
 }
 
 func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
+	var instance *constant.Values
+	if c.source != nil {
+		instance = c.source.Const
+	}
+	staged := *c
+	if instance != nil {
+		staged.component = instance.Apply(c.component)
+	}
+	c = &staged
+	constants, err := instance.For(c.component)
+	if err != nil {
+		return nil, err
+	}
 	inputType, err := c.inputType()
 	if err != nil {
 		return nil, err
@@ -68,6 +83,14 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 		if !target.CanAddr() {
 			return nil, fmt.Errorf("transcribe column: default field %s is not addressable", field.Name)
 		}
+		if strings.EqualFold(param.Source.Kind, "const") {
+			converted, convertErr := (conv.ValueConverter{}).Convert(*param.Value, target.Type())
+			if convertErr != nil {
+				return nil, fmt.Errorf("transcribe column: constant %s cannot convert to %s", param.Name, target.Type())
+			}
+			target.Set(reflect.ValueOf(converted))
+			continue
+		}
 		if err = toolbox.DefaultConverter.AssignConverted(target.Addr().Interface(), *param.Value); err != nil {
 			return nil, fmt.Errorf("transcribe column: convert default for parameter %s: %w", param.Name, err)
 		}
@@ -85,7 +108,7 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 		return nil, fmt.Errorf("transcribe column: compile input projection: %w", err)
 	}
 	resolver := sqlx.ParameterResolver(projection.Resolver(value.Addr().Interface()))
-	return &column.TemplateInput{Value: value, Variables: variables, ParameterResolver: resolver}, nil
+	return &column.TemplateInput{Const: constants, Value: value, Variables: variables, ParameterResolver: resolver}, nil
 }
 
 func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {

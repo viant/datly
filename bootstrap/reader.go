@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"fmt"
+	"github.com/viant/datly/constant"
 	"reflect"
 
 	"github.com/viant/datly/bootstrap/cacheconfig"
@@ -17,15 +18,18 @@ import (
 // CompiledReader exposes the immutable reader products needed to attach a
 // concrete reader execution without exposing the containing bootstrap artifact.
 type CompiledReader struct {
-	component  *spec.Component
-	inputType  reflect.Type
-	outputType reflect.Type
-	plan       *sqlreader.Plan
+	instanceConst *constant.Values
+	component     *spec.Component
+	inputType     reflect.Type
+	outputType    reflect.Type
+	plan          *sqlreader.Plan
 }
 
 // ReaderRuntimeConfig supplies concrete execution dependencies without
 // exposing compiled reader metadata to composition callers.
 type ReaderRuntimeConfig struct {
+	// CacheIdentity identifies concrete connector configuration without credentials.
+	CacheIdentity string
 	// Aerospike is a caller-owned native client pool, shared across compiled readers.
 	Aerospike                *aerospike.Pool
 	SQL                      *dsql.SQLComponent
@@ -41,7 +45,7 @@ func (a *Artifact) ReaderCompilation() *CompiledReader {
 		return nil
 	}
 	return &CompiledReader{
-		component: a.Component, inputType: a.inputType, outputType: a.outputType, plan: a.Reader,
+		instanceConst: a.instanceConst, component: a.Component, inputType: a.inputType, outputType: a.outputType, plan: a.Reader,
 	}
 }
 
@@ -106,7 +110,14 @@ func (c *CompiledReader) resolveCaches(config ReaderRuntimeConfig) (map[*data.Vi
 		}
 		if result[view] == nil {
 			if settings != nil && settings.Enabled {
-				service, err := (cacheconfig.Config{Settings: settings, Aerospike: config.Aerospike, Identity: c.component.Key.String() + ":" + path + ":" + view.Connector}).New()
+				accessSettings := *settings
+				settings = &accessSettings
+				var err error
+				settings.Location, err = c.instanceConst.Path(settings.Location)
+				if err != nil {
+					return err
+				}
+				service, err := (cacheconfig.Config{Settings: settings, Aerospike: config.Aerospike, Identity: c.component.Key.String() + ":" + path + ":" + view.Connector + ":" + config.CacheIdentity + ":" + c.instanceConst.Identity()}).New()
 				if err != nil {
 					return err
 				}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	gateway "github.com/viant/datly/gateway/http"
 	"github.com/viant/datly/standalone/config"
 	fixture "github.com/viant/datly/standalone/testdata/app"
 	"github.com/viant/datly/standalone/testdata/app/records"
@@ -22,6 +23,8 @@ func TestConfiguredDisabledExportRetainsNativeCapture(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.Observation = &config.Observation{OTel: &config.OTel{Enabled: false}}
+	// Client metrics require explicit opt-in independently of OTel export.
+	cfg.Metrics = &gateway.MetricsConfig{}
 	exports, err := records.Exports()
 	if err != nil {
 		t.Fatal(err)

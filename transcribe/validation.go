@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"path/filepath"
 
 	"github.com/viant/datly/transcribe/column"
@@ -13,6 +14,7 @@ import (
 // developer tooling. It reuses discovery and generation planning; it never
 // registers components or executes application code.
 type Validator struct {
+	Const      *constant.Values
 	BaseDir    string
 	ModuleDirs []string
 	Include    []string
@@ -46,12 +48,23 @@ func (v *Validator) Validate(ctx context.Context) (*ValidationReport, error) {
 	if err := ctx.Err(); err != nil {
 		return report, report.failure(err)
 	}
-	base, err := filepath.Abs(v.BaseDir)
+	directory, err := v.Const.Path(v.BaseDir)
 	if err != nil {
 		return report, report.failure(err)
 	}
-	project, err := (&Discovery{BaseDir: base, ModuleDirs: v.ModuleDirs, Include: v.Include, Exclude: v.Exclude,
-		Connector: v.Connector, ColumnRefiner: v.ColumnRefiner}).Compile(ctx)
+	base, err := filepath.Abs(directory)
+	if err != nil {
+		return report, report.failure(err)
+	}
+	moduleDirs := append([]string(nil), v.ModuleDirs...)
+	for i, path := range moduleDirs {
+		moduleDirs[i], err = v.Const.Path(path)
+		if err != nil {
+			return report, report.failure(err)
+		}
+	}
+	project, err := (&Discovery{BaseDir: base, ModuleDirs: moduleDirs, Include: v.Include, Exclude: v.Exclude,
+		Const: v.Const, Connector: v.Connector, ColumnRefiner: v.ColumnRefiner}).Compile(ctx)
 	if err != nil {
 		return report, report.failure(err)
 	}

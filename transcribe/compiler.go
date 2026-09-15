@@ -140,6 +140,18 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			return nil, err
 		}
 	}
+	if !source.Const.Empty() {
+		constantsResolver := typeResolver
+		if constantsResolver == nil {
+			constantsResolver, err = typecatalog.NewResolver(typecatalog.NewCatalog(), typecatalog.TranscribeAuthority, compiledTypeContext)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if err = source.Const.Validate(component, constantsResolver.Type); err != nil {
+			return nil, err
+		}
+	}
 	readPlan, err := (&readPlanCompiler{sourceMap: sourceMap, path: source.Path, types: typeResolver}).compile(component, prepared)
 	if err != nil {
 		return nil, err

@@ -39,7 +39,7 @@ func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.
 	if input == nil || output == nil || input.Kind() != reflect.Struct || output.Kind() != reflect.Struct {
 		return bootstrap.ArtifactInput{}, fmt.Errorf("component %s input/output contracts must be linked structs", compiled.Component.Key.String())
 	}
-	return bootstrap.ArtifactInput{Component: compiled.Component, Types: compiled.Source.Types, InputType: input, OutputType: output, Resources: compiled.Source.Resources, CodecFactory: c.source.codecs}, nil
+	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: compiled.Component, Types: compiled.Source.Types, InputType: input, OutputType: output, Resources: compiled.Source.Resources, CodecFactory: c.source.codecs}, nil
 }
 
 func (c *sourceComponent) Configure(ctx context.Context, artifact *report.ComponentArtifact) (report.RuntimeCapabilities, error) {
@@ -52,7 +52,7 @@ func (c *sourceComponent) Configure(ctx context.Context, artifact *report.Compon
 		result.Providers = append(result.Providers, views)
 	}
 	if reader := artifact.ReaderCompilation(); reader != nil {
-		result.Reader, err = reader.NewExecution(bootstrap.ReaderRuntimeConfig{SQL: c.source.connections.SQL, Aerospike: &c.source.caches})
+		result.Reader, err = reader.NewExecution(bootstrap.ReaderRuntimeConfig{CacheIdentity: c.source.connections.CacheIdentity(), SQL: c.source.connections.SQL, Aerospike: &c.source.caches})
 		if err != nil {
 			return result, err
 		}

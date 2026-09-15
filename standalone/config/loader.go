@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"io"
 	"net/url"
 	"os"
@@ -20,7 +21,9 @@ import (
 )
 
 type Loader struct {
-	FS afs.Service
+	// ConstURL overrides the config file selection; its relative path is process-relative.
+	ConstURL string
+	FS       afs.Service
 	// StaticLocalRoot grants an independently selected, caller-owned authority for
 	// local ContentURL paths. Such paths stay relative to this handle, not the
 	// config file. The caller keeps it open for the server's reload lifetime.
@@ -57,42 +60,21 @@ func (l Loader) Load(ctx context.Context, location string) (*Config, error) {
 	if !strings.Contains(location, "://") {
 		base = filepath.Dir(location)
 	}
-	for _, value := range []*string{&c.RouteURL, &c.PluginsURL, &c.DependencyURL, &c.JobURL, &c.FailedJobURL} {
-		if *value != "" && afsurl.IsRelative(*value) {
-			*value = afsurl.Join(base, *value)
-		}
+	constantURL := c.ConstURL
+	if constantURL != "" && afsurl.IsRelative(constantURL) {
+		constantURL = afsurl.Join(base, constantURL)
 	}
-	if c.Jobs != nil && c.Jobs.Notification.Destination != "" && afsurl.IsRelative(c.Jobs.Notification.Destination) {
-		c.Jobs.Notification.Destination = afsurl.Join(base, c.Jobs.Notification.Destination)
+	if l.ConstURL != "" {
+		constantURL = l.ConstURL
 	}
-	if c.ContentURL != "" {
-		c.ContentURL = l.staticURL(base, c.ContentURL)
+	var constErr error
+	c.Const, constErr = (constant.Loader{FS: l.FS}).Load(ctx, constantURL)
+	if constErr != nil {
+		return nil, constErr
 	}
-	if c.ContentURL == "" {
-		for _, content := range c.StaticContent {
-			if content != nil && content.ContentURL != "" && afsurl.IsRelative(content.ContentURL) {
-				content.ContentURL = l.staticURL(base, content.ContentURL)
-			}
-		}
-	}
-	if c.BaseDir == "" {
-		c.BaseDir = base
-	} else if afsurl.IsRelative(c.BaseDir) {
-		c.BaseDir = afsurl.Join(base, c.BaseDir)
-	}
-	if strings.HasPrefix(c.BaseDir, "file://") {
-		parsed, err := url.Parse(c.BaseDir)
-		if err != nil || parsed.Host != "" && parsed.Host != "localhost" || parsed.RawQuery != "" || parsed.Fragment != "" {
-			return nil, fmt.Errorf("invalid local BaseDir URL")
-		}
-		c.BaseDir = parsed.Path
-	}
-	if strings.Contains(c.BaseDir, "://") {
-		return nil, fmt.Errorf("BaseDir must identify a local authored module")
-	}
-	for i, dir := range c.ModuleDirs {
-		if !filepath.IsAbs(dir) {
-			c.ModuleDirs[i] = filepath.Join(c.BaseDir, dir)
+	if c.Const == nil {
+		if err := l.normalize(c); err != nil {
+			return nil, err
 		}
 	}
 	if c.Info != nil {
@@ -102,19 +84,15 @@ func (l Loader) Load(ctx context.Context, location string) (*Config, error) {
 		c.OpenAPI = &gateway.OpenAPIConfig{Info: *c.Info}
 	}
 	if c.DependencyURL != "" {
-		connectors, err := l.dependencies(ctx, c.DependencyURL)
+		access, err := c.ResolveConstants()
+		if err != nil {
+			return nil, err
+		}
+		connectors, err := l.dependencies(ctx, access.DependencyURL)
 		if err != nil {
 			return nil, err
 		}
 		c.Connectors = append(c.Connectors, connectors...)
-	}
-	if c.OpenAPI != nil {
-		for i := range c.OpenAPI.StartupExports {
-			export := &c.OpenAPI.StartupExports[i]
-			if export.URL != "" && afsurl.IsRelative(export.URL) {
-				export.URL = afsurl.Join(base, export.URL)
-			}
-		}
 	}
 	return c, nil
 }
@@ -211,4 +189,60 @@ func (l Loader) staticURL(base, location string) string {
 		return strings.TrimRight(base, "/") + "/" + location
 	}
 	return afsurl.Join(base, location)
+}
+
+// normalize applies existing URL/base-directory policy to access arguments.
+// Expansion callers invoke this only on a detached, already-expanded config.
+func (l Loader) normalize(c *Config) error {
+	base, _ := afsurl.Split(c.URL, "file")
+	if !strings.Contains(c.URL, "://") {
+		base = filepath.Dir(c.URL)
+	}
+	for _, value := range []*string{&c.RouteURL, &c.PluginsURL, &c.DependencyURL, &c.JobURL, &c.FailedJobURL} {
+		if *value != "" && afsurl.IsRelative(*value) {
+			*value = afsurl.Join(base, *value)
+		}
+	}
+	if c.Jobs != nil && c.Jobs.Notification.Destination != "" && afsurl.IsRelative(c.Jobs.Notification.Destination) {
+		c.Jobs.Notification.Destination = afsurl.Join(base, c.Jobs.Notification.Destination)
+	}
+	if c.ContentURL != "" {
+		c.ContentURL = l.staticURL(base, c.ContentURL)
+	}
+	if c.ContentURL == "" {
+		for _, content := range c.StaticContent {
+			if content != nil && content.ContentURL != "" && afsurl.IsRelative(content.ContentURL) {
+				content.ContentURL = l.staticURL(base, content.ContentURL)
+			}
+		}
+	}
+	if c.BaseDir == "" {
+		c.BaseDir = base
+	} else if afsurl.IsRelative(c.BaseDir) {
+		c.BaseDir = afsurl.Join(base, c.BaseDir)
+	}
+	if strings.HasPrefix(c.BaseDir, "file://") {
+		parsed, err := url.Parse(c.BaseDir)
+		if err != nil || parsed.Host != "" && parsed.Host != "localhost" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return fmt.Errorf("invalid local BaseDir URL")
+		}
+		c.BaseDir = parsed.Path
+	}
+	if strings.Contains(c.BaseDir, "://") {
+		return fmt.Errorf("BaseDir must identify a local authored module")
+	}
+	for i, dir := range c.ModuleDirs {
+		if !filepath.IsAbs(dir) {
+			c.ModuleDirs[i] = filepath.Join(c.BaseDir, dir)
+		}
+	}
+	if c.OpenAPI != nil {
+		for i := range c.OpenAPI.StartupExports {
+			export := &c.OpenAPI.StartupExports[i]
+			if export.URL != "" && afsurl.IsRelative(export.URL) {
+				export.URL = afsurl.Join(base, export.URL)
+			}
+		}
+	}
+	return nil
 }

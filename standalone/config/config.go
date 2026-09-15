@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/viant/datly/constant"
 	"net"
 	"strconv"
 	"time"
@@ -16,6 +17,9 @@ import (
 )
 
 type Config struct {
+	// ConstURL identifies one trusted flat YAML/JSON instance constant mapping.
+	ConstURL string
+	Const    *constant.Values `json:"-"`
 	gateway.Config
 	URL         string `json:"-"`
 	Version     string

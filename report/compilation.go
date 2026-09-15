@@ -142,7 +142,7 @@ func (c *ProjectCompiler) CompileArtifacts(inputs []bootstrap.ArtifactInput) (*C
 			return nil, fmt.Errorf("report source input is unavailable for %s", derived.Plan.Target().Component.String())
 		}
 		artifact, buildErr := builder.Build(bootstrap.ArtifactInput{
-			Component: derived.Component, InputType: derived.InputType, OutputType: derived.OutputType, HandlerOwnedOutput: true,
+			Const: sourceInput.Const, Component: derived.Component, InputType: derived.InputType, OutputType: derived.OutputType, HandlerOwnedOutput: true,
 			CodecFactory: sourceInput.CodecFactory, Types: types, Resources: sourceInput.Resources,
 		})
 		if buildErr != nil {

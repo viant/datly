@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"os"
 	"path/filepath"
 	"sort"
@@ -29,6 +30,7 @@ var sourceFileExtensions = map[string]bool{
 // package patterns into one canonical project. It is the local-filesystem
 // frontend corresponding to the original transcribe command's source loop.
 type Discovery struct {
+	Const *constant.Values
 	// Workspace fixes source selection to a Go build when supplied.
 	Workspace     *xmodule.Workspace
 	BaseDir       string
@@ -161,6 +163,7 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		return nil, err
 	}
 	source := &Source{
+		Const:         c.discovery.Const,
 		Scope:         file.ImportPath,
 		Name:          strings.TrimSuffix(filepath.Base(file.Path), filepath.Ext(file.Path)),
 		Path:          file.Path,

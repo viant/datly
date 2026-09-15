@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"github.com/viant/datly/constant"
 	"io/fs"
 	"reflect"
 	"sort"
@@ -24,6 +25,7 @@ import (
 )
 
 type Input struct {
+	Const           *constant.Values
 	CodecFactory    xcodec.Factory
 	Component       *spec.Component
 	InputType       reflect.Type
@@ -45,6 +47,12 @@ type planCompiler struct {
 }
 
 func (b *planCompiler) Compile() (*sqlreader.Plan, error) {
+	constants, err := b.input.Const.For(b.input.Component)
+	if err != nil {
+		return nil, err
+	}
+	b.input.Const = constants
+	b.input.Resources = constants.Resources(b.input.Resources)
 	directViewField := strings.TrimSpace(b.input.DirectViewField)
 	if directViewField == "" && b.input.DirectViewType == nil {
 		typ := (xshape.Runtime{}).Indirect(b.input.OutputType)
@@ -146,6 +154,7 @@ func (b *planCompiler) compileSQLPrograms(root *data.View, bindings []bindly.Bin
 		visited[view] = true
 		if view.Spec.Source != nil {
 			evaluator, err := (sqltemplate.Compiler{
+				Const:            b.input.Const,
 				Source:           view.Spec.Source.SQL,
 				InputType:        b.input.InputType,
 				Variables:        variables,

@@ -6,6 +6,7 @@ package template
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"reflect"
 	"strings"
 
@@ -19,6 +20,7 @@ import (
 )
 
 const (
+	constantVariable = "SQLInstanceConstants"
 	unsafeVariable   = "Unsafe"
 	bindingVariable  = "SQLBindings"
 	viewVariable     = "View"
@@ -57,6 +59,8 @@ type Variable struct {
 
 // Compiler compiles one SQL source against its canonical input type.
 type Compiler struct {
+	// Const is immutable trusted deployment data, never invocation input.
+	Const            *constant.Values
 	Source           string
 	InputType        reflect.Type
 	Variables        []Variable
@@ -65,11 +69,13 @@ type Compiler struct {
 }
 
 type compiled struct {
-	exec      *est.Execution
-	newState  func() *est.State
-	inputType reflect.Type
-	variables []variableBinding
-	predicate dexec.PredicateEvaluator
+	constants       *constantBindings
+	allowEmptyInput bool
+	exec            *est.Execution
+	newState        func() *est.State
+	inputType       reflect.Type
+	variables       []variableBinding
+	predicate       dexec.PredicateEvaluator
 }
 
 type variableBinding struct {
@@ -84,7 +90,16 @@ type variableBinding struct {
 // Compile returns nil for plain SQL and a reusable evaluator when the parsed
 // source contains executable Velty control flow or SQL context calls.
 func (c Compiler) Compile() (Evaluator, error) {
-	source := protectContextVariables(c.Source, dexec.PredicateVariable, viewVariable, unsafeVariable, criteriaVariable)
+	source, constants, err := c.constantSource()
+	if err != nil {
+		return nil, err
+	}
+	protected := []string{dexec.PredicateVariable, viewVariable, unsafeVariable, criteriaVariable}
+	for _, v := range c.Variables {
+		protected = append(protected, v.Name)
+	}
+	protected = append(protected, c.Const.Names()...)
+	source = protectContextVariables(source, protected...)
 	source, _ = sqlmacro.PrepareNonWindowSQLTemplate(source, c.NonWindowAliases...)
 	templateVariables := []string{dexec.PredicateVariable, viewVariable, unsafeVariable, criteriaVariable}
 	for _, variable := range c.Variables {
@@ -92,7 +107,7 @@ func (c Compiler) Compile() (Evaluator, error) {
 			templateVariables = append(templateVariables, name)
 		}
 	}
-	if !hasTemplateCode(source, templateVariables...) {
+	if constants == nil && !hasTemplateCode(source, templateVariables...) {
 		return nil, nil
 	}
 	root, spans, err := veltyparser.ParseWithSpansDetailed([]byte(source))
@@ -110,17 +125,26 @@ func (c Compiler) Compile() (Evaluator, error) {
 			break
 		}
 	}
-	if !hasControlFlow(root) && !predicateUsed && !viewUsed && !unsafeUsed && !criteriaUsed && !declaredVariableUsed {
+	if constants == nil && !hasControlFlow(root) && !predicateUsed && !viewUsed && !unsafeUsed && !criteriaUsed && !declaredVariableUsed {
 		return nil, nil
 	}
 	if predicateUsed && c.Predicate == nil {
 		return nil, fmt.Errorf("SQL template uses $%s without a compiled predicate program", dexec.PredicateVariable)
 	}
 	inputType := dereferenceType(c.InputType)
+	allowEmptyInput := inputType == nil && constants != nil && !hasControlFlow(root) && !predicateUsed && !viewUsed && !unsafeUsed && !criteriaUsed && !declaredVariableUsed
+	if allowEmptyInput {
+		inputType = reflect.TypeFor[struct{}]()
+	}
 	if inputType == nil || inputType.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("SQL template input must be a struct, got %v", c.InputType)
 	}
 	planner := velty.New(velty.BufferSize(len(source) + 128))
+	if constants != nil {
+		if err := planner.DefineVariable(constantVariable, &constantBindings{}); err != nil {
+			return nil, fmt.Errorf("define SQL constant slots: %w", err)
+		}
+	}
 	if err := planner.DefineVariable(unsafeVariable, reflect.New(inputType).Interface()); err != nil {
 		return nil, fmt.Errorf("define $%s SQL template input: %w", unsafeVariable, err)
 	}
@@ -158,7 +182,7 @@ func (c Compiler) Compile() (Evaluator, error) {
 	if predicateUsed {
 		predicateProgram = c.Predicate
 	}
-	return &compiled{
+	return &compiled{constants: constants, allowEmptyInput: allowEmptyInput,
 		exec:      exec,
 		newState:  newState,
 		inputType: inputType,
@@ -168,7 +192,7 @@ func (c Compiler) Compile() (Evaluator, error) {
 }
 
 func (c Compiler) defineVariables(planner *velty.Planner, inputType reflect.Type) ([]variableBinding, error) {
-	seen := map[string]bool{unsafeVariable: true, bindingVariable: true, viewVariable: true, criteriaVariable: true, dexec.PredicateVariable: true}
+	seen := map[string]bool{constantVariable: true, unsafeVariable: true, bindingVariable: true, viewVariable: true, criteriaVariable: true, dexec.PredicateVariable: true}
 	variables := make([]Variable, 0, inputType.NumField()+len(c.Variables))
 	for i := 0; i < inputType.NumField(); i++ {
 		field := inputType.Field(i)
@@ -226,6 +250,11 @@ func (c *compiled) Evaluate(ctx context.Context, invocation Invocation) (Result,
 	}
 	state := c.newState()
 	state.SetContext(ctx)
+	if c.constants != nil {
+		if err := state.SetValue(constantVariable, c.constants); err != nil {
+			return Result{}, fmt.Errorf("set SQL constant slots: %w", err)
+		}
+	}
 	if err := state.SetValue(unsafeVariable, inputPtr.Interface()); err != nil {
 		return Result{}, fmt.Errorf("set $%s SQL template input: %w", unsafeVariable, err)
 	}
@@ -315,6 +344,9 @@ func typedVariableValue(name string, target reflect.Type, actual any) (reflect.V
 }
 
 func (c *compiled) input(value reflect.Value) (reflect.Value, reflect.Value, error) {
+	if !value.IsValid() && c.allowEmptyInput {
+		value = reflect.ValueOf(struct{}{})
+	}
 	for value.IsValid() && value.Kind() == reflect.Interface {
 		if value.IsNil() {
 			return reflect.Value{}, reflect.Value{}, fmt.Errorf("SQL template input is nil")

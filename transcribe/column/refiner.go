@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"io/fs"
 	"reflect"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	dsql "github.com/viant/datly/sql"
 	sqltemplate "github.com/viant/datly/sql/template"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
@@ -45,6 +47,7 @@ type Refiner struct {
 // TemplateInput is the compile-time contract used to evaluate parameterized
 // SQL before SQLX column discovery. It contains no request or runtime session.
 type TemplateInput struct {
+	Const             *constant.Values
 	Value             reflect.Value
 	Variables         []sqltemplate.Variable
 	ParameterResolver sqlx.ParameterResolver
@@ -80,6 +83,19 @@ func (r *Refiner) RefineRoot(ctx context.Context, component *spec.Component, res
 	if component.Settings != nil {
 		connector = strings.TrimSpace(component.Settings.DefaultConnector)
 	}
+	staged := TemplateInput{}
+	if input != nil {
+		staged = *input
+	}
+	var err error
+	staged.Const, err = staged.Const.For(component)
+	if err != nil {
+		return err
+	}
+	if !staged.Value.IsValid() && !staged.Const.Empty() {
+		staged.Value = reflect.ValueOf(struct{}{})
+	}
+	input = &staged
 	visited := map[*spec.View]bool{}
 	return r.refineView(ctx, component, component.RootView, connector, resources, input, nil, nil, visited)
 }
@@ -96,6 +112,19 @@ func (r *Refiner) RefineViews(ctx context.Context, component *spec.Component, re
 	if component.Settings != nil {
 		connector = strings.TrimSpace(component.Settings.DefaultConnector)
 	}
+	staged := TemplateInput{}
+	if input != nil {
+		staged = *input
+	}
+	var err error
+	staged.Const, err = staged.Const.For(component)
+	if err != nil {
+		return err
+	}
+	if !staged.Value.IsValid() && !staged.Const.Empty() {
+		staged.Value = reflect.ValueOf(struct{}{})
+	}
+	input = &staged
 	visited := map[*spec.View]bool{}
 	for _, view := range component.Views {
 		if err := r.refineView(ctx, component, view, connector, resources, input, nil, nil, visited); err != nil {
@@ -142,14 +171,31 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 		return nil, err
 	}
 	source := view.Source.Clone()
+	if input != nil {
+		resources = input.Const.Resources(resources)
+	}
 	if err := dsql.ResolveSource(view.Name, source, resources); err != nil {
 		return nil, err
 	}
+	authoredSource := source.Clone()
 	if strings.TrimSpace(source.SQL) == "" && strings.TrimSpace(source.Table) == "" {
 		return &expandedQuery{}, nil
 	}
 	if strings.TrimSpace(connector) == "" {
 		return nil, fmt.Errorf("connector is required")
+	}
+	if input != nil {
+		names := append([]string(nil), parentAliases...)
+		for _, variable := range input.Variables {
+			names = append(names, variable.Name)
+		}
+		renderer := sqltemplate.ConstantRenderer{Values: input.Const, Variables: names}
+		if err := renderer.Validate(source.SQL); err != nil {
+			return nil, err
+		}
+		if err := renderer.Validate("SELECT * FROM " + source.Table); err != nil {
+			return nil, err
+		}
 	}
 	db, err := r.resolver.ResolveDB(ctx, connector)
 	if err != nil {
@@ -158,13 +204,9 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	if db == nil {
 		return nil, fmt.Errorf("connector %q returned a nil DB", connector)
 	}
-	var constraints map[string]tableConstraint
-	if table := strings.TrimSpace(source.Table); table != "" {
-		constraints, err = loadTableConstraints(ctx, db, table)
+	if input != nil {
+		source.Table, err = (sqltemplate.ConstantRenderer{Values: input.Const}).Identifier(source.Table)
 		if err != nil {
-			return nil, err
-		}
-		if err := retainNamedIdentity(view, source, constraints); err != nil {
 			return nil, err
 		}
 	}
@@ -177,6 +219,36 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 		return nil, err
 	}
 	source.SQL = evaluated.SQL
+	// Metadata reads follow the table actually selected by the evaluated query.
+	// This also handles existing $Unsafe table constants without reversing or
+	// overwriting their authored SQL or canonical table metadata.
+	if source.Table != "" {
+		if parsed, parseErr := sqlparser.ParseQuery(evaluated.SQL); parseErr == nil && parsed != nil && len(parsed.WithSelects) == 0 && parsed.Union == nil {
+			if table, _, tableErr := sqlparser.SourceTable(parsed.From.X); tableErr == nil && table != "" {
+				source.Table = table
+			}
+		}
+	}
+	var constraints map[string]tableConstraint
+	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
+		constraints, err = loadTableConstraints(ctx, db, table)
+		if err != nil {
+			return nil, err
+		}
+		beforeIdentity := authoredSource.SQL
+		if err := retainNamedIdentity(view, authoredSource, constraints); err != nil {
+			return nil, err
+		}
+		if authoredSource.SQL != beforeIdentity {
+			// Identity augmentation owns authored SQL. Re-evaluate its changed copy;
+			// never feed expanded SQL back into the source-persistence owner.
+			evaluated, err = evaluateSource(ctx, authoredSource, dialect, input, parent, parentAliases)
+			if err != nil {
+				return nil, err
+			}
+			source.SQL = evaluated.SQL
+		}
+	}
 	query, err := discoveryQuery(source)
 	if err != nil {
 		return nil, err
@@ -209,7 +281,7 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 		view.Source.SQL = resolvedSQL
 	}
 	view.Columns = mergeColumns(view.Columns, columns)
-	if table := strings.TrimSpace(source.Table); table != "" {
+	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
 		lineage, err := directProjectionLineage(source)
 		if err != nil {
 			return nil, err
@@ -250,6 +322,12 @@ func evaluateSource(ctx context.Context, source *spec.ViewSource, dialect *info.
 		inputType = inputType.Elem()
 	}
 	program, err := (sqltemplate.Compiler{
+		Const: func() *constant.Values {
+			if input != nil {
+				return input.Const
+			}
+			return nil
+		}(),
 		Source: sqlText, InputType: inputType, Variables: variables,
 		NonWindowAliases: parentAliases, Predicate: predicate,
 	}).Compile()

@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"github.com/viant/datly/constant"
 	documentation "github.com/viant/datly/documentation"
 	xdocs "github.com/viant/xdatly/docs"
 	"reflect"
@@ -24,6 +25,7 @@ import (
 // ArtifactInput is resolved bootstrap input. Authored DQL parsing belongs to
 // transcribe; this stage only compiles runtime plans from spec and Go types.
 type ArtifactInput struct {
+	Const         *constant.Values
 	Documentation xdocs.Source
 	Component     *spec.Component
 	InputType     reflect.Type
@@ -42,6 +44,7 @@ type ArtifactInput struct {
 // Artifact is bootstrap's compiled output before runtime registration binds a
 // concrete SQL reader execution to its connections and caches.
 type Artifact struct {
+	instanceConst    *constant.Values
 	Documentation    *documentation.Snapshot
 	Handler          rhandler.TypedHandler
 	Component        *spec.Component
@@ -69,6 +72,12 @@ type artifactCompiler struct {
 
 func (c *artifactCompiler) compile() (*Artifact, error) {
 	input := c.input
+	if input.Const != nil {
+		if _, err := input.Const.For(input.Component); err != nil {
+			return nil, err
+		}
+		input.Component = input.Const.Apply(input.Component)
+	}
 	outputDescriptor := linkedContractType(input.OutputType)
 	if input.HandlerOwnedOutput {
 		outputDescriptor = nil
@@ -77,6 +86,9 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 		Component: input.Component, InputType: linkedContractType(input.InputType), OutputType: outputDescriptor,
 	}).Resolve()
 	if err != nil {
+		return nil, err
+	}
+	if err = input.Const.Validate(component, c.lookupType); err != nil {
 		return nil, err
 	}
 	if err = c.compileOutputColumns(component); err != nil {
@@ -93,10 +105,14 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 		return nil, err
 	}
 	input.Component = component
+	effective, err := input.Const.For(component)
+	if err != nil {
+		return nil, err
+	}
 	factory := newCodecFactory(input.CodecFactory)
 	compiledInput, err := handlercompiler.New(handlercompiler.Input{
 		Component: input.Component, InputType: input.InputType,
-		CodecFactory: factory, Resources: input.Resources, TypeLookup: c.lookupType,
+		CodecFactory: factory, Resources: effective.Resources(input.Resources), TypeLookup: c.lookupType,
 	}).Compile()
 	if err != nil {
 		return nil, err
@@ -115,7 +131,7 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 			Component:    input.Component, InputType: input.InputType, OutputType: input.OutputType,
 			Bindings:  compiledInput.Bindings,
 			Predicate: predicate, TypeLookup: c.lookupType,
-			DirectViewField: input.DirectViewField, Resources: input.Resources,
+			Const: input.Const, DirectViewField: input.DirectViewField, Resources: input.Resources,
 		})
 		if err != nil {
 			return nil, err
@@ -125,7 +141,7 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 			Component:    input.Component, InputType: input.InputType, OutputType: input.OutputType,
 			Bindings:  compiledInput.Bindings,
 			Predicate: predicate, TypeLookup: c.lookupType,
-			Resources: input.Resources,
+			Const: input.Const, Resources: input.Resources,
 		})
 		if err != nil {
 			return nil, err
@@ -147,7 +163,7 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Artifact{Documentation: docs,
+	return &Artifact{instanceConst: input.Const, Documentation: docs,
 		Component: component, Input: compiledInput.Input.WithDocumentation(docs),
 		Output: outputContract,
 		Reader: readerPlan, ViewDependencies: viewDependencies,
