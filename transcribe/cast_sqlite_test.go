@@ -43,7 +43,8 @@ func TestCASTImportedRichShapeSQLite(t *testing.T) {
 			const pkg = "github.com/viant/datly/internal/testfixture/castmodel"
 			text := `#import('domain','` + pkg + `')
 #setting($_ = $route('/records','GET'))
-SELECT r.*, CAST(r.bounds AS domain.Bounds), tag(r.bounds,'sqlx:"-"'), tag(r.unit,'internal:"true"'), tag(r.cap,'internal:"true"'), CAST(r.labels AS '[]string'), tag(r.labels,'sqlx:"labels,enc=JSON"') FROM records r`
+SELECT r.*, CAST(r.bounds AS domain.Bounds), tag(r.bounds,'sqlx:"-"'), tag(r.unit,'internal:"true"'), tag(r.cap,'internal:"true"'), CAST(r.labels AS '[]string'), tag(r.labels,'sqlx:"labels,enc=JSON"')
+FROM (SELECT id, unit, cap, labels, '' AS bounds FROM records) r`
 			compiled, err := NewCompiler().Compile(ctx, &Source{Name: "Records", Scope: "example.com/app/records", Connector: "main", Types: catalog, ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": h.DB}), Text: text})
 			if err != nil {
 				t.Fatal(err)

@@ -211,6 +211,12 @@ SELECT r.* EXCEPT INTERNAL_NOTE is Datly visibility syntax. Internal backing dat
 
 ## Rich CAST, pseudo fields and tag customization
 
+An inner Datly view can contain CTEs, nested queries and database-specific
+expressions. Its result-column metadata comes from the database driver and may
+be less precise than table metadata. Keep that SQL intact. Outer DQL CASTs supply
+explicit Go type authority where inference is insufficient; accepting a typed
+result must not depend on reconstructing its base-table expression.
+
 Typed projection and tag annotations:
 
 ~~~~sql
@@ -222,7 +228,22 @@ tag(r.BOUND_UNIT, 'internal:"true"')
 tag(r.name, 'validate:"required"')
 ~~~~
 
-Declare the pseudo projection explicitly through the view/shape contract (for example a logical NULL projection with non-DML mapping). CAST provides rich type authority; it does not make every physical JSON/custom-cast column transient.
+Expose a pseudo column in the inner SQL and apply its Go shape in the outer DQL:
+
+~~~~sql
+#import('model', 'example.com/app/model')
+SELECT orders.*,
+       CAST(orders.pseudo_column AS model.GoShape),
+       tag(orders.pseudo_column, 'sqlx:"-"')
+FROM (
+    SELECT o.*, '' AS pseudo_column FROM ORDERS o
+) orders
+~~~~
+
+The inner query remains valid database SQL. The outer CAST declares the Go field
+shape; it does not ask the database to cast a string to a Go struct. Here the
+`sqlx:"-"` tag makes the hook-populated field nonphysical. A physical column using
+a custom Go shape instead retains its mapping and appropriate codec.
 
 The application shorthand tag(r.name,'validate:required') expresses the same validation annotation; generated Go tags must be valid validate:"required". Prefer quoted Go-tag spelling in examples. Explicit tags refine the corresponding metadata without deleting unrelated json/sqlx tags.
 
