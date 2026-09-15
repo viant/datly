@@ -84,8 +84,8 @@ fields where their wire representation is known, without invoking user codecs.
 Sequencer dialect/concurrency corrections and generated delete-marker/token-validation
 policies are integrated in the release candidate. MySQL retains the unchanged original
 transient-transaction mechanism by default; the table-based allocator is an explicit
-option. The published SQLX sequencing dependency is pinned; xdatly publication and
-final verification against that published SDK remain release gates.
+option. The published SQLX sequencing and xdatly mutation-contract dependencies
+are pinned, and focused generated/runtime verification passes against both.
 
 ## Numeric sequencing
 
