@@ -15,18 +15,19 @@ generate a combined reader/writer component in one struct.
 1. [Choose the writer product](#choose-the-writer-product)
 2. [Describe the writable graph](#describe-the-writable-graph)
 3. [CLI generation and generated code](#cli-generation-and-generated-code)
-4. [Understand the complete lifecycle](#understand-the-complete-lifecycle)
-5. [Separate the four kinds of state](#separate-the-four-kinds-of-state)
-6. [Use Has markers for sparse requests](#use-has-markers-for-sparse-requests)
-7. [Understand SyncPresence](#understand-syncpresence)
-8. [Backfill invariant groups](#backfill-invariant-groups)
-9. [Customize the writing hooks](#customize-the-writing-hooks)
-10. [Inject services and publish messages](#inject-services-and-publish-messages)
-11. [Control errors](#control-errors)
-12. [Shape custom output](#shape-custom-output)
-13. [Understand finalizer selection](#understand-finalizer-selection)
-14. [Sequence IDs and reconcile foreign keys](#sequence-ids-and-reconcile-foreign-keys)
-15. [Regenerate and test](#regenerate-and-test)
+4. [Walkthrough: transcribe, then add application logic](#walkthrough-transcribe-then-add-application-logic)
+5. [Understand the complete lifecycle](#understand-the-complete-lifecycle)
+6. [Separate the four kinds of state](#separate-the-four-kinds-of-state)
+7. [Use Has markers for sparse requests](#use-has-markers-for-sparse-requests)
+8. [Understand SyncPresence](#understand-syncpresence)
+9. [Backfill invariant groups](#backfill-invariant-groups)
+10. [Customize the writing hooks](#customize-the-writing-hooks)
+11. [Inject services and publish messages](#inject-services-and-publish-messages)
+12. [Control errors](#control-errors)
+13. [Shape custom output](#shape-custom-output)
+14. [Understand finalizer selection](#understand-finalizer-selection)
+15. [Sequence IDs and reconcile foreign keys](#sequence-ids-and-reconcile-foreign-keys)
+16. [Regenerate and test](#regenerate-and-test)
 
 ## Choose the writer product
 
@@ -73,11 +74,11 @@ Body contracts, key projections and Current-state declarations belong to the
 
 ```sql
 #package('example.com/shop/orders/write')
-#import('hooks', 'example.com/shop/hooks')
 #setting($_ = $route('/orders', 'PATCH'))
 #setting($_ = $connector('main'))
 SELECT orders.*, items.*, kind.*,
-       entity_hooks(orders, 'hooks.OrderLifecycle'),
+       type(orders, 'Order'),
+       type(items, 'Item'),
        invariant(orders.WINDOW_START, 'DeliveryWindow'),
        invariant(orders.WINDOW_END, 'DeliveryWindow')
 FROM (
@@ -169,6 +170,126 @@ Exact file/type names come from the plan and authored naming settings. Edit the
 create-once hook file rather than modifying private generated capture, matching
 or DML code. Build and link the emitted package before publishing a runtime
 generation. The generation step itself does not execute the business mutation.
+
+## Walkthrough: transcribe, then add application logic
+
+### 1. Save the graph
+
+In an existing Datly project with Go module `example.com/shop` and its runtime
+dependencies configured, save the DQL above as
+`source/Orders.dql`. `#package('example.com/shop/orders/write')` selects the generated
+package. The outer `type` annotations name the mutable shapes `Order` and `Item`,
+so their default lifecycle structs are `OrderLifecycle` and `ItemLifecycle`.
+No lifecycle import is needed to request these default placeholders.
+
+The example assumes the three database tables above and date/time columns for
+WINDOW_START and WINDOW_END. Run the shown `datly gen -op patch` command from a
+build containing the high-level generator. Generation inspects the schema and
+produces source; it does not execute the application's mutations.
+
+### 2. Inspect what transcription produced
+
+For this example, the generated files are under `orders/write/`:
+
+| File | Purpose |
+| --- | --- |
+| `orders.go` | Typed views, relation holders and internal Has markers. |
+| `orders_input.go`, `orders_output.go` | The generated request and response contracts. |
+| `orders_hooks.go` | Create-once application lifecycle placeholders: edit this file. |
+| `orders_entities_gen.go` | Setters, presence synchronization and invariant helpers. |
+| `orders_mutation_gen.go` and `NewOrdersHandler_*_gen.go` | Generated orchestration, capture, Previous matching, validation and queued actions. |
+| `orders_router.go`, `orders_link_gen.go`, `orders_resources.go`, `datly_sql/` | Component registration, linked types and embedded SQL resources. |
+
+The generator derives the needed current-state reads and key projections.
+Auxiliary `kind` remains available as data, but receives no mutation lifecycle
+scaffold or INSERT/UPDATE actions.
+
+### 3. Open the lifecycle placeholders
+
+`orders_hooks.go` contains the following root methods, plus the child lifecycle.
+Each generated body initially contains only `return nil`:
+
+```go
+type OrderLifecycle struct{}
+
+func (hooks *OrderLifecycle) Init(ctx context.Context, entity *Order,
+    state xhandler.EntityState[Order, xhandler.NoParent]) error {
+    return nil
+}
+
+func (hooks *OrderLifecycle) Validate(ctx context.Context, entity *Order,
+    state xhandler.EntityState[Order, xhandler.NoParent]) error {
+    return nil
+}
+
+func (hooks *OrderLifecycle) AfterSequence(ctx context.Context, entity *Order,
+    state xhandler.EntityState[Order, xhandler.NoParent]) error {
+    return nil
+}
+
+func (hooks *OrderLifecycle) AfterQueue(ctx context.Context, entity *Order,
+    state xhandler.EntityState[Order, xhandler.NoParent]) error {
+    return nil
+}
+
+func (hooks *OrderLifecycle) Finalize(ctx context.Context, input *OrdersInput,
+    output *OrdersOutput, outcome xhandler.Outcome) error {
+    return nil
+}
+```
+
+Here `xhandler` imports `github.com/viant/xdatly/handler`. Child methods use
+`EntityState[Item, Order]`, so they have a typed parent. Keep methods you do not
+need as no-ops.
+
+### 4. Replace a placeholder with a business rule
+
+Add `fmt` to the file's imports and replace the existing `Validate` body with:
+
+```go
+func (hooks *OrderLifecycle) Validate(ctx context.Context, entity *Order,
+    state xhandler.EntityState[Order, xhandler.NoParent]) error {
+    if entity.WindowStart != nil && entity.WindowEnd != nil &&
+        entity.WindowStart.After(*entity.WindowEnd) {
+        return fmt.Errorf("start must not exceed end")
+    }
+    return nil
+}
+```
+
+The outer DeliveryWindow annotations let generated preparation backfill a missing
+sibling from known Previous data before this method runs. The business rule sees
+the effective interval. Returning an error stops later mutation phases; this
+method must not modify the row or its markers.
+
+Put value preparation in `Init`, using generated setters such as
+`entity.SetWindowStart(value)` to record application changes. Use `AfterSequence`
+when logic needs allocated IDs. `AfterQueue` means work was buffered, not committed;
+commit-dependent messages belong in the outcome-aware `Finalize` method described
+below. Avoid implementing those framework phases yourself.
+
+### 5. Test, regenerate and build
+
+```sh
+gofmt -w orders/write/orders_hooks.go
+go test ./orders/write
+go build ./...
+```
+
+Test an increasing interval, an equal start/end, and an invalid reversed interval.
+Add invocation tests for sparse backfill and rejected writes, not just direct
+method calls. Then rerun the same generation command and confirm that your
+lifecycle edits remain unchanged. Adding injected fields or changing contracts
+also requires regeneration and rebuilding so the compiled bindings stay current.
+
+The example's generated package and date-validation tests were executed, and an
+identical second generation preserved the edited lifecycle file byte-for-byte.
+Changing DQL-owned field tags during regeneration is a separate known correction
+in progress; do not overwrite a reported source conflict to force regeneration.
+
+For an existing lifecycle type instead of a default scaffold, declare its package
+with `#import` and attach it to the outer view using `entity_hooks`. That explicit
+type takes precedence. See [Customize the writing hooks](#customize-the-writing-hooks).
 
 ## Understand the complete lifecycle
 
