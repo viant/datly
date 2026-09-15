@@ -30,7 +30,7 @@ func startWireServer(t *testing.T, service ServerService) *wireServer {
 	return startConfiguredWireServer(t, service, TransportConfig{Kind: TransportStreamable})
 }
 
-func startConfiguredWireServer(t *testing.T, service ServerService, transport TransportConfig) *wireServer {
+func startConfiguredWireServer(t *testing.T, service ServerService, transport TransportConfig, configure ...func(*http.Server)) *wireServer {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -50,6 +50,9 @@ func startConfiguredWireServer(t *testing.T, service ServerService, transport Tr
 	if err != nil {
 		listener.Close()
 		t.Fatal(err)
+	}
+	for _, apply := range configure {
+		apply(httpServer)
 	}
 	done := make(chan error, 1)
 	go func() { done <- httpServer.Serve(listener) }()

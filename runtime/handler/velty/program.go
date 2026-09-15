@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sync"
 
+	dexec "github.com/viant/datly/exec"
 	vtemplate "github.com/viant/velty"
 	"github.com/viant/velty/est"
 )
@@ -28,7 +29,7 @@ func newCompiledProgram[S any, I any, O any](template string) (result *compiledP
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			result = nil
-			err = fmt.Errorf("compile velty program: %v", recovered)
+			err = dexec.NewPanicError("compile velty program", recovered)
 		}
 	}()
 	stateType, err := compiledProgramStateType[S]()

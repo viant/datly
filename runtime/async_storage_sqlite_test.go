@@ -9,6 +9,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	requestprovider "github.com/viant/bindly/provider/request"
+	dexec "github.com/viant/datly/exec"
 	jobstorage "github.com/viant/datly/gateway/async"
 	"github.com/viant/datly/internal/testharness"
 	rhandler "github.com/viant/datly/runtime/handler"
@@ -393,6 +394,12 @@ func TestAsyncCustomMutationCompletionStorageSQLite(t *testing.T) {
 			}
 			if (tc.external || tc.fail || tc.panicHandler) != (err != nil) {
 				t.Fatalf("dispatch error=%v", err)
+			}
+			if tc.panicHandler {
+				var recovered *dexec.PanicError
+				if !errors.As(err, &recovered) || recovered.Cause() != "application panic" || len(recovered.Stack()) == 0 {
+					t.Fatalf("lost private panic diagnostics: %v", err)
+				}
 			}
 			row, err := f.store.Get(ctx, scheduled.Job.ID)
 			if err != nil {

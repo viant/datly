@@ -14,6 +14,13 @@ func newCORSPolicy(config *spec.CORS) (*corsPolicy, error) {
 	if config == nil {
 		return nil, nil
 	}
+	if config.AllowCredentials != nil && *config.AllowCredentials && config.AllowOrigins != nil {
+		for _, origin := range *config.AllowOrigins {
+			if origin == "*" {
+				return nil, fmt.Errorf("credentialed CORS requires explicitly configured origins; wildcard is not allowed")
+			}
+		}
+	}
 	if config.MaxAge != nil && *config.MaxAge < 0 {
 		return nil, fmt.Errorf("MaxAge must not be negative")
 	}
@@ -73,7 +80,7 @@ func (p *corsPolicy) apply(writer stdhttp.ResponseWriter, req *stdhttp.Request, 
 			requested = append(requested, name)
 		}
 	}
-	// Echoing an allowed origin makes wildcard credentials browser-valid.
+	// Credentialed policies have been validated to contain explicit origins.
 	headers.Set("Access-Control-Allow-Origin", origin)
 	if p.config.AllowCredentials != nil && *p.config.AllowCredentials {
 		headers.Set("Access-Control-Allow-Credentials", "true")

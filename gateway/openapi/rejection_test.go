@@ -22,7 +22,6 @@ func TestUnrepresentableContractsFailClosed(t *testing.T) {
 		settings      *spec.Settings
 		want          string
 	}{
-		{name: "custom JSON", output: reflect.TypeFor[marshalOutput](), want: "opaque standard JSON encoder"},
 		{name: "unsupported JSON value", output: reflect.TypeFor[struct{ C chan int }](), want: "cannot be represented"},
 		{name: "visible output marker", output: reflect.TypeFor[struct {
 			Has *struct{ A bool } `setMarker:"true"`

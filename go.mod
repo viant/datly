@@ -16,7 +16,7 @@ require (
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20260915061102-65308eabace8
 	github.com/viant/sqlx v0.26.1-0.20260915052314-24e180f5c1e5
-	github.com/viant/structology v0.10.1-0.20260915143641-202bd3a5f8e8
+	github.com/viant/structology v0.10.1-0.20260915165514-89d421971772
 	github.com/viant/structql v0.5.4
 	github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
@@ -86,7 +86,7 @@ require (
 	github.com/onsi/gomega v1.41.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
-	github.com/viant/bindly v0.1.1-0.20260914092747-4823e9c62012
+	github.com/viant/bindly v0.2.1-0.20260915164201-7cf35da5bd9a
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
 	github.com/viant/jsonrpc v0.25.0
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726

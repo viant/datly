@@ -5,7 +5,6 @@ import (
 	"io"
 	stdhttp "net/http"
 	"strconv"
-	"strings"
 
 	xexec "github.com/viant/xdatly/exec"
 	xresponse "github.com/viant/xdatly/response"
@@ -18,21 +17,7 @@ func classifyRequestError(err error) int {
 	if code := xresponse.ErrorStatusCode(err, 0); code != 0 {
 		return code
 	}
-	msg := err.Error()
-	switch {
-	case strings.HasPrefix(msg, "unsupported content type "):
-		return stdhttp.StatusUnsupportedMediaType
-	case strings.HasPrefix(msg, "invalid content type "),
-		strings.HasPrefix(msg, "missing required "),
-		strings.Contains(msg, "failed to parse "),
-		strings.HasPrefix(msg, "unsupported query bind kind "),
-		strings.HasPrefix(msg, "failed to decode body "),
-		strings.HasPrefix(msg, "failed to unmarshal body "),
-		strings.HasPrefix(msg, "failed to unmarshal body field "):
-		return stdhttp.StatusBadRequest
-	default:
-		return stdhttp.StatusInternalServerError
-	}
+	return stdhttp.StatusInternalServerError
 }
 
 func writeResponse(writer stdhttp.ResponseWriter, statusCode int, explicitStatus bool, response xresponse.Response) {
@@ -79,16 +64,19 @@ func hasExplicitStatusCode(execCtx *xexec.Context, execErr error) bool {
 	return execCtx != nil && execCtx.StatusCode != 0 && execCtx.StatusCode != stdhttp.StatusOK
 }
 
-func publishMetricsHeaders(writer stdhttp.ResponseWriter, req *stdhttp.Request, execCtx *xexec.Context) {
-	if writer == nil || req == nil || execCtx == nil {
+func (h *Handler) publishMetricsHeaders(writer stdhttp.ResponseWriter, req *stdhttp.Request, execCtx *xexec.Context) {
+	if writer == nil || req == nil || execCtx == nil || h.metrics == nil {
 		return
 	}
 	mode := req.Header.Get(datlyRequestMetricsHeader)
 	if mode == "" {
 		return
 	}
+	if h.metrics.Authorize != nil && h.metrics.Authorize(req) != nil {
+		return
+	}
 	metrics := execCtx.Metrics
-	if mode != datlyDebugHeaderValue {
+	if mode != datlyDebugHeaderValue || !h.metrics.AllowSQL {
 		metrics = metrics.HideMetrics()
 	}
 	for _, metric := range metrics {

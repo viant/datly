@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 
+	bindinput "github.com/viant/bindly/input"
 	bodyprovider "github.com/viant/bindly/provider/body"
 	requestprovider "github.com/viant/bindly/provider/request"
 )
@@ -153,7 +154,7 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 	}
 	value, err := decodeSourceValue(encoded, argument.SourceType)
 	if err != nil {
-		return resolvedValue{}, false, fmt.Errorf("decode MCP argument %q as %s: %w", argument.PublicName, argument.SourceType, err)
+		return resolvedValue{}, false, fmt.Errorf("decode MCP argument %q: %w", argument.PublicName, &bindinput.Error{Cause: err})
 	}
 	wire, err := wireValues(value)
 	if err != nil {

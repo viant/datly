@@ -1,7 +1,6 @@
 package http
 
 import (
-	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"strings"
@@ -52,7 +51,7 @@ func (p *DocumentAccess) Authorize(request *http.Request) error {
 	if p == nil {
 		return nil
 	}
-	if request == nil || subtle.ConstantTimeCompare([]byte(request.Header.Get(p.APIKeyHeader)), []byte(p.APIKeyValue)) != 1 {
+	if request == nil || !(APIKey{Value: p.APIKeyValue}).matchesValue(request.Header.Get(p.APIKeyHeader)) {
 		return fmt.Errorf("API key denied")
 	}
 	return nil

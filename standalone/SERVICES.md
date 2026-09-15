@@ -71,7 +71,9 @@ Observation:
 ## Original Options
 
 CORS retains original optional arrays/booleans, MaxAge, global/route inheritance,
-DisableCors, and the credentialed-wildcard parent restriction. Empty arrays and
+DisableCors, and the credentialed-wildcard parent restriction. The default now
+disables credentials; effective credentialed policies must contain explicit
+origins. Wildcard credential policies fail staging. Empty arrays and
 false values are not treated as absent. The existing HTTP owner handles OPTIONS
 and preflight without requiring component credentials on the preflight itself.
 
@@ -91,6 +93,16 @@ second simultaneous document configuration.
 JWTValidator continues to configure Scy's verifier only for declared JwtClaim
 inputs. Warmup prepares that same input through Bindly. A valid JWT is not an
 administrator grant and does not replace a configured component API key.
+
+## Security defaults migration
+
+Unlike original Datly, absent CORS no longer reflects origins with credentials,
+and arbitrary `Datly-Show-Metrics` headers enable no diagnostics by default.
+`Endpoint.ReadHeaderTimeoutMs` and `Endpoint.IdleTimeoutMs` default to 10000 and
+120000 for HTTP and MCP. Negative values explicitly disable those deadlines.
+Existing `ReadTimeoutMs` and `WriteTimeoutMs` are preserved for HTTP; no fixed
+write deadline is introduced for MCP streams. See the complete
+[migration and operator policy](../doc/gateway-security.md).
 
 ## Added Options
 

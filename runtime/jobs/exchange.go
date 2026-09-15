@@ -3,7 +3,6 @@ package jobs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	dexec "github.com/viant/datly/exec"
@@ -44,7 +43,7 @@ func (s *Service) Exchange(ctx context.Context, request Submission) (result *Exc
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			result = nil
-			failure = fmt.Errorf("async job request panicked")
+			failure = dexec.NewPanicError("async job request", recovered)
 		}
 	}()
 

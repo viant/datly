@@ -62,10 +62,10 @@ func (c *CORS) Resolve(parent *CORS) *CORS {
 	return result
 }
 
-// DefaultCORS returns an independent original Datly default policy. Callers
-// explicitly disable it with HTTP DisableCors or override fields with pointers.
+// DefaultCORS allows noncredentialed cross-origin reads. Credentialed access
+// requires an explicit origin policy. DisableCors disables cross-origin access.
 func DefaultCORS() *CORS {
-	yes := true
+	yes := false
 	origins, methods, headers, exposed := []string{"*"}, []string{"*"}, []string{"*"}, []string{"*"}
 	return &CORS{AllowOrigins: &origins, AllowMethods: &methods, AllowHeaders: &headers, ExposeHeaders: &exposed, AllowCredentials: &yes}
 }

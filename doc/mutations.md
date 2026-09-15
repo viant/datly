@@ -258,6 +258,37 @@ Here `xhandler` imports `github.com/viant/xdatly/handler`. Child methods use
 `EntityState[Item, Order]`, so they have a typed parent. Keep methods you do not
 need as no-ops.
 
+### Child lifecycle with a typed parent
+
+For the declared `Order → Items` relation, `lifecycle_type(items, 'ItemLifecycle')`
+selects a lifecycle whose state is `EntityState[Item, Order]`. Replace its generated
+`Validate` body with application logic such as the following (imports: `context`,
+`fmt`, `time`, and `xhandler "github.com/viant/xdatly/handler"`):
+
+```go
+func (hooks *ItemLifecycle) Validate(
+    ctx context.Context,
+    item *Item,
+    state xhandler.EntityState[Item, Order],
+) error {
+    order := state.Parent
+    if order == nil {
+        return fmt.Errorf("item requires an order")
+    }
+    if order.WindowEnd != nil && order.WindowEnd.Before(time.Now()) {
+        return fmt.Errorf("cannot modify items after the delivery window closes")
+    }
+    return nil
+}
+```
+
+This example uses the parent Order's declared `WindowEnd` field. `Parent` is the
+current typed parent; `Previous` is the matched previous **item**, not the previous
+order. The same parent-bearing state is available in `Init`, `AfterSequence`, and
+`AfterQueue`. A recursive relation also exposes its immediate `SelfParent`.
+Keep validation read-only; use marker-aware setters in initialization when values
+need to change. Use `AfterSequence` for logic that requires allocated identifiers.
+
 ### 4. Replace a placeholder with a business rule
 
 Add `fmt` to the file's imports and replace the existing `Validate` body with:

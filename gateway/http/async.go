@@ -30,7 +30,7 @@ func (h *Handler) asyncRoute(req *http.Request) *asyncRoute {
 func (r *asyncRoute) execute(ctx context.Context, req *http.Request, scope exec.ProviderScope, service AsyncService) (any, error) {
 	// The request path is the matched route instance, not a client-supplied target.
 	// Raw query/source values live in canonical SourceState instead of URI replay.
-	if r.targetAPIKeyHeader != "" && req.Header.Get(r.targetAPIKeyHeader) != r.targetAPIKeyValue {
+	if r.targetAPIKeyHeader != "" && !(APIKey{Value: r.targetAPIKeyValue}).matchesValue(req.Header.Get(r.targetAPIKeyHeader)) {
 		return nil, &xresponse.Error{Code: 403, Payload: xresponse.Status{Status: "error", Message: "forbidden"}}
 	}
 	uri := req.URL.EscapedPath()

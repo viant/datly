@@ -15,10 +15,12 @@ import (
 	xlogger "github.com/viant/xdatly/logger"
 )
 
-// Config is the application HTTP policy. A nil CORS policy selects original
-// Datly defaults; an explicit empty CORS policy remains empty.
+// Config is the application HTTP policy. A nil CORS policy selects
+// safe noncredentialed defaults; an explicit empty CORS policy remains empty.
 type Config struct {
-	Async []AsyncRoute `json:"Async,omitempty" yaml:"Async,omitempty"`
+	// Metrics opts into diagnostic response headers. Nil disables them.
+	Metrics *MetricsConfig `json:"Metrics,omitempty" yaml:"Metrics,omitempty"`
+	Async   []AsyncRoute   `json:"Async,omitempty" yaml:"Async,omitempty"`
 	// StaticLocalRoot is an optional caller-owned local filesystem authority.
 	// Configured ContentURL paths beneath it must be relative and symlink-free.
 	// Keep it open until all reloads finish. JSON configuration cannot grant it.
@@ -131,6 +133,10 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 	}
 	h := NewHandler(rt, log, version)
 	h.allowedSubnet = c.Meta.AllowedSubnet
+	if c.Metrics != nil {
+		policy := *c.Metrics
+		h.metrics = &policy
+	}
 	h.cors = map[string]*corsPolicy{}
 	for _, endpoint := range rt.Routes() {
 		policy, err := newCORSPolicy(c.routeCORS(endpoint))

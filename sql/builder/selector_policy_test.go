@@ -3,11 +3,13 @@ package builder
 import (
 	"context"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/spec"
+	xresponse "github.com/viant/xdatly/response"
 	xstate "github.com/viant/xdatly/state"
 )
 
@@ -20,6 +22,7 @@ func TestBuilder_SelectorPolicy(t *testing.T) {
 		projection []string
 		wantSQL    string
 		wantErr    string
+		wantCode   int
 	}{
 		{
 			name: "defaults",
@@ -28,6 +31,35 @@ func TestBuilder_SelectorPolicy(t *testing.T) {
 				DefaultLimit: 2,
 			},
 			wantSQL: "SELECT id, name FROM users ORDER BY name ASC LIMIT 2",
+		},
+		{
+			name:     "page offset overflow",
+			selector: &xstate.Selector{Page: int(^uint(0) >> 1), Limit: 2},
+			wantErr:  "page and limit overflow offset",
+			wantCode: 400,
+		},
+		{
+			name:     "largest page with unit limit",
+			selector: &xstate.Selector{Page: int(^uint(0) >> 1), Limit: 1},
+			wantSQL:  "SELECT id, name FROM users LIMIT 1 OFFSET " + strconv.Itoa(int(^uint(0)>>1)-1),
+		},
+		{
+			name:     "negative page",
+			selector: &xstate.Selector{Page: -1, Limit: 1},
+			wantErr:  "pagination values must be non-negative",
+			wantCode: 400,
+		},
+		{
+			name:     "negative limit",
+			selector: &xstate.Selector{Limit: -1},
+			wantErr:  "pagination values must be non-negative",
+			wantCode: 400,
+		},
+		{
+			name:     "negative offset",
+			selector: &xstate.Selector{Offset: -1, Limit: 1},
+			wantErr:  "pagination values must be non-negative",
+			wantCode: 400,
 		},
 		{
 			name: "request limit is capped by original style default maximum",
@@ -131,6 +163,9 @@ func TestBuilder_SelectorPolicy(t *testing.T) {
 			if test.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 					t.Fatalf("expected error containing %q, got %v", test.wantErr, err)
+				}
+				if test.wantCode != 0 && xresponse.ErrorStatusCode(err, 500) != test.wantCode {
+					t.Fatalf("status=%d want=%d", xresponse.ErrorStatusCode(err, 500), test.wantCode)
 				}
 				return
 			}

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/viant/datly/exec"
 	"github.com/viant/datly/mcp/invocation"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/schema"
@@ -87,10 +88,7 @@ func executionError(execution *invocation.Execution) *jsonrpc.Error {
 	if execution.Error() == nil && status < http.StatusBadRequest {
 		return nil
 	}
-	message := http.StatusText(status)
-	if execution.Error() != nil && status < http.StatusInternalServerError {
-		message = execution.Error().Error()
-	}
+	message := exec.ErrorMessage(execution.Error(), status)
 	if status < http.StatusInternalServerError {
 		return jsonrpc.NewInvalidParamsError(message, nil)
 	}

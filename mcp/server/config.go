@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/mcp-protocol/schema"
@@ -36,13 +37,16 @@ type Config struct {
 }
 
 type TransportConfig struct {
-	Kind          TransportKind
-	Address       string
-	SSEURI        string
-	SSEMessageURI string
-	StreamableURI string
-	RootRedirect  bool
-	CORS          *upstream.Cors
+	// Zero selects safe listener defaults; negative explicitly disables a deadline.
+	ReadHeaderTimeout time.Duration
+	IdleTimeout       time.Duration
+	Kind              TransportKind
+	Address           string
+	SSEURI            string
+	SSEMessageURI     string
+	StreamableURI     string
+	RootRedirect      bool
+	CORS              *upstream.Cors
 }
 
 func (c Config) normalized() (Config, error) {

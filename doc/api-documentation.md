@@ -111,6 +111,32 @@ Generated-document and resource tests cover the integrated pipeline.
 Name/alias behavior follows the [naming contract](selectors-and-formats.md);
 do not infer spelling variations or apply a guessed alias while annotating fields.
 
+## Custom serialization in OpenAPI
+
+Custom JSON/text serialization does not require removing an otherwise valid
+endpoint from OpenAPI. The schema uses the guarantees of the actual encoding
+contract, without invoking application serialization methods to guess a shape.
+
+- A value implementing `encoding.TextMarshaler`, such as `uuid.UUID`, is
+  represented as a JSON string when that contract determines its encoding.
+- A `json.Marshaler`, including `json.RawMessage`, may produce any JSON value.
+  Its schema is unconstrained rather than inferred from private Go fields.
+- Pointer-only custom methods can depend on value addressability. Their schema
+  remains conservative where a fixed representation cannot be guaranteed.
+- JSON body schemas follow custom unmarshaling contracts independently of output
+  marshaling contracts. Query/form and other transport inputs retain their
+  provider-specific conversion rules.
+
+Global output casing applies to surrounding typed fields. It does not rewrite
+keys inside a RawMessage or bytes emitted by a custom JSON marshaler. Dictionary
+annotations can still supply descriptions and examples for these fields.
+An unconstrained schema means that consumers must not assume an object, array,
+string or numeric shape without an additional application contract.
+
+Transport-ready `response.Response` bodies still require explicit authored
+response documentation, as described below. Unsupported non-JSON values such
+as channels remain errors; this support does not make them serializable.
+
 ## Generic response documentation
 
 For a handler returning arbitrary bytes/buffer, author media types, status codes,

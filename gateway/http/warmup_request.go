@@ -32,7 +32,7 @@ func (w *warmupRoutes) snapshot(ctx context.Context, req *stdhttp.Request, endpo
 
 func (e *warmupRoute) execute(ctx context.Context, policy WarmupConfig, req *stdhttp.Request) (WarmupResult, int, error) {
 	result := WarmupResult{Target: e.target.Route.String(), Status: "rejected"}
-	if e.apiKeyHeader != "" && req.Header.Get(e.apiKeyHeader) != e.apiKeyValue {
+	if e.apiKeyHeader != "" && !(APIKey{Value: e.apiKeyValue}).matchesValue(req.Header.Get(e.apiKeyHeader)) {
 		return result, 403, fmt.Errorf("component API key denied")
 	}
 	headers := map[string]any{}

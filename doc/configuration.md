@@ -66,22 +66,31 @@ DSNs and Scy secret content are not rewritten as relative file locations.
 | `Connectors` | Named DB configuration: driver, DSN, optional Scy secret and SQL pool settings. SQLite is linked by the command; other drivers must be linked by the app. |
 | `Endpoint.Port` | Zero/absent defaults to 8080. |
 | `Endpoint.Address` | Explicit override, mutually exclusive with nonzero Port; `127.0.0.1:0` requests an allocated port. |
+| `Endpoint.ReadHeaderTimeoutMs` / `IdleTimeoutMs` | Zero/absent defaults to 10s / 120s on HTTP and MCP; negative explicitly disables the respective deadline. |
+| `Endpoint.ReadTimeoutMs` / `WriteTimeoutMs` | Remain unchanged: zero adds no active request/response deadline. Positive configured durations are preserved on HTTP. |
 | `Endpoint.ShutdownTimeoutMs` | Defaults to five seconds. Deadline return does not discard active cleanup. |
 | `JWTValidator` | Existing Scy verifier configuration for explicitly declared `JwtClaim` inputs. |
-| `CORS`, `DisableCors`, `APIPrefix`, `Meta` | Existing HTTP policy. Explicit empty CORS differs from absent defaults. |
+| `CORS`, `DisableCors`, `APIPrefix`, `Meta` | Absent CORS allows noncredentialed cross-origin reads. Credentialed access requires explicit origins; wildcard credentials fail staging. Empty CORS disables cross-origin exposure. |
 | `Info` or `OpenAPI` | Opt into OpenAPI publication; configuring both fails. Document-access policy is separate from component authorization. |
 | `MCP.Address` or `MCP.Port` | Native MCP listener, with explicit authorization policy. Explicit MCP Port zero requests allocation. |
 | `APIKeys` | Current configured component-key policy. Longest raw URI prefix wins; duplicate prefixes fail. |
 | `Warmup` | Current HTTP warmup administration bridge with required admin key and positive timeout. Startup warmup URI execution remains separate. |
 | `OpenAPI.StartupExports` | Current JSON/YAML file snapshot export before listener admission. It is not a file watcher or multi-file transaction. |
+| `Metrics` | Absent disables diagnostic response headers. `{}` enables SQL-redacted metrics; `AllowSQL: true` enables SQL/arguments for debug requests. |
 | `Observation` | Current native capture summaries and optional bounded OTLP/HTTP export. Export failure is telemetry loss, not business failure. |
 
-Nonpositive original HTTP/SQL pool limits preserve standard-library default or
-disabling behavior; do not assume all zeros mean the same thing across fields.
+Read/write timeouts and SQL pool limits preserve their existing nonpositive
+semantics. Read-header and idle timeouts now have safe zero defaults; use negative
+values only for an intentional disabled deadline.
 Inspect the [configuration type](../standalone/config/config.go) and
 [connector owner](../bootstrap/connector/config.go) for exact fields. The
 accepted CORS/API-key/warmup/OpenAPI/Observation settings and limits are also
 listed in [standalone/SERVICES.md](../standalone/SERVICES.md).
+
+## Security defaults migration
+
+See [gateway security migration](gateway-security.md) for original Datly behavior,
+explicit credentialed CORS examples, diagnostic policy and streaming timeouts.
 
 ## Resources and reload
 

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"sync"
 
+	dexec "github.com/viant/datly/exec"
 	"github.com/viant/govalidator"
 	"github.com/viant/sqlx/io"
 	sqlvalidator "github.com/viant/sqlx/io/validator"
@@ -180,7 +181,7 @@ func (s *Service) validateGo(ctx context.Context, value any, prepared *govalidat
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			result = nil
-			err = fmt.Errorf("native Go validation cannot execute entity type %T; native validation support is required", value)
+			err = dexec.NewPanicError("native Go validation", recovered)
 		}
 	}()
 	return prepared.Validate(ctx, value)

@@ -52,7 +52,17 @@ Exporter failures remain observable as export failures.
 Arguments, request headers/bodies and raw error messages are not exported by this
 adapter. Native diagnostic capture is a separate surface with its own policy;
 do not assume export filtering erases all local capture. No logger means capture
-does not start printing diagnostics to stdout.
+does not start printing capture summaries to stdout. Recovered panics are an
+exception: recovery records the private cause and stack in the standard server
+log (stderr by default), even without a configured invocation logger. HTTP
+failures also fall back to that log when no HTTP logger is supplied.
+
+HTTP `Datly-Show-Metrics` headers have no effect unless the operator configures
+`Metrics`. `Metrics: {}` enables SQL-redacted headers; SQL and bound arguments
+require `Metrics: {AllowSQL: true}` and a `debug` request. Embedders can additionally
+set `MetricsConfig.Authorize` to restrict each caller. This gate is independent of
+OTel `IncludeSQL`; clients cannot enable it. Enable SQL diagnostics only on
+trusted routes/deployments: arguments and authored literals may be confidential.
 
 Use `ExportStats` to inspect accepted, dropped, exported and failed counts.
 Incomplete/invalid native records can fail export without changing the business

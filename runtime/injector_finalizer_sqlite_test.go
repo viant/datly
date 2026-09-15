@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	dexec "github.com/viant/datly/exec"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -521,6 +522,12 @@ func TestInjectorFinalizerPreparedFailureAndPanicSQLite(t *testing.T) {
 			result, err := f.execute(t)
 			if err == nil {
 				t.Fatal("expected failure")
+			}
+			if mode == "panic" {
+				var recovered *dexec.PanicError
+				if !errors.As(err, &recovered) || recovered.Cause() != "finalizer panic" || len(recovered.Stack()) == 0 {
+					t.Fatalf("lost panic diagnostics: %v", err)
+				}
 			}
 			if f.count(t) != 0 {
 				t.Fatal("committed on failure")

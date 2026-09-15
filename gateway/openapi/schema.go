@@ -55,10 +55,16 @@ func (b *schemaBuilder) schema(t reflect.Type, input bool) (*openapi3.Schema, er
 	if t == reflect.TypeFor[time.Time]() {
 		return &openapi3.Schema{Type: "string", Format: "date-time"}, nil
 	}
-	if t.Implements(reflect.TypeFor[json.Marshaler]()) || reflect.PointerTo(t).Implements(reflect.TypeFor[json.Marshaler]()) ||
-		t.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || reflect.PointerTo(t).Implements(reflect.TypeFor[encoding.TextMarshaler]()) ||
-		(input && (reflect.PointerTo(t).Implements(reflect.TypeFor[json.Unmarshaler]()) || reflect.PointerTo(t).Implements(reflect.TypeFor[encoding.TextUnmarshaler]()))) {
-		return nil, fmt.Errorf("type %s uses custom wire serialization without schema authority", t)
+	jsonContract, textContract := reflect.TypeFor[json.Marshaler](), reflect.TypeFor[encoding.TextMarshaler]()
+	if input {
+		jsonContract, textContract = reflect.TypeFor[json.Unmarshaler](), reflect.TypeFor[encoding.TextUnmarshaler]()
+	}
+	if t.Implements(jsonContract) || reflect.PointerTo(t).Implements(jsonContract) {
+		// Custom JSON may accept or emit any JSON value; do not infer its Go fields.
+		return &openapi3.Schema{}, nil
+	}
+	if t.Implements(textContract) || reflect.PointerTo(t).Implements(textContract) {
+		return &openapi3.Schema{Type: "string"}, nil
 	}
 	key := schemaKey{t, input, b.path}
 	if name, ok := b.names[key]; ok {

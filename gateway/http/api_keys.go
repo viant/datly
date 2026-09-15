@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"fmt"
 	"sort"
 	"strings"
@@ -69,4 +71,11 @@ func (keys APIKeys) match(path string) *APIKey {
 		}
 	}
 	return nil
+}
+
+// matchesValue compares fixed-length digests so key content and length do not
+// select an early-exit string comparison. Empty configured keys never authorize.
+func (key APIKey) matchesValue(value string) bool {
+	expected, actual := sha256.Sum256([]byte(key.Value)), sha256.Sum256([]byte(value))
+	return subtle.ConstantTimeCompare(expected[:], actual[:]) == 1 && key.Value != ""
 }

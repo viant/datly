@@ -252,7 +252,7 @@ func TestProjectedReaderJSONAndAttachmentSQLite(t *testing.T) {
 	}
 }
 
-func TestProjectedJSONCollisionAndOpaqueEncoderFail(t *testing.T) {
+func TestProjectedJSONCollisionFails(t *testing.T) {
 	type collision struct {
 		FooBar  int
 		Foo_Bar int
@@ -263,7 +263,6 @@ func TestProjectedJSONCollisionAndOpaqueEncoderFail(t *testing.T) {
 		want   string
 	}{
 		{"case collision", reflect.TypeFor[collision](), "collision"},
-		{"custom Go encoder", reflect.TypeFor[marshalOutput](), "opaque JSON encoder"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			entry := (fixture{output: tc.output, component: &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "Opaque"}, Routes: []*spec.Route{{Method: "GET", Path: "/opaque"}}, Settings: &spec.Settings{CaseFormat: "lc"}}}).registration(t)

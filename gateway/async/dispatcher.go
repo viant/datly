@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	afsstorage "github.com/viant/afs/storage"
+	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/runtime/jobs"
 	"reflect"
 )
@@ -43,7 +44,7 @@ func NewDispatcher(fs afs.Service, service JobHandler) (*Dispatcher, error) {
 func (d *Dispatcher) DispatchStorageEvent(ctx context.Context, object afsstorage.Object) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("storage job dispatch panicked")
+			err = dexec.NewPanicError("storage job dispatch", recovered)
 		}
 	}()
 	if object == nil || object.IsDir() {

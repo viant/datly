@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/viant/datly/exec"
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/xdatly/response"
 )
@@ -118,10 +119,7 @@ func errorResult(status int, err error) *schema.CallToolResult {
 	if status == 0 {
 		status = http.StatusInternalServerError
 	}
-	message := http.StatusText(status)
-	if err != nil && status < http.StatusInternalServerError && strings.TrimSpace(err.Error()) != "" {
-		message = err.Error()
-	}
+	message := exec.ErrorMessage(err, status)
 	payload := map[string]interface{}{"status": status, "error": true, "message": message}
 	encoded, _ := json.Marshal(payload)
 	isError := true

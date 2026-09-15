@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	dexec "github.com/viant/datly/exec"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -24,8 +25,8 @@ type finalizerInjectors struct {
 
 func (s *finalizerInjectors) finalize(finalizer xhandler.InjectorFinalizer, cause error) (err error) {
 	defer func() {
-		if recover() != nil {
-			err = fmt.Errorf("injector finalizer panicked")
+		if value := recover(); value != nil {
+			err = dexec.NewPanicError("injector finalizer", value)
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()

@@ -12,6 +12,7 @@ import (
 	"github.com/viant/sqlparser/expr"
 	sqltext "github.com/viant/sqlparser/source"
 	"github.com/viant/sqlx/io/read/cache"
+	xresponse "github.com/viant/xdatly/response"
 	xstate "github.com/viant/xdatly/state"
 )
 
@@ -72,6 +73,9 @@ type selectorResolver struct {
 }
 
 func (r selectorResolver) controls(base *spec.ViewControls, input *xstate.Selector, excludePagination bool) (*spec.ViewControls, error) {
+	if !excludePagination && input != nil && (input.Page < 0 || input.Limit < 0 || input.Offset < 0) {
+		return nil, &xresponse.Error{Code: 400, Payload: xresponse.Status{Status: "error", Message: "selector pagination values must be non-negative"}, Cause: fmt.Errorf("selector pagination values must be non-negative")}
+	}
 	result := base.Clone()
 	if result == nil {
 		result = &spec.ViewControls{}
@@ -122,6 +126,9 @@ func (r selectorResolver) controls(base *spec.ViewControls, input *xstate.Select
 				}
 				if result.Limit == nil || *result.Limit <= 0 {
 					return nil, fmt.Errorf("selector page requires a positive limit")
+				}
+				if input.Page-1 > int(^uint(0)>>1) / *result.Limit {
+					return nil, &xresponse.Error{Code: 400, Payload: xresponse.Status{Status: "error", Message: "selector page and limit overflow offset"}, Cause: fmt.Errorf("selector page and limit overflow offset")}
 				}
 				offset := *result.Limit * (input.Page - 1)
 				result.Offset = &offset

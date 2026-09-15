@@ -86,7 +86,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			failure := err
 			panicked := recover()
 			if panicked != nil {
-				failure = fmt.Errorf("invocation panicked")
+				failure = dexec.NewPanicError("invocation", panicked)
 			}
 			ec := xexec.GetContext(ctx)
 			ec.Complete(end, failure)

@@ -46,11 +46,13 @@ type Packages struct{ Packages, Exclude []string }
 type Endpoint struct {
 	Port int
 	// Address is an explicit listener override, including port zero for OS allocation.
-	Address           string
-	ReadTimeoutMs     int
-	WriteTimeoutMs    int
-	MaxHeaderBytes    int
-	ShutdownTimeoutMs int
+	Address             string
+	ReadTimeoutMs       int
+	ReadHeaderTimeoutMs int
+	IdleTimeoutMs       int
+	WriteTimeoutMs      int
+	MaxHeaderBytes      int
+	ShutdownTimeoutMs   int
 }
 
 type MCP struct {
@@ -65,7 +67,7 @@ func (e Endpoint) ListenAddress() (string, error) {
 		return "", fmt.Errorf("invalid endpoint port, timeout or header limit")
 	}
 	const maxMs = int64((1<<63 - 1) / int64(time.Millisecond))
-	for _, value := range []int{e.ReadTimeoutMs, e.WriteTimeoutMs, e.ShutdownTimeoutMs} {
+	for _, value := range []int{e.ReadHeaderTimeoutMs, e.IdleTimeoutMs, e.ReadTimeoutMs, e.WriteTimeoutMs, e.ShutdownTimeoutMs} {
 		if int64(value) > maxMs || int64(value) < -maxMs {
 			return "", fmt.Errorf("endpoint timeout overflows duration")
 		}

@@ -62,3 +62,21 @@ The comprehensive grammar reference and EBNF are integrated, with the DQL +
 Velty extension documented separately at the end. Per-instance constant expansion
 from YAML/JSON files is still being completed. Release publication and version tags remain
 separate from local commits and verification.
+
+## Production review follow-up
+
+The independent production review identified additional work beyond the earlier
+suite baseline. The gateway now defaults to noncredentialed CORS, requires
+operator opt-in for diagnostic metrics, classifies external binding failures by
+typed errors, hides unknown internal error details, retains private panic
+information, and applies header/idle timeouts. API-key checks use a shared
+constant-time comparison. Published Bindly and Structology updates supply the
+native error and custom-serialization fixes; HTTP/MCP/output race checks pass.
+
+Pagination rejects negative values and overflowing page/limit products before SQL
+execution. OpenAPI supports custom JSON fields conservatively and text-serialized
+fields where their wire representation is known, without invoking user codecs.
+
+Sequencer dialect/concurrency corrections, instance constant-file expansion, and
+generated delete-marker/version-validation policies are still being completed.
+These remain release gates; a passing earlier test baseline does not close them.

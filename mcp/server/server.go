@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/viant/datly/internal/httpserver"
 	"github.com/viant/jsonrpc/transport/server/stdio"
 	upstream "github.com/viant/mcp/server"
 	"github.com/viant/mcp/server/auth"
@@ -100,6 +101,9 @@ func (s *Server) HTTP() (*http.Server, error) {
 	defer s.mu.Unlock()
 	if s.httpServer == nil {
 		s.httpServer = s.upstream.HTTP(context.Background(), s.config.Transport.Address)
+		s.httpServer.ReadHeaderTimeout = s.config.Transport.ReadHeaderTimeout
+		s.httpServer.IdleTimeout = s.config.Transport.IdleTimeout
+		httpserver.Defaults(s.httpServer)
 	}
 	return s.httpServer, nil
 }

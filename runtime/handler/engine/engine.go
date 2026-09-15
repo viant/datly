@@ -138,7 +138,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	// canonical owner; never bypass rollback and outcome reporting in an adapter.
 	defer func() {
 		if value := recover(); value != nil {
-			failure = fmt.Errorf("handler invocation panicked")
+			failure = dexec.NewPanicError("handler invocation", value)
 			actual = nil
 			if !finishing {
 				actual, failure = finish(nil, failure)

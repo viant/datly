@@ -280,6 +280,37 @@ Instantiate and bind one hook object per view/role per invocation. Reuse it acro
 
 Use exact generic signatures and canonical package identities. A different parent's hook type, an unknown type, or a same-short-name type from another package must not silently match.
 
+### Child lifecycle with a typed parent
+
+For the declared `Order → Items` relation, `lifecycle_type(items, 'ItemLifecycle')`
+selects a lifecycle whose state is `EntityState[Item, Order]`. Replace its generated
+`Validate` body with application logic such as the following (imports: `context`,
+`fmt`, `time`, and `xhandler "github.com/viant/xdatly/handler"`):
+
+```go
+func (hooks *ItemLifecycle) Validate(
+    ctx context.Context,
+    item *Item,
+    state xhandler.EntityState[Item, Order],
+) error {
+    order := state.Parent
+    if order == nil {
+        return fmt.Errorf("item requires an order")
+    }
+    if order.WindowEnd != nil && order.WindowEnd.Before(time.Now()) {
+        return fmt.Errorf("cannot modify items after the delivery window closes")
+    }
+    return nil
+}
+```
+
+This example uses the parent Order's declared `WindowEnd` field. `Parent` is the
+current typed parent; `Previous` is the matched previous **item**, not the previous
+order. The same parent-bearing state is available in `Init`, `AfterSequence`, and
+`AfterQueue`. A recursive relation also exposes its immediate `SelfParent`.
+Keep validation read-only; use marker-aware setters in initialization when values
+need to change. Use `AfterSequence` for logic that requires allocated identifiers.
+
 ## 8. Invariants and backfill
 
 An invariant groups business fields that must be validated together. A group can contain three, four, or more fields; it is not limited to pairs.

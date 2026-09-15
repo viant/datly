@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"log"
 	stdhttp "net/http"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ const (
 )
 
 type Handler struct {
+	metrics       *MetricsConfig
 	async         *asyncRoutes
 	allowedSubnet []string
 	documents     *documentRoutes
@@ -120,7 +122,14 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	pathParams, _ := h.runtime.MatchPathParams(req.Method, escapedPath)
 	requestScope, scopeErr := requestprovider.New(req, requestprovider.WithPathParams(pathParams))
 	if scopeErr != nil {
-		writeJSON(writer, classifyRequestError(scopeErr), xresponse.Status{Status: "error", Message: scopeErr.Error(), Error: scopeErr.Error()})
+		if h.logger != nil {
+			h.logger.Error("HTTP request preparation failed", scopeErr)
+		} else {
+			log.Printf("HTTP request preparation failed: %+v", scopeErr)
+		}
+		code := classifyRequestError(scopeErr)
+		message := stdhttp.StatusText(code)
+		writeJSON(writer, code, xresponse.Status{Status: "error", Message: message, Error: message})
 		return
 	}
 	defer func() {
@@ -144,6 +153,8 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		} else {
 			h.logger.Debug("HTTP route dispatched through handler engine")
 		}
+	} else if execErr != nil {
+		log.Printf("HTTP route execution failed: %+v", execErr)
 	}
 	execCtx := xexec.GetContext(ctx)
 	statusCode := stdhttp.StatusOK
@@ -165,15 +176,16 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 			actual = json.RawMessage("null")
 		}
 	}
-	if actual == nil && execErr != nil && !hasPublicBody {
+	if execErr != nil && !hasPublicBody {
+		message := dexec.ErrorMessage(execErr, statusCode)
 		actual = xresponse.Status{
 			Status:  "error",
-			Message: execErr.Error(),
-			Error:   execErr.Error(),
+			Message: message,
+			Error:   message,
 		}
 	}
 	writer.Header().Set(datlyServiceTimeHeader, time.Since(started).String())
-	publishMetricsHeaders(writer, req, execCtx)
+	h.publishMetricsHeaders(writer, req, execCtx)
 	if response, ok := actual.(xresponse.Response); ok {
 		writeResponse(writer, statusCode, hasExplicitStatusCode(execCtx, execErr), response)
 		return
@@ -196,5 +208,5 @@ func (h *Handler) canHandle(req *stdhttp.Request) bool {
 	if route.APIKeyHeader == "" {
 		return true
 	}
-	return req.Header.Get(route.APIKeyHeader) == route.APIKeyValue
+	return (APIKey{Value: route.APIKeyValue}).matchesValue(req.Header.Get(route.APIKeyHeader))
 }

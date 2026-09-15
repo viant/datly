@@ -1014,8 +1014,8 @@ github.com/viant/assertly v0.4.8/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49u
 github.com/viant/assertly v0.9.0/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49uaYMPRU=
 github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60 h1:VFJvCOHKXv4IqX8rJwn1otpHWQGgMDv2bXtAPgEzndM=
 github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49uaYMPRU=
-github.com/viant/bindly v0.1.1-0.20260914092747-4823e9c62012 h1:bf0RkUjJWD4r7y5rLhoEqHv2tQz8mouJIxGORkkKFIs=
-github.com/viant/bindly v0.1.1-0.20260914092747-4823e9c62012/go.mod h1:09YU4fJL0QlMmtrPZRZVx005W9Lsgp0pREeUzSVgHyo=
+github.com/viant/bindly v0.2.1-0.20260915164201-7cf35da5bd9a h1:/3xeUEE2zmYpreibDQ9sXt+CsMiXIhxVkzDeJs1nWKw=
+github.com/viant/bindly v0.2.1-0.20260915164201-7cf35da5bd9a/go.mod h1:09YU4fJL0QlMmtrPZRZVx005W9Lsgp0pREeUzSVgHyo=
 github.com/viant/gmetric v0.3.2 h1:zTdW9QrPk2P0i/do9fokxtHesFQCvYqIc5Yktzmyxtg=
 github.com/viant/gmetric v0.3.2/go.mod h1:3WGxSMCL+owUb0HewYXMLxkoen8e8MlX1Vd2C6tJ5qw=
 github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8 h1:PCgpoW8IwGsYDs805dCXp25vLTWkakpfvIYll0Twir4=
@@ -1040,8 +1040,8 @@ github.com/viant/sqlparser v0.13.1-0.20260915061102-65308eabace8 h1:eONDIpiWrweD
 github.com/viant/sqlparser v0.13.1-0.20260915061102-65308eabace8/go.mod h1:2QRGiGZYk2/pjhORGG1zLVQ9JO+bXFhqIVi31mkCRPg=
 github.com/viant/sqlx v0.26.1-0.20260915052314-24e180f5c1e5 h1:sUqg/d2SkARQ1YdqLsxnahBjPwbGoIgR7KcRwbpd2pQ=
 github.com/viant/sqlx v0.26.1-0.20260915052314-24e180f5c1e5/go.mod h1:yz4VT1+FvXKuTJ8GOXaiTaNeCX9wgCX0dHhNyYZHnhs=
-github.com/viant/structology v0.10.1-0.20260915143641-202bd3a5f8e8 h1:i/LJYqOdsJ8+prW5ZInNIJW6G0LdeRLgi8ww+aN54iU=
-github.com/viant/structology v0.10.1-0.20260915143641-202bd3a5f8e8/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
+github.com/viant/structology v0.10.1-0.20260915165514-89d421971772 h1:98TEsZlEurUCExZJ3kpYqcwxqi2tnlo8LiB/Ut6xUsM=
+github.com/viant/structology v0.10.1-0.20260915165514-89d421971772/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
 github.com/viant/structql v0.5.4 h1:bMdcOpzU8UMoe5OBcyJVRxLAndvU1oj3ysvPUgBckCI=
 github.com/viant/structql v0.5.4/go.mod h1:nm9AYnAuSKH7b7pG+dKVxbQrr1Mgp1CQEMvUwwkE+I8=
 github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630 h1:H+mvmT2GxVZBmGxdxtMEylekTqDZoCEwNKqOynOfVik=

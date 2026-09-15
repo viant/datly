@@ -117,7 +117,7 @@ func (s *Service) Run(ctx context.Context, id string) (result any, err error) {
 	var completion *xhandler.Outcome
 	defer func() {
 		if panicValue := recover(); panicValue != nil {
-			err = fmt.Errorf("async execution panicked")
+			err = dexec.NewPanicError("async execution", panicValue)
 			result = nil
 		}
 		if completion != nil {
