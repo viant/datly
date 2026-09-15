@@ -387,6 +387,29 @@ update. A Previous row is not the original request snapshot. Unknown Previous
 fields are not known zero values. These distinctions remain important in nested
 and self-referencing graphs.
 
+### Matching parents, children and deeper descendants
+
+Generated matching follows every mutable role in the graph, including
+`Order → Items → child relations of Item`. Original capture records a parent
+before descending into its children and retains each entity's original identity,
+presence and graph association.
+
+Each role has its own Previous-row index keyed by the complete declared identity.
+A composite identity compares every key part. Working entities are associated
+with their original capture and matched Previous row; the generator does not
+pair rows by slice position or use one unqualified ID map for the entire graph.
+
+The lifecycle receives the resulting typed state: `EntityState[Item, Order]`
+provides the current parent and the matched Previous item. A deeper child receives
+its own declared parent type. Recursive self-relations also expose `SelfParent`.
+If the schema defines identity as a parent key plus a local child key, both parts
+must participate in that composite identity.
+
+This separation keeps ID allocation safe: a new child acquiring an ID during
+sequencing remains originally new. Missing key parts or conflicting associations
+are errors, rather than reasons to guess a match. Auxiliary views remain available
+for lookup logic but do not enter mutable-entity traversal.
+
 ## Use Has markers for sparse requests
 
 These order-entity fragments have different meanings:
