@@ -2,12 +2,12 @@
 
 [All guides](README.md)
 
-**Release validation in progress.** The reader, writer, cache, output, resource,
-documentation and MCP changes described here are integrated into the development
-tree. The source baseline was reported with passing main and SDK full suites. The remaining
-corrections below still need acceptance and regression checks before release. The local `v1` release copy pins the published xdatly SDK
-`v0.5.4-0.20260914204318-08752d9972c1` and the native versions in `go.mod`,
-without local dependency replacements. No published Datly 1.0 version is claimed.
+**Published-dependency baseline verified.** The integrated reader, writer, cache,
+output, resource, documentation and MCP implementation has passed the complete
+repository suite against published dependencies. The release module pins the
+published xdatly SDK and native versions in `go.mod`, without local dependency
+replacements. The subsequent explicit lifecycle-naming change described below
+is still in progress. No Datly `v1.0.0` tag or completed release is claimed.
 
 | Surface | Integrated behavior / acceptance boundary |
 | --- | --- |
@@ -24,23 +24,15 @@ without local dependency replacements. No published Datly 1.0 version is claimed
 | Developer/business MCP | Seven developer tools, business exposure, resource folders and native Final SEP-2640 static skills are composed. The authoring-root provenance correction has bounded parent approval. Declared roots alone become skills. Optional directory support is not advertised. |
 | Metadata resolution | The reviewed catalog/resolver optimization is integrated; race checks preserve detached public descriptors. |
 | Native observations/optional async OTel | Native capture and bounded default-off export remain separate; no zero-overhead or production-capacity promise. |
-| Mutation/schema boundary | Integrated relation-produced FK deferral is restricted to captured parent INSERTs and validates final values before Queue. Main SQLite ordinary/self/composite acceptance passes. Direct recursive Velty DTO registration exposes a native selector-expansion bug still being corrected; adapter-based acceptance does not prove that direct path. Complete schema constraint discovery and automatic UNIQUE inference are not promised. |
-| DQL package destinations | Project root remains the external destination. The extension that lets existing DQL directives control separate component/shape packages is under correction: generated entity methods must follow their owning shape package. It is not yet integrated or accepted. |
+| Mutation/schema boundary | Resolved identities, immutable original presence, scoped Previous matching, typed indexes, recursive DTOs, sequencing and final validation are integrated. Stable keys from an authorized existing parent can supply a new child's declared link; pending-reference receipts retain their narrower INSERT requirements. See [mutation lifecycle](mutations.md). Universal constraint discovery is not promised. |
+| DQL package destinations | `#package` selects the generated component package. DQL controls individual shapes and files; generated entity methods follow their owning package. Plain filenames are the default, with explicit optional prefixes and per-file overrides. Split-package and protected-regeneration tests pass. |
 
 ## Dependency tooling
 
-The pinned Structology module still has a dependency test that imports original
-Datly's removed `gateway/router/marshal/tabjson` package. `go mod tidy` traverses
-that test and currently fails against this canonical v1 module. The runtime build
-and targeted generated tests do not require that package. This native dependency
-needs a separately published correction before the tidy release gate can pass;
-do not restore the obsolete Datly package to satisfy a dependency's test.
-
-For the local quickstart, `go list -mod=mod -deps ./...` resolves the application's
-build graph after initialization. Go may raise its locally replaced Datly
-requirement from `v0.0.0` to `v0.37.0`, as requested by the native dependency graph;
-the replacement still selects this v1 checkout. That version is not a Datly 1.0
-release claim. Datly's release `go.mod` itself retains its published native pins.
+`go mod tidy` and `go mod verify` succeed with the pinned public modules. The
+former dependency-test import of a removed Datly package has been corrected in
+the published dependency. Development workspaces may use local replacements;
+release module manifests use published dependency versions.
 
 ## Verification meaning
 
@@ -50,14 +42,15 @@ hashes. Public guides do not navigate host paths or temporary implementation
 reports. Focused tests are evidence for their exercised behavior, not certification
 of all drivers, cloud deployments, cache combinations or production performance.
 
-The documentation author's sandbox denied TCP and Aerospike access, but parent
-acceptance ran successfully in an environment that permits them. Preserve that
-provenance: do not claim the author executed those runs or present the earlier
-sandbox restrictions as missing implementation. Parent live cache/TCP acceptance
-does not establish production scale or source-free deployment.
+## Remaining authoring change
 
-Remaining release work includes DQL destination support for generated entity
-methods, native recursive Velty selectors, and final regression and documentation checks
-against the pinned published dependencies. The SQLX scanner update is already
-pinned to its published version in this release copy. Regenerate the canonical skill bundle from its source
-inputs after those corrections. No hand-edited embedded copies are authoritative.
+Lifecycle type selection is being made explicit through the outer DQL
+`lifecycle_type(view, 'TypeName')` declaration. This change replaces the older
+`entity_hooks` spelling and removes inferred lifecycle struct names. Its generator,
+regeneration, hookless-operation and documentation checks must pass before it is
+reported complete. Reader request initialization remains on the declared input
+contract; reader row hooks and output finalization are separate concerns.
+
+The reader guide now declares its output holder explicitly and shows the generated
+public shape and JSON response. Release publication and version tags remain
+separate from local commits and verification.
