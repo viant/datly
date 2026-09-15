@@ -24,6 +24,13 @@ type GeneratedPackage struct {
 // Transcribe compiles one authored source under normalized options, emits its
 // package artifacts, and loads the generated package.
 func (c *Compiler) Transcribe(ctx context.Context, request Request) (*GeneratedPackage, error) {
+	if request.Generation.Enabled() {
+		generator, generation, err := request.GeneratorRequest()
+		if err != nil {
+			return nil, err
+		}
+		return generator.Generate(ctx, generation)
+	}
 	if request.Component != nil {
 		var types *typecatalog.Catalog
 		if request.Source != nil {

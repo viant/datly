@@ -34,13 +34,28 @@ func (d *dqlPackageDiscovery) load(ctx context.Context, files []xmodule.File) ([
 		if err != nil {
 			return nil, err
 		}
-		prepared := dql.PrepareSource(string(content))
-		if prepared.TypeContext != nil {
-			for _, item := range prepared.TypeContext.Imports {
-				imports[item.Package] = true
-			}
-		}
+		d.collectImports(imports, string(content))
 	}
+	return d.loadImports(ctx, imports)
+}
+
+func (d *dqlPackageDiscovery) loadSource(ctx context.Context, source string) ([]string, error) {
+	imports := map[string]bool{}
+	d.collectImports(imports, source)
+	return d.loadImports(ctx, imports)
+}
+
+func (d *dqlPackageDiscovery) collectImports(imports map[string]bool, source string) {
+	prepared := dql.PrepareSource(source)
+	if prepared.TypeContext == nil {
+		return
+	}
+	for _, item := range prepared.TypeContext.Imports {
+		imports[item.Package] = true
+	}
+}
+
+func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[string]bool) ([]string, error) {
 	paths := make([]string, 0, len(imports))
 	for path := range imports {
 		paths = append(paths, path)

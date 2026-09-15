@@ -52,6 +52,7 @@ type Request struct {
 	Source      *Source
 	Destination string
 	Options     Options
+	Generation  GenerationOptions
 }
 
 // HandlerOptions selects one generated product over the canonical handler
@@ -99,6 +100,84 @@ type VeltyHandlerOptions struct {
 	Factory             string
 	GoDestination       string
 	ResourceDestination string
+}
+
+// GenerationOptions opts a configured authoring target into the high-level
+// Generator path. Source and Destination remain owned by Request so operator
+// configuration has one source/destination owner.
+type GenerationOptions struct {
+	Operation string
+	Language  HandlerTarget
+}
+
+func (o GenerationOptions) Enabled() bool {
+	return strings.TrimSpace(o.Operation) != "" || strings.TrimSpace(string(o.Language)) != ""
+}
+
+func (o GenerationOptions) Normalize() (GenerationOptions, error) {
+	o.Operation = strings.ToLower(strings.TrimSpace(o.Operation))
+	o.Language = HandlerTarget(strings.ToLower(strings.TrimSpace(string(o.Language))))
+	if o.Language == "" {
+		o.Language = HandlerGo
+	}
+	switch o.Operation {
+	case "get", "patch", "post", "put":
+	default:
+		return GenerationOptions{}, fmt.Errorf("gen operation must be get, patch, post or put")
+	}
+	switch o.Language {
+	case HandlerGo, HandlerVelty:
+	default:
+		return GenerationOptions{}, fmt.Errorf("unsupported gen language %q", o.Language)
+	}
+	return o, nil
+}
+
+func (r Request) NormalizeGeneration() (Request, error) {
+	if !r.Generation.Enabled() {
+		return r, nil
+	}
+	generation, err := r.Generation.Normalize()
+	if err != nil {
+		return Request{}, err
+	}
+	if r.Component != nil || r.InputType != nil || r.OutputType != nil {
+		return Request{}, fmt.Errorf("high-level generation cannot be combined with linked component contracts")
+	}
+	if hasExplicitTranscribeOptions(r.Options) {
+		return Request{}, fmt.Errorf("high-level generation cannot be combined with low-level transcription options")
+	}
+	r.Generation = generation
+	return r, nil
+}
+
+func (r Request) GeneratorRequest() (Generator, GenerationRequest, error) {
+	r, err := r.NormalizeGeneration()
+	if err != nil {
+		return Generator{}, GenerationRequest{}, err
+	}
+	if !r.Generation.Enabled() {
+		return Generator{}, GenerationRequest{}, fmt.Errorf("high-level generation is not enabled")
+	}
+	return Generator{Operation: r.Generation.Operation, Language: r.Generation.Language}, GenerationRequest{Source: r.Source, Destination: r.Destination}, nil
+}
+
+func hasExplicitTranscribeOptions(options Options) bool {
+	handler := options.Handler
+	return strings.TrimSpace(string(options.Contracts)) != "" ||
+		strings.TrimSpace(string(handler.Target)) != "" ||
+		strings.TrimSpace(string(handler.Operation)) != "" ||
+		strings.TrimSpace(handler.Input) != "" ||
+		strings.TrimSpace(handler.Output) != "" ||
+		strings.TrimSpace(handler.RootView) != "" ||
+		strings.TrimSpace(handler.Current) != "" ||
+		len(handler.Currents) != 0 ||
+		strings.TrimSpace(handler.Table) != "" ||
+		strings.TrimSpace(handler.Key) != "" ||
+		handler.Hooks.Scaffold ||
+		strings.TrimSpace(handler.Hooks.Destination) != "" ||
+		handler.Go != (GoHandlerOptions{}) ||
+		handler.Velty != (VeltyHandlerOptions{})
 }
 
 func normalizeOptions(options Options) (Options, error) {

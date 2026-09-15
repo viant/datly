@@ -46,6 +46,10 @@ func (s *Service) configure(config Config) error {
 				return err
 			}
 		}
+		request, err = request.NormalizeGeneration()
+		if err != nil {
+			return fmt.Errorf("authoring target %q: %w", name, err)
+		}
 		s.authoring[name] = request
 	}
 	s.applications = map[string]Application{}

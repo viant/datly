@@ -30,6 +30,20 @@ contains trusted standalone options with allowed loopback ports/addresses;
 `MaxInstances` bounds owned application instances. Authorization remains explicit.
 Missing per-target authoring/application capability is not permission to infer one.
 
+For high-level DQL generation, set the authoring request's `Generation.Operation`
+to `get`, `patch`, `post`, or `put`. Go is the default language. This uses the same
+generator as `datly gen`: GET produces reader code, while write operations produce
+mutation code and create-once Lifecycle placeholders. The DQL must declare its
+destination with `#package`. Configure separate targets when exposing different
+operations; clients submit only the target name and DQL source.
+
+Tool metadata exposes `datly.authoringTargets` with each target's enabled state,
+mode, operation, and language. The transcription result reports the selected mode
+and generated files. Source discovery uses the configured project and schema
+authority, including local package imports. Invalid operations and combinations
+of high-level generation with low-level options or linked contracts fail before
+file emission. An empty `Generation` retains the configured transcription path.
+
 The service copies target configuration and package-selection slices. Native
 refiners/connections and authorization objects remain operator-owned and must be
 stable and concurrency-safe. Use the ordinary MCP server configuration to select

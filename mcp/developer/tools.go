@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/jsonrpc"
@@ -21,14 +22,18 @@ type arguments struct {
 	Prefix     string `json:"prefix,omitempty"`
 }
 type Transcription struct {
-	Target string   `json:"target"`
-	Files  []string `json:"files"`
+	Target    string   `json:"target"`
+	Mode      string   `json:"mode,omitempty"`
+	Operation string   `json:"operation,omitempty"`
+	Language  string   `json:"language,omitempty"`
+	Files     []string `json:"files"`
 }
 
 func (s *Service) toolMetadata(name string, names []string) (schema.Tool, error) {
 	properties := schema.ToolInputSchemaProperties{"target": {"type": "string", "enum": names}}
 	required := []string{"target"}
 	description := ""
+	var meta map[string]interface{}
 	destructive, readOnly, openWorld := false, false, false
 	var output any
 	switch name {
@@ -52,6 +57,9 @@ func (s *Service) toolMetadata(name string, names []string) (schema.Tool, error)
 		}
 	case TranscribeTool:
 		description = "Transcribe source into an operator-configured target using canonical generation and authored-file protection. No client paths, shell or compiler overrides."
+		capabilities, summary := s.authoringCapabilities(names)
+		meta = map[string]interface{}{"datly.authoringTargets": capabilities}
+		properties["target"]["description"] = "Operator-configured authoring target. " + summary
 		properties["source"] = map[string]any{"type": "string", "maxLength": 1048576}
 		required = append(required, "source")
 		output = &Transcription{}
@@ -72,7 +80,30 @@ func (s *Service) toolMetadata(name string, names []string) (schema.Tool, error)
 	if err := schemaOutput.Load(output); err != nil {
 		return schema.Tool{}, err
 	}
-	return schema.Tool{Name: name, Description: &description, Annotations: &schema.ToolAnnotations{ReadOnlyHint: &readOnly, DestructiveHint: &destructive, OpenWorldHint: &openWorld}, InputSchema: schema.ToolInputSchema{Type: "object", Properties: properties, Required: required}, OutputSchema: schemaOutput}, nil
+	return schema.Tool{Meta: meta, Name: name, Description: &description, Annotations: &schema.ToolAnnotations{ReadOnlyHint: &readOnly, DestructiveHint: &destructive, OpenWorldHint: &openWorld}, InputSchema: schema.ToolInputSchema{Type: "object", Properties: properties, Required: required}, OutputSchema: schemaOutput}, nil
+}
+
+func (s *Service) authoringCapabilities(names []string) (map[string]any, string) {
+	capabilities := make(map[string]any, len(names))
+	summary := make([]string, 0, len(names))
+	for _, name := range names {
+		request, ok := s.authoring[name]
+		if !ok {
+			capabilities[name] = map[string]any{"enabled": false}
+			summary = append(summary, name+"=disabled")
+			continue
+		}
+		if request.Generation.Enabled() {
+			operation := request.Generation.Operation
+			language := string(request.Generation.Language)
+			capabilities[name] = map[string]any{"enabled": true, "mode": "generation", "operation": operation, "language": language}
+			summary = append(summary, name+"=generation:"+language+":"+operation)
+			continue
+		}
+		capabilities[name] = map[string]any{"enabled": true, "mode": "transcribe"}
+		summary = append(summary, name+"=transcribe")
+	}
+	return capabilities, strings.Join(summary, "; ")
 }
 
 func (s *Service) execute(ctx context.Context, request *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {

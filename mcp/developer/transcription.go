@@ -42,13 +42,39 @@ func (s *Service) transcribe(ctx context.Context, args arguments) (*Transcriptio
 		}
 		source.Types = types
 	}
+	if request.Generation.Enabled() {
+		target := s.targets[args.Target]
+		compiled, err := (&transcribe.Discovery{
+			BaseDir:       target.BaseDir,
+			ModuleDirs:    target.ModuleDirs,
+			Connector:     target.Connector,
+			ColumnRefiner: target.ColumnRefiner,
+		}).CompileSource(ctx, request.Source)
+		if err != nil {
+			return nil, err
+		}
+		result, err := (transcribe.Generator{Operation: request.Generation.Operation, Language: request.Generation.Language}).Generate(ctx, transcribe.GenerationRequest{Compiled: compiled, Destination: request.Destination})
+		if err != nil {
+			return nil, err
+		}
+		return s.transcription(args.Target, result, request.Generation)
+	}
 	result, err := transcribe.NewCompiler().Transcribe(ctx, request)
 	if err != nil {
 		return nil, err
 	}
-	response := &Transcription{Target: args.Target}
+	return s.transcription(args.Target, result, transcribe.GenerationOptions{})
+}
+
+func (s *Service) transcription(target string, result *transcribe.GeneratedPackage, generation transcribe.GenerationOptions) (*Transcription, error) {
+	response := &Transcription{Target: target, Mode: "transcribe"}
+	if generation.Enabled() {
+		response.Mode = "generation"
+		response.Operation = generation.Operation
+		response.Language = string(generation.Language)
+	}
 	for _, file := range result.Result.Files {
-		relative, err := filepath.Rel(s.targets[args.Target].BaseDir, file.Path)
+		relative, err := filepath.Rel(s.targets[target].BaseDir, file.Path)
 		if err != nil {
 			return nil, err
 		}
