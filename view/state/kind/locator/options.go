@@ -300,16 +300,52 @@ func WithView(aView *view.View) Option {
 
 // WithForm return form option
 func WithForm(form *hstate.Form) Option {
+	form = cloneForm(form)
 	return func(o *Options) {
 		o.mu.Lock()
 		defer o.mu.Unlock()
 
 		if o.Form == nil {
-			o.Form = form
+			o.Form = cloneForm(form)
 		} else if form != nil {
-			o.Form.SetValues(form.Values)
+			o.Form = mergeForms(o.Form, form)
 		}
 	}
+}
+
+func cloneForm(form *hstate.Form) *hstate.Form {
+	if form == nil {
+		return nil
+	}
+	result := hstate.NewForm()
+	mu := form.Mutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	result.Values = cloneURLValues(form.Values)
+	if result.Values == nil {
+		result.Values = url.Values{}
+	}
+	return result
+}
+
+func mergeForms(base, overlay *hstate.Form) *hstate.Form {
+	result := cloneForm(base)
+	if result == nil {
+		result = hstate.NewForm()
+	}
+	if overlay == nil {
+		return result
+	}
+	mu := overlay.Mutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	if result.Values == nil {
+		result.Values = url.Values{}
+	}
+	for key, values := range overlay.Values {
+		result.Values[key] = append([]string(nil), values...)
+	}
+	return result
 }
 
 // WithQuery return query parameters option

@@ -25,7 +25,7 @@ func (r *Form) Names() []string {
 }
 
 func (r *Form) Value(ctx context.Context, rType reflect.Type, name string) (interface{}, bool, error) {
-	if r.form != nil && len(r.form.Values) == 0 && r.request == nil {
+	if r.form != nil && r.formLen() == 0 && r.request == nil {
 		return nil, false, nil
 	}
 
@@ -55,7 +55,7 @@ func (r *Form) Value(ctx context.Context, rType reflect.Type, name string) (inte
 		}
 	}
 
-	values, ok := r.form.Lookup(name)
+	values, ok := r.lookupValues(name)
 	if !ok {
 		if r.request == nil {
 			return nil, false, nil
@@ -63,11 +63,11 @@ func (r *Form) Value(ctx context.Context, rType reflect.Type, name string) (inte
 		// If multipart, seed from multipart and avoid FormValue fallback
 		if shared.IsMultipartContentType(r.request.Header.Get("Content-Type")) {
 			r.once.Do(func() { r.seedFormFromMultipart() })
-			if values, ok = r.form.Lookup(name); ok {
+			if values, ok = r.lookupValues(name); ok {
 				if len(values) > 1 {
 					return values, true, nil
 				}
-				return r.form.Get(name), true, nil
+				return firstValue(values), true, nil
 			}
 			return nil, false, nil
 		}
@@ -92,7 +92,38 @@ func (r *Form) Value(ctx context.Context, rType reflect.Type, name string) (inte
 	if len(values) > 1 {
 		return values, true, nil
 	}
-	return r.form.Get(name), true, nil
+	return firstValue(values), true, nil
+}
+
+func (r *Form) formLen() int {
+	if r.form == nil {
+		return 0
+	}
+	mu := r.form.Mutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	return len(r.form.Values)
+}
+
+func (r *Form) lookupValues(name string) ([]string, bool) {
+	if r.form == nil {
+		return nil, false
+	}
+	mu := r.form.Mutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	values, ok := r.form.Values[name]
+	if !ok {
+		return nil, false
+	}
+	return append([]string(nil), values...), true
+}
+
+func firstValue(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }
 
 // NewForm returns body locator

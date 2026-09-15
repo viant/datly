@@ -152,8 +152,11 @@ func (c *Connection) Init(ctx context.Context, connectors Connectors) error {
 // DB creates connection to the DB.
 // It is important to not close the DB since the connection is shared.
 func (c *Connection) DB() (*sql.DB, error) {
+	c.lock()
 	if c._db != nil {
-		return c._db()
+		db := c._db
+		c.unlock()
+		return db()
 	}
 
 	var err error
@@ -162,17 +165,17 @@ func (c *Connection) DB() (*sql.DB, error) {
 	if c.Secret != nil {
 		secrets := scy.New()
 		if secret, err = secrets.Load(context.Background(), c.Secret); err != nil {
+			c.unlock()
 			return nil, fmt.Errorf("invalid db:%v secret, %w", c.DSN, err)
 		}
 		dsn = secret.Expand(dsn)
 	}
 
-	c.lock()
 	c._db = aDbPool.DB(c.Driver, dsn, &c.DBConfig)
-	aDB, err := c._db()
+	db := c._db
 	c.unlock()
 
-	return aDB, err
+	return db()
 }
 
 func (c *Connection) unlock() {

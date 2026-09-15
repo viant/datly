@@ -67,9 +67,28 @@ func WithPath(pathParameters map[string]string) Option {
 
 // WithForm adds form
 func WithForm(form *hstate.Form) Option {
+	form = cloneForm(form)
 	return func(o *Options) {
-		o.Form = form
+		o.Form = cloneForm(form)
 	}
+}
+
+func cloneForm(form *hstate.Form) *hstate.Form {
+	if form == nil {
+		return nil
+	}
+	result := hstate.NewForm()
+	mu := form.Mutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	if form.Values == nil {
+		return result
+	}
+	result.Values = make(url.Values, len(form.Values))
+	for key, values := range form.Values {
+		result.Values[key] = append([]string(nil), values...)
+	}
+	return result
 }
 
 // WithQuery adds query parameters
