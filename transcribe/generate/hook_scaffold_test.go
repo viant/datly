@@ -35,6 +35,30 @@ func TestGeneratorRejectsHookScaffoldWithoutGeneratedContractHandler(t *testing.
 	}
 }
 
+func TestHookScaffoldFileTextPlacesPositionlessDocsOnDeclarations(t *testing.T) {
+	file := &ast.File{
+		Name: ast.NewIdent("generated"),
+		Decls: []ast.Decl{&ast.GenDecl{
+			Tok: token.TYPE,
+			Doc: &ast.CommentGroup{List: []*ast.Comment{{Text: "// OrderLifecycle customizes role Input.Orders."}}},
+			Specs: []ast.Spec{&ast.TypeSpec{
+				Name: ast.NewIdent("OrderLifecycle"),
+				Type: &ast.StructType{Fields: &ast.FieldList{}},
+			}},
+		}},
+	}
+	source, err := hookScaffoldFileText("orders", &HookScaffoldPlan{File: file})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(source, "package //") || !strings.Contains(source, "package orders\n\n// OrderLifecycle customizes role Input.Orders.\ntype OrderLifecycle struct") {
+		t.Fatalf("misplaced hook scaffold comment:\n%s", source)
+	}
+	if _, err = parser.ParseFile(token.NewFileSet(), "orders_hooks.go", source, parser.ParseComments); err != nil {
+		t.Fatalf("generated hook source does not parse: %v\n%s", err, source)
+	}
+}
+
 func TestResolveHookScaffoldRejectsLinkedContracts(t *testing.T) {
 	plan := &Plan{
 		ComponentName: "Orders",

@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
@@ -22,10 +23,11 @@ func (e *AmbiguityError) Error() string {
 // Resolver applies package/import context over an immutable catalog snapshot.
 // Native shape resolution and public results receive detached descriptors.
 type Resolver struct {
-	authority  Authority
-	types      map[string]*x.Type
-	context    *ResolutionContext
-	provenance map[string]Provenance
+	authority    Authority
+	types        map[string]*x.Type
+	context      *ResolutionContext
+	provenance   map[string]Provenance
+	implicitTime bool
 }
 
 func NewResolver(catalog *Catalog, authority Authority, context *ResolutionContext) (*Resolver, error) {
@@ -37,7 +39,14 @@ func NewResolverWithProvenance(catalog *Catalog, authority Authority, context *R
 	if err != nil {
 		return nil, err
 	}
-	return &Resolver{authority: authority, types: types, context: NormalizeContext(context), provenance: cloneProvenance(provenance)}, nil
+	// SQLX discovers timestamps as the standard library's time.Time. Retain
+	// that native package authority when no caller descriptor was supplied;
+	// synthetic reconstruction cannot represent its private implementation.
+	implicitTime := types["time.Time"] == nil
+	if implicitTime {
+		types["time.Time"] = x.NewType(reflect.TypeOf(time.Time{}))
+	}
+	return &Resolver{authority: authority, types: types, context: NormalizeContext(context), provenance: cloneProvenance(provenance), implicitTime: implicitTime}, nil
 }
 
 func (r *Resolver) Resolve(typeExpr string) (string, error) {
@@ -135,7 +144,7 @@ func (r *Resolver) ResolveWithProvenance(typeExpr string) (*Resolution, error) {
 }
 
 func (r *Resolver) shapeResolver() xshape.Resolver {
-	result := xshape.Resolver{Lookup: r.lookupStructural, Imports: map[string]string{}}
+	result := xshape.Resolver{Lookup: r.lookupCanonical, Imports: map[string]string{}}
 	if r == nil || r.context == nil {
 		return result
 	}
@@ -152,6 +161,19 @@ func (r *Resolver) shapeResolver() xshape.Resolver {
 	return result
 }
 
+// Native shape resolution calls Lookup with canonical names first. Those
+// names must not be interpreted a second time as authored import aliases.
+func (r *Resolver) lookupCanonical(expression string) (*x.Type, error) {
+	name, err := (xshape.Resolver{}).Named(expression)
+	if err != nil {
+		return nil, err
+	}
+	if descriptor := r.types[name]; descriptor != nil {
+		return CloneDescriptor(descriptor)
+	}
+	return r.lookupStructural(expression)
+}
+
 func (r *Resolver) lookupStructural(typeExpr string) (*x.Type, error) {
 	base, err := (xshape.Resolver{}).Named(typeExpr)
 	if err != nil {
@@ -165,6 +187,22 @@ func (r *Resolver) lookupStructural(typeExpr string) (*x.Type, error) {
 }
 
 func (r *Resolver) resolveNamedCandidate(expression, base string) (*candidate, error) {
+	// An authored import qualifier is source authority, including a qualifier
+	// that happens to spell a standard-library package name.
+	if reference, err := (xshape.Resolver{}).Reference(base); err == nil && r.context != nil && reference.Qualifier != "" {
+		for _, imported := range r.context.Imports {
+			if imported.Alias != reference.Qualifier {
+				continue
+			}
+			for _, name := range referenceNames(reference) {
+				key := imported.Package + "." + name
+				if r.types[key] != nil {
+					return &candidate{key: key, matchKind: "alias_import"}, nil
+				}
+			}
+			return nil, nil
+		}
+	}
 	if r.types[base] != nil {
 		return &candidate{key: base, matchKind: "exact"}, nil
 	}
@@ -269,6 +307,9 @@ func (r *Resolver) unqualifiedCandidates(typeName string) []candidate {
 		return result
 	}
 	for key := range r.types {
+		if r.implicitTime && key == "time.Time" {
+			continue
+		}
 		if key != typeName && !strings.HasSuffix(key, "."+typeName) || seen[key] {
 			continue
 		}

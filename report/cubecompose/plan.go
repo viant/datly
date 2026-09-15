@@ -268,41 +268,59 @@ type fieldRef struct {
 }
 
 func (p *Plan) validateJoin(n node.Node, frame int) (int, error) {
-	binary, ok := n.(*expr.Binary)
-	if !ok {
-		return 0, fmt.Errorf("cube compose ON supports dimension equality joined with AND")
-	}
-	if strings.EqualFold(strings.TrimSpace(binary.Op), "AND") {
-		left, err := p.validateJoin(binary.X, frame)
-		if err != nil {
-			return 0, err
-		}
-		right, err := p.validateJoin(binary.Y, frame)
-		return left + right, err
-	}
-	if strings.TrimSpace(binary.Op) != "=" {
-		return 0, fmt.Errorf("cube compose join keys must use equality")
-	}
-	left, err := p.resolveSelector(binary.X)
+	terms, err := joinTerms(n)
 	if err != nil {
 		return 0, err
+	}
+	for _, term := range terms {
+		if err := p.validateJoinTerm(term, frame); err != nil {
+			return 0, err
+		}
+	}
+	return len(terms), nil
+}
+
+func joinTerms(n node.Node) ([]*expr.Binary, error) {
+	n = unwrapParenthesis(n)
+	binary, ok := n.(*expr.Binary)
+	if !ok {
+		return nil, fmt.Errorf("cube compose ON supports dimension equality joined with AND")
+	}
+	if strings.EqualFold(strings.TrimSpace(binary.Op), "AND") {
+		left, err := joinTerms(binary.X)
+		if err != nil {
+			return nil, err
+		}
+		right, err := joinTerms(binary.Y)
+		return append(left, right...), err
+	}
+	if strings.TrimSpace(binary.Op) != "=" {
+		return nil, fmt.Errorf("cube compose join keys must use equality")
+	}
+	return []*expr.Binary{binary}, nil
+}
+
+func (p *Plan) validateJoinTerm(binary *expr.Binary, frame int) error {
+	left, err := p.resolveSelector(binary.X)
+	if err != nil {
+		return err
 	}
 	right, err := p.resolveSelector(binary.Y)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	if left.field.Role != Dimension || right.field.Role != Dimension {
-		return 0, fmt.Errorf("cube compose join keys must be dimensions")
+		return fmt.Errorf("cube compose join keys must be dimensions")
 	}
 	leftFrame, _ := aliasFrame(left.alias, p.FrameCount)
 	rightFrame, _ := aliasFrame(right.alias, p.FrameCount)
 	if leftFrame == rightFrame || !joinsNewFrame(leftFrame, rightFrame, frame) {
-		return 0, fmt.Errorf("cube compose join for %s must match one of its dimensions to an earlier cube", cubeAlias(frame))
+		return fmt.Errorf("cube compose join for %s must match one of its dimensions to an earlier cube", cubeAlias(frame))
 	}
 	if left.field.SQLName != right.field.SQLName {
-		return 0, fmt.Errorf("cube compose join dimensions must match, got %s and %s", left.field.Name, right.field.Name)
+		return fmt.Errorf("cube compose join dimensions must match, got %s and %s", left.field.Name, right.field.Name)
 	}
-	return 1, nil
+	return nil
 }
 
 func (p *Plan) outputColumn(item *query.Item) (string, Role, reflect.Type, error) {
@@ -410,6 +428,16 @@ func (p *Plan) validateNode(n node.Node, aliases map[string]Column) ([]fieldRef,
 		return nil, fmt.Errorf("opaque SQL expression %T is not allowed", n)
 	default:
 		return nil, fmt.Errorf("unsupported cube compose expression %T", n)
+	}
+}
+
+func unwrapParenthesis(n node.Node) node.Node {
+	for {
+		parenthesis, ok := n.(*expr.Parenthesis)
+		if !ok || parenthesis.X == nil {
+			return n
+		}
+		n = parenthesis.X
 	}
 }
 

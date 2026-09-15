@@ -166,8 +166,13 @@ func (c *preparedProjectComponent) output() (projectComponentOutput, error) {
 		return projectComponentOutput{}, fmt.Errorf("generated output type %q is not a local named type", name)
 	}
 	return projectComponentOutput{
-		descriptor: &x.Type{PkgPath: c.targetPackage, Name: name},
-		origin:     typecatalog.TypeOriginGenerated,
+		descriptor: &x.Type{PkgPath: func() string {
+			if c.plan.Output.Package != "" {
+				return c.plan.Output.Package
+			}
+			return c.targetPackage
+		}(), Name: name},
+		origin: typecatalog.TypeOriginGenerated,
 	}, nil
 }
 

@@ -1,0 +1,60 @@
+package orders
+
+import (
+ "context"
+ "fmt"
+ "net/http/httptest"
+ "reflect"
+ "strings"
+ "testing"
+ "sort"
+
+ "github.com/viant/bindly/locator"
+ "github.com/viant/bindly/resource"
+ requestprovider "github.com/viant/bindly/provider/request"
+ "github.com/viant/datly/bootstrap"
+ "github.com/viant/datly/internal/testharness/genpatch"
+ "github.com/viant/datly/internal/testharness/sqlite"
+ druntime "github.com/viant/datly/runtime"
+ mutationhandler "github.com/viant/datly/runtime/handler/mutation"
+ dsql "github.com/viant/datly/sql"
+ "github.com/viant/datly/sql/dml"
+ viewprovider "github.com/viant/datly/sql/reader/provider"
+ dtag "github.com/viant/datly/tag"
+
+)
+
+func TestGeneratedPatchRuntime(t *testing.T){
+ ctx:=context.Background();db:=sqlite.New(t);db.DB.SetMaxOpenConns(1)
+ if err:=db.ExecStatements(ctx,genpatch.CompositeSchema...);err!=nil{t.Fatal(err)}
+ var foreignKeys int;if err:=db.DB.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeys);err!=nil||foreignKeys!=1{t.Fatal("foreign keys not enabled",err)}
+ holder:=reflect.TypeOf(OrdersComponent{});field,ok:=holder.FieldByName("Contract");if !ok{t.Fatal("missing holder")}
+ tag,present,err:=dtag.ParseComponent(field.Tag);if err!=nil||!present{t.Fatal(err)}
+ source:=&bootstrap.RouteSource{HolderType:"OrdersComponent",FieldName:field.Name,PackageName:"orders",PackagePath:holder.PkgPath(),Tag:tag,InputType:"OrdersInput",OutputType:"OrdersOutput"}
+ component,err:=source.Resolve(reflect.TypeOf(OrdersInput{}),reflect.TypeOf(OrdersOutput{}));if err!=nil{t.Fatal(err)}
+ resources:=resource.New();if err:=resources.Register(OrdersDatlyResourceNamespace,OrdersDatlyResources);err!=nil{t.Fatal(err)}
+ artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:reflect.TypeOf(OrdersInput{}),OutputType:reflect.TypeOf(OrdersOutput{}),Resources:resources});if err!=nil{t.Fatal(err)}
+ views,err:=viewprovider.New(viewprovider.Config{Dependencies:artifact.ViewDependencies,Input:artifact.Input,SQL:&dsql.SQLComponent{DB:db.DB}});if err!=nil{t.Fatal(err)}
+ handler:=mutationhandler.New[OrdersInput,OrdersOutput](NewOrdersHandler())
+ rt,err:=druntime.NewRuntime([]*druntime.RegisteredComponent{{Component:artifact.Component,Input:artifact.Input,Output:artifact.Output,OutputType:reflect.TypeOf(OrdersOutput{}),Handler:handler,Providers:[]locator.Provider{views},DataSource:dml.Source{DB:db.DB}}},druntime.WithResources(resources));if err!=nil{t.Fatal(err)}
+ invoke:=func(body string)(any,error){
+  request:=httptest.NewRequest("PATCH","/orders",strings.NewReader(body));request.Header.Set("Content-Type","application/json")
+  scope,err:=requestprovider.New(request);if err!=nil{t.Fatal(err)};defer scope.Close()
+  return rt.ExecuteRoute(ctx,"PATCH","/orders",scope)
+ }
+
+ cases:=[]struct{body string;want []string}{
+ {`{"Data":[{"tenantId":1,"id":5}]}`,[]string{"10/7"}},
+ {`{"Data":[{"tenantId":2,"id":5}]}`,[]string{"20/8"}},
+ {`{"Data":[{"tenantId":1,"id":5},{"tenantId":2,"id":5}]}`,[]string{"10/7","20/8"}},
+ {`{"Data":[{"tenantId":1,"id":5,"kindId":8}]}`,[]string{"10/8"}},
+ {`{"Data":[{"tenantId":1,"id":5,"kindId":null}]}`,nil},
+ {`{"Data":[{"id":5}]}`,nil},
+ {`{"Data":[{"tenantId":null,"id":5}]}`,nil},
+ {`{"Data":[{"tenantId":3,"id":5}]}`,nil},
+ {`{"Data":[{"kindTenantId":20,"kindId":7}]}`,[]string{"20/7"}},
+ }
+ for _,tc:=range cases{observed=nil;_,err:=invoke(tc.body);if err==nil||!strings.Contains(err.Error(),"probe stop"){t.Fatalf("%s: unexpected invocation %v",tc.body,err)};sort.Strings(observed);if !reflect.DeepEqual(observed,tc.want){t.Fatalf("%s observed=%v want=%v",tc.body,observed,tc.want)}}
+}
+var observed []string
+func(input *OrdersInput)Init(context.Context)error{for _,row:=range input.CurrentKinds{observed=append(observed,fmt.Sprintf("%d/%d",*row.TenantId,*row.Id))};return fmt.Errorf("probe stop")}

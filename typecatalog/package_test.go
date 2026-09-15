@@ -100,3 +100,21 @@ func TestCatalogRegisterPackageRejectsForeignAndDuplicateTypes(t *testing.T) {
 		t.Fatal("expected duplicate type error")
 	}
 }
+
+func TestCatalogPackageFilesPreservesSharedOrigins(t *testing.T) {
+	generated := &smodel.Type{Name: "Generated"}
+	authored := &smodel.Type{Name: "Authored"}
+	pkg := &smodel.Package{PkgPath: "example.com/shared", Types: []*smodel.Type{generated, authored}, Files: []*smodel.GoFile{{Name: "generated.go", Types: []*smodel.Type{generated}}, {Name: "authored.go", Types: []*smodel.Type{authored}}}}
+	catalog := NewCatalog()
+	if err := catalog.RegisterPackageFiles(pkg, map[string]bool{"generated.go": true}); err != nil {
+		t.Fatal(err)
+	}
+	catalog.mu.RLock()
+	defer catalog.mu.RUnlock()
+	if entries := catalog.items["example.com/shared.Generated"]; len(entries) != 1 || entries[0].Origin != TypeOriginGenerated {
+		t.Fatal(entries)
+	}
+	if entries := catalog.items["example.com/shared.Authored"]; len(entries) != 1 || entries[0].Origin != TypeOriginPackage {
+		t.Fatal(entries)
+	}
+}

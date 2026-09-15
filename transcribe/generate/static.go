@@ -18,7 +18,7 @@ func (r *planResolver) resolveStatic() (*Plan, error) {
 	if err := content.Validate(); err != nil {
 		return nil, err
 	}
-	r.plan = &Plan{ComponentName: r.input.Component.Name, Static: content, RouterDest: lowerSnake(r.input.Component.Name) + "_static.go"}
+	r.plan = &Plan{Package: r.input.TargetPackage, GoPackage: r.input.PackageName, ProjectRoot: r.input.ProjectRoot, ComponentName: r.input.Component.Name, Static: content, RouterDest: lowerSnake(r.input.Component.Name) + "_static.go"}
 	var err error
 	r.plan.Resources, err = r.prepareResources()
 	return r.plan, err

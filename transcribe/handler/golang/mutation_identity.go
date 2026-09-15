@@ -86,7 +86,7 @@ func (p *mutationIdentityPolicy) declarations(e *entityEmitter, record *recordLo
 		&ast.AssignStmt{Lhs: []ast.Expr{id("key"), id("complete"), id("_"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(adapter, "Identity"), id("state"))}},
 		returnStmt(id("key"), id("complete"), id("err")),
 	}}}
-	return []ast.Decl{p.produced(e, record), p.insert(e, record), identity, key}
+	return []ast.Decl{p.produced(e, record), p.write(e, record), identity, key}
 }
 
 func (p *mutationIdentityPolicy) verifyAction(e *actionEmitter, action ast.Expr) []ast.Stmt {

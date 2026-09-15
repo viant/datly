@@ -385,7 +385,11 @@ func (g *handlerGeneration) appendRecordType(result *[]handlergo.RecordType, sem
 	}
 	if record.Entity != nil {
 		if view != nil && view.Ownership == gen.ViewGenerated {
-			record.Entity.Type = spec.TypeRef{Package: g.input.TargetPackage, Name: base}
+			packagePath := view.Package
+			if packagePath == "" {
+				packagePath = g.input.TargetPackage
+			}
+			record.Entity.Type = spec.TypeRef{Package: packagePath, Name: base}
 		} else if g.input.TypeResolver != nil {
 			resolved, err := g.input.TypeResolver.ResolveShape(base)
 			if err != nil {

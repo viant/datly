@@ -12,3 +12,12 @@ func TestEntityPlanCloneDetachesInvariantFields(t *testing.T) {
 		t.Fatal("entity clone retained mutable invariant aliases")
 	}
 }
+
+func TestLookupProjectionCloneIsDetached(t *testing.T) {
+	source := &Plan{Root: &RecordPlan{Current: &CurrentPlan{Lookup: &LookupProjection{Name: "Keys", Columns: []string{"ID"}}}}}
+	clone := source.Clone()
+	clone.Root.Current.Lookup.Columns[0] = "OTHER"
+	if source.Root.Current.Lookup.Columns[0] != "ID" {
+		t.Fatal("lookup columns aliased across semantic clone")
+	}
+}

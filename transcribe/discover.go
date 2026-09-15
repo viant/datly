@@ -94,6 +94,11 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 	if err != nil {
 		return nil, err
 	}
+	dqlImports, err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: d.Registry}).load(ctx, files)
+	if err != nil {
+		return nil, err
+	}
+	packagePaths = append(packagePaths, dqlImports...)
 	assets, err := (packageresources.Loader{Workspace: workspace, Packages: packagePaths}).Load(ctx)
 	if err != nil {
 		return nil, err

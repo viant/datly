@@ -12,26 +12,35 @@ type EmittedFile struct {
 }
 
 func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
-	files, userFiles, removals, err := scaffoldArtifacts(dir, plan)
+	packages, err := plan.packages(dir)
 	if err != nil {
 		return nil, err
 	}
-	persistence := &scaffoldPersistence{dir: dir, owner: plan.ComponentName, files: files, userFiles: userFiles, removals: removals, plan: plan}
-	if err = persistence.Commit(); err != nil {
+	if err = packages.validate(); err != nil {
 		return nil, err
 	}
-	return persistence.files, nil
+	var result []EmittedFile
+	for i, p := range packages.plans {
+		files, userFiles, removals, err := scaffoldArtifacts(packages.dirs[i], p)
+		if err != nil {
+			return nil, err
+		}
+		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: userFiles, removals: removals, plan: p}
+		if err = persistence.Commit(); err != nil {
+			return nil, err
+		}
+		result = append(result, persistence.files...)
+	}
+	return result, nil
 }
 
-// ValidateDestination checks package ownership and file collisions without
-// writing. Project composition uses it to preflight every component before the
-// first package is emitted.
+// ValidateDestination checks every package in this component before writing.
 func (p *Plan) ValidateDestination(dir string) error {
-	files, userFiles, removals, err := scaffoldArtifacts(dir, p)
+	packages, err := p.packages(dir)
 	if err != nil {
 		return err
 	}
-	return (&scaffoldPersistence{dir: dir, owner: p.ComponentName, files: files, userFiles: userFiles, removals: removals, plan: p}).Validate()
+	return packages.validate()
 }
 
 func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []string, error) {
@@ -47,7 +56,8 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 	packageName := plan.PackageName()
 	var componentContent string
 	var err error
-	if plan.Static != nil {
+	if plan.ShapesOnly {
+	} else if plan.Static != nil {
 		componentContent, err = plan.staticSource(packageName)
 	} else {
 		componentContent, err = componentFileText(packageName, plan)
@@ -57,7 +67,7 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 	}
 	viewDestinations := map[string]bool{}
 	for _, view := range plan.Views {
-		if view.Ownership == ViewGenerated {
+		if view.Ownership == ViewGenerated && plan.localShape(view.Package) {
 			viewDestinations[view.Destination] = true
 		}
 	}
@@ -88,10 +98,13 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 			Path: filepath.Join(dir, destination), Content: viewFileForDestination(packageName, plan, destination),
 		})
 	}
-	files = append(files, EmittedFile{
-		Path: filepath.Join(dir, plan.RouterDest), Content: componentContent,
-	})
-	if plan.Input.Ownership == ContractGenerated {
+	if !plan.ShapesOnly {
+		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.RouterDest), Content: componentContent})
+	}
+	if len(plan.Aliases) > 0 {
+		files = append(files, EmittedFile{Path: filepath.Join(dir, lowerSnake(plan.ComponentName)+"_types_gen.go"), Content: plan.aliasSource()})
+	}
+	if plan.Input.Ownership == ContractGenerated && plan.localShape(plan.Input.Package) {
 		files = append(files, EmittedFile{
 			Path: filepath.Join(dir, plan.Input.Destination),
 			Content: inputStructFile(packageName,
@@ -100,7 +113,7 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 			),
 		})
 	}
-	if plan.Output.Ownership == ContractGenerated {
+	if plan.Output.Ownership == ContractGenerated && plan.localShape(plan.Output.Package) {
 		files = append(files, EmittedFile{
 			Path: filepath.Join(dir, plan.Output.Destination),
 			Content: structFileWithImports(packageName,

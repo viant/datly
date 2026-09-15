@@ -82,6 +82,64 @@ func TestCompositionSQLiteEightFrames(t *testing.T) {
 	}{{ID: 7}})
 }
 
+func TestCompositionSQLiteMultiKeyJoinPreventsCrossMatch(t *testing.T) {
+	type row struct {
+		ID     int64    `sqlx:"id"`
+		Region string   `sqlx:"region"`
+		Value  *float64 `sqlx:"value"`
+	}
+	value := func(v float64) *float64 { return &v }
+	ctx := context.Background()
+	h := sqlite.New(t)
+	if err := h.ExecStatements(ctx,
+		`CREATE TABLE facts(id INTEGER, region TEXT, period TEXT, amount REAL)`,
+		`INSERT INTO facts VALUES
+			(1,'EU','previous',100),
+			(1,'US','previous',80),
+			(1,'EU','current',40),
+			(1,'US','current',25)`,
+	); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := NewCatalog(
+		Field{Name: "id", Type: reflect.TypeFor[int64](), Role: Dimension},
+		Field{Name: "region", Type: reflect.TypeFor[string](), Role: Dimension},
+		Field{Name: "amount", Type: reflect.TypeFor[float64](), Role: Measure},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames := []Frame{
+		{SQL: `SELECT id,region,SUM(amount) AS amount FROM facts WHERE period=? GROUP BY id,region`, Args: []any{"previous"}},
+		{SQL: `SELECT id,region,SUM(amount) AS amount FROM facts WHERE period=? GROUP BY id,region`, Args: []any{"current"}},
+	}
+	oneKey, err := Compile(`SELECT t1.id, t1.region, t1.amount-t2.amount AS value
+ FROM $CubeSQL1 AS t1
+ JOIN $CubeSQL2 AS t2 ON t1.id=t2.id
+ ORDER BY t1.region, value`, catalog, 2, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query, args, err := oneKey.Render(frames)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.AssertQuery(t, ctx, sqlite.Query{SQL: query, Args: args}, []row{{1, "EU", value(60)}, {1, "EU", value(75)}, {1, "US", value(40)}, {1, "US", value(55)}})
+
+	twoKeys, err := Compile(`SELECT t1.id, t1.region, t1.amount-t2.amount AS value
+ FROM $CubeSQL1 AS t1
+ JOIN $CubeSQL2 AS t2 ON t1.id=t2.id AND t1.region=t2.region
+ ORDER BY t1.region`, catalog, 2, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query, args, err = twoKeys.Render(frames)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.AssertQuery(t, ctx, sqlite.Query{SQL: query, Args: args}, []row{{1, "EU", value(60)}, {1, "US", value(55)}})
+}
+
 func TestCompositionMapsContractNamesToSQLColumns(t *testing.T) {
 	ctx := context.Background()
 	h := sqlite.New(t)

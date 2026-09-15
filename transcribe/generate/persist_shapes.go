@@ -17,14 +17,14 @@ func (p *scaffoldPersistence) shapeDestinations() map[string]bool {
 	if p.plan == nil {
 		return destinations
 	}
-	if p.plan.Input.Ownership == ContractGenerated {
+	if p.plan.Input.Ownership == ContractGenerated && p.plan.localShape(p.plan.Input.Package) {
 		destinations[p.plan.Input.Destination] = true
 	}
-	if p.plan.Output.Ownership == ContractGenerated {
+	if p.plan.Output.Ownership == ContractGenerated && p.plan.localShape(p.plan.Output.Package) {
 		destinations[p.plan.Output.Destination] = true
 	}
 	for _, view := range p.plan.Views {
-		if view.Ownership == ViewGenerated {
+		if view.Ownership == ViewGenerated && p.plan.localShape(view.Package) {
 			destinations[view.Destination] = true
 		}
 	}
@@ -170,8 +170,12 @@ func (p *scaffoldPersistence) shapeTypeUpdates(destination string, existing, own
 				if !present {
 					continue
 				}
+				canonical, err := p.plan.CanonicalType("", field.Type)
+				if err != nil {
+					return nil, err
+				}
 				prior, trusted := owned[key]
-				if trusted && prior.Type == field.Type || !trusted && before.Type == field.Type {
+				if trusted && prior.Type == canonical || !trusted && before.Type == canonical {
 					continue // No cardinality edit; retain native type/tag conflict checks.
 				}
 				if !trusted {
@@ -182,7 +186,7 @@ func (p *scaffoldPersistence) shapeTypeUpdates(destination string, existing, own
 				}
 				// Both expressions come from canonical generated field ownership and
 				// the relation planner. Only the slice wrapper may change, never T.
-				if prior.Type != "[]"+field.Type && field.Type != "[]"+prior.Type {
+				if prior.Type != "[]"+canonical && canonical != "[]"+prior.Type {
 					return nil, fmt.Errorf("shape %s field %s changes relation child type: explicit migration required", destination, key)
 				}
 				result = append(result, xshape.SourceFieldTypeUpdate{Owner: view.Name, Field: field.Name, TypeExpr: field.Type})

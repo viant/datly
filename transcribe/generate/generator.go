@@ -33,6 +33,8 @@ type Input struct {
 	Declarations    Declarations
 	TypeResolver    *typecatalog.Resolver
 	TargetPackage   string
+	PackageName     string
+	ProjectRoot     string
 	Contracts       ContractReferences
 	Views           ViewReferences
 	ViewBindings    ViewBindings

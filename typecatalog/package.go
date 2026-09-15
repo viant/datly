@@ -2,6 +2,7 @@ package typecatalog
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	x "github.com/viant/x"
@@ -110,4 +111,52 @@ func (c *Catalog) RegisterPackage(origin TypeOrigin, pkg *smodel.Package) error 
 		}
 	}
 	return nil
+}
+
+// RegisterPackageFiles preserves source ownership in a shared generated package.
+// The file ownership manifest classifies declarations; it never promotes an
+// unrelated authored file to generated authority.
+func (c *Catalog) RegisterPackageFiles(pkg *smodel.Package, generatedFiles map[string]bool) error {
+	if pkg == nil {
+		return fmt.Errorf("synthetic package is required")
+	}
+	generated, authored := *pkg, *pkg
+	generated.Types = nil
+	authored.Types = nil
+	byName := map[string]bool{}
+	for _, file := range pkg.Files {
+		for _, typ := range file.Types {
+			if generatedFiles[filepath.Base(file.Name)] {
+				byName[typ.Name] = true
+			}
+		}
+	}
+	for _, typ := range pkg.Types {
+		if byName[typ.Name] {
+			generated.Types = append(generated.Types, typ)
+		} else {
+			authored.Types = append(authored.Types, typ)
+		}
+	}
+	if err := c.RegisterPackage(TypeOriginGenerated, &generated); err != nil {
+		return err
+	}
+	// Refresh authored source descriptors as a package snapshot too; repeated
+	// generation must retain edits to create-once hooks, not register duplicates.
+	// Preserve compiled identity where one is already linked to that source.
+	for index, typ := range authored.Types {
+		existing, ok, err := c.Resolve(PackageAuthority, pkg.PkgPath+"."+typ.Name)
+		if err != nil {
+			return err
+		}
+		if ok && existing.Type != nil {
+			detached, err := (x.Cloner{}).Synthetic(typ)
+			if err != nil {
+				return err
+			}
+			detached.ReflectType = existing.Type
+			authored.Types[index] = detached
+		}
+	}
+	return c.RegisterPackage(TypeOriginPackage, &authored)
 }

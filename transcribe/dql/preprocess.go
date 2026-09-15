@@ -113,6 +113,10 @@ func PrepareSource(source string) *PreparedSource {
 			switch name {
 			case "package":
 				if pkg, ok := parsePackageLineDirective(trimmed); ok {
+					if typeContext.PackagePath != "" && typeContext.PackagePath != pkg {
+						prepared.Diagnostics = append(prepared.Diagnostics, SourceDiagnostic{Code: DiagnosticInvalidPackage, Message: "conflicting #package destinations", Offset: start, End: lineEnd})
+					}
+					typeContext.PackagePath = pkg
 					typeContext.DefaultPackage = pkg
 				} else {
 					prepared.Diagnostics = append(prepared.Diagnostics, SourceDiagnostic{

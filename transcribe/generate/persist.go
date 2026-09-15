@@ -16,9 +16,14 @@ import (
 
 const scaffoldManifestName = packageasset.ManifestName
 
-const scaffoldManifestVersion = 4
+const scaffoldManifestVersion = 5
 
 type scaffoldManifest struct {
+	Identity         string                       `json:"identity,omitempty"`
+	ComponentPackage string                       `json:"componentPackage,omitempty"`
+	Destinations     map[string]string            `json:"destinations,omitempty"`
+	Owners           map[string]*scaffoldManifest `json:"owners,omitempty"`
+	others           map[string]*scaffoldManifest
 	Version          int                                  `json:"version"`
 	Owner            string                               `json:"owner"`
 	Files            []string                             `json:"files"`
@@ -108,6 +113,10 @@ func (p *scaffoldPersistence) Commit() error {
 	if err != nil {
 		return err
 	}
+	manifest, err = manifest.forOwner(p.owner, p.plan != nil && p.plan.GoPackage != "")
+	if err != nil {
+		return err
+	}
 	if err = p.validateExisting(target, stage, manifest); err != nil {
 		return err
 	}
@@ -145,7 +154,9 @@ func (p *scaffoldPersistence) Commit() error {
 	if err = p.writeUserFiles(target, stage); err != nil {
 		return err
 	}
-	if err = writeScaffoldManifest(stage, p.owner, desired, &scaffoldManifest{Roles: roles, Resources: resources, Fingerprints: fingerprints, ProjectionFields: p.fieldOwnership}); err != nil {
+	metadata := p.destinationMetadata()
+	metadata.Roles, metadata.Resources, metadata.Fingerprints, metadata.ProjectionFields, metadata.others = roles, resources, fingerprints, p.fieldOwnership, manifest.others
+	if err = writeScaffoldManifest(stage, p.owner, desired, metadata); err != nil {
 		return err
 	}
 	if err = p.swap(target, stage, original); err != nil {
@@ -156,15 +167,26 @@ func (p *scaffoldPersistence) Commit() error {
 }
 
 func (p *scaffoldPersistence) Validate() error {
+	_, err := p.preview()
+	return err
+}
+
+// preview exposes the exact merged files to package/import validation without
+// replacing the caller's raw generator proposal with retained authored edits.
+func (p *scaffoldPersistence) preview() (*scaffoldPersistence, error) {
+	copy := *p
+	copy.prepareFiles()
+	if err := copy.validatePrepared(); err != nil {
+		return nil, err
+	}
+	return &copy, nil
+}
+
+func (p *scaffoldPersistence) validatePrepared() error {
 	target, err := p.target()
 	if err != nil {
 		return err
 	}
-	// Preflight may merge shape source in memory, but must not turn that merged
-	// authored source into a later invocation's raw generator proposal.
-	copy := *p
-	p = &copy
-	p.prepareFiles()
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
 		return nil
@@ -182,6 +204,10 @@ func (p *scaffoldPersistence) Validate() error {
 		return err
 	}
 	manifest, err := readScaffoldManifest(target)
+	if err != nil {
+		return err
+	}
+	manifest, err = manifest.forOwner(p.owner, p.plan != nil && p.plan.GoPackage != "")
 	if err != nil {
 		return err
 	}
@@ -225,6 +251,16 @@ func (p *scaffoldPersistence) target() (string, error) {
 func (p *scaffoldPersistence) validateExisting(_, existing string, manifest *scaffoldManifest) error {
 	if manifest == nil {
 		return fmt.Errorf("scaffold manifest is required")
+	}
+	if p.plan != nil {
+		for role, previous := range manifest.Destinations {
+			if next := p.plan.Destinations[role]; next != "" && next != previous {
+				return fmt.Errorf("shape %s destination changed from %s to %s; explicit migration is required", role, previous, next)
+			}
+		}
+	}
+	if err := p.validateForeignFiles(manifest); err != nil {
+		return err
 	}
 	owned := map[string]bool{}
 	if manifest.exists {
@@ -539,7 +575,7 @@ func readScaffoldManifest(stage string) (*scaffoldManifest, error) {
 	if err = json.Unmarshal(data, result); err != nil {
 		return nil, fmt.Errorf("decode scaffold manifest: %w", err)
 	}
-	if result.Version != scaffoldManifestVersion && result.Version != 3 && result.Version != 2 {
+	if result.Version != scaffoldManifestVersion && result.Version != 4 && result.Version != 3 && result.Version != 2 {
 		return nil, fmt.Errorf("unsupported scaffold manifest version %d", result.Version)
 	}
 	result.exists = true
@@ -549,12 +585,16 @@ func readScaffoldManifest(stage string) (*scaffoldManifest, error) {
 func writeScaffoldManifest(stage, owner string, files []string, metadata ...*scaffoldManifest) error {
 	manifest := &scaffoldManifest{Version: scaffoldManifestVersion, Owner: strings.TrimSpace(owner), Files: files}
 	if len(metadata) > 0 && metadata[0] != nil {
+		manifest.others = metadata[0].others
+		manifest.Identity = metadata[0].Identity
+		manifest.ComponentPackage = metadata[0].ComponentPackage
+		manifest.Destinations = metadata[0].Destinations
 		manifest.Roles = metadata[0].Roles
 		manifest.Resources = metadata[0].Resources
 		manifest.Fingerprints = metadata[0].Fingerprints
 		manifest.ProjectionFields = metadata[0].ProjectionFields
 	}
-	data, err := json.MarshalIndent(manifest, "", "  ")
+	data, err := json.MarshalIndent(manifest.aggregate(), "", "  ")
 	if err != nil {
 		return err
 	}

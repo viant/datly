@@ -166,6 +166,11 @@ func (e *entityEmitter) emit() (*EntityAsset, error) {
 		return nil, err
 	}
 	file.Decls = append(file.Decls, syncInput...)
+	lookup, err := e.lookupDeclarations()
+	if err != nil {
+		return nil, err
+	}
+	file.Decls = append(file.Decls, lookup...)
 	file.Decls = append([]ast.Decl{e.importDeclaration(file)}, file.Decls...)
 	e.asset.File = file
 	e.asset.CaptureFunction = e.capture

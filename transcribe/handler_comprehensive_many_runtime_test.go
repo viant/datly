@@ -89,7 +89,11 @@ SELECT ID, NAME FROM EVENTS`
 	assertComprehensiveManyPlan(t, generated, modelPackage, target)
 
 	testSource := generatedComprehensiveManyRuntimeSource(target)
-	packageDir := filepath.Join(root, "generated")
+	packageDir := filepath.Join(root, "comprehensive")
+	testSource = strings.ReplaceAll(testSource, "package comprehensive_many", "package comprehensive")
+	testSource = strings.ReplaceAll(testSource, "Component{}", "ComprehensiveManyComponent{}")
+	testSource = strings.ReplaceAll(testSource, "DatlyResourceNamespace", "ComprehensiveManyDatlyResourceNamespace")
+	testSource = strings.ReplaceAll(testSource, "DatlyResources", "ComprehensiveManyDatlyResources")
 	if err = os.WriteFile(filepath.Join(packageDir, "comprehensive_many_test.go"), []byte(testSource), 0o644); err != nil {
 		t.Fatal(err)
 	}

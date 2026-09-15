@@ -129,11 +129,21 @@ func (plan *Plan) contractImports() []spec.ImportSpec {
 		return nil
 	}
 	fields := make([]Field, 0, 2)
-	if plan.Input.Ownership == ContractLinked {
-		fields = append(fields, Field{Type: plan.Input.Type})
-	}
-	if plan.Output.Ownership == ContractLinked {
-		fields = append(fields, Field{Type: plan.Output.Type})
-	}
+	fields = append(fields, Field{Type: plan.Input.Type})
+	fields = append(fields, Field{Type: plan.Output.Type})
 	return importsForFields(fields, plan.Imports)
+}
+
+// contractType emits canonical cross-package ownership on the route holder.
+// Local aliases remain available to accepted handler source, but are not the
+// contract's package authority during discovery and reload.
+func (plan *Plan) contractType(contract ContractPlan) string {
+	if contract.Ownership == ContractGenerated && !plan.localShape(contract.Package) {
+		return uniqueImportAlias(plan, contract.Package) + "." + contract.Type
+	}
+	return contract.Type
+}
+
+func (plan *Plan) holderImports() []spec.ImportSpec {
+	return importsForFields([]Field{{Type: plan.contractType(plan.Input)}, {Type: plan.contractType(plan.Output)}}, plan.Imports)
 }

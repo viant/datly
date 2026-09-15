@@ -2,7 +2,6 @@ package packageasset
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"github.com/viant/afs"
 	afsio "github.com/viant/afs/adapter/io"
@@ -27,7 +26,7 @@ type StaticSource struct {
 	ContentURL string
 }
 
-func (s StaticSource) Snapshot(ctx context.Context, content *spec.StaticContent) (*embed.FS, error) {
+func (s StaticSource) Snapshot(ctx context.Context, content *spec.StaticContent) (fs.FS, error) {
 	if err := content.Validate(); err != nil {
 		return nil, err
 	}

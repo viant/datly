@@ -19,7 +19,7 @@ func TestCubeComposeHTTPAndMCP(t *testing.T) {
 			map[string]any{"filters": map[string]any{"accountIDs": "1,2", "tenant": "acme", "region": "EU", "channel": "web", "status": "active"}},
 			map[string]any{"inheritFrom": 1, "filters": map[string]any{"channel": "store"}},
 		},
-		"sql": "SELECT t1.AccountID, t1.TotalSpend AS web, COALESCE(t2.TotalSpend, 0) AS store FROM $CubeSQL1 AS t1 LEFT JOIN $CubeSQL2 AS t2 ON t1.AccountID = t2.AccountID ORDER BY t1.AccountID LIMIT 8",
+		"sql": "SELECT t1.AccountID, t1.TotalSpend AS web, COALESCE(t2.TotalSpend, 0) AS store FROM $CubeSQL1 AS t1 LEFT JOIN $CubeSQL2 AS t2 ON t1.AccountID = t2.AccountID AND t1.Region = t2.Region ORDER BY t1.AccountID LIMIT 8",
 	}
 	body, err := json.Marshal(request)
 	if err != nil {

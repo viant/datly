@@ -20,6 +20,7 @@ import (
 type ResourcePlan struct {
 	Namespace   string
 	Destination string
+	Symbol      string
 	Files       []EmittedFile
 }
 
@@ -36,6 +37,9 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 		return nil, fmt.Errorf("package resource generation requires a target package")
 	}
 	result := &ResourcePlan{Namespace: fmt.Sprintf("datly_%x", sha256.Sum256([]byte(identity))), Destination: lowerSnake(r.input.Component.Name) + "_resources.go"}
+	if r.input.PackageName != "" {
+		result.Symbol = upperCamel(r.input.Component.Name)
+	}
 	files := map[string]string{}
 	if !r.plan.Documentation.IsZero() {
 		packaged, err := (docs.Loader{Resources: r.input.Resources}).Package(context.Background(), docs.PackageRequest{Source: r.plan.Documentation, Namespace: result.Namespace})
@@ -140,11 +144,11 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 func (r *ResourcePlan) source(packageName string) string {
 	var source strings.Builder
 	source.WriteString("package " + packageName + "\n\nimport \"embed\"\n\n")
-	source.WriteString("// DatlyResourceNamespace identifies this package's generated resource filesystem.\nconst DatlyResourceNamespace = " + strconv.Quote(r.Namespace) + "\n\n")
+	source.WriteString("// DatlyResourceNamespace identifies this package's generated resource filesystem.\nconst " + r.Symbol + "DatlyResourceNamespace = " + strconv.Quote(r.Namespace) + "\n\n")
 	source.WriteString("// DatlyResources must be registered with the shared Bindly resource store.\n//go:embed")
 	for _, file := range r.Files {
 		source.WriteString(" " + strconv.Quote(file.Path))
 	}
-	source.WriteString("\nvar DatlyResources embed.FS\n")
+	source.WriteString("\nvar " + r.Symbol + "DatlyResources embed.FS\n")
 	return source.String()
 }

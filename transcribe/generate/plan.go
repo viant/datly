@@ -11,17 +11,27 @@ import (
 )
 
 type Plan struct {
-	Documentation xdocs.Source
-	Static        *spec.StaticContent
-	ComponentName string
-	Description   string
-	Example       string
-	Handler       string
-	Routes        []RoutePlan
-	Connector     string
-	Report        *spec.ReportSettings
-	Settings      dtag.Settings
-	Imports       []spec.ImportSpec
+	OwnerIdentity    string
+	ComponentPackage string
+	Destinations     map[string]string
+	Aliases          []TypeAlias
+	Package          string
+	GoPackage        string
+	Holder           string
+	ProjectRoot      string
+	ShapePackages    []*Plan
+	ShapesOnly       bool
+	Documentation    xdocs.Source
+	Static           *spec.StaticContent
+	ComponentName    string
+	Description      string
+	Example          string
+	Handler          string
+	Routes           []RoutePlan
+	Connector        string
+	Report           *spec.ReportSettings
+	Settings         dtag.Settings
+	Imports          []spec.ImportSpec
 
 	ViewDest     string
 	RouterDest   string
@@ -46,7 +56,18 @@ type Plan struct {
 }
 
 // PackageName is the Go package name used by the scaffold emission owner.
-func (p *Plan) PackageName() string { return lowerSnake(p.ComponentName) }
+func (p *Plan) PackageName() string {
+	if p.GoPackage != "" {
+		return p.GoPackage
+	}
+	return lowerSnake(p.ComponentName)
+}
+func (p *Plan) HolderName() string {
+	if p.Holder != "" {
+		return p.Holder
+	}
+	return "Component"
+}
 
 // RoutePlan is the route-specific metadata emitted on one typed component
 // holder field. Handler identity remains component-wide on Plan.
@@ -70,6 +91,7 @@ const (
 // ContractPlan keeps one input/output contract's type, destination, fields,
 // and ownership together so emission cannot mix linked and generated state.
 type ContractPlan struct {
+	Package       string
 	Type          string
 	Destination   string
 	Fields        []Field
@@ -103,13 +125,15 @@ type Field struct {
 }
 
 type HelperType struct {
-	Name   string
-	Fields []Field
+	Package string
+	Name    string
+	Fields  []Field
 }
 
 // ViewPlan is one generated canonical view type. Relations reference another
 // ViewPlan by its local type name rather than creating a parallel graph.
 type ViewPlan struct {
+	Package         string
 	Identity        string
 	Name            string
 	Type            string
@@ -195,6 +219,8 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 
 	plan := &Plan{
 		ComponentName: name,
+		OwnerIdentity: component.Key.String(), ComponentPackage: r.input.TargetPackage,
+		Package: r.input.TargetPackage, GoPackage: r.input.PackageName, ProjectRoot: r.input.ProjectRoot,
 		Documentation: component.Documentation.Clone(),
 		Description:   strings.TrimSpace(component.Description),
 		Example:       strings.TrimSpace(component.Example),
@@ -213,6 +239,9 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 			Fields: outputFields, Ownership: ContractGenerated,
 		},
 		HelperTypes: resolveHelperTypes(component, declarations),
+	}
+	if r.input.PackageName != "" {
+		plan.Holder = upperCamel(name) + "Component"
 	}
 	if component.TypeContext != nil {
 		plan.Imports = append(plan.Imports, component.TypeContext.Imports...)

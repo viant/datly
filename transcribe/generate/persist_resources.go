@@ -56,7 +56,7 @@ func (p *scaffoldPersistence) retainResources(target, stage string, previous *sc
 			return nil, err
 		}
 		if relative == resources.Destination {
-			p.files[i].Content = emitted.source(lowerSnake(p.plan.ComponentName))
+			p.files[i].Content = emitted.source(p.plan.PackageName())
 			break
 		}
 	}

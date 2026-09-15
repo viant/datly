@@ -1,17 +1,13 @@
 package generate
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"go/format"
-	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
 
-	afsembed "github.com/viant/afs/embed"
 	"github.com/viant/datly/internal/packageasset"
 	"github.com/viant/datly/typecatalog"
 	loaderast "github.com/viant/x/loader/ast"
@@ -25,47 +21,38 @@ func (a *HookScaffoldAsset) ResolveEntityHookTypes(directory string) (*typecatal
 	if a == nil || a.PackagePath == "" || a.File == nil || a.File.Name == nil || len(a.EntityHooks) == 0 {
 		return nil, fmt.Errorf("mutation hook scaffold requires package, source and typed contracts")
 	}
-	holder := afsembed.NewHolder()
+	snapshot := packageasset.Snapshotter{Overlay: []packageasset.File{{Path: "go.mod", Data: []byte("module " + a.PackagePath + "\n")}}}
 	if directory != "" {
 		if _, err := os.Stat(directory); err == nil {
-			snapshot, err := (packageasset.Snapshotter{Source: os.DirFS(directory)}).All(context.Background())
-			if err != nil {
-				return nil, err
-			}
-			if err = fs.WalkDir(snapshot, ".", func(name string, entry fs.DirEntry, walkErr error) error {
-				if walkErr != nil || entry.IsDir() {
-					return walkErr
-				}
-				content, err := fs.ReadFile(snapshot, name)
-				if err != nil {
-					return err
-				}
-				holder.Add(name, string(content))
-				return nil
-			}); err != nil {
-				return nil, err
-			}
+			snapshot.Source = os.DirFS(directory)
 		} else if !os.IsNotExist(err) {
 			return nil, err
 		}
 	}
-	// This module header exists only in memory to give the native source loader
-	// the package identity; no application module or source file is written.
-	holder.Add("go.mod", "module "+a.PackagePath+"\n")
 	name := a.Destination
 	if name == "" {
 		name = "hooks.go"
 	}
-	if _, err := holder.EmbedFs().ReadFile(name); os.IsNotExist(err) {
-		var source bytes.Buffer
-		if err = format.Node(&source, token.NewFileSet(), a.File); err != nil {
+	exists := false
+	if snapshot.Source != nil {
+		if _, err := fs.Stat(snapshot.Source, name); err == nil {
+			exists = true
+		} else if !os.IsNotExist(err) {
 			return nil, err
 		}
-		holder.Add(name, source.String())
-	} else if err != nil {
+	}
+	if !exists {
+		source, err := (xshape.SourceParser{}).FormatFile(a.File)
+		if err != nil {
+			return nil, err
+		}
+		snapshot.Overlay = append(snapshot.Overlay, packageasset.File{Path: name, Data: source})
+	}
+	source, err := snapshot.All(context.Background())
+	if err != nil {
 		return nil, err
 	}
-	pkg, err := loaderast.LoadPackageFS(context.Background(), holder.EmbedFs(), ".")
+	pkg, err := loaderast.LoadPackageFS(context.Background(), source, ".")
 	if err != nil {
 		return nil, fmt.Errorf("load mutation hook scaffold: %w", err)
 	}
@@ -81,7 +68,9 @@ func (a *HookScaffoldAsset) ResolveEntityHookTypes(directory string) (*typecatal
 			return nil, err
 		}
 	}
-	if err = catalog.RegisterPackage(typecatalog.TypeOriginGenerated, pkg); err != nil {
+	// The create-once file is authored source. Refresh its package authority
+	// in this detached resolver so a cached pre-edit hook cannot shadow it.
+	if err = catalog.RegisterPackage(typecatalog.TypeOriginPackage, pkg); err != nil {
 		return nil, err
 	}
 	resolver, err := typecatalog.NewResolver(catalog, typecatalog.TranscribeAuthority, &typecatalog.ResolutionContext{DefaultPackage: a.PackagePath, PackagePath: a.PackagePath})

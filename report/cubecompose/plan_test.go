@@ -49,6 +49,27 @@ func TestCompileAndRenderTopSpendDrop(t *testing.T) {
 	assert.Equal(t, []interface{}{29, 29}, args)
 }
 
+func TestCompileAndRenderMultiKeyJoin(t *testing.T) {
+	plan, err := Compile(`SELECT t1.ad_order_id,
+ t1.publisher_id,
+ t1.total_spend - t2.total_spend AS spend_delta
+ FROM $CubeSQL1 AS t1
+ JOIN $CubeSQL2 AS t2 ON t1.ad_order_id = t2.ad_order_id AND t1.publisher_id = t2.publisher_id
+ ORDER BY t1.ad_order_id, t1.publisher_id`, testCatalog(t), 2, 100)
+	require.NoError(t, err)
+	require.Len(t, plan.Fields, 2)
+	assert.ElementsMatch(t, []string{"ad_order_id", "publisher_id", "total_spend"}, plan.Fields[0])
+	assert.ElementsMatch(t, []string{"ad_order_id", "publisher_id", "total_spend"}, plan.Fields[1])
+
+	SQL, args, err := plan.Render([]Frame{
+		{SQL: "SELECT ad_order_id, publisher_id, total_spend FROM current WHERE advertiser_id = ?", Args: []interface{}{29}},
+		{SQL: "SELECT ad_order_id, publisher_id, total_spend FROM previous WHERE advertiser_id = ?", Args: []interface{}{29}},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, SQL, "JOIN (SELECT ad_order_id, publisher_id, total_spend FROM previous WHERE advertiser_id = ?) AS t2 ON t1.ad_order_id = t2.ad_order_id AND t1.publisher_id = t2.publisher_id")
+	assert.Equal(t, []interface{}{29, 29}, args)
+}
+
 func TestCompileAndRenderThreeCubeComposition(t *testing.T) {
 	plan, err := Compile(`SELECT t1.publisher_id,
  COALESCE(t1.total_spend, 0) AS current_spend,
@@ -156,6 +177,19 @@ func TestCompileRejectsUnsafeSourcesAndProjection(t *testing.T) {
 		`SELECT t1.total_spend FROM $CubeSQL1 t1 JOIN $CubeSQL2 t2 ON t1.total_spend = t2.total_spend LIMIT 5`,
 		`SELECT t1.ad_order_id FROM $CubeSQL1 t1 JOIN $CubeSQL2 t2 ON t1.ad_order_id = t2.ad_order_id; DROP TABLE x`,
 		`SELECT SAFE_DIVIDE(t1.total_spend, t2.total_spend) AS ratio FROM $CubeSQL1 t1 JOIN $CubeSQL2 t2 ON t1.ad_order_id = t2.ad_order_id LIMIT 5`,
+	}
+	for _, SQL := range useCases {
+		_, err := Compile(SQL, testCatalog(t), 2, 100)
+		assert.Error(t, err, SQL)
+	}
+}
+
+func TestCompileRejectsInvalidMultiKeyJoinTerms(t *testing.T) {
+	useCases := []string{
+		`SELECT t1.ad_order_id FROM $CubeSQL1 AS t1 JOIN $CubeSQL2 AS t2 ON t1.ad_order_id = ad_order_id AND t1.publisher_id = t2.publisher_id`,
+		`SELECT t1.ad_order_id FROM $CubeSQL1 AS t1 JOIN $CubeSQL2 AS t2 ON t1.ad_order_id = t3.ad_order_id AND t1.publisher_id = t2.publisher_id`,
+		`SELECT t1.ad_order_id FROM $CubeSQL1 AS t1 JOIN $CubeSQL2 AS t2 ON t1.ad_order_id = t2.ad_order_id AND t1.total_spend = t2.total_spend`,
+		`SELECT t1.ad_order_id FROM $CubeSQL1 AS t1 JOIN $CubeSQL2 AS t2 ON t1.ad_order_id = t2.ad_order_id OR t1.publisher_id = t2.publisher_id`,
 	}
 	for _, SQL := range useCases {
 		_, err := Compile(SQL, testCatalog(t), 2, 100)

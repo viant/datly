@@ -59,26 +59,25 @@ func (l Loader) Load(ctx context.Context) (*Loaded, error) {
 		}
 		defer root.Close()
 		source := root.FS()
-		manifest, err := packageasset.Read(source)
+		manifests, err := packageasset.ReadAll(source)
 		if err != nil {
 			return nil, fmt.Errorf("package %s assets: %w", packagePath, err)
 		}
-		if manifest == nil {
-			continue
-		}
-		if previous := namespaces[manifest.Namespace]; previous != "" {
-			return nil, fmt.Errorf("resource namespace %q is declared by both %s and %s", manifest.Namespace, previous, packagePath)
-		}
-		namespaces[manifest.Namespace] = packagePath
-		snapshot, err := (packageasset.Snapshotter{Source: source}).Files(ctx, manifest.Files)
-		if err != nil {
-			return nil, fmt.Errorf("package %s assets: %w", packagePath, err)
-		}
-		if err := result.Store.Register(manifest.Namespace, snapshot); err != nil {
-			return nil, err
-		}
-		for _, file := range manifest.Files {
-			result.assets[filepath.Join(location.Dir, filepath.FromSlash(file))] = true
+		for _, manifest := range manifests {
+			if previous := namespaces[manifest.Namespace]; previous != "" {
+				return nil, fmt.Errorf("resource namespace %q is declared by both %s and %s", manifest.Namespace, previous, packagePath)
+			}
+			namespaces[manifest.Namespace] = packagePath
+			snapshot, err := (packageasset.Snapshotter{Source: source}).Files(ctx, manifest.Files)
+			if err != nil {
+				return nil, fmt.Errorf("package %s assets: %w", packagePath, err)
+			}
+			if err := result.Store.Register(manifest.Namespace, snapshot); err != nil {
+				return nil, err
+			}
+			for _, file := range manifest.Files {
+				result.assets[filepath.Join(location.Dir, filepath.FromSlash(file))] = true
+			}
 		}
 	}
 	return result, nil

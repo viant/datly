@@ -24,6 +24,9 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "gen" {
+		return generationCommand(ctx, args, stdout, stderr)
+	}
 	if len(args) > 0 && (args[0] == "init" || args[0] == "build") {
 		return projectCommand(ctx, args, stdout, stderr)
 	}
@@ -31,7 +34,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return (command.Service{}).Run(ctx, args, stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "validate" {
-		fmt.Fprintln(stderr, "usage: datly init|build [-dir project]; datly run|start -conf configuration-URL; datly validate [-dir project-directory] [-format text|json] [-schema -connector name -driver driver -dsn connection] module/package [...]")
+		fmt.Fprintln(stderr, "usage: datly gen -op patch -dir project module/package; datly init|build [-dir project]; datly run|start -conf configuration-URL; datly validate [-dir project-directory] [-format text|json] [-schema -connector name -driver driver -dsn connection] module/package [...]")
 		return 2
 	}
 	flags := flag.NewFlagSet("validate", flag.ContinueOnError)

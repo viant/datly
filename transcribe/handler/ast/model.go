@@ -67,7 +67,24 @@ type KeyLink struct {
 }
 
 // CurrentPlan describes the ordinary input datapoint used for PATCH lookup.
+// LookupProjection names a pure typed projection for a generated auxiliary
+// read. The enclosing relation supplies identity and value-link semantics.
+type LookupProjection struct {
+	Name    string
+	Columns []string
+}
+
+func (p *LookupProjection) Clone() *LookupProjection {
+	if p == nil {
+		return nil
+	}
+	result := *p
+	result.Columns = append([]string(nil), p.Columns...)
+	return &result
+}
+
 type CurrentPlan struct {
+	Lookup        *LookupProjection
 	ParamIdentity string
 	ViewIdentity  string
 	InputPath     FieldPath

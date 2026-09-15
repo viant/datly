@@ -14,7 +14,7 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 	b.WriteString(packageName)
 	b.WriteString("\n\n")
 	b.WriteString("import (\n\txdatly \"github.com/viant/xdatly\"\n")
-	for _, item := range plan.contractImports() {
+	for _, item := range plan.holderImports() {
 		b.WriteString("\t")
 		b.WriteString(item.Alias)
 		b.WriteString(" ")
@@ -25,7 +25,7 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 	b.WriteString("// Component is the generated component scaffold for ")
 	b.WriteString(plan.ComponentName)
 	b.WriteString(".\n")
-	b.WriteString("type Component struct {\n")
+	b.WriteString("type " + plan.HolderName() + " struct {\n")
 	if len(plan.Routes) == 0 {
 		writeComponentHolderField(&b, "Contract", plan, "")
 	} else {
@@ -82,9 +82,9 @@ func writeComponentHolderField(builder *strings.Builder, name string, plan *Plan
 	builder.WriteString("\t")
 	builder.WriteString(name)
 	builder.WriteString(" xdatly.Component[")
-	builder.WriteString(plan.Input.Type)
+	builder.WriteString(plan.contractType(plan.Input))
 	builder.WriteString(", ")
-	builder.WriteString(plan.Output.Type)
+	builder.WriteString(plan.contractType(plan.Output))
 	builder.WriteString("]")
 	if structTag != "" {
 		builder.WriteString(" ")

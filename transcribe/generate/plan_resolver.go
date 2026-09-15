@@ -24,6 +24,10 @@ func (r *planResolver) resolve() (*Plan, error) {
 	if r.input.Component.Static != nil {
 		return r.resolveStatic()
 	}
+	destinations := &shapeDestinations{input: &r.input, planningOnly: !r.requireConcreteHelpers}
+	if err := destinations.prepare(); err != nil {
+		return nil, err
+	}
 	if err := r.validateHandlerSelection(); err != nil {
 		return nil, err
 	}
@@ -72,6 +76,7 @@ func (r *planResolver) resolve() (*Plan, error) {
 	if err = r.resolveContractOwnership(); err != nil {
 		return nil, err
 	}
+	destinations.contracts(r.plan)
 	if r.input.VeltyHandler != nil {
 		applyGeneratedInputVeltyAliases(r.plan, r.input.Component)
 	}
@@ -110,6 +115,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 		return nil, err
 	}
 	if err = r.plan.validateGeneratedDestinations(); err != nil {
+		return nil, err
+	}
+	if err = destinations.partition(r.plan); err != nil {
 		return nil, err
 	}
 	return r.plan, nil

@@ -2,7 +2,6 @@ package packageasset
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"io/fs"
 	"os"
@@ -14,7 +13,7 @@ import (
 // trusted handle. Checking the identity after OpenRoot prevents a replacement
 // between Lstat and OpenRoot from authorizing a different directory. Each child
 // stays pinned while the next name is checked; no checked pathname is reopened.
-func (s StaticSource) localSnapshot(ctx context.Context, local, subtree string) (*embed.FS, error) {
+func (s StaticSource) localSnapshot(ctx context.Context, local, subtree string) (fs.FS, error) {
 	if local == "" {
 		return nil, fmt.Errorf("static local path must not be empty")
 	}

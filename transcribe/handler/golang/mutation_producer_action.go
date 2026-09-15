@@ -10,7 +10,9 @@ import (
 
 // Producer eligibility uses the same original tuple and captured database index
 // as frame preparation. No working values, markers or pending payloads classify
-// a parent. The captured acyclic edges let Identity resolve produced key parts
+// a parent. A captured UPDATE can also supply its stable key to a new child.
+// Final relation verification and native validation still run after reconciliation.
+// The captured acyclic edges let Identity resolve produced key parts
 // recursively, without a second graph or row index.
 func (p *mutationIdentityPolicy) previousName(record *recordLowering) string {
 	return "producerPrevious" + strconv.Itoa(record.order)
@@ -20,7 +22,7 @@ func (p *mutationIdentityPolicy) previousType(e *entityEmitter, record *recordLo
 	return &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{namedField("key", ast.NewIdent(e.matchKeyName(record)))}}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("bool")}}}}
 }
 
-func (p *mutationIdentityPolicy) insert(e *entityEmitter, record *recordLowering) ast.Decl {
+func (p *mutationIdentityPolicy) write(e *entityEmitter, record *recordLowering) ast.Decl {
 	id := ast.NewIdent
 	adapter := &ast.ParenExpr{X: &ast.CompositeLit{Type: id(e.matchAdapterName(record))}}
 	body := []ast.Stmt{
@@ -36,15 +38,15 @@ func (p *mutationIdentityPolicy) insert(e *entityEmitter, record *recordLowering
 		lookup := selectExpr(selectExpr(id("state"), "owner"), p.previousName(record))
 		body = append(body,
 			&ast.IfStmt{Cond: &ast.BinaryExpr{X: lookup, Op: token.EQL, Y: id("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(id("false"), e.invariantError("captured producer database policy is unavailable"))}}},
-			&ast.IfStmt{Cond: &ast.BinaryExpr{X: id("complete"), Op: token.LAND, Y: callExpr(lookup, id("key"))}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(id(strconv.FormatBool(record.plan.Write.Existing == plan.ActionInsert)), id("nil"))}}},
+			&ast.IfStmt{Cond: &ast.BinaryExpr{X: id("complete"), Op: token.LAND, Y: callExpr(lookup, id("key"))}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(id(strconv.FormatBool(record.plan.Write.Existing == plan.ActionInsert || record.plan.Write.Existing == plan.ActionUpdate)), id("nil"))}}},
 		)
 	}
 	allowed := false
 	for _, candidate := range record.plan.Write.Allowed {
-		allowed = allowed || candidate == plan.ActionInsert
+		allowed = allowed || candidate == plan.ActionInsert || candidate == plan.ActionUpdate
 	}
-	body = append(body, returnStmt(id(strconv.FormatBool(allowed && action == plan.ActionInsert)), id("nil")))
-	return &ast.FuncDecl{Name: id("ProducerInsert"), Recv: &ast.FieldList{List: []*ast.Field{namedField("state", e.statePointer(record))}}, Type: &ast.FuncType{Params: &ast.FieldList{}, Results: &ast.FieldList{List: []*ast.Field{{Type: id("bool")}, {Type: id("error")}}}}, Body: &ast.BlockStmt{List: body}}
+	body = append(body, returnStmt(id(strconv.FormatBool(allowed && (action == plan.ActionInsert || action == plan.ActionUpdate))), id("nil")))
+	return &ast.FuncDecl{Name: id("ProducerWrite"), Recv: &ast.FieldList{List: []*ast.Field{namedField("state", e.statePointer(record))}}, Type: &ast.FuncType{Params: &ast.FieldList{}, Results: &ast.FieldList{List: []*ast.Field{{Type: id("bool")}, {Type: id("error")}}}}, Body: &ast.BlockStmt{List: body}}
 }
 
 func (e *frameEmitter) bindProducers() (ast.Decl, error) {

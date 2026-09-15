@@ -16,6 +16,9 @@ func (l *componentLoader) mergeTypeContext(base, authored *spec.TypeContext, pac
 	if authored == nil {
 		return base
 	}
+	if authored.PackagePath != "" {
+		base.PackagePath = authored.PackagePath
+	}
 	if strings.TrimSpace(authored.DefaultPackage) != "" {
 		base.DefaultPackage = authored.DefaultPackage
 	}

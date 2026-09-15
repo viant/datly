@@ -1,0 +1,75 @@
+package orders
+
+import (
+ "context"
+ "fmt"
+ "net/http/httptest"
+ "reflect"
+ "strings"
+ "testing"
+ "time"
+ "github.com/viant/bindly/locator"
+ "github.com/viant/bindly/resource"
+ requestprovider "github.com/viant/bindly/provider/request"
+ "github.com/viant/datly/bootstrap"
+ "github.com/viant/datly/internal/testharness/genpatch"
+ "github.com/viant/datly/internal/testharness/sqlite"
+ druntime "github.com/viant/datly/runtime"
+ mutationhandler "github.com/viant/datly/runtime/handler/mutation"
+ dsql "github.com/viant/datly/sql"
+ "github.com/viant/datly/sql/dml"
+ viewprovider "github.com/viant/datly/sql/reader/provider"
+ dtag "github.com/viant/datly/tag"
+ "github.com/viant/sqlx/testutil/sqlfault"
+)
+
+var expectedKeys map[int]bool
+func(input *OrdersInput)Init(context.Context)error{
+ actual:=map[int]bool{}
+ for _,kind:=range input.CurrentKinds{if kind.Id==nil{return fmt.Errorf("nil lookup key")};actual[*kind.Id]=true}
+ if !reflect.DeepEqual(actual,expectedKeys){return fmt.Errorf("lookup keys differ: got %d expected %d",len(actual),len(expectedKeys))}
+ return nil
+}
+func TestGeneratedBatchRuntime(t *testing.T){
+ for _,n:=range []int{32,256}{for _,mode:=range []string{"shared","mixed distinct"}{t.Run(fmt.Sprintf("%d/%s",n,mode),func(t *testing.T){
+ ctx:=context.Background();db:=sqlite.New(t);db.DB.SetMaxOpenConns(1)
+ if err:=db.ExecStatements(ctx,genpatch.Schema[:4]...);err!=nil{t.Fatal(err)}
+ expectedKeys=map[int]bool{}
+ var parts []string
+ for id:=1;id<=n;id++{
+  before,after:=1000+id,2000+id;if mode=="shared"{before,after=7,7}
+  for _,key:=range []int{before,after}{if _,err:=db.DB.Exec("INSERT OR IGNORE INTO ORDER_KINDS VALUES(?,'kind')",key);err!=nil{t.Fatal(err)}}
+  if _,err:=db.DB.Exec("INSERT INTO ORDERS VALUES(?,?,'before','2026-09-01T00:00:00Z','2026-09-30T00:00:00Z')",id,before);err!=nil{t.Fatal(err)}
+  extra:="";key:=before;if id%2==0{extra=fmt.Sprintf(",\"kindId\":%d",after);key=after}
+  expectedKeys[key]=true
+  parts=append(parts,fmt.Sprintf("{\"id\":%d,\"start\":\"2026-09-02T00:00:00Z\"%s}",id,extra))
+ }
+ if err:=db.ExecStatements(ctx,genpatch.Schema[7:]...);err!=nil{t.Fatal(err)}
+ maxArgs,maxSQL,auxQueries:=0,0,0
+ traced:=db.FaultDB(t,func(_ context.Context,call sqlfault.Call)error{
+  if call.Phase=="prepare"&&strings.Contains(strings.ToUpper(call.SQL),"ORDER_KINDS")&&strings.Contains(call.SQL," IN ("){
+   args:=strings.Count(call.SQL,"?");if args>maxArgs{maxArgs=args};if len(call.SQL)>maxSQL{maxSQL=len(call.SQL)};auxQueries++
+   if strings.Count(strings.ToUpper(call.SQL)," OR ")>0{return fmt.Errorf("auxiliary SQL expanded OR tree")}
+  };return nil
+ });traced.SetMaxOpenConns(1)
+ if _,err:=traced.Exec("PRAGMA foreign_keys=ON");err!=nil{t.Fatal(err)}
+ holder:=reflect.TypeOf(OrdersComponent{});field,_:=holder.FieldByName("Contract")
+ tag,present,err:=dtag.ParseComponent(field.Tag);if err!=nil||!present{t.Fatal(err)}
+ source:=&bootstrap.RouteSource{HolderType:"OrdersComponent",FieldName:field.Name,PackageName:"orders",PackagePath:holder.PkgPath(),Tag:tag,InputType:"OrdersInput",OutputType:"OrdersOutput"}
+ component,err:=source.Resolve(reflect.TypeOf(OrdersInput{}),reflect.TypeOf(OrdersOutput{}));if err!=nil{t.Fatal(err)}
+ resources:=resource.New();if err:=resources.Register(OrdersDatlyResourceNamespace,OrdersDatlyResources);err!=nil{t.Fatal(err)}
+ artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:reflect.TypeOf(OrdersInput{}),OutputType:reflect.TypeOf(OrdersOutput{}),Resources:resources});if err!=nil{t.Fatal(err)}
+ views,err:=viewprovider.New(viewprovider.Config{Dependencies:artifact.ViewDependencies,Input:artifact.Input,SQL:&dsql.SQLComponent{DB:traced}});if err!=nil{t.Fatal(err)}
+ handler:=mutationhandler.New[OrdersInput,OrdersOutput](NewOrdersHandler())
+ rt,err:=druntime.NewRuntime([]*druntime.RegisteredComponent{{Component:artifact.Component,Input:artifact.Input,Output:artifact.Output,OutputType:reflect.TypeOf(OrdersOutput{}),Handler:handler,Providers:[]locator.Provider{views},DataSource:dml.Source{DB:traced}}},druntime.WithResources(resources));if err!=nil{t.Fatal(err)}
+ request:=httptest.NewRequest("PATCH","/orders",strings.NewReader("{\"Data\":["+strings.Join(parts,",")+"]}"));request.Header.Set("Content-Type","application/json")
+ scope,err:=requestprovider.New(request);if err!=nil{t.Fatal(err)};defer scope.Close()
+ begin:=time.Now();out,err:=rt.ExecuteRoute(ctx,"PATCH","/orders",scope);elapsed:=time.Since(begin);if err!=nil{t.Fatalf("batch %d: %v",n,err)}
+ output:=out.(*OrdersOutput);if len(output.Data)!=n{t.Fatal("output cardinality")}
+ for _,row:=range output.Data{if row.End==nil||row.End.Format("2006-01-02")!="2026-09-30"{t.Fatal("invariant backfill lost")}}
+ var changed int;if err:=db.DB.QueryRow("SELECT COUNT(*) FROM ORDERS WHERE date(START)='2026-09-02' AND date(END)='2026-09-30'").Scan(&changed);err!=nil||changed!=n{t.Fatalf("changed=%d err=%v",changed,err)}
+ if mode=="mixed distinct"{var correct int;if err:=db.DB.QueryRow("SELECT COUNT(*) FROM ORDERS WHERE KIND_ID=CASE WHEN ID%2=0 THEN 2000+ID ELSE 1000+ID END").Scan(&correct);err!=nil||correct!=n{t.Fatalf("FK associations changed: %d %v",correct,err)}}
+ if auxQueries!=1||maxArgs!=len(expectedKeys)||maxSQL>1024+4*len(expectedKeys){t.Fatalf("unexpected lookup growth: queries=%d args=%d bytes=%d unique=%d",auxQueries,maxArgs,maxSQL,len(expectedKeys))}
+ t.Logf("batch=%d mode=%s current_rows=%d unique_lookup_keys=%d lookup_queries=%d lookup_args=%d lookup_sql_bytes=%d elapsed=%s",n,mode,n,len(expectedKeys),auxQueries,maxArgs,maxSQL,elapsed)
+ })}}
+}

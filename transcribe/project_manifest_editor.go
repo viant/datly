@@ -2,16 +2,14 @@ package transcribe
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 )
 
 // projectManifestEditor owns the complete mutation sequence for one project
 // manifest update, including collision indexes and final dependency ordering.
 type projectManifestEditor struct {
-	manifest        *ProjectManifest
-	componentOwners map[string]string
-	routeOwners     map[string]string
+	manifest    *ProjectManifest
+	routeOwners map[string]string
 }
 
 func newProjectManifestEditor(existing *ProjectManifest, prepared []preparedProjectComponent) (*projectManifestEditor, error) {
@@ -21,7 +19,7 @@ func newProjectManifestEditor(existing *ProjectManifest, prepared []preparedProj
 	}
 	manifest.Version = projectManifestVersion
 	editor := &projectManifestEditor{
-		manifest: manifest, componentOwners: map[string]string{}, routeOwners: map[string]string{},
+		manifest: manifest, routeOwners: map[string]string{},
 	}
 	incoming := make(map[string]bool, len(prepared))
 	for _, component := range prepared {
@@ -32,12 +30,16 @@ func newProjectManifestEditor(existing *ProjectManifest, prepared []preparedProj
 		if incoming[identity] {
 			continue
 		}
-		editor.componentOwners[filepath.Clean(component.Package)] = identity
 		for _, route := range component.Routes {
 			editor.routeOwners[projectRouteIdentity(route)] = identity
 		}
 	}
 	for _, component := range prepared {
+		for _, previous := range manifest.Components {
+			if previous.Key.String() == component.identity && previous.Package != component.packagePath {
+				return nil, fmt.Errorf("component %s package changed from %s to %s; explicit migration is required", component.identity, previous.Package, component.packagePath)
+			}
+		}
 		if err := editor.reserve(component); err != nil {
 			return nil, err
 		}
@@ -46,11 +48,6 @@ func newProjectManifestEditor(existing *ProjectManifest, prepared []preparedProj
 }
 
 func (e *projectManifestEditor) reserve(component preparedProjectComponent) error {
-	packagePath := filepath.Clean(component.packagePath)
-	if owner := e.componentOwners[packagePath]; owner != "" && owner != component.identity {
-		return fmt.Errorf("generated package %q is shared by components %q and %q", packagePath, owner, component.identity)
-	}
-	e.componentOwners[packagePath] = component.identity
 	for _, route := range component.routes() {
 		identity := projectRouteIdentity(route)
 		if identity == "" {

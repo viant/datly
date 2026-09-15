@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/viant/sqlx/metadata/product/sqlite"
 )
 
 // schemaOptions composes one explicitly named authoring connection. Opening is

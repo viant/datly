@@ -2,10 +2,8 @@
 package golang
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
 	"path"
@@ -15,6 +13,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	plan "github.com/viant/datly/transcribe/handler/ast"
+	xshape "github.com/viant/x/shape"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -58,11 +57,11 @@ func (a *Asset) Source() ([]byte, error) {
 	if a == nil || a.File == nil {
 		return nil, fmt.Errorf("generated Go handler AST is required")
 	}
-	var result bytes.Buffer
-	if err := format.Node(&result, token.NewFileSet(), a.File); err != nil {
+	source, err := (xshape.SourceParser{}).FormatFile(a.File)
+	if err != nil {
 		return nil, fmt.Errorf("format generated Go handler: %w", err)
 	}
-	return result.Bytes(), nil
+	return source, nil
 }
 
 type lowerer struct {

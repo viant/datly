@@ -689,9 +689,9 @@ func TestCompilerGenerateUsesShapeCatalog(t *testing.T) {
 		Scope: "example.com/generated",
 		Name:  "Customers",
 		Types: catalog,
-		Text: `#package('example.com/models')
+		Text: `#import('models','example.com/models')
 #setting($_ = $route('/customers', 'POST'))
-#define($_ = $Customer<?>(body/Customer).Tag('typeName:"Customer"'))
+#define($_ = $Customer<?>(body/Customer).Tag('typeName:"models.Customer"'))
 SELECT 1`,
 	})
 	if err != nil {

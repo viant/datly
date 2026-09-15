@@ -10,8 +10,8 @@ import (
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
 	loaderast "github.com/viant/x/loader/ast"
-	xmodule "github.com/viant/x/module"
 	smodel "github.com/viant/x/syntetic/model"
+	"strings"
 )
 
 // GeneratedPackage holds transcribed package artifacts for package bootstrap.
@@ -81,11 +81,28 @@ func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir stri
 	if err != nil {
 		return nil, err
 	}
+	for _, shapePlan := range result.Plan.ShapePackages {
+		authority, e := typecatalog.NewDestinationAuthority(rootDir)
+		if e != nil {
+			return nil, e
+		}
+		dest, e := authority.Package(shapePlan.Package, "")
+		if e != nil {
+			return nil, e
+		}
+		shapePackage, e := loaderast.LoadPackageFS(ctx, os.DirFS(rootDir), filepath.ToSlash(dest.Directory))
+		if e != nil {
+			return nil, e
+		}
+		if e = result.RegisterPackage(compiled.Source.Types, shapePackage, filepath.Join(rootDir, dest.Directory)); e != nil {
+			return nil, e
+		}
+	}
 	pkg, err := loaderast.LoadPackageFS(ctx, os.DirFS(rootDir), filepath.ToSlash(packageDir))
 	if err != nil {
 		return nil, err
 	}
-	if err := compiled.Source.Types.RegisterPackage(typecatalog.TypeOriginGenerated, pkg); err != nil {
+	if err := result.RegisterPackage(compiled.Source.Types, pkg, pkgDir); err != nil {
 		return nil, err
 	}
 	return &GeneratedPackage{
@@ -102,20 +119,24 @@ func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, s
 	if compiled.Source.Types == nil {
 		return gen.Input{}, "", fmt.Errorf("compiled transcribe result requires type catalog")
 	}
-	packageDir, err := managedProjectPath(packageDir)
-	if err != nil {
-		return gen.Input{}, "", fmt.Errorf("generated package path: %w", err)
-	}
-	pkgDir := filepath.Join(rootDir, packageDir)
-	moduleInfo, err := xmodule.LocateLocal(pkgDir)
+	authority, err := typecatalog.NewDestinationAuthority(rootDir)
 	if err != nil {
 		return gen.Input{}, "", err
 	}
-	targetPackage, err := xmodule.ImportPathLocal(moduleInfo.Dir, moduleInfo.Path, pkgDir)
+	authored := ""
+	if compiled.Component.TypeContext != nil {
+		authored = compiled.Component.TypeContext.PackagePath
+	}
+	destination, err := authority.Package(authored, packageDir)
 	if err != nil {
 		return gen.Input{}, "", err
 	}
+	packageDir = destination.Directory
+	targetPackage := destination.ImportPath
 	component := compiled.Component.Clone()
+	if component.TypeContext != nil && authored != "" && component.TypeContext.DefaultPackage == authored {
+		component.TypeContext.DefaultPackage = targetPackage
+	}
 	if err = resolveComponentSources(component, compiled.Source.Resources); err != nil {
 		return gen.Input{}, "", err
 	}
@@ -133,11 +154,14 @@ func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, s
 	}
 	input := gen.Input{Resources: resources,
 		Component: component, Declarations: compiled.Declarations,
-		SQLResources: true,
-		TargetPackage: targetPackage, Contracts: compiled.Contracts, Views: compiled.Views, ViewBindings: compiled.ViewBindings,
+		SQLResources:  true,
+		TargetPackage: targetPackage, ProjectRoot: rootDir, Contracts: compiled.Contracts, Views: compiled.Views, ViewBindings: compiled.ViewBindings,
 		GeneratedTypes: compiled.GeneratedTypes,
 		GoHandler:      compiled.GoHandler,
 		VeltyHandler:   compiled.VeltyHandler,
+	}
+	if strings.TrimSpace(authored) != "" {
+		input.PackageName = destination.Name
 	}
 	if compiled.TypeResolver != nil {
 		input.TypeResolver = compiled.TypeResolver

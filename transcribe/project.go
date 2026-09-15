@@ -160,7 +160,7 @@ func (g *ProjectGeneration) prepareWithManifest(rootDir string, existing *Projec
 		seen[identity] = true
 		slug := projectComponentSlug(key)
 		packagePath := filepath.Join("generated", slug)
-		input, _, err := generationInput(rootDir, packagePath, compiled)
+		input, packagePath, err := generationInput(rootDir, packagePath, compiled)
 		if err != nil {
 			return nil, fmt.Errorf("plan component %q: %w", identity, err)
 		}
@@ -199,7 +199,18 @@ func (g *ProjectGeneration) prepareWithManifest(rootDir string, existing *Projec
 		}
 	}
 	components.components = result
-	return components.order()
+	ordered, err := components.order()
+	if err != nil {
+		return nil, err
+	}
+	var packages gen.Packages
+	for _, entry := range result {
+		packages = append(packages, gen.PackagePlan{Plan: entry.plan, Directory: filepath.Join(rootDir, entry.packagePath)})
+	}
+	if err := packages.Validate(); err != nil {
+		return nil, err
+	}
+	return ordered, nil
 }
 
 func (r *Result) projectClone() (*Result, error) {

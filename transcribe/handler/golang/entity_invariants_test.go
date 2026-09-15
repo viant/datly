@@ -2,16 +2,19 @@ package golang
 
 import (
 	"bytes"
+	"encoding/json"
 	"go/format"
 	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/spec"
 	plan "github.com/viant/datly/transcribe/handler/ast"
+	xshape "github.com/viant/x/shape"
 )
 
 func TestGeneratedInvariantBackfill(t *testing.T) {
@@ -30,6 +33,10 @@ func TestGeneratedInvariantBackfill(t *testing.T) {
 		{Name: "Schedule", Fields: []string{"Start", "End", "Zone", "Days", "Enabled"}},
 		{Name: "RatePolicy", Fields: []string{"Limit", "Burst", "Detail"}},
 	}}
+	before, err := json.Marshal(semantic)
+	if err != nil {
+		t.Fatal(err)
+	}
 	asset, err := EntitySupport(semantic, Config{Package: "events", Factory: "NewEventsHandler", InputType: "Input", OutputType: "Output", Records: rootRecordTypes(semantic, "[]*Record", "")})
 	if err != nil {
 		t.Fatal(err)
@@ -37,6 +44,20 @@ func TestGeneratedInvariantBackfill(t *testing.T) {
 	var source bytes.Buffer
 	if err = format.Node(&source, token.NewFileSet(), asset.File); err != nil {
 		t.Fatal(err)
+	}
+	after, err := json.Marshal(semantic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("entity lowering mutated the semantic plan")
+	}
+	projected, err := (xshape.SourceParser{}).ProjectMethods(source.Bytes(), xshape.MethodProjection{Receivers: []string{"Record"}, Package: "models"})
+	if err != nil {
+		t.Fatalf("receiver behavior depends on component support: %v", err)
+	}
+	if strings.Contains(string(projected.Selected), asset.SnapshotType) {
+		t.Fatal("receiver acquired component-private snapshot ownership")
 	}
 	root := t.TempDir()
 	(testharness.GeneratedModule{}).Write(t, root)

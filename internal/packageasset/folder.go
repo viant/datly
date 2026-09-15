@@ -2,7 +2,6 @@ package packageasset
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"io/fs"
 	"path"
@@ -11,7 +10,7 @@ import (
 
 // Folder snapshots an explicit subtree for both generated embedding and MCP.
 // Filesystems supplied directly must be immutable; development OS callers use os.Root.
-func (s Snapshotter) Folder(ctx context.Context, root string) (*embed.FS, error) {
+func (s Snapshotter) Folder(ctx context.Context, root string) (fs.FS, error) {
 	if ctx == nil || s.Source == nil {
 		return nil, fmt.Errorf("resource source and context are required")
 	}

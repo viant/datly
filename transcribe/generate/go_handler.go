@@ -1,10 +1,8 @@
 package generate
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
 	"path"
@@ -209,6 +207,14 @@ func validateHandlerSignature(function *ast.FuncDecl, plan *Plan, imports map[st
 		if expectedErr != nil {
 			return fmt.Errorf("%s contract: %w", comparison.label, expectedErr)
 		}
+		actual, actualErr = plan.canonicalAliases(targetPackage, actual)
+		if actualErr != nil {
+			return actualErr
+		}
+		expected, expectedErr = plan.canonicalAliases(targetPackage, expected)
+		if expectedErr != nil {
+			return expectedErr
+		}
 		if actual != expected {
 			return fmt.Errorf("%s type %q does not match %q", comparison.label, actual, expected)
 		}
@@ -378,21 +384,21 @@ func goHandlerFileText(packageName string, plan *GoHandlerPlan) (string, error) 
 	if file == nil || file.Name == nil {
 		return "", fmt.Errorf("validated custom handler AST is required")
 	}
-	file.Name = ast.NewIdent(packageName)
-	var result bytes.Buffer
-	if err := format.Node(&result, token.NewFileSet(), file); err != nil {
+	file.Name.Name = packageName
+	source, err := (xshape.SourceParser{}).FormatFile(file)
+	if err != nil {
 		return "", fmt.Errorf("format custom handler: %w", err)
 	}
-	return result.String(), nil
+	return string(source), nil
 }
 
 func cloneGoFile(file *ast.File) (*ast.File, error) {
 	if file == nil {
 		return nil, nil
 	}
-	var source bytes.Buffer
-	if err := format.Node(&source, token.NewFileSet(), file); err != nil {
+	source, err := (xshape.SourceParser{}).FormatFile(file)
+	if err != nil {
 		return nil, err
 	}
-	return parser.ParseFile(token.NewFileSet(), "handler.go", source.Bytes(), parser.ParseComments)
+	return parser.ParseFile(token.NewFileSet(), "handler.go", source, parser.ParseComments)
 }

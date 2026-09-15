@@ -67,6 +67,15 @@ func assertStandaloneReportMCP(t *testing.T, native *client.Client, expected flo
 		require.NotNil(t, result)
 		require.True(t, result.IsError != nil && *result.IsError)
 	}
+	var args map[string]any
+	require.NoError(t, json.Unmarshal([]byte(spendComposeMultiKey), &args))
+	result, err := native.CallTool(context.Background(), &schema.CallToolRequestParams{Name: "SpendCubeCompose", Arguments: args})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError != nil && *result.IsError, "multi-key compose: %+v", result)
+	body, err := json.Marshal(result.StructuredContent)
+	require.NoError(t, err)
+	assertStandaloneReport(t, body, "composeMultiKey", expected)
 }
 
 func TestStandaloneDiscoveredReportsStdioMCP(t *testing.T) {

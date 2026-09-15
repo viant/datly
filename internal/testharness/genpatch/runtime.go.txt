@@ -1,0 +1,90 @@
+package orders
+
+import (
+ "context"
+ "fmt"
+ "net/http/httptest"
+ "reflect"
+ "strings"
+ "testing"
+ "time"
+
+ "github.com/viant/bindly/locator"
+ "github.com/viant/bindly/resource"
+ requestprovider "github.com/viant/bindly/provider/request"
+ "github.com/viant/datly/bootstrap"
+ "github.com/viant/datly/internal/testharness/genpatch"
+ "github.com/viant/datly/internal/testharness/sqlite"
+ druntime "github.com/viant/datly/runtime"
+ mutationhandler "github.com/viant/datly/runtime/handler/mutation"
+ dsql "github.com/viant/datly/sql"
+ "github.com/viant/datly/sql/dml"
+ viewprovider "github.com/viant/datly/sql/reader/provider"
+ dtag "github.com/viant/datly/tag"
+ "github.com/viant/xdatly/response"
+)
+
+var lookupRead bool
+func(input *OrdersInput)Init(context.Context)error{
+ for _,order:=range input.Orders{if order!=nil{
+  if order.Has!=nil && order.Has.KindId && order.KindId==nil {if len(input.CurrentKinds)!=0{return fmt.Errorf("explicit null acquired previous lookup")};continue}
+  if len(input.CurrentKinds)!=1||input.CurrentKinds[0].Id==nil||*input.CurrentKinds[0].Id!=7||input.CurrentKinds[0].Name==nil||*input.CurrentKinds[0].Name!="standard"{return fmt.Errorf("generated auxiliary lookup was not bound: %+v",input.CurrentKinds)}
+  lookupRead=true
+ }}
+ return nil
+}
+
+func TestGeneratedPatchRuntime(t *testing.T){
+ ctx:=context.Background();db:=sqlite.New(t);db.DB.SetMaxOpenConns(1)
+ if err:=db.ExecStatements(ctx,genpatch.Schema...);err!=nil{t.Fatal(err)}
+ var foreignKeys int;if err:=db.DB.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeys);err!=nil||foreignKeys!=1{t.Fatal("foreign keys not enabled",err)}
+ holder:=reflect.TypeOf(OrdersComponent{});field,ok:=holder.FieldByName("Contract");if !ok{t.Fatal("missing holder")}
+ tag,present,err:=dtag.ParseComponent(field.Tag);if err!=nil||!present{t.Fatal(err)}
+ source:=&bootstrap.RouteSource{HolderType:"OrdersComponent",FieldName:field.Name,PackageName:"orders",PackagePath:holder.PkgPath(),Tag:tag,InputType:"OrdersInput",OutputType:"OrdersOutput"}
+ component,err:=source.Resolve(reflect.TypeOf(OrdersInput{}),reflect.TypeOf(OrdersOutput{}));if err!=nil{t.Fatal(err)}
+ resources:=resource.New();if err:=resources.Register(OrdersDatlyResourceNamespace,OrdersDatlyResources);err!=nil{t.Fatal(err)}
+ artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:reflect.TypeOf(OrdersInput{}),OutputType:reflect.TypeOf(OrdersOutput{}),Resources:resources});if err!=nil{t.Fatal(err)}
+ views,err:=viewprovider.New(viewprovider.Config{Dependencies:artifact.ViewDependencies,Input:artifact.Input,SQL:&dsql.SQLComponent{DB:db.DB}});if err!=nil{t.Fatal(err)}
+ handler:=mutationhandler.New[OrdersInput,OrdersOutput](NewOrdersHandler())
+ rt,err:=druntime.NewRuntime([]*druntime.RegisteredComponent{{Component:artifact.Component,Input:artifact.Input,Output:artifact.Output,OutputType:reflect.TypeOf(OrdersOutput{}),Handler:handler,Providers:[]locator.Provider{views},DataSource:dml.Source{DB:db.DB}}},druntime.WithResources(resources));if err!=nil{t.Fatal(err)}
+ invoke:=func(body string)(any,error){
+  request:=httptest.NewRequest("PATCH","/orders",strings.NewReader(body));request.Header.Set("Content-Type","application/json")
+  scope,err:=requestprovider.New(request);if err!=nil{t.Fatal(err)};defer scope.Close()
+  return rt.ExecuteRoute(ctx,"PATCH","/orders",scope)
+ }
+ actual,err:=invoke(`{"Data":[{"id":1,"start":"2026-09-02T00:00:00Z","Items":[{"id":10,"name":"updated"},{"name":"new"}]}]}`)
+ if err!=nil{t.Fatal(err)}
+ output:=actual.(*OrdersOutput)
+ if len(output.Data)!=1||len(output.Data[0].Items)!=2{t.Fatalf("output: %+v",output)}
+ order:=output.Data[0]
+ if order.End.Format("2006-01-02")!="2026-09-30"{t.Fatalf("end not backfilled: %v",order.End)}
+ for _,child:=range order.Items{if child.Id==nil||*child.Id==0||child.OrderId==nil||*child.OrderId!=1{t.Fatalf("generated ID/FK: %+v",child)}}
+ db.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT NAME FROM ITEMS ORDER BY ID"},[]struct{Name string}{{"updated"},{"new"}})
+ db.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT NAME FROM ORDER_KINDS ORDER BY ID"},[]struct{Name string}{{"decoy"},{"standard"}})
+ _,err=invoke(`{"Data":[{"id":1,"start":"2026-10-01T00:00:00Z","Items":[{"id":10,"name":"must rollback"}]}]}`)
+ if err==nil||response.ErrorStatusCode(err,500)!=422{t.Fatalf("invalid interval error/status: %v",err)}
+ db.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT NAME FROM ITEMS ORDER BY ID"},[]struct{Name string}{{"updated"},{"new"}})
+ var start time.Time;if err=db.DB.QueryRow("SELECT START FROM ORDERS WHERE ID=1").Scan(&start);err!=nil{t.Fatal(err)}
+ if start.Format("2006-01-02")!="2026-09-02"{t.Fatalf("invalid interval persisted: %v",start)}
+ actual,err=invoke(`{"Data":[{"id":1,"kindId":7}]}`);if err!=nil{t.Fatalf("parent FK without nested lookup: %v",err)}
+ _,err=invoke(`{"Data":[{"id":1,"kindId":null}]}`);if err==nil||response.ErrorStatusCode(err,500)!=422{t.Fatalf("explicit null FK: %v",err)}
+ if !lookupRead{t.Fatal("auxiliary lookup never executed")}
+ if !hookObservedOriginal{t.Fatal("edited hook not called or original End presence changed")}
+ actual,err=invoke(`{"Data":[{"name":"inserted","kindId":7,"start":"2026-09-01T00:00:00Z","end":"2026-09-10T00:00:00Z","Items":[{"name":"new parent child"}]}]}`)
+ if err!=nil{t.Fatal(err)}
+ inserted:=actual.(*OrdersOutput).Data[0]
+ if inserted.Id==nil||*inserted.Id<=1||len(inserted.Items)!=1||inserted.Items[0].OrderId==nil||*inserted.Items[0].OrderId!=*inserted.Id{t.Fatalf("new root ID/FK not reconciled: %+v",inserted)}
+}
+
+func TestGeneratedSettersAndSyncPresence(t *testing.T){
+ id:=1
+ entity:=&OrdersView{Id:&id,Has:&OrdersViewHas{Id:true}}
+ input:=&OrdersInput{Orders:[]*OrdersView{entity}}
+ captured,err:=_newOrdersHandlerCaptureInput(context.Background(),input);if err!=nil{t.Fatal(err)}
+ snapshot:=captured.(*_newOrdersHandlerOriginalInput)
+ name:="changed";entity.Name=&name
+ if err:=entity.SyncPresence(snapshot.Roots[0]);err!=nil{t.Fatal(err)}
+ if !entity.Has.Name || snapshot.Roots[0].Has("Name"){t.Fatal("sync corrupted original presence")}
+ start:=time.Date(2026,9,4,0,0,0,0,time.UTC);entity.SetStart(&start)
+ if !entity.Has.Start || !entity.HasIntervalChanges(){t.Fatal("setter/invariant presence missing")}
+}

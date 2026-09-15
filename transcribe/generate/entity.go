@@ -1,12 +1,12 @@
 package generate
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/token"
 	"strings"
+
+	xshape "github.com/viant/x/shape"
 )
 
 type EntityMethod struct {
@@ -89,10 +89,10 @@ func (p *EntitySupportPlan) source(packageName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	file.Name = ast.NewIdent(packageName)
-	var result bytes.Buffer
-	if err = format.Node(&result, token.NewFileSet(), file); err != nil {
+	file.Name.Name = packageName
+	source, err := (xshape.SourceParser{}).FormatFile(file)
+	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(result.String()) + "\n", nil
+	return strings.TrimSpace(string(source)) + "\n", nil
 }

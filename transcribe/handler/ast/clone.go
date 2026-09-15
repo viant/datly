@@ -55,6 +55,7 @@ func cloneCurrent(source *CurrentPlan) *CurrentPlan {
 	}
 	result := *source
 	result.InputPath = cloneFieldPath(source.InputPath)
+	result.Lookup = source.Lookup.Clone()
 	result.Keys = append([]KeyPart(nil), source.Keys...)
 	result.Fields = append([]CurrentField(nil), source.Fields...)
 	result.Self = append([]FieldRef(nil), source.Self...)

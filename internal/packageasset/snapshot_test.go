@@ -3,6 +3,7 @@ package packageasset
 import (
 	"context"
 	"io/fs"
+	"runtime"
 	"testing"
 	"testing/fstest"
 )
@@ -47,5 +48,30 @@ func TestResourceSnapshotRejectsInvalidInputs(t *testing.T) {
 	cancel()
 	if _, err := (Snapshotter{Source: source}).All(ctx); err == nil {
 		t.Fatal("cancellation ignored")
+	}
+}
+
+func TestResourceSnapshotOverlayAndGC(t *testing.T) {
+	source := fstest.MapFS{"go.mod": &fstest.MapFile{Data: []byte("module old")}, "kept.go": &fstest.MapFile{Data: []byte("package p")}}
+	data := []byte("module current")
+	snapshot, err := (Snapshotter{Source: source, Overlay: []File{{Path: "go.mod", Data: data}, {Path: "hook.go", Data: []byte("package p")}}}).All(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	data[0] = 'X'
+	source["kept.go"].Data[0] = 'X'
+	for iteration := 0; iteration < 10; iteration++ {
+		runtime.GC()
+		for name, want := range map[string]string{"go.mod": "module current", "kept.go": "package p", "hook.go": "package p"} {
+			got, err := fs.ReadFile(snapshot, name)
+			if err != nil || string(got) != want {
+				t.Fatalf("snapshot %s: %q %v", name, got, err)
+			}
+		}
+	}
+	for _, overlay := range [][]File{{{Path: "../escape"}}, {{Path: "x"}, {Path: "x"}}, {{Path: "x"}, {Path: "x/y"}}} {
+		if _, err := (Snapshotter{Overlay: overlay}).All(context.Background()); err == nil {
+			t.Fatal("invalid overlay accepted")
+		}
 	}
 }

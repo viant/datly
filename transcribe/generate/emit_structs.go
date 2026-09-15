@@ -35,7 +35,7 @@ func viewFile(packageName string, plan *Plan) string {
 func viewFileForDestination(packageName string, plan *Plan, destination string) string {
 	selected := make([]ViewPlan, 0, len(plan.Views))
 	for _, view := range plan.Views {
-		if view.Ownership == ViewGenerated && view.Destination == destination {
+		if view.Ownership == ViewGenerated && plan.localShape(view.Package) && view.Destination == destination {
 			selected = append(selected, view)
 		}
 	}
@@ -43,7 +43,15 @@ func viewFileForDestination(packageName string, plan *Plan, destination string) 
 }
 
 func (plan *Plan) hasViewSupport() bool {
-	return plan != nil && (len(plan.HelperTypes) > 0 || len(plan.referencedPlaceholderTypes()) > 0)
+	if plan == nil {
+		return false
+	}
+	for _, helper := range plan.HelperTypes {
+		if plan.localShape(helper.Package) {
+			return true
+		}
+	}
+	return !plan.ShapesOnly && len(plan.referencedPlaceholderTypes()) > 0
 }
 
 func viewFileContent(packageName string, plan *Plan, views []ViewPlan, includeSupport bool) string {
@@ -56,6 +64,9 @@ func viewFileContent(packageName string, plan *Plan, views []ViewPlan, includeSu
 	}
 	if includeSupport {
 		for _, helper := range plan.HelperTypes {
+			if !plan.localShape(helper.Package) {
+				continue
+			}
 			viewFields = append(viewFields, helper.Fields...)
 		}
 	}
@@ -110,6 +121,9 @@ func viewFileContent(packageName string, plan *Plan, views []ViewPlan, includeSu
 		return b.String()
 	}
 	for _, helper := range plan.HelperTypes {
+		if !plan.localShape(helper.Package) {
+			continue
+		}
 		b.WriteString("\n")
 		b.WriteString("type ")
 		b.WriteString(helper.Name)

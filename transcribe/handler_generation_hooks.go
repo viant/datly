@@ -169,10 +169,14 @@ func (c *entityHookCompilation) identity(record *plan.RecordPlan) (string, error
 		return "", err
 	}
 	if view := c.generated.ViewByType(base); view != nil && view.Ownership == gen.ViewGenerated {
-		if c.generation.input.TargetPackage == "" {
+		packagePath := view.Package
+		if packagePath == "" {
+			packagePath = c.generation.input.TargetPackage
+		}
+		if packagePath == "" {
 			return "", fmt.Errorf("generated entity %s requires target package identity", base)
 		}
-		return (xshape.Resolver{Package: c.generation.input.TargetPackage}).Canonical(base)
+		return (xshape.Resolver{Package: packagePath}).Canonical(base)
 	}
 	if c.generation.input.TypeResolver == nil {
 		return "", fmt.Errorf("linked entity %s requires canonical type authority", base)

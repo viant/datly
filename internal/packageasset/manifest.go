@@ -7,13 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"sort"
 	"strings"
 )
 
 const ManifestName = ".datly-gen.json"
 
 type Manifest struct {
-	Resources *Resources `json:"resources,omitempty"`
+	Resources *Resources           `json:"resources,omitempty"`
+	Owners    map[string]*Manifest `json:"owners,omitempty"`
 }
 
 type Resources struct {
@@ -22,7 +24,7 @@ type Resources struct {
 }
 
 // Read returns nil when the package has no generated-resource manifest.
-func Read(source fs.FS) (*Resources, error) {
+func ReadAll(source fs.FS) ([]*Resources, error) {
 	if source == nil {
 		return nil, fmt.Errorf("package filesystem is required")
 	}
@@ -37,13 +39,49 @@ func Read(source fs.FS) (*Resources, error) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return nil, fmt.Errorf("read %s: %w", ManifestName, err)
 	}
-	if manifest.Resources == nil {
-		return nil, nil
+	var result []*Resources
+	if manifest.Resources != nil {
+		result = append(result, manifest.Resources)
 	}
-	if err := manifest.Resources.Validate(); err != nil {
+	names := make([]string, 0, len(manifest.Owners))
+	for name := range manifest.Owners {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		member := manifest.Owners[name]
+		if member == nil || member.Owners != nil {
+			return nil, fmt.Errorf("invalid resource owner %q", name)
+		}
+		if member.Resources != nil {
+			result = append(result, member.Resources)
+		}
+	}
+	seen := map[string]bool{}
+	for _, r := range result {
+		if err := r.Validate(); err != nil {
+			return nil, err
+		}
+		if seen[r.Namespace] {
+			return nil, fmt.Errorf("duplicate resource namespace %s", r.Namespace)
+		}
+		seen[r.Namespace] = true
+	}
+	return result, nil
+}
+
+func Read(source fs.FS) (*Resources, error) {
+	all, err := ReadAll(source)
+	if err != nil {
 		return nil, err
 	}
-	return manifest.Resources, nil
+	if len(all) == 0 {
+		return nil, nil
+	}
+	if len(all) > 1 {
+		return nil, fmt.Errorf("package has multiple resource owners; use ReadAll")
+	}
+	return all[0], nil
 }
 
 func (r *Resources) Validate() error {

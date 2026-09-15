@@ -29,6 +29,7 @@ type Request struct {
 // CurrentBinding maps one canonical record-view identity to the ordinary
 // component input parameter that supplies its current rows.
 type CurrentBinding struct {
+	Lookup       *plan.LookupProjection
 	ViewIdentity string
 	Param        string
 }
@@ -37,6 +38,7 @@ type CurrentBinding struct {
 type Compiler struct{}
 
 type indexedCurrentBinding struct {
+	lookup        *plan.LookupProjection
 	name          string
 	paramIdentity string
 }
@@ -135,7 +137,7 @@ func (c *compiler) indexCurrentBindings(request Request) error {
 		if strings.TrimSpace(request.ViewBindings[paramIdentity]) == "" {
 			return fmt.Errorf("current-state input %q requires an exact canonical view binding", currentParam.Name)
 		}
-		c.currentByView[identity] = indexedCurrentBinding{name: currentParam.Name, paramIdentity: paramIdentity}
+		c.currentByView[identity] = indexedCurrentBinding{name: currentParam.Name, paramIdentity: paramIdentity, lookup: binding.Lookup.Clone()}
 		c.currentOrder = append(c.currentOrder, identity)
 	}
 	return nil
@@ -276,6 +278,9 @@ func (c *compiler) compileCurrent(request Request, name string, recordView *spec
 	result := &plan.CurrentPlan{
 		ParamIdentity: param.Identity(), ViewIdentity: identity,
 		InputPath: plan.FieldPath{"Input", field}, Keys: currentKeys, Fields: fields,
+	}
+	if selected, ok := c.currentByView[recordIdentity]; ok {
+		result.Lookup = selected.lookup.Clone()
 	}
 	if view.SelfReference != nil {
 		result.Self = append(result.Self, plan.FieldRef{Field: view.SelfReference.Holder})

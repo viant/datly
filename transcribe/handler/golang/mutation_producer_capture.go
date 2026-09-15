@@ -147,9 +147,9 @@ func (p *mutationIdentityPolicy) produced(e *entityEmitter, record *recordLoweri
 			proof := []ast.Stmt{&ast.IncDecStmt{X: id("count"), Tok: token.INC}}
 			if parent := source.parent; parent != nil {
 				proof = []ast.Stmt{
-					&ast.AssignStmt{Lhs: []ast.Expr{id("insert"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(parent, "ProducerInsert"))}},
+					&ast.AssignStmt{Lhs: []ast.Expr{id("writable"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(parent, "ProducerWrite"))}},
 					&ast.IfStmt{Cond: &ast.BinaryExpr{X: id("err"), Op: token.NEQ, Y: id("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(id("false"), id("err"))}}},
-					&ast.IfStmt{Cond: id("insert"), Body: &ast.BlockStmt{List: proof}},
+					&ast.IfStmt{Cond: id("writable"), Body: &ast.BlockStmt{List: proof}},
 				}
 			}
 			checks = append(checks, &ast.IfStmt{Cond: source.condition, Body: &ast.BlockStmt{List: proof}})

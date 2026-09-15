@@ -1,13 +1,13 @@
 package generate
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/token"
 	"path/filepath"
 	"strings"
+
+	xshape "github.com/viant/x/shape"
 )
 
 const contractHandlerPackage = "github.com/viant/xdatly/handler"
@@ -120,10 +120,10 @@ func contractHandlerFileText(packageName string, plan *ContractHandlerPlan) (str
 	if file == nil || file.Name == nil {
 		return "", fmt.Errorf("validated generated contract handler AST is required")
 	}
-	file.Name = ast.NewIdent(packageName)
-	var result bytes.Buffer
-	if err = format.Node(&result, token.NewFileSet(), file); err != nil {
+	file.Name.Name = packageName
+	source, err := (xshape.SourceParser{}).FormatFile(file)
+	if err != nil {
 		return "", fmt.Errorf("format generated contract handler: %w", err)
 	}
-	return result.String(), nil
+	return string(source), nil
 }

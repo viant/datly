@@ -34,5 +34,24 @@ func (p *Plan) CanonicalType(packagePath, expression string) (string, error) {
 		}
 		resolver.Imports[alias] = item.Package
 	}
-	return resolver.Canonical(expression)
+	canonical, err := resolver.Canonical(expression)
+	if err != nil {
+		return "", err
+	}
+	return p.canonicalAliases(packagePath, canonical)
+}
+
+func (p *Plan) canonicalAliases(packagePath, expression string) (string, error) {
+	aliases := map[string]string{}
+	for _, contract := range []ContractPlan{p.Input, p.Output} {
+		if contract.Ownership == ContractGenerated && contract.Package != "" && contract.Package != packagePath {
+			aliases[packagePath+"."+contract.Type] = contract.Package + "." + contract.Type
+		}
+	}
+	return (xshape.Resolver{Rewriter: func(name string) (string, error) {
+		if replacement := aliases[name]; replacement != "" {
+			return replacement, nil
+		}
+		return name, nil
+	}}).Rewrite(expression)
 }

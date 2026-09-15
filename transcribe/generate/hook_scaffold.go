@@ -1,16 +1,15 @@
 package generate
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
 	"path/filepath"
 	"strings"
 
 	"github.com/viant/datly/typecatalog"
+	xshape "github.com/viant/x/shape"
 )
 
 // HookScaffoldAsset is an optional create-once, user-owned lifecycle file.
@@ -117,14 +116,21 @@ func (plan *Plan) validateHookScaffold() error {
 	if hook.File == nil {
 		return fmt.Errorf("hook scaffold AST is required")
 	}
-	if plan.ContractHandler == nil && plan.MutationHandler == nil {
+	if plan.ContractHandler == nil && plan.MutationHandler == nil && !plan.ShapesOnly {
 		return fmt.Errorf("hook scaffold requires a generated contract handler")
 	}
-	if plan.MutationHandler == nil && (plan.Input.Ownership != ContractGenerated || plan.Output.Ownership != ContractGenerated) {
-		return fmt.Errorf("hook scaffold requires package-local generated input and output contracts")
-	}
-	if plan.MutationHandler == nil && (!isDirectLocalType(plan.Input.Type) || !isDirectLocalType(plan.Output.Type)) {
-		return fmt.Errorf("hook scaffold requires direct package-local contract types, got %s -> %s", plan.Input.Type, plan.Output.Type)
+	if plan.MutationHandler == nil {
+		for _, contract := range []ContractPlan{plan.Input, plan.Output} {
+			if plan.ShapesOnly && contract.Type == "" {
+				continue
+			}
+			if contract.Ownership != ContractGenerated {
+				return fmt.Errorf("hook scaffold requires package-local generated input and output contracts")
+			}
+			if !isDirectLocalType(contract.Type) {
+				return fmt.Errorf("hook scaffold requires direct package-local contract types, got %s", contract.Type)
+			}
+		}
 	}
 	relative, err := managedRelativePath(hook.Destination)
 	if err != nil {
@@ -157,19 +163,28 @@ func (plan *Plan) validateHookScaffold() error {
 }
 
 func validateHookMethods(file *ast.File, plan *Plan, imports map[string]string) error {
-	initializer, err := hookMethod(file, "Init", plan.Input.Type)
-	if err != nil {
-		return err
-	}
-	if err = validateHookSignature(initializer, imports, []string{"context.Context"}); err != nil {
-		return fmt.Errorf("input hook Init: %w", err)
-	}
-	finalizer, err := hookMethod(file, "Finalize", plan.Output.Type)
-	if err != nil {
-		return err
-	}
-	if err = validateHookSignature(finalizer, imports, []string{"context.Context", "error"}); err != nil {
-		return fmt.Errorf("output hook Finalize: %w", err)
+	for _, role := range []struct {
+		contract ContractPlan
+		method   string
+		args     []string
+	}{
+		{plan.Input, "Init", []string{"context.Context"}},
+		{plan.Output, "Finalize", []string{"context.Context", "error"}},
+	} {
+		if role.contract.Type == "" || !plan.localShape(role.contract.Package) {
+			continue
+		}
+		method, err := hookMethod(file, role.method, role.contract.Type)
+		if err != nil {
+			return err
+		}
+		if err = validateHookSignature(method, imports, role.args); err != nil {
+			label := "input"
+			if role.method == "Finalize" {
+				label = "output"
+			}
+			return fmt.Errorf("%s hook %s: %w", label, role.method, err)
+		}
 	}
 	return nil
 }
@@ -185,6 +200,17 @@ func validateExistingHookScaffold(path string, plan *Plan) error {
 	imports, err := handlerImports(file, "")
 	if err != nil {
 		return err
+	}
+	for _, role := range []struct {
+		contract ContractPlan
+		method   string
+	}{{plan.Input, "Init"}, {plan.Output, "Finalize"}} {
+		if plan.localShape(role.contract.Package) {
+			continue
+		}
+		if method, _ := hookMethod(file, role.method, role.contract.Type); method != nil {
+			return fmt.Errorf("authored hook %s.%s belongs in %s; explicit migration required", role.contract.Type, role.method, role.contract.Package)
+		}
 	}
 	if err = validateHookMethods(file, plan, imports); err != nil {
 		return fmt.Errorf("lifecycle contract changed: %w", err)
@@ -269,10 +295,10 @@ func hookScaffoldFileText(packageName string, plan *HookScaffoldPlan) (string, e
 	if file == nil || file.Name == nil {
 		return "", fmt.Errorf("validated hook scaffold AST is required")
 	}
-	file.Name = ast.NewIdent(packageName)
-	var result bytes.Buffer
-	if err = format.Node(&result, token.NewFileSet(), file); err != nil {
+	file.Name.Name = packageName
+	source, err := (xshape.SourceParser{}).FormatFile(file)
+	if err != nil {
 		return "", fmt.Errorf("format hook scaffold: %w", err)
 	}
-	return result.String(), nil
+	return string(source), nil
 }

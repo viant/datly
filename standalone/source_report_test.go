@@ -3,6 +3,7 @@ package standalone
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -19,8 +20,9 @@ import (
 
 const spendCube = `{"dimensions":{"accountID":true,"region":true},"measures":{"totalSpend":true},"filters":{"tenant":"acme","channel":"web"}}`
 const spendCompose = `{"cubes":[{"filters":{"tenant":"acme","channel":"web"}},{"inheritFrom":1,"filters":{"channel":"store"}}],"sql":"SELECT t1.customer_id AS customer, t1.spend_total AS web, COALESCE(t2.spend_total, 0) AS store FROM $CubeSQL1 AS t1 LEFT JOIN $CubeSQL2 AS t2 ON t1.customer_id = t2.customer_id ORDER BY t1.customer_id"}`
+const spendComposeMultiKey = `{"cubes":[{"filters":{"tenant":"acme","channel":"web"}},{"inheritFrom":1,"filters":{"channel":"store"}}],"sql":"SELECT t1.customer_id AS customer, t1.region_code AS region, t1.spend_total AS web, COALESCE(t2.spend_total, 0) AS store FROM $CubeSQL1 AS t1 LEFT JOIN $CubeSQL2 AS t2 ON t1.customer_id = t2.customer_id AND t1.region_code = t2.region_code ORDER BY t1.customer_id, t1.region_code"}`
 
-func newStandaloneReport(t *testing.T, options ...func(*fixture.Fixture, *config.Config)) (*Server, *fixture.Fixture, string) {
+func newStandaloneReportFixture(t *testing.T, options ...func(*fixture.Fixture, *config.Config)) (*fixture.Fixture, *config.Config, *testharness.JWT) {
 	t.Helper()
 	f := fixture.New(t)
 	require.NoError(t, f.DB.ExecStatements(context.Background(),
@@ -39,6 +41,12 @@ func newStandaloneReport(t *testing.T, options ...func(*fixture.Fixture, *config
 	for _, option := range options {
 		option(f, cfg)
 	}
+	return f, cfg, jwt
+}
+
+func newStandaloneReport(t *testing.T, options ...func(*fixture.Fixture, *config.Config)) (*Server, *fixture.Fixture, string) {
+	t.Helper()
+	f, cfg, jwt := newStandaloneReportFixture(t, options...)
 	s, err := New(context.Background(), Options{Config: cfg, Registry: spend.Exports()})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, s.Shutdown(context.Background())) })
@@ -83,6 +91,11 @@ func TestStandaloneDiscoveredReportsSQLite(t *testing.T) {
 			w := call("/spend"+tc.path, tc.body, "", "")
 			require.Equal(t, 200, w.Code, w.Body.String())
 			assertStandaloneReport(t, w.Body.Bytes(), tc.name, 150)
+			if tc.name == "compose" {
+				w = call("/spend"+tc.path, spendComposeMultiKey, "", "")
+				require.Equal(t, 200, w.Code, w.Body.String())
+				assertStandaloneReport(t, w.Body.Bytes(), "composeMultiKey", 150)
+			}
 			missing := strings.ReplaceAll(tc.body, `"tenant":"acme",`, "")
 			if tc.name == "cube" {
 				// Omitted ordinary cube filters retain source binding semantics.
@@ -178,6 +191,17 @@ func assertStandaloneReport(t *testing.T, body []byte, kind string, eu float64) 
 			}
 		}
 		require.NoError(t, json.Unmarshal(body, &result))
+		if kind == "composeMultiKey" {
+			require.Len(t, result.Data, 3, string(body))
+			values := map[string]struct{ Web, Store float64 }{}
+			for _, row := range result.Data {
+				values[fmt.Sprintf("%d:%s", row.Customer, row.Region)] = struct{ Web, Store float64 }{row.Web, row.Store}
+			}
+			require.Equal(t, struct{ Web, Store float64 }{eu, eu / 150 * 2000}, values["1:EU"], string(body))
+			require.Equal(t, struct{ Web, Store float64 }{eu / 150 * 1000, 0}, values["1:US"], string(body))
+			require.Equal(t, struct{ Web, Store float64 }{eu / 150 * 70, 0}, values["2:EU"], string(body))
+			return
+		}
 		require.Len(t, result.Data, 2, string(body))
 		require.Equal(t, 1, result.Data[0].Customer)
 

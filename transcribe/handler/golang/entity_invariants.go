@@ -47,7 +47,13 @@ func (e *entityEmitter) invariantDeclarations(record *recordLowering) ([]ast.Dec
 			continue
 		}
 		e.setters[signature] = definition
-		result = append(result, e.hasInvariantDeclaration(record, group), e.backfillInvariantDeclaration(record, group, helper))
+		// Owned receiver behavior is self-contained. The component helper delegates
+		// through the public method so moving a receiver never creates a reverse
+		// dependency on component-private invocation support.
+		function := declaration.(*ast.FuncDecl)
+		method := e.backfillInvariantDeclaration(record, group, function.Body)
+		function.Body = &ast.BlockStmt{List: []ast.Stmt{returnStmt(callExpr(selectExpr(ast.NewIdent("entity"), "Backfill"+group.Name+"IfNeeded"), ast.NewIdent("previous"), ast.NewIdent("previousFields")))}}
+		result = append(result, e.hasInvariantDeclaration(record, group), method)
 	}
 	return result, nil
 }
@@ -70,14 +76,14 @@ func (e *entityEmitter) hasInvariantDeclaration(record *recordLowering, group pl
 	return &ast.FuncDecl{Name: ast.NewIdent(name), Recv: &ast.FieldList{List: []*ast.Field{namedField("entity", record.value.pointerExpr())}}, Type: &ast.FuncType{Params: &ast.FieldList{}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("bool")}}}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(condition)}}}
 }
 
-func (e *entityEmitter) backfillInvariantDeclaration(record *recordLowering, group plan.InvariantGroup, helper string) ast.Decl {
+func (e *entityEmitter) backfillInvariantDeclaration(record *recordLowering, group plan.InvariantGroup, body *ast.BlockStmt) ast.Decl {
 	name := "Backfill" + group.Name + "IfNeeded"
 	e.asset.Methods = append(e.asset.Methods, EntityMethod{Receiver: record.value.base, Name: name, Signature: fmt.Sprintf("func(*%s, %s.FieldSet) error", record.value.base, e.l.handlerAlias)})
 	return &ast.FuncDecl{
 		Doc:  &ast.CommentGroup{List: []*ast.Comment{{Text: "// " + name + " hydrates omitted group values without marking presence."}, {Text: "// A nil previousFields denotes a full typed contract; generated programs pass actual field evidence."}}},
 		Name: ast.NewIdent(name), Recv: &ast.FieldList{List: []*ast.Field{namedField("entity", record.value.pointerExpr())}},
 		Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{namedField("previous", record.value.pointerExpr()), namedField("previousFields", selectExpr(ast.NewIdent(e.l.handlerAlias), "FieldSet"))}}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}},
-		Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(callExpr(ast.NewIdent(helper), ast.NewIdent("entity"), ast.NewIdent("previous"), ast.NewIdent("previousFields")))}},
+		Body: body,
 	}
 }
 

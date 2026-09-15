@@ -24,7 +24,7 @@ func (plan *Plan) validateGeneratedNames() error {
 		owners[name] = owner
 		return nil
 	}
-	for name, owner := range map[string]string{"Component": "component holder"} {
+	for name, owner := range map[string]string{plan.HolderName(): "component holder"} {
 		if err := reserve(name, owner); err != nil {
 			return err
 		}
@@ -82,7 +82,7 @@ func (plan *Plan) validateGeneratedNames() error {
 		}
 	}
 	if resources := plan.Resources; resources != nil {
-		for _, name := range []string{"DatlyResourceNamespace", "DatlyResources"} {
+		for _, name := range []string{plan.Resources.Symbol + "DatlyResourceNamespace", plan.Resources.Symbol + "DatlyResources"} {
 			if err := reserve(name, "SQL resource export"); err != nil {
 				return err
 			}
@@ -205,7 +205,7 @@ func (plan *Plan) validateGeneratedDestinations() error {
 	}
 	generatedViews := 0
 	for _, view := range plan.Views {
-		if view.Ownership != ViewGenerated {
+		if view.Ownership != ViewGenerated || !plan.localShape(view.Package) {
 			continue
 		}
 		generatedViews++
@@ -218,15 +218,22 @@ func (plan *Plan) validateGeneratedDestinations() error {
 			return err
 		}
 	}
-	if err := reserve(plan.RouterDest, "component holder", false); err != nil {
-		return err
+	if !plan.ShapesOnly {
+		if err := reserve(plan.RouterDest, "component holder", false); err != nil {
+			return err
+		}
 	}
-	if plan.Input.Ownership == ContractGenerated {
+	if len(plan.Aliases) > 0 {
+		if err := reserve(lowerSnake(plan.ComponentName)+"_types_gen.go", "shape aliases", false); err != nil {
+			return err
+		}
+	}
+	if plan.Input.Ownership == ContractGenerated && plan.localShape(plan.Input.Package) {
 		if err := reserve(plan.Input.Destination, "input contract", false); err != nil {
 			return err
 		}
 	}
-	if plan.Output.Ownership == ContractGenerated {
+	if plan.Output.Ownership == ContractGenerated && plan.localShape(plan.Output.Package) {
 		if err := reserve(plan.Output.Destination, "output contract", false); err != nil {
 			return err
 		}

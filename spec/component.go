@@ -20,6 +20,8 @@ type Component struct {
 }
 
 type TypeContext struct {
+	// PackagePath is the destination explicitly authored by #package.
+	PackagePath    string       `json:"packagePath,omitempty"`
 	DefaultPackage string       `json:"defaultPackage,omitempty"`
 	Imports        []ImportSpec `json:"imports,omitempty"`
 }

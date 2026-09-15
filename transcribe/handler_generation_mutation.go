@@ -67,7 +67,7 @@ func (g *handlerGeneration) refineMutationLinks(links []plan.KeyLink, parent, ch
 }
 
 func (g *handlerGeneration) refineRelationMutationFields(relation *plan.RelationPlan, parent *plan.RecordPlan, generated *gen.Plan, parentType, childType string) error {
-	if parent.Auxiliary || relation.Child.Auxiliary {
+	if parent.Auxiliary || relation.Child.Auxiliary && (relation.Child.Current == nil || relation.Child.Current.Lookup == nil) {
 		return nil
 	}
 	parentFields, err := g.currentProjectionFields(generated, parentType, parent.Cardinality)
