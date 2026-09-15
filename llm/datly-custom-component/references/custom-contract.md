@@ -1,6 +1,6 @@
 # Author a custom Datly component
 
-For current enablement and pending integration boundaries, consult [output-and-operations.md](references/output-and-operations.md) when using operational or extension features below. Required behavior is not a claim of connected-build availability.
+For current enablement and pending integration boundaries, consult [output-and-operations.md](output-and-operations.md) when using operational or extension features below. Required behavior is not a claim of connected-build availability.
 
 ## When to choose custom behavior
 
@@ -31,7 +31,7 @@ Do not allocate every row whose current ID is zero. An original supplied zero ca
 
 A bound field such as bind:"kind=component,in=GET:/internal-records,required" consumes an existing component through the declared interface. Use the actual server-advertised identity scheme for cross-project/private components. Canonical input remains available to predicates and hooks; helper-target binding must not impersonate the component input.
 
-This declarative binding inherits the caller's request/provider scope; it does **not** automatically pass the parent's typed Input object. If a POST body must become a private GET component's query-shaped input, explicitly map the approved fields into that dependency's exact Go input type. The existing exported `exec.ComponentInvoker` accepts a trusted `ComponentRequest.Input` for this purpose. Never let a client choose the component key, route, providers, or input type. See the [verified forwarding and registration example](references/custom-examples.md#explicit-typed-forwarding-and-trusted-service-registration).
+This declarative binding inherits the caller's request/provider scope; it does **not** automatically pass the parent's typed Input object. If a POST body must become a private GET component's query-shaped input, explicitly map the approved fields into that dependency's exact Go input type. The existing exported `exec.ComponentInvoker` accepts a trusted `ComponentRequest.Input` for this purpose. Never let a client choose the component key, route, providers, or input type. See the [verified forwarding and registration example](custom-examples.md#explicit-typed-forwarding-and-trusted-service-registration).
 
 Application service injection is also explicit: the embedding host can attach a provider to the check component's registration, and the handler requests that provider through Binder. Body/query properties are not service registrations. A shared service object must be concurrency-safe; request state belongs in context or a request-scoped instance.
 

@@ -77,12 +77,16 @@ from the graph:
 #package('example.com/shop/orders/write')
 #setting($_ = $input_type('OrdersInput'))
 #setting($_ = $output_type('OrdersOutput'))
+#setting($_ = $case_format('lc'))
+#define($_ = $Data<[]*Order>(output/body))
 #setting($_ = $route('/orders', 'PATCH'))
 #setting($_ = $connector('main'))
 SELECT orders.*, items.*, kind.*,
        type(orders, 'Order'),
        type(items, 'Item'),
        type(kind, 'Kind'),
+       lifecycle_type(orders, 'OrderLifecycle'),
+       lifecycle_type(items, 'ItemLifecycle'),
        invariant(orders.WINDOW_START, 'DeliveryWindow'),
        invariant(orders.WINDOW_END, 'DeliveryWindow')
 FROM (
@@ -103,6 +107,11 @@ Previous reads and typed Go write support for the selected PATCH operation.
 `OrdersOutput`) in the declared package. The outer `type(orders, 'Order')` and
 `type(items, 'Item')` and `type(kind, 'Kind')` annotations name the individual shapes inside that
 graph; they do not replace the input or output contract declarations.
+`$Data<[]*Order>(output/body)` explicitly selects the typed main output holder;
+`Data` is the Go output field and `body` is the writer output binding. The generated
+writer populates it with the changed rows. Global `case_format('lc')` applies
+Structology lower-camel casing to output names. Use this setting for routine
+casing; do not add per-column JSON tags or a holder `WithTag` just to lowercase.
 StructQL key projection is generated plumbing; the application should not need
 to write a template loop to load Current rows.
 
@@ -179,9 +188,10 @@ generation. The generation step itself does not execute the business mutation.
 In an existing Datly project with Go module `example.com/shop` and its runtime
 dependencies configured, save the DQL above as
 `orders/source/Orders.dql`. `#package('example.com/shop/orders/write')` selects the generated
-package. The outer `type` annotations name the mutable shapes `Order` and `Item`,
-so their default lifecycle structs are `OrderLifecycle` and `ItemLifecycle`.
-No lifecycle import is needed to request these default placeholders.
+package. The outer `type` annotations name the mutable shapes `Order` and `Item`.
+The separate `lifecycle_type` declarations explicitly name `OrderLifecycle` and
+`ItemLifecycle` in that destination package. Removing those declarations produces
+an ordinary hookless writer: no lifecycle bindings or placeholders are inferred.
 
 The example assumes the three database tables above and date/time columns for
 WINDOW_START and WINDOW_END. Run the shown `datly transcribe patch` command from a
@@ -197,7 +207,7 @@ prefix applies to defaults; explicit DQL filename overrides take precedence:
 | --- | --- |
 | `views.go` | Typed views, relation holders and internal Has markers. |
 | `input.go`, `output.go` | The generated request and response contracts. |
-| `lifecycle.go` | Create-once application lifecycle placeholders: edit this file. |
+| `lifecycle.go` | Create-once methods for the explicitly named local lifecycle structs: edit this file. |
 | `entities.go` | Setters, presence synchronization and invariant helpers. |
 | `indexes.go` | Detached typed read collections, canonical key/link maps and on-demand business constructors. |
 | `mutation.go`, `frames.go`, `previous.go`, `layout.go`, `actions.go`, `mutation_output.go`, `validation.go`, `hooks.go`, `invariants.go` | Generated orchestration, capture, Previous matching, validation and queued actions. |
@@ -294,9 +304,9 @@ DQL-owned field tags and types can change through regeneration when the existing
 field still matches its recorded generated version. Conflicting manual field edits
 stop generation before publication; resolve that ownership conflict explicitly.
 
-For an existing lifecycle type instead of a default scaffold, declare its package
-with `#import` and attach it to the outer view using `entity_hooks`. That explicit
-type takes precedence. See [Customize the writing hooks](#customize-the-writing-hooks).
+For an existing lifecycle type, declare its package with `#import` and attach
+it to the outer view using `lifecycle_type`. Its authored methods are preserved
+and validated; generation does not overwrite them. See [Customize the writing hooks](#customize-the-writing-hooks).
 
 ## Understand the complete lifecycle
 
@@ -604,20 +614,46 @@ func (h *OrderLifecycle) Validate(ctx context.Context, row *Order,
 }
 ```
 
-The default scaffold uses an entity-based name such as `OrderLifecycle` and
-contains empty lifecycle methods, each with only `return nil`. It supplies the
-signatures; application code supplies the behavior. Auxiliary views do not receive
-mutation lifecycle scaffolds. If one entity type appears in different parent roles,
-the generated names must distinguish their different typed contracts.
+Each writable role that needs application hooks must explicitly declare its struct:
 
-Scaffold files are create-once: regeneration preserves application edits. An
-explicitly supplied lifecycle type takes precedence. Keep the scaffold's actual
-method signatures. For an existing application hook type, declare
-`entity_hooks(orders, 'hooks.OrderLifecycle')` in the outer projection, with
-`#import('hooks', 'example.com/shop/hooks')` declaring the package. The import
-identifies the Go package; `hooks.OrderLifecycle` identifies its hook struct. Child hooks
-use `EntityState[Child, Parent]`; root hooks use `NoParent`. SelfParent identifies
-a recursive parent independently of the enclosing relation Parent.
+```sql
+#import('hooks', 'example.com/shop/hooks')
+SELECT orders.*, lifecycle_type(orders, 'hooks.OrderLifecycle')
+FROM (SELECT o.* FROM ORDERS o) orders
+```
+
+`#import('hooks', 'example.com/shop/hooks')` is an explicit Go package import;
+`hooks.OrderLifecycle` identifies an existing type in that package. Generation
+validates its required Init/Validate signatures and any optional phase/finalizer
+methods. Invalid declarations fail; there is no fallback lifecycle.
+
+To request a new empty struct in the generated package, write
+`lifecycle_type(orders, 'OrderLifecycle')` under that package's `#package`.
+A declared import alias pointing to the same destination package also works.
+High-level pure Go transcription creates its empty methods once in `lifecycle.go`;
+each body initially contains only `return nil`. Existing files and authored types
+are preserved. A missing type in a foreign package must be authored there: the
+lifecycle filename setting cannot redirect generation into a foreign package.
+An external default package remains authoritative for unqualified type names.
+
+No declaration means no application lifecycle binding or scaffold. Ordinary writes
+still execute framework validation and DML. Auxiliary views cannot declare mutation
+lifecycles. Declare child hooks independently with their actual typed parent;
+when one entity participates under different parent types, explicitly choose
+separate lifecycle structs for those contracts. Root state uses `NoParent`;
+`SelfParent` identifies a recursive parent independently of the enclosing `Parent`.
+
+Scaffolds remain outside the generated manifest. Regeneration validates the
+current methods and preserves application edits; incompatible methods fail before
+writes. `entity_hooks` is unsupported DQL and produces an explicit diagnostic.
+
+`lifecycle_type` is accepted only for generated Go mutation writers. GET readers
+and other lowering modes reject the declaration before generating files.
+
+Reader request initialization belongs to the explicitly named `input_type`
+(`OrdersInput.Init`), and response finalization belongs to the named `output_type`
+(`OrdersOutput.Finalize`). Row `OnFetch` remains a separate read hook. Generate
+reader and writer components separately; no hook registration list is required.
 
 The hook object is invocation-scoped and reused across its phases. Validate must
 not change business values, markers or Previous snapshots. Optional AfterSequence

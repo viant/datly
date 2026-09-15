@@ -1,12 +1,12 @@
 # Licensing and attribution
 
-The repository's original Apache-2.0 [LICENSE](references/product/datly/LICENSE) and Viant [NOTICE](references/product/datly/NOTICE)
+The repository's original Apache-2.0 [LICENSE](LICENSE) and Viant [NOTICE](NOTICE)
 are retained unchanged in this migration. Preserve them when redistributing Datly.
 
 The OpenAPI model port includes its own
-[LICENSE](references/product/datly/gateway/openapi/openapi3/LICENSE) and
-[NOTICE](references/product/datly/gateway/openapi/openapi3/NOTICE). The HTTP adapter attribution is retained
-in [OPENAPI_NOTICE](references/product/datly/gateway/http/OPENAPI_NOTICE). These files record the source
+[LICENSE](gateway/openapi/openapi3/LICENSE) and
+[NOTICE](gateway/openapi/openapi3/NOTICE). The HTTP adapter attribution is retained
+in [OPENAPI_NOTICE](gateway/http/OPENAPI_NOTICE). These files record the source
 and applicable attribution; do not remove them when repackaging those files.
 
 The separate `github.com/viant/xdatly` SDK and other dependencies retain their own

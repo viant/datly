@@ -26,7 +26,7 @@ func TestMutationHookScaffoldCreateOnceSQLite(t *testing.T) {
 		existing                    bool
 	}{
 		{name: "fresh default destination", filename: "lifecycle.go"},
-		{name: "enable on existing package", destination: "entity_hooks.go", filename: "entity_hooks.go", existing: true},
+		{name: "enable on existing package", destination: "entity_lifecycle.go", filename: "entity_lifecycle.go", existing: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -36,7 +36,8 @@ func TestMutationHookScaffoldCreateOnceSQLite(t *testing.T) {
 			}
 			root := t.TempDir()
 			testharness.WriteGeneratedGoMod(t, root)
-			source := &Source{Name: "Events", Scope: "example.com/generated/events", Connector: "main", Types: typecatalog.NewCatalog(), ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": db.DB}), Text: `#setting($_ = $route('/events','POST'))
+			source := &Source{Name: "Events", Scope: "example.com/generated/events", Connector: "main", Types: typecatalog.NewCatalog(), ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": db.DB}), Text: `#package('example.com/generated/generated')
+#setting($_ = $route('/events','POST'))
 #define($_ = $Events<[]*EventsView>(body/Data).Cardinality('Many').Required())
 #define($_ = $Status<int>(output/status).Output())
 #define($_ = $Data<[]*EventsView>(output/body))
@@ -59,6 +60,7 @@ SELECT ID, NAME FROM EVENTS`}
 					t.Fatal("disabled scaffold wrote a file", err)
 				}
 			}
+			source.Text = strings.Replace(source.Text, "SELECT ID, NAME FROM EVENTS", "SELECT e.*, lifecycle_type(e, 'EventRules') FROM EVENTS e", 1)
 			options.Handler.Hooks = HookOptions{Scaffold: true, Destination: tc.destination}
 			first := run()
 			if first.Result.Plan.HookScaffold == nil || len(first.Result.Plan.HookScaffold.EntityHooks) != 1 {
@@ -76,7 +78,7 @@ SELECT ID, NAME FROM EVENTS`}
 			if err != nil {
 				t.Fatal(err)
 			}
-			content, err = (xshape.SourceParser{}).AppendStructFields(content, []byte("package events;type "+hookRef.BaseName+" struct { Input *EventsInput `bind:\"kind=input\"`; InitCount,ValidateCount,SequenceCount,QueueCount int }"))
+			content, err = (xshape.SourceParser{}).AppendStructFields(content, []byte("package generated;type "+hookRef.BaseName+" struct { Input *EventsInput `bind:\"kind=input\"`; InitCount,ValidateCount,SequenceCount,QueueCount int }"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -119,6 +121,7 @@ SELECT ID, NAME FROM EVENTS`}
 			}
 			consumer := strings.ReplaceAll(generatedGoWriteRuntimeSource(WritePost, false), "github.com/viant/datly/runtime/handler/custom", "github.com/viant/datly/runtime/handler/mutation")
 			consumer = strings.ReplaceAll(consumer, "customhandler", "mutationhandler")
+			consumer = strings.Replace(consumer, "package events", "package generated", 1)
 			consumer = strings.Replace(consumer, "var count int", `counts:=map[string]int{};for _,phase:=range scaffoldEvents{counts[phase]++};for _,phase:=range []string{"Init","Validate","AfterSequence","AfterQueue"}{if counts[phase]!=2{t.Fatalf("scaffold phase %s calls=%d",phase,counts[phase])}};if counts["Finalize"]!=1{t.Fatalf("finalizer calls=%d",counts["Finalize"])}
 	var count int`, 1)
 			if err = os.WriteFile(filepath.Join(root, "generated", "scaffold_runtime_test.go"), []byte(consumer), 0644); err != nil {

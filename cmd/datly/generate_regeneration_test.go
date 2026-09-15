@@ -99,6 +99,7 @@ func TestGenExecutableNamedGraphRegeneration(t *testing.T) {
 			invariant := func(name string) string {
 				return "invariant(orders.START,'" + name + "'), invariant(orders.END,'" + name + "')"
 			}
+			base = strings.Replace(base, "kind.*", "kind.*, lifecycle_type(orders,'OrderRules')", 1)
 			write(sourcePath, base)
 			run(t, false)
 			hookPath := filepath.Join(root, "api/orders/lifecycle.go")
@@ -112,7 +113,7 @@ import (
 )
 func TestAuthoredLifecycle(t *testing.T) {
  lifecycleCalls = 0
- if err := (&`+owner+`Lifecycle{}).Init(context.Background(), &`+owner+`{}, xhandler.EntityState[`+owner+`, xhandler.NoParent]{}); err != nil { t.Fatal(err) }
+ if err := (&OrderRules{}).Init(context.Background(), &`+owner+`{}, xhandler.EntityState[`+owner+`, xhandler.NoParent]{}); err != nil { t.Fatal(err) }
  if lifecycleCalls != 1 { t.Fatal("authored lifecycle was not called") }
 }
 `)

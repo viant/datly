@@ -12,6 +12,9 @@ type EmittedFile struct {
 }
 
 func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
+	if plan != nil && plan.MutationHandler == nil && plan.lifecycleTargetError != nil {
+		return nil, plan.lifecycleTargetError
+	}
 	packages, err := plan.packages(dir)
 	if err != nil {
 		return nil, err
@@ -36,6 +39,9 @@ func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
 
 // ValidateDestination checks every package in this component before writing.
 func (p *Plan) ValidateDestination(dir string) error {
+	if p != nil && p.MutationHandler == nil && p.lifecycleTargetError != nil {
+		return p.lifecycleTargetError
+	}
 	packages, err := p.packages(dir)
 	if err != nil {
 		return err

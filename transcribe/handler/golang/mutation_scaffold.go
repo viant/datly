@@ -1,13 +1,11 @@
 package golang
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"go/ast"
 	"go/token"
 	"strings"
 
-	"github.com/viant/datly/spec"
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	xshape "github.com/viant/x/shape"
 )
@@ -52,17 +50,6 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 		imports[alias] = path
 	}
 	resolver := xshape.Resolver{Package: config.PackagePath, Imports: imports}
-	nameCounts := map[string]int{}
-	for _, record := range l.records {
-		if record.plan.Auxiliary || record.plan.Entity == nil || !record.plan.Entity.Hooks.IsZero() {
-			continue
-		}
-		reference, err := resolver.Reference(record.value.base)
-		if err != nil {
-			return nil, err
-		}
-		nameCounts[reference.BaseName+"Lifecycle"]++
-	}
 	for _, record := range l.records {
 		if record.plan.Auxiliary {
 			continue
@@ -70,20 +57,14 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 		if record.plan.Entity == nil {
 			return nil, fmt.Errorf("mutation scaffold role %s has no canonical entity metadata", record.plan.Identity)
 		}
-		if !record.plan.Entity.Hooks.IsZero() {
+		if !record.plan.Entity.HooksScaffold {
 			continue
 		}
-		reference, err := resolver.Reference(record.value.base)
-		if err != nil {
-			return nil, err
+		hook := record.plan.Entity.Hooks
+		if hook.IsZero() || hook.Package != config.PackagePath || hook.Pointer || hook.Cardinality != "" {
+			return nil, fmt.Errorf("mutation scaffold role %s requires an explicit local lifecycle type", record.plan.Identity)
 		}
-		name := reference.BaseName + "Lifecycle"
-		if nameCounts[name] > 1 {
-			// One entity can have distinct parent contracts in separate view roles.
-			identity := record.plan.Identity + "\x00" + strings.Join(record.plan.InputPath, "\x00")
-			digest := sha256.Sum256([]byte(identity))
-			name += fmt.Sprintf("_%x", digest[:6])
-		}
+		name := hook.Name
 		if err := l.reserveDeclaration(name); err != nil {
 			return nil, err
 		}
@@ -102,7 +83,7 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 		}
 		binding := MutationScaffoldBinding{Identity: record.plan.Identity, Path: append(plan.FieldPath(nil), record.plan.InputPath...), Hook: config.PackagePath + "." + name, Entity: entity, Parent: parent, Root: record.plan == result.Plan.Root}
 		result.Bindings = append(result.Bindings, binding)
-		record.plan.Entity.Hooks = spec.TypeRef{Package: config.PackagePath, Name: name}
+		record.plan.Entity.HooksScaffold = false
 		record.plan.Entity.HooksBind = false
 		file.Decls = append(file.Decls, &ast.GenDecl{Tok: token.TYPE, Doc: &ast.CommentGroup{List: []*ast.Comment{{Text: "// " + name + " customizes role " + strings.Join(record.plan.InputPath, ".") + "."}}}, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(name), Type: &ast.StructType{Fields: &ast.FieldList{}}}}})
 		for _, method := range []string{"Init", "Validate", "AfterSequence", "AfterQueue"} {

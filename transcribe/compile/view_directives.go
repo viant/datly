@@ -23,6 +23,9 @@ func extractViewDirectives(parsed *query.Select) ([]viewDirective, error) {
 	if parsed == nil || len(parsed.List) == 0 {
 		return nil, nil
 	}
+	if containsSQLCall(parsed, func(name string) bool { return name == "entity_hooks" }) {
+		return nil, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("entity_hooks is unsupported; declare lifecycle_type(view, 'package.Type')")}
+	}
 	filtered := make(query.List, 0, len(parsed.List))
 	result := make([]viewDirective, 0)
 	for _, item := range parsed.List {

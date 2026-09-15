@@ -8,7 +8,7 @@ var ResolvedCompositeSchema = []string{
 }
 
 var ResolvedCompositeDQL = strings.NewReplacer(
-	"SELECT o.*,Kinds.*", "SELECT o.*,Items.*,Kinds.*,CAST(Items.ID AS int),CAST(Items.TENANT_ID AS int),CAST(Items.ORDER_ID AS int)",
+	"SELECT o.*,Kinds.*", "SELECT o.*,Items.*,Kinds.*,lifecycle_type(o,'OrderRules'),lifecycle_type(Items,'ItemRules'),CAST(Items.ID AS int),CAST(Items.TENANT_ID AS int),CAST(Items.ORDER_ID AS int)",
 	"FROM ORDERS o", "FROM ORDERS o LEFT JOIN ITEMS Items ON Items.TENANT_ID=o.TENANT_ID AND Items.ORDER_ID=o.ID",
 ).Replace(CompositeDQL)
 

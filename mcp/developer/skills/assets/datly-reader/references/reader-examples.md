@@ -3,7 +3,9 @@
 ## Explicit output holder and JSON shape
 
 Name the output field as well as the output type. `output_type` names a Go
-contract; `output/view` binds the main root-view result into that contract:
+contract; `output/view` binds the main root-view result into that contract.
+This declaration fragment belongs in the
+[complete parameterized reader](reader-examples.md#parameterized-dql-reader):
 
 ~~~~sql
 #setting($_ = $input_type('OrdersInput'))
@@ -31,11 +33,13 @@ These are application patterns. The developer server supplies actual connector/s
 #package('example.com/app/records/read')
 #setting($_ = $input_type('RecordsInput'))
 #setting($_ = $output_type('RecordsOutput'))
+#setting($_ = $case_format('lc'))
 #setting($_ = $route('/v1/records', 'GET'))
 #setting($_ = $connector('main'))
 #setting($_ = $mcp('records.list', 'List records in a tenant'))
 #define($_ = $TenantID<int>(query/tenantId).Required())
 #define($_ = $Limit<int>(query/limit).Optional().QuerySelector('Records'))
+#define($_ = $Records<[]*Record>(output/view))
 SELECT records.*, type(records, 'Record'),
        set_limit(records, 100),
        allowed_order_by_columns(records, 'id,name')
@@ -54,10 +58,11 @@ datly transcribe get -dir "$PROJECT" \
 ```
 
 `#package` selects the destination, input/output settings name contracts, and
-`type(records,'Record')` names the row. `records` is the outer view alias; `r`
+`type(records,'Record')` names the row. The `Records` output/view holder binds
+the root to `RecordsOutput.Records []*Record`, serialized as `records`. `records` is the outer view alias; `r`
 stays local to its SQL. Configure selector permissions and verify the canonical
 selector view identity `Records` in the generated component. Author the writer
-separately. Default filenames are plain; [exact overrides and optional prefixes](references/developer-mcp.md#operation-based-generation-to-pure-go)
+separately. Default filenames are plain; [exact overrides and optional prefixes](developer-mcp.md#operation-based-generation-to-pure-go)
 control their destinations.
 
 ## Go-shape reader
@@ -68,20 +73,23 @@ package records
 import xdatly "github.com/viant/xdatly"
 
 type Components struct {
-    List xdatly.Component[Input, Output] `component:"List,path=/v1/records,method=GET,connector=main,view=Records" desc:"List records in a tenant"`
+    List xdatly.Component[Input, Output] `component:"List,path=/v1/records,method=GET,connector=main,view=Records" caseFormat:"lc" desc:"List records in a tenant"`
 }
 type Input struct {
     TenantID int `parameter:"TenantID,kind=query,in=tenantId,required=true"`
 }
 type Output struct {
-    Data []*Record `view:"Records,table=records" sql:"SELECT id,tenant_id,name FROM records WHERE tenant_id=:TenantID"`
+    Data []*Record `parameter:"Data,kind=output,in=view" view:"Records,table=records" sql:"SELECT id,tenant_id,name FROM records WHERE tenant_id=:TenantID"`
 }
 type Record struct {
-    ID       int    `json:"id" sqlx:"id,primaryKey"`
-    TenantID int    `json:"tenantId" sqlx:"tenant_id"`
-    Name     string `json:"name" sqlx:"name"`
+    ID       int    `sqlx:"id,primaryKey"`
+    TenantID int    `sqlx:"tenant_id"`
+    Name     string `sqlx:"name"`
 }
 ~~~~
+
+The component-level `caseFormat:"lc"` applies lowerCamel output names to the
+envelope and nested fields without routine JSON tags.
 
 No DAO forwarding layer is required. Add custom orchestration only when chosen or needed.
 
@@ -99,27 +107,27 @@ package records
 import xdatly "github.com/viant/xdatly"
 
 type Components struct {
-    Records xdatly.Component[Input, Output] `component:"Records,path=/records,method=GET,connector=main,view=Records"`
+    Records xdatly.Component[Input, Output] `component:"Records,path=/records,method=GET,connector=main,view=Records" caseFormat:"lc"`
 }
 type Input struct {
     TenantID int `parameter:"TenantID,kind=query,in=tenantId,required=true"`
     Offset int `parameter:"Offset,kind=query,in=offset" querySelector:"Records"`
 }
 type Record struct {
-    ID int `json:"id" sqlx:"id"`
-    Name string `json:"name" sqlx:"name"`
+    ID int `sqlx:"id"`
+    Name string `sqlx:"name"`
 }
 type Totals struct {
-    Count int `json:"count" sqlx:"count"`
+    Count int `sqlx:"count"`
 }
 type Bounds struct {
-    Minimum *int `json:"minimum" sqlx:"minimum"`
-    Maximum *int `json:"maximum" sqlx:"maximum"`
+    Minimum *int `sqlx:"minimum"`
+    Maximum *int `sqlx:"maximum"`
 }
 type Output struct {
-    Data []*Record `json:"data" parameter:"Data,kind=output,in=view" view:"Records,limit=1,selectorOffset=true" sql:"SELECT id,name FROM records WHERE tenant_id=:TenantID ORDER BY id"`
-    Totals *Totals `json:"totals" parameter:"Totals,kind=output,in=derived" view:"Totals" sql:"SELECT COUNT(*) AS count FROM ($View.Records.NonWindowSQL) parent"`
-    Bounds *Bounds `json:"bounds" parameter:"Bounds,kind=output,in=derived" view:"Bounds,allowNulls=true" sql:"SELECT MIN(id) AS minimum,MAX(id) AS maximum FROM ($View.Records.NonWindowSQL) parent"`
+    Data []*Record `parameter:"Data,kind=output,in=view" view:"Records,limit=1,selectorOffset=true" sql:"SELECT id,name FROM records WHERE tenant_id=:TenantID ORDER BY id"`
+    Totals *Totals `parameter:"Totals,kind=output,in=derived" view:"Totals" sql:"SELECT COUNT(*) AS count FROM ($View.Records.NonWindowSQL) parent"`
+    Bounds *Bounds `parameter:"Bounds,kind=output,in=derived" view:"Bounds,allowNulls=true" sql:"SELECT MIN(id) AS minimum,MAX(id) AS maximum FROM ($View.Records.NonWindowSQL) parent"`
 }
 ~~~~
 
@@ -146,19 +154,23 @@ When the component uses the same linked `Input`/`Output` shapes, this DQL declar
 #package('example.com/app/records')
 #setting($_ = $input_type('Input'))
 #setting($_ = $output_type('Output'))
+#setting($_ = $case_format('lc'))
 #setting($_ = $route('/records','GET'))
 #setting($_ = $connector('main'))
 #define($_ = $TenantID<int>(query/tenantId).Required())
 #define($_ = $Offset<int>(query/offset).Optional().QuerySelector('Records'))
-#define($_ = $Data<?>(output/view))
+#define($_ = $Data<[]*Record>(output/view))
 #define($_ = $Totals<Totals>(output/derived) /* SELECT COUNT(*) AS count FROM ($View.Records.NonWindowSQL) parent */)
 #define($_ = $Bounds<Bounds>(output/derived) /* SELECT MIN(id) AS minimum,MAX(id) AS maximum,allow_nulls(parent) FROM ($View.Records.NonWindowSQL) parent */)
-SELECT r.id,r.name,set_limit(r,1)
+SELECT r.id,r.name,type(r,'Record'),set_limit(r,1)
 FROM records r
 WHERE r.tenant_id=:TenantID
 ORDER BY r.id
 ~~~~
 
+The explicit `Data<[]*Record>(output/view)` binds root rows to `Output.Data`
+under JSON key `data`; `type(r,'Record')` matches the linked row type. The
+`Totals` and `Bounds` declarations retain their separate derived-output bindings.
 Use component name/root view `Records`, and retain the linked root's `selectorOffset=true` permission. `r` is the SQL namespace for `set_limit`; it is not the selector/view identity. The DQL specifies its own limit and aggregate NULL policy because authored DQL can override the corresponding Go SQL settings. Do not assume the overwritten Go query still supplies these controls.
 
 `NonWindowSQL` removes **view pagination**, not an explicit business `LIMIT` already inside the authored SQL source. If the base query itself says `LIMIT 1`, a derived count may legitimately count only that limited source. Use a view limit for page-size behavior when totals must count all matches.
@@ -176,8 +188,10 @@ Required target pattern:
 #import('model', 'example.com/app/model')
 #setting($_ = $input_type('ConfigurationsInput'))
 #setting($_ = $output_type('ConfigurationsOutput'))
+#setting($_ = $case_format('lc'))
 #setting($_ = $route('/v1/configurations', 'GET'))
 #setting($_ = $connector('main'))
+#define($_ = $Configurations<[]*Configuration>(output/view))
 SELECT configurations.*, type(configurations, 'Configuration'),
        CAST(configurations.bounds AS model.Bounds),
        tag(configurations.bounds, 'sqlx:"-"'),
@@ -188,7 +202,9 @@ FROM (
 ) configurations
 ~~~~
 
-The result must contain the `bounds` output. The outer CAST supplies its Go type
+The root binds to `ConfigurationsOutput.Configurations []*Configuration`,
+serialized under `configurations`. The result must contain the `bounds` output.
+The outer CAST supplies its Go type
 even when driver type metadata is empty; inner CTE/computed SQL need not have
 literal provenance. Without CAST, simple `''`/`0` projections default to
 `string`/`int`. Missing/duplicate outputs and undeclared unknown types fail.

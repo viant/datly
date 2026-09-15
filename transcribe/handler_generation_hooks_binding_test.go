@@ -6,6 +6,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/handler/compiler"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 )
@@ -48,5 +49,28 @@ func TestEntityHookBindingMetadataAtOrchestrationBoundary(t *testing.T) {
 	}
 	if _, err := (&entityHookCompilation{}).bindingRequired(spec.TypeRef{}); err == nil {
 		t.Fatal("missing authority accepted")
+	}
+}
+
+func TestEntityLifecycleScaffoldRequiresDestinationAuthority(t *testing.T) {
+	resolver, err := typecatalog.NewResolver(typecatalog.NewCatalog(), typecatalog.TranscribeAuthority, &typecatalog.ResolutionContext{PackagePath: "example.com/source"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, defaultPackage string
+		enabled              bool
+	}{
+		{"foreign default", "example.com/authored", true},
+		{"scaffold disabled", "example.com/generated", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := &gen.Input{TypeResolver: resolver, TargetPackage: "example.com/generated", Component: &spec.Component{TypeContext: &spec.TypeContext{DefaultPackage: tc.defaultPackage}}}
+			generation := &handlerGeneration{input: input, options: Options{Handler: HandlerOptions{Go: GoHandlerOptions{Execution: GoExecutionMutation}, Hooks: HookOptions{Scaffold: tc.enabled}}}}
+			_, scaffold, err := (&entityHookCompilation{generation: generation}).compileHook(compiler.EntityHookRequest{Hook: "ExplicitRules", Entity: "example.com/generated.Order"})
+			if err == nil || scaffold {
+				t.Fatalf("invalid declaration acquired scaffold: %v %v", scaffold, err)
+			}
+		})
 	}
 }

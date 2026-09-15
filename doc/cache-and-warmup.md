@@ -24,6 +24,9 @@ retention must not be silently substituted.
 
 A component-level DQL declaration can carry current AFS settings:
 
+Declaration fragment; adapt to the [complete reader contract](../llm/datly-reader/references/reader-examples.md#parameterized-dql-reader)
+with the target view identity and existing input/output bindings.
+
 ```sql
 #setting($_ = $cache('records', '5m').WithProvider('afs').WithLocation('cache/records'))
 ```
@@ -63,6 +66,9 @@ native service's lifecycle.
 The candidate accepts this authored form, preserved from
 original Datly syntax:
 
+Declaration fragment; adapt to the [complete reader contract](../llm/datly-reader/references/reader-examples.md#parameterized-dql-reader)
+with the target view identity and existing input/output bindings.
+
 ```sql
 -- Candidate syntax; configure and verify the selected backend before deployment.
 #setting($_ = $cache('records').WithProvider('aerospike://127.0.0.1:3000/test').WithLocation('records').WithTimeToLiveMs(60000))
@@ -87,6 +93,9 @@ qualification is claimed here. See [status](status.md) for the release boundary.
 The DQL parser supports a dedicated connector, an index column/parameter and case
 values:
 
+Declaration fragment; adapt to the [complete reader contract](../llm/datly-reader/references/reader-examples.md#parameterized-dql-reader)
+with the target view identity and existing input/output bindings.
+
 ```sql
 #setting($_ = $cache_warmup('order_id', 'Connector=bq_metrics_prewarm', 'IndexParameter=OrderId', 'Period=today,yesterday', 'Granularity=hour,day'))
 ```
@@ -110,11 +119,21 @@ For a query that always filters one ID, warm the concrete parameter case without
 an index column:
 
 ```sql
+#package('example.com/app/records/warmup')
+#setting($_ = $input_type('RecordsInput'))
+#setting($_ = $output_type('RecordsOutput'))
+#setting($_ = $case_format('lc'))
+#setting($_ = $route('/records', 'GET'))
+#setting($_ = $connector('main'))
+#define($_ = $ID<int>(query/id).Required())
+#define($_ = $Records<[]*Record>(output/view))
 #setting($_ = $cache_warmup('', 'ID=1'))
-SELECT id, name FROM records WHERE id=:ID
+SELECT r.id, r.name, type(r, 'Record') FROM records r WHERE r.id=:ID
 ```
 
-This fragment assumes a declared `ID` input. It warms that SQL/argument pair;
+Configure `main`, `records(id,name)` and the native read cache for this reader.
+`RecordsOutput.Records []*Record` receives the root rows as JSON `records`.
+The explicit `ID` input supplies the exact warmup SQL/argument pair;
 another ID can fill its own lazy cache entry. A successful warmup response alone
 does not prove later reuse: verify the read after making the database unavailable.
 

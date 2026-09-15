@@ -70,7 +70,7 @@ Record what actually ran. A parser pass is not proof of DB semantics; generated 
 
 ## Operational and pending-feature acceptance
 
-Use [output-and-operations.md](references/output-and-operations.md) for the relevant cache, async, output, documentation and lifecycle checks. Record source inspection, tests actually run and pending integration separately. Do not count a tag/SDK construction test as end-to-end acceptance.
+Use [output-and-operations.md](output-and-operations.md) for the relevant cache, async, output, documentation and lifecycle checks. Record source inspection, tests actually run and pending integration separately. Do not count a tag/SDK construction test as end-to-end acceptance.
 
 ## Naming and release boundary
 

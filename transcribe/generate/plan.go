@@ -11,28 +11,30 @@ import (
 )
 
 type Plan struct {
-	Generation       *spec.GenerationSettings
-	OwnerIdentity    string
-	ComponentPackage string
-	Destinations     map[string]string
-	Aliases          []TypeAlias
-	Package          string
-	GoPackage        string
-	Holder           string
-	ProjectRoot      string
-	ShapePackages    []*Plan
-	ShapesOnly       bool
-	Documentation    xdocs.Source
-	Static           *spec.StaticContent
-	ComponentName    string
-	Description      string
-	Example          string
-	Handler          string
-	Routes           []RoutePlan
-	Connector        string
-	Report           *spec.ReportSettings
-	Settings         dtag.Settings
-	Imports          []spec.ImportSpec
+	// Retain source dispatch requirements across intermediate shape planning.
+	lifecycleTargetError error
+	Generation           *spec.GenerationSettings
+	OwnerIdentity        string
+	ComponentPackage     string
+	Destinations         map[string]string
+	Aliases              []TypeAlias
+	Package              string
+	GoPackage            string
+	Holder               string
+	ProjectRoot          string
+	ShapePackages        []*Plan
+	ShapesOnly           bool
+	Documentation        xdocs.Source
+	Static               *spec.StaticContent
+	ComponentName        string
+	Description          string
+	Example              string
+	Handler              string
+	Routes               []RoutePlan
+	Connector            string
+	Report               *spec.ReportSettings
+	Settings             dtag.Settings
+	Imports              []spec.ImportSpec
 
 	ViewDest     string
 	RouterDest   string

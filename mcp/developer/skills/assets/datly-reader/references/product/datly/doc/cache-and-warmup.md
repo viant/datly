@@ -3,6 +3,9 @@
 The DQL parser supports a dedicated connector, an index column/parameter and case
 values:
 
+Declaration fragment; adapt to the [complete reader contract](../../../reader-examples.md#parameterized-dql-reader)
+with the target view identity and existing input/output bindings.
+
 ```sql
 #setting($_ = $cache_warmup('order_id', 'Connector=bq_metrics_prewarm', 'IndexParameter=OrderId', 'Period=today,yesterday', 'Granularity=hour,day'))
 ```
@@ -26,11 +29,21 @@ For a query that always filters one ID, warm the concrete parameter case without
 an index column:
 
 ```sql
+#package('example.com/app/records/warmup')
+#setting($_ = $input_type('RecordsInput'))
+#setting($_ = $output_type('RecordsOutput'))
+#setting($_ = $case_format('lc'))
+#setting($_ = $route('/records', 'GET'))
+#setting($_ = $connector('main'))
+#define($_ = $ID<int>(query/id).Required())
+#define($_ = $Records<[]*Record>(output/view))
 #setting($_ = $cache_warmup('', 'ID=1'))
-SELECT id, name FROM records WHERE id=:ID
+SELECT r.id, r.name, type(r, 'Record') FROM records r WHERE r.id=:ID
 ```
 
-This fragment assumes a declared `ID` input. It warms that SQL/argument pair;
+Configure `main`, `records(id,name)` and the native read cache for this reader.
+`RecordsOutput.Records []*Record` receives the root rows as JSON `records`.
+The explicit `ID` input supplies the exact warmup SQL/argument pair;
 another ID can fill its own lazy cache entry. A successful warmup response alone
 does not prove later reuse: verify the read after making the database unavailable.
 

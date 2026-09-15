@@ -21,6 +21,11 @@ type planResolver struct {
 
 func (r *planResolver) resolve() (*Plan, error) {
 	r.input.Component = r.input.Component.Clone()
+	// Writer shapes may be planned before lowering; reader plans cannot dispatch
+	// mutation lifecycles even when a declared Go type already exists.
+	if err := r.input.ValidateLifecycleTarget(true); err != nil {
+		return nil, err
+	}
 	if r.input.Component.Static != nil {
 		return r.resolveStatic()
 	}
@@ -36,6 +41,7 @@ func (r *planResolver) resolve() (*Plan, error) {
 		return plan, err
 	}
 	r.plan = plan
+	r.plan.lifecycleTargetError = r.input.ValidateLifecycleTarget(false)
 	if err = r.validateHelperFieldNames(); err != nil {
 		return nil, err
 	}

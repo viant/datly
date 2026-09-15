@@ -16,7 +16,7 @@ require (
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20260915061102-65308eabace8
 	github.com/viant/sqlx v0.26.1-0.20260915052314-24e180f5c1e5
-	github.com/viant/structology v0.10.1-0.20260914220719-1c7fa69a9a75
+	github.com/viant/structology v0.10.1-0.20260915143641-202bd3a5f8e8
 	github.com/viant/structql v0.5.4
 	github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8

@@ -132,7 +132,7 @@ and [mutation rules](mutations.md) for the projection/validation boundaries.
 
 Opt into hook scaffolding through the transcription `HookOptions`, then edit the
 create-once application hook file. For an existing hook type, author
-`entity_hooks(viewAlias, 'hooks.OrderHooks')` in the DQL projection and import its
+`lifecycle_type(viewAlias, 'hooks.OrderHooks')` in the DQL projection and import its
 Go package. A hook must match the generated entity/parent type exactly.
 
 `EntityHooks[T,P]` supplies Init and Validate on one invocation-scoped object.

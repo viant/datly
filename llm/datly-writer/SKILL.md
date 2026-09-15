@@ -36,8 +36,10 @@ substitute `translate`, lower-level transcription, or manual writer plumbing.
 
 The standard workflow is **reader-like declarative DQL graph + explicit `transcribe`
 operation (`get`, `patch`, `post`, `put`) → generated pure Go**. Declare auxiliary
-tables in parentheses, entity hooks and invariant tags in DQL. The generator owns
-binding, Previous reads, presence, validation and write orchestration; application
+tables in parentheses, explicit `lifecycle_type(view, 'package.Type')` hooks and
+invariant tags in DQL. Omitting lifecycle declarations produces ordinary hookless
+writes; never infer lifecycle struct names. `entity_hooks` is unsupported.
+The generator owns binding, Previous reads, presence, validation and write orchestration; application
 Go hooks own business rules. Existing linked Go types keep their authority.
 
 - Establish operation, input/output shapes, writable tables, full identity tuples, parent links, auxiliary read-only joins, validation rules, and authorization/error policy.
@@ -53,7 +55,7 @@ Go hooks own business rules. Existing linked Go types keep their authority.
 ## Non-obvious rules
 
 - DQL plus Go-shape metadata is the component contract. HTTP method alone does not decide handler policy.
-- Use full Go module/package identity and declared import aliases; never create a local empty substitute for an unresolved type.
+- Use full Go module/package identity and declared import aliases; create empty lifecycle methods only for explicitly named unresolved types in the generated destination package. Preserve known/imported hooks; foreign missing types and invalid signatures must fail.
 - Has/presence bookkeeping is internal. Keep it out of client JSON, MCP schemas, examples of request bodies, and public error payloads.
 - Internal physical columns still participate in SQL. A logical pseudo field that is not persisted is a different concept.
 - Preserve existing field order, append new fields, and retain authored handlers/hooks. Do not overwrite edited generated output to make regeneration pass.
@@ -67,7 +69,10 @@ Return the component's purpose, public input/output contract, DQL/Go files, hook
 ## Graph naming
 
 Use separate reader/writer DQL with required `#package`. Declare `input_type`,
-`output_type` and outer `type(view,'Entity')` names; inner SQL aliases remain local.
+`output_type`, outer `type(view,'Entity')` names, a typed main output holder
+(`$Data<[]*Entity>(output/body)` for generated writes), and global
+`#setting($_ = $case_format('lc'))`. Use Structology casing rather than JSON tags
+or holder `WithTag` solely for lowercasing; inner SQL aliases remain local.
 Auxiliary `(TABLE)` sources are nonmutating, and outer `AND 1=1` marks a to-one
 relation while retaining real equality links. See the grammar for CAST authority
 over source-preserved SQL/CTEs and literal defaults.

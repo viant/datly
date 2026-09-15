@@ -1,6 +1,6 @@
 # Datly 1.0 writer contract
 
-For current enablement and pending integration boundaries, consult [availability-and-operations.md](references/availability-and-operations.md) when using operational or extension features below. Required behavior is not a claim of connected-build availability.
+For current enablement and pending integration boundaries, consult [availability-and-operations.md](availability-and-operations.md) when using operational or extension features below. Required behavior is not a claim of connected-build availability.
 
 Use this reference when authoring an application component that changes data. It describes the agreed Datly 1.0 contract, including required features still being integrated. Do not silently omit a required phase because the installed implementation is incomplete. Check the implementation-status section before promising that an endpoint meets the complete contract.
 
@@ -28,8 +28,15 @@ Keep authorization filters and current-row lookups scoped to the caller. A recor
 The standard authoring surface is a reader-like DQL graph plus an explicit `transcribe`
 operation and pure Go output. Link authoritative application types when they
 exist; otherwise generate owned shapes. Application Go hooks carry business
-rules. Generation owns binding, Previous reads and mutation orchestration.
-See [writer-examples.md](references/writer-examples.md) for the primary graph.
+rules. Every complete writer example declares `input_type`, `output_type`, the
+row type, a typed main output holder such as
+`#define($_ = $Data<[]*Record>(output/body))`, and
+`#setting($_ = $case_format('lc'))`. `Data` names the Go output field; `body`
+selects the generated writer output binding. Global Structology casing owns
+routine lowercase/camel-case presentation; do not add JSON tags or holder
+`WithTag` for that purpose. Generation owns binding, Previous reads and mutation
+orchestration.
+See [writer-examples.md](writer-examples.md) for the primary graph.
 
 Existing Go-only components remain supported for explicitly chosen application
 contracts. Preserve their types and authored methods. In generated shapes,
@@ -46,7 +53,7 @@ remove dropped owned columns without rewriting unrelated authored content.
 Route method and operation must agree. Custom Go orchestration is an explicit
 application choice; it is not a replacement for missing high-level generation.
 Discover connected `transcribe` support as described in
-[developer-mcp.md](references/developer-mcp.md).
+[developer-mcp.md](developer-mcp.md).
 
 ## 3. Go shapes and tags
 
@@ -56,8 +63,8 @@ derives component/body/output binding and its handler from the DQL graph.
 
 ```go
 type Record struct {
-    ID   int    `json:"id,omitempty" sqlx:"ID,primaryKey=true,autoincrement=true"`
-    Name string `json:"name,omitempty" sqlx:"NAME"`
+    ID   int    `sqlx:"ID,primaryKey=true,autoincrement=true"`
+    Name string `sqlx:"NAME"`
 
     Has *RecordHas `json:"-" sqlx:"-" setMarker:"true" typeName:"RecordHas"`
 }
@@ -114,8 +121,21 @@ are auxiliary: readable by business logic and excluded from sequencing, mutation
 hooks, relinking and DML. A parenthesized physical root is also auxiliary.
 A real `(SELECT ...)` subquery retains its declared query meaning.
 
-Attach `entity_hooks(records, 'hooks.RecordLifecycle')` to the named outer view,
-using a declared package import. Declare cohesive groups with
+Attach `lifecycle_type(records, 'hooks.RecordLifecycle')` to the named outer view,
+using a declared package import, for example
+`#import('hooks', 'example.com/shop/hooks')`. The imported type must exist and
+match the entity/parent signatures. For a new lifecycle in the generated
+`#package`, explicitly name a local type, such as
+`lifecycle_type(records, 'RecordLifecycle')`; pure Go transcription creates its
+empty methods once. Foreign missing types and invalid methods fail without a
+fallback. Every child role needs its own declaration if it needs hooks; auxiliary
+views cannot declare mutation lifecycles. Omitting the declaration leaves normal
+framework validation and writes hookless. No lifecycle names are inferred.
+`lifecycle_type` requires a generated Go mutation writer; GET readers and
+unsupported lowering modes reject it before file writes. Reader request Init
+belongs to the declared input type, output Finalize to the declared output type,
+and row OnFetch is separate. `entity_hooks` is unsupported DQL. Regeneration preserves authored/imported hooks
+and validates their current signatures. Declare cohesive groups with
 `invariant(records.START, 'Schedule')` and
 `invariant(records.END, 'Schedule')`. Add the separate validation annotation
 `tag(records.END, 'validate:"gtfield(Start)"')` in the outer projection.
@@ -368,7 +388,7 @@ Import `response` from `github.com/viant/xdatly/response`. `ErrorPayload` is the
 
 The target HTTP and MCP adapters must preserve explicit status/body intent in their protocol-supported representation, including wrapped errors. Do not assume that setting an output field named `Status` changes HTTP status or MCP error state. `session.Response().SetStatusCode(code)` controls the response status; returning a typed error communicates failure. Validation and binding errors retain their safe authored status/message contracts.
 
-For scoped message-bus hook examples and the original async job/dry-run boundary, see [mutation-messages.md](references/mutation-messages.md).
+For scoped message-bus hook examples and the original async job/dry-run boundary, see [mutation-messages.md](mutation-messages.md).
 
 ## 14. Regeneration and delivery checks
 
@@ -405,4 +425,4 @@ This section is a delivery warning, not a reduction of the target contract above
 | Generic primary-key-changing updates | Unsupported; existing identities are restored. Use explicitly custom orchestration for a different policy. |
 | Ambiguous value associations or conflicting parent/self-holder contexts | Explicit errors, not guessed matches or arbitrary truncation. |
 
-Use the public interfaces and examples in [tags-and-interfaces.md](references/tags-and-interfaces.md) and [writer-examples.md](references/writer-examples.md). Application authoring does not require framework source access.
+Use the public interfaces and examples in [tags-and-interfaces.md](tags-and-interfaces.md) and [writer-examples.md](writer-examples.md). Application authoring does not require framework source access.

@@ -14,6 +14,9 @@ a new YAML schema from those names.
 
 The candidate DQL settings are:
 
+Declaration fragment; adapt to the [complete reader contract](../../../reader-examples.md#parameterized-dql-reader)
+with the target view identity and existing input/output bindings.
+
 ```sql
 #setting($_ = $DocGlobalURLs('docs/global.yaml', 'docs/product.yaml'))
 #setting($_ = $DocURLs('docs/rule.yaml'))
@@ -64,7 +67,7 @@ must establish all of these behaviors:
   tested policy rather than accidental map iteration behavior.
 
 Generated-document and resource tests cover the integrated pipeline.
-Name/alias behavior follows the [naming contract](references/product/datly/doc/selectors-and-formats.md);
+Name/alias behavior follows the [naming contract](selectors-and-formats.md);
 do not infer spelling variations or apply a guessed alias while annotating fields.
 
 

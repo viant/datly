@@ -12,15 +12,15 @@ import (
 )
 
 func (g *handlerGeneration) prepareMutationScaffold(semantic *plan.Plan, config handlergo.Config) (*plan.Plan, error) {
-	if g.directory == "" {
-		return nil, fmt.Errorf("mutation hook scaffolding requires the generated package destination")
-	}
 	proposal, err := handlergo.ScaffoldMutationHooks(semantic, config)
 	if err != nil {
 		return nil, err
 	}
 	if proposal.File == nil {
 		return proposal.Plan, nil
+	}
+	if g.directory == "" {
+		return nil, fmt.Errorf("mutation hook scaffolding requires the generated package destination")
 	}
 	asset := &gen.HookScaffoldAsset{Destination: g.options.Handler.Hooks.Destination, File: proposal.File, PackagePath: config.PackagePath, Catalog: g.compiled.Source.Types}
 	asset.Destination, err = asset.Filename()

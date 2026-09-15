@@ -19,8 +19,10 @@ Datly views and their relationships. Each view subquery contains its database SQ
 #package('example.com/shop/orders/read')
 #setting($_ = $input_type('OrdersInput'))
 #setting($_ = $output_type('OrdersOutput'))
+#setting($_ = $case_format('lc'))
 #setting($_ = $route('/orders', 'GET'))
 #setting($_ = $connector('main'))
+#define($_ = $Orders<[]*Order>(output/view))
 SELECT orders.*, items.*, type(orders, 'Order'), type(items, 'Item')
 FROM (
     SELECT o.ID, o.WINDOW_START, o.WINDOW_END FROM ORDERS o
@@ -29,6 +31,16 @@ LEFT JOIN (
     SELECT i.ID, i.ORDER_ID, i.QUANTITY FROM ITEMS i
 ) items ON items.ORDER_ID = orders.ID
 ```
+
+The root `orders` binds to `OrdersOutput.Orders []*Order` through
+`output/view`; its JSON key is `orders`. `type(orders, 'Order')` names each
+root row, and `type(items, 'Item')` names the related rows. The output type
+setting alone does not specify a result field. `case_format('lc')` applies
+lowerCamel naming to the envelope and nested fields through the runtime
+Structology JSON marshaler. Use this global policy for ordinary naming.
+For a deliberate rename, prefer `format:"name=CustomerName"`; the serializer applies `lc` to that name and emits `customerName`. An explicit
+nonempty `json` name is an exact override of format-name/global casing, not the
+recommended rename mechanism.
 
 `orders` and `items` are the view names. `o` and `i` are local table aliases
 inside their respective SQL queries. Datly annotations such as `set_limit`,
@@ -55,6 +67,8 @@ metadata; they do not introduce a different query language inside the views.
 
 ## Package and import grammar
 
+Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-view-structure-for-readers-and-writers).
+
 ~~~~sql
 #package('example.com/app/records')
 #import('model', 'example.com/app/model')
@@ -67,13 +81,16 @@ project module. Use its module-qualified path, or a module-relative package such
 as `api/orders`; `-dir` and the source package do not supply this declaration.
 Declare `$input_type('OrdersInput')` and `$output_type('OrdersOutput')` to choose
 contract names, and `type(orders,'Order')` to name an entity/view shape. These
-naming settings have distinct roles; contract/entity names can otherwise be
-derived by the generator. Reader and writer components use separately authored
+naming settings have distinct roles. In complete reader examples, also declare
+a named, typed `(output/view)` holder matching the root row type, as above;
+do not rely on generated default names or an implicit `Data` field. Reader and writer components use separately authored
 DQL and destination packages.
 
 ## Component settings
 
 Canonical form:
+
+Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-view-structure-for-readers-and-writers).
 
 ~~~~sql
 #setting($_ = $directive(arguments))
@@ -118,18 +135,22 @@ Warmup options: connector=..., indexParameter=... (also index_param/indexparam),
 
 Explicit declarations are available when the application needs a custom binding. Standard `transcribe` writer workflows derive body and Current bindings automatically; do not add them as required boilerplate.
 
+Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-view-structure-for-readers-and-writers).
+
 ~~~~sql
 #define($_ = $ID<int>(path/id).Required())
 #define($_ = $Name<*string>(query/name).Optional())
 #define($_ = $Authorization<string>(header/Authorization).WithStatusCode(401))
 #define($_ = $Body<[]*model.Record>(body/))
-#define($_ = $Rows<?>(view/Rows) /*
+#define($_ = $Rows<[]*model.Record>(view/Rows) /*
  SELECT id, name FROM records
 */)
 ~~~~
 
 Head: `$_ = $Name[<InputType[,OutputType]>](kind/location)`.
-Question mark means infer a type, not Go any. The second type is meaningful for conversion/codec authoring.
+`model.Record` is a linked row type from the declared import; name row types
+explicitly in authored examples. The grammar also accepts `?` for inference
+(it is not Go `any`). The second type is meaningful for conversion/codec authoring.
 
 #define establishes declared authority. Use `.Value(...)` for declared defaults. Reject conflicting definitions.
 
@@ -176,11 +197,47 @@ View options do not apply to ordinary request parameters. A declaration SQL comm
 
 Canonical QuerySelector controls: Fields, OrderBy, Offset, Limit, Page, Criteria. Preserve each declared binding location and exact view identity. The selector still needs an allowed-column/method policy.
 
+Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-view-structure-for-readers-and-writers).
+
 ~~~~sql
 #define($_ = $IDs<[]int>(query/ids).WithPredicate(0, 'in', 'r.id'))
 ~~~~
 
 Predicate catalogs define actual argument contracts. Common families include equal/not-equal/comparison, in/not-in/composite membership, contains/like, null, exists, criteria, between, duration and presence conditions. A custom predicate may use canonical input and scoped component dependencies.
+
+### Predicate groups: creating WHERE or appending AND
+
+These are reader SQL-source fragments. Declare predicates in DQL first; for
+example, put status/category filters in group `0` and name/description search
+filters in group `1`. `FilterGroup(0, "AND")` joins the active filters within
+group 0 with AND; `FilterGroup(1, "OR")` joins those within group 1 with OR.
+`CombineAnd` then joins the two parenthesized groups with AND.
+
+When the query has no WHERE clause, let the builder create it:
+
+```sql
+SELECT p.ID, p.NAME FROM PRODUCTS p
+${predicate.Builder()
+    .CombineAnd($predicate.FilterGroup(0, "AND"), $predicate.FilterGroup(1, "OR"))
+    .Build("WHERE")}
+```
+
+When the query already has a fixed condition, append the groups with AND:
+
+```sql
+SELECT p.ID, p.NAME FROM PRODUCTS p
+WHERE p.ACTIVE = 1
+${predicate.Builder()
+    .CombineAnd($predicate.FilterGroup(0, "AND"), $predicate.FilterGroup(1, "OR"))
+    .Build("AND")}
+```
+
+The second form means `p.ACTIVE = 1 AND (group 0 AND group 1)`; an OR search
+inside group 1 cannot bypass the fixed condition. `Build` supplies the leading
+keyword, not the operator inside a group. Empty groups are omitted. If every
+group is empty, both forms emit nothing: no dangling WHERE or AND, and the
+second query retains its fixed condition. Predicate values remain bound SQL
+arguments rather than text interpolated into the query.
 
 ## SQL and view-control projections
 
@@ -205,13 +262,21 @@ the entire projection.
 | parent publication | publish_parent(alias) |
 | partitioning | set_partitioner(alias,'Type'[,integer]) |
 | match policy | match_strategy(alias,'read_all'|'read_matched'|'read_derived'); related view only |
-| mutation lifecycle | entity_hooks(view,'package.OrderLifecycle') |
+| mutation lifecycle | lifecycle_type(view,'package.OrderLifecycle') |
 | invariant group | invariant(view.column,'GroupName') |
 
 Numeric control arguments are unquoted, nonnegative integer literals. set_limit(alias,0) removes the view limit; it does not erase an explicitly authored SQL LIMIT. Controls are consumed as metadata rather than sent to the DB. Allowed-order declarations can repeat without ambiguous mappings.
 
 ~~~~sql
-SELECT records.*, children.*, batch_size(children,100), batch_concurrency(children,2)
+#package('example.com/app/records/read')
+#setting($_ = $input_type('RecordsInput'))
+#setting($_ = $output_type('RecordsOutput'))
+#setting($_ = $case_format('lc'))
+#setting($_ = $route('/records', 'GET'))
+#setting($_ = $connector('main'))
+#define($_ = $Records<[]*Record>(output/view))
+SELECT records.*, children.*, type(records, 'Record'), type(children, 'Child'),
+       batch_size(children,100), batch_concurrency(children,2)
 FROM (SELECT r.* FROM records r) records
 JOIN (SELECT c.* FROM children c) children
   ON children.record_id=records.id AND children.tenant_id=records.tenant_id
@@ -231,6 +296,8 @@ result must not depend on reconstructing its base-table expression.
 
 Typed projection and tag annotations:
 
+Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-view-structure-for-readers-and-writers).
+
 ~~~~sql
 #import('model', 'example.com/app/model')
 -- Projection annotations:
@@ -243,8 +310,15 @@ tag(r.name, 'validate:"required"')
 Prefer an outer CAST to declare the intended Go type, especially for rich hook-populated fields:
 
 ~~~~sql
+#package('example.com/app/orders/read')
+#setting($_ = $input_type('OrdersInput'))
+#setting($_ = $output_type('OrdersOutput'))
+#setting($_ = $case_format('lc'))
+#setting($_ = $route('/orders', 'GET'))
+#setting($_ = $connector('main'))
 #import('model', 'example.com/app/model')
-SELECT orders.*, CAST(orders.pseudo_column AS model.GoShape),
+#define($_ = $Orders<[]*Order>(output/view))
+SELECT orders.*, type(orders, 'Order'), CAST(orders.pseudo_column AS model.GoShape),
        tag(orders.pseudo_column, 'sqlx:"-"')
 FROM (SELECT o.*, '' AS pseudo_column FROM ORDERS o) orders
 ~~~~
@@ -276,9 +350,13 @@ These fixed query-context references preserve bindings and pagination semantics.
 ## StructQL declaration queries
 
 StructQL derives typed projections/index helpers from an input graph rather than a physical DB source.
+This fragment assumes the `model` import, a linked `model.EventKey` row with
+`Id`, and an input graph exposing `/Events`; declare those in the containing contract.
+
+Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-view-structure-for-readers-and-writers).
 
 ~~~~sql
-#define($_ = $Keys<?>(param/Keys) /*
+#define($_ = $Keys<[]*model.EventKey>(param/Keys) /*
  SELECT Id FROM /Events
 */)
 ~~~~
@@ -305,7 +383,7 @@ supply graph metadata and application Go hooks.
 #setting($_ = $connector('main'))
 SELECT records.*, children.*, lookup.*,
        type(records, 'Record'), type(children, 'Child'), type(lookup, 'Lookup'),
-       entity_hooks(records, 'hooks.RecordLifecycle'),
+       lifecycle_type(records, 'hooks.RecordLifecycle'),
        invariant(records.START, 'Schedule'),
        invariant(records.END, 'Schedule'),
        tag(records.END, 'validate:"gtfield(Start)"')
@@ -313,6 +391,14 @@ FROM (SELECT r.* FROM records r) records
 JOIN (SELECT c.* FROM children c) children ON children.record_id = records.id
 JOIN (SELECT l.* FROM (lookup_values) l) lookup ON lookup.id = records.lookup_id AND 1=1
 ```
+
+`lifecycle_type(records, 'hooks.RecordLifecycle')` explicitly binds an existing
+struct in the imported package. Its methods must match the entity/parent types.
+For a new local scaffold, declare `lifecycle_type(records, 'RecordLifecycle')`
+under the destination `#package`; pure Go transcription creates empty methods
+once. Missing foreign types fail. Omitting the declaration keeps ordinary writes
+hookless, and auxiliary views cannot declare mutation lifecycles. The spelling
+`entity_hooks` is unsupported and produces a diagnostic.
 
 `invariant` places Start and End in one cohesive invariant group; the comparison rule
 uses the exact generated Go field name `Start`. Use schema-resolved date/time
@@ -351,6 +437,8 @@ and writers: `orders_input.go`, `orders_router.go`, `orders_mutation.go`, etc.
 The prefix must start with an ASCII letter and contain only ASCII letters,
 digits, underscores or hyphens. Without this setting the prefix is empty.
 Exact per-file overrides take precedence and are never prefixed:
+
+Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-view-structure-for-readers-and-writers).
 
 ```sql
 #package('api/orders')
@@ -408,6 +496,8 @@ Resolve names, Go imports/types, provider kinds, codecs, predicates, resources, 
 
 For reader and writer DQL generation, append `AND 1=1` to a relation's outer
 `JOIN ... ON` equality links to declare a single holder:
+
+Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-view-structure-for-readers-and-writers).
 
 ```sql
 JOIN (...) product

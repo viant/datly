@@ -108,7 +108,7 @@ Declare an authored hook on a DQL view with:
 
 ```sql
 #import('hooks', 'example.com/app/hooks')
-SELECT orders.*, entity_hooks(orders, 'hooks.OrderLifecycle')
+SELECT orders.*, lifecycle_type(orders, 'hooks.OrderLifecycle')
 FROM (SELECT o.* FROM ORDERS o) orders
 ```
 

@@ -44,7 +44,7 @@ func TestHandlerGenerationValidatesEntityHooksAfterEntityAuthority(t *testing.T)
 			root := &plan.RecordPlan{Identity: rootID, InputPath: plan.FieldPath{"Input", "Orders"}, Cardinality: spec.CardinalityMany, Entity: &plan.EntityPlan{Owned: true}, Relations: []*plan.RelationPlan{{FieldPath: plan.FieldPath{"Items"}, Child: child}}}
 			semantic := &plan.Plan{Root: root}
 			generated := &gen.Plan{Views: []gen.ViewPlan{{Identity: rootID, Name: "Order", Type: "Order", Ownership: gen.ViewGenerated}, {Identity: childID, Name: "Item", Type: "Item", Ownership: gen.ViewGenerated}}}
-			generation := newHandlerGeneration(&Result{Component: &spec.Component{RootView: rootView}}, &gen.Input{TypeResolver: resolver, TargetPackage: "example.com/generated"}, Options{})
+			generation := newHandlerGeneration(&Result{Component: &spec.Component{RootView: rootView}}, &gen.Input{TypeResolver: resolver, TargetPackage: "example.com/generated"}, Options{Handler: HandlerOptions{Hooks: HookOptions{Scaffold: true}, Go: GoHandlerOptions{Execution: GoExecutionMutation}}})
 			err := generation.compileEntityHooks(semantic, generated, []handlergo.RecordType{{Identity: rootID, Path: root.InputPath, Value: "[]*Order"}, {Identity: childID, Path: child.InputPath, Value: "[]*Item"}})
 			if (err != nil) != test.invalid {
 				t.Fatalf("hook generation = %v", err)

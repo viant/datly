@@ -237,10 +237,14 @@ outer query. Keep each view's database SQL inside its subquery:
 #package('example.com/shop/orders/write')
 #setting($_ = $input_type('OrdersInput'))
 #setting($_ = $output_type('OrdersOutput'))
+#setting($_ = $case_format('lc'))
 #setting($_ = $route('/orders', 'PATCH'))
 #setting($_ = $connector('main'))
+#define($_ = $Data<[]*Order>(output/body))
 SELECT orders.*, items.*, kind.*,
        type(orders, 'Order'), type(items, 'Item'), type(kind, 'Kind'),
+       lifecycle_type(orders, 'OrderLifecycle'),
+       lifecycle_type(items, 'ItemLifecycle'),
        invariant(orders.WINDOW_START, 'DeliveryWindow'),
        invariant(orders.WINDOW_END, 'DeliveryWindow')
 FROM (
@@ -274,10 +278,17 @@ ORDER_KINDS is auxiliary data for application logic and receives no DML. Sparse
 updates preserve omitted values, while the DeliveryWindow invariant supplies the
 effective start/end pair for validation.
 
-Add business behavior to the generated `OrderLifecycle` and child lifecycle
-scaffolds. Their methods initially return `nil`, and regeneration preserves the
+The explicit output declaration binds the mutation result to `OrdersOutput.Data`;
+the global case policy names that envelope `data`. The auxiliary kind view remains
+available for application logic through the graph rather than becoming a separate
+top-level output holder.
+
+Add business behavior to the explicitly declared `OrderLifecycle` and
+`ItemLifecycle` scaffolds. Their methods initially return `nil`, and regeneration preserves the
 application's edits. Authors do not hand-write key-extraction queries, Current
 bindings, template loops or mutation orchestration for this standard workflow.
+Omit a view's `lifecycle_type` declaration when it needs no lifecycle implementation;
+transcription does not infer an application lifecycle type name.
 
 ## What happens to service and DAO responsibilities?
 

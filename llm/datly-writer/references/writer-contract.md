@@ -28,7 +28,14 @@ Keep authorization filters and current-row lookups scoped to the caller. A recor
 The standard authoring surface is a reader-like DQL graph plus an explicit `transcribe`
 operation and pure Go output. Link authoritative application types when they
 exist; otherwise generate owned shapes. Application Go hooks carry business
-rules. Generation owns binding, Previous reads and mutation orchestration.
+rules. Every complete writer example declares `input_type`, `output_type`, the
+row type, a typed main output holder such as
+`#define($_ = $Data<[]*Record>(output/body))`, and
+`#setting($_ = $case_format('lc'))`. `Data` names the Go output field; `body`
+selects the generated writer output binding. Global Structology casing owns
+routine lowercase/camel-case presentation; do not add JSON tags or holder
+`WithTag` for that purpose. Generation owns binding, Previous reads and mutation
+orchestration.
 See [writer-examples.md](references/writer-examples.md) for the primary graph.
 
 Existing Go-only components remain supported for explicitly chosen application
@@ -56,8 +63,8 @@ derives component/body/output binding and its handler from the DQL graph.
 
 ```go
 type Record struct {
-    ID   int    `json:"id,omitempty" sqlx:"ID,primaryKey=true,autoincrement=true"`
-    Name string `json:"name,omitempty" sqlx:"NAME"`
+    ID   int    `sqlx:"ID,primaryKey=true,autoincrement=true"`
+    Name string `sqlx:"NAME"`
 
     Has *RecordHas `json:"-" sqlx:"-" setMarker:"true" typeName:"RecordHas"`
 }
@@ -114,8 +121,21 @@ are auxiliary: readable by business logic and excluded from sequencing, mutation
 hooks, relinking and DML. A parenthesized physical root is also auxiliary.
 A real `(SELECT ...)` subquery retains its declared query meaning.
 
-Attach `entity_hooks(records, 'hooks.RecordLifecycle')` to the named outer view,
-using a declared package import. Declare cohesive groups with
+Attach `lifecycle_type(records, 'hooks.RecordLifecycle')` to the named outer view,
+using a declared package import, for example
+`#import('hooks', 'example.com/shop/hooks')`. The imported type must exist and
+match the entity/parent signatures. For a new lifecycle in the generated
+`#package`, explicitly name a local type, such as
+`lifecycle_type(records, 'RecordLifecycle')`; pure Go transcription creates its
+empty methods once. Foreign missing types and invalid methods fail without a
+fallback. Every child role needs its own declaration if it needs hooks; auxiliary
+views cannot declare mutation lifecycles. Omitting the declaration leaves normal
+framework validation and writes hookless. No lifecycle names are inferred.
+`lifecycle_type` requires a generated Go mutation writer; GET readers and
+unsupported lowering modes reject it before file writes. Reader request Init
+belongs to the declared input type, output Finalize to the declared output type,
+and row OnFetch is separate. `entity_hooks` is unsupported DQL. Regeneration preserves authored/imported hooks
+and validates their current signatures. Declare cohesive groups with
 `invariant(records.START, 'Schedule')` and
 `invariant(records.END, 'Schedule')`. Add the separate validation annotation
 `tag(records.END, 'validate:"gtfield(Start)"')` in the outer projection.

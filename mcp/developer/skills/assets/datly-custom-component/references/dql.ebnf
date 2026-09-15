@@ -74,7 +74,7 @@ control_name = "use_connector" | "use_cache" | "cache_warmup" | "order_by"
  | "set_limit" | "allow_nulls" | "groupable" | "grouping_enabled"
  | "allowed_order_by_columns" | "cardinality" | "self_ref" | "type" | "dest"
  | "batch_size" | "batch_concurrency" | "relational_concurrency"
- | "publish_parent" | "set_partitioner" | "match_strategy" | "entity_hooks" ;
+ | "publish_parent" | "set_partitioner" | "match_strategy" | "lifecycle_type" ;
 control_argument = string | integer | identifier ;
 rich_type_declaration = "CAST", "(", column_ref, "AS", go_type, ")" ;
 column_tag_declaration = "tag", "(", column_ref, ",", string, ")" ;

@@ -40,10 +40,10 @@ func TestAuthoredHookDestinations(t *testing.T) {
 			}
 			control := ""
 			if tc.rootHook {
-				control += ",entity_hooks(e,'rh.RootHooks')"
+				control += ",lifecycle_type(e,'rh.RootHooks')"
 			}
 			if tc.childHook {
-				control += ",entity_hooks(i,'ch.ChildHooks')"
+				control += ",lifecycle_type(i,'ch.ChildHooks')"
 			}
 			source := &Source{Name: "Events", Scope: "authored-hooks", Connector: "main", ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": db.DB}), Text: `#package('api/events')
 #import('contracts','example.com/generated/contracts')
@@ -74,7 +74,7 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 					}
 				}
 				source.Types = catalog
-				generated, err := NewCompiler().Transcribe(ctx, Request{Source: source, Destination: root, Options: Options{Handler: HandlerOptions{Target: HandlerGo, Operation: WritePost, Go: GoHandlerOptions{Execution: GoExecutionMutation}}}})
+				generated, err := NewCompiler().Transcribe(ctx, Request{Source: source, Destination: root, Options: Options{Handler: HandlerOptions{Target: HandlerGo, Operation: WritePost, Go: GoHandlerOptions{Execution: GoExecutionMutation}, Hooks: HookOptions{Scaffold: true}}}})
 				if tc.invalid != "" {
 					if err == nil || !strings.Contains(err.Error(), "incompatible signature") {
 						t.Fatalf("stale package identity accepted: %v", err)
@@ -88,6 +88,9 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 				}
 				if err != nil {
 					t.Fatal(err)
+				}
+				if generated.Result.Plan.HookScaffold != nil {
+					t.Fatal("authored lifecycle inferred an additional scaffold")
 				}
 				holder := ""
 				for _, view := range generated.Result.Plan.Views {

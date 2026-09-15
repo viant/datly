@@ -43,6 +43,8 @@ type EntityPlan struct {
 	Keys          []KeyPart
 	Invariants    []InvariantGroup
 	Hooks         spec.TypeRef
+	// HooksScaffold marks an explicit unresolved local lifecycle declaration.
+	HooksScaffold bool
 	HooksBind     bool
 	LateWrite     LateWriteEffects
 }

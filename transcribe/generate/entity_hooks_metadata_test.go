@@ -29,7 +29,7 @@ func TestGeneratedViewTagPreservesEntityHooks(t *testing.T) {
 func TestDQLGeneratedTagBootstrapEntityHooksRoundTrip(t *testing.T) {
 	for _, reference := range []string{"app.Hooks", "example.com/private/app.Hooks"} {
 		t.Run(reference, func(t *testing.T) {
-			view, err := compile.NewReader().Compile(compile.ReadInput{View: &spec.View{Name: "Rows", Source: &spec.ViewSource{}}, SQL: "SELECT r.id, entity_hooks(r,'" + reference + "') FROM rows r"})
+			view, err := compile.NewReader().Compile(compile.ReadInput{View: &spec.View{Name: "Rows", Source: &spec.ViewSource{}}, SQL: "SELECT r.id, lifecycle_type(r,'" + reference + "') FROM rows r"})
 			if err != nil {
 				t.Fatal(err)
 			}

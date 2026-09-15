@@ -101,6 +101,9 @@ func TestGenExecutableOuterProjection(t *testing.T) {
 				} {
 					t.Log(step.name)
 					source := genpatch.OuterProjectionDQL(module, operation, step.parent, step.child, split)
+					if operation == "patch" {
+						source = strings.Replace(source, "\nFROM", ", lifecycle_type(orders,'OrderRules')\nFROM", 1)
+					}
 					childID := 10
 					if step.name == "changed child restriction" {
 						source = strings.Replace(source, "i.ID=10", "i.ID=11", 1)

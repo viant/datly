@@ -31,13 +31,22 @@ MCP metadata can be attached to a component field or authored in DQL. A small
 DQL exposure pattern is:
 
 ```sql
+#package('example.com/app/things/read')
+#setting($_ = $input_type('ThingsInput'))
+#setting($_ = $output_type('ThingsOutput'))
+#setting($_ = $case_format('lc'))
+#setting($_ = $connector('main'))
 #setting($_ = $route('/things','GET'))
 #setting($_ = $mcp('Things'))
 #define($_ = $Id<int>(path/id).WithURI('/{id}'))
-SELECT id FROM things
+#define($_ = $Things<[]*Thing>(output/view))
+SELECT t.id, type(t, 'Thing') FROM things t
 ```
 
-This is a source fragment needing the `things` schema and configured connector.
+This complete reader requires `things(id)` and connector `main`. Root rows
+bind to `ThingsOutput.Things []*Thing` under JSON key `things`. The `Id`
+declaration illustrates route activation; this query retains its unfiltered
+SQL and does not implement an ID lookup.
 `WithURI` derives an alternative `/things/{id}` route and `ThingsById` exposure.
 Verify the active inputs on each route; base and path variants can be enabled
 separately through the supported metadata. Exposing an MCP tool does not install
@@ -50,7 +59,7 @@ its narrower address/port/authorization configuration; do not infer every server
 API option is a CLI field.
 
 Gateway MCP resource folders are composed in the candidate. The exact
-DQL setting is:
+DQL setting fragment, added to the complete Things reader above, is:
 
 ```sql
 #setting($_ = $mcp_folder('docs', 'guide', 'skill://app-guide/'))

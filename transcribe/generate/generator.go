@@ -175,6 +175,12 @@ func cloneIdentitySet(source map[string]bool) map[string]bool {
 }
 
 func (g *Generator) Generate(dir string) (*Result, error) {
+	if g == nil {
+		return nil, fmt.Errorf("generator is required")
+	}
+	if err := g.input.ValidateLifecycleTarget(g.input.MutationHandler != nil); err != nil {
+		return nil, err
+	}
 	plan, err := g.Plan()
 	if err != nil {
 		return nil, err

@@ -16,7 +16,12 @@ type EntityHookRequest struct{ Hook, Entity, Parent, Input, Output string }
 
 // EntityHookCompiler validates authored hook contracts before target lowering.
 // Instantiation and Bindly invocation lifetime belong to the generated program.
-type EntityHookCompiler struct{ Types *typecatalog.Resolver }
+type EntityHookCompiler struct {
+	Types *typecatalog.Resolver
+	// CanonicalType applies generated alias authority when declarations use
+	// package-local aliases for separately owned entities or contracts.
+	CanonicalType func(string) (string, error)
+}
 
 func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, error) {
 	if c.Types == nil {
@@ -52,6 +57,20 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 	methods, err := shape.Methods(true)
 	if err != nil {
 		return spec.TypeRef{}, fmt.Errorf("entity hook %q: %w", request.Hook, err)
+	}
+	if c.CanonicalType != nil {
+		for i := range methods {
+			for j, parameter := range methods[i].Parameters {
+				parameter, err = c.CanonicalType(parameter)
+				if err != nil {
+					return spec.TypeRef{}, err
+				}
+				methods[i].Parameters[j], err = (xshape.Resolver{}).Canonical(parameter)
+				if err != nil {
+					return spec.TypeRef{}, err
+				}
+			}
+		}
 	}
 	expected := []string{"context.Context", "*" + entity, "github.com/viant/xdatly/handler.EntityState[" + entity + "," + parent + "]"}
 	for index, name := range []string{"Init", "Validate", "AfterSequence", "AfterQueue"} {

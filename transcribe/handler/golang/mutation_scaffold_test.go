@@ -22,8 +22,8 @@ func TestMutationScaffoldTypedRolesAndImmutablePlan(t *testing.T) {
 	semantic := recursiveSemanticPlan(plan.OperationPost)
 	child := semantic.Root.Relations[0].Child
 	last := child.Relations[0].Child
-	for _, record := range []*plan.RecordPlan{semantic.Root, child, last} {
-		record.Entity = &plan.EntityPlan{}
+	for i, record := range []*plan.RecordPlan{semantic.Root, child, last} {
+		record.Entity = &plan.EntityPlan{Hooks: spec.TypeRef{Package: "example.com/scaffoldfixture", Name: []string{"OrderRules", "ItemRules", "DetailRules"}[i]}, HooksScaffold: true}
 	}
 	child.SelfRelations = []plan.SelfRelationPlan{{FieldPath: plan.FieldPath{"Children"}, Links: []plan.KeyLink{{Parent: child.Keys[0], Child: child.Keys[0]}}}}
 	config := Config{Package: "fixture", PackagePath: "example.com/scaffoldfixture", Factory: "NewWriter", InputType: "Input", OutputType: "Output", Records: []RecordType{
@@ -64,7 +64,7 @@ func TestMutationScaffoldTypedRolesAndImmutablePlan(t *testing.T) {
 		}
 		names[i] = ref.BaseName
 	}
-	if names[0] != "OrderLifecycle" || !strings.HasPrefix(names[1], "NodeLifecycle_") || !strings.HasPrefix(names[2], "NodeLifecycle_") {
+	if names[0] != "OrderRules" || names[1] != "ItemRules" || names[2] != "DetailRules" {
 		t.Fatalf("lifecycle names = %v", names)
 	}
 	if names[1] == names[2] || asset.Bindings[1].Entity != asset.Bindings[2].Entity || asset.Bindings[1].Parent == asset.Bindings[2].Parent {
@@ -94,6 +94,7 @@ func TestTypedState(t *testing.T){ctx:=context.Background();state:=h.EntityState
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("typed scaffold: %v\n%s\n%s", err, out, source.String())
 	}
+	semantic.Root.Entity.HooksScaffold = false
 	semantic.Root.Entity.Hooks = spec.TypeRef{Package: "example.com/authored", Name: "Hooks"}
 	preserved, err := ScaffoldMutationHooks(semantic, config)
 	if err != nil {
@@ -103,6 +104,7 @@ func TestTypedState(t *testing.T){ctx:=context.Background();state:=h.EntityState
 		t.Fatal("authored hook overwritten")
 	}
 	for _, record := range []*plan.RecordPlan{child, last} {
+		record.Entity.HooksScaffold = false
 		record.Entity.Hooks = spec.TypeRef{Package: "example.com/authored", Name: "Hooks"}
 	}
 	preserved, err = ScaffoldMutationHooks(semantic, config)
@@ -115,5 +117,18 @@ func TestTypedState(t *testing.T){ctx:=context.Background();state:=h.EntityState
 	}
 	if strings.Contains(source.String(), "func (input *") {
 		t.Fatal("direct lifecycle leaked into mutation scaffold")
+	}
+}
+
+func TestMutationScaffoldHookless(t *testing.T) {
+	semantic := rootSemanticPlan(plan.OperationPost, false)
+	semantic.Root.Entity = &plan.EntityPlan{}
+	config := Config{Package: "fixture", PackagePath: "example.com/fixture", Factory: "NewWriter", InputType: "Input", OutputType: "Output", Records: []RecordType{{Identity: semantic.Root.Identity, Path: semantic.Root.InputPath, Value: "[]*Order"}}}
+	result, err := ScaffoldMutationHooks(semantic, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.File != nil || len(result.Bindings) != 0 || !result.Plan.Root.Entity.Hooks.IsZero() {
+		t.Fatal("implicit lifecycle created")
 	}
 }

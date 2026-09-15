@@ -39,13 +39,25 @@ This is an authoring example for a package containing `Records.dql`; configure
 the `main` connector and provide `records(id, tenant_id, name)` before executing:
 
 ```sql
+#package('example.com/app/records/read')
+#setting($_ = $input_type('RecordsInput'))
+#setting($_ = $output_type('RecordsOutput'))
+#setting($_ = $case_format('lc'))
 #setting($_ = $route('/v1/records', 'GET'))
 #setting($_ = $connector('main'))
 #define($_ = $TenantID<int>(query/tenantId).Required())
-SELECT r.id, r.tenant_id, r.name, set_limit(r, 100)
+#define($_ = $Records<[]*Record>(output/view))
+SELECT r.id, r.tenant_id, r.name, type(r, 'Record'), set_limit(r, 100)
 FROM records r
 WHERE r.tenant_id = :TenantID
 ```
+
+`RecordsOutput.Records []*Record` holds the root query rows under JSON key
+`records`. `type(r, 'Record')` explicitly names the row shape;
+`Records<[]*Record>(output/view)` binds that root to the output field. Naming
+`RecordsOutput` alone does not declare a result holder. Global `case_format('lc')`
+makes the envelope and row fields lowerCamel (`records`, `id`, `tenantId`, `name`)
+through the runtime Structology marshaler; no per-field JSON tags are needed.
 
 `#setting` declares component metadata. `#define` declares typed binding.
 `set_limit` is a view control removed from executable SQL and mapped into query

@@ -23,6 +23,9 @@ from the declared logical control, such as Fields, OrderBy, Offset, Limit, Page
 or Criteria. Do not use a two-argument selector form or invent a query parameter
 name; binding locations are authored independently.
 
+Declaration fragment; adapt to the [complete reader contract](../llm/datly-reader/references/reader-examples.md#parameterized-dql-reader)
+with the target view identity and existing input/output bindings.
+
 ```sql
 #define($_ = $Fields<[]string>(query/fields).Optional().QuerySelector('inventory'))
 #define($_ = $Limit<int>(query/limit).Optional().QuerySelector('inventory'))

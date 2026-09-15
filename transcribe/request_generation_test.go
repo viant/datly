@@ -42,7 +42,7 @@ func TestCompilerTranscribeRoutesPublicGeneration(t *testing.T) {
 			}
 			continue
 		}
-		if generated.Result.Plan.MutationHandler == nil || generated.Result.Plan.HookScaffold == nil {
+		if generated.Result.Plan.MutationHandler == nil || generated.Result.Plan.HookScaffold != nil {
 			t.Fatal("PATCH public generation did not use canonical mutation generation")
 		}
 	}

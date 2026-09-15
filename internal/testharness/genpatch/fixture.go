@@ -1,7 +1,10 @@
 // Package genpatch owns the shared high-level generation acceptance fixture.
 package genpatch
 
-import _ "embed"
+import (
+	_ "embed"
+	"strings"
+)
 
 var Schema = []string{
 	`PRAGMA foreign_keys=ON`,
@@ -32,3 +35,6 @@ var RuntimeSource string
 
 //go:embed batch_runtime.go.txt
 var BatchRuntimeSource string
+
+// LifecycleDQL explicitly requests application hooks for the writable roles.
+var LifecycleDQL = strings.Replace(DQL, "SELECT o.*, Items.*, Kinds.*,", "SELECT o.*, Items.*, Kinds.*, lifecycle_type(o,'OrderRules'), lifecycle_type(Items,'ItemRules'),", 1)

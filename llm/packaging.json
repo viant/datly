@@ -64,5 +64,8 @@
       "EndBefore": "## Performance claims and measurement",
       "Reason": "Exact maintained author-facing section: includes declarative configuration and behavior; excludes repository navigation, implementation/test evidence and unrelated authoring workflows. Other feature contracts remain in the canonical skill references."
     }
-  }
+  },
+  "SkillRootLinks": [
+    "datly-writer"
+  ]
 }

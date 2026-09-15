@@ -18,9 +18,9 @@ var DeepIdentitySchema = []string{
 var NamedIdentityDQL = strings.NewReplacer(
 	"FROM ORDERS o", "FROM (SELECT base.* FROM ORDERS base WHERE base.ID<>2) o",
 	"JOIN ITEMS Items", "LEFT JOIN (SELECT base.* FROM ITEMS base WHERE base.NAME<>'hidden') Items",
-	"SELECT o.*, Items.*, Kinds.*,", "SELECT o.*, Items.*, Details.*, Kinds.*,",
+	"SELECT o.*, Items.*, Kinds.*,", "SELECT o.*, Items.*, Details.*, Kinds.*, lifecycle_type(Details,'DetailRules'),",
 	"JOIN (ORDER_KINDS) Kinds", "LEFT JOIN (SELECT d.* FROM DETAILS d WHERE d.NOTE<>'hidden') Details ON Details.ITEM_ID=Items.ID LEFT JOIN (SELECT k.* FROM (ORDER_KINDS) k WHERE k.ID=7) Kinds",
-).Replace(DQL)
+).Replace(LifecycleDQL)
 
 // ResolvedIdentityRuntime reuses the shared real registration, resource, reader,
 // transaction and HTTP fixture; only the application callbacks/cases differ.

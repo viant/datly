@@ -28,7 +28,7 @@ func TestTranscribedMutationProgramSQLite(t *testing.T) {
 			if operation == WritePut {
 				typeExpr, cardinality = "*EventsView", ""
 			}
-			intent := HandlerOptions{Target: HandlerGo, Operation: operation, Go: GoHandlerOptions{Execution: GoExecutionMutation}}
+			intent := HandlerOptions{Target: HandlerGo, Operation: operation, Go: GoHandlerOptions{Execution: GoExecutionMutation}, Hooks: HookOptions{Scaffold: true}}
 			if operation == WritePatch || operation == WritePut {
 				intent.Current = "CurrentEvents"
 				current = `#define($_ = $CurrentEvents<?>(view/CurrentEvents).Cardinality('Many') /*
@@ -54,6 +54,14 @@ SELECT ID, NAME FROM EVENTS`
 			}
 			if generated.Result.Plan.MutationHandler == nil || generated.Result.Plan.ContractHandler != nil {
 				t.Fatal("generic mutation policy was not persisted")
+			}
+			if generated.Result.Plan.HookScaffold != nil {
+				t.Fatal("hookless writer inferred a lifecycle")
+			}
+			for _, name := range []string{"lifecycle.go", "hooks.go"} {
+				if _, err := os.Stat(filepath.Join(root, "generated", name)); !os.IsNotExist(err) {
+					t.Fatalf("hookless writer emitted %s: %v", name, err)
+				}
 			}
 			source := strings.ReplaceAll(generatedGoWriteRuntimeSource(operation, operation != WritePost), "github.com/viant/datly/runtime/handler/custom", "github.com/viant/datly/runtime/handler/mutation")
 			source = strings.ReplaceAll(source, "customhandler", "mutationhandler")

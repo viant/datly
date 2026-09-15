@@ -12,7 +12,10 @@ output slots.
 ## Define input and output
 
 The [quickstart](quickstart.md) shows a linked reader with a required path input
-and SQL resource. An application can instead declare SQL on an output field:
+and SQL resource. This contract fragment declares SQL on an output field.
+The containing component selects `caseFormat:"lc"` for lowerCamel output names;
+the typed holders below need no per-field JSON casing tags. See the
+[complete Go-shape reader](../llm/datly-reader/references/reader-examples.md#complete-go-shape-pattern-one-row-pages-full-match-count-and-bounds).
 
 ```go
 type Input struct {
@@ -20,11 +23,11 @@ type Input struct {
     Offset int `parameter:"Offset,kind=query,in=offset" querySelector:"Records"`
 }
 type Record struct {
-    ID int `json:"id" sqlx:"id"`
-    Name string `json:"name" sqlx:"name"`
+    ID int `sqlx:"id"`
+    Name string `sqlx:"name"`
 }
 type Output struct {
-    Data []*Record `json:"data" parameter:"Data,kind=output,in=view" view:"Records,limit=1,selectorOffset=true" sql:"SELECT id,name FROM records WHERE tenant_id=:TenantID ORDER BY id"`
+    Data []*Record `parameter:"Data,kind=output,in=view" view:"Records,limit=1,selectorOffset=true" sql:"SELECT id,name FROM records WHERE tenant_id=:TenantID ORDER BY id"`
 }
 ```
 
@@ -57,14 +60,14 @@ select supported matching strategies rather than changing relation identity.
 Add typed output slots, not an extra metadata field on the root view:
 
 ```go
-type Totals struct { Count int `json:"count" sqlx:"count"` }
+type Totals struct { Count int `sqlx:"count"` }
 type Bounds struct {
-    Minimum *int `json:"minimum" sqlx:"minimum"`
-    Maximum *int `json:"maximum" sqlx:"maximum"`
+    Minimum *int `sqlx:"minimum"`
+    Maximum *int `sqlx:"maximum"`
 }
 // Add these fields to Output:
-// Totals *Totals `json:"totals" parameter:"Totals,kind=output,in=derived" view:"Totals" sql:"SELECT COUNT(*) AS count FROM ($View.Records.NonWindowSQL) parent"`
-// Bounds *Bounds `json:"bounds" parameter:"Bounds,kind=output,in=derived" view:"Bounds,allowNulls=true" sql:"SELECT MIN(id) AS minimum,MAX(id) AS maximum FROM ($View.Records.NonWindowSQL) parent"`
+// Totals *Totals `parameter:"Totals,kind=output,in=derived" view:"Totals" sql:"SELECT COUNT(*) AS count FROM ($View.Records.NonWindowSQL) parent"`
+// Bounds *Bounds `parameter:"Bounds,kind=output,in=derived" view:"Bounds,allowNulls=true" sql:"SELECT MIN(id) AS minimum,MAX(id) AS maximum FROM ($View.Records.NonWindowSQL) parent"`
 ```
 
 For three matching IDs with page size one, offset ten returns no page rows while

@@ -86,6 +86,10 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 			return nil, fmt.Errorf("transcribe operation %q conflicts with authored route method %q", operation, route.Method)
 		}
 	}
+	inputTarget := gen.Input{Component: compiled.Component}
+	if err := inputTarget.ValidateLifecycleTarget(operation != "get" && language == HandlerGo); err != nil {
+		return nil, err
+	}
 	if operation == "get" {
 		return NewCompiler().generateCompiledAt(ctx, root, dir, compiled)
 	}

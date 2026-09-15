@@ -39,7 +39,7 @@ func TestGenCommandSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	sourcePath := filepath.Join(sourceDir, "Orders.dql")
-	dql := strings.Replace(genpatch.DQL, "SELECT o.*, Items.*, Kinds.*,", "SELECT o.*, Items.*, Kinds.*, type(o,'Order'), type(Items,'Item'),", 1)
+	dql := strings.Replace(genpatch.DQL, "SELECT o.*, Items.*, Kinds.*,", "SELECT o.*, Items.*, Kinds.*, type(o,'Order'), type(Items,'Item'), lifecycle_type(o,'OrderLifecycle'), lifecycle_type(Items,'ItemLifecycle'),", 1)
 	if err := os.WriteFile(sourcePath, []byte(dql), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +209,7 @@ func TestTranscribeOperationsSQLite(t *testing.T) {
 				if operation == "get" {
 					// Readers use the registered reader; no handler wrapper is emitted.
 				} else {
+					source = strings.Replace(source, "SELECT o.*, Items.*, Kinds.*,", "SELECT o.*, Items.*, Kinds.*, lifecycle_type(o,'OrderRules'), lifecycle_type(Items,'ItemRules'),", 1)
 					roles = append(roles, "mutation", "lifecycle", "links")
 					if operation != "post" {
 						roles = append(roles, "resources")

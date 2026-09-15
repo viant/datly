@@ -1,7 +1,7 @@
 # Cache, warmup and reader operations
 
 Read for operational reader choices. The candidate and the final exact-name
-contract have different acceptance states; consult [status](references/product/llm/datly-reader/references/developer-mcp.md#operation-based-generation-to-pure-go).
+contract have different acceptance states; consult [status](developer-mcp.md#operation-based-generation-to-pure-go).
 
 ## Cache and warmup
 
@@ -12,11 +12,17 @@ TTL; candidate Aerospike uses its provider URL, namespace, set and positive
 whole-second TTL. TTL and timeToLiveMs must agree when both are present. Native
 client ownership must outlive consumers and drain before close.
 
+Declaration fragment; adapt to the [complete reader contract](reader-examples.md#parameterized-dql-reader)
+with the target view identity and existing input/output bindings.
+
 ```sql
 #setting($_ = $cache('records', '5m').WithProvider('afs').WithLocation('cache/records'))
 ```
 
 For an explicitly selected Aerospike backend, the candidate's authored form is:
+
+Declaration fragment; adapt to the [complete reader contract](reader-examples.md#parameterized-dql-reader)
+with the target view identity and existing input/output bindings.
 
 ```sql
 #setting($_ = $cache('records').WithProvider('aerospike://127.0.0.1:3000/test').WithLocation('records').WithTimeToLiveMs(60000))
@@ -59,7 +65,7 @@ routes beneath `Meta.CacheWarmURI` (default `/v1/api/cache/warmup`), with explic
 admin authorization and a positive bounded timeout. Bind the target's declared
 credentials too. Accepted work uses the server lifetime and reports actual
 completion; client disconnection is not a success signal.
-See [cache and warmup](references/product/datly/doc/cache-and-warmup.md).
+See [cache and warmup](../../../datly/doc/cache-and-warmup.md).
 
 ## Selectors and output
 
@@ -73,18 +79,18 @@ JSON/CSV/XML/tabular/XLSX selection and direct/named singleton output have bound
 candidate proof. Native CSV expands relation slices; XML uses result/row and
 explicit selected null holders; XLSX null cells are blank. Named `output/body`
 and `output/view` identify the same existing row-holder authority. Do not infer
-a child collection as root after selection. Read [selectors and formats](references/product/datly/doc/selectors-and-formats.md)
+a child collection as root after selection. Read [selectors and formats](../../../datly/doc/selectors-and-formats.md)
 for null, envelope and format-specific limitations.
 
 ## Other operational tasks
 
-- [Project build](references/product/llm/datly-reader/references/project-build.md): automatic discovery/linking, the pinned release graph and source-backed deployment.
-- [JWT and predicates](references/product/llm/datly-reader/references/tags-and-interfaces.md#jwt-input-and-authorization-predicates): verified declared input and bound values, never ambient claims.
-- [Async](references/mutation-messages.md#async-and-dry-run): original 34-column job schema, AFS events, canonical replay/current authorization, explicit HTTP controls, cache-only result inspection and limited reader dryrun.
-- [Observability](references/product/datly/doc/observability.md): native capture plus optional default-off bounded async OTel export; no zero-cost claim.
-- [API documentation](references/product/datly/doc/api-documentation.md): `$DocGlobalURLs`, `$DocURL`, `$DocURLs`, `$DocBaseURL`; global then rule YAML, explicit annotation precedence and shared embedded OpenAPI/MCP schemas.
-- [Static content](references/product/datly/doc/static-content.md): `$static_resource('site','public')` or `$static_content('content-url','root')`, resource manifests, explicit filesystem authority and CORS.
-- [Developer MCP](references/product/llm/datly-reader/references/developer-mcp.md): seven authoring tools versus business tools, folder publication, declared Final SEP-2640 skills/list/get and canonical bundle generation.
+- [Project build](project-build.md): automatic discovery/linking, the pinned release graph and source-backed deployment.
+- [JWT and predicates](tags-and-interfaces.md#jwt-input-and-authorization-predicates): verified declared input and bound values, never ambient claims.
+- [Async](../../../../mutation-messages.md#async-and-dry-run): original 34-column job schema, AFS events, canonical replay/current authorization, explicit HTTP controls, cache-only result inspection and limited reader dryrun.
+- [Observability](../../../datly/doc/observability.md): native capture plus optional default-off bounded async OTel export; no zero-cost claim.
+- [API documentation](../../../datly/doc/api-documentation.md): `$DocGlobalURLs`, `$DocURL`, `$DocURLs`, `$DocBaseURL`; global then rule YAML, explicit annotation precedence and shared embedded OpenAPI/MCP schemas.
+- [Static content](../../../datly/doc/static-content.md): `$static_resource('site','public')` or `$static_content('content-url','root')`, resource manifests, explicit filesystem authority and CORS.
+- [Developer MCP](developer-mcp.md): seven authoring tools versus business tools, folder publication, declared Final SEP-2640 skills/list/get and canonical bundle generation.
 
 ## Configured reports
 
@@ -97,6 +103,6 @@ not inferred Go/JSON name variants. Cache reuse must retain every warmed groupin
 dimension and may narrow measures. Source/URI reload publishes the complete report
 set atomically. API-key-only HTTP routes must set `reportMCPTool=false` and
 `reportComposeMCPTool=false`, or declare an MCP-compatible authorization policy.
-See [composition examples](references/product/llm/datly-reader/references/reader-examples.md#cubecompose) for frame
+See [composition examples](reader-examples.md#cubecompose) for frame
 inheritance and budgets. Verify actual configured HTTP and native MCP execution; metadata discovery alone
 is not runtime proof.

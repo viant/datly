@@ -55,6 +55,9 @@ a new YAML schema from those names.
 
 The candidate DQL settings are:
 
+Declaration fragment; adapt to the [complete reader contract](../llm/datly-reader/references/reader-examples.md#parameterized-dql-reader)
+with the target view identity and existing input/output bindings.
+
 ```sql
 #setting($_ = $DocGlobalURLs('docs/global.yaml', 'docs/product.yaml'))
 #setting($_ = $DocURLs('docs/rule.yaml'))

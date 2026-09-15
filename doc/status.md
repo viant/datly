@@ -6,8 +6,9 @@
 output, resource, documentation and MCP implementation has passed the complete
 repository suite against published dependencies. The release module pins the
 published xdatly SDK and native versions in `go.mod`, without local dependency
-replacements. The subsequent explicit lifecycle-naming change described below
-is still in progress. No Datly `v1.0.0` tag or completed release is claimed.
+replacements. Subsequent explicit lifecycle naming, output naming and documentation
+corrections are integrated; their final regression checks are described below.
+No Datly `v1.0.0` tag or completed release is claimed.
 
 | Surface | Integrated behavior / acceptance boundary |
 | --- | --- |
@@ -42,15 +43,20 @@ hashes. Public guides do not navigate host paths or temporary implementation
 reports. Focused tests are evidence for their exercised behavior, not certification
 of all drivers, cloud deployments, cache combinations or production performance.
 
-## Remaining authoring change
+## Latest authoring corrections and verification
 
-Lifecycle type selection is being made explicit through the outer DQL
+Lifecycle type selection is explicit through the outer DQL
 `lifecycle_type(view, 'TypeName')` declaration. This change replaces the older
-`entity_hooks` spelling and removes inferred lifecycle struct names. Its generator,
-regeneration, hookless-operation and documentation checks must pass before it is
-reported complete. Reader request initialization remains on the declared input
+`entity_hooks` spelling and removes inferred lifecycle struct names. Focused
+generation, regeneration, hookless-operation and unsupported-target checks pass;
+the full affected-owner regression run remains in progress. Reader request initialization remains on the declared input
 contract; reader row hooks and output finalization are separate concerns.
 
-The reader guide now declares its output holder explicitly and shows the generated
-public shape and JSON response. Release publication and version tags remain
+Complete reader examples explicitly declare output holders and global casing.
+The published Structology correction applies global casing to `format` names
+while preserving exact nonempty JSON names; output and wire-schema tests pass.
+Skill packaging now validates links relative to their containing documents.
+
+Expanded grouped/custom predicate examples and the comprehensive DQL grammar
+reference are still being completed. Release publication and version tags remain
 separate from local commits and verification.

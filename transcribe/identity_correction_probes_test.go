@@ -18,7 +18,7 @@ func TestCorrectionCacheEvidence(t *testing.T) {
 	}
 	root := t.TempDir()
 	(testharness.GeneratedModule{Path: "github.com/viant/datly/genfixture"}).Write(t, root)
-	got, err := (Generator{Operation: "patch"}).Generate(ctx, GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Scope: "example.com/generated/orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}})
+	got, err := (Generator{Operation: "patch"}).Generate(ctx, GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Scope: "example.com/generated/orders", Text: genpatch.LifecycleDQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}})
 	if err != nil {
 		t.Fatal(err)
 	}

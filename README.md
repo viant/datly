@@ -185,6 +185,14 @@ validation must repeat these paths against the selected published dependencies.
 | DQL with generated shapes and Go handlers | A declared query or write graph that should produce typed artifacts | [Generation](doc/authoring.md), [mutations](doc/mutations.md) |
 | Embedded application manager | Application-owned service wiring and atomic reload | [Architecture](doc/architecture.md), [configuration](doc/configuration.md) |
 
+A complete DQL reader explicitly declares its package, input/output type names,
+a named typed `output/view` holder and the root row `type(...)`. The holder
+binds the root result to the response field; global `case_format('lc')` gives
+the envelope and nested fields lowerCamel names. Naming an output type alone
+does not define that shape. See the
+[complete Records reader](doc/authoring.md#a-small-dql-reader) and
+[Orders reader with JSON output](doc/programming-model.md#dql-describes-the-data-operation).
+
 A component has typed input/output contracts and registered behavior. A view is
 one query-shaped dataset; relations connect datasets. A DerivedView computes
 another output from a parent query, while SelfReference describes an entity

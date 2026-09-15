@@ -1,7 +1,10 @@
 package transcribe
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/viant/bindly"
@@ -10,6 +13,8 @@ import (
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/datly/transcribe/handler/compiler"
 	handlergo "github.com/viant/datly/transcribe/handler/golang"
+	"github.com/viant/datly/typecatalog"
+	loaderast "github.com/viant/x/loader/ast"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -64,6 +69,9 @@ func (g *handlerGeneration) compileEntityHooks(semantic *plan.Plan, generated *g
 	if !hasHooks {
 		return nil
 	}
+	if err := compilation.refreshLocalTypes(); err != nil {
+		return err
+	}
 	for _, record := range records {
 		compilation.types[strings.Join(record.Path, ".")] = record.Value
 	}
@@ -96,16 +104,19 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 				return err
 			}
 		}
-		hook, err := (compiler.EntityHookCompiler{Types: c.generation.input.TypeResolver}).Compile(request)
+		hook, scaffold, err := c.compileHook(request)
 		if err != nil {
 			return fmt.Errorf("view %s: %w", record.Identity, err)
 		}
 		record.Entity.Hooks = hook
-		binding, err := c.bindingRequired(hook)
-		if err != nil {
-			return err
+		record.Entity.HooksScaffold = scaffold
+		if !scaffold {
+			binding, err := c.bindingRequired(hook)
+			if err != nil {
+				return err
+			}
+			record.Entity.HooksBind = binding
 		}
-		record.Entity.HooksBind = binding
 	}
 	for _, relation := range record.Relations {
 		if relation != nil {
@@ -115,6 +126,98 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 		}
 	}
 	return nil
+}
+
+// refreshLocalTypes reads the authored destination on regeneration, including
+// fields added since an earlier Source.Types snapshot. Keep this resolver local
+// to lifecycle validation/binding so generated shape ownership is unchanged.
+func (c *entityHookCompilation) refreshLocalTypes() error {
+	g := c.generation
+	if g.directory == "" || g.input.ProjectRoot == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(g.directory)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	hasSource := false
+	for _, entry := range entries {
+		hasSource = hasSource || !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") && !strings.HasSuffix(entry.Name(), "_test.go")
+	}
+	if !hasSource {
+		return nil
+	}
+	relative, err := filepath.Rel(g.input.ProjectRoot, g.directory)
+	if err != nil {
+		return err
+	}
+	pkg, err := loaderast.LoadPackageFS(context.Background(), os.DirFS(g.input.ProjectRoot), filepath.ToSlash(relative))
+	if err != nil {
+		return fmt.Errorf("load lifecycle destination: %w", err)
+	}
+	catalog, err := g.compiled.Source.Types.Clone()
+	if err != nil {
+		return err
+	}
+	if err = catalog.RegisterPackage(typecatalog.TypeOriginPackage, pkg); err != nil {
+		return err
+	}
+	types, err := typecatalog.NewResolver(catalog, g.compiled.TypeAuthority, g.compiled.TypeContext)
+	if err != nil {
+		return err
+	}
+	input, generation := *g.input, *g
+	input.TypeResolver = types
+	generation.input = &input
+	c.generation = &generation
+	return nil
+}
+
+// compileHook preserves source declaration authority even when lookup scope
+// differs from the generated package. Only unresolved local declarations may
+// become create-once scaffold proposals; known types always validate normally.
+func (c *entityHookCompilation) compileHook(request compiler.EntityHookRequest) (spec.TypeRef, bool, error) {
+	types := c.generation.input.TypeResolver
+	if types == nil {
+		return spec.TypeRef{}, false, fmt.Errorf("lifecycle_type %q requires canonical type authority", request.Hook)
+	}
+	packagePath := c.generation.input.TargetPackage
+	if component := c.generation.input.Component; component != nil && component.TypeContext != nil && component.TypeContext.DefaultPackage != "" {
+		packagePath = component.TypeContext.DefaultPackage
+	}
+	identity, err := types.CanonicalDeclaration(request.Hook, packagePath)
+	if err != nil {
+		return spec.TypeRef{}, false, err
+	}
+	resolved, err := types.ResolveShape(identity)
+	if err != nil {
+		return spec.TypeRef{}, false, err
+	}
+	if resolved != nil && resolved.Descriptor == nil && c.generation.options.Handler.Hooks.Scaffold && c.generation.options.Handler.Go.Execution == GoExecutionMutation {
+		ref, err := (xshape.Resolver{}).Reference(identity)
+		if err != nil {
+			return spec.TypeRef{}, false, err
+		}
+		if len(ref.Wrappers) != 0 || len(ref.Arguments) != 0 {
+			return spec.TypeRef{}, false, fmt.Errorf("lifecycle_type %q must name a concrete unwrapped local type", request.Hook)
+		}
+		if ref.Qualifier == "" || ref.Qualifier != c.generation.input.TargetPackage {
+			return spec.TypeRef{}, false, fmt.Errorf("lifecycle_type %q was not found; cannot scaffold package %q in generated package %q; author the type in its declared package", request.Hook, ref.Qualifier, c.generation.input.TargetPackage)
+		}
+		return spec.TypeRef{Package: ref.Qualifier, Name: ref.Name}, true, nil
+	}
+	request.Hook = identity
+	hookCompiler := compiler.EntityHookCompiler{Types: types}
+	if c.generated != nil && resolved != nil && resolved.Descriptor != nil && resolved.Descriptor.PkgPath == c.generation.input.TargetPackage {
+		hookCompiler.CanonicalType = func(expression string) (string, error) {
+			return c.generated.CanonicalType(c.generation.input.TargetPackage, expression)
+		}
+	}
+	hook, err := hookCompiler.Compile(request)
+	return hook, false, err
 }
 
 // bindingRequired enriches the compiled hook with canonical Bindly field

@@ -20,7 +20,7 @@ func TestGeneratorPatchDerivesState(t *testing.T) {
 	}
 	root := t.TempDir()
 	(testharness.GeneratedModule{Path: "github.com/viant/datly/genfixture"}).Write(t, root)
-	request := GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Scope: "example.com/generated/orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}
+	request := GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Scope: "example.com/generated/orders", Text: genpatch.LifecycleDQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}
 	got, err := (Generator{Operation: "patch"}).Generate(ctx, request)
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestGeneratorReaderWriterRemainSeparate(t *testing.T) {
 					t.Fatalf("reader acquired writer state %+v", field)
 				}
 			}
-		} else if plan.MutationHandler == nil {
+		} else if plan.MutationHandler == nil || plan.HookScaffold != nil {
 			t.Fatal("missing writer")
 		}
 	}
@@ -149,5 +149,69 @@ func TestGeneratorPreservesDQLAuthority(t *testing.T) {
 	_, err := (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}})
 	if err == nil || !strings.Contains(err.Error(), "conflicts with authored route") {
 		t.Fatalf("route conflict=%v", err)
+	}
+}
+
+func TestGeneratorExplicitLifecycleDeclarations(t *testing.T) {
+	ctx := context.Background()
+	db := testharness.NewSQLiteHarness(t)
+	if err := db.ExecStatements(ctx, genpatch.Schema...); err != nil {
+		t.Fatal(err)
+	}
+	const module = "github.com/viant/datly/lifecyclefixture"
+	for _, tc := range []struct{ name, header, control, wantError string }{
+		{"local", "", "lifecycle_type(o,'OrderRules')", ""},
+		{"local alias", "#import('hooks','" + module + "/api/orders')\n", "lifecycle_type(o,'hooks.OrderRules')", ""},
+		{"foreign package", "#import('hooks','example.com/shop/hooks')\n", "lifecycle_type(o,'hooks.OrderLifecycle')", "cannot scaffold package"},
+		{"unknown alias", "", "lifecycle_type(o,'missing.OrderRules')", "cannot scaffold package"},
+		{"wrapped", "", "lifecycle_type(o,'*OrderRules')", "concrete unwrapped"},
+		{"generic", "", "lifecycle_type(o,'OrderRules[int]')", "concrete unwrapped"},
+		{"auxiliary", "", "lifecycle_type(Kinds,'KindRules')", "auxiliary view"},
+		{"conflicting role type", "", "lifecycle_type(o,'SharedRules'),lifecycle_type(Items,'SharedRules')", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			(testharness.GeneratedModule{Path: module}).Write(t, root)
+			text := tc.header + `#setting($_ = $input_type('OrdersInput'))
+#setting($_ = $output_type('OrdersOutput'))
+#setting($_ = $case_format('lc'))
+#define($_ = $Data<[]*Order>(output/body))
+` + strings.Replace(genpatch.DQL, "SELECT o.*, Items.*, Kinds.*,", "SELECT o.*, Items.*, Kinds.*, type(o,'Order'), "+tc.control+",", 1)
+			request := GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Scope: "example.com/source", Text: text, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}
+			generated, err := (Generator{Operation: "patch"}).Generate(ctx, request)
+			if tc.name == "conflicting role type" {
+				if err == nil {
+					t.Fatal("shared lifecycle scaffold accepted incompatible parent contracts")
+				}
+				return
+			}
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("error=%v, want %s", err, tc.wantError)
+				}
+				if _, statErr := os.Stat(filepath.Join(root, "api/orders")); !os.IsNotExist(statErr) {
+					t.Fatalf("invalid lifecycle persisted: %v", statErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			scaffold := generated.Result.Plan.HookScaffold
+			if scaffold == nil || len(scaffold.EntityHooks) != 1 || scaffold.EntityHooks[0].Type != module+"/api/orders.OrderRules" {
+				t.Fatalf("explicit binding=%+v", scaffold)
+			}
+			before, err := os.ReadFile(filepath.Join(root, "api/orders/lifecycle.go"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = (Generator{Operation: "patch"}).Generate(ctx, request); err != nil {
+				t.Fatal(err)
+			}
+			after, err := os.ReadFile(filepath.Join(root, "api/orders/lifecycle.go"))
+			if err != nil || string(before) != string(after) {
+				t.Fatal("regeneration changed explicit scaffold", err)
+			}
+		})
 	}
 }

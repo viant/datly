@@ -6,7 +6,7 @@ do not require application `init()`, `Register()`, blank-import lists or aggrega
 registration functions. Ordinary imports express real code dependencies.
 
 Operation-based `transcribe` to pure Go precedes building generated components; first
-verify the connected generation capability in [developer-mcp.md](references/product/llm/datly-writer/references/developer-mcp.md).
+verify the connected generation capability in [developer-mcp.md](developer-mcp.md).
 Preserve authored hooks, resource manifests, Go workspace/tags/target settings
 and existing module choices. New packages are found by normal traversal; runtime
 exposure is a separate policy. Never infer aliases to repair discovery errors.

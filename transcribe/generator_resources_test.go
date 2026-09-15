@@ -29,7 +29,7 @@ func TestGeneratorCompiledResourceScope(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	compiled, err := NewCompiler().Compile(ctx, &Source{Name: "Orders", Scope: "resource-proof", Text: genpatch.DQL, Resources: resources, Types: typecatalog.NewCatalog(), Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})})
+	compiled, err := NewCompiler().Compile(ctx, &Source{Name: "Orders", Scope: "resource-proof", Text: genpatch.LifecycleDQL, Resources: resources, Types: typecatalog.NewCatalog(), Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})})
 	if err != nil {
 		t.Fatal(err)
 	}

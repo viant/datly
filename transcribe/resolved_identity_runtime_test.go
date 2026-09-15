@@ -19,7 +19,7 @@ func TestGeneratorResolvedIdentityIndexes(t *testing.T) {
 			ctx := context.Background()
 			db := testharness.NewSQLiteHarness(t)
 			schema := append(append([]string(nil), genpatch.Schema...), genpatch.ResolvedIdentitySchema...)
-			text := genpatch.DQL
+			text := genpatch.LifecycleDQL
 			if deep {
 				schema = append(schema, genpatch.DeepIdentitySchema...)
 				text = genpatch.NamedIdentityDQL

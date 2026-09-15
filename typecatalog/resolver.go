@@ -161,6 +161,15 @@ func (r *Resolver) shapeResolver() xshape.Resolver {
 	return result
 }
 
+// CanonicalDeclaration applies authored import/default-package authority to a
+// type declaration in a destination-normalized defaultPackage. Source lookup
+// scope is not a declaration destination. Native shape owns expression syntax.
+func (r *Resolver) CanonicalDeclaration(expression, defaultPackage string) (string, error) {
+	resolver := r.shapeResolver()
+	resolver.Package = defaultPackage
+	return resolver.Canonical(expression)
+}
+
 // Native shape resolution calls Lookup with canonical names first. Those
 // names must not be interpreted a second time as authored import aliases.
 func (r *Resolver) lookupCanonical(expression string) (*x.Type, error) {

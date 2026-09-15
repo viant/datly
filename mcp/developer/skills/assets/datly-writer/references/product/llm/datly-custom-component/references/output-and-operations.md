@@ -2,8 +2,8 @@
 
 Load this for direct bytes, output documentation, static content, conditional
 component binding or operational services. Preserve the
-[existing examples](references/product/llm/datly-custom-component/references/custom-examples.md) and
-[verified JWT input/predicate pattern](references/product/llm/datly-custom-component/references/tags-and-interfaces.md#jwt-input-and-authorization-predicates).
+[existing examples](custom-examples.md) and
+[verified JWT input/predicate pattern](tags-and-interfaces.md#jwt-input-and-authorization-predicates).
 
 ## Direct bytes and authored documentation
 
@@ -65,7 +65,7 @@ The feature retains route authority, declared request/JWT headers,
 authorization, recursion/cancellation guards, canonical scope and caller transaction
 ownership without using a completed Data scope. Resolve timing against precommit
 error finalization, postcompletion success and result-aware outcome finalization.
-Use [the SDK guide](references/product/xdatly/handler/injector_finalizer.md) as the
+Use [the SDK guide](../../../xdatly/handler/injector_finalizer.md) as the
 authoritative example. The candidate has runtime SQLite/auth/concurrency tests
 and transcribed Go output discovery coverage; still validate the connected build
 before presenting an application recipe as runnable.
@@ -85,7 +85,7 @@ are `$DocGlobalURLs(...)`, `$DocURL(...)`, `$DocURLs(...)` and `$DocBaseURL(...)
 YAML sections are `Columns`, `Filter`, `Parameters`, `Paths` and `Responses`.
 Preserve explicit annotation precedence and immutable snapshots; do not invent
 a new loader schema or network upload endpoint. See
-[API documentation](references/product/datly/doc/api-documentation.md).
+[API documentation](../../../datly/doc/api-documentation.md).
 
 Static folder/filesystem-to-URL-prefix serving is present in the candidate. DQL
 settings are `$static_resource('site', 'public')` and
@@ -93,7 +93,7 @@ settings are `$static_resource('site', 'public')` and
 A manually returned byte response is not static root routing. Require root
 confinement, path/index/GET/HEAD/range cases where supported, auth/CORS and
 route collision acceptance before claiming deployment acceptance. See
-[static content](references/product/datly/doc/static-content.md).
+[static content](../../../datly/doc/static-content.md).
 
 Gateway MCP folder resources are declared with
 `$mcp_folder('docs', 'guide', 'skill://app-guide/')`. Embedded skills/resources
@@ -102,23 +102,23 @@ manual copies in generated assets.
 
 ## Services: use the actual host surface
 
-- [Linked configuration](references/product/llm/datly-custom-component/references/project-build.md): `run`/`start` need
+- [Linked configuration](project-build.md): `run`/`start` need
   compiled application exports. The stock binary does not execute arbitrary Go
   from source; `validate` is not generation/deployment. Current standalone
   services include CORS, APIKeys, warmup admin, OpenAPI startup exports and
   Observation/OTel. No invented watch command.
-- [Async](references/mutation-messages.md#async-and-dry-run): original DATLY_JOBS schema, AFS events,
+- [Async](../../../../mutation-messages.md#async-and-dry-run): original DATLY_JOBS schema, AFS events,
   explicit authorizer, native cache/metrics and known completion. Explicit HTTP async and canonical source/provenance replay are present in the
   candidate; standalone declarative async still needs authorization integration. Retain
   RUNNING/event state on pending/unknown completion; no blind retries.
-- [Cache/warmup](references/product/llm/datly-reader/references/cache-and-operations.md): AFS/Aerospike are
+- [Cache/warmup](../../datly-reader/references/cache-and-operations.md): AFS/Aerospike are
   independent choices with explicit TTL. Warmup can use a dedicated connector
   while retaining the regular cache service. No threshold switching or handler
   invalidation architecture. Parent race acceptance passes AFS and live Docker Aerospike narrowing, regular/cube, groups, pagination and table-drop replay. Earlier author sandbox denial is not a capability blocker; no production-scale qualification is implied.
-- [Observability](references/product/datly/doc/observability.md): native capture plus an
+- [Observability](../../../datly/doc/observability.md): native capture plus an
   optional bounded application-owned OTel exporter, with no fabricated performance
   or capacity claims. Export failure is not business transaction failure.
-- [Mutation limits](references/writer-contract.md): stable IDs precede Queue;
+- [Mutation limits](../../../../writer-contract.md): stable IDs precede Queue;
   relation-produced FK deferral applies only to captured parent INSERTs, with final validation before Queue. Custom handlers must own
   their validation/sparse policy explicitly.
 
@@ -126,13 +126,13 @@ Acceptance distinguishes SDK construction, direct HTTP transport, authored
 registration and full protocol behavior. Report missing support precisely rather
 than presenting a requested contract as current implementation.
 
-Use [project build](references/product/llm/datly-custom-component/references/project-build.md) for automatic traversal/internal
+Use [project build](project-build.md) for automatic traversal/internal
 linking, explicit development pins/mappings and truthful source-backed deployment.
-Use [selectors/formats](references/product/datly/doc/selectors-and-formats.md) for
+Use [selectors/formats](../../../datly/doc/selectors-and-formats.md) for
 view-specific pagination/filter/order, singleton/body and native CSV/XML/XLSX.
 Public selectors use exact authored names: no inferred spelling variants, only
 user-defined aliases, and duplicate output column names are errors. See
-[developer MCP](references/product/llm/datly-custom-component/references/developer-mcp.md) for declared Final SEP-2640 skills,
+[developer MCP](developer-mcp.md) for declared Final SEP-2640 skills,
 list/get/read consistency and reproducible canonical bundle generation.
 
 ## Configured reports

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -16,23 +17,54 @@ type productDeclaration struct {
 	Files       []string
 	Directories map[string][]string
 	Exports     map[string]struct{ StartAt, EndBefore, Reason string }
+	// SkillRootLinks explicitly selects the source convention for independently
+	// maintained skills. All generated Markdown is document-relative.
+	SkillRootLinks []string
 }
 
 // Product imports are exact, operator-reviewed files. There is no recursive
 // source-folder copy and no automatic expansion of the approved import set.
 func (p packager) products(contents map[string][]byte) (map[string]string, error) {
 	manifest, err := os.ReadFile(path.Join(p.source, "packaging.json"))
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	var declaration productDeclaration
-	decoder := json.NewDecoder(bytes.NewReader(manifest))
-	decoder.DisallowUnknownFields()
-	if err = decoder.Decode(&declaration); err != nil {
-		return nil, err
+	if err == nil {
+		decoder := json.NewDecoder(bytes.NewReader(manifest))
+		decoder.DisallowUnknownFields()
+		if err = decoder.Decode(&declaration); err != nil {
+			return nil, err
+		}
+	}
+	for _, skill := range declaration.SkillRootLinks {
+		switch skill {
+		case "datly-reader", "datly-writer", "datly-custom-component":
+		default:
+			return nil, fmt.Errorf("unknown skill link base %q", skill)
+		}
+	}
+	// Use skill-relative targets only as an intermediate representation, shared
+	// with exact product imports. Final links are made document-relative below.
+	for name, data := range contents {
+		if !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		contents[name], err = rewriteLinks(data, func(raw string) (string, error) {
+			u, err := localReference(raw)
+			if err != nil || u == nil || u.Path == "" {
+				return raw, err
+			}
+			target, err := declaration.canonicalTarget(name, u.Path)
+			if err != nil {
+				return "", err
+			}
+			u.Path = target
+			return u.String(), nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("canonical %s: %w", name, err)
+		}
 	}
 	sources := os.DirFS(p.productsRoot)
 	targets := map[string]string{}
@@ -137,9 +169,13 @@ func (p packager) products(contents map[string][]byte) (map[string]string, error
 						sourceRef = path.Clean(path.Join(path.Dir(ref), u.Path))
 						if strings.HasPrefix(ref, "llm/") {
 							parts := strings.SplitN(ref, "/", 3)
-							sourceRef = path.Join("llm", parts[1], u.Path)
-							if strings.HasPrefix(u.Path, "references/product/") {
-								sourceRef = strings.TrimPrefix(u.Path, "references/product/")
+							canonical, err := declaration.canonicalTarget(strings.TrimPrefix(ref, "llm/"), u.Path)
+							if err != nil {
+								return "", err
+							}
+							sourceRef = path.Join("llm", parts[1], canonical)
+							if strings.HasPrefix(canonical, "references/product/") {
+								sourceRef = strings.TrimPrefix(canonical, "references/product/")
 							}
 						}
 					}
@@ -177,7 +213,48 @@ func (p packager) products(contents map[string][]byte) (map[string]string, error
 		sort.Strings(missing)
 		return nil, fmt.Errorf("undeclared product references (add exact imports, not folders):\n%s", strings.Join(missing, "\n"))
 	}
+	for name, data := range contents {
+		if !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		contents[name], err = rewriteLinks(data, func(raw string) (string, error) {
+			u, err := localReference(raw)
+			if err != nil || u == nil || u.Path == "" {
+				return raw, err
+			}
+			root := strings.SplitN(name, "/", 2)[0]
+			target := path.Join(root, u.Path)
+			if !strings.HasPrefix(target, root+"/") {
+				return "", fmt.Errorf("link escapes skill root: %s -> %s", name, raw)
+			}
+			relative, err := filepath.Rel(filepath.FromSlash(path.Dir(name)), filepath.FromSlash(target))
+			if err != nil {
+				return "", err
+			}
+			u.Path = filepath.ToSlash(relative)
+			return u.String(), nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("generated %s: %w", name, err)
+		}
+	}
 	return provenance, nil
+}
+
+func (d productDeclaration) canonicalTarget(name, link string) (string, error) {
+	root := strings.SplitN(name, "/", 2)[0]
+	base := path.Dir(name)
+	for _, skill := range d.SkillRootLinks {
+		if skill == root {
+			base = root
+			break
+		}
+	}
+	target := path.Join(base, link)
+	if !strings.HasPrefix(target, root+"/") {
+		return "", fmt.Errorf("link escapes skill root: %s -> %s", name, link)
+	}
+	return strings.TrimPrefix(target, root+"/"), nil
 }
 
 func validateLinks(contents map[string][]byte) error {
@@ -204,13 +281,13 @@ func validateLinks(contents map[string][]byte) error {
 			root := strings.SplitN(name, "/", 2)[0]
 			target := name
 			if u.Path != "" {
-				target = path.Join(root, u.Path)
+				target = path.Join(path.Dir(name), u.Path)
 			}
 			if !strings.HasPrefix(target, root+"/") {
 				return fmt.Errorf("link escapes skill root: %s -> %s", name, link.target)
 			}
 			if _, ok := contents[target]; !ok {
-				return fmt.Errorf("unresolved skill-root link: %s -> %s", name, link.target)
+				return fmt.Errorf("unresolved document-relative link: %s -> %s (resolved %s)", name, link.target, target)
 			}
 			if u.Fragment != "" && !anchors[target][u.Fragment] {
 				return fmt.Errorf("unresolved heading: %s -> %s", name, link.target)

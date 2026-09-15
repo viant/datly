@@ -14,9 +14,9 @@ Author independent reader and writer DQL using the same structure: an outer
 graph of named views, each backed by its own database SQL subquery. Place Datly
 annotations only in the outer projection; inner table aliases stay local. Select `transcribe` operation `get`, `patch`, `post`
 or `put` with pure Go output. Parenthesized physical tables are auxiliary;
-`entity_hooks` and `invariant(view.column, 'Group')` declare business seams. The
+`lifecycle_type` and `invariant(view.column, 'Group')` declare business seams. The
 generator derives plumbing; application Go hooks hold business rules. Discover
-capabilities as described in [developer-mcp.md](references/developer-mcp.md).
+capabilities as described in [developer-mcp.md](developer-mcp.md).
 
 ## Contract ownership modes
 

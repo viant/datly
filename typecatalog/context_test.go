@@ -32,3 +32,20 @@ func TestNormalizeContextPreservesAbsolutePackageDirectory(t *testing.T) {
 		t.Fatalf("NormalizeContext() = %+v", actual)
 	}
 }
+
+func TestCanonicalDeclarationUsesDestinationAndExplicitImports(t *testing.T) {
+	resolver, err := NewResolver(NewCatalog(), TranscribeAuthority, &ResolutionContext{PackagePath: "example.com/source", Imports: []PackageImport{{Alias: "hooks", Package: "example.com/shop/hooks"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ expression, destination, want string }{
+		{"OrderRules", "example.com/generated", "example.com/generated.OrderRules"},
+		{"hooks.OrderLifecycle", "example.com/generated", "example.com/shop/hooks.OrderLifecycle"},
+		{"OrderRules", "example.com/external", "example.com/external.OrderRules"},
+	} {
+		got, err := resolver.CanonicalDeclaration(tc.expression, tc.destination)
+		if err != nil || got != tc.want {
+			t.Fatalf("%s: %s %v", tc.expression, got, err)
+		}
+	}
+}

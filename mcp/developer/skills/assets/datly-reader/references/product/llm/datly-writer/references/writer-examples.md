@@ -8,12 +8,13 @@ Select mutation behavior explicitly; the HTTP verb alone is not the generated po
 #package('example.com/app/records/write')
 #setting($_ = $input_type('RecordsInput'))
 #setting($_ = $output_type('RecordsOutput'))
-#import('hooks', 'example.com/app/recordhooks')
+#setting($_ = $case_format('lc'))
+#define($_ = $Data<[]*Record>(output/body))
 #setting($_ = $route('/v1/records', 'PATCH'))
 #setting($_ = $connector('main'))
 SELECT records.*, children.*, lookup.*,
        type(records, 'Record'), type(children, 'Child'), type(lookup, 'Lookup'),
-       entity_hooks(records, 'hooks.RecordLifecycle'),
+       lifecycle_type(records, 'RecordLifecycle'),
        invariant(records.START, 'Schedule'),
        invariant(records.END, 'Schedule'),
        tag(records.END, 'validate:"gtfield(Start)"')
@@ -34,13 +35,22 @@ datly transcribe patch -dir "$PROJECT" \
 Save this DQL as `source/write/Records.dql` in the existing `example.com/app`
 module at `$PROJECT`. The required `#package` selects `records/write`; the source
 package and `-dir` have different roles. Input/output settings name contracts,
-while outer `type` annotations name row shapes. Default artifacts include
+while outer `type` annotations name row shapes. The explicitly typed
+`$Data<[]*Record>(output/body)` binds the main output holder: `Data` is the Go
+field, `body` is the generated writer output binding. Global `case_format('lc')`
+uses Structology lower-camel casing for output; use it instead of per-column JSON
+tags or holder `WithTag` annotations for routine casing. Default artifacts include
 `views.go`, `input.go`, `output.go`, `router.go`, `lifecycle.go` and mutation support.
-Edit the create-once lifecycle file; see [filename overrides](references/product/llm/datly-writer/references/developer-mcp.md#operation-based-generation-to-pure-go)
+Only the explicitly named root lifecycle is scaffolded; children remain hookless.
+To use an existing foreign type, declare its package with
+`#import('hooks', 'example.com/app/recordhooks')` and name
+`lifecycle_type(records, 'hooks.RecordLifecycle')`. Author that type in its
+package; generation preserves it and does not create a foreign scaffold.
+Edit the create-once local lifecycle file; see [filename overrides](developer-mcp.md#operation-based-generation-to-pure-go)
 for optional prefixes and exact destinations.
 
 High-level generation is available in the `v1` source CLI. Discover connected
-server support as described in [developer-mcp.md](references/product/llm/datly-writer/references/developer-mcp.md); report a
+server support as described in [developer-mcp.md](developer-mcp.md); report a
 missing capability without substituting translation.
 
 The generator owns Body/Existing/Data binding, original identity tuple extraction,
@@ -50,7 +60,7 @@ parent links, writes and completion. Authors declare the graph and Go hook metad
 single holder, while the unmarked children relation stays many. Ordinary joins declare writable
 relations; composite links must include every key part. Schema discovery supplies
 actual identities, constraints and date types. Bind authorization explicitly using
-the [JWT input pattern](references/product/llm/datly-writer/references/tags-and-interfaces.md#jwt-input-and-authorization-predicates).
+the [JWT input pattern](tags-and-interfaces.md#jwt-input-and-authorization-predicates).
 Current reads may discover children through authorized parent scope so input
 initialization can resolve omitted child IDs. Do not add manual key-extraction
 or pagination plumbing. Inspect the scope and generated read evidence.
@@ -63,8 +73,8 @@ exposed reader and writer components in distinct packages/routes as appropriate.
 
 ~~~~go
 type Record struct {
-    ID   *int64 `json:"id,omitempty" sqlx:"id,primaryKey"`
-    Name string `json:"name" sqlx:"name" validate:"required"`
+    ID   *int64 `sqlx:"id,primaryKey"`
+    Name string `sqlx:"name" validate:"required"`
     Has  *RecordHas `json:"-" sqlx:"-" setMarker:"true"`
 }
 type RecordHas struct { ID, Name bool }
@@ -76,8 +86,8 @@ Clients send business data, not Has. Omitted Name is skipped in sparse required 
 
 ~~~~go
 type Window struct {
-    Start *time.Time `json:"start" invariant:"Schedule"`
-    End   *time.Time `json:"end" invariant:"Schedule" validate:"gtfield(Start)"`
+    Start *time.Time `invariant:"Schedule"`
+    End   *time.Time `invariant:"Schedule" validate:"gtfield(Start)"`
     Has   *WindowHas `json:"-" sqlx:"-" setMarker:"true"`
 }
 type WindowHas struct { Start, End bool }

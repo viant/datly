@@ -49,7 +49,7 @@ func TestDQLImportDiscoveryCLIPreservesAuthoredPackageFailures(t *testing.T) {
 		{
 			name: "missing hook type",
 			rewrite: func(module string) string {
-				return strings.Replace(genpatch.DestinationDQL(module), "entity_hooks(o,'rh.Hooks')", "entity_hooks(o,'rh.MissingHooks')", 1)
+				return strings.Replace(genpatch.DestinationDQL(module), "lifecycle_type(o,'rh.Hooks')", "lifecycle_type(o,'rh.MissingHooks')", 1)
 			},
 			want: "MissingHooks",
 		},

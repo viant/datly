@@ -180,6 +180,40 @@ Canonical QuerySelector controls: Fields, OrderBy, Offset, Limit, Page, Criteria
 
 Predicate catalogs define actual argument contracts. Common families include equal/not-equal/comparison, in/not-in/composite membership, contains/like, null, exists, criteria, between, duration and presence conditions. A custom predicate may use canonical input and scoped component dependencies.
 
+### Predicate groups: creating WHERE or appending AND
+
+These are reader SQL-source fragments. Declare predicates in DQL first; for
+example, put status/category filters in group `0` and name/description search
+filters in group `1`. `FilterGroup(0, "AND")` joins the active filters within
+group 0 with AND; `FilterGroup(1, "OR")` joins those within group 1 with OR.
+`CombineAnd` then joins the two parenthesized groups with AND.
+
+When the query has no WHERE clause, let the builder create it:
+
+```sql
+SELECT p.ID, p.NAME FROM PRODUCTS p
+${predicate.Builder()
+    .CombineAnd($predicate.FilterGroup(0, "AND"), $predicate.FilterGroup(1, "OR"))
+    .Build("WHERE")}
+```
+
+When the query already has a fixed condition, append the groups with AND:
+
+```sql
+SELECT p.ID, p.NAME FROM PRODUCTS p
+WHERE p.ACTIVE = 1
+${predicate.Builder()
+    .CombineAnd($predicate.FilterGroup(0, "AND"), $predicate.FilterGroup(1, "OR"))
+    .Build("AND")}
+```
+
+The second form means `p.ACTIVE = 1 AND (group 0 AND group 1)`; an OR search
+inside group 1 cannot bypass the fixed condition. `Build` supplies the leading
+keyword, not the operator inside a group. Empty groups are omitted. If every
+group is empty, both forms emit nothing: no dangling WHERE or AND, and the
+second query retains its fixed condition. Predicate values remain bound SQL
+arguments rather than text interpolated into the query.
+
 ## SQL and view-control projections
 
 The SQL layer supports ordinary SELECT projections, tables/subqueries, CTEs/recursive CTEs, JOIN/ON, WHERE, GROUP BY/HAVING, ORDER BY, LIMIT/OFFSET, UNION and dialect expressions. Validate actual parser/dialect support; an opaque vendor expression is not necessarily valid structural metadata.
@@ -200,7 +234,7 @@ Controls target SQL aliases, not arbitrary metadata names. They must be standalo
 | parent publication | publish_parent(alias) |
 | partitioning | set_partitioner(alias,'Type'[,integer]) |
 | match policy | match_strategy(alias,'read_all'|'read_matched'|'read_derived'); related view only |
-| mutation hooks | entity_hooks(alias,'package.Hooks') |
+| mutation hooks | lifecycle_type(alias,'package.Hooks') |
 
 Numeric control arguments are unquoted, nonnegative integer literals. set_limit(alias,0) removes the view limit; it does not erase an explicitly authored SQL LIMIT. Controls are consumed as metadata rather than sent to the DB. Allowed-order declarations can repeat without ambiguous mappings.
 
@@ -293,12 +327,13 @@ supply graph metadata and application Go hooks.
 #package('example.com/app/records/write')
 #setting($_ = $input_type('RecordsInput'))
 #setting($_ = $output_type('RecordsOutput'))
-#import('hooks', 'example.com/app/recordhooks')
+#setting($_ = $case_format('lc'))
+#define($_ = $Data<[]*Record>(output/body))
 #setting($_ = $route('/records', 'PATCH'))
 #setting($_ = $connector('main'))
 SELECT records.*, children.*, lookup.*,
        type(records, 'Record'), type(children, 'Child'), type(lookup, 'Lookup'),
-       entity_hooks(records, 'hooks.RecordLifecycle'),
+       lifecycle_type(records, 'RecordLifecycle'),
        invariant(records.START, 'Schedule'),
        invariant(records.END, 'Schedule'),
        tag(records.END, 'validate:"gtfield(Start)"')
@@ -306,6 +341,20 @@ FROM (SELECT r.* FROM records r) records
 JOIN (SELECT c.* FROM children c) children ON children.record_id = records.id
 JOIN (SELECT l.* FROM (lookup_values) l) lookup ON lookup.id = records.lookup_id AND 1=1
 ```
+
+`$Data<[]*Record>(output/body)` names the typed main output holder. `Data` is
+its Go field and `body` selects the generated writer output binding. Global
+`case_format('lc')` controls output casing through Structology; routine casing
+needs no per-column JSON tags or holder `WithTag`.
+
+`lifecycle_type(records, 'RecordLifecycle')` explicitly names a local lifecycle;
+pure Go transcription creates its empty methods once. To bind an existing imported
+type, use `#import('hooks', 'example.com/app/recordhooks')` and
+`lifecycle_type(records, 'hooks.RecordLifecycle')`. The imported type must exist
+and match the entity/parent signatures. Missing foreign types fail. Omitting the
+declaration keeps ordinary writes hookless, and auxiliary views cannot declare
+mutation lifecycles. GET readers and unsupported lowering modes reject this
+mutation declaration. `entity_hooks` is unsupported and produces a diagnostic.
 
 `invariant` places Start and End in one cohesive invariant group; the comparison rule
 uses the exact generated Go field name `Start`. Use schema-resolved date/time

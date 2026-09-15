@@ -33,6 +33,9 @@ func (g *handlerGeneration) prepare() error {
 	if g == nil || g.compiled == nil || g.compiled.Component == nil || g.input == nil {
 		return fmt.Errorf("compiled transcribe result and generation input are required")
 	}
+	if err := g.input.ValidateLifecycleTarget(g.options.Handler.Target == HandlerGo && g.options.Handler.Go.Execution == GoExecutionMutation); err != nil {
+		return err
+	}
 	if settings := g.compiled.Component.Settings; settings != nil {
 		if override := settings.Generation.File("lifecycle", ""); override != "" {
 			g.options.Handler.Hooks.Destination = override

@@ -732,7 +732,7 @@ func TestReaderCompileToOneHintLeavesPhysicalJoinSQL(t *testing.T) {
 func TestReaderRejectsDatabaseScopeAnnotations(t *testing.T) {
 	for _, annotation := range []string{
 		`set_limit(o,10)`, `use_cache(o,'orders')`, `use_connector(o,'main')`, `cache_warmup(o,'orders')`,
-		`cardinality(o,'One')`, `allow_nulls(o)`, `entity_hooks(o,'Hooks')`, `tag(o.ID,'json:"id"')`, `invariant(o.ID,'Identity')`,
+		`cardinality(o,'One')`, `allow_nulls(o)`, `lifecycle_type(o,'Hooks')`, `tag(o.ID,'json:"id"')`, `invariant(o.ID,'Identity')`,
 	} {
 		t.Run(annotation, func(t *testing.T) {
 			SQL := `SELECT orders.* FROM (SELECT o.*,` + annotation + ` FROM ORDERS o) orders`

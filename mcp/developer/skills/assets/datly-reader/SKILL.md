@@ -70,6 +70,14 @@ Return the component's purpose, public input/output contract, DQL/Go files, hook
 
 Use separate reader/writer DQL with required `#package`. Declare `input_type`,
 `output_type` and outer `type(view,'Entity')` names; inner SQL aliases remain local.
+Every complete reader example also declares a named, typed `(output/view)`
+holder, with global `case_format('lc')` for lowerCamel output names. The holder's
+row type must match the root `type(...)`; output type naming alone does not bind rows.
+For deliberate renames, prefer `format:"name=CustomerName"` with global casing;
+nonempty `json` names are exact overrides. With `lc`, the format name becomes `customerName`; the runtime encoder and
+its wire schema use the same compiled naming policy.
+Label small syntax/inner-SQL fragments and link a complete contract. Preserve
+selectors, conditions, authorization, query resources, derived outputs and metadata.
 Auxiliary `(TABLE)` sources are nonmutating, and outer `AND 1=1` marks a to-one
 relation while retaining real equality links. See the grammar for CAST authority
 over source-preserved SQL/CTEs and literal defaults.

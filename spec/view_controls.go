@@ -20,7 +20,7 @@ const (
 	ViewControlPartitioner      = "set_partitioner"
 	ViewControlPublish          = "publish_parent"
 	ViewControlConcurrency      = "relational_concurrency"
-	ViewControlEntityHooks      = "entity_hooks"
+	ViewControlEntityHooks      = "lifecycle_type"
 )
 
 // ViewControls are the query-shaping controls derived from authored SQL-ish

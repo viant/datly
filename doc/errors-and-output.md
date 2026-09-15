@@ -4,7 +4,8 @@
 
 ## Errors from binding and declarations
 
-Use declaration metadata for expected binding failures:
+Declaration fragment for expected binding failures; adapt the input/route in the
+[complete reader contract](programming-model.md#dql-describes-the-data-operation):
 
 ```sql
 #define($_ = $OrderID<int>(path/id).Required().WithStatusCode(400).WithErrorMessage('order id is required'))
@@ -49,7 +50,9 @@ an envelope, summary or selected fields. Generated output shapes are selected by
 DQL output declarations/type settings; they are not an automatic mirror of all
 database columns or a combined reader/writer component.
 
-For a reader, name the output holder as well as the output type:
+Output declaration fragment from the
+[complete reader contract](programming-model.md#dql-describes-the-data-operation);
+name the output holder as well as the output type:
 
 ```sql
 #setting($_ = $output_type('OrdersOutput'))
@@ -69,6 +72,45 @@ is passed to the native Structology JSON marshaler and applies to the envelope
 and nested fields; routine per-field JSON tags are unnecessary. Custom handlers can fill a typed output directly.
 Output finalizers can enrich it at the supported lifecycle point. Do not expose
 internal Has markers or read-provenance metadata as user data.
+
+### Rename a field while retaining the case policy
+
+Use a `format` name when the public name differs from the Go field or SQL column:
+
+```go
+Name string `format:"name=CustomerName"`
+```
+
+With `case_format('lc')`, the JSON property is `customerName`. In an outer DQL
+projection, the equivalent annotation is
+`tag(orders.NAME, 'format:"name=CustomerName"')`. This changes presentation;
+the SQL column mapping remains independent.
+
+A nonempty `json:"Exact_Name"` takes precedence over the format name and remains
+exact even with global casing enabled. Use `format` for ordinary renames rather
+than introducing a fixed JSON name. A JSON tag with no name, such as
+`json:",omitempty"`, does not itself fix the property name.
+
+## Preserve database NULL or use scalar defaults
+
+Null handling starts in the reader's SQL projection, before JSON encoding.
+With the default view policy, nullable scalar columns receive `COALESCE`
+fallbacks: numeric values become `0`, strings become `''`, and booleans become
+`FALSE`. Types without a supported scalar fallback are not automatically
+coalesced.
+
+To preserve database NULLs for a view, add `allow_nulls(orders)` to its outer
+DQL projection. Keep the database query inside the view as ordinary SQL.
+Use nullable Go fields, such as `*int` or `*string`, to represent those NULLs.
+An explicit outer `CAST(orders.TOTAL AS *float64)` also preserves the pointer
+shape: the reader does not replace pointer NULLs with scalar defaults, even
+when the view has not enabled `allow_nulls`.
+
+Structology encodes a retained nil pointer as JSON `null` unless an applicable
+omission policy removes the field. SQL `allow_nulls`, Go pointer shape and JSON
+omission are separate controls; enabling one does not imply the others. A
+non-pointer scalar cannot preserve the distinction between NULL and its zero
+value.
 
 ## Return an already-shaped response body
 

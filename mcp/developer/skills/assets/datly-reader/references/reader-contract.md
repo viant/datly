@@ -1,8 +1,8 @@
 # Authoring Datly readers
 
-For current enablement and pending integration boundaries, consult [cache-and-operations.md](references/cache-and-operations.md) when using operational or extension features below. Required behavior is not a claim of connected-build availability.
+For current enablement and pending integration boundaries, consult [cache-and-operations.md](cache-and-operations.md) when using operational or extension features below. Required behavior is not a claim of connected-build availability.
 
-A reader turns bound application inputs into typed views and an output contract. Author the domain types, query, relationships, and allowed client operations; add Go behavior where the application needs it. Use [project build](references/project-build.md) for initial setup. You do not need to understand Datly's compiler or collectors to author a reader.
+A reader turns bound application inputs into typed views and an output contract. Author the domain types, query, relationships, and allowed client operations; add Go behavior where the application needs it. Use [project build](project-build.md) for initial setup. You do not need to understand Datly's compiler or collectors to author a reader.
 
 This guide includes required capabilities still under development. Keep the requested application contract intact; when a checkout cannot execute it, identify the blocker rather than silently weakening the design.
 
@@ -57,7 +57,7 @@ Use the row's actual identity/parent fields. Duplicate identities or conflicting
 
 A DerivedView is a query-derived view, such as counts, bounds, or totals. For a paginated list, decide whether a count means the page or all matching records; query the intended scope deliberately.
 
-Attach a top-level derived output with `parameter:"Totals,kind=output,in=derived"` plus its `view`/`sql` tags, or declare `$Totals<Totals>(output/derived)` in DQL. Its output holder (`Totals`) is separate from the root view identity (`Records`) used in `$View.Records.NonWindowSQL`. Query selectors also target the root view identity, not the collection's JSON name. See the [complete paginated-count example](references/reader-examples.md#complete-go-shape-pattern-one-row-pages-full-match-count-and-bounds) for exact Go and DQL declarations, two derived slots, NULL handling, and verified empty-page behavior.
+Attach a top-level derived output with `parameter:"Totals,kind=output,in=derived"` plus its `view`/`sql` tags, or declare `$Totals<Totals>(output/derived)` in DQL. Its output holder (`Totals`) is separate from the root view identity (`Records`) used in `$View.Records.NonWindowSQL`. Query selectors also target the root view identity, not the collection's JSON name. See the [complete paginated-count example](reader-examples.md#complete-go-shape-pattern-one-row-pages-full-match-count-and-bounds) for exact Go and DQL declarations, two derived slots, NULL handling, and verified empty-page behavior.
 
 Multiple derived outputs are independent. An output can contain paginated `Rows`, `Left.Total`, and `Right.Total`; a total may still be useful when `Rows` is empty. Full holder paths distinguish the two totals. Avoid definitions where an aggregate overwrites the root collection or another slot. Nested independent output slots support pointer containers; do not assume every dotted ordinary row-relation holder has the same support.
 
@@ -111,6 +111,9 @@ For multiview controls, use one explicit view argument. Current Go tag parsing
 accepts `querySelector:"inventory"` or `querySelector:"view=inventory"`. The
 candidate DQL uses:
 
+Declaration fragment; adapt to the [complete reader contract](reader-examples.md#parameterized-dql-reader)
+with the target view identity and existing input/output bindings.
+
 ```sql
 #define($_ = $Fields<[]string>(query/_fields).Optional().QuerySelector('inventory'))
 #define($_ = $Limit<int>(query/product_limit).Optional().QuerySelector('products'))
@@ -136,6 +139,9 @@ When application logic must distinguish actual loaded fields, public read-metada
 ## Rich imported shapes and internal backing fields
 
 Required target declarations include:
+
+Syntax fragment; adapt within the
+[complete reader contract](reader-examples.md#parameterized-dql-reader).
 
 ```sql
 CAST(view.pseudo AS importAlias.ShapeName),
@@ -177,11 +183,22 @@ Compose is configurable, not unlimited. Defaults: 8 cubes, result limit 100, tim
 WithURI activates a parameter on an alternative route with a dedicated MCP exposure:
 
 ```sql
+#package('example.com/app/things/read')
+#setting($_ = $input_type('ThingsInput'))
+#setting($_ = $output_type('ThingsOutput'))
+#setting($_ = $case_format('lc'))
+#setting($_ = $connector('main'))
 #setting($_ = $route('/things','GET'))
 #setting($_ = $mcp('Things'))
 #define($_ = $Id<int>(path/id).WithURI('/{id}'))
-SELECT id FROM things
+#define($_ = $Things<[]*Thing>(output/view))
+SELECT t.id, type(t, 'Thing') FROM things t
 ```
+
+This complete reader requires `things(id)` and connector `main`. Root rows
+bind to `ThingsOutput.Things []*Thing` under JSON key `things`. The `Id`
+declaration illustrates route activation; this query retains its unfiltered
+SQL and does not implement an ID lookup.
 
 This yields `/things/{id}` and `ThingsById`. Go `mcpEnabled` and `pathMcpEnabled` control base/alternative visibility separately. Verify each route's active input and tool schema. These declarations expose your component; they do not invent a developer-MCP authoring API.
 
@@ -213,6 +230,9 @@ Prove your reader with data-driven SQLite tests: real binding/query/output, same
 ## To-one outer JOIN shorthand
 
 For reader and writer DQL generation, this shorthand marks only the joined relation as one:
+
+Syntax fragment; adapt within the
+[complete reader contract](reader-examples.md#parameterized-dql-reader).
 
 ```sql
 JOIN (...) product

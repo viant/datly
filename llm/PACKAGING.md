@@ -1,8 +1,16 @@
 # Authoring Skill Packaging
 
-The three authoring source folders use skill-root-relative Markdown references,
-including references inside supporting documents. Do not replace them with
-document-relative sibling paths. `packaging.json` is the exact approved product
+Canonical reader/custom Markdown uses document-relative links: a reference
+beside `reader-examples.md` links to `reader-examples.md`, not
+`references/reader-examples.md`. Product dependency links are also relative to
+the containing document; their `references/product/` targets are materialized
+from the exact import list below.
+
+`SkillRootLinks` explicitly identifies the untouched writer source as using
+skill-root-relative input links during its separate authoring update. The
+packager interprets that declared input base and emits document-relative links
+for every installed/embedded skill, including writer copies and imported docs.
+Do not hand-edit generated links or infer a source link base from file existence. `packaging.json` is the exact approved product
 reference import list; it is not a glob or a request to copy a repository.
 
 From the Datly module, materialize an installable filesystem bundle:
@@ -25,7 +33,7 @@ an existing output byte-for-byte. The same packaging path serves both targets;
 never hand-edit the generated copies.
 
 Product Markdown links are rewritten at parser-confirmed destination spans into
-the selected skill's root. Source hashes and generated file hashes are recorded
+paths relative to the containing generated document. Source hashes and generated file hashes are recorded
 in the manifest. Exact canonical cross-skill imports keep their maintained source
 identity and do not grant activation or tools. Only the linked reference closure
 is imported; there are no extra skill entrypoints or source-code assets.
@@ -44,7 +52,11 @@ declarative graphs and generated pure Go, with business behavior in Go hooks.
 There are no source directory indexes or procedural authoring alternatives.
 
 Unapproved links, missing files, escaping paths, symlinks, unsupported link forms,
-missing heading fragments and invalid skill metadata fail packaging. There is no
+missing heading fragments and invalid skill metadata fail packaging. Link
+validation resolves each destination from the actual containing file's directory,
+including nested imported documents; a same-named file at the skill root is not
+a substitute. Raw source product dependencies require materialization; their
+canonical source identity is checked against the exact declared imports. There is no
 unresolved-reference warning mode. Keep the complete source/profile together and
 re-run packaging when product documentation changes.
 
