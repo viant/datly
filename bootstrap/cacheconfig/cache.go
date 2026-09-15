@@ -23,7 +23,15 @@ type Config struct {
 	Aerospike *aerospike.Pool
 }
 
-func (c Config) New() (cache.Cache, error) {
+type Validation struct {
+	Location string
+	Provider string
+	TTL      time.Duration
+}
+
+// Validate checks cache configuration without creating a provider, opening a
+// pool, touching storage or performing network I/O.
+func (c Config) Validate() (*Validation, error) {
 	if c.Settings == nil {
 		return nil, fmt.Errorf("cache settings are required")
 	}
@@ -37,11 +45,10 @@ func (c Config) New() (cache.Cache, error) {
 	if location == "" {
 		return nil, fmt.Errorf("cache %q location is required", c.Settings.Name)
 	}
-	var ttl time.Duration
 	if c.Settings.TimeToLiveMs < 0 || c.Settings.TimeToLiveMs > int((1<<63-1)/int64(time.Millisecond)) {
 		return nil, fmt.Errorf("cache %q timeToLiveMs is invalid", c.Settings.Name)
 	}
-	ttl = time.Duration(c.Settings.TimeToLiveMs) * time.Millisecond
+	ttl := time.Duration(c.Settings.TimeToLiveMs) * time.Millisecond
 	if c.Settings.TTL != "" {
 		parsed, err := time.ParseDuration(c.Settings.TTL)
 		if err != nil || parsed <= 0 {
@@ -56,6 +63,22 @@ func (c Config) New() (cache.Cache, error) {
 		return nil, fmt.Errorf("cache %q TTL is required", c.Settings.Name)
 	}
 	provider := strings.TrimSpace(c.Settings.Provider)
+	if !strings.HasPrefix(provider, "aerospike:") {
+		switch strings.ToLower(provider) {
+		case "", "afs":
+		default:
+			return nil, fmt.Errorf("cache provider %q is not supported; supply a native cache service", c.Settings.Provider)
+		}
+	}
+	return &Validation{Location: location, Provider: provider, TTL: ttl}, nil
+}
+
+func (c Config) New() (cache.Cache, error) {
+	validated, err := c.Validate()
+	if err != nil {
+		return nil, err
+	}
+	location, provider, ttl := validated.Location, validated.Provider, validated.TTL
 	if strings.HasPrefix(provider, "aerospike:") {
 		service, err := c.Aerospike.NewCache(aerospike.Config{
 			Provider: provider, Location: location, Identity: c.Identity, TTL: ttl,
@@ -74,7 +97,6 @@ func (c Config) New() (cache.Cache, error) {
 	case "", "afs":
 		namespace := fmt.Sprintf("%x", sha256.Sum256([]byte(c.Identity)))
 		return afs.NewCache(strings.TrimRight(location, "/")+"/"+namespace, ttl, c.Identity, nil)
-	default:
-		return nil, fmt.Errorf("cache provider %q is not supported; supply a native cache service", c.Settings.Provider)
 	}
+	return nil, fmt.Errorf("cache provider %q was not resolved", provider)
 }

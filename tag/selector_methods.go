@@ -28,6 +28,12 @@ func parseSQLMethods(value string) ([]spec.SQLMethod, error) {
 	return methods, nil
 }
 
+// ParseSQLMethods decodes the canonical selector-method JSON used by both Go
+// view tags and DQL selector policy declarations.
+func ParseSQLMethods(value string) ([]spec.SQLMethod, error) {
+	return parseSQLMethods(value)
+}
+
 func encodeSQLMethods(methods []spec.SQLMethod) (string, error) {
 	if err := validateSQLMethods(methods); err != nil {
 		return "", err

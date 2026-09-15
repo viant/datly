@@ -12,25 +12,25 @@ const (
 
 // Position identifies a byte offset and its rune-aware source location.
 type Position struct {
-	Offset int
-	Line   int
-	Char   int
+	Offset int `json:"offset"`
+	Line   int `json:"line"`
+	Char   int `json:"char"`
 }
 
 type Span struct {
-	Start Position
-	End   Position
+	Start Position `json:"start"`
+	End   Position `json:"end"`
 }
 
 // Diagnostic is transcribe compile feedback. It remains outside canonical
 // spec because source spans and compiler hints are pipeline products.
 type Diagnostic struct {
-	Code     string
-	Severity Severity
-	Message  string
-	Hint     string
-	Path     string
-	Span     Span
+	Code     string   `json:"code"`
+	Severity Severity `json:"severity"`
+	Message  string   `json:"message"`
+	Hint     string   `json:"hint,omitempty"`
+	Path     string   `json:"path,omitempty"`
+	Span     Span     `json:"span"`
 }
 
 func (d *Diagnostic) Error() string {

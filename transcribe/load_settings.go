@@ -104,7 +104,11 @@ func (l *settingsLoader) mergeReport(base, authored *spec.ReportSettings) *spec.
 	} else {
 		base = base.Clone()
 	}
-	base.Enabled = authored.Enabled
+	// A cubeCompose-only DQL overlay configures composition and must not disable
+	// a package-owned cube. DQL currently has no report-disable syntax.
+	if authored.Enabled {
+		base.Enabled = true
+	}
 	if authored.Compose != nil {
 		base.Compose = authored.Compose.Clone()
 	}

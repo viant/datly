@@ -56,8 +56,8 @@ type DirectivePlan struct {
 }
 
 type SourceSpan struct {
-	Start int
-	End   int
+	Start int `json:"start"`
+	End   int `json:"end"`
 }
 
 type RoutePlan struct {

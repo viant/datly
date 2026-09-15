@@ -20,3 +20,22 @@ func TestCubeComposeDirective(t *testing.T) {
 		t.Fatal("accepted invalid compose flag")
 	}
 }
+
+func TestCubeComposeDirectiveCarriesMCPAndBudgets(t *testing.T) {
+	prepared := PrepareSource("#setting($_ = $cubeCompose(true,false,4,50,12000))\nSELECT id FROM events")
+	if err := prepared.Err(); err != nil {
+		t.Fatal(err)
+	}
+	compose := prepared.Directives.Settings.Report.Compose
+	if compose == nil || !compose.Enabled || compose.MCPTool == nil || *compose.MCPTool || compose.MaxCubes != 4 || compose.MaxLimit != 50 || compose.TimeoutMs != 12000 {
+		t.Fatalf("compose=%+v", compose)
+	}
+	for _, source := range []string{
+		"#setting($_ = $cubeCompose(true,false,0))\nSELECT id FROM events",
+		"#setting($_ = $cubeCompose(true,false,4,50,12000,1))\nSELECT id FROM events",
+	} {
+		if err := PrepareSource(source).Err(); err == nil {
+			t.Fatalf("accepted %s", source)
+		}
+	}
+}

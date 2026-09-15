@@ -122,7 +122,7 @@ outer_sql_expression = ? expression accepted by SQLparser and outer projection
    Inner CAST(expr AS database_type) is SQL, not a Go type annotation. *)
 
 view_control = named_binding_control | numeric_control | flag_control
-             | string_control | self_reference | partitioner ;
+             | string_control | selector_control | self_reference | partitioner ;
 named_binding_control = ("use_connector" | "use_cache" | "cache_warmup"),
                         "(", view_name, ",", (string | identifier), ")" ;
 numeric_control = ("set_limit" | "batch_size" | "batch_concurrency"
@@ -133,6 +133,20 @@ flag_control = ("allow_nulls" | "groupable" | "grouping_enabled"
 string_control = ("order_by" | "allowed_order_by_columns" | "cardinality"
                  | "type" | "dest" | "match_strategy" | "lifecycle_type"),
                  "(", view_name, ",", string, ")" ;
+selector_control = selector_boolean | selector_string | selector_limit
+                 | selector_methods ;
+selector_boolean = ("selector_fields" | "selector_order_by"
+                   | "selector_criteria" | "selector_limit"
+                   | "selector_offset" | "selector_page"
+                   | "selector_no_limit"),
+                   "(", view_name, ",", boolean, ")" ;
+selector_string = ("selector_default_order" | "selector_filterable"
+                  | "selector_namespace"),
+                  "(", view_name, ",", string, ")" ;
+selector_limit = "selector_default_limit", "(", view_name, ",",
+                 unsigned_integer, ")" ;
+selector_methods = "selector_sql_methods", "(", view_name, ",",
+                   string, ")" ;
 self_reference = "self_ref", "(", view_name, ",", string, ",", string,
                  ",", string, ")" ;
 partitioner = "set_partitioner", "(", view_name, ",", string,

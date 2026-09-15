@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/tag"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
@@ -68,7 +69,11 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 		spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
 		spec.ViewControlType, spec.ViewControlDest, spec.ViewControlBatchSize, spec.ViewControlBatchConcurrency,
 		spec.ViewControlMatch, spec.ViewControlPartitioner, spec.ViewControlPublish,
-		spec.ViewControlConcurrency, spec.ViewControlEntityHooks:
+		spec.ViewControlConcurrency, spec.ViewControlEntityHooks,
+		spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
+		spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage,
+		spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorDefaultLimit, spec.ViewControlSelectorNoLimit,
+		spec.ViewControlSelectorFilterable, spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods:
 	default:
 		return viewDirective{}, false, nil
 	}
@@ -106,6 +111,22 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 		limit, err := strconv.Atoi(directive.value)
 		if err != nil || limit < 0 {
 			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("set_limit value %q must be a non-negative integer", directive.value)}
+		}
+	}
+	if selectorBooleanDirective(name) {
+		if _, err := strconv.ParseBool(strings.ToLower(directive.value)); err != nil {
+			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s value %q must be true or false", name, directive.value)}
+		}
+	}
+	if name == spec.ViewControlSelectorDefaultLimit {
+		value, err := strconv.Atoi(directive.value)
+		if err != nil || value < 0 {
+			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("selector_default_limit value %q must be a non-negative integer", directive.value)}
+		}
+	}
+	if name == spec.ViewControlSelectorSQLMethods {
+		if _, err := tag.ParseSQLMethods(directive.value); err != nil {
+			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: err}
 		}
 	}
 	if name == spec.ViewControlBatchSize || name == spec.ViewControlConcurrency || name == spec.ViewControlBatchConcurrency {
@@ -150,7 +171,11 @@ func containsViewDirective(source node.Node) bool {
 			spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
 			spec.ViewControlType, spec.ViewControlDest, spec.ViewControlBatchSize, spec.ViewControlBatchConcurrency,
 			spec.ViewControlMatch, spec.ViewControlPartitioner, spec.ViewControlPublish,
-			spec.ViewControlConcurrency, spec.ViewControlEntityHooks:
+			spec.ViewControlConcurrency, spec.ViewControlEntityHooks,
+			spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
+			spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage,
+			spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorDefaultLimit, spec.ViewControlSelectorNoLimit,
+			spec.ViewControlSelectorFilterable, spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods:
 			return true
 		}
 		return false
@@ -260,12 +285,16 @@ func viewDirectiveTarget(source node.Node) (string, bool) {
 func viewDirectiveValue(name string, argument int, source node.Node) (string, bool) {
 	switch actual := source.(type) {
 	case *expr.Literal:
-		numeric := name == spec.ViewControlSetLimit || name == spec.ViewControlBatchSize || name == spec.ViewControlConcurrency || name == spec.ViewControlBatchConcurrency ||
+		numeric := name == spec.ViewControlSetLimit || name == spec.ViewControlBatchSize || name == spec.ViewControlConcurrency || name == spec.ViewControlBatchConcurrency || name == spec.ViewControlSelectorDefaultLimit ||
 			name == spec.ViewControlPartitioner && argument == 2
 		if numeric && actual.Kind != "int" {
 			return "", false
 		}
-		if !numeric && actual.Kind != "string" {
+		boolean := selectorBooleanDirective(name)
+		if boolean && actual.Kind != "bool" {
+			return "", false
+		}
+		if !numeric && !boolean && actual.Kind != "string" {
 			return "", false
 		}
 		value := normalizeViewDirectiveValue(actual.Value)
@@ -273,6 +302,11 @@ func viewDirectiveValue(name string, argument int, source node.Node) (string, bo
 	case *expr.Ident:
 		switch name {
 		case spec.ViewControlUseConnector, spec.ViewControlUseCache, spec.ViewControlCacheWarmup:
+		case spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
+			spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage, spec.ViewControlSelectorNoLimit:
+			if !strings.EqualFold(actual.Name, "true") && !strings.EqualFold(actual.Name, "false") {
+				return "", false
+			}
 		default:
 			return "", false
 		}
@@ -298,6 +332,10 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s target %q is declared more than once", directive.name, directive.target)}
 			}
 			seen[target][key] = true
+			if (directive.name == spec.ViewControlSetLimit && seen[target][spec.ViewControlSelectorNoLimit]) ||
+				(directive.name == spec.ViewControlSelectorNoLimit && seen[target][spec.ViewControlSetLimit]) {
+				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("set_limit and selector_no_limit cannot both target %q", directive.target)}
+			}
 		}
 		if target.Source == nil {
 			target.Source = &spec.ViewSource{}
@@ -389,9 +427,69 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("match_strategy target %q must be a related view", directive.target)}
 			}
 			relation.MatchStrategy = spec.MatchStrategy(directive.value)
+		case spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
+			spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage, spec.ViewControlSelectorNoLimit:
+			if target.Selector == nil {
+				target.Selector = &spec.Selector{}
+			}
+			value, _ := strconv.ParseBool(strings.ToLower(directive.value))
+			switch directive.name {
+			case spec.ViewControlSelectorFields:
+				target.Selector.AllowFields = value
+			case spec.ViewControlSelectorOrderBy:
+				target.Selector.AllowOrderBy = value
+			case spec.ViewControlSelectorCriteria:
+				target.Selector.AllowCriteria = value
+			case spec.ViewControlSelectorLimit:
+				target.Selector.AllowLimit = value
+			case spec.ViewControlSelectorOffset:
+				target.Selector.AllowOffset = value
+			case spec.ViewControlSelectorPage:
+				target.Selector.AllowPage = value
+			case spec.ViewControlSelectorNoLimit:
+				target.Selector.NoLimit = value
+			}
+		case spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorFilterable,
+			spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods, spec.ViewControlSelectorDefaultLimit:
+			if target.Selector == nil {
+				target.Selector = &spec.Selector{}
+			}
+			switch directive.name {
+			case spec.ViewControlSelectorDefaultOrder:
+				target.Selector.DefaultOrder = directive.value
+			case spec.ViewControlSelectorFilterable:
+				target.Selector.Filterable = splitFieldPaths(directive.value)
+			case spec.ViewControlSelectorNamespace:
+				target.Selector.Namespace = directive.value
+			case spec.ViewControlSelectorDefaultLimit:
+				target.Selector.DefaultLimit, _ = strconv.Atoi(directive.value)
+			case spec.ViewControlSelectorSQLMethods:
+				target.Selector.SQLMethods, _ = tag.ParseSQLMethods(directive.value)
+			}
 		}
 	}
 	return nil
+}
+
+func selectorBooleanDirective(name string) bool {
+	switch name {
+	case spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
+		spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage, spec.ViewControlSelectorNoLimit:
+		return true
+	default:
+		return false
+	}
+}
+
+func splitFieldPaths(value string) []spec.FieldPath {
+	parts := strings.Split(value, ",")
+	result := make([]spec.FieldPath, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			result = append(result, spec.FieldPath(part))
+		}
+	}
+	return result
 }
 
 func singletonViewDirectiveKey(name string) string {

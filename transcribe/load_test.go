@@ -412,6 +412,16 @@ func TestSettingsLoaderAuthoredEmptyReportInputSelectsGeneratedType(t *testing.T
 	}
 }
 
+func TestSettingsLoaderComposeOnlyOverlayPreservesPackageReport(t *testing.T) {
+	actual := (&settingsLoader{
+		base:     &spec.Settings{Report: &spec.ReportSettings{Enabled: true}},
+		authored: &spec.Settings{Report: &spec.ReportSettings{Compose: &spec.CubeComposeSettings{Enabled: true}}},
+	}).Load()
+	if actual.Report == nil || !actual.Report.Enabled || actual.Report.Compose == nil || !actual.Report.Compose.Enabled {
+		t.Fatalf("report settings=%+v", actual.Report)
+	}
+}
+
 func TestSettingsLoaderOverlaysConstantsByCanonicalName(t *testing.T) {
 	base := &spec.Settings{Const: map[string]string{"Vendor": "package", "PackageOnly": "kept"}}
 	authored := &spec.Settings{Const: map[string]string{"vendor": "dql"}}

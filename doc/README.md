@@ -17,6 +17,7 @@ provide a runnable feature switch.
 | Transcribe DQL, import types and preserve generated edits | [Authoring](authoring.md) |
 | Understand reader/writer hook order, sparse updates and invariants | [Hook flow diagrams](hooks.md) |
 | Build nested reads and paginated outputs | [Readers](readers.md) |
+| Edit complete reader DQL through the stateless API | [Reader builder](reader-builder.md) |
 | Combine optional reader filters and scoped AND/OR groups | [Reader predicates](reader-predicates.md) |
 | Build analytical reports or compare query frames | [Reports](reports.md) |
 | Generate a mutator and understand Has markers, SyncPresence and invariants | [Generated mutators](generated-mutator.md) |

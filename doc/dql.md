@@ -145,7 +145,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `mcp` | 1+ | name (nonempty), optional description, optional description path; arguments after third ignored |
 | `mcp_folder`, `mcp_skill_folder` | exactly 3 | namespace, root, URI prefix; no tail; skill variant selects `Skills: ["."]` |
 | `report`, `cube` | 0+ | first eight: linked input type, dimensions, measures, filters, orderBy, limit, offset, MCP-tool boolean; later arguments ignored |
-| `cubeCompose` | exactly 1 | boolean; no tail |
+| `cubeCompose` | 1–5 | enabled; optional MCP-tool flag, max cubes, max limit, timeout milliseconds |
 | `cache` | 1+ | enabled boolean or name, optional TTL; later positional arguments ignored; fluent options below |
 | `cache_warmup` | 1+ | index column, then name=value options; repeated calls merge cases with conflict checks |
 | `marshal`, `unmarshal` | 2+ | MIME and Go implementation type; later arguments ignored |
@@ -422,6 +422,10 @@ the entire projection.
 | match policy | match_strategy(alias,'read_all'|'read_matched'|'read_derived'); related view only |
 | mutation lifecycle | lifecycle_type(view,'package.OrderLifecycle') |
 | invariant group | invariant(view.column,'GroupName') |
+| selector permissions | selector_fields(view,bool), selector_order_by(view,bool), selector_criteria(view,bool), selector_limit(view,bool), selector_offset(view,bool), selector_page(view,bool) |
+| selector defaults | selector_default_order(view,'expression'), selector_default_limit(view,integer), selector_no_limit(view,bool) |
+| selector scope | selector_namespace(view,'name'), selector_filterable(view,'field,path,...') |
+| selector criteria methods | selector_sql_methods(view,'[{"name":"lower","args":["string"]}]') |
 
 Numeric control arguments are unquoted, nonnegative integer literals. set_limit(alias,0) removes the view limit; it does not erase an explicitly authored SQL LIMIT. Controls are consumed as metadata rather than sent to the DB. Every listed
 control has exactly 2 arguments except the four flags (`allow_nulls`, `groupable`,
@@ -432,6 +436,19 @@ names also accept a bare identifier. All controls are singleton per target excep
 `groupable` and `grouping_enabled` share one singleton slot. `tag` and `invariant`
 are separate column annotations, exactly 2 arguments each; rich CAST is a
 column/type pair in CAST syntax.
+
+Selector permission booleans are unquoted. `QuerySelector(view)` binds a request
+field to the named view; it does not itself grant permission. Selector policy
+calls grant each capability independently. `selector_default_limit` is both the
+fallback and cap for a positive requested limit while `selector_no_limit` is
+false. A positive `set_limit` sets a base view limit and clears no-limit mode;
+`set_limit(view,0)` clears that base limit and enables no-limit mode. Criteria
+methods use a quoted JSON array of method names and Go argument type expressions;
+malformed or duplicate methods are rejected. JSON shape is validated during DQL
+compilation; argument type expressions resolve later through the reader compiler's
+canonical type authority. `set_limit` and `selector_no_limit` cannot both target
+the same view because their overlapping no-limit semantics would otherwise be
+source-order dependent.
 
 ~~~~sql
 #package('example.com/app/records/read')
@@ -800,11 +817,19 @@ SDK documentation service. Shared schema references remain resources.
 | Parameter errors | status 100–599; counts nonnegative; the binder checks the bound collection count; `transcribe/dql/declarations_options.go`, registration/binding validation |
 | View counts | nonnegative integer literals for limit/batching/concurrency; no fixed global maximum in directive parser; `transcribe/compile/view_directives.go` |
 | No-limit | `set_limit(view,0)` removes view limit; authored inner SQL LIMIT remains SQL |
-| Cube composition | `cubeCompose(bool)` enables it; typed `CubeComposeSettings` defaults to max 8 cubes, max limit 100, timeout 30000 ms; these numbers are **not** additional DQL arguments |
+| Cube composition | `cubeCompose(enabled[,mcpTool,maxCubes,maxLimit,timeoutMs])`; omitted positive budgets normalize to 8 cubes, limit 100, timeout 30000 ms |
 | Warmup | `Limit`, `MaxCases`, `FieldNames` and per-case exclusions exist on typed settings, not standalone DQL options; unknown warmup option names become parameter dimensions |
 | Cache | positive TTL and agreement between duration/milliseconds checked by configuration; no automatic backend selection or fallback |
 | SQL parameters / expressions | database dialect placeholder budgets and reader/report validation apply; no universal DQL parameter-count maximum |
 | Resource/folder/file paths | explicit resource authority, traversal and filename checks owned by their loaders/generator; parsing text does not authorize filesystem access |
+
+The dynamic reader builder initially enables cube/report only for a narrow main
+view shape: one wrapped SELECT over one source, direct aliased
+SUM/COUNT/MIN/MAX/AVG measures, explicit grouped column dimensions, and no
+HAVING, joins, CTEs, windows, DISTINCT, set operations, nested aggregates or
+aggregate wrappers such as COALESCE/CAST. Outer DQL CAST may still assign the Go
+type of the resulting measure. These activation checks do not restrict ordinary
+reader DQL compilation.
 
 ### Known parser boundaries
 

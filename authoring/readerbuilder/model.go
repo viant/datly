@@ -1,0 +1,122 @@
+// Package readerbuilder provides stateless, source-preserving DQL reader edits.
+package readerbuilder
+
+import (
+	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe"
+	"github.com/viant/datly/transcribe/dql"
+)
+
+type OperationType string
+
+const (
+	OperationInspect              OperationType = "inspect"
+	OperationAddField             OperationType = "addField"
+	OperationAddFieldPredicate    OperationType = "addFieldPredicate"
+	OperationUpdateFieldPredicate OperationType = "updateFieldPredicate"
+	OperationRemoveFieldPredicate OperationType = "removeFieldPredicate"
+	OperationAddFunction          OperationType = "addFunction"
+	OperationUpdateFunction       OperationType = "updateFunction"
+	OperationRemoveFunction       OperationType = "removeFunction"
+	OperationSetSetting           OperationType = "setSetting"
+	OperationAddView              OperationType = "addView"
+	OperationUpdateView           OperationType = "updateView"
+	OperationRemoveView           OperationType = "removeView"
+)
+
+type Request struct {
+	DQL       string    `json:"dql"`
+	Operation Operation `json:"operation"`
+}
+
+type Operation struct {
+	Type      OperationType      `json:"type"`
+	Field     *Field             `json:"field,omitempty"`
+	Predicate *PredicateMutation `json:"predicate,omitempty"`
+	Function  *FunctionMutation  `json:"function,omitempty"`
+	Setting   *SettingMutation   `json:"setting,omitempty"`
+	View      *ViewMutation      `json:"view,omitempty"`
+}
+
+type Field struct {
+	Name          string `json:"name"`
+	Type          string `json:"type"`
+	SourceKind    string `json:"sourceKind"`
+	SourceName    string `json:"sourceName"`
+	Required      *bool  `json:"required,omitempty"`
+	QuerySelector string `json:"querySelector,omitempty"`
+}
+
+type PredicateMutation struct {
+	Field           string   `json:"field"`
+	Occurrence      int      `json:"occurrence,omitempty"`
+	View            string   `json:"view"`
+	Group           int      `json:"group"`
+	Name            string   `json:"name,omitempty"`
+	Args            []string `json:"args,omitempty"`
+	ApplyWhenAbsent bool     `json:"applyWhenAbsent,omitempty"`
+	ExpansionViews  []string `json:"expansionViews,omitempty"`
+	GroupOperator   string   `json:"groupOperator,omitempty"`
+	CombineOperator string   `json:"combineOperator,omitempty"`
+}
+
+type FunctionMutation struct {
+	Name         string   `json:"name"`
+	Args         []string `json:"args,omitempty"`
+	ExpectedArgs []string `json:"expectedArgs,omitempty"`
+	Occurrence   int      `json:"occurrence,omitempty"`
+}
+
+type SettingMutation struct {
+	Name    string             `json:"name"`
+	Args    []string           `json:"args,omitempty"`
+	Options []FunctionMutation `json:"options,omitempty"`
+	Remove  bool               `json:"remove,omitempty"`
+}
+
+type ViewMutation struct {
+	Name   string `json:"name"`
+	SQL    string `json:"sql,omitempty"`
+	Parent string `json:"parent,omitempty"`
+	Join   string `json:"join,omitempty"`
+	On     string `json:"on,omitempty"`
+}
+
+type Response struct {
+	Applied     bool                     `json:"applied"`
+	DQL         string                   `json:"dql"`
+	Structure   *Structure               `json:"structure,omitempty"`
+	Diagnostics []*transcribe.Diagnostic `json:"diagnostics,omitempty"`
+}
+
+type Structure struct {
+	Status              string                      `json:"status"`
+	Component           *spec.Component             `json:"component,omitempty"`
+	Declarations        []dql.DeclarationOccurrence `json:"declarations,omitempty"`
+	Views               []ViewOccurrence            `json:"views,omitempty"`
+	PredicateExpansions []PredicateExpansion        `json:"predicateExpansions,omitempty"`
+	Functions           []FunctionOccurrence        `json:"functions,omitempty"`
+	AvailableConnectors []string                    `json:"availableConnectors,omitempty"`
+	AvailablePredicates []string                    `json:"availablePredicates,omitempty"`
+	AvailableCaches     []string                    `json:"availableCaches,omitempty"`
+}
+
+type FunctionOccurrence struct {
+	Name       string         `json:"name"`
+	Args       []string       `json:"args,omitempty"`
+	Occurrence int            `json:"occurrence"`
+	SourceSpan dql.SourceSpan `json:"sourceSpan"`
+}
+
+type ViewOccurrence struct {
+	Name       string         `json:"name"`
+	SourceSpan dql.SourceSpan `json:"sourceSpan"`
+}
+
+type PredicateExpansion struct {
+	View       string         `json:"view"`
+	Method     string         `json:"method"`
+	Group      int            `json:"group"`
+	Operator   string         `json:"operator,omitempty"`
+	SourceSpan dql.SourceSpan `json:"sourceSpan"`
+}

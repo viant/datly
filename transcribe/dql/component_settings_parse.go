@@ -74,17 +74,34 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			}
 			ret.Report = report
 		case strings.EqualFold(name, "cubeCompose"):
-			if len(args) != 1 || tail != "" {
-				return nil, fmt.Errorf("cubeCompose requires exactly one boolean")
+			if len(args) < 1 || len(args) > 5 || tail != "" {
+				return nil, fmt.Errorf("cubeCompose requires enabled and optional MCP, max cubes, max limit and timeout values")
 			}
 			enabled, parseErr := strconv.ParseBool(strings.TrimSpace(trimQuote(args[0])))
 			if parseErr != nil {
-				return nil, fmt.Errorf("cubeCompose requires true or false")
+				return nil, fmt.Errorf("cubeCompose enabled requires true or false")
 			}
 			if ret.Report == nil {
 				ret.Report = &spec.ReportSettings{}
 			}
-			ret.Report.Compose = &spec.CubeComposeSettings{Enabled: enabled}
+			compose := &spec.CubeComposeSettings{Enabled: enabled}
+			if len(args) > 1 {
+				mcpTool, err := strconv.ParseBool(strings.TrimSpace(trimQuote(args[1])))
+				if err != nil {
+					return nil, fmt.Errorf("cubeCompose MCP tool requires true or false")
+				}
+				compose.MCPTool = &mcpTool
+			}
+			values := []*int{&compose.MaxCubes, &compose.MaxLimit, &compose.TimeoutMs}
+			labels := []string{"max cubes", "max limit", "timeout milliseconds"}
+			for index := 2; index < len(args); index++ {
+				value, ok := parseIntArg(args[index])
+				if !ok || value <= 0 {
+					return nil, fmt.Errorf("cubeCompose %s requires a positive integer", labels[index-2])
+				}
+				*values[index-2] = value
+			}
+			ret.Report.Compose = compose
 		case strings.EqualFold(name, "cache"):
 			cache, err := parseCacheSettings(args, tail)
 			if err != nil {

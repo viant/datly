@@ -292,6 +292,25 @@ FROM orders o JOIN order_items i ON i.order_id = o.id`})
 	}
 }
 
+func TestReaderCompileLowersSelectorPolicyDirectives(t *testing.T) {
+	actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Records", Source: &spec.ViewSource{}}, SQL: `SELECT r.*,
+selector_fields(r,true), selector_order_by(r,true), selector_criteria(r,true),
+selector_limit(r,true), selector_offset(r,true), selector_page(r,true),
+selector_default_order(r,'created_at DESC'), selector_default_limit(r,100), selector_no_limit(r,false),
+selector_filterable(r,'id,name'), selector_namespace(r,'records'),
+selector_sql_methods(r,'[{"name":"lower","args":["string"]}]')
+FROM records r`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	selector := actual.Selector
+	if selector == nil || !selector.AllowFields || !selector.AllowOrderBy || !selector.AllowCriteria || !selector.AllowLimit || !selector.AllowOffset || !selector.AllowPage ||
+		selector.DefaultOrder != "created_at DESC" || selector.DefaultLimit != 100 || selector.NoLimit || selector.Namespace != "records" ||
+		len(selector.Filterable) != 2 || len(selector.SQLMethods) != 1 || selector.SQLMethods[0].Name != "lower" {
+		t.Fatalf("selector=%+v", selector)
+	}
+}
+
 func TestReaderCompileLowersCanonicalViewDecorators(t *testing.T) {
 	actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Orders", Source: &spec.ViewSource{}}, SQL: `SELECT o.*, i.*,
 allow_nulls(o), grouping_enabled(o),
@@ -395,6 +414,8 @@ func TestReaderCompileRejectsDuplicateSingletonViewDirectives(t *testing.T) {
 
 func TestReaderCompileRejectsInvalidViewDirective(t *testing.T) {
 	tests := []string{
+		`SELECT o.*, selector_fields(o,'true') FROM orders o`,
+		`SELECT o.*, set_limit(o,0), selector_no_limit(o,false) FROM orders o`,
 		`SELECT o.*, set_limit(o, 'many') FROM orders o`,
 		`SELECT o.*, use_connector(missing, 'analytics') FROM orders o`,
 		`SELECT o.*, use_connector(Orders, 'analytics') FROM orders o`,
