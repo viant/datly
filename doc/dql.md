@@ -258,7 +258,7 @@ Declaration queries contain plain SQL or StructQL. Express requiredness with `.R
 
 ## Operation-based graph generation
 
-Use the same reader-like graph for `gen` operation `get`, `patch`, `post` or
+Use the same reader-like graph for `transcribe` operation `get`, `patch`, `post` or
 `put`, selecting pure Go output. Operation is explicit and must agree with route
 metadata. Generation derives request/output shapes, original-key Previous reads,
 internal Has markers, SyncPresence, validation, sequencing, relation links and
@@ -287,7 +287,7 @@ Has, then validates the effective date interval. Application Go `Init` and
 and never enter mutation traversal. The generator owns Body/Existing/Data
 plumbing; authors do not construct it for standard generation.
 
-High-level `gen` is available in the `v1` source tree. Check the installed CLI
+High-level `transcribe` is available in the `v1` source tree. Check the installed CLI
 or connected developer MCP capabilities before invoking it; an older release or
 unconfigured server may not expose this workflow. Do not substitute lower-level
 translation or hand-authored writer plumbing when generation is unavailable.
