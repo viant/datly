@@ -142,11 +142,6 @@ This is a command-line workflow. Application authors should not need to construc
 compiler objects, metadata registries, body contracts or Current queries in Go.
 
 
-Original Datly separates `transcribe` from `translate`. The `transcribe` PATCH workflow
-starts from the graph description, constructs the write contract and logic, then
-passes its generated result through compilation/translation. Translating an
-already-complete writer declaration is a lower-level operation.
-
 Use `datly transcribe <operation>` for this high-level workflow. Lower-level transcription accepts
 already-authored contracts and is a separate API; application authors do not need
 to recreate those contracts to generate a standard writer.
@@ -194,16 +189,17 @@ produces source; it does not execute the application's mutations.
 
 ### 2. Inspect what transcription produced
 
-For this example, the generated files are under `orders/write/`:
+The default layout under `orders/write/` uses plain filenames. An optional
+prefix applies to defaults; explicit DQL filename overrides take precedence:
 
 | File | Purpose |
 | --- | --- |
-| `orders.go` | Typed views, relation holders and internal Has markers. |
-| `orders_input.go`, `orders_output.go` | The generated request and response contracts. |
-| `orders_hooks.go` | Create-once application lifecycle placeholders: edit this file. |
-| `orders_entities_gen.go` | Setters, presence synchronization and invariant helpers. |
-| `orders_mutation_gen.go` and `NewOrdersHandler_*_gen.go` | Generated orchestration, capture, Previous matching, validation and queued actions. |
-| `orders_router.go`, `orders_link_gen.go`, `orders_resources.go`, `datly_sql/` | Component registration, linked types and embedded SQL resources. |
+| `views.go` | Typed views, relation holders and internal Has markers. |
+| `input.go`, `output.go` | The generated request and response contracts. |
+| `lifecycle.go` | Create-once application lifecycle placeholders: edit this file. |
+| `entities.go` | Setters, presence synchronization and invariant helpers. |
+| `handler.go`, `mutation.go` and their support files | Generated orchestration, capture, Previous matching, validation and queued actions. |
+| `router.go`, `links.go`, `resources.go`, `datly_sql/` | Component registration, linked types and embedded SQL resources. |
 
 The generator derives the needed current-state reads and key projections.
 Auxiliary `kind` remains available as data, but receives no mutation lifecycle
@@ -211,7 +207,7 @@ scaffold or INSERT/UPDATE actions.
 
 ### 3. Open the lifecycle placeholders
 
-`orders_hooks.go` contains the following root methods, plus the child lifecycle.
+`lifecycle.go` contains the following root methods, plus the child lifecycle.
 Each generated body initially contains only `return nil`:
 
 ```go
@@ -276,7 +272,7 @@ below. Avoid implementing those framework phases yourself.
 ### 5. Test, regenerate and build
 
 ```sh
-gofmt -w orders/write/orders_hooks.go
+gofmt -w orders/write/lifecycle.go
 go test ./orders/write
 go build ./...
 ```
