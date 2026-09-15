@@ -1,5 +1,26 @@
 # Reader authoring examples
 
+## Explicit output holder and JSON shape
+
+Name the output field as well as the output type. `output_type` names a Go
+contract; `output/view` binds the main root-view result into that contract:
+
+~~~~sql
+#setting($_ = $input_type('OrdersInput'))
+#setting($_ = $output_type('OrdersOutput'))
+#define($_ = $Orders<[]*Order>(output/view).WithTag('json:"orders"'))
+~~~~
+
+In the complete DQL, declare `#package`, route and connector, and name the root
+row with `type(orders, 'Order')` in the outer SELECT. The generated public shape
+is `OrdersOutput.Orders []*Order`; the JSON envelope key is `orders`. Row columns
+come from the selected projection, and outer `tag(orders.ID, 'json:"id"')`
+annotations control their JSON names. Do not imply that the output type setting
+alone specifies a holder, or that reader and writer contracts are automatically
+combined. Request initialization belongs to the explicitly named input contract;
+row `OnFetch` processing and output finalization are separate lifecycle points.
+
+
 These are application patterns. The developer server supplies actual connector/schema/type authority and validates the finished component. Names/tables are illustrative.
 
 ## Parameterized DQL reader

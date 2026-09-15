@@ -65,13 +65,52 @@ route, binding, type, relationship and generation authority around it.
 #setting($_ = $route('/orders', 'GET'))
 #setting($_ = $connector('main'))
 #define($_ = $CustomerID<int>(query/customerId).Required())
-SELECT orders.*, type(orders, 'Order')
+#define($_ = $Orders<[]*Order>(output/view).WithTag('json:"orders"'))
+SELECT orders.*, type(orders, 'Order'),
+       tag(orders.ID, 'json:"id"'),
+       tag(orders.CUSTOMER_ID, 'json:"customerId"'),
+       tag(orders.TOTAL, 'json:"total"')
 FROM (
     SELECT o.ID, o.CUSTOMER_ID, o.TOTAL
     FROM ORDERS o
     WHERE o.CUSTOMER_ID = :CustomerID
 ) orders
 ```
+
+`output_type('OrdersOutput')` names the response struct. It does not, by itself,
+specify a result field. The explicit `Orders<[]*Order>(output/view)` declaration
+binds the main query result—the `orders` root view—to its `Orders` field.
+`type(orders, 'Order')` names each row's Go shape; `[]*Order` makes the result a
+collection. The field's JSON tag names the public envelope property `orders`.
+
+The public shape is equivalent to the following; the generated `output.go` also
+contains the binding, view, and SQL-resource tags used to populate it:
+
+```go
+type OrdersOutput struct {
+    Orders []*Order `json:"orders"`
+}
+```
+
+For one matching row, the response is:
+
+```json
+{"orders":[{"id":42,"customerId":7,"total":125.5}]}
+```
+
+Shape the response explicitly at two levels:
+
+- Change the output field's JSON tag to change its envelope key; for example,
+  `WithTag('json:"data"')` produces a `data` property without changing the Go field.
+- Select the desired row columns and set their JSON tags in the outer DQL. For
+  example, selecting only `orders.ID` and `orders.TOTAL` creates a narrower row
+  shape; retain only the corresponding type/tag annotations. The inner query
+  can still use `CUSTOMER_ID` for filtering.
+
+The named input and output types also identify the reader's request/output hook
+receivers: `OrdersInput.Init` and `OrdersOutput.Finalize`. Row processing such as
+`OnFetch` belongs to the row type. See [reader hooks](hooks.md) and
+[custom output](errors-and-output.md#shape-an-ordinary-typed-output).
 
 This reader fragment declares an input binding and a parameterized query. It
 requires the named connector/table and does not itself establish that the caller

@@ -49,6 +49,19 @@ an envelope, summary or selected fields. Generated output shapes are selected by
 DQL output declarations/type settings; they are not an automatic mirror of all
 database columns or a combined reader/writer component.
 
+For a reader, name the output holder as well as the output type:
+
+```sql
+#setting($_ = $output_type('OrdersOutput'))
+#define($_ = $Orders<[]*Order>(output/view).WithTag('json:"orders"'))
+```
+
+`output/view` binds the main reader result to `OrdersOutput.Orders`. The `Order`
+row shape is declared by `type(orders, 'Order')` in the outer query. This yields
+an object with an `orders` collection; the output type setting alone does not
+express that association. The [complete reader example](programming-model.md#dql-describes-the-data-operation)
+shows the query, row JSON tags, generated public shape and resulting JSON.
+
 Use JSON tags, explicit output holders and supported selector/exclusion settings
 to define the public shape. Custom handlers can fill a typed output directly.
 Output finalizers can enrich it at the supported lifecycle point. Do not expose
