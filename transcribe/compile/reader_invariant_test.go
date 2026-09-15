@@ -176,7 +176,6 @@ func TestReaderInvariantNativeParserRegressions(t *testing.T) {
 		{"CASE annotation", `SELECT orders.*,CASE WHEN orders.ID=1 THEN invariant(orders.WINDOW_START,'DeliveryWindow') ELSE 0 END AS invalid FROM (SELECT o.* FROM ORDERS o) orders`, "sqlparser operand.go:89 emits CASE as expr.Switch.Raw without Cases"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Skip("requires native dependency fix: " + tc.blocker)
 			_, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Orders", Source: &spec.ViewSource{SQL: tc.SQL}}, SQL: tc.SQL})
 			if err == nil {
 				t.Fatal("malformed or misplaced invariant was accepted")
