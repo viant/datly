@@ -52,6 +52,17 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 		imports[alias] = path
 	}
 	resolver := xshape.Resolver{Package: config.PackagePath, Imports: imports}
+	nameCounts := map[string]int{}
+	for _, record := range l.records {
+		if record.plan.Auxiliary || record.plan.Entity == nil || !record.plan.Entity.Hooks.IsZero() {
+			continue
+		}
+		reference, err := resolver.Reference(record.value.base)
+		if err != nil {
+			return nil, err
+		}
+		nameCounts[reference.BaseName+"Lifecycle"]++
+	}
 	for _, record := range l.records {
 		if record.plan.Auxiliary {
 			continue
@@ -62,9 +73,17 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 		if !record.plan.Entity.Hooks.IsZero() {
 			continue
 		}
-		identity := record.plan.Identity + "\x00" + strings.Join(record.plan.InputPath, "\x00")
-		digest := sha256.Sum256([]byte(identity))
-		name := strings.TrimPrefix(l.factory, "New") + fmt.Sprintf("EntityHooks_%x", digest[:6])
+		reference, err := resolver.Reference(record.value.base)
+		if err != nil {
+			return nil, err
+		}
+		name := reference.BaseName + "Lifecycle"
+		if nameCounts[name] > 1 {
+			// One entity can have distinct parent contracts in separate view roles.
+			identity := record.plan.Identity + "\x00" + strings.Join(record.plan.InputPath, "\x00")
+			digest := sha256.Sum256([]byte(identity))
+			name += fmt.Sprintf("_%x", digest[:6])
+		}
 		if err := l.reserveDeclaration(name); err != nil {
 			return nil, err
 		}

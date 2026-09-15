@@ -64,6 +64,9 @@ func TestMutationScaffoldTypedRolesAndImmutablePlan(t *testing.T) {
 		}
 		names[i] = ref.BaseName
 	}
+	if names[0] != "OrderLifecycle" || !strings.HasPrefix(names[1], "NodeLifecycle_") || !strings.HasPrefix(names[2], "NodeLifecycle_") {
+		t.Fatalf("lifecycle names = %v", names)
+	}
 	if names[1] == names[2] || asset.Bindings[1].Entity != asset.Bindings[2].Entity || asset.Bindings[1].Parent == asset.Bindings[2].Parent {
 		t.Fatal("role/parent authority collapsed")
 	}
