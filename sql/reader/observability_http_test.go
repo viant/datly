@@ -30,7 +30,11 @@ func TestHTTPMetricsHeadersPreserveNativeSQLSQLite(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer private-JWT")
 	request.Header.Set("Datly-Show-Metrics", "true")
 	response := httptest.NewRecorder()
-	gateway.NewHandler(app, nil, "test").ServeHTTP(response, request)
+	handler, err := (gateway.Config{Metrics: &gateway.MetricsConfig{}}).NewHandler(app, nil, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler.ServeHTTP(response, request)
 	if response.Code != 200 {
 		t.Fatal(response.Body.String())
 	}

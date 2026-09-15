@@ -295,7 +295,7 @@ func TestReaderPartialErrorRetainsCollectorCountsSQLite(t *testing.T) {
 		_, err = app.InvokeComponent(context.WithValue(xexec.WithContext(ctx, panicked), observationPanicKey{}, true), dexec.ComponentRequest{Target: dexec.ComponentTarget{Component: artifact.Component.Key, Route: spec.RouteRef{Method: "GET", Path: "/graph"}}, Input: &struct{}{}})
 	}()
 	if caught != nil || err == nil || err.Error() != "handler invocation panicked" || len(panicked.Metrics) != 1 || panicked.Metrics[0].Error != "reader panicked" || panicked.Metrics[0].Executions[0].Error != "reader panicked" {
-		t.Fatal("panic contract or failure metadata lost")
+		t.Fatalf("panic contract or failure metadata lost: caught=%v err=%v metrics=%+v", caught, err, panicked.Metrics)
 	}
 }
 
