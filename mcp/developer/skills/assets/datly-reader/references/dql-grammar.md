@@ -740,24 +740,19 @@ authored code to bypass that guard.
 
 ## Constants and instance-specific substitution boundary
 
-See [Constants and substitutions](constants-and-substitutions.md) for the
-current supported constant declarations and the substitution-file limitation.
-Typed `const` parameters and the component `const(name,value)` setting are
-supported. The current compiler synthesizes constant parameters and resolves its
-explicit constant-backed table forms; this is not evidence of a general
-instance-specific source/resource substitution pipeline. Documentation
-`docSubstitutes` metadata serves documentation dictionaries only.
+See [Constants and substitutions](constants-and-substitutions.md) for typed DQL
+defaults and per-instance YAML/JSON overrides. `datly transcribe ... -const`
+and standalone `ConstURL` load one trusted flat mapping. A present override,
+including zero, false or an empty string, wins; an omitted name retains its DQL
+default. Runtime request data cannot override constants.
 
-The intended extension reuses constants with per-instance values for qualified
-table identifiers and resource paths across E2E and production. Expanded values
-must **never be persisted** into authored DQL, reusable resources or generated
-source artifacts: substitution belongs in transient before-database work for
-column discovery and execution. This is the required direction, not a claim
-that the extension is already implemented. The current guide describes the
-limitation; no new flag, profile loader or persistence-reversal mechanism is
-implied here. Identifier-expression spellings belong to the final language
-section. Do not treat compile-time metadata resolution as proof of this E2E
-lifecycle or silently rewrite a reusable source for one instance.
+Constants can select qualified table roots and resource paths across E2E and
+production instances. `$project.dataset.table` is supported. Braced table roots
+such as `${project}.dataset.table` require the published SQL parser version
+identified in the constants guide; quote the whole BigQuery or legacy identifier
+when required by that database. Expansion is transient before database discovery,
+SQL execution or resource access. Authored DQL, reusable resources and generated
+source retain the unexpanded spelling.
 
 ## Resources, static content and documentation
 
@@ -924,16 +919,14 @@ This protection does **not** apply to the separate embedded-resource scan below.
 
 These fixed query-context references preserve bindings and pagination semantics. Declare optional filters through typed predicates and relation membership through JOIN keys; the generator derives parent membership and all bound query fragments.
 
-### Constant identifiers and planned per-instance expressions
+### Constant identifiers and per-instance expressions
 
-The current [constants guide](constants-and-substitutions.md) documents explicit
-`$Unsafe.Table` identifier constants separately from bound SQL values. Do not
-claim that this implements general `$Name`/`${Name}` substitution or configured
-URL/profile loading. The requested per-instance form, such as `$project.ds.table`,
-and constants in resource paths belong to the planned extension described
-above. They are not added as supported productions in this grammar. Its contract
-is transient expansion before database discovery/execution, with the unexpanded
-source preserved for all instances. No substitution flags are introduced here.
+The [constants guide](constants-and-substitutions.md) documents the supported
+identifier forms, YAML/JSON instance files, CLI and standalone configuration.
+Identifier constants are trusted deployment configuration; ordinary request
+values remain SQL bind parameters. Expansion happens only in a private
+database-bound or resource-access copy, so discovery and execution use the same
+instance value without persisting it into the DQL or generated artifacts.
 
 ### Parent-query helpers and bound fragments
 
