@@ -165,12 +165,13 @@ func TestManagerHTTPConfigDecodedDefaultsAndPresenceSQLite(t *testing.T) {
 		origin, credentials string
 		warmStatus          int
 	}{
-		{"original defaults", `{}`, "https://test.example", "true", 200},
+		{"default noncredentialed CORS", `{}`, "https://test.example", "", 200},
 		{"explicit empty CORS", `{"CORS":{}}`, "", "", 200},
 		{"disable overrides route", `{"DisableCors":true}`, "", "", 200},
 		{"false and empty methods", `{"CORS":{"AllowOrigins":["*"],"AllowCredentials":false,"AllowMethods":[]}}`, "", "", 200},
+		{"explicit credentialed origin", `{"CORS":{"AllowOrigins":["https://test.example"],"AllowCredentials":true}}`, "https://test.example", "true", 200},
 		{"false credentials", `{"CORS":{"AllowOrigins":["*"],"AllowCredentials":false}}`, "https://test.example", "", 200},
-		{"whitespace disables warmup", `{"Meta":{"CacheWarmURI":" "}}`, "https://test.example", "true", 404},
+		{"whitespace disables warmup", `{"Meta":{"CacheWarmURI":" "}}`, "https://test.example", "", 404},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &httpReloadFixture{}

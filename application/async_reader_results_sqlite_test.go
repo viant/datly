@@ -188,7 +188,7 @@ func (f *readerResultsFixture) compile(ctx context.Context, _ *typecatalog.Catal
 		}
 		routes = append(routes, route)
 	}
-	return &application.Build{Components: components, HTTP: gateway.Config{Async: routes}}, nil
+	return &application.Build{Components: components, HTTP: gateway.Config{Async: routes, Metrics: &gateway.MetricsConfig{}}}, nil
 }
 
 type countedResultReader struct {
