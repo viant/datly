@@ -48,10 +48,9 @@ missing heading fragments and invalid skill metadata fail packaging. There is no
 unresolved-reference warning mode. Keep the complete source/profile together and
 re-run packaging when product documentation changes.
 
-Readiness: high-level operation-based `gen` has been delivered in the isolated
-`/tmp/datly-gen-patch-work` review worktree and is under review. It is not claimed
-to be in the released CLI. Skills require discovery of the connected capability
-and reporting missing `gen`; lower-level transcription is not a substitute.
+Readiness: the v1 CLI uses `datly transcribe get|patch|post|put`, with Go output
+by default. Developer MCP targets declare their configured generation operation. Skills require discovery of the connected capability
+and reporting missing `transcribe`; lower-level transcription is not a substitute.
 Packaging validates documents and metadata, not generated endpoint behavior.
 
 Each materialized skill carries Datly LICENSE/NOTICE and xdatly LICENSE files from

@@ -18,7 +18,7 @@ import (
 )
 
 func TestGenCommandBoundary(t *testing.T) {
-	for _, args := range [][]string{{"gen"}, {"gen", "-op", "delete", "example.com/app/orders"}, {"gen", "-op", "patch", "-lang", "java", "example.com/app/orders"}, {"gen", "-op", "patch", "-dest", "wrong", "example.com/app/orders"}, {"gen", "-op", "patch", "-dsn", "unused", "example.com/app/orders"}} {
+	for _, args := range [][]string{{"transcribe"}, {"transcribe", "delete", "example.com/app/orders"}, {"transcribe", "patch", "-lang", "java", "example.com/app/orders"}, {"transcribe", "patch", "-dest", "wrong", "example.com/app/orders"}, {"transcribe", "patch", "-dsn", "unused", "example.com/app/orders"}} {
 		var out, diagnostic bytes.Buffer
 		if code := run(context.Background(), args, &out, &diagnostic); code != 2 || diagnostic.Len() == 0 {
 			t.Fatalf("%v: %d %s", args, code, &diagnostic)
@@ -44,7 +44,7 @@ func TestGenCommandSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, diagnostic bytes.Buffer
-	args := []string{"gen", "-dir", root, "-op", "patch", "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), "github.com/viant/datly/gencommand/orders"}
+	args := []string{"transcribe", "patch", "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), "github.com/viant/datly/gencommand/orders"}
 	if code := run(ctx, args, &out, &diagnostic); code != 0 {
 		t.Fatalf("code=%d %s", code, &diagnostic)
 	}
@@ -161,7 +161,7 @@ func TestGenExecutableDestinations(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	args := []string{"run", ".", "gen", "-dir", root, "-op", "patch", "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module + "/source"}
+	args := []string{"run", ".", "transcribe", "patch", "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module + "/source"}
 	for iteration := 0; iteration < 2; iteration++ {
 		command := exec.CommandContext(ctx, "go", args...)
 		if output, err := command.CombinedOutput(); err != nil {
@@ -180,5 +180,49 @@ func TestGenExecutableDestinations(t *testing.T) {
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("CLI products: %v\n%s", err, output)
+	}
+}
+
+func TestTranscribeOperationsSQLite(t *testing.T) {
+	ctx := context.Background()
+	db := sqlite.New(t)
+	if err := db.ExecStatements(ctx, genpatch.Schema...); err != nil {
+		t.Fatal(err)
+	}
+	for _, operation := range []string{"get", "patch", "post", "put"} {
+		t.Run(operation, func(t *testing.T) {
+			root := t.TempDir()
+			const module = "github.com/viant/datly/transcribecommand"
+			(testharness.GeneratedModule{Path: module}).Write(t, root)
+			sourceDir := filepath.Join(root, "source")
+			if err := os.Mkdir(sourceDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			source := strings.Replace(genpatch.DQL, "'PATCH'", "'"+strings.ToUpper(operation)+"'", 1)
+			if err := os.WriteFile(filepath.Join(sourceDir, "Orders.dql"), []byte(source), 0644); err != nil {
+				t.Fatal(err)
+			}
+			var out, diagnostic bytes.Buffer
+			args := []string{"transcribe", operation, "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module + "/source"}
+			if code := run(ctx, args, &out, &diagnostic); code != 0 {
+				t.Fatalf("exit %d: %s", code, &diagnostic)
+			}
+			if !strings.Contains(out.String(), "Generated go "+operation) {
+				t.Fatal(&out)
+			}
+			_, err := os.Stat(filepath.Join(root, "api", "orders", "orders_hooks.go"))
+			if operation == "get" {
+				if !os.IsNotExist(err) {
+					t.Fatalf("reader generated mutation hooks: %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			command := exec.CommandContext(ctx, "go", "test", "-mod=mod", "./api/orders")
+			command.Dir = root
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("generated %s compile: %v\n%s", operation, err, output)
+			}
+		})
 	}
 }

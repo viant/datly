@@ -182,7 +182,7 @@ LEFT JOIN (
 Generate the Go writer from the source package containing that DQL:
 
 ```sh
-datly gen -op patch \
+datly transcribe patch \
   -dir "$PROJECT" \
   -schema -connector main -driver sqlite3 -dsn "$PROJECT/orders.db" \
   example.com/shop/source

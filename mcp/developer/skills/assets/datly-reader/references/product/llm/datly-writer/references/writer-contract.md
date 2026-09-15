@@ -25,7 +25,7 @@ Keep authorization filters and current-row lookups scoped to the caller. A recor
 
 ## 2. Select graph generation and contract ownership
 
-The standard authoring surface is a reader-like DQL graph plus an explicit `gen`
+The standard authoring surface is a reader-like DQL graph plus an explicit `transcribe`
 operation and pure Go output. Link authoritative application types when they
 exist; otherwise generate owned shapes. Application Go hooks carry business
 rules. Generation owns binding, Previous reads and mutation orchestration.
@@ -45,13 +45,13 @@ remove dropped owned columns without rewriting unrelated authored content.
 
 Route method and operation must agree. Custom Go orchestration is an explicit
 application choice; it is not a replacement for missing high-level generation.
-Discover connected `gen` support as described in
+Discover connected `transcribe` support as described in
 [developer-mcp.md](references/product/llm/datly-writer/references/developer-mcp.md).
 
 ## 3. Go shapes and tags
 
 Inspect the generated row shape or link an existing authoritative application type.
-The fragment below explains SQL mapping and internal presence; standard `gen`
+The fragment below explains SQL mapping and internal presence; standard `transcribe`
 derives component/body/output binding and its handler from the DQL graph.
 
 ```go
@@ -125,7 +125,7 @@ The generator derives body/output bindings and typed Previous reads restricted t
 all requested original identity tuples and declared authorization. Check the
 preview for complete composite keys, authorized scope and no accidental
 pagination/truncation. Do not author manual Body/Existing/Data or key-extraction
-plumbing for standard `gen`. The generator must report unsupported metadata or
+plumbing for standard `transcribe`. The generator must report unsupported metadata or
 capabilities instead of producing a broader table scan.
 
 ## 5. Required generated mutation lifecycle
@@ -355,7 +355,7 @@ This section is a delivery warning, not a reduction of the target contract above
 
 | Area | Current checkout status |
 |---|---|
-| High-level graph + operation `gen` to pure Go | Implementation delivered in an isolated review worktree; under review. Release CLI availability is not established. Discover connected support; missing `gen` remains a reported capability gap. |
+| High-level graph + operation `transcribe` to pure Go | Available as `datly transcribe <operation>` (`get`, `patch`, `post`, `put`) in the v1 source CLI. Go is the default output; inspect the connected MCP target metadata for server operation support. |
 | Original snapshots, recursive sync, typed hooks, invariant helpers, typed Previous evidence, sequencing/diff/reconcile/queue, output/finalization | Required generated behavior. Verify generated Go fixtures and hook preservation on the connected build; parser or metadata acceptance alone does not establish it. |
 | Framework Go + DB validation, schema-to-validate tags, and DQL validation customization execution | Current framework Go/database validation and generated NOT NULL/customization paths have native/generated SQLite tests. Complete UNIQUE/reference discovery is not established; authored native UNIQUE tags remain explicit. Relation-produced FK deferral is restricted to captured parent INSERTs and final validation runs before Queue. Never substitute custom-hook-only validation or infer constraint absence from missing metadata. |
 | Native `OnInsert` / `OnUpdate` callbacks and native default generators inside the generic post-validation write path | Explicitly rejected by generic policy until moved to a safe earlier phase. Ordinary custom handlers retain native behavior. |

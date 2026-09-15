@@ -10,10 +10,9 @@ every connected build.
 ## Select high-level generation
 
 Use a reader-like DQL graph, auxiliary tables in parentheses, DQL entity hooks
-and invariant tags, and explicit `gen` operation with pure Go output. The
-implementation is delivered in an isolated review worktree and is under review;
-release CLI availability is not established. Discover the connected capability
-using [developer-mcp.md](references/product/llm/datly-writer/references/developer-mcp.md). Missing `gen` is a reported
+and invariant tags, and explicit `transcribe` operation with pure Go output. The
+implementation is available in the v1 source CLI. Discover the connected MCP capability
+using [developer-mcp.md](references/product/llm/datly-writer/references/developer-mcp.md). Missing `transcribe` is a reported
 gap, not a reason to author body/output/Current plumbing or use translation.
 
 ## Stable IDs and relation-produced validation

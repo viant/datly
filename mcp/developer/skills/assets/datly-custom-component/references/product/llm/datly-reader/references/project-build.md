@@ -5,7 +5,7 @@ packages, reachable types and typed factories. Discovery/linking is internal;
 do not require application `init()`, `Register()`, blank-import lists or aggregate
 registration functions. Ordinary imports express real code dependencies.
 
-Operation-based `gen` to pure Go precedes building generated components; first
+Operation-based `transcribe` to pure Go precedes building generated components; first
 verify the connected generation capability in [developer-mcp.md](references/product/llm/datly-reader/references/developer-mcp.md).
 Preserve authored hooks, resource manifests, Go workspace/tags/target settings
 and existing module choices. New packages are found by normal traversal; runtime

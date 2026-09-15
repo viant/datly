@@ -4,7 +4,7 @@
 
 Inspect `datly.transcribe` tool metadata at `datly.authoringTargets` before
 choosing a target. A target with `enabled: true`, `mode: generation`, and the
-required `operation` uses the same generator as `datly gen`; prefer `language: go`.
+required `operation` uses the same generator as `datly transcribe <operation>`; prefer `language: go`.
 Submit only its configured target name and the authored DQL as `source`. The DQL
 must include `#package`. The server owns the operation, destination, project
 imports and schema authority; do not send client path or compiler overrides.
@@ -26,7 +26,7 @@ substitute lower-level translation or manual writer plumbing.
 For a matching `v1` CLI:
 
 ```sh
-datly gen -op patch -lang go -dir /path/to/application example.com/application/records
+datly transcribe patch -lang go -dir /path/to/application example.com/application/records
 ```
 
 Use `post`, `put` or `get` for the corresponding operation. Select one component
@@ -135,7 +135,7 @@ Use project conventions and existing shapes when clear. Ask about ambiguous writ
 1. Inspect the current package, schema, shapes and tool capabilities.
 2. Draft the declarative DQL graph and application Go hooks (or preserve an explicitly requested existing Go contract).
 3. Parse and validate. Resolve unknown types/aliases/columns/providers instead of fabricating substitutes.
-4. Discover and select the `gen` operation with pure Go output. Preview the resulting files, public schema, generated binding/Previous reads, dependencies and exposure. If `gen` is absent, report it and keep the authoring artifacts; do not substitute translation.
+4. Discover and select the `transcribe` operation with pure Go output. Preview the resulting files, public schema, generated binding/Previous reads, dependencies and exposure. If `transcribe` is absent, report it and keep the authoring artifacts; do not substitute translation.
 5. Exercise data-driven SQLite fixtures and inspect actual responses/DB state. For a vendor-sensitive feature also validate that vendor's dialect and limits.
 6. Apply the approved development change using expected revision/hash where supported.
 7. Re-read the resulting component and verify generation, schema and route/tool visibility.

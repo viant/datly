@@ -1,6 +1,6 @@
 ---
 name: datly-reader
-description: Author Datly readers with declarative DQL graphs and gen get to pure Go, linked shapes, typed relations, selectors, DerivedViews, cubes, and MCP exposure.
+description: Author Datly readers with declarative DQL graphs and transcribe get to pure Go, linked shapes, typed relations, selectors, DerivedViews, cubes, and MCP exposure.
 ---
 
 # Datly Reader Components
@@ -13,10 +13,8 @@ This skill is for application developers, not Datly framework contributors. Expl
 
 The references describe the **required Datly 1.0 authoring contract**, including features under development. Those features remain part of the requested design. A capability missing from the connected build is an implementation gap, not permission to drop a requirement, invent syntax, or silently choose another architecture. Compile/validate against the connected developer server and report a missing capability precisely.
 
-**Generation availability.** The high-level `gen` implementation is delivered in
-an isolated review worktree and is under review; it is not established as part
-of the release CLI. Discover the connected developer server and installed CLI
-capabilities before generation. If operation-based `gen` with pure Go output is
+**Generation availability.** The v1 CLI exposes `datly transcribe get|patch|post|put` with Go output by default. Discover the connected developer server and installed CLI
+capabilities before generation. If operation-based `transcribe` with pure Go output is
 missing, return the DQL and application hook contract and report that gap. Do not
 substitute `translate`, lower-level transcription, or manual writer plumbing.
 
@@ -40,7 +38,7 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 
 ## Authoring workflow
 
-The standard workflow is **reader-like declarative DQL graph + explicit `gen`
+The standard workflow is **reader-like declarative DQL graph + explicit `transcribe`
 operation (`get`, `patch`, `post`, `put`) → generated pure Go**. Declare auxiliary
 tables in parentheses, entity hooks and invariant tags in DQL. The generator owns
 binding, Previous reads, presence, validation and write orchestration; application

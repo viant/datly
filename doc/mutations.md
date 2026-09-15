@@ -35,16 +35,16 @@ Select the write operation in the CLI and declare its matching HTTP route in DQL
 
 | CLI operation | Route method | Intent |
 | --- | --- | --- |
-| `-op patch` | `PATCH` | Apply supplied fields while preserving omitted values. |
-| `-op post` | `POST` | Insert the writable graph. |
-| `-op put` | `PUT` | Apply the generated update policy for the writable graph. |
+| `patch` | `PATCH` | Apply supplied fields while preserving omitted values. |
+| `post` | `POST` | Insert the writable graph. |
+| `put` | `PUT` | Apply the generated update policy for the writable graph. |
 
 Generation emits Go and creates the request/output contracts and state reads
 needed by the operation. The route method alone does not generate that code.
 For a sparse update, Datly matches the authorized previous database rows using
 complete identities; the application authors the graph and lifecycle behavior.
 
-A reader is generated separately with `-op get` and its own DQL/package. An
+A reader is generated separately with `get` and its own DQL/package. An
 existing application handler remains an explicit alternative with its own
 orchestration; it is not required for this generated-writer workflow.
 
@@ -69,16 +69,20 @@ This is the same outer-view structure used for a reader. The selected operation
 controls generation; writer annotations add behavior to its graph. Reader and
 writer DQL are authored independently and can select different fields, relations
 and filters.
-Body contracts, key projections and Current-state declarations belong to the
-**generated output**, not to the minimum hand-authored input:
+Declare the input and output contract names alongside their destination package.
+The generator derives their fields, key projections and Current-state declarations
+from the graph:
 
 ```sql
 #package('example.com/shop/orders/write')
+#setting($_ = $input_type('OrdersInput'))
+#setting($_ = $output_type('OrdersOutput'))
 #setting($_ = $route('/orders', 'PATCH'))
 #setting($_ = $connector('main'))
 SELECT orders.*, items.*, kind.*,
        type(orders, 'Order'),
        type(items, 'Item'),
+       type(kind, 'Kind'),
        invariant(orders.WINDOW_START, 'DeliveryWindow'),
        invariant(orders.WINDOW_END, 'DeliveryWindow')
 FROM (
@@ -95,6 +99,10 @@ LEFT JOIN (
 The database metadata supplies the real column types and keys. Use a start/end
 date pair for WINDOW_START/WINDOW_END. The generator derives the request graph,
 Previous reads and typed Go write support for the selected PATCH operation.
+`input_type` and `output_type` name the component contracts (`OrdersInput` and
+`OrdersOutput`) in the declared package. The outer `type(orders, 'Order')` and
+`type(items, 'Item')` and `type(kind, 'Kind')` annotations name the individual shapes inside that
+graph; they do not replace the input or output contract declarations.
 StructQL key projection is generated plumbing; the application should not need
 to write a template loop to load Current rows.
 
@@ -118,28 +126,28 @@ DQL owns the Go package and shape declarations.
 The high-level generation command is available in the `v1` source tree:
 
 ```sh
-datly gen -op patch \
+datly transcribe patch \
   -dir "$PROJECT" \
   -schema -connector main -driver sqlite3 -dsn "$PROJECT/orders.db" \
   example.com/shop/orders/source
 ```
 
 `-dir` selects the existing project/module root. The final argument selects the
-source package containing the DQL. `-op` selects the operation; `-schema` and the
+source package containing the DQL. The first argument after `transcribe` selects the operation; `-schema` and the
 connector options select the database metadata used for generation. The generator
 emits pure Go into the package declared by DQL. Use separately authored reader DQL
-and `-op get` for the reader; do not generate a combined reader/writer declaration.
+and `get` for the reader; do not generate a combined reader/writer declaration.
 
 This is a command-line workflow. Application authors should not need to construct
 compiler objects, metadata registries, body contracts or Current queries in Go.
 
 
-Original Datly separates `gen` from `translate`. The `gen` PATCH workflow
+Original Datly separates `transcribe` from `translate`. The `transcribe` PATCH workflow
 starts from the graph description, constructs the write contract and logic, then
 passes its generated result through compilation/translation. Translating an
 already-complete writer declaration is a lower-level operation.
 
-Use `datly gen` for this high-level workflow. Lower-level transcription accepts
+Use `datly transcribe <operation>` for this high-level workflow. Lower-level transcription accepts
 already-authored contracts and is a separate API; application authors do not need
 to recreate those contracts to generate a standard writer.
 
@@ -180,7 +188,7 @@ so their default lifecycle structs are `OrderLifecycle` and `ItemLifecycle`.
 No lifecycle import is needed to request these default placeholders.
 
 The example assumes the three database tables above and date/time columns for
-WINDOW_START and WINDOW_END. Run the shown `datly gen -op patch` command from a
+WINDOW_START and WINDOW_END. Run the shown `datly transcribe patch` command from a
 build containing the high-level generator. Generation inspects the schema and
 produces source; it does not execute the application's mutations.
 
@@ -463,6 +471,10 @@ Has/set-marker information alongside the working fields.
 Use `state.Original.Has("Note")` to ask about client intent. Use the working
 marker or a generated setter to manage a deliberate application change. Field
 names in these contracts are canonical Go field names, not guessed SQL aliases.
+`Original.Has` does not use a string-keyed presence map: its generated switch
+reads boolean fields from a private captured marker. The working entity retains
+its generated typed marker, such as `entity.Has.Note`. The shared hook interface
+exposes the immutable snapshot without letting hooks change the captured bits.
 
 ## Understand SyncPresence
 

@@ -13,10 +13,8 @@ This skill is for application developers, not Datly framework contributors. Expl
 
 The references describe the **required Datly 1.0 authoring contract**, including features under development. Those features remain part of the requested design. A capability missing from the connected build is an implementation gap, not permission to drop a requirement, invent syntax, or silently choose another architecture. Compile/validate against the connected developer server and report a missing capability precisely.
 
-**Generation availability for requested graph generation.** The high-level `gen` implementation is delivered in
-an isolated review worktree and is under review; it is not established as part
-of the release CLI. Discover the connected developer server and installed CLI
-capabilities before generation. If operation-based `gen` with pure Go output is
+**Generation availability for requested graph generation.** The v1 CLI exposes `datly transcribe get|patch|post|put` with Go output by default. Discover the connected developer server and installed CLI
+capabilities before generation. If operation-based `transcribe` with pure Go output is
 missing, return the DQL and application hook contract and report that gap. Do not
 substitute `translate`, lower-level transcription, or manual writer plumbing.
 

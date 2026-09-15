@@ -32,7 +32,7 @@ Missing per-target authoring/application capability is not permission to infer o
 
 For high-level DQL generation, set the authoring request's `Generation.Operation`
 to `get`, `patch`, `post`, or `put`. Go is the default language. This uses the same
-generator as `datly gen`: GET produces reader code, while write operations produce
+generator as `datly transcribe <operation>`: GET produces reader code, while write operations produce
 mutation code and create-once Lifecycle placeholders. The DQL must declare its
 destination with `#package`. Configure separate targets when exposing different
 operations; clients submit only the target name and DQL source.

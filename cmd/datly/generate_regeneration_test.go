@@ -78,7 +78,7 @@ func TestGenExecutableNamedGraphRegeneration(t *testing.T) {
 				}
 				return result
 			}
-			args := []string{"gen", "-dir", root, "-op", "patch", "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module + "/source"}
+			args := []string{"transcribe", "patch", "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module + "/source"}
 			run := func(t *testing.T, failure bool) {
 				t.Helper()
 				output, err := exec.CommandContext(ctx, binary, args...).CombinedOutput()

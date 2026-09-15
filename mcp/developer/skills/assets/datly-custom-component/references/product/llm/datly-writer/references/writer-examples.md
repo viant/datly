@@ -19,11 +19,11 @@ JOIN (SELECT c.* FROM record_children c) children ON children.record_id = record
 JOIN (SELECT l.* FROM (lookup_values) l) lookup ON lookup.id = records.lookup_id
 ```
 
-Select `gen` operation `patch` with pure Go output; for a build advertising the
+Select `transcribe` operation `patch` with pure Go output; for a build advertising the
 reviewed interface:
 
 ```sh
-datly gen -op patch -lang go -dir /path/to/application example.com/app/records
+datly transcribe patch -lang go -dir /path/to/application example.com/app/records
 ```
 
 High-level generation is available in the `v1` source CLI. Discover connected

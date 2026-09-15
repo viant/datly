@@ -46,7 +46,7 @@ func TestGenExecutableRequiresPackage(t *testing.T) {
 				if err := os.WriteFile(file, []byte(source), 0644); err != nil {
 					t.Fatal(err)
 				}
-				command := exec.CommandContext(ctx, binary, "gen", "-dir", root, "-op", operation, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), "example.com/generated/source")
+				command := exec.CommandContext(ctx, binary, "transcribe", operation, "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), "example.com/generated/source")
 				output, err := command.CombinedOutput()
 				if tc.valid {
 					if err != nil {

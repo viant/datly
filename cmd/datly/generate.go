@@ -11,21 +11,43 @@ import (
 )
 
 func generationCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("gen", flag.ContinueOnError)
+	name := args[0]
+	operationValue := ""
+	arguments := args[1:]
+	if name == "transcribe" {
+		if len(arguments) == 0 {
+			fmt.Fprintln(stderr, "usage: datly transcribe get|patch|post|put [options] module/package")
+			return 2
+		}
+		if arguments[0] != "-h" && arguments[0] != "--help" {
+			operationValue, arguments = arguments[0], arguments[1:]
+			if operationValue != "get" && operationValue != "patch" && operationValue != "post" && operationValue != "put" {
+				fmt.Fprintln(stderr, "transcribe requires operation get|patch|post|put before options")
+				return 2
+			}
+		}
+	}
+	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	if name == "transcribe" {
+		flags.Usage = func() {
+			fmt.Fprintln(stderr, "usage: datly transcribe get|patch|post|put [options] module/package")
+			flags.PrintDefaults()
+		}
+	}
 	directory := flags.String("dir", ".", "project root; DQL/package metadata controls artifact destinations")
-	operation := flags.String("op", "", "operation: get, patch, post or put")
+	operation := &operationValue
 	language := flags.String("lang", "go", "handler language: go or velty")
 	var schema schemaOptions
 	schema.flags(flags)
-	if err := flags.Parse(args[1:]); err != nil {
+	if err := flags.Parse(arguments); err != nil {
 		if err == flag.ErrHelp {
 			return 0
 		}
 		return 2
 	}
 	if flags.NArg() != 1 || (*operation != "get" && *operation != "patch" && *operation != "post" && *operation != "put") || (*language != "go" && *language != "velty") {
-		fmt.Fprintln(stderr, "gen requires -op get|patch|post|put, -lang go|velty and one module-qualified source package")
+		fmt.Fprintln(stderr, "transcribe requires get|patch|post|put, optional -lang go|velty and one module-qualified source package")
 		return 2
 	}
 	if err := schema.validate(); err != nil {
@@ -44,7 +66,7 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 		return 1
 	}
 	if len(project.Components) != 1 {
-		fmt.Fprintf(stderr, "gen requires exactly one component in the selected source package; found %d\n", len(project.Components))
+		fmt.Fprintf(stderr, "transcribe requires exactly one component in the selected source package; found %d\n", len(project.Components))
 		return 1
 	}
 	generated, err := (transcribe.Generator{Operation: *operation, Language: transcribe.HandlerTarget(*language)}).Generate(ctx, transcribe.GenerationRequest{Compiled: project.Components[0], Destination: *directory})
