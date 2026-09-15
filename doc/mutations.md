@@ -377,15 +377,44 @@ sequence/queue observations shown above, or explicitly author custom orchestrati
 
 | State | Source | Meaning |
 | --- | --- | --- |
-| Original presence/identity | Detached capture before input Init | What the client supplied and how the original operation is classified |
+| Original presence/identity | Detached capture before input Init | What the client actually supplied, independently of later identity resolution |
 | Working values/markers | Bound and subsequently prepared entity | What validation, sequencing and DML currently process |
 | Previous row | Authored database Current read | Existing database values for comparison/backfill |
 | Previous field evidence | Completed typed read projection | Which Previous fields are known, rather than omitted from that read |
 
-An initialized or sequenced ID does not turn an originally new entity into an
-update. A Previous row is not the original request snapshot. Unknown Previous
+An ID allocated by sequencing is not evidence that a database row already exists.
+A Previous row is not the original request snapshot. Unknown Previous
 fields are not known zero values. These distinctions remain important in nested
 and self-referencing graphs.
+
+### Decide INSERT or UPDATE from Previous data
+
+The presence of an ID does not decide the operation. A caller may supply a new
+ID, and initialization may resolve an omitted ID to a row that already exists.
+The decision must come from matching the resolved, complete identity against the
+authoritative Previous snapshot:
+
+| Match result | Mutation decision |
+| --- | --- |
+| Matching Previous row exists | UPDATE, when permitted by the selected operation. |
+| No matching row exists | INSERT only when the selected operation and read scope permit it. |
+| Identity is incomplete, ambiguous or outside the allowed scope | Report the applicable error; do not guess an UPDATE. |
+
+Keep original request presence separate from resolved identity. Relationship
+reconciliation can identify an existing child before its mutation decision is
+fixed. Once matching has decided the operation, sequencing supplies IDs for new
+rows without reclassifying them as existing rows.
+
+Business initialization also needs typed indexes over previous and auxiliary
+collections: key-to-entity lookups and key-to-collection groupings. Those let
+lifecycle logic resolve related records and validate business rules efficiently.
+The matched row passed as `state.Previous` is useful, but does not replace access
+to those collections.
+
+**Implementation status:** internal Previous indexes exist today. Public generated
+collection indexes and matching identities resolved during initialization are
+being added. The current captured-key path must not be mistaken for completed
+support for that reconciliation workflow.
 
 ### Matching parents, children and deeper descendants
 
