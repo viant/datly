@@ -1,5 +1,20 @@
 # Developer MCP authoring workflow
 
+## High-level generation through MCP
+
+Inspect `datly.transcribe` tool metadata at `datly.authoringTargets` before
+choosing a target. A target with `enabled: true`, `mode: generation`, and the
+required `operation` uses the same generator as `datly gen`; prefer `language: go`.
+Submit only its configured target name and the authored DQL as `source`. The DQL
+must include `#package`. The server owns the operation, destination, project
+imports and schema authority; do not send client path or compiler overrides.
+Use separate configured targets for reader and writer operations. Check the
+result's mode, operation, language and generated file list, then validate the
+component and test its behavior. A target in `mode: transcribe` does not establish
+high-level generation support. If no matching target exists, use the matching CLI
+workflow or report the missing server configuration.
+
+
 ## Operation-based generation to pure Go
 
 **Generation availability.** Operation-based Go generation is available in the
