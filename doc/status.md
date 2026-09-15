@@ -58,6 +58,7 @@ while preserving exact nonempty JSON names; output and wire-schema tests pass.
 Skill packaging now validates links relative to their containing documents.
 
 Grouped/custom predicate examples and imported handler aliases are integrated.
-The comprehensive grammar reference and per-instance constant expansion from
-YAML/JSON files are still being completed. Release publication and version tags remain
+The comprehensive grammar reference and EBNF are integrated, with the DQL +
+Velty extension documented separately at the end. Per-instance constant expansion
+from YAML/JSON files is still being completed. Release publication and version tags remain
 separate from local commits and verification.

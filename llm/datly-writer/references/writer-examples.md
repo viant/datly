@@ -46,11 +46,11 @@ To use an existing foreign type, declare its package with
 `#import('hooks', 'example.com/app/recordhooks')` and name
 `lifecycle_type(records, 'hooks.RecordLifecycle')`. Author that type in its
 package; generation preserves it and does not create a foreign scaffold.
-Edit the create-once local lifecycle file; see [filename overrides](references/developer-mcp.md#operation-based-generation-to-pure-go)
+Edit the create-once local lifecycle file; see [filename overrides](developer-mcp.md#operation-based-generation-to-pure-go)
 for optional prefixes and exact destinations.
 
 High-level generation is available in the `v1` source CLI. Discover connected
-server support as described in [developer-mcp.md](references/developer-mcp.md); report a
+server support as described in [developer-mcp.md](developer-mcp.md); report a
 missing capability without substituting translation.
 
 The generator owns Body/Existing/Data binding, original identity tuple extraction,
@@ -60,7 +60,7 @@ parent links, writes and completion. Authors declare the graph and Go hook metad
 single holder, while the unmarked children relation stays many. Ordinary joins declare writable
 relations; composite links must include every key part. Schema discovery supplies
 actual identities, constraints and date types. Bind authorization explicitly using
-the [JWT input pattern](references/tags-and-interfaces.md#jwt-input-and-authorization-predicates).
+the [JWT input pattern](tags-and-interfaces.md#jwt-input-and-authorization-predicates).
 Current reads may discover children through authorized parent scope so input
 initialization can resolve omitted child IDs. Do not add manual key-extraction
 or pagination plumbing. Inspect the scope and generated read evidence.

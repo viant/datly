@@ -71,8 +71,5 @@
       "EndBefore": "## Verification",
       "Reason": "Maintained reader authoring examples and predicate composition semantics; excludes repository test navigation."
     }
-  },
-  "SkillRootLinks": [
-    "datly-writer"
-  ]
+  }
 }

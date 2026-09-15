@@ -1,6 +1,6 @@
 # Datly 1.0 writer contract
 
-For current enablement and pending integration boundaries, consult [availability-and-operations.md](references/availability-and-operations.md) when using operational or extension features below. Required behavior is not a claim of connected-build availability.
+For current enablement and pending integration boundaries, consult [availability-and-operations.md](availability-and-operations.md) when using operational or extension features below. Required behavior is not a claim of connected-build availability.
 
 Use this reference when authoring an application component that changes data. It describes the agreed Datly 1.0 contract, including required features still being integrated. Do not silently omit a required phase because the installed implementation is incomplete. Check the implementation-status section before promising that an endpoint meets the complete contract.
 
@@ -36,7 +36,7 @@ selects the generated writer output binding. Global Structology casing owns
 routine lowercase/camel-case presentation; do not add JSON tags or holder
 `WithTag` for that purpose. Generation owns binding, Previous reads and mutation
 orchestration.
-See [writer-examples.md](references/writer-examples.md) for the primary graph.
+See [writer-examples.md](writer-examples.md) for the primary graph.
 
 Existing Go-only components remain supported for explicitly chosen application
 contracts. Preserve their types and authored methods. In generated shapes,
@@ -53,7 +53,7 @@ remove dropped owned columns without rewriting unrelated authored content.
 Route method and operation must agree. Custom Go orchestration is an explicit
 application choice; it is not a replacement for missing high-level generation.
 Discover connected `transcribe` support as described in
-[developer-mcp.md](references/developer-mcp.md).
+[developer-mcp.md](developer-mcp.md).
 
 ## 3. Go shapes and tags
 
@@ -388,7 +388,7 @@ Import `response` from `github.com/viant/xdatly/response`. `ErrorPayload` is the
 
 The target HTTP and MCP adapters must preserve explicit status/body intent in their protocol-supported representation, including wrapped errors. Do not assume that setting an output field named `Status` changes HTTP status or MCP error state. `session.Response().SetStatusCode(code)` controls the response status; returning a typed error communicates failure. Validation and binding errors retain their safe authored status/message contracts.
 
-For scoped message-bus hook examples and the original async job/dry-run boundary, see [mutation-messages.md](references/mutation-messages.md).
+For scoped message-bus hook examples and the original async job/dry-run boundary, see [mutation-messages.md](mutation-messages.md).
 
 ## 14. Regeneration and delivery checks
 
@@ -425,4 +425,4 @@ This section is a delivery warning, not a reduction of the target contract above
 | Generic primary-key-changing updates | Unsupported; existing identities are restored. Use explicitly custom orchestration for a different policy. |
 | Ambiguous value associations or conflicting parent/self-holder contexts | Explicit errors, not guessed matches or arbitrary truncation. |
 
-Use the public interfaces and examples in [tags-and-interfaces.md](references/tags-and-interfaces.md) and [writer-examples.md](references/writer-examples.md). Application authoring does not require framework source access.
+Use the public interfaces and examples in [tags-and-interfaces.md](tags-and-interfaces.md) and [writer-examples.md](writer-examples.md). Application authoring does not require framework source access.

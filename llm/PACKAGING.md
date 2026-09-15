@@ -1,15 +1,16 @@
 # Authoring Skill Packaging
 
-Canonical reader/custom Markdown uses document-relative links: a reference
+Canonical reader/writer/custom Markdown uses document-relative links: a reference
 beside `reader-examples.md` links to `reader-examples.md`, not
 `references/reader-examples.md`. Product dependency links are also relative to
 the containing document; their `references/product/` targets are materialized
 from the exact import list below.
 
-`SkillRootLinks` explicitly identifies the untouched writer source as using
-skill-root-relative input links during its separate authoring update. The
-packager interprets that declared input base and emits document-relative links
-for every installed/embedded skill, including writer copies and imported docs.
+All canonical skill Markdown uses document-relative links. The writer references
+have been converted from their previously declared skill-root-relative source
+convention; `packaging.json` no longer selects `SkillRootLinks` for the writer.
+The packager emits document-relative links for installed/embedded skills and
+exact imported documents through its normal declared-source path.
 Do not hand-edit generated links or infer a source link base from file existence. `packaging.json` is the exact approved product
 reference import list; it is not a glob or a request to copy a repository.
 

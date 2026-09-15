@@ -1,29 +1,51 @@
-(* Datly-specific grammar plus explicitly delegated host languages.
-   Whitespace/comments are allowed between tokens unless a line directive says otherwise.
-   Arity/type/uniqueness rules are in dql-grammar.md. *)
-document = {package_line | import_line | setting | declaration | query | comment} ;
+(* High-level Datly DQL authoring grammar.
+   This is a structural EBNF, not an executable validator. SQL keywords and
+   directive/option names are case-insensitive in their owning parsers; names,
+   locations, imports and literal contents retain their authored authority.
+   Whitespace and SQL comments may separate tokens. Package/import directives
+   occupy complete lines. See dql-grammar.md for actual arity enforcement, duplicates,
+   registrations, type suitability and known permissive-parser gaps.
+
+   The main grammar describes declarative DQL. The separate FINAL extension
+   describes DQL + Velty. Neither section claims an exhaustive host grammar. *)
+
+document = { metadata }, [ outer_query, [ ";" ] ] ;
+metadata = package_line | import_line | setting | declaration | comment ;
 package_line = "#package", "(", string, ")", line_end ;
 import_line = "#import", "(", string, ",", string, ")", line_end ;
-setting = "#setting", "(", assignment_prefix, setting_call, ")" ;
+setting = setting_keyword, "(", assignment_prefix, "$", setting_name,
+          arguments, { cache_modifier }, ")" ;
+setting_keyword = "#setting" | "#settings" ;
 assignment_prefix = "$_", "=" ;
-setting_call = "$", setting_name, arguments, {".", cache_option, arguments} ;
 setting_name = "route" | "api_key" | "connector"
  | "input_type" | "output_type" | "dest" | "input_dest" | "output_dest"
  | "file_prefix" | "handler_dest" | "lifecycle_dest" | "mutation_dest"
- | "resources_dest" | "links_dest" | "template_dest" | "support_dest"
- | "router_dest" | "meta" | "mcp" | "report" | "cube" | "cubeCompose"
- | "cache" | "cache_warmup" | "marshal" | "unmarshal" | "format"
- | "date_format" | "case_format" | "ignoreEmptyQueryParameters"
- | "output_exclude" | "output_omit_empty" | "output_title" | "const"
- | "DocGlobalURLs" | "DocURLs" | "DocURL" | "DocBaseURL"
- | "static_resource" | "static_content" | "mcp_folder" ;
-cache_option = "WithProvider" | "WithLocation" | "WithTimeToLiveMs" ;
-declaration = "#define", "(", assignment_prefix, "$", parameter_name,
- [type_annotation], [binding], {declaration_option}, [declaration_query], ")" ;
-type_annotation = "<", ("?" | go_type), [",", go_type], ">" ;
+ | "resources_dest" | "links_dest" | "support_dest" | "router_dest"
+ | "meta" | "mcp" | "mcp_folder" | "mcp_skill_folder"
+ | "report" | "cube" | "cubeCompose" | "cache" | "cache_warmup"
+ | "marshal" | "unmarshal" | "format" | "date_format" | "case_format"
+ | "ignoreEmptyQueryParameters" | "output_exclude" | "output_omit_empty"
+ | "output_title" | "const" | "DocGlobalURLs" | "DocURLs" | "DocURL"
+ | "DocBaseURL" | "static_resource" | "static_content" ;
+cache_modifier = ".", ("WithProvider" | "WithLocation" | "WithTimeToLiveMs"),
+                 arguments ;
+(* cache_modifier has meaning only after cache. Recommended arity is one.
+   Settings have distinct counts and argument rules in dql-grammar.md; this shared
+   production does not grant arbitrary arguments/tails to every setting.
+   A static/MCP resource component may omit outer_query. A reader cannot.
+   High-level transcription requires a valid explicit package destination. *)
+
+declaration = "#define", "(", declaration_body, ")" ;
+declaration_body = assignment_prefix, "$", parameter_name, [type_annotation],
+                   [binding], {declaration_option}, [declaration_query] ;
+type_annotation = "<", type_slot, [",", type_slot], ">" ;
+type_slot = "?" | declaration_type ;
 binding = "(", provider_kind, "/", location, ")" ;
 provider_kind = identifier ;
-location = ? provider location text, possibly empty, up to matching ')' ? ;
+location = ? provider-owned location text, possibly empty, up to matching ')' ? ;
+(* An implicit declaration with no binding MUST have declaration_query.
+   Explicit view/data_view declarations use the holder as canonical read name.
+   '?' requests inference; it is not Go 'any'. *)
 declaration_option = ".", option_name, arguments ;
 option_name = "Required" | "Optional" | "WithType" | "WithTag" | "Tag"
  | "WithCodec" | "WithStatusCode" | "WithErrorMessage" | "Cacheable"
@@ -35,68 +57,156 @@ option_name = "Required" | "Optional" | "WithType" | "WithTag" | "Tag"
  | "WithDest" | "Dest" | "WithCache" | "WithLimit"
  | "WithColumnType" | "ColumnType" | "WithColumnTag" | "ColumnTag"
  | "WithColumnGroupable" | "ColumnGroupable" ;
-declaration_query = "/*", declaration_sql, "*/" ;
-declaration_sql = sql_query | structql_query ;
-structql_query = ? StructQL SELECT over a declared Go data path ? ;
-query = sql_query, [";"] ;
-sql_query = [with_clause], select_core, {set_operation, select_core},
- [order_clause], [window_clause], [limit_clause], [offset_clause] ;
-with_clause = "WITH", ["RECURSIVE"], cte, {",", cte} ;
-cte = sql_identifier, [column_names], "AS", "(", sql_query, ")" ;
-column_names = "(", sql_identifier, {",", sql_identifier}, ")" ;
-select_core = "SELECT", ["DISTINCT" | "ALL"], projection, {",", projection},
- ["FROM", table_source, {join_clause}], ["WHERE", sql_expression],
- ["GROUP BY", expression_list], ["HAVING", sql_expression] ;
-projection = star_projection | view_control | rich_type_declaration
- | column_tag_declaration | sql_expression, [sql_alias] ;
-star_projection = [sql_identifier, "."], "*", ["EXCEPT", identifier_list] ;
-table_source = sql_identifier, [sql_alias] | "(", sql_query, ")", [sql_alias]
- | "(", sql_identifier, ")", [sql_alias] | embedded_sql, [sql_alias]
- | ? supported dialect table expression ? ;
-join_clause = [join_kind], "JOIN", table_source,
- [("ON", sql_expression) | ("USING", column_names)] ;
+declaration_query = "/*", (inner_sql | structql_query), "*/" ;
+structql_query = ? StructQL query over a declared Go data path, owned by StructQL ? ;
+(* Options have exact counts/constraints in dql-grammar.md. Predicates repeat; other
+   options are singleton, except distinct column/facet options. The SQL comment
+   is last. Provider, codec and predicate catalogs are open semantic registries.
+   The predicate option consumes [integer group,] name, catalog arguments.
+   Of(group) is a parameter owning-group reference, not a numeric predicate. *)
+
+(* The preferred graph is one authoring shape, NOT the full reader grammar.
+   The other branch delegates the actual accepted boundary to SQLparser and
+   the reader compiler. It must not be used to guess vendor syntax. *)
+outer_query = preferred_named_graph | accepted_reader_query ;
+accepted_reader_query = ? complete reader SELECT accepted by SQLparser with
+                         structural validation and Datly read compilation,
+                         including no-FROM SELECT, unaliased tables, outer WITH,
+                         and single-view DISTINCT or UNION ? ;
+preferred_named_graph = [outer_with], "SELECT", outer_projection,
+                        {",", outer_projection}, "FROM", named_source,
+                        {outer_join}, [outer_sql_tail] ;
+outer_with = ? SQLparser-owned WITH clause including its supported CTE forms ? ;
+named_source = source_body, [["AS"], view_name] ;
+(* Explicit aliases are recommended for named graph authoring. Without a FROM
+   alias, queryNamespace uses the terminal source name; a no-FROM scalar has no
+   source namespace. Outer UNION/DISTINCT are rejected when relations exist.
+   In a multi-view graph, root GROUP BY/HAVING belong inside the root source,
+   and outer WHERE/ORDER BY references must have root ownership. Inner SQL
+   retains its own dialect expressions/joins/set operations. Template envelopes
+   extend this reader boundary only in the FINAL language layer below. *)
+source_body = "(", inner_sql, ")" | sql_table
+            | "(", sql_table, ")" ;
+outer_join = [join_kind], "JOIN", named_source, "ON", relation_condition ;
 join_kind = "INNER" | "LEFT", ["OUTER"] | "RIGHT", ["OUTER"]
- | "FULL", ["OUTER"] | "CROSS" ;
-set_operation = "UNION", ["ALL" | "DISTINCT"] | ? dialect set operator ? ;
-order_clause = "ORDER BY", order_item, {",", order_item} ;
-order_item = sql_expression, ["ASC" | "DESC"], ["NULLS FIRST" | "NULLS LAST"] ;
-window_clause = ? dialect WINDOW clause ? ;
-limit_clause = "LIMIT", sql_expression, [",", sql_expression] ;
-offset_clause = "OFFSET", sql_expression ;
-sql_alias = ["AS"], sql_identifier ;
-expression_list = sql_expression, {",", sql_expression} ;
-identifier_list = sql_identifier, {",", sql_identifier} ;
-sql_expression = ? SQLparser/dialect expression: literals, identifiers, bound parameters,
- operators, predicates, CASE, functions, CAST, windows and subqueries;
- declared input values and fixed query-context operators preserve bound arguments ? ;
-view_control = control_name, "(", identifier, {",", control_argument}, ")" ;
-control_name = "use_connector" | "use_cache" | "cache_warmup" | "order_by"
- | "set_limit" | "allow_nulls" | "groupable" | "grouping_enabled"
- | "allowed_order_by_columns" | "cardinality" | "self_ref" | "type" | "dest"
- | "batch_size" | "batch_concurrency" | "relational_concurrency"
- | "publish_parent" | "set_partitioner" | "match_strategy" | "lifecycle_type" ;
-control_argument = string | integer | identifier ;
-rich_type_declaration = "CAST", "(", column_ref, "AS", go_type, ")" ;
-column_tag_declaration = "tag", "(", column_ref, ",", string, ")" ;
-column_ref = identifier, ".", sql_identifier ;
-embedded_sql = "$", "{embed:", resource_reference, "}" ;
-resource_reference = ? fs resource path, optionally namespace:path ? ;
-bound_parameter = ":", identifier, {".", identifier} ;
-input_reference = "$", identifier, {".", identifier} ;
-query_context = ? fixed View pagination references and CubeSQL frame references ? ;
-declaration_value = input_reference | ? supported declarative provider/activation value ? ;
-go_type = ? Go type expression using declared package aliases: named type, pointer,
- slice, array, map, struct, interface, function/channel or generic instantiation;
- component suitability is a semantic check ? ;
+          | "FULL", ["OUTER"] ;
+relation_condition = key_equality, {"AND", key_equality}, ["AND", "1", "=", "1"] ;
+key_equality = column_ref, "=", column_ref ;
+(* Key equalities describe relation metadata. AND 1=1 is a to-one hint only
+   here; explicit cardinality takes precedence. Composite links keep every key.
+   Parenthesized physical SQL sources can mark auxiliary/nonmutating data;
+   ordinary (SELECT ...) alone does not make a view auxiliary. *)
+outer_sql_tail = ? SQLparser-owned outer clauses, subject to graph compilation ? ;
+outer_projection = star_projection | column_ref, [sql_alias]
+                 | view_control | rich_cast | column_tag | invariant
+                 | outer_sql_expression ;
+star_projection = [view_name, "."], "*", ["EXCEPT", exclusion_names] ;
+exclusion_names = sql_column, {",", sql_column} ;
+rich_cast = "CAST", "(", column_ref, "AS", column_type, ")" ;
+column_type = column_type_name | "(", column_type, ")"
+            | "*", column_type | "[]", column_type ;
+column_type_name = identifier, [".", identifier] ;
+(* Semantic restriction of ColumnType: at most one '*' and one '[]' across
+   the whole expression. Parentheses may repeat. Identifiers must resolve;
+   qualification uses one import alias (time has a standard-package fallback).
+   '*[]T' and '[]*T' normalize to the same pointer/cardinality metadata.
+   Fixed arrays, nested slices/pointers and inline map/struct/interface/function/
+   channel/generic-instantiation AST expressions are rejected. Named rich types
+   remain possible. WithColumnType/ColumnType use this same production. *)
+column_tag = "tag", "(", column_ref, ",", string, ")" ;
+invariant = "invariant", "(", column_ref, ",", string, ")" ;
+column_ref = view_name, ".", sql_column ;
+outer_sql_expression = ? expression accepted by SQLparser and outer projection
+                        compiler; not a substitute for declaring column authority ? ;
+(* Rich CAST, tag and invariant address named outer views, not inner aliases.
+   Inner CAST(expr AS database_type) is SQL, not a Go type annotation. *)
+
+view_control = named_binding_control | numeric_control | flag_control
+             | string_control | self_reference | partitioner ;
+named_binding_control = ("use_connector" | "use_cache" | "cache_warmup"),
+                        "(", view_name, ",", (string | identifier), ")" ;
+numeric_control = ("set_limit" | "batch_size" | "batch_concurrency"
+                  | "relational_concurrency"),
+                  "(", view_name, ",", unsigned_integer, ")" ;
+flag_control = ("allow_nulls" | "groupable" | "grouping_enabled"
+               | "publish_parent"), "(", view_name, ")" ;
+string_control = ("order_by" | "allowed_order_by_columns" | "cardinality"
+                 | "type" | "dest" | "match_strategy" | "lifecycle_type"),
+                 "(", view_name, ",", string, ")" ;
+self_reference = "self_ref", "(", view_name, ",", string, ",", string,
+                 ",", string, ")" ;
+partitioner = "set_partitioner", "(", view_name, ",", string,
+              [",", unsigned_integer], ")" ;
+(* These are standalone outer projection items and cannot be the whole
+   projection. Numeric controls require unquoted nonnegative integer literals.
+   cardinality values: One/Many. match_strategy: read_all/read_matched/read_derived,
+   and only on a related view. lifecycle_type explicitly selects the lifecycle;
+   no inference and no entity_hooks alias. See dql-grammar.md for uniqueness and limits. *)
+
+inner_sql = ? opaque database SQL source, including ordinary CTEs, recursive
+              CTEs, projections, nested queries, joins, functions, expressions,
+              aggregates, windows and dialect clauses, parsed by SQLparser and
+              the selected database; this is NOT an exhaustive SQL production ? ;
+sql_table = ? SQLparser-owned physical table name, including dialect quoting ? ;
+sql_column = ? one SQL column identifier, including dialect quoting ? ;
+sql_alias = ["AS"], sql_column ;
+view_name = identifier ;
+declaration_type = ? Go type expression resolved by Go parsing and viant/x/shape with
+            declared import/package authority; named types, pointers, slices,
+            arrays, maps, structs, interfaces, functions, channels and generic
+            instantiations remain subject to component/type suitability ? ;
 arguments = "(", [argument, {",", argument}], ")" ;
-argument = string | integer | boolean | go_type | declaration_value ;
+argument = string | integer | boolean | declaration_type | declarative_value ;
+declarative_value = ? balanced option-specific value text; its meaning belongs
+                      to the option/provider. Executable expressions are below ? ;
 parameter_name = letter, {letter | digit | "_"} ;
 identifier = (letter | "_"), {letter | digit | "_"} ;
-sql_identifier = identifier, {".", identifier} | ? dialect-quoted identifier ? ;
-integer = ["-"], digit, {digit} ;
+integer = ["-"], unsigned_integer ;
+unsigned_integer = digit, {digit} ;
 boolean = "true" | "false" ;
-string = ? balanced single- or double-quoted DQL argument ? ;
-comment = ? SQL line or balanced block comment ? ;
+string = ? balanced single- or double-quoted DQL argument. Delimiter handling
+           belongs to SQLparser/source; Go tags use inner double quotes ? ;
+comment = ? SQL line or balanced block comment outside a declaration query ? ;
 letter = ? ASCII A-Z or a-z ? ;
 digit = ? ASCII 0-9 ? ;
 line_end = ? newline or end of input ? ;
+
+(* ================= FINAL: DQL + VELTY EXTENSION =================
+   Separate host-language integration. The main document remains the metadata
+   grammar above. These productions describe extension islands in SQL/template
+   sources and metadata classified by the DQL preprocessor. They neither grant
+   every Velty construct to every runtime nor redefine Velty expression syntax. *)
+dql_velty_document = {metadata | template_setting | cube_set_setting
+                      | declaration_set}, [reader_template_source] ;
+template_setting = setting_keyword, "(", assignment_prefix, "$",
+                   ("useTemplate" | "template_dest"), arguments, ")" ;
+cube_set_setting = "#set", "(", assignment_prefix, "$",
+                   ("cube" | "cubeCompose"), arguments, ")" ;
+declaration_set = "#set", "(", declaration_body, ")" ;
+(* Declaration-shaped #set entries are classified as metadata; #define takes
+   precedence for the same identity. Other #set forms are executable Velty. *)
+reader_template_source = [template_prefix], outer_query, [";"], [template_suffix] ;
+(* The SQL delegated by outer_query/inner_sql may contain sql_extension islands
+   only at positions accepted by the SQLparser/Velty integration owners. *)
+template_prefix = ? parser-supported statement prefix retained as TemplateFrame ? ;
+template_suffix = ? matching parser-supported suffix retained as TemplateFrame ? ;
+sql_extension = bound_parameter | input_reference | embedded_sql
+              | query_context | velty_expression | velty_statement ;
+bound_parameter = ":", identifier, {".", identifier} ;
+input_reference = "$", identifier, {".", identifier} ;
+embedded_sql = "${embed:", resource_reference, "}" ;
+resource_reference = ? fs resource path or explicit namespace:path ? ;
+query_context = ? scoped View pagination, parent-key helpers, NonWindowSQL,
+                  predicate context or CubeSQL1 through CubeSQLN frame reference ? ;
+velty_expression = ? Velty-owned expression with its own references, calls,
+                    indexes, operators and grouping, compiled in active scope ? ;
+velty_statement = ? Velty-owned directive. SQL-template detection recognizes
+                   if/elseif/else/set/foreach/for/evaluate/end/break; actual
+                   syntax and validity belong to the installed Velty compiler ? ;
+(* SQL-template scanner protection for its supported context variables/directives
+   does not apply to embedded_sql. EmbeddedSQLRefs raw-scans exact '${embed:'
+   through the next '}', even inside literals/quoted identifiers/comments;
+   ResolveSource replaces the full raw token. No general instance-specific
+   constant/resource-path expansion production is promised here. Group expansion appends ordered SQL arguments; Builder.Build
+   supplies an authored WHERE/AND prefix, not SQL-clause detection. Full helper
+   signatures and empty-group behavior are in dql-grammar.md's FINAL section. *)
