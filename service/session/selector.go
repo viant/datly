@@ -220,6 +220,11 @@ func (s *Session) setPageQuerySelector(value interface{}, ns *view.NamespaceView
 	if err != nil {
 		return fmt.Errorf("invalid page value: %v", err)
 	}
+	// Preserve the established one-based Page contract while accepting the
+	// zero-based first-page value emitted by UI paging controls.
+	if page < 1 {
+		page = 1
+	}
 	selector := s.state.Lookup(ns.View)
 	actualLimit := selector.Limit
 	if actualLimit == 0 {
