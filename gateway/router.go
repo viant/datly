@@ -403,21 +403,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				//	}
 
 				if r.mcpRegistry != nil && aPath.HasMCPIntegration() {
-					if aPath.MCPResource {
-						if err = r.buildResourceIntegration(anItem, aPath, aRoute, provider); err != nil {
-							return nil, nil, fmt.Errorf("failed to build resource integration: %w", err)
-						}
-					}
-					if aPath.MCPTemplateResource {
-						if err = r.buildTemplateResourceIntegration(anItem, aPath, aRoute, provider); err != nil {
-							return nil, nil, fmt.Errorf("failed to build template resource integration: %w", err)
-						}
-					}
-					if aPath.MCPTool {
-						if err = r.buildToolsIntegration(anItem, aPath, aRoute, provider); err != nil {
-							return nil, nil, fmt.Errorf("failed to build tool integration: %w", err)
-						}
-					}
+					r.buildMCPIntegrations(ctx, anItem, aPath, aRoute, provider)
 				}
 
 				routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.Meta.ViewURI, aPath.URI), provider))
@@ -479,6 +465,31 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 		matchables = append(matchables, route)
 	}
 	return matcher.NewMatcher(matchables), paths, nil
+}
+
+// buildMCPIntegrations isolates component initialization failures to the MCP
+// integration that depends on them. The HTTP route remains registered and can
+// report its own datasource error when called, while unrelated routes and MCP
+// tools remain available.
+func (r *Router) buildMCPIntegrations(ctx context.Context, item *path.Item, aPath *path.Path, aRoute *Route, provider *repository.Provider) {
+	build := func(kind string, enabled bool, register func() error) {
+		if !enabled {
+			return
+		}
+		if integrationErr := register(); integrationErr != nil && r.logger != nil {
+			r.logger.Warnc(ctx, "skipping unavailable MCP integration", "kind", kind, "method", aPath.Method, "uri", aPath.URI, "error", integrationErr)
+		}
+	}
+
+	build("resource", aPath.MCPResource, func() error {
+		return r.buildResourceIntegration(item, aPath, aRoute, provider)
+	})
+	build("template_resource", aPath.MCPTemplateResource, func() error {
+		return r.buildTemplateResourceIntegration(item, aPath, aRoute, provider)
+	})
+	build("tool", aPath.MCPTool, func() error {
+		return r.buildToolsIntegration(item, aPath, aRoute, provider)
+	})
 }
 
 func (r *Router) appendCacheWarmupRoute(routes []*Route, aPath *path.Path, provider *repository.Provider) []*Route {
