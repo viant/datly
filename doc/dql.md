@@ -773,9 +773,8 @@ including zero, false or an empty string, wins; an omitted name retains its DQL
 default. Runtime request data cannot override constants.
 
 Constants can select qualified table roots and resource paths across E2E and
-production instances. `$project.dataset.table` is supported. Braced table roots
-such as `${project}.dataset.table` require the published SQL parser version
-identified in the constants guide; quote the whole BigQuery or legacy identifier
+production instances. `$project.dataset.table` and braced table roots such as
+`${project}.dataset.table` are supported. Quote the whole BigQuery or legacy identifier
 when required by that database. Expansion is transient before database discovery,
 SQL execution or resource access. Authored DQL, reusable resources and generated
 source retain the unexpanded spelling.

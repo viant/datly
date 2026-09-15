@@ -62,9 +62,9 @@ The comprehensive grammar reference and EBNF are integrated, with the DQL +
 Velty extension documented separately at the end. Per-instance constant expansion
 from YAML/JSON files is integrated for discovery, execution and configured resource
 paths, with immutable authored sources. CLI and generated-code regression checks
-pass. Unquoted `${project}.dataset.table` parsing still awaits the published native
-parser update; supported quoted forms and `$project.dataset.table` are documented
-in [instance constants](constants-and-substitutions.md). Release publication and
+pass. Unquoted `${project}.dataset.table`, `$project.dataset.table`, and quoted
+BigQuery/legacy forms are documented in [instance constants](constants-and-substitutions.md).
+Release publication and
 version tags remain separate from local commits and verification.
 
 ## Production review follow-up

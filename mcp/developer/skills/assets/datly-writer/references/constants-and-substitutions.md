@@ -135,10 +135,11 @@ retain their contents. Velty conditions, calls, loop variables, `$predicate`,
 `$View`, declared query selectors, and normal scalar binds retain their existing
 owners. Replacement is not recursive.
 
-**Native grammar boundary:** the pinned SQL parser rejects unquoted
-`${project}.ds.records` during DQL compilation. Use `$project.ds.records` or the
-quoted forms above. The DB-bound renderer can render that braced spelling, but
-this does not make it supported throughout the DQL compilation pipeline.
+The pinned SQL parser supports unquoted `${project}.ds.records` as a qualified
+table root while preserving the authored spelling. `$project.ds.records`,
+BigQuery backticks, and legacy bracket quoting remain supported. Braced syntax is
+restricted to table identifiers; it does not turn ordinary SQL values into raw
+substitutions.
 
 ## Existing `$Unsafe` behavior
 
