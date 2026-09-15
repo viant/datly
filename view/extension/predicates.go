@@ -75,7 +75,9 @@ type (
 )
 
 func (r *PredicateRegistry) Lookup(name string) (*Predicate, error) {
+	r.Lock()
 	result, ok := r.registry[name]
+	r.Unlock()
 	if ok {
 		return result, nil
 	}
@@ -94,6 +96,8 @@ func (r *PredicateRegistry) Scope() *PredicateRegistry {
 }
 
 func (r *PredicateRegistry) Add(template *predicate.Template) {
+	r.Lock()
+	defer r.Unlock()
 	r.registry[template.Name] = &Predicate{
 		Template: template,
 	}
