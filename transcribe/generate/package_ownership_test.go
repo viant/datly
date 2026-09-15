@@ -71,3 +71,35 @@ func TestPackageOwnershipDestination(t *testing.T) {
 		})
 	}
 }
+
+func TestPackageOwnershipResourceOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		reject       bool
+	}{
+		{"resources", `{"resources":{"namespace":"app","files":["query.sql"]}}`, false},
+		{"shared resources", `{"owners":{"Read":{"resources":{"namespace":"app","files":["query.sql"]}}}}`, false},
+		{"claimed identity", `{"identity":"component:app:Read","resources":{"namespace":"app","files":["query.sql"]}}`, true},
+		{"claimed files", `{"files":["input.go"],"resources":{"namespace":"app","files":["query.sql"]}}`, true},
+		{"unsupported version", `{"version":999,"resources":{"namespace":"app","files":["query.sql"]}}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, scaffoldManifestName)
+			if err := os.WriteFile(path, []byte(tc.source), 0644); err != nil {
+				t.Fatal(err)
+			}
+			got, err := (PackageOwnership{Directory: dir}).Destination(spec.Key{Kind: spec.KindComponent, Scope: "example.com/app", Name: "Read"})
+			if (err != nil) != tc.reject || got != "" {
+				t.Fatalf("destination=%q err=%v", got, err)
+			}
+			if _, err := readScaffoldManifest(dir); err == nil {
+				t.Fatal("resource-only or invalid descriptor authorized generation")
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || string(after) != tc.source {
+				t.Fatal("read changed resource descriptor", err)
+			}
+		})
+	}
+}

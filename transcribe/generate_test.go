@@ -89,7 +89,7 @@ SELECT 1`,
 	if err != nil || !strings.Contains(string(component), "handler=NewOrdersHandler") {
 		t.Fatalf("component source = %q, %v", component, err)
 	}
-	template, err := os.ReadFile(filepath.Join(root, "generated", "orders", "handler.velty"))
+	template, err := os.ReadFile(filepath.Join(root, "generated", generated.Result.Plan.VeltyHandler.ResourceDestination))
 	if err != nil || string(template) != `#set($Output.Result = $Input.Name)` {
 		t.Fatalf("Velty template = %q, %v", template, err)
 	}
@@ -175,7 +175,7 @@ $dml.Execute("INSERT INTO events(name) VALUES (?)", $Name);
 	if generated.Result.Plan.Handler != "NewEventsHandler" || generated.Result.Plan.VeltyHandler == nil {
 		t.Fatalf("generated Velty plan = %+v", generated.Result.Plan)
 	}
-	template, err := os.ReadFile(filepath.Join(root, "generated", "events", "handler.velty"))
+	template, err := os.ReadFile(filepath.Join(root, "generated", generated.Result.Plan.VeltyHandler.ResourceDestination))
 	if err != nil || !strings.Contains(string(template), "$dml.Execute") || !strings.Contains(string(template), "$Output.Result") {
 		t.Fatalf("generated template = %q, %v", template, err)
 	}
@@ -282,7 +282,7 @@ SELECT event_id, name, score, created_at FROM events`,
 		fields[3].Name != "CreatedAt" || fields[3].Type != "*time.Time" {
 		t.Fatalf("ViewFields = %+v", fields)
 	}
-	content, err := os.ReadFile(filepath.Join(root, "generated", "events.go"))
+	content, err := os.ReadFile(filepath.Join(root, "generated", generated.Result.Plan.ViewDest))
 	if err != nil {
 		t.Fatalf("read generated view: %v", err)
 	}

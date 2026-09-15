@@ -390,7 +390,7 @@ func TestLowerPersistsThroughCanonicalGeneratorProduct(t *testing.T) {
 	if result.Plan.ContractHandler == nil || result.Plan.Handler != "NewEventsHandler" {
 		t.Fatalf("generated handler plan = %+v, identity = %q", result.Plan.ContractHandler, result.Plan.Handler)
 	}
-	hookPath := filepath.Join(packageDir, "events_hooks.go")
+	hookPath := filepath.Join(packageDir, result.Plan.HookScaffold.Destination)
 	hookSource, err := os.ReadFile(hookPath)
 	if err != nil {
 		t.Fatal(err)

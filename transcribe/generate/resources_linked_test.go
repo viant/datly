@@ -64,7 +64,7 @@ func TestLinkedPackageResourcesRetainOwnership(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			plan, err := New(Input{Component: &spec.Component{Key: key, Name: key.Name}, TargetPackage: pkg, PackageName: "records", ProjectRoot: root, TypeResolver: resolver, SQLResources: name != "disabled",
+			plan, err := New(Input{Component: &spec.Component{Key: key, Name: key.Name, Settings: &spec.Settings{Generation: &spec.GenerationSettings{ResourcesFile: resources.Destination}}}, TargetPackage: pkg, PackageName: "records", ProjectRoot: root, TypeResolver: resolver, SQLResources: name != "disabled",
 				Contracts: ContractReferences{Input: &ContractReference{Expression: input.Name, DescriptorKey: input.Key()}, Output: &ContractReference{Expression: output.Name, DescriptorKey: output.Key()}}}).Plan()
 			if name == "missing" || name == "foreign-namespace" {
 				if err == nil {

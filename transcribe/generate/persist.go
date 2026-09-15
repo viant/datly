@@ -561,6 +561,24 @@ func managedRelativePath(path string) (string, error) {
 }
 
 func readScaffoldManifest(stage string) (*scaffoldManifest, error) {
+	result, err := readScaffoldMetadata(stage)
+	if err != nil || !result.exists {
+		return result, err
+	}
+	if err := result.validateVersion(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (m *scaffoldManifest) validateVersion() error {
+	if m.Version != scaffoldManifestVersion && m.Version != 4 && m.Version != 3 && m.Version != 2 {
+		return fmt.Errorf("unsupported scaffold manifest version %d", m.Version)
+	}
+	return nil
+}
+
+func readScaffoldMetadata(stage string) (*scaffoldManifest, error) {
 	data, err := os.ReadFile(filepath.Join(stage, scaffoldManifestName))
 	if os.IsNotExist(err) {
 		return &scaffoldManifest{}, nil
@@ -571,9 +589,6 @@ func readScaffoldManifest(stage string) (*scaffoldManifest, error) {
 	result := &scaffoldManifest{}
 	if err = json.Unmarshal(data, result); err != nil {
 		return nil, fmt.Errorf("decode scaffold manifest: %w", err)
-	}
-	if result.Version != scaffoldManifestVersion && result.Version != 4 && result.Version != 3 && result.Version != 2 {
-		return nil, fmt.Errorf("unsupported scaffold manifest version %d", result.Version)
 	}
 	result.exists = true
 	return result, nil
