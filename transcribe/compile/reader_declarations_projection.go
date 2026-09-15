@@ -15,6 +15,7 @@ import (
 // projections. Wildcard output existence is checked by SQLX discovery.
 func validateInvariantProjections(parsed *query.Select, root *spec.View) error {
 	views := canonicalViews(root)
+	wildcards := map[*spec.View]bool{}
 	for _, view := range views {
 		var names []string
 		wildcard := false
@@ -36,14 +37,17 @@ func validateInvariantProjections(parsed *query.Select, root *spec.View) error {
 			}
 			names = append(names, output.Identity())
 		}
+		wildcards[view] = wildcard
 		if !wildcard {
-			if err := column.ValidateInvariants(view, names); err != nil {
+			if err := column.ValidateProjectionAnnotations(view, names); err != nil {
 				return err
 			}
 		}
 	}
-	if err := validateInvariantSourceProjection(parsed.From.X, root, parsed.WithSelects); err != nil {
-		return err
+	if wildcards[root] {
+		if err := validateInvariantSourceProjection(parsed.From.X, root, parsed.WithSelects); err != nil {
+			return err
+		}
 	}
 	for _, join := range parsed.Joins {
 		if join == nil {
@@ -53,7 +57,7 @@ func validateInvariantProjections(parsed *query.Select, root *spec.View) error {
 		if namespace == "" {
 			namespace = terminalName(join.With)
 		}
-		if view := views[strings.ToLower(namespace)]; view != nil {
+		if view := views[strings.ToLower(namespace)]; view != nil && wildcards[view] {
 			if err := validateInvariantSourceProjection(join.With, view, parsed.WithSelects); err != nil {
 				return err
 			}
@@ -94,7 +98,9 @@ func validateInvariantSourceProjection(source node.Node, view *spec.View, withs 
 			parsed = prepared.query
 		}
 	}
-	if parsed == nil {
+	// An incomplete dialect AST is not evidence that an output is absent.
+	// SQLX discovery validates these declarations against actual result names.
+	if parsed == nil || len(parsed.List) == 0 {
 		return nil
 	}
 	var names []string
@@ -104,5 +110,5 @@ func validateInvariantSourceProjection(source node.Node, view *spec.View, withs 
 		}
 		names = append(names, sqlparser.NewColumn(item).Identity())
 	}
-	return column.ValidateInvariants(view, names)
+	return column.ValidateProjectionAnnotations(view, names)
 }

@@ -3,6 +3,7 @@ package compile
 import (
 	"strings"
 
+	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
@@ -18,7 +19,7 @@ func parseReadSQL(sql string) (*query.Select, error) {
 		if cursor != nil {
 			offset = cursor.Pos
 		}
-		return err
+		return (dql.TemplateExpressions{}).Parse(err, cursor, destination)
 	}))
 	if err != nil {
 		return nil, &Error{Code: CodeSQLParse, Offset: offset, Cause: err}

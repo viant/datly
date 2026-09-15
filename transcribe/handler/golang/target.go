@@ -21,7 +21,8 @@ const handlerPackage = "github.com/viant/xdatly/handler"
 
 // Config contains target syntax and package choices only.
 type Config struct {
-	Package string
+	ReadIndexes *ReadIndexConfig
+	Package     string
 	// PackagePath is the canonical target import path when lowering hook type references.
 	PackagePath string
 	Factory     string

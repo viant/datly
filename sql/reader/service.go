@@ -414,11 +414,7 @@ func viewProjection(view *data.View, selector *xstate.Selector) []string {
 			if link == nil {
 				continue
 			}
-			if link.Column != "" {
-				appendName(link.Column)
-			} else {
-				appendName(link.Field)
-			}
+			appendName(link.OutputColumn())
 		}
 	}
 	return result
@@ -443,11 +439,7 @@ func relationProjection(view *data.View, selector *xstate.Selector, relation *da
 	}
 	for _, link := range relation.Of.On {
 		if link != nil {
-			if link.Column != "" {
-				appendName(link.Column)
-			} else {
-				appendName(link.Field)
-			}
+			appendName(link.OutputColumn())
 		}
 	}
 	return result

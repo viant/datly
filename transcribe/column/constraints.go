@@ -16,6 +16,7 @@ import (
 )
 
 type tableConstraint struct {
+	name          string
 	primaryKey    bool
 	autoIncrement bool
 	unique        bool
@@ -24,6 +25,7 @@ type tableConstraint struct {
 }
 
 type projectionLineage struct {
+	names    map[string]string
 	direct   map[string]string
 	blocked  map[string]bool
 	wildcard bool
@@ -51,6 +53,7 @@ func constraintsFromColumns(columns []sink.Column) map[string]tableConstraint {
 		}
 		primaryKey := strings.EqualFold(strings.TrimSpace(column.Key), "PRI")
 		constraint := tableConstraint{
+			name:          column.Name,
 			primaryKey:    primaryKey,
 			autoIncrement: column.Autoincrement(),
 			unique:        !primaryKey && column.IsUnique(),
@@ -66,7 +69,7 @@ func constraintsFromColumns(columns []sink.Column) map[string]tableConstraint {
 }
 
 func directProjectionLineage(source *spec.ViewSource) (*projectionLineage, error) {
-	result := &projectionLineage{direct: map[string]string{}, blocked: map[string]bool{}}
+	result := &projectionLineage{names: map[string]string{}, direct: map[string]string{}, blocked: map[string]bool{}}
 	if source == nil || strings.TrimSpace(source.Table) == "" {
 		return result, nil
 	}
@@ -89,7 +92,7 @@ type projectionLineageResolver struct {
 }
 
 func (r projectionLineageResolver) query(parsed *query.Select) (*projectionLineage, error) {
-	result := &projectionLineage{direct: map[string]string{}, blocked: map[string]bool{}}
+	result := &projectionLineage{names: map[string]string{}, direct: map[string]string{}, blocked: map[string]bool{}}
 	if parsed == nil || parsed.Union != nil {
 		return result, nil
 	}
@@ -126,6 +129,7 @@ func (r projectionLineageResolver) query(parsed *query.Select) (*projectionLinea
 			result.wildcard = source.wildcard
 			for output, name := range source.direct {
 				result.direct[output] = name
+				result.names[output] = source.names[output]
 			}
 			for output := range source.blocked {
 				result.blocked[output] = true
@@ -160,12 +164,13 @@ func (r projectionLineageResolver) query(parsed *query.Select) (*projectionLinea
 			continue
 		}
 		result.direct[output] = physical
+		result.names[output] = column.Identity()
 	}
 	return result, nil
 }
 
 func (r projectionLineageResolver) source(value node.Node) (*projectionLineage, error) {
-	empty := &projectionLineage{direct: map[string]string{}, blocked: map[string]bool{}}
+	empty := &projectionLineage{names: map[string]string{}, direct: map[string]string{}, blocked: map[string]bool{}}
 	if identifier, ok := value.(*expr.Ident); ok {
 		for _, with := range r.withs {
 			if with == nil || !strings.EqualFold(with.Alias, identifier.Name) {
@@ -252,6 +257,11 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 		constraint, ok := constraints[sourceName]
 		if !ok {
 			continue
+		}
+		// SQL output aliases remain canonical names; DML mapping follows the
+		// already-proven physical lineage, unless the author supplied a source.
+		if column.Source == column.Name && constraint.name != "" {
+			column.Source = constraint.name
 		}
 		column.PrimaryKey = column.PrimaryKey || constraint.primaryKey
 		column.AutoIncrement = column.AutoIncrement || constraint.autoIncrement

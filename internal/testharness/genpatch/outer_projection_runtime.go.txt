@@ -1,0 +1,41 @@
+package orders
+
+import (
+ "context"
+ "reflect"
+ "testing"
+ "github.com/viant/bindly/resource"
+ "github.com/viant/datly/bootstrap"
+ "github.com/viant/datly/internal/testharness/genpatch"
+ "github.com/viant/datly/internal/testharness/sqlite"
+ dsql "github.com/viant/datly/sql"
+ "github.com/viant/datly/sql/reader"
+ dtag "github.com/viant/datly/tag"
+ WRITER_IMPORTS
+)
+
+func TestOuterProjectionRuntime(t *testing.T) {
+ ctx:=context.Background();db:=sqlite.New(t);db.DB.SetMaxOpenConns(1)
+ if err:=db.ExecStatements(ctx,genpatch.Schema...);err!=nil{t.Fatal(err)}
+ if err:=db.ExecStatements(ctx,genpatch.OuterProjectionDecoys...);err!=nil{t.Fatal(err)}
+ holder:=reflect.TypeOf(OrdersComponent{});field,ok:=holder.FieldByName("Contract");if !ok{t.Fatal("missing holder")}
+ tag,present,err:=dtag.ParseComponent(field.Tag);if err!=nil||!present{t.Fatal(err)}
+ source:=&bootstrap.RouteSource{HolderType:"OrdersComponent",FieldName:field.Name,PackageName:"orders",PackagePath:holder.PkgPath(),Tag:tag,InputType:"OrdersInput",OutputType:"OrdersOutput"}
+ component,err:=source.Resolve(reflect.TypeOf(OrdersInput{}),reflect.TypeOf(OrdersOutput{}));if err!=nil{t.Fatal(err)}
+ resources:=resource.New();if err:=resources.Register(OrdersDatlyResourceNamespace,OrdersDatlyResources);err!=nil{t.Fatal(err)}
+ artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:reflect.TypeOf(OrdersInput{}),OutputType:reflect.TypeOf(OrdersOutput{}),Resources:resources});if err!=nil{t.Fatal(err)}
+ READER_START
+ execution,err:=reader.NewExecution(reader.Config{Component:artifact.Component,InputType:reflect.TypeOf(OrdersInput{}),OutputType:reflect.TypeOf(OrdersOutput{}),Plan:artifact.Reader,SQL:&dsql.SQLComponent{DB:db.DB}});if err!=nil{t.Fatal(err)}
+ result,err:=execution.Read(ctx,&OrdersInput{},nil,nil);if err!=nil{t.Fatal(err)}
+ rows:=reflect.ValueOf(result).Elem().FieldByName("Data");if !rows.IsValid()||rows.Len()!=1{t.Fatalf("root restrictions lost: %+v",result)}
+ row:=rows.Index(0).Elem();children:=row.FieldByName("Items");if children.Len()!=1{t.Fatalf("child restrictions lost: %+v",result)}
+ number:=func(value reflect.Value)int64{if value.Kind()==reflect.Pointer{if value.IsNil(){return 0};value=value.Elem()};return value.Int()}
+ if number(row.FieldByName("ROOT_KEY"))!=1 || number(children.Index(0).Elem().FieldByName("CHILD_KEY"))!=CHILD_ID || number(children.Index(0).Elem().FieldByName("CHILD_FK"))!=1{t.Fatal("backing/aliased relation keys lost")}
+ kind:=row.FieldByName("Kind");if kind.IsNil()||number(kind.Elem().FieldByName("Id"))!=7{t.Fatal("auxiliary restrictions/association lost")}
+ for _,check:=range []struct{value reflect.Value; name,want string}{{row,"ROOT_NAME","before"},{children.Index(0).Elem(),"CHILD_NAME","old"}} {
+  if check.name==""{if check.value.FieldByName("Name").IsValid(){t.Fatal("removed field restored at runtime")};continue}
+  field:=check.value.FieldByName(check.name);if !field.IsValid()||field.IsNil()||field.Elem().String()!=check.want{t.Fatalf("alias %s lost",check.name)}
+ }
+ READER_END
+ WRITER_TEST
+}

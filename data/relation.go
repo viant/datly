@@ -4,12 +4,29 @@ import "strings"
 
 type Link struct {
 	Namespace string
-	Column    string
-	Field     string
+	// Column addresses the SQL source used by a matching predicate.
+	Column string
+	// Output retains the authored result label when it differs from Column.
+	Output string
+	Field  string
 }
 
 func NewLink(namespace, column, field string) *Link {
 	return &Link{Namespace: namespace, Column: column, Field: field}
+}
+
+// OutputColumn is the result value required when this relation is selected.
+func (l *Link) OutputColumn() string {
+	if l == nil {
+		return ""
+	}
+	if l.Output != "" {
+		return l.Output
+	}
+	if l.Column != "" {
+		return l.Column
+	}
+	return l.Field
 }
 
 type Links []*Link

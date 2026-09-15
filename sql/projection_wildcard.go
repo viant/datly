@@ -91,6 +91,14 @@ func (s wildcardSource) matchesQualifier(parts []string) bool {
 }
 
 func (s wildcardSource) query(ctes query.WithSelects) (*query.Select, string) {
+	// Native table markers may carry a partially populated query in Raw.X.
+	// Their source identity, not that partial query, owns schema discovery.
+	switch s.node.(type) {
+	case *expr.Raw, *expr.Parenthesis:
+		if table, _, err := sqlparser.SourceTable(s.node); err == nil && table != "" {
+			return nil, ""
+		}
+	}
 	var nested *query.Select
 	raw := ""
 	switch value := s.node.(type) {
@@ -121,12 +129,16 @@ func (s wildcardSource) query(ctes query.WithSelects) (*query.Select, string) {
 func (p SelectorProjection) wildcardSourceColumns(stmt *query.Select, src wildcardSource, depth int) ([]ProjectionColumn, error) {
 	nested, raw := src.query(stmt.WithSelects)
 	if nested == nil {
-		switch src.node.(type) {
-		case *expr.Ident, *expr.Selector:
+		if table, _, err := sqlparser.SourceTable(src.node); err != nil {
+			return nil, err
+		} else if table != "" {
 			return p.wildcardMetadataColumns(stmt, src)
-		default:
-			return nil, fmt.Errorf("wildcard source projection is unresolved")
 		}
+		return nil, &UnresolvedProjectionError{}
+	}
+	// An incomplete dialect AST supplies no closed output contract.
+	if len(nested.List) == 0 {
+		return nil, &databaseProjectionSchema{}
 	}
 	// A sole wildcard over one derived view has exactly that view's prepared
 	// output contract only when every inner projection is the same wildcard.
@@ -134,15 +146,23 @@ func (p SelectorProjection) wildcardSourceColumns(stmt *query.Select, src wildca
 	// Resolve at this boundary instead of treating output
 	// metadata as the schema of an inner physical table. Joined or mixed outer
 	// projections still need source-specific resolution below.
-	if !src.joined && len(stmt.List) == 1 && projectionStar(stmt.List[0]) != nil && p.View != nil && len(p.View.Columns) > 0 && src.preservesPhysicalWildcard(stmt.WithSelects, 0) {
+	prepared := !src.joined && len(stmt.List) == 1 && projectionStar(stmt.List[0]) != nil && p.View != nil && len(p.View.Columns) > 0
+	if prepared && src.preservesPhysicalWildcard(stmt.WithSelects, 0, false) {
 		return p.wildcardMetadataColumns(stmt, src)
 	}
+	// Literal pseudo fields add outputs without renaming physical columns.
+	// Resolve their aliases from SQL, using the prepared scan columns only for
+	// the unchanged physical wildcard. Arbitrary mixed projections cannot do so.
+	prepared = prepared && src.preservesPhysicalWildcard(stmt.WithSelects, 0, true)
 	parts, hasParts := newSelectProjectionSource(raw)
 	var columns []ProjectionColumn
 	for i, inner := range nested.List {
 		if projectionStar(inner) != nil {
-			// Derived sources cannot borrow the outer row type's prepared columns.
+			// Only a proven unchanged physical wildcard may use prepared columns.
 			child := SelectorProjection{}
+			if prepared {
+				child = SelectorProjection{SQL: raw, View: p.View}
+			}
 			copyStmt := *nested
 			copyStmt.WithSelects = append(append(query.WithSelects(nil), nested.WithSelects...), stmt.WithSelects...)
 			resolved, err := child.wildcardColumns(&copyStmt, inner, depth+1)
@@ -177,7 +197,7 @@ func (p SelectorProjection) wildcardSourceColumns(stmt *query.Select, src wildca
 
 func (p SelectorProjection) wildcardMetadataColumns(stmt *query.Select, src wildcardSource) ([]ProjectionColumn, error) {
 	if p.View == nil || len(p.View.Columns) == 0 {
-		return nil, fmt.Errorf("wildcard projection requires prepared columns")
+		return nil, &databaseProjectionSchema{}
 	}
 	parts, hasParts := newSelectProjectionSource(p.SQL)
 	var columns []ProjectionColumn
@@ -266,8 +286,9 @@ func projectionMetadataColumns(item *query.Item, view *data.View) ([]*data.Colum
 }
 
 // preservesPhysicalWildcard recognizes an unchanged row contract through named
-// sources. It does not lend a row schema to joined, computed or renamed outputs.
-func (s wildcardSource) preservesPhysicalWildcard(ctes query.WithSelects, depth int) bool {
+// sources, optionally with aliased literals added to it. It does not lend a row
+// schema to joined, computed or renamed physical outputs.
+func (s wildcardSource) preservesPhysicalWildcard(ctes query.WithSelects, depth int, allowLiterals bool) bool {
 	if depth > 32 {
 		return false
 	}
@@ -286,10 +307,25 @@ func (s wildcardSource) preservesPhysicalWildcard(ctes query.WithSelects, depth 
 		}
 	}
 	nested, _ := s.query(ctes)
-	if nested == nil || nested.Union != nil || len(nested.Joins) != 0 || len(nested.List) != 1 {
+	if nested == nil || nested.Union != nil || len(nested.Joins) != 0 {
 		return false
 	}
-	star := projectionStar(nested.List[0])
+	var star *expr.Star
+	for _, item := range nested.List {
+		if candidate := projectionStar(item); candidate != nil {
+			if star != nil {
+				return false
+			}
+			star = candidate
+		} else {
+			if item == nil || !allowLiterals || item.Alias == "" {
+				return false
+			}
+			if _, literal := item.Expr.(*expr.Literal); !literal {
+				return false
+			}
+		}
+	}
 	if star == nil || len(star.Except) > 0 {
 		return false
 	}
@@ -314,5 +350,5 @@ func (s wildcardSource) preservesPhysicalWildcard(ctes query.WithSelects, depth 
 		}
 	}
 	scoped := append(append(query.WithSelects(nil), nested.WithSelects...), ctes...)
-	return child.preservesPhysicalWildcard(scoped, depth+1)
+	return child.preservesPhysicalWildcard(scoped, depth+1, allowLiterals)
 }

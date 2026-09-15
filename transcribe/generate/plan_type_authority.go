@@ -48,6 +48,16 @@ func (p *Plan) canonicalAliases(packagePath, expression string) (string, error) 
 			aliases[packagePath+"."+contract.Type] = contract.Package + "." + contract.Type
 		}
 	}
+	for _, view := range p.Views {
+		if view.Ownership == ViewGenerated && view.Package != "" && view.Package != packagePath {
+			aliases[packagePath+"."+view.Name] = view.Package + "." + view.Name
+		}
+	}
+	for _, helper := range p.HelperTypes {
+		if helper.Package != "" && helper.Package != packagePath {
+			aliases[packagePath+"."+helper.Name] = helper.Package + "." + helper.Name
+		}
+	}
 	return (xshape.Resolver{Rewriter: func(name string) (string, error) {
 		if replacement := aliases[name]; replacement != "" {
 			return replacement, nil

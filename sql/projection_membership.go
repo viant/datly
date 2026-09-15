@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -55,6 +56,103 @@ func (c ProjectionColumn) Matches(name string) bool { return c.names.Matches(nam
 
 func (c ProjectionColumn) MatchesOutput(name string) bool {
 	return (ProjectionNames{c.output}).Matches(name)
+}
+
+// HasOutput checks declared SQL output identity. Complete is false only when
+// a physical wildcard or opaque source needs database discovery; invalid SQL and explicit missing
+// outputs are never treated as a wildcard. Prepared Go fields are not evidence
+// that an inner SQL projection exposes a column.
+func (p SelectorProjection) HasOutput(name string) (found, complete bool, err error) {
+	p.View = nil
+	columns, _, err := p.columns()
+	if err != nil {
+		var pending *databaseProjectionSchema
+		if errors.As(err, &pending) {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+	for _, column := range columns {
+		if column.MatchesOutput(name) {
+			return true, true, nil
+		}
+	}
+	return false, true, nil
+}
+
+// HasSourceOutput checks a name in the SQL FROM/JOIN scope, rather than in the
+// final SELECT aliases. This prevents a projected selector from claiming an
+// output that its explicitly narrowed derived source does not expose.
+func (p SelectorProjection) HasSourceOutput(namespace, name string) (found, complete bool, err error) {
+	source, ok := newSelectProjectionSource(p.SQL)
+	if !ok {
+		return false, false, &UnresolvedProjectionError{Cause: fmt.Errorf("source projection has no FROM scope")}
+	}
+	start, end := 0, len(p.SQL)
+	if sqltext.FindTopLevelKeyword(p.SQL[:source.selectIndex], "with", 0) < 0 {
+		start = source.selectIndex
+	}
+	// Availability depends on FROM/JOIN sources, not later template predicates.
+	// Native clause scanning retains nested source predicates and CTE scopes.
+	for _, clause := range []string{"where", "group by", "having", "order by", "limit", "offset", "union"} {
+		if at := sqltext.FindTopLevelKeyword(p.SQL, clause, source.fromIndex+len("from")); at >= 0 && at < end {
+			end = at
+		}
+	}
+	parsed, err := sqlparser.ParseQuery(p.SQL[start:end])
+	if err != nil {
+		return false, false, &UnresolvedProjectionError{Cause: err}
+	}
+	if parsed == nil || parsed.From.X == nil {
+		return false, false, &UnresolvedProjectionError{Cause: fmt.Errorf("source projection has no FROM scope")}
+	}
+	sources := []wildcardSource{{alias: parsed.From.Alias, node: parsed.From.X, joined: len(parsed.Joins) > 0}}
+	for _, join := range parsed.Joins {
+		if join != nil {
+			sources = append(sources, wildcardSource{alias: join.Alias, node: join.With, joined: true})
+		}
+	}
+	for _, src := range sources {
+		if src.alias == "" {
+			src.alias = sqlparser.NewColumn(query.NewItem(src.node)).Identity()
+		}
+		if namespace != "" {
+			parts, err := sqlparser.TableIdentifierParts(namespace)
+			if err != nil {
+				return false, false, err
+			}
+			if !src.matchesQualifier(parts) {
+				continue
+			}
+		} else if len(sources) != 1 {
+			return false, false, fmt.Errorf("unqualified source output %q is ambiguous", name)
+		}
+		columns, err := (SelectorProjection{}).wildcardSourceColumns(parsed, src, 0)
+		if err != nil {
+			var pending *databaseProjectionSchema
+			if errors.As(err, &pending) {
+				return false, false, nil
+			}
+			return false, false, err
+		}
+		matches := 0
+		for _, column := range columns {
+			if column.MatchesOutput(name) {
+				matches++
+			}
+		}
+		if matches > 1 {
+			return false, true, &duplicateProjectionError{name: name}
+		}
+		return matches == 1, true, nil
+	}
+	return false, true, nil
+}
+
+type databaseProjectionSchema struct{}
+
+func (*databaseProjectionSchema) Error() string {
+	return "wildcard projection requires prepared columns"
 }
 
 func (c ProjectionColumn) OrderExpression() string { return c.order }
@@ -118,7 +216,7 @@ func (p SelectorProjection) selectColumns(columns []ProjectionColumn, selected [
 
 func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
 	if err := sqltext.ValidateStructure(p.SQL); err != nil {
-		return nil, false, fmt.Errorf("source projection is unresolved: %w", err)
+		return nil, false, &UnresolvedProjectionError{Cause: err}
 	}
 	parts, ok := newSelectProjectionSource(p.SQL)
 	source := p.SQL
@@ -130,17 +228,17 @@ func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
 		parsed, err = parts.parse()
 	}
 	if err != nil || parsed == nil || len(parsed.List) == 0 {
-		return nil, false, fmt.Errorf("source projection is unresolved")
+		return nil, false, &UnresolvedProjectionError{}
 	}
 	var columns []ProjectionColumn
 	for i, item := range parsed.List {
 		if item == nil || item.Expr == nil {
-			return nil, false, fmt.Errorf("source projection is unresolved")
+			return nil, false, &UnresolvedProjectionError{}
 		}
 		if projectionStar(item) != nil {
 			full, err := sqlparser.ParseQuery(strings.TrimSuffix(strings.TrimSpace(p.SQL), ";"))
 			if err != nil || full == nil {
-				return nil, false, fmt.Errorf("wildcard source projection is unresolved")
+				return nil, false, &UnresolvedProjectionError{Cause: err}
 			}
 			resolved, err := p.wildcardColumns(full, item, 0)
 			if err != nil {
@@ -278,7 +376,7 @@ func (p SelectorProjection) Expand() (string, error) {
 	}
 	source, ok := newSelectProjectionSource(p.SQL)
 	if !ok {
-		return "", fmt.Errorf("source projection is unresolved")
+		return "", &UnresolvedProjectionError{}
 	}
 	return source.render(p.SQL, parts), nil
 }

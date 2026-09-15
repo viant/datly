@@ -76,9 +76,54 @@ func init(){govalidator.RegisterWithDependencies("produced_fk",func(_ *govalidat
 	source = strings.Replace(source, ` if mode=="incomplete key"{`, ` if mode=="supplied nil"{if err==nil||!strings.Contains(err.Error(),"supplied without a value")||customCalls!=0||sequenceCalls!=0||queueCalls!=0||writes.Load()!=0{t.Fatalf("supplied null composite identity accepted: %v",err)};return}
  if mode=="incomplete key"{`, 1)
 	if f.mode == "parent update" {
-		source = strings.Replace(source, ` if mode=="supplied nil"{`, ` if mode=="parent update"{if err==nil||!strings.Contains(err.Error(),"partial original identity")||initCalls!=0||customCalls!=0||sequenceCalls!=0||queueCalls!=0||writes.Load()!=0{t.Fatalf("UPDATE parent authorized a missing composite key part: %v",err)};return}
+		childAction := "captured.actions.role1[0].Action"
+		if f.self {
+			childAction = "captured.actions.role0[1].Action"
+		}
+		source = strings.Replace(source, `func(p *observedProgram)Queue(ctx context.Context)error{`, `func(p *observedProgram)Queue(ctx context.Context)error{if captured.actions.role0[0].Action!=handler.WriteUpdate||`+childAction+`!=handler.WriteInsert{return errors.New("parent-produced composite actions changed")};`, 1)
+		source = strings.Replace(source, ` if mode=="supplied nil"{`, ` if mode=="parent update"{
+  if err!=nil||queueInvocations!=1||queueCalls!=2||writes.Load()!=2{t.Fatalf("stable UPDATE parent did not supply a new INSERT child: %v queue=%d hooks=%d writes=%d",err,queueInvocations,queueCalls,writes.Load())}
+  h.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT id,parent_id,ancestor_id,name FROM nodes ORDER BY id"},[]struct{Id,ParentId,AncestorId int64;Name string}{{5,5,5,"parent"},{20,5,5,"child"}})
+ }
  if mode=="supplied nil"{`, 1)
+	}
+	if f.mode == "supplied conflict" {
+		source = strings.Replace(source, `!strings.Contains(err.Error(),"supplied relation field conflicts")`, `!strings.Contains(err.Error(),"frozen resolved identity")`, 1)
+		source = strings.Replace(source, `t.Fatalf("supplied link was overwritten: %v",err)}
+  return`, `t.Fatalf("supplied link was overwritten: %v",err)}
+  if queueInvocations!=0{t.Fatal("conflicting composite reached Queue")}
+  h.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT id,parent_id,ancestor_id,name FROM nodes ORDER BY id"},[]struct{Id,ParentId,AncestorId int64;Name string}{{5,5,5,"anchor"}})
+  return`, 1)
 	}
 
 	return source
+}
+
+func TestCompositeParentProducedCollisionRemainsInsert(t *testing.T) {
+	for _, self := range []bool{false, true} {
+		name := "relation"
+		if self {
+			name = "self"
+		}
+		t.Run(name, func(t *testing.T) {
+			fixture := relationProducerFixture{self: self, composite: true, mode: "parent update", rewrite: func(source string) string {
+				source = strings.Replace(source, ` connection,err:=h.DB.Conn(ctx)`, ` if err:=h.ExecStatements(ctx,"INSERT INTO nodes VALUES(20,5,'existing child',5)");err!=nil{t.Fatal(err)}
+ connection,err:=h.DB.Conn(ctx)`, 1)
+				start := strings.Index(source, ` if mode=="parent update"{`)
+				end := strings.Index(source[start:], ` if mode=="supplied nil"{`) + start
+				if start < 0 || end < start {
+					t.Fatal("parent proof block missing")
+				}
+				source = source[:start] + ` if mode=="parent update"{
+    if err==nil||queueInvocations!=1{t.Fatalf("pending child did not retain INSERT through Queue: %v queue=%d",err,queueInvocations)}
+    h.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT id,parent_id,ancestor_id,name FROM nodes ORDER BY id"},[]struct{Id,ParentId,AncestorId int64;Name string}{{5,5,5,"anchor"},{20,5,5,"existing child"}})
+    if len(outcomes)!=1||outcomes[0].CommitConfirmed(){t.Fatalf("collision committed: %v %+v",err,outcomes)}
+    return
+   }
+` + source[end:]
+				return source
+			}}
+			fixture.run(t)
+		})
+	}
 }

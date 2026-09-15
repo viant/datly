@@ -91,13 +91,13 @@ func (e *actionEmitter) reconcile() (ast.Decl, error) {
 		}
 		original := &ast.TypeAssertExpr{X: selectExpr(selectExpr(selectExpr(ast.NewIdent("entry"), "Frame"), "State"), "Original"), Type: &ast.StarExpr{X: ast.NewIdent(role.association.StateType)}}
 		loop := []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("key"), ast.NewIdent("valid"), ast.NewIdent("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(ast.NewIdent(role.association.CurrentKeyFunction), selectExpr(ast.NewIdent("entry"), "Payload"), original)}}, &ast.IfStmt{Cond: &ast.BinaryExpr{X: ast.NewIdent("err"), Op: token.NEQ, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(ast.NewIdent("err"))}}}, &ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent("valid")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("reconciled mutation identity is missing"))}}}}
-		changed := &ast.BinaryExpr{X: &ast.BinaryExpr{X: selectExpr(ast.NewIdent("entry"), "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteUpdate")}, Op: token.LAND, Y: &ast.BinaryExpr{X: ast.NewIdent("key"), Op: token.NEQ, Y: selectExpr(ast.NewIdent("entry"), "OriginalKey")}}
+		changed := &ast.BinaryExpr{X: &ast.BinaryExpr{X: selectExpr(ast.NewIdent("entry"), "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteUpdate")}, Op: token.LAND, Y: &ast.BinaryExpr{X: ast.NewIdent("key"), Op: token.NEQ, Y: selectExpr(ast.NewIdent("entry"), "IdentityKey")}}
 		loop = append(loop, &ast.IfStmt{Cond: changed, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("parent linking cannot change an existing identity"))}}})
 		if e.entities.identity != nil {
 			for _, part := range role.record.plan.IdentityKeys() {
-				supplied := callExpr(selectExpr(original, "Has"), stringExpr(part.Field))
-				differs := &ast.BinaryExpr{X: selectExpr(ast.NewIdent("key"), part.Field), Op: token.NEQ, Y: selectExpr(selectExpr(ast.NewIdent("entry"), "OriginalKey"), part.Field)}
-				loop = append(loop, &ast.IfStmt{Cond: &ast.BinaryExpr{X: supplied, Op: token.LAND, Y: differs}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("parent linking cannot change an originally supplied identity part"))}}})
+				supplied := selectExpr(selectExpr(selectExpr(ast.NewIdent("entry"), "Frame"), "identityKnown"), part.Field)
+				differs := &ast.BinaryExpr{X: selectExpr(ast.NewIdent("key"), part.Field), Op: token.NEQ, Y: selectExpr(selectExpr(ast.NewIdent("entry"), "IdentityKey"), part.Field)}
+				loop = append(loop, &ast.IfStmt{Cond: &ast.BinaryExpr{X: supplied, Op: token.LAND, Y: differs}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("parent linking cannot change a frozen resolved identity part"))}}})
 			}
 		}
 		index := &ast.IndexExpr{X: ast.NewIdent(owner.field + "Identities"), Index: identityKey}
@@ -122,7 +122,10 @@ func (e *actionEmitter) decisionLoop(role actionRole, body []ast.Stmt) ast.Stmt 
 
 func (e *actionEmitter) restoreIdentity(role actionRole) ([]ast.Stmt, error) {
 	update := &ast.BinaryExpr{X: selectExpr(ast.NewIdent("entry"), "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteUpdate")}
-	statements := []ast.Stmt{&ast.IfStmt{Cond: &ast.BinaryExpr{X: update, Op: token.LAND, Y: &ast.UnaryExpr{Op: token.NOT, X: selectExpr(ast.NewIdent("entry"), "OriginalAssigned")}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("update requires an originally assigned identity"))}}}}
+	statements := []ast.Stmt{&ast.IfStmt{Cond: &ast.BinaryExpr{X: update, Op: token.LAND, Y: &ast.UnaryExpr{Op: token.NOT, X: selectExpr(ast.NewIdent("entry"), "IdentityAssigned")}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("update requires a resolved identity"))}}}}
+	if e.entities.identity != nil {
+		return statements, nil
+	}
 	for index, key := range role.record.plan.IdentityKeys() {
 		path, err := e.fieldPath(role, key.Field)
 		if err != nil {
@@ -130,7 +133,7 @@ func (e *actionEmitter) restoreIdentity(role actionRole) ([]ast.Stmt, error) {
 		}
 		name := "identity" + strconv.Itoa(index)
 		part := e.accessor(role.record, path, name)
-		var value ast.Expr = selectExpr(selectExpr(ast.NewIdent("entry"), "OriginalKey"), key.Field)
+		var value ast.Expr = selectExpr(selectExpr(ast.NewIdent("entry"), "IdentityKey"), key.Field)
 		if key.Type.Pointer || strings.HasPrefix(key.Type.Name, "*") {
 			part = append(part, defineStmt(name+"Value", value))
 			value = &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent(name + "Value")}

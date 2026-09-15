@@ -94,7 +94,7 @@ func (e *actionEmitter) linkAssignments(role, parent actionRole, links []plan.Ke
 		default:
 			return nil, fmt.Errorf("mutation link %d for %s has no checked conversion", index, role.record.plan.Identity)
 		}
-		if e.entities.identity != nil {
+		if e.entities.identity != nil && !e.isIdentityField(role, link.Child.Field) {
 			original := selectExpr(selectExpr(selectExpr(ast.NewIdent("entry"), "Frame"), "State"), "Original")
 			captured := selectExpr(&ast.TypeAssertExpr{X: original, Type: &ast.StarExpr{X: ast.NewIdent(role.association.StateType)}}, "original")
 			insert := &ast.BinaryExpr{X: selectExpr(ast.NewIdent("entry"), "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteInsert")}

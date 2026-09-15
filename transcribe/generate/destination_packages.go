@@ -62,6 +62,9 @@ func (d *shapeDestinations) partition(p *Plan) error {
 		}
 		d.byName[h.Name] = shapeDestination{name: h.Name, pkg: h.Package}
 	}
+	if indexes := p.ReadIndexes; indexes != nil && indexes.CacheField != "" {
+		d.byName[indexes.TypeName] = shapeDestination{name: indexes.TypeName, pkg: indexes.Package}
+	}
 	groups := map[string]*Plan{}
 	group := func(pkg string) *Plan {
 		if result := groups[pkg]; result != nil {
@@ -109,6 +112,14 @@ func (d *shapeDestinations) partition(p *Plan) error {
 			g.HelperTypes = append(g.HelperTypes, helper)
 			alias(helper.Name, helper.Package)
 		}
+	}
+	if indexes := p.ReadIndexes; indexes != nil && indexes.Package != p.Package {
+		target := groups[indexes.Package]
+		if target == nil {
+			return fmt.Errorf("application indexes require generated input package %s", indexes.Package)
+		}
+		target.ReadIndexes = indexes
+		p.ReadIndexes = nil
 	}
 	if err := d.relocateContractHooks(p, groups); err != nil {
 		return err

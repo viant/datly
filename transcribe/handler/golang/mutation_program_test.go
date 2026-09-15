@@ -50,7 +50,7 @@ type Marker struct{Id,Name bool}
 	"type Previous struct{Id *int64 `sqlx:\"id\"`;Name string `sqlx:\"name\"`}\n" + `
 type Input struct{Events []*Record;CurrentEvents []*Previous;Mode string}
 type Output struct{Data []*Record}
-func(i *Input)Init(context.Context)error{*i.Events[0].Id=7;for _,row:=range i.CurrentEvents{*row.Id=99;row.Name="corrupted"};return nil}
+func(i *Input)Init(context.Context)error{for _,row:=range i.CurrentEvents{*row.Id=99;row.Name="corrupted"};return nil}
 ` + "type Hooks struct{Input *Input `bind:\"kind=input\"`;initialized,sequenced,queued int}\n" + `
 var callbackError=errors.New("hook failed")
 var outcomes []handler.Outcome

@@ -66,7 +66,7 @@ func TestGeneratedSequenceBusinessAndFinalValidationSQLite(t *testing.T) {
 			}
 			source := strings.NewReplacer("{{FACTORY}}", asset.Factory, "{{DEFINITION}}", asset.Definition, "{{PROGRAM}}", asset.Program, "{{EVENTS}}", events, "{{SECOND_LOCATION}}", secondLocation).Replace(sequenceValidationSQLiteFixture)
 			if f.nonKey {
-				source = strings.Replace(source, `"relation missing","restored invalid key","custom value"`, `"relation missing","custom value"`, 1)
+				source = strings.Replace(source, `"relation missing","initialized valid key","custom value"`, `"relation missing","custom value"`, 1)
 				source = strings.Replace(source, `"pending changed key",`, "", 1)
 				source = strings.NewReplacer("id,primaryKey,unique,table=records", "id,unique,table=records", "PRIMARY KEY(tenant_id,id)", "PRIMARY KEY(tenant_id)").Replace(source)
 			}
@@ -79,6 +79,8 @@ func (f sequenceValidationFixture) update() (*plan.Plan, Config) {
 	semantic := f.semantic()
 	semantic.Operation = plan.OperationPatch
 	root, child := semantic.Root, semantic.Root.Relations[0].Child
+	// These authored final-link validation cases explicitly request reparenting.
+	root.Relations[0].AllowReparent = true
 	root.Sequence = nil
 	for index, record := range []*plan.RecordPlan{root, child} {
 		record.Write = fixtureWritePolicy(plan.OperationPatch, record.InputPath, index)
@@ -287,7 +289,7 @@ func init(){
   },nil
  },func(*govalidator.Field,*govalidator.Check)([]string,error){return nil,nil})
 }
-func(i *Input)Init(context.Context)error{active=i;if i.Mode=="restored invalid key"{*i.Events[0].Id=5};if i.Mode=="pending changed key"{id:=int64(50);i.Events[0].Children[0].Id=&id};return nil}
+func(i *Input)Init(context.Context)error{active=i;if i.Mode=="initialized valid key"{*i.Events[0].Id=5};if i.Mode=="pending changed key"{id:=int64(50);i.Events[0].Children[0].Id=&id};return nil}
 ` + "type Hooks struct{Input *Input `bind:\"kind=input\"`}\n" + `
 func(h *Hooks)Init(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{return nil}
 func(h *Hooks)Validate(_ context.Context,row *Record,_ handler.EntityState[Record,handler.NoParent])error{
@@ -310,7 +312,7 @@ func(*ChildHooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,R
 type completion struct{}
 func(*completion)Finalize(_ context.Context,_ *Input,_ *Output,outcome handler.Outcome)error{outcomes=append(outcomes,outcome.Clone());return nil}
 func TestSequenceValidation(t *testing.T){
- for _,mode:=range []string{"success","pending supplied","pending changed key","unrelated tenant","explicit zero","supplied nil","ordinary missing","logical missing","children missing","relation missing","restored invalid key","custom value","custom marker","custom logical marker","custom logical value","custom logical pointer","custom relationship value","native business value","native business marker","native final value","native final marker","native final logical marker","native final logical value","native final logical pointer","native final relationship value","native final relation slice","produced collision","final failure","final cancellation"}{t.Run(mode,func(t *testing.T){
+ for _,mode:=range []string{"success","pending supplied","pending changed key","unrelated tenant","explicit zero","supplied nil","ordinary missing","logical missing","children missing","relation missing","initialized valid key","custom value","custom marker","custom logical marker","custom logical value","custom logical pointer","custom relationship value","native business value","native business marker","native final value","native final marker","native final logical marker","native final logical value","native final logical pointer","native final relationship value","native final relation slice","produced collision","final failure","final cancellation"}{t.Run(mode,func(t *testing.T){
   active=nil;produced=false;customCalls=0;afterSequenceCalls=0;queueCalls=0;finalCalls=0;outcomes=nil
   ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel();cancelFinal=cancel
   h:=sqlite.New(t);h.DB.SetMaxOpenConns(1);h.DB.SetMaxIdleConns(1)
@@ -335,7 +337,7 @@ func TestSequenceValidation(t *testing.T){
   case "ordinary missing":first.Name=""
   case "logical missing":first.Context=""
   case "relation missing":first.Labels=nil
-  case "restored invalid key":bad:=int64(-1);first.Id=&bad;first.Has.Id=true
+  case "initialized valid key":bad:=int64(-1);first.Id=&bad;first.Has.Id=true
   case "pending supplied","pending changed key","produced collision":peer=11
   case "unrelated tenant":second.TenantId=11
   }
@@ -343,8 +345,9 @@ func TestSequenceValidation(t *testing.T){
   if mode=="children missing"{first.Children=nil}
   definition:={{FACTORY}}().(*{{DEFINITION}});definition.Finalizer=&completion{}
   _,err=engine.New().Execute(ctx,engine.Request{Input:route,Handler:mutation.New[Input,Output](&observedSequenceDefinition{definition}),DataSource:dml.Source{DB:h.DB},Providers:[]locator.Provider{values.New("test",map[string]any{"events":events,"mode":mode})}})
-  success:=mode=="success"||mode=="explicit zero"||mode=="pending supplied"||mode=="pending changed key"||mode=="unrelated tenant"
-  if strings.HasPrefix(mode,"pending ")&&(first.Id==nil||*first.Id!=12||*second.Id!=11){t.Fatalf("pending supplied identity was not reserved: %+v / %+v",first,second)}
+  success:=mode=="success"||mode=="explicit zero"||mode=="pending supplied"||mode=="pending changed key"||mode=="unrelated tenant"||mode=="initialized valid key"
+  if mode=="pending supplied"&&(first.Id==nil||*first.Id!=12||*second.Id!=11){t.Fatalf("pending supplied identity was not reserved: %+v / %+v",first,second)}
+  if mode=="pending changed key"&&(first.Id==nil||*first.Id!=11||*second.Id!=50){t.Fatalf("effective initialized key not reserved: %+v / %+v",first,second)}
   if mode=="unrelated tenant"&&(first.Id==nil||*first.Id!=11){t.Fatal("allocator reserved an unrelated composite key part")}
   if (err==nil)!=success{var id int64;if first.Id!=nil{id=*first.Id};t.Fatalf("execution: %v (first ID=%d)",err,id)}
   if len(outcomes)!=1||outcomes[0].CommitConfirmed()!=success||(outcomes[0].Error==nil)!=success{t.Fatalf("outcomes=%+v error=%v",outcomes,err)}
@@ -368,7 +371,7 @@ func TestSequenceValidation(t *testing.T){
    expected:=[]string{"Input.Events[0].Id","{{SECOND_LOCATION}}"};sort.Strings(locations);sort.Strings(expected);if !reflect.DeepEqual(locations,expected){t.Fatalf("locations=%v want=%v",locations,expected)}
   }
   if mode=="final cancellation"&&!errors.Is(err,context.Canceled){t.Fatalf("cancellation lost: %v",err)}
-  if mode=="restored invalid key"{var failed *handler.Validation;if !errors.As(err,&failed){t.Fatalf("restored key not rechecked: %v",err)};if *first.Id!=-1{t.Fatal("original key not restored")}}
+  if mode=="initialized valid key"{if *first.Id!=5{t.Fatal("initialized key not retained")};h.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT name FROM records WHERE id=5"},[]struct{Name string}{{"first"}})}
   queryCtx:=context.Background();want:=1;if success{want=3;if queueCalls!=2||finalCalls!=2{t.Fatalf("final context checks/queue=%d/%d",finalCalls,queueCalls)};if first.Context==""||len(first.Labels)==0{t.Fatal("logical context dropped")};if mode=="explicit zero"&&*first.Id!=0{t.Fatal("supplied zero allocated")}}
   h.AssertQuery(t,queryCtx,sqlite.Query{SQL:"SELECT COUNT(*) AS n FROM records"},[]struct{N int}{{want}})
   if success&&(first.Details!=details||second.Details!=details||first.Links[0]!=link||second.Links[0]!=link||first.Has!=firstMarker||second.Has!=secondMarker||first.Service!=service||first.Signal!=signal||first.Callback()==0){t.Fatal("context aliases, holders or opaque services were changed")}

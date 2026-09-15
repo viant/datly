@@ -12,6 +12,8 @@ func TestScalarColumnFieldTagMergesSQLXConstraints(t *testing.T) {
 		column *spec.Column
 		want   string
 	}{
+		{name: "exact output alias", column: &spec.Column{Name: "Alias_Name"}, want: `sqlx:"event_id|Alias_Name"`},
+		{name: "authored mapping retains authority", column: &spec.Column{Name: "Alias_Name", Tag: `sqlx:"custom|Alias_Name"`}, want: `sqlx:"custom|Alias_Name"`},
 		{name: "table not null", column: &spec.Column{NotNull: true, Nullable: true}, want: `sqlx:"event_id,required=true"`},
 		{name: "explicit required false", column: &spec.Column{NotNull: true, Tag: `sqlx:"event_id,required=false"`}, want: `sqlx:"event_id,required=false"`},
 		{name: "nullable inference is not a table constraint", column: &spec.Column{Nullable: false}, want: `sqlx:"event_id"`},

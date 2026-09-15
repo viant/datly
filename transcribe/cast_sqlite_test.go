@@ -25,10 +25,18 @@ func TestCASTImportedRichShapeSQLite(t *testing.T) {
 		name, request string
 		unit          string
 		cap           int
+		wildcard      bool
 	}{
-		{"cap zero", `{"id":1,"bounds":{"cap":0}}`, "days", 0},
-		{"unit empty", `{"id":1,"bounds":{"unit":""}}`, "", 7},
-		{"logical omitted", `{"id":1}`, "days", 7},
+		{"cap zero", `{"id":1,"bounds":{"cap":0}}`, "days", 0, false},
+		{"unit empty", `{"id":1,"bounds":{"unit":""}}`, "", 7, false},
+		{"logical omitted", `{"id":1}`, "days", 7, false},
+		{"wildcard cap zero", `{"id":1,"bounds":{"cap":0}}`, "days", 0, true},
+		{"wildcard unit empty", `{"id":1,"bounds":{"unit":""}}`, "", 7, true},
+		{"wildcard logical omitted", `{"id":1}`, "days", 7, true},
+		{"quoted cap zero", `{"id":1,"bounds":{"cap":0}}`, "days", 0, false},
+		{"backtick unit empty", `{"id":1,"bounds":{"unit":""}}`, "", 7, false},
+		{"CTE logical omitted", `{"id":1}`, "days", 7, false},
+		{"CTE cap zero", `{"id":1,"bounds":{"cap":0}}`, "days", 0, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -45,9 +53,27 @@ func TestCASTImportedRichShapeSQLite(t *testing.T) {
 #setting($_ = $route('/records','GET'))
 SELECT r.*, CAST(r.bounds AS domain.Bounds), tag(r.bounds,'sqlx:"-"'), tag(r.unit,'internal:"true"'), tag(r.cap,'internal:"true"'), CAST(r.labels AS '[]string'), tag(r.labels,'sqlx:"labels,enc=JSON"')
 FROM (SELECT id, unit, cap, labels, '' AS bounds FROM records) r`
+			if tc.wildcard {
+				text = strings.Replace(text, "SELECT id, unit, cap, labels, '' AS bounds FROM records", "SELECT o.*, '' AS bounds FROM records o", 1)
+			}
+			if strings.HasPrefix(tc.name, "quoted") {
+				text = strings.Replace(text, "'' AS bounds", `'' AS "bounds"`, 1)
+			}
+			if strings.HasPrefix(tc.name, "backtick") {
+				text = strings.Replace(text, "'' AS bounds", "'' AS `bounds`", 1)
+			}
+			expectedInner := ""
+			if strings.HasPrefix(tc.name, "CTE") {
+				inner := `WITH physical AS (SELECT id,unit,cap,labels FROM records), shaped AS (SELECT id,unit,cap,labels, json_extract('{"arbitrary":1}', '$.arbitrary') AS bounds FROM physical) SELECT id,unit,cap,labels,bounds FROM shaped`
+				expectedInner = inner
+				text = strings.Replace(text, "SELECT id, unit, cap, labels, '' AS bounds FROM records", inner, 1)
+			}
 			compiled, err := NewCompiler().Compile(ctx, &Source{Name: "Records", Scope: "example.com/app/records", Connector: "main", Types: catalog, ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": h.DB}), Text: text})
 			if err != nil {
 				t.Fatal(err)
+			}
+			if expectedInner != "" && !strings.Contains(compiled.Component.RootView.Source.SQL, expectedInner) {
+				t.Fatal("inner CTE text changed")
 			}
 			resolver, err := typecatalog.NewResolver(catalog, typecatalog.TranscribeAuthority, &typecatalog.ResolutionContext{Imports: []typecatalog.PackageImport{{Alias: "domain", Package: pkg}}})
 			if err != nil {
@@ -149,5 +175,40 @@ func TestCASTUnknownImportedShapeFailsGeneration(t *testing.T) {
 SELECT r.*,CAST(r.bounds AS domain.Bounds),tag(r.bounds,'sqlx:"-"') FROM records r`})
 	if err == nil {
 		t.Fatal("unresolved imported type emitted")
+	}
+}
+
+func TestCASTNamedPseudoViewOwnershipSQLite(t *testing.T) {
+	ctx := context.Background()
+	h := sqlite.New(t)
+	if err := h.ExecStatements(ctx, `CREATE TABLE records(id INTEGER, unknown)`, `CREATE TABLE known(id INTEGER)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, sql, failure string
+	}{
+		{"child owns declaration", `SELECT r.*, child.*, CAST(child.bounds AS int), tag(child.bounds,'sqlx:"-"') FROM (SELECT id FROM records) r JOIN (SELECT id, '' AS bounds FROM records) child ON child.id=r.id`, ""},
+		{"child wildcard", `SELECT r.*, child.*, CAST(child.bounds AS int), tag(child.bounds,'sqlx:"-"') FROM (SELECT id FROM records) r JOIN (SELECT o.*, '' AS bounds FROM known o) child ON child.id=r.id`, ""},
+		{"root does not authorize child", `SELECT r.*, child.*, CAST(r.bounds AS int), tag(r.bounds,'sqlx:"-"') FROM (SELECT id, '' AS bounds FROM records) r JOIN (SELECT id, id+0 AS bounds FROM records) child ON child.id=r.id`, "unable discover column bounds type"},
+		{"unknown physical remains strict", `SELECT r.*, CAST(r.bounds AS int), tag(r.bounds,'sqlx:"-"') FROM (SELECT o.*, '' AS bounds FROM records o) r`, "unable discover column unknown type"},
+		{"inner alias is not view alias", `SELECT r.*, CAST(o.bounds AS int), tag(o.bounds,'sqlx:"-"') FROM (SELECT id, '' AS bounds FROM records o) r`, "has no canonical view"},
+		{"database scope annotation restricted", `SELECT r.*, CAST(r.bounds AS int), tag(r.bounds,'sqlx:"-"') FROM (SELECT id, '' AS bounds, tag(o.id,'internal:"true"') FROM records o) r`, "outer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			compiled, err := NewCompiler().Compile(ctx, &Source{Name: "Records", Connector: "main", ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": h.DB}), Text: "#setting($_ = $route('/records','GET'))\n" + tc.sql})
+			if tc.failure != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.failure) {
+					t.Fatalf("expected %s, got %v", tc.failure, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			child := compiled.Component.RootView.Relations[0].View
+			if len(compiled.Component.RootView.Columns) != 1 || len(child.Columns) != 2 || child.Columns[0].Name != "bounds" || child.Columns[0].Type.Name != "int" || !child.Columns[0].ExplicitType {
+				t.Fatalf("declaration reached wrong view: %+v", compiled.Component.RootView)
+			}
+		})
 	}
 }

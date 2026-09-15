@@ -8,12 +8,9 @@ import (
 	plan "github.com/viant/datly/transcribe/handler/ast"
 )
 
-// Producer eligibility uses the same original tuple and captured database index
-// as frame preparation. No working values, markers or pending payloads classify
-// a parent. A captured UPDATE can also supply its stable key to a new child.
-// Final relation verification and native validation still run after reconciliation.
-// The captured acyclic edges let Identity resolve produced key parts
-// recursively, without a second graph or row index.
+// Producer eligibility follows initialized candidates and the detached scoped
+// read. Original capture continues to own the acyclic producer topology. Frame
+// decisions and frozen key parts remain authoritative for the actual operation.
 func (p *mutationIdentityPolicy) previousName(record *recordLowering) string {
 	return "producerPrevious" + strconv.Itoa(record.order)
 }
@@ -24,9 +21,8 @@ func (p *mutationIdentityPolicy) previousType(e *entityEmitter, record *recordLo
 
 func (p *mutationIdentityPolicy) write(e *entityEmitter, record *recordLowering) ast.Decl {
 	id := ast.NewIdent
-	adapter := &ast.ParenExpr{X: &ast.CompositeLit{Type: id(e.matchAdapterName(record))}}
 	body := []ast.Stmt{
-		&ast.AssignStmt{Lhs: []ast.Expr{id("key"), id("complete"), id("_"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(adapter, "Identity"), id("state"))}},
+		&ast.AssignStmt{Lhs: []ast.Expr{id("key"), id("_"), id("complete"), id("_"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(id(e.prefix+"ResolvedIdentity"+strconv.Itoa(record.order)), selectExpr(id("state"), "source"), id("state"))}},
 		&ast.IfStmt{Cond: &ast.BinaryExpr{X: id("err"), Op: token.NEQ, Y: id("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(id("false"), id("err"))}}},
 		assignStmt(id("_"), id("key")), assignStmt(id("_"), id("complete")),
 	}

@@ -12,7 +12,7 @@ func (s *GenerationSettings) SetSupportFile(role, file string) error {
 		return fmt.Errorf("support_dest role %q requires a nonempty destination", role)
 	}
 	switch role {
-	case "entities", "entity_methods", "types", "frames", "previous", "layout", "actions", "mutation_output", "validation", "hooks", "invariants":
+	case "entities", "entity_methods", "types", "frames", "previous", "layout", "actions", "mutation_output", "validation", "hooks", "invariants", "indexes":
 	default:
 		name, ok := strings.CutPrefix(role, "type:")
 		if !ok || !token.IsIdentifier(name) || !token.IsExported(name) {

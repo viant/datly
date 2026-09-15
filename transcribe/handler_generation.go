@@ -201,6 +201,27 @@ func (g *handlerGeneration) prepareGo(semantic *handlerplan.Plan) error {
 	}
 	if options.Go.Execution == GoExecutionMutation {
 		config.Package = contractPlan.PackageName()
+		if err := g.readCollections(semantic, contractPlan); err != nil {
+			return err
+		}
+		inputPackage := contractPlan.Input.Package
+		if inputPackage == "" || contractPlan.Input.Ownership != gen.ContractGenerated {
+			inputPackage = config.PackagePath
+		}
+		packageName := config.Package
+		for _, shape := range contractPlan.ShapePackages {
+			if shape.Package == inputPackage {
+				packageName = shape.PackageName()
+			}
+		}
+		inputType, err := contractPlan.CanonicalType(g.input.TargetPackage, contractPlan.Input.Type)
+		if err != nil {
+			return err
+		}
+		config.ReadIndexes = &handlergo.ReadIndexConfig{Package: packageName, PackagePath: inputPackage, InputType: inputType, Owned: contractPlan.Input.Ownership == gen.ContractGenerated}
+		if g.input.TypeResolver != nil {
+			config.ReadIndexes.Types = g.input.TypeResolver.Descriptor
+		}
 		return g.prepareMutation(semantic, config)
 	}
 	asset, err := handlergo.Lower(semantic, config)

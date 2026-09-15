@@ -190,8 +190,19 @@ func (p *scaffoldPersistence) projectionChanges(destination string, previous, pr
 			continue
 		}
 		prior, trusted := owned[candidate.key()]
-		if !owners[candidate.Owner] || relations[candidate.key()] || !trusted || candidate.Tag == prior.Tag {
+		if !owners[candidate.Owner] || !trusted || candidate.Tag == prior.Tag {
 			continue
+		}
+		if relations[candidate.key()] {
+			// Canonical outer aliases can change exact matching fields. This
+			// grants no destination, source, cardinality or child-type authority.
+			onlyOn, err := prior.tagChange(candidate, "on")
+			if err != nil {
+				return xshape.SourceFieldEdits{}, err
+			}
+			if !onlyOn || candidate.Type != prior.Type {
+				continue
+			}
 		}
 		// DQL controls generated projection metadata, but never adopts a
 		// destination edit, even when that edit happens to equal the proposal.
@@ -203,7 +214,7 @@ func (p *scaffoldPersistence) projectionChanges(destination string, previous, pr
 	for _, field := range ownership.Fields {
 		if desired, retained := current[field.key()]; retained {
 			if bindings[field.key()] && field.Tag != desired.Tag {
-				codecOnly, err := field.codecChange(desired)
+				codecOnly, err := field.tagChange(desired, "codec")
 				if err != nil {
 					return xshape.SourceFieldEdits{}, err
 				}
@@ -230,9 +241,9 @@ func (p *scaffoldPersistence) projectionChanges(destination string, previous, pr
 	return edits, nil
 }
 
-// codecChange limits projection authority to its generated codec reference;
-// unrelated binding, validation and application tags retain conflict protection.
-func (f projectionField) codecChange(next projectionField) (bool, error) {
+// tagChange limits an owned transition to one canonical tag key.
+// All other metadata retains its existing conflict protection.
+func (f projectionField) tagChange(next projectionField, key string) (bool, error) {
 	previous, err := tags.Parse(f.Tag)
 	if err != nil {
 		return false, err
@@ -253,7 +264,7 @@ func (f projectionField) codecChange(next projectionField) (bool, error) {
 		if tag.Values == other.Values {
 			continue
 		}
-		if tag.Name != "codec" {
+		if tag.Name != key {
 			return false, nil
 		}
 		changed = true

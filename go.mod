@@ -14,13 +14,13 @@ require (
 	github.com/viant/mcp v0.23.1-0.20260914191339-228d17f0aec4
 	github.com/viant/mcp-protocol v0.17.1-0.20260914185636-cba084cedb3d
 	github.com/viant/parsly v0.3.3
-	github.com/viant/sqlparser v0.13.1-0.20260915043317-c2eb88dec646
-	github.com/viant/sqlx v0.26.1-0.20260914200428-eae2a0576379
+	github.com/viant/sqlparser v0.13.1-0.20260915061102-65308eabace8
+	github.com/viant/sqlx v0.26.1-0.20260915052314-24e180f5c1e5
 	github.com/viant/structology v0.10.1-0.20260914220719-1c7fa69a9a75
 	github.com/viant/structql v0.5.4
 	github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630
-	github.com/viant/velty v0.4.1-0.20260914221954-309e5a1d786c
-	github.com/viant/x v0.5.1-0.20260915020332-d92a88484426
+	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
+	github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47
 	github.com/viant/xdatly v0.5.4-0.20260914204318-08752d9972c1
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.0

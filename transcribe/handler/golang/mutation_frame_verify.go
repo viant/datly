@@ -8,8 +8,8 @@ import (
 )
 
 // verify checks working graph addresses against prepared frames. It neither
-// reads database keys nor reclassifies original presence. Scalar changes are
-// allowed; membership, traversal order, and parent/holder context must agree.
+// reads database keys nor reclassifies original presence. Established identity
+// parts, membership, traversal order, and parent/holder context must agree.
 func (e *frameEmitter) verify() (ast.Decl, error) {
 	id := ast.NewIdent
 	nilExpr := id("nil")
@@ -84,6 +84,13 @@ func (e *frameEmitter) verifyRecord(record *recordLowering, role MutationFrameRo
 		changed = &ast.BinaryExpr{X: changed, Op: token.LOR, Y: &ast.BinaryExpr{X: pair[0], Op: token.NEQ, Y: pair[1]}}
 	}
 	body = append(body, guard(changed, "mutation graph order or parent context changed after frame preparation"))
+	if e.entities.identity != nil {
+		identity, err := e.frozenIdentity(record)
+		if err != nil {
+			return nil, err
+		}
+		body = append(body, identity...)
+	}
 	order := selectExpr(id("frames"), e.layout.OrderField)
 	body = append(body, guard(&ast.BinaryExpr{X: id("visitIndex"), Op: token.GEQ, Y: callExpr(id("len"), order)}, "mutation frame execution order is incomplete"), defineStmt("visit", &ast.IndexExpr{X: order, Index: id("visitIndex")}), &ast.IncDecStmt{X: id("visitIndex"), Tok: token.INC})
 	orderMismatch := &ast.BinaryExpr{X: &ast.BinaryExpr{X: selectExpr(id("visit"), "Role"), Op: token.NEQ, Y: &ast.BasicLit{Kind: token.INT, Value: index}}, Op: token.LOR, Y: &ast.BinaryExpr{X: selectExpr(id("visit"), "Index"), Op: token.NEQ, Y: &ast.BinaryExpr{X: next, Op: token.SUB, Y: &ast.BasicLit{Kind: token.INT, Value: "1"}}}}

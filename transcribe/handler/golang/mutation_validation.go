@@ -152,7 +152,7 @@ func (e *validationEmitter) validate(final bool) (ast.Decl, error) {
 			body = append(body, assignStmt(policies, callExpr(id("make"), &ast.MapType{Key: &ast.StarExpr{X: id(role.frame.FrameType)}, Value: selectExpr(id(a.l.handlerAlias), "ValidationOptions")})))
 		}
 		loop := a.original(role)
-		loop = append(loop, a.originalKey(role, "_", "supplied")...)
+		loop = append(loop, a.decisionIdentity(role, "_", "supplied")...)
 		loop = append(loop, assignStmt(id("_"), id("supplied")))
 		selection, action, err := a.actionSelection(role)
 		if err != nil {

@@ -7,12 +7,18 @@ Choose fixtures relevant to the component; this is a behavioral checklist, not p
 Start from a reader-like DQL graph with no hand-authored body/current/output
 plumbing. Select each requested `transcribe` operation with pure Go output after
 capability discovery. Inspect the generated artifact, not just parsed DQL:
-authorized tuple-restricted Previous reads, auxiliary exclusion, Has/SyncPresence,
+authorized Previous reads (including parent-scoped child discovery), auxiliary exclusion, Has/SyncPresence,
 DQL hook/invariant metadata and preserved application Go hook files. If `transcribe` is
 missing, retain the graph and hook contract and report that gap; translation
 success does not satisfy this check. For dates, change only End and verify Start
 backfill without Has, valid intervals, reversed dates, missing Previous evidence
 and new-row completeness.
+
+Test required `#package`, authored input/output/entity names, plain default files,
+optional prefixes and exact overrides. Keep reader/writer DQL separate. Preserve
+inner SQL/CTEs; verify CAST authority for real computed outputs with missing driver
+types, literal defaults (`''` → `string`, `0` → `int`), missing/duplicate outputs,
+and internal backing columns versus `sqlx:"-"` logical fields.
 
 ## Shared contract
 
@@ -36,7 +42,8 @@ For cube/compose, test multiple frames, per-frame selectors and bindings, SQL wr
 
 Use at least: update existing, insert missing, mixed insert/update, supplied zero identity, omitted identity, partial composite identity, same ID/different tenant, reordered sparse children, missing parent links, nullable values, false/zero/empty updates, and omitted fields remaining unchanged.
 
-- Original identity determines matching despite later initialization/sequencing.
+- Original retains request values/presence; initialized complete identities select authorized Previous rows. Nonzero scalars and non-nil pointers (including zero pointers) are candidates; absent scalar zero requires explicit presence. Frozen keys and decisions cannot be changed by sequencing.
+- Public read indexes eagerly prepare only canonical identity/link maps. Business `GroupBy…()`/`IndexBy…()` constructors run on demand; edits to helpers cannot alter Previous authority. Test missing read evidence, duplicate keys, composite links and zero/null distinctions.
 - Full checks for inserts; Has-gated field checks for sparse updates.
 - Required/unique/reference/DB rules run before custom validation.
 - Invariant backfill activates only affected groups, preserves Has, and fails atomically when required previous data is unknown.

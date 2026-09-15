@@ -75,6 +75,9 @@ func (b *planCompiler) Compile() (*sqlreader.Plan, error) {
 	if err := resolveViewResources(view, b.input.Resources); err != nil {
 		return nil, err
 	}
+	if err := resolveRelationProjections(view); err != nil {
+		return nil, err
+	}
 	viewIndex := sqlreader.NewViewIndex(b.input.Component, view)
 	selectorBindings, err := compileSelectorBindings(b.input.Component, b.input.InputType, viewIndex, b.input.Bindings)
 	if err != nil {

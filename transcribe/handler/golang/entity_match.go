@@ -36,7 +36,16 @@ func (e *entityEmitter) matchDeclarations(record *recordLowering) ([]ast.Decl, e
 	}
 	original := []ast.Decl{e.matchOriginalKey(record)}
 	if e.identity != nil {
-		original = e.identity.declarations(e, record)
+		resolved, err := e.resolvedIdentity(record)
+		if err != nil {
+			return nil, err
+		}
+		var knownFields []*ast.Field
+		for _, key := range e.keys(record) {
+			knownFields = append(knownFields, namedField(key.Field, ast.NewIdent("bool")))
+		}
+		known := &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(e.matchKeyName(record) + "Known"), Type: &ast.StructType{Fields: &ast.FieldList{List: knownFields}}}}}
+		original = append(e.identity.declarations(e, record), known, resolved)
 	}
 	result := []ast.Decl{keyDeclaration, adapter, e.matchSource(record)}
 	result = append(result, original...)

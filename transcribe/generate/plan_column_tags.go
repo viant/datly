@@ -14,7 +14,13 @@ func scalarColumnFieldTag(column *spec.Column, source string, includeVelty bool)
 	parsed := tags.NewTags(strings.TrimSpace(column.Tag))
 	sqlxTag := parsed.Lookup(sqlio.TagSqlx)
 	if sqlxTag == nil {
-		parsed.Set(sqlio.TagSqlx, source)
+		mapping := source
+		// SQLX owns exact alternative mappings. Keep the physical DML name
+		// first and register SQL aliases not already equal to the Go field.
+		if name := strings.TrimSpace(column.Name); name != "" && !strings.EqualFold(name, source) && !strings.EqualFold(name, typecatalog.FieldName(name)) {
+			mapping += "|" + name
+		}
+		parsed.Set(sqlio.TagSqlx, mapping)
 		sqlxTag = parsed.Lookup(sqlio.TagSqlx)
 	}
 	if sqlxTag == nil {

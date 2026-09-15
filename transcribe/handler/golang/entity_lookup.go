@@ -22,10 +22,16 @@ func (e *entityEmitter) lookupDeclarations() ([]ast.Decl, error) {
 	var result []ast.Decl
 	for _, parent := range e.l.records {
 		for _, relation := range parent.plan.Relations {
-			if relation.Child == nil || !relation.Child.Auxiliary || relation.Child.Current == nil || relation.Child.Current.Lookup == nil {
+			if relation.Child == nil || relation.Child.Current == nil || relation.Child.Current.Lookup == nil {
 				continue
 			}
-			method, err := e.lookupMethod(parent, relation)
+			var method ast.Decl
+			var err error
+			if relation.Child.Current.Lookup.ParentOnly {
+				method, err = e.parentLookupMethod(parent, relation)
+			} else {
+				method, err = e.lookupMethod(parent, relation)
+			}
 			if err != nil {
 				return nil, err
 			}

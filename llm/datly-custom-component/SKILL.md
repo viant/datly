@@ -13,8 +13,8 @@ This skill is for application developers, not Datly framework contributors. Expl
 
 The references describe the **required Datly 1.0 authoring contract**, including features under development. Those features remain part of the requested design. A capability missing from the connected build is an implementation gap, not permission to drop a requirement, invent syntax, or silently choose another architecture. Compile/validate against the connected developer server and report a missing capability precisely.
 
-**Generation availability for requested graph generation.** The v1 CLI exposes `datly transcribe get|patch|post|put` with Go output by default. Discover the connected developer server and installed CLI
-capabilities before generation. If operation-based `transcribe` with pure Go output is
+**Generation availability for requested graph generation.** The v1 CLI exposes `datly transcribe get|patch|post|put` with Go output by default. Use the matching CLI first; inspect connected developer MCP targets when using a server.
+Check the installed capability before generation. If operation-based `transcribe` with pure Go output is
 missing, return the DQL and application hook contract and report that gap. Do not
 substitute `translate`, lower-level transcription, or manual writer plumbing.
 
@@ -61,6 +61,14 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 ## Deliver
 
 Return the component's purpose, public input/output contract, DQL/Go files, hook responsibilities, exposure choice, validation/error behavior, tests run, and any unresolved capability. Do not claim production registration or database mutation unless it actually occurred and was authorized.
+
+## Graph naming
+
+Use separate reader/writer DQL with required `#package`. Declare `input_type`,
+`output_type` and outer `type(view,'Entity')` names; inner SQL aliases remain local.
+Auxiliary `(TABLE)` sources are nonmutating, and outer `AND 1=1` marks a to-one
+relation while retaining real equality links. See the grammar for CAST authority
+over source-preserved SQL/CTEs and literal defaults.
 
 ## Filename controls
 

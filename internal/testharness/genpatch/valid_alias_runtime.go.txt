@@ -1,0 +1,40 @@
+package probe
+
+import (
+ "context"
+ "reflect"
+ "strings"
+ "testing"
+ "github.com/viant/bindly/resource"
+ "github.com/viant/datly/bootstrap"
+ "github.com/viant/datly/internal/testharness/sqlite"
+ dsql "github.com/viant/datly/sql"
+ "github.com/viant/datly/sql/reader"
+ dtag "github.com/viant/datly/tag"
+)
+
+func TestValidAliasGeneratedReader(t *testing.T) {
+ ctx:=context.Background();db:=sqlite.New(t)
+ holder:=reflect.TypeOf(ProbeComponent{});field,ok:=holder.FieldByName("Contract");if !ok{t.Fatal("missing holder")}
+ tag,present,err:=dtag.ParseComponent(field.Tag);if err!=nil||!present{t.Fatal(err)}
+ source:=&bootstrap.RouteSource{HolderType:"ProbeComponent",FieldName:field.Name,PackageName:"probe",PackagePath:holder.PkgPath(),Tag:tag,InputType:"ProbeInput",OutputType:"ProbeOutput"}
+ component,err:=source.Resolve(reflect.TypeOf(ProbeInput{}),reflect.TypeOf(ProbeOutput{}));if err!=nil{t.Fatal(err)}
+ resources:=resource.New();if err:=resources.Register(ProbeDatlyResourceNamespace,ProbeDatlyResources);err!=nil{t.Fatal(err)}
+ artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:reflect.TypeOf(ProbeInput{}),OutputType:reflect.TypeOf(ProbeOutput{}),Resources:resources});if err!=nil{t.Fatal(err)}
+ sql:=artifact.Reader.Root.View.Spec.Source.SQL
+ if !strings.Contains(sql,"SELECT 1 AS ALIAS") {t.Fatalf("SQL alias changed: %s",sql)}
+ execution,err:=reader.NewExecution(reader.Config{Component:artifact.Component,InputType:reflect.TypeOf(ProbeInput{}),OutputType:reflect.TypeOf(ProbeOutput{}),Plan:artifact.Reader,SQL:&dsql.SQLComponent{DB:db.DB}});if err!=nil{t.Fatal(err)}
+ result,err:=execution.Read(ctx,&ProbeInput{},nil,nil);if err!=nil{t.Fatal(err)}
+ rows:=reflect.ValueOf(result).Elem().FieldByName("Data");if !rows.IsValid()||rows.Len()!=1{t.Fatalf("rows: %+v",result)}
+ row:=rows.Index(0);if row.Kind()==reflect.Pointer {row=row.Elem()}
+ matched:=0
+ for i:=0;i<row.NumField();i++ {
+  field:=row.Type().Field(i)
+  if strings.Split(field.Tag.Get("sqlx"),",")[0]!="ALIAS" {continue}
+  matched++
+  value:=row.Field(i);if value.Kind()==reflect.Pointer {if value.IsNil(){t.Fatal("nil alias value")};value=value.Elem()}
+  if value.Int()!=1 {t.Fatalf("value: %v",value.Interface())}
+  t.Logf("SQL alias=ALIAS Go field=%s type=%s value=%d SQL=%s",field.Name,value.Type(),value.Int(),sql)
+ }
+ if matched!=1 {t.Fatalf("expected one field mapped to authored alias, got %d: %s",matched,row.Type())}
+}

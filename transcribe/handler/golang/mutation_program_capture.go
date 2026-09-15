@@ -24,6 +24,17 @@ func (e *programEmitter) capture() ast.Decl {
 	}
 	body = append(body, &ast.AssignStmt{Lhs: []ast.Expr{id("original"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(id(e.asset.Entities.CaptureFunction), id("ctx"), id("input"))}}, guard(), &ast.AssignStmt{Lhs: []ast.Expr{id("snapshot"), id("ok")}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.TypeAssertExpr{X: id("original"), Type: &ast.StarExpr{X: id(e.asset.Entities.SnapshotType)}}}}, failure(&ast.BinaryExpr{X: &ast.UnaryExpr{Op: token.NOT, X: id("ok")}, Op: token.LOR, Y: &ast.BinaryExpr{X: id("snapshot"), Op: token.EQL, Y: nilExpr}}, id("program"), "mutation original snapshot is unavailable"), assignStmt(selectExpr(id("program"), "original"), id("snapshot")))
 	body = append(body, &ast.AssignStmt{Lhs: []ast.Expr{id("metadata"), id("_")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(id(e.l.handlerAlias), "ReadMetadataFromContext"), id("ctx"))}}, &ast.AssignStmt{Lhs: []ast.Expr{id("database"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(id(e.asset.Frames.CaptureFunction), id("input"), id("metadata"))}}, guard(), &ast.AssignStmt{Lhs: []ast.Expr{id("err")}, Tok: token.ASSIGN, Rhs: []ast.Expr{callExpr(selectExpr(id("database"), "bindProducers"), id("snapshot"))}}, guard(), assignStmt(selectExpr(id("program"), "database"), id("database")), assignStmt(selectExpr(id("program"), "stage"), &ast.BasicLit{Kind: token.INT, Value: "1"}), assignStmt(selectExpr(id("program"), "failed"), id("false")), returnStmt(id("program"), nilExpr))
+	if e.asset.Indexes != nil && e.asset.Indexes.CacheField != "" {
+		preparation := []ast.Stmt{assignStmt(selectExpr(id("program"), "failed"), id("true")), assignStmt(id("err"), callExpr(selectExpr(id("input"), "PrepareReadIndexes"), id("ctx"))), guard(), assignStmt(selectExpr(id("program"), "failed"), id("false"))}
+		body = append(body[:len(body)-1], append(preparation, body[len(body)-1])...)
+	}
+	if e.hasIdentityResolver() {
+		resolver := selectExpr(id("p"), "ResolveIdentity")
+		callback := []ast.Stmt{assignStmt(selectExpr(id("program"), "failed"), id("true")), &ast.AssignStmt{Lhs: []ast.Expr{id("indexes"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(id(e.asset.Indexes.BuildFunction), id("ctx"), id("input"))}}, guard(), assignStmt(id("err"), callExpr(resolver, id("ctx"), id("input"), id("indexes"))), guard(), assignStmt(selectExpr(id("program"), "failed"), id("false"))}
+		statement := &ast.IfStmt{Cond: &ast.BinaryExpr{X: resolver, Op: token.NEQ, Y: nilExpr}, Body: &ast.BlockStmt{List: callback}}
+		body = append(body[:len(body)-1], statement, body[len(body)-1])
+	}
+
 	return e.method(e.asset.Definition, "Capture", []*ast.Field{e.contextParam(), namedField("input", &ast.StarExpr{X: parseExpr(e.l.config.InputType)})}, []*ast.Field{{Type: resultType}, {Type: id("error")}}, body)
 }
 
@@ -52,4 +63,17 @@ func (e *programEmitter) finalize(definition bool) ast.Decl {
 		body = append(body, returnStmt(nilExpr))
 	}
 	return e.method(receiver, name, params, []*ast.Field{{Type: id("error")}}, body)
+}
+
+// Foreign input types cannot import their generated handler without a cycle.
+// An application may supply this typed adapter when constructing the definition.
+func (e *programEmitter) hasIdentityResolver() bool {
+	return e.asset.Indexes != nil && e.l.config.ReadIndexes != nil && !e.l.config.ReadIndexes.Owned
+}
+func (e *programEmitter) definitionFields(finalizer ast.Expr) []*ast.Field {
+	fields := []*ast.Field{namedField("Finalizer", finalizer)}
+	if e.hasIdentityResolver() {
+		fields = append(fields, namedField("ResolveIdentity", &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{e.contextParam(), namedField("input", &ast.StarExpr{X: parseExpr(e.l.config.InputType)}), namedField("indexes", &ast.StarExpr{X: ast.NewIdent(e.asset.Indexes.TypeName)})}}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}))
+	}
+	return fields
 }

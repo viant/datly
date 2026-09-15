@@ -38,14 +38,13 @@ func (e *actionEmitter) original(role actionRole) []ast.Stmt {
 	}
 }
 
-func (e *actionEmitter) originalKey(role actionRole, key, supplied string) []ast.Stmt {
+func (e *actionEmitter) decisionIdentity(role actionRole, key, supplied string) []ast.Stmt {
+	if e.entities.identity != nil {
+		return []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(key), ast.NewIdent(supplied), ast.NewIdent("insertOnly")}, Tok: token.DEFINE, Rhs: []ast.Expr{selectExpr(ast.NewIdent("frame"), "identityKey"), selectExpr(ast.NewIdent("frame"), "identityAssigned"), selectExpr(ast.NewIdent("frame"), "identityInsertOnly")}}}
+	}
 	adapter := &ast.ParenExpr{X: &ast.CompositeLit{Type: ast.NewIdent(role.association.KeyAdapterType)}}
 	method := "Key"
 	lhs := []ast.Expr{ast.NewIdent(key), ast.NewIdent(supplied)}
-	if e.entities.identity != nil {
-		method = "Identity"
-		lhs = append(lhs, ast.NewIdent("insertOnly"))
-	}
 	lhs = append(lhs, ast.NewIdent("err"))
 	return []ast.Stmt{&ast.AssignStmt{Lhs: lhs, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(adapter, method), ast.NewIdent("original"))}}, errorGuard(ast.NewIdent("err"))}
 }

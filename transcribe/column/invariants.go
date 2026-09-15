@@ -11,9 +11,9 @@ import (
 	"github.com/viant/datly/tag"
 )
 
-// ValidateInvariants checks SQL view annotations against authoritative output
+// ValidateProjectionAnnotations checks SQL view annotations against authoritative output
 // names, supplied by the SQL projection or by SQLX column discovery.
-func ValidateInvariants(view *spec.View, projected []string) error {
+func ValidateProjectionAnnotations(view *spec.View, projected []string) error {
 	if view == nil {
 		return nil
 	}
@@ -22,24 +22,28 @@ func ValidateInvariants(view *spec.View, projected []string) error {
 			continue
 		}
 		value, annotated := reflect.StructTag(column.Tag).Lookup(tag.InvariantName)
-		if !annotated {
+		label := "invariant"
+		if annotated {
+			if _, err := tag.ParseInvariant(value); err != nil {
+				return err
+			}
+		} else if column.ExplicitType {
+			label = "CAST"
+		} else {
 			continue
-		}
-		if _, err := tag.ParseInvariant(value); err != nil {
-			return err
 		}
 		matches := 0
 		for _, output := range projected {
 			name := normalizedName(output)
-			if name == normalizedName(column.Name) || (column.Source != "" && name == normalizedName(column.Source)) {
+			if (!column.NameInferred && name == normalizedName(column.Name)) || (column.Source != "" && name == normalizedName(column.Source)) {
 				matches++
 			}
 		}
 		if matches == 0 {
-			return fmt.Errorf("invariant target %s.%s is absent from the SQL projection", view.Namespace, column.Name)
+			return fmt.Errorf("%s target %s.%s is absent from the SQL projection", label, view.Namespace, column.Name)
 		}
 		if matches > 1 {
-			return fmt.Errorf("invariant target %s.%s matches multiple projected columns", view.Namespace, column.Name)
+			return fmt.Errorf("%s target %s.%s matches multiple projected columns", label, view.Namespace, column.Name)
 		}
 	}
 	return nil
@@ -61,7 +65,7 @@ func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources
 		annotated := false
 		for _, column := range view.Columns {
 			if column != nil {
-				if _, ok := reflect.StructTag(column.Tag).Lookup(tag.InvariantName); ok {
+				if _, ok := reflect.StructTag(column.Tag).Lookup(tag.InvariantName); ok || column.ExplicitType {
 					annotated = true
 					break
 				}
@@ -85,7 +89,7 @@ func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources
 				for _, column := range columns {
 					names = append(names, column.OutputName())
 				}
-				if err := ValidateInvariants(view, names); err != nil {
+				if err := ValidateProjectionAnnotations(view, names); err != nil {
 					return err
 				}
 			}

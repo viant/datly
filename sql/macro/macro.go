@@ -136,7 +136,7 @@ func validateColumn(column string) error {
 		if err == nil {
 			err = fmt.Errorf("column is required")
 		}
-		return err
+		return fmt.Errorf("%q is not a column reference: %w", column, err)
 	}
 	item := parsed.List[0]
 	if item.Alias != "" || normalizeSQLFragment(sqlparser.Stringify(item)) != normalizeSQLFragment(column) {

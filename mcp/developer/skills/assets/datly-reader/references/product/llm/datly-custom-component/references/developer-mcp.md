@@ -1,5 +1,37 @@
 # Developer MCP authoring workflow
 
+## Operation-based generation to pure Go
+
+**Generation availability.** Operation-based Go generation is available in the
+`v1` source CLI. Check the installed CLI and connected developer server separately:
+older releases and unconfigured servers may not expose high-level generation.
+If unavailable, report that gap with the DQL and lifecycle contract; do not
+substitute lower-level translation or manual writer plumbing.
+
+For a matching `v1` CLI:
+
+```sh
+datly transcribe patch -dir "$PROJECT" \
+  -schema -connector main -driver sqlite3 -dsn "$PROJECT/schema.db" \
+  example.com/application/source/write
+```
+
+Use `post`, `put` or `get` for the corresponding operation. Select one component
+in a module-qualified package; flags precede the package. DQL must declare
+`#package`, for example `example.com/application/records/write`.
+`-dir` selects the existing module root; the final argument selects the source
+package containing exactly one component. Declare `input_type`/`output_type` and
+outer `type(view,'Entity')` names explicitly. The destination package owns plain
+default filenames; optional `file_prefix` affects defaults, while exact overrides
+win. Reader and writer use separate DQL sources and destinations. Keep the
+authored route method consistent with the operation.
+The graph supplies writable/auxiliary roles, complete relation keys, hooks and
+invariants. Schema discovery uses an explicitly selected read-only connector.
+Require generated pure Go and preview derived input/output, Previous lookups,
+presence and validation policy before building. Go hooks are create-once
+application files; regeneration preserves their edits. A transcribe capability
+does not establish availability of this high-level operation.
+
 ## High-level generation through MCP
 
 Inspect `datly.transcribe` tool metadata at `datly.authoringTargets` before
@@ -14,30 +46,6 @@ component and test its behavior. A target in `mode: transcribe` does not establi
 high-level generation support. If no matching target exists, use the matching CLI
 workflow or report the missing server configuration.
 
-
-## Operation-based generation to pure Go
-
-**Generation availability.** Operation-based Go generation is available in the
-`v1` source CLI. Check the installed CLI and connected developer server separately:
-older releases and unconfigured servers may not expose high-level generation.
-If unavailable, report that gap with the DQL and lifecycle contract; do not
-substitute lower-level translation or manual writer plumbing.
-
-For a matching `v1` CLI:
-
-```sh
-datly transcribe patch -lang go -dir /path/to/application example.com/application/records
-```
-
-Use `post`, `put` or `get` for the corresponding operation. Select one component
-in a module-qualified package; flags precede the package. DQL/package metadata
-owns destinations. Keep the authored route method consistent with the operation.
-The graph supplies writable/auxiliary roles, complete relation keys, hooks and
-invariants. Schema discovery uses an explicitly selected read-only connector.
-Require generated pure Go and preview derived input/output, Previous lookups,
-presence and validation policy before building. Go hooks are create-once
-application files; regeneration preserves their edits. A transcribe capability
-does not establish availability of this high-level operation.
 
 ## Datly validation command
 

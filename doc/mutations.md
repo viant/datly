@@ -146,7 +146,8 @@ Use `datly transcribe <operation>` for this high-level workflow. Lower-level tra
 already-authored contracts and is a separate API; application authors do not need
 to recreate those contracts to generate a standard writer.
 
-After generation, inspect the returned plan/file list, add business behavior to
+The CLI reports the operation, language and artifact count. Inspect emitted files
+and `.datly-gen.json`, then add business behavior to
 the create-once Go hook file, build/link the component and run it. Do not create
 a combined reader/writer component or manually recreate generated matching and
 Current-state support.
@@ -177,7 +178,7 @@ generation. The generation step itself does not execute the business mutation.
 
 In an existing Datly project with Go module `example.com/shop` and its runtime
 dependencies configured, save the DQL above as
-`source/Orders.dql`. `#package('example.com/shop/orders/write')` selects the generated
+`orders/source/Orders.dql`. `#package('example.com/shop/orders/write')` selects the generated
 package. The outer `type` annotations name the mutable shapes `Order` and `Item`,
 so their default lifecycle structs are `OrderLifecycle` and `ItemLifecycle`.
 No lifecycle import is needed to request these default placeholders.
@@ -198,6 +199,7 @@ prefix applies to defaults; explicit DQL filename overrides take precedence:
 | `input.go`, `output.go` | The generated request and response contracts. |
 | `lifecycle.go` | Create-once application lifecycle placeholders: edit this file. |
 | `entities.go` | Setters, presence synchronization and invariant helpers. |
+| `indexes.go` | Detached typed read collections, canonical key/link maps and on-demand business constructors. |
 | `mutation.go`, `frames.go`, `previous.go`, `layout.go`, `actions.go`, `mutation_output.go`, `validation.go`, `hooks.go`, `invariants.go` | Generated orchestration, capture, Previous matching, validation and queued actions. |
 | `router.go`, `links.go`, `resources.go`, `datly_sql/` | Component registration, linked types and embedded SQL resources. |
 
@@ -286,8 +288,8 @@ method calls. Then rerun the same generation command and confirm that your
 lifecycle edits remain unchanged. Adding injected fields or changing contracts
 also requires regeneration and rebuilding so the compiled bindings stay current.
 
-The example's generated package and date-validation tests were executed, and an
-identical second generation preserved the edited lifecycle file byte-for-byte.
+The generated-package fixtures cover date validation and preservation of edited
+lifecycle files on identical regeneration; run these checks for your component.
 DQL-owned field tags and types can change through regeneration when the existing
 field still matches its recorded generated version. Conflicting manual field edits
 stop generation before publication; resolve that ownership conflict explicitly.
@@ -304,7 +306,8 @@ type takes precedence. See [Customize the writing hooks](#customize-the-writing-
    dependencies. Current-state reader dependencies may run their own OnFetch and
    OnRelation hooks as part of those reads.
 2. The generated mutation definition captures original input presence, identity
-   and topology before initialization.
+   and topology, detached Previous evidence, and public read indexes before
+   initialization.
 3. Run input `Init(context.Context) error` when implemented.
 4. For an MCP invocation with the corresponding context, run
    `InitMCP(context.Context, mcp.Context) error` when implemented.
@@ -330,6 +333,7 @@ sequenceDiagram
     Request->>Writer: Bind input and dependency reads
     Writer->>Writer: Capture original identity, presence and topology
     Note over Writer: Input Init / InitMCP, scoped DI, SyncPresence
+    Writer->>Writer: Match resolved identity to Previous and freeze decision
     Writer->>Writer: Backfill invariant groups from Previous
     Writer->>Lifecycle: Init(ctx, order, state)
     Writer->>Writer: Framework validation
@@ -405,10 +409,18 @@ authoritative Previous snapshot:
 | No matching row exists | INSERT only when the selected operation and read scope permit it. |
 | Identity is incomplete, ambiguous or outside the allowed scope | Report the applicable error; do not guess an UPDATE. |
 
-Keep original request presence separate from resolved identity. Relationship
-reconciliation can identify an existing child before its mutation decision is
-fixed. Once matching has decided the operation, sequencing supplies IDs for new
-rows without reclassifying them as existing rows.
+Keep original request presence separate from resolved identity. Input
+initialization can resolve an existing child from authorized parent-scoped reads
+before frame preparation fixes its mutation decision. Once matching has decided
+the operation, sequencing supplies IDs for new rows without reclassifying them
+as existing rows.
+
+Nonzero scalars and non-nil pointers (including pointers to zero) are resolved
+candidates regardless of their original marker. An absent scalar zero needs
+explicit presence, such as a generated setter. Frame preparation freezes known
+key parts, including partial composite tuples, and the match/missing-row decision.
+Entity Init cannot retarget that decision. Captured producer rules govern pending
+allocator/parent parts. See [identity and read indexes](go-patch-indexes.md).
 
 Business initialization also needs typed indexes over previous and auxiliary
 collections: key-to-entity lookups and key-to-collection groupings. Those let
@@ -416,10 +428,31 @@ lifecycle logic resolve related records and validate business rules efficiently.
 The matched row passed as `state.Previous` is useful, but does not replace access
 to those collections.
 
-**Implementation status:** internal Previous indexes exist today. Public generated
-collection indexes and matching identities resolved during initialization are
-being added. The current captured-key path must not be mistaken for completed
-support for that reconciliation workflow.
+Generated inputs prepare invocation-cached typed read indexes before `Input.Init`.
+The default preparation builds primary/composite key maps and groups required by
+canonical relationship links. Additional business-field indexes are available
+through typed collection methods and are built only when called:
+
+```go
+reads, err := input.ReadIndexes(ctx)
+if err != nil {
+    return err
+}
+existing := reads.CurrentItemsById.Has(itemID)
+children := reads.CurrentItemsGroupedByOrderId[orderID]
+byName := reads.CurrentItems.GroupByName()
+```
+
+Names follow the generated read slots and Go field names. `IndexByName()` returns
+an error for duplicate keys; `GroupByName()` retains all matching rows. A generated
+`indexes.go` holds this support, with optional prefix and
+`#setting($_ = $support_dest('indexes', 'lookup.go'))` override.
+
+Read-index helpers are separate from the authoritative Previous snapshot:
+changing an application lookup map cannot authorize an UPDATE. Loaded-field
+checks prevent missing columns from being interpreted as known zero values.
+Imported input types use the generated free builder and adapter rather than
+adding methods or storage to a foreign type.
 
 ### Matching parents, children and deeper descendants
 
@@ -527,7 +560,7 @@ working interval is valid, and Original.Has("WindowEnd") remains false. Moving
 the start to `2026-09-17T09:00:00Z` instead must fail validation and leave the
 stored interval unchanged. With pointer-valued `time.Time` fields, compare using
 `row.WindowStart.After(*row.WindowEnd)`, not numeric ordering operators.
-The GEN PATCH acceptance gate must verify the actual generated date shape and setters.
+The generated PATCH acceptance gate must verify the actual generated date shape and setters.
 
 ## Customize the writing hooks
 
@@ -700,15 +733,21 @@ for their parent outcome rather than announcing success at a child seal.
 
 Stable identities are allocated before Queue. Pending supplied identities must
 be visible to allocation so generated IDs do not collide with the request.
-AfterSequence observes allocated IDs; diffing still uses captured original identity.
+AfterSequence observes allocated IDs. Diffing follows the frozen mutation decision
+and resolved identity; original request values and presence remain immutable.
 Reconciliation repairs the exact parent-child links before final validation/DML.
 
-An originally absent child FK may be deferred only for its exact captured parent
-INSERT. Parent UPDATE does not authorize that deferral. Supplied null/zero remains
-supplied; a hook changing the working value cannot erase the original intent.
-Final Go/NULL/UNIQUE/reference validation runs with no remaining field deferral.
-Pending-parent references require unchanged topology, verified INSERT decisions,
+A new INSERT child can receive its declared foreign-key parts from an authorized
+existing UPDATE parent or from an INSERT parent whose key is ready before Queue.
+That key propagation does not permit reparenting an existing child. A completed
+child identity remains INSERT even if it collides with a database row; the write
+fails rather than switching to UPDATE.
+
+Deferring a database reference check for a parent row that does not yet exist is
+a separate case: it requires the exact captured parent INSERT, unchanged topology,
 parent-before-child order and native matching of the actual SQL-bound values.
+Supplied null/zero remains supplied; a hook cannot erase that original intent.
+Final Go/NULL/UNIQUE/reference validation runs with no remaining field deferral.
 
 Composite identities compare the complete tuple. Native metadata support is not
 universal constraint discovery; authored UNIQUE/reference constraints remain

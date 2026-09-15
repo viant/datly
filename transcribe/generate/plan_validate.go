@@ -102,6 +102,15 @@ func (plan *Plan) validateGeneratedNames() error {
 			}
 		}
 	}
+	if plan.ReadIndexes != nil {
+		for _, decl := range plan.ReadIndexes.Source.File.Decls {
+			for _, name := range declarationNames(decl) {
+				if err := reserve(name, "application read indexes"); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	if plan.MutationHandler != nil {
 		if plan.MutationHandler.File == nil {
 			return fmt.Errorf("mutation definition source is required")
@@ -264,6 +273,11 @@ func (plan *Plan) validateGeneratedDestinations() error {
 	}
 	if plan.ContractHandler != nil {
 		if err := reserve(plan.ContractHandler.Destination, "generated contract handler", false); err != nil {
+			return err
+		}
+	}
+	if plan.ReadIndexes != nil {
+		if err := reserve(plan.ReadIndexes.Source.Destination, "application read indexes", false); err != nil {
 			return err
 		}
 	}

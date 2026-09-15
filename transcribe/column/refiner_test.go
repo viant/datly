@@ -306,3 +306,36 @@ func TestRefinerInvariantCanonicalSourceAlias(t *testing.T) {
 		t.Fatalf("columns=%+v", columns)
 	}
 }
+
+func TestRefinerTemplateCollectionsSQLite(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := h.ExecStatements(ctx, `CREATE TABLE events(id INTEGER PRIMARY KEY, name TEXT NOT NULL)`, `INSERT INTO events VALUES(1,'one'),(2,'two')`); err != nil {
+		t.Fatal(err)
+	}
+	type input struct{ IDs []int }
+	template := `#foreach($id in $IDs)$id#if($foreach.HasNext),#end#end`
+	for _, sql := range []string{
+		`SELECT id, name FROM events WHERE id IN (` + template + `)`,
+		`WITH current AS (SELECT id, name FROM events WHERE id IN (` + template + `)) SELECT id, name FROM current`,
+		`SELECT e.id, e.name FROM (SELECT id, name FROM events WHERE id IN (` + template + `)) e`,
+	} {
+		for name, ids := range map[string][]int{"empty": nil, "populated": {1, 2}} {
+			t.Run(sql+"/"+name, func(t *testing.T) {
+				view := &spec.View{Name: "Current", Source: &spec.ViewSource{SQL: sql, Table: "events"}}
+				component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: view}
+				value := reflect.ValueOf(&input{IDs: ids})
+				err := New(Connections{"main": h.DB}).Refine(ctx, component, nil, &TemplateInput{Value: value, Variables: []sqltemplate.Variable{{Name: "IDs", FieldIndex: []int{0}}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if view.Source.SQL != sql {
+					t.Fatalf("authored source changed: %s", view.Source.SQL)
+				}
+				if len(view.Columns) != 2 || view.Columns[0].Name != "id" || view.Columns[0].Type.Name != "int" || !view.Columns[0].PrimaryKey || view.Columns[1].Type.Name != "string" {
+					t.Fatalf("metadata lost: %+v", view.Columns)
+				}
+			})
+		}
+	}
+}

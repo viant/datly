@@ -45,6 +45,9 @@ func (e *frameEmitter) frame(record *recordLowering, role MutationFrameRole) ([]
 	stateType := &ast.IndexListExpr{X: selectExpr(ast.NewIdent(e.l.handlerAlias), "EntityState"), Indices: []ast.Expr{parseExpr(record.value.base), parseExpr(role.ParentType)}}
 	state := &ast.CompositeLit{Type: stateType, Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent("Parent"), Value: ast.NewIdent("parent")}, &ast.KeyValueExpr{Key: ast.NewIdent("SelfParent"), Value: ast.NewIdent("selfParent")}, &ast.KeyValueExpr{Key: ast.NewIdent("Original"), Value: ast.NewIdent("original")}}}
 	body = append(body, defineStmt("frame", &ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{Type: ast.NewIdent(role.FrameType), Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent("Entity"), Value: current}, &ast.KeyValueExpr{Key: ast.NewIdent("State"), Value: state}, &ast.KeyValueExpr{Key: ast.NewIdent("SelfHolder"), Value: ast.NewIdent("selfHolder")}}}}))
+	if e.entities.identity != nil {
+		body = append(body, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("resolvedKey"), ast.NewIdent("resolvedKnown"), ast.NewIdent("resolvedAssigned"), ast.NewIdent("insertOnly"), ast.NewIdent("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(ast.NewIdent("_"+lowerInitial(e.l.factory)+"ResolvedIdentity"+strconv.Itoa(record.order)), current, ast.NewIdent("original"))}}, e.visitError(), assignStmt(selectExpr(ast.NewIdent("frame"), "identityKey"), ast.NewIdent("resolvedKey")), assignStmt(selectExpr(ast.NewIdent("frame"), "identityKnown"), ast.NewIdent("resolvedKnown")), assignStmt(selectExpr(ast.NewIdent("frame"), "identityAssigned"), ast.NewIdent("resolvedAssigned")), assignStmt(selectExpr(ast.NewIdent("frame"), "identityInsertOnly"), ast.NewIdent("insertOnly")))
+	}
 	if record.plan.Current != nil {
 		previous, err := e.previousRole(record)
 		if err != nil {
@@ -53,10 +56,25 @@ func (e *frameEmitter) frame(record *recordLowering, role MutationFrameRole) ([]
 		database := selectExpr(ast.NewIdent("database"), previous.TypeName)
 		body = append(body, &ast.IfStmt{Cond: &ast.BinaryExpr{X: database, Op: token.EQL, Y: nilExpr}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("database role was not captured before input initialization"))}}}, &ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: callExpr(selectExpr(ast.NewIdent("original"), "Available"))}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("original identity presence is unavailable"))}}})
 		adapter := &ast.ParenExpr{X: &ast.CompositeLit{Type: ast.NewIdent(association.KeyAdapterType)}}
-		body = append(body, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("key"), ast.NewIdent("supplied"), ast.NewIdent("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(adapter, "Key"), ast.NewIdent("original"))}}, e.visitError())
+		if e.entities.identity == nil {
+			body = append(body, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("key"), ast.NewIdent("supplied"), ast.NewIdent("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(adapter, "Key"), ast.NewIdent("original"))}}, e.visitError())
+		} else {
+			body = append(body, defineStmt("key", selectExpr(ast.NewIdent("frame"), "identityKey")), defineStmt("supplied", selectExpr(ast.NewIdent("frame"), "identityAssigned")))
+		}
+		if e.entities.identity != nil {
+			// The private resolved tuple is fixed before business hooks/sequence.
+			body = append(body, assignStmt(ast.NewIdent("key"), selectExpr(ast.NewIdent("frame"), "identityKey")), assignStmt(ast.NewIdent("supplied"), selectExpr(ast.NewIdent("frame"), "identityAssigned")))
+		}
 		entry := &ast.IndexExpr{X: selectExpr(database, "byKey"), Index: ast.NewIdent("key")}
 		block := []ast.Stmt{&ast.IfStmt{Init: defineStmt("previous", entry), Cond: &ast.BinaryExpr{X: ast.NewIdent("previous"), Op: token.NEQ, Y: nilExpr}, Body: &ast.BlockStmt{List: []ast.Stmt{assignStmt(selectExpr(selectExpr(ast.NewIdent("frame"), "State"), "Previous"), selectExpr(ast.NewIdent("previous"), "value")), assignStmt(selectExpr(selectExpr(ast.NewIdent("frame"), "State"), "PreviousFields"), selectExpr(ast.NewIdent("previous"), "fields"))}}}}
 		body = append(body, &ast.IfStmt{Cond: ast.NewIdent("supplied"), Body: &ast.BlockStmt{List: block}})
+	}
+	if e.entities.identity != nil {
+		scoped, err := e.matchedScope(record)
+		if err != nil {
+			return nil, err
+		}
+		body = append(body, scoped...)
 	}
 	order := selectExpr(ast.NewIdent("frames"), e.layout.OrderField)
 	visit := &ast.CompositeLit{Type: ast.NewIdent(e.layout.OrderEntryType), Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent("Role"), Value: &ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(record.order)}}, &ast.KeyValueExpr{Key: ast.NewIdent("Index"), Value: callExpr(ast.NewIdent("len"), selectExpr(ast.NewIdent("frames"), role.Field))}}}

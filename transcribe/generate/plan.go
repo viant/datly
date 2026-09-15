@@ -49,6 +49,7 @@ type Plan struct {
 	GoHandler       *GoHandlerPlan
 	ContractHandler *ContractHandlerPlan
 	MutationHandler *MutationHandlerPlan
+	ReadIndexes     *ReadIndexSource
 	FactoryLink     *FactoryLinkPlan
 	HookScaffold    *HookScaffoldPlan
 	VeltyHandler    *VeltyHandlerPlan
@@ -114,6 +115,8 @@ func (p *ContractPlan) Field(name string) (Field, bool) {
 }
 
 type Field struct {
+	// Implementation fields are private generated support, never binding or shape placeholders.
+	Implementation bool
 	// ExplicitType authorizes only this field's exact planned CAST type during shape persistence.
 	ExplicitType bool
 	// RelationHolder carries canonical relation cardinality authority. Persistence

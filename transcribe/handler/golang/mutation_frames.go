@@ -32,6 +32,29 @@ func MutationFrameSupport(value *plan.Plan, config Config, entities *EntityAsset
 	if err != nil {
 		return nil, err
 	}
+	if entities.identity != nil {
+		for _, association := range entities.Associations {
+			for _, role := range layout.Roles {
+				if role.Identity != association.Identity || strings.Join(role.Path, ".") != strings.Join(association.Path, ".") {
+					continue
+				}
+				for _, declaration := range layout.File.Decls {
+					decl, ok := declaration.(*ast.GenDecl)
+					if !ok || decl.Tok != token.TYPE {
+						continue
+					}
+					for _, item := range decl.Specs {
+						typ := item.(*ast.TypeSpec)
+						if typ.Name.Name != role.FrameType {
+							continue
+						}
+						fields := typ.Type.(*ast.StructType).Fields
+						fields.List = append(fields.List, namedField("identityKey", ast.NewIdent(association.KeyType)), namedField("identityKnown", ast.NewIdent(association.KeyType+"Known")), namedField("identityAssigned", ast.NewIdent("bool")), namedField("identityInsertOnly", ast.NewIdent("bool")))
+					}
+				}
+			}
+		}
+	}
 	previous, err := MutationPreviousSupport(value, config, entities)
 	if err != nil {
 		return nil, err
@@ -71,6 +94,13 @@ func MutationFrameSupport(value *plan.Plan, config Config, entities *EntityAsset
 		return nil, err
 	}
 	file.Decls = append(file.Decls, verify)
+	if entities.identity != nil {
+		freeze, err := e.freezePendingIdentity()
+		if err != nil {
+			return nil, err
+		}
+		file.Decls = append(file.Decls, freeze)
+	}
 	file.Decls = append([]ast.Decl{(&entityEmitter{l: l}).importDeclaration(file)}, file.Decls...)
 	return &MutationFrameAsset{File: file, Layout: layout, Previous: previous, TypeName: e.name, CaptureFunction: e.name + "Capture", BuildMethod: "Build", VerifyMethod: "Verify"}, nil
 }

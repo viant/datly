@@ -60,10 +60,12 @@ route, binding, type, relationship and generation authority around it.
 
 ```sql
 #package('example.com/shop/orders/read')
+#setting($_ = $input_type('OrdersInput'))
+#setting($_ = $output_type('OrdersOutput'))
 #setting($_ = $route('/orders', 'GET'))
 #setting($_ = $connector('main'))
 #define($_ = $CustomerID<int>(query/customerId).Required())
-SELECT orders.*
+SELECT orders.*, type(orders, 'Order')
 FROM (
     SELECT o.ID, o.CUSTOMER_ID, o.TOTAL
     FROM ORDERS o
@@ -100,6 +102,23 @@ flowchart TD
 The graph shows alternative generation paths, not a request to emit both products
 at once. A project may intentionally contain multiple separately authored components.
 
+From an existing project module, select the source package and operation:
+
+```sh
+datly transcribe get -dir "$PROJECT" \
+  -schema -connector main -driver sqlite3 -dsn "$PROJECT/orders.db" \
+  example.com/shop/source/read
+```
+
+Save the reader DQL in that source package. For a writer, author separate DQL in
+`example.com/shop/source/write`, declare `#package('example.com/shop/orders/write')`
+and the matching route, then use `patch`, `post` or `put`. `#package` is required
+for high-level DQL generation; input/output type settings name contracts and
+outer `type` annotations name entity shapes. Plain filenames such as `views.go`,
+`input.go`, `output.go` and `router.go` are defaults; optional `file_prefix` applies
+only to defaults, while explicit destinations win. Application writer hooks live
+in create-once `lifecycle.go`. See [filename controls](dql.md#generated-filenames-and-destinations).
+
 Generated artifacts can include:
 
 - Input/output contracts and view/entity types, when those are generator-owned.
@@ -112,6 +131,19 @@ Generated artifacts can include:
 Linked application types retain their existing owner. The exact files depend on
 the selected product and DQL names/destinations. Transcription, compiling the Go
 program and publishing a runtime generation are separate steps.
+
+For writers, Original captures client values/presence before input initialization.
+Input.Init can resolve identity using generated typed read indexes; the authorized
+Previous match and known key parts then freeze before entity Init and sequencing.
+Sparse Has markers govern working changes independently of Original. Canonical
+key/link indexes are prepared eagerly; business `GroupBy…()`/`IndexBy…()` helpers
+run on demand. Follow the [complete writer lifecycle](mutations.md).
+
+Inner SQL, including CTEs, stays source-preserved. Driver result metadata supplies
+output names/existence; outer CAST supplies explicit Go type authority even for
+computed outputs without driver types. Simple `''`/`0` projections default to
+`string`/`int`. Keep internal physical columns SQL-mapped; `sqlx:"-"` explicitly
+excludes a logical pseudo field from SQL/DML. See [CAST and mapping](dql.md#rich-cast-pseudo-fields-and-tag-customization).
 
 ## Application hooks on readers and writers
 
@@ -163,9 +195,12 @@ outer query. Keep each view's database SQL inside its subquery:
 
 ```sql
 #package('example.com/shop/orders/write')
+#setting($_ = $input_type('OrdersInput'))
+#setting($_ = $output_type('OrdersOutput'))
 #setting($_ = $route('/orders', 'PATCH'))
 #setting($_ = $connector('main'))
 SELECT orders.*, items.*, kind.*,
+       type(orders, 'Order'), type(items, 'Item'), type(kind, 'Kind'),
        invariant(orders.WINDOW_START, 'DeliveryWindow'),
        invariant(orders.WINDOW_END, 'DeliveryWindow')
 FROM (
@@ -185,7 +220,7 @@ Generate the Go writer from the source package containing that DQL:
 datly transcribe patch \
   -dir "$PROJECT" \
   -schema -connector main -driver sqlite3 -dsn "$PROJECT/orders.db" \
-  example.com/shop/source
+  example.com/shop/source/write
 ```
 
 The high-level CLI is available in the `v1` source tree. See

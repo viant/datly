@@ -27,7 +27,7 @@ func (e *actionEmitter) verifyBusiness() ([]ast.Stmt, error) {
 		var sequenceChange ast.Expr
 		if sequence := role.record.plan.Sequence; sequence != nil && !excluded[sequence.Field.Field] {
 			loop = append(loop, e.original(role)...)
-			loop = append(loop, e.originalKey(role, "_", "supplied")...)
+			loop = append(loop, e.decisionIdentity(role, "_", "supplied")...)
 			loop = append(loop, assignStmt(ast.NewIdent("_"), ast.NewIdent("supplied")))
 			selection, action, err := e.actionSelection(role)
 			if err != nil {

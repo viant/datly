@@ -62,7 +62,11 @@ func (e *actionEmitter) insertReadiness(role actionRole) ([]ast.Stmt, error) {
 			zero = append(zero, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("flag"), ast.NewIdent("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(ast.NewIdent("marker"), "Get"), selectExpr(ast.NewIdent("frame"), "Entity"))}}, &ast.IfStmt{Cond: &ast.BinaryExpr{X: ast.NewIdent("err"), Op: token.NEQ, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(ast.NewIdent("err"))}}}, &ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: callExpr(selectExpr(ast.NewIdent("flag"), "Bool"))}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr(label + " has no completed producer; configure sequencing or assign it with a marker-aware setter"))}}})
 		}
 		block = append(block, &ast.IfStmt{Cond: callExpr(selectExpr(ast.NewIdent("keyValue"), "IsZero")), Body: &ast.BlockStmt{List: zero}})
-		block = []ast.Stmt{&ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: callExpr(selectExpr(ast.NewIdent("original"), "Has"), stringExpr(key.Field))}, Body: &ast.BlockStmt{List: block}}}
+		pending := ast.Expr(&ast.UnaryExpr{Op: token.NOT, X: callExpr(selectExpr(ast.NewIdent("original"), "Has"), stringExpr(key.Field))})
+		if e.entities.identity != nil && e.isIdentityField(role, key.Field) {
+			pending = &ast.UnaryExpr{Op: token.NOT, X: selectExpr(selectExpr(ast.NewIdent("frame"), "identityKnown"), key.Field)}
+		}
+		block = []ast.Stmt{&ast.IfStmt{Cond: pending, Body: &ast.BlockStmt{List: block}}}
 		if holders := selfLinked[key.Field]; len(holders) > 0 {
 			var match ast.Expr
 			for _, holder := range holders {

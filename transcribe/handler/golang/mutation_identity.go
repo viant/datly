@@ -80,12 +80,31 @@ func (p *mutationIdentityPolicy) declarations(e *entityEmitter, record *recordLo
 		)
 	}
 	identity := &ast.FuncDecl{Name: id("Identity"), Recv: e.adapterReceiver(record), Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{namedField("state", e.statePointer(record))}}, Results: &ast.FieldList{List: results}}, Body: &ast.BlockStmt{List: body}}
-	// CollectionMatcher and Previous lookup still see only complete keys.
+	// Original collection association uses captured keys; effective Previous
+	// matching uses the separately resolved candidate.
 	adapter := &ast.ParenExpr{X: &ast.CompositeLit{Type: id(e.matchAdapterName(record))}}
 	key := &ast.FuncDecl{Name: id("Key"), Recv: e.adapterReceiver(record), Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{namedField("state", e.statePointer(record))}}, Results: &ast.FieldList{List: []*ast.Field{{Type: keyType}, {Type: id("bool")}, {Type: id("error")}}}}, Body: &ast.BlockStmt{List: []ast.Stmt{
 		&ast.AssignStmt{Lhs: []ast.Expr{id("key"), id("complete"), id("_"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(adapter, "Identity"), id("state"))}},
 		returnStmt(id("key"), id("complete"), id("err")),
 	}}}
+	// A partial original may be completed by Input.Init before association.
+	// Unresolved partial tuples retain the original captured-producer checks.
+	if len(keys) > 1 {
+		var incomplete ast.Expr
+		for _, part := range keys {
+			absent := &ast.UnaryExpr{Op: token.NOT, X: callExpr(selectExpr(id("state"), "Has"), stringExpr(part.Field))}
+			if incomplete == nil {
+				incomplete = absent
+			} else {
+				incomplete = &ast.BinaryExpr{X: incomplete, Op: token.LOR, Y: absent}
+			}
+		}
+		resolved := []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{id("_"), id("_"), id("_"), id("_"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(id(e.prefix+"ResolvedIdentity"+strconv.Itoa(record.order)), selectExpr(id("state"), "source"), id("state"))}}, returnStmt(zero, id("false"), id("err"))}
+
+		guard := &ast.IfStmt{Cond: &ast.BinaryExpr{X: &ast.BinaryExpr{X: id("state"), Op: token.NEQ, Y: id("nil")}, Op: token.LAND, Y: &ast.ParenExpr{X: incomplete}}, Body: &ast.BlockStmt{List: resolved}}
+		key.Body.List = append([]ast.Stmt{guard}, key.Body.List...)
+	}
+
 	return []ast.Decl{p.produced(e, record), p.write(e, record), identity, key}
 }
 

@@ -155,7 +155,7 @@ func TestProjectionCodecAuthorityProtectsUnrelatedTags(t *testing.T) {
 		{`parameter:"Derived,kind=param" codec:"structql,new" custom:"new"`, false},
 	} {
 		field := projectionField{Tag: `parameter:"Derived,kind=param" codec:"structql,old"`}
-		allowed, err := field.codecChange(projectionField{Tag: tc.next})
+		allowed, err := field.tagChange(projectionField{Tag: tc.next}, "codec")
 		if err != nil || allowed != tc.allowed {
 			t.Fatalf("codec authority for %q: %v %v", tc.next, allowed, err)
 		}

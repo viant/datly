@@ -14,27 +14,36 @@ func TestBuildInputDerivesCanonicalState(t *testing.T) {
 	child := root.Clone()
 	child.Name = "Items"
 	child.Source.Table = "ITEMS"
-	child.Source.SQL = "SELECT ID, NAME FROM ITEMS"
+	child.Source.SQL = "SELECT ID, ORDER_ID, NAME FROM ITEMS WHERE VISIBLE=1"
+	child.Columns = append(child.Columns, &spec.Column{Name: "ORDER_ID", Source: "ORDER_ID", Type: spec.TypeRef{Name: "int64"}})
 	aux := root.Clone()
 	aux.Name = "Kinds"
 	aux.Source.Table = "KINDS"
 	aux.Source.SQL = "SELECT ID,NAME FROM KINDS"
 	aux.Auxiliary = true
-	root.Relations = []*spec.Relation{{Name: "Items", Holder: "Lines", Cardinality: spec.CardinalityMany, View: child}, {Name: "Kinds", View: aux, On: []*spec.RelationLink{{ParentColumn: "ID", ChildColumn: "ID"}}}}
+	root.Relations = []*spec.Relation{{Name: "Items", Holder: "Lines", Cardinality: spec.CardinalityMany, View: child, On: []*spec.RelationLink{{ParentColumn: "ID", ChildColumn: "ORDER_ID"}}}, {Name: "Kinds", View: aux, On: []*spec.RelationLink{{ParentColumn: "ID", ChildColumn: "ID"}}}}
 	component := &spec.Component{Name: "Orders", RootView: root}
 	before, _ := json.Marshal(component)
 	got, err := (&Compiler{}).BuildInput(Request{Component: component, Operation: plan.OperationPatch}, "Order")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Currents) != 3 || len(got.Component.Parameters) != 7 {
+	if len(got.Currents) != 3 || len(got.Component.Parameters) != 6 {
 		t.Fatalf("derived state: %+v", got)
 	}
-	for _, p := range got.Component.Parameters {
-		if p.Name == "ItemsKeys" && (!strings.Contains(p.DeclarationSQL, "`/Lines`") || p.Codec == nil || p.Codec.Body != "structql") {
-			t.Fatalf("child projection: %+v", p)
+	if lookup := got.Currents[1].Lookup; lookup == nil || !lookup.ParentOnly || len(lookup.Columns) != 1 || lookup.Columns[0] != "ORDER_ID" {
+		t.Fatalf("child parent projection: %+v", lookup)
+	}
+	childSQL := got.Component.Views[1].Source.SQL
+	if !strings.Contains(childSQL, "WHERE VISIBLE=1") || !strings.Contains(childSQL, "$Unsafe.ProjectCurrentItemsParentKeys($CurrentOrders)") {
+		t.Fatalf("child scope lost: %s", childSQL)
+	}
+	for _, parameter := range got.Component.Parameters {
+		if parameter.Name == "ItemsKeys" {
+			t.Fatal("child identity-only lookup was retained")
 		}
 	}
+
 	if !strings.Contains(got.Component.Views[0].Source.SQL, "WHERE TENANT=7") {
 		t.Fatal("authored read scope lost")
 	}

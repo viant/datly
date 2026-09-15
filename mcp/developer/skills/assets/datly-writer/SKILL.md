@@ -13,8 +13,8 @@ This skill is for application developers, not Datly framework contributors. Expl
 
 The references describe the **required Datly 1.0 authoring contract**, including features under development. Those features remain part of the requested design. A capability missing from the connected build is an implementation gap, not permission to drop a requirement, invent syntax, or silently choose another architecture. Compile/validate against the connected developer server and report a missing capability precisely.
 
-**Generation availability.** The v1 CLI exposes `datly transcribe get|patch|post|put` with Go output by default. Discover the connected developer server and installed CLI
-capabilities before generation. If operation-based `transcribe` with pure Go output is
+**Generation availability.** The v1 CLI exposes `datly transcribe get|patch|post|put` with Go output by default. Use the matching CLI first; inspect connected developer MCP targets when using a server.
+Check the installed capability before generation. If operation-based `transcribe` with pure Go output is
 missing, return the DQL and application hook contract and report that gap. Do not
 substitute `translate`, lower-level transcription, or manual writer plumbing.
 
@@ -41,11 +41,12 @@ binding, Previous reads, presence, validation and write orchestration; applicati
 Go hooks own business rules. Existing linked Go types keep their authority.
 
 - Establish operation, input/output shapes, writable tables, full identity tuples, parent links, auxiliary read-only joins, validation rules, and authorization/error policy.
-- Preserve the distinction between original supplied identity, current values, database Previous, and Has markers. An ID supplied as zero is still supplied; a sequenced ID never changes insert/update classification.
+- Preserve the distinction between Original request facts, resolved/frozen identity, database Previous, and working Has markers. Input.Init can resolve identity using typed read indexes before the match freezes. An ID supplied as zero is still supplied; a sequenced ID never changes insert/update classification.
+- Use the [typed read indexes](references/writer-contract.md#typed-read-indexes-for-application-hooks) in input/entity hooks: canonical key/link maps are eager; business GroupBy/IndexBy methods run on demand.
 - Verify the generator supplies the canonical lifecycle: capture before input initialization; SyncPresence; invariant backfill; entity Init; framework Go/database validation; custom Validate; begin/join transaction; Sequence; AfterSequence; Diff; Reconcile; Queue; AfterQueue; outcome-aware finalization.
 - New entities get complete checks; sparse existing entities use Has-gated checks. Backfill does not mark client presence. Framework/database violations stop custom validation and mutation.
 - Generate Go tags from authoritative constraints and refine them with tag(view.column, 'validate:...'). Do not manufacture constraints from missing metadata or make false/zero invalid merely because a column is NOT NULL.
-- Keep business data fixed after validation. Identity/link reconciliation follows the original tuple and explicit relation producers. Verify graph structure before actions and queued values after observation hooks.
+- Keep business data fixed after validation. Identity/link reconciliation preserves the frozen resolved tuple and explicit relation producers. Verify graph structure before actions and queued values after observation hooks.
 - Return the transformed request body with final IDs/links. Preserve authored status/message/error/violation payloads; do not publish commit-dependent messages on Queue or caller-pending work.
 - Prove mixed inserts/updates, composite and zero identities, omitted/null/false values, rollback, shared transactions, hook order, and regeneration with SQLite before delivery.
 
@@ -62,6 +63,14 @@ Go hooks own business rules. Existing linked Go types keep their authority.
 ## Deliver
 
 Return the component's purpose, public input/output contract, DQL/Go files, hook responsibilities, exposure choice, validation/error behavior, tests run, and any unresolved capability. Do not claim production registration or database mutation unless it actually occurred and was authorized.
+
+## Graph naming
+
+Use separate reader/writer DQL with required `#package`. Declare `input_type`,
+`output_type` and outer `type(view,'Entity')` names; inner SQL aliases remain local.
+Auxiliary `(TABLE)` sources are nonmutating, and outer `AND 1=1` marks a to-one
+relation while retaining real equality links. See the grammar for CAST authority
+over source-preserved SQL/CTEs and literal defaults.
 
 ## Filename controls
 

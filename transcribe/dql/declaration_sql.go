@@ -51,7 +51,7 @@ func AnalyzeDeclarationSQL(raw string) (*DeclarationAnalysis, error) {
 	if sqlText == "" {
 		return nil, nil
 	}
-	parsed, err := sqlparser.ParseQuery(sqlText, withDeclarationExpressions())
+	parsed, err := sqlparser.ParseQuery(sqlText, sqlparser.WithStructuralValidation(), withDeclarationExpressions())
 	if err != nil {
 		return nil, fmt.Errorf("parse declaration sql %q: %w", sqlText, err)
 	}
@@ -63,6 +63,13 @@ func AnalyzeDeclarationSQL(raw string) (*DeclarationAnalysis, error) {
 		FromPath: strings.TrimSpace(parsed.From.Unparsed),
 		Table:    fromTable(parsed.From.X),
 		DataType: normalizeDataType(firstNonEmpty(decodeDataTypeHint(hint), decodeProjectionDataType(parsed.List))),
+	}
+	// A quoted StructQL path is a native identifier, so the FROM error
+	// callback does not populate Unparsed. Resolve its canonical token here.
+	if result.FromPath == "" {
+		if parts, err := sqlparser.TableIdentifierParts(result.Table); err == nil && len(parts) == 1 && strings.HasPrefix(parts[0], "/") {
+			result.FromPath = parts[0]
+		}
 	}
 	result.Projection, result.ProjectionComplete = parseDeclarationProjection(parsed.List)
 	result.DeclarationCriteriaIn = parseCriteriaIn(parsed.Qualify)
@@ -89,7 +96,7 @@ func withDeclarationExpressions() sqlparser.Option {
 	return sqlparser.WithErrorHandler(func(err error, cur *parsly.Cursor, destNode interface{}) error {
 		fromNode, ok := destNode.(*query.From)
 		if !ok {
-			return err
+			return (TemplateExpressions{}).Parse(err, cur, destNode)
 		}
 		if cur.Pos >= len(cur.Input) || cur.Input[cur.Pos] != '/' {
 			return err
@@ -129,7 +136,14 @@ func parseDeclarationProjection(list query.List) ([]DeclarationProjection, bool)
 			if len(list) != 1 || !strings.EqualFold(sqlparser.Stringify(actual.X), "ARRAY_AGG") || len(actual.Args) != 1 {
 				return nil, false
 			}
-			source = trimSelectorSuffix(sqlparser.Stringify(actual.Args[0]))
+			switch argument := actual.Args[0].(type) {
+			case *qexpr.Ident:
+				source = argument.Name
+			case *qexpr.Selector:
+				source = trimSelectorSuffix(sqlparser.Stringify(argument))
+			default:
+				return nil, false
+			}
 			aggregate = true
 		default:
 			return nil, false

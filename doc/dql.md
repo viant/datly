@@ -17,9 +17,11 @@ Datly views and their relationships. Each view subquery contains its database SQ
 
 ```sql
 #package('example.com/shop/orders/read')
+#setting($_ = $input_type('OrdersInput'))
+#setting($_ = $output_type('OrdersOutput'))
 #setting($_ = $route('/orders', 'GET'))
 #setting($_ = $connector('main'))
-SELECT orders.*, items.*
+SELECT orders.*, items.*, type(orders, 'Order'), type(items, 'Item')
 FROM (
     SELECT o.ID, o.WINDOW_START, o.WINDOW_END FROM ORDERS o
 ) orders
@@ -59,6 +61,15 @@ metadata; they do not introduce a different query language inside the views.
 ~~~~
 
 Use full module/package identity, not a filesystem path. model.Record, *model.Record, []*model.Record and model.Page[model.Record] resolve through the alias. Do not substitute a same-short-name local type.
+
+High-level DQL generation requires a nonempty `#package` destination inside the
+project module. Use its module-qualified path, or a module-relative package such
+as `api/orders`; `-dir` and the source package do not supply this declaration.
+Declare `$input_type('OrdersInput')` and `$output_type('OrdersOutput')` to choose
+contract names, and `type(orders,'Order')` to name an entity/view shape. These
+naming settings have distinct roles; contract/entity names can otherwise be
+derived by the generator. Reader and writer components use separately authored
+DQL and destination packages.
 
 ## Component settings
 
@@ -105,7 +116,7 @@ Warmup options: connector=..., indexParameter=... (also index_param/indexparam),
 
 ## Parameter and view declarations
 
-Explicit declarations are available when the application needs a custom binding. Standard GEN writer workflows derive body and Current bindings automatically; do not add them as required boilerplate.
+Explicit declarations are available when the application needs a custom binding. Standard `transcribe` writer workflows derive body and Current bindings automatically; do not add them as required boilerplate.
 
 ~~~~sql
 #define($_ = $ID<int>(path/id).Required())
@@ -229,22 +240,20 @@ tag(r.BOUND_UNIT, 'internal:"true"')
 tag(r.name, 'validate:"required"')
 ~~~~
 
-Expose a pseudo column in the inner SQL and apply its Go shape in the outer DQL:
+Prefer an outer CAST to declare the intended Go type, especially for rich hook-populated fields:
 
 ~~~~sql
 #import('model', 'example.com/app/model')
-SELECT orders.*,
-       CAST(orders.pseudo_column AS model.GoShape),
+SELECT orders.*, CAST(orders.pseudo_column AS model.GoShape),
        tag(orders.pseudo_column, 'sqlx:"-"')
-FROM (
-    SELECT o.*, '' AS pseudo_column FROM ORDERS o
-) orders
+FROM (SELECT o.*, '' AS pseudo_column FROM ORDERS o) orders
 ~~~~
 
-The inner query remains valid database SQL. The outer CAST declares the Go field
-shape; it does not ask the database to cast a string to a Go struct. Here the
-`sqlx:"-"` tag makes the hook-populated field nonphysical. A physical column using
-a custom Go shape instead retains its mapping and appropriate codec.
+The inner view SQL may contain database-specific expressions, nested queries or CTEs. SQLX result metadata owns output existence and names. An explicit outer CAST supplies the Go type even when the driver cannot report a database type; Datly does not need to infer that expression's provenance. Missing or duplicate result outputs still fail. Undeclared outputs with unknown types do not silently become strings.
+
+For simple literal projections, `'' AS pseudo_column` defaults to Go `string` and `0 AS pseudo_column` defaults to Go `int`. These are optional syntax-based defaults, checked against the database result label and ordinal. Use outer `CAST(view.column AS int)` or `CAST(view.column AS *int)` when the exact type matters; CAST overrides literal defaults and inferred nullability. Opaque CTE/computed expressions should use an explicit CAST when the driver has no type metadata.
+
+CAST does not imply transient DML mapping. Add `sqlx:"-"` explicitly for a logical field populated by `OnFetch` and translated into physical columns by writer `Init`. Physical codec-backed fields retain their authored SQLX mapping.
 
 The application shorthand tag(r.name,'validate:required') expresses the same validation annotation; generated Go tags must be valid validate:"required". Prefer quoted Go-tag spelling in examples. Explicit tags refine the corresponding metadata without deleting unrelated json/sqlx tags.
 
@@ -280,24 +289,29 @@ Declaration queries contain plain SQL or StructQL. Express requiredness with `.R
 
 ## Operation-based graph generation
 
-Use the same reader-like graph for `transcribe` operation `get`, `patch`, `post` or
-`put`, selecting pure Go output. Operation is explicit and must agree with route
-metadata. Generation derives request/output shapes, original-key Previous reads,
-internal Has markers, SyncPresence, validation, sequencing, relation links and
-transaction orchestration. Authors supply graph metadata and application Go hooks.
+Use separately authored reader-like graphs for `transcribe get`, `patch`, `post`
+or `put`, selecting pure Go output. The operation must agree with route metadata.
+`get` generates reader contracts and query resources. Writers derive request/output
+shapes, authorized Current/Previous reads, internal Has markers, SyncPresence,
+validation, sequencing, relation links and transaction orchestration. Authors
+supply graph metadata and application Go hooks.
 
 ```sql
+#package('example.com/app/records/write')
+#setting($_ = $input_type('RecordsInput'))
+#setting($_ = $output_type('RecordsOutput'))
 #import('hooks', 'example.com/app/recordhooks')
 #setting($_ = $route('/records', 'PATCH'))
 #setting($_ = $connector('main'))
 SELECT records.*, children.*, lookup.*,
+       type(records, 'Record'), type(children, 'Child'), type(lookup, 'Lookup'),
        entity_hooks(records, 'hooks.RecordLifecycle'),
        invariant(records.START, 'Schedule'),
        invariant(records.END, 'Schedule'),
        tag(records.END, 'validate:"gtfield(Start)"')
 FROM (SELECT r.* FROM records r) records
 JOIN (SELECT c.* FROM children c) children ON children.record_id = records.id
-JOIN (SELECT l.* FROM (lookup_values) l) lookup ON lookup.id = records.lookup_id
+JOIN (SELECT l.* FROM (lookup_values) l) lookup ON lookup.id = records.lookup_id AND 1=1
 ```
 
 `invariant` places Start and End in one cohesive invariant group; the comparison rule
@@ -357,7 +371,7 @@ arguments; duplicate role settings and unknown support roles are errors.
 Use `$support_dest('role','filename.go')` for separate support products. Supported
 roles are `entities`, `entity_methods`, `types` (cross-package shape aliases),
 `frames`, `previous`, `layout`, `actions`, `mutation_output`, `validation`, `hooks`,
-and `invariants`. Their defaults are `<role>.go`. Generated `hooks.go` contains
+`invariants`, and `indexes`. Their defaults are `<role>.go`. Generated `hooks.go` contains
 mutation hook adapters; application edits belong in create-once `lifecycle.go`.
 `mutation_output.go` contains mutation result logic; `output.go` owns the output
 contract. `$support_dest('type:CubeInput','cube.go')` selects the filename for a

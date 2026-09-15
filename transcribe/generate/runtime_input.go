@@ -133,6 +133,9 @@ func (m *runtimeInputMaterializer) inputType() (reflect.Type, error) {
 func runtimeFields(source []Field) []xshape.RuntimeField {
 	result := make([]xshape.RuntimeField, 0, len(source))
 	for _, field := range source {
+		if field.Implementation {
+			continue
+		}
 		result = append(result, xshape.RuntimeField{
 			Name: field.Name, TypeExpr: field.Type, Tag: reflect.StructTag(field.Tag),
 		})

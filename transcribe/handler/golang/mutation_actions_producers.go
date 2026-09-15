@@ -38,7 +38,7 @@ func (e *actionEmitter) verifyRelations() (ast.Decl, error) {
 	for _, role := range e.roles {
 		policy := []ast.Stmt{defineStmt("frame", selectExpr(id("entry"), "Frame"))}
 		policy = append(policy, e.original(role)...)
-		policy = append(policy, e.originalKey(role, "_", "supplied")...)
+		policy = append(policy, e.decisionIdentity(role, "_", "supplied")...)
 		policy = append(policy, assignStmt(id("_"), id("supplied")))
 		selection, action, err := e.actionSelection(role)
 		if err != nil {

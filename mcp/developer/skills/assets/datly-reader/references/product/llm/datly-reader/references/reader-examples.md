@@ -5,20 +5,37 @@ These are application patterns. The developer server supplies actual connector/s
 ## Parameterized DQL reader
 
 ~~~~sql
-#package('example.com/app/records')
+#package('example.com/app/records/read')
+#setting($_ = $input_type('RecordsInput'))
+#setting($_ = $output_type('RecordsOutput'))
 #setting($_ = $route('/v1/records', 'GET'))
 #setting($_ = $connector('main'))
 #setting($_ = $mcp('records.list', 'List records in a tenant'))
 #define($_ = $TenantID<int>(query/tenantId).Required())
 #define($_ = $Limit<int>(query/limit).Optional().QuerySelector('Records'))
-SELECT r.id, r.tenant_id, r.name,
-       set_limit(r, 100),
-       allowed_order_by_columns(r, 'id,name')
-FROM records r
-WHERE r.tenant_id = :TenantID
+SELECT records.*, type(records, 'Record'),
+       set_limit(records, 100),
+       allowed_order_by_columns(records, 'id,name')
+FROM (
+    SELECT r.id, r.tenant_id, r.name FROM records r
+    WHERE r.tenant_id = :TenantID
+) records
 ~~~~
 
-Configure selector permissions and row type. Verify that the selector view identity is Records in the compiled component; r is the SQL namespace.
+Save as `source/read/Records.dql` in the existing `example.com/app` module:
+
+```sh
+datly transcribe get -dir "$PROJECT" \
+  -schema -connector main -driver sqlite3 -dsn "$PROJECT/schema.db" \
+  example.com/app/source/read
+```
+
+`#package` selects the destination, input/output settings name contracts, and
+`type(records,'Record')` names the row. `records` is the outer view alias; `r`
+stays local to its SQL. Configure selector permissions and verify the canonical
+selector view identity `Records` in the generated component. Author the writer
+separately. Default filenames are plain; [exact overrides and optional prefixes](references/developer-mcp.md#operation-based-generation-to-pure-go)
+control their destinations.
 
 ## Go-shape reader
 
@@ -103,6 +120,9 @@ The tenant condition is an example filter, not proof that an arbitrary client-su
 When the component uses the same linked `Input`/`Output` shapes, this DQL declares the two output-derived queries explicitly:
 
 ~~~~sql
+#package('example.com/app/records')
+#setting($_ = $input_type('Input'))
+#setting($_ = $output_type('Output'))
 #setting($_ = $route('/records','GET'))
 #setting($_ = $connector('main'))
 #define($_ = $TenantID<int>(query/tenantId).Required())
@@ -129,17 +149,27 @@ For multi-batch relations, OnRelation sees the complete collection. A reducer se
 Required target pattern:
 
 ~~~~sql
+#package('example.com/app/configurations/read')
 #import('model', 'example.com/app/model')
+#setting($_ = $input_type('ConfigurationsInput'))
+#setting($_ = $output_type('ConfigurationsOutput'))
 #setting($_ = $route('/v1/configurations', 'GET'))
-SELECT r.id, r.BOUND_UNIT, r.BOUND_CAP, NULL AS bounds,
-       CAST(r.bounds AS model.Bounds),
-       tag(r.bounds, 'sqlx:"-"'),
-       tag(r.BOUND_UNIT, 'internal:"true"'),
-       tag(r.BOUND_CAP, 'internal:"true"')
-FROM configurations r
+#setting($_ = $connector('main'))
+SELECT configurations.*, type(configurations, 'Configuration'),
+       CAST(configurations.bounds AS model.Bounds),
+       tag(configurations.bounds, 'sqlx:"-"'),
+       tag(configurations.BOUND_UNIT, 'internal:"true"'),
+       tag(configurations.BOUND_CAP, 'internal:"true"')
+FROM (
+    SELECT r.id, r.BOUND_UNIT, r.BOUND_CAP, '' AS bounds FROM configurations r
+) configurations
 ~~~~
 
-The resolved view must identify bounds as a logical non-DML projection. Verify it is not sent as an unsupported physical field, and backing dependencies are fetched. Do not infer transient behavior for every physical rich/JSON cast.
+The result must contain the `bounds` output. The outer CAST supplies its Go type
+even when driver type metadata is empty; inner CTE/computed SQL need not have
+literal provenance. Without CAST, simple `''`/`0` projections default to
+`string`/`int`. Missing/duplicate outputs and undeclared unknown types fail.
+`sqlx:"-"` makes this hook-built logical value non-SQL/non-DML; Verify it is not sent as an unsupported physical field, and backing dependencies are fetched. Do not infer transient behavior for every physical rich/JSON cast.
 
 The imported model.Bounds may contain Unit and Cap. OnFetch builds it from the internal columns. Reuse the imported type; do not emit a duplicate local Bounds.
 

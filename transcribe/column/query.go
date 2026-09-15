@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
-	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 )
 
@@ -23,8 +22,10 @@ func discoveryQuery(source *spec.ViewSource) (string, error) {
 		return "", nil
 	}
 	parsed, err := sqlparser.ParseQuery(text)
-	if err != nil {
-		return "", fmt.Errorf("parse discovery SQL: %w", err)
+	if err != nil || parsed == nil || len(parsed.List) == 0 {
+		// Inner dialect SQL is database-owned. Preserve it as an opaque source
+		// and request zero-row metadata rather than guessing or sampling types.
+		return "SELECT * FROM (" + strings.TrimSuffix(text, ";") + ") datly_discovery WHERE 1=0", nil
 	}
 	if err := falsifySelect(parsed); err != nil {
 		return "", err
@@ -48,70 +49,11 @@ func falsifySelect(selectNode *query.Select) error {
 	} else {
 		selectNode.Qualify = &expr.Qualify{X: &expr.Binary{X: falsePredicate, Op: "AND", Y: selectNode.Qualify.X}}
 	}
-	for _, item := range selectNode.WithSelects {
-		if item == nil || item.X == nil {
-			continue
-		}
-		if err := falsifySelect(item.X); err != nil {
-			return err
-		}
-		item.Raw = ""
-	}
 	if selectNode.Union != nil {
 		if err := falsifySelect(selectNode.Union.X); err != nil {
 			return err
 		}
 	}
-	if err := falsifySubquery(selectNode.From.X); err != nil {
-		return fmt.Errorf("falsify FROM subquery: %w", err)
-	}
-	for _, join := range selectNode.Joins {
-		if join == nil {
-			continue
-		}
-		if err := falsifySubquery(join.With); err != nil {
-			return fmt.Errorf("falsify JOIN subquery: %w", err)
-		}
-	}
-	return nil
-}
-
-func falsifySubquery(source node.Node) error {
-	if table, _, err := sqlparser.SourceTable(source); err != nil {
-		return err
-	} else if table != "" {
-		return nil
-	}
-	var raw string
-	var update func(string, *query.Select)
-	switch actual := source.(type) {
-	case *expr.Parenthesis:
-		raw = actual.Raw
-		update = func(rewritten string, parsed *query.Select) {
-			actual.Raw = "(" + rewritten + ")"
-			actual.X = parsed
-		}
-	case *expr.Raw:
-		raw = actual.Raw
-		update = func(rewritten string, parsed *query.Select) {
-			actual.Raw = "(" + rewritten + ")"
-			actual.X = parsed
-		}
-	default:
-		return nil
-	}
-	raw = trimParentheses(raw)
-	if raw == "" {
-		return nil
-	}
-	parsed, err := sqlparser.ParseQuery(raw)
-	if err != nil {
-		return err
-	}
-	if err = falsifySelect(parsed); err != nil {
-		return err
-	}
-	update(strings.TrimSpace(sqlparser.Stringify(parsed)), parsed)
 	return nil
 }
 

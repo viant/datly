@@ -13,8 +13,8 @@ This skill is for application developers, not Datly framework contributors. Expl
 
 The references describe the **required Datly 1.0 authoring contract**, including features under development. Those features remain part of the requested design. A capability missing from the connected build is an implementation gap, not permission to drop a requirement, invent syntax, or silently choose another architecture. Compile/validate against the connected developer server and report a missing capability precisely.
 
-**Generation availability.** The v1 CLI exposes `datly transcribe get|patch|post|put` with Go output by default. Discover the connected developer server and installed CLI
-capabilities before generation. If operation-based `transcribe` with pure Go output is
+**Generation availability.** The v1 CLI exposes `datly transcribe get|patch|post|put` with Go output by default. Use the matching CLI first; inspect connected developer MCP targets when using a server.
+Check the installed capability before generation. If operation-based `transcribe` with pure Go output is
 missing, return the DQL and application hook contract and report that gap. Do not
 substitute `translate`, lower-level transcription, or manual writer plumbing.
 
@@ -40,8 +40,8 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 
 The standard workflow is **reader-like declarative DQL graph + explicit `transcribe`
 operation (`get`, `patch`, `post`, `put`) → generated pure Go**. Declare auxiliary
-tables in parentheses, entity hooks and invariant tags in DQL. The generator owns
-binding, Previous reads, presence, validation and write orchestration; application
+tables in parentheses, entity hooks and invariant tags in DQL. Reader generation owns typed read contracts and resources; writer generation
+owns Previous reads, presence, validation and write orchestration. Application
 Go hooks own business rules. Existing linked Go types keep their authority.
 
 - Establish the public result shape, parameter sources, connector names, identity/join keys, authorized filters, pagination, and selected package exposure.
@@ -49,7 +49,7 @@ Go hooks own business rules. Existing linked Go types keep their authority.
 - Model ordinary relations, self references, and DerivedViews explicitly. For richer API fields use imported Go shapes and the required CAST/tag contract; keep physical backing columns internal but SQL-mapped.
 - Use typed predicates and allowed selectors. Do not interpolate client values, column names, or arbitrary SQL.
 - Define OnFetch transformations per row and OnRelation work after the complete relation is assembled. Configure batching, concurrency, partitions, cache, and retry policy deliberately.
-- Compile and preview through the developer MCP server, then exercise realistic SQLite fixtures and protocol exposure. Verify empty results, NULLs, composite joins, multiple batches, output slots, and hook counts.
+- Generate with `datly transcribe get` (or a configured developer MCP generation target), inspect the emitted files, then exercise realistic SQLite fixtures and protocol exposure. Verify empty results, NULLs, composite joins, multiple batches, output slots, and hook counts.
 - Persist with authored-code preservation and atomic generation replacement. Expose only the chosen components/packages; keep dependency components private unless explicitly selected.
 
 ## Non-obvious rules
@@ -65,6 +65,14 @@ Go hooks own business rules. Existing linked Go types keep their authority.
 ## Deliver
 
 Return the component's purpose, public input/output contract, DQL/Go files, hook responsibilities, exposure choice, validation/error behavior, tests run, and any unresolved capability. Do not claim production registration or database mutation unless it actually occurred and was authorized.
+
+## Graph naming
+
+Use separate reader/writer DQL with required `#package`. Declare `input_type`,
+`output_type` and outer `type(view,'Entity')` names; inner SQL aliases remain local.
+Auxiliary `(TABLE)` sources are nonmutating, and outer `AND 1=1` marks a to-one
+relation while retaining real equality links. See the grammar for CAST authority
+over source-preserved SQL/CTEs and literal defaults.
 
 ## Filename controls
 

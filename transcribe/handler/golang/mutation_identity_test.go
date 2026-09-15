@@ -162,6 +162,10 @@ func TestPartialProgram(t *testing.T){
   if mode=="business failure"{row.Name=""}
   definition:={{FACTORY}}().(*{{DEFINITION}})
   _,err=engine.New().Execute(ctx,engine.Request{Input:route,Handler:mutation.New[Input,Output](definition),DataSource:dml.Source{DB:h.DB},Providers:[]locator.Provider{views,values.New("test",map[string]any{"events":[]*Record{row},"mode":mode})}})
+  if mode=="changed tenant"&&"{{OPERATION}}"!="PUT"{
+   if err==nil||!strings.Contains(err.Error(),"frozen resolved identity")||initialized!=1||validated!=1||sequenced!=1||queued!=0{t.Fatalf("known part retarget not rejected: %v",err)}
+   h.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT COUNT(*) AS n FROM trace"},[]struct{N int}{{0}});return
+  }
   success:="{{OPERATION}}"!="PUT"&&mode!="missing tenant"&&mode!="supplied nil"&&mode!="business failure"
   if success{
    if err!=nil{t.Fatal(err)}
@@ -172,7 +176,7 @@ func TestPartialProgram(t *testing.T){
   }else{
    if err==nil{t.Fatal("invalid partial identity or business field accepted")}
    if mode=="supplied nil"&&!strings.Contains(err.Error(),"supplied without a value"){t.Fatalf("wrong supplied-null error: %v",err)}
-   if mode!="supplied nil"&&mode!="business failure"&&!strings.Contains(err.Error(),"partial original identity"){t.Fatalf("wrong partial-key error: %v",err)}
+   if mode!="supplied nil"&&mode!="business failure"&&!strings.Contains(err.Error(),"partial resolved identity"){t.Fatalf("wrong partial-key error: %v",err)}
    if validated!=0||sequenced!=0||queued!=0{t.Fatalf("failure escaped prechecks: %v hooks=%d/%d/%d",err,validated,sequenced,queued)}
    if mode!="missing tenant"&&row.Id!=nil{t.Fatal("identity allocated before failure")}
    h.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT COUNT(*) AS n FROM trace"},[]struct{N int}{{0}})
@@ -215,11 +219,10 @@ func TestActionIdentitySQLite(t *testing.T){
   if err!=nil{t.Fatal(err)}
   wantCalls:=1;if mode=="explicit zero"{wantCalls=0}
   if probe.calls!=wantCalls{t.Fatalf("allocation calls=%d want=%d",probe.calls,wantCalls)}
-  row.TenantId=99;row.Has.TenantId=false
   if err=actions.Diff(ctx,frames);err!=nil{t.Fatal(err)}
   if len(actions.role0)!=1||actions.role0[0].Action!=handler.WriteInsert{t.Fatal("sequence changed INSERT classification")}
   if err=actions.Reconcile(ctx,frames);err!=nil{t.Fatal(err)}
-  if row.TenantId!=0||row.Id==nil||!row.Has.TenantId{t.Fatalf("supplied zero was not restored: %+v",row)}
+  if row.TenantId!=0||row.Id==nil||!row.Has.TenantId{t.Fatalf("known zero changed: %+v",row)}
   if mode=="explicit zero"&&*row.Id!=0{t.Fatal("explicit zero ID was allocated")}
   if err=actions.Queue(ctx,frames);err!=nil{t.Fatal(err)};if err=data.Complete(ctx,nil);err!=nil{t.Fatal(err)}
   h.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT tenant_id,id,name FROM records WHERE tenant_id=0"},[]struct{TenantId,Id int64;Name string}{{0,*row.Id,"new"}})

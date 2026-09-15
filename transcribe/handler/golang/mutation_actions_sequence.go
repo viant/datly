@@ -10,6 +10,9 @@ import (
 
 func (e *actionEmitter) sequence() (ast.Decl, error) {
 	body := []ast.Stmt{}
+	if e.entities.identity != nil {
+		body = append(body, errorGuard(callExpr(selectExpr(ast.NewIdent("frames"), "freezePendingIdentity"))))
+	}
 	// Validate all captured identities before invoking any allocator. Working
 	// zero tests alone are never evidence that a client omitted an identity.
 	for _, role := range e.roles {
@@ -20,7 +23,7 @@ func (e *actionEmitter) sequence() (ast.Decl, error) {
 			body = append(body, defineStmt(role.field+"Candidates", &ast.CompositeLit{Type: &ast.ArrayType{Elt: role.record.value.pointerExpr()}}))
 		}
 		loop := e.original(role)
-		loop = append(loop, e.originalKey(role, "_", "supplied")...)
+		loop = append(loop, e.decisionIdentity(role, "_", "supplied")...)
 		loop = append(loop, assignStmt(ast.NewIdent("_"), ast.NewIdent("supplied")))
 		selection, action, err := e.actionSelection(role)
 		if err != nil {
@@ -32,6 +35,9 @@ func (e *actionEmitter) sequence() (ast.Decl, error) {
 		if sequence != nil {
 			appendCandidate := assignStmt(ast.NewIdent(role.field+"Candidates"), callExpr(ast.NewIdent("append"), ast.NewIdent(role.field+"Candidates"), selectExpr(ast.NewIdent("frame"), "Entity")))
 			eligible := &ast.BinaryExpr{X: &ast.BinaryExpr{X: action, Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteInsert")}, Op: token.LAND, Y: &ast.UnaryExpr{Op: token.NOT, X: callExpr(selectExpr(ast.NewIdent("original"), "Has"), stringExpr(sequence.Field.Field))}}
+			if e.entities.identity != nil && e.isIdentityField(role, sequence.Field.Field) {
+				eligible = &ast.BinaryExpr{X: &ast.BinaryExpr{X: action, Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteInsert")}, Op: token.LAND, Y: &ast.UnaryExpr{Op: token.NOT, X: selectExpr(selectExpr(ast.NewIdent("frame"), "identityKnown"), sequence.Field.Field)}}
+			}
 			loop = append(loop, &ast.IfStmt{Cond: eligible, Body: &ast.BlockStmt{List: []ast.Stmt{appendCandidate}}})
 		}
 		body = append(body, e.frameLoop(role, loop))
@@ -57,8 +63,8 @@ func (e *actionEmitter) sequence() (ast.Decl, error) {
 	return e.phase("Sequence", 1, body), nil
 }
 
-// sequenceReservations exposes supplied IDs from every role in the allocation
-// domain before the first Allocate call. Only captured originals are evidence;
+// sequenceReservations exposes supplied and explicitly resolved IDs from every
+// role in the allocation domain before the first Allocate call;
 // detached payload clones keep optional custom reservation code away from them.
 func (e *actionEmitter) sequenceReservations() ([]ast.Stmt, error) {
 	id := ast.NewIdent
@@ -77,7 +83,23 @@ func (e *actionEmitter) sequenceReservations() ([]ast.Stmt, error) {
 				&ast.IfStmt{Cond: &ast.BinaryExpr{X: id("err"), Op: token.NEQ, Y: id("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(id("err"))}}},
 				assignStmt(id("reserved"), callExpr(id("append"), id("reserved"), &ast.TypeAssertExpr{X: id("cloned"), Type: role.record.value.pointerExpr()})),
 			}
-			loop = append(loop, &ast.IfStmt{Cond: callExpr(selectExpr(id("original"), "Has"), stringExpr(field)), Body: &ast.BlockStmt{List: capture}})
+			if e.entities.identity == nil || !e.isIdentityField(role, field) {
+				loop = append(loop, &ast.IfStmt{Cond: callExpr(selectExpr(id("original"), "Has"), stringExpr(field)), Body: &ast.BlockStmt{List: capture}})
+			}
+			if e.entities.identity != nil && e.isIdentityField(role, field) {
+				resolved := selectExpr(selectExpr(id("frame"), "identityKnown"), field)
+				capture := []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{id("clone"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{e.runtimeCall("CloneValue", selectExpr(id("frame"), "Entity"), id(role.field+"Options"))}}, errorGuard(id("err")), defineStmt("reservedRow", &ast.TypeAssertExpr{X: id("clone"), Type: role.record.value.pointerExpr()})}
+				capture = append(capture, e.accessor(role.record, path, "reservedField")...)
+				value := ast.Expr(selectExpr(selectExpr(id("frame"), "identityKey"), field))
+				for _, key := range role.record.plan.IdentityKeys() {
+					if key.Field == field && (key.Type.Pointer || strings.HasPrefix(key.Type.Name, "*")) {
+						capture = append(capture, defineStmt("reservedValue", value))
+						value = &ast.UnaryExpr{Op: token.AND, X: id("reservedValue")}
+					}
+				}
+				capture = append(capture, errorGuard(e.runtimeCall("AssignFields", id("reservedRow"), e.assignment(id("reservedField"), value))), assignStmt(id("reserved"), callExpr(id("append"), id("reserved"), id("reservedRow"))))
+				loop = append(loop, &ast.IfStmt{Cond: resolved, Body: &ast.BlockStmt{List: capture}})
+			}
 			block = append(block, e.frameLoop(role, loop))
 			call := callExpr(selectExpr(id("reserver"), "Reserve"), id("ctx"), stringExpr(role.record.plan.Table), id("reserved"), stringExpr(strings.ReplaceAll(path, ".", "/")))
 			block = append(block, &ast.IfStmt{Cond: &ast.BinaryExpr{X: callExpr(id("len"), id("reserved")), Op: token.GTR, Y: &ast.BasicLit{Kind: token.INT, Value: "0"}}, Body: &ast.BlockStmt{List: []ast.Stmt{errorGuard(call)}}})
@@ -125,4 +147,13 @@ func (e *actionEmitter) sequenceFields(role actionRole) []string {
 		}
 	}
 	return result
+}
+
+func (e *actionEmitter) isIdentityField(role actionRole, name string) bool {
+	for _, key := range role.record.plan.IdentityKeys() {
+		if key.Field == name {
+			return true
+		}
+	}
+	return false
 }

@@ -13,6 +13,7 @@ const mutationHandlerPackage = "github.com/viant/xdatly/handler/mutation"
 // Its factory returns public mutation.Definition[I,O], not a custom Contract
 // or runtime handler. The linking application uses runtime mutation.New.
 type MutationHandlerAsset struct {
+	ReadIndexes          *ReadIndexSource
 	Destination, Factory string
 	File                 *ast.File
 	Support              []MutationSource
@@ -32,6 +33,13 @@ func (a *MutationHandlerAsset) Clone() (*MutationHandlerAsset, error) {
 		return nil, fmt.Errorf("clone generated mutation definition: %w", err)
 	}
 	result := &MutationHandlerAsset{Destination: a.Destination, Factory: a.Factory, File: file}
+	if a.ReadIndexes != nil {
+		copy, err := a.ReadIndexes.Source.clone()
+		if err != nil {
+			return nil, err
+		}
+		result.ReadIndexes = &ReadIndexSource{Package: a.ReadIndexes.Package, TypeName: a.ReadIndexes.TypeName, CacheField: a.ReadIndexes.CacheField, Source: copy}
+	}
 	for _, source := range a.Support {
 		cloned, err := source.clone()
 		if err != nil {
@@ -89,6 +97,22 @@ func (a *MutationHandlerAsset) resolve(plan *Plan, targetPackage string) error {
 			return err
 		}
 		result.Support = append(result.Support, resolved)
+	}
+	if a.ReadIndexes != nil {
+		source, err := a.ReadIndexes.Source.resolve(plan, a.ReadIndexes.Package)
+		if err != nil {
+			return err
+		}
+		if a.ReadIndexes.CacheField != "" {
+			if plan.Input.Ownership != ContractGenerated {
+				return fmt.Errorf("read index storage requires a generated input")
+			}
+			if _, exists := plan.Input.Field(a.ReadIndexes.CacheField); exists {
+				return fmt.Errorf("generated read index storage collides with input field %s", a.ReadIndexes.CacheField)
+			}
+			plan.Input.Fields = append(plan.Input.Fields, Field{Name: a.ReadIndexes.CacheField, Type: "*" + a.ReadIndexes.TypeName, Implementation: true, Tag: `json:"-" sqlx:"-"`})
+		}
+		plan.ReadIndexes = &ReadIndexSource{Package: a.ReadIndexes.Package, TypeName: a.ReadIndexes.TypeName, CacheField: a.ReadIndexes.CacheField, Source: source}
 	}
 	plan.MutationHandler = result
 	return nil

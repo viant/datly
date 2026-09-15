@@ -52,15 +52,18 @@ func TestDiscoveryQueryUsesSQLParserForTableAndQuerySources(t *testing.T) {
 	}
 }
 
-func TestDiscoveryQueryFalsifiesFromAndJoinSubqueries(t *testing.T) {
+func TestDiscoveryQueryPreservesFromAndJoinSubqueries(t *testing.T) {
 	actual, err := discoveryQuery(&spec.ViewSource{SQL: `SELECT o.id, i.name
 FROM (SELECT id FROM orders) o
 JOIN (SELECT order_id, name FROM items) i ON i.order_id = o.id`})
 	if err != nil {
 		t.Fatalf("discoveryQuery() error = %v", err)
 	}
-	if count := strings.Count(actual, "1 = 0"); count != 3 {
-		t.Fatalf("expected outer and two nested false predicates, got %d:\n%s", count, actual)
+	if count := strings.Count(actual, "1 = 0"); count != 1 {
+		t.Fatalf("expected only the outer false predicate, got %d:\n%s", count, actual)
+	}
+	if !strings.Contains(actual, "(SELECT id FROM orders)") || !strings.Contains(actual, "(SELECT order_id, name FROM items)") {
+		t.Fatalf("inner SQL changed: %s", actual)
 	}
 	if _, err = sqlparser.ParseQuery(actual); err != nil {
 		t.Fatalf("rewritten nested SQL is invalid: %v\n%s", err, actual)

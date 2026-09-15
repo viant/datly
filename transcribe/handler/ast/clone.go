@@ -6,6 +6,16 @@ func (p *Plan) Clone() *Plan {
 		return nil
 	}
 	result := *p
+	result.ReadCollections = append([]ReadCollection(nil), p.ReadCollections...)
+	for i := range result.ReadCollections {
+		result.ReadCollections[i].InputPath = cloneFieldPath(p.ReadCollections[i].InputPath)
+		result.ReadCollections[i].Fields = append([]FieldRef(nil), p.ReadCollections[i].Fields...)
+		result.ReadCollections[i].Keys = append([]KeyPart(nil), p.ReadCollections[i].Keys...)
+		result.ReadCollections[i].Groups = append([]ReadGroup(nil), p.ReadCollections[i].Groups...)
+		for j := range result.ReadCollections[i].Groups {
+			result.ReadCollections[i].Groups[j].Parts = append([]KeyPart(nil), p.ReadCollections[i].Groups[j].Parts...)
+		}
+	}
 	result.Input = cloneContractRef(p.Input)
 	if p.Output != nil {
 		output := cloneContractRef(*p.Output)

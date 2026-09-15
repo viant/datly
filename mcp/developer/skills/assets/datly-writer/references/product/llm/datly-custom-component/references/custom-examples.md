@@ -156,7 +156,7 @@ The empty message is intentional. A wrapper's private error text must not replac
 
 ## Writes and completion
 
-Request Data or narrow DML/Sequencer capabilities per invocation. Validate before mutation; classify using original presence/identity. Do not allocate every current zero ID. Flush of caller-owned work is not a commit.
+Request Data or narrow DML/Sequencer capabilities per invocation. Validate before mutation; keep original presence separate from resolved identity and classify against authorized Previous according to the chosen policy. Do not allocate every current zero ID. Flush of caller-owned work is not a commit.
 
 Custom orchestration must explicitly preserve sparse identity, validation and transaction semantics. It is not automatically protected by all generated writer phases.
 

@@ -70,8 +70,10 @@ type KeyLink struct {
 // LookupProjection names a pure typed projection for a generated auxiliary
 // read. The enclosing relation supplies identity and value-link semantics.
 type LookupProjection struct {
-	Name    string
-	Columns []string
+	// ParentOnly projects the already scoped Previous parent, without request fallback.
+	ParentOnly bool
+	Name       string
+	Columns    []string
 }
 
 func (p *LookupProjection) Clone() *LookupProjection {
@@ -123,18 +125,21 @@ type WritePolicy struct {
 
 // RelationPlan describes one typed child traversal from a parent record.
 type RelationPlan struct {
-	Identity    string
-	FieldPath   FieldPath
-	Cardinality spec.Cardinality
-	Links       []KeyLink
-	Child       *RecordPlan
+	// AllowReparent is explicit permission to change non-identity parent links.
+	AllowReparent bool
+	Identity      string
+	FieldPath     FieldPath
+	Cardinality   spec.Cardinality
+	Links         []KeyLink
+	Child         *RecordPlan
 }
 
 // SelfRelationPlan describes holder-specific linking within the same row type.
 // It has no child plan: the existing record role owns recursive traversal.
 type SelfRelationPlan struct {
-	FieldPath FieldPath
-	Links     []KeyLink
+	AllowReparent bool
+	FieldPath     FieldPath
+	Links         []KeyLink
 }
 
 // RecordPlan describes one canonical record write and its ordered children.
@@ -188,8 +193,9 @@ func (r *RecordPlan) IdentityKeys() []KeyPart {
 
 // Plan is the immutable target-neutral input to handler target lowering.
 type Plan struct {
-	Operation Operation
-	Input     ContractRef
-	Output    *ContractRef
-	Root      *RecordPlan
+	ReadCollections []ReadCollection
+	Operation       Operation
+	Input           ContractRef
+	Output          *ContractRef
+	Root            *RecordPlan
 }

@@ -35,6 +35,9 @@ func (g *handlerGeneration) prepareMutation(semantic *plan.Plan, config handlerg
 		{"mutation_output", program.Output.File},
 		{"validation", program.Validation.File},
 	}
+	if program.Indexes != nil {
+		asset.ReadIndexes = &gen.ReadIndexSource{Package: program.Indexes.PackagePath, TypeName: program.Indexes.TypeName, CacheField: program.Indexes.CacheField, Source: gen.MutationSource{Role: "indexes", Destination: "indexes.go", File: program.Indexes.File}}
+	}
 	if program.Hooks != nil {
 		sources = append(sources, struct {
 			role string

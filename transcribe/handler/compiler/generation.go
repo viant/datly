@@ -71,7 +71,7 @@ func (c *Compiler) BuildInput(request Request, rootType string) (Request, error)
 	}
 	b.request.Output = output.Name
 	if request.Operation == plan.OperationPatch || request.Operation == plan.OperationPut {
-		if err := b.record(b.request.Component.RootView, body.Name, nil); err != nil {
+		if err := b.record(b.request.Component.RootView, body.Name, nil, nil); err != nil {
 			return Request{}, err
 		}
 	}
@@ -93,7 +93,7 @@ func (b *inputGeneration) append(p *spec.Parameter) error {
 	return nil
 }
 
-func (b *inputGeneration) record(view *spec.View, body string, path []string) error {
+func (b *inputGeneration) record(view *spec.View, body string, path []string, scope *currentParentScope) error {
 	if view == nil {
 		return fmt.Errorf("generation relation requires a view")
 	}
@@ -136,7 +136,11 @@ func (b *inputGeneration) record(view *spec.View, body string, path []string) er
 			return fmt.Errorf("current input %q conflicts with authored binding", currentName)
 		}
 	} else {
-		if err := b.addCurrent(view, body, path, currentName, keys); err != nil {
+		if scope != nil {
+			if err := b.addScopedCurrent(view, currentName, scope); err != nil {
+				return err
+			}
+		} else if err := b.addCurrent(view, body, path, currentName, keys); err != nil {
 			return err
 		}
 	}
@@ -165,7 +169,7 @@ func (b *inputGeneration) record(view *spec.View, body string, path []string) er
 			if err := b.auxiliary(view, rel, body); err != nil {
 				return err
 			}
-		} else if err := b.record(rel.View, body, next); err != nil {
+		} else if err := b.record(rel.View, body, next, &currentParentScope{view: view, relation: rel, input: currentName}); err != nil {
 			return err
 		}
 	}

@@ -57,9 +57,9 @@ func TestActions(t *testing.T){
  if reserve&&(len(reserved.reserved)!=2||reserved.reserved[0]!=0||reserved.reserved[1]!=8){t.Fatalf("reservation lost original keys: %v",reserved.reserved)}
  if native.calls!=1||len(native.candidates)!=2||native.candidates[0]!=input.Events[2]||native.candidates[1]!=input.Events[3]||*input.Events[0].Id!=77||*input.Events[1].Id!=8||*input.Events[2].Id!=100||*input.Events[3].Id!=55{t.Fatal("original identity sequence filtering")}
  if err=actions.Diff(context.Background(),frames);err!=nil{t.Fatal(err)}
- if len(actions.role0)!=4||actions.role0[0].Action!=handler.WriteUpdate||actions.role0[0].OriginalKey.Id!=0||!actions.role0[0].OriginalAssigned{t.Fatal("original zero identity update lost")}
+ if len(actions.role0)!=4||actions.role0[0].Action!=handler.WriteUpdate||actions.role0[0].IdentityKey.Id!=0||!actions.role0[0].IdentityAssigned{t.Fatal("original zero identity update lost")}
  for _,i:=range []int{1,2,3}{if actions.role0[i].Action!=handler.WriteInsert{t.Fatal("missing/new identity was treated as update")}}
- if actions.role0[2].OriginalAssigned||actions.role0[3].OriginalAssigned{t.Fatal("post-capture flags contaminated identity")}
+ if actions.role0[2].IdentityAssigned||actions.role0[3].IdentityAssigned{t.Fatal("post-capture flags contaminated identity")}
  if err=actions.Reconcile(context.Background(),frames);err!=nil{t.Fatal(err)}
  if *input.Events[0].Id!=0||!input.Events[2].Has.Id||frames.Role0[2].State.Original.Has("Id"){t.Fatal("reconciled output or immutable identity mask lost")}
  if err=actions.Queue(context.Background(),frames);err!=nil{t.Fatal(err)}

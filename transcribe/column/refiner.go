@@ -158,6 +158,16 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	if db == nil {
 		return nil, fmt.Errorf("connector %q returned a nil DB", connector)
 	}
+	var constraints map[string]tableConstraint
+	if table := strings.TrimSpace(source.Table); table != "" {
+		constraints, err = loadTableConstraints(ctx, db, table)
+		if err != nil {
+			return nil, err
+		}
+		if err := retainNamedIdentity(view, source, constraints); err != nil {
+			return nil, err
+		}
+	}
 	dialect, err := config.Dialect(ctx, db)
 	if err != nil {
 		return nil, fmt.Errorf("resolve SQL dialect: %w", err)
@@ -174,7 +184,7 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	if strings.TrimSpace(query) == "" {
 		return evaluated, nil
 	}
-	detected, err := io.DetectColumns(ctx, db, query, evaluated.Args...)
+	detected, err := r.detectColumns(ctx, db, view, query, evaluated.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("SQLX discovery failed: %w", err)
 	}
@@ -186,15 +196,20 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	for _, column := range columns {
 		projected = append(projected, column.Name)
 	}
-	if err := ValidateInvariants(view, projected); err != nil {
+	if err := ValidateProjectionAnnotations(view, projected); err != nil {
 		return nil, err
+	}
+	// Successful database discovery can materialize a named outer wildcard
+	// even when the local parser cannot enumerate its inner dialect SQL.
+	resolvedSQL, changed, err := (dsql.SelectorProjection{SQL: view.Source.SQL}).ResolveDiscoveredColumns(projected, dialect)
+	if err != nil {
+		return nil, err
+	}
+	if changed {
+		view.Source.SQL = resolvedSQL
 	}
 	view.Columns = mergeColumns(view.Columns, columns)
 	if table := strings.TrimSpace(source.Table); table != "" {
-		constraints, err := loadTableConstraints(ctx, db, table)
-		if err != nil {
-			return nil, err
-		}
 		lineage, err := directProjectionLineage(source)
 		if err != nil {
 			return nil, err

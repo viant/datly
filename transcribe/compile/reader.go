@@ -120,7 +120,7 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err := applyViewDirectives(root, directives); err != nil {
 		return nil, err
 	}
-	if !sourceDecomposed && (projectionRewritten || columnsRewritten || len(directives) > 0 || directAuxiliary) {
+	if !sourceDecomposed && (projectionRewritten || columnsRewritten || len(directives) > 0 || directAuxiliary || root.Source.SQL == "" && (table == "" || referencesCTE(parsed.From.X, parsed.WithSelects))) {
 		root.Source.SQL = wrapReadProgram(input.Template, strings.TrimSpace((sqlparser.Stringifier{PreserveWindow: true}).String(parsed)))
 	}
 	if err := validateView(root, map[*spec.View]bool{}); err != nil {

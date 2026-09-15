@@ -9,6 +9,7 @@ import (
 )
 
 type relationProducerFixture struct {
+	rewrite   func(string) string
 	self      bool
 	mode      string
 	composite bool
@@ -77,7 +78,7 @@ func (f relationProducerFixture) program(t *testing.T) *MutationProgramAsset {
 		root.Relations = []*plan.RelationPlan{{Identity: "Children", FieldPath: plan.FieldPath{"Children"}, Cardinality: spec.CardinalityMany, Links: links, Child: child}}
 		types = append(types, RecordType{Identity: child.Identity, Path: child.InputPath, Value: "[]*Record"})
 	}
-	if f.mode == "incomplete key" {
+	if f.mode == "incomplete key" || f.mode == "precomputed key" {
 		records := []*plan.RecordPlan{root}
 		if !f.self {
 			records = append(records, root.Relations[0].Child)
@@ -106,6 +107,14 @@ func (f relationProducerFixture) program(t *testing.T) *MutationProgramAsset {
 			types[index].Current = "[]*Record"
 		}
 	}
+	if f.mode == "child update" {
+		// Explicit reparent intent still must not bypass native UPDATE/FK rules.
+		if f.self {
+			root.SelfRelations[0].AllowReparent = true
+		} else {
+			root.Relations[0].AllowReparent = true
+		}
+	}
 	asset, err := MutationProgram(semantic, Config{Package: "events", PackagePath: "github.com/viant/datly/syncfixture", Factory: "NewEventsHandler", InputType: "Input", OutputType: "Output", Records: types})
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +130,7 @@ func TestRelationProducerProgramSQLite(t *testing.T) {
 			layout = "self"
 		}
 		t.Run(layout, func(t *testing.T) {
-			for _, mode := range []string{"absent child", "produced Go", "produced Go failure", "working marker", "supplied nil changed", "supplied zero changed", "incomplete key", "reference boundary", "partial key", "parent update", "parent update changed", "parent update supplied", "parent update wrong target", "child update", "supplied nil", "supplied zero", "supplied conflict", "unrelated root", "ordinary Go rule", "produced unique", "pending identity", "pending alias", "two allocations", "bad allocator", "altered topology", "ambiguous graph", "competing producers", "reversed order", "wrong target"} {
+			for _, mode := range []string{"absent child", "produced Go", "produced Go failure", "working marker", "supplied nil changed", "supplied zero changed", "incomplete key", "precomputed key", "reference boundary", "partial key", "parent update", "parent update changed", "parent update supplied", "parent update wrong target", "child update", "supplied nil", "supplied zero", "supplied conflict", "unrelated root", "ordinary Go rule", "produced unique", "pending identity", "pending alias", "two allocations", "bad allocator", "altered topology", "ambiguous graph", "competing producers", "reversed order", "wrong target"} {
 				t.Run(mode, func(t *testing.T) {
 					(relationProducerFixture{self: self, mode: mode}).run(t)
 				})
@@ -149,6 +158,9 @@ func (f relationProducerFixture) run(t *testing.T) {
 		source = strings.NewReplacer("refTable=nodes", "refTable=othernodes", "REFERENCES nodes(id)", "REFERENCES othernodes(id)").Replace(source)
 	}
 	source = f.refineSource(source)
+	if f.rewrite != nil {
+		source = f.rewrite(source)
+	}
 	(entitySyncFixture{entity: asset.Entities, products: files, source: source}).run(t)
 }
 
@@ -223,7 +235,8 @@ func TestPendingGraph(t *testing.T){
  parent.Children=[]*Record{child};events:=[]*Record{parent}
  wantRows,wantEdges:=2,1
  switch mode{
- case "incomplete key":child.Has.Name=false
+ case "incomplete key":child.Has.Name=false;child.Name=""
+ case "precomputed key":child.Has.Name=false
  case "two allocations":child.Id=nil;child.Has.Id=false;id:=int64(6);parent.Children=append(parent.Children,&Record{Id:&id,Name:"provided",Has:&Marker{Id:true,Name:true}});wantRows=3;wantEdges=2
  case "parent update","parent update changed","parent update supplied":parent.Id=&anchor;parent.Has.Id=true;if mode=="parent update supplied"{child.ParentId=&anchor;child.Has.ParentId=true}
  case "parent update wrong target":id:=int64(9);parent.Id=&id;parent.Has.Id=true
@@ -261,7 +274,7 @@ func TestPendingGraph(t *testing.T){
   h.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT id,parent_id,name FROM nodes ORDER BY id"},[]struct{Id,ParentId int64;Name string}{{5,5,"anchor"},{9,5,"existing parent"}})
   return
  }
- if mode=="incomplete key"{if err==nil||!strings.Contains(err.Error(),"partial original identity")||customCalls!=0||sequenceCalls!=0||queueCalls!=0||writes.Load()!=0{t.Fatalf("incomplete captured key acquired producer authority: %v",err)};return}
+ if mode=="incomplete key"{if err==nil||!strings.Contains(err.Error(),"partial resolved identity")||customCalls!=0||sequenceCalls!=0||queueCalls!=0||writes.Load()!=0{t.Fatalf("incomplete captured key acquired producer authority: %v",err)};return}
  if mode=="produced Go failure"{var failed *handler.Validation;if !errors.As(err,&failed)||customCalls!=2||sequenceCalls!=2||queueCalls!=0||writes.Load()!=0||len(failed.Violations)!=1||failed.Violations[0].Check!="produced_fk"{t.Fatalf("final Go rule did not validate produced value: %v custom=%d sequence=%d",err,customCalls,sequenceCalls)};return}
  if mode=="bad allocator"{if err==nil||!strings.Contains(err.Error(),"reconciled mutation identities are duplicated")||queueCalls!=0||writes.Load()!=0||len(outcomes)!=1||outcomes[0].CommitConfirmed(){t.Fatalf("cross-role identity collision reached Queue: err=%v queue=%d writes=%d",err,queueCalls,writes.Load())};return}
  if mode=="altered topology"||mode=="ambiguous graph"{
@@ -272,18 +285,19 @@ func TestPendingGraph(t *testing.T){
  if mode=="reversed order"{if err==nil||!strings.Contains(err.Error(),"execution order")||customCalls!=2||queueCalls!=0||writes.Load()!=0{t.Fatalf("reversed order escaped existing frame verifier: %v",err)};return}
  if initCalls!=wantRows||activeEdges!=wantEdges{t.Fatalf("typed topology missing: init=%d edges=%d error=%v",initCalls,activeEdges,err)}
  if len(outcomes)!=1{t.Fatalf("finalizers=%d error=%v",len(outcomes),err)}
- if (mode=="absent child"||mode=="produced Go"||mode=="working marker"||mode=="reference boundary"||mode=="partial key"||mode=="partial current"||strings.HasPrefix(mode,"parent update")||strings.HasPrefix(mode,"pending ")||mode=="two allocations")&&err==nil{
-  expectedID:=int64(6);if strings.HasPrefix(mode,"parent update"){expectedID=5}
+ if (mode=="precomputed key"||mode=="absent child"||mode=="produced Go"||mode=="working marker"||mode=="reference boundary"||mode=="partial key"||mode=="partial current"||strings.HasPrefix(mode,"parent update")||strings.HasPrefix(mode,"pending ")||mode=="two allocations")&&err==nil{
+  expectedID:=int64(6);if strings.HasPrefix(mode,"parent update"){expectedID=5};if mode=="parent update changed"{expectedID=99}
   if strings.HasPrefix(mode,"pending ")||mode=="two allocations"{expectedID=7}
   if parent.Id==nil||*parent.Id!=expectedID||child.ParentId==nil||*child.ParentId!=expectedID{t.Fatal("producer did not reconcile the exact parent")}
   if customCalls!=wantRows||sequenceCalls!=wantRows||queueCalls!=wantRows||writes.Load()!=int64(wantRows)||!outcomes[0].CommitConfirmed(){t.Fatalf("incorrect phase/write outcome custom=%d sequence=%d queue=%d writes=%d outcome=%+v",customCalls,sequenceCalls,queueCalls,writes.Load(),outcomes)}
   expected:=[]struct{Id,ParentId int64;Name string}{{5,5,"anchor"},{6,5,"parent"},{20,6,"child"}}
   if strings.HasPrefix(mode,"parent update"){expected=[]struct{Id,ParentId int64;Name string}{{5,5,"parent"},{20,5,"child"}}}
+  if mode=="parent update changed"{expected=[]struct{Id,ParentId int64;Name string}{{5,5,"anchor"},{20,99,"child"},{99,5,"parent"}}}
   if strings.HasPrefix(mode,"pending "){expected=[]struct{Id,ParentId int64;Name string}{{5,5,"anchor"},{6,7,"child"},{7,5,"parent"}}}
   if mode=="two allocations"{expected=[]struct{Id,ParentId int64;Name string}{{5,5,"anchor"},{6,7,"provided"},{7,5,"parent"},{8,7,"child"}}}
   h.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT id,parent_id,name FROM nodes ORDER BY id"},expected)
   h.AssertQuery(t,ctx,sqlite.Query{SQL:"PRAGMA foreign_keys"},[]struct{ForeignKeys int}{{1}})
-  if orphan:=h.ExecStatements(ctx,"INSERT INTO nodes VALUES(99,999,'orphan')");orphan==nil{t.Fatal("actual SQLite FK was disabled")}
+  orphanSQL:="INSERT INTO nodes VALUES(99,999,'orphan')";if mode=="parent update changed"{orphanSQL="INSERT INTO nodes VALUES(999,1000,'orphan')"};if orphan:=h.ExecStatements(ctx,orphanSQL);orphan==nil{t.Fatal("actual SQLite FK was disabled")}
   return
  }
  if mode=="supplied conflict"||mode=="supplied nil changed"||mode=="supplied zero changed"{

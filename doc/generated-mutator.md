@@ -36,6 +36,12 @@ files and authored edits must be preserved.
 
 Keeping these separate is what makes sparse updates and business hooks compatible.
 
+Original values remain immutable facts; `Input.Init` may establish a different
+effective identity, which must match authorized Previous before UPDATE. Known
+parts are then frozen through sequencing. See [Go PATCH identity and read
+indexes](go-patch-indexes.md) for candidate/zero rules, canonical relationship
+groups, explicit business constructors, and field-evidence requirements.
+
 ## Has markers: omission is not zero
 
 Consider these request bodies for an existing order:

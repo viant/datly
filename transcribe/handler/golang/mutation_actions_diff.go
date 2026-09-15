@@ -45,7 +45,7 @@ func (e *actionEmitter) actionSelection(role actionRole) ([]ast.Stmt, ast.Expr, 
 		if err != nil {
 			return nil, nil, err
 		}
-		body := []ast.Stmt{defineStmt("action", missing), &ast.IfStmt{Cond: &ast.BinaryExpr{X: selectExpr(selectExpr(ast.NewIdent("frame"), "State"), "Previous"), Op: token.NEQ, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{&ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent("supplied")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("database match cannot exist for an originally unassigned identity"))}}}, assignStmt(ast.NewIdent("action"), existing)}}}}
+		body := []ast.Stmt{defineStmt("action", missing), &ast.IfStmt{Cond: &ast.BinaryExpr{X: selectExpr(selectExpr(ast.NewIdent("frame"), "State"), "Previous"), Op: token.NEQ, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{&ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent("supplied")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("database match requires a complete resolved identity"))}}}, assignStmt(ast.NewIdent("action"), existing)}}}}
 		body = append(body, e.entities.identity.verifyAction(e, ast.NewIdent("action"))...)
 		return body, ast.NewIdent("action"), nil
 	default:
@@ -62,7 +62,7 @@ func (e *actionEmitter) diff() (ast.Decl, error) {
 		entries := ast.NewIdent(role.field + "Decisions")
 		body = append(body, defineStmt(entries.Name, &ast.CompositeLit{Type: &ast.ArrayType{Elt: &ast.StarExpr{X: ast.NewIdent(role.entry)}}}))
 		loop := e.original(role)
-		loop = append(loop, e.originalKey(role, "key", "supplied")...)
+		loop = append(loop, e.decisionIdentity(role, "key", "supplied")...)
 		selection, action, err := e.actionSelection(role)
 		if err != nil {
 			return nil, err
@@ -77,8 +77,8 @@ func (e *actionEmitter) diff() (ast.Decl, error) {
 		}
 		entry := &ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{Type: ast.NewIdent(role.entry), Elts: []ast.Expr{
 			&ast.KeyValueExpr{Key: ast.NewIdent("Frame"), Value: ast.NewIdent("frame")},
-			&ast.KeyValueExpr{Key: ast.NewIdent("OriginalKey"), Value: ast.NewIdent("key")},
-			&ast.KeyValueExpr{Key: ast.NewIdent("OriginalAssigned"), Value: ast.NewIdent("supplied")},
+			&ast.KeyValueExpr{Key: ast.NewIdent("IdentityKey"), Value: ast.NewIdent("key")},
+			&ast.KeyValueExpr{Key: ast.NewIdent("IdentityAssigned"), Value: ast.NewIdent("supplied")},
 			&ast.KeyValueExpr{Key: ast.NewIdent("Action"), Value: action},
 		}}}
 		loop = append(loop, assignStmt(entries, callExpr(ast.NewIdent("append"), entries, entry)))

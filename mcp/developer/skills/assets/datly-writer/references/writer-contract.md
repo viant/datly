@@ -40,7 +40,7 @@ remove dropped owned columns without rewriting unrelated authored content.
 | --- | --- |
 | `post` | Insert intended writable records. |
 | `put` | Update under the declared policy; do not infer insert-on-miss. |
-| `patch` | Match original supplied tuples and apply declared existing/missing actions. |
+| `patch` | Match resolved complete tuples against authorized Previous and apply declared existing/missing actions. |
 | `get` | Generate the reader graph; no mutation traversal. |
 
 Route method and operation must agree. Custom Go orchestration is an explicit
@@ -121,28 +121,31 @@ using a declared package import. Declare cohesive groups with
 `tag(records.END, 'validate:"gtfield(Start)"')` in the outer projection.
 Use exact resolved Go field names in cross-field validation rules.
 
-The generator derives body/output bindings and typed Previous reads restricted to
-all requested original identity tuples and declared authorization. Check the
+The generator derives body/output bindings and authorized typed Previous reads.
+Root lookup uses requested keys; child discovery can use captured parent scope
+to include existing children whose IDs Input.Init resolves. Resolution uses only
+rows already available in that authorized snapshot, and does not trigger an
+unrestricted reload. Check the
 preview for complete composite keys, authorized scope and no accidental
 pagination/truncation. Do not author manual Body/Existing/Data or key-extraction
 plumbing for standard `transcribe`. The generator must report unsupported metadata or
-capabilities instead of producing a broader table scan.
+capabilities instead of silently broadening the authorized scope.
 
 ## 5. Required generated mutation lifecycle
 
 The generator supplies this order. Use it to review hooks and observable behavior;
 do not implement these phases as an authored DQL program:
 
-1. Bind the component input and completed current reads. Capture immutable original presence/identity and a detached processing baseline **before** input `Init` and `InitMCP`.
+1. Bind the component input and completed current reads. Capture immutable original presence/identity and a detached processing baseline **before** input `Init` and `InitMCP`; capture detached Previous evidence and prepare public read indexes.
 2. Run input `Init`, then `InitMCP` when MCP context is present. `InitMCP` remains supported.
 3. Prepare invocation-local dependencies and hook instances. Do not perform business initialization in dependency preparation.
-4. Run recursive `SyncPresence` against the captured processing baseline; prepare typed entity frames and database `Previous` values.
+4. Run recursive `SyncPresence` against the captured processing baseline; resolve initialized identity candidates against authorized Previous, check parent scope, and prepare typed frames. Freeze established key parts and the match/missing-row decision.
 5. Run invariant-group backfill when needed, without marking hydrated fields supplied.
 6. Run entity `Init` using marker-aware setters for business changes.
 7. Run framework Go-tag and database-derived validation, then custom entity `Validate`.
 8. Begin/join the managed transaction before sequencing.
-9. Register captured originally supplied IDs with the scoped sequencer, allocate stable IDs for eligible original-unassigned insert candidates, then run `AfterSequence`.
-10. Diff against original identity and the frozen database match; determine allowed insert/update actions.
+9. Reserve established IDs with the scoped sequencer and allocate stable IDs for eligible unresolved INSERT candidates, then run `AfterSequence`.
+10. Diff using the frozen resolved identity and database match/missing-row decision; produce the allowed actions without reclassifying sequenced rows.
 11. Reconcile identities and populate declared parent/self foreign keys from the allocated IDs. Run final validation over the values that will be written, with no unresolved deferred constraints. Business values must remain frozen.
 12. Prepare detached typed write payloads and queue them in deterministic traversal order.
 13. Run observational `AfterQueue`, verify that queued working values/markers/topology did not change, and populate the output from the working body.
@@ -156,13 +159,18 @@ There is no automatic second `SyncPresence` between entity `Init` and `Validate`
 
 ## 6. Original identity and sparse presence
 
-Identity suppliedness comes from the immutable original marker—not `ID != 0`, a sequencer-mutated value, or the current mutable marker.
+Original suppliedness comes from the immutable request capture. Database matching
+uses a separate initialized candidate: nonzero scalars and non-nil pointers
+(including pointers to zero) participate even without an original marker. An
+absent scalar zero requires explicit presence, such as a generated setter.
+`Input.Init` can resolve an omitted or replace a supplied identity, subject to
+authorized Previous and parent scope. Entity Init runs after this match is frozen.
 
 - Original marker true with identity zero is an explicitly supplied identity.
-- Original marker false with a later nonzero sequenced/derived ID remains a new/unassigned request entity for matching purposes.
+- Resolving identity before frame preparation can select UPDATE while `Original.Has("Id")` stays false. Once classified INSERT, later sequencing or link production cannot turn it into UPDATE.
 - A supplied but unmatched identity does not guarantee UPDATE; apply the declared missing-row policy.
 - A missing original marker is different from a known marker with all bits false. Do not silently invent suppliedness.
-- Original supplied composite keys must be complete. Reject partial tuples unless an explicitly implemented producer policy defines them; never guess missing components.
+- Match only complete resolved tuples. A partial tuple may proceed as INSERT only under the compiled producer policy for every missing part; established parts are already frozen. Never match by a prefix.
 - Multiple new unassigned entities remain separate inserts. Do not report them as duplicate zero/null identities merely because their initial values match.
 - Validate duplicate assigned tuples even when a positional fast path appears to match them.
 - An unresolved insert identity cannot be left for SQLX to backfill only into a detached write DTO while the returned working body remains stale. Require a completed declared producer or an explicit marker-aware assignment. This readiness check is not UPDATE classification.
@@ -175,6 +183,41 @@ Matching the request graph to its processing baseline is separate from matching 
 - No arbitrary framework depth cap should truncate a valid graph. Retain real cycle and ambiguous-parent detection.
 
 Owned generated entities expose typed getters/setters and `SyncPresence(snapshot handler.EntitySnapshot[T]) error`. Getters do not mark fields. Setters assign the exact field type and mark presence. For an imported/linked entity, call `snapshot.SyncPresence(entity)` instead of trying to add a method to a foreign Go type. A nil current entity is a no-op; a nonnil entity without a usable baseline is an error. Failed recursive synchronization must leave all working markers unchanged.
+
+## Typed read indexes for application hooks
+
+Generated inputs expose `PrepareReadIndexes(ctx)` and `ReadIndexes(ctx)`. Capture
+prepares and caches detached read collections before Input.Init; entity hooks can
+obtain the same set through their bound input. Default eager maps cover canonical
+read identity (declared primary keys for independent auxiliary reads) and complete
+parent/child or self-link equality tuples. Business names, dates or `Id` suffixes
+do not select automatic groups.
+
+```go
+reads, err := input.ReadIndexes(ctx)
+if err != nil {
+    return err
+}
+exists := reads.CurrentItemsById.Has(itemID)
+children := reads.CurrentItemsGroupedByOrderId[orderID]
+byName := reads.CurrentItems.GroupByName()
+```
+
+Names follow actual read slots and Go fields. `GroupByName()` is built on demand;
+`IndexByName()` also runs on demand and returns an error for duplicate keys.
+Comparable composite keys have generated struct types; maps provide `Has`.
+Groups retain all rows with valid keys, including zero; null parts are excluded.
+Noncomparable fields retain row data without invalid map helpers. There is no
+global business-group cache.
+
+Every declared read field needs loaded-field evidence, even without an eager map.
+Failed preparation clears the cache. Public helpers are detached from canonical
+Previous; changing their rows/maps cannot authorize a write or change its match.
+Owned inputs keep support in their package even with split destinations. Foreign
+inputs retain their owner; a typed free builder and optional definition-level
+`ResolveIdentity` callback supply the adapter before Input.Init. Linked inputs
+must already declare their read slots. The default support file is `indexes.go`;
+`$file_prefix` and `$support_dest('indexes','lookup.go')` follow normal precedence.
 
 ## 7. Reusable typed entity hooks
 
@@ -253,7 +296,7 @@ Current reads can be partitioned or fetched in bounded batches. Supported read c
 
 During reconciliation:
 
-- Restore a matched existing entity's working/output identity to its captured matched tuple before propagating links.
+- Preserve the frozen resolved/matched identity in working/output values; reject later changes to established key parts before propagating links.
 - Generic updates exclude identity columns from UPDATE SET. They do not implement primary-key-changing mutations.
 - Use every canonical parent-link component and its checked pointer/value conversion.
 - Self holders may have different links; retain the exact holder context.

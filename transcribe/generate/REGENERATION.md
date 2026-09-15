@@ -25,6 +25,9 @@ silently omit a requested metadata update or overwrite a conflicting edited type
 The native `x/shape.SourceParser` performs all exact type/tag edits, import
 rewrites, and removals; Datly supplies only source-ownership authorization.
 Relation holder tags retain their separate destination/cardinality protections.
+An exact `on`-only transition may follow canonical projected key aliases when
+the prior generated type/tag still match and the child type is unchanged; other
+relation tags retain conflict protection.
 
 Automatic UNIQUE discovery is not being expanded across drivers, per user
 direction. Authored native UNIQUE tags remain the explicit contract; missing

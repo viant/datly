@@ -19,8 +19,8 @@ func decomposeReadSources(parsed *query.Select, root *spec.View, frame TemplateF
 	if parsed == nil || root == nil || len(root.Relations) == 0 {
 		return false, nil
 	}
-	if parsed.Union != nil {
-		return false, &Error{Code: CodeRelationUnsupported, Cause: fmt.Errorf("multi-view read declarations cannot use an outer UNION")}
+	if parsed.Union != nil || strings.EqualFold(strings.TrimSpace(parsed.Kind), "DISTINCT") {
+		return false, &Error{Code: CodeRelationUnsupported, Cause: fmt.Errorf("multi-view read declarations cannot use an outer UNION or DISTINCT")}
 	}
 	source, err := canonicalRootSource(parsed, root, frame)
 	if err != nil {
@@ -34,6 +34,30 @@ func decomposeReadSources(parsed *query.Select, root *spec.View, frame TemplateF
 	}
 	root.Source.SQL = source.SQL
 	root.Source.Embeds = source.Embeds
+	views := canonicalViews(root)
+	for _, join := range parsed.Joins {
+		if join == nil {
+			continue
+		}
+		alias := strings.TrimSpace(join.Alias)
+		if alias == "" {
+			alias = terminalName(join.With)
+		}
+		child := views[strings.ToLower(alias)]
+		projection, err := readViewProjection(parsed, root, child)
+		if err != nil {
+			return false, err
+		}
+		if len(projection) == 0 {
+			continue
+		}
+		statement := &query.Select{List: projection, From: query.From{X: join.With, Alias: alias}}
+		if referencesCTE(join.With, parsed.WithSelects) {
+			statement.WithSelects, statement.WithRecursive = parsed.WithSelects, parsed.WithRecursive
+		}
+		child.Source.SQL = wrapReadProgram(frame, strings.TrimSpace((sqlparser.Stringifier{PreserveWindow: true}).String(statement)))
+		child.Source.Embeds = dql.EmbeddedSQLRefs(child.Source.SQL)
+	}
 	return true, nil
 }
 
@@ -47,12 +71,19 @@ func canonicalRootSource(parsed *query.Select, root *spec.View, frame TemplateFr
 	if err := validateRootClauseOwnership(parsed, root); err != nil {
 		return nil, err
 	}
+	projection, err := readViewProjection(parsed, root, root)
+	if err != nil {
+		return nil, err
+	}
 	cteBacked := referencesCTE(parsed.From.X, parsed.WithSelects)
-	if !cteBacked && parsed.Qualify == nil && len(parsed.OrderBy) == 0 && parsed.Limit == nil && parsed.Offset == nil {
+	if len(projection) == 0 && !cteBacked && parsed.Qualify == nil && len(parsed.OrderBy) == 0 && parsed.Limit == nil && parsed.Offset == nil {
 		return canonicalReadSource(parsed.From.X, queryNamespace(parsed), nil, false, frame)
 	}
+	if len(projection) == 0 {
+		projection = query.List{query.NewItem(expr.NewSelector("*"))}
+	}
 	standalone := &query.Select{
-		List: query.List{query.NewItem(expr.NewSelector("*"))}, From: parsed.From,
+		List: projection, From: parsed.From,
 		Qualify: parsed.Qualify, OrderBy: parsed.OrderBy, Limit: parsed.Limit, Offset: parsed.Offset,
 	}
 	if cteBacked {

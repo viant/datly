@@ -48,7 +48,8 @@ Runtime-only generation is a required authoring mode; ask the developer MCP serv
 | Selector | A controlled client choice of fields, filters, order, limit, offset or page |
 | Codec | A typed conversion between representation and application value |
 | Presence / Has | Internal suppliedness flags; omission differs from a supplied zero, false, empty string or null |
-| Original identity | The tuple and presence captured before initialization; it decides matching, not a later generated ID |
+| Original identity | The immutable request tuple and presence captured before initialization |
+| Resolved identity | Initialized candidate matched against authorized Previous; established key parts and the decision are frozen before sequencing |
 | Current / Previous | A DB read used for comparison; `Previous` is the detached matching row available to writer hooks |
 | PreviousFields | Which previous fields were actually loaded; SQL NULL is loaded, omission is not |
 | Invariant group | Fields that must be considered together, such as Start/End or Unit/Cap |

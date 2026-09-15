@@ -137,7 +137,7 @@ func (e *actionEmitter) file() (*ast.File, error) {
 		fields = append(fields, namedField(role.field+"PreviousState", &ast.MapType{Key: framePointer, Value: role.record.value.pointerExpr()}))
 		fields = append(fields, namedField(role.field+"PreviousFields", &ast.MapType{Key: framePointer, Value: &ast.MapType{Key: ast.NewIdent("string"), Value: ast.NewIdent("bool")}}))
 		fields = append(fields, namedField(role.field+"QueuedState", &ast.MapType{Key: role.record.value.pointerExpr(), Value: role.record.value.pointerExpr()}))
-		entryFields := []*ast.Field{namedField("Frame", &ast.StarExpr{X: ast.NewIdent(role.frame.FrameType)}), namedField("Action", selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteAction")), namedField("OriginalKey", ast.NewIdent(role.association.KeyType)), namedField("OriginalAssigned", ast.NewIdent("bool")), namedField("Payload", role.record.value.pointerExpr())}
+		entryFields := []*ast.Field{namedField("Frame", &ast.StarExpr{X: ast.NewIdent(role.frame.FrameType)}), namedField("Action", selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteAction")), namedField("IdentityKey", ast.NewIdent(role.association.KeyType)), namedField("IdentityAssigned", ast.NewIdent("bool")), namedField("Payload", role.record.value.pointerExpr())}
 		file.Decls = append(file.Decls, &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(role.entry), Type: &ast.StructType{Fields: &ast.FieldList{List: entryFields}}}}})
 		file.Decls = append(file.Decls, e.payloadOptions(role))
 	}

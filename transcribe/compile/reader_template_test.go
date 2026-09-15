@@ -34,3 +34,32 @@ func TestReaderRetainsPredicateExpressions(t *testing.T) {
 		})
 	}
 }
+
+func TestReaderTemplateOperands(t *testing.T) {
+	template := `#foreach($id in $IDs)$id#if($foreach.HasNext),#end#end`
+	for _, tc := range []struct {
+		name, sql string
+		rewrite   bool
+	}{
+		{"direct", `SELECT ID FROM EVENTS WHERE ID IN (` + template + `) ORDER BY ID`, false},
+		{"control", `SELECT e.ID, use_connector(e, 'main') FROM EVENTS e WHERE ID IN (` + template + `) ORDER BY ID`, true},
+		{"CTE", `WITH e AS (SELECT ID FROM EVENTS WHERE ID IN (` + template + `)) SELECT ID FROM e`, false},
+		{"inner view", `SELECT e.ID FROM (SELECT ID FROM EVENTS WHERE ID IN (` + template + `)) e`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Events", Source: &spec.ViewSource{SQL: tc.sql}}, SQL: tc.sql})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(actual.Source.SQL, template) {
+				t.Fatalf("template changed: %s", actual.Source.SQL)
+			}
+			if !tc.rewrite && actual.Source.SQL != tc.sql {
+				t.Fatalf("opaque source changed: %q", actual.Source.SQL)
+			}
+			if tc.rewrite && strings.Contains(actual.Source.SQL, "use_connector(") {
+				t.Fatal("control not lowered")
+			}
+		})
+	}
+}

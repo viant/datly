@@ -17,20 +17,28 @@ gap, not a reason to author body/output/Current plumbing or use translation.
 
 ## Stable IDs and relation-produced validation
 
-Sequence allocation supplies stable IDs before Queue. It does not change original
-insert/update classification or original presence. Pending supplied IDs must be
-visible to sequencing. Complete original tuples determine identity; do not match
-Previous by a prefix, current zero values or child position.
+Sequence allocation supplies stable IDs before Queue. It does not change the
+frozen resolved match/missing-row decision or Original presence. Reserve established
+IDs before allocation. Complete initialized tuples select authorized Previous;
+never match by a prefix or child position. Explicit zero can be a valid identity;
+an absent scalar zero is not evidence. See the [identity and read-index contract](references/writer-contract.md#6-original-identity-and-sparse-presence).
 
 Verify relation-produced validation on the connected build with normal, self and
 composite parent/child cases. Metadata acceptance or local sequence support alone
 does not prove that generated children receive valid foreign keys before Queue.
 
 Preserve the required contract: only an originally absent field on an exact
-captured authorized INSERT edge may await production, with verified parent INSERT,
+captured authorized INSERT edge may await production, with a verified parent producer,
 matching native target/columns/values, same transaction and correct queue order.
-Supplied nil/zero, UPDATE, unrelated roots or same-Go-type roles must not inherit
-that permission. Final Go/NULL/UNIQUE/reference checks see reconciled values before
+An existing authorized parent can also provide its stable key to an INSERT child.
+A completed child-key collision remains INSERT and fails/rolls back; it never
+rematches as UPDATE. Supplied nil/zero, unrelated roots or same-Go-type roles must
+not inherit pending-producer permission. Default parent checks do not authorize
+reparenting from a broad read; explicit policy is required for non-identity link
+changes, and identity freezes remain active. Deferring a reference check for a
+parent not yet in the database requires the exact captured parent INSERT and
+parent-before-child queue order; an existing parent is checked normally.
+Final Go/NULL/UNIQUE/reference checks see reconciled values before
 Queue. Do not disable database FK checks, flush early or broaden deferral to make
 a fixture pass. Use [mutation status](references/writer-contract.md).
 

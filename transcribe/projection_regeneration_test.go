@@ -43,13 +43,13 @@ func TestProjectionRemovalRegeneratesReaderAndWriterShapes(t *testing.T) {
 			catalog := typecatalog.NewCatalog()
 			generate := func(projection string) *GeneratedPackage {
 				t.Helper()
-				result, err := NewCompiler().Transcribe(ctx, Request{Source: &Source{Scope: "example.com/generated/events", Name: "Events", Connector: "main", Text: header + "SELECT " + projection + " FROM EVENTS", Types: catalog, ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": h.DB})}, Destination: root, Options: Options{Handler: tc.handler}})
+				result, err := NewCompiler().Transcribe(ctx, Request{Source: &Source{Scope: "example.com/generated/events", Name: "Events", Connector: "main", Text: header + "SELECT " + projection + " FROM (SELECT ID, NAME, EXTRA, '' AS Logical FROM EVENTS) EVENTS", Types: catalog, ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": h.DB})}, Destination: root, Options: Options{Handler: tc.handler}})
 				if err != nil {
 					t.Fatal(err)
 				}
 				return result
 			}
-			logical := `,CAST(EVENTS.Logical AS string),tag(EVENTS.Logical,'sqlx:"-"')`
+			logical := `,Logical,CAST(EVENTS.Logical AS string),tag(EVENTS.Logical,'sqlx:"-"')`
 			first := generate("ID, NAME, EXTRA,CAST(EVENTS.EXTRA AS int)" + logical)
 			rowType := first.Result.Plan.RootViewType
 			shapePath := ""

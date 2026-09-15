@@ -16,6 +16,7 @@ import (
 type MutationProgramAsset struct {
 	File                         *ast.File
 	Factory, Definition, Program string
+	Indexes                      *ReadIndexAsset
 	Entities                     *EntityAsset
 	Frames                       *MutationFrameAsset
 	Hooks                        *MutationHookAsset
@@ -66,6 +67,9 @@ func MutationProgram(value *plan.Plan, config Config) (*MutationProgramAsset, er
 	e.shape = l.availableAlias("xshape")
 	l.pathsByAlias[e.shape] = "github.com/viant/x/shape"
 	l.pathsByAlias[l.fmtAlias] = "fmt"
+	if asset.Indexes, err = l.readIndexes(); err != nil {
+		return nil, err
+	}
 	asset.File = e.file()
 	return asset, nil
 }
@@ -77,6 +81,9 @@ func (a *MutationProgramAsset) Files() ([]*ast.File, error) {
 	}
 	files := []*ast.File{a.File, a.Entities.File, a.Frames.File, a.Frames.Previous.File, a.Frames.Layout.File, a.Actions.File, a.Output.File}
 	files = append(files, a.Validation.File)
+	if a.Indexes != nil {
+		files = append(files, a.Indexes.File)
+	}
 	if a.Hooks != nil {
 		files = append(files, a.Hooks.File)
 	}
@@ -145,7 +152,7 @@ func (e *programEmitter) file() *ast.File {
 	if e.asset.Hooks != nil {
 		fields = append(fields, namedField("hooks", &ast.StarExpr{X: id(e.asset.Hooks.TypeName)}))
 	}
-	file := &ast.File{Name: id(e.l.config.Package), Decls: []ast.Decl{structure(e.asset.Definition, []*ast.Field{namedField("Finalizer", finalizer)}), structure(e.asset.Program, fields)}}
+	file := &ast.File{Name: id(e.l.config.Package), Decls: []ast.Decl{structure(e.asset.Definition, e.definitionFields(finalizer)), structure(e.asset.Program, fields)}}
 	file.Decls = append(file.Decls, &ast.FuncDecl{Name: id(e.asset.Factory), Type: &ast.FuncType{Params: &ast.FieldList{}, Results: &ast.FieldList{List: []*ast.Field{{Type: e.policyType("Definition", e.ioTypes()...)}}}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(&ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{Type: id(e.asset.Definition)}})}}}, e.capture(), e.finalize(false), e.finalize(true))
 	prepare := []ast.Stmt{}
 	if e.asset.Hooks != nil {

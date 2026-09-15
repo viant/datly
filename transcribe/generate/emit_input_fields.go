@@ -48,7 +48,7 @@ func hasBodyFields(fields []Field) bool {
 }
 
 func shouldSkipHasMirror(field Field) bool {
-	return field.Name == "Has" || strings.Contains(field.Tag, `setMarker:"true"`)
+	return field.Implementation || field.Name == "Has" || strings.Contains(field.Tag, `setMarker:"true"`)
 }
 
 func hasMarkerField(typeName string, fields []Field) (Field, bool) {
@@ -79,6 +79,9 @@ func (plan *Plan) referencedPlaceholderTypes() []string {
 	var result []string
 	appendFromFields := func(fields []Field) {
 		for _, field := range fields {
+			if field.Implementation {
+				continue
+			}
 			for _, name := range extractPlaceholderTypeNames(field.Type) {
 				if shouldSkipPlaceholderType(plan, name) || seen[name] || helperTypes[name] {
 					continue

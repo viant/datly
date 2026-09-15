@@ -16,6 +16,18 @@ type preparedProjectionSource struct {
 	compositeInjected   bool
 }
 
+// ProjectionSource prepares relation markers for static projection inspection.
+// The same source owner expands them with invocation values during Build.
+// It neither evaluates input templates nor changes the authored view SQL.
+func (b *Builder) ProjectionSource(sqlText string) (string, error) {
+	options := builderOptions{sqlText: sqlText, skipRelationFilter: true}
+	prepared, err := options.prepareProjectionSource()
+	if err != nil {
+		return "", err
+	}
+	return prepared.sql, nil
+}
+
 func (o *builderOptions) prepareProjectionSource() (*preparedProjectionSource, error) {
 	result := &preparedProjectionSource{sql: o.sqlText, parentHandled: o.templateParentBindings}
 	var err error

@@ -24,6 +24,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 	filtered := make(query.List, 0, len(parsed.List))
 	changed := false
 	casts := map[*spec.Column]spec.TypeRef{}
+	targets := map[*spec.View][]string{}
 	for _, item := range parsed.List {
 		call, ok := item.Expr.(*expr.Call)
 		if !ok {
@@ -71,6 +72,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 		if view == nil {
 			return false, fmt.Errorf("%s target %q has no canonical view", name, target)
 		}
+		targets[view] = append(targets[view], parts[1])
 		var column *spec.Column
 		for _, candidate := range view.Columns {
 			if candidate != nil && sameProjectionColumn(candidate, parts[1]) {
@@ -139,6 +141,9 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 		return false, fmt.Errorf("column declarations cannot be the entire SELECT projection")
 	}
 	parsed.List = filtered
+	if err := validateDeclaredProjectionTargets(parsed, root, targets); err != nil {
+		return false, err
+	}
 	if containsSQLCall(parsed, func(name string) bool { return name == tag.InvariantName }) {
 		return false, fmt.Errorf("invariant must be a standalone outer SELECT annotation")
 	}
