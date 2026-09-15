@@ -87,10 +87,10 @@ Author an explicit `#package` in each reader/writer DQL, select the source packa
 and project root, and choose the operation. Standard writers are generated Go;
 application code belongs in the generated customization points.
 
-The high-level command is undergoing integration and verification in this branch.
-Do not replace a missing `gen` command with a programmatic compiler tutorial or
-manually reconstructed body/Current plumbing. The command reference must match
-the installed build's help output.
+Use `datly transcribe patch`, `datly transcribe get`, `datly transcribe post`, or
+`datly transcribe put`, followed by options and the source package. Go is the
+default output. The command derives the required request and previous-state
+contracts from the authored graph.
 
 ## Imported types, field tags and SQL macros
 
