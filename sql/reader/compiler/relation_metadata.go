@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
+	sqlxio "github.com/viant/sqlx/io"
 	"github.com/viant/tagly/format/text"
 	xshape "github.com/viant/x/shape"
 )
@@ -71,6 +72,22 @@ func (d *viewDeriver) enrich(view *data.View, outputType reflect.Type) error {
 		}
 		view.Relations = append(view.Relations, relation)
 	}
+	// DQL can declare relation holders without repeating relation tags on Go
+	// fields. Once those holders are resolved, they are graph edges, not SQL
+	// columns of the parent view.
+	physical := view.Columns[:0]
+	for _, column := range view.Columns {
+		if column != nil && hasRelationHolder(view, column.Name) {
+			fieldTag := reflect.StructTag(column.Tag)
+			scalar := sqlxio.ParseTag(fieldTag)
+			if column.Codec != nil || fieldTag.Get(dtag.SourceName) != "" || (!scalar.Transient && (scalar.Column != "" || scalar.Encoding != "")) {
+				return fmt.Errorf("relation holder %s also declares a scalar SQL or codec mapping", column.Name)
+			}
+			continue
+		}
+		physical = append(physical, column)
+	}
+	view.Columns = physical
 	return nil
 }
 

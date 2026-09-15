@@ -128,6 +128,15 @@ func (p SelectorProjection) wildcardSourceColumns(stmt *query.Select, src wildca
 			return nil, fmt.Errorf("wildcard source projection is unresolved")
 		}
 	}
+	// A sole wildcard over one derived view has exactly that view's prepared
+	// output contract only when every inner projection is the same wildcard.
+	// Explicit aliases/exclusions remain authoritative over prepared metadata.
+	// Resolve at this boundary instead of treating output
+	// metadata as the schema of an inner physical table. Joined or mixed outer
+	// projections still need source-specific resolution below.
+	if !src.joined && len(stmt.List) == 1 && projectionStar(stmt.List[0]) != nil && p.View != nil && len(p.View.Columns) > 0 && src.preservesPhysicalWildcard(stmt.WithSelects, 0) {
+		return p.wildcardMetadataColumns(stmt, src)
+	}
 	parts, hasParts := newSelectProjectionSource(raw)
 	var columns []ProjectionColumn
 	for i, inner := range nested.List {
@@ -254,4 +263,56 @@ func projectionMetadataColumns(item *query.Item, view *data.View) ([]*data.Colum
 		}
 	}
 	return result, nil
+}
+
+// preservesPhysicalWildcard recognizes an unchanged row contract through named
+// sources. It does not lend a row schema to joined, computed or renamed outputs.
+func (s wildcardSource) preservesPhysicalWildcard(ctes query.WithSelects, depth int) bool {
+	if depth > 32 {
+		return false
+	}
+	isCTE := false
+	if value, ok := s.node.(*expr.Ident); ok {
+		for _, cte := range ctes {
+			if cte != nil && strings.EqualFold(sqltext.TrimQuote(cte.Alias), sqltext.TrimQuote(value.Name)) {
+				isCTE = true
+				break
+			}
+		}
+	}
+	if !isCTE {
+		if table, _, err := sqlparser.SourceTable(s.node); err == nil && table != "" {
+			return true
+		}
+	}
+	nested, _ := s.query(ctes)
+	if nested == nil || nested.Union != nil || len(nested.Joins) != 0 || len(nested.List) != 1 {
+		return false
+	}
+	star := projectionStar(nested.List[0])
+	if star == nil || len(star.Except) > 0 {
+		return false
+	}
+	child := wildcardSource{alias: nested.From.Alias, node: nested.From.X}
+	qualifier := ""
+	switch value := star.X.(type) {
+	case *expr.Selector:
+		qualifier = value.Name
+	case *expr.Ident:
+		qualifier = value.Name
+	}
+	if qualifier != "" && qualifier != "*" {
+		if child.alias == "" {
+			switch child.node.(type) {
+			case *expr.Ident, *expr.Selector:
+				child.alias = sqlparser.NewColumn(query.NewItem(child.node)).Identity()
+			}
+		}
+		parts, err := sqlparser.TableIdentifierParts(qualifier)
+		if err != nil || !child.matchesQualifier(parts) {
+			return false
+		}
+	}
+	scoped := append(append(query.WithSelects(nil), nested.WithSelects...), ctes...)
+	return child.preservesPhysicalWildcard(scoped, depth+1)
 }

@@ -14,6 +14,10 @@ func TestSelectorSourceProjection(t *testing.T) {
 		want         []string
 		reject       string
 	}{
+		{name: "named physical wildcard", source: "SELECT n.* FROM (SELECT r.* FROM records r) n", metadata: []*data.Column{{Name: "id"}}, fields: []string{"id"}, want: []string{"id"}},
+		{name: "named schema wildcard", source: "SELECT n.* FROM (SELECT records.* FROM main.records) n", metadata: []*data.Column{{Name: "id"}}, fields: []string{"id"}, want: []string{"id"}},
+		{name: "named wrong inner alias", source: "SELECT n.* FROM (SELECT wrong.* FROM records r) n", metadata: []*data.Column{{Name: "id"}}, fields: []string{"id"}, reject: "unresolved"},
+		{name: "named joined wildcard cannot borrow row", source: "SELECT n.* FROM (SELECT a.* FROM records a JOIN other b ON a.id=b.id) n", metadata: []*data.Column{{Name: "id"}}, fields: []string{"id"}, reject: "prepared columns"},
 		{name: "mixed physical", source: "SELECT u.*, 7 AS extra FROM users u", metadata: []*data.Column{{Name: "id"}, {Name: "name"}, {Name: "extra"}}, fields: []string{"extra", "name"}, want: []string{"u.name", "extra"}},
 		{name: "mixed derived", source: "SELECT u.*, 7 AS extra FROM (SELECT id,name FROM users) u", fields: []string{"extra", "name"}, want: []string{"u.name", "extra"}},
 		{name: "derived rejects inferred Go alias", source: "SELECT u.* FROM (SELECT id FROM users) u", metadata: []*data.Column{{Name: "Key", Column: "id"}}, fields: []string{"Key"}, reject: "not found column"},
@@ -57,4 +61,12 @@ func TestSelectorSourceProjection(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestNullableDerivedProjectionDoesNotAdoptStaleColumns(t *testing.T) {
+	view := &data.View{Columns: []*data.Column{{Name: "id", Column: "id", Nullable: true, NullFallback: "0"}, {Name: "secret", Column: "secret", Nullable: true, NullFallback: "''"}}}
+	SQL, err := ApplySelectorProjection("SELECT named.* FROM (SELECT id FROM records) named", nil, view)
+	require.NoError(t, err)
+	require.NotContains(t, SQL, "secret")
+	require.Contains(t, SQL, "COALESCE(id, 0)")
 }

@@ -87,16 +87,12 @@ func validatePartitionExpression(expression string, argCount int) error {
 func insertPartitionCriteria(sqlText, expression string) (string, int) {
 	boundary := sqltext.CriteriaBoundary(sqlText)
 	prefix := strings.TrimRight(sqlText[:boundary], " \t\r\n")
-	suffix := strings.TrimLeft(sqlText[boundary:], " \t\r\n")
 	clause := " WHERE (" + expression + ")"
 	if sqltext.HasTopLevelClause(prefix, "where") {
 		clause = " AND (" + expression + ")"
 	}
 	insertAt := len(prefix)
-	result := prefix + clause
-	if suffix != "" {
-		result += " " + suffix
-	}
+	result := insertRelationClause(sqlText, clause)
 	return result, insertAt
 }
 

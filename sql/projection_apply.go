@@ -14,33 +14,45 @@ import (
 )
 
 func ApplySelectorProjection(sqlText string, selected []string, view *data.View) (string, error) {
+	projected, err := (SelectorProjection{SQL: sqlText, View: view}).Prepare(selected)
+	if err != nil {
+		return "", err
+	}
+	return projected.Render(projected.Source), nil
+}
+
+// Prepare narrows authored outputs before binding while deferring wrappers
+// that hide the source namespace until source predicates have been assembled.
+func (p SelectorProjection) Prepare(selected []string) (*Projection, error) {
+	sqlText, view := p.SQL, p.View
 	selected = normalizeProjectionSelection(selected)
 	if len(selected) > 0 {
-		return (SelectorProjection{SQL: sqlText, View: view}).apply(selected)
+		return p.prepare(selected)
 	}
 	if _, _, err := (SelectorProjection{SQL: sqlText, View: view}).columns(); err != nil {
 		var duplicate *duplicateProjectionError
 		if view != nil || errors.As(err, &duplicate) {
-			return "", err
+			return nil, err
 		}
 	}
-	if projected, handled, err := applyStarProjection(sqlText, selected, view); handled || err != nil {
+	if projected, handled, err := prepareStarProjection(sqlText, selected, view); handled || err != nil {
 		return projected, err
 	}
-	return applyNullProjection(sqlText, view)
+	source, err := applyNullProjection(sqlText, view)
+	return &Projection{Source: source}, err
 }
 
-func (p SelectorProjection) apply(selected []string) (string, error) {
+func (p SelectorProjection) prepare(selected []string) (*Projection, error) {
 	columns, pureStar, err := p.columns()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	chosen, err := p.selectColumns(columns, selected, pureStar)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if pureStar {
-		return p.applySelectedStar(columns, chosen)
+		return p.prepareSelectedStar(columns, chosen)
 	}
 	sqlText := p.SQL
 	expanded := make([]string, 0, len(columns))
@@ -52,7 +64,7 @@ func (p SelectorProjection) apply(selected []string) (string, error) {
 	if hasStar {
 		parts, ok := newSelectProjectionSource(sqlText)
 		if !ok {
-			return "", fmt.Errorf("source projection is unresolved")
+			return nil, fmt.Errorf("source projection is unresolved")
 		}
 		sqlText = parts.render(sqlText, expanded)
 	}
@@ -63,9 +75,10 @@ func (p SelectorProjection) apply(selected []string) (string, error) {
 
 	projected, err := applyFilteredSelectorProjection(sqlText, selected, p.View != nil && p.View.IsGroupable())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return applyNullProjection(projected, p.View)
+	source, err := applyNullProjection(projected, p.View)
+	return &Projection{Source: source}, err
 }
 
 func applyFilteredSelectorProjection(sqlText string, selected []string, groupable bool) (string, error) {

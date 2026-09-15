@@ -142,9 +142,5 @@ func appendAutoSelectorCriteria(sqlText string, args []any, selector *xstate.Sel
 }
 
 func insertSelectorClause(sqlText string, clause string) string {
-	insertAt := sqltext.CriteriaBoundary(sqlText)
-	if insertAt == len(sqlText) {
-		return sqlText + clause
-	}
-	return strings.TrimRight(sqlText[:insertAt], " \t\r\n") + clause + " " + strings.TrimLeft(sqlText[insertAt:], " \t\r\n")
+	return insertRelationClause(sqlText, clause)
 }

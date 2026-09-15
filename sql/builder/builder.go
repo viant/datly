@@ -187,11 +187,15 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 			return nil, err
 		}
 	}
-	sqlText, err := dsql.ApplySelectorProjection(sourceSQL, options.projection, options.view)
+	projection, err := (dsql.SelectorProjection{SQL: sourceSQL, View: options.view}).Prepare(options.projection)
 	if err != nil {
 		return nil, err
 	}
-	sqlText = dsql.PrepareExecutableSQL(sqlText, controls)
+	controls, err = projection.OutputControls(controls)
+	if err != nil {
+		return nil, err
+	}
+	sqlText := projection.Source
 	relationFilter := relationFilter{
 		relation: options.relation, positionalArgs: options.positionalArgs,
 		compositeColumns: options.compositeColumns, compositeRows: options.compositeRows, dialect: options.dialect,
@@ -232,6 +236,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	if err != nil {
 		return nil, err
 	}
+	boundSQL = dsql.PrepareExecutableSQL(projection.Render(boundSQL), controls)
 	result := &cache.ParmetrizedQuery{
 		SQL:  boundSQL,
 		Args: interfaceSlice(args),

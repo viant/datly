@@ -125,10 +125,27 @@ func relationScalarColumnExpr(relation *data.Relation) (string, bool) {
 	return column, true
 }
 
+// insertRelationClause also serves selector/partition conjunctions. Native
+// clause scanning keeps each existing disjunction one operand of the added AND.
 func insertRelationClause(sqlText string, clause string) string {
 	insertAt := sqltext.CriteriaBoundary(sqlText)
+	where := sqltext.FindTopLevelKeyword(sqlText, "where", 0)
+	if strings.HasPrefix(strings.TrimSpace(clause), "AND ") {
+		body := strings.TrimSpace(strings.TrimSpace(clause)[len("AND"):])
+		if sqltext.FindTopLevelKeyword(body, "or", 0) >= 0 {
+			clause = " AND (" + body + ")"
+		}
+		if where >= 0 {
+			start := where + len("where")
+			predicate := strings.TrimSpace(sqlText[start:insertAt])
+			if sqltext.FindTopLevelKeyword(predicate, "or", 0) >= 0 {
+				sqlText = sqlText[:start] + " (" + predicate + ") " + sqlText[insertAt:]
+				insertAt = sqltext.CriteriaBoundary(sqlText)
+			}
+		}
+	}
 	if insertAt == len(sqlText) {
-		return sqlText + clause
+		return strings.TrimRight(sqlText, " \t\r\n") + clause
 	}
 	return strings.TrimRight(sqlText[:insertAt], " \t\r\n") + clause + " " + strings.TrimLeft(sqlText[insertAt:], " \t\r\n")
 }

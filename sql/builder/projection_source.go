@@ -5,7 +5,8 @@ import (
 )
 
 // preparedProjectionSource carries the explicit predicate expansion through
-// projection rendering. Fallback filters and binding still run afterwards.
+// projection planning. Fallback filters and binding complete the source before
+// any result wrapper is rendered.
 type preparedProjectionSource struct {
 	sql                 string
 	macroArgs           []any
@@ -35,7 +36,7 @@ func (o *builderOptions) prepareProjectionSource() (*preparedProjectionSource, e
 		result.sql = filter.applyCriteriaTokens(result.sql)
 		if !result.parentHandled {
 			// Resolve authored COLUMN_IN slots, but retain the existing phase of
-			// automatic relation predicates outside any selector projection wrapper.
+			// automatic relation predicates at the source scope before result wrapping.
 			result.sql, result.compositeInjected = filter.applyColumnIn(result.sql, true)
 		}
 	}
