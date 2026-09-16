@@ -33,36 +33,44 @@ type Method struct {
 }
 
 func (c *Compiler) Compile(source string, placeholders []any) (string, []any, error) {
+	sql, args, _, err := c.CompileWithColumns(source, placeholders)
+	return sql, args, err
+}
+
+// CompileWithColumns also reports the trusted columns referenced by this
+// invocation, including column comparisons on the right-hand side.
+func (c *Compiler) CompileWithColumns(source string, placeholders []any) (string, []any, []Column, error) {
 	source = strings.TrimSpace(source)
 	if source == "" {
 		if len(placeholders) > 0 {
-			return "", nil, fmt.Errorf("unused selector criteria placeholders")
+			return "", nil, nil, fmt.Errorf("unused selector criteria placeholders")
 		}
-		return "", nil, nil
+		return "", nil, nil, nil
 	}
 	cursor := parsly.NewCursor("criteria", []byte(source+" "), 0)
 	qualified := &expr.Qualify{}
 	if err := sqlparser.ParseQualify(cursor, qualified); err != nil {
-		return "", nil, fmt.Errorf("invalid selector criteria: %w", err)
+		return "", nil, nil, fmt.Errorf("invalid selector criteria: %w", err)
 	}
 	if strings.TrimSpace(string(cursor.Input[cursor.Pos:])) != "" {
-		return "", nil, fmt.Errorf("invalid trailing selector criteria")
+		return "", nil, nil, fmt.Errorf("invalid trailing selector criteria")
 	}
 	invocation := compilation{compiler: c, placeholders: placeholders}
 	sql, err := invocation.predicate(qualified.X)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	if invocation.index != len(placeholders) {
-		return "", nil, fmt.Errorf("unused selector criteria placeholders")
+		return "", nil, nil, fmt.Errorf("unused selector criteria placeholders")
 	}
-	return "(" + sql + ")", invocation.args, nil
+	return "(" + sql + ")", invocation.args, invocation.columns, nil
 }
 
 type compilation struct {
 	compiler           *Compiler
 	placeholders, args []any
 	index              int
+	columns            []Column
 }
 
 func (c *compilation) predicate(n node.Node) (string, error) {
@@ -171,6 +179,7 @@ func (c *compilation) column(n node.Node) (Column, error) {
 	name := sqlparser.Stringify(n)
 	for candidate, target := range c.compiler.Columns {
 		if strings.EqualFold(candidate, name) {
+			c.columns = append(c.columns, target)
 			return target, nil
 		}
 	}

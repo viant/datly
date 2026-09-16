@@ -21,9 +21,9 @@ type hookKeyChild struct {
 
 type hookKeyParent struct {
 	ID        int             `sqlx:"id"`
-	Keys      []int           `sqlx:"-"`
-	Codes     []string        `sqlx:"-"`
-	Tenant    int             `sqlx:"-"`
+	Keys      []int           `sqlx:"-" relationKey:"hook"`
+	Codes     []string        `sqlx:"-" relationKey:"hook"`
+	Tenant    int             `sqlx:"-" relationKey:"hook"`
 	Children  []*hookKeyChild `view:"Children" on:"Keys:keys=ID:id" sql:"SELECT id,code,tenant FROM children ORDER BY id"`
 	Named     []*hookKeyChild `view:"Named" on:"Codes:codes=Code:code" sql:"SELECT id,code,tenant FROM children ORDER BY id"`
 	Composite []*hookKeyChild `view:"Composite" on:"Tenant:tenant=Tenant:tenant,Keys:keys=ID:id" sql:"SELECT id,code,tenant FROM children ORDER BY id"`

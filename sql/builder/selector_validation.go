@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/sql/criteria"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	sqltext "github.com/viant/sqlparser/source"
+	"github.com/viant/sqlx"
 )
 
 func WithBuilderCriteriaCompiler(compiler *criteria.Compiler) BuilderOption {
@@ -60,19 +62,38 @@ func (b *Builder) prepareCriteria(options *builderOptions) error {
 	}
 	// Parse only the authored projection: the later source can legitimately
 	// contain unexpanded Datly criteria markers or parameter expressions.
+	source := dsql.NormalizeAuthoredSQL(options.sqlText)
 	projection := ""
-	selectAt := sqltext.FindTopLevelKeyword(options.sqlText, "select", 0)
+	selectAt := sqltext.FindTopLevelKeyword(source, "select", 0)
 	if selectAt >= 0 {
-		fromAt := sqltext.FindTopLevelKeyword(options.sqlText, "from", selectAt+6)
+		fromAt := sqltext.FindTopLevelKeyword(source, "from", selectAt+6)
 		if fromAt > selectAt {
-			projection = options.sqlText[selectAt+6 : fromAt]
+			projection = source[selectAt+6 : fromAt]
 		}
 	}
 	parsed, err := sqlparser.ParseQuery("SELECT " + projection + " FROM criteria_source")
+	aggregates := map[string]bool{}
 	if err == nil && parsed != nil {
 		for _, item := range parsed.List {
 			if item == nil {
 				continue
+			}
+			if item.Alias != "" && dsql.ContainsAggregate(item.Expr) {
+				expression := "(" + sqlparser.Stringify(item.Expr) + ")"
+				aggregates[expression] = true
+				aliasColumn := criteria.Column{Expression: expression}
+				for name, column := range columns {
+					if strings.EqualFold(name, item.Alias) || strings.EqualFold(column.Expression, item.Alias) {
+						column.Expression = expression
+						columns[name] = column
+						if column.Type != nil {
+							aliasColumn = column
+						}
+					}
+				}
+				if _, exists := columns[item.Alias]; !exists {
+					columns[item.Alias] = aliasColumn
+				}
 			}
 			switch item.Expr.(type) {
 			case *expr.Ident, *expr.Selector:
@@ -100,9 +121,28 @@ func (b *Builder) prepareCriteria(options *builderOptions) error {
 		columns = allowed
 	}
 	compiler := criteria.Compiler{Columns: columns, Methods: methods}
-	sql, args, err := compiler.Compile(options.selector.Criteria, options.selector.Placeholders)
+	sql, args, used, err := compiler.CompileWithColumns(options.selector.Criteria, options.selector.Placeholders)
 	if err != nil {
 		return err
+	}
+	for _, column := range used {
+		if !aggregates[column.Expression] {
+			continue
+		}
+		if sqlx.ParseParameters(column.Expression).Count() != 0 {
+			return fmt.Errorf("selector criteria cannot reuse a parameterized aggregate expression")
+		}
+		options.criteriaHaving = true
+	}
+	if options.criteriaHaving && containsSelectorCriteriaToken(options.sqlText) {
+		return fmt.Errorf("aggregate selector criteria requires automatic HAVING placement, not an explicit criteria slot")
+	}
+	if options.criteriaHaving {
+		for _, keyword := range []string{"union", "intersect", "except"} {
+			if sqltext.HasTopLevelClause(source, keyword) {
+				return fmt.Errorf("aggregate selector criteria on set operations requires an outer grouped view")
+			}
+		}
 	}
 	selector := *options.selector
 	selector.Criteria, selector.Placeholders = sql, args

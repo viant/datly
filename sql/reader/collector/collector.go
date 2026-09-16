@@ -34,9 +34,9 @@ type Collector struct {
 	parent                 *Collector
 	destValue              reflect.Value
 	appender               *xunsafe.Appender
-	valuePosition          map[string]map[string]map[interface{}][]int // ns -> col -> val -> positions
+	valuePosition          map[relationIndexKey]map[interface{}][]int
 	compositeValuePosition map[string]map[compositeKey][]int
-	preparedValuePosition  map[string]map[string]bool
+	preparedValuePosition  map[relationIndexKey]bool
 	preparedComposite      map[string]bool
 	types                  map[string]*xunsafe.Type
 	relation               *Relation
@@ -70,9 +70,9 @@ func NewCollector(view *View, dest interface{}, readAll bool) *Collector {
 		Id:                     uuid.New().String(),
 		indexMutex:             &sync.Mutex{},
 		destValue:              reflect.ValueOf(ensuredDest),
-		valuePosition:          make(map[string]map[string]map[interface{}][]int),
+		valuePosition:          make(map[relationIndexKey]map[interface{}][]int),
 		compositeValuePosition: make(map[string]map[compositeKey][]int),
-		preparedValuePosition:  make(map[string]map[string]bool),
+		preparedValuePosition:  make(map[relationIndexKey]bool),
 		preparedComposite:      make(map[string]bool),
 		appender:               slice.Appender(xunsafe.AsPointer(ensuredDest)),
 		slice:                  slice,

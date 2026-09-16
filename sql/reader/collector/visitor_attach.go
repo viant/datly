@@ -40,7 +40,7 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 			}
 
 			parentLink := relation.On[j]
-			valuePosition := r.parentValuesPositions(parentLink.Namespace, parentLink.Column)
+			valuePosition := r.parentValuesPositions(parentLink)
 			positions, ok := valuePosition[aKey]
 			if !ok {
 				return nil
@@ -98,7 +98,7 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 			if err != nil {
 				return fmt.Errorf("resolve relation %s: %w", relation.Name, err)
 			}
-			valuePosition := r.parentValuesPositions(relation.On[i].Namespace, relation.On[i].Column)
+			valuePosition := r.parentValuesPositions(relation.On[i])
 			positions, ok := valuePosition[key]
 			if !ok {
 				return nil

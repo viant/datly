@@ -42,7 +42,15 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 			panic(panicked)
 		}
 	}()
-	reader, err := sqlxread.New(ctx, q.db, q.query.SQL, r.newRow, r.options...)
+	options := r.options
+	var capture *relationKeyCapture
+	if q.collector != nil {
+		if columns := q.collector.SQLKeyColumns(); len(columns) > 0 {
+			capture = &relationKeyCapture{collector: q.collector, columns: columns}
+			options = append(append([]sqlxread.Option(nil), options...), sqlxread.WithRowMapper(capture.mapper))
+		}
+	}
+	reader, err := sqlxread.New(ctx, q.db, q.query.SQL, r.newRow, options...)
 	if err != nil {
 		return err
 	}
@@ -53,6 +61,11 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 	}()
 	err = reader.QueryAll(ctx, func(value any) error {
 		delivered++
+		if capture != nil {
+			if err := capture.snapshot(); err != nil {
+				return err
+			}
+		}
 		if err := q.visit(value); err != nil {
 			return err
 		}

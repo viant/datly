@@ -18,7 +18,7 @@ type compositeParentRow struct {
 	B int
 }
 
-func TestIndexValueByRel_SkipsNilInt64Pointers(t *testing.T) {
+func TestIndexValueByLink_SkipsNilInt64Pointers(t *testing.T) {
 	rowType := reflect.TypeOf(indexVisitorRow{})
 	view := newTestView(&data.View{}, rowType)
 	var dest []indexVisitorRow
@@ -32,9 +32,9 @@ func TestIndexValueByRel_SkipsNilInt64Pointers(t *testing.T) {
 	}
 
 	value := int64(7)
-	c.indexValueByRel([]*int64{nil, &value}, relation, 0)
+	c.indexValueByLink([]*int64{nil, &value}, relation.On[0], 0)
 
-	entries := c.valuePosition["users"]["id1"]
+	entries := c.valuePosition[relationIndexIdentity(relation.On[0])]
 	total := 0
 	for _, positions := range entries {
 		total += len(positions)

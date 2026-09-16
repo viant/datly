@@ -1,6 +1,8 @@
 package collector
 
-import "github.com/viant/xunsafe"
+import (
+	"github.com/viant/xunsafe"
+)
 
 // ParentPlaceholders returns the deduplicated parent key values needed to
 // parameterise the child SQL query. The three return values are:
@@ -26,13 +28,12 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, [][]interface{}, []stri
 					valueSets = append(valueSets, normalizeValues(field.Value(xunsafe.AsPointer(parent))))
 					continue
 				}
-				values := r.parent.values[link.Column]
-				valueType := r.parent.types[link.Column]
-				if values == nil || valueType == nil || i >= len(*values) {
+				value, ok := r.parent.sqlKeyAt(link.Column, i)
+				if !ok {
 					valueSets = nil
 					break
 				}
-				valueSets = append(valueSets, normalizeValues(valueType.Deref((*values)[i])))
+				valueSets = append(valueSets, normalizeValues(value))
 			}
 			for _, row := range compositeRows(valueSets) {
 				key := buildCompositeKey(row)
@@ -51,7 +52,7 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, [][]interface{}, []stri
 outer:
 	for i := 0; i < sliceLen; i++ {
 		parent := r.parent.slice.ValuePointerAt(destPtr, i)
-		for k, link := range r.relation.On {
+		for _, link := range r.relation.On {
 			field := link.XField
 			if field != nil {
 				fieldValue := field.Value(xunsafe.AsPointer(parent))
@@ -98,11 +99,13 @@ outer:
 				}
 				continue outer
 			}
-			positions := r.parentValuesPositions(r.relation.On[k].Namespace, r.relation.On[k].Column)
-			for key := range positions {
-				if _, ok := unique[key]; ok {
-					continue
-				}
+			// Preserve SQL row order, as typed keys do, rather than map order.
+			// Otherwise equivalent reads can produce different cache arguments.
+			key, ok := r.parent.sqlKeyAt(link.Column, i)
+			if !ok {
+				continue outer
+			}
+			if _, ok := unique[key]; !ok {
 				unique[key] = true
 				result = append(result, key)
 			}

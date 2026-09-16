@@ -16,10 +16,24 @@ func (r *Collector) linkKeyAt(row any, link *Link, position int) (any, error) {
 	if link.XField != nil {
 		return sqlxio.NormalizeKey(link.XField.Interface(xunsafe.AsPointer(row))), nil
 	}
-	values := r.values[link.Column]
-	valueType := r.types[link.Column]
-	if values == nil || valueType == nil || position < 0 || position >= len(*values) {
+	value, ok := r.sqlKeyAt(link.Column, position)
+	if !ok {
 		return nil, fmt.Errorf("relation column %s has no value at row %d", link.Column, position)
 	}
-	return sqlxio.NormalizeKey(valueType.Deref((*values)[position])), nil
+	return value, nil
+}
+
+func (r *Collector) sqlKeyAt(column string, position int) (any, bool) {
+	values := r.values[column]
+	if values == nil || position < 0 || position >= len(*values) || (*values)[position] == nil {
+		return nil, false
+	}
+	if snapshot, ok := (*values)[position].(*any); ok {
+		return sqlxio.NormalizeKey(*snapshot), true
+	}
+	valueType := r.types[column]
+	if valueType == nil {
+		return nil, false
+	}
+	return sqlxio.NormalizeKey(valueType.Deref((*values)[position])), true
 }

@@ -5113,7 +5113,7 @@ func TestService_Read_ErrorsOnChildRelationBuildFailure(t *testing.T) {
 	}
 }
 
-func TestService_Read_ErrorsOnCompositeChildVisitorFailure(t *testing.T) {
+func TestService_Read_CompositeSQLKeyWithoutGoField(t *testing.T) {
 	h := testharness.NewSQLiteHarness(t)
 	if err := h.ExecStatements(context.Background(),
 		`CREATE TABLE users (tenant_id INTEGER, id INTEGER, name TEXT);`,
@@ -5210,8 +5210,15 @@ func TestService_Read_ErrorsOnCompositeChildVisitorFailure(t *testing.T) {
 		Scope:      testharness.Request{}.WithQuery(url.Values{}),
 	}
 
-	if _, err := NewService().Read(context.Background(), session); err == nil {
-		t.Fatalf("expected composite child visitor failure")
+	// MissingUserID is not a Go field, but user_id is present in SQL and
+	// mapped to UserID. The SQL-backed join must still attach the child.
+	actual, err := NewService().Read(context.Background(), session)
+	if err != nil {
+		t.Fatalf("read SQL-backed composite relation: %v", err)
+	}
+	result := actual.(*output)
+	if len(result.Data) != 1 || result.Data[0].Profile == nil || result.Data[0].Profile.UserID != 7 {
+		t.Fatalf("expected attached profile, got %+v", result.Data)
 	}
 }
 

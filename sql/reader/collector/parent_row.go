@@ -18,14 +18,12 @@ func (r *Collector) ParentRow() func(value interface{}) (interface{}, error) {
 	destPtr := xunsafe.AsPointer(dest)
 
 	if len(links) == 1 {
-		column := relation.On[0].Column
-		namespace := relation.On[0].Namespace
 		return func(child interface{}) (interface{}, error) {
 			key, err := r.linkKeyAt(child, links[0], r.indexCounter)
 			if err != nil {
 				return nil, err
 			}
-			valuePosition := r.parentValuesPositions(namespace, column)
+			valuePosition := r.parentValuesPositions(relation.On[0])
 			positions, ok := valuePosition[key]
 			if !ok {
 				return nil, fmt.Errorf(`key "%v" is not found`, key)
@@ -64,7 +62,7 @@ func (r *Collector) ParentRow() func(value interface{}) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
-			valuePosition := r.parentValuesPositions(relation.On[i].Namespace, relation.On[i].Column)
+			valuePosition := r.parentValuesPositions(relation.On[i])
 			positions, ok := valuePosition[key]
 			if !ok {
 				return nil, fmt.Errorf(`key "%v" is not found`, key)

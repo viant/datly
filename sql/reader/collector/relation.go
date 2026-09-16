@@ -37,8 +37,20 @@ type RelationRef struct {
 
 type Link struct {
 	*data.Link
+	// KeySource is resolved once at compile time, never from a row's value.
+	KeySource KeySource
+	// XField is present only for typed field and hook sources. Every key
+	// consumer uses this accessor or the captured SQL column, consistently.
 	XField *xunsafe.Field
 }
+
+type KeySource string
+
+const (
+	KeySourceField  KeySource = "field"
+	KeySourceColumn KeySource = "column"
+	KeySourceHook   KeySource = "hook"
+)
 
 type Links []*Link
 
