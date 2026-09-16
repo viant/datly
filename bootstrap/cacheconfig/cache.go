@@ -23,38 +23,57 @@ type Config struct {
 	Aerospike *aerospike.Pool
 }
 
-func (c Config) New() (cache.Cache, error) {
+// Validate checks settings without constructing a service or opening a connection.
+func Validate(settings *spec.CacheSettings) error {
+	_, err := (Config{Settings: settings}).validateSettings()
+	return err
+}
+
+func (c Config) validateSettings() (time.Duration, error) {
 	if c.Settings == nil {
-		return nil, fmt.Errorf("cache settings are required")
+		return 0, fmt.Errorf("cache settings are required")
 	}
 	if !c.Settings.Enabled {
-		return nil, fmt.Errorf("cache %q is disabled", c.Settings.Name)
-	}
-	if strings.TrimSpace(c.Identity) == "" {
-		return nil, fmt.Errorf("cache view identity is required")
+		return 0, fmt.Errorf("cache %q is disabled", c.Settings.Name)
 	}
 	location := strings.TrimSpace(c.Settings.Location)
 	if location == "" {
-		return nil, fmt.Errorf("cache %q location is required", c.Settings.Name)
+		return 0, fmt.Errorf("cache %q location is required", c.Settings.Name)
 	}
 	var ttl time.Duration
 	if c.Settings.TimeToLiveMs < 0 || c.Settings.TimeToLiveMs > int((1<<63-1)/int64(time.Millisecond)) {
-		return nil, fmt.Errorf("cache %q timeToLiveMs is invalid", c.Settings.Name)
+		return 0, fmt.Errorf("cache %q timeToLiveMs is invalid", c.Settings.Name)
 	}
 	ttl = time.Duration(c.Settings.TimeToLiveMs) * time.Millisecond
 	if c.Settings.TTL != "" {
 		parsed, err := time.ParseDuration(c.Settings.TTL)
 		if err != nil || parsed <= 0 {
-			return nil, fmt.Errorf("cache %q TTL must be a positive duration", c.Settings.Name)
+			return 0, fmt.Errorf("cache %q TTL must be a positive duration", c.Settings.Name)
 		}
 		if ttl != 0 && ttl != parsed {
-			return nil, fmt.Errorf("cache %q TTL and timeToLiveMs disagree", c.Settings.Name)
+			return 0, fmt.Errorf("cache %q TTL and timeToLiveMs disagree", c.Settings.Name)
 		}
 		ttl = parsed
 	}
 	if ttl <= 0 {
-		return nil, fmt.Errorf("cache %q TTL is required", c.Settings.Name)
+		return 0, fmt.Errorf("cache %q TTL is required", c.Settings.Name)
 	}
+	provider := strings.TrimSpace(c.Settings.Provider)
+	if !strings.HasPrefix(provider, "aerospike:") && provider != "" && !strings.EqualFold(provider, "afs") {
+		return 0, fmt.Errorf("cache %q provider is not supported; supply a native cache service", c.Settings.Name)
+	}
+	return ttl, nil
+}
+
+func (c Config) New() (cache.Cache, error) {
+	ttl, err := c.validateSettings()
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(c.Identity) == "" {
+		return nil, fmt.Errorf("cache view identity is required")
+	}
+	location := strings.TrimSpace(c.Settings.Location)
 	provider := strings.TrimSpace(c.Settings.Provider)
 	if strings.HasPrefix(provider, "aerospike:") {
 		service, err := c.Aerospike.NewCache(aerospike.Config{

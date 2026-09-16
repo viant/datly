@@ -12,7 +12,7 @@ import (
 	"github.com/viant/datly/internal/testharness/sqlite"
 )
 
-//go:embed records authrecords asyncrecords spend
+//go:embed records authrecords asyncrecords spend cachedrecords
 var Files embed.FS
 
 const Module = "github.com/viant/datly/standalone/testdata/app"

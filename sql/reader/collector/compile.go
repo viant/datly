@@ -7,7 +7,6 @@ import (
 
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/spec"
-	sqlxio "github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
 )
 
@@ -122,24 +121,23 @@ func compileLinks(metadata data.Links, rowType reflect.Type) Links {
 		if link == nil {
 			continue
 		}
-		result = append(result, &Link{Link: link, XField: compileScannedField(rowType, link.Field)})
+		result = append(result, &Link{Link: link, XField: compileLinkField(rowType, link.Field)})
 	}
 	return result
 }
 
-func compileScannedField(rowType reflect.Type, name string) *xunsafe.Field {
+func compileLinkField(rowType reflect.Type, name string) *xunsafe.Field {
 	for rowType != nil && rowType.Kind() == reflect.Ptr {
 		rowType = rowType.Elem()
 	}
 	if rowType == nil || rowType.Kind() != reflect.Struct {
 		return nil
 	}
-	field, ok := rowType.FieldByName(name)
+	_, ok := rowType.FieldByName(name)
 	if !ok {
 		return nil
 	}
-	if tag := sqlxio.ParseTag(field.Tag); tag != nil && tag.Transient {
-		return nil
-	}
+	// An explicit relation field may be populated by a row hook. sqlx:"-"
+	// controls scanning, not whether that field can supply a relation key.
 	return xunsafe.FieldByName(rowType, name)
 }

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 	afsurl "github.com/viant/afs/url"
 	"github.com/viant/datly/bootstrap/connector"
 	gateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -88,11 +90,25 @@ func (l Loader) Load(ctx context.Context, location string) (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		connectors, err := l.dependencies(ctx, access.DependencyURL)
+		dependencies, err := l.dependencies(ctx, access.DependencyURL)
 		if err != nil {
 			return nil, err
 		}
-		c.Connectors = append(c.Connectors, connectors...)
+		c.Connectors = append(c.Connectors, dependencies.Connectors...)
+		c.CacheProviders = append(c.CacheProviders, dependencies.CacheProviders...)
+	}
+	var err error
+	c.Caches, err = namedCaches(c.Caches, c.CacheProviders)
+	if err != nil {
+		return nil, err
+	}
+	c.CacheProviders = nil
+	resolved, err := c.ResolveConstants()
+	if err != nil {
+		return nil, err
+	}
+	if err := resolved.validateCaches(); err != nil {
+		return nil, err
 	}
 	return c, nil
 }
@@ -128,6 +144,9 @@ func (l Loader) decode(ctx context.Context, location string, target any) error {
 	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
 		return fmt.Errorf("configuration must be an object")
 	}
+	if err := validateJSONKeys(data, reflect.TypeOf(target)); err != nil {
+		return err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	// Decoder diagnostics may include configured credentials. Do not expose them.
@@ -141,7 +160,14 @@ func (l Loader) decode(ctx context.Context, location string, target any) error {
 	return ctx.Err()
 }
 
-func (l Loader) dependencies(ctx context.Context, location string) ([]connector.Config, error) {
+type dependencyDocument struct {
+	Connectors     []connector.Config
+	Caches         map[string]*spec.CacheSettings
+	CacheProviders []*CacheProvider
+	ModTime        string // legacy dependency document metadata
+}
+
+func (l Loader) dependencies(ctx context.Context, location string) (*dependencyDocument, error) {
 	object, err := l.FS.Object(ctx, location)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -167,13 +193,21 @@ func (l Loader) dependencies(ctx context.Context, location string) ([]connector.
 		}
 		sort.Strings(locations)
 	}
-	var result []connector.Config
+	result := &dependencyDocument{}
 	for _, item := range locations {
-		var document struct{ Connectors []connector.Config }
+		var document dependencyDocument
 		if err := l.decode(ctx, item, &document); err != nil {
 			return nil, err
 		}
-		result = append(result, document.Connectors...)
+		result.Connectors = append(result.Connectors, document.Connectors...)
+		caches, err := namedCaches(document.Caches, document.CacheProviders)
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range cacheNames(caches) {
+			settings := caches[name]
+			result.CacheProviders = append(result.CacheProviders, &CacheProvider{CacheSettings: *settings, Enabled: &settings.Enabled})
+		}
 	}
 	return result, nil
 }

@@ -16,10 +16,20 @@ func (c *Config) ResolveConstants() (*Config, error) {
 		return nil, fmt.Errorf("standalone configuration is required")
 	}
 	result := *c
+	var err error
+	result.Caches, err = namedCaches(c.Caches, c.CacheProviders)
+	if err != nil {
+		return nil, err
+	}
+	result.CacheProviders = nil
 	if c.Const == nil {
 		return &result, nil
 	}
 	paths := []*string{&result.BaseDir, &result.ContentURL, &result.RouteURL, &result.PluginsURL, &result.DependencyURL, &result.JobURL, &result.FailedJobURL}
+	for _, name := range cacheNames(result.Caches) {
+		paths = append(paths, &result.Caches[name].Provider)
+		// Location is expanded by the reader, which also owns legacy View.Name.
+	}
 	result.ModuleDirs = append([]string(nil), c.ModuleDirs...)
 	for i := range result.ModuleDirs {
 		paths = append(paths, &result.ModuleDirs[i])
