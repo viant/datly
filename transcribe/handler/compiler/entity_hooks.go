@@ -53,6 +53,10 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 	if err != nil {
 		return spec.TypeRef{}, err
 	}
+	output, err := (xshape.Resolver{}).Canonical(request.Output)
+	if err != nil || strings.TrimSpace(output) == "" {
+		return spec.TypeRef{}, fmt.Errorf("entity hook %q requires a canonical output type: %v", request.Hook, err)
+	}
 	shape := xshape.New(resolved.Descriptor, c.Types.Descriptor)
 	methods, err := shape.Methods(true)
 	if err != nil {
@@ -72,7 +76,8 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 			}
 		}
 	}
-	expected := []string{"context.Context", "*" + entity, "github.com/viant/xdatly/handler.EntityState[" + entity + "," + parent + "]"}
+	lifecycle := "github.com/viant/xdatly/handler.LifecycleContext[" + entity + "," + parent + "," + output + "]"
+	expected := []string{"context.Context", "*" + entity, lifecycle}
 	for index, name := range []string{"Init", "Validate", "AfterSequence", "AfterQueue"} {
 		var found *xshape.Method
 		for i := range methods {
@@ -85,21 +90,14 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 			if index >= 2 {
 				continue
 			}
-			return spec.TypeRef{}, fmt.Errorf("entity hook %s requires %s(context.Context, *%s, handler.EntityState[%s,%s]) error", resolved.Identity, name, entity, entity, parent)
+			return spec.TypeRef{}, fmt.Errorf("entity hook %s requires %s(context.Context, *%s, handler.LifecycleContext[%s,%s,%s]) error", resolved.Identity, name, entity, entity, parent, output)
 		}
 		if found.Variadic || !reflect.DeepEqual(found.Parameters, expected) || !reflect.DeepEqual(found.Results, []string{"error"}) {
 			return spec.TypeRef{}, fmt.Errorf("entity hook %s.%s has incompatible signature: parameters=%v results=%v; expected parameters=%v and error result", resolved.Identity, name, found.Parameters, found.Results, expected)
 		}
 	}
-	if request.Input != "" || request.Output != "" {
-		if request.Input == "" || request.Output == "" {
-			return spec.TypeRef{}, fmt.Errorf("completion validation requires both input and output types")
-		}
+	if request.Input != "" {
 		input, err := (xshape.Resolver{}).Canonical(request.Input)
-		if err != nil {
-			return spec.TypeRef{}, err
-		}
-		output, err := (xshape.Resolver{}).Canonical(request.Output)
 		if err != nil {
 			return spec.TypeRef{}, err
 		}

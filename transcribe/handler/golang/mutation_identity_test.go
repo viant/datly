@@ -133,15 +133,15 @@ type Output struct{Data []*Record}
 func(i *Input)Init(context.Context)error{if i.Mode=="changed tenant"{for _,row:=range i.Events{row.TenantId=91;row.Has.TenantId=false}};return nil}
 ` + "type Hooks struct{Input *Input `bind:\"kind=input\"`}\n" + `
 var initialized,validated,sequenced,queued int
-func(h *Hooks)Init(_ context.Context,row *Record,state handler.EntityState[Record,handler.NoParent])error{
+func(h *Hooks)Init(_ context.Context,row *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{
  initialized++
  if state.Previous!=nil{return fmt.Errorf("incomplete key matched Previous")}
  if !state.Original.Has("TenantId"){return fmt.Errorf("original tenant lost")}
  return nil
 }
-func(h *Hooks)Validate(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{validated++;return nil}
-func(h *Hooks)AfterSequence(_ context.Context,row *Record,_ handler.EntityState[Record,handler.NoParent])error{sequenced++;if h.Input.Mode=="changed tenant"{row.TenantId=92;row.Has.TenantId=false};return nil}
-func(h *Hooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{queued++;return nil}
+func(h *Hooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{validated++;return nil}
+func(h *Hooks)AfterSequence(_ context.Context,row *Record,_ handler.LifecycleContext[Record,handler.NoParent,Output])error{sequenced++;if h.Input.Mode=="changed tenant"{row.TenantId=92;row.Has.TenantId=false};return nil}
+func(h *Hooks)AfterQueue(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{queued++;return nil}
 func TestPartialProgram(t *testing.T){
  for _,mode:=range []string{"tenant zero","tenant seven","changed tenant","missing tenant","supplied nil","business failure"}{t.Run(mode,func(t *testing.T){
   initialized=0;validated=0;sequenced=0;queued=0

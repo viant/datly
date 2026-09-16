@@ -197,7 +197,7 @@ func(p *observedProgram)Queue(ctx context.Context)error{queueInvocations++;if st
 type badSequencer struct{}
 func(badSequencer)Allocate(_ context.Context,_ string,dest any,_ string)error{for _,row:=range dest.([]*Record){id:=int64(6);row.Id=&id};return nil}
 type Hooks struct{}
-func(*Hooks)Init(_ context.Context,row *Record,state handler.EntityState[Record,handler.NoParent])error{
+func(*Hooks)Init(_ context.Context,row *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{
  initCalls++
  if row!=parent&&row.Name!="unrelated"{
   if !{{SELF}}||state.SelfParent!=parent{return errors.New("self edge did not reach typed frame")};activeEdges++
@@ -205,16 +205,16 @@ func(*Hooks)Init(_ context.Context,row *Record,state handler.EntityState[Record,
  if {{SELF}}&&state.SelfParent!=nil&&mode=="reference boundary"{row.ParentId=parent.ParentId}
  return nil
 }
-func(*Hooks)Validate(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{customCalls++;return noEarlyWrite()}
-func(*Hooks)AfterSequence(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{sequenceCalls++;if mode=="reversed order"&&sequenceCalls==1{order:=captured.frames.{{ORDER}};order[0],order[len(order)-1]=order[len(order)-1],order[0]};return noEarlyWrite()}
-func(*Hooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{queueCalls++;return noEarlyWrite()}
+func(*Hooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{customCalls++;return noEarlyWrite()}
+func(*Hooks)AfterSequence(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{sequenceCalls++;if mode=="reversed order"&&sequenceCalls==1{order:=captured.frames.{{ORDER}};order[0],order[len(order)-1]=order[len(order)-1],order[0]};return noEarlyWrite()}
+func(*Hooks)AfterQueue(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{queueCalls++;return noEarlyWrite()}
 type ChildHooks struct{}
-func(*ChildHooks)Init(_ context.Context,row *Record,state handler.EntityState[Record,Record])error{
+func(*ChildHooks)Init(_ context.Context,row *Record,state handler.LifecycleContext[Record,Record,Output])error{
  initCalls++;if state.Parent!=parent||state.SelfParent!=nil{return errors.New("canonical relation parent missing")};activeEdges++;if mode=="reference boundary"{row.ParentId=parent.ParentId};return nil
 }
-func(*ChildHooks)Validate(context.Context,*Record,handler.EntityState[Record,Record])error{customCalls++;return noEarlyWrite()}
-func(*ChildHooks)AfterSequence(context.Context,*Record,handler.EntityState[Record,Record])error{sequenceCalls++;return noEarlyWrite()}
-func(*ChildHooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,Record])error{queueCalls++;return noEarlyWrite()}
+func(*ChildHooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{customCalls++;return noEarlyWrite()}
+func(*ChildHooks)AfterSequence(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{sequenceCalls++;return noEarlyWrite()}
+func(*ChildHooks)AfterQueue(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{queueCalls++;return noEarlyWrite()}
 func noEarlyWrite()error{if writes.Load()!=0{return errors.New("entity SQL executed before buffered completion")};return nil}
 type completion struct{}
 func(*completion)Finalize(_ context.Context,_ *Input,_ *Output,outcome handler.Outcome)error{outcomes=append(outcomes,outcome.Clone());return nil}

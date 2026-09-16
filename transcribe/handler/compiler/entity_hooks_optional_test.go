@@ -24,10 +24,10 @@ func (*wrongCompletionHooks) Finalize(context.Context, *hookInput, *hookOutput, 
 	return nil
 }
 
-func (*optionalEntityHooks) AfterSequence(context.Context, *hookEntity, h.EntityState[hookEntity, h.NoParent]) error {
+func (*optionalEntityHooks) AfterSequence(context.Context, *hookEntity, h.LifecycleContext[hookEntity, h.NoParent, hookOutput]) error {
 	return nil
 }
-func (*optionalEntityHooks) AfterQueue(context.Context, *hookEntity, h.EntityState[hookEntity, h.NoParent]) error {
+func (*optionalEntityHooks) AfterQueue(context.Context, *hookEntity, h.LifecycleContext[hookEntity, h.NoParent, hookOutput]) error {
 	return nil
 }
 
@@ -37,7 +37,7 @@ func (*wrongSequenceHooks) AfterSequence(*hookEntity) error { return nil }
 
 type wrongQueueHooks struct{ rootEntityHooks }
 
-func (*wrongQueueHooks) AfterQueue(context.Context, *hookEntity, h.EntityState[hookEntity, hookParent]) error {
+func (*wrongQueueHooks) AfterQueue(context.Context, *hookEntity, h.LifecycleContext[hookEntity, hookParent, hookOutput]) error {
 	return nil
 }
 

@@ -156,7 +156,7 @@ func (e *programEmitter) file() *ast.File {
 	file.Decls = append(file.Decls, &ast.FuncDecl{Name: id(e.asset.Factory), Type: &ast.FuncType{Params: &ast.FieldList{}, Results: &ast.FieldList{List: []*ast.Field{{Type: e.policyType("Definition", e.ioTypes()...)}}}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(&ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{Type: id(e.asset.Definition)}})}}}, e.capture(), e.finalize(false), e.finalize(true))
 	prepare := []ast.Stmt{}
 	if e.asset.Hooks != nil {
-		prepare = append(prepare, e.delegate("hooks", "Prepare", id("binder")))
+		prepare = append(prepare, e.delegate("hooks", "Prepare", id("binder"), e.member("output")))
 	}
 	prepare = append(prepare, e.delegate("actions", "Prepare", id("binder")))
 	prepare = append(prepare, e.delegate("validation", "Prepare", id("binder")))

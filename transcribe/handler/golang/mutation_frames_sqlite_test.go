@@ -93,20 +93,20 @@ type Input struct{Events []*Record;CurrentEvents []*Previous;initialized bool}
 type Output struct{Data []*Record}
 func(i *Input)Init(ctx context.Context)error{for _,r:=range i.CurrentEvents{*r.Id=99;r.LoadedName=nil};i.initialized=true;return nil}
 type Hooks struct{initialized,sequenced,queued int}
-func(h *Hooks)Init(ctx context.Context,current *Record,state handler.EntityState[Record,handler.NoParent])error{
+func(h *Hooks)Init(ctx context.Context,current *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{
  if state.Previous==nil{return fmt.Errorf("missing database Previous")}
  if !state.Original.Has("Id")||state.Original.Has("Name"){return fmt.Errorf("incorrect original presence")}
  current.Evidence=state.PreviousFields.Has("Name")
  if state.PreviousFields.Has("LoadedName"){return fmt.Errorf("SQL DTO name leaked to entity fields")}
  current.SetName(state.Previous.Name);h.initialized++;return nil
 }
-func(h *Hooks)Validate(ctx context.Context,current *Record,state handler.EntityState[Record,handler.NoParent])error{
+func(h *Hooks)Validate(ctx context.Context,current *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{
  if h.initialized!=2||!current.Has.Name{return fmt.Errorf("hook instance or setter presence lost")};return nil
 }
-func(h *Hooks)AfterSequence(ctx context.Context,current *Record,state handler.EntityState[Record,handler.NoParent])error{
+func(h *Hooks)AfterSequence(ctx context.Context,current *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{
  if h.initialized!=2||state.Previous==nil||!state.Original.Has("Id"){return fmt.Errorf("AfterSequence lost hook or frame state")};h.sequenced++;return nil
 }
-func(h *Hooks)AfterQueue(ctx context.Context,current *Record,state handler.EntityState[Record,handler.NoParent])error{
+func(h *Hooks)AfterQueue(ctx context.Context,current *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{
  if h.sequenced!=2||state.Previous==nil{return fmt.Errorf("AfterQueue lost hook or frame state")};h.queued++;return nil
 }
 type captured struct{original *_newEventsHandlerOriginalInput;database *_newEventsHandlerDatabaseSnapshot}
@@ -124,7 +124,7 @@ func(*contract)Exec(ctx context.Context,session handler.Session,input *Input,out
  snapshot,found,err:=session.Binder().Lookup(ctx,handler.InputSnapshotKey);if err!=nil{return err};if !found{return fmt.Errorf("missing snapshot")}
  value:=snapshot.(*captured);sync,err:=value.original.synchronize(input);if err!=nil{return err}
  frames,err:=value.database.Build(input,sync);if err!=nil{return err}
- hooks:=&_newEventsHandlerMutationHooks{};if err=hooks.Prepare(ctx,session.Binder());err!=nil{return err}
+ hooks:=&_newEventsHandlerMutationHooks{};if err=hooks.Prepare(ctx,session.Binder(),output);err!=nil{return err}
  if err=hooks.Init(ctx,frames);err!=nil{return err};if err=hooks.Validate(ctx,frames);err!=nil{return err}
  if err=hooks.AfterQueue(ctx,frames);err==nil{return fmt.Errorf("AfterQueue ran before AfterSequence")}
  if err=hooks.AfterSequence(ctx,frames);err!=nil{return err};if err=hooks.AfterQueue(ctx,frames);err!=nil{return err}

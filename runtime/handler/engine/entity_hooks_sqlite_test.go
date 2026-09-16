@@ -43,13 +43,13 @@ type injectedEntityHooks struct {
 	initialized bool
 }
 
-func (h *injectedEntityHooks) Init(_ context.Context, entity *hookEntity, _ xhandler.EntityState[hookEntity, hookParent]) error {
+func (h *injectedEntityHooks) Init(_ context.Context, entity *hookEntity, _ xhandler.LifecycleContext[hookEntity, hookParent, hookEntity]) error {
 	entity.Value = h.Input.Value
 	h.initialized = true
 	h.Logger.Debug("init")
 	return nil
 }
-func (h *injectedEntityHooks) Validate(_ context.Context, entity *hookEntity, state xhandler.EntityState[hookEntity, hookParent]) error {
+func (h *injectedEntityHooks) Validate(_ context.Context, entity *hookEntity, state xhandler.LifecycleContext[hookEntity, hookParent, hookEntity]) error {
 	if !h.initialized {
 		return fmt.Errorf("hook state was not retained")
 	}
@@ -82,9 +82,9 @@ func TestEntityHooksUseInvocationCapabilitiesSQLite(t *testing.T) {
 					if hooks.Input != input || hooks.Logger != logger || hooks.Bus != bus {
 						return nil, fmt.Errorf("wrong scoped dependencies")
 					}
-					var lifecycle xhandler.EntityHooks[hookEntity, hookParent] = hooks
+					var lifecycle xhandler.EntityHooks[hookEntity, hookParent, hookEntity] = hooks
 					entity := &hookEntity{ID: 1}
-					state := xhandler.EntityState[hookEntity, hookParent]{Parent: &hookParent{Minimum: 1}}
+					state := xhandler.LifecycleContext[hookEntity, hookParent, hookEntity]{EntityState: xhandler.EntityState[hookEntity, hookParent]{Parent: &hookParent{Minimum: 1}}, Output: &hookEntity{}}
 					if err := lifecycle.Init(ctx, entity, state); err != nil {
 						return nil, err
 					}

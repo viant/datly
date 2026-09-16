@@ -139,21 +139,21 @@ OnFetch is per row; OnRelation sees complete relation assembly, not one batch. U
 
 Writer hooks:
 ~~~~go
-type EntityHooks[T, P any] interface {
-    Init(context.Context, *T, handler.EntityState[T, P]) error
-    Validate(context.Context, *T, handler.EntityState[T, P]) error
+type EntityHooks[T, P, O any] interface {
+    Init(context.Context, *T, handler.LifecycleContext[T, P, O]) error
+    Validate(context.Context, *T, handler.LifecycleContext[T, P, O]) error
 }
 ~~~~
 
-EntityState supplies Previous, PreviousFields, Original, Parent and SelfParent. Previous is detached/read-only. Root roles use NoParent. SelfParent is the immediate recursive parent; Parent remains the enclosing relation parent.
+LifecycleContext embeds EntityState and supplies Previous, PreviousFields, Original, Parent and SelfParent. Its typed Output pointer is the invocation-owned component response; hooks may append violations, warnings and other response metadata even when they return an error. Previous is detached/read-only. Root roles use NoParent. SelfParent is the immediate recursive parent; Parent remains the enclosing relation parent.
 
 Optional same-instance interfaces:
 ~~~~go
-type AfterSequenceHook[T, P any] interface {
-    AfterSequence(context.Context, *T, handler.EntityState[T, P]) error
+type AfterSequenceHook[T, P, O any] interface {
+    AfterSequence(context.Context, *T, handler.LifecycleContext[T, P, O]) error
 }
-type AfterQueueHook[T, P any] interface {
-    AfterQueue(context.Context, *T, handler.EntityState[T, P]) error
+type AfterQueueHook[T, P, O any] interface {
+    AfterQueue(context.Context, *T, handler.LifecycleContext[T, P, O]) error
 }
 ~~~~
 

@@ -18,19 +18,19 @@ type hookEntity struct{}
 type hookParent struct{}
 type rootEntityHooks struct{}
 
-func (*rootEntityHooks) Init(context.Context, *hookEntity, xhandler.EntityState[hookEntity, xhandler.NoParent]) error {
+func (*rootEntityHooks) Init(context.Context, *hookEntity, xhandler.LifecycleContext[hookEntity, xhandler.NoParent, hookOutput]) error {
 	return nil
 }
-func (*rootEntityHooks) Validate(context.Context, *hookEntity, xhandler.EntityState[hookEntity, xhandler.NoParent]) error {
+func (*rootEntityHooks) Validate(context.Context, *hookEntity, xhandler.LifecycleContext[hookEntity, xhandler.NoParent, hookOutput]) error {
 	return nil
 }
 
 type childEntityHooks struct{}
 
-func (childEntityHooks) Init(context.Context, *hookEntity, xhandler.EntityState[hookEntity, hookParent]) error {
+func (childEntityHooks) Init(context.Context, *hookEntity, xhandler.LifecycleContext[hookEntity, hookParent, hookOutput]) error {
 	return nil
 }
-func (*childEntityHooks) Validate(context.Context, *hookEntity, xhandler.EntityState[hookEntity, hookParent]) error {
+func (*childEntityHooks) Validate(context.Context, *hookEntity, xhandler.LifecycleContext[hookEntity, hookParent, hookOutput]) error {
 	return nil
 }
 
@@ -43,7 +43,7 @@ func TestEntityHookCompilerCanonicalContracts(t *testing.T) {
 		}
 	}
 	for _, item := range []struct{ path, parent, entity string }{{"example.com/one", "h.NoParent", "e.hookEntity"}, {"example.com/two", "e.hookParent", "e.hookEntity"}, {"example.com/wrong", "h.NoParent", "e.hookParent"}, {"example.com/imposter", "h.NoParent", "e.hookEntity"}} {
-		file, err := parser.ParseFile(token.NewFileSet(), "hooks.go", "package hooks\nfunc(*Hooks)Init(ctx c.Context,current *"+item.entity+",state h.EntityState["+item.entity+","+item.parent+"])error{return nil}\nfunc(*Hooks)Validate(ctx c.Context,current *"+item.entity+",state h.EntityState["+item.entity+","+item.parent+"])error{return nil}", 0)
+		file, err := parser.ParseFile(token.NewFileSet(), "hooks.go", "package hooks\nfunc(*Hooks)Init(ctx c.Context,current *"+item.entity+",state h.LifecycleContext["+item.entity+","+item.parent+",e.hookOutput])error{return nil}\nfunc(*Hooks)Validate(ctx c.Context,current *"+item.entity+",state h.LifecycleContext["+item.entity+","+item.parent+",e.hookOutput])error{return nil}", 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -76,7 +76,7 @@ func TestEntityHookCompilerCanonicalContracts(t *testing.T) {
 		{"unknown", "one.Absent", "", true, ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			actual, err := compiler.Compile(EntityHookRequest{Hook: test.hook, Entity: location + ".hookEntity", Parent: test.parent})
+			actual, err := compiler.Compile(EntityHookRequest{Hook: test.hook, Entity: location + ".hookEntity", Parent: test.parent, Output: location + ".hookOutput"})
 			if (err != nil) != test.invalid {
 				t.Fatalf("Compile = %+v, %v", actual, err)
 			}

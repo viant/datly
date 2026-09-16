@@ -108,12 +108,14 @@ func TestGenExecutableNamedGraphRegeneration(t *testing.T) {
 			write(filepath.Join(root, "api/orders/regeneration_test.go"), `package orders
 import (
  "context"
+	"reflect"
  "testing"
- xhandler "github.com/viant/xdatly/handler"
 )
 func TestAuthoredLifecycle(t *testing.T) {
  lifecycleCalls = 0
- if err := (&OrderRules{}).Init(context.Background(), &`+owner+`{}, xhandler.EntityState[`+owner+`, xhandler.NoParent]{}); err != nil { t.Fatal(err) }
+	hook := reflect.ValueOf(&OrderRules{}).MethodByName("Init")
+	result := hook.Call([]reflect.Value{reflect.ValueOf(context.Background()), reflect.ValueOf(&`+owner+`{}), reflect.Zero(hook.Type().In(2))})
+	if err, _ := result[0].Interface().(error); err != nil { t.Fatal(err) }
  if lifecycleCalls != 1 { t.Fatal("authored lifecycle was not called") }
 }
 `)

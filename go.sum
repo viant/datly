@@ -1056,8 +1056,8 @@ github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8 h1:3zbRaLhr9Egc59mnd
 github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8/go.mod h1:Q/UXviI2Nli8WROEpYd/BELMCSvnulQeyNrbPmMiS/Y=
 github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47 h1:VNpyUuP4Dg0FZ+C7+aAXXDbi+DDu2fSLwbemxu+/gjM=
 github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47/go.mod h1:Ud4v5LGA8uA0EfmuO4H0t0YgAq2FNLnh3ydQUjBdaLI=
-github.com/viant/xdatly v0.5.4-0.20260915180800-2ca08190e478 h1:DCJ3KXaOuaSGFOZXTq1DbpPKG0CGzYC6dIYSUtM5X24=
-github.com/viant/xdatly v0.5.4-0.20260915180800-2ca08190e478/go.mod h1:gEYEgpHrdnUaTflT2KNg6Y5RAEnE9I3cIL8cQhBCxe4=
+github.com/viant/xdatly v0.5.4-0.20260916204235-3de57245b7ec h1:XsclD8bp1YEW9woGZrkjVEZIkh5wQ4pGdHDIqFAYvBU=
+github.com/viant/xdatly v0.5.4-0.20260916204235-3de57245b7ec/go.mod h1:gEYEgpHrdnUaTflT2KNg6Y5RAEnE9I3cIL8cQhBCxe4=
 github.com/viant/xlsy v0.3.1 h1:KwA7PxOTVg+ns4CCPOdfNy5aEA9OUlIByUbuNC9ju0s=
 github.com/viant/xlsy v0.3.1/go.mod h1:RajfF9HkL/PfIxRCvZSubpNlpdMUNDKYZp8C1o3vF4Q=
 github.com/viant/xmlify v0.1.2-0.20260914155716-e525a8788fd0 h1:KOvP8KJgM8+SmrsnPOOnZ6EPhAvivMj7dS/QCfBk++U=

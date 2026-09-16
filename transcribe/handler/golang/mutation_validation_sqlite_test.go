@@ -45,7 +45,7 @@ func TestGeneratedFrameworkValidationBeforeAllCustomHooksSQLite(t *testing.T) {
 		"{{FACTORY}}", asset.Factory, "{{DEFINITION}}", asset.Definition,
 		"Name string `sqlx:\"name\"`", "Name string `sqlx:\"name\" validate:\"required\"`",
 		"var outcomes []handler.Outcome", "var outcomes []handler.Outcome\nvar validationCalls int",
-		"func(h *Hooks)Validate(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{", "func(h *Hooks)Validate(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{validationCalls++;",
+		"func(h *Hooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{", "func(h *Hooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{validationCalls++;",
 		"[]string{\"success\",\"override\",\"binding\",\"validate\",\"queue\",\"mutate queued\"}", "[]string{\"success\",\"framework\"}",
 		"outcomes=nil;finalizerKinds=nil;ctx,cancel:=", "outcomes=nil;finalizerKinds=nil;validationCalls=0;ctx,cancel:=",
 		"  var supplied any=events", "  if mode==\"framework\"{events[0].Name=\"\";events[1].Name=\"\"};var supplied any=events",

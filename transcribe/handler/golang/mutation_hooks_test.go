@@ -43,8 +43,8 @@ func TestScalar(t *testing.T){
  ctx:=context.Background();hooks:=&_newScalarMutationHooks{}
  frames:=&_newScalarMutationFrames{Role0:[]*_newScalarMutationHooksFrame0{{Entity:&model.Row{}},{Entity:&model.Row{}}}}
  if err:=hooks.Init(ctx,frames);err==nil{t.Fatal("Init before Prepare accepted")}
- if err:=hooks.Prepare(ctx,nil);err!=nil{t.Fatal(err)}
- if err:=hooks.Prepare(ctx,nil);err==nil{t.Fatal("Prepare repeated")}
+ if err:=hooks.Prepare(ctx,nil,&model.Output{});err!=nil{t.Fatal(err)}
+ if err:=hooks.Prepare(ctx,nil,&model.Output{});err==nil{t.Fatal("Prepare repeated")}
  if err:=hooks.Init(ctx,frames);err!=nil{t.Fatal(err)}
  if err:=hooks.Init(ctx,frames);err==nil{t.Fatal("Init repeated")}
  if err:=hooks.Validate(ctx,frames);err!=nil{t.Fatal(err)}
@@ -52,9 +52,9 @@ func TestScalar(t *testing.T){
  if err:=hooks.AfterSequence(ctx,frames);err!=nil{t.Fatal(err)}
  if err:=hooks.AfterQueue(ctx,frames);err!=nil{t.Fatal(err)}
  for _,bad:=range []*_newScalarMutationFrames{{Role0:[]*_newScalarMutationHooksFrame0{nil}},{Role0:[]*_newScalarMutationHooksFrame0{{}}}}{
-  invalid:=&_newScalarMutationHooks{};if err:=invalid.Prepare(ctx,nil);err!=nil{t.Fatal(err)}
+  invalid:=&_newScalarMutationHooks{};if err:=invalid.Prepare(ctx,nil,&model.Output{});err!=nil{t.Fatal(err)}
   if err:=invalid.Init(ctx,bad);err==nil||!strings.Contains(err.Error(),"requires a non-nil frame and entity"){t.Fatalf("bad Init frame=%v",err)}
-  invalid=&_newScalarMutationHooks{};if err:=invalid.Prepare(ctx,nil);err!=nil{t.Fatal(err)};if err:=invalid.Init(ctx,frames);err!=nil{t.Fatal(err)}
+  invalid=&_newScalarMutationHooks{};if err:=invalid.Prepare(ctx,nil,&model.Output{});err!=nil{t.Fatal(err)};if err:=invalid.Init(ctx,frames);err!=nil{t.Fatal(err)}
   if err:=invalid.Validate(ctx,bad);err==nil||!strings.Contains(err.Error(),"requires a non-nil frame and entity"){t.Fatalf("bad Validate frame=%v",err)}
  }
 }

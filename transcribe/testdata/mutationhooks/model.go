@@ -53,7 +53,7 @@ type RootHooks struct {
 	initialized map[*Row]bool
 }
 
-func (hook *RootHooks) Init(_ context.Context, row *Row, state h.EntityState[Row, h.NoParent]) error {
+func (hook *RootHooks) Init(_ context.Context, row *Row, state h.LifecycleContext[Row, h.NoParent, Output]) error {
 	if hook.Input == nil || hook.Logger == nil {
 		return fmt.Errorf("canonical DI missing")
 	}
@@ -74,7 +74,7 @@ func (hook *RootHooks) Init(_ context.Context, row *Row, state h.EntityState[Row
 	hook.Logger.Debug("root init")
 	return nil
 }
-func (hook *RootHooks) Validate(_ context.Context, row *Row, state h.EntityState[Row, h.NoParent]) error {
+func (hook *RootHooks) Validate(_ context.Context, row *Row, state h.LifecycleContext[Row, h.NoParent, Output]) error {
 	if !hook.initialized[row] {
 		return fmt.Errorf("root hook instance changed")
 	}
@@ -94,7 +94,7 @@ type ChildHooks struct {
 	initialized map[*Child]bool
 }
 
-func (hook *ChildHooks) Init(_ context.Context, child *Child, state h.EntityState[Child, Row]) error {
+func (hook *ChildHooks) Init(_ context.Context, child *Child, state h.LifecycleContext[Child, Row, Output]) error {
 	if hook.Input == nil || hook.Logger == nil || state.Parent != hook.Input.Rows[0] {
 		return fmt.Errorf("child parent/DI is wrong")
 	}
@@ -118,7 +118,7 @@ func (hook *ChildHooks) Init(_ context.Context, child *Child, state h.EntityStat
 	hook.Logger.Debug("child init")
 	return nil
 }
-func (hook *ChildHooks) Validate(_ context.Context, child *Child, _ h.EntityState[Child, Row]) error {
+func (hook *ChildHooks) Validate(_ context.Context, child *Child, _ h.LifecycleContext[Child, Row, Output]) error {
 	if !hook.initialized[child] {
 		return fmt.Errorf("child hook instance changed")
 	}
@@ -128,11 +128,11 @@ func (hook *ChildHooks) Validate(_ context.Context, child *Child, _ h.EntityStat
 
 type ScalarHooks int
 
-func (hook *ScalarHooks) Init(context.Context, *Row, h.EntityState[Row, h.NoParent]) error {
+func (hook *ScalarHooks) Init(context.Context, *Row, h.LifecycleContext[Row, h.NoParent, Output]) error {
 	*hook++
 	return nil
 }
-func (hook *ScalarHooks) Validate(context.Context, *Row, h.EntityState[Row, h.NoParent]) error {
+func (hook *ScalarHooks) Validate(context.Context, *Row, h.LifecycleContext[Row, h.NoParent, Output]) error {
 	if *hook != 2 {
 		return fmt.Errorf("scalar hook instance changed: %d", *hook)
 	}

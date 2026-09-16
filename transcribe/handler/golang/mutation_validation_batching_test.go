@@ -135,13 +135,13 @@ type Input struct{Events []*Record}
 type Output struct{Data []*Record}
 var initialized,validated,queued [2]int
 type Hooks struct{}
-func(*Hooks)Init(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{initialized[0]++;return nil}
-func(*Hooks)Validate(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{validated[0]++;return nil}
-func(*Hooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{queued[0]++;return nil}
+func(*Hooks)Init(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{initialized[0]++;return nil}
+func(*Hooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{validated[0]++;return nil}
+func(*Hooks)AfterQueue(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{queued[0]++;return nil}
 type ChildHooks struct{}
-func(*ChildHooks)Init(context.Context,*Record,handler.EntityState[Record,Record])error{initialized[1]++;return nil}
-func(*ChildHooks)Validate(context.Context,*Record,handler.EntityState[Record,Record])error{validated[1]++;return nil}
-func(*ChildHooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,Record])error{queued[1]++;return nil}
+func(*ChildHooks)Init(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{initialized[1]++;return nil}
+func(*ChildHooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{validated[1]++;return nil}
+func(*ChildHooks)AfterQueue(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{queued[1]++;return nil}
 func TestValidationBatch(t *testing.T){
  for _,duplicate:=range []bool{true,false}{t.Run(map[bool]string{true:"duplicate",false:"distinct"}[duplicate],func(t *testing.T){
   initialized=[2]int{};validated=[2]int{};queued=[2]int{}

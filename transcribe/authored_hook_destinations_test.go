@@ -177,11 +177,11 @@ import (
 )
 type RootHooks struct {Suffix string ` + "`parameter:\"Suffix,kind=query,in=suffix\"`" + `}
 var InitCalls,ValidateCalls,FinalizeCalls int
-func(hook *RootHooks)Init(ctx context.Context,row *entities.Event,state h.EntityState[entities.Event,h.NoParent])error{
+func(hook *RootHooks)Init(ctx context.Context,row *entities.Event,state h.LifecycleContext[entities.Event,h.NoParent,contracts.Response])error{
  if hook.Suffix!="authored" || state.Original==nil || !state.Original.Has("Name") {return fmt.Errorf("root hook binding or original presence missing")}
  InitCalls++;row.SetName(row.Name+":"+hook.Suffix);return nil
 }
-func(*RootHooks)Validate(ctx context.Context,row *entities.Event,state h.EntityState[entities.Event,h.NoParent])error{ValidateCalls++;return nil}
+func(*RootHooks)Validate(ctx context.Context,row *entities.Event,state h.LifecycleContext[entities.Event,h.NoParent,contracts.Response])error{ValidateCalls++;return nil}
 func(*RootHooks)Finalize(ctx context.Context,input *contracts.Request,output *contracts.Response,outcome h.Outcome)error{
  if input==nil||output==nil||len(output.Data)!=2{return fmt.Errorf("root completion contracts missing")};FinalizeCalls++;return nil
 }
@@ -190,15 +190,16 @@ const authoredChildHookSource = `package childhooks
 import (
  "context"
  "fmt"
+ contracts "example.com/generated/contracts"
  entities "example.com/generated/entities"
  items "example.com/generated/items"
  h "github.com/viant/xdatly/handler"
 )
 type ChildHooks struct{}
 var InitCalls,ValidateCalls int
-func(*ChildHooks)Init(ctx context.Context,row *items.Item,state h.EntityState[items.Item,entities.Event])error{
+func(*ChildHooks)Init(ctx context.Context,row *items.Item,state h.LifecycleContext[items.Item,entities.Event,contracts.Response])error{
  if state.Parent==nil||state.Parent.Name==""||state.Original==nil||!state.Original.Has("Name"){return fmt.Errorf("typed child parent or original presence missing")}
  InitCalls++;row.SetName(row.Name+":child-v1");return nil
 }
-func(*ChildHooks)Validate(ctx context.Context,row *items.Item,state h.EntityState[items.Item,entities.Event])error{ValidateCalls++;return nil}
+func(*ChildHooks)Validate(ctx context.Context,row *items.Item,state h.LifecycleContext[items.Item,entities.Event,contracts.Response])error{ValidateCalls++;return nil}
 `

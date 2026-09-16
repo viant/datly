@@ -155,9 +155,9 @@ func init(){govalidator.RegisterWithDependencies("prior_probe",func(*govalidator
  if value==int64(7)&&((!finalPhase&&priorMode=="native business evidence")||(finalPhase&&priorMode=="native final evidence")){childEvidence.hideName=true}
  return true,nil
 },nil},func(*govalidator.Field,*govalidator.Check)([]string,error){return nil,nil})}
-func(*Hooks)AfterSequence(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{finalPhase=true;if priorMode=="after sequence prior"{childPrevious.Name="fake"};return nil}`,
-				`func(*ChildHooks)Init(context.Context,*Record,handler.EntityState[Record,Record])error{return nil}`, `func(*ChildHooks)Init(_ context.Context,_ *Record,state handler.EntityState[Record,Record])error{childPrevious=state.Previous;if priorMode=="init prior"{childPrevious.Name="fake"};return nil}`,
-				`func(*ChildHooks)Validate(context.Context,*Record,handler.EntityState[Record,Record])error{customCalls++;return nil}`, `func(*ChildHooks)Validate(_ context.Context,_ *Record,state handler.EntityState[Record,Record])error{customCalls++;if priorMode=="custom prior"{state.Previous.Name="fake"};if priorMode=="custom evidence"{childEvidence.hideName=true};return nil}`,
+func(*Hooks)AfterSequence(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{finalPhase=true;if priorMode=="after sequence prior"{childPrevious.Name="fake"};return nil}`,
+				`func(*ChildHooks)Init(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{return nil}`, `func(*ChildHooks)Init(_ context.Context,_ *Record,state handler.LifecycleContext[Record,Record,Output])error{childPrevious=state.Previous;if priorMode=="init prior"{childPrevious.Name="fake"};return nil}`,
+				`func(*ChildHooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{customCalls++;return nil}`, `func(*ChildHooks)Validate(_ context.Context,_ *Record,state handler.LifecycleContext[Record,Record,Output])error{customCalls++;if priorMode=="custom prior"{state.Previous.Name="fake"};if priorMode=="custom evidence"{childEvidence.hideName=true};return nil}`,
 				`var failed *handler.Validation`, `if priorMode!="control"{
  if err==nil||!strings.Contains(err.Error(),"immutable Previous"){t.Fatalf("prior mutation escaped guard: %v custom=%d queued=%d",err,customCalls,queueCalls)}
  if queueCalls!=0{t.Fatal("corrupt Previous reached Queue")}
@@ -195,13 +195,13 @@ type Input struct{Events []*Record;CurrentEvents,CurrentChildren []*Previous}
 type Output struct{Data []*Record}
 var customCalls,queueCalls int
 type Hooks struct{}
-func(*Hooks)Init(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{return nil}
-func(*Hooks)Validate(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{customCalls++;return nil}
-func(*Hooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{queueCalls++;return nil}
+func(*Hooks)Init(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{return nil}
+func(*Hooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{customCalls++;return nil}
+func(*Hooks)AfterQueue(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{queueCalls++;return nil}
 type ChildHooks struct{}
-func(*ChildHooks)Init(context.Context,*Record,handler.EntityState[Record,Record])error{return nil}
-func(*ChildHooks)Validate(context.Context,*Record,handler.EntityState[Record,Record])error{customCalls++;return nil}
-func(*ChildHooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,Record])error{queueCalls++;return nil}
+func(*ChildHooks)Init(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{return nil}
+func(*ChildHooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{customCalls++;return nil}
+func(*ChildHooks)AfterQueue(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{queueCalls++;return nil}
 func TestReconciledCoverage(t *testing.T){
  ctx:=context.Background();h:=sqlite.New(t)
  if err:=h.ExecStatements(ctx,"CREATE TABLE records(tenant_id INTEGER NOT NULL,id INTEGER NOT NULL,parent_id INTEGER,name TEXT,PRIMARY KEY(tenant_id,id))","INSERT INTO records VALUES(5,10,99,'parent'),(7,20,99,'child')");err!=nil{t.Fatal(err)}
@@ -291,8 +291,8 @@ func init(){
 }
 func(i *Input)Init(context.Context)error{active=i;if i.Mode=="initialized valid key"{*i.Events[0].Id=5};if i.Mode=="pending changed key"{id:=int64(50);i.Events[0].Children[0].Id=&id};return nil}
 ` + "type Hooks struct{Input *Input `bind:\"kind=input\"`}\n" + `
-func(h *Hooks)Init(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{return nil}
-func(h *Hooks)Validate(_ context.Context,row *Record,_ handler.EntityState[Record,handler.NoParent])error{
+func(h *Hooks)Init(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{return nil}
+func(h *Hooks)Validate(_ context.Context,row *Record,_ handler.LifecycleContext[Record,handler.NoParent,Output])error{
  customCalls++
  if h.Input.Mode=="custom value"{row.Name="mutated"}
  if h.Input.Mode=="custom marker"{row.Has.Name=false}
@@ -302,13 +302,13 @@ func(h *Hooks)Validate(_ context.Context,row *Record,_ handler.EntityState[Recor
  if h.Input.Mode=="custom relationship value"{row.Links[0].Value=""}
  return nil
 }
-func(*Hooks)AfterSequence(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{produced=true;afterSequenceCalls++;return nil}
-func(*Hooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{queueCalls++;return nil}
+func(*Hooks)AfterSequence(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{produced=true;afterSequenceCalls++;return nil}
+func(*Hooks)AfterQueue(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{queueCalls++;return nil}
 type ChildHooks struct{}
-func(*ChildHooks)Init(context.Context,*Record,handler.EntityState[Record,Record])error{return nil}
-func(*ChildHooks)Validate(context.Context,*Record,handler.EntityState[Record,Record])error{customCalls++;return nil}
-func(*ChildHooks)AfterSequence(context.Context,*Record,handler.EntityState[Record,Record])error{produced=true;afterSequenceCalls++;return nil}
-func(*ChildHooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,Record])error{queueCalls++;return nil}
+func(*ChildHooks)Init(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{return nil}
+func(*ChildHooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{customCalls++;return nil}
+func(*ChildHooks)AfterSequence(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{produced=true;afterSequenceCalls++;return nil}
+func(*ChildHooks)AfterQueue(context.Context,*Record,handler.LifecycleContext[Record,Record,Output])error{queueCalls++;return nil}
 type completion struct{}
 func(*completion)Finalize(_ context.Context,_ *Input,_ *Output,outcome handler.Outcome)error{outcomes=append(outcomes,outcome.Clone());return nil}
 func TestSequenceValidation(t *testing.T){

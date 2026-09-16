@@ -18,8 +18,8 @@ func TestEntityHookCompilerGenericAndPromotedContracts(t *testing.T) {
 	location := reflect.TypeOf(hookEntity{}).PkgPath()
 	source := `package hooks
 type Hook[T,P any]struct{}
-func(*Hook[A,B])Init(c.Context,*A,h.EntityState[A,B])error{return nil}
-func(*Hook[T,P])Validate(c.Context,*T,h.EntityState[T,P])error{return nil}
+func(*Hook[A,B])Init(c.Context,*A,h.LifecycleContext[A,B,e.hookOutput])error{return nil}
+func(*Hook[T,P])Validate(c.Context,*T,h.LifecycleContext[T,P,e.hookOutput])error{return nil}
 type Wrapper struct{Hook[e.hookEntity,h.NoParent]}
 type Left struct{Hook[e.hookEntity,h.NoParent]}
 type Right struct{Hook[e.hookEntity,h.NoParent]}
@@ -76,7 +76,7 @@ type Blocked struct{Hook[e.hookEntity,h.NoParent];Init string}
 		{"wrong arity", "app.Hook[int]", "", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			actual, err := compiler.Compile(EntityHookRequest{Hook: test.hook, Entity: location + ".hookEntity", Parent: test.parent})
+			actual, err := compiler.Compile(EntityHookRequest{Hook: test.hook, Entity: location + ".hookEntity", Parent: test.parent, Output: location + ".hookOutput"})
 			if (err != nil) != test.invalid {
 				t.Fatalf("Compile = %+v, %v", actual, err)
 			}

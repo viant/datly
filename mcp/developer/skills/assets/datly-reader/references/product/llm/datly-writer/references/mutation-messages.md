@@ -21,7 +21,7 @@ or merely because a write was queued. For example, with application types
 
 ```go
 func (h *RecordHooks) Validate(ctx context.Context, row *Record,
-    state handler.EntityState[Record, handler.NoParent]) error {
+    state handler.LifecycleContext[Record, handler.NoParent, Output]) error {
     if row.Value >= 10 {
         h.pending = append(h.pending, RecordChanged{ID: row.ID, Value: row.Value})
     }

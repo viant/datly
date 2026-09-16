@@ -92,14 +92,18 @@ and [generated policy phases](../transcribe/handler/golang/mutation_program.go).
 
 | Hook | What it receives and may do |
 | --- | --- |
-| `EntityHooks[T,P].Init(ctx, entity, state)` | Prepare business values after presence synchronization/backfill; use marker-aware setters. |
-| `EntityHooks[T,P].Validate(ctx, entity, state)` | Check business rules after framework validation. Do not mutate values, markers or Previous. |
-| `AfterSequenceHook[T,P].AfterSequence(ctx, entity, state)` | Observe allocated identities before diffing; preserve validated business values. |
-| `AfterQueueHook[T,P].AfterQueue(ctx, entity, state)` | Observe successfully queued work. It is not commit confirmation. |
+| `EntityHooks[T,P,O].Init(ctx, entity, state)` | Prepare business values after presence synchronization/backfill; use marker-aware setters. |
+| `EntityHooks[T,P,O].Validate(ctx, entity, state)` | Check business rules after framework validation. It may add typed response details through `state.Output`; do not mutate entity values, markers or Previous. |
+| `AfterSequenceHook[T,P,O].AfterSequence(ctx, entity, state)` | Observe allocated identities before diffing; preserve validated business values. |
+| `AfterQueueHook[T,P,O].AfterQueue(ctx, entity, state)` | Observe successfully queued work. It is not commit confirmation. |
 | `mutation.Finalizer[I,O].Finalize(ctx, input, output, outcome)` | Handle the completed outcome, including failure and caller-pending work. Gate commit-dependent messages on `outcome.CommitConfirmed()`. |
 
-`EntityState[T,P]` supplies typed `Previous`, `PreviousFields`, `Parent`,
-`SelfParent` and immutable original presence. A root uses `handler.NoParent`.
+`LifecycleContext[T,P,O]` embeds `EntityState[T,P]`, which supplies typed
+`Previous`, `PreviousFields`, `Parent`, `SelfParent` and immutable original
+presence. Its `Output *O` is the invocation-owned component response. A root
+uses `handler.NoParent`. Hooks may update response metadata through `Output`,
+including violations that must survive a returned validation error, but must not
+retain or concurrently use the pointer.
 The same invocation-scoped hook object serves its Init/Validate/observation
 callbacks and can receive input, logger, message bus or other configured scoped
 services through dependency injection. The runtime owns traversal and transactions.

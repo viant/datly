@@ -29,15 +29,15 @@ type Input struct{Events []*Record}
 type Output struct{Data []*Record}
 var callbackError=errors.New("callback failed")
 type Hooks struct{initialized,sequences,queues int;fail string}
-func(h *Hooks)Init(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{h.initialized++;return nil}
-func(h *Hooks)Validate(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{if h.initialized!=2{return callbackError};return nil}
-func(h *Hooks)AfterSequence(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{h.sequences++;if h.fail=="sequence"{return callbackError};return nil}
-func(h *Hooks)AfterQueue(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{h.queues++;if h.fail=="queue"{return callbackError};return nil}
+func(h *Hooks)Init(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{h.initialized++;return nil}
+func(h *Hooks)Validate(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{if h.initialized!=2{return callbackError};return nil}
+func(h *Hooks)AfterSequence(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{h.sequences++;if h.fail=="sequence"{return callbackError};return nil}
+func(h *Hooks)AfterQueue(context.Context,*Record,handler.LifecycleContext[Record,handler.NoParent,Output])error{h.queues++;if h.fail=="queue"{return callbackError};return nil}
 func TestOptionalFailure(t *testing.T){
  for _,phase:=range []string{"sequence","queue"}{t.Run(phase,func(t *testing.T){
   ctx:=context.Background();hooks:=&{{HOOKS}}{}
   frames:=&{{FRAMES}}{ {{ROLE}}:[]*{{FRAME}}{ {Entity:&Record{}},{Entity:&Record{}} } }
-  if err:=hooks.Prepare(ctx,nil);err!=nil{t.Fatal(err)}
+  if err:=hooks.Prepare(ctx,nil,&Output{});err!=nil{t.Fatal(err)}
   if err:=hooks.AfterSequence(ctx,frames);err==nil{t.Fatal("AfterSequence before Validate accepted")}
   if err:=hooks.Init(ctx,frames);err!=nil{t.Fatal(err)};if err:=hooks.Validate(ctx,frames);err!=nil{t.Fatal(err)}
   hooks.hook0.fail=phase

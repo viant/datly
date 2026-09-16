@@ -13,7 +13,7 @@ type Hooks struct { Input *requests.OrdersInput ` + "`bind:\"kind=input\"`" + ` 
 var HookObservedOriginal,LookupRead bool
 var Calls,Completions int
 const Version=1
-func(hooks *Hooks)Init(_ context.Context,entity *rows.Order,state h.EntityState[rows.Order,h.NoParent])error{
+func(hooks *Hooks)Init(_ context.Context,entity *rows.Order,state h.LifecycleContext[rows.Order,h.NoParent,responses.OrdersOutput])error{
  Calls++
  if hooks.Input==nil{return fmt.Errorf("authored root hook input missing")}
  if entity.Has!=nil && entity.Has.KindId && entity.KindId==nil{
@@ -28,7 +28,7 @@ func(hooks *Hooks)Init(_ context.Context,entity *rows.Order,state h.EntityState[
  }
  return nil
 }
-func(*Hooks)Validate(context.Context,*rows.Order,h.EntityState[rows.Order,h.NoParent])error{return nil}
+func(*Hooks)Validate(context.Context,*rows.Order,h.LifecycleContext[rows.Order,h.NoParent,responses.OrdersOutput])error{return nil}
 func(*Hooks)Finalize(_ context.Context,_ *requests.OrdersInput,_ *responses.OrdersOutput,outcome h.Outcome)error{if outcome.CommitConfirmed(){Completions++};return nil}
 `
 
@@ -38,11 +38,12 @@ import (
  "fmt"
  rows "github.com/viant/datly/genfixture/entities"
  items "github.com/viant/datly/genfixture/items"
+ responses "github.com/viant/datly/genfixture/responses"
  h "github.com/viant/xdatly/handler"
 )
 type Hooks struct{}
 var Calls int
 const Version=1
-func(*Hooks)Init(_ context.Context,_ *items.Item,state h.EntityState[items.Item,rows.Order])error{Calls++;if state.Parent==nil{return fmt.Errorf("typed child parent missing")};return nil}
-func(*Hooks)Validate(context.Context,*items.Item,h.EntityState[items.Item,rows.Order])error{return nil}
+func(*Hooks)Init(_ context.Context,_ *items.Item,state h.LifecycleContext[items.Item,rows.Order,responses.OrdersOutput])error{Calls++;if state.Parent==nil{return fmt.Errorf("typed child parent missing")};return nil}
+func(*Hooks)Validate(context.Context,*items.Item,h.LifecycleContext[items.Item,rows.Order,responses.OrdersOutput])error{return nil}
 `

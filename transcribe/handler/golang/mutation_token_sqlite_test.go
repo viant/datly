@@ -52,7 +52,7 @@ func TestGeneratedTimeTokenSQLite(t *testing.T) {
 		"  dependencies,err:=", "  if mode==\"missing previous\"{component.Views[0].Source.SQL=\"SELECT id,name FROM records\"};dependencies,err:=",
 		"  definition:=", `  tokenInstant:=time.Date(2026,9,1,2,0,0,0,time.FixedZone("same instant",7200));for _,row:=range events{row.Version=tokenInstant;row.Has.Version=true};if mode=="mismatch"{events[0].Version=tokenInstant.Add(time.Second)};if mode=="missing"{events[0].Has.Version=false};definition:=`,
 		"h.initialized++;return nil", `if h.Input.Mode=="prepare next"{row.SetVersion(row.Version.Add(time.Hour))};h.initialized++;return nil`,
-		"func(h *Hooks)Validate(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{", "func(h *Hooks)Validate(_ context.Context,row *Record,_ handler.EntityState[Record,handler.NoParent])error{customCalls++;if h.Input.Mode==\"mutate validation\"{row.Version=row.Version.Add(time.Hour)};",
+		"func(h *Hooks)Validate(_ context.Context,_ *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{", "func(h *Hooks)Validate(_ context.Context,row *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{customCalls++;if h.Input.Mode==\"mutate validation\"{row.Version=row.Version.Add(time.Hour)};",
 		`success:=mode=="success"||mode=="override"`, `success:=mode=="success"||mode=="prepare next";if mode=="mismatch"||mode=="missing"||mode=="missing previous"{var conflict *handler.Conflict;if !errors.As(err,&conflict)||customCalls!=0{t.Fatalf("typed conflict/order: %v calls=%d",err,customCalls)}}`,
 	).Replace(programSQLiteFixture)
 	source = strings.NewReplacer("{{FACTORY}}", asset.Factory, "{{DEFINITION}}", asset.Definition).Replace(source)

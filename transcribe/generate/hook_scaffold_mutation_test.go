@@ -16,10 +16,11 @@ import (
 const mutationHookFixture = `package orders
 import("context";h "github.com/viant/xdatly/handler")
 type Row struct{}
+type Output struct{}
 type Hooks struct{}
-func(*Hooks) Init(context.Context,*Row,h.EntityState[Row,h.NoParent])error{return nil}
-func(*Hooks) Validate(context.Context,*Row,h.EntityState[Row,h.NoParent])error{return nil}
-func(*Hooks) AfterQueue(context.Context,*Row,h.EntityState[Row,h.NoParent])error{return nil}
+func(*Hooks) Init(context.Context,*Row,h.LifecycleContext[Row,h.NoParent,Output])error{return nil}
+func(*Hooks) Validate(context.Context,*Row,h.LifecycleContext[Row,h.NoParent,Output])error{return nil}
+func(*Hooks) AfterQueue(context.Context,*Row,h.LifecycleContext[Row,h.NoParent,Output])error{return nil}
 `
 
 func testMutationScaffoldAsset(t *testing.T) *HookScaffoldAsset {
@@ -59,7 +60,7 @@ func TestMutationScaffoldNativeSourceContracts(t *testing.T) {
 		{name: "optional method removed", actual: source[:strings.Index(source, "func(*Hooks) AfterQueue")]},
 		{name: "value receiver", actual: strings.ReplaceAll(source, "(*Hooks)", "(Hooks)")},
 		{name: "wrong result", actual: strings.Replace(source, ")error", ")string", 1), want: "incompatible signature"},
-		{name: "variadic state", actual: strings.Replace(source, ",h.EntityState", ",...h.EntityState", 1), want: "incompatible signature"},
+		{name: "variadic state", actual: strings.Replace(source, ",h.LifecycleContext", ",...h.LifecycleContext", 1), want: "incompatible signature"},
 		{name: "required method removed", actual: strings.Replace(source, " Init(", " CustomInit(", 1), want: "requires Init"},
 		{name: "parent contract changed", actual: strings.Replace(source, "h.NoParent", "Row", 1), want: "incompatible signature"},
 		{name: "wrong package", actual: strings.Replace(source, "package orders", "package other", 1), want: "differs from generated package"},

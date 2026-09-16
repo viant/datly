@@ -141,7 +141,7 @@ func (e *mutationHookEmitter) hookType(ref spec.TypeRef) (ast.Expr, error) {
 
 func (e *mutationHookEmitter) file() (*ast.File, error) {
 	file := &ast.File{Name: ast.NewIdent(e.l.config.Package)}
-	hookFields := []*ast.Field{namedField("prepareAttempted", ast.NewIdent("bool")), namedField("prepared", ast.NewIdent("bool")), namedField("initAttempted", ast.NewIdent("bool")), namedField("initialized", ast.NewIdent("bool")), namedField("validateAttempted", ast.NewIdent("bool"))}
+	hookFields := []*ast.Field{namedField("output", &ast.StarExpr{X: parseExpr(e.l.config.OutputType)}), namedField("prepareAttempted", ast.NewIdent("bool")), namedField("prepared", ast.NewIdent("bool")), namedField("initAttempted", ast.NewIdent("bool")), namedField("initialized", ast.NewIdent("bool")), namedField("validateAttempted", ast.NewIdent("bool"))}
 	for _, name := range []string{"validated", "afterSequenceAttempted", "afterSequenceComplete", "afterQueueAttempted", "finalizeAttempted"} {
 		hookFields = append(hookFields, namedField(name, ast.NewIdent("bool")))
 	}

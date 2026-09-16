@@ -135,7 +135,8 @@ create-once application hook file. For an existing hook type, author
 `lifecycle_type(viewAlias, 'hooks.OrderHooks')` in the DQL projection and import its
 Go package. A hook must match the generated entity/parent type exactly.
 
-`EntityHooks[T,P]` supplies Init and Validate on one invocation-scoped object.
+`EntityHooks[T,P,O]` supplies Init and Validate on one invocation-scoped object;
+each callback receives `LifecycleContext[T,P,O]` with the shared typed output.
 Init uses marker-aware setters when changing business values. Validate checks
 business rules without mutating the working values, markers or Previous snapshot.
 `AfterSequence` observes allocated IDs; `AfterQueue` observes buffered work.

@@ -94,12 +94,14 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 			return fmt.Errorf("entity hook view %s has no entity metadata", record.Identity)
 		}
 		request := compiler.EntityHookRequest{Hook: view.EntityHooks, Entity: entity, Parent: parent}
-		if parent == "" && c.generated.Input.Type != "" && c.generated.Output.Type != "" {
-			request.Input, err = c.generated.CanonicalType(c.generation.input.TargetPackage, c.generated.Input.Type)
+		if c.generated.Output.Type != "" {
+			request.Output, err = c.generated.CanonicalType(c.generation.input.TargetPackage, c.generated.Output.Type)
 			if err != nil {
 				return err
 			}
-			request.Output, err = c.generated.CanonicalType(c.generation.input.TargetPackage, c.generated.Output.Type)
+		}
+		if parent == "" && c.generated.Input.Type != "" {
+			request.Input, err = c.generated.CanonicalType(c.generation.input.TargetPackage, c.generated.Input.Type)
 			if err != nil {
 				return err
 			}

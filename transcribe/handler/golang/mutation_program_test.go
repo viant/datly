@@ -49,27 +49,29 @@ type Marker struct{Id,Name bool}
 ` + "type Record struct{Id *int64 `sqlx:\"id,primaryKey\"`;Name string `sqlx:\"name\"`;Has *Marker `setMarker:\"true\" sqlx:\"-\"`}\n" +
 	"type Previous struct{Id *int64 `sqlx:\"id\"`;Name string `sqlx:\"name\"`}\n" + `
 type Input struct{Events []*Record;CurrentEvents []*Previous;Mode string}
-type Output struct{Data []*Record}
+type Output struct{Data []*Record;Violations []string}
 func(i *Input)Init(context.Context)error{for _,row:=range i.CurrentEvents{*row.Id=99;row.Name="corrupted"};return nil}
-` + "type Hooks struct{Input *Input `bind:\"kind=input\"`;initialized,sequenced,queued int}\n" + `
+` + "type Hooks struct{Input *Input `bind:\"kind=input\"`;output *Output;initialized,sequenced,queued int}\n" + `
 var callbackError=errors.New("hook failed")
 var outcomes []handler.Outcome
 var finalizerKinds []string
 type completion struct{}
 func(*completion)Finalize(_ context.Context,_ *Input,_ *Output,outcome handler.Outcome)error{outcomes=append(outcomes,outcome.Clone());finalizerKinds=append(finalizerKinds,"definition");return nil}
-func(h *Hooks)Init(ctx context.Context,row *Record,state handler.EntityState[Record,handler.NoParent])error{
+func(h *Hooks)Init(ctx context.Context,row *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{
  if h.Input==nil||!state.Original.Has("Id")||!state.Original.Has("Name"){return errors.New("canonical input or presence lost")}
+ if state.Output==nil{return errors.New("lifecycle output missing")};if h.output==nil{h.output=state.Output};if h.output!=state.Output{return errors.New("lifecycle output changed")}
  if state.Previous!=nil&&(*state.Previous.Id!=1||state.Previous.Name!="old"){return errors.New("previous snapshot changed")}
  h.initialized++;return nil
 }
-func(h *Hooks)Validate(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{if h.initialized!=2{return errors.New("hook lifetime differs")};if h.Input.Mode=="validate"{return callbackError};return nil}
-func(h *Hooks)AfterSequence(context.Context,*Record,handler.EntityState[Record,handler.NoParent])error{h.sequenced++;return nil}
-func(h *Hooks)AfterQueue(_ context.Context,row *Record,_ handler.EntityState[Record,handler.NoParent])error{
+func(h *Hooks)Validate(_ context.Context,_ *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{if h.initialized!=2{return errors.New("hook lifetime differs")};if state.Output!=h.output{return errors.New("validate output differs")};if h.Input.Mode=="validate"{state.Output.Violations=append(state.Output.Violations,"invalid record");return callbackError};return nil}
+func(h *Hooks)AfterSequence(_ context.Context,_ *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{if state.Output!=h.output{return errors.New("sequence output differs")};h.sequenced++;return nil}
+func(h *Hooks)AfterQueue(_ context.Context,row *Record,state handler.LifecycleContext[Record,handler.NoParent,Output])error{
+ if state.Output!=h.output{return errors.New("queue output differs")}
  if h.sequenced!=2{return errors.New("sequence hook order lost")};h.queued++
  if h.Input.Mode=="queue"{return callbackError};if h.Input.Mode=="mutate queued"{*row.Id=88};return nil
 }
 func(h *Hooks)Finalize(ctx context.Context,input *Input,output *Output,outcome handler.Outcome)error{
- if input!=h.Input{return errors.New("finalizer input differs")}
+ if input!=h.Input||output!=h.output{return errors.New("finalizer contracts differ")}
  if outcome.CommitConfirmed()&&(h.queued!=2||len(output.Data)!=2||*output.Data[0].Id!=1||*output.Data[1].Id!=2){return errors.New("finalizer ran before completed output")}
  outcomes=append(outcomes,outcome.Clone());finalizerKinds=append(finalizerKinds,"root");return nil
 }
@@ -98,6 +100,7 @@ func TestProgram(t *testing.T){
   expected:=[]row{{Id:1,Name:"old"}}
   if success{expected=[]row{{Id:1,Name:"updated"},{Id:2,Name:"inserted"}};output:=result.(*Output);if len(output.Data)!=2||output.Data[0]!=events[0]||*output.Data[0].Id!=1||*output.Data[1].Id!=2{t.Fatal("output is not reconciled request body")}}
   if mode=="validate"||mode=="queue"{if !errors.Is(err,callbackError){t.Fatalf("error cause lost: %v",err)}}
+  if mode=="validate"{output:=result.(*Output);if len(output.Violations)!=1||output.Violations[0]!="invalid record"{t.Fatalf("validation output=%+v",output)}}
   h.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT id,name FROM records ORDER BY id"},expected)
  })}
 }

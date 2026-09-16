@@ -25,13 +25,14 @@ func (e *mutationHookEmitter) commonGuards() []ast.Stmt {
 func (e *mutationHookEmitter) prepare() ast.Decl {
 	hooks := ast.NewIdent(e.receiver)
 	body := e.commonGuards()
+	body = append(body, e.guard(&ast.BinaryExpr{X: ast.NewIdent("output"), Op: token.EQL, Y: ast.NewIdent("nil")}, "mutation hook output is required"))
 	for _, role := range e.roles {
 		if role.bind {
 			body = append(body, e.guard(&ast.BinaryExpr{X: ast.NewIdent(e.binder), Op: token.EQL, Y: ast.NewIdent("nil")}, "mutation hook binder is required"))
 			break
 		}
 	}
-	body = append(body, e.guard(selectExpr(hooks, "prepareAttempted"), "mutation hooks were already prepared"), assignStmt(selectExpr(hooks, "prepareAttempted"), ast.NewIdent("true")))
+	body = append(body, e.guard(selectExpr(hooks, "prepareAttempted"), "mutation hooks were already prepared"), assignStmt(selectExpr(hooks, "prepareAttempted"), ast.NewIdent("true")), assignStmt(selectExpr(hooks, "output"), ast.NewIdent("output")))
 	for _, role := range e.roles {
 		body = append(body, assignStmt(selectExpr(hooks, role.hookField), callExpr(ast.NewIdent("new"), role.hook)))
 		if role.bind {
@@ -39,7 +40,7 @@ func (e *mutationHookEmitter) prepare() ast.Decl {
 		}
 	}
 	body = append(body, assignStmt(selectExpr(hooks, "prepared"), ast.NewIdent("true")), returnStmt(ast.NewIdent("nil")))
-	return e.method("Prepare", []*ast.Field{namedField(e.context, selectExpr(ast.NewIdent(e.l.contextAlias), "Context")), namedField(e.binder, selectExpr(ast.NewIdent(e.l.handlerAlias), "Binder"))}, body)
+	return e.method("Prepare", []*ast.Field{namedField(e.context, selectExpr(ast.NewIdent(e.l.contextAlias), "Context")), namedField(e.binder, selectExpr(ast.NewIdent(e.l.handlerAlias), "Binder")), namedField("output", &ast.StarExpr{X: parseExpr(e.l.config.OutputType)})}, body)
 }
 
 func (e *mutationHookEmitter) bindGuard(role mutationHookRole) ast.Stmt {
@@ -58,7 +59,13 @@ func (e *mutationHookEmitter) phase(name string) ast.Decl {
 	}
 	for _, role := range e.roles {
 		missing := &ast.BinaryExpr{X: &ast.BinaryExpr{X: frame, Op: token.EQL, Y: ast.NewIdent("nil")}, Op: token.LOR, Y: &ast.BinaryExpr{X: selectExpr(frame, "Entity"), Op: token.EQL, Y: ast.NewIdent("nil")}}
-		call := callExpr(selectExpr(selectExpr(hooks, role.hookField), name), ast.NewIdent(e.context), selectExpr(frame, "Entity"), selectExpr(frame, "State"))
+		var parent ast.Expr = selectExpr(ast.NewIdent(e.l.handlerAlias), "NoParent")
+		if role.parent != nil {
+			parent = parseExpr(role.parent.value.base)
+		}
+		lifecycleType := &ast.IndexListExpr{X: selectExpr(ast.NewIdent(e.l.handlerAlias), "LifecycleContext"), Indices: []ast.Expr{parseExpr(role.record.value.base), parent, parseExpr(e.l.config.OutputType)}}
+		lifecycle := &ast.CompositeLit{Type: lifecycleType, Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent("EntityState"), Value: selectExpr(frame, "State")}, &ast.KeyValueExpr{Key: ast.NewIdent("Output"), Value: selectExpr(hooks, "output")}}}
+		call := callExpr(selectExpr(selectExpr(hooks, role.hookField), name), ast.NewIdent(e.context), selectExpr(frame, "Entity"), lifecycle)
 		loop := []ast.Stmt{e.guard(missing, "entity hook "+role.record.plan.Identity+" "+name+" requires a non-nil frame and entity"), errorGuard(callExpr(selectExpr(ast.NewIdent(e.context), "Err"))), errorGuard(call)}
 		body = append(body, &ast.RangeStmt{Key: ast.NewIdent("_"), Value: frame, Tok: token.DEFINE, X: selectExpr(frames, role.field), Body: &ast.BlockStmt{List: loop}})
 	}

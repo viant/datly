@@ -273,7 +273,7 @@ type RecordHooks struct {
 func (h *RecordHooks) Init(
     ctx context.Context,
     current *Record,
-    state handler.EntityState[Record, handler.NoParent],
+    state handler.LifecycleContext[Record, handler.NoParent, Output],
 ) error {
     return nil
 }
@@ -281,7 +281,7 @@ func (h *RecordHooks) Init(
 func (h *RecordHooks) Validate(
     ctx context.Context,
     current *Record,
-    state handler.EntityState[Record, handler.NoParent],
+    state handler.LifecycleContext[Record, handler.NoParent, Output],
 ) error {
     return nil
 }
@@ -289,13 +289,14 @@ func (h *RecordHooks) Validate(
 
 The empty bodies above show the verified signature, not complete application validation. Implement the requested business behavior.
 
-`EntityState[T, P]` supplies:
+`LifecycleContext[T, P, O]` embeds `EntityState[T, P]` and supplies:
 
 - `Previous *T`: detached database projection, treated as read-only.
 - `PreviousFields`: actual loaded-field evidence, using canonical Go names. An unselected field is not a known zero.
 - `Original`: immutable original suppliedness, also using canonical Go names.
 - `Parent *P`: the enclosing declared relation parent; root uses `handler.NoParent` with nil parent.
 - `SelfParent *T`: the immediate self-edge parent, nil at a self-tree root. Self descendants retain their enclosing `Parent`.
+- `Output *O`: the shared invocation-owned component response; it remains available when a hook returns a validation error.
 
 Instantiate and bind one hook object per view/role per invocation. Reuse it across `Init`, `Validate`, optional `AfterSequence`, optional `AfterQueue`, and supported root finalization. Do not share mutable request hook state globally. Application input/configuration/logger/message-bus dependencies belong on the hook object through normal scoped binding; entity types need not acquire an `any` parent or a large session facade.
 
@@ -304,7 +305,7 @@ Use exact generic signatures and canonical package identities. A different paren
 ### Child lifecycle with a typed parent
 
 For the declared `Order → Items` relation, `lifecycle_type(items, 'ItemLifecycle')`
-selects a lifecycle whose state is `EntityState[Item, Order]`. Replace its generated
+selects a lifecycle whose state is `LifecycleContext[Item, Order, Output]`. Replace its generated
 `Validate` body with application logic such as the following (imports: `context`,
 `fmt`, `time`, and `xhandler "github.com/viant/xdatly/handler"`):
 
@@ -312,7 +313,7 @@ selects a lifecycle whose state is `EntityState[Item, Order]`. Replace its gener
 func (hooks *ItemLifecycle) Validate(
     ctx context.Context,
     item *Item,
-    state xhandler.EntityState[Item, Order],
+    state xhandler.LifecycleContext[Item, Order, Output],
 ) error {
     order := state.Parent
     if order == nil {
@@ -536,7 +537,7 @@ identity parts. Zero identity parts retain their normal Has-based meaning.
 An omitted row, omitted collection, empty collection, or false flag never
 requests deletion. Other supplied rows retain the normal insert/update policy.
 
-The child lifecycle receives `EntityState[Item, Order]`: `state.Parent` is typed,
+The child lifecycle receives `LifecycleContext[Item, Order, Output]`: `state.Parent` is typed,
 `state.Previous` is the matched child, and `item.ShouldDelete` is available to
 business validation. Delete payloads may contain only identity and flag; framework
 INSERT/UPDATE required/reference checks do not require business fields on them.

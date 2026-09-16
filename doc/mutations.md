@@ -229,22 +229,22 @@ Each generated body initially contains only `return nil`:
 type OrderLifecycle struct{}
 
 func (hooks *OrderLifecycle) Init(ctx context.Context, entity *Order,
-    state xhandler.EntityState[Order, xhandler.NoParent]) error {
+    state xhandler.LifecycleContext[Order, xhandler.NoParent, OrdersOutput]) error {
     return nil
 }
 
 func (hooks *OrderLifecycle) Validate(ctx context.Context, entity *Order,
-    state xhandler.EntityState[Order, xhandler.NoParent]) error {
+    state xhandler.LifecycleContext[Order, xhandler.NoParent, OrdersOutput]) error {
     return nil
 }
 
 func (hooks *OrderLifecycle) AfterSequence(ctx context.Context, entity *Order,
-    state xhandler.EntityState[Order, xhandler.NoParent]) error {
+    state xhandler.LifecycleContext[Order, xhandler.NoParent, OrdersOutput]) error {
     return nil
 }
 
 func (hooks *OrderLifecycle) AfterQueue(ctx context.Context, entity *Order,
-    state xhandler.EntityState[Order, xhandler.NoParent]) error {
+    state xhandler.LifecycleContext[Order, xhandler.NoParent, OrdersOutput]) error {
     return nil
 }
 
@@ -255,13 +255,13 @@ func (hooks *OrderLifecycle) Finalize(ctx context.Context, input *OrdersInput,
 ```
 
 Here `xhandler` imports `github.com/viant/xdatly/handler`. Child methods use
-`EntityState[Item, Order]`, so they have a typed parent. Keep methods you do not
-need as no-ops.
+`LifecycleContext[Item, Order, OrdersOutput]`, so they have a typed parent and
+the invocation-owned response. Keep methods you do not need as no-ops.
 
 ### Child lifecycle with a typed parent
 
 For the declared `Order → Items` relation, `lifecycle_type(items, 'ItemLifecycle')`
-selects a lifecycle whose state is `EntityState[Item, Order]`. Replace its generated
+selects a lifecycle whose state is `LifecycleContext[Item, Order, OrdersOutput]`. Replace its generated
 `Validate` body with application logic such as the following (imports: `context`,
 `fmt`, `time`, and `xhandler "github.com/viant/xdatly/handler"`):
 
@@ -269,7 +269,7 @@ selects a lifecycle whose state is `EntityState[Item, Order]`. Replace its gener
 func (hooks *ItemLifecycle) Validate(
     ctx context.Context,
     item *Item,
-    state xhandler.EntityState[Item, Order],
+    state xhandler.LifecycleContext[Item, Order, OrdersOutput],
 ) error {
     order := state.Parent
     if order == nil {
@@ -295,7 +295,7 @@ Add `fmt` to the file's imports and replace the existing `Validate` body with:
 
 ```go
 func (hooks *OrderLifecycle) Validate(ctx context.Context, entity *Order,
-    state xhandler.EntityState[Order, xhandler.NoParent]) error {
+    state xhandler.LifecycleContext[Order, xhandler.NoParent, OrdersOutput]) error {
     if entity.WindowStart != nil && entity.WindowEnd != nil &&
         entity.WindowStart.After(*entity.WindowEnd) {
         return fmt.Errorf("start must not exceed end")
@@ -406,7 +406,7 @@ and [generated policy phases](../transcribe/handler/golang/mutation_program.go).
 The direct generated row-writing path can call
 `InitWrite(context.Context) error` and `ValidateWrite(context.Context) error` on
 typed entities after the generated identity/link preparation and before DML.
-These are not aliases for `EntityHooks[T,P].Init/Validate`: they belong to a
+These are not aliases for `EntityHooks[T,P,O].Init/Validate`: they belong to a
 different generated orchestration seam. Custom handlers must invoke the policy
 and capabilities they intend to use.
 
@@ -507,9 +507,10 @@ A composite identity compares every key part. Working entities are associated
 with their original capture and matched Previous row; the generator does not
 pair rows by slice position or use one unqualified ID map for the entire graph.
 
-The lifecycle receives the resulting typed state: `EntityState[Item, Order]`
-provides the current parent and the matched Previous item. A deeper child receives
-its own declared parent type. Recursive self-relations also expose `SelfParent`.
+The lifecycle receives the resulting typed context:
+`LifecycleContext[Item, Order, OrdersOutput]` provides the current parent, the
+matched Previous item and `Output *OrdersOutput`. A deeper child receives its
+own declared parent type. Recursive self-relations also expose `SelfParent`.
 If the schema defines identity as a parent key plus a local child key, both parts
 must participate in that composite identity.
 
@@ -630,13 +631,13 @@ type OrderLifecycle struct {
 }
 
 func (h *OrderLifecycle) Init(ctx context.Context, row *Order,
-    state handler.EntityState[Order, handler.NoParent]) error {
+    state handler.LifecycleContext[Order, handler.NoParent, Output]) error {
     // Apply defaults with generated marker-aware setters.
     return nil
 }
 
 func (h *OrderLifecycle) Validate(ctx context.Context, row *Order,
-    state handler.EntityState[Order, handler.NoParent]) error {
+    state handler.LifecycleContext[Order, handler.NoParent, Output]) error {
     if row.WindowStart != nil && row.WindowEnd != nil &&
         row.WindowStart.After(*row.WindowEnd) {
         return fmt.Errorf("start must not exceed end")
@@ -932,9 +933,10 @@ identity parts. Zero identity parts retain their normal Has-based meaning.
 An omitted row, omitted collection, empty collection, or false flag never
 requests deletion. Other supplied rows retain the normal insert/update policy.
 
-The child lifecycle receives `EntityState[Item, Order]`: `state.Parent` is typed,
-`state.Previous` is the matched child, and `item.ShouldDelete` is available to
-business validation. Delete payloads may contain only identity and flag; framework
+The child lifecycle receives `LifecycleContext[Item, Order, Output]`:
+`state.Parent` is typed, `state.Previous` is the matched child, `state.Output`
+is the shared response, and `item.ShouldDelete` is available to business
+validation. Delete payloads may contain only identity and flag; framework
 INSERT/UPDATE required/reference checks do not require business fields on them.
 `Validate` remains read-only. Deleting a parent does not generate child actions.
 Explicitly marked descendants queue before their marked ancestors; a supplied

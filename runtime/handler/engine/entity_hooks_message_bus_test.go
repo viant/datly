@@ -26,15 +26,15 @@ type notifyingEntityHooks struct {
 	finalized int
 }
 
-var _ xhandler.EntityHooks[messageHookEntity, xhandler.NoParent] = (*notifyingEntityHooks)(nil)
+var _ xhandler.EntityHooks[messageHookEntity, xhandler.NoParent, messageHookEntity] = (*notifyingEntityHooks)(nil)
 var _ mutation.Finalizer[messageHookInput, messageHookEntity] = (*notifyingEntityHooks)(nil)
 
-func (h *notifyingEntityHooks) Init(_ context.Context, entity *messageHookEntity, _ xhandler.EntityState[messageHookEntity, xhandler.NoParent]) error {
+func (h *notifyingEntityHooks) Init(_ context.Context, entity *messageHookEntity, _ xhandler.LifecycleContext[messageHookEntity, xhandler.NoParent, messageHookEntity]) error {
 	entity.Value = h.Input.Value
 	return nil
 }
 
-func (h *notifyingEntityHooks) Validate(_ context.Context, entity *messageHookEntity, _ xhandler.EntityState[messageHookEntity, xhandler.NoParent]) error {
+func (h *notifyingEntityHooks) Validate(_ context.Context, entity *messageHookEntity, _ xhandler.LifecycleContext[messageHookEntity, xhandler.NoParent, messageHookEntity]) error {
 	// Application policy decides whether this mutation warrants a message.
 	if entity.Value >= 10 {
 		copy := *entity
@@ -123,7 +123,7 @@ func TestMutationHookMessageBusPublishesAfterCommitSQLite(t *testing.T) {
 						return nil, fmt.Errorf("wrong scoped hook dependencies")
 					}
 					entity := &messageHookEntity{ID: 1}
-					state := xhandler.EntityState[messageHookEntity, xhandler.NoParent]{}
+					state := xhandler.LifecycleContext[messageHookEntity, xhandler.NoParent, messageHookEntity]{Output: entity}
 					if err := hooks.Init(ctx, entity, state); err != nil {
 						return nil, err
 					}

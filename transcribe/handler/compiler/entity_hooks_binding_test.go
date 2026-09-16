@@ -11,19 +11,19 @@ import (
 
 type scalarEntityHooks int
 
-func (*scalarEntityHooks) Init(context.Context, *hookEntity, h.EntityState[hookEntity, h.NoParent]) error {
+func (*scalarEntityHooks) Init(context.Context, *hookEntity, h.LifecycleContext[hookEntity, h.NoParent, hookOutput]) error {
 	return nil
 }
-func (*scalarEntityHooks) Validate(context.Context, *hookEntity, h.EntityState[hookEntity, h.NoParent]) error {
+func (*scalarEntityHooks) Validate(context.Context, *hookEntity, h.LifecycleContext[hookEntity, h.NoParent, hookOutput]) error {
 	return nil
 }
 
 type sliceEntityHooks []string
 
-func (*sliceEntityHooks) Init(context.Context, *hookEntity, h.EntityState[hookEntity, h.NoParent]) error {
+func (*sliceEntityHooks) Init(context.Context, *hookEntity, h.LifecycleContext[hookEntity, h.NoParent, hookOutput]) error {
 	return nil
 }
-func (*sliceEntityHooks) Validate(context.Context, *hookEntity, h.EntityState[hookEntity, h.NoParent]) error {
+func (*sliceEntityHooks) Validate(context.Context, *hookEntity, h.LifecycleContext[hookEntity, h.NoParent, hookOutput]) error {
 	return nil
 }
 
@@ -31,10 +31,10 @@ type injectedEntityHooks struct {
 	Input any `bind:"kind=input"`
 }
 
-func (*injectedEntityHooks) Init(context.Context, *hookEntity, h.EntityState[hookEntity, h.NoParent]) error {
+func (*injectedEntityHooks) Init(context.Context, *hookEntity, h.LifecycleContext[hookEntity, h.NoParent, hookOutput]) error {
 	return nil
 }
-func (*injectedEntityHooks) Validate(context.Context, *hookEntity, h.EntityState[hookEntity, h.NoParent]) error {
+func (*injectedEntityHooks) Validate(context.Context, *hookEntity, h.LifecycleContext[hookEntity, h.NoParent, hookOutput]) error {
 	return nil
 }
 
@@ -54,7 +54,7 @@ func TestEntityHookContractsAcrossUnderlyingKinds(t *testing.T) {
 	compiler := EntityHookCompiler{Types: resolver}
 	for _, typ := range types {
 		t.Run(typ.Name(), func(t *testing.T) {
-			_, err := compiler.Compile(EntityHookRequest{Hook: typ.Name(), Entity: location + ".hookEntity"})
+			_, err := compiler.Compile(EntityHookRequest{Hook: typ.Name(), Entity: location + ".hookEntity", Output: location + ".hookOutput"})
 			if err != nil {
 				t.Fatal(err)
 			}

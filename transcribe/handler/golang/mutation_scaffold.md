@@ -12,8 +12,9 @@ by orchestration. It never derives a lifecycle name from an entity or factory.
 Unbound roles remain hookless. Known authored hooks retain their authority.
 Different typed parent contracts require explicitly distinct lifecycle names.
 
-The empty methods implement the SDK's existing `EntityHooks[T,P]`,
-`AfterSequenceHook[T,P]` and `AfterQueueHook[T,P]` contracts. The root also gets
+The empty methods implement the SDK's `EntityHooks[T,P,O]`,
+`AfterSequenceHook[T,P,O]` and `AfterQueueHook[T,P,O]` contracts. Each receives
+`LifecycleContext[T,P,O]` with the invocation-owned output. The root also gets
 `Finalize(ctx, input, output, outcome) error`. Root state uses `NoParent`;
 children use their declared parent's entity type. Self descendants retain that
 role's declared parent type and receive the self ancestor through `SelfParent`.

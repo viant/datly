@@ -78,13 +78,13 @@ func TestMutationScaffoldTypedRolesAndImmutablePlan(t *testing.T) {
 	fixture := fmt.Sprintf(`package fixture
 import("context";"testing";h "github.com/viant/xdatly/handler";m "github.com/viant/xdatly/handler/mutation")
 type Order struct{Items []*Node};type Node struct{Details,Children []*Node};type Input struct{Orders []*Order};type Output struct{Data []*Order}
-var _ h.EntityHooks[Order,h.NoParent]=(*%s)(nil)
-var _ h.EntityHooks[Node,Order]=(*%s)(nil)
-var _ h.EntityHooks[Node,Node]=(*%s)(nil)
-var _ h.AfterSequenceHook[Node,Order]=(*%s)(nil)
-var _ h.AfterQueueHook[Node,Order]=(*%s)(nil)
+var _ h.EntityHooks[Order,h.NoParent,Output]=(*%s)(nil)
+var _ h.EntityHooks[Node,Order,Output]=(*%s)(nil)
+var _ h.EntityHooks[Node,Node,Output]=(*%s)(nil)
+var _ h.AfterSequenceHook[Node,Order,Output]=(*%s)(nil)
+var _ h.AfterQueueHook[Node,Order,Output]=(*%s)(nil)
 var _ m.Finalizer[Input,Output]=(*%s)(nil)
-func TestTypedState(t *testing.T){ctx:=context.Background();state:=h.EntityState[Node,Order]{Parent:&Order{},SelfParent:&Node{}};hooks:=&%s{};if err:=hooks.Init(ctx,&Node{},state);err!=nil{t.Fatal(err)};if err:=hooks.Validate(ctx,&Node{},state);err!=nil{t.Fatal(err)}}
+func TestTypedState(t *testing.T){ctx:=context.Background();output:=&Output{};state:=h.LifecycleContext[Node,Order,Output]{EntityState:h.EntityState[Node,Order]{Parent:&Order{},SelfParent:&Node{}},Output:output};hooks:=&%s{};if err:=hooks.Init(ctx,&Node{},state);err!=nil{t.Fatal(err)};if err:=hooks.Validate(ctx,&Node{},state);err!=nil{t.Fatal(err)}}
 `, names[0], names[1], names[2], names[1], names[1], names[0], names[1])
 	if err = os.WriteFile(filepath.Join(root, "hooks_test.go"), []byte(fixture), 0644); err != nil {
 		t.Fatal(err)

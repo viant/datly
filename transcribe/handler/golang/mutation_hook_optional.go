@@ -17,10 +17,12 @@ func (e *mutationHookEmitter) optionalPhase(name, contract, prerequisite, attemp
 		if role.parent != nil {
 			parent = parseExpr(role.parent.value.base)
 		}
-		capability := &ast.IndexListExpr{X: selectExpr(id(e.l.handlerAlias), contract), Indices: []ast.Expr{parseExpr(role.record.value.base), parent}}
+		capability := &ast.IndexListExpr{X: selectExpr(id(e.l.handlerAlias), contract), Indices: []ast.Expr{parseExpr(role.record.value.base), parent, parseExpr(e.l.config.OutputType)}}
 		assertion := &ast.TypeAssertExpr{X: callExpr(id("any"), selectExpr(hooks, role.hookField)), Type: capability}
 		missing := &ast.BinaryExpr{X: &ast.BinaryExpr{X: frame, Op: token.EQL, Y: id("nil")}, Op: token.LOR, Y: &ast.BinaryExpr{X: selectExpr(frame, "Entity"), Op: token.EQL, Y: id("nil")}}
-		loop := []ast.Stmt{e.guard(missing, "entity hook "+name+" requires an entity frame"), errorGuard(callExpr(selectExpr(id(e.context), "Err"))), errorGuard(callExpr(selectExpr(id("callback"), name), id(e.context), selectExpr(frame, "Entity"), selectExpr(frame, "State")))}
+		lifecycleType := &ast.IndexListExpr{X: selectExpr(id(e.l.handlerAlias), "LifecycleContext"), Indices: []ast.Expr{parseExpr(role.record.value.base), parent, parseExpr(e.l.config.OutputType)}}
+		lifecycle := &ast.CompositeLit{Type: lifecycleType, Elts: []ast.Expr{&ast.KeyValueExpr{Key: id("EntityState"), Value: selectExpr(frame, "State")}, &ast.KeyValueExpr{Key: id("Output"), Value: selectExpr(hooks, "output")}}}
+		loop := []ast.Stmt{e.guard(missing, "entity hook "+name+" requires an entity frame"), errorGuard(callExpr(selectExpr(id(e.context), "Err"))), errorGuard(callExpr(selectExpr(id("callback"), name), id(e.context), selectExpr(frame, "Entity"), lifecycle))}
 		body = append(body, &ast.IfStmt{Init: &ast.AssignStmt{Lhs: []ast.Expr{id("callback"), id("ok")}, Tok: token.DEFINE, Rhs: []ast.Expr{assertion}}, Cond: id("ok"), Body: &ast.BlockStmt{List: []ast.Stmt{&ast.RangeStmt{Key: id("_"), Value: frame, Tok: token.DEFINE, X: selectExpr(frames, role.field), Body: &ast.BlockStmt{List: loop}}}}})
 	}
 	if completed != "" {

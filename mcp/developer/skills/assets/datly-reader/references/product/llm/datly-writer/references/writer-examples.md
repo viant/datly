@@ -100,12 +100,12 @@ same group metadata. For an existing row with only End supplied, the generator b
 
 ~~~~go
 func (h *RecordHooks) Init(ctx context.Context, row *model.Record,
-    state handler.EntityState[model.Record, handler.NoParent]) error {
+    state handler.LifecycleContext[model.Record, handler.NoParent, Output]) error {
     // Application defaults/normalization, using marker-aware setters.
     return nil
 }
 func (h *RecordHooks) Validate(ctx context.Context, row *model.Record,
-    state handler.EntityState[model.Record, handler.NoParent]) error {
+    state handler.LifecycleContext[model.Record, handler.NoParent, Output]) error {
     // Custom checks, only after framework/schema/database validation passed.
     return nil
 }

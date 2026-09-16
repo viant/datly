@@ -35,12 +35,12 @@ func (g *handlerGeneration) prepareMutationScaffold(semantic *plan.Plan, config 
 	var contracts []compiler.EntityHookRequest
 	for _, binding := range proposal.Bindings {
 		request := compiler.EntityHookRequest{Hook: binding.Hook, Entity: binding.Entity, Parent: binding.Parent}
+		request.Output, err = resolver.Canonical(config.OutputType)
+		if err != nil {
+			return nil, err
+		}
 		if binding.Root {
 			request.Input, err = resolver.Canonical(config.InputType)
-			if err != nil {
-				return nil, err
-			}
-			request.Output, err = resolver.Canonical(config.OutputType)
 			if err != nil {
 				return nil, err
 			}
