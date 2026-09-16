@@ -13,6 +13,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
+	"go/format"
 	"path"
 	"reflect"
 	"strconv"
@@ -190,14 +191,18 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 
 	if withEmbed {
 		embedderCode := fmt.Sprintf(`
-	func (i *%vInput) EmbedFS() *embed.FS {
-		return &%vFS
-	}`, componentName, componentName)
+func (i *%vInput) EmbedFS() *embed.FS {
+	return &%vFS
+}
+`, componentName, componentName)
 		builder.WriteString(embedderCode)
 	}
 
 	result := builder.String()
 	result = c.View.Resource().ReverseSubstitutes(result)
+	if formatted, err := format.Source([]byte(result)); err == nil {
+		result = string(formatted)
+	}
 	return result
 }
 

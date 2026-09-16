@@ -2,11 +2,12 @@ package codegen
 
 import (
 	_ "embed"
+	"strings"
+
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
-	"strings"
 )
 
 //go:embed tmpl/handler/handler.gox

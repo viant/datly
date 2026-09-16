@@ -2,15 +2,17 @@ package translator
 
 import (
 	"fmt"
+	"path"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
-
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/tagly/format/text"
-	"path"
 )
 
 type (
@@ -42,11 +44,10 @@ func (v *View) applyHintSettings(namespace *Viewlet) error {
 		return fmt.Errorf("invalid view %v hint, %w, %s", v, err, viewJSONHint)
 	}
 
-	v.applyShorthands(namespace)
-	return nil
+	return v.applyShorthands(namespace)
 }
 
-func (v *View) applyShorthands(viewlet *Viewlet) {
+func (v *View) applyShorthands(viewlet *Viewlet) error {
 	if v.Self != nil {
 		v.SelfReference = v.Self
 	}
@@ -78,19 +79,61 @@ func (v *View) applyShorthands(viewlet *Viewlet) {
 	}
 
 	if len(v.Warmup) > 0 {
-		v.View.Cache.Warmup = v.buildCacheWarmup(v.Warmup, viewlet)
+		warmup, err := v.buildCacheWarmup(v.Warmup, viewlet)
+		if err != nil {
+			return err
+		}
+		v.View.Cache.Warmup = warmup
 	}
+	return nil
 }
 
-func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet) *view.Warmup {
-	if warmup == nil || viewlet.Join == nil {
-		return nil
+func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet) (*view.Warmup, error) {
+	if warmup == nil {
+		return nil, nil
 	}
 	warmup = copyWarmup(warmup)
 
-	_, refColumn := inference.ExtractRelationColumns(viewlet.Join)
+	explicitIndex, _ := warmup["IndexColumn"]
+	delete(warmup, "IndexColumn")
+	indexParameter, _ := warmup["IndexParameter"]
+	delete(warmup, "IndexParameter")
+	limit, hasLimit := warmup["Limit"]
+	delete(warmup, "Limit")
+	connector, _ := warmup["Connector"]
+	delete(warmup, "Connector")
+	var refColumn string
+	if viewlet.Join != nil {
+		_, refColumn = inference.ExtractRelationColumns(viewlet.Join)
+	}
+
 	result := &view.Warmup{
 		IndexColumn: refColumn,
+	}
+	if explicit := strings.TrimSpace(fmt.Sprint(explicitIndex)); explicit != "" && explicit != "<nil>" {
+		result.IndexColumn = explicit
+	}
+	if result.IndexColumn == "" {
+		return nil, nil
+	}
+	if parameterName := strings.TrimSpace(fmt.Sprint(indexParameter)); parameterName != "" && parameterName != "<nil>" {
+		result.IndexParameter = parameterName
+	}
+	if hasLimit {
+		limitValue := strings.TrimSpace(fmt.Sprint(limit))
+		if limitValue != "" && limitValue != "<nil>" {
+			parsed, err := strconv.Atoi(limitValue)
+			if err != nil {
+				return nil, fmt.Errorf("invalid warmup limit %q: %w", limitValue, err)
+			}
+			if parsed < 0 {
+				return nil, fmt.Errorf("invalid warmup limit %q: must be zero or greater", limitValue)
+			}
+			result.Limit = &parsed
+		}
+	}
+	if connectorName := strings.TrimSpace(fmt.Sprint(connector)); connectorName != "" && connectorName != "<nil>" {
+		result.Connector = view.NewRefConnector(connectorName)
 	}
 
 	multiSet := &view.CacheParameters{}
@@ -104,7 +147,7 @@ func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet)
 	}
 
 	result.Cases = append(result.Cases, multiSet)
-	return result
+	return result, nil
 }
 
 func copyWarmup(warmup map[string]interface{}) map[string]interface{} {
@@ -180,9 +223,13 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 			Offset:     true,
 			Projection: true,
 		}
-		if !v.ParameterDerived {
-			selector.Constraints.Filterable = []string{"*"}
-		}
+	}
+	setter.SetBoolIfFalse(&selector.Constraints.Criteria, true)
+	setter.SetBoolIfFalse(&selector.Constraints.Limit, true)
+	setter.SetBoolIfFalse(&selector.Constraints.Offset, true)
+	setter.SetBoolIfFalse(&selector.Constraints.Projection, true)
+	if len(selector.Constraints.Filterable) == 0 && !v.ParameterDerived {
+		selector.Constraints.Filterable = []string{"*"}
 	}
 
 	if querySelectors, ok := namespace.Resource.Declarations.QuerySelectors[namespace.Name]; ok {
@@ -212,7 +259,8 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 			selector.PageParameter = &parameter.Parameter
 			selector.Constraints.Page = &enabled
 		}
-		delete(namespace.Resource.Declarations.QuerySelectors, namespace.Name)
+
+		//delete(namespace.Resource.Declarations.QuerySelectors, namespace.Name)
 	}
 
 }
@@ -244,8 +292,18 @@ func (v *View) buildTemplate(namespace *Viewlet, rule *Rule) {
 	isRoot := rule.Root == v.Name
 	resource := namespace.Resource
 	v.EnsureTemplate()
-	v.Template.Source = namespace.SanitizedSQL
-	v.Template.Parameters = v.matchParameters(namespace.SanitizedSQL, resource.State, isRoot)
+	// Emit sanitized SQL as the runtime template so SQL fragments stay inline;
+	// matching still uses raw SQL to preserve the post-5e41c4ee root/predicate detection.
+	sourceSQL := namespace.SanitizedSQL
+	if sourceSQL == "" {
+		sourceSQL = namespace.SQL
+	}
+	matchSQL := namespace.SQL
+	if matchSQL == "" {
+		matchSQL = sourceSQL
+	}
+	v.Template.Source = sourceSQL
+	v.Template.Parameters = v.matchParameters(matchSQL, resource.State, isRoot)
 }
 
 // matchParameters matches parameter used by SQL, and add explicit parameter for root view
@@ -275,38 +333,60 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		if relation.KeyField == nil {
 			return fmt.Errorf("failed to add relation: %v, unknown reference", relation.Name)
 		}
-		columnName := relation.ParentField.Column.Name
-		if columnName == "" {
-			columnName = relation.ParentField.Column.Alias
-		}
-
-		viewRelation.On = append(viewRelation.On, &view.Link{
-			Column:    columnName,
-			Namespace: relation.ParentField.Column.Namespace,
-			Field:     relation.ParentField.Name,
-		})
-
 		holderFormat := text.DetectCaseFormat(relNamespace.Name)
 		viewRelation.Holder = holderFormat.Format(relNamespace.Name, text.CaseFormatUpperCamel)
 		viewRelation.IncludeColumn = true
 		relNamespace.Holder = viewRelation.Holder
 		refViewName := relNamespace.View.Name
-		refColumn := relation.KeyField.Column.Name
-		if ns := relation.KeyField.Column.Namespace; ns != "" {
-			refColumn = ns + "." + refColumn
-		}
 		if relNamespace.View.AllowNulls == nil {
 			relNamespace.View.AllowNulls = v.View.AllowNulls
 		}
-
-		refField := relation.KeyField.Name
 		aRefView := view.NewRefView(refViewName)
 		aRefView.Name = refViewName + "#"
-		viewRelation.Of = view.NewReferenceView(view.JoinOn(view.WithLink(refField, refColumn)), aRefView)
+		relLinks, refLinks := relationLinks(relation)
+		viewRelation.On = relLinks
+		viewRelation.Of = view.NewReferenceView(refLinks, aRefView)
 		viewRelation.Cardinality = relation.Cardinality
 		v.View.With = append(v.View.With, viewRelation)
 	}
 	return nil
+}
+
+func relationLinks(relation *inference.Relation) (view.Links, view.Links) {
+	pairs := relation.Pairs
+	if len(pairs) == 0 && relation.ParentField != nil && relation.KeyField != nil {
+		pairs = []*inference.RelationPair{{
+			ParentField: relation.ParentField,
+			KeyField:    relation.KeyField,
+		}}
+	}
+
+	var relLinks view.Links
+	var refLinks view.Links
+	for _, pair := range pairs {
+		if pair == nil || pair.ParentField == nil || pair.KeyField == nil {
+			continue
+		}
+		columnName := pair.ParentField.Column.Name
+		if columnName == "" {
+			columnName = pair.ParentField.Column.Alias
+		}
+		relLinks = append(relLinks, &view.Link{
+			Column:    columnName,
+			Namespace: pair.ParentField.Column.Namespace,
+			Field:     pair.ParentField.Name,
+		})
+
+		refColumn := pair.KeyField.Column.Name
+		if refColumn == "" {
+			refColumn = pair.KeyField.Column.Alias
+		}
+		if ns := pair.KeyField.Column.Namespace; ns != "" {
+			refColumn = ns + "." + refColumn
+		}
+		refLinks = append(refLinks, view.WithLink(pair.KeyField.Name, refColumn))
+	}
+	return relLinks, refLinks
 }
 
 func (v *View) GenerateFiles(baseURL string, ruleName string, files *asset.Files, substitutes view.Substitutes) {

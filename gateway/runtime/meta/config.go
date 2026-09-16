@@ -11,6 +11,8 @@ const (
 	ViewURI = "/v1/api/meta/view"
 	//OpenApiURI represents default config openapi URIPrefix
 	OpenApiURI = "/v1/api/meta/openapi"
+	//DocURI represents default Swagger UI documentation URI
+	DocURI = "/v1/api/meta/doc"
 	//CacheWarmupURI URIPrefix default value
 	CacheWarmupURI = "/v1/api/cache/warmup"
 	//StructURI URIPrefix that generates a Golang struct representation
@@ -29,6 +31,7 @@ type Config struct {
 	StatusURI     string
 	ViewURI       string
 	OpenApiURI    string
+	DocURI        string
 	CacheWarmURI  string
 	StructURI     string
 	StateURI      string
@@ -54,6 +57,9 @@ func (m *Config) Init() {
 
 	if m.OpenApiURI == "" {
 		m.OpenApiURI = OpenApiURI
+	}
+	if m.DocURI == "" {
+		m.DocURI = DocURI
 	}
 	if m.CacheWarmURI == "" {
 		m.CacheWarmURI = CacheWarmupURI

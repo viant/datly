@@ -1,0 +1,41 @@
+init:
+  parentPath: $parent.path
+
+pipeline:
+  test:
+    description: generated PATCH component updates an existing FOOS row and inserts a new one when the primary key is absent
+    action: http/runner:send
+    requests:
+      - Method: PATCH
+        URL: http://127.0.0.1:8080/v1/api/shape/dev/basic/foos
+        JsonBody:
+          ID: 4
+          Quantity: 2500
+          Name: 'changed - foo 4'
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
+
+      - Method: PATCH
+        URL: http://127.0.0.1:8080/v1/api/shape/dev/basic/foos
+        JsonBody:
+          Quantity: 1234
+          Name: 'created'
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
+
+  checkDb:
+    action: dsunit:query
+    datastore: dev
+    sql: |
+      SELECT
+        (CASE WHEN EXISTS(SELECT 1 FROM FOOS WHERE ID = 4 AND QUANTITY = 2500 AND NAME = 'changed - foo 4') THEN TRUE ELSE FALSE END) AS UPDATED_ROW,
+        (CASE WHEN EXISTS(SELECT 1 FROM FOOS WHERE ID <> 4 AND QUANTITY = 1234 AND NAME = 'created') THEN TRUE ELSE FALSE END) AS INSERTED_ROW,
+        (SELECT COUNT(*) FROM FOOS) AS TOTAL_ROWS,
+        (SELECT COUNT(*) FROM FOOS WHERE NAME = 'created' AND QUANTITY = 1234) AS INSERTED_COUNT
+    expect:
+      - UPDATED_ROW: true
+        INSERTED_ROW: true
+        TOTAL_ROWS: 11
+        INSERTED_COUNT: 1

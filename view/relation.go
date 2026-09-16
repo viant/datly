@@ -22,6 +22,7 @@ type (
 		Of            *ReferenceView    `json:",omitempty"`
 		Caser         text.CaseFormat   `json:",omitempty"`
 		Cardinality   state.Cardinality `json:",omitempty"` //IsToOne, or Many
+		Composite     bool              `json:",omitempty"`
 		On            Links
 		Holder        string `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
 		IncludeColumn bool   `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
@@ -265,6 +266,10 @@ func (r *Relation) TagLink() tags.LinkOn {
 		links = append(links, parent.EncodeLinkTag()+"="+child.EncodeLinkTag())
 	}
 	return links
+}
+
+func (r *Relation) IsComposite() bool {
+	return r != nil && (r.Composite || len(r.On) > 1)
 }
 
 func (l *Link) EncodeLinkTag() string {

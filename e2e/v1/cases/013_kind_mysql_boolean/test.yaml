@@ -1,0 +1,10 @@
+pipeline:
+  test:
+    description: MySQL boolean columns are projected with the expected output shape
+    action: http/runner:send
+    requests:
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/shape/dev/user-metadata
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parent.path}/expect.json')

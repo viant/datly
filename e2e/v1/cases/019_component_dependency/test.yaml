@@ -1,0 +1,49 @@
+init:
+  parentPath: $parent.path
+  expectReadOnly: $LoadData('${parentPath}/expect_readonly.json')
+  expectAdmin: $LoadData('${parentPath}/expect_admin.json')
+
+pipeline:
+  signReadOnly:
+    action: secret:signJWT
+    privateKey:
+      URL: ${appPath}/e2e/cloud/jwt/private.enc
+      Key: blowfish://default
+    claims:
+      userID: 1
+      firstName: Tester
+      email: tester@viantint.com
+
+  testReadOnly:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        description: component dependency resolves a sibling DQL component and gates vendor access for read-only users
+        URL: http://127.0.0.1:8080/v1/api/shape/dev/vendors/component-acl
+        Header:
+          Authorization: Bearer ${signReadOnly.TokenString}
+        Expect:
+          Code: 200
+          JSONBody: $expectReadOnly
+
+  signAdmin:
+    action: secret:signJWT
+    privateKey:
+      URL: ${appPath}/e2e/cloud/jwt/private.enc
+      Key: blowfish://default
+    claims:
+      userID: 2
+      firstName: Developer
+      email: dev@viantint.com
+
+  testAdmin:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        description: component dependency keeps query predicate filtering for non-read-only users
+        URL: http://127.0.0.1:8080/v1/api/shape/dev/vendors/component-acl?name=2
+        Header:
+          Authorization: Bearer ${signAdmin.TokenString}
+        Expect:
+          Code: 200
+          JSONBody: $expectAdmin
