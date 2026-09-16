@@ -1,11 +1,16 @@
-# Reader and writer hooks: execution flows
+# Reader hooks and generated mutation lifecycle hooks
 
 [All guides](README.md) · [DQL grammar](dql.md) · [Readers](readers.md) · [Mutations](mutations.md)
 
 Hooks connect application behavior to typed data execution. Datly supplies the
 invocation context and scoped dependencies; application hooks supply business
 preparation, validation and completion behavior. Reader row hooks and generated
-mutation hooks have different phases and contracts.
+mutation lifecycle hooks have different phases and contracts.
+
+In this guide, **mutation hooks**, **writer hooks** and **lifecycle hooks** refer
+to the callbacks attached to a writable view with `lifecycle_type`. These are
+distinct from input initialization, reader row hooks, output finalizers and
+custom Go-handler orchestration.
 
 ## Reader flow
 
@@ -48,11 +53,12 @@ See the implemented [reader hook dispatch](../sql/reader/hooks.go),
 [reader service](../sql/reader/service.go) and
 [batched hook tests](../sql/reader/batch_runtime_sqlite_test.go).
 
-## Generated writer flow
+## Generated mutation lifecycle
 
-This is the optional generated mutation policy. Custom Go handlers can
-compose the same capabilities with explicitly authored orchestration; the HTTP
-verb alone does not install this policy.
+This is the optional generated mutator policy. A `lifecycle_type` declaration
+attaches one invocation-scoped hook object to a writable entity role. Custom Go
+handlers can compose the same capabilities with explicitly authored
+orchestration; the HTTP verb alone does not install this policy.
 
 ```mermaid
 sequenceDiagram
@@ -88,7 +94,7 @@ A caller-owned transaction remains pending from this invocation's perspective.
 The order is implemented by the [mutation adapter](../runtime/handler/mutation/adapter.go)
 and [generated policy phases](../transcribe/handler/golang/mutation_program.go).
 
-## Writing-hook contracts
+## Mutation lifecycle hook contracts
 
 | Hook | What it receives and may do |
 | --- | --- |
@@ -104,9 +110,47 @@ presence. Its `Output *O` is the invocation-owned component response. A root
 uses `handler.NoParent`. Hooks may update response metadata through `Output`,
 including violations that must survive a returned validation error, but must not
 retain or concurrently use the pointer.
+
 The same invocation-scoped hook object serves its Init/Validate/observation
 callbacks and can receive input, logger, message bus or other configured scoped
 services through dependency injection. The runtime owns traversal and transactions.
+
+### Add validation details to the component output
+
+Every mutation lifecycle phase receives the same typed output pointer. A
+validation hook can therefore add structured violations before returning an
+error:
+
+```go
+type OrdersOutput struct {
+    Data       []*Order
+    Violations []*handler.Violation
+}
+
+func (hooks *OrderLifecycle) Validate(
+    ctx context.Context,
+    order *Order,
+    state handler.LifecycleContext[Order, handler.NoParent, OrdersOutput],
+) error {
+    if order.Name == "" {
+        state.Output.Violations = append(state.Output.Violations,
+            &handler.Violation{
+                Location: "orders.name",
+                Field:    "Name",
+                Check:    "required",
+                Message:  "order name is required",
+            })
+        return fmt.Errorf("order validation failed")
+    }
+    return nil
+}
+```
+
+Returning an error stops subsequent mutation phases but does not replace or
+discard the program's output object. Protocol error-body selection still follows
+the component's typed error and finalization policy. Use `Finalize` for behavior
+that depends on the resolved transaction outcome, not for collecting ordinary
+validation details.
 
 Declare an authored hook on a DQL view with:
 
@@ -136,7 +180,7 @@ previous `End` to validate an interval. Preserve loaded-field evidence: an unkno
 previous field is not a known zero value. Conflicting topology or ambiguous
 identity is an error, not a guessed association.
 
-## Hooks, dependency injection and messages
+## Mutation hooks, dependency injection and messages
 
 Use hook initialization to collect business event intent and sequence observation
 to obtain generated IDs. Publish a message that depends on committed data only
