@@ -46,6 +46,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 		param := fieldParams[field.Name]
 		if param == nil {
 			if hasTag {
+				if err := applyTimeFormat(field, &tagged); err != nil {
+					return nil, err
+				}
 				result = append(result, tagged)
 			}
 			continue
@@ -55,6 +58,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 			return nil, err
 		}
 		if ok {
+			if err := applyTimeFormat(field, &compiled); err != nil {
+				return nil, err
+			}
 			result = append(result, compiled)
 		}
 	}

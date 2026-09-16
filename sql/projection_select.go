@@ -17,6 +17,19 @@ type selectProjectionSource struct {
 	selectionKind string
 }
 
+// Authored v0 SQL resources can enclose the entire SELECT in parentheses.
+// Peel only complete enclosures, never a derived table or a UNION operand.
+func unwrapProjectionSQL(text string) string {
+	for {
+		trimmed := strings.TrimSpace(text)
+		group, end, ok := sqltext.ReadGroupString(trimmed, 0, '(', ')')
+		if !ok || end != len(trimmed) {
+			return text
+		}
+		text = strings.TrimSpace(group[1 : len(group)-1])
+	}
+}
+
 func newSelectProjectionSource(sqlText string) (selectProjectionSource, bool) {
 	lower := strings.ToLower(sqlText)
 	selectIndex := sqltext.FindTopLevelKeyword(lower, "select", 0)
@@ -52,7 +65,10 @@ func (s selectProjectionSource) parse() (*query.Select, error) {
 			continue
 		}
 		parsed, err := sqlparser.ParseQuery("SELECT " + raw + " FROM projection_source")
-		if err != nil || parsed == nil || len(parsed.List) != 1 {
+		if err != nil {
+			return nil, fmt.Errorf("source projection item %q: %w", raw, err)
+		}
+		if parsed == nil || len(parsed.List) != 1 {
 			return nil, fmt.Errorf("source projection is unresolved")
 		}
 		result.List = append(result.List, parsed.List[0])

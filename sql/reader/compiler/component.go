@@ -3,6 +3,7 @@ package compiler
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/spec"
@@ -78,7 +79,46 @@ func buildDataViewsWithType(component *spec.Component, outputType reflect.Type, 
 		return nil, err
 	}
 	view.Relations = append(view.Relations, outputRelations...)
+	if err := inheritViewConnectors(view); err != nil {
+		return nil, err
+	}
 	return result, nil
+}
+
+// Resolve defaults on the detached graph before plans are published. An
+// explicit child connector wins; an unqualified shared child must have one
+// unambiguous inherited connector, independent of traversal order.
+func inheritViewConnectors(root *data.View) error {
+	type resolved struct{ explicit, effective string }
+	seen := map[*data.View]resolved{}
+	var visit func(*data.View, string) error
+	visit = func(view *data.View, parent string) error {
+		if view == nil {
+			return nil
+		}
+		if previous, ok := seen[view]; ok {
+			if previous.explicit == "" && previous.effective != parent {
+				return fmt.Errorf("view %s inherits conflicting connectors %q and %q", view.Spec.Name, previous.effective, parent)
+			}
+			return nil
+		}
+		explicit := strings.TrimSpace(view.Connector)
+		effective := explicit
+		if effective == "" {
+			effective = parent
+		}
+		seen[view] = resolved{explicit, effective}
+		view.Connector = effective
+		for _, relation := range view.Relations {
+			if relation != nil && relation.Of != nil {
+				if err := visit(relation.Of.View, effective); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	return visit(root, "")
 }
 
 func splitOutputRelations(relations []*data.Relation) (rowRelations, outputRelations []*data.Relation) {

@@ -55,6 +55,7 @@ func TestSecurityHTTPBindingAndDiagnosticsSQLite(t *testing.T) {
 				uri = "/api/records/private-invalid"
 			}
 			if kind == "form" {
+				uri = "/api/records"
 				body = "tenant=private-invalid"
 			}
 			if kind == "body" {

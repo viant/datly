@@ -21,9 +21,12 @@ import (
 	"github.com/viant/mcp/server/auth"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
+	xcodec "github.com/viant/xdatly/codec"
 )
 
 type Options struct {
+	// Codecs supplies named application codec factories; built-in names are reserved.
+	Codecs map[string]xcodec.Factory
 	// Async supplies trusted authorization and optional AFS callbacks for Config.Jobs.
 	Async     *AsyncOptions
 	Workspace *xmodule.Workspace
@@ -80,6 +83,10 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 		return nil, fmt.Errorf("linked Async options require Jobs configuration")
 	}
 	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
+	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
+	if err != nil {
+		return nil, err
+	}
 	types, err := s.source.init(ctx, options.Registry)
 	if err != nil {
 		return nil, err
