@@ -14,8 +14,8 @@ require (
 	github.com/viant/mcp v0.23.1-0.20260914191339-228d17f0aec4
 	github.com/viant/mcp-protocol v0.17.1-0.20260914185636-cba084cedb3d
 	github.com/viant/parsly v0.3.3
-	github.com/viant/sqlparser v0.13.1-0.20260915172301-fa3ac2bfc756
-	github.com/viant/sqlx v0.26.1-0.20260915193124-0d3431bef010
+	github.com/viant/sqlparser v0.13.1-0.20260917190119-be9c94b5605c
+	github.com/viant/sqlx v0.26.1-0.20260917190326-31d8e2f51e47
 	github.com/viant/structology v0.10.1-0.20260915165514-89d421971772
 	github.com/viant/structql v0.5.4
 	github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630
@@ -100,7 +100,5 @@ require (
 )
 
 replace google.golang.org/grpc/stats/opentelemetry => google.golang.org/grpc v1.77.0
-
-replace github.com/viant/sqlparser => /Users/vcarey/Projects/go/src/github.com/viant/sqlparser
 
 exclude google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a
