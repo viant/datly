@@ -8,7 +8,8 @@ import (
 
 func (r *Collector) valueIndexer(_ context.Context, visitorRelations []*Relation) func(value interface{}) error {
 	distinctRelations := make([]*Relation, 0)
-	presenceMap := map[string]map[string]bool{}
+	distinctLinks := make(Links, 0)
+	presenceMap := map[relationIndexKey]bool{}
 	compositePresence := map[string]bool{}
 
 	for i := range visitorRelations {
@@ -21,34 +22,24 @@ func (r *Collector) valueIndexer(_ context.Context, visitorRelations []*Relation
 			compositePresence[signature] = true
 			continue
 		}
-		appended := false
 		for _, item := range visitorRelations[i].On {
-			if _, ok := presenceMap[item.Namespace]; !ok {
-				presenceMap[item.Namespace] = map[string]bool{}
-			}
-			if _, ok := presenceMap[item.Namespace][item.Column]; ok {
+			key := relationIndexIdentity(item)
+			if presenceMap[key] {
 				continue
 			}
-			if !appended {
-				distinctRelations = append(distinctRelations, visitorRelations[i])
-				appended = true
-			}
-			presenceMap[item.Namespace][item.Column] = true
+			distinctLinks = append(distinctLinks, item)
+			presenceMap[key] = true
 		}
 	}
 
 	return func(value interface{}) error {
 		ptr := xunsafe.AsPointer(value)
 		for _, rel := range distinctRelations {
-			if rel.IsComposite() {
-				r.indexCompositeValueByRel(ptr, rel, r.indexCounter)
-				continue
-			}
-			for _, link := range rel.On {
-				if field := link.XField; field != nil {
-					fieldValue := field.Value(ptr)
-					r.indexValueByRel(fieldValue, rel, r.indexCounter)
-				}
+			r.indexCompositeValueByRel(ptr, rel, r.indexCounter)
+		}
+		for _, link := range distinctLinks {
+			if field := link.XField; field != nil {
+				r.indexValueByLink(field.Value(ptr), link, r.indexCounter)
 			}
 		}
 		r.indexCounter++

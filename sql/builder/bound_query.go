@@ -40,7 +40,7 @@ func (b *Builder) ShapeBound(query *cache.ParmetrizedQuery, opts ...BuilderOptio
 	if err != nil {
 		return nil, err
 	}
-	boundSQL, args = appendAutoSelectorCriteria(boundSQL, args, options.selector, hadCriteriaToken)
+	boundSQL, args = options.appendSelectorCriteria(boundSQL, args, hadCriteriaToken)
 	boundSQL, args, err = applyPartition(boundSQL, args, options.source, options.partition)
 	if err != nil {
 		return nil, err

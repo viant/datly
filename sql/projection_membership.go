@@ -84,6 +84,7 @@ func (p SelectorProjection) HasOutput(name string) (found, complete bool, err er
 // final SELECT aliases. This prevents a projected selector from claiming an
 // output that its explicitly narrowed derived source does not expose.
 func (p SelectorProjection) HasSourceOutput(namespace, name string) (found, complete bool, err error) {
+	p.SQL = unwrapProjectionSQL(p.SQL)
 	source, ok := newSelectProjectionSource(p.SQL)
 	if !ok {
 		return false, false, &UnresolvedProjectionError{Cause: fmt.Errorf("source projection has no FROM scope")}
@@ -215,6 +216,7 @@ func (p SelectorProjection) selectColumns(columns []ProjectionColumn, selected [
 }
 
 func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
+	p.SQL = unwrapProjectionSQL(p.SQL)
 	if err := sqltext.ValidateStructure(p.SQL); err != nil {
 		return nil, false, &UnresolvedProjectionError{Cause: err}
 	}
@@ -228,7 +230,7 @@ func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
 		parsed, err = parts.parse()
 	}
 	if err != nil || parsed == nil || len(parsed.List) == 0 {
-		return nil, false, &UnresolvedProjectionError{}
+		return nil, false, &UnresolvedProjectionError{Cause: err}
 	}
 	var columns []ProjectionColumn
 	for i, item := range parsed.List {
@@ -361,6 +363,7 @@ func (p SelectorProjection) TableColumn(column *data.Column) (*data.Column, erro
 // uses this for ordering an unnarrowed wildcard, so ordinal policy and executed
 // SQL cannot disagree when prepared column order differs from table order.
 func (p SelectorProjection) Expand() (string, error) {
+	p.SQL = unwrapProjectionSQL(p.SQL)
 	columns, _, err := p.columns()
 	if err != nil {
 		return "", err

@@ -1,7 +1,6 @@
 package collector
 
 import (
-	sqlxio "github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
 )
 
@@ -9,31 +8,23 @@ import (
 //   - indexing buffered parent/collector positions
 //   - parent delegation for value/composite positions
 
-func (r *Collector) indexPositions(ns, name string) {
-	values := r.values[name]
+func (r *Collector) indexPositions(link *Link) {
+	values := r.values[link.Column]
 	if values == nil {
 		return
 	}
-	xType := r.types[name]
-	columnValues, ok := r.valuePosition[ns]
-	if !ok {
-		columnValues = map[string]map[interface{}][]int{}
-		r.valuePosition[ns] = columnValues
+	key := relationIndexIdentity(link)
+	positions := r.valuePosition[key]
+	if positions == nil {
+		positions = map[interface{}][]int{}
+		r.valuePosition[key] = positions
 	}
-	if _, ok := columnValues[name]; !ok {
-		columnValues[name] = map[interface{}][]int{}
-	}
-	for position, v := range *values {
-		if v == nil {
+	for position := range *values {
+		val, ok := r.sqlKeyAt(link.Column, position)
+		if !ok {
 			continue
 		}
-		val := xType.Deref(v)
-		val = sqlxio.NormalizeKey(val)
-		_, ok := columnValues[name][val]
-		if !ok {
-			columnValues[name][val] = make([]int, 0)
-		}
-		columnValues[name][val] = append(columnValues[name][val], position)
+		positions[val] = append(positions[val], position)
 	}
 }
 
@@ -60,17 +51,12 @@ func (r *Collector) indexCompositePositions(relation *Relation) {
 				valueSets = append(valueSets, normalizeValues(link.XField.Value(xunsafe.AsPointer(parent))))
 				continue
 			}
-			values := r.values[link.Column]
-			if values == nil || position >= len(*values) {
+			value, ok := r.sqlKeyAt(link.Column, position)
+			if !ok {
 				valueSets = nil
 				break
 			}
-			xType := r.types[link.Column]
-			if xType == nil {
-				valueSets = nil
-				break
-			}
-			valueSets = append(valueSets, normalizeValues(xType.Deref((*values)[position])))
+			valueSets = append(valueSets, normalizeValues(value))
 		}
 		if valueSets == nil {
 			continue

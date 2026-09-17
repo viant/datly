@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	requestprovider "github.com/viant/bindly/provider/request"
 	dexec "github.com/viant/datly/exec"
 	druntime "github.com/viant/datly/runtime"
 	"github.com/viant/datly/spec"
@@ -120,7 +119,7 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		}
 	}
 	pathParams, _ := h.runtime.MatchPathParams(req.Method, escapedPath)
-	requestScope, scopeErr := requestprovider.New(req, requestprovider.WithPathParams(pathParams))
+	requestScope, scopeErr := newHTTPRequestScope(req, pathParams)
 	if scopeErr != nil {
 		if h.logger != nil {
 			h.logger.Error("HTTP request preparation failed", scopeErr)

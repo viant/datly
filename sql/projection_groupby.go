@@ -114,6 +114,8 @@ func containsAggregateNode(n node.Node) bool {
 		return false
 	case *expr.Parenthesis:
 		return containsAggregateNode(actual.X)
+	case *expr.Subscript:
+		return containsAggregateNode(actual.X) || containsAggregateNode(actual.Index)
 	case *expr.Unary:
 		return containsAggregateNode(actual.X)
 	case *expr.Binary:
@@ -134,6 +136,12 @@ func containsAggregateNode(n node.Node) bool {
 		return containsAggregateNode(actual.X)
 	}
 	return false
+}
+
+// ContainsAggregate identifies expressions using the same aggregate semantics
+// as grouped projection rewriting.
+func ContainsAggregate(n node.Node) bool {
+	return containsAggregateNode(n)
 }
 
 func isAggregateFunction(name string) bool {

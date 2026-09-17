@@ -46,6 +46,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 		param := fieldParams[field.Name]
 		if param == nil {
 			if hasTag {
+				if err := applyTimeFormat(field, &tagged); err != nil {
+					return nil, err
+				}
 				result = append(result, tagged)
 			}
 			continue
@@ -55,6 +58,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 			return nil, err
 		}
 		if ok {
+			if err := applyTimeFormat(field, &compiled); err != nil {
+				return nil, err
+			}
 			result = append(result, compiled)
 		}
 	}
@@ -162,8 +168,7 @@ func newCodecTransformer(codec xcodec.Instance) xform.Transformer {
 }
 
 func (t *codecTransformer) Transform(ctx context.Context, _ locator.Resolver, input any) (any, error) {
-	if values, ok := input.([]string); ok && len(values) > 0 {
-		input = values[0]
-	}
+	// Bindly already converts to the declared codec source type. Do not collapse
+	// collection inputs; scalar codecs receive their declared scalar type.
 	return t.codec.Value(ctx, input)
 }

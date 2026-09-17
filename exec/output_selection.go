@@ -27,6 +27,18 @@ func CaptureOutputSelection(ctx context.Context) context.Context {
 	return context.WithValue(ctx, outputSelectionKey{}, &outputSelection{})
 }
 
+// CaptureChildOutputSelection isolates one explicitly delegated output read.
+// The caller must publish SelectedOutputFields(childContext, childResult) for
+// its own result, and is responsible for preserving the filter's field paths.
+// Ordinary child/input/sibling reads never inherit this publication authority.
+func CaptureChildOutputSelection(ctx context.Context) context.Context {
+	if !WantsOutputSelection(ctx) {
+		return ctx
+	}
+	ctx = context.WithValue(ctx, outputSelectionFrameKey{}, (*outputSelection)(nil))
+	return CaptureOutputSelection(ctx)
+}
+
 // ScopeOutputSelection shadows parent state at every canonical component entry.
 // Only the outer frame can publish to the transport, after its handler returns.
 func ScopeOutputSelection(ctx context.Context) (context.Context, func(any, error)) {

@@ -100,10 +100,16 @@ func (c *graphCompiler) compileRelation(metadata *data.Relation, parentType refl
 		compiled.Of = &RelationRef{
 			RelationRef: metadata.Of,
 			View:        child,
-			On:          compileLinks(metadata.Of.On, c.rowTypes[metadata.Of.View]),
+		}
+		compiled.Of.On, err = compileLinks(metadata.Of.On, c.rowTypes[metadata.Of.View])
+		if err != nil {
+			return nil, fmt.Errorf("relation %s child keys: %w", metadata.Name, err)
 		}
 	}
-	compiled.On = compileLinks(metadata.On, parentType)
+	compiled.On, err = compileLinks(metadata.On, parentType)
+	if err != nil {
+		return nil, fmt.Errorf("relation %s parent keys: %w", metadata.Name, err)
+	}
 	if !metadata.IsOutput() && parentType != nil && strings.TrimSpace(metadata.Holder) != "" {
 		compiled.HolderField = xunsafe.FieldByName(parentType, metadata.Holder)
 		if compiled.HolderField == nil {
@@ -116,30 +122,47 @@ func (c *graphCompiler) compileRelation(metadata *data.Relation, parentType refl
 	return compiled, nil
 }
 
-func compileLinks(metadata data.Links, rowType reflect.Type) Links {
+func compileLinks(metadata data.Links, rowType reflect.Type) (Links, error) {
 	result := make(Links, 0, len(metadata))
 	for _, link := range metadata {
 		if link == nil {
 			continue
 		}
-		result = append(result, &Link{Link: link, XField: compileScannedField(rowType, link.Field)})
+		field, source, err := compileLinkField(rowType, link.Field)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, &Link{Link: link, XField: field, KeySource: source})
 	}
-	return result
+	return result, nil
 }
 
-func compileScannedField(rowType reflect.Type, name string) *xunsafe.Field {
+func compileLinkField(rowType reflect.Type, name string) (*xunsafe.Field, KeySource, error) {
 	for rowType != nil && rowType.Kind() == reflect.Ptr {
 		rowType = rowType.Elem()
 	}
 	if rowType == nil || rowType.Kind() != reflect.Struct {
-		return nil
+		return nil, KeySourceColumn, nil
 	}
 	field, ok := rowType.FieldByName(name)
 	if !ok {
-		return nil
+		return nil, KeySourceColumn, nil
 	}
+	source := KeySourceField
 	if tag := sqlxio.ParseTag(field.Tag); tag != nil && tag.Transient {
-		return nil
+		source = KeySourceColumn
 	}
-	return xunsafe.FieldByName(rowType, name)
+	if value, present := field.Tag.Lookup("relationKey"); present {
+		if value != "hook" {
+			return nil, "", fmt.Errorf("field %s.%s has invalid relationKey %q; expected hook", rowType, name, value)
+		}
+		source = KeySourceHook
+	}
+	if source == KeySourceColumn {
+		return nil, source, nil
+	}
+	if field.PkgPath != "" {
+		return nil, "", fmt.Errorf("relation key field %s.%s must be exported", rowType, name)
+	}
+	return xunsafe.FieldByName(rowType, name), source, nil
 }

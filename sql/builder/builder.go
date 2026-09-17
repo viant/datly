@@ -226,7 +226,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	if err != nil {
 		return nil, err
 	}
-	boundSQL, args = appendAutoSelectorCriteria(boundSQL, args, options.selector, hadExplicitSelectorCriteria)
+	boundSQL, args = options.appendSelectorCriteria(boundSQL, args, hadExplicitSelectorCriteria)
 	if len(options.compositeColumns) > 0 {
 		if !options.skipRelationFilter && !prepared.parentHandled && !compositeInjected && !prepared.hadRelationCriteria {
 			boundSQL, args = appendCompositeWhere(boundSQL, args, options.compositeRows, options.compositeColumns, options.dialect)
@@ -386,6 +386,7 @@ type builderOptions struct {
 	skipRelationFilter     bool
 	selectorPolicy         *spec.Selector
 	criteriaCompiler       *criteria.Compiler
+	criteriaHaving         bool
 	excludePagination      bool
 	partition              *PartitionInput
 	template               sqltemplate.Evaluator

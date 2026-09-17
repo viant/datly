@@ -29,17 +29,31 @@ type Validation struct {
 	TTL      time.Duration
 }
 
+// Validate checks settings without constructing a service or opening a connection.
+func Validate(settings *spec.CacheSettings) error {
+	_, err := (Config{Settings: settings}).validateSettings()
+	return err
+}
+
 // Validate checks cache configuration without creating a provider, opening a
 // pool, touching storage or performing network I/O.
 func (c Config) Validate() (*Validation, error) {
+	validated, err := c.validateSettings()
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(c.Identity) == "" {
+		return nil, fmt.Errorf("cache view identity is required")
+	}
+	return validated, nil
+}
+
+func (c Config) validateSettings() (*Validation, error) {
 	if c.Settings == nil {
 		return nil, fmt.Errorf("cache settings are required")
 	}
 	if !c.Settings.Enabled {
 		return nil, fmt.Errorf("cache %q is disabled", c.Settings.Name)
-	}
-	if strings.TrimSpace(c.Identity) == "" {
-		return nil, fmt.Errorf("cache view identity is required")
 	}
 	location := strings.TrimSpace(c.Settings.Location)
 	if location == "" {
@@ -63,12 +77,8 @@ func (c Config) Validate() (*Validation, error) {
 		return nil, fmt.Errorf("cache %q TTL is required", c.Settings.Name)
 	}
 	provider := strings.TrimSpace(c.Settings.Provider)
-	if !strings.HasPrefix(provider, "aerospike:") {
-		switch strings.ToLower(provider) {
-		case "", "afs":
-		default:
-			return nil, fmt.Errorf("cache provider %q is not supported; supply a native cache service", c.Settings.Provider)
-		}
+	if !strings.HasPrefix(provider, "aerospike:") && provider != "" && !strings.EqualFold(provider, "afs") {
+		return nil, fmt.Errorf("cache %q provider is not supported; supply a native cache service", c.Settings.Name)
 	}
 	return &Validation{Location: location, Provider: provider, TTL: ttl}, nil
 }
@@ -97,6 +107,7 @@ func (c Config) New() (cache.Cache, error) {
 	case "", "afs":
 		namespace := fmt.Sprintf("%x", sha256.Sum256([]byte(c.Identity)))
 		return afs.NewCache(strings.TrimRight(location, "/")+"/"+namespace, ttl, c.Identity, nil)
+	default:
+		return nil, fmt.Errorf("cache provider %q is not supported; supply a native cache service", c.Settings.Provider)
 	}
-	return nil, fmt.Errorf("cache provider %q was not resolved", provider)
 }

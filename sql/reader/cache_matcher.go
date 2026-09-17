@@ -120,10 +120,17 @@ func (m rootCacheMatcher) apply(ctx context.Context) error {
 	} else if !compatible {
 		return nil
 	}
+	// Native indexed replay applies its window per index value. A root SQL
+	// window is global, so multiple index values must use the ordinary query.
+	if len(values) > 1 && (identity.Limit > 0 || identity.Offset > 0) {
+		return nil
+	}
 	m.query.By = strings.TrimSpace(settings.IndexColumn)
 	m.query.In = values
 	m.query.IdentitySQL = identity.SQL
 	m.query.IdentityArgs = identity.Args
+	m.query.Limit = identity.Limit
+	m.query.Offset = identity.Offset
 	for _, field := range requested {
 		// Native entry metadata retains the actual scan columns/types. Grouped
 		// compatibility was checked above by the same native Projection owner.

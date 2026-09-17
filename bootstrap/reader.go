@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/constant"
 	"reflect"
+	"strings"
 
 	"github.com/viant/datly/bootstrap/cacheconfig"
 	"github.com/viant/datly/data"
@@ -113,7 +114,7 @@ func (c *CompiledReader) resolveCaches(config ReaderRuntimeConfig) (map[*data.Vi
 				accessSettings := *settings
 				settings = &accessSettings
 				var err error
-				settings.Location, err = c.instanceConst.Path(settings.Location)
+				settings.Location, err = c.instanceConst.Path(strings.NewReplacer("${View.Name}", view.Spec.Name, "$View.Name", view.Spec.Name).Replace(settings.Location))
 				if err != nil {
 					return err
 				}

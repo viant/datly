@@ -24,6 +24,7 @@ func ApplySelectorProjection(sqlText string, selected []string, view *data.View)
 // Prepare narrows authored outputs before binding while deferring wrappers
 // that hide the source namespace until source predicates have been assembled.
 func (p SelectorProjection) Prepare(selected []string) (*Projection, error) {
+	p.SQL = unwrapProjectionSQL(p.SQL)
 	sqlText, view := p.SQL, p.View
 	selected = normalizeProjectionSelection(selected)
 	if len(selected) > 0 {

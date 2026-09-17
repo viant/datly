@@ -30,54 +30,45 @@ func (r *Collector) indexCompositeValueByRel(ptr unsafe.Pointer, rel *Relation, 
 	}
 }
 
-func (r *Collector) indexValueByRel(fieldValue interface{}, rel *Relation, counter int) {
+func (r *Collector) indexValueByLink(fieldValue interface{}, link *Link, counter int) {
 	switch actual := fieldValue.(type) {
 	case []int:
 		for _, v := range actual {
-			r.indexValueToPosition(rel, v, counter)
+			r.indexValueToPosition(link, v, counter)
 		}
 	case []*int64:
 		for _, v := range actual {
 			if v == nil {
 				continue
 			}
-			r.indexValueToPosition(rel, int(*v), counter)
+			r.indexValueToPosition(link, int(*v), counter)
 		}
 	case []int64:
 		for _, v := range actual {
-			r.indexValueToPosition(rel, int(v), counter)
+			r.indexValueToPosition(link, int(v), counter)
 		}
 	case int32:
-		r.indexValueToPosition(rel, int(actual), counter)
+		r.indexValueToPosition(link, int(actual), counter)
 	case *int64:
 		if actual == nil {
 			return
 		}
-		r.indexValueToPosition(rel, int(*actual), counter)
+		r.indexValueToPosition(link, int(*actual), counter)
 	case []string:
 		for _, v := range actual {
-			r.indexValueToPosition(rel, v, counter)
+			r.indexValueToPosition(link, v, counter)
 		}
 	default:
-		r.indexValueToPosition(rel, sqlxio.NormalizeKey(fieldValue), counter)
+		r.indexValueToPosition(link, sqlxio.NormalizeKey(fieldValue), counter)
 	}
 }
 
-func (r *Collector) indexValueToPosition(rel *Relation, fieldValue interface{}, counter int) {
-	for _, item := range rel.On {
-		columnValues, ok := r.valuePosition[item.Namespace]
-		if !ok {
-			columnValues = map[string]map[interface{}][]int{}
-			r.valuePosition[item.Namespace] = columnValues
-		}
-		if _, ok := columnValues[item.Column]; !ok {
-			columnValues[item.Column] = map[interface{}][]int{}
-		}
-		_, ok = columnValues[item.Column][fieldValue]
-		if !ok {
-			columnValues[item.Column][fieldValue] = []int{counter}
-		} else {
-			columnValues[item.Column][fieldValue] = append(columnValues[item.Column][fieldValue], counter)
-		}
+func (r *Collector) indexValueToPosition(link *Link, fieldValue interface{}, counter int) {
+	key := relationIndexIdentity(link)
+	positions := r.valuePosition[key]
+	if positions == nil {
+		positions = map[interface{}][]int{}
+		r.valuePosition[key] = positions
 	}
+	positions[fieldValue] = append(positions[fieldValue], counter)
 }

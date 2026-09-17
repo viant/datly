@@ -101,4 +101,6 @@ require (
 
 replace google.golang.org/grpc/stats/opentelemetry => google.golang.org/grpc v1.77.0
 
+replace github.com/viant/sqlparser => /Users/vcarey/Projects/go/src/github.com/viant/sqlparser
+
 exclude google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a

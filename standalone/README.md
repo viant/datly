@@ -51,8 +51,8 @@ Connectors:
 JSON, `.yaml` and `.yml` documents load through AFS. Relative location fields
 resolve against the config URL, not process cwd. `BaseDir` and `ModuleDirs` are
 explicit local-module location extensions; a remote configuration must identify
-a local BaseDir. DependencyURL accepts a connector document or a flat directory
-of JSON/YAML connector documents. Inline `Connectors` is an additional supported
+a local BaseDir. DependencyURL accepts a dependency document or a flat directory
+of JSON/YAML connector and cache documents. Inline `Connectors` is an additional supported
 configuration form. DSNs and Scy secret settings retain their content and are
 not treated as location fields. SQLite is linked by the command; other database
 drivers must be linked by the application.
@@ -63,6 +63,42 @@ normal component compilation is deferred until the first matching HTTP or MCP
 use and cached until reload. This default creates no `paths.yaml` or persistent
 cache. Set `GoBootstrap.EagerComponents` only when the deployment explicitly
 wants every component compiled during startup.
+
+Named reader caches use `Caches` either inline or in a `DependencyURL` document:
+
+```yaml
+Caches:
+  aerospike:
+    Enabled: true
+    Provider: aerospike://localhost:3000/ns_memory
+    Location: steward_${View.Name}
+    TimeToLiveMs: 14400000
+```
+
+Standalone forwards these definitions to the existing reader runtime, including
+nested relations declaring `view:",cache=aerospike"`. A cache name is independent
+of its provider; `Provider: afs` with an absolute directory is also supported.
+Use a positive `TTL` duration or `TimeToLiveMs`; if both are supplied they must
+agree. Native definitions require `Enabled: true`. An unused disabled definition
+is allowed, but a referenced disabled or missing cache fails component publication.
+
+Legacy `CacheProviders` lists are accepted in both locations, with `Name` on each
+entry and optional document `ModTime` in dependency files. They default to enabled
+when `Enabled` is omitted; explicit false is preserved. Lists are normalized to
+the same named settings map, not a second resource assembly path. Repeated names
+must have identical normalized settings; conflicting definitions fail instead of
+being overridden by document order. Map keys and any explicit `Name` must agree.
+Duplicate object keys are rejected before decoding, including repeated `Caches`
+blocks and duplicate names within a single map. Struct-field aliases such as
+`Caches`/`caches` and `Enabled`/`enabled` also conflict in JSON and YAML; ordinary
+map keys (including cache names) remain case-sensitive. Identical definitions in
+separate dependency documents remain allowed.
+
+`Provider` uses instance constants from `ConstURL`. Cache locations retain reader
+ownership: `${View.Name}` is expanded for each view, followed by instance/authored
+constant expansion. Cache locations are not rebased against the config URL.
+Services use the existing SQLX implementations and standalone-owned Aerospike pool.
+Definitions are fixed for a server lifetime; route reload does not reload them.
 
 HTTP policy is the existing `gateway/http.Config`: CORS defaults and presence,
 DisableCors, APIPrefix, Meta and OpenAPI retain their owner. `Info` selects

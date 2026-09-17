@@ -256,7 +256,7 @@ func (r *Collector) mergeToParent(snapshot *hookTopology) error {
 	}
 
 	for i, link := range links {
-		valuePositions := r.parentValuesPositions(r.relation.On[i].Namespace, r.relation.On[i].Column)
+		valuePositions := r.parentValuesPositions(r.relation.On[i])
 		destPtr := xunsafe.AsPointer(r.DestPtr())
 		holderField := r.relation.HolderField
 		for j := 0; j < r.slice.Len(destPtr); j++ {

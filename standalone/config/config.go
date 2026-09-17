@@ -12,6 +12,7 @@ import (
 	gateway "github.com/viant/datly/gateway/http"
 	"github.com/viant/datly/gateway/openapi/openapi3"
 	"github.com/viant/datly/mcp/resource"
+	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/scy/auth/jwt/verifier"
 )
@@ -30,19 +31,22 @@ type Config struct {
 	Observation *Observation
 	// BaseDir and ModuleDirs locate trusted local source modules. Package selection
 	// retains original GoBootstrap names; discovery is owned by transcribe.
-	BaseDir       string
-	ModuleDirs    []string
-	Connector     string
-	Connectors    []connector.Config
-	JWTValidator  *verifier.Config
-	MCP           *MCP
-	RouteURL      string
-	PluginsURL    string
-	DependencyURL string
-	Jobs          *Jobs
-	JobURL        string
-	FailedJobURL  string
-	MaxJobs       int
+	BaseDir    string
+	ModuleDirs []string
+	Connector  string
+	Connectors []connector.Config
+	// Caches supplies named reader services. CacheProviders accepts legacy dependency documents.
+	Caches         map[string]*spec.CacheSettings
+	CacheProviders []*CacheProvider
+	JWTValidator   *verifier.Config
+	MCP            *MCP
+	RouteURL       string
+	PluginsURL     string
+	DependencyURL  string
+	Jobs           *Jobs
+	JobURL         string
+	FailedJobURL   string
+	MaxJobs        int
 }
 
 type Packages struct {
@@ -122,6 +126,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("RouteURL and PluginsURL deployment is not supported by this standalone slice")
 	}
 	if err := c.validateJobs(); err != nil {
+		return err
+	}
+	if err := c.validateCaches(); err != nil {
 		return err
 	}
 	if c.MCP != nil {

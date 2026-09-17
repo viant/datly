@@ -52,7 +52,7 @@ func (c *sourceComponent) Configure(ctx context.Context, artifact *report.Compon
 		result.Providers = append(result.Providers, views)
 	}
 	if reader := artifact.ReaderCompilation(); reader != nil {
-		result.Reader, err = reader.NewExecution(bootstrap.ReaderRuntimeConfig{CacheIdentity: c.source.connections.CacheIdentity(), SQL: c.source.connections.SQL, Aerospike: &c.source.caches})
+		result.Reader, err = reader.NewExecution(bootstrap.ReaderRuntimeConfig{CacheIdentity: c.source.connections.CacheIdentity(), SQL: c.source.connections.SQL, Aerospike: &c.source.caches, CacheSettings: c.source.config.Caches})
 		if err != nil {
 			return result, err
 		}

@@ -19,11 +19,9 @@ func (r *Collector) Visitor(ctx context.Context) VisitorFn {
 			continue
 		}
 		for _, item := range rel.On {
-			if _, ok := r.valuePosition[item.Namespace]; !ok {
-				r.valuePosition[item.Namespace] = map[string]map[interface{}][]int{}
-			}
-			if _, ok := r.valuePosition[item.Namespace][item.Column]; !ok {
-				r.valuePosition[item.Namespace][item.Column] = map[interface{}][]int{}
+			key := relationIndexIdentity(item)
+			if _, ok := r.valuePosition[key]; !ok {
+				r.valuePosition[key] = map[interface{}][]int{}
 			}
 		}
 	}

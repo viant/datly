@@ -28,14 +28,15 @@ import (
 )
 
 type source struct {
-	Workspace   *xmodule.Workspace
-	resources   *resource.Store
-	caches      aerospike.Pool
-	config      *config.Config
-	connections *connector.Set
-	codecs      xcodec.Factory
-	registry    *x.Registry
-	http        gateway.Config
+	Workspace      *xmodule.Workspace
+	resources      *resource.Store
+	caches         aerospike.Pool
+	config         *config.Config
+	connections    *connector.Set
+	codecs         xcodec.Factory
+	codecFactories map[string]xcodec.Factory
+	registry       *x.Registry
+	http           gateway.Config
 }
 
 func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
@@ -232,6 +233,9 @@ func (s *source) init(ctx context.Context, registry *x.Registry) (*typecatalog.C
 			}
 			return nil, fmt.Errorf("JWTValidator initialization failed")
 		}
+	}
+	if len(s.codecFactories) > 0 {
+		s.codecs = &applicationCodecs{factories: s.codecFactories, fallback: s.codecs}
 	}
 	return exports.Catalog(nil)
 }

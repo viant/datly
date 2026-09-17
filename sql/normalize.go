@@ -20,7 +20,7 @@ var removableSelectCalls = map[string]bool{
 }
 
 func NormalizeAuthoredSQL(sqlText string) string {
-	sqlText = strings.TrimSpace(sqlText)
+	sqlText = unwrapProjectionSQL(strings.TrimSpace(sqlText))
 	if sqlText == "" {
 		return sqlText
 	}
