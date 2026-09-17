@@ -9,7 +9,6 @@ import (
 	bootstrapindex "github.com/viant/datly/bootstrap/index"
 	"github.com/viant/datly/report"
 	"github.com/viant/datly/runtime/registry"
-	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe"
 	"github.com/viant/datly/typecatalog"
 	xmodule "github.com/viant/x/module"
@@ -33,8 +32,7 @@ func (m *indexedMaterializer) Materialize(ctx context.Context, entry *bootstrapi
 	if entry.Owner.Name != "" {
 		owner = entry.Owner
 	}
-	selection := indexedMaterializerSelection(owner, entry.Sources)
-	discovery := transcribe.Discovery{Const: m.source.config.Const, Workspace: m.workspace, Include: selection, Exclude: m.source.config.GoBootstrap.Exclude, Connector: m.source.config.Connector, Types: types, Registry: m.source.registry}
+	discovery := transcribe.Discovery{Const: m.source.config.Const, Workspace: m.workspace, Include: []string{owner.Scope}, TypeInclude: indexedMaterializerTypeSelection(owner.Scope, entry.Sources), Exclude: m.source.config.GoBootstrap.Exclude, Connector: m.source.config.Connector, Types: types, Registry: m.source.registry}
 	project, err := discovery.Compile(ctx)
 	if err != nil {
 		return nil, err
@@ -77,20 +75,18 @@ func (m *indexedMaterializer) Materialize(ctx context.Context, entry *bootstrapi
 	return &bootstrapindex.Loaded{Registration: primary, Related: related}, nil
 }
 
-func indexedMaterializerSelection(owner spec.Key, sources []bootstrapindex.Source) []string {
+func indexedMaterializerTypeSelection(ownerScope string, sources []bootstrapindex.Source) []string {
 	seen := map[string]bool{}
 	var result []string
 	add := func(packagePath string) {
-		if packagePath == "" || seen[packagePath] {
+		if packagePath == "" || packagePath == ownerScope || seen[packagePath] {
 			return
 		}
 		seen[packagePath] = true
 		result = append(result, packagePath)
 	}
-	add(owner.Scope)
 	for _, source := range sources {
-		switch source.Kind {
-		case bootstrapindex.SourceGo, bootstrapindex.SourceDQL:
+		if source.Kind == bootstrapindex.SourceGo {
 			add(source.PackagePath)
 		}
 	}

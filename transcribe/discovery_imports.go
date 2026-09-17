@@ -7,6 +7,7 @@ import (
 	"go/build"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/viant/datly/transcribe/dql"
@@ -78,21 +79,12 @@ func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[strin
 	if len(available) == 0 {
 		return nil, nil
 	}
-	packagesByPath := map[string]*smodel.Package{}
-	for _, path := range available {
-		module, err := (loaderast.LocalPackageLoader{Workspace: d.workspace}).Load(ctx, path)
-		if err != nil {
-			var noGo *build.NoGoError
-			if errors.As(err, &noGo) {
-				continue
-			}
-			return nil, fmt.Errorf("load DQL import %s: %w", path, err)
-		}
-		for packagePath := range module.Packages {
-			if packagesByPath[packagePath] == nil {
-				packagesByPath[packagePath] = module.Packages[packagePath]
-			}
-		}
+	packagesByPath, err := loadAvailablePackageClosure(ctx, d.workspace, available)
+	if err != nil {
+		return nil, err
+	}
+	if len(packagesByPath) == 0 {
+		return nil, nil
 	}
 	loaded := make([]string, 0, len(packagesByPath))
 	packagePaths := make([]string, 0, len(packagesByPath))
@@ -121,4 +113,76 @@ func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[strin
 		loaded = append(loaded, path)
 	}
 	return loaded, nil
+}
+
+func loadAvailablePackageClosure(ctx context.Context, workspace *xmodule.Workspace, roots []string) (map[string]*smodel.Package, error) {
+	result := map[string]*smodel.Package{}
+	queued := map[string]bool{}
+	queue := append([]string(nil), roots...)
+	for _, path := range roots {
+		queued[path] = true
+	}
+	for i := 0; i < len(queue); i++ {
+		path := queue[i]
+		if result[path] != nil {
+			continue
+		}
+		pkg, err := loadAvailablePackage(ctx, workspace, path)
+		if err != nil {
+			var noGo *build.NoGoError
+			if errors.As(err, &noGo) {
+				continue
+			}
+			return nil, fmt.Errorf("load DQL import %s: %w", path, err)
+		}
+		if pkg == nil {
+			continue
+		}
+		result[path] = pkg
+		imports := make([]string, 0, len(pkg.Imports))
+		for _, imported := range pkg.Imports {
+			imports = append(imports, imported.Path)
+		}
+		sort.Strings(imports)
+		for _, imported := range imports {
+			if queued[imported] {
+				continue
+			}
+			location, err := workspace.Package(imported)
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if location == nil {
+				continue
+			}
+			queued[imported] = true
+			queue = append(queue, imported)
+		}
+	}
+	return result, nil
+}
+
+func loadAvailablePackage(ctx context.Context, workspace *xmodule.Workspace, packagePath string) (*smodel.Package, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	location, err := workspace.Package(packagePath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil || location == nil {
+		return nil, err
+	}
+	relative, err := filepath.Rel(location.Module.Dir, location.Dir)
+	if err != nil {
+		return nil, err
+	}
+	pkg, err := loaderast.LoadPackageFS(ctx, workspace.SourceFS(location.Module), filepath.ToSlash(relative))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	return pkg, err
 }

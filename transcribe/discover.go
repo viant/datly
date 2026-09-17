@@ -32,10 +32,13 @@ var sourceFileExtensions = map[string]bool{
 type Discovery struct {
 	Const *constant.Values
 	// Workspace fixes source selection to a Go build when supplied.
-	Workspace     *xmodule.Workspace
-	BaseDir       string
-	ModuleDirs    []string
-	Include       []string
+	Workspace  *xmodule.Workspace
+	BaseDir    string
+	ModuleDirs []string
+	Include    []string
+	// TypeInclude loads package-level type authority without selecting those
+	// packages for component discovery or resource loading.
+	TypeInclude   []string
 	Exclude       []string
 	Connector     string
 	Types         *typecatalog.Catalog
@@ -79,6 +82,9 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+	if _, err = d.loadTypeIncludes(ctx, catalog, workspace); err != nil {
+		return nil, err
 	}
 	packageSources, packagePaths, err := d.packageSources(ctx, catalog, workspace)
 	if err != nil {
@@ -183,6 +189,20 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		return nil, fmt.Errorf("compile component source %q: %w", file.Path, err)
 	}
 	return result, nil
+}
+
+func (d *Discovery) loadTypeIncludes(ctx context.Context, catalog *typecatalog.Catalog, workspace *xmodule.Workspace) ([]string, error) {
+	if len(d.TypeInclude) == 0 {
+		return nil, nil
+	}
+	imports := map[string]bool{}
+	for _, packagePath := range d.TypeInclude {
+		packagePath = strings.TrimSpace(packagePath)
+		if packagePath != "" {
+			imports[packagePath] = true
+		}
+	}
+	return (&dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: d.Registry}).loadImports(ctx, imports)
 }
 
 func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Catalog, workspace *xmodule.Workspace) (map[string]*bootstrap.PackageComponentSource, []string, error) {

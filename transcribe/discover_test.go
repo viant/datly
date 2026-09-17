@@ -182,6 +182,32 @@ SELECT 1`)
 	}
 }
 
+func TestDiscoveryTypeIncludeDoesNotDiscoverDependencyComponents(t *testing.T) {
+	base := t.TempDir()
+	writeSourceFile(t, base, "go.mod", discoverGoMod)
+	writeSourceFile(t, base, "svc/owner/Owner.dql", `#setting($_ = $route('/owner', 'GET'))
+SELECT 1`)
+	writeSourceFile(t, base, "deps/bad/component.go", `package bad
+import xdatly "github.com/viant/xdatly"
+type Input struct{}
+type Output struct{}
+type Holder struct {
+	Route xdatly.Component[Input,Output] `+"`"+`component:"Bad"`+"`"+`
+}
+`)
+	project, err := (&Discovery{
+		BaseDir:     base,
+		Include:     []string{"example.com/app/svc/owner"},
+		TypeInclude: []string{"example.com/app/deps/bad"},
+	}).Compile(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(project.Components) != 1 || project.Components[0].Component.Key.Name != "Owner" {
+		t.Fatalf("components = %+v", project.Components)
+	}
+}
+
 func containsString(values []string, candidate string) bool {
 	for _, value := range values {
 		if value == candidate {
