@@ -145,6 +145,18 @@ func TestDiscoverComponentsFromPackages_DiscoversTaggedHolder(t *testing.T) {
 	}
 }
 
+func TestPackageDiscoveryRequiresUserSelectedDefaultImport(t *testing.T) {
+	base := t.TempDir()
+	writeFile(t, base, "go.mod", testGoMod)
+	writeFile(t, base, "svc/users/holder.go", usersHolderSource)
+	_, err := (PackageDiscovery{
+		BaseDir: base, Include: []string{"example.com/app/svc/users"}, RequireLinked: true,
+	}).Discover(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "is not selected by the default imports") {
+		t.Fatalf("expected missing default import error, got %v", err)
+	}
+}
+
 // TestDiscoverComponentsFromPackages_AliasedImportAndExclude proves alias-aware
 // component resolution and exclude patterns over import paths.
 func TestDiscoverComponentsFromPackages_AliasedImportAndExclude(t *testing.T) {

@@ -13,7 +13,19 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 	b.WriteString("package ")
 	b.WriteString(packageName)
 	b.WriteString("\n\n")
-	b.WriteString("import (\n\txdatly \"github.com/viant/xdatly\"\n")
+	b.WriteString("import (\n")
+	if plan.Resources != nil {
+		b.WriteString("\t\"embed\"\n\n")
+	}
+	b.WriteString("\txdatly \"github.com/viant/xdatly\"\n")
+	if plan.Handler != "" && (plan.MutationHandler != nil || plan.ContractHandler != nil) {
+		b.WriteString("\trhandler \"github.com/viant/datly/runtime/handler\"\n")
+		if plan.MutationHandler != nil {
+			b.WriteString("\tmutationhandler \"github.com/viant/datly/runtime/handler/mutation\"\n")
+		} else {
+			b.WriteString("\tcustomhandler \"github.com/viant/datly/runtime/handler/custom\"\n")
+		}
+	}
 	for _, item := range plan.holderImports() {
 		b.WriteString("\t")
 		b.WriteString(item.Alias)
@@ -22,6 +34,7 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 		b.WriteString("\n")
 	}
 	b.WriteString(")\n\n")
+	b.WriteString("func init() {}\n\n")
 	b.WriteString("// Component is the generated component scaffold for ")
 	b.WriteString(plan.ComponentName)
 	b.WriteString(".\n")
@@ -46,6 +59,40 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 		}
 	}
 	b.WriteString("}\n")
+	if plan.Handler != "" && (plan.MutationHandler != nil || plan.ContractHandler != nil) {
+		b.WriteString("\nfunc (")
+		b.WriteString(plan.HolderName())
+		b.WriteString(") DatlyHandler(name string) func() (rhandler.TypedHandler, error) {\n")
+		b.WriteString("\tif name == ")
+		b.WriteString(strconv.Quote(plan.Handler))
+		b.WriteString(" { return ")
+		if plan.MutationHandler != nil {
+			b.WriteString("mutationhandler.Factory[")
+		} else {
+			b.WriteString("customhandler.Factory[")
+		}
+		b.WriteString(plan.contractType(plan.Input))
+		b.WriteString(", ")
+		b.WriteString(plan.contractType(plan.Output))
+		b.WriteString("](")
+		b.WriteString(plan.Handler)
+		b.WriteString(") }\n")
+		b.WriteString("\treturn nil\n}\n")
+	}
+	if plan.Resources != nil {
+		b.WriteString("\nfunc (")
+		b.WriteString(plan.HolderName())
+		b.WriteString(") EmbedFS() *embed.FS {\n")
+		b.WriteString("\treturn &")
+		b.WriteString(plan.Resources.Symbol)
+		b.WriteString("DatlyResources\n}\n")
+		b.WriteString("\nfunc (")
+		b.WriteString(plan.HolderName())
+		b.WriteString(") EmbedNamespace() string {\n")
+		b.WriteString("\treturn ")
+		b.WriteString(plan.Resources.Symbol)
+		b.WriteString("DatlyResourceNamespace\n}\n")
+	}
 	return b.String(), nil
 }
 

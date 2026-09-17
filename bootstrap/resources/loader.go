@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/internal/packageasset"
 	xmodule "github.com/viant/x/module"
 )
@@ -17,6 +18,7 @@ import (
 type Loader struct {
 	Workspace *xmodule.Workspace
 	Packages  []string
+	Holders   []any
 }
 
 type Loaded struct {
@@ -62,6 +64,18 @@ func (l Loader) Load(ctx context.Context) (*Loaded, error) {
 		manifests, err := packageasset.ReadAll(source)
 		if err != nil {
 			return nil, fmt.Errorf("package %s assets: %w", packagePath, err)
+		}
+		if len(manifests) == 0 {
+			for namespace, embedded := range bootstrap.LinkedResources(l.Holders, packagePath) {
+				if previous := namespaces[namespace]; previous != "" {
+					return nil, fmt.Errorf("resource namespace %q is declared by both %s and %s", namespace, previous, packagePath)
+				}
+				namespaces[namespace] = packagePath
+				if err := result.Store.Register(namespace, embedded); err != nil {
+					return nil, err
+				}
+			}
+			continue
 		}
 		for _, manifest := range manifests {
 			if previous := namespaces[manifest.Namespace]; previous != "" {

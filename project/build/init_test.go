@@ -76,7 +76,7 @@ func TestInitRejectsUnpinnedNewModule(t *testing.T) {
 	}
 }
 
-func TestInitExistingDependencyPackageIsNoop(t *testing.T) {
+func TestInitIgnoresLegacyDependencyPackage(t *testing.T) {
 	for _, dependency := range []string{"github.com/viant/datly"} {
 		t.Run(dependency, func(t *testing.T) {
 			root := t.TempDir()
@@ -92,7 +92,7 @@ func TestInitExistingDependencyPackageIsNoop(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(directory, "dependencies.go"), content, 0644); err != nil {
 				t.Fatal(err)
 			}
-			request := build.InitRequest{Dir: root, Module: "example.com/different", Pins: map[string]string{dependency: "latest"}}
+			request := build.InitRequest{Dir: root, Module: "example.com/existing"}
 			if err := (build.Service{}).Init(context.Background(), request); err != nil {
 				t.Fatal(err)
 			}
@@ -104,8 +104,8 @@ func TestInitExistingDependencyPackageIsNoop(t *testing.T) {
 			if !bytes.Equal(actual, content) {
 				t.Fatal("dependency package changed")
 			}
-			if _, err := os.Stat(filepath.Join(root, "datly.yaml")); !os.IsNotExist(err) {
-				t.Fatalf("unexpected scaffolding: %v", err)
+			if _, err := os.Stat(filepath.Join(root, "datly.yaml")); err != nil {
+				t.Fatalf("missing Datly 1.0 scaffolding: %v", err)
 			}
 		})
 	}

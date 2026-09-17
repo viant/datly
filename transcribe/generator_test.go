@@ -64,6 +64,28 @@ FROM records r`}
 	}
 }
 
+func TestGeneratorEphemeralOwnershipLeavesNoPackageManifest(t *testing.T) {
+	ctx := context.Background()
+	db := testharness.NewSQLiteHarness(t)
+	if err := db.ExecStatements(ctx, genpatch.Schema...); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	testharness.WriteGeneratedGoMod(t, root)
+	request := GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Scope: "example.com/generated/orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}
+	generator := Generator{Operation: "patch", EphemeralOwnership: true}
+	for attempt := 0; attempt < 2; attempt++ {
+		generated, err := generator.Generate(ctx, request)
+		if err != nil {
+			t.Fatalf("generation %d: %v", attempt+1, err)
+		}
+		directory := filepath.Join(root, strings.TrimPrefix(generated.Package.PkgPath, "github.com/viant/datly/genfixture/"))
+		if _, err = os.Stat(filepath.Join(directory, ".datly-gen.json")); !os.IsNotExist(err) {
+			t.Fatalf("generation %d retained package manifest: %v", attempt+1, err)
+		}
+	}
+}
+
 func TestGeneratorReaderWriterRemainSeparate(t *testing.T) {
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)

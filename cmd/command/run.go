@@ -8,6 +8,7 @@ import (
 	"io"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/standalone"
 	"github.com/viant/datly/standalone/config"
 	"github.com/viant/x"
@@ -17,6 +18,7 @@ import (
 type Service struct {
 	Workspace *xmodule.Workspace
 	Registry  *x.Registry
+	Holders   []any
 	Version   string
 }
 
@@ -56,7 +58,11 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Diagnostics: stderr})
+	holders := s.Holders
+	if holders == nil {
+		holders = bootstrap.DefaultImports()
+	}
+	server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: holders, Diagnostics: stderr})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

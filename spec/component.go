@@ -75,13 +75,14 @@ type GenerationSettings struct {
 	LinksFile           string            `json:"linksFile,omitempty"`
 	TemplateFile        string            `json:"templateFile,omitempty"`
 	SupportFiles        map[string]string `json:"supportFiles,omitempty"`
+	SQLFiles            map[string]string `json:"sqlFiles,omitempty"`
 }
 
 func (s GenerationSettings) IsZero() bool {
 	return s.FilePrefix == "" && s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
 		s.InputFile == "" && s.OutputFile == "" && s.RouterFile == "" &&
 		s.HandlerFile == "" && s.LifecycleFile == "" && s.MutationFile == "" &&
-		s.ResourcesFile == "" && s.LinksFile == "" && s.TemplateFile == "" && len(s.SupportFiles) == 0
+		s.ResourcesFile == "" && s.LinksFile == "" && s.TemplateFile == "" && len(s.SupportFiles) == 0 && len(s.SQLFiles) == 0
 }
 
 type ReportSettings struct {

@@ -1,15 +1,18 @@
-// Package build owns custom project initialization and automatic compiled linking.
+// Package build owns custom project initialization and compilation. The
+// application-owned internal/datlylink package selects compiled components.
 // The service is independent of CLI flags and can be reused by developer tools.
 package build
 
 import (
 	"context"
-	"errors"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	"github.com/viant/datly/bootstrap"
 	xmodule "github.com/viant/x/module"
 )
 
@@ -22,7 +25,7 @@ type Request struct {
 	Packages []string
 }
 type Result struct {
-	Binary, LinkFile, SHA256     string
+	Binary, SHA256               string
 	Components, Types, Factories int
 }
 
@@ -38,41 +41,19 @@ func (Service) Build(ctx context.Context, request Request) (_ *Result, err error
 	if info.Dir != root {
 		return nil, fmt.Errorf("build directory must be the module root: %s", info.Dir)
 	}
-	managed := managedFiles{root: root}
-	unlock, err := managed.lock()
+	selection, err := (xmodule.BuildWorkspace{BaseDir: root, Patterns: request.Packages, Tags: request.Tags, Env: request.Env}).Resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer unlock()
-	previous, err := managed.read()
+	routes, err := (bootstrap.PackageDiscovery{
+		Workspace: selection.Workspace(),
+		Include:   []string{"..."},
+		Exclude:   []string{info.Path + "/cmd/datly", info.Path + "/internal/datlylink"},
+	}).Discover(ctx)
 	if err != nil {
 		return nil, err
 	}
-	overlay, cleanup, err := managed.overlay()
-	if err != nil {
-		return nil, err
-	}
-	defer cleanup()
-	selection, err := (xmodule.BuildWorkspace{BaseDir: root, Patterns: request.Packages, Tags: request.Tags, Env: request.Env, Overlay: overlay}).Resolve(ctx)
-	if err != nil {
-		return nil, err
-	}
-	links := newLinker(selection)
-	source, result, err := links.generate(ctx, info.Path)
-	if err != nil {
-		return nil, err
-	}
-	if err = managed.write(source); err != nil {
-		return nil, err
-	}
-	succeeded := false
-	defer func() {
-		if !succeeded {
-			if restoreErr := managed.restore(previous); restoreErr != nil {
-				err = errors.Join(err, fmt.Errorf("restore previous linker: %w", restoreErr))
-			}
-		}
-	}()
+	result := &Result{Components: len(routes)}
 	output := request.Output
 	if output == "" {
 		output = filepath.Join("bin", "datly")
@@ -100,18 +81,15 @@ func (Service) Build(ctx context.Context, request Request) (_ *Result, err error
 	if data, buildErr := cmd.CombinedOutput(); buildErr != nil {
 		return nil, fmt.Errorf("compile linked project (check exported contracts and factory signatures): %w\n%s", buildErr, data)
 	}
-	result.SHA256, err = managed.hashFile(temp.Name())
+	binary, err := os.ReadFile(temp.Name())
 	if err != nil {
 		return nil, err
 	}
-	if err = managed.commit(source); err != nil {
-		return nil, err
-	}
+	digest := sha256.Sum256(binary)
+	result.SHA256 = hex.EncodeToString(digest[:])
 	if err = os.Rename(temp.Name(), output); err != nil {
 		return nil, err
 	}
-	succeeded = true
 	result.Binary = output
-	result.LinkFile = filepath.Join(root, linkPath)
 	return result, nil
 }

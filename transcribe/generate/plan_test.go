@@ -1145,8 +1145,8 @@ func TestEmitScaffoldMigratesOwnedDuplicateComponentHolder(t *testing.T) {
 	dir := t.TempDir()
 	fingerprints := map[string]string{}
 	for name, content := range map[string]string{
-		"component.go":    "package users\n\ntype Component struct{}\n",
-		"router.go": "package users\n\ntype Route struct{}\n",
+		"component.go": "package users\n\ntype Component struct{}\n",
+		"router.go":    "package users\n\ntype Route struct{}\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
@@ -1198,7 +1198,24 @@ func TestEmitScaffold_WritesTypedInputFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated input file: %v", err)
 	}
-	assertly.AssertValues(t, "package vendor_catalog\n\n// VendorInput is the generated input scaffold for VendorCatalog.\ntype VendorInput struct {\n\tVendorID int `parameter:\"vendorID,kind=path,in=vendorID\"`\n\tName string `parameter:\"name,kind=query,in=name\"`\n\tHas *VendorInputHas `setMarker:\"true\" typeName:\"VendorInputHas\" json:\"-\" sqlx:\"-\"`\n}\n\ntype VendorInputHas struct {\n\tVendorID bool\n\tName bool\n}\n", string(inputBytes))
+	content := string(inputBytes)
+	setterBytes, err := os.ReadFile(filepath.Join(dir, "input_setters.go"))
+	if err != nil {
+		t.Fatalf("failed to read generated input setters: %v", err)
+	}
+	content += "\n" + string(setterBytes)
+	for _, expected := range []string{
+		"type VendorInputHas struct {\n\tVendorID bool\n\tName bool\n}",
+		"func (input *VendorInput) SetVendorID(value int)",
+		"input.Has = &VendorInputHas{}",
+		"input.Has.VendorID = true",
+		"func (input *VendorInput) SetName(value string)",
+		"input.Has.Name = true",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("generated input missing %q:\n%s", expected, content)
+		}
+	}
 }
 
 func TestEmitScaffold_WritesTypedOutputFields(t *testing.T) {

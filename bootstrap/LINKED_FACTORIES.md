@@ -1,42 +1,41 @@
 # Linked Go factories
 
-Custom projects use `datly init` and `datly build` through `project/build.Service`.
-The build discovers component metadata and reachable shapes, then internally
-links exported Contract and mutation Definition factories into the existing
-`x.Registry`. Application packages need no init(), Register call, or maintained
-import list. See `project/build/README.md` for module/workspace and resource rules.
+Custom projects use a user-owned `internal/datlylink` package as explicit
+default-import policy. Its `init()` calls `bootstrap.UseDefaultImports` with one
+exported generated component holder per selected package. `cmd/datly`
+blank-imports only this link package.
 
-Generated `<component>_link_gen.go` companions remain available for applications
-that explicitly assemble an embedded registry. They are optional; automatic
-project builds use the factory declaration itself and the established typed
-custom/mutation adapter constructors. Policy source stays runtime-free.
+Generated component package `init()` functions remain empty. There is no
+`link_gen.go`, checksum, aggregate contract registry, or generated `x.Registry`.
+At startup bootstrap scans only `GoBootstrap.Packages`, finds holder declarations
+and tags in source, then matches them to the selected concrete holder values.
 
-Pass that registry to `report.ProjectConfig.Registry`. `CompileArtifacts`
-snapshots it once for the whole stage, compiles all components, and
-`RuntimeComponents` consumes the resolved handlers. Standalone compilation can
-use `bootstrap.NewArtifactBuilder(registry)`, `Build`, and
-`Artifact.Registration`. The registration method owns canonical metadata while
-the application supplies database/read capabilities and providers. Explicit
-handlers cannot override a resolved named factory.
+A generated holder may implement the internal typed-handler provider:
 
-Factory references retain full package authority. Unqualified names use the
-component package, not an unrelated input type's default package. A blank route
-handler inherits the component's single resolved handler; conflicting nonblank
-names fail. Missing factories, invalid signatures, nil results and mismatched
-input/output contracts fail before publication. Package exposure is unchanged:
-linked exports do not create routes or expose private component dependencies.
+```go
+DatlyHandler(name string) func() (handler.TypedHandler, error)
+```
 
-`viant/x` owns compiled exports, native callable type identity, invocation and
-registry snapshots. Its existing `Registry.Merge` remains type-only; callable
-batches merge explicitly through `RegisterFunctions(source.Functions()...)`.
-Snapshots detach tables and type ASTs, not arbitrary closure state. Factories
-must not capture mutable active-generation state. A definition is constructed
-per component build; its mutation Programs remain invocation-local.
+The method returns the generated custom/mutation adapter for that holder's named
+factory. Discovery does not execute the factory; artifact materialization invokes
+it for the selected component. Full input/output type identity is retained by
+the generic holder and adapter.
 
-This is compiled Go linking, not dynamic source execution. Reflection cannot
-discover free functions from a package name. Original Datly's
-`repository/handler/handler.go` resolves registered handler/factory **types**;
-its plugin snapshot loads exported type lists or an extension registry. Neither
-mechanism supplies callable top-level function values to the new runtime.
-Non-persisted synthetic/DQL mutation execution remains a separate requirement;
-registering compiled exports does not implement it.
+Embedded package SQL and other generated assets are exposed through:
+
+```go
+EmbedFS() *embed.FS
+EmbedNamespace() string
+```
+
+The same linked holder therefore supplies concrete types, typed handlers and
+immutable files, while scanned source remains component metadata authority.
+
+`x.Registry` remains available for genuinely dynamic structs and factories. It
+is only a fallback when no directly linked typed handler was supplied and must
+not replace linked Go authority.
+
+This explicit link is necessary because Go reflection cannot discover free
+functions or named types from an import-path string. The link package controls
+what is compiled; `GoBootstrap.Packages` controls what bootstrap scans and
+exposes. A scanned Go holder absent from default imports is rejected at startup.

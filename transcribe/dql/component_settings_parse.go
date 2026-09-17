@@ -204,9 +204,9 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			if ret.Generation.RouterFile == "" {
 				return nil, fmt.Errorf("invalid router_dest directive: empty destination")
 			}
-		case strings.EqualFold(name, "file_prefix"), strings.EqualFold(name, "handler_dest"), strings.EqualFold(name, "lifecycle_dest"), strings.EqualFold(name, "mutation_dest"), strings.EqualFold(name, "resources_dest"), strings.EqualFold(name, "links_dest"), strings.EqualFold(name, "template_dest"), strings.EqualFold(name, "support_dest"):
+		case strings.EqualFold(name, "file_prefix"), strings.EqualFold(name, "handler_dest"), strings.EqualFold(name, "lifecycle_dest"), strings.EqualFold(name, "mutation_dest"), strings.EqualFold(name, "resources_dest"), strings.EqualFold(name, "links_dest"), strings.EqualFold(name, "template_dest"), strings.EqualFold(name, "support_dest"), strings.EqualFold(name, "sql_dest"):
 			expected := 1
-			if strings.EqualFold(name, "support_dest") {
+			if strings.EqualFold(name, "support_dest") || strings.EqualFold(name, "sql_dest") {
 				expected = 2
 			}
 			if len(args) != expected || tail != "" {
@@ -239,6 +239,10 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				destination = &generation.TemplateFile
 			case "support_dest":
 				if err := generation.SetSupportFile(values[0], values[1]); err != nil {
+					return nil, err
+				}
+			case "sql_dest":
+				if err := generation.SetSQLFile(values[0], values[1]); err != nil {
 					return nil, err
 				}
 			}

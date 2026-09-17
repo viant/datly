@@ -25,12 +25,14 @@ import (
 const formatVersion = "datly-bootstrap-index-v1"
 
 type Config struct {
-	BaseDir    string
-	ModuleDirs []string
-	Include    []string
-	Exclude    []string
-	Workspace  *xmodule.Workspace
-	Types      *typecatalog.Catalog
+	BaseDir       string
+	ModuleDirs    []string
+	Include       []string
+	Exclude       []string
+	Workspace     *xmodule.Workspace
+	Types         *typecatalog.Catalog
+	Holders       []any
+	RequireLinked bool
 }
 
 type Builder struct{ Config Config }
@@ -70,7 +72,7 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 	for _, file := range selected {
 		files = append(files, file.file)
 	}
-	routes, err := (bootstrap.PackageDiscovery{Workspace: workspace}).DiscoverFiles(files)
+	routes, err := (bootstrap.PackageDiscovery{Workspace: workspace, Holders: config.Holders, RequireLinked: config.RequireLinked}).DiscoverFiles(files)
 	if err != nil {
 		return nil, err
 	}
@@ -395,24 +397,96 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	for _, route := range routes {
 		imports = append(imports, route.PackagePath)
 	}
-	module, err := (loaderast.LocalPackageLoader{Workspace: workspace}).Load(ctx, imports...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("index package authority: %w", err)
+	packages := map[string]*synthetic.Package{}
+	active := map[string]bool{}
+	currentModule := ""
+	allowedModules := map[string]bool{}
+	for _, packagePath := range imports {
+		location, locationErr := workspace.Package(packagePath)
+		if locationErr != nil || location == nil || location.Module == nil {
+			return nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, locationErr)
+		}
+		if currentModule == "" {
+			currentModule = location.Module.Path
+		} else if currentModule != location.Module.Path {
+			return nil, nil, fmt.Errorf("index package authority spans modules %q and %q", currentModule, location.Module.Path)
+		}
+		allowedModules[location.Module.Path] = true
+	}
+	for _, route := range routes {
+		for _, imported := range route.Imports {
+			location, locationErr := workspace.Package(imported.Package)
+			if locationErr == nil && location != nil && location.Module != nil {
+				allowedModules[location.Module.Path] = true
+			}
+		}
+	}
+	var loadCurrentModulePackage func(string) (*synthetic.Package, error)
+	loadCurrentModulePackage = func(packagePath string) (*synthetic.Package, error) {
+		if existing := packages[packagePath]; existing != nil {
+			return existing, nil
+		}
+		if active[packagePath] {
+			return nil, fmt.Errorf("current module package import cycle at %s", packagePath)
+		}
+		location, loadErr := workspace.Package(packagePath)
+		if loadErr != nil || location == nil || location.Module == nil || !allowedModules[location.Module.Path] {
+			return nil, loadErr
+		}
+		relative, loadErr := filepath.Rel(location.Module.Dir, location.Dir)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		pkg, loadErr := loaderast.LoadPackageFS(ctx, workspace.SourceFS(location.Module), filepath.ToSlash(relative))
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		active[packagePath] = true
+		packages[packagePath] = pkg
+		for _, imported := range pkg.Imports {
+			dependencyLocation, dependencyErr := workspace.Package(imported.Path)
+			if dependencyErr != nil || dependencyLocation == nil || dependencyLocation.Module == nil || !allowedModules[dependencyLocation.Module.Path] {
+				continue
+			}
+			dependency, dependencyErr := loadCurrentModulePackage(imported.Path)
+			if dependencyErr != nil {
+				return nil, dependencyErr
+			}
+			if dependency != nil {
+				pkg.Dependencies = append(pkg.Dependencies, dependency)
+			}
+		}
+		delete(active, packagePath)
+		return pkg, nil
+	}
+	for _, packagePath := range imports {
+		_, loadErr := loadCurrentModulePackage(packagePath)
+		if loadErr != nil {
+			return nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, loadErr)
+		}
+	}
+	for _, route := range routes {
+		for _, imported := range route.Imports {
+			if _, loadErr := loadCurrentModulePackage(imported.Package); loadErr != nil {
+				return nil, nil, fmt.Errorf("index imported package authority %q: %w", imported.Package, loadErr)
+			}
+		}
 	}
 	catalog := typecatalog.NewCatalog()
 	if seed != nil {
-		catalog, err = seed.Clone()
+		cloned, err := seed.Clone()
 		if err != nil {
 			return nil, nil, err
 		}
+		catalog = cloned
 	}
-	packagePaths := make([]string, 0, len(module.Packages))
-	for packagePath := range module.Packages {
+	packagePaths := make([]string, 0, len(packages))
+	for packagePath := range packages {
 		packagePaths = append(packagePaths, packagePath)
 	}
 	sort.Strings(packagePaths)
 	for _, packagePath := range packagePaths {
-		if err := catalog.RegisterPackage(typecatalog.TypeOriginPackage, module.Packages[packagePath]); err != nil {
+		if err := catalog.RegisterPackage(typecatalog.TypeOriginPackage, packages[packagePath]); err != nil {
 			return nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, err)
 		}
 	}
@@ -459,7 +533,7 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	sort.Slice(result, func(i, j int) bool { return result[i].Key.String() < result[j].Key.String() })
 	dependencies := map[string][]Source{}
 	for packagePath := range routesByPackage {
-		pkg := module.Packages[packagePath]
+		pkg := packages[packagePath]
 		if pkg == nil {
 			continue
 		}

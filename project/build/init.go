@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	xmodule "github.com/viant/x/module"
 	"golang.org/x/mod/modfile"
@@ -173,33 +172,24 @@ func (Service) Init(ctx context.Context, request InitRequest) error {
 	}
 	modulePath := file.Module.Mod.Path
 	files := map[string]string{
-		"cmd/datly/main.go":   fmt.Sprintf(mainTemplate, modulePath),
-		"dql/README.md":       "Place authored DQL here; transcribe it into generated Go component packages before building.\n",
-		"generated/README.md": "Generated component holders and shapes. Build discovers Go packages automatically.\n",
-		"hooks/README.md":     "Authored Go hook packages. Reference exported factories from component handler metadata.\n",
-		"resources/README.md": "Keep package assets with their owning Go package and its existing resource manifest.\n",
-		"datly.yaml":          fmt.Sprintf("BaseDir: .\nEndpoint:\n  Address: 127.0.0.1:8080\nGoBootstrap:\n  Packages: [%s/...]\n", modulePath),
+		"cmd/datly/main.go":          fmt.Sprintf(mainTemplate, modulePath),
+		"internal/datlylink/link.go": linkTemplate,
+		"dql/README.md":              "Place authored DQL here; transcribe it into generated Go component packages before building.\n",
+		"generated/README.md":        "Generated component holders and shapes. Add selected package holders to internal/datlylink.\n",
+		"hooks/README.md":            "Authored Go hook packages. Reference exported factories from component handler metadata.\n",
+		"resources/README.md":        "Keep package assets with their owning Go package and its existing resource manifest.\n",
+		"datly.yaml":                 fmt.Sprintf("BaseDir: .\nEndpoint:\n  Address: 127.0.0.1:8080\nGoBootstrap:\n  Packages: [%s/...]\n", modulePath),
 	}
-	for _, path := range []string{"cmd/datly/main.go", "dql/README.md", "generated/README.md", "hooks/README.md", "resources/README.md", "datly.yaml"} {
+	for _, path := range []string{"cmd/datly/main.go", "internal/datlylink/link.go", "dql/README.md", "generated/README.md", "hooks/README.md", "resources/README.md", "datly.yaml"} {
 		if err = (Service{}).create(root, path, files[path]); err != nil {
 			return err
 		}
 	}
-	managed := managedFiles{root: root}
-	if _, err = os.Stat(filepath.Join(root, linkPath)); os.IsNotExist(err) {
-		if err = (Service{}).create(root, linkPath, linkStub); err != nil {
-			return err
-		}
-		return managed.commit([]byte(linkStub))
-	} else if err != nil {
-		return err
-	}
-	_, err = managed.read()
-	return err
+	return nil
 }
 
-// initialized recognizes a custom Datly module with an existing dependency
-// package. Init is not a dependency updater for an already initialized project.
+// initialized recognizes a custom Datly module from its stable project files.
+// Transient build linkage is never persisted in the application module.
 func (Service) initialized(root string, file *modfile.File) (bool, error) {
 	if file.Module == nil {
 		return false, nil
@@ -217,21 +207,15 @@ func (Service) initialized(root string, file *modfile.File) (bool, error) {
 	if !custom {
 		return false, nil
 	}
-	for _, relative := range []string{"pkg/dependency", "internal/datlylink"} {
-		entries, err := os.ReadDir(filepath.Join(root, relative))
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
+	for _, relative := range []string{"cmd/datly/main.go", "internal/datlylink/link.go", "datly.yaml"} {
+		if _, err := os.Stat(filepath.Join(root, relative)); err != nil {
+			if os.IsNotExist(err) {
+				return false, nil
+			}
 			return false, err
 		}
-		for _, entry := range entries {
-			if entry.Type().IsRegular() && strings.HasSuffix(entry.Name(), ".go") && !strings.HasSuffix(entry.Name(), "_test.go") {
-				return true, nil
-			}
-		}
 	}
-	return false, nil
+	return true, nil
 }
 
 func (Service) create(root, path, content string) error {
@@ -257,16 +241,26 @@ func (Service) create(root, path, content string) error {
 const mainTemplate = `package main
 import (
  "context"
- "fmt"
  "os"
  "os/signal"
  "syscall"
  "github.com/viant/datly/cmd/command"
- "%s/internal/datlylink"
+ _ "%s/internal/datlylink"
 )
 func main(){
  ctx,stop:=signal.NotifyContext(context.Background(),os.Interrupt,syscall.SIGTERM);defer stop()
- registry,err:=datlylink.Registry();if err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}
- os.Exit((command.Service{Registry:registry,Workspace:datlylink.Workspace()}).Run(ctx,os.Args[1:],os.Stdout,os.Stderr))
+ os.Exit((command.Service{}).Run(ctx,os.Args[1:],os.Stdout,os.Stderr))
+}
+`
+
+const linkTemplate = `// Package datlylink owns the application's explicit default component imports.
+// Add generated component packages here and pass one exported component holder
+// per selected package to bootstrap.UseDefaultImports.
+package datlylink
+
+import "github.com/viant/datly/bootstrap"
+
+func init() {
+	bootstrap.UseDefaultImports()
 }
 `

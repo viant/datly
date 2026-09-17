@@ -6,10 +6,13 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
+	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 	xmodule "github.com/viant/x/module"
@@ -40,8 +43,11 @@ type RouteSource struct {
 	OutputType string
 	// Imports contains file-local aliases referenced by the input or output
 	// contract expressions. Unrelated holder-file imports are not retained.
-	Imports []spec.ImportSpec
-	ordinal int
+	Imports          []spec.ImportSpec
+	LinkedInputType  reflect.Type
+	LinkedOutputType reflect.Type
+	LinkedHandler    func() (rhandler.TypedHandler, error)
+	ordinal          int
 }
 
 // DiscoverComponentsFromPackages is the default package-authority bootstrap
@@ -67,6 +73,8 @@ type PackageDiscovery struct {
 	ModuleDirs       []string
 	Include, Exclude []string
 	Workspace        *xmodule.Workspace
+	Holders          []any
+	RequireLinked    bool
 }
 
 func (d PackageDiscovery) Discover(ctx context.Context) ([]*RouteSource, error) {
@@ -103,7 +111,7 @@ func (d PackageDiscovery) DiscoverFiles(files []xmodule.File) ([]*RouteSource, e
 			return nil, err
 		}
 		for ordinal, field := range holders.fields {
-			sources = append(sources, &RouteSource{
+			source := &RouteSource{
 				HolderType:  field.holderType,
 				FieldName:   field.fieldName,
 				PackageName: holders.packageName,
@@ -115,7 +123,31 @@ func (d PackageDiscovery) DiscoverFiles(files []xmodule.File) ([]*RouteSource, e
 				OutputType:  field.outputType,
 				Imports:     append([]spec.ImportSpec(nil), field.imports...),
 				ordinal:     ordinal,
-			})
+			}
+			holder := linkedHolder(d.Holders, file.ImportPath, field.holderType)
+			if holder == nil && d.RequireLinked {
+				return nil, fmt.Errorf("component holder %s.%s is not selected by the default imports", file.ImportPath, field.holderType)
+			}
+			if holder != nil {
+				holderType := reflect.TypeOf(holder)
+				for holderType.Kind() == reflect.Pointer {
+					holderType = holderType.Elem()
+				}
+				if linkedField, ok := holderType.FieldByName(field.fieldName); ok && linkedField.Type.Kind() == reflect.Struct {
+					if input, found := linkedField.Type.FieldByName("Input"); found {
+						source.LinkedInputType = input.Type
+					} else if input, found = linkedField.Type.FieldByName("Inout"); found {
+						source.LinkedInputType = input.Type
+					}
+					if output, found := linkedField.Type.FieldByName("Output"); found {
+						source.LinkedOutputType = output.Type
+					}
+				}
+				if provider, ok := holder.(linkedHandlerProvider); ok {
+					source.LinkedHandler = provider.DatlyHandler(field.tag.Handler)
+				}
+			}
+			sources = append(sources, source)
 		}
 	}
 	sort.SliceStable(sources, func(i, j int) bool {

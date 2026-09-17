@@ -4,6 +4,8 @@ import (
 	"embed"
 	hooks "example.com/buildapp/hooks"
 	models "example.com/buildmodel"
+	rhandler "github.com/viant/datly/runtime/handler"
+	customhandler "github.com/viant/datly/runtime/handler/custom"
 	xdatly "github.com/viant/xdatly"
 )
 
@@ -21,3 +23,14 @@ type Output struct {
 
 //go:embed queries/*.sql
 var Assets embed.FS
+
+func (Component) EmbedFS() *embed.FS { return &Assets }
+
+func (Component) EmbedNamespace() string { return "build_records" }
+
+func (Component) DatlyHandler(name string) func() (rhandler.TypedHandler, error) {
+	if name == "hooks.NewWrite" || name == "example.com/buildapp/hooks.NewWrite" {
+		return customhandler.Factory[hooks.Input, hooks.Output](hooks.NewWrite)
+	}
+	return nil
+}

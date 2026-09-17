@@ -102,7 +102,7 @@ func TestEmbeddedPublication(t *testing.T){
 	// and generated filesystem copies before starting the compiled test binary.
 	require.NoError(t, os.RemoveAll(source))
 	require.NoError(t, os.RemoveAll(filepath.Join(root, "generated/datly_docs")))
-	require.NoError(t, os.RemoveAll(filepath.Join(root, "generated/datly_sql")))
+	require.NoError(t, os.RemoveAll(filepath.Join(root, "generated/sql")))
 	execute := exec.Command(binary, "-test.run", "TestEmbeddedPublication", "-test.v")
 	execute.Dir = t.TempDir()
 	output, err = execute.CombinedOutput()

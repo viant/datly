@@ -94,6 +94,12 @@ func (s *GenerationSettings) Clone() *GenerationSettings {
 			result.SupportFiles[role] = file
 		}
 	}
+	if s.SQLFiles != nil {
+		result.SQLFiles = map[string]string{}
+		for role, file := range s.SQLFiles {
+			result.SQLFiles[role] = file
+		}
+	}
 	return &result
 }
 

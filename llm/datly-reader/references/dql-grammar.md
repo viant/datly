@@ -141,6 +141,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `input_type`, `output_type` | 1+ | last argument is contract type |
 | `dest`, `input_dest`, `output_dest`, `router_dest` | 1+ | last argument is nonempty destination |
 | `file_prefix`, `handler_dest`, `lifecycle_dest`, `mutation_dest`, `resources_dest`, `links_dest` | exactly 1 | nonempty quoted value; no fluent tail; duplicate setting fails |
+| `sql_dest` | exactly 2 | canonical root view or generated SQL field/view name and relative `.sql` destination; duplicate role fails |
 | `support_dest` | exactly 2 | quoted role and filename; no tail; duplicate role fails |
 | `meta` | 1+ | last argument is nonempty description resource path |
 | `mcp` | 1+ | name (nonempty), optional description, optional description path; arguments after third ignored |
@@ -662,6 +663,7 @@ needed by the component are emitted; transcription does not create empty files.
 | Create-once application lifecycle, when requested | `lifecycle.go` | `$lifecycle_dest('custom.go')` |
 | Generated mutation definition | `mutation.go` | `$mutation_dest('policy.go')` |
 | Embedded resource filesystem, when needed | `resources.go` | `$resources_dest('sql_resources.go')` |
+| Generated SQL resource | `sql/<lower_snake_component_or_view>.sql` | `$sql_dest('orders','sql/orders.sql')` or `$sql_dest('CurrentOrders','sql/current_orders.sql')` |
 | Factory registration, when needed | `links.go` | `$links_dest('register.go')` |
 
 Optional `$file_prefix('orders_')` applies to default filenames for both readers

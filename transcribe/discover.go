@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/constant"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
-	loaderast "github.com/viant/x/loader/ast"
 	xmodule "github.com/viant/x/module"
 )
 
@@ -43,6 +43,14 @@ type Discovery struct {
 	// Registry is trusted compiled package authority. Selected source descriptors
 	// retain linked types so lifecycle methods and typed factories remain executable.
 	Registry *x.Registry
+	// Holders are build-linked component declarations for the packages selected
+	// by Include. They supply concrete Go contracts and factories without init
+	// registration; source scanning remains the discovery authority.
+	Holders []any
+	// RequireLinked rejects source-declared component holders that were not
+	// selected by the host's default-import package. Runtime hosts enable it;
+	// authoring/transcription may intentionally inspect unlinked source.
+	RequireLinked bool
 }
 
 // Compile discovers and compiles each component source exactly once. Plain SQL
@@ -101,7 +109,7 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 		return nil, err
 	}
 	packagePaths = append(packagePaths, dqlImports...)
-	assets, err := (packageresources.Loader{Workspace: workspace, Packages: packagePaths}).Load(ctx)
+	assets, err := (packageresources.Loader{Workspace: workspace, Packages: packagePaths, Holders: d.Holders}).Load(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +194,7 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 }
 
 func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Catalog, workspace *xmodule.Workspace) (map[string]*bootstrap.PackageComponentSource, []string, error) {
-	routes, err := (bootstrap.PackageDiscovery{Workspace: workspace, Include: d.Include, Exclude: d.Exclude}).Discover(ctx)
+	routes, err := (bootstrap.PackageDiscovery{Workspace: workspace, Include: d.Include, Exclude: d.Exclude, Holders: d.Holders, RequireLinked: d.RequireLinked}).Discover(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -197,7 +205,7 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 	for _, route := range routes {
 		imports = append(imports, route.PackagePath)
 	}
-	module, err := (loaderast.LocalPackageLoader{Workspace: workspace}).Load(ctx, imports...)
+	module, err := loadScopedPackageAuthority(ctx, workspace, routes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("load package authority: %w", err)
 	}
@@ -229,7 +237,13 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 		packagePaths = append(packagePaths, packagePath)
 	}
 	sort.Strings(packagePaths)
+	linked := linkedRouteTypes(routes)
 	for _, packagePath := range packagePaths {
+		for _, declared := range module.Packages[packagePath].Types {
+			if declared != nil {
+				declared.ReflectType = linked[packagePath+"."+declared.Name]
+			}
+		}
 		if d.Registry != nil {
 			for _, declared := range module.Packages[packagePath].Types {
 				if declared == nil {
@@ -289,6 +303,37 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 		}
 	}
 	return selected, loadedPackagePaths, nil
+}
+
+func linkedRouteTypes(routes []*bootstrap.RouteSource) map[string]reflect.Type {
+	result := map[string]reflect.Type{}
+	visited := map[reflect.Type]bool{}
+	var visit func(reflect.Type)
+	visit = func(typeOf reflect.Type) {
+		for typeOf != nil && (typeOf.Kind() == reflect.Pointer || typeOf.Kind() == reflect.Slice || typeOf.Kind() == reflect.Array) {
+			typeOf = typeOf.Elem()
+		}
+		if typeOf == nil || visited[typeOf] {
+			return
+		}
+		visited[typeOf] = true
+		if typeOf.Name() != "" && typeOf.PkgPath() != "" {
+			result[typeOf.PkgPath()+"."+typeOf.Name()] = typeOf
+		}
+		if typeOf.Kind() != reflect.Struct {
+			return
+		}
+		for i := 0; i < typeOf.NumField(); i++ {
+			visit(typeOf.Field(i).Type)
+		}
+	}
+	for _, route := range routes {
+		if route != nil {
+			visit(route.LinkedInputType)
+			visit(route.LinkedOutputType)
+		}
+	}
+	return result
 }
 
 func packageSourceIdentity(packagePath, componentName string) string {

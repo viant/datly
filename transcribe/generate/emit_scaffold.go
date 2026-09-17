@@ -125,6 +125,9 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 				plan.Input.Type, plan.Input.Fields, plan.Imports,
 			),
 		})
+		if setters := inputSetterFile(packageName, plan.Input.Type, plan.Input.Fields, plan.Imports); setters != "" {
+			files = append(files, EmittedFile{Path: filepath.Join(dir, plan.Generation.File("input_setters", "input_setters.go")), Content: setters})
+		}
 	}
 	if plan.Output.Ownership == ContractGenerated && plan.localShape(plan.Output.Package) {
 		files = append(files, EmittedFile{

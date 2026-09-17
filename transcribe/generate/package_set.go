@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/typecatalog"
+	xmodule "github.com/viant/x/module"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -161,7 +162,7 @@ func (s *packageSet) validateImports() error {
 	if root == "" {
 		return nil
 	}
-	authority, err := typecatalog.NewDestinationAuthority(root)
+	module, err := xmodule.LocateLocal(root)
 	if err != nil {
 		return err
 	}
@@ -206,15 +207,21 @@ func (s *packageSet) validateImports() error {
 		if _, ok := proposed[filepath.Clean(file)]; ok {
 			return nil
 		}
-		rel, err := filepath.Rel(root, file)
-		if err != nil {
-			return err
-		}
-		target, err := authority.Package("", rel)
-		if err != nil {
-			return err
-		}
 		files, err := os.ReadDir(file)
+		if err != nil {
+			return err
+		}
+		hasGoSource := false
+		for _, item := range files {
+			if !item.IsDir() && strings.HasSuffix(item.Name(), ".go") && !strings.HasSuffix(item.Name(), "_test.go") {
+				hasGoSource = true
+				break
+			}
+		}
+		if !hasGoSource {
+			return nil
+		}
+		importPath, err := xmodule.ImportPathLocal(module.Dir, module.Path, file)
 		if err != nil {
 			return err
 		}
@@ -226,7 +233,7 @@ func (s *packageSet) validateImports() error {
 			if err != nil {
 				return err
 			}
-			if err = s.imports(graph, target.ImportPath, string(content)); err != nil {
+			if err = s.imports(graph, importPath, string(content)); err != nil {
 				return err
 			}
 		}

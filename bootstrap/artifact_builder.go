@@ -40,7 +40,10 @@ func (b *ArtifactBuilder) Build(input ArtifactInput) (*Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
-	if b.registry != nil {
+	// A handler discovered from the compiled package holder is direct linked
+	// authority. The dynamic registry is only a fallback for runtime-defined
+	// components; it must not replace or re-register a linked factory.
+	if artifact.Handler == nil && b.registry != nil {
 		artifact.Handler, err = b.handler(artifact)
 		if err != nil {
 			return nil, err

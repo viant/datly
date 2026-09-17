@@ -225,6 +225,43 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 	if err != nil {
 		return nil, err
 	}
+	c.source.LinkedInputType = c.packageSource.InputType.Type
+	c.source.LinkedOutputType = c.packageSource.OutputType.Type
+	c.source.LinkedHandler = c.packageSource.Handler
+	// Concrete linked contracts are the runtime authority for reachable view
+	// shapes. Source AST remains useful for metadata, but it cannot manufacture
+	// reflect.Type values for imported structs in another module.
+	linkedViews := newPackageViewResolver(component, nil)
+	linkedRoot, err := linkedViews.rootDescriptor(c.source.LinkedOutputType)
+	if err != nil {
+		return nil, err
+	}
+	linkedInputs, err := linkedViews.inputDescriptors(c.source.LinkedInputType)
+	if err != nil {
+		return nil, err
+	}
+	linkedDescriptors := []*x.Type{c.packageSource.InputType, c.packageSource.OutputType}
+	if linkedRoot != nil {
+		linkedDescriptors = append(linkedDescriptors, linkedRoot)
+	}
+	for _, linked := range linkedInputs {
+		linkedDescriptors = append(linkedDescriptors, linked.descriptor)
+	}
+	for _, descriptor := range linkedDescriptors {
+		existing, found, resolveErr := c.catalog.Resolve(typecatalog.PackageAuthority, descriptor.Key())
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		if found {
+			if existing.Type == nil {
+				return nil, fmt.Errorf("linked type %q did not replace its source descriptor", descriptor.Key())
+			}
+			continue
+		}
+		if err = c.catalog.Register(typecatalog.TypeOriginPackage, descriptor); err != nil {
+			return nil, err
+		}
+	}
 	resolvedContext := compileTypeContext(c.source, component.TypeContext)
 	resolvedContext.PackageDir = c.packageSource.Routes[0].Dir
 	resolvedContext.PackageName = c.packageSource.Routes[0].PackageName
