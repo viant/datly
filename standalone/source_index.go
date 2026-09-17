@@ -3,11 +3,13 @@ package standalone
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/viant/datly/bootstrap"
 	bootstrapindex "github.com/viant/datly/bootstrap/index"
 	"github.com/viant/datly/report"
 	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe"
 	"github.com/viant/datly/typecatalog"
 	xmodule "github.com/viant/x/module"
@@ -31,7 +33,7 @@ func (m *indexedMaterializer) Materialize(ctx context.Context, entry *bootstrapi
 	if entry.Owner.Name != "" {
 		owner = entry.Owner
 	}
-	selection := []string{owner.Scope}
+	selection := indexedMaterializerSelection(owner, entry.Sources)
 	discovery := transcribe.Discovery{Const: m.source.config.Const, Workspace: m.workspace, Include: selection, Exclude: m.source.config.GoBootstrap.Exclude, Connector: m.source.config.Connector, Types: types, Registry: m.source.registry}
 	project, err := discovery.Compile(ctx)
 	if err != nil {
@@ -73,4 +75,25 @@ func (m *indexedMaterializer) Materialize(ctx context.Context, entry *bootstrapi
 		return nil, fmt.Errorf("indexed component %s did not produce its primary registration", entry.Key().String())
 	}
 	return &bootstrapindex.Loaded{Registration: primary, Related: related}, nil
+}
+
+func indexedMaterializerSelection(owner spec.Key, sources []bootstrapindex.Source) []string {
+	seen := map[string]bool{}
+	var result []string
+	add := func(packagePath string) {
+		if packagePath == "" || seen[packagePath] {
+			return
+		}
+		seen[packagePath] = true
+		result = append(result, packagePath)
+	}
+	add(owner.Scope)
+	for _, source := range sources {
+		switch source.Kind {
+		case bootstrapindex.SourceGo, bootstrapindex.SourceDQL:
+			add(source.PackagePath)
+		}
+	}
+	sort.Strings(result)
+	return result
 }

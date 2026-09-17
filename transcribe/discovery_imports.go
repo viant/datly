@@ -7,7 +7,6 @@ import (
 	"go/build"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 
 	"github.com/viant/datly/transcribe/dql"
@@ -16,6 +15,7 @@ import (
 	"github.com/viant/x"
 	loaderast "github.com/viant/x/loader/ast"
 	xmodule "github.com/viant/x/module"
+	smodel "github.com/viant/x/syntetic/model"
 )
 
 // DQL imports can name authored Go hooks without a Go component in the source
@@ -61,23 +61,26 @@ func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[strin
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
-	var loaded []string
+	available := make([]string, 0, len(paths))
 	for _, path := range paths {
-		location, err := d.workspace.Package(path)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		_, err := d.workspace.Package(path)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
 		if err != nil {
 			return nil, err
 		}
-		if location == nil {
-			continue
-		}
-		relative, err := filepath.Rel(location.Module.Dir, location.Dir)
-		if err != nil {
-			return nil, err
-		}
-		pkg, err := loaderast.LoadPackageFS(ctx, d.workspace.SourceFS(location.Module), filepath.ToSlash(relative))
+		available = append(available, path)
+	}
+	if len(available) == 0 {
+		return nil, nil
+	}
+	packagesByPath := map[string]*smodel.Package{}
+	for _, path := range available {
+		module, err := (loaderast.LocalPackageLoader{Workspace: d.workspace}).Load(ctx, path)
 		if err != nil {
 			var noGo *build.NoGoError
 			if errors.As(err, &noGo) {
@@ -85,6 +88,20 @@ func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[strin
 			}
 			return nil, fmt.Errorf("load DQL import %s: %w", path, err)
 		}
+		for packagePath := range module.Packages {
+			if packagesByPath[packagePath] == nil {
+				packagesByPath[packagePath] = module.Packages[packagePath]
+			}
+		}
+	}
+	loaded := make([]string, 0, len(packagesByPath))
+	packagePaths := make([]string, 0, len(packagesByPath))
+	for path := range packagesByPath {
+		packagePaths = append(packagePaths, path)
+	}
+	sort.Strings(packagePaths)
+	for _, path := range packagePaths {
+		pkg := packagesByPath[path]
 		if d.registry != nil {
 			for _, declared := range pkg.Types {
 				if declared != nil {
@@ -93,6 +110,10 @@ func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[strin
 					}
 				}
 			}
+		}
+		location, err := d.workspace.Package(path)
+		if err != nil || location == nil {
+			return nil, err
 		}
 		if err = (&gen.Result{}).RegisterPackage(d.catalog, pkg, location.Dir); err != nil {
 			return nil, fmt.Errorf("register DQL import %s: %w", path, err)

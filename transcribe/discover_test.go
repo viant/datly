@@ -11,6 +11,9 @@ import (
 
 	"github.com/viant/datly/internal/testharness"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/typecatalog"
+	xmodule "github.com/viant/x/module"
+	xshape "github.com/viant/x/shape"
 )
 
 const discoverGoMod = "module example.com/app\n\ngo 1.25.0\n"
@@ -92,6 +95,100 @@ func TestDiscoveryCompilesCanonicalProjectOnce(t *testing.T) {
 	if len(users.Component.Routes) != 1 || users.Component.Routes[0].Method != "GET" || users.Component.Routes[0].Path != "/v1/api/users" {
 		t.Fatalf("users routes = %+v", users.Component.Routes)
 	}
+}
+
+func TestDQLPackageDiscoveryLoadsImportedTypeDependencyClosure(t *testing.T) {
+	base := t.TempDir()
+	writeSourceFile(t, base, "go.mod", discoverGoMod)
+	writeSourceFile(t, base, "response/status.go", `package response
+type Status struct { Code int }
+`)
+	writeSourceFile(t, base, "auth/output.go", `package auth
+import response "example.com/app/response"
+type UserContextOutput struct {
+	response.Status
+	Subject string
+}
+`)
+	workspace, err := (xmodule.LocalWorkspace{BaseDir: base}).Resolve(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := typecatalog.NewCatalog()
+	loaded, err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog}).loadSource(context.Background(), "#import('auth','example.com/app/auth')\nSELECT 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(loaded, "example.com/app/auth") || !containsString(loaded, "example.com/app/response") {
+		t.Fatalf("loaded packages = %v", loaded)
+	}
+	resolver, err := typecatalog.NewResolver(catalog, typecatalog.PackageAuthority, &typecatalog.ResolutionContext{
+		PackagePath: "example.com/app/tool",
+		Imports:     []typecatalog.PackageImport{{Alias: "auth", Package: "example.com/app/auth"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor, err := resolver.Descriptor("auth.UserContextOutput")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields, err := xshape.New(descriptor, resolver.Descriptor).Fields()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, field := range fields {
+		names = append(names, field.Name)
+	}
+	if !containsString(names, "Code") || !containsString(names, "Subject") {
+		t.Fatalf("fields = %v", names)
+	}
+}
+
+func TestDQLPackageDiscoverySkipsNoGoImportWithoutDroppingValidImports(t *testing.T) {
+	base := t.TempDir()
+	writeSourceFile(t, base, "go.mod", discoverGoMod)
+	writeSourceFile(t, base, "assets/README.txt", "not a Go package\n")
+	writeSourceFile(t, base, "hooks/hook.go", `package hooks
+type Hook struct { Value string }
+`)
+	workspace, err := (xmodule.LocalWorkspace{BaseDir: base}).Resolve(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := typecatalog.NewCatalog()
+	loaded, err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog}).loadSource(context.Background(), `#import('assets','example.com/app/assets')
+#import('hooks','example.com/app/hooks')
+SELECT 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if containsString(loaded, "example.com/app/assets") {
+		t.Fatalf("no-Go import was loaded: %v", loaded)
+	}
+	if !containsString(loaded, "example.com/app/hooks") {
+		t.Fatalf("valid import was dropped: %v", loaded)
+	}
+	resolver, err := typecatalog.NewResolver(catalog, typecatalog.PackageAuthority, &typecatalog.ResolutionContext{
+		PackagePath: "example.com/app/tool",
+		Imports:     []typecatalog.PackageImport{{Alias: "hooks", Package: "example.com/app/hooks"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if descriptor, err := resolver.Descriptor("hooks.Hook"); err != nil || descriptor == nil {
+		t.Fatalf("hooks.Hook descriptor = %+v, %v", descriptor, err)
+	}
+}
+
+func containsString(values []string, candidate string) bool {
+	for _, value := range values {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDiscoveryComposesExactPackageAndDQLAuthority(t *testing.T) {
