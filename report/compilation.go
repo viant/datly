@@ -125,10 +125,7 @@ func (c *ProjectCompiler) CompileArtifacts(inputs []bootstrap.ArtifactInput) (*C
 		// Derivation must inspect the source already resolved by the reader
 		// compiler (including SQL URI/embed resources), not reopen resources or
 		// change the base artifact's authored SQL/cache metadata.
-		sourceComponent := artifact.Component.Clone()
-		if sourceComponent.RootView != nil && artifact.Reader != nil && artifact.Reader.Root != nil {
-			sourceComponent.RootView.Source = artifact.Reader.Root.View.Spec.Source.Clone()
-		}
+		sourceComponent := artifact.ReportSourceComponent()
 		sources = append(sources, Source{Component: sourceComponent, Input: artifact.Input, OutputType: input.OutputType})
 		sourceInputs[artifact.Component.Key.String()] = input
 	}

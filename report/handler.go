@@ -56,7 +56,12 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 	if !ok || invoker == nil {
 		return nil, fmt.Errorf("report component invoker is unavailable")
 	}
-	return invoker.InvokeComponent(ctx, exec.ComponentRequest{Target: h.plan.target, Providers: providers})
+	childContext := exec.CaptureChildOutputSelection(ctx)
+	result, err := invoker.InvokeComponent(childContext, exec.ComponentRequest{Target: h.plan.target, Providers: providers})
+	if err == nil {
+		exec.PublishOutputSelection(ctx, result, exec.SelectedOutputFields(childContext, result))
+	}
+	return result, err
 }
 
 func (p *Plan) selectedFields(input reflect.Value) ([]string, error) {
