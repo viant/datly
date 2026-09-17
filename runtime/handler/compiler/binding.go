@@ -168,8 +168,7 @@ func newCodecTransformer(codec xcodec.Instance) xform.Transformer {
 }
 
 func (t *codecTransformer) Transform(ctx context.Context, _ locator.Resolver, input any) (any, error) {
-	if values, ok := input.([]string); ok && len(values) > 0 {
-		input = values[0]
-	}
+	// Bindly already converts to the declared codec source type. Do not collapse
+	// collection inputs; scalar codecs receive their declared scalar type.
 	return t.codec.Value(ctx, input)
 }
