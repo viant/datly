@@ -29,6 +29,15 @@ type indexedInput struct {
 	Name string `parameter:"Name,kind=query,in=name"`
 }
 
+type indexedToolWithAuthInput struct {
+	Name string         `parameter:"Name,kind=query,in=name"`
+	Auth *indexedOutput `parameter:"Auth,kind=component,in=GET:/auth"`
+}
+
+type indexedAuthInput struct {
+	Token string `parameter:"Token,kind=query,in=token"`
+}
+
 type lifecycleMaterializer struct {
 	started chan struct{}
 	gate    chan struct{}
@@ -171,6 +180,88 @@ type Holder struct { Route xdatly.Component[Input,Output] `+"`"+`component:"`+fi
 		t.Fatalf("cached MCP calls=%v", materializer.calls)
 	}
 	mcpserver.Release(pinned)
+	if err := manager.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestIndexedApplicationMCPPreparesTransitiveInputDependencies(t *testing.T) {
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "example.com/indexedauth"}).Write(t, root)
+	for _, fixture := range []struct {
+		pkg, name, path string
+		mcp             bool
+	}{{"tool", "Tool", "/tool", true}, {"auth", "Auth", "/auth", false}, {"unused", "Unused", "/unused", false}} {
+		extra := ""
+		if fixture.mcp {
+			extra = ` mcp:"[{\"kind\":\"tool\",\"name\":\"indexed.auth.tool\"}]"`
+		}
+		writeFixture(t, root, fixture.pkg+"/holder.go", `package `+fixture.pkg+`
+import xdatly "github.com/viant/xdatly"
+type Input struct{}
+type Output struct{}
+type Holder struct { Route xdatly.Component[Input,Output] `+"`"+`component:"`+fixture.name+`,path=`+fixture.path+`,method=GET"`+extra+"`"+` }
+`)
+	}
+	snapshot, err := (bootstrapindex.Builder{Config: bootstrapindex.Config{BaseDir: root, Include: []string{"example.com/indexedauth/..."}}}).Build(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	materializer := &countingMaterializer{calls: map[string]int{}, regs: map[string]*registry.RegisteredComponent{}}
+	materializerForAuth := bootstrapindex.MaterializeFunc(func(ctx context.Context, entry *bootstrapindex.Entry, resolver bootstrapindex.Resolver) (*bootstrapindex.Loaded, error) {
+		materializer.mu.Lock()
+		materializer.calls[entry.Key().Name]++
+		materializer.mu.Unlock()
+		var inputType reflect.Type
+		switch entry.Key().Name {
+		case "Tool":
+			inputType = reflect.TypeFor[indexedToolWithAuthInput]()
+		case "Auth":
+			inputType = reflect.TypeFor[indexedAuthInput]()
+		default:
+			inputType = reflect.TypeFor[indexedInput]()
+		}
+		artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: entry.Component, InputType: inputType, OutputType: reflect.TypeFor[indexedOutput]()})
+		if err != nil {
+			return nil, err
+		}
+		registered := &registry.RegisteredComponent{Component: artifact.Component, Input: artifact.Input, Output: artifact.Output, OutputType: reflect.TypeFor[indexedOutput](), Handler: custom.NewFunc[indexedInput, indexedOutput](func(_ context.Context, input *indexedInput) (*indexedOutput, error) {
+			return &indexedOutput{Name: input.Name}, nil
+		})}
+		materializer.mu.Lock()
+		materializer.regs[entry.Key().Name] = registered
+		materializer.mu.Unlock()
+		return &bootstrapindex.Loaded{Registration: registered}, nil
+	})
+	manager, err := application.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = manager.Reload(context.Background(), application.Request{Revision: 1, Compile: func(context.Context, *typecatalog.Catalog) (*application.Build, error) {
+		return &application.Build{Index: snapshot, Materializer: materializerForAuth}, nil
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	pinned, service, err := manager.Pin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mcpserver.Release(pinned)
+	if err := service.(interface {
+		PrepareTool(context.Context, string) error
+	}).PrepareTool(pinned, "indexed.auth.tool"); err != nil {
+		t.Fatal(err)
+	}
+	if materializer.count("Tool") != 1 || materializer.count("Auth") != 1 || materializer.count("Unused") != 0 {
+		t.Fatalf("MCP transitive preparation calls=%v", materializer.calls)
+	}
+	entry, ok := service.Registry().ToolRegistry.Get("indexed.auth.tool")
+	if !ok {
+		t.Fatal("indexed tool was not prepared")
+	}
+	if entry.Metadata.InputSchema.Properties["Token"] == nil {
+		t.Fatalf("transitive auth input missing from schema: %+v", entry.Metadata.InputSchema.Properties)
+	}
 	if err := manager.Shutdown(context.Background()); err != nil {
 		t.Fatal(err)
 	}

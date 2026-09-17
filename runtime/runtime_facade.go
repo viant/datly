@@ -255,6 +255,15 @@ func (r *Runtime) LoadComponents(ctx context.Context, key spec.Key) ([]*Register
 	return []*RegisteredComponent{component}, nil
 }
 
+func (r *Runtime) ResolveComponentRoute(method, path string) (spec.Key, *spec.Route, bool) {
+	if resolver, ok := r.loader.(interface {
+		ResolveComponentRoute(method, path string) (spec.Key, *spec.Route, bool)
+	}); ok {
+		return resolver.ResolveComponentRoute(method, path)
+	}
+	return spec.Key{}, nil, false
+}
+
 // ResourceFS returns the original package filesystem registered under name.
 func (r *Runtime) ResourceFS(name string) (fs.FS, bool) {
 	if r == nil || r.injector == nil {

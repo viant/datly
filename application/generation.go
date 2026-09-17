@@ -227,13 +227,12 @@ func (m *Manager) Reload(ctx context.Context, request Request) error {
 	}
 	sources := map[*spec.Component]bool{}
 	rawComponents := append([]*registry.RegisteredComponent(nil), built.Components...)
-	for _, key := range built.Preload {
-		loaded, loadErr := indexLease.LoadComponent(ctx, key)
+	if built.Index != nil {
+		loaded, loadErr := preloadComponents(ctx, indexLease, built.Preload)
 		if loadErr != nil {
 			return loadErr
 		}
-		rawComponents = append(rawComponents, loaded.Registration)
-		rawComponents = append(rawComponents, loaded.Related...)
+		rawComponents = append(rawComponents, loaded...)
 	}
 	components := make([]*registry.RegisteredComponent, 0, len(rawComponents))
 	for _, component := range rawComponents {
@@ -543,6 +542,17 @@ func (l indexedRuntimeLoader) LoadComponents(ctx context.Context, key spec.Key) 
 		return nil, err
 	}
 	return append([]*registry.RegisteredComponent{loaded.Registration}, loaded.Related...), nil
+}
+
+func (l indexedRuntimeLoader) ResolveComponentRoute(method, path string) (spec.Key, *spec.Route, bool) {
+	if l.lease == nil || l.lease.Snapshot() == nil {
+		return spec.Key{}, nil, false
+	}
+	entry, route, _, ok := l.lease.Snapshot().Route(method, path)
+	if !ok || entry == nil {
+		return spec.Key{}, nil, false
+	}
+	return entry.Key(), route, true
 }
 
 type generationKey struct{ manager *Manager }

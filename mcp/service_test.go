@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/datly/internal/testharness"
 	"reflect"
 	"strings"
@@ -247,6 +248,151 @@ func TestSharedHTTPRouteKeepsComponentToolInputs(t *testing.T) {
 	if _, err := inputs.Fields(spec.RouteRef{Method: "POST", Path: "/shared"}); err == nil {
 		t.Fatal("ambiguous route-only input lookup accepted")
 	}
+}
+
+type lazyToolInput struct {
+	Query string `json:"query"`
+	Auth  *lazyAuthOutput
+}
+
+type lazyAuthInput struct {
+	Token string `json:"token"`
+}
+
+type lazyAuthOutput struct {
+	Subject string
+}
+
+type lazyIndexedLoader struct {
+	components map[string]*registry.RegisteredComponent
+	routes     map[string]spec.Key
+	calls      map[string]int
+	resolve    bool
+}
+
+func (l *lazyIndexedLoader) LoadComponent(_ context.Context, key spec.Key) (*registry.RegisteredComponent, error) {
+	l.calls[key.Name]++
+	registered := l.components[key.String()]
+	if registered == nil {
+		return nil, fmt.Errorf("missing component %s", key.String())
+	}
+	return registered, nil
+}
+
+func (l *lazyIndexedLoader) LoadComponents(ctx context.Context, key spec.Key) ([]*registry.RegisteredComponent, error) {
+	registered, err := l.LoadComponent(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	return []*registry.RegisteredComponent{registered}, nil
+}
+
+func (l *lazyIndexedLoader) ResolveComponentRoute(method, path string) (spec.Key, *spec.Route, bool) {
+	if !l.resolve {
+		return spec.Key{}, nil, false
+	}
+	ref := spec.RouteRef{Method: method, Path: path}
+	key, ok := l.routes[ref.String()]
+	if !ok {
+		return spec.Key{}, nil, false
+	}
+	registered := l.components[key.String()]
+	if registered == nil || registered.Component == nil {
+		return spec.Key{}, nil, false
+	}
+	for _, route := range registered.Component.Routes {
+		if route != nil && strings.EqualFold(route.Method, method) && route.Path == path {
+			return key, route, true
+		}
+	}
+	return spec.Key{}, nil, false
+}
+
+func TestIndexedLazyToolPreparationLoadsTransitiveInputs(t *testing.T) {
+	tool := lazyToolComponent(t)
+	auth := lazyAuthComponent(t)
+	loader := newLazyIndexedLoader(tool, auth)
+	loader.resolve = true
+	service, err := New(Config{Indexed: []*spec.Component{tool.Component, auth.Component}, Loader: loader, Invoker: &serviceInvoker{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = service.PrepareTool(context.Background(), "indexed.lazy"); err != nil {
+		t.Fatal(err)
+	}
+	if loader.calls["Tool"] != 1 || loader.calls["Auth"] != 1 {
+		t.Fatalf("loads = %v", loader.calls)
+	}
+	entry, ok := service.Registry().ToolRegistry.Get("indexed.lazy")
+	if !ok {
+		t.Fatal("indexed tool was not prepared")
+	}
+	if entry.Metadata.InputSchema.Properties["token"] == nil {
+		t.Fatalf("transitive auth input missing from schema: %+v", entry.Metadata.InputSchema.Properties)
+	}
+}
+
+func TestIndexedLazyToolPreparationFailureDoesNotPoisonRetry(t *testing.T) {
+	tool := lazyToolComponent(t)
+	auth := lazyAuthComponent(t)
+	loader := newLazyIndexedLoader(tool, auth)
+	service, err := New(Config{Indexed: []*spec.Component{tool.Component, auth.Component}, Loader: loader, Invoker: &serviceInvoker{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = service.PrepareTool(context.Background(), "indexed.lazy"); err == nil || !strings.Contains(err.Error(), "component dependency route contract not found") {
+		t.Fatalf("PrepareTool error = %v", err)
+	}
+	if _, ok := service.Registry().ToolRegistry.Get("indexed.lazy"); ok {
+		t.Fatal("failed preparation published the tool")
+	}
+	if service.lazy.prepared[tool.Component.Key.String()] != nil {
+		t.Fatal("failed preparation marked the tool prepared")
+	}
+	loader.resolve = true
+	if err = service.PrepareTool(context.Background(), "indexed.lazy"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := service.Registry().ToolRegistry.Get("indexed.lazy"); !ok {
+		t.Fatal("retry did not publish the tool")
+	}
+	if loader.calls["Tool"] != 2 || loader.calls["Auth"] != 1 {
+		t.Fatalf("loads = %v", loader.calls)
+	}
+}
+
+func newLazyIndexedLoader(components ...*registry.RegisteredComponent) *lazyIndexedLoader {
+	result := &lazyIndexedLoader{components: map[string]*registry.RegisteredComponent{}, routes: map[string]spec.Key{}, calls: map[string]int{}}
+	for _, registered := range components {
+		result.components[registered.Component.Key.String()] = registered
+		for _, route := range registered.Component.Routes {
+			result.routes[(spec.RouteRef{Method: route.Method, Path: route.Path}).String()] = registered.Component.Key
+		}
+	}
+	return result
+}
+
+func lazyToolComponent(t *testing.T) *registry.RegisteredComponent {
+	t.Helper()
+	return buildServiceComponent(t, serviceComponentFixture{
+		name:      "Tool",
+		inputType: reflect.TypeOf(lazyToolInput{}),
+		bindings: []bindly.BindingSpec{
+			{Path: "Query", Location: bindstate.Location{Kind: "query", In: "query"}},
+			{Path: "Auth", Location: bindstate.Location{Kind: "component", In: "GET:/auth"}},
+		},
+		route: &spec.Route{Method: "POST", Path: "/tool", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "indexed.lazy"}}},
+	})
+}
+
+func lazyAuthComponent(t *testing.T) *registry.RegisteredComponent {
+	t.Helper()
+	return buildServiceComponent(t, serviceComponentFixture{
+		name:      "Auth",
+		inputType: reflect.TypeOf(lazyAuthInput{}),
+		bindings:  []bindly.BindingSpec{{Path: "Token", Location: bindstate.Location{Kind: "query", In: "token"}}},
+		route:     &spec.Route{Method: "GET", Path: "/auth"},
+	})
 }
 
 func TestToolOnlyServiceRejectsMalformedRoutes(t *testing.T) {

@@ -89,43 +89,22 @@ func (l *lazyCatalog) prepareAll(ctx context.Context) error {
 func (l *lazyCatalog) prepare(ctx context.Context, keys []spec.Key) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	staged := clonePrepared(l.prepared)
 	changed := false
-	for _, key := range keys {
-		identity := key.String()
-		if l.prepared[identity] != nil {
-			continue
-		}
-		loaded, err := l.config.Loader.LoadComponent(ctx, key)
-		if err != nil {
-			return err
-		}
-		l.prepared[identity] = loaded
-		if family, ok := l.config.Loader.(interface {
-			LoadComponents(context.Context, spec.Key) ([]*registry.RegisteredComponent, error)
-		}); ok {
-			registrations, familyErr := family.LoadComponents(ctx, key)
-			if familyErr != nil {
-				return familyErr
-			}
-			for _, related := range registrations {
-				if related != nil && related.Component != nil {
-					l.prepared[related.Component.Key.String()] = related
-				}
-			}
-		}
-		changed = true
+	if err := l.prepareClosure(ctx, staged, &changed, keys); err != nil {
+		return err
 	}
 	if !changed {
 		return nil
 	}
 	components := append([]*registry.RegisteredComponent(nil), l.base...)
-	identities := make([]string, 0, len(l.prepared))
-	for identity := range l.prepared {
+	identities := make([]string, 0, len(staged))
+	for identity := range staged {
 		identities = append(identities, identity)
 	}
 	sort.Strings(identities)
 	for _, identity := range identities {
-		components = append(components, l.prepared[identity])
+		components = append(components, staged[identity])
 	}
 	config := l.config
 	config.Components = components
@@ -135,7 +114,7 @@ func (l *lazyCatalog) prepare(ctx context.Context, keys []spec.Key) error {
 		policy := cloneAuthorizationPolicy(config.Authorization)
 		policy.Tools = map[string]*authorization.Authorization{}
 		for name, key := range l.targets {
-			if rule, exists := config.Authorization.Tools[name]; exists && l.prepared[key.String()] != nil {
+			if rule, exists := config.Authorization.Tools[name]; exists && staged[key.String()] != nil {
 				policy.Tools[name] = cloneAuthorization(rule)
 			}
 		}
@@ -145,8 +124,119 @@ func (l *lazyCatalog) prepare(ctx context.Context, keys []spec.Key) error {
 	if err != nil {
 		return err
 	}
+	l.prepared = staged
 	l.active.Store(compiled)
 	return nil
+}
+
+func clonePrepared(source map[string]*registry.RegisteredComponent) map[string]*registry.RegisteredComponent {
+	result := make(map[string]*registry.RegisteredComponent, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
+func (l *lazyCatalog) prepareClosure(ctx context.Context, staged map[string]*registry.RegisteredComponent, changed *bool, roots []spec.Key) error {
+	queue := append([]spec.Key(nil), roots...)
+	routes := preparedRoutes(l.base, staged)
+	for i := 0; i < len(queue); i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		family, loaded, err := l.loadFamily(ctx, staged, queue[i])
+		if err != nil {
+			return err
+		}
+		if loaded {
+			*changed = true
+			addPreparedRoutes(routes, family)
+		}
+		for _, registered := range family {
+			if registered == nil || registered.Component == nil || registered.Input == nil {
+				return fmt.Errorf("indexed MCP component %s requires a compiled input contract", queue[i].String())
+			}
+			for _, endpoint := range registered.Component.Routes {
+				if endpoint == nil {
+					return fmt.Errorf("indexed MCP component %s has a nil route", registered.Component.Key.String())
+				}
+				ref := spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}
+				contract, ok := registered.Input.ForRoute(ref)
+				if !ok {
+					return fmt.Errorf("indexed MCP input contract not found: %s", ref.String())
+				}
+				for _, field := range contract.Fields() {
+					target, dependency := field.Dependency()
+					if !dependency || routes[target.String()] {
+						continue
+					}
+					resolver, ok := l.config.Loader.(ComponentRouteResolver)
+					if !ok {
+						return fmt.Errorf("%s input %s: component dependency route resolver not available: %s", ref.String(), field.Path(), target.String())
+					}
+					key, route, found := resolver.ResolveComponentRoute(target.Method, target.Path)
+					if !found || route == nil || route.Path != target.Path {
+						return fmt.Errorf("%s input %s: component dependency route contract not found: %s", ref.String(), field.Path(), target.String())
+					}
+					queue = append(queue, key)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (l *lazyCatalog) loadFamily(ctx context.Context, staged map[string]*registry.RegisteredComponent, key spec.Key) ([]*registry.RegisteredComponent, bool, error) {
+	if staged[key.String()] != nil {
+		return []*registry.RegisteredComponent{staged[key.String()]}, false, nil
+	}
+	var family []*registry.RegisteredComponent
+	if loader, ok := l.config.Loader.(interface {
+		LoadComponents(context.Context, spec.Key) ([]*registry.RegisteredComponent, error)
+	}); ok {
+		loaded, err := loader.LoadComponents(ctx, key)
+		if err != nil {
+			return nil, false, err
+		}
+		family = loaded
+	} else {
+		loaded, err := l.config.Loader.LoadComponent(ctx, key)
+		if err != nil {
+			return nil, false, err
+		}
+		family = []*registry.RegisteredComponent{loaded}
+	}
+	for _, registered := range family {
+		if registered == nil || registered.Component == nil {
+			continue
+		}
+		staged[registered.Component.Key.String()] = registered
+	}
+	return family, true, nil
+}
+
+func preparedRoutes(base []*registry.RegisteredComponent, prepared map[string]*registry.RegisteredComponent) map[string]bool {
+	result := map[string]bool{}
+	addPreparedRoutes(result, base)
+	components := make([]*registry.RegisteredComponent, 0, len(prepared))
+	for _, registered := range prepared {
+		components = append(components, registered)
+	}
+	addPreparedRoutes(result, components)
+	return result
+}
+
+func addPreparedRoutes(routes map[string]bool, components []*registry.RegisteredComponent) {
+	for _, registered := range components {
+		if registered == nil || registered.Component == nil {
+			continue
+		}
+		for _, endpoint := range registered.Component.Routes {
+			if endpoint != nil {
+				routes[(spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}).String()] = true
+			}
+		}
+	}
 }
 
 func compileIndexedAuthorizationPolicy(source *authorization.Policy, catalog *Catalog, indexed []*spec.Component) (*authorization.Policy, error) {

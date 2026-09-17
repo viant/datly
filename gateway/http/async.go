@@ -70,8 +70,11 @@ func (r *asyncRoute) execute(ctx context.Context, req *http.Request, scope exec.
 	return value, errors.Join(err, bindErr)
 }
 
-func (h *Handler) prepareAsyncRoute(req *http.Request, route *asyncRoute) (*asyncRoute, error) {
-	format := h.outputFormat(req)
+func (h *Handler) prepareAsyncRoute(ctx context.Context, req *http.Request, route *asyncRoute) (*asyncRoute, error) {
+	format, err := h.outputFormat(ctx, req)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := output.ContentType(format); err != nil {
 		return nil, &xresponse.Error{Code: 400, Payload: xresponse.Status{Status: "error", Message: err.Error()}}
 	}

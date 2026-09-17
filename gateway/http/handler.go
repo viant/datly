@@ -139,7 +139,7 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	var actual any
 	var execErr error
 	if asyncRoute != nil {
-		asyncRoute, execErr = h.prepareAsyncRoute(req, asyncRoute)
+		asyncRoute, execErr = h.prepareAsyncRoute(ctx, req, asyncRoute)
 		if execErr == nil {
 			actual, execErr = asyncRoute.execute(ctx, req, requestScope, asyncService)
 		}

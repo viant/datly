@@ -35,6 +35,10 @@ type ComponentLoader interface {
 	LoadComponent(context.Context, spec.Key) (*registry.RegisteredComponent, error)
 }
 
+type ComponentRouteResolver interface {
+	ResolveComponentRoute(method, path string) (spec.Key, *spec.Route, bool)
+}
+
 type Service struct {
 	catalog   *Catalog
 	registry  *mcpserver.Registry
