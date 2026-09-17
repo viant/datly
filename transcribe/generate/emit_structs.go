@@ -132,13 +132,7 @@ func viewFileContent(packageName string, plan *Plan, views []ViewPlan, includeSu
 			continue
 		}
 		b.WriteString(" struct {\n")
-		for _, field := range helper.Fields {
-			b.WriteString("\t")
-			b.WriteString(field.Name)
-			b.WriteString(" ")
-			b.WriteString(field.Type)
-			b.WriteString("\n")
-		}
+		appendFields(&b, helper.Fields)
 		b.WriteString("}\n")
 	}
 	for _, name := range plan.referencedPlaceholderTypes() {

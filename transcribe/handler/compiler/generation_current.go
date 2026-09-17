@@ -55,7 +55,10 @@ func (b *inputGeneration) addCurrent(view *spec.View, body string, path []string
 		alias := ""
 		for _, col := range view.Columns {
 			if col != nil && col.PrimaryKey && typecatalog.FieldName(col.Name) == key.Field {
-				alias = col.Name
+				// StructQL helper projections are Go shapes. Keep the physical
+				// database name in SQLX metadata and use the canonical exported
+				// field name for the generated helper contract.
+				alias = key.Field
 				break
 			}
 		}

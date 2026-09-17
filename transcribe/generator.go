@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
 	handlercompiler "github.com/viant/datly/transcribe/handler/compiler"
 	"github.com/viant/datly/typecatalog"
@@ -92,6 +93,9 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	}
 	if operation == "get" {
 		return NewCompiler().generateCompiledAt(ctx, root, dir, compiled)
+	}
+	if err := column.ApplyWriterMetadata(compiled.Component); err != nil {
+		return nil, err
 	}
 	input, dir, err := generationInput(root, dir, compiled)
 	if err != nil {

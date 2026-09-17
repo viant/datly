@@ -3,9 +3,11 @@ package generate
 import (
 	"fmt"
 	"go/token"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
+	sqlio "github.com/viant/sqlx/io"
 	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
 )
@@ -62,10 +64,17 @@ func (r *planResolver) concretizeGeneratedHelperFields() error {
 			valueField := exportedName(projected.Source)
 			valueType := ""
 			valueExplicit := false
+			valueSQLX := ""
 			for _, field := range sourceView.Fields {
 				if strings.EqualFold(field.Name, valueField) {
 					valueType = strings.TrimSpace(field.Type)
 					valueExplicit = field.ExplicitType
+					if _, ok := reflect.StructTag(field.Tag).Lookup(sqlio.TagSqlx); ok {
+						// Helpers need only the physical column mapping. Mutation and
+						// validation options belong to the entity field, not to the
+						// projected lookup key.
+						valueSQLX = sqlio.ParseTag(reflect.StructTag(field.Tag)).Name()
+					}
 					break
 				}
 			}
@@ -80,6 +89,9 @@ func (r *planResolver) concretizeGeneratedHelperFields() error {
 					continue
 				}
 				helper.Fields[index].ExplicitType = valueExplicit
+				if valueSQLX != "" {
+					helper.Fields[index].Tag = appendStructTag(helper.Fields[index].Tag, sqlio.TagSqlx, valueSQLX)
+				}
 				if declaration.isAggregate() {
 					helper.Fields[index].Type = "[]" + valueType
 				} else {
