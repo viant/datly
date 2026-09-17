@@ -41,6 +41,11 @@ func TestDescriptorPreservesGenericSpecializationAndOrdinaryIdentity(t *testing.
 		if !strings.Contains(actual.Name, "example.com/"+alias+".Item") {
 			t.Fatalf("specialized identity = %s", actual.Name)
 		}
+		actual.SynteticType.TypeSpec.Type.(*ast.StructType).Fields.List[0].Names[0].Name = "Mutation"
+		again, err := resolver.Descriptor("h.Hook[" + alias + ".Item]")
+		if err != nil || again.SynteticType.TypeSpec.Type.(*ast.StructType).Fields.List[0].Names[0].Name != "Value" {
+			t.Fatalf("specialized descriptor mutation leaked: %v", err)
+		}
 	}
 	ordinary, err := resolver.Descriptor("one.Item")
 	if err != nil || ordinary.Key() != "example.com/one.Item" {

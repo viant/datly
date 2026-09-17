@@ -145,6 +145,25 @@ func (c *Catalog) Resolve(authority Authority, key string) (*x.Type, bool, error
 	return detached, ok, err
 }
 
+// ResolveRuntimeType returns only the immutable Go identity of the selected
+// descriptor. A found synthetic-only declaration returns nil, true; it must not
+// fall through to a lower-priority origin's compiled type.
+func (c *Catalog) ResolveRuntimeType(authority Authority, key string) (reflect.Type, bool, error) {
+	if c == nil {
+		return nil, false, fmt.Errorf("type catalog is required")
+	}
+	if err := validateAuthority(authority); err != nil {
+		return nil, false, err
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	typ, ok := resolveRegistrations(authority, c.items[strings.TrimSpace(key)])
+	if !ok {
+		return nil, false, nil
+	}
+	return typ.Type, true, nil
+}
+
 func resolveRegistrations(authority Authority, registrations []registration) (*x.Type, bool) {
 	if len(registrations) == 0 {
 		return nil, false

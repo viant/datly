@@ -95,13 +95,9 @@ func (c *Catalog) RegisterPackage(origin TypeOrigin, pkg *smodel.Package) error 
 				filtered = append(filtered, existing)
 			}
 		}
-		detached, err := (x.Cloner{}).Type(typ)
-		if err != nil {
-			return err
-		}
-		// Resolve the native lazy identity cache before publishing immutable storage.
-		_ = detached.Key()
-		updates[key] = append(filtered, registration{Origin: origin, Type: detached})
+		// The descriptor already owns the detached AST, and Key was initialized
+		// above. Publish it without copying that private graph a second time.
+		updates[key] = append(filtered, registration{Origin: origin, Type: typ})
 	}
 	for key, registrations := range updates {
 		if len(registrations) == 0 {
@@ -145,17 +141,16 @@ func (c *Catalog) RegisterPackageFiles(pkg *smodel.Package, generatedFiles map[s
 	// generation must retain edits to create-once hooks, not register duplicates.
 	// Preserve compiled identity where one is already linked to that source.
 	for index, typ := range authored.Types {
-		existing, ok, err := c.Resolve(PackageAuthority, pkg.PkgPath+"."+typ.Name)
+		existing, ok, err := c.ResolveRuntimeType(PackageAuthority, pkg.PkgPath+"."+typ.Name)
 		if err != nil {
 			return err
 		}
-		if ok && existing.Type != nil {
-			detached, err := (x.Cloner{}).Synthetic(typ)
-			if err != nil {
-				return err
-			}
-			detached.ReflectType = existing.Type
-			authored.Types[index] = detached
+		if ok && existing != nil {
+			// Only the header changes here. RegisterPackage detaches the complete
+			// graph before publication; the source declaration remains untouched.
+			linked := *typ
+			linked.ReflectType = existing
+			authored.Types[index] = &linked
 		}
 	}
 	return c.RegisterPackage(TypeOriginPackage, &authored)

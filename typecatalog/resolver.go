@@ -59,9 +59,21 @@ func (r *Resolver) Resolve(typeExpr string) (string, error) {
 
 // Type resolves an expression to the catalog's effective reflect type.
 func (r *Resolver) Type(typeExpr string) (reflect.Type, error) {
-	typ, err := r.Descriptor(typeExpr)
-	if err != nil || typ == nil {
+	if reference, err := (xshape.Resolver{}).Reference(typeExpr); err == nil && len(reference.Arguments) > 0 {
+		typ, err := r.Descriptor(typeExpr)
+		if err != nil || typ == nil {
+			return nil, err
+		}
+		return typ.Type, nil
+	}
+	resolved, err := r.ResolveWithProvenance(typeExpr)
+	if err != nil || resolved == nil {
 		return nil, err
+	}
+	// Runtime identity is immutable; no synthetic AST needs to escape.
+	typ := r.types[resolved.ResolvedKey]
+	if typ == nil {
+		return nil, nil
 	}
 	return typ.Type, nil
 }
@@ -97,14 +109,8 @@ func (r *Resolver) ResolveShape(typeExpr string) (*xshape.Resolution, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve type shape %q: %w", typeExpr, err)
 	}
-	if resolved == nil || resolved.Descriptor == nil {
-		return resolved, nil
-	}
-	descriptor, err := CloneDescriptor(resolved.Descriptor)
-	if err != nil {
-		return nil, fmt.Errorf("clone resolved type shape %q: %w", typeExpr, err)
-	}
-	return &xshape.Resolution{Identity: resolved.Identity, Descriptor: descriptor}, nil
+	// Both lookup paths detach descriptors before native shape resolution.
+	return resolved, nil
 }
 
 func (r *Resolver) ResolveWithProvenance(typeExpr string) (*Resolution, error) {
