@@ -2,11 +2,13 @@ package typecatalog
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
 
 	x "github.com/viant/x"
+	xresponse "github.com/viant/xdatly/response"
 )
 
 // TypeOrigin identifies where a structural type entered Datly's authority.
@@ -39,7 +41,17 @@ type Catalog struct {
 }
 
 func NewCatalog() *Catalog {
-	return &Catalog{items: map[string][]registration{}}
+	result := &Catalog{items: map[string][]registration{}}
+	for _, typ := range standardTypes() {
+		result.items[typ.Key()] = []registration{{Origin: TypeOriginPackage, Type: typ}}
+	}
+	return result
+}
+
+func standardTypes() []*x.Type {
+	return []*x.Type{
+		x.NewType(reflect.TypeOf(xresponse.Status{})),
+	}
 }
 
 func (c *Catalog) Register(origin TypeOrigin, typ *x.Type) error {

@@ -7,12 +7,70 @@ import (
 	"testing"
 
 	x "github.com/viant/x"
+	xshape "github.com/viant/x/shape"
 	smodel "github.com/viant/x/syntetic/model"
 )
 
 type packageSample struct{ Package string }
 type generatedSample struct{ Generated string }
 type dqlSample struct{ DQL string }
+
+func TestNewCatalogIncludesRuntimeResponseStatus(t *testing.T) {
+	catalog := NewCatalog()
+	typ, ok, err := catalog.Resolve(PackageAuthority, "github.com/viant/xdatly/response.Status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || typ == nil || typ.Type == nil {
+		t.Fatalf("response.Status was not registered: type=%+v found=%v", typ, ok)
+	}
+}
+
+func TestMinimalCatalogExpandsExternalEmbeddedResponseStatus(t *testing.T) {
+	outputSpec := &ast.TypeSpec{Name: ast.NewIdent("UserContextOutput"), Type: &ast.StructType{Fields: &ast.FieldList{List: []*ast.Field{{
+		Type: &ast.SelectorExpr{X: ast.NewIdent("response"), Sel: ast.NewIdent("Status")},
+	}, {
+		Names: []*ast.Ident{ast.NewIdent("Subject")}, Type: ast.NewIdent("string"),
+	}}}}}
+	catalog := NewCatalog()
+	if err := catalog.RegisterPackage(TypeOriginPackage, &smodel.Package{
+		Name: "acl", PkgPath: "example.com/platform/acl",
+		Types: []*smodel.Type{{
+			Name: "UserContextOutput", PkgPath: "example.com/platform/acl", TypeSpec: outputSpec,
+			Imports: map[string]*smodel.ImportRef{"response": {Path: "github.com/viant/xdatly/response"}},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := NewResolver(catalog, PackageAuthority, &ResolutionContext{
+		PackagePath: "example.com/tool",
+		Imports:     []PackageImport{{Alias: "acl", Package: "example.com/platform/acl"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor, err := resolver.Descriptor("acl.UserContextOutput")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields, err := xshape.New(descriptor, resolver.Descriptor).Fields()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, field := range fields {
+		names = append(names, field.Name)
+	}
+	seen := map[string]bool{}
+	for _, name := range names {
+		seen[name] = true
+	}
+	for _, expected := range []string{"Status", "Message", "Error", "Subject"} {
+		if !seen[expected] {
+			t.Fatalf("fields = %v, missing %s", names, expected)
+		}
+	}
+}
 
 func TestCatalogRejectsDifferentMethodImportScope(t *testing.T) {
 	source := &x.Type{Name: "Row", PkgPath: "example.com/rows", SynteticType: &smodel.Type{

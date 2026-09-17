@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/viant/x"
+	xshape "github.com/viant/x/shape"
 	smodel "github.com/viant/x/syntetic/model"
 )
 
@@ -173,5 +174,54 @@ func TestPackageAuthorityShadowsImportedContractNames(t *testing.T) {
 	}
 	if _, err = resolver.Resolve("Input"); err == nil {
 		t.Fatal("transcription ambiguity policy changed")
+	}
+}
+
+func TestResolverExpandsEmbeddedTypeUsingDeclaringImports(t *testing.T) {
+	statusSpec := &ast.TypeSpec{Name: ast.NewIdent("Status"), Type: &ast.StructType{Fields: &ast.FieldList{List: []*ast.Field{{
+		Names: []*ast.Ident{ast.NewIdent("Code")}, Type: ast.NewIdent("int"),
+	}}}}}
+	outputSpec := &ast.TypeSpec{Name: ast.NewIdent("UserContextOutput"), Type: &ast.StructType{Fields: &ast.FieldList{List: []*ast.Field{{
+		Type: &ast.SelectorExpr{X: ast.NewIdent("response"), Sel: ast.NewIdent("Status")},
+	}, {
+		Names: []*ast.Ident{ast.NewIdent("Subject")}, Type: ast.NewIdent("string"),
+	}}}}}
+	catalog := NewCatalog()
+	if err := catalog.RegisterPackage(TypeOriginPackage, &smodel.Package{
+		Name: "response", PkgPath: "github.com/viant/xdatly/response",
+		Types: []*smodel.Type{{Name: "Status", PkgPath: "github.com/viant/xdatly/response", TypeSpec: statusSpec}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.RegisterPackage(TypeOriginPackage, &smodel.Package{
+		Name: "acl", PkgPath: "example.com/platform/acl",
+		Types: []*smodel.Type{{
+			Name: "UserContextOutput", PkgPath: "example.com/platform/acl", TypeSpec: outputSpec,
+			Imports: map[string]*smodel.ImportRef{"response": {Path: "github.com/viant/xdatly/response"}},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := NewResolver(catalog, PackageAuthority, &ResolutionContext{
+		PackagePath: "example.com/tool",
+		Imports:     []PackageImport{{Alias: "acl", Package: "example.com/platform/acl"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor, err := resolver.Descriptor("acl.UserContextOutput")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields, err := xshape.New(descriptor, resolver.Descriptor).Fields()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, field := range fields {
+		names = append(names, field.Name)
+	}
+	if !reflect.DeepEqual(names, []string{"Status", "Code", "Subject"}) {
+		t.Fatalf("fields = %v", names)
 	}
 }
