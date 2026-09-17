@@ -214,11 +214,23 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	if err != nil {
 		return nil, fmt.Errorf("resolve SQL dialect: %w", err)
 	}
-	evaluated, err := evaluateSource(ctx, source, dialect, input, parent, parentAliases)
+	evaluationSource := source
+	if input == nil || input.Predicate == nil {
+		evaluationSource = source.Clone()
+		evaluationSource.SQL, err = schemaDiscoverySQL(evaluationSource.SQL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	evaluated, err := evaluateSource(ctx, evaluationSource, dialect, input, parent, parentAliases)
 	if err != nil {
 		return nil, err
 	}
 	source.SQL = evaluated.SQL
+	source.SQL, err = schemaDiscoverySQL(source.SQL)
+	if err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(source.Table) == "" {
 		if table := directSourceTable(evaluated.SQL); table != "" {
 			source.Table = table
@@ -298,6 +310,26 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 		applyTableConstraints(view.Columns, constraints, lineage)
 	}
 	return evaluated, nil
+}
+
+// schemaDiscoverySQL removes unresolved predicate expansions only from the
+// zero-row metadata query. Runtime/authored SQL remains owned by the original
+// view source and evaluated result.
+func schemaDiscoverySQL(SQL string) (string, error) {
+	const prefix = "${predicate."
+	result := SQL
+	for {
+		start := strings.Index(result, prefix)
+		if start < 0 {
+			return result, nil
+		}
+		end := strings.IndexByte(result[start+len(prefix):], '}')
+		if end < 0 {
+			return "", fmt.Errorf("unterminated predicate expression in schema discovery SQL")
+		}
+		end += start + len(prefix)
+		result = result[:start] + result[end+1:]
+	}
 }
 
 func directSourceTable(SQL string) string {

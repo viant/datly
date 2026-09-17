@@ -167,6 +167,25 @@ func TestRefinerResolvesEmbeddedSQLWithoutMutatingSource(t *testing.T) {
 	}
 }
 
+func TestRefinerDiscoversColumnsWithUnresolvedPredicateBuilder(t *testing.T) {
+	harness := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := harness.ExecStatements(ctx, `CREATE TABLE records (id INTEGER PRIMARY KEY, status TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	authored := `SELECT r.id, r.status FROM records r WHERE 1=1
+${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("AND")}`
+	component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: &spec.View{
+		Name: "Records", Source: &spec.ViewSource{SQL: authored},
+	}}
+	if err := New(Connections{"main": harness.DB}).Refine(ctx, component, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if component.RootView.Source.SQL != authored || len(component.RootView.Columns) != 2 || !component.RootView.Columns[0].PrimaryKey {
+		t.Fatalf("source/columns = %q / %+v", component.RootView.Source.SQL, component.RootView.Columns)
+	}
+}
+
 func TestRefinerRequiresExactConnector(t *testing.T) {
 	component := &spec.Component{RootView: &spec.View{Name: "Events", Source: &spec.ViewSource{Table: "events"}}}
 	err := New(Connections{}).Refine(context.Background(), component, nil, nil)
