@@ -58,6 +58,20 @@ func (p *Plan) ValidateDestination(dir string) error {
 	return packages.validate()
 }
 
+// ValidateDestinationEphemeral validates a prospective generated layout and
+// imports without applying persistence ownership checks. It is for read-only
+// project validation; real transcription still calls ValidateDestination.
+func (p *Plan) ValidateDestinationEphemeral(dir string) error {
+	if p != nil && p.MutationHandler == nil && p.lifecycleTargetError != nil {
+		return p.lifecycleTargetError
+	}
+	packages, err := p.packages(dir)
+	if err != nil {
+		return err
+	}
+	return packages.validateEphemeral()
+}
+
 func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []string, error) {
 	if plan == nil {
 		return nil, nil, nil, fmt.Errorf("nil plan")
