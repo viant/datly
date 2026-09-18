@@ -201,6 +201,15 @@ func TestServiceValidatesNamedViewCache(t *testing.T) {
 	}
 }
 
+func TestServiceCanRemoveUnavailableLegacyConnectorDirective(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+SELECT records.*,use_connector(records,'legacy') FROM (SELECT id FROM records) records`
+	response := New(Config{Name: "Records", AvailableConnectors: []string{"current"}}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationRemoveFunction, Function: &FunctionMutation{Name: "use_connector", Occurrence: 0, ExpectedArgs: []string{"records", "'legacy'"}}}})
+	if !response.Applied || strings.Contains(response.DQL, "use_connector") {
+		t.Fatalf("response=%+v", response)
+	}
+}
+
 func TestServiceAuthorsCacheWarmupAndReaderMCP(t *testing.T) {
 	service := New(Config{Name: "Records"})
 	location := strings.ReplaceAll(t.TempDir(), "'", "''")
