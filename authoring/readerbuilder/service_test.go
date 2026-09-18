@@ -262,10 +262,25 @@ SELECT records.* FROM (SELECT r.id FROM records r ${predicate.Builder().CombineA
 	}
 }
 
-func TestServiceUpdateFieldRejectsRename(t *testing.T) {
-	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: baseDQL, Operation: Operation{Type: OperationUpdateField, Field: &Field{ExistingName: "IDs", Name: "Other"}}})
-	if response.Applied || response.DQL != baseDQL || len(response.Diagnostics) == 0 || !strings.Contains(response.Diagnostics[len(response.Diagnostics)-1].Message, "reference-aware") {
+func TestServiceUpdateFieldRenamesExecutableReferencesAtomically(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+#define($_ = $Limit<int>(query/limit).Optional().WithPredicate(0,'less_or_equal','r','id'))
+SELECT records.* FROM (SELECT r.id,'$Limit' AS literal FROM records r WHERE r.id <= $Limit) records`
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateField, Field: &Field{ExistingName: "Limit", Name: "Maximum", SourceName: "max"}}})
+	if !response.Applied || !strings.Contains(response.DQL, "$Maximum<int>(query/max)") || !strings.Contains(response.DQL, "r.id <= $Maximum") || !strings.Contains(response.DQL, `'$Limit' AS literal`) || strings.Contains(response.DQL, "$Limit<int>") {
 		t.Fatalf("response=%+v", response)
+	}
+}
+
+func TestServiceUpdateFieldRenameRejectsCollision(t *testing.T) {
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: baseDQL, Operation: Operation{Type: OperationUpdateField, Field: &Field{ExistingName: "IDs", Name: "IDs"}}})
+	if !response.Applied {
+		t.Fatalf("same-name update=%+v", response)
+	}
+	source := strings.Replace(baseDQL, "SELECT records.*", "#define($_ = $Other<int>(query/other))\nSELECT records.*", 1)
+	collision := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateField, Field: &Field{ExistingName: "IDs", Name: "Other"}}})
+	if collision.Applied || collision.DQL != source || len(collision.Diagnostics) == 0 {
+		t.Fatalf("collision=%+v", collision)
 	}
 }
 

@@ -52,8 +52,15 @@ func editField(source string, operation OperationType, mutation *Field) (string,
 	if name == "" {
 		name = parameter.Name
 	}
-	if !strings.EqualFold(name, parameter.Name) {
-		return "", fmt.Errorf("field rename requires a dedicated reference-aware operation")
+	if name != parameter.Name {
+		renamed, renameErr := renameFieldReferences(source, parameter.Name, name, declarations)
+		if renameErr != nil {
+			return "", renameErr
+		}
+		copy := *mutation
+		copy.ExistingName = name
+		copy.Name = name
+		return editField(renamed, operation, &copy)
 	}
 	typeExpr := firstNonBlank(mutation.Type, parameter.TypeExpr)
 	sourceKind := firstNonBlank(mutation.SourceKind, parameter.Source.Kind)
@@ -67,6 +74,63 @@ func editField(source string, operation OperationType, mutation *Field) (string,
 	patches := []sourcePatch{{span: occurrence.HeadSpan, text: fmt.Sprintf("$%s<%s>(%s/%s)", name, typeExpr, sourceKind, sourceName)}}
 	patches = append(patches, optionPatches(occurrence, mutation)...)
 	return applySourcePatches(source, patches)
+}
+
+func renameFieldReferences(source, from, to string, declarations []dql.DeclarationOccurrence) (string, error) {
+	if !validIdentifier(to) {
+		return "", fmt.Errorf("new field name %q is not an identifier", to)
+	}
+	for _, occurrence := range declarations {
+		if occurrence.Parameter != nil && !strings.EqualFold(occurrence.Parameter.Name, from) && strings.EqualFold(occurrence.Parameter.Name, to) {
+			return "", fmt.Errorf("field %q already exists", to)
+		}
+	}
+	needle := "$" + from
+	var result strings.Builder
+	result.Grow(len(source) + 16)
+	quote := byte(0)
+	for index := 0; index < len(source); {
+		ch := source[index]
+		if quote != 0 {
+			result.WriteByte(ch)
+			index++
+			if ch == '\\' && index < len(source) {
+				result.WriteByte(source[index])
+				index++
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' || ch == '`' {
+			quote = ch
+			result.WriteByte(ch)
+			index++
+			continue
+		}
+		if strings.HasPrefix(source[index:], needle) && identifierBoundary(source, index+len(needle)) {
+			result.WriteByte('$')
+			result.WriteString(to)
+			index += len(needle)
+			continue
+		}
+		result.WriteByte(ch)
+		index++
+	}
+	if quote != 0 {
+		return "", fmt.Errorf("source contains an unterminated quoted value")
+	}
+	return result.String(), nil
+}
+
+func identifierBoundary(source string, index int) bool {
+	if index >= len(source) {
+		return true
+	}
+	ch := source[index]
+	return ch != '_' && !(ch >= 'a' && ch <= 'z') && !(ch >= 'A' && ch <= 'Z') && !(ch >= '0' && ch <= '9')
 }
 
 func optionPatches(occurrence dql.DeclarationOccurrence, mutation *Field) []sourcePatch {
