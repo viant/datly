@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/report"
 	rhandler "github.com/viant/datly/runtime/handler"
 	writerhandler "github.com/viant/datly/runtime/handler/writer"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/sql/dml"
 	"github.com/viant/datly/transcribe"
 	"github.com/viant/datly/typecatalog"
@@ -17,6 +19,27 @@ import (
 // sourceComponent attaches standalone capabilities to canonical project artifacts.
 // Report handlers and registration metadata remain owned by report/bootstrap.
 type sourceComponent struct{ source *source }
+
+func (c *sourceComponent) reflectedArtifactInput(component *spec.Component, source *bootstrap.RouteSource, types *typecatalog.Catalog, resources *resource.Store) (bootstrap.ArtifactInput, error) {
+	if component == nil || source == nil || source.LinkedInputType == nil || source.LinkedOutputType == nil {
+		return bootstrap.ArtifactInput{}, fmt.Errorf("reflected component contract is incomplete")
+	}
+	var handler rhandler.TypedHandler
+	var err error
+	if source.LinkedHandler != nil {
+		handler, err = source.LinkedHandler()
+		if err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
+	}
+	if component.Settings != nil && component.Settings.Mutation != "" {
+		handler, err = writerhandler.New(component, source.LinkedInputType, source.LinkedOutputType, component.Settings.Mutation)
+		if err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
+	}
+	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: component, Types: types, InputType: source.LinkedInputType, OutputType: source.LinkedOutputType, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: resources, CodecFactory: c.source.codecs}, nil
+}
 
 func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.ArtifactInput, error) {
 	if compiled.VeltyHandler != nil || compiled.GoHandler != nil {

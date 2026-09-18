@@ -34,6 +34,26 @@ func (g *Generator) RuntimeInputType() (reflect.Type, error) {
 	return newRuntimeInputMaterializer(plan, g.resolver).inputType()
 }
 
+// RuntimeOutputType materializes the generated output contract used before a
+// generated package exists. It mirrors RuntimeInputType for dynamic readers.
+func (g *Generator) RuntimeOutputType() (reflect.Type, error) {
+	if g == nil {
+		return nil, fmt.Errorf("generator is required")
+	}
+	if g.initErr != nil {
+		return nil, g.initErr
+	}
+	if g.input.Component == nil {
+		return nil, fmt.Errorf("generation component is required")
+	}
+	plan, err := g.plan(false)
+	if err != nil {
+		return nil, err
+	}
+	plan.omitUnresolvedHelpers()
+	return newRuntimeInputMaterializer(plan, g.resolver).outputType()
+}
+
 func (plan *Plan) omitUnresolvedHelpers() {
 	if plan == nil || len(plan.HelperTypes) == 0 {
 		return
@@ -130,6 +150,17 @@ func (m *runtimeInputMaterializer) inputType() (reflect.Type, error) {
 	result, err := m.runtime().Struct(fields)
 	if err != nil {
 		return nil, fmt.Errorf("materialize input contract: %w", err)
+	}
+	return result, nil
+}
+
+func (m *runtimeInputMaterializer) outputType() (reflect.Type, error) {
+	if m == nil || m.plan == nil {
+		return nil, fmt.Errorf("output contract plan is required")
+	}
+	result, err := m.runtime().Struct(runtimeFields(m.plan.Output.Fields))
+	if err != nil {
+		return nil, fmt.Errorf("materialize output contract: %w", err)
 	}
 	return result, nil
 }

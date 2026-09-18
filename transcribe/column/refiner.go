@@ -185,12 +185,16 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 		return nil, fmt.Errorf("connector is required")
 	}
 	if input != nil {
+		validationSQL, validationErr := schemaDiscoverySQL(source.SQL)
+		if validationErr != nil {
+			return nil, validationErr
+		}
 		names := append([]string(nil), parentAliases...)
 		for _, variable := range input.Variables {
 			names = append(names, variable.Name)
 		}
 		renderer := sqltemplate.ConstantRenderer{Values: input.Const, Variables: names}
-		if err := renderer.Validate(source.SQL); err != nil {
+		if err := renderer.Validate(validationSQL); err != nil {
 			return nil, err
 		}
 		if err := renderer.Validate("SELECT * FROM " + source.Table); err != nil {
@@ -214,17 +218,14 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	if err != nil {
 		return nil, fmt.Errorf("resolve SQL dialect: %w", err)
 	}
-	evaluationSource := source
-	if input == nil || input.Predicate == nil {
-		evaluationSource = source.Clone()
-		evaluationSource.SQL, err = schemaDiscoverySQL(evaluationSource.SQL)
-		if err != nil {
-			return nil, err
-		}
+	evaluationSource := source.Clone()
+	evaluationSource.SQL, err = schemaDiscoverySQL(evaluationSource.SQL)
+	if err != nil {
+		return nil, err
 	}
 	evaluated, err := evaluateSource(ctx, evaluationSource, dialect, input, parent, parentAliases)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("evaluate schema-discovery source: %w", err)
 	}
 	source.SQL = evaluated.SQL
 	source.SQL, err = schemaDiscoverySQL(source.SQL)
@@ -257,22 +258,29 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 			return nil, err
 		}
 		beforeIdentity := authoredSource.SQL
-		if err := retainNamedIdentity(view, authoredSource, constraints); err != nil {
-			return nil, err
+		if !strings.Contains(authoredSource.SQL, "${predicate.") {
+			if err := retainNamedIdentity(view, authoredSource, constraints); err != nil {
+				return nil, fmt.Errorf("retain named identity: %w", err)
+			}
 		}
 		if authoredSource.SQL != beforeIdentity {
 			// Identity augmentation owns authored SQL. Re-evaluate its changed copy;
 			// never feed expanded SQL back into the source-persistence owner.
-			evaluated, err = evaluateSource(ctx, authoredSource, dialect, input, parent, parentAliases)
+			recheckSource := authoredSource.Clone()
+			recheckSource.SQL, err = schemaDiscoverySQL(recheckSource.SQL)
 			if err != nil {
 				return nil, err
+			}
+			evaluated, err = evaluateSource(ctx, recheckSource, dialect, input, parent, parentAliases)
+			if err != nil {
+				return nil, fmt.Errorf("re-evaluate named identity source: %w", err)
 			}
 			source.SQL = evaluated.SQL
 		}
 	}
 	query, err := discoveryQuery(source)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build schema-discovery query: %w", err)
 	}
 	if strings.TrimSpace(query) == "" {
 		return evaluated, nil
@@ -294,18 +302,23 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	}
 	// Successful database discovery can materialize a named outer wildcard
 	// even when the local parser cannot enumerate its inner dialect SQL.
-	resolvedSQL, changed, err := (dsql.SelectorProjection{SQL: view.Source.SQL}).ResolveDiscoveredColumns(projected, dialect)
-	if err != nil {
-		return nil, err
-	}
-	if changed {
-		view.Source.SQL = resolvedSQL
+	// The authored source is retained exactly. A predicate template can make
+	// SQL parser projection rewriting unsafe even though discovery has already
+	// produced canonical columns for dynamic runtime shapes.
+	if !strings.Contains(view.Source.SQL, "${predicate.") {
+		resolvedSQL, changed, err := (dsql.SelectorProjection{SQL: view.Source.SQL}).ResolveDiscoveredColumns(projected, dialect)
+		if err != nil {
+			return nil, err
+		}
+		if changed {
+			view.Source.SQL = resolvedSQL
+		}
 	}
 	view.Columns = mergeColumns(view.Columns, columns)
 	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
 		lineage, err := directProjectionLineage(source)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("resolve table projection lineage: %w", err)
 		}
 		applyTableConstraints(view.Columns, constraints, lineage)
 	}
