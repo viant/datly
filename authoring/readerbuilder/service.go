@@ -146,6 +146,8 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 		return editView(source, operation.Type, operation.View)
 	case OperationUpdateRelation:
 		return updateRelation(source, operation.Relation)
+	case OperationSetColumnRole:
+		return s.setColumnRole(source, operation.ColumnRole)
 	default:
 		return "", fmt.Errorf("unsupported reader builder operation %q", operation.Type)
 	}
@@ -153,7 +155,7 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 
 func (o Operation) validate() error {
 	payloads := 0
-	for _, present := range []bool{o.Reader != nil, o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil, o.Relation != nil} {
+	for _, present := range []bool{o.Reader != nil, o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil, o.Relation != nil, o.ColumnRole != nil} {
 		if present {
 			payloads++
 		}
@@ -202,6 +204,10 @@ func (o Operation) validate() error {
 	case OperationUpdateRelation:
 		if o.Relation == nil {
 			return fmt.Errorf("operation %q requires relation", o.Type)
+		}
+	case OperationSetColumnRole:
+		if o.ColumnRole == nil {
+			return fmt.Errorf("operation %q requires columnRole", o.Type)
 		}
 	default:
 		return fmt.Errorf("unsupported reader builder operation %q", o.Type)

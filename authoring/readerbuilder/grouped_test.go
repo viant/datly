@@ -48,3 +48,18 @@ FROM (SELECT s.account_id,SUM(s.amount) AS total FROM spend s GROUP BY s.account
 		t.Fatalf("compose=%+v", compose)
 	}
 }
+
+func TestServiceColumnRolePreservesOtherTags(t *testing.T) {
+	source := `#setting($_ = $route('/spend','GET'))
+SELECT summary.*,groupable(summary),tag(summary.status,'json:"statusName" groupable:"true"'),CAST(summary.total AS float64)
+FROM (SELECT status,COUNT(*) AS total FROM spend GROUP BY status) summary`
+	service := New(Config{Name: "Spend"})
+	measure := service.Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationSetColumnRole, ColumnRole: &ColumnRoleMutation{View: "summary", Column: "status", Role: "measure"}}})
+	if !measure.Applied || !strings.Contains(measure.DQL, `groupable:"false"`) || !strings.Contains(measure.DQL, `json:"statusName"`) {
+		t.Fatalf("measure=%+v", measure)
+	}
+	dimension := service.Apply(context.Background(), Request{DQL: measure.DQL, Operation: Operation{Type: OperationSetColumnRole, ColumnRole: &ColumnRoleMutation{View: "summary", Column: "status", Role: "dimension"}}})
+	if !dimension.Applied || !strings.Contains(dimension.DQL, `groupable:"true"`) || !strings.Contains(dimension.DQL, `json:"statusName"`) {
+		t.Fatalf("dimension=%+v", dimension)
+	}
+}

@@ -74,6 +74,24 @@ func editView(source string, operation OperationType, mutation *ViewMutation) (s
 }
 
 func validateOperationResult(operation Operation, structure *Structure) error {
+	if operation.Type == OperationSetColumnRole && operation.ColumnRole != nil {
+		view := findView(structure.Component.RootView, operation.ColumnRole.View)
+		if view == nil {
+			return fmt.Errorf("column role view %q did not compile", operation.ColumnRole.View)
+		}
+		for _, column := range view.Columns {
+			if column == nil || !strings.EqualFold(column.Source, operation.ColumnRole.Column) && !strings.EqualFold(column.Name, operation.ColumnRole.Column) {
+				continue
+			}
+			actual := compiledColumnGroupable(column)
+			want := strings.EqualFold(operation.ColumnRole.Role, "dimension")
+			if actual != want {
+				return fmt.Errorf("column %s.%s role did not compile as %s", operation.ColumnRole.View, operation.ColumnRole.Column, operation.ColumnRole.Role)
+			}
+			return nil
+		}
+		return fmt.Errorf("column %s.%s was not found after role update", operation.ColumnRole.View, operation.ColumnRole.Column)
+	}
 	if operation.Type == OperationUpdateRelation && operation.Relation != nil {
 		if structure == nil || structure.Component == nil || structure.Component.RootView == nil {
 			return fmt.Errorf("updated relation graph is unavailable")
@@ -137,6 +155,23 @@ func validateOperationResult(operation Operation, structure *Structure) error {
 	}
 	if !strings.EqualFold(strings.TrimSpace(relation.ParentNamespace), parent) {
 		return fmt.Errorf("added view %q resolved parent %q, expected %q", operation.View.Name, relation.ParentNamespace, parent)
+	}
+	return nil
+}
+
+func findView(view *spec.View, name string) *spec.View {
+	if view == nil {
+		return nil
+	}
+	if strings.EqualFold(view.Name, name) || strings.EqualFold(view.Namespace, name) {
+		return view
+	}
+	for _, relation := range view.Relations {
+		if relation != nil {
+			if found := findView(relation.View, name); found != nil {
+				return found
+			}
+		}
 	}
 	return nil
 }

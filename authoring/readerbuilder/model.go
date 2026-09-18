@@ -26,6 +26,7 @@ const (
 	OperationUpdateView           OperationType = "updateView"
 	OperationRemoveView           OperationType = "removeView"
 	OperationUpdateRelation       OperationType = "updateRelation"
+	OperationSetColumnRole        OperationType = "setColumnRole"
 )
 
 type Request struct {
@@ -34,14 +35,15 @@ type Request struct {
 }
 
 type Operation struct {
-	Type      OperationType      `json:"type"`
-	Reader    *ReaderMutation    `json:"reader,omitempty"`
-	Field     *Field             `json:"field,omitempty"`
-	Predicate *PredicateMutation `json:"predicate,omitempty"`
-	Function  *FunctionMutation  `json:"function,omitempty"`
-	Setting   *SettingMutation   `json:"setting,omitempty"`
-	View      *ViewMutation      `json:"view,omitempty"`
-	Relation  *RelationMutation  `json:"relation,omitempty"`
+	Type       OperationType       `json:"type"`
+	Reader     *ReaderMutation     `json:"reader,omitempty"`
+	Field      *Field              `json:"field,omitempty"`
+	Predicate  *PredicateMutation  `json:"predicate,omitempty"`
+	Function   *FunctionMutation   `json:"function,omitempty"`
+	Setting    *SettingMutation    `json:"setting,omitempty"`
+	View       *ViewMutation       `json:"view,omitempty"`
+	Relation   *RelationMutation   `json:"relation,omitempty"`
+	ColumnRole *ColumnRoleMutation `json:"columnRole,omitempty"`
 }
 
 // ReaderMutation defines the initial typed root graph. The reader builder owns
@@ -108,6 +110,12 @@ type RelationMutation struct {
 	Name   string `json:"name"`
 	Parent string `json:"parent"`
 	On     string `json:"on"`
+}
+
+type ColumnRoleMutation struct {
+	View   string `json:"view"`
+	Column string `json:"column"`
+	Role   string `json:"role"`
 }
 
 type Response struct {
