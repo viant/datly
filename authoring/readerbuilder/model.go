@@ -13,6 +13,8 @@ const (
 	OperationInspect              OperationType = "inspect"
 	OperationCreateReader         OperationType = "createReader"
 	OperationAddField             OperationType = "addField"
+	OperationUpdateField          OperationType = "updateField"
+	OperationRemoveField          OperationType = "removeField"
 	OperationAddFieldPredicate    OperationType = "addFieldPredicate"
 	OperationUpdateFieldPredicate OperationType = "updateFieldPredicate"
 	OperationRemoveFieldPredicate OperationType = "removeFieldPredicate"
@@ -53,12 +55,14 @@ type ReaderMutation struct {
 }
 
 type Field struct {
-	Name          string `json:"name"`
-	Type          string `json:"type"`
-	SourceKind    string `json:"sourceKind"`
-	SourceName    string `json:"sourceName"`
-	Required      *bool  `json:"required,omitempty"`
-	QuerySelector string `json:"querySelector,omitempty"`
+	ExistingName        string  `json:"existingName,omitempty"`
+	Name                string  `json:"name"`
+	Type                string  `json:"type"`
+	SourceKind          string  `json:"sourceKind"`
+	SourceName          string  `json:"sourceName"`
+	Required            *bool   `json:"required,omitempty"`
+	QuerySelector       string  `json:"querySelector,omitempty"`
+	UpdateQuerySelector *string `json:"updateQuerySelector,omitempty"`
 }
 
 type PredicateMutation struct {

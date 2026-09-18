@@ -243,6 +243,32 @@ func TestServiceAddsQuerySelectorField(t *testing.T) {
 	}
 }
 
+func TestServiceUpdatesAndRemovesInputWithoutDroppingPredicateOptions(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+#define($_ = $Limit<int>(query/limit).Optional().QuerySelector("Records").WithPredicate(0,"less_or_equal","r","id"))
+SELECT records.* FROM (SELECT r.id FROM records r ${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("WHERE")}) records`
+	required := true
+	selector := ""
+	service := New(Config{Name: "Records"})
+	updated := service.Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateField, Field: &Field{
+		ExistingName: "Limit", Name: "Limit", Type: "int64", SourceKind: "query", SourceName: "max", Required: &required, UpdateQuerySelector: &selector,
+	}}})
+	if !updated.Applied || !strings.Contains(updated.DQL, `$Limit<int64>(query/max).Required().WithPredicate`) || strings.Contains(updated.DQL, "QuerySelector") {
+		t.Fatalf("updated=%+v", updated)
+	}
+	removed := service.Apply(context.Background(), Request{DQL: updated.DQL, Operation: Operation{Type: OperationRemoveField, Field: &Field{ExistingName: "Limit"}}})
+	if !removed.Applied || strings.Contains(removed.DQL, "$Limit") {
+		t.Fatalf("removed=%+v", removed)
+	}
+}
+
+func TestServiceUpdateFieldRejectsRename(t *testing.T) {
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: baseDQL, Operation: Operation{Type: OperationUpdateField, Field: &Field{ExistingName: "IDs", Name: "Other"}}})
+	if response.Applied || response.DQL != baseDQL || len(response.Diagnostics) == 0 || !strings.Contains(response.Diagnostics[len(response.Diagnostics)-1].Message, "reference-aware") {
+		t.Fatalf("response=%+v", response)
+	}
+}
+
 func TestServiceEnablesSelectorPolicyWithGenericFunction(t *testing.T) {
 	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: baseDQL, Operation: Operation{
 		Type: OperationAddFunction, Function: &FunctionMutation{Name: "selector_page", Args: []string{"records", "true"}},

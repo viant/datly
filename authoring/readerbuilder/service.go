@@ -134,6 +134,8 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 		return s.createReader(source, operation.Reader)
 	case OperationAddField:
 		return addField(source, operation.Field)
+	case OperationUpdateField, OperationRemoveField:
+		return editField(source, operation.Type, operation.Field)
 	case OperationAddFieldPredicate, OperationUpdateFieldPredicate, OperationRemoveFieldPredicate:
 		return s.editPredicate(source, operation.Type, operation.Predicate)
 	case OperationAddFunction, OperationUpdateFunction, OperationRemoveFunction:
@@ -167,7 +169,7 @@ func (o Operation) validate() error {
 		if o.Reader == nil {
 			return fmt.Errorf("operation %q requires reader", o.Type)
 		}
-	case OperationAddField:
+	case OperationAddField, OperationUpdateField, OperationRemoveField:
 		if o.Field == nil {
 			return fmt.Errorf("operation %q requires field", o.Type)
 		}
