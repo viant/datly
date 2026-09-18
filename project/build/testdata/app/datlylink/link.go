@@ -1,10 +1,5 @@
 package datlylink
 
-import (
-	"example.com/buildapp/records"
-	"github.com/viant/datly/bootstrap"
-)
+import _ "example.com/buildapp/records"
 
-func init() {
-	bootstrap.UseDefaultImports(records.Component{})
-}
+func init() {}

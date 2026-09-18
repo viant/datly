@@ -32,6 +32,7 @@ type ImportSpec struct {
 }
 
 type Settings struct {
+	Mutation                   string              `json:"mutation,omitempty"`
 	SequenceStrategy           string              `json:"sequenceStrategy,omitempty"`
 	MCPFolders                 []ResourceFolder    `json:"mcpFolders,omitempty"`
 	IgnoreEmptyQueryParameters *bool               `json:"ignoreEmptyQueryParameters,omitempty"`

@@ -33,6 +33,9 @@ type Options struct {
 	// Holders are concrete component declarations emitted into a custom build.
 	// Runtime package names still come exclusively from Config.GoBootstrap.
 	Holders []any
+	// RequireLinked rejects Go holder source that is absent from the executable's
+	// runtime typelinks. Custom commands enable it; direct authoring tests may not.
+	RequireLinked bool
 	// MCPResourceAuthorizer uses the linked deployment's existing token/scope
 	// verifier for protected embedded resources. Nil denies protected skill reads.
 	MCPResourceAuthorizer auth.ResourceAuthorizer
@@ -85,7 +88,7 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 	if options.Config.Jobs == nil && options.Async != nil {
 		return nil, fmt.Errorf("linked Async options require Jobs configuration")
 	}
-	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), requireLinked: options.Holders != nil}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
+	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), requireLinked: options.RequireLinked || options.Holders != nil}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
 	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
 	if err != nil {
 		return nil, err

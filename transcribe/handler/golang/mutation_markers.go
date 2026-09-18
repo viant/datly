@@ -10,6 +10,36 @@ import (
 	xshape "github.com/viant/x/shape"
 )
 
+// ValidateUniversalWriterPlan applies target-independent mutation-policy
+// checks without generating a component-specific mutation program.
+func ValidateUniversalWriterPlan(value *plan.Plan, config Config) error {
+	l := &lowerer{plan: value, config: config}
+	if err := l.prepare(); err != nil {
+		return err
+	}
+	emitter := &actionEmitter{l: l}
+	for _, record := range l.records {
+		if record.plan.Auxiliary {
+			continue
+		}
+		if record.plan.Entity == nil {
+			return fmt.Errorf("mutation role %s requires entity metadata", record.plan.Identity)
+		}
+		if err := emitter.validateMarkers(record.plan); err != nil {
+			return err
+		}
+		if unresolved := record.plan.Entity.LateWrite.Unresolved; unresolved != "" {
+			return fmt.Errorf("generic mutation native policy for %s is unresolved: %s", record.plan.Identity, unresolved)
+		}
+		for _, allowed := range record.plan.Write.Allowed {
+			if allowed != plan.ActionInsert && allowed != plan.ActionUpdate && allowed != plan.ActionDelete {
+				return fmt.Errorf("mutation action %s is unsupported", allowed)
+			}
+		}
+	}
+	return nil
+}
+
 // markerValue reads a canonical field through the shared shape accessor. Its
 // result has the declared Go type; token equality never stringifies values.
 func (e *actionEmitter) markerValue(role actionRole, field plan.EntityField, source ast.Expr, name string) ([]ast.Stmt, ast.Expr, error) {

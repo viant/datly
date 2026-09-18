@@ -25,8 +25,8 @@ type Request struct {
 	Packages []string
 }
 type Result struct {
-	Binary, SHA256               string
-	Components, Types, Factories int
+	Binary, SHA256 string
+	Components     int
 }
 
 func (Service) Build(ctx context.Context, request Request) (_ *Result, err error) {

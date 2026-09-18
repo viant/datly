@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/internal/packageasset"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
 	handlercompiler "github.com/viant/datly/transcribe/handler/compiler"
@@ -116,29 +117,22 @@ func (g Generator) generateEphemeral(ctx context.Context, root, fallback string,
 		if err != nil {
 			return nil, err
 		}
-		if err = publishEphemeralPackage(filepath.Join(stage, source.Directory), filepath.Join(root, target.Directory)); err != nil {
+		sourceDir := filepath.Join(stage, source.Directory)
+		generatedFiles := map[string]bool{}
+		for _, file := range generated.Result.Files {
+			relative, relativeErr := filepath.Rel(sourceDir, file.Path)
+			if relativeErr == nil && relative != "." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+				generatedFiles[filepath.Clean(relative)] = true
+			}
+		}
+		if err = publishEphemeralPackage(sourceDir, filepath.Join(root, target.Directory), generatedFiles); err != nil {
 			return nil, err
 		}
 	}
 	return generated, nil
 }
 
-func publishEphemeralPackage(source, target string) error {
-	tests := map[string][]byte{}
-	_ = filepath.WalkDir(target, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), "_test.go") {
-			return walkErr
-		}
-		relative, err := filepath.Rel(target, path)
-		if err != nil {
-			return err
-		}
-		tests[relative], err = os.ReadFile(path)
-		return err
-	})
-	if err := os.RemoveAll(target); err != nil {
-		return err
-	}
+func publishEphemeralPackage(source, target string, generated map[string]bool) error {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		return err
 	}
@@ -161,21 +155,16 @@ func publishEphemeralPackage(source, target string) error {
 		if err != nil {
 			return err
 		}
+		if !generated[filepath.Clean(relative)] {
+			if _, statErr := os.Stat(destination); statErr == nil {
+				return nil
+			} else if !os.IsNotExist(statErr) {
+				return statErr
+			}
+		}
 		return os.WriteFile(destination, data, 0o644)
 	})
-	if err != nil {
-		return err
-	}
-	for relative, data := range tests {
-		path := filepath.Join(target, relative)
-		if err = os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return err
-		}
-		if err = os.WriteFile(path, data, 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
+	return err
 }
 
 func (g Generator) generate(ctx context.Context, root, dir string, compiled *Result) (*GeneratedPackage, error) {
@@ -186,6 +175,12 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	}
 	if operation != "get" && operation != "patch" && operation != "post" && operation != "put" {
 		return nil, fmt.Errorf("transcribe operation must be get, patch, post or put")
+	}
+	if operation != "get" {
+		if compiled.Component.Settings == nil {
+			compiled.Component.Settings = &spec.Settings{}
+		}
+		compiled.Component.Settings.Mutation = operation
 	}
 	if language != HandlerGo && language != HandlerVelty {
 		return nil, fmt.Errorf("unsupported transcribe language %q", language)
@@ -250,5 +245,6 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	if err = handlers.prepare(); err != nil {
 		return nil, handlers.diagnostic(err)
 	}
+	input.EphemeralOwnership = g.EphemeralOwnership
 	return NewCompiler().generateInputAt(ctx, root, dir, &copy, input)
 }

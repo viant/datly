@@ -38,6 +38,8 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 		return nil, err
 	}
 	file := &ast.File{Name: ast.NewIdent(l.config.Package)}
+	reflectAlias := l.availableAlias("reflect")
+	l.pathsByAlias[reflectAlias] = "reflect"
 	parents := map[*plan.RecordPlan]*recordLowering{}
 	for _, record := range l.records {
 		for _, relation := range record.plan.Relations {
@@ -87,6 +89,19 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 		record.plan.Entity.HooksScaffold = false
 		record.plan.Entity.HooksBind = false
 		file.Decls = append(file.Decls, &ast.GenDecl{Tok: token.TYPE, Doc: &ast.CommentGroup{List: []*ast.Comment{{Text: "// " + name + " customizes role " + strings.Join(record.plan.InputPath, ".") + "."}}}, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(name), Type: &ast.StructType{Fields: &ast.FieldList{}}}}})
+		factory := name + "DatlyType"
+		file.Decls = append(file.Decls, &ast.FuncDecl{
+			Name: ast.NewIdent(factory),
+			Type: &ast.FuncType{Params: &ast.FieldList{}, Results: &ast.FieldList{List: []*ast.Field{{Type: selectExpr(ast.NewIdent(reflectAlias), "Type")}}}},
+			Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(callExpr(selectExpr(callExpr(selectExpr(ast.NewIdent(reflectAlias), "TypeOf"), &ast.CallExpr{Fun: &ast.ParenExpr{X: &ast.StarExpr{X: ast.NewIdent(name)}}, Args: []ast.Expr{ast.NewIdent("nil")}}), "Elem")))}},
+		})
+		file.Decls = append(file.Decls, &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+			Names:  []*ast.Ident{ast.NewIdent(name + "Hooks")},
+			Values: []ast.Expr{callExpr(ast.NewIdent("new"), ast.NewIdent(name))},
+		}, &ast.ValueSpec{
+			Names:  []*ast.Ident{ast.NewIdent(name + "Datly")},
+			Values: []ast.Expr{callExpr(ast.NewIdent(factory))},
+		}}})
 		for _, method := range []string{"Init", "Validate", "AfterSequence", "AfterQueue"} {
 			state := &ast.IndexListExpr{X: selectExpr(ast.NewIdent(l.handlerAlias), "LifecycleContext"), Indices: []ast.Expr{parseExpr(record.value.base), parentExpr, parseExpr(config.OutputType)}}
 			file.Decls = append(file.Decls, (&mutationScaffoldEmitter{name: name}).method(method, []*ast.Field{

@@ -12,7 +12,7 @@ import (
 // aliases; they do not define methods on those aliases.
 func (d *shapeDestinations) relocateContractHooks(p *Plan, groups map[string]*Plan) error {
 	hook := p.HookScaffold
-	if hook == nil || p.MutationHandler != nil {
+	if hook == nil || p.MutationHandler != nil || p.Settings.Mutation != "" {
 		return nil
 	}
 	receivers := map[string][]string{}

@@ -45,6 +45,7 @@ type scaffoldPersistence struct {
 	customizedShapes map[string]bool
 	fieldOwnership   map[string]*projectionFieldOwnership
 	proposal         []EmittedFile
+	ephemeral        bool
 }
 
 type scaffoldCommitLock struct {
@@ -157,8 +158,10 @@ func (p *scaffoldPersistence) Commit() error {
 	}
 	metadata := p.destinationMetadata()
 	metadata.Roles, metadata.Resources, metadata.Fingerprints, metadata.ProjectionFields, metadata.others = roles, resources, fingerprints, p.fieldOwnership, manifest.others
-	if err = writeScaffoldManifest(stage, p.owner, desired, metadata); err != nil {
-		return err
+	if !p.ephemeral {
+		if err = writeScaffoldManifest(stage, p.owner, desired, metadata); err != nil {
+			return err
+		}
 	}
 	if err = p.swap(target, stage, original); err != nil {
 		return err
@@ -279,6 +282,14 @@ func (p *scaffoldPersistence) validateExisting(_, existing string, manifest *sca
 	if err != nil {
 		return err
 	}
+	proposals := map[string]string{}
+	for _, file := range p.files {
+		relative, pathErr := managedPath(p.dir, file.Path)
+		if pathErr != nil {
+			return pathErr
+		}
+		proposals[relative] = file.Content
+	}
 	for _, candidate := range append(generated, p.removals...) {
 		relative, err := managedRelativePath(candidate)
 		if err != nil {
@@ -288,7 +299,10 @@ func (p *scaffoldPersistence) validateExisting(_, existing string, manifest *sca
 			continue
 		}
 		if _, err = os.Lstat(filepath.Join(existing, relative)); err == nil && !owned[relative] {
-			return fmt.Errorf("generated file %q collides with an unowned package file", relative)
+			content, readErr := os.ReadFile(filepath.Join(existing, relative))
+			if proposal, ok := proposals[relative]; !ok || readErr != nil || string(content) != proposal {
+				return fmt.Errorf("generated file %q collides with an unowned package file", relative)
+			}
 		} else if !os.IsNotExist(err) {
 			if err == nil {
 				continue

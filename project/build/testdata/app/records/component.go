@@ -7,6 +7,7 @@ import (
 	rhandler "github.com/viant/datly/runtime/handler"
 	customhandler "github.com/viant/datly/runtime/handler/custom"
 	xdatly "github.com/viant/xdatly"
+	"reflect"
 )
 
 // The application declares only real component metadata, with no registration.
@@ -14,6 +15,12 @@ type Component struct {
 	Read  xdatly.Component[Input, Output]             `component:"Read,path=/records/{id},method=GET,connector=main,view=records"`
 	Write xdatly.Component[hooks.Input, hooks.Output] `component:"Write,path=/records,method=POST,connector=main,handler=hooks.NewWrite"`
 }
+
+func RecordsDatlyType() reflect.Type { return reflect.TypeOf((*Component)(nil)).Elem() }
+
+var RecordsDatly = new(Component)
+var RecordsDatlyLinkedType = RecordsDatlyType()
+
 type Input struct {
 	ID int `parameter:"ID,kind=path,in=id,required"`
 }
@@ -34,3 +41,5 @@ func (Component) DatlyHandler(name string) func() (rhandler.TypedHandler, error)
 	}
 	return nil
 }
+
+var RecordsHandler = Component{}.DatlyHandler

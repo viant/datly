@@ -12,6 +12,11 @@ type Component struct {
 	Protected xdatly.Component[AuthInput, Output] `component:"Protected,path=/secure,method=GET,connector=main,view=spend,report=true,reportCompose=true,reportMCPTool=false,reportComposeMCPTool=false" apiKeyHeader:"X-Report-Key" apiKeyValue:"report-secret"`
 }
 
+func SpendDatlyType() reflect.Type { return reflect.TypeOf((*Component)(nil)).Elem() }
+
+var SpendDatly = new(Component)
+var SpendDatlyLinkedType = SpendDatlyType()
+
 type Access struct {
 	Tenant string `sqlx:"tenant"`
 }

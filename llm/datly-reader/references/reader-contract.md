@@ -206,7 +206,7 @@ This yields `/things/{id}` and `ThingsById`. Go `mcpEnabled` and `pathMcpEnabled
 
 Select application packages by canonical module path. Private imported types may be needed without publishing their packages' routes. Dependency loading is not endpoint exposure.
 
-Keep SQL resources with their component and declared namespace. Generated holders expose `EmbedFS() *embed.FS` and `EmbedNamespace() string`; package bootstrap loads those resources from the user-selected default imports. Do not add a resource registry or depend on mutable working-directory files leaking across a live update.
+Keep SQL resources with their component and declared namespace. Generated holders expose `EmbedFS() *embed.FS` and `EmbedNamespace() string`; package bootstrap finds those holders through runtime typelinks from blank-imported packages. Do not add a resource registry or depend on mutable working-directory files leaking across a live update.
 
 Compiled Go factories require linked package authority; finding a source name does not make it executable. The generated holder exposes the typed factory, while `internal/datlylink` selects the package. Reuse named types/factories, preserve handwritten hooks, and protect manual edits during regeneration.
 

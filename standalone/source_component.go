@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/report"
 	rhandler "github.com/viant/datly/runtime/handler"
+	writerhandler "github.com/viant/datly/runtime/handler/writer"
 	"github.com/viant/datly/sql/dml"
 	"github.com/viant/datly/transcribe"
 	"github.com/viant/datly/typecatalog"
@@ -27,10 +28,10 @@ func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.
 	}
 	var input, output reflect.Type
 	var handler rhandler.TypedHandler
+	var err error
 	if compiled.Source.LinkedInputType != nil && compiled.Source.LinkedOutputType != nil {
 		input, output = compiled.Source.LinkedInputType, compiled.Source.LinkedOutputType
 		if compiled.Source.LinkedHandler != nil {
-			var err error
 			handler, err = compiled.Source.LinkedHandler()
 			if err != nil {
 				return bootstrap.ArtifactInput{}, err
@@ -52,6 +53,12 @@ func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.
 	}
 	if input == nil || output == nil || input.Kind() != reflect.Struct || output.Kind() != reflect.Struct {
 		return bootstrap.ArtifactInput{}, fmt.Errorf("component %s input/output contracts must be linked structs", compiled.Component.Key.String())
+	}
+	if settings.Mutation != "" {
+		handler, err = writerhandler.New(compiled.Component, input, output, settings.Mutation)
+		if err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
 	}
 	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: compiled.Component, Types: compiled.Source.Types, InputType: input, OutputType: output, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: compiled.Source.Resources, CodecFactory: c.source.codecs}, nil
 }

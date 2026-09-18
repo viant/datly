@@ -253,14 +253,9 @@ func main(){
 }
 `
 
-const linkTemplate = `// Package datlylink owns the application's explicit default component imports.
-// Add generated component packages here and pass one exported component holder
-// per selected package to bootstrap.UseDefaultImports.
+const linkTemplate = `// Package datlylink owns the application's explicit component imports.
+// Add one blank import for each generated component package selected by the host.
 package datlylink
 
-import "github.com/viant/datly/bootstrap"
-
-func init() {
-	bootstrap.UseDefaultImports()
-}
+func init() {}
 `

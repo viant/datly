@@ -66,7 +66,7 @@ import (
  "github.com/viant/datly/internal/testharness"
  "github.com/viant/datly/internal/testharness/sqlite"
  druntime "github.com/viant/datly/runtime"
- mutationhandler "github.com/viant/datly/runtime/handler/mutation"
+ writerhandler "github.com/viant/datly/runtime/handler/writer"
  "github.com/viant/datly/runtime/jobs"
  "github.com/viant/datly/runtime/registry"
  "github.com/viant/datly/spec"
@@ -86,7 +86,7 @@ func TestAsyncGeneratedMutation(t *testing.T){
   ctx:=context.Background();app:=testharness.NewSQLiteHarness(t);app.DB.SetMaxOpenConns(1)
   if err:=app.ExecStatements(ctx,"PRAGMA foreign_keys=ON","CREATE TABLE EVENTS(ID INTEGER PRIMARY KEY AUTOINCREMENT, NAME TEXT NOT NULL, QTY INTEGER NOT NULL DEFAULT 0, NOTE TEXT)","INSERT INTO EVENTS(ID,NAME,QTY,NOTE) VALUES(1,'before',9,'old-note'),(2,'before-two',5,'old-two'),(3,'before-three',7,'third-note')");err!=nil{t.Fatal(err)}
   storeDB:=testharness.NewSQLiteHarness(t);if err:=storeDB.ExecStatements(ctx,sqlite.DatlyJobsSchema);err!=nil{t.Fatal(err)}
-  component:=&spec.Component{Key:spec.Key{Kind:spec.KindComponent,Name:"Events",Scope:"example.com/generated/events"},Routes:[]*spec.Route{{Method:"PATCH",Path:"/events"}},Parameters:[]*spec.Parameter{
+  component:=&spec.Component{Key:spec.Key{Kind:spec.KindComponent,Name:"Events",Scope:"example.com/generated/events"},Settings:&spec.Settings{Mutation:"patch"},RootView:&spec.View{Name:"Events",Source:&spec.ViewSource{Table:"EVENTS"},Columns:[]*spec.Column{{Name:"ID",Source:"ID",Type:spec.TypeRef{Name:"int64"},PrimaryKey:true,AutoIncrement:true},{Name:"NAME",Source:"NAME",Type:spec.TypeRef{Name:"string"}},{Name:"QTY",Source:"QTY",Type:spec.TypeRef{Name:"int64"}},{Name:"NOTE",Source:"NOTE",Type:spec.TypeRef{Name:"string"}}}},Routes:[]*spec.Route{{Method:"PATCH",Path:"/events"}},Parameters:[]*spec.Parameter{
    {Name:"Events",Source:spec.BindSource{Kind:"body",Name:"Data"}},
    {Name:"MatchKey",Source:spec.BindSource{Kind:"query",Name:"key"}},
    {Name:"JobStatus",Source:spec.BindSource{Kind:"async",Name:"jobinfo.status"},EmitOutput:true},
@@ -98,7 +98,8 @@ func TestAsyncGeneratedMutation(t *testing.T){
   }}}}
   artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:reflect.TypeOf(EventsInput{}),OutputType:reflect.TypeOf(EventsOutput{})});if err!=nil{t.Fatal(err)}
   views,err:=viewprovider.New(viewprovider.Config{Dependencies:artifact.ViewDependencies,Input:artifact.Input,SQL:&dsql.SQLComponent{DB:app.DB}});if err!=nil{t.Fatal(err)}
-  components:=[]*registry.RegisteredComponent{{Component:artifact.Component,Input:artifact.Input,Output:artifact.Output,OutputType:reflect.TypeOf(EventsOutput{}),Handler:mutationhandler.New[EventsInput,EventsOutput](NewEventsHandler()),Providers:[]locator.Provider{views},DataSource:sqldml.Source{DB:app.DB}}}
+  handler,err:=writerhandler.New(artifact.Component,reflect.TypeOf(EventsInput{}),reflect.TypeOf(EventsOutput{}),"patch");if err!=nil{t.Fatal(err)}
+  components:=[]*registry.RegisteredComponent{{Component:artifact.Component,Input:artifact.Input,Output:artifact.Output,OutputType:reflect.TypeOf(EventsOutput{}),Handler:handler,Providers:[]locator.Provider{views},DataSource:sqldml.Source{DB:app.DB}}}
   rt,err:=druntime.NewRuntime(components);if err!=nil{t.Fatal(err)}
   store,err:=(bootstrap.JobStoreConfig{SQL:&dsql.SQLComponent{DB:storeDB.DB}}).NewStore(ctx);if err!=nil{t.Fatal(err)}
   notifications:=0

@@ -16,6 +16,7 @@ import (
 	"github.com/viant/x"
 	loaderast "github.com/viant/x/loader/ast"
 	xmodule "github.com/viant/x/module"
+	"github.com/viant/xunsafe"
 )
 
 // DQL imports can name authored Go hooks without a Go component in the source
@@ -71,6 +72,17 @@ func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[strin
 			return nil, err
 		}
 		if location == nil {
+			var descriptors []*x.Type
+			for _, typeOf := range xunsafe.PackageTypes(path) {
+				if typeOf != nil && typeOf.Name() != "" {
+					descriptors = append(descriptors, x.NewType(typeOf))
+				}
+			}
+			if len(descriptors) > 0 {
+				if err = d.catalog.RegisterAll(typecatalog.TypeOriginPackage, descriptors...); err != nil {
+					return nil, fmt.Errorf("register linked DQL import %s: %w", path, err)
+				}
+			}
 			continue
 		}
 		relative, err := filepath.Rel(location.Module.Dir, location.Dir)

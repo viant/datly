@@ -80,12 +80,12 @@ func runGeneratedMutationMarkers(t *testing.T, composite bool) {
 	}
 	after, _ := os.ReadFile(hooks)
 	if string(after) != edited {
-		t.Fatal("regeneration changed application hooks")
+		t.Fatalf("regeneration changed application hooks\nBEFORE:\n%s\nAFTER:\n%s", edited, after)
 	}
 	source := genpatch.RuntimeSource
 	// Reuse the shared real binding/runtime/SQLite fixture, replacing its scenario.
 	start := strings.Index(source, " actual,err:=invoke(")
-	end := strings.Index(source, "\nfunc TestGeneratedSettersAndSyncPresence")
+	end := strings.Index(source, "\nfunc TestGeneratedSettersDrivePresence")
 	source = source[:start] + mutationMarkersRuntime + "\n" + source[end:]
 	source = strings.Replace(source, "\"github.com/viant/xdatly/response\"", "\"errors\"\nxhandler \"github.com/viant/xdatly/handler\"", 1)
 	source = strings.Replace(source, "\"time\"", "", 1)

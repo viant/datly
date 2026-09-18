@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/mod/module"
+
 	"github.com/viant/datly/internal/packageasset"
 	"github.com/viant/datly/tag"
 	"github.com/viant/tagly/tags"
@@ -130,7 +132,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			if name == "" {
 				return fmt.Errorf("SQL field identity %s has no resource name", identity)
 			}
-			defaultPath := "sql/" + name + ".sql"
+			defaultPath := defaultSQLResourcePath(name)
 			rootRole := r.plan.RootViewName
 			if strings.TrimSpace(rootRole) == "" {
 				rootRole = r.plan.ComponentName
@@ -140,7 +142,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 				if path != defaultPath {
 					return fmt.Errorf("SQL field identity %s conflicts at configured destination %s", identity, path)
 				}
-				path = "sql/" + lowerSnake(owner+"_"+field.Name) + ".sql"
+				path = defaultSQLResourcePath(lowerSnake(owner + "_" + field.Name))
 			}
 			if existing, ok := files[path]; ok && existing != source.Text {
 				return fmt.Errorf("SQL field identity %s has conflicting sources", identity)
@@ -169,7 +171,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 				continue
 			}
 			name := lowerSnake(field.Name)
-			defaultPath := "sql/" + name + ".sql"
+			defaultPath := defaultSQLResourcePath(name)
 			rootRole := r.plan.RootViewName
 			if strings.TrimSpace(rootRole) == "" {
 				rootRole = r.plan.ComponentName
@@ -221,6 +223,17 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 	return result, nil
 }
 
+func defaultSQLResourcePath(name string) string {
+	name = lowerSnake(name)
+	candidate := "sql/" + name + ".sql"
+	if module.CheckFilePath(candidate) == nil {
+		return candidate
+	}
+	// Go embed applies module path portability rules, including Windows device
+	// names such as aux and con, on every platform.
+	return "sql/" + name + "_query.sql"
+}
+
 func readableResourceNamespace(packagePath, component string) string {
 	parts := strings.Split(strings.Trim(strings.TrimSpace(packagePath), "/"), "/")
 	if len(parts) > 3 {
@@ -237,7 +250,7 @@ func (r *ResourcePlan) source(packageName string) string {
 	var source strings.Builder
 	source.WriteString("package " + packageName + "\n\nimport \"embed\"\n\n")
 	source.WriteString("// DatlyResourceNamespace identifies this package's generated resource filesystem.\nconst " + r.Symbol + "DatlyResourceNamespace = " + strconv.Quote(r.Namespace) + "\n\n")
-	source.WriteString("// DatlyResources must be registered with the shared Bindly resource store.\n//go:embed")
+	source.WriteString("//go:embed")
 	for _, file := range r.Files {
 		source.WriteString(" " + strconv.Quote(file.Path))
 	}

@@ -14,6 +14,10 @@ func scalarColumnFieldTag(column *spec.Column, source string, includeVelty bool)
 	parsed := tags.NewTags(strings.TrimSpace(column.Tag))
 	if column.DeleteMarker {
 		parsed.Set(sqlio.TagSqlx, "-")
+		parsed.Set("writer", "delete")
+	}
+	if column.ConcurrencyToken {
+		parsed.Set("writer", "concurrency")
 	}
 	sqlxTag := parsed.Lookup(sqlio.TagSqlx)
 	if sqlxTag == nil {

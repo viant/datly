@@ -113,7 +113,7 @@ func TestDQLDestinationsSingleAndProject(t *testing.T) {
 					if err != nil {
 						t.Fatalf("automatic build: %v", err)
 					}
-					if built.Components != 1 || built.Types < 3 {
+					if built.Components != 1 {
 						t.Fatalf("automatic discovery: %+v", built)
 					}
 				}

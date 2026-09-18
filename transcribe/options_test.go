@@ -116,8 +116,8 @@ func TestPrepareMutationExecutionKeepsSeparateProducts(t *testing.T) {
 	if err = generation.prepare(); err != nil {
 		t.Fatal(err)
 	}
-	if input.MutationHandler == nil || input.ContractHandler != nil || input.EntitySupport == nil || len(input.MutationHandler.Support) < 5 {
-		t.Fatalf("incomplete separated mutation products: %+v", input)
+	if input.MutationHandler != nil || input.ContractHandler != nil || input.Component.Settings == nil || input.Component.Settings.Mutation != "post" {
+		t.Fatalf("universal mutation metadata was not prepared: %+v", input)
 	}
 	if _, err = gen.New(*input).Plan(); err != nil {
 		t.Fatalf("mutation artifact plan: %v", err)

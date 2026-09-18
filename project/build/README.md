@@ -15,32 +15,25 @@ the build command does not silently regenerate source.
 ## User-owned default imports
 
 `internal/datlylink` is application-owned selection policy. The application adds
-or removes one exported component holder for each component package it wants
-compiled into the host:
+or removes one blank import for each component package it wants compiled into
+the host:
 
 ```go
 package datlylink
 
 import (
-	"example.com/app/generated/orders/reader"
-	"example.com/app/generated/orders/writer"
-	"github.com/viant/datly/bootstrap"
+	_ "example.com/app/generated/orders/reader"
+	_ "example.com/app/generated/orders/writer"
 )
 
-func init() {
-	bootstrap.UseDefaultImports(
-		reader.OrdersComponent{},
-		writer.OrdersComponent{},
-	)
-}
+func init() {}
 ```
 
 `cmd/datly` blank-imports only this link package. Generated component packages
-have an empty `init()` and never register themselves. The link init publishes
-only concrete package holders; it does not parse or register component contracts.
+have an empty `init()` and never register themselves. The link init is also empty.
 At runtime `GoBootstrap.Packages` remains the source-scanning and exposure
-selection. Bootstrap matches scanned holder declarations to the linked concrete
-types, handlers, and embedded filesystems.
+selection. Bootstrap uses `xunsafe.PackageTypes` to match scanned holder
+declarations to linked concrete types and embedded filesystems.
 
 `x.Registry` is retained for genuinely dynamic types and factories. Linked,
 generated Go contracts do not populate it.
@@ -52,9 +45,10 @@ EmbedFS() *embed.FS
 EmbedNamespace() string
 ```
 
-The generated holder may also expose `DatlyHandler(name)` so bootstrap can use a
-typed factory without a global function registry. Package SQL remains under its
-readable namespace and path.
+An explicitly custom component holder may expose `DatlyHandler(name)`. Standard
+generated writers instead use the shared metadata-driven writer and emit no
+component-specific handler factory. Package SQL remains under its readable
+namespace and path.
 
 ## Build
 
@@ -65,7 +59,8 @@ datly build -dir . -o bin/app -tags production
 ./bin/app run -conf datly.yaml
 ```
 
-Build inherits the caller's Go environment, including `GOWORK`, build tags,
+Build reports component count and the resulting binary digest; it does not
+count or synthesize type/factory registrations. It inherits the caller's Go environment, including `GOWORK`, build tags,
 GOOS, GOARCH, CGO and GOFLAGS. It compiles `./cmd/datly` without rewriting the
 link package, generating a sidecar, or persisting a checksum. A failed build
 leaves the previous executable intact.

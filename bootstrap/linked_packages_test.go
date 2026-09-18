@@ -16,24 +16,11 @@ func TestLinkedPackagePathsAreDerivedAndSorted(t *testing.T) {
 	}
 }
 
-func TestDefaultImportsSnapshotsUserLinkedHolders(t *testing.T) {
-	defaultImports.Lock()
-	original := append([]any(nil), defaultImports.holders...)
-	defaultImports.holders = nil
-	defaultImports.Unlock()
-	defer func() {
-		defaultImports.Lock()
-		defaultImports.holders = original
-		defaultImports.Unlock()
-	}()
-	holders := []any{linkedWriterHolder{}, linkedReaderHolder{}}
-	UseDefaultImports(holders...)
-	actual := DefaultImports()
-	if !reflect.DeepEqual(actual, holders) {
-		t.Fatalf("default imports: got %#v want %#v", actual, holders)
-	}
-	actual[0] = linkedReaderHolder{}
-	if reflect.DeepEqual(DefaultImports(), actual) {
-		t.Fatal("caller mutated default import authority")
+func TestLinkedHolderUsesRuntimePackageTypes(t *testing.T) {
+	typeOf := reflect.TypeOf(linkedReaderHolder{})
+	holder := LinkedHolder(nil, typeOf.PkgPath(), typeOf.Name())
+	actual := reflect.TypeOf(holder)
+	if actual == nil || actual.Kind() != reflect.Pointer || actual.Elem() != typeOf {
+		t.Fatalf("linked holder type = %v, want *%v", actual, typeOf)
 	}
 }

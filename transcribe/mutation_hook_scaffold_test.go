@@ -95,7 +95,11 @@ SELECT ID, NAME FROM EVENTS`}
 			}
 			for _, decl := range file.Decls {
 				if method, ok := decl.(*ast.FuncDecl); ok {
-					body, err := parser.ParseFile(token.NewFileSet(), "body.go", "package p;func f(){scaffoldEvents=append(scaffoldEvents,\""+method.Name.Name+"\");"+checks[method.Name.Name]+"}", 0)
+					check, lifecycle := checks[method.Name.Name]
+					if !lifecycle {
+						continue
+					}
+					body, err := parser.ParseFile(token.NewFileSet(), "body.go", "package p;func f(){scaffoldEvents=append(scaffoldEvents,\""+method.Name.Name+"\");"+check+"}", 0)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -119,8 +123,7 @@ SELECT ID, NAME FROM EVENTS`}
 			if err != nil || strings.Contains(string(manifest), tc.filename) {
 				t.Fatal("user scaffold entered generated ownership", err)
 			}
-			consumer := strings.ReplaceAll(generatedGoWriteRuntimeSource(WritePost, false), "github.com/viant/datly/runtime/handler/custom", "github.com/viant/datly/runtime/handler/mutation")
-			consumer = strings.ReplaceAll(consumer, "customhandler", "mutationhandler")
+			consumer := generatedGoWriteRuntimeSource(WritePost, false)
 			consumer = strings.Replace(consumer, "package events", "package generated", 1)
 			consumer = strings.Replace(consumer, "var count int", `counts:=map[string]int{};for _,phase:=range scaffoldEvents{counts[phase]++};for _,phase:=range []string{"Init","Validate","AfterSequence","AfterQueue"}{if counts[phase]!=2{t.Fatalf("scaffold phase %s calls=%d",phase,counts[phase])}};if counts["Finalize"]!=1{t.Fatalf("finalizer calls=%d",counts["Finalize"])}
 	var count int`, 1)

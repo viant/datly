@@ -252,10 +252,7 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
-		if found {
-			if existing.Type == nil {
-				return nil, fmt.Errorf("linked type %q did not replace its source descriptor", descriptor.Key())
-			}
+		if found && existing.Type != nil {
 			continue
 		}
 		if err = c.catalog.Register(typecatalog.TypeOriginPackage, descriptor); err != nil {

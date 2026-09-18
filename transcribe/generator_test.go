@@ -25,8 +25,8 @@ func TestGeneratorPatchDerivesState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Result.Plan.MutationHandler == nil || got.Result.Plan.VeltyHandler != nil {
-		t.Fatal("Go mutation generation missing")
+	if got.Result.Plan.MutationHandler != nil || got.Result.Plan.VeltyHandler != nil || got.Result.Plan.Settings.Mutation != "patch" {
+		t.Fatal("universal writer metadata missing")
 	}
 	pkgDir := filepath.Join(root, strings.TrimPrefix(got.Package.PkgPath, "github.com/viant/datly/genfixture/"))
 	hooks := filepath.Join(pkgDir, "lifecycle.go")
@@ -59,8 +59,8 @@ FROM records r`}
 	if err != nil {
 		t.Fatal(err)
 	}
-	if generated.Result.Plan.MutationHandler == nil {
-		t.Fatal("authored SQLX primary key did not produce a mutation handler")
+	if generated.Result.Plan.MutationHandler != nil || generated.Result.Plan.Settings.Mutation != "patch" {
+		t.Fatal("authored SQLX primary key did not select universal writer metadata")
 	}
 }
 
@@ -130,8 +130,8 @@ func TestGeneratorReaderWriterRemainSeparate(t *testing.T) {
 					t.Fatalf("reader acquired writer state %+v", field)
 				}
 			}
-		} else if plan.MutationHandler == nil || plan.HookScaffold != nil {
-			t.Fatal("missing writer")
+		} else if plan.MutationHandler != nil || plan.Settings.Mutation != operation || plan.HookScaffold != nil {
+			t.Fatalf("writer did not select universal mutation metadata: %+v", plan)
 		}
 	}
 	command := exec.Command("go", "test", "-mod=mod", "./...")

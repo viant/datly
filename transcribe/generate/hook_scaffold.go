@@ -123,10 +123,11 @@ func (plan *Plan) validateHookScaffold() error {
 	if hook.File == nil {
 		return fmt.Errorf("hook scaffold AST is required")
 	}
-	if plan.ContractHandler == nil && plan.MutationHandler == nil && !plan.ShapesOnly {
+	genericMutation := plan.Settings.Mutation != ""
+	if plan.ContractHandler == nil && plan.MutationHandler == nil && !genericMutation && !plan.ShapesOnly {
 		return fmt.Errorf("hook scaffold requires a generated contract handler")
 	}
-	if plan.MutationHandler == nil {
+	if plan.MutationHandler == nil && !genericMutation {
 		for _, contract := range []ContractPlan{plan.Input, plan.Output} {
 			if plan.ShapesOnly && contract.Type == "" {
 				continue
@@ -156,7 +157,7 @@ func (plan *Plan) validateHookScaffold() error {
 	if err = validateContractHandlerImports(imports); err != nil {
 		return err
 	}
-	if plan.MutationHandler != nil {
+	if plan.MutationHandler != nil || genericMutation {
 		if err = plan.validateMutationHookScaffold(); err != nil {
 			return err
 		}
@@ -197,7 +198,7 @@ func validateHookMethods(file *ast.File, plan *Plan, imports map[string]string) 
 }
 
 func validateExistingHookScaffold(path string, plan *Plan) error {
-	if plan.MutationHandler != nil {
+	if plan.MutationHandler != nil || plan.Settings.Mutation != "" {
 		return plan.validateExistingMutationHookScaffold(path)
 	}
 	file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments|parser.AllErrors)

@@ -36,6 +36,13 @@ func (g *handlerGeneration) prepare() error {
 	if err := g.input.ValidateLifecycleTarget(g.options.Handler.Target == HandlerGo && g.options.Handler.Go.Execution == GoExecutionMutation); err != nil {
 		return err
 	}
+	if g.options.Handler.Go.Execution == GoExecutionMutation && g.options.Handler.Operation != "" {
+		if g.compiled.Component.Settings == nil {
+			g.compiled.Component.Settings = &spec.Settings{}
+		}
+		g.compiled.Component.Settings.Mutation = string(g.options.Handler.Operation)
+		g.input.Component = g.compiled.Component
+	}
 	if settings := g.compiled.Component.Settings; settings != nil {
 		if override := settings.Generation.File("lifecycle", ""); override != "" {
 			g.options.Handler.Hooks.Destination = override

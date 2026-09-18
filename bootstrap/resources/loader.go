@@ -66,7 +66,8 @@ func (l Loader) Load(ctx context.Context) (*Loaded, error) {
 			return nil, fmt.Errorf("package %s assets: %w", packagePath, err)
 		}
 		if len(manifests) == 0 {
-			for namespace, embedded := range bootstrap.LinkedResources(l.Holders, packagePath) {
+			linked := bootstrap.LinkedResources(l.Holders, packagePath)
+			for namespace, embedded := range linked {
 				if previous := namespaces[namespace]; previous != "" {
 					return nil, fmt.Errorf("resource namespace %q is declared by both %s and %s", namespace, previous, packagePath)
 				}
@@ -75,7 +76,13 @@ func (l Loader) Load(ctx context.Context) (*Loaded, error) {
 					return nil, err
 				}
 			}
-			continue
+			if len(linked) > 0 {
+				continue
+			}
+			manifests, err = sourceResources(location.Dir)
+			if err != nil {
+				return nil, fmt.Errorf("package %s embedded resources: %w", packagePath, err)
+			}
 		}
 		for _, manifest := range manifests {
 			if previous := namespaces[manifest.Namespace]; previous != "" {

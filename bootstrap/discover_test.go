@@ -152,7 +152,7 @@ func TestPackageDiscoveryRequiresUserSelectedDefaultImport(t *testing.T) {
 	_, err := (PackageDiscovery{
 		BaseDir: base, Include: []string{"example.com/app/svc/users"}, RequireLinked: true,
 	}).Discover(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "is not selected by the default imports") {
+	if err == nil || !strings.Contains(err.Error(), "is not linked into the executable") {
 		t.Fatalf("expected missing default import error, got %v", err)
 	}
 }

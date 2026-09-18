@@ -65,7 +65,7 @@ func TestInitializedBinarySQLiteRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Components != 2 || result.Factories != 0 || result.Types != 0 {
+	if result.Components != 2 {
 		t.Fatalf("result %+v", result)
 	}
 	dsn := filepath.Join(root, "records.db")
@@ -118,12 +118,12 @@ func TestInitializedBinarySQLiteRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	extra := filepath.Join(extraDir, "extra.go")
-	added := "//go:build extra\n\npackage extra\nimport (xdatly \"github.com/viant/xdatly\"; records \"example.com/buildapp/records\")\ntype Extra struct{ Read xdatly.Component[records.Input,records.Output] `component:\"Extra,path=/extra/{id},method=GET,connector=main,view=records\"` }\n"
+	added := "//go:build extra\n\npackage extra\nimport (\"reflect\"; xdatly \"github.com/viant/xdatly\"; records \"example.com/buildapp/records\")\ntype Extra struct{ Read xdatly.Component[records.Input,records.Output] `component:\"Extra,path=/extra/{id},method=GET,connector=main,view=records\"` }\nfunc ExtraDatlyType() reflect.Type{return reflect.TypeOf((*Extra)(nil)).Elem()}\nvar ExtraDatlyLinkedType=ExtraDatlyType()\n"
 	if err = os.WriteFile(extra, []byte(added), 0644); err != nil {
 		t.Fatal(err)
 	}
 	extraLink := filepath.Join(app, "internal/datlylink/extra.go")
-	linked := "//go:build extra\n\npackage datlylink\nimport (extra \"example.com/buildapp/extra\"; \"github.com/viant/datly/bootstrap\")\nfunc init(){bootstrap.UseDefaultImports(extra.Extra{})}\n"
+	linked := "//go:build extra\n\npackage datlylink\nimport _ \"example.com/buildapp/extra\"\nfunc init(){}\n"
 	if err = os.WriteFile(extraLink, []byte(linked), 0644); err != nil {
 		t.Fatal(err)
 	}

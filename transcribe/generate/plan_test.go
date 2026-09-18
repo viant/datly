@@ -689,6 +689,20 @@ func TestEmitScaffold_WritesPlannedFiles(t *testing.T) {
 	assertly.AssertValues(t, dtag.Component{Name: "VendorCatalog", Path: "/v1/api/vendors", Method: "GET"}, tag)
 }
 
+func TestEmitScaffoldEphemeralWritesNoManifest(t *testing.T) {
+	plan := &Plan{
+		ComponentName: "Records", Routes: []RoutePlan{{Method: "GET", Path: "/records"}},
+		RouterDest: "router.go", Input: generatedContract("Input", "input.go"), Output: generatedContract("Output", "output.go"),
+	}
+	dir := t.TempDir()
+	if _, err := EmitScaffoldEphemeral(dir, plan); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, scaffoldManifestName)); !os.IsNotExist(err) {
+		t.Fatalf("ephemeral generation persisted ownership manifest: %v", err)
+	}
+}
+
 func TestComponentFilePreservesCanonicalHolderMetadata(t *testing.T) {
 	plan := &Plan{
 		ComponentName: "Orders", Description: "Order lookup", Example: `{"id":1}`,

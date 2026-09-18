@@ -24,7 +24,7 @@ func ResolvedCompositeRuntime() string {
  ` + "`" + `{"Data":[{"tenantId":1,"id":5,"name":"must rollback","Items":[{"name":"unresolved"}]}]}` + "`" + `,
  ` + "`" + `{"Data":[{"tenantId":1,"id":5,"name":"must rollback","Items":[{"tenantId":2,"id":0,"name":"wrong parent"}]},{"tenantId":2,"id":5}]}` + "`" + `,
  }{
-  if _,err=invoke(body);err==nil{t.Fatal("absent zero or cross-parent identity authorized")}
+  if _,err=invoke(body);err==nil{t.Fatalf("absent zero or cross-parent identity authorized: %s",body)}
   db.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT NAME FROM ORDERS ORDER BY TENANT_ID"},[]struct{Name string}{{"a"},{"b"}})
   db.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT NAME FROM ITEMS ORDER BY TENANT_ID"},[]struct{Name string}{{"resolved"},{"outside"}})
  }

@@ -106,7 +106,12 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 					t.Fatal("child holder absent")
 				}
 				runtimeSource := generatedGoWriteRuntimeSource(WritePost)
-				runtimeSource = strings.NewReplacer("runtime/handler/custom", "runtime/handler/mutation", "EventsInput", "Request", "EventsOutput", "Response").Replace(runtimeSource)
+				runtimeSource = strings.NewReplacer("EventsInput", "Request", "EventsOutput", "Response").Replace(runtimeSource)
+				lifecycleMetadata := `component.TypeContext=&spec.TypeContext{Imports:[]spec.ImportSpec{{Alias:"rh",Package:"example.com/generated/hooks/root"},{Alias:"ch",Package:"example.com/generated/hooks/child"}}}`
+				if tc.rootHook {
+					lifecycleMetadata += `;component.RootView.EntityHooks="rh.RootHooks"`
+				}
+				runtimeSource = strings.Replace(runtimeSource, "artifact, err :=", lifecycleMetadata+"\n\tartifact, err :=", 1)
 				runtimeSource = strings.Replace(runtimeSource, "defer db.Close()", "defer db.Close()\n if _,err=db.Exec(\"CREATE TABLE ITEMS(ID INTEGER PRIMARY KEY AUTOINCREMENT,EVENT_ID INTEGER,NAME TEXT NOT NULL)\");err!=nil{t.Fatal(err)}", 1)
 				runtimeSource = strings.Replace(runtimeSource, `{"Data":[{"name":"one"},{"name":"two"}]}`, `{"Data":[{"name":"one","`+holder+`":[{"name":"first"}]},{"name":"two","`+holder+`":[{"name":"second"}]}]}`, 1)
 				runtimeSource = strings.Replace(runtimeSource, `"/events", strings.NewReader`, `"/events?suffix=authored", strings.NewReader`, 1)
@@ -150,7 +155,7 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 					if err != nil {
 						t.Fatalf("automatic hook build: %v", err)
 					}
-					if built.Components != 1 || built.Factories != 1 {
+					if built.Components != 1 {
 						t.Fatalf("automatic hook discovery: %+v", built)
 					}
 				}

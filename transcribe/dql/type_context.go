@@ -1,6 +1,7 @@
 package dql
 
 import (
+	"path"
 	"strings"
 
 	sqltext "github.com/viant/sqlparser/source"
@@ -24,23 +25,47 @@ func parsePackageLineDirective(line string) (string, bool) {
 
 func parseImportLineDirective(line string) (string, string, bool) {
 	args, ok := parseExactHashDirectiveCall(line, "import")
-	if !ok || len(args) != 2 {
+	if !ok || len(args) < 1 || len(args) > 2 {
 		return "", "", false
 	}
-	alias, ok := parseQuotedLiteral(args[0])
+	first, ok := parseQuotedLiteral(args[0])
 	if !ok {
 		return "", "", false
 	}
-	pkg, ok := parseQuotedLiteral(args[1])
-	if !ok {
-		return "", "", false
+	alias, pkg := "", ""
+	if len(args) == 1 {
+		pkg = first
+		// Inferred aliases are intentionally limited to import paths. A bare
+		// token remains invalid and receives the authored directive diagnostic.
+		if !strings.Contains(strings.TrimSpace(pkg), "/") {
+			return "", "", false
+		}
+		alias = path.Base(strings.TrimSpace(pkg))
+	} else {
+		alias = first
+		pkg, ok = parseQuotedLiteral(args[1])
+		if !ok {
+			return "", "", false
+		}
 	}
 	alias = strings.TrimSpace(alias)
 	pkg = strings.TrimSpace(pkg)
-	if alias == "" || pkg == "" {
+	if alias == "" || pkg == "" || !validImportAlias(alias) {
 		return "", "", false
 	}
 	return alias, pkg, true
+}
+
+func validImportAlias(value string) bool {
+	if value == "" || value[0] >= '0' && value[0] <= '9' {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		if !isIdentifierPart(value[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func parseExactHashDirectiveCall(line, directive string) ([]string, bool) {

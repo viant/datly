@@ -4,56 +4,10 @@ import (
 	"embed"
 	"reflect"
 	"sort"
-	"sync"
 
 	rhandler "github.com/viant/datly/runtime/handler"
+	"github.com/viant/xunsafe"
 )
-
-var defaultImports struct {
-	sync.RWMutex
-	holders []any
-}
-
-// UseDefaultImports publishes the concrete package holders selected by the
-// application's user-owned link package. It does not parse or register any
-// component contract; bootstrap still discovers contracts by scanning the
-// configured package names.
-func UseDefaultImports(holders ...any) {
-	defaultImports.Lock()
-	defer defaultImports.Unlock()
-	seen := map[string]bool{}
-	for _, holder := range defaultImports.holders {
-		if key := linkedHolderKey(holder); key != "" {
-			seen[key] = true
-		}
-	}
-	for _, holder := range holders {
-		key := linkedHolderKey(holder)
-		if key == "" || seen[key] {
-			continue
-		}
-		seen[key] = true
-		defaultImports.holders = append(defaultImports.holders, holder)
-	}
-}
-
-func linkedHolderKey(holder any) string {
-	typeOf := reflect.TypeOf(holder)
-	for typeOf != nil && typeOf.Kind() == reflect.Pointer {
-		typeOf = typeOf.Elem()
-	}
-	if typeOf == nil || typeOf.PkgPath() == "" || typeOf.Name() == "" {
-		return ""
-	}
-	return typeOf.PkgPath() + "." + typeOf.Name()
-}
-
-// DefaultImports returns an isolated snapshot of the linked package holders.
-func DefaultImports() []any {
-	defaultImports.RLock()
-	defer defaultImports.RUnlock()
-	return append([]any(nil), defaultImports.holders...)
-}
 
 // Embedder is the established linked-package resource capability.
 type Embedder interface {
@@ -82,6 +36,15 @@ func linkedHolder(holders []any, packagePath, holderName string) any {
 			return holder
 		}
 	}
+	for _, typeOf := range xunsafe.PackageTypes(packagePath) {
+		for typeOf != nil && typeOf.Kind() == reflect.Pointer {
+			typeOf = typeOf.Elem()
+		}
+		if typeOf == nil || typeOf.Name() != holderName || typeOf.PkgPath() != packagePath {
+			continue
+		}
+		return reflect.New(typeOf).Interface()
+	}
 	return nil
 }
 
@@ -94,7 +57,16 @@ func LinkedHolder(holders []any, packagePath, holderName string) any {
 // selected package. It performs no registration and invokes no init side effect.
 func LinkedResources(holders []any, packagePath string) map[string]*embed.FS {
 	result := map[string]*embed.FS{}
-	for _, holder := range holders {
+	candidates := append([]any(nil), holders...)
+	for _, typeOf := range xunsafe.PackageTypes(packagePath) {
+		for typeOf != nil && typeOf.Kind() == reflect.Pointer {
+			typeOf = typeOf.Elem()
+		}
+		if typeOf != nil && typeOf.Name() != "" && typeOf.PkgPath() == packagePath {
+			candidates = append(candidates, reflect.New(typeOf).Interface())
+		}
+	}
+	for _, holder := range candidates {
 		typeOf := reflect.TypeOf(holder)
 		for typeOf != nil && typeOf.Kind() == reflect.Pointer {
 			typeOf = typeOf.Elem()

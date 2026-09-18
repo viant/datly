@@ -129,7 +129,7 @@ func PrepareSource(source string) *PreparedSource {
 					typeContext.Imports = append(typeContext.Imports, spec.ImportSpec{Alias: alias, Package: pkg})
 				} else {
 					prepared.Diagnostics = append(prepared.Diagnostics, SourceDiagnostic{
-						Code: DiagnosticInvalidImport, Message: "invalid #import directive: expected #import('alias','github.com/acme/pkg')",
+						Code: DiagnosticInvalidImport, Message: "invalid #import directive: expected #import('github.com/acme/pkg') or #import('alias','github.com/acme/pkg')",
 						Offset: start, End: start + len(strings.TrimRight(trimmed, "\r\n")),
 					})
 				}

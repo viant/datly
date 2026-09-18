@@ -1,10 +1,11 @@
 # Project builds and deployment
 
 Use `datly init` to scaffold and `datly build` to compile Go-selected component
-packages, reachable types and typed factories. The application-owned
-`internal/datlylink` package is the explicit default-import policy: its `init()`
-calls `bootstrap.UseDefaultImports` with one exported component holder per
-selected package. `cmd/datly` blank-imports only that link package. Generated
+packages and reachable types. The application-owned
+`internal/datlylink` package is the explicit import policy: it blank-imports
+selected component packages and has an empty `init()`. `cmd/datly` blank-imports
+only that link package. Bootstrap discovers linked types with
+`xunsafe.PackageTypes`. Generated
 component-package `init()` functions stay empty; there is no per-contract
 registration and linked Go types do not populate `x.Registry`.
 

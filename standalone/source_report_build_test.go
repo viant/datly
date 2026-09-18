@@ -36,11 +36,8 @@ func TestStandaloneReportsAutomaticCustomBuildSQLite(t *testing.T) {
 	service := build.Service{}
 	require.NoError(t, service.Init(ctx, build.InitRequest{Dir: f.Root}))
 	link := `package datlylink
-import (
- spend "example.com/standalone/reporting/spend"
- "github.com/viant/datly/bootstrap"
-)
-func init(){bootstrap.UseDefaultImports(spend.Component{})}
+import _ "example.com/standalone/reporting/spend"
+func init(){}
 `
 	formattedLink, err := format.Source([]byte(link))
 	require.NoError(t, err)

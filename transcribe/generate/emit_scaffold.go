@@ -12,6 +12,15 @@ type EmittedFile struct {
 }
 
 func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
+	return emitScaffold(dir, plan, false)
+}
+
+// EmitScaffoldEphemeral emits a staging package without any ownership sidecar.
+func EmitScaffoldEphemeral(dir string, plan *Plan) ([]EmittedFile, error) {
+	return emitScaffold(dir, plan, true)
+}
+
+func emitScaffold(dir string, plan *Plan, ephemeral bool) ([]EmittedFile, error) {
 	if plan != nil && plan.MutationHandler == nil && plan.lifecycleTargetError != nil {
 		return nil, plan.lifecycleTargetError
 	}
@@ -28,7 +37,7 @@ func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
 		if err != nil {
 			return nil, err
 		}
-		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: userFiles, removals: removals, plan: p}
+		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: userFiles, removals: removals, plan: p, ephemeral: ephemeral}
 		if err = persistence.Commit(); err != nil {
 			return nil, err
 		}

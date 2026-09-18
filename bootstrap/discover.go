@@ -124,9 +124,13 @@ func (d PackageDiscovery) DiscoverFiles(files []xmodule.File) ([]*RouteSource, e
 				Imports:     append([]spec.ImportSpec(nil), field.imports...),
 				ordinal:     ordinal,
 			}
-			holder := linkedHolder(d.Holders, file.ImportPath, field.holderType)
+			explicitHolder := linkedHolder(d.Holders, file.ImportPath, field.holderType)
+			holder := explicitHolder
+			if holder == nil {
+				holder = linkedHolder(nil, file.ImportPath, field.holderType)
+			}
 			if holder == nil && d.RequireLinked {
-				return nil, fmt.Errorf("component holder %s.%s is not selected by the default imports", file.ImportPath, field.holderType)
+				return nil, fmt.Errorf("component holder %s.%s is not linked into the executable", file.ImportPath, field.holderType)
 			}
 			if holder != nil {
 				holderType := reflect.TypeOf(holder)
@@ -143,7 +147,10 @@ func (d PackageDiscovery) DiscoverFiles(files []xmodule.File) ([]*RouteSource, e
 						source.LinkedOutputType = output.Type
 					}
 				}
-				if provider, ok := holder.(linkedHandlerProvider); ok {
+				// Runtime typelinks prove type identity, but Go may dead-strip an
+				// unreferenced method body. Explicit embedding may still supply a
+				// callable legacy/custom provider; metadata-driven writers do not.
+				if provider, ok := explicitHolder.(linkedHandlerProvider); ok {
 					source.LinkedHandler = provider.DatlyHandler(field.tag.Handler)
 				}
 			}

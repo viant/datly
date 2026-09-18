@@ -35,6 +35,7 @@ type Plan struct {
 	Report               *spec.ReportSettings
 	Settings             dtag.Settings
 	Imports              []spec.ImportSpec
+	LifecycleTypes       []string
 
 	ViewDest     string
 	RouterDest   string
@@ -243,7 +244,8 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 			Type: upperCamel(name) + "Output", Destination: generation.File("output", "output.go"),
 			Fields: outputFields, Ownership: ContractGenerated,
 		},
-		HelperTypes: resolveHelperTypes(component, declarations),
+		HelperTypes:    resolveHelperTypes(component, declarations),
+		LifecycleTypes: lifecycleTypes(component.RootView),
 	}
 	if r.input.PackageName != "" {
 		plan.Holder = upperCamel(name) + "Component"
@@ -296,6 +298,30 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 		}
 	}
 	return plan, nil
+}
+
+func lifecycleTypes(root *spec.View) []string {
+	seen := map[string]bool{}
+	visited := map[*spec.View]bool{}
+	var result []string
+	var visit func(*spec.View)
+	visit = func(view *spec.View) {
+		if view == nil || visited[view] {
+			return
+		}
+		visited[view] = true
+		if value := strings.TrimSpace(view.EntityHooks); value != "" && !seen[value] {
+			seen[value] = true
+			result = append(result, value)
+		}
+		for _, relation := range view.Relations {
+			if relation != nil {
+				visit(relation.View)
+			}
+		}
+	}
+	visit(root)
+	return result
 }
 
 func resolveRoutes(routes []*spec.Route) ([]RoutePlan, string, error) {
