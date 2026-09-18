@@ -776,7 +776,52 @@ func TestBuilder_Build_OrdinaryProjectionPreservesAuthoredGrouping(t *testing.T)
 	}
 
 	assertly.AssertValues(t,
-		normalizeSQLForAssert("SELECT tenant_id, COUNT(*) AS total FROM users GROUP BY tenant_id, name ORDER BY tenant_id, name"),
+		normalizeSQLForAssert("SELECT tenant_id, total FROM (SELECT tenant_id, name, COUNT(*) AS total FROM users GROUP BY tenant_id, name ORDER BY tenant_id, name) AS datly_view"),
+		normalizeSQLForAssert(query.SQL),
+	)
+}
+
+func TestBuilder_Build_OrdinaryProjectionOrdersByHiddenInnerColumn(t *testing.T) {
+	type input struct{}
+	limit := 100000
+	offset := 10
+
+	query, err := NewBuilder().Build(
+		context.Background(),
+		WithBuilderSQL("SELECT campaign_id, advertiser_hstamp, SUM(spend) AS spend FROM campaigns GROUP BY campaign_id, advertiser_hstamp"),
+		WithBuilderView(&data.View{}),
+		WithBuilderControls(&spec.ViewControls{OrderBy: "advertiser_hstamp ASC", Limit: &limit, Offset: &offset}),
+		WithBuilderProjection([]string{"campaign_id", "spend"}),
+		WithBuilderInput(reflect.ValueOf(input{})),
+	)
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+
+	assertly.AssertValues(t,
+		normalizeSQLForAssert("SELECT campaign_id, spend FROM (SELECT campaign_id, advertiser_hstamp, SUM(spend) AS spend FROM campaigns GROUP BY campaign_id, advertiser_hstamp) AS datly_view ORDER BY datly_view.advertiser_hstamp ASC LIMIT 100000 OFFSET 10"),
+		normalizeSQLForAssert(query.SQL),
+	)
+}
+
+func TestBuilder_Build_OrdinaryProjectionExplicitOrderByHiddenInnerColumn(t *testing.T) {
+	type input struct{}
+
+	query, err := NewBuilder().Build(
+		context.Background(),
+		WithBuilderSQL("SELECT campaign_id, advertiser_hstamp, SUM(spend) AS spend FROM campaigns GROUP BY campaign_id, advertiser_hstamp"),
+		WithBuilderView(&data.View{}),
+		WithBuilderSelector(&xstate.Selector{OrderBy: "advertiser_hstamp ASC"}),
+		WithBuilderSelectorPolicy(&spec.Selector{AllowFields: true, AllowOrderBy: true}),
+		WithBuilderProjection([]string{"campaign_id", "spend"}),
+		WithBuilderInput(reflect.ValueOf(input{})),
+	)
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+
+	assertly.AssertValues(t,
+		normalizeSQLForAssert("SELECT campaign_id, spend FROM (SELECT campaign_id, advertiser_hstamp, SUM(spend) AS spend FROM campaigns GROUP BY campaign_id, advertiser_hstamp) AS datly_view ORDER BY datly_view.advertiser_hstamp ASC"),
 		normalizeSQLForAssert(query.SQL),
 	)
 }
@@ -791,7 +836,7 @@ func TestBuilder_ShapeBound_HonorsExplicitGroupableMetadata(t *testing.T) {
 		{
 			name: "ordinary view preserves authored grouping",
 			view: data.FromComponent(&spec.Component{RootView: &spec.View{}}),
-			want: "SELECT tenant_id, COUNT(*) AS total FROM users GROUP BY tenant_id, name ORDER BY tenant_id, name",
+			want: "SELECT tenant_id, total FROM (SELECT tenant_id, name, COUNT(*) AS total FROM users GROUP BY tenant_id, name ORDER BY tenant_id, name) AS datly_view",
 		},
 		{
 			name: "groupable view rewrites grouping",
@@ -812,6 +857,26 @@ func TestBuilder_ShapeBound_HonorsExplicitGroupableMetadata(t *testing.T) {
 			assertly.AssertValues(t, normalizeSQLForAssert(test.want), normalizeSQLForAssert(actual.SQL))
 		})
 	}
+}
+
+func TestBuilder_ShapeBound_OrdinaryProjectionOrdersByHiddenInnerColumn(t *testing.T) {
+	limit := 100000
+	source := &cache.ParmetrizedQuery{SQL: "SELECT campaign_id, advertiser_hstamp, SUM(spend) AS spend FROM campaigns GROUP BY campaign_id, advertiser_hstamp"}
+
+	actual, err := NewBuilder().ShapeBound(
+		source,
+		WithBuilderView(data.FromComponent(&spec.Component{RootView: &spec.View{}})),
+		WithBuilderControls(&spec.ViewControls{OrderBy: "advertiser_hstamp ASC", Limit: &limit}),
+		WithBuilderProjection([]string{"campaign_id", "spend"}),
+	)
+	if err != nil {
+		t.Fatalf("ShapeBound() error = %v", err)
+	}
+
+	assertly.AssertValues(t,
+		normalizeSQLForAssert("SELECT campaign_id, spend FROM (SELECT campaign_id, advertiser_hstamp, SUM(spend) AS spend FROM campaigns GROUP BY campaign_id, advertiser_hstamp) AS datly_view ORDER BY datly_view.advertiser_hstamp ASC LIMIT 100000"),
+		normalizeSQLForAssert(actual.SQL),
+	)
 }
 
 func TestBuilder_Build_GroupedProjectionDropsGroupByForAggregateOnlySelection(t *testing.T) {

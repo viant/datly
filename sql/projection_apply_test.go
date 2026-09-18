@@ -77,7 +77,13 @@ func TestApplySelectorProjection(t *testing.T) {
 			name:      "ordinary projection preserves authored grouping",
 			sqlText:   "SELECT tenant_id, region, SUM(amount) AS total FROM sales GROUP BY tenant_id, region ORDER BY region, total",
 			selected:  []string{"tenant_id", "total"},
-			expectSQL: "SELECT tenant_id, SUM(amount) AS total FROM sales GROUP BY tenant_id, region ORDER BY region, total",
+			expectSQL: "SELECT tenant_id, total FROM (SELECT tenant_id, region, SUM(amount) AS total FROM sales GROUP BY tenant_id, region ORDER BY region, total) AS datly_view",
+		},
+		{
+			name:      "ordinary grouped projection wraps removed group and order dependencies",
+			sqlText:   "SELECT ad_order_id, audience_id, COUNT(DISTINCT audience_id) AS audience_count, SUM(imps) AS total_imps_7d FROM audiences GROUP BY 1, 2 ORDER BY total_imps_7d DESC",
+			selected:  []string{"ad_order_id", "audience_count"},
+			expectSQL: "SELECT ad_order_id, audience_count FROM (SELECT ad_order_id, audience_id, COUNT(DISTINCT audience_id) AS audience_count, SUM(imps) AS total_imps_7d FROM audiences GROUP BY 1, 2 ORDER BY total_imps_7d DESC) AS datly_view",
 		},
 		{
 			name:      "set query projects from complete union",

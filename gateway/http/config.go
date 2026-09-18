@@ -154,6 +154,7 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 			return nil, fmt.Errorf("HTTP warmup requires a completion callback or logger")
 		}
 		h.warmup = warmup
+		h.warmupPrefix = strings.TrimSuffix(c.Meta.CacheWarmURI, "/")
 	}
 	h.async, err = h.newAsyncRoutes(c.Async, input)
 	if err != nil {
