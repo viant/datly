@@ -6,6 +6,7 @@ import (
 	afsurl "github.com/viant/afs/url"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/application"
@@ -19,7 +20,6 @@ import (
 	"github.com/viant/datly/runtime/auth"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/standalone/config"
-	"github.com/viant/datly/transcribe"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlx/io/read/cache/aerospike"
 	"github.com/viant/x"
@@ -148,37 +148,67 @@ func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (
 	if s.config.GoBootstrap == nil || len(s.config.GoBootstrap.Packages) == 0 {
 		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Version: s.config.Version}, nil
 	}
-	discovery := transcribe.Discovery{Const: s.config.Const, Workspace: s.Workspace, BaseDir: s.config.BaseDir, ModuleDirs: s.config.ModuleDirs, Include: s.config.GoBootstrap.Packages, Exclude: s.config.GoBootstrap.Exclude, Connector: s.config.Connector, Types: types, Registry: s.registry, Holders: s.holders, RequireLinked: s.requireLinked}
-	project, err := discovery.Compile(ctx)
+	discovered, err := bootstrap.ReflectPackages(s.config.GoBootstrap.Packages)
 	if err != nil {
 		return nil, err
 	}
-	if len(project.Components) == 0 {
-		return nil, fmt.Errorf("no authored components found")
+	if len(discovered.Components) == 0 {
+		return nil, fmt.Errorf("no linked reflected components found")
 	}
-	built := &application.Build{Resources: project.Resources, Types: project.Components[0].Source.Types, HTTP: s.http, Version: s.config.Version}
+	resources := resource.New()
+	for _, packagePath := range discovered.Packages {
+		for namespace, embedded := range bootstrap.LinkedResources(s.holders, packagePath) {
+			if _, exists := resources.Lookup(namespace); exists {
+				return nil, fmt.Errorf("duplicate linked resource namespace %q", namespace)
+			}
+			if err = resources.Register(namespace, embedded); err != nil {
+				return nil, err
+			}
+		}
+	}
+	built := &application.Build{Resources: resources, Types: discovered.Types, HTTP: s.http, Version: s.config.Version}
 	if s.config.MCP != nil {
 		built.MCP = mcp.Config{Authorization: s.config.MCP.Authorization, Folders: s.config.MCP.Folders}
 	}
 	built.HTTP.StaticContent = append([]*spec.StaticContent(nil), s.http.StaticContent...)
 	components := &sourceComponent{source: s}
-	var inputs []bootstrap.ArtifactInput
-	for _, compiled := range project.Components {
-		if compiled.Component.Static != nil {
-			content := compiled.Component.Static.Clone()
-			content.ContentURL, err = s.config.Const.Path(content.ContentURL)
-			if err != nil {
-				return nil, err
+	type reflectedComponent struct {
+		component *spec.Component
+		source    *bootstrap.RouteSource
+	}
+	byKey := map[string]*reflectedComponent{}
+	var order []string
+	for _, source := range discovered.Components {
+		component, resolveErr := source.Resolve(source.LinkedInputType, source.LinkedOutputType)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		key := component.Key.String()
+		if current := byKey[key]; current != nil {
+			for _, candidate := range component.Routes {
+				duplicate := false
+				for _, existing := range current.component.Routes {
+					if existing != nil && candidate != nil && strings.EqualFold(existing.Method, candidate.Method) && existing.Path == candidate.Path {
+						duplicate = true
+						break
+					}
+				}
+				if !duplicate {
+					current.component.Routes = append(current.component.Routes, candidate)
+				}
 			}
-			if built.HTTP.StaticLocalRoot == nil && built.HTTP.ContentURL == "" && content.ContentURL != "" && afsurl.IsRelative(content.ContentURL) {
-				content.ContentURL = compiled.Source.BaseDir() + string(filepath.Separator) + content.ContentURL
-			}
-			built.HTTP.StaticContent = append(built.HTTP.StaticContent, content)
 			continue
 		}
-		input, err := components.artifactInput(compiled)
-		if err != nil {
-			return nil, err
+		byKey[key] = &reflectedComponent{component: component, source: source}
+		order = append(order, key)
+	}
+	sort.Strings(order)
+	inputs := make([]bootstrap.ArtifactInput, 0, len(order))
+	for _, key := range order {
+		current := byKey[key]
+		input, inputErr := components.reflectedArtifactInput(current.component, current.source, discovered.Types, resources)
+		if inputErr != nil {
+			return nil, inputErr
 		}
 		inputs = append(inputs, input)
 	}
@@ -193,23 +223,6 @@ func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (
 	built.Types, err = compilation.Types()
 	if err != nil {
 		return nil, err
-	}
-	imported := map[string]bool{}
-	for _, content := range built.HTTP.StaticContent {
-		if content == nil || content.Namespace == "" || s.resources == nil || imported[content.Namespace] {
-			continue
-		}
-		linked, ok := s.resources.Lookup(content.Namespace)
-		if !ok {
-			continue
-		}
-		if _, exists := built.Resources.Lookup(content.Namespace); exists {
-			return nil, fmt.Errorf("static namespace %q conflicts with discovered package resources", content.Namespace)
-		}
-		imported[content.Namespace] = true
-		if err := built.Resources.Register(content.Namespace, linked); err != nil {
-			return nil, err
-		}
 	}
 	return built, nil
 }

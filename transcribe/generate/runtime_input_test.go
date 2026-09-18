@@ -41,6 +41,31 @@ func TestGeneratorRuntimeInputTypeUsesCanonicalFieldsAndPresenceMarker(t *testin
 	}
 }
 
+func TestGeneratorRuntimeOutputTypeUsesGeneratedViewFields(t *testing.T) {
+	component := &spec.Component{
+		Name: "Events",
+		Parameters: []*spec.Parameter{{
+			Name: "Events", TypeExpr: "[]*EventsView", Source: spec.BindSource{Kind: "output", Name: "view"},
+		}},
+		RootView: &spec.View{Name: "Events", Columns: []*spec.Column{
+			{Name: "ID", Type: spec.TypeRef{Name: "int64"}},
+			{Name: "NAME", Type: spec.TypeRef{Name: "string"}},
+		}},
+	}
+	outputType, err := New(Input{Component: component}).RuntimeOutputType()
+	if err != nil {
+		t.Fatalf("RuntimeOutputType() error = %v", err)
+	}
+	field, ok := outputType.FieldByName("Events")
+	if !ok || field.Type.Kind() != reflect.Slice || field.Type.Elem().Kind() != reflect.Ptr {
+		t.Fatalf("Events field = %+v", field)
+	}
+	row := field.Type.Elem().Elem()
+	if row.NumField() != 2 || row.Field(0).Name != "Id" || row.Field(1).Name != "Name" {
+		t.Fatalf("generated output row = %v", row)
+	}
+}
+
 func TestGeneratorRuntimeInputTypeResolvesLinkedFieldThroughTypeCatalog(t *testing.T) {
 	catalog := typecatalog.NewCatalog()
 	if err := catalog.Register(typecatalog.TypeOriginPackage, x.NewType(

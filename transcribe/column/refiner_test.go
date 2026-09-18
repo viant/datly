@@ -7,6 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/viant/datly/constant"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/spec"
 	sqltemplate "github.com/viant/datly/sql/template"
@@ -183,6 +184,30 @@ ${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("AND")}
 	}
 	if component.RootView.Source.SQL != authored || len(component.RootView.Columns) != 2 || !component.RootView.Columns[0].PrimaryKey {
 		t.Fatalf("source/columns = %q / %+v", component.RootView.Source.SQL, component.RootView.Columns)
+	}
+}
+
+func TestRefinerDiscoversColumnsWithUnresolvedWherePredicateBuilder(t *testing.T) {
+	harness := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := harness.ExecStatements(ctx, `CREATE TABLE records (id INTEGER PRIMARY KEY, status TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	authored := `SELECT r.id, r.status FROM records r
+${predicate.Builder().CombineAnd($predicate.FilterGroup(1, "AND")).Build("WHERE")}`
+	component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: &spec.View{
+		Name: "Records", Source: &spec.ViewSource{SQL: authored},
+	}}
+	values, err := constant.New(map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := &TemplateInput{Const: values, Value: reflect.ValueOf(struct{}{})}
+	if err := New(Connections{"main": harness.DB}).Refine(ctx, component, nil, input); err != nil {
+		t.Fatal(err)
+	}
+	if len(component.RootView.Columns) != 2 {
+		t.Fatalf("columns = %+v", component.RootView.Columns)
 	}
 }
 
