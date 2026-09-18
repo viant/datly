@@ -10,6 +10,13 @@ import (
 	druntime "github.com/viant/datly/runtime"
 )
 
+func writeWarmupNotFound(writer stdhttp.ResponseWriter) {
+	writeJSON(writer, stdhttp.StatusNotFound, map[string]string{
+		"status":  "error",
+		"message": "No warmup target is configured for this route.",
+	})
+}
+
 type warmupRoute struct {
 	target                    dexec.ComponentTarget
 	operation                 *druntime.Warmup
@@ -102,7 +109,7 @@ func (h *Handler) serveWarmup(writer stdhttp.ResponseWriter, req *stdhttp.Reques
 	target, ok := h.runtime.WarmupTarget(targetPath)
 	endpoint := w.routes[target.Route.String()]
 	if !ok || endpoint == nil || endpoint.target != target {
-		writer.WriteHeader(stdhttp.StatusNotFound)
+		writeWarmupNotFound(writer)
 		return true
 	}
 	preflight := req.Method == "OPTIONS" && req.Header.Get("Origin") != "" && req.Header.Get("Access-Control-Request-Method") != ""

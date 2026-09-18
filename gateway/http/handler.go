@@ -31,6 +31,7 @@ type Handler struct {
 	static        []*staticRoute
 	cors          map[string]*corsPolicy
 	warmup        *warmupRoutes
+	warmupPrefix  string
 	runtime       *druntime.Runtime
 	logger        xlogger.Logger
 	version       string
@@ -75,6 +76,10 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	}
 	escapedPath := req.URL.EscapedPath()
 	if methods := h.runtime.AllowedMethodsForPath(escapedPath); len(methods) == 0 {
+		if h.warmupPrefix != "" && (escapedPath == h.warmupPrefix || strings.HasPrefix(escapedPath, h.warmupPrefix+"/")) {
+			writeWarmupNotFound(writer)
+			return
+		}
 		writeJSON(writer, stdhttp.StatusNotFound, xresponse.Status{
 			Status:  "error",
 			Message: "not found",
