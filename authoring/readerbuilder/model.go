@@ -75,11 +75,13 @@ type SettingMutation struct {
 }
 
 type ViewMutation struct {
-	Name   string `json:"name"`
-	SQL    string `json:"sql,omitempty"`
-	Parent string `json:"parent,omitempty"`
-	Join   string `json:"join,omitempty"`
-	On     string `json:"on,omitempty"`
+	Name     string            `json:"name"`
+	Kind     spec.RelationKind `json:"kind,omitempty"`
+	TypeExpr string            `json:"typeExpr,omitempty"`
+	SQL      string            `json:"sql,omitempty"`
+	Parent   string            `json:"parent,omitempty"`
+	Join     string            `json:"join,omitempty"`
+	On       string            `json:"on,omitempty"`
 }
 
 type Response struct {

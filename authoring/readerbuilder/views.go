@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/dql"
 	sqltext "github.com/viant/sqlparser/source"
+	"github.com/viant/tagly/format/text"
 )
 
 func editView(source string, operation OperationType, mutation *ViewMutation) (string, error) {
@@ -18,6 +19,10 @@ func editView(source string, operation OperationType, mutation *ViewMutation) (s
 	if err != nil {
 		return "", err
 	}
+	derived, err := derivedViewOccurrences(source)
+	if err != nil {
+		return "", err
+	}
 	index := -1
 	for i := range views {
 		if strings.EqualFold(views[i].Name, mutation.Name) {
@@ -25,13 +30,26 @@ func editView(source string, operation OperationType, mutation *ViewMutation) (s
 			break
 		}
 	}
+	derivedIndex := -1
+	for i := range derived {
+		if strings.EqualFold(derived[i].Parameter.Name, mutation.Name) {
+			derivedIndex = i
+			break
+		}
+	}
 	switch operation {
 	case OperationAddView:
-		if index >= 0 {
+		if index >= 0 || derivedIndex >= 0 {
 			return "", fmt.Errorf("view %q already exists", mutation.Name)
+		}
+		if normalizeViewKind(mutation.Kind) == spec.RelationKindDerived {
+			return addDerivedView(source, views, mutation)
 		}
 		return addRelatedView(source, views, mutation)
 	case OperationUpdateView:
+		if derivedIndex >= 0 {
+			return updateDerivedView(source, derived[derivedIndex], mutation)
+		}
 		if index < 0 {
 			return "", fmt.Errorf("view %q was not found", mutation.Name)
 		}
@@ -40,6 +58,9 @@ func editView(source string, operation OperationType, mutation *ViewMutation) (s
 		}
 		return dql.ApplyPatch(source, views[index].SourceSpan, strings.TrimSpace(mutation.SQL))
 	case OperationRemoveView:
+		if derivedIndex >= 0 {
+			return dql.ApplyPatch(source, derived[derivedIndex].Span, "")
+		}
 		if index < 0 {
 			return "", fmt.Errorf("view %q was not found", mutation.Name)
 		}
@@ -95,6 +116,13 @@ func validateOperationResult(operation Operation, structure *Structure) error {
 	if relation == nil {
 		return fmt.Errorf("added view %q did not compile as a relation", operation.View.Name)
 	}
+	wantKind := normalizeViewKind(operation.View.Kind)
+	if relation.Kind != wantKind {
+		return fmt.Errorf("added view %q compiled as %q, expected %q", operation.View.Name, relation.Kind, wantKind)
+	}
+	if wantKind == spec.RelationKindDerived {
+		return nil
+	}
 	if !strings.EqualFold(strings.TrimSpace(relation.ParentNamespace), parent) {
 		return fmt.Errorf("added view %q resolved parent %q, expected %q", operation.View.Name, relation.ParentNamespace, parent)
 	}
@@ -120,6 +148,9 @@ func findRelation(view *spec.View, name string) *spec.Relation {
 }
 
 func addRelatedView(source string, views []ViewOccurrence, mutation *ViewMutation) (string, error) {
+	if normalizeViewKind(mutation.Kind) != spec.RelationKindSubview {
+		return "", fmt.Errorf("related view kind must be %q", spec.RelationKindSubview)
+	}
 	if len(views) == 0 {
 		return "", fmt.Errorf("addView requires an existing wrapped root view")
 	}
@@ -169,6 +200,90 @@ func addRelatedView(source string, views []ViewOccurrence, mutation *ViewMutatio
 		{span: dql.SourceSpan{Start: boundary, End: boundary}, text: fmt.Sprintf("\n%s (%s) %s ON %s\n", join, strings.TrimSpace(mutation.SQL), mutation.Name, strings.TrimSpace(mutation.On))},
 	}
 	return applySourcePatches(source, patches)
+}
+
+func addDerivedView(source string, views []ViewOccurrence, mutation *ViewMutation) (string, error) {
+	if len(views) == 0 {
+		return "", fmt.Errorf("addView requires an existing root view")
+	}
+	if strings.TrimSpace(mutation.Parent) != "" && !strings.EqualFold(strings.TrimSpace(mutation.Parent), views[0].Name) {
+		return "", fmt.Errorf("derived view %q must attach to root view %q", mutation.Name, views[0].Name)
+	}
+	line, err := renderDerivedView(mutation, "")
+	if err != nil {
+		return "", err
+	}
+	prepared := dql.PrepareSource(source)
+	if err = prepared.Err(); err != nil {
+		return "", err
+	}
+	if len(prepared.Statements) == 0 {
+		return "", fmt.Errorf("addView requires a SQL statement")
+	}
+	insert := prepared.TrimPrefix + prepared.Statements[0].SQLStart
+	return dql.ApplyPatch(source, dql.SourceSpan{Start: insert, End: insert}, line+"\n")
+}
+
+func updateDerivedView(source string, occurrence dql.DeclarationOccurrence, mutation *ViewMutation) (string, error) {
+	typeExpr := ""
+	if occurrence.Parameter != nil {
+		typeExpr = occurrence.Parameter.TypeExpr
+	}
+	line, err := renderDerivedView(mutation, typeExpr)
+	if err != nil {
+		return "", err
+	}
+	return dql.ApplyPatch(source, occurrence.Span, line)
+}
+
+func renderDerivedView(mutation *ViewMutation, fallbackType string) (string, error) {
+	sql := strings.TrimSpace(mutation.SQL)
+	if sql == "" {
+		return "", fmt.Errorf("derived view %q SQL is required", mutation.Name)
+	}
+	if strings.Contains(sql, "*/") {
+		return "", fmt.Errorf("derived view %q SQL cannot contain a block-comment terminator", mutation.Name)
+	}
+	if strings.TrimSpace(mutation.Join) != "" || strings.TrimSpace(mutation.On) != "" {
+		return "", fmt.Errorf("derived view %q cannot declare join or relation keys", mutation.Name)
+	}
+	typeExpr := strings.TrimSpace(mutation.TypeExpr)
+	if typeExpr == "" {
+		typeExpr = strings.TrimSpace(fallbackType)
+	}
+	if typeExpr == "" {
+		typeExpr = text.DetectCaseFormat(mutation.Name).Format(mutation.Name, text.CaseFormatUpperCamel)
+	}
+	if strings.ContainsAny(typeExpr, "\r\n<>()") {
+		return "", fmt.Errorf("derived view %q typeExpr is invalid", mutation.Name)
+	}
+	return fmt.Sprintf("#define($_ = $%s<%s>(output/derived) /* %s */)", mutation.Name, typeExpr, sql), nil
+}
+
+func derivedViewOccurrences(source string) ([]dql.DeclarationOccurrence, error) {
+	declarations, err := dql.DeclarationOccurrences(source)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]dql.DeclarationOccurrence, 0)
+	for _, occurrence := range declarations {
+		parameter := occurrence.Parameter
+		if parameter != nil && parameter.IsDerivedOutput() {
+			result = append(result, occurrence)
+		}
+	}
+	return result, nil
+}
+
+func normalizeViewKind(kind spec.RelationKind) spec.RelationKind {
+	switch spec.RelationKind(strings.ToLower(strings.TrimSpace(string(kind)))) {
+	case "", spec.RelationKindSubview:
+		return spec.RelationKindSubview
+	case spec.RelationKindDerived:
+		return spec.RelationKindDerived
+	default:
+		return kind
+	}
 }
 
 func removeRelatedView(source string, view ViewOccurrence) (string, error) {
