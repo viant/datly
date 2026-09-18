@@ -776,7 +776,7 @@ func TestBuilder_Build_OrdinaryProjectionPreservesAuthoredGrouping(t *testing.T)
 	}
 
 	assertly.AssertValues(t,
-		normalizeSQLForAssert("SELECT tenant_id, COUNT(*) AS total FROM users GROUP BY tenant_id, name ORDER BY tenant_id, name"),
+		normalizeSQLForAssert("SELECT tenant_id, total FROM (SELECT tenant_id, name, COUNT(*) AS total FROM users GROUP BY tenant_id, name ORDER BY tenant_id, name) AS datly_view"),
 		normalizeSQLForAssert(query.SQL),
 	)
 }
@@ -791,7 +791,7 @@ func TestBuilder_ShapeBound_HonorsExplicitGroupableMetadata(t *testing.T) {
 		{
 			name: "ordinary view preserves authored grouping",
 			view: data.FromComponent(&spec.Component{RootView: &spec.View{}}),
-			want: "SELECT tenant_id, COUNT(*) AS total FROM users GROUP BY tenant_id, name ORDER BY tenant_id, name",
+			want: "SELECT tenant_id, total FROM (SELECT tenant_id, name, COUNT(*) AS total FROM users GROUP BY tenant_id, name ORDER BY tenant_id, name) AS datly_view",
 		},
 		{
 			name: "groupable view rewrites grouping",

@@ -73,6 +73,9 @@ func (p SelectorProjection) prepare(selected []string) (*Projection, error) {
 	for _, column := range chosen {
 		selected = append(selected, column.output)
 	}
+	if needsOuterDependentProjection(sqlText, len(chosen), len(columns), p.View != nil && p.View.IsGroupable()) {
+		return p.prepareOuterDependentProjection(sqlText, chosen)
+	}
 
 	projected, err := applyFilteredSelectorProjection(sqlText, selected, p.View != nil && p.View.IsGroupable())
 	if err != nil {
@@ -136,6 +139,36 @@ func applyFilteredSelectorProjection(sqlText string, selected []string, groupabl
 		return sqlText, nil
 	}
 	return source.render(sqlText, filtered), nil
+}
+
+func needsOuterDependentProjection(sqlText string, selectedCount, totalCount int, groupable bool) bool {
+	return !groupable && selectedCount > 0 && selectedCount < totalCount &&
+		(sqltext.HasTopLevelClause(sqlText, "group by") || sqltext.HasTopLevelClause(sqlText, "having"))
+}
+
+func (p SelectorProjection) prepareOuterDependentProjection(sqlText string, chosen []ProjectionColumn) (*Projection, error) {
+	allowNulls := p.View != nil && p.View.NullsAllowed()
+	projection := make([]string, 0, len(chosen))
+	for _, column := range chosen {
+		output := strings.TrimSpace(column.output)
+		if output == "" {
+			return nil, fmt.Errorf("source projection is unresolved")
+		}
+		resolved := column.outputColumn(p.View)
+		if resolved == nil {
+			resolved = &data.Column{}
+		}
+		outer := *resolved
+		outer.Name = output
+		outer.Column = output
+		outer.Expression = ""
+		expression := strings.TrimSpace(outer.SelectExpression(allowNulls))
+		if expression == "" {
+			return nil, fmt.Errorf("source projection is unresolved")
+		}
+		projection = append(projection, expression)
+	}
+	return &Projection{Source: strings.TrimSuffix(strings.TrimSpace(sqlText), ";"), outer: projection, columns: chosen}, nil
 }
 
 func normalizeProjectionSelection(input []string) []string {
