@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -11,8 +12,13 @@ import (
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
+	sqlio "github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
+	"github.com/viant/sqlx/metadata"
+	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
+	"github.com/viant/sqlx/option"
+	"github.com/viant/tagly/tags"
 )
 
 type tableConstraint struct {
@@ -22,6 +28,13 @@ type tableConstraint struct {
 	unique        bool
 	notNull       bool
 	defaultValue  *string
+	reference     *tableReference
+}
+
+type tableReference struct {
+	schema string
+	table  string
+	column string
 }
 
 type projectionLineage struct {
@@ -40,7 +53,33 @@ func loadTableConstraints(ctx context.Context, db *sql.DB, table string) (map[st
 	if err != nil {
 		return nil, fmt.Errorf("load SQLX table metadata for %q: %w", table, err)
 	}
-	return constraintsFromColumns(columns), nil
+	result := constraintsFromColumns(columns)
+	keys := make([]sink.Key, 0)
+	err = metadata.New().Info(ctx, db, info.KindForeignKeys, &keys,
+		option.NewArgs(session.Catalog, session.Schema, table))
+	if err != nil {
+		// Some SQLX products expose columns but not foreign-key metadata. PK,
+		// nullability, defaults and uniqueness remain authoritative in that case.
+		if strings.Contains(strings.ToLower(err.Error()), "unsupported") {
+			return result, nil
+		}
+		return nil, fmt.Errorf("load SQLX foreign keys for %q: %w", table, err)
+	}
+	for index := range keys {
+		key := &keys[index]
+		name := normalizedName(key.Column)
+		if name == "" || strings.TrimSpace(key.ReferenceTable) == "" || strings.TrimSpace(key.ReferenceColumn) == "" {
+			continue
+		}
+		constraint := result[name]
+		constraint.reference = &tableReference{
+			schema: strings.TrimSpace(key.ReferenceSchema),
+			table:  strings.TrimSpace(key.ReferenceTable),
+			column: strings.TrimSpace(key.ReferenceColumn),
+		}
+		result[name] = constraint
+	}
+	return result, nil
 }
 
 func constraintsFromColumns(columns []sink.Column) map[string]tableConstraint {
@@ -271,7 +310,35 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 			value := *constraint.defaultValue
 			column.Default = &value
 		}
+		applyReferenceConstraint(column, constraint.reference)
 	}
+}
+
+func applyReferenceConstraint(column *spec.Column, reference *tableReference) {
+	if column == nil || reference == nil {
+		return
+	}
+	parsed := tags.NewTags(strings.TrimSpace(column.Tag))
+	sqlxTag := parsed.Lookup(sqlio.TagSqlx)
+	if sqlxTag == nil {
+		mapping := firstValue(column.Source, column.Name)
+		parsed.Set(sqlio.TagSqlx, mapping)
+		sqlxTag = parsed.Lookup(sqlio.TagSqlx)
+	}
+	if sqlxTag == nil {
+		return
+	}
+	authored := sqlio.ParseTag(reflect.StructTag(parsed.Stringify()))
+	if authored.RefDb == "" && reference.schema != "" {
+		sqlxTag.Append("refDb=" + reference.schema)
+	}
+	if authored.RefTable == "" {
+		sqlxTag.Append("refTable=" + reference.table)
+	}
+	if authored.RefColumn == "" {
+		sqlxTag.Append("refColumn=" + reference.column)
+	}
+	column.Tag = parsed.Stringify()
 }
 
 func lineageNamespaceAllowed(namespace string, allowed map[string]bool, requireQualifier bool) bool {

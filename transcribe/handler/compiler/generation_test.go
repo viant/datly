@@ -53,6 +53,26 @@ func TestBuildInputDerivesCanonicalState(t *testing.T) {
 	}
 }
 
+func TestBuildInputExportsLowercaseDatabaseKeyProjection(t *testing.T) {
+	view := &spec.View{Name: "connectors", Source: &spec.ViewSource{Table: "connectors", SQL: "SELECT name FROM connectors"}, Columns: []*spec.Column{
+		{Name: "name", Source: "name", PrimaryKey: true, Type: spec.TypeRef{Name: "string"}, Tag: `sqlx:"name,primaryKey"`},
+	}}
+	got, err := (&Compiler{}).BuildInput(Request{Component: &spec.Component{Name: "Connector", RootView: view}, Operation: plan.OperationPatch}, "Connector")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, parameter := range got.Component.Parameters {
+		if parameter.Name != "ConnectorsKeys" {
+			continue
+		}
+		if parameter.DeclarationSQL != "SELECT Name AS Name FROM `/`" {
+			t.Fatalf("key projection = %q", parameter.DeclarationSQL)
+		}
+		return
+	}
+	t.Fatal("generated key projection was not found")
+}
+
 func TestBuildInputPreservesOverridesAndRejectsConflicts(t *testing.T) {
 	for _, conflict := range []bool{false, true} {
 		t.Run(map[bool]string{false: "authored", true: "conflicting"}[conflict], func(t *testing.T) {

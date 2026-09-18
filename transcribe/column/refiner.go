@@ -214,11 +214,32 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	if err != nil {
 		return nil, fmt.Errorf("resolve SQL dialect: %w", err)
 	}
-	evaluated, err := evaluateSource(ctx, source, dialect, input, parent, parentAliases)
+	evaluationSource := source
+	if input == nil || input.Predicate == nil {
+		evaluationSource = source.Clone()
+		evaluationSource.SQL, err = schemaDiscoverySQL(evaluationSource.SQL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	evaluated, err := evaluateSource(ctx, evaluationSource, dialect, input, parent, parentAliases)
 	if err != nil {
 		return nil, err
 	}
 	source.SQL = evaluated.SQL
+	source.SQL, err = schemaDiscoverySQL(source.SQL)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(source.Table) == "" {
+		if table := directSourceTable(evaluated.SQL); table != "" {
+			source.Table = table
+			// Resource-backed and inline SQL have identical table authority once
+			// the evaluated query proves one direct physical source. Persist that
+			// fact for writer planning; readers do not depend on it.
+			view.Source.Table = table
+		}
+	}
 	// Metadata reads follow the table actually selected by the evaluated query.
 	// This also handles existing $Unsafe table constants without reversing or
 	// overwriting their authored SQL or canonical table metadata.
@@ -258,7 +279,7 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	}
 	detected, err := r.detectColumns(ctx, db, view, query, evaluated.Args...)
 	if err != nil {
-		return nil, fmt.Errorf("SQLX discovery failed: %w", err)
+		return nil, fmt.Errorf("SQLX discovery failed for %q: %w", query, err)
 	}
 	columns, err := canonicalColumns(detected, view.Groupable != nil && *view.Groupable)
 	if err != nil {
@@ -289,6 +310,60 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 		applyTableConstraints(view.Columns, constraints, lineage)
 	}
 	return evaluated, nil
+}
+
+// schemaDiscoverySQL removes unresolved predicate expansions only from the
+// zero-row metadata query. Runtime/authored SQL remains owned by the original
+// view source and evaluated result.
+func schemaDiscoverySQL(SQL string) (string, error) {
+	const prefix = "${predicate."
+	result := SQL
+	for {
+		start := strings.Index(result, prefix)
+		if start < 0 {
+			return result, nil
+		}
+		end := strings.IndexByte(result[start+len(prefix):], '}')
+		if end < 0 {
+			return "", fmt.Errorf("unterminated predicate expression in schema discovery SQL")
+		}
+		end += start + len(prefix)
+		result = result[:start] + result[end+1:]
+	}
+}
+
+func directSourceTable(SQL string) string {
+	parsed, err := sqlparser.ParseQuery(strings.TrimSpace(SQL))
+	if err != nil {
+		return ""
+	}
+	lineage := sqlparser.Lineage{Query: parsed}
+	if table := strings.TrimSpace(lineage.RootTable()); table != "" {
+		return table
+	}
+	// A derived source has no direct root, but the parser can still prove that
+	// every exposed direct column originates from one physical table.
+	table := ""
+	for _, origin := range lineage.Columns() {
+		candidate := strings.TrimSpace(origin.Table)
+		if candidate == "" {
+			continue
+		}
+		if table != "" && !strings.EqualFold(table, candidate) {
+			return ""
+		}
+		table = candidate
+	}
+	if table == "" && parsed.Union == nil {
+		candidate := strings.TrimSpace(sqlparser.TableName(parsed))
+		for _, with := range parsed.WithSelects {
+			if with != nil && strings.EqualFold(strings.TrimSpace(with.Alias), candidate) {
+				return ""
+			}
+		}
+		table = candidate
+	}
+	return table
 }
 
 func evaluateSource(ctx context.Context, source *spec.ViewSource, dialect *info.Dialect, input *TemplateInput, parent *expandedQuery, parentAliases []string) (*expandedQuery, error) {

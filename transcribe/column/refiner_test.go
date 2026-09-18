@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/spec"
 	sqltemplate "github.com/viant/datly/sql/template"
 	"github.com/viant/sqlx"
+	sqlio "github.com/viant/sqlx/io"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"github.com/viant/sqlx/metadata/sink"
 )
@@ -87,7 +88,7 @@ func TestRefinerEnrichesExplicitSQLiteTableConstraints(t *testing.T) {
 	}
 }
 
-func TestRefinerUsesParserLineageAndNeverInfersConstraintTable(t *testing.T) {
+func TestRefinerUsesProvenDirectTableLineage(t *testing.T) {
 	harness := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()
 	if err := harness.ExecStatements(ctx, `CREATE TABLE lineage_events (
@@ -110,10 +111,10 @@ func TestRefinerUsesParserLineageAndNeverInfersConstraintTable(t *testing.T) {
 			namespace: "e", wantPrimary: true, wantDefault: true,
 		},
 		{
-			name: "query alone does not infer table authority",
+			name: "direct query infers table authority",
 			source: &spec.ViewSource{SQL: `SELECT e.id AS event_id, e.status
 				FROM lineage_events e`},
-			namespace: "e",
+			namespace: "e", wantPrimary: true, wantDefault: true,
 		},
 	}
 	for _, test := range tests {
@@ -137,7 +138,10 @@ func TestRefinerUsesParserLineageAndNeverInfersConstraintTable(t *testing.T) {
 func TestRefinerResolvesEmbeddedSQLWithoutMutatingSource(t *testing.T) {
 	harness := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()
-	if err := harness.ExecStatements(ctx, `CREATE TABLE events (id INTEGER, name TEXT)`); err != nil {
+	if err := harness.ExecStatements(ctx,
+		`CREATE TABLE owners (id INTEGER PRIMARY KEY)`,
+		`CREATE TABLE events (id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL, name TEXT,
+			FOREIGN KEY(owner_id) REFERENCES owners(id))`); err != nil {
 		t.Fatalf("create table: %v", err)
 	}
 	component := &spec.Component{
@@ -146,12 +150,39 @@ func TestRefinerResolvesEmbeddedSQLWithoutMutatingSource(t *testing.T) {
 			URI: "events.sql",
 		}},
 	}
-	resources := fstest.MapFS{"events.sql": &fstest.MapFile{Data: []byte("SELECT id, name FROM events")}}
+	resources := fstest.MapFS{"events.sql": &fstest.MapFile{Data: []byte(`SELECT record.id, record.owner_id, record.name
+		FROM (SELECT e.* FROM events e) record`)}}
 	if err := New(Connections{"main": harness.DB}).Refine(ctx, component, resources, nil); err != nil {
 		t.Fatalf("Refine() error = %v", err)
 	}
-	if len(component.RootView.Columns) != 2 || component.RootView.Source.URI != "events.sql" || len(component.RootView.Source.Embeds) != 0 || component.RootView.Source.SQL != "" {
+	if len(component.RootView.Columns) != 3 || component.RootView.Source.URI != "events.sql" || len(component.RootView.Source.Embeds) != 0 || component.RootView.Source.SQL != "" || component.RootView.Source.Table != "events" {
 		t.Fatalf("component source/columns = %+v / %+v", component.RootView.Source, component.RootView.Columns)
+	}
+	if !component.RootView.Columns[0].PrimaryKey {
+		t.Fatalf("embedded primary key was not discovered: %+v", component.RootView.Columns[0])
+	}
+	reference := sqlio.ParseTag(reflect.StructTag(component.RootView.Columns[1].Tag))
+	if reference.RefTable != "owners" || reference.RefColumn != "id" {
+		t.Fatalf("embedded foreign key was not discovered: tag=%q metadata=%+v", component.RootView.Columns[1].Tag, reference)
+	}
+}
+
+func TestRefinerDiscoversColumnsWithUnresolvedPredicateBuilder(t *testing.T) {
+	harness := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := harness.ExecStatements(ctx, `CREATE TABLE records (id INTEGER PRIMARY KEY, status TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	authored := `SELECT r.id, r.status FROM records r WHERE 1=1
+${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("AND")}`
+	component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: &spec.View{
+		Name: "Records", Source: &spec.ViewSource{SQL: authored},
+	}}
+	if err := New(Connections{"main": harness.DB}).Refine(ctx, component, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if component.RootView.Source.SQL != authored || len(component.RootView.Columns) != 2 || !component.RootView.Columns[0].PrimaryKey {
+		t.Fatalf("source/columns = %q / %+v", component.RootView.Source.SQL, component.RootView.Columns)
 	}
 }
 

@@ -41,6 +41,29 @@ func TestGeneratorPatchDerivesState(t *testing.T) {
 	genpatch.Run(t, root, pkgDir, genpatch.RuntimeSource)
 }
 
+func TestGeneratorPatchAcceptsAuthoredSQLXIdentity(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	testharness.WriteGeneratedGoMod(t, root)
+	source := &Source{Name: "Records", Scope: "example.com/source", Text: `#package('api/records/writer')
+#setting($_ = $input_type('PatchInput'))
+#setting($_ = $output_type('PatchOutput'))
+#setting($_ = $route('/records','PATCH'))
+#define($_ = $Data<[]*Record>(output/body))
+SELECT r.ID, r.OWNER_ID, type(r,'Record'),
+       CAST(r.ID AS int), CAST(r.OWNER_ID AS int),
+       tag(r.ID,'sqlx:"id,primaryKey"'),
+       tag(r.OWNER_ID,'sqlx:"owner_id,refTable=owners,refColumn=id"')
+FROM records r`}
+	generated, err := (Generator{Operation: "patch"}).Generate(ctx, GenerationRequest{Source: source, Destination: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if generated.Result.Plan.MutationHandler == nil {
+		t.Fatal("authored SQLX primary key did not produce a mutation handler")
+	}
+}
+
 func TestGeneratorReaderWriterRemainSeparate(t *testing.T) {
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
