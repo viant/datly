@@ -12,9 +12,10 @@ import (
 // Projection keeps source-scope SQL separate from an optional result wrapper.
 // Builders complete predicates/bindings in Source before rendering the result.
 type Projection struct {
-	Source  string
-	outer   []string
-	columns []ProjectionColumn
+	Source       string
+	outer        []string
+	columns      []ProjectionColumn
+	orderColumns []ProjectionColumn
 }
 
 func (p *Projection) Render(source string) string {
@@ -83,7 +84,7 @@ func (p *Projection) outputOrderExpression(value node.Node) (node.Node, error) {
 	case *expr.Ident, *expr.Selector:
 		name := strings.TrimSpace(sqlparser.Stringify(value))
 		output := ""
-		for _, column := range p.columns {
+		for _, column := range p.orderScopeColumns() {
 			if !column.Matches(name) && !(ProjectionNames{column.order}).Matches(name) {
 				continue
 			}
@@ -94,6 +95,9 @@ func (p *Projection) outputOrderExpression(value node.Node) (node.Node, error) {
 		}
 		if output == "" {
 			return nil, fmt.Errorf("order by %q is not a declared projected output", name)
+		}
+		if len(p.orderColumns) > 0 {
+			output = "datly_view." + output
 		}
 		return &expr.Ident{Name: output}, nil
 	case *expr.Call:
@@ -140,4 +144,11 @@ func (p *Projection) outputOrderExpression(value node.Node) (node.Node, error) {
 		return &copied, err
 	}
 	return nil, fmt.Errorf("order expression %q cannot be resolved in projected output scope", sqlparser.Stringify(value))
+}
+
+func (p *Projection) orderScopeColumns() []ProjectionColumn {
+	if len(p.orderColumns) > 0 {
+		return p.orderColumns
+	}
+	return p.columns
 }

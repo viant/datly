@@ -74,7 +74,7 @@ func (p SelectorProjection) prepare(selected []string) (*Projection, error) {
 		selected = append(selected, column.output)
 	}
 	if needsOuterDependentProjection(sqlText, len(chosen), len(columns), p.View != nil && p.View.IsGroupable()) {
-		return p.prepareOuterDependentProjection(sqlText, chosen)
+		return p.prepareOuterDependentProjection(sqlText, columns, chosen)
 	}
 
 	projected, err := applyFilteredSelectorProjection(sqlText, selected, p.View != nil && p.View.IsGroupable())
@@ -146,7 +146,7 @@ func needsOuterDependentProjection(sqlText string, selectedCount, totalCount int
 		(sqltext.HasTopLevelClause(sqlText, "group by") || sqltext.HasTopLevelClause(sqlText, "having"))
 }
 
-func (p SelectorProjection) prepareOuterDependentProjection(sqlText string, chosen []ProjectionColumn) (*Projection, error) {
+func (p SelectorProjection) prepareOuterDependentProjection(sqlText string, columns, chosen []ProjectionColumn) (*Projection, error) {
 	allowNulls := p.View != nil && p.View.NullsAllowed()
 	projection := make([]string, 0, len(chosen))
 	for _, column := range chosen {
@@ -168,7 +168,7 @@ func (p SelectorProjection) prepareOuterDependentProjection(sqlText string, chos
 		}
 		projection = append(projection, expression)
 	}
-	return &Projection{Source: strings.TrimSuffix(strings.TrimSpace(sqlText), ";"), outer: projection, columns: chosen}, nil
+	return &Projection{Source: strings.TrimSuffix(strings.TrimSpace(sqlText), ";"), outer: projection, columns: chosen, orderColumns: columns}, nil
 }
 
 func normalizeProjectionSelection(input []string) []string {
