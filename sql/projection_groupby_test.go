@@ -214,6 +214,25 @@ func TestGroupedProjectionHelpers(t *testing.T) {
 		}
 	})
 
+	t.Run("known aggregate functions", func(t *testing.T) {
+		for _, name := range []string{"BIT_AND", "BIT_OR", "BIT_XOR", "GROUP_CONCAT"} {
+			if !containsAggregateNode(&expr.Call{X: &expr.Ident{Name: name}}) {
+				t.Fatalf("expected %s to be classified as aggregate", name)
+			}
+		}
+	})
+
+	t.Run("grouped projection does not group by bit or group concat aggregates", func(t *testing.T) {
+		stmt, err := sqlparser.ParseQuery("SELECT tenant_id, BIT_OR(flags) AS flags, GROUP_CONCAT(name) AS names FROM users GROUP BY tenant_id")
+		if err != nil {
+			t.Fatalf("parse query: %v", err)
+		}
+		groupBy := groupedProjectionGroupBy(query.List{stmt.List[0], stmt.List[1], stmt.List[2]})
+		if len(groupBy) != 1 || sqlparser.Stringify(groupBy[0].Expr) != "1" {
+			t.Fatalf("unexpected grouped projection group by: %+v", groupBy)
+		}
+	})
+
 	t.Run("call with qualify target aggregate child", func(t *testing.T) {
 		node := &expr.Call{
 			X: &expr.Qualify{

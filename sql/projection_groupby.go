@@ -157,7 +157,7 @@ func ContainsAggregate(n node.Node) bool {
 
 func isAggregateFunction(name string) bool {
 	switch strings.ToUpper(strings.TrimSpace(name)) {
-	case "SUM", "COUNT", "AVG", "MIN", "MAX", "ARRAY_AGG", "STRING_AGG", "ANY_VALUE", "APPROX_COUNT_DISTINCT":
+	case "SUM", "COUNT", "AVG", "MIN", "MAX", "ARRAY_AGG", "STRING_AGG", "GROUP_CONCAT", "ANY_VALUE", "APPROX_COUNT_DISTINCT", "BIT_AND", "BIT_OR", "BIT_XOR":
 		return true
 	default:
 		return false
