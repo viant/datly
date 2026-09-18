@@ -1,12 +1,16 @@
 package generate
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"reflect"
 	"strings"
+	"time"
 
 	xshape "github.com/viant/x/shape"
+	xhandler "github.com/viant/xdatly/handler"
+	xresponse "github.com/viant/xdatly/response"
 )
 
 // RuntimeInputType materializes the generated input contract used before the
@@ -195,6 +199,9 @@ func (m *runtimeInputMaterializer) identifierType(name string) (reflect.Type, er
 }
 
 func (m *runtimeInputMaterializer) descriptorType(name string) (reflect.Type, error) {
+	if standard := standardRuntimeType(name); standard != nil {
+		return standard, nil
+	}
 	if m.resolver == nil {
 		return nil, fmt.Errorf("named type %q requires type authority", name)
 	}
@@ -209,4 +216,18 @@ func (m *runtimeInputMaterializer) descriptorType(name string) (reflect.Type, er
 		return nil, fmt.Errorf("named type %q has no compiled runtime type", name)
 	}
 	return descriptor.Type, nil
+}
+
+func standardRuntimeType(name string) reflect.Type {
+	switch strings.TrimSpace(name) {
+	case "encoding/json.RawMessage":
+		return reflect.TypeFor[json.RawMessage]()
+	case "time.Time":
+		return reflect.TypeFor[time.Time]()
+	case "github.com/viant/xdatly/response.Status", "response.Status":
+		return reflect.TypeFor[xresponse.Status]()
+	case "github.com/viant/xdatly/handler.Violation", "handler.Violation", "xhandler.Violation":
+		return reflect.TypeFor[xhandler.Violation]()
+	}
+	return nil
 }

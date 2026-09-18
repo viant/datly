@@ -3,6 +3,7 @@ package generate
 import (
 	"go/ast"
 	"go/parser"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -35,6 +36,60 @@ func inputStructFile(packageName string, comment string, typeName string, fields
 		return b.String()
 	}
 	return content
+}
+
+func inputSetterFile(packageName, typeName string, fields []Field, imports []spec.ImportSpec) string {
+	settable := make([]Field, 0, len(fields))
+	for _, field := range fields {
+		if !shouldSkipHasMirror(field) && field.Source != "output" {
+			settable = append(settable, field)
+		}
+	}
+	if len(settable) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("package ")
+	b.WriteString(packageName)
+	if used := importsForFields(settable, imports); len(used) > 0 {
+		b.WriteString("\n\nimport (\n")
+		for _, item := range used {
+			b.WriteString("\t")
+			if item.Alias != "" {
+				b.WriteString(item.Alias)
+				b.WriteString(" ")
+			}
+			b.WriteString(strconv.Quote(item.Package))
+			b.WriteString("\n")
+		}
+		b.WriteString(")")
+	}
+	for index, field := range settable {
+		if index == 0 {
+			b.WriteString("\n\n")
+		} else {
+			b.WriteString("\n")
+		}
+		b.WriteString("func (input *")
+		b.WriteString(typeName)
+		b.WriteString(") Set")
+		b.WriteString(field.Name)
+		b.WriteString("(value ")
+		b.WriteString(field.Type)
+		b.WriteString(") {\n")
+		b.WriteString("\tif input == nil {\n\t\treturn\n\t}\n")
+		b.WriteString("\tinput.")
+		b.WriteString(field.Name)
+		b.WriteString(" = value\n")
+		b.WriteString("\tif input.Has == nil {\n\t\tinput.Has = &")
+		b.WriteString(typeName)
+		b.WriteString("Has{}\n\t}\n")
+		b.WriteString("\tinput.Has.")
+		b.WriteString(field.Name)
+		b.WriteString(" = true\n")
+		b.WriteString("}\n")
+	}
+	return b.String()
 }
 
 func hasBodyFields(fields []Field) bool {

@@ -1,8 +1,6 @@
 package generate
 
 import (
-	"crypto/sha256"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -23,7 +21,7 @@ func TestLinkedPackageResourcesRetainOwnership(t *testing.T) {
 			pkg := "example.com/generated/records"
 			dir := filepath.Join(root, "records")
 			key := spec.Key{Kind: spec.KindComponent, Scope: pkg, Name: "Records"}
-			resources := &ResourcePlan{Namespace: fmt.Sprintf("datly_%x", sha256.Sum256([]byte(pkg+":Records"))), Destination: "records_resources.go", Files: []EmittedFile{{Path: "query.sql", Content: "SELECT 1"}}}
+			resources := &ResourcePlan{Namespace: readableResourceNamespace(pkg, "Records"), Destination: "records_resources.go", Files: []EmittedFile{{Path: "query.sql", Content: "SELECT 1"}}}
 			if name == "prefixed-symbol" {
 				resources.Symbol = "Records"
 			}

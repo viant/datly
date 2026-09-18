@@ -304,7 +304,7 @@ func TestPublicReload(t *testing.T) {
 			old.schema(t)
 			old.rows(t, 3)
 			old.required(t)
-			files, err := fs.Glob(DatlyResources, "datly_sql/*.sql")
+			files, err := fs.Glob(DatlyResources, "sql/*.sql")
 			if err != nil || len(files) != 1 {
 				t.Fatalf("emitted resources=%v err=%v", files, err)
 			}

@@ -53,7 +53,7 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if parseSQL == "" {
 		return nil, fmt.Errorf("read SQL is required")
 	}
-	parsed, err := parseReadSQL(parseSQL)
+	parsed, err := parseReadSQL(lineDirectiveSkeleton(parseSQL))
 	if err != nil {
 		return nil, err
 	}
@@ -127,6 +127,23 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 		return nil, err
 	}
 	return root, nil
+}
+
+func lineDirectiveSkeleton(sql string) string {
+	lines := strings.SplitAfter(sql, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#if(") || strings.HasPrefix(trimmed, "#else") || strings.HasPrefix(trimmed, "#end") {
+			ending := ""
+			if strings.HasSuffix(line, "\r\n") {
+				ending = "\r\n"
+			} else if strings.HasSuffix(line, "\n") {
+				ending = "\n"
+			}
+			lines[i] = ending
+		}
+	}
+	return strings.Join(lines, "")
 }
 
 func (r *Reader) compileRelations(parsed *query.Select, root *spec.View, frame TemplateFrame) ([]*spec.Relation, error) {

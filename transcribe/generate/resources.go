@@ -2,13 +2,14 @@ package generate
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	docs "github.com/viant/datly/documentation"
 	"io/fs"
 	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/mod/module"
 
 	"github.com/viant/datly/internal/packageasset"
 	"github.com/viant/datly/tag"
@@ -48,11 +49,10 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 	if !r.input.SQLResources && r.plan.Static == nil && r.plan.Documentation.IsZero() && len(r.plan.Settings.MCPFolders) == 0 {
 		return nil, nil
 	}
-	identity := strings.TrimSpace(r.input.TargetPackage) + ":" + r.input.Component.Name
 	if strings.TrimSpace(r.input.TargetPackage) == "" {
 		return nil, fmt.Errorf("package resource generation requires a target package")
 	}
-	result := &ResourcePlan{Namespace: fmt.Sprintf("datly_%x", sha256.Sum256([]byte(identity))), Destination: r.plan.Generation.File("resources", "resources.go")}
+	result := &ResourcePlan{Namespace: readableResourceNamespace(r.input.TargetPackage, r.input.Component.Name), Destination: r.plan.Generation.File("resources", "resources.go")}
 	if r.input.PackageName != "" {
 		result.Symbol = upperCamel(r.input.Component.Name)
 	}
@@ -120,7 +120,30 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 				continue
 			}
 			identity := owner + "." + field.Name
-			path := fmt.Sprintf("datly_sql/%x.sql", sha256.Sum256([]byte(identity)))
+			name := lowerSnake(field.Name)
+			role := field.Name
+			if rootType := unwrapQualifiedTypeName(field.Type); rootType != "" && rootType == unwrapQualifiedTypeName(r.plan.RootViewType) {
+				name = lowerSnake(r.plan.ComponentName)
+				role = r.plan.RootViewName
+				if strings.TrimSpace(role) == "" {
+					role = r.plan.ComponentName
+				}
+			}
+			if name == "" {
+				return fmt.Errorf("SQL field identity %s has no resource name", identity)
+			}
+			defaultPath := defaultSQLResourcePath(name)
+			rootRole := r.plan.RootViewName
+			if strings.TrimSpace(rootRole) == "" {
+				rootRole = r.plan.ComponentName
+			}
+			path := r.plan.Generation.SQLFileFor(role, rootRole, defaultPath)
+			if existing, ok := files[path]; ok && existing != source.Text {
+				if path != defaultPath {
+					return fmt.Errorf("SQL field identity %s conflicts at configured destination %s", identity, path)
+				}
+				path = defaultSQLResourcePath(lowerSnake(owner + "_" + field.Name))
+			}
 			if existing, ok := files[path]; ok && existing != source.Text {
 				return fmt.Errorf("SQL field identity %s has conflicting sources", identity)
 			}
@@ -128,6 +151,49 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			field.Tag = appendStructTag(withoutStructTags(field.Tag, tag.SQLName), tag.SQLName, (tag.SQL{URI: result.Namespace + ":" + path}).Value())
 		}
 		return nil
+	}
+	externalizeStructQL := func(fields []Field) error {
+		for i := range fields {
+			field := &fields[i]
+			raw := tags.NewTags(field.Tag).Lookup(tag.CodecName)
+			if raw == nil {
+				continue
+			}
+			codec, err := tag.ParseCodec(string(raw.Values))
+			if err != nil {
+				return err
+			}
+			if codec == nil || !strings.EqualFold(strings.TrimSpace(codec.Body), "structql") || len(codec.Arguments) != 1 {
+				continue
+			}
+			query := strings.TrimSpace(codec.Arguments[0])
+			if query == "" || strings.HasPrefix(strings.ToLower(query), "uri=") {
+				continue
+			}
+			name := lowerSnake(field.Name)
+			defaultPath := defaultSQLResourcePath(name)
+			rootRole := r.plan.RootViewName
+			if strings.TrimSpace(rootRole) == "" {
+				rootRole = r.plan.ComponentName
+			}
+			path := r.plan.Generation.SQLFileFor(field.Name, rootRole, defaultPath)
+			if existing, ok := files[path]; ok && existing != query {
+				return fmt.Errorf("StructQL field %s conflicts at SQL destination %s", field.Name, path)
+			}
+			files[path] = query
+			codec.Arguments[0] = "uri=" + result.Namespace + ":" + path
+			value, err := codec.Value()
+			if err != nil {
+				return err
+			}
+			field.Tag = appendStructTag(withoutStructTags(field.Tag, tag.CodecName), tag.CodecName, value)
+		}
+		return nil
+	}
+	if r.input.SQLResources && r.plan.Input.Ownership == ContractGenerated {
+		if err := externalizeStructQL(r.plan.Input.Fields); err != nil {
+			return nil, err
+		}
 	}
 	if r.input.SQLResources && r.plan.Input.Ownership == ContractGenerated {
 		if err := externalize(r.plan.Input.Type, r.plan.Input.Fields); err != nil {
@@ -157,6 +223,26 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 	return result, nil
 }
 
+func defaultSQLResourcePath(name string) string {
+	name = lowerSnake(name)
+	candidate := "sql/" + name + ".sql"
+	if module.CheckFilePath(candidate) == nil {
+		return candidate
+	}
+	// Go embed applies module path portability rules, including Windows device
+	// names such as aux and con, on every platform.
+	return "sql/" + name + "_query.sql"
+}
+
+func readableResourceNamespace(packagePath, component string) string {
+	parts := strings.Split(strings.Trim(strings.TrimSpace(packagePath), "/"), "/")
+	if len(parts) > 3 {
+		parts = parts[len(parts)-3:]
+	}
+	parts = append(parts, component)
+	return lowerSnake(strings.Join(parts, "_"))
+}
+
 func (r *ResourcePlan) source(packageName string) string {
 	if r.sourceText != "" {
 		return r.sourceText
@@ -164,7 +250,7 @@ func (r *ResourcePlan) source(packageName string) string {
 	var source strings.Builder
 	source.WriteString("package " + packageName + "\n\nimport \"embed\"\n\n")
 	source.WriteString("// DatlyResourceNamespace identifies this package's generated resource filesystem.\nconst " + r.Symbol + "DatlyResourceNamespace = " + strconv.Quote(r.Namespace) + "\n\n")
-	source.WriteString("// DatlyResources must be registered with the shared Bindly resource store.\n//go:embed")
+	source.WriteString("//go:embed")
 	for _, file := range r.Files {
 		source.WriteString(" " + strconv.Quote(file.Path))
 	}

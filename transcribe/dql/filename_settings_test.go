@@ -15,6 +15,7 @@ func TestFilenameSettings(t *testing.T) {
 #setting($_ = $template_dest('templates/main.velty'))
 #setting($_ = $support_dest('frames','state.go'))
 #setting($_ = $support_dest('type:CubeInput','cube.go'))
+#setting($_ = $sql_dest('orders','sql/orders.sql'))
 SELECT 1`
 	prepared := PrepareSource(source)
 	if err := prepared.Err(); err != nil {
@@ -29,6 +30,12 @@ SELECT 1`
 	if settings.File("input", "input.go") != "orders_input.go" {
 		t.Fatal("missing prefix")
 	}
+	if settings.SQLFile("orders", "sql/default.sql") != "sql/orders.sql" {
+		t.Fatal("missing SQL destination")
+	}
+	if settings.SQLFileFor("CurrentOrders", "orders", "sql/current_orders.sql") != "sql/current_orders.sql" {
+		t.Fatal("missing inherited SQL destination directory")
+	}
 	clone := settings.Clone()
 	clone.SupportFiles["frames"] = "different.go"
 	if settings.SupportFiles["frames"] != "state.go" {
@@ -42,6 +49,7 @@ func TestFilenameSettingsRejectMalformedDirectives(t *testing.T) {
 		"$handler_dest()", "$lifecycle_dest('')", "$mutation_dest('a.go','b.go')", "$resources_dest(123)", "$links_dest('a.go').Extra()",
 		"$support_dest('unknown','a.go')", "$support_dest('type:bad','a.go')", "$support_dest('frames','')",
 		"$handler_dest('a.go'))\n#setting($_ = $handler_dest('b.go')", "$support_dest('frames','a.go'))\n#setting($_ = $support_dest('frames','b.go')",
+		"$sql_dest('orders','')", "$sql_dest('orders','../escape.sql')", "$sql_dest('orders','query.txt')", "$sql_dest('orders','a.sql'))\n#setting($_ = $sql_dest('orders','b.sql')",
 	} {
 		t.Run(directive, func(t *testing.T) {
 			err := PrepareSource("#setting($_ = " + directive + ")\nSELECT 1").Err()

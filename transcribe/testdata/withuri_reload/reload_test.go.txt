@@ -280,7 +280,7 @@ func TestWithURIReload(t *testing.T) {
 			old.check(t, 3)
 			// WithMCP/WithPathMCP affect tools only: the HTTP branch above
 			// deliberately executes both routes for both visibility variants.
-			files, err := fs.Glob(DatlyResources, "datly_sql/*.sql")
+			files, err := fs.Glob(DatlyResources, "sql/*.sql")
 			if err != nil || len(files) != 1 {
 				t.Fatalf("generated SQL resources=%v error=%v", files, err)
 			}

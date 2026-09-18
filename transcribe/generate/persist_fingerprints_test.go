@@ -330,6 +330,12 @@ func TestCustomizedShapeBaselineSurvivesAppendAndLinkedTransition(t *testing.T) 
 					t.Fatal(err)
 				}
 				p := &scaffoldPersistence{dir: dir, owner: plan.ComponentName, files: files, userFiles: userFiles, removals: removals, plan: plan}
+				if oldManifest && appendField {
+					if err := p.Validate(); err == nil || !strings.Contains(err.Error(), "input_setters.go") || !strings.Contains(err.Error(), "no trusted fingerprint") {
+						t.Fatalf("old manifest changed generated setters without migration: %v", err)
+					}
+					return
+				}
 				if err := p.Validate(); err != nil {
 					t.Fatal(err)
 				}

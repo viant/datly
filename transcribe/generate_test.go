@@ -369,7 +369,7 @@ SELECT id FROM users`,
 		independent.Fields[0].Name != "Authorized" || independent.Fields[0].Type != "*bool" || !strings.Contains(independent.Fields[0].Tag, `internal:"true"`) ||
 		strings.Contains(independent.Fields[0].Tag, `groupable:`) || generated.Result.Plan.Input.Fields[0].Type != "*AuthorizationRow" ||
 		!strings.Contains(generated.Result.Plan.Input.Fields[0].Tag, `view:"Authorization,type=AuthorizationRow,dest=authorization.go,uri=queries/authorization.sql`) ||
-		!strings.Contains(generated.Result.Plan.Input.Fields[0].Tag, `sql:"uri=datly_`) {
+		!strings.Contains(generated.Result.Plan.Input.Fields[0].Tag, `sql:"uri=`) {
 		t.Fatalf("independent generation = view:%+v input:%+v", independent, generated.Result.Plan.Input.Fields)
 	}
 	matchedSQL := false

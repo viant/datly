@@ -25,8 +25,8 @@ func TestGeneratorPatchDerivesState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Result.Plan.MutationHandler == nil || got.Result.Plan.VeltyHandler != nil {
-		t.Fatal("Go mutation generation missing")
+	if got.Result.Plan.MutationHandler != nil || got.Result.Plan.VeltyHandler != nil || got.Result.Plan.Settings.Mutation != "patch" {
+		t.Fatal("universal writer metadata missing")
 	}
 	pkgDir := filepath.Join(root, strings.TrimPrefix(got.Package.PkgPath, "github.com/viant/datly/genfixture/"))
 	hooks := filepath.Join(pkgDir, "lifecycle.go")
@@ -59,8 +59,30 @@ FROM records r`}
 	if err != nil {
 		t.Fatal(err)
 	}
-	if generated.Result.Plan.MutationHandler == nil {
-		t.Fatal("authored SQLX primary key did not produce a mutation handler")
+	if generated.Result.Plan.MutationHandler != nil || generated.Result.Plan.Settings.Mutation != "patch" {
+		t.Fatal("authored SQLX primary key did not select universal writer metadata")
+	}
+}
+
+func TestGeneratorEphemeralOwnershipLeavesNoPackageManifest(t *testing.T) {
+	ctx := context.Background()
+	db := testharness.NewSQLiteHarness(t)
+	if err := db.ExecStatements(ctx, genpatch.Schema...); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	testharness.WriteGeneratedGoMod(t, root)
+	request := GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Scope: "example.com/generated/orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}
+	generator := Generator{Operation: "patch", EphemeralOwnership: true}
+	for attempt := 0; attempt < 2; attempt++ {
+		generated, err := generator.Generate(ctx, request)
+		if err != nil {
+			t.Fatalf("generation %d: %v", attempt+1, err)
+		}
+		directory := filepath.Join(root, strings.TrimPrefix(generated.Package.PkgPath, "github.com/viant/datly/genfixture/"))
+		if _, err = os.Stat(filepath.Join(directory, ".datly-gen.json")); !os.IsNotExist(err) {
+			t.Fatalf("generation %d retained package manifest: %v", attempt+1, err)
+		}
 	}
 }
 
@@ -108,8 +130,8 @@ func TestGeneratorReaderWriterRemainSeparate(t *testing.T) {
 					t.Fatalf("reader acquired writer state %+v", field)
 				}
 			}
-		} else if plan.MutationHandler == nil || plan.HookScaffold != nil {
-			t.Fatal("missing writer")
+		} else if plan.MutationHandler != nil || plan.Settings.Mutation != operation || plan.HookScaffold != nil {
+			t.Fatalf("writer did not select universal mutation metadata: %+v", plan)
 		}
 	}
 	command := exec.Command("go", "test", "-mod=mod", "./...")

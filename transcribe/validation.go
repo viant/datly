@@ -80,7 +80,7 @@ func (v *Validator) Validate(ctx context.Context) (*ValidationReport, error) {
 	if err = ctx.Err(); err != nil {
 		return report, report.failure(err)
 	}
-	prepared, err := project.prepare(base)
+	prepared, err := project.prepareEphemeral(base)
 	if err != nil {
 		return report, report.failure(err)
 	}
@@ -90,7 +90,7 @@ func (v *Validator) Validate(ctx context.Context) (*ValidationReport, error) {
 	for _, component := range prepared {
 		report.Components = append(report.Components, component.identity)
 	}
-	report.Completed = append(report.Completed, "generation plan, resources, component dependencies and route conflicts", "generated destination ownership (no writes)")
+	report.Completed = append(report.Completed, "generation plan, resources, component dependencies and route conflicts", "generated destination layout and imports (no writes)")
 	report.Valid = true
 	return report, nil
 }

@@ -61,6 +61,13 @@ func (p *scaffoldPersistence) projectionBindings(destination string) map[string]
 		helpers[helper.Name] = true
 	}
 	for _, field := range p.plan.Input.Fields {
+		if field.Source == "body" && tags.NewTags(field.Tag).Lookup("view") != nil {
+			result[p.plan.Input.Type+"."+field.Name] = true
+			if _, ok := hasMarkerField(p.plan.Input.Type, p.plan.Input.Fields); ok {
+				result[p.plan.Input.Type+"Has."+field.Name] = true
+			}
+			continue
+		}
 		if field.Source != "param" {
 			continue
 		}
@@ -214,12 +221,15 @@ func (p *scaffoldPersistence) projectionChanges(destination string, previous, pr
 	for _, field := range ownership.Fields {
 		if desired, retained := current[field.key()]; retained {
 			if bindings[field.key()] && field.Tag != desired.Tag {
-				codecOnly, err := field.tagChange(desired, "codec")
-				if err != nil {
-					return xshape.SourceFieldEdits{}, err
-				}
-				if codecOnly {
-					edits.Tags = append(edits.Tags, xshape.SourceFieldTagUpdate{Owner: field.Owner, Field: field.Name, Previous: field.Tag, Tag: desired.Tag})
+				for _, controlled := range []string{"codec", "view"} {
+					controlledOnly, err := field.tagChange(desired, controlled)
+					if err != nil {
+						return xshape.SourceFieldEdits{}, err
+					}
+					if controlledOnly {
+						edits.Tags = append(edits.Tags, xshape.SourceFieldTagUpdate{Owner: field.Owner, Field: field.Name, Previous: field.Tag, Tag: desired.Tag})
+						break
+					}
 				}
 			}
 			continue

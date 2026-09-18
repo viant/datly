@@ -114,7 +114,7 @@ func(*hookContract)Exec(ctx context.Context,session xhandler.Session,input *mode
  },
  }
  hooks:=&_newHookHarnessMutationHooks{}
- if err:=hooks.Prepare(ctx,session.Binder());err!=nil{return err}
+ if err:=hooks.Prepare(ctx,session.Binder(),output);err!=nil{return err}
  if err:=hooks.Init(ctx,frames);err!=nil{return err}
  if err:=hooks.Validate(ctx,frames);err!=nil{return err}
  value,found,err:=session.Binder().Lookup(ctx,xhandler.DMLKey);if err!=nil{return err};if !found{return fmt.Errorf("DML missing")}

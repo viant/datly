@@ -14,7 +14,7 @@ func (s *source) validateConstants(ctx context.Context, types *typecatalog.Catal
 	if s.config.GoBootstrap == nil {
 		return nil
 	}
-	project, err := (&transcribe.Discovery{Const: s.config.Const, Workspace: s.Workspace, BaseDir: s.config.BaseDir, ModuleDirs: s.config.ModuleDirs, Include: s.config.GoBootstrap.Packages, Exclude: s.config.GoBootstrap.Exclude, Connector: s.config.Connector, Types: types, Registry: s.registry}).Compile(ctx)
+	project, err := (&transcribe.Discovery{Const: s.config.Const, Workspace: s.Workspace, BaseDir: s.config.BaseDir, ModuleDirs: s.config.ModuleDirs, Include: s.config.GoBootstrap.Packages, Exclude: s.config.GoBootstrap.Exclude, Connector: s.config.Connector, Types: types, Registry: s.registry, Holders: s.holders, RequireLinked: s.requireLinked}).Compile(ctx)
 	if err != nil {
 		return err
 	}

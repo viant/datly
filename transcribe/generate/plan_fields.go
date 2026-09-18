@@ -34,6 +34,12 @@ func resolveInputFields(component *spec.Component, declarations Declarations) ([
 			return nil, err
 		}
 		if ok {
+			if component.Settings != nil && component.Settings.Mutation != "" && strings.EqualFold(strings.TrimSpace(param.Source.Kind), "body") {
+				field.Tag, err = appendViewTags(field.Tag, component.RootView)
+				if err != nil {
+					return nil, err
+				}
+			}
 			if names[field.Name] {
 				return nil, fmt.Errorf("generated input field %q collides; use distinct selector source names", field.Name)
 			}

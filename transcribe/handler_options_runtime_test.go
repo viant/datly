@@ -434,7 +434,7 @@ SELECT ID, NAME FROM EVENTS`)
 	if generated.Result.Plan.ContractHandler == nil || generated.Result.Plan.VeltyHandler != nil {
 		t.Fatalf("generated Go products = contract:%+v velty:%+v", generated.Result.Plan.ContractHandler, generated.Result.Plan.VeltyHandler)
 	}
-	if err = os.WriteFile(filepath.Join(root, "generated", "generated_write_test.go"), []byte(generatedGoWriteRuntimeSource(operation)), 0o644); err != nil {
+	if err = os.WriteFile(filepath.Join(root, "generated", "generated_write_test.go"), []byte(generatedContractWriteRuntimeSource(operation)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	command := exec.Command("go", "test", "-mod=mod", "./...")
@@ -448,8 +448,8 @@ func generatedWriteRuntimeSource(operation WriteOperation) string {
 	return generatedWriteRuntimeSourceForKey(operation, "int64")
 }
 
-func generatedGoWriteRuntimeSource(operation WriteOperation, withCurrent ...bool) string {
-	source := generatedWriteRuntimeSourceForKey(operation, "int64", withCurrent...)
+func generatedContractWriteRuntimeSource(operation WriteOperation) string {
+	source := generatedWriteRuntimeSourceForKey(operation, "int64")
 	source = strings.Replace(source,
 		`handlerengine "github.com/viant/datly/runtime/handler/engine"`,
 		`customhandler "github.com/viant/datly/runtime/handler/custom"
@@ -460,6 +460,27 @@ func generatedGoWriteRuntimeSource(operation WriteOperation, withCurrent ...bool
 		t.Fatal(err)
 	}`,
 		`handler := customhandler.New[EventsInput, EventsOutput](NewEventsHandler())`, 1)
+	return source
+}
+
+func generatedGoWriteRuntimeSource(operation WriteOperation, withCurrent ...bool) string {
+	source := generatedWriteRuntimeSourceForKey(operation, "int64", withCurrent...)
+	source = strings.Replace(source,
+		`handlerengine "github.com/viant/datly/runtime/handler/engine"`,
+		`writerhandler "github.com/viant/datly/runtime/handler/writer"
+	handlerengine "github.com/viant/datly/runtime/handler/engine"`, 1)
+	source = strings.Replace(source,
+		`handler, err := NewEventsHandler()
+	if err != nil {
+		t.Fatal(err)
+	}`,
+		`handler, err := writerhandler.New(artifact.Component, reflect.TypeOf(EventsInput{}), reflect.TypeOf(EventsOutput{}), "`+string(operation)+`")
+	if err != nil {
+		t.Fatal(err)
+	}`, 1)
+	source = strings.Replace(source,
+		`component := &spec.Component{Routes:`,
+		`component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeOf(EventsInput{}).PkgPath(), Name: "Events"}, Name: "Events", Settings: &spec.Settings{Mutation: "`+string(operation)+`"}, RootView: &spec.View{Name: "Events", Source: &spec.ViewSource{Table: "EVENTS"}, Columns: []*spec.Column{{Name: "ID", Source: "ID", Type: spec.TypeRef{Name: "int64"}, PrimaryKey: true, AutoIncrement: true}, {Name: "NAME", Source: "NAME", Type: spec.TypeRef{Name: "string"}}}}, Routes:`, 1)
 	return source
 }
 
@@ -669,7 +690,7 @@ func TestGeneratedWriteHandler(t *testing.T) {
 `
 	currentParam := ""
 	currentView := ""
-	includeCurrent := operation == WritePatch
+	includeCurrent := operation == WritePatch || operation == WritePut
 	if len(withCurrent) > 0 {
 		includeCurrent = withCurrent[0]
 	}

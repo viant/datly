@@ -59,7 +59,7 @@ func (d *Discovery) CompileSource(ctx context.Context, source *Source) (*Result,
 	if err != nil {
 		return nil, err
 	}
-	assets, err := (packageresources.Loader{Workspace: workspace, Packages: imports}).Load(ctx)
+	assets, err := (packageresources.Loader{Workspace: workspace, Packages: imports, Holders: staged.Holders}).Load(ctx)
 	if err != nil {
 		return nil, err
 	}

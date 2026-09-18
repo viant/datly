@@ -1,12 +1,16 @@
 package generate
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
+	xhandler "github.com/viant/xdatly/handler"
+	xresponse "github.com/viant/xdatly/response"
 )
 
 type fieldTypeResolver struct {
@@ -111,6 +115,9 @@ func (r *fieldTypeResolver) rewriteNamed(authored string) (string, error) {
 
 func (r *fieldTypeResolver) requiredDescriptor(authored string) (*x.Type, error) {
 	if r.lookup == nil {
+		if descriptor := r.standardDescriptor(authored); descriptor != nil {
+			return descriptor, nil
+		}
 		return nil, fmt.Errorf("package type requires type authority")
 	}
 	descriptor, err := r.lookup(authored)
@@ -121,6 +128,36 @@ func (r *fieldTypeResolver) requiredDescriptor(authored string) (*x.Type, error)
 		return nil, fmt.Errorf("package type was not found")
 	}
 	return descriptor, nil
+}
+
+func (r *fieldTypeResolver) standardDescriptor(authored string) *x.Type {
+	if strings.TrimSpace(authored) == "encoding/json.RawMessage" {
+		return x.NewType(reflect.TypeFor[json.RawMessage]())
+	}
+	qualifier, name, found := strings.Cut(strings.TrimSpace(authored), ".")
+	if !found || r.context == nil {
+		return nil
+	}
+	packagePath := ""
+	for _, item := range r.context.Imports {
+		if item.Alias == qualifier {
+			packagePath = item.Package
+			break
+		}
+	}
+	var typeOf reflect.Type
+	switch packagePath + "." + name {
+	case "github.com/viant/xdatly/response.Status":
+		typeOf = reflect.TypeFor[xresponse.Status]()
+	case "github.com/viant/xdatly/handler.Violation":
+		typeOf = reflect.TypeFor[xhandler.Violation]()
+	case "encoding/json.RawMessage":
+		typeOf = reflect.TypeFor[json.RawMessage]()
+	}
+	if typeOf == nil {
+		return nil
+	}
+	return x.NewType(typeOf)
 }
 
 func (r *fieldTypeResolver) emittedNamedType(authored string, descriptor *x.Type) string {

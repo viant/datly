@@ -325,6 +325,9 @@ func (c *compiler) selectOutput(component *spec.Component, name string) (*spec.P
 		if kind == "output" && (source == "status" || param.IsDerivedOutput()) {
 			return false
 		}
+		if kind == "transient" && source == "status" {
+			return false
+		}
 		return param.EmitOutput || kind == "output"
 	}, "output", false)
 }

@@ -48,13 +48,13 @@ const OuterProjectionWriterImports = `
  "github.com/viant/bindly/locator"
  requestprovider "github.com/viant/bindly/provider/request"
  druntime "github.com/viant/datly/runtime"
- mutationhandler "github.com/viant/datly/runtime/handler/mutation"
+ writerhandler "github.com/viant/datly/runtime/handler/writer"
  "github.com/viant/datly/sql/dml"
  viewprovider "github.com/viant/datly/sql/reader/provider"
 `
 const OuterProjectionWriterTest = `
  views,err:=viewprovider.New(viewprovider.Config{Dependencies:artifact.ViewDependencies,Input:artifact.Input,SQL:&dsql.SQLComponent{DB:db.DB}});if err!=nil{t.Fatal(err)}
- handler:=mutationhandler.New[OrdersInput,OrdersOutput](NewOrdersHandler())
+ handler,err:=writerhandler.New(artifact.Component,reflect.TypeOf(OrdersInput{}),reflect.TypeOf(OrdersOutput{}),"patch");if err!=nil{t.Fatal(err)}
  rt,err:=druntime.NewRuntime([]*druntime.RegisteredComponent{{Component:artifact.Component,Input:artifact.Input,Output:artifact.Output,OutputType:reflect.TypeOf(OrdersOutput{}),Handler:handler,Providers:[]locator.Provider{views},DataSource:dml.Source{DB:db.DB}}},druntime.WithResources(resources));if err!=nil{t.Fatal(err)}
  request:=httptest.NewRequest("PATCH","/orders",strings.NewReader(BODY));request.Header.Set("Content-Type","application/json")
  scope,err:=requestprovider.New(request);if err!=nil{t.Fatal(err)};defer scope.Close()

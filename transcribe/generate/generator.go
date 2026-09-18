@@ -28,25 +28,27 @@ type DeclarationProjection struct {
 type Declarations map[string]Declaration
 
 type Input struct {
-	Resources       *resource.Store
-	Component       *spec.Component
-	Declarations    Declarations
-	TypeResolver    *typecatalog.Resolver
-	TargetPackage   string
-	PackageName     string
-	ProjectRoot     string
-	Contracts       ContractReferences
-	Views           ViewReferences
-	ViewBindings    ViewBindings
-	GeneratedTypes  []GeneratedTypeReference
-	SetMarkerViews  map[string]bool
-	GoHandler       *GoHandlerAsset
-	ContractHandler *ContractHandlerAsset
-	MutationHandler *MutationHandlerAsset
-	HookScaffold    *HookScaffoldAsset
-	VeltyHandler    *VeltyHandlerAsset
-	SQLResources    bool
-	EntitySupport   *EntitySupportAsset
+	Resources          *resource.Store
+	Component          *spec.Component
+	Declarations       Declarations
+	TypeResolver       *typecatalog.Resolver
+	TargetPackage      string
+	PackageName        string
+	ProjectRoot        string
+	Contracts          ContractReferences
+	Views              ViewReferences
+	ViewBindings       ViewBindings
+	GeneratedTypes     []GeneratedTypeReference
+	SetMarkerViews     map[string]bool
+	GoHandler          *GoHandlerAsset
+	ContractHandler    *ContractHandlerAsset
+	MutationHandler    *MutationHandlerAsset
+	ReadIndexes        *ReadIndexSource
+	HookScaffold       *HookScaffoldAsset
+	VeltyHandler       *VeltyHandlerAsset
+	SQLResources       bool
+	EntitySupport      *EntitySupportAsset
+	EphemeralOwnership bool
 }
 
 type ContractReference struct {
@@ -100,6 +102,14 @@ func New(input Input) *Generator {
 	input.MutationHandler, mutationErr = input.MutationHandler.Clone()
 	if cloneErr == nil {
 		cloneErr = mutationErr
+	}
+	if input.ReadIndexes != nil {
+		cloned, err := input.ReadIndexes.Source.clone()
+		if err != nil && cloneErr == nil {
+			cloneErr = err
+		} else if err == nil {
+			input.ReadIndexes = &ReadIndexSource{Package: input.ReadIndexes.Package, TypeName: input.ReadIndexes.TypeName, CacheField: input.ReadIndexes.CacheField, Source: cloned}
+		}
 	}
 	var hookErr error
 	input.HookScaffold, hookErr = input.HookScaffold.Clone()
@@ -181,14 +191,20 @@ func (g *Generator) Generate(dir string) (*Result, error) {
 	if g.initErr != nil {
 		return nil, g.initErr
 	}
-	if err := g.input.ValidateLifecycleTarget(g.input.MutationHandler != nil); err != nil {
+	mutation := g.input.MutationHandler != nil || g.input.Component != nil && g.input.Component.Settings != nil && g.input.Component.Settings.Mutation != ""
+	if err := g.input.ValidateLifecycleTarget(mutation); err != nil {
 		return nil, err
 	}
 	plan, err := g.Plan()
 	if err != nil {
 		return nil, err
 	}
-	files, err := EmitScaffold(dir, plan)
+	var files []EmittedFile
+	if g.input.EphemeralOwnership {
+		files, err = EmitScaffoldEphemeral(dir, plan)
+	} else {
+		files, err = EmitScaffold(dir, plan)
+	}
 	if err != nil {
 		return nil, err
 	}

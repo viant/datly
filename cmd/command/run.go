@@ -17,6 +17,7 @@ import (
 type Service struct {
 	Workspace *xmodule.Workspace
 	Registry  *x.Registry
+	Holders   []any
 	Version   string
 }
 
@@ -56,7 +57,7 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Diagnostics: stderr})
+	server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, RequireLinked: true, Diagnostics: stderr})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

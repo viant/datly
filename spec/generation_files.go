@@ -3,8 +3,63 @@ package spec
 import (
 	"fmt"
 	"go/token"
+	"path/filepath"
 	"strings"
 )
+
+// SetSQLFile selects a generated SQL resource path for root or a named field/view role.
+func (s *GenerationSettings) SetSQLFile(role, file string) error {
+	role, file = strings.TrimSpace(role), strings.TrimSpace(file)
+	if role == "" || file == "" {
+		return fmt.Errorf("sql_dest requires a nonempty role and destination")
+	}
+	if strings.Contains(file, "\\") || filepath.IsAbs(file) || filepath.Ext(file) != ".sql" {
+		return fmt.Errorf("sql_dest role %q requires a relative .sql destination", role)
+	}
+	for _, part := range strings.Split(filepath.ToSlash(file), "/") {
+		if part == "" || part == "." || part == ".." {
+			return fmt.Errorf("sql_dest role %q has an invalid destination %q", role, file)
+		}
+	}
+	if s.SQLFiles == nil {
+		s.SQLFiles = map[string]string{}
+	}
+	key := strings.ToLower(role)
+	if _, exists := s.SQLFiles[key]; exists {
+		return fmt.Errorf("duplicate sql_dest role %q", role)
+	}
+	s.SQLFiles[key] = filepath.ToSlash(file)
+	return nil
+}
+
+// SQLFile returns a configured SQL resource path or its readable default.
+func (s *GenerationSettings) SQLFile(role, fallback string) string {
+	if s != nil {
+		if file := s.SQLFiles[strings.ToLower(strings.TrimSpace(role))]; file != "" {
+			return file
+		}
+	}
+	return fallback
+}
+
+// SQLFileFor returns an exact role override or inherits the root view's
+// configured directory while retaining the role's default filename.
+func (s *GenerationSettings) SQLFileFor(role, rootRole, fallback string) string {
+	if s == nil {
+		return fallback
+	}
+	if exact := s.SQLFile(role, ""); exact != "" {
+		return exact
+	}
+	if root := s.SQLFile(rootRole, ""); root != "" && fallback != "" {
+		directory := filepath.Dir(root)
+		if directory == "." {
+			return filepath.Base(fallback)
+		}
+		return filepath.ToSlash(filepath.Join(directory, filepath.Base(fallback)))
+	}
+	return fallback
+}
 
 // SetSupportFile selects a named support product without depending on its filename.
 func (s *GenerationSettings) SetSupportFile(role, file string) error {
@@ -12,7 +67,7 @@ func (s *GenerationSettings) SetSupportFile(role, file string) error {
 		return fmt.Errorf("support_dest role %q requires a nonempty destination", role)
 	}
 	switch role {
-	case "entities", "entity_methods", "types", "frames", "previous", "layout", "actions", "mutation_output", "validation", "hooks", "invariants", "indexes":
+	case "entities", "entity_methods", "types", "input_setters", "setters", "frames", "previous", "layout", "actions", "mutation_output", "validation", "hooks", "invariants", "indexes":
 	default:
 		name, ok := strings.CutPrefix(role, "type:")
 		if !ok || !token.IsIdentifier(name) || !token.IsExported(name) {

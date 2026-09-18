@@ -93,9 +93,11 @@ func TestGeneratorDestinationAuthority(t *testing.T) {
 	end := strings.Index(runtime, "func TestGeneratedPatchRuntime")
 	runtime = runtime[:start] + runtime[end:]
 	runtime = strings.Replace(runtime, " \"fmt\"", "", 1)
-	runtime = strings.Replace(runtime, " \"context\"", " \"context\";rows \"github.com/viant/datly/genfixture/entities\";rh \"github.com/viant/datly/genfixture/hooks/root\";ch \"github.com/viant/datly/genfixture/hooks/child\"", 1)
+	runtime = strings.Replace(runtime, " \"context\"", " \"context\";rows \"github.com/viant/datly/genfixture/entities\";rh \"github.com/viant/datly/genfixture/hooks/root\";ch \"github.com/viant/datly/genfixture/hooks/child\";\"github.com/viant/datly/spec\"", 1)
 	runtime = strings.NewReplacer("OrdersViewHas", "rows.OrderHas", "OrdersView", "rows.Order", "hookObservedOriginal", "rh.HookObservedOriginal", "lookupRead", "rh.LookupRead").Replace(runtime)
 	runtime = strings.Replace(runtime, " if !rh.LookupRead", " if rh.Version!=2||ch.Version!=2||rh.Calls==0||ch.Calls==0||rh.Completions==0{t.Fatal(\"authored hooks were not linked\")}\n if !rh.LookupRead", 1)
+	runtime = strings.Replace(runtime, "artifact,err:=", `component.TypeContext=&spec.TypeContext{Imports:[]spec.ImportSpec{{Alias:"rh",Package:"github.com/viant/datly/genfixture/hooks/root"},{Alias:"ch",Package:"github.com/viant/datly/genfixture/hooks/child"}}};component.RootView.EntityHooks="rh.Hooks"
+ artifact,err:=`, 1)
 	genpatch.Run(t, root, filepath.Join(root, "api/orders"), runtime)
 
 }

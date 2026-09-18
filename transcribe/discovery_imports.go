@@ -17,6 +17,7 @@ import (
 	loaderast "github.com/viant/x/loader/ast"
 	xmodule "github.com/viant/x/module"
 	smodel "github.com/viant/x/syntetic/model"
+	"github.com/viant/xunsafe"
 )
 
 // DQL imports can name authored Go hooks without a Go component in the source
@@ -67,12 +68,18 @@ func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[strin
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		_, err := d.workspace.Package(path)
+		location, err := d.workspace.Package(path)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
 		if err != nil {
 			return nil, err
+		}
+		if location == nil {
+			if err := d.registerLinkedPackageTypes(path); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		available = append(available, path)
 	}
@@ -113,6 +120,22 @@ func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[strin
 		loaded = append(loaded, path)
 	}
 	return loaded, nil
+}
+
+func (d *dqlPackageDiscovery) registerLinkedPackageTypes(path string) error {
+	var descriptors []*x.Type
+	for _, typeOf := range xunsafe.PackageTypes(path) {
+		if typeOf != nil && typeOf.Name() != "" {
+			descriptors = append(descriptors, x.NewType(typeOf))
+		}
+	}
+	if len(descriptors) == 0 {
+		return nil
+	}
+	if err := d.catalog.RegisterAll(typecatalog.TypeOriginPackage, descriptors...); err != nil {
+		return fmt.Errorf("register linked DQL import %s: %w", path, err)
+	}
+	return nil
 }
 
 func loadAvailablePackageClosure(ctx context.Context, workspace *xmodule.Workspace, roots []string) (map[string]*smodel.Package, error) {

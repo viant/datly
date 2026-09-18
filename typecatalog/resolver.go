@@ -1,6 +1,7 @@
 package typecatalog
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
+	xhandler "github.com/viant/xdatly/handler"
+	xresponse "github.com/viant/xdatly/response"
 )
 
 type AmbiguityError struct {
@@ -45,6 +48,12 @@ func NewResolverWithProvenance(catalog *Catalog, authority Authority, context *R
 	implicitTime := types["time.Time"] == nil
 	if implicitTime {
 		types["time.Time"] = x.NewType(reflect.TypeOf(time.Time{}))
+	}
+	for _, typeOf := range []reflect.Type{reflect.TypeFor[xresponse.Status](), reflect.TypeFor[xhandler.Violation](), reflect.TypeFor[json.RawMessage]()} {
+		key := typeOf.PkgPath() + "." + typeOf.Name()
+		if types[key] == nil {
+			types[key] = x.NewType(typeOf)
+		}
 	}
 	return &Resolver{authority: authority, types: types, context: NormalizeContext(context), provenance: cloneProvenance(provenance), implicitTime: implicitTime}, nil
 }

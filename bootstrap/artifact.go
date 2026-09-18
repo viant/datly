@@ -30,6 +30,7 @@ type ArtifactInput struct {
 	Component     *spec.Component
 	InputType     reflect.Type
 	OutputType    reflect.Type
+	Handler       rhandler.TypedHandler
 	CodecFactory  xcodec.Factory
 	Types         *typecatalog.Catalog
 	// HandlerOwnedOutput preserves the output type/schema without importing its
@@ -126,15 +127,17 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	var readerPlan *sqlreader.Plan
 	var viewDependencies []*sqlreader.ViewDependency
 	if input.Component.RootView != nil || len(input.Component.Views) > 0 {
-		readerPlan, err = readercompiler.Compile(readercompiler.Input{
-			CodecFactory: factory,
-			Component:    input.Component, InputType: input.InputType, OutputType: input.OutputType,
-			Bindings:  compiledInput.Bindings,
-			Predicate: predicate, TypeLookup: c.lookupType,
-			Const: input.Const, DirectViewField: input.DirectViewField, Resources: input.Resources,
-		})
-		if err != nil {
-			return nil, err
+		if !input.HandlerOwnedOutput {
+			readerPlan, err = readercompiler.Compile(readercompiler.Input{
+				CodecFactory: factory,
+				Component:    input.Component, InputType: input.InputType, OutputType: input.OutputType,
+				Bindings:  compiledInput.Bindings,
+				Predicate: predicate, TypeLookup: c.lookupType,
+				Const: input.Const, DirectViewField: input.DirectViewField, Resources: input.Resources,
+			})
+			if err != nil {
+				return nil, err
+			}
 		}
 		viewDependencies, err = readercompiler.CompileViewDependencies(readercompiler.Input{
 			CodecFactory: factory,
@@ -167,7 +170,7 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 		Component: component, Input: compiledInput.Input.WithDocumentation(docs),
 		Output: outputContract,
 		Reader: readerPlan, ViewDependencies: viewDependencies,
-		inputType: input.InputType, outputType: input.OutputType,
+		Handler: input.Handler, inputType: input.InputType, outputType: input.OutputType,
 	}, nil
 }
 

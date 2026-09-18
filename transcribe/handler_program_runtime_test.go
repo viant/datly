@@ -52,7 +52,7 @@ SELECT ID, NAME FROM EVENTS`
 			if err != nil {
 				t.Fatal(err)
 			}
-			if generated.Result.Plan.MutationHandler == nil || generated.Result.Plan.ContractHandler != nil {
+			if generated.Result.Plan.MutationHandler != nil || generated.Result.Plan.ContractHandler != nil || generated.Result.Plan.Settings.Mutation != string(operation) {
 				t.Fatal("generic mutation policy was not persisted")
 			}
 			if generated.Result.Plan.HookScaffold != nil {
@@ -63,8 +63,7 @@ SELECT ID, NAME FROM EVENTS`
 					t.Fatalf("hookless writer emitted %s: %v", name, err)
 				}
 			}
-			source := strings.ReplaceAll(generatedGoWriteRuntimeSource(operation, operation != WritePost), "github.com/viant/datly/runtime/handler/custom", "github.com/viant/datly/runtime/handler/mutation")
-			source = strings.ReplaceAll(source, "customhandler", "mutationhandler")
+			source := generatedGoWriteRuntimeSource(operation, operation != WritePost)
 			if err = os.WriteFile(filepath.Join(root, "generated", "program_runtime_test.go"), []byte(source), 0644); err != nil {
 				t.Fatal(err)
 			}

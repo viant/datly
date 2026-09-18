@@ -152,7 +152,7 @@ func TestComposeReload(t *testing.T) {
 			}
 			current.check(t, 2)
 			old.check(t, 1)
-			files, err := fs.Glob(DatlyResources, "datly_sql/*.sql")
+			files, err := fs.Glob(DatlyResources, "sql/*.sql")
 			if err != nil || len(files) != 1 {
 				t.Fatalf("emitted SQL=%v err=%v", files, err)
 			}

@@ -21,6 +21,7 @@ const (
 	DateFormatTag       = "dateFormat"
 	OutputSettingsTag   = "output"
 	IgnoreEmptyQueryTag = "ignoreEmptyQueryParameters"
+	MutationTag         = "mutation"
 )
 
 // Settings contains component settings that remain meaningful after package
@@ -28,6 +29,7 @@ const (
 // constants are deliberately excluded because transcription consumes or
 // materializes them before package bootstrap.
 type Settings struct {
+	Mutation                   string
 	SequenceStrategy           string
 	MCPFolders                 []spec.ResourceFolder
 	IgnoreEmptyQueryParameters *bool
@@ -47,6 +49,7 @@ func SettingsFromSpec(source *spec.Settings) Settings {
 	}
 	cloned := source.Clone()
 	return Settings{
+		Mutation:                   cloned.Mutation,
 		SequenceStrategy:           cloned.SequenceStrategy,
 		MCPFolders:                 cloned.MCPFolders,
 		IgnoreEmptyQueryParameters: cloned.IgnoreEmptyQueryParameters,
@@ -62,6 +65,7 @@ func (s Settings) Apply(target *spec.Settings) {
 		return
 	}
 	target.SequenceStrategy = s.SequenceStrategy
+	target.Mutation = s.Mutation
 	target.CaseFormat = s.CaseFormat
 	target.MCPFolders = append([]spec.ResourceFolder(nil), s.MCPFolders...)
 	for i := range target.MCPFolders {
@@ -85,6 +89,9 @@ func (s Settings) Apply(target *spec.Settings) {
 }
 
 func (s Settings) StructTag() (string, error) {
+	if err := validateMutation(s.Mutation); err != nil {
+		return "", err
+	}
 	if err := (&spec.Settings{SequenceStrategy: s.SequenceStrategy}).ValidateSequenceStrategy(); err != nil {
 		return "", err
 	}
@@ -95,6 +102,7 @@ func (s Settings) StructTag() (string, error) {
 		}
 	}
 	appendValue(SequenceStrategyTag, s.SequenceStrategy)
+	appendValue(MutationTag, s.Mutation)
 	appendValue(CaseFormatTag, s.CaseFormat)
 	if len(s.MCPFolders) > 0 {
 		data, err := json.Marshal(s.MCPFolders)
@@ -130,6 +138,7 @@ func (s Settings) StructTag() (string, error) {
 
 func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 	result := Settings{
+		Mutation:         structTag.Get(MutationTag),
 		SequenceStrategy: structTag.Get(SequenceStrategyTag),
 		CaseFormat:       structTag.Get(CaseFormatTag), JSONMarshalType: structTag.Get(JSONMarshalTag),
 		JSONUnmarshalType: structTag.Get(JSONUnmarshalTag), XMLUnmarshalType: structTag.Get(XMLUnmarshalTag),
@@ -167,5 +176,17 @@ func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 	if err := (&spec.Settings{SequenceStrategy: result.SequenceStrategy}).ValidateSequenceStrategy(); err != nil {
 		return Settings{}, err
 	}
+	if err := validateMutation(result.Mutation); err != nil {
+		return Settings{}, err
+	}
 	return result, nil
+}
+
+func validateMutation(value string) error {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "patch", "post", "put":
+		return nil
+	default:
+		return fmt.Errorf("unsupported mutation operation %q", value)
+	}
 }

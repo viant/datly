@@ -17,6 +17,8 @@ func TestScalarColumnFieldTagMergesSQLXConstraints(t *testing.T) {
 		{name: "table not null", column: &spec.Column{NotNull: true, Nullable: true}, want: `sqlx:"event_id,required=true"`},
 		{name: "explicit required false", column: &spec.Column{NotNull: true, Tag: `sqlx:"event_id,required=false"`}, want: `sqlx:"event_id,required=false"`},
 		{name: "nullable inference is not a table constraint", column: &spec.Column{Nullable: false}, want: `sqlx:"event_id"`},
+		{name: "JSON uses native SQLX codec", column: &spec.Column{DatabaseType: "JSON"}, want: `sqlx:"event_id,enc=JSON"`},
+		{name: "authored JSON codec retains authority", column: &spec.Column{DatabaseType: "JSON", Tag: `sqlx:"event_id,enc=Custom"`}, want: `sqlx:"event_id,enc=Custom"`},
 		{name: "transient not null", column: &spec.Column{NotNull: true, Tag: `sqlx:"-"`}, want: `sqlx:"-"`},
 		{
 			name:   "discovered constraints",

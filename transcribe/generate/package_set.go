@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/typecatalog"
+	xmodule "github.com/viant/x/module"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -68,6 +69,24 @@ func (s *packageSet) validate() error {
 				return err
 			}
 		}
+		if p.ProjectRoot != "" {
+			if err = s.validatePackage(i); err != nil {
+				return err
+			}
+		}
+	}
+	return s.validateImports()
+}
+
+// validateEphemeral avoids the persistence preview and its ownership checks.
+// Existing sidecar-free generated resources are not user-owned files.
+func (s *packageSet) validateEphemeral() error {
+	for i, p := range s.plans {
+		files, _, _, err := scaffoldArtifacts(s.dirs[i], p)
+		if err != nil {
+			return err
+		}
+		s.files[i] = files
 		if p.ProjectRoot != "" {
 			if err = s.validatePackage(i); err != nil {
 				return err
@@ -161,7 +180,7 @@ func (s *packageSet) validateImports() error {
 	if root == "" {
 		return nil
 	}
-	authority, err := typecatalog.NewDestinationAuthority(root)
+	module, err := xmodule.LocateLocal(root)
 	if err != nil {
 		return err
 	}
@@ -206,15 +225,21 @@ func (s *packageSet) validateImports() error {
 		if _, ok := proposed[filepath.Clean(file)]; ok {
 			return nil
 		}
-		rel, err := filepath.Rel(root, file)
-		if err != nil {
-			return err
-		}
-		target, err := authority.Package("", rel)
-		if err != nil {
-			return err
-		}
 		files, err := os.ReadDir(file)
+		if err != nil {
+			return err
+		}
+		hasGoSource := false
+		for _, item := range files {
+			if !item.IsDir() && strings.HasSuffix(item.Name(), ".go") && !strings.HasSuffix(item.Name(), "_test.go") {
+				hasGoSource = true
+				break
+			}
+		}
+		if !hasGoSource {
+			return nil
+		}
+		importPath, err := xmodule.ImportPathLocal(module.Dir, module.Path, file)
 		if err != nil {
 			return err
 		}
@@ -226,7 +251,7 @@ func (s *packageSet) validateImports() error {
 			if err != nil {
 				return err
 			}
-			if err = s.imports(graph, target.ImportPath, string(content)); err != nil {
+			if err = s.imports(graph, importPath, string(content)); err != nil {
 				return err
 			}
 		}
@@ -311,4 +336,31 @@ func (p Packages) Validate() error {
 		all.files = append(all.files, group.files...)
 	}
 	return all.validate()
+}
+
+// ValidateEphemeral validates the generated package layout without treating
+// existing generated artifacts as user-owned merely because no persistence
+// sidecar is present. It is deliberately limited to read-only validation.
+func (p Packages) ValidateEphemeral() error {
+	all := &packageSet{}
+	paths := map[string]string{}
+	for _, entry := range p {
+		group, err := entry.Plan.packages(entry.Directory)
+		if err != nil {
+			return err
+		}
+		for _, files := range group.files {
+			for _, file := range files {
+				key := filepath.Clean(file.Path)
+				if prior := paths[key]; prior != "" {
+					return fmt.Errorf("generated destination %s collides between components %s and %s", key, prior, entry.Plan.ComponentName)
+				}
+				paths[key] = entry.Plan.ComponentName
+			}
+		}
+		all.plans = append(all.plans, group.plans...)
+		all.dirs = append(all.dirs, group.dirs...)
+		all.files = append(all.files, group.files...)
+	}
+	return all.validateEphemeral()
 }

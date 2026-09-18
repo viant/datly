@@ -32,7 +32,8 @@ func (m *indexedMaterializer) Materialize(ctx context.Context, entry *bootstrapi
 	if entry.Owner.Name != "" {
 		owner = entry.Owner
 	}
-	discovery := transcribe.Discovery{Const: m.source.config.Const, Workspace: m.workspace, Include: []string{owner.Scope}, TypeInclude: indexedMaterializerTypeSelection(owner.Scope, entry.Sources), Exclude: m.source.config.GoBootstrap.Exclude, Connector: m.source.config.Connector, Types: types, Registry: m.source.registry}
+	selection := []string{owner.Scope}
+	discovery := transcribe.Discovery{Const: m.source.config.Const, Workspace: m.workspace, Include: selection, TypeInclude: indexedMaterializerTypeSelection(owner.Scope, entry.Sources), Exclude: m.source.config.GoBootstrap.Exclude, Connector: m.source.config.Connector, Types: types, Registry: m.source.registry, Holders: m.source.holders, RequireLinked: m.source.requireLinked}
 	project, err := discovery.Compile(ctx)
 	if err != nil {
 		return nil, err

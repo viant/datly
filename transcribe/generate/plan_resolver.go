@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -41,7 +42,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 		return plan, err
 	}
 	r.plan = plan
-	r.plan.lifecycleTargetError = r.input.ValidateLifecycleTarget(false)
+	if r.input.Component.Settings == nil || r.input.Component.Settings.Mutation == "" {
+		r.plan.lifecycleTargetError = r.input.ValidateLifecycleTarget(false)
+	}
 	if err = r.validateHelperFieldNames(); err != nil {
 		return nil, err
 	}
@@ -63,6 +66,7 @@ func (r *planResolver) resolve() (*Plan, error) {
 	if err = r.concretizeFields(r.plan.Output.Fields); err != nil {
 		return nil, err
 	}
+	r.resolveUniversalOutputs()
 	if err = r.bindIndependentViewFields(r.plan.Input.Fields); err != nil {
 		return nil, err
 	}
@@ -93,6 +97,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 		return nil, err
 	}
 	if err = r.input.MutationHandler.resolve(r.plan, r.input.TargetPackage); err != nil {
+		return nil, err
+	}
+	if err = r.input.ReadIndexes.resolve(r.plan); err != nil {
 		return nil, err
 	}
 	r.resolveFactoryLink()
@@ -127,6 +134,38 @@ func (r *planResolver) resolve() (*Plan, error) {
 		return nil, err
 	}
 	return r.plan, nil
+}
+
+func (r *planResolver) resolveUniversalOutputs() {
+	if r == nil || r.plan == nil || r.plan.Output.Ownership != ContractGenerated {
+		return
+	}
+	imports := map[string]bool{}
+	for _, item := range r.plan.Imports {
+		imports[item.Package] = true
+	}
+	for i := range r.plan.Output.Fields {
+		field := &r.plan.Output.Fields[i]
+		if strings.TrimSpace(field.Type) != "any" {
+			continue
+		}
+		binding := reflect.StructTag(field.Tag).Get("parameter")
+		location := strings.ToLower(strings.ReplaceAll(binding, " ", ""))
+		switch {
+		case strings.EqualFold(strings.TrimSpace(field.Source), "transient"):
+			field.Type = "[]*xhandler.Violation"
+			if !imports["github.com/viant/xdatly/handler"] {
+				r.plan.Imports = append(r.plan.Imports, spec.ImportSpec{Alias: "xhandler", Package: "github.com/viant/xdatly/handler"})
+				imports["github.com/viant/xdatly/handler"] = true
+			}
+		case strings.Contains(location, "kind=output") && strings.Contains(location, "in=status"):
+			field.Type = "response.Status"
+			if !imports["github.com/viant/xdatly/response"] {
+				r.plan.Imports = append(r.plan.Imports, spec.ImportSpec{Alias: "response", Package: "github.com/viant/xdatly/response"})
+				imports["github.com/viant/xdatly/response"] = true
+			}
+		}
+	}
 }
 
 func (r *planResolver) validateHandlerSelection() error {

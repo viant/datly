@@ -60,14 +60,13 @@ func(input *OrdersInput)Init(ctx context.Context)error{measuredInput=input;measu
  input,readContext:=measuredInput,measuredContext
  if len(input.CurrentOrders)!=parentCount||len(input.CurrentItems)!=parentCount*10||len(input.CurrentDetails)!=parentCount*50{t.Fatalf("unexpected scoped row counts %d/%d/%d",len(input.CurrentOrders),len(input.CurrentItems),len(input.CurrentDetails))}
  reads,err:=input.ReadIndexes(readContext);if err!=nil{t.Fatal(err)}
- definition:=NewOrdersHandler()
  t.Run("evidence_only",func(b *testing.B){b.ReportAllocs();b.ResetTimer();for n:=0;n<b.N;n++{if err:=benchmarkEvidence(readContext,input);err!=nil{b.Fatal(err)}}})
  t.Run("clone_only",func(b *testing.B){b.ReportAllocs();b.ResetTimer();for n:=0;n<b.N;n++{value,err:=benchmarkClone(input);if err!=nil{b.Fatal(err)};preparedIndexSink=value}})
  t.Run("required_key_link_indexes_only",func(b *testing.B){b.ReportAllocs();b.ResetTimer();for n:=0;n<b.N;n++{if err:=benchmarkRequired(reads);err!=nil{b.Fatal(err)}}})
  t.Run("optional_business_groups_only",func(b *testing.B){b.ReportAllocs();b.ResetTimer();for n:=0;n<b.N;n++{benchmarkOptional(reads)}})
  t.Run("manual_required_full",func(b *testing.B){b.ReportAllocs();b.ResetTimer();for n:=0;n<b.N;n++{if err:=benchmarkEvidence(readContext,input);err!=nil{b.Fatal(err)};value,err:=benchmarkClone(input);if err!=nil{b.Fatal(err)};if err=benchmarkRequired(value);err!=nil{b.Fatal(err)};preparedIndexSink=value}})
  t.Run("default_preparation",func(b *testing.B){b.ReportAllocs();b.ResetTimer();for n:=0;n<b.N;n++{if err:=input.PrepareReadIndexes(readContext);err!=nil{b.Fatal(err)}}})
- t.Run("graph_and_indexes_capture",func(b *testing.B){b.ReportAllocs();b.ResetTimer();for n:=0;n<b.N;n++{program,err:=definition.Capture(readContext,input);if err!=nil{b.Fatal(err)};capturedProgramSink=program}})
+ t.Run("graph_and_indexes_capture",func(b *testing.B){b.ReportAllocs();b.ResetTimer();for n:=0;n<b.N;n++{if err:=input.PrepareReadIndexes(readContext);err!=nil{b.Fatal(err)};program,err:=handler.CaptureInput(readContext,input);if err!=nil{b.Fatal(err)};capturedProgramSink=program}})
  t.Run("cached_access",func(b *testing.B){b.ReportAllocs();b.ResetTimer();for n:=0;n<b.N;n++{indexes,err:=input.ReadIndexes(readContext);if err!=nil{b.Fatal(err)};preparedIndexSink=indexes}})
 }
 func BenchmarkGeneratedPreparation(b *testing.B){for _,size:=range []int{10,100}{b.Run(fmt.Sprintf("parents_%d_items_%d_details_%d",size,size*10,size*50),func(b *testing.B){benchmarkPreparedGraph(b,size)})}}

@@ -3,21 +3,26 @@ package transcribe
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/viant/datly/internal/packageasset"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
 	handlercompiler "github.com/viant/datly/transcribe/handler/compiler"
 	"github.com/viant/datly/typecatalog"
+	xmodule "github.com/viant/x/module"
 )
 
 // Generator derives request contracts and mutation state before lowering a
 // canonical handler. Transcribe remains the lower-level authored-contract path.
 // Destination is only the project root; DQL and package metadata own artifacts.
 type Generator struct {
-	Operation string
-	Language  HandlerTarget
+	Operation          string
+	Language           HandlerTarget
+	EphemeralOwnership bool
 }
 
 type GenerationRequest struct {
@@ -67,7 +72,99 @@ func (g Generator) Generate(ctx context.Context, request GenerationRequest) (*Ge
 	} else if compiled.Component.TypeContext == nil || strings.TrimSpace(compiled.Component.TypeContext.PackagePath) == "" {
 		return nil, fmt.Errorf("transcribe requires an explicit #package('path/to/package') destination in DQL")
 	}
-	return g.generate(ctx, request.Destination, fallback, compiled)
+	if g.EphemeralOwnership {
+		return g.generateEphemeral(ctx, request.Destination, fallback, compiled)
+	}
+	generated, err := g.generate(ctx, request.Destination, fallback, compiled)
+	return generated, err
+}
+
+func (g Generator) generateEphemeral(ctx context.Context, root, fallback string, compiled *Result) (*GeneratedPackage, error) {
+	module, err := xmodule.LocateLocal(root)
+	if err != nil {
+		return nil, err
+	}
+	stage, err := os.MkdirTemp("", "datly-transcribe-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(stage)
+	if err = os.WriteFile(filepath.Join(stage, "go.mod"), []byte("module "+module.Path+"\n\ngo 1.25.8\n"), 0o644); err != nil {
+		return nil, err
+	}
+	generated, err := g.generate(ctx, stage, fallback, compiled)
+	if err != nil {
+		return nil, err
+	}
+	packages := map[string]bool{generated.Package.PkgPath: true}
+	for _, plan := range generated.Result.Plan.ShapePackages {
+		packages[plan.Package] = true
+	}
+	stageAuthority, err := typecatalog.NewDestinationAuthority(stage)
+	if err != nil {
+		return nil, err
+	}
+	targetAuthority, err := typecatalog.NewDestinationAuthority(root)
+	if err != nil {
+		return nil, err
+	}
+	for packagePath := range packages {
+		source, err := stageAuthority.Package(packagePath, "")
+		if err != nil {
+			return nil, err
+		}
+		target, err := targetAuthority.Package(packagePath, "")
+		if err != nil {
+			return nil, err
+		}
+		sourceDir := filepath.Join(stage, source.Directory)
+		generatedFiles := map[string]bool{}
+		for _, file := range generated.Result.Files {
+			relative, relativeErr := filepath.Rel(sourceDir, file.Path)
+			if relativeErr == nil && relative != "." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+				generatedFiles[filepath.Clean(relative)] = true
+			}
+		}
+		if err = publishEphemeralPackage(sourceDir, filepath.Join(root, target.Directory), generatedFiles); err != nil {
+			return nil, err
+		}
+	}
+	return generated, nil
+}
+
+func publishEphemeralPackage(source, target string, generated map[string]bool) error {
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		return err
+	}
+	err := filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(source, path)
+		if err != nil || relative == "." {
+			return err
+		}
+		if filepath.Base(path) == packageasset.ManifestName {
+			return nil
+		}
+		destination := filepath.Join(target, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(destination, 0o755)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if !generated[filepath.Clean(relative)] {
+			if _, statErr := os.Stat(destination); statErr == nil {
+				return nil
+			} else if !os.IsNotExist(statErr) {
+				return statErr
+			}
+		}
+		return os.WriteFile(destination, data, 0o644)
+	})
+	return err
 }
 
 func (g Generator) generate(ctx context.Context, root, dir string, compiled *Result) (*GeneratedPackage, error) {
@@ -78,6 +175,12 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	}
 	if operation != "get" && operation != "patch" && operation != "post" && operation != "put" {
 		return nil, fmt.Errorf("transcribe operation must be get, patch, post or put")
+	}
+	if operation != "get" {
+		if compiled.Component.Settings == nil {
+			compiled.Component.Settings = &spec.Settings{}
+		}
+		compiled.Component.Settings.Mutation = operation
 	}
 	if language != HandlerGo && language != HandlerVelty {
 		return nil, fmt.Errorf("unsupported transcribe language %q", language)
@@ -142,5 +245,6 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	if err = handlers.prepare(); err != nil {
 		return nil, handlers.diagnostic(err)
 	}
+	input.EphemeralOwnership = g.EphemeralOwnership
 	return NewCompiler().generateInputAt(ctx, root, dir, &copy, input)
 }

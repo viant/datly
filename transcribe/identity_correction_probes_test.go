@@ -50,20 +50,20 @@ func independentSetKinds(input *OrdersInput,ids ...int){
 }
 func TestIndependentCacheAndEvidence(t *testing.T){
  ctx:=sdk.WithReadMetadata(context.Background(),independentMetadata{})
- input:=&OrdersInput{};definition:=NewOrdersHandler().(*OrdersHandlerDefinition)
+ input:=&OrdersInput{}
  independentSetKinds(input,7)
- if _,err:=definition.Capture(ctx,input);err!=nil{t.Fatal(err)}
+ if err:=input.PrepareReadIndexes(ctx);err!=nil{t.Fatal(err)}
  first,err:=input.ReadIndexes(ctx);if err!=nil||!first.CurrentKindsById.Has(7){t.Fatal("first capture",err)}
  *first.CurrentKindsById[7].Id=777
  if *input.CurrentKinds[0].Id!=7{t.Fatal("helper mutated read input")}
  independentSetKinds(input,8)
- if _,err=definition.Capture(ctx,input);err!=nil{t.Fatal(err)}
+ if err=input.PrepareReadIndexes(ctx);err!=nil{t.Fatal(err)}
  second,err:=input.ReadIndexes(ctx);if err!=nil||first==second||!second.CurrentKindsById.Has(8)||second.CurrentKindsById.Has(7){t.Fatal("stale invocation cache",err)}
  reduced:=sdk.WithReadMetadata(context.Background(),independentMetadata{missing:true})
- if _,err=definition.Capture(reduced,input);err==nil||!strings.Contains(err.Error(),"application index field was not loaded: CurrentKinds.Name"){t.Fatalf("unused auxiliary reduced projection = %v",err)}
+ if err=input.PrepareReadIndexes(reduced);err==nil||!strings.Contains(err.Error(),"application index field was not loaded: CurrentKinds.Name"){t.Fatalf("unused auxiliary reduced projection = %v",err)}
  if input._ordersHandlerReadIndexes!=nil{t.Fatal("failed preparation left stale cache")}
  independentSetKinds(input,8,8)
- if _,err=definition.Capture(ctx,input);err==nil||!strings.Contains(err.Error(),"ambiguous application index"){t.Fatalf("duplicate auxiliary primary keys = %v",err)}
+ if err=input.PrepareReadIndexes(ctx);err==nil||!strings.Contains(err.Error(),"ambiguous application index"){t.Fatalf("duplicate auxiliary primary keys = %v",err)}
  t.Log("same-input Capture refresh, detached rows, reduced unused auxiliary evidence failure, cache clearing, and duplicate primary-key rejection verified")
 }
 `

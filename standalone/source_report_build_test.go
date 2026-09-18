@@ -35,10 +35,17 @@ func TestStandaloneReportsAutomaticCustomBuildSQLite(t *testing.T) {
 	env := append(os.Environ(), "GOFLAGS=-mod=mod")
 	service := build.Service{}
 	require.NoError(t, service.Init(ctx, build.InitRequest{Dir: f.Root}))
+	link := `package datlylink
+import _ "example.com/standalone/reporting/spend"
+func init(){}
+`
+	formattedLink, err := format.Source([]byte(link))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(f.Root, "internal/datlylink/link.go"), formattedLink, 0600))
 	result, err := service.Build(ctx, build.Request{Dir: f.Root, Packages: []string{"./spend"}, Env: env})
 	require.NoError(t, err)
 	require.Equal(t, 2, result.Components)
-	// Exercise the generated Registry/Workspace, with no manual type export list.
+	// Exercise the user-selected default import with no generated registry.
 	// The binary is built above; HTTP handlers can be tested without a TCP socket.
 	code := `package datlylink
 import (
@@ -52,26 +59,18 @@ import (
  "reflect"
  "strings"
  "testing"
- "time"
- jwtv5 "github.com/golang-jwt/jwt/v5"
  "github.com/viant/scy/auth/jwt"
  "github.com/viant/datly/standalone"
  "github.com/viant/datly/standalone/config"
+ spend "example.com/standalone/reporting/spend"
 )
 func TestDiscoveredReports(t *testing.T) {
  ctx:=context.Background()
  cfg,err:=(config.Loader{}).Load(ctx,` + strconv.Quote(f.Config) + `);if err!=nil{t.Fatal(err)}
- registry,err:=Registry();if err!=nil{t.Fatal(err)}
- for _,typ:=range []reflect.Type{reflect.TypeFor[jwt.Claims](),reflect.TypeFor[jwtv5.RegisteredClaims](),reflect.TypeFor[jwtv5.NumericDate](),reflect.TypeFor[jwtv5.ClaimStrings](),reflect.TypeFor[time.Time]()} {
-  key:=typ.PkgPath()+"."+typ.Name()
-  linked:=registry.Lookup(key)
-  if linked==nil || linked.Type!=typ {t.Fatalf("canonical compiled identity missing: %s",key)}
- }
- input:=registry.Lookup("example.com/standalone/reporting/spend.AuthInput")
- if input==nil {t.Fatal("declared authenticated input missing")}
- field,ok:=input.Type.FieldByName("JWT")
+ input:=reflect.TypeFor[spend.AuthInput]()
+ field,ok:=input.FieldByName("JWT")
  if !ok || field.Type!=reflect.TypeFor[*jwt.Claims]() || !strings.Contains(field.Tag.Get("parameter"),"required") || field.Tag.Get("codec")!="JwtClaim" {t.Fatalf("declared JWT contract changed: %+v",field)}
- server,err:=standalone.New(ctx,standalone.Options{Config:cfg,Registry:registry,Workspace:Workspace()});if err!=nil{t.Fatal(err)}
+ server,err:=standalone.New(ctx,standalone.Options{Config:cfg,Holders:[]any{spend.Component{}}});if err!=nil{t.Fatal(err)}
  defer func(){if err:=server.Shutdown(ctx);err!=nil{t.Error(err)}}()
  if err=server.Reload(ctx,1);err!=nil{t.Fatal(err)}
  metadata,err:=server.Metadata(ctx);if err!=nil{t.Fatal(err)}
@@ -138,5 +137,5 @@ func TestDiscoveredReports(t *testing.T) {
 	command.Env = env
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
-	t.Logf("Built custom executable and verified generated Registry/Workspace: %s", output)
+	t.Logf("Built custom executable and verified user-linked package authority: %s", output)
 }

@@ -9,9 +9,91 @@ import (
 	handlergo "github.com/viant/datly/transcribe/handler/golang"
 	sqlio "github.com/viant/sqlx/io"
 	xshape "github.com/viant/x/shape"
+	"go/ast"
+	"go/token"
 	"reflect"
 	"strings"
 )
+
+// applyEntitySetters retains only public generated entity accessors. Mutation
+// state, snapshots, invariants, and phase programs belong to the universal
+// runtime writer and are never emitted into an application package.
+func (g *handlerGeneration) applyEntitySetters(asset *handlergo.EntityAsset) error {
+	if asset == nil || asset.File == nil {
+		g.input.EntitySupport = nil
+		return nil
+	}
+	wanted := map[string]handlergo.EntityMethod{}
+	for _, method := range asset.Methods {
+		if strings.HasPrefix(method.Name, "Set") || strings.HasPrefix(method.Name, "Get") || strings.HasPrefix(method.Name, "Project") {
+			wanted[method.Receiver+"."+method.Name] = method
+		}
+	}
+	if len(wanted) == 0 {
+		g.input.EntitySupport = nil
+		return nil
+	}
+	selected := &ast.File{Name: ast.NewIdent(asset.File.Name.Name)}
+	usedAliases := map[string]bool{}
+	for _, declaration := range asset.File.Decls {
+		method, ok := declaration.(*ast.FuncDecl)
+		if !ok || method.Recv == nil || len(method.Recv.List) != 1 {
+			continue
+		}
+		receiver := method.Recv.List[0].Type
+		if pointer, ok := receiver.(*ast.StarExpr); ok {
+			receiver = pointer.X
+		}
+		name, ok := receiver.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		if _, ok = wanted[name.Name+"."+method.Name.Name]; !ok {
+			continue
+		}
+		selected.Decls = append(selected.Decls, method)
+		ast.Inspect(method, func(node ast.Node) bool {
+			if selector, ok := node.(*ast.SelectorExpr); ok {
+				if qualifier, ok := selector.X.(*ast.Ident); ok {
+					usedAliases[qualifier.Name] = true
+				}
+			}
+			return true
+		})
+	}
+	for _, declaration := range asset.File.Decls {
+		group, ok := declaration.(*ast.GenDecl)
+		if !ok || group.Tok != token.IMPORT {
+			continue
+		}
+		imports := &ast.GenDecl{Tok: token.IMPORT, Lparen: group.Lparen}
+		for _, item := range group.Specs {
+			specification := item.(*ast.ImportSpec)
+			alias := ""
+			if specification.Name != nil {
+				alias = specification.Name.Name
+			}
+			if alias != "" && usedAliases[alias] {
+				imports.Specs = append(imports.Specs, specification)
+			}
+		}
+		if len(imports.Specs) > 0 {
+			selected.Decls = append([]ast.Decl{imports}, selected.Decls...)
+		}
+	}
+	filtered := &handlergo.EntityAsset{File: selected}
+	for _, method := range asset.Methods {
+		if _, ok := wanted[method.Receiver+"."+method.Name]; ok {
+			filtered.Methods = append(filtered.Methods, method)
+		}
+	}
+	result := &gen.EntitySupportAsset{File: filtered.File}
+	for _, method := range filtered.Methods {
+		result.Methods = append(result.Methods, gen.EntityMethod{Receiver: method.Receiver, Name: method.Name, ValueType: method.ValueType, Getter: method.Getter, Signature: method.Signature})
+	}
+	g.input.EntitySupport = result
+	return nil
+}
 
 func (g *handlerGeneration) applyEntitySupport(asset *handlergo.EntityAsset) {
 	if asset == nil {

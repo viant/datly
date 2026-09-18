@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sort"
 
+	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
@@ -16,6 +17,7 @@ type PackageComponentSource struct {
 	Routes     []*RouteSource
 	InputType  *x.Type
 	OutputType *x.Type
+	Handler    func() (rhandler.TypedHandler, error)
 	component  *spec.Component
 }
 
@@ -32,9 +34,6 @@ func (s *PackageComponentSource) ComponentName() string {
 // route holders without relying on field names, file order heuristics, or
 // dynamic registration.
 func GroupPackageComponentSources(routes []*RouteSource, types *typecatalog.Resolver) ([]*PackageComponentSource, error) {
-	if types == nil {
-		return nil, fmt.Errorf("package type resolver is required")
-	}
 	groups := map[string]*PackageComponentSource{}
 	var order []string
 	for _, route := range routes {
@@ -45,22 +44,42 @@ func GroupPackageComponentSources(routes []*RouteSource, types *typecatalog.Reso
 		if err != nil {
 			return nil, err
 		}
-		input, err := types.ResolveShape(route.InputType)
-		if err != nil {
-			return nil, fmt.Errorf("resolve package component %s input: %w", component.Key.String(), err)
+		var inputDescriptor, outputDescriptor *x.Type
+		inputIdentity, outputIdentity := "", ""
+		if route.LinkedInputType != nil && route.LinkedOutputType != nil {
+			if err := route.ValidateContractTypes(route.LinkedInputType, route.LinkedOutputType); err != nil {
+				return nil, err
+			}
+			inputDescriptor = x.NewType(route.LinkedInputType)
+			outputDescriptor = x.NewType(route.LinkedOutputType)
+			inputIdentity, outputIdentity = inputDescriptor.Key(), outputDescriptor.Key()
+		} else {
+			if types == nil {
+				return nil, fmt.Errorf("package type resolver is required")
+			}
+			input, err := types.ResolveShape(route.InputType)
+			if err != nil {
+				return nil, fmt.Errorf("resolve package component %s input: %w", component.Key.String(), err)
+			}
+			output, err := types.ResolveShape(route.OutputType)
+			if err != nil {
+				return nil, fmt.Errorf("resolve package component %s output: %w", component.Key.String(), err)
+			}
+			if input != nil {
+				inputDescriptor, inputIdentity = input.Descriptor, input.Identity
+			}
+			if output != nil {
+				outputDescriptor, outputIdentity = output.Descriptor, output.Identity
+			}
 		}
-		output, err := types.ResolveShape(route.OutputType)
-		if err != nil {
-			return nil, fmt.Errorf("resolve package component %s output: %w", component.Key.String(), err)
-		}
-		if input == nil || input.Descriptor == nil || output == nil || output.Descriptor == nil {
+		if inputDescriptor == nil || outputDescriptor == nil {
 			return nil, fmt.Errorf("package component %s contract descriptors are required", component.Key.String())
 		}
-		key := component.Key.String() + "\x00" + input.Identity + "\x00" + output.Identity
+		key := component.Key.String() + "\x00" + inputIdentity + "\x00" + outputIdentity
 		group := groups[key]
 		if group == nil {
 			group = &PackageComponentSource{
-				InputType: input.Descriptor, OutputType: output.Descriptor, component: component,
+				InputType: inputDescriptor, OutputType: outputDescriptor, Handler: route.LinkedHandler, component: component,
 			}
 			groups[key] = group
 			order = append(order, key)

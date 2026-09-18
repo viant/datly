@@ -88,7 +88,7 @@ SELECT ID, NAME FROM EVENTS`
 			currentTag = field.Tag
 		}
 	}
-	if !strings.Contains(currentTag, `sql:"uri=datly_`) {
+	if !strings.Contains(currentTag, `sql:"uri=`) {
 		t.Fatalf("generated current-view field tag = %q", currentTag)
 	}
 	currentSQL := false
@@ -190,6 +190,7 @@ func TestStructQLPatch(t *testing.T) {
 		}
 	}
 	resources:=resource.New();if err:=resources.Register(DatlyResourceNamespace,DatlyResources);err!=nil{t.Fatal(err)}
+	if strings.HasPrefix(helperCodec,"uri="){data,readErr:=resources.ReadFile(strings.TrimPrefix(helperCodec,"uri="));if readErr!=nil{t.Fatal(readErr)};helperCodec=string(data)}
 	viewSQL := ""
 	if len(component.Views) == 1 && component.Views[0] != nil && component.Views[0].Source != nil {
 		data,err:=resources.ReadFile(component.Views[0].Source.URI);if err!=nil{t.Fatal(err)};viewSQL=string(data)

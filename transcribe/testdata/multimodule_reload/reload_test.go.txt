@@ -133,7 +133,7 @@ func (f *exposureReload) authority(t *testing.T, manager *application.Manager, c
 		embedded  fs.FS
 		child     bool
 	}{{DatlyResourceNamespace, DatlyResources, false}, {private.DatlyResourceNamespace, private.DatlyResources, true}} {
-		files, err := fs.Glob(asset.embedded, "datly_sql/*.sql")
+		files, err := fs.Glob(asset.embedded, "sql/*.sql")
 		if err != nil || len(files) != 1 {
 			t.Fatalf("emitted SQL files=%v err=%v", files, err)
 		}

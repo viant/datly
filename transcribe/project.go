@@ -138,10 +138,20 @@ func (g *ProjectGeneration) Generate(ctx context.Context, rootDir string) (*Gene
 }
 
 func (g *ProjectGeneration) prepare(rootDir string) ([]preparedProjectComponent, error) {
-	return g.prepareWithManifest(rootDir, nil)
+	return g.prepareWithValidation(rootDir, nil, false)
+}
+
+// prepareEphemeral validates source and import layout without applying
+// persistence ownership checks to existing generated artifacts.
+func (g *ProjectGeneration) prepareEphemeral(rootDir string) ([]preparedProjectComponent, error) {
+	return g.prepareWithValidation(rootDir, nil, true)
 }
 
 func (g *ProjectGeneration) prepareWithManifest(rootDir string, existing *ProjectManifest) ([]preparedProjectComponent, error) {
+	return g.prepareWithValidation(rootDir, existing, false)
+}
+
+func (g *ProjectGeneration) prepareWithValidation(rootDir string, existing *ProjectManifest, ephemeral bool) ([]preparedProjectComponent, error) {
 	seen := map[string]bool{}
 	result := make([]preparedProjectComponent, 0, len(g.Components))
 	for _, source := range g.Components {
@@ -168,7 +178,11 @@ func (g *ProjectGeneration) prepareWithManifest(rootDir string, existing *Projec
 		if err != nil {
 			return nil, fmt.Errorf("plan component %q: %w", identity, err)
 		}
-		if err = plan.ValidateDestination(filepath.Join(rootDir, packagePath)); err != nil {
+		validate := plan.ValidateDestination
+		if ephemeral {
+			validate = plan.ValidateDestinationEphemeral
+		}
+		if err = validate(filepath.Join(rootDir, packagePath)); err != nil {
 			return nil, fmt.Errorf("validate component %q destination: %w", identity, err)
 		}
 		result = append(result, preparedProjectComponent{
@@ -194,7 +208,11 @@ func (g *ProjectGeneration) prepareWithManifest(rootDir string, existing *Projec
 		if err != nil {
 			return nil, fmt.Errorf("plan component %q: %w", component.identity, err)
 		}
-		if err = component.plan.ValidateDestination(filepath.Join(rootDir, component.packagePath)); err != nil {
+		validate := component.plan.ValidateDestination
+		if ephemeral {
+			validate = component.plan.ValidateDestinationEphemeral
+		}
+		if err = validate(filepath.Join(rootDir, component.packagePath)); err != nil {
 			return nil, fmt.Errorf("validate component %q destination: %w", component.identity, err)
 		}
 	}
@@ -207,7 +225,11 @@ func (g *ProjectGeneration) prepareWithManifest(rootDir string, existing *Projec
 	for _, entry := range result {
 		packages = append(packages, gen.PackagePlan{Plan: entry.plan, Directory: filepath.Join(rootDir, entry.packagePath)})
 	}
-	if err := packages.Validate(); err != nil {
+	validatePackages := packages.Validate
+	if ephemeral {
+		validatePackages = packages.ValidateEphemeral
+	}
+	if err := validatePackages(); err != nil {
 		return nil, err
 	}
 	return ordered, nil

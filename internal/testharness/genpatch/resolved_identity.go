@@ -79,7 +79,7 @@ func ResolvedIdentityRuntime(deep bool) string {
  if _,err=invoke(` + "`" + `{"Data":[{"id":1,"name":"must rollback","Items":[{"name":"ambiguous"}]}]}` + "`" + `);err==nil||!strings.Contains(err.Error(),"ambiguous"){t.Fatalf("ambiguous lookup = %v",err)}
  db.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT NAME FROM ORDERS WHERE ID=1"},[]struct{Name string}{{"before"}})
 `
-	source = strings.Replace(source, "\n}\n\nfunc TestGeneratedSettersAndSyncPresence", suffix+"\n}\n\nfunc TestGeneratedSettersAndSyncPresence", 1)
+	source = strings.Replace(source, "\n}\n\nfunc TestGeneratedSettersDrivePresence", suffix+"\n}\n\nfunc TestGeneratedSettersDrivePresence", 1)
 	deepInit, deepBody, deepSchema, deepAssert := "", "", "", ""
 	if deep {
 		deepInit = `if indexes.CurrentItemsById.Has(30)||indexes.CurrentDetailsById.Has(300)||indexes.CurrentDetailsById.Has(301){return fmt.Errorf("authored inner filter did not bound Previous")}

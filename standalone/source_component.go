@@ -7,6 +7,8 @@ import (
 
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/report"
+	rhandler "github.com/viant/datly/runtime/handler"
+	writerhandler "github.com/viant/datly/runtime/handler/writer"
 	"github.com/viant/datly/sql/dml"
 	"github.com/viant/datly/transcribe"
 	"github.com/viant/datly/typecatalog"
@@ -24,22 +26,41 @@ func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.
 	if settings == nil || settings.InputType == "" || settings.OutputType == "" {
 		return bootstrap.ArtifactInput{}, fmt.Errorf("component %s requires authored linked input/output contracts", compiled.Component.Key.String())
 	}
-	resolver, err := typecatalog.NewResolver(compiled.Source.Types, typecatalog.PackageAuthority, compiled.TypeContext)
-	if err != nil {
-		return bootstrap.ArtifactInput{}, err
-	}
-	input, err := resolver.Type(settings.InputType)
-	if err != nil {
-		return bootstrap.ArtifactInput{}, err
-	}
-	output, err := resolver.Type(settings.OutputType)
-	if err != nil {
-		return bootstrap.ArtifactInput{}, err
+	var input, output reflect.Type
+	var handler rhandler.TypedHandler
+	var err error
+	if compiled.Source.LinkedInputType != nil && compiled.Source.LinkedOutputType != nil {
+		input, output = compiled.Source.LinkedInputType, compiled.Source.LinkedOutputType
+		if compiled.Source.LinkedHandler != nil {
+			handler, err = compiled.Source.LinkedHandler()
+			if err != nil {
+				return bootstrap.ArtifactInput{}, err
+			}
+		}
+	} else {
+		resolver, err := typecatalog.NewResolver(compiled.Source.Types, typecatalog.PackageAuthority, compiled.TypeContext)
+		if err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
+		input, err = resolver.Type(settings.InputType)
+		if err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
+		output, err = resolver.Type(settings.OutputType)
+		if err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
 	}
 	if input == nil || output == nil || input.Kind() != reflect.Struct || output.Kind() != reflect.Struct {
 		return bootstrap.ArtifactInput{}, fmt.Errorf("component %s input/output contracts must be linked structs", compiled.Component.Key.String())
 	}
-	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: compiled.Component, Types: compiled.Source.Types, InputType: input, OutputType: output, Resources: compiled.Source.Resources, CodecFactory: c.source.codecs}, nil
+	if settings.Mutation != "" {
+		handler, err = writerhandler.New(compiled.Component, input, output, settings.Mutation)
+		if err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
+	}
+	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: compiled.Component, Types: compiled.Source.Types, InputType: input, OutputType: output, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: compiled.Source.Resources, CodecFactory: c.source.codecs}, nil
 }
 
 func (c *sourceComponent) Configure(ctx context.Context, artifact *report.ComponentArtifact) (report.RuntimeCapabilities, error) {

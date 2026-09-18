@@ -24,8 +24,8 @@ func TestGeneratorBatchLookup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if generated.Result.Plan.MutationHandler == nil || generated.Result.Plan.VeltyHandler != nil {
-		t.Fatal("GEN did not emit the pure Go mutator")
+	if generated.Result.Plan.MutationHandler != nil || generated.Result.Plan.VeltyHandler != nil || generated.Result.Plan.Settings.Mutation != "patch" {
+		t.Fatal("GEN did not emit universal writer metadata")
 	}
 	directory := filepath.Join(root, strings.TrimPrefix(generated.Package.PkgPath, "github.com/viant/datly/genbatch/"))
 	genpatch.Run(t, root, directory, genpatch.BatchRuntimeSource, "-v")

@@ -231,8 +231,18 @@ SELECT 1`
 	}
 }
 
+func TestPrepareSourceInfersImportAliasFromPackageFolder(t *testing.T) {
+	prepared := PrepareSource("#import('github.com/viant/xdatly/response')\nSELECT 1")
+	if err := prepared.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if prepared.TypeContext == nil || len(prepared.TypeContext.Imports) != 1 || prepared.TypeContext.Imports[0].Alias != "response" || prepared.TypeContext.Imports[0].Package != "github.com/viant/xdatly/response" {
+		t.Fatalf("imports = %#v", prepared.TypeContext)
+	}
+}
+
 func TestPrepareSourceOrdersAllDiagnosticsByAuthoredOffset(t *testing.T) {
-	source := `#import('model')
+	source := `#import()
 #setting($_ = $route('relative'))
 SELECT 1`
 	prepared := PrepareSource(source)
@@ -300,7 +310,7 @@ func TestPrepareSourcePreservesHandlerSetLogic(t *testing.T) {
 }
 
 func TestPrepareSourceReportsInvalidImportAtAuthoredOffset(t *testing.T) {
-	source := "  #import('model')\nSELECT 1"
+	source := "  #import()\nSELECT 1"
 	prepared := PrepareSource(source)
 	if len(prepared.Diagnostics) != 1 {
 		t.Fatalf("expected one diagnostic, got %#v", prepared.Diagnostics)
@@ -348,7 +358,7 @@ func TestPrepareSourceMasksMalformedMultilineDirectiveRemainder(t *testing.T) {
 }
 
 func TestPrepareSourcePreservesCRLFAndUnicodeByteOffsets(t *testing.T) {
-	source := "-- café\r\n\t#import('model')\r\nSELECT 1"
+	source := "-- café\r\n\t#import()\r\nSELECT 1"
 	prepared := PrepareSource(source)
 	if len(prepared.Diagnostics) != 1 {
 		t.Fatalf("diagnostics = %#v", prepared.Diagnostics)

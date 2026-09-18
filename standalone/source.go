@@ -37,6 +37,8 @@ type source struct {
 	codecFactories map[string]xcodec.Factory
 	registry       *x.Registry
 	http           gateway.Config
+	holders        []any
+	requireLinked  bool
 }
 
 func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
@@ -54,7 +56,7 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 			return nil, err
 		}
 	}
-	snapshot, err := (bootstrapindex.Builder{Config: bootstrapindex.Config{Workspace: workspace, BaseDir: s.config.BaseDir, ModuleDirs: s.config.ModuleDirs, Include: s.config.GoBootstrap.Packages, Exclude: s.config.GoBootstrap.Exclude, Types: types}}).Build(ctx)
+	snapshot, err := (bootstrapindex.Builder{Config: bootstrapindex.Config{Workspace: workspace, BaseDir: s.config.BaseDir, ModuleDirs: s.config.ModuleDirs, Include: s.config.GoBootstrap.Packages, Exclude: s.config.GoBootstrap.Exclude, Types: types, Holders: s.holders, RequireLinked: s.requireLinked}}).Build(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +72,7 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 			packages = append(packages, scope)
 		}
 	}
-	assets, err := (packageresources.Loader{Workspace: workspace, Packages: packages}).Load(ctx)
+	assets, err := (packageresources.Loader{Workspace: workspace, Packages: packages, Holders: s.holders}).Load(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +148,7 @@ func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (
 	if s.config.GoBootstrap == nil || len(s.config.GoBootstrap.Packages) == 0 {
 		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Version: s.config.Version}, nil
 	}
-	discovery := transcribe.Discovery{Const: s.config.Const, Workspace: s.Workspace, BaseDir: s.config.BaseDir, ModuleDirs: s.config.ModuleDirs, Include: s.config.GoBootstrap.Packages, Exclude: s.config.GoBootstrap.Exclude, Connector: s.config.Connector, Types: types, Registry: s.registry}
+	discovery := transcribe.Discovery{Const: s.config.Const, Workspace: s.Workspace, BaseDir: s.config.BaseDir, ModuleDirs: s.config.ModuleDirs, Include: s.config.GoBootstrap.Packages, Exclude: s.config.GoBootstrap.Exclude, Connector: s.config.Connector, Types: types, Registry: s.registry, Holders: s.holders, RequireLinked: s.requireLinked}
 	project, err := discovery.Compile(ctx)
 	if err != nil {
 		return nil, err

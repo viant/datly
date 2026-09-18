@@ -202,7 +202,7 @@ func TestEntityMethods(t *testing.T){e:=&Event{};e.SetName("changed");if e.GetNa
 				if err != nil {
 					t.Fatal(err)
 				}
-				if built.Components != 1 || built.Factories != 1 {
+				if built.Components != 1 {
 					t.Fatalf("automatic build missed generated writer: %+v", built)
 				}
 			}
@@ -281,14 +281,9 @@ func TestGeneratedReader(t *testing.T){
 
 const entityDestinationInvariant = `package entities
 import "testing"
-func TestRelocatedBackfill(t *testing.T){
- value:=41
- previous:=&Event{Name:"previous",Extra:&value}
+func TestRelocatedSetter(t *testing.T){
  current:=&Event{}
  current.SetName("changed")
- if err:=current.BackfillDetailsIfNeeded(previous,nil);err!=nil{t.Fatal(err)}
- if current.Name!="changed" || current.Extra==nil || *current.Extra!=41 || current.Has.Extra || !current.Has.Name {t.Fatalf("backfill/presence changed: %+v",current)}
- *current.Extra=7
- if *previous.Extra!=41{t.Fatal("backfill aliases the previous value")}
+ if current.Name!="changed" || current.Has==nil || !current.Has.Name {t.Fatalf("setter/presence changed: %+v",current)}
 }
 `

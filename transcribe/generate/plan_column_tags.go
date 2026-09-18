@@ -14,6 +14,10 @@ func scalarColumnFieldTag(column *spec.Column, source string, includeVelty bool)
 	parsed := tags.NewTags(strings.TrimSpace(column.Tag))
 	if column.DeleteMarker {
 		parsed.Set(sqlio.TagSqlx, "-")
+		parsed.Set("writer", "delete")
+	}
+	if column.ConcurrencyToken {
+		parsed.Set("writer", "concurrency")
 	}
 	sqlxTag := parsed.Lookup(sqlio.TagSqlx)
 	if sqlxTag == nil {
@@ -44,6 +48,10 @@ func scalarColumnFieldTag(column *spec.Column, source string, includeVelty bool)
 	}
 	if column.Unique && !metadata.IsUnique && !hasSQLXOption(sqlxTag.Values, "unique", "uniqueDep") {
 		sqlxTag.Append("unique=true")
+	}
+	databaseType := strings.ToUpper(strings.TrimSpace(column.DatabaseType))
+	if strings.Contains(databaseType, "JSON") && metadata.Encoding == "" && !hasSQLXOption(sqlxTag.Values, "enc") {
+		sqlxTag.Append("enc=JSON")
 	}
 	return withVeltyNames(parsed.Stringify(), source, typecatalog.FieldName(column.Name), includeVelty)
 }

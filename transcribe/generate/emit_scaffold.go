@@ -12,6 +12,15 @@ type EmittedFile struct {
 }
 
 func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
+	return emitScaffold(dir, plan, false)
+}
+
+// EmitScaffoldEphemeral emits a staging package without any ownership sidecar.
+func EmitScaffoldEphemeral(dir string, plan *Plan) ([]EmittedFile, error) {
+	return emitScaffold(dir, plan, true)
+}
+
+func emitScaffold(dir string, plan *Plan, ephemeral bool) ([]EmittedFile, error) {
 	if plan != nil && plan.MutationHandler == nil && plan.lifecycleTargetError != nil {
 		return nil, plan.lifecycleTargetError
 	}
@@ -28,7 +37,7 @@ func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
 		if err != nil {
 			return nil, err
 		}
-		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: userFiles, removals: removals, plan: p}
+		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: userFiles, removals: removals, plan: p, ephemeral: ephemeral}
 		if err = persistence.Commit(); err != nil {
 			return nil, err
 		}
@@ -47,6 +56,20 @@ func (p *Plan) ValidateDestination(dir string) error {
 		return err
 	}
 	return packages.validate()
+}
+
+// ValidateDestinationEphemeral validates a prospective generated layout and
+// imports without applying persistence ownership checks. It is for read-only
+// project validation; real transcription still calls ValidateDestination.
+func (p *Plan) ValidateDestinationEphemeral(dir string) error {
+	if p != nil && p.MutationHandler == nil && p.lifecycleTargetError != nil {
+		return p.lifecycleTargetError
+	}
+	packages, err := p.packages(dir)
+	if err != nil {
+		return err
+	}
+	return packages.validateEphemeral()
 }
 
 func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []string, error) {
@@ -125,6 +148,9 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 				plan.Input.Type, plan.Input.Fields, plan.Imports,
 			),
 		})
+		if setters := inputSetterFile(packageName, plan.Input.Type, plan.Input.Fields, plan.Imports); setters != "" {
+			files = append(files, EmittedFile{Path: filepath.Join(dir, plan.Generation.File("input_setters", "input_setters.go")), Content: setters})
+		}
 	}
 	if plan.Output.Ownership == ContractGenerated && plan.localShape(plan.Output.Package) {
 		files = append(files, EmittedFile{

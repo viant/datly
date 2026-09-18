@@ -28,6 +28,16 @@ type ReadIndexAsset struct {
 
 type readIndexEmitter struct{ previousEmitter }
 
+// ReadIndexes emits only the public typed read-index support used by input and
+// entity hooks. It does not emit a component-specific mutation program.
+func ReadIndexes(value *plan.Plan, config Config) (*ReadIndexAsset, error) {
+	l := &lowerer{plan: value, config: config}
+	if err := l.prepare(); err != nil {
+		return nil, err
+	}
+	return l.readIndexes()
+}
+
 func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 	if len(l.plan.ReadCollections) == 0 {
 		return nil, nil
