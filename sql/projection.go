@@ -46,6 +46,36 @@ func (p *Projection) OutputControls(controls *spec.ViewControls) (*spec.ViewCont
 	return result, nil
 }
 
+// GroupedOutputControls drops inherited ordering that is no longer valid after
+// grouped projection reduction. Explicit selector ordering is validated before
+// controls are merged, so this is only for default/source controls.
+func (p *Projection) GroupedOutputControls(controls *spec.ViewControls) (*spec.ViewControls, error) {
+	if controls == nil || strings.TrimSpace(controls.OrderBy) == "" {
+		return controls, nil
+	}
+	selectStmt, err := sqlparser.ParseQuery(p.Source)
+	if err != nil || selectStmt == nil || len(selectStmt.List) == 0 {
+		return nil, fmt.Errorf("grouped projection order cannot be resolved")
+	}
+	parsed, err := sqlparser.ParseQuery("SELECT 1 FROM grouped_projection_order ORDER BY " + controls.OrderBy)
+	if err != nil || parsed == nil || len(parsed.OrderBy) == 0 || parsed.Limit != nil || parsed.Offset != nil || parsed.Union != nil {
+		return nil, fmt.Errorf("grouped projection order cannot be resolved")
+	}
+	filtered := filterGroupedOrderBy(parsed.OrderBy, selectStmt.List)
+	if len(filtered) == len(parsed.OrderBy) {
+		return controls, nil
+	}
+	result := controls.Clone()
+	result.OrderBy = ""
+	if len(filtered) > 0 {
+		result.OrderBy = sqlparser.Stringify(filtered)
+	}
+	if result.IsZero() {
+		return nil, nil
+	}
+	return result, nil
+}
+
 func (p *Projection) outputOrderExpression(value node.Node) (node.Node, error) {
 	switch actual := value.(type) {
 	case *expr.Literal:

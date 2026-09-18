@@ -68,6 +68,13 @@ func filterGroupedOrderBy(orderBy query.List, items query.List) query.List {
 		if item == nil || item.Expr == nil {
 			continue
 		}
+		if literal, ok := item.Expr.(*expr.Literal); ok && literal.Kind == "int" {
+			position, err := strconv.Atoi(literal.Value)
+			if err == nil && position >= 1 && position <= len(items) {
+				result = append(result, item)
+			}
+			continue
+		}
 		if allowed[normalizeExpression(sqlparser.Stringify(item.Expr))] {
 			result = append(result, item)
 		}

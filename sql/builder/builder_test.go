@@ -675,6 +675,87 @@ func TestBuilder_Build_GroupedProjectionRewritesGroupByAndOrderBy(t *testing.T) 
 	)
 }
 
+func TestBuilder_Build_GroupedProjectionDropsInvalidDefaultOrderBy(t *testing.T) {
+	type input struct{}
+	limit := 20
+
+	query, err := NewBuilder().Build(
+		context.Background(),
+		WithBuilderSQL("SELECT ad_order_id, audience_id, COUNT(DISTINCT audience_id) AS audience_count FROM audiences GROUP BY ad_order_id, audience_id"),
+		WithBuilderView(resolvedGroupableView()),
+		WithBuilderControls(&spec.ViewControls{OrderBy: "audience_id DESC", Limit: &limit}),
+		WithBuilderProjection([]string{"ad_order_id", "audience_count"}),
+		WithBuilderInput(reflect.ValueOf(input{})),
+	)
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+
+	assertly.AssertValues(t,
+		normalizeSQLForAssert("SELECT ad_order_id, COUNT(DISTINCT audience_id) AS audience_count FROM audiences GROUP BY 1 LIMIT 20"),
+		normalizeSQLForAssert(query.SQL),
+	)
+}
+
+func TestBuilder_Build_GroupedProjectionKeepsValidDefaultOrderBy(t *testing.T) {
+	type input struct{}
+
+	query, err := NewBuilder().Build(
+		context.Background(),
+		WithBuilderSQL("SELECT ad_order_id, audience_id, COUNT(DISTINCT audience_id) AS audience_count FROM audiences GROUP BY ad_order_id, audience_id"),
+		WithBuilderView(resolvedGroupableView()),
+		WithBuilderControls(&spec.ViewControls{OrderBy: "ad_order_id DESC"}),
+		WithBuilderProjection([]string{"ad_order_id", "audience_count"}),
+		WithBuilderInput(reflect.ValueOf(input{})),
+	)
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+
+	assertly.AssertValues(t,
+		normalizeSQLForAssert("SELECT ad_order_id, COUNT(DISTINCT audience_id) AS audience_count FROM audiences GROUP BY 1 ORDER BY ad_order_id DESC"),
+		normalizeSQLForAssert(query.SQL),
+	)
+}
+
+func TestBuilder_Build_GroupedProjectionKeepsValidDefaultPositionalOrderBy(t *testing.T) {
+	type input struct{}
+
+	query, err := NewBuilder().Build(
+		context.Background(),
+		WithBuilderSQL("SELECT ad_order_id, audience_id, COUNT(DISTINCT audience_id) AS audience_count FROM audiences GROUP BY ad_order_id, audience_id"),
+		WithBuilderView(resolvedGroupableView()),
+		WithBuilderControls(&spec.ViewControls{OrderBy: "1 DESC"}),
+		WithBuilderProjection([]string{"ad_order_id", "audience_count"}),
+		WithBuilderInput(reflect.ValueOf(input{})),
+	)
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+
+	assertly.AssertValues(t,
+		normalizeSQLForAssert("SELECT ad_order_id, COUNT(DISTINCT audience_id) AS audience_count FROM audiences GROUP BY 1 ORDER BY 1 DESC"),
+		normalizeSQLForAssert(query.SQL),
+	)
+}
+
+func TestBuilder_Build_GroupedProjectionRejectsExplicitOrderByPrunedDimension(t *testing.T) {
+	type input struct{}
+
+	_, err := NewBuilder().Build(
+		context.Background(),
+		WithBuilderSQL("SELECT ad_order_id, audience_id, COUNT(DISTINCT audience_id) AS audience_count FROM audiences GROUP BY ad_order_id, audience_id"),
+		WithBuilderView(resolvedGroupableView()),
+		WithBuilderSelector(&xstate.Selector{OrderBy: "audience_id DESC"}),
+		WithBuilderSelectorPolicy(&spec.Selector{AllowOrderBy: true}),
+		WithBuilderProjection([]string{"ad_order_id", "audience_count"}),
+		WithBuilderInput(reflect.ValueOf(input{})),
+	)
+	if err == nil || !strings.Contains(err.Error(), `order by field "audience_id" is not selected in grouped projection`) {
+		t.Fatalf("expected explicit grouped order rejection, got %v", err)
+	}
+}
+
 func resolvedGroupableView() *data.View {
 	groupable := true
 	return data.FromComponent(&spec.Component{RootView: &spec.View{Groupable: &groupable}})

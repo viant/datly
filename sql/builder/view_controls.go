@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"strings"
+
 	"github.com/viant/datly/spec"
 	xstate "github.com/viant/xdatly/state"
 )
@@ -64,4 +66,11 @@ func NonWindowSelector(selector *xstate.Selector) *xstate.Selector {
 	cloned.Offset = 0
 	cloned.Page = 0
 	return &cloned
+}
+
+func shouldFilterDefaultGroupedOrder(options *builderOptions) bool {
+	if options == nil || len(options.projection) == 0 || options.view == nil || !options.view.IsGroupable() {
+		return false
+	}
+	return options.selector == nil || strings.TrimSpace(options.selector.OrderBy) == ""
 }

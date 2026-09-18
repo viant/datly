@@ -205,6 +205,9 @@ func (r selectorResolver) orderBy(source string) (string, error) {
 					}
 				}
 				if !retained {
+					if r.view != nil && r.view.IsGroupable() {
+						return "", fmt.Errorf("order by field %q is not selected in grouped projection", name)
+					}
 					name = matched.SourceExpression()
 				}
 			}

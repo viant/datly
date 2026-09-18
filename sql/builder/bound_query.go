@@ -44,6 +44,12 @@ func (b *Builder) ShapeBound(query *cache.ParmetrizedQuery, opts ...BuilderOptio
 	if err != nil {
 		return nil, err
 	}
+	if shouldFilterDefaultGroupedOrder(options) {
+		controls, err = projection.GroupedOutputControls(controls)
+		if err != nil {
+			return nil, err
+		}
+	}
 	sqlText := projection.Source
 	hadCriteriaToken := containsSelectorCriteriaToken(sqlText)
 	boundSQL, args, err := bindSelectorCriteriaSQL(sqlText, resolver, options.selector, positionalArgs)

@@ -225,6 +225,12 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	if err != nil {
 		return nil, err
 	}
+	if shouldFilterDefaultGroupedOrder(options) {
+		controls, err = projection.GroupedOutputControls(controls)
+		if err != nil {
+			return nil, err
+		}
+	}
 	sqlText := projection.Source
 	hadExplicitSelectorCriteria := containsSelectorCriteriaToken(sqlText)
 	boundSQL, args, err := bindSelectorCriteriaSQL(sqlText, resolver, options.selector, bindingPositionalArgs)
