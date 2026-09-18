@@ -83,6 +83,9 @@ func (s *Session) Init() error {
 		if err == nil {
 			err = s.outputAccessors.compileMetrics(s.Artifact.OutputMetricsField, s.OutputType)
 		}
+		if err == nil && !s.Artifact.DirectOutput {
+			err = s.outputAccessors.compileStatus(s.Artifact.OutputStatusField, s.OutputType)
+		}
 		if err != nil {
 			return err
 		}

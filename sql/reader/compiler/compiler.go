@@ -122,6 +122,7 @@ func (b *planCompiler) Compile() (*sqlreader.Plan, error) {
 		ViewIndex:          viewIndex,
 		OutputViewField:    directViewField,
 		OutputMetricsField: ResolveOutputField(b.input.Component, b.input.OutputType, MetricsSlot),
+		OutputStatusField:  ResolveOutputField(b.input.Component, b.input.OutputType, StatusSlot),
 		DirectOutput:       b.input.DirectViewType != nil,
 		RootView:           view,
 		Templates:          programs,

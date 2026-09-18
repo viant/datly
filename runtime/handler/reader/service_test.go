@@ -371,7 +371,7 @@ func TestService_Read_NoViewSlotReturnsTypedOutput(t *testing.T) {
 		t.Fatalf("read failed: %v", err)
 	}
 
-	assertly.AssertValues(t, &output{}, actual)
+	assertly.AssertValues(t, &output{Status: "ok"}, actual)
 }
 
 func TestService_Read_ReturnsNilWhenOutputTypeIsNil(t *testing.T) {

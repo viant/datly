@@ -42,6 +42,7 @@ type Plan struct {
 	ViewIndex          *ViewIndex
 	OutputViewField    string
 	OutputMetricsField string
+	OutputStatusField  string
 	DirectOutput       bool
 	Root               *ViewPlan
 
@@ -56,6 +57,7 @@ type PlanConfig struct {
 	ViewIndex          *ViewIndex
 	OutputViewField    string
 	OutputMetricsField string
+	OutputStatusField  string
 	DirectOutput       bool
 	RootView           *data.View
 	Templates          map[*data.View]sqltemplate.Evaluator
@@ -81,6 +83,7 @@ func NewPlan(config PlanConfig) (*Plan, error) {
 		ViewIndex:          config.ViewIndex,
 		OutputViewField:    config.OutputViewField,
 		OutputMetricsField: config.OutputMetricsField,
+		OutputStatusField:  config.OutputStatusField,
 		DirectOutput:       config.DirectOutput,
 		Root:               root,
 		views:              views,

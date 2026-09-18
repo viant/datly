@@ -73,6 +73,9 @@ func (s *Service) Read(ctx context.Context, session *Session, input any, binder 
 	if err == nil {
 		err = session.outputAccessors.writeMetrics(actual, session.Metrics)
 	}
+	if err == nil && !session.DryRun {
+		err = session.outputAccessors.writeSuccess(actual)
+	}
 	if err == nil && !session.DryRun && dexec.WantsOutputSelection(ctx) {
 		filter, selectionErr := session.selectedOutput(selectors)
 		if selectionErr != nil {

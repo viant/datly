@@ -13,6 +13,8 @@ import (
 type outputAccessors struct {
 	fields  map[*RelationPlan]*xshape.Accessor
 	metrics *xshape.Accessor
+	status  *xshape.Accessor
+	success any
 }
 
 func (p *Plan) compileOutputAccessors(outputType reflect.Type) (*outputAccessors, error) {
