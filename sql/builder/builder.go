@@ -181,6 +181,36 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 		return nil, err
 	}
 	sourceSQL := options.sqlText
+	relationFilter := relationFilter{
+		relation: options.relation, positionalArgs: options.positionalArgs,
+		compositeColumns: options.compositeColumns, compositeRows: options.compositeRows, dialect: options.dialect,
+	}
+	compositeInjected := prepared.compositeInjected
+	if !options.skipRelationFilter && !prepared.parentHandled && !compositeInjected {
+		sourceSQL, compositeInjected = relationFilter.applyColumnIn(sourceSQL, prepared.hadRelationCriteria)
+	}
+	bindingPositionalArgs := options.positionalArgs
+	if len(options.templateArgs) > 0 || options.templateParentBindings {
+		bindingPositionalArgs = options.templateArgs
+	} else if prepared.macroCount > 0 {
+		bindingPositionalArgs = prepared.macroArgs
+	}
+	if len(options.compositeColumns) > 0 && (compositeInjected || prepared.hadRelationCriteria) {
+		bindingPositionalArgs = flattenCompositeArgs(options.compositeRows)
+	}
+	if len(bindingPositionalArgs) > 0 {
+		sourceSQL = expandPositionalInClause(sourceSQL, len(bindingPositionalArgs))
+	}
+	resolver := options.parameterResolver
+	if len(options.projection) > 0 {
+		// Name positional bindings before projection can remove, duplicate or move
+		// their expressions. Only surviving names are bound in the rewritten SQL.
+		sourceSQL, resolver, err = nameProjectionBindings(sourceSQL, bindingPositionalArgs, resolver)
+		if err != nil {
+			return nil, err
+		}
+		bindingPositionalArgs = nil
+	}
 	if options.selector != nil && strings.TrimSpace(options.selector.OrderBy) != "" && len(options.projection) == 0 {
 		sourceSQL, err = (dsql.SelectorProjection{SQL: sourceSQL, View: options.view}).Expand()
 		if err != nil {
@@ -196,33 +226,8 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 		return nil, err
 	}
 	sqlText := projection.Source
-	relationFilter := relationFilter{
-		relation: options.relation, positionalArgs: options.positionalArgs,
-		compositeColumns: options.compositeColumns, compositeRows: options.compositeRows, dialect: options.dialect,
-	}
-	compositeInjected := prepared.compositeInjected
-	if !options.skipRelationFilter && !prepared.parentHandled && !compositeInjected {
-		sqlText, compositeInjected = relationFilter.applyColumnIn(sqlText, prepared.hadRelationCriteria)
-	}
-
 	hadExplicitSelectorCriteria := containsSelectorCriteriaToken(sqlText)
-	bindingPositionalArgs := options.positionalArgs
-	if len(options.templateArgs) > 0 || options.templateParentBindings {
-		bindingPositionalArgs = options.templateArgs
-	} else if prepared.macroCount > 0 {
-		bindingPositionalArgs = prepared.macroArgs
-	}
-	if len(options.compositeColumns) > 0 && (compositeInjected || prepared.hadRelationCriteria) {
-		bindingPositionalArgs = flattenCompositeArgs(options.compositeRows)
-	}
-	var (
-		boundSQL string
-		args     []any
-	)
-	if len(bindingPositionalArgs) > 0 {
-		sqlText = expandPositionalInClause(sqlText, len(bindingPositionalArgs))
-	}
-	boundSQL, args, err = bindSelectorCriteriaSQL(sqlText, options.parameterResolver, options.selector, bindingPositionalArgs)
+	boundSQL, args, err := bindSelectorCriteriaSQL(sqlText, resolver, options.selector, bindingPositionalArgs)
 	if err != nil {
 		return nil, err
 	}

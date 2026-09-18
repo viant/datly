@@ -26,7 +26,17 @@ func (b *Builder) ShapeBound(query *cache.ParmetrizedQuery, opts ...BuilderOptio
 	if err := b.validateProjection(options); err != nil {
 		return nil, err
 	}
-	projection, err := (dsql.SelectorProjection{SQL: options.sqlText, View: options.view}).Prepare(options.projection)
+	sourceSQL := options.sqlText
+	positionalArgs := interfaceSlice(query.Args)
+	resolver := options.parameterResolver
+	if len(options.projection) > 0 {
+		sourceSQL, resolver, err = nameProjectionBindings(sourceSQL, positionalArgs, resolver)
+		if err != nil {
+			return nil, err
+		}
+		positionalArgs = nil
+	}
+	projection, err := (dsql.SelectorProjection{SQL: sourceSQL, View: options.view}).Prepare(options.projection)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +46,7 @@ func (b *Builder) ShapeBound(query *cache.ParmetrizedQuery, opts ...BuilderOptio
 	}
 	sqlText := projection.Source
 	hadCriteriaToken := containsSelectorCriteriaToken(sqlText)
-	boundSQL, args, err := bindSelectorCriteriaSQL(sqlText, options.parameterResolver, options.selector, interfaceSlice(query.Args))
+	boundSQL, args, err := bindSelectorCriteriaSQL(sqlText, resolver, options.selector, positionalArgs)
 	if err != nil {
 		return nil, err
 	}
