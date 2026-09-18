@@ -74,6 +74,18 @@ func editView(source string, operation OperationType, mutation *ViewMutation) (s
 }
 
 func validateOperationResult(operation Operation, structure *Structure) error {
+	if operation.Type == OperationUpdateRelation && operation.Relation != nil {
+		if structure == nil || structure.Component == nil || structure.Component.RootView == nil {
+			return fmt.Errorf("updated relation graph is unavailable")
+		}
+		relation := findRelation(structure.Component.RootView, operation.Relation.Name)
+		if relation == nil {
+			return fmt.Errorf("updated relation %q did not compile", operation.Relation.Name)
+		}
+		if !strings.EqualFold(strings.TrimSpace(relation.ParentNamespace), strings.TrimSpace(operation.Relation.Parent)) {
+			return fmt.Errorf("updated relation %q resolved parent %q, expected %q", operation.Relation.Name, relation.ParentNamespace, operation.Relation.Parent)
+		}
+	}
 	if (operation.Type == OperationAddFieldPredicate || operation.Type == OperationUpdateFieldPredicate) && operation.Predicate != nil && structure != nil {
 		intended := operation.Predicate.ExpansionViews
 		if len(intended) == 0 {

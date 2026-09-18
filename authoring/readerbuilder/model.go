@@ -25,6 +25,7 @@ const (
 	OperationAddView              OperationType = "addView"
 	OperationUpdateView           OperationType = "updateView"
 	OperationRemoveView           OperationType = "removeView"
+	OperationUpdateRelation       OperationType = "updateRelation"
 )
 
 type Request struct {
@@ -40,6 +41,7 @@ type Operation struct {
 	Function  *FunctionMutation  `json:"function,omitempty"`
 	Setting   *SettingMutation   `json:"setting,omitempty"`
 	View      *ViewMutation      `json:"view,omitempty"`
+	Relation  *RelationMutation  `json:"relation,omitempty"`
 }
 
 // ReaderMutation defines the initial typed root graph. The reader builder owns
@@ -100,6 +102,12 @@ type ViewMutation struct {
 	Parent   string            `json:"parent,omitempty"`
 	Join     string            `json:"join,omitempty"`
 	On       string            `json:"on,omitempty"`
+}
+
+type RelationMutation struct {
+	Name   string `json:"name"`
+	Parent string `json:"parent"`
+	On     string `json:"on"`
 }
 
 type Response struct {

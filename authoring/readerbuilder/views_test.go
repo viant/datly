@@ -99,3 +99,30 @@ func TestServiceDerivedViewRejectsJoinAndNestedParent(t *testing.T) {
 		}
 	}
 }
+
+func TestServiceUpdatesRelationParentAndCompositeKeys(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+SELECT records.*,items.*,notes.* FROM (SELECT id,tenant_id FROM records) records
+JOIN (SELECT id,record_id,tenant_id FROM items) items ON items.record_id=records.id AND items.tenant_id=records.tenant_id
+JOIN (SELECT id,item_id,tenant_id FROM notes) notes ON notes.tenant_id=records.tenant_id AND notes.item_id=records.id`
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateRelation, Relation: &RelationMutation{
+		Name: "notes", Parent: "items", On: "notes.item_id=items.id AND notes.tenant_id=items.tenant_id",
+	}}})
+	if !response.Applied || len(response.Diagnostics) != 0 || !strings.Contains(response.DQL, "ON notes.item_id=items.id AND notes.tenant_id=items.tenant_id") {
+		t.Fatalf("response=%+v", response)
+	}
+	items := findRelation(response.Structure.Component.RootView, "items")
+	if items == nil || len(items.View.Relations) != 1 || items.View.Relations[0].Name != "notes" || len(items.View.Relations[0].On) != 2 {
+		t.Fatalf("items=%+v", items)
+	}
+}
+
+func TestServiceUpdateRelationRollsBackWrongParent(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+SELECT records.*,items.* FROM (SELECT id FROM records) records
+JOIN (SELECT id,record_id FROM items) items ON items.record_id=records.id`
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateRelation, Relation: &RelationMutation{Name: "items", Parent: "missing", On: "items.record_id=records.id"}}})
+	if response.Applied || response.DQL != source || len(response.Diagnostics) == 0 {
+		t.Fatalf("response=%+v", response)
+	}
+}
