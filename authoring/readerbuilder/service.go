@@ -132,6 +132,8 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 		return source, nil
 	case OperationCreateReader:
 		return s.createReader(source, operation.Reader)
+	case OperationSetPackage:
+		return dql.SetPackage(source, operation.Package.Path, operation.Package.Expected)
 	case OperationAddField:
 		return addField(source, operation.Field)
 	case OperationUpdateField, OperationRemoveField:
@@ -155,7 +157,7 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 
 func (o Operation) validate() error {
 	payloads := 0
-	for _, present := range []bool{o.Reader != nil, o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil, o.Relation != nil, o.ColumnRole != nil} {
+	for _, present := range []bool{o.Reader != nil, o.Package != nil, o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil, o.Relation != nil, o.ColumnRole != nil} {
 		if present {
 			payloads++
 		}
@@ -172,6 +174,10 @@ func (o Operation) validate() error {
 	case OperationCreateReader:
 		if o.Reader == nil {
 			return fmt.Errorf("operation %q requires reader", o.Type)
+		}
+	case OperationSetPackage:
+		if o.Package == nil || strings.TrimSpace(o.Package.Path) == "" {
+			return fmt.Errorf("operation %q requires package path", o.Type)
 		}
 	case OperationAddField, OperationUpdateField, OperationRemoveField:
 		if o.Field == nil {

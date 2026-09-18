@@ -242,6 +242,18 @@ func TestServiceRejectsIncompleteInlineCache(t *testing.T) {
 	}
 }
 
+func TestServiceSetsPackageWithExpectedAuthority(t *testing.T) {
+	source := `#package('example.com/old/reader')
+#setting($_ = $route('/records','GET'))
+SELECT records.* FROM (SELECT id FROM records) records`
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{
+		Type: OperationSetPackage, Package: &PackageMutation{Path: "example.com/users/alice/reader", Expected: "example.com/old/reader"},
+	}})
+	if !response.Applied || response.Structure == nil || response.Structure.Component == nil || response.Structure.Component.TypeContext.PackagePath != "example.com/users/alice/reader" {
+		t.Fatalf("response=%+v", response)
+	}
+}
+
 func TestServiceAddsQuerySelectorField(t *testing.T) {
 	optional := false
 	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: baseDQL, Operation: Operation{

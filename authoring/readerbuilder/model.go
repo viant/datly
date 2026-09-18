@@ -12,6 +12,7 @@ type OperationType string
 const (
 	OperationInspect              OperationType = "inspect"
 	OperationCreateReader         OperationType = "createReader"
+	OperationSetPackage           OperationType = "setPackage"
 	OperationAddField             OperationType = "addField"
 	OperationUpdateField          OperationType = "updateField"
 	OperationRemoveField          OperationType = "removeField"
@@ -37,6 +38,7 @@ type Request struct {
 type Operation struct {
 	Type       OperationType       `json:"type"`
 	Reader     *ReaderMutation     `json:"reader,omitempty"`
+	Package    *PackageMutation    `json:"package,omitempty"`
 	Field      *Field              `json:"field,omitempty"`
 	Predicate  *PredicateMutation  `json:"predicate,omitempty"`
 	Function   *FunctionMutation   `json:"function,omitempty"`
@@ -44,6 +46,11 @@ type Operation struct {
 	View       *ViewMutation       `json:"view,omitempty"`
 	Relation   *RelationMutation   `json:"relation,omitempty"`
 	ColumnRole *ColumnRoleMutation `json:"columnRole,omitempty"`
+}
+
+type PackageMutation struct {
+	Path     string `json:"path"`
+	Expected string `json:"expected,omitempty"`
 }
 
 // ReaderMutation defines the initial typed root graph. The reader builder owns
