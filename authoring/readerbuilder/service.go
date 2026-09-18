@@ -130,6 +130,8 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 	switch operation.Type {
 	case OperationInspect:
 		return source, nil
+	case OperationCreateReader:
+		return s.createReader(source, operation.Reader)
 	case OperationAddField:
 		return addField(source, operation.Field)
 	case OperationAddFieldPredicate, OperationUpdateFieldPredicate, OperationRemoveFieldPredicate:
@@ -147,7 +149,7 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 
 func (o Operation) validate() error {
 	payloads := 0
-	for _, present := range []bool{o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil} {
+	for _, present := range []bool{o.Reader != nil, o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil} {
 		if present {
 			payloads++
 		}
@@ -161,6 +163,10 @@ func (o Operation) validate() error {
 	}
 	switch o.Type {
 	case OperationInspect:
+	case OperationCreateReader:
+		if o.Reader == nil {
+			return fmt.Errorf("operation %q requires reader", o.Type)
+		}
 	case OperationAddField:
 		if o.Field == nil {
 			return fmt.Errorf("operation %q requires field", o.Type)

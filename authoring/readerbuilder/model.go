@@ -11,6 +11,7 @@ type OperationType string
 
 const (
 	OperationInspect              OperationType = "inspect"
+	OperationCreateReader         OperationType = "createReader"
 	OperationAddField             OperationType = "addField"
 	OperationAddFieldPredicate    OperationType = "addFieldPredicate"
 	OperationUpdateFieldPredicate OperationType = "updateFieldPredicate"
@@ -31,11 +32,24 @@ type Request struct {
 
 type Operation struct {
 	Type      OperationType      `json:"type"`
+	Reader    *ReaderMutation    `json:"reader,omitempty"`
 	Field     *Field             `json:"field,omitempty"`
 	Predicate *PredicateMutation `json:"predicate,omitempty"`
 	Function  *FunctionMutation  `json:"function,omitempty"`
 	Setting   *SettingMutation   `json:"setting,omitempty"`
 	View      *ViewMutation      `json:"view,omitempty"`
+}
+
+// ReaderMutation defines the initial typed root graph. The reader builder owns
+// DQL rendering and compilation; clients provide author intent, not DQL text.
+type ReaderMutation struct {
+	Package    string `json:"package"`
+	Connector  string `json:"connector"`
+	Route      string `json:"route"`
+	Name       string `json:"name"`
+	TypeName   string `json:"typeName,omitempty"`
+	OutputName string `json:"outputName,omitempty"`
+	SQL        string `json:"sql"`
 }
 
 type Field struct {
