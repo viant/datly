@@ -49,6 +49,10 @@ func scalarColumnFieldTag(column *spec.Column, source string, includeVelty bool)
 	if column.Unique && !metadata.IsUnique && !hasSQLXOption(sqlxTag.Values, "unique", "uniqueDep") {
 		sqlxTag.Append("unique=true")
 	}
+	databaseType := strings.ToUpper(strings.TrimSpace(column.DatabaseType))
+	if strings.Contains(databaseType, "JSON") && metadata.Encoding == "" && !hasSQLXOption(sqlxTag.Values, "enc") {
+		sqlxTag.Append("enc=JSON")
+	}
 	return withVeltyNames(parsed.Stringify(), source, typecatalog.FieldName(column.Name), includeVelty)
 }
 
