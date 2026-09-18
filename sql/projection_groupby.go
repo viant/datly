@@ -116,6 +116,10 @@ func containsAggregateNode(n node.Node) bool {
 		return containsAggregateNode(actual.X)
 	case *expr.Subscript:
 		return containsAggregateNode(actual.X) || containsAggregateNode(actual.Index)
+	case *expr.FieldAccess:
+		return containsAggregateNode(actual.X)
+	case *expr.NullTreatment:
+		return containsAggregateNode(actual.X)
 	case *expr.Unary:
 		return containsAggregateNode(actual.X)
 	case *expr.Binary:

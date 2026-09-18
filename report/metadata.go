@@ -84,7 +84,7 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 	for _, inputField := range contract.Fields() {
 		binding := inputField.Binding()
 		param, ok := binding.Extension.(*spec.Parameter)
-		if !ok || param == nil || len(param.Predicates) == 0 || param.QuerySelector != nil {
+		if !ok || param == nil || len(param.Predicates) == 0 || param.QuerySelector != nil || !param.Source.RequestValue() {
 			continue
 		}
 		name := strings.TrimSpace(param.Name)
