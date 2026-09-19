@@ -148,6 +148,7 @@ type Route struct {
 	Method       string         `json:"method"`
 	Path         string         `json:"path"`
 	Name         string         `json:"name,omitempty"`
+	Internal     bool           `json:"internal,omitempty"`
 	Marshaller   string         `json:"marshaller,omitempty"`
 	Handler      string         `json:"handler,omitempty"`
 	APIKeyHeader string         `json:"apiKeyHeader,omitempty"`

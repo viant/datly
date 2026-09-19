@@ -30,6 +30,7 @@ type Runtime struct {
 	registered         map[string]*RegisteredComponent
 	metadata           map[string]*spec.Component
 	loader             ComponentLoader
+	exposure           *rroute.Exposure
 	relatedExposure    sync.Map
 	relatedMetadata    sync.Map
 	canonicalConstants map[string]locator.Provider
@@ -117,18 +118,9 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 	if err != nil {
 		return nil, err
 	}
-	publicBundle := bundle
-	if options.exposure != nil {
-		publicSpecs := make([]*spec.Component, 0, len(specs))
-		for _, component := range specs {
-			if options.exposure.Allows(component.Key.Scope) {
-				publicSpecs = append(publicSpecs, component)
-			}
-		}
-		publicBundle, err = rroute.NewBundle(publicSpecs)
-		if err != nil {
-			return nil, err
-		}
+	publicBundle, err := publicRouteBundle(specs, options.exposure)
+	if err != nil {
+		return nil, err
 	}
 	injector, err := bindly.NewInjector(options.injector...)
 	if err != nil {
@@ -141,7 +133,7 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 	}
 	return &Runtime{
 		observability: observation, ownsObservability: options.managedObservability == nil,
-		bundle: bundle, publicBundle: publicBundle, registered: registered, canonicalConstants: canonicalConstants,
+		bundle: bundle, publicBundle: publicBundle, exposure: options.exposure, registered: registered, canonicalConstants: canonicalConstants,
 		metadata: metadata,
 		invoker:  handlerengine.New(), injector: injector,
 	}, nil
@@ -191,21 +183,36 @@ func NewIndexedRuntime(components []*spec.Component, preloaded []*RegisteredComp
 	if err != nil {
 		return nil, err
 	}
-	r.publicBundle = r.bundle
-	if options.exposure != nil {
-		var public []*spec.Component
-		for _, component := range specs {
-			if options.exposure.Allows(component.Key.Scope) {
-				public = append(public, component)
-			}
-		}
-		r.publicBundle, err = rroute.NewBundle(public)
-		if err != nil {
-			return nil, err
-		}
+	r.publicBundle, err = publicRouteBundle(specs, options.exposure)
+	if err != nil {
+		return nil, err
 	}
 	r.loader = loader
+	r.exposure = options.exposure
 	return r, nil
+}
+
+func publicRouteBundle(components []*spec.Component, exposure *rroute.Exposure) (*rroute.Bundle, error) {
+	publicSpecs := make([]*spec.Component, 0, len(components))
+	for _, component := range components {
+		if component == nil {
+			continue
+		}
+		if exposure != nil && !exposure.Allows(component.Key.Scope) {
+			continue
+		}
+		clone := component.Clone()
+		clone.Routes = clone.Routes[:0]
+		for _, route := range component.Routes {
+			if spec.PublicRoute(route) {
+				clone.Routes = append(clone.Routes, route.Clone())
+			}
+		}
+		if len(clone.Routes) > 0 {
+			publicSpecs = append(publicSpecs, clone)
+		}
+	}
+	return rroute.NewBundle(publicSpecs)
 }
 
 func (r *Runtime) registeredComponent(ctx context.Context, key spec.Key) (*RegisteredComponent, error) {

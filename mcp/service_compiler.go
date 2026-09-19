@@ -116,6 +116,9 @@ func (c *serviceCompiler) plans(components []*registry.RegisteredComponent) (*co
 			continue
 		}
 		for _, route := range registered.Component.Routes {
+			if !spec.PublicRoute(route) {
+				continue
+			}
 			if err := c.compileRoute(result, toolCompiler, resourceCompiler, registered, route); err != nil {
 				return nil, err
 			}

@@ -18,6 +18,7 @@ const (
 	RouteNameTag    = "routeName"
 	APIKeyHeaderTag = "apiKeyHeader"
 	APIKeyValueTag  = "apiKeyValue"
+	InternalTag     = "internal"
 	MCPTag          = "mcp"
 )
 
@@ -39,6 +40,7 @@ type Component struct {
 	Source                string
 	Description           string
 	Example               string
+	Internal              bool
 	Report                bool
 	ReportCompose         *spec.CubeComposeSettings
 	ReportMCPTool         *bool
@@ -77,6 +79,9 @@ func (c Component) value() string {
 	appendNonEmpty(builder, "source", c.Source)
 	if c.Report {
 		appendNonEmpty(builder, "report", "true")
+	}
+	if c.Internal {
+		appendNonEmpty(builder, InternalTag, "true")
 	}
 	if c.ReportCompose != nil {
 		appendNonEmpty(builder, "reportCompose", strconv.FormatBool(c.ReportCompose.Enabled))
@@ -168,6 +173,13 @@ func ParseComponent(structTag reflect.StructTag) (Component, bool, error) {
 	parsed.RouteName = structTag.Get(RouteNameTag)
 	parsed.APIKeyHeader = structTag.Get(APIKeyHeaderTag)
 	parsed.APIKeyValue = structTag.Get(APIKeyValueTag)
+	if value, ok := structTag.Lookup(InternalTag); ok {
+		internal, err := parseBool(InternalTag, value)
+		parsed.Internal = internal
+		if err != nil && parseErr == nil {
+			parseErr = err
+		}
+	}
 	parsed.Description = strings.TrimSpace(structTag.Get(DescriptionName))
 	parsed.Example = strings.TrimSpace(structTag.Get(ExampleName))
 	parsed.Documentation.DocURL = structTag.Get("docURL")
@@ -230,6 +242,10 @@ func ParseComponentValue(value string) (Component, error) {
 		case "report":
 			parsed, err := parseBool("report", value)
 			result.Report = parsed
+			return err
+		case InternalTag:
+			parsed, err := parseBool(InternalTag, value)
+			result.Internal = parsed
 			return err
 		case "reportmcptool":
 			parsed, err := parseBool("reportMCPTool", value)

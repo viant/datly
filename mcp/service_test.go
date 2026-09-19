@@ -250,6 +250,21 @@ func TestSharedHTTPRouteKeepsComponentToolInputs(t *testing.T) {
 	}
 }
 
+func TestServiceSkipsInternalRouteExposures(t *testing.T) {
+	entry := serviceComponent(t, "InternalTool", &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "internal.tool"})
+	entry.Component.Routes[0].Internal = true
+	service, err := New(Config{Components: []*registry.RegisteredComponent{entry}, Invoker: &serviceInvoker{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names := service.Catalog().ToolNames(); len(names) != 0 {
+		t.Fatalf("internal MCP tools = %v", names)
+	}
+	if _, ok := service.Registry().ToolRegistry.Get("internal.tool"); ok {
+		t.Fatal("internal route MCP tool was registered")
+	}
+}
+
 type lazyToolInput struct {
 	Query string `json:"query"`
 	Auth  *lazyAuthOutput

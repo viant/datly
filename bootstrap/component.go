@@ -94,6 +94,7 @@ func (s *RouteSource) canonicalComponent() (*spec.Component, error) {
 		Example:       s.Tag.Example,
 		Routes: []*spec.Route{{
 			Name: s.Tag.RouteName, Method: s.Tag.Method, Path: s.Tag.Path,
+			Internal:   s.Tag.Internal,
 			Marshaller: strings.TrimSpace(s.Tag.Marshaller), Handler: strings.TrimSpace(s.Tag.Handler),
 			APIKeyHeader: strings.TrimSpace(s.Tag.APIKeyHeader), APIKeyValue: s.Tag.APIKeyValue,
 		}},

@@ -54,7 +54,7 @@ func newWarmupRoutes(rt *druntime.Runtime, c Config) (*warmupRoutes, error) {
 		return nil, fmt.Errorf("warmup prefix must be distinct")
 	}
 	result := &warmupRoutes{prefix: prefix, apiPrefix: apiPrefix, routes: map[string]*warmupRoute{}}
-	for _, endpoint := range rt.Routes() {
+	for _, endpoint := range rt.WarmupRoutes() {
 		if !strings.EqualFold(endpoint.Method, "GET") {
 			continue
 		}
