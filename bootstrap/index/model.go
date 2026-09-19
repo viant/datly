@@ -33,6 +33,9 @@ type Source struct {
 // component. Contract fields and executable plans are intentionally absent.
 type Entry struct {
 	Component *spec.Component
+	// Warmup indicates that the component has root or child warmup declarations
+	// discoverable during indexed bootstrap, before executable readers exist.
+	Warmup bool
 	// Owner identifies the authored component that materializes this entry when
 	// the entry is a derived report component.
 	Owner       spec.Key
@@ -51,7 +54,7 @@ func (e *Entry) Clone() *Entry {
 	if e == nil {
 		return nil
 	}
-	return &Entry{Component: e.Component.Clone(), Owner: e.Owner, Sources: append([]Source(nil), e.Sources...), Fingerprint: e.Fingerprint}
+	return &Entry{Component: e.Component.Clone(), Warmup: e.Warmup, Owner: e.Owner, Sources: append([]Source(nil), e.Sources...), Fingerprint: e.Fingerprint}
 }
 
 type MCPIdentity struct {

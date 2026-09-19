@@ -116,7 +116,7 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 	preload := map[string]spec.Key{}
 	if s.config.Warmup != nil {
 		for _, entry := range entries {
-			if hasWarmupConfiguration(entry.Component) {
+			if entry.Warmup || hasWarmupConfiguration(entry.Component) {
 				preload[entry.Key().String()] = entry.Key()
 			}
 		}
