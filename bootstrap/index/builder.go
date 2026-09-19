@@ -19,8 +19,10 @@ import (
 	dtag "github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/x"
 	loaderast "github.com/viant/x/loader/ast"
 	xmodule "github.com/viant/x/module"
+	xshape "github.com/viant/x/shape"
 	synthetic "github.com/viant/x/syntetic/model"
 )
 
@@ -83,7 +85,7 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	packageComponents, dependencySources, err := resolvePackageComponents(ctx, workspace, routes, config.Types)
+	packageComponents, dependencySources, catalogWarmups, err := resolvePackageComponents(ctx, workspace, routes, config.Types)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +96,7 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 			component: component,
 			packages:  map[string]bool{component.Key.Scope: true},
 			sources:   append([]Source(nil), dependencySources[component.Key.Scope]...),
-			warmup:    linkedWarmups[identity] || hasComponentWarmupConfiguration(component),
+			warmup:    linkedWarmups[identity] || catalogWarmups[identity] || hasComponentWarmupConfiguration(component),
 		}
 	}
 	for _, file := range selected {
@@ -246,6 +248,77 @@ func typeHasWarmupTag(candidate reflect.Type, visited map[reflect.Type]bool) (bo
 		}
 	}
 	return false, nil
+}
+
+func descriptorHasWarmupTag(descriptor *x.Type, resolver *typecatalog.Resolver) (bool, error) {
+	if descriptor == nil || resolver == nil {
+		return false, nil
+	}
+	lookup := func(expression string) (*x.Type, error) {
+		resolved, err := resolver.ResolveShape(expression)
+		if err != nil || resolved == nil {
+			return nil, err
+		}
+		return resolved.Descriptor, nil
+	}
+	return shapeHasWarmupTag(xshape.New(descriptor, lookup), "", map[string]bool{})
+}
+
+func shapeHasWarmupTag(shape *xshape.Type, path string, visited map[string]bool) (bool, error) {
+	if shape == nil {
+		return false, nil
+	}
+	key := shapeWarmupKey(shape, path)
+	if visited[key] {
+		return false, nil
+	}
+	visited[key] = true
+	var (
+		fields []xshape.Field
+		err    error
+	)
+	if path == "" {
+		fields, err = shape.Fields()
+	} else {
+		fields, err = shape.FieldsAt(path)
+	}
+	if err != nil {
+		return false, err
+	}
+	for _, field := range fields {
+		if value := strings.TrimSpace(field.Tag.Get(dtag.ViewName)); value != "" {
+			viewTag, err := dtag.ParseView(value)
+			if err != nil {
+				return false, fmt.Errorf("%s view tag: %w", field.Name, err)
+			}
+			if viewTag != nil && strings.TrimSpace(viewTag.CacheWarmup) != "" {
+				return true, nil
+			}
+		}
+		if _, builtin := field.BuiltinType(); builtin {
+			continue
+		}
+		fieldPath := field.Name
+		if path != "" {
+			fieldPath = path + "." + field.Name
+		}
+		nested, err := shapeHasWarmupTag(shape, fieldPath, visited)
+		if err != nil {
+			continue
+		}
+		if nested {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func shapeWarmupKey(shape *xshape.Type, path string) string {
+	descriptor := shape.Descriptor()
+	if descriptor == nil {
+		return path
+	}
+	return descriptor.Key() + "\x00" + path
 }
 
 func hasComponentWarmupConfiguration(component *spec.Component) bool {
@@ -497,9 +570,9 @@ func uniqueSources(sources []Source) []Source {
 	return result
 }
 
-func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace, routes []*bootstrap.RouteSource, seed *typecatalog.Catalog) ([]*spec.Component, map[string][]Source, error) {
+func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace, routes []*bootstrap.RouteSource, seed *typecatalog.Catalog) ([]*spec.Component, map[string][]Source, map[string]bool, error) {
 	if len(routes) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	imports := make([]string, 0, len(routes))
 	for _, route := range routes {
@@ -512,12 +585,12 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	for _, packagePath := range imports {
 		location, locationErr := workspace.Package(packagePath)
 		if locationErr != nil || location == nil || location.Module == nil {
-			return nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, locationErr)
+			return nil, nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, locationErr)
 		}
 		if currentModule == "" {
 			currentModule = location.Module.Path
 		} else if currentModule != location.Module.Path {
-			return nil, nil, fmt.Errorf("index package authority spans modules %q and %q", currentModule, location.Module.Path)
+			return nil, nil, nil, fmt.Errorf("index package authority spans modules %q and %q", currentModule, location.Module.Path)
 		}
 		allowedModules[location.Module.Path] = true
 	}
@@ -570,13 +643,13 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	for _, packagePath := range imports {
 		_, loadErr := loadCurrentModulePackage(packagePath)
 		if loadErr != nil {
-			return nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, loadErr)
+			return nil, nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, loadErr)
 		}
 	}
 	for _, route := range routes {
 		for _, imported := range route.Imports {
 			if _, loadErr := loadCurrentModulePackage(imported.Package); loadErr != nil {
-				return nil, nil, fmt.Errorf("index imported package authority %q: %w", imported.Package, loadErr)
+				return nil, nil, nil, fmt.Errorf("index imported package authority %q: %w", imported.Package, loadErr)
 			}
 		}
 	}
@@ -584,7 +657,7 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	if seed != nil {
 		cloned, err := seed.Clone()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		catalog = cloned
 	}
@@ -595,7 +668,7 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	sort.Strings(packagePaths)
 	for _, packagePath := range packagePaths {
 		if err := catalog.RegisterPackage(typecatalog.TypeOriginPackage, packages[packagePath]); err != nil {
-			return nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, err)
+			return nil, nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, err)
 		}
 	}
 	routesByPackage := map[string][]*bootstrap.RouteSource{}
@@ -608,6 +681,7 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	}
 	sort.Strings(packagePaths)
 	var result []*spec.Component
+	warmups := map[string]bool{}
 	for _, packagePath := range packagePaths {
 		packageRoutes := routesByPackage[packagePath]
 		resolution := &typecatalog.ResolutionContext{DefaultPackage: packagePath, PackagePath: packagePath, PackageName: packageRoutes[0].PackageName, PackageDir: packageRoutes[0].Dir}
@@ -624,16 +698,27 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 		}
 		resolver, err := typecatalog.NewResolver(catalog, typecatalog.PackageAuthority, resolution)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		groups, err := bootstrap.GroupPackageComponentSources(packageRoutes, resolver)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for _, group := range groups {
 			component, err := group.ResolveDescriptors(resolver)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
+			}
+			if hasComponentWarmupConfiguration(component) {
+				warmups[component.Key.String()] = true
+			} else {
+				hasWarmup, err := descriptorHasWarmupTag(group.OutputType, resolver)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("index component %s output warmup tags: %w", component.Key.String(), err)
+				}
+				if hasWarmup {
+					warmups[component.Key.String()] = true
+				}
 			}
 			result = append(result, component)
 		}
@@ -666,11 +751,11 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 		}
 		for _, dependency := range pkg.Dependencies {
 			if err := visit(dependency); err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 		}
 	}
-	return result, dependencies, nil
+	return result, dependencies, warmups, nil
 }
 
 func packageGoSources(workspace *xmodule.Workspace, packagePath string) ([]Source, error) {

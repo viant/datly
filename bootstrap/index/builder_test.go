@@ -107,6 +107,42 @@ type IndexedChildWarmupHolder struct {
 	}
 }
 
+func TestBuilderMarksCatalogChildWarmupWithoutLinkedHolder(t *testing.T) {
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "example.com/app"}).Write(t, root)
+	writeFixture(t, root, "api/holder.go", `package api
+import xdatly "github.com/viant/xdatly"
+type Input struct{}
+type Output struct {
+  Rows []Row `+"`"+`view:"advertiserPerformance"`+"`"+`
+}
+type Row struct {
+  ID int
+  Summary []Summary `+"`"+`view:"advertiserPeriodSummary,cacheWarmup=advertiserPeriodSummaryWarmup"`+"`"+`
+}
+type Summary struct {
+  ID int
+}
+type Holder struct {
+  Route xdatly.Component[Input,Output] `+"`"+`component:"AdvertiserPerformance,path=/advertiser,method=GET"`+"`"+`
+}
+`)
+	snapshot, err := (Builder{Config: Config{
+		BaseDir: root,
+		Include: []string{"example.com/app/api"},
+	}}).Build(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, _, _, ok := snapshot.Route("GET", "/advertiser")
+	if !ok {
+		t.Fatal("indexed route missing")
+	}
+	if !entry.Warmup {
+		t.Fatalf("catalog child warmup marker was not preserved on indexed entry: %+v", entry)
+	}
+}
+
 func TestBuilderIndexesMultiModuleSelectionDeterministically(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "app/go.mod", "module corp.example/app\ngo 1.25\n")
