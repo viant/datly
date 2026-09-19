@@ -57,6 +57,11 @@ type Build struct {
 	// Preload names only explicitly configured startup consumers such as cache
 	// warmup or async routes; unrelated indexed components remain lazy.
 	Preload []spec.Key
+	// Shutdown owns stage-local external resources such as database handles.
+	// After publication, Manager calls it exactly once when the generation has
+	// retired and all admitted requests have released their generation lease. A
+	// failed stage is also shut down before Reload returns.
+	Shutdown func(context.Context) error
 }
 
 type Request struct {
@@ -84,6 +89,7 @@ type generation struct {
 	closed     chan struct{}
 	closeErr   error
 	closeOnce  sync.Once
+	shutdown   func(context.Context) error
 	httpMu     sync.Mutex
 	documents  func(context.Context) (*gateway.Handler, error)
 	docsReady  bool
@@ -178,6 +184,12 @@ func (m *Manager) Reload(ctx context.Context, request Request) error {
 	if built == nil {
 		return fmt.Errorf("application stage is required")
 	}
+	buildOwned := true
+	defer func() {
+		if buildOwned && built.Shutdown != nil {
+			_ = built.Shutdown(context.Background())
+		}
+	}()
 	if built.MCP.Invoker != nil || len(built.MCP.Components) != 0 {
 		return fmt.Errorf("application owns MCP registration and invocation")
 	}
@@ -336,7 +348,7 @@ func (m *Manager) Reload(ctx context.Context, request Request) error {
 	if err != nil {
 		return err
 	}
-	next := &generation{async: async, revision: request.Revision, types: types, runtime: rt, http: httpHandler, httpConfig: built.HTTP, mcp: service, sources: sources, index: indexRegistry, lease: indexLease, closed: make(chan struct{})}
+	next := &generation{async: async, revision: request.Revision, types: types, runtime: rt, http: httpHandler, httpConfig: built.HTTP, mcp: service, sources: sources, index: indexRegistry, lease: indexLease, closed: make(chan struct{}), shutdown: built.Shutdown}
 	if built.Index != nil && built.HTTP.OpenAPI != nil {
 		next.documents = func(loadCtx context.Context) (*gateway.Handler, error) {
 			var registrations []*registry.RegisteredComponent
@@ -390,6 +402,7 @@ func (m *Manager) Reload(ctx context.Context, request Request) error {
 		previous.retire()
 	}
 	published = true
+	buildOwned = false
 	cleanupIndex = false
 	m.async.start()
 	return nil
@@ -485,9 +498,15 @@ func (g *generation) closeResources() {
 		return
 	}
 	g.closeOnce.Do(func() {
+		if g.runtime != nil {
+			g.closeErr = errors.Join(g.closeErr, g.runtime.Shutdown(context.Background()))
+		}
 		if g.index != nil {
 			g.lease.Close()
-			g.closeErr = g.index.Shutdown(context.Background())
+			g.closeErr = errors.Join(g.closeErr, g.index.Shutdown(context.Background()))
+		}
+		if g.shutdown != nil {
+			g.closeErr = errors.Join(g.closeErr, g.shutdown(context.Background()))
 		}
 		close(g.closed)
 	})
