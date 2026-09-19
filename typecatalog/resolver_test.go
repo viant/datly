@@ -43,6 +43,31 @@ func TestResolverUsesPackageImportAndGlobalRules(t *testing.T) {
 	}
 }
 
+func TestTranscribeResolverPrefersCurrentPackageOverImportedSameName(t *testing.T) {
+	type componentInput struct{}
+	type authInput struct{}
+	catalog := NewCatalog()
+	for _, typ := range []*x.Type{
+		x.NewType(reflect.TypeOf(componentInput{}), x.WithName("Input"), x.WithPkgPath("example.com/app/studio/connectors")),
+		x.NewType(reflect.TypeOf(authInput{}), x.WithName("Input"), x.WithPkgPath("example.com/app/auth")),
+	} {
+		if err := catalog.Register(TypeOriginPackage, typ); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resolver, err := NewResolver(catalog, TranscribeAuthority, &ResolutionContext{
+		PackagePath: "example.com/app/studio/connectors",
+		Imports:     []PackageImport{{Alias: "auth", Package: "example.com/app/auth"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := resolver.Resolve("Input")
+	if err != nil || actual != "example.com/app/studio/connectors.Input" {
+		t.Fatalf("Resolve(Input) = %q, %v", actual, err)
+	}
+}
+
 func TestResolverUsesOuterAliasForGenericType(t *testing.T) {
 	catalog := NewCatalog()
 	if err := catalog.RegisterAll(TypeOriginPackage,
@@ -152,7 +177,7 @@ func TestResolverRejectsAmbiguousGlobalType(t *testing.T) {
 	}
 }
 
-func TestPackageAuthorityShadowsImportedContractNames(t *testing.T) {
+func TestCurrentPackageShadowsImportedContractNames(t *testing.T) {
 	catalog := NewCatalog()
 	if err := catalog.RegisterAll(TypeOriginPackage, &x.Type{PkgPath: "example.com/app", Name: "Input"}, &x.Type{PkgPath: "example.com/hooks", Name: "Input"}); err != nil {
 		t.Fatal(err)
@@ -172,8 +197,8 @@ func TestPackageAuthorityShadowsImportedContractNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = resolver.Resolve("Input"); err == nil {
-		t.Fatal("transcription ambiguity policy changed")
+	if got, resolveErr := resolver.Resolve("Input"); resolveErr != nil || got != "example.com/app.Input" {
+		t.Fatalf("transcribe Input: %s %v", got, resolveErr)
 	}
 }
 

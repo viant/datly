@@ -255,9 +255,11 @@ func (r *Resolver) resolveNamedCandidate(expression, base string) (*candidate, e
 		}
 		return nil, nil
 	}
-	// Go package declarations shadow same-named types in imported packages.
-	// Transcription authority retains its multi-source ambiguity policy.
-	if r.authority == PackageAuthority && r.context != nil && r.context.PackagePath != "" {
+	// The active #package/package scope shadows same-named imported types for
+	// both package and transcription authority. Transcription may select among
+	// external candidates differently, but an unqualified Input or Output in
+	// the component's own package is never ambiguous with an imported Input.
+	if r.context != nil && r.context.PackagePath != "" {
 		for _, name := range referenceNames(reference) {
 			key := r.context.PackagePath + "." + name
 			if r.types[key] != nil {
