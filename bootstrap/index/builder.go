@@ -401,7 +401,7 @@ func expandReportEntries(entries []*Entry) []*Entry {
 				suffix = typecatalog.ExportedFieldName(route.Name)
 			}
 			name := typecatalog.ExportedFieldName(component.Key.Name + suffix + "Cube")
-			cube := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: name}, Name: name, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube", APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
+			cube := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: name}, Name: name, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube", Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
 			if component.Settings.Report.MCPTool == nil || *component.Settings.Report.MCPTool {
 				cube.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: name, Description: component.Description}}
 			}
@@ -411,7 +411,7 @@ func expandReportEntries(entries []*Entry) []*Entry {
 				continue
 			}
 			composeName := name + "Compose"
-			composed := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: composeName}, Name: composeName, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube/compose", APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
+			composed := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: composeName}, Name: composeName, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube/compose", Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
 			if compose.MCPTool == nil || *compose.MCPTool {
 				composed.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: composeName, Description: component.Description}}
 			}
