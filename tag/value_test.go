@@ -1,6 +1,7 @@
 package tag
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/viant/datly/spec"
@@ -50,6 +51,23 @@ func TestQuerySelectorValueRoundTrips(t *testing.T) {
 	actual, err := ParseQuerySelector(value)
 	if err != nil || actual.View != "users=current,next" {
 		t.Fatalf("ParseQuerySelector() = %+v, %v\n%s", actual, err, value)
+	}
+}
+
+func TestParseFieldSelectorAlias(t *testing.T) {
+	type row struct {
+		AdvertiserID int `sqlx:"advertiser_id" selectorAlias:"advertiserId"`
+	}
+	field, ok := reflect.TypeFor[row]().FieldByName("AdvertiserID")
+	if !ok {
+		t.Fatal("missing field")
+	}
+	actual, err := ParseField(field)
+	if err != nil {
+		t.Fatalf("ParseField() error = %v", err)
+	}
+	if actual.SelectorAlias != "advertiserId" {
+		t.Fatalf("SelectorAlias = %q", actual.SelectorAlias)
 	}
 }
 
