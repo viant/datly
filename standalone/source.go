@@ -116,7 +116,7 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 	preload := map[string]spec.Key{}
 	if s.config.Warmup != nil {
 		for _, entry := range entries {
-			if entry.Component.CacheWarmup() != nil {
+			if hasWarmupConfiguration(entry.Component) {
 				preload[entry.Key().String()] = entry.Key()
 			}
 		}
@@ -142,6 +142,32 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 		built.MCP = mcp.Config{Authorization: s.config.MCP.Authorization, Folders: s.config.MCP.Folders}
 	}
 	return built, nil
+}
+
+func hasWarmupConfiguration(component *spec.Component) bool {
+	if component == nil {
+		return false
+	}
+	if component.CacheWarmup() != nil {
+		return true
+	}
+	return hasViewWarmupBinding(component.RootView, map[*spec.View]bool{})
+}
+
+func hasViewWarmupBinding(view *spec.View, visited map[*spec.View]bool) bool {
+	if view == nil || visited[view] {
+		return false
+	}
+	visited[view] = true
+	if view.Source != nil && view.Source.Bindings != nil && strings.TrimSpace(view.Source.Bindings.CacheWarmup) != "" {
+		return true
+	}
+	for _, relation := range view.Relations {
+		if relation != nil && hasViewWarmupBinding(relation.View, visited) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {

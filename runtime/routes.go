@@ -39,9 +39,6 @@ func (r *Runtime) WarmupTarget(path string) (dexec.ComponentTarget, bool) {
 	if !ok {
 		return dexec.ComponentTarget{}, false
 	}
-	if component.Settings == nil || component.Settings.Cache == nil || !component.Settings.Cache.Enabled {
-		return dexec.ComponentTarget{}, false
-	}
 	target := dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}}
 	_, err := r.NewWarmup(target)
 	return target, err == nil
