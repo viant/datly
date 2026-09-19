@@ -11,7 +11,11 @@ type OperationType string
 
 const (
 	OperationInspect              OperationType = "inspect"
+	OperationCreateReader         OperationType = "createReader"
+	OperationSetPackage           OperationType = "setPackage"
 	OperationAddField             OperationType = "addField"
+	OperationUpdateField          OperationType = "updateField"
+	OperationRemoveField          OperationType = "removeField"
 	OperationAddFieldPredicate    OperationType = "addFieldPredicate"
 	OperationUpdateFieldPredicate OperationType = "updateFieldPredicate"
 	OperationRemoveFieldPredicate OperationType = "removeFieldPredicate"
@@ -22,6 +26,8 @@ const (
 	OperationAddView              OperationType = "addView"
 	OperationUpdateView           OperationType = "updateView"
 	OperationRemoveView           OperationType = "removeView"
+	OperationUpdateRelation       OperationType = "updateRelation"
+	OperationSetColumnRole        OperationType = "setColumnRole"
 )
 
 type Request struct {
@@ -30,21 +36,44 @@ type Request struct {
 }
 
 type Operation struct {
-	Type      OperationType      `json:"type"`
-	Field     *Field             `json:"field,omitempty"`
-	Predicate *PredicateMutation `json:"predicate,omitempty"`
-	Function  *FunctionMutation  `json:"function,omitempty"`
-	Setting   *SettingMutation   `json:"setting,omitempty"`
-	View      *ViewMutation      `json:"view,omitempty"`
+	Type       OperationType       `json:"type"`
+	Reader     *ReaderMutation     `json:"reader,omitempty"`
+	Package    *PackageMutation    `json:"package,omitempty"`
+	Field      *Field              `json:"field,omitempty"`
+	Predicate  *PredicateMutation  `json:"predicate,omitempty"`
+	Function   *FunctionMutation   `json:"function,omitempty"`
+	Setting    *SettingMutation    `json:"setting,omitempty"`
+	View       *ViewMutation       `json:"view,omitempty"`
+	Relation   *RelationMutation   `json:"relation,omitempty"`
+	ColumnRole *ColumnRoleMutation `json:"columnRole,omitempty"`
+}
+
+type PackageMutation struct {
+	Path     string `json:"path"`
+	Expected string `json:"expected,omitempty"`
+}
+
+// ReaderMutation defines the initial typed root graph. The reader builder owns
+// DQL rendering and compilation; clients provide author intent, not DQL text.
+type ReaderMutation struct {
+	Package    string `json:"package"`
+	Connector  string `json:"connector"`
+	Route      string `json:"route"`
+	Name       string `json:"name"`
+	TypeName   string `json:"typeName,omitempty"`
+	OutputName string `json:"outputName,omitempty"`
+	SQL        string `json:"sql"`
 }
 
 type Field struct {
-	Name          string `json:"name"`
-	Type          string `json:"type"`
-	SourceKind    string `json:"sourceKind"`
-	SourceName    string `json:"sourceName"`
-	Required      *bool  `json:"required,omitempty"`
-	QuerySelector string `json:"querySelector,omitempty"`
+	ExistingName        string  `json:"existingName,omitempty"`
+	Name                string  `json:"name"`
+	Type                string  `json:"type"`
+	SourceKind          string  `json:"sourceKind"`
+	SourceName          string  `json:"sourceName"`
+	Required            *bool   `json:"required,omitempty"`
+	QuerySelector       string  `json:"querySelector,omitempty"`
+	UpdateQuerySelector *string `json:"updateQuerySelector,omitempty"`
 }
 
 type PredicateMutation struct {
@@ -75,11 +104,25 @@ type SettingMutation struct {
 }
 
 type ViewMutation struct {
+	Name     string            `json:"name"`
+	Kind     spec.RelationKind `json:"kind,omitempty"`
+	TypeExpr string            `json:"typeExpr,omitempty"`
+	SQL      string            `json:"sql,omitempty"`
+	Parent   string            `json:"parent,omitempty"`
+	Join     string            `json:"join,omitempty"`
+	On       string            `json:"on,omitempty"`
+}
+
+type RelationMutation struct {
 	Name   string `json:"name"`
-	SQL    string `json:"sql,omitempty"`
-	Parent string `json:"parent,omitempty"`
-	Join   string `json:"join,omitempty"`
-	On     string `json:"on,omitempty"`
+	Parent string `json:"parent"`
+	On     string `json:"on"`
+}
+
+type ColumnRoleMutation struct {
+	View   string `json:"view"`
+	Column string `json:"column"`
+	Role   string `json:"role"`
 }
 
 type Response struct {

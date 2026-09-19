@@ -12,10 +12,18 @@ import (
 // needed by source-preserving editor clients. Parameter is detached metadata;
 // Span and predicate spans address the complete authored DQL.
 type DeclarationOccurrence struct {
-	Parameter    *spec.Parameter             `json:"parameter"`
-	Span         SourceSpan                  `json:"span"`
-	OptionInsert int                         `json:"optionInsert"`
-	Predicates   []PredicateOptionOccurrence `json:"predicates,omitempty"`
+	Parameter    *spec.Parameter               `json:"parameter"`
+	Span         SourceSpan                    `json:"span"`
+	HeadSpan     SourceSpan                    `json:"headSpan"`
+	OptionInsert int                           `json:"optionInsert"`
+	Options      []DeclarationOptionOccurrence `json:"options,omitempty"`
+	Predicates   []PredicateOptionOccurrence   `json:"predicates,omitempty"`
+}
+
+type DeclarationOptionOccurrence struct {
+	Name string     `json:"name"`
+	Args []string   `json:"args,omitempty"`
+	Span SourceSpan `json:"span"`
 }
 
 // PredicateOptionOccurrence identifies one repeatable predicate option in its
@@ -66,11 +74,18 @@ func DeclarationOccurrences(source string) ([]DeclarationOccurrence, error) {
 			Parameter: parameter.Clone(),
 			Span:      SourceSpan{Start: block.start, End: block.end},
 		}
+		if !implicit {
+			if head, headOK := declarationHeadSpan(block.body); headOK {
+				occurrence.HeadSpan = SourceSpan{Start: block.bodyStart + head.Start, End: block.bodyStart + head.End}
+			}
+		}
 		cursor := newOptionCursor(tail)
 		ordinal := 0
 		for cursor.next() {
 			name, args := cursor.option()
 			key := strings.ToLower(strings.TrimSpace(name))
+			optionSpan := SourceSpan{Start: block.bodyStart + tailOffset + cursor.start, End: block.bodyStart + tailOffset + cursor.cursor}
+			occurrence.Options = append(occurrence.Options, DeclarationOptionOccurrence{Name: name, Args: append([]string(nil), args...), Span: optionSpan})
 			if key != "withpredicate" && key != "predicate" && key != "applywhenabsentpredicate" {
 				continue
 			}
@@ -81,10 +96,7 @@ func DeclarationOccurrences(source string) ([]DeclarationOccurrence, error) {
 			occurrence.Predicates = append(occurrence.Predicates, PredicateOptionOccurrence{
 				Ordinal:   ordinal,
 				Predicate: predicate,
-				Span: SourceSpan{
-					Start: block.bodyStart + tailOffset + cursor.start,
-					End:   block.bodyStart + tailOffset + cursor.cursor,
-				},
+				Span:      optionSpan,
 			})
 			ordinal++
 		}
@@ -95,6 +107,34 @@ func DeclarationOccurrences(source string) ([]DeclarationOccurrence, error) {
 		result = append(result, occurrence)
 	}
 	return result, nil
+}
+
+func declarationHeadSpan(body string) (SourceSpan, bool) {
+	cursor := newByteCursor(body)
+	skipWhitespace(cursor)
+	if !consumeAssignmentPrefix(cursor) {
+		return SourceSpan{}, false
+	}
+	skipWhitespace(cursor)
+	start := cursor.pos
+	if cursor.pos >= len(cursor.input) || cursor.input[cursor.pos] != '$' {
+		return SourceSpan{}, false
+	}
+	cursor.pos++
+	if _, ok := readIdentifier(cursor); !ok {
+		return SourceSpan{}, false
+	}
+	skipWhitespace(cursor)
+	if cursor.pos < len(cursor.input) && cursor.input[cursor.pos] == '<' {
+		if _, ok := readBracketGroup(cursor, '<', '>'); !ok {
+			return SourceSpan{}, false
+		}
+	}
+	skipWhitespace(cursor)
+	if _, ok := readBracketGroup(cursor, '(', ')'); !ok {
+		return SourceSpan{}, false
+	}
+	return SourceSpan{Start: start, End: cursor.pos}, true
 }
 
 // RenderPredicateOption renders the canonical declaration option spelling.

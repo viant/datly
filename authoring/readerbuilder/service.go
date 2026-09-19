@@ -130,8 +130,14 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 	switch operation.Type {
 	case OperationInspect:
 		return source, nil
+	case OperationCreateReader:
+		return s.createReader(source, operation.Reader)
+	case OperationSetPackage:
+		return dql.SetPackage(source, operation.Package.Path, operation.Package.Expected)
 	case OperationAddField:
 		return addField(source, operation.Field)
+	case OperationUpdateField, OperationRemoveField:
+		return editField(source, operation.Type, operation.Field)
 	case OperationAddFieldPredicate, OperationUpdateFieldPredicate, OperationRemoveFieldPredicate:
 		return s.editPredicate(source, operation.Type, operation.Predicate)
 	case OperationAddFunction, OperationUpdateFunction, OperationRemoveFunction:
@@ -140,6 +146,10 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 		return s.editSetting(source, operation.Setting)
 	case OperationAddView, OperationUpdateView, OperationRemoveView:
 		return editView(source, operation.Type, operation.View)
+	case OperationUpdateRelation:
+		return updateRelation(source, operation.Relation)
+	case OperationSetColumnRole:
+		return s.setColumnRole(source, operation.ColumnRole)
 	default:
 		return "", fmt.Errorf("unsupported reader builder operation %q", operation.Type)
 	}
@@ -147,7 +157,7 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 
 func (o Operation) validate() error {
 	payloads := 0
-	for _, present := range []bool{o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil} {
+	for _, present := range []bool{o.Reader != nil, o.Package != nil, o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil, o.Relation != nil, o.ColumnRole != nil} {
 		if present {
 			payloads++
 		}
@@ -161,7 +171,15 @@ func (o Operation) validate() error {
 	}
 	switch o.Type {
 	case OperationInspect:
-	case OperationAddField:
+	case OperationCreateReader:
+		if o.Reader == nil {
+			return fmt.Errorf("operation %q requires reader", o.Type)
+		}
+	case OperationSetPackage:
+		if o.Package == nil || strings.TrimSpace(o.Package.Path) == "" {
+			return fmt.Errorf("operation %q requires package path", o.Type)
+		}
+	case OperationAddField, OperationUpdateField, OperationRemoveField:
 		if o.Field == nil {
 			return fmt.Errorf("operation %q requires field", o.Type)
 		}
@@ -188,6 +206,14 @@ func (o Operation) validate() error {
 	case OperationAddView, OperationUpdateView, OperationRemoveView:
 		if o.View == nil {
 			return fmt.Errorf("operation %q requires view", o.Type)
+		}
+	case OperationUpdateRelation:
+		if o.Relation == nil {
+			return fmt.Errorf("operation %q requires relation", o.Type)
+		}
+	case OperationSetColumnRole:
+		if o.ColumnRole == nil {
+			return fmt.Errorf("operation %q requires columnRole", o.Type)
 		}
 	default:
 		return fmt.Errorf("unsupported reader builder operation %q", o.Type)

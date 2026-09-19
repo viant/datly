@@ -201,6 +201,15 @@ func TestServiceValidatesNamedViewCache(t *testing.T) {
 	}
 }
 
+func TestServiceCanRemoveUnavailableLegacyConnectorDirective(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+SELECT records.*,use_connector(records,'legacy') FROM (SELECT id FROM records) records`
+	response := New(Config{Name: "Records", AvailableConnectors: []string{"current"}}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationRemoveFunction, Function: &FunctionMutation{Name: "use_connector", Occurrence: 0, ExpectedArgs: []string{"records", "'legacy'"}}}})
+	if !response.Applied || strings.Contains(response.DQL, "use_connector") {
+		t.Fatalf("response=%+v", response)
+	}
+}
+
 func TestServiceAuthorsCacheWarmupAndReaderMCP(t *testing.T) {
 	service := New(Config{Name: "Records"})
 	location := strings.ReplaceAll(t.TempDir(), "'", "''")
@@ -233,6 +242,18 @@ func TestServiceRejectsIncompleteInlineCache(t *testing.T) {
 	}
 }
 
+func TestServiceSetsPackageWithExpectedAuthority(t *testing.T) {
+	source := `#package('example.com/old/reader')
+#setting($_ = $route('/records','GET'))
+SELECT records.* FROM (SELECT id FROM records) records`
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{
+		Type: OperationSetPackage, Package: &PackageMutation{Path: "example.com/users/alice/reader", Expected: "example.com/old/reader"},
+	}})
+	if !response.Applied || response.Structure == nil || response.Structure.Component == nil || response.Structure.Component.TypeContext.PackagePath != "example.com/users/alice/reader" {
+		t.Fatalf("response=%+v", response)
+	}
+}
+
 func TestServiceAddsQuerySelectorField(t *testing.T) {
 	optional := false
 	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: baseDQL, Operation: Operation{
@@ -240,6 +261,47 @@ func TestServiceAddsQuerySelectorField(t *testing.T) {
 	}})
 	if !response.Applied || !strings.Contains(response.DQL, `.QuerySelector("Records")`) {
 		t.Fatalf("response=%+v", response)
+	}
+}
+
+func TestServiceUpdatesAndRemovesInputWithoutDroppingPredicateOptions(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+#define($_ = $Limit<int>(query/limit).Optional().QuerySelector("Records").WithPredicate(0,"less_or_equal","r","id"))
+SELECT records.* FROM (SELECT r.id FROM records r ${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("WHERE")}) records`
+	required := true
+	selector := ""
+	service := New(Config{Name: "Records"})
+	updated := service.Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateField, Field: &Field{
+		ExistingName: "Limit", Name: "Limit", Type: "int64", SourceKind: "query", SourceName: "max", Required: &required, UpdateQuerySelector: &selector,
+	}}})
+	if !updated.Applied || !strings.Contains(updated.DQL, `$Limit<int64>(query/max).Required().WithPredicate`) || strings.Contains(updated.DQL, "QuerySelector") {
+		t.Fatalf("updated=%+v", updated)
+	}
+	removed := service.Apply(context.Background(), Request{DQL: updated.DQL, Operation: Operation{Type: OperationRemoveField, Field: &Field{ExistingName: "Limit"}}})
+	if !removed.Applied || strings.Contains(removed.DQL, "$Limit") {
+		t.Fatalf("removed=%+v", removed)
+	}
+}
+
+func TestServiceUpdateFieldRenamesExecutableReferencesAtomically(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+#define($_ = $Limit<int>(query/limit).Optional().WithPredicate(0,'less_or_equal','r','id'))
+SELECT records.* FROM (SELECT r.id,'$Limit' AS literal FROM records r WHERE r.id <= $Limit) records`
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateField, Field: &Field{ExistingName: "Limit", Name: "Maximum", SourceName: "max"}}})
+	if !response.Applied || !strings.Contains(response.DQL, "$Maximum<int>(query/max)") || !strings.Contains(response.DQL, "r.id <= $Maximum") || !strings.Contains(response.DQL, `'$Limit' AS literal`) || strings.Contains(response.DQL, "$Limit<int>") {
+		t.Fatalf("response=%+v", response)
+	}
+}
+
+func TestServiceUpdateFieldRenameRejectsCollision(t *testing.T) {
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: baseDQL, Operation: Operation{Type: OperationUpdateField, Field: &Field{ExistingName: "IDs", Name: "IDs"}}})
+	if !response.Applied {
+		t.Fatalf("same-name update=%+v", response)
+	}
+	source := strings.Replace(baseDQL, "SELECT records.*", "#define($_ = $Other<int>(query/other))\nSELECT records.*", 1)
+	collision := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateField, Field: &Field{ExistingName: "IDs", Name: "Other"}}})
+	if collision.Applied || collision.DQL != source || len(collision.Diagnostics) == 0 {
+		t.Fatalf("collision=%+v", collision)
 	}
 }
 

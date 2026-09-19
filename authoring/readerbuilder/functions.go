@@ -52,7 +52,7 @@ func (s *Service) editFunction(source string, operation OperationType, mutation 
 	if mutation == nil || !validIdentifier(strings.TrimSpace(mutation.Name)) {
 		return "", fmt.Errorf("function name is required and must be an identifier")
 	}
-	if strings.EqualFold(mutation.Name, "use_connector") {
+	if operation != OperationRemoveFunction && strings.EqualFold(mutation.Name, "use_connector") {
 		if len(mutation.Args) != 2 {
 			return "", fmt.Errorf("use_connector requires view and connector arguments")
 		}
@@ -60,7 +60,7 @@ func (s *Service) editFunction(source string, operation OperationType, mutation 
 			return "", err
 		}
 	}
-	if strings.EqualFold(mutation.Name, "use_cache") {
+	if operation != OperationRemoveFunction && strings.EqualFold(mutation.Name, "use_cache") {
 		if len(mutation.Args) != 2 {
 			return "", fmt.Errorf("use_cache requires view and cache arguments")
 		}

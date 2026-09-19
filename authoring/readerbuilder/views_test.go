@@ -62,3 +62,67 @@ JOIN (SELECT id,item_id FROM notes) notes ON notes.item_id=items.id`
 		t.Fatalf("response=%+v", response)
 	}
 }
+
+func TestServiceDerivedViewCRUD(t *testing.T) {
+	service := New(Config{Name: "Records"})
+	added := service.Apply(context.Background(), Request{DQL: baseDQL, Operation: Operation{Type: OperationAddView, View: &ViewMutation{
+		Name: "totals", Kind: "derived", SQL: "SELECT COUNT(*) AS count FROM ($View.Records.NonWindowSQL) parent", Parent: "records",
+	}}})
+	if !added.Applied || !strings.Contains(added.DQL, `$totals<Totals>(output/derived)`) {
+		t.Fatalf("added=%+v", added)
+	}
+	relation := findRelation(added.Structure.Component.RootView, "totals")
+	if relation == nil || relation.Kind != "derived" || relation.View == nil || relation.View.Source == nil || !strings.Contains(relation.View.Source.SQL, "COUNT(*)") {
+		t.Fatalf("relation=%+v", relation)
+	}
+	updated := service.Apply(context.Background(), Request{DQL: added.DQL, Operation: Operation{Type: OperationUpdateView, View: &ViewMutation{
+		Name: "totals", Kind: "derived", SQL: "SELECT COUNT(*) AS count, MAX(id) AS max_id FROM ($View.Records.NonWindowSQL) parent",
+	}}})
+	if !updated.Applied || !strings.Contains(updated.DQL, "MAX(id)") || strings.Count(updated.DQL, "output/derived") != 1 {
+		t.Fatalf("updated=%+v", updated)
+	}
+	removed := service.Apply(context.Background(), Request{DQL: updated.DQL, Operation: Operation{Type: OperationRemoveView, View: &ViewMutation{Name: "totals", Kind: "derived"}}})
+	if !removed.Applied || strings.Contains(removed.DQL, "output/derived") || findRelation(removed.Structure.Component.RootView, "totals") != nil {
+		t.Fatalf("removed=%+v", removed)
+	}
+}
+
+func TestServiceDerivedViewRejectsJoinAndNestedParent(t *testing.T) {
+	service := New(Config{Name: "Records"})
+	for _, mutation := range []*ViewMutation{
+		{Name: "totals", Kind: "derived", SQL: "SELECT COUNT(*) AS count", Join: "JOIN"},
+		{Name: "totals", Kind: "derived", SQL: "SELECT COUNT(*) AS count", Parent: "items"},
+	} {
+		response := service.Apply(context.Background(), Request{DQL: baseDQL, Operation: Operation{Type: OperationAddView, View: mutation}})
+		if response.Applied || response.DQL != baseDQL || len(response.Diagnostics) == 0 {
+			t.Fatalf("response=%+v", response)
+		}
+	}
+}
+
+func TestServiceUpdatesRelationParentAndCompositeKeys(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+SELECT records.*,items.*,notes.* FROM (SELECT id,tenant_id FROM records) records
+JOIN (SELECT id,record_id,tenant_id FROM items) items ON items.record_id=records.id AND items.tenant_id=records.tenant_id
+JOIN (SELECT id,item_id,tenant_id FROM notes) notes ON notes.tenant_id=records.tenant_id AND notes.item_id=records.id`
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateRelation, Relation: &RelationMutation{
+		Name: "notes", Parent: "items", On: "notes.item_id=items.id AND notes.tenant_id=items.tenant_id",
+	}}})
+	if !response.Applied || len(response.Diagnostics) != 0 || !strings.Contains(response.DQL, "ON notes.item_id=items.id AND notes.tenant_id=items.tenant_id") {
+		t.Fatalf("response=%+v", response)
+	}
+	items := findRelation(response.Structure.Component.RootView, "items")
+	if items == nil || len(items.View.Relations) != 1 || items.View.Relations[0].Name != "notes" || len(items.View.Relations[0].On) != 2 {
+		t.Fatalf("items=%+v", items)
+	}
+}
+
+func TestServiceUpdateRelationRollsBackWrongParent(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+SELECT records.*,items.* FROM (SELECT id FROM records) records
+JOIN (SELECT id,record_id FROM items) items ON items.record_id=records.id`
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateRelation, Relation: &RelationMutation{Name: "items", Parent: "missing", On: "items.record_id=records.id"}}})
+	if response.Applied || response.DQL != source || len(response.Diagnostics) == 0 {
+		t.Fatalf("response=%+v", response)
+	}
+}
