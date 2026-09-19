@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	dsql "github.com/viant/datly/sql"
 	rsql "github.com/viant/datly/sql/builder"
 	rcollector "github.com/viant/datly/sql/reader/collector"
+	"github.com/viant/sqlx/io/read/cache"
 	xhandler "github.com/viant/xdatly/handler"
 	xreader "github.com/viant/xdatly/reader"
+	xstate "github.com/viant/xdatly/state"
 )
 
 type relationRead struct {
@@ -176,6 +179,9 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 	if err != nil {
 		return fmt.Errorf("build relation cache matcher for %s: %w", view.Spec.Name, err)
 	}
+	if err := r.applyWarmupMatcher(r.ctx, query, matcher); err != nil {
+		return fmt.Errorf("build relation warmup matcher for %s: %w", view.Spec.Name, err)
+	}
 	if !r.readAll && r.parentCount <= 1 {
 		matcher.Offset = 0
 		matcher.Limit = 0
@@ -190,4 +196,58 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 		parent = p.Id
 	}
 	return scan.query(r.ctx, rowQuery{collector: r.child, db: r.connection.DB, query: query, visit: visitor.Visit, read: r.read, id: r.child.Id, parent: parent})
+}
+
+func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *cache.ParmetrizedQuery) error {
+	if r == nil || r.session == nil || r.plan == nil || matcher == nil {
+		return nil
+	}
+	view := r.plan.View
+	if r.session.ReadCaches[view] == nil || view.Cache == nil || view.Cache.Warmup == nil {
+		return nil
+	}
+	settings := view.Cache.Warmup
+	selector := r.selector.forView(view).Clone()
+	projection := viewProjection(view, selector)
+	if selector == nil {
+		selector = &xstate.Selector{}
+	}
+	selector.Fields = append([]string(nil), settings.FieldNames...)
+	selector.Columns = nil
+	identity, err := rsql.NewBuilder().CacheSQL(ctx,
+		rsql.WithBuilderComponent(r.session.Component), rsql.WithBuilderView(view), rsql.WithBuilderCriteriaCompiler(r.plan.Criteria),
+		rsql.WithBuilderSelector(selector), rsql.WithBuilderProjection(viewProjection(view, selector)),
+		rsql.WithBuilderInput(r.input.Elem()), rsql.WithBuilderParameterResolver(r.session.Parameters),
+		rsql.WithBuilderTemplate(r.plan.Template), rsql.WithBuilderBinder(r.binder), rsql.WithBuilderDialect(r.connection.Dialect))
+	if err != nil {
+		return err
+	}
+	stored, requested := r.plan.cacheProjection(settings.FieldNames), r.plan.cacheProjection(projection)
+	if view.IsGroupable() {
+		stored, err = (dsql.CacheProjection{SQL: identity.SQL, View: view}).Fields()
+		if err != nil {
+			return nil
+		}
+		requested, err = (dsql.CacheProjection{SQL: query.SQL, View: view}).Fields()
+		if err != nil {
+			return nil
+		}
+	}
+	if _, compatible, _, err := (cache.Projection{Stored: stored}).Indexes(requested); err != nil {
+		return err
+	} else if !compatible {
+		return nil
+	}
+	if indexColumn := strings.TrimSpace(settings.IndexColumn); indexColumn != "" {
+		matcher.By = indexColumn
+	}
+	matcher.IdentitySQL = identity.SQL
+	matcher.IdentityArgs = identity.Args
+	matcher.Limit = identity.Limit
+	matcher.Offset = identity.Offset
+	for _, field := range requested {
+		field.DimensionKey, field.MeasureKey = "", ""
+		matcher.RequestedFields = append(matcher.RequestedFields, field)
+	}
+	return nil
 }

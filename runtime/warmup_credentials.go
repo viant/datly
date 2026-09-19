@@ -46,21 +46,35 @@ func (w *Warmup) CredentialHeaders() ([]string, error) {
 			if parameter, ok := source.Extension.(*spec.Parameter); ok && parameter != nil && parameter.Name != "" {
 				name = parameter.Name
 			}
-			if w.settings.IndexParameter == name {
-				return nil, fmt.Errorf("warmup index must not remove JWT input %s", name)
-			}
-			for _, set := range w.settings.Cases {
-				if set != nil {
-					for _, parameter := range set.Set {
-						if parameter != nil && parameter.Name == name {
-							return nil, fmt.Errorf("warmup cases must not override caller JWT input %s", name)
-						}
-					}
-				}
+			if err := w.validateCredentialWarmupTarget(name); err != nil {
+				return nil, err
 			}
 		}
 
 		result = append(result, binding.Location.In)
 	}
 	return result, nil
+}
+
+func (w *Warmup) validateCredentialWarmupTarget(name string) error {
+	for _, target := range w.targets {
+		settings := target.Settings
+		if settings == nil {
+			continue
+		}
+		if settings.IndexParameter == name {
+			return fmt.Errorf("warmup index must not remove JWT input %s", name)
+		}
+		for _, set := range settings.Cases {
+			if set == nil {
+				continue
+			}
+			for _, parameter := range set.Set {
+				if parameter != nil && parameter.Name == name {
+					return fmt.Errorf("warmup cases must not override caller JWT input %s", name)
+				}
+			}
+		}
+	}
+	return nil
 }

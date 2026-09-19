@@ -14,6 +14,12 @@ type ReaderWarmupRequest struct {
 	Settings *spec.CacheWarmupSettings
 }
 
+// ReaderWarmupTarget is one materialized view warmup policy owned by a reader.
+type ReaderWarmupTarget struct {
+	View     string
+	Settings *spec.CacheWarmupSettings
+}
+
 // ReaderWarmupInvocation carries canonical input already bound by the engine.
 type ReaderWarmupInvocation struct {
 	Request    ReaderWarmupRequest
@@ -25,4 +31,9 @@ type ReaderWarmupInvocation struct {
 // ReaderWarmer is an optional reader operation; native SQLX owns all cache data.
 type ReaderWarmer interface {
 	Warmup(context.Context, ReaderWarmupInvocation) (int, error)
+}
+
+// ReaderWarmupTargeter exposes reader-owned warmup targets after compilation.
+type ReaderWarmupTargeter interface {
+	WarmupTargets() []ReaderWarmupTarget
 }
