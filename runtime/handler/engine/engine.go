@@ -99,6 +99,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	data, ownsData := invocationDataScope(ctx, request.DataSource)
 	if data != nil {
 		data.sequenceStrategy = request.SequenceStrategy
+		data.connectors = request.Capabilities.Connector
 	} else if request.SequenceStrategy != "" {
 		return nil, fmt.Errorf("sequence_strategy requires a data source")
 	}
@@ -109,8 +110,14 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if data == nil && (outcomeAware || request.Completion != nil || request.hasInjectorFinalizer()) {
 		data, ownsData = neutralDataScope(), true
 	}
+	if data == nil && request.Capabilities.Connector != nil {
+		data, ownsData = neutralDataScope(), true
+	}
 	if data != nil {
-		if data.source != nil || data.parent != nil {
+		if data.connectors == nil {
+			data.connectors = request.Capabilities.Connector
+		}
+		if data.source != nil || data.parent != nil || data.connectors != nil {
 			runtimeProviders = append(runtimeProviders, data.providers()...)
 		}
 		ctx = withDataScope(ctx, data)
