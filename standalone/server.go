@@ -117,6 +117,9 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 		}
 	}()
 	logger := serviceLogger(options.Diagnostics)
+	if options.Diagnostics != nil {
+		s.source.logger = logger
+	}
 	async, err := s.source.async(ctx, options.Async, logger)
 	if err != nil {
 		return nil, err
