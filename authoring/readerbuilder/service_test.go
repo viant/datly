@@ -18,7 +18,7 @@ func TestServiceInspectReturnsCanonicalAndAuthoringMetadata(t *testing.T) {
 	if !response.Applied || response.DQL != baseDQL || len(response.Diagnostics) != 0 {
 		t.Fatalf("response=%+v expansions=%+v", response, response.Structure.PredicateExpansions)
 	}
-	if response.Structure == nil || response.Structure.Component == nil || len(response.Structure.Views) != 1 || response.Structure.Views[0].Name != "records" {
+	if response.Structure == nil || response.Structure.Component == nil || len(response.Structure.Views) != 1 || response.Structure.Views[0].Name != "records" || !strings.Contains(response.Structure.Views[0].SQL, "SELECT r.id,r.name FROM records r") {
 		t.Fatalf("structure=%+v", response.Structure)
 	}
 }

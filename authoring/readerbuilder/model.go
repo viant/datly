@@ -152,7 +152,11 @@ type FunctionOccurrence struct {
 }
 
 type ViewOccurrence struct {
-	Name       string         `json:"name"`
+	Name string `json:"name"`
+	// SQL is the exact embedded query for this named view. It intentionally
+	// excludes the outer graph projection and join wrapper so authoring clients
+	// can edit a view without reverse-engineering compiled runtime SQL.
+	SQL        string         `json:"sql,omitempty"`
 	SourceSpan dql.SourceSpan `json:"sourceSpan"`
 }
 
