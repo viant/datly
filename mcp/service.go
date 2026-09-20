@@ -19,13 +19,15 @@ import (
 )
 
 type Config struct {
-	Folders         []mcpresource.Folder
-	Components      []*registry.RegisteredComponent
-	Invoker         exec.ComponentInvoker
-	Client          xmcp.Client
-	Resources       *bindresource.Store
-	ResourceBaseURI string
-	Authorization   *authorization.Policy
+	Folders           []mcpresource.Folder
+	Components        []*registry.RegisteredComponent
+	Invoker           exec.ComponentInvoker
+	Client            xmcp.Client
+	Resources         *bindresource.Store
+	ResourceBaseURI   string
+	Authorization     *authorization.Policy
+	AuthorizeTool     func(context.Context, exec.ComponentTarget) error
+	AuthorizeResource func(context.Context, string) error
 	// Indexed publishes tool identities without eager component contracts.
 	Indexed []*spec.Component
 	Loader  ComponentLoader
@@ -40,11 +42,12 @@ type ComponentRouteResolver interface {
 }
 
 type Service struct {
-	catalog   *Catalog
-	registry  *mcpserver.Registry
-	resources *mcpresource.Handler
-	policy    *authorization.Policy
-	lazy      *lazyCatalog
+	catalog           *Catalog
+	registry          *mcpserver.Registry
+	resources         *mcpresource.Handler
+	policy            *authorization.Policy
+	lazy              *lazyCatalog
+	authorizeResource func(context.Context, string) error
 }
 
 func (s *Service) ReadResource(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {
@@ -53,6 +56,11 @@ func (s *Service) ReadResource(ctx context.Context, request *schema.ReadResource
 	}
 	if s == nil || s.resources == nil {
 		return nil, jsonrpc.NewInternalError("MCP resource service is unavailable", nil)
+	}
+	if s.authorizeResource != nil {
+		if request == nil || s.authorizeResource(ctx, request.Params.Uri) != nil {
+			return nil, jsonrpc.NewInvalidRequest("MCP resource authorization denied", nil)
+		}
 	}
 	return s.resources.Handle(ctx, request)
 }

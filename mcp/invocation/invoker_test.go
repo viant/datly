@@ -182,6 +182,24 @@ func TestInvokerAddsProtocolTokenAsImmutableAuthorizationProvider(t *testing.T) 
 	}
 }
 
+func TestInvokerAuthorizesExactComponentTargetBeforeInvocation(t *testing.T) {
+	target := exec.ComponentTarget{Component: spec.Key{Kind: spec.KindComponent, Name: "Protected"}, Route: spec.RouteRef{Method: "GET", Path: "/protected"}}
+	called := false
+	invoker := New(Config{Invoker: &captureInvoker{}, Authorize: func(_ context.Context, actual exec.ComponentTarget) error {
+		called = true
+		if actual != target {
+			t.Fatalf("target=%+v want=%+v", actual, target)
+		}
+		return errors.New("denied")
+	}})
+	if _, rpcErr := invoker.Execute(context.Background(), Request{Target: target, Method: "tools/call", URI: "protected"}); rpcErr == nil {
+		t.Fatal("denied MCP target unexpectedly executed")
+	}
+	if !called {
+		t.Fatal("MCP target authorizer was not called")
+	}
+}
+
 func invokeTool(ctx context.Context, invoker *Invoker, request Request) (*schema.CallToolResult, *jsonrpc.Error) {
 	request.Method = schema.MethodToolsCall
 	request.URI = request.Target.String()

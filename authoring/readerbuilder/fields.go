@@ -137,6 +137,7 @@ func optionPatches(occurrence dql.DeclarationOccurrence, mutation *Field) []sour
 	var patches []sourcePatch
 	requiredSeen := false
 	selectorSeen := false
+	valueSeen := false
 	selector := ""
 	if mutation.UpdateQuerySelector != nil {
 		selector = strings.TrimSpace(*mutation.UpdateQuerySelector)
@@ -167,6 +168,16 @@ func optionPatches(occurrence dql.DeclarationOccurrence, mutation *Field) []sour
 			}
 			selectorSeen = true
 			patches = append(patches, sourcePatch{span: option.Span, text: text})
+		case "value":
+			if !mutation.UpdateValue {
+				continue
+			}
+			text := ""
+			if !valueSeen && mutation.Value != nil {
+				text = ".Value(" + strconv.Quote(*mutation.Value) + ")"
+			}
+			valueSeen = true
+			patches = append(patches, sourcePatch{span: option.Span, text: text})
 		}
 	}
 	insert := ""
@@ -179,6 +190,9 @@ func optionPatches(occurrence dql.DeclarationOccurrence, mutation *Field) []sour
 	}
 	if mutation.UpdateQuerySelector != nil && selector != "" && !selectorSeen {
 		insert += ".QuerySelector(" + strconv.Quote(selector) + ")"
+	}
+	if mutation.UpdateValue && mutation.Value != nil && !valueSeen {
+		insert += ".Value(" + strconv.Quote(*mutation.Value) + ")"
 	}
 	if insert != "" {
 		patches = append(patches, sourcePatch{span: dql.SourceSpan{Start: occurrence.OptionInsert, End: occurrence.OptionInsert}, text: insert})

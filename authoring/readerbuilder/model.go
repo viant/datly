@@ -28,6 +28,8 @@ const (
 	OperationRemoveView           OperationType = "removeView"
 	OperationUpdateRelation       OperationType = "updateRelation"
 	OperationSetColumnRole        OperationType = "setColumnRole"
+	OperationSetColumnContract    OperationType = "setColumnContract"
+	OperationBatch                OperationType = "batch"
 )
 
 type Request struct {
@@ -36,16 +38,18 @@ type Request struct {
 }
 
 type Operation struct {
-	Type       OperationType       `json:"type"`
-	Reader     *ReaderMutation     `json:"reader,omitempty"`
-	Package    *PackageMutation    `json:"package,omitempty"`
-	Field      *Field              `json:"field,omitempty"`
-	Predicate  *PredicateMutation  `json:"predicate,omitempty"`
-	Function   *FunctionMutation   `json:"function,omitempty"`
-	Setting    *SettingMutation    `json:"setting,omitempty"`
-	View       *ViewMutation       `json:"view,omitempty"`
-	Relation   *RelationMutation   `json:"relation,omitempty"`
-	ColumnRole *ColumnRoleMutation `json:"columnRole,omitempty"`
+	Type       OperationType           `json:"type"`
+	Reader     *ReaderMutation         `json:"reader,omitempty"`
+	Package    *PackageMutation        `json:"package,omitempty"`
+	Field      *Field                  `json:"field,omitempty"`
+	Predicate  *PredicateMutation      `json:"predicate,omitempty"`
+	Function   *FunctionMutation       `json:"function,omitempty"`
+	Setting    *SettingMutation        `json:"setting,omitempty"`
+	View       *ViewMutation           `json:"view,omitempty"`
+	Relation   *RelationMutation       `json:"relation,omitempty"`
+	ColumnRole *ColumnRoleMutation     `json:"columnRole,omitempty"`
+	Column     *ColumnContractMutation `json:"column,omitempty"`
+	Operations []Operation             `json:"operations,omitempty"`
 }
 
 type PackageMutation struct {
@@ -74,6 +78,8 @@ type Field struct {
 	Required            *bool   `json:"required,omitempty"`
 	QuerySelector       string  `json:"querySelector,omitempty"`
 	UpdateQuerySelector *string `json:"updateQuerySelector,omitempty"`
+	Value               *string `json:"value,omitempty"`
+	UpdateValue         bool    `json:"updateValue,omitempty"`
 }
 
 type PredicateMutation struct {
@@ -125,6 +131,18 @@ type ColumnRoleMutation struct {
 	Role   string `json:"role"`
 }
 
+// ColumnContractMutation applies cohesive field metadata to one compiled view
+// column. A nil CastType preserves the current CAST; a non-nil empty value
+// removes it. Tags are merged by key and RemoveTags removes only the named
+// metadata, preserving unrelated authored tags.
+type ColumnContractMutation struct {
+	View       string            `json:"view"`
+	Column     string            `json:"column"`
+	CastType   *string           `json:"castType,omitempty"`
+	Tags       map[string]string `json:"tags,omitempty"`
+	RemoveTags []string          `json:"removeTags,omitempty"`
+}
+
 type Response struct {
 	Applied     bool                     `json:"applied"`
 	DQL         string                   `json:"dql"`
@@ -139,6 +157,7 @@ type Structure struct {
 	Views               []ViewOccurrence            `json:"views,omitempty"`
 	PredicateExpansions []PredicateExpansion        `json:"predicateExpansions,omitempty"`
 	Functions           []FunctionOccurrence        `json:"functions,omitempty"`
+	ColumnContracts     []ColumnContract            `json:"columnContracts,omitempty"`
 	AvailableConnectors []string                    `json:"availableConnectors,omitempty"`
 	AvailablePredicates []string                    `json:"availablePredicates,omitempty"`
 	AvailableCaches     []string                    `json:"availableCaches,omitempty"`
@@ -149,6 +168,15 @@ type FunctionOccurrence struct {
 	Args       []string       `json:"args,omitempty"`
 	Occurrence int            `json:"occurrence"`
 	SourceSpan dql.SourceSpan `json:"sourceSpan"`
+}
+
+// ColumnContract is the normalized authoring projection for one view column.
+// It lets clients render cohesive controls without parsing DQL or Go tags.
+type ColumnContract struct {
+	View     string            `json:"view"`
+	Column   string            `json:"column"`
+	CastType string            `json:"castType,omitempty"`
+	Tags     map[string]string `json:"tags,omitempty"`
 }
 
 type ViewOccurrence struct {

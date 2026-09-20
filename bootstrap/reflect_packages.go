@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"fmt"
+	"go/token"
 	"path"
 	"reflect"
 	"sort"
@@ -33,6 +34,13 @@ func ReflectPackages(includes []string) (*ReflectedPackages, error) {
 			typeOf := dereference(candidate)
 			if typeOf == nil || typeOf.Name() == "" || typeOf.PkgPath() != packagePath {
 				continue
+			}
+			// Package bootstrap is also the type authority for ordinary exported
+			// handlers and shared shapes that are not reachable from a component
+			// input/output. Unexported function-local helper types can share a
+			// runtime key, so they are deliberately excluded from package authority.
+			if token.IsExported(typeOf.Name()) {
+				collectContractTypes(contracts, typeOf)
 			}
 			if typeOf.Kind() != reflect.Struct {
 				continue

@@ -74,6 +74,14 @@ func editView(source string, operation OperationType, mutation *ViewMutation) (s
 }
 
 func validateOperationResult(operation Operation, structure *Structure) error {
+	if operation.Type == OperationBatch {
+		for _, child := range operation.Operations {
+			if err := validateOperationResult(child, structure); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	if operation.Type == OperationSetColumnRole && operation.ColumnRole != nil {
 		view := findView(structure.Component.RootView, operation.ColumnRole.View)
 		if view == nil {

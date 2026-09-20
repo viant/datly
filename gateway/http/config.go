@@ -34,6 +34,9 @@ type Config struct {
 	Meta            Meta           `json:"Meta,omitempty" yaml:"Meta,omitempty"`
 	OpenAPI         *OpenAPIConfig `json:"OpenAPI,omitempty" yaml:"OpenAPI,omitempty"`
 	Warmup          *WarmupConfig  `json:"-" yaml:"-"`
+	// Authorize applies application policy to every resolved component target
+	// after route/API-key checks and before request binding or execution.
+	Authorize func(context.Context, *stdhttp.Request, dexec.ComponentTarget) error `json:"-" yaml:"-"`
 }
 
 const DefaultCacheWarmURI = "/v1/api/cache/warmup"
@@ -132,6 +135,7 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 		}
 	}
 	h := NewHandler(rt, log, version)
+	h.authorize = c.Authorize
 	h.allowedSubnet = c.Meta.AllowedSubnet
 	if c.Metrics != nil {
 		policy := *c.Metrics

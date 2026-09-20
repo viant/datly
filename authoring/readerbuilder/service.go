@@ -77,7 +77,7 @@ func (s *Service) inspect(ctx context.Context, source string) (*Structure, []*tr
 	views, expansions, authoringErr := inspectViewSources(source)
 	functions, functionErr := inspectFunctions(source)
 	structure := &Structure{Status: "complete", Declarations: declarations, Views: views,
-		PredicateExpansions: expansions, Functions: functions, AvailableConnectors: append([]string(nil), s.config.AvailableConnectors...),
+		PredicateExpansions: expansions, Functions: functions, ColumnContracts: inspectColumnContracts(functions), AvailableConnectors: append([]string(nil), s.config.AvailableConnectors...),
 		AvailablePredicates: append([]string(nil), s.config.PredicateNames...)}
 	structure.AvailableCaches = append([]string(nil), s.config.AvailableCaches...)
 	name := strings.TrimSpace(s.config.Name)
@@ -150,6 +150,18 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 		return updateRelation(source, operation.Relation)
 	case OperationSetColumnRole:
 		return s.setColumnRole(source, operation.ColumnRole)
+	case OperationSetColumnContract:
+		return s.setColumnContract(source, operation.Column)
+	case OperationBatch:
+		candidate := source
+		for _, child := range operation.Operations {
+			var err error
+			candidate, err = s.edit(candidate, child)
+			if err != nil {
+				return "", err
+			}
+		}
+		return candidate, nil
 	default:
 		return "", fmt.Errorf("unsupported reader builder operation %q", operation.Type)
 	}
@@ -157,7 +169,7 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 
 func (o Operation) validate() error {
 	payloads := 0
-	for _, present := range []bool{o.Reader != nil, o.Package != nil, o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil, o.Relation != nil, o.ColumnRole != nil} {
+	for _, present := range []bool{o.Reader != nil, o.Package != nil, o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil, o.Relation != nil, o.ColumnRole != nil, o.Column != nil, len(o.Operations) > 0} {
 		if present {
 			payloads++
 		}
@@ -215,6 +227,23 @@ func (o Operation) validate() error {
 		if o.ColumnRole == nil {
 			return fmt.Errorf("operation %q requires columnRole", o.Type)
 		}
+	case OperationSetColumnContract:
+		if o.Column == nil {
+			return fmt.Errorf("operation %q requires column", o.Type)
+		}
+	case OperationBatch:
+		if len(o.Operations) == 0 {
+			return fmt.Errorf("operation %q requires at least one child operation", o.Type)
+		}
+		for index := range o.Operations {
+			child := o.Operations[index]
+			if child.Type == OperationBatch || child.Type == OperationInspect {
+				return fmt.Errorf("batch child %d uses unsupported operation %q", index, child.Type)
+			}
+			if err := child.validate(); err != nil {
+				return fmt.Errorf("batch child %d: %w", index, err)
+			}
+		}
 	default:
 		return fmt.Errorf("unsupported reader builder operation %q", o.Type)
 	}
@@ -247,6 +276,9 @@ func addField(source string, field *Field) (string, error) {
 	}
 	if strings.TrimSpace(field.QuerySelector) != "" {
 		line += ".QuerySelector(" + strconv.Quote(strings.TrimSpace(field.QuerySelector)) + ")"
+	}
+	if field.Value != nil {
+		line += ".Value(" + strconv.Quote(*field.Value) + ")"
 	}
 	line += ")\n"
 	prepared := dql.PrepareSource(source)

@@ -49,11 +49,19 @@ func NewResolverWithProvenance(catalog *Catalog, authority Authority, context *R
 	if implicitTime {
 		types["time.Time"] = x.NewType(reflect.TypeOf(time.Time{}))
 	}
-	for _, typeOf := range []reflect.Type{reflect.TypeFor[xresponse.Status](), reflect.TypeFor[xhandler.Violation](), reflect.TypeFor[json.RawMessage]()} {
+	for _, typeOf := range []reflect.Type{reflect.TypeFor[xresponse.Status](), reflect.TypeFor[xhandler.Violation]()} {
 		key := typeOf.PkgPath() + "." + typeOf.Name()
 		if types[key] == nil {
 			types[key] = x.NewType(typeOf)
 		}
+	}
+	// Go 1.25 may expose json.RawMessage's runtime identity through the
+	// encoding/json/jsontext implementation alias. DQL and generated Go source
+	// retain the public encoding/json.RawMessage spelling, so register that
+	// authored identity explicitly while preserving the actual runtime type.
+	const rawMessageKey = "encoding/json.RawMessage"
+	if types[rawMessageKey] == nil {
+		types[rawMessageKey] = x.NewType(reflect.TypeFor[json.RawMessage](), x.WithPkgPath("encoding/json"), x.WithName("RawMessage"))
 	}
 	return &Resolver{authority: authority, types: types, context: NormalizeContext(context), provenance: cloneProvenance(provenance), implicitTime: implicitTime}, nil
 }

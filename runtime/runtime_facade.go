@@ -297,6 +297,23 @@ func (r *Runtime) RouteByMethodPath(method, path string) (*spec.Route, bool) {
 	return r.bundle.RouteByMethodPath(method, path)
 }
 
+// ComponentTargetByMethodPath resolves the exact public component target used
+// by protocol authorization without exposing the mutable route bundle.
+func (r *Runtime) ComponentTargetByMethodPath(method, path string) (dexec.ComponentTarget, bool) {
+	if r == nil || r.bundle == nil {
+		return dexec.ComponentTarget{}, false
+	}
+	component, _, ok := r.publicComponentByRoute(method, path)
+	if !ok || component == nil {
+		return dexec.ComponentTarget{}, false
+	}
+	route, ok := r.bundle.RouteByMethodPath(method, path)
+	if !ok || route == nil {
+		return dexec.ComponentTarget{}, false
+	}
+	return dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: route.Method, Path: route.Path}}, true
+}
+
 func (r *Runtime) AllowedMethodsForPath(path string) []string {
 	if r == nil || r.bundle == nil {
 		return nil

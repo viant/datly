@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/mcp/tool"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
+	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/mcp-protocol/schema"
 	mcpserver "github.com/viant/mcp-protocol/server"
@@ -184,18 +185,27 @@ func (c *serviceCompiler) compileRoute(result *compiledPlans, toolCompiler *tool
 
 func (c *serviceCompiler) publish(catalog *Catalog, policy *authorization.Policy) (*Service, error) {
 	protocolRegistry := mcpserver.NewRegistry()
-	componentInvoker := invocation.New(invocation.Config{Invoker: c.config.Invoker, Client: c.config.Client})
+	componentInvoker := invocation.New(invocation.Config{Invoker: c.config.Invoker, Client: c.config.Client, Authorize: c.config.AuthorizeTool})
 	resourceHandler := mcpresource.NewHandler(catalog.resources, componentInvoker)
+	resourceReadHandler := resourceHandler.Handle
+	if c.config.AuthorizeResource != nil {
+		resourceReadHandler = func(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {
+			if request == nil || c.config.AuthorizeResource(ctx, request.Params.Uri) != nil {
+				return nil, jsonrpc.NewInvalidRequest("MCP resource authorization denied", nil)
+			}
+			return resourceHandler.Handle(ctx, request)
+		}
+	}
 	for _, name := range catalog.names {
 		plan, _ := catalog.Tool(name)
 		handler := tool.NewHandler(plan, componentInvoker)
 		protocolRegistry.RegisterTool(&mcpserver.ToolEntry{Metadata: plan.Metadata(), Handler: handler.Handle})
 	}
 	for _, metadata := range catalog.resources.Resources() {
-		protocolRegistry.RegisterResource(metadata, resourceHandler.Handle)
+		protocolRegistry.RegisterResource(metadata, resourceReadHandler)
 	}
 	for _, metadata := range catalog.resources.Templates() {
-		protocolRegistry.RegisterResourceTemplate(metadata, resourceHandler.Handle)
+		protocolRegistry.RegisterResourceTemplate(metadata, resourceReadHandler)
 	}
 	if len(catalog.resources.Names()) > 0 {
 		protocolRegistry.Methods.Put(schema.MethodResourcesRead, true)
@@ -203,7 +213,7 @@ func (c *serviceCompiler) publish(catalog *Catalog, policy *authorization.Policy
 	if err := catalog.resources.RegisterSkills(protocolRegistry); err != nil {
 		return nil, err
 	}
-	return &Service{catalog: catalog, registry: protocolRegistry, resources: resourceHandler, policy: policy}, nil
+	return &Service{catalog: catalog, registry: protocolRegistry, resources: resourceHandler, policy: policy, authorizeResource: c.config.AuthorizeResource}, nil
 }
 
 func resourceBaseURI(value string) string {

@@ -264,6 +264,34 @@ func TestServiceAddsQuerySelectorField(t *testing.T) {
 	}
 }
 
+func TestServiceAddsAndUpdatesConstantValue(t *testing.T) {
+	service := New(Config{})
+	source := `#package('example.com/readers')
+#setting($_ = $route('/records','GET'))
+#define($_ = $Records<[]*Record>(output/view))
+SELECT records.*, type(records,'Record') FROM (SELECT id FROM records) records`
+	zero := "0"
+	added := service.Apply(context.Background(), Request{DQL: source, Operation: Operation{
+		Type: OperationAddField, Field: &Field{Name: "TenantID", Type: "int", SourceKind: "const", SourceName: "TenantID", Value: &zero},
+	}})
+	if !added.Applied || !strings.Contains(added.DQL, `$TenantID<int>(const/TenantID).Value("0")`) {
+		t.Fatalf("add constant=%s diagnostics=%+v", added.DQL, added.Diagnostics)
+	}
+	seven := "7"
+	updated := service.Apply(context.Background(), Request{DQL: added.DQL, Operation: Operation{
+		Type: OperationUpdateField, Field: &Field{ExistingName: "TenantID", Name: "TenantID", Type: "int", SourceKind: "const", SourceName: "TenantID", Value: &seven, UpdateValue: true},
+	}})
+	if !updated.Applied || !strings.Contains(updated.DQL, `.Value("7")`) || strings.Contains(updated.DQL, `.Value("0")`) {
+		t.Fatalf("update constant=%s diagnostics=%+v", updated.DQL, updated.Diagnostics)
+	}
+	removed := service.Apply(context.Background(), Request{DQL: updated.DQL, Operation: Operation{
+		Type: OperationUpdateField, Field: &Field{ExistingName: "TenantID", Name: "TenantID", Type: "int", SourceKind: "const", SourceName: "TenantID", UpdateValue: true},
+	}})
+	if !removed.Applied || strings.Contains(removed.DQL, `.Value(`) {
+		t.Fatalf("remove constant default=%s diagnostics=%+v", removed.DQL, removed.Diagnostics)
+	}
+}
+
 func TestServiceUpdatesAndRemovesInputWithoutDroppingPredicateOptions(t *testing.T) {
 	source := `#setting($_ = $route('/records','GET'))
 #define($_ = $Limit<int>(query/limit).Optional().QuerySelector("Records").WithPredicate(0,"less_or_equal","r","id"))

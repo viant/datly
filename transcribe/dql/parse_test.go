@@ -2,6 +2,7 @@ package dql
 
 import (
 	"context"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -201,6 +202,21 @@ SELECT 1`
 	assertly.AssertValues(t, "bq_metrics_prewarm", warmup.Connector)
 	if len(warmup.Cases) != 1 || len(warmup.Cases[0].Set) != 2 {
 		t.Fatalf("expected one warmup case with two params")
+	}
+}
+
+func TestParseComponentSource_WithBoundedCacheWarmup(t *testing.T) {
+	component, err := parseComponentSource("example.com/cache", "records", `#package('example.com/cache')
+#setting($_ = $route('/records','GET'))
+#setting($_ = $cache('records','5m').WithLocation('/tmp/records'))
+#setting($_ = $cache_warmup('tenant_id','IndexParameter=TenantID','MaxCases=30','Limit=100','FieldNames=id,name','Period=today,yesterday'))
+SELECT 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmup := component.Settings.Cache.Warmup
+	if warmup == nil || warmup.MaxCases == nil || *warmup.MaxCases != 30 || warmup.Limit == nil || *warmup.Limit != 100 || !reflect.DeepEqual(warmup.FieldNames, []string{"id", "name"}) || len(warmup.Cases) != 1 {
+		t.Fatalf("warmup=%+v", warmup)
 	}
 }
 
