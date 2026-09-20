@@ -107,3 +107,93 @@ func TestRuntimeAuthoredWarmupSQLite(t *testing.T) {
 		})
 	}
 }
+
+func TestRuntimeWarmupExecutesChildViewWarmupSQLite(t *testing.T) {
+	type input struct{ Tenant int }
+	type childRow struct {
+		ID       int    `sqlx:"id"`
+		ParentID int    `sqlx:"parent_id"`
+		Name     string `sqlx:"name"`
+	}
+	type parentRow struct {
+		ID       int        `sqlx:"id"`
+		Children []childRow `sqlx:"-"`
+	}
+	type output struct{ Rows []parentRow }
+
+	ctx := context.Background()
+	db := sqlite.New(t)
+	if err := db.ExecStatements(ctx,
+		"CREATE TABLE parents(id INTEGER, tenant INTEGER)",
+		"CREATE TABLE children(id INTEGER, parent_id INTEGER, name TEXT)",
+		"INSERT INTO parents VALUES(1,7),(2,7),(3,8)",
+		"INSERT INTO children VALUES(11,1,'one'),(12,1,'two'),(21,2,'three'),(31,3,'other')",
+	); err != nil {
+		t.Fatal(err)
+	}
+	required := true
+	child := &spec.View{
+		Name: "children",
+		Source: &spec.ViewSource{
+			Bindings: &spec.ViewBindings{CacheName: "child-cache", CacheWarmup: "child-warmup"},
+			SQL:      "SELECT id,parent_id,name FROM children WHERE $COLUMN_IN ORDER BY parent_id,id",
+		},
+	}
+	component := &spec.Component{
+		Key:    spec.Key{Kind: spec.KindComponent, Name: "Parents"},
+		Routes: []*spec.Route{{Method: "GET", Path: "/parents"}},
+		Parameters: []*spec.Parameter{
+			{Name: "Tenant", TypeExpr: "int", Required: &required, Source: spec.BindSource{Kind: "query", Name: "tenant"}},
+			{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}},
+		},
+		RootView: &spec.View{
+			Name:   "parents",
+			Source: &spec.ViewSource{SQL: "SELECT id FROM parents WHERE tenant=:Tenant ORDER BY id"},
+			Relations: []*spec.Relation{{
+				Name: "children", Holder: "Children", Cardinality: spec.CardinalityMany,
+				On:   []*spec.RelationLink{{ParentColumn: "id", ChildColumn: "parent_id"}},
+				View: child,
+			}},
+		},
+	}
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeOf(input{}), OutputType: reflect.TypeOf(output{}), DirectViewField: "Rows"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{
+		SQL: &dsql.SQLComponent{DB: db.DB},
+		CacheSettings: map[string]*spec.CacheSettings{
+			"child-cache": {Enabled: true, Location: t.TempDir(), TTL: "1m"},
+			"child-warmup": {
+				Warmup: &spec.CacheWarmupSettings{
+					IndexColumn: "parent_id",
+					Cases: []*spec.CacheWarmupCase{{
+						Set: []*spec.CacheWarmupParam{{Name: "Tenant", Values: []string{"7"}}},
+					}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := NewRuntime([]*registry.RegisteredComponent{{Component: artifact.Component, Input: artifact.Input, OutputType: reflect.TypeOf(output{}), Reader: reader}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: "GET", Path: "/parents"}}
+	if count, err := runtime.Warmup(ctx, target); err != nil || count != 3 {
+		t.Fatalf("Warmup=%d,%v", count, err)
+	}
+	if err := db.ExecStatements(ctx, "UPDATE children SET name='changed' WHERE parent_id IN (1,2)"); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := runtime.InvokeComponent(ctx, dexec.ComponentRequest{Target: target, Providers: []locator.Provider{values.New("query", map[string]any{"tenant": 7})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := actual.(*output).Rows
+	if len(rows) != 2 || len(rows[0].Children) != 2 || rows[0].Children[0].Name != "one" || len(rows[1].Children) != 1 || rows[1].Children[0].Name != "three" {
+		t.Fatalf("rows=%+v", rows)
+	}
+}

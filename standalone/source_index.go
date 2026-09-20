@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/viant/datly/bootstrap"
 	bootstrapindex "github.com/viant/datly/bootstrap/index"
@@ -21,11 +22,14 @@ type indexedMaterializer struct {
 }
 
 func (m *indexedMaterializer) Materialize(ctx context.Context, entry *bootstrapindex.Entry, _ bootstrapindex.Resolver) (*bootstrapindex.Loaded, error) {
+	started := time.Now()
 	if m == nil || m.source == nil || entry == nil || entry.Component == nil {
 		return nil, fmt.Errorf("indexed standalone component source is required")
 	}
+	component := entry.Key().String()
 	types, err := m.seed.Clone()
 	if err != nil {
+		m.logMaterialize(component, 0, started, err)
 		return nil, err
 	}
 	owner := entry.Key()
@@ -36,6 +40,7 @@ func (m *indexedMaterializer) Materialize(ctx context.Context, entry *bootstrapi
 	discovery := transcribe.Discovery{Const: m.source.config.Const, Workspace: m.workspace, Include: selection, TypeInclude: indexedMaterializerTypeSelection(owner.Scope, entry.Sources), Exclude: m.source.config.GoBootstrap.Exclude, Connector: m.source.config.Connector, Types: types, Registry: m.source.registry, Holders: m.source.holders, RequireLinked: m.source.requireLinked}
 	project, err := discovery.Compile(ctx)
 	if err != nil {
+		m.logMaterialize(component, 0, started, err)
 		return nil, err
 	}
 	var selected *transcribe.Result
@@ -46,19 +51,24 @@ func (m *indexedMaterializer) Materialize(ctx context.Context, entry *bootstrapi
 		}
 	}
 	if selected == nil {
-		return nil, fmt.Errorf("indexed component source no longer resolves: %s", entry.Key().String())
+		err := fmt.Errorf("indexed component source no longer resolves: %s", entry.Key().String())
+		m.logMaterialize(component, 0, started, err)
+		return nil, err
 	}
 	components := &sourceComponent{source: m.source}
 	input, err := components.artifactInput(selected)
 	if err != nil {
+		m.logMaterialize(component, 0, started, err)
 		return nil, err
 	}
 	compilation, err := report.NewProjectCompiler(report.ProjectConfig{Registry: m.source.registry, Types: selected.Source.Types}).CompileArtifacts([]bootstrap.ArtifactInput{input})
 	if err != nil {
+		m.logMaterialize(component, 0, started, err)
 		return nil, err
 	}
 	registrations, err := compilation.RuntimeComponents(ctx, components)
 	if err != nil {
+		m.logMaterialize(component, 0, started, err)
 		return nil, err
 	}
 	var primary *registry.RegisteredComponent
@@ -71,9 +81,26 @@ func (m *indexedMaterializer) Materialize(ctx context.Context, entry *bootstrapi
 		}
 	}
 	if primary == nil {
-		return nil, fmt.Errorf("indexed component %s did not produce its primary registration", entry.Key().String())
+		err := fmt.Errorf("indexed component %s did not produce its primary registration", entry.Key().String())
+		m.logMaterialize(component, len(related), started, err)
+		return nil, err
 	}
+	m.logMaterialize(component, len(related), started, nil)
 	return &bootstrapindex.Loaded{Registration: primary, Related: related}, nil
+}
+
+func (m *indexedMaterializer) logMaterialize(component string, related int, started time.Time, err error) {
+	if m == nil || m.source == nil || m.source.logger == nil {
+		return
+	}
+	args := []any{"component", component, "related", related, "elapsed", time.Since(started).String()}
+	if err != nil {
+		args = append(args, "status", "error", "error", err)
+		m.source.logger.Error("datly bootstrap indexed materialize", args...)
+		return
+	}
+	args = append(args, "status", "ok")
+	m.source.logger.Info("datly bootstrap indexed materialize", args...)
 }
 
 func indexedMaterializerTypeSelection(ownerScope string, sources []bootstrapindex.Source) []string {

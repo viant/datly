@@ -106,6 +106,24 @@ func TestProjectCompilerLinkedInputAndMCPOptOut(t *testing.T) {
 	}
 }
 
+func TestProjectCompilerDerivedRoutesInheritInternalVisibility(t *testing.T) {
+	source := reportSource(t, &spec.ReportSettings{Enabled: true})
+	source.Component.Routes[0].Internal = true
+	project, err := NewProjectCompiler(ProjectConfig{Types: typecatalog.NewCatalog()}).Compile([]Source{source})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	derived := project.Derived()
+	if len(derived) != 1 {
+		t.Fatalf("Derived() count = %d, want cube", len(derived))
+	}
+	for _, item := range derived {
+		if len(item.Component.Routes) != 1 || !item.Component.Routes[0].Internal {
+			t.Fatalf("derived route did not inherit internal visibility: %+v", item.Component.Routes)
+		}
+	}
+}
+
 func TestProjectCompilerRejectsDerivedRouteCollision(t *testing.T) {
 	source := reportSource(t, &spec.ReportSettings{Enabled: true})
 	collision := Source{Component: &spec.Component{

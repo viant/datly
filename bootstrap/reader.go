@@ -96,9 +96,25 @@ func (c *CompiledReader) resolveCaches(config ReaderRuntimeConfig) (map[*data.Vi
 		}
 		view := plan.View
 		visited[view] = true
+		warmupBinding := viewWarmupBinding(view)
+		if warmupBinding != "" {
+			if view.Cache == nil {
+				view.Cache = &data.Cache{}
+			}
+			if view.Cache.Warmup == nil {
+				warmupSettings := config.CacheSettings[warmupBinding]
+				if warmupSettings == nil || warmupSettings.Warmup == nil {
+					return fmt.Errorf("view %q cache warmup %q has no configuration", view.Spec.Name, warmupBinding)
+				}
+				view.Cache.Warmup = warmupSettings.Warmup.Clone()
+			}
+		}
 		var settings *spec.CacheSettings
 		if view.Cache != nil {
 			settings = config.CacheSettings[view.Cache.Name]
+		}
+		if settings == nil && warmupBinding != "" && view.Cache != nil && view.Cache.Name == "" {
+			settings = config.CacheSettings[warmupBinding]
 		}
 		if settings == nil && plan == c.plan.Root && c.component.Settings != nil && c.component.Settings.Cache != nil {
 			settings = c.component.Settings.Cache
@@ -141,4 +157,11 @@ func (c *CompiledReader) resolveCaches(config ReaderRuntimeConfig) (map[*data.Vi
 		return nil, err
 	}
 	return result, nil
+}
+
+func viewWarmupBinding(view *data.View) string {
+	if view == nil || view.Spec.Source == nil || view.Spec.Source.Bindings == nil {
+		return ""
+	}
+	return strings.TrimSpace(view.Spec.Source.Bindings.CacheWarmup)
 }

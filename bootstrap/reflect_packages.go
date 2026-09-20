@@ -27,14 +27,12 @@ type ReflectedPackages struct {
 func ReflectPackages(includes []string) (*ReflectedPackages, error) {
 	packages := reflectedPackagePaths(includes)
 	result := &ReflectedPackages{Types: typecatalog.NewCatalog(), Packages: append([]string(nil), packages...)}
+	contracts := map[reflect.Type]bool{}
 	for _, packagePath := range packages {
 		for _, candidate := range xunsafe.PackageTypes(packagePath) {
 			typeOf := dereference(candidate)
 			if typeOf == nil || typeOf.Name() == "" || typeOf.PkgPath() != packagePath {
 				continue
-			}
-			if err := result.Types.Register(typecatalog.TypeOriginPackage, x.NewType(typeOf)); err != nil {
-				return nil, fmt.Errorf("reflect package type %s.%s: %w", packagePath, typeOf.Name(), err)
 			}
 			if typeOf.Kind() != reflect.Struct {
 				continue
@@ -65,12 +63,17 @@ func ReflectPackages(includes []string) (*ReflectedPackages, error) {
 					Tag: componentTag, InputType: inputField.Type.String(), OutputType: outputField.Type.String(),
 					LinkedInputType: inputField.Type, LinkedOutputType: outputField.Type,
 				}
+				collectContractTypes(contracts, inputField.Type)
+				collectContractTypes(contracts, outputField.Type)
 				if provider, ok := holder.(linkedHandlerProvider); ok {
 					source.LinkedHandler = provider.DatlyHandler(componentTag.Handler)
 				}
 				result.Components = append(result.Components, source)
 			}
 		}
+	}
+	if err := registerContractTypes(result.Types, contracts); err != nil {
+		return nil, err
 	}
 	sort.Slice(result.Components, func(i, j int) bool {
 		left, right := result.Components[i], result.Components[j]
@@ -83,6 +86,50 @@ func ReflectPackages(includes []string) (*ReflectedPackages, error) {
 		return left.FieldName < right.FieldName
 	})
 	return result, nil
+}
+
+func registerContractTypes(catalog *typecatalog.Catalog, contracts map[reflect.Type]bool) error {
+	types := make([]*x.Type, 0, len(contracts))
+	for typeOf := range contracts {
+		typeOf = dereference(typeOf)
+		if typeOf == nil || typeOf.Name() == "" || typeOf.PkgPath() == "" {
+			continue
+		}
+		types = append(types, x.NewType(typeOf))
+	}
+	sort.Slice(types, func(i, j int) bool { return types[i].Key() < types[j].Key() })
+	if err := catalog.RegisterAll(typecatalog.TypeOriginPackage, types...); err != nil {
+		return fmt.Errorf("reflect package contract types: %w", err)
+	}
+	return nil
+}
+
+func collectContractTypes(contracts map[reflect.Type]bool, typeOf reflect.Type) {
+	typeOf = dereference(typeOf)
+	if typeOf == nil {
+		return
+	}
+	switch typeOf.Kind() {
+	case reflect.Slice, reflect.Array, reflect.Pointer:
+		collectContractTypes(contracts, typeOf.Elem())
+	case reflect.Map:
+		collectContractTypes(contracts, typeOf.Key())
+		collectContractTypes(contracts, typeOf.Elem())
+	case reflect.Struct:
+		if typeOf.Name() != "" && typeOf.PkgPath() != "" {
+			if contracts[typeOf] {
+				return
+			}
+			contracts[typeOf] = true
+		}
+		for i := 0; i < typeOf.NumField(); i++ {
+			collectContractTypes(contracts, typeOf.Field(i).Type)
+		}
+	default:
+		if typeOf.Name() != "" && typeOf.PkgPath() != "" {
+			contracts[typeOf] = true
+		}
+	}
 }
 
 func reflectedPackagePaths(includes []string) []string {

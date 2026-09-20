@@ -46,7 +46,7 @@ func (d *reportDeriver) derivedComponent(source *spec.Component, sourceRoute *sp
 		Key: identity.key, Name: identity.key.Name, Description: strings.TrimSpace(source.Description + " cube"),
 		Settings: settings, TypeContext: source.TypeContext.Clone(), Parameters: cloneParams(input.params),
 		Routes: []*spec.Route{{
-			Method: identity.route.Method, Path: identity.route.Path, Name: sourceRoute.Name + " Cube", MCP: exposure,
+			Method: identity.route.Method, Path: identity.route.Path, Name: sourceRoute.Name + " Cube", MCP: exposure, Internal: sourceRoute.Internal,
 			APIKeyHeader: sourceRoute.APIKeyHeader, APIKeyValue: sourceRoute.APIKeyValue,
 		}},
 	}

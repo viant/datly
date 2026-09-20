@@ -41,9 +41,12 @@ type Build struct {
 	MCP            mcp.Config
 	// HTTP is validated with the rest of the stage before publication. Manager
 	// supplies its shared server lifetime; stages must not supply Warmup.Lifetime.
-	HTTP    gateway.Config
-	Logger  xlogger.Logger
-	Version string
+	HTTP   gateway.Config
+	Logger xlogger.Logger
+	// BootstrapLogger emits source/index lifecycle diagnostics without enabling
+	// request logging for protocol handlers.
+	BootstrapLogger xlogger.Logger
+	Version         string
 	// Resources is the stage-owned filesystem authority shared by all compilers,
 	// runtime binding and MCP. Conflicting explicitly configured stores fail.
 	Resources *resource.Store
@@ -240,7 +243,7 @@ func (m *Manager) Reload(ctx context.Context, request Request) error {
 	sources := map[*spec.Component]bool{}
 	rawComponents := append([]*registry.RegisteredComponent(nil), built.Components...)
 	if built.Index != nil {
-		loaded, loadErr := preloadComponents(ctx, indexLease, built.Preload)
+		loaded, loadErr := preloadComponents(ctx, indexLease, built.Preload, built.BootstrapLogger)
 		if loadErr != nil {
 			return loadErr
 		}

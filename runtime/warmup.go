@@ -31,7 +31,7 @@ type Warmup struct {
 	runtime    *Runtime
 	target     dexec.ComponentTarget
 	registered *registry.RegisteredComponent
-	settings   *spec.CacheWarmupSettings
+	targets    []dexec.ReaderWarmupTarget
 	providers  []locator.Provider
 }
 
@@ -49,11 +49,11 @@ func (r *Runtime) NewWarmup(target dexec.ComponentTarget) (*Warmup, error) {
 	if !componentOwnsRoute(registered.Component, target.Route) {
 		return nil, fmt.Errorf("component does not own warmup route")
 	}
-	settings := registered.Component.CacheWarmup()
-	if settings == nil {
+	targets := warmupTargets(registered)
+	if len(targets) == 0 {
 		return nil, fmt.Errorf("component has no authored warmup settings")
 	}
-	return &Warmup{runtime: r, target: target, registered: registered, settings: settings.Clone()}, nil
+	return &Warmup{runtime: r, target: target, registered: registered, targets: targets}, nil
 }
 
 // Prepare validates every selected authored case, including verified codecs and
@@ -70,7 +70,7 @@ func (w *Warmup) Prepare(ctx context.Context, providers ...locator.Provider) (*W
 func (w *Warmup) Run(ctx context.Context) (int, error) { return w.execute(ctx, false) }
 
 func (w *Warmup) execute(ctx context.Context, prepare bool) (int, error) {
-	registered, settings, target := w.registered, w.settings, w.target
+	registered, target := w.registered, w.target
 	contract, ok := registered.Input.ForRoute(target.Route)
 	if !ok {
 		return 0, fmt.Errorf("registered warmup route not found: %s", target.Route.String())
@@ -85,6 +85,23 @@ func (w *Warmup) execute(ctx context.Context, prepare bool) (int, error) {
 		}
 		fields[name] = field
 		required[name] = binding.Required != nil && *binding.Required
+	}
+	total := 0
+	for _, warmupTarget := range w.targets {
+		count, err := w.executeTarget(ctx, prepare, fields, required, warmupTarget)
+		total += count
+		if err != nil {
+			return total, err
+		}
+	}
+	return total, nil
+}
+
+func (w *Warmup) executeTarget(ctx context.Context, prepare bool, fields map[string]registry.InputField, required map[string]bool, warmupTarget dexec.ReaderWarmupTarget) (int, error) {
+	registered, target := w.registered, w.target
+	settings := warmupTarget.Settings
+	if settings == nil {
+		return 0, fmt.Errorf("warmup target %q has no settings", warmupTarget.View)
 	}
 	for _, set := range settings.Cases {
 		if set == nil {
@@ -101,7 +118,7 @@ func (w *Warmup) execute(ctx context.Context, prepare bool) (int, error) {
 	}
 	total := 0
 	entryCost := 1
-	if settings.IndexMeta && registered.Component.RootView != nil {
+	if warmupTarget.View == "" && settings.IndexMeta && registered.Component.RootView != nil {
 		for _, relation := range registered.Component.RootView.Relations {
 			if relation != nil && relation.Kind == spec.RelationKindDerived && len(relation.On) == 0 {
 				entryCost++
@@ -137,7 +154,7 @@ func (w *Warmup) execute(ctx context.Context, prepare bool) (int, error) {
 		if err != nil {
 			return err
 		}
-		request := dexec.ComponentRequest{Target: target, Providers: providers, Warmup: &dexec.ReaderWarmupRequest{Settings: policy}}
+		request := dexec.ComponentRequest{Target: target, Providers: providers, Warmup: &dexec.ReaderWarmupRequest{View: warmupTarget.View, Settings: policy}}
 		if prepare {
 			request.Warmup = nil
 			request.PrepareQuery = true
@@ -159,4 +176,20 @@ func (w *Warmup) execute(ctx context.Context, prepare bool) (int, error) {
 		return nil
 	})
 	return total, err
+}
+
+func warmupTargets(registered *registry.RegisteredComponent) []dexec.ReaderWarmupTarget {
+	if registered == nil {
+		return nil
+	}
+	if targeter, ok := registered.Reader.(dexec.ReaderWarmupTargeter); ok {
+		targets := targeter.WarmupTargets()
+		if len(targets) > 0 {
+			return targets
+		}
+	}
+	if settings := registered.Component.CacheWarmup(); settings != nil {
+		return []dexec.ReaderWarmupTarget{{Settings: settings.Clone()}}
+	}
+	return nil
 }

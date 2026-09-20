@@ -3,11 +3,13 @@ package standalone
 import (
 	"context"
 	"fmt"
-	afsurl "github.com/viant/afs/url"
+	"log/slog"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	afsurl "github.com/viant/afs/url"
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/application"
 	"github.com/viant/datly/bootstrap"
@@ -39,6 +41,7 @@ type source struct {
 	http           gateway.Config
 	holders        []any
 	requireLinked  bool
+	logger         *slog.Logger
 }
 
 func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
@@ -48,6 +51,7 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 	if s.config.GoBootstrap == nil || len(s.config.GoBootstrap.Packages) == 0 {
 		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Version: s.config.Version}, nil
 	}
+	started := time.Now()
 	workspace := s.Workspace
 	var err error
 	if workspace == nil {
@@ -81,6 +85,9 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 		return nil, err
 	}
 	built := &application.Build{Index: snapshot, Materializer: &indexedMaterializer{source: s, workspace: workspace, seed: seed}, Resources: assets.Store, Types: types, HTTP: s.http, Version: s.config.Version}
+	if s.logger != nil {
+		built.BootstrapLogger = s.logger
+	}
 	built.HTTP.StaticContent = append([]*spec.StaticContent(nil), s.http.StaticContent...)
 	for _, entry := range entries {
 		if entry.Component.Static == nil {
@@ -116,7 +123,7 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 	preload := map[string]spec.Key{}
 	if s.config.Warmup != nil {
 		for _, entry := range entries {
-			if entry.Component.CacheWarmup() != nil {
+			if entry.Warmup || hasWarmupConfiguration(entry.Component) {
 				preload[entry.Key().String()] = entry.Key()
 			}
 		}
@@ -141,7 +148,58 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 	if s.config.MCP != nil {
 		built.MCP = mcp.Config{Authorization: s.config.MCP.Authorization, Folders: s.config.MCP.Folders}
 	}
+	if s.logger != nil {
+		components, routes, mcpTools := indexedBootstrapCounts(snapshot)
+		s.logger.Info("datly bootstrap indexed done", "components", components, "routes", routes, "mcp", mcpTools, "preload", len(built.Preload), "elapsed", time.Since(started).String())
+	}
 	return built, nil
+}
+
+func indexedBootstrapCounts(snapshot *bootstrapindex.Snapshot) (components, routes, mcpTools int) {
+	if snapshot == nil {
+		return 0, 0, 0
+	}
+	entries := snapshot.Entries()
+	components = len(entries)
+	for _, entry := range entries {
+		if entry == nil || entry.Component == nil {
+			continue
+		}
+		routes += len(entry.Component.Routes)
+		for _, endpoint := range entry.Component.Routes {
+			if endpoint == nil {
+				continue
+			}
+			mcpTools += len(endpoint.MCP)
+		}
+	}
+	return components, routes, mcpTools
+}
+
+func hasWarmupConfiguration(component *spec.Component) bool {
+	if component == nil {
+		return false
+	}
+	if component.CacheWarmup() != nil {
+		return true
+	}
+	return hasViewWarmupBinding(component.RootView, map[*spec.View]bool{})
+}
+
+func hasViewWarmupBinding(view *spec.View, visited map[*spec.View]bool) bool {
+	if view == nil || visited[view] {
+		return false
+	}
+	visited[view] = true
+	if view.Source != nil && view.Source.Bindings != nil && strings.TrimSpace(view.Source.Bindings.CacheWarmup) != "" {
+		return true
+	}
+	for _, relation := range view.Relations {
+		if relation != nil && hasViewWarmupBinding(relation.View, visited) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {

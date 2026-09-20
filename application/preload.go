@@ -3,16 +3,19 @@ package application
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"time"
 
 	bootstrapindex "github.com/viant/datly/bootstrap/index"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
+	xlogger "github.com/viant/xdatly/logger"
 )
 
 // Startup consumers such as warmup credential validation need the transitive
 // input contracts, not just the root registration. Load only their dependency
 // closure; do not execute binding or eagerly compile unrelated components.
-func preloadComponents(ctx context.Context, lease *bootstrapindex.Lease, roots []spec.Key) ([]*registry.RegisteredComponent, error) {
+func preloadComponents(ctx context.Context, lease *bootstrapindex.Lease, roots []spec.Key, logger xlogger.Logger) ([]*registry.RegisteredComponent, error) {
 	var result []*registry.RegisteredComponent
 	seen := map[spec.Key]bool{}
 	routes := map[string]bool{}
@@ -20,10 +23,13 @@ func preloadComponents(ctx context.Context, lease *bootstrapindex.Lease, roots [
 		if seen[key] {
 			return nil
 		}
+		started := time.Now()
 		loaded, err := lease.LoadComponent(ctx, key)
 		if err != nil {
+			logIndexedPreload(logger, key, 0, started, err)
 			return err
 		}
+		logIndexedPreload(logger, key, len(loaded.Related), started, nil)
 		family := append([]*registry.RegisteredComponent{loaded.Registration}, loaded.Related...)
 		for _, reg := range family {
 			if reg == nil || reg.Component == nil || reg.Input == nil {
@@ -79,4 +85,31 @@ func preloadComponents(ctx context.Context, lease *bootstrapindex.Lease, roots [
 		}
 	}
 	return result, nil
+}
+
+func logIndexedPreload(logger xlogger.Logger, key spec.Key, related int, started time.Time, err error) {
+	if nilBootstrapLogger(logger) {
+		return
+	}
+	args := []any{"component", key.String(), "related", related, "elapsed", time.Since(started).String()}
+	if err != nil {
+		args = append(args, "status", "error", "error", err)
+		logger.Error("datly bootstrap indexed preload", args...)
+		return
+	}
+	args = append(args, "status", "ok")
+	logger.Info("datly bootstrap indexed preload", args...)
+}
+
+func nilBootstrapLogger(logger xlogger.Logger) bool {
+	if logger == nil {
+		return true
+	}
+	value := reflect.ValueOf(logger)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }

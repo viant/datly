@@ -9,16 +9,20 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
 	"github.com/viant/datly/bootstrap"
 	bootstraproutes "github.com/viant/datly/bootstrap/routes"
 	"github.com/viant/datly/spec"
+	dtag "github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/x"
 	loaderast "github.com/viant/x/loader/ast"
 	xmodule "github.com/viant/x/module"
+	xshape "github.com/viant/x/shape"
 	synthetic "github.com/viant/x/syntetic/model"
 )
 
@@ -43,6 +47,7 @@ type draft struct {
 	sources   []Source
 	imports   []string
 	overlay   bool
+	warmup    bool
 }
 
 // Build scans selected packages once at bootstrap and publishes routing-only
@@ -76,14 +81,23 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	packageComponents, dependencySources, err := resolvePackageComponents(ctx, workspace, routes, config.Types)
+	linkedWarmups, err := linkedWarmupComponents(routes)
+	if err != nil {
+		return nil, err
+	}
+	packageComponents, dependencySources, catalogWarmups, err := resolvePackageComponents(ctx, workspace, routes, config.Types)
 	if err != nil {
 		return nil, err
 	}
 	drafts := map[string]*draft{}
 	for _, component := range packageComponents {
 		identity := component.Key.String()
-		drafts[identity] = &draft{component: component, packages: map[string]bool{component.Key.Scope: true}, sources: append([]Source(nil), dependencySources[component.Key.Scope]...)}
+		drafts[identity] = &draft{
+			component: component,
+			packages:  map[string]bool{component.Key.Scope: true},
+			sources:   append([]Source(nil), dependencySources[component.Key.Scope]...),
+			warmup:    linkedWarmups[identity] || catalogWarmups[identity] || hasComponentWarmupConfiguration(component),
+		}
 	}
 	for _, file := range selected {
 		if file.kind != SourceDQL {
@@ -110,7 +124,7 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 		}
 		current := drafts[identity]
 		if current == nil {
-			current = &draft{component: component, packages: map[string]bool{file.source.PackagePath: true}, sources: []Source{file.source}, imports: componentImports, overlay: true}
+			current = &draft{component: component, packages: map[string]bool{file.source.PackagePath: true}, sources: []Source{file.source}, imports: componentImports, overlay: true, warmup: hasComponentWarmupConfiguration(component)}
 			drafts[identity] = current
 			continue
 		}
@@ -123,6 +137,7 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 		current.component.Routes = cloneRoutes(component.Routes)
 		current.component.Static = component.Static.Clone()
 		current.component.Settings = mergeIndexSettings(current.component.Settings, component.Settings)
+		current.warmup = current.warmup || hasComponentWarmupConfiguration(current.component) || hasComponentWarmupConfiguration(component)
 		current.packages[file.source.PackagePath] = true
 		current.sources = append(current.sources, file.source)
 		current.imports = append(current.imports, componentImports...)
@@ -158,12 +173,178 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 		sources = append(sources, declared...)
 		sources = uniqueSources(sources)
 		sort.Slice(sources, func(i, j int) bool { return sources[i].Path < sources[j].Path })
-		entries = append(entries, &Entry{Component: current.component.Clone(), Sources: sources, Fingerprint: digestSources(sources)})
+		entries = append(entries, &Entry{Component: current.component.Clone(), Warmup: current.warmup || hasComponentWarmupConfiguration(current.component), Sources: sources, Fingerprint: digestSources(sources)})
 	}
 	entries = expandReportEntries(entries)
 	sortEntries(entries)
 	selection := selectionIdentity(config)
 	return newSnapshot(selection, snapshotFingerprint(selection, entries), entries)
+}
+
+func linkedWarmupComponents(routes []*bootstrap.RouteSource) (map[string]bool, error) {
+	result := map[string]bool{}
+	for _, route := range routes {
+		if route == nil || route.LinkedOutputType == nil {
+			continue
+		}
+		hasWarmup, err := linkedOutputHasWarmup(route.LinkedOutputType)
+		if err != nil {
+			return nil, fmt.Errorf("index component %s.%s output warmup tags: %w", route.PackagePath, route.FieldName, err)
+		}
+		if !hasWarmup {
+			continue
+		}
+		key := spec.Key{Kind: spec.KindComponent, Scope: route.PackagePath, Name: linkedComponentName(route)}.String()
+		result[key] = true
+	}
+	return result, nil
+}
+
+func linkedComponentName(route *bootstrap.RouteSource) string {
+	if route == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(route.Tag.Name); name != "" {
+		return name
+	}
+	return strings.TrimSpace(route.FieldName)
+}
+
+func linkedOutputHasWarmup(output reflect.Type) (bool, error) {
+	return typeHasWarmupTag(output, map[reflect.Type]bool{})
+}
+
+func typeHasWarmupTag(candidate reflect.Type, visited map[reflect.Type]bool) (bool, error) {
+	if candidate == nil {
+		return false, nil
+	}
+	for candidate.Kind() == reflect.Pointer || candidate.Kind() == reflect.Slice || candidate.Kind() == reflect.Array {
+		candidate = candidate.Elem()
+		if candidate == nil {
+			return false, nil
+		}
+	}
+	if candidate.Kind() != reflect.Struct {
+		return false, nil
+	}
+	if visited[candidate] {
+		return false, nil
+	}
+	visited[candidate] = true
+	for i := 0; i < candidate.NumField(); i++ {
+		field := candidate.Field(i)
+		if value := strings.TrimSpace(field.Tag.Get(dtag.ViewName)); value != "" {
+			viewTag, err := dtag.ParseView(value)
+			if err != nil {
+				return false, fmt.Errorf("%s.%s view tag: %w", candidate.Name(), field.Name, err)
+			}
+			if viewTag != nil && strings.TrimSpace(viewTag.CacheWarmup) != "" {
+				return true, nil
+			}
+		}
+		nested, err := typeHasWarmupTag(field.Type, visited)
+		if err != nil || nested {
+			return nested, err
+		}
+	}
+	return false, nil
+}
+
+func descriptorHasWarmupTag(descriptor *x.Type, resolver *typecatalog.Resolver) (bool, error) {
+	if descriptor == nil || resolver == nil {
+		return false, nil
+	}
+	lookup := func(expression string) (*x.Type, error) {
+		resolved, err := resolver.ResolveShape(expression)
+		if err != nil || resolved == nil {
+			return nil, err
+		}
+		return resolved.Descriptor, nil
+	}
+	return shapeHasWarmupTag(xshape.New(descriptor, lookup), "", map[string]bool{})
+}
+
+func shapeHasWarmupTag(shape *xshape.Type, path string, visited map[string]bool) (bool, error) {
+	if shape == nil {
+		return false, nil
+	}
+	key := shapeWarmupKey(shape, path)
+	if visited[key] {
+		return false, nil
+	}
+	visited[key] = true
+	var (
+		fields []xshape.Field
+		err    error
+	)
+	if path == "" {
+		fields, err = shape.Fields()
+	} else {
+		fields, err = shape.FieldsAt(path)
+	}
+	if err != nil {
+		return false, err
+	}
+	for _, field := range fields {
+		if value := strings.TrimSpace(field.Tag.Get(dtag.ViewName)); value != "" {
+			viewTag, err := dtag.ParseView(value)
+			if err != nil {
+				return false, fmt.Errorf("%s view tag: %w", field.Name, err)
+			}
+			if viewTag != nil && strings.TrimSpace(viewTag.CacheWarmup) != "" {
+				return true, nil
+			}
+		}
+		if _, builtin := field.BuiltinType(); builtin {
+			continue
+		}
+		fieldPath := field.Name
+		if path != "" {
+			fieldPath = path + "." + field.Name
+		}
+		nested, err := shapeHasWarmupTag(shape, fieldPath, visited)
+		if err != nil {
+			continue
+		}
+		if nested {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func shapeWarmupKey(shape *xshape.Type, path string) string {
+	descriptor := shape.Descriptor()
+	if descriptor == nil {
+		return path
+	}
+	return descriptor.Key() + "\x00" + path
+}
+
+func hasComponentWarmupConfiguration(component *spec.Component) bool {
+	if component == nil {
+		return false
+	}
+	if component.CacheWarmup() != nil {
+		return true
+	}
+	return hasViewWarmupBinding(component.RootView, map[*spec.View]bool{})
+}
+
+func hasViewWarmupBinding(view *spec.View, visited map[*spec.View]bool) bool {
+	if view == nil || visited[view] {
+		return false
+	}
+	visited[view] = true
+	if view.Source != nil && view.Source.Bindings != nil && strings.TrimSpace(view.Source.Bindings.CacheWarmup) != "" {
+		return true
+	}
+	for _, relation := range view.Relations {
+		if relation != nil && hasViewWarmupBinding(relation.View, visited) {
+			return true
+		}
+	}
+	return false
 }
 
 func componentImportSources(ctx context.Context, workspace *xmodule.Workspace, declared []string) ([]Source, error) {
@@ -220,7 +401,7 @@ func expandReportEntries(entries []*Entry) []*Entry {
 				suffix = typecatalog.ExportedFieldName(route.Name)
 			}
 			name := typecatalog.ExportedFieldName(component.Key.Name + suffix + "Cube")
-			cube := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: name}, Name: name, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube", APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
+			cube := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: name}, Name: name, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube", Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
 			if component.Settings.Report.MCPTool == nil || *component.Settings.Report.MCPTool {
 				cube.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: name, Description: component.Description}}
 			}
@@ -230,7 +411,7 @@ func expandReportEntries(entries []*Entry) []*Entry {
 				continue
 			}
 			composeName := name + "Compose"
-			composed := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: composeName}, Name: composeName, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube/compose", APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
+			composed := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: composeName}, Name: composeName, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube/compose", Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
 			if compose.MCPTool == nil || *compose.MCPTool {
 				composed.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: composeName, Description: component.Description}}
 			}
@@ -389,9 +570,9 @@ func uniqueSources(sources []Source) []Source {
 	return result
 }
 
-func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace, routes []*bootstrap.RouteSource, seed *typecatalog.Catalog) ([]*spec.Component, map[string][]Source, error) {
+func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace, routes []*bootstrap.RouteSource, seed *typecatalog.Catalog) ([]*spec.Component, map[string][]Source, map[string]bool, error) {
 	if len(routes) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	imports := make([]string, 0, len(routes))
 	for _, route := range routes {
@@ -404,12 +585,12 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	for _, packagePath := range imports {
 		location, locationErr := workspace.Package(packagePath)
 		if locationErr != nil || location == nil || location.Module == nil {
-			return nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, locationErr)
+			return nil, nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, locationErr)
 		}
 		if currentModule == "" {
 			currentModule = location.Module.Path
 		} else if currentModule != location.Module.Path {
-			return nil, nil, fmt.Errorf("index package authority spans modules %q and %q", currentModule, location.Module.Path)
+			return nil, nil, nil, fmt.Errorf("index package authority spans modules %q and %q", currentModule, location.Module.Path)
 		}
 		allowedModules[location.Module.Path] = true
 	}
@@ -462,13 +643,13 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	for _, packagePath := range imports {
 		_, loadErr := loadCurrentModulePackage(packagePath)
 		if loadErr != nil {
-			return nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, loadErr)
+			return nil, nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, loadErr)
 		}
 	}
 	for _, route := range routes {
 		for _, imported := range route.Imports {
 			if _, loadErr := loadCurrentModulePackage(imported.Package); loadErr != nil {
-				return nil, nil, fmt.Errorf("index imported package authority %q: %w", imported.Package, loadErr)
+				return nil, nil, nil, fmt.Errorf("index imported package authority %q: %w", imported.Package, loadErr)
 			}
 		}
 	}
@@ -476,7 +657,7 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	if seed != nil {
 		cloned, err := seed.Clone()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		catalog = cloned
 	}
@@ -487,7 +668,7 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	sort.Strings(packagePaths)
 	for _, packagePath := range packagePaths {
 		if err := catalog.RegisterPackage(typecatalog.TypeOriginPackage, packages[packagePath]); err != nil {
-			return nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, err)
+			return nil, nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, err)
 		}
 	}
 	routesByPackage := map[string][]*bootstrap.RouteSource{}
@@ -500,6 +681,7 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	}
 	sort.Strings(packagePaths)
 	var result []*spec.Component
+	warmups := map[string]bool{}
 	for _, packagePath := range packagePaths {
 		packageRoutes := routesByPackage[packagePath]
 		resolution := &typecatalog.ResolutionContext{DefaultPackage: packagePath, PackagePath: packagePath, PackageName: packageRoutes[0].PackageName, PackageDir: packageRoutes[0].Dir}
@@ -516,16 +698,27 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 		}
 		resolver, err := typecatalog.NewResolver(catalog, typecatalog.PackageAuthority, resolution)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		groups, err := bootstrap.GroupPackageComponentSources(packageRoutes, resolver)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for _, group := range groups {
 			component, err := group.ResolveDescriptors(resolver)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
+			}
+			if hasComponentWarmupConfiguration(component) {
+				warmups[component.Key.String()] = true
+			} else {
+				hasWarmup, err := descriptorHasWarmupTag(group.OutputType, resolver)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("index component %s output warmup tags: %w", component.Key.String(), err)
+				}
+				if hasWarmup {
+					warmups[component.Key.String()] = true
+				}
 			}
 			result = append(result, component)
 		}
@@ -558,11 +751,11 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 		}
 		for _, dependency := range pkg.Dependencies {
 			if err := visit(dependency); err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 		}
 	}
-	return result, dependencies, nil
+	return result, dependencies, warmups, nil
 }
 
 func packageGoSources(workspace *xmodule.Workspace, packagePath string) ([]Source, error) {

@@ -147,9 +147,15 @@ func (r *outputColumnCompiler) column(field xshape.Field, path string) (*spec.Co
 	if source == "" {
 		source = field.Name
 	}
+	name := field.Name
+	nameInferred := true
+	if metadata.SelectorAlias != "" {
+		name = metadata.SelectorAlias
+		nameInferred = false
+	}
 	groupable := metadata.Groupable
 	result := &spec.Column{
-		Name: field.Name, NameInferred: true, Source: source, Type: typeRef, Nullable: nullable,
+		Name: name, NameInferred: nameInferred, Source: source, Type: typeRef, Nullable: nullable,
 		Groupable: &groupable, Tag: string(field.Tag), DatabaseType: strings.TrimSpace(sqlTag.DataType),
 		PrimaryKey: sqlTag.PrimaryKey, AutoIncrement: sqlTag.Autoincrement, Unique: sqlTag.IsUnique,
 	}

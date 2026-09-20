@@ -42,3 +42,88 @@ func TestInferredColumnsDoNotAuthorizeSelectorAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectorAliasAuthorizesOutputFieldProjection(t *testing.T) {
+	type row struct {
+		AdvertiserID int     `sqlx:"advertiser_id" selectorAlias:"advertiserId"`
+		Spend        float64 `sqlx:"spend"`
+	}
+	type output struct {
+		Rows []*row
+	}
+	component := &spec.Component{
+		Routes:   []*spec.Route{{Method: "GET", Path: "/metrics"}},
+		RootView: &spec.View{Name: "metrics", Source: &spec.ViewSource{SQL: "SELECT advertiser_id, spend FROM metrics"}},
+		Parameters: []*spec.Parameter{
+			{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}},
+		},
+	}
+
+	artifact, err := BuildArtifact(ArtifactInput{
+		Component:       component,
+		InputType:       reflect.TypeFor[struct{}](),
+		OutputType:      reflect.TypeFor[output](),
+		DirectViewField: "Rows",
+	})
+	require.NoError(t, err)
+
+	view := artifact.Reader.Root.View
+	require.Len(t, view.Spec.Columns, 2)
+	require.Equal(t, "advertiserId", view.Spec.Columns[0].Name)
+	require.Equal(t, "advertiser_id", view.Spec.Columns[0].Source)
+	require.False(t, view.Spec.Columns[0].NameInferred)
+	require.Equal(t, "spend", view.Spec.Columns[1].Source)
+	require.True(t, view.Spec.Columns[1].NameInferred)
+
+	projection := dsql.SelectorProjection{SQL: view.Spec.Source.SQL, View: view}
+	_, err = projection.Columns([]string{"advertiserId"})
+	require.NoError(t, err)
+	_, err = projection.Columns([]string{"advertiser_id"})
+	require.NoError(t, err)
+}
+
+func TestSelectorAliasRejectsUnresolvedOrAmbiguousSource(t *testing.T) {
+	type row struct {
+		AdvertiserID int     `sqlx:"advertiser_id" selectorAlias:"advertiserId"`
+		Spend        float64 `sqlx:"spend"`
+	}
+	type output struct {
+		Rows []*row
+	}
+	for _, tc := range []struct {
+		name string
+		sql  string
+		want string
+	}{
+		{
+			name: "unknown source",
+			sql:  "SELECT spend FROM metrics",
+			want: `not found column advertiserid`,
+		},
+		{
+			name: "ambiguous source",
+			sql:  "SELECT a.advertiser_id, b.advertiser_id, spend FROM metrics a JOIN metrics b ON a.advertiser_id = b.advertiser_id",
+			want: `duplicate output column "advertiser_id"`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			component := &spec.Component{
+				Routes:   []*spec.Route{{Method: "GET", Path: "/metrics"}},
+				RootView: &spec.View{Name: "metrics", Source: &spec.ViewSource{SQL: tc.sql}},
+				Parameters: []*spec.Parameter{
+					{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}},
+				},
+			}
+
+			artifact, err := BuildArtifact(ArtifactInput{
+				Component:       component,
+				InputType:       reflect.TypeFor[struct{}](),
+				OutputType:      reflect.TypeFor[output](),
+				DirectViewField: "Rows",
+			})
+			require.NoError(t, err)
+			_, err = (dsql.SelectorProjection{SQL: artifact.Reader.Root.View.Spec.Source.SQL, View: artifact.Reader.Root.View}).Columns([]string{"advertiserId"})
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
+}

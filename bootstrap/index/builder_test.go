@@ -5,10 +5,13 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
+	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/spec"
+	"github.com/viant/xdatly"
 )
 
 func writeFixture(t testing.TB, root, name, body string) {
@@ -31,6 +34,113 @@ type Holder struct {
   Route xdatly.Component[Input,Output] ` + "`" + `component:"` + component + `,path=` + path + `,method=` + method + `" mcp:"[{\"kind\":\"tool\"}]"` + "`" + `
 }
 ` + extra
+}
+
+type indexedChildWarmupOutput struct {
+	Rows []indexedChildWarmupRow `view:"advertiserPerformance"`
+}
+
+type indexedChildWarmupInput struct{}
+
+type IndexedChildWarmupHolder struct {
+	Route xdatly.Component[indexedChildWarmupInput, indexedChildWarmupOutput]
+}
+
+type indexedChildWarmupRow struct {
+	ID       int
+	Summary  []indexedChildWarmupSummary  `view:"advertiserPeriodSummary,cacheWarmup=advertiserPeriodSummaryWarmup"`
+	Timeline []indexedChildWarmupTimeline `view:"advertiserPerformanceTimeline,cacheWarmup=advertiserPerformanceTimelineWarmup"`
+}
+
+type indexedChildWarmupSummary struct {
+	ID int
+}
+
+type indexedChildWarmupTimeline struct {
+	ID int
+}
+
+func TestLinkedWarmupComponentsDetectsNestedChildWarmupTags(t *testing.T) {
+	routes := []*bootstrap.RouteSource{{
+		PackagePath:      "example.com/steward/performance",
+		FieldName:        "AdvertiserPerformance",
+		LinkedOutputType: reflect.TypeFor[indexedChildWarmupOutput](),
+	}}
+	warmups, err := linkedWarmupComponents(routes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := spec.Key{Kind: spec.KindComponent, Scope: "example.com/steward/performance", Name: "AdvertiserPerformance"}.String()
+	if !warmups[key] {
+		t.Fatalf("linked child warmup marker missing for %s: %+v", key, warmups)
+	}
+}
+
+func TestBuilderMarksLinkedChildWarmupBeforeRelationMaterialization(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "go.mod", "module github.com/viant/datly/bootstrap/index\ngo 1.25\n")
+	writeFixture(t, root, "holder.go", `package index
+import xdatly "github.com/viant/xdatly"
+type Input struct{}
+type Output struct{}
+type IndexedChildWarmupHolder struct {
+  Route xdatly.Component[indexedChildWarmupInput,indexedChildWarmupOutput] `+"`"+`component:"AdvertiserPerformance,path=/advertiser,method=GET"`+"`"+`
+}
+`)
+	snapshot, err := (Builder{Config: Config{
+		BaseDir: root,
+		Include: []string{"github.com/viant/datly/bootstrap/index"},
+		Holders: []any{IndexedChildWarmupHolder{}},
+	}}).Build(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, _, _, ok := snapshot.Route("GET", "/advertiser")
+	if !ok {
+		t.Fatal("indexed route missing")
+	}
+	if entry.Component.RootView != nil && len(entry.Component.RootView.Relations) != 0 {
+		t.Fatalf("test requires pre-materialized descriptor without child relations: %+v", entry.Component.RootView.Relations)
+	}
+	if !entry.Warmup {
+		t.Fatalf("linked child warmup marker was not preserved on indexed entry: %+v", entry)
+	}
+}
+
+func TestBuilderMarksCatalogChildWarmupWithoutLinkedHolder(t *testing.T) {
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "example.com/app"}).Write(t, root)
+	writeFixture(t, root, "api/holder.go", `package api
+import xdatly "github.com/viant/xdatly"
+type Input struct{}
+type Output struct {
+  Rows []Row `+"`"+`view:"advertiserPerformance"`+"`"+`
+}
+type Row struct {
+  ID int
+  Summary []Summary `+"`"+`view:"advertiserPeriodSummary,cacheWarmup=advertiserPeriodSummaryWarmup"`+"`"+`
+}
+type Summary struct {
+  ID int
+}
+type Holder struct {
+  Route xdatly.Component[Input,Output] `+"`"+`component:"AdvertiserPerformance,path=/advertiser,method=GET"`+"`"+`
+}
+`)
+	snapshot, err := (Builder{Config: Config{
+		BaseDir: root,
+		Include: []string{"example.com/app/api"},
+	}}).Build(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, _, _, ok := snapshot.Route("GET", "/advertiser")
+	if !ok {
+		t.Fatal("indexed route missing")
+	}
+	if !entry.Warmup {
+		t.Fatalf("catalog child warmup marker was not preserved on indexed entry: %+v", entry)
+	}
 }
 
 func TestBuilderIndexesMultiModuleSelectionDeterministically(t *testing.T) {

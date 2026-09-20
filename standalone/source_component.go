@@ -24,8 +24,11 @@ func (c *sourceComponent) reflectedArtifactInput(component *spec.Component, sour
 	if component == nil || source == nil || source.LinkedInputType == nil || source.LinkedOutputType == nil {
 		return bootstrap.ArtifactInput{}, fmt.Errorf("reflected component contract is incomplete")
 	}
+	resources, err := linkedDefaultResources(resources, source.LinkedInputType)
+	if err != nil {
+		return bootstrap.ArtifactInput{}, err
+	}
 	var handler rhandler.TypedHandler
-	var err error
 	if source.LinkedHandler != nil {
 		handler, err = source.LinkedHandler()
 		if err != nil {
@@ -39,6 +42,37 @@ func (c *sourceComponent) reflectedArtifactInput(component *spec.Component, sour
 		}
 	}
 	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: component, Types: types, InputType: source.LinkedInputType, OutputType: source.LinkedOutputType, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: resources, CodecFactory: c.source.codecs}, nil
+}
+
+func linkedDefaultResources(resources *resource.Store, inputType reflect.Type) (*resource.Store, error) {
+	embedder := linkedInputEmbedder(inputType)
+	if embedder == nil || embedder.EmbedFS() == nil {
+		return resources, nil
+	}
+	if resources == nil {
+		resources = resource.New()
+	}
+	return resources.WithDefault(embedder.EmbedFS())
+}
+
+func linkedInputEmbedder(inputType reflect.Type) bootstrap.Embedder {
+	for inputType != nil && inputType.Kind() == reflect.Pointer {
+		inputType = inputType.Elem()
+	}
+	if inputType == nil || inputType.Kind() != reflect.Struct {
+		return nil
+	}
+	if value := reflect.New(inputType).Interface(); value != nil {
+		if embedder, ok := value.(bootstrap.Embedder); ok {
+			return embedder
+		}
+	}
+	if value := reflect.New(inputType).Elem().Interface(); value != nil {
+		if embedder, ok := value.(bootstrap.Embedder); ok {
+			return embedder
+		}
+	}
+	return nil
 }
 
 func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.ArtifactInput, error) {

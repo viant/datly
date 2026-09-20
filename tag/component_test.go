@@ -42,6 +42,26 @@ func TestComponentRoundTripPreservesRouteMCPExposures(t *testing.T) {
 	assertly.AssertValues(t, original, actual)
 }
 
+func TestComponentRoundTripPreservesInternalVisibility(t *testing.T) {
+	original := Component{Path: "/internal", Method: "GET", Internal: true}
+	structTag, err := original.StructTag()
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, ok, err := ParseComponent(reflect.StructTag(structTag))
+	if err != nil || !ok {
+		t.Fatalf("ParseComponent() = %+v, %v, %v", actual, ok, err)
+	}
+	assertly.AssertValues(t, original, actual)
+	actual, ok, err = ParseComponent(reflect.StructTag(`component:",path=/internal,method=GET" internal:"true"`))
+	if err != nil || !ok {
+		t.Fatalf("ParseComponent() separate tag = %+v, %v, %v", actual, ok, err)
+	}
+	if !actual.Internal {
+		t.Fatal("separate internal tag was not parsed")
+	}
+}
+
 func TestParseComponentRejectsMalformedRouteMCPTag(t *testing.T) {
 	_, _, err := ParseComponent(reflect.StructTag(`component:",path=/orders,method=GET" mcp:"not-json"`))
 	if err == nil {

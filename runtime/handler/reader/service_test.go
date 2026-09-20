@@ -2,6 +2,7 @@ package reader
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"reflect"
 	"strings"
@@ -3807,6 +3808,77 @@ func TestService_Read_AppliesSelectorProjectionBySQLAlias(t *testing.T) {
 			},
 		}},
 	}, actual)
+}
+
+func TestService_Read_AppliesExplicitSelectorAliasAndSkipsUnselectedRelation(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	if err := h.ExecStatements(context.Background(),
+		`CREATE TABLE metrics (advertiser_id INTEGER, spend REAL);`,
+		`INSERT INTO metrics(advertiser_id, spend) VALUES (7, 12.5)`,
+	); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	component := &spec.Component{
+		Key:  spec.Key{Kind: spec.KindComponent, Scope: "example.com/demo/metrics", Name: "Metrics"},
+		Name: "Metrics",
+		RootView: &spec.View{
+			Source: &spec.ViewSource{SQL: "SELECT advertiser_id, spend FROM metrics"},
+		},
+		Parameters: []*spec.Parameter{
+			{Name: "Data", Source: spec.BindSource{Kind: "output", Name: "view"}},
+		},
+	}
+
+	type input struct{}
+	type account struct {
+		ID int
+	}
+	type row struct {
+		AdvertiserID int        `sqlx:"advertiser_id" selectorAlias:"advertiserId" json:"advertiserId"`
+		Spend        float64    `sqlx:"spend" json:"spend"`
+		Accounts     []*account `view:"accounts" sql:"SELECT id FROM missing_accounts WHERE advertiser_id IN (?)" on:"AdvertiserID:advertiser_id=ID:advertiser_id" json:"accounts,omitempty"`
+	}
+	type output struct {
+		Data []*row
+	}
+
+	artifact, err := buildArtifact(bootstrap.ArtifactInput{
+		Component:       component,
+		InputType:       reflect.TypeOf(input{}),
+		OutputType:      reflect.TypeOf(output{}),
+		DirectViewField: "Data",
+	})
+	if err != nil {
+		t.Fatalf("artifact build failed: %v", err)
+	}
+
+	for _, selected := range []string{"advertiserId", "advertiser_id"} {
+		t.Run(selected, func(t *testing.T) {
+			session := &Session{
+				Component:  component,
+				OutputType: reflect.TypeOf(output{}),
+				Input:      routeInput(t, artifact),
+				Artifact:   artifact.Reader,
+				SQL:        &rsql.SQLComponent{DB: h.DB},
+				Scope:      testharness.Request{}.WithQuery(url.Values{}),
+				Providers: rootSelectors(xstate.Selector{
+					Columns: []string{selected, "spend"},
+				}),
+			}
+
+			actual, err := NewService().Read(context.Background(), session)
+			if err != nil {
+				t.Fatalf("read failed: %v", err)
+			}
+			assertly.AssertValues(t, &output{Data: []*row{{AdvertiserID: 7, Spend: 12.5}}}, actual)
+			encoded, err := json.Marshal(actual)
+			if err != nil {
+				t.Fatalf("marshal failed: %v", err)
+			}
+			assertly.AssertValues(t, `{"Data":[{"advertiserId":7,"spend":12.5}]}`, string(encoded))
+		})
+	}
 }
 
 func TestService_Read_SelectedRelationUsesUnmappedParentColumn(t *testing.T) {

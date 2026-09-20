@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/observability"
 	"reflect"
+	"strings"
 
 	"github.com/viant/datly/data"
 	dexec "github.com/viant/datly/exec"
@@ -35,6 +36,7 @@ type Execution struct {
 }
 
 var _ dexec.Reader = (*Execution)(nil)
+var _ dexec.ReaderWarmupTargeter = (*Execution)(nil)
 
 func NewExecution(config Config, options ...Option) (*Execution, error) {
 	execution := &Execution{
@@ -68,6 +70,45 @@ func (e *Execution) Read(ctx context.Context, input any, binder xhandler.Binder,
 	session.Parameters = resolver
 	session.applyReadOptions(ctx)
 	return e.service.Read(ctx, session, input, binder)
+}
+
+func (e *Execution) WarmupTargets() []dexec.ReaderWarmupTarget {
+	if e == nil || e.config.Plan == nil || e.config.Plan.Root == nil {
+		return nil
+	}
+	var result []dexec.ReaderWarmupTarget
+	visited := map[*ViewPlan]bool{}
+	var visit func(*ViewPlan, bool)
+	visit = func(plan *ViewPlan, root bool) {
+		if plan == nil || visited[plan] {
+			return
+		}
+		visited[plan] = true
+		if plan.View != nil && plan.View.Cache != nil && plan.View.Cache.Warmup != nil {
+			viewName := warmupTargetViewName(plan.View)
+			if root {
+				viewName = ""
+			}
+			result = append(result, dexec.ReaderWarmupTarget{View: viewName, Settings: plan.View.Cache.Warmup.Clone()})
+		}
+		for _, relation := range plan.Relations {
+			if relation != nil {
+				visit(relation.Target, false)
+			}
+		}
+	}
+	visit(e.config.Plan.Root, true)
+	return result
+}
+
+func warmupTargetViewName(view *data.View) string {
+	if view == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(view.Spec.Key.Name); name != "" {
+		return name
+	}
+	return strings.TrimSpace(view.Spec.Name)
 }
 
 func (e *Execution) session() *Session {

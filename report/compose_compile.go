@@ -101,7 +101,7 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 	component := &spec.Component{
 		Key: identity.key, Name: identity.key.Name, Description: strings.TrimSpace(source.Component.Description + " cube composition"),
 		Settings: &spec.Settings{InputType: descriptor.Key()}, TypeContext: source.Component.TypeContext.Clone(), Parameters: params,
-		Routes: []*spec.Route{{Method: identity.route.Method, Path: identity.route.Path, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}},
+		Routes: []*spec.Route{{Method: identity.route.Method, Path: identity.route.Path, Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}},
 	}
 	if config.MCPTool == nil || *config.MCPTool {
 		component.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: identity.key.Name, Description: component.Description}}
