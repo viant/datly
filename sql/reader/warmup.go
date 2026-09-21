@@ -38,13 +38,37 @@ func (e *Execution) Warmup(ctx context.Context, invocation dexec.ReaderWarmupInv
 	if !input.IsValid() || input.Kind() != reflect.Pointer || input.IsNil() || input.Elem().Type() != session.InputType {
 		return 0, fmt.Errorf("warmup input must be *%s", session.InputType)
 	}
-	settings := invocation.Request.Settings
-	if settings == nil && view.Cache != nil {
-		settings = view.Cache.Warmup
+	// An explicit request executes exactly one warmup policy. Without one, every
+	// effective view warmup runs in declaration order: singular first, then plural.
+	var effective []*spec.CacheWarmupSettings
+	if invocation.Request.Settings != nil {
+		effective = []*spec.CacheWarmupSettings{invocation.Request.Settings}
+	} else if view.Cache != nil {
+		effective, err = view.Cache.EffectiveWarmups()
+		if err != nil {
+			return 0, err
+		}
 	}
-	if settings == nil {
+	if len(effective) == 0 {
 		return 0, fmt.Errorf("view %q has no warmup settings", view.Spec.Name)
 	}
+	selectors, err := resolveInvocationSelectors(ctx, session, input, invocation.Binder)
+	if err != nil {
+		return 0, err
+	}
+	warmup := warmupExecution{owner: e, session: session, input: input, binder: invocation.Binder, selectors: selectors}
+	total := 0
+	for _, settings := range effective {
+		count, err := e.warmupWithSettings(ctx, session, warmup, plan, settings)
+		total += count
+		if err != nil {
+			return total, err
+		}
+	}
+	return total, nil
+}
+
+func (e *Execution) warmupWithSettings(ctx context.Context, session *Session, warmup warmupExecution, plan *ViewPlan, settings *spec.CacheWarmupSettings) (int, error) {
 	if settings.Limit != nil && *settings.Limit < 0 || settings.MaxCases != nil && *settings.MaxCases < 0 {
 		return 0, fmt.Errorf("warmup limits must be non-negative")
 	}
@@ -61,11 +85,6 @@ func (e *Execution) Warmup(ctx context.Context, invocation dexec.ReaderWarmupInv
 			return 0, fmt.Errorf("view %q has no native read cache", candidate.View.Spec.Name)
 		}
 	}
-	selectors, err := resolveInvocationSelectors(ctx, session, input, invocation.Binder)
-	if err != nil {
-		return 0, err
-	}
-	warmup := warmupExecution{owner: e, session: session, input: input, binder: invocation.Binder, selectors: selectors}
 	total, err := warmup.run(ctx, plan, nil, settings)
 	if err != nil || !settings.IndexMeta {
 		return total, err
@@ -74,17 +93,23 @@ func (e *Execution) Warmup(ctx context.Context, invocation dexec.ReaderWarmupInv
 		if !relation.Relation.IsOutput() {
 			continue
 		}
-		policy := settings.Clone()
-		policy.IndexMeta = false
-		policy.IndexColumn = ""
-		policy.FieldNames = nil
-		if relation.Target.View.Cache != nil && relation.Target.View.Cache.Warmup != nil {
-			policy = relation.Target.View.Cache.Warmup.Clone()
-		}
-		count, err := warmup.run(ctx, relation.Target, relation, policy)
-		total += count
+		policies, err := relation.Target.View.Cache.EffectiveWarmups()
 		if err != nil {
 			return total, err
+		}
+		if len(policies) == 0 {
+			policy := settings.Clone()
+			policy.IndexMeta = false
+			policy.IndexColumn = ""
+			policy.FieldNames = nil
+			policies = []*spec.CacheWarmupSettings{policy}
+		}
+		for _, policy := range policies {
+			count, err := warmup.run(ctx, relation.Target, relation, policy)
+			total += count
+			if err != nil {
+				return total, err
+			}
 		}
 	}
 	return total, nil

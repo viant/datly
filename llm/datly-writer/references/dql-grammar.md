@@ -148,7 +148,8 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `report`, `cube` | 0+ | first eight: linked input type, dimensions, measures, filters, orderBy, limit, offset, MCP-tool boolean; later arguments ignored |
 | `cubeCompose` | exactly 1 | boolean; no tail |
 | `cache` | 1+ | enabled boolean or name, optional TTL; later positional arguments ignored; fluent options below |
-| `cache_warmup` | 1+ | index column, then name=value options; repeated calls merge cases with conflict checks |
+| `cache_warmup` | 1+ | index column, then name=value options; repeated same-index calls merge cases with conflict checks; a different index appends an ordered plural warmup |
+| `cache_warmup_cases` | 2+ | shared case set: name, then name=value parameters; referenced by warmup `CaseRefs` |
 | `marshal`, `unmarshal` | 2+ | MIME and Go implementation type; later arguments ignored |
 | `format` | 1+ | last argument; `tabular_json` normalizes to `tabular` |
 | `date_format`, `case_format` | 1+ | last argument; date layout and global name policy respectively |
@@ -225,11 +226,20 @@ Warmup consumes quoted options after the index column:
 | `Connector` | nonempty connector name |
 | `IndexParameter`, `index_param`, `indexparam` | nonempty canonical parameter name |
 | `IndexMeta`, `index_meta` | true/1/yes/on or false/0/no/off, case-insensitive |
+| `Name`, `Priority` | optional warmup identity name and integer request-selection priority |
+| `CaseRefs`, `case_refs` | comma-separated shared case set names declared with `cache_warmup_cases` |
 | Any other name | comma-separated, nonempty parameter values; produces a case dimension |
 
 Parameter names refer to existing canonical inputs. Each call adds a case;
-values within a case expand as combinations. Repeated calls must agree on index
-column, index parameter, connector and index-meta policy. The first argument may
+values within a case expand as combinations. Repeated calls targeting the same
+index identity must agree on index column, index parameter, connector and
+index-meta policy and merge their cases; a different index identity appends a
+distinct warmup, preserving declaration order: singular first, then plural.
+Duplicate effective warmup names or index identities fail compilation. Shared
+case sets declared with `cache_warmup_cases` expand independently for every
+referencing warmup, ahead of inline cases. A request selects the most
+restrictive supplied index by explicit `Priority`; equal priorities let the
+later, more specific declaration win. The first argument may
 be `''` when only concrete parameter cases are wanted. `cache_warmup(view,name)`
 in the outer projection is a different, exactly-two-argument named view binding.
 Neither form adds automatic cache invalidation to writer execution.

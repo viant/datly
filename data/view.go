@@ -32,6 +32,35 @@ func (v *View) IsGroupable() bool {
 type Cache struct {
 	Name   string                    `json:"name,omitempty"`
 	Warmup *spec.CacheWarmupSettings `json:"warmup,omitempty"`
+	// Warmups holds additional warmup definitions; the singular Warmup, when set, is always first.
+	Warmups []*spec.CacheWarmupSettings `json:"warmups,omitempty"`
+	// SharedCases holds named reusable case sets referenced by warmup CaseRefs.
+	SharedCases map[string][]*spec.CacheWarmupCase `json:"sharedCases,omitempty"`
+}
+
+// EffectiveWarmups returns every normalized warmup: singular first, then plural
+// in declaration order, each owning an expanded, detached case list.
+func (c *Cache) EffectiveWarmups() ([]*spec.CacheWarmupSettings, error) {
+	if c == nil {
+		return nil, nil
+	}
+	return spec.EffectiveCacheWarmups(c.Warmup, c.Warmups, c.SharedCases)
+}
+
+// HasWarmup reports whether the cache defines a singular or plural warmup.
+func (c *Cache) HasWarmup() bool {
+	if c == nil {
+		return false
+	}
+	if c.Warmup != nil {
+		return true
+	}
+	for _, item := range c.Warmups {
+		if item != nil {
+			return true
+		}
+	}
+	return false
 }
 
 type Relation struct {
@@ -79,15 +108,23 @@ func FromView(component *spec.Component, source *spec.View) *View {
 	}
 	if component.Settings != nil && component.Settings.Cache != nil {
 		settings := component.Settings.Cache
-		if ret.Cache == nil && (settings.Name != "" || settings.Warmup != nil) {
+		if ret.Cache == nil && (settings.Name != "" || settings.HasWarmup()) {
 			ret.Cache = &Cache{}
 		}
 		if ret.Cache != nil {
 			if ret.Cache.Name == "" {
 				ret.Cache.Name = settings.Name
 			}
-			if ret.Cache.Warmup == nil {
+			// The plural collection travels with the singular so an empty plural
+			// value never shadows a valid singular warmup and vice versa.
+			if ret.Cache.Warmup == nil && len(ret.Cache.Warmups) == 0 {
 				ret.Cache.Warmup = settings.Warmup.Clone()
+				for _, item := range settings.Warmups {
+					ret.Cache.Warmups = append(ret.Cache.Warmups, item.Clone())
+				}
+			}
+			if ret.Cache.SharedCases == nil {
+				ret.Cache.SharedCases = spec.CloneSharedCases(settings.SharedCases)
 			}
 		}
 	}

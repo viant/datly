@@ -9,6 +9,15 @@ func (c *Component) CacheWarmup() *CacheWarmupSettings {
 	return c.Settings.Cache.Warmup
 }
 
+// CacheWarmups returns every effective warmup definition: singular first, then
+// plural in declaration order, with case references expanded per warmup.
+func (c *Component) CacheWarmups() ([]*CacheWarmupSettings, error) {
+	if c == nil || c.Settings == nil || c.Settings.Cache == nil {
+		return nil, nil
+	}
+	return c.Settings.Cache.EffectiveWarmups()
+}
+
 func (c *Component) RootSource() *ViewSource {
 	if c == nil || c.RootView == nil {
 		return nil
