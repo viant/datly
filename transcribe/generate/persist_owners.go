@@ -87,9 +87,17 @@ func (p *scaffoldPersistence) validateForeignFiles(manifest *scaffoldManifest) e
 // RegisterPackage publishes generated declarations under manifest ownership and
 // preserves authored declarations that share the same Go package.
 func (r *Result) RegisterPackage(catalog *typecatalog.Catalog, pkg *smodel.Package, dir string) error {
-	manifest, err := readScaffoldManifest(dir)
+	manifest, err := readScaffoldMetadata(dir)
 	if err != nil {
 		return err
+	}
+	if manifest.exists && manifest.Version == 0 && manifest.isResourceOnly() {
+		return catalog.RegisterPackageFiles(pkg, nil)
+	}
+	if manifest.exists {
+		if err = manifest.validateVersion(); err != nil {
+			return err
+		}
 	}
 	files := map[string]bool{}
 	for _, file := range manifest.Files {
@@ -101,6 +109,10 @@ func (r *Result) RegisterPackage(catalog *typecatalog.Catalog, pkg *smodel.Packa
 		}
 	}
 	return catalog.RegisterPackageFiles(pkg, files)
+}
+
+func (m *scaffoldManifest) isResourceOnly() bool {
+	return m != nil && m.Resources != nil && m.Owner == "" && m.Identity == "" && m.ComponentPackage == "" && len(m.Files) == 0 && len(m.Owners) == 0
 }
 
 func (p *scaffoldPersistence) destinationMetadata() *scaffoldManifest {

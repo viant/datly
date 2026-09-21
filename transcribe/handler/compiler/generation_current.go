@@ -56,8 +56,9 @@ func (b *inputGeneration) addCurrent(view *spec.View, body string, path []string
 		for _, col := range view.Columns {
 			if col != nil && col.PrimaryKey && typecatalog.FieldName(col.Name) == key.Field {
 				// StructQL helper projections are Go shapes. Keep the physical
-				// database name in SQLX metadata and use the canonical exported
-				// field name for the generated helper contract.
+				// input field as the source and use the canonical exported field
+				// name for the generated helper contract. appendCurrent aliases the
+				// derived SQL projection to the same canonical name.
 				alias = key.Field
 				break
 			}
@@ -95,12 +96,25 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	current.Dest = ""
 	current.EntityHooks = ""
 	current.Columns = nil
+	var columns []string
 	for _, column := range view.Columns {
 		if column == nil || column.DeleteMarker {
 			continue
 		}
 		projected := column.Clone()
 		projected.ConcurrencyToken = false
+		outputName := projected.Name
+		if projected.PrimaryKey {
+			projected.Expression = strings.TrimSpace(projected.Source)
+			if projected.Expression == "" {
+				projected.Expression = projected.Name
+			}
+			projected.Name = typecatalog.FieldName(projected.Name)
+			projected.Source = projected.Name
+			columns = append(columns, `r."`+strings.ReplaceAll(outputName, `"`, `""`)+`" AS "`+strings.ReplaceAll(projected.Name, `"`, `""`)+`"`)
+		} else {
+			columns = append(columns, `r."`+strings.ReplaceAll(outputName, `"`, `""`)+`"`)
+		}
 		current.Columns = append(current.Columns, projected)
 	}
 	current.Relations = nil
@@ -115,12 +129,6 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	}
 	// Preserve authored WHERE, joins and projections inside the derived table.
 	// CompositeIn narrows that read; it must never replace authored row scope.
-	var columns []string
-	for _, col := range current.Columns {
-		if col != nil {
-			columns = append(columns, `r."`+strings.ReplaceAll(col.Name, `"`, `""`)+`"`)
-		}
-	}
 	current.Source = view.Source.Clone()
 	current.Source.URI = ""
 	current.Source.SQL = "SELECT " + strings.Join(columns, ", ") + " FROM (" + strings.TrimSuffix(sql, ";") + ") r WHERE " + predicate

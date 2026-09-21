@@ -194,6 +194,14 @@ func TestGenExecutableOuterProjection(t *testing.T) {
 					command := exec.CommandContext(ctx, "go", "test", "-mod=mod", "./...")
 					command.Dir = root
 					if out, err := command.CombinedOutput(); err != nil {
+						_ = filepath.WalkDir(filepath.Join(root, "api", "orders"), func(path string, entry fs.DirEntry, walkErr error) error {
+							if walkErr == nil && !entry.IsDir() && (strings.HasSuffix(path, ".sql") || strings.HasSuffix(path, "resources.go")) {
+								if content, readErr := os.ReadFile(path); readErr == nil {
+									t.Logf("generated resource %s:\n%s", path, content)
+								}
+							}
+							return nil
+						})
 						t.Fatalf("generated module: %v\n%s", err, out)
 					}
 				}

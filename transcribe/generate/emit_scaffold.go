@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"go/format"
 	"path/filepath"
 	"sort"
 )
@@ -234,5 +235,25 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 	if plan.Output.Ownership == ContractLinked {
 		removals = append(removals, plan.Output.Destination)
 	}
+	if err := formatGoArtifacts(files); err != nil {
+		return nil, nil, nil, err
+	}
+	if err := formatGoArtifacts(userFiles); err != nil {
+		return nil, nil, nil, err
+	}
 	return files, userFiles, removals, nil
+}
+
+func formatGoArtifacts(files []EmittedFile) error {
+	for index := range files {
+		if filepath.Ext(files[index].Path) != ".go" {
+			continue
+		}
+		formatted, err := format.Source([]byte(files[index].Content))
+		if err != nil {
+			return fmt.Errorf("format generated Go artifact %s: %w", files[index].Path, err)
+		}
+		files[index].Content = string(formatted)
+	}
+	return nil
 }

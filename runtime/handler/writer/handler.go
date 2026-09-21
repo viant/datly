@@ -92,9 +92,10 @@ func New(component *spec.Component, inputType, outputType reflect.Type, operatio
 	return &Handler{inputType: inputType, outputType: outputType, metadata: metadata}, nil
 }
 
-func (h *Handler) InputType() reflect.Type  { return h.inputType }
-func (h *Handler) OutputType() reflect.Type { return h.outputType }
-func (*Handler) RequiresReadMetadata() bool { return true }
+func (h *Handler) InputType() reflect.Type           { return h.inputType }
+func (h *Handler) OutputType() reflect.Type          { return h.outputType }
+func (*Handler) RequiresReadMetadata() bool          { return true }
+func (*Handler) RequiresPreBindingTransaction() bool { return true }
 
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
@@ -410,6 +411,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		if err = p.callEntityHook(ctx, "Validate", frame); err != nil {
 			return err
 		}
+		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+			continue
+		}
 		action := &Action{Kind: frame.Action, Entity: frame.Entity}
 		if frame.Action == xhandler.WriteDelete {
 			p.actions.Rows = append([]*Action{action}, p.actions.Rows...)
@@ -484,6 +488,22 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	return nil
 }
 
+func hasMutableFields(frame *Frame) bool {
+	if frame == nil || frame.Record == nil {
+		return false
+	}
+	keys := make(map[string]bool, len(frame.Record.Keys))
+	for _, key := range frame.Record.Keys {
+		keys[key.Name] = true
+	}
+	for name, supplied := range frame.Fields {
+		if supplied && !keys[name] {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Program) frameFor(entity reflect.Value) *Frame {
 	for _, frame := range p.frames.Rows {
 		if frame != nil && frame.Entity.IsValid() && frame.Entity.Pointer() == entity.Pointer() {
@@ -533,7 +553,68 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 			}
 		}
 	}
+	if frame.Action == xhandler.WriteInsert {
+		for _, reference := range p.satisfiedGraphReferences(frame) {
+			if !transactionStarted {
+				if options.DeferredFields == nil {
+					options.DeferredFields = fieldSet{}
+				}
+				options.DeferredFields.(fieldSet)[reference.Field] = true
+				continue
+			}
+			duplicate := false
+			for _, existing := range options.SatisfiedReferences {
+				if existing.Field == reference.Field && strings.EqualFold(existing.Schema, reference.Schema) && strings.EqualFold(existing.Table, reference.Table) && strings.EqualFold(existing.Column, reference.Column) {
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
+				options.SatisfiedReferences = append(options.SatisfiedReferences, reference)
+			}
+		}
+	}
 	return options
+}
+
+// satisfiedGraphReferences returns exact foreign-key references that will be
+// satisfied by an earlier INSERT in the same mutation graph. The framework
+// validator still verifies each receipt against native sqlx metadata, while
+// the database retains final authority when the queued transaction executes.
+func (p *Program) satisfiedGraphReferences(frame *Frame) []xhandler.ValidationReference {
+	if p == nil || frame == nil || frame.Record == nil || !frame.Entity.IsValid() {
+		return nil
+	}
+	current := frame.Entity.Elem()
+	var result []xhandler.ValidationReference
+	for _, field := range frame.Record.Fields {
+		if field.RefTable == "" || field.RefColumn == "" {
+			continue
+		}
+		value := current.FieldByIndex(field.Index)
+		if !linkValueResolved(value) {
+			continue
+		}
+		for _, candidate := range p.frames.Rows {
+			if candidate == frame {
+				break
+			}
+			if candidate == nil || candidate.Action != xhandler.WriteInsert || candidate.Record == nil || !strings.EqualFold(candidate.Record.Table, field.RefTable) || !candidate.Entity.IsValid() {
+				continue
+			}
+			for _, parentField := range candidate.Record.Fields {
+				if !strings.EqualFold(parentField.Column, field.RefColumn) {
+					continue
+				}
+				parentValue := candidate.Entity.Elem().FieldByIndex(parentField.Index)
+				if linkValueResolved(parentValue) && linkedEqual(value, parentValue) {
+					result = append(result, xhandler.ValidationReference{Field: field.Name, Schema: field.RefDB, Table: field.RefTable, Column: field.RefColumn})
+				}
+				break
+			}
+		}
+	}
+	return result
 }
 
 func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validator, transactionStarted bool) error {
@@ -733,7 +814,9 @@ func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *
 				if children.IsNil() {
 					continue
 				}
-				children = children.Elem()
+				wrapped := reflect.MakeSlice(reflect.SliceOf(children.Type()), 1, 1)
+				wrapped.Index(0).Set(children)
+				children = wrapped
 			}
 			if children.Kind() != reflect.Slice {
 				return fmt.Errorf("writer relation %s is not a collection", relation.Child.Path)

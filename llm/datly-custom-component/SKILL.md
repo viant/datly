@@ -25,6 +25,12 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 
 ## Read what the task needs
 
+- For legacy components that perform database access, read
+  [legacy-to-v1-migration.md](references/product/datly/doc/legacy-to-v1-migration.md) before choosing a
+  custom component. Under a generated-only migration policy, database access
+  stays in transcribed readers/writers and custom code only composes them or
+  handles non-database behavior.
+
 - For YAML/JSON instance constants (`-const` / `ConstURL`), typed defaults, DB-only identifier rendering and source preservation, read [constants and substitutions](references/constants-and-substitutions.md).
 
 - For project init/build and deployment, read [project-build.md](references/project-build.md). Custom builds discover/link internally; no mandatory user init/Register/import list.

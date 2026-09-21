@@ -145,6 +145,38 @@ func TestProjectionOwnershipDoesNotAdoptPreexistingAuthoredField(t *testing.T) {
 	}
 }
 
+func TestGeneratedInputMetadataRegeneratesFromOwnedContract(t *testing.T) {
+	dir := t.TempDir()
+	plan := &Plan{
+		ComponentName: "Read", ViewDest: "views.go", RouterDest: "router.go",
+		Input:  generatedContract("ReadInput", "input.go", Field{Name: "PodID", Type: "string", Tag: `parameter:"PodID,kind=query,in=podId"`}),
+		Output: generatedContract("ReadOutput", "output.go"),
+	}
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := readScaffoldManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.ProjectionFields["input.go"].Fields = nil
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(dir, scaffoldManifestName), encoded, 0644); err != nil {
+		t.Fatal(err)
+	}
+	plan.Input.Fields[0].Tag = `parameter:"PodID,kind=query,in=podId" predicate:"equal,group=0,p,id"`
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatalf("regenerate generated input metadata: %v", err)
+	}
+	content, err := os.ReadFile(filepath.Join(dir, "input.go"))
+	if err != nil || !strings.Contains(string(content), `predicate:"equal,group=0,p,id"`) {
+		t.Fatalf("generated input metadata was not updated: %v\n%s", err, content)
+	}
+}
+
 func TestProjectionCodecAuthorityProtectsUnrelatedTags(t *testing.T) {
 	for _, tc := range []struct {
 		next    string

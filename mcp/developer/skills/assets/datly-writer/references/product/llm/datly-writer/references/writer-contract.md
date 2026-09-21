@@ -26,9 +26,11 @@ Keep authorization filters and current-row lookups scoped to the caller. A recor
 ## 2. Select graph generation and contract ownership
 
 The standard authoring surface is a reader-like DQL graph plus an explicit `transcribe`
-operation and pure Go output. Link authoritative application types when they
-exist; otherwise generate owned shapes. Application Go hooks carry business
-rules. Every complete writer example declares `input_type`, `output_type`, the
+operation and generated Go shapes, metadata, resources, public setters/indexes,
+and optional lifecycle hooks. One shared metadata-driven runtime writer executes
+the mutation lifecycle; transcription does not emit a private phase program per
+component. Link authoritative application types when they exist; otherwise
+generate owned shapes. Application Go hooks carry business rules. Every complete writer example declares `input_type`, `output_type`, the
 row type, a typed main output holder such as
 `#define($_ = $Data<[]*Record>(output/body))`, and
 `#setting($_ = $case_format('lc'))`. `Data` names the Go output field; `body`
@@ -346,14 +348,13 @@ Days  []string   `invariant:"Schedule"`
 
 These are field fragments; also declare their SQL/JSON metadata and presence bits as appropriate. Each field currently declares one group. Do not silently split a comma-separated list into overlapping groups.
 
-The generated application methods are:
-
-```go
-HasScheduleChanges() bool
-BackfillScheduleIfNeeded(previous *Record, previousFields handler.FieldSet) error
-```
-
-Backfill applies only when the group has changes and some members are omitted. Copy only omitted members from the matched, actually loaded `Previous`; retain explicitly supplied zero, false, empty, and null values. Validate all necessary source fields and prepare detached copies before assigning anything, so an error cannot partly hydrate the group. Hydration must not mark omitted fields supplied or overwrite original presence.
+Invariant groups are compiled once into the component's immutable universal-writer
+metadata. They do not generate component-private `Has…Changes` or `Backfill…`
+methods. At invocation time the shared writer applies backfill only when the
+group has changes and some members are omitted. It copies only omitted members
+from the matched, actually loaded `Previous`; explicitly supplied zero, false,
+empty, and null values remain authoritative. Hydration must not mark omitted
+fields supplied or overwrite original presence.
 
 No previous row is normal for an insert: backfill is a no-op and entity `Init` may derive defaults. An update that requires a previous value must fail explicitly if the row/evidence needed for that value is unavailable. The generated runtime must provide actual `PreviousFields`; nil must not mean “assume every database field was loaded.” A deliberate standalone helper caller may use nil to assert that its supplied typed previous value is complete.
 
@@ -472,7 +473,7 @@ This section is a delivery warning, not a reduction of the target contract above
 | Area | Current checkout status |
 |---|---|
 | High-level graph + operation `transcribe` to pure Go | Available as `datly transcribe <operation>` (`get`, `patch`, `post`, `put`) in the v1 source CLI. Go is the default output; inspect the connected MCP target metadata for server operation support. |
-| Original snapshots, recursive sync, typed hooks, invariant helpers, typed Previous evidence, sequencing/diff/reconcile/queue, output/finalization | Required generated behavior. Verify generated Go fixtures and hook preservation on the connected build; parser or metadata acceptance alone does not establish it. |
+| Original snapshots, recursive presence, typed hooks, invariant metadata, typed Previous evidence, sequencing/diff/reconcile/queue, output/finalization | Implemented by the shared `runtime/handler/writer` program from immutable component metadata. Verify generated-shape runtime fixtures and hook preservation; parser or metadata acceptance alone does not establish it. |
 | Framework Go + DB validation, schema-to-validate tags, and DQL validation customization execution | Current framework Go/database validation and generated NOT NULL/customization paths have native/generated SQLite tests. Complete UNIQUE/reference discovery is not established; authored native UNIQUE tags remain explicit. Relation-produced FK deferral is restricted to captured parent INSERTs and final validation runs before Queue. Never substitute custom-hook-only validation or infer constraint absence from missing metadata. |
 | Native `OnInsert` / `OnUpdate` callbacks and native default generators inside the generic post-validation write path | Explicitly rejected by generic policy until moved to a safe earlier phase. Ordinary custom handlers retain native behavior. |
 | Generic primary-key-changing updates | Unsupported; existing identities are restored. Use explicitly custom orchestration for a different policy. |

@@ -47,7 +47,7 @@ func TestGeneratorEmitsSetMarkersForGeneratedWritableViews(t *testing.T) {
 		"type OrdersViewHas struct {\n\tId bool\n\tName bool\n\tItems bool\n}",
 		"type ItemsViewHas struct {\n\tId bool\n\tOrderId bool\n}",
 	} {
-		if !strings.Contains(text, expected) {
+		if !containsNormalized(text, expected) {
 			t.Fatalf("generated view source does not contain %q:\n%s", expected, text)
 		}
 	}

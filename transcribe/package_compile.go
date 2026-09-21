@@ -127,7 +127,7 @@ func (c *PackageCompilation) Compile(ctx context.Context) (*Result, error) {
 	for _, linked := range inputViews {
 		descriptors = append(descriptors, linked.descriptor)
 	}
-	if err = catalog.RegisterAll(typecatalog.TypeOriginPackage, descriptors...); err != nil {
+	if err = catalog.LinkRuntimeTypes(typecatalog.TypeOriginPackage, descriptors...); err != nil {
 		return nil, err
 	}
 	result, err := (&packageAuthority{
@@ -138,7 +138,7 @@ func (c *PackageCompilation) Compile(ctx context.Context) (*Result, error) {
 		return nil, err
 	}
 	if c.Types != nil {
-		if err = c.Types.RegisterAll(typecatalog.TypeOriginPackage, descriptors...); err != nil {
+		if err = c.Types.LinkRuntimeTypes(typecatalog.TypeOriginPackage, descriptors...); err != nil {
 			return nil, err
 		}
 	}
@@ -247,17 +247,8 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 	for _, linked := range linkedInputs {
 		linkedDescriptors = append(linkedDescriptors, linked.descriptor)
 	}
-	for _, descriptor := range linkedDescriptors {
-		existing, found, resolveErr := c.catalog.Resolve(typecatalog.PackageAuthority, descriptor.Key())
-		if resolveErr != nil {
-			return nil, resolveErr
-		}
-		if found && existing.Type != nil {
-			continue
-		}
-		if err = c.catalog.Register(typecatalog.TypeOriginPackage, descriptor); err != nil {
-			return nil, err
-		}
+	if err = c.catalog.LinkRuntimeTypes(typecatalog.TypeOriginPackage, linkedDescriptors...); err != nil {
+		return nil, err
 	}
 	resolvedContext := compileTypeContext(c.source, component.TypeContext)
 	resolvedContext.PackageDir = c.packageSource.Routes[0].Dir

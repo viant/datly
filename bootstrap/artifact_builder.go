@@ -88,7 +88,7 @@ func (b *ArtifactBuilder) Catalog(source *typecatalog.Catalog) (*typecatalog.Cat
 		if lookupErr != nil {
 			return nil, lookupErr
 		}
-		if err = result.RegisterAll(typecatalog.TypeOriginPackage, descriptors...); err != nil {
+		if err = result.LinkRuntimeTypes(typecatalog.TypeOriginPackage, descriptors...); err != nil {
 			return nil, err
 		}
 	}

@@ -73,6 +73,29 @@ func TestBuildInputExportsLowercaseDatabaseKeyProjection(t *testing.T) {
 	t.Fatal("generated key projection was not found")
 }
 
+func TestBuildInputCurrentStateUsesProjectedKeyAlias(t *testing.T) {
+	view := &spec.View{Name: "Orders", Source: &spec.ViewSource{Table: "ORDERS", SQL: "SELECT ID AS RootKey, NAME AS DisplayName FROM ORDERS"}, Columns: []*spec.Column{
+		{Name: "RootKey", Source: "ID", PrimaryKey: true, Type: spec.TypeRef{Name: "int64"}},
+		{Name: "DisplayName", Source: "NAME", Type: spec.TypeRef{Name: "string"}},
+	}}
+	got, err := (&Compiler{}).BuildInput(Request{Component: &spec.Component{Name: "Orders", RootView: view}, Operation: plan.OperationPatch}, "Order")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := got.Component.Views[0]
+	if len(current.Columns) != 2 || current.Columns[0].Source != "RootKey" || current.Columns[1].Source != "NAME" || current.Columns[0].Expression != "ID" {
+		t.Fatalf("current aliases and physical origins were not retained: %+v", current.Columns)
+	}
+	if !strings.Contains(current.Source.SQL, `SELECT r."RootKey" AS "RootKey", r."DisplayName"`) {
+		t.Fatalf("current SQL did not use projected aliases: %s", current.Source.SQL)
+	}
+	for _, parameter := range got.Component.Parameters {
+		if parameter.Name == "OrdersKeys" && parameter.DeclarationSQL != "SELECT RootKey AS RootKey FROM `/`" {
+			t.Fatalf("key helper did not retain the projected alias: %s", parameter.DeclarationSQL)
+		}
+	}
+}
+
 func TestBuildInputPreservesOverridesAndRejectsConflicts(t *testing.T) {
 	for _, conflict := range []bool{false, true} {
 		t.Run(map[bool]string{false: "authored", true: "conflicting"}[conflict], func(t *testing.T) {

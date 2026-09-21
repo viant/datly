@@ -141,6 +141,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `input_type`, `output_type` | 1+ | last argument is contract type |
 | `dest`, `input_dest`, `output_dest`, `router_dest` | 1+ | last argument is nonempty destination |
 | `file_prefix`, `handler_dest`, `lifecycle_dest`, `mutation_dest`, `resources_dest`, `links_dest` | exactly 1 | nonempty quoted value; no fluent tail; duplicate setting fails |
+| `sql_dest` | exactly 2 | canonical root view or generated SQL field/view name and relative `.sql` destination; duplicate role fails |
 | `support_dest` | exactly 2 | quoted role and filename; no tail; duplicate role fails |
 | `meta` | 1+ | last argument is nonempty description resource path |
 | `mcp` | 1+ | name (nonempty), optional description, optional description path; arguments after third ignored |
@@ -662,6 +663,7 @@ needed by the component are emitted; transcription does not create empty files.
 | Create-once application lifecycle, when requested | `lifecycle.go` | `$lifecycle_dest('custom.go')` |
 | Generated mutation definition | `mutation.go` | `$mutation_dest('policy.go')` |
 | Embedded resource filesystem, when needed | `resources.go` | `$resources_dest('sql_resources.go')` |
+| Generated SQL resource | `sql/<lower_snake_component_or_view>.sql` | `$sql_dest('orders','sql/orders.sql')` or `$sql_dest('CurrentOrders','sql/current_orders.sql')` |
 | Factory registration, when needed | `links.go` | `$links_dest('register.go')` |
 
 Optional `$file_prefix('orders_')` applies to default filenames for both readers
@@ -687,14 +689,12 @@ Other Go destinations are visible package-local `.go` filenames; directory
 traversal, hidden files and `_test.go` destinations are rejected.  The exact-arity filename settings require nonempty quoted
 arguments; duplicate role settings and unknown support roles are errors.
 
-Use `$support_dest('role','filename.go')` for separate support products. Supported
-roles are `entities`, `entity_methods`, `types` (cross-package shape aliases),
-`frames`, `previous`, `layout`, `actions`, `mutation_output`, `validation`, `hooks`,
-`invariants`, and `indexes`. Role names are case-sensitive; a `type:` role requires
-an exported Go identifier after the colon. Their defaults are `<role>.go`. Generated `hooks.go` contains
-mutation hook adapters; application edits belong in create-once `lifecycle.go`.
-`mutation_output.go` contains mutation result logic; `output.go` owns the output
-contract. `$support_dest('type:CubeInput','cube.go')` selects the filename for a
+Use `$support_dest('role','filename.go')` for separate support products. Standard
+roles are `setters`, `input_setters`, `indexes`, `entity_methods`, and `types`
+(cross-package shape aliases). Role names are case-sensitive; a `type:` role
+requires an exported Go identifier after the colon. Application lifecycle edits
+belong in create-once `lifecycle.go`; `output.go` owns the output contract.
+`$support_dest('type:CubeInput','cube.go')` selects the filename for a
 separately generated named type; otherwise its snake-case type name supplies the
 default filename. Support overrides apply in each package that owns that role,
 including relocated entity methods.
@@ -704,10 +704,11 @@ or per-file destinations when files conflict. There is no inferred prefix or
 collision fallback. Distinct filenames also do not resolve Go declaration-name
 conflicts.
 
-The `.datly-gen.json` manifest owns generated paths and fingerprints. Filenames
-and suffixes do not establish ownership. Regeneration removes replaced,
-manifest-owned files only with trusted unchanged contents; edited or unowned
-files cause an error before publication. Existing shapes with authored edits
+The high-level `datly transcribe` command uses `.datly-gen.json` to own generated
+paths and fingerprints while preserving create-once and authored files.
+Filenames and suffixes alone do not establish ownership. Regeneration removes
+replaced, manifest-owned files only with trusted
+unchanged contents; edited or unowned files cause an error before publication. Existing shapes with authored edits
 retain the normal field-merge rules at the same destination. A filename move
 requires the old file to be unchanged and its declarations to have destinations.
 Cross-package moves still require explicit migration. Application lifecycle

@@ -29,6 +29,14 @@ type InputCapturer interface {
 	CaptureInput(context.Context, any) (any, error)
 }
 
+// PreBindingTransaction requests that the engine start its managed data
+// transaction before binding input views. Mutation Current/Previous and
+// auxiliary reads can then share the same transaction as the queued writes.
+// Read-only/custom handlers remain unaffected unless they opt in explicitly.
+type PreBindingTransaction interface {
+	RequiresPreBindingTransaction() bool
+}
+
 // TypedHandler exposes the contract types of handlers assembled from Go
 // shapes. Registration can use these without reflecting over handler methods.
 type TypedHandler interface {
