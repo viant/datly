@@ -237,6 +237,28 @@ managed transaction. If a connected older generator still propagates auxiliary
 status to descendants or skips the auxiliary root traversal, classify that as a
 writer/runtime version gap and preserve the legacy transaction.
 
+### Replacement collections and explicit deletion
+
+Legacy code often implements replacement semantics with `DELETE ... WHERE
+parent_id = ?` followed by inserts. A PATCH graph must not infer deletion merely
+because an existing child is absent from the request. Project a logical boolean
+field, declare it with `delete_marker`, and have the root lifecycle append
+identity-only deletion rows for Previous children that are no longer desired.
+Use the generated deletion setter: it sets both the logical flag and its presence
+marker. Directly assigning the boolean bypasses the generated mutation contract.
+Deletion-marker fields are control metadata, not physical UPDATE columns.
+
+### Transient relation keys
+
+A derived writer projection may need a key only to connect an auxiliary scope to
+a writable descendant. Declare that field `sqlx:"-"` and use it in the typed
+relation `ON` mapping. Datly retains it in immutable writer metadata for relation
+resolution and Current copying while excluding it from INSERT and UPDATE DML.
+This permits a graph to reuse a projected lookup key without inventing a
+physical column or reparsing tags at execution time. If writer registration says
+that such a typed link does not resolve, update Datly rather than making the
+projection key writable.
+
 ## Verification gates
 
 A migrated component is complete only when all applicable gates pass:
