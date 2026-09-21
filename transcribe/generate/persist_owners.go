@@ -87,9 +87,19 @@ func (p *scaffoldPersistence) validateForeignFiles(manifest *scaffoldManifest) e
 // RegisterPackage publishes generated declarations under manifest ownership and
 // preserves authored declarations that share the same Go package.
 func (r *Result) RegisterPackage(catalog *typecatalog.Catalog, pkg *smodel.Package, dir string) error {
-	manifest, err := readScaffoldManifest(dir)
+	manifest, err := readScaffoldMetadata(dir)
 	if err != nil {
 		return err
+	}
+	// A resource-only .datly-gen.json describes embedded assets, not generated
+	// source ownership. Every Go declaration in that package remains authored.
+	if manifest.resourceOnly() {
+		return catalog.RegisterPackageFiles(pkg, nil)
+	}
+	if manifest.exists {
+		if err = manifest.validateVersion(); err != nil {
+			return err
+		}
 	}
 	files := map[string]bool{}
 	for _, file := range manifest.Files {

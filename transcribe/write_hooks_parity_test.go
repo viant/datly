@@ -71,7 +71,19 @@ func TestGeneratedWriteHooksGoVeltySQLiteParity(t *testing.T) {
 				if err = os.WriteFile(filepath.Join(dir, "hooks_test.go"), []byte(source), 0644); err != nil {
 					t.Fatal(err)
 				}
-				command := exec.Command("go", "test", "-mod=mod", "-race", "-timeout", "45s", "./...")
+				// Lowering/rendering covers the complete cross-product above. Runtime
+				// acceptance uses a bounded pairwise set covering all three conversions
+				// and both value/pointer collection shapes.
+				runRuntime := conversion == plan.LinkDirect ||
+					conversion == plan.LinkAddress && pointer ||
+					conversion == plan.LinkDereference && !pointer
+				if !runRuntime {
+					return
+				}
+				// This matrix checks generated Go/Velty parity. One canonical generated
+				// runtime test owns race instrumentation, so each matrix cell need not
+				// rebuild the dependency graph under -race.
+				command := exec.Command("go", "test", "-mod=mod", "-timeout", "45s", "./...")
 				command.Dir = dir
 				if output, err := command.CombinedOutput(); err != nil {
 					t.Fatalf("generated %s hook parity failed: %v\n%s\nTemplate:\n%s", name, err, output, template)

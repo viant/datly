@@ -70,25 +70,11 @@ func (b *ArtifactBuilder) Catalog(source *typecatalog.Catalog) (*typecatalog.Cat
 	}
 	if b.registry != nil {
 		var descriptors []*x.Type
-		var lookupErr error
 		b.registry.ForEach(func(_ string, typ *x.Type) bool {
-			existing, found, err := result.ResolveRuntimeType(typecatalog.PackageAuthority, typ.Key())
-			if err != nil {
-				lookupErr = err
-				return false
-			}
-			// Discovery may already have attached this exact compiled type to its
-			// source descriptor. Retain the source metadata instead of replacing it.
-			if found && existing != nil && existing == typ.Type {
-				return true
-			}
 			descriptors = append(descriptors, typ)
 			return true
 		})
-		if lookupErr != nil {
-			return nil, lookupErr
-		}
-		if err = result.RegisterAll(typecatalog.TypeOriginPackage, descriptors...); err != nil {
+		if err = result.LinkRuntimeAll(typecatalog.TypeOriginPackage, descriptors...); err != nil {
 			return nil, err
 		}
 	}

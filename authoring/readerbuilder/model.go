@@ -10,26 +10,28 @@ import (
 type OperationType string
 
 const (
-	OperationInspect              OperationType = "inspect"
-	OperationCreateReader         OperationType = "createReader"
-	OperationSetPackage           OperationType = "setPackage"
-	OperationAddField             OperationType = "addField"
-	OperationUpdateField          OperationType = "updateField"
-	OperationRemoveField          OperationType = "removeField"
-	OperationAddFieldPredicate    OperationType = "addFieldPredicate"
-	OperationUpdateFieldPredicate OperationType = "updateFieldPredicate"
-	OperationRemoveFieldPredicate OperationType = "removeFieldPredicate"
-	OperationAddFunction          OperationType = "addFunction"
-	OperationUpdateFunction       OperationType = "updateFunction"
-	OperationRemoveFunction       OperationType = "removeFunction"
-	OperationSetSetting           OperationType = "setSetting"
-	OperationAddView              OperationType = "addView"
-	OperationUpdateView           OperationType = "updateView"
-	OperationRemoveView           OperationType = "removeView"
-	OperationUpdateRelation       OperationType = "updateRelation"
-	OperationSetColumnRole        OperationType = "setColumnRole"
-	OperationSetColumnContract    OperationType = "setColumnContract"
-	OperationBatch                OperationType = "batch"
+	OperationInspect                    OperationType = "inspect"
+	OperationCreateReader               OperationType = "createReader"
+	OperationSetPackage                 OperationType = "setPackage"
+	OperationAddField                   OperationType = "addField"
+	OperationUpdateField                OperationType = "updateField"
+	OperationRemoveField                OperationType = "removeField"
+	OperationAddFieldPredicate          OperationType = "addFieldPredicate"
+	OperationUpdateFieldPredicate       OperationType = "updateFieldPredicate"
+	OperationRemoveFieldPredicate       OperationType = "removeFieldPredicate"
+	OperationUpdatePredicateGroup       OperationType = "updatePredicateGroup"
+	OperationUpdatePredicateComposition OperationType = "updatePredicateComposition"
+	OperationAddFunction                OperationType = "addFunction"
+	OperationUpdateFunction             OperationType = "updateFunction"
+	OperationRemoveFunction             OperationType = "removeFunction"
+	OperationSetSetting                 OperationType = "setSetting"
+	OperationAddView                    OperationType = "addView"
+	OperationUpdateView                 OperationType = "updateView"
+	OperationRemoveView                 OperationType = "removeView"
+	OperationUpdateRelation             OperationType = "updateRelation"
+	OperationSetColumnRole              OperationType = "setColumnRole"
+	OperationSetColumnContract          OperationType = "setColumnContract"
+	OperationBatch                      OperationType = "batch"
 )
 
 type Request struct {
@@ -38,18 +40,59 @@ type Request struct {
 }
 
 type Operation struct {
-	Type       OperationType           `json:"type"`
-	Reader     *ReaderMutation         `json:"reader,omitempty"`
-	Package    *PackageMutation        `json:"package,omitempty"`
-	Field      *Field                  `json:"field,omitempty"`
-	Predicate  *PredicateMutation      `json:"predicate,omitempty"`
-	Function   *FunctionMutation       `json:"function,omitempty"`
-	Setting    *SettingMutation        `json:"setting,omitempty"`
-	View       *ViewMutation           `json:"view,omitempty"`
-	Relation   *RelationMutation       `json:"relation,omitempty"`
-	ColumnRole *ColumnRoleMutation     `json:"columnRole,omitempty"`
-	Column     *ColumnContractMutation `json:"column,omitempty"`
-	Operations []Operation             `json:"operations,omitempty"`
+	Type                 OperationType                 `json:"type"`
+	Reader               *ReaderMutation               `json:"reader,omitempty"`
+	Package              *PackageMutation              `json:"package,omitempty"`
+	Field                *Field                        `json:"field,omitempty"`
+	Predicate            *PredicateMutation            `json:"predicate,omitempty"`
+	PredicateGroup       *PredicateGroupMutation       `json:"predicateGroup,omitempty"`
+	PredicateComposition *PredicateCompositionMutation `json:"predicateComposition,omitempty"`
+	Function             *FunctionMutation             `json:"function,omitempty"`
+	Setting              *SettingMutation              `json:"setting,omitempty"`
+	View                 *ViewMutation                 `json:"view,omitempty"`
+	Relation             *RelationMutation             `json:"relation,omitempty"`
+	ColumnRole           *ColumnRoleMutation           `json:"columnRole,omitempty"`
+	Column               *ColumnContractMutation       `json:"column,omitempty"`
+	Operations           []Operation                   `json:"operations,omitempty"`
+}
+
+// PredicateGroupMutation updates the compiled boolean operator for every
+// explicit expansion site of one predicate group. Views must name the complete
+// current expansion scope so an authoring client cannot silently broaden or
+// narrow a shared filter group.
+type PredicateGroupMutation struct {
+	Group    int      `json:"group"`
+	Views    []string `json:"views"`
+	Operator string   `json:"operator"`
+}
+
+// PredicateCompositionMutation changes only outer boolean composition. Every
+// existing expansion must occur exactly as often as before; group membership
+// and within-group operators are managed by the predicate/group operations.
+type PredicateCompositionMutation struct {
+	View         string                     `json:"view"`
+	Occurrence   int                        `json:"occurrence"`
+	Terms        []PredicateCompositionTerm `json:"terms"`
+	BuildKeyword string                     `json:"buildKeyword"`
+}
+
+type PredicateCompositionTerm struct {
+	Operator  string `json:"operator"`
+	Connector string `json:"connector"`
+	Groups    []int  `json:"groups"`
+}
+
+// PredicateComposition describes one complete Builder chain, in source order.
+// Connector is the effective persistent And/Or state at each Combine call.
+// The first term also records that state, although no preceding term exists.
+type PredicateComposition struct {
+	View         string                     `json:"view"`
+	Occurrence   int                        `json:"occurrence"`
+	Terms        []PredicateCompositionTerm `json:"terms,omitempty"`
+	BuildKeyword string                     `json:"buildKeyword"`
+	SourceSpan   dql.SourceSpan             `json:"sourceSpan"`
+	Editable     bool                       `json:"editable"`
+	Reason       string                     `json:"reason,omitempty"`
 }
 
 type PackageMutation struct {
@@ -70,16 +113,30 @@ type ReaderMutation struct {
 }
 
 type Field struct {
-	ExistingName        string  `json:"existingName,omitempty"`
-	Name                string  `json:"name"`
-	Type                string  `json:"type"`
-	SourceKind          string  `json:"sourceKind"`
-	SourceName          string  `json:"sourceName"`
-	Required            *bool   `json:"required,omitempty"`
-	QuerySelector       string  `json:"querySelector,omitempty"`
-	UpdateQuerySelector *string `json:"updateQuerySelector,omitempty"`
-	Value               *string `json:"value,omitempty"`
-	UpdateValue         bool    `json:"updateValue,omitempty"`
+	ExistingName        string         `json:"existingName,omitempty"`
+	Name                string         `json:"name"`
+	Type                string         `json:"type"`
+	SourceKind          string         `json:"sourceKind"`
+	SourceName          string         `json:"sourceName"`
+	Required            *bool          `json:"required,omitempty"`
+	QuerySelector       string         `json:"querySelector,omitempty"`
+	UpdateQuerySelector *string        `json:"updateQuerySelector,omitempty"`
+	Value               *string        `json:"value,omitempty"`
+	UpdateValue         bool           `json:"updateValue,omitempty"`
+	URI                 *string        `json:"uri,omitempty"`
+	UpdateURI           bool           `json:"updateUri,omitempty"`
+	Codec               *CodecMutation `json:"codec,omitempty"`
+	UpdateCodec         bool           `json:"updateCodec,omitempty"`
+	EmitOutput          *bool          `json:"emitOutput,omitempty"`
+	Description         *string        `json:"description,omitempty"`
+	UpdateDescription   bool           `json:"updateDescription,omitempty"`
+	Example             *string        `json:"example,omitempty"`
+	UpdateExample       bool           `json:"updateExample,omitempty"`
+}
+
+type CodecMutation struct {
+	Name string   `json:"name"`
+	Args []string `json:"args,omitempty"`
 }
 
 type PredicateMutation struct {
@@ -151,16 +208,17 @@ type Response struct {
 }
 
 type Structure struct {
-	Status              string                      `json:"status"`
-	Component           *spec.Component             `json:"component,omitempty"`
-	Declarations        []dql.DeclarationOccurrence `json:"declarations,omitempty"`
-	Views               []ViewOccurrence            `json:"views,omitempty"`
-	PredicateExpansions []PredicateExpansion        `json:"predicateExpansions,omitempty"`
-	Functions           []FunctionOccurrence        `json:"functions,omitempty"`
-	ColumnContracts     []ColumnContract            `json:"columnContracts,omitempty"`
-	AvailableConnectors []string                    `json:"availableConnectors,omitempty"`
-	AvailablePredicates []string                    `json:"availablePredicates,omitempty"`
-	AvailableCaches     []string                    `json:"availableCaches,omitempty"`
+	Status                string                      `json:"status"`
+	Component             *spec.Component             `json:"component,omitempty"`
+	Declarations          []dql.DeclarationOccurrence `json:"declarations,omitempty"`
+	Views                 []ViewOccurrence            `json:"views,omitempty"`
+	PredicateExpansions   []PredicateExpansion        `json:"predicateExpansions,omitempty"`
+	PredicateCompositions []PredicateComposition      `json:"predicateCompositions,omitempty"`
+	Functions             []FunctionOccurrence        `json:"functions,omitempty"`
+	ColumnContracts       []ColumnContract            `json:"columnContracts,omitempty"`
+	AvailableConnectors   []string                    `json:"availableConnectors,omitempty"`
+	AvailablePredicates   []string                    `json:"availablePredicates,omitempty"`
+	AvailableCaches       []string                    `json:"availableCaches,omitempty"`
 }
 
 type FunctionOccurrence struct {

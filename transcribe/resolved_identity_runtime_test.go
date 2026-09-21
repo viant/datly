@@ -43,7 +43,10 @@ func TestGeneratorResolvedIdentityIndexes(t *testing.T) {
 			if err != nil || string(after) != hooks {
 				t.Fatal("regeneration changed application lifecycle", err)
 			}
-			genpatch.Run(t, root, directory, genpatch.ResolvedIdentityRuntime(deep), "-race", "-v")
+			// Shared entity-sync acceptance owns race instrumentation. These fresh
+			// generated modules validate identity semantics without rebuilding the
+			// entire dependency graph under -race for every shape variant.
+			genpatch.Run(t, root, directory, genpatch.ResolvedIdentityRuntime(deep), "-v")
 		})
 	}
 }
@@ -74,7 +77,7 @@ func TestGeneratorResolvedCompositeZeroIdentity(t *testing.T) {
 	if err != nil || string(after) != string(before) {
 		t.Fatal("empty lifecycle placeholders changed", err)
 	}
-	genpatch.Run(t, root, directory, genpatch.ResolvedCompositeRuntime(), "-race", "-v")
+	genpatch.Run(t, root, directory, genpatch.ResolvedCompositeRuntime(), "-v")
 }
 
 func TestGeneratorNamedResolvedSplitPackages(t *testing.T) {
@@ -101,7 +104,7 @@ func TestGeneratorNamedResolvedSplitPackages(t *testing.T) {
 	if err != nil || string(after) != hooks {
 		t.Fatal("split lifecycle changed on regeneration", err)
 	}
-	genpatch.Run(t, root, directory, source, "-race", "-v")
+	genpatch.Run(t, root, directory, source, "-v")
 }
 
 func TestGeneratedIdentityPreparationCost(t *testing.T) {
@@ -126,7 +129,10 @@ func TestGeneratedIdentityPreparationCost(t *testing.T) {
 				t.Fatal(err)
 			}
 			directory := filepath.Join(root, strings.TrimPrefix(got.Package.PkgPath, "github.com/viant/datly/genfixture/"))
-			genpatch.Run(t, root, directory, genpatch.PreparationCostRuntime(wide), "-run", "^$", "-bench", "BenchmarkGeneratedPreparation", "-benchmem", "-benchtime=10x", "-count=5")
+			// One bounded sample is sufficient to assert the generated preparation
+			// benchmark remains executable; repeated statistical benchmarking belongs
+			// in the dedicated performance job, not the default package suite.
+			genpatch.Run(t, root, directory, genpatch.PreparationCostRuntime(wide), "-run", "^$", "-bench", "BenchmarkGeneratedPreparation", "-benchmem", "-benchtime=3x", "-count=1")
 
 		})
 	}

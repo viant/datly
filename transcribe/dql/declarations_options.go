@@ -27,6 +27,8 @@ type declarationOptions struct {
 	async                                                  bool
 	errorStatusCode                                        int
 	errorMessage                                           string
+	description                                            string
+	example                                                string
 	emitOutput                                             bool
 	predicates                                             []*spec.Predicate
 	codec                                                  *spec.Codec
@@ -268,6 +270,19 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 				return declarationOptions{}, err
 			}
 			p.result.errorMessage = trimQuote(args[0])
+		case "withdescription", "description":
+			if err := p.single(cursor, key, args, 1, 1); err != nil {
+				return declarationOptions{}, err
+			}
+			p.result.description = strings.TrimSpace(trimQuote(args[0]))
+			if p.result.description == "" {
+				return declarationOptions{}, p.fail(cursor, "%s requires description text", name)
+			}
+		case "withexample", "example":
+			if err := p.single(cursor, key, args, 1, 1); err != nil {
+				return declarationOptions{}, err
+			}
+			p.result.example = trimQuote(args[0])
 		case "value":
 			if err := p.single(cursor, key, args, 1, 1); err != nil {
 				return declarationOptions{}, err

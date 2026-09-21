@@ -74,6 +74,9 @@ func editView(source string, operation OperationType, mutation *ViewMutation) (s
 }
 
 func validateOperationResult(operation Operation, structure *Structure) error {
+	if operation.Type == OperationUpdatePredicateComposition {
+		return validatePredicateCompositionResult(operation.PredicateComposition, structure)
+	}
 	if operation.Type == OperationBatch {
 		for _, child := range operation.Operations {
 			if err := validateOperationResult(child, structure); err != nil {
@@ -129,6 +132,27 @@ func validateOperationResult(operation Operation, structure *Structure) error {
 		}
 		if !seenTarget {
 			return fmt.Errorf("predicate group %d is not expanded in target view %q after edit", operation.Predicate.Group, operation.Predicate.View)
+		}
+	}
+	if operation.Type == OperationUpdatePredicateGroup && operation.PredicateGroup != nil && structure != nil {
+		operator := strings.ToUpper(strings.TrimSpace(operation.PredicateGroup.Operator))
+		seen := map[string]bool{}
+		for _, site := range structure.PredicateExpansions {
+			if site.Group != operation.PredicateGroup.Group {
+				continue
+			}
+			if !slicesContainsFold(operation.PredicateGroup.Views, site.View) {
+				return fmt.Errorf("predicate group %d unexpectedly expands in view %q after update", site.Group, site.View)
+			}
+			if !strings.EqualFold(site.Operator, operator) {
+				return fmt.Errorf("predicate group %d in view %q compiled with operator %q, expected %q", site.Group, site.View, site.Operator, operator)
+			}
+			seen[strings.ToLower(strings.TrimSpace(site.View))] = true
+		}
+		for _, view := range operation.PredicateGroup.Views {
+			if !seen[strings.ToLower(strings.TrimSpace(view))] {
+				return fmt.Errorf("predicate group %d did not compile in view %q", operation.PredicateGroup.Group, view)
+			}
 		}
 	}
 	if operation.Type == OperationSetSetting && operation.Setting != nil && structure != nil && structure.Component != nil &&

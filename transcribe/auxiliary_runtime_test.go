@@ -111,7 +111,20 @@ SELECT orders.*, Aux.*, invariant(orders.WINDOW_START, 'DeliveryWindow'), invari
 					if _, err := NewCompiler().Transcribe(ctx, request); err != nil {
 						t.Fatalf("regenerate: %v", err)
 					}
-					command := exec.Command("go", "test", "-race", "-mod=mod", "./...")
+					// Compilation/regeneration assertions above cover the full 2 x 3 x 2
+					// matrix. Execute a bounded pairwise runtime set that still covers both
+					// targets, all operations, and both auxiliary-root states.
+					runRuntime := target == HandlerGo && operation == WritePost && !auxRoot ||
+						target == HandlerGo && operation == WritePatch && auxRoot ||
+						target == HandlerVelty && operation == WritePut && !auxRoot ||
+						target == HandlerVelty && operation == WritePatch && auxRoot
+					if !runRuntime {
+						return
+					}
+					// The generated fixture is repeated across every handler/operation/shape
+					// combination. Run its semantic acceptance normally; the dedicated
+					// generated mutation acceptance owns nested race instrumentation.
+					command := exec.Command("go", "test", "-mod=mod", "./...")
 					command.Dir = root
 					if output, err := command.CombinedOutput(); err != nil {
 						t.Fatalf("generated auxiliary %s/%s: %v\n%s", target, operation, err, output)

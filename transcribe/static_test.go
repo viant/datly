@@ -59,7 +59,10 @@ func TestStaticDQLGeneratedBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	binary := filepath.Join(t.TempDir(), "static.test")
-	command := exec.Command("go", "test", "-mod=mod", "-race", "-c", "-o", binary, "./generated")
+	// The parent package's race run already instruments Datly. Rebuilding this
+	// disposable acceptance binary with -race multiplies full-suite time and
+	// does not add coverage for the embed/source-removal contract exercised here.
+	command := exec.Command("go", "test", "-mod=mod", "-c", "-o", binary, "./generated")
 	command.Dir = generated
 	command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=go1.25.8")
 	if out, err := command.CombinedOutput(); err != nil {

@@ -82,7 +82,7 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 		fmt.Fprintf(stderr, "transcribe requires exactly one component in the selected source package; found %d\n", len(project.Components))
 		return 1
 	}
-	generated, err := (transcribe.Generator{Operation: *operation, Language: transcribe.HandlerTarget(*language), EphemeralOwnership: true}).Generate(ctx, transcribe.GenerationRequest{Compiled: project.Components[0], Destination: resolvedDirectory})
+	generated, err := (transcribe.Generator{Operation: *operation, Language: transcribe.HandlerTarget(*language)}).Generate(ctx, transcribe.GenerationRequest{Compiled: project.Components[0], Destination: resolvedDirectory})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

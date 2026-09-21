@@ -15,9 +15,11 @@ import (
 	"strings"
 )
 
-// applyEntitySetters retains only public generated entity accessors. Mutation
-// state, snapshots, invariants, and phase programs belong to the universal
-// runtime writer and are never emitted into an application package.
+// applyEntitySetters retains public generated entity behavior. Invocation
+// state, snapshots and phase programs belong to the universal runtime writer,
+// but invariant receiver methods remain part of the authored entity contract:
+// lifecycle hooks may call them and regeneration must add/change/remove them
+// with the DQL invariant declaration.
 func (g *handlerGeneration) applyEntitySetters(asset *handlergo.EntityAsset) error {
 	if asset == nil || asset.File == nil {
 		g.input.EntitySupport = nil
@@ -25,7 +27,9 @@ func (g *handlerGeneration) applyEntitySetters(asset *handlergo.EntityAsset) err
 	}
 	wanted := map[string]handlergo.EntityMethod{}
 	for _, method := range asset.Methods {
-		if strings.HasPrefix(method.Name, "Set") || strings.HasPrefix(method.Name, "Get") || strings.HasPrefix(method.Name, "Project") {
+		invariant := strings.HasPrefix(method.Name, "Backfill") || strings.HasPrefix(method.Name, "Has") && strings.HasSuffix(method.Name, "Changes")
+		accessor := strings.HasPrefix(method.Name, "Set") || strings.HasPrefix(method.Name, "Get") || strings.HasPrefix(method.Name, "Project")
+		if invariant || accessor {
 			wanted[method.Receiver+"."+method.Name] = method
 		}
 	}
@@ -87,9 +91,12 @@ func (g *handlerGeneration) applyEntitySetters(asset *handlergo.EntityAsset) err
 			filtered.Methods = append(filtered.Methods, method)
 		}
 	}
-	result := &gen.EntitySupportAsset{File: filtered.File}
+	result := &gen.EntitySupportAsset{File: filtered.File, Role: "entities"}
 	for _, method := range filtered.Methods {
 		result.Methods = append(result.Methods, gen.EntityMethod{Receiver: method.Receiver, Name: method.Name, ValueType: method.ValueType, Getter: method.Getter, Signature: method.Signature})
+	}
+	for _, invariant := range asset.Invariants {
+		result.Invariants = append(result.Invariants, gen.EntityInvariant{Identity: invariant.Identity, Path: append([]string(nil), invariant.Path...), Group: invariant.Group, BackfillFunction: invariant.BackfillFunction})
 	}
 	g.input.EntitySupport = result
 	return nil

@@ -491,7 +491,7 @@ SELECT 1`
 
 func TestParseComponentSource_PreservesDeclarationOptionSurface(t *testing.T) {
 	source := `#setting($_ = $route('/v1/api/example/options', 'GET'))
-#define($_ = $Fields<string>(query/fields).WithURI('assets:fields.sql').WithTag('json:"fields,omitempty"').Optional().Cacheable(false).QuerySelector('users').WithPredicate(2, 'contains', 'u', 'name').ApplyWhenAbsentPredicate('tenant', 'tenant_id = 7').When('enabled').Scope('request').Of('Filter').WithType('[]string').WithCodec('CSV', 'trim').WithStatusCode(422).WithErrorMessage('bad fields').Value('id,name').Cardinality('Many').Async())
+#define($_ = $Fields<string>(query/fields).WithURI('assets:fields.sql').WithTag('json:"fields,omitempty"').Optional().Cacheable(false).QuerySelector('users').WithPredicate(2, 'contains', 'u', 'name').ApplyWhenAbsentPredicate('tenant', 'tenant_id = 7').When('enabled').Scope('request').Of('Filter').WithType('[]string').WithCodec('CSV', 'trim').WithStatusCode(422).WithErrorMessage('bad fields').WithDescription('Selected fields').WithExample('id,name').Value('id,name').Cardinality('Many').Async())
 SELECT 1`
 
 	component, err := parseComponentSource("example.com/demo/options", "Options", source)
@@ -513,6 +513,9 @@ SELECT 1`
 	}
 	if param.ErrorStatusCode != 422 || param.ErrorMessage != "bad fields" {
 		t.Fatalf("unexpected error metadata: %+v", param)
+	}
+	if param.Description != "Selected fields" || param.Example != "id,name" {
+		t.Fatalf("unexpected documentation metadata: %+v", param)
 	}
 	if param.Codec == nil || param.Codec.Body != "CSV" || len(param.Codec.Args) != 1 || param.Codec.Args[0] != "trim" {
 		t.Fatalf("unexpected codec: %+v", param.Codec)

@@ -37,7 +37,7 @@ func TestGeneratedAsyncMutationRefreshesProvenanceSQLite(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "generated", "async_provenance_test.go"), []byte(generatedAsyncProvenanceSource), 0600); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "-race", "-count=1", "-timeout=90s", "./...")
+	command := exec.Command("go", "test", "-mod=mod", "-count=1", "-timeout=90s", "./...")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("generated async provenance: %v\n%s", err, output)

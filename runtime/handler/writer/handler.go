@@ -729,15 +729,6 @@ func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
 			children := entity.Elem().FieldByIndex(relation.Field)
-			if children.Kind() == reflect.Pointer {
-				if children.IsNil() {
-					continue
-				}
-				children = children.Elem()
-			}
-			if children.Kind() != reflect.Slice {
-				return fmt.Errorf("writer relation %s is not a collection", relation.Child.Path)
-			}
 			if err := p.buildRecordFrames(relation.Child, children, frame); err != nil {
 				return err
 			}
@@ -1166,7 +1157,9 @@ func resolveHookType(component *spec.Component, expression string) reflect.Type 
 	if index := strings.LastIndex(expression, "."); index >= 0 {
 		alias := expression[:index]
 		typeName = expression[index+1:]
-		if component.TypeContext != nil {
+		if strings.Contains(alias, "/") {
+			packagePath = alias
+		} else if component.TypeContext != nil {
 			for _, item := range component.TypeContext.Imports {
 				if item.Alias == alias {
 					packagePath = item.Package

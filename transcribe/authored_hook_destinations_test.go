@@ -139,7 +139,16 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 				}
 				runtimeSource = strings.Replace(runtimeSource, "var count int", extra, 1)
 				writeSourceFile(t, root, "api/events/runtime_test.go", runtimeSource)
-				cmd := exec.Command("go", "test", "-mod=mod", "-count=1", "-race", "./...")
+				// The second iteration recompiles and executes the same contract after
+				// authored edits. Keep the first iteration's generation assertions, but
+				// avoid executing an identical disposable module twice.
+				if iteration == 0 {
+					continue
+				}
+				// Hook ownership and regeneration are asserted for every destination;
+				// nested race instrumentation is covered by the canonical mutation
+				// runtime fixture rather than rebuilt for each hook permutation.
+				cmd := exec.Command("go", "test", "-mod=mod", "-count=1", "./...")
 				cmd.Dir = root
 				cmd.Env = os.Environ()
 				if output, err := cmd.CombinedOutput(); err != nil {

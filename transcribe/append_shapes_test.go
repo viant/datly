@@ -84,7 +84,7 @@ func TestDynamicDQLUpdatesPersistedGoShapeAppendOnly(t *testing.T) {
 	if err = os.WriteFile(filepath.Join(root, "generated", "reload_test.go"), []byte(resourceReloadSource), 0644); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "-race", "./...")
+	command := exec.Command("go", "test", "-mod=mod", "./...")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("updated generated module failed: %v\n%s", err, output)

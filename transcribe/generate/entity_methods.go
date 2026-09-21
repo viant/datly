@@ -15,6 +15,7 @@ import (
 type entityMethodOwnership struct {
 	expected    map[string]EntityMethod
 	claimed     map[string]string
+	generated   map[string]string
 	imports     map[string]string
 	packageName string
 }
@@ -26,6 +27,14 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string, man
 	owned := map[string]bool{}
 	for _, file := range manifest.Files {
 		owned[file] = true
+	}
+	proposed := map[string]string{}
+	for _, file := range p.files {
+		relative, err := managedPath(target, file.Path)
+		if err != nil {
+			return err
+		}
+		proposed[relative] = scaffoldFingerprint([]byte(file.Content))
 	}
 	index := -1
 	for i, file := range p.files {
@@ -49,9 +58,18 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string, man
 	if err != nil {
 		return err
 	}
-	policy := &entityMethodOwnership{expected: map[string]EntityMethod{}, claimed: map[string]string{}, imports: imports, packageName: file.Name.Name}
+	policy := &entityMethodOwnership{expected: map[string]EntityMethod{}, claimed: map[string]string{}, generated: map[string]string{}, imports: imports, packageName: file.Name.Name}
 	for _, method := range p.plan.EntitySupport.Methods {
 		policy.expected[method.Receiver+"."+method.Name] = method
+	}
+	for _, declaration := range file.Decls {
+		method, ok := declaration.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		if key, _ := policy.methodKey(method); key != "" {
+			policy.generated[key] = entityMethodSource(method)
+		}
 	}
 	entries, err := os.ReadDir(existing)
 	if os.IsNotExist(err) {
@@ -65,10 +83,34 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string, man
 		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		if owned[name] && manifest.Roles[name] != "shape" && !p.shapeDestinations()[name] {
-			continue
+		path := filepath.Join(existing, name)
+		if fingerprint := proposed[name]; fingerprint != "" {
+			content, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			if fingerprint == scaffoldFingerprint(content) {
+				continue
+			}
 		}
-		source, err := parser.ParseFile(token.NewFileSet(), filepath.Join(existing, name), nil, parser.ParseComments)
+		if owned[name] {
+			if manifest.Roles[name] != "shape" && !p.shapeDestinations()[name] {
+				continue
+			}
+			// An unchanged generated shape is Datly-owned output, not an
+			// authored implementation of the methods being regenerated. Only
+			// inspect a shape after its trusted fingerprint diverges.
+			if fingerprint := manifest.Fingerprints[name]; fingerprint != "" {
+				content, readErr := os.ReadFile(path)
+				if readErr != nil {
+					return readErr
+				}
+				if fingerprint == scaffoldFingerprint(content) {
+					continue
+				}
+			}
+		}
+		source, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
 		if err != nil {
 			return err
 		}
@@ -164,6 +206,9 @@ func (p *entityMethodOwnership) inspect(file *ast.File, path string) error {
 		if !ok {
 			continue
 		}
+		if generated := p.generated[key]; generated != "" && generated == entityMethodSource(method) {
+			continue
+		}
 		if file.Name.Name != p.packageName {
 			return fmt.Errorf("authored accessor %s belongs to a different package", key)
 		}
@@ -243,4 +288,15 @@ func (p *entityMethodOwnership) inspect(file *ast.File, path string) error {
 		p.claimed[key] = path
 	}
 	return nil
+}
+
+func entityMethodSource(method *ast.FuncDecl) string {
+	if method == nil {
+		return ""
+	}
+	var output bytes.Buffer
+	if err := format.Node(&output, token.NewFileSet(), method); err != nil {
+		return ""
+	}
+	return output.String()
 }

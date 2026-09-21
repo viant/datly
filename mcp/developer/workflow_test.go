@@ -3,10 +3,6 @@ package developer_test
 import (
 	"context"
 	"encoding/json"
-	"github.com/viant/datly/internal/testharness/devapp"
-	"github.com/viant/datly/internal/testharness/mcpclient"
-	"github.com/viant/datly/mcp/developer"
-	"github.com/viant/mcp-protocol/schema"
 	"io"
 	"net"
 	"net/http"
@@ -14,7 +10,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/viant/datly/internal/testharness/devapp"
+	"github.com/viant/datly/internal/testharness/mcpclient"
+	"github.com/viant/datly/mcp/developer"
+	"github.com/viant/mcp-protocol/schema"
 )
+
+const developerWorkflowHTTPTimeout = 30 * time.Second
 
 func TestNativeDeveloperFullWorkflow(t *testing.T) {
 	f := devapp.New(t)
@@ -57,31 +60,45 @@ func TestNativeDeveloperFullWorkflow(t *testing.T) {
 	if err = json.Unmarshal(data, &instance); err != nil || instance.ID == "" {
 		t.Fatal(err)
 	}
-	client := &http.Client{Timeout: 3 * time.Second}
-	res, err := client.Get(instance.Address + "/records/1")
+	// WaitReady proves the listener is bound, while the first request can still
+	// perform cold application work (notably under -race and full-suite load).
+	// Keep every probe bounded without imposing a scheduler-sensitive 3s cap.
+	client := &http.Client{Timeout: developerWorkflowHTTPTimeout}
+	requestCtx, requestCancel := context.WithTimeout(ctx, developerWorkflowHTTPTimeout)
+	res, err := client.Do(mustRequest(t, requestCtx, http.MethodGet, instance.Address+"/records/1", nil))
 	if err != nil {
+		requestCancel()
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
+	requestCancel()
 	if res.StatusCode != 200 || !strings.Contains(string(body), "first") {
 		t.Fatalf("read %d %s", res.StatusCode, body)
 	}
-	res, err = client.Post(instance.Address+"/records", "application/json", strings.NewReader(`{"data":{"id":2,"name":"written"}}`))
+	requestCtx, requestCancel = context.WithTimeout(ctx, developerWorkflowHTTPTimeout)
+	request := mustRequest(t, requestCtx, http.MethodPost, instance.Address+"/records", strings.NewReader(`{"data":{"id":2,"name":"written"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	res, err = client.Do(request)
 	if err != nil {
+		requestCancel()
 		t.Fatal(err)
 	}
 	body, _ = io.ReadAll(res.Body)
 	res.Body.Close()
+	requestCancel()
 	if res.StatusCode != 200 {
 		t.Fatalf("write %d %s", res.StatusCode, body)
 	}
-	res, err = client.Get(instance.Address + "/records/2")
+	requestCtx, requestCancel = context.WithTimeout(ctx, developerWorkflowHTTPTimeout)
+	res, err = client.Do(mustRequest(t, requestCtx, http.MethodGet, instance.Address+"/records/2", nil))
 	if err != nil {
+		requestCancel()
 		t.Fatal(err)
 	}
 	body, _ = io.ReadAll(res.Body)
 	res.Body.Close()
+	requestCancel()
 	if res.StatusCode != 200 || !strings.Contains(string(body), "written") {
 		t.Fatalf("mutation roundtrip %d %s", res.StatusCode, body)
 	}
@@ -103,6 +120,15 @@ func TestNativeDeveloperFullWorkflow(t *testing.T) {
 	if _, err = native.CallTool(ctx, &schema.CallToolRequestParams{Name: developer.StopTool, Arguments: map[string]any{"pid": 1}}); err == nil {
 		t.Fatal("arbitrary process control accepted")
 	}
+}
+
+func mustRequest(t *testing.T, ctx context.Context, method, uri string, body io.Reader) *http.Request {
+	t.Helper()
+	request, err := http.NewRequestWithContext(ctx, method, uri, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return request
 }
 
 func TestNativeDeveloperPortCollisionAndCanceledRun(t *testing.T) {

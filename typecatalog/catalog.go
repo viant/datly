@@ -58,6 +58,74 @@ func (c *Catalog) Register(origin TypeOrigin, typ *x.Type) error {
 	return c.RegisterAll(origin, typ)
 }
 
+// LinkRuntimeAll attaches available compiled Go identities to source-backed
+// descriptors without replacing their declaration metadata. A source-only
+// descriptor is retained as-is. Indexed bootstrap first loads package ASTs and
+// initialized binaries subsequently contribute reflect.Types; those are two
+// representations of the same package authority, not duplicate registrations.
+func (c *Catalog) LinkRuntimeAll(origin TypeOrigin, types ...*x.Type) error {
+	if c == nil {
+		return fmt.Errorf("type catalog is required")
+	}
+	if !validTypeOrigin(origin) {
+		return fmt.Errorf("unknown type origin %q", origin)
+	}
+	linked := make(map[string]*x.Type, len(types))
+	for _, typ := range types {
+		if typ == nil {
+			return fmt.Errorf("type is required")
+		}
+		copy, err := (x.Cloner{}).Type(typ)
+		if err != nil {
+			return err
+		}
+		key := strings.TrimSpace(copy.Key())
+		if key == "" {
+			return fmt.Errorf("type key is required")
+		}
+		if prior := linked[key]; prior != nil && prior.Type != copy.Type {
+			return fmt.Errorf("compiled type %q occurs more than once", key)
+		}
+		linked[key] = copy
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	updates := make(map[string][]registration, len(linked))
+	for key, compiled := range linked {
+		registrations := append([]registration(nil), c.items[key]...)
+		matched := false
+		for index, existing := range registrations {
+			if existing.Origin != origin {
+				continue
+			}
+			matched = true
+			if compiled.Type == nil {
+				continue
+			}
+			if existing.Type.Type != nil && existing.Type.Type != compiled.Type {
+				return fmt.Errorf("type %q is already linked to a different compiled identity", key)
+			}
+			descriptor, err := (x.Cloner{}).Type(existing.Type)
+			if err != nil {
+				return err
+			}
+			descriptor.Type = compiled.Type
+			if descriptor.SynteticType != nil {
+				descriptor.SynteticType.ReflectType = compiled.Type
+			}
+			registrations[index].Type = descriptor
+		}
+		if !matched {
+			registrations = append(registrations, registration{Origin: origin, Type: compiled})
+		}
+		updates[key] = registrations
+	}
+	for key, registrations := range updates {
+		c.items[key] = registrations
+	}
+	return nil
+}
+
 // RegisterAll atomically adds a group of types under one origin. Validation or
 // conflicts leave the catalog unchanged.
 func (c *Catalog) RegisterAll(origin TypeOrigin, types ...*x.Type) error {

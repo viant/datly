@@ -60,6 +60,7 @@ func (r *planResolver) concretizeGeneratedHelperFields() error {
 		if helper == nil {
 			continue
 		}
+		aliasColumns := compositeAliasColumns(param)
 		for _, projected := range declaration.Projection {
 			valueField := exportedName(projected.Source)
 			valueType := ""
@@ -89,6 +90,13 @@ func (r *planResolver) concretizeGeneratedHelperFields() error {
 					continue
 				}
 				helper.Fields[index].ExplicitType = valueExplicit
+				// A generated current-key helper normally retains the entity's
+				// physical SQLX column (TENANT_ID). Only keys explicitly renamed by
+				// the current view's outer projection address the derived table by
+				// their logical output alias (RootKey).
+				if aliasColumns[helper.Fields[index].Name] {
+					valueSQLX = projected.Name
+				}
 				if valueSQLX != "" {
 					helper.Fields[index].Tag = appendStructTag(helper.Fields[index].Tag, sqlio.TagSqlx, valueSQLX)
 				}
@@ -101,6 +109,20 @@ func (r *planResolver) concretizeGeneratedHelperFields() error {
 		}
 	}
 	return nil
+}
+
+func compositeAliasColumns(param *spec.Parameter) map[string]bool {
+	result := map[string]bool{}
+	if param == nil {
+		return result
+	}
+	value := reflect.StructTag(param.Tag).Get("compositeAlias")
+	for _, item := range strings.Split(value, ",") {
+		if name := strings.TrimSpace(item); name != "" {
+			result[name] = true
+		}
+	}
+	return result
 }
 
 func (r *planResolver) concretizeHelperFields() error {

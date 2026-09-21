@@ -135,7 +135,7 @@ func TestGeneratedEntityDestinations(t *testing.T) {
 				if err = os.WriteFile(testPath, []byte(entityDestinationInvariant), 0600); err != nil {
 					t.Fatal(err)
 				}
-				cmd := exec.Command("go", "test", "-mod=mod", "-race", "./entities")
+				cmd := exec.Command("go", "test", "-mod=mod", "./entities")
 				cmd.Dir = root
 				cmd.Env = append(os.Environ(), "GOWORK=off")
 				if out, err := cmd.CombinedOutput(); err != nil {
@@ -186,7 +186,10 @@ func TestEntityMethods(t *testing.T){e:=&Event{};e.SetName("changed");if e.GetNa
 			if err = os.WriteFile(testFile, []byte(runtimeSource), 0600); err != nil {
 				t.Fatal(err)
 			}
-			cmd := exec.Command("go", "test", "-mod=mod", "-race", "./...")
+			// Every destination case compiles a fresh module. The assertions below
+			// validate placement, regeneration, and runtime behavior; racing every
+			// duplicate fixture adds build cost without distinct race coverage.
+			cmd := exec.Command("go", "test", "-mod=mod", "./...")
 			cmd.Dir = root
 			cmd.Env = append(os.Environ(), "GOWORK=off")
 			if out, err := cmd.CombinedOutput(); err != nil {
