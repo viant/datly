@@ -221,6 +221,35 @@ func TestGeneratedHelperFieldsPreserveQualifiedSource(t *testing.T) {
 	}
 }
 
+func TestGeneratedCurrentKeyHelpersSupportPhysicalAndProjectedColumns(t *testing.T) {
+	for _, tc := range []struct {
+		name, parameterTag, want string
+	}{
+		{name: "physical", want: "pod_id"},
+		{name: "projected alias", parameterTag: `compositeAlias:"PodId"`, want: "PodId"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			param := &spec.Parameter{Name: "PatchKeys", Source: spec.BindSource{Kind: "param", Name: "Patch"}, Tag: tc.parameterTag}
+			plan := &Plan{
+				Input:       ContractPlan{Fields: []Field{{Name: "Patch", Type: "*Entitlement"}}},
+				HelperTypes: []HelperType{{Name: "PatchKeysRow", Fields: []Field{{Name: "PodId", Type: "any"}}}},
+				Views:       []ViewPlan{{Type: "Entitlement", Fields: []Field{{Name: "PodId", Type: "*string", Tag: `sqlx:"pod_id,primaryKey=true"`}}}},
+			}
+			resolver := &planResolver{plan: plan, input: Input{
+				Component:    &spec.Component{Parameters: []*spec.Parameter{param}},
+				Declarations: Declarations{param.Identity(): {Projection: []DeclarationProjection{{Name: "PodId", Source: "PodId"}}}},
+			}}
+			if err := resolver.concretizeGeneratedHelperFields(); err != nil {
+				t.Fatal(err)
+			}
+			field := plan.HelperTypes[0].Fields[0]
+			if got := reflect.StructTag(field.Tag).Get("sqlx"); got != tc.want {
+				t.Fatalf("sqlx key column=%q want=%q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRuntimeRowHelpersUseExactGeneratedNestedSource(t *testing.T) {
 	for _, test := range []struct {
 		path string
