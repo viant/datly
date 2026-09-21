@@ -135,7 +135,7 @@ func (p *Plan) providers(input reflect.Value, selectors xstate.Selectors) ([]loc
 		if !present {
 			continue
 		}
-		values[item.location.In] = typedValue{typeOf: item.sourceType, value: value.Interface()}
+		values[item.location.In] = typedValue{typeOf: item.sourceType, value: value.Interface(), owns: true, found: true}
 	}
 	kinds := make([]string, 0, len(byKind))
 	for kind := range byKind {
@@ -143,17 +143,7 @@ func (p *Plan) providers(input reflect.Value, selectors xstate.Selectors) ([]loc
 	}
 	sort.Strings(kinds)
 	for _, kind := range kinds {
-		values := byKind[kind]
-		result = append(result, handlerprovider.Named(kind, func(_ context.Context, targetType reflect.Type, name string) (any, bool, error) {
-			value, ok := values[name]
-			if !ok {
-				return nil, false, nil
-			}
-			if targetType != value.typeOf {
-				return nil, false, fmt.Errorf("report %s/%s requires source type %s, got %s", kind, name, value.typeOf, targetType)
-			}
-			return value.value, true, nil
-		}))
+		result = append(result, newTypedValueProvider(kind, byKind[kind]))
 	}
 	return result, nil
 }

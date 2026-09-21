@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -193,5 +194,34 @@ func TestCubeComposeOmittedFilterMasksAmbientRequest(t *testing.T) {
 	}
 	if len(result.Data) != 1 || result.Data[0].Amount != 1150 {
 		t.Fatalf("ambient region leaked: %s", recorder.Body.String())
+	}
+}
+
+func TestCubeComposeOmittedFilterMasksAmbientRequestWithoutSettingPresenceMarker(t *testing.T) {
+	h := (groupedReportHarnessConfig{
+		input: reflect.TypeOf(groupedSpendInputWithPresence{}),
+		report: []func(*spec.ReportSettings){
+			func(s *spec.ReportSettings) { s.Compose = &spec.CubeComposeSettings{Enabled: true} },
+		},
+	}).build(t)
+	body := `{"cubes":[{"filters":{"accountIDs":"1","tenant":"acme","channel":"web","status":"active"}}],"sql":"SELECT t1.AccountID, t1.TotalSpend AS amount FROM $CubeSQL1 AS t1"}`
+	request := httptest.NewRequest("POST", "/spend/acme/cube/compose", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Region", "US")
+	recorder := httptest.NewRecorder()
+	httpgateway.NewHandler(h.runtime, nil, "").ServeHTTP(recorder, request)
+	if recorder.Code != 200 {
+		t.Fatalf("HTTP %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var result struct {
+		Data []struct {
+			Amount float64 `json:"amount"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Data) != 1 || result.Data[0].Amount != 1150 {
+		t.Fatalf("omitted marker-aware filter was treated as present or ambient leaked: %s", recorder.Body.String())
 	}
 }

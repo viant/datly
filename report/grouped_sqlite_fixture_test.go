@@ -35,6 +35,7 @@ type groupedReportHarnessConfig struct {
 	report  []func(*spec.ReportSettings)
 	route   func(*spec.Route)
 	source  func(*spec.Component, *typecatalog.Catalog)
+	input   reflect.Type
 }
 
 func (c groupedReportHarnessConfig) build(t *testing.T) *groupedReportHarness {
@@ -76,6 +77,10 @@ func (c groupedReportHarnessConfig) build(t *testing.T) *groupedReportHarness {
 	}
 	codec := &groupedCSVCodecFactory{}
 	component := groupedReportComponent(settings)
+	inputType := c.input
+	if inputType == nil {
+		inputType = reflect.TypeOf(groupedSpendInput{})
+	}
 	if c.source != nil {
 		c.source(component, types)
 	}
@@ -85,7 +90,7 @@ func (c groupedReportHarnessConfig) build(t *testing.T) *groupedReportHarness {
 		}
 	}
 	compilation, err := NewProjectCompiler(ProjectConfig{Types: types}).CompileArtifacts([]bootstrap.ArtifactInput{{
-		Component: component, InputType: reflect.TypeOf(groupedSpendInput{}),
+		Component: component, InputType: inputType,
 		OutputType: reflect.TypeOf(groupedSpendOutput{}), DirectViewField: "Rows", CodecFactory: codec,
 	}})
 	if err != nil {
