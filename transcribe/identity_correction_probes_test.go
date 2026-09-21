@@ -24,7 +24,9 @@ func TestCorrectionCacheEvidence(t *testing.T) {
 	}
 	directory := filepath.Join(root, strings.TrimPrefix(got.Package.PkgPath, "github.com/viant/datly/genfixture/"))
 	genpatch.ObserveResolvedHooks(t, directory)
-	genpatch.Run(t, root, directory, correctionCacheRuntime(false), "-run", "TestIndependentCacheAndEvidence", "-race", "-v")
+	// Entity-sync fixtures own race instrumentation; this generated module
+	// validates correction/cache semantics without another full race build.
+	genpatch.Run(t, root, directory, correctionCacheRuntime(false), "-run", "TestIndependentCacheAndEvidence", "-v")
 }
 func correctionCacheRuntime(deep bool) string {
 	source := strings.Replace(genpatch.ResolvedIdentityRuntime(deep), ` "context"`, ` "context";sdk "github.com/viant/xdatly/handler"`, 1)

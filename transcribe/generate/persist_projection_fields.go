@@ -217,10 +217,28 @@ func (p *scaffoldPersistence) projectionChanges(destination string, previous, pr
 			continue
 		}
 		prior, trusted := owned[candidate.key()]
-		if !owners[candidate.Owner] || !trusted || candidate.Tag == prior.Tag {
+		if !owners[candidate.Owner] || !trusted {
 			continue
 		}
-		if relations[candidate.key()] {
+		// Type and tag authority are independent. An authored tag extension must
+		// survive an explicit CAST-driven type transition, and an authored type
+		// must survive a generated metadata transition. Fail only when the same
+		// dimension was changed by both the destination and the new proposal.
+		if before.Type != prior.Type && candidate.Type != prior.Type || before.Tag != prior.Tag && candidate.Tag != prior.Tag {
+			return xshape.SourceFieldEdits{}, fmt.Errorf("shape %s field %s has customized type or tag: explicit migration required before metadata change", destination, candidate.key())
+		}
+		// Relation holders are entirely generated metadata. An edited on tag
+		// must fail even when the next DQL proposal is byte-identical to the
+		// prior proposal; otherwise a no-op regeneration silently blesses the
+		// edit and a later alias transition can overwrite it.
+		isRelation := relations[candidate.key()] || tags.NewTags(prior.Tag).Lookup("on") != nil
+		if isRelation && (before.Type != prior.Type || before.Tag != prior.Tag) {
+			return xshape.SourceFieldEdits{}, fmt.Errorf("shape %s field %s has customized type or tag: explicit migration required before metadata change", destination, candidate.key())
+		}
+		if candidate.Tag == prior.Tag {
+			continue
+		}
+		if isRelation {
 			// Canonical outer aliases can change exact matching fields. This
 			// grants no destination, source, cardinality or child-type authority.
 			onlyOn, err := prior.tagChange(candidate, "on")

@@ -123,6 +123,8 @@ func (f relationProducerFixture) program(t *testing.T) *MutationProgramAsset {
 }
 
 // Exercise the complete generated policy through canonical Data and native SQLite checks.
+var relationProducerGeneratedSlots = make(chan struct{}, 4)
+
 func TestRelationProducerProgramSQLite(t *testing.T) {
 	for _, self := range []bool{false, true} {
 		layout := "relation"
@@ -132,6 +134,9 @@ func TestRelationProducerProgramSQLite(t *testing.T) {
 		t.Run(layout, func(t *testing.T) {
 			for _, mode := range []string{"absent child", "produced Go", "produced Go failure", "working marker", "supplied nil changed", "supplied zero changed", "incomplete key", "precomputed key", "reference boundary", "partial key", "parent update", "parent update changed", "parent update supplied", "parent update wrong target", "child update", "supplied nil", "supplied zero", "supplied conflict", "unrelated root", "ordinary Go rule", "produced unique", "pending identity", "pending alias", "two allocations", "bad allocator", "altered topology", "ambiguous graph", "competing producers", "reversed order", "wrong target"} {
 				t.Run(mode, func(t *testing.T) {
+					t.Parallel()
+					relationProducerGeneratedSlots <- struct{}{}
+					defer func() { <-relationProducerGeneratedSlots }()
 					(relationProducerFixture{self: self, mode: mode}).run(t)
 				})
 			}
@@ -161,7 +166,11 @@ func (f relationProducerFixture) run(t *testing.T) {
 	if f.rewrite != nil {
 		source = f.rewrite(source)
 	}
-	(entitySyncFixture{entity: asset.Entities, products: files, source: source}).run(t)
+	// This matrix launches a generated-module test for every policy mode. The
+	// enclosing package race run covers generator code; racing every nested
+	// disposable binary makes the suite timeout without increasing policy
+	// coverage.
+	(entitySyncFixture{entity: asset.Entities, products: files, source: source, withoutRace: true}).run(t)
 }
 
 const relationProducerSQLiteSource = `package events

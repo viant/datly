@@ -89,19 +89,17 @@ ORDER BY id`, module, predicateType, revision+2)}
 		}
 		stages = append(stages, stage)
 	}
-	for _, protocol := range []string{"http", "mcp-registry", "mcp-session", "mcp-stateless"} {
-		t.Run(protocol, func(t *testing.T) {
-			command := exec.Command("go", "test", "-mod=mod", "-race", "-count=1", "-timeout=120s", "-v", "-run", "^TestPublicReload$/^"+protocol+"$", "./records")
-			command.Dir = stages[0]
-			command.Env = append(os.Environ(), "DATLY_RELOAD_STAGE="+stages[1], "GOWORK=off")
-			output, err := command.CombinedOutput()
-			if err != nil {
-				t.Fatalf("generated predicate public reload: %v\n%s", err, output)
-			}
-			if !strings.Contains(string(output), "TestPublicReload/"+protocol) {
-				t.Fatalf("fixture did not execute: %s", output)
-			}
-			t.Logf("compiled emitted package acceptance:\n%s", output)
-		})
+	command := exec.Command("go", "test", "-mod=mod", "-count=1", "-timeout=120s", "-v", "-run", "^TestPublicReload$", "./records")
+	command.Dir = stages[0]
+	command.Env = append(os.Environ(), "DATLY_RELOAD_STAGE="+stages[1], "GOWORK=off")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("generated predicate public reload: %v\n%s", err, output)
 	}
+	for _, protocol := range []string{"http", "mcp-registry", "mcp-session", "mcp-stateless"} {
+		if !strings.Contains(string(output), "TestPublicReload/"+protocol) {
+			t.Fatalf("fixture did not execute %s: %s", protocol, output)
+		}
+	}
+	t.Logf("compiled emitted package acceptance:\n%s", output)
 }

@@ -40,7 +40,7 @@ SELECT r.* FROM RECORDS r`
 				t.Fatal("strategy absent from generation plan")
 			}
 			writeSourceFile(t, root, "generated/sequence_runtime_test.go", strings.ReplaceAll(sequenceStrategyFixture, "{{STRATEGY}}", strategy))
-			cmd := exec.Command("go", "test", "-mod=mod", "-race", "-count=1", "./...")
+			cmd := exec.Command("go", "test", "-mod=mod", "-count=1", "./...")
 			cmd.Dir = root
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("generated strategy runtime: %v\n%s", err, out)

@@ -15,8 +15,9 @@ import (
 )
 
 type Config struct {
-	Invoker exec.ComponentInvoker
-	Client  xmcp.Client
+	Invoker   exec.ComponentInvoker
+	Client    xmcp.Client
+	Authorize func(context.Context, exec.ComponentTarget) error
 }
 
 type Request struct {
@@ -29,10 +30,11 @@ type Request struct {
 type Invoker struct {
 	component exec.ComponentInvoker
 	mcp       xmcp.Context
+	authorize func(context.Context, exec.ComponentTarget) error
 }
 
 func New(config Config) *Invoker {
-	return &Invoker{component: config.Invoker, mcp: &requestContext{client: config.Client}}
+	return &Invoker{component: config.Invoker, mcp: &requestContext{client: config.Client}, authorize: config.Authorize}
 }
 
 func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *jsonrpc.Error) {
@@ -47,6 +49,11 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 	}
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if i.authorize != nil {
+		if err := i.authorize(ctx, request.Target); err != nil {
+			return nil, jsonrpc.NewInvalidRequest("MCP tool authorization denied", nil)
+		}
 	}
 	ctx = exec.CaptureOutputSelection(ctx)
 	execContext := xexec.New(xexec.WithMethod(request.Method), xexec.WithURI(request.URI))

@@ -91,7 +91,9 @@ func (r *Result) RegisterPackage(catalog *typecatalog.Catalog, pkg *smodel.Packa
 	if err != nil {
 		return err
 	}
-	if manifest.exists && manifest.Version == 0 && manifest.isResourceOnly() {
+	// A resource-only .datly-gen.json describes embedded assets, not generated
+	// source ownership. Every Go declaration in that package remains authored.
+	if manifest.resourceOnly() {
 		return catalog.RegisterPackageFiles(pkg, nil)
 	}
 	if manifest.exists {
@@ -109,10 +111,6 @@ func (r *Result) RegisterPackage(catalog *typecatalog.Catalog, pkg *smodel.Packa
 		}
 	}
 	return catalog.RegisterPackageFiles(pkg, files)
-}
-
-func (m *scaffoldManifest) isResourceOnly() bool {
-	return m != nil && m.Resources != nil && m.Owner == "" && m.Identity == "" && m.ComponentPackage == "" && len(m.Files) == 0 && len(m.Owners) == 0
 }
 
 func (p *scaffoldPersistence) destinationMetadata() *scaffoldManifest {

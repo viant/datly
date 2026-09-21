@@ -26,11 +26,13 @@ import (
 )
 
 const packagePath = "github.com/viant/datly/testfixture/composereload/spend"
+const testRuntimeTimeout = 250 * time.Millisecond
 
 type composeFixture struct {
 	db        *sqlite.Harness
 	stage     string
 	resources []*resource.Store
+	testTimeoutMs int
 }
 
 func (f *composeFixture) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
@@ -58,6 +60,13 @@ func (f *composeFixture) compile(ctx context.Context, types *typecatalog.Catalog
 	settings := component.Settings.Report.Compose.Normalize()
 	if !settings.Enabled || settings.MaxCubes != 8 || settings.MaxLimit != 100 || settings.TimeoutMs != 30000 {
 		return nil, fmt.Errorf("reloaded defaults=%+v", settings)
+	}
+	// Keep the emitted/default contract assertion above, but do not make every
+	// transport and retained-generation acceptance test spend 30 seconds proving
+	// that the same context deadline is honored. This override is confined to the
+	// generated test fixture and is applied before runtime compilation.
+	if f.testTimeoutMs > 0 {
+		component.Settings.Report.Compose.TimeoutMs = f.testTimeoutMs
 	}
 	assets, err := (packageresources.Loader{Workspace: workspace, Packages: []string{packagePath}}).Load(ctx)
 	if err != nil {
@@ -126,7 +135,7 @@ func TestComposeReload(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			fixture := &composeFixture{db: db, stage: stage1}
+			fixture := &composeFixture{db: db, stage: stage1, testTimeoutMs: int(testRuntimeTimeout / time.Millisecond)}
 			if err = manager.Reload(ctx, application.Request{Revision: 1, Compile: fixture.compile}); err != nil {
 				t.Fatal(err)
 			}

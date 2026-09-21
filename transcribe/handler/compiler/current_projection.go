@@ -53,7 +53,7 @@ func (p *currentProjection) match(entity *spec.Column) (*spec.Column, error) {
 			continue
 		}
 		fieldMatch := typecatalog.FieldName(current.Name) == field
-		currentSource := currentColumnOrigin(current)
+		currentSource := currentEntitySource(current)
 		sourceMatch := source != "" && strings.EqualFold(source, currentSource)
 		if fieldMatch && source != "" && currentSource != "" && !sourceMatch {
 			return nil, fmt.Errorf("current view %q field %q source %q conflicts with entity source %q", p.current.CanonicalName(), current.Name, currentSource, source)
@@ -70,7 +70,24 @@ func (p *currentProjection) match(entity *spec.Column) (*spec.Column, error) {
 }
 
 func (p *currentProjection) field(column *spec.Column) plan.FieldRef {
-	return plan.FieldRef{Field: typecatalog.FieldName(column.Name), Source: currentColumnOrigin(column), Type: column.EffectiveType()}
+	if column == nil {
+		return plan.FieldRef{}
+	}
+	source := strings.TrimSpace(column.Source)
+	if strings.TrimSpace(column.Expression) != "" {
+		source = currentEntitySource(column)
+	}
+	return plan.FieldRef{Field: typecatalog.FieldName(column.Name), Source: source, Type: column.EffectiveType()}
+}
+
+func currentEntitySource(column *spec.Column) string {
+	if column == nil {
+		return ""
+	}
+	if source := strings.TrimSpace(column.Expression); source != "" {
+		return source
+	}
+	return strings.TrimSpace(column.Source)
 }
 
 func currentColumnOrigin(column *spec.Column) string {

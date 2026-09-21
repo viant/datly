@@ -92,10 +92,9 @@ func New(component *spec.Component, inputType, outputType reflect.Type, operatio
 	return &Handler{inputType: inputType, outputType: outputType, metadata: metadata}, nil
 }
 
-func (h *Handler) InputType() reflect.Type           { return h.inputType }
-func (h *Handler) OutputType() reflect.Type          { return h.outputType }
-func (*Handler) RequiresReadMetadata() bool          { return true }
-func (*Handler) RequiresPreBindingTransaction() bool { return true }
+func (h *Handler) InputType() reflect.Type  { return h.inputType }
+func (h *Handler) OutputType() reflect.Type { return h.outputType }
+func (*Handler) RequiresReadMetadata() bool { return true }
 
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
@@ -488,22 +487,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	return nil
 }
 
-func hasMutableFields(frame *Frame) bool {
-	if frame == nil || frame.Record == nil {
-		return false
-	}
-	keys := make(map[string]bool, len(frame.Record.Keys))
-	for _, key := range frame.Record.Keys {
-		keys[key.Name] = true
-	}
-	for name, supplied := range frame.Fields {
-		if supplied && !keys[name] {
-			return true
-		}
-	}
-	return false
-}
-
 func (p *Program) frameFor(entity reflect.Value) *Frame {
 	for _, frame := range p.frames.Rows {
 		if frame != nil && frame.Entity.IsValid() && frame.Entity.Pointer() == entity.Pointer() {
@@ -511,6 +494,22 @@ func (p *Program) frameFor(entity reflect.Value) *Frame {
 		}
 	}
 	return nil
+}
+
+func hasMutableFields(frame *Frame) bool {
+	if frame == nil || frame.Record == nil {
+		return false
+	}
+	keys := map[string]bool{}
+	for _, key := range frame.Record.Keys {
+		keys[key.Name] = true
+	}
+	for name, present := range frame.Fields {
+		if present && !keys[name] {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Program) unresolvedParentLinks(frame *Frame) bool {
@@ -577,10 +576,6 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 	return options
 }
 
-// satisfiedGraphReferences returns exact foreign-key references that will be
-// satisfied by an earlier INSERT in the same mutation graph. The framework
-// validator still verifies each receipt against native sqlx metadata, while
-// the database retains final authority when the queued transaction executes.
 func (p *Program) satisfiedGraphReferences(frame *Frame) []xhandler.ValidationReference {
 	if p == nil || frame == nil || frame.Record == nil || !frame.Entity.IsValid() {
 		return nil
@@ -810,6 +805,8 @@ func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
 			children := entity.Elem().FieldByIndex(relation.Field)
+			// A generated cardinality-one relation is represented as a pointer;
+			// normalize it for the universal recursive frame builder.
 			if children.Kind() == reflect.Pointer {
 				if children.IsNil() {
 					continue
@@ -1249,7 +1246,9 @@ func resolveHookType(component *spec.Component, expression string) reflect.Type 
 	if index := strings.LastIndex(expression, "."); index >= 0 {
 		alias := expression[:index]
 		typeName = expression[index+1:]
-		if component.TypeContext != nil {
+		if strings.Contains(alias, "/") {
+			packagePath = alias
+		} else if component.TypeContext != nil {
 			for _, item := range component.TypeContext.Imports {
 				if item.Alias == alias {
 					packagePath = item.Package

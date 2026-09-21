@@ -74,6 +74,7 @@ func TestCapabilityKeysAreDistinct(t *testing.T) {
 		rhandler.ValidatorCapabilityKey,
 		rhandler.MessageBusCapabilityKey,
 		rhandler.ConnectorCapabilityKey,
+		rhandler.TransactionSQLCapabilityKey,
 		xhandler.SequencerKey,
 		xhandler.DMLKey,
 		xhandler.FlusherKey,

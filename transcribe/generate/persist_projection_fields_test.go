@@ -145,35 +145,19 @@ func TestProjectionOwnershipDoesNotAdoptPreexistingAuthoredField(t *testing.T) {
 	}
 }
 
-func TestGeneratedInputMetadataRegeneratesFromOwnedContract(t *testing.T) {
+func TestProjectionOwnershipReplacesGeneratedHelperFields(t *testing.T) {
 	dir := t.TempDir()
-	plan := &Plan{
-		ComponentName: "Read", ViewDest: "views.go", RouterDest: "router.go",
-		Input:  generatedContract("ReadInput", "input.go", Field{Name: "PodID", Type: "string", Tag: `parameter:"PodID,kind=query,in=podId"`}),
-		Output: generatedContract("ReadOutput", "output.go"),
-	}
+	plan := &Plan{ComponentName: "Orders", ViewDest: "views.go", RouterDest: "router.go", Input: generatedContract("Input", "input.go"), Output: generatedContract("Output", "output.go"), HelperTypes: []HelperType{{Name: "OrdersKeysRow", Fields: []Field{{Name: "Id", Type: "int"}}}}}
 	if _, err := EmitScaffold(dir, plan); err != nil {
 		t.Fatal(err)
 	}
-	manifest, err := readScaffoldManifest(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	manifest.ProjectionFields["input.go"].Fields = nil
-	encoded, err := json.Marshal(manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(filepath.Join(dir, scaffoldManifestName), encoded, 0644); err != nil {
-		t.Fatal(err)
-	}
-	plan.Input.Fields[0].Tag = `parameter:"PodID,kind=query,in=podId" predicate:"equal,group=0,p,id"`
+	plan.HelperTypes[0].Fields = []Field{{Name: "RootKey", Type: "int"}}
 	if _, err := EmitScaffold(dir, plan); err != nil {
-		t.Fatalf("regenerate generated input metadata: %v", err)
+		t.Fatal(err)
 	}
-	content, err := os.ReadFile(filepath.Join(dir, "input.go"))
-	if err != nil || !strings.Contains(string(content), `predicate:"equal,group=0,p,id"`) {
-		t.Fatalf("generated input metadata was not updated: %v\n%s", err, content)
+	data, err := os.ReadFile(filepath.Join(dir, "views.go"))
+	if err != nil || strings.Contains(string(data), "Id int") || !strings.Contains(string(data), "RootKey int") {
+		t.Fatalf("helper projection was not replaced: %v\n%s", err, data)
 	}
 }
 

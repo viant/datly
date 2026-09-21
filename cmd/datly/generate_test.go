@@ -62,9 +62,7 @@ func TestGenCommandSQLite(t *testing.T) {
 		"OrderLifecycle": "customizes role Input.Orders",
 		"ItemLifecycle":  "customizes role Input.Orders.Items",
 	}, "")
-	if _, err := os.Stat(filepath.Join(root, "api", "orders", "setters.go")); err != nil {
-		t.Fatal("missing generated entity setters", err)
-	}
+	assertGeneratedCommentPlacement(t, filepath.Join(root, "api", "orders", "entities.go"), nil, "BackfillIntervalIfNeeded")
 	hookEdited, err := os.ReadFile(hookPath)
 	if err != nil {
 		t.Fatal(err)
@@ -212,12 +210,13 @@ func TestTranscribeOperationsSQLite(t *testing.T) {
 					// Readers use the registered reader; no handler wrapper is emitted.
 				} else {
 					source = strings.Replace(source, "SELECT o.*, Items.*, Kinds.*,", "SELECT o.*, Items.*, Kinds.*, lifecycle_type(o,'OrderRules'), lifecycle_type(Items,'ItemRules'),", 1)
-					roles = append(roles, "lifecycle")
-					support = []string{"input_setters", "setters"}
+					roles = append(roles, "mutation", "lifecycle", "links")
 					if operation != "post" {
 						roles = append(roles, "resources")
-						support = append(support, "indexes")
 					}
+					// Hook scaffolds are create-once only when a component declares
+					// authored hooks. Hookless writers must not emit an empty hooks.go.
+					support = []string{"entities", "frames", "previous", "layout", "actions", "mutation_output", "validation", "invariants"}
 				}
 				if layout != "defaults" {
 					source = "#setting($_ = $file_prefix('orders_'))\n" + source
@@ -261,11 +260,10 @@ func TestTranscribeOperationsSQLite(t *testing.T) {
 				}
 				generate()
 				directory := filepath.Join(root, "api", "orders")
-				available, _ := filepath.Glob(filepath.Join(directory, "*"))
 				for role, filename := range filenames {
 					content, err := os.ReadFile(filepath.Join(directory, filename))
 					if err != nil || len(content) == 0 {
-						t.Fatalf("%s file %s: %v; generated: %v", role, filename, err, available)
+						t.Fatalf("%s file %s: %v", role, filename, err)
 					}
 				}
 				files, err := os.ReadDir(directory)

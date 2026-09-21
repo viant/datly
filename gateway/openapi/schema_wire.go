@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/viant/datly/gateway/openapi/openapi3"
 	jsonmarshal "github.com/viant/structology/encoding/json/marshal"
@@ -48,6 +49,14 @@ func (b *schemaBuilder) wire(shape *jsonmarshal.WireShape) (*openapi3.Schema, er
 			b.path = parent
 			if err != nil {
 				return nil, err
+			}
+			// encoding/json applies the string option to a defined pointer whose
+			// element is a supported scalar. The standard wire discovery supplied
+			// by older structology versions reports that case as the underlying
+			// pointer shape (unlike an unnamed *scalar), even though the encoder
+			// writes a quoted scalar. Preserve the observable HTTP contract here.
+			if quotedNamedScalarPointer(field.Field(), field.Shape()) {
+				property = &openapi3.Schema{Type: "string", Nullable: true}
 			}
 			if annotation.Description != "" || annotation.Example != "" {
 				copy := *property
@@ -118,4 +127,34 @@ func (b *schemaBuilder) wire(shape *jsonmarshal.WireShape) (*openapi3.Schema, er
 		return nil, fmt.Errorf("unsupported native JSON wire kind %s", shape.Kind())
 	}
 	return result, nil
+}
+
+func quotedNamedScalarPointer(field reflect.StructField, shape *jsonmarshal.WireShape) bool {
+	if shape == nil || shape.Kind() != reflect.Pointer {
+		return false
+	}
+	typeOf := shape.Source()
+	if typeOf == nil || typeOf.Kind() != reflect.Pointer || typeOf.Name() == "" {
+		return false
+	}
+	quoted := false
+	parts := strings.Split(field.Tag.Get("json"), ",")
+	for _, option := range parts[1:] {
+		if option == "string" {
+			quoted = true
+			break
+		}
+	}
+	if !quoted {
+		return false
+	}
+	switch typeOf.Elem().Kind() {
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.String:
+		return true
+	default:
+		return false
+	}
 }

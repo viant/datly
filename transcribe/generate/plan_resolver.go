@@ -133,7 +133,39 @@ func (r *planResolver) resolve() (*Plan, error) {
 	if err = destinations.partition(r.plan); err != nil {
 		return nil, err
 	}
+	canonicalizeLifecycleTags(r.plan, r.plan.Imports)
 	return r.plan, nil
+}
+
+// canonicalizeLifecycleTags makes generated view metadata self-contained.
+// Import aliases are file-local and are not recoverable from an initialized
+// binary's reflected Component[I,O] holder, while package paths remain stable.
+func canonicalizeLifecycleTags(plan *Plan, imports []spec.ImportSpec) {
+	if plan == nil {
+		return
+	}
+	canonicalize := func(fields []Field) {
+		for index := range fields {
+			for _, item := range imports {
+				alias, packagePath := strings.TrimSpace(item.Alias), strings.TrimSpace(item.Package)
+				if alias == "" || packagePath == "" {
+					continue
+				}
+				fields[index].Tag = strings.ReplaceAll(fields[index].Tag, "entityHooks="+alias+".", "entityHooks="+packagePath+".")
+			}
+		}
+	}
+	canonicalize(plan.Input.Fields)
+	canonicalize(plan.Output.Fields)
+	for index := range plan.Views {
+		canonicalize(plan.Views[index].Fields)
+	}
+	for index := range plan.HelperTypes {
+		canonicalize(plan.HelperTypes[index].Fields)
+	}
+	for _, child := range plan.ShapePackages {
+		canonicalizeLifecycleTags(child, imports)
+	}
 }
 
 func (r *planResolver) resolveUniversalOutputs() {

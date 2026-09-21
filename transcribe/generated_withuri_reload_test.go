@@ -122,21 +122,19 @@ ORDER BY id`, tc.uri, tc.visibility, revision+2)
 			if err = os.WriteFile(filepath.Join(stages[0], "records", "reload_test.go"), data, 0644); err != nil {
 				t.Fatal(err)
 			}
-			for _, protocol := range []string{"http", "mcp-session", "mcp-stateless"} {
-				t.Run(protocol, func(t *testing.T) {
-					command := exec.Command("go", "test", "-mod=mod", "-race", "-count=1", "-timeout=120s", "-v", "-run", "^TestWithURIReload$/^"+protocol+"$", "./records")
-					command.Dir = stages[0]
-					command.Env = append(os.Environ(), "GOWORK=off", "DATLY_WITHURI_STAGE="+stages[1], "DATLY_WITHURI_VISIBILITY="+tc.name)
-					output, err := command.CombinedOutput()
-					if err != nil {
-						t.Fatalf("generated WithURI acceptance: %v\n%s", err, output)
-					}
-					if !strings.Contains(string(output), "--- PASS: TestWithURIReload/"+protocol) {
-						t.Fatalf("consumer acceptance did not execute: %s", output)
-					}
-					t.Logf("compiled generated consumer:\n%s", output)
-				})
+			command := exec.Command("go", "test", "-mod=mod", "-count=1", "-timeout=120s", "-v", "-run", "^TestWithURIReload$", "./records")
+			command.Dir = stages[0]
+			command.Env = append(os.Environ(), "GOWORK=off", "DATLY_WITHURI_STAGE="+stages[1], "DATLY_WITHURI_VISIBILITY="+tc.name)
+			output, err := command.CombinedOutput()
+			if err != nil {
+				t.Fatalf("generated WithURI acceptance: %v\n%s", err, output)
 			}
+			for _, protocol := range []string{"http", "mcp-session", "mcp-stateless"} {
+				if !strings.Contains(string(output), "--- PASS: TestWithURIReload/"+protocol) {
+					t.Fatalf("consumer acceptance did not execute %s: %s", protocol, output)
+				}
+			}
+			t.Logf("compiled generated consumer:\n%s", output)
 		})
 	}
 }

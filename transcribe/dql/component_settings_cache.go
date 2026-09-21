@@ -2,6 +2,7 @@ package dql
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -85,6 +86,27 @@ func parseCacheWarmupSettings(args []string) (*spec.CacheWarmupSettings, error) 
 			default:
 				return nil, fmt.Errorf("invalid warmup index meta %q", value)
 			}
+		case "limit":
+			parsed, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil || parsed < 0 {
+				return nil, fmt.Errorf("invalid warmup limit %q", value)
+			}
+			ret.Limit = &parsed
+		case "maxcases", "max_cases":
+			parsed, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil || parsed < 0 {
+				return nil, fmt.Errorf("invalid warmup max cases %q", value)
+			}
+			ret.MaxCases = &parsed
+		case "fieldnames", "field_names", "fields":
+			for _, field := range strings.Split(value, ",") {
+				if field = strings.TrimSpace(field); field != "" {
+					ret.FieldNames = append(ret.FieldNames, field)
+				}
+			}
+			if len(ret.FieldNames) == 0 {
+				return nil, fmt.Errorf("warmup field names were empty")
+			}
 		default:
 			values := strings.Split(value, ",")
 			param := &spec.CacheWarmupParam{Name: name}
@@ -139,6 +161,26 @@ func mergeCacheWarmupSettings(current, incoming *spec.CacheWarmupSettings) (*spe
 	merged.IndexMeta = merged.IndexMeta || incoming.IndexMeta
 	if incoming.Cases != nil {
 		merged.Cases = append(append([]*spec.CacheWarmupCase{}, current.Cases...), incoming.Cases...)
+	}
+	if incoming.Limit != nil {
+		if merged.Limit != nil && *merged.Limit != *incoming.Limit {
+			return nil, fmt.Errorf("conflicting cache warmup limit: %d != %d", *merged.Limit, *incoming.Limit)
+		}
+		value := *incoming.Limit
+		merged.Limit = &value
+	}
+	if incoming.MaxCases != nil {
+		if merged.MaxCases != nil && *merged.MaxCases != *incoming.MaxCases {
+			return nil, fmt.Errorf("conflicting cache warmup max cases: %d != %d", *merged.MaxCases, *incoming.MaxCases)
+		}
+		value := *incoming.MaxCases
+		merged.MaxCases = &value
+	}
+	if len(incoming.FieldNames) > 0 {
+		if len(merged.FieldNames) > 0 && strings.Join(merged.FieldNames, "\x00") != strings.Join(incoming.FieldNames, "\x00") {
+			return nil, fmt.Errorf("conflicting cache warmup field names")
+		}
+		merged.FieldNames = append([]string(nil), incoming.FieldNames...)
 	}
 	return &merged, nil
 }

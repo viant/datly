@@ -70,7 +70,11 @@ func TestGeneratedSequenceBusinessAndFinalValidationSQLite(t *testing.T) {
 				source = strings.Replace(source, `"pending changed key",`, "", 1)
 				source = strings.NewReplacer("id,primaryKey,unique,table=records", "id,unique,table=records", "PRIMARY KEY(tenant_id,id)", "PRIMARY KEY(tenant_id)").Replace(source)
 			}
-			(entitySyncFixture{entity: asset.Entities, products: files, source: source}).run(t)
+			// This test validates generated sequencing semantics in three fresh
+			// modules. Race instrumentation is covered by the shared entity-sync
+			// acceptance fixtures; omitting it here avoids three redundant,
+			// memory-heavy race builds during the full repository suite.
+			(entitySyncFixture{entity: asset.Entities, products: files, source: source, withoutRace: true}).run(t)
 		})
 	}
 }

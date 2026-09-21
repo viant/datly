@@ -69,6 +69,48 @@ func (w *Warmup) Prepare(ctx context.Context, providers ...locator.Provider) (*W
 
 func (w *Warmup) Run(ctx context.Context) (int, error) { return w.execute(ctx, false) }
 
+// PlannedCases returns the number of server-expanded authored cases that Run
+// will execute. It uses the exact input contract and MaxCases policy retained
+// by this warmup operation; callers do not supply case values.
+func (w *Warmup) PlannedCases() (int, error) {
+	registered, target := w.registered, w.target
+	contract, ok := registered.Input.ForRoute(target.Route)
+	if !ok {
+		return 0, fmt.Errorf("registered warmup route not found: %s", target.Route.String())
+	}
+	required := map[string]bool{}
+	for _, field := range contract.Fields() {
+		binding := field.Binding()
+		name := field.Path()
+		if parameter, ok := binding.Extension.(*spec.Parameter); ok && parameter != nil && parameter.Name != "" {
+			name = parameter.Name
+		}
+		required[name] = binding.Required != nil && *binding.Required
+	}
+	count := 0
+	for _, warmupTarget := range w.targets {
+		settings := warmupTarget.Settings
+		if settings == nil {
+			return 0, fmt.Errorf("warmup target %q has no settings", warmupTarget.View)
+		}
+		entryCost := 1
+		if warmupTarget.View == "" && settings.IndexMeta && registered.Component.RootView != nil {
+			for _, relation := range registered.Component.RootView.Relations {
+				if relation != nil && relation.Kind == spec.RelationKindDerived && len(relation.On) == 0 {
+					entryCost++
+				}
+			}
+		}
+		if err := (cacheconfig.Cases{Settings: settings, Required: required, EntryCost: entryCost}).ForEach(func(cacheconfig.Case) error {
+			count++
+			return nil
+		}); err != nil {
+			return 0, err
+		}
+	}
+	return count, nil
+}
+
 func (w *Warmup) execute(ctx context.Context, prepare bool) (int, error) {
 	registered, target := w.registered, w.target
 	contract, ok := registered.Input.ForRoute(target.Route)

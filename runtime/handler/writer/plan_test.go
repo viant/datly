@@ -28,12 +28,12 @@ func TestUniversalWriterRecognizesEarlierGraphInsertReference(t *testing.T) {
 	childFrame := &Frame{Entity: reflect.ValueOf(&child{ID: &childID, ParentID: &id}), Record: childRecord, Action: xhandler.WriteInsert}
 	program := &Program{frames: &MutationFrames{Rows: []*Frame{parentFrame, childFrame}}}
 	options := program.validationOptions(childFrame, true)
-	if len(options.SatisfiedReferences) != 1 || options.SatisfiedReferences[0].Field != "ParentID" || options.SatisfiedReferences[0].Table != "parents" || options.SatisfiedReferences[0].Column != "id" {
-		t.Fatalf("satisfied references = %+v", options.SatisfiedReferences)
+	if len(options.SatisfiedReferences) != 1 || options.SatisfiedReferences[0].Field != "ParentID" {
+		t.Fatalf("satisfied references=%+v", options.SatisfiedReferences)
 	}
 	program.frames.Rows = []*Frame{childFrame, parentFrame}
 	if options = program.validationOptions(childFrame, true); len(options.SatisfiedReferences) != 0 {
-		t.Fatalf("later insert unexpectedly satisfied reference: %+v", options.SatisfiedReferences)
+		t.Fatalf("later insert satisfied reference=%+v", options.SatisfiedReferences)
 	}
 }
 

@@ -182,6 +182,13 @@ func TestRuntimeWarmupExecutesChildViewWarmupSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: "GET", Path: "/parents"}}
+	operation, err := runtime.NewWarmup(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if planned, planErr := operation.PlannedCases(); planErr != nil || planned != 1 {
+		t.Fatalf("PlannedCases=%d,%v", planned, planErr)
+	}
 	if count, err := runtime.Warmup(ctx, target); err != nil || count != 3 {
 		t.Fatalf("Warmup=%d,%v", count, err)
 	}

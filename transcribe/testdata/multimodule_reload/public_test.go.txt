@@ -72,7 +72,7 @@ func (c exposurePublic) check(t *testing.T, selection exposureSelection, id int)
 				t.Fatal(err)
 			}
 			var want any
-			if err := json.Unmarshal([]byte(fmt.Sprintf(`{"Status":"","Data":[{"Id":%d}]}`, id+10*(tenant-7))), &want); err != nil {
+			if err := json.Unmarshal([]byte(fmt.Sprintf(`{"Status":"ok","Data":[{"Id":%d}]}`, id+10*(tenant-7))), &want); err != nil {
 				t.Fatal(err)
 			}
 			if !reflect.DeepEqual(actual, want) {

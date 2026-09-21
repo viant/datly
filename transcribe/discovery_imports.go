@@ -132,7 +132,7 @@ func (d *dqlPackageDiscovery) registerLinkedPackageTypes(path string) error {
 	if len(descriptors) == 0 {
 		return nil
 	}
-	if err := d.catalog.RegisterAll(typecatalog.TypeOriginPackage, descriptors...); err != nil {
+	if err := d.catalog.LinkRuntimeAll(typecatalog.TypeOriginPackage, descriptors...); err != nil {
 		return fmt.Errorf("register linked DQL import %s: %w", path, err)
 	}
 	return nil

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/viant/datly/internal/testharness"
 	"reflect"
@@ -111,6 +112,40 @@ func TestNewBuildsAtomicResourceCatalogAndRegistry(t *testing.T) {
 	}
 	if invoker.request.Target.Component.Name != "Order" || invoker.request.Input != nil || len(invoker.request.Providers) != 1 {
 		t.Fatalf("request = %+v", invoker.request)
+	}
+}
+
+func TestResourceAuthorizationGuardsDirectAndRegistryReads(t *testing.T) {
+	component := buildServiceComponent(t, serviceComponentFixture{
+		name: "Status", inputType: reflect.TypeOf(struct{}{}),
+		route: &spec.Route{Method: "GET", Path: "/status", MCP: []*spec.MCPExposure{{
+			Kind: spec.MCPExposureResource, Name: "status", MIMEType: "text/plain",
+		}}},
+	})
+	const uri = "datly://localhost/status"
+	service, err := New(Config{
+		Components: []*registry.RegisteredComponent{component},
+		Invoker:    &serviceInvoker{},
+		AuthorizeResource: func(_ context.Context, requested string) error {
+			if requested == uri {
+				return errors.New("denied")
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := &schema.ReadResourceRequest{Method: schema.MethodResourcesRead, Params: schema.ReadResourceRequestParams{Uri: uri}}
+	if _, protocolErr := service.ReadResource(context.Background(), request); protocolErr == nil {
+		t.Fatal("direct resource read was not denied")
+	}
+	entry, ok := service.Registry().ResourceRegistry.Get(uri)
+	if !ok {
+		t.Fatal("resource was not registered")
+	}
+	if _, protocolErr := entry.Handler(context.Background(), request); protocolErr == nil {
+		t.Fatal("registry resource read was not denied")
 	}
 }
 

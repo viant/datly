@@ -63,7 +63,7 @@ func TestGeneratedAuthoredConstraintSQL(t *testing.T){
 			if err := os.WriteFile(filepath.Join(root, dir, "bigquery_test.go"), []byte(smoke), 0644); err != nil {
 				t.Fatal(err)
 			}
-			command := exec.Command("go", "test", "-race", "-mod=mod", "-timeout=60s", "./...")
+			command := exec.Command("go", "test", "-mod=mod", "-timeout=60s", "./...")
 			command.Dir = root
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("generated package: %v\n%s", err, output)

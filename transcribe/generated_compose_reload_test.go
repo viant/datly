@@ -114,19 +114,17 @@ func testGeneratedCubeComposePublicReloadSQLite(t *testing.T, explicitAlias bool
 		}
 		stages = append(stages, stage)
 	}
-	for _, protocol := range []string{"http", "mcp-registry", "mcp-session", "mcp-stateless"} {
-		t.Run(protocol, func(t *testing.T) {
-			command := exec.Command("go", "test", "-mod=mod", "-race", "-count=1", "-timeout=180s", "-v", "-run", "^TestComposeReload$/^"+protocol+"$", "./spend")
-			command.Dir = stages[0]
-			command.Env = append(os.Environ(), "GOWORK=off", "DATLY_COMPOSE_STAGE="+stages[1])
-			output, err := command.CombinedOutput()
-			if err != nil {
-				t.Fatalf("generated compose acceptance: %v\n%s", err, output)
-			}
-			if !strings.Contains(string(output), "--- PASS: TestComposeReload/"+protocol) {
-				t.Fatalf("consumer did not execute: %s", output)
-			}
-			t.Logf("compiled generated consumer:\n%s", output)
-		})
+	command := exec.Command("go", "test", "-mod=mod", "-count=1", "-timeout=180s", "-v", "-run", "^TestComposeReload$", "./spend")
+	command.Dir = stages[0]
+	command.Env = append(os.Environ(), "GOWORK=off", "DATLY_COMPOSE_STAGE="+stages[1])
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("generated compose acceptance: %v\n%s", err, output)
 	}
+	for _, protocol := range []string{"http", "mcp-registry", "mcp-session", "mcp-stateless"} {
+		if !strings.Contains(string(output), "--- PASS: TestComposeReload/"+protocol) {
+			t.Fatalf("consumer did not execute %s: %s", protocol, output)
+		}
+	}
+	t.Logf("compiled generated consumer:\n%s", output)
 }

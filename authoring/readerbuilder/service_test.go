@@ -115,6 +115,30 @@ func TestInspectionRecognizesExpandWithOnce(t *testing.T) {
 	}
 }
 
+func TestServiceUpdatesSharedPredicateGroupOperator(t *testing.T) {
+	source := strings.Replace(baseDQL, `FROM (SELECT r.id,r.name FROM records r) records`, `FROM (SELECT r.id,r.name FROM records r ${predicate.Expand(3)}) records`, 1)
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{
+		Type: OperationUpdatePredicateGroup, PredicateGroup: &PredicateGroupMutation{Group: 3, Views: []string{"records"}, Operator: "OR"},
+	}})
+	if !response.Applied || len(response.Diagnostics) != 0 || !strings.Contains(response.DQL, `${predicate.ExpandWith(3, "OR")}`) {
+		t.Fatalf("response=%+v\ndql=%s", response, response.DQL)
+	}
+	if len(response.Structure.PredicateExpansions) != 1 || response.Structure.PredicateExpansions[0].Operator != "OR" {
+		t.Fatalf("expansions=%+v", response.Structure.PredicateExpansions)
+	}
+}
+
+func TestServiceRejectsPartialSharedPredicateGroupScope(t *testing.T) {
+	source := strings.Replace(baseDQL, `FROM (SELECT r.id,r.name FROM records r) records`, `FROM (SELECT r.id,r.name FROM records r ${predicate.ExpandWith(3, "AND")}) records`, 1)
+	source += "\nSELECT child.* FROM (SELECT r.id FROM records r ${predicate.ExpandWith(3, \"AND\")}) child"
+	response := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{
+		Type: OperationUpdatePredicateGroup, PredicateGroup: &PredicateGroupMutation{Group: 3, Views: []string{"records"}, Operator: "OR"},
+	}})
+	if response.Applied || len(response.Diagnostics) == 0 || !strings.Contains(response.Diagnostics[len(response.Diagnostics)-1].Message, "complete shared scope") {
+		t.Fatalf("response=%+v", response)
+	}
+}
+
 func TestServiceUpdateAndRemovePredicateUseDeclarationOccurrence(t *testing.T) {
 	source := strings.Replace(baseDQL, `.Optional()`, `.Optional().WithPredicate(0,'in','r','id')`, 1)
 	source = strings.Replace(source, `FROM (SELECT r.id,r.name FROM records r) records`, `FROM (SELECT r.id,r.name FROM records r ${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("WHERE")}) records`, 1)
@@ -261,6 +285,58 @@ func TestServiceAddsQuerySelectorField(t *testing.T) {
 	}})
 	if !response.Applied || !strings.Contains(response.DQL, `.QuerySelector("Records")`) {
 		t.Fatalf("response=%+v", response)
+	}
+}
+
+func TestServiceAddsAndUpdatesInputContractOptions(t *testing.T) {
+	optional := false
+	emit := true
+	uri := "assets:ids.sql"
+	description, example := "CSV identifiers", "1,2,3"
+	service := New(Config{Name: "Records"})
+	added := service.Apply(context.Background(), Request{DQL: baseDQL, Operation: Operation{
+		Type: OperationAddField, Field: &Field{Name: "EncodedIDs", Type: "string", SourceKind: "query", SourceName: "ids", Required: &optional, URI: &uri, Codec: &CodecMutation{Name: "CSV", Args: []string{"trim"}}, EmitOutput: &emit, Description: &description, Example: &example},
+	}})
+	for _, expected := range []string{`.WithURI("assets:ids.sql")`, `.WithCodec("CSV", "trim")`, `.Output()`, `.WithDescription("CSV identifiers")`, `.WithExample("1,2,3")`} {
+		if !added.Applied || !strings.Contains(added.DQL, expected) {
+			t.Fatalf("missing %s in:\n%s\ndiagnostics=%+v", expected, added.DQL, added.Diagnostics)
+		}
+	}
+	emit = false
+	empty := ""
+	updated := service.Apply(context.Background(), Request{DQL: added.DQL, Operation: Operation{
+		Type: OperationUpdateField, Field: &Field{ExistingName: "EncodedIDs", Name: "EncodedIDs", Type: "string", SourceKind: "query", SourceName: "ids", URI: &empty, UpdateURI: true, UpdateCodec: true, EmitOutput: &emit, Description: &empty, UpdateDescription: true, Example: nil, UpdateExample: true},
+	}})
+	if !updated.Applied || strings.Contains(updated.DQL, ".WithURI(") || strings.Contains(updated.DQL, ".WithCodec(") || strings.Contains(updated.DQL, ".Output()") || strings.Contains(updated.DQL, ".WithDescription(") || strings.Contains(updated.DQL, ".WithExample(") {
+		t.Fatalf("updated=%s diagnostics=%+v", updated.DQL, updated.Diagnostics)
+	}
+}
+
+func TestServiceAddsAndUpdatesConstantValue(t *testing.T) {
+	service := New(Config{})
+	source := `#package('example.com/readers')
+#setting($_ = $route('/records','GET'))
+#define($_ = $Records<[]*Record>(output/view))
+SELECT records.*, type(records,'Record') FROM (SELECT id FROM records) records`
+	zero := "0"
+	added := service.Apply(context.Background(), Request{DQL: source, Operation: Operation{
+		Type: OperationAddField, Field: &Field{Name: "TenantID", Type: "int", SourceKind: "const", SourceName: "TenantID", Value: &zero},
+	}})
+	if !added.Applied || !strings.Contains(added.DQL, `$TenantID<int>(const/TenantID).Value("0")`) {
+		t.Fatalf("add constant=%s diagnostics=%+v", added.DQL, added.Diagnostics)
+	}
+	seven := "7"
+	updated := service.Apply(context.Background(), Request{DQL: added.DQL, Operation: Operation{
+		Type: OperationUpdateField, Field: &Field{ExistingName: "TenantID", Name: "TenantID", Type: "int", SourceKind: "const", SourceName: "TenantID", Value: &seven, UpdateValue: true},
+	}})
+	if !updated.Applied || !strings.Contains(updated.DQL, `.Value("7")`) || strings.Contains(updated.DQL, `.Value("0")`) {
+		t.Fatalf("update constant=%s diagnostics=%+v", updated.DQL, updated.Diagnostics)
+	}
+	removed := service.Apply(context.Background(), Request{DQL: updated.DQL, Operation: Operation{
+		Type: OperationUpdateField, Field: &Field{ExistingName: "TenantID", Name: "TenantID", Type: "int", SourceKind: "const", SourceName: "TenantID", UpdateValue: true},
+	}})
+	if !removed.Applied || strings.Contains(removed.DQL, `.Value(`) {
+		t.Fatalf("remove constant default=%s diagnostics=%+v", removed.DQL, removed.Diagnostics)
 	}
 }
 

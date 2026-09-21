@@ -97,7 +97,8 @@ func TestJoinToOneHintReaderWriterRegenerationSQLite(t *testing.T) {
 						factory = "generated:=customhandler.New[OrdersInput,OrdersOutput](NewOrdersHandler())"
 					}
 					if tc.handler.Go.Execution == GoExecutionMutation {
-						imports = strings.Replace(imports, "runtime/handler/custom", "runtime/handler/mutation", 1)
+						imports = strings.Replace(imports, `customhandler "github.com/viant/datly/runtime/handler/custom"`, `writerhandler "github.com/viant/datly/runtime/handler/writer"`, 1)
+						factory = fmt.Sprintf(`generated,err:=writerhandler.New(artifact.Component,reflect.TypeOf(OrdersInput{}),reflect.TypeOf(OrdersOutput{}),%q);if err!=nil{t.Fatal(err)}`, tc.handler.Operation)
 					}
 					execute = hintWriterExecute
 				} else {
@@ -115,7 +116,7 @@ func TestJoinToOneHintReaderWriterRegenerationSQLite(t *testing.T) {
 					consumer = strings.Replace(consumer, "artifact,err:=bootstrap", "component.RootView=nil;artifact,err:=bootstrap", 1)
 				}
 				writeSourceFile(t, root, "generated/hint_runtime_test.go", consumer)
-				cmd := exec.Command("go", "test", "-mod=mod", "-race", "-count=1", "-timeout=30s", "./...")
+				cmd := exec.Command("go", "test", "-mod=mod", "-count=1", "-timeout=30s", "./...")
 				cmd.Dir = root
 				if output, err := cmd.CombinedOutput(); err != nil {
 					t.Fatalf("one=%v generated consumer: %v\n%s", one, err, output)

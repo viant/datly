@@ -43,6 +43,37 @@ func TestResolveRuntimeTypePreservesAuthority(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestLinkRuntimeAllEnrichesPackageDeclaration(t *testing.T) {
+	catalog := NewCatalog()
+	declaration := runtimeIdentityDeclaration(1)
+	require.NoError(t, catalog.RegisterPackage(TypeOriginPackage, &smodel.Package{
+		PkgPath: "example.com/demo", Types: []*smodel.Type{declaration},
+	}))
+	native := reflect.TypeOf(struct{ ID int }{})
+	require.NoError(t, catalog.LinkRuntimeAll(TypeOriginPackage,
+		x.NewType(native, x.WithPkgPath("example.com/demo"), x.WithName("Record"))))
+
+	resolved, found, err := catalog.Resolve(PackageAuthority, "example.com/demo.Record")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, native, resolved.Type)
+	require.Equal(t, native, resolved.SynteticType.ReflectType)
+	require.Equal(t, "ID", syntheticFirstField(resolved))
+
+	other := reflect.TypeOf(struct{ Name string }{})
+	err = catalog.LinkRuntimeAll(TypeOriginPackage,
+		x.NewType(other, x.WithPkgPath("example.com/demo"), x.WithName("Record")))
+	require.ErrorContains(t, err, "different compiled identity")
+
+	err = catalog.LinkRuntimeAll(TypeOriginPackage,
+		x.NewType(reflect.TypeOf(struct{ Added bool }{}), x.WithPkgPath("example.com/demo"), x.WithName("Added")),
+		x.NewType(other, x.WithPkgPath("example.com/demo"), x.WithName("Record")))
+	require.ErrorContains(t, err, "different compiled identity")
+	_, found, err = catalog.Resolve(PackageAuthority, "example.com/demo.Added")
+	require.NoError(t, err)
+	require.False(t, found, "failed runtime linking must remain atomic")
+}
+
 func TestPackageFilesRuntimeLinkRetainsIsolation(t *testing.T) {
 	catalog := NewCatalog()
 	const key = "example.com/demo.Record"

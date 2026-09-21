@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"reflect"
@@ -9,7 +10,10 @@ import (
 
 	"github.com/viant/bindly/locator"
 	dexec "github.com/viant/datly/exec"
+	rhandler "github.com/viant/datly/runtime/handler"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
+	sqldml "github.com/viant/datly/sql/dml"
+	"github.com/viant/xdatly/connector"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -39,6 +43,7 @@ type dataScope struct {
 	finalized         bool
 	completionStarted bool
 	contextReleases   []context.CancelFunc
+	connectors        connector.Provider
 }
 
 type invocationData interface {
@@ -70,6 +75,54 @@ type invocationSource interface {
 
 type invocationTransactionSource interface {
 	InvocationTransactionKey() any
+}
+
+type transactionSQLCapability struct {
+	service rhandler.TransactionSQL
+}
+
+func (c transactionSQLCapability) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return c.service.QueryContext(ctx, query, args...)
+}
+
+func (c transactionSQLCapability) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	return c.service.QueryRowContext(ctx, query, args...)
+}
+
+func (c transactionSQLCapability) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	return c.service.ExecContext(ctx, query, args...)
+}
+
+type transactionSQLProvider struct {
+	scope *dataScope
+}
+
+func (p transactionSQLProvider) Connector(ctx context.Context, name string) (rhandler.TransactionSQL, error) {
+	if p.scope == nil || p.scope.connectors == nil {
+		return nil, fmt.Errorf("transaction SQL connector provider is required")
+	}
+	db, err := p.scope.connectors.Connector(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	root := p.scope.root
+	if root == nil {
+		root = p.scope
+	}
+	source := sqldml.Source{DB: db}
+	unit, err := root.databaseUnit(ctx, source, db, "")
+	if err != nil {
+		return nil, err
+	}
+	data, err := unit.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	txSQL, ok := data.(rhandler.TransactionSQL)
+	if !ok {
+		return nil, fmt.Errorf("transaction SQL is unavailable for connector %q", name)
+	}
+	return transactionSQLCapability{service: txSQL}, nil
 }
 
 // dmlCapability exposes only buffered writes under the focused DML key.
@@ -386,7 +439,7 @@ func (s *dataScope) seal() {
 }
 
 func (s *dataScope) providers() []locator.Provider {
-	return []locator.Provider{
+	providers := []locator.Provider{
 		s.transactionStarterProvider(),
 		handlerprovider.New(xhandler.DataKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)
@@ -421,6 +474,12 @@ func (s *dataScope) providers() []locator.Provider {
 			return flusherCapability{service: data}, true, nil
 		}),
 	}
+	if s.connectors != nil {
+		providers = append(providers, handlerprovider.New(rhandler.TransactionSQLCapabilityKey, func(context.Context) (any, bool, error) {
+			return transactionSQLProvider{scope: s}, true, nil
+		}))
+	}
+	return providers
 }
 
 func (s *dataScope) complete(ctx context.Context, handlerErr error) (completionErr error) {

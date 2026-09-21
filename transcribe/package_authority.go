@@ -15,9 +15,10 @@ type scopedPackageAuthority struct {
 	Packages map[string]*model.Package
 }
 
-// loadScopedPackageAuthority loads selected component packages and modules
-// named explicitly by their contract imports. It never recursively promotes
-// standard-library or unrelated third-party dependencies to package authority.
+// loadScopedPackageAuthority loads selected component packages and their local
+// contract dependency closure. Workspace.Package only resolves selected roots
+// and explicit local replacements, so this never promotes module-cache or
+// unrelated third-party dependencies to package authority.
 func loadScopedPackageAuthority(ctx context.Context, workspace *xmodule.Workspace, routes []*bootstrap.RouteSource) (*scopedPackageAuthority, error) {
 	result := &scopedPackageAuthority{Packages: map[string]*model.Package{}}
 	allowedModules := map[string]bool{}
@@ -59,9 +60,10 @@ func loadScopedPackageAuthority(ctx context.Context, workspace *xmodule.Workspac
 		result.Packages[packagePath] = pkg
 		for _, imported := range pkg.Imports {
 			dependency, err := workspace.Package(imported.Path)
-			if err != nil || dependency == nil || dependency.Module == nil || !allowedModules[dependency.Module.Path] {
+			if err != nil || dependency == nil || dependency.Module == nil {
 				continue
 			}
+			allowedModules[dependency.Module.Path] = true
 			loaded, err := load(imported.Path)
 			if err != nil {
 				return nil, err

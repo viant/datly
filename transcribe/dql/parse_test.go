@@ -2,6 +2,7 @@ package dql
 
 import (
 	"context"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -201,6 +202,21 @@ SELECT 1`
 	assertly.AssertValues(t, "bq_metrics_prewarm", warmup.Connector)
 	if len(warmup.Cases) != 1 || len(warmup.Cases[0].Set) != 2 {
 		t.Fatalf("expected one warmup case with two params")
+	}
+}
+
+func TestParseComponentSource_WithBoundedCacheWarmup(t *testing.T) {
+	component, err := parseComponentSource("example.com/cache", "records", `#package('example.com/cache')
+#setting($_ = $route('/records','GET'))
+#setting($_ = $cache('records','5m').WithLocation('/tmp/records'))
+#setting($_ = $cache_warmup('tenant_id','IndexParameter=TenantID','MaxCases=30','Limit=100','FieldNames=id,name','Period=today,yesterday'))
+SELECT 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmup := component.Settings.Cache.Warmup
+	if warmup == nil || warmup.MaxCases == nil || *warmup.MaxCases != 30 || warmup.Limit == nil || *warmup.Limit != 100 || !reflect.DeepEqual(warmup.FieldNames, []string{"id", "name"}) || len(warmup.Cases) != 1 {
+		t.Fatalf("warmup=%+v", warmup)
 	}
 }
 
@@ -475,7 +491,7 @@ SELECT 1`
 
 func TestParseComponentSource_PreservesDeclarationOptionSurface(t *testing.T) {
 	source := `#setting($_ = $route('/v1/api/example/options', 'GET'))
-#define($_ = $Fields<string>(query/fields).WithURI('assets:fields.sql').WithTag('json:"fields,omitempty"').Optional().Cacheable(false).QuerySelector('users').WithPredicate(2, 'contains', 'u', 'name').ApplyWhenAbsentPredicate('tenant', 'tenant_id = 7').When('enabled').Scope('request').Of('Filter').WithType('[]string').WithCodec('CSV', 'trim').WithStatusCode(422).WithErrorMessage('bad fields').Value('id,name').Cardinality('Many').Async())
+#define($_ = $Fields<string>(query/fields).WithURI('assets:fields.sql').WithTag('json:"fields,omitempty"').Optional().Cacheable(false).QuerySelector('users').WithPredicate(2, 'contains', 'u', 'name').ApplyWhenAbsentPredicate('tenant', 'tenant_id = 7').When('enabled').Scope('request').Of('Filter').WithType('[]string').WithCodec('CSV', 'trim').WithStatusCode(422).WithErrorMessage('bad fields').WithDescription('Selected fields').WithExample('id,name').Value('id,name').Cardinality('Many').Async())
 SELECT 1`
 
 	component, err := parseComponentSource("example.com/demo/options", "Options", source)
@@ -497,6 +513,9 @@ SELECT 1`
 	}
 	if param.ErrorStatusCode != 422 || param.ErrorMessage != "bad fields" {
 		t.Fatalf("unexpected error metadata: %+v", param)
+	}
+	if param.Description != "Selected fields" || param.Example != "id,name" {
+		t.Fatalf("unexpected documentation metadata: %+v", param)
 	}
 	if param.Codec == nil || param.Codec.Body != "CSV" || len(param.Codec.Args) != 1 || param.Codec.Args[0] != "trim" {
 		t.Fatalf("unexpected codec: %+v", param.Codec)

@@ -49,6 +49,34 @@ FROM (SELECT s.account_id,SUM(s.amount) AS total FROM spend s GROUP BY s.account
 	}
 }
 
+func TestBatchAppliesComponentSettingsAtomically(t *testing.T) {
+	grouped := `#setting($_ = $route('/spend','GET'))
+SELECT spend.*, groupable(spend), tag(spend.account_id,'groupable:"true"'), CAST(spend.total AS float64)
+FROM (SELECT s.account_id,SUM(s.amount) AS total FROM spend s GROUP BY s.account_id) spend`
+	operation := Operation{Type: OperationBatch, Operations: []Operation{
+		{Type: OperationSetSetting, Setting: &SettingMutation{Name: "cube", Args: []string{}}},
+		{Type: OperationSetSetting, Setting: &SettingMutation{Name: "cubeCompose", Args: []string{"true", "false", "4", "50", "12000"}}},
+		{Type: OperationSetSetting, Setting: &SettingMutation{Name: "mcp", Args: []string{"'spend.read'", "'Read grouped spend'"}}},
+	}}
+	service := New(Config{Name: "Spend"})
+	response := service.Apply(context.Background(), Request{DQL: grouped, Operation: operation})
+	if !response.Applied {
+		t.Fatalf("response=%+v", response)
+	}
+	settings := response.Structure.Component.Settings.Report
+	if settings == nil || !settings.Enabled || settings.Compose == nil || !settings.Compose.Enabled || len(response.Structure.Component.Routes[0].MCP) != 1 {
+		t.Fatalf("settings=%+v routes=%+v", settings, response.Structure.Component.Routes)
+	}
+
+	rejected := New(Config{Name: "Spend"}).Apply(context.Background(), Request{DQL: grouped, Operation: Operation{Type: OperationBatch, Operations: []Operation{
+		{Type: OperationSetSetting, Setting: &SettingMutation{Name: "cube", Args: []string{}}},
+		{Type: OperationSetSetting, Setting: &SettingMutation{Name: "mcp", Args: []string{""}}},
+	}}})
+	if rejected.Applied || rejected.DQL != grouped {
+		t.Fatalf("rejected=%+v", rejected)
+	}
+}
+
 func TestServiceColumnRolePreservesOtherTags(t *testing.T) {
 	source := `#setting($_ = $route('/spend','GET'))
 SELECT summary.*,groupable(summary),tag(summary.status,'json:"statusName" groupable:"true"'),CAST(summary.total AS float64)

@@ -21,6 +21,23 @@ type groupedSpendInput struct {
 	Status     string
 }
 
+type groupedSpendInputHas struct {
+	AccountIDs bool
+	Tenant     bool
+	Region     bool
+	Channel    bool
+	Status     bool
+}
+
+type groupedSpendInputWithPresence struct {
+	AccountIDs []int
+	Tenant     string
+	Region     string
+	Channel    string
+	Status     string
+	Has        *groupedSpendInputHas `setMarker:"true"`
+}
+
 type groupedSpendDetail struct {
 	Tenant    string `sqlx:"tenant"`
 	AccountID int    `sqlx:"account_id"`

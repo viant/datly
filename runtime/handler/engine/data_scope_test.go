@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/internal/testharness"
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
+	dsql "github.com/viant/datly/sql"
 	sqldml "github.com/viant/datly/sql/dml"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -163,6 +164,228 @@ func TestEngineDiscardsBufferedWritesWhenHandlerFailsBeforeFlush(t *testing.T) {
 	var count int
 	if err := h.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("expected buffered write to remain unexecuted, count=%d err=%v", count, err)
+	}
+}
+
+func TestEngineTransactionSQLImmediateAndBufferedCommitTogetherSQLite(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := h.ExecStatements(ctx, `CREATE TABLE audit (id INTEGER PRIMARY KEY, name TEXT)`); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	connectors := &dsql.SQLComponent{}
+	if err := connectors.RegisterConnector("ci_ads", h.DB); err != nil {
+		t.Fatal(err)
+	}
+	type input struct{}
+	_, err := New().Execute(ctx, Request{
+		Input:        testRouteInput(t, reflect.TypeOf(input{})),
+		DataSource:   sqldml.Source{DB: h.DB},
+		Capabilities: rhandler.InvocationCapabilities{Connector: connectors},
+		Handler: rhandler.HandlerFunc(func(ctx context.Context, invocation rhandler.Invocation) (any, error) {
+			providerValue, found, lookupErr := invocation.Binder.Lookup(ctx, rhandler.TransactionSQLCapabilityKey)
+			if lookupErr != nil || !found {
+				return nil, fmt.Errorf("transaction SQL lookup: found=%v err=%w", found, lookupErr)
+			}
+			provider := providerValue.(rhandler.TransactionSQLProvider)
+			txSQL, err := provider.Connector(ctx, "ci_ads")
+			if err != nil {
+				return nil, err
+			}
+			if _, exposed := txSQL.(interface{ Commit() error }); exposed {
+				t.Fatal("transaction SQL must not expose Commit")
+			}
+			if _, exposed := txSQL.(interface{ Rollback() error }); exposed {
+				t.Fatal("transaction SQL must not expose Rollback")
+			}
+			result, err := txSQL.ExecContext(ctx, `INSERT INTO audit(name) VALUES (?)`, "immediate")
+			if err != nil {
+				return nil, err
+			}
+			if affected, err := result.RowsAffected(); err != nil || affected != 1 {
+				return nil, fmt.Errorf("RowsAffected=%d err=%v", affected, err)
+			}
+			if id, err := result.LastInsertId(); err != nil || id == 0 {
+				return nil, fmt.Errorf("LastInsertId=%d err=%v", id, err)
+			}
+			dmlValue, found, lookupErr := invocation.Binder.Lookup(ctx, xhandler.DMLKey)
+			if lookupErr != nil || !found {
+				return nil, fmt.Errorf("DML lookup: found=%v err=%w", found, lookupErr)
+			}
+			return nil, dmlValue.(xhandler.DML).Execute(`INSERT INTO audit(id,name) VALUES (?,?)`, 20, "buffered")
+		}),
+	})
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	var count int
+	if err := h.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit`).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("committed rows=%d err=%v", count, err)
+	}
+}
+
+func TestEngineTransactionSQLRollbackIncludesImmediateAndFlushedWritesSQLite(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := h.ExecStatements(ctx, `CREATE TABLE audit (id INTEGER PRIMARY KEY, name TEXT)`); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	connectors := &dsql.SQLComponent{}
+	if err := connectors.RegisterConnector("ci_ads", h.DB); err != nil {
+		t.Fatal(err)
+	}
+	expected := errors.New("handler failed")
+	type input struct{}
+	_, err := New().Execute(ctx, Request{
+		Input:        testRouteInput(t, reflect.TypeOf(input{})),
+		DataSource:   sqldml.Source{DB: h.DB},
+		Capabilities: rhandler.InvocationCapabilities{Connector: connectors},
+		Handler: rhandler.HandlerFunc(func(ctx context.Context, invocation rhandler.Invocation) (any, error) {
+			providerValue, _, err := invocation.Binder.Lookup(ctx, rhandler.TransactionSQLCapabilityKey)
+			if err != nil {
+				return nil, err
+			}
+			txSQL, err := providerValue.(rhandler.TransactionSQLProvider).Connector(ctx, "ci_ads")
+			if err != nil {
+				return nil, err
+			}
+			if _, err = txSQL.ExecContext(ctx, `INSERT INTO audit(id,name) VALUES (?,?)`, 1, "immediate"); err != nil {
+				return nil, err
+			}
+			dmlValue, _, err := invocation.Binder.Lookup(ctx, xhandler.DMLKey)
+			if err != nil {
+				return nil, err
+			}
+			if err = dmlValue.(xhandler.DML).Execute(`INSERT INTO audit(id,name) VALUES (?,?)`, 2, "buffered"); err != nil {
+				return nil, err
+			}
+			flusherValue, _, err := invocation.Binder.Lookup(ctx, xhandler.FlusherKey)
+			if err != nil {
+				return nil, err
+			}
+			if err = flusherValue.(xhandler.Flusher).Flush(ctx, ""); err != nil {
+				return nil, err
+			}
+			return nil, expected
+		}),
+	})
+	if !errors.Is(err, expected) {
+		t.Fatalf("expected handler error, got %v", err)
+	}
+	var count int
+	if err := h.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("rolled back rows=%d err=%v", count, err)
+	}
+}
+
+func TestEngineTransactionSQLNeverImplicitlyFlushesBufferedWritesSQLite(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := h.ExecStatements(ctx, `CREATE TABLE audit (id INTEGER PRIMARY KEY)`); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	connectors := &dsql.SQLComponent{}
+	if err := connectors.RegisterConnector("ci_ads", h.DB); err != nil {
+		t.Fatal(err)
+	}
+	type input struct{}
+	_, err := New().Execute(ctx, Request{
+		Input:        testRouteInput(t, reflect.TypeOf(input{})),
+		DataSource:   sqldml.Source{DB: h.DB},
+		Capabilities: rhandler.InvocationCapabilities{Connector: connectors},
+		Handler: rhandler.HandlerFunc(func(ctx context.Context, invocation rhandler.Invocation) (any, error) {
+			dmlValue, _, err := invocation.Binder.Lookup(ctx, xhandler.DMLKey)
+			if err != nil {
+				return nil, err
+			}
+			if err = dmlValue.(xhandler.DML).Execute(`INSERT INTO audit(id) VALUES (1)`); err != nil {
+				return nil, err
+			}
+			providerValue, _, err := invocation.Binder.Lookup(ctx, rhandler.TransactionSQLCapabilityKey)
+			if err != nil {
+				return nil, err
+			}
+			txSQL, err := providerValue.(rhandler.TransactionSQLProvider).Connector(ctx, "ci_ads")
+			if err != nil {
+				return nil, err
+			}
+			var count int
+			if err = txSQL.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit`).Scan(&count); err != nil {
+				return nil, err
+			}
+			if count != 0 {
+				return nil, fmt.Errorf("immediate SQL implicitly flushed buffered writes")
+			}
+			flusherValue, _, err := invocation.Binder.Lookup(ctx, xhandler.FlusherKey)
+			if err != nil {
+				return nil, err
+			}
+			if err = flusherValue.(xhandler.Flusher).Flush(ctx, ""); err != nil {
+				return nil, err
+			}
+			if err = txSQL.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit`).Scan(&count); err != nil {
+				return nil, err
+			}
+			if count != 1 {
+				return nil, fmt.Errorf("explicit flush not visible, count=%d", count)
+			}
+			return nil, nil
+		}),
+	})
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+}
+
+func TestEngineTransactionSQLSeparatesConnectorUnitsSQLite(t *testing.T) {
+	first, second := testharness.NewSQLiteHarness(t), testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	for _, h := range []*testharness.Harness{first, second} {
+		if err := h.ExecStatements(ctx, `CREATE TABLE audit (id INTEGER PRIMARY KEY)`); err != nil {
+			t.Fatalf("setup failed: %v", err)
+		}
+	}
+	connectors := &dsql.SQLComponent{}
+	if err := connectors.RegisterConnector("first", first.DB); err != nil {
+		t.Fatal(err)
+	}
+	if err := connectors.RegisterConnector("second", second.DB); err != nil {
+		t.Fatal(err)
+	}
+	type input struct{}
+	_, err := New().Execute(ctx, Request{
+		Input:        testRouteInput(t, reflect.TypeOf(input{})),
+		Capabilities: rhandler.InvocationCapabilities{Connector: connectors},
+		Handler: rhandler.HandlerFunc(func(ctx context.Context, invocation rhandler.Invocation) (any, error) {
+			providerValue, _, err := invocation.Binder.Lookup(ctx, rhandler.TransactionSQLCapabilityKey)
+			if err != nil {
+				return nil, err
+			}
+			provider := providerValue.(rhandler.TransactionSQLProvider)
+			firstSQL, err := provider.Connector(ctx, "first")
+			if err != nil {
+				return nil, err
+			}
+			secondSQL, err := provider.Connector(ctx, "second")
+			if err != nil {
+				return nil, err
+			}
+			if _, err = firstSQL.ExecContext(ctx, `INSERT INTO audit(id) VALUES (1)`); err != nil {
+				return nil, err
+			}
+			_, err = secondSQL.ExecContext(ctx, `INSERT INTO audit(id) VALUES (2)`)
+			return nil, err
+		}),
+	})
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	var firstCount, secondCount int
+	if err := first.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit WHERE id=1`).Scan(&firstCount); err != nil || firstCount != 1 {
+		t.Fatalf("first rows=%d err=%v", firstCount, err)
+	}
+	if err := second.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit WHERE id=2`).Scan(&secondCount); err != nil || secondCount != 1 {
+		t.Fatalf("second rows=%d err=%v", secondCount, err)
 	}
 }
 

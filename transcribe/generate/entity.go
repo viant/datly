@@ -19,6 +19,7 @@ type EntityMethod struct {
 // It contains typed accessors and an invocation-local original-input capturer.
 type EntitySupportAsset struct {
 	File                                      *ast.File
+	Role                                      string
 	CaptureFunction                           string
 	Methods                                   []EntityMethod
 	SnapshotType, SyncContextType, SyncMethod string
@@ -39,6 +40,7 @@ type EntityAssociation struct {
 }
 type EntitySupportPlan struct {
 	File                                      *ast.File
+	Role                                      string
 	Destination, CaptureFunction              string
 	Methods                                   []EntityMethod
 	SnapshotType, SyncContextType, SyncMethod string
@@ -54,7 +56,7 @@ func (a *EntitySupportAsset) Clone() (*EntitySupportAsset, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &EntitySupportAsset{File: file, CaptureFunction: a.CaptureFunction, Methods: append([]EntityMethod(nil), a.Methods...), SnapshotType: a.SnapshotType, SyncContextType: a.SyncContextType, SyncMethod: a.SyncMethod, Associations: append([]EntityAssociation(nil), a.Associations...)}
+	result := &EntitySupportAsset{File: file, Role: a.Role, CaptureFunction: a.CaptureFunction, Methods: append([]EntityMethod(nil), a.Methods...), SnapshotType: a.SnapshotType, SyncContextType: a.SyncContextType, SyncMethod: a.SyncMethod, Associations: append([]EntityAssociation(nil), a.Associations...)}
 	for index := range result.Associations {
 		result.Associations[index].Path = append([]string(nil), a.Associations[index].Path...)
 	}
@@ -77,7 +79,10 @@ func (r *planResolver) resolveEntitySupport() error {
 	if asset.CaptureFunction == "" {
 		role, destination = "setters", "setters.go"
 	}
-	r.plan.EntitySupport = &EntitySupportPlan{File: asset.File, Destination: r.plan.Generation.File(role, destination), CaptureFunction: asset.CaptureFunction, Methods: append([]EntityMethod(nil), asset.Methods...), SnapshotType: asset.SnapshotType, SyncContextType: asset.SyncContextType, SyncMethod: asset.SyncMethod, Associations: append([]EntityAssociation(nil), asset.Associations...)}
+	if strings.TrimSpace(asset.Role) != "" {
+		role, destination = strings.TrimSpace(asset.Role), strings.TrimSpace(asset.Role)+".go"
+	}
+	r.plan.EntitySupport = &EntitySupportPlan{File: asset.File, Role: role, Destination: r.plan.Generation.File(role, destination), CaptureFunction: asset.CaptureFunction, Methods: append([]EntityMethod(nil), asset.Methods...), SnapshotType: asset.SnapshotType, SyncContextType: asset.SyncContextType, SyncMethod: asset.SyncMethod, Associations: append([]EntityAssociation(nil), asset.Associations...)}
 	for index := range r.plan.EntitySupport.Associations {
 		r.plan.EntitySupport.Associations[index].Path = append([]string(nil), asset.Associations[index].Path...)
 	}

@@ -19,6 +19,12 @@ type ReflectedPackageRow struct {
 	ID int
 }
 
+type ReflectedOrdinaryHandler struct {
+	Name string
+}
+
+var reflectedOrdinaryHandlerLink = reflect.TypeFor[ReflectedOrdinaryHandler]()
+
 var reflectedLocalWireOutputOneLink = reflectedLocalWireOutputOne()
 var reflectedLocalWireOutputTwoLink = reflectedLocalWireOutputTwo()
 
@@ -47,5 +53,18 @@ func TestRegisterContractTypesIgnoresFunctionLocalHelperTypes(t *testing.T) {
 	}
 	if err := registerContractTypes(typecatalog.NewCatalog(), contracts); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReflectPackagesIncludesOrdinaryExportedTypes(t *testing.T) {
+	_ = reflectedOrdinaryHandlerLink
+	reflected, err := ReflectPackages([]string{"github.com/viant/datly/bootstrap"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const key = "github.com/viant/datly/bootstrap.ReflectedOrdinaryHandler"
+	resolved, ok, err := reflected.Types.Resolve(typecatalog.PackageAuthority, key)
+	if err != nil || !ok || resolved == nil || resolved.Type != reflect.TypeFor[ReflectedOrdinaryHandler]() {
+		t.Fatalf("ordinary package type %s: resolved=%#v found=%v err=%v", key, resolved, ok, err)
 	}
 }

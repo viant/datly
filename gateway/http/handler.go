@@ -35,6 +35,7 @@ type Handler struct {
 	runtime       *druntime.Runtime
 	logger        xlogger.Logger
 	version       string
+	authorize     func(context.Context, *stdhttp.Request, dexec.ComponentTarget) error
 }
 
 func NewHandler(rt *druntime.Runtime, log xlogger.Logger, version string) *Handler {
@@ -102,6 +103,19 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 			Error:   "forbidden",
 		})
 		return
+	}
+	if h.authorize != nil {
+		target, ok := h.runtime.ComponentTargetByMethodPath(req.Method, escapedPath)
+		if !ok {
+			writeJSON(writer, stdhttp.StatusNotFound, xresponse.Status{Status: "error", Message: "not found", Error: "not found"})
+			return
+		}
+		if err := h.authorize(req.Context(), req, target); err != nil {
+			statusCode := xresponse.ErrorStatusCode(err, stdhttp.StatusForbidden)
+			message := dexec.ErrorMessage(err, statusCode)
+			writeJSON(writer, statusCode, xresponse.Status{Status: "error", Message: message, Error: message})
+			return
+		}
 	}
 	started := time.Now()
 	ctx := context.WithValue(req.Context(), xexec.ContextKey, xexec.NewContext(req.Method, req.RequestURI, req.Header, h.version))
