@@ -257,6 +257,8 @@ func standardRuntimeType(name string) reflect.Type {
 		return reflect.TypeFor[time.Time]()
 	case "github.com/viant/xdatly/response.Status", "response.Status":
 		return reflect.TypeFor[xresponse.Status]()
+	case "github.com/viant/xdatly/response.Metrics", "response.Metrics":
+		return reflect.TypeFor[xresponse.Metrics]()
 	case "github.com/viant/xdatly/handler.Violation", "handler.Violation", "xhandler.Violation":
 		return reflect.TypeFor[xhandler.Violation]()
 	}

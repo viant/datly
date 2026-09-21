@@ -197,6 +197,13 @@ func (r *planResolver) resolveUniversalOutputs() {
 				r.plan.Imports = append(r.plan.Imports, spec.ImportSpec{Alias: "response", Package: "github.com/viant/xdatly/response"})
 				imports["github.com/viant/xdatly/response"] = true
 			}
+		case strings.Contains(location, "kind=output") && strings.Contains(location, "in=metrics"):
+			field.Type = "response.Metrics"
+			clearOutputParameterTagName(field)
+			if !imports["github.com/viant/xdatly/response"] {
+				r.plan.Imports = append(r.plan.Imports, spec.ImportSpec{Alias: "response", Package: "github.com/viant/xdatly/response"})
+				imports["github.com/viant/xdatly/response"] = true
+			}
 		}
 	}
 }

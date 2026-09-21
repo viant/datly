@@ -95,6 +95,27 @@ func TestGeneratorRuntimeOutputTypeEmbedsAnonymousStatus(t *testing.T) {
 	}
 }
 
+func TestGeneratorRuntimeOutputTypeInfersMetrics(t *testing.T) {
+	component := &spec.Component{
+		Name: "MetricsOut",
+		Parameters: []*spec.Parameter{{
+			Name: "Metrics", Tag: `json:"metrics"`,
+			Source: spec.BindSource{Kind: "output", Name: "metrics"},
+		}},
+	}
+	outputType, err := New(Input{Component: component}).RuntimeOutputType()
+	if err != nil {
+		t.Fatalf("RuntimeOutputType() error = %v", err)
+	}
+	field, ok := outputType.FieldByName("Metrics")
+	if !ok || field.Anonymous || field.Type != reflect.TypeFor[response.Metrics]() {
+		t.Fatalf("Metrics field = %+v", field)
+	}
+	if field.Tag.Get("json") != "metrics" {
+		t.Fatalf("Metrics json tag = %q", field.Tag.Get("json"))
+	}
+}
+
 func TestGeneratorRuntimeInputTypeResolvesLinkedFieldThroughTypeCatalog(t *testing.T) {
 	catalog := typecatalog.NewCatalog()
 	if err := catalog.Register(typecatalog.TypeOriginPackage, x.NewType(

@@ -1417,6 +1417,44 @@ SELECT 1`
 	}
 }
 
+func TestEmitScaffold_InfersMetricsOutputField(t *testing.T) {
+	source := `#setting($_ = $route('/v1/api/example/metrics', 'GET'))
+#set($_ = $Metrics<?>(output/metrics).WithTag('json:"metrics"'))
+SELECT 1`
+
+	component, err := parseTestComponentSource("example.com/demo/metrics", "MetricsOut", source)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	plan := testPlan(t, component)
+	dir := t.TempDir()
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatalf("unexpected emit error: %v", err)
+	}
+	outputFile := filepath.Join(dir, plan.Output.Destination)
+	file, err := parser.ParseFile(token.NewFileSet(), outputFile, nil, 0)
+	if err != nil {
+		t.Fatalf("parse generated output: %v", err)
+	}
+	field := generatedNamedField(t, file, plan.Output.Type, "Metrics")
+	selector, ok := field.Type.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected selector type, got %#v", field.Type)
+	}
+	pkg, ok := selector.X.(*ast.Ident)
+	if !ok || pkg.Name != "response" || selector.Sel.Name != "Metrics" {
+		t.Fatalf("unexpected metrics type: %#v", field.Type)
+	}
+	tag, err := strconv.Unquote(field.Tag.Value)
+	if err != nil {
+		t.Fatalf("unquote metrics tag: %v", err)
+	}
+	structTag := reflect.StructTag(tag)
+	if structTag.Get("parameter") != `,kind=output,in=metrics` || structTag.Get("json") != "metrics" {
+		t.Fatalf("unexpected metrics tag: %#v", field.Tag)
+	}
+}
+
 func generatedEmbeddedField(t *testing.T, file *ast.File, typeName string) *ast.Field {
 	t.Helper()
 	var field *ast.Field
@@ -1452,6 +1490,38 @@ func generatedEmbeddedField(t *testing.T, file *ast.File, typeName string) *ast.
 		t.Fatal("expected embedded field tag")
 	}
 	return field
+}
+
+func generatedNamedField(t *testing.T, file *ast.File, typeName, fieldName string) *ast.Field {
+	t.Helper()
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok || typeSpec.Name.Name != typeName {
+				continue
+			}
+			structType, ok := typeSpec.Type.(*ast.StructType)
+			if !ok {
+				t.Fatalf("output type = %#v", typeSpec.Type)
+			}
+			for _, candidate := range structType.Fields.List {
+				for _, name := range candidate.Names {
+					if name.Name == fieldName {
+						if candidate.Tag == nil {
+							t.Fatalf("expected %s field tag", fieldName)
+						}
+						return candidate
+					}
+				}
+			}
+		}
+	}
+	t.Fatalf("generated field %s was not found", fieldName)
+	return nil
 }
 
 func TestResolvePlan_RootViewCardinalityControlsImplicitOutput(t *testing.T) {

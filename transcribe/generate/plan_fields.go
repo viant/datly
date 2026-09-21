@@ -228,6 +228,14 @@ func markAnonymousOutputField(field *Field) {
 		return
 	}
 	field.Anonymous = true
+	clearOutputParameterTagName(field, "dataType")
+	field.Tag = withoutStructTags(field.Tag, "anonymous")
+}
+
+func clearOutputParameterTagName(field *Field, removeParts ...string) {
+	if field == nil {
+		return
+	}
 	tag := reflect.StructTag(field.Tag).Get("parameter")
 	if tag == "" {
 		return
@@ -237,9 +245,8 @@ func markAnonymousOutputField(field *Field) {
 		return
 	}
 	parts[0] = ""
-	parts = withoutParameterTagParts(parts, "dataType")
+	parts = withoutParameterTagParts(parts, removeParts...)
 	field.Tag = replaceStructTag(field.Tag, "parameter", strings.Join(parts, ","))
-	field.Tag = withoutStructTags(field.Tag, "anonymous")
 }
 
 func withoutParameterTagParts(parts []string, names ...string) []string {
