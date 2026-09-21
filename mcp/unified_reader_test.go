@@ -57,9 +57,14 @@ func TestToolExecutesReaderHandlerThroughUnifiedRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := executeRuntimeTool(t, &registry.RegisteredComponent{
+	registered := &registry.RegisteredComponent{
 		Component: component, Input: artifact.Input, OutputType: reflect.TypeOf(readerOutput{}), Reader: reader,
-	}, "reader.run", map[string]interface{}{"id": float64(7)})
+	}
+	entry, present := runtimeToolService(t, registered).Registry().ToolRegistry.Get("reader.run")
+	if !present || entry.Metadata.OutputSchema == nil || entry.Metadata.OutputSchema.Type != "object" || entry.Metadata.OutputSchema.Properties["data"] == nil {
+		t.Fatalf("reader output schema = %+v", entry.Metadata.OutputSchema)
+	}
+	result := executeRuntimeTool(t, registered, "reader.run", map[string]interface{}{"id": float64(7)})
 	data, ok := testharness.StructuredObject(t, result.StructuredContent)["data"].([]interface{})
 	if !ok || len(data) != 1 || data[0].(map[string]interface{})["name"] != "Ada" {
 		t.Fatalf("reader result = %+v", result.StructuredContent)
