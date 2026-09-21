@@ -50,6 +50,7 @@ type Field struct {
 type Record struct {
 	Name             string
 	Path             string
+	Auxiliary        bool
 	Selector         string
 	EntityType       reflect.Type
 	CurrentField     int
@@ -411,13 +412,16 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		return err
 	}
 	for _, frame := range p.frames.Rows {
-		if frame.Action == xhandler.WriteInsert {
+		if !frame.Record.Auxiliary && frame.Action == xhandler.WriteInsert {
 			if err = validateInsertIdentity(frame.Record, frame.Entity.Elem(), frame.Parent); err != nil {
 				return err
 			}
 		}
 		if err = p.callEntityHook(ctx, "Validate", frame); err != nil {
 			return err
+		}
+		if frame.Record.Auxiliary {
+			continue
 		}
 		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
 			continue
@@ -477,7 +481,7 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			err = fmt.Errorf("unsupported writer action %q", action.Kind)
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("%s %s: %w", action.Kind, table, err)
 		}
 		if err = p.callEntityHook(ctx, "AfterQueue", frame); err != nil {
 			return err
@@ -625,7 +629,7 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 	groups := map[*Record][]*Frame{}
 	var order []*Record
 	for _, frame := range p.frames.Rows {
-		if frame == nil || frame.Action == xhandler.WriteDelete {
+		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Action == xhandler.WriteDelete {
 			continue
 		}
 		if _, ok := groups[frame.Record]; !ok {
@@ -744,7 +748,7 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 		}
 		key, ok := record.loadedKey(previous.Elem())
 		if !ok {
-			return fmt.Errorf("current writer row has incomplete identity")
+			return fmt.Errorf("current writer row for %s has incomplete identity", record.Path)
 		}
 		if _, exists := p.database.Rows[record.Path+"\x00"+key]; exists {
 			return fmt.Errorf("current writer identity %q is duplicated", key)
@@ -1045,6 +1049,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	}
 	root := &Record{
 		Name: component.RootView.CanonicalName(), Path: component.RootView.CanonicalName(), EntityType: metadata.EntityType,
+		Auxiliary:    component.RootView.Auxiliary || strings.EqualFold(tagOption(rootViewTag, "auxiliary"), "true"),
 		CurrentField: metadata.CurrentField, Table: metadata.Table, Keys: metadata.Keys, Fields: metadata.Fields,
 		Sequence: metadata.Sequence, DeleteMarker: metadata.DeleteMarker, ConcurrencyToken: metadata.ConcurrencyToken,
 		Invariants: metadata.Invariants, HookType: metadata.HookType,
@@ -1115,8 +1120,9 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 }
 
 func compileRecord(component *spec.Component, inputType reflect.Type, name, path string, entityType reflect.Type, view *spec.View, viewTag string) (*Record, error) {
-	record := &Record{Name: name, Path: path, EntityType: entityType, CurrentField: -1, Table: tagOption(viewTag, "table"), Invariants: map[string][]Field{}}
+	record := &Record{Name: name, Path: path, EntityType: entityType, CurrentField: -1, Table: tagOption(viewTag, "table"), Auxiliary: strings.EqualFold(tagOption(viewTag, "auxiliary"), "true"), Invariants: map[string][]Field{}}
 	if view != nil {
+		record.Auxiliary = record.Auxiliary || view.Auxiliary
 		if view.Source != nil && strings.TrimSpace(view.Source.Table) != "" {
 			record.Table = strings.TrimSpace(view.Source.Table)
 		}

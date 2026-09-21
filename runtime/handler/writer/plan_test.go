@@ -148,6 +148,18 @@ func TestUniversalWriterCompilesPlanOnceAndBackfillsInvariant(t *testing.T) {
 	}
 }
 
+func TestUniversalWriterRetainsAuxiliaryRootMetadata(t *testing.T) {
+	component := unitComponent()
+	component.RootView.Auxiliary = true
+	handler, err := New(component, reflect.TypeFor[unitInput](), reflect.TypeFor[unitOutput](), "patch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handler.metadata.Root == nil || !handler.metadata.Root.Auxiliary {
+		t.Fatalf("auxiliary root metadata = %+v", handler.metadata.Root)
+	}
+}
+
 func TestUniversalWriterBuildsToOneRelationFrames(t *testing.T) {
 	component := &spec.Component{
 		Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[toOneParent]().PkgPath(), Name: "Rows"}, Name: "Rows",
