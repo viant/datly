@@ -135,6 +135,23 @@ func TestUniversalWriterResolvesTransientProjectionRelationKey(t *testing.T) {
 	}
 }
 
+func TestUniversalWriterAssemblesTypedPreviousRelationGraph(t *testing.T) {
+	scope := "scope-1"
+	parentID, childID := 1, 2
+	parent := &transientLinkParent{ID: &parentID, Scope: &scope}
+	child := &transientLinkChild{ID: &childID, Scope: &scope}
+	parentRecord := &Record{Name: "Parents", Path: "Parents", EntityType: reflect.TypeFor[transientLinkParent](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
+	childRecord := &Record{Name: "Children", Path: "Parents/Children", EntityType: reflect.TypeFor[transientLinkChild](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
+	parentRecord.Relations = []*Relation{{Field: []int{2}, Child: childRecord, Links: []Link{{Parent: parentRecord.Fields[0], Child: childRecord.Fields[0]}}}}
+	program := &Program{database: &DatabaseSnapshot{Rows: map[string]reflect.Value{"Parents\x001": reflect.ValueOf(parent), "Parents/Children\x002": reflect.ValueOf(child)}}}
+	if err := program.assemblePreviousRelations(parentRecord); err != nil {
+		t.Fatal(err)
+	}
+	if len(parent.Children) != 1 || parent.Children[0] != child {
+		t.Fatalf("children = %#v", parent.Children)
+	}
+}
+
 func unitComponent() *spec.Component {
 	return &spec.Component{
 		Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[unitRow]().PkgPath(), Name: "Rows"}, Name: "Rows",

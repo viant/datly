@@ -365,6 +365,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err := p.indexRecordCurrent(input, p.metadata.Root); err != nil {
 		return err
 	}
+	if err := p.assemblePreviousRelations(p.metadata.Root); err != nil {
+		return err
+	}
 	if err := p.buildRecordFrames(p.metadata.Root, entities, nil); err != nil {
 		return err
 	}
@@ -394,14 +397,45 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 	}
+	initialized := map[frameIdentity]bool{}
 	for _, frame := range p.frames.Rows {
 		if err = p.callEntityHook(ctx, "Init", frame); err != nil {
 			return err
 		}
+		initialized[identityOfFrame(frame)] = true
 		// Init is the supported phase for marker-aware business defaults and
 		// sparse server-owned transitions. Merge newly set Has bits before
 		// validation and action selection while retaining invariant evidence,
 		// whose backfill deliberately does not mutate client presence markers.
+		for name, present := range suppliedFields(frame.Entity.Elem(), frame.Record.Fields) {
+			if present {
+				frame.Fields[name] = true
+			}
+		}
+	}
+	// A lifecycle may implement atomic replacement by appending explicit
+	// deletion rows derived from the assembled Previous graph. Rebuild frames
+	// once after Init so those new rows participate in validation, ordering and
+	// DML without invoking Init twice for the original topology.
+	p.frames = &MutationFrames{}
+	if err = p.buildRecordFrames(p.metadata.Root, entities, nil); err != nil {
+		return err
+	}
+	if err = p.reconcileLinks(false); err != nil {
+		return err
+	}
+	for _, frame := range p.frames.Rows {
+		if err = p.applyInvariants(frame); err != nil {
+			return err
+		}
+		if err = p.checkConcurrency(frame); err != nil {
+			return err
+		}
+		if !initialized[identityOfFrame(frame)] {
+			if err = p.callEntityHook(ctx, "Init", frame); err != nil {
+				return err
+			}
+		}
 		for name, present := range suppliedFields(frame.Entity.Elem(), frame.Record.Fields) {
 			if present {
 				frame.Fields[name] = true
@@ -498,6 +532,18 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	}
 	p.failed = false
 	return nil
+}
+
+type frameIdentity struct {
+	record  *Record
+	pointer uintptr
+}
+
+func identityOfFrame(frame *Frame) frameIdentity {
+	if frame == nil || !frame.Entity.IsValid() || frame.Entity.IsNil() {
+		return frameIdentity{}
+	}
+	return frameIdentity{record: frame.Record, pointer: frame.Entity.Pointer()}
 }
 
 func (p *Program) frameFor(entity reflect.Value) *Frame {
@@ -756,6 +802,66 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 		p.database.Rows[record.Path+"\x00"+key] = previous
 	}
 	return nil
+}
+
+func (p *Program) assemblePreviousRelations(record *Record) error {
+	if record == nil {
+		return nil
+	}
+	for _, relation := range record.Relations {
+		if relation == nil || relation.Child == nil {
+			continue
+		}
+		if err := p.assemblePreviousRelations(relation.Child); err != nil {
+			return err
+		}
+		parents, children := p.previousRows(record), p.previousRows(relation.Child)
+		for _, child := range children {
+			for _, parent := range parents {
+				if !relationValuesEqual(parent.Elem(), child.Elem(), relation.Links) {
+					continue
+				}
+				holder := parent.Elem().FieldByIndex(relation.Field)
+				switch holder.Kind() {
+				case reflect.Slice:
+					holder.Set(reflect.Append(holder, child))
+				case reflect.Pointer:
+					if !holder.IsNil() && holder.Pointer() != child.Pointer() {
+						return fmt.Errorf("current writer relation %s has multiple rows for a to-one holder", relation.Child.Path)
+					}
+					holder.Set(child)
+				default:
+					return fmt.Errorf("current writer relation %s holder is neither slice nor pointer", relation.Child.Path)
+				}
+				break
+			}
+		}
+	}
+	return nil
+}
+
+func (p *Program) previousRows(record *Record) []reflect.Value {
+	prefix := record.Path + "\x00"
+	result := make([]reflect.Value, 0)
+	for key, row := range p.database.Rows {
+		if strings.HasPrefix(key, prefix) {
+			result = append(result, row)
+		}
+	}
+	return result
+}
+
+func relationValuesEqual(parent, child reflect.Value, links []Link) bool {
+	if len(links) == 0 {
+		return false
+	}
+	for _, link := range links {
+		left, right := parent.FieldByIndex(link.Parent.Index), child.FieldByIndex(link.Child.Index)
+		if !left.IsValid() || !right.IsValid() || !reflect.DeepEqual(left.Interface(), right.Interface()) {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *Frame) error {
