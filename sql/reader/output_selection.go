@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/sqlparser"
 	sqlxio "github.com/viant/sqlx/io"
 	structjson "github.com/viant/structology/encoding/json"
 )
@@ -52,7 +53,7 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 				}
 			}
 			if !relation {
-				columns = append(columns, name)
+				columns = append(columns, outputSelectionColumnName(name))
 			}
 		}
 		if len(columns) > 0 && plan.Collector != nil {
@@ -60,10 +61,15 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 			if err != nil && !sqlxio.IsMatchedError(err) {
 				return err
 			}
+			matchedIndexes := 0
 			for _, field := range matched {
 				if index := field.FieldIndex(); len(index) > 0 {
+					matchedIndexes++
 					scope.Indexes = append(scope.Indexes, index)
 				}
+			}
+			if matchedIndexes != len(columns) {
+				return fmt.Errorf("output selection for view %s matched %d of %d requested fields", plan.View.Spec.Name, matchedIndexes, len(columns))
 			}
 		}
 		s.scopes = append(s.scopes, scope)
@@ -84,4 +90,12 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 		}
 	}
 	return nil
+}
+
+func outputSelectionColumnName(name string) string {
+	parts, err := sqlparser.TableIdentifierParts(strings.TrimSpace(name))
+	if err == nil && len(parts) == 1 {
+		return parts[0]
+	}
+	return name
 }
