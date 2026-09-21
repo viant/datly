@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
@@ -37,6 +39,12 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 		aTag.SQL = tags.NewViewSQL(c.View.Template.Source, "")
 		aTag.View = &tags.View{Name: c.View.Name}
 		if c.View != nil {
+			if c.View.Connector != nil {
+				aTag.View.Connector = c.View.Connector.Ref
+			}
+			if c.View.Cache != nil {
+				aTag.View.Cache = c.View.Cache.Ref
+			}
 			if c.View.Batch != nil {
 				aTag.View.Batch = c.View.Batch.Size
 			}
@@ -85,6 +93,7 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 
 	replacer := data.NewMap()
 	replacer.Put("WithConnector", fmt.Sprintf(`,view.WithConnectorRef("%s")`, c.View.Connector.Name))
+	replacer.Put("ApplyGeneratedCache", generatedCacheSnippet(c.View.Cache))
 	replacer.Put("Name", componentName)
 	replacer.Put("URI", c.URI)
 	replacer.Put("Method", c.Method)
@@ -204,6 +213,35 @@ func (i *%vInput) EmbedFS() *embed.FS {
 		result = string(formatted)
 	}
 	return result
+}
+
+// ApplyGeneratedCache restores cache settings that cannot be represented by
+// the legacy view tag, notably plural cache warmups.
+func ApplyGeneratedCache(aView *view.View, encoded string) error {
+	if aView == nil || encoded == "" {
+		return nil
+	}
+	payload, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return fmt.Errorf("decode generated view cache: %w", err)
+	}
+	cache := &view.Cache{}
+	if err := json.Unmarshal(payload, cache); err != nil {
+		return fmt.Errorf("decode generated view cache metadata: %w", err)
+	}
+	aView.Cache = cache
+	return nil
+}
+
+func generatedCacheSnippet(cache *view.Cache) string {
+	if cache == nil {
+		return ""
+	}
+	payload, err := json.Marshal(cache)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("\n\tif err := repository.ApplyGeneratedCache(aComponent.View, %q); err != nil {\n\t\treturn fmt.Errorf(\"apply generated component cache: %%w\", err)\n\t}\n", base64.StdEncoding.EncodeToString(payload))
 }
 
 func (c *Component) buildDependencyTypes(inPackageComponentTypes map[string]bool, importModules map[string]string) []*xreflect.Type {

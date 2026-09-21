@@ -21,6 +21,8 @@ func newEmbedFSTestComponent(t *testing.T) *Component {
 	resource := view.EmptyResource()
 	rootView := view.NewView("active_advertiser", "ACTIVE_ADVERTISER")
 	rootView.Connector = &view.Connector{Connection: view.Connection{DBConfig: view.DBConfig{Name: "ci_ads"}}}
+	rootView.Cache = view.NewRefCache("aerospike")
+	rootView.Cache.Warmup = &view.Warmup{IndexColumn: "advertiser_id", IndexParameter: "AdvertiserId"}
 	rootView.Template = &view.Template{Source: "SELECT ID FROM ACTIVE_ADVERTISER"}
 	rootView.Schema = state.NewSchema(reflect.TypeOf([]*struct {
 		Id *int `sqlx:"ID"`
@@ -74,6 +76,15 @@ func TestGenerateOutputCode_EmbedFSAccessorIsGoFormatted(t *testing.T) {
 		"EmbedFS accessor must be emitted at column 0 with a tab-indented body")
 	assert.NotContains(t, code, "\n\tfunc (", "no top-level func may be indented")
 	assert.True(t, strings.HasSuffix(code, "\n"), "generated file must end with a newline")
+}
+
+func TestGenerateOutputCode_PreservesRootCacheMetadata(t *testing.T) {
+	component := newEmbedFSTestComponent(t)
+	code := component.GenerateOutputCode(context.Background(), true, true, map[string]string{})
+
+	assert.Contains(t, code, `view:"active_advertiser,cache=aerospike"`)
+	assert.Contains(t, code, `view.WithConnectorRef("ci_ads")`)
+	assert.Contains(t, code, "repository.ApplyGeneratedCache(aComponent.View,")
 }
 
 func TestGenerateOutputCode_IsGofmtStable(t *testing.T) {
