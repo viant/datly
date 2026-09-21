@@ -78,6 +78,13 @@ func TestCurrentSourceOutputsPreservesOuterAliases(t *testing.T) {
 	}
 }
 
+func TestCurrentReadTagProjectsTransientRelationKey(t *testing.T) {
+	actual := currentReadTag(`sqlx:"-" internal:"true"`, "linked_resource_id")
+	if actual != `sqlx:"linked_resource_id" internal:"true"` {
+		t.Fatalf("tag = %q", actual)
+	}
+}
+
 func TestCurrentSourceOutputsPreservesAliasesAfterTemplatePrelude(t *testing.T) {
 	actual := currentSourceOutputs("#set($X = 1)\nSELECT orders.ID AS RootKey FROM (SELECT o.* FROM ORDERS o) orders")
 	if actual["id"] != "RootKey" {

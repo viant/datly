@@ -156,6 +156,10 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 				col.Source = name
 			}
 			col.Name = name
+			// The entity may keep a derived relation key transient so it never
+			// becomes a DML column. Its generated Current carrier is a read shape,
+			// however, and must scan the projected alias for matching/linking.
+			col.Tag = currentReadTag(col.Tag, name)
 			columns = append(columns, `r."`+strings.ReplaceAll(name, `"`, `""`)+`"`)
 		}
 	}
@@ -174,6 +178,13 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	}
 	b.request.ViewBindings[p.Identity()] = currentIdentity
 	return nil
+}
+
+func currentReadTag(tag, column string) string {
+	if strings.Contains(tag, `sqlx:"-"`) {
+		return strings.Replace(tag, `sqlx:"-"`, `sqlx:"`+strings.TrimSpace(column)+`"`, 1)
+	}
+	return tag
 }
 
 // currentSourceOutputs maps a direct source column to the output name of the
