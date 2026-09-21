@@ -192,6 +192,17 @@ generic capability, then keep an application SQLite regression proving the
 application-style behavior. Do not add application-specific table names or
 business rules to Datly.
 
+### Composite snake_case Current keys
+
+A generated PATCH Current query must apply `CompositeIn` using the SQL columns
+projected by its derived table, not Go field names from the key helper. For an
+identity such as `tenant_id,record_id`, criteria must address
+`r.tenant_id,r.record_id`; `r.TenantId,r.RecordId` is invalid SQL. If binding
+reports a missing CamelCase column in generated Current SQL, treat it as a
+transcriber projection defect. Fix key projection/criteria generation and add a
+native composite-key fixture; do not patch generated SQL or rename schema
+columns to accommodate it.
+
 ## Verification gates
 
 A migrated component is complete only when all applicable gates pass:
