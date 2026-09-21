@@ -8,6 +8,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	sqlio "github.com/viant/sqlx/io"
+	"github.com/viant/tagly/tags"
 	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
 )
@@ -60,6 +61,15 @@ func (r *planResolver) concretizeGeneratedHelperFields() error {
 		if helper == nil {
 			continue
 		}
+		// Parse each source field's tag once for this plan. Helper projections may
+		// reuse the same field several times; raw struct-tag parsing does not
+		// belong in that inner loop.
+		sqlxColumns := make(map[string]string, len(sourceView.Fields))
+		for _, field := range sourceView.Fields {
+			if sqlxTag := tags.NewTags(strings.TrimSpace(field.Tag)).Lookup(sqlio.TagSqlx); sqlxTag != nil {
+				sqlxColumns[strings.ToLower(field.Name)] = strings.TrimSpace(strings.Split(string(sqlxTag.Values), ",")[0])
+			}
+		}
 		aliasColumns := compositeAliasColumns(param)
 		for _, projected := range declaration.Projection {
 			valueField := exportedName(projected.Source)
@@ -70,13 +80,13 @@ func (r *planResolver) concretizeGeneratedHelperFields() error {
 				if strings.EqualFold(field.Name, valueField) {
 					valueType = strings.TrimSpace(field.Type)
 					valueExplicit = field.ExplicitType
-					if sqlxTag, ok := reflect.StructTag(field.Tag).Lookup(sqlio.TagSqlx); ok {
+					if sqlxColumn := sqlxColumns[strings.ToLower(field.Name)]; sqlxColumn != "" {
 						// Helpers need only the physical column mapping. Mutation and
 						// validation options belong to the entity field, not to the
 						// projected lookup key. The declaration's destination alias is
 						// authoritative because CompositeIn targets the derived query,
 						// not the underlying physical table.
-						valueSQLX = strings.TrimSpace(strings.Split(sqlxTag, ",")[0])
+						valueSQLX = sqlxColumn
 					}
 					break
 				}
