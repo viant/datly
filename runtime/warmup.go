@@ -112,6 +112,11 @@ func (w *Warmup) PlannedCases() (int, error) {
 }
 
 func (w *Warmup) execute(ctx context.Context, prepare bool) (int, error) {
+	phase := dexec.WarmupPhaseFill
+	if prepare {
+		phase = dexec.WarmupPhasePrepare
+	}
+	ctx = dexec.WithCacheWarmup(ctx, phase)
 	registered, target := w.registered, w.target
 	contract, ok := registered.Input.ForRoute(target.Route)
 	if !ok {

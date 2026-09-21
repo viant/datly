@@ -168,6 +168,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	runtimeProviders = append(runtimeProviders, handlerprovider.CallerOutput(request.BindingOutput))
 	runtimeProviders = append(runtimeProviders, handlerprovider.Parameter())
 	runtimeProviders = append(runtimeProviders, handlerprovider.Input())
+	runtimeProviders = append(runtimeProviders, handlerprovider.New(dexec.InvocationKey, func(ctx context.Context) (any, bool, error) {
+		return dexec.InvocationFromContext(ctx), true, nil
+	}))
 	runtimeProviders = append(runtimeProviders, handlerprovider.New(xhandler.ReadMetadataKey, func(context.Context) (any, bool, error) {
 		if reads == nil {
 			return nil, false, fmt.Errorf("input read metadata was not requested")

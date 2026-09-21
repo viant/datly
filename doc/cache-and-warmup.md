@@ -192,14 +192,48 @@ POST administration under `Meta.CacheWarmURI` (default
 It requires a server-owned lifetime, positive timeout and explicit administrator
 authorizer. Merely setting a URI does not install those services.
 
-The operation still binds the target's declared credentials/parameters and
-preserves authorization predicates. Its accepted work uses the server lifetime
+The operation still binds the target's declared credentials/parameters. Its accepted work uses the server lifetime
 with a bounded timeout; client disconnection does not define success or abandon
 completion accounting. Use the `Completed` callback for the actual result/error.
 Configured defaults and case budgets must be authorized as deliberately as an
 ordinary request. [HTTP warmup tests](../gateway/http/warmup_policy_test.go) cover
 partial results, limits and failed setup; [JWT warmup tests](../gateway/http/warmup_jwt_sqlite_test.go)
 cover declared verified credentials. Standalone services expose warmup admin configuration. Startup warmup and each actual backend/connector combination need their own acceptance.
+
+### Detect warmup in a custom authorization predicate
+
+Custom predicates receive immutable invocation metadata through both their
+`context.Context` and the reserved `invocation` binding. Both access paths return
+the same descriptor. Warmup preparation and cache filling have distinct phases:
+
+```go
+type AuthorizationPredicate struct {
+    Input      *SearchInput         `bind:"kind=input,required"`
+    Invocation *exec.InvocationInfo `bind:"kind=invocation,required"`
+}
+
+func (p *AuthorizationPredicate) Compute(ctx context.Context, value any) (*predicate.Criteria, error) {
+    // Equivalent context access: info := exec.InvocationFromContext(ctx)
+    info := p.Invocation
+    if info.MayBypassRowAuthorization() {
+        return nil, nil
+    }
+    return authorizedCriteria(p.Input, value)
+}
+```
+
+Use `MayBypassRowAuthorization`, rather than inferring permission from
+`IsCacheWarmup`. The capability is installed only by the server-owned warmup
+operation and is available during both `WarmupPhasePrepare` and
+`WarmupPhaseFill`. The `invocation` provider is runtime-reserved, so component,
+protocol and child providers cannot replace it.
+
+This capability only controls application predicate behavior. It does not skip
+HTTP warmup administrator authorization, API-key checks, required input binding,
+credential codecs, authored warmup cases or case budgets. A required JWT still
+needs a valid credential even when a predicate elects to omit its row filter.
+Before returning no authorization criteria, ensure the warmed cache identity and
+ordinary read path cannot expose a broad entry across tenants or principals.
 
 ## Expiry, writes and diagnosis
 

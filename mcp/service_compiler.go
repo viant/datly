@@ -163,7 +163,7 @@ func (c *serviceCompiler) compileRoute(result *compiledPlans, toolCompiler *tool
 			if err != nil {
 				return err
 			}
-			plan, compileErr := toolCompiler.Compile(tool.Input{Fields: fields, Example: registered.Documentation.Operation(route.Path, documentation.Annotation{Example: registered.Component.Example}).Example, TransportReady: registered.Output != nil && registered.Output.TransportReady(), Documentation: registered.Documentation, Component: registered.Component.Key, Exposure: exposure, Contract: contract})
+			plan, compileErr := toolCompiler.Compile(tool.Input{Fields: fields, Example: registered.Documentation.Operation(route.Path, documentation.Annotation{Example: registered.Component.Example}).Example, TransportReady: registered.Output != nil && registered.Output.TransportReady(), Documentation: registered.Documentation, Component: registered.Component.Key, Exposure: exposure, Contract: contract, OutputType: registered.OutputType})
 			if compileErr != nil {
 				return compileErr
 			}

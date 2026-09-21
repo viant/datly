@@ -24,6 +24,9 @@ type Input struct {
 	Component      spec.Key
 	Exposure       *spec.MCPExposure
 	Contract       *registry.RouteInputContract
+	// OutputType is the execution result shape. MCP output schemas are only
+	// emitted for object-shaped structuredContent, as required by the protocol.
+	OutputType reflect.Type
 }
 
 type fieldCompiler func(registry.InputField, reflect.StructField) (Argument, bool, error)
@@ -178,11 +181,34 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			metadata["datly/httpSchemas"] = input.Documentation.Schemas()
 		}
 	}
+	outputSchema, outputErr := outputContractSchema(input.OutputType)
+	if outputErr != nil {
+		return nil, fmt.Errorf("compile MCP tool %q output schema: %w", name, outputErr)
+	}
 	return &Plan{
-		metadata: schema.Tool{Meta: metadata, Name: name, Description: &description, InputSchema: inputSchema},
+		metadata: schema.Tool{Meta: metadata, Name: name, Description: &description, InputSchema: inputSchema, OutputSchema: outputSchema},
 		target:   exec.ComponentTarget{Component: input.Component, Route: input.Contract.Route()},
 		input:    input.Contract, args: arguments, binding: binding,
 	}, nil
+}
+
+func outputContractSchema(source reflect.Type) (*schema.ToolOutputSchema, error) {
+	if source == nil {
+		return nil, nil
+	}
+	for source.Kind() == reflect.Pointer {
+		source = source.Elem()
+	}
+	// A non-object result is transported as text by the MCP invoker and cannot
+	// truthfully be advertised as structuredContent.
+	if source.Kind() != reflect.Struct {
+		return nil, nil
+	}
+	result := &schema.ToolOutputSchema{}
+	if err := result.Load(reflect.New(source).Interface()); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (c *Compiler) compileExternal(inputField registry.InputField, field reflect.StructField) (Argument, bool, error) {

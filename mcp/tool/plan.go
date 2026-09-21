@@ -103,6 +103,15 @@ func cloneTool(source schema.Tool) schema.Tool {
 		result.InputSchema.Properties[name] = cloneSchemaMap(property)
 	}
 	result.InputSchema.Required = append([]string(nil), source.InputSchema.Required...)
+	if source.OutputSchema != nil {
+		output := *source.OutputSchema
+		output.Properties = make(map[string]map[string]interface{}, len(source.OutputSchema.Properties))
+		for name, property := range source.OutputSchema.Properties {
+			output.Properties[name] = cloneSchemaMap(property)
+		}
+		output.Required = append([]string(nil), source.OutputSchema.Required...)
+		result.OutputSchema = &output
+	}
 	return result
 }
 
