@@ -156,6 +156,68 @@ func TestRuntimeIndexedWarmupSQLite(t *testing.T) {
 	}
 }
 
+func TestRuntimeIndexedWarmupOmitsRequiredIndexParameterSQLite(t *testing.T) {
+	type input struct{ CampaignID int }
+	type row struct {
+		CampaignID int `sqlx:"campaign_id"`
+		Value      int `sqlx:"value"`
+	}
+	type output struct{ Rows []row }
+
+	ctx := context.Background()
+	db := sqlite.New(t)
+	if err := db.ExecStatements(ctx,
+		"CREATE TABLE campaign_report(campaign_id INTEGER, value INTEGER)",
+		"INSERT INTO campaign_report VALUES(101,7),(202,9)",
+	); err != nil {
+		t.Fatal(err)
+	}
+	required := true
+	component := &spec.Component{
+		Key: spec.Key{Kind: spec.KindComponent, Name: "CampaignReport"}, Routes: []*spec.Route{{Method: "GET", Path: "/campaign"}},
+		Settings: &spec.Settings{Cache: &spec.CacheSettings{
+			Enabled: true, Name: "campaign_report", Location: t.TempDir(), TTL: "1m",
+			Warmup: &spec.CacheWarmupSettings{IndexColumn: "campaign_id", IndexParameter: "campaign_id"},
+		}},
+		Parameters: []*spec.Parameter{
+			{Name: "CampaignID", Required: &required, TypeExpr: "int", Source: spec.BindSource{Kind: "query", Name: "campaign_id"}},
+			{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}},
+		},
+		RootView: &spec.View{Name: "campaign_report", Source: &spec.ViewSource{SQL: "SELECT campaign_id, value FROM campaign_report WHERE (:CampaignID=0 OR campaign_id=:CampaignID) ORDER BY campaign_id"}},
+	}
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeOf(input{}), OutputType: reflect.TypeOf(output{}), DirectViewField: "Rows"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db.DB}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := NewRuntime([]*registry.RegisteredComponent{{Component: artifact.Component, Input: artifact.Input, OutputType: reflect.TypeOf(output{}), Reader: reader}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: "GET", Path: "/campaign"}}
+
+	if _, err = runtime.InvokeComponent(ctx, dexec.ComponentRequest{Target: target}); err == nil {
+		t.Fatal("ordinary read accepted missing required campaign_id")
+	}
+	if count, err := runtime.Warmup(ctx, target); err != nil || count != 2 {
+		t.Fatalf("Warmup=%d,%v", count, err)
+	}
+	if err := db.ExecStatements(ctx, "DROP TABLE campaign_report"); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := runtime.InvokeComponent(ctx, dexec.ComponentRequest{Target: target, Input: &input{CampaignID: 101}})
+	if err != nil {
+		t.Fatalf("warmup replay missed and attempted root SQL: %v", err)
+	}
+	rows := actual.(*output).Rows
+	if len(rows) != 1 || rows[0] != (row{CampaignID: 101, Value: 7}) {
+		t.Fatalf("rows=%+v", rows)
+	}
+}
+
 func TestRuntimeIndexedGroupedWarmupReusesNamedPlaceholderDimensionsSQLite(t *testing.T) {
 	type input struct{ AdvertiserID int }
 	type row struct {

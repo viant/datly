@@ -203,6 +203,65 @@ func (c *RouteInputContract) Without(target any, names ...string) (any, error) {
 	return c.contract.projection.Without(target, names...)
 }
 
+// WithOptionalBindings returns a detached route contract with matching bindings
+// marked optional. It is used by trusted runtime flows that intentionally remove
+// server-owned inputs while preserving all other canonical binding semantics.
+func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputContract, error) {
+	if c == nil || c.contract == nil {
+		return nil, fmt.Errorf("input contract is required")
+	}
+	optional := map[string]bool{}
+	for _, name := range names {
+		if normalized := normalizeInputName(name); normalized != "" {
+			optional[normalized] = true
+		}
+	}
+	if len(optional) == 0 {
+		return c, nil
+	}
+	bindings := make([]bindly.BindingSpec, 0, len(c.fields))
+	matched := map[string]int{}
+	for _, field := range c.fields {
+		binding := cloneBindingSpec(field.binding)
+		keys := inputFieldMatchKeys(field)
+		for _, key := range keys {
+			if optional[key] {
+				value := false
+				binding.Required = &value
+				matched[key]++
+				break
+			}
+		}
+		bindings = append(bindings, binding)
+	}
+	for name := range optional {
+		switch matched[name] {
+		case 0:
+			return nil, fmt.Errorf("optional input binding %q is not defined for route %s", name, c.route.String())
+		case 1:
+		default:
+			return nil, fmt.Errorf("optional input binding %q is ambiguous for route %s", name, c.route.String())
+		}
+	}
+	injector, err := bindly.NewInjector()
+	if err != nil {
+		return nil, err
+	}
+	plan, err := injector.CompilePlan(c.inputType, bindings...)
+	if err != nil {
+		return nil, err
+	}
+	contract, err := NewInputContract(c.inputType, c.contract.projection, RouteInput{Route: c.route, Plan: plan, Bindings: bindings})
+	if err != nil {
+		return nil, err
+	}
+	result, ok := contract.ForRoute(c.route)
+	if !ok {
+		return nil, fmt.Errorf("rebuilt route input contract not found: %s", c.route.String())
+	}
+	return result, nil
+}
+
 func (c *RouteInputContract) Fields() []InputField {
 	if c == nil {
 		return nil
@@ -225,6 +284,47 @@ func (f InputField) Anonymous() bool               { return f.anonymous }
 func (f InputField) WireSchema() *spec.WireSchema  { return f.wireSchema.Clone() }
 func (f InputField) WireSchemas() map[string]*spec.WireSchema {
 	return cloneWireSchemas(f.wireSchemas)
+}
+
+func inputFieldMatchKeys(field InputField) []string {
+	var result []string
+	appendKey := func(value string) {
+		normalized := normalizeInputName(value)
+		if normalized == "" {
+			return
+		}
+		for _, existing := range result {
+			if existing == normalized {
+				return
+			}
+		}
+		result = append(result, normalized)
+	}
+	appendKey(field.path)
+	appendKey(field.binding.Name)
+	appendKey(field.binding.Location.In)
+	if parameter, ok := field.binding.Extension.(*spec.Parameter); ok && parameter != nil {
+		appendKey(parameter.Name)
+		appendKey(parameter.Source.Name)
+	}
+	return result
+}
+
+func normalizeInputName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var builder strings.Builder
+	for _, r := range value {
+		switch {
+		case r == '_' || r == '-' || r == '.' || r == ' ':
+			continue
+		default:
+			builder.WriteRune(r)
+		}
+	}
+	return strings.ToLower(builder.String())
 }
 
 func cloneBindingSpec(binding bindly.BindingSpec) bindly.BindingSpec {

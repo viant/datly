@@ -203,6 +203,9 @@ func (w *Warmup) executeTarget(ctx context.Context, prepare bool, fields map[str
 			return err
 		}
 		request := dexec.ComponentRequest{Target: target, Providers: providers, Warmup: &dexec.ReaderWarmupRequest{View: warmupTarget.View, Settings: policy}}
+		if policy.IndexParameter != "" {
+			request.WarmupOmitInput = []string{policy.IndexParameter}
+		}
 		if prepare {
 			request.Warmup = nil
 			request.PrepareQuery = true

@@ -131,6 +131,12 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if !ok {
 		return nil, fmt.Errorf("registered route input contract not found: %s", route.String())
 	}
+	if len(request.WarmupOmitInput) > 0 {
+		inputRoute, err = inputRoute.WithOptionalBindings(request.WarmupOmitInput...)
+		if err != nil {
+			return nil, err
+		}
+	}
 	target := dexec.ComponentTarget{Component: request.Target.Component, Route: route}
 	ctx, err = enterComponent(ctx, target)
 	if err != nil {
