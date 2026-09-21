@@ -59,9 +59,17 @@ func (p CacheProjection) Fields() ([]cache.ProjectionField, error) {
 		if measure {
 			field.MeasureKey = expression
 		} else {
-			field.DimensionKey = expression
+			field.DimensionKey = projectionDimensionKey(name, expression)
 		}
 		fields = append(fields, field)
 	}
 	return fields, nil
+}
+
+func projectionDimensionKey(name, expression string) string {
+	name = strings.TrimSpace(name)
+	if name != "" {
+		return strings.ToLower(name) + "\x00" + expression
+	}
+	return expression
 }

@@ -155,3 +155,71 @@ func TestRuntimeIndexedWarmupSQLite(t *testing.T) {
 		})
 	}
 }
+
+func TestRuntimeIndexedGroupedWarmupReusesNamedPlaceholderDimensionsSQLite(t *testing.T) {
+	type input struct{ AdvertiserID int }
+	type row struct {
+		AdvertiserID int     `sqlx:"advertiser_id"`
+		DefaultCPM   float64 `sqlx:"default_cpm"`
+		PartnerFee   float64 `sqlx:"partner_fee"`
+		Spend        float64 `sqlx:"spend"`
+	}
+	type output struct{ Rows []row }
+
+	ctx := context.Background()
+	db := sqlite.New(t)
+	if err := db.ExecStatements(ctx,
+		"CREATE TABLE advertiser_report(advertiser_id INTEGER, spend REAL)",
+		"INSERT INTO advertiser_report VALUES(101,12.5)",
+	); err != nil {
+		t.Fatal(err)
+	}
+	groupable := true
+	component := &spec.Component{
+		Key: spec.Key{Kind: spec.KindComponent, Name: "AdvertiserReport"}, Routes: []*spec.Route{{Method: "GET", Path: "/advertiser"}},
+		Settings: &spec.Settings{Cache: &spec.CacheSettings{
+			Enabled: true, Name: "advertiser_report", Location: t.TempDir(), TTL: "1m",
+			Warmup: &spec.CacheWarmupSettings{IndexColumn: "advertiser_id", IndexParameter: "AdvertiserID"},
+		}},
+		Parameters: []*spec.Parameter{
+			{Name: "AdvertiserID", TypeExpr: "int", Source: spec.BindSource{Kind: "query", Name: "advertiser_id"}},
+			{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}},
+		},
+		RootView: &spec.View{Name: "advertiser_report", Groupable: &groupable, Source: &spec.ViewSource{SQL: `
+SELECT
+  advertiser_id,
+  CAST(0 AS FLOAT64) AS default_cpm,
+  CAST(0 AS FLOAT64) AS partner_fee,
+  SUM(spend) AS spend
+FROM advertiser_report
+WHERE (:AdvertiserID=0 OR advertiser_id=:AdvertiserID)
+GROUP BY 1,2,3`}},
+	}
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeOf(input{}), OutputType: reflect.TypeOf(output{}), DirectViewField: "Rows"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db.DB}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := NewRuntime([]*registry.RegisteredComponent{{Component: artifact.Component, Input: artifact.Input, OutputType: reflect.TypeOf(output{}), Reader: reader}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: "GET", Path: "/advertiser"}}
+	if count, err := runtime.Warmup(ctx, target); err != nil || count != 1 {
+		t.Fatalf("Warmup=%d,%v", count, err)
+	}
+	if err := db.ExecStatements(ctx, "DROP TABLE advertiser_report"); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := runtime.InvokeComponent(ctx, dexec.ComponentRequest{Target: target, Input: &input{AdvertiserID: 101}})
+	if err != nil {
+		t.Fatalf("warmup replay missed and attempted root SQL: %v", err)
+	}
+	rows := actual.(*output).Rows
+	if len(rows) != 1 || rows[0].AdvertiserID != 101 || rows[0].Spend != 12.5 {
+		t.Fatalf("rows=%+v", rows)
+	}
+}
