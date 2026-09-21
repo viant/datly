@@ -9,12 +9,45 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	xhandler "github.com/viant/xdatly/handler"
 )
 
 type renderGroupPredicateHandler struct{}
 
 func (r *renderGroupPredicateHandler) Compute(_ context.Context, value interface{}) (*codec.Criteria, error) {
 	return &codec.Criteria{Expression: "t.ACCOUNT_ID = ?", Placeholders: []interface{}{value}}, nil
+}
+
+type warmupAuthorizationPredicateHandler struct{}
+
+func (w *warmupAuthorizationPredicateHandler) Compute(ctx context.Context, value interface{}) (*codec.Criteria, error) {
+	if xhandler.InvocationFromContext(ctx).MayBypassRowAuthorization() {
+		return nil, nil
+	}
+	return &codec.Criteria{Expression: "t.OWNER_ID = ?", Placeholders: []interface{}{value}}, nil
+}
+
+func TestPredicateCanLiftAuthorizationForWarmupContext(t *testing.T) {
+	type input struct{ OwnerID int }
+	stateType := structology.NewStateType(reflect.TypeOf(input{}))
+	parameterState := stateType.NewState()
+	require.NoError(t, parameterState.SetInt("OwnerID", 29))
+	predicateConfig := []*PredicateConfig{{
+		Selector: stateType.Lookup("OwnerID"),
+		Expander: &warmupAuthorizationPredicateHandler{},
+	}}
+
+	render := func(ctx context.Context) string {
+		t.Helper()
+		expandContext := &Context{Context: ctx, DataUnit: NewDataUnit(nil)}
+		actual, err := NewPredicate(expandContext, parameterState, predicateConfig, stateType).RenderGroup(0, "AND")
+		require.NoError(t, err)
+		return actual.Expression
+	}
+
+	assert.Equal(t, "(t.OWNER_ID = ?)", render(context.Background()))
+	warmupCtx := xhandler.WithCacheWarmup(context.Background(), xhandler.WarmupPhasePrepare)
+	assert.Empty(t, render(warmupCtx))
 }
 
 func TestPredicateBuilder_NilReceiver(t *testing.T) {
