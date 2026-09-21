@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
 	sqlcache "github.com/viant/sqlx/io/read/cache"
+	xhandler "github.com/viant/xdatly/handler"
 )
 
 func TestPopulateCacheWithDetails(t *testing.T) {
@@ -137,7 +138,12 @@ func TestWarmupWithLimitCapsConcurrency(t *testing.T) {
 	}
 	var active int64
 	var maxActive int64
+	var warmupContexts int64
 	read := func(ctx context.Context, entry *warmupEntry) (*EntryResult, error) {
+		invocation := xhandler.InvocationFromContext(ctx)
+		if invocation.MayBypassRowAuthorization() && invocation.WarmupPhase() == xhandler.WarmupPhaseFill {
+			atomic.AddInt64(&warmupContexts, 1)
+		}
 		current := atomic.AddInt64(&active, 1)
 		for {
 			max := atomic.LoadInt64(&maxActive)
@@ -162,6 +168,7 @@ func TestWarmupWithLimitCapsConcurrency(t *testing.T) {
 	}
 
 	assert.Equal(t, len(entries), total)
+	assert.Equal(t, int64(len(entries)), atomic.LoadInt64(&warmupContexts))
 	assert.LessOrEqual(t, atomic.LoadInt64(&maxActive), int64(maxWarmupConcurrency))
 }
 

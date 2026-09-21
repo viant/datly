@@ -57,7 +57,7 @@ require (
 	github.com/viant/x v0.4.1-0.20260306005005-975ded1e1bef
 	github.com/viant/xdatly v0.5.4-0.20260306062123-17850ac34977
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20251208172928-dd34b7f09fd5
+	github.com/viant/xdatly/handler v0.0.0-20260921130302-d70acd05c616
 	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1

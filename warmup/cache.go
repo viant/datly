@@ -9,6 +9,7 @@ import (
 	errUtils "github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/read/cache"
+	xhandler "github.com/viant/xdatly/handler"
 	"strings"
 	"sync"
 	"time"
@@ -72,6 +73,7 @@ func (c *matchersCollector) populate(ctx context.Context, collector chan warmupE
 }
 
 func (c *matchersCollector) populateCacheCases(ctx context.Context, collector chan warmupEntryFn) (int, error) {
+	ctx = xhandler.WithCacheWarmup(ctx, xhandler.WarmupPhasePrepare)
 	started := time.Now()
 	cacheCases, err := c.view.Cache.GenerateCacheInputs(ctx)
 	if err != nil {
@@ -177,6 +179,7 @@ func warmup(ctx context.Context, entries []*warmupEntry, notifier chan func() (*
 type warmupReadFn func(context.Context, *warmupEntry) (*EntryResult, error)
 
 func warmupWithLimit(ctx context.Context, entries []*warmupEntry, notifier chan func() (*EntryResult, error), limit int, read warmupReadFn) {
+	ctx = xhandler.WithCacheWarmup(ctx, xhandler.WarmupPhaseFill)
 	if len(entries) == 0 {
 		return
 	}
