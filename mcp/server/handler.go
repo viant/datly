@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 
 	"github.com/viant/jsonrpc"
@@ -68,6 +69,8 @@ func (h *Handler) CallTool(ctx context.Context, request *jsonrpc.TypedRequest[*s
 		PrepareTool(context.Context, string) error
 	}); ok && request != nil && request.Request != nil {
 		if prepareErr := preparer.PrepareTool(ctx, request.Request.Params.Name); prepareErr != nil {
+			// Keep internal causes in the process log, not MCP log notifications.
+			log.Printf("MCP preparation failed operation=%q stage=prepare request_id=%d tool=%q error=%q", schema.MethodToolsCall, request.Id, request.Request.Params.Name, prepareErr.Error())
 			return nil, jsonrpc.NewInternalError("MCP tool is unavailable", nil)
 		}
 		h.DefaultHandler.Registry = h.service.Registry()
@@ -91,6 +94,7 @@ func (h *Handler) ListTools(ctx context.Context, request *jsonrpc.TypedRequest[*
 	}
 	if preparer, ok := h.service.(interface{ PrepareTools(context.Context) error }); ok {
 		if prepareErr := preparer.PrepareTools(ctx); prepareErr != nil {
+			log.Printf("MCP preparation failed operation=%q stage=prepare request_id=%d error=%q", schema.MethodToolsList, request.Id, prepareErr.Error())
 			return nil, jsonrpc.NewInternalError("MCP tools are unavailable", nil)
 		}
 		h.DefaultHandler.Registry = h.service.Registry()
