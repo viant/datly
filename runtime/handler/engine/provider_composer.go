@@ -128,6 +128,7 @@ func protectedRuntimeKind(kind string) bool {
 	case "input", "param", "caller_output", "component", string(xhandler.DataKey), string(xhandler.DMLKey),
 		string(xhandler.SequencerKey), string(xhandler.FlusherKey),
 		string(dexec.ComponentInvokerKey),
+		string(dexec.InvocationKey),
 		string(dexec.ReaderInputPreparerKey),
 		string(xhandler.InputSnapshotKey),
 		string(xhandler.ReadMetadataKey),
