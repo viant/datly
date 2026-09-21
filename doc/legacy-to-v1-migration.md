@@ -217,10 +217,18 @@ call. That loses the original transaction boundary and permits the selected
 current row to change between observation and mutation. The writer needs a
 transactional auxiliary read keyed from captured body fields, with its evidence
 available to lifecycle validation and with any intentionally supplied transition
-row participating in the same sparse write graph. If the connected generator
-cannot express that body-key auxiliary read for a new root, classify it as a
-writer/runtime capability gap and preserve the legacy transaction until the
-generic feature has a native concurrency regression.
+row participating in the same sparse write graph.
+
+Datly v1 supports this as an auxiliary root with writable descendants. The
+auxiliary ancestor receives typed Current, presence, invariant and lifecycle
+state but never emits DML; generated traversal continues into explicitly
+writable child views. Lifecycle setters on an existing child create sparse
+update presence after Current matching, while a missing child remains an insert.
+This is materially stronger than a legacy read-then-write service split because
+the auxiliary read, child classification, validation and DML share the writer's
+managed transaction. If a connected older generator still propagates auxiliary
+status to descendants or skips the auxiliary root traversal, classify that as a
+writer/runtime version gap and preserve the legacy transaction.
 
 ## Verification gates
 
