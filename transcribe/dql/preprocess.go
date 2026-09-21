@@ -48,6 +48,7 @@ type DirectivePlan struct {
 	Route         *RoutePlan
 	Settings      *spec.Settings
 	MCP           *spec.MCPExposure
+	MCPOnly       bool
 	Params        []*spec.Parameter
 	Views         []*spec.View
 	ParamSpans    map[string]SourceSpan
@@ -214,6 +215,7 @@ func normalizeDirectivePlan(blocks []directiveBlock) (*DirectivePlan, error) {
 	result := &DirectivePlan{Settings: toSpecSettings(settings), Params: params, ParamSpans: paramSpans, viewOptions: viewOptions}
 	if settings != nil {
 		result.MCP = settings.MCP.Clone()
+		result.MCPOnly = settings.MCPOnly
 		result.Documentation = settings.Documentation.Clone()
 		result.Static = settings.Static.Clone()
 	}
