@@ -203,6 +203,25 @@ transcriber projection defect. Fix key projection/criteria generation and add a
 native composite-key fixture; do not patch generated SQL or rename schema
 columns to accommodate it.
 
+### Body-key auxiliary state for a new mutation root
+
+Some legacy transactions insert a new root while also inspecting or updating an
+existing row selected by non-identity request fields. For example, a request may
+insert a new record while transitioning the current record for the same
+`tenant_id,owner_id` tuple. The new root identity cannot drive that Current read:
+generated Current matches supplied root identities, and a child Current relation
+normally derives its parent keys from matched Current parents.
+
+Do not split this contract into an external reader call followed by a writer
+call. That loses the original transaction boundary and permits the selected
+current row to change between observation and mutation. The writer needs a
+transactional auxiliary read keyed from captured body fields, with its evidence
+available to lifecycle validation and with any intentionally supplied transition
+row participating in the same sparse write graph. If the connected generator
+cannot express that body-key auxiliary read for a new root, classify it as a
+writer/runtime capability gap and preserve the legacy transaction until the
+generic feature has a native concurrency regression.
+
 ## Verification gates
 
 A migrated component is complete only when all applicable gates pass:
