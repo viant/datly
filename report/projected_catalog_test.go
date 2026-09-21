@@ -15,3 +15,12 @@ func TestProjectedComponentsExposeCubeAndComposeSeparately(t *testing.T) {
 		t.Fatalf("projected=%+v", actual)
 	}
 }
+
+func TestProjectedComponentsUseCanonicalReaderMCPIdentity(t *testing.T) {
+	groupable, enabled := true, true
+	component := &spec.Component{Key: spec.Key{Name: "Reader"}, RootView: &spec.View{Groupable: &groupable}, Routes: []*spec.Route{{Method: "GET", Path: "/vendors", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "awitas.vendor.spend.read"}}}}, Settings: &spec.Settings{Report: &spec.ReportSettings{Enabled: true, Compose: &spec.CubeComposeSettings{Enabled: enabled}}}}
+	actual := ProjectedComponents(component)
+	if len(actual) != 2 || actual[0].Name != "awitas.vendor.spend.readCube" || actual[1].Name != "awitas.vendor.spend.readCubeCompose" {
+		t.Fatalf("canonical projected tools=%+v", actual)
+	}
+}

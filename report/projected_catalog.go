@@ -40,13 +40,13 @@ func ProjectedComponents(component *spec.Component) []ProjectedComponent {
 		}
 		cubeName := typecatalog.ExportedFieldName(component.Key.Name + suffix + "Cube")
 		cubeMCP := component.Settings.Report.MCPTool == nil || *component.Settings.Report.MCPTool
-		result = append(result, ProjectedComponent{Name: cubeName, Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube", MCPEnabled: cubeMCP, Description: strings.TrimSpace(component.Description + " cube")})
+		result = append(result, ProjectedComponent{Name: derivedMCPToolName(route, cubeName, "Cube"), Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube", MCPEnabled: cubeMCP, Description: strings.TrimSpace(component.Description + " cube")})
 		compose := component.Settings.Report.Compose
 		if compose == nil || !compose.Enabled {
 			continue
 		}
 		composeMCP := compose.MCPTool == nil || *compose.MCPTool
-		result = append(result, ProjectedComponent{Name: cubeName + "Compose", Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube/compose", MCPEnabled: composeMCP, Description: strings.TrimSpace(component.Description + " cube composition")})
+		result = append(result, ProjectedComponent{Name: derivedMCPToolName(route, cubeName+"Compose", "CubeCompose"), Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube/compose", MCPEnabled: composeMCP, Description: strings.TrimSpace(component.Description + " cube composition")})
 	}
 	return result
 }
