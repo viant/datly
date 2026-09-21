@@ -78,6 +78,30 @@ func TestScopeNamedBodyUsesExactCanonicalName(t *testing.T) {
 	}
 }
 
+func TestScopeNormalizesArgumentAliasesWithoutMutatingCallerInput(t *testing.T) {
+	plan, err := NewCompiler().Compile([]Argument{{
+		PublicName: "Request", Aliases: []string{"diagnose"},
+		Source: bindstate.Location{Kind: requestprovider.BodyKind, In: "diagnose"}, SourceType: reflect.TypeOf(struct {
+			ID int `json:"id"`
+		}{}),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := Arguments{"diagnose": map[string]interface{}{"id": float64(9)}}
+	scope, err := plan.Scope(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := input["Request"]; ok {
+		t.Fatalf("caller arguments were mutated: %+v", input)
+	}
+	value, ok, err := scope.Body().Locate(nil).Value(context.Background(), plan.arguments[0].SourceType, "diagnose")
+	if err != nil || !ok || reflect.ValueOf(value).FieldByName("ID").Int() != 9 {
+		t.Fatalf("body value = %#v, %v, %v", value, ok, err)
+	}
+}
+
 func TestScopeWholeBodyDelegatesTypedDecode(t *testing.T) {
 	type payload struct {
 		ID int `json:"id"`
@@ -106,6 +130,9 @@ func TestCompileAndScopeFailClosed(t *testing.T) {
 		{name: "unsupported", arguments: []Argument{{PublicName: "id", Source: bindstate.Location{Kind: "component", In: "id"}, SourceType: stringType}}, match: "unsupported binding kind"},
 		{name: "mixed body", arguments: []Argument{{PublicName: "body", Source: bindstate.Location{Kind: "body"}, SourceType: stringType}, {PublicName: "name", Source: bindstate.Location{Kind: "body", In: "name"}, SourceType: stringType}}, match: "cannot mix whole and named"},
 		{name: "unknown value", arguments: []Argument{{PublicName: "id", Source: bindstate.Location{Kind: "query", In: "id"}, SourceType: stringType}}, values: map[string]interface{}{"other": "x"}, match: "unknown MCP argument"},
+		{name: "duplicate alias", arguments: []Argument{{PublicName: "id", Aliases: []string{"value"}, Source: bindstate.Location{Kind: "query", In: "id"}, SourceType: stringType}, {PublicName: "other", Aliases: []string{"value"}, Source: bindstate.Location{Kind: "query", In: "other"}, SourceType: stringType}}, match: "duplicate MCP argument"},
+		{name: "public collides with alias", arguments: []Argument{{PublicName: "id", Aliases: []string{"other"}, Source: bindstate.Location{Kind: "query", In: "id"}, SourceType: stringType}, {PublicName: "other", Source: bindstate.Location{Kind: "query", In: "other"}, SourceType: stringType}}, match: "duplicate MCP argument"},
+		{name: "canonical and alias supplied", arguments: []Argument{{PublicName: "id", Aliases: []string{"value"}, Source: bindstate.Location{Kind: "query", In: "id"}, SourceType: stringType}}, values: map[string]interface{}{"id": "1", "value": "1"}, match: "conflicting MCP argument"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -149,8 +176,8 @@ func TestScopeHeaderOverlayIsImmutableAndCaseInsensitive(t *testing.T) {
 
 func TestScopeUsesSameCanonicalRequestProvidersForURI(t *testing.T) {
 	plan, err := NewCompiler().Compile([]Argument{
-		{PublicName: "id", Source: bindstate.Location{Kind: "path", In: "id"}, SourceType: reflect.TypeOf(0)},
-		{PublicName: "tag", Source: bindstate.Location{Kind: "query", In: "tag"}, SourceType: reflect.TypeOf([]int{})},
+		{PublicName: "id", Aliases: []string{"identifier"}, Source: bindstate.Location{Kind: "path", In: "id"}, SourceType: reflect.TypeOf(0)},
+		{PublicName: "tag", Aliases: []string{"tags"}, Source: bindstate.Location{Kind: "query", In: "tag"}, SourceType: reflect.TypeOf([]int{})},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -165,6 +192,7 @@ func TestScopeUsesSameCanonicalRequestProvidersForURI(t *testing.T) {
 		URI{Query: url.Values{"id": {"1", "2"}}},
 		URI{Query: url.Values{"other": {"1"}}},
 		URI{Path: map[string]string{"other": "1"}},
+		URI{Path: map[string]string{"identifier": "7"}, Query: url.Values{"tags": {"2"}}},
 	} {
 		if _, err := plan.Scope(source); err == nil {
 			t.Fatal("URI scope expected error")

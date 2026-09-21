@@ -37,6 +37,22 @@ type anonymousInput struct {
 	Payload anonymousPayload `anonymous:"true"`
 }
 
+type anonymousMCPPayload struct {
+	Name   string `json:"name" mcp:"name=Name,aliases=legacy_name"`
+	Count  int    `json:"count"`
+	Hidden string `json:"hidden" mcp:"-"`
+}
+
+type anonymousMCPInput struct {
+	Payload anonymousMCPPayload `anonymous:"true"`
+}
+
+type mcpTaggedInput struct {
+	Request       toolNested `json:"diagnose,omitempty" mcp:"name=Request,aliases=diagnose"`
+	Debug         bool       `json:"debug,omitempty" mcp:"name=Debug,aliases=debug"`
+	ForwardedHost string     `parameter:",kind=header,in=X-Forwarded-Host" json:"forwardedHost,omitempty" mcp:"-"`
+}
+
 func TestCompilerBuildsSchemaAndBindingFromRouteContract(t *testing.T) {
 	required := true
 	description := &spec.Parameter{Name: "Search", Description: "CSV search terms", Example: "one,two"}
@@ -95,6 +111,49 @@ func TestCompilerBuildsSchemaAndBindingFromRouteContract(t *testing.T) {
 	}
 }
 
+func TestCompilerUsesMCPNamesAliasesAndExclusionsWithoutChangingBindingSources(t *testing.T) {
+	required := true
+	contract := testRouteContract(t, reflect.TypeOf(mcpTaggedInput{}), []bindly.BindingSpec{
+		{Path: "Request", Location: bindstate.Location{Kind: "body", In: "diagnose"}, Required: &required},
+		{Path: "Debug", Location: bindstate.Location{Kind: "query", In: "debug"}},
+		{Path: "ForwardedHost", Location: bindstate.Location{Kind: "header", In: "X-Forwarded-Host"}},
+	})
+	plan, err := NewCompiler().Compile(Input{
+		Component: spec.Key{Kind: spec.KindComponent, Name: "Diagnostic"},
+		Exposure:  &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "diagnostic.run"}, Contract: contract,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := plan.Metadata()
+	if len(metadata.InputSchema.Properties) != 2 || metadata.InputSchema.Properties["Request"] == nil || metadata.InputSchema.Properties["Debug"] == nil ||
+		metadata.InputSchema.Properties["diagnose"] != nil || metadata.InputSchema.Properties["ForwardedHost"] != nil {
+		t.Fatalf("schema = %+v", metadata.InputSchema.Properties)
+	}
+	scope, err := plan.Scope(map[string]interface{}{
+		"diagnose": map[string]interface{}{"when": "2026-07-14T10:00:00Z", "tags": []interface{}{"a"}},
+		"debug":    false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := scope.Body().Locate(nil).Value(context.Background(), reflect.TypeOf(toolNested{}), "diagnose"); err != nil || !ok {
+		t.Fatalf("body diagnose lookup ok=%v err=%v", ok, err)
+	}
+	debug, ok, err := scope.Query().Locate(nil).Value(context.Background(), reflect.TypeOf(false), "debug")
+	if err != nil || !ok || debug != "false" {
+		t.Fatalf("debug lookup = %#v ok=%v err=%v", debug, ok, err)
+	}
+	for _, args := range []map[string]interface{}{
+		{"Request": map[string]interface{}{"when": "2026-07-14T10:00:00Z"}, "diagnose": map[string]interface{}{"when": "2026-07-14T10:00:00Z"}},
+		{"ForwardedHost": "example.com", "Request": map[string]interface{}{"when": "2026-07-14T10:00:00Z"}},
+	} {
+		if _, err := plan.Scope(args); err == nil {
+			t.Fatalf("expected rejected MCP arguments: %+v", args)
+		}
+	}
+}
+
 func TestCompilerRejectsInvalidPublicContracts(t *testing.T) {
 	required := true
 	tests := []struct {
@@ -110,6 +169,13 @@ func TestCompilerRejectsInvalidPublicContracts(t *testing.T) {
 		}{}), bindings: []bindly.BindingSpec{{Path: "Value", Location: bindstate.Location{Kind: "query", In: "value"}, Required: &required}}, exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "hidden"}, match: "hidden"},
 		{name: "required request", typeOf: reflect.TypeOf(struct{ Request *http.Request }{}), bindings: []bindly.BindingSpec{{Path: "Request", Location: bindstate.Location{Kind: "http_request"}, Required: &required}}, exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "request"}, match: "cannot be supplied"},
 		{name: "duplicate public", typeOf: reflect.TypeOf(struct{ A, B string }{}), bindings: []bindly.BindingSpec{{Path: "A", Name: "same", Location: bindstate.Location{Kind: "query", In: "a"}}, {Path: "B", Name: "same", Location: bindstate.Location{Kind: "query", In: "b"}}}, exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "duplicate"}, match: "duplicate public"},
+		{name: "duplicate alias", typeOf: reflect.TypeOf(struct {
+			A string `mcp:"aliases=same"`
+			B string `mcp:"aliases=same"`
+		}{}), bindings: []bindly.BindingSpec{{Path: "A", Name: "A", Location: bindstate.Location{Kind: "query", In: "a"}}, {Path: "B", Name: "B", Location: bindstate.Location{Kind: "query", In: "b"}}}, exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "duplicateAlias"}, match: "duplicate public"},
+		{name: "required mcp hidden", typeOf: reflect.TypeOf(struct {
+			Value string `mcp:"-"`
+		}{}), bindings: []bindly.BindingSpec{{Path: "Value", Location: bindstate.Location{Kind: "query", In: "value"}, Required: &required}}, exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "hiddenMCP"}, match: "hidden from MCP"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -161,6 +227,36 @@ func TestCompilerFlattensExplicitAnonymousBody(t *testing.T) {
 	payload := value.(anonymousPayload)
 	if payload.Name != "Ada" || payload.Count != 3 {
 		t.Fatalf("anonymous body = %+v", payload)
+	}
+}
+
+func TestCompilerAnonymousMCPNamePreservesJSONBodySource(t *testing.T) {
+	contract := testRouteContract(t, reflect.TypeOf(anonymousMCPInput{}), []bindly.BindingSpec{{
+		Path: "Payload", Location: bindstate.Location{Kind: "body"},
+	}})
+	plan, err := NewCompiler().Compile(Input{
+		Component: spec.Key{Kind: spec.KindComponent, Name: "AnonymousMCP"},
+		Exposure:  &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "anonymous.mcp"}, Contract: contract,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := plan.Metadata()
+	if len(metadata.InputSchema.Properties) != 2 || metadata.InputSchema.Properties["Name"] == nil || metadata.InputSchema.Properties["count"] == nil ||
+		metadata.InputSchema.Properties["name"] != nil || metadata.InputSchema.Properties["hidden"] != nil {
+		t.Fatalf("anonymous MCP schema = %+v", metadata.InputSchema.Properties)
+	}
+	scope, err := plan.Scope(map[string]interface{}{"legacy_name": "Ada", "count": float64(3)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, ok, err := scope.Body().Locate(nil).Value(context.Background(), reflect.TypeOf(anonymousMCPPayload{}), "")
+	if err != nil || !ok {
+		t.Fatalf("anonymous MCP body value=%#v ok=%v err=%v", value, ok, err)
+	}
+	payload := value.(anonymousMCPPayload)
+	if payload.Name != "Ada" || payload.Count != 3 {
+		t.Fatalf("anonymous MCP body = %+v", payload)
 	}
 }
 
@@ -226,6 +322,25 @@ func TestPlanMetadataIsDetached(t *testing.T) {
 	actual := plan.Metadata().InputSchema.Properties["ids"]
 	if actual["type"] != "array" || actual["items"].(map[string]interface{})["type"] != "integer" {
 		t.Fatal("returned metadata aliases immutable tool plan")
+	}
+}
+
+func TestPlanArgumentsAreDetached(t *testing.T) {
+	type input struct {
+		ID int `mcp:"aliases=legacy_id"`
+	}
+	contract := testRouteContract(t, reflect.TypeOf(input{}), []bindly.BindingSpec{{Path: "ID", Location: bindstate.Location{Kind: "query", In: "id"}}})
+	plan, err := NewCompiler().Compile(Input{
+		Component: spec.Key{Kind: spec.KindComponent, Name: "Test"},
+		Exposure:  &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "test"}, Contract: contract,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	arguments := plan.Arguments()
+	arguments[0].aliases[0] = "mutated"
+	if actual := plan.Arguments()[0].Aliases(); len(actual) != 1 || actual[0] != "legacy_id" {
+		t.Fatalf("arguments aliases mutated: %+v", actual)
 	}
 }
 

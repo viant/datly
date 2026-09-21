@@ -18,6 +18,7 @@ import (
 type Argument struct {
 	documentation   *docs.Snapshot
 	publicName      string
+	aliases         []string
 	path            string
 	sourceKind      string
 	sourceName      string
@@ -29,6 +30,7 @@ type Argument struct {
 }
 
 func (a Argument) PublicName() string            { return a.publicName }
+func (a Argument) Aliases() []string             { return append([]string(nil), a.aliases...) }
 func (a Argument) Path() string                  { return a.path }
 func (a Argument) SourceKind() string            { return a.sourceKind }
 func (a Argument) SourceName() string            { return a.sourceName }
@@ -72,19 +74,32 @@ func (p *Plan) Arguments() []Argument {
 	if p == nil {
 		return nil
 	}
-	return append([]Argument(nil), p.args...)
+	result := make([]Argument, len(p.args))
+	for i, argument := range p.args {
+		result[i] = cloneArgument(argument)
+	}
+	return result
 }
 
 func (p *Plan) Scope(arguments map[string]interface{}) (*requestprovider.Scope, error) {
 	if p == nil {
 		return nil, fmt.Errorf("MCP tool plan is required")
 	}
+	normalized, err := p.binding.NormalizeArguments(arguments)
+	if err != nil {
+		return nil, err
+	}
 	for _, argument := range p.args {
-		if _, ok := arguments[argument.publicName]; argument.required && !ok {
+		if _, ok := normalized[argument.publicName]; argument.required && !ok {
 			return nil, fmt.Errorf("missing required MCP argument %q", argument.publicName)
 		}
 	}
-	return p.binding.Scope(mcpinput.Arguments(arguments))
+	return p.binding.Scope(mcpinput.Arguments(normalized))
+}
+
+func cloneArgument(argument Argument) Argument {
+	argument.aliases = append([]string(nil), argument.aliases...)
+	return argument
 }
 
 func cloneTool(source schema.Tool) schema.Tool {
