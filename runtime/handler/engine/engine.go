@@ -14,6 +14,7 @@ import (
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
 	"github.com/viant/sqlx"
 	xhandler "github.com/viant/xdatly/handler"
 	xmcp "github.com/viant/xdatly/handler/mcp"
@@ -220,8 +221,15 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return finish(nil, fmt.Errorf("start pre-binding transaction: %w", err))
 		}
 	}
-	if !bound {
-		options := []bindly.BindOption{bindly.WithPlan(inputPlan), bindly.WithSource(input)}
+	bindPlan := inputPlan
+	if bound {
+		bindPlan, err = boundSupplementalPlan(root, request.Input)
+		if err != nil {
+			return finish(nil, err)
+		}
+	}
+	if !bound || bindPlan != nil {
+		options := []bindly.BindOption{bindly.WithPlan(bindPlan), bindly.WithSource(input)}
 		if request.Replay != nil {
 			options = append(options, bindly.WithReplay(*request.Replay))
 		}
@@ -322,6 +330,25 @@ func invocationInput(inputType reflect.Type, supplied any) (any, bool, error) {
 		return nil, false, fmt.Errorf("bound component input must be a non-nil *%s, got %T", inputType, supplied)
 	}
 	return supplied, true, nil
+}
+
+func boundSupplementalPlan(injector *bindly.Injector, input *registry.RouteInputContract) (*bindly.Plan, error) {
+	var bindings []bindly.BindingSpec
+	for _, field := range input.Fields() {
+		binding := field.Binding()
+		if (spec.BindSource{Kind: binding.Location.Kind}).RequestValue() {
+			continue
+		}
+		bindings = append(bindings, binding)
+	}
+	if len(bindings) == 0 {
+		return nil, nil
+	}
+	plan, err := injector.CompilePlan(input.Type(), bindings...)
+	if err != nil {
+		return nil, fmt.Errorf("compile trusted input supplemental bindings: %w", err)
+	}
+	return plan, nil
 }
 
 func (r Request) hasInjectorFinalizer() bool {
