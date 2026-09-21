@@ -94,16 +94,23 @@ missing-row, sparse-update, deletion, and identity policy explicitly.
 2. Author a separate reader DQL file with required `#package`, `input_type`,
    `output_type`, root `type(...)`, a named typed output holder, connector and
    route settings, and global `case_format('lc')`.
-3. Put all joins, derived views, complete composite relations, and mandatory
+3. Make the projection field-driven: list the fields the caller contract
+   consumes instead of selecting a physical row with `table.*`. A projection
+   is an application contract, not a mirror of the current schema. This keeps
+   generated shapes stable when unrelated columns are added, makes nullable
+   and sensitive fields deliberate, and lets review prove which data leaves
+   each relation. Use a whole-row projection only when the public contract
+   intentionally is the whole row.
+4. Put all joins, derived views, complete composite relations, and mandatory
    authorization restrictions in the declarative graph. Bind client values;
    never interpolate them.
-4. Use typed predicates for caller-dependent authorization. Verified JWT input
+5. Use typed predicates for caller-dependent authorization. Verified JWT input
    is explicit; query/header viewer IDs do not become authority by convention.
-5. Move row transformations to `OnFetch`, and complete-relation transformations
+6. Move row transformations to `OnFetch`, and complete-relation transformations
    to `OnRelation`. Hooks do not query the database.
-6. Run `datly transcribe get` against the application package. Inspect generated
+7. Run `datly transcribe get` against the application package. Inspect generated
    types, SQL resources, selectors, routes, and authored-code preservation.
-7. Replace legacy callers with the generated component contract, then remove
+8. Replace legacy callers with the generated component contract, then remove
    the old SQL service only after parity tests pass.
 
 Aggregates assembled from several legacy service calls should normally become
