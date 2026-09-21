@@ -104,6 +104,37 @@ type toOneOutput struct {
 	Data []*toOneParent `parameter:"Data,kind=output,in=body"`
 }
 
+type transientLinkParent struct {
+	ID       *int                  `sqlx:"id,primaryKey=true"`
+	Scope    *string               `sqlx:"scope"`
+	Children []*transientLinkChild `view:"Children,table=children" on:"Scope=Scope"`
+}
+type transientLinkChild struct {
+	ID    *int    `sqlx:"id,primaryKey=true"`
+	Scope *string `sqlx:"-"`
+}
+type transientLinkInput struct {
+	Rows []*transientLinkParent `parameter:"Rows,kind=body,in=data" view:"Rows,table=parents"`
+}
+type transientLinkOutput struct {
+	Data []*transientLinkParent `parameter:"Data,kind=output,in=body"`
+}
+
+func TestUniversalWriterResolvesTransientProjectionRelationKey(t *testing.T) {
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[transientLinkParent]().PkgPath(), Name: "Rows"}, Name: "Rows", Settings: &spec.Settings{Mutation: "post"}, RootView: &spec.View{Name: "Rows", Source: &spec.ViewSource{Table: "parents"}, Columns: []*spec.Column{{Name: "id", Source: "id", PrimaryKey: true}, {Name: "scope", Source: "scope"}}}}
+	handler, err := New(component, reflect.TypeFor[transientLinkInput](), reflect.TypeFor[transientLinkOutput](), "post")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(handler.metadata.Root.Relations) != 1 || len(handler.metadata.Root.Relations[0].Links) != 1 {
+		t.Fatalf("relations = %+v", handler.metadata.Root.Relations)
+	}
+	link := handler.metadata.Root.Relations[0].Links[0]
+	if link.Child.Name != "Scope" || link.Child.Column != "-" {
+		t.Fatalf("transient link = %+v", link)
+	}
+}
+
 func unitComponent() *spec.Component {
 	return &spec.Component{
 		Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[unitRow]().PkgPath(), Name: "Rows"}, Name: "Rows",

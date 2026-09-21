@@ -1002,7 +1002,10 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		if column == nil {
 			column = columns[strings.ToLower(field.Name)]
 		}
-		if column == nil && (columnName == "" || columnName == "-") && writerRole == "" {
+		// Transient scalar fields may be typed relation keys. Keep them in the
+		// immutable record metadata so relation compilation and Current copying
+		// reuse the generated projection without making them DML columns.
+		if column == nil && columnName == "" && writerRole == "" {
 			continue
 		}
 		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
@@ -1152,7 +1155,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		sqlx := field.Tag.Get("sqlx")
 		writerRole := strings.ToLower(strings.TrimSpace(field.Tag.Get("writer")))
 		columnName := strings.TrimSpace(strings.Split(sqlx, ",")[0])
-		if (columnName == "" || columnName == "-") && writerRole == "" {
+		if columnName == "" && writerRole == "" {
 			continue
 		}
 		column := columns[strings.ToLower(columnName)]
