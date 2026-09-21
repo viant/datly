@@ -41,6 +41,7 @@ type Component struct {
 	Description           string
 	Example               string
 	Internal              bool
+	WarmupTarget          string
 	Report                bool
 	ReportCompose         *spec.CubeComposeSettings
 	ReportMCPTool         *bool
@@ -83,6 +84,7 @@ func (c Component) value() string {
 	if c.Internal {
 		appendNonEmpty(builder, InternalTag, "true")
 	}
+	appendNonEmpty(builder, "warmupTarget", c.WarmupTarget)
 	if c.ReportCompose != nil {
 		appendNonEmpty(builder, "reportCompose", strconv.FormatBool(c.ReportCompose.Enabled))
 		appendNonEmpty(builder, "reportComposeMaxCubes", strconv.Itoa(c.ReportCompose.MaxCubes))
@@ -247,6 +249,8 @@ func ParseComponentValue(value string) (Component, error) {
 			parsed, err := parseBool(InternalTag, value)
 			result.Internal = parsed
 			return err
+		case "warmuptarget":
+			result.WarmupTarget = value
 		case "reportmcptool":
 			parsed, err := parseBool("reportMCPTool", value)
 			result.ReportMCPTool = &parsed
@@ -310,7 +314,7 @@ func validateComponentValues(component Component) error {
 		"path": component.Path, "method": component.Method,
 		"connector": component.Connector, "marshaller": component.Marshaller,
 		"handler": component.Handler, "input": component.Input, "output": component.Output,
-		"view": component.View, "source": component.Source,
+		"view": component.View, "source": component.Source, "warmupTarget": component.WarmupTarget,
 		"reportLinkedInputType": component.ReportLinkedInputType, "reportDimensions": component.ReportDimensions,
 		"reportMeasures": component.ReportMeasures, "reportFilters": component.ReportFilters,
 		"reportOrderBy": component.ReportOrderBy, "reportLimit": component.ReportLimit,

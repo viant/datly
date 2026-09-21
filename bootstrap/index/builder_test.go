@@ -107,6 +107,41 @@ type IndexedChildWarmupHolder struct {
 	}
 }
 
+func TestBuilderMarksDelegatedWarmupTargetBeforeMaterialization(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "go.mod", "module example.com/app\ngo 1.25\n")
+	writeFixture(t, root, "api/holder.go", `package api
+import xdatly "github.com/viant/xdatly"
+type Input struct{}
+type Output struct{}
+type Holder struct {
+  Handler xdatly.Component[Input,Output] `+"`"+`component:"AdConfig,path=/ad-config,method=GET,warmupTarget=GET:/ad-config/read,handler=Handle"`+"`"+`
+  Reader xdatly.Component[Input,Output] `+"`"+`component:"AdConfigRead,path=/ad-config/read,method=GET,internal=true"`+"`"+`
+}
+`)
+	snapshot, err := (Builder{Config: Config{
+		BaseDir: root,
+		Include: []string{"example.com/app/api"},
+	}}).Build(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, _, _, ok := snapshot.Route("GET", "/ad-config")
+	if !ok {
+		t.Fatal("handler route missing")
+	}
+	if !entry.Warmup {
+		t.Fatalf("delegated warmup marker missing on handler entry: %+v", entry)
+	}
+	if entry.Component.Settings == nil || entry.Component.Settings.WarmupTarget == nil || entry.Component.Settings.WarmupTarget.String() != "GET:/ad-config/read" {
+		t.Fatalf("handler warmup target = %+v", entry.Component.Settings)
+	}
+	reader, endpoint, _, ok := snapshot.Route("GET", "/ad-config/read")
+	if !ok || reader == nil || endpoint == nil || !endpoint.Internal {
+		t.Fatalf("private reader route = entry:%+v endpoint:%+v ok:%t", reader, endpoint, ok)
+	}
+}
+
 func TestBuilderMarksCatalogChildWarmupWithoutLinkedHolder(t *testing.T) {
 	root := t.TempDir()
 	(testharness.GeneratedModule{Path: "example.com/app"}).Write(t, root)

@@ -175,7 +175,7 @@ func TestRouteSourceResolveCreatesCanonicalPackageComponent(t *testing.T) {
 		Tag: dtag.Component{
 			Name: "UserLookup", RouteName: "List", Method: "GET", Path: "/users", Connector: "analytics", Marshaller: "tabular", Description: "User lookup", Example: `{"id":1}`,
 			APIKeyHeader: "X-Key", APIKeyValue: " secret ",
-			Input: "UsersInput", Output: "UsersOutput", Handler: "HandleUsers", Report: true, ReportLinkedInputType: "ReportInput", ReportDimensions: "Dimensions",
+			Input: "UsersInput", Output: "UsersOutput", Handler: "HandleUsers", WarmupTarget: "GET:/users/read", Report: true, ReportLinkedInputType: "ReportInput", ReportDimensions: "Dimensions",
 		},
 	}
 	component, err := source.Resolve(reflect.TypeOf(packageTaggedInput{}), nil)
@@ -187,6 +187,7 @@ func TestRouteSourceResolveCreatesCanonicalPackageComponent(t *testing.T) {
 		component.Routes[0].Name != "List" || component.Routes[0].Path != "/users" || component.Routes[0].Marshaller != "tabular" || component.Routes[0].Handler != "HandleUsers" ||
 		component.Routes[0].APIKeyHeader != "X-Key" || component.Routes[0].APIKeyValue != " secret " || component.Settings == nil || component.Settings.DefaultConnector != "analytics" ||
 		component.Settings.InputType != "UsersInput" || component.Settings.OutputType != "UsersOutput" || component.Settings.Report == nil ||
+		component.Settings.WarmupTarget == nil || component.Settings.WarmupTarget.String() != "GET:/users/read" ||
 		!component.Settings.Report.Enabled || component.Settings.Report.LinkedInputType != "ReportInput" || component.Settings.Report.InputLayout == nil ||
 		component.Settings.Report.InputLayout.Dimensions != "Dimensions" ||
 		len(component.Views) != 1 || len(component.Parameters) != 2 {

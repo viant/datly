@@ -101,6 +101,73 @@ func TestRuntimeInternalRouteStillEligibleForWarmup(t *testing.T) {
 	}
 }
 
+type delegatedWarmupReader struct {
+	warmups int
+}
+
+func (r *delegatedWarmupReader) Read(context.Context, any, xhandler.Binder, sqlx.ParameterResolver) (any, error) {
+	return &internalVisibilityOutput{}, nil
+}
+
+func (r *delegatedWarmupReader) Warmup(context.Context, exec.ReaderWarmupInvocation) (int, error) {
+	r.warmups++
+	return 1, nil
+}
+
+func (r *delegatedWarmupReader) WarmupTargets() []exec.ReaderWarmupTarget {
+	return []exec.ReaderWarmupTarget{{Settings: &spec.CacheWarmupSettings{}}}
+}
+
+func TestRuntimeWarmupDelegatesHandlerRouteToPrivateReader(t *testing.T) {
+	handlerComponent := componentSpec("AdConfig", http.MethodGet, "/ad-config", nil)
+	target := spec.RouteRef{Method: http.MethodGet, Path: "/ad-config/read"}
+	handlerComponent.Settings = &spec.Settings{WarmupTarget: &target}
+	handlerArtifact := componentArtifact(t, handlerComponent, reflect.TypeOf(struct{}{}), reflect.TypeOf(internalVisibilityOutput{}))
+	readerComponent := componentSpec("AdConfigRead", http.MethodGet, "/ad-config/read", nil)
+	readerComponent.Routes[0].Internal = true
+	readerArtifact := componentArtifact(t, readerComponent, reflect.TypeOf(struct{}{}), reflect.TypeOf(internalVisibilityOutput{}))
+	handlerCalls := 0
+	reader := &delegatedWarmupReader{}
+	rt, err := NewRuntime([]*registry.RegisteredComponent{
+		{
+			Component: handlerArtifact.Component, Input: handlerArtifact.Input, OutputType: reflect.TypeOf(internalVisibilityOutput{}),
+			Handler: custom.NewFunc[struct{}, internalVisibilityOutput](func(context.Context, *struct{}) (*internalVisibilityOutput, error) {
+				handlerCalls++
+				return &internalVisibilityOutput{Message: "handler"}, nil
+			}),
+		},
+		{
+			Component: readerArtifact.Component, Input: readerArtifact.Input, OutputType: reflect.TypeOf(internalVisibilityOutput{}),
+			Reader: reader,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmupTarget, ok := rt.WarmupTarget("/ad-config")
+	if !ok {
+		t.Fatal("delegated warmup target was not resolved")
+	}
+	if warmupTarget.Component != readerComponent.Key || warmupTarget.Route.Path != "/ad-config/read" {
+		t.Fatalf("warmup target = %+v", warmupTarget)
+	}
+	if _, ok = rt.WarmupTarget("/ad-config/read"); !ok {
+		t.Fatal("private reader warmup target was not resolved")
+	}
+	if _, err = rt.Warmup(context.Background(), warmupTarget); err != nil {
+		t.Fatalf("Warmup() error = %v", err)
+	}
+	if handlerCalls != 0 {
+		t.Fatalf("handler executed during delegated warmup: %d", handlerCalls)
+	}
+	if reader.warmups != 1 {
+		t.Fatalf("reader warmups = %d, want 1", reader.warmups)
+	}
+	if len(rt.Routes()) != 1 || rt.Routes()[0].Path != "/ad-config" {
+		t.Fatalf("public routes = %+v", rt.Routes())
+	}
+}
+
 type internalVisibilityLoader struct {
 	component *registry.RegisteredComponent
 }

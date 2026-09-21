@@ -122,6 +122,13 @@ func (s *RouteSource) canonicalComponent() (*spec.Component, error) {
 		InputType:        inputContract,
 		OutputType:       outputContract,
 	}
+	if value := strings.TrimSpace(s.Tag.WarmupTarget); value != "" {
+		target, err := spec.ParseRouteRef(value)
+		if err != nil {
+			return nil, fmt.Errorf("component warmup target: %w", err)
+		}
+		settings.WarmupTarget = &target
+	}
 	s.Tag.Settings.Apply(settings)
 	if s.Tag.Report || s.Tag.ReportCompose != nil || s.Tag.ReportMCPTool != nil || s.Tag.ReportLinkedInputType != "" || s.Tag.ReportDimensions != "" || s.Tag.ReportMeasures != "" ||
 		s.Tag.ReportFilters != "" || s.Tag.ReportOrderBy != "" || s.Tag.ReportLimit != "" || s.Tag.ReportOffset != "" {
@@ -144,7 +151,7 @@ func (s *RouteSource) canonicalComponent() (*spec.Component, error) {
 	}
 	if len(settings.MCPFolders) > 0 || settings.Mutation != "" || settings.SequenceStrategy != "" || settings.DefaultConnector != "" || settings.InputType != "" || settings.OutputType != "" || settings.Report != nil ||
 		settings.Cache != nil || settings.CaseFormat != "" || settings.JSONMarshalType != "" ||
-		settings.JSONUnmarshalType != "" || settings.XMLUnmarshalType != "" || settings.Format != "" || settings.DateFormat != "" || settings.Output != nil || settings.IgnoreEmptyQueryParameters != nil {
+		settings.JSONUnmarshalType != "" || settings.XMLUnmarshalType != "" || settings.Format != "" || settings.DateFormat != "" || settings.Output != nil || settings.IgnoreEmptyQueryParameters != nil || settings.WarmupTarget != nil {
 		component.Settings = settings
 	}
 	if viewName := strings.TrimSpace(s.Tag.View); viewName != "" {

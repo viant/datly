@@ -96,7 +96,7 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 			component: component,
 			packages:  map[string]bool{component.Key.Scope: true},
 			sources:   append([]Source(nil), dependencySources[component.Key.Scope]...),
-			warmup:    linkedWarmups[identity] || catalogWarmups[identity] || hasComponentWarmupConfiguration(component),
+			warmup:    linkedWarmups[identity] || catalogWarmups[identity] || hasComponentWarmupConfiguration(component) || hasDelegatedWarmupTarget(component),
 		}
 	}
 	for _, file := range selected {
@@ -124,7 +124,7 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 		}
 		current := drafts[identity]
 		if current == nil {
-			current = &draft{component: component, packages: map[string]bool{file.source.PackagePath: true}, sources: []Source{file.source}, imports: componentImports, overlay: true, warmup: hasComponentWarmupConfiguration(component)}
+			current = &draft{component: component, packages: map[string]bool{file.source.PackagePath: true}, sources: []Source{file.source}, imports: componentImports, overlay: true, warmup: hasComponentWarmupConfiguration(component) || hasDelegatedWarmupTarget(component)}
 			drafts[identity] = current
 			continue
 		}
@@ -137,7 +137,7 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 		current.component.Routes = cloneRoutes(component.Routes)
 		current.component.Static = component.Static.Clone()
 		current.component.Settings = mergeIndexSettings(current.component.Settings, component.Settings)
-		current.warmup = current.warmup || hasComponentWarmupConfiguration(current.component) || hasComponentWarmupConfiguration(component)
+		current.warmup = current.warmup || hasComponentWarmupConfiguration(current.component) || hasComponentWarmupConfiguration(component) || hasDelegatedWarmupTarget(current.component) || hasDelegatedWarmupTarget(component)
 		current.packages[file.source.PackagePath] = true
 		current.sources = append(current.sources, file.source)
 		current.imports = append(current.imports, componentImports...)
@@ -173,7 +173,7 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 		sources = append(sources, declared...)
 		sources = uniqueSources(sources)
 		sort.Slice(sources, func(i, j int) bool { return sources[i].Path < sources[j].Path })
-		entries = append(entries, &Entry{Component: current.component.Clone(), Warmup: current.warmup || hasComponentWarmupConfiguration(current.component), Sources: sources, Fingerprint: digestSources(sources)})
+		entries = append(entries, &Entry{Component: current.component.Clone(), Warmup: current.warmup || hasComponentWarmupConfiguration(current.component) || hasDelegatedWarmupTarget(current.component), Sources: sources, Fingerprint: digestSources(sources)})
 	}
 	entries = expandReportEntries(entries)
 	sortEntries(entries)
@@ -331,6 +331,10 @@ func hasComponentWarmupConfiguration(component *spec.Component) bool {
 	return hasViewWarmupBinding(component.RootView, map[*spec.View]bool{})
 }
 
+func hasDelegatedWarmupTarget(component *spec.Component) bool {
+	return component != nil && component.Settings != nil && component.Settings.WarmupTarget != nil && component.Settings.WarmupTarget.String() != ""
+}
+
 func hasViewWarmupBinding(view *spec.View, visited map[*spec.View]bool) bool {
 	if view == nil || visited[view] {
 		return false
@@ -471,6 +475,10 @@ func mergeIndexSettings(base, overlay *spec.Settings) *spec.Settings {
 	}
 	if overlay.Output != nil {
 		result.Output = overlay.Clone().Output
+	}
+	if overlay.WarmupTarget != nil {
+		target := *overlay.WarmupTarget
+		result.WarmupTarget = &target
 	}
 	if overlay.CaseFormat != "" {
 		result.CaseFormat = overlay.CaseFormat

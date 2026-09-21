@@ -123,8 +123,11 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 	preload := map[string]spec.Key{}
 	if s.config.Warmup != nil {
 		for _, entry := range entries {
-			if entry.Warmup || hasWarmupConfiguration(entry.Component) {
+			if entry.Warmup || hasWarmupConfiguration(entry.Component) || hasDelegatedWarmupTarget(entry.Component) {
 				preload[entry.Key().String()] = entry.Key()
+			}
+			if target := delegatedWarmupTarget(snapshot, entry.Component); target.Kind != "" {
+				preload[target.String()] = target
 			}
 		}
 	}
@@ -184,6 +187,22 @@ func hasWarmupConfiguration(component *spec.Component) bool {
 		return true
 	}
 	return hasViewWarmupBinding(component.RootView, map[*spec.View]bool{})
+}
+
+func hasDelegatedWarmupTarget(component *spec.Component) bool {
+	return component != nil && component.Settings != nil && component.Settings.WarmupTarget != nil && component.Settings.WarmupTarget.String() != ""
+}
+
+func delegatedWarmupTarget(snapshot *bootstrapindex.Snapshot, component *spec.Component) spec.Key {
+	if !hasDelegatedWarmupTarget(component) || snapshot == nil {
+		return spec.Key{}
+	}
+	ref := component.Settings.WarmupTarget
+	entry, _, _, ok := snapshot.Route(ref.Method, ref.Path)
+	if !ok || entry == nil {
+		return spec.Key{}
+	}
+	return entry.Key()
 }
 
 func hasViewWarmupBinding(view *spec.View, visited map[*spec.View]bool) bool {

@@ -8,6 +8,7 @@ import (
 
 	dexec "github.com/viant/datly/exec"
 	druntime "github.com/viant/datly/runtime"
+	"github.com/viant/datly/spec"
 )
 
 func writeWarmupNotFound(writer stdhttp.ResponseWriter) {
@@ -81,7 +82,8 @@ func newWarmupRoutes(rt *druntime.Runtime, c Config) (*warmupRoutes, error) {
 		if len(rt.AllowedMethodsForPath(path)) > 0 {
 			return nil, fmt.Errorf("warmup route collides with component route %s", path)
 		}
-		result.routes[target.Route.String()] = &warmupRoute{target: target, operation: operation, credentials: credentials, cors: policy, apiKeyHeader: endpoint.APIKeyHeader, apiKeyValue: endpoint.APIKeyValue}
+		requestRoute := spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}
+		result.routes[requestRoute.String()] = &warmupRoute{target: target, operation: operation, credentials: credentials, cors: policy, apiKeyHeader: endpoint.APIKeyHeader, apiKeyValue: endpoint.APIKeyValue}
 	}
 	if len(result.routes) == 0 {
 		return nil, nil
@@ -107,8 +109,9 @@ func (h *Handler) serveWarmup(writer stdhttp.ResponseWriter, req *stdhttp.Reques
 	}
 	targetPath := w.apiPrefix + strings.TrimPrefix(path, w.prefix)
 	target, ok := h.runtime.WarmupTarget(targetPath)
-	endpoint := w.routes[target.Route.String()]
-	if !ok || endpoint == nil || endpoint.target != target {
+	requestRoute, routeOK := h.runtime.WarmupRoute(targetPath)
+	endpoint := w.routes[requestRoute.String()]
+	if !ok || !routeOK || endpoint == nil || endpoint.target != target {
 		writeWarmupNotFound(writer)
 		return true
 	}

@@ -50,6 +50,7 @@ type Settings struct {
 	Output                     *OutputSettings     `json:"output,omitempty"`
 	CaseFormat                 string              `json:"caseFormat,omitempty"`
 	Const                      map[string]string   `json:"const,omitempty"`
+	WarmupTarget               *RouteRef           `json:"warmupTarget,omitempty"`
 }
 
 // OutputSettings describes presentation policy independently of the row shape.
@@ -165,5 +166,5 @@ func (s *Settings) IsZero() bool {
 		s.DefaultConnector == "" && s.SequenceStrategy == "" && s.Report == nil && s.Cache == nil &&
 		(s.Generation == nil || s.Generation.IsZero()) && s.InputType == "" && s.OutputType == "" &&
 		s.JSONMarshalType == "" && s.JSONUnmarshalType == "" && s.XMLUnmarshalType == "" &&
-		s.Format == "" && s.DateFormat == "" && s.Output == nil && s.CaseFormat == "" && len(s.Const) == 0
+		s.Format == "" && s.DateFormat == "" && s.Output == nil && s.CaseFormat == "" && len(s.Const) == 0 && s.WarmupTarget == nil
 }

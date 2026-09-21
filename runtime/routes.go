@@ -47,9 +47,43 @@ func (r *Runtime) WarmupTarget(path string) (dexec.ComponentTarget, bool) {
 	if !ok {
 		return dexec.ComponentTarget{}, false
 	}
+	if component.Settings != nil && component.Settings.WarmupTarget != nil {
+		ref := *component.Settings.WarmupTarget
+		targetComponent, _, ok := r.bundle.ComponentByRouteWithParams(ref.Method, ref.Path)
+		if !ok || targetComponent == nil {
+			return dexec.ComponentTarget{}, false
+		}
+		if r.exposure != nil && !r.exposure.Allows(targetComponent.Key.Scope) {
+			return dexec.ComponentTarget{}, false
+		}
+		targetEndpoint, ok := r.bundle.RouteByMethodPath(ref.Method, ref.Path)
+		if !ok {
+			return dexec.ComponentTarget{}, false
+		}
+		target := dexec.ComponentTarget{Component: targetComponent.Key, Route: spec.RouteRef{Method: targetEndpoint.Method, Path: targetEndpoint.Path}}
+		_, err := r.NewWarmup(target)
+		return target, err == nil
+	}
 	target := dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}}
 	_, err := r.NewWarmup(target)
 	return target, err == nil
+}
+
+// WarmupRoute resolves the public/requested GET route template that owns a
+// warmup path. The returned route can differ from WarmupTarget when a handler
+// delegates warmup execution to a private reader.
+func (r *Runtime) WarmupRoute(path string) (spec.RouteRef, bool) {
+	if r == nil || r.bundle == nil {
+		return spec.RouteRef{}, false
+	}
+	if _, ok := r.WarmupTarget(path); !ok {
+		return spec.RouteRef{}, false
+	}
+	endpoint, ok := r.bundle.RouteByMethodPath("GET", path)
+	if !ok {
+		return spec.RouteRef{}, false
+	}
+	return spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}, true
 }
 
 // WarmupRoutes returns detached GET route metadata for operational cache

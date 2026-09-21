@@ -52,6 +52,10 @@ func (s *Settings) Clone() *Settings {
 			result.Const[key] = value
 		}
 	}
+	if s.WarmupTarget != nil {
+		target := *s.WarmupTarget
+		result.WarmupTarget = &target
+	}
 	result.Report = s.Report.Clone()
 	if s.Cache != nil {
 		cache := *s.Cache
