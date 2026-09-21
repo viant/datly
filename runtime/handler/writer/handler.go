@@ -410,6 +410,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		if err = p.callEntityHook(ctx, "Validate", frame); err != nil {
 			return err
 		}
+		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+			continue
+		}
 		action := &Action{Kind: frame.Action, Entity: frame.Entity}
 		if frame.Action == xhandler.WriteDelete {
 			p.actions.Rows = append([]*Action{action}, p.actions.Rows...)
@@ -493,6 +496,22 @@ func (p *Program) frameFor(entity reflect.Value) *Frame {
 	return nil
 }
 
+func hasMutableFields(frame *Frame) bool {
+	if frame == nil || frame.Record == nil {
+		return false
+	}
+	keys := map[string]bool{}
+	for _, key := range frame.Record.Keys {
+		keys[key.Name] = true
+	}
+	for name, present := range frame.Fields {
+		if present && !keys[name] {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Program) unresolvedParentLinks(frame *Frame) bool {
 	if frame == nil || frame.Parent == nil {
 		return false
@@ -533,7 +552,64 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 			}
 		}
 	}
+	if frame.Action == xhandler.WriteInsert {
+		for _, reference := range p.satisfiedGraphReferences(frame) {
+			if !transactionStarted {
+				if options.DeferredFields == nil {
+					options.DeferredFields = fieldSet{}
+				}
+				options.DeferredFields.(fieldSet)[reference.Field] = true
+				continue
+			}
+			duplicate := false
+			for _, existing := range options.SatisfiedReferences {
+				if existing.Field == reference.Field && strings.EqualFold(existing.Schema, reference.Schema) && strings.EqualFold(existing.Table, reference.Table) && strings.EqualFold(existing.Column, reference.Column) {
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
+				options.SatisfiedReferences = append(options.SatisfiedReferences, reference)
+			}
+		}
+	}
 	return options
+}
+
+func (p *Program) satisfiedGraphReferences(frame *Frame) []xhandler.ValidationReference {
+	if p == nil || frame == nil || frame.Record == nil || !frame.Entity.IsValid() {
+		return nil
+	}
+	current := frame.Entity.Elem()
+	var result []xhandler.ValidationReference
+	for _, field := range frame.Record.Fields {
+		if field.RefTable == "" || field.RefColumn == "" {
+			continue
+		}
+		value := current.FieldByIndex(field.Index)
+		if !linkValueResolved(value) {
+			continue
+		}
+		for _, candidate := range p.frames.Rows {
+			if candidate == frame {
+				break
+			}
+			if candidate == nil || candidate.Action != xhandler.WriteInsert || candidate.Record == nil || !strings.EqualFold(candidate.Record.Table, field.RefTable) || !candidate.Entity.IsValid() {
+				continue
+			}
+			for _, parentField := range candidate.Record.Fields {
+				if !strings.EqualFold(parentField.Column, field.RefColumn) {
+					continue
+				}
+				parentValue := candidate.Entity.Elem().FieldByIndex(parentField.Index)
+				if linkValueResolved(parentValue) && linkedEqual(value, parentValue) {
+					result = append(result, xhandler.ValidationReference{Field: field.Name, Schema: field.RefDB, Table: field.RefTable, Column: field.RefColumn})
+				}
+				break
+			}
+		}
+	}
+	return result
 }
 
 func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validator, transactionStarted bool) error {
@@ -729,6 +805,19 @@ func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
 			children := entity.Elem().FieldByIndex(relation.Field)
+			// A generated cardinality-one relation is represented as a pointer;
+			// normalize it for the universal recursive frame builder.
+			if children.Kind() == reflect.Pointer {
+				if children.IsNil() {
+					continue
+				}
+				wrapped := reflect.MakeSlice(reflect.SliceOf(children.Type()), 1, 1)
+				wrapped.Index(0).Set(children)
+				children = wrapped
+			}
+			if children.Kind() != reflect.Slice {
+				return fmt.Errorf("writer relation %s is not a collection", relation.Child.Path)
+			}
 			if err := p.buildRecordFrames(relation.Child, children, frame); err != nil {
 				return err
 			}

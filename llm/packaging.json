@@ -5,6 +5,7 @@
     "datly/THIRD_PARTY_NOTICES.md",
     "datly/doc/api-documentation.md",
     "datly/doc/cache-and-warmup.md",
+    "datly/doc/legacy-to-v1-migration.md",
     "datly/doc/observability.md",
     "datly/doc/reader-predicates.md",
     "datly/doc/reports.md",

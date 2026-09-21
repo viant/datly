@@ -25,6 +25,10 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 
 ## Read what the task needs
 
+- For migrating legacy Datly handlers or direct-SQL application reads to the
+  operation-based generated contract, read
+  [legacy-to-v1-migration.md](references/product/datly/doc/legacy-to-v1-migration.md).
+
 - For YAML/JSON instance constants (`-const` / `ConstURL`), typed defaults, DB-only identifier rendering and source preservation, read [constants and substitutions](references/constants-and-substitutions.md).
 
 - For project init/build and deployment, read [project-build.md](references/project-build.md). Custom builds discover/link internally; no mandatory user init/Register/import list.

@@ -73,8 +73,10 @@ func (r *planResolver) concretizeGeneratedHelperFields() error {
 					if _, ok := reflect.StructTag(field.Tag).Lookup(sqlio.TagSqlx); ok {
 						// Helpers need only the physical column mapping. Mutation and
 						// validation options belong to the entity field, not to the
-						// projected lookup key.
-						valueSQLX = sqlio.ParseTag(reflect.StructTag(field.Tag)).Name()
+						// projected lookup key. The declaration's destination alias is
+						// authoritative because CompositeIn targets the derived query,
+						// not the underlying physical table.
+						valueSQLX = strings.TrimSpace(projected.Name)
 					}
 					break
 				}

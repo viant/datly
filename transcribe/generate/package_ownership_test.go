@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/typecatalog"
+	smodel "github.com/viant/x/syntetic/model"
 )
 
 func TestPackageOwnershipDestination(t *testing.T) {
@@ -69,6 +71,17 @@ func TestPackageOwnershipDestination(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRegisterPackageTreatsResourceOnlyManifestAsAuthored(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, scaffoldManifestName), []byte(`{"resources":{"namespace":"app","files":["query.sql"]}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	catalog := typecatalog.NewCatalog()
+	if err := (&Result{}).RegisterPackage(catalog, &smodel.Package{PkgPath: "example.com/app"}, dir); err != nil {
+		t.Fatalf("resource-only package registration failed: %v", err)
 	}
 }
 

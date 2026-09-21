@@ -1,13 +1,17 @@
 # Project builds and deployment
 
-Use `datly init` to scaffold and `datly build` to discover Go-selected component
-packages, reachable types and typed factories. Discovery/linking is internal;
-do not require application `init()`, `Register()`, blank-import lists or aggregate
-registration functions. Ordinary imports express real code dependencies.
+Use `datly init` to scaffold and `datly build` to compile Go-selected component
+packages and reachable types. The application-owned
+`internal/datlylink` package is the explicit import policy: it blank-imports
+selected component packages and has an empty `init()`. `cmd/datly` blank-imports
+only that link package. Bootstrap discovers linked types with
+`xunsafe.PackageTypes`. Generated
+component-package `init()` functions stay empty; there is no per-contract
+registration and linked Go types do not populate `x.Registry`.
 
 Operation-based `transcribe` to pure Go precedes building generated components; first
 verify the connected generation capability in [developer-mcp.md](../../../../developer-mcp.md).
-Preserve authored hooks, resource manifests, Go workspace/tags/target settings
+Preserve authored hooks, embedded resources, Go workspace/tags/target settings
 and existing module choices. New packages are found by normal traversal; runtime
 exposure is a separate policy. Never infer aliases to repair discovery errors.
 
@@ -31,11 +35,13 @@ datly build -dir . -o bin/app
 ./bin/app run -conf datly.yaml
 ```
 
-Build selects actual Go files using workspace, tags, GOOS, GOARCH and CGO. Factories
-are exported zero-argument functions returning `handler.Contract[I,O]`, a supported
+Build selects actual Go files using workspace, tags, GOOS, GOARCH and CGO. Users
+add/remove default component holders in `internal/datlylink`; build never rewrites
+that policy or persists generated linker/checksum files. Factories are exported
+zero-argument functions returning `handler.Contract[I,O]`, a supported
 mutation definition or typed handler, optionally with error. Discovery does not
-execute factories. Add/remove packages and rebuild to refresh internal linking;
-private imported types do not expose routes. Preserve the previous executable on
+execute factories. Add/remove linked packages and rebuild; private imported
+types do not expose routes. Preserve the previous executable on
 build failure and report conflicts with edited generated files.
 
 Parent real-TCP acceptance passes custom-build read/mutation endpoints and
@@ -75,7 +81,8 @@ nonzero Port; zero HTTP Port defaults to 8080, while explicit `127.0.0.1:0`
 requests allocation. Explicit MCP Port zero also requests allocation. Do not
 assume every zero timeout/pool setting has the same semantics.
 
-Resources use canonical namespaces and immutable generation publication. Failed
-reload retains the previous generation; missing files fail staging. Shutdown
+Generated holders expose package resources through `EmbedFS() *embed.FS` and
+`EmbedNamespace() string`; bootstrap loads them under canonical namespaces.
+Failed reload retains the previous generation; missing files fail staging. Shutdown
 stops admission and drains accepted work and externally owned services. A deadline
 return does not justify closing services still in use.

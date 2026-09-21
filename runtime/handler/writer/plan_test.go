@@ -6,10 +6,50 @@ import (
 	"testing"
 
 	"github.com/viant/datly/spec"
+	xhandler "github.com/viant/xdatly/handler"
 )
 
 type unitHas struct {
 	ID, Start, End, Name, Remove bool
+}
+
+func TestUniversalWriterRecognizesEarlierGraphInsertReference(t *testing.T) {
+	type parent struct {
+		ID *int `sqlx:"id,primaryKey=true"`
+	}
+	type child struct {
+		ID       *int `sqlx:"id,primaryKey=true"`
+		ParentID *int `sqlx:"parent_id,refTable=parents,refColumn=id"`
+	}
+	id, childID := 7, 9
+	parentRecord := &Record{Table: "parents", EntityType: reflect.TypeFor[parent](), Fields: []Field{{Name: "ID", Column: "id", Index: []int{0}}}}
+	childRecord := &Record{Table: "children", EntityType: reflect.TypeFor[child](), Fields: []Field{{Name: "ID", Column: "id", Index: []int{0}}, {Name: "ParentID", Column: "parent_id", Index: []int{1}, RefTable: "parents", RefColumn: "id"}}}
+	parentFrame := &Frame{Entity: reflect.ValueOf(&parent{ID: &id}), Record: parentRecord, Action: xhandler.WriteInsert}
+	childFrame := &Frame{Entity: reflect.ValueOf(&child{ID: &childID, ParentID: &id}), Record: childRecord, Action: xhandler.WriteInsert}
+	program := &Program{frames: &MutationFrames{Rows: []*Frame{parentFrame, childFrame}}}
+	options := program.validationOptions(childFrame, true)
+	if len(options.SatisfiedReferences) != 1 || options.SatisfiedReferences[0].Field != "ParentID" {
+		t.Fatalf("satisfied references=%+v", options.SatisfiedReferences)
+	}
+	program.frames.Rows = []*Frame{childFrame, parentFrame}
+	if options = program.validationOptions(childFrame, true); len(options.SatisfiedReferences) != 0 {
+		t.Fatalf("later insert satisfied reference=%+v", options.SatisfiedReferences)
+	}
+}
+
+func TestUniversalWriterTreatsIdentityOnlySparseUpdateAsNoOp(t *testing.T) {
+	id := 7
+	record := &Record{Keys: []Field{{Name: "ID"}}}
+	if hasMutableFields(&Frame{Record: record, Fields: fieldSet{"ID": true}}) {
+		t.Fatal("identity-only sparse update was treated as mutable")
+	}
+	name := "updated"
+	if !hasMutableFields(&Frame{Record: record, Fields: fieldSet{"ID": true, "Name": true}, Entity: reflect.ValueOf(&struct {
+		ID   *int
+		Name *string
+	}{ID: &id, Name: &name})}) {
+		t.Fatal("supplied non-key field was not treated as mutable")
+	}
 }
 
 type unitRow struct {
@@ -28,6 +68,25 @@ type unitInput struct {
 
 type unitOutput struct {
 	Data []*unitRow `parameter:"Data,kind=output,in=body"`
+}
+
+type toOneHas struct{ ID, Child bool }
+type toOneChildHas struct{ ID, ParentID bool }
+type toOneParent struct {
+	ID    *int        `sqlx:"ID,primaryKey=true"`
+	Child *toOneChild `view:"Child,table=children" on:"ID=PARENT_ID"`
+	Has   *toOneHas   `setMarker:"true" sqlx:"-" json:"-"`
+}
+type toOneChild struct {
+	ID       *int           `sqlx:"ID,primaryKey=true"`
+	ParentID *int           `sqlx:"PARENT_ID"`
+	Has      *toOneChildHas `setMarker:"true" sqlx:"-" json:"-"`
+}
+type toOneInput struct {
+	Rows []*toOneParent `parameter:"Rows,kind=body,in=data" view:"Rows,table=parents"`
+}
+type toOneOutput struct {
+	Data []*toOneParent `parameter:"Data,kind=output,in=body"`
 }
 
 func unitComponent() *spec.Component {
@@ -71,5 +130,34 @@ func TestUniversalWriterCompilesPlanOnceAndBackfillsInvariant(t *testing.T) {
 	original := program.original.Presence[reflect.ValueOf(row).Pointer()]
 	if !original.Available() || !original.Has("Start") || original.Has("End") {
 		t.Fatalf("original presence = %+v", original)
+	}
+}
+
+func TestUniversalWriterBuildsToOneRelationFrames(t *testing.T) {
+	component := &spec.Component{
+		Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[toOneParent]().PkgPath(), Name: "Rows"}, Name: "Rows",
+		Settings: &spec.Settings{Mutation: "post"},
+		RootView: &spec.View{Name: "Rows", Source: &spec.ViewSource{Table: "parents"}, Columns: []*spec.Column{{Name: "ID", Source: "ID", PrimaryKey: true}}, Relations: []*spec.Relation{{
+			Name: "Child", Holder: "Child", Cardinality: spec.CardinalityOne,
+			View: &spec.View{Name: "Child", Source: &spec.ViewSource{Table: "children"}, Columns: []*spec.Column{{Name: "ID", Source: "ID", PrimaryKey: true}, {Name: "PARENT_ID", Source: "PARENT_ID"}}},
+			On:   []*spec.RelationLink{{ParentColumn: "ID", ChildColumn: "PARENT_ID"}},
+		}}},
+	}
+	handler, err := New(component, reflect.TypeFor[toOneInput](), reflect.TypeFor[toOneOutput](), "post")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parentID, childID := 1, 2
+	input := &toOneInput{Rows: []*toOneParent{{ID: &parentID, Child: &toOneChild{ID: &childID}, Has: &toOneHas{ID: true, Child: true}}}}
+	snapshot, err := handler.CaptureInput(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	program := snapshot.(*Program)
+	if err = program.buildRecordFrames(program.metadata.Root, reflect.ValueOf(input.Rows), nil); err != nil {
+		t.Fatalf("build to-one frames: %v", err)
+	}
+	if len(program.frames.Rows) != 2 || program.frames.Rows[1].Parent != program.frames.Rows[0] {
+		t.Fatalf("to-one frames = %+v", program.frames.Rows)
 	}
 }

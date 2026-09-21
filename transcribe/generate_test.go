@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -286,8 +287,8 @@ SELECT event_id, name, score, created_at FROM events`,
 	if err != nil {
 		t.Fatalf("read generated view: %v", err)
 	}
-	if !strings.Contains(string(content), "EventId *int") || !strings.Contains(string(content), "Name *string") ||
-		!strings.Contains(string(content), `time "time"`) || !strings.Contains(string(content), "CreatedAt *time.Time") {
+	if !regexp.MustCompile(`EventId\s+\*int`).Match(content) || !regexp.MustCompile(`Name\s+\*string`).Match(content) ||
+		!strings.Contains(string(content), `time "time"`) || !regexp.MustCompile(`CreatedAt\s+\*time\.Time`).Match(content) {
 		t.Fatalf("generated view source:\n%s", content)
 	}
 	command := exec.Command("go", "test", "./...")

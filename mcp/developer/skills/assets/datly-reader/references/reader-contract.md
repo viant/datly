@@ -206,9 +206,9 @@ This yields `/things/{id}` and `ThingsById`. Go `mcpEnabled` and `pathMcpEnabled
 
 Select application packages by canonical module path. Private imported types may be needed without publishing their packages' routes. Dependency loading is not endpoint exposure.
 
-Keep SQL resources with their component and declared namespace. Generated packages provide `DatlyResourceNamespace` and `DatlyResources embed.FS`; use the shared resource registration path. Do not depend on mutable working-directory files leaking across a live update.
+Keep SQL resources with their component and declared namespace. Generated holders expose `EmbedFS() *embed.FS` and `EmbedNamespace() string`; package bootstrap finds those holders through runtime typelinks from blank-imported packages. Do not add a resource registry or depend on mutable working-directory files leaking across a live update.
 
-Compiled Go factories require linked registration; finding a source name does not make it executable. Reuse named types/factories, preserve handwritten hooks, and protect manual edits during regeneration.
+Compiled Go factories require linked package authority; finding a source name does not make it executable. The generated holder exposes the typed factory, while `internal/datlylink` selects the package. Reuse named types/factories, preserve handwritten hooks, and protect manual edits during regeneration.
 
 A live DQL update publishes a complete validated generation. New requests see the new generation; in-flight requests and nested calls retain a consistent old one. Failed/stale updates leave old routes/types active. Explicit reload is not an automatic database watcher.
 

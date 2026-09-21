@@ -83,7 +83,7 @@ func TestGenExecutableNamedGraphRegeneration(t *testing.T) {
 				t.Helper()
 				output, err := exec.CommandContext(ctx, binary, args...).CombinedOutput()
 				if failure {
-					if err == nil || !strings.Contains(string(output), "customized type or tag") {
+					if err == nil || (!strings.Contains(string(output), "customized type or tag") && !strings.Contains(string(output), "explicit migration required")) {
 						t.Fatalf("expected source conflict: %v\n%s", err, output)
 					}
 				} else if err != nil || !strings.Contains(string(output), "Generated go patch") {
@@ -173,12 +173,8 @@ func TestAuthoredLifecycle(t *testing.T) {
 						}
 					}
 					invariantPath := filepath.Join(root, "api/orders/invariants.go")
-					if step.group != "" {
-						if !strings.Contains(read(invariantPath), "Backfill"+step.group+"IfNeeded") {
-							t.Fatal("invariant implementation did not follow DQL")
-						}
-					} else if _, err := os.Stat(invariantPath); !os.IsNotExist(err) {
-						t.Fatal("removed invariant phase retained", err)
+					if _, err := os.Stat(invariantPath); !os.IsNotExist(err) {
+						t.Fatal("universal writer emitted component-private invariant phases", err)
 					}
 					if read(hookPath) != hooks {
 						t.Fatal("authored lifecycle changed")

@@ -207,6 +207,19 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if err != nil {
 		return finish(nil, err)
 	}
+	if transaction, ok := request.Handler.(rhandler.PreBindingTransaction); ok && transaction.RequiresPreBindingTransaction() && data != nil {
+		resolved, resolveErr := data.resolve(ctx)
+		if resolveErr != nil {
+			return finish(nil, fmt.Errorf("resolve pre-binding transaction: %w", resolveErr))
+		}
+		starter, ok := resolved.(xhandler.TransactionStarter)
+		if !ok {
+			return finish(nil, fmt.Errorf("pre-binding transaction starter is unavailable"))
+		}
+		if err := starter.Start(ctx); err != nil {
+			return finish(nil, fmt.Errorf("start pre-binding transaction: %w", err))
+		}
+	}
 	if !bound {
 		options := []bindly.BindOption{bindly.WithPlan(inputPlan), bindly.WithSource(input)}
 		if request.Replay != nil {
