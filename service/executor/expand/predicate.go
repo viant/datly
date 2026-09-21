@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/logger"
 )
 
@@ -199,7 +200,11 @@ func (p *Predicate) renderGroup(group int, operator string) (*PredicateGroupSQL,
 
 		value := predicateConfig.Selector.Value(p.state.Pointer())
 
-		criteria, err := predicateConfig.Expander.Compute(ctx, value)
+		predicateCtx := ctx
+		if p.ctx != nil && p.ctx.Session != nil {
+			predicateCtx = context.WithValue(predicateCtx, handler.Key, handler.Session(p.ctx.Session))
+		}
+		criteria, err := predicateConfig.Expander.Compute(predicateCtx, value)
 		if err != nil {
 			return nil, nil, err
 		}

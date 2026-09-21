@@ -82,7 +82,7 @@ func TestGenerateOutputCode_PreservesRootCacheMetadata(t *testing.T) {
 	component := newEmbedFSTestComponent(t)
 	code := component.GenerateOutputCode(context.Background(), true, true, map[string]string{})
 
-	assert.Contains(t, code, `view:"active_advertiser,cache=aerospike"`)
+	assert.Contains(t, code, `view:"active_advertiser,connector=ci_ads,cache=aerospike"`)
 	assert.Contains(t, code, `view.WithConnectorRef("ci_ads")`)
 	assert.Contains(t, code, "repository.ApplyGeneratedCache(aComponent.View,")
 }

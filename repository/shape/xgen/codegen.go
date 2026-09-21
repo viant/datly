@@ -1917,23 +1917,27 @@ func (g *ComponentCodegen) relationFieldTag(parent *view.View, rel *view.Relatio
 		}
 		tag.View.CustomTag = relTag
 	}
-	if parent != nil && parent.Cache != nil {
+	if child.Connector != nil {
 		if tag.View == nil {
 			tag.View = &viewtags.View{}
 		}
-		tag.View.Cache = parent.Cache.Ref
-	}
-	if parent != nil && parent.Connector != nil && child.Connector != nil && child.Connector.Ref != parent.Connector.Ref {
-		if tag.View == nil {
-			tag.View = &viewtags.View{}
-		}
-		tag.View.Connector = child.Connector.Ref
+		tag.View.Connector = generatedConnectorName(child.Connector)
 	}
 	tag.LinkOn = g.relationLinkTag(parent, child, rel)
 	if child.Template != nil {
 		tag.SQL = viewtags.NewViewSQL("", strings.TrimSpace(child.Template.SourceURL))
 	}
 	return string(tag.UpdateTag(``))
+}
+
+func generatedConnectorName(connector *view.Connector) string {
+	if connector == nil {
+		return ""
+	}
+	if connector.Ref != "" {
+		return connector.Ref
+	}
+	return connector.Name
 }
 
 func (g *ComponentCodegen) normalizeColumnType(column *view.Column, rType reflect.Type) reflect.Type {

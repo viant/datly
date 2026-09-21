@@ -40,7 +40,7 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 		aTag.View = &tags.View{Name: c.View.Name}
 		if c.View != nil {
 			if c.View.Connector != nil {
-				aTag.View.Connector = c.View.Connector.Ref
+				aTag.View.Connector = generatedViewConnectorName(c.View.Connector)
 			}
 			if c.View.Cache != nil {
 				aTag.View.Cache = c.View.Cache.Ref
@@ -215,6 +215,16 @@ func (i *%vInput) EmbedFS() *embed.FS {
 	return result
 }
 
+func generatedViewConnectorName(connector *view.Connector) string {
+	if connector == nil {
+		return ""
+	}
+	if connector.Ref != "" {
+		return connector.Ref
+	}
+	return connector.Name
+}
+
 // ApplyGeneratedCache restores cache settings that cannot be represented by
 // the legacy view tag, notably plural cache warmups.
 func ApplyGeneratedCache(aView *view.View, encoded string) error {
@@ -328,7 +338,13 @@ func (c *Component) generatorImports(modulePath string, component bool) []string
 
 func (c *Component) adjustStructField(embedURI string, embeds map[string]string, generateContract bool) func(aField *reflect.StructField, tag *string, typeName *string, doc *string) {
 	return func(aField *reflect.StructField, tag, typeName, doc *string) {
-		fieldTag := *tag
+		fieldTag := mergeDuplicateViewTags(*tag)
+		if !strings.Contains(fieldTag, "parameter:") {
+			if parsed, _ := tags.ParseViewTags(reflect.StructTag(fieldTag), nil); parsed != nil && parsed.View != nil && parsed.View.Cache != "" {
+				parsed.View.Cache = ""
+				fieldTag = string(parsed.UpdateTag(reflect.StructTag(fieldTag)))
+			}
+		}
 		if !generateContract {
 			fieldTag, _ = xreflect.RemoveTag(fieldTag, "on")
 		} else if !strings.Contains(fieldTag, "parameter:") {
@@ -361,6 +377,36 @@ func (c *Component) adjustStructField(embedURI string, embeds map[string]string,
 		//}
 		*tag = fieldTag
 	}
+}
+
+func mergeDuplicateViewTags(raw string) string {
+	const prefix = `view:"`
+	first := strings.Index(raw, prefix)
+	if first == -1 {
+		return raw
+	}
+	firstValue := first + len(prefix)
+	firstEnd := strings.Index(raw[firstValue:], `"`)
+	if firstEnd == -1 {
+		return raw
+	}
+	firstEnd += firstValue
+	secondRelative := strings.Index(raw[firstEnd+1:], prefix)
+	if secondRelative == -1 {
+		return raw
+	}
+	second := firstEnd + 1 + secondRelative
+	secondValue := second + len(prefix)
+	secondEnd := strings.Index(raw[secondValue:], `"`)
+	if secondEnd == -1 {
+		return raw
+	}
+	secondEnd += secondValue
+	left, right := raw[firstValue:firstEnd], raw[secondValue:secondEnd]
+	if right != "" && !strings.HasPrefix(right, ",") {
+		right = "," + right
+	}
+	return strings.TrimSpace(raw[:firstValue] + left + right + raw[firstEnd:second] + raw[secondEnd+1:])
 }
 
 func extractViewName(aField *reflect.StructField) string {
