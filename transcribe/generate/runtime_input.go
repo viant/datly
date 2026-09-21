@@ -172,7 +172,7 @@ func runtimeFields(source []Field) []xshape.RuntimeField {
 			continue
 		}
 		result = append(result, xshape.RuntimeField{
-			Name: field.Name, TypeExpr: field.Type, Tag: reflect.StructTag(field.Tag),
+			Name: field.Name, TypeExpr: field.Type, Tag: reflect.StructTag(field.Tag), Anonymous: field.Anonymous,
 		})
 	}
 	return result

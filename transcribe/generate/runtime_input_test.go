@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
+	"github.com/viant/xdatly/response"
 )
 
 type runtimeInputCustomer struct {
@@ -63,6 +65,34 @@ func TestGeneratorRuntimeOutputTypeUsesGeneratedViewFields(t *testing.T) {
 	row := field.Type.Elem().Elem()
 	if row.NumField() != 2 || row.Field(0).Name != "Id" || row.Field(1).Name != "Name" {
 		t.Fatalf("generated output row = %v", row)
+	}
+}
+
+func TestGeneratorRuntimeOutputTypeEmbedsAnonymousStatus(t *testing.T) {
+	component := &spec.Component{
+		Name:        "StatusOut",
+		TypeContext: &spec.TypeContext{Imports: []spec.ImportSpec{{Alias: "response", Package: "github.com/viant/xdatly/response"}}},
+		Parameters: []*spec.Parameter{{
+			Name: "Status", TypeExpr: "response.Status", Tag: `anonymous:"true"`,
+			Source: spec.BindSource{Kind: "output", Name: "status"},
+		}},
+	}
+	outputType, err := New(Input{Component: component}).RuntimeOutputType()
+	if err != nil {
+		t.Fatalf("RuntimeOutputType() error = %v", err)
+	}
+	field, ok := outputType.FieldByName("Status")
+	if !ok || !field.Anonymous || field.Type != reflect.TypeFor[response.Status]() {
+		t.Fatalf("Status field = %+v", field)
+	}
+	value := reflect.New(outputType).Elem()
+	value.FieldByIndex(field.Index).Set(reflect.ValueOf(response.Status{Status: "ok"}))
+	data, err := json.Marshal(value.Interface())
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if string(data) != `{"status":"ok"}` {
+		t.Fatalf("json=%s", data)
 	}
 }
 

@@ -147,8 +147,10 @@ func viewFileContent(packageName string, plan *Plan, views []ViewPlan, includeSu
 func appendFields(b *strings.Builder, fields []Field) {
 	for _, field := range fields {
 		b.WriteString("\t")
-		b.WriteString(field.Name)
-		b.WriteString(" ")
+		if !field.Anonymous {
+			b.WriteString(field.Name)
+			b.WriteString(" ")
+		}
 		b.WriteString(field.Type)
 		if field.Tag != "" {
 			if strings.ContainsRune(field.Tag, '`') {

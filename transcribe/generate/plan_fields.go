@@ -198,16 +198,28 @@ func resolveField(param *spec.Parameter, declarations Declarations) (Field, bool
 	if tagName == "" {
 		tagName = strings.TrimSpace(param.Source.Name)
 	}
+	anonymous := statusOutput(param) && anonymousTagEnabled(param.Tag) && embeddableFieldType(typ)
+	if anonymous {
+		tagName = ""
+	}
 	metadata, err := canonicalFieldMetadata(param)
 	if err != nil {
 		return Field{}, false, fmt.Errorf("parameter %s metadata: %w", param.Name, err)
 	}
 	return Field{
-		Name:   name,
-		Type:   typ,
-		Tag:    fieldTag(param, tagName, metadata),
-		Source: strings.TrimSpace(param.Source.Kind),
+		Name:      name,
+		Type:      typ,
+		Tag:       fieldTag(param, tagName, metadata),
+		Source:    strings.TrimSpace(param.Source.Kind),
+		Anonymous: anonymous,
 	}, true, nil
+}
+
+func statusOutput(param *spec.Parameter) bool {
+	if param == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output") && strings.EqualFold(strings.TrimSpace(param.Source.Name), "status")
 }
 
 type structTagValue struct {

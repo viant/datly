@@ -1358,6 +1358,67 @@ SELECT 1`
 	assertly.AssertValues(t, `parameter:"Data,kind=output,in=view,cardinality=One" anonymous:"true" view:"ViewOut" sql:"SELECT 1"`, plan.Output.Fields[0].Tag)
 }
 
+func TestEmitScaffold_EmbedsAnonymousStatusOutputField(t *testing.T) {
+	source := `#import('response','github.com/viant/xdatly/response')
+#setting($_ = $route('/v1/api/example/status', 'GET'))
+#define($_ = $Status<response.Status>(output/status).Tag('anonymous:"true"'))
+SELECT 1`
+
+	component, err := parseTestComponentSource("example.com/demo/status", "StatusOut", source)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	plan := testPlan(t, component)
+	dir := t.TempDir()
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatalf("unexpected emit error: %v", err)
+	}
+	outputFile := filepath.Join(dir, plan.Output.Destination)
+	file, err := parser.ParseFile(token.NewFileSet(), outputFile, nil, 0)
+	if err != nil {
+		t.Fatalf("parse generated output: %v", err)
+	}
+	var field *ast.Field
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok || typeSpec.Name.Name != plan.Output.Type {
+				continue
+			}
+			structType, ok := typeSpec.Type.(*ast.StructType)
+			if !ok {
+				t.Fatalf("output type = %#v", typeSpec.Type)
+			}
+			for _, candidate := range structType.Fields.List {
+				if len(candidate.Names) == 0 {
+					field = candidate
+					break
+				}
+			}
+		}
+	}
+	if field == nil {
+		t.Fatal("generated output field was not found")
+	}
+	if len(field.Names) != 0 {
+		t.Fatalf("expected embedded status field, got names=%v", field.Names)
+	}
+	if field.Tag == nil {
+		t.Fatal("expected embedded status field tag")
+	}
+	tag, err := strconv.Unquote(field.Tag.Value)
+	if err != nil {
+		t.Fatalf("unquote status tag: %v", err)
+	}
+	if !strings.Contains(tag, `parameter:",kind=output,in=status`) {
+		t.Fatalf("unexpected status tag: %#v", field.Tag)
+	}
+}
+
 func TestResolvePlan_RootViewCardinalityControlsImplicitOutput(t *testing.T) {
 	component := &spec.Component{
 		Name:     "SingleView",
