@@ -93,7 +93,9 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 	if err != nil {
 		return nil, nil, err
 	}
-	params := []*spec.Parameter{bodyParam("Cubes", inputType), bodyParam("SQL", inputType)}
+	cubesParam := bodyParam("Cubes", inputType)
+	cubesParam.WireSchemas = filterWireSchemas("Cubes.Filters", metadata.filters)
+	params := []*spec.Parameter{cubesParam, bodyParam("SQL", inputType)}
 	required := true
 	for _, param := range params {
 		param.Required = &required

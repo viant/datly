@@ -47,6 +47,27 @@ func bodyParam(name string, inputType reflect.Type) *spec.Parameter {
 	return &spec.Parameter{Name: name, Source: spec.BindSource{Kind: "body", Name: jsonName(field)}}
 }
 
+func filterWireSchemas(prefix string, filters []filterField) map[string]*spec.WireSchema {
+	var result map[string]*spec.WireSchema
+	for _, item := range filters {
+		schema := item.contract.WireSchema()
+		if schema == nil {
+			continue
+		}
+		schema = schema.Clone()
+		schema.Nullable = true
+		key := item.fieldName
+		if prefix != "" {
+			key = prefix + "." + key
+		}
+		if result == nil {
+			result = map[string]*spec.WireSchema{}
+		}
+		result[key] = schema
+	}
+	return result
+}
+
 func jsonName(field reflect.StructField) string {
 	name := strings.Split(field.Tag.Get("json"), ",")[0]
 	if name == "" || name == "-" {

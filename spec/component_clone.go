@@ -168,6 +168,13 @@ func (p *Parameter) Clone() *Parameter {
 		selector := *p.QuerySelector
 		result.QuerySelector = &selector
 	}
+	result.WireSchema = p.WireSchema.Clone()
+	if len(p.WireSchemas) != 0 {
+		result.WireSchemas = make(map[string]*WireSchema, len(p.WireSchemas))
+		for key, schema := range p.WireSchemas {
+			result.WireSchemas[key] = schema.Clone()
+		}
+	}
 	result.Predicates = make([]*Predicate, len(p.Predicates))
 	for i, predicate := range p.Predicates {
 		if predicate != nil {

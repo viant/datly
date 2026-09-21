@@ -126,7 +126,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if argument.required {
 			sourceType = (xshape.Runtime{}).Indirect(sourceType)
 		}
-		property, err := (&schemaProjector{docs: owner}).argument(sourceType, argument.path, argument.publicName)
+		property, err := (&schemaProjector{docs: owner, schemas: argument.wireSchemas}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
 		}
@@ -229,7 +229,8 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 	argument := Argument{
 		publicName: publicName, aliases: aliases, path: inputField.Path(),
 		sourceKind: strings.ToLower(strings.TrimSpace(binding.Location.Kind)), sourceName: binding.Location.In,
-		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(), required: required,
+		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
+		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), required: required,
 	}
 	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
 		argument.description = strings.TrimSpace(param.Description)

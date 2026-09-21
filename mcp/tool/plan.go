@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/exec"
 	mcpinput "github.com/viant/datly/mcp/input"
 	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
 )
 
@@ -24,6 +25,8 @@ type Argument struct {
 	sourceName      string
 	sourceType      reflect.Type
 	destinationType reflect.Type
+	wireSchema      *spec.WireSchema
+	wireSchemas     map[string]*spec.WireSchema
 	required        bool
 	description     string
 	example         string
@@ -36,9 +39,13 @@ func (a Argument) SourceKind() string            { return a.sourceKind }
 func (a Argument) SourceName() string            { return a.sourceName }
 func (a Argument) SourceType() reflect.Type      { return a.sourceType }
 func (a Argument) DestinationType() reflect.Type { return a.destinationType }
-func (a Argument) Required() bool                { return a.required }
-func (a Argument) Description() string           { return a.description }
-func (a Argument) Example() string               { return a.example }
+func (a Argument) WireSchema() *spec.WireSchema  { return a.wireSchema.Clone() }
+func (a Argument) WireSchemas() map[string]*spec.WireSchema {
+	return cloneWireSchemas(a.wireSchemas)
+}
+func (a Argument) Required() bool      { return a.required }
+func (a Argument) Description() string { return a.description }
+func (a Argument) Example() string     { return a.example }
 
 // Plan is one immutable exact-route MCP tool plan.
 type Plan struct {
@@ -99,7 +106,20 @@ func (p *Plan) Scope(arguments map[string]interface{}) (*requestprovider.Scope, 
 
 func cloneArgument(argument Argument) Argument {
 	argument.aliases = append([]string(nil), argument.aliases...)
+	argument.wireSchema = argument.wireSchema.Clone()
+	argument.wireSchemas = cloneWireSchemas(argument.wireSchemas)
 	return argument
+}
+
+func cloneWireSchemas(source map[string]*spec.WireSchema) map[string]*spec.WireSchema {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make(map[string]*spec.WireSchema, len(source))
+	for key, schema := range source {
+		result[key] = schema.Clone()
+	}
+	return result
 }
 
 func cloneTool(source schema.Tool) schema.Tool {

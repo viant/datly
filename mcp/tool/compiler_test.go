@@ -10,6 +10,7 @@ import (
 
 	"github.com/viant/bindly"
 	bindstate "github.com/viant/bindly/state"
+	handlercompiler "github.com/viant/datly/runtime/handler/compiler"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 )
@@ -151,6 +152,66 @@ func TestCompilerUsesMCPNamesAliasesAndExclusionsWithoutChangingBindingSources(t
 		if _, err := plan.Scope(args); err == nil {
 			t.Fatalf("expected rejected MCP arguments: %+v", args)
 		}
+	}
+}
+
+func TestCompilerDiscoversFormattedDateWireSchemaWithoutChangingBindingSource(t *testing.T) {
+	type input struct {
+		From *time.Time `parameter:",kind=query,in=from" format:"dateFormat=YYYY-MM-DD"`
+	}
+	compiled, err := handlercompiler.New(handlercompiler.Input{
+		Component: &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: "/dates"}}},
+		InputType: reflect.TypeOf(input{}),
+	}).Compile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract, ok := compiled.Input.ForRoute(spec.RouteRef{Method: "GET", Path: "/dates"})
+	if !ok {
+		t.Fatal("missing route contract")
+	}
+	plan, err := NewCompiler().Compile(Input{
+		Component: spec.Key{Kind: spec.KindComponent, Name: "Dates"},
+		Exposure:  &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "dates"}, Contract: contract,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	field := contract.Fields()[0]
+	if field.SourceType() != reflect.TypeFor[any]() {
+		t.Fatalf("runtime source type = %v, want any", field.SourceType())
+	}
+	property := plan.Metadata().InputSchema.Properties["From"]
+	if property["type"] != "string" || property["format"] != "date" {
+		t.Fatalf("date schema = %+v", property)
+	}
+}
+
+func TestCompilerAppliesNestedWireSchemaOverridesForBodyArguments(t *testing.T) {
+	type filters struct {
+		From any `json:"from,omitempty"`
+	}
+	type input struct {
+		Filters filters `json:"filters,omitempty"`
+	}
+	contract := testRouteContract(t, reflect.TypeOf(input{}), []bindly.BindingSpec{{
+		Path: "Filters", Location: bindstate.Location{Kind: "body", In: "filters"}, SourceType: reflect.TypeOf(filters{}),
+		Extension: &spec.Parameter{Name: "Filters", WireSchemas: map[string]*spec.WireSchema{
+			"Filters.From": {Type: "string", Format: "date", Nullable: true},
+		}},
+	}})
+	plan, err := NewCompiler().Compile(Input{
+		Component: spec.Key{Kind: spec.KindComponent, Name: "Cube"},
+		Exposure:  &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "cube"}, Contract: contract,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtersSchema := plan.Metadata().InputSchema.Properties["filters"]
+	properties := filtersSchema["properties"].(map[string]interface{})
+	from := properties["from"].(map[string]interface{})
+	if !reflect.DeepEqual(from["type"], []string{"string", "null"}) || from["format"] != "date" {
+		t.Fatalf("nested date schema = %+v", from)
 	}
 }
 
