@@ -162,7 +162,7 @@ func (h *composeHandler) providers(frame reflect.Value, fields []string) ([]loca
 			values = map[string]typedValue{}
 			byKind[binding.Location.Kind] = values
 		}
-		values[binding.Location.In] = typedValue{typeOf: field.SourceType()}
+		values[binding.Location.In] = typedValue{typeOf: field.SourceType(), owns: true}
 	}
 	filters := frame.FieldByName("Filters")
 	for _, filter := range h.metadata.filters {
@@ -175,18 +175,15 @@ func (h *composeHandler) providers(frame reflect.Value, fields []string) ([]loca
 		if err != nil {
 			return nil, err
 		}
-		var supplied any
-		if present {
-			supplied = value.Interface()
-		}
-		// Found nil is an explicit absence at this higher provider layer. It
-		// prevents ambient wrapper query values from supplying omitted filters.
 		values := byKind[binding.Location.Kind]
 		if values == nil {
 			values = map[string]typedValue{}
 			byKind[binding.Location.Kind] = values
 		}
-		values[binding.Location.In] = typedValue{typeOf: filter.contract.SourceType(), value: supplied}
+		values[binding.Location.In] = typedValue{typeOf: filter.contract.SourceType(), owns: true}
+		if present {
+			values[binding.Location.In] = typedValue{typeOf: filter.contract.SourceType(), value: value.Interface(), owns: true, found: true}
+		}
 	}
 	kinds := make([]string, 0, len(byKind))
 	for kind := range byKind {
@@ -194,17 +191,7 @@ func (h *composeHandler) providers(frame reflect.Value, fields []string) ([]loca
 	}
 	sort.Strings(kinds)
 	for _, kind := range kinds {
-		values := byKind[kind]
-		result = append(result, handlerprovider.Named(kind, func(_ context.Context, target reflect.Type, name string) (any, bool, error) {
-			value, ok := values[name]
-			if !ok {
-				return nil, false, nil
-			}
-			if target != value.typeOf {
-				return nil, false, fmt.Errorf("compose filter %s type mismatch", name)
-			}
-			return value.value, true, nil
-		}))
+		result = append(result, newTypedValueProvider(kind, byKind[kind]))
 	}
 	return result, nil
 }

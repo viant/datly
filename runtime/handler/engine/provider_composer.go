@@ -132,6 +132,7 @@ func protectedRuntimeKind(kind string) bool {
 		string(xhandler.InputSnapshotKey),
 		string(xhandler.ReadMetadataKey),
 		string(xhandler.TransactionStarterKey),
+		string(rhandler.TransactionSQLCapabilityKey),
 		string(xhandler.FrameworkValidatorKey),
 		string(rhandler.ConnectorCapabilityKey), string(rhandler.DifferCapabilityKey),
 		string(rhandler.ValidatorCapabilityKey), string(rhandler.LoggerCapabilityKey), string(rhandler.MessageBusCapabilityKey):

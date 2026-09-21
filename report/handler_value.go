@@ -1,13 +1,73 @@
 package report
 
 import (
+	"context"
 	"fmt"
 	"reflect"
+
+	"github.com/viant/bindly/locator"
+	"github.com/viant/structology"
 )
 
 type typedValue struct {
 	typeOf reflect.Type
 	value  any
+	owns   bool
+	found  bool
+}
+
+type typedValueProvider struct {
+	kind   string
+	values map[string]typedValue
+}
+
+type typedValueLocator struct {
+	provider *typedValueProvider
+}
+
+func newTypedValueProvider(kind string, values map[string]typedValue) locator.Provider {
+	return &typedValueProvider{kind: kind, values: values}
+}
+
+func (p *typedValueProvider) Kind() string  { return p.kind }
+func (p *typedValueProvider) Priority() int { return 0 }
+func (p *typedValueProvider) DefaultCacheable() bool {
+	return true
+}
+func (p *typedValueProvider) Locate(*structology.State) locator.Locator {
+	return &typedValueLocator{provider: p}
+}
+
+func (l *typedValueLocator) Kind() string {
+	if l == nil || l.provider == nil {
+		return ""
+	}
+	return l.provider.kind
+}
+
+func (l *typedValueLocator) Value(_ context.Context, targetType reflect.Type, name string) (any, bool, error) {
+	if l == nil || l.provider == nil {
+		return nil, false, nil
+	}
+	value, ok := l.provider.values[name]
+	if !ok {
+		return nil, false, nil
+	}
+	if targetType != value.typeOf {
+		return nil, false, fmt.Errorf("report %s/%s requires source type %s, got %s", l.provider.kind, name, value.typeOf, targetType)
+	}
+	if !value.found {
+		return nil, false, nil
+	}
+	return value.value, true, nil
+}
+
+func (l *typedValueLocator) Owns(name string) bool {
+	if l == nil || l.provider == nil {
+		return false
+	}
+	value, ok := l.provider.values[name]
+	return ok && value.owns
 }
 
 func reportInput(input any, expected reflect.Type) (reflect.Value, error) {

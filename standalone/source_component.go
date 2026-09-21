@@ -142,6 +142,7 @@ func (c *sourceComponent) Configure(ctx context.Context, artifact *report.Compon
 			return result, err
 		}
 		result.DataSource = dml.Source{DB: db}
+		result.Invocation.Connector = c.source.connections.SQL
 	}
 	return result, nil
 }
