@@ -3,12 +3,15 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/viant/xdatly/handler/exec"
 )
 
@@ -53,7 +56,7 @@ func TestSafeMarshal_Panic(t *testing.T) {
 func TestSafeMarshal_ExecContext(t *testing.T) {
 	execCtx := exec.NewContext("GET", "/test", nil, "")
 	result := safeMarshal("EXECCONTEXT", execCtx)
-	
+
 	// Should either succeed (return non-nil) or fail gracefully (return nil)
 	// The important thing is it doesn't panic
 	if result != nil {
@@ -95,7 +98,7 @@ func TestFindBadField_ValidExecContext(t *testing.T) {
 // TestFindBadField_CompletesWithoutPanic tests that findBadField completes without panicking
 func TestFindBadField_CompletesWithoutPanic(t *testing.T) {
 	execCtx := exec.NewContext("GET", "/test", nil, "")
-	
+
 	// Should complete without panicking
 	assert.NotPanics(t, func() {
 		findBadField(execCtx)
@@ -139,11 +142,11 @@ func TestSafeMarshal_RecoversFromPanic(t *testing.T) {
 	type PanicType struct {
 		Value func() // Functions cannot be marshaled
 	}
-	
+
 	panicValue := PanicType{
 		Value: func() {},
 	}
-	
+
 	// This should not cause the test to panic
 	result := safeMarshal("PANIC_TEST", panicValue)
 
@@ -172,7 +175,7 @@ func TestSafeMarshal_ExecContextPanicCallsFindBadField(t *testing.T) {
 	os.Stdout = w
 
 	execCtx := exec.NewContext("GET", "/test", nil, "")
-	
+
 	// Try to marshal - if it panics, findBadField should be called
 	result := safeMarshal("EXECCONTEXT", execCtx)
 
@@ -191,4 +194,65 @@ func TestSafeMarshal_ExecContextPanicCallsFindBadField(t *testing.T) {
 		// The important thing is that the function didn't crash
 		assert.True(t, true, "findBadField should be called when exec.Context panics")
 	}
+}
+
+func TestSafeMarshal_RedactsSensitiveFieldsAndEmbeddedCredentialText(t *testing.T) {
+	fakeBearer := "syntheticHeader.syntheticPayload.syntheticSignature"
+	fakeRefresh := "synthetic-refresh-value"
+	fakeAPIKey := "synthetic-api-key-value"
+	payload := map[string]interface{}{
+		"error":  "failed to transform Authorization with JwtClaim: Bearer " + fakeBearer + ", malformed claim",
+		"detail": "request rejected: refresh_token=\"" + fakeRefresh + "\"",
+		"headers": map[string]interface{}{
+			"X-Api-Key":    fakeAPIKey,
+			"X-Request-ID": "request-123",
+		},
+	}
+
+	result := safeMarshal("AUDIT", payload)
+	require.NotNil(t, result)
+	serialized := string(result)
+	for _, secret := range []string{fakeBearer, fakeRefresh, fakeAPIKey} {
+		assert.NotContains(t, serialized, secret)
+	}
+	assert.Contains(t, serialized, redactedValue)
+	assert.Contains(t, serialized, "request-123")
+
+	var actual map[string]interface{}
+	require.NoError(t, json.Unmarshal(result, &actual))
+	headers := actual["headers"].(map[string]interface{})
+	assert.Equal(t, redactedValue, headers["X-Api-Key"])
+	assert.Equal(t, "request-123", headers["X-Request-ID"])
+}
+
+func TestLog_RedactsAuditAndTraceErrorsBeforeEmission(t *testing.T) {
+	fakeBearer := "auditHeader.auditPayload.auditSignature"
+	fakeAPIKey := "audit-api-key-value"
+	headers := http.Header{
+		"Authorization": []string{"Bearer " + fakeBearer},
+		"X-Api-Key":     []string{fakeAPIKey},
+	}
+	execCtx := exec.NewContext(http.MethodGet, "/reports?refresh_token=synthetic-query-secret", headers, "test")
+	execCtx.SetError(errors.New("failed to transform Authorization with JwtClaim: Bearer " + fakeBearer + ", malformed claim"))
+	enabled := true
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	Log(&Config{EnableAudit: &enabled, EnableTracing: &enabled}, execCtx)
+	require.NoError(t, w.Close())
+	os.Stdout = oldStdout
+	defer r.Close()
+
+	var output bytes.Buffer
+	_, err = io.Copy(&output, r)
+	require.NoError(t, err)
+	logged := output.String()
+	for _, secret := range []string{fakeBearer, fakeAPIKey, "synthetic-query-secret"} {
+		assert.NotContains(t, logged, secret)
+	}
+	assert.Contains(t, logged, "[AUDIT]")
+	assert.Contains(t, logged, "[TRACE]")
+	assert.Contains(t, logged, redactedValue)
 }

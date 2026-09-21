@@ -551,7 +551,7 @@ func ExtractCacheableViews(ctx context.Context, component *repository.Component)
 }
 
 func appendCacheWarmupViews(aView *view.View, result *[]*view.View) {
-	if aCache := aView.Cache; aCache != nil && aCache.Warmup != nil {
+	if aCache := aView.Cache; aCache != nil && aCache.HasWarmup() {
 		*result = append(*result, aView)
 	}
 

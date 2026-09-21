@@ -72,6 +72,42 @@ type mcpPresenceInput struct {
 	Has  *mcpPresenceInputHas `json:"-" setMarker:"true"`
 }
 
+type MCPEmbeddedBidValue struct {
+	Dimension     string   `json:"dimension"`
+	Value         string   `json:"value"`
+	Enabled       bool     `json:"enabled"`
+	BidMultiplier *float64 `json:"bidMultiplier"`
+}
+
+type MCPEmbeddedBidPatchHas struct {
+	Dimension     bool
+	Value         bool
+	Enabled       bool
+	BidMultiplier bool
+	ToBeDeleted   bool
+}
+
+type MCPEmbeddedBidPatch struct {
+	MCPEmbeddedBidValue
+	ToBeDeleted bool                    `json:"toBeDeleted"`
+	Has         *MCPEmbeddedBidPatchHas `json:"-" setMarker:"true"`
+}
+
+type MCPEmbeddedBidInput struct {
+	Campaigns []*MCPEmbeddedBidPatch `json:"Campaigns"`
+}
+
+func (i *MCPEmbeddedBidInput) Init(context.Context) error {
+	if len(i.Campaigns) != 1 || i.Campaigns[0] == nil || i.Campaigns[0].BidMultiplier == nil || *i.Campaigns[0].BidMultiplier != 1.35 {
+		return fmt.Errorf("flat embedded bidMultiplier was not populated")
+	}
+	has := i.Campaigns[0].Has
+	if has == nil || !has.Dimension || !has.Value || !has.Enabled || !has.BidMultiplier || has.ToBeDeleted {
+		return fmt.Errorf("flat embedded field presence was not preserved")
+	}
+	return nil
+}
+
 func (i *mcpPresenceInput) Init(context.Context) error {
 	if i.Has == nil || !i.Has.Name || !i.Has.Body {
 		return fmt.Errorf("missing MCP input presence markers")
@@ -153,6 +189,31 @@ func TestInitializeToolArgumentsPopulatesPresenceMarkersBeforeInitializer(t *tes
 	assert.Equal(t, float64(7), row["ID"])
 	assert.Equal(t, "sparse", row["Name"])
 	assert.NotContains(t, row, "Count")
+}
+
+func TestInitializeToolArgumentsPreservesFlatFieldsPromotedFromEmbeddedBodyValue(t *testing.T) {
+	body := state.NewParameter("Campaigns", state.NewBodyLocation("data"), state.WithParameterSchema(state.NewSchema(reflect.TypeOf([]*MCPEmbeddedBidPatch{}))))
+	inputType := state.Type{Schema: state.NewSchema(reflect.TypeOf(MCPEmbeddedBidInput{})), Parameters: state.Parameters{body}}
+	inputType.SetType(reflect.TypeOf(MCPEmbeddedBidInput{}))
+	component := &repository.Component{Contract: contract.Contract{Input: contract.Input{Type: inputType}}}
+
+	arguments, err := initializeToolArguments(context.Background(), component, map[string]interface{}{
+		"Campaigns": []interface{}{map[string]interface{}{
+			"dimension": "day.of.the.week", "value": "mon", "enabled": true, "bidMultiplier": 1.35,
+		}},
+	})
+
+	require.NoError(t, err)
+	rows, ok := arguments["Campaigns"].([]interface{})
+	require.True(t, ok, "expected projected body array, got %T", arguments["Campaigns"])
+	require.Len(t, rows, 1)
+	row, ok := rows[0].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "day.of.the.week", row["dimension"])
+	assert.Equal(t, "mon", row["value"])
+	assert.Equal(t, true, row["enabled"])
+	assert.Equal(t, 1.35, row["bidMultiplier"])
+	assert.NotContains(t, row, "toBeDeleted", "omitted sibling fields must remain omitted")
 }
 
 func TestPreserveMCPExplicitNullsSupportsRootBodyArrays(t *testing.T) {

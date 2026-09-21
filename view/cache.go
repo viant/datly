@@ -33,6 +33,10 @@ type (
 		PartSize     int `json:",omitempty"`
 		AerospikeConfig
 		Warmup *Warmup `json:",omitempty" yaml:",omitempty"`
+		// Warmups holds additional warmup definitions; the singular Warmup, when set, is always first.
+		Warmups []*Warmup `json:",omitempty" yaml:",omitempty"`
+		// SharedCases holds named reusable case sets referenced by Warmup.CaseRefs.
+		SharedCases map[string][]*CacheParameters `json:",omitempty" yaml:",omitempty"`
 
 		newCache     func() (cache.Cache, error)
 		_initialized bool
@@ -51,6 +55,8 @@ type (
 	}
 
 	Warmup struct {
+		Name           string `json:",omitempty" yaml:",omitempty"`
+		Priority       int    `json:",omitempty" yaml:",omitempty"`
 		IndexColumn    string
 		IndexParameter string     `json:",omitempty" yaml:",omitempty"`
 		IndexMeta      bool       `json:",omitempty"`
@@ -58,6 +64,7 @@ type (
 		MaxCases       *int       `json:",omitempty" yaml:",omitempty"`
 		FieldNames     []string   `json:",omitempty" yaml:",omitempty"`
 		Connector      *Connector `json:",omitempty"`
+		CaseRefs       []string   `json:",omitempty" yaml:",omitempty"`
 		Cases          []*CacheParameters
 	}
 
@@ -85,6 +92,8 @@ type (
 		Label        string
 		FieldNames   []string
 		StoredFields []ProjectionField
+		// Warmup references the warmup definition this input originated from.
+		Warmup *Warmup
 	}
 
 	CacheInputFn func() ([]*CacheInput, error)
@@ -314,15 +323,15 @@ func (c *Cache) inheritIfNeeded(ctx context.Context, resource *Resource, aView *
 		return fmt.Errorf("not found cache provider with %v name", c.Ref)
 	}
 
-	if c.Warmup == nil && source.Warmup != nil {
-		warmupMarshal, err := json.Marshal(source.Warmup)
-		if err != nil {
-			return err
+	if c.Warmup == nil && len(c.Warmups) == 0 {
+		c.Warmup = source.Warmup.clone()
+		for _, item := range source.Warmups {
+			c.Warmups = append(c.Warmups, item.clone())
 		}
+	}
 
-		if err = json.Unmarshal(warmupMarshal, c.Warmup); err != nil {
-			return err
-		}
+	if c.SharedCases == nil && len(source.SharedCases) > 0 {
+		c.SharedCases = cloneSharedCases(source.SharedCases)
 	}
 
 	if err := source.init(ctx, resource, nil); err != nil {
@@ -366,8 +375,27 @@ func (c *Cache) cloneForInheritance() *Cache {
 		PartSize:        c.PartSize,
 		AerospikeConfig: c.AerospikeConfig,
 		Warmup:          c.Warmup.clone(),
+		SharedCases:     cloneSharedCases(c.SharedCases),
+	}
+	for _, item := range c.Warmups {
+		cloned.Warmups = append(cloned.Warmups, item.clone())
 	}
 
+	return cloned
+}
+
+func cloneSharedCases(caseSets map[string][]*CacheParameters) map[string][]*CacheParameters {
+	if caseSets == nil {
+		return nil
+	}
+	cloned := make(map[string][]*CacheParameters, len(caseSets))
+	for name, cases := range caseSets {
+		items := make([]*CacheParameters, 0, len(cases))
+		for _, item := range cases {
+			items = append(items, item.clone())
+		}
+		cloned[name] = items
+	}
 	return cloned
 }
 
@@ -377,10 +405,13 @@ func (w *Warmup) clone() *Warmup {
 	}
 
 	cloned := &Warmup{
+		Name:           w.Name,
+		Priority:       w.Priority,
 		IndexColumn:    w.IndexColumn,
 		IndexParameter: w.IndexParameter,
 		IndexMeta:      w.IndexMeta,
 		FieldNames:     append([]string(nil), w.FieldNames...),
+		CaseRefs:       append([]string(nil), w.CaseRefs...),
 		Cases:          make([]*CacheParameters, 0, len(w.Cases)),
 	}
 	if w.Limit != nil {
@@ -429,14 +460,79 @@ func (p *ParamValue) clone() *ParamValue {
 	return cloned
 }
 
+// EffectiveWarmups returns a defensive ordered slice of every warmup definition:
+// the singular Warmup first, followed by the plural Warmups in declaration order.
+func (c *Cache) EffectiveWarmups() []*Warmup {
+	if c == nil {
+		return nil
+	}
+	var result []*Warmup
+	if c.Warmup != nil {
+		result = append(result, c.Warmup)
+	}
+	for _, item := range c.Warmups {
+		if item == nil {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+// HasWarmup reports whether the cache defines a singular or plural warmup.
+func (c *Cache) HasWarmup() bool {
+	return len(c.EffectiveWarmups()) > 0
+}
+
+// EffectiveName canonicalizes an absent Name from IndexParameter, falling back to IndexColumn.
+func (w *Warmup) EffectiveName() string {
+	if w == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(w.Name); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(w.IndexParameter); name != "" {
+		return name
+	}
+	return strings.TrimSpace(w.IndexColumn)
+}
+
+// GenerateCacheInput preserves the singular compatibility API: it generates inputs
+// only for the singular Warmup definition.
 func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
-	if len(c.Warmup.Cases) == 0 {
-		input, err := c.newInputWithError(NewStatelet(), nil)
+	if c.Warmup == nil {
+		return []*CacheInput{}, nil
+	}
+	return c.generateWarmupCacheInput(ctx, c.Warmup)
+}
+
+// GenerateCacheInputs generates inputs for every effective warmup, singular first then
+// plural, in declaration order. Cases are generated per owning warmup only; no global
+// cartesian product across warmups is computed. Each input carries its originating warmup.
+func (c *Cache) GenerateCacheInputs(ctx context.Context) ([]*CacheInput, error) {
+	var result []*CacheInput
+	for _, warmup := range c.EffectiveWarmups() {
+		inputs, err := c.generateWarmupCacheInput(ctx, warmup)
 		if err != nil {
 			return nil, err
 		}
-		if c.maxCasesExceeded(0, 0, input) {
-			if maxCases := c.maxCases(); maxCases > 0 {
+		result = append(result, inputs...)
+	}
+	if result == nil {
+		result = []*CacheInput{}
+	}
+	return result, nil
+}
+
+func (c *Cache) generateWarmupCacheInput(ctx context.Context, warmup *Warmup) ([]*CacheInput, error) {
+	if len(warmup.Cases) == 0 {
+		input, err := c.newInputWithError(warmup, NewStatelet(), nil)
+		if err != nil {
+			return nil, err
+		}
+		if c.maxCasesExceeded(warmup, 0, 0, input) {
+			if maxCases := warmupMaxCases(warmup); maxCases > 0 {
 				fmt.Printf("[INFO] cache warmup selector cap view=%s max_cases=%d selected_entries=0 selected_selectors=0\n", c.owner.Name, maxCases)
 			}
 			return []*CacheInput{}, nil
@@ -444,15 +540,15 @@ func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
 		return []*CacheInput{input}, nil
 	}
 
-	paramValues := make([][][]interface{}, len(c.Warmup.Cases))
-	results := make(chan cacheParamValuesResult, len(c.Warmup.Cases))
-	for i, dataSet := range c.Warmup.Cases {
+	paramValues := make([][][]interface{}, len(warmup.Cases))
+	results := make(chan cacheParamValuesResult, len(warmup.Cases))
+	for i, dataSet := range warmup.Cases {
 		go func(index int, set *CacheParameters) {
 			values, err := c.generateDatasetParamValues(ctx, set)
 			results <- cacheParamValuesResult{index: index, values: values, err: err}
 		}(i, dataSet)
 	}
-	for i := 0; i < len(c.Warmup.Cases); i++ {
+	for i := 0; i < len(warmup.Cases); i++ {
 		result := <-results
 		if result.err != nil {
 			return nil, result.err
@@ -462,14 +558,14 @@ func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
 
 	var cacheInputPermutations []*CacheInput
 	selectedEntries := 0
-	for i, dataSet := range c.Warmup.Cases {
-		selectors, err := c.generateDatasetSelectors(dataSet, paramValues[i], selectedEntries)
+	for i, dataSet := range warmup.Cases {
+		selectors, err := c.generateDatasetSelectors(warmup, dataSet, paramValues[i], selectedEntries)
 		if err != nil {
 			return nil, err
 		}
 		cacheInputPermutations = append(cacheInputPermutations, selectors...)
 		selectedEntries += c.cacheInputEntryCount(selectors...)
-		if maxCases := c.maxCases(); maxCases > 0 && selectedEntries >= maxCases {
+		if maxCases := warmupMaxCases(warmup); maxCases > 0 && selectedEntries >= maxCases {
 			fmt.Printf("[INFO] cache warmup selector cap view=%s max_cases=%d selected_entries=%d selected_selectors=%d\n", c.owner.Name, maxCases, selectedEntries, len(cacheInputPermutations))
 			break
 		}
@@ -493,9 +589,9 @@ func (c *Cache) generateDatasetParamValues(ctx context.Context, set *CacheParame
 	return availableValues, nil
 }
 
-func (c *Cache) generateDatasetSelectors(set *CacheParameters, availableValues [][]interface{}, selectedEntries int) ([]*CacheInput, error) {
+func (c *Cache) generateDatasetSelectors(warmup *Warmup, set *CacheParameters, availableValues [][]interface{}, selectedEntries int) ([]*CacheInput, error) {
 	var result []*CacheInput
-	if err := c.appendSelectors(set, availableValues, &result, selectedEntries); err != nil {
+	if err := c.appendSelectors(warmup, set, availableValues, &result, selectedEntries); err != nil {
 		return nil, err
 	}
 
@@ -581,18 +677,113 @@ func formatWarmupDate(value time.Time, param *state.Parameter) string {
 }
 
 func (c *Cache) initWarmup(ctx context.Context, resource *Resource) error {
-	if c.owner == nil || c.Warmup == nil {
+	if c.owner == nil {
 		return nil
 	}
+	warmups := c.EffectiveWarmups()
+	if len(warmups) == 0 {
+		return nil
+	}
+	if err := c.validateWarmupIdentities(warmups); err != nil {
+		return err
+	}
+	for _, warmup := range warmups {
+		if err := c.initWarmupItem(ctx, resource, warmup); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-	c.addNonRequiredWarmupIfNeeded()
+func (c *Cache) validateWarmupIdentities(warmups []*Warmup) error {
+	if len(warmups) < 2 {
+		return nil
+	}
+	seenNames := make(map[string]bool, len(warmups))
+	seenIndexes := make(map[string]bool, len(warmups))
+	for _, warmup := range warmups {
+		name := strings.ToLower(strings.TrimSpace(warmup.EffectiveName()))
+		if seenNames[name] {
+			return fmt.Errorf("duplicate warmup name %q at View %v", name, c.owner.Name)
+		}
+		seenNames[name] = true
 
-	_, ok := c.owner.ColumnByName(c.Warmup.IndexColumn)
-	if !ok && c.Warmup.IndexColumn != "" {
-		return fmt.Errorf("not found warmup column %v at View %v", c.Warmup, c.owner.Name)
+		indexIdentity := strings.ToLower(strings.Join([]string{strings.TrimSpace(warmup.IndexColumn), strings.TrimSpace(warmup.IndexParameter)}, "|"))
+		if seenIndexes[indexIdentity] {
+			return fmt.Errorf("duplicate warmup index identity %q (indexColumn|indexParameter) at View %v", indexIdentity, c.owner.Name)
+		}
+		seenIndexes[indexIdentity] = true
+	}
+	return nil
+}
+
+func (c *Cache) expandWarmupCaseRefs(warmup *Warmup) error {
+	if len(warmup.CaseRefs) == 0 {
+		return nil
+	}
+	var expanded []*CacheParameters
+	for _, ref := range warmup.CaseRefs {
+		ref = strings.TrimSpace(ref)
+		cases, ok := c.SharedCases[ref]
+		if !ok {
+			return fmt.Errorf("not found warmup case set %q referenced by warmup %v at View %v", ref, warmup.EffectiveName(), c.owner.Name)
+		}
+		for _, item := range cases {
+			expanded = append(expanded, item.clone())
+		}
+	}
+	warmup.Cases = dedupeWarmupCases(append(expanded, warmup.Cases...))
+	return nil
+}
+
+// dedupeWarmupCases removes duplicated cases within one warmup by canonical parameter
+// name and value; it also makes repeated CaseRefs expansion idempotent.
+func dedupeWarmupCases(cases []*CacheParameters) []*CacheParameters {
+	result := make([]*CacheParameters, 0, len(cases))
+	seen := make(map[string]bool, len(cases))
+	for _, item := range cases {
+		key := warmupCaseKey(item)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, item)
+	}
+	return result
+}
+
+func warmupCaseKey(item *CacheParameters) string {
+	if item == nil {
+		return ""
+	}
+	builder := strings.Builder{}
+	for _, paramValue := range item.Set {
+		if paramValue == nil {
+			continue
+		}
+		builder.WriteString(strings.TrimSpace(paramValue.Name))
+		builder.WriteString("=")
+		builder.WriteString(fmt.Sprint(paramValue.Values...))
+		builder.WriteString(fmt.Sprintf(";excludeDefault=%v|", paramValue.ExcludeDefault))
+	}
+	builder.WriteString("fields=")
+	builder.WriteString(strings.Join(item.FieldNames, ","))
+	return builder.String()
+}
+
+func (c *Cache) initWarmupItem(ctx context.Context, resource *Resource, warmup *Warmup) error {
+	if err := c.expandWarmupCaseRefs(warmup); err != nil {
+		return err
 	}
 
-	for _, dataset := range c.Warmup.Cases {
+	c.addNonRequiredWarmupIfNeeded(warmup)
+
+	_, ok := c.owner.ColumnByName(warmup.IndexColumn)
+	if !ok && warmup.IndexColumn != "" {
+		return fmt.Errorf("not found warmup column %v at View %v", warmup, c.owner.Name)
+	}
+
+	for _, dataset := range warmup.Cases {
 
 		for _, paramValue := range dataset.Set {
 			if err := c.ensureParam(paramValue); err != nil {
@@ -601,19 +792,19 @@ func (c *Cache) initWarmup(ctx context.Context, resource *Resource) error {
 		}
 	}
 
-	if c.Warmup.Connector != nil {
-		if err := c.Warmup.Connector.Init(ctx, resource.GetConnectors()); err != nil {
+	if warmup.Connector != nil {
+		if err := warmup.Connector.Init(ctx, resource.GetConnectors()); err != nil {
 			return err
 		}
 	}
 
-	if err := c.validateWarmupFieldNames(c.Warmup.FieldNames); err != nil {
+	if err := c.validateWarmupFieldNames(warmup.FieldNames); err != nil {
 		return err
 	}
-	if err := c.validateWarmupBudget("maxCases", c.Warmup.MaxCases); err != nil {
+	if err := c.validateWarmupBudget("maxCases", warmup.MaxCases); err != nil {
 		return err
 	}
-	for _, dataset := range c.Warmup.Cases {
+	for _, dataset := range warmup.Cases {
 		if err := c.validateWarmupFieldNames(dataset.FieldNames); err != nil {
 			return err
 		}
@@ -644,8 +835,8 @@ func (c *Cache) ensureParam(paramValue *ParamValue) error {
 	return nil
 }
 
-func (c *Cache) addNonRequiredWarmupIfNeeded() {
-	if len(c.Warmup.Cases) != 0 {
+func (c *Cache) addNonRequiredWarmupIfNeeded(warmup *Warmup) {
+	if len(warmup.Cases) != 0 {
 		return
 	}
 
@@ -662,12 +853,12 @@ func (c *Cache) addNonRequiredWarmupIfNeeded() {
 		return
 	}
 
-	c.Warmup.Cases = append(c.Warmup.Cases, &CacheParameters{
+	warmup.Cases = append(warmup.Cases, &CacheParameters{
 		Set: values,
 	})
 }
 
-func (c *Cache) appendSelectors(set *CacheParameters, paramValues [][]interface{}, selectors *[]*CacheInput, selectedEntries int) error {
+func (c *Cache) appendSelectors(warmup *Warmup, set *CacheParameters, paramValues [][]interface{}, selectors *[]*CacheInput, selectedEntries int) error {
 	for i, value := range paramValues {
 		if len(value) == 0 {
 			return fmt.Errorf("parameter %v is required but there was no data", set.Set[i].Name)
@@ -677,16 +868,16 @@ func (c *Cache) appendSelectors(set *CacheParameters, paramValues [][]interface{
 	indexes := make([]int, len(paramValues))
 	generatedEntries := 0
 	if len(indexes) == 0 {
-		input, err := c.newInputWithError(NewStatelet(), set)
+		input, err := c.newInputWithError(warmup, NewStatelet(), set)
 		if err != nil {
 			return err
 		}
-		if c.maxCasesExceeded(selectedEntries, generatedEntries, input) {
+		if c.maxCasesExceeded(warmup, selectedEntries, generatedEntries, input) {
 			return nil
 		}
 		*selectors = append(*selectors, input)
 		generatedEntries += c.cacheInputEntryCount(input)
-		fmt.Printf("[INFO] cache warmup selector view=%s index_column=%s params= field_names=%s\n", c.owner.Name, c.Warmup.IndexColumn, strings.Join(input.FieldNames, ","))
+		fmt.Printf("[INFO] cache warmup selector view=%s index_column=%s params= field_names=%s\n", c.owner.Name, warmup.IndexColumn, strings.Join(input.FieldNames, ","))
 		return nil
 	}
 
@@ -709,17 +900,17 @@ outer:
 		}
 
 		label := strings.Join(debugParams, ",")
-		input, err := c.newInputWithError(selector, set)
+		input, err := c.newInputWithError(warmup, selector, set)
 		if err != nil {
 			return err
 		}
 		input.Label = label
-		if c.maxCasesExceeded(selectedEntries, generatedEntries, input) {
+		if c.maxCasesExceeded(warmup, selectedEntries, generatedEntries, input) {
 			return nil
 		}
 		*selectors = append(*selectors, input)
 		generatedEntries += c.cacheInputEntryCount(input)
-		fmt.Printf("[INFO] cache warmup selector view=%s index_column=%s params=%s field_names=%s\n", c.owner.Name, c.Warmup.IndexColumn, label, strings.Join(input.FieldNames, ","))
+		fmt.Printf("[INFO] cache warmup selector view=%s index_column=%s params=%s field_names=%s\n", c.owner.Name, warmup.IndexColumn, label, strings.Join(input.FieldNames, ","))
 
 		for i := len(indexes) - 1; i >= 0; i-- {
 			if indexes[i] < len(paramValues[i])-1 {
@@ -739,65 +930,80 @@ outer:
 }
 
 func (c *Cache) NewInput(selector *Statelet) *CacheInput {
-	return c.newInput(selector, nil)
+	return c.newInput(c.Warmup, selector, nil)
 }
 
-func (c *Cache) newInput(selector *Statelet, set *CacheParameters) *CacheInput {
-	input, err := c.newInputWithError(selector, set)
+func (c *Cache) newInput(warmup *Warmup, selector *Statelet, set *CacheParameters) *CacheInput {
+	input, err := c.newInputWithError(warmup, selector, set)
 	if err == nil {
 		return input
 	}
 	if c != nil && c.owner != nil {
-		fmt.Printf("[INFO] cache warmup projection metadata error view=%s field_names=%v error=%v\n", c.owner.Name, c.fieldNamesFor(set), err)
+		fmt.Printf("[INFO] cache warmup projection metadata error view=%s field_names=%v error=%v\n", c.owner.Name, fieldNamesFor(warmup, set), err)
 	}
-	return c.newInputWithoutStoredFields(selector, set)
+	return c.newInputWithoutStoredFields(warmup, selector, set)
 }
 
-func (c *Cache) newInputWithError(selector *Statelet, set *CacheParameters) (*CacheInput, error) {
-	fieldNames := c.fieldNamesFor(set)
-	if selector != nil && c.Warmup != nil && c.Warmup.Limit != nil {
-		selector.Limit = *c.Warmup.Limit
-		selector.WarmupNoLimit = *c.Warmup.Limit == 0
+func (c *Cache) newInputWithError(warmup *Warmup, selector *Statelet, set *CacheParameters) (*CacheInput, error) {
+	fieldNames := fieldNamesFor(warmup, set)
+	if selector != nil && warmup != nil && warmup.Limit != nil {
+		selector.Limit = *warmup.Limit
+		selector.WarmupNoLimit = *warmup.Limit == 0
 	}
 	c.applyWarmupFieldNames(selector, fieldNames)
 	storedFields, err := ProjectionFieldsForNames(c.owner, fieldNames)
 	if err != nil {
 		return nil, err
 	}
-	input := c.newInputWithoutStoredFields(selector, set)
+	input := c.newInputWithoutStoredFields(warmup, selector, set)
 	input.StoredFields = append([]ProjectionField(nil), storedFields...)
 	return input, nil
 }
 
-func (c *Cache) newInputWithoutStoredFields(selector *Statelet, set *CacheParameters) *CacheInput {
-	fieldNames := c.fieldNamesFor(set)
+func (c *Cache) newInputWithoutStoredFields(warmup *Warmup, selector *Statelet, set *CacheParameters) *CacheInput {
+	fieldNames := fieldNamesFor(warmup, set)
+	indexColumn := ""
+	indexMeta := false
+	if warmup != nil {
+		indexColumn = warmup.IndexColumn
+		indexMeta = warmup.IndexMeta
+	}
 	return &CacheInput{
 		Selector:     selector,
-		Column:       c.Warmup.IndexColumn,
-		MetaColumn:   c.Warmup.IndexColumn,
-		IndexMeta:    (c.Warmup.IndexMeta || c.Warmup.IndexColumn != "") && c.owner.Template.Summary != nil,
+		Column:       indexColumn,
+		MetaColumn:   indexColumn,
+		IndexMeta:    (indexMeta || indexColumn != "") && c.owner.Template.Summary != nil,
 		FieldNames:   append([]string(nil), fieldNames...),
 		StoredFields: nil,
+		Warmup:       warmup,
 	}
 }
 
-func (c *Cache) fieldNamesFor(set *CacheParameters) []string {
+func fieldNamesFor(warmup *Warmup, set *CacheParameters) []string {
 	if set != nil && len(set.FieldNames) > 0 {
 		return set.FieldNames
 	}
-	if c.Warmup == nil {
+	if warmup == nil {
 		return nil
 	}
-	return c.Warmup.FieldNames
+	return warmup.FieldNames
 }
 
 func (c *Cache) WarmupFieldNamesForSelector(selector *Statelet) ([]string, bool) {
-	if c == nil || c.Warmup == nil {
+	if c == nil {
+		return nil, true
+	}
+	return c.WarmupFieldNames(c.Warmup, selector)
+}
+
+// WarmupFieldNames resolves projection field names for the given warmup and selector.
+func (c *Cache) WarmupFieldNames(warmup *Warmup, selector *Statelet) ([]string, bool) {
+	if c == nil || warmup == nil {
 		return nil, true
 	}
 	matchedAny := false
 	var matchedColumns []string
-	for _, candidate := range c.Warmup.Cases {
+	for _, candidate := range warmup.Cases {
 		if candidate == nil || len(candidate.FieldNames) == 0 || !c.warmupCaseMatchesSelector(candidate, selector) {
 			continue
 		}
@@ -817,7 +1023,7 @@ func (c *Cache) WarmupFieldNamesForSelector(selector *Statelet) ([]string, bool)
 	if matchedAny {
 		return matchedColumns, true
 	}
-	return c.Warmup.FieldNames, true
+	return warmup.FieldNames, true
 }
 
 func (c *Cache) warmupProjectionColumns(fieldNames []string) ([]string, bool) {
@@ -935,15 +1141,15 @@ func warmupValueMatches(actual interface{}, candidates []interface{}) bool {
 	return false
 }
 
-func (c *Cache) maxCases() int {
-	if c == nil || c.Warmup == nil || c.Warmup.MaxCases == nil || *c.Warmup.MaxCases <= 0 {
+func warmupMaxCases(warmup *Warmup) int {
+	if warmup == nil || warmup.MaxCases == nil || *warmup.MaxCases <= 0 {
 		return 0
 	}
-	return *c.Warmup.MaxCases
+	return *warmup.MaxCases
 }
 
-func (c *Cache) maxCasesExceeded(selectedEntries, generatedEntries int, input *CacheInput) bool {
-	maxCases := c.maxCases()
+func (c *Cache) maxCasesExceeded(warmup *Warmup, selectedEntries, generatedEntries int, input *CacheInput) bool {
+	maxCases := warmupMaxCases(warmup)
 	return maxCases > 0 && selectedEntries+generatedEntries+c.cacheInputEntryCount(input) > maxCases
 }
 

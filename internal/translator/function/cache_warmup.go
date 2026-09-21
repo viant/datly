@@ -57,6 +57,27 @@ func (c *cacheWarmup) Apply(args []string, column *sqlparser.Column, resource *v
 			warmup.MaxCases = maxCases
 			continue
 		}
+		if name, ok, err := parseWarmupName(raw); ok || err != nil {
+			if err != nil {
+				return err
+			}
+			warmup.Name = name
+			continue
+		}
+		if priority, ok, err := parseWarmupPriority(raw); ok || err != nil {
+			if err != nil {
+				return err
+			}
+			warmup.Priority = priority
+			continue
+		}
+		if caseRefs, ok, err := parseWarmupCaseRefs(raw); ok || err != nil {
+			if err != nil {
+				return err
+			}
+			warmup.CaseRefs = caseRefs
+			continue
+		}
 		param, err := parseWarmupParam(raw)
 		if err != nil {
 			return err
@@ -66,8 +87,78 @@ func (c *cacheWarmup) Apply(args []string, column *sqlparser.Column, resource *v
 	if len(parameters.Set) > 0 {
 		warmup.Cases = append(warmup.Cases, parameters)
 	}
-	aView.Cache.Warmup = warmup
+	// Repeated cache_warmup declarations are additive: the first one keeps populating the
+	// singular Warmup, later ones append to Warmups; earlier declarations are never overwritten.
+	if aView.Cache.Warmup == nil && len(aView.Cache.Warmups) == 0 {
+		aView.Cache.Warmup = warmup
+	} else {
+		aView.Cache.Warmups = append(aView.Cache.Warmups, warmup)
+	}
 	return nil
+}
+
+func parseWarmupName(raw string) (string, bool, error) {
+	name, value, ok := splitWarmupOption(raw)
+	if !ok {
+		return "", false, nil
+	}
+	switch strings.ToLower(name) {
+	case "name":
+	default:
+		return "", false, nil
+	}
+	if value == "" {
+		return "", true, fmt.Errorf("warmup name was empty")
+	}
+	if strings.Contains(value, ",") {
+		return "", true, fmt.Errorf("warmup name %q must be a single name", value)
+	}
+	return value, true, nil
+}
+
+func parseWarmupPriority(raw string) (int, bool, error) {
+	name, value, ok := splitWarmupOption(raw)
+	if !ok {
+		return 0, false, nil
+	}
+	switch strings.ToLower(name) {
+	case "priority":
+	default:
+		return 0, false, nil
+	}
+	if value == "" {
+		return 0, true, fmt.Errorf("warmup priority was empty")
+	}
+	priority, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, true, fmt.Errorf("warmup priority %q was invalid: %w", value, err)
+	}
+	return priority, true, nil
+}
+
+func parseWarmupCaseRefs(raw string) ([]string, bool, error) {
+	name, value, ok := splitWarmupOption(raw)
+	if !ok {
+		return nil, false, nil
+	}
+	switch strings.ToLower(name) {
+	case "caserefs", "case_refs":
+	default:
+		return nil, false, nil
+	}
+	values := strings.Split(value, ",")
+	result := make([]string, 0, len(values))
+	for _, candidate := range values {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		result = append(result, candidate)
+	}
+	if len(result) == 0 {
+		return nil, true, fmt.Errorf("warmup caseRefs has no values")
+	}
+	return result, true, nil
 }
 
 func parseWarmupConnector(raw string) (*view.Connector, bool, error) {

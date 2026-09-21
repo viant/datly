@@ -113,6 +113,16 @@ func TestMCPMultipartPayloadCannotOverrideDeclaredFormFields(t *testing.T) {
 	assert.Contains(t, rpcErr.Message, "conflicts with a declared form parameter")
 }
 
+func TestMCPMultipartPayloadRequiresFiles(t *testing.T) {
+	_, parameters := mcpMultipartComponent()
+	body, rpcErr := buildMCPMultipartBody(parameters, map[string]interface{}{
+		"Payload": map[string]interface{}{"advertiserId": 85141},
+	})
+	require.Nil(t, body)
+	require.NotNil(t, rpcErr)
+	assert.Contains(t, rpcErr.Message, "requires Files")
+}
+
 func TestMCPMultipartRouteKeepsJSONModeWithoutBlob(t *testing.T) {
 	_, parameters := mcpMultipartComponent()
 	body, rpcErr := buildMCPMultipartBody(parameters, map[string]interface{}{

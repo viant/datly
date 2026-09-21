@@ -101,7 +101,7 @@ func TestWarmupConnectorLabelUsesExplicitWarmupConnector(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, "bq_metrics_prewarm", warmupConnectorLabel(aView))
+	assert.Equal(t, "bq_metrics_prewarm", warmupConnectorLabel(&warmupEntry{view: aView, warmup: aView.Cache.Warmup}))
 }
 
 func TestWarmupConnectorLabelFallsBackToViewConnector(t *testing.T) {
@@ -110,7 +110,7 @@ func TestWarmupConnectorLabelFallsBackToViewConnector(t *testing.T) {
 		Cache:     &view.Cache{Warmup: &view.Warmup{}},
 	}
 
-	assert.Equal(t, "bq_metrics", warmupConnectorLabel(aView))
+	assert.Equal(t, "bq_metrics", warmupConnectorLabel(&warmupEntry{view: aView, warmup: aView.Cache.Warmup}))
 }
 
 func TestDBUsesExplicitWarmupConnector(t *testing.T) {

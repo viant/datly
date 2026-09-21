@@ -399,9 +399,9 @@ func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, st
 	var cacheErr error
 	go func() {
 		defer wg.Done()
-		if (aView.Cache != nil && aView.Cache.Warmup != nil) || relation != nil {
+		if (aView.Cache != nil && aView.Cache.HasWarmup()) || relation != nil {
 			data, _ := session.ParentData()
-			if aView.Cache != nil && aView.Cache.Warmup != nil {
+			if aView.Cache != nil && aView.Cache.HasWarmup() {
 				if relation == nil {
 					columnInMatcher, cacheErr = s.topLevelWarmupMatcher(ctx, aView, statelet, data.AsParam())
 					return
@@ -438,23 +438,43 @@ func ensureWarmupIdentity(matcher *cache.ParmetrizedQuery) {
 }
 
 func (s *Service) relationWarmupMatcher(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, relation *view.Relation) (*cache.ParmetrizedQuery, error) {
-	if aView == nil || aView.Cache == nil || aView.Cache.Warmup == nil || batchData == nil || relation == nil || relation.Of == nil || len(relation.Of.On) != 1 {
+	if aView == nil || aView.Cache == nil || !aView.Cache.HasWarmup() || batchData == nil || relation == nil || relation.Of == nil || len(relation.Of.On) != 1 {
 		return nil, nil
 	}
-	indexColumn := strings.TrimSpace(aView.Cache.Warmup.IndexColumn)
-	if indexColumn == "" || len(batchData.ValuesBatch) == 0 || batchData.HasComposite() || len(batchData.ColumnNames) != 1 {
+	if len(batchData.ValuesBatch) == 0 || batchData.HasComposite() || len(batchData.ColumnNames) != 1 {
 		return nil, nil
 	}
-	if !matchesWarmupIndex(aView, indexColumn, relation.Of.On[0], batchData.ColumnNames[0]) {
+	selected := selectRelationWarmup(aView, relation, batchData)
+	if selected == nil {
 		return nil, nil
 	}
-	matcher, err := s.warmupMatcher(ctx, aView, statelet, nil)
+	indexColumn := strings.TrimSpace(selected.IndexColumn)
+	matcher, err := s.warmupMatcher(ctx, aView, selected, statelet, nil)
 	if err != nil || matcher == nil {
 		return matcher, err
 	}
 	matcher.By = warmupMarkerColumn(indexColumn, relation, batchData)
 	matcher.In = batchData.ValuesBatch
 	return matcher, nil
+}
+
+// selectRelationWarmup picks the effective warmup whose index column matches the relation
+// link; explicit priority wins, declaration order (singular first) breaks ties.
+func selectRelationWarmup(aView *view.View, relation *view.Relation, batchData *view.BatchData) *view.Warmup {
+	var best *view.Warmup
+	for _, candidate := range aView.Cache.EffectiveWarmups() {
+		indexColumn := strings.TrimSpace(candidate.IndexColumn)
+		if indexColumn == "" {
+			continue
+		}
+		if !matchesWarmupIndex(aView, indexColumn, relation.Of.On[0], batchData.ColumnNames[0]) {
+			continue
+		}
+		if best == nil || candidate.Priority > best.Priority {
+			best = candidate
+		}
+	}
+	return best
 }
 
 func warmupMarkerColumn(indexColumn string, relation *view.Relation, batchData *view.BatchData) string {
@@ -587,37 +607,69 @@ func warmupParamValues(value interface{}) []interface{} {
 	return []interface{}{value}
 }
 
+type warmupCandidate struct {
+	warmup    *view.Warmup
+	parameter *state.Parameter
+	values    []interface{}
+}
+
+// selectTopLevelWarmup selects the most specific applicable effective warmup by request
+// parameter presence: a warmup applies when its index parameter carries values; among
+// applicable warmups the highest explicit Priority wins. Equal priorities use
+// the later declaration so broad-to-specific declarations select the most
+// restrictive supplied dimension.
+func selectTopLevelWarmup(aView *view.View, statelet *view.Statelet) (*warmupCandidate, error) {
+	if aView == nil || aView.Cache == nil || statelet == nil || statelet.Template == nil {
+		return nil, nil
+	}
+	var best *warmupCandidate
+	var firstErr error
+	for _, candidate := range aView.Cache.EffectiveWarmups() {
+		indexColumn := strings.TrimSpace(candidate.IndexColumn)
+		if indexColumn == "" {
+			continue
+		}
+		matchParam := warmupParameterFor(aView, candidate)
+		if matchParam == nil {
+			continue
+		}
+		liveSelector, selErr := statelet.Template.Selector(matchParam.Name)
+		if selErr != nil || liveSelector == nil {
+			if firstErr == nil {
+				firstErr = selErr
+			}
+			continue
+		}
+		value := liveSelector.Value(statelet.Template.Pointer())
+		values := warmupParamValues(value)
+		if len(values) == 0 {
+			continue
+		}
+		if best == nil || candidate.Priority >= best.warmup.Priority {
+			best = &warmupCandidate{warmup: candidate, parameter: matchParam, values: values}
+		}
+	}
+	if best == nil {
+		return nil, firstErr
+	}
+	return best, nil
+}
+
 func (s *Service) topLevelWarmupMatcher(ctx context.Context, aView *view.View, statelet *view.Statelet, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {
-	if aView == nil || aView.Cache == nil || aView.Cache.Warmup == nil || statelet == nil || statelet.Template == nil {
-		return nil, nil
+	selected, err := selectTopLevelWarmup(aView, statelet)
+	if selected == nil || err != nil {
+		return nil, err
 	}
-	indexColumn := strings.TrimSpace(aView.Cache.Warmup.IndexColumn)
-	if indexColumn == "" {
-		return nil, nil
-	}
-	matchParam := warmupIndexParameter(aView)
-	if matchParam == nil {
-		return nil, nil
-	}
-	liveSelector, selErr := statelet.Template.Selector(matchParam.Name)
-	if selErr != nil || liveSelector == nil {
-		return nil, selErr
-	}
-	value := liveSelector.Value(statelet.Template.Pointer())
-	values := warmupParamValues(value)
-	if len(values) == 0 {
-		return nil, nil
-	}
-	matcher, err := s.warmupMatcher(ctx, aView, statelet, parent)
+	matcher, err := s.warmupMatcher(ctx, aView, selected.warmup, statelet, parent)
 	if err != nil || matcher == nil {
 		return matcher, err
 	}
-	matcher.By = indexColumn
-	matcher.In = values
+	matcher.By = strings.TrimSpace(selected.warmup.IndexColumn)
+	matcher.In = selected.values
 	return matcher, nil
 }
 
-func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, statelet *view.Statelet, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {
+func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, warmup *view.Warmup, statelet *view.Statelet, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {
 	if statelet == nil || statelet.Template == nil {
 		return nil, nil
 	}
@@ -625,7 +677,7 @@ func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, statelet 
 	if clonedTemplate == nil {
 		return nil, nil
 	}
-	if candidate := warmupIndexParameter(aView); candidate != nil {
+	if candidate := warmupParameterFor(aView, warmup); candidate != nil {
 		if clonedSelector, err := clonedTemplate.Selector(candidate.Name); err == nil && clonedSelector != nil {
 			zero := reflect.Zero(clonedSelector.Type()).Interface()
 			_ = clonedSelector.SetValue(clonedTemplate.Pointer(), zero)
@@ -639,7 +691,7 @@ func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, statelet 
 	}
 	cloned := statelet.CloneForSummary()
 	cloned.Template = clonedTemplate
-	ok, err := applyWarmupIdentityProjection(aView, cloned)
+	ok, err := applyWarmupProjection(aView, warmup, cloned)
 	if err != nil {
 		return nil, err
 	}
@@ -659,10 +711,17 @@ func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, statelet 
 }
 
 func applyWarmupIdentityProjection(aView *view.View, statelet *view.Statelet) (bool, error) {
-	if aView == nil || aView.Cache == nil || aView.Cache.Warmup == nil || statelet == nil {
+	if aView == nil || aView.Cache == nil {
 		return true, nil
 	}
-	fieldNames, ok := aView.Cache.WarmupFieldNamesForSelector(statelet)
+	return applyWarmupProjection(aView, aView.Cache.Warmup, statelet)
+}
+
+func applyWarmupProjection(aView *view.View, warmup *view.Warmup, statelet *view.Statelet) (bool, error) {
+	if aView == nil || aView.Cache == nil || warmup == nil || statelet == nil {
+		return true, nil
+	}
+	fieldNames, ok := aView.Cache.WarmupFieldNames(warmup, statelet)
 	if !ok {
 		return false, nil
 	}
@@ -719,10 +778,17 @@ func requestedFieldNames(statelet *view.Statelet) []string {
 }
 
 func warmupIndexParameter(aView *view.View) *state.Parameter {
-	if aView == nil || aView.Cache == nil || aView.Cache.Warmup == nil || aView.Template == nil {
+	if aView == nil || aView.Cache == nil {
 		return nil
 	}
-	parameterName := strings.TrimSpace(aView.Cache.Warmup.IndexParameter)
+	return warmupParameterFor(aView, aView.Cache.Warmup)
+}
+
+func warmupParameterFor(aView *view.View, warmup *view.Warmup) *state.Parameter {
+	if aView == nil || warmup == nil || aView.Template == nil {
+		return nil
+	}
+	parameterName := strings.TrimSpace(warmup.IndexParameter)
 	if parameterName == "" {
 		return nil
 	}

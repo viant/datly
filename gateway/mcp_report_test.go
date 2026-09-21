@@ -121,6 +121,38 @@ func TestRouter_buildToolInputType_FlattensAnonymousBody(t *testing.T) {
 	}
 }
 
+func TestRouter_buildToolInputType_FlattensUnnamedBodyWithoutTag(t *testing.T) {
+	bodyType := reflect.StructOf([]reflect.StructField{
+		{Name: "FileName", Type: reflect.TypeOf(""), Tag: `json:"fileName"`},
+		{Name: "Data", Type: reflect.TypeOf([]byte{}), Tag: `json:"data"`},
+		{Name: "Action", Type: reflect.TypeOf(""), Tag: `json:"uploadAction"`},
+	})
+	bodyParam := state.NewParameter("Body", state.NewBodyLocation(""), state.WithParameterSchema(state.NewSchema(bodyType)))
+	component := &repository.Component{Contract: contract.Contract{Input: contract.Input{Type: state.Type{Parameters: state.Parameters{bodyParam}}}}}
+
+	rType := (&Router{}).buildToolInputType(component)
+	_, wrapped := rType.FieldByName("Body")
+	assert.False(t, wrapped)
+	for _, name := range []string{"FileName", "Data", "Action"} {
+		_, ok := rType.FieldByName(name)
+		assert.True(t, ok, name)
+	}
+	dataField, ok := rType.FieldByName("Data")
+	require.True(t, ok)
+	assert.Equal(t, reflect.TypeOf([]byte{}), dataField.Type)
+	toolSchema := schema.ToolInputSchema{}
+	require.NoError(t, toolSchema.Load(reflect.New(rType).Interface()))
+	assert.Equal(t, "array", toolSchema.Properties["data"]["type"])
+
+	arguments := map[string]interface{}{"fileName": "", "data": "", "uploadAction": "UPLOAD_IMAGE_URL"}
+	value := toolArgumentValue(bodyParam, arguments)
+	_, body, rpcErr := (&Router{}).applyParamToRequest("http://localhost/upload", url.Values{}, bodyParam, value, map[string]bool{}, map[string]bool{}, nil)
+	require.Nil(t, rpcErr)
+	encoded, err := io.ReadAll(body)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"fileName":"","data":"","uploadAction":"UPLOAD_IMAGE_URL"}`, string(encoded))
+}
+
 func TestAnonymousBodyArgumentValue_UsesJSONFieldNames(t *testing.T) {
 	bodyType := reflect.StructOf([]reflect.StructField{
 		{Name: "Dimensions", Type: reflect.StructOf([]reflect.StructField{{Name: "AccountId", Type: reflect.TypeOf(false), Tag: `json:"accountId,omitempty"`}}), Tag: `json:"dimensions,omitempty"`},

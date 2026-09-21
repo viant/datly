@@ -13,6 +13,7 @@ import (
 
 func Log(config *Config, execContext *exec.Context) {
 	snap := execContext.SnapshotForLogging()
+	snap.Error = redactSensitiveText(snap.Error)
 	includeSQL := config.ShallIncludeSQL()
 	if !includeSQL {
 		snap.Metrics = snap.Metrics.HideMetrics()
@@ -53,7 +54,7 @@ func Log(config *Config, execContext *exec.Context) {
 func safeMarshal(label string, v any) []byte {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("[LOG-MARSHAL-PANIC] label=%s type=%T panic=%v\nSTACK:\n%s\n", label, v, r, debug.Stack())
+			fmt.Printf("[LOG-MARSHAL-PANIC] label=%s type=%T panic=%s\nSTACK:\n%s\n", label, v, redactSensitiveText(fmt.Sprint(r)), debug.Stack())
 			if execCtx, ok := v.(*exec.Context); ok {
 				findBadField(execCtx)
 			}
@@ -61,10 +62,10 @@ func safeMarshal(label string, v any) []byte {
 	}()
 	data, err := json.Marshal(v)
 	if err != nil {
-		fmt.Printf("[LOG-MARSHAL-ERROR] label=%s type=%T err=%v\n", label, v, err)
+		fmt.Printf("[LOG-MARSHAL-ERROR] label=%s type=%T err=%s\n", label, v, redactSensitiveText(err.Error()))
 		return nil
 	}
-	return data
+	return redactSerializedJSON(data)
 }
 
 func findBadField(execCtx *exec.Context) {
@@ -83,11 +84,11 @@ func findBadField(execCtx *exec.Context) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					fmt.Printf("[BAD-FIELD-PANIC] %s (%s): %v\n", fieldName, field.Type(), r)
+					fmt.Printf("[BAD-FIELD-PANIC] %s (%s): %s\n", fieldName, field.Type(), redactSensitiveText(fmt.Sprint(r)))
 				}
 			}()
 			if _, err := json.Marshal(field.Interface()); err != nil {
-				fmt.Printf("[BAD-FIELD-ERROR] %s (%s): %v\n", fieldName, field.Type(), err)
+				fmt.Printf("[BAD-FIELD-ERROR] %s (%s): %s\n", fieldName, field.Type(), redactSensitiveText(err.Error()))
 			}
 		}()
 	}

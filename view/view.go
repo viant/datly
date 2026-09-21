@@ -188,6 +188,14 @@ func (v *View) Warmup() *Warmup {
 	return v.Cache.Warmup
 }
 
+// Warmups returns every effective warmup definition, singular first then plural.
+func (v *View) Warmups() []*Warmup {
+	if v.Cache == nil {
+		return nil
+	}
+	return v.Cache.EffectiveWarmups()
+}
+
 func (v *View) ViewName() string {
 	return v.Name
 }

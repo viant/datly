@@ -83,7 +83,11 @@ func (v *View) applyShorthands(viewlet *Viewlet) error {
 		if err != nil {
 			return err
 		}
-		v.View.Cache.Warmup = warmup
+		if v.View.Cache.Warmup == nil && len(v.View.Cache.Warmups) == 0 {
+			v.View.Cache.Warmup = warmup
+		} else if warmup != nil {
+			v.View.Cache.Warmups = append(v.View.Cache.Warmups, warmup)
+		}
 	}
 	return nil
 }
