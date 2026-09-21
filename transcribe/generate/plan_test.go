@@ -1378,6 +1378,47 @@ SELECT 1`
 	if err != nil {
 		t.Fatalf("parse generated output: %v", err)
 	}
+	field := generatedEmbeddedField(t, file, plan.Output.Type)
+	tag, err := strconv.Unquote(field.Tag.Value)
+	if err != nil {
+		t.Fatalf("unquote status tag: %v", err)
+	}
+	if tag != `parameter:",kind=output,in=status"` {
+		t.Fatalf("unexpected status tag: %#v", field.Tag)
+	}
+}
+
+func TestEmitScaffold_EmbedsInferredAnonymousStatusOutputField(t *testing.T) {
+	source := `#setting($_ = $route('/v1/api/example/status', 'GET'))
+#set($_ = $Status<?>(output/status).WithTag('anonymous:"true"'))
+SELECT 1`
+
+	component, err := parseTestComponentSource("example.com/demo/status", "InferredStatusOut", source)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	plan := testPlan(t, component)
+	dir := t.TempDir()
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatalf("unexpected emit error: %v", err)
+	}
+	outputFile := filepath.Join(dir, plan.Output.Destination)
+	file, err := parser.ParseFile(token.NewFileSet(), outputFile, nil, 0)
+	if err != nil {
+		t.Fatalf("parse generated output: %v", err)
+	}
+	field := generatedEmbeddedField(t, file, plan.Output.Type)
+	tag, err := strconv.Unquote(field.Tag.Value)
+	if err != nil {
+		t.Fatalf("unquote status tag: %v", err)
+	}
+	if tag != `parameter:",kind=output,in=status"` {
+		t.Fatalf("unexpected inferred status tag: %#v", field.Tag)
+	}
+}
+
+func generatedEmbeddedField(t *testing.T, file *ast.File, typeName string) *ast.Field {
+	t.Helper()
 	var field *ast.Field
 	for _, decl := range file.Decls {
 		gen, ok := decl.(*ast.GenDecl)
@@ -1386,7 +1427,7 @@ SELECT 1`
 		}
 		for _, spec := range gen.Specs {
 			typeSpec, ok := spec.(*ast.TypeSpec)
-			if !ok || typeSpec.Name.Name != plan.Output.Type {
+			if !ok || typeSpec.Name.Name != typeName {
 				continue
 			}
 			structType, ok := typeSpec.Type.(*ast.StructType)
@@ -1402,21 +1443,15 @@ SELECT 1`
 		}
 	}
 	if field == nil {
-		t.Fatal("generated output field was not found")
+		t.Fatal("generated embedded field was not found")
 	}
 	if len(field.Names) != 0 {
-		t.Fatalf("expected embedded status field, got names=%v", field.Names)
+		t.Fatalf("expected embedded field, got names=%v", field.Names)
 	}
 	if field.Tag == nil {
-		t.Fatal("expected embedded status field tag")
+		t.Fatal("expected embedded field tag")
 	}
-	tag, err := strconv.Unquote(field.Tag.Value)
-	if err != nil {
-		t.Fatalf("unquote status tag: %v", err)
-	}
-	if !strings.Contains(tag, `parameter:",kind=output,in=status`) {
-		t.Fatalf("unexpected status tag: %#v", field.Tag)
-	}
+	return field
 }
 
 func TestResolvePlan_RootViewCardinalityControlsImplicitOutput(t *testing.T) {

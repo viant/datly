@@ -70,10 +70,9 @@ func TestGeneratorRuntimeOutputTypeUsesGeneratedViewFields(t *testing.T) {
 
 func TestGeneratorRuntimeOutputTypeEmbedsAnonymousStatus(t *testing.T) {
 	component := &spec.Component{
-		Name:        "StatusOut",
-		TypeContext: &spec.TypeContext{Imports: []spec.ImportSpec{{Alias: "response", Package: "github.com/viant/xdatly/response"}}},
+		Name: "StatusOut",
 		Parameters: []*spec.Parameter{{
-			Name: "Status", TypeExpr: "response.Status", Tag: `anonymous:"true"`,
+			Name: "Status", Tag: `anonymous:"true"`,
 			Source: spec.BindSource{Kind: "output", Name: "status"},
 		}},
 	}

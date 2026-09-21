@@ -589,3 +589,8 @@ func appendStructTag(fieldTag, name, value string) string {
 	}
 	return fieldTag + name + ":" + strconv.Quote(value)
 }
+
+func replaceStructTag(fieldTag, name, value string) string {
+	filtered := withoutStructTags(fieldTag, name)
+	return appendStructTag(filtered, name, value)
+}
