@@ -39,7 +39,7 @@ func MutationInvariantSupport(value *plan.Plan, config Config, entities *EntityA
 	body := []ast.Stmt{&ast.IfStmt{Cond: &ast.BinaryExpr{X: &ast.BinaryExpr{X: id("ctx"), Op: token.EQL, Y: nilExpr}, Op: token.LOR, Y: &ast.BinaryExpr{X: id("frames"), Op: token.EQL, Y: nilExpr}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(errExpr("invariant phase requires context and frames"))}}}, checkContext()}
 	groups := 0
 	for _, record := range l.records {
-		if record.plan.Auxiliary || record.plan.Entity == nil || len(record.plan.Entity.Invariants) == 0 {
+		if record.plan.Entity == nil || len(record.plan.Entity.Invariants) == 0 {
 			continue
 		}
 		role, err := layout.role(record.plan)

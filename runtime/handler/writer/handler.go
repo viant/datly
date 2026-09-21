@@ -397,6 +397,15 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		if err = p.callEntityHook(ctx, "Init", frame); err != nil {
 			return err
 		}
+		// Init is the supported phase for marker-aware business defaults and
+		// sparse server-owned transitions. Merge newly set Has bits before
+		// validation and action selection while retaining invariant evidence,
+		// whose backfill deliberately does not mutate client presence markers.
+		for name, present := range suppliedFields(frame.Entity.Elem(), frame.Record.Fields) {
+			if present {
+				frame.Fields[name] = true
+			}
+		}
 	}
 	if err = p.validateFrames(ctx, validator, false); err != nil {
 		return err

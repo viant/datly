@@ -52,6 +52,21 @@ func TestUniversalWriterTreatsIdentityOnlySparseUpdateAsNoOp(t *testing.T) {
 	}
 }
 
+func TestUniversalWriterRecognizesLifecycleSparseUpdatePresence(t *testing.T) {
+	id, name := 7, "updated"
+	row := &unitRow{ID: &id, Name: &name, Has: &unitHas{ID: true, Name: true}}
+	record := &Record{EntityType: reflect.TypeFor[unitRow](), Keys: []Field{{Name: "ID"}}, Fields: []Field{{Name: "ID", Index: []int{0}, Has: []int{5, 0}}, {Name: "Name", Index: []int{3}, Has: []int{5, 3}}}}
+	frame := &Frame{Record: record, Entity: reflect.ValueOf(row), Fields: fieldSet{"ID": true}, Action: xhandler.WriteUpdate}
+	for field, present := range suppliedFields(frame.Entity.Elem(), frame.Record.Fields) {
+		if present {
+			frame.Fields[field] = true
+		}
+	}
+	if !hasMutableFields(frame) {
+		t.Fatal("lifecycle setter presence was not recognized as a sparse update")
+	}
+}
+
 type unitRow struct {
 	ID     *int     `sqlx:"ID,primaryKey=true,autoincrement=true"`
 	Start  *int     `sqlx:"START" invariant:"Window"`

@@ -60,7 +60,10 @@ func (c *compiler) compileRelations(parent recordContext) ([]*plan.RelationPlan,
 			request: parent.request, operation: parent.operation, view: relation.View, identity: identity,
 			inputPath: appendPath(parent.inputPath, holder), destination: parent.destination,
 			sequencePrefix: appendPath(parent.sequencePrefix, holder), cardinality: cardinality, stack: parent.stack,
-			auxiliary: parent.auxiliary || relation.View.Auxiliary,
+			// Read-only authority belongs to the authored view itself. An auxiliary
+			// parent may own writable descendants whose links and Current reads are
+			// derived from the parent's transaction-scoped body-key projection.
+			auxiliary: relation.View.Auxiliary,
 		}
 		child, err := c.compileChildRecord(childContext)
 		if err != nil {

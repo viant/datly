@@ -87,7 +87,7 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 		return err
 	}
 	if view := c.views[record.Identity]; view != nil && strings.TrimSpace(view.EntityHooks) != "" {
-		if record.Auxiliary {
+		if record.Auxiliary && !hasWritableDescendant(record) {
 			return fmt.Errorf("auxiliary view %s cannot declare mutation entity hooks", record.Identity)
 		}
 		if record.Entity == nil {
