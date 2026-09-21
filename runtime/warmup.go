@@ -12,6 +12,7 @@ import (
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
+	handlerexec "github.com/viant/xdatly/handler/exec"
 )
 
 // Warmup binds each authored root cache case through the canonical component
@@ -112,11 +113,11 @@ func (w *Warmup) PlannedCases() (int, error) {
 }
 
 func (w *Warmup) execute(ctx context.Context, prepare bool) (int, error) {
-	phase := dexec.WarmupPhaseFill
+	phase := handlerexec.WarmupPhaseFill
 	if prepare {
-		phase = dexec.WarmupPhasePrepare
+		phase = handlerexec.WarmupPhasePrepare
 	}
-	ctx = dexec.WithCacheWarmup(ctx, phase)
+	ctx = handlerexec.WithCacheWarmup(ctx, phase)
 	registered, target := w.registered, w.target
 	contract, ok := registered.Input.ForRoute(target.Route)
 	if !ok {

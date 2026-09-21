@@ -15,20 +15,21 @@ import (
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
+	handlerexec "github.com/viant/xdatly/handler/exec"
 	xpredicate "github.com/viant/xdatly/predicate"
 )
 
 type warmupAuthorizationPredicate struct {
-	Invocation *dexec.InvocationInfo `bind:"kind=invocation,required"`
+	Invocation *handlerexec.InvocationInfo `bind:"kind=invocation,required"`
 }
 
 var warmupAuthorizationTrace struct {
 	sync.Mutex
-	phases []dexec.WarmupPhase
+	phases []handlerexec.WarmupPhase
 }
 
 func (p *warmupAuthorizationPredicate) Compute(ctx context.Context, _ any) (*xpredicate.Criteria, error) {
-	fromContext := dexec.InvocationFromContext(ctx)
+	fromContext := handlerexec.InvocationFromContext(ctx)
 	if p.Invocation == nil || p.Invocation != fromContext {
 		return nil, fmt.Errorf("injected invocation does not match context invocation")
 	}
@@ -99,9 +100,9 @@ func TestRuntimeWarmupExposesInvocationToAuthorizationPredicate(t *testing.T) {
 		t.Fatal(err)
 	}
 	warmupAuthorizationTrace.Lock()
-	phases := append([]dexec.WarmupPhase(nil), warmupAuthorizationTrace.phases...)
+	phases := append([]handlerexec.WarmupPhase(nil), warmupAuthorizationTrace.phases...)
 	warmupAuthorizationTrace.Unlock()
-	if !reflect.DeepEqual(phases, []dexec.WarmupPhase{dexec.WarmupPhasePrepare, dexec.WarmupPhaseFill}) {
+	if !reflect.DeepEqual(phases, []handlerexec.WarmupPhase{handlerexec.WarmupPhasePrepare, handlerexec.WarmupPhaseFill}) {
 		t.Fatalf("predicate warmup phases = %v", phases)
 	}
 }

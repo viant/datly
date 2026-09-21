@@ -204,16 +204,16 @@ cover declared verified credentials. Standalone services expose warmup admin con
 
 Custom predicates receive immutable invocation metadata through both their
 `context.Context` and the reserved `invocation` binding. Both access paths return
-the same descriptor. Warmup preparation and cache filling have distinct phases:
+the same `xdatly/handler/exec.InvocationInfo`. Warmup preparation and cache
+filling have distinct phases:
 
 ```go
 type AuthorizationPredicate struct {
-    Input      *SearchInput         `bind:"kind=input,required"`
-    Invocation *exec.InvocationInfo `bind:"kind=invocation,required"`
+    Input      *SearchInput                    `bind:"kind=input,required"`
+    Invocation *handlerexec.InvocationInfo     `bind:"kind=invocation,required"`
 }
 
 func (p *AuthorizationPredicate) Compute(ctx context.Context, value any) (*predicate.Criteria, error) {
-    // Equivalent context access: info := exec.InvocationFromContext(ctx)
     info := p.Invocation
     if info.MayBypassRowAuthorization() {
         return nil, nil
@@ -225,8 +225,7 @@ func (p *AuthorizationPredicate) Compute(ctx context.Context, value any) (*predi
 Use `MayBypassRowAuthorization`, rather than inferring permission from
 `IsCacheWarmup`. The capability is installed only by the server-owned warmup
 operation and is available during both `WarmupPhasePrepare` and
-`WarmupPhaseFill`. The `invocation` provider is runtime-reserved, so component,
-protocol and child providers cannot replace it.
+`WarmupPhaseFill`.
 
 This capability only controls application predicate behavior. It does not skip
 HTTP warmup administrator authorization, API-key checks, required input binding,
