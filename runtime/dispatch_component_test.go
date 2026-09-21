@@ -399,7 +399,7 @@ func TestRuntimeExactInvocationRejectsInvalidAuthorityBeforeHandler(t *testing.T
 		{name: "unowned route", request: dexec.ComponentRequest{Target: dexec.ComponentTarget{Component: primary.Key, Route: spec.RouteRef{Method: http.MethodGet, Path: "/other-authority"}}}, want: "does not own route"},
 		{name: "wrong bound input", request: dexec.ComponentRequest{Target: validTarget, Input: &struct{}{}}, want: "bound component input"},
 		{name: "protected child provider", request: dexec.ComponentRequest{Target: validTarget, Providers: []locator.Provider{handlerprovider.Static(xhandler.InputKey, &input{})}}, want: "protected runtime kind"},
-		{name: "protected invocation provider", request: dexec.ComponentRequest{Target: validTarget, Providers: []locator.Provider{handlerprovider.Static(dexec.InvocationKey, &dexec.InvocationInfo{})}}, want: "protected runtime kind"},
+		{name: "protected invocation provider", request: dexec.ComponentRequest{Target: validTarget, Providers: []locator.Provider{handlerprovider.Static(xhandler.ValueKey("invocation"), &struct{}{})}}, want: "protected runtime kind"},
 		{name: "duplicate child provider", request: dexec.ComponentRequest{Target: validTarget, Providers: []locator.Provider{namedProvider("query", "a", "one"), namedProvider("query", "b", "two")}}, want: "provider kind \"query\" is duplicated"},
 	}
 	for _, testCase := range tests {

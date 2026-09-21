@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/sqlx"
 	xhandler "github.com/viant/xdatly/handler"
+	handlerexec "github.com/viant/xdatly/handler/exec"
 	xmcp "github.com/viant/xdatly/handler/mcp"
 )
 
@@ -168,8 +169,8 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	runtimeProviders = append(runtimeProviders, handlerprovider.CallerOutput(request.BindingOutput))
 	runtimeProviders = append(runtimeProviders, handlerprovider.Parameter())
 	runtimeProviders = append(runtimeProviders, handlerprovider.Input())
-	runtimeProviders = append(runtimeProviders, handlerprovider.New(dexec.InvocationKey, func(ctx context.Context) (any, bool, error) {
-		return dexec.InvocationFromContext(ctx), true, nil
+	runtimeProviders = append(runtimeProviders, handlerprovider.New(invocationKind, func(ctx context.Context) (any, bool, error) {
+		return handlerexec.InvocationFromContext(ctx), true, nil
 	}))
 	runtimeProviders = append(runtimeProviders, handlerprovider.New(xhandler.ReadMetadataKey, func(context.Context) (any, bool, error) {
 		if reads == nil {
