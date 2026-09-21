@@ -261,7 +261,9 @@ SELECT 1`
 	assertly.AssertValues(t, true, component.Settings.Cache.Warmup.IndexMeta)
 }
 
-func TestParseComponentSource_RejectsConflictingStructuredCacheWarmup(t *testing.T) {
+func TestParseComponentSource_RejectsDuplicateCacheWarmupIdentity(t *testing.T) {
+	// Different index columns sharing one index parameter are additive plural
+	// warmups, but their effective identities collide and fail compilation.
 	source := `#setting($_ = $route('/warmup', 'GET'))
 #setting($_ = $cache('aerospike').WithTimeToLiveMs(60000))
 #setting($_ = $cache_warmup('order_id', 'IndexParameter=OrderId'))
@@ -270,10 +272,86 @@ SELECT 1`
 
 	_, err := parseComponentSource("example.com/demo/warmup", "Warmup", source)
 	if err == nil {
-		t.Fatalf("expected conflicting warmup error")
+		t.Fatalf("expected duplicate warmup identity error")
 	}
-	if !strings.Contains(err.Error(), "conflicting cache warmup index column") {
+	if !strings.Contains(err.Error(), "duplicate warmup name") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseComponentSource_AdditivePluralCacheWarmup(t *testing.T) {
+	source := `#setting($_ = $route('/warmup', 'GET'))
+#setting($_ = $cache('aerospike').WithTimeToLiveMs(60000))
+#setting($_ = $cache_warmup('advertiser_id', 'IndexParameter=AdvertiserID', 'Period=today,yesterday'))
+#setting($_ = $cache_warmup('campaign_id', 'IndexParameter=CampaignID', 'Priority=2', 'Connector=prewarm', 'Period=today'))
+#define($_ = $AdvertiserID<int>(query/advertiserId))
+#define($_ = $CampaignID<int>(query/campaignId))
+#define($_ = $Period<string>(query/period))
+SELECT 1`
+
+	component, err := parseComponentSource("example.com/demo/warmup", "Warmup", source)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	cache := component.Settings.Cache
+	if cache == nil || cache.Warmup == nil || len(cache.Warmups) != 1 {
+		t.Fatalf("expected singular plus one plural warmup, got %+v", cache)
+	}
+	assertly.AssertValues(t, "advertiser_id", cache.Warmup.IndexColumn)
+	assertly.AssertValues(t, "AdvertiserID", cache.Warmup.IndexParameter)
+	assertly.AssertValues(t, 0, cache.Warmup.Priority)
+	if len(cache.Warmup.Cases) != 1 || len(cache.Warmup.Cases[0].Set[0].Values) != 2 {
+		t.Fatalf("singular warmup lost its own cases: %+v", cache.Warmup.Cases)
+	}
+	plural := cache.Warmups[0]
+	assertly.AssertValues(t, "campaign_id", plural.IndexColumn)
+	assertly.AssertValues(t, "CampaignID", plural.IndexParameter)
+	assertly.AssertValues(t, 2, plural.Priority)
+	assertly.AssertValues(t, "prewarm", plural.Connector)
+	if len(plural.Cases) != 1 || len(plural.Cases[0].Set[0].Values) != 1 {
+		t.Fatalf("plural warmup lost its own cases: %+v", plural.Cases)
+	}
+	effective, err := cache.EffectiveWarmups()
+	if err != nil || len(effective) != 2 {
+		t.Fatalf("effective warmups=%d err=%v", len(effective), err)
+	}
+}
+
+func TestParseComponentSource_SharedCacheWarmupCases(t *testing.T) {
+	source := `#setting($_ = $route('/warmup', 'GET'))
+#setting($_ = $cache('aerospike').WithTimeToLiveMs(60000))
+#setting($_ = $cache_warmup_cases('recent', 'Period=today,yesterday'))
+#setting($_ = $cache_warmup_cases('broad', 'Period=week,month'))
+#setting($_ = $cache_warmup('advertiser_id', 'IndexParameter=AdvertiserID', 'CaseRefs=recent,broad'))
+#setting($_ = $cache_warmup('campaign_id', 'IndexParameter=CampaignID', 'Name=campaign', 'CaseRefs=recent', 'Period=lastweek'))
+#define($_ = $AdvertiserID<int>(query/advertiserId))
+#define($_ = $CampaignID<int>(query/campaignId))
+#define($_ = $Period<string>(query/period))
+SELECT 1`
+
+	component, err := parseComponentSource("example.com/demo/warmup", "Warmup", source)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	cache := component.Settings.Cache
+	if cache == nil || len(cache.SharedCases) != 2 {
+		t.Fatalf("expected two shared case sets, got %+v", cache)
+	}
+	effective, err := cache.EffectiveWarmups()
+	if err != nil || len(effective) != 2 {
+		t.Fatalf("effective warmups=%d err=%v", len(effective), err)
+	}
+	// Referenced cases expand ahead of inline cases, independently per warmup.
+	if len(effective[0].Cases) != 2 {
+		t.Fatalf("advertiser cases=%+v", effective[0].Cases)
+	}
+	if len(effective[1].Cases) != 2 || effective[1].Cases[1].Set[0].Values[0] != "lastweek" {
+		t.Fatalf("campaign cases=%+v", effective[1].Cases)
+	}
+	assertly.AssertValues(t, "campaign", effective[1].EffectiveName())
+	// Raw metadata keeps unexpanded CaseRefs so both runtimes normalize identically.
+	if len(cache.Warmup.CaseRefs) != 2 || len(cache.Warmups[0].CaseRefs) != 1 {
+		t.Fatalf("caseRefs were not preserved: %+v %+v", cache.Warmup.CaseRefs, cache.Warmups[0].CaseRefs)
 	}
 }
 

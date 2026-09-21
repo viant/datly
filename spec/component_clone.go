@@ -57,11 +57,7 @@ func (s *Settings) Clone() *Settings {
 		result.WarmupTarget = &target
 	}
 	result.Report = s.Report.Clone()
-	if s.Cache != nil {
-		cache := *s.Cache
-		cache.Warmup = s.Cache.Warmup.Clone()
-		result.Cache = &cache
-	}
+	result.Cache = s.Cache.Clone()
 	return &result
 }
 

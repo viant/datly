@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/sql/builder"
 	"github.com/viant/sqlx/io/read/cache"
@@ -25,44 +26,19 @@ type rootCacheMatcher struct {
 func (m rootCacheMatcher) apply(ctx context.Context) error {
 	root := m.session.Artifact.Root
 	view := root.View
-	if m.session.ReadCaches[view] == nil || view.Cache == nil || view.Cache.Warmup == nil {
+	if m.session.ReadCaches[view] == nil || view.Cache == nil {
 		return nil
 	}
-	settings := view.Cache.Warmup
+	warmups, err := view.Cache.EffectiveWarmups()
+	if err != nil {
+		return err
+	}
+	settings, name, values, err := m.selectWarmup(warmups)
+	if err != nil || settings == nil {
+		return err
+	}
 	prepared := &dexec.ReaderInput{Input: m.input.Interface(), Binder: m.binder, Parameters: m.session.Parameters}
-	var values []any
-	if settings.IndexColumn != "" {
-		name := settings.IndexParameter
-		if name == "" {
-			name = settings.IndexColumn
-		}
-		if m.session.Parameters == nil {
-			return nil
-		}
-		value, found, err := m.session.Parameters(name)
-		if err != nil {
-			return err
-		}
-		if !found || value == nil {
-			return nil
-		}
-		actual := reflect.ValueOf(value)
-		for actual.Kind() == reflect.Pointer || actual.Kind() == reflect.Interface {
-			if actual.IsNil() {
-				return nil
-			}
-			actual = actual.Elem()
-		}
-		if actual.Kind() == reflect.Slice && actual.Type().Elem().Kind() != reflect.Uint8 {
-			for i := 0; i < actual.Len(); i++ {
-				values = append(values, actual.Index(i).Interface())
-			}
-		} else {
-			values = []any{actual.Interface()}
-		}
-		if len(values) == 0 {
-			return nil
-		}
+	if len(values) > 0 {
 		if m.binder == nil {
 			return fmt.Errorf("indexed root cache requires canonical input preparation")
 		}
@@ -138,6 +114,98 @@ func (m rootCacheMatcher) apply(ctx context.Context) error {
 		m.query.RequestedFields = append(m.query.RequestedFields, field)
 	}
 	return nil
+}
+
+// selectWarmup picks the most restrictive supplied index: warmups whose index
+// parameter carries request values are preferred; among those the highest
+// explicit Priority wins and equal priorities use the later declaration so
+// broad-to-specific declarations select the most specific supplied dimension.
+// Without any supplied index, a non-indexed warmup (same priority rule) still
+// drives cache identity and projection, preserving the singular behavior.
+func (m rootCacheMatcher) selectWarmup(warmups []*spec.CacheWarmupSettings) (*spec.CacheWarmupSettings, string, []any, error) {
+	type indexedCandidate struct {
+		settings *spec.CacheWarmupSettings
+		name     string
+		values   []any
+	}
+	var supplied, zero *indexedCandidate
+	var fallback *spec.CacheWarmupSettings
+	for _, candidate := range warmups {
+		if candidate == nil {
+			continue
+		}
+		if strings.TrimSpace(candidate.IndexColumn) == "" {
+			if fallback == nil || candidate.Priority >= fallback.Priority {
+				fallback = candidate
+			}
+			continue
+		}
+		if m.session.Parameters == nil {
+			continue
+		}
+		name := candidate.IndexParameter
+		if name == "" {
+			name = candidate.IndexColumn
+		}
+		value, found, err := m.session.Parameters(name)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		if !found || value == nil {
+			continue
+		}
+		values := warmupIndexValues(value)
+		if len(values) == 0 {
+			continue
+		}
+		// A bound zero value is not a supplied selection; it only wins when no
+		// index carries an actual value, preserving the singular contract.
+		slot := &supplied
+		if allZeroWarmupValues(values) {
+			slot = &zero
+		}
+		if *slot == nil || candidate.Priority >= (*slot).settings.Priority {
+			*slot = &indexedCandidate{settings: candidate, name: name, values: values}
+		}
+	}
+	if supplied == nil {
+		supplied = zero
+	}
+	if supplied != nil {
+		return supplied.settings, supplied.name, supplied.values, nil
+	}
+	return fallback, "", nil, nil
+}
+
+func allZeroWarmupValues(values []any) bool {
+	for _, value := range values {
+		if value == nil {
+			continue
+		}
+		actual := reflect.ValueOf(value)
+		if actual.IsValid() && !actual.IsZero() {
+			return false
+		}
+	}
+	return true
+}
+
+func warmupIndexValues(value any) []any {
+	actual := reflect.ValueOf(value)
+	for actual.Kind() == reflect.Pointer || actual.Kind() == reflect.Interface {
+		if actual.IsNil() {
+			return nil
+		}
+		actual = actual.Elem()
+	}
+	if actual.Kind() == reflect.Slice && actual.Type().Elem().Kind() != reflect.Uint8 {
+		var values []any
+		for i := 0; i < actual.Len(); i++ {
+			values = append(values, actual.Index(i).Interface())
+		}
+		return values
+	}
+	return []any{actual.Interface()}
 }
 
 // cacheProjection classifies this view's compiled column identities for native

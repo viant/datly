@@ -41,7 +41,13 @@ indexed identity.
 `$cache_warmup('order_id','Connector=bq_metrics_prewarm','IndexParameter=OrderId','Period=today,yesterday')`
 uses declared canonical parameters and an explicit dedicated warmup connector.
 Both connectors must address equivalent authorized data and the same intended
-native cache. Bound case products, timeout and MaxCases. Warmup HTTP requires
+native cache. Bound case products, timeout and MaxCases. Repeated
+`$cache_warmup` calls with different indexes are additive ordered warmups, each
+owning its cases, connector, limits and index settings; `cache_warmup_cases`
+declares shared case sets that `CaseRefs` expand per referencing warmup. A
+request selects the most restrictive supplied index by explicit `Priority`,
+with later declarations winning equal-priority ties; duplicate warmup
+names or index identities fail initialization. Warmup HTTP requires
 explicit administration policy and a server-owned lifetime.
 
 Warm a full ordinary projection, then narrow compatible regular fields. Cubes

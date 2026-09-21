@@ -325,7 +325,7 @@ func hasComponentWarmupConfiguration(component *spec.Component) bool {
 	if component == nil {
 		return false
 	}
-	if component.CacheWarmup() != nil {
+	if component.Settings != nil && component.Settings.Cache.HasWarmup() {
 		return true
 	}
 	return hasViewWarmupBinding(component.RootView, map[*spec.View]bool{})

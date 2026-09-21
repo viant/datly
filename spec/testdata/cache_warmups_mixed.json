@@ -1,0 +1,37 @@
+{
+  "Name": "resource_cube",
+  "Provider": "afs",
+  "Location": "/tmp/cache",
+  "TimeToLiveMs": 60000,
+  "Warmup": {
+    "IndexColumn": "advertiser_id",
+    "IndexParameter": "AdvertiserID",
+    "CaseRefs": ["recent", "broad"],
+    "Cases": [
+      {"Set": [{"Name": "Period", "Values": ["lastweek"], "ExcludeDefault": true}]}
+    ]
+  },
+  "Warmups": [
+    {
+      "Name": "campaign",
+      "Priority": 2,
+      "IndexColumn": "campaign_id",
+      "IndexParameter": "CampaignID",
+      "Limit": 100,
+      "MaxCases": 30,
+      "FieldNames": ["id", "spend"],
+      "CaseRefs": ["recent"]
+    }
+  ],
+  "SharedCases": {
+    "recent": [
+      {"Set": [
+        {"Name": "Period", "Values": ["today", "yesterday"], "ExcludeDefault": true},
+        {"Name": "Granularity", "Values": ["day", "hour"], "ExcludeDefault": true}
+      ]}
+    ],
+    "broad": [
+      {"Set": [{"Name": "Period", "Values": ["week", "month"], "ExcludeDefault": true}]}
+    ]
+  }
+}

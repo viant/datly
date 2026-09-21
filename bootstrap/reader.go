@@ -101,12 +101,18 @@ func (c *CompiledReader) resolveCaches(config ReaderRuntimeConfig) (map[*data.Vi
 			if view.Cache == nil {
 				view.Cache = &data.Cache{}
 			}
-			if view.Cache.Warmup == nil {
+			if !view.Cache.HasWarmup() {
 				warmupSettings := config.CacheSettings[warmupBinding]
-				if warmupSettings == nil || warmupSettings.Warmup == nil {
+				if warmupSettings == nil || !warmupSettings.HasWarmup() {
 					return fmt.Errorf("view %q cache warmup %q has no configuration", view.Spec.Name, warmupBinding)
 				}
 				view.Cache.Warmup = warmupSettings.Warmup.Clone()
+				for _, item := range warmupSettings.Warmups {
+					view.Cache.Warmups = append(view.Cache.Warmups, item.Clone())
+				}
+				if view.Cache.SharedCases == nil {
+					view.Cache.SharedCases = spec.CloneSharedCases(warmupSettings.SharedCases)
+				}
 			}
 		}
 		var settings *spec.CacheSettings
@@ -121,8 +127,15 @@ func (c *CompiledReader) resolveCaches(config ReaderRuntimeConfig) (map[*data.Vi
 		}
 		if settings == nil && output && c.component.Settings != nil && c.component.Settings.Cache != nil {
 			root := c.component.Settings.Cache
-			if root.Warmup != nil && root.Warmup.IndexMeta {
-				settings = root
+			if rootWarmups, err := root.EffectiveWarmups(); err != nil {
+				return err
+			} else {
+				for _, item := range rootWarmups {
+					if item.IndexMeta {
+						settings = root
+						break
+					}
+				}
 			}
 		}
 		if result[view] == nil {
@@ -139,7 +152,7 @@ func (c *CompiledReader) resolveCaches(config ReaderRuntimeConfig) (map[*data.Vi
 					return err
 				}
 				result[view] = service
-			} else if view.Cache != nil && (view.Cache.Name != "" || view.Cache.Warmup != nil) {
+			} else if view.Cache != nil && (view.Cache.Name != "" || view.Cache.HasWarmup()) {
 				return fmt.Errorf("view %q cache %q has no enabled configuration or supplied service", view.Spec.Name, view.Cache.Name)
 			}
 		}

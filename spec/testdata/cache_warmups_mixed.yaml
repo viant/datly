@@ -1,0 +1,36 @@
+name: resource_cube
+provider: afs
+location: /tmp/cache
+timetolivems: 60000
+warmup:
+  indexcolumn: advertiser_id
+  indexparameter: AdvertiserID
+  caserefs: [recent, broad]
+  cases:
+    - set:
+        - name: Period
+          values: [lastweek]
+          excludedefault: true
+warmups:
+  - name: campaign
+    priority: 2
+    indexcolumn: campaign_id
+    indexparameter: CampaignID
+    limit: 100
+    maxcases: 30
+    fieldnames: [id, spend]
+    caserefs: [recent]
+sharedcases:
+  recent:
+    - set:
+        - name: Period
+          values: [today, yesterday]
+          excludedefault: true
+        - name: Granularity
+          values: [day, hour]
+          excludedefault: true
+  broad:
+    - set:
+        - name: Period
+          values: [week, month]
+          excludedefault: true

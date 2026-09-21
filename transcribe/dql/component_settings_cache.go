@@ -67,6 +67,29 @@ func parseCacheWarmupSettings(args []string) (*spec.CacheWarmupSettings, error) 
 			return nil, fmt.Errorf("invalid warmup parameter %q, expected name=value1,value2", raw)
 		}
 		switch strings.ToLower(name) {
+		case "name":
+			if value == "" {
+				return nil, fmt.Errorf("warmup name was empty")
+			}
+			if strings.Contains(value, ",") {
+				return nil, fmt.Errorf("warmup name %q must be a single name", value)
+			}
+			ret.Name = value
+		case "priority":
+			parsed, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil {
+				return nil, fmt.Errorf("invalid warmup priority %q", value)
+			}
+			ret.Priority = parsed
+		case "caserefs", "case_refs":
+			for _, ref := range strings.Split(value, ",") {
+				if ref = strings.TrimSpace(ref); ref != "" {
+					ret.CaseRefs = append(ret.CaseRefs, ref)
+				}
+			}
+			if len(ret.CaseRefs) == 0 {
+				return nil, fmt.Errorf("warmup caseRefs has no values")
+			}
 		case "connector":
 			if value == "" {
 				return nil, fmt.Errorf("warmup connector was empty")
@@ -129,12 +152,108 @@ func parseCacheWarmupSettings(args []string) (*spec.CacheWarmupSettings, error) 
 	return ret, nil
 }
 
+// parseCacheWarmupCases parses one $cache_warmup_cases declaration: a named
+// reusable case set that warmups reference through CaseRefs.
+func parseCacheWarmupCases(args []string) (string, *spec.CacheWarmupCase, error) {
+	if len(args) < 2 {
+		return "", nil, fmt.Errorf("invalid cache_warmup_cases directive: expected set name and at least one parameter")
+	}
+	name := strings.TrimSpace(trimQuote(args[0]))
+	if name == "" {
+		return "", nil, fmt.Errorf("warmup case set name was empty")
+	}
+	current := &spec.CacheWarmupCase{}
+	for _, raw := range args[1:] {
+		raw = trimQuote(raw)
+		optName, value, ok := splitWarmupOption(raw)
+		if !ok {
+			return "", nil, fmt.Errorf("invalid warmup parameter %q, expected name=value1,value2", raw)
+		}
+		switch strings.ToLower(optName) {
+		case "fieldnames", "field_names", "fields":
+			for _, field := range strings.Split(value, ",") {
+				if field = strings.TrimSpace(field); field != "" {
+					current.FieldNames = append(current.FieldNames, field)
+				}
+			}
+			if len(current.FieldNames) == 0 {
+				return "", nil, fmt.Errorf("warmup field names were empty")
+			}
+		default:
+			param := &spec.CacheWarmupParam{Name: optName}
+			for _, item := range strings.Split(value, ",") {
+				if item = strings.TrimSpace(item); item != "" {
+					param.Values = append(param.Values, item)
+				}
+			}
+			if len(param.Values) == 0 {
+				return "", nil, fmt.Errorf("warmup parameter %q has no values", optName)
+			}
+			current.Set = append(current.Set, param)
+		}
+	}
+	if len(current.Set) == 0 {
+		return "", nil, fmt.Errorf("warmup case set %q has no parameters", name)
+	}
+	return name, current, nil
+}
+
+// appendCacheWarmupSettings applies one $cache_warmup declaration additively.
+// A declaration matching an existing warmup's index identity merges into that
+// warmup, preserving the singular contract; a different index identity appends
+// a new warmup, keeping declaration order: singular first, then plural.
+func appendCacheWarmupSettings(cache *spec.CacheSettings, incoming *spec.CacheWarmupSettings) error {
+	if incoming == nil {
+		return nil
+	}
+	if cache.Warmup == nil && len(cache.Warmups) == 0 {
+		cache.Warmup = incoming
+		return nil
+	}
+	if cache.Warmup != nil && sameCacheWarmupIndexIdentity(cache.Warmup, incoming) {
+		merged, err := mergeCacheWarmupSettings(cache.Warmup, incoming)
+		if err != nil {
+			return err
+		}
+		cache.Warmup = merged
+		return nil
+	}
+	for i, existing := range cache.Warmups {
+		if existing != nil && sameCacheWarmupIndexIdentity(existing, incoming) {
+			merged, err := mergeCacheWarmupSettings(existing, incoming)
+			if err != nil {
+				return err
+			}
+			cache.Warmups[i] = merged
+			return nil
+		}
+	}
+	cache.Warmups = append(cache.Warmups, incoming)
+	return nil
+}
+
+// sameCacheWarmupIndexIdentity reports whether two declarations target the same
+// warmup slot: neither the index column nor the index parameter explicitly differs.
+func sameCacheWarmupIndexIdentity(current, incoming *spec.CacheWarmupSettings) bool {
+	sameField := func(left, right string) bool {
+		left, right = strings.TrimSpace(left), strings.TrimSpace(right)
+		return left == "" || right == "" || strings.EqualFold(left, right)
+	}
+	return sameField(current.IndexColumn, incoming.IndexColumn) && sameField(current.IndexParameter, incoming.IndexParameter)
+}
+
 func mergeCacheWarmupSettings(current, incoming *spec.CacheWarmupSettings) (*spec.CacheWarmupSettings, error) {
 	if current == nil {
 		return incoming, nil
 	}
 	if incoming == nil {
 		return current, nil
+	}
+	if current.Name != "" && incoming.Name != "" && !strings.EqualFold(strings.TrimSpace(current.Name), strings.TrimSpace(incoming.Name)) {
+		return nil, fmt.Errorf("conflicting cache warmup name: %s != %s", current.Name, incoming.Name)
+	}
+	if current.Priority != 0 && incoming.Priority != 0 && current.Priority != incoming.Priority {
+		return nil, fmt.Errorf("conflicting cache warmup priority: %d != %d", current.Priority, incoming.Priority)
 	}
 	if current.IndexColumn != "" && incoming.IndexColumn != "" && !strings.EqualFold(strings.TrimSpace(current.IndexColumn), strings.TrimSpace(incoming.IndexColumn)) {
 		return nil, fmt.Errorf("conflicting cache warmup index column: %s != %s", current.IndexColumn, incoming.IndexColumn)
@@ -149,6 +268,24 @@ func mergeCacheWarmupSettings(current, incoming *spec.CacheWarmupSettings) (*spe
 		return nil, fmt.Errorf("conflicting cache warmup index meta: %t != %t", current.IndexMeta, incoming.IndexMeta)
 	}
 	merged := *current
+	if merged.Name == "" {
+		merged.Name = incoming.Name
+	}
+	if merged.Priority == 0 {
+		merged.Priority = incoming.Priority
+	}
+	for _, ref := range incoming.CaseRefs {
+		known := false
+		for _, existing := range merged.CaseRefs {
+			if strings.EqualFold(existing, ref) {
+				known = true
+				break
+			}
+		}
+		if !known {
+			merged.CaseRefs = append(append([]string(nil), merged.CaseRefs...), ref)
+		}
+	}
 	if merged.IndexColumn == "" {
 		merged.IndexColumn = incoming.IndexColumn
 	}

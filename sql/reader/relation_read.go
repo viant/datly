@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	rsql "github.com/viant/datly/sql/builder"
 	rcollector "github.com/viant/datly/sql/reader/collector"
@@ -179,7 +180,7 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 	if err != nil {
 		return fmt.Errorf("build relation cache matcher for %s: %w", view.Spec.Name, err)
 	}
-	if err := r.applyWarmupMatcher(r.ctx, query, matcher); err != nil {
+	if err := r.applyWarmupMatcher(r.ctx, query, matcher, columns); err != nil {
 		return fmt.Errorf("build relation warmup matcher for %s: %w", view.Spec.Name, err)
 	}
 	if !r.readAll && r.parentCount <= 1 {
@@ -198,15 +199,22 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 	return scan.query(r.ctx, rowQuery{collector: r.child, db: r.connection.DB, query: query, visit: visitor.Visit, read: r.read, id: r.child.Id, parent: parent})
 }
 
-func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *cache.ParmetrizedQuery) error {
+func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *cache.ParmetrizedQuery, columns []string) error {
 	if r == nil || r.session == nil || r.plan == nil || matcher == nil {
 		return nil
 	}
 	view := r.plan.View
-	if r.session.ReadCaches[view] == nil || view.Cache == nil || view.Cache.Warmup == nil {
+	if r.session.ReadCaches[view] == nil || view.Cache == nil {
 		return nil
 	}
-	settings := view.Cache.Warmup
+	warmups, err := view.Cache.EffectiveWarmups()
+	if err != nil {
+		return err
+	}
+	settings := selectRelationWarmup(warmups, columns)
+	if settings == nil {
+		return nil
+	}
 	selector := r.selector.forView(view).Clone()
 	projection := viewProjection(view, selector)
 	if selector == nil {
@@ -250,4 +258,54 @@ func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *c
 		matcher.RequestedFields = append(matcher.RequestedFields, field)
 	}
 	return nil
+}
+
+// selectRelationWarmup picks the effective warmup whose index column matches the
+// relation link columns; explicit priority wins and declaration order (singular
+// first) breaks ties. Without an indexed match, a non-indexed warmup keeps the
+// existing singular identity behavior. A single declared warmup is used as-is.
+func selectRelationWarmup(warmups []*spec.CacheWarmupSettings, columns []string) *spec.CacheWarmupSettings {
+	if len(warmups) == 1 {
+		return warmups[0]
+	}
+	var indexed, fallback *spec.CacheWarmupSettings
+	for _, candidate := range warmups {
+		if candidate == nil {
+			continue
+		}
+		indexColumn := strings.TrimSpace(candidate.IndexColumn)
+		if indexColumn == "" {
+			if fallback == nil || candidate.Priority >= fallback.Priority {
+				fallback = candidate
+			}
+			continue
+		}
+		if !matchesRelationIndexColumn(indexColumn, columns) {
+			continue
+		}
+		if indexed == nil || candidate.Priority > indexed.Priority {
+			indexed = candidate
+		}
+	}
+	if indexed != nil {
+		return indexed
+	}
+	return fallback
+}
+
+func matchesRelationIndexColumn(indexColumn string, columns []string) bool {
+	for _, column := range columns {
+		if strings.EqualFold(normalizeWarmupColumnName(column), normalizeWarmupColumnName(indexColumn)) {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeWarmupColumnName(input string) string {
+	input = strings.TrimSpace(input)
+	if index := strings.LastIndex(input, "."); index != -1 {
+		input = input[index+1:]
+	}
+	return strings.TrimSpace(input)
 }

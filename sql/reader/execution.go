@@ -59,7 +59,42 @@ func NewExecution(config Config, options ...Option) (*Execution, error) {
 	if err := execution.config.Plan.Validate(execution.config.OutputType); err != nil {
 		return nil, err
 	}
+	if err := validatePlanWarmups(execution.config.Plan); err != nil {
+		return nil, err
+	}
 	return execution, nil
+}
+
+// validatePlanWarmups fails initialization for duplicate effective warmup
+// identities or unresolved shared case references instead of overwriting or
+// ambiguously matching at request time.
+func validatePlanWarmups(plan *Plan) error {
+	if plan == nil || plan.Root == nil {
+		return nil
+	}
+	visited := map[*ViewPlan]bool{}
+	var visit func(*ViewPlan) error
+	visit = func(item *ViewPlan) error {
+		if item == nil || visited[item] {
+			return nil
+		}
+		visited[item] = true
+		if item.View != nil && item.View.Cache != nil {
+			if _, err := item.View.Cache.EffectiveWarmups(); err != nil {
+				return fmt.Errorf("view %q warmup: %w", item.View.Spec.Name, err)
+			}
+		}
+		for _, relation := range item.Relations {
+			if relation == nil {
+				continue
+			}
+			if err := visit(relation.Target); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return visit(plan.Root)
 }
 
 func (e *Execution) Read(ctx context.Context, input any, binder xhandler.Binder, resolver sqlx.ParameterResolver) (any, error) {
@@ -84,12 +119,20 @@ func (e *Execution) WarmupTargets() []dexec.ReaderWarmupTarget {
 			return
 		}
 		visited[plan] = true
-		if plan.View != nil && plan.View.Cache != nil && plan.View.Cache.Warmup != nil {
+		if plan.View != nil && plan.View.Cache != nil {
 			viewName := warmupTargetViewName(plan.View)
 			if root {
 				viewName = ""
 			}
-			result = append(result, dexec.ReaderWarmupTarget{View: viewName, Settings: plan.View.Cache.Warmup.Clone()})
+			// Initialization already rejected invalid warmup declarations; every
+			// effective warmup becomes its own target so generated work retains
+			// its originating warmup.
+			warmups, err := plan.View.Cache.EffectiveWarmups()
+			if err == nil {
+				for _, settings := range warmups {
+					result = append(result, dexec.ReaderWarmupTarget{View: viewName, Settings: settings})
+				}
+			}
 		}
 		for _, relation := range plan.Relations {
 			if relation != nil {
