@@ -217,6 +217,9 @@ func (c *serviceCompiler) publish(catalog *Catalog, policy *authorization.Policy
 	if err := catalog.resources.RegisterSkills(protocolRegistry); err != nil {
 		return nil, err
 	}
+	if err := registerSkillToolBridge(protocolRegistry); err != nil {
+		return nil, err
+	}
 	return &Service{catalog: catalog, registry: protocolRegistry, resources: resourceHandler, policy: policy, authorizeResource: c.config.AuthorizeResource}, nil
 }
 
