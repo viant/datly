@@ -282,14 +282,6 @@ func (p *scaffoldPersistence) validateExisting(_, existing string, manifest *sca
 	if err != nil {
 		return err
 	}
-	proposals := map[string]string{}
-	for _, file := range p.files {
-		relative, pathErr := managedPath(p.dir, file.Path)
-		if pathErr != nil {
-			return pathErr
-		}
-		proposals[relative] = file.Content
-	}
 	for _, candidate := range append(generated, p.removals...) {
 		relative, err := managedRelativePath(candidate)
 		if err != nil {
@@ -299,10 +291,7 @@ func (p *scaffoldPersistence) validateExisting(_, existing string, manifest *sca
 			continue
 		}
 		if _, err = os.Lstat(filepath.Join(existing, relative)); err == nil && !owned[relative] {
-			content, readErr := os.ReadFile(filepath.Join(existing, relative))
-			if proposal, ok := proposals[relative]; !ok || readErr != nil || string(content) != proposal {
-				return fmt.Errorf("generated file %q collides with an unowned package file", relative)
-			}
+			return fmt.Errorf("generated file %q collides with an unowned package file", relative)
 		} else if !os.IsNotExist(err) {
 			if err == nil {
 				continue

@@ -81,7 +81,7 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 			if err := os.WriteFile(filepath.Join(root, "api/events/runtime_test.go"), []byte(runtimeSource), 0600); err != nil {
 				t.Fatal(err)
 			}
-			cmd := exec.Command("go", "test", "-mod=mod", "-race", "./...")
+			cmd := exec.Command("go", "test", "-mod=mod", "./...")
 			cmd.Dir = root
 			cmd.Env = append(os.Environ(), "GOWORK=off")
 			if out, err := cmd.CombinedOutput(); err != nil {

@@ -117,7 +117,7 @@ func (c composeClient) check(t *testing.T, revision int) {
 		if event.Frame.Frame != i+1 || event.Frame.Alignment != alignment || event.Tenant != "acme" || event.Channel != []string{"web", "store"}[i] || !event.Frame.Snapshot.Equal(events[0].Frame.Snapshot) || event.Frame.Snapshot.Before(start) || event.Err != nil {
 			t.Fatalf("frame %d=%+v", i, event)
 		}
-		if remaining := event.Deadline.Sub(start); remaining < 29*time.Second || remaining > 31*time.Second {
+		if remaining := event.Deadline.Sub(start); remaining < testRuntimeTimeout-50*time.Millisecond || remaining > testRuntimeTimeout+time.Second {
 			t.Fatalf("configured deadline lost: %v", remaining)
 		}
 	}

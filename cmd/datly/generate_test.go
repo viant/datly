@@ -214,7 +214,9 @@ func TestTranscribeOperationsSQLite(t *testing.T) {
 					if operation != "post" {
 						roles = append(roles, "resources")
 					}
-					support = []string{"entities", "frames", "previous", "layout", "actions", "mutation_output", "validation", "hooks", "invariants"}
+					// Hook scaffolds are create-once only when a component declares
+					// authored hooks. Hookless writers must not emit an empty hooks.go.
+					support = []string{"entities", "frames", "previous", "layout", "actions", "mutation_output", "validation", "invariants"}
 				}
 				if layout != "defaults" {
 					source = "#setting($_ = $file_prefix('orders_'))\n" + source

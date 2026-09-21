@@ -19,7 +19,7 @@ func (c composeClient) deadlines(t *testing.T) {
 			call := c
 			stop := func() {}
 			expected := error(context.DeadlineExceeded)
-			duration := 30 * time.Second
+			duration := testRuntimeTimeout
 			if mode == "caller-deadline" {
 				duration = 100 * time.Millisecond
 				call.ctx, stop = context.WithTimeout(c.ctx, duration)
@@ -53,7 +53,7 @@ func (c composeClient) deadlines(t *testing.T) {
 			var result response
 			select {
 			case result = <-done:
-			case <-time.After(35 * time.Second):
+			case <-time.After(5 * time.Second):
 				t.Fatal("compose ignored deadline/cancellation")
 			}
 			if result.err != nil || !result.failed {

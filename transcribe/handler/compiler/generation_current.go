@@ -2,10 +2,12 @@ package compiler
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/viant/datly/spec"
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/datly/typecatalog"
-	"strings"
+	"github.com/viant/sqlparser"
 )
 
 func (b *inputGeneration) currentName(view *spec.View) (string, error) {
@@ -47,7 +49,9 @@ func (b *inputGeneration) addCurrent(view *spec.View, body string, path []string
 		return fmt.Errorf("generation view %q requires a canonical table", view.CanonicalName())
 	}
 	keyName := typecatalog.FieldName(view.CanonicalName()) + "Keys"
+	outputs := currentSourceOutputs(view.Source.SQL)
 	var projection []string
+	var aliased []string
 	for _, key := range keys {
 		if key.Source == "" {
 			return fmt.Errorf("generation key %s has no source column", key.Field)
@@ -65,10 +69,21 @@ func (b *inputGeneration) addCurrent(view *spec.View, body string, path []string
 		if alias == "" {
 			return fmt.Errorf("generation key %s has no projection", key.Field)
 		}
-		projection = append(projection, key.Field+" AS "+alias)
+		source := key.Field
+		if output := outputs[strings.ToLower(strings.TrimSpace(key.Source))]; output != "" {
+			alias = typecatalog.FieldName(output)
+			source = alias
+			if !strings.EqualFold(strings.TrimSpace(output), strings.TrimSpace(key.Source)) {
+				aliased = append(aliased, alias)
+			}
+		}
+		projection = append(projection, source+" AS "+alias)
 	}
 	query := "SELECT " + strings.Join(projection, ", ") + " FROM `/" + strings.Join(path, "/") + "`"
 	parameter := &spec.Parameter{Name: keyName, Source: spec.BindSource{Kind: "param", Name: body}, Cardinality: "Many", DeclarationSQL: query, Codec: &spec.Codec{Body: "structql", Args: []string{query}}}
+	if len(aliased) > 0 {
+		parameter.Tag = `compositeAlias:"` + strings.Join(aliased, ",") + `"`
+	}
 	if err := b.appendProjection(parameter); err != nil {
 		return err
 	}
@@ -80,6 +95,13 @@ func (b *inputGeneration) appendProjection(parameter *spec.Parameter) error {
 		if existing.Source.Kind != "param" || existing.Source.Name != parameter.Source.Name || (existing.DeclarationSQL == "" && (existing.Codec == nil || existing.Codec.Body != "structql")) {
 			return fmt.Errorf("key projection %q conflicts with authored binding", parameter.Name)
 		}
+		// Current-key helpers are generated from the current outer projection.
+		// Refresh their declaration when that projection renames a key; retaining
+		// the bootstrapped prior SQL would keep the stale helper field and make
+		// CompositeIn address the old derived-table column.
+		existing.DeclarationSQL = parameter.DeclarationSQL
+		existing.Codec = parameter.Codec
+		existing.Tag = parameter.Tag
 	} else if err := b.append(parameter); err != nil {
 		return err
 	}
@@ -115,10 +137,26 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	}
 	// Preserve authored WHERE, joins and projections inside the derived table.
 	// CompositeIn narrows that read; it must never replace authored row scope.
+	outputs := currentSourceOutputs(sql)
 	var columns []string
 	for _, col := range current.Columns {
 		if col != nil {
-			columns = append(columns, `r."`+strings.ReplaceAll(col.Name, `"`, `""`)+`"`)
+			name := col.Name
+			for _, candidate := range []string{col.Name, col.Source} {
+				if output := outputs[strings.ToLower(strings.TrimSpace(candidate))]; output != "" {
+					name = output
+					break
+				}
+			}
+			// The derived table and CompositeIn criteria share this canonical
+			// current-view column name. Keep Source as the physical entity link
+			// so currentProjection can still map the alias back to the entity.
+			if !strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(col.Name)) {
+				col.Expression = col.Source
+				col.Source = name
+			}
+			col.Name = name
+			columns = append(columns, `r."`+strings.ReplaceAll(name, `"`, `""`)+`"`)
 		}
 	}
 	current.Source = view.Source.Clone()
@@ -136,4 +174,37 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	}
 	b.request.ViewBindings[p.Identity()] = currentIdentity
 	return nil
+}
+
+// currentSourceOutputs maps a direct source column to the output name of the
+// already-compiled view SQL. The current-state reader wraps that SQL as a
+// derived table, so an outer alias (ID AS RootKey) is the only addressable
+// name; the physical source name no longer exists at that boundary.
+func currentSourceOutputs(SQL string) map[string]string {
+	result := map[string]string{}
+	SQL = strings.TrimSpace(SQL)
+	parsed, err := sqlparser.ParseQuery(SQL)
+	if err != nil || parsed == nil || len(parsed.List) == 0 {
+		// Generated read programs may have a Velty prelude. The view SELECT is
+		// still authoritative and is the first SQL statement in that program.
+		if index := strings.Index(strings.ToUpper(SQL), "SELECT "); index >= 0 {
+			parsed, err = sqlparser.ParseQuery(SQL[index:])
+		}
+	}
+	if err != nil || parsed == nil {
+		return result
+	}
+	for _, item := range parsed.List {
+		column := sqlparser.NewColumn(item)
+		if column.Expression != "" || strings.TrimSpace(column.Name) == "" {
+			continue
+		}
+		output := strings.TrimSpace(column.Identity())
+		if output == "" {
+			output = strings.TrimSpace(column.Name)
+		}
+		result[strings.ToLower(strings.TrimSpace(column.Name))] = output
+		result[strings.ToLower(output)] = output
+	}
+	return result
 }

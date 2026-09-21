@@ -138,6 +138,11 @@ func optionPatches(occurrence dql.DeclarationOccurrence, mutation *Field) []sour
 	requiredSeen := false
 	selectorSeen := false
 	valueSeen := false
+	uriSeen := false
+	codecSeen := false
+	outputSeen := false
+	descriptionSeen := false
+	exampleSeen := false
 	selector := ""
 	if mutation.UpdateQuerySelector != nil {
 		selector = strings.TrimSpace(*mutation.UpdateQuerySelector)
@@ -178,6 +183,56 @@ func optionPatches(occurrence dql.DeclarationOccurrence, mutation *Field) []sour
 			}
 			valueSeen = true
 			patches = append(patches, sourcePatch{span: option.Span, text: text})
+		case "withuri":
+			if !mutation.UpdateURI {
+				continue
+			}
+			text := ""
+			if !uriSeen && mutation.URI != nil && strings.TrimSpace(*mutation.URI) != "" {
+				text = ".WithURI(" + strconv.Quote(strings.TrimSpace(*mutation.URI)) + ")"
+			}
+			uriSeen = true
+			patches = append(patches, sourcePatch{span: option.Span, text: text})
+		case "withcodec":
+			if !mutation.UpdateCodec {
+				continue
+			}
+			text := ""
+			if !codecSeen && mutation.Codec != nil && strings.TrimSpace(mutation.Codec.Name) != "" {
+				text = renderCodecOption(mutation.Codec)
+			}
+			codecSeen = true
+			patches = append(patches, sourcePatch{span: option.Span, text: text})
+		case "output":
+			if mutation.EmitOutput == nil {
+				continue
+			}
+			text := ""
+			if !outputSeen && *mutation.EmitOutput {
+				text = ".Output()"
+			}
+			outputSeen = true
+			patches = append(patches, sourcePatch{span: option.Span, text: text})
+		case "withdescription", "description":
+			if !mutation.UpdateDescription {
+				continue
+			}
+			text := ""
+			if !descriptionSeen && mutation.Description != nil && strings.TrimSpace(*mutation.Description) != "" {
+				text = ".WithDescription(" + strconv.Quote(strings.TrimSpace(*mutation.Description)) + ")"
+			}
+			descriptionSeen = true
+			patches = append(patches, sourcePatch{span: option.Span, text: text})
+		case "withexample", "example":
+			if !mutation.UpdateExample {
+				continue
+			}
+			text := ""
+			if !exampleSeen && mutation.Example != nil {
+				text = ".WithExample(" + strconv.Quote(*mutation.Example) + ")"
+			}
+			exampleSeen = true
+			patches = append(patches, sourcePatch{span: option.Span, text: text})
 		}
 	}
 	insert := ""
@@ -194,10 +249,36 @@ func optionPatches(occurrence dql.DeclarationOccurrence, mutation *Field) []sour
 	if mutation.UpdateValue && mutation.Value != nil && !valueSeen {
 		insert += ".Value(" + strconv.Quote(*mutation.Value) + ")"
 	}
+	if mutation.UpdateURI && mutation.URI != nil && strings.TrimSpace(*mutation.URI) != "" && !uriSeen {
+		insert += ".WithURI(" + strconv.Quote(strings.TrimSpace(*mutation.URI)) + ")"
+	}
+	if mutation.UpdateCodec && mutation.Codec != nil && strings.TrimSpace(mutation.Codec.Name) != "" && !codecSeen {
+		insert += renderCodecOption(mutation.Codec)
+	}
+	if mutation.EmitOutput != nil && *mutation.EmitOutput && !outputSeen {
+		insert += ".Output()"
+	}
+	if mutation.UpdateDescription && mutation.Description != nil && strings.TrimSpace(*mutation.Description) != "" && !descriptionSeen {
+		insert += ".WithDescription(" + strconv.Quote(strings.TrimSpace(*mutation.Description)) + ")"
+	}
+	if mutation.UpdateExample && mutation.Example != nil && !exampleSeen {
+		insert += ".WithExample(" + strconv.Quote(*mutation.Example) + ")"
+	}
 	if insert != "" {
 		patches = append(patches, sourcePatch{span: dql.SourceSpan{Start: occurrence.OptionInsert, End: occurrence.OptionInsert}, text: insert})
 	}
 	return patches
+}
+
+func renderCodecOption(codec *CodecMutation) string {
+	if codec == nil || strings.TrimSpace(codec.Name) == "" {
+		return ""
+	}
+	args := []string{strconv.Quote(strings.TrimSpace(codec.Name))}
+	for _, arg := range codec.Args {
+		args = append(args, strconv.Quote(arg))
+	}
+	return ".WithCodec(" + strings.Join(args, ", ") + ")"
 }
 
 func firstNonBlank(values ...string) string {

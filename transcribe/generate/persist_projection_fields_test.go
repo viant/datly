@@ -145,6 +145,22 @@ func TestProjectionOwnershipDoesNotAdoptPreexistingAuthoredField(t *testing.T) {
 	}
 }
 
+func TestProjectionOwnershipReplacesGeneratedHelperFields(t *testing.T) {
+	dir := t.TempDir()
+	plan := &Plan{ComponentName: "Orders", ViewDest: "views.go", RouterDest: "router.go", Input: generatedContract("Input", "input.go"), Output: generatedContract("Output", "output.go"), HelperTypes: []HelperType{{Name: "OrdersKeysRow", Fields: []Field{{Name: "Id", Type: "int"}}}}}
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatal(err)
+	}
+	plan.HelperTypes[0].Fields = []Field{{Name: "RootKey", Type: "int"}}
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "views.go"))
+	if err != nil || strings.Contains(string(data), "Id int") || !strings.Contains(string(data), "RootKey int") {
+		t.Fatalf("helper projection was not replaced: %v\n%s", err, data)
+	}
+}
+
 func TestProjectionCodecAuthorityProtectsUnrelatedTags(t *testing.T) {
 	for _, tc := range []struct {
 		next    string

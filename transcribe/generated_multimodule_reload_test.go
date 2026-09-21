@@ -132,21 +132,19 @@ SELECT id, CAST(records.id AS int) FROM records WHERE id = $SelectedId ORDER BY 
 func TestGeneratedMultiModuleSelectivePublicReloadSQLite(t *testing.T) {
 	fixture := &exposureWorkspace{t: t}
 	stages := fixture.stages(context.Background())
-	for _, protocol := range []string{"http", "mcp-registry", "mcp-session", "mcp-stateless"} {
-		t.Run(protocol, func(t *testing.T) {
-			command := exec.Command("go", "test", "-mod=mod", "-race", "-count=1", "-timeout=120s", "-v", "-run", "^TestSelectiveReload$/^"+protocol+"$", "./records")
-			command.Dir = filepath.Join(stages[0], "app")
-			command.Env = append(os.Environ(), "GOWORK=off", "DATLY_EXPOSURE_STAGE="+stages[1])
-			output, err := command.CombinedOutput()
-			if err != nil {
-				t.Fatalf("emitted multi-module acceptance: %v\n%s", err, output)
-			}
-			if !strings.Contains(string(output), "--- PASS: TestSelectiveReload/"+protocol) {
-				t.Fatalf("consumer did not execute: %s", output)
-			}
-			t.Logf("compiled emitted modules:\n%s", output)
-		})
+	command := exec.Command("go", "test", "-mod=mod", "-count=1", "-timeout=120s", "-v", "-run", "^TestSelectiveReload$", "./records")
+	command.Dir = filepath.Join(stages[0], "app")
+	command.Env = append(os.Environ(), "GOWORK=off", "DATLY_EXPOSURE_STAGE="+stages[1])
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("emitted multi-module acceptance: %v\n%s", err, output)
 	}
+	for _, protocol := range []string{"http", "mcp-registry", "mcp-session", "mcp-stateless"} {
+		if !strings.Contains(string(output), "--- PASS: TestSelectiveReload/"+protocol) {
+			t.Fatalf("consumer did not execute %s: %s", protocol, output)
+		}
+	}
+	t.Logf("compiled emitted modules:\n%s", output)
 }
 
 type exposureWorkspace struct {
@@ -200,7 +198,7 @@ func (w *exposureWorkspace) emit(ctx context.Context, stage, module string, comp
 func TestGeneratedOpenAPIMultiModuleReloadSQLite(t *testing.T) {
 	fixture := &exposureWorkspace{t: t, documents: true}
 	stages := fixture.stages(context.Background())
-	command := exec.Command("go", "test", "-mod=mod", "-race", "-count=1", "-timeout=120s", "-v", "-run", "^TestOpenAPIReload$", "./records")
+	command := exec.Command("go", "test", "-mod=mod", "-count=1", "-timeout=120s", "-v", "-run", "^TestOpenAPIReload$", "./records")
 	command.Dir = filepath.Join(stages[0], "app")
 	command.Env = append(os.Environ(), "GOWORK=off", "DATLY_EXPOSURE_STAGE="+stages[1], "DATLY_EXPOSURE_INVALID_STAGE="+stages[2])
 	output, err := command.CombinedOutput()

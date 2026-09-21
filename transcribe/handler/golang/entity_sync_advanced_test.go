@@ -26,9 +26,10 @@ func runEntitySyncFixture(t *testing.T, semantic *plan.Plan, types []RecordType,
 }
 
 type entitySyncFixture struct {
-	entity   *EntityAsset
-	products []*ast.File
-	source   string
+	entity      *EntityAsset
+	products    []*ast.File
+	source      string
+	withoutRace bool
 }
 
 func (f entitySyncFixture) run(t *testing.T) {
@@ -56,7 +57,12 @@ func (f entitySyncFixture) run(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	command := exec.Command("go", "test", "-race", "-mod=mod", "-timeout=60s", "./...")
+	arguments := []string{"test"}
+	if !f.withoutRace {
+		arguments = append(arguments, "-race")
+	}
+	arguments = append(arguments, "-mod=mod", "-timeout=60s", "./...")
+	command := exec.Command("go", arguments...)
 	command.Dir = directory
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("generated recursive sync: %v\n%s\n%s", err, output, generated.Bytes())

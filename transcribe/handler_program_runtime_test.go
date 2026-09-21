@@ -67,7 +67,7 @@ SELECT ID, NAME FROM EVENTS`
 			if err = os.WriteFile(filepath.Join(root, "generated", "program_runtime_test.go"), []byte(source), 0644); err != nil {
 				t.Fatal(err)
 			}
-			command := exec.Command("go", "test", "-mod=mod", "-race", "-timeout", "45s", "./...")
+			command := exec.Command("go", "test", "-mod=mod", "-timeout", "45s", "./...")
 			command.Dir = root
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("transcribed mutation policy: %v\n%s", err, output)

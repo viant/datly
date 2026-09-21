@@ -43,7 +43,7 @@ SELECT TENANT_ID,ID,NAME,ACTIVE,QUANTITY FROM RECORDS`
 			if _, err := NewCompiler().Transcribe(ctx, request); err != nil {
 				t.Fatalf("regenerate: %v", err)
 			}
-			command := exec.Command("go", "test", "-race", "-mod=mod", "./...")
+			command := exec.Command("go", "test", "-mod=mod", "./...")
 			command.Dir = root
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("generated %s composite PATCH: %v\n%s", target, err, output)

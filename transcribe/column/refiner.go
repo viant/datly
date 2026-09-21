@@ -15,6 +15,8 @@ import (
 	sqltemplate "github.com/viant/datly/sql/template"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/node"
+	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
@@ -348,6 +350,21 @@ func schemaDiscoverySQL(SQL string) (string, error) {
 func directSourceTable(SQL string) string {
 	parsed, err := sqlparser.ParseQuery(strings.TrimSpace(SQL))
 	if err != nil {
+		return ""
+	}
+	// A set operation, including one nested inside a derived source, does not
+	// establish one explicit physical table. Lineage can legitimately converge
+	// on the same table across branches, but that is insufficient writer or
+	// metadata-lookup authority.
+	hasUnion := false
+	sqlparser.Traverse(parsed, func(current node.Node) bool {
+		if selection, ok := current.(*query.Select); ok && selection.Union != nil {
+			hasUnion = true
+			return false
+		}
+		return true
+	})
+	if hasUnion {
 		return ""
 	}
 	lineage := sqlparser.Lineage{Query: parsed}

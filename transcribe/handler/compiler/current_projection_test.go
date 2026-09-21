@@ -71,6 +71,20 @@ func TestCurrentProjectionCompilesCanonicalAssignments(t *testing.T) {
 	}
 }
 
+func TestCurrentSourceOutputsPreservesOuterAliases(t *testing.T) {
+	actual := currentSourceOutputs(`SELECT orders.ID AS RootKey, orders.NAME FROM (SELECT o.* FROM ORDERS o) orders`)
+	if actual["id"] != "RootKey" || actual["rootkey"] != "RootKey" || actual["name"] != "NAME" {
+		t.Fatalf("outputs = %+v", actual)
+	}
+}
+
+func TestCurrentSourceOutputsPreservesAliasesAfterTemplatePrelude(t *testing.T) {
+	actual := currentSourceOutputs("#set($X = 1)\nSELECT orders.ID AS RootKey FROM (SELECT o.* FROM ORDERS o) orders")
+	if actual["id"] != "RootKey" {
+		t.Fatalf("outputs = %+v", actual)
+	}
+}
+
 func TestCurrentProjectionKeepsCompositeChildAndRootAuthority(t *testing.T) {
 	component, item, detail := recursiveComponent()
 	for index, view := range []*spec.View{component.RootView, item, detail} {

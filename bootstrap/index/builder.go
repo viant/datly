@@ -588,17 +588,11 @@ func resolvePackageComponents(ctx context.Context, workspace *xmodule.Workspace,
 	}
 	packages := map[string]*synthetic.Package{}
 	active := map[string]bool{}
-	currentModule := ""
 	allowedModules := map[string]bool{}
 	for _, packagePath := range imports {
 		location, locationErr := workspace.Package(packagePath)
 		if locationErr != nil || location == nil || location.Module == nil {
 			return nil, nil, nil, fmt.Errorf("index package authority %q: %w", packagePath, locationErr)
-		}
-		if currentModule == "" {
-			currentModule = location.Module.Path
-		} else if currentModule != location.Module.Path {
-			return nil, nil, nil, fmt.Errorf("index package authority spans modules %q and %q", currentModule, location.Module.Path)
 		}
 		allowedModules[location.Module.Path] = true
 	}

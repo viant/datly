@@ -103,7 +103,7 @@ func contractFieldTags(raw string) string {
 
 func isCanonicalParameterTag(name string) bool {
 	switch name {
-	case "parameter", "bind", "codec", "predicate", "querySelector", "desc", "example":
+	case "parameter", "bind", "codec", "predicate", "querySelector", "desc", "example", "compositeAlias":
 		return true
 	default:
 		return false

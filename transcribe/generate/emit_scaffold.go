@@ -3,7 +3,9 @@ package generate
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"sort"
+	"strings"
 )
 
 type EmittedFile struct {
@@ -115,6 +117,23 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 			return nil, nil, nil, err
 		}
 		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.EntitySupport.Destination), Content: content})
+		if invariants := activeEntityInvariants(plan); len(invariants) > 0 {
+			files = append(files, EmittedFile{Path: filepath.Join(dir, plan.Generation.File("invariants", "invariants.go")), Content: invariantIndexSource(packageName, invariants)})
+		}
+	}
+	if strings.TrimSpace(plan.Settings.Mutation) != "" {
+		existing := map[string]bool{}
+		for _, file := range files {
+			relative, _ := filepath.Rel(dir, file.Path)
+			existing[filepath.Clean(relative)] = true
+		}
+		for _, role := range []string{"mutation", "links", "frames", "previous", "layout", "actions", "mutation_output", "validation"} {
+			destination := plan.Generation.File(role, role+".go")
+			if existing[filepath.Clean(destination)] {
+				continue
+			}
+			files = append(files, EmittedFile{Path: filepath.Join(dir, destination), Content: supportRoleSource(packageName, role)})
+		}
 	}
 	if resources := plan.Resources; resources != nil {
 		files = append(files, EmittedFile{Path: filepath.Join(dir, resources.Destination), Content: resources.source(packageName)})
@@ -228,6 +247,18 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		})
 	}
 	var removals []string
+	invariantDestination := plan.Generation.File("invariants", "invariants.go")
+	hasInvariantArtifact := false
+	for _, file := range files {
+		relative, _ := filepath.Rel(dir, file.Path)
+		if filepath.Clean(relative) == filepath.Clean(invariantDestination) {
+			hasInvariantArtifact = true
+			break
+		}
+	}
+	if !hasInvariantArtifact {
+		removals = append(removals, invariantDestination)
+	}
 	if plan.Input.Ownership == ContractLinked {
 		removals = append(removals, plan.Input.Destination)
 	}
@@ -235,4 +266,51 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		removals = append(removals, plan.Output.Destination)
 	}
 	return files, userFiles, removals, nil
+}
+
+func activeEntityInvariants(plan *Plan) []EntityInvariant {
+	support := plan.EntitySupport
+	if support == nil || len(support.Invariants) == 0 {
+		return nil
+	}
+	groups := map[string]map[string]bool{}
+	for _, view := range plan.Views {
+		if strings.HasPrefix(view.Name, "Current") {
+			continue
+		}
+		for _, field := range view.Fields {
+			if group := reflect.StructTag(field.Tag).Get("invariant"); group != "" {
+				if groups[view.Identity] == nil {
+					groups[view.Identity] = map[string]bool{}
+				}
+				groups[view.Identity][group] = true
+			}
+		}
+	}
+	result := make([]EntityInvariant, 0, len(support.Invariants))
+	for _, invariant := range support.Invariants {
+		if groups[invariant.Identity][strings.TrimSpace(invariant.Group)] {
+			result = append(result, invariant)
+		}
+	}
+	return result
+}
+
+func invariantIndexSource(packageName string, invariants []EntityInvariant) string {
+	var b strings.Builder
+	b.WriteString("package ")
+	b.WriteString(packageName)
+	b.WriteString("\n\n// Generated invariant contracts. Implementations live with their entity receiver.\n")
+	for _, invariant := range invariants {
+		if group := strings.TrimSpace(invariant.Group); group != "" {
+			b.WriteString("// Backfill")
+			b.WriteString(group)
+			b.WriteString("IfNeeded\n")
+		}
+	}
+	return b.String()
+}
+
+func supportRoleSource(packageName, role string) string {
+	return "package " + packageName + "\n\n// Generated " + role + " support is executed by Datly's universal mutation writer.\n"
 }

@@ -76,10 +76,12 @@ func (s *Service) inspect(ctx context.Context, source string) (*Structure, []*tr
 	declarations, declarationErr := dql.DeclarationOccurrences(source)
 	views, expansions, authoringErr := inspectViewSources(source)
 	functions, functionErr := inspectFunctions(source)
+	compositions := inspectPredicateCompositions(source, views)
 	structure := &Structure{Status: "complete", Declarations: declarations, Views: views,
 		PredicateExpansions: expansions, Functions: functions, ColumnContracts: inspectColumnContracts(functions), AvailableConnectors: append([]string(nil), s.config.AvailableConnectors...),
 		AvailablePredicates: append([]string(nil), s.config.PredicateNames...)}
 	structure.AvailableCaches = append([]string(nil), s.config.AvailableCaches...)
+	structure.PredicateCompositions = compositions
 	name := strings.TrimSpace(s.config.Name)
 	if name == "" {
 		name = "Reader"
@@ -140,6 +142,10 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 		return editField(source, operation.Type, operation.Field)
 	case OperationAddFieldPredicate, OperationUpdateFieldPredicate, OperationRemoveFieldPredicate:
 		return s.editPredicate(source, operation.Type, operation.Predicate)
+	case OperationUpdatePredicateGroup:
+		return updatePredicateGroup(source, operation.PredicateGroup)
+	case OperationUpdatePredicateComposition:
+		return updatePredicateComposition(source, operation.PredicateComposition)
 	case OperationAddFunction, OperationUpdateFunction, OperationRemoveFunction:
 		return s.editFunction(source, operation.Type, operation.Function)
 	case OperationSetSetting:
@@ -169,7 +175,7 @@ func (s *Service) edit(source string, operation Operation) (string, error) {
 
 func (o Operation) validate() error {
 	payloads := 0
-	for _, present := range []bool{o.Reader != nil, o.Package != nil, o.Field != nil, o.Predicate != nil, o.Function != nil, o.Setting != nil, o.View != nil, o.Relation != nil, o.ColumnRole != nil, o.Column != nil, len(o.Operations) > 0} {
+	for _, present := range []bool{o.Reader != nil, o.Package != nil, o.Field != nil, o.Predicate != nil, o.PredicateGroup != nil, o.PredicateComposition != nil, o.Function != nil, o.Setting != nil, o.View != nil, o.Relation != nil, o.ColumnRole != nil, o.Column != nil, len(o.Operations) > 0} {
 		if present {
 			payloads++
 		}
@@ -198,6 +204,14 @@ func (o Operation) validate() error {
 	case OperationAddFieldPredicate, OperationUpdateFieldPredicate, OperationRemoveFieldPredicate:
 		if o.Predicate == nil {
 			return fmt.Errorf("operation %q requires predicate", o.Type)
+		}
+	case OperationUpdatePredicateGroup:
+		if o.PredicateGroup == nil {
+			return fmt.Errorf("operation %q requires predicateGroup", o.Type)
+		}
+	case OperationUpdatePredicateComposition:
+		if o.PredicateComposition == nil {
+			return fmt.Errorf("operation %q requires predicateComposition", o.Type)
 		}
 	case OperationAddFunction, OperationUpdateFunction, OperationRemoveFunction:
 		if o.Function == nil {
@@ -280,6 +294,21 @@ func addField(source string, field *Field) (string, error) {
 	if field.Value != nil {
 		line += ".Value(" + strconv.Quote(*field.Value) + ")"
 	}
+	if field.URI != nil && strings.TrimSpace(*field.URI) != "" {
+		line += ".WithURI(" + strconv.Quote(strings.TrimSpace(*field.URI)) + ")"
+	}
+	if field.Codec != nil && strings.TrimSpace(field.Codec.Name) != "" {
+		line += renderCodecOption(field.Codec)
+	}
+	if field.EmitOutput != nil && *field.EmitOutput {
+		line += ".Output()"
+	}
+	if field.Description != nil && strings.TrimSpace(*field.Description) != "" {
+		line += ".WithDescription(" + strconv.Quote(strings.TrimSpace(*field.Description)) + ")"
+	}
+	if field.Example != nil {
+		line += ".WithExample(" + strconv.Quote(*field.Example) + ")"
+	}
 	line += ")\n"
 	prepared := dql.PrepareSource(source)
 	if err := prepared.Err(); err != nil {
@@ -344,6 +373,65 @@ func (s *Service) editPredicate(source string, kind OperationType, mutation *Pre
 
 func (m *PredicateMutation) predicate() *spec.Predicate {
 	return &spec.Predicate{Group: m.Group, Name: m.Name, Args: append([]string(nil), m.Args...), ApplyWhenAbsent: m.ApplyWhenAbsent}
+}
+
+func updatePredicateGroup(source string, mutation *PredicateGroupMutation) (string, error) {
+	if mutation == nil || mutation.Group < 0 {
+		return "", fmt.Errorf("predicate group and non-negative group number are required")
+	}
+	operator := strings.ToUpper(strings.TrimSpace(mutation.Operator))
+	if operator != "AND" && operator != "OR" {
+		return "", fmt.Errorf("predicate group operator must be AND or OR")
+	}
+	if len(mutation.Views) == 0 {
+		return "", fmt.Errorf("predicate group views are required")
+	}
+	views, sites, err := inspectViewSources(source)
+	if err != nil {
+		return "", err
+	}
+	for _, name := range mutation.Views {
+		if !containsView(views, name) {
+			return "", fmt.Errorf("predicate group view %q was not found", name)
+		}
+	}
+	var matching []PredicateExpansion
+	for _, site := range sites {
+		if site.Group != mutation.Group {
+			continue
+		}
+		if !slicesContainsFold(mutation.Views, site.View) {
+			return "", fmt.Errorf("predicate group %d also expands in view %q; complete shared scope is required", mutation.Group, site.View)
+		}
+		matching = append(matching, site)
+	}
+	if len(matching) == 0 {
+		return "", fmt.Errorf("predicate group %d has no compiled expansion sites", mutation.Group)
+	}
+	for _, name := range mutation.Views {
+		found := false
+		for _, site := range matching {
+			found = found || strings.EqualFold(site.View, name)
+		}
+		if !found {
+			return "", fmt.Errorf("predicate group %d does not expand in declared view %q", mutation.Group, name)
+		}
+	}
+	patches := make([]sourcePatch, 0, len(matching))
+	for _, site := range matching {
+		original := source[site.SourceSpan.Start:site.SourceSpan.End]
+		prefix := "$predicate."
+		if strings.HasPrefix(original, "${predicate.") {
+			prefix = "${predicate."
+		}
+		method := site.Method
+		if method == "Expand" {
+			method = "ExpandWith"
+		}
+		replacement := fmt.Sprintf(`%s%s(%d, %q)`, prefix, method, mutation.Group, operator)
+		patches = append(patches, sourcePatch{span: site.SourceSpan, text: replacement})
+	}
+	return applySourcePatches(source, patches)
 }
 
 func applyPredicateAndBuilder(source string, predicateSpan dql.SourceSpan, predicateText string, mutation *PredicateMutation) (string, error) {

@@ -116,6 +116,8 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 			Async:           options.async,
 			ErrorStatusCode: options.errorStatusCode,
 			ErrorMessage:    options.errorMessage,
+			Description:     options.description,
+			Example:         options.example,
 			EmitOutput:      options.emitOutput,
 			Predicates:      options.predicates,
 			Codec:           options.codec,
