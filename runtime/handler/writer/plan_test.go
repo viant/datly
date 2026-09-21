@@ -120,6 +120,32 @@ type transientLinkOutput struct {
 	Data []*transientLinkParent `parameter:"Data,kind=output,in=body"`
 }
 
+type auxiliaryChildParent struct {
+	ID       *int                    `sqlx:"id,primaryKey=true"`
+	Children []*auxiliaryChildRecord `view:"Children,table=children,auxiliary=true" on:"ID=ParentID"`
+}
+type auxiliaryChildRecord struct {
+	ID       *int `sqlx:"id,primaryKey=true"`
+	ParentID *int `sqlx:"parent_id"`
+}
+type auxiliaryChildInput struct {
+	Rows []*auxiliaryChildParent `parameter:"Rows,kind=body,in=data" view:"Rows,table=parents"`
+}
+type auxiliaryChildOutput struct {
+	Data []*auxiliaryChildParent `parameter:"Data,kind=output,in=body"`
+}
+
+func TestUniversalWriterRetainsAuxiliaryChildMetadata(t *testing.T) {
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[auxiliaryChildParent]().PkgPath(), Name: "Rows"}, Name: "Rows", Settings: &spec.Settings{Mutation: "post"}, RootView: &spec.View{Name: "Rows", Source: &spec.ViewSource{Table: "parents"}, Columns: []*spec.Column{{Name: "id", Source: "id", PrimaryKey: true}}}}
+	handler, err := New(component, reflect.TypeFor[auxiliaryChildInput](), reflect.TypeFor[auxiliaryChildOutput](), "post")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(handler.metadata.Root.Relations) != 1 || !handler.metadata.Root.Relations[0].Child.Auxiliary {
+		t.Fatalf("auxiliary relations = %+v", handler.metadata.Root.Relations)
+	}
+}
+
 func TestUniversalWriterResolvesTransientProjectionRelationKey(t *testing.T) {
 	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[transientLinkParent]().PkgPath(), Name: "Rows"}, Name: "Rows", Settings: &spec.Settings{Mutation: "post"}, RootView: &spec.View{Name: "Rows", Source: &spec.ViewSource{Table: "parents"}, Columns: []*spec.Column{{Name: "id", Source: "id", PrimaryKey: true}, {Name: "scope", Source: "scope"}}}}
 	handler, err := New(component, reflect.TypeFor[transientLinkInput](), reflect.TypeFor[transientLinkOutput](), "post")

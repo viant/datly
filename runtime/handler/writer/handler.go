@@ -1189,7 +1189,7 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 	for i := 0; i < parent.EntityType.NumField(); i++ {
 		structField := parent.EntityType.Field(i)
 		viewTag := structField.Tag.Get("view")
-		if viewTag == "" || strings.EqualFold(tagOption(viewTag, "auxiliary"), "true") {
+		if viewTag == "" {
 			continue
 		}
 		childType := dereference(structField.Type)
