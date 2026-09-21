@@ -380,7 +380,7 @@ func TestGroupedProjectionRewritesTransparentWrapper(t *testing.T) {
 	  GROUP BY id, name, category
 	  HAVING COUNT(*) > 0
 	) selector_features`
-	result, err := ApplySelectorProjection(source, []string{"category", "feature_count"}, view)
+	result, err := ApplySelectorProjection(source, []string{"selector_features.category", "selector_features.feature_count"}, view)
 	if err != nil {
 		t.Fatalf("ApplySelectorProjection() error = %v", err)
 	}
@@ -393,5 +393,15 @@ func TestGroupedProjectionRewritesTransparentWrapper(t *testing.T) {
 		if strings.Contains(result, fragment) {
 			t.Fatalf("unexpected %q in %s", fragment, result)
 		}
+	}
+	measureOnly, err := ApplySelectorProjection(source, []string{"selector_features.feature_count"}, view)
+	if err != nil {
+		t.Fatalf("ApplySelectorProjection() measure-only error = %v", err)
+	}
+	if strings.Contains(measureOnly, "GROUP BY") {
+		t.Fatalf("measure-only projection retained grouping: %s", measureOnly)
+	}
+	if !strings.Contains(measureOnly, "COUNT(*) AS feature_count") {
+		t.Fatalf("measure-only projection lost aggregate: %s", measureOnly)
 	}
 }

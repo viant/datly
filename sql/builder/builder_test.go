@@ -1052,6 +1052,33 @@ func TestBuilder_Build_GroupedProjectionAddsGroupByWhenMissing(t *testing.T) {
 	)
 }
 
+func TestBuilder_Build_GroupedProjectionRewritesTransparentWrapper(t *testing.T) {
+	type input struct{}
+
+	query, err := NewBuilder().Build(
+		context.Background(),
+		WithBuilderSQL(`SELECT selector_features.category, selector_features.feature_count
+FROM (
+  SELECT id, name, category, COUNT(*) AS feature_count
+  FROM selector_features
+  GROUP BY id, name, category
+) selector_features
+LIMIT 200`),
+		WithBuilderView(resolvedGroupableView()),
+		WithBuilderSelector(&xstate.Selector{Fields: []string{"selector_features.category", "selector_features.feature_count"}}),
+		WithBuilderProjection([]string{"selector_features.category", "selector_features.feature_count"}),
+		WithBuilderInput(reflect.ValueOf(input{})),
+	)
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+
+	assertly.AssertValues(t,
+		normalizeSQLForAssert("SELECT category, COUNT(*) AS feature_count FROM selector_features GROUP BY 1 LIMIT 200"),
+		normalizeSQLForAssert(query.SQL),
+	)
+}
+
 func TestBuilder_Build_AppliesSelectorFieldProjectionBySQLAlias(t *testing.T) {
 	type input struct{}
 
