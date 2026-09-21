@@ -113,11 +113,15 @@ func (c *serviceCompiler) plans(components []*registry.RegisteredComponent) (*co
 	result := &compiledPlans{inputs: inputs, tools: map[string]*tool.Plan{}}
 	toolCompiler := tool.NewCompiler()
 	for _, registered := range components {
-		if visibility, ok := c.config.Invoker.(interface{ ExposesComponent(spec.Key) bool }); ok && !visibility.ExposesComponent(registered.Component.Key) {
+		if mcpVisibility, ok := c.config.Invoker.(interface{ ExposesMCPComponent(spec.Key) bool }); ok {
+			if !mcpVisibility.ExposesMCPComponent(registered.Component.Key) {
+				continue
+			}
+		} else if visibility, ok := c.config.Invoker.(interface{ ExposesComponent(spec.Key) bool }); ok && !visibility.ExposesComponent(registered.Component.Key) {
 			continue
 		}
 		for _, route := range registered.Component.Routes {
-			if !spec.PublicRoute(route) {
+			if !spec.MCPRoute(route) {
 				continue
 			}
 			if err := c.compileRoute(result, toolCompiler, resourceCompiler, registered, route); err != nil {

@@ -43,7 +43,7 @@ func TestEmitScaffoldUpdatesShapesAppendOnly(t *testing.T) {
 			if readErr != nil {
 				t.Fatal(readErr)
 			}
-			if conflict != "" {
+			if conflict == "type" {
 				if err == nil || !strings.Contains(err.Error(), "explicit migration required") {
 					t.Fatalf("error %v", err)
 				}
@@ -60,6 +60,9 @@ func TestEmitScaffoldUpdatesShapesAppendOnly(t *testing.T) {
 				t.Fatal(err)
 			}
 			text := string(after)
+			if conflict == "tag" && !strings.Contains(text, `json:"renamed"`) {
+				t.Fatalf("generated output tag was not updated: %s", text)
+			}
 			z, a, b := strings.Index(text, "Z string"), strings.Index(text, "A int"), strings.Index(text, "B bool")
 			if z < 0 || a < z || b < a || !strings.Contains(text, "// authored tail remains") {
 				t.Fatalf("append-only shape: %s", text)

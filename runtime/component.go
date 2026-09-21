@@ -102,9 +102,16 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if request.Target.Component.Kind != spec.KindComponent || strings.TrimSpace(request.Target.Component.Name) == "" {
 		return nil, fmt.Errorf("exact component target requires a component key")
 	}
-	route, err := spec.ParseRouteRef(request.Target.Route.String())
-	if err != nil {
-		return nil, err
+	// ComponentTarget already stores a typed route. Do not stringify and parse
+	// it again on every invocation; normalize the two fields directly.
+	route := request.Target.Route
+	route.Method = strings.ToUpper(strings.TrimSpace(route.Method))
+	route.Path = strings.TrimSpace(route.Path)
+	if route.Method == "" || route.Path == "" || !strings.HasPrefix(route.Path, "/") {
+		// Preserve the public validation contract formerly supplied by
+		// ParseRouteRef, while keeping valid invocation off the stringify/parse
+		// path.
+		return nil, fmt.Errorf("component route reference %q must use METHOD:/path", request.Target.Route.String())
 	}
 	identity := request.Target.Component.String()
 	registered, err := r.registeredComponent(ctx, request.Target.Component)

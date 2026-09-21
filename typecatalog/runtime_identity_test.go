@@ -125,6 +125,32 @@ func TestRuntimeIdentityLookupDoesNotCloneAST(t *testing.T) {
 	require.Zero(t, allocations, "identity-only reads must not clone a synthetic AST")
 }
 
+func TestLinkRuntimeTypesEnrichesSourcePackageIdentity(t *testing.T) {
+	catalog := NewCatalog()
+	declared := runtimeIdentityDeclaration(1)
+	require.NoError(t, catalog.RegisterPackage(TypeOriginPackage, &smodel.Package{
+		PkgPath: "example.com/demo", Types: []*smodel.Type{declared},
+	}))
+	runtimeType := reflect.TypeOf(struct{ ID int }{})
+	linked := x.NewType(runtimeType, x.WithPkgPath("example.com/demo"), x.WithName("Record"))
+	require.NoError(t, catalog.LinkRuntimeTypes(TypeOriginPackage, linked))
+
+	resolved, found, err := catalog.Resolve(PackageAuthority, "example.com/demo.Record")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, runtimeType, resolved.Type)
+	require.Equal(t, runtimeType, resolved.SynteticType.ReflectType)
+	require.Equal(t, "ID", syntheticFirstField(resolved))
+	require.NoError(t, catalog.LinkRuntimeTypes(TypeOriginPackage, linked), "linking the same runtime identity is idempotent")
+
+	conflict := x.NewType(reflect.TypeOf(struct{ Name string }{}), x.WithPkgPath("example.com/demo"), x.WithName("Record"))
+	require.Error(t, catalog.LinkRuntimeTypes(TypeOriginPackage, conflict))
+	resolved, found, err = catalog.Resolve(PackageAuthority, "example.com/demo.Record")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, runtimeType, resolved.Type, "failed linking must retain the prior identity")
+}
+
 func runtimeIdentityDeclaration(count int) *smodel.Type {
 	fields := make([]*ast.Field, count)
 	for i := range fields {

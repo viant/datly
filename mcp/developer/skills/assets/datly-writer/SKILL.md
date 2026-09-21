@@ -20,6 +20,10 @@ substitute `translate`, lower-level transcription, or manual writer plumbing.
 
 ## Read what the task needs
 
+- For migrating legacy `handler.Session`/`sess.Db()` writers or direct-SQL
+  application mutations to generated Datly 1.0 graphs and hooks, read
+  [legacy-to-v1-migration.md](references/product/datly/doc/legacy-to-v1-migration.md).
+
 - For YAML/JSON instance constants (`-const` / `ConstURL`), typed defaults, DB-only identifier rendering and source preservation, read [constants and substitutions](references/constants-and-substitutions.md).
 
 - For project init/build and deployment, read [project-build.md](references/project-build.md). Custom builds discover/link internally; no mandatory user init/Register/import list.

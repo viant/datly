@@ -705,12 +705,10 @@ or per-file destinations when files conflict. There is no inferred prefix or
 collision fallback. Distinct filenames also do not resolve Go declaration-name
 conflicts.
 
-The low-level persistent scaffold API may use `.datly-gen.json` to own generated
-paths and fingerprints. The high-level `datly transcribe` command uses
-sidecar-free ephemeral ownership: no target or staging manifest is written, and
-publication uses the in-memory generated-file set while preserving create-once
-and authored files. Filenames and suffixes alone do not establish ownership.
-Persistent regeneration removes replaced, manifest-owned files only with trusted
+The high-level `datly transcribe` command uses `.datly-gen.json` to own generated
+paths and fingerprints while preserving create-once and authored files.
+Filenames and suffixes alone do not establish ownership. Regeneration removes
+replaced, manifest-owned files only with trusted
 unchanged contents; edited or unowned files cause an error before publication. Existing shapes with authored edits
 retain the normal field-merge rules at the same destination. A filename move
 requires the old file to be unchanged and its declarations to have destinations.

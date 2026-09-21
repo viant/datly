@@ -45,7 +45,7 @@ func newLazyCatalog(config Config, base *Service) (*lazyCatalog, error) {
 			if route == nil {
 				return nil, fmt.Errorf("indexed MCP component %s has a nil route", component.Key.String())
 			}
-			if !spec.PublicRoute(route) {
+			if !spec.MCPRoute(route) {
 				continue
 			}
 			for _, exposure := range route.MCP {
@@ -256,7 +256,7 @@ func compileIndexedAuthorizationPolicy(source *authorization.Policy, catalog *Ca
 			continue
 		}
 		for _, route := range component.Routes {
-			if !spec.PublicRoute(route) {
+			if !spec.MCPRoute(route) {
 				continue
 			}
 			for _, exposure := range route.MCP {

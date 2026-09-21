@@ -172,6 +172,15 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			}
 			ret.MCP = mcp
 			ret.mcpSpan = SourceSpan{Start: block.start, End: block.end}
+		case strings.EqualFold(name, "mcpOnly"):
+			if len(args) != 1 || tail != "" {
+				return nil, fmt.Errorf("mcpOnly requires one boolean value")
+			}
+			enabled, parseErr := strconv.ParseBool(strings.TrimSpace(trimQuote(args[0])))
+			if parseErr != nil {
+				return nil, fmt.Errorf("mcpOnly requires true or false")
+			}
+			ret.MCPOnly = enabled
 		case strings.EqualFold(name, "dest"):
 			if len(args) == 0 {
 				return nil, fmt.Errorf("invalid dest directive: missing destination")
@@ -359,12 +368,15 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	if err := ret.Generation.ValidateFilePrefix(); err != nil {
 		return nil, err
 	}
+	if ret != nil && ret.MCPOnly && ret.MCP == nil {
+		return nil, fmt.Errorf("mcpOnly requires an explicit mcp tool")
+	}
 	if ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
 		ret.MCP == nil && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&
 		ret.Format == "" && ret.DateFormat == "" && ret.CaseFormat == "" && ret.Output == nil &&
-		len(ret.Const) == 0 && ret.IgnoreEmptyQueryParameters == nil {
+		len(ret.Const) == 0 && ret.IgnoreEmptyQueryParameters == nil && !ret.MCPOnly {
 		return nil, nil
 	}
 	return ret, nil

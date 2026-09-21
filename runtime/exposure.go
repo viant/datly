@@ -29,6 +29,28 @@ func (r *Runtime) ExposesComponent(key spec.Key) bool {
 	return ok
 }
 
+// ExposesMCPComponent applies scope visibility to an MCP catalogue entry.
+// An explicitly MCP-exposed internal route is intentionally absent from the
+// public HTTP bundle, but must remain discoverable by the MCP compiler.
+func (r *Runtime) ExposesMCPComponent(key spec.Key) bool {
+	if r == nil || r.bundle == nil {
+		return false
+	}
+	component, ok := r.bundle.ComponentByKey(key)
+	if !ok || component == nil {
+		return false
+	}
+	if r.exposure != nil && !r.exposure.Allows(component.Key.Scope) {
+		return false
+	}
+	for _, route := range component.Routes {
+		if spec.MCPRoute(route) {
+			return true
+		}
+	}
+	return false
+}
+
 // Resolve against the full route catalog before applying visibility. A hidden
 // exact route must not fall through to a public path-template component.
 func (r *Runtime) publicComponentByRoute(method, path string) (*spec.Component, map[string]string, bool) {

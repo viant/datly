@@ -1226,7 +1226,7 @@ func TestEmitScaffold_WritesTypedInputFields(t *testing.T) {
 		"func (input *VendorInput) SetName(value string)",
 		"input.Has.Name = true",
 	} {
-		if !strings.Contains(content, expected) {
+		if !containsNormalized(content, expected) {
 			t.Fatalf("generated input missing %q:\n%s", expected, content)
 		}
 	}
@@ -1252,7 +1252,7 @@ func TestEmitScaffold_WritesTypedOutputFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
-	assertly.AssertValues(t, "package vendor_catalog\n\n// VendorOutput is the generated output scaffold for VendorCatalog.\ntype VendorOutput struct {\n\tData []*VendorView `parameter:\"view,kind=output,in=view\"`\n\tStatus string `parameter:\"status,kind=output,in=status\"`\n}\n", string(outputBytes))
+	assertly.AssertValues(t, "package vendor_catalog\n\n// VendorOutput is the generated output scaffold for VendorCatalog.\ntype VendorOutput struct {\n\tData   []*VendorView `parameter:\"view,kind=output,in=view\"`\n\tStatus string        `parameter:\"status,kind=output,in=status\"`\n}\n", string(outputBytes))
 }
 
 func TestEmitScaffold_WritesDefaultOutputFields(t *testing.T) {
@@ -1275,7 +1275,7 @@ func TestEmitScaffold_WritesDefaultOutputFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
-	assertly.AssertValues(t, "package vendor_catalog\n\n// VendorOutput is the generated output scaffold for VendorCatalog.\ntype VendorOutput struct {\n\tStatus string `parameter:\"status,kind=output,in=status\"`\n\tData []*View `parameter:\"view,kind=output,in=view\"`\n}\n", string(outputBytes))
+	assertly.AssertValues(t, "package vendor_catalog\n\n// VendorOutput is the generated output scaffold for VendorCatalog.\ntype VendorOutput struct {\n\tStatus string  `parameter:\"status,kind=output,in=status\"`\n\tData   []*View `parameter:\"view,kind=output,in=view\"`\n}\n", string(outputBytes))
 }
 
 func TestResolvePlan_OutputOptionPromotesBodyFieldToOutput(t *testing.T) {
@@ -1421,7 +1421,7 @@ func TestEmitScaffold_WritesOutputSummaryField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
-	assertly.AssertValues(t, "package meta_out\n\n// MetaOutOutput is the generated output scaffold for MetaOut.\ntype MetaOutOutput struct {\n\tSummary any `parameter:\"summary,kind=output,in=summary\"`\n\tData *View `parameter:\"view,kind=output,in=view\"`\n}\n", string(outputBytes))
+	assertly.AssertValues(t, "package meta_out\n\n// MetaOutOutput is the generated output scaffold for MetaOut.\ntype MetaOutOutput struct {\n\tSummary any   `parameter:\"summary,kind=output,in=summary\"`\n\tData    *View `parameter:\"view,kind=output,in=view\"`\n}\n", string(outputBytes))
 }
 
 func TestEmitScaffold_WritesCombinedOutputChannels(t *testing.T) {
@@ -1445,7 +1445,7 @@ func TestEmitScaffold_WritesCombinedOutputChannels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
-	assertly.AssertValues(t, "package meta_status_out\n\n// MetaStatusOutOutput is the generated output scaffold for MetaStatusOut.\ntype MetaStatusOutOutput struct {\n\tSummary any `parameter:\"summary,kind=output,in=summary\"`\n\tStatus string `parameter:\"status,kind=output,in=status\"`\n\tData *View `parameter:\"view,kind=output,in=view\"`\n}\n", string(outputBytes))
+	assertly.AssertValues(t, "package meta_status_out\n\n// MetaStatusOutOutput is the generated output scaffold for MetaStatusOut.\ntype MetaStatusOutOutput struct {\n\tSummary any    `parameter:\"summary,kind=output,in=summary\"`\n\tStatus  string `parameter:\"status,kind=output,in=status\"`\n\tData    *View  `parameter:\"view,kind=output,in=view\"`\n}\n", string(outputBytes))
 }
 
 func TestEmitScaffold_WritesNestedPatchBodyOutputField(t *testing.T) {
@@ -1552,10 +1552,10 @@ func TestEmitScaffold_WritesFlatHasMarkerStruct(t *testing.T) {
 		t.Fatalf("failed to read generated input file: %v", err)
 	}
 	content := string(inputBytes)
-	if !strings.Contains(content, "Has *FlatPatchInputHas") {
+	if !containsNormalized(content, "Has *FlatPatchInputHas") {
 		t.Fatalf("expected Has marker field, got:\n%s", content)
 	}
-	if !strings.Contains(content, "type FlatPatchInputHas struct {\n\tID bool\n\tName bool\n}") {
+	if !containsNormalized(content, "type FlatPatchInputHas struct {\n\tID bool\n\tName bool\n}") {
 		t.Fatalf("expected flat Has struct, got:\n%s", content)
 	}
 }
@@ -1982,13 +1982,13 @@ SELECT 1`
 		t.Fatalf("failed to read generated input file: %v", err)
 	}
 	content := string(inputBytes)
-	if !strings.Contains(content, "A models.Foo") {
+	if !containsNormalized(content, "A models.Foo") {
 		t.Fatalf("expected resolved bare qualified type, got:\n%s", content)
 	}
-	if !strings.Contains(content, "B *models.Foo") {
+	if !containsNormalized(content, "B *models.Foo") {
 		t.Fatalf("expected resolved pointer qualified type, got:\n%s", content)
 	}
-	if !strings.Contains(content, "C []*models.Foo") {
+	if !containsNormalized(content, "C []*models.Foo") {
 		t.Fatalf("expected resolved slice pointer qualified type, got:\n%s", content)
 	}
 }
@@ -2049,13 +2049,13 @@ SELECT 1`
 	if !strings.Contains(content, `models "example.com/generated/models"`) {
 		t.Fatalf("expected models import from default package, got:\n%s", content)
 	}
-	if !strings.Contains(content, "A models.Foo") {
+	if !containsNormalized(content, "A models.Foo") {
 		t.Fatalf("expected default-package bare type resolution, got:\n%s", content)
 	}
-	if !strings.Contains(content, "B *models.Foo") {
+	if !containsNormalized(content, "B *models.Foo") {
 		t.Fatalf("expected default-package pointer type resolution, got:\n%s", content)
 	}
-	if !strings.Contains(content, "C []*models.Foo") {
+	if !containsNormalized(content, "C []*models.Foo") {
 		t.Fatalf("expected default-package slice pointer type resolution, got:\n%s", content)
 	}
 	viewBytes, err := os.ReadFile(filepath.Join(pkgDir, "views.go"))
@@ -2101,10 +2101,10 @@ SELECT 1`
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
 	content := string(outputBytes)
-	if !strings.Contains(content, "Foos models.Foos") {
+	if !containsNormalized(content, "Foos models.Foos") {
 		t.Fatalf("expected concrete parent type, got:\n%s", content)
 	}
-	if !strings.Contains(content, "FoosPerformance []*models.FoosPerformance") {
+	if !containsNormalized(content, "FoosPerformance []*models.FoosPerformance") {
 		t.Fatalf("expected concrete depth-1 child type, got:\n%s", content)
 	}
 }
@@ -2188,6 +2188,10 @@ func TestResolvePlan_PrefersDefineOverShadowedSetDeclarationForShaping(t *testin
 		t.Fatalf("expected single define-backed Result output field, got %d: %+v", len(resultFields), plan.Output.Fields)
 	}
 	assertly.AssertValues(t, "PreferredResult", resultFields[0].Type)
+}
+
+func containsNormalized(actual, expected string) bool {
+	return strings.Contains(strings.Join(strings.Fields(actual), " "), strings.Join(strings.Fields(expected), " "))
 }
 
 func TestResolvePlan_KeepsSetOnlyInputShapingUnchanged(t *testing.T) {

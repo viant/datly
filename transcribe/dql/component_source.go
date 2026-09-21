@@ -92,6 +92,7 @@ func ParsePreparedComponentSource(scope, name string, prepared *PreparedSource) 
 			Name:         name,
 			APIKeyHeader: route.APIKeyHeader,
 			APIKeyValue:  route.APIKeyValue,
+			Internal:     prepared.Directives.MCPOnly,
 		}
 		if prepared.Directives.MCP != nil {
 			routeSpec.MCP = []*spec.MCPExposure{prepared.Directives.MCP.Clone()}

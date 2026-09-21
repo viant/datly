@@ -180,6 +180,82 @@ func (c *Catalog) RegisterAll(origin TypeOrigin, types ...*x.Type) error {
 	return nil
 }
 
+// LinkRuntimeTypes attaches compiled Go identities to existing source-backed
+// registrations from the same package origin. It preserves the source
+// descriptor and still rejects a different compiled identity for an already
+// linked key. The update is atomic across the supplied group.
+func (c *Catalog) LinkRuntimeTypes(origin TypeOrigin, types ...*x.Type) error {
+	if c == nil {
+		return fmt.Errorf("type catalog is required")
+	}
+	if !validTypeOrigin(origin) {
+		return fmt.Errorf("unknown type origin %q", origin)
+	}
+	linked := make(map[string]*x.Type, len(types))
+	for _, typ := range types {
+		if typ == nil {
+			return fmt.Errorf("linked type is required")
+		}
+		copy, err := (x.Cloner{}).Type(typ)
+		if err != nil {
+			return err
+		}
+		key := strings.TrimSpace(copy.Key())
+		if key == "" {
+			return fmt.Errorf("linked runtime type key is required")
+		}
+		if prior := linked[key]; prior != nil && prior.Type != copy.Type {
+			return fmt.Errorf("linked runtime type %q occurs more than once with different identities", key)
+		}
+		linked[key] = copy
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	updates := make(map[string][]registration, len(linked))
+	for key, runtimeType := range linked {
+		registrations := append([]registration(nil), c.items[key]...)
+		found := false
+		for index := range registrations {
+			existing := registrations[index]
+			if existing.Origin != origin {
+				continue
+			}
+			found = true
+			if existing.Type == nil {
+				return fmt.Errorf("type %q has an empty registration from origin %q", key, origin)
+			}
+			if runtimeType.Type == nil {
+				if !equalType(existing.Type, runtimeType) {
+					return fmt.Errorf("type %q is already registered from origin %q", key, origin)
+				}
+				break
+			}
+			if existing.Type.Type != nil && existing.Type.Type != runtimeType.Type {
+				return fmt.Errorf("type %q is already linked to a different runtime identity from origin %q", key, origin)
+			}
+			enriched, err := (x.Cloner{}).Type(existing.Type)
+			if err != nil {
+				return err
+			}
+			enriched.Type = runtimeType.Type
+			if enriched.SynteticType != nil {
+				enriched.SynteticType.ReflectType = runtimeType.Type
+			}
+			registrations[index].Type = enriched
+			break
+		}
+		if !found {
+			registrations = append(registrations, registration{Origin: origin, Type: runtimeType})
+		}
+		updates[key] = registrations
+	}
+	for key, registrations := range updates {
+		c.items[key] = registrations
+	}
+	return nil
+}
+
 // Clone returns a detached catalog snapshot that can be safely extended
 // without mutating the source catalog.
 func (c *Catalog) Clone() (*Catalog, error) {

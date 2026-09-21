@@ -36,7 +36,7 @@ func matchCurrentKey(view *spec.View, root plan.KeyPart) (plan.KeyPart, error) {
 			continue
 		}
 		fieldMatch := typecatalog.FieldName(column.Name) == root.Field
-		source := strings.TrimSpace(column.Source)
+		source := currentColumnOrigin(column)
 		sourceMatch := root.Source != "" && strings.EqualFold(source, root.Source)
 		if fieldMatch && root.Source != "" && source != "" && !sourceMatch {
 			return plan.KeyPart{}, fmt.Errorf("patch current view %q key %q source %q does not match root source %q", view.CanonicalName(), column.Name, source, root.Source)

@@ -89,3 +89,13 @@ func currentEntitySource(column *spec.Column) string {
 	}
 	return strings.TrimSpace(column.Source)
 }
+
+func currentColumnOrigin(column *spec.Column) string {
+	if column == nil {
+		return ""
+	}
+	if origin := strings.TrimSpace(column.Expression); column.PrimaryKey && origin != "" {
+		return origin
+	}
+	return strings.TrimSpace(column.Source)
+}

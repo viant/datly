@@ -16,6 +16,7 @@ type componentSettings struct {
 	Cache                      *spec.CacheSettings
 	Generation                 spec.GenerationSettings
 	MCP                        *spec.MCPExposure
+	MCPOnly                    bool
 	InputType                  string
 	OutputType                 string
 	JSONMarshalType            string

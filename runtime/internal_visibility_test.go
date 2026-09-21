@@ -29,6 +29,7 @@ func TestRuntimeInternalRouteHiddenFromHTTPButAvailableToInternalInvocation(t *t
 		Name: "Name", Source: spec.BindSource{Kind: "query", Name: "name"}, TypeExpr: "string",
 	}})
 	component.Routes[0].Internal = true
+	component.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "internal.only"}}
 	artifact := componentArtifact(t, component, reflect.TypeOf(internalVisibilityInput{}), reflect.TypeOf(internalVisibilityOutput{}))
 	rt, err := NewRuntime([]*registry.RegisteredComponent{{
 		Component: artifact.Component, Input: artifact.Input, OutputType: reflect.TypeOf(internalVisibilityOutput{}),
@@ -41,6 +42,9 @@ func TestRuntimeInternalRouteHiddenFromHTTPButAvailableToInternalInvocation(t *t
 	}
 	if rt.ExposesComponent(component.Key) {
 		t.Fatal("internal-only component is publicly exposed")
+	}
+	if !rt.ExposesMCPComponent(component.Key) {
+		t.Fatal("explicit MCP-only component is missing from the MCP catalogue boundary")
 	}
 	if len(rt.Routes()) != 0 {
 		t.Fatalf("public routes = %+v", rt.Routes())

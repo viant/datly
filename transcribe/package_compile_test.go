@@ -754,7 +754,7 @@ func TestPackageCompilationGenerateOwnsReaderOutputMissingFromPackageContract(t 
 		t.Fatalf("linked input file was emitted: %v", err)
 	}
 	output, err := os.ReadFile(filepath.Join(root, "generated", "output.go"))
-	if err != nil || !strings.Contains(string(output), "Data []*UsersView") {
+	if err != nil || !strings.Contains(strings.Join(strings.Fields(string(output)), " "), "Data []*UsersView") {
 		t.Fatalf("generated reader output = %v\n%s", err, output)
 	}
 }

@@ -32,6 +32,15 @@ func (p *scaffoldPersistence) projectionOwners(destination string) map[string]bo
 	if p.plan == nil {
 		return result
 	}
+	if p.plan.Input.Ownership == ContractGenerated && p.plan.localShape(p.plan.Input.Package) && destination == p.plan.Input.Destination {
+		result[p.plan.Input.Type] = true
+		if _, ok := hasMarkerField(p.plan.Input.Type, p.plan.Input.Fields); ok {
+			result[p.plan.Input.Type+"Has"] = true
+		}
+	}
+	if p.plan.Output.Ownership == ContractGenerated && p.plan.localShape(p.plan.Output.Package) && destination == p.plan.Output.Destination {
+		result[p.plan.Output.Type] = true
+	}
 	for _, view := range p.plan.Views {
 		if view.Ownership != ViewGenerated || view.Destination != destination {
 			continue
@@ -148,6 +157,17 @@ func (p *scaffoldPersistence) projectionChanges(destination string, previous, pr
 				if owners[field.Owner] || bindings[field.key()] {
 					ownership.Fields = append(ownership.Fields, field)
 				}
+			}
+		}
+	}
+	// Older v5 manifests recorded generated input/output files as complete but
+	// omitted their ordinary contract fields. When the entire current file still
+	// matches its trusted generated fingerprint, backfill ownership from that
+	// exact baseline so later DQL metadata changes can regenerate safely.
+	if known && ownership.Complete && len(ownership.Fields) == 0 && previous != nil && manifest.Fingerprints[destination] != "" && manifest.Fingerprints[destination] == scaffoldFingerprint(previous) {
+		for _, field := range before {
+			if owners[field.Owner] || bindings[field.key()] {
+				ownership.Fields = append(ownership.Fields, field)
 			}
 		}
 	}
