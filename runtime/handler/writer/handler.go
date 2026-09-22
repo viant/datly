@@ -708,10 +708,10 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 		}
 		result, err := validator.Validate(ctx, values.Interface(), options)
 		if err != nil {
-			return err
+			return fmt.Errorf("validate writer %s: %w", record.Path, err)
 		}
 		if err = result.Err(); err != nil {
-			return err
+			return fmt.Errorf("validate writer %s: %w", record.Path, err)
 		}
 	}
 	return nil
