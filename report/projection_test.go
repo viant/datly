@@ -20,6 +20,7 @@ func TestCubeDeclaredOutputMetadata(t *testing.T) {
 		{name: "inferred Go name", sql: "SELECT account_id, SUM(amount) AS total_spend FROM spend GROUP BY account_id", source: "account_id", inferred: true},
 		{name: "authored mapping", sql: "SELECT account_id, SUM(amount) AS total_spend FROM spend GROUP BY account_id", source: "account_id", alias: "AccountID"},
 		{name: "SQL alias", sql: "SELECT account_id AS customer_id, SUM(amount) AS total_spend FROM spend GROUP BY account_id", source: "customer_id", inferred: true},
+		{name: "quoted qualified output identifiers", sql: "SELECT spend.`account_id`, spend.`total_spend` FROM (SELECT account_id, total_spend FROM spend) spend", source: "account_id", inferred: true},
 		{name: "hidden source", sql: "SELECT account_id AS customer_id, SUM(amount) AS total_spend FROM spend GROUP BY account_id", source: "account_id", reject: "no declared output"},
 		{name: "inferred spelling", sql: "SELECT accountid, total_spend FROM spend", source: "account_id", inferred: true, reject: "no declared output"},
 		{name: "duplicate direct outputs", sql: "SELECT a.account_id, b.account_id, total_spend FROM spend a JOIN spend b ON a.account_id=b.account_id", source: "account_id", reject: "duplicate output column"},

@@ -47,6 +47,13 @@ func (p *Plan) Scope(source Source) (*requestprovider.Scope, error) {
 	if source == nil {
 		return nil, fmt.Errorf("MCP input source is required")
 	}
+	if arguments, ok := source.(Arguments); ok {
+		normalized, err := p.NormalizeArguments(arguments)
+		if err != nil {
+			return nil, err
+		}
+		source = Arguments(normalized)
+	}
 	if err := source.validate(p.arguments); err != nil {
 		return nil, err
 	}

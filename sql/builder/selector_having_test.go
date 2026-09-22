@@ -63,6 +63,35 @@ func TestAggregateSelectorCriteriaSQLite(t *testing.T) {
 	}
 }
 
+func TestAggregateSelectorCriteriaThroughTransparentGroupedWrapperSQLite(t *testing.T) {
+	ctx := context.Background()
+	db := sqlite.New(t)
+	require.NoError(t, db.ExecStatements(ctx,
+		"CREATE TABLE site_metrics(site_id INTEGER, bids INTEGER)",
+		"INSERT INTO site_metrics VALUES(1,10),(1,20),(2,20)"))
+
+	source := `SELECT ad_site_cube.site_id, ad_site_cube.bids
+FROM (
+  SELECT site_id, SUM(bids) AS bids
+  FROM site_metrics
+  GROUP BY site_id
+) ad_site_cube`
+	query, err := NewBuilder().Build(ctx,
+		WithBuilderSQL(source),
+		WithBuilderView(resolvedGroupableView()),
+		WithBuilderProjection([]string{"site_id", "bids"}),
+		WithBuilderSelector(&xstate.Selector{Criteria: "bids > ?", Placeholders: []any{25}}),
+	)
+	require.NoError(t, err)
+	require.Contains(t, query.SQL, "HAVING")
+	require.Contains(t, query.SQL, "SUM(bids)")
+	require.NotContains(t, strings.Split(query.SQL, "GROUP BY")[0], "bids > ?")
+	require.Equal(t, []interface{}{25}, query.Args)
+
+	type row struct{ SiteID, Bids int }
+	db.AssertQuery(t, ctx, sqlite.Query{SQL: query.SQL, Args: query.Args}, []row{{SiteID: 1, Bids: 30}})
+}
+
 func TestAggregateSelectorCriteriaValidation(t *testing.T) {
 	for _, tc := range []struct {
 		name, source, predicate string

@@ -5,8 +5,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/viant/datly/bootstrap"
+	handlercompiler "github.com/viant/datly/runtime/handler/compiler"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
@@ -124,6 +126,62 @@ func TestProjectCompilerDerivedRoutesInheritInternalVisibility(t *testing.T) {
 	}
 }
 
+type dateReportInput struct {
+	From *time.Time `format:"dateFormat=YYYY-MM-DD"`
+}
+
+func TestProjectCompilerPropagatesFormattedDateWireSchemaToCubeFilters(t *testing.T) {
+	groupable := true
+	component := &spec.Component{
+		Key:  spec.Key{Kind: spec.KindComponent, Scope: "example.com/acme/reporting", Name: "DateSpend"},
+		Name: "DateSpend", Description: "Date Spend",
+		Settings:    &spec.Settings{Report: &spec.ReportSettings{Enabled: true, Compose: &spec.CubeComposeSettings{Enabled: true}}, InputType: "dateReportInput", OutputType: "reportSourceOutput"},
+		TypeContext: &spec.TypeContext{DefaultPackage: "example.com/acme/reporting"},
+		Routes:      []*spec.Route{{Method: "GET", Path: "/date-spend", Name: "Date Spend"}},
+		Parameters: []*spec.Parameter{
+			{Name: "From", Source: spec.BindSource{Kind: "query", Name: "from"}, Predicates: []*spec.Predicate{{Name: "gte", Args: []string{"spend", "event_date"}}}},
+			{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}},
+		},
+		RootView: &spec.View{
+			Key: spec.Key{Kind: spec.KindView, Scope: "example.com/acme/reporting", Name: "date_spend"}, Name: "date_spend", Groupable: &groupable,
+			Source: &spec.ViewSource{SQL: "SELECT account_id, total_spend FROM spend"},
+			Columns: []*spec.Column{
+				{Name: "AccountID", Source: "account_id", Groupable: &groupable},
+				{Name: "TotalSpend", Source: "total_spend"},
+			},
+		},
+	}
+	compiled, err := handlercompiler.New(handlercompiler.Input{
+		Component: component, InputType: reflect.TypeOf(dateReportInput{}),
+	}).Compile()
+	if err != nil {
+		t.Fatalf("compile source input: %v", err)
+	}
+	project, err := NewProjectCompiler(ProjectConfig{Types: typecatalog.NewCatalog()}).Compile([]Source{
+		{Component: component, Input: compiled.Input, OutputType: reflect.TypeOf(reportSourceOutput{})},
+	})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	derived := project.Derived()
+	if len(derived) != 2 {
+		t.Fatalf("derived count = %d, want cube and compose", len(derived))
+	}
+	for _, item := range derived {
+		var schemas map[string]*spec.WireSchema
+		switch item.Plan.inputType.Field(0).Name {
+		case "Dimensions":
+			schemas = parameterByName(item.Component.Parameters, "Filters").WireSchemas
+			assertWireDateSchema(t, schemas["Filters.From"], true)
+		case "Cubes":
+			schemas = parameterByName(item.Component.Parameters, "Cubes").WireSchemas
+			assertWireDateSchema(t, schemas["Cubes.Filters.From"], true)
+		default:
+			t.Fatalf("unexpected derived input: %v", item.Plan.inputType)
+		}
+	}
+}
+
 func TestProjectCompilerRejectsDerivedRouteCollision(t *testing.T) {
 	source := reportSource(t, &spec.ReportSettings{Enabled: true})
 	collision := Source{Component: &spec.Component{
@@ -133,5 +191,21 @@ func TestProjectCompilerRejectsDerivedRouteCollision(t *testing.T) {
 	_, err := NewProjectCompiler(ProjectConfig{Types: typecatalog.NewCatalog()}).Compile([]Source{source, collision})
 	if err == nil || !strings.Contains(err.Error(), "collides") {
 		t.Fatalf("Compile() error = %v, want route collision", err)
+	}
+}
+
+func parameterByName(params []*spec.Parameter, name string) *spec.Parameter {
+	for _, param := range params {
+		if param != nil && param.Name == name {
+			return param
+		}
+	}
+	return nil
+}
+
+func assertWireDateSchema(t *testing.T, schema *spec.WireSchema, nullable bool) {
+	t.Helper()
+	if schema == nil || schema.Type != "string" || schema.Format != "date" || schema.Nullable != nullable {
+		t.Fatalf("wire schema = %+v, want nullable=%v date string", schema, nullable)
 	}
 }

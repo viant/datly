@@ -1,6 +1,8 @@
 package generate
 
 import (
+	"go/ast"
+	"go/parser"
 	"strconv"
 	"strings"
 
@@ -132,4 +134,39 @@ func defaultTagTypeName(tag string) string {
 		return ""
 	}
 	return typ
+}
+
+func anonymousTagEnabled(tag string) bool {
+	parsed := tags.NewTags(strings.TrimSpace(tag)).Lookup("anonymous")
+	if parsed == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(string(parsed.Values)), "true")
+}
+
+func embeddableFieldType(typeExpr string) bool {
+	expr, err := parser.ParseExpr(strings.TrimSpace(typeExpr))
+	if err != nil {
+		return false
+	}
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
+	}
+	switch actual := expr.(type) {
+	case *ast.Ident:
+		return !isBuiltinNonEmbeddableType(actual.Name)
+	case *ast.SelectorExpr:
+		return true
+	default:
+		return false
+	}
+}
+
+func isBuiltinNonEmbeddableType(name string) bool {
+	switch name {
+	case "any", "bool", "byte", "complex64", "complex128", "error", "float32", "float64", "int", "int8", "int16", "int32", "int64", "rune", "string", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr":
+		return true
+	default:
+		return false
+	}
 }

@@ -129,6 +129,7 @@ type Field struct {
 	Type           string
 	Tag            string
 	Source         string
+	Anonymous      bool
 }
 
 type HelperType struct {

@@ -103,10 +103,23 @@ with the target view identity and existing input/output bindings.
 This fragment requires those canonical input parameters, index column and both
 connectors to exist. The `Period`/`Granularity` values expand into combinations;
 select limits deliberately rather than accidentally warming an unbounded product.
-Configured `CacheWarmupSettings` additionally exposes `Limit`, `MaxCases`,
-`FieldNames`, `IndexColumn`, `IndexParameter`, `IndexMeta`, `Connector` and `Cases`.
-Per-case field names and excluded defaults belong to the typed settings; do not
-invent DQL options for every Go field.
+Configured `CacheWarmupSettings` additionally exposes `Name`, `Priority`,
+`Limit`, `MaxCases`, `FieldNames`, `IndexColumn`, `IndexParameter`, `IndexMeta`,
+`Connector`, `CaseRefs` and `Cases`. Per-case field names and excluded defaults
+belong to the typed settings; do not invent DQL options for every Go field.
+
+A cache may declare several warmups: the singular `Warmup` plus an ordered
+plural `Warmups` list, with named reusable case sets in `SharedCases`. The
+singular contract is unchanged and executes first; plural entries follow in
+declaration order and each warmup owns its cases, connector, limits, projection
+and index settings. `CaseRefs` expand per warmup ahead of inline cases with no
+cartesian product across indexes and no shared mutable case slices. Duplicate
+effective warmup names or index identities (an absent name derives from
+`IndexParameter`, then `IndexColumn`) fail initialization, and an empty plural
+list never shadows a valid singular warmup. A regular request selects the most
+restrictive supplied index by explicit `Priority`; equal priorities let the
+later, more specific declaration win. Required index inputs are omitted only
+for the warmup that owns them.
 
 `IndexMeta` selects related output queries for warmup too. Each target needs its
 native cache service. Limits and counts describe completed warmup work, not a
@@ -192,14 +205,47 @@ POST administration under `Meta.CacheWarmURI` (default
 It requires a server-owned lifetime, positive timeout and explicit administrator
 authorizer. Merely setting a URI does not install those services.
 
-The operation still binds the target's declared credentials/parameters and
-preserves authorization predicates. Its accepted work uses the server lifetime
+The operation still binds the target's declared credentials/parameters. Its accepted work uses the server lifetime
 with a bounded timeout; client disconnection does not define success or abandon
 completion accounting. Use the `Completed` callback for the actual result/error.
 Configured defaults and case budgets must be authorized as deliberately as an
 ordinary request. [HTTP warmup tests](../gateway/http/warmup_policy_test.go) cover
 partial results, limits and failed setup; [JWT warmup tests](../gateway/http/warmup_jwt_sqlite_test.go)
 cover declared verified credentials. Standalone services expose warmup admin configuration. Startup warmup and each actual backend/connector combination need their own acceptance.
+
+### Detect warmup in a custom authorization predicate
+
+Custom predicates receive immutable invocation metadata through both their
+`context.Context` and the reserved `invocation` binding. Both access paths return
+the same `xdatly/handler/exec.InvocationInfo`. Warmup preparation and cache
+filling have distinct phases:
+
+```go
+type AuthorizationPredicate struct {
+    Input      *SearchInput                    `bind:"kind=input,required"`
+    Invocation *handlerexec.InvocationInfo     `bind:"kind=invocation,required"`
+}
+
+func (p *AuthorizationPredicate) Compute(ctx context.Context, value any) (*predicate.Criteria, error) {
+    info := p.Invocation
+    if info.MayBypassRowAuthorization() {
+        return nil, nil
+    }
+    return authorizedCriteria(p.Input, value)
+}
+```
+
+Use `MayBypassRowAuthorization`, rather than inferring permission from
+`IsCacheWarmup`. The capability is installed only by the server-owned warmup
+operation and is available during both `WarmupPhasePrepare` and
+`WarmupPhaseFill`.
+
+This capability only controls application predicate behavior. It does not skip
+HTTP warmup administrator authorization, API-key checks, required input binding,
+credential codecs, authored warmup cases or case budgets. A required JWT still
+needs a valid credential even when a predicate elects to omit its row filter.
+Before returning no authorization criteria, ensure the warmed cache identity and
+ordinary read path cannot expose a broad entry across tenants or principals.
 
 ## Expiry, writes and diagnosis
 

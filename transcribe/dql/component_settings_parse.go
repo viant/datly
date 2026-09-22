@@ -129,10 +129,24 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			if ret.Cache == nil {
 				ret.Cache = &spec.CacheSettings{Enabled: true}
 			}
-			ret.Cache.Warmup, err = mergeCacheWarmupSettings(ret.Cache.Warmup, warmup)
+			// Repeated declarations are additive: one declaration keeps the
+			// singular contract, a matching index identity merges cases, and a
+			// different index appends a distinct plural warmup.
+			if err := appendCacheWarmupSettings(ret.Cache, warmup); err != nil {
+				return nil, err
+			}
+		case strings.EqualFold(name, "cache_warmup_cases"):
+			setName, warmupCase, err := parseCacheWarmupCases(args)
 			if err != nil {
 				return nil, err
 			}
+			if ret.Cache == nil {
+				ret.Cache = &spec.CacheSettings{Enabled: true}
+			}
+			if ret.Cache.SharedCases == nil {
+				ret.Cache.SharedCases = map[string][]*spec.CacheWarmupCase{}
+			}
+			ret.Cache.SharedCases[setName] = append(ret.Cache.SharedCases[setName], warmupCase)
 		case strings.EqualFold(name, "DocGlobalURLs"), strings.EqualFold(name, "DocURL"), strings.EqualFold(name, "DocURLs"), strings.EqualFold(name, "DocBaseURL"):
 			if len(args) == 0 || tail != "" {
 				return nil, fmt.Errorf("%s requires resource references", name)
@@ -378,6 +392,13 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 		ret.Format == "" && ret.DateFormat == "" && ret.CaseFormat == "" && ret.Output == nil &&
 		len(ret.Const) == 0 && ret.IgnoreEmptyQueryParameters == nil && !ret.MCPOnly {
 		return nil, nil
+	}
+	if ret.Cache != nil {
+		// Compile-time diagnostics: duplicate effective warmup identities or
+		// unresolved shared case references fail here instead of at runtime.
+		if _, err := ret.Cache.EffectiveWarmups(); err != nil {
+			return nil, fmt.Errorf("invalid cache warmup configuration: %w", err)
+		}
 	}
 	return ret, nil
 }

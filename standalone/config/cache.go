@@ -30,13 +30,12 @@ func namedCaches(caches map[string]*spec.CacheSettings, providers []*CacheProvid
 		if settings.Name != "" && settings.Name != name {
 			return fmt.Errorf("cache %q name disagrees with its map key", name)
 		}
-		item := *settings
+		item := settings.Clone()
 		item.Name = name
-		item.Warmup = settings.Warmup.Clone()
-		if previous, ok := result[name]; ok && !reflect.DeepEqual(previous, &item) {
+		if previous, ok := result[name]; ok && !reflect.DeepEqual(previous, item) {
 			return fmt.Errorf("conflicting definitions for cache %q", name)
 		}
-		result[name] = &item
+		result[name] = item
 		return nil
 	}
 	for _, name := range cacheNames(caches) {

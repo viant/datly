@@ -49,7 +49,10 @@ type ComponentRequest struct {
 	// ReaderOptions apply after canonical input binding, to the target reader's
 	// result graph. Dependency binding retains its own invocation context policy.
 	ReaderOptions *ReaderOptions
-	Warmup        *ReaderWarmupRequest
+	// WarmupOmitInput names trusted warmup-owned inputs that are intentionally
+	// absent from canonical transport binding, such as an indexed warmup key.
+	WarmupOmitInput []string
+	Warmup          *ReaderWarmupRequest
 }
 
 type ComponentInvoker interface {

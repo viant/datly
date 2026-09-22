@@ -10,6 +10,7 @@ import (
 	bindinput "github.com/viant/bindly/input"
 	"github.com/viant/bindly/locator"
 	"github.com/viant/bindly/xform/conv"
+	"github.com/viant/datly/spec"
 	"github.com/viant/tagly/format"
 )
 
@@ -50,6 +51,13 @@ type timeFormatTransformer struct {
 	target   reflect.Type
 	layout   string
 	external bool
+}
+
+func (t *timeFormatTransformer) WireSchema() *spec.WireSchema {
+	if t == nil {
+		return nil
+	}
+	return &spec.WireSchema{Type: "string", Format: "date"}
 }
 
 func (t *timeFormatTransformer) Transform(_ context.Context, _ locator.Resolver, input any) (any, error) {

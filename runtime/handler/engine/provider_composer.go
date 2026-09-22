@@ -20,6 +20,8 @@ type providerComposition struct {
 
 type providerComposer struct{}
 
+const invocationKind xhandler.ValueKey = "invocation"
+
 func (providerComposer) compose(input providerComposition) ([]locator.Provider, error) {
 	component, err := indexProviderLayer("component", input.component, protectedComponentKind)
 	if err != nil {
@@ -128,6 +130,7 @@ func protectedRuntimeKind(kind string) bool {
 	case "input", "param", "caller_output", "component", string(xhandler.DataKey), string(xhandler.DMLKey),
 		string(xhandler.SequencerKey), string(xhandler.FlusherKey),
 		string(dexec.ComponentInvokerKey),
+		string(invocationKind),
 		string(dexec.ReaderInputPreparerKey),
 		string(xhandler.InputSnapshotKey),
 		string(xhandler.ReadMetadataKey),

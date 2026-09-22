@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/exec"
 	mcpinput "github.com/viant/datly/mcp/input"
 	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
 )
 
@@ -18,25 +19,33 @@ import (
 type Argument struct {
 	documentation   *docs.Snapshot
 	publicName      string
+	aliases         []string
 	path            string
 	sourceKind      string
 	sourceName      string
 	sourceType      reflect.Type
 	destinationType reflect.Type
+	wireSchema      *spec.WireSchema
+	wireSchemas     map[string]*spec.WireSchema
 	required        bool
 	description     string
 	example         string
 }
 
 func (a Argument) PublicName() string            { return a.publicName }
+func (a Argument) Aliases() []string             { return append([]string(nil), a.aliases...) }
 func (a Argument) Path() string                  { return a.path }
 func (a Argument) SourceKind() string            { return a.sourceKind }
 func (a Argument) SourceName() string            { return a.sourceName }
 func (a Argument) SourceType() reflect.Type      { return a.sourceType }
 func (a Argument) DestinationType() reflect.Type { return a.destinationType }
-func (a Argument) Required() bool                { return a.required }
-func (a Argument) Description() string           { return a.description }
-func (a Argument) Example() string               { return a.example }
+func (a Argument) WireSchema() *spec.WireSchema  { return a.wireSchema.Clone() }
+func (a Argument) WireSchemas() map[string]*spec.WireSchema {
+	return cloneWireSchemas(a.wireSchemas)
+}
+func (a Argument) Required() bool      { return a.required }
+func (a Argument) Description() string { return a.description }
+func (a Argument) Example() string     { return a.example }
 
 // Plan is one immutable exact-route MCP tool plan.
 type Plan struct {
@@ -72,19 +81,45 @@ func (p *Plan) Arguments() []Argument {
 	if p == nil {
 		return nil
 	}
-	return append([]Argument(nil), p.args...)
+	result := make([]Argument, len(p.args))
+	for i, argument := range p.args {
+		result[i] = cloneArgument(argument)
+	}
+	return result
 }
 
 func (p *Plan) Scope(arguments map[string]interface{}) (*requestprovider.Scope, error) {
 	if p == nil {
 		return nil, fmt.Errorf("MCP tool plan is required")
 	}
+	normalized, err := p.binding.NormalizeArguments(arguments)
+	if err != nil {
+		return nil, err
+	}
 	for _, argument := range p.args {
-		if _, ok := arguments[argument.publicName]; argument.required && !ok {
+		if _, ok := normalized[argument.publicName]; argument.required && !ok {
 			return nil, fmt.Errorf("missing required MCP argument %q", argument.publicName)
 		}
 	}
-	return p.binding.Scope(mcpinput.Arguments(arguments))
+	return p.binding.Scope(mcpinput.Arguments(normalized))
+}
+
+func cloneArgument(argument Argument) Argument {
+	argument.aliases = append([]string(nil), argument.aliases...)
+	argument.wireSchema = argument.wireSchema.Clone()
+	argument.wireSchemas = cloneWireSchemas(argument.wireSchemas)
+	return argument
+}
+
+func cloneWireSchemas(source map[string]*spec.WireSchema) map[string]*spec.WireSchema {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make(map[string]*spec.WireSchema, len(source))
+	for key, schema := range source {
+		result[key] = schema.Clone()
+	}
+	return result
 }
 
 func cloneTool(source schema.Tool) schema.Tool {
@@ -103,6 +138,15 @@ func cloneTool(source schema.Tool) schema.Tool {
 		result.InputSchema.Properties[name] = cloneSchemaMap(property)
 	}
 	result.InputSchema.Required = append([]string(nil), source.InputSchema.Required...)
+	if source.OutputSchema != nil {
+		output := *source.OutputSchema
+		output.Properties = make(map[string]map[string]interface{}, len(source.OutputSchema.Properties))
+		for name, property := range source.OutputSchema.Properties {
+			output.Properties[name] = cloneSchemaMap(property)
+		}
+		output.Required = append([]string(nil), source.OutputSchema.Required...)
+		result.OutputSchema = &output
+	}
 	return result
 }
 

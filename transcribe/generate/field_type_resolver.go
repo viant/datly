@@ -149,6 +149,8 @@ func (r *fieldTypeResolver) standardDescriptor(authored string) *x.Type {
 	switch packagePath + "." + name {
 	case "github.com/viant/xdatly/response.Status":
 		typeOf = reflect.TypeFor[xresponse.Status]()
+	case "github.com/viant/xdatly/response.Metrics":
+		typeOf = reflect.TypeFor[xresponse.Metrics]()
 	case "github.com/viant/xdatly/handler.Violation":
 		typeOf = reflect.TypeFor[xhandler.Violation]()
 	case "encoding/json.RawMessage":

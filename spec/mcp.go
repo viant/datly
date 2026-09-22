@@ -49,6 +49,20 @@ func (e *MCPExposure) Identity(component *Component, route *Route) string {
 	return name + "." + routeMCPIdentifier(route)
 }
 
+// DerivedMCPToolName derives a public MCP name for a synthetic endpoint such
+// as a report cube from the source route's authored tool exposure.
+func DerivedMCPToolName(route *Route, fallback, suffix string) string {
+	if route != nil {
+		for _, exposure := range route.MCP {
+			if exposure == nil || exposure.Kind != MCPExposureTool || strings.TrimSpace(exposure.Name) == "" {
+				continue
+			}
+			return strings.TrimSpace(exposure.Name) + suffix
+		}
+	}
+	return fallback
+}
+
 func routeMCPIdentifier(route *Route) string {
 	input := strings.ToLower(strings.TrimSpace(route.Method)) + "_" + strings.TrimSpace(route.Path)
 	var result strings.Builder

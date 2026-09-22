@@ -40,7 +40,7 @@ func (d *reportDeriver) derivedComponent(source *spec.Component, sourceRoute *sp
 	}
 	var exposure []*spec.MCPExposure
 	if metadata.settings.MCPTool == nil || *metadata.settings.MCPTool {
-		exposure = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: identity.key.Name, Description: source.Description}}
+		exposure = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: spec.DerivedMCPToolName(sourceRoute, identity.key.Name, "Cube"), Description: source.Description}}
 	}
 	return &spec.Component{
 		Key: identity.key, Name: identity.key.Name, Description: strings.TrimSpace(source.Description + " cube"),

@@ -325,7 +325,7 @@ func hasComponentWarmupConfiguration(component *spec.Component) bool {
 	if component == nil {
 		return false
 	}
-	if component.CacheWarmup() != nil {
+	if component.Settings != nil && component.Settings.Cache.HasWarmup() {
 		return true
 	}
 	return hasViewWarmupBinding(component.RootView, map[*spec.View]bool{})
@@ -407,7 +407,7 @@ func expandReportEntries(entries []*Entry) []*Entry {
 			name := typecatalog.ExportedFieldName(component.Key.Name + suffix + "Cube")
 			cube := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: name}, Name: name, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube", Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
 			if component.Settings.Report.MCPTool == nil || *component.Settings.Report.MCPTool {
-				cube.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: name, Description: component.Description}}
+				cube.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: spec.DerivedMCPToolName(route, name, "Cube"), Description: component.Description}}
 			}
 			result = append(result, &Entry{Component: cube, Owner: component.Key, Sources: append([]Source(nil), entry.Sources...), Fingerprint: digestStrings(entry.Fingerprint, cube.Key.String())})
 			compose := component.Settings.Report.Compose
@@ -417,7 +417,7 @@ func expandReportEntries(entries []*Entry) []*Entry {
 			composeName := name + "Compose"
 			composed := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: composeName}, Name: composeName, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube/compose", Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
 			if compose.MCPTool == nil || *compose.MCPTool {
-				composed.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: composeName, Description: component.Description}}
+				composed.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: spec.DerivedMCPToolName(route, composeName, "CubeCompose"), Description: component.Description}}
 			}
 			result = append(result, &Entry{Component: composed, Owner: component.Key, Sources: append([]Source(nil), entry.Sources...), Fingerprint: digestStrings(entry.Fingerprint, composed.Key.String())})
 		}

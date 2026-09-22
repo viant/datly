@@ -32,6 +32,8 @@ type InputField struct {
 	anonymous       bool
 	dependency      *spec.RouteRef
 	verifiedJWT     bool
+	wireSchema      *spec.WireSchema
+	wireSchemas     map[string]*spec.WireSchema
 }
 
 // RouteInputContract is the exact binding contract for one component route.
@@ -109,8 +111,13 @@ func NewInputContract(inputType reflect.Type, projection *bindly.Projection, rou
 			if transformer, ok := binding.Transformer.(interface{ Codec() xcodec.Instance }); ok {
 				verifiedJWT = auth.VerifiesJWT(transformer.Codec())
 			}
+			wireSchema, wireSchemas, err := bindingWireSchema(binding)
+			if err != nil {
+				return nil, fmt.Errorf("route input contract %s field %s: %w", key, binding.Path, err)
+			}
 			fields = append(fields, InputField{
 				owner: inputType, origin: route.Route, path: binding.Path, destinationType: destinationType, binding: binding, anonymous: anonymous, dependency: dependency, verifiedJWT: verifiedJWT,
+				wireSchema: wireSchema, wireSchemas: wireSchemas,
 			})
 		}
 		var replayPaths []string
@@ -196,6 +203,65 @@ func (c *RouteInputContract) Without(target any, names ...string) (any, error) {
 	return c.contract.projection.Without(target, names...)
 }
 
+// WithOptionalBindings returns a detached route contract with matching bindings
+// marked optional. It is used by trusted runtime flows that intentionally remove
+// server-owned inputs while preserving all other canonical binding semantics.
+func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputContract, error) {
+	if c == nil || c.contract == nil {
+		return nil, fmt.Errorf("input contract is required")
+	}
+	optional := map[string]bool{}
+	for _, name := range names {
+		if normalized := normalizeInputName(name); normalized != "" {
+			optional[normalized] = true
+		}
+	}
+	if len(optional) == 0 {
+		return c, nil
+	}
+	bindings := make([]bindly.BindingSpec, 0, len(c.fields))
+	matched := map[string]int{}
+	for _, field := range c.fields {
+		binding := cloneBindingSpec(field.binding)
+		keys := inputFieldMatchKeys(field)
+		for _, key := range keys {
+			if optional[key] {
+				value := false
+				binding.Required = &value
+				matched[key]++
+				break
+			}
+		}
+		bindings = append(bindings, binding)
+	}
+	for name := range optional {
+		switch matched[name] {
+		case 0:
+			return nil, fmt.Errorf("optional input binding %q is not defined for route %s", name, c.route.String())
+		case 1:
+		default:
+			return nil, fmt.Errorf("optional input binding %q is ambiguous for route %s", name, c.route.String())
+		}
+	}
+	injector, err := bindly.NewInjector()
+	if err != nil {
+		return nil, err
+	}
+	plan, err := injector.CompilePlan(c.inputType, bindings...)
+	if err != nil {
+		return nil, err
+	}
+	contract, err := NewInputContract(c.inputType, c.contract.projection, RouteInput{Route: c.route, Plan: plan, Bindings: bindings})
+	if err != nil {
+		return nil, err
+	}
+	result, ok := contract.ForRoute(c.route)
+	if !ok {
+		return nil, fmt.Errorf("rebuilt route input contract not found: %s", c.route.String())
+	}
+	return result, nil
+}
+
 func (c *RouteInputContract) Fields() []InputField {
 	if c == nil {
 		return nil
@@ -204,6 +270,8 @@ func (c *RouteInputContract) Fields() []InputField {
 	for index, field := range c.fields {
 		result[index] = field
 		result[index].binding = cloneBindingSpec(field.binding)
+		result[index].wireSchema = field.wireSchema.Clone()
+		result[index].wireSchemas = cloneWireSchemas(field.wireSchemas)
 	}
 	return result
 }
@@ -213,6 +281,51 @@ func (f InputField) DestinationType() reflect.Type { return f.destinationType }
 func (f InputField) SourceType() reflect.Type      { return f.binding.SourceType }
 func (f InputField) Binding() bindly.BindingSpec   { return cloneBindingSpec(f.binding) }
 func (f InputField) Anonymous() bool               { return f.anonymous }
+func (f InputField) WireSchema() *spec.WireSchema  { return f.wireSchema.Clone() }
+func (f InputField) WireSchemas() map[string]*spec.WireSchema {
+	return cloneWireSchemas(f.wireSchemas)
+}
+
+func inputFieldMatchKeys(field InputField) []string {
+	var result []string
+	appendKey := func(value string) {
+		normalized := normalizeInputName(value)
+		if normalized == "" {
+			return
+		}
+		for _, existing := range result {
+			if existing == normalized {
+				return
+			}
+		}
+		result = append(result, normalized)
+	}
+	appendKey(field.path)
+	appendKey(field.binding.Name)
+	appendKey(field.binding.Location.In)
+	if parameter, ok := field.binding.Extension.(*spec.Parameter); ok && parameter != nil {
+		appendKey(parameter.Name)
+		appendKey(parameter.Source.Name)
+	}
+	return result
+}
+
+func normalizeInputName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var builder strings.Builder
+	for _, r := range value {
+		switch {
+		case r == '_' || r == '-' || r == '.' || r == ' ':
+			continue
+		default:
+			builder.WriteRune(r)
+		}
+	}
+	return strings.ToLower(builder.String())
+}
 
 func cloneBindingSpec(binding bindly.BindingSpec) bindly.BindingSpec {
 	binding.Required = cloneBool(binding.Required)
@@ -232,6 +345,59 @@ func cloneBool(value *bool) *bool {
 	}
 	result := *value
 	return &result
+}
+
+func bindingWireSchema(binding bindly.BindingSpec) (*spec.WireSchema, map[string]*spec.WireSchema, error) {
+	var result *spec.WireSchema
+	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
+		result = param.WireSchema.Clone()
+	}
+	if result == nil {
+		if provider, ok := binding.Transformer.(interface{ WireSchema() *spec.WireSchema }); ok {
+			result = provider.WireSchema()
+		}
+	}
+	if err := validateWireSchema(result); err != nil {
+		return nil, nil, err
+	}
+	var nested map[string]*spec.WireSchema
+	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
+		nested = cloneWireSchemas(param.WireSchemas)
+	}
+	for key, schema := range nested {
+		if err := validateWireSchema(schema); err != nil {
+			return nil, nil, fmt.Errorf("nested wire schema %s: %w", key, err)
+		}
+	}
+	return result.Clone(), nested, nil
+}
+
+func cloneWireSchemas(source map[string]*spec.WireSchema) map[string]*spec.WireSchema {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make(map[string]*spec.WireSchema, len(source))
+	for key, schema := range source {
+		result[key] = schema.Clone()
+	}
+	return result
+}
+
+func validateWireSchema(schema *spec.WireSchema) error {
+	if schema == nil {
+		return nil
+	}
+	switch schema.Type {
+	case "string":
+	default:
+		return fmt.Errorf("unsupported wire schema type %q", schema.Type)
+	}
+	switch schema.Format {
+	case "", "date":
+	default:
+		return fmt.Errorf("unsupported wire schema format %q", schema.Format)
+	}
+	return nil
 }
 
 func inputFieldAnonymous(field reflect.StructField, extension any) (bool, error) {

@@ -120,9 +120,15 @@ type CacheSettings struct {
 	Location                string               `json:"location,omitempty"`
 	TimeToLiveMs            int                  `json:"timeToLiveMs,omitempty"`
 	Warmup                  *CacheWarmupSettings `json:"warmup,omitempty"`
+	// Warmups holds additional warmup definitions; the singular Warmup, when set, is always first.
+	Warmups []*CacheWarmupSettings `json:"warmups,omitempty"`
+	// SharedCases holds named reusable case sets referenced by CacheWarmupSettings.CaseRefs.
+	SharedCases map[string][]*CacheWarmupCase `json:"sharedCases,omitempty"`
 }
 
 type CacheWarmupSettings struct {
+	Name           string             `json:"name,omitempty"`
+	Priority       int                `json:"priority,omitempty"`
 	Limit          *int               `json:"limit,omitempty"`
 	MaxCases       *int               `json:"maxCases,omitempty"`
 	FieldNames     []string           `json:"fieldNames,omitempty"`
@@ -130,6 +136,7 @@ type CacheWarmupSettings struct {
 	IndexParameter string             `json:"indexParameter,omitempty"`
 	IndexMeta      bool               `json:"indexMeta,omitempty"`
 	Connector      string             `json:"connector,omitempty"`
+	CaseRefs       []string           `json:"caseRefs,omitempty"`
 	Cases          []*CacheWarmupCase `json:"cases,omitempty"`
 }
 

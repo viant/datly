@@ -50,7 +50,11 @@ func (c *inputCompiler) compileLayout(typeOf reflect.Type, descriptor *x.Type) (
 		c.metadata.inputLayout.Dimensions, c.metadata.inputLayout.Measures, c.metadata.inputLayout.Filters,
 		c.metadata.inputLayout.OrderBy, c.metadata.inputLayout.Limit, c.metadata.inputLayout.Offset,
 	} {
-		result.params = append(result.params, bodyParam(name, typeOf))
+		param := bodyParam(name, typeOf)
+		if name == c.metadata.inputLayout.Filters {
+			param.WireSchemas = filterWireSchemas(name, c.metadata.filters)
+		}
+		result.params = append(result.params, param)
 	}
 	return result, nil
 }

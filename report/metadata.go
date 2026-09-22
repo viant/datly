@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/sqlparser"
 )
 
 const (
@@ -61,8 +62,16 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 	fieldNames := map[string]string{}
 	for _, projected := range projection {
 		column := projected.Column
+		selectionName, err := reportOutputIdentifier(projected.Selector)
+		if err != nil {
+			return nil, fmt.Errorf("report column %q selector: %w", column.Name, err)
+		}
+		sqlName, err := reportOutputIdentifier(projected.Name)
+		if err != nil {
+			return nil, fmt.Errorf("report column %q SQL name: %w", column.Name, err)
+		}
 		item := field{
-			name: projected.Selector, publicName: strings.TrimSpace(column.Name), sqlName: projected.Name,
+			name: selectionName, publicName: strings.TrimSpace(column.Name), sqlName: sqlName,
 			fieldName: typecatalog.ExportedFieldName(column.Name), description: strings.TrimSpace(column.Source),
 		}
 		if item.fieldName == "" {
@@ -104,6 +113,21 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 	}
 	result.compileRelationHolders(component.RootView)
 	return result, nil
+}
+
+func reportOutputIdentifier(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", fmt.Errorf("identifier is empty")
+	}
+	parts, err := sqlparser.TableIdentifierParts(value)
+	if err != nil {
+		return "", err
+	}
+	if len(parts) == 0 {
+		return "", fmt.Errorf("identifier is empty")
+	}
+	return parts[len(parts)-1], nil
 }
 
 func (m *metadata) compileRelationHolders(view *spec.View) {

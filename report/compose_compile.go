@@ -93,7 +93,9 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 	if err != nil {
 		return nil, nil, err
 	}
-	params := []*spec.Parameter{bodyParam("Cubes", inputType), bodyParam("SQL", inputType)}
+	cubesParam := bodyParam("Cubes", inputType)
+	cubesParam.WireSchemas = filterWireSchemas("Cubes.Filters", metadata.filters)
+	params := []*spec.Parameter{cubesParam, bodyParam("SQL", inputType)}
 	required := true
 	for _, param := range params {
 		param.Required = &required
@@ -104,7 +106,7 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		Routes: []*spec.Route{{Method: identity.route.Method, Path: identity.route.Path, Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}},
 	}
 	if config.MCPTool == nil || *config.MCPTool {
-		component.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: identity.key.Name, Description: component.Description}}
+		component.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: spec.DerivedMCPToolName(route, identity.key.Name, "CubeCompose"), Description: component.Description}}
 	}
 	// A separate source plan keeps composition from mutating ordinary cube input.
 	plan := &Plan{target: sourcePlan.target, inputType: inputType, outputType: reflect.TypeFor[ComposeResponse]()}

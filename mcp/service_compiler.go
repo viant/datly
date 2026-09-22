@@ -163,7 +163,7 @@ func (c *serviceCompiler) compileRoute(result *compiledPlans, toolCompiler *tool
 			if err != nil {
 				return err
 			}
-			plan, compileErr := toolCompiler.Compile(tool.Input{Fields: fields, Example: registered.Documentation.Operation(route.Path, documentation.Annotation{Example: registered.Component.Example}).Example, TransportReady: registered.Output != nil && registered.Output.TransportReady(), Documentation: registered.Documentation, Component: registered.Component.Key, Exposure: exposure, Contract: contract})
+			plan, compileErr := toolCompiler.Compile(tool.Input{Fields: fields, Example: registered.Documentation.Operation(route.Path, documentation.Annotation{Example: registered.Component.Example}).Example, TransportReady: registered.Output != nil && registered.Output.TransportReady(), Documentation: registered.Documentation, Component: registered.Component.Key, Exposure: exposure, Contract: contract, OutputType: registered.OutputType})
 			if compileErr != nil {
 				return compileErr
 			}
@@ -215,6 +215,9 @@ func (c *serviceCompiler) publish(catalog *Catalog, policy *authorization.Policy
 		protocolRegistry.Methods.Put(schema.MethodResourcesRead, true)
 	}
 	if err := catalog.resources.RegisterSkills(protocolRegistry); err != nil {
+		return nil, err
+	}
+	if err := registerSkillToolBridge(protocolRegistry); err != nil {
 		return nil, err
 	}
 	return &Service{catalog: catalog, registry: protocolRegistry, resources: resourceHandler, policy: policy, authorizeResource: c.config.AuthorizeResource}, nil

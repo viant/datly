@@ -36,14 +36,16 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 			continue
 		}
 		field := projected.Field.StructField()
-		publicName := projected.Name
-		hidden := field.Tag.Get("setMarker") == "true"
+		publicName, aliases, hidden, err := publicFieldName(projected.Name, projected.Name, field)
+		if err != nil {
+			return nil, err
+		}
 		if hidden {
 			continue
 		}
 		result = append(result, Argument{
-			documentation: inputField.Documentation(), publicName: publicName, path: inputField.Path() + "." + field.Name,
-			sourceKind: "body", sourceName: publicName,
+			documentation: inputField.Documentation(), publicName: publicName, aliases: aliases, path: inputField.Path() + "." + field.Name,
+			sourceKind: "body", sourceName: projected.Name,
 			sourceType: field.Type, destinationType: field.Type,
 		})
 	}

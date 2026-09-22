@@ -1,8 +1,11 @@
 package sql
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/viant/datly/data"
+	"github.com/viant/datly/spec"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
@@ -365,4 +368,40 @@ func TestGroupedProjectionHelpers(t *testing.T) {
 			t.Fatalf("did not expect unsupported query item node to match")
 		}
 	})
+}
+
+func TestGroupedProjectionRewritesTransparentWrapper(t *testing.T) {
+	on := true
+	view := &data.View{Spec: spec.View{Groupable: &on}}
+	source := `SELECT selector_features.category, selector_features.feature_count
+	FROM (
+	  SELECT id, name, category, COUNT(*) AS feature_count
+	  FROM selector_features
+	  GROUP BY id, name, category
+	  HAVING COUNT(*) > 0
+	) selector_features`
+	result, err := ApplySelectorProjection(source, []string{"selector_features.category", "selector_features.feature_count"}, view)
+	if err != nil {
+		t.Fatalf("ApplySelectorProjection() error = %v", err)
+	}
+	for _, fragment := range []string{"COUNT(*) AS feature_count", "GROUP BY 1", "HAVING COUNT(*) > 0"} {
+		if !strings.Contains(result, fragment) {
+			t.Fatalf("missing %q in %s", fragment, result)
+		}
+	}
+	for _, fragment := range []string{"FROM (\n  SELECT", "GROUP BY id, name, category"} {
+		if strings.Contains(result, fragment) {
+			t.Fatalf("unexpected %q in %s", fragment, result)
+		}
+	}
+	measureOnly, err := ApplySelectorProjection(source, []string{"selector_features.feature_count"}, view)
+	if err != nil {
+		t.Fatalf("ApplySelectorProjection() measure-only error = %v", err)
+	}
+	if strings.Contains(measureOnly, "GROUP BY") {
+		t.Fatalf("measure-only projection retained grouping: %s", measureOnly)
+	}
+	if !strings.Contains(measureOnly, "COUNT(*) AS feature_count") {
+		t.Fatalf("measure-only projection lost aggregate: %s", measureOnly)
+	}
 }

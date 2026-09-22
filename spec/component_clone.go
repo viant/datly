@@ -57,11 +57,7 @@ func (s *Settings) Clone() *Settings {
 		result.WarmupTarget = &target
 	}
 	result.Report = s.Report.Clone()
-	if s.Cache != nil {
-		cache := *s.Cache
-		cache.Warmup = s.Cache.Warmup.Clone()
-		result.Cache = &cache
-	}
+	result.Cache = s.Cache.Clone()
 	return &result
 }
 
@@ -167,6 +163,13 @@ func (p *Parameter) Clone() *Parameter {
 	if p.QuerySelector != nil {
 		selector := *p.QuerySelector
 		result.QuerySelector = &selector
+	}
+	result.WireSchema = p.WireSchema.Clone()
+	if len(p.WireSchemas) != 0 {
+		result.WireSchemas = make(map[string]*WireSchema, len(p.WireSchemas))
+		for key, schema := range p.WireSchemas {
+			result.WireSchemas[key] = schema.Clone()
+		}
 	}
 	result.Predicates = make([]*Predicate, len(p.Predicates))
 	for i, predicate := range p.Predicates {

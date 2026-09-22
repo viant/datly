@@ -1358,6 +1358,172 @@ SELECT 1`
 	assertly.AssertValues(t, `parameter:"Data,kind=output,in=view,cardinality=One" anonymous:"true" view:"ViewOut" sql:"SELECT 1"`, plan.Output.Fields[0].Tag)
 }
 
+func TestEmitScaffold_EmbedsAnonymousStatusOutputField(t *testing.T) {
+	source := `#import('response','github.com/viant/xdatly/response')
+#setting($_ = $route('/v1/api/example/status', 'GET'))
+#define($_ = $Status<response.Status>(output/status).Tag('anonymous:"true"'))
+SELECT 1`
+
+	component, err := parseTestComponentSource("example.com/demo/status", "StatusOut", source)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	plan := testPlan(t, component)
+	dir := t.TempDir()
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatalf("unexpected emit error: %v", err)
+	}
+	outputFile := filepath.Join(dir, plan.Output.Destination)
+	file, err := parser.ParseFile(token.NewFileSet(), outputFile, nil, 0)
+	if err != nil {
+		t.Fatalf("parse generated output: %v", err)
+	}
+	field := generatedEmbeddedField(t, file, plan.Output.Type)
+	tag, err := strconv.Unquote(field.Tag.Value)
+	if err != nil {
+		t.Fatalf("unquote status tag: %v", err)
+	}
+	if tag != `parameter:",kind=output,in=status"` {
+		t.Fatalf("unexpected status tag: %#v", field.Tag)
+	}
+}
+
+func TestEmitScaffold_EmbedsInferredAnonymousStatusOutputField(t *testing.T) {
+	source := `#setting($_ = $route('/v1/api/example/status', 'GET'))
+#set($_ = $Status<?>(output/status).WithTag('anonymous:"true"'))
+SELECT 1`
+
+	component, err := parseTestComponentSource("example.com/demo/status", "InferredStatusOut", source)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	plan := testPlan(t, component)
+	dir := t.TempDir()
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatalf("unexpected emit error: %v", err)
+	}
+	outputFile := filepath.Join(dir, plan.Output.Destination)
+	file, err := parser.ParseFile(token.NewFileSet(), outputFile, nil, 0)
+	if err != nil {
+		t.Fatalf("parse generated output: %v", err)
+	}
+	field := generatedEmbeddedField(t, file, plan.Output.Type)
+	tag, err := strconv.Unquote(field.Tag.Value)
+	if err != nil {
+		t.Fatalf("unquote status tag: %v", err)
+	}
+	if tag != `parameter:",kind=output,in=status"` {
+		t.Fatalf("unexpected inferred status tag: %#v", field.Tag)
+	}
+}
+
+func TestEmitScaffold_InfersMetricsOutputField(t *testing.T) {
+	source := `#setting($_ = $route('/v1/api/example/metrics', 'GET'))
+#set($_ = $Metrics<?>(output/metrics).WithTag('json:"metrics"'))
+SELECT 1`
+
+	component, err := parseTestComponentSource("example.com/demo/metrics", "MetricsOut", source)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	plan := testPlan(t, component)
+	dir := t.TempDir()
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatalf("unexpected emit error: %v", err)
+	}
+	outputFile := filepath.Join(dir, plan.Output.Destination)
+	file, err := parser.ParseFile(token.NewFileSet(), outputFile, nil, 0)
+	if err != nil {
+		t.Fatalf("parse generated output: %v", err)
+	}
+	field := generatedNamedField(t, file, plan.Output.Type, "Metrics")
+	selector, ok := field.Type.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected selector type, got %#v", field.Type)
+	}
+	pkg, ok := selector.X.(*ast.Ident)
+	if !ok || pkg.Name != "response" || selector.Sel.Name != "Metrics" {
+		t.Fatalf("unexpected metrics type: %#v", field.Type)
+	}
+	tag, err := strconv.Unquote(field.Tag.Value)
+	if err != nil {
+		t.Fatalf("unquote metrics tag: %v", err)
+	}
+	structTag := reflect.StructTag(tag)
+	if structTag.Get("parameter") != `,kind=output,in=metrics` || structTag.Get("json") != "metrics" {
+		t.Fatalf("unexpected metrics tag: %#v", field.Tag)
+	}
+}
+
+func generatedEmbeddedField(t *testing.T, file *ast.File, typeName string) *ast.Field {
+	t.Helper()
+	var field *ast.Field
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok || typeSpec.Name.Name != typeName {
+				continue
+			}
+			structType, ok := typeSpec.Type.(*ast.StructType)
+			if !ok {
+				t.Fatalf("output type = %#v", typeSpec.Type)
+			}
+			for _, candidate := range structType.Fields.List {
+				if len(candidate.Names) == 0 {
+					field = candidate
+					break
+				}
+			}
+		}
+	}
+	if field == nil {
+		t.Fatal("generated embedded field was not found")
+	}
+	if len(field.Names) != 0 {
+		t.Fatalf("expected embedded field, got names=%v", field.Names)
+	}
+	if field.Tag == nil {
+		t.Fatal("expected embedded field tag")
+	}
+	return field
+}
+
+func generatedNamedField(t *testing.T, file *ast.File, typeName, fieldName string) *ast.Field {
+	t.Helper()
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok || typeSpec.Name.Name != typeName {
+				continue
+			}
+			structType, ok := typeSpec.Type.(*ast.StructType)
+			if !ok {
+				t.Fatalf("output type = %#v", typeSpec.Type)
+			}
+			for _, candidate := range structType.Fields.List {
+				for _, name := range candidate.Names {
+					if name.Name == fieldName {
+						if candidate.Tag == nil {
+							t.Fatalf("expected %s field tag", fieldName)
+						}
+						return candidate
+					}
+				}
+			}
+		}
+	}
+	t.Fatalf("generated field %s was not found", fieldName)
+	return nil
+}
+
 func TestResolvePlan_RootViewCardinalityControlsImplicitOutput(t *testing.T) {
 	component := &spec.Component{
 		Name:     "SingleView",
@@ -1670,6 +1836,40 @@ SELECT 1`
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("generated package from source did not compile:\n%s\n%v", string(output), err)
+	}
+}
+
+func TestGeneratePackageFromSource_PreservesCacheWarmupExcludeDefault(t *testing.T) {
+	source := `#setting($_ = $route('/v1/api/example/records', 'GET'))
+#setting($_ = $cache('records'))
+#setting($_ = $cache_warmup('order_id','IndexParameter=OrderID','ExcludeDefault=Period','Period=today,week,last_complete_7d'))
+#define($_ = $OrderID<int>(query/order_id))
+#define($_ = $Data<[]*RecordView>(output/view))
+SELECT 1`
+
+	root := t.TempDir()
+	testharness.WriteGeneratedGoMod(t, root)
+
+	pkgDir := filepath.Join(root, "records")
+	result, err := GeneratePackageFromSource(pkgDir, "example.com/demo/records", "Records", source)
+	if err != nil {
+		t.Fatalf("unexpected generate-from-source error: %v", err)
+	}
+	componentSource, err := os.ReadFile(filepath.Join(pkgDir, result.Plan.RouterDest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tag, err := generatedComponentContractTag(componentSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmup := tag.Settings.Cache.Warmup
+	if warmup == nil || len(warmup.Cases) != 1 || len(warmup.Cases[0].Set) != 1 {
+		t.Fatalf("warmup=%+v", warmup)
+	}
+	param := warmup.Cases[0].Set[0]
+	if param.Name != "Period" || !param.ExcludeDefault {
+		t.Fatalf("param=%+v", param)
 	}
 }
 

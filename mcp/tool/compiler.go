@@ -24,6 +24,9 @@ type Input struct {
 	Component      spec.Key
 	Exposure       *spec.MCPExposure
 	Contract       *registry.RouteInputContract
+	// OutputType is the execution result shape. MCP output schemas are only
+	// emitted for object-shaped structuredContent, as required by the protocol.
+	OutputType reflect.Type
 }
 
 type fieldCompiler func(registry.InputField, reflect.StructField) (Argument, bool, error)
@@ -78,10 +81,9 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 				return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 			}
 			for _, argument := range flattened {
-				if publicNames[argument.publicName] {
-					return nil, fmt.Errorf("compile MCP tool %q: duplicate public argument %q", name, argument.publicName)
+				if err := registerPublicArgument(publicNames, argument); err != nil {
+					return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 				}
-				publicNames[argument.publicName] = true
 				arguments = append(arguments, argument)
 			}
 			continue
@@ -97,10 +99,9 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if !include {
 			continue
 		}
-		if publicNames[argument.publicName] {
-			return nil, fmt.Errorf("compile MCP tool %q: duplicate public argument %q", name, argument.publicName)
+		if err := registerPublicArgument(publicNames, argument); err != nil {
+			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 		}
-		publicNames[argument.publicName] = true
 		owner := inputField.Documentation()
 		if owner == nil {
 			owner = input.Documentation
@@ -125,7 +126,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if argument.required {
 			sourceType = (xshape.Runtime{}).Indirect(sourceType)
 		}
-		property, err := (&schemaProjector{docs: owner}).argument(sourceType, argument.path, argument.publicName)
+		property, err := (&schemaProjector{docs: owner, schemas: argument.wireSchemas}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
 		}
@@ -156,6 +157,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		}
 		bindingArguments[index] = mcpinput.Argument{
 			PublicName: argument.publicName,
+			Aliases:    argument.aliases,
 			Source:     bindstate.Location{Kind: argument.sourceKind, In: argument.sourceName},
 			SourceType: argument.sourceType,
 		}
@@ -178,20 +180,46 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			metadata["datly/httpSchemas"] = input.Documentation.Schemas()
 		}
 	}
+	outputSchema, outputErr := outputContractSchema(input.OutputType)
+	if outputErr != nil {
+		return nil, fmt.Errorf("compile MCP tool %q output schema: %w", name, outputErr)
+	}
 	return &Plan{
-		metadata: schema.Tool{Meta: metadata, Name: name, Description: &description, InputSchema: inputSchema},
+		metadata: schema.Tool{Meta: metadata, Name: name, Description: &description, InputSchema: inputSchema, OutputSchema: outputSchema},
 		target:   exec.ComponentTarget{Component: input.Component, Route: input.Contract.Route()},
 		input:    input.Contract, args: arguments, binding: binding,
 	}, nil
 }
 
+func outputContractSchema(source reflect.Type) (*schema.ToolOutputSchema, error) {
+	if source == nil {
+		return nil, nil
+	}
+	for source.Kind() == reflect.Pointer {
+		source = source.Elem()
+	}
+	// A non-object result is transported as text by the MCP invoker and cannot
+	// truthfully be advertised as structuredContent.
+	if source.Kind() != reflect.Struct {
+		return nil, nil
+	}
+	result := &schema.ToolOutputSchema{}
+	if err := result.Load(reflect.New(source).Interface()); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Compiler) compileExternal(inputField registry.InputField, field reflect.StructField) (Argument, bool, error) {
 	binding := inputField.Binding()
-	publicName, hidden := publicFieldName(binding.Name, binding.Location.In, field)
+	publicName, aliases, hidden, err := publicFieldName(binding.Name, binding.Location.In, field)
+	if err != nil {
+		return Argument{}, false, err
+	}
 	required := binding.Required != nil && *binding.Required
 	if hidden {
 		if required {
-			return Argument{}, false, fmt.Errorf("required field %q is hidden by json:\"-\"", inputField.Path())
+			return Argument{}, false, fmt.Errorf("required field %q is hidden from MCP", inputField.Path())
 		}
 		return Argument{}, false, nil
 	}
@@ -199,15 +227,30 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		return Argument{}, false, fmt.Errorf("field %q has no canonical public name", inputField.Path())
 	}
 	argument := Argument{
-		publicName: publicName, path: inputField.Path(),
+		publicName: publicName, aliases: aliases, path: inputField.Path(),
 		sourceKind: strings.ToLower(strings.TrimSpace(binding.Location.Kind)), sourceName: binding.Location.In,
-		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(), required: required,
+		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
+		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), required: required,
 	}
 	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
 		argument.description = strings.TrimSpace(param.Description)
 		argument.example = strings.TrimSpace(param.Example)
 	}
 	return argument, true, nil
+}
+
+func registerPublicArgument(names map[string]bool, argument Argument) error {
+	if names[argument.publicName] {
+		return fmt.Errorf("duplicate public argument %q", argument.publicName)
+	}
+	names[argument.publicName] = true
+	for _, alias := range argument.aliases {
+		if names[alias] {
+			return fmt.Errorf("duplicate public argument %q", alias)
+		}
+		names[alias] = true
+	}
+	return nil
 }
 
 func (c *Compiler) compileHeader(inputField registry.InputField, field reflect.StructField) (Argument, bool, error) {

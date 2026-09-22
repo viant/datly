@@ -152,9 +152,7 @@ func (l *settingsLoader) mergeCache(base, authored *spec.CacheSettings) *spec.Ca
 	if base == nil {
 		base = &spec.CacheSettings{}
 	} else {
-		copy := *base
-		copy.Warmup = base.Warmup.Clone()
-		base = &copy
+		base = base.Clone()
 	}
 	base.Enabled = true
 	l.setString(&base.Name, authored.Name)
@@ -164,8 +162,17 @@ func (l *settingsLoader) mergeCache(base, authored *spec.CacheSettings) *spec.Ca
 	if authored.TimeToLiveMs != 0 {
 		base.TimeToLiveMs = authored.TimeToLiveMs
 	}
-	if authored.Warmup != nil {
+	// Authored warmups replace as one unit so an authored singular never mixes
+	// with a stale base plural collection, and vice versa.
+	if authored.HasWarmup() {
 		base.Warmup = authored.Warmup.Clone()
+		base.Warmups = nil
+		for _, item := range authored.Warmups {
+			base.Warmups = append(base.Warmups, item.Clone())
+		}
+	}
+	if authored.SharedCases != nil {
+		base.SharedCases = spec.CloneSharedCases(authored.SharedCases)
 	}
 	return base
 }

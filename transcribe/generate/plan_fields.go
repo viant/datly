@@ -3,6 +3,7 @@ package generate
 import (
 	"fmt"
 	"github.com/viant/tagly/format/text"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -202,12 +203,70 @@ func resolveField(param *spec.Parameter, declarations Declarations) (Field, bool
 	if err != nil {
 		return Field{}, false, fmt.Errorf("parameter %s metadata: %w", param.Name, err)
 	}
-	return Field{
-		Name:   name,
-		Type:   typ,
-		Tag:    fieldTag(param, tagName, metadata),
-		Source: strings.TrimSpace(param.Source.Kind),
-	}, true, nil
+	result := Field{
+		Name:      name,
+		Type:      typ,
+		Tag:       fieldTag(param, tagName, metadata),
+		Source:    strings.TrimSpace(param.Source.Kind),
+		Anonymous: false,
+	}
+	if statusOutput(param) && anonymousTagEnabled(param.Tag) {
+		markAnonymousOutputField(&result)
+	}
+	return result, true, nil
+}
+
+func statusOutput(param *spec.Parameter) bool {
+	if param == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output") && strings.EqualFold(strings.TrimSpace(param.Source.Name), "status")
+}
+
+func markAnonymousOutputField(field *Field) {
+	if field == nil || !embeddableFieldType(field.Type) || !anonymousTagEnabled(field.Tag) {
+		return
+	}
+	field.Anonymous = true
+	clearOutputParameterTagName(field, "dataType")
+	field.Tag = withoutStructTags(field.Tag, "anonymous")
+}
+
+func clearOutputParameterTagName(field *Field, removeParts ...string) {
+	if field == nil {
+		return
+	}
+	tag := reflect.StructTag(field.Tag).Get("parameter")
+	if tag == "" {
+		return
+	}
+	parts := strings.Split(tag, ",")
+	if len(parts) == 0 {
+		return
+	}
+	parts[0] = ""
+	parts = withoutParameterTagParts(parts, removeParts...)
+	field.Tag = replaceStructTag(field.Tag, "parameter", strings.Join(parts, ","))
+}
+
+func withoutParameterTagParts(parts []string, names ...string) []string {
+	remove := make(map[string]bool, len(names))
+	for _, name := range names {
+		remove[name] = true
+	}
+	result := parts[:0]
+	for index, part := range parts {
+		if index == 0 {
+			result = append(result, part)
+			continue
+		}
+		name, _, _ := strings.Cut(part, "=")
+		if remove[strings.TrimSpace(name)] {
+			continue
+		}
+		result = append(result, part)
+	}
+	return result
 }
 
 type structTagValue struct {

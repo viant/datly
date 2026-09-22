@@ -16,6 +16,7 @@ import (
 // Argument is one public MCP argument mapped to its canonical provider source.
 type Argument struct {
 	PublicName string
+	Aliases    []string
 	Source     bindstate.Location
 	SourceType reflect.Type
 }
@@ -23,6 +24,7 @@ type Argument struct {
 // Plan is an immutable argument-to-provider projection.
 type Plan struct {
 	arguments []Argument
+	aliases   map[string]string
 }
 
 // Compiler owns the supported canonical source-kind registry.
@@ -51,6 +53,7 @@ func (c *Compiler) Compile(arguments []Argument) (*Plan, error) {
 	sources := make(map[string]bool, len(arguments))
 	for index, argument := range arguments {
 		argument.PublicName = strings.TrimSpace(argument.PublicName)
+		argument.Aliases = normalizeAliases(argument.Aliases)
 		argument.Source.Kind = strings.ToLower(strings.TrimSpace(argument.Source.Kind))
 		argument.Source.In = normalizeSourceName(argument.Source.Kind, argument.Source.In)
 		if argument.PublicName == "" {
@@ -60,6 +63,16 @@ func (c *Compiler) Compile(arguments []Argument) (*Plan, error) {
 			return nil, fmt.Errorf("duplicate MCP argument name %q", argument.PublicName)
 		}
 		publicNames[argument.PublicName] = true
+		for _, alias := range argument.Aliases {
+			if publicNames[alias] {
+				return nil, fmt.Errorf("duplicate MCP argument name %q", alias)
+			}
+			publicNames[alias] = true
+			if result.aliases == nil {
+				result.aliases = map[string]string{}
+			}
+			result.aliases[alias] = argument.PublicName
+		}
 		if !c.registry[argument.Source.Kind] {
 			return nil, fmt.Errorf("MCP argument %q has unsupported binding kind %q", argument.PublicName, argument.Source.Kind)
 		}
@@ -71,7 +84,7 @@ func (c *Compiler) Compile(arguments []Argument) (*Plan, error) {
 			return nil, fmt.Errorf("duplicate MCP source %s/%s", argument.Source.Kind, argument.Source.In)
 		}
 		sources[sourceKey] = true
-		result.arguments[index] = argument
+		result.arguments[index] = cloneArgument(argument)
 	}
 	if len(arguments) > 1 {
 		hasWhole := false
@@ -105,5 +118,60 @@ func (p *Plan) Arguments() []Argument {
 	if p == nil {
 		return nil
 	}
-	return append([]Argument(nil), p.arguments...)
+	result := make([]Argument, len(p.arguments))
+	for i, argument := range p.arguments {
+		result[i] = cloneArgument(argument)
+	}
+	return result
+}
+
+// NormalizeArguments projects tool argument aliases to canonical public names
+// without mutating the caller-owned map.
+func (p *Plan) NormalizeArguments(arguments map[string]interface{}) (map[string]interface{}, error) {
+	if p == nil {
+		return nil, fmt.Errorf("MCP input plan is required")
+	}
+	if len(arguments) == 0 {
+		return nil, nil
+	}
+	known := make(map[string]bool, len(p.arguments))
+	for _, argument := range p.arguments {
+		known[argument.PublicName] = true
+	}
+	result := make(map[string]interface{}, len(arguments))
+	for name, value := range arguments {
+		canonical := name
+		if mapped := p.aliases[name]; mapped != "" {
+			canonical = mapped
+		} else if !known[name] {
+			return nil, fmt.Errorf("unknown MCP argument %q", name)
+		}
+		if _, exists := result[canonical]; exists {
+			return nil, fmt.Errorf("conflicting MCP argument %q", canonical)
+		}
+		result[canonical] = value
+	}
+	return result, nil
+}
+
+func cloneArgument(argument Argument) Argument {
+	argument.Aliases = append([]string(nil), argument.Aliases...)
+	return argument
+}
+
+func normalizeAliases(aliases []string) []string {
+	if len(aliases) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	result := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if alias == "" || seen[alias] {
+			continue
+		}
+		seen[alias] = true
+		result = append(result, alias)
+	}
+	return result
 }

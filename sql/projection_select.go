@@ -30,6 +30,106 @@ func unwrapProjectionSQL(text string) string {
 	}
 }
 
+func unwrapGroupedProjectionWrapper(sqlText string, selected []string) (string, []string) {
+	outer, err := sqlparser.ParseQuery(sqlText)
+	if err != nil || outer == nil || outer.Union != nil || len(outer.WithSelects) > 0 || len(outer.Joins) > 0 ||
+		len(outer.GroupBy) > 0 || outer.Having != nil || len(outer.OrderBy) > 0 || outer.Qualify != nil ||
+		realOuterWindow(outer) {
+		return sqlText, selected
+	}
+	if sqltext.HasTopLevelClause(sqlText, "where") {
+		return sqlText, selected
+	}
+	alias := strings.TrimSpace(outer.From.Alias)
+	raw, ok := outer.From.X.(*expr.Raw)
+	if alias == "" || !ok {
+		return sqlText, selected
+	}
+	innerSQL := unwrapProjectionSQL(raw.Raw)
+	inner, _ := raw.X.(*query.Select)
+	if inner == nil {
+		inner, err = sqlparser.ParseQuery(innerSQL)
+		if err != nil {
+			return sqlText, selected
+		}
+	}
+	if inner == nil || !groupedWrapperInner(inner) {
+		return sqlText, selected
+	}
+	outputByOuter := map[string]string{}
+	for _, item := range outer.List {
+		if item == nil || strings.TrimSpace(item.Alias) != "" {
+			return sqlText, selected
+		}
+		itemName := sqlparser.Stringify(item.Expr)
+		parts, err := sqlparser.TableIdentifierParts(itemName)
+		if err != nil || len(parts) != 2 || !strings.EqualFold(parts[0], alias) {
+			return sqlText, selected
+		}
+		outputByOuter[canonicalProjectionName(itemName)] = parts[1]
+		outputByOuter[canonicalProjectionName(parts[1])] = parts[1]
+	}
+	return groupedWrapperInnerSQLWithControls(innerSQL, outer), normalizeGroupedWrapperSelection(selected, outputByOuter)
+}
+
+// GroupedProjectionCriteriaSource returns the same source scope grouped
+// projection rewriting will use, without changing ordinary full-shape reads.
+func GroupedProjectionCriteriaSource(sqlText string, selected []string) string {
+	if len(selected) == 0 {
+		return sqlText
+	}
+	result, _ := unwrapGroupedProjectionWrapper(sqlText, selected)
+	return result
+}
+
+func groupedWrapperInner(selectStmt *query.Select) bool {
+	if selectStmt == nil {
+		return false
+	}
+	if len(selectStmt.GroupBy) > 0 || selectStmt.Having != nil {
+		return true
+	}
+	for _, item := range selectStmt.List {
+		if isAggregateSelectItem(item) {
+			return true
+		}
+	}
+	return false
+}
+
+func realOuterWindow(selectStmt *query.Select) bool {
+	return selectStmt != nil && selectStmt.Window != nil && !strings.EqualFold(strings.TrimSpace(selectStmt.Window.Raw), "LIMIT")
+}
+
+func normalizeGroupedWrapperSelection(selected []string, outputByOuter map[string]string) []string {
+	if len(selected) == 0 || len(outputByOuter) == 0 {
+		return selected
+	}
+	result := make([]string, 0, len(selected))
+	for _, item := range selected {
+		if output := outputByOuter[canonicalProjectionName(item)]; output != "" {
+			result = append(result, output)
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+func groupedWrapperInnerSQLWithControls(innerSQL string, outer *query.Select) string {
+	result := strings.TrimSuffix(strings.TrimSpace(innerSQL), ";")
+	if outer == nil {
+		return result
+	}
+	if outer.Limit != nil {
+		result += " LIMIT " + sqlparser.Stringify(outer.Limit)
+	}
+	if outer.Offset != nil {
+		result += " OFFSET " + sqlparser.Stringify(outer.Offset)
+	}
+	return result
+}
+
 func newSelectProjectionSource(sqlText string) (selectProjectionSource, bool) {
 	lower := strings.ToLower(sqlText)
 	selectIndex := sqltext.FindTopLevelKeyword(lower, "select", 0)

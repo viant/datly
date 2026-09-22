@@ -12,6 +12,7 @@ import (
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
+	handlerexec "github.com/viant/xdatly/handler/exec"
 )
 
 // Warmup binds each authored root cache case through the canonical component
@@ -49,7 +50,10 @@ func (r *Runtime) NewWarmup(target dexec.ComponentTarget) (*Warmup, error) {
 	if !componentOwnsRoute(registered.Component, target.Route) {
 		return nil, fmt.Errorf("component does not own warmup route")
 	}
-	targets := warmupTargets(registered)
+	targets, err := warmupTargets(registered)
+	if err != nil {
+		return nil, err
+	}
 	if len(targets) == 0 {
 		return nil, fmt.Errorf("component has no authored warmup settings")
 	}
@@ -112,6 +116,11 @@ func (w *Warmup) PlannedCases() (int, error) {
 }
 
 func (w *Warmup) execute(ctx context.Context, prepare bool) (int, error) {
+	phase := handlerexec.WarmupPhaseFill
+	if prepare {
+		phase = handlerexec.WarmupPhasePrepare
+	}
+	ctx = handlerexec.WithCacheWarmup(ctx, phase)
 	registered, target := w.registered, w.target
 	contract, ok := registered.Input.ForRoute(target.Route)
 	if !ok {
@@ -197,6 +206,9 @@ func (w *Warmup) executeTarget(ctx context.Context, prepare bool, fields map[str
 			return err
 		}
 		request := dexec.ComponentRequest{Target: target, Providers: providers, Warmup: &dexec.ReaderWarmupRequest{View: warmupTarget.View, Settings: policy}}
+		if policy.IndexParameter != "" {
+			request.WarmupOmitInput = []string{policy.IndexParameter}
+		}
 		if prepare {
 			request.Warmup = nil
 			request.PrepareQuery = true
@@ -220,18 +232,23 @@ func (w *Warmup) executeTarget(ctx context.Context, prepare bool, fields map[str
 	return total, err
 }
 
-func warmupTargets(registered *registry.RegisteredComponent) []dexec.ReaderWarmupTarget {
+func warmupTargets(registered *registry.RegisteredComponent) ([]dexec.ReaderWarmupTarget, error) {
 	if registered == nil {
-		return nil
+		return nil, nil
 	}
 	if targeter, ok := registered.Reader.(dexec.ReaderWarmupTargeter); ok {
 		targets := targeter.WarmupTargets()
 		if len(targets) > 0 {
-			return targets
+			return targets, nil
 		}
 	}
-	if settings := registered.Component.CacheWarmup(); settings != nil {
-		return []dexec.ReaderWarmupTarget{{Settings: settings.Clone()}}
+	warmups, err := registered.Component.CacheWarmups()
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	result := make([]dexec.ReaderWarmupTarget, 0, len(warmups))
+	for _, settings := range warmups {
+		result = append(result, dexec.ReaderWarmupTarget{Settings: settings})
+	}
+	return result, nil
 }

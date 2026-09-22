@@ -13,10 +13,23 @@ with the target view identity and existing input/output bindings.
 This fragment requires those canonical input parameters, index column and both
 connectors to exist. The `Period`/`Granularity` values expand into combinations;
 select limits deliberately rather than accidentally warming an unbounded product.
-Configured `CacheWarmupSettings` additionally exposes `Limit`, `MaxCases`,
-`FieldNames`, `IndexColumn`, `IndexParameter`, `IndexMeta`, `Connector` and `Cases`.
-Per-case field names and excluded defaults belong to the typed settings; do not
-invent DQL options for every Go field.
+Configured `CacheWarmupSettings` additionally exposes `Name`, `Priority`,
+`Limit`, `MaxCases`, `FieldNames`, `IndexColumn`, `IndexParameter`, `IndexMeta`,
+`Connector`, `CaseRefs` and `Cases`. Per-case field names and excluded defaults
+belong to the typed settings; do not invent DQL options for every Go field.
+
+A cache may declare several warmups: the singular `Warmup` plus an ordered
+plural `Warmups` list, with named reusable case sets in `SharedCases`. The
+singular contract is unchanged and executes first; plural entries follow in
+declaration order and each warmup owns its cases, connector, limits, projection
+and index settings. `CaseRefs` expand per warmup ahead of inline cases with no
+cartesian product across indexes and no shared mutable case slices. Duplicate
+effective warmup names or index identities (an absent name derives from
+`IndexParameter`, then `IndexColumn`) fail initialization, and an empty plural
+list never shadows a valid singular warmup. A regular request selects the most
+restrictive supplied index by explicit `Priority`; equal priorities let the
+later, more specific declaration win. Required index inputs are omitted only
+for the warmup that owns them.
 
 `IndexMeta` selects related output queries for warmup too. Each target needs its
 native cache service. Limits and counts describe completed warmup work, not a

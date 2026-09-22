@@ -44,6 +44,9 @@ func (p SelectorProjection) Prepare(selected []string) (*Projection, error) {
 }
 
 func (p SelectorProjection) prepare(selected []string) (*Projection, error) {
+	if p.View != nil && p.View.IsGroupable() {
+		p.SQL, selected = unwrapGroupedProjectionWrapper(p.SQL, selected)
+	}
 	columns, pureStar, err := p.columns()
 	if err != nil {
 		return nil, err
