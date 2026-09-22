@@ -23,6 +23,7 @@ type Generator struct {
 	Operation          string
 	Language           HandlerTarget
 	EphemeralOwnership bool
+	GenerationPolicy   gen.GenerationPolicy
 }
 
 type GenerationRequest struct {
@@ -195,7 +196,7 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		return nil, err
 	}
 	if operation == "get" {
-		return NewCompiler().generateCompiledAt(ctx, root, dir, compiled)
+		return NewCompiler().generateCompiledAtWithPolicy(ctx, root, dir, compiled, g.GenerationPolicy)
 	}
 	if err := column.ApplyWriterMetadata(compiled.Component); err != nil {
 		return nil, err
@@ -246,5 +247,6 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		return nil, handlers.diagnostic(err)
 	}
 	input.EphemeralOwnership = g.EphemeralOwnership
+	input.GenerationPolicy = g.GenerationPolicy
 	return NewCompiler().generateInputAt(ctx, root, dir, &copy, input)
 }

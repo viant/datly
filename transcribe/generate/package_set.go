@@ -21,6 +21,7 @@ type packageSet struct {
 	dirs     []string
 	files    [][]EmittedFile
 	removals []map[string]bool
+	policies []GenerationPolicy
 }
 
 func (p *Plan) packages(dir string) (*packageSet, error) {
@@ -49,19 +50,29 @@ func (p *Plan) packages(dir string) (*packageSet, error) {
 	return result, nil
 }
 func (s *packageSet) validate() error {
+	return s.validateWithPolicy(GenerationPolicyMerge)
+}
+
+func (s *packageSet) validateWithPolicy(policy GenerationPolicy) error {
+	normalized, err := policy.normalize()
+	if err != nil {
+		return err
+	}
 	s.removals = make([]map[string]bool, len(s.plans))
+	s.policies = make([]GenerationPolicy, len(s.plans))
 	for i, p := range s.plans {
 		files, user, removals, err := scaffoldArtifacts(s.dirs[i], p)
 		if err != nil {
 			return err
 		}
-		persistence := &scaffoldPersistence{dir: s.dirs[i], owner: p.ComponentName, files: files, userFiles: user, removals: removals, plan: p}
+		persistence := &scaffoldPersistence{dir: s.dirs[i], owner: p.ComponentName, files: files, userFiles: user, removals: removals, plan: p, policy: normalized}
 		preview, err := persistence.preview()
 		if err != nil {
 			return err
 		}
 		s.files[i] = preview.files
 		s.removals[i] = preview.renames
+		s.policies[i] = normalized
 		for _, file := range preview.userFiles {
 			if _, err := os.Stat(file.Path); os.IsNotExist(err) {
 				s.files[i] = append(s.files[i], file)
@@ -130,9 +141,6 @@ func (s *packageSet) sources(index int) (map[string]string, error) {
 		return nil, err
 	}
 	for _, name := range manifest.Files {
-		if manifest.Roles[name] != "artifact" && (index >= len(s.removals) || !s.removals[index][name]) {
-			continue
-		}
 		proposed := false
 		for _, group := range s.files {
 			for _, file := range group {
@@ -140,6 +148,12 @@ func (s *packageSet) sources(index int) (map[string]string, error) {
 					proposed = true
 				}
 			}
+		}
+		if manifest.Roles[name] != "artifact" && (index >= len(s.removals) || !s.removals[index][name]) {
+			if index < len(s.policies) && s.policies[index] == GenerationPolicyOverwrite && !proposed {
+				delete(sources, name)
+			}
+			continue
 		}
 		if !proposed {
 			delete(sources, name)
@@ -315,6 +329,14 @@ type PackagePlan struct {
 type Packages []PackagePlan
 
 func (p Packages) Validate() error {
+	return p.ValidateWithPolicy(GenerationPolicyMerge)
+}
+
+func (p Packages) ValidateWithPolicy(policy GenerationPolicy) error {
+	normalized, err := policy.normalize()
+	if err != nil {
+		return err
+	}
 	all := &packageSet{}
 	paths := map[string]string{}
 	for _, entry := range p {
@@ -335,7 +357,7 @@ func (p Packages) Validate() error {
 		all.dirs = append(all.dirs, group.dirs...)
 		all.files = append(all.files, group.files...)
 	}
-	return all.validate()
+	return all.validateWithPolicy(normalized)
 }
 
 // ValidateEphemeral validates the generated package layout without treating

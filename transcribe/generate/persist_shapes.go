@@ -38,6 +38,9 @@ func (p *scaffoldPersistence) shapeDestinations() map[string]bool {
 }
 
 func (p *scaffoldPersistence) mergeShapes(target, existing string, manifest *scaffoldManifest) error {
+	if p.policy == GenerationPolicyOverwrite {
+		return p.overwriteShapes(target)
+	}
 	destinations := p.shapeDestinations()
 	p.customizedShapes = map[string]bool{}
 	p.fieldOwnership = map[string]*projectionFieldOwnership{}
@@ -85,6 +88,35 @@ func (p *scaffoldPersistence) mergeShapes(target, existing string, manifest *sca
 			return fmt.Errorf("update generated shape %s: %w", relative, err)
 		}
 		file.Content = string(merged)
+	}
+	return nil
+}
+
+func (p *scaffoldPersistence) overwriteShapes(target string) error {
+	destinations := p.shapeDestinations()
+	p.customizedShapes = map[string]bool{}
+	p.fieldOwnership = map[string]*projectionFieldOwnership{}
+	for _, file := range p.files {
+		relative, err := managedPath(target, file.Path)
+		if err != nil {
+			return err
+		}
+		if !destinations[relative] {
+			continue
+		}
+		fields, err := p.projectionFields([]byte(file.Content))
+		if err != nil {
+			return fmt.Errorf("update generated shape %s: %w", relative, err)
+		}
+		owners := p.projectionOwners(relative)
+		bindings := p.projectionBindings(relative)
+		ownership := &projectionFieldOwnership{Complete: true}
+		for _, field := range fields {
+			if owners[field.Owner] || bindings[field.key()] {
+				ownership.Fields = append(ownership.Fields, field)
+			}
+		}
+		p.fieldOwnership[relative] = ownership
 	}
 	return nil
 }
@@ -139,6 +171,9 @@ func (p *scaffoldPersistence) retainShapes(target, existing string, manifest *sc
 			default:
 				return nil, nil, fmt.Errorf("ambiguous obsolete generated Go file %s: migrate its manifest role before removal", relative)
 			}
+		}
+		if p.policy == GenerationPolicyOverwrite {
+			continue
 		}
 		if role == "shape" {
 			desired = append(desired, relative)

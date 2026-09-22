@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/viant/datly/spec"
 )
 
 type fingerprintFixture struct {
@@ -122,6 +124,100 @@ func TestGeneratedFileFingerprintsProtectEdits(t *testing.T) {
 				t.Fatalf("hooks changed: %q %v", hooks, err)
 			}
 		})
+	}
+}
+
+func TestOverwritePolicyReplacesTrustedMalformedGeneratedShape(t *testing.T) {
+	dir := t.TempDir()
+	malformed := "package records\n\n// Input is generated.\ntype Input struct {\n\tKeywordFrom *time.Time `parameter:\"keyword_from,kind=form\"`\n}\n"
+	if err := os.WriteFile(filepath.Join(dir, "input.go"), []byte(malformed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	metadata := &scaffoldManifest{
+		Roles:        map[string]string{"input.go": "shape"},
+		Fingerprints: map[string]string{"input.go": scaffoldFingerprint([]byte(malformed))},
+	}
+	if err := writeScaffoldManifest(dir, "Records", []string{"input.go"}, metadata); err != nil {
+		t.Fatal(err)
+	}
+	plan := &Plan{
+		ComponentName: "Records",
+		RouterDest:    "router.go",
+		Input:         generatedContract("Input", "input.go"),
+		Output:        ContractPlan{Ownership: ContractLinked, Type: "Output"},
+		Imports:       []spec.ImportSpec{{Alias: "time", Package: "time"}},
+	}
+	plan.Input.Fields = []Field{{Name: "KeywordFrom", Type: "*time.Time", Tag: `parameter:"keyword_from,kind=form"`}}
+	if _, err := EmitScaffold(dir, plan); err == nil || !strings.Contains(err.Error(), "time") {
+		t.Fatalf("merge mode did not expose malformed existing shape: %v", err)
+	}
+	if _, err := EmitScaffoldWithPolicy(dir, plan, GenerationPolicyOverwrite); err != nil {
+		t.Fatalf("overwrite regeneration failed: %v", err)
+	}
+	content, err := os.ReadFile(filepath.Join(dir, "input.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), `time "time"`) || !strings.Contains(string(content), "*time.Time") {
+		t.Fatalf("input.go was not replaced with corrected generated source:\n%s", content)
+	}
+	manifest, err := readScaffoldManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Fingerprints["input.go"] != scaffoldFingerprint(content) {
+		t.Fatalf("manifest fingerprint not refreshed: %+v", manifest.Fingerprints)
+	}
+	ownership := manifest.ProjectionFields["input.go"]
+	if ownership == nil || !ownership.Complete {
+		t.Fatalf("projection ownership not refreshed: %+v", ownership)
+	}
+	foundKeywordFrom := false
+	for _, field := range ownership.Fields {
+		foundKeywordFrom = foundKeywordFrom || field.Owner == "Input" && field.Name == "KeywordFrom"
+	}
+	if !foundKeywordFrom {
+		t.Fatalf("projection ownership missing KeywordFrom: %+v", ownership)
+	}
+}
+
+func TestOverwritePolicyRejectsEditedGeneratedShape(t *testing.T) {
+	dir := t.TempDir()
+	plan := &Plan{ComponentName: "Records", RouterDest: "router.go", Input: generatedContract("Input", "input.go"), Output: ContractPlan{Ownership: ContractLinked, Type: "Output"}}
+	plan.Input.Fields = []Field{{Name: "ID", Type: "int"}}
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "input.go"), []byte("package records\n\ntype Input struct { ID string }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plan.Input.Fields = []Field{{Name: "ID", Type: "int"}, {Name: "Name", Type: "string"}}
+	if _, err := EmitScaffoldWithPolicy(dir, plan, GenerationPolicyOverwrite); err == nil || !strings.Contains(err.Error(), "manually changed") {
+		t.Fatalf("overwrite accepted edited generated shape: %v", err)
+	}
+}
+
+func TestOverwritePolicyRemovesObsoleteOwnedShape(t *testing.T) {
+	dir := t.TempDir()
+	plan := &Plan{ComponentName: "Records", RouterDest: "router.go", Input: generatedContract("Input", "input.go"), Output: generatedContract("Output", "output.go")}
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatal(err)
+	}
+	plan.Output = ContractPlan{Ownership: ContractLinked, Type: "Output"}
+	if _, err := EmitScaffoldWithPolicy(dir, plan, GenerationPolicyOverwrite); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "output.go")); !os.IsNotExist(err) {
+		t.Fatalf("obsolete output.go remains: %v", err)
+	}
+	manifest, err := readScaffoldManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range manifest.Files {
+		if file == "output.go" {
+			t.Fatalf("obsolete output.go remains in manifest: %+v", manifest.Files)
+		}
 	}
 }
 

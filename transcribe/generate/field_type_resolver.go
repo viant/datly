@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/x"
@@ -134,6 +135,9 @@ func (r *fieldTypeResolver) standardDescriptor(authored string) *x.Type {
 	if strings.TrimSpace(authored) == "encoding/json.RawMessage" {
 		return x.NewType(reflect.TypeFor[json.RawMessage]())
 	}
+	if strings.TrimSpace(authored) == "time.Time" {
+		return x.NewType(reflect.TypeFor[time.Time]())
+	}
 	qualifier, name, found := strings.Cut(strings.TrimSpace(authored), ".")
 	if !found || r.context == nil {
 		return nil
@@ -164,18 +168,32 @@ func (r *fieldTypeResolver) standardDescriptor(authored string) *x.Type {
 
 func (r *fieldTypeResolver) emittedNamedType(authored string, descriptor *x.Type) string {
 	authored = strings.TrimSpace(authored)
-	if strings.Contains(authored, ".") && !strings.Contains(authored, "/") {
-		return authored
-	}
 	if descriptor == nil || strings.TrimSpace(descriptor.Name) == "" {
 		return ""
+	}
+	if qualifier, name, found := strings.Cut(unwrapQualifiedTypeName(authored), "."); found && name == descriptor.Name && !strings.Contains(qualifier, "/") && r.context != nil {
+		for _, item := range r.context.Imports {
+			if item.Alias == qualifier {
+				ensureImport(r.plan, qualifier, item.Package)
+				return authored
+			}
+		}
 	}
 	packagePath := strings.TrimSpace(descriptor.PkgPath)
 	if packagePath == "" || packagePath == strings.TrimSpace(r.targetPackage) {
 		return descriptor.Name
 	}
+	if qualifier, name, found := strings.Cut(unwrapQualifiedTypeName(authored), "."); found && name == descriptor.Name && !strings.Contains(qualifier, "/") {
+		if qualifier == packageAlias(packagePath) {
+			ensureImport(r.plan, qualifier, packagePath)
+			return authored
+		}
+	}
 	alias := uniqueImportAlias(r.plan, packagePath)
 	ensureImport(r.plan, alias, packagePath)
+	if strings.Contains(authored, ".") && !strings.Contains(authored, "/") && strings.HasPrefix(unwrapQualifiedTypeName(authored), alias+".") {
+		return authored
+	}
 	return alias + "." + descriptor.Name
 }
 

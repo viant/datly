@@ -75,10 +75,15 @@ func (c *Compiler) generateCompiled(ctx context.Context, rootDir string, compile
 }
 
 func (c *Compiler) generateCompiledAt(ctx context.Context, rootDir, packageDir string, compiled *Result) (*GeneratedPackage, error) {
+	return c.generateCompiledAtWithPolicy(ctx, rootDir, packageDir, compiled, gen.GenerationPolicyMerge)
+}
+
+func (c *Compiler) generateCompiledAtWithPolicy(ctx context.Context, rootDir, packageDir string, compiled *Result, policy gen.GenerationPolicy) (*GeneratedPackage, error) {
 	input, packageDir, err := generationInput(rootDir, packageDir, compiled)
 	if err != nil {
 		return nil, err
 	}
+	input.GenerationPolicy = policy
 	return c.generateInputAt(ctx, rootDir, packageDir, compiled, input)
 }
 
