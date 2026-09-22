@@ -22,13 +22,14 @@ type Config struct {
 	ConstURL string
 	Const    *constant.Values `json:"-"`
 	gateway.Config
-	URL         string `json:"-"`
-	Version     string
-	Endpoint    Endpoint
-	Info        *openapi3.Info
-	GoBootstrap *Packages
-	Warmup      *Warmup
-	Observation *Observation
+	URL               string `json:"-"`
+	Version           string
+	Endpoint          Endpoint
+	Info              *openapi3.Info
+	GoBootstrap       *Packages
+	Warmup            *Warmup
+	CacheInvalidation *CacheInvalidation
+	Observation       *Observation
 	// BaseDir and ModuleDirs locate trusted local source modules. Package selection
 	// retains original GoBootstrap names; discovery is owned by transcribe.
 	BaseDir    string

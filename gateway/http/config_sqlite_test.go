@@ -17,6 +17,7 @@ import (
 	druntime "github.com/viant/datly/runtime"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
+	"github.com/viant/sqlx/io/read/cache/aerospike"
 )
 
 type configInput struct{ Tenant int }
@@ -28,6 +29,7 @@ type configOutput struct {
 }
 
 type configFixture struct {
+	pool      *aerospike.Pool
 	db        *sqlite.Harness
 	component *spec.Component
 }
@@ -55,7 +57,7 @@ func (f *configFixture) runtime(t *testing.T, options ...druntime.Option) *drunt
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: f.db.DB}})
+	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: f.db.DB}, Aerospike: f.pool})
 	if err != nil {
 		t.Fatal(err)
 	}

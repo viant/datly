@@ -31,7 +31,10 @@ func (e *entityEmitter) accessorDeclarations(record *recordLowering) ([]ast.Decl
 			result = append(result, &ast.FuncDecl{Name: ast.NewIdent(getterName), Recv: &ast.FieldList{List: []*ast.Field{namedField("entity", record.value.pointerExpr())}}, Type: &ast.FuncType{Params: &ast.FieldList{}, Results: &ast.FieldList{List: []*ast.Field{{Type: parseExpr(field.Type.Name)}}}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(fieldExpression)}}})
 			e.asset.Methods = append(e.asset.Methods, EntityMethod{Receiver: record.value.base, Name: getterName, ValueType: field.Type.Name, Getter: true})
 		}
-		if !field.Writable {
+		// A delete marker is excluded from physical INSERT/UPDATE columns, but it
+		// is still intentional mutation input. Hooks and callers need the same
+		// marker-aware setter contract as ordinary sparse fields.
+		if !field.Writable && !field.DeleteMarker {
 			continue
 		}
 		name := "Set" + field.Name

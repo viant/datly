@@ -24,16 +24,17 @@ type Config struct {
 	// StaticLocalRoot is an optional caller-owned local filesystem authority.
 	// Configured ContentURL paths beneath it must be relative and symlink-free.
 	// Keep it open until all reloads finish. JSON configuration cannot grant it.
-	StaticLocalRoot *os.Root `json:"-"`
-	StaticContent   []*spec.StaticContent
-	ContentURL      string
-	APIKeys         APIKeys        `json:"APIKeys,omitempty" yaml:"APIKeys,omitempty"`
-	DisableCors     bool           `json:"DisableCors,omitempty" yaml:"DisableCors,omitempty"`
-	CORS            *spec.CORS     `json:"CORS,omitempty" yaml:"CORS,omitempty"`
-	APIPrefix       string         `json:"APIPrefix,omitempty" yaml:"APIPrefix,omitempty"`
-	Meta            Meta           `json:"Meta,omitempty" yaml:"Meta,omitempty"`
-	OpenAPI         *OpenAPIConfig `json:"OpenAPI,omitempty" yaml:"OpenAPI,omitempty"`
-	Warmup          *WarmupConfig  `json:"-" yaml:"-"`
+	StaticLocalRoot   *os.Root `json:"-"`
+	StaticContent     []*spec.StaticContent
+	ContentURL        string
+	APIKeys           APIKeys                  `json:"APIKeys,omitempty" yaml:"APIKeys,omitempty"`
+	DisableCors       bool                     `json:"DisableCors,omitempty" yaml:"DisableCors,omitempty"`
+	CORS              *spec.CORS               `json:"CORS,omitempty" yaml:"CORS,omitempty"`
+	APIPrefix         string                   `json:"APIPrefix,omitempty" yaml:"APIPrefix,omitempty"`
+	Meta              Meta                     `json:"Meta,omitempty" yaml:"Meta,omitempty"`
+	OpenAPI           *OpenAPIConfig           `json:"OpenAPI,omitempty" yaml:"OpenAPI,omitempty"`
+	Warmup            *WarmupConfig            `json:"-" yaml:"-"`
+	CacheInvalidation *CacheInvalidationConfig `json:"-" yaml:"-"`
 	// Authorize applies application policy to every resolved component target
 	// after route/API-key checks and before request binding or execution.
 	Authorize func(context.Context, *stdhttp.Request, dexec.ComponentTarget) error `json:"-" yaml:"-"`
@@ -45,10 +46,11 @@ const DefaultCacheWarmURI = "/v1/api/cache/warmup"
 // a nonempty whitespace value explicitly disables warmup route activation.
 type Meta struct {
 	// AllowedSubnet retains original RemoteAddr prefix matching (not CIDR parsing).
-	AllowedSubnet []string `json:"AllowedSubnet,omitempty" yaml:"AllowedSubnet,omitempty"`
-	OpenApiURI    string   `json:"OpenApiURI,omitempty" yaml:"OpenApiURI,omitempty"`
-	DocURI        string   `json:"DocURI,omitempty" yaml:"DocURI,omitempty"`
-	CacheWarmURI  string   `json:"CacheWarmURI,omitempty" yaml:"CacheWarmURI,omitempty"`
+	AllowedSubnet      []string `json:"AllowedSubnet,omitempty" yaml:"AllowedSubnet,omitempty"`
+	OpenApiURI         string   `json:"OpenApiURI,omitempty" yaml:"OpenApiURI,omitempty"`
+	DocURI             string   `json:"DocURI,omitempty" yaml:"DocURI,omitempty"`
+	CacheWarmURI       string   `json:"CacheWarmURI,omitempty" yaml:"CacheWarmURI,omitempty"`
+	CacheInvalidateURI string   `json:"CacheInvalidateURI,omitempty" yaml:"CacheInvalidateURI,omitempty"`
 }
 
 func (c Config) resolved() Config {
@@ -65,6 +67,9 @@ func (c Config) resolved() Config {
 	}
 	if c.OpenAPI != nil && c.Meta.DocURI == "" {
 		c.Meta.DocURI = DefaultDocURI
+	}
+	if c.Meta.CacheInvalidateURI == "" {
+		c.Meta.CacheInvalidateURI = DefaultCacheInvalidateURI
 	}
 	if c.Meta.CacheWarmURI == "" {
 		c.Meta.CacheWarmURI = DefaultCacheWarmURI
@@ -159,6 +164,10 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 		}
 		h.warmup = warmup
 		h.warmupPrefix = strings.TrimSuffix(c.Meta.CacheWarmURI, "/")
+	}
+	h.cacheInvalidation, err = newCacheRoutes(rt, c)
+	if err != nil {
+		return nil, err
 	}
 	h.async, err = h.newAsyncRoutes(c.Async, input)
 	if err != nil {

@@ -178,6 +178,9 @@ func (m *mapper) convert(c Completion) ([]sdktrace.ReadOnlySpan, error) {
 			}
 			if s := e.CacheStats; s != nil {
 				r.attrs = append(r.attrs, attribute.String("cache.type", s.Type), attribute.Int("cache.records", s.RecordsCounter), attribute.Bool("cache.warmup", s.FoundWarmup), attribute.Bool("cache.lazy", s.FoundLazy), attribute.Bool("cache.error", s.ErrorType != ""), attribute.Int("cache.error_code", s.ErrorCode))
+				if s.CreatedTime != nil {
+					r.attrs = append(r.attrs, attribute.Int64("cache.created_unix_nano", s.CreatedTime.UnixNano()))
+				}
 				if s.ExpiryTime != nil {
 					r.attrs = append(r.attrs, attribute.Int64("cache.expiry_unix_nano", s.ExpiryTime.UnixNano()))
 				}

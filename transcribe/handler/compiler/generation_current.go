@@ -2,6 +2,8 @@ package compiler
 
 import (
 	"fmt"
+	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -156,6 +158,10 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 				col.Source = name
 			}
 			col.Name = name
+			// The entity may keep a derived relation key transient so it never
+			// becomes a DML column. Its generated Current carrier is a read shape,
+			// however, and must scan the projected alias for matching/linking.
+			col.Tag = currentReadTag(col.Tag, name)
 			columns = append(columns, `r."`+strings.ReplaceAll(name, `"`, `""`)+`"`)
 		}
 	}
@@ -174,6 +180,19 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	}
 	b.request.ViewBindings[p.Identity()] = currentIdentity
 	return nil
+}
+
+func currentReadTag(tag, column string) string {
+	raw := reflect.StructTag(strings.TrimSpace(tag)).Get("sqlx")
+	if raw == "" {
+		return tag
+	}
+	parts := strings.Split(raw, ",")
+	if len(parts) == 0 || strings.TrimSpace(parts[0]) != "-" {
+		return tag
+	}
+	parts[0] = strings.TrimSpace(column)
+	return strings.Replace(tag, `sqlx:`+strconv.Quote(raw), `sqlx:`+strconv.Quote(strings.Join(parts, ",")), 1)
 }
 
 // currentSourceOutputs maps a direct source column to the output name of the

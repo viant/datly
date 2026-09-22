@@ -4,6 +4,8 @@ package cacheconfig
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/viant/datly/internal/cache/managed"
+	"net/url"
 	"strings"
 	"time"
 
@@ -101,12 +103,26 @@ func (c Config) New() (cache.Cache, error) {
 		if err != nil {
 			return nil, err
 		}
-		return service, nil
+		u, err := url.Parse(provider)
+		if err != nil {
+			return nil, err
+		}
+		owner := fmt.Sprintf("%x", sha256.Sum256([]byte(c.Identity)))
+		store, err := managed.NewAerospikeStore(service.Client(), strings.TrimPrefix(u.Path, "/"), location, owner)
+		if err != nil {
+			return nil, err
+		}
+		return managed.New(service, store, owner), nil
 	}
 	switch strings.ToLower(provider) {
 	case "", "afs":
 		namespace := fmt.Sprintf("%x", sha256.Sum256([]byte(c.Identity)))
-		return afs.NewCache(strings.TrimRight(location, "/")+"/"+namespace, ttl, c.Identity, nil)
+		root := strings.TrimRight(location, "/") + "/" + namespace
+		native, err := afs.NewCache(root, ttl, c.Identity, nil)
+		if err != nil {
+			return nil, err
+		}
+		return managed.New(native, managed.NewFileStore(root+"/.datly-generations"), namespace), nil
 	default:
 		return nil, fmt.Errorf("cache provider %q is not supported; supply a native cache service", c.Settings.Provider)
 	}

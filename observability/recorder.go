@@ -105,3 +105,19 @@ func (r *Recorder) Recent(name, metric string) int64 {
 	defer r.mu.Unlock()
 	return r.service.LookupOperationRecentMetric(name, metric)
 }
+
+// Created records successful native publications, independently of miss attempts.
+func (r *Recorder) Created(name, kind string, entries int) {
+	if entries <= 0 {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	op := r.operation(name)
+	op.IncrementValueBy(cacheCreatedMetric, int64(entries))
+	key := cacheLazyCreatedMetric
+	if kind == "warmup" {
+		key = cacheWarmupCreatedMetric
+	}
+	op.IncrementValueBy(key, int64(entries))
+}

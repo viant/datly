@@ -70,7 +70,7 @@ func (l *lowerer) entitySupport() (*EntityAsset, error) {
 
 func (e *entityEmitter) emit() (*EntityAsset, error) {
 	l := e.l
-	if l.plan.Root.Entity == nil || l.plan.Root.Auxiliary {
+	if l.plan.Root.Entity == nil {
 		return nil, nil
 	}
 	original := l.usedImports
@@ -186,7 +186,7 @@ func (e *entityEmitter) emit() (*EntityAsset, error) {
 }
 
 func (e *entityEmitter) enabled(record *recordLowering) bool {
-	return record != nil && record.plan.Entity != nil && !record.plan.Auxiliary
+	return record != nil && record.plan.Entity != nil
 }
 func (e *entityEmitter) stateName(record *recordLowering) string {
 	return fmt.Sprintf("%sOriginal%d", e.prefix, record.order)

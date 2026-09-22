@@ -6,8 +6,8 @@ contract have different acceptance states; consult [status](developer-mcp.md#ope
 ## Cache and warmup
 
 AFS and Aerospike are independent explicit choices. Use the actual native SQLX
-cache service for a prepared view; no backend switching threshold, Datly row-map
-cache or handler invalidation layer. Authored AFS uses a location and positive
+cache service for a prepared view; there is no backend switching threshold or
+Datly row-map cache. Shared generation controls provide scoped invalidation. Authored AFS uses a location and positive
 TTL; candidate Aerospike uses its provider URL, namespace, set and positive
 whole-second TTL. TTL and timeToLiveMs must agree when both are present. Native
 client ownership must outlive consumers and drain before close.
@@ -71,6 +71,12 @@ routes beneath `Meta.CacheWarmURI` (default `/v1/api/cache/warmup`), with explic
 admin authorization and a positive bounded timeout. Bind the target's declared
 credentials too. Accepted work uses the server lifetime and reports actual
 completion; client disconnection is not a success signal.
+Cache administrator endpoints use `Meta.CacheInvalidateURI` (default
+`/v1/api/cache/invalidate`) and an explicit administrator policy. Select `lazy`,
+`warmup`, or `all`, with an optional prepared view name; omitted views include
+nested and lazy-only caches. Invalidation does not run SQL. Provider locations
+expand `${View.Name}`, `${View.Alias}`, and `${View.Table}`. Metrics expose persisted
+`createdTime`/`expiryTime` plus successful lazy/warmup publication counters.
 See [cache and warmup](../../../datly/doc/cache-and-warmup.md).
 
 ## Selectors and output

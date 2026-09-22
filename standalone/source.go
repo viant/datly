@@ -131,6 +131,17 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 			}
 		}
 	}
+	if s.config.CacheInvalidation != nil || s.config.Config.CacheInvalidation != nil {
+		for _, entry := range entries {
+			if hasCacheConfiguration(entry.Component) || hasCacheAdministrationRoute(entry.Component) {
+				preload[entry.Key().String()] = entry.Key()
+			}
+			if target := delegatedWarmupTarget(snapshot, entry.Component); target.Kind != "" {
+				preload[entry.Key().String()] = entry.Key()
+				preload[target.String()] = target
+			}
+		}
+	}
 	for _, configured := range built.HTTP.Async {
 		for _, target := range []spec.RouteRef{configured.Route} {
 			if indexed, _, _, ok := snapshot.Route(target.Method, target.Path); ok {
@@ -330,4 +341,46 @@ func (s *source) init(ctx context.Context, registry *x.Registry) (*typecatalog.C
 		s.codecs = &applicationCodecs{factories: s.codecFactories, fallback: s.codecs}
 	}
 	return exports.Catalog(nil)
+}
+
+func hasCacheConfiguration(component *spec.Component) bool {
+	if component == nil {
+		return false
+	}
+	if component.Settings != nil && component.Settings.Cache != nil && component.Settings.Cache.Enabled {
+		return true
+	}
+	seen := map[*spec.View]bool{}
+	var visit func(*spec.View) bool
+	visit = func(view *spec.View) bool {
+		if view == nil || seen[view] {
+			return false
+		}
+		seen[view] = true
+		if view.Source != nil && view.Source.Bindings != nil && view.Source.Bindings.CacheName != "" {
+			return true
+		}
+		for _, relation := range view.Relations {
+			if relation != nil && visit(relation.View) {
+				return true
+			}
+		}
+		return false
+	}
+	return visit(component.RootView)
+}
+
+// Indexed metadata can omit cache tags on linked output types. Materialize GET
+// targets when cache administration is enabled so nested caches are discoverable
+// before the first data request, then let the runtime expose actual cache owners.
+func hasCacheAdministrationRoute(component *spec.Component) bool {
+	if component == nil {
+		return false
+	}
+	for _, route := range component.Routes {
+		if route != nil && strings.EqualFold(route.Method, "GET") {
+			return true
+		}
+	}
+	return false
 }

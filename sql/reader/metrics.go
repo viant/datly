@@ -122,6 +122,10 @@ func (r *viewRead) completeSQL(e *response.SQLExecution, stats *cache.Stats, row
 			expiry := *stats.ExpiryTime
 			e.CacheStats.ExpiryTime = &expiry
 		}
+		e.CacheStats.SetCreatedTime(stats.CreatedTime)
+		if err == nil && stats.Type == cache.TypeWrite && stats.CreatedTime != nil {
+			r.session.recorder.Created(r.scope, "lazy", 1)
+		}
 		r.session.recorder.Cache(r.scope, e.CacheStats)
 	}
 	traceID := ""

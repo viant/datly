@@ -7,39 +7,20 @@ import (
 	plan "github.com/viant/datly/transcribe/handler/ast"
 )
 
-func TestAuxiliarySubtreeKeepsBusinessGraphWithoutWriteRequirements(t *testing.T) {
-	for _, operation := range []plan.Operation{plan.OperationPost, plan.OperationPut, plan.OperationPatch} {
-		t.Run(string(operation), func(t *testing.T) {
-			component, item, detail := recursiveComponent()
-			item.Auxiliary = true
-			detail.Source = &spec.ViewSource{SQL: "SELECT 1 AS ID, 2 AS ITEM_ID"}
-			for _, column := range detail.Columns {
-				column.PrimaryKey = false
-			}
-			request := Request{Component: component, Operation: operation}
-			if operation == plan.OperationPatch {
-				request.Current = "CurrentOrders"
-				request.ViewBindings = testViewBindings(t, component, viewBindingIndex{param: 2, view: 0})
-			}
-			before := len(component.Parameters)
-			compiled, err := (&Compiler{}).Compile(request)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(component.Parameters) != before || len(compiled.Root.Relations) != 1 || len(compiled.Root.Relations[0].Child.Relations) != 1 {
-				t.Fatal("auxiliary business input/graph was dropped")
-			}
-			child := compiled.Root.Relations[0].Child
-			descendant := child.Relations[0].Child
-			for _, record := range []*plan.RecordPlan{child, descendant} {
-				if !record.Auxiliary || record.Sequence != nil || len(record.Write.Allowed) != 0 || record.Write.Missing != "" || record.Write.Existing != "" {
-					t.Fatalf("auxiliary mutation plan=%+v", record)
-				}
-			}
-			if len(compiled.Root.Write.Allowed) == 0 {
-				t.Fatal("writable root lost mutation")
-			}
-		})
+func TestAuxiliaryViewDoesNotImplicitlyMakeDescendantsAuxiliary(t *testing.T) {
+	component, item, _ := recursiveComponent()
+	item.Auxiliary = true
+	compiled, err := (&Compiler{}).Compile(Request{Component: component, Operation: plan.OperationPost})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := compiled.Root.Relations[0].Child
+	descendant := child.Relations[0].Child
+	if !child.Auxiliary || len(child.Write.Allowed) != 0 {
+		t.Fatalf("authored auxiliary child=%+v", child)
+	}
+	if descendant.Auxiliary || descendant.Write.Missing != plan.ActionInsert {
+		t.Fatalf("writable descendant=%+v", descendant)
 	}
 }
 

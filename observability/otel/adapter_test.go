@@ -50,7 +50,7 @@ func completedFixture() Completion {
 	start := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	parent := "0102030405060708"
 	expiry := start.Add(time.Hour)
-	return Completion{End: start.Add(time.Second), Failed: true, Context: &xexec.Context{TraceID: "12345678-1234-5678-90ab-1234567890ab", StartTime: start, Header: map[string]string{"Authorization": "secret-JWT"}, Trace: &tracing.Trace{Spans: []*tracing.Span{{SpanID: "request-native", ParentSpanID: &parent, StartTime: start, Attributes: map[string]string{"http.url": "?secret=credentials"}}}}, Metrics: response.Metrics{{ID: "metric-native", View: "records", Type: "SELECT", StartTime: start.Add(time.Millisecond), EndTime: start.Add(5 * time.Millisecond), Rows: 2, Error: "sensitive error JWT", Executions: response.SQLExecutions{{ID: "root-sql-native", StartTime: start.Add(2 * time.Millisecond), EndTime: start.Add(3 * time.Millisecond), Rows: 2, SQL: "SELECT 'credentials'", Args: []any{"secret-JWT"}, CacheStats: &response.CacheStats{Key: "sensitive cache key", ExpiryTime: &expiry, FoundLazy: true, RecordsCounter: 2}}}}, {ID: "child-metric-native", View: "children", Type: "SELECT", StartTime: start.Add(6 * time.Millisecond), EndTime: start.Add(9 * time.Millisecond), Executions: response.SQLExecutions{{ID: "child-sql-native", ParentID: "root-sql-native", StartTime: start.Add(7 * time.Millisecond), EndTime: start.Add(8 * time.Millisecond), Error: "password=secret"}}}}}, Links: []Link{{TraceID: "11111111111111111111111111111111", SpanID: "2222222222222222"}}}
+	return Completion{End: start.Add(time.Second), Failed: true, Context: &xexec.Context{TraceID: "12345678-1234-5678-90ab-1234567890ab", StartTime: start, Header: map[string]string{"Authorization": "secret-JWT"}, Trace: &tracing.Trace{Spans: []*tracing.Span{{SpanID: "request-native", ParentSpanID: &parent, StartTime: start, Attributes: map[string]string{"http.url": "?secret=credentials"}}}}, Metrics: response.Metrics{{ID: "metric-native", View: "records", Type: "SELECT", StartTime: start.Add(time.Millisecond), EndTime: start.Add(5 * time.Millisecond), Rows: 2, Error: "sensitive error JWT", Executions: response.SQLExecutions{{ID: "root-sql-native", StartTime: start.Add(2 * time.Millisecond), EndTime: start.Add(3 * time.Millisecond), Rows: 2, SQL: "SELECT 'credentials'", Args: []any{"secret-JWT"}, CacheStats: &response.CacheStats{Key: "sensitive cache key", CreatedTime: &start, ExpiryTime: &expiry, FoundLazy: true, RecordsCounter: 2}}}}, {ID: "child-metric-native", View: "children", Type: "SELECT", StartTime: start.Add(6 * time.Millisecond), EndTime: start.Add(9 * time.Millisecond), Executions: response.SQLExecutions{{ID: "child-sql-native", ParentID: "root-sql-native", StartTime: start.Add(7 * time.Millisecond), EndTime: start.Add(8 * time.Millisecond), Error: "password=secret"}}}}}, Links: []Link{{TraceID: "11111111111111111111111111111111", SpanID: "2222222222222222"}}}
 }
 func TestMappingNativeTimingParentageAndPrivacy(t *testing.T) {
 	exporter := &exportProbe{}
@@ -89,6 +89,18 @@ func TestMappingNativeTimingParentageAndPrivacy(t *testing.T) {
 	root := by["datly request"]
 	sql := by["SQL Select: records"]
 	child := by["SQL Select: children"]
+	createdFound := false
+	for _, attr := range sql.Attributes() {
+		if attr.Key == "cache.created_unix_nano" {
+			createdFound = true
+			if attr.Value.AsInt64() != start.UnixNano() {
+				t.Fatal("cache creation timestamp changed")
+			}
+		}
+	}
+	if !createdFound {
+		t.Fatal("cache creation timestamp missing")
+	}
 	if !root.StartTime().Equal(start) || !root.EndTime().Equal(c.End) || root.Parent().SpanID().String() != "0102030405060708" || len(root.Links()) != 1 {
 		t.Fatal("root timing/parent/link lost")
 	}
@@ -121,6 +133,7 @@ func TestSnapshotDetachedAndQueueDrop(t *testing.T) {
 	c.Context.Metrics[0].Executions[0].Rows = 999
 	*c.Context.Trace.Spans[0].ParentSpanID = "ffffffffffffffff"
 	*c.Context.Metrics[0].Executions[0].CacheStats.ExpiryTime = time.Time{}
+	*c.Context.Metrics[0].Executions[0].CacheStats.CreatedTime = time.Time{}
 	if a.TrySubmit(c) {
 		t.Fatal("queue must drop while full")
 	}
@@ -136,6 +149,9 @@ func TestSnapshotDetachedAndQueueDrop(t *testing.T) {
 	}
 	for _, span := range p.batches[1] {
 		for _, attr := range span.Attributes() {
+			if attr.Key == "cache.created_unix_nano" && attr.Value.AsInt64() != c.Context.StartTime.UnixNano() {
+				t.Fatal("queued creation timestamp retained mutable pointer")
+			}
 			if attr.Key == "datly.rows" && attr.Value.AsInt64() == 999 {
 				t.Fatal("queued snapshot retained mutable metric")
 			}

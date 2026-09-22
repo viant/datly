@@ -13,7 +13,7 @@ func TestDeleteErrorsPrecedeEveryAllocationAndDML(t *testing.T) {
 	root.Sequence.Field = plan.FieldRef{Field: "Id", Source: "ID", Type: spec.TypeRef{Name: "*int64"}}
 	root.Write.DeleteMarker = plan.FieldRef{Field: "Remove", Type: spec.TypeRef{Name: "bool"}}
 	root.Write.Allowed = append(root.Write.Allowed, plan.ActionDelete)
-	root.Entity = &plan.EntityPlan{Type: spec.TypeRef{Name: "Record"}, MarkerField: "Has", MarkerPointer: true, Keys: root.Keys, Fields: []plan.EntityField{{Name: "Id", Type: spec.TypeRef{Name: "*int64"}, Identity: true, Writable: true}, {Name: "Name", Type: spec.TypeRef{Name: "string"}, Writable: true}, {Name: "Remove", Type: spec.TypeRef{Name: "bool"}, DeleteMarker: true}}}
+	root.Entity = &plan.EntityPlan{Type: spec.TypeRef{Name: "Record"}, Owned: true, MarkerField: "Has", MarkerType: spec.TypeRef{Name: "Marker"}, MarkerPointer: true, Keys: root.Keys, Fields: []plan.EntityField{{Name: "Id", Type: spec.TypeRef{Name: "*int64"}, Identity: true, Writable: true}, {Name: "Name", Type: spec.TypeRef{Name: "string"}, Writable: true}, {Name: "Remove", Type: spec.TypeRef{Name: "bool"}, DeleteMarker: true}}}
 	root.Current.Fields = []plan.CurrentField{{Current: plan.FieldRef{Field: "Id", Type: spec.TypeRef{Name: "*int64"}}, Entity: plan.FieldRef{Field: "Id", Type: spec.TypeRef{Name: "*int64"}}, Conversion: plan.LinkDirect}}
 	types := rootRecordTypes(semantic, "[]*Record", "[]*Previous")
 	config := Config{Package: "events", Factory: "NewEventsHandler", InputType: "Input", OutputType: "Output", Records: types}
@@ -42,7 +42,7 @@ type data struct{allocations,writes int};func(d *data)Allocate(context.Context,s
 type binder struct{data *data;input *Input};func(b binder)Bind(_ context.Context,target any)error{a:=target.(*_newEventsHandlerMutationActions);a.DML=b.data;a.Sequencer=b.data;a.Input=b.input;return nil};func(b binder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,nil}
 func TestFailBeforeAllocation(t *testing.T){
  for _,unknown:=range []bool{false,true}{
-  id:=int64(999);bad:=&Record{Remove:true,Has:&Marker{Remove:true}};if unknown{bad.Id=&id;bad.Has.Id=true}
+  id:=int64(999);bad:=&Record{};bad.SetRemove(true);if !bad.Has.Remove{t.Fatal("delete setter presence missing")};if unknown{bad.Id=&id;bad.Has.Id=true}
   first:=&Record{Has:&Marker{}}
   input:=&Input{Events:[]*Record{first,bad}}
   ctx:=context.Background();original,err:=_newEventsHandlerCaptureInput(ctx,input);if err!=nil{t.Fatal(err)}

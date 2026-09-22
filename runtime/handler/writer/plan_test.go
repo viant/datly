@@ -31,6 +31,15 @@ func TestUniversalWriterRecognizesEarlierGraphInsertReference(t *testing.T) {
 	if len(options.SatisfiedReferences) != 1 || options.SatisfiedReferences[0].Field != "ParentID" {
 		t.Fatalf("satisfied references=%+v", options.SatisfiedReferences)
 	}
+	childFrame.Action = xhandler.WriteUpdate
+	options = program.validationOptions(childFrame, false)
+	if len(options.SatisfiedReferences) != 0 || options.DeferredFields != nil || options.Fields.Has("ParentID") {
+		t.Fatalf("pre-transaction sparse update references=%+v deferred=%+v fields=%+v", options.SatisfiedReferences, options.DeferredFields, options.Fields)
+	}
+	options = program.validationOptions(childFrame, true)
+	if len(options.SatisfiedReferences) != 0 || options.Fields.Has("ParentID") {
+		t.Fatalf("sparse update references=%+v fields=%+v", options.SatisfiedReferences, options.Fields)
+	}
 	program.frames.Rows = []*Frame{childFrame, parentFrame}
 	if options = program.validationOptions(childFrame, true); len(options.SatisfiedReferences) != 0 {
 		t.Fatalf("later insert satisfied reference=%+v", options.SatisfiedReferences)
@@ -49,6 +58,21 @@ func TestUniversalWriterTreatsIdentityOnlySparseUpdateAsNoOp(t *testing.T) {
 		Name *string
 	}{ID: &id, Name: &name})}) {
 		t.Fatal("supplied non-key field was not treated as mutable")
+	}
+}
+
+func TestUniversalWriterRecognizesLifecycleSparseUpdatePresence(t *testing.T) {
+	id, name := 7, "updated"
+	row := &unitRow{ID: &id, Name: &name, Has: &unitHas{ID: true, Name: true}}
+	record := &Record{EntityType: reflect.TypeFor[unitRow](), Keys: []Field{{Name: "ID"}}, Fields: []Field{{Name: "ID", Index: []int{0}, Has: []int{5, 0}}, {Name: "Name", Index: []int{3}, Has: []int{5, 3}}}}
+	frame := &Frame{Record: record, Entity: reflect.ValueOf(row), Fields: fieldSet{"ID": true}, Action: xhandler.WriteUpdate}
+	for field, present := range suppliedFields(frame.Entity.Elem(), frame.Record.Fields) {
+		if present {
+			frame.Fields[field] = true
+		}
+	}
+	if !hasMutableFields(frame) {
+		t.Fatal("lifecycle setter presence was not recognized as a sparse update")
 	}
 }
 
@@ -87,6 +111,102 @@ type toOneInput struct {
 }
 type toOneOutput struct {
 	Data []*toOneParent `parameter:"Data,kind=output,in=body"`
+}
+
+type transientLinkParent struct {
+	ID       *int                  `sqlx:"id,primaryKey=true"`
+	Scope    *string               `sqlx:"scope"`
+	Children []*transientLinkChild `view:"Children,table=children" on:"Scope=Scope"`
+}
+type transientLinkChild struct {
+	ID    *int    `sqlx:"id,primaryKey=true"`
+	Scope *string `sqlx:"-"`
+}
+type transientLinkInput struct {
+	Rows []*transientLinkParent `parameter:"Rows,kind=body,in=data" view:"Rows,table=parents"`
+}
+type transientLinkOutput struct {
+	Data []*transientLinkParent `parameter:"Data,kind=output,in=body"`
+}
+
+type auxiliaryChildParent struct {
+	ID       *int                    `sqlx:"id,primaryKey=true"`
+	Children []*auxiliaryChildRecord `view:"Children,table=children,auxiliary=true" on:"ID=ParentID"`
+}
+type auxiliaryChildRecord struct {
+	ID       *int `sqlx:"id,primaryKey=true"`
+	ParentID *int `sqlx:"parent_id"`
+}
+type auxiliaryChildInput struct {
+	Rows []*auxiliaryChildParent `parameter:"Rows,kind=body,in=data" view:"Rows,table=parents"`
+}
+type auxiliaryChildOutput struct {
+	Data []*auxiliaryChildParent `parameter:"Data,kind=output,in=body"`
+}
+
+func TestUniversalWriterRetainsAuxiliaryChildMetadata(t *testing.T) {
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[auxiliaryChildParent]().PkgPath(), Name: "Rows"}, Name: "Rows", Settings: &spec.Settings{Mutation: "post"}, RootView: &spec.View{Name: "Rows", Source: &spec.ViewSource{Table: "parents"}, Columns: []*spec.Column{{Name: "id", Source: "id", PrimaryKey: true}}}}
+	handler, err := New(component, reflect.TypeFor[auxiliaryChildInput](), reflect.TypeFor[auxiliaryChildOutput](), "post")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(handler.metadata.Root.Relations) != 1 || !handler.metadata.Root.Relations[0].Child.Auxiliary {
+		t.Fatalf("auxiliary relations = %+v", handler.metadata.Root.Relations)
+	}
+}
+
+func TestUniversalWriterResolvesTransientProjectionRelationKey(t *testing.T) {
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[transientLinkParent]().PkgPath(), Name: "Rows"}, Name: "Rows", Settings: &spec.Settings{Mutation: "post"}, RootView: &spec.View{Name: "Rows", Source: &spec.ViewSource{Table: "parents"}, Columns: []*spec.Column{{Name: "id", Source: "id", PrimaryKey: true}, {Name: "scope", Source: "scope"}}}}
+	handler, err := New(component, reflect.TypeFor[transientLinkInput](), reflect.TypeFor[transientLinkOutput](), "post")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(handler.metadata.Root.Relations) != 1 || len(handler.metadata.Root.Relations[0].Links) != 1 {
+		t.Fatalf("relations = %+v", handler.metadata.Root.Relations)
+	}
+	link := handler.metadata.Root.Relations[0].Links[0]
+	if link.Child.Name != "Scope" || link.Child.Column != "-" {
+		t.Fatalf("transient link = %+v", link)
+	}
+}
+
+func TestUniversalWriterAssemblesTypedPreviousRelationGraph(t *testing.T) {
+	scope := "scope-1"
+	parentID, childID := 1, 2
+	parent := &transientLinkParent{ID: &parentID, Scope: &scope}
+	child := &transientLinkChild{ID: &childID, Scope: &scope}
+	parentRecord := &Record{Name: "Parents", Path: "Parents", EntityType: reflect.TypeFor[transientLinkParent](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
+	childRecord := &Record{Name: "Children", Path: "Parents/Children", EntityType: reflect.TypeFor[transientLinkChild](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
+	parentRecord.Relations = []*Relation{{Field: []int{2}, Child: childRecord, Links: []Link{{Parent: parentRecord.Fields[0], Child: childRecord.Fields[0]}}}}
+	program := &Program{database: &DatabaseSnapshot{Rows: map[string]reflect.Value{"Parents\x001": reflect.ValueOf(parent), "Parents/Children\x002": reflect.ValueOf(child)}}}
+	if err := program.assemblePreviousRelations(parentRecord); err != nil {
+		t.Fatal(err)
+	}
+	if len(parent.Children) != 1 || parent.Children[0] != child {
+		t.Fatalf("children = %#v", parent.Children)
+	}
+}
+
+func TestUniversalWriterAssemblesPreviousRelationAcrossValueAndPointerKeys(t *testing.T) {
+	type parent struct {
+		ID       *int
+		Scope    string
+		Children []*transientLinkChild
+	}
+	scope := "request-1"
+	parentID, childID := 1, 2
+	parentRow := &parent{ID: &parentID, Scope: scope}
+	child := &transientLinkChild{ID: &childID, Scope: &scope}
+	parentRecord := &Record{Name: "Parents", Path: "Parents", EntityType: reflect.TypeFor[parent](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
+	childRecord := &Record{Name: "Children", Path: "Parents/Children", EntityType: reflect.TypeFor[transientLinkChild](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
+	parentRecord.Relations = []*Relation{{Field: []int{2}, Child: childRecord, Links: []Link{{Parent: parentRecord.Fields[0], Child: childRecord.Fields[0]}}}}
+	program := &Program{database: &DatabaseSnapshot{Rows: map[string]reflect.Value{"Parents\x001": reflect.ValueOf(parentRow), "Parents/Children\x002": reflect.ValueOf(child)}}}
+	if err := program.assemblePreviousRelations(parentRecord); err != nil {
+		t.Fatal(err)
+	}
+	if len(parentRow.Children) != 1 || parentRow.Children[0] != child {
+		t.Fatalf("children = %#v", parentRow.Children)
+	}
 }
 
 func unitComponent() *spec.Component {
@@ -130,6 +250,18 @@ func TestUniversalWriterCompilesPlanOnceAndBackfillsInvariant(t *testing.T) {
 	original := program.original.Presence[reflect.ValueOf(row).Pointer()]
 	if !original.Available() || !original.Has("Start") || original.Has("End") {
 		t.Fatalf("original presence = %+v", original)
+	}
+}
+
+func TestUniversalWriterRetainsAuxiliaryRootMetadata(t *testing.T) {
+	component := unitComponent()
+	component.RootView.Auxiliary = true
+	handler, err := New(component, reflect.TypeFor[unitInput](), reflect.TypeFor[unitOutput](), "patch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handler.metadata.Root == nil || !handler.metadata.Root.Auxiliary {
+		t.Fatalf("auxiliary root metadata = %+v", handler.metadata.Root)
 	}
 }
 

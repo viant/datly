@@ -260,11 +260,13 @@ func (g *handlerGeneration) setMarkerViews(plan *handlerplan.Plan) map[string]bo
 	result := map[string]bool{}
 	var visit func(*handlerplan.RecordPlan)
 	visit = func(record *handlerplan.RecordPlan) {
-		if record == nil || record.Auxiliary {
+		if record == nil {
 			return
 		}
-		if identity := strings.TrimSpace(record.Identity); identity != "" {
-			result[identity] = true
+		if !record.Auxiliary || hasWritableDescendant(record) {
+			if identity := strings.TrimSpace(record.Identity); identity != "" {
+				result[identity] = true
+			}
 		}
 		for _, relation := range record.Relations {
 			if relation != nil {
@@ -274,6 +276,21 @@ func (g *handlerGeneration) setMarkerViews(plan *handlerplan.Plan) map[string]bo
 	}
 	visit(plan.Root)
 	return result
+}
+
+func hasWritableDescendant(record *handlerplan.RecordPlan) bool {
+	if record == nil {
+		return false
+	}
+	for _, relation := range record.Relations {
+		if relation == nil || relation.Child == nil {
+			continue
+		}
+		if !relation.Child.Auxiliary || hasWritableDescendant(relation.Child) {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *handlerGeneration) withGeneratedPresence(semantic *handlerplan.Plan, generated *gen.Plan) (*handlerplan.Plan, error) {
@@ -298,7 +315,15 @@ func (g *handlerGeneration) withGeneratedPresence(semantic *handlerplan.Plan, ge
 		if record == nil {
 			return fmt.Errorf("generated entity presence plan contains a nil record")
 		}
-		if record.Auxiliary {
+		if record.Auxiliary && !hasWritableDescendant(record) {
+			for _, relation := range record.Relations {
+				if relation == nil || relation.Child == nil {
+					return fmt.Errorf("generated PATCH presence plan contains an incomplete relation")
+				}
+				if err := apply(relation.Child); err != nil {
+					return err
+				}
+			}
 			return nil
 		}
 		record.PresenceFields = append([]string(nil), fieldsByIdentity[record.Identity]...)

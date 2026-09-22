@@ -20,9 +20,6 @@ func (l *lowerer) traversalStatements(record *recordLowering, before beforeRecor
 }
 
 func (l *lowerer) traverseValues(record *recordLowering, values ast.Expr, before beforeRecord) ([]ast.Stmt, error) {
-	if record.plan.Auxiliary {
-		return nil, nil
-	}
 	recordVariable := fmt.Sprintf("record%d", record.order)
 	body, err := l.recordBody(record, ast.NewIdent(recordVariable), before)
 	if err != nil {
@@ -58,19 +55,21 @@ func (l *lowerer) traverseValues(record *recordLowering, values ast.Expr, before
 
 func (l *lowerer) recordBody(record *recordLowering, value ast.Expr, before beforeRecord) ([]ast.Stmt, error) {
 	var result []ast.Stmt
-	if before != nil {
-		statements, err := before(value)
+	if !record.plan.Auxiliary {
+		if before != nil {
+			statements, err := before(value)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, statements...)
+		}
+		result = append(result, l.entityWriteHookStatements(record, value)...)
+		writes, err := l.recordWriteStatements(record, value)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, statements...)
+		result = append(result, writes...)
 	}
-	result = append(result, l.entityWriteHookStatements(record, value)...)
-	writes, err := l.recordWriteStatements(record, value)
-	if err != nil {
-		return nil, err
-	}
-	result = append(result, writes...)
 	for _, relation := range record.plan.Relations {
 		if relation.Child.Auxiliary {
 			continue

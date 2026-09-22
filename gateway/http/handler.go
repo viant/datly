@@ -24,18 +24,19 @@ const (
 )
 
 type Handler struct {
-	metrics       *MetricsConfig
-	async         *asyncRoutes
-	allowedSubnet []string
-	documents     *documentRoutes
-	static        []*staticRoute
-	cors          map[string]*corsPolicy
-	warmup        *warmupRoutes
-	warmupPrefix  string
-	runtime       *druntime.Runtime
-	logger        xlogger.Logger
-	version       string
-	authorize     func(context.Context, *stdhttp.Request, dexec.ComponentTarget) error
+	metrics           *MetricsConfig
+	async             *asyncRoutes
+	allowedSubnet     []string
+	documents         *documentRoutes
+	static            []*staticRoute
+	cors              map[string]*corsPolicy
+	warmup            *warmupRoutes
+	cacheInvalidation *cacheRoutes
+	warmupPrefix      string
+	runtime           *druntime.Runtime
+	logger            xlogger.Logger
+	version           string
+	authorize         func(context.Context, *stdhttp.Request, dexec.ComponentTarget) error
 }
 
 func NewHandler(rt *druntime.Runtime, log xlogger.Logger, version string) *Handler {
@@ -62,6 +63,9 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		return
 	}
 	if h.documents != nil && h.serveDocuments(writer, req) {
+		return
+	}
+	if h.cacheInvalidation != nil && h.serveCacheInvalidation(writer, req) {
 		return
 	}
 	if h.warmup != nil && h.serveWarmup(writer, req) {
