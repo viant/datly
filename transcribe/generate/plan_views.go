@@ -498,7 +498,7 @@ func (p *viewPlanner) relationField(relation *spec.Relation) (Field, error) {
 		fieldTag = appendStructTag(fieldTag, tag.RelationName, onValue)
 	}
 	if format := text.NewCaseFormat(p.plan.Settings.CaseFormat); format != text.CaseFormatUndefined {
-		fieldTag = appendStructTag(fieldTag, "json", text.DetectCaseFormat(name).Format(name, format)+",omitempty")
+		fieldTag = appendStructTag(fieldTag, "json", text.DetectCaseFormat(name).Format(name, format))
 	}
 	return Field{Name: name, Type: fieldType, Tag: fieldTag, RelationHolder: true}, nil
 }

@@ -653,7 +653,7 @@ func TestResolvePlan_RelationHoldersUseComponentCaseFormat(t *testing.T) {
 		t.Fatalf("generated views = %+v", plan.Views)
 	}
 	holder := plan.Views[0].Fields[1]
-	if holder.Name != "SupplyPublisher" || reflect.StructTag(holder.Tag).Get("json") != "supplyPublisher,omitempty" {
+	if holder.Name != "SupplyPublisher" || reflect.StructTag(holder.Tag).Get("json") != "supplyPublisher" {
 		t.Fatalf("relation holder tag = %q", holder.Tag)
 	}
 }

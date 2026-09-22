@@ -191,12 +191,28 @@ func findColumn(columns []*spec.Column, name string) *spec.Column {
 }
 
 func columnMatchesLink(column *spec.Column, link *spec.RelationLink) bool {
+	parentColumn := reportIdentifierName(link.ParentColumn)
+	if parentColumn == "" {
+		return false
+	}
 	for _, candidate := range []string{column.Name, column.Source} {
-		if strings.EqualFold(strings.TrimSpace(candidate), strings.TrimSpace(link.ParentColumn)) {
+		if candidate = reportIdentifierName(candidate); candidate != "" && strings.EqualFold(candidate, parentColumn) {
 			return true
 		}
 	}
 	return false
+}
+
+func reportIdentifierName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	parts, err := sqlparser.TableIdentifierParts(value)
+	if err == nil && len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return value
 }
 
 func appendUnique(values []string, value string) []string {
