@@ -270,6 +270,11 @@ physical column or reparsing tags at execution time. If writer registration says
 that such a typed link does not resolve, update Datly rather than making the
 projection key writable.
 
+When the body may explicitly supply such a parent link, generated presence
+metadata includes that transient relation field even though it is excluded from
+DML. This lets Current lookup distinguish an authored request value from a
+fallback copied from Previous without exposing the marker in public JSON.
+
 Current projections commonly represent a nullable physical child key as a Go
 pointer while an auxiliary request-derived parent key is a value. Previous graph
 assembly compares their dereferenced typed values, so `string` and `*string`
