@@ -1873,6 +1873,58 @@ SELECT 1`
 	}
 }
 
+func TestGeneratePackageFromSource_ImportsQualifiedTimeInputTypes(t *testing.T) {
+	source := `#setting($_ = $route('/v1/api/example/keywords', 'GET'))
+#set($_ = $KeywordDate<time.Time>(form/keyword_date).Tag('format:"dateFormat=YYYY-MM-DD"').Optional())
+#set($_ = $KeywordFrom<*time.Time>(form/keyword_from).Tag('format:"dateFormat=YYYY-MM-DD"').Optional())
+#set($_ = $KeywordWindows<[]time.Time>(form/keyword_windows).Optional())
+#define($_ = $Data<[]*KeywordView>(output/view))
+SELECT 1`
+
+	root := t.TempDir()
+	testharness.WriteGeneratedGoMod(t, root)
+
+	pkgDir := filepath.Join(root, "keywords")
+	result, err := GeneratePackageFromSource(pkgDir, "example.com/demo/keywords", "Keywords", source)
+	if err != nil {
+		t.Fatalf("unexpected generate-from-source error: %v", err)
+	}
+	if result == nil || result.Plan == nil {
+		t.Fatalf("expected generation result with plan")
+	}
+	inputSource, err := os.ReadFile(filepath.Join(pkgDir, result.Plan.Input.Destination))
+	if err != nil {
+		t.Fatal(err)
+	}
+	settersSource, err := os.ReadFile(filepath.Join(pkgDir, result.Plan.Generation.File("input_setters", "input_setters.go")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []struct {
+		name   string
+		source string
+	}{
+		{"input.go", string(inputSource)},
+		{"input_setters.go", string(settersSource)},
+	} {
+		if !strings.Contains(file.source, `time "time"`) {
+			t.Fatalf("%s missing time import:\n%s", file.name, file.source)
+		}
+	}
+	for _, expected := range []string{"KeywordDate", "time.Time", "KeywordFrom", "*time.Time", "KeywordWindows", "[]time.Time", `format:"dateFormat=YYYY-MM-DD"`} {
+		if !strings.Contains(string(inputSource), expected) {
+			t.Fatalf("input.go missing %q:\n%s", expected, inputSource)
+		}
+	}
+
+	cmd := exec.Command("go", "test", "-mod=mod", "./...")
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("generated package with time inputs did not compile:\n%s\n%v", string(output), err)
+	}
+}
+
 func TestGeneratePackageFromSource_LoadsWithViantXAstLoader(t *testing.T) {
 	source := `#setting($_ = $route('/v1/api/example/vendors', 'GET'))
 #define($_ = $VendorID<int>(path/vendorID))
