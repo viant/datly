@@ -8,15 +8,18 @@ import (
 )
 
 const (
-	successMetric        = "Success"
-	errorMetric          = "Error"
-	pendingMetric        = "Pending"
-	cacheHitMetric       = "cache:hit"
-	cacheWarmupHitMetric = "cache:warmup_hit"
-	cacheLazyHitMetric   = "cache:lazy_hit"
-	cacheMissMetric      = "cache:miss"
-	cacheMissWriteMetric = "cache:miss_write"
-	cacheErrorMetric     = "cache:error"
+	successMetric            = "Success"
+	errorMetric              = "Error"
+	pendingMetric            = "Pending"
+	cacheHitMetric           = "cache:hit"
+	cacheWarmupHitMetric     = "cache:warmup_hit"
+	cacheLazyHitMetric       = "cache:lazy_hit"
+	cacheMissMetric          = "cache:miss"
+	cacheMissWriteMetric     = "cache:miss_write"
+	cacheErrorMetric         = "cache:error"
+	cacheCreatedMetric       = "cache:created"
+	cacheLazyCreatedMetric   = "cache:lazy_created"
+	cacheWarmupCreatedMetric = "cache:warmup_created"
 )
 
 type viewMetricProvider struct{}
@@ -33,6 +36,9 @@ var viewMetricKeys = []string{
 	cacheMissMetric,
 	cacheMissWriteMetric,
 	cacheErrorMetric,
+	cacheCreatedMetric,
+	cacheLazyCreatedMetric,
+	cacheWarmupCreatedMetric,
 }
 
 func newViewMetricProvider() counter.Provider {
@@ -77,6 +83,12 @@ func (p *viewMetricProvider) Map(value interface{}) int {
 		return 9
 	case cacheErrorMetric:
 		return 10
+	case cacheCreatedMetric:
+		return 11
+	case cacheLazyCreatedMetric:
+		return 12
+	case cacheWarmupCreatedMetric:
+		return 13
 	default:
 		return -1
 	}

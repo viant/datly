@@ -14,7 +14,8 @@ const (
 	//DocURI represents default Swagger UI documentation URI
 	DocURI = "/v1/api/meta/doc"
 	//CacheWarmupURI URIPrefix default value
-	CacheWarmupURI = "/v1/api/cache/warmup"
+	CacheWarmupURI     = "/v1/api/cache/warmup"
+	CacheInvalidateURI = "/v1/api/cache/invalidate"
 	//StructURI URIPrefix that generates a Golang struct representation
 	StructURI = "/v1/api/meta/struct"
 
@@ -24,17 +25,18 @@ const (
 
 // Config represents meta config
 type Config struct {
-	AllowedSubnet []string
-	Version       string
-	MetricURI     string
-	ConfigURI     string
-	StatusURI     string
-	ViewURI       string
-	OpenApiURI    string
-	DocURI        string
-	CacheWarmURI  string
-	StructURI     string
-	StateURI      string
+	AllowedSubnet      []string
+	Version            string
+	MetricURI          string
+	ConfigURI          string
+	StatusURI          string
+	ViewURI            string
+	OpenApiURI         string
+	DocURI             string
+	CacheWarmURI       string
+	CacheInvalidateURI string
+	StructURI          string
+	StateURI           string
 }
 
 // Init initialises config
@@ -63,6 +65,9 @@ func (m *Config) Init() {
 	}
 	if m.CacheWarmURI == "" {
 		m.CacheWarmURI = CacheWarmupURI
+	}
+	if m.CacheInvalidateURI == "" {
+		m.CacheInvalidateURI = CacheInvalidateURI
 	}
 	if m.StructURI == "" {
 		m.StructURI = StructURI

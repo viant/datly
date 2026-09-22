@@ -320,6 +320,9 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 		}
 		cacheStats = &cache.Stats{}
 		metaOptions = []read.Option{read.WithCache(cacheService), read.WithInMatcher(cacheMatcher), read.WithCacheStats(cacheStats)}
+		if session.CacheRefresh {
+			metaOptions = append(metaOptions, read.WithCacheRefresh(session.CacheRefresh))
+		}
 	}()
 
 	var err error
@@ -1249,6 +1252,9 @@ func NewExecutionInfo(index *cache.ParmetrizedQuery, cacheStats *cache.Stats, co
 			ret.CacheStats.ErrorType = cacheStats.ErrorType
 			ret.CacheStats.ErrorCode = int(cacheStats.ErrorCode)
 			ret.CacheStats.ExpiryTime = cacheStats.ExpiryTime
+			if target, ok := interface{}(ret.CacheStats).(interface{ SetCreatedTime(*time.Time) }); ok {
+				target.SetCreatedTime(cacheStats.CreatedTime)
+			}
 		}
 	}
 }
