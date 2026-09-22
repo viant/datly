@@ -640,6 +640,24 @@ func TestResolvePlan_RejectsGeneratedViewAndFieldCollisions(t *testing.T) {
 	})
 }
 
+func TestResolvePlan_RelationHoldersUseComponentCaseFormat(t *testing.T) {
+	child := &spec.View{Name: "SupplyPublisher", Source: &spec.ViewSource{Table: "publishers"},
+		Columns: []*spec.Column{{Name: "id", Type: spec.TypeRef{Name: "int"}}}}
+	root := &spec.View{Name: "Supply", Source: &spec.ViewSource{Table: "supply"},
+		Columns: []*spec.Column{{Name: "publisher_id", Type: spec.TypeRef{Name: "int"}}},
+		Relations: []*spec.Relation{{Name: "SupplyPublisher", Holder: "SupplyPublisher", Cardinality: spec.CardinalityOne, View: child,
+			On: []*spec.RelationLink{{ParentColumn: "publisher_id", ChildColumn: "id"}}}}}
+
+	plan := testPlan(t, &spec.Component{Name: "Supply", Settings: &spec.Settings{CaseFormat: "lc"}, RootView: root})
+	if len(plan.Views) == 0 || len(plan.Views[0].Fields) < 2 {
+		t.Fatalf("generated views = %+v", plan.Views)
+	}
+	holder := plan.Views[0].Fields[1]
+	if holder.Name != "SupplyPublisher" || reflect.StructTag(holder.Tag).Get("json") != "supplyPublisher" {
+		t.Fatalf("relation holder tag = %q", holder.Tag)
+	}
+}
+
 func TestResolvePlan_GeneratesTypedSelfReference(t *testing.T) {
 	root := &spec.View{Name: "Category", SelfReference: &spec.SelfReference{Holder: "Children", Child: "ID", Parent: "ParentID"}}
 	plan := testPlan(t, &spec.Component{Name: "Categories", RootView: root})

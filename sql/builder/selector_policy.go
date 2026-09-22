@@ -153,7 +153,11 @@ func (r selectorResolver) orderBy(source string) (string, error) {
 		return "", err
 	}
 
-	projection := dsql.SelectorProjection{SQL: r.sqlText, View: r.view}
+	sqlText := r.sqlText
+	if r.view != nil && r.view.IsGroupable() && len(r.projection) > 0 {
+		sqlText = dsql.GroupedProjectionCriteriaSource(sqlText, r.projection)
+	}
+	projection := dsql.SelectorProjection{SQL: sqlText, View: r.view}
 	projected, err := projection.Columns(nil)
 	if err != nil {
 		return "", err
