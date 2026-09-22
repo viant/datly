@@ -40,7 +40,7 @@ func (d *reportDeriver) derivedComponent(source *spec.Component, sourceRoute *sp
 	}
 	var exposure []*spec.MCPExposure
 	if metadata.settings.MCPTool == nil || *metadata.settings.MCPTool {
-		exposure = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: derivedMCPToolName(sourceRoute, identity.key.Name, "Cube"), Description: source.Description}}
+		exposure = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: spec.DerivedMCPToolName(sourceRoute, identity.key.Name, "Cube"), Description: source.Description}}
 	}
 	return &spec.Component{
 		Key: identity.key, Name: identity.key.Name, Description: strings.TrimSpace(source.Description + " cube"),
@@ -50,18 +50,6 @@ func (d *reportDeriver) derivedComponent(source *spec.Component, sourceRoute *sp
 			APIKeyHeader: sourceRoute.APIKeyHeader, APIKeyValue: sourceRoute.APIKeyValue,
 		}},
 	}
-}
-
-func derivedMCPToolName(route *spec.Route, fallback, suffix string) string {
-	if route != nil {
-		for _, exposure := range route.MCP {
-			if exposure == nil || exposure.Kind != spec.MCPExposureTool || strings.TrimSpace(exposure.Name) == "" {
-				continue
-			}
-			return strings.TrimSpace(exposure.Name) + suffix
-		}
-	}
-	return fallback
 }
 
 func (s Source) identity() string {
