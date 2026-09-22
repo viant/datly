@@ -34,6 +34,15 @@ func (s *source) services(ctx context.Context, logger *slog.Logger) (runtime.Obs
 			logger.Info("datly cache warmup completed", "target", result.Target, "status", result.Status, "groups", result.Groups, "failed", err != nil)
 		}}
 	}
+	if policy := s.config.CacheInvalidation; policy != nil {
+		admin := *policy.Admin
+		s.http.CacheInvalidation = &gateway.CacheInvalidationConfig{Timeout: time.Duration(policy.TimeoutMs) * time.Millisecond, Authorize: func(ctx context.Context, request *http.Request, _ exec.ComponentTarget) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return admin.Authorize(request)
+		}}
+	}
 	result := runtime.ObservabilityConfig{}
 	if s.config.Observation == nil {
 		return result, nil

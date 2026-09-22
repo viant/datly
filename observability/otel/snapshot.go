@@ -49,6 +49,7 @@ func (c Completion) detached(includeSQL bool) Completion {
 				e.Error = "read failed"
 			}
 			if e.CacheStats != nil {
+				e.CacheStats.SetCreatedTime(e.CacheStats.CreatedTime)
 				if e.CacheStats.ExpiryTime != nil {
 					expiry := *e.CacheStats.ExpiryTime
 					e.CacheStats.ExpiryTime = &expiry

@@ -188,6 +188,7 @@ func (w *warmupExecution) run(ctx context.Context, plan *ViewPlan, derived *Rela
 		}
 		execution := observation.execution(query, "", "")
 		defer func() { observation.completeSQL(execution, nil, -1, err) }()
+		ctx = cache.WithCreationObserver(ctx, func(kind string, entries int) { w.session.recorder.Created(observation.scope, kind, entries) })
 		return w.session.ReadCaches[view].IndexBy(ctx, connection.DB, settings.IndexColumn, query.SQL, query.Args, query)
 	}
 	if plan.Partitioner == nil {

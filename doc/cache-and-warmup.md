@@ -5,7 +5,8 @@
 Use a read cache to reuse SQLX query results, and warmup to populate known query
 cases before ordinary requests arrive. Datly attaches the actual native SQLX
 `cache.Cache` service to each prepared view. Normal reads and warmup use that
-same service; there is no Datly row replay cache or handler invalidation layer.
+same service. Datly adds shared generation controls for administrative invalidation;
+row storage, scanning, TTL and publication remain native SQLX responsibilities.
 
 ## Choose a backend explicitly
 
@@ -257,7 +258,7 @@ For an unexpected miss, compare actual native SQL/arguments, selected projection
 prepared view identity, namespace, TTL and index metadata. For wrong rows, test
 complete composite keys and authorization cases. Measure cold read, hit, warmup,
 expiry and failure separately. [Native observability](observability.md) supplies
-existing cache metadata without inventing a second key scheme. Run bounded
+native cache metadata, persisted creation/expiry timestamps and publication counters. Run bounded
 realistic workloads before making memory or latency claims.
 
 ## Miss fallback and statistics
@@ -273,3 +274,114 @@ statistics. A refresh conflict stays an error; it is not a successful hit.
 Physical cache record counts can remain unknown; do not substitute returned rows
 for storage counts. Prove a warmed hit with the source unavailable, an unwarmed
 lazy fill then hit, TTL expiry and the dedicated connector actually used.
+
+## Cache provider location expansion
+
+Named provider settings and component settings expand `${View.Name}`,
+`${View.Alias}`, and `${View.Table}` before application constants are resolved.
+`Name` is the canonical view name, `Alias` is its SQL namespace, and `Table` is
+`ViewSource.Table`. An absent alias or table expands to an empty string. Escaped-dot
+forms such as `${View\.Name}` and unbraced `$View.Name` are accepted as well.
+
+```go
+"records": {
+    Enabled: true, Provider: "afs", TTL: "5m",
+    Location: "cache/${View.Name}/${View.Alias}/${View.Table}",
+}
+```
+
+Each prepared view still receives its own component/path/connector namespace.
+Two views can share a provider location without sharing query entries.
+
+## Invalidate lazy and prewarmed caches
+
+Enable the HTTP control with an explicit administrator policy:
+
+```go
+httpConfig.CacheInvalidation = &http.CacheInvalidationConfig{
+    Timeout: 10 * time.Second,
+    Authorize: authorizeCacheAdministrator,
+}
+httpConfig.Meta.CacheInvalidateURI = "/v1/api/cache/invalidate"
+```
+
+Here `http` is `github.com/viant/datly/gateway/http`. The authorization callback
+receives `(context.Context, *net/http.Request, exec.ComponentTarget)` and must
+validate administrative access to the exact server-selected target. Enabling this
+control is independent of configuring HTTP warmup. It includes lazy-only views.
+Existing subnet, route API-key, application authorization and CORS policies apply.
+
+For a GET route `/v1/api/orders`, using `APIPrefix: "/v1/api"`:
+
+```http
+POST /v1/api/cache/invalidate/orders
+Content-Type: application/json
+
+{"view":"items","scope":"all"}
+```
+
+`view` selects a prepared view using its canonical name or registered alias;
+unknown/ambiguous selections are rejected. Omit it to invalidate every cached
+view in the component, including children. Path parameters select the component
+route; they do not narrow invalidation to one query-argument value.
+
+`scope` is `all` (default), `lazy`, or `warmup`. The response reports each selected
+view and its new generation. Warmup-only invalidation preserves existing lazy
+entries, and lazy-only invalidation preserves warmup publications. To refresh all
+cached data, use `all`, then invoke the existing warmup endpoint if desired.
+Invalidation itself does not execute SQL. Programmatic callers can use
+`Runtime.InvalidateCache(ctx, target, view, scope)` on a server-owned target.
+Directly supplied cache services must implement scoped invalidation; unsupported
+services produce an explicit error before changes are made.
+
+Generation controls live in the same shared backend as the data. Readers obtain
+the current generation on each lookup. Requests already in flight may finish;
+older writers can only publish into their retired generation. Other instances
+sharing the same backend observe invalidation without process-local broadcasts.
+Separate local disks/memory stores are separate cache domains. Multi-view
+invalidation is not transactional: storage failures return per-view results and
+can leave a partially completed operation. Retrying is safe.
+
+Keep generation controls outside external TTL/eviction cleanup. Removing them
+while retaining payloads can make old generations reachable. Aerospike control
+records do not expire. AFS stores controls below `.datly-generations`; data TTL
+prevents serving expired payloads but is not a background file garbage collector.
+Storage lifecycle rules may clean expired payloads while retaining the controls.
+
+The generation namespace makes pre-upgrade entries cold. Normal reads and warmup
+refill the new namespace. Exact-query refresh retires the selected exact entry
+and matching warmup publication, preserving unrelated authored cases. Use
+component/view invalidation for a broader refresh.
+
+## Creation timestamps and counters
+
+Completed SQL metrics expose `cacheStats.createdTime` and `expiryTime`.
+Creation time is persisted by SQLX, remains stable on hits, and changes when a
+new entry is published. Legacy entries without timestamps omit `createdTime`.
+Authorized diagnostic headers retain these fields; OpenTelemetry spans export
+`cache.created_unix_nano` and `cache.expiry_unix_nano`.
+
+Per-view native counters include `cache:created`, `cache:lazy_created`, and
+`cache:warmup_created`. They count successful publications, including empty-result
+entries and index markers, excluding overflow chunks. Hits, failed writes,
+rollbacks and reused AFS warmups do not increment them. `cache:miss_write` remains
+the separate attempt counter. Invocation-local warmup observers preserve metric
+ownership across concurrent reader executions and reloads.
+
+Standalone JSON/YAML configuration can enable the same control without embedding
+an authorization callback:
+
+```yaml
+CacheInvalidation:
+  TimeoutMs: 10000
+  Admin:
+    APIKeyHeader: X-Cache-Admin
+    APIKeyValue: replace-with-your-admin-secret
+Meta:
+  CacheInvalidateURI: /v1/api/cache/invalidate
+```
+
+Configure the administrator credential through your deployment's configuration
+handling. Standalone preloads GET component metadata when this control is enabled
+so caches declared on nested Go output types are available before the first read.
+Only components with actual cached views receive invalidation routes.

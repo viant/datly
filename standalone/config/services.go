@@ -16,6 +16,11 @@ type Warmup struct {
 	Admin     *gateway.DocumentAccess
 }
 
+type CacheInvalidation struct {
+	TimeoutMs int64
+	Admin     *gateway.DocumentAccess
+}
+
 // Observation configures the existing native capture owner. Logging summaries
 // is independent of OTel; neither option disables native Datly capture.
 type Observation struct {
@@ -46,6 +51,20 @@ func (c *Config) validateServices() error {
 		}
 		if strings.TrimSpace(c.Meta.CacheWarmURI) == "" && c.Meta.CacheWarmURI != "" {
 			return fmt.Errorf("Warmup requires an enabled Meta.CacheWarmURI")
+		}
+	}
+	if policy := c.CacheInvalidation; policy != nil {
+		if c.Config.CacheInvalidation != nil {
+			return fmt.Errorf("configured and supplied CacheInvalidation policies conflict")
+		}
+		if policy.TimeoutMs <= 0 || policy.TimeoutMs > maxMs || policy.Admin == nil {
+			return fmt.Errorf("CacheInvalidation requires a positive TimeoutMs and Admin policy")
+		}
+		if err := policy.Admin.Validate(); err != nil {
+			return err
+		}
+		if c.Meta.CacheInvalidateURI != "" && strings.TrimSpace(c.Meta.CacheInvalidateURI) == "" {
+			return fmt.Errorf("CacheInvalidation requires an enabled Meta.CacheInvalidateURI")
 		}
 	}
 	if c.Observation != nil && c.Observation.OTel != nil {

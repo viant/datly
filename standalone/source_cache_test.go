@@ -3,9 +3,11 @@ package standalone
 import (
 	"context"
 	"encoding/json"
+	gateway "github.com/viant/datly/gateway/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,7 +18,7 @@ import (
 )
 
 func TestStandaloneNamedNestedCacheSQLite(t *testing.T) {
-	for _, mode := range []string{"inline", "legacy", "missing", "disabled", "conflict"} {
+	for _, mode := range []string{"inline", "legacy", "missing", "disabled", "conflict", "invalidation"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx := context.Background()
 			f := fixture.New(t)
@@ -28,6 +30,10 @@ func TestStandaloneNamedNestedCacheSQLite(t *testing.T) {
 			settings := map[string]any{"Name": "shared", "Enabled": mode != "disabled", "Provider": "afs", "Location": filepath.Join(f.Root, "cache/${View.Name}"), "TTL": "1m"}
 			f.WriteConfig(t, func(c map[string]any) {
 				c["GoBootstrap"] = map[string]any{"Packages": []string{fixture.Module + "/cachedrecords"}, "EagerComponents": true}
+				if mode == "invalidation" {
+					c["GoBootstrap"] = map[string]any{"Packages": []string{fixture.Module + "/cachedrecords"}}
+					c["CacheInvalidation"] = map[string]any{"TimeoutMs": 2000, "Admin": map[string]any{"APIKeyHeader": "X-Admin", "APIKeyValue": "admin"}}
+				}
 				if mode == "legacy" {
 					delete(settings, "Enabled")
 					data, err := json.Marshal(map[string]any{"CacheProviders": []any{settings}})
@@ -64,6 +70,7 @@ func TestStandaloneNamedNestedCacheSQLite(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+			expectedChild := "child"
 			read := func() cachedrecords.Output {
 				w := httptest.NewRecorder()
 				s.ServeHTTP(w, httptest.NewRequest("GET", "/cached-records", nil))
@@ -73,11 +80,27 @@ func TestStandaloneNamedNestedCacheSQLite(t *testing.T) {
 				require.Len(t, out.Rows, 1)
 				require.Len(t, out.Rows[0].Children, 1)
 				require.Len(t, out.Rows[0].Children[0].Details, 1)
-				require.Equal(t, "child", out.Rows[0].Children[0].Name)
+				require.Equal(t, expectedChild, out.Rows[0].Children[0].Name)
 				require.Equal(t, "detail", out.Rows[0].Children[0].Details[0].Name)
 				return out
 			}
+			if mode == "invalidation" {
+				rejected := httptest.NewRecorder()
+				s.ServeHTTP(rejected, httptest.NewRequest("POST", gateway.DefaultCacheInvalidateURI+"/cached-records", strings.NewReader(`{"view":"children","scope":"lazy"}`)))
+				require.Equal(t, 403, rejected.Code, "cache control must be preloaded before the first read")
+			}
 			require.Equal(t, "first", read().Rows[0].Name)
+			if mode == "invalidation" {
+				require.NoError(t, f.DB.ExecStatements(ctx, "UPDATE cache_children SET name='fresh'"))
+				read() // still serves the previous cached child
+				request := httptest.NewRequest("POST", gateway.DefaultCacheInvalidateURI+"/cached-records", strings.NewReader(`{"view":"children","scope":"lazy"}`))
+				request.Header.Set("X-Admin", "admin")
+				response := httptest.NewRecorder()
+				s.ServeHTTP(response, request)
+				require.Equal(t, 200, response.Code, response.Body.String())
+				expectedChild = "fresh"
+				read()
+			}
 			// Only nested views are cached; the parent must still read fresh SQL.
 			require.NoError(t, f.DB.ExecStatements(ctx, "DROP TABLE cache_children", "DROP TABLE cache_details", "UPDATE records SET name='updated'"))
 			require.Equal(t, "updated", read().Rows[0].Name)

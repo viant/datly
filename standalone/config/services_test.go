@@ -13,6 +13,9 @@ import (
 func TestServicesInvalidConfiguration(t *testing.T) {
 	for _, extra := range []string{
 		`"Warmup":{"TimeoutMs":10}`,
+		`"CacheInvalidation":{"TimeoutMs":10}`,
+		`"CacheInvalidation":{"TimeoutMs":0,"Admin":{"APIKeyHeader":"X-Admin","APIKeyValue":"key"}}`,
+		`"CacheInvalidation":{"TimeoutMs":9223372036854775807,"Admin":{"APIKeyHeader":"X-Admin","APIKeyValue":"key"}}`,
 		`"Warmup":{"TimeoutMs":0,"Admin":{"APIKeyHeader":"X-Admin","APIKeyValue":"key"}}`,
 		`"Warmup":{"TimeoutMs":9223372036854775807,"Admin":{"APIKeyHeader":"X-Admin","APIKeyValue":"key"}}`,
 		`"Observation":{"OTel":{"Enabled":true,"HTTP":{"EndpointURL":"http://localhost/v1/traces"}}}`,

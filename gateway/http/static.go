@@ -43,7 +43,7 @@ func (c Config) staticRoutes(ctx context.Context, input HandlerInput, keys APIKe
 				return nil, fmt.Errorf("static prefix conflicts with component route %s", endpoint.Path)
 			}
 		}
-		for _, reserved := range []string{c.Meta.OpenApiURI, c.Meta.DocURI, c.Meta.CacheWarmURI} {
+		for _, reserved := range []string{c.Meta.OpenApiURI, c.Meta.DocURI, c.Meta.CacheWarmURI, c.Meta.CacheInvalidateURI} {
 			reserved = strings.TrimSuffix(reserved, "/")
 			if reserved != "" && (prefix == reserved || strings.HasPrefix(prefix, reserved+"/")) {
 				return nil, fmt.Errorf("static prefix conflicts with metadata/admin route %s", reserved)
