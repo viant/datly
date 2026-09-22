@@ -237,6 +237,17 @@ managed transaction. If a connected older generator still propagates auxiliary
 status to descendants or skips the auxiliary root traversal, classify that as a
 writer/runtime version gap and preserve the legacy transaction.
 
+Keep the auxiliary scope source distinct from any writable descendant that
+targets the same physical table. If a derived auxiliary root is based on
+`(record)` and the graph also joins writable `record records`, both views share
+one physical table identity and Current classification can collapse them into
+an incomplete or ambiguous writer row. Base the auxiliary scope on a different
+authorizing table (or a purpose-built read-only scope) and join the writable
+record as an ordinary descendant. Verify that transcription emits a separate
+`Current<Record>` projection, then exercise the graph against SQLite. This is a
+graph-modeling issue, not a reason to patch generated Current SQL or abandon the
+single transaction.
+
 ### Replacement collections and explicit deletion
 
 Legacy code often implements replacement semantics with `DELETE ... WHERE
