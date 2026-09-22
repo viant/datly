@@ -79,9 +79,13 @@ func TestCurrentSourceOutputsPreservesOuterAliases(t *testing.T) {
 }
 
 func TestCurrentReadTagProjectsTransientRelationKey(t *testing.T) {
-	actual := currentReadTag(`sqlx:"-" internal:"true"`, "linked_resource_id")
-	if actual != `sqlx:"linked_resource_id" internal:"true"` {
-		t.Fatalf("tag = %q", actual)
+	for _, test := range []struct{ tag, want string }{
+		{`sqlx:"-" internal:"true"`, `sqlx:"linked_resource_id" internal:"true"`},
+		{`sqlx:"-,refTable=resource,refColumn=id,required=true" validate:"required"`, `sqlx:"linked_resource_id,refTable=resource,refColumn=id,required=true" validate:"required"`},
+	} {
+		if actual := currentReadTag(test.tag, "linked_resource_id"); actual != test.want {
+			t.Fatalf("currentReadTag(%q) = %q, want %q", test.tag, actual, test.want)
+		}
 	}
 }
 

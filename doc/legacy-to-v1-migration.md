@@ -275,6 +275,13 @@ metadata includes that transient relation field even though it is excluded from
 DML. This lets Current lookup distinguish an authored request value from a
 fallback copied from Previous without exposing the marker in public JSON.
 
+The generated Current carrier maps that transient field to its projected SQL
+alias while retaining mapping options such as `refTable`, `refColumn`, and
+`required`. A tag like `sqlx:"-,refTable=parent,refColumn=id"` therefore becomes
+`sqlx:"parent_scope,refTable=parent,refColumn=id"` on Current only. If SQL
+returns the alias but read provenance reports the field as unloaded, treat it as
+a Current-tag generation defect rather than removing the transient mapping.
+
 Current projections commonly represent a nullable physical child key as a Go
 pointer while an auxiliary request-derived parent key is a value. Previous graph
 assembly compares their dereferenced typed values, so `string` and `*string`

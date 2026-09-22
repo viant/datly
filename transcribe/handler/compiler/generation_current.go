@@ -2,6 +2,8 @@ package compiler
 
 import (
 	"fmt"
+	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -181,10 +183,16 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 }
 
 func currentReadTag(tag, column string) string {
-	if strings.Contains(tag, `sqlx:"-"`) {
-		return strings.Replace(tag, `sqlx:"-"`, `sqlx:"`+strings.TrimSpace(column)+`"`, 1)
+	raw := reflect.StructTag(strings.TrimSpace(tag)).Get("sqlx")
+	if raw == "" {
+		return tag
 	}
-	return tag
+	parts := strings.Split(raw, ",")
+	if len(parts) == 0 || strings.TrimSpace(parts[0]) != "-" {
+		return tag
+	}
+	parts[0] = strings.TrimSpace(column)
+	return strings.Replace(tag, `sqlx:`+strconv.Quote(raw), `sqlx:`+strconv.Quote(strings.Join(parts, ",")), 1)
 }
 
 // currentSourceOutputs maps a direct source column to the output name of the
