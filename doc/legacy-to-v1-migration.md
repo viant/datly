@@ -118,6 +118,16 @@ one reader graph with related and DerivedView outputs. Do not preserve a
 service-local fan-out of raw SELECTs merely because the public response is an
 aggregate.
 
+When several callers aggregate the same facts with different dimensions,
+measures, or windows, prefer one authorized groupable reader with a derived
+cube and, where needed, cube composition. Enable MCP cube/compose exposure only
+when the source contract enforces the same identity and authorization policy
+for those tools. A fixed dashboard graph can still compose cube results with
+other relations; do not duplicate near-identical aggregate SQL in each
+dashboard reader. Check the connected build's cube activation shape before
+rewriting a correlated or joined aggregate: a reader that compiles normally
+does not automatically qualify as a cube source.
+
 ## Rebuild a legacy writer
 
 1. Identify the entire atomic business event. Include every insert, update, and
@@ -151,6 +161,15 @@ aggregate.
 For a legacy handler that manually indexes `Cur*` rows, model those rows as
 authorized Previous or auxiliary views and use generated typed read indexes.
 Do not carry forward unexported maps or repeated service-local SELECT loops.
+
+For writer relations, declare every real equality key in the DQL join. Use
+`AND 1=1` as the to-one shortcut only when the linked data is actually unique
+for that parent; do not also declare `cardinality(child, 'One')`. Keep explicit
+root cardinality where needed. If an account or learner can own multiple rows,
+model a collection instead of forcing a to-one hint onto a broad foreign-key
+join. A Current lookup returning multiple rows for a to-one holder is usually
+evidence of an incomplete relation key or false cardinality, not a reason to
+silence the reader.
 
 ### External work between database mutations
 
