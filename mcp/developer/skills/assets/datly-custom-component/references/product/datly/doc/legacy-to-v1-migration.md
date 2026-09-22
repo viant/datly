@@ -359,6 +359,14 @@ matches that trusted baseline; an authored relation edit remains protected.
 Keep the corrected policy in Datly with a native regeneration test rather than
 hand-editing every generated view field in the application.
 
+Merge regeneration conservatively retains historical SQL resources for old
+shape references. When a relation is intentionally retired, audit that package's
+authored code and run a targeted `-generation-policy overwrite` regeneration
+only after its replacement component passes parity tests. Overwrite removes
+obsolete generated shapes and resources, but still rejects removal of a
+resource whose bytes differ from its trusted fingerprint. Do not use it to
+discard edited hooks or bypass an unexplained ownership conflict.
+
 ## Verification gates
 
 A migrated component is complete only when all applicable gates pass:
