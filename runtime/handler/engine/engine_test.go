@@ -120,6 +120,24 @@ func (*failingMCPInput) InitMCP(context.Context, xmcp.Context) error {
 	return errMCPInputInit
 }
 
+type finalizerInputContextInput struct {
+	Debug bool
+}
+
+type finalizerInputContextOutput struct {
+	Metrics *string
+	Seen    *finalizerInputContextInput
+}
+
+func (o *finalizerInputContextOutput) Finalize(ctx context.Context) error {
+	input, _ := ctx.Value(reflect.TypeOf((*finalizerInputContextInput)(nil))).(*finalizerInputContextInput)
+	o.Seen = input
+	if input == nil || !input.Debug {
+		o.Metrics = nil
+	}
+	return nil
+}
+
 func TestEngineExecuteBindsOnceAndInvokesWithScopedLocator(t *testing.T) {
 	injector, err := bindly.NewInjector()
 	if err != nil {
@@ -159,6 +177,103 @@ func TestEngineExecuteBindsOnceAndInvokesWithScopedLocator(t *testing.T) {
 	}
 	if actual != 7 {
 		t.Fatalf("unexpected result: %v", actual)
+	}
+}
+
+func TestEngineOutputFinalizerReceivesBoundInputContext(t *testing.T) {
+	injector, err := bindly.NewInjector()
+	if err != nil {
+		t.Fatalf("NewInjector() error = %v", err)
+	}
+	binding := bindly.BindingSpec{
+		Path: "Debug", Name: "debug", Location: bindstate.Location{Kind: "query", In: "debug"},
+	}
+	plan, err := injector.CompilePlan(reflect.TypeOf(finalizerInputContextInput{}), binding)
+	if err != nil {
+		t.Fatalf("CompilePlan() error = %v", err)
+	}
+	input := testRouteInputWithPlan(t, reflect.TypeOf(finalizerInputContextInput{}), plan, binding)
+
+	for _, testCase := range []struct {
+		name        string
+		query       url.Values
+		wantDebug   bool
+		wantMetrics bool
+	}{
+		{name: "default false clears metrics", wantDebug: false, wantMetrics: false},
+		{name: "explicit false clears metrics", query: url.Values{"debug": {"false"}}, wantDebug: false, wantMetrics: false},
+		{name: "true preserves metrics", query: url.Values{"debug": {"true"}}, wantDebug: true, wantMetrics: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			value := "present"
+			actual, err := New().Execute(context.Background(), Request{
+				Injector: injector,
+				Input:    input,
+				Scope:    testharness.Request{}.WithQuery(testCase.query),
+				Handler: rhandler.HandlerFunc(func(context.Context, rhandler.Invocation) (any, error) {
+					return &finalizerInputContextOutput{Metrics: &value}, nil
+				}),
+			})
+			if err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			output, ok := actual.(*finalizerInputContextOutput)
+			if !ok {
+				t.Fatalf("output = %T", actual)
+			}
+			if output.Seen == nil || output.Seen.Debug != testCase.wantDebug {
+				t.Fatalf("finalizer input = %+v, want debug=%v", output.Seen, testCase.wantDebug)
+			}
+			if got := output.Metrics != nil; got != testCase.wantMetrics {
+				t.Fatalf("metrics present = %v, want %v", got, testCase.wantMetrics)
+			}
+		})
+	}
+}
+
+func TestEngineInputContextShadowsParentForNestedInvocation(t *testing.T) {
+	parentInput := &finalizerInputContextInput{Debug: false}
+	childInput := &finalizerInputContextInput{Debug: true}
+	childMetric := "child"
+	var parentContextInput *finalizerInputContextInput
+	var childOutput *finalizerInputContextOutput
+
+	actual, err := New().Execute(context.Background(), Request{
+		Input:      testRouteInput(t, reflect.TypeOf(finalizerInputContextInput{})),
+		BoundInput: parentInput,
+		Handler: rhandler.HandlerFunc(func(ctx context.Context, _ rhandler.Invocation) (any, error) {
+			parentContextInput, _ = ctx.Value(reflect.TypeOf((*finalizerInputContextInput)(nil))).(*finalizerInputContextInput)
+			result, err := New().Execute(ctx, Request{
+				Input:      testRouteInput(t, reflect.TypeOf(finalizerInputContextInput{})),
+				BoundInput: childInput,
+				Handler: rhandler.HandlerFunc(func(context.Context, rhandler.Invocation) (any, error) {
+					return &finalizerInputContextOutput{Metrics: &childMetric}, nil
+				}),
+			})
+			if err != nil {
+				return nil, err
+			}
+			childOutput, _ = result.(*finalizerInputContextOutput)
+			return "parent", nil
+		}),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if parentContextInput != parentInput {
+		t.Fatalf("parent context input = %p, want %p", parentContextInput, parentInput)
+	}
+	if actual != "parent" {
+		t.Fatalf("parent result = %v", actual)
+	}
+	if childOutput == nil {
+		t.Fatal("child output was not captured")
+	}
+	if childOutput.Seen != childInput {
+		t.Fatalf("child finalizer input = %p, want %p", childOutput.Seen, childInput)
+	}
+	if childOutput.Metrics == nil {
+		t.Fatal("child finalizer used parent input and cleared metrics")
 	}
 }
 

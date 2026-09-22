@@ -236,6 +236,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return finish(nil, err)
 		}
 	}
+	ctx = context.WithValue(ctx, reflect.TypeOf(input), input)
 	if request.Replay != nil && request.Replay.Only {
 		return finish(input, nil)
 	}
