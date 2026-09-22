@@ -60,6 +60,7 @@ func parseCacheWarmupSettings(args []string) (*spec.CacheWarmupSettings, error) 
 		IndexColumn: trimQuote(args[0]),
 	}
 	current := &spec.CacheWarmupCase{}
+	var excludeDefault []string
 	for _, raw := range args[1:] {
 		raw = trimQuote(raw)
 		name, value, ok := splitWarmupOption(raw)
@@ -130,6 +131,12 @@ func parseCacheWarmupSettings(args []string) (*spec.CacheWarmupSettings, error) 
 			if len(ret.FieldNames) == 0 {
 				return nil, fmt.Errorf("warmup field names were empty")
 			}
+		case "excludedefault", "exclude_default":
+			names := warmupNameList(value)
+			if len(names) == 0 {
+				return nil, fmt.Errorf("warmup excludeDefault has no parameters")
+			}
+			excludeDefault = append(excludeDefault, names...)
 		default:
 			values := strings.Split(value, ",")
 			param := &spec.CacheWarmupParam{Name: name}
@@ -145,6 +152,9 @@ func parseCacheWarmupSettings(args []string) (*spec.CacheWarmupSettings, error) 
 			}
 			current.Set = append(current.Set, param)
 		}
+	}
+	if err := applyWarmupExcludeDefault(current, excludeDefault); err != nil {
+		return nil, err
 	}
 	if len(current.Set) > 0 {
 		ret.Cases = append(ret.Cases, current)
@@ -163,6 +173,7 @@ func parseCacheWarmupCases(args []string) (string, *spec.CacheWarmupCase, error)
 		return "", nil, fmt.Errorf("warmup case set name was empty")
 	}
 	current := &spec.CacheWarmupCase{}
+	var excludeDefault []string
 	for _, raw := range args[1:] {
 		raw = trimQuote(raw)
 		optName, value, ok := splitWarmupOption(raw)
@@ -179,6 +190,12 @@ func parseCacheWarmupCases(args []string) (string, *spec.CacheWarmupCase, error)
 			if len(current.FieldNames) == 0 {
 				return "", nil, fmt.Errorf("warmup field names were empty")
 			}
+		case "excludedefault", "exclude_default":
+			names := warmupNameList(value)
+			if len(names) == 0 {
+				return "", nil, fmt.Errorf("warmup excludeDefault has no parameters")
+			}
+			excludeDefault = append(excludeDefault, names...)
 		default:
 			param := &spec.CacheWarmupParam{Name: optName}
 			for _, item := range strings.Split(value, ",") {
@@ -191,6 +208,9 @@ func parseCacheWarmupCases(args []string) (string, *spec.CacheWarmupCase, error)
 			}
 			current.Set = append(current.Set, param)
 		}
+	}
+	if err := applyWarmupExcludeDefault(current, excludeDefault); err != nil {
+		return "", nil, err
 	}
 	if len(current.Set) == 0 {
 		return "", nil, fmt.Errorf("warmup case set %q has no parameters", name)
@@ -329,4 +349,42 @@ func splitWarmupOption(raw string) (string, string, bool) {
 		return "", "", false
 	}
 	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+}
+
+func warmupNameList(value string) []string {
+	var result []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func applyWarmupExcludeDefault(warmupCase *spec.CacheWarmupCase, names []string) error {
+	if len(names) == 0 {
+		return nil
+	}
+	if warmupCase == nil {
+		return fmt.Errorf("warmup excludeDefault has no parameters")
+	}
+	params := map[string]*spec.CacheWarmupParam{}
+	for _, param := range warmupCase.Set {
+		if param == nil {
+			continue
+		}
+		params[strings.ToLower(strings.TrimSpace(param.Name))] = param
+	}
+	for _, name := range names {
+		key := strings.ToLower(strings.TrimSpace(name))
+		if key == "" {
+			continue
+		}
+		param := params[key]
+		if param == nil {
+			return fmt.Errorf("warmup excludeDefault references unknown parameter %q", name)
+		}
+		param.ExcludeDefault = true
+	}
+	return nil
 }

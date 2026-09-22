@@ -1839,6 +1839,40 @@ SELECT 1`
 	}
 }
 
+func TestGeneratePackageFromSource_PreservesCacheWarmupExcludeDefault(t *testing.T) {
+	source := `#setting($_ = $route('/v1/api/example/records', 'GET'))
+#setting($_ = $cache('records'))
+#setting($_ = $cache_warmup('order_id','IndexParameter=OrderID','ExcludeDefault=Period','Period=today,week,last_complete_7d'))
+#define($_ = $OrderID<int>(query/order_id))
+#define($_ = $Data<[]*RecordView>(output/view))
+SELECT 1`
+
+	root := t.TempDir()
+	testharness.WriteGeneratedGoMod(t, root)
+
+	pkgDir := filepath.Join(root, "records")
+	result, err := GeneratePackageFromSource(pkgDir, "example.com/demo/records", "Records", source)
+	if err != nil {
+		t.Fatalf("unexpected generate-from-source error: %v", err)
+	}
+	componentSource, err := os.ReadFile(filepath.Join(pkgDir, result.Plan.RouterDest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tag, err := generatedComponentContractTag(componentSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmup := tag.Settings.Cache.Warmup
+	if warmup == nil || len(warmup.Cases) != 1 || len(warmup.Cases[0].Set) != 1 {
+		t.Fatalf("warmup=%+v", warmup)
+	}
+	param := warmup.Cases[0].Set[0]
+	if param.Name != "Period" || !param.ExcludeDefault {
+		t.Fatalf("param=%+v", param)
+	}
+}
+
 func TestGeneratePackageFromSource_LoadsWithViantXAstLoader(t *testing.T) {
 	source := `#setting($_ = $route('/v1/api/example/vendors', 'GET'))
 #define($_ = $VendorID<int>(path/vendorID))

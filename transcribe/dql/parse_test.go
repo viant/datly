@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/viant/assertly"
+	"github.com/viant/datly/bootstrap/cacheconfig"
 	"github.com/viant/datly/spec"
 	xcodec "github.com/viant/xdatly/codec"
 )
@@ -220,6 +221,67 @@ SELECT 1`)
 	}
 }
 
+func TestParseComponentSource_CacheWarmupExcludeDefault(t *testing.T) {
+	component, err := parseComponentSource("example.com/cache", "records", `#package('example.com/cache')
+#setting($_ = $route('/records','GET'))
+#setting($_ = $cache('records'))
+#setting($_ = $cache_warmup('order_id','IndexParameter=OrderID','ExcludeDefault=Period,Granularity','Period=today,week,last_complete_7d','Granularity=hour,day'))
+SELECT 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmup := component.Settings.Cache.Warmup
+	if warmup == nil || len(warmup.Cases) != 1 || len(warmup.Cases[0].Set) != 2 {
+		t.Fatalf("warmup=%+v", warmup)
+	}
+	for _, param := range warmup.Cases[0].Set {
+		if !param.ExcludeDefault {
+			t.Fatalf("param=%+v", param)
+		}
+	}
+	var cases []map[string]any
+	err = (cacheconfig.Cases{Settings: warmup}).ForEach(func(value cacheconfig.Case) error {
+		cases = append(cases, value.Values)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 6 {
+		t.Fatalf("cases=%v", cases)
+	}
+	for _, warmupCase := range cases {
+		if warmupCase["Period"] == nil || warmupCase["Granularity"] == nil {
+			t.Fatalf("unexpected default case: %v", cases)
+		}
+	}
+}
+
+func TestParseComponentSource_CacheWarmupExcludeDefaultValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want string
+	}{
+		{name: "empty", line: `'ExcludeDefault='`, want: "excludeDefault has no parameters"},
+		{name: "unknown", line: `'Period=today','ExcludeDefault=Granularity'`, want: `references unknown parameter "Granularity"`},
+		{name: "shared empty", line: `'Period=today','ExcludeDefault='`, want: "excludeDefault has no parameters"},
+		{name: "shared unknown", line: `'Period=today','ExcludeDefault=Granularity'`, want: `references unknown parameter "Granularity"`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			directive := "$cache_warmup('order_id'," + test.line + ")"
+			if strings.HasPrefix(test.name, "shared") {
+				directive = "$cache_warmup_cases('recent'," + test.line + ")"
+			}
+			_, err := parseComponentSource("example.com/cache", "records", "#setting($_ = $route('/records','GET'))\n#setting($_ = "+directive+")\nSELECT 1")
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error=%v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestParseComponentSource_MergesRepeatedStructuredCacheWarmup(t *testing.T) {
 	source := `#setting($_ = $route('/warmup', 'GET'))
 #setting($_ = $cache('aerospike').WithTimeToLiveMs(60000))
@@ -352,6 +414,28 @@ SELECT 1`
 	// Raw metadata keeps unexpanded CaseRefs so both runtimes normalize identically.
 	if len(cache.Warmup.CaseRefs) != 2 || len(cache.Warmups[0].CaseRefs) != 1 {
 		t.Fatalf("caseRefs were not preserved: %+v %+v", cache.Warmup.CaseRefs, cache.Warmups[0].CaseRefs)
+	}
+}
+
+func TestParseComponentSource_SharedCacheWarmupCasesExcludeDefault(t *testing.T) {
+	source := `#setting($_ = $route('/warmup', 'GET'))
+#setting($_ = $cache('aerospike'))
+#setting($_ = $cache_warmup_cases('recent', 'ExcludeDefault=Period,Granularity', 'Period=today,week,last_complete_7d', 'Granularity=day,hour'))
+#setting($_ = $cache_warmup('advertiser_id', 'IndexParameter=AdvertiserID', 'CaseRefs=recent'))
+SELECT 1`
+
+	component, err := parseComponentSource("example.com/demo/warmup", "Warmup", source)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	cases := component.Settings.Cache.SharedCases["recent"]
+	if len(cases) != 1 || len(cases[0].Set) != 2 {
+		t.Fatalf("shared cases=%+v", cases)
+	}
+	for _, param := range cases[0].Set {
+		if !param.ExcludeDefault {
+			t.Fatalf("param=%+v", param)
+		}
 	}
 }
 
