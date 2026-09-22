@@ -69,7 +69,7 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 			}
 			continue
 		}
-		variables = append(variables, sqltemplate.Variable{Name: param.Name, FieldIndex: field.Index})
+		variables = append(variables, sqltemplate.Variable{Name: param.Name, FieldIndex: field.Index, Type: field.Type})
 		projected = append(projected, bindly.ProjectionField{
 			Path: field.Name, Names: tag.BindingAliases(field, param),
 		})
@@ -107,8 +107,71 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 	if err != nil {
 		return nil, fmt.Errorf("transcribe column: compile input projection: %w", err)
 	}
-	resolver := sqlx.ParameterResolver(projection.Resolver(value.Addr().Interface()))
+	resolver := discoveryParameterResolver(projection.Resolver(value.Addr().Interface()), inputDiscoveryTypes(inputType, c.component.Parameters, fieldIndex))
 	return &column.TemplateInput{Const: constants, Value: value, Variables: variables, ParameterResolver: resolver}, nil
+}
+
+func inputDiscoveryTypes(inputType reflect.Type, params []*spec.Parameter, fieldIndex *tag.BindingIndex) map[string]reflect.Type {
+	if inputType == nil || fieldIndex == nil {
+		return nil
+	}
+	result := map[string]reflect.Type{}
+	for _, param := range spec.EffectiveParameters(params) {
+		if param == nil || param.EmitOutput || strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output") {
+			continue
+		}
+		field, ok, err := fieldIndex.Resolve(param)
+		if err != nil || !ok {
+			continue
+		}
+		for _, alias := range tag.BindingAliases(field, param) {
+			if key := strings.ToLower(strings.TrimSpace(alias)); key != "" {
+				result[key] = field.Type
+			}
+		}
+	}
+	return result
+}
+
+func discoveryParameterResolver(delegate func(string) (any, bool, error), types map[string]reflect.Type) sqlx.ParameterResolver {
+	return sqlx.ParameterResolver(func(name string) (any, bool, error) {
+		value, ok, err := delegate(name)
+		if err != nil || !ok {
+			return value, ok, err
+		}
+		rType := types[strings.ToLower(strings.TrimSpace(name))]
+		if replacement, replaced := discoveryValue(value, rType); replaced {
+			return replacement, true, nil
+		}
+		return value, true, nil
+	})
+}
+
+func discoveryValue(value any, rType reflect.Type) (any, bool) {
+	if rType == nil {
+		return nil, false
+	}
+	if value != nil {
+		actual := reflect.ValueOf(value)
+		switch actual.Kind() {
+		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+			if !actual.IsNil() {
+				return nil, false
+			}
+		default:
+			return nil, false
+		}
+	}
+	for rType.Kind() == reflect.Pointer {
+		rType = rType.Elem()
+	}
+	if rType.Kind() == reflect.Interface {
+		return nil, false
+	}
+	if rType.Kind() == reflect.Slice {
+		return reflect.MakeSlice(rType, 0, 0).Interface(), true
+	}
+	return reflect.Zero(rType).Interface(), true
 }
 
 func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
