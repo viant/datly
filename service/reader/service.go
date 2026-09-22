@@ -394,37 +394,41 @@ func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, st
 			Args: append([]interface{}{}, session.Query.Args...),
 		}, nil, nil
 	}
+	relation := collector.Relation()
+	rootWarmup := relation == nil && aView.Cache != nil && aView.Cache.HasWarmup()
+	if rootWarmup {
+		ctx = view.WithCacheIndexSelection(ctx)
+	}
+	data, _ := session.ParentData()
+	if rootWarmup {
+		parametrizedSQL, err = s.sqlBuilder.Build(ctx, WithBuilderView(aView), WithBuilderStatelet(statelet), WithBuilderPartitions(partitions), WithBuilderBatchData(batchData), WithBuilderRelation(relation), WithBuilderExclude(false, false), WithBuilderParent(data.AsParam()))
+		if err != nil {
+			return nil, nil, err
+		}
+		columnInMatcher, err = s.topLevelWarmupMatcher(ctx, aView, statelet, data.AsParam())
+		ensureWarmupIdentity(columnInMatcher)
+		return parametrizedSQL, columnInMatcher, err
+	}
+
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-
-	relation := collector.Relation()
-
 	var cacheErr error
 	go func() {
 		defer wg.Done()
-		if (aView.Cache != nil && aView.Cache.HasWarmup()) || relation != nil {
-			data, _ := session.ParentData()
-			if aView.Cache != nil && aView.Cache.HasWarmup() {
-				if relation == nil {
-					columnInMatcher, cacheErr = s.topLevelWarmupMatcher(ctx, aView, statelet, data.AsParam())
-					return
-				}
-				columnInMatcher, cacheErr = s.relationWarmupMatcher(ctx, aView, statelet, batchData, relation)
-				if cacheErr != nil || columnInMatcher != nil {
-					return
-				}
-			}
-			if relation != nil {
-				columnInMatcher, cacheErr = s.sqlBuilder.CacheSQLWithOptions(ctx, aView, statelet, batchData, relation, data.AsParam())
+		if aView.Cache != nil && aView.Cache.HasWarmup() {
+			columnInMatcher, cacheErr = s.relationWarmupMatcher(ctx, aView, statelet, batchData, relation)
+			if cacheErr != nil || columnInMatcher != nil {
 				return
 			}
 		}
+		if relation != nil {
+			columnInMatcher, cacheErr = s.sqlBuilder.CacheSQLWithOptions(ctx, aView, statelet, batchData, relation, data.AsParam())
+		}
 	}()
-
-	data, _ := session.ParentData()
 	parametrizedSQL, err = s.sqlBuilder.Build(ctx, WithBuilderView(aView), WithBuilderStatelet(statelet), WithBuilderPartitions(partitions), WithBuilderBatchData(batchData), WithBuilderRelation(relation), WithBuilderExclude(
 		false, relation != nil && len(batchData.ValuesBatch) > 1), WithBuilderParent(data.AsParam()))
 	if err != nil {
+		wg.Wait()
 		return nil, nil, err
 	}
 	wg.Wait()
@@ -659,9 +663,12 @@ func selectTopLevelWarmup(aView *view.View, statelet *view.Statelet) (*warmupCan
 }
 
 func (s *Service) topLevelWarmupMatcher(ctx context.Context, aView *view.View, statelet *view.Statelet, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {
-	selected, err := selectTopLevelWarmup(aView, statelet)
+	selected, err := selectAuthorizedTopLevelWarmup(ctx, aView, statelet)
 	if selected == nil || err != nil {
 		return nil, err
+	}
+	if view.SelectedCacheIndex(ctx) != nil {
+		ctx = view.WithCacheIndexIdentity(ctx)
 	}
 	matcher, err := s.warmupMatcher(ctx, aView, selected.warmup, statelet, parent)
 	if err != nil || matcher == nil {
@@ -670,6 +677,22 @@ func (s *Service) topLevelWarmupMatcher(ctx context.Context, aView *view.View, s
 	matcher.By = strings.TrimSpace(selected.warmup.IndexColumn)
 	matcher.In = selected.values
 	return matcher, nil
+}
+
+func selectAuthorizedTopLevelWarmup(ctx context.Context, aView *view.View, statelet *view.Statelet) (*warmupCandidate, error) {
+	if view.IsCacheIndexDenied(ctx) {
+		return nil, nil
+	}
+	selection := view.SelectedCacheIndex(ctx)
+	if selection == nil {
+		return selectTopLevelWarmup(aView, statelet)
+	}
+	for _, warmup := range aView.Cache.EffectiveWarmups() {
+		if strings.EqualFold(normalizeWarmupColumnName(warmup.IndexColumn), normalizeWarmupColumnName(selection.Column)) {
+			return &warmupCandidate{warmup: warmup, parameter: warmupParameterFor(aView, warmup), values: selection.Values}, nil
+		}
+	}
+	return nil, fmt.Errorf("authorized cache index %q has no configured warmup", selection.Column)
 }
 
 func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, warmup *view.Warmup, statelet *view.Statelet, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {

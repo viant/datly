@@ -49,6 +49,38 @@ func TestSelectTopLevelWarmup_MostSpecificByParameterPresence(t *testing.T) {
 	require.Equal(t, []interface{}{101, 102}, candidate.values)
 }
 
+func TestSelectAuthorizedTopLevelWarmup_UsesResolvedIndexValues(t *testing.T) {
+	cache := &view.Cache{Warmups: []*view.Warmup{
+		{IndexColumn: "advertiser_id", IndexParameter: "AdvertiserIds"},
+		{IndexColumn: "campaign_id", IndexParameter: "CampaignIds"},
+	}}
+	aView, _, _ := newWarmupsMatcherView(t, cache)
+	statelet := view.NewStatelet()
+	statelet.Init(aView)
+	ctx := view.WithCacheIndexSelection(context.Background())
+	view.SelectCacheIndex(ctx, "campaign_id", []interface{}{101, 102})
+
+	candidate, err := selectAuthorizedTopLevelWarmup(ctx, aView, statelet)
+	require.NoError(t, err)
+	require.NotNil(t, candidate)
+	require.Same(t, cache.Warmups[1], candidate.warmup)
+	require.Equal(t, []interface{}{101, 102}, candidate.values)
+}
+
+func TestSelectAuthorizedTopLevelWarmup_DeniedRequestCannotUseUntrustedIndex(t *testing.T) {
+	cache := &view.Cache{Warmups: []*view.Warmup{{IndexColumn: "campaign_id", IndexParameter: "CampaignIds"}}}
+	aView, _, campaignParam := newWarmupsMatcherView(t, cache)
+	statelet := view.NewStatelet()
+	statelet.Init(aView)
+	require.NoError(t, campaignParam.Set(statelet.Template, []int{101}))
+	ctx := view.WithCacheIndexSelection(context.Background())
+	view.DenyCacheIndex(ctx)
+
+	candidate, err := selectAuthorizedTopLevelWarmup(ctx, aView, statelet)
+	require.NoError(t, err)
+	require.Nil(t, candidate)
+}
+
 func TestSelectTopLevelWarmup_LaterDeclarationBreaksTies(t *testing.T) {
 	cache := &view.Cache{
 		Warmups: []*view.Warmup{

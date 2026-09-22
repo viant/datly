@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/viant/sqlx/io/read/cache"
@@ -63,7 +64,9 @@ func (c *Cache) identity(sql string, generation Generation, scope Scope) string 
 	if scope == Warmup {
 		token = generation.Warmup
 	}
-	return fmt.Sprintf("/* datly-cache:%s:%s:%s:%s */\n%s", c.owner, scope, generation.All, token, sql)
+	marker := fmt.Sprintf("datly-cache:%s:%s:%s:%s", c.owner, scope, generation.All, token)
+	marker = strings.ReplaceAll(marker, "'", "''")
+	return fmt.Sprintf("SELECT * FROM (%s) AS datly_cache_generation WHERE '%s' = '%s'", strings.TrimSuffix(strings.TrimSpace(sql), ";"), marker, marker)
 }
 
 // options resolves the unmodified native warmup identity before adding ownership.
