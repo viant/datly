@@ -9,6 +9,7 @@ import (
 
 	"github.com/viant/bindly"
 	"github.com/viant/bindly/locator"
+	bindstate "github.com/viant/bindly/state"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/handler/custom"
 	"github.com/viant/datly/runtime/handler/provider"
@@ -91,6 +92,38 @@ func TestInputReadMetadataReadyBeforeCaptureAndInit(t *testing.T) {
 	}
 	if !*result.(*bool) {
 		t.Fatal("handler did not execute")
+	}
+}
+
+func TestBoundInputBindsSupplementalReadsAndMetadata(t *testing.T) {
+	input := &metadataLifecycleInput{}
+	contract := testRouteInput(t, reflect.TypeOf(metadataLifecycleInput{}), bindly.BindingSpec{
+		Path: "Rows", Location: bindstate.Location{Kind: "metadataFixture", In: "Rows"},
+	})
+	if fields := contract.Fields(); len(fields) != 1 || fields[0].Binding().Location.Kind != "metadataFixture" {
+		t.Fatalf("fields=%#v", fields)
+	}
+	injector, err := bindly.NewInjector()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := boundSupplementalPlan(injector, contract)
+	if err != nil || plan == nil {
+		t.Fatalf("supplemental plan=%v err=%v", plan, err)
+	}
+	result, err := New().Execute(context.Background(), Request{
+		Input:      contract,
+		BoundInput: input,
+		Handler:    custom.New[metadataLifecycleInput, bool](&metadataLifecycleContract{}),
+		Providers: []locator.Provider{provider.Named("metadataFixture", func(context.Context, reflect.Type, string) (any, bool, error) {
+			return locator.ValueWithMetadata{Value: []int{1}, Metadata: &metadataTestProjection{}}, true, nil
+		})},
+	})
+	if err != nil {
+		t.Fatalf("%v input=%#v", err, input)
+	}
+	if !*result.(*bool) || len(input.Rows) != 1 || input.Rows[0] != 1 {
+		t.Fatalf("result=%v input=%#v", result, input)
 	}
 }
 

@@ -53,12 +53,19 @@ func (l *lowerer) mutationFrames() (*MutationFrameLayout, error) {
 		if record == nil {
 			return fmt.Errorf("mutation frame role is required")
 		}
-		if record.Auxiliary {
-			return nil
-		}
 		actual := l.recordByPlan[record]
 		if actual == nil {
 			return fmt.Errorf("mutation frame role %s was not lowered", record.Identity)
+		}
+		if record.Entity == nil {
+			for _, relation := range record.Relations {
+				if relation != nil {
+					if err := collect(relation.Child, actual); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
 		}
 		parentType := selectExpr(ast.NewIdent(l.handlerAlias), "NoParent")
 		var parentExpression ast.Expr = parentType

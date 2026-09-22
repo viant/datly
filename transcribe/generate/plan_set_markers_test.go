@@ -94,6 +94,31 @@ func TestApplySetMarkerViewsRejectsUnknownIdentityAndFieldCollision(t *testing.T
 	}
 }
 
+func TestApplySetMarkerViewsIncludesTransientParentRelationKey(t *testing.T) {
+	component, root, child := setMarkerComponent()
+	root.Relations[0].On = []*spec.RelationLink{{ParentColumn: "INTERNAL", ChildColumn: "ORDER_ID"}}
+	rootIdentity, err := root.Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	childIdentity, err := child.Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := New(Input{Component: component}).Plan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := &planResolver{plan: plan, input: Input{Component: component, SetMarkerViews: map[string]bool{rootIdentity: true, childIdentity: true}}}
+	if err = resolver.applySetMarkerViews(); err != nil {
+		t.Fatal(err)
+	}
+	rootPlan := generatedViewByIdentity(plan, rootIdentity)
+	if rootPlan == nil || !reflect.DeepEqual(rootPlan.SetMarkerFields, []string{"Id", "Name", "Internal", "Items"}) {
+		t.Fatalf("root marker fields = %+v", rootPlan)
+	}
+}
+
 func setMarkerComponent() (*spec.Component, *spec.View, *spec.View) {
 	child := &spec.View{
 		Name: "Items", TypeName: "ItemsView",

@@ -177,7 +177,7 @@ func (e *frameEmitter) build() (ast.Decl, error) {
 	guard = &ast.BinaryExpr{X: guard, Op: token.LOR, Y: &ast.BinaryExpr{X: ast.NewIdent("input"), Op: token.EQL, Y: nilExpr}}
 	body := []ast.Stmt{&ast.IfStmt{Cond: guard, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(nilExpr, e.errorExpr("captured database and successful presence synchronization are required"))}}}, defineStmt("frames", &ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{Type: ast.NewIdent(e.layout.TypeName)}})}
 	for _, record := range e.l.records {
-		if record.plan.Auxiliary {
+		if record.plan.Entity == nil {
 			continue
 		}
 		role, err := e.layout.role(record.plan)
@@ -189,7 +189,7 @@ func (e *frameEmitter) build() (ast.Decl, error) {
 		body = append(body, defineStmt("seen"+strconv.Itoa(record.order), callExpr(ast.NewIdent("make"), &ast.MapType{Key: record.value.pointerExpr(), Value: &ast.StarExpr{X: ast.NewIdent(role.FrameType)}})), &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(name)}, Type: typ}}}})
 	}
 	for _, record := range e.l.records {
-		if record.plan.Auxiliary {
+		if record.plan.Entity == nil {
 			continue
 		}
 		role, _ := e.layout.role(record.plan)

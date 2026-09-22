@@ -50,6 +50,7 @@ type Field struct {
 type Record struct {
 	Name             string
 	Path             string
+	Auxiliary        bool
 	Selector         string
 	EntityType       reflect.Type
 	CurrentField     int
@@ -364,6 +365,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err := p.indexRecordCurrent(input, p.metadata.Root); err != nil {
 		return err
 	}
+	if err := p.assemblePreviousRelations(p.metadata.Root); err != nil {
+		return err
+	}
 	if err := p.buildRecordFrames(p.metadata.Root, entities, nil); err != nil {
 		return err
 	}
@@ -393,22 +397,65 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 	}
+	initialized := map[frameIdentity]bool{}
 	for _, frame := range p.frames.Rows {
 		if err = p.callEntityHook(ctx, "Init", frame); err != nil {
 			return err
+		}
+		initialized[identityOfFrame(frame)] = true
+		// Init is the supported phase for marker-aware business defaults and
+		// sparse server-owned transitions. Merge newly set Has bits before
+		// validation and action selection while retaining invariant evidence,
+		// whose backfill deliberately does not mutate client presence markers.
+		for name, present := range suppliedFields(frame.Entity.Elem(), frame.Record.Fields) {
+			if present {
+				frame.Fields[name] = true
+			}
+		}
+	}
+	// A lifecycle may implement atomic replacement by appending explicit
+	// deletion rows derived from the assembled Previous graph. Rebuild frames
+	// once after Init so those new rows participate in validation, ordering and
+	// DML without invoking Init twice for the original topology.
+	p.frames = &MutationFrames{}
+	if err = p.buildRecordFrames(p.metadata.Root, entities, nil); err != nil {
+		return err
+	}
+	if err = p.reconcileLinks(false); err != nil {
+		return err
+	}
+	for _, frame := range p.frames.Rows {
+		if err = p.applyInvariants(frame); err != nil {
+			return err
+		}
+		if err = p.checkConcurrency(frame); err != nil {
+			return err
+		}
+		if !initialized[identityOfFrame(frame)] {
+			if err = p.callEntityHook(ctx, "Init", frame); err != nil {
+				return err
+			}
+		}
+		for name, present := range suppliedFields(frame.Entity.Elem(), frame.Record.Fields) {
+			if present {
+				frame.Fields[name] = true
+			}
 		}
 	}
 	if err = p.validateFrames(ctx, validator, false); err != nil {
 		return err
 	}
 	for _, frame := range p.frames.Rows {
-		if frame.Action == xhandler.WriteInsert {
+		if !frame.Record.Auxiliary && frame.Action == xhandler.WriteInsert {
 			if err = validateInsertIdentity(frame.Record, frame.Entity.Elem(), frame.Parent); err != nil {
 				return err
 			}
 		}
 		if err = p.callEntityHook(ctx, "Validate", frame); err != nil {
 			return err
+		}
+		if frame.Record.Auxiliary {
+			continue
 		}
 		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
 			continue
@@ -468,7 +515,7 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			err = fmt.Errorf("unsupported writer action %q", action.Kind)
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("%s %s: %w", action.Kind, table, err)
 		}
 		if err = p.callEntityHook(ctx, "AfterQueue", frame); err != nil {
 			return err
@@ -485,6 +532,18 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	}
 	p.failed = false
 	return nil
+}
+
+type frameIdentity struct {
+	record  *Record
+	pointer uintptr
+}
+
+func identityOfFrame(frame *Frame) frameIdentity {
+	if frame == nil || !frame.Entity.IsValid() || frame.Entity.IsNil() {
+		return frameIdentity{}
+	}
+	return frameIdentity{record: frame.Record, pointer: frame.Entity.Pointer()}
 }
 
 func (p *Program) frameFor(entity reflect.Value) *Frame {
@@ -535,6 +594,21 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		options.PreviousFields = allFields(frame.Previous.Elem().Type())
 		options.Fields = frame.Fields
 	}
+	graphReferences := p.satisfiedGraphReferences(frame)
+	if frame.Action == xhandler.WriteUpdate && len(graphReferences) > 0 {
+		// SQLX reference receipts are insert-only. For a sparse update whose new
+		// FK value is proven to match an earlier insert in this ordered graph,
+		// exclude only that reference field from the external database lookup.
+		// The generated transaction and database FK still enforce the value.
+		coverage := fieldSet{}
+		for field, present := range frame.Fields {
+			coverage[field] = present
+		}
+		for _, reference := range graphReferences {
+			delete(coverage, reference.Field)
+		}
+		options.Fields = coverage
+	}
 	if frame.Action == xhandler.WriteInsert && frame.Parent != nil {
 		if relation := relationFor(frame.Parent.Record, frame.Record); relation != nil {
 			deferred := fieldSet{}
@@ -553,7 +627,7 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		}
 	}
 	if frame.Action == xhandler.WriteInsert {
-		for _, reference := range p.satisfiedGraphReferences(frame) {
+		for _, reference := range graphReferences {
 			if !transactionStarted {
 				if options.DeferredFields == nil {
 					options.DeferredFields = fieldSet{}
@@ -616,7 +690,7 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 	groups := map[*Record][]*Frame{}
 	var order []*Record
 	for _, frame := range p.frames.Rows {
-		if frame == nil || frame.Action == xhandler.WriteDelete {
+		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Action == xhandler.WriteDelete {
 			continue
 		}
 		if _, ok := groups[frame.Record]; !ok {
@@ -634,10 +708,10 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 		}
 		result, err := validator.Validate(ctx, values.Interface(), options)
 		if err != nil {
-			return err
+			return fmt.Errorf("validate writer %s: %w", record.Path, err)
 		}
 		if err = result.Err(); err != nil {
-			return err
+			return fmt.Errorf("validate writer %s: %w", record.Path, err)
 		}
 	}
 	return nil
@@ -735,7 +809,7 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 		}
 		key, ok := record.loadedKey(previous.Elem())
 		if !ok {
-			return fmt.Errorf("current writer row has incomplete identity")
+			return fmt.Errorf("current writer row for %s has incomplete identity", record.Path)
 		}
 		if _, exists := p.database.Rows[record.Path+"\x00"+key]; exists {
 			return fmt.Errorf("current writer identity %q is duplicated", key)
@@ -743,6 +817,66 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 		p.database.Rows[record.Path+"\x00"+key] = previous
 	}
 	return nil
+}
+
+func (p *Program) assemblePreviousRelations(record *Record) error {
+	if record == nil {
+		return nil
+	}
+	for _, relation := range record.Relations {
+		if relation == nil || relation.Child == nil {
+			continue
+		}
+		if err := p.assemblePreviousRelations(relation.Child); err != nil {
+			return err
+		}
+		parents, children := p.previousRows(record), p.previousRows(relation.Child)
+		for _, child := range children {
+			for _, parent := range parents {
+				if !relationValuesEqual(parent.Elem(), child.Elem(), relation.Links) {
+					continue
+				}
+				holder := parent.Elem().FieldByIndex(relation.Field)
+				switch holder.Kind() {
+				case reflect.Slice:
+					holder.Set(reflect.Append(holder, child))
+				case reflect.Pointer:
+					if !holder.IsNil() && holder.Pointer() != child.Pointer() {
+						return fmt.Errorf("current writer relation %s has multiple rows for a to-one holder", relation.Child.Path)
+					}
+					holder.Set(child)
+				default:
+					return fmt.Errorf("current writer relation %s holder is neither slice nor pointer", relation.Child.Path)
+				}
+				break
+			}
+		}
+	}
+	return nil
+}
+
+func (p *Program) previousRows(record *Record) []reflect.Value {
+	prefix := record.Path + "\x00"
+	result := make([]reflect.Value, 0)
+	for key, row := range p.database.Rows {
+		if strings.HasPrefix(key, prefix) {
+			result = append(result, row)
+		}
+	}
+	return result
+}
+
+func relationValuesEqual(parent, child reflect.Value, links []Link) bool {
+	if len(links) == 0 {
+		return false
+	}
+	for _, link := range links {
+		left, right := parent.FieldByIndex(link.Parent.Index), child.FieldByIndex(link.Child.Index)
+		if !linkedEqual(left, right) {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *Frame) error {
@@ -989,7 +1123,10 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		if column == nil {
 			column = columns[strings.ToLower(field.Name)]
 		}
-		if column == nil && (columnName == "" || columnName == "-") && writerRole == "" {
+		// Transient scalar fields may be typed relation keys. Keep them in the
+		// immutable record metadata so relation compilation and Current copying
+		// reuse the generated projection without making them DML columns.
+		if column == nil && columnName == "" && writerRole == "" {
 			continue
 		}
 		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
@@ -1036,6 +1173,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	}
 	root := &Record{
 		Name: component.RootView.CanonicalName(), Path: component.RootView.CanonicalName(), EntityType: metadata.EntityType,
+		Auxiliary:    component.RootView.Auxiliary || strings.EqualFold(tagOption(rootViewTag, "auxiliary"), "true"),
 		CurrentField: metadata.CurrentField, Table: metadata.Table, Keys: metadata.Keys, Fields: metadata.Fields,
 		Sequence: metadata.Sequence, DeleteMarker: metadata.DeleteMarker, ConcurrencyToken: metadata.ConcurrencyToken,
 		Invariants: metadata.Invariants, HookType: metadata.HookType,
@@ -1066,7 +1204,7 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 	for i := 0; i < parent.EntityType.NumField(); i++ {
 		structField := parent.EntityType.Field(i)
 		viewTag := structField.Tag.Get("view")
-		if viewTag == "" || strings.EqualFold(tagOption(viewTag, "auxiliary"), "true") {
+		if viewTag == "" {
 			continue
 		}
 		childType := dereference(structField.Type)
@@ -1106,8 +1244,9 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 }
 
 func compileRecord(component *spec.Component, inputType reflect.Type, name, path string, entityType reflect.Type, view *spec.View, viewTag string) (*Record, error) {
-	record := &Record{Name: name, Path: path, EntityType: entityType, CurrentField: -1, Table: tagOption(viewTag, "table"), Invariants: map[string][]Field{}}
+	record := &Record{Name: name, Path: path, EntityType: entityType, CurrentField: -1, Table: tagOption(viewTag, "table"), Auxiliary: strings.EqualFold(tagOption(viewTag, "auxiliary"), "true"), Invariants: map[string][]Field{}}
 	if view != nil {
+		record.Auxiliary = record.Auxiliary || view.Auxiliary
 		if view.Source != nil && strings.TrimSpace(view.Source.Table) != "" {
 			record.Table = strings.TrimSpace(view.Source.Table)
 		}
@@ -1137,7 +1276,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		sqlx := field.Tag.Get("sqlx")
 		writerRole := strings.ToLower(strings.TrimSpace(field.Tag.Get("writer")))
 		columnName := strings.TrimSpace(strings.Split(sqlx, ",")[0])
-		if (columnName == "" || columnName == "-") && writerRole == "" {
+		if columnName == "" && writerRole == "" {
 			continue
 		}
 		column := columns[strings.ToLower(columnName)]

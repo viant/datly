@@ -135,6 +135,17 @@ func addViewSetMarker(plan *ViewPlan, view *spec.View) error {
 	if _, ok := fields["Has"]; ok {
 		return fmt.Errorf("generated view %q set marker collides with field Has", plan.Name)
 	}
+	relationKeys := map[string]bool{}
+	for _, relation := range view.Relations {
+		if relation == nil {
+			continue
+		}
+		for _, link := range relation.On {
+			if link != nil {
+				relationKeys[strings.ToLower(strings.TrimSpace(link.ParentColumn))] = true
+			}
+		}
+	}
 	markerFields := make([]string, 0, len(view.Columns))
 	for _, column := range view.Columns {
 		if column == nil {
@@ -145,7 +156,8 @@ func addViewSetMarker(plan *ViewPlan, view *spec.View) error {
 		if !ok {
 			return fmt.Errorf("generated view %q set marker column %q has no field", plan.Name, column.Name)
 		}
-		if ignoredSQLXField(field.Tag) && !column.DeleteMarker {
+		linked := relationKeys[strings.ToLower(strings.TrimSpace(column.Name))] || relationKeys[strings.ToLower(strings.TrimSpace(column.Source))]
+		if ignoredSQLXField(field.Tag) && !column.DeleteMarker && !linked {
 			continue
 		}
 		markerFields = append(markerFields, name)
