@@ -756,6 +756,31 @@ func TestBuilder_Build_GroupedProjectionRejectsExplicitOrderByPrunedDimension(t 
 	}
 }
 
+func TestBuilder_Build_GroupedWrapperProjectionResolvesExplicitOrderByInRewrittenScope(t *testing.T) {
+	type input struct{}
+
+	query, err := NewBuilder().Build(
+		context.Background(),
+		WithBuilderSQL("SELECT supply_performance.site_id, supply_performance.bids FROM (SELECT p.site_id, p.publisher_id, SUM(p.bids) AS bids FROM performance p GROUP BY p.site_id, p.publisher_id) supply_performance"),
+		WithBuilderView(resolvedGroupableView()),
+		WithBuilderSelector(&xstate.Selector{OrderBy: "bids desc", Limit: 1}),
+		WithBuilderSelectorPolicy(&spec.Selector{AllowFields: true, AllowOrderBy: true, AllowLimit: true}),
+		WithBuilderProjection([]string{"site_id", "bids"}),
+		WithBuilderInput(reflect.ValueOf(input{})),
+	)
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+
+	assertly.AssertValues(t,
+		normalizeSQLForAssert("SELECT p.site_id, SUM(p.bids) AS bids FROM performance p GROUP BY 1 ORDER BY bids DESC LIMIT 1"),
+		normalizeSQLForAssert(query.SQL),
+	)
+	if strings.Contains(query.SQL, "supply_performance.") {
+		t.Fatalf("stale wrapper alias survived in SQL: %s", query.SQL)
+	}
+}
+
 func resolvedGroupableView() *data.View {
 	groupable := true
 	return data.FromComponent(&spec.Component{RootView: &spec.View{Groupable: &groupable}})
