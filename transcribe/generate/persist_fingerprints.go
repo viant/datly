@@ -54,7 +54,7 @@ func (p *scaffoldPersistence) protectArtifacts(target, existing string, previous
 		if !writing && !removing {
 			continue
 		}
-		if writing && shapes[relative] {
+		if writing && shapes[relative] && p.policy != GenerationPolicyOverwrite {
 			continue
 		} // exact-field merge already validated preservation
 		current, err := os.ReadFile(filepath.Join(existing, relative))

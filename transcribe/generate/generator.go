@@ -49,6 +49,7 @@ type Input struct {
 	SQLResources       bool
 	EntitySupport      *EntitySupportAsset
 	EphemeralOwnership bool
+	GenerationPolicy   GenerationPolicy
 }
 
 type ContractReference struct {
@@ -203,7 +204,7 @@ func (g *Generator) Generate(dir string) (*Result, error) {
 	if g.input.EphemeralOwnership {
 		files, err = EmitScaffoldEphemeral(dir, plan)
 	} else {
-		files, err = EmitScaffold(dir, plan)
+		files, err = EmitScaffoldWithPolicy(dir, plan, g.input.GenerationPolicy)
 	}
 	if err != nil {
 		return nil, err

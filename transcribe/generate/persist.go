@@ -46,6 +46,7 @@ type scaffoldPersistence struct {
 	fieldOwnership   map[string]*projectionFieldOwnership
 	proposal         []EmittedFile
 	ephemeral        bool
+	policy           GenerationPolicy
 }
 
 type scaffoldCommitLock struct {
