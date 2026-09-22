@@ -594,6 +594,21 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		options.PreviousFields = allFields(frame.Previous.Elem().Type())
 		options.Fields = frame.Fields
 	}
+	graphReferences := p.satisfiedGraphReferences(frame)
+	if frame.Action == xhandler.WriteUpdate && len(graphReferences) > 0 {
+		// SQLX reference receipts are insert-only. For a sparse update whose new
+		// FK value is proven to match an earlier insert in this ordered graph,
+		// exclude only that reference field from the external database lookup.
+		// The generated transaction and database FK still enforce the value.
+		coverage := fieldSet{}
+		for field, present := range frame.Fields {
+			coverage[field] = present
+		}
+		for _, reference := range graphReferences {
+			delete(coverage, reference.Field)
+		}
+		options.Fields = coverage
+	}
 	if frame.Action == xhandler.WriteInsert && frame.Parent != nil {
 		if relation := relationFor(frame.Parent.Record, frame.Record); relation != nil {
 			deferred := fieldSet{}
@@ -612,7 +627,7 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		}
 	}
 	if frame.Action == xhandler.WriteInsert {
-		for _, reference := range p.satisfiedGraphReferences(frame) {
+		for _, reference := range graphReferences {
 			if !transactionStarted {
 				if options.DeferredFields == nil {
 					options.DeferredFields = fieldSet{}
@@ -857,7 +872,7 @@ func relationValuesEqual(parent, child reflect.Value, links []Link) bool {
 	}
 	for _, link := range links {
 		left, right := parent.FieldByIndex(link.Parent.Index), child.FieldByIndex(link.Child.Index)
-		if !left.IsValid() || !right.IsValid() || !reflect.DeepEqual(left.Interface(), right.Interface()) {
+		if !linkedEqual(left, right) {
 			return false
 		}
 	}

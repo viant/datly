@@ -270,6 +270,21 @@ physical column or reparsing tags at execution time. If writer registration says
 that such a typed link does not resolve, update Datly rather than making the
 projection key writable.
 
+Current projections commonly represent a nullable physical child key as a Go
+pointer while an auxiliary request-derived parent key is a value. Previous graph
+assembly compares their dereferenced typed values, so `string` and `*string`
+representations of the same key still attach the child. Do not weaken the DQL
+relation or make a transient parent field physical merely to force identical Go
+pointer shapes.
+
+A sparse update may also set a foreign key to a row inserted earlier in the same
+ordered mutation graph—for example, closing an existing reservation with the ID
+of a newly inserted event. Datly recognizes that exact earlier insert, avoids a
+redundant pre-write reference lookup for only the proven update field, and leaves
+the database foreign key to enforce the value inside the managed transaction.
+This is not permission to suppress unrelated update validation or to reference a
+later or unordered insert.
+
 ## Verification gates
 
 A migrated component is complete only when all applicable gates pass:

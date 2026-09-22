@@ -31,6 +31,15 @@ func TestUniversalWriterRecognizesEarlierGraphInsertReference(t *testing.T) {
 	if len(options.SatisfiedReferences) != 1 || options.SatisfiedReferences[0].Field != "ParentID" {
 		t.Fatalf("satisfied references=%+v", options.SatisfiedReferences)
 	}
+	childFrame.Action = xhandler.WriteUpdate
+	options = program.validationOptions(childFrame, false)
+	if len(options.SatisfiedReferences) != 0 || options.DeferredFields != nil || options.Fields.Has("ParentID") {
+		t.Fatalf("pre-transaction sparse update references=%+v deferred=%+v fields=%+v", options.SatisfiedReferences, options.DeferredFields, options.Fields)
+	}
+	options = program.validationOptions(childFrame, true)
+	if len(options.SatisfiedReferences) != 0 || options.Fields.Has("ParentID") {
+		t.Fatalf("sparse update references=%+v fields=%+v", options.SatisfiedReferences, options.Fields)
+	}
 	program.frames.Rows = []*Frame{childFrame, parentFrame}
 	if options = program.validationOptions(childFrame, true); len(options.SatisfiedReferences) != 0 {
 		t.Fatalf("later insert satisfied reference=%+v", options.SatisfiedReferences)
@@ -175,6 +184,28 @@ func TestUniversalWriterAssemblesTypedPreviousRelationGraph(t *testing.T) {
 	}
 	if len(parent.Children) != 1 || parent.Children[0] != child {
 		t.Fatalf("children = %#v", parent.Children)
+	}
+}
+
+func TestUniversalWriterAssemblesPreviousRelationAcrossValueAndPointerKeys(t *testing.T) {
+	type parent struct {
+		ID       *int
+		Scope    string
+		Children []*transientLinkChild
+	}
+	scope := "request-1"
+	parentID, childID := 1, 2
+	parentRow := &parent{ID: &parentID, Scope: scope}
+	child := &transientLinkChild{ID: &childID, Scope: &scope}
+	parentRecord := &Record{Name: "Parents", Path: "Parents", EntityType: reflect.TypeFor[parent](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
+	childRecord := &Record{Name: "Children", Path: "Parents/Children", EntityType: reflect.TypeFor[transientLinkChild](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
+	parentRecord.Relations = []*Relation{{Field: []int{2}, Child: childRecord, Links: []Link{{Parent: parentRecord.Fields[0], Child: childRecord.Fields[0]}}}}
+	program := &Program{database: &DatabaseSnapshot{Rows: map[string]reflect.Value{"Parents\x001": reflect.ValueOf(parentRow), "Parents/Children\x002": reflect.ValueOf(child)}}}
+	if err := program.assemblePreviousRelations(parentRecord); err != nil {
+		t.Fatal(err)
+	}
+	if len(parentRow.Children) != 1 || parentRow.Children[0] != child {
+		t.Fatalf("children = %#v", parentRow.Children)
 	}
 }
 
