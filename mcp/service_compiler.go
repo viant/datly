@@ -7,9 +7,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/viant/datly/exec"
 	"github.com/viant/datly/mcp/invocation"
 	mcpresource "github.com/viant/datly/mcp/resource"
 	"github.com/viant/datly/mcp/tool"
+	"github.com/viant/datly/runtime/output"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/jsonrpc"
@@ -72,7 +74,7 @@ func (c *serviceCompiler) Compile(ctx context.Context) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	service, err := c.publish(catalog, policy)
+	service, err := c.publish(catalog, policy, components)
 	if err != nil {
 		return nil, err
 	}
@@ -187,9 +189,23 @@ func (c *serviceCompiler) compileRoute(result *compiledPlans, toolCompiler *tool
 	return nil
 }
 
-func (c *serviceCompiler) publish(catalog *Catalog, policy *authorization.Policy) (*Service, error) {
+func (c *serviceCompiler) publish(catalog *Catalog, policy *authorization.Policy, components []*registry.RegisteredComponent) (*Service, error) {
 	protocolRegistry := mcpserver.NewRegistry()
-	componentInvoker := invocation.New(invocation.Config{Invoker: c.config.Invoker, Client: c.config.Client, Authorize: c.config.AuthorizeTool})
+	outputs := make(map[string]*output.Plan, len(components))
+	for _, registered := range components {
+		plan := registered.Output
+		if plan == nil {
+			var err error
+			plan, err = (output.Compiler{}).Compile(output.CompileInput{Component: registered.Component, Type: registered.OutputType})
+			if err != nil {
+				return nil, fmt.Errorf("compile MCP output for %s: %w", registered.Component.Key.String(), err)
+			}
+		}
+		outputs[registered.Component.Key.String()] = plan
+	}
+	componentInvoker := invocation.New(invocation.Config{Invoker: c.config.Invoker, Client: c.config.Client, Authorize: c.config.AuthorizeTool, Output: func(target exec.ComponentTarget) *output.Plan {
+		return outputs[target.Component.String()]
+	}})
 	resourceHandler := mcpresource.NewHandler(catalog.resources, componentInvoker)
 	resourceReadHandler := resourceHandler.Handle
 	if c.config.AuthorizeResource != nil {

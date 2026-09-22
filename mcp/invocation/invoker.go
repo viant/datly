@@ -8,6 +8,7 @@ import (
 	"github.com/viant/bindly/locator"
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/exec"
+	"github.com/viant/datly/runtime/output"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
 	xexec "github.com/viant/xdatly/exec"
@@ -18,6 +19,8 @@ type Config struct {
 	Invoker   exec.ComponentInvoker
 	Client    xmcp.Client
 	Authorize func(context.Context, exec.ComponentTarget) error
+	// Output supplies the component's compiled JSON presentation contract.
+	Output func(exec.ComponentTarget) *output.Plan
 }
 
 type Request struct {
@@ -31,10 +34,11 @@ type Invoker struct {
 	component exec.ComponentInvoker
 	mcp       xmcp.Context
 	authorize func(context.Context, exec.ComponentTarget) error
+	output    func(exec.ComponentTarget) *output.Plan
 }
 
 func New(config Config) *Invoker {
-	return &Invoker{component: config.Invoker, mcp: &requestContext{client: config.Client}, authorize: config.Authorize}
+	return &Invoker{component: config.Invoker, mcp: &requestContext{client: config.Client}, authorize: config.Authorize, output: config.Output}
 }
 
 func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *jsonrpc.Error) {
@@ -72,7 +76,11 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 	result, err := i.component.InvokeComponent(ctx, exec.ComponentRequest{
 		Target: request.Target, Providers: providers,
 	})
-	return &Execution{value: result, err: err, context: execContext, selection: exec.SelectedOutputFields(ctx, result)}, nil
+	var plan *output.Plan
+	if i.output != nil {
+		plan = i.output(request.Target)
+	}
+	return &Execution{value: result, err: err, context: execContext, selection: exec.SelectedOutputFields(ctx, result), output: plan, encodingContext: ctx}, nil
 }
 
 func authorizationHeader(ctx context.Context) string {

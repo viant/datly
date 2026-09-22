@@ -1,9 +1,12 @@
 package invocation
 
 import (
-	"github.com/viant/datly/exec"
-	structjson "github.com/viant/structology/encoding/json"
+	"context"
 	"net/http"
+
+	"github.com/viant/datly/exec"
+	"github.com/viant/datly/runtime/output"
+	structjson "github.com/viant/structology/encoding/json"
 
 	xexec "github.com/viant/xdatly/exec"
 	"github.com/viant/xdatly/response"
@@ -11,10 +14,12 @@ import (
 
 // Execution is the protocol-neutral outcome of one exact MCP component call.
 type Execution struct {
-	selection exec.OutputFieldFilter
-	value     interface{}
-	err       error
-	context   *xexec.Context
+	output          *output.Plan
+	encodingContext context.Context
+	selection       exec.OutputFieldFilter
+	value           interface{}
+	err             error
+	context         *xexec.Context
 }
 
 func (e *Execution) Value() interface{} {
@@ -54,7 +59,14 @@ func (e *Execution) Payload() ([]byte, error) {
 	if e == nil {
 		return nil, nil
 	}
-	if _, raw := e.value.(response.Response); !raw && e.selection != nil {
+	if _, raw := e.value.(response.Response); raw {
+		return encodePayload(e.value)
+	}
+	if e.value != nil && e.output != nil {
+		encoded, err := e.output.Encode(e.encodingContext, "json", e.value)
+		return encoded.Data, err
+	}
+	if e.selection != nil {
 		return structjson.MarshalStandard(e.value, structjson.WithPathFieldExcluder(e.selection))
 	}
 	return encodePayload(e.value)
