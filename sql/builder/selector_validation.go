@@ -63,6 +63,9 @@ func (b *Builder) prepareCriteria(options *builderOptions) error {
 	// Parse only the authored projection: the later source can legitimately
 	// contain unexpanded Datly criteria markers or parameter expressions.
 	source := dsql.NormalizeAuthoredSQL(options.sqlText)
+	if len(options.projection) > 0 && options.view != nil && options.view.IsGroupable() {
+		source = dsql.GroupedProjectionCriteriaSource(source, options.projection)
+	}
 	projection := ""
 	selectAt := sqltext.FindTopLevelKeyword(source, "select", 0)
 	if selectAt >= 0 {

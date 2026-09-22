@@ -72,6 +72,16 @@ func unwrapGroupedProjectionWrapper(sqlText string, selected []string) (string, 
 	return groupedWrapperInnerSQLWithControls(innerSQL, outer), normalizeGroupedWrapperSelection(selected, outputByOuter)
 }
 
+// GroupedProjectionCriteriaSource returns the same source scope grouped
+// projection rewriting will use, without changing ordinary full-shape reads.
+func GroupedProjectionCriteriaSource(sqlText string, selected []string) string {
+	if len(selected) == 0 {
+		return sqlText
+	}
+	result, _ := unwrapGroupedProjectionWrapper(sqlText, selected)
+	return result
+}
+
 func groupedWrapperInner(selectStmt *query.Select) bool {
 	if selectStmt == nil {
 		return false
