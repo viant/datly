@@ -320,6 +320,9 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 		}
 		cacheStats = &cache.Stats{}
 		metaOptions = []read.Option{read.WithCache(cacheService), read.WithInMatcher(cacheMatcher), read.WithCacheStats(cacheStats)}
+		if session.CacheRefresh {
+			metaOptions = append(metaOptions, read.WithCacheRefresh(session.CacheRefresh))
+		}
 	}()
 
 	var err error

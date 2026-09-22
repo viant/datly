@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/gateway/router"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/logging"
@@ -24,6 +24,7 @@ const (
 	RouteUnspecifiedKind = iota
 	RouteWarmupKind
 	RouteOpenAPIKind
+	RouteCacheInvalidationKind
 )
 
 type (
@@ -47,6 +48,7 @@ type (
 func (r *Route) Handle(res http.ResponseWriter, req *http.Request) int {
 	if !r.CanHandle(req) {
 		write(res, http.StatusForbidden, nil)
+		return http.StatusForbidden
 	}
 	ctx := req.Context()
 	if ctx == nil {

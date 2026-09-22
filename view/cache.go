@@ -2,10 +2,12 @@ package view
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/internal/cache/managed"
 	"github.com/viant/datly/internal/converter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
@@ -129,12 +131,17 @@ func (r *Caches) Append(cache *Cache) {
 	*r = append(*r, cache)
 }
 
-func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error {
+func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) (err error) {
 	if c._initialized {
 		return nil
 	}
 
 	c._initialized = true
+	defer func() {
+		if err != nil {
+			c._initialized = false
+		}
+	}()
 	c.owner = aView
 	var viewName string
 	if aView != nil {
@@ -149,8 +156,8 @@ func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error
 		return fmt.Errorf("View %v cache State can't be empty", viewName)
 	}
 
-	if c.TimeToLiveMs == 0 {
-		return fmt.Errorf("View %v cache TimeToLiveMs can't be empty", viewName)
+	if err := c.validateTTL(); err != nil {
+		return fmt.Errorf("view %s cache: %w", viewName, err)
 	}
 
 	//if c.ErrorTimeToLiveMs == 0 {
@@ -165,6 +172,20 @@ func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error
 		return err
 	}
 
+	return nil
+}
+
+// validateTTL prevents provider-specific sentinel values and duration overflow.
+func (c *Cache) validateTTL() error {
+	if c.TimeToLiveMs <= 0 || uint64(c.TimeToLiveMs) > uint64((1<<63-1)/int64(time.Millisecond)) {
+		return fmt.Errorf("TimeToLiveMs must be a positive representable duration")
+	}
+	if url.Scheme(c.Provider, "") == aerospikeType {
+		// Aerospike reserves the largest two uint32 values and zero.
+		if c.TimeToLiveMs%1000 != 0 || uint64(c.TimeToLiveMs/1000) >= uint64(^uint32(0)-1) {
+			return fmt.Errorf("Aerospike TimeToLiveMs must be whole positive seconds below 4294967294")
+		}
+	}
 	return nil
 }
 
@@ -205,9 +226,10 @@ func (c *Cache) cacheService(name string, aView *View) (func() (cache.Cache, err
 			return nil, err
 		}
 
-		return func() (cache.Cache, error) {
-			return afsCache, nil
-		}, nil
+		owner := c.cacheOwner(aView)
+		store := managed.NewFileStore(strings.TrimRight(expandedLoc, "/") + "/.datly-generations/" + owner)
+		service := managed.New(afsCache, store, owner)
+		return func() (cache.Cache, error) { return service, nil }, nil
 	}
 }
 
@@ -231,12 +253,13 @@ func (c *Cache) aerospikeCache(aView *View) (func() (cache.Cache, error), error)
 	timeoutConfig := &aerospike.TimeoutConfig{
 		MaxRetries:            c.AerospikeConfig.MaxRetries,
 		TotalTimeoutMs:        c.AerospikeConfig.TotalTimeoutInMs,
+		SocketTimeoutMs:       c.AerospikeConfig.SocketTimeoutInMs,
 		SleepBetweenRetriesMs: c.SleepBetweenRetriesInMs,
 	}
 
 	var resetTimout *time.Duration
 	if c.AerospikeConfig.ResetFailuresInMs != 0 {
-		resetDuration := time.Duration(c.AerospikeConfig.ResetFailuresInMs)
+		resetDuration := time.Duration(c.AerospikeConfig.ResetFailuresInMs) * time.Millisecond
 		resetTimout = &resetDuration
 	}
 
@@ -248,8 +271,58 @@ func (c *Cache) aerospikeCache(aView *View) (func() (cache.Cache, error), error)
 			return nil, err
 		}
 
-		return aerospike.New(namespace, expanded, client, uint32(c.TimeToLiveMs/1000), timeoutConfig, failureHandler)
+		native, err := aerospike.New(namespace, expanded, client, uint32(c.TimeToLiveMs/1000), timeoutConfig, failureHandler)
+		if err != nil {
+			return nil, err
+		}
+		owner := c.cacheOwner(aView)
+		store, err := managed.NewAerospikeStore(client, namespace, expanded, owner)
+		if err != nil {
+			return nil, err
+		}
+		return managed.New(native, store, owner), nil
 	}, nil
+}
+
+// cacheOwner scopes shared storage to a resource/view/connector identity.
+func (c *Cache) cacheOwner(aView *View) string {
+	source := ""
+	if resource := aView.GetResource(); resource != nil {
+		source = resource.SourceURL
+	}
+	// Deployment roots may differ between replicas; route-relative identity is stable.
+	if i := strings.Index(source, "/routes/"); i >= 0 {
+		source = source[i+len("/routes/"):]
+	}
+	connector := ""
+	if aView.Connector != nil {
+		data, _ := json.Marshal(aView.Connector.DBConfig)
+		connector = string(data)
+	}
+	data, _ := json.Marshal([]string{source, aView.Name, connector})
+	return fmt.Sprintf("%x", sha256.Sum256(data))
+}
+
+// InvalidateCache retires cache publications without deleting another view's data.
+func (c *Cache) InvalidateCache(ctx context.Context, scope string) (string, error) {
+	selected := managed.Scope(scope)
+	if err := selected.Validate(); err != nil {
+		return "", err
+	}
+	if c.newCache == nil {
+		return "", fmt.Errorf("cache is not initialized")
+	}
+	service, err := c.Service()
+	if err != nil {
+		return "", err
+	}
+	invalidator, ok := service.(interface {
+		Invalidate(context.Context, managed.Scope) (string, error)
+	})
+	if !ok {
+		return "", fmt.Errorf("cache provider does not support scoped invalidation")
+	}
+	return invalidator.Invalidate(ctx, selected)
 }
 
 func (c *Cache) expandLocation(aView *View) (string, error) {
@@ -267,7 +340,8 @@ func (c *Cache) expandLocation(aView *View) (string, error) {
 	}
 
 	locationMap.Put("View", viewMap)
-	expanded := locationMap.ExpandAsText(c.Location)
+	location := strings.ReplaceAll(c.Location, `${View\.`, `${View.`)
+	expanded := locationMap.ExpandAsText(location)
 	return expanded, nil
 }
 

@@ -354,6 +354,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 						return nil, nil, fmt.Errorf("failed to locate component provider: %w", err)
 					}
 					routes = r.appendCacheWarmupRoute(routes, aPath, provider)
+					routes = r.appendCacheInvalidationRoute(routes, aPath, provider)
 					if len(apiKeys) > 0 {
 						for i := offset; i < len(routes); i++ {
 							routes[i].ApiKeys = apiKeys
@@ -420,6 +421,7 @@ func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.
 				}
 
 				routes = r.appendCacheWarmupRoute(routes, aPath, provider)
+				routes = r.appendCacheInvalidationRoute(routes, aPath, provider)
 			}
 			if len(apiKeys) > 0 { //update keys to all path derived routes
 				for i := offset; i < len(routes); i++ {

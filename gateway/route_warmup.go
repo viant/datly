@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/view"
+	"github.com/viant/xdatly/handler/exec"
 	"net/http"
 )
 
@@ -29,6 +30,9 @@ func (r *Router) NewWarmupRoute(URL string, providers ...*repository.Provider) *
 
 func (r *Router) handleCacheWarmup(ctx context.Context, writer http.ResponseWriter, provider []*repository.Provider) {
 	statusCode, content := r.handleCacheWarmupWithErr(ctx, provider)
+	if execution, ok := ctx.Value(exec.ContextKey).(*exec.Context); ok {
+		execution.StatusCode = statusCode
+	}
 	setContentType(writer, statusCode, "application/json")
 	write(writer, statusCode, content)
 }
@@ -63,6 +67,9 @@ func (r *Router) handleCacheWarmupWithErr(ctx context.Context, providers []*repo
 	data, err := json.Marshal(response)
 	if err != nil {
 		return http.StatusInternalServerError, []byte(err.Error())
+	}
+	if response.Status == "error" {
+		return http.StatusInternalServerError, data
 	}
 	return http.StatusOK, data
 }

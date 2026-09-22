@@ -28,7 +28,7 @@ require (
 	github.com/viant/parsly v0.3.3
 	github.com/viant/pgo v0.11.0
 	github.com/viant/scy v0.33.1
-	github.com/viant/sqlx v0.25.0
+	github.com/viant/sqlx v0.26.0
 	github.com/viant/structql v0.5.4
 	github.com/viant/toolbox v0.37.0
 	github.com/viant/velty v0.4.1-0.20260408224432-5a1c31e1bd87
@@ -42,7 +42,7 @@ require (
 
 require (
 	github.com/viant/govalidator v0.3.1
-	github.com/viant/sqlparser v0.12.1-0.20260409013525-147f8fc299b7
+	github.com/viant/sqlparser v0.12.1-0.20260914020630-6fa55a0d6b32
 )
 
 require (
@@ -53,7 +53,7 @@ require (
 	github.com/viant/mcp v0.19.1-0.20260810230811-de146552d03f
 	github.com/viant/mcp-protocol v0.16.0
 	github.com/viant/structology v0.9.0
-	github.com/viant/tagly v0.3.0
+	github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630
 	github.com/viant/x v0.4.1-0.20260306005005-975ded1e1bef
 	github.com/viant/xdatly v0.5.4-0.20260306062123-17850ac34977
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
