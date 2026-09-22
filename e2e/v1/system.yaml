@@ -1,0 +1,32 @@
+init:
+  mysqlSecrets: ${secrets.$mysqlCredentials}
+pipeline:
+
+  stop:
+    services:
+      action: docker:stop
+      images:
+        - mysql
+        - aerospike
+
+  start:
+    services:
+      mysql_dev:
+        action: docker:run
+        image: mysql:5.7
+        platform: linux/amd64
+        name: mysql_dev
+        ports:
+          3306: 3306
+        env:
+          MYSQL_ROOT_PASSWORD: ${mysqlSecrets.Password}
+
+      aerospike:
+        action: docker:run
+        platform: linux/amd64
+        image: 'aerospike:ce-6.2.0.2'
+        name: aero
+        ports:
+          3000: 3000
+          3001: 3001
+          3002: 3002

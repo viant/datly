@@ -2,6 +2,8 @@ package view
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDetectColumnsSQL(t *testing.T) {
@@ -65,4 +67,11 @@ GROUP BY 1`,
 		//
 		//assert.Equal(t, testcase.sql, sql, testcase.description)
 	}
+}
+
+func TestNeutralizePredicateBuilderForDiscovery(t *testing.T) {
+	input := `SELECT * FROM FOO t WHERE 1=1 ${predicate.Builder().CombineOr($predicate.FilterGroup(0, "AND")).Build("AND")}`
+	actual := neutralizePredicateBuilderForDiscovery(input)
+	require.NotContains(t, actual, `${predicate.Builder()`)
+	require.Contains(t, actual, `AND 1=0`)
 }

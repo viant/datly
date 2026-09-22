@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/view/state/kind"
 	"net/http"
+	"reflect"
 )
 
 type Cookie struct {
@@ -19,7 +20,7 @@ func (v *Cookie) Names() []string {
 	return result
 }
 
-func (v *Cookie) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (v *Cookie) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	for _, cookie := range v.cookies {
 		if cookie.Name == name {
 			return cookie.Value, true, nil

@@ -7,6 +7,7 @@ import (
 	"github.com/viant/xdatly/handler/exec"
 	"net/http"
 	"net/url"
+	"reflect"
 )
 
 type Query struct {
@@ -23,7 +24,7 @@ func (q *Query) Names() []string {
 	return result
 }
 
-func (q *Query) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (q *Query) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	if name == "" {
 		return q.rawQuery, true, nil
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/viant/afs"
 	"github.com/viant/afs/asset"
 	"github.com/viant/afs/file"
@@ -63,4 +64,30 @@ func TestNew(t *testing.T) {
 		assert.Equal(t, element.URI, aPath.URI)
 	}
 
+}
+
+func TestService_onModify_DoesNotAppendDuplicateForTrackedURL(t *testing.T) {
+	location := "mem://localhost/test/routes_modify"
+	mgr, err := afs.Manager(location)
+	require.NoError(t, err)
+	err = asset.Create(mgr, location, []*asset.Resource{
+		asset.New("dev/vendor.yml", file.DefaultFileOsMode, false, "", ruleVendor),
+	})
+	require.NoError(t, err)
+
+	service, err := New(context.Background(), afs.New(), location, time.Second)
+	require.NoError(t, err)
+	require.Len(t, service.Container.Items, 1)
+
+	fs := afs.New()
+	object, err := fs.Object(context.Background(), "mem://localhost/test/routes_modify/dev/vendor.yml")
+	require.NoError(t, err)
+
+	err = service.onModify(context.Background(), object)
+	require.NoError(t, err)
+
+	require.Len(t, service.Container.Items, 1)
+	aPath := &contract.Path{URI: "/v1/api/dev/hauth/vendors/{vendorID}", Method: "GET"}
+	element := service.Lookup(aPath)
+	require.NotNil(t, element)
 }

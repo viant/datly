@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/repository/version"
 	"gopkg.in/yaml.v3"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -151,6 +152,7 @@ func (s *Service) createPathFiles(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	sortByURL(candidates)
 	rootPath := url.Path(s.URL)
 	for _, candidate := range candidates {
 		if candidate.IsDir() {
@@ -187,6 +189,18 @@ func (s *Service) createPathFiles(ctx context.Context) error {
 	return nil
 }
 
+// sortByURL gives paths.yaml a stable entry order. The recursive listing that
+// feeds it reflects directory enumeration order, which differs between
+// filesystems and shifts whenever route files are rewritten - so without this
+// the same repository yields a different paths.yaml on every machine, and any
+// partial regeneration reshuffles thousands of lines. Route lookup itself is
+// order independent: the matcher builds a trie and prefers exact matches.
+func sortByURL(candidates []storage.Object) {
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].URL() < candidates[j].URL()
+	})
+}
+
 func (s *Service) buildPaths(ctx context.Context, candidate storage.Object, rootPath string) (*Item, error) {
 	data, err := s.fs.Download(ctx, candidate)
 	if err != nil {
@@ -198,7 +212,8 @@ func (s *Service) buildPaths(ctx context.Context, candidate storage.Object, root
 	}
 	sourceURL := candidate.URL()
 	if index := strings.Index(sourceURL, rootPath); index != -1 {
-		sourceURL = sourceURL[1+index+len(rootPath):]
+		sourceURL = sourceURL[index+len(rootPath):]
+		sourceURL = strings.TrimPrefix(sourceURL, "/")
 	}
 	anItem := &Item{
 		SourceURL: sourceURL,
@@ -239,8 +254,11 @@ func (s *Service) load(ctx context.Context) error {
 }
 
 func (s *Service) onModify(ctx context.Context, object storage.Object) error {
-	path := url.Path(object.URL())
-	prev := s.lookupRouteBySourceURL(path)
+	sourceURL := object.URL()
+	prev := s.lookupRouteBySourceURL(sourceURL)
+	if prev == nil {
+		prev = s.lookupRouteBySourceURL(url.Path(sourceURL))
+	}
 	if prev != nil && prev.Version.HasChanged(object.ModTime()) {
 		return nil
 	}
@@ -262,8 +280,11 @@ func (s *Service) onModify(ctx context.Context, object storage.Object) error {
 }
 
 func (s *Service) onDelete(ctx context.Context, object storage.Object) error {
-	path := url.Path(object.URL())
-	prev := s.lookupRouteBySourceURL(path)
+	sourceURL := object.URL()
+	prev := s.lookupRouteBySourceURL(sourceURL)
+	if prev == nil {
+		prev = s.lookupRouteBySourceURL(url.Path(sourceURL))
+	}
 	if prev == nil {
 		return nil
 	}
@@ -271,7 +292,7 @@ func (s *Service) onDelete(ctx context.Context, object storage.Object) error {
 	prev.Version.Increase()
 
 	// TODO delete works fine but after adding back rule file we get panic
-	//s.delete(prev, path)
+	//s.delete(prev, sourceURL)
 	return nil
 }
 

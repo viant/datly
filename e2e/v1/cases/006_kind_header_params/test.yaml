@@ -1,0 +1,16 @@
+init:
+  parentPath: $parent.path
+  created: $FormatTime('nowInUTC', 'yyyy-MM-ddT00:00:00Z')
+  expect: $LoadData('${parentPath}/expect.json')
+pipeline:
+  test:
+    description: inline SQL header hint binds Vendor-Id into the request parameter
+    action: http/runner:send
+    requests:
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/shape/dev/headers/vendors
+        Header:
+          Vendor-Id: ["2"]
+        Expect:
+          Code: 200
+          JSONBody: $expect
