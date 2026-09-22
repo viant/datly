@@ -315,6 +315,31 @@ the database foreign key to enforce the value inside the managed transaction.
 This is not permission to suppress unrelated update validation or to reference a
 later or unordered insert.
 
+## Repeatable generation with an orchestrator
+
+An application may use Endly or another task runner to regenerate many
+components. The task runner orchestrates the same operation-based CLI; it does
+not become a second generator or a place for database business logic.
+
+- Enumerate one DQL source package per component and select `get`, `post`,
+  `put`, or `patch` from its declared operation, not its directory name.
+- Build or pin the Datly 1.0 CLI before regeneration. Use a disposable schema
+  database for metadata discovery when possible; do not embed live credentials
+  in generated files or task logs.
+- Run with the merge generation policy so create-once authored hooks survive.
+  A conflict in an owned shape is a migration failure to investigate, not a
+  reason to overwrite the generated package wholesale.
+- After generation, compile every generated package, run real component tests,
+  and inspect any owned-file changes. A successful CLI exit alone does not
+  prove authorization, sparse presence, or transaction behavior.
+
+When newer generator metadata changes an owned relation tag, compare the DQL
+proposal, the checked-in field, and the recorded generation manifest. Datly may
+update its own join and JSON presentation tags only when the destination still
+matches that trusted baseline; an authored relation edit remains protected.
+Keep the corrected policy in Datly with a native regeneration test rather than
+hand-editing every generated view field in the application.
+
 ## Verification gates
 
 A migrated component is complete only when all applicable gates pass:

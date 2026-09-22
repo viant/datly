@@ -239,13 +239,14 @@ func (p *scaffoldPersistence) projectionChanges(destination string, previous, pr
 			continue
 		}
 		if isRelation {
-			// Canonical outer aliases can change exact matching fields. This
-			// grants no destination, source, cardinality or child-type authority.
-			onlyOn, err := prior.tagChange(candidate, "on")
+			// Canonical outer aliases and JSON casing can change generated
+			// relation metadata. This grants no destination, source,
+			// cardinality or child-type authority.
+			controlled, err := prior.relationTagChange(candidate)
 			if err != nil {
 				return xshape.SourceFieldEdits{}, err
 			}
-			if !onlyOn || candidate.Type != prior.Type {
+			if !controlled || candidate.Type != prior.Type {
 				continue
 			}
 		}
@@ -313,6 +314,52 @@ func (f projectionField) tagChange(next projectionField, key string) (bool, erro
 			continue
 		}
 		if tag.Name != key {
+			return false, nil
+		}
+		changed = true
+	}
+	return changed, nil
+}
+
+// relationTagChange permits only generator-owned join and JSON presentation
+// metadata to change. The recorded baseline must still match the destination
+// before this edit is applied; authored changes remain protected above.
+func (f projectionField) relationTagChange(next projectionField) (bool, error) {
+	previous, err := tags.Parse(f.Tag)
+	if err != nil {
+		return false, err
+	}
+	desired, err := tags.Parse(next.Tag)
+	if err != nil {
+		return false, err
+	}
+	oldValues := map[string]tags.Values{}
+	newValues := map[string]tags.Values{}
+	for _, tag := range previous {
+		oldValues[tag.Name] = tag.Values
+	}
+	for _, tag := range desired {
+		newValues[tag.Name] = tag.Values
+	}
+	if len(oldValues) != len(previous) || len(newValues) != len(desired) {
+		return false, nil
+	}
+	changed := false
+	for key, oldValue := range oldValues {
+		newValue, exists := newValues[key]
+		if exists && oldValue == newValue {
+			continue
+		}
+		if key != "on" && key != "json" {
+			return false, nil
+		}
+		changed = true
+	}
+	for key := range newValues {
+		if _, exists := oldValues[key]; exists {
+			continue
+		}
+		if key != "on" && key != "json" {
 			return false, nil
 		}
 		changed = true
