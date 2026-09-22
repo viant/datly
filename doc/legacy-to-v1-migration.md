@@ -152,6 +152,24 @@ For a legacy handler that manually indexes `Cur*` rows, model those rows as
 authorized Previous or auxiliary views and use generated typed read indexes.
 Do not carry forward unexported maps or repeated service-local SELECT loops.
 
+### External work between database mutations
+
+If a request calls an external provider, a durable lease can be its own generated
+PATCH component. Acquire the lease before the provider call, save the prepared
+provider result after it succeeds, and allow a failed call to release the lease
+for retry. The final generated writer graph must include both the business row
+and the lease's committed transition so they commit or roll back together. A
+separate post-write lease update can leave a completed business row with a
+retryable lease and repeat the provider call.
+
+Check an existing request key before applying a target row's active-status
+gate: an idempotent replay may arrive after the first request completed that
+row. Return the saved response only after the generated read confirms the
+viewer's scope. Recheck the target's mutable status in the final writer's
+transaction so a slower provider result cannot overwrite a request that won
+while the external call was in flight. Preserve the lease owner and expiry as
+sparse update fields; do not reuse a prepared result from a different owner.
+
 For reader relations, keep request predicates on the root whenever the child
 is scoped by the declared `ON` keys. Datly loads relations in parent-key
 batches; a child SQL source should therefore expose the link columns and let
