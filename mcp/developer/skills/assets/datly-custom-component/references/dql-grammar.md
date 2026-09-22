@@ -301,6 +301,8 @@ Write the canonical option names shown here. Do not infer input, field, column o
 | WithCodec(name,args...) | 1+ | installed codec and ordered args |
 | WithStatusCode(code) | 1 | failure code, 100–599 |
 | WithErrorMessage(message) | 1 | authored safe failure message |
+| WithDescription(text), Description(text) | 1 | generated HTTP/MCP parameter description |
+| WithExample(value), Example(value) | 1 | illustrative documentation/test value; not a runtime default |
 | Cacheable(bool) | 1 | input cache policy |
 | QuerySelector(view) | 1 | selector binding |
 | WithPredicate(...), Predicate(...) | 1+ | optional leading group number, name, args; repeatable |
