@@ -2,6 +2,8 @@ package reader
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -187,4 +189,29 @@ func TestReqTraceID(t *testing.T) {
 	ctx := requesttrace.Ensure(context.Background(), "trace-123")
 
 	require.Equal(t, "trace-123", reqTraceID(ctx))
+}
+
+func TestExecutionMetricsExposeCacheCreationTime(t *testing.T) {
+	created := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
+	expiry := created.Add(time.Minute)
+	v := &view.View{Name: "records", Schema: state.NewSchema(reflect.TypeOf(&metricsTestRow{}))}
+	dest := make([]*metricsTestRow, 0)
+	collector := view.NewCollector(xunsafe.NewSlice(reflect.TypeOf(dest)), v, &dest, nil, false)
+	stats := &cache.Stats{CreatedTime: &created, ExpiryTime: &expiry}
+	result, done := NewExecutionInfo(&cache.ParmetrizedQuery{SQL: "SELECT id FROM records"}, stats, collector)
+	_, supported := interface{}(result.CacheStats).(interface{ SetCreatedTime(*time.Time) })
+	if os.Getenv("DATLY_REQUIRE_NATIVE_CREATION_METRICS") == "1" {
+		require.True(t, supported, "updated xdatly response contract must be active")
+	}
+	if !supported {
+		t.Skip("published response contract does not yet expose creation time")
+	}
+	done()
+	data, err := json.Marshal(result)
+	require.NoError(t, err)
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &payload))
+	fields := payload["cacheStats"].(map[string]interface{})
+	require.Equal(t, created.Format(time.RFC3339), fields["createdTime"])
+	require.Equal(t, expiry.Format(time.RFC3339), fields["expiryTime"])
 }

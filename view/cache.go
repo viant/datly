@@ -9,6 +9,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/internal/cache/managed"
 	"github.com/viant/datly/internal/converter"
+	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io/read/cache"
@@ -228,7 +229,7 @@ func (c *Cache) cacheService(name string, aView *View) (func() (cache.Cache, err
 
 		owner := c.cacheOwner(aView)
 		store := managed.NewFileStore(strings.TrimRight(expandedLoc, "/") + "/.datly-generations/" + owner)
-		service := managed.New(afsCache, store, owner)
+		service := managed.New(afsCache, store, owner, c.creationObserver(aView))
 		return func() (cache.Cache, error) { return service, nil }, nil
 	}
 }
@@ -280,7 +281,7 @@ func (c *Cache) aerospikeCache(aView *View) (func() (cache.Cache, error), error)
 		if err != nil {
 			return nil, err
 		}
-		return managed.New(native, store, owner), nil
+		return managed.New(native, store, owner, c.creationObserver(aView)), nil
 	}, nil
 }
 
@@ -1331,4 +1332,15 @@ func (c Caches) Unique() []*Cache {
 // NewRefCache creates cache reference
 func NewRefCache(name string) *Cache {
 	return &Cache{Reference: shared.Reference{Ref: name}}
+}
+
+func (c *Cache) creationObserver(v *View) func(string, int) {
+	return func(kind string, entries int) {
+		logger.IncrementValueBy(v.Counter, cacheCreatedMetric, int64(entries))
+		metric := cacheLazyCreatedMetric
+		if kind == string(managed.Warmup) {
+			metric = cacheWarmupCreatedMetric
+		}
+		logger.IncrementValueBy(v.Counter, metric, int64(entries))
+	}
 }

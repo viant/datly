@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,14 +42,33 @@ func TestManagedAerospikeIntegration(t *testing.T) {
 			t.Cleanup(func() { _, err := client.Delete(nil, store.key); require.NoError(t, err) })
 			native, err := aerospike.New(namespace, set, client, 2)
 			require.NoError(t, err)
-			first := New(native, store, owner)
+			var lazyCreated, warmupCreated atomic.Int64
+			observer := func(kind string, entries int) {
+				if kind == string(Warmup) {
+					warmupCreated.Add(int64(entries))
+				} else {
+					lazyCreated.Add(int64(entries))
+				}
+			}
+			first := New(native, store, owner, observer)
+			if os.Getenv("DATLY_REQUIRE_NATIVE_CREATION_METRICS") == "1" {
+				require.True(t, first.nativeCreation, "native SQLX creation observer must be active")
+			}
 			secondNative, err := aerospike.New(namespace, set, client, 2)
 			require.NoError(t, err)
 			secondStore, err := NewAerospikeStore(client, namespace, set, owner)
 			require.NoError(t, err)
-			second := New(secondNative, secondStore, owner)
+			second := New(secondNative, secondStore, owner, observer)
 			db := database(t)
 			warm(t, db, first, grouped)
+			expectedWarmup := int64(1)
+			if grouped {
+				expectedWarmup = 2
+			}
+			if first.nativeCreation {
+				require.Equal(t, expectedWarmup, warmupCreated.Load())
+			}
+			require.Zero(t, lazyCreated.Load())
 			change(t, db)
 			name, stats := query(t, db, second, matcher(grouped), false, nil)
 			require.Equal(t, "before", name)
@@ -58,6 +78,7 @@ func TestManagedAerospikeIntegration(t *testing.T) {
 			name, stats = query(t, db, second, matcher(grouped), false, nil)
 			require.Equal(t, "after", name)
 			require.True(t, stats.FoundLazy)
+			require.Equal(t, int64(1), lazyCreated.Load(), "hits must not create entries")
 			_, err = second.Invalidate(context.Background(), Lazy)
 			require.NoError(t, err)
 			name, stats = query(t, db, first, nil, false, nil)
@@ -107,6 +128,10 @@ func TestManagedAerospikeIntegration(t *testing.T) {
 			generation, err := store.Read(context.Background())
 			require.NoError(t, err)
 			require.NotEqual(t, "0", generation.All)
+			require.Equal(t, int64(4), lazyCreated.Load())
+			if first.nativeCreation {
+				require.Equal(t, 2*expectedWarmup, warmupCreated.Load())
+			}
 		})
 	}
 }

@@ -1,6 +1,7 @@
 # Cache management
 
-Datly uses SQLX v0.26.0 and adds persistent, view-scoped generations to native
+Datly uses SQLX main revision `031ed89ced07` and xdatly/handler revision
+`34eaa9f4902b`, and adds persistent, view-scoped generations to native
 cache identities. Both request-populated (lazy) and prewarmed entries remain
 subject to their configured TTL.
 
@@ -130,3 +131,22 @@ The existing `e2e/local/system.yaml` uses Aerospike `ce-6.2.0.2` at that address
 The test uses unique owner identities in `datly_cache_test`, short payload TTLs,
 and removes its own generation records. It does not truncate a namespace or set.
 It is skipped when `DATLY_TEST_AEROSPIKE` is unset.
+
+## Creation metrics
+
+Per-view counters expose `cache:created`, `cache:lazy_created`, and
+`cache:warmup_created`. These count successfully published cache entries, not
+lookup misses or write attempts. Index markers count as entries; overflow chunks
+do not. Hits, reused AFS warmups, failed writes, and rolled-back requests do not
+increment creation counters. Empty results count when their cache entry or index
+marker is published. `cache:miss_write` remains the separate write-attempt counter.
+
+SQLX caches with `SetCreationObserver(func(kind string, entries int))` report
+both lazy and warmup publications. Cache implementations without the observer use Datly's successful
+lazy-close fallback; exact warmup creation counts require the native observer.
+Existing warmup run/group metrics remain available independently.
+
+With the updated shared response contract, SQL execution metrics expose
+`cacheStats.createdTime` alongside `expiryTime`. Creation time is persisted by
+SQLX and stays unchanged on cache hits. Legacy entries without a stored creation
+time omit the field. Datly copies the timestamp after cache publication completes.

@@ -118,3 +118,10 @@ func lookupOperationUnlocked(service *gmetric.Service, name string) *gmetric.Ope
 	}
 	return nil
 }
+
+func (c *operationCounter) IncrementValueBy(value interface{}, delta int64) int64 {
+	if c == nil || c.ref == nil {
+		return 0
+	}
+	return c.ref.IncrementValueBy(value, delta)
+}

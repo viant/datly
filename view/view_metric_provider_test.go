@@ -23,6 +23,7 @@ func TestViewMetricProvider_ExportsViewCounters(t *testing.T) {
 	counter.IncrementValue(cacheMissMetric)
 	counter.IncrementValue(cacheMissWriteMetric)
 	counter.IncrementValue(cacheErrorMetric)
+	counter.IncrementValue(cacheCreatedMetric)
 
 	operation := metrics.LookupOperation("steward.metadata.softIneligibilities")
 	require.NotNil(t, operation)
@@ -41,4 +42,5 @@ func TestViewMetricProvider_ExportsViewCounters(t *testing.T) {
 	require.Equal(t, int64(1), values[cacheMissMetric])
 	require.Equal(t, int64(1), values[cacheMissWriteMetric])
 	require.Equal(t, int64(1), values[cacheErrorMetric])
+	require.Equal(t, int64(1), values[cacheCreatedMetric])
 }

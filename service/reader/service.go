@@ -1252,6 +1252,9 @@ func NewExecutionInfo(index *cache.ParmetrizedQuery, cacheStats *cache.Stats, co
 			ret.CacheStats.ErrorType = cacheStats.ErrorType
 			ret.CacheStats.ErrorCode = int(cacheStats.ErrorCode)
 			ret.CacheStats.ExpiryTime = cacheStats.ExpiryTime
+			if target, ok := interface{}(ret.CacheStats).(interface{ SetCreatedTime(*time.Time) }); ok {
+				target.SetCreatedTime(cacheStats.CreatedTime)
+			}
 		}
 	}
 }

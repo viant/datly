@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
 
 	"github.com/viant/sqlx/io/read/cache"
 )
@@ -32,12 +33,24 @@ type Store interface {
 
 type Cache struct {
 	cache.Cache
-	store Store
-	owner string
+	store          Store
+	owner          string
+	created        func(string, int)
+	pending        sync.Map
+	nativeCreation bool
 }
 
-func New(native cache.Cache, store Store, owner string) *Cache {
-	return &Cache{Cache: native, store: store, owner: owner}
+// New optionally observes successful lazy entry publication (not cache misses).
+func New(native cache.Cache, store Store, owner string, observers ...func(string, int)) *Cache {
+	result := &Cache{Cache: native, store: store, owner: owner}
+	if len(observers) > 0 {
+		result.created = observers[0]
+		if source, ok := native.(interface{ SetCreationObserver(func(string, int)) }); ok {
+			source.SetCreationObserver(result.created)
+			result.nativeCreation = true
+		}
+	}
+	return result
 }
 func (c *Cache) Invalidate(ctx context.Context, scope Scope) (string, error) {
 	if err := scope.Validate(); err != nil {
@@ -105,7 +118,11 @@ func (c *Cache) Get(ctx context.Context, sql string, args []interface{}, options
 	if err != nil {
 		return nil, err
 	}
-	return c.Cache.Get(ctx, c.identity(sql, generation, Lazy), args, options...)
+	entry, err := c.Cache.Get(ctx, c.identity(sql, generation, Lazy), args, options...)
+	if err == nil && entry != nil && !entry.Has() && !entry.ReadOnly && c.created != nil && !c.nativeCreation {
+		c.pending.Store(entry, struct{}{})
+	}
+	return entry, err
 }
 func (c *Cache) Lookup(ctx context.Context, sql string, args []interface{}, options ...interface{}) (*cache.Entry, error) {
 	lookup, ok := c.Cache.(cache.Lookup)
@@ -156,4 +173,29 @@ func (c *Cache) IndexByWithResult(ctx context.Context, db *sql.DB, column, sql s
 	}
 	count, err := c.Cache.IndexBy(ctx, db, column, executionSQL, args, options...)
 	return &cache.IndexByResult{GroupsWritten: count}, err
+}
+
+// Close reports an entry only after its native publication succeeds.
+func (c *Cache) Close(ctx context.Context, entry *cache.Entry) error {
+	_, pending := c.pending.LoadAndDelete(entry)
+	err := c.Cache.Close(ctx, entry)
+	if err == nil && pending && entry.WriteCloser != nil && len(entry.Meta.Fields) > 0 {
+		c.created(string(Lazy), 1)
+	}
+	return err
+}
+func (c *Cache) Rollback(ctx context.Context, entry *cache.Entry) error {
+	c.pending.Delete(entry)
+	return c.Cache.Rollback(ctx, entry)
+}
+func (c *Cache) Delete(ctx context.Context, entry *cache.Entry) error {
+	c.pending.Delete(entry)
+	return c.Cache.Delete(ctx, entry)
+}
+func (c *Cache) UpdateType(ctx context.Context, entry *cache.Entry, values []interface{}) (bool, error) {
+	ok, err := c.Cache.UpdateType(ctx, entry, values)
+	if !ok || err != nil {
+		c.pending.Delete(entry)
+	}
+	return ok, err
 }
