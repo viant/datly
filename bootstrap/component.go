@@ -231,6 +231,7 @@ func (r *packageComponentResolver) indexCanonicalMetadata() {
 }
 
 func (r *packageComponentResolver) resolve() (*spec.Component, error) {
+	var derivedOutputs []*resolvedContractField
 	for index := range r.contracts {
 		contract := &r.contracts[index]
 		for _, field := range contract.fields {
@@ -242,6 +243,12 @@ func (r *packageComponentResolver) resolve() (*spec.Component, error) {
 				continue
 			}
 			if contract.role == outputContract {
+				// Summary declarations may precede Data in the output contract.
+				// Resolve their parent view before attaching output-owned relations.
+				if resolved.param.IsDerivedOutput() {
+					derivedOutputs = append(derivedOutputs, resolved)
+					continue
+				}
 				err = r.applyOutput(resolved)
 			} else {
 				err = r.applyInput(resolved)
@@ -249,6 +256,11 @@ func (r *packageComponentResolver) resolve() (*spec.Component, error) {
 			if err != nil {
 				return nil, err
 			}
+		}
+	}
+	for _, resolved := range derivedOutputs {
+		if err := r.applyOutput(resolved); err != nil {
+			return nil, err
 		}
 	}
 	return r.component, nil

@@ -188,6 +188,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			return nil, err
 		}
 	}
+	if err := resolveQuerySelectorViews(component); err != nil {
+		return nil, err
+	}
 	var declaredViews map[string]*spec.View
 	if declarations != nil {
 		declaredViews = declarations.viewsByParam

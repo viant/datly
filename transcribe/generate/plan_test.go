@@ -1578,7 +1578,7 @@ SELECT 1`
 		t.Fatalf("expected two output fields, got %d", len(plan.Output.Fields))
 	}
 	assertly.AssertValues(t, "Summary", plan.Output.Fields[0].Name)
-	assertly.AssertValues(t, "any", plan.Output.Fields[0].Type)
+	assertly.AssertValues(t, "*SummaryView", plan.Output.Fields[0].Type)
 	assertly.AssertValues(t, `parameter:"Summary,kind=output,in=derived" view:"Summary" sql:"SELECT 1 AS summary_value"`, plan.Output.Fields[0].Tag)
 	assertly.AssertValues(t, "Data", plan.Output.Fields[1].Name)
 	assertly.AssertValues(t, "*MetaOutView", plan.Output.Fields[1].Type)

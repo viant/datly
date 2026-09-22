@@ -23,6 +23,7 @@ type viewPlanner struct {
 	dests    map[*spec.View]string
 	visiting map[*spec.View]bool
 	ordered  []*spec.View
+	outputs  map[*spec.Relation]*spec.Parameter
 }
 
 func (r *planResolver) resolveViews() (map[string]int, error) {
@@ -35,6 +36,17 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 	planner := &viewPlanner{
 		plan: plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
 		parents: map[*spec.View]string{}, dests: map[*spec.View]string{}, visiting: map[*spec.View]bool{},
+		outputs: map[*spec.Relation]*spec.Parameter{},
+	}
+	for _, param := range preferDefinedParams(component.Parameters) {
+		if !param.IsDerivedOutput() {
+			continue
+		}
+		relation := outputRelation(component.RootView, param.Name)
+		if relation == nil || relation.View == nil || len(relation.On) != 0 {
+			return nil, fmt.Errorf("output relation %s requires a derived view without row links", param.Name)
+		}
+		planner.outputs[relation] = param
 	}
 	if root := component.RootView; root != nil {
 		rootIdentity, err := root.Identity()
@@ -48,6 +60,18 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 			}
 			plan.RootViewType = linked.Type
 			plan.Views = append(plan.Views, linked)
+			for _, relation := range root.Relations {
+				if _, output := planner.outputs[relation]; !output {
+					continue
+				}
+				destination, err := generatedViewDestination(relation.View, plan.ViewDest)
+				if err != nil {
+					return nil, err
+				}
+				if err := planner.assign(relation.View, generatedChildViewType(relation), destination); err != nil {
+					return nil, err
+				}
+			}
 		} else {
 			rootDest, err := generatedViewDestination(root, plan.ViewDest)
 			if err != nil {
@@ -112,7 +136,35 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		indexes[linked.identity] = len(plan.Views)
 		plan.Views = append(plan.Views, linked.plan)
 	}
+	if err := planner.bindOutputFields(); err != nil {
+		return nil, err
+	}
 	return indexes, nil
+}
+
+// Output-owned derived views still need generated row types and resources, but
+// their holders belong to the response envelope rather than each parent row.
+func (p *viewPlanner) bindOutputFields() error {
+	for relation, param := range p.outputs {
+		if strings.TrimSpace(param.TypeExpr) != "" || strings.TrimSpace(param.OutputTypeExpr) != "" || defaultTagTypeName(param.Tag) != "" {
+			continue
+		}
+		cardinality, err := spec.NormalizeCardinality(relation.Cardinality)
+		if err != nil {
+			return err
+		}
+		typeName := "*" + p.names[relation.View]
+		if cardinality == spec.CardinalityMany {
+			typeName = "[]" + typeName
+		}
+		for i := range p.plan.Output.Fields {
+			if p.plan.Output.Fields[i].Name == generatedParameterName(param) {
+				p.plan.Output.Fields[i].Type = typeName
+				break
+			}
+		}
+	}
+	return nil
 }
 
 func (r *planResolver) resolveLinkedView(view *spec.View, reference *ViewReference, identity string) (ViewPlan, error) {
@@ -387,6 +439,9 @@ func (p *viewPlanner) fields(view *spec.View) ([]Field, error) {
 		seen[field.Name] = true
 	}
 	for _, relation := range view.Relations {
+		if _, output := p.outputs[relation]; output {
+			continue
+		}
 		field, err := p.relationField(relation)
 		if err != nil {
 			return nil, err

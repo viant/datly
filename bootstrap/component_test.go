@@ -283,6 +283,30 @@ func TestContractResolverBuildsCanonicalOutputRelationFromTags(t *testing.T) {
 	}
 }
 
+func TestContractResolverSummaryBeforeRootOutput(t *testing.T) {
+	type totals struct {
+		Count int `sqlx:"count"`
+	}
+	type output struct {
+		Meta *totals           `parameter:"Meta,kind=output,in=derived" view:"Totals" sql:"SELECT COUNT(*) AS count FROM ($View.NonWindowSQL) parent"`
+		Data []*packageViewRow `parameter:"Data,kind=output,in=view" view:"Users" sql:"SELECT id, name FROM users"`
+	}
+	for _, declaredRoot := range []bool{false, true} {
+		component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "Users"}}
+		if declaredRoot {
+			component.RootView = &spec.View{Name: "Users"}
+		}
+		resolved, err := (ContractResolver{Component: component, OutputType: linkedContractType(reflect.TypeFor[output]())}).Resolve()
+		if err != nil {
+			t.Fatalf("declared root=%v: %v", declaredRoot, err)
+		}
+		root := resolved.RootView
+		if root == nil || root.Source == nil || root.Source.SQL != "SELECT id, name FROM users" || len(root.Relations) != 1 || root.Relations[0].Holder != "Meta" {
+			t.Fatalf("declared root=%v: summary lost during root resolution: %+v", declaredRoot, root)
+		}
+	}
+}
+
 func TestContractResolverReconcilesCanonicalOutputRelationToAliasedField(t *testing.T) {
 	type totals struct {
 		Count int `sqlx:"count"`
