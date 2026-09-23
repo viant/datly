@@ -384,6 +384,50 @@ func TestRetainedSQLResourceDoesNotAcquireEditedBaseline(t *testing.T) {
 	}
 }
 
+func TestOverwritePrunesOnlyUneditedObsoleteSQLResources(t *testing.T) {
+	for _, edited := range []bool{false, true} {
+		t.Run(fmt.Sprintf("edited=%t", edited), func(t *testing.T) {
+			dir := t.TempDir()
+			plan := &Plan{ComponentName: "Records", RouterDest: "router.go", Input: generatedContract("Input", "input.go"), Output: generatedContract("Output", "output.go"), Resources: &ResourcePlan{Namespace: "queries", Destination: "resources.go", Files: []EmittedFile{{Path: "old.sql", Content: "SELECT 1"}, {Path: "current.sql", Content: "SELECT 2"}}}}
+			if _, err := EmitScaffold(dir, plan); err != nil {
+				t.Fatal(err)
+			}
+			if edited {
+				if err := os.WriteFile(filepath.Join(dir, "old.sql"), []byte("SELECT 42"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			plan.Resources.Files = plan.Resources.Files[1:]
+			_, err := EmitScaffoldWithPolicy(dir, plan, GenerationPolicyOverwrite)
+			if edited {
+				if err == nil || !strings.Contains(err.Error(), "manually changed") {
+					t.Fatalf("edited obsolete resource removal = %v", err)
+				}
+				if _, statErr := os.Stat(filepath.Join(dir, "old.sql")); statErr != nil {
+					t.Fatalf("edited obsolete resource was removed: %v", statErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, statErr := os.Stat(filepath.Join(dir, "old.sql")); !os.IsNotExist(statErr) {
+				t.Fatalf("obsolete resource still exists: %v", statErr)
+			}
+			manifest, err := readScaffoldManifest(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if manifest.Resources == nil || len(manifest.Resources.Files) != 1 || manifest.Resources.Files[0] != "current.sql" {
+				t.Fatalf("resource manifest retained obsolete SQL: %+v", manifest.Resources)
+			}
+			if _, err := EmitScaffold(dir, plan); err != nil {
+				t.Fatalf("merge after prune: %v", err)
+			}
+		})
+	}
+}
+
 func TestCustomizedShapeBaselineSurvivesAppendAndLinkedTransition(t *testing.T) {
 	for _, oldManifest := range []bool{false, true} {
 		for _, appendField := range []bool{false, true} {

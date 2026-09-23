@@ -158,14 +158,14 @@ capabilities instead of silently broadening the authorized scope.
 The generator supplies this order. Use it to review hooks and observable behavior;
 do not implement these phases as an authored DQL program:
 
-1. Bind the component input and completed current reads. Capture immutable original presence/identity and a detached processing baseline **before** input `Init` and `InitMCP`; capture detached Previous evidence and prepare public read indexes.
+1. For a universal generated writer, start or join the managed transaction immediately before binding. Bind the component input and completed Current/auxiliary reads in that transaction. Capture immutable original presence/identity and a detached processing baseline **before** input `Init` and `InitMCP`; capture detached Previous evidence and prepare public read indexes.
 2. Run input `Init`, then `InitMCP` when MCP context is present. `InitMCP` remains supported.
 3. Prepare invocation-local dependencies and hook instances. Do not perform business initialization in dependency preparation.
 4. Run recursive `SyncPresence` against the captured processing baseline; resolve initialized identity candidates against authorized Previous, check parent scope, and prepare typed frames. Freeze established key parts and the match/missing-row decision.
 5. Run invariant-group backfill when needed, without marking hydrated fields supplied.
 6. Run entity `Init` using marker-aware setters for business changes.
 7. Run framework Go-tag and database-derived validation, then custom entity `Validate`.
-8. Begin/join the managed transaction before sequencing.
+8. The managed transaction is already active; retain it through sequencing.
 9. Reserve established IDs with the scoped sequencer and allocate stable IDs for eligible unresolved INSERT candidates, then run `AfterSequence`.
 10. Diff using the frozen resolved identity and database match/missing-row decision; produce the allowed actions without reclassifying sequenced rows.
 11. Reconcile identities and populate declared parent/self foreign keys from the allocated IDs. Run final validation over the values that will be written, with no unresolved deferred constraints. Business values must remain frozen.

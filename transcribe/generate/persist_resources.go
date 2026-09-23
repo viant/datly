@@ -30,6 +30,11 @@ func (p *scaffoldPersistence) retainResources(target, stage string, previous *sc
 			if seen[file] || strings.HasPrefix(filepath.ToSlash(file), "datly_assets/static/") {
 				continue
 			}
+			// Explicit overwrite retires obsolete generated resources. The
+			// fingerprint guard still rejects removal of hand-edited bytes.
+			if p.policy == GenerationPolicyOverwrite {
+				continue
+			}
 			relative, err := managedRelativePath(file)
 			if err != nil {
 				return nil, err
