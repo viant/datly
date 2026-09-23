@@ -46,6 +46,33 @@ func TestUniversalWriterRecognizesEarlierGraphInsertReference(t *testing.T) {
 	}
 }
 
+func TestUniversalWriterOrdersSiblingInsertBeforeForeignKeyValidation(t *testing.T) {
+	type enrollment struct {
+		ID *string `sqlx:"id,primaryKey=true"`
+	}
+	type candidate struct {
+		ID           *string `sqlx:"id,primaryKey=true"`
+		EnrollmentID *string `sqlx:"enrollment_id,refTable=enrollments,refColumn=id"`
+	}
+	enrollmentID, candidateID := "enrollment-1", "candidate-1"
+	enrollmentRecord := &Record{Table: "enrollments", EntityType: reflect.TypeFor[enrollment](), Fields: []Field{{Name: "ID", Column: "id", Index: []int{0}}}}
+	candidateRecord := &Record{Table: "candidates", EntityType: reflect.TypeFor[candidate](), Fields: []Field{{Name: "ID", Column: "id", Index: []int{0}},
+		{Name: "EnrollmentID", Column: "enrollment_id", Index: []int{1}, RefTable: "enrollments", RefColumn: "id"}}}
+	enrollmentFrame := &Frame{Entity: reflect.ValueOf(&enrollment{ID: &enrollmentID}), Record: enrollmentRecord, Action: xhandler.WriteInsert}
+	candidateFrame := &Frame{Entity: reflect.ValueOf(&candidate{ID: &candidateID, EnrollmentID: &enrollmentID}), Record: candidateRecord, Action: xhandler.WriteInsert}
+	program := &Program{frames: &MutationFrames{Rows: []*Frame{candidateFrame, enrollmentFrame}}}
+	if err := program.orderFramesByReferences(); err != nil {
+		t.Fatal(err)
+	}
+	if program.frames.Rows[0] != enrollmentFrame || program.frames.Rows[1] != candidateFrame {
+		t.Fatalf("graph order=%v", program.frames.Rows)
+	}
+	options := program.validationOptions(candidateFrame, true)
+	if len(options.SatisfiedReferences) != 1 || options.SatisfiedReferences[0].Field != "EnrollmentID" {
+		t.Fatalf("satisfied sibling reference=%+v", options.SatisfiedReferences)
+	}
+}
+
 func TestUniversalWriterTreatsIdentityOnlySparseUpdateAsNoOp(t *testing.T) {
 	id := 7
 	record := &Record{Keys: []Field{{Name: "ID"}}}

@@ -152,6 +152,12 @@ func (r *outputColumnCompiler) column(field xshape.Field, path string) (*spec.Co
 	if metadata.SelectorAlias != "" {
 		name = metadata.SelectorAlias
 		nameInferred = false
+	} else if _, projected, ok := strings.Cut(sqlTag.Column, "|"); ok && strings.TrimSpace(projected) != "" {
+		// SQLX's dual column tag retains the physical source before the pipe
+		// and the authored query projection after it. Keep both identities in
+		// the immutable output plan; do not reparse tags during execution.
+		name = strings.TrimSpace(projected)
+		nameInferred = false
 	}
 	groupable := metadata.Groupable
 	result := &spec.Column{

@@ -180,6 +180,29 @@ func TestPackageOutputPreservesCanonicalProjection(t *testing.T) {
 	}
 }
 
+func TestPackageOutputUsesProjectedSQLXAliasForCube(t *testing.T) {
+	type row struct {
+		ProgramEnrollmentID *string `sqlx:"id|program_enrollment_id,primaryKey=true" groupable:"true"`
+	}
+	type output struct {
+		Data []*row `parameter:"Data,kind=output,in=view" view:"Cube,type=row,table=program_enrollment,groupable=true"`
+	}
+	view := &spec.View{Name: "Cube", Source: &spec.ViewSource{SQL: "SELECT pe.id AS program_enrollment_id FROM program_enrollment pe"}}
+	if err := (&outputColumnCompiler{output: xshape.Linked(reflect.TypeOf(output{}))}).compile(view, "Data"); err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Columns) != 1 || view.Columns[0].Name != "program_enrollment_id" || view.Columns[0].Source != "id" || view.Columns[0].NameInferred {
+		t.Fatalf("dual SQLX metadata=%+v", view.Columns)
+	}
+	projected, err := (ViewProjection{View: view}).Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projected) != 1 || projected[0].Selector != "program_enrollment_id" {
+		t.Fatalf("cube projection=%+v", projected)
+	}
+}
+
 func TestPackageOutputExcludesCanonicalRelationHolder(t *testing.T) {
 	type row struct {
 		ID       int

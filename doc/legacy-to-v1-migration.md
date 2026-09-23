@@ -113,6 +113,15 @@ missing-row, sparse-update, deletion, and identity policy explicitly.
 8. Replace legacy callers with the generated component contract, then remove
    the old SQL service only after parity tests pass.
 
+When list and detail differ mainly by nested data, keep one authorized reader
+relation. Declare a `Fields` parameter with `QuerySelector` for that relation
+and enable `selector_fields` in its DQL projection. A list caller selects only
+its response scalars, while a detail caller leaves the selector unset to load
+the nested relation. Keep authorization evidence in the root so an authorized
+empty collection remains distinguishable from a missing or forbidden scope.
+Prove both shapes, including omitted child work, missing targets, and viewer
+permissions, with the generated runtime rather than comparing SQL text alone.
+
 Aggregates assembled from several legacy service calls should normally become
 one reader graph with related and DerivedView outputs. Do not preserve a
 service-local fan-out of raw SELECTs merely because the public response is an
@@ -172,8 +181,10 @@ evidence of an incomplete relation key or false cardinality, not a reason to
 silence the reader.
 
 When a new binding row references other new rows in the same atomic graph,
-declare those producer rows as earlier writable siblings rather than nesting
-them beneath the binding. A derived parent may project logical transient keys
+declare those producer rows as writable siblings rather than nesting them
+beneath the binding. The v1 writer orders pending inserts by their declared
+foreign-key values, so a sibling's generated field order does not have to match
+database insertion order. A derived parent may project logical transient keys
 for their typed relations while the physical foreign keys remain on the
 binding. Resolve a request-supplied transient sibling key in generated input
 `Init`, before Datly freezes Previous matching; entity `Init` is too late for
@@ -181,6 +192,17 @@ an existing child's parent-scope check. Keep the transient key non-DML and use
 generated setters only for intentional working presence. Prove first insert,
 idempotent re-import, unchanged sparse fields, and late-error rollback with a
 runtime test before replacing the legacy transaction.
+
+For an importer that must preserve operator-curated fields, compile a fresh
+generated PATCH graph for each invocation and set only importer-owned columns.
+Do not mark `status`, `created_at`, optional hints, or similar fields present
+just to satisfy an insert. In the lifecycle hook, inspect typed Previous: use
+a generated setter to supply a required value only when the row is new; for an
+existing row, carry its Previous value into the working entity without setting
+the presence marker when validation needs to see it. Otherwise a re-import can
+reset a curated status or hint even when the authored manifest did not change.
+Test insert and re-import after independently editing those fields, and assert
+the exact keyed row counts across every writable relation.
 
 ### External work between database mutations
 
@@ -285,6 +307,24 @@ managed transaction. If a connected older generator still propagates auxiliary
 status to descendants or skips the auxiliary root traversal, classify that as a
 writer/runtime version gap and preserve the legacy transaction.
 
+An auxiliary lookup with nested relations needs explicit authored Current
+authority; the generator cannot safely infer descendant Current from a
+request-keyed auxiliary parent. If several evidence rows are independently
+keyed by the request and only validate one mutation, attach them as sibling
+auxiliary relations beneath the scoped root. Project transient target keys on
+that root, resolve them in input `Init` before Current matching, and give each
+sibling its complete equality join. Keep the actual writable rows as separate
+non-auxiliary relations in the same graph. This retains one transaction while
+avoiding an unsupported inferred auxiliary lineage.
+
+For a derived auxiliary sibling that projects a target row's identity, make
+the parenthesized physical source the target table. For example, a module
+lookup may join an enrollment for scope, but `(module)` must own a projected
+module `id`; starting from `(enrollment)` can assign the lookup the wrong
+physical table and leave its generated Current without a module primary key.
+Keep the enrollment link key transient, inspect the generated view's table and
+identity tags, and prove the lookup through a runtime writer test.
+
 Keep the auxiliary scope source distinct from any writable descendant that
 targets the same physical table. If a derived auxiliary root is based on
 `(record)` and the graph also joins writable `record records`, both views share
@@ -337,13 +377,13 @@ representations of the same key still attach the child. Do not weaken the DQL
 relation or make a transient parent field physical merely to force identical Go
 pointer shapes.
 
-A sparse update may also set a foreign key to a row inserted earlier in the same
-ordered mutation graph—for example, closing an existing reservation with the ID
-of a newly inserted event. Datly recognizes that exact earlier insert, avoids a
-redundant pre-write reference lookup for only the proven update field, and leaves
-the database foreign key to enforce the value inside the managed transaction.
-This is not permission to suppress unrelated update validation or to reference a
-later or unordered insert.
+A sparse update may also set a foreign key to a row inserted in the same
+mutation graph—for example, closing an existing reservation with the ID of a
+newly inserted event. Datly orders the producer insert before its consumer,
+recognizes the exact in-graph reference, avoids a redundant pre-write lookup
+for only that proven field, and leaves the database foreign key to enforce the
+value inside the managed transaction. This does not suppress unrelated update
+validation or permit cyclic references that the database cannot insert.
 
 ## Repeatable generation with an orchestrator
 

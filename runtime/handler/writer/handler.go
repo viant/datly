@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
@@ -126,6 +127,7 @@ type Stage uint8
 
 type Frame struct {
 	Entity, Previous reflect.Value
+	ExpectedToken    reflect.Value
 	Fields           fieldSet
 	Action           xhandler.WriteAction
 	Record           *Record
@@ -331,7 +333,11 @@ func (p *Program) captureOriginal(record *Record, rows reflect.Value) error {
 		if entity.IsNil() {
 			return fmt.Errorf("writer row %d is nil", i)
 		}
-		p.original.Presence[entity.Pointer()] = originalPresence{fieldSet: suppliedFields(entity.Elem(), record.Fields), available: presenceAvailable(entity.Elem())}
+		captured := originalPresence{fieldSet: suppliedFields(entity.Elem(), record.Fields), available: presenceAvailable(entity.Elem())}
+		if record.ConcurrencyToken != nil {
+			captured.token = cloneTokenValue(entity.Elem().FieldByIndex(record.ConcurrencyToken.Index))
+		}
+		p.original.Presence[entity.Pointer()] = captured
 		for _, relation := range record.Relations {
 			if err := p.captureOriginal(relation.Child, entity.Elem().FieldByIndex(relation.Field)); err != nil {
 				return err
@@ -441,6 +447,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 				frame.Fields[name] = true
 			}
 		}
+	}
+	if err = p.orderFramesByReferences(); err != nil {
+		return err
 	}
 	if err = p.validateFrames(ctx, validator, false); err != nil {
 		return err
@@ -684,6 +693,91 @@ func (p *Program) satisfiedGraphReferences(frame *Frame) []xhandler.ValidationRe
 		}
 	}
 	return result
+}
+
+// orderFramesByReferences keeps a graph's inserts ahead of rows that refer to
+// them, including references between different root relations. Generated view
+// order alone cannot express every foreign-key dependency.
+func (p *Program) orderFramesByReferences() error {
+	if p == nil || p.frames == nil || len(p.frames.Rows) < 2 {
+		return nil
+	}
+	rows := p.frames.Rows
+	dependencies := make([]map[int]bool, len(rows))
+	index := make(map[*Frame]int, len(rows))
+	for i, frame := range rows {
+		index[frame] = i
+	}
+	for i, frame := range rows {
+		if frame == nil || frame.Record == nil || !frame.Entity.IsValid() {
+			continue
+		}
+		if frame.Parent != nil {
+			if parentIndex, ok := index[frame.Parent]; ok && parentIndex != i {
+				dependencies[i] = map[int]bool{parentIndex: true}
+			}
+		}
+		if frame.Action == xhandler.WriteDelete {
+			continue
+		}
+		current := frame.Entity.Elem()
+		for _, field := range frame.Record.Fields {
+			if field.RefTable == "" || field.RefColumn == "" {
+				continue
+			}
+			value := current.FieldByIndex(field.Index)
+			if !linkValueResolved(value) {
+				continue
+			}
+			for j, candidate := range rows {
+				if i == j || candidate == nil || candidate.Action != xhandler.WriteInsert || candidate.Record == nil ||
+					!strings.EqualFold(candidate.Record.Table, field.RefTable) || !candidate.Entity.IsValid() {
+					continue
+				}
+				for _, parentField := range candidate.Record.Fields {
+					if !strings.EqualFold(parentField.Column, field.RefColumn) {
+						continue
+					}
+					parentValue := candidate.Entity.Elem().FieldByIndex(parentField.Index)
+					if linkValueResolved(parentValue) && linkedEqual(value, parentValue) {
+						if dependencies[i] == nil {
+							dependencies[i] = map[int]bool{}
+						}
+						dependencies[i][j] = true
+					}
+					break
+				}
+			}
+		}
+	}
+	ordered := make([]*Frame, 0, len(rows))
+	visited := make([]bool, len(rows))
+	for len(ordered) < len(rows) {
+		selected := -1
+		for i := range rows {
+			if visited[i] {
+				continue
+			}
+			ready := true
+			for dependency := range dependencies[i] {
+				if !visited[dependency] {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				selected = i
+				break
+			}
+		}
+		if selected < 0 {
+			return fmt.Errorf("writer graph has cyclic insert references")
+		}
+		visited[selected] = true
+		ordered = append(ordered, rows[selected])
+	}
+	p.frames.Rows = ordered
+	return nil
 }
 
 func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validator, transactionStarted bool) error {
@@ -935,7 +1029,7 @@ func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *
 			action = xhandler.WriteDelete
 		}
 		original := p.original.Presence[entity.Pointer()]
-		frame := &Frame{Entity: entity, Previous: previous, Fields: fields, Action: action, Record: record, Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
+		frame := &Frame{Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, Action: action, Record: record, Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
 			children := entity.Elem().FieldByIndex(relation.Field)
@@ -1030,16 +1124,38 @@ func (p *Program) checkConcurrency(frame *Frame) error {
 	if field == nil || frame.Action != xhandler.WriteUpdate || !frame.Previous.IsValid() {
 		return nil
 	}
-	current := frame.Entity.Elem()
-	if !supplied(current, *field) {
+	if frame.Original == nil || !frame.Original.Has(field.Name) || !frame.ExpectedToken.IsValid() {
 		return &xhandler.Conflict{Entity: frame.Record.Path, Field: field.Name, Reason: "expected token is missing"}
 	}
-	expected := current.FieldByIndex(field.Index).Interface()
+	expected := frame.ExpectedToken.Interface()
 	actual := frame.Previous.Elem().FieldByName(field.Name)
-	if !actual.IsValid() || !reflect.DeepEqual(expected, actual.Interface()) {
+	if !actual.IsValid() || !concurrencyTokenEqual(expected, actual.Interface()) {
 		return &xhandler.Conflict{Entity: frame.Record.Path, Field: field.Name, Reason: "expected token differs from Previous"}
 	}
 	return nil
+}
+
+func concurrencyTokenEqual(expected, actual any) bool {
+	left, right := reflect.ValueOf(expected), reflect.ValueOf(actual)
+	for left.IsValid() && left.Kind() == reflect.Pointer {
+		if left.IsNil() {
+			return !right.IsValid() || right.Kind() == reflect.Pointer && right.IsNil()
+		}
+		left = left.Elem()
+	}
+	for right.IsValid() && right.Kind() == reflect.Pointer {
+		if right.IsNil() {
+			return false
+		}
+		right = right.Elem()
+	}
+	if !left.IsValid() || !right.IsValid() || left.Type() != right.Type() {
+		return false
+	}
+	if left.Type() == reflect.TypeOf(time.Time{}) {
+		return left.Interface().(time.Time).Equal(right.Interface().(time.Time))
+	}
+	return reflect.DeepEqual(left.Interface(), right.Interface())
 }
 
 func Compile(component *spec.Component, inputType, outputType reflect.Type, operation string) (*Metadata, error) {
@@ -1451,9 +1567,22 @@ func (s fieldSet) Has(name string) bool { return s[name] }
 type originalPresence struct {
 	fieldSet
 	available bool
+	token     reflect.Value
 }
 
 func (p originalPresence) Available() bool { return p.available }
+
+// A lifecycle may change a token through a setter (or mutate a supplied
+// pointer in place). Keep the caller's original scalar value for both writer
+// validation passes instead of rereading the working entity after Init.
+func cloneTokenValue(value reflect.Value) reflect.Value {
+	if !value.IsValid() || value.Kind() != reflect.Pointer || value.IsNil() {
+		return value
+	}
+	copy := reflect.New(value.Type().Elem())
+	copy.Elem().Set(value.Elem())
+	return copy
+}
 
 func suppliedFields(entity reflect.Value, fields []Field) fieldSet {
 	result := fieldSet{}

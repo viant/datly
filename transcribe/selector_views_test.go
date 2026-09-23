@@ -35,6 +35,20 @@ SELECT r.id FROM records r`,
 	require.ErrorContains(t, err, `query selector Fields: unknown view "metaOrder"`)
 }
 
+func TestCompileGoOnlySelectorWaitsForLinkedNestedView(t *testing.T) {
+	selector := &spec.QuerySelectorBinding{View: "programs", Property: spec.SelectorPropertyFields}
+	result, err := NewCompiler().Compile(context.Background(), &Source{
+		Scope: "example.com/app/library", Name: "Read",
+		PackageComponent: &spec.Component{
+			Key:  spec.Key{Kind: spec.KindComponent, Scope: "example.com/app/library", Name: "Read"},
+			Name: "Read", RootView: &spec.View{Name: "Read", Namespace: "scope"},
+			Parameters: []*spec.Parameter{{Name: "Fields", QuerySelector: selector}},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "programs", result.Component.Parameters[0].QuerySelector.View)
+}
+
 func TestResolveQuerySelectorViewGraph(t *testing.T) {
 	for _, tc := range []struct {
 		name, selector, childName, childAlias, want, errorPart string

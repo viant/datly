@@ -100,11 +100,19 @@ SELECT id,name FROM records`
 				t.Fatal("unpublished file read")
 			}
 			tools, err := native.ListTools(context.Background(), nil)
-			if err != nil || len(tools.Tools) != 1 {
-				t.Fatal(err)
+			if err != nil {
+				t.Fatalf("tools inventory: %+v %v", tools, err)
 			}
-			if documented && (tools.Tools[0].Description == nil || *tools.Tools[0].Description != "Jointly embedded records") {
-				t.Fatalf("embedded documentation missing from tool: %+v", tools.Tools[0])
+			byName := map[string]schema.Tool{}
+			for _, tool := range tools.Tools {
+				byName[tool.Name] = tool
+			}
+			if len(tools.Tools) != 3 || len(byName) != 3 || byName["records.read"].Name == "" || byName["skills/get"].Name == "" || byName["skills/list"].Name == "" {
+				t.Fatalf("business and standard skills tools: %+v", tools.Tools)
+			}
+			business := byName["records.read"]
+			if documented && (business.Description == nil || *business.Description != "Jointly embedded records") {
+				t.Fatalf("embedded documentation missing from tool: %+v", business)
 			}
 			result, err := native.CallTool(context.Background(), &schema.CallToolRequestParams{Name: "records.read", Arguments: map[string]any{}})
 			if err != nil || result.IsError != nil && *result.IsError {
