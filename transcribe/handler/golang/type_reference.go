@@ -20,6 +20,9 @@ func (l *lowerer) typeReference(ref spec.TypeRef) (ast.Expr, error) {
 	if ref.Cardinality == spec.CardinalityMany && !strings.HasPrefix(name, "[]") {
 		name = "[]" + name
 	}
+	if ref.SlicePointer {
+		name = "*" + name
+	}
 	resolver := xshape.Resolver{Rewriter: func(source string) (string, error) {
 		reference, err := (xshape.Resolver{}).Reference(source)
 		if err != nil {

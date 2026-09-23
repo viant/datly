@@ -17,6 +17,7 @@ func TestTargetTypeReferenceUsesCanonicalImports(t *testing.T) {
 		{"pointer normalized", spec.TypeRef{Name: "*int64", Pointer: true}, "*int64"},
 		{"pointer map", spec.TypeRef{Name: "map[string]int", Pointer: true}, "*map[string]int"},
 		{"collection metadata", spec.TypeRef{Name: "Row", Package: "example.com/model", Pointer: true, Cardinality: spec.CardinalityMany}, "[]*model.Row"},
+		{"pointer to collection", spec.TypeRef{Name: "Row", Package: "example.com/model", SlicePointer: true, Cardinality: spec.CardinalityMany}, "*[]model.Row"},
 		{"foreign qualified nested", spec.TypeRef{Name: "map[string][]example.com/model.Row"}, "map[string][]model.Row"},
 		{"local", spec.TypeRef{Name: "Row", Package: "example.com/local"}, "Row"},
 	} {

@@ -36,6 +36,22 @@ func TestCurrentProjectionCompilesCanonicalAssignments(t *testing.T) {
 		{name: "different type", errorText: "cannot project", change: func(c *spec.Component) { c.Views[0].Columns[1].Type.Name = "int" }},
 		{name: "different package", errorText: "cannot project", change: func(c *spec.Component) { c.Views[0].Columns[1].Type.Package = "example.com/other" }},
 		{name: "different cardinality", errorText: "cannot project", change: func(c *spec.Component) { c.Views[0].Columns[1].Type.Cardinality = spec.CardinalityMany }},
+		{name: "matching slice pointers", fields: 2, current: "Name", conversion: plan.LinkDirect, change: func(c *spec.Component) {
+			c.RootView.Columns[1].Type = spec.TypeRef{Name: "string", Cardinality: spec.CardinalityMany, SlicePointer: true}
+			c.Views[0].Columns[1].Type = c.RootView.Columns[1].Type
+		}},
+		{name: "different slice pointers", errorText: "cannot project", change: func(c *spec.Component) {
+			c.RootView.Columns[1].Type = spec.TypeRef{Name: "string", Cardinality: spec.CardinalityMany, SlicePointer: true}
+			c.Views[0].Columns[1].Type = spec.TypeRef{Name: "string", Cardinality: spec.CardinalityMany}
+		}},
+		{name: "different element pointers", errorText: "cannot project", change: func(c *spec.Component) {
+			c.RootView.Columns[1].Type = spec.TypeRef{Name: "string", Cardinality: spec.CardinalityMany, Pointer: true}
+			c.Views[0].Columns[1].Type = spec.TypeRef{Name: "string", Cardinality: spec.CardinalityMany}
+		}},
+		{name: "different pointer placement", errorText: "cannot project", change: func(c *spec.Component) {
+			c.RootView.Columns[1].Type = spec.TypeRef{Name: "string", Cardinality: spec.CardinalityMany, SlicePointer: true}
+			c.Views[0].Columns[1].Type = spec.TypeRef{Name: "string", Cardinality: spec.CardinalityMany, Pointer: true}
+		}},
 		{name: "duplicate destination", errorText: "duplicate entity", change: func(c *spec.Component) {
 			c.RootView.Columns = append(c.RootView.Columns, c.RootView.Columns[1].Clone())
 		}},

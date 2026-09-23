@@ -493,10 +493,13 @@ func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) []F
 			ensureImport(plan, alias, packagePath)
 			typeName = alias + "." + typeName
 		}
+		if effectiveType.Pointer && (column.ExplicitType || nullablePointerType(typeName)) {
+			typeName = "*" + typeName
+		}
 		if effectiveType.Cardinality == spec.CardinalityMany {
 			typeName = "[]" + typeName
 		}
-		if effectiveType.Pointer && nullablePointerType(typeName) {
+		if effectiveType.SlicePointer {
 			typeName = "*" + typeName
 		}
 		source := strings.TrimSpace(column.Source)

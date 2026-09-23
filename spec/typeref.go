@@ -45,12 +45,15 @@ func (c *Cardinality) UnmarshalJSON(data []byte) error {
 }
 
 type TypeRef struct {
-	Package     string      `json:"package,omitempty"`
-	Name        string      `json:"name"`
+	Package string `json:"package,omitempty"`
+	Name    string `json:"name"`
+	// Pointer applies to the named element, inside a slice when Cardinality is many.
 	Pointer     bool        `json:"pointer,omitempty"`
 	Cardinality Cardinality `json:"cardinality,omitempty"`
+	// SlicePointer distinguishes *[]T from []*T (Pointer with Cardinality many).
+	SlicePointer bool `json:"slicePointer,omitempty"`
 }
 
 func (t TypeRef) IsZero() bool {
-	return t.Package == "" && t.Name == "" && !t.Pointer && t.Cardinality == ""
+	return t.Package == "" && t.Name == "" && !t.Pointer && t.Cardinality == "" && !t.SlicePointer
 }

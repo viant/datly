@@ -37,7 +37,9 @@ func (p *currentProjection) compile() ([]plan.CurrentField, error) {
 			return nil, fmt.Errorf("current view %q has duplicate entity field %q (sources %q and %q)", p.current.CanonicalName(), to.Field, prior, to.Source)
 		}
 		used[to.Field] = to.Source
-		if !sameType(from.Type, to.Type) || (from.Type.Cardinality == spec.CardinalityMany) != (to.Type.Cardinality == spec.CardinalityMany) {
+		collectionShapeMismatch := from.Type.Cardinality == spec.CardinalityMany &&
+			(from.Type.Pointer != to.Type.Pointer || from.Type.SlicePointer != to.Type.SlicePointer)
+		if !sameType(from.Type, to.Type) || (from.Type.Cardinality == spec.CardinalityMany) != (to.Type.Cardinality == spec.CardinalityMany) || collectionShapeMismatch {
 			return nil, fmt.Errorf("current view %q field %q type %+v cannot project into entity field %q type %+v", p.current.CanonicalName(), from.Field, from.Type, to.Field, to.Type)
 		}
 		result = append(result, plan.CurrentField{Current: from, Entity: to, Conversion: linkConversion(from.Type, to.Type)})
