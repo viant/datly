@@ -7,6 +7,7 @@ const (
 	ViewControlUseCache             = "use_cache"
 	ViewControlCacheWarmup          = "cache_warmup"
 	ViewControlAllowNulls           = "allow_nulls"
+	ViewControlInMemory             = "in_memory"
 	ViewControlGroupable            = "groupable"
 	ViewControlGrouping             = "grouping_enabled"
 	ViewControlAllowedOrder         = "allowed_order_by_columns"

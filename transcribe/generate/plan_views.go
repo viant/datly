@@ -584,7 +584,7 @@ func appendViewTagsWithMatch(fieldTag string, view *spec.View, match string) (st
 		PublishParent:    view.PublishParent, RelationalConcurrency: view.RelationalConcurrency,
 		Partitioning: view.Partitioning.Clone(), Selector: view.Selector.Clone(),
 		AllowNulls: cloneBoolValue(view.AllowNulls), Groupable: cloneBoolValue(view.Groupable)}
-	if source := view.Source; source != nil {
+	if source := view.RuntimeSource(); source != nil {
 		metadata.Table = source.Table
 		metadata.URI = source.URI
 		if source.Bindings != nil {
@@ -618,13 +618,14 @@ func appendViewTagsWithMatch(fieldTag string, view *spec.View, match string) (st
 }
 
 func viewSQLValue(view *spec.View) string {
-	if view == nil || view.Source == nil {
+	source := view.RuntimeSource()
+	if source == nil {
 		return ""
 	}
-	if strings.TrimSpace(view.Source.SQL) != "" {
-		return (tag.SQL{Text: view.Source.SQL}).Value()
+	if strings.TrimSpace(source.SQL) != "" {
+		return (tag.SQL{Text: source.SQL}).Value()
 	}
-	if uri := strings.TrimSpace(view.Source.URI); uri != "" {
+	if uri := strings.TrimSpace(source.URI); uri != "" {
 		return (tag.SQL{URI: uri}).Value()
 	}
 	return ""

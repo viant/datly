@@ -1,0 +1,41 @@
+package parents
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	xhandler "github.com/viant/xdatly/handler"
+)
+
+var (
+	_ xhandler.OnRelationer = (*ParentRow)(nil)
+	_ xhandler.OnRelationer = (*SignalRow)(nil)
+)
+
+func (r *ParentRow) OnFetch(context.Context) error {
+	if r.Id == 1 {
+		r.Signals = []*SignalRow{
+			{ParentId: r.Id, FeatureType: "a", FeatureValue: "shared"},
+			{ParentId: r.Id, FeatureType: "b", FeatureValue: "shared"},
+		}
+	}
+	return nil
+}
+
+func (r *SignalRow) OnRelation(context.Context) {
+	if r.Perf == nil {
+		panic(fmt.Sprintf("missing lookup for %s/%s", r.FeatureType, r.FeatureValue))
+	}
+	r.Score = r.Perf.Score
+	r.Perf = nil
+}
+
+func (r *ParentRow) OnRelation(context.Context) {
+	values := make([]string, 0, len(r.Signals))
+	for _, signal := range r.Signals {
+		values = append(values, fmt.Sprintf("%s/%s=%d", signal.FeatureType, signal.FeatureValue, signal.Score))
+	}
+	r.Summary = strings.Join(values, ",")
+	r.Signals = nil
+}

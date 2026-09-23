@@ -68,7 +68,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 		spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 		spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
 		spec.ViewControlType, spec.ViewControlDest, spec.ViewControlBatchSize, spec.ViewControlBatchConcurrency,
-		spec.ViewControlMatch, spec.ViewControlPartitioner, spec.ViewControlPublish,
+		spec.ViewControlMatch, spec.ViewControlPartitioner, spec.ViewControlPublish, spec.ViewControlInMemory,
 		spec.ViewControlConcurrency, spec.ViewControlEntityHooks,
 		spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
 		spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage,
@@ -79,7 +79,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	}
 	minimum, maximum := 2, 2
 	switch name {
-	case spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping, spec.ViewControlPublish:
+	case spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping, spec.ViewControlPublish, spec.ViewControlInMemory:
 		minimum, maximum = 1, 1
 	case spec.ViewControlSelfRef:
 		minimum, maximum = 4, 4
@@ -170,7 +170,7 @@ func containsViewDirective(source node.Node) bool {
 			spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 			spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
 			spec.ViewControlType, spec.ViewControlDest, spec.ViewControlBatchSize, spec.ViewControlBatchConcurrency,
-			spec.ViewControlMatch, spec.ViewControlPartitioner, spec.ViewControlPublish,
+			spec.ViewControlMatch, spec.ViewControlPartitioner, spec.ViewControlPublish, spec.ViewControlInMemory,
 			spec.ViewControlConcurrency, spec.ViewControlEntityHooks,
 			spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
 			spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage,
@@ -341,6 +341,11 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			target.Source = &spec.ViewSource{}
 		}
 		switch directive.name {
+		case spec.ViewControlInMemory:
+			if findDirectiveRelation(root, target) == nil {
+				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("in_memory target %q must be a related view", directive.target)}
+			}
+			target.InMemory = true
 		case spec.ViewControlOrderBy:
 			if target.Source.Controls == nil {
 				target.Source.Controls = &spec.ViewControls{}

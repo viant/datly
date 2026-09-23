@@ -5,9 +5,37 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/stretchr/testify/require"
 	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/data"
 	"github.com/viant/datly/spec"
 )
+
+func TestResolveInMemoryDiscoverySource(t *testing.T) {
+	child := &spec.View{Name: "signals", InMemory: true,
+		Source: &spec.ViewSource{URI: "missing-discovery.sql", Table: "placeholder"},
+		Relations: []*spec.Relation{{Name: "perf", Holder: "Perf", View: &spec.View{
+			Name: "perf", Source: &spec.ViewSource{URI: "perf.sql"},
+		}}},
+	}
+	root := &spec.View{Name: "parents", Source: &spec.ViewSource{SQL: "SELECT id FROM parents"},
+		Relations: []*spec.Relation{{Name: "signals", Holder: "Signals", View: child}},
+	}
+	runtimeView := data.FromView(nil, root)
+	err := resolveViewResources(runtimeView, fstest.MapFS{"perf.sql": {Data: []byte("SELECT feature_type, feature_value FROM performance")}})
+	require.NoError(t, err)
+	resolved := runtimeView.Relations[0].Of.View
+	require.Empty(t, resolved.Spec.Source.SQL)
+	require.Empty(t, resolved.Spec.Source.Table)
+	require.Empty(t, resolved.Spec.Source.URI)
+	require.Equal(t, "SELECT feature_type, feature_value FROM performance", resolved.Relations[0].Of.View.Spec.Source.SQL)
+	require.Equal(t, "missing-discovery.sql", child.Source.URI, "runtime lowering must not destroy discovery metadata")
+}
+
+func TestResolveInMemoryRootRejected(t *testing.T) {
+	root := data.FromView(nil, &spec.View{Name: "root", InMemory: true})
+	require.ErrorContains(t, resolveViewResources(root, nil), "requires a parent relation")
+}
 
 func TestResolveViewResourcesExpandsInlineAndNestedURISources(t *testing.T) {
 	type detail struct {

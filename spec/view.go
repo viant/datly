@@ -12,6 +12,9 @@ type View struct {
 	// Auxiliary is generation-only mutation intent. Reads and business data
 	// remain part of the canonical view graph; runtime data.View does not own it.
 	Auxiliary bool `json:"auxiliary,omitempty"`
+	// InMemory marks a child populated by its parent hook. Source is retained
+	// for column discovery only; runtime traverses the existing holder rows.
+	InMemory bool `json:"inMemory,omitempty"`
 	// TypeName and Dest retain authored package-generation choices. Runtime
 	// view resolution deliberately ignores both fields.
 	TypeName string `json:"typeName,omitempty"`
@@ -41,6 +44,20 @@ func (v *View) CanonicalName() string {
 		return name
 	}
 	return strings.TrimSpace(v.Key.Name)
+}
+
+// RuntimeSource excludes discovery-only SQL without mutating authored metadata.
+func (v *View) RuntimeSource() *ViewSource {
+	if v == nil {
+		return nil
+	}
+	if !v.InMemory || v.Source == nil {
+		return v.Source
+	}
+	result := v.Source.Clone()
+	result.SQL, result.URI, result.Table = "", "", ""
+	result.Embeds = nil
+	return result
 }
 
 // Identity returns the canonical metadata identity of an independent view.

@@ -10,6 +10,9 @@ import (
 )
 
 func resolveViewResources(root *data.View, resources fs.FS) error {
+	if root != nil && root.Spec.InMemory {
+		return fmt.Errorf("in_memory view %q requires a parent relation", root.Spec.Name)
+	}
 	visited := map[*data.View]bool{}
 	var resolve func(*data.View) error
 	resolve = func(view *data.View) error {
@@ -17,6 +20,7 @@ func resolveViewResources(root *data.View, resources fs.FS) error {
 			return nil
 		}
 		visited[view] = true
+		view.Spec.Source = view.Spec.RuntimeSource()
 		if view.Spec.Source != nil && (len(view.Spec.Source.Embeds) > 0 ||
 			(strings.TrimSpace(view.Spec.Source.SQL) == "" && strings.TrimSpace(view.Spec.Source.URI) != "")) {
 			if resources == nil {

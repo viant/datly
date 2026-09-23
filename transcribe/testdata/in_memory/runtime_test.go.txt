@@ -1,0 +1,100 @@
+package parents
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/bootstrap"
+	gateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/internal/testharness/sqlite"
+	druntime "github.com/viant/datly/runtime"
+	dsql "github.com/viant/datly/sql"
+	"github.com/viant/sqlx/testutil/sqlfault"
+)
+
+func TestGeneratedInMemoryExecution(t *testing.T) {
+	ctx := context.Background()
+	h := sqlite.New(t)
+	require.NoError(t, h.ExecStatements(ctx,
+		"CREATE TABLE parents(id INTEGER, summary TEXT)",
+		"INSERT INTO parents VALUES(1,''),(2,'')",
+		"CREATE TABLE lookup_values(feature_type TEXT, feature_value TEXT, score INTEGER)",
+		"INSERT INTO lookup_values VALUES('a','shared',11),('b','shared',22),('a','decoy',99),('c','shared',88)"))
+	var lookups atomic.Int32
+	db := h.FaultDB(t, func(_ context.Context, call sqlfault.Call) error {
+		if strings.Contains(call.SQL, "discovery_only") {
+			return fmt.Errorf("intermediate discovery SQL executed: %s", call.SQL)
+		}
+		if call.Phase == "query" && strings.Contains(call.SQL, "lookup_values") {
+			if !strings.Contains(strings.ToUpper(call.SQL), "WHERE") ||
+				!strings.Contains(call.SQL, "feature_type") || !strings.Contains(call.SQL, "feature_value") ||
+				!strings.Contains(call.SQL, "?") {
+				return fmt.Errorf("nested lookup lacks bound key predicates: %s", call.SQL)
+			}
+			lookups.Add(1)
+		}
+		return nil
+	})
+	resources := resource.New()
+	const pkg = "github.com/viant/datly/inmemoryfixture/parents"
+	for namespace, fs := range bootstrap.LinkedResources(nil, pkg) {
+		require.NoError(t, resources.Register(namespace, fs))
+	}
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	sources, err := bootstrap.DiscoverComponentsFromPackages(ctx, filepath.Dir(cwd), []string{pkg}, nil)
+	require.NoError(t, err)
+	require.Len(t, sources, 1)
+	component, err := sources[0].Resolve(reflect.TypeFor[ParentsInput](), reflect.TypeFor[ParentsOutput]())
+	require.NoError(t, err)
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{
+		Component: component, InputType: reflect.TypeFor[ParentsInput](), OutputType: reflect.TypeFor[ParentsOutput](), Resources: resources,
+	})
+	require.NoError(t, err)
+	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db}})
+	require.NoError(t, err)
+	registered, err := artifact.Registration(druntime.RegisteredComponent{Reader: reader})
+	require.NoError(t, err)
+	rt, err := druntime.NewRuntime([]*druntime.RegisteredComponent{registered})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, rt.Shutdown(context.Background())) })
+	handler := gateway.NewHandler(rt, nil, "test")
+	for _, tc := range []struct {
+		name, path, summary string
+		lookups             int32
+	}{
+		{"populated", "/parents?id=1", "a/shared=11,b/shared=22", 1},
+		{"empty", "/parents?id=2", "", 0},
+		{"excluded", "/parents?id=1&fields=id", "", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lookups.Store(0)
+			res := httptest.NewRecorder()
+			handler.ServeHTTP(res, httptest.NewRequest("GET", tc.path, nil))
+			require.Equal(t, 200, res.Code, res.Body.String())
+			require.Equal(t, tc.lookups, lookups.Load())
+			var actual map[string]any
+			require.NoError(t, json.Unmarshal(res.Body.Bytes(), &actual))
+			rows := actual["data"].([]any)
+			require.Len(t, rows, 1)
+			row := rows[0].(map[string]any)
+			if tc.name == "excluded" {
+				require.Len(t, row, 1)
+				require.Contains(t, row, "Id")
+			} else {
+				require.Equal(t, tc.summary, row["Summary"])
+				require.Empty(t, row["Signals"])
+			}
+		})
+	}
+}

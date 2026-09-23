@@ -434,6 +434,7 @@ the entire projection.
 | null/grouping | allow_nulls(alias), groupable(alias), grouping_enabled(alias) |
 | order allowlist | allowed_order_by_columns(alias,'column,alias:column,...') |
 | cardinality | cardinality(alias,'One'|'Many') |
+| hook-populated relation | in_memory(alias); related view only |
 | self relation | self_ref(alias,'Holder','ChildKey','ParentKey') |
 | row type/file | type(alias,'GoType'), dest(alias,'file.go') |
 | batching | batch_size(alias,integer), batch_concurrency(alias,integer) |
@@ -449,14 +450,38 @@ the entire projection.
 | selector criteria methods | selector_sql_methods(view,'[{"name":"lower","args":["string"]}]') |
 
 Numeric control arguments are unquoted, nonnegative integer literals. set_limit(alias,0) removes the view limit; it does not erase an explicitly authored SQL LIMIT. Controls are consumed as metadata rather than sent to the DB. Every listed
-control has exactly 2 arguments except the four flags (`allow_nulls`, `groupable`,
-`grouping_enabled`, `publish_parent`: exactly 1), `self_ref` (exactly 4) and
+control has exactly 2 arguments except the five flags (`allow_nulls`, `groupable`,
+`grouping_enabled`, `publish_parent`, `in_memory`: exactly 1), `self_ref` (exactly 4) and
 `set_partitioner` (2 or 3). String values are quoted; only connector/cache/warmup
 names also accept a bare identifier. All controls are singleton per target except
 `allowed_order_by_columns`, whose repeats must not create ambiguous mappings.
 `groupable` and `grouping_enabled` share one singleton slot. `tag` and `invariant`
 are separate column annotations, exactly 2 arguments each; rich CAST is a
 column/type pair in CAST syntax.
+
+`in_memory(childAlias)` declares a relation whose rows are supplied by a
+handwritten parent `OnFetch` hook, rather than fetched from SQL. Its joined SQL
+still describes the row shape for transcription and database column discovery.
+Generation preserves the row type, `view`/`on` tags, cardinality, and nested
+relations, but emits no executable SQL, table, or URI for that holder. Nested
+SQL-backed relations still execute against the hook-populated rows and their
+actual join keys. Child `OnRelation` hooks run before the parent's `OnRelation`.
+Empty holders and relations excluded by projection do not execute nested lookups.
+Place hooks beside generated files; regeneration does not generate or replace
+their implementation. Literal SELECTs are not implicitly in-memory.
+When changing an already generated SQL-backed holder to `in_memory`, use the
+ownership-checked overwrite generation policy: default merge rejects conflicting
+execution tags. Subsequent regeneration supports either policy.
+
+~~~~sql
+SELECT p.*, signals.*, perf.*, in_memory(signals), cardinality(perf,'One')
+FROM parents p
+JOIN (SELECT 0 AS parent_id, '' AS feature_type, '' AS feature_value) signals
+  ON p.id = signals.parent_id
+JOIN performance perf
+  ON signals.feature_type = perf.feature_type
+ AND signals.feature_value = perf.feature_value
+~~~~
 
 Selector permission booleans are unquoted. `QuerySelector(view)` binds a request
 field to the named view; it does not itself grant permission. Selector policy
