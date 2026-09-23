@@ -55,6 +55,9 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 		ctx = context.Background()
 	}
 	if i.authorize != nil {
+		// The hook may bind trusted, server-owned providers for this exact
+		// target; the same context must reach the component so they apply.
+		ctx, _ = exec.CaptureScopeBinding(ctx)
 		if err := i.authorize(ctx, request.Target); err != nil {
 			return nil, jsonrpc.NewInvalidRequest("MCP tool authorization denied", nil)
 		}
