@@ -159,6 +159,7 @@ const mutationMarkersRuntime = `
  if err!=nil{t.Fatalf("explicit nested delete order: %v",err)}
  var count int;if err=db.DB.QueryRow("SELECT COUNT(*) FROM ORDERS WHERE ID=2").Scan(&count);err!=nil||count!=0{t.Fatal("nested deletion did not execute",err)}
  // Init authors advancement independently; comparison still uses original zero.
+ var beforeAdvance int;if err=db.DB.QueryRow("SELECT VERSION FROM ORDERS WHERE ID=1").Scan(&beforeAdvance);err!=nil||beforeAdvance!=0{t.Fatalf("unexpected token before Init: version=%d err=%v",beforeAdvance,err)}
  advanceVersion=true
  _,err=invoke(` + "`" + `{"Data":[{"id":1,"version":0}]}` + "`" + `);if err!=nil{t.Fatalf("captured expected token lost during Init: %v",err)}
  advanceVersion=false

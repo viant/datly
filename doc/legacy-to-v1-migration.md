@@ -182,6 +182,17 @@ generated setters only for intentional working presence. Prove first insert,
 idempotent re-import, unchanged sparse fields, and late-error rollback with a
 runtime test before replacing the legacy transaction.
 
+For an importer that must preserve operator-curated fields, compile a fresh
+generated PATCH graph for each invocation and set only importer-owned columns.
+Do not mark `status`, `created_at`, optional hints, or similar fields present
+just to satisfy an insert. In the lifecycle hook, inspect typed Previous: use
+a generated setter to supply a required value only when the row is new; for an
+existing row, carry its Previous value into the working entity without setting
+the presence marker when validation needs to see it. Otherwise a re-import can
+reset a curated status or hint even when the authored manifest did not change.
+Test insert and re-import after independently editing those fields, and assert
+the exact keyed row counts across every writable relation.
+
 ### External work between database mutations
 
 If a request calls an external provider, a durable lease can be its own generated
