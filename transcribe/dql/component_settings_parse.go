@@ -14,6 +14,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	defer func() { err = wrapDirectiveError(err, active) }()
 	ret = &componentSettings{}
 	constantNames := map[string]string{}
+	var internalDeclared bool
 	for _, block := range blocks {
 		if block.kind != directiveKindSetting && !isCubeSetting(block) {
 			continue
@@ -21,9 +22,21 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 		active = block
 		name, args, tail, ok := parseDirectiveCall(block.body)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("invalid setting: expected a directive call")
 		}
 		switch {
+		case strings.EqualFold(name, "route"), strings.EqualFold(name, "api_key"):
+			// Route settings are validated by parseRouteDirective.
+		case strings.EqualFold(name, "internal"):
+			if internalDeclared || len(args) != 1 || tail != "" {
+				return nil, fmt.Errorf("internal requires one boolean value, once, without modifiers")
+			}
+			value := strings.TrimSpace(trimQuote(args[0]))
+			if value != "true" && value != "false" {
+				return nil, fmt.Errorf("internal requires true or false")
+			}
+			internalDeclared = true
+			ret.Internal = value == "true"
 		case strings.EqualFold(name, "mcp_folder"), strings.EqualFold(name, "mcp_skill_folder"):
 			if len(args) != 3 || tail != "" {
 				return nil, fmt.Errorf("mcp_folder requires namespace, root and URI prefix")
@@ -377,6 +390,8 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			}
 			ret.Const[constantName] = trimQuote(args[1])
 			ret.constSpans[canonicalName] = SourceSpan{Start: block.start, End: block.end}
+		default:
+			return nil, fmt.Errorf("unsupported setting %q", name)
 		}
 	}
 	if err := ret.Generation.ValidateFilePrefix(); err != nil {
@@ -385,12 +400,32 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	if ret != nil && ret.MCPOnly && ret.MCP == nil {
 		return nil, fmt.Errorf("mcpOnly requires an explicit mcp tool")
 	}
+	if ret.Internal && (ret.MCP != nil || ret.MCPOnly) {
+		return nil, fmt.Errorf("internal(true) cannot expose MCP; use mcpOnly(true) for an MCP-only route")
+	}
+	if ret.Internal && ret.Static != nil {
+		return nil, fmt.Errorf("internal(true) requires a component route, not static content")
+	}
+	if ret.Internal && ret.Report != nil {
+		// Derived tools default to exposed; a private reader must not acquire
+		// a public MCP entry indirectly through cube or compose generation.
+		if ret.Report.MCPTool != nil && *ret.Report.MCPTool {
+			return nil, fmt.Errorf("internal(true) cannot expose a report MCP tool")
+		}
+		ret.Report.MCPTool = new(bool)
+		if compose := ret.Report.Compose; compose != nil {
+			if compose.MCPTool != nil && *compose.MCPTool {
+				return nil, fmt.Errorf("internal(true) cannot expose a compose MCP tool")
+			}
+			compose.MCPTool = new(bool)
+		}
+	}
 	if ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
 		ret.MCP == nil && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&
 		ret.Format == "" && ret.DateFormat == "" && ret.CaseFormat == "" && ret.Output == nil &&
-		len(ret.Const) == 0 && ret.IgnoreEmptyQueryParameters == nil && !ret.MCPOnly {
+		len(ret.Const) == 0 && ret.IgnoreEmptyQueryParameters == nil && !ret.MCPOnly && !ret.Internal {
 		return nil, nil
 	}
 	if ret.Cache != nil {

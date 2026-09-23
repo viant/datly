@@ -1,0 +1,166 @@
+package records
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/bootstrap"
+	bootstrapindex "github.com/viant/datly/bootstrap/index"
+	dexec "github.com/viant/datly/exec"
+	gateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/mcp"
+	druntime "github.com/viant/datly/runtime"
+	rhandler "github.com/viant/datly/runtime/handler"
+	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
+)
+
+type privateLoader struct{ registration *druntime.RegisteredComponent }
+
+func (l privateLoader) LoadComponent(_ context.Context, key spec.Key) (*druntime.RegisteredComponent, error) {
+	if key != l.registration.Component.Key {
+		return nil, errors.New("unexpected component")
+	}
+	return l.registration, nil
+}
+
+func TestGeneratedPrivateReader(t *testing.T) {
+	ctx := context.Background()
+	const pkg = "github.com/viant/datly/privatereaderfixture/records"
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	resources := resource.New()
+	holder := reflect.New(PrivateReadDatlyType()).Interface()
+	linkedResources := bootstrap.LinkedResources([]any{holder}, pkg)
+	require.NotEmpty(t, linkedResources)
+	for namespace, fs := range linkedResources {
+		require.NoError(t, resources.Register(namespace, fs))
+	}
+	linked, err := bootstrap.ReflectPackages([]string{pkg})
+	require.NoError(t, err)
+	require.Len(t, linked.Components, 1)
+	component, err := linked.Components[0].Resolve(reflect.TypeFor[PrivateInput](), reflect.TypeFor[PrivateOutput]())
+	require.NoError(t, err)
+	require.True(t, component.Routes[0].Internal)
+	snapshot, err := (bootstrapindex.Builder{Config: bootstrapindex.Config{BaseDir: filepath.Dir(cwd), Include: []string{pkg}}}).Build(ctx)
+	require.NoError(t, err)
+	entries := snapshot.Entries()
+	require.Len(t, entries, 1)
+	require.True(t, entries[0].Component.Routes[0].Internal)
+	for _, mode := range []string{"eager", "indexed"} {
+		t.Run(mode, func(t *testing.T) {
+			db := sqlite.New(t)
+			require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER, name TEXT)", "INSERT INTO records VALUES(1,'private')"))
+			c := component.Clone()
+			c.Settings.Cache.Location = t.TempDir()
+			artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: c,
+				InputType: reflect.TypeFor[PrivateInput](), OutputType: reflect.TypeFor[PrivateOutput](), Resources: resources})
+			require.NoError(t, err)
+			reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db.DB}})
+			require.NoError(t, err)
+			registration, err := artifact.Registration(druntime.RegisteredComponent{Reader: reader})
+			require.NoError(t, err)
+			target := spec.RouteRef{Method: "GET", Path: "/api/private/read"}
+			parent, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{
+				Component: &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "Public"},
+					Routes:   []*spec.Route{{Method: "GET", Path: "/api/public", APIKeyHeader: "X-Reader-Key", APIKeyValue: "secret"}},
+					Settings: &spec.Settings{WarmupTarget: &target}},
+				InputType: reflect.TypeFor[struct{}](), OutputType: reflect.TypeFor[struct{}](),
+			})
+			require.NoError(t, err)
+			parentCalls := 0
+			parentRegistration := &druntime.RegisteredComponent{Component: parent.Component, Input: parent.Input,
+				OutputType: reflect.TypeFor[PrivateOutput](),
+				Handler: rhandler.HandlerFunc(func(ctx context.Context, inv rhandler.Invocation) (any, error) {
+					parentCalls++
+					value, found, err := inv.Binder.Lookup(ctx, dexec.ComponentInvokerKey)
+					require.NoError(t, err)
+					require.True(t, found)
+					return value.(dexec.ComponentInvoker).InvokeComponent(ctx, dexec.ComponentRequest{
+						Target: dexec.ComponentTarget{Component: artifact.Component.Key, Route: target}, Input: &PrivateInput{},
+					})
+				}),
+			}
+			var rt *druntime.Runtime
+			config := mcp.Config{}
+			if mode == "indexed" {
+				indexed := []*spec.Component{entries[0].Component, parent.Component}
+				// Warmable components are preloaded before HTTP warmup publication.
+				rt, err = druntime.NewIndexedRuntime(indexed, []*druntime.RegisteredComponent{registration, parentRegistration}, privateLoader{registration})
+				config.Indexed, config.Loader = indexed, rt
+			} else {
+				config.Components = []*druntime.RegisteredComponent{registration, parentRegistration}
+				rt, err = druntime.NewRuntime(config.Components)
+			}
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, rt.Shutdown(context.Background())) })
+			require.False(t, rt.ExposesComponent(component.Key))
+			require.False(t, rt.ExposesMCPComponent(component.Key))
+			config.Invoker = rt
+			service, err := mcp.New(config)
+			require.NoError(t, err)
+			require.NoError(t, service.PrepareTools(ctx))
+			_, exposed := service.Registry().ToolRegistry.Get("PrivateRead")
+			require.False(t, exposed)
+			warmupConfig := gateway.Config{APIPrefix: "/api", Meta: gateway.Meta{CacheWarmURI: "/admin/warm"},
+				Warmup: &gateway.WarmupConfig{Lifetime: gateway.NewWarmupLifetime(ctx), Timeout: time.Minute,
+					AdminHeaders: []string{"X-Admin"}, Completed: func(_ gateway.WarmupResult, err error) {},
+					Authorize: func(_ context.Context, request *http.Request, target dexec.ComponentTarget) error {
+						if request.Header.Get("X-Admin") != "yes" || target.Route.Path != "/api/private/read" {
+							return errors.New("denied")
+						}
+						return nil
+					}},
+			}
+			handler, err := warmupConfig.NewHandler(rt, nil, "test")
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, handler.Shutdown(context.Background())) })
+			for _, tc := range []struct {
+				method, path, credential, admin string
+				status                          int
+			}{
+				{"GET", "/api/private/read", "", "", 404},
+				{"GET", "/api/private/read", "secret", "", 404},
+				{"POST", "/admin/warm/public", "", "yes", 403},
+				{"POST", "/admin/warm/public", "secret", "", 403},
+				{"POST", "/admin/warm/public", "secret", "yes", 200},
+			} {
+				request := httptest.NewRequest(tc.method, tc.path, nil)
+				request.Header.Set("X-Reader-Key", tc.credential)
+				request.Header.Set("X-Admin", tc.admin)
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, request)
+				require.Equal(t, tc.status, response.Code, response.Body.String())
+				if tc.method == "POST" {
+					var result gateway.WarmupResult
+					require.NoError(t, json.Unmarshal(response.Body.Bytes(), &result))
+					if tc.status == 200 {
+						require.Equal(t, "ok", result.Status)
+						require.Positive(t, result.Groups)
+					} else {
+						require.Zero(t, result.Groups)
+					}
+				}
+			}
+			require.Zero(t, parentCalls, "warmup must not execute enrichment")
+			request := httptest.NewRequest("GET", "/api/public", nil)
+			request.Header.Set("X-Reader-Key", "secret")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			require.Equal(t, 200, response.Code, response.Body.String())
+			require.Contains(t, response.Body.String(), `"Name":"private"`)
+			require.Equal(t, 1, parentCalls)
+		})
+	}
+}

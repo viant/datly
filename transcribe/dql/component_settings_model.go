@@ -17,6 +17,7 @@ type componentSettings struct {
 	Generation                 spec.GenerationSettings
 	MCP                        *spec.MCPExposure
 	MCPOnly                    bool
+	Internal                   bool
 	InputType                  string
 	OutputType                 string
 	JSONMarshalType            string

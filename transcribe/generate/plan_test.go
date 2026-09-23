@@ -1050,7 +1050,7 @@ func generatedComponentContractTags(componentSource []byte) ([]dtag.Component, e
 
 func TestResolvePlanPreservesAllCanonicalRoutes(t *testing.T) {
 	component := &spec.Component{Name: "Orders", Routes: []*spec.Route{
-		{Name: "List", Method: "get", Path: "/orders", Marshaller: "json", Handler: "HandleOrders", APIKeyHeader: "X-Key", APIKeyValue: " read-key ", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "orders.list"}}},
+		{Name: "List", Method: "get", Path: "/orders", Internal: true, Marshaller: "json", Handler: "HandleOrders", APIKeyHeader: "X-Key", APIKeyValue: " read-key ", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "orders.list"}}},
 		{Name: "Create", Method: "POST", Path: "/orders", Marshaller: "tabular", Handler: "HandleOrders", APIKeyHeader: "X-Key", APIKeyValue: "write-key"},
 	}}
 	plan := testPlan(t, component)
@@ -1058,7 +1058,7 @@ func TestResolvePlanPreservesAllCanonicalRoutes(t *testing.T) {
 		t.Fatalf("routes = %+v, handler = %q", plan.Routes, plan.Handler)
 	}
 	want := []RoutePlan{
-		{Name: "List", Method: "GET", Path: "/orders", Marshaller: "json", APIKeyHeader: "X-Key", APIKeyValue: " read-key ", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "orders.list"}}},
+		{Name: "List", Method: "GET", Path: "/orders", Internal: true, Marshaller: "json", APIKeyHeader: "X-Key", APIKeyValue: " read-key ", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "orders.list"}}},
 		{Name: "Create", Method: "POST", Path: "/orders", Marshaller: "tabular", APIKeyHeader: "X-Key", APIKeyValue: "write-key", MCP: []*spec.MCPExposure{}},
 	}
 	if !reflect.DeepEqual(plan.Routes, want) {
@@ -1095,7 +1095,7 @@ func TestComponentFileEmitsAllCanonicalRoutes(t *testing.T) {
 	plan := &Plan{
 		ComponentName: "Orders", Handler: "HandleOrders",
 		Routes: []RoutePlan{
-			{Name: "List", Method: "GET", Path: "/orders", Marshaller: "json", APIKeyHeader: "X-Key", APIKeyValue: "read-key"},
+			{Name: "List", Method: "GET", Path: "/orders", Internal: true, Marshaller: "json", APIKeyHeader: "X-Key", APIKeyValue: "read-key", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "orders.list"}}},
 			{Name: "Create", Method: "POST", Path: "/orders", Marshaller: "tabular", APIKeyHeader: "X-Key", APIKeyValue: "write-key"},
 		},
 		Input: generatedContract("OrdersInput", "input.go"), Output: generatedContract("OrdersOutput", "output.go"),
@@ -1114,6 +1114,9 @@ func TestComponentFileEmitsAllCanonicalRoutes(t *testing.T) {
 	if tags[0].RouteName != "List" || tags[0].APIKeyValue != "read-key" || tags[0].Handler != "HandleOrders" ||
 		tags[1].RouteName != "Create" || tags[1].APIKeyValue != "write-key" || tags[1].Handler != "HandleOrders" {
 		t.Fatalf("generated tags = %+v", tags)
+	}
+	if !tags[0].Internal || len(tags[0].MCP) != 1 || tags[1].Internal {
+		t.Fatalf("generated visibility = %+v", tags)
 	}
 }
 

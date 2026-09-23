@@ -78,6 +78,7 @@ func (p *Plan) HolderName() string {
 // holder field. Handler identity remains component-wide on Plan.
 type RoutePlan struct {
 	Name         string
+	Internal     bool
 	Path         string
 	Method       string
 	Marshaller   string
@@ -351,7 +352,8 @@ func resolveRoutes(routes []*spec.Route) ([]RoutePlan, string, error) {
 		}
 		cloned := route.Clone()
 		result = append(result, RoutePlan{
-			Name: strings.TrimSpace(route.Name), Path: path, Method: method,
+			Internal: route.Internal,
+			Name:     strings.TrimSpace(route.Name), Path: path, Method: method,
 			Marshaller: strings.TrimSpace(route.Marshaller), APIKeyHeader: strings.TrimSpace(route.APIKeyHeader),
 			APIKeyValue: route.APIKeyValue,
 			MCP:         cloned.MCP,
