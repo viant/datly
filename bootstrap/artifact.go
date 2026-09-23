@@ -89,6 +89,15 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Reader components resolve selectors against the completed view index in
+	// the reader compiler below. A handler-owned output never builds that index
+	// and links no output views, so its spec graph is final: reject unknown or
+	// ambiguous selector targets here, before the component can be registered.
+	if input.HandlerOwnedOutput {
+		if err = ResolveQuerySelectorViews(component, true); err != nil {
+			return nil, err
+		}
+	}
 	if err = input.Const.Validate(component, c.lookupType); err != nil {
 		return nil, err
 	}
