@@ -448,6 +448,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			}
 		}
 	}
+	if err = p.orderFramesByReferences(); err != nil {
+		return err
+	}
 	if err = p.validateFrames(ctx, validator, false); err != nil {
 		return err
 	}
@@ -690,6 +693,91 @@ func (p *Program) satisfiedGraphReferences(frame *Frame) []xhandler.ValidationRe
 		}
 	}
 	return result
+}
+
+// orderFramesByReferences keeps a graph's inserts ahead of rows that refer to
+// them, including references between different root relations. Generated view
+// order alone cannot express every foreign-key dependency.
+func (p *Program) orderFramesByReferences() error {
+	if p == nil || p.frames == nil || len(p.frames.Rows) < 2 {
+		return nil
+	}
+	rows := p.frames.Rows
+	dependencies := make([]map[int]bool, len(rows))
+	index := make(map[*Frame]int, len(rows))
+	for i, frame := range rows {
+		index[frame] = i
+	}
+	for i, frame := range rows {
+		if frame == nil || frame.Record == nil || !frame.Entity.IsValid() {
+			continue
+		}
+		if frame.Parent != nil {
+			if parentIndex, ok := index[frame.Parent]; ok && parentIndex != i {
+				dependencies[i] = map[int]bool{parentIndex: true}
+			}
+		}
+		if frame.Action == xhandler.WriteDelete {
+			continue
+		}
+		current := frame.Entity.Elem()
+		for _, field := range frame.Record.Fields {
+			if field.RefTable == "" || field.RefColumn == "" {
+				continue
+			}
+			value := current.FieldByIndex(field.Index)
+			if !linkValueResolved(value) {
+				continue
+			}
+			for j, candidate := range rows {
+				if i == j || candidate == nil || candidate.Action != xhandler.WriteInsert || candidate.Record == nil ||
+					!strings.EqualFold(candidate.Record.Table, field.RefTable) || !candidate.Entity.IsValid() {
+					continue
+				}
+				for _, parentField := range candidate.Record.Fields {
+					if !strings.EqualFold(parentField.Column, field.RefColumn) {
+						continue
+					}
+					parentValue := candidate.Entity.Elem().FieldByIndex(parentField.Index)
+					if linkValueResolved(parentValue) && linkedEqual(value, parentValue) {
+						if dependencies[i] == nil {
+							dependencies[i] = map[int]bool{}
+						}
+						dependencies[i][j] = true
+					}
+					break
+				}
+			}
+		}
+	}
+	ordered := make([]*Frame, 0, len(rows))
+	visited := make([]bool, len(rows))
+	for len(ordered) < len(rows) {
+		selected := -1
+		for i := range rows {
+			if visited[i] {
+				continue
+			}
+			ready := true
+			for dependency := range dependencies[i] {
+				if !visited[dependency] {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				selected = i
+				break
+			}
+		}
+		if selected < 0 {
+			return fmt.Errorf("writer graph has cyclic insert references")
+		}
+		visited[selected] = true
+		ordered = append(ordered, rows[selected])
+	}
+	p.frames.Rows = ordered
+	return nil
 }
 
 func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validator, transactionStarted bool) error {
