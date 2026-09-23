@@ -15,6 +15,7 @@ import (
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/application"
 	"github.com/viant/datly/bootstrap/connector"
+	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/httpserver"
 	mcpserver "github.com/viant/datly/mcp/server"
 	"github.com/viant/datly/standalone/config"
@@ -231,6 +232,16 @@ func (s *Server) WaitReady(ctx context.Context) ([]string, error) {
 // Metadata snapshots the published application generation, not source files.
 func (s *Server) Metadata(ctx context.Context) (*application.Metadata, error) {
 	return s.manager.Metadata(ctx)
+}
+
+// InvokeComponent runs a linked component in the currently published
+// generation without starting an HTTP listener. Reload must publish the first
+// generation before an in-process caller invokes a component.
+func (s *Server) InvokeComponent(ctx context.Context, request dexec.ComponentRequest) (any, error) {
+	if s == nil || s.manager == nil {
+		return nil, fmt.Errorf("standalone server is required")
+	}
+	return s.manager.InvokeComponent(ctx, request)
 }
 
 func (s *Server) prepare(ctx context.Context) error {
