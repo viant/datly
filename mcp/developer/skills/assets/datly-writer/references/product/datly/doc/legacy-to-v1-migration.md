@@ -315,6 +315,14 @@ sibling its complete equality join. Keep the actual writable rows as separate
 non-auxiliary relations in the same graph. This retains one transaction while
 avoiding an unsupported inferred auxiliary lineage.
 
+For a derived auxiliary sibling that projects a target row's identity, make
+the parenthesized physical source the target table. For example, a module
+lookup may join an enrollment for scope, but `(module)` must own a projected
+module `id`; starting from `(enrollment)` can assign the lookup the wrong
+physical table and leave its generated Current without a module primary key.
+Keep the enrollment link key transient, inspect the generated view's table and
+identity tags, and prove the lookup through a runtime writer test.
+
 Keep the auxiliary scope source distinct from any writable descendant that
 targets the same physical table. If a derived auxiliary root is based on
 `(record)` and the graph also joins writable `record records`, both views share
