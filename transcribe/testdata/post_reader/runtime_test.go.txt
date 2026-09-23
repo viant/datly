@@ -1,0 +1,110 @@
+package profiles
+
+import (
+	"context"
+	"encoding/json"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/bootstrap"
+	dexec "github.com/viant/datly/exec"
+	gateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/internal/testharness/sqlite"
+	druntime "github.com/viant/datly/runtime"
+	rhandler "github.com/viant/datly/runtime/handler"
+	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
+)
+
+func TestGeneratedPostReaderExecution(t *testing.T) {
+	ctx := context.Background()
+	db := sqlite.New(t)
+	require.NoError(t, db.ExecStatements(ctx,
+		"CREATE TABLE profiles(id INTEGER, category TEXT, name TEXT)",
+		"INSERT INTO profiles VALUES (1,'a','keep'),(2,'a','omit'),(3,'b','other')",
+		"PRAGMA query_only = ON"))
+	resources := resource.New()
+	const pkg = "github.com/viant/datly/postreaderfixture/profiles"
+	for namespace, fs := range bootstrap.LinkedResources(nil, pkg) {
+		require.NoError(t, resources.Register(namespace, fs))
+	}
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	sources, err := bootstrap.DiscoverComponentsFromPackages(ctx, filepath.Dir(cwd), []string{pkg}, nil)
+	require.NoError(t, err)
+	require.Len(t, sources, 1)
+	component, err := sources[0].Resolve(reflect.TypeFor[ProfilesInput](), reflect.TypeFor[ProfilesOutput]())
+	require.NoError(t, err)
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{
+		Component: component,
+		InputType: reflect.TypeFor[ProfilesInput](), OutputType: reflect.TypeFor[ProfilesOutput](), Resources: resources,
+	})
+	require.NoError(t, err)
+	require.Len(t, artifact.Component.Routes, 1)
+	require.Equal(t, "POST", artifact.Component.Routes[0].Method)
+	require.Equal(t, "/profiles/read", artifact.Component.Routes[0].Path)
+	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db.DB}})
+	require.NoError(t, err)
+	registered, err := artifact.Registration(druntime.RegisteredComponent{Reader: reader})
+	require.NoError(t, err)
+	parent, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{
+		Component: &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "Parent"}, Routes: []*spec.Route{{Method: "GET", Path: "/parent"}}},
+		InputType: reflect.TypeFor[struct{}](), OutputType: reflect.TypeFor[struct{}](),
+	})
+	require.NoError(t, err)
+	parentRegistration := &druntime.RegisteredComponent{
+		Component: parent.Component, Input: parent.Input, OutputType: reflect.TypeFor[ProfilesOutput](),
+		Handler: rhandler.HandlerFunc(func(ctx context.Context, inv rhandler.Invocation) (any, error) {
+			value, found, err := inv.Binder.Lookup(ctx, dexec.ComponentInvokerKey)
+			require.NoError(t, err)
+			require.True(t, found)
+			return value.(dexec.ComponentInvoker).InvokeComponent(ctx, dexec.ComponentRequest{
+				Target: dexec.ComponentTarget{Component: artifact.Component.Key, Route: spec.RouteRef{Method: "POST", Path: "/profiles/read"}},
+				Input:  &ProfilesInput{Inclusion: "b", Exclusion: "omit"},
+			})
+		}),
+	}
+	rt, err := druntime.NewRuntime([]*druntime.RegisteredComponent{registered, parentRegistration})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, rt.Shutdown(context.Background())) })
+	handler := gateway.NewHandler(rt, nil, "test")
+	for _, tc := range []struct {
+		name, method, path, body string
+		id                       float64
+		fields                   int
+	}{
+		{"full", "POST", "/profiles/read", "{\"inclusion\":\"a\",\"exclusion\":\"omit\"}", 1, 2},
+		{"independent body fields", "POST", "/profiles/read", "{\"inclusion\":\"a\",\"exclusion\":\"keep\"}", 2, 2},
+		{"projected", "POST", "/profiles/read?fields=id", "{\"inclusion\":\"a\",\"exclusion\":\"omit\"}", 1, 1},
+		{"child", "GET", "/parent", "", 3, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			res := httptest.NewRecorder()
+			handler.ServeHTTP(res, req)
+			require.Equal(t, 200, res.Code, res.Body.String())
+			var actual map[string]any
+			require.NoError(t, json.Unmarshal(res.Body.Bytes(), &actual))
+			require.Equal(t, "ok", actual["status"])
+			require.Contains(t, actual, "metrics")
+			rows := actual["data"].([]any)
+			require.Len(t, rows, 1)
+			row := rows[0].(map[string]any)
+			require.Len(t, row, tc.fields)
+			require.Equal(t, tc.id, row["Id"])
+		})
+	}
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, httptest.NewRequest("GET", "/profiles/read", nil))
+	require.Equal(t, 405, res.Code)
+	var count int
+	require.NoError(t, db.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM profiles").Scan(&count))
+	require.Equal(t, 3, count)
+}

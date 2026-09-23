@@ -191,7 +191,7 @@ func TestGeneratorPreservesDQLAuthority(t *testing.T) {
 	}
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
-	_, err := (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}})
+	_, err := (Generator{Operation: "post"}).Generate(ctx, GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}})
 	if err == nil || !strings.Contains(err.Error(), "conflicts with authored route") {
 		t.Fatalf("route conflict=%v", err)
 	}

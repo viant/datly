@@ -114,6 +114,14 @@ Use `datly transcribe patch`, `datly transcribe get`, `datly transcribe post`, o
 default output. The command derives the required request and previous-state
 contracts from the authored graph.
 
+The operation specifies generation intent, not the reader's HTTP method.
+Use `transcribe get` (or `Generator{Operation: "get"}`) for a read-only component,
+including one authored with `$route('/targeting/read', 'POST')` and independent
+body inputs. The generated reader retains that POST route and its input bindings.
+`post`, `put`, and `patch` continue to request mutation generation and require
+compatible authored route methods; SELECT-shaped DQL alone does not distinguish
+a reader from a mutation's record model.
+
 ## Imported types, field tags and SQL macros
 
 Use full module/package identities and declared import aliases. Rich projections

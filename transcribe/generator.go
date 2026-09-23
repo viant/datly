@@ -20,6 +20,8 @@ import (
 // canonical handler. Transcribe remains the lower-level authored-contract path.
 // Destination is only the project root; DQL and package metadata own artifacts.
 type Generator struct {
+	// Operation selects reader generation (get) or mutation generation
+	// (post/put/patch). Reader generation preserves the authored HTTP method.
 	Operation          string
 	Language           HandlerTarget
 	EphemeralOwnership bool
@@ -187,7 +189,7 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		return nil, fmt.Errorf("unsupported transcribe language %q", language)
 	}
 	for _, route := range compiled.Component.Routes {
-		if route != nil && route.Method != "" && !strings.EqualFold(route.Method, operation) {
+		if operation != "get" && route != nil && route.Method != "" && !strings.EqualFold(route.Method, operation) {
 			return nil, fmt.Errorf("transcribe operation %q conflicts with authored route method %q", operation, route.Method)
 		}
 	}
