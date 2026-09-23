@@ -305,6 +305,16 @@ managed transaction. If a connected older generator still propagates auxiliary
 status to descendants or skips the auxiliary root traversal, classify that as a
 writer/runtime version gap and preserve the legacy transaction.
 
+An auxiliary lookup with nested relations needs explicit authored Current
+authority; the generator cannot safely infer descendant Current from a
+request-keyed auxiliary parent. If several evidence rows are independently
+keyed by the request and only validate one mutation, attach them as sibling
+auxiliary relations beneath the scoped root. Project transient target keys on
+that root, resolve them in input `Init` before Current matching, and give each
+sibling its complete equality join. Keep the actual writable rows as separate
+non-auxiliary relations in the same graph. This retains one transaction while
+avoiding an unsupported inferred auxiliary lineage.
+
 Keep the auxiliary scope source distinct from any writable descendant that
 targets the same physical table. If a derived auxiliary root is based on
 `(record)` and the graph also joins writable `record records`, both views share
