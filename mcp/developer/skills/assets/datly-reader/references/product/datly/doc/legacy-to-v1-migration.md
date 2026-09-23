@@ -113,6 +113,15 @@ missing-row, sparse-update, deletion, and identity policy explicitly.
 8. Replace legacy callers with the generated component contract, then remove
    the old SQL service only after parity tests pass.
 
+When list and detail differ mainly by nested data, keep one authorized reader
+relation. Declare a `Fields` parameter with `QuerySelector` for that relation
+and enable `selector_fields` in its DQL projection. A list caller selects only
+its response scalars, while a detail caller leaves the selector unset to load
+the nested relation. Keep authorization evidence in the root so an authorized
+empty collection remains distinguishable from a missing or forbidden scope.
+Prove both shapes, including omitted child work, missing targets, and viewer
+permissions, with the generated runtime rather than comparing SQL text alone.
+
 Aggregates assembled from several legacy service calls should normally become
 one reader graph with related and DerivedView outputs. Do not preserve a
 service-local fan-out of raw SELECTs merely because the public response is an
