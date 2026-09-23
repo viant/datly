@@ -92,9 +92,18 @@ func (c *serviceCompiler) components() ([]*registry.RegisteredComponent, error) 
 		return nil, fmt.Errorf("MCP component invoker is required")
 	}
 	result := append([]*registry.RegisteredComponent(nil), c.config.Components...)
-	for _, registered := range result {
+	for i, registered := range result {
 		if registered == nil || registered.Component == nil || registered.Input == nil {
 			return nil, fmt.Errorf("MCP registered component and input contract are required")
+		}
+		if registered.Output == nil {
+			plan, err := (output.Compiler{}).Compile(output.CompileInput{Component: registered.Component, Type: registered.OutputType})
+			if err != nil {
+				return nil, fmt.Errorf("compile MCP output for %s: %w", registered.Component.Key.String(), err)
+			}
+			copy := *registered
+			copy.Output = plan
+			result[i] = &copy
 		}
 	}
 	sort.SliceStable(result, func(i, j int) bool {
@@ -165,7 +174,7 @@ func (c *serviceCompiler) compileRoute(result *compiledPlans, toolCompiler *tool
 			if err != nil {
 				return err
 			}
-			plan, compileErr := toolCompiler.Compile(tool.Input{Fields: fields, Example: registered.Documentation.Operation(route.Path, documentation.Annotation{Example: registered.Component.Example}).Example, TransportReady: registered.Output != nil && registered.Output.TransportReady(), Documentation: registered.Documentation, Component: registered.Component.Key, Exposure: exposure, Contract: contract, OutputType: registered.OutputType})
+			plan, compileErr := toolCompiler.Compile(tool.Input{Fields: fields, Example: registered.Documentation.Operation(route.Path, documentation.Annotation{Example: registered.Component.Example}).Example, TransportReady: registered.Output != nil && registered.Output.TransportReady(), Documentation: registered.Documentation, Component: registered.Component.Key, Exposure: exposure, Contract: contract, OutputType: registered.OutputType, Output: registered.Output})
 			if compileErr != nil {
 				return compileErr
 			}
@@ -193,15 +202,7 @@ func (c *serviceCompiler) publish(catalog *Catalog, policy *authorization.Policy
 	protocolRegistry := mcpserver.NewRegistry()
 	outputs := make(map[string]*output.Plan, len(components))
 	for _, registered := range components {
-		plan := registered.Output
-		if plan == nil {
-			var err error
-			plan, err = (output.Compiler{}).Compile(output.CompileInput{Component: registered.Component, Type: registered.OutputType})
-			if err != nil {
-				return nil, fmt.Errorf("compile MCP output for %s: %w", registered.Component.Key.String(), err)
-			}
-		}
-		outputs[registered.Component.Key.String()] = plan
+		outputs[registered.Component.Key.String()] = registered.Output
 	}
 	componentInvoker := invocation.New(invocation.Config{Invoker: c.config.Invoker, Client: c.config.Client, Authorize: c.config.AuthorizeTool, Output: func(target exec.ComponentTarget) *output.Plan {
 		return outputs[target.Component.String()]

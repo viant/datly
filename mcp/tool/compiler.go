@@ -1,6 +1,8 @@
 package tool
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	documentation "github.com/viant/datly/documentation"
 	"reflect"
@@ -10,6 +12,7 @@ import (
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/exec"
 	mcpinput "github.com/viant/datly/mcp/input"
+	"github.com/viant/datly/runtime/output"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
@@ -27,6 +30,8 @@ type Input struct {
 	// OutputType is the execution result shape. MCP output schemas are only
 	// emitted for object-shaped structuredContent, as required by the protocol.
 	OutputType reflect.Type
+	// Output is the same compiled presentation plan used for MCP result encoding.
+	Output *output.Plan
 }
 
 type fieldCompiler func(registry.InputField, reflect.StructField) (Argument, bool, error)
@@ -180,7 +185,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			metadata["datly/httpSchemas"] = input.Documentation.Schemas()
 		}
 	}
-	outputSchema, outputErr := outputContractSchema(input.OutputType)
+	outputSchema, outputErr := outputContractSchema(input.OutputType, input.Output)
 	if outputErr != nil {
 		return nil, fmt.Errorf("compile MCP tool %q output schema: %w", name, outputErr)
 	}
@@ -191,20 +196,37 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 	}, nil
 }
 
-func outputContractSchema(source reflect.Type) (*schema.ToolOutputSchema, error) {
-	if source == nil {
+func outputContractSchema(source reflect.Type, plan *output.Plan) (*schema.ToolOutputSchema, error) {
+	if source == nil && plan == nil {
 		return nil, nil
 	}
-	for source.Kind() == reflect.Pointer {
-		source = source.Elem()
+	if plan == nil {
+		var err error
+		plan, err = (output.Compiler{}).Compile(output.CompileInput{Type: source})
+		if err != nil {
+			return nil, err
+		}
+	}
+	document, err := plan.JSONSchema()
+	if errors.Is(err, output.ErrSchemaUnavailable) {
+		// Output schemas are optional. Never advertise an invented shape for
+		// opaque encoders or colliding wire names, nor block existing execution.
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	// A non-object result is transported as text by the MCP invoker and cannot
 	// truthfully be advertised as structuredContent.
-	if source.Kind() != reflect.Struct {
+	if document["type"] != "object" {
 		return nil, nil
 	}
+	data, err := json.Marshal(document)
+	if err != nil {
+		return nil, err
+	}
 	result := &schema.ToolOutputSchema{}
-	if err := result.Load(reflect.New(source).Interface()); err != nil {
+	if err := json.Unmarshal(data, result); err != nil {
 		return nil, err
 	}
 	return result, nil
