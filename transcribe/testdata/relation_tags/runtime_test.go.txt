@@ -1,0 +1,158 @@
+package parents
+
+import (
+	"context"
+	"encoding/json"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/bootstrap"
+	gateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/mcp"
+	druntime "github.com/viant/datly/runtime"
+	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
+	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/sqlx/testutil/sqlfault"
+)
+
+type holderLoader struct {
+	load func(context.Context) (*druntime.RegisteredComponent, error)
+}
+
+func (l holderLoader) LoadComponent(ctx context.Context, _ spec.Key) (*druntime.RegisteredComponent, error) {
+	return l.load(ctx)
+}
+
+func TestHiddenRelationHTTPMCP(t *testing.T) {
+	for _, mode := range []string{"eager", "indexed"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx := context.Background()
+			h := sqlite.New(t)
+			require.NoError(t, h.ExecStatements(ctx,
+				"CREATE TABLE parents(id INTEGER, name TEXT)", "INSERT INTO parents VALUES(1,'parent'),(2,'empty')",
+				"CREATE TABLE timeline(parent_id INTEGER, value INTEGER)", "INSERT INTO timeline VALUES(1,11),(1,22),(9,999)",
+				"CREATE TABLE summaries(parent_id INTEGER, value INTEGER)", "INSERT INTO summaries VALUES(1,7),(9,999)"))
+			var childReads atomic.Int32
+			db := h.FaultDB(t, func(_ context.Context, call sqlfault.Call) error {
+				if call.Phase == "query" && (strings.Contains(call.SQL, "FROM timeline") || strings.Contains(call.SQL, "FROM summaries")) {
+					childReads.Add(1)
+				}
+				return nil
+			})
+			const pkg = "github.com/viant/datly/relationtagsfixture/parents"
+			resources := resource.New()
+			for namespace, fs := range bootstrap.LinkedResources(nil, pkg) {
+				require.NoError(t, resources.Register(namespace, fs))
+			}
+			cwd, err := os.Getwd()
+			require.NoError(t, err)
+			sources, err := bootstrap.DiscoverComponentsFromPackages(ctx, filepath.Dir(cwd), []string{pkg}, nil)
+			require.NoError(t, err)
+			require.Len(t, sources, 1)
+			component, err := sources[0].Resolve(reflect.TypeFor[ParentsInput](), reflect.TypeFor[ParentsOutput]())
+			require.NoError(t, err)
+			loader := holderLoader{load: func(ctx context.Context) (*druntime.RegisteredComponent, error) {
+				artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component,
+					InputType: reflect.TypeFor[ParentsInput](), OutputType: reflect.TypeFor[ParentsOutput](), Resources: resources})
+				if err != nil {
+					return nil, err
+				}
+				reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db}})
+				if err != nil {
+					return nil, err
+				}
+				return artifact.Registration(druntime.RegisteredComponent{Reader: reader})
+			}}
+			var rt *druntime.Runtime
+			config := mcp.Config{}
+			if mode == "indexed" {
+				rt, err = druntime.NewIndexedRuntime([]*spec.Component{component}, nil, loader)
+				config.Indexed, config.Loader = []*spec.Component{component}, rt
+			} else {
+				registered, loadErr := loader.load(ctx)
+				require.NoError(t, loadErr)
+				config.Components = []*druntime.RegisteredComponent{registered}
+				rt, err = druntime.NewRuntime(config.Components)
+			}
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, rt.Shutdown(context.Background())) })
+			config.Invoker = rt
+			service, err := mcp.New(config)
+			require.NoError(t, err)
+			require.NoError(t, service.PrepareTool(ctx, "Parents"))
+			tool, ok := service.Registry().ToolRegistry.Get("Parents")
+			require.True(t, ok)
+			require.NotNil(t, tool.Metadata.OutputSchema)
+			encodedSchema, err := json.Marshal(tool.Metadata.OutputSchema)
+			require.NoError(t, err)
+			for _, hidden := range []string{"privateTimeline", "privateSummary", "PrivateTimeline", "PrivateSummary"} {
+				require.NotContains(t, string(encodedSchema), `"`+hidden+`"`)
+			}
+			http := gateway.NewHandler(rt, nil, "test")
+			for _, tc := range []struct {
+				name            string
+				id              int
+				fields          []string
+				computed, reads int
+			}{
+				{"populated", 1, nil, 40, 2},
+				{"empty", 2, nil, 0, 2},
+				{"projected enrichment", 1, []string{"id", "computed", "PrivateTimeline", "PrivateSummary"}, 40, 2},
+				{"unselected relations", 1, []string{"id"}, 0, 0},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					args := map[string]any{"id": tc.id}
+					query := url.Values{"id": {jsonNumber(tc.id)}}
+					if tc.fields != nil {
+						args["fields"] = tc.fields
+						query["fields"] = tc.fields
+					}
+					childReads.Store(0)
+					res := httptest.NewRecorder()
+					http.ServeHTTP(res, httptest.NewRequest("GET", "/parents?"+query.Encode(), nil))
+					require.Equal(t, 200, res.Code, res.Body.String())
+					require.EqualValues(t, tc.reads, childReads.Load())
+					assertHiddenRow(t, res.Body.Bytes(), tc.computed, tc.name == "unselected relations")
+					childReads.Store(0)
+					result, rpcErr := tool.Handler(ctx, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "Parents", Arguments: args}})
+					require.Nil(t, rpcErr)
+					require.True(t, result.IsError == nil || !*result.IsError)
+					require.EqualValues(t, tc.reads, childReads.Load())
+					encoded, err := json.Marshal(result.StructuredContent)
+					require.NoError(t, err)
+					assertHiddenRow(t, encoded, tc.computed, tc.name == "unselected relations")
+				})
+			}
+		})
+	}
+}
+
+func jsonNumber(v int) string { b, _ := json.Marshal(v); return string(b) }
+
+func assertHiddenRow(t *testing.T, data []byte, computed int, idOnly bool) {
+	t.Helper()
+	var result struct {
+		Data []map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(data, &result))
+	require.Len(t, result.Data, 1)
+	row := result.Data[0]
+	for _, name := range []string{"privateTimeline", "privateSummary", "PrivateTimeline", "PrivateSummary"} {
+		require.NotContains(t, row, name)
+	}
+	if idOnly {
+		require.Len(t, row, 1)
+	} else {
+		require.EqualValues(t, computed, row["computed"])
+	}
+}

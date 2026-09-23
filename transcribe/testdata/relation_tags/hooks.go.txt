@@ -1,0 +1,13 @@
+package parents
+
+import "context"
+
+func (r *ParentRow) OnRelation(context.Context) {
+	for _, row := range r.PrivateTimeline {
+		r.Computed += row.Value
+	}
+	if r.PrivateSummary != nil {
+		r.Computed += r.PrivateSummary.Value
+	}
+	// Deliberately retain populated holders: tags, not clearing values, hide them.
+}

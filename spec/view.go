@@ -97,6 +97,8 @@ const (
 // view. A DerivedView uses the derived relation kind, not a separate view slot
 // or lifecycle. Counts and aggregates are examples, not a separate model.
 type Relation struct {
+	// Tag contains authored Go tags for the relation holder, not child columns.
+	Tag             string          `json:"tag,omitempty"`
 	Name            string          `json:"name,omitempty"`
 	Kind            RelationKind    `json:"kind,omitempty"`
 	Holder          string          `json:"holder,omitempty"`

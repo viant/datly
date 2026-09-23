@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/tagly/tags"
 )
 
 type viewPlanner struct {
@@ -548,14 +549,25 @@ func (p *viewPlanner) relationField(relation *spec.Relation) (Field, error) {
 	if err != nil {
 		return Field{}, fmt.Errorf("format generated relation %q on tag: %w", relation.Name, err)
 	}
-	fieldTag, err := appendRelationViewTags("", relation)
+	holderTags, err := tags.Parse(relation.Tag)
+	if err != nil {
+		return Field{}, fmt.Errorf("generated relation %q holder tags: %w", relation.Name, err)
+	}
+	// Execution metadata is compiled from the relation graph, never overridden
+	// by presentation annotations on its holder.
+	for _, key := range []string{tag.ViewName, tag.SQLName, tag.RelationName} {
+		if holderTags.Lookup(key) != nil {
+			return Field{}, fmt.Errorf("generated relation %q holder tag %q conflicts with canonical relation metadata", relation.Name, key)
+		}
+	}
+	fieldTag, err := appendRelationViewTags(relation.Tag, relation)
 	if err != nil {
 		return Field{}, fmt.Errorf("format generated relation %q view tag: %w", relation.Name, err)
 	}
 	if onValue != "" {
 		fieldTag = appendStructTag(fieldTag, tag.RelationName, onValue)
 	}
-	if format := text.NewCaseFormat(p.plan.Settings.CaseFormat); format != text.CaseFormatUndefined {
+	if format := text.NewCaseFormat(p.plan.Settings.CaseFormat); format != text.CaseFormatUndefined && !hasStructTag(fieldTag, "json") {
 		fieldTag = appendStructTag(fieldTag, "json", text.DetectCaseFormat(name).Format(name, format))
 	}
 	return Field{Name: name, Type: fieldType, Tag: fieldTag, RelationHolder: true}, nil

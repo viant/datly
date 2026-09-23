@@ -456,8 +456,23 @@ control has exactly 2 arguments except the five flags (`allow_nulls`, `groupable
 names also accept a bare identifier. All controls are singleton per target except
 `allowed_order_by_columns`, whose repeats must not create ambiguous mappings.
 `groupable` and `grouping_enabled` share one singleton slot. `tag` and `invariant`
-are separate column annotations, exactly 2 arguments each; rich CAST is a
-column/type pair in CAST syntax.
+are separate annotations, exactly 2 arguments each; rich CAST is a column/type
+pair in CAST syntax. `invariant` targets a column. `tag(view.column,'...')`
+targets a column, while `tag(relationAlias,'...')` targets the generated relation
+holder. Relation targets must resolve uniquely; unknown or ambiguous names are
+errors. For example:
+
+```sql
+tag(campaignViewabilityTimeline, 'json:"-" internal:"true"')
+```
+
+Holder tags survive regeneration, and an authored JSON tag overrides automatic
+case-format naming. Hiding a holder does not disable its SQL, joins, hooks, or
+cache configuration. Relation execution tags (`view`, `on`, `sql`) remain owned
+by the canonical relation graph and cannot be overridden through holder tags.
+Changing tags on an existing generated holder follows the normal explicit
+shape-migration policy: use ownership-checked overwrite regeneration rather than
+editing generated Go.
 
 `in_memory(childAlias)` declares a relation whose rows are supplied by a
 handwritten parent `OnFetch` hook, rather than fetched from SQL. Its joined SQL

@@ -70,6 +70,18 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			}
 		}
 		parts, err := sqlparser.TableIdentifierParts(target)
+		if err == nil && name == "tag" && len(parts) == 1 {
+			relation, err := relationTagTarget(root, parts[0])
+			if err != nil {
+				return false, err
+			}
+			relation.Tag, err = mergeDeclarationTags(relation.Tag, rawTag, target)
+			if err != nil {
+				return false, err
+			}
+			changed = true
+			continue
+		}
 		if err != nil || len(parts) != 2 {
 			return false, fmt.Errorf("%s target %q must be a qualified view column", name, target)
 		}
@@ -131,27 +143,10 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			if strings.HasPrefix(rawTag, "validate:") && !strings.HasPrefix(rawTag, `validate:"`) {
 				rawTag = (tags.Tags{&tags.Tag{Name: "validate", Values: tags.Values(strings.TrimPrefix(rawTag, "validate:"))}}).Literal()
 			}
-			additions, err := tags.Parse(rawTag)
+			column.Tag, err = mergeDeclarationTags(column.Tag, rawTag, target)
 			if err != nil {
-				return false, fmt.Errorf("tag %s: %w", target, err)
+				return false, err
 			}
-			if len(additions) == 0 {
-				return false, fmt.Errorf("tag %s contains no Go tags", target)
-			}
-			merged, err := tags.Parse(column.Tag)
-			if err != nil {
-				return false, fmt.Errorf("existing tag %s: %w", target, err)
-			}
-			for _, addition := range additions {
-				if addition.Name == "" {
-					return false, fmt.Errorf("tag %s has an empty key", target)
-				}
-				if previous := merged.Lookup(addition.Name); previous != nil && previous.Values != addition.Values {
-					return false, fmt.Errorf("tag %s has conflicting %s values", target, addition.Name)
-				}
-				merged.SetTag(addition)
-			}
-			column.Tag = merged.Literal()
 		}
 		changed = true
 	}
@@ -176,4 +171,65 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 		return false, err
 	}
 	return changed, nil
+}
+
+func mergeDeclarationTags(existing, raw, target string) (string, error) {
+	additions, err := tags.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("tag %s: %w", target, err)
+	}
+	if len(additions) == 0 {
+		return "", fmt.Errorf("tag %s contains no Go tags", target)
+	}
+	merged, err := tags.Parse(existing)
+	if err != nil {
+		return "", fmt.Errorf("existing tag %s: %w", target, err)
+	}
+	for _, addition := range additions {
+		if addition.Name == "" {
+			return "", fmt.Errorf("tag %s has an empty key", target)
+		}
+		if previous := merged.Lookup(addition.Name); previous != nil && previous.Values != addition.Values {
+			return "", fmt.Errorf("tag %s has conflicting %s values", target, addition.Name)
+		}
+		merged.SetTag(addition)
+	}
+	return merged.Literal(), nil
+}
+
+func relationTagTarget(root *spec.View, target string) (*spec.Relation, error) {
+	var matched *spec.Relation
+	seen := map[*spec.View]bool{}
+	var visit func(*spec.View) error
+	visit = func(view *spec.View) error {
+		if view == nil || seen[view] {
+			return nil
+		}
+		seen[view] = true
+		for _, relation := range view.Relations {
+			if relation == nil || relation.View == nil {
+				continue
+			}
+			for _, name := range []string{relation.Name, relation.Holder, relation.View.Namespace, relation.View.CanonicalName()} {
+				if name == "" || !strings.EqualFold(name, target) {
+					continue
+				}
+				if matched != nil && matched != relation {
+					return fmt.Errorf("tag target %q matches multiple canonical relations", target)
+				}
+				matched = relation
+			}
+			if err := visit(relation.View); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := visit(root); err != nil {
+		return nil, err
+	}
+	if matched == nil {
+		return nil, fmt.Errorf("tag target %q has no canonical relation", target)
+	}
+	return matched, nil
 }
