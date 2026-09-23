@@ -183,6 +183,7 @@ func (p *Plan) componentTag(route RoutePlan) dtag.Component {
 		Documentation: p.Documentation.Clone(), Name: p.ComponentName, RouteName: route.Name, Path: route.Path, Method: route.Method,
 		Marshaller: route.Marshaller, Handler: p.Handler,
 		APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue,
+		Internal:  route.Internal,
 		MCP:       route.MCP,
 		Connector: p.Connector, View: p.RootViewName, Source: p.RootSource,
 		Description: p.Description, Example: p.Example, Settings: p.Settings,

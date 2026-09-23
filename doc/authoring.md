@@ -122,6 +122,15 @@ body inputs. The generated reader retains that POST route and its input bindings
 compatible authored route methods; SELECT-shaped DQL alone does not distinguish
 a reader from a mutation's record model.
 
+For a private reader, declare `#setting($_ = $internal(true))`. Transcription
+preserves this as `internal=true` on the generated component. The reader is not
+published over HTTP or MCP, but remains available for internal child invocation
+and separately authorized operational warmup, including delegation from a public
+handler. This is independent of `$mcpOnly(true)`, which requires an explicit MCP
+tool and hides only HTTP access. Combining `internal(true)` with MCP exposure is
+an error. Unsupported settings (including misspelled visibility directives) are
+rejected rather than silently generating a public route.
+
 ## Imported types, field tags and SQL macros
 
 Use full module/package identities and declared import aliases. Rich projections
