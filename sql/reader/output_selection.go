@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/viant/datly/data"
 	dexec "github.com/viant/datly/exec"
+	dsql "github.com/viant/datly/sql"
 	"github.com/viant/sqlparser"
 	sqlxio "github.com/viant/sqlx/io"
 	structjson "github.com/viant/structology/encoding/json"
@@ -53,7 +55,11 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 				}
 			}
 			if !relation {
-				columns = append(columns, outputSelectionColumnName(name))
+				column, err := outputSelectionColumn(plan.View, name)
+				if err != nil {
+					return err
+				}
+				columns = append(columns, column)
 			}
 		}
 		if len(columns) > 0 && plan.Collector != nil {
@@ -90,6 +96,26 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 		}
 	}
 	return nil
+}
+
+// SQL selection has already validated the request. Translate its explicit
+// canonical aliases back to SQLX field identities, not JSON names or inferred
+// Go aliases. This also keeps codec destinations on their model field indexes.
+func outputSelectionColumn(view *data.View, name string) (string, error) {
+	source := ""
+	for _, mapping := range view.Spec.Columns {
+		if mapping == nil || mapping.NameInferred || mapping.Source == "" || !(dsql.ProjectionNames{mapping.Name}).Matches(name) {
+			continue
+		}
+		if source != "" && !(dsql.ProjectionNames{source}).Matches(mapping.Source) {
+			return "", fmt.Errorf("output selection for view %s has ambiguous alias %q", view.Spec.Name, name)
+		}
+		source = mapping.Source
+	}
+	if source != "" {
+		name = source
+	}
+	return outputSelectionColumnName(name), nil
 }
 
 func outputSelectionColumnName(name string) string {

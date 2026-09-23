@@ -73,3 +73,45 @@ func TestOutputSelectionRejectsUnmatchedRequestedScalarField(t *testing.T) {
 	_, err := session.selectedOutput(invocationSelectors{plan.Root.View: &xstate.Selector{Fields: []string{"missing"}}})
 	require.ErrorContains(t, err, "matched 0 of 1")
 }
+
+func TestOutputSelectionUsesOnlyExplicitColumnMappings(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		columns  []*spec.Column
+		selected string
+		want     string
+		wantErr  string
+	}{
+		{
+			name: "explicit alias", selected: "publicValue", want: "raw_value",
+			columns: []*spec.Column{{Name: "publicValue", Source: "raw_value"}},
+		},
+		{
+			name: "quoted alias and source", selected: "`publicValue`", want: "raw_value",
+			columns: []*spec.Column{{Name: "publicValue", Source: "`raw_value`"}},
+		},
+		{
+			name: "inferred names are not aliases", selected: "publicValue", want: "publicValue",
+			columns: []*spec.Column{{Name: "publicValue", Source: "raw_value", NameInferred: true}},
+		},
+		{
+			name: "no transitive alias expansion", selected: "publicValue", want: "raw_value",
+			columns: []*spec.Column{{Name: "publicValue", Source: "raw_value"}, {Name: "raw_value", Source: "other"}},
+		},
+		{
+			name: "ambiguous explicit alias", selected: "publicValue", wantErr: "ambiguous alias",
+			columns: []*spec.Column{{Name: "publicValue", Source: "raw_value"}, {Name: "publicValue", Source: "other"}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			view := &data.View{Spec: spec.View{Name: "records", Columns: tc.columns}}
+			got, err := outputSelectionColumn(view, tc.selected)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
