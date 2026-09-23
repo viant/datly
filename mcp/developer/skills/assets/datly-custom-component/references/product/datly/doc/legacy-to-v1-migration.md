@@ -181,8 +181,10 @@ evidence of an incomplete relation key or false cardinality, not a reason to
 silence the reader.
 
 When a new binding row references other new rows in the same atomic graph,
-declare those producer rows as earlier writable siblings rather than nesting
-them beneath the binding. A derived parent may project logical transient keys
+declare those producer rows as writable siblings rather than nesting them
+beneath the binding. The v1 writer orders pending inserts by their declared
+foreign-key values, so a sibling's generated field order does not have to match
+database insertion order. A derived parent may project logical transient keys
 for their typed relations while the physical foreign keys remain on the
 binding. Resolve a request-supplied transient sibling key in generated input
 `Init`, before Datly freezes Previous matching; entity `Init` is too late for
@@ -375,13 +377,13 @@ representations of the same key still attach the child. Do not weaken the DQL
 relation or make a transient parent field physical merely to force identical Go
 pointer shapes.
 
-A sparse update may also set a foreign key to a row inserted earlier in the same
-ordered mutation graph—for example, closing an existing reservation with the ID
-of a newly inserted event. Datly recognizes that exact earlier insert, avoids a
-redundant pre-write reference lookup for only the proven update field, and leaves
-the database foreign key to enforce the value inside the managed transaction.
-This is not permission to suppress unrelated update validation or to reference a
-later or unordered insert.
+A sparse update may also set a foreign key to a row inserted in the same
+mutation graph—for example, closing an existing reservation with the ID of a
+newly inserted event. Datly orders the producer insert before its consumer,
+recognizes the exact in-graph reference, avoids a redundant pre-write lookup
+for only that proven field, and leaves the database foreign key to enforce the
+value inside the managed transaction. This does not suppress unrelated update
+validation or permit cyclic references that the database cannot insert.
 
 ## Repeatable generation with an orchestrator
 
