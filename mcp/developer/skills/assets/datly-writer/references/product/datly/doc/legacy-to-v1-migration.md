@@ -171,6 +171,17 @@ join. A Current lookup returning multiple rows for a to-one holder is usually
 evidence of an incomplete relation key or false cardinality, not a reason to
 silence the reader.
 
+When a new binding row references other new rows in the same atomic graph,
+declare those producer rows as earlier writable siblings rather than nesting
+them beneath the binding. A derived parent may project logical transient keys
+for their typed relations while the physical foreign keys remain on the
+binding. Resolve a request-supplied transient sibling key in generated input
+`Init`, before Datly freezes Previous matching; entity `Init` is too late for
+an existing child's parent-scope check. Keep the transient key non-DML and use
+generated setters only for intentional working presence. Prove first insert,
+idempotent re-import, unchanged sparse fields, and late-error rollback with a
+runtime test before replacing the legacy transaction.
+
 ### External work between database mutations
 
 If a request calls an external provider, a durable lease can be its own generated
