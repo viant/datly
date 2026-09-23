@@ -554,7 +554,7 @@ func mergeColumns(base, discovered []*spec.Column) []*spec.Column {
 			if cloned.Type.IsZero() {
 				cloned.Type = fresh.Type
 			}
-			cloned.Nullable = fresh.Nullable
+			cloned.Nullable = fresh.Nullable && !cloned.Required
 			cloned.NotNull = fresh.NotNull
 			if cloned.Groupable == nil && fresh.Groupable != nil {
 				value := *fresh.Groupable

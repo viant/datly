@@ -30,7 +30,10 @@ func (v *linkedViewCastValidator) validate(view *spec.View, prefix string) error
 	}
 	v.visiting[view] = true
 	defer delete(v.visiting, view)
-	fields := resolveScalarViewFields(v.plan, view, false)
+	fields, err := resolveScalarViewFields(v.plan, view, false)
+	if err != nil {
+		return err
+	}
 	imports := map[string]string{}
 	for _, imported := range v.plan.Imports {
 		imports[imported.Alias] = imported.Package

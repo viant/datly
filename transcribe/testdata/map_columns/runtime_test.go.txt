@@ -1,0 +1,56 @@
+package audience
+
+import (
+	"context"
+	"encoding/json"
+	"reflect"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/bootstrap"
+	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
+	signalmodel "github.com/viant/datly/transcribe/testdata/castmodel"
+)
+
+var (
+	_ string = AudienceRow{}.Target
+	_ map[string][]string = AudienceRow{}.InclusionMap
+	_ map[string][]string = AudienceRow{}.ExclusionMap
+	_ map[signalmodel.Signals][]*signalmodel.Signals = AudienceRow{}.Signals
+	_ map[string]map[int][]string = AudienceRow{}.Nested
+)
+
+func TestTransientMapsPopulatedByHook(t *testing.T) {
+	ctx := context.Background()
+	db := sqlite.New(t)
+	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE audience(id INTEGER, TARGET TEXT)", "INSERT INTO audience VALUES(1,'target')"))
+	resources := resource.New()
+	for namespace, fs := range bootstrap.LinkedResources(nil, "github.com/viant/datly/mapfixture/audience") {
+		require.NoError(t, resources.Register(namespace, fs))
+	}
+	component := &spec.Component{Name: "Audience", Key: spec.Key{Kind: spec.KindComponent, Name: "Audience"}, Routes: []*spec.Route{{Method: "GET", Path: "/audience"}}}
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[AudienceInput](), OutputType: reflect.TypeFor[AudienceOutput](), Resources: resources})
+	require.NoError(t, err)
+	execution, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db.DB}})
+	require.NoError(t, err)
+	actual, err := execution.Read(ctx, &AudienceInput{}, nil, nil)
+	require.NoError(t, err)
+	rows := actual.(*AudienceOutput).Data
+	require.Len(t, rows, 1)
+	require.Equal(t, 3, rows[0].Computed)
+	require.Equal(t, "target", rows[0].Target)
+	require.Equal(t, []string{"a", "b"}, rows[0].InclusionMap["include"])
+	require.Nil(t, rows[0].Signals[signalmodel.Signals{Label:"key"}][0])
+	require.Equal(t, "kept", rows[0].Signals[signalmodel.Signals{Label:"key"}][1].Label)
+	encoded, err := json.Marshal(rows[0])
+	require.NoError(t, err)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(encoded, &payload))
+	require.Len(t, payload, 3, "%s", encoded)
+	for _, field := range []string{"InclusionMap", "ExclusionMap", "Signals", "Nested"} {
+		require.NotContains(t, payload, field)
+	}
+}

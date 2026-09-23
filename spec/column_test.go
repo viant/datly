@@ -10,6 +10,8 @@ func TestColumnEffectiveType(t *testing.T) {
 	}{
 		{name: "scalar", column: &Column{Type: TypeRef{Name: "int64"}}, want: TypeRef{Name: "int64"}},
 		{name: "nullable scalar", column: &Column{Type: TypeRef{Name: "int64"}, Nullable: true}, want: TypeRef{Name: "int64", Pointer: true}},
+		{name: "required nullable scalar", column: &Column{Type: TypeRef{Name: "int64"}, Required: true, Nullable: true}, want: TypeRef{Name: "int64"}},
+		{name: "required explicit pointer", column: &Column{Type: TypeRef{Name: "int64", Pointer: true}, Required: true, ExplicitType: true, Nullable: true}, want: TypeRef{Name: "int64", Pointer: true}},
 		{name: "explicit pointer", column: &Column{Type: TypeRef{Name: "int64", Pointer: true}}, want: TypeRef{Name: "int64", Pointer: true}},
 		{name: "slice", column: &Column{Type: TypeRef{Name: "string", Cardinality: CardinalityMany}, Nullable: true}, want: TypeRef{Name: "string", Cardinality: CardinalityMany}},
 		{name: "cast value overrides nullable", column: &Column{Type: TypeRef{Name: "T"}, ExplicitType: true, Nullable: true}, want: TypeRef{Name: "T"}},

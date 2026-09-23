@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/tagly/tags"
+	xshape "github.com/viant/x/shape"
 )
 
 type viewPlanner struct {
@@ -431,7 +432,10 @@ func generatedViewDestination(view *spec.View, inherited string) (string, error)
 }
 
 func (p *viewPlanner) fields(view *spec.View) ([]Field, error) {
-	fields := resolveScalarViewFields(p.plan, view, p.velty)
+	fields, err := resolveScalarViewFields(p.plan, view, p.velty)
+	if err != nil {
+		return nil, err
+	}
 	seen := map[string]bool{}
 	for _, field := range fields {
 		if seen[field.Name] {
@@ -471,9 +475,9 @@ func (p *viewPlanner) fields(view *spec.View) ([]Field, error) {
 	return fields, nil
 }
 
-func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) []Field {
+func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) ([]Field, error) {
 	if plan == nil || view == nil {
-		return nil
+		return nil, nil
 	}
 	result := make([]Field, 0, len(view.Columns))
 	for _, column := range view.Columns {
@@ -489,12 +493,19 @@ func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) []F
 		if typeName == "" {
 			typeName = "any"
 		}
+		if strings.HasPrefix(typeName, "map[") {
+			var err error
+			typeName, err = emittedMapColumnType(plan, typeName)
+			if err != nil {
+				return nil, fmt.Errorf("view %s column %s type: %w", view.Name, column.Name, err)
+			}
+		}
 		if packagePath := strings.TrimSpace(effectiveType.Package); packagePath != "" {
 			alias := uniqueImportAlias(plan, packagePath)
 			ensureImport(plan, alias, packagePath)
 			typeName = alias + "." + typeName
 		}
-		if effectiveType.Pointer && (column.ExplicitType || nullablePointerType(typeName)) {
+		if effectiveType.Pointer && (column.ExplicitType || strings.HasPrefix(typeName, "map[") || nullablePointerType(typeName)) {
 			typeName = "*" + typeName
 		}
 		if effectiveType.Cardinality == spec.CardinalityMany {
@@ -513,7 +524,29 @@ func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) []F
 		}
 		result = append(result, Field{Name: name, Type: typeName, Tag: fieldTag, ExplicitType: column.ExplicitType})
 	}
-	return result
+	return result, nil
+}
+
+func emittedMapColumnType(plan *Plan, expression string) (string, error) {
+	return (xshape.Resolver{Rewriter: func(name string) (string, error) {
+		ref, err := (xshape.Resolver{}).Reference(name)
+		if err != nil {
+			return "", err
+		}
+		if ref.Qualifier == "" {
+			return name, nil
+		}
+		packagePath := ref.Qualifier
+		for _, imported := range plan.Imports {
+			if imported.Alias == packagePath {
+				packagePath = imported.Package
+				break
+			}
+		}
+		alias := uniqueImportAlias(plan, packagePath)
+		ensureImport(plan, alias, packagePath)
+		return alias + "." + ref.Name, nil
+	}}).Rewrite(expression)
 }
 
 func (p *viewPlanner) relationField(relation *spec.Relation) (Field, error) {

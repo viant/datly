@@ -80,6 +80,17 @@ func TestFromViewPreservesCanonicalNullableScalarFallback(t *testing.T) {
 	}
 }
 
+func TestFromViewRequiredSuppressesNullableInference(t *testing.T) {
+	source := &spec.View{Columns: []*spec.Column{{Name: "value", Type: spec.TypeRef{Name: "string"}, Nullable: true, Required: true}}}
+	actual := FromView(nil, source)
+	if actual.Columns[0].Nullable || actual.Columns[0].NullFallback != "" || !actual.Spec.Columns[0].Required {
+		t.Fatalf("required output column = %+v", actual.Columns[0])
+	}
+	if !source.Columns[0].Nullable {
+		t.Fatal("runtime conversion mutated authored metadata")
+	}
+}
+
 func TestFromViewResolvesCanonicalRelationMatchStrategy(t *testing.T) {
 	tests := []struct {
 		name     string

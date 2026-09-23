@@ -1,0 +1,21 @@
+package audience
+
+import (
+	"context"
+	"fmt"
+
+	signalmodel "github.com/viant/datly/transcribe/testdata/castmodel"
+)
+
+func (r *AudienceRow) OnFetch(context.Context) error {
+	if r.InclusionMap != nil || r.ExclusionMap != nil || r.Signals != nil || r.Nested != nil {
+		return fmt.Errorf("transient maps must not be scanned from SQL")
+	}
+	r.InclusionMap = map[string][]string{"include": {"a", "b"}}
+	r.ExclusionMap = map[string][]string{"exclude": {"c"}}
+	r.Signals = map[signalmodel.Signals][]*signalmodel.Signals{{Label: "key"}: {nil, {Label: "kept"}}}
+	r.Nested = map[string]map[int][]string{"group": {1: {"value"}}}
+	r.Computed = len(r.InclusionMap["include"]) + len(r.ExclusionMap["exclude"])
+	// Keep maps populated so the test proves tags, not clearing, hide them.
+	return nil
+}

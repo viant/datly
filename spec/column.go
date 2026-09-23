@@ -17,6 +17,9 @@ type Column struct {
 	ExplicitType bool    `json:"explicitType,omitempty"`
 	Type         TypeRef `json:"type"`
 	Nullable     bool    `json:"nullable,omitempty"`
+	// Required is an authored non-null output declaration, not a table constraint
+	// or input validation rule. It suppresses inferred nullable pointers only.
+	Required bool `json:"required,omitempty"`
 	// NotNull records an authoritative table constraint, independently of reader nullability.
 	NotNull       bool    `json:"notNull,omitempty"`
 	Groupable     *bool   `json:"groupable,omitempty"`
@@ -29,15 +32,15 @@ type Column struct {
 }
 
 // EffectiveType returns the canonical Go value type represented by the column.
-// Database nullability supplies pointer inference unless an explicit CAST
-// specifies the exact Go type, including a non-pointer type.
+// Database nullability supplies pointer inference unless Required suppresses
+// it or an explicit CAST specifies the exact Go type.
 func (c *Column) EffectiveType() TypeRef {
 	if c == nil {
 		return TypeRef{}
 	}
 	result := c.Type
 	name := strings.TrimSpace(result.Name)
-	if !c.ExplicitType && c.Nullable && result.Cardinality != CardinalityMany && name != "" && name != "any" && name != "interface{}" &&
+	if !c.ExplicitType && !c.Required && c.Nullable && result.Cardinality != CardinalityMany && name != "" && name != "any" && name != "interface{}" &&
 		!strings.HasPrefix(name, "*") && !strings.HasPrefix(name, "[]") && !strings.HasPrefix(name, "map[") {
 		result.Pointer = true
 	}

@@ -150,6 +150,22 @@ func declarationColumnTypeNode(expression ast.Expr, context *spec.TypeContext, r
 		result.SlicePointer = result.Pointer
 		result.Pointer = false
 		return declarationColumnTypeNode(actual.Elt, context, result)
+	case *ast.MapType:
+		key, err := declarationColumnTypeNode(actual.Key, context, spec.TypeRef{})
+		if err != nil {
+			return spec.TypeRef{}, fmt.Errorf("map key: %w", err)
+		}
+		if !key.SlicePointer && (key.Cardinality == spec.CardinalityMany || !key.Pointer && strings.HasPrefix(key.Name, "map[")) {
+			return spec.TypeRef{}, fmt.Errorf("map key %s is not comparable", columnTypeExpression(key))
+		}
+		value, err := declarationColumnTypeNode(actual.Value, context, spec.TypeRef{})
+		if err != nil {
+			return spec.TypeRef{}, fmt.Errorf("map value: %w", err)
+		}
+		// A map has two independent type branches. Keep their canonical package
+		// identities in the expression instead of assigning one Package to both.
+		result.Name = "map[" + columnTypeExpression(key) + "]" + columnTypeExpression(value)
+		return result, nil
 	case *ast.Ident:
 		result.Name = actual.Name
 		if !isPredeclaredColumnType(actual.Name) && context != nil {
@@ -171,6 +187,23 @@ func declarationColumnTypeNode(expression ast.Expr, context *spec.TypeContext, r
 	default:
 		return spec.TypeRef{}, fmt.Errorf("unsupported column type expression %T", expression)
 	}
+}
+
+func columnTypeExpression(ref spec.TypeRef) string {
+	name := ref.Name
+	if ref.Package != "" {
+		name = ref.Package + "." + name
+	}
+	if ref.Pointer {
+		name = "*" + name
+	}
+	if ref.Cardinality == spec.CardinalityMany {
+		name = "[]" + name
+	}
+	if ref.SlicePointer {
+		name = "*" + name
+	}
+	return name
 }
 
 func declarationImportPath(context *spec.TypeContext, alias string) (string, bool) {

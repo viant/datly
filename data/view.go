@@ -194,7 +194,7 @@ func columnsFromSpec(source []*spec.Column) []*Column {
 			Name: item.Name, Column: item.Source, Expression: item.Expression,
 			Groupable: boolValue(item.Groupable), DataType: item.DatabaseType, Tag: item.Tag,
 		}
-		column.ConfigureNullability(item.Nullable, item.Type.Name)
+		column.ConfigureNullability(item.Nullable && !item.Required, item.Type.Name)
 		if item.Type.Pointer {
 			column.NullFallback = ""
 		}

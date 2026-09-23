@@ -32,10 +32,10 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			continue
 		}
 		name := strings.ToLower(strings.TrimSpace(sqlparser.Stringify(call.X)))
-		if (name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token") && item.Alias != "" {
+		if (name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required") && item.Alias != "" {
 			return false, fmt.Errorf("%s must be a standalone SELECT annotation without an alias", name)
 		}
-		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token") {
+		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token" && name != "required") {
 			filtered = append(filtered, item)
 			continue
 		}
@@ -46,7 +46,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 				return false, err
 			}
 			target, typeName = cast.Operand, cast.Type
-		} else if name == "delete_marker" || name == "concurrency_token" {
+		} else if name == "delete_marker" || name == "concurrency_token" || name == "required" {
 			if len(call.Args) != 1 {
 				return false, fmt.Errorf("%s requires one qualified view column", name)
 			}
@@ -103,6 +103,10 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			column = &spec.Column{Name: parts[1], Source: parts[1]}
 			view.Columns = append(view.Columns, column)
 		}
+		if name == "required" {
+			column.Required = true
+			column.Nullable = false
+		}
 
 		if name == "delete_marker" || name == "concurrency_token" {
 			for _, other := range view.Columns {
@@ -122,12 +126,20 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 				return false, fmt.Errorf("CAST %s: %w", target, err)
 			}
 			if _, builtinErr := (xshape.Runtime{}).Type(typeName); builtinErr != nil && types != nil {
-				resolved, err := types.ResolveShape(typeName)
+				// Structural types such as maps have independently named key/value
+				// dependencies, not one named descriptor for the whole expression.
+				_, err := (xshape.Resolver{Rewriter: func(name string) (string, error) {
+					resolved, err := types.ResolveShape(name)
+					if err != nil {
+						return "", err
+					}
+					if resolved == nil || resolved.Descriptor == nil {
+						return "", fmt.Errorf("type %q was not found", name)
+					}
+					return name, nil
+				}}).Rewrite(typeName)
 				if err != nil {
 					return false, fmt.Errorf("CAST %s: %w", target, err)
-				}
-				if resolved == nil || resolved.Descriptor == nil {
-					return false, fmt.Errorf("CAST %s type %q was not found", target, typeName)
 				}
 			}
 			if previous, found := casts[column]; found && previous != typeRef {
@@ -159,7 +171,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 	}
 	misplaced := ""
 	if containsSQLCall(parsed, func(name string) bool {
-		if name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" {
+		if name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required" {
 			misplaced = name
 			return true
 		}
