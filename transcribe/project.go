@@ -240,6 +240,7 @@ func (r *Result) projectClone() (*Result, error) {
 		return nil, fmt.Errorf("project component requires a compiled transcribe result")
 	}
 	result := *r
+	result.ExternalHandler = r.ExternalHandler.Clone()
 	componentSource := *r.Source
 	if componentSource.Types == nil {
 		componentSource.Types = typecatalog.NewCatalog()

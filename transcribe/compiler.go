@@ -37,6 +37,7 @@ type Result struct {
 	ViewBindings          gen.ViewBindings
 	GeneratedTypes        []gen.GeneratedTypeReference
 	GoHandler             *gen.GoHandlerAsset
+	ExternalHandler       *gen.ExternalHandler
 	VeltyHandler          *gen.VeltyHandlerAsset
 	ContractTypeOverrides ContractTypeOverrides
 	Diagnostics           []*Diagnostic
@@ -65,6 +66,11 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	}
 	if source == nil {
 		return nil, ErrNilSource
+	}
+	if header, body, err := dql.ParseHandlerSource(source.Text); err != nil {
+		return nil, err
+	} else if header != nil {
+		return c.compileHandler(source, header, body)
 	}
 	prepared := dql.PrepareSource(source.Text)
 	sourceMap := newSourceMap(len(source.Text), nil, prepared.TrimPrefix, source.Text)
@@ -188,13 +194,12 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			return nil, err
 		}
 	}
-	// A Go-only holder's nested view graph is assembled from linked output
-	// types by artifact bootstrap, not by this source transcription stage.
-	// Preserve its generated selector name until that typed graph is available.
-	if source.PackageComponent == nil || strings.TrimSpace(source.Text) != "" {
-		if err := resolveQuerySelectorViews(component); err != nil {
-			return nil, err
-		}
+	// Canonicalize selector targets proven by the transcribed graph and reject
+	// ambiguity now. Nested views linked from a Go output type are assembled by
+	// artifact bootstrap, so targets unknown here stay authored until that
+	// completed graph validates them.
+	if err := resolveQuerySelectorViews(component); err != nil {
+		return nil, err
 	}
 	var declaredViews map[string]*spec.View
 	if declarations != nil {

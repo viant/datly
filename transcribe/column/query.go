@@ -47,7 +47,12 @@ func falsifySelect(selectNode *query.Select) error {
 	if selectNode.Qualify == nil || selectNode.Qualify.X == nil {
 		selectNode.Qualify = &expr.Qualify{X: falsePredicate}
 	} else {
-		selectNode.Qualify = &expr.Qualify{X: &expr.Binary{X: falsePredicate, Op: "AND", Y: selectNode.Qualify.X}}
+		// Keep the entire authored predicate under the false guard. Without
+		// parentheses, an OR branch can escape because AND binds more tightly.
+		predicate := selectNode.Qualify.X
+		// The SQL parser stringifies Parenthesis from Raw, not its child node.
+		grouped := &expr.Parenthesis{X: predicate, Raw: "(" + sqlparser.Stringify(predicate) + ")"}
+		selectNode.Qualify = &expr.Qualify{X: &expr.Binary{X: falsePredicate, Op: "AND", Y: grouped}}
 	}
 	if selectNode.Union != nil {
 		if err := falsifySelect(selectNode.Union.X); err != nil {

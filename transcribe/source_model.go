@@ -46,6 +46,9 @@ type Source struct {
 	// explicit DQL service programs are transcribed into the same artifact.
 	// Runtime state and capabilities remain owned by runtime/handler/velty.
 	VeltyHandler *gen.VeltyHandlerAsset
+	// HandlerBindings supplies explicit legacy-to-native factory authority for
+	// SQL-free handler declarations. It is not runtime handler construction.
+	HandlerBindings []*HandlerBinding
 }
 
 func (s *Source) BaseDir() string {

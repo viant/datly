@@ -41,6 +41,7 @@ type Input struct {
 	GeneratedTypes     []GeneratedTypeReference
 	SetMarkerViews     map[string]bool
 	GoHandler          *GoHandlerAsset
+	ExternalHandler    *ExternalHandler
 	ContractHandler    *ContractHandlerAsset
 	MutationHandler    *MutationHandlerAsset
 	ReadIndexes        *ReadIndexSource
@@ -118,6 +119,7 @@ func New(input Input) *Generator {
 		cloneErr = hookErr
 	}
 	input.VeltyHandler = input.VeltyHandler.Clone()
+	input.ExternalHandler = input.ExternalHandler.Clone()
 	var entityErr error
 	input.EntitySupport, entityErr = input.EntitySupport.Clone()
 	if cloneErr == nil {

@@ -20,7 +20,7 @@ func TestTranscribeCommandArguments(t *testing.T) {
 			t.Fatalf("%v: exit %d, %s", args, code, diagnostic.String())
 		}
 	}
-	for _, op := range []string{"", "get", "patch", "post", "put"} {
+	for _, op := range []string{"", "get", "patch", "post", "put", "handler"} {
 		args := []string{"transcribe"}
 		if op != "" {
 			args = append(args, op)
