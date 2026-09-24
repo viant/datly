@@ -1,0 +1,16 @@
+package registration
+
+import (
+	"github.com/viant/datly/runtime/handler"
+	fixture "github.com/viant/datly/transcribe/testdata/handleronly"
+	"github.com/viant/xdatly"
+)
+
+// Reference is handwritten registration using the same native output contract.
+type Reference struct {
+	Contract xdatly.Component[fixture.Input, fixture.CaseOutput] `component:"Reference,path=/reference,method=POST,handler=github.com/viant/datly/transcribe/testdata/handleronly.NewCaseHandler" caseFormat:"lc" mcp:"[{\"kind\":\"tool\",\"name\":\"Reference\"}]"`
+}
+
+func (Reference) DatlyHandler(name string) func() (handler.TypedHandler, error) {
+	return ConvertDatly.DatlyHandler(name)
+}
