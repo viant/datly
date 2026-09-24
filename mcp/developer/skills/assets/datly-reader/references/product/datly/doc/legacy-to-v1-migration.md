@@ -180,6 +180,15 @@ join. A Current lookup returning multiple rows for a to-one holder is usually
 evidence of an incomplete relation key or false cardinality, not a reason to
 silence the reader.
 
+For example, if a membership row is keyed by `(group_id, user_id)` but the
+parent graph exposes only `group_id`, joining all memberships on `group_id`
+and adding `AND 1=1` does not select one user. Filter the writable child
+source by the bound `user_id`, then join its remaining `group_id` to the parent.
+Keep the child physical table writable rather than parenthesizing it as an
+auxiliary lookup. Prove the graph with a fixture containing multiple members
+of the same group; the selected user's insert/update must remain atomic and
+must not alter the other members.
+
 When a new binding row references other new rows in the same atomic graph,
 declare those producer rows as writable siblings rather than nesting them
 beneath the binding. The v1 writer orders pending inserts by their declared
