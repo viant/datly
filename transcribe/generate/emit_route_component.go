@@ -5,40 +5,55 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 )
 
 func componentFileText(packageName string, plan *Plan) (string, error) {
 	var b strings.Builder
 	anchors := externalLifecycleAnchors(plan)
+	imports := plan.holderImports()
+	for _, anchor := range anchors {
+		imports = append(imports, spec.ImportSpec{Alias: anchor.alias, Package: anchor.path})
+	}
+	addImport := func(path, preferred string) string {
+		for _, item := range imports {
+			if item.Package == path {
+				if item.Alias == "" {
+					return packageAlias(path)
+				}
+				return item.Alias
+			}
+		}
+		alias := availableImportAlias(imports, preferred)
+		imports = append(imports, spec.ImportSpec{Alias: alias, Package: path})
+		return alias
+	}
+	reflectAlias := addImport("reflect", "reflect")
+	xdatlyAlias := addImport("github.com/viant/xdatly", "xdatly")
+	embedAlias, runtimeAlias, adapterAlias := "", "", ""
+	if plan.Resources != nil {
+		embedAlias = addImport("embed", "embed")
+	}
+	if plan.Handler != "" && (plan.MutationHandler != nil || plan.ContractHandler != nil || plan.ExternalHandler != nil) {
+		runtimeAlias = addImport("github.com/viant/datly/runtime/handler", "rhandler")
+		if plan.MutationHandler != nil {
+			adapterAlias = addImport("github.com/viant/datly/runtime/handler/mutation", "mutationhandler")
+		} else {
+			adapterAlias = addImport("github.com/viant/datly/runtime/handler/custom", "customhandler")
+		}
+	}
 	b.WriteString("package ")
 	b.WriteString(packageName)
 	b.WriteString("\n\n")
 	b.WriteString("import (\n")
-	if plan.Resources != nil {
-		b.WriteString("\t\"embed\"\n\n")
-	}
-	b.WriteString("\t\"reflect\"\n\n")
-	for _, anchor := range anchors {
-		b.WriteString("\t")
-		b.WriteString(anchor.alias)
-		b.WriteString(" ")
-		b.WriteString(strconv.Quote(anchor.path))
-		b.WriteString("\n")
-	}
-	if len(anchors) > 0 {
-		b.WriteString("\n")
-	}
-	b.WriteString("\txdatly \"github.com/viant/xdatly\"\n")
-	if plan.Handler != "" && (plan.MutationHandler != nil || plan.ContractHandler != nil) {
-		b.WriteString("\trhandler \"github.com/viant/datly/runtime/handler\"\n")
-		if plan.MutationHandler != nil {
-			b.WriteString("\tmutationhandler \"github.com/viant/datly/runtime/handler/mutation\"\n")
-		} else {
-			b.WriteString("\tcustomhandler \"github.com/viant/datly/runtime/handler/custom\"\n")
+	seenImports := map[string]bool{}
+	for _, item := range imports {
+		key := item.Alias + " " + item.Package
+		if seenImports[key] {
+			continue
 		}
-	}
-	for _, item := range plan.holderImports() {
+		seenImports[key] = true
 		b.WriteString("\t")
 		b.WriteString(item.Alias)
 		b.WriteString(" ")
@@ -52,7 +67,7 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 	b.WriteString(".\n")
 	b.WriteString("type " + plan.HolderName() + " struct {\n")
 	if len(plan.Routes) == 0 {
-		writeComponentHolderField(&b, "Contract", plan, "")
+		writeComponentHolderField(&b, "Contract", plan, "", xdatlyAlias)
 	} else {
 		for index, route := range plan.Routes {
 			routeTag := plan.componentTag(route)
@@ -67,7 +82,7 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 			if len(plan.Routes) > 1 {
 				fieldName = fmt.Sprintf("Contract%d", index+1)
 			}
-			writeComponentHolderField(&b, fieldName, plan, structTag)
+			writeComponentHolderField(&b, fieldName, plan, structTag, xdatlyAlias)
 		}
 	}
 	b.WriteString("}\n")
@@ -76,7 +91,7 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 	b.WriteString("DatlyType keeps the public component type linked for blank-import discovery.\n")
 	b.WriteString("func ")
 	b.WriteString(strings.TrimSuffix(plan.HolderName(), "Component"))
-	b.WriteString("DatlyType() reflect.Type { return reflect.TypeOf((*")
+	b.WriteString("DatlyType() " + reflectAlias + ".Type { return " + reflectAlias + ".TypeOf((*")
 	b.WriteString(plan.HolderName())
 	b.WriteString(")(nil)).Elem() }\n")
 	b.WriteString("\n// Datly anchors this package's public component contract.\n")
@@ -93,7 +108,7 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 	for _, anchor := range anchors {
 		b.WriteString("\nfunc ")
 		b.WriteString(anchor.symbol)
-		b.WriteString("DatlyType() reflect.Type { return reflect.TypeOf((*")
+		b.WriteString("DatlyType() " + reflectAlias + ".Type { return " + reflectAlias + ".TypeOf((*")
 		b.WriteString(anchor.expression)
 		b.WriteString(")(nil)).Elem() }\n")
 		b.WriteString("var ")
@@ -102,23 +117,24 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 		b.WriteString(anchor.symbol)
 		b.WriteString("DatlyType()\n")
 	}
-	if plan.Handler != "" && (plan.MutationHandler != nil || plan.ContractHandler != nil) {
+	if plan.Handler != "" && (plan.MutationHandler != nil || plan.ContractHandler != nil || plan.ExternalHandler != nil) {
+		name := availableImportAlias(imports, "name")
 		b.WriteString("\nfunc (")
 		b.WriteString(plan.HolderName())
-		b.WriteString(") DatlyHandler(name string) func() (rhandler.TypedHandler, error) {\n")
-		b.WriteString("\tif name == ")
+		b.WriteString(") DatlyHandler(" + name + " string) func() (" + runtimeAlias + ".TypedHandler, error) {\n")
+		b.WriteString("\tif " + name + " == ")
 		b.WriteString(strconv.Quote(plan.Handler))
 		b.WriteString(" { return ")
-		if plan.MutationHandler != nil {
-			b.WriteString("mutationhandler.Factory[")
-		} else {
-			b.WriteString("customhandler.Factory[")
-		}
+		b.WriteString(adapterAlias + ".Factory[")
 		b.WriteString(plan.contractType(plan.Input))
 		b.WriteString(", ")
 		b.WriteString(plan.contractType(plan.Output))
 		b.WriteString("](")
-		b.WriteString(plan.Handler)
+		if plan.ExternalHandler != nil {
+			b.WriteString(plan.FactoryExpression)
+		} else {
+			b.WriteString(plan.Handler)
+		}
 		b.WriteString(") }\n")
 		b.WriteString("\treturn nil\n}\n")
 		b.WriteString("\n// ")
@@ -133,7 +149,7 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 	if plan.Resources != nil {
 		b.WriteString("\nfunc (")
 		b.WriteString(plan.HolderName())
-		b.WriteString(") EmbedFS() *embed.FS {\n")
+		b.WriteString(") EmbedFS() *" + embedAlias + ".FS {\n")
 		b.WriteString("\treturn &")
 		b.WriteString(plan.Resources.Symbol)
 		b.WriteString("DatlyResources\n}\n")
@@ -208,10 +224,10 @@ func (p *Plan) componentTag(route RoutePlan) dtag.Component {
 	return result
 }
 
-func writeComponentHolderField(builder *strings.Builder, name string, plan *Plan, structTag string) {
+func writeComponentHolderField(builder *strings.Builder, name string, plan *Plan, structTag, xdatlyAlias string) {
 	builder.WriteString("\t")
 	builder.WriteString(name)
-	builder.WriteString(" xdatly.Component[")
+	builder.WriteString(" " + xdatlyAlias + ".Component[")
 	builder.WriteString(plan.contractType(plan.Input))
 	builder.WriteString(", ")
 	builder.WriteString(plan.contractType(plan.Output))

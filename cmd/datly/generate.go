@@ -12,19 +12,19 @@ import (
 	gen "github.com/viant/datly/transcribe/generate"
 )
 
-func generationCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+func generationCommand(ctx context.Context, args []string, stdout, stderr io.Writer, handlers ...*transcribe.HandlerBinding) int {
 	name := args[0]
 	operationValue := ""
 	arguments := args[1:]
 	if name == "transcribe" {
 		if len(arguments) == 0 {
-			fmt.Fprintln(stderr, "usage: datly transcribe get|patch|post|put [options] module/package")
+			fmt.Fprintln(stderr, "usage: datly transcribe get|patch|post|put|handler [options] module/package")
 			return 2
 		}
 		if arguments[0] != "-h" && arguments[0] != "--help" {
 			operationValue, arguments = arguments[0], arguments[1:]
-			if operationValue != "get" && operationValue != "patch" && operationValue != "post" && operationValue != "put" {
-				fmt.Fprintln(stderr, "transcribe requires operation get|patch|post|put before options")
+			if operationValue != "get" && operationValue != "patch" && operationValue != "post" && operationValue != "put" && operationValue != "handler" {
+				fmt.Fprintln(stderr, "transcribe requires operation get|patch|post|put|handler before options")
 				return 2
 			}
 		}
@@ -33,7 +33,7 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 	flags.SetOutput(stderr)
 	if name == "transcribe" {
 		flags.Usage = func() {
-			fmt.Fprintln(stderr, "usage: datly transcribe get|patch|post|put [options] module/package")
+			fmt.Fprintln(stderr, "usage: datly transcribe get|patch|post|put|handler [options] module/package")
 			flags.PrintDefaults()
 		}
 	}
@@ -50,13 +50,20 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 		}
 		return 2
 	}
-	if flags.NArg() != 1 || (*operation != "get" && *operation != "patch" && *operation != "post" && *operation != "put") || (*language != "go" && *language != "velty") {
-		fmt.Fprintln(stderr, "transcribe requires get|patch|post|put, optional -lang go|velty and one module-qualified source package")
+	if flags.NArg() != 1 || (*operation != "get" && *operation != "patch" && *operation != "post" && *operation != "put" && *operation != "handler") || (*language != "go" && *language != "velty") {
+		fmt.Fprintln(stderr, "transcribe requires get|patch|post|put|handler, optional -lang go|velty and one module-qualified source package")
 		return 2
 	}
-	if err := schema.validate(); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+	if *operation == "handler" {
+		if *language != "go" || schema.enabled || schema.driver != "" || schema.dsn != "" {
+			fmt.Fprintln(stderr, "handler registration uses compiled Go bindings, not database column discovery or Velty")
+			return 2
+		}
+	} else {
+		if err := schema.validate(); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 2
+		}
 	}
 	instance, err := (constant.Loader{}).Load(ctx, *constantURL)
 	if err != nil {
@@ -70,6 +77,10 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 	}
 	schema.Const = instance
 	discovery := &transcribe.Discovery{Const: instance, BaseDir: resolvedDirectory, Include: flags.Args()}
+	discovery.HandlerBindings = handlers
+	if *operation == "handler" {
+		discovery.Connector = schema.connector
+	}
 	if schema.enabled {
 		discovery.Connector = schema.connector
 		discovery.ColumnRefiner = column.New(&schema)

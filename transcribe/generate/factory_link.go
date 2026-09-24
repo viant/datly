@@ -13,7 +13,7 @@ import (
 
 // FactoryLinkPlan is compiled-Go registration wiring, separate from the
 // runtime-free public policy source. It registers only in a supplied x.Registry.
-type FactoryLinkPlan struct{ Name, Destination, PackagePath, Factory, Adapter string }
+type FactoryLinkPlan struct{ Name, Destination, PackagePath, Factory, Adapter, Expression string }
 
 func (r *planResolver) resolveFactoryLink() {
 	factory, adapter := "", ""
@@ -26,13 +26,16 @@ func (r *planResolver) resolveFactoryLink() {
 		adapter = "mutation"
 	}
 	if factory == "" {
+		if h := r.plan.ExternalHandler; h != nil {
+			r.plan.FactoryLink = &FactoryLinkPlan{Name: "Register" + exportedName(r.plan.ComponentName) + "Factories", Destination: r.plan.Generation.File("links", "links.go"), PackagePath: h.Package, Factory: h.Name, Adapter: "custom", Expression: r.plan.FactoryExpression}
+		}
 		return
 	}
 	r.plan.FactoryLink = &FactoryLinkPlan{Name: "Register" + exportedName(r.plan.ComponentName) + "Factories", Destination: r.plan.Generation.File("links", "links.go"), PackagePath: r.input.TargetPackage, Factory: factory, Adapter: adapter}
 }
 
 func (p *FactoryLinkPlan) source(packageName string, plan *Plan) (string, error) {
-	imports := importsForFields([]Field{{Type: plan.Input.Type}, {Type: plan.Output.Type}}, plan.Imports)
+	imports := importsForFields([]Field{{Type: plan.Input.Type}, {Type: plan.Output.Type}, {Type: p.Expression}}, plan.Imports)
 	xAlias, adapterAlias := "", ""
 	for _, target := range []struct {
 		path, preferred string
@@ -70,7 +73,15 @@ func (p *FactoryLinkPlan) source(packageName string, plan *Plan) (string, error)
 		}
 		declaration.Specs = append(declaration.Specs, imported)
 	}
-	bridge := &ast.CallExpr{Fun: &ast.IndexListExpr{X: &ast.SelectorExpr{X: ast.NewIdent(adapterAlias), Sel: ast.NewIdent("Factory")}, Indices: []ast.Expr{input, output}}, Args: []ast.Expr{ast.NewIdent(p.Factory)}}
+	expression := p.Expression
+	if expression == "" {
+		expression = p.Factory
+	}
+	factory, err := parser.ParseExpr(expression)
+	if err != nil {
+		return "", err
+	}
+	bridge := &ast.CallExpr{Fun: &ast.IndexListExpr{X: &ast.SelectorExpr{X: ast.NewIdent(adapterAlias), Sel: ast.NewIdent("Factory")}, Indices: []ast.Expr{input, output}}, Args: []ast.Expr{factory}}
 	function := &ast.FuncDecl{Name: ast.NewIdent(p.Name), Type: &ast.FuncType{
 		Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(registryName)}, Type: &ast.StarExpr{X: &ast.SelectorExpr{X: ast.NewIdent(xAlias), Sel: ast.NewIdent("Registry")}}}}},
 		Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}},

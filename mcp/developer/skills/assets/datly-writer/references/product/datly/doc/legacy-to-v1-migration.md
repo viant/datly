@@ -87,6 +87,18 @@ mutation graph.
 Do not choose the operation from the HTTP verb alone. Preserve the existing
 missing-row, sparse-update, deletion, and identity policy explicitly.
 
+For a legacy handler that performs **no database access**, the separate
+`transcribe handler` path can retain its exported native Go contract and factory
+while generating its Datly registration. This is appropriate for a pure
+transformation or external-system adapter, not for carrying a legacy DAO into
+1.0. A compiled application mapping must name the exact legacy type, input,
+output, exported zero-argument factory, and separate generated destination;
+the stock CLI cannot infer those bindings from the DQL header. The maintained
+`transcribe/HANDLER_ONLY.md` in the Datly repository specifies the exact
+mapping and validation contract. If the old handler touches `sess.Db()` or `*sql.DB`, move
+that persistence into generated readers/writers first. Retire only the old
+registration when the new holder is linked, so the route is not duplicated.
+
 ## Rebuild a legacy reader
 
 1. Define the public input and output contract, including exact parameter
@@ -179,6 +191,15 @@ model a collection instead of forcing a to-one hint onto a broad foreign-key
 join. A Current lookup returning multiple rows for a to-one holder is usually
 evidence of an incomplete relation key or false cardinality, not a reason to
 silence the reader.
+
+For example, if a membership row is keyed by `(group_id, user_id)` but the
+parent graph exposes only `group_id`, joining all memberships on `group_id`
+and adding `AND 1=1` does not select one user. Filter the writable child
+source by the bound `user_id`, then join its remaining `group_id` to the parent.
+Keep the child physical table writable rather than parenthesizing it as an
+auxiliary lookup. Prove the graph with a fixture containing multiple members
+of the same group; the selected user's insert/update must remain atomic and
+must not alter the other members.
 
 When a new binding row references other new rows in the same atomic graph,
 declare those producer rows as writable siblings rather than nesting them

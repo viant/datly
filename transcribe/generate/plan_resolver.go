@@ -102,6 +102,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 	if err = r.input.ReadIndexes.resolve(r.plan); err != nil {
 		return nil, err
 	}
+	if err = r.resolveExternalHandler(); err != nil {
+		return nil, err
+	}
 	r.resolveFactoryLink()
 	if err = resolveHookScaffold(r.plan, r.input.HookScaffold); err != nil {
 		return nil, err
@@ -210,7 +213,7 @@ func (r *planResolver) resolveUniversalOutputs() {
 
 func (r *planResolver) validateHandlerSelection() error {
 	count := 0
-	for _, present := range []bool{r.input.GoHandler != nil, r.input.ContractHandler != nil, r.input.MutationHandler != nil, r.input.VeltyHandler != nil} {
+	for _, present := range []bool{r.input.ExternalHandler != nil, r.input.GoHandler != nil, r.input.ContractHandler != nil, r.input.MutationHandler != nil, r.input.VeltyHandler != nil} {
 		if present {
 			count++
 		}

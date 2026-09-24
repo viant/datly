@@ -20,8 +20,8 @@ import (
 // canonical handler. Transcribe remains the lower-level authored-contract path.
 // Destination is only the project root; DQL and package metadata own artifacts.
 type Generator struct {
-	// Operation selects reader generation (get) or mutation generation
-	// (post/put/patch). Reader generation preserves the authored HTTP method.
+	// Operation selects reader (get), mutation (post/put/patch), or external
+	// handler registration (handler). Readers preserve the authored HTTP method.
 	Operation          string
 	Language           HandlerTarget
 	EphemeralOwnership bool
@@ -172,6 +172,15 @@ func publishEphemeralPackage(source, target string, generated map[string]bool) e
 
 func (g Generator) generate(ctx context.Context, root, dir string, compiled *Result) (*GeneratedPackage, error) {
 	operation := strings.ToLower(strings.TrimSpace(g.Operation))
+	if operation == "handler" {
+		if compiled.ExternalHandler == nil || (g.Language != "" && g.Language != HandlerGo) {
+			return nil, fmt.Errorf("handler operation requires an explicitly mapped native Go handler")
+		}
+		return NewCompiler().generateCompiledAtWithPolicy(ctx, root, dir, compiled, g.GenerationPolicy)
+	}
+	if compiled.ExternalHandler != nil {
+		return nil, fmt.Errorf("handler-only DQL requires operation handler, not %q", operation)
+	}
 	language := g.Language
 	if language == "" {
 		language = HandlerGo
