@@ -16,6 +16,8 @@ const (
 	MessageBusCapabilityKey = xhandler.MessageBusKey
 	// ConnectorCapabilityKey identifies the explicitly granted named DB provider.
 	ConnectorCapabilityKey = xhandler.ConnectorKey
+	// RemoteMapperCapabilityKey selects the runtime-owned mapper through native DI.
+	RemoteMapperCapabilityKey xhandler.ValueKey = "remote_mapper"
 )
 
 type ValidationService = xhandler.Validator

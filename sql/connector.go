@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/sql/dml"
 	"github.com/viant/xdatly/connector"
 )
 
@@ -35,3 +37,15 @@ func (c *SQLComponent) Connector(ctx context.Context, name string) (*sql.DB, err
 }
 
 var _ connector.Provider = (*SQLComponent)(nil)
+
+// ConnectorDataSource adapts a registered connector to the neutral execution
+// port without opening a transaction or transferring database ownership.
+func (c *SQLComponent) ConnectorDataSource(ctx context.Context, name string) (dexec.DataSource, error) {
+	db, err := c.Connector(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return dml.Source{DB: db}, nil
+}
+
+var _ dexec.ConnectorDataSourceProvider = (*SQLComponent)(nil)

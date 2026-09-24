@@ -4,9 +4,9 @@
 
 **Published-dependency baseline verified.** The integrated reader, writer, cache,
 output, resource, documentation and MCP implementation has passed the complete
-repository suite against published dependencies. The release module pins the
-published xdatly SDK and native versions in `go.mod`, without local dependency
-replacements. Subsequent explicit lifecycle naming, output naming and documentation
+repository suite against published dependencies. Release verification uses the
+published xdatly SDK and native versions pinned in `go.mod`.
+Subsequent explicit lifecycle naming, output naming and documentation
 corrections are integrated; their final regression checks are described below.
 No Datly `v1.0.0` tag or completed release is claimed.
 
@@ -32,8 +32,7 @@ No Datly `v1.0.0` tag or completed release is claimed.
 
 `go mod tidy` and `go mod verify` succeed with the pinned public modules. The
 former dependency-test import of a removed Datly package has been corrected in
-the published dependency. Development workspaces may use local replacements;
-release module manifests use published dependency versions.
+the published dependency. Release module manifests use published dependency versions.
 
 ## Verification meaning
 

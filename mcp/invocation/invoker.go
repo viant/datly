@@ -8,19 +8,22 @@ import (
 	"github.com/viant/bindly/locator"
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/exec"
-	"github.com/viant/datly/runtime/output"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
 	xexec "github.com/viant/xdatly/exec"
 	xmcp "github.com/viant/xdatly/handler/mcp"
 )
 
+// OutputEncoder applies a compiled presentation contract without exposing its
+// runtime owner to the protocol-neutral invocation package.
+type OutputEncoder func(context.Context, any) ([]byte, error)
+
 type Config struct {
 	Invoker   exec.ComponentInvoker
 	Client    xmcp.Client
 	Authorize func(context.Context, exec.ComponentTarget) error
-	// Output supplies the component's compiled JSON presentation contract.
-	Output func(exec.ComponentTarget) *output.Plan
+	// Output selects the component's compiled JSON presentation adapter.
+	Output func(exec.ComponentTarget) OutputEncoder
 }
 
 type Request struct {
@@ -34,7 +37,7 @@ type Invoker struct {
 	component exec.ComponentInvoker
 	mcp       xmcp.Context
 	authorize func(context.Context, exec.ComponentTarget) error
-	output    func(exec.ComponentTarget) *output.Plan
+	output    func(exec.ComponentTarget) OutputEncoder
 }
 
 func New(config Config) *Invoker {
@@ -55,9 +58,6 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 		ctx = context.Background()
 	}
 	if i.authorize != nil {
-		// The hook may bind trusted, server-owned providers for this exact
-		// target; the same context must reach the component so they apply.
-		ctx, _ = exec.CaptureScopeBinding(ctx)
 		if err := i.authorize(ctx, request.Target); err != nil {
 			return nil, jsonrpc.NewInvalidRequest("MCP tool authorization denied", nil)
 		}
@@ -79,11 +79,11 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 	result, err := i.component.InvokeComponent(ctx, exec.ComponentRequest{
 		Target: request.Target, Providers: providers,
 	})
-	var plan *output.Plan
+	var encode OutputEncoder
 	if i.output != nil {
-		plan = i.output(request.Target)
+		encode = i.output(request.Target)
 	}
-	return &Execution{value: result, err: err, context: execContext, selection: exec.SelectedOutputFields(ctx, result), output: plan, encodingContext: ctx}, nil
+	return &Execution{value: result, err: err, context: execContext, selection: exec.SelectedOutputFields(ctx, result), encodeOutput: encode, encodingContext: ctx}, nil
 }
 
 func authorizationHeader(ctx context.Context) string {

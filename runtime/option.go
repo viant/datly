@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/viant/bindly"
+	"github.com/viant/bindly/locator"
 	"github.com/viant/bindly/resource"
+	remotecore "github.com/viant/datly/runtime/remote"
 	"github.com/viant/datly/runtime/route"
 )
 
@@ -21,6 +23,23 @@ type options struct {
 	exposure                *route.Exposure
 	resources               *resource.Store
 	resourceFiles           bool
+	// clientProviders are the runtime-level outbound client providers; when
+	// not configured the runtime creates and owns the default registry.
+	clientProviders           []locator.Provider
+	clientProvidersConfigured bool
+	remoteMapper              *remotecore.Mapper
+}
+
+// WithRemoteMapper supplies the shared mapping helper for remote handlers.
+// Without it, the runtime creates one mapper for all its components.
+func WithRemoteMapper(value *remotecore.Mapper) Option {
+	return func(options *options) error {
+		if value == nil {
+			return fmt.Errorf("remote mapper is required")
+		}
+		options.remoteMapper = value
+		return nil
+	}
 }
 
 // WithExposedPackages restricts public HTTP/MCP endpoints by package import path.

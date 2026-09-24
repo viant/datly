@@ -142,14 +142,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if err != nil {
 		return nil, err
 	}
-	// Providers bound by the adapter's authorization hook join the explicit
-	// request providers as child authority, so trusted scope values shadow any
-	// transport-bound input of the same kind and inherit into nested calls.
-	childProviders := request.Providers
-	if bound := dexec.ScopeProviders(ctx); len(bound) > 0 {
-		childProviders = append(append([]locator.Provider(nil), request.Providers...), bound...)
-	}
-	effectiveScope, err := handlerengine.ComposeScope(scope, childProviders...)
+	effectiveScope, err := handlerengine.ComposeScope(scope, request.Providers...)
 	if err != nil {
 		return nil, err
 	}

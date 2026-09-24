@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -173,8 +175,23 @@ func TestAuthoredLifecycle(t *testing.T) {
 						}
 					}
 					invariantPath := filepath.Join(root, "api/orders/invariants.go")
-					if _, err := os.Stat(invariantPath); !os.IsNotExist(err) {
-						t.Fatal("universal writer emitted component-private invariant phases", err)
+					if step.group == "" {
+						if _, err := os.Stat(invariantPath); !os.IsNotExist(err) {
+							t.Fatal("removed invariants retained their generated index", err)
+						}
+					} else {
+						// The generator emits a comments-only contract index, not
+						// component-private executable invariant phases.
+						index, err := parser.ParseFile(token.NewFileSet(), invariantPath, nil, parser.ParseComments)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if len(index.Decls) != 0 {
+							t.Fatal("universal writer emitted component-private invariant declarations")
+						}
+						if !strings.Contains(read(invariantPath), "Backfill"+step.group+"IfNeeded") {
+							t.Fatal("generated invariant index does not reflect the active group")
+						}
 					}
 					if read(hookPath) != hooks {
 						t.Fatal("authored lifecycle changed")

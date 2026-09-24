@@ -39,6 +39,7 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 - Use [dql-grammar.md](references/dql-grammar.md) and [dql.ebnf](references/dql.ebnf) for DQL, directives, options, declarative SQL graphs, CAST, and tag customization.
 - Use [tags-and-interfaces.md](references/tags-and-interfaces.md) for Go shapes, binding tags, SQL mapping, predicates, validation, and public APIs.
 - For JWT-based authorization, use the [explicit input and predicate pattern](references/tags-and-interfaces.md#jwt-input-and-authorization-predicates); preserve original certificate/public-key verification and do not inject ambient claims.
+- For a typed remote authorization context, read the [auth-context contract](references/product/datly/doc/auth-context.md). Keep verification, dependency binding, outbound headers and SQL predicates explicit; confirm generic provider API availability before naming its syntax.
 - Read [custom-contract.md](references/custom-contract.md) for this component's behavior and decisions.
 - Adapt [custom-examples.md](references/custom-examples.md); examples are patterns, not authorization to access a live database.
 - For direct bytes, conditional finalizers, YAML docs, static/MCP resources and operational services, read [output-and-operations.md](references/output-and-operations.md). Separate current APIs from pending authoring/integration contracts.

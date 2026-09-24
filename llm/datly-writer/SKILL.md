@@ -32,6 +32,7 @@ substitute `translate`, lower-level transcription, or manual writer plumbing.
 - Use [dql-grammar.md](references/dql-grammar.md) and [dql.ebnf](references/dql.ebnf) for DQL, directives, options, declarative SQL graphs, CAST, and tag customization.
 - Use [tags-and-interfaces.md](references/tags-and-interfaces.md) for Go shapes, binding tags, SQL mapping, predicates, validation, and public APIs.
 - For JWT-based authorization, use the [explicit input and predicate pattern](references/tags-and-interfaces.md#jwt-input-and-authorization-predicates); preserve original certificate/public-key verification and do not inject ambient claims.
+- For a typed remote authorization context, read the [auth-context contract](references/product/datly/doc/auth-context.md). Keep verification, dependency binding, outbound headers and SQL predicates explicit; confirm generic provider API availability before naming its syntax.
 - For explicit row deletion and validation-only tokens, read [the mutation marker contract](references/writer-contract.md#explicit-deletion-and-token-validation). Omitted rows never imply deletion; token checks do not make writes atomic.
 - Read [writer-contract.md](references/writer-contract.md) for this component's behavior and decisions.
 - Adapt [writer-examples.md](references/writer-examples.md); examples are patterns, not authorization to access a live database.

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	dexec "github.com/viant/datly/exec"
 	"sync"
@@ -133,13 +134,22 @@ func (o *Observability) Shutdown(ctx context.Context) error {
 	}
 }
 
-// Shutdown releases only a standalone runtime's owned services. Managed
-// generations borrow their application owner and must not close it on retirement.
+// Shutdown releases only a standalone runtime's owned services: the default
+// outbound client registry it created and, when not managed, observability.
+// Managed generations borrow their application owner and must not close it
+// on retirement; explicitly configured client providers are likewise borrowed.
 func (r *Runtime) Shutdown(ctx context.Context) error {
-	if r == nil || !r.ownsObservability {
+	if r == nil {
 		return nil
 	}
-	return r.observability.Shutdown(ctx)
+	var err error
+	if r.ownsClients && r.clients != nil {
+		err = r.clients.Close()
+	}
+	if !r.ownsObservability {
+		return err
+	}
+	return errors.Join(err, r.observability.Shutdown(ctx))
 }
 func (o *Observability) ExportStats() otel.Stats {
 	if o == nil {

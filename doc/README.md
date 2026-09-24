@@ -26,6 +26,7 @@ provide a runnable feature switch.
 | Return business errors or shape a typed/raw response | [Errors and custom output](errors-and-output.md) |
 | Enforce verified identity and row access | [Security](security.md) |
 | Register custom behavior, return bytes or finalize output | [Custom handlers](custom-handlers.md) |
+| Call a configured HTTP endpoint or MCP tool as a typed component (for example an authorization context) | [Remote handlers](remote-handlers.md) |
 | Expose HTTP and MCP | [Protocols](protocols.md) |
 | Configure a linked server, resources and reload | [Configuration](configuration.md) |
 | Select a cache and plan warmup | [Cache and warmup](cache-and-warmup.md) |

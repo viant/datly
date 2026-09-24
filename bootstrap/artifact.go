@@ -195,12 +195,19 @@ func (c *artifactCompiler) lookupType(name string) (reflect.Type, error) {
 	if c == nil || c.input.Types == nil {
 		return nil, nil
 	}
-	typ, ok, err := c.input.Types.Resolve(typecatalog.PackageAuthority, name)
+	resolution := &typecatalog.ResolutionContext{}
+	if component := c.input.Component; component != nil {
+		resolution.PackagePath = component.Key.Scope
+		if authored := component.TypeContext; authored != nil {
+			resolution.DefaultPackage = authored.DefaultPackage
+			for _, imported := range authored.Imports {
+				resolution.Imports = append(resolution.Imports, typecatalog.PackageImport{Alias: imported.Alias, Package: imported.Package})
+			}
+		}
+	}
+	resolver, err := typecatalog.NewResolver(c.input.Types, typecatalog.PackageAuthority, resolution)
 	if err != nil {
 		return nil, err
 	}
-	if !ok || typ == nil {
-		return nil, nil
-	}
-	return typ.Type, nil
+	return resolver.Type(name)
 }

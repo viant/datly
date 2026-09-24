@@ -142,26 +142,34 @@ func collectContractTypes(contracts map[reflect.Type]bool, typeOf reflect.Type) 
 
 func reflectedPackagePaths(includes []string) []string {
 	seen := map[string]bool{}
+	var patterns []string
 	for _, include := range includes {
 		include = strings.TrimSpace(include)
-		if include != "" && !strings.ContainsAny(include, "*?") && !strings.HasSuffix(include, "...") {
+		if include == "" {
+			continue
+		}
+		if !strings.ContainsAny(include, "*?[") && !strings.HasSuffix(include, "...") {
 			seen[include] = true
 			_ = xunsafe.PackageTypes(include)
+		} else {
+			patterns = append(patterns, include)
 		}
 	}
-	_ = xunsafe.PackageTypes("")
-	for _, packagePath := range xunsafe.PackageNames() {
-		for _, include := range includes {
-			include = strings.TrimSpace(include)
-			matched := false
-			if strings.HasSuffix(include, "...") {
-				matched = strings.HasPrefix(packagePath, strings.TrimSuffix(include, "..."))
-			} else if value, err := path.Match(include, packagePath); err == nil {
-				matched = value
-			}
-			if matched {
-				seen[packagePath] = true
-				break
+	// Exact package selections need no walk over every linked package name.
+	if len(patterns) > 0 {
+		_ = xunsafe.PackageTypes("")
+		for _, packagePath := range xunsafe.PackageNames() {
+			for _, include := range patterns {
+				matched := false
+				if strings.HasSuffix(include, "...") {
+					matched = strings.HasPrefix(packagePath, strings.TrimSuffix(include, "..."))
+				} else if value, err := path.Match(include, packagePath); err == nil {
+					matched = value
+				}
+				if matched {
+					seen[packagePath] = true
+					break
+				}
 			}
 		}
 	}

@@ -204,8 +204,15 @@ func (c *serviceCompiler) publish(catalog *Catalog, policy *authorization.Policy
 	for _, registered := range components {
 		outputs[registered.Component.Key.String()] = registered.Output
 	}
-	componentInvoker := invocation.New(invocation.Config{Invoker: c.config.Invoker, Client: c.config.Client, Authorize: c.config.AuthorizeTool, Output: func(target exec.ComponentTarget) *output.Plan {
-		return outputs[target.Component.String()]
+	componentInvoker := invocation.New(invocation.Config{Invoker: c.config.Invoker, Client: c.config.Client, Authorize: c.config.AuthorizeTool, Output: func(target exec.ComponentTarget) invocation.OutputEncoder {
+		plan := outputs[target.Component.String()]
+		if plan == nil {
+			return nil
+		}
+		return func(ctx context.Context, value any) ([]byte, error) {
+			encoded, err := plan.Encode(ctx, "json", value)
+			return encoded.Data, err
+		}
 	}})
 	resourceHandler := mcpresource.NewHandler(catalog.resources, componentInvoker)
 	resourceReadHandler := resourceHandler.Handle

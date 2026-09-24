@@ -22,7 +22,7 @@ require (
 	github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47
-	github.com/viant/xdatly v1.0.0
+	github.com/viant/xdatly v1.0.1-0.20260924020612-f598b017c9e8
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.0
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -100,5 +100,7 @@ require (
 )
 
 replace google.golang.org/grpc/stats/opentelemetry => google.golang.org/grpc v1.77.0
+
+replace github.com/viant/xdatly => ../xdatly
 
 exclude google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a

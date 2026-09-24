@@ -9,6 +9,9 @@ The canonical `llm` source contains three application-authoring skills:
 Short entrypoints route to grammar, contracts, examples and operational references.
 They describe the integrated authoring rules and explicitly documented remaining
 gaps. See [release status](status.md) for the current validation boundaries.
+For explicit verified identity, typed context dependencies and remote HTTP/MCP
+provider requirements, see the [auth-context guide](auth-context.md). Its
+generic provider registration syntax remains subject to connected-build verification.
 
 ## Source and product inputs
 

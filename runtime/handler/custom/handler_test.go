@@ -3,9 +3,12 @@ package custom
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/viant/bindly"
 	rhandler "github.com/viant/datly/runtime/handler"
+	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	xhandler "github.com/viant/xdatly/handler"
 	xresponse "github.com/viant/xdatly/response"
 )
@@ -82,5 +85,67 @@ func TestFuncHandler(t *testing.T) {
 	actual, err := handler.Execute(context.Background(), rhandler.Invocation{Input: &input{Value: 4}})
 	if err != nil || actual.(*output).Value != 5 {
 		t.Fatalf("unexpected function result: actual=%#v err=%v", actual, err)
+	}
+}
+
+type staticInput struct{}
+type staticOutput struct{}
+
+type staticContract struct {
+	Dependency string `bind:"kind=static,required"`
+}
+
+type requestBoundContract struct {
+	Token string `bind:"kind=header,in=Authorization,required"`
+}
+
+func (requestBoundContract) Exec(context.Context, xhandler.Session, *staticInput, *staticOutput) error {
+	return nil
+}
+
+func (s staticContract) Exec(context.Context, xhandler.Session, *staticInput, *staticOutput) error {
+	return nil
+}
+
+func TestStaticHandlerBindingsRequirePointerAndBindOnce(t *testing.T) {
+	first, err := bindly.NewInjector(bindly.WithProviders(handlerprovider.Static(xhandler.ValueKey("static"), "first")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := New[staticInput, staticOutput](staticContract{})
+	if err := value.(interface {
+		BindStatic(context.Context, *bindly.Injector) error
+	}).BindStatic(context.Background(), first); err == nil || !strings.Contains(err.Error(), "pointer contract") {
+		t.Fatalf("value contract binding error = %v", err)
+	}
+	contract := &staticContract{}
+	bound := New[staticInput, staticOutput](contract)
+	binder := bound.(interface {
+		BindStatic(context.Context, *bindly.Injector) error
+	})
+	if err := binder.BindStatic(context.Background(), first); err != nil || contract.Dependency != "first" {
+		t.Fatalf("first static binding = %q, %v", contract.Dependency, err)
+	}
+	second, err := bindly.NewInjector(bindly.WithProviders(handlerprovider.Static(xhandler.ValueKey("static"), "second")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := binder.BindStatic(context.Background(), second); err != nil || contract.Dependency != "first" {
+		t.Fatalf("one-time static binding changed = %q, %v", contract.Dependency, err)
+	}
+}
+
+func TestHandlerStaticBindingRejectsRequestScopeEvenWithProvider(t *testing.T) {
+	injector, err := bindly.NewInjector(bindly.WithProviders(handlerprovider.Static(xhandler.ValueKey("header"), "Bearer forged")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract := &requestBoundContract{}
+	handler := New[staticInput, staticOutput](contract)
+	err = handler.(interface {
+		BindStatic(context.Context, *bindly.Injector) error
+	}).BindStatic(context.Background(), injector)
+	if err == nil || !strings.Contains(err.Error(), "request-scoped") || contract.Token != "" {
+		t.Fatalf("request-scoped handler binding = %q, %v", contract.Token, err)
 	}
 }

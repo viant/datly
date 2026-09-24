@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	structqlcodec "github.com/viant/datly/runtime/handler/codec/structql"
@@ -29,6 +30,28 @@ func (f *codecFactory) New(config *xcodec.Config, options ...xcodec.Option) (xco
 		copy := *config
 		copy.Body = name
 		return factory.New(&copy, options...)
+	}
+	if lookup := xcodec.NewOptions(options).LookupType; lookup != nil {
+		typeOf, err := lookup(strings.TrimSpace(config.Body))
+		if err != nil {
+			return nil, fmt.Errorf("resolve codec type %q: %w", config.Body, err)
+		}
+		if typeOf != nil {
+			for typeOf.Kind() == reflect.Pointer {
+				typeOf = typeOf.Elem()
+			}
+			pointer := reflect.PointerTo(typeOf)
+			if pointer.Implements(reflect.TypeFor[xcodec.Factory]()) {
+				return reflect.New(typeOf).Interface().(xcodec.Factory).New(config, options...)
+			}
+			if pointer.Implements(reflect.TypeFor[xcodec.Instance]()) {
+				if len(config.Args) != 0 {
+					return nil, fmt.Errorf("codec instance %s does not accept codec arguments", typeOf)
+				}
+				return reflect.New(typeOf).Interface().(xcodec.Instance), nil
+			}
+			return nil, fmt.Errorf("codec type %s implements neither codec.Factory nor codec.Instance", typeOf)
+		}
 	}
 	if f.fallback != nil {
 		return f.fallback.New(config, options...)

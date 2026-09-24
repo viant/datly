@@ -4,6 +4,8 @@
     "datly/NOTICE",
     "datly/THIRD_PARTY_NOTICES.md",
     "datly/doc/api-documentation.md",
+    "datly/doc/auth-context.md",
+    "datly/doc/remote-handlers.md",
     "datly/doc/cache-and-warmup.md",
     "datly/doc/legacy-to-v1-migration.md",
     "datly/doc/observability.md",

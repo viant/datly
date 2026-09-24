@@ -35,6 +35,12 @@ preserves internal visibility, authorization and the root transaction owner.
 Supplied zero remains supplied, and arbitrary body fields cannot replace a
 registered service.
 
+To call an external HTTP endpoint or MCP tool without writing transport code,
+declare a `remote.Config` constant and use the ordinary
+[remote handlers](remote-handlers.md). They use the same handler DI injection
+and lifecycle as application handlers; their typed output composes like any
+other component result.
+
 A configured named connector-provider capability is an opt-in exception for
 specialized integrations. It returns a borrowed DB for an exact configured name,
 not a managed transaction. Do not close it or assume direct work silently joins

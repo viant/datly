@@ -12,7 +12,6 @@ import (
 	dexec "github.com/viant/datly/exec"
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
-	sqldml "github.com/viant/datly/sql/dml"
 	"github.com/viant/xdatly/connector"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -101,16 +100,23 @@ func (p transactionSQLProvider) Connector(ctx context.Context, name string) (rha
 	if p.scope == nil || p.scope.connectors == nil {
 		return nil, fmt.Errorf("transaction SQL connector provider is required")
 	}
-	db, err := p.scope.connectors.Connector(ctx, name)
+	sources, ok := p.scope.connectors.(dexec.ConnectorDataSourceProvider)
+	if !ok {
+		return nil, fmt.Errorf("transaction SQL connector %q requires an execution data-source provider", name)
+	}
+	source, err := sources.ConnectorDataSource(ctx, name)
 	if err != nil {
 		return nil, err
+	}
+	key := sourceKey(source)
+	if source == nil || key == nil {
+		return nil, ErrUnknownDatabaseIdentity
 	}
 	root := p.scope.root
 	if root == nil {
 		root = p.scope
 	}
-	source := sqldml.Source{DB: db}
-	unit, err := root.databaseUnit(ctx, source, db, "")
+	unit, err := root.databaseUnit(ctx, source, key, "")
 	if err != nil {
 		return nil, err
 	}

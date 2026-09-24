@@ -108,17 +108,13 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		})
 		return
 	}
-	ctx := req.Context()
 	if h.authorize != nil {
 		target, ok := h.runtime.ComponentTargetByMethodPath(req.Method, escapedPath)
 		if !ok {
 			writeJSON(writer, stdhttp.StatusNotFound, xresponse.Status{Status: "error", Message: "not found", Error: "not found"})
 			return
 		}
-		// The hook may bind trusted, server-owned providers for this exact
-		// target; the same context must reach the runtime so they apply.
-		ctx, _ = dexec.CaptureScopeBinding(ctx)
-		if err := h.authorize(ctx, req, target); err != nil {
+		if err := h.authorize(req.Context(), req, target); err != nil {
 			statusCode := xresponse.ErrorStatusCode(err, stdhttp.StatusForbidden)
 			message := dexec.ErrorMessage(err, statusCode)
 			writeJSON(writer, statusCode, xresponse.Status{Status: "error", Message: message, Error: message})
@@ -126,7 +122,7 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		}
 	}
 	started := time.Now()
-	ctx = context.WithValue(ctx, xexec.ContextKey, xexec.NewContext(req.Method, req.RequestURI, req.Header, h.version))
+	ctx := context.WithValue(req.Context(), xexec.ContextKey, xexec.NewContext(req.Method, req.RequestURI, req.Header, h.version))
 	ctx = dexec.CaptureOutputSelection(ctx)
 	asyncRoute := h.asyncRoute(req)
 	var asyncService AsyncService

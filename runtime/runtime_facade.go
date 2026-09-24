@@ -11,10 +11,13 @@ import (
 	"github.com/viant/bindly/locator"
 	"github.com/viant/bindly/resource"
 	dexec "github.com/viant/datly/exec"
+	rhandler "github.com/viant/datly/runtime/handler"
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
+	"github.com/viant/datly/runtime/handler/provider/clients"
 	"github.com/viant/datly/runtime/output"
 	rregistry "github.com/viant/datly/runtime/registry"
+	remotecore "github.com/viant/datly/runtime/remote"
 	rroute "github.com/viant/datly/runtime/route"
 	"github.com/viant/datly/spec"
 	xexec "github.com/viant/xdatly/exec"
@@ -36,6 +39,13 @@ type Runtime struct {
 	canonicalConstants map[string]locator.Provider
 	invoker            *handlerengine.Engine
 	injector           *bindly.Injector
+	// clientProviders are applied to every component that does not register
+	// the same kind itself. clients is the default registry the runtime
+	// created when no providers were configured; it is closed on Shutdown.
+	clientProviders  []locator.Provider
+	defaultProviders []locator.Provider
+	clients          *clients.Registry
+	ownsClients      bool
 }
 
 // ComponentLoader materializes one indexed component inside the currently
@@ -65,6 +75,20 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 	if observation == nil {
 		observation = &Observability{Recorder: observability.NewRecorder(options.observability.Logger, observability.WithReadingData(options.observability.ReadingData))}
 	}
+	// Outbound client capabilities are composed here, once, for every
+	// component. Without explicit providers the runtime owns the default
+	// registry and releases it on Shutdown; handlers only ever borrow.
+	clientProviders := options.clientProviders
+	var ownedClients *clients.Registry
+	if !options.clientProvidersConfigured {
+		ownedClients = clients.New()
+		clientProviders = ownedClients.Providers()
+	}
+	remoteMapper := options.remoteMapper
+	if remoteMapper == nil {
+		remoteMapper = remotecore.NewMapper()
+	}
+	defaultProviders := append(append([]locator.Provider(nil), clientProviders...), handlerprovider.Static(rhandler.RemoteMapperCapabilityKey, remoteMapper))
 	specs := make([]*spec.Component, 0, len(components))
 	registered := make(map[string]*RegisteredComponent, len(components))
 	metadata := make(map[string]*spec.Component, len(components))
@@ -99,7 +123,7 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 				return nil, fmt.Errorf("component %s output: %w", component.Component.Key.String(), outputErr)
 			}
 		}
-		entry.Providers = append([]locator.Provider(nil), component.Providers...)
+		entry.Providers = withDefaultClientProviders(append([]locator.Provider(nil), component.Providers...), defaultProviders)
 		constants, constantsErr := canonicalConstantValues(component.Component)
 		if constantsErr != nil {
 			return nil, fmt.Errorf("component %s constants: %w", component.Component.Key.String(), constantsErr)
@@ -126,6 +150,11 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 	if err != nil {
 		return nil, err
 	}
+	for _, entry := range registered {
+		if err := bindStaticHandler(context.Background(), injector, entry); err != nil {
+			return nil, fmt.Errorf("component %s handler: %w", entry.Component.Key.String(), err)
+		}
+	}
 	if options.managedObservability == nil {
 		if err := observation.initialize(options.observability); err != nil {
 			return nil, err
@@ -136,6 +165,7 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 		bundle: bundle, publicBundle: publicBundle, exposure: options.exposure, registered: registered, canonicalConstants: canonicalConstants,
 		metadata: metadata,
 		invoker:  handlerengine.New(), injector: injector,
+		clientProviders: clientProviders, defaultProviders: defaultProviders, clients: ownedClients, ownsClients: ownedClients != nil,
 	}, nil
 }
 
@@ -232,7 +262,40 @@ func (r *Runtime) registeredComponent(ctx context.Context, key spec.Key) (*Regis
 	if registered == nil || registered.Component == nil || registered.Component.Key != key {
 		return nil, fmt.Errorf("loaded component does not match indexed component %s", key.String())
 	}
-	return registered, nil
+	return r.prepareLoadedComponent(registered)
+}
+
+// prepareLoadedComponent gives every lazy registration the same static
+// capabilities as an eagerly registered component without mutating its loader.
+func (r *Runtime) prepareLoadedComponent(registered *RegisteredComponent) (*RegisteredComponent, error) {
+	if registered == nil || registered.Component == nil {
+		return nil, fmt.Errorf("loaded component is required")
+	}
+	entry := *registered
+	entry.Providers = withDefaultClientProviders(append([]locator.Provider(nil), registered.Providers...), r.defaultProviders)
+	// Static dependencies are runtime-scoped, not request-scoped; a canceled
+	// first lookup must not permanently poison this handler's one-time bind.
+	if err := bindStaticHandler(context.Background(), r.injector, &entry); err != nil {
+		return nil, fmt.Errorf("component %s handler: %w", entry.Component.Key.String(), err)
+	}
+	return &entry, nil
+}
+
+func bindStaticHandler(ctx context.Context, injector *bindly.Injector, entry *RegisteredComponent) error {
+	if entry == nil || entry.Handler == nil {
+		return nil
+	}
+	binder, ok := entry.Handler.(interface {
+		BindStatic(context.Context, *bindly.Injector) error
+	})
+	if !ok {
+		return nil
+	}
+	scope, err := injector.ForScope(entry.Providers...)
+	if err != nil {
+		return err
+	}
+	return binder.BindStatic(ctx, scope)
 }
 
 // LoadComponent exposes generation-scoped lazy resolution to protocol owners.
@@ -245,15 +308,25 @@ func (r *Runtime) LoadComponents(ctx context.Context, key spec.Key) ([]*Register
 		LoadComponents(context.Context, spec.Key) ([]*RegisteredComponent, error)
 	}); ok {
 		components, err := family.LoadComponents(ctx, key)
-		if err == nil && r.ExposesComponent(key) {
-			for _, component := range components {
-				if component != nil && component.Component != nil && component.Component.Key != key {
-					r.relatedExposure.Store(component.Component.Key.String(), true)
-					r.relatedMetadata.Store(component.Component.Key.String(), component.Component.Clone())
-				}
+		if err != nil {
+			return nil, err
+		}
+		prepared := make([]*RegisteredComponent, len(components))
+		for index, component := range components {
+			if component == nil {
+				continue
+			}
+			ready, prepareErr := r.prepareLoadedComponent(component)
+			if prepareErr != nil {
+				return nil, prepareErr
+			}
+			prepared[index] = ready
+			if r.ExposesComponent(key) && ready.Component.Key != key {
+				r.relatedExposure.Store(component.Component.Key.String(), true)
+				r.relatedMetadata.Store(component.Component.Key.String(), component.Component.Clone())
 			}
 		}
-		return components, err
+		return prepared, nil
 	}
 	component, err := r.registeredComponent(ctx, key)
 	if err != nil {

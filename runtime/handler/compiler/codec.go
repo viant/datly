@@ -67,7 +67,7 @@ func (c ParamCodecCompiler) Build() (map[string]ParamCodec, error) {
 			DestinationType:      field.Type,
 			Args:                 append([]string(nil), param.Codec.Args...),
 			OutputTypeExpression: param.Codec.OutputType,
-		}, xcodec.WithResourceFS(c.Resources))
+		}, xcodec.WithResourceFS(c.Resources), xcodec.WithTypeLookup(c.LookupType))
 		if err != nil {
 			return nil, fmt.Errorf("build codec for %s: %w", param.Name, err)
 		}
@@ -104,9 +104,13 @@ func (c ParamCodecCompiler) sourceType(fields *contractFields, param *spec.Param
 		return sourceType, nil
 	}
 	name := strings.TrimSpace(param.Source.Name)
+	// A derived param may address a field inside another bound parameter
+	// (for example a component dependency output): the root segment names
+	// the source parameter and the remaining path is walked on its type.
+	root, path, _ := strings.Cut(name, ".")
 	var source *spec.Parameter
 	for _, candidate := range spec.EffectiveParameters(c.Component.Parameters) {
-		if !isInputParam(candidate) || !strings.EqualFold(strings.TrimSpace(candidate.Name), name) {
+		if !isInputParam(candidate) || !strings.EqualFold(strings.TrimSpace(candidate.Name), root) {
 			continue
 		}
 		if source != nil {
@@ -124,5 +128,36 @@ func (c ParamCodecCompiler) sourceType(fields *contractFields, param *spec.Param
 	if !ok {
 		return nil, fmt.Errorf("codec param %q source field %q was not found", param.Name, name)
 	}
-	return resolved.field.Type, nil
+	sourceType, err := fieldPathType(resolved.field.Type, path)
+	if err != nil {
+		return nil, fmt.Errorf("codec param %q source %q: %w", param.Name, name, err)
+	}
+	return sourceType, nil
+}
+
+// fieldPathType walks a dotted exported field path on a struct type,
+// dereferencing pointers, and returns the addressed field type.
+func fieldPathType(root reflect.Type, path string) (reflect.Type, error) {
+	current := root
+	if strings.TrimSpace(path) == "" {
+		return current, nil
+	}
+	for _, segment := range strings.Split(path, ".") {
+		segment = strings.TrimSpace(segment)
+		if segment == "" {
+			return nil, fmt.Errorf("empty field path segment")
+		}
+		for current != nil && current.Kind() == reflect.Pointer {
+			current = current.Elem()
+		}
+		if current == nil || current.Kind() != reflect.Struct {
+			return nil, fmt.Errorf("field %q is not addressable on %v", segment, current)
+		}
+		field, ok := current.FieldByName(segment)
+		if !ok || !field.IsExported() {
+			return nil, fmt.Errorf("field %q was not found on %v", segment, current)
+		}
+		current = field.Type
+	}
+	return current, nil
 }

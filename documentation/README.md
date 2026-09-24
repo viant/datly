@@ -154,11 +154,10 @@ private-input ownership, failed/successful metadata-only reload, and generated
 binary publication/reload after source removal. Generic response tests cover
 byte-for-byte HTTP output and explicit MCP blobs without entity/schema inference.
 
-Native prerequisites are isolated copies: approved X JSON field selection and
+Native prerequisites include approved X JSON field selection and
 Structology wire projection, Structology annotation provenance, AFS file/directory
 correctness, SQLparser compiled lineage, and the MCP protocol schema/ref/blob
-owners. They are verified through explicit local replacements; no published
-version is fabricated. Review and publication of these native prerequisites must
+owners. Review and publication of these native prerequisites must
 precede integration against published dependencies.
 
 Authored response resources use OpenAPI 3.0-compatible draft-04 schema vocabulary.

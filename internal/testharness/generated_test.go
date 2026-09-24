@@ -57,8 +57,18 @@ func TestGeneratedModuleUsesSourceReplacements(t *testing.T) {
 	}
 }
 
-func TestGeneratedModuleResolvesPublishedSDK(t *testing.T) {
+func TestGeneratedModuleResolvesSelectedSDK(t *testing.T) {
 	fixture := GeneratedModule{}
+	source, root, err := fixture.source()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expected *modfile.Replace
+	for _, replacement := range source.Replace {
+		if replacement.Old.Path == "github.com/viant/xdatly" {
+			expected = replacement
+		}
+	}
 	content, err := fixture.Content()
 	if err != nil {
 		t.Fatal(err)
@@ -67,10 +77,24 @@ func TestGeneratedModuleResolvesPublishedSDK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	found := false
 	for _, replacement := range file.Replace {
 		if replacement.Old.Path == "github.com/viant/xdatly" {
-			t.Fatal("published SDK unexpectedly replaced in generated application")
+			found = true
+			if expected == nil {
+				t.Fatal("published SDK unexpectedly replaced in generated application")
+			}
+			path := expected.New.Path
+			if expected.New.Version == "" && !filepath.IsAbs(path) {
+				path = filepath.Join(root, path)
+			}
+			if replacement.New.Path != path || replacement.New.Version != expected.New.Version {
+				t.Fatalf("SDK replacement diverged from source: %+v", replacement.New)
+			}
 		}
+	}
+	if expected != nil && !found {
+		t.Fatal("selected SDK replacement lost in generated application")
 	}
 	location, err := fixture.DependencyDir("github.com/viant/xdatly")
 	if err != nil {
