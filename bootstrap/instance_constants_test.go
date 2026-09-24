@@ -112,7 +112,7 @@ func TestSQLiteDiscoveryAndExecutionInstanceFiles(t *testing.T) {
 			mu.Lock()
 			defer mu.Unlock()
 			seenDiscovery, seenRead := false, false
-			expectedDiscovery := "SELECT id, name FROM `" + environment + ".ds.records` WHERE 1 = 0 AND id = ?"
+			expectedDiscovery := "SELECT id, name FROM `" + environment + ".ds.records` WHERE 1 = 0 AND (id = ?)"
 			expectedRead := "SELECT COALESCE(id, 0) AS id, COALESCE(name, '') AS name FROM `" + environment + ".ds.records` WHERE id=?"
 			for _, call := range calls {
 				if call.Phase != "query" {

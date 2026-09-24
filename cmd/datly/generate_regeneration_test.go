@@ -173,8 +173,17 @@ func TestAuthoredLifecycle(t *testing.T) {
 						}
 					}
 					invariantPath := filepath.Join(root, "api/orders/invariants.go")
-					if _, err := os.Stat(invariantPath); !os.IsNotExist(err) {
-						t.Fatal("universal writer emitted component-private invariant phases", err)
+					if step.group == "" {
+						if _, err := os.Stat(invariantPath); !os.IsNotExist(err) {
+							t.Fatal("removed invariant retained metadata", err)
+						}
+					} else {
+						if _, err := os.Stat(invariantPath); err != nil {
+							t.Fatalf("active invariant metadata missing: %v", err)
+						}
+						if !strings.Contains(read(invariantPath), "Backfill"+step.group+"IfNeeded") {
+							t.Fatalf("invariant metadata does not contain %q", step.group)
+						}
 					}
 					if read(hookPath) != hooks {
 						t.Fatal("authored lifecycle changed")
