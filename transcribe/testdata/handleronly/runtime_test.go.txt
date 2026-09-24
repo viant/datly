@@ -1,0 +1,114 @@
+package registration
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/spec"
+	"github.com/viant/datly/standalone"
+	"github.com/viant/datly/standalone/config"
+	fixture "github.com/viant/datly/transcribe/testdata/handleronly"
+	upstream "github.com/viant/mcp"
+	"github.com/viant/mcp-protocol/authorization"
+	oauthmeta "github.com/viant/mcp-protocol/oauth2/meta"
+	"github.com/viant/mcp-protocol/schema"
+	mcpclient "github.com/viant/mcp/client"
+	"github.com/viant/x"
+)
+
+func TestGeneratedHandlerRuntime(t *testing.T) {
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	for _, eager := range []bool{false, true} {
+		for _, registered := range []bool{false, true} {
+			name := "indexed"
+			if eager {
+				name = "eager"
+			}
+			if registered {
+				name += "/registry"
+			} else {
+				name += "/holder"
+			}
+			t.Run(name, func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				exports := x.NewRegistry()
+				before := fixture.Constructions.Load()
+				if registered {
+					require.NoError(t, RegisterConvertFactories(exports))
+				}
+				require.Equal(t, before, fixture.Constructions.Load(), "registration must not invoke factory")
+				cfg := &config.Config{BaseDir: filepath.Dir(cwd), GoBootstrap: &config.Packages{Packages: []string{"github.com/viant/datly/handlerfixture/registration"}, EagerComponents: eager}, Endpoint: config.Endpoint{Address: "127.0.0.1:0"}, MCP: &config.MCP{Address: "127.0.0.1:0"}}
+				cfg.MCP.Authorization = &authorization.Policy{Tools: map[string]*authorization.Authorization{"Convert": {ProtectedResourceMetadata: &oauthmeta.ProtectedResourceMetadata{Resource: "https://test.invalid/convert"}}}}
+				server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: exports, Holders: []any{ConvertDatly}})
+				require.NoError(t, err)
+				done := make(chan error, 1)
+				go func() { done <- server.Serve(ctx, io.Discard) }()
+				t.Cleanup(func() {
+					cancel()
+					require.NoError(t, server.Shutdown(context.Background()))
+					require.NoError(t, <-done)
+				})
+				addresses, err := server.WaitReady(ctx)
+				require.NoError(t, err)
+				require.Len(t, addresses, 2)
+				for _, tc := range []struct {
+					token, inclusion string
+					code             int
+				}{{"", "one", 401}, {"allowed", "fail", 400}, {"allowed", "one", 200}} {
+					body := `{"inclusion":"` + tc.inclusion + `","exclusion":"two"}`
+					request := httptest.NewRequest("POST", "/convert?debug=true", strings.NewReader(body))
+					request.Header.Set("Content-Type", "application/json")
+					request.Header.Set("Authorization", tc.token)
+					response := httptest.NewRecorder()
+					server.ServeHTTP(response, request)
+					require.Equal(t, tc.code, response.Code, response.Body.String())
+					if tc.code == 200 {
+						require.JSONEq(t, `{"converted":"one:two:debug"}`, response.Body.String())
+					}
+				}
+				value, err := server.InvokeComponent(ctx, dexec.ComponentRequest{Target: dexec.ComponentTarget{Component: spec.Key{Kind: spec.KindComponent, Scope: "github.com/viant/datly/handlerfixture/registration", Name: "Convert"}, Route: spec.RouteRef{Method: "POST", Path: "/convert"}}, Input: &fixture.Input{Token: "allowed", Inclusion: "child", Exclusion: "typed"}})
+				require.NoError(t, err)
+				data, err := json.Marshal(value)
+				require.NoError(t, err)
+				require.JSONEq(t, `{"converted":"child:typed"}`, string(data))
+				client, err := upstream.NewClientWithContext(ctx, nil, &upstream.ClientOptions{Name: "test", Version: "1", ProtocolVersion: schema.LatestProtocolVersion, Transport: upstream.ClientTransport{Type: "streamable", ClientTransportHTTP: upstream.ClientTransportHTTP{URL: "http://" + addresses[1] + "/mcp"}}})
+				require.NoError(t, err)
+				defer client.Close()
+				list, err := client.ListTools(ctx, nil)
+				require.NoError(t, err)
+				data, err = json.Marshal(list)
+				require.NoError(t, err)
+				require.Contains(t, string(data), "Convert")
+				result, err := client.CallTool(ctx, &schema.CallToolRequestParams{Name: "Convert", Arguments: map[string]any{"Inclusion": "mcp", "Exclusion": "typed", "Debug": true}}, mcpclient.WithAuthToken("allowed"))
+				require.NoError(t, err)
+				require.False(t, result.IsError != nil && *result.IsError, "%+v", result)
+				data, err = json.Marshal(result.StructuredContent)
+				require.NoError(t, err)
+				require.JSONEq(t, `{"converted":"mcp:typed:debug"}`, string(data))
+				result, err = client.CallTool(ctx, &schema.CallToolRequestParams{Name: "Convert", Arguments: map[string]any{"Exclusion": "typed"}}, mcpclient.WithAuthToken("allowed"))
+				require.NoError(t, err)
+				require.False(t, result.IsError != nil && *result.IsError)
+				data, err = json.Marshal(result.StructuredContent)
+				require.NoError(t, err)
+				require.JSONEq(t, `{"converted":"default:typed"}`, string(data), "handwritten input initialization is retained")
+				for _, tc := range []struct{ token, inclusion string }{{"denied", "one"}, {"allowed", "fail"}} {
+					result, err = client.CallTool(ctx, &schema.CallToolRequestParams{Name: "Convert", Arguments: map[string]any{"Inclusion": tc.inclusion}}, mcpclient.WithAuthToken(tc.token))
+					require.NoError(t, err)
+					require.True(t, result.IsError != nil && *result.IsError)
+				}
+				require.Greater(t, fixture.Constructions.Load(), before)
+			})
+		}
+	}
+}

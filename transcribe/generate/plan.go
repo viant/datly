@@ -47,17 +47,19 @@ type Plan struct {
 	Input  ContractPlan
 	Output ContractPlan
 
-	HelperTypes     []HelperType
-	GeneratedTypes  []GeneratedTypePlan
-	GoHandler       *GoHandlerPlan
-	ContractHandler *ContractHandlerPlan
-	MutationHandler *MutationHandlerPlan
-	ReadIndexes     *ReadIndexSource
-	FactoryLink     *FactoryLinkPlan
-	HookScaffold    *HookScaffoldPlan
-	VeltyHandler    *VeltyHandlerPlan
-	Resources       *ResourcePlan
-	EntitySupport   *EntitySupportPlan
+	HelperTypes       []HelperType
+	GeneratedTypes    []GeneratedTypePlan
+	GoHandler         *GoHandlerPlan
+	ExternalHandler   *ExternalHandler
+	FactoryExpression string
+	ContractHandler   *ContractHandlerPlan
+	MutationHandler   *MutationHandlerPlan
+	ReadIndexes       *ReadIndexSource
+	FactoryLink       *FactoryLinkPlan
+	HookScaffold      *HookScaffoldPlan
+	VeltyHandler      *VeltyHandlerPlan
+	Resources         *ResourcePlan
+	EntitySupport     *EntitySupportPlan
 }
 
 // PackageName is the Go package name used by the scaffold emission owner.
@@ -216,13 +218,19 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 	if component.RootView != nil && strings.TrimSpace(component.RootView.TypeName) != "" {
 		rootViewType = strings.TrimSpace(component.RootView.TypeName)
 	}
-	outputFields, err := resolveOutputFields(component, declarations, rootViewType)
-	if err != nil {
-		return nil, err
-	}
-	inputFields, err := resolveInputFields(component, declarations)
-	if err != nil {
-		return nil, err
+	var outputFields, inputFields []Field
+	var err error
+	// An external handler retains its compiled contracts. Planning replacement
+	// fields would unnecessarily resolve (and potentially reshape) their internals.
+	if r.input.ExternalHandler == nil {
+		outputFields, err = resolveOutputFields(component, declarations, rootViewType)
+		if err != nil {
+			return nil, err
+		}
+		inputFields, err = resolveInputFields(component, declarations)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	plan := &Plan{

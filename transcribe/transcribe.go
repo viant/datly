@@ -168,9 +168,10 @@ func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, s
 		Component: component, Declarations: compiled.Declarations,
 		SQLResources:  true,
 		TargetPackage: targetPackage, ProjectRoot: rootDir, Contracts: compiled.Contracts, Views: compiled.Views, ViewBindings: compiled.ViewBindings,
-		GeneratedTypes: compiled.GeneratedTypes,
-		GoHandler:      compiled.GoHandler,
-		VeltyHandler:   compiled.VeltyHandler,
+		GeneratedTypes:  compiled.GeneratedTypes,
+		GoHandler:       compiled.GoHandler,
+		ExternalHandler: compiled.ExternalHandler.Clone(),
+		VeltyHandler:    compiled.VeltyHandler,
 	}
 	if strings.TrimSpace(authored) != "" {
 		input.PackageName = destination.Name

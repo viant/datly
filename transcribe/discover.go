@@ -54,6 +54,9 @@ type Discovery struct {
 	// selected by the host's default-import package. Runtime hosts enable it;
 	// authoring/transcription may intentionally inspect unlinked source.
 	RequireLinked bool
+	// HandlerBindings supplies application-compiled adapters for legacy
+	// SQL-free handler DQL without loading or invoking constructors.
+	HandlerBindings []*HandlerBinding
 }
 
 // Compile discovers and compiles each component source exactly once. Plain SQL
@@ -177,15 +180,16 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		return nil, err
 	}
 	source := &Source{
-		Const:         c.discovery.Const,
-		Scope:         file.ImportPath,
-		Name:          strings.TrimSuffix(filepath.Base(file.Path), filepath.Ext(file.Path)),
-		Path:          file.Path,
-		Text:          string(content),
-		Connector:     c.discovery.Connector,
-		Resources:     resources,
-		Types:         c.catalog,
-		ColumnRefiner: c.discovery.ColumnRefiner,
+		HandlerBindings: c.discovery.HandlerBindings,
+		Const:           c.discovery.Const,
+		Scope:           file.ImportPath,
+		Name:            strings.TrimSuffix(filepath.Base(file.Path), filepath.Ext(file.Path)),
+		Path:            file.Path,
+		Text:            string(content),
+		Connector:       c.discovery.Connector,
+		Resources:       resources,
+		Types:           c.catalog,
+		ColumnRefiner:   c.discovery.ColumnRefiner,
 	}
 	var result *Result
 	if packageSource := c.packages[packageSourceIdentity(file.ImportPath, source.Name)]; packageSource != nil {

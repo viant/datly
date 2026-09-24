@@ -37,6 +37,7 @@ type Result struct {
 	ViewBindings          gen.ViewBindings
 	GeneratedTypes        []gen.GeneratedTypeReference
 	GoHandler             *gen.GoHandlerAsset
+	ExternalHandler       *gen.ExternalHandler
 	VeltyHandler          *gen.VeltyHandlerAsset
 	ContractTypeOverrides ContractTypeOverrides
 	Diagnostics           []*Diagnostic
@@ -65,6 +66,11 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	}
 	if source == nil {
 		return nil, ErrNilSource
+	}
+	if header, body, err := dql.ParseHandlerSource(source.Text); err != nil {
+		return nil, err
+	} else if header != nil {
+		return c.compileHandler(source, header, body)
 	}
 	prepared := dql.PrepareSource(source.Text)
 	sourceMap := newSourceMap(len(source.Text), nil, prepared.TrimPrefix, source.Text)
