@@ -87,6 +87,18 @@ mutation graph.
 Do not choose the operation from the HTTP verb alone. Preserve the existing
 missing-row, sparse-update, deletion, and identity policy explicitly.
 
+For a legacy handler that performs **no database access**, the separate
+`transcribe handler` path can retain its exported native Go contract and factory
+while generating its Datly registration. This is appropriate for a pure
+transformation or external-system adapter, not for carrying a legacy DAO into
+1.0. A compiled application mapping must name the exact legacy type, input,
+output, exported zero-argument factory, and separate generated destination;
+the stock CLI cannot infer those bindings from the DQL header. The maintained
+`transcribe/HANDLER_ONLY.md` in the Datly repository specifies the exact
+mapping and validation contract. If the old handler touches `sess.Db()` or `*sql.DB`, move
+that persistence into generated readers/writers first. Retire only the old
+registration when the new holder is linked, so the route is not duplicated.
+
 ## Rebuild a legacy reader
 
 1. Define the public input and output contract, including exact parameter
