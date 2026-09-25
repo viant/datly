@@ -1101,7 +1101,7 @@ outer `CAST(items.should_delete AS bool), delete_marker(items.should_delete)`).
 Only explicitly supplied true flags with complete, authorized, parent-scoped
 identities request deletion. Omitted rows and collections never imply deletion.
 
-A concurrency token is numeric or `time.Time`, optionally pointer-valued. Its
+A concurrency token is a canonical string, numeric or `time.Time`, optionally pointer-valued. Its
 validation compares captured expected presence/value with loaded Previous before
 other validation. The resulting UPDATE compares the validated Previous token
 in its SQL WHERE clause and requires one affected row, so a change after Previous was

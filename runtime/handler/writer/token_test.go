@@ -24,4 +24,10 @@ func TestConcurrencyTokenSnapshotAndEquality(t *testing.T) {
 	if concurrencyTokenEqual(&instant, instant.Add(time.Second)) {
 		t.Fatal("different instants were accepted")
 	}
+	status := "accepted"
+	captured := cloneTokenValue(reflect.ValueOf(&status))
+	status = "running"
+	if !concurrencyTokenEqual(captured.Interface(), "accepted") || concurrencyTokenEqual(captured.Interface(), status) {
+		t.Fatal("string token comparison lost the captured state")
+	}
 }

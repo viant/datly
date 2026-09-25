@@ -174,9 +174,9 @@ func (e *actionEmitter) validateMarkers(role *plan.RecordPlan) error {
 				return fmt.Errorf("concurrency_token %s requires its canonical write policy", field.Name)
 			}
 			switch name {
-			case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64", "time.Time":
+			case "string", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64", "time.Time":
 			default:
-				return fmt.Errorf("concurrency_token %s must have a canonical numeric or time.Time type", field.Name)
+				return fmt.Errorf("concurrency_token %s must have a canonical string, numeric, or time.Time type", field.Name)
 			}
 		}
 	}

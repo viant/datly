@@ -954,7 +954,7 @@ Previous evidence, or a mismatch returns `*handler.Conflict` (status 409) before
 sequencing or queuing mutations. Inserts do not perform this token check;
 unversioned deletes continue to use their ordinary identity policy.
 
-Numeric tokens compare in their canonical Go numeric type. `time.Time` tokens
+String tokens compare exactly; numeric tokens compare in their canonical Go numeric type. `time.Time` tokens
 compare instants with `Time.Equal`, including equal instants expressed in
 different time zones. Presence is independent of the value: a supplied numeric
 zero is an expected token; an omitted numeric zero is missing.
