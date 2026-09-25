@@ -3,9 +3,11 @@ package dml
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/viant/sqlx/option"
+	xhandler "github.com/viant/xdatly/handler"
 )
 
 func (d *Data) executePlanStep(ctx context.Context, db *sql.DB, tx *sql.Tx, step executionStep) error {
@@ -67,7 +69,17 @@ func (d *Data) executeUpdateStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 		if i > 0 {
 			metric.restart()
 		}
-		count, err := service.Exec(ctx, operation.data, options...)
+		writeOptions := options
+		if operation.match != nil {
+			writeOptions = append(append([]option.Option(nil), options...), option.IfMatch{Column: operation.match.Column, Value: operation.match.Value})
+		}
+		count, err := service.Exec(ctx, operation.data, writeOptions...)
+		if operation.match != nil && errors.Is(err, option.ErrNoMatch) {
+			err = &xhandler.Conflict{Entity: step.table, Field: operation.match.Column, Reason: "expected token no longer matches persisted row"}
+		}
+		if err == nil && operation.match != nil && count != 1 {
+			err = &xhandler.Conflict{Entity: step.table, Field: operation.match.Column, Reason: "expected token no longer matches persisted row"}
+		}
 		metric.complete(count, err)
 		if err != nil {
 			return err
@@ -87,7 +99,17 @@ func (d *Data) executeDeleteStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 		if i > 0 {
 			metric.restart()
 		}
-		count, err := service.Exec(ctx, operation.data, options...)
+		writeOptions := options
+		if operation.match != nil {
+			writeOptions = append(append([]option.Option(nil), options...), option.IfMatch{Column: operation.match.Column, Value: operation.match.Value})
+		}
+		count, err := service.Exec(ctx, operation.data, writeOptions...)
+		if operation.match != nil && errors.Is(err, option.ErrNoMatch) {
+			err = &xhandler.Conflict{Entity: step.table, Field: operation.match.Column, Reason: "expected token no longer matches persisted row"}
+		}
+		if err == nil && operation.match != nil && count != 1 {
+			err = &xhandler.Conflict{Entity: step.table, Field: operation.match.Column, Reason: "expected token no longer matches persisted row"}
+		}
 		metric.complete(count, err)
 		if err != nil {
 			return err

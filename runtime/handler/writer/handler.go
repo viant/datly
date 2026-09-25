@@ -517,9 +517,50 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		case xhandler.WriteInsert:
 			err = dml.Insert(table, value)
 		case xhandler.WriteUpdate:
-			err = dml.Update(table, value)
+			if token := frame.Record.ConcurrencyToken; token != nil {
+				matched, ok := dml.(xhandler.MatchedDML)
+				if !ok {
+					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "atomic matched update is unavailable"}
+				}
+				persisted := frame.Previous
+				if persisted.IsValid() && persisted.Kind() == reflect.Pointer {
+					persisted = persisted.Elem()
+				}
+				if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
+					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+				}
+				previousToken := persisted.FieldByName(token.Name)
+				if !previousToken.IsValid() {
+					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+				}
+				// The earlier check proves client expectation and Previous are
+				// equivalent. Bind the database-decoded Previous representation so
+				// equal instants in different time zones still compare correctly.
+				err = matched.UpdateWithOptions(table, value, xhandler.WithIfMatch(token.Column, previousToken.Interface()))
+			} else {
+				err = dml.Update(table, value)
+			}
 		case xhandler.WriteDelete:
-			err = dml.Delete(table, value)
+			if token := frame.Record.ConcurrencyToken; token != nil {
+				matched, ok := dml.(xhandler.MatchedDML)
+				if !ok {
+					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "atomic matched delete is unavailable"}
+				}
+				persisted := frame.Previous
+				if persisted.IsValid() && persisted.Kind() == reflect.Pointer {
+					persisted = persisted.Elem()
+				}
+				if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
+					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+				}
+				previousToken := persisted.FieldByName(token.Name)
+				if !previousToken.IsValid() {
+					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+				}
+				err = matched.DeleteWithOptions(table, value, xhandler.WithIfMatch(token.Column, previousToken.Interface()))
+			} else {
+				err = dml.Delete(table, value)
+			}
 		default:
 			err = fmt.Errorf("unsupported writer action %q", action.Kind)
 		}
@@ -1121,7 +1162,7 @@ func (p *Program) applyInvariants(frame *Frame) error {
 
 func (p *Program) checkConcurrency(frame *Frame) error {
 	field := frame.Record.ConcurrencyToken
-	if field == nil || frame.Action != xhandler.WriteUpdate || !frame.Previous.IsValid() {
+	if field == nil || (frame.Action != xhandler.WriteUpdate && frame.Action != xhandler.WriteDelete) || !frame.Previous.IsValid() {
 		return nil
 	}
 	if frame.Original == nil || !frame.Original.Has(field.Name) || !frame.ExpectedToken.IsValid() {

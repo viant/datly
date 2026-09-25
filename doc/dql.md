@@ -1103,7 +1103,10 @@ identities request deletion. Omitted rows and collections never imply deletion.
 
 A concurrency token is numeric or `time.Time`, optionally pointer-valued. Its
 validation compares captured expected presence/value with loaded Previous before
-other validation. It does not add a SQL predicate, advance tokens, lock rows, or
-provide atomic race prevention. Init may explicitly prepare a next working token
-without changing the captured expectation. Missing/mismatched update tokens fail
-with a typed conflict before mutations proceed.
+other validation. The resulting UPDATE compares the validated Previous token
+in its SQL WHERE clause and requires one affected row, so a change after Previous was
+loaded still fails atomically with a typed conflict. Init may explicitly prepare
+a next working token without changing the captured expectation; Datly does not
+increment tokens automatically. The lifecycle or database must advance the
+token on success, or a later update can still match it. The update path uses
+no vendor-specific row lock.
