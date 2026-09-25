@@ -14,6 +14,7 @@ import (
 )
 
 func TestTranscribedMutationProgramSQLite(t *testing.T) {
+	t.Parallel()
 	for _, operation := range []WriteOperation{WritePost, WritePut, WritePatch} {
 		t.Run(string(operation), func(t *testing.T) {
 			ctx := context.Background()

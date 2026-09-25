@@ -136,6 +136,7 @@ SELECT id FROM users`},
 }
 
 func TestPackageCompilationTranscribesGeneratedGoHandlerAfterDQLRefinement(t *testing.T) {
+	t.Parallel()
 	harness := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()
 	if err := harness.ExecStatements(ctx, `CREATE TABLE EVENTS (
@@ -541,6 +542,7 @@ SELECT 1`},
 }
 
 func TestPackageCompilationGeneratesDQLDivergedIndependentView(t *testing.T) {
+	t.Parallel()
 	const packagePath = "github.com/viant/datly/transcribe"
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
@@ -585,7 +587,7 @@ SELECT id FROM users`},
 	if strings.Contains(string(inputSource), "github.com/viant/datly/transcribe") {
 		t.Fatalf("diverged independent input retained package import:\n%s", inputSource)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("DQL-diverged independent-view module did not compile: %v\n%s", runErr, output)

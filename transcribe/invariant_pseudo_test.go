@@ -23,6 +23,7 @@ import (
 )
 
 func TestInvariantPseudoNamedViewsSQLiteAndGo(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	h := sqlite.New(t)
 	if err := h.ExecStatements(ctx,

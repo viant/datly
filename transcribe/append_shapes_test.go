@@ -16,6 +16,7 @@ import (
 )
 
 func TestDynamicDQLUpdatesPersistedGoShapeAppendOnly(t *testing.T) {
+	t.Parallel()
 	h := sqlite.New(t)
 	ctx := context.Background()
 	if err := h.ExecStatements(ctx, "CREATE TABLE records(z TEXT,a INTEGER,b TEXT)", "INSERT INTO records VALUES('z',1,'b')"); err != nil {

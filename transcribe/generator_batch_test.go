@@ -12,6 +12,7 @@ import (
 )
 
 func TestGeneratorBatchLookup(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	if err := db.ExecStatements(ctx, genpatch.Schema...); err != nil {
@@ -32,6 +33,7 @@ func TestGeneratorBatchLookup(t *testing.T) {
 }
 
 func TestGeneratorCompositeLookup(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	if err := db.ExecStatements(ctx, genpatch.CompositeSchema...); err != nil {

@@ -44,6 +44,7 @@ func (*ordersContract) Exec(ctx context.Context, session xhandler.Session, input
 }
 
 func TestGeneratorEmitsGeneratedContractHandler(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	dir := filepath.Join(root, "orders")

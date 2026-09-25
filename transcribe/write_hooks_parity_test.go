@@ -16,6 +16,7 @@ import (
 )
 
 func TestGeneratedWriteHooksGoVeltySQLiteParity(t *testing.T) {
+	t.Parallel()
 	for _, conversion := range []plan.LinkConversion{plan.LinkDirect, plan.LinkAddress, plan.LinkDereference} {
 		for _, pointer := range []bool{false, true} {
 			name := "values"

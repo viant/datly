@@ -14,6 +14,7 @@ import (
 )
 
 func TestGeneratedEntitySettersAndOriginalCapture(t *testing.T) {
+	t.Parallel()
 	for _, target := range []HandlerTarget{HandlerGo, HandlerVelty} {
 		t.Run(string(target), func(t *testing.T) {
 			db := sqlite.New(t)

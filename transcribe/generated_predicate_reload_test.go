@@ -17,6 +17,7 @@ import (
 // changes persisted SQL/metadata with a stable Go ABI, as application.Manager's
 // trusted stage callback requires; it does not compile arbitrary Go at runtime.
 func TestGeneratedCustomPredicatePublicReloadSQLite(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := t.TempDir()
 	module := "github.com/viant/datly/testfixture/predicatereload"

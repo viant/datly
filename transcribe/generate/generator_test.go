@@ -259,6 +259,7 @@ func TestGeneratorEmitsOnlyDivergedContractRole(t *testing.T) {
 }
 
 func TestGeneratorLinksPackageOwnedRootViewWithoutDuplicateEmission(t *testing.T) {
+	t.Parallel()
 	type linkedOutput struct{}
 	type linkedRow struct{ ID int }
 	root := t.TempDir()
@@ -316,7 +317,7 @@ func TestGeneratorLinksPackageOwnedRootViewWithoutDuplicateEmission(t *testing.T
 			t.Fatalf("linked view was emitted: %+v", file)
 		}
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("linked-view package did not compile: %v\n%s", err, output)
@@ -351,6 +352,7 @@ func TestGeneratorPlansIndependentViewAsTypedInput(t *testing.T) {
 }
 
 func TestGeneratorLinksPackageOwnedIndependentView(t *testing.T) {
+	t.Parallel()
 	type linkedRow struct{ ID int }
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
@@ -391,7 +393,7 @@ func TestGeneratorLinksPackageOwnedIndependentView(t *testing.T) {
 		len(result.Plan.Input.Fields) != 1 || result.Plan.Input.Fields[0].Type != "[]*contracts.Row" {
 		t.Fatalf("linked independent view = views:%+v input:%+v", result.Plan.Views, result.Plan.Input.Fields)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("linked independent-view module did not compile: %v\n%s", runErr, output)

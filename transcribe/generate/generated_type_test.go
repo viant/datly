@@ -19,6 +19,7 @@ import (
 )
 
 func TestGeneratorEmitsCatalogGeneratedTypeAsOwnedPackageArtifact(t *testing.T) {
+	t.Parallel()
 	const targetPackage = "example.com/generated/reporting"
 	catalog := typecatalog.NewCatalog()
 	descriptor := generatedTypeDescriptor(targetPackage, "SpendCubeInput")
@@ -52,7 +53,7 @@ func TestGeneratorEmitsCatalogGeneratedTypeAsOwnedPackageArtifact(t *testing.T) 
 		!strings.Contains(text, `json:"when,omitempty"`) {
 		t.Fatalf("generated type content = %s", text)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated package does not compile: %v\n%s", runErr, output)

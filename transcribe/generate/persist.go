@@ -105,10 +105,9 @@ func (p *scaffoldPersistence) Commit() error {
 			_ = os.RemoveAll(stage)
 		}
 	}()
-	if err = p.copyExisting(target, stage); err != nil {
-		return err
-	}
-	original, err := readScaffoldSnapshot(stage)
+	// The copy doubles as the original snapshot: each file is read once, and
+	// the fingerprint is taken from the bytes being copied.
+	original, stats, err := p.copyExisting(target, stage)
 	if err != nil {
 		return err
 	}
@@ -164,7 +163,7 @@ func (p *scaffoldPersistence) Commit() error {
 			return err
 		}
 	}
-	if err = p.swap(target, stage, original); err != nil {
+	if err = p.swap(target, stage, original, stats); err != nil {
 		return err
 	}
 	committed = true
@@ -451,21 +450,25 @@ func (p *scaffoldPersistence) validateUserFiles(base, existing string) error {
 	return nil
 }
 
-func (p *scaffoldPersistence) copyExisting(target, stage string) error {
+// copyExisting mirrors the current package into the stage and returns the
+// snapshot of what was copied, so publication can detect concurrent edits
+// without re-reading the tree.
+func (p *scaffoldPersistence) copyExisting(target, stage string) (scaffoldSnapshot, scaffoldStats, error) {
+	snapshot, stats := scaffoldSnapshot{}, scaffoldStats{}
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
-		return nil
+		return snapshot, stats, nil
 	}
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("scaffold target %q is an unsupported symlink", target)
+		return nil, nil, fmt.Errorf("scaffold target %q is an unsupported symlink", target)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("scaffold target %q is not a directory", target)
+		return nil, nil, fmt.Errorf("scaffold target %q is not a directory", target)
 	}
-	return filepath.WalkDir(target, func(path string, entry fs.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(target, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -482,16 +485,27 @@ func (p *scaffoldPersistence) copyExisting(target, stage string) error {
 			return fmt.Errorf("generated package contains unsupported symlink %q", path)
 		}
 		if entry.IsDir() {
+			snapshot[relative] = snapshotEntry(info, nil)
 			return os.MkdirAll(destination, info.Mode().Perm())
 		}
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf("generated package contains unsupported non-regular file %q", path)
 		}
-		return copyScaffoldFile(path, destination, info.Mode().Perm())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		snapshot[relative] = snapshotEntry(info, data)
+		stats[relative] = scaffoldStat{size: info.Size(), modTime: info.ModTime()}
+		return os.WriteFile(destination, data, info.Mode().Perm())
 	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return snapshot, stats, nil
 }
 
-func (p *scaffoldPersistence) swap(target, stage string, original scaffoldSnapshot) error {
+func (p *scaffoldPersistence) swap(target, stage string, original scaffoldSnapshot, stats scaffoldStats) error {
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
 		if len(original) != 0 {
@@ -517,7 +531,7 @@ func (p *scaffoldPersistence) swap(target, stage string, original scaffoldSnapsh
 	if err = os.Rename(target, backup); err != nil {
 		return err
 	}
-	if err = original.validate(backup); err != nil {
+	if err = original.validate(backup, stats); err != nil {
 		if restoreErr := os.Rename(backup, target); restoreErr != nil {
 			return fmt.Errorf("%w; restore package: %v", err, restoreErr)
 		}

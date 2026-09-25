@@ -15,6 +15,7 @@ import (
 )
 
 func TestGeneratedInferredOutputSummary(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE orders(id INTEGER, tenant_id INTEGER, name TEXT)", "INSERT INTO orders VALUES (1,7,'a'),(2,7,'b'),(3,7,'c'),(4,9,'private')"))

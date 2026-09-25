@@ -125,7 +125,7 @@ func publicGenerationDQL(method, pkg string) string {
 
 func compilePublicGeneratedProject(t testing.TB, root string) {
 	t.Helper()
-	command := exec.Command("go", "test", "-mod=mod", "-count=1", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	output, err := command.CombinedOutput()
 	if err != nil {

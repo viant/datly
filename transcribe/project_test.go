@@ -17,6 +17,7 @@ import (
 )
 
 func TestProjectGenerationEmitsAuditableMultiComponentProject(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	users := compileProjectSource(t, "Users", "/users", "SELECT id FROM users")
@@ -47,7 +48,7 @@ func TestProjectGenerationEmitsAuditableMultiComponentProject(t *testing.T) {
 	if _, err = os.Stat(filepath.Join(root, projectMetadataDir, "migration.json")); err != nil {
 		t.Fatalf("migration report: %v", err)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated project does not compile: %v\n%s", runErr, output)

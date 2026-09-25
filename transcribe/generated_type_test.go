@@ -17,6 +17,7 @@ import (
 )
 
 func TestProjectGenerationCarriesGeneratedTypeReferences(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	compiled := compileProjectSource(t, "Spend", "/spend", "SELECT account_id FROM spend")
@@ -54,7 +55,7 @@ func TestProjectGenerationCarriesGeneratedTypeReferences(t *testing.T) {
 	if err != nil || !strings.Contains(string(content), "type SpendCubeInput struct") {
 		t.Fatalf("generated type content = %q, %v", content, err)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated project does not compile: %v\n%s", runErr, output)

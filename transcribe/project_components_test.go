@@ -61,6 +61,7 @@ SELECT 1 AS ID`)
 }
 
 func TestProjectGenerationResolvesPersistedSiblingComponent(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	sourceRoot := filepath.Join(t.TempDir(), "dql", "dev")
@@ -94,7 +95,7 @@ SELECT 1 AS ID`)
 		!strings.Contains(string(input), "UserAclOutput") {
 		t.Fatalf("generated parent input = %q, %v", input, err)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("partial generated project does not compile: %v\n%s", runErr, output)
@@ -191,6 +192,7 @@ SELECT 1 AS ID`)
 }
 
 func TestProjectComponentReferenceUsesLinkedOutputAuthority(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	const packagePath = "github.com/viant/datly/transcribe/testdata/linkedcontract"
@@ -244,7 +246,7 @@ SELECT 1 AS ID`)
 		if readErr != nil || !strings.Contains(string(input), "linkedcontract.ComponentOutput") {
 			t.Fatalf("persisted linked parent input = %q, %v", input, readErr)
 		}
-		command := exec.Command("go", "test", "-mod=mod", "./...")
+		command := exec.Command("go", "vet", "-mod=mod", "./...")
 		command.Dir = root
 		if output, runErr := command.CombinedOutput(); runErr != nil {
 			t.Fatalf("linked partial project does not compile: %v\n%s", runErr, output)

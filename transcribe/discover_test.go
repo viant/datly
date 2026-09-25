@@ -218,6 +218,7 @@ func containsString(values []string, candidate string) bool {
 }
 
 func TestDiscoveryComposesExactPackageAndDQLAuthority(t *testing.T) {
+	t.Parallel()
 	base := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, base)
 	writeSourceFile(t, base, "model/audit.go", "package model\n\ntype AuditRow struct { ID int `sqlx:\"ID\"` }\n")

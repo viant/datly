@@ -128,11 +128,15 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 	}
 	sort.Strings(orderedViewDestinations)
 	files := make([]EmittedFile, 0, len(orderedViewDestinations)+len(plan.GeneratedTypes)+5)
+	// preformatted lists artifacts rendered through SourceParser.FormatFile,
+	// which already yields gofmt output; the final formatting pass skips them.
+	preformatted := map[string]bool{}
 	if plan.EntitySupport != nil {
 		content, err := plan.EntitySupport.source(packageName)
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		preformatted[filepath.Join(dir, plan.EntitySupport.Destination)] = true
 		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.EntitySupport.Destination), Content: content})
 		if invariants := activeEntityInvariants(plan); len(invariants) > 0 {
 			files = append(files, EmittedFile{Path: filepath.Join(dir, plan.Generation.File("invariants", "invariants.go")), Content: invariantIndexSource(packageName, invariants)})
@@ -174,6 +178,7 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		preformatted[filepath.Join(dir, plan.ReadIndexes.Source.Destination)] = true
 		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.ReadIndexes.Source.Destination), Content: content})
 	}
 	if plan.Input.Ownership == ContractGenerated && plan.localShape(plan.Input.Package) {
@@ -209,6 +214,7 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		preformatted[filepath.Join(dir, plan.GoHandler.Destination)] = true
 		files = append(files, EmittedFile{
 			Path: filepath.Join(dir, plan.GoHandler.Destination), Content: content,
 		})
@@ -218,6 +224,7 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		preformatted[filepath.Join(dir, plan.ContractHandler.Destination)] = true
 		files = append(files, EmittedFile{
 			Path: filepath.Join(dir, plan.ContractHandler.Destination), Content: content,
 		})
@@ -227,12 +234,14 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		preformatted[filepath.Join(dir, plan.MutationHandler.Destination)] = true
 		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.MutationHandler.Destination), Content: content})
 		for _, source := range plan.MutationHandler.Support {
 			content, err := source.source(packageName)
 			if err != nil {
 				return nil, nil, nil, err
 			}
+			preformatted[filepath.Join(dir, source.Destination)] = true
 			files = append(files, EmittedFile{Path: filepath.Join(dir, source.Destination), Content: content})
 		}
 	}
@@ -282,15 +291,15 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 	if plan.Output.Ownership == ContractLinked {
 		removals = append(removals, plan.Output.Destination)
 	}
-	if err := formatGoArtifacts(files); err != nil {
+	if err := formatGoArtifacts(files, preformatted); err != nil {
 		return nil, nil, nil, err
 	}
 	return files, userFiles, removals, nil
 }
 
-func formatGoArtifacts(files []EmittedFile) error {
+func formatGoArtifacts(files []EmittedFile, preformatted map[string]bool) error {
 	for index := range files {
-		if filepath.Ext(files[index].Path) != ".go" {
+		if filepath.Ext(files[index].Path) != ".go" || preformatted[files[index].Path] {
 			continue
 		}
 		formatted, err := format.Source([]byte(files[index].Content))
