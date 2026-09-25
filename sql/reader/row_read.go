@@ -14,6 +14,7 @@ import (
 type rowQuery struct {
 	collector  *collector.Collector
 	db         *sql.DB
+	tx         *sql.Tx
 	query      *cache.ParmetrizedQuery
 	visit      func(any) error
 	read       *viewRead
@@ -43,6 +44,9 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 		}
 	}()
 	options := r.options
+	if q.tx != nil {
+		options = append(append([]sqlxread.Option(nil), options...), sqlxread.WithTx(q.tx))
+	}
 	var capture *relationKeyCapture
 	if q.collector != nil {
 		if columns := q.collector.SQLKeyColumns(); len(columns) > 0 {

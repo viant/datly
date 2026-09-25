@@ -16,6 +16,9 @@ import (
 // lazily and cached with their database handle.
 type SQLComponent struct {
 	DB *dsql.DB
+	// Tx is a caller-owned transaction for reader execution against DB.
+	// Named connectors must resolve to the same DB while Tx is set.
+	Tx *dsql.Tx
 
 	mu         sync.RWMutex
 	dialect    *info.Dialect
@@ -32,6 +35,7 @@ type connection struct {
 // Connection is the DB and dialect pair selected for one view source.
 type Connection struct {
 	DB      *dsql.DB
+	Tx      *dsql.Tx
 	Dialect *info.Dialect
 }
 
@@ -72,11 +76,14 @@ func (c *SQLComponent) Resolve(ctx context.Context, connector string) (Connectio
 	defaultDB := c.DB
 	c.mu.RUnlock()
 	if named != nil {
+		if c.Tx != nil && named.db != defaultDB {
+			return Connection{}, fmt.Errorf("transactional reader connector %s must use the transaction database", connector)
+		}
 		dialect, err := named.resolveDialect(ctx)
 		if err != nil {
 			return Connection{}, fmt.Errorf("resolve connector %s dialect: %w", connector, err)
 		}
-		return Connection{DB: named.db, Dialect: dialect}, nil
+		return Connection{DB: named.db, Tx: c.Tx, Dialect: dialect}, nil
 	}
 	if connector != "" && hasNamed {
 		return Connection{}, fmt.Errorf("sql connector %s is not registered", connector)
@@ -88,7 +95,7 @@ func (c *SQLComponent) Resolve(ctx context.Context, connector string) (Connectio
 	if err != nil {
 		return Connection{}, err
 	}
-	return Connection{DB: defaultDB, Dialect: dialect}, nil
+	return Connection{DB: defaultDB, Tx: c.Tx, Dialect: dialect}, nil
 }
 
 func (c *SQLComponent) Dialect(ctx context.Context) (*info.Dialect, error) {

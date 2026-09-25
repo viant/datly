@@ -54,7 +54,7 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 	if err != nil {
 		return nil, err
 	}
-	return &dexec.PreparedQuery{SQL: query.SQL, Args: append([]any(nil), query.Args...), Projection: &projectionReader{db: connection.DB, dialect: connection.Dialect, component: session.Component, view: root.View, recorder: session.recorder, metricScope: session.metricScope, retry: readRetry{source: session.SQL, connector: root.Connector}}}, nil
+	return &dexec.PreparedQuery{SQL: query.SQL, Args: append([]any(nil), query.Args...), Projection: &projectionReader{db: connection.DB, tx: connection.Tx, dialect: connection.Dialect, component: session.Component, view: root.View, recorder: session.recorder, metricScope: session.metricScope, retry: readRetry{source: session.SQL, connector: root.Connector}}}, nil
 }
 
 // projectionReader is request-local. SQLX owns typed row mapping; source caches,
@@ -66,6 +66,7 @@ type projectionReader struct {
 	view        *data.View
 	recorder    *observability.Recorder
 	db          *sql.DB
+	tx          *sql.Tx
 	dialect     *info.Dialect
 }
 
@@ -91,7 +92,7 @@ func (r *projectionReader) ReadProjection(ctx context.Context, request dexec.Pro
 	defer session.recorder.Pending(observation.scope, -1)
 	defer observation.finish(&err)
 	scan := rowRead{newRow: func() any { return reflect.New(request.RowType).Interface() }, options: []sqlxread.Option{sqlxread.WithRetry(r.retry.policy())}}
-	err = scan.query(ctx, rowQuery{db: r.db, query: &cache.ParmetrizedQuery{SQL: request.SQL, Args: request.Args}, read: observation, visit: func(row any) error { rows = reflect.Append(rows, reflect.ValueOf(row)); return nil }})
+	err = scan.query(ctx, rowQuery{db: r.db, tx: r.tx, query: &cache.ParmetrizedQuery{SQL: request.SQL, Args: request.Args}, read: observation, visit: func(row any) error { rows = reflect.Append(rows, reflect.ValueOf(row)); return nil }})
 	if err != nil {
 		return nil, err
 	}
