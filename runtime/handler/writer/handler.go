@@ -1617,11 +1617,19 @@ func (p originalPresence) Available() bool { return p.available }
 // pointer in place). Keep the caller's original scalar value for both writer
 // validation passes instead of rereading the working entity after Init.
 func cloneTokenValue(value reflect.Value) reflect.Value {
-	if !value.IsValid() || value.Kind() != reflect.Pointer || value.IsNil() {
+	if !value.IsValid() {
 		return value
 	}
-	copy := reflect.New(value.Type().Elem())
-	copy.Elem().Set(value.Elem())
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return value
+		}
+		copy := reflect.New(value.Type().Elem())
+		copy.Elem().Set(value.Elem())
+		return copy
+	}
+	copy := reflect.New(value.Type()).Elem()
+	copy.Set(value)
 	return copy
 }
 

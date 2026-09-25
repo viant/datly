@@ -30,4 +30,10 @@ func TestConcurrencyTokenSnapshotAndEquality(t *testing.T) {
 	if !concurrencyTokenEqual(captured.Interface(), "accepted") || concurrencyTokenEqual(captured.Interface(), status) {
 		t.Fatal("string token comparison lost the captured state")
 	}
+	row := struct{ Status string }{Status: "building"}
+	addressable := cloneTokenValue(reflect.ValueOf(&row).Elem().FieldByName("Status"))
+	row.Status = "active"
+	if !concurrencyTokenEqual(addressable.Interface(), "building") || concurrencyTokenEqual(addressable.Interface(), row.Status) {
+		t.Fatal("addressable value token changed with the lifecycle field")
+	}
 }
