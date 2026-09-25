@@ -79,9 +79,9 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
-	github.com/aerospike/aerospike-client-go v4.5.2+incompatible // indirect
+	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/felixge/httpsnoop v1.0.4
-	github.com/francoispqt/gojay v1.2.13 // indirect
+	github.com/francoispqt/gojay v1.2.13
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
