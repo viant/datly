@@ -1,0 +1,70 @@
+package registration
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"github.com/viant/datly/standalone"
+	"github.com/viant/datly/standalone/config"
+	upstream "github.com/viant/mcp"
+	"github.com/viant/mcp-protocol/authorization"
+	oauthmeta "github.com/viant/mcp-protocol/oauth2/meta"
+	"github.com/viant/mcp-protocol/schema"
+	mcpclient "github.com/viant/mcp/client"
+)
+
+func TestGeneratedHandlerCaseFormat(t *testing.T) {
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	const expected = `{"accountInfo":{"accountName":"one:two","enabled":false,"recordCount":0,"KeepThisName":"explicit"},"accounts":[{"accountName":"one:two","enabled":false,"recordCount":0,"KeepThisName":"explicit"}],"missing":null}`
+	for _, mode := range []string{"indexed", "eager"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			cfg := &config.Config{BaseDir: filepath.Dir(cwd), GoBootstrap: &config.Packages{Packages: []string{"github.com/viant/datly/handlerfixture/registration"}, EagerComponents: mode == "eager"}, Endpoint: config.Endpoint{Address: "127.0.0.1:0"}, MCP: &config.MCP{Address: "127.0.0.1:0"}}
+			cfg.MCP.Authorization = &authorization.Policy{Tools: map[string]*authorization.Authorization{}}
+			for _, tool := range []string{"Convert", "Reference"} {
+				cfg.MCP.Authorization.Tools[tool] = &authorization.Authorization{ProtectedResourceMetadata: &oauthmeta.ProtectedResourceMetadata{Resource: "https://test.invalid/" + tool}}
+			}
+			server, err := standalone.New(ctx, standalone.Options{Config: cfg, Holders: []any{ConvertDatly, &Reference{}}})
+			require.NoError(t, err)
+			done := make(chan error, 1)
+			go func() { done <- server.Serve(ctx, io.Discard) }()
+			t.Cleanup(func() {
+				cancel()
+				require.NoError(t, server.Shutdown(context.Background()))
+				require.NoError(t, <-done)
+			})
+			addresses, err := server.WaitReady(ctx)
+			require.NoError(t, err)
+			for _, route := range []string{"/convert", "/reference"} {
+				request := httptest.NewRequest("POST", route, strings.NewReader(`{"inclusion":"one","exclusion":"two"}`))
+				request.Header.Set("Content-Type", "application/json")
+				request.Header.Set("Authorization", "allowed")
+				response := httptest.NewRecorder()
+				server.ServeHTTP(response, request)
+				require.Equal(t, 200, response.Code, response.Body.String())
+				require.JSONEq(t, expected, response.Body.String(), route)
+			}
+			client, err := upstream.NewClientWithContext(ctx, nil, &upstream.ClientOptions{Name: "test", Version: "1", ProtocolVersion: schema.LatestProtocolVersion, Transport: upstream.ClientTransport{Type: "streamable", ClientTransportHTTP: upstream.ClientTransportHTTP{URL: "http://" + addresses[1] + "/mcp"}}})
+			require.NoError(t, err)
+			defer client.Close()
+			for _, tool := range []string{"Convert", "Reference"} {
+				result, err := client.CallTool(ctx, &schema.CallToolRequestParams{Name: tool, Arguments: map[string]any{"Inclusion": "one", "Exclusion": "two"}}, mcpclient.WithAuthToken("allowed"))
+				require.NoError(t, err)
+				require.False(t, result.IsError != nil && *result.IsError, "%+v", result)
+				data, err := json.Marshal(result.StructuredContent)
+				require.NoError(t, err)
+				require.JSONEq(t, expected, string(data), tool)
+			}
+		})
+	}
+}

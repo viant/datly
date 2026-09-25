@@ -73,3 +73,34 @@ type Contract[I, O any] interface {
 
 func WrongContract() Contract[Input, Output]          { return &Handler{} }
 func WrongInput() handler.Contract[Different, Output] { panic("must not execute") }
+
+type CaseOutput struct {
+	AccountInfo *AccountInfo
+	Accounts    []AccountInfo
+	Missing     *AccountInfo
+}
+
+type AccountInfo struct {
+	AccountName string
+	Enabled     bool
+	RecordCount int
+	Explicit    string `json:"KeepThisName"`
+}
+
+type CaseHandler struct{}
+
+func NewCaseHandler() handler.Contract[Input, CaseOutput] {
+	Constructions.Add(1)
+	return &CaseHandler{}
+}
+
+func (*CaseHandler) Exec(ctx context.Context, session handler.Session, in *Input, out *CaseOutput) error {
+	var converted Output
+	if err := (&Handler{}).Exec(ctx, session, in, &converted); err != nil {
+		return err
+	}
+	account := AccountInfo{AccountName: converted.Value, Explicit: "explicit"}
+	out.AccountInfo = &account
+	out.Accounts = []AccountInfo{account}
+	return nil
+}

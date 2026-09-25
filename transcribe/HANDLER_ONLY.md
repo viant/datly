@@ -98,3 +98,7 @@ Required declarations cannot be discarded this way.
 SQL, conflicting modern settings, unsupported header fields, missing mappings,
 wrong factory identities, and incompatible contracts fail before publication.
 Existing generated files and manifests are preserved on validation failure.
+
+`#setting($_ = $case_format('lc'))` may supplement the legacy header. It is
+preserved as component case-format metadata and uses normal native output
+encoding; linked contracts and explicit JSON tags are not rewritten.

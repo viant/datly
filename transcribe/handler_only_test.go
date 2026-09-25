@@ -57,12 +57,14 @@ func TestHandlerOnlyCompilation(t *testing.T) {
 	before := fixture.Constructions.Load()
 	for _, connector := range []string{"", "explicit"} {
 		source := handlerSource(t)
+		source.Text += "\n#setting($_ = $case_format('lc'))"
 		source.Connector = connector
 		compiled, err := NewCompiler().Compile(context.Background(), source)
 		require.NoError(t, err)
 		require.Nil(t, compiled.Component.RootView)
 		require.Empty(t, compiled.Component.Settings.Mutation)
 		require.Equal(t, connector, compiled.Component.Settings.DefaultConnector)
+		require.Equal(t, "lc", compiled.Component.Settings.CaseFormat)
 		require.Equal(t, "POST", compiled.Component.Routes[0].Method)
 		require.Equal(t, "Convert", compiled.Component.Routes[0].MCP[0].Name)
 		require.NotNil(t, compiled.Contracts.Input)
@@ -167,6 +169,7 @@ func TestHandlerOnlyFailureDoesNotPublish(t *testing.T) {
 	root := t.TempDir()
 	(testharness.GeneratedModule{Path: handlerFixtureModule}).Write(t, root)
 	source := handlerSource(t)
+	source.Text += "\n#setting($_ = $case_format('lc'))"
 	g := Generator{Operation: "handler", GenerationPolicy: generate.GenerationPolicyOverwrite}
 	_, err := g.Generate(ctx, GenerationRequest{Source: source, Destination: root})
 	require.NoError(t, err)
@@ -191,8 +194,11 @@ func TestHandlerOnlyFailureDoesNotPublish(t *testing.T) {
 		func(s *Source) { s.HandlerBindings = nil },
 		func(s *Source) { s.HandlerBindings = append(s.HandlerBindings, s.HandlerBindings[0]) },
 		func(s *Source) { s.Text = strings.ReplaceAll(s.Text, "legacy.Input", "wrong.Input") },
+		func(s *Source) { s.Text = strings.ReplaceAll(s.Text, "legacy.Output", "wrong.Output") },
+		func(s *Source) { s.Text = strings.ReplaceAll(s.Text, "legacy.Handler", "wrong.Handler") },
 		func(s *Source) { s.Text += "\nSELECT 1" },
 		func(s *Source) { s.Text += "\n#setting($_ = $route('/other','POST'))" },
+		func(s *Source) { s.Text += "\n#setting($_ = $limit(10))" },
 		func(s *Source) { s.Text = strings.ReplaceAll(s.Text, "form/debug", "query/debug") },
 		func(s *Source) { s.Text = strings.ReplaceAll(s.Text, "$Debug<bool>", "$Unknown<bool>") },
 		func(s *Source) { s.Text = strings.ReplaceAll(s.Text, "$Debug<bool>", "$Debug<string>") },

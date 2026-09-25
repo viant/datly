@@ -44,7 +44,15 @@ func (c *Compiler) compileHandler(source *Source, header *dql.HandlerHeader, bod
 	if strings.TrimSpace(prepared.SQL) != "" || len(directives.Views) != 0 || directives.Static != nil {
 		return nil, fmt.Errorf("handler-only DQL cannot contain SQL or reader views")
 	}
-	if directives.Route != nil || directives.MCP != nil || directives.MCPOnly || directives.Internal || !directives.Settings.IsZero() || !directives.Documentation.IsZero() {
+	// Case formatting supplements the legacy header, which has no equivalent
+	// setting. Do not relax validation for unrelated execution declarations.
+	settings := directives.Settings.Clone()
+	if settings == nil {
+		settings = &spec.Settings{}
+	}
+	remainingSettings := *settings
+	remainingSettings.CaseFormat = ""
+	if directives.Route != nil || directives.MCP != nil || directives.MCPOnly || directives.Internal || !remainingSettings.IsZero() || !directives.Documentation.IsZero() {
 		return nil, fmt.Errorf("handler-only DQL settings conflict with the legacy header; retain settings in one declaration")
 	}
 	if prepared.TypeContext != nil && prepared.TypeContext.PackagePath != "" && prepared.TypeContext.PackagePath != mapping.DestinationPackage {
@@ -57,13 +65,14 @@ func (c *Compiler) compileHandler(source *Source, header *dql.HandlerHeader, bod
 		}
 		connector = source.Connector
 	}
+	settings.DefaultConnector = connector
 	typeContext := &spec.TypeContext{PackagePath: mapping.DestinationPackage}
 	if prepared.TypeContext != nil {
 		typeContext.Imports = append(typeContext.Imports, prepared.TypeContext.Imports...)
 	}
 	component := &spec.Component{
 		Key: spec.Key{Kind: spec.KindComponent, Scope: source.Scope, Name: header.Name}, Name: header.Name, Description: header.Description,
-		TypeContext: typeContext, Settings: &spec.Settings{DefaultConnector: connector},
+		TypeContext: typeContext, Settings: settings,
 		Routes: []*spec.Route{{Name: header.Name, Path: header.URI, Method: header.Method, Internal: header.Internal, Handler: mapping.FactoryPackage + "." + mapping.FactoryName}},
 	}
 	if header.MCPTool {

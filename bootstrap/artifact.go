@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/datly/constant"
 	documentation "github.com/viant/datly/documentation"
 	xdocs "github.com/viant/xdatly/docs"
@@ -35,6 +36,7 @@ type ArtifactInput struct {
 	Types         *typecatalog.Catalog
 	// HandlerOwnedOutput preserves the output type/schema without importing its
 	// reader declarations into a component whose handler produces that output.
+	// Enabled reports resolve those declarations into separate metadata only.
 	HandlerOwnedOutput bool
 	DirectViewField    string
 	// Resources is the same Bindly store supplied to runtime composition. SQL,
@@ -55,6 +57,7 @@ type Artifact struct {
 	ViewDependencies []*sqlreader.ViewDependency
 	inputType        reflect.Type
 	outputType       reflect.Type
+	reportSource     *spec.Component
 }
 
 // BuildArtifact composes the handler-input and reader-plan compilers. Registry
@@ -175,11 +178,19 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
+	var reportSource *spec.Component
+	if input.HandlerOwnedOutput && component.Settings != nil && component.Settings.Report != nil && component.Settings.Report.Enabled {
+		reportSource, err = c.compileHandlerReportSource(component)
+		if err != nil {
+			return nil, fmt.Errorf("compile handler report metadata for %s: %w", component.Key.String(), err)
+		}
+	}
 	return &Artifact{instanceConst: input.Const, Documentation: docs,
 		Component: component, Input: compiledInput.Input.WithDocumentation(docs),
 		Output: outputContract,
 		Reader: readerPlan, ViewDependencies: viewDependencies,
 		Handler: input.Handler, inputType: input.InputType, outputType: input.OutputType,
+		reportSource: reportSource,
 	}, nil
 }
 

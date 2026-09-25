@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 
 	"github.com/viant/datly/transcribe/dql"
@@ -101,14 +102,8 @@ func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[strin
 	sort.Strings(packagePaths)
 	for _, path := range packagePaths {
 		pkg := packagesByPath[path]
-		if d.registry != nil {
-			for _, declared := range pkg.Types {
-				if declared != nil {
-					if linked := d.registry.Lookup(path + "." + declared.Name); linked != nil && linked.Type != nil {
-						declared.ReflectType = linked.Type
-					}
-				}
-			}
+		if err := d.linkSourcePackage(pkg, xunsafe.PackageTypes(path)); err != nil {
+			return nil, fmt.Errorf("link DQL import %s: %w", path, err)
 		}
 		location, err := d.workspace.Package(path)
 		if err != nil || location == nil {
@@ -120,6 +115,56 @@ func (d *dqlPackageDiscovery) loadImports(ctx context.Context, imports map[strin
 		loaded = append(loaded, path)
 	}
 	return loaded, nil
+}
+
+// Enrich declarations, rather than registering reflected packages, so source
+// metadata and manifest ownership remain authoritative.
+func (d *dqlPackageDiscovery) linkSourcePackage(pkg *smodel.Package, linked []reflect.Type) error {
+	byName := make(map[string]reflect.Type, len(linked))
+	ambiguous := map[string]bool{}
+	for _, typ := range linked {
+		if typ == nil || typ.PkgPath() != pkg.PkgPath || typ.Name() == "" {
+			continue
+		}
+		if prior := byName[typ.Name()]; prior != nil && prior != typ {
+			ambiguous[typ.Name()] = true
+		}
+		byName[typ.Name()] = typ
+	}
+	resolved := make(map[*smodel.Type]reflect.Type, len(pkg.Types))
+	for _, declared := range pkg.Types {
+		if declared == nil {
+			continue
+		}
+		key := pkg.PkgPath + "." + declared.Name
+		typ := declared.ReflectType
+		if d.registry != nil {
+			if explicit := d.registry.Lookup(key); explicit != nil && explicit.Type != nil {
+				typ = explicit.Type
+			}
+		}
+		if typ == nil {
+			if ambiguous[declared.Name] {
+				return fmt.Errorf("type %q has ambiguous linked compiled identities", key)
+			}
+			typ = byName[declared.Name]
+		}
+		existing, _, err := d.catalog.ResolveRuntimeType(typecatalog.PackageAuthority, key)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			if typ != nil && typ != existing {
+				return fmt.Errorf("type %q is already linked to a different compiled identity", key)
+			}
+			typ = existing
+		}
+		resolved[declared] = typ
+	}
+	for declared, typ := range resolved {
+		declared.ReflectType = typ
+	}
+	return nil
 }
 
 func (d *dqlPackageDiscovery) registerLinkedPackageTypes(path string) error {

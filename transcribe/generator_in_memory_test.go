@@ -25,7 +25,7 @@ func TestGeneratorInMemoryRelation(t *testing.T) {
 	const module = "github.com/viant/datly/inmemoryfixture"
 	(testharness.GeneratedModule{Path: module}).Write(t, root)
 	source := &Source{
-		Name: "Parents", Scope: module + "/parents", Connector: "main",
+		Name: "Parents", Scope: module + "/parents",
 		ColumnRefiner: column.New(column.Connections{"main": db.DB}),
 		Text: `#package('parents')
 #setting($_ = $route('/parents', 'GET'))
@@ -35,7 +35,7 @@ func TestGeneratorInMemoryRelation(t *testing.T) {
 #set($_ = $Fields<[]string>(query/fields).QuerySelector(p).Optional())
 #set($_ = $Status<?>(output/status).WithTag('anonymous:"true"'))
 #set($_ = $Data<?>(output/view).WithTag('json:"data"'))
-SELECT p.*, signals.*, perf.*,
+SELECT p.*, signals.*, perf.*, use_connector(p,'main'),
 type(p,'ParentRow'), type(signals,'SignalRow'), type(perf,'PerformanceRow'),
 in_memory(signals), allow_nulls(signals), set_limit(signals,40),
 cardinality(signals,'Many'), cardinality(perf,'One'), selector_fields(p,true),

@@ -150,7 +150,11 @@ func (r *Refiner) refineView(ctx context.Context, component *spec.Component, vie
 		var err error
 		query, err = r.discover(ctx, view, connector, resources, input, parent, parentAliases)
 		if err != nil {
-			return fmt.Errorf("transcribe column: refine view %q: %w", view.Name, err)
+			componentName := firstValue(component.Name, component.Key.Name)
+			if connector != "" {
+				return fmt.Errorf("transcribe column: component %q, view %q, connector %q: %w", componentName, view.CanonicalName(), connector, err)
+			}
+			return fmt.Errorf("transcribe column: component %q, view %q: %w", componentName, view.CanonicalName(), err)
 		}
 	}
 	aliases := templateAliases(view)

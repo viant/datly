@@ -110,6 +110,7 @@ func (p plainProof) validate(s *openapi3.Schema, value any) bool {
 		for name, child := range obj {
 			if property := s.Properties[name]; property != nil {
 				if !p.validate(property, child) {
+					p.t.Logf("wire/schema mismatch at %q: value=%#v schema=%+v", name, child, p.schema(property))
 					return false
 				}
 			} else if s.AdditionalProperties != nil {
@@ -187,7 +188,7 @@ func TestPlainJSONWireMatchesStandardHTTP(t *testing.T) {
 		{name: "nil pointer promoted children optional", value: struct{ *PlainHolder }{nil}, names: []string{"Name", "Number"}},
 		{name: "pointer promoted values", value: struct{ *PlainHolder }{&PlainHolder{"name", 0}}, names: []string{"Name", "Number"}, types: map[string]string{"Number": "string"}},
 		{name: "omission zero method", value: omitted{Pointer: pointer, Zero: 7, Both: 7}, names: []string{"Name", "Number", "fixed", "empty", "object", "pointer", "zero", "both"}, required: []string{"fixed", "object"}},
-		{name: "all quoted scalar zero", value: plainQuoted{Ptr: pointer, Deep: &pointer, Named: plainPointer(pointer), Text: "a\"b<>&", Bytes: plainBytes{1, 2}}, names: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}, required: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}, types: map[string]string{"int": "string", "uint": "string", "float": "string", "bool": "string", "text": "string", "ptr": "string", "deep": "integer", "named": "string", "array": "array", "object": "object", "bytes": "string"}},
+		{name: "all quoted scalar zero", value: plainQuoted{Ptr: pointer, Deep: &pointer, Named: plainPointer(pointer), Text: "a\"b<>&", Bytes: plainBytes{1, 2}}, names: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}, required: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}, types: map[string]string{"int": "string", "uint": "string", "float": "string", "bool": "string", "text": "string", "ptr": "string", "deep": "integer", "named": "integer", "array": "array", "object": "object", "bytes": "string"}},
 		{name: "quoted null pointers", value: plainQuoted{}, names: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}, required: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}},
 		{name: "stdlib ignores format and internal tags", value: struct {
 			Label    string `json:"a=b" format:"name=ignored"`
