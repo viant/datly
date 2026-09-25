@@ -46,10 +46,20 @@ type planCompiler struct {
 	input Input
 }
 
-func (b *planCompiler) Compile() (*sqlreader.Plan, error) {
-	constants, err := b.input.Const.For(b.input.Component)
+// CompileViewMetadata resolves the same output graph as a reader without
+// compiling SQL programs, collectors, codecs, or an executable reader plan.
+func CompileViewMetadata(input Input) (*data.View, error) {
+	views, _, err := (&planCompiler{input: input}).prepareViews()
 	if err != nil {
 		return nil, err
+	}
+	return views.root, nil
+}
+
+func (b *planCompiler) prepareViews() (*viewSet, string, error) {
+	constants, err := b.input.Const.For(b.input.Component)
+	if err != nil {
+		return nil, "", err
 	}
 	b.input.Const = constants
 	b.input.Resources = constants.Resources(b.input.Resources)
@@ -72,20 +82,29 @@ func (b *planCompiler) Compile() (*sqlreader.Plan, error) {
 	views, err := buildDataViews(b.input.Component, b.input.OutputType, directViewField)
 	if b.input.DirectViewType != nil {
 		if directViewField != "" {
-			return nil, fmt.Errorf("direct view field and direct view type are mutually exclusive")
+			return nil, "", fmt.Errorf("direct view field and direct view type are mutually exclusive")
 		}
 		views, err = buildDirectDataViews(b.input.Component, b.input.DirectViewType)
 	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	view := views.root
 	if err := resolveViewResources(view, b.input.Resources); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if err := resolveRelationProjections(view); err != nil {
+		return nil, "", err
+	}
+	return views, directViewField, nil
+}
+
+func (b *planCompiler) Compile() (*sqlreader.Plan, error) {
+	views, directViewField, err := b.prepareViews()
+	if err != nil {
 		return nil, err
 	}
+	view := views.root
 	viewIndex := sqlreader.NewViewIndex(b.input.Component, view)
 	selectorBindings, err := compileSelectorBindings(b.input.Component, b.input.InputType, viewIndex, b.input.Bindings)
 	if err != nil {
