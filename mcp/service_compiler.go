@@ -74,7 +74,7 @@ func (c *serviceCompiler) Compile(ctx context.Context) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	service, err := c.publish(catalog, policy, components)
+	service, err := c.publish(ctx, catalog, policy, components)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func (c *serviceCompiler) compileRoute(result *compiledPlans, toolCompiler *tool
 	return nil
 }
 
-func (c *serviceCompiler) publish(catalog *Catalog, policy *authorization.Policy, components []*registry.RegisteredComponent) (*Service, error) {
+func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy *authorization.Policy, components []*registry.RegisteredComponent) (*Service, error) {
 	protocolRegistry := mcpserver.NewRegistry()
 	outputs := make(map[string]*output.Plan, len(components))
 	for _, registered := range components {
@@ -227,7 +227,26 @@ func (c *serviceCompiler) publish(catalog *Catalog, policy *authorization.Policy
 	for _, name := range catalog.names {
 		plan, _ := catalog.Tool(name)
 		handler := tool.NewHandler(plan, componentInvoker)
-		protocolRegistry.RegisterTool(&mcpserver.ToolEntry{Metadata: plan.Metadata(), Handler: handler.Handle})
+		metadata := plan.Metadata()
+		if c.config.ToolMetadata != nil {
+			values, err := c.config.ToolMetadata(ctx, plan.Target())
+			if err != nil {
+				return nil, fmt.Errorf("MCP tool %q host metadata: %w", name, err)
+			}
+			if metadata.Meta == nil {
+				metadata.Meta = map[string]interface{}{}
+			}
+			for key, value := range values {
+				if key == "" {
+					return nil, fmt.Errorf("MCP tool %q host metadata has an empty key", name)
+				}
+				if _, exists := metadata.Meta[key]; exists {
+					return nil, fmt.Errorf("MCP tool %q host metadata conflicts at %q", name, key)
+				}
+				metadata.Meta[key] = value
+			}
+		}
+		protocolRegistry.RegisterTool(&mcpserver.ToolEntry{Metadata: metadata, Handler: handler.Handle})
 	}
 	for _, metadata := range catalog.resources.Resources() {
 		protocolRegistry.RegisterResource(metadata, resourceReadHandler)

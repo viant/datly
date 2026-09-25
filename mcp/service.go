@@ -28,6 +28,10 @@ type Config struct {
 	Authorization     *authorization.Policy
 	AuthorizeTool     func(context.Context, exec.ComponentTarget) error
 	AuthorizeResource func(context.Context, string) error
+	// ToolMetadata supplies host-owned, exact component identity metadata for
+	// MCP tools. The compiler merges it into schema.Tool.Meta without allowing
+	// a host to replace the tool name or input/output contract.
+	ToolMetadata func(context.Context, exec.ComponentTarget) (map[string]interface{}, error)
 	// Indexed publishes tool identities without eager component contracts.
 	Indexed []*spec.Component
 	Loader  ComponentLoader
