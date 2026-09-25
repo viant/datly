@@ -1166,6 +1166,11 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Action == xhandler.WriteDelete {
 			continue
 		}
+		// An identity-only update writes nothing, so there is nothing for the
+		// framework validator to check; entity Validate hooks still run for it.
+		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+			continue
+		}
 		if _, ok := groups[frame.Record]; !ok {
 			order = append(order, frame.Record)
 		}

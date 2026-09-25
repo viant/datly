@@ -12,7 +12,12 @@ import (
 
 // fakeCapabilities supplies no-op validator, DML, sequencer and transaction
 // starter so benchmarks measure the writer program itself.
-type fakeCapabilities struct{ inserts, updates, deletes int }
+type fakeCapabilities struct {
+	inserts, updates, deletes int
+	// validations records every framework validation call's options so tests
+	// can inspect the presence coverage the writer reported per pass.
+	validations [][]xhandler.ValidationOptions
+}
 
 func (f *fakeCapabilities) Bind(context.Context, any) error { return nil }
 func (f *fakeCapabilities) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
@@ -22,7 +27,12 @@ func (f *fakeCapabilities) Lookup(_ context.Context, key xhandler.ValueKey) (any
 	}
 	return nil, false, nil
 }
-func (f *fakeCapabilities) Validate(context.Context, any, ...any) (*xhandler.Validation, error) {
+func (f *fakeCapabilities) Validate(_ context.Context, _ any, opts ...any) (*xhandler.Validation, error) {
+	if len(opts) > 0 {
+		if options, ok := opts[0].([]xhandler.ValidationOptions); ok {
+			f.validations = append(f.validations, options)
+		}
+	}
 	return &xhandler.Validation{}, nil
 }
 func (f *fakeCapabilities) Insert(string, any) error     { f.inserts++; return nil }

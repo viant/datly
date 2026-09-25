@@ -84,7 +84,23 @@ type sqPlainOutput struct {
 // sqHookTypes keeps hook types linked into the test binary (a live reflect
 // conversion) so xunsafe can resolve them by name, and lets the harness assert
 // that resolution picked the intended type.
-var sqHookTypes = map[string]reflect.Type{"sqReplaceHooks": reflect.TypeOf(sqReplaceHooks{})}
+var sqHookTypes = map[string]reflect.Type{"sqReplaceHooks": reflect.TypeOf(sqReplaceHooks{}), "sqDenyNameHooks": reflect.TypeOf(sqDenyNameHooks{})}
+
+// sqDenyNameHooks models an authorization rule: the caller may not change
+// Name, so Init withdraws the field by clearing its Has marker. The writer
+// reads presence live, so the withdrawn field is neither validated as a
+// change nor written, while state.Original still records the attempt.
+type sqDenyNameHooks struct{}
+
+func (*sqDenyNameHooks) Init(_ context.Context, entity *sqParent, state xhandler.LifecycleContext[sqParent, xhandler.NoParent, sqOutput]) error {
+	if entity.Has != nil && entity.Has.Name {
+		if state.Original != nil && state.Original.Has("Name") {
+			state.Output.Events = append(state.Output.Events, "denied:Name")
+		}
+		entity.Has.Name = false
+	}
+	return nil
+}
 
 // sqReplaceHooks implements atomic child replacement: children present in
 // Previous but absent from the request are appended as explicit deletions.
@@ -332,6 +348,29 @@ func TestUniversalWriterSQLite(t *testing.T) {
 			},
 			output: func() any { return &sqOutput{} },
 			want:   expectation{errContains: "Rows.Version: expected token is missing", children: []sqRow{{ID: 10, ParentID: ptr(1), Label: ptr("c"), Version: ptr(1)}}},
+		},
+		{
+			name: "init withdrawing a forbidden field makes the update a no-op", operation: "patch", hooks: "sqDenyNameHooks",
+			seed: []string{"INSERT INTO parents VALUES(1,'p',1)"},
+			input: func(ctx context.Context, t *testing.T, db *sqlite.Harness) any {
+				in := &sqInput{Rows: []*sqParent{{ID: ptr(1), Name: ptr("hacked"), Version: ptr(1), Has: &sqParentHas{ID: true, Name: true, Version: true}}}}
+				sqLoadCurrent(t, ctx, db, &in.CurrentRows, &in.CurrentChildren)
+				return in
+			},
+			output: func() any { return &sqOutput{} },
+			want:   expectation{parents: []sqRow{{ID: 1, Label: ptr("p"), Version: ptr(1)}}, parentWrites: 0, childWrites: 0, events: []string{"denied:Name"}},
+		},
+		{
+			name: "init withdrawing one field still writes the permitted one", operation: "patch", hooks: "sqDenyNameHooks",
+			seed: []string{"INSERT INTO parents VALUES(1,'p',1)", "INSERT INTO children VALUES(10,1,'c',1)"},
+			input: func(ctx context.Context, t *testing.T, db *sqlite.Harness) any {
+				in := &sqInput{Rows: []*sqParent{{ID: ptr(1), Name: ptr("hacked"), Version: ptr(1), Has: &sqParentHas{ID: true, Name: true, Version: true, Children: true},
+					Children: []*sqChild{{ID: ptr(10), Label: ptr("allowed"), Version: ptr(1), Has: &sqChildHas{ID: true, Label: true, Version: true}}}}}}
+				sqLoadCurrent(t, ctx, db, &in.CurrentRows, &in.CurrentChildren)
+				return in
+			},
+			output: func() any { return &sqOutput{} },
+			want:   expectation{parents: []sqRow{{ID: 1, Label: ptr("p"), Version: ptr(1)}}, children: []sqRow{{ID: 10, ParentID: ptr(1), Label: ptr("allowed"), Version: ptr(1)}}, parentWrites: 0, childWrites: 1, events: []string{"denied:Name"}},
 		},
 		{
 			// Issue 1: rows appended by Init (atomic replacement) have no
