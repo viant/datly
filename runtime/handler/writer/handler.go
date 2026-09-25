@@ -2,14 +2,19 @@
 package writer
 
 import (
+	"container/heap"
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
+	"github.com/viant/structology"
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xunsafe"
 )
@@ -45,6 +50,36 @@ type Field struct {
 	RefDB         string
 	RefTable      string
 	RefColumn     string
+	// marker/markerIndex address this field's presence bit through the
+	// entity's structology set-marker (xunsafe backed). Has stays as the
+	// reflect fallback for holders without a setMarker tag.
+	marker      *structology.Marker
+	markerIndex int
+}
+
+// compileMarker records the Has marker path and, when the entity declares a
+// structology set-marker holder, the direct accessor for this field's bit.
+func compileMarker(compiled *Field, has reflect.StructField, marker reflect.StructField, presence *structology.Marker) {
+	compiled.Has = append(append([]int(nil), has.Index...), marker.Index...)
+	compiled.markerIndex = -1
+	if presence != nil {
+		if index := presence.Index(compiled.Name); index >= 0 {
+			compiled.marker, compiled.markerIndex = presence, index
+		}
+	}
+}
+
+// entityMarker compiles the structology set-marker for an entity type, or nil
+// when the type declares no setMarker holder.
+func entityMarker(entityType reflect.Type) *structology.Marker {
+	if !structology.HasSetMarker(entityType) {
+		return nil
+	}
+	marker, err := structology.NewMarker(entityType, structology.WithNoStrict(true))
+	if err != nil {
+		return nil
+	}
+	return marker
 }
 
 // Record is one writable role in a component graph.
@@ -64,6 +99,131 @@ type Record struct {
 	Invariants       map[string][]Field
 	HookType         reflect.Type
 	Relations        []*Relation
+	// positions maps field names to their index in Fields; compiled once.
+	positions map[string]int
+}
+
+func (r *Record) indexFields() {
+	r.positions = make(map[string]int, len(r.Fields))
+	for i, field := range r.Fields {
+		r.positions[field.Name] = i
+	}
+}
+
+// position returns the field's index in Fields or -1. Records assembled by
+// hand (tests) without compiled positions fall back to a linear scan.
+func (r *Record) position(name string) int {
+	if r == nil {
+		return -1
+	}
+	if r.positions != nil {
+		if pos, ok := r.positions[name]; ok {
+			return pos
+		}
+		return -1
+	}
+	for i, field := range r.Fields {
+		if field.Name == name {
+			return i
+		}
+	}
+	return -1
+}
+
+// presence is the writer's view of which fields a row supplies. The entity's
+// Has marker is the single authority shared with sqlx, godiffer, govalidator
+// and structology: a live presence reads it on demand (xunsafe offsets), so
+// lifecycle setters are visible without any re-synchronisation pass, even for
+// graphs with thousands of field checks. The writer layers two small bitsets
+// on top: forced bits for coverage it adds itself (reconciled links, invariant
+// backfill, which must not mutate the client's marker) and excluded bits for
+// validation coverage. A snapshot presence freezes the marker bits once and
+// never reads the working entity.
+type presence struct {
+	record   *Record
+	entity   reflect.Value // addressable struct; invalid for a snapshot
+	snapshot []uint64
+	forced   []uint64
+	excluded []uint64
+}
+
+func words(count int) int { return (count + 63) / 64 }
+
+func bit(bits []uint64, pos int) bool { return len(bits) > pos/64 && bits[pos/64]&(1<<(pos%64)) != 0 }
+
+func setBit(bits *[]uint64, count, pos int) {
+	if *bits == nil {
+		*bits = make([]uint64, words(count))
+	}
+	(*bits)[pos/64] |= 1 << (pos % 64)
+}
+
+// livePresence views the entity's current marker state.
+func livePresence(record *Record, entity reflect.Value) *presence {
+	return &presence{record: record, entity: entity}
+}
+
+// snapshotPresence copies the marker bits once (original presence contract).
+func snapshotPresence(record *Record, entity reflect.Value) *presence {
+	result := &presence{record: record, snapshot: make([]uint64, words(len(record.Fields)))}
+	for pos, field := range record.Fields {
+		if supplied(entity, field) {
+			result.snapshot[pos/64] |= 1 << (pos % 64)
+		}
+	}
+	return result
+}
+
+func (p *presence) hasPos(pos int) bool {
+	if p == nil || pos < 0 || pos >= len(p.record.Fields) {
+		return false
+	}
+	if bit(p.excluded, pos) {
+		return false
+	}
+	if bit(p.forced, pos) {
+		return true
+	}
+	if p.entity.IsValid() {
+		return supplied(p.entity, p.record.Fields[pos])
+	}
+	return bit(p.snapshot, pos)
+}
+
+// Has implements xhandler.FieldSet.
+func (p *presence) Has(name string) bool {
+	if p == nil {
+		return false
+	}
+	return p.hasPos(p.record.position(name))
+}
+
+// force marks writer-provided coverage without touching the client marker.
+func (p *presence) force(name string) {
+	if p == nil {
+		return
+	}
+	if pos := p.record.position(name); pos >= 0 {
+		setBit(&p.forced, len(p.record.Fields), pos)
+	}
+}
+
+// excluding returns a coverage view with the named fields removed. A nil
+// presence (frames assembled without one) stays nil.
+func (p *presence) excluding(names []string) *presence {
+	if p == nil {
+		return nil
+	}
+	result := &presence{record: p.record, entity: p.entity, snapshot: p.snapshot, forced: p.forced}
+	if len(p.excluded) > 0 {
+		result.excluded = append([]uint64(nil), p.excluded...)
+	}
+	for _, name := range names {
+		if pos := p.record.position(name); pos >= 0 {
+			setBit(&result.excluded, len(p.record.Fields), pos)
+		}
+	}
+	return result
 }
 
 // Relation is one typed parent-to-child mutation edge.
@@ -115,10 +275,196 @@ type Program struct {
 	stage         Stage
 	failed        bool
 	finalized     bool
+	// graph caches insert lookups for the current frame topology.
+	graph *graphIndex
+	// typeFields caches the exported field set per Previous type.
+	typeFields map[reflect.Type]fieldSet
+}
+
+func (p *Program) fieldsOf(typeOf reflect.Type) fieldSet {
+	if p.typeFields == nil {
+		p.typeFields = map[reflect.Type]fieldSet{}
+	}
+	if cached, ok := p.typeFields[typeOf]; ok {
+		return cached
+	}
+	result := allFields(typeOf)
+	p.typeFields[typeOf] = result
+	return result
+}
+
+// graphIndex answers "which earlier insert produces this foreign-key value"
+// in constant time. It is rebuilt whenever the frame list changes, replacing
+// the previous frame-by-frame scans that made ordering and validation
+// quadratic in the batch size.
+type graphIndex struct {
+	rows      []*Frame
+	positions map[*Frame]int
+	byPointer map[uintptr]*Frame
+	inserts   map[insertKey][]insertReference
+}
+
+// positionHeap is a min-heap of frame positions for stable topological order.
+type positionHeap []int
+
+func (h positionHeap) Len() int           { return len(h) }
+func (h positionHeap) Less(i, j int) bool { return h[i] < h[j] }
+func (h positionHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *positionHeap) Push(value any)    { *h = append(*h, value.(int)) }
+func (h *positionHeap) Pop() any {
+	old := *h
+	last := old[len(old)-1]
+	*h = old[:len(old)-1]
+	return last
+}
+
+type insertReference struct {
+	position int
+	frame    *Frame
+	value    reflect.Value
+}
+
+type insertKey struct {
+	table, column string
+	value         identityKey
+}
+
+func newInsertKey(table, column string, value reflect.Value) insertKey {
+	return insertKey{table: strings.ToLower(table), column: strings.ToLower(column), value: scalarKey(indirect(value))}
+}
+
+// graphIndex returns the cached index for the current frames, rebuilding it
+// when the frame slice was replaced or reordered.
+func (p *Program) graphIndex() *graphIndex {
+	rows := p.frames.Rows
+	if p.graph != nil && len(p.graph.rows) == len(rows) && (len(rows) == 0 || &p.graph.rows[0] == &rows[0]) {
+		return p.graph
+	}
+	index := &graphIndex{rows: rows, positions: make(map[*Frame]int, len(rows)), byPointer: make(map[uintptr]*Frame, len(rows)), inserts: map[insertKey][]insertReference{}}
+	for position, frame := range rows {
+		if frame == nil {
+			continue
+		}
+		index.positions[frame] = position
+		if frame.Entity.IsValid() && !frame.Entity.IsNil() {
+			index.byPointer[frame.Entity.Pointer()] = frame
+		}
+		if frame.Action != xhandler.WriteInsert || frame.Record == nil || !frame.Entity.IsValid() {
+			continue
+		}
+		entity := frame.Entity.Elem()
+		for _, field := range frame.Record.Fields {
+			if field.Column == "" {
+				continue
+			}
+			value := entity.FieldByIndex(field.Index)
+			if !linkValueResolved(value) {
+				continue
+			}
+			key := newInsertKey(frame.Record.Table, field.Column, value)
+			index.inserts[key] = append(index.inserts[key], insertReference{position: position, frame: frame, value: value})
+		}
+	}
+	p.graph = index
+	return index
+}
+
+// producers returns the insert frames whose table/column value equals the
+// supplied foreign-key value. The string key narrows candidates; linkedEqual
+// keeps the exact equality semantics.
+func (g *graphIndex) producers(field Field, value reflect.Value) []insertReference {
+	if field.RefTable == "" || field.RefColumn == "" || !linkValueResolved(value) {
+		return nil
+	}
+	candidates := g.inserts[newInsertKey(field.RefTable, field.RefColumn, value)]
+	result := make([]insertReference, 0, len(candidates))
+	for _, candidate := range candidates {
+		if linkedEqual(value, candidate.value) {
+			result = append(result, candidate)
+		}
+	}
+	return result
 }
 
 type OriginalInput struct{ Presence map[uintptr]originalPresence }
-type DatabaseSnapshot struct{ Rows map[string]reflect.Value }
+
+// identityKey is an allocation-free rendering of a row identity or relation
+// link value. Single integer keys fold into number; single strings use text;
+// composite or exotic keys render to text.
+type identityKey struct {
+	kind   uint8
+	number uint64
+	text   string
+}
+
+const (
+	identityInt uint8 = iota + 1
+	identityUint
+	identityString
+	identityBool
+	identityText
+)
+
+func (k identityKey) String() string {
+	switch k.kind {
+	case identityInt:
+		return strconv.FormatInt(int64(k.number), 10)
+	case identityUint:
+		return strconv.FormatUint(k.number, 10)
+	case identityBool:
+		return strconv.FormatBool(k.number != 0)
+	}
+	return k.text
+}
+
+// scalarKey folds one dereferenced value into an identityKey component.
+func scalarKey(value reflect.Value) identityKey {
+	if !value.IsValid() {
+		return identityKey{kind: identityText, text: "<nil>"}
+	}
+	switch value.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return identityKey{kind: identityInt, number: uint64(value.Int())}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return identityKey{kind: identityUint, number: value.Uint()}
+	case reflect.String:
+		return identityKey{kind: identityString, text: value.String()}
+	case reflect.Bool:
+		if value.Bool() {
+			return identityKey{kind: identityBool, number: 1}
+		}
+		return identityKey{kind: identityBool}
+	}
+	return identityKey{kind: identityText, text: fmt.Sprintf("%#v", value.Interface())}
+}
+
+// compositeKey joins several components; a single component is returned as is.
+func compositeKey(parts []identityKey) identityKey {
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	var builder strings.Builder
+	for i, part := range parts {
+		if i > 0 {
+			builder.WriteByte(0)
+		}
+		builder.WriteByte(byte('0' + part.kind))
+		builder.WriteString(part.String())
+	}
+	return identityKey{kind: identityText, text: builder.String()}
+}
+
+type rowIdentity struct {
+	record *Record
+	key    identityKey
+}
+
+// DatabaseSnapshot indexes Current rows by role and identity. ByRecord keeps
+// the load order so assembled Previous relations are deterministic.
+type DatabaseSnapshot struct {
+	Rows     map[rowIdentity]reflect.Value
+	ByRecord map[*Record][]reflect.Value
+}
 type MutationFrames struct{ Rows []*Frame }
 type MutationActions struct{ Rows []*Action }
 type FrameworkValidation struct{}
@@ -128,7 +474,7 @@ type Stage uint8
 type Frame struct {
 	Entity, Previous reflect.Value
 	ExpectedToken    reflect.Value
-	Fields           fieldSet
+	Fields           *presence
 	Action           xhandler.WriteAction
 	Record           *Record
 	Parent           *Frame
@@ -176,8 +522,14 @@ func (p *Program) reconcileLinks(requireResolved bool) error {
 			if err := assignLinkedValue(child, parent); err != nil {
 				return fmt.Errorf("writer relation %s link %s=%s: %w", frame.Record.Path, link.Parent.Name, link.Child.Name, err)
 			}
+			// Updates stay sparse: a matched Previous row already carries this
+			// foreign key (buildRecordFrames rejects parent-scope mismatches), so
+			// only produced rows record the link as a supplied field.
+			if frame.Previous.IsValid() && frame.Action != xhandler.WriteInsert {
+				continue
+			}
 			markSupplied(frame.Entity.Elem(), link.Child)
-			frame.Fields[link.Child.Name] = true
+			frame.Fields.force(link.Child.Name)
 		}
 	}
 	return nil
@@ -228,14 +580,21 @@ func markSupplied(entity reflect.Value, field Field) {
 	if len(field.Has) == 0 {
 		return
 	}
-	markerRoot := entity.FieldByName("Has")
+	if field.marker != nil && entity.CanAddr() {
+		structPtr := unsafe.Pointer(entity.UnsafeAddr())
+		field.marker.EnsureHolder(structPtr)
+		if err := field.marker.Set(structPtr, field.markerIndex, true); err == nil {
+			return
+		}
+	}
+	markerRoot := markerByIndex(entity, field.Has[:len(field.Has)-1])
 	if !markerRoot.IsValid() || !markerRoot.CanSet() {
 		return
 	}
-	if markerRoot.IsNil() {
+	if markerRoot.Kind() == reflect.Pointer && markerRoot.IsNil() {
 		markerRoot.Set(reflect.New(markerRoot.Type().Elem()))
 	}
-	marker := markerRoot.Elem().FieldByName(field.Name)
+	marker := markerByIndex(markerRoot, field.Has[len(field.Has)-1:])
 	if marker.IsValid() && marker.CanSet() && marker.Kind() == reflect.Bool {
 		marker.SetBool(true)
 	}
@@ -300,7 +659,7 @@ func (h *Handler) program(input any) (*Program, error) {
 	output := reflect.New(h.outputType)
 	result := &Program{
 		metadata: h.metadata, input: input, output: output.Interface(), original: &OriginalInput{Presence: map[uintptr]originalPresence{}},
-		database: &DatabaseSnapshot{Rows: map[string]reflect.Value{}}, frames: &MutationFrames{},
+		database: &DatabaseSnapshot{Rows: map[rowIdentity]reflect.Value{}, ByRecord: map[*Record][]reflect.Value{}}, frames: &MutationFrames{},
 		actions: &MutationActions{}, validation: &FrameworkValidation{}, hooks: &Hooks{}, hooksByRecord: map[*Record]reflect.Value{}, failed: true,
 	}
 	if h.metadata.Root != nil {
@@ -333,11 +692,7 @@ func (p *Program) captureOriginal(record *Record, rows reflect.Value) error {
 		if entity.IsNil() {
 			return fmt.Errorf("writer row %d is nil", i)
 		}
-		captured := originalPresence{fieldSet: suppliedFields(entity.Elem(), record.Fields), available: presenceAvailable(entity.Elem())}
-		if record.ConcurrencyToken != nil {
-			captured.token = cloneTokenValue(entity.Elem().FieldByIndex(record.ConcurrencyToken.Index))
-		}
-		p.original.Presence[entity.Pointer()] = captured
+		p.captureEntityOriginal(record, entity)
 		for _, relation := range record.Relations {
 			if err := p.captureOriginal(relation.Child, entity.Elem().FieldByIndex(relation.Field)); err != nil {
 				return err
@@ -345,6 +700,22 @@ func (p *Program) captureOriginal(record *Record, rows reflect.Value) error {
 		}
 	}
 	return nil
+}
+
+// captureEntityOriginal snapshots one row's presence markers and concurrency
+// token exactly once. Rows a lifecycle appends during Init (for example
+// explicit deletions derived from Previous) are captured when first framed, so
+// their authored token remains available to the concurrency check.
+func (p *Program) captureEntityOriginal(record *Record, entity reflect.Value) originalPresence {
+	if existing, ok := p.original.Presence[entity.Pointer()]; ok {
+		return existing
+	}
+	captured := originalPresence{presence: snapshotPresence(record, entity.Elem()), available: presenceAvailable(entity.Elem())}
+	if record.ConcurrencyToken != nil {
+		captured.token = cloneTokenValue(entity.Elem().FieldByIndex(record.ConcurrencyToken.Index))
+	}
+	p.original.Presence[entity.Pointer()] = captured
+	return captured
 }
 
 func (p *Program) prepareHooks(record *Record) {
@@ -410,14 +781,10 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		}
 		initialized[identityOfFrame(frame)] = true
 		// Init is the supported phase for marker-aware business defaults and
-		// sparse server-owned transitions. Merge newly set Has bits before
-		// validation and action selection while retaining invariant evidence,
-		// whose backfill deliberately does not mutate client presence markers.
-		for name, present := range suppliedFields(frame.Entity.Elem(), frame.Record.Fields) {
-			if present {
-				frame.Fields[name] = true
-			}
-		}
+		// sparse server-owned transitions. Frame presence is a live view of the
+		// entity marker, so setter changes are visible to validation and action
+		// selection without a synchronisation pass; invariant backfill stays in
+		// the writer overlay and never mutates client markers.
 	}
 	// A lifecycle may implement atomic replacement by appending explicit
 	// deletion rows derived from the assembled Previous graph. Rebuild frames
@@ -440,11 +807,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		if !initialized[identityOfFrame(frame)] {
 			if err = p.callEntityHook(ctx, "Init", frame); err != nil {
 				return err
-			}
-		}
-		for name, present := range suppliedFields(frame.Entity.Elem(), frame.Record.Fields) {
-			if present {
-				frame.Fields[name] = true
 			}
 		}
 	}
@@ -597,24 +959,31 @@ func identityOfFrame(frame *Frame) frameIdentity {
 }
 
 func (p *Program) frameFor(entity reflect.Value) *Frame {
-	for _, frame := range p.frames.Rows {
-		if frame != nil && frame.Entity.IsValid() && frame.Entity.Pointer() == entity.Pointer() {
-			return frame
-		}
+	if !entity.IsValid() || entity.IsNil() {
+		return nil
 	}
-	return nil
+	return p.graphIndex().byPointer[entity.Pointer()]
 }
 
 func hasMutableFields(frame *Frame) bool {
 	if frame == nil || frame.Record == nil {
 		return false
 	}
-	keys := map[string]bool{}
+	// Identity fields are match criteria, never changes. A supplied concurrency
+	// token that still equals the expected (Previous) value is also criteria; a
+	// token a lifecycle advanced during Init is a real change and is written.
+	criteria := map[string]bool{}
 	for _, key := range frame.Record.Keys {
-		keys[key.Name] = true
+		criteria[key.Name] = true
 	}
-	for name, present := range frame.Fields {
-		if present && !keys[name] {
+	if token := frame.Record.ConcurrencyToken; token != nil && frame.Entity.IsValid() && frame.ExpectedToken.IsValid() {
+		current := frame.Entity.Elem().FieldByIndex(token.Index)
+		if concurrencyTokenEqual(frame.ExpectedToken.Interface(), current.Interface()) {
+			criteria[token.Name] = true
+		}
+	}
+	for pos, field := range frame.Record.Fields {
+		if !criteria[field.Name] && frame.Fields.hasPos(pos) {
 			return true
 		}
 	}
@@ -641,7 +1010,7 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 	options := xhandler.ValidationOptions{Action: frame.Action, Location: frame.Record.Path, Shallow: true}
 	if frame.Previous.IsValid() {
 		options.Previous = frame.Previous.Interface()
-		options.PreviousFields = allFields(frame.Previous.Elem().Type())
+		options.PreviousFields = p.fieldsOf(frame.Previous.Elem().Type())
 		options.Fields = frame.Fields
 	}
 	graphReferences := p.satisfiedGraphReferences(frame)
@@ -650,14 +1019,11 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		// FK value is proven to match an earlier insert in this ordered graph,
 		// exclude only that reference field from the external database lookup.
 		// The generated transaction and database FK still enforce the value.
-		coverage := fieldSet{}
-		for field, present := range frame.Fields {
-			coverage[field] = present
-		}
+		excluded := make([]string, 0, len(graphReferences))
 		for _, reference := range graphReferences {
-			delete(coverage, reference.Field)
+			excluded = append(excluded, reference.Field)
 		}
-		options.Fields = coverage
+		options.Fields = frame.Fields.excluding(excluded)
 	}
 	if frame.Action == xhandler.WriteInsert && frame.Parent != nil {
 		if relation := relationFor(frame.Parent.Record, frame.Record); relation != nil {
@@ -704,32 +1070,20 @@ func (p *Program) satisfiedGraphReferences(frame *Frame) []xhandler.ValidationRe
 	if p == nil || frame == nil || frame.Record == nil || !frame.Entity.IsValid() {
 		return nil
 	}
+	index := p.graphIndex()
+	position, ok := index.positions[frame]
+	if !ok {
+		return nil
+	}
 	current := frame.Entity.Elem()
 	var result []xhandler.ValidationReference
 	for _, field := range frame.Record.Fields {
 		if field.RefTable == "" || field.RefColumn == "" {
 			continue
 		}
-		value := current.FieldByIndex(field.Index)
-		if !linkValueResolved(value) {
-			continue
-		}
-		for _, candidate := range p.frames.Rows {
-			if candidate == frame {
-				break
-			}
-			if candidate == nil || candidate.Action != xhandler.WriteInsert || candidate.Record == nil || !strings.EqualFold(candidate.Record.Table, field.RefTable) || !candidate.Entity.IsValid() {
-				continue
-			}
-			for _, parentField := range candidate.Record.Fields {
-				if !strings.EqualFold(parentField.Column, field.RefColumn) {
-					continue
-				}
-				parentValue := candidate.Entity.Elem().FieldByIndex(parentField.Index)
-				if linkValueResolved(parentValue) && linkedEqual(value, parentValue) {
-					result = append(result, xhandler.ValidationReference{Field: field.Name, Schema: field.RefDB, Table: field.RefTable, Column: field.RefColumn})
-				}
-				break
+		for _, producer := range index.producers(field, current.FieldByIndex(field.Index)) {
+			if producer.position < position && producer.frame != frame {
+				result = append(result, xhandler.ValidationReference{Field: field.Name, Schema: field.RefDB, Table: field.RefTable, Column: field.RefColumn})
 			}
 		}
 	}
@@ -744,18 +1098,15 @@ func (p *Program) orderFramesByReferences() error {
 		return nil
 	}
 	rows := p.frames.Rows
-	dependencies := make([]map[int]bool, len(rows))
-	index := make(map[*Frame]int, len(rows))
-	for i, frame := range rows {
-		index[frame] = i
-	}
+	index := p.graphIndex()
+	dependencies := make([][]int, len(rows))
 	for i, frame := range rows {
 		if frame == nil || frame.Record == nil || !frame.Entity.IsValid() {
 			continue
 		}
 		if frame.Parent != nil {
-			if parentIndex, ok := index[frame.Parent]; ok && parentIndex != i {
-				dependencies[i] = map[int]bool{parentIndex: true}
+			if parentIndex, ok := index.positions[frame.Parent]; ok && parentIndex != i {
+				dependencies[i] = append(dependencies[i], parentIndex)
 			}
 		}
 		if frame.Action == xhandler.WriteDelete {
@@ -766,58 +1117,45 @@ func (p *Program) orderFramesByReferences() error {
 			if field.RefTable == "" || field.RefColumn == "" {
 				continue
 			}
-			value := current.FieldByIndex(field.Index)
-			if !linkValueResolved(value) {
-				continue
-			}
-			for j, candidate := range rows {
-				if i == j || candidate == nil || candidate.Action != xhandler.WriteInsert || candidate.Record == nil ||
-					!strings.EqualFold(candidate.Record.Table, field.RefTable) || !candidate.Entity.IsValid() {
-					continue
-				}
-				for _, parentField := range candidate.Record.Fields {
-					if !strings.EqualFold(parentField.Column, field.RefColumn) {
-						continue
-					}
-					parentValue := candidate.Entity.Elem().FieldByIndex(parentField.Index)
-					if linkValueResolved(parentValue) && linkedEqual(value, parentValue) {
-						if dependencies[i] == nil {
-							dependencies[i] = map[int]bool{}
-						}
-						dependencies[i][j] = true
-					}
-					break
+			for _, producer := range index.producers(field, current.FieldByIndex(field.Index)) {
+				if producer.position != i {
+					dependencies[i] = append(dependencies[i], producer.position)
 				}
 			}
+		}
+	}
+	// Kahn's algorithm with a position-ordered ready queue keeps the original
+	// relative order for frames that have no dependency between them.
+	pending := make([]int, len(rows))
+	dependents := make([][]int, len(rows))
+	for i, deps := range dependencies {
+		pending[i] = len(deps)
+		for _, dependency := range deps {
+			dependents[dependency] = append(dependents[dependency], i)
+		}
+	}
+	ready := &positionHeap{}
+	for i := range rows {
+		if pending[i] == 0 {
+			heap.Push(ready, i)
 		}
 	}
 	ordered := make([]*Frame, 0, len(rows))
-	visited := make([]bool, len(rows))
-	for len(ordered) < len(rows) {
-		selected := -1
-		for i := range rows {
-			if visited[i] {
-				continue
-			}
-			ready := true
-			for dependency := range dependencies[i] {
-				if !visited[dependency] {
-					ready = false
-					break
-				}
-			}
-			if ready {
-				selected = i
-				break
-			}
-		}
-		if selected < 0 {
-			return fmt.Errorf("writer graph has cyclic insert references")
-		}
-		visited[selected] = true
+	for ready.Len() > 0 {
+		selected := heap.Pop(ready).(int)
 		ordered = append(ordered, rows[selected])
+		for _, dependent := range dependents[selected] {
+			pending[dependent]--
+			if pending[dependent] == 0 {
+				heap.Push(ready, dependent)
+			}
+		}
+	}
+	if len(ordered) != len(rows) {
+		return fmt.Errorf("writer graph has cyclic insert references")
 	}
 	p.frames.Rows = ordered
+	p.graph = nil
 	return nil
 }
 
@@ -871,7 +1209,7 @@ func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame)
 			previous.Set(frame.Previous)
 		}
 		if fields := entityState.FieldByName("PreviousFields"); fields.IsValid() && fields.CanSet() && frame.Previous.IsValid() {
-			fields.Set(reflect.ValueOf(allFields(frame.Previous.Elem().Type())))
+			fields.Set(reflect.ValueOf(p.fieldsOf(frame.Previous.Elem().Type())))
 		}
 	}
 	if output := state.FieldByName("Output"); output.IsValid() && output.CanSet() {
@@ -929,27 +1267,39 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 		wrapped.Index(0).Set(rows)
 		rows = wrapped
 	}
+	// Resolve the Current-to-entity field mapping once per collection instead
+	// of two FieldByName lookups per field per row.
+	type fieldCopy struct{ source, destination []int }
+	copies := make([]fieldCopy, 0, len(record.Fields))
+	if rows.Len() > 0 {
+		sourceType := dereference(rows.Type().Elem())
+		for _, field := range record.Fields {
+			source, sourceOK := sourceType.FieldByName(field.Name)
+			destination, destinationOK := record.EntityType.FieldByName(field.Name)
+			if sourceOK && destinationOK && source.Type.AssignableTo(destination.Type) {
+				copies = append(copies, fieldCopy{source: source.Index, destination: destination.Index})
+			}
+		}
+	}
 	for i := 0; i < rows.Len(); i++ {
 		row := rows.Index(i)
 		if row.IsNil() {
 			continue
 		}
 		previous := reflect.New(record.EntityType)
-		for _, field := range record.Fields {
-			source := row.Elem().FieldByName(field.Name)
-			destination := previous.Elem().FieldByName(field.Name)
-			if source.IsValid() && destination.IsValid() && destination.CanSet() && source.Type().AssignableTo(destination.Type()) {
-				destination.Set(source)
-			}
+		for _, copy := range copies {
+			previous.Elem().FieldByIndex(copy.destination).Set(row.Elem().FieldByIndex(copy.source))
 		}
 		key, ok := record.loadedKey(previous.Elem())
 		if !ok {
 			return fmt.Errorf("current writer row for %s has incomplete identity", record.Path)
 		}
-		if _, exists := p.database.Rows[record.Path+"\x00"+key]; exists {
-			return fmt.Errorf("current writer identity %q is duplicated", key)
+		identity := rowIdentity{record: record, key: key}
+		if _, exists := p.database.Rows[identity]; exists {
+			return fmt.Errorf("current writer identity %q is duplicated", key.String())
 		}
-		p.database.Rows[record.Path+"\x00"+key] = previous
+		p.database.Rows[identity] = previous
+		p.database.ByRecord[record] = append(p.database.ByRecord[record], previous)
 	}
 	return nil
 }
@@ -966,8 +1316,15 @@ func (p *Program) assemblePreviousRelations(record *Record) error {
 			return err
 		}
 		parents, children := p.previousRows(record), p.previousRows(relation.Child)
+		// Index parents by their link values so assembly is linear in the
+		// number of Current rows instead of parents×children reflect compares.
+		parentsByLink := make(map[identityKey][]reflect.Value, len(parents))
+		for _, parent := range parents {
+			key := linkKey(parent.Elem(), relation.Links, true)
+			parentsByLink[key] = append(parentsByLink[key], parent)
+		}
 		for _, child := range children {
-			for _, parent := range parents {
+			for _, parent := range parentsByLink[linkKey(child.Elem(), relation.Links, false)] {
 				if !relationValuesEqual(parent.Elem(), child.Elem(), relation.Links) {
 					continue
 				}
@@ -983,7 +1340,8 @@ func (p *Program) assemblePreviousRelations(record *Record) error {
 				default:
 					return fmt.Errorf("current writer relation %s holder is neither slice nor pointer", relation.Child.Path)
 				}
-				break
+				// Links may target non-unique parent columns; every matching parent
+				// receives the child, so the scan deliberately continues.
 			}
 		}
 	}
@@ -991,14 +1349,42 @@ func (p *Program) assemblePreviousRelations(record *Record) error {
 }
 
 func (p *Program) previousRows(record *Record) []reflect.Value {
-	prefix := record.Path + "\x00"
-	result := make([]reflect.Value, 0)
-	for key, row := range p.database.Rows {
-		if strings.HasPrefix(key, prefix) {
-			result = append(result, row)
+	if rows, ok := p.database.ByRecord[record]; ok {
+		return rows
+	}
+	// A snapshot assembled without per-record order (hand-built in tests)
+	// falls back to a stable identity order.
+	identities := make([]rowIdentity, 0, len(p.database.Rows))
+	for identity := range p.database.Rows {
+		if identity.record == record {
+			identities = append(identities, identity)
 		}
 	}
+	sort.Slice(identities, func(i, j int) bool { return identities[i].key.String() < identities[j].key.String() })
+	result := make([]reflect.Value, 0, len(identities))
+	for _, identity := range identities {
+		result = append(result, p.database.Rows[identity])
+	}
 	return result
+}
+
+// linkKey renders one side of a relation's link values as a lookup key. Two
+// values that linkedEqual considers equal always render the same key, so the
+// key narrows candidates and relationValuesEqual confirms them.
+func linkKey(entity reflect.Value, links []Link, parentSide bool) identityKey {
+	var single [1]identityKey
+	parts := single[:0]
+	if len(links) > 1 {
+		parts = make([]identityKey, 0, len(links))
+	}
+	for _, link := range links {
+		field := link.Child
+		if parentSide {
+			field = link.Parent
+		}
+		parts = append(parts, scalarKey(indirect(entity.FieldByIndex(field.Index))))
+	}
+	return compositeKey(parts)
 }
 
 func relationValuesEqual(parent, child reflect.Value, links []Link) bool {
@@ -1019,20 +1405,29 @@ func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *
 		if rows.IsNil() {
 			return nil
 		}
-		wrapped := reflect.MakeSlice(reflect.SliceOf(rows.Type()), 1, 1)
-		wrapped.Index(0).Set(rows)
-		rows = wrapped
+		return p.buildEntityFrame(record, rows, parent, 0)
 	}
 	if rows.Kind() != reflect.Slice {
 		return fmt.Errorf("writer role %s requires a record or collection, got %s", record.Path, rows.Type())
 	}
 	for i := 0; i < rows.Len(); i++ {
-		entity := rows.Index(i)
+		if err := p.buildEntityFrame(record, rows.Index(i), parent, i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// buildEntityFrame frames one row (a *T element or a to-one pointer holder)
+// and recurses into its relations.
+func (p *Program) buildEntityFrame(record *Record, entity reflect.Value, parent *Frame, position int) error {
+	{
+		i := position
 		if entity.IsNil() {
 			return fmt.Errorf("writer row %d is nil", i)
 		}
 		key, complete := record.key(entity.Elem())
-		previous := p.database.Rows[record.Path+"\x00"+key]
+		previous := p.database.Rows[rowIdentity{record: record, key: key}]
 		if previous.IsValid() && parent != nil {
 			relation := relationFor(parent.Record, record)
 			if relation == nil {
@@ -1062,29 +1457,21 @@ func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *
 		default:
 			return fmt.Errorf("unsupported writer operation %q", p.metadata.Operation)
 		}
-		fields := suppliedFields(entity.Elem(), record.Fields)
+		fields := livePresence(record, entity.Elem())
 		if record.DeleteMarker != nil && supplied(entity.Elem(), *record.DeleteMarker) && boolValue(entity.Elem().FieldByIndex(record.DeleteMarker.Index)) {
 			if !previous.IsValid() || !complete {
 				return fmt.Errorf("delete requires a matched complete identity")
 			}
 			action = xhandler.WriteDelete
 		}
-		original := p.original.Presence[entity.Pointer()]
+		original := p.captureEntityOriginal(record, entity)
 		frame := &Frame{Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, Action: action, Record: record, Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
 			children := entity.Elem().FieldByIndex(relation.Field)
-			// A generated cardinality-one relation is represented as a pointer;
-			// normalize it for the universal recursive frame builder.
-			if children.Kind() == reflect.Pointer {
-				if children.IsNil() {
-					continue
-				}
-				wrapped := reflect.MakeSlice(reflect.SliceOf(children.Type()), 1, 1)
-				wrapped.Index(0).Set(children)
-				children = wrapped
-			}
-			if children.Kind() != reflect.Slice {
+			// A generated cardinality-one relation is a pointer holder, which the
+			// recursive builder frames directly without wrapping it in a slice.
+			if children.Kind() != reflect.Slice && children.Kind() != reflect.Pointer {
 				return fmt.Errorf("writer relation %s is not a collection", relation.Child.Path)
 			}
 			if err := p.buildRecordFrames(relation.Child, children, frame); err != nil {
@@ -1125,10 +1512,40 @@ func linkedEqual(left, right reflect.Value) bool {
 	if !left.IsValid() || !right.IsValid() {
 		return !left.IsValid() && !right.IsValid()
 	}
+	// Scalars compare without boxing; mixed widths of the same family compare
+	// by value, which matches the previous textual fallback for numbers.
+	switch leftKind, rightKind := scalarFamily(left.Kind()), scalarFamily(right.Kind()); {
+	case leftKind == identityInt && rightKind == identityInt:
+		return left.Int() == right.Int()
+	case leftKind == identityUint && rightKind == identityUint:
+		return left.Uint() == right.Uint()
+	case leftKind == identityInt && rightKind == identityUint:
+		return left.Int() >= 0 && uint64(left.Int()) == right.Uint()
+	case leftKind == identityUint && rightKind == identityInt:
+		return right.Int() >= 0 && uint64(right.Int()) == left.Uint()
+	case leftKind == identityString && rightKind == identityString:
+		return left.String() == right.String()
+	case leftKind == identityBool && rightKind == identityBool:
+		return left.Bool() == right.Bool()
+	}
 	if left.Type() == right.Type() {
 		return reflect.DeepEqual(left.Interface(), right.Interface())
 	}
 	return fmt.Sprint(left.Interface()) == fmt.Sprint(right.Interface())
+}
+
+func scalarFamily(kind reflect.Kind) uint8 {
+	switch kind {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return identityInt
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return identityUint
+	case reflect.String:
+		return identityString
+	case reflect.Bool:
+		return identityBool
+	}
+	return 0
 }
 
 func (p *Program) applyInvariants(frame *Frame) error {
@@ -1154,7 +1571,7 @@ func (p *Program) applyInvariants(frame *Frame) error {
 				return fmt.Errorf("invariant %s field %s cannot be backfilled", name, field.Name)
 			}
 			destination.Set(source)
-			frame.Fields[field.Name] = true
+			frame.Fields.force(field.Name)
 		}
 	}
 	return nil
@@ -1268,6 +1685,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		}
 	}
 	has, _ := metadata.EntityType.FieldByName("Has")
+	presence := entityMarker(metadata.EntityType)
 	for i := 0; i < metadata.EntityType.NumField(); i++ {
 		field := metadata.EntityType.Field(i)
 		if field.Name == "Has" || field.PkgPath != "" {
@@ -1290,7 +1708,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		if has.Type != nil {
 			markerType := dereference(has.Type)
 			if marker, ok := markerType.FieldByName(field.Name); ok {
-				compiled.Has = append(append([]int(nil), has.Index...), marker.Index...)
+				compileMarker(&compiled, has, marker, presence)
 			}
 		}
 		metadata.Fields = append(metadata.Fields, compiled)
@@ -1338,6 +1756,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	if root.Name == "" {
 		root.Name = metadata.EntityType.Name()
 	}
+	root.indexFields()
 	if metadata.Sequence != nil {
 		root.Selector = metadata.Sequence.Name
 	}
@@ -1425,6 +1844,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		}
 	}
 	has, _ := entityType.FieldByName("Has")
+	presence := entityMarker(entityType)
 	for i := 0; i < entityType.NumField(); i++ {
 		field := entityType.Field(i)
 		if field.Name == "Has" || field.PkgPath != "" || field.Tag.Get("view") != "" {
@@ -1441,7 +1861,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		if has.Type != nil {
 			markerType := dereference(has.Type)
 			if marker, ok := markerType.FieldByName(field.Name); ok {
-				compiled.Has = append(append([]int(nil), has.Index...), marker.Index...)
+				compileMarker(&compiled, has, marker, presence)
 			}
 		}
 		record.Fields = append(record.Fields, compiled)
@@ -1472,6 +1892,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		copy := record.Keys[0]
 		record.Sequence = &copy
 	}
+	record.indexFields()
 	for i := 0; i < inputType.NumField(); i++ {
 		field := inputType.Field(i)
 		if field.Type.Kind() != reflect.Slice && field.Type.Kind() != reflect.Pointer || !strings.Contains(field.Tag.Get("parameter"), "kind=view") {
@@ -1571,34 +1992,38 @@ func hasAction(actions []*Action, kind xhandler.WriteAction) bool {
 	return false
 }
 
-func (m *Metadata) key(value reflect.Value) (string, bool) {
+func (m *Metadata) key(value reflect.Value) (identityKey, bool) {
 	if m == nil || m.Root == nil {
-		return "", false
+		return identityKey{}, false
 	}
 	return m.Root.key(value)
 }
 
-func (r *Record) key(value reflect.Value) (string, bool) {
+func (r *Record) key(value reflect.Value) (identityKey, bool) {
 	return r.keyValue(value, true)
 }
 
-func (r *Record) loadedKey(value reflect.Value) (string, bool) {
+func (r *Record) loadedKey(value reflect.Value) (identityKey, bool) {
 	return r.keyValue(value, false)
 }
 
-func (r *Record) keyValue(value reflect.Value, requirePresence bool) (string, bool) {
-	parts := make([]string, len(r.Keys))
-	for i, key := range r.Keys {
+func (r *Record) keyValue(value reflect.Value, requirePresence bool) (identityKey, bool) {
+	var single [1]identityKey
+	parts := single[:0]
+	if len(r.Keys) > 1 {
+		parts = make([]identityKey, 0, len(r.Keys))
+	}
+	for _, key := range r.Keys {
 		field := value.FieldByIndex(key.Index)
 		if isNil(field) {
-			return "", false
+			return identityKey{}, false
 		}
 		if requirePresence && field.Kind() != reflect.Pointer && field.IsZero() && !supplied(value, key) {
-			return "", false
+			return identityKey{}, false
 		}
-		parts[i] = fmt.Sprintf("%#v", indirect(field).Interface())
+		parts = append(parts, scalarKey(indirect(field)))
 	}
-	return strings.Join(parts, "\x00"), true
+	return compositeKey(parts), true
 }
 
 type fieldSet map[string]bool
@@ -1606,7 +2031,7 @@ type fieldSet map[string]bool
 func (s fieldSet) Has(name string) bool { return s[name] }
 
 type originalPresence struct {
-	fieldSet
+	*presence
 	available bool
 	token     reflect.Value
 }
@@ -1633,16 +2058,6 @@ func cloneTokenValue(value reflect.Value) reflect.Value {
 	return copy
 }
 
-func suppliedFields(entity reflect.Value, fields []Field) fieldSet {
-	result := fieldSet{}
-	for _, field := range fields {
-		if supplied(entity, field) {
-			result[field.Name] = true
-		}
-	}
-	return result
-}
-
 func presenceAvailable(entity reflect.Value) bool {
 	marker := entity.FieldByName("Has")
 	return marker.IsValid() && (!isNil(marker) || marker.Kind() != reflect.Pointer)
@@ -1652,12 +2067,36 @@ func supplied(entity reflect.Value, field Field) bool {
 	if len(field.Has) == 0 {
 		return true
 	}
-	markerRoot := entity.FieldByName("Has")
-	if !markerRoot.IsValid() || markerRoot.IsNil() {
-		return false
+	if field.marker != nil && entity.CanAddr() {
+		structPtr := unsafe.Pointer(entity.UnsafeAddr())
+		// A missing holder means nothing was supplied; structology's IsSet would
+		// assume the opposite, so guard explicitly.
+		if !field.marker.CanUseHolder(structPtr) {
+			return false
+		}
+		return field.marker.IsSet(structPtr, field.markerIndex)
 	}
-	marker := markerRoot.Elem().FieldByName(field.Name)
+	marker := markerByIndex(entity, field.Has)
 	return marker.IsValid() && marker.Kind() == reflect.Bool && marker.Bool()
+}
+
+// markerByIndex walks a compiled Has marker path, dereferencing pointers and
+// returning an invalid value instead of panicking on a nil marker holder.
+func markerByIndex(entity reflect.Value, index []int) reflect.Value {
+	value := entity
+	for _, i := range index {
+		for value.Kind() == reflect.Pointer {
+			if value.IsNil() {
+				return reflect.Value{}
+			}
+			value = value.Elem()
+		}
+		if value.Kind() != reflect.Struct || i >= value.NumField() {
+			return reflect.Value{}
+		}
+		value = value.Field(i)
+	}
+	return value
 }
 
 func allFields(typeOf reflect.Type) fieldSet {
