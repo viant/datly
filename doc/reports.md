@@ -43,6 +43,41 @@ sources. Explicit cube filters override their source values; omitted cube filter
 retain source binding. Composition masks omitted frame filters so they cannot
 borrow accidental values from the outer HTTP request.
 
+## Report ordering permission
+
+Native cubes can order selected dimensions and measures even when the source
+reader declares `selectorOrderBy=false`. Direct reads still enforce that setting.
+The report supplies an invocation-local permission for its exact target route
+and canonical view, restricted to selected scalar fields. SQL ordering validation
+still resolves explicit aliases, enforces orderable-column restrictions, and
+checks the final grouped projection. Hidden lookup keys do not add sortable
+report fields. Invalid or disabled ordering returns HTTP 400 and an MCP tool
+error; database and internal failures retain normal sanitized error handling.
+
+A handler-backed report must explicitly forward this permission to its designated
+private reader, alongside its existing typed selectors:
+
+```go
+request := exec.ComponentRequest{
+    Target: privateReaderTarget,
+    Input: input,
+    Providers: selectorProviders,
+    ReportOrdering: exec.ForwardReportOrdering(ctx, privateReaderTarget, "readerView"),
+}
+result, err := invoker.InvokeComponent(ctx, request)
+```
+
+Use the private reader's canonical view name. `ForwardReportOrdering` returns nil
+for ordinary handler invocations. Component boundaries never inherit permission
+implicitly, even if selectors are forwarded; unrelated children retain their own
+policies. The grant does not replace authentication, change execution ownership,
+or mutate shared reader metadata.
+
+Pagination is separate: generated cube inputs currently advertise `limit` and
+`offset` unconditionally, but both still obey the source reader's permissions and
+limit cap. Report ordering permission does not enable either control. Composition
+has its own validated outer SQL ordering and does not grant per-frame ordering.
+
 ## Compose query frames
 
 This body comes from the [HTTP/MCP composition fixture](../report/compose_integration_test.go).

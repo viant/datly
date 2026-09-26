@@ -30,6 +30,7 @@ func NewBuilder() *Builder {
 
 func (b *Builder) CacheSQL(ctx context.Context, opts ...BuilderOption) (*cache.ParmetrizedQuery, error) {
 	options := newBuilderOptions(opts...)
+	applyReportOrdering(ctx, options)
 	window, err := b.resolveControls(options, false)
 	if err != nil {
 		return nil, err
@@ -96,6 +97,7 @@ func (b *Builder) QueryMatcher(ctx context.Context, query *cache.ParmetrizedQuer
 		return nil, fmt.Errorf("relation query is required")
 	}
 	options := newBuilderOptions(opts...)
+	applyReportOrdering(ctx, options)
 	window, err := b.resolveControls(options, false)
 	if err != nil {
 		return nil, err
@@ -130,6 +132,7 @@ func (b *Builder) QueryMatcher(ctx context.Context, query *cache.ParmetrizedQuer
 
 func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.ParmetrizedQuery, error) {
 	options := newBuilderOptions(opts...)
+	applyReportOrdering(ctx, options)
 	if options.template != nil {
 		viewInput := sqltemplate.ViewInput{
 			Dialect:               options.dialect,
@@ -396,6 +399,7 @@ type builderOptions struct {
 	projection             []string
 	skipRelationFilter     bool
 	selectorPolicy         *spec.Selector
+	reportOrderFields      []string
 	criteriaCompiler       *criteria.Compiler
 	criteriaHaving         bool
 	excludePagination      bool

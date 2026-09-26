@@ -138,6 +138,10 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		}
 	}
 	target := dexec.ComponentTarget{Component: request.Target.Component, Route: route}
+	ctx, err = dexec.EnterReportOrdering(ctx, target, request.ReportOrdering)
+	if err != nil {
+		return nil, err
+	}
 	ctx, err = enterComponent(ctx, target)
 	if err != nil {
 		return nil, err

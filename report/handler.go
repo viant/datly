@@ -57,11 +57,29 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 		return nil, fmt.Errorf("report component invoker is unavailable")
 	}
 	childContext := exec.CaptureChildOutputSelection(ctx)
-	result, err := invoker.InvokeComponent(childContext, exec.ComponentRequest{Target: h.plan.target, Providers: providers})
+	result, err := invoker.InvokeComponent(childContext, exec.ComponentRequest{
+		Target: h.plan.target, Providers: providers,
+		ReportOrdering: exec.NewReportOrdering(h.plan.target, h.plan.view, h.plan.orderingFields(fields)...),
+	})
 	if err == nil {
 		exec.PublishOutputSelection(ctx, result, exec.SelectedOutputFields(childContext, result))
 	}
 	return result, err
+}
+
+func (p *Plan) orderingFields(fields []string) []string {
+	var result []string
+	for _, selections := range [][]selection{p.dimensions, p.measures} {
+		for _, item := range selections {
+			for _, selected := range fields {
+				if item.name == selected {
+					result = append(result, selected)
+					break
+				}
+			}
+		}
+	}
+	return result
 }
 
 func (p *Plan) selectedFields(input reflect.Value) ([]string, error) {
