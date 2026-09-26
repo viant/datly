@@ -438,21 +438,27 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 				target.Selector = &spec.Selector{}
 			}
 			value, _ := strconv.ParseBool(strings.ToLower(directive.value))
+			var property spec.SelectorProperty
 			switch directive.name {
 			case spec.ViewControlSelectorFields:
-				target.Selector.AllowFields = value
+				property = spec.SelectorPropertyFields
 			case spec.ViewControlSelectorOrderBy:
-				target.Selector.AllowOrderBy = value
+				property = spec.SelectorPropertyOrderBy
 			case spec.ViewControlSelectorCriteria:
-				target.Selector.AllowCriteria = value
+				property = spec.SelectorPropertyCriteria
 			case spec.ViewControlSelectorLimit:
-				target.Selector.AllowLimit = value
+				property = spec.SelectorPropertyLimit
 			case spec.ViewControlSelectorOffset:
-				target.Selector.AllowOffset = value
+				property = spec.SelectorPropertyOffset
 			case spec.ViewControlSelectorPage:
-				target.Selector.AllowPage = value
+				property = spec.SelectorPropertyPage
 			case spec.ViewControlSelectorNoLimit:
 				target.Selector.NoLimit = value
+			}
+			if property != "" {
+				if err := target.Selector.SetPermission(property, value); err != nil {
+					return err
+				}
 			}
 		case spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorFilterable,
 			spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods, spec.ViewControlSelectorDefaultLimit:
@@ -512,7 +518,9 @@ func applyAllowedOrderBy(target *spec.View, value string) error {
 	if target.Selector == nil {
 		target.Selector = &spec.Selector{}
 	}
-	target.Selector.AllowOrderBy = true
+	if err := target.EnableQuerySelector(spec.SelectorPropertyOrderBy); err != nil {
+		return err
+	}
 	if target.Selector.OrderAliases == nil {
 		target.Selector.OrderAliases = map[string]spec.FieldPath{}
 	}

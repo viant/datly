@@ -13,30 +13,17 @@ func (v *View) applySelectorOption(key, value string) (bool, error) {
 	switch key {
 	case "selectornamespace":
 		v.ensureSelector().Namespace = value
-	case "selectorprojection":
+	case "selectorprojection", "selectororderby", "selectorcriteria", "selectorlimit", "selectoroffset", "selectorpage":
 		parsed, err := parseBool(key, value)
-		v.ensureSelector().AllowFields = parsed
-		return true, err
-	case "selectororderby":
-		parsed, err := parseBool(key, value)
-		v.ensureSelector().AllowOrderBy = parsed
-		return true, err
-	case "selectorcriteria":
-		parsed, err := parseBool(key, value)
-		v.ensureSelector().AllowCriteria = parsed
-		return true, err
-	case "selectorlimit":
-		parsed, err := parseBool(key, value)
-		v.ensureSelector().AllowLimit = parsed
-		return true, err
-	case "selectoroffset":
-		parsed, err := parseBool(key, value)
-		v.ensureSelector().AllowOffset = parsed
-		return true, err
-	case "selectorpage":
-		parsed, err := parseBool(key, value)
-		v.ensureSelector().AllowPage = parsed
-		return true, err
+		if err != nil {
+			return true, err
+		}
+		propertyName := strings.TrimPrefix(key, "selector")
+		if propertyName == "projection" {
+			propertyName = "fields"
+		}
+		property, _ := spec.SelectorPropertyForParam(propertyName)
+		return true, v.ensureSelector().SetPermission(property, parsed)
 	case "selectorfilterable":
 		paths, err := parseFieldPaths(value)
 		v.ensureSelector().Filterable = paths

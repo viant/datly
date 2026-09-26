@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/viant/datly/spec"
 )
 
 // Value formats view metadata using the same grammar accepted by ParseView.
@@ -84,17 +86,17 @@ func (v View) Value() (string, error) {
 		if err := appendPair("selectorNamespace", v.Selector.Namespace); err != nil {
 			return "", err
 		}
-		appendFlag := func(name string, enabled bool) {
-			if enabled {
-				values = append(values, name+"=true")
+		appendFlag := func(name string, property spec.SelectorProperty, enabled bool) {
+			if enabled || v.Selector.PermissionSpecified(property) {
+				values = append(values, name+"="+strconv.FormatBool(enabled))
 			}
 		}
-		appendFlag("selectorProjection", v.Selector.AllowFields)
-		appendFlag("selectorOrderBy", v.Selector.AllowOrderBy)
-		appendFlag("selectorCriteria", v.Selector.AllowCriteria)
-		appendFlag("selectorLimit", v.Selector.AllowLimit)
-		appendFlag("selectorOffset", v.Selector.AllowOffset)
-		appendFlag("selectorPage", v.Selector.AllowPage)
+		appendFlag("selectorProjection", spec.SelectorPropertyFields, v.Selector.AllowFields)
+		appendFlag("selectorOrderBy", spec.SelectorPropertyOrderBy, v.Selector.AllowOrderBy)
+		appendFlag("selectorCriteria", spec.SelectorPropertyCriteria, v.Selector.AllowCriteria)
+		appendFlag("selectorLimit", spec.SelectorPropertyLimit, v.Selector.AllowLimit)
+		appendFlag("selectorOffset", spec.SelectorPropertyOffset, v.Selector.AllowOffset)
+		appendFlag("selectorPage", spec.SelectorPropertyPage, v.Selector.AllowPage)
 		if len(v.Selector.SQLMethods) > 0 {
 			encoded, err := encodeSQLMethods(v.Selector.SQLMethods)
 			if err != nil {
