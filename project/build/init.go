@@ -3,9 +3,12 @@ package build
 import (
 	"context"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 
 	xmodule "github.com/viant/x/module"
 	"golang.org/x/mod/modfile"
@@ -14,6 +17,8 @@ import (
 
 type InitRequest struct {
 	Dir, Module string
+	// LinkPackage is internal/<name>; the default is internal/dependencylink.
+	LinkPackage string
 	// Pins are exact module versions; mutable queries such as latest are rejected.
 	Pins map[string]string
 	// Local explicitly maps module paths to development directories. Local-only
@@ -29,6 +34,10 @@ func (Service) Init(ctx context.Context, request InitRequest) error {
 	if err != nil {
 		return err
 	}
+	linkPackage, linkName, err := resolveLinkPackage(request.LinkPackage)
+	if err != nil {
+		return err
+	}
 	name := filepath.Join(root, "go.mod")
 	data, err := os.ReadFile(name)
 	exists := err == nil
@@ -41,7 +50,7 @@ func (Service) Init(ctx context.Context, request InitRequest) error {
 		if err != nil {
 			return err
 		}
-		if initialized, err := (Service{}).initialized(root, file); err != nil {
+		if initialized, err := (Service{}).initialized(root, file, linkPackage); err != nil {
 			return err
 		} else if initialized {
 			return nil
@@ -158,6 +167,9 @@ func (Service) Init(ctx context.Context, request InitRequest) error {
 	if !available && !exists {
 		return fmt.Errorf("new module needs an exact github.com/viant/datly pin or explicit local mapping")
 	}
+	if err := verifyExistingEntrypoint(root, file.Module.Mod.Path, linkPackage); err != nil {
+		return err
+	}
 	if err = os.MkdirAll(root, 0755); err != nil {
 		return err
 	}
@@ -172,15 +184,15 @@ func (Service) Init(ctx context.Context, request InitRequest) error {
 	}
 	modulePath := file.Module.Mod.Path
 	files := map[string]string{
-		"cmd/datly/main.go":          fmt.Sprintf(mainTemplate, modulePath),
-		"internal/datlylink/link.go": linkTemplate,
-		"dql/README.md":              "Place authored DQL here; transcribe it into generated Go component packages before building.\n",
-		"generated/README.md":        "Generated component holders and shapes. Add selected package holders to internal/datlylink.\n",
-		"hooks/README.md":            "Authored Go hook packages. Reference exported factories from component handler metadata.\n",
-		"resources/README.md":        "Keep package assets with their owning Go package and its existing resource manifest.\n",
-		"datly.yaml":                 fmt.Sprintf("BaseDir: .\nEndpoint:\n  Address: 127.0.0.1:8080\nGoBootstrap:\n  Packages: [%s/...]\n", modulePath),
+		"cmd/datly/main.go":      fmt.Sprintf(mainTemplate, modulePath, linkPackage),
+		linkPackage + "/link.go": fmt.Sprintf(linkTemplate, linkName),
+		"dql/README.md":          "Place authored DQL here; transcribe it into generated Go component packages before building.\n",
+		"generated/README.md":    fmt.Sprintf("Generated component holders and shapes. Add selected package holders to %s.\n", linkPackage),
+		"hooks/README.md":        "Authored Go hook packages. Reference exported factories from component handler metadata.\n",
+		"resources/README.md":    "Keep package assets with their owning Go package and its existing resource manifest.\n",
+		"datly.yaml":             fmt.Sprintf("BaseDir: .\nEndpoint:\n  Address: 127.0.0.1:8080\nGoBootstrap:\n  Packages: [%s/...]\n", modulePath),
 	}
-	for _, path := range []string{"cmd/datly/main.go", "internal/datlylink/link.go", "dql/README.md", "generated/README.md", "hooks/README.md", "resources/README.md", "datly.yaml"} {
+	for _, path := range []string{"cmd/datly/main.go", linkPackage + "/link.go", "dql/README.md", "generated/README.md", "hooks/README.md", "resources/README.md", "datly.yaml"} {
 		if err = (Service{}).create(root, path, files[path]); err != nil {
 			return err
 		}
@@ -188,9 +200,31 @@ func (Service) Init(ctx context.Context, request InitRequest) error {
 	return nil
 }
 
+func verifyExistingEntrypoint(root, modulePath, linkPackage string) error {
+	path := filepath.Join(root, "cmd/datly/main.go")
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	want := modulePath + "/" + linkPackage
+	for _, imported := range file.Imports {
+		actual, err := strconv.Unquote(imported.Path.Value)
+		if err != nil {
+			return err
+		}
+		if actual == want && imported.Name != nil && imported.Name.Name == "_" {
+			return nil
+		}
+	}
+	return fmt.Errorf("existing cmd/datly/main.go must blank-import %q before initializing the requested link package", want)
+}
+
 // initialized recognizes a custom Datly module from its stable project files.
 // Transient build linkage is never persisted in the application module.
-func (Service) initialized(root string, file *modfile.File) (bool, error) {
+func (Service) initialized(root string, file *modfile.File, linkPackage string) (bool, error) {
 	if file.Module == nil {
 		return false, nil
 	}
@@ -207,7 +241,7 @@ func (Service) initialized(root string, file *modfile.File) (bool, error) {
 	if !custom {
 		return false, nil
 	}
-	for _, relative := range []string{"cmd/datly/main.go", "internal/datlylink/link.go", "datly.yaml"} {
+	for _, relative := range []string{"cmd/datly/main.go", "datly.yaml"} {
 		if _, err := os.Stat(filepath.Join(root, relative)); err != nil {
 			if os.IsNotExist(err) {
 				return false, nil
@@ -215,7 +249,21 @@ func (Service) initialized(root string, file *modfile.File) (bool, error) {
 			return false, err
 		}
 	}
-	return true, nil
+	if _, err := os.Stat(filepath.Join(root, linkPackage, "link.go")); err == nil {
+		return true, nil
+	} else if !os.IsNotExist(err) {
+		return false, err
+	}
+	// Older initialized projects keep their existing application-owned link
+	// package until the caller explicitly chooses to migrate it.
+	if linkPackage == DefaultLinkPackage {
+		if _, err := os.Stat(filepath.Join(root, "internal/datlylink/link.go")); err == nil {
+			return true, nil
+		} else if !os.IsNotExist(err) {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func (Service) create(root, path, content string) error {
@@ -242,7 +290,7 @@ const mainTemplate = `package main
 
 import (
 	"context"
-	_ "%s/internal/datlylink"
+	_ "%s/%s"
 	"github.com/viant/datly/cmd/command"
 	"os"
 	"os/signal"
@@ -256,7 +304,5 @@ func main() {
 }
 `
 
-const linkTemplate = `// Package datlylink owns the application's explicit blank imports.
-// Run "datly link sync -dir ." to add missing component-package imports.
-package datlylink
+const linkTemplate = `package %s
 `
