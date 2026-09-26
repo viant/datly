@@ -123,6 +123,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			runtimeProviders = append(runtimeProviders, data.providers()...)
 		}
 		ctx = withDataScope(ctx, data)
+		ctx = dexec.WithInvocationTransactionLookup(ctx, data.transactionForDatabase)
 	}
 	if ownsData {
 		defer data.releaseContexts()

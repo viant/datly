@@ -124,9 +124,6 @@ type warmupExecution struct {
 }
 
 func (w *warmupExecution) run(ctx context.Context, plan *ViewPlan, derived *RelationPlan, settings *spec.CacheWarmupSettings) (int, error) {
-	if w.session.SQL != nil && w.session.SQL.Tx != nil {
-		return 0, fmt.Errorf("transactional reader does not support cache warmup")
-	}
 	view := plan.View
 	connector := plan.Connector
 	if settings.Connector != "" {
@@ -135,6 +132,9 @@ func (w *warmupExecution) run(ctx context.Context, plan *ViewPlan, derived *Rela
 	connection, err := w.session.SQL.Resolve(ctx, connector)
 	if err != nil {
 		return 0, err
+	}
+	if connection.Tx != nil {
+		return 0, fmt.Errorf("transactional reader does not support cache warmup")
 	}
 	selector := w.selectors.forView(view).Clone()
 	if len(settings.FieldNames) > 0 {

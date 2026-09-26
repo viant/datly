@@ -46,6 +46,23 @@ specialized integrations. It returns a borrowed DB for an exact configured name,
 not a managed transaction. Do not close it or assume direct work silently joins
 Data's transaction; it is not client-bindable or installed by default.
 
+## One transaction for a native mutation
+
+The first endpoint invocation owns transaction completion. Its first generic
+writer starts the transaction. Invoke child readers and writers through the
+scoped `exec.ComponentInvoker`; they share the database unit and buffered DML.
+An imperative child writer flushes its queued prefix into that same transaction
+before returning, so a later child reader sees the write. The endpoint's final
+error rolls the entire unit back, including already flushed child writes.
+
+Do not construct another `Runtime` with a fresh `*sql.Tx` inside a handler for
+the same database. Datly rejects that conflicting owner. For immediate SQL
+that is not a reader or writer component, resolve the connector through
+`handler.TransactionSQLCapabilityKey`; its capability has no commit or rollback
+method. A child success finalizer runs after the root completes. If a parent
+needs data from a child before then, read the child's typed view or call a pure
+projection method rather than depending on a success finalizer's output fields.
+
 ## Return already-shaped bytes
 
 The canonical SDK transport contract is `response.Response`: body reader,

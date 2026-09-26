@@ -69,6 +69,19 @@ func NewData(db *sql.DB, opts ...Option) *Data {
 	}
 }
 
+// InvocationTransaction exposes the currently active database transaction to
+// Datly's internal reader connector resolution. Callers must never commit or
+// roll it back; the root invocation remains its sole owner.
+func (d *Data) InvocationTransaction() (*sql.DB, *sql.Tx) {
+	if d == nil {
+		return nil, nil
+	}
+	owner := d.owner()
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	return owner.db, owner.tx
+}
+
 func (d *Data) Allocate(ctx context.Context, tableName string, dest any, selector string) error {
 	return d.sequence(ctx, func(s *sequencer.Service) error { return s.Allocate(ctx, tableName, dest, selector) })
 }

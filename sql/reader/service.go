@@ -86,9 +86,6 @@ func (s *Service) Read(ctx context.Context, session *Session, input any, binder 
 }
 
 func (s *Service) readBound(ctx context.Context, session *Session, input reflect.Value, binder xhandler.Binder, selectors invocationSelectors) (_ any, err error) {
-	if session.SQL != nil && session.SQL.Tx != nil && len(session.ReadCaches) > 0 {
-		return nil, fmt.Errorf("transactional reader cannot use read caches")
-	}
 	root := session.Artifact.Root
 	read := session.rootRead
 	rootSelector := selectors.forView(root.View)
@@ -312,12 +309,15 @@ func viewConnection(ctx context.Context, session *Session, plan *ViewPlan) (dsql
 	if plan == nil || plan.View == nil {
 		return dsql.Connection{}, fmt.Errorf("reader view plan is required")
 	}
-	if session.SQL.Tx != nil && plan.Partitioner != nil {
-		return dsql.Connection{}, fmt.Errorf("transactional reader does not support partitioned view %s", viewName(plan.View))
-	}
 	connection, err := session.SQL.Resolve(ctx, plan.Connector)
 	if err != nil {
 		return dsql.Connection{}, fmt.Errorf("resolve view %s connector %s: %w", viewName(plan.View), plan.Connector, err)
+	}
+	if connection.Tx != nil && plan.Partitioner != nil {
+		return dsql.Connection{}, fmt.Errorf("transactional reader does not support partitioned view %s", viewName(plan.View))
+	}
+	if connection.Tx != nil && len(session.ReadCaches) > 0 {
+		return dsql.Connection{}, fmt.Errorf("transactional reader cannot use read caches")
 	}
 	return connection, nil
 }
