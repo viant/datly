@@ -183,7 +183,8 @@ func TestGeneratorPlansLinkedContractsWithoutDuplicateEmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Count(content, `contracts "example.com/contracts"`) != 1 ||
-		!strings.Contains(content, "xdatly.Component[*contracts.Input, []*contracts.Output]") {
+		!strings.Contains(content, "xdatly.Component[*contracts.Input, []*contracts.Output]") ||
+		!strings.Contains(content, "TypeFor[Component]()") || strings.Contains(content, "DatlyLinkedType") {
 		t.Fatalf("linked component source:\n%s", content)
 	}
 }
