@@ -463,6 +463,31 @@ A migrated component is complete only when all applicable gates pass:
 Direct SQL is acceptable in tests only for schema setup, seed fixtures, or
 narrow fixture inspection. It must not be the primary behavioral proof.
 
+### Prove the released executable, not only test packages
+
+A Go test may import a SQL driver for fixture setup even when the application
+binary does not. In that case generated components compile and tests pass, but
+the released executable cannot open its connector. Link the selected driver
+from a production bootstrap/runtime package when the standalone build needs
+it; a blank driver import is connector registration, not an application SQL
+repository. Do not add a direct `*sql.DB` path to compensate.
+
+Build the exact executable and target architecture used by deployment. Run it
+against an isolated initialized schema and verify that it reaches a generated
+reader or startup contract check, rather than merely exiting after flag
+validation. Prefer an explicit check-only mode that validates linked
+components, required identities, Auth discovery, and private storage without
+opening a listener or calling an unapproved external provider. Add a binary-
+level regression so a test-only driver import cannot mask a missing link.
+
+Treat an archive upload, a staged binary, an active service, a public route,
+and an authenticated end-to-end journey as distinct milestones. Before moving
+the default route, test the generated graph from the real browser or phone
+client, prove persisted evidence through a generated reader/cube, and verify
+rollback leaves existing data and routes intact. A deterministic provider or
+Auth fixture is useful local proof, but does not establish live provider or
+production issuer readiness.
+
 ## Migration order
 
 Prefer vertical slices that can remove a legacy path completely:
