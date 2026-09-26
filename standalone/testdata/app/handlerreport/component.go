@@ -18,12 +18,17 @@ import (
 )
 
 type LinkedComponents struct {
-	Linked xdatly.Component[Input, Output] `component:"LinkedReport,path=/linked-report,method=GET,connector=main,handler=NewReport,report=true" mcp:"[{\"kind\":\"tool\",\"name\":\"LinkedReport\"}]"`
+	Linked      xdatly.Component[Input, Output] `component:"LinkedReport,path=/linked-report,method=GET,connector=main,handler=NewReport,report=true" mcp:"[{\"kind\":\"tool\",\"name\":\"LinkedReport\"}]"`
+	Native      xdatly.Component[Input, Output] `component:"NativeReport,path=/native-report,method=GET,connector=main,report=true" mcp:"[{\"kind\":\"tool\",\"name\":\"NativeReport\"}]"`
+	Unforwarded xdatly.Component[Input, Output] `component:"UnforwardedReport,path=/unforwarded-report,method=GET,connector=main,handler=NewUnforwardedReport,report=true" mcp:"[{\"kind\":\"tool\",\"name\":\"UnforwardedReport\"}]"`
 }
 
 func (LinkedComponents) DatlyHandler(name string) func() (rhandler.TypedHandler, error) {
 	if name == "NewReport" {
 		return custom.Factory(NewReport)
+	}
+	if name == "NewUnforwardedReport" {
+		return custom.Factory(NewUnforwardedReport)
 	}
 	return nil
 }
@@ -39,11 +44,12 @@ var LinkedDatlyType = reflect.TypeFor[LinkedComponents]()
 var RegistryDatlyType = reflect.TypeFor[RegistryComponents]()
 
 type Input struct {
-	Permit bool `parameter:"Permit,kind=query,in=permit" predicate:"equal,f,enabled" json:"permit"`
+	Permit  bool   `parameter:"Permit,kind=query,in=permit" predicate:"equal,f,enabled" json:"permit"`
+	OrderBy string `parameter:"OrderBy,kind=query,in=orderBy" querySelector:"view=facts,property=orderBy" json:"orderBy"`
 }
 
 type Output struct {
-	Data    []*Row `parameter:",kind=output,in=view" view:"facts,groupable=true,selectorProjection=true" sql:"SELECT f.country, f.region, f.site_id, SUM(f.amount) AS amount FROM report_facts f WHERE f.enabled=:Permit GROUP BY f.country, f.region, f.site_id" json:"data"`
+	Data    []*Row `parameter:",kind=output,in=view" view:"facts,groupable=true,selectorProjection=true,selectorOrderBy=false,selectorLimit=true,selectorOffset=false" sql:"SELECT f.country, f.region, f.site_id, SUM(f.amount) AS amount FROM report_facts f WHERE f.enabled=:Permit GROUP BY f.country, f.region, f.site_id" json:"data"`
 	Handled bool   `json:"handled"`
 }
 
@@ -67,11 +73,12 @@ type Site struct {
 	Label string `sqlx:"label" json:"label"`
 }
 
-type reportHandler struct{}
+type reportHandler struct{ forwardOrdering bool }
 
-func NewReport() handler.Contract[Input, Output] { return &reportHandler{} }
+func NewReport() handler.Contract[Input, Output]            { return &reportHandler{forwardOrdering: true} }
+func NewUnforwardedReport() handler.Contract[Input, Output] { return &reportHandler{} }
 
-func (*reportHandler) Exec(ctx context.Context, session handler.Session, input *Input, output *Output) error {
+func (h *reportHandler) Exec(ctx context.Context, session handler.Session, input *Input, output *Output) error {
 	if !input.Permit {
 		return &response.Error{Code: 403, Payload: "handler authorization required"}
 	}
@@ -92,9 +99,14 @@ func (*reportHandler) Exec(ctx context.Context, session handler.Session, input *
 		providers = append(providers, provider.Static(handler.SelectorsKey, selectors))
 	}
 	childContext := exec.CaptureChildOutputSelection(ctx)
+	target := exec.ComponentTarget{Component: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[RegistryComponents]().PkgPath(), Name: "PrivateReport"}, Route: spec.RouteRef{Method: "GET", Path: "/private-report"}}
+	var ordering *exec.ReportOrdering
+	if h.forwardOrdering {
+		ordering = exec.ForwardReportOrdering(ctx, target, "facts")
+	}
 	value, err = invoker.InvokeComponent(childContext, exec.ComponentRequest{
-		Target: exec.ComponentTarget{Component: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[RegistryComponents]().PkgPath(), Name: "PrivateReport"}, Route: spec.RouteRef{Method: "GET", Path: "/private-report"}},
-		Input:  input, Providers: providers,
+		Target: target, ReportOrdering: ordering,
+		Input: input, Providers: providers,
 	})
 	if err != nil {
 		return err

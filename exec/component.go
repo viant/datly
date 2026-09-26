@@ -49,6 +49,9 @@ type ComponentRequest struct {
 	// ReaderOptions apply after canonical input binding, to the target reader's
 	// result graph. Dependency binding retains its own invocation context policy.
 	ReaderOptions *ReaderOptions
+	// ReportOrdering is explicit report-only ordering permission. It is never
+	// inherited by child calls and does not enable pagination or other selectors.
+	ReportOrdering *ReportOrdering
 	// WarmupOmitInput names trusted warmup-owned inputs that are intentionally
 	// absent from canonical transport binding, such as an indexed warmup key.
 	WarmupOmitInput []string

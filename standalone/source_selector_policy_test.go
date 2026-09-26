@@ -68,7 +68,11 @@ func TestStandaloneSelectorExplicitPolicy(t *testing.T) {
 						response := httptest.NewRecorder()
 						server.ServeHTTP(response, httptest.NewRequest("GET", policy.path+shape.query, nil))
 						if denied {
-							require.Equal(t, 500, response.Code, response.Body.String())
+							status := 500
+							if shape.name == "sorting" {
+								status = 400
+							}
+							require.Equal(t, status, response.Code, response.Body.String())
 						} else {
 							require.Equal(t, 200, response.Code, response.Body.String())
 							assertSelectorPolicyRow(t, response.Body.Bytes(), shape.id)
