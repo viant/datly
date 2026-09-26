@@ -317,6 +317,9 @@ func canonicalFieldMetadata(param *spec.Parameter) ([]structTagValue, error) {
 		}
 		result = append(result, structTagValue{name: dtag.QuerySelectorName, value: value})
 	}
+	if param.FormatSelector {
+		result = append(result, structTagValue{name: "formatSelector", value: "true"})
+	}
 	for _, item := range []structTagValue{
 		{name: dtag.DescriptionName, value: param.Description},
 		{name: dtag.ExampleName, value: param.Example},

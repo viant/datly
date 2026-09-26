@@ -537,6 +537,7 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 		}
 		param.QuerySelector = &spec.QuerySelectorBinding{View: metadata.QuerySelector.View, Property: property}
 	}
+	param.FormatSelector = metadata.FormatSelector
 	return param, nil
 }
 

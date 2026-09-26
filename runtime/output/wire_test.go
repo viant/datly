@@ -27,6 +27,18 @@ func TestCustomJSONDeclaresStableWireType(t *testing.T) {
 	encoded, err := plan.Encode(context.Background(), "json", &stableWireOutput{Data: stableWireResult{Name: "Ada"}})
 	require.NoError(t, err)
 	require.JSONEq(t, `{"name":"Ada"}`, string(encoded.Data))
+	for _, format := range []string{"csv", "xml", "xlsx", "tabular"} {
+		_, err = plan.Wire(format)
+		require.ErrorContains(t, err, "custom JSON output")
+		_, err = plan.Encode(context.Background(), format, &stableWireOutput{Data: stableWireResult{Name: "Ada"}})
+		require.ErrorContains(t, err, "custom JSON output")
+	}
+	_, err = (Compiler{}).Compile(CompileInput{Type: reflect.TypeFor[stableWireOutput](),
+		Component: &spec.Component{Settings: &spec.Settings{Format: "csv"}}})
+	require.ErrorContains(t, err, "custom JSON output cannot use csv")
+	_, err = (Compiler{}).Compile(CompileInput{Type: reflect.TypeFor[stableWireOutput](),
+		Component: &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: "/records", Marshaller: "xml"}}}})
+	require.ErrorContains(t, err, "custom JSON output cannot use xml")
 }
 
 func TestWireUsesCompiledPresentation(t *testing.T) {

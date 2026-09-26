@@ -48,6 +48,9 @@ func (p *Plan) Wire(format string) (WireContract, error) {
 		format = p.DefaultFormat()
 	}
 	format = strings.ToLower(strings.TrimSpace(format))
+	if format != "json" && p.JSONOnly() {
+		return WireContract{}, fmt.Errorf("custom JSON output does not declare a safe %s representation", format)
+	}
 	contentType, err := ContentType(format)
 	if err != nil {
 		return WireContract{}, err
@@ -83,6 +86,8 @@ func (p *Plan) Wire(format string) (WireContract, error) {
 		if p.rows == nil {
 			return WireContract{}, fmt.Errorf("CSV output requires typed rows")
 		}
+		result.Type = reflect.TypeFor[string]()
+	case "xml":
 		result.Type = reflect.TypeFor[string]()
 	case "xls", "xlsx":
 		result.Type = reflect.TypeFor[string]()

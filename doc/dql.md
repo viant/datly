@@ -305,6 +305,7 @@ Write the canonical option names shown here. Do not infer input, field, column o
 | WithExample(value), Example(value) | 1 | illustrative documentation/test value; not a runtime default |
 | Cacheable(bool) | 1 | input cache policy |
 | QuerySelector(view) | 1 | selector binding |
+| FormatSelector() | 0 | bind one string query field or `header/Accept` to response-format selection |
 | WithPredicate(...), Predicate(...) | 1+ | optional leading group number, name, args; repeatable |
 | ApplyWhenAbsentPredicate(...) | 1+ | predicate active when absent |
 | When(condition) | 1 | activation condition |
@@ -353,6 +354,26 @@ Offset/Limit/Page signed integer types (pointers are unwrapped). One property
 cannot be bound twice to the same prepared view. Order aliases are explicit `allowed_order_by_columns` entries, not
 inferred SQL or wire-name conversions. Pagination, field selection and criteria
 are validated by the reader/compiler and SQL builder after declaration parsing.
+
+### Output format selection
+
+Declare one string `FormatSelector()` input when a component should choose its
+response format from a specific request source:
+
+```sql
+#define($_ = $OutputFormat<string>(header/Accept).FormatSelector())
+```
+
+Alternatively bind `query/_format` for format names such as `csv` and `xlsx`.
+An absent selector value uses the route/component format, JSON by default.
+With `header/Accept`, Datly selects a supported media type using quality
+weights; an unacceptable request returns 406. A query selector takes its exact
+authored query key and rejects unknown formats with 400. Only one format source
+may be declared per component. `Content-Type` on the response is produced by
+the selected encoder; the request's `Content-Type` is not an output selector.
+Legacy components without a declaration retain the `_format` query source.
+Custom JSON outputs cannot switch to another encoder without a separate safe
+wire projection.
 
 ### Predicate metadata and group references
 
