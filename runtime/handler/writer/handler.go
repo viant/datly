@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	rhandler "github.com/viant/datly/runtime/handler"
+	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	"github.com/viant/datly/spec"
 	"github.com/viant/structology"
 	xhandler "github.com/viant/xdatly/handler"
@@ -614,6 +615,15 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 	}
 	if err = program.prepare(ctx, invocation.Binder); err != nil {
 		return program.output, err
+	}
+	if handlerengine.IsImperativeComponent(ctx) {
+		flusher, lookupErr := lookup[xhandler.Flusher](ctx, invocation.Binder, xhandler.FlusherKey)
+		if lookupErr != nil {
+			return program.output, lookupErr
+		}
+		if err = flusher.Flush(ctx, ""); err != nil {
+			return program.output, fmt.Errorf("flush imperative writer: %w", err)
+		}
 	}
 	return program.output, nil
 }

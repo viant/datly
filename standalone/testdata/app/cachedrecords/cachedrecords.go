@@ -11,7 +11,7 @@ type Component struct {
 	Read xdatly.Component[Input, Output] `component:"Read,path=/cached-records,method=GET,connector=main,view=parents"`
 }
 
-var DatlyLinkedType = reflect.TypeFor[Component]()
+var _datlyReachableComponent = reflect.TypeFor[Component]()
 
 type Input struct{}
 type Output struct {

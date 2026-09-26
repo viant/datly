@@ -15,7 +15,7 @@ type Component struct {
 func SpendDatlyType() reflect.Type { return reflect.TypeOf((*Component)(nil)).Elem() }
 
 var SpendDatly = new(Component)
-var SpendDatlyLinkedType = SpendDatlyType()
+var _datlyReachableComponent = reflect.TypeFor[Component]()
 
 type Access struct {
 	Tenant string `sqlx:"tenant"`

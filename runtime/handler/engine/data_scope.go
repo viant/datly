@@ -402,6 +402,35 @@ func sourceKey(source dexec.DataSource) any {
 	return nil
 }
 
+func (s *dataScope) transactionForDatabase(ctx context.Context, db *sql.DB) (*sql.Tx, error) {
+	if s == nil || db == nil {
+		return nil, nil
+	}
+	root := s.root
+	if root == nil {
+		root = s
+	}
+	root.mu.Lock()
+	unit := root.bySource[db]
+	root.mu.Unlock()
+	if unit == nil {
+		return nil, nil
+	}
+	data, err := unit.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	owned, ok := data.(interface{ InvocationTransaction() (*sql.DB, *sql.Tx) })
+	if !ok {
+		return nil, nil
+	}
+	resolvedDB, tx := owned.InvocationTransaction()
+	if resolvedDB != db {
+		return nil, ErrUnknownDatabaseIdentity
+	}
+	return tx, nil
+}
+
 func sourceTransactionKey(source dexec.DataSource) any {
 	if identified, ok := source.(invocationTransactionSource); ok {
 		return identified.InvocationTransactionKey()
