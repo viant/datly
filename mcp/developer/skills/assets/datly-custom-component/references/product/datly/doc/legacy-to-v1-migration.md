@@ -158,9 +158,13 @@ value, err := invoker.InvokeComponent(ctx, dexec.ComponentRequest{
 })
 ```
 
-Use the generated setters for every supplied query/path/header/body parameter
-in internal readers, writers, and cubes. An explicit zero or empty value can
-still be present; a nonzero literal without its marker is not. In particular,
+Prefer generated setters for every supplied query/path/header/body parameter
+in internal readers, writers, and cubes. A trusted Go literal may equivalently
+initialize the generated presence type explicitly, for example
+`&recordread.ReadInput{TenantID: tenantID, Has: &recordread.ReadInputHas{TenantID: true}}`.
+Mark every supplied field, including optional selectors; do not mark omitted
+fields. An explicit zero or empty value can still be present; a nonzero literal
+without its marker is not. In particular,
 do not weaken required-input validation or infer presence from Go zero values
 to make old callers pass: that can suppress a required authorization scope.
 The marker is internal bookkeeping, never a client JSON field. Include direct
