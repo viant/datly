@@ -16,10 +16,8 @@ type Component struct {
 	Write xdatly.Component[hooks.Input, hooks.Output] `component:"Write,path=/records,method=POST,connector=main,handler=hooks.NewWrite"`
 }
 
-func RecordsDatlyType() reflect.Type { return reflect.TypeOf((*Component)(nil)).Elem() }
-
 var RecordsDatly = new(Component)
-var RecordsDatlyLinkedType = RecordsDatlyType()
+var ComponentType = reflect.TypeOf((*Component)(nil)).Elem()
 
 type Input struct {
 	ID int `parameter:"ID,kind=path,in=id,required"`

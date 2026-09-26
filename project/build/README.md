@@ -30,10 +30,24 @@ func init() {}
 ```
 
 `cmd/datly` blank-imports only this link package. Generated component packages
-have an empty `init()` and never register themselves. The link init is also empty.
+have an empty `init()` and never register themselves. New link files contain no
+registration or init function.
 At runtime `GoBootstrap.Packages` remains the source-scanning and exposure
 selection. Bootstrap uses `xunsafe.PackageTypes` to match scanned holder
 declarations to linked concrete types and embedded filesystems.
+
+Run `datly link sync -dir /path/to/app` explicitly to scan selected project
+packages for actual tagged component holders and predicate/codec interface
+implementations, then add missing blank imports to the existing
+`internal/datlylink/link.go`. `-tags` and optional Go package patterns use the
+same selection inputs as `datly build`. Sync preserves every existing import
+and authored line, never removes a package, and is idempotent. The scan uses
+Go source/AST, not runtime reflection of unlinked types. If a selected package
+lacks an explicit `init`, sync adds an empty one in a separate additive file.
+A discovered type lacking a reachability anchor gets a `reflect.TypeFor`
+reference there too, never a registry entry. Transcribe and build do not invoke
+sync implicitly. The link file gets imports only; runtime discovery and
+exposure policy remain unchanged.
 
 `x.Registry` is retained for genuinely dynamic types and factories. Linked,
 generated Go contracts do not populate it.

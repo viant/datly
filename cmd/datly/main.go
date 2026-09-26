@@ -31,11 +31,14 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && (args[0] == "init" || args[0] == "build") {
 		return projectCommand(ctx, args, stdout, stderr)
 	}
+	if len(args) > 0 && args[0] == "link" {
+		return linkCommand(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) > 0 && (args[0] == "run" || args[0] == "start") {
 		return (command.Service{}).Run(ctx, args, stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "validate" {
-		fmt.Fprintln(stderr, "usage: datly transcribe patch -dir project module/package; datly init|build [-dir project]; datly run|start -conf configuration-URL; datly validate [-dir project-directory] [-format text|json] [-schema -connector name -driver driver -dsn connection] module/package [...]")
+		fmt.Fprintln(stderr, "usage: datly transcribe patch -dir project module/package; datly init|build [-dir project]; datly link sync [-dir project] [-tags tags]; datly run|start -conf configuration-URL; datly validate [-dir project-directory] [-format text|json] [-schema -connector name -driver driver -dsn connection] module/package [...]")
 		return 2
 	}
 	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
