@@ -632,7 +632,8 @@ func inspectViewSources(source string) ([]ViewOccurrence, []PredicateExpansion, 
 		if cursor == start {
 			continue
 		}
-		views = append(views, ViewOccurrence{Name: masked[start:cursor], SQL: strings.TrimSpace(source[pos+1 : end-1]), SourceSpan: dql.SourceSpan{Start: pos + 1, End: end - 1}})
+		innerSQL := strings.TrimSpace(source[pos+1 : end-1])
+		views = append(views, ViewOccurrence{Name: masked[start:cursor], SQL: innerSQL, SourceProjectionAll: selectsAllPhysicalColumns(innerSQL), SourceSpan: dql.SourceSpan{Start: pos + 1, End: end - 1}})
 		skipUntil = end
 	}
 	seen := map[string]bool{}

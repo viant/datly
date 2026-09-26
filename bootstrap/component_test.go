@@ -443,6 +443,25 @@ func TestContractResolverBuildsCanonicalParameterMetadata(t *testing.T) {
 	}
 }
 
+func TestContractResolverKeepsSelectorPropertyWithDistinctPhysicalNames(t *testing.T) {
+	type input struct {
+		PodFields    []string `parameter:"PodFields,kind=query,in=podFields" querySelector:"view=Read,property=fields"`
+		ViewerFields []string `parameter:"ViewerFields,kind=query,in=viewerFields" querySelector:"view=viewer,property=fields"`
+	}
+	component, err := (ContractResolver{InputType: linkedContractType(reflect.TypeOf(input{}))}).Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(component.Parameters) != 2 {
+		t.Fatalf("parameters=%+v", component.Parameters)
+	}
+	for _, param := range component.Parameters {
+		if param.QuerySelector == nil || param.QuerySelector.Property != spec.SelectorPropertyFields {
+			t.Fatalf("selector metadata=%+v", param)
+		}
+	}
+}
+
 func TestContractResolverRejectsTransportCodecWithoutSourceDataType(t *testing.T) {
 	type input struct {
 		Projection []string `bind:"Fields,kind=query,in=fields" codec:"CSV,outputType=[]string"`

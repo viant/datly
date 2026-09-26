@@ -2,12 +2,32 @@ package output
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/spec"
 )
+
+type stableWireResult struct {
+	Name string `json:"name"`
+}
+type stableWireOutput struct{ Data stableWireResult }
+
+func (o *stableWireOutput) MarshalJSON() ([]byte, error)  { return json.Marshal(o.Data) }
+func (*stableWireOutput) DatlyJSONWireType() reflect.Type { return reflect.TypeFor[stableWireResult]() }
+
+func TestCustomJSONDeclaresStableWireType(t *testing.T) {
+	plan, err := (Compiler{}).Compile(CompileInput{Type: reflect.TypeFor[stableWireOutput]()})
+	require.NoError(t, err)
+	wire, err := plan.Wire("json")
+	require.NoError(t, err)
+	require.Equal(t, reflect.TypeFor[stableWireResult](), wire.Type)
+	encoded, err := plan.Encode(context.Background(), "json", &stableWireOutput{Data: stableWireResult{Name: "Ada"}})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"name":"Ada"}`, string(encoded.Data))
+}
 
 func TestWireUsesCompiledPresentation(t *testing.T) {
 	type record struct {

@@ -50,8 +50,13 @@ SELECT orderRows.id, orderRows.name FROM orders orderRows WHERE orderRows.tenant
 	require.NoError(t, err)
 	plan := generated.Result.Plan
 	for _, field := range plan.Input.Fields {
-		if field.Name == "Fields" || field.Name == "Limit" || field.Name == "Offset" {
-			require.Contains(t, field.Tag, `querySelector:"view=Orders"`)
+		switch field.Name {
+		case "Fields":
+			require.Contains(t, field.Tag, `querySelector:"view=Orders,property=fields"`)
+		case "Limit":
+			require.Contains(t, field.Tag, `querySelector:"view=Orders,property=limit"`)
+		case "Offset":
+			require.Contains(t, field.Tag, `querySelector:"view=Orders,property=offset"`)
 		}
 	}
 	require.Equal(t, "*MetaView", plan.Output.Fields[0].Type)

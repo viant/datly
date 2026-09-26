@@ -38,7 +38,7 @@ func TestGeneratorInMemoryRelation(t *testing.T) {
 SELECT p.*, signals.*, perf.*, use_connector(p,'main'),
 type(p,'ParentRow'), type(signals,'SignalRow'), type(perf,'PerformanceRow'),
 in_memory(signals), allow_nulls(signals), set_limit(signals,40),
-cardinality(signals,'Many'), cardinality(perf,'One'), selector_fields(p,true),
+cardinality(signals,'Many'), cardinality(perf,'One'),
 cast(p.id as int), cast(p.summary as string), tag(p.summary,'sqlx:"-"'),
 cast(signals.parent_id as int), cast(signals.feature_type as string), cast(signals.feature_value as string), cast(signals.score as int),
 cast(perf.feature_type as string), cast(perf.feature_value as string), cast(perf.score as int)

@@ -27,6 +27,41 @@ SELECT %s.id FROM records %s`, alias, alias, alias),
 	}
 }
 
+func TestCompileExplicitBodyLimitAutoEnablesOnlyItsSelector(t *testing.T) {
+	result, err := NewCompiler().Compile(context.Background(), &Source{
+		Name: "connector",
+		Text: `#setting($_ = $route('/connector', 'POST'))
+#define($_ = $Limit<int>(body/limit).WithTag('json:"limit"').Optional().QuerySelector('connector'))
+#define($_ = $Rows<[]*Row>(output/view))
+SELECT connector.id, set_limit(connector,25) FROM connectors connector`,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result.Component.RootView.Selector)
+	require.True(t, result.Component.RootView.Selector.AllowLimit)
+	require.False(t, result.Component.RootView.Selector.AllowFields)
+	require.False(t, result.Component.RootView.Selector.AllowOffset)
+	require.NotNil(t, result.Component.RootView.Source.Controls.Limit)
+	require.Equal(t, 25, *result.Component.RootView.Source.Controls.Limit)
+}
+
+func TestCompileTwoViewFieldSelectorsUseDistinctInputAliases(t *testing.T) {
+	result, err := NewCompiler().Compile(context.Background(), &Source{
+		Name: "ParentRead",
+		Text: `#setting($_ = $route('/parents', 'GET'))
+#define($_ = $Fields<[]string>(query/parent_fields).Optional().QuerySelector('parents'))
+#define($_ = $Fields<[]string>(query/child_fields).Optional().QuerySelector('children'))
+#define($_ = $Rows<[]*Parent>(output/view))
+SELECT parents.id,parents.name,children.id,children.parent_id,children.name,
+       type(parents,'Parent'),type(children,'Child'),
+       set_limit(parents,0),set_limit(children,0)
+FROM parents parents
+LEFT JOIN children children ON children.parent_id=parents.id`,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result.Component)
+	require.Len(t, result.Component.Parameters, 3)
+}
+
 type selectorProbeInput struct {
 	Fields []string
 }

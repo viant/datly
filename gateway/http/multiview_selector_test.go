@@ -98,7 +98,7 @@ func multiViewHandler(t *testing.T, direct, generated bool, extra ...string) *Ha
 	}
 	compiled, err := transcribe.NewCompiler().Compile(ctx, &transcribe.Source{Scope: "example.com/inventory", Name: "Inventory", Text: source})
 	require.NoError(t, err)
-	compiled.Component.RootView.Selector = &spec.Selector{AllowFields: true, AllowLimit: true, AllowPage: true, AllowOrderBy: true, AllowCriteria: true, Filterable: []spec.FieldPath{"id", "price", "name"}, Orderable: []spec.FieldPath{"id"}, DefaultOrder: "id ASC"}
+	compiled.Component.RootView.Selector = &spec.Selector{Filterable: []spec.FieldPath{"id", "price", "name"}, Orderable: []spec.FieldPath{"id"}, DefaultOrder: "id ASC"}
 	inputType := reflect.TypeFor[multiviewInput]()
 	if generated {
 		inputType, err = generate.New(generate.Input{Component: compiled.Component}).RuntimeInputType()
@@ -117,7 +117,11 @@ func multiViewHandler(t *testing.T, direct, generated bool, extra ...string) *Ha
 	}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: compiled.Component, InputType: inputType, OutputType: outputType, DirectViewField: holder})
 	require.NoError(t, err)
-	artifact.Reader.Root.View.Relations[1].Of.View.Spec.Selector = &spec.Selector{AllowFields: true, AllowLimit: true, AllowPage: true, AllowOrderBy: true, AllowCriteria: true, Filterable: []spec.FieldPath{"id", "price", "name"}, Orderable: []spec.FieldPath{"id"}, DefaultOrder: "id DESC"}
+	childPolicy := artifact.Reader.Root.View.Relations[1].Of.View.Spec.Selector
+	require.NotNil(t, childPolicy)
+	childPolicy.Filterable = []spec.FieldPath{"id", "price", "name"}
+	childPolicy.Orderable = []spec.FieldPath{"id"}
+	childPolicy.DefaultOrder = "id DESC"
 	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db.DB}})
 	require.NoError(t, err)
 	rt, err := druntime.NewRuntime([]*druntime.RegisteredComponent{{Component: artifact.Component, Input: artifact.Input, OutputType: outputType, Reader: reader}})

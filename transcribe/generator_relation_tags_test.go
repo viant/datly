@@ -40,7 +40,7 @@ SELECT p.*, privateTimeline.*, privateSummary.*,
 type(p,'ParentRow'), type(privateTimeline,'TimelineRow'), type(privateSummary,'SummaryRow'),
 tag(privateTimeline,'json:"-" internal:"true"'),
 tag(privateSummary,'json:"-" internal:"true"'),
-selector_fields(p,true), cardinality(privateSummary,'One'),
+cardinality(privateSummary,'One'),
 cast(p.id AS int), cast(p.name AS string), cast(p.computed AS int),
 cast(privateTimeline.parent_id AS int), cast(privateTimeline.value AS int),
 cast(privateSummary.parent_id AS int), cast(privateSummary.value AS int)

@@ -527,7 +527,11 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 		param.Predicates = append(param.Predicates, &cloned)
 	}
 	if metadata.QuerySelector != nil {
-		property, ok := spec.SelectorPropertyForParam(name)
+		property := metadata.QuerySelector.Property
+		ok := property != ""
+		if !ok {
+			property, ok = spec.SelectorPropertyForParam(name)
+		}
 		if !ok {
 			return nil, fmt.Errorf("resolve package %s %s: query selector is not supported for parameter %q", role.label(), field.Name, name)
 		}

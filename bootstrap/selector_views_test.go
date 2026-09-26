@@ -101,6 +101,29 @@ func TestResolveQuerySelectorViews(t *testing.T) {
 	}
 }
 
+func TestResolveQuerySelectorViewsAutoEnablesDeclaredProperties(t *testing.T) {
+	root := &spec.View{Name: "connector", Relations: []*spec.Relation{{View: &spec.View{Name: "child"}}}}
+	properties := []spec.SelectorProperty{spec.SelectorPropertyFields, spec.SelectorPropertyOrderBy,
+		spec.SelectorPropertyCriteria, spec.SelectorPropertyLimit, spec.SelectorPropertyOffset, spec.SelectorPropertyPage}
+	component := &spec.Component{Name: "connector", RootView: root}
+	for _, property := range properties {
+		component.Parameters = append(component.Parameters, &spec.Parameter{Name: string(property), QuerySelector: &spec.QuerySelectorBinding{View: "connector", Property: property}})
+	}
+	if err := ResolveQuerySelectorViews(component, true); err != nil {
+		t.Fatal(err)
+	}
+	selector := root.Selector
+	if selector == nil || !selector.AllowFields || !selector.AllowOrderBy || !selector.AllowCriteria || !selector.AllowLimit || !selector.AllowOffset || !selector.AllowPage {
+		t.Fatalf("explicit selector grants = %+v", selector)
+	}
+	if len(selector.Filterable) != 1 || selector.Filterable[0] != "*" {
+		t.Fatalf("explicit criteria did not get its compiled-column scope: %+v", selector)
+	}
+	if root.Relations[0].View.Selector != nil {
+		t.Fatalf("unrelated child gained selector permissions: %+v", root.Relations[0].View.Selector)
+	}
+}
+
 // TestBuildArtifactResolvesSelectorAgainstLinkedOutputView proves the deferral
 // contract end to end at the artifact seam: a target that exists only in the
 // linked Go output relation graph resolves during the artifact build, while

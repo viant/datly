@@ -498,9 +498,13 @@ JOIN performance perf
  AND signals.feature_value = perf.feature_value
 ~~~~
 
-Selector permission booleans are unquoted. `QuerySelector(view)` binds a request
-field to the named view; it does not itself grant permission. Selector policy
-calls grant each capability independently. `selector_default_limit` is both the
+Selector permission booleans are unquoted. An explicit `QuerySelector(view)`
+request field binds to the named view and enables its matching selector
+property, so it does not need a duplicate `selector_*` permission call.
+Selector policy calls can still enable independently injected properties.
+An explicit Criteria field defaults to the compiled view's columns unless
+`selector_filterable` narrows that set.
+`selector_default_limit` is both the
 fallback and cap for a positive requested limit while `selector_no_limit` is
 false. A positive `set_limit` sets a base view limit and clears no-limit mode;
 `set_limit(view,0)` clears that base limit and enables no-limit mode. Criteria

@@ -44,6 +44,12 @@ func TestCompileSelectorBindings_ResolvesExactViewAndField(t *testing.T) {
 	if bindings[1].View != child || bindings[1].Property != spec.SelectorPropertyLimit {
 		t.Fatalf("unexpected child binding: %+v", bindings[1])
 	}
+	if root.Spec.Selector == nil || !root.Spec.Selector.AllowFields || root.Spec.Selector.AllowLimit {
+		t.Fatalf("root selector permissions = %+v", root.Spec.Selector)
+	}
+	if child.Spec.Selector == nil || !child.Spec.Selector.AllowLimit || child.Spec.Selector.AllowFields {
+		t.Fatalf("child selector permissions = %+v", child.Spec.Selector)
+	}
 }
 
 func TestCompileSelectorBindings_RejectsInvalidMetadata(t *testing.T) {

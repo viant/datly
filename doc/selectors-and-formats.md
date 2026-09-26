@@ -32,11 +32,16 @@ with the target view identity and existing input/output bindings.
 #define($_ = $Offset<int>(query/offset).Optional().QuerySelector('inventory'))
 ```
 
-This fragment needs a view named `inventory` with the corresponding selectors
-enabled and an explicit allowed-column/method policy. Child/sibling views have
-independent controls. Offset requires a positive limit; page and limit follow
-the view's supported pagination policy. Use bound values for Criteria and exact
-authored order mappings; arbitrary SQL expressions are not request input.
+This fragment needs a view named `inventory`. Each explicit `QuerySelector`
+declaration enables its own property on that view; no duplicate
+`selector_fields`, `selector_limit`, or `selector_offset` setting is required.
+Child/sibling views have independent controls. Selector policy settings remain
+available for defaults, caps, allowed columns/methods, and selectors injected
+without a declared field. Offset requires a positive limit; page and limit
+follow the view's supported pagination policy. Use bound values for Criteria
+and exact authored order mappings; arbitrary SQL expressions are not request
+input. A declared Criteria field uses the compiled view's columns when no
+narrower `selector_filterable` allowlist is authored.
 
 Allowed source columns must actually belong to the selected query/view and the
 authored public policy. A column's existence does not grant access. Omitted
