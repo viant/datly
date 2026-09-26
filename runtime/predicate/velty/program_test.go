@@ -289,6 +289,11 @@ func TestProgram_ContextUsesPresenceMarkerInsteadOfZeroHeuristic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compile failed: %v", err)
 	}
+	if len(program.predicates) != 1 || program.predicates[0].marker == nil ||
+		!reflect.DeepEqual(program.predicates[0].marker.holderIndex, []int{1}) ||
+		!reflect.DeepEqual(program.predicates[0].marker.flagIndex, []int{0}) {
+		t.Fatalf("presence marker was not compiled: %+v", program.predicates)
+	}
 	for _, testCase := range []struct {
 		name     string
 		input    input
@@ -314,6 +319,63 @@ func TestProgram_ContextUsesPresenceMarkerInsteadOfZeroHeuristic(t *testing.T) {
 				t.Fatalf("unexpected presence result: fragment=%q args=%#v", fragment, args)
 			}
 		})
+	}
+}
+
+func TestCompileRejectsMalformedPredicatePresenceMarker(t *testing.T) {
+	type missingFlag struct{ Other bool }
+	type missingInput struct {
+		Limit int
+		Has   *missingFlag `setMarker:"true"`
+	}
+	type wrongInput struct {
+		Limit int
+		Has   *string `setMarker:"true"`
+	}
+	component := &spec.Component{Parameters: []*spec.Parameter{{
+		Name: "Limit", Predicates: []*spec.Predicate{{Name: predicateEqual, Args: []string{"u", "limit"}}},
+	}}}
+	for _, testCase := range []struct {
+		name   string
+		typeOf reflect.Type
+		want   string
+	}{
+		{name: "missing flag", typeOf: reflect.TypeOf(missingInput{}), want: "needs boolean field Limit"},
+		{name: "wrong holder", typeOf: reflect.TypeOf(wrongInput{}), want: "must be a struct"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := Compile(CompileInput{Component: component, InputType: testCase.typeOf})
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("expected %q, got %v", testCase.want, err)
+			}
+		})
+	}
+}
+
+func TestProgram_UnmarkedPredicateKeepsValueFallback(t *testing.T) {
+	type input struct{ Limit int }
+	component := &spec.Component{Parameters: []*spec.Parameter{{
+		Name: "Limit", Predicates: []*spec.Predicate{{Name: predicateEqual, Args: []string{"u", "limit"}}},
+	}}}
+	program, err := Compile(CompileInput{Component: component, InputType: reflect.TypeOf(input{})})
+	if err != nil || len(program.predicates) != 1 || program.predicates[0].marker != nil {
+		t.Fatalf("unmarked input compile=%+v, %v", program, err)
+	}
+	for _, testCase := range []struct {
+		value int
+		want  string
+	}{
+		{value: 0, want: ""},
+		{value: 7, want: "( u.limit = ? )"},
+	} {
+		actual, err := program.NewContext(context.Background(), predicateBinder{input: &input{Limit: testCase.value}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fragment, err := actual.(*Context).FilterGroup(0, "AND")
+		if err != nil || fragment != testCase.want {
+			t.Fatalf("value=%d fragment=%q err=%v", testCase.value, fragment, err)
+		}
 	}
 }
 
