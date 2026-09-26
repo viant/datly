@@ -15,8 +15,8 @@ type stableWireResult struct {
 }
 type stableWireOutput struct{ Data stableWireResult }
 
-func (o *stableWireOutput) MarshalJSON() ([]byte, error)  { return json.Marshal(o.Data) }
-func (*stableWireOutput) DatlyJSONWireType() reflect.Type { return reflect.TypeFor[stableWireResult]() }
+func (o *stableWireOutput) MarshalJSON() ([]byte, error) { return json.Marshal(o.Data) }
+func (*stableWireOutput) JSONWireType() reflect.Type     { return reflect.TypeFor[stableWireResult]() }
 
 func TestCustomJSONDeclaresStableWireType(t *testing.T) {
 	plan, err := (Compiler{}).Compile(CompileInput{Type: reflect.TypeFor[stableWireOutput]()})

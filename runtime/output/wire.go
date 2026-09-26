@@ -24,7 +24,7 @@ type WireContract struct {
 // successful wire value has a stable, separately typed shape. OpenAPI uses the
 // declared type instead of treating the marshaler as arbitrary JSON.
 type JSONWireType interface {
-	DatlyJSONWireType() reflect.Type
+	JSONWireType() reflect.Type
 }
 
 // TransportReady reports the declared SDK response contract, independently of
@@ -72,7 +72,7 @@ func (p *Plan) Wire(format string) (WireContract, error) {
 			candidate = reflect.New(p.typeOf.Elem())
 		}
 		if declared, ok := candidate.Interface().(JSONWireType); ok {
-			wireType := declared.DatlyJSONWireType()
+			wireType := declared.JSONWireType()
 			if wireType == nil {
 				return WireContract{}, fmt.Errorf("custom JSON wire type is nil")
 			}
