@@ -139,6 +139,34 @@ one reader graph with related and DerivedView outputs. Do not preserve a
 service-local fan-out of raw SELECTs merely because the public response is an
 aggregate.
 
+### Mark presence in internal component calls
+
+An internal `InvokeComponent` call supplies a typed **bound input**, not an
+HTTP query that Datly can parse for presence. Current v1 validates every
+required request field against the transcribed input's generated `Has` marker.
+Populating a struct literal alone does not mark the field present:
+
+```go
+input := &recordread.ReadInput{}
+input.SetTenantID(tenantID) // generated setter marks Has.TenantID
+if fields != nil {
+    input.SetFields(fields) // omit this call when the selector is absent
+}
+value, err := invoker.InvokeComponent(ctx, dexec.ComponentRequest{
+    Target: target,
+    Input:  input,
+})
+```
+
+Use the generated setters for every supplied query/path/header/body parameter
+in internal readers, writers, and cubes. An explicit zero or empty value can
+still be present; a nonzero literal without its marker is not. In particular,
+do not weaken required-input validation or infer presence from Go zero values
+to make old callers pass: that can suppress a required authorization scope.
+The marker is internal bookkeeping, never a client JSON field. Include direct
+bound-invocation tests for required presence, optional omission, explicit zero,
+and wrong-scope identity when migrating callers.
+
 When several callers aggregate the same facts with different dimensions,
 measures, or windows, prefer one authorized groupable reader with a derived
 cube and, where needed, cube composition. Enable MCP cube/compose exposure only
