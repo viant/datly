@@ -211,6 +211,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	}
 	applySourceDefaults(component, source)
 	if source.ColumnRefiner != nil {
+		columnCompilation := source.ColumnRefiner.BeginCompilation()
 		templateInput, compileErr := (&discoveryInputCompiler{
 			component: component, declarations: declarations.generation,
 			viewBindings: gen.ViewBindings(viewBindings), resolver: typeResolver, source: source,
@@ -218,7 +219,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		if compileErr != nil {
 			return nil, compileErr
 		}
-		if err = source.ColumnRefiner.RefineRoot(ctx, component, source.Resources, templateInput); err != nil {
+		if err = columnCompilation.RefineRoot(ctx, component, source.Resources, templateInput); err != nil {
 			return nil, err
 		}
 		templateInput, compileErr = (&discoveryInputCompiler{
@@ -228,7 +229,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		if compileErr != nil {
 			return nil, compileErr
 		}
-		if err = source.ColumnRefiner.RefineViews(ctx, component, source.Resources, templateInput); err != nil {
+		if err = columnCompilation.RefineViews(ctx, component, source.Resources, templateInput); err != nil {
 			return nil, err
 		}
 	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources); err != nil {

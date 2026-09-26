@@ -45,17 +45,25 @@ type projectionLineage struct {
 }
 
 func loadTableConstraints(ctx context.Context, db *sql.DB, table string) (map[string]tableConstraint, error) {
-	session, err := config.Session(ctx, db)
+	return (&discoveryMetadata{}).loadTableConstraints(ctx, db, table)
+}
+
+func (m *discoveryMetadata) loadTableConstraints(ctx context.Context, db *sql.DB, table string) (map[string]tableConstraint, error) {
+	product, err := m.product(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	session, err := m.session(ctx, db, product)
 	if err != nil {
 		return nil, fmt.Errorf("load SQLX metadata session: %w", err)
 	}
-	columns, err := config.Columns(ctx, session, db, table)
+	columns, err := config.Columns(ctx, session, db, table, product)
 	if err != nil {
 		return nil, fmt.Errorf("load SQLX table metadata for %q: %w", table, err)
 	}
 	result := constraintsFromColumns(columns)
 	keys := make([]sink.Key, 0)
-	err = metadata.New().Info(ctx, db, info.KindForeignKeys, &keys,
+	err = metadata.New().Info(ctx, db, info.KindForeignKeys, &keys, product,
 		option.NewArgs(session.Catalog, session.Schema, table))
 	if err != nil {
 		// Some SQLX products expose columns but not foreign-key metadata. PK,

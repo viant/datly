@@ -66,16 +66,28 @@ func New(resolver DBResolver) *Refiner {
 }
 
 func (r *Refiner) Refine(ctx context.Context, component *spec.Component, resources fs.FS, input *TemplateInput) error {
-	if err := r.RefineRoot(ctx, component, resources, input); err != nil {
+	compilation := r.BeginCompilation()
+	if err := compilation.RefineRoot(ctx, component, resources, input); err != nil {
 		return err
 	}
-	return r.RefineViews(ctx, component, resources, input)
+	return compilation.RefineViews(ctx, component, resources, input)
+}
+
+// RefineRoot discovers a root relation tree with fresh metadata state. Use
+// BeginCompilation to share metadata with a subsequent RefineViews call.
+func (r *Refiner) RefineRoot(ctx context.Context, component *spec.Component, resources fs.FS, input *TemplateInput) error {
+	return r.BeginCompilation().RefineRoot(ctx, component, resources, input)
+}
+
+// RefineViews discovers independent views with fresh metadata state.
+func (r *Refiner) RefineViews(ctx context.Context, component *spec.Component, resources fs.FS, input *TemplateInput) error {
+	return r.BeginCompilation().RefineViews(ctx, component, resources, input)
 }
 
 // RefineRoot discovers the root relation tree before generated input contracts
 // are rebuilt for parameterized independent views.
-func (r *Refiner) RefineRoot(ctx context.Context, component *spec.Component, resources fs.FS, input *TemplateInput) error {
-	if r == nil || r.resolver == nil {
+func (r *Compilation) RefineRoot(ctx context.Context, component *spec.Component, resources fs.FS, input *TemplateInput) error {
+	if r == nil || r.refiner == nil || r.refiner.resolver == nil {
 		return fmt.Errorf("transcribe column: DB resolver is required")
 	}
 	if component == nil {
@@ -103,8 +115,8 @@ func (r *Refiner) RefineRoot(ctx context.Context, component *spec.Component, res
 }
 
 // RefineViews discovers independent view trees against the rebuilt typed input.
-func (r *Refiner) RefineViews(ctx context.Context, component *spec.Component, resources fs.FS, input *TemplateInput) error {
-	if r == nil || r.resolver == nil {
+func (r *Compilation) RefineViews(ctx context.Context, component *spec.Component, resources fs.FS, input *TemplateInput) error {
+	if r == nil || r.refiner == nil || r.refiner.resolver == nil {
 		return fmt.Errorf("transcribe column: DB resolver is required")
 	}
 	if component == nil {
@@ -136,7 +148,7 @@ func (r *Refiner) RefineViews(ctx context.Context, component *spec.Component, re
 	return nil
 }
 
-func (r *Refiner) refineView(ctx context.Context, component *spec.Component, view *spec.View, inheritedConnector string, resources fs.FS, input *TemplateInput, parent *expandedQuery, parentAliases []string, visited map[*spec.View]bool) error {
+func (r *Compilation) refineView(ctx context.Context, component *spec.Component, view *spec.View, inheritedConnector string, resources fs.FS, input *TemplateInput, parent *expandedQuery, parentAliases []string, visited map[*spec.View]bool) error {
 	if view == nil || visited[view] {
 		return nil
 	}
@@ -172,7 +184,7 @@ func (r *Refiner) refineView(ctx context.Context, component *spec.Component, vie
 	return nil
 }
 
-func (r *Refiner) discover(ctx context.Context, view *spec.View, connector string, resources fs.FS, input *TemplateInput, parent *expandedQuery, parentAliases []string) (*expandedQuery, error) {
+func (r *Compilation) discover(ctx context.Context, view *spec.View, connector string, resources fs.FS, input *TemplateInput, parent *expandedQuery, parentAliases []string) (*expandedQuery, error) {
 	if err := validateColumns("canonical", view.Columns); err != nil {
 		return nil, err
 	}
@@ -207,7 +219,7 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 			return nil, err
 		}
 	}
-	db, err := r.resolver.ResolveDB(ctx, connector)
+	db, err := r.refiner.resolver.ResolveDB(ctx, connector)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +232,11 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 			return nil, err
 		}
 	}
-	dialect, err := config.Dialect(ctx, db)
+	product, err := r.metadata.product(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	dialect, err := config.Dialect(ctx, db, product)
 	if err != nil {
 		return nil, fmt.Errorf("resolve SQL dialect: %w", err)
 	}
@@ -259,7 +275,7 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	}
 	var constraints map[string]tableConstraint
 	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
-		constraints, err = loadTableConstraints(ctx, db, table)
+		constraints, err = r.metadata.loadTableConstraints(ctx, db, table)
 		if err != nil {
 			return nil, err
 		}
@@ -291,7 +307,7 @@ func (r *Refiner) discover(ctx context.Context, view *spec.View, connector strin
 	if strings.TrimSpace(query) == "" {
 		return evaluated, nil
 	}
-	detected, err := r.detectColumns(ctx, db, view, query, evaluated.Args...)
+	detected, err := r.refiner.detectColumns(ctx, db, view, query, evaluated.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("SQLX discovery failed for %q: %w", query, err)
 	}

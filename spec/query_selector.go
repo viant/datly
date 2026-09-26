@@ -2,6 +2,7 @@ package spec
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -40,9 +41,49 @@ func SelectorPropertyForParam(name string) (SelectorProperty, bool) {
 	}
 }
 
-// EnableQuerySelector permits the request field that was explicitly declared
-// with QuerySelector(view). The declaration itself is the author's grant for
-// that one property; unrelated selector inputs remain closed.
+// SetPermission authors a permission independently of input binding. In
+// particular, an explicit false must not be replaced by binding inference.
+func (s *Selector) SetPermission(property SelectorProperty, enabled bool) error {
+	field, err := s.permissionField(property)
+	if err != nil {
+		return err
+	}
+	*field = enabled
+	if !s.PermissionSpecified(property) {
+		s.Specified = append(s.Specified, property)
+		slices.Sort(s.Specified)
+	}
+	return nil
+}
+
+func (s *Selector) PermissionSpecified(property SelectorProperty) bool {
+	return s != nil && slices.Contains(s.Specified, property)
+}
+
+func (s *Selector) permissionField(property SelectorProperty) (*bool, error) {
+	if s == nil {
+		return nil, fmt.Errorf("selector policy is required")
+	}
+	switch property {
+	case SelectorPropertyFields:
+		return &s.AllowFields, nil
+	case SelectorPropertyOrderBy:
+		return &s.AllowOrderBy, nil
+	case SelectorPropertyCriteria:
+		return &s.AllowCriteria, nil
+	case SelectorPropertyLimit:
+		return &s.AllowLimit, nil
+	case SelectorPropertyOffset:
+		return &s.AllowOffset, nil
+	case SelectorPropertyPage:
+		return &s.AllowPage, nil
+	default:
+		return nil, fmt.Errorf("unsupported query selector property %q", property)
+	}
+}
+
+// EnableQuerySelector supplies a default permission for a declared binding.
+// An explicitly authored view policy always wins, including an explicit deny.
 func (v *View) EnableQuerySelector(property SelectorProperty) error {
 	if v == nil {
 		return fmt.Errorf("query selector view is required")
@@ -50,27 +91,17 @@ func (v *View) EnableQuerySelector(property SelectorProperty) error {
 	if v.Selector == nil {
 		v.Selector = &Selector{}
 	}
-	switch property {
-	case SelectorPropertyFields:
-		v.Selector.AllowFields = true
-	case SelectorPropertyOrderBy:
-		v.Selector.AllowOrderBy = true
-	case SelectorPropertyCriteria:
-		v.Selector.AllowCriteria = true
-		if len(v.Selector.Filterable) == 0 {
-			// A declared Criteria field is the author's opt-in. In the
-			// absence of a narrower allowlist, the runtime still restricts
-			// names to columns proven by this view's compiled projection.
-			v.Selector.Filterable = []FieldPath{"*"}
-		}
-	case SelectorPropertyLimit:
-		v.Selector.AllowLimit = true
-	case SelectorPropertyOffset:
-		v.Selector.AllowOffset = true
-	case SelectorPropertyPage:
-		v.Selector.AllowPage = true
-	default:
-		return fmt.Errorf("unsupported query selector property %q", property)
+	field, err := v.Selector.permissionField(property)
+	if err != nil {
+		return err
+	}
+	if !v.Selector.PermissionSpecified(property) {
+		*field = true
+	}
+	if property == SelectorPropertyCriteria && *field && len(v.Selector.Filterable) == 0 {
+		// Keep declared criteria bounded to the compiled projection unless
+		// the author supplies a narrower allowlist.
+		v.Selector.Filterable = []FieldPath{"*"}
 	}
 	return nil
 }

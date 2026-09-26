@@ -521,7 +521,10 @@ JOIN performance perf
 
 Selector permission booleans are unquoted. An explicit `QuerySelector(view)`
 request field binds to the named view and enables its matching selector
-property, so it does not need a duplicate `selector_*` permission call.
+property only when its policy is unspecified. An explicit `selector_*(view,false)`
+denies that property even if a request field binds it; generation and runtime
+compilation preserve that denial. A duplicate permission call is not required
+when binding-inferred permission is intended.
 Selector policy calls can still enable independently injected properties.
 An explicit Criteria field defaults to the compiled view's columns unless
 `selector_filterable` narrows that set.

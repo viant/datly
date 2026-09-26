@@ -56,6 +56,7 @@ func (s *Selector) Clone() *Selector {
 		return nil
 	}
 	result := *s
+	result.Specified = append([]SelectorProperty(nil), s.Specified...)
 	result.Filterable = append([]FieldPath(nil), s.Filterable...)
 	result.SQLMethods = make([]SQLMethod, len(s.SQLMethods))
 	for i, method := range s.SQLMethods {

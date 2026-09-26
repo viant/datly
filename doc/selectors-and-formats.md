@@ -23,6 +23,13 @@ from the declared logical control, such as Fields, OrderBy, Offset, Limit, Page
 or Criteria. Do not use a two-argument selector form or invent a query parameter
 name; binding locations are authored independently.
 
+A binding enables its property only if view policy is unspecified. Explicit
+permissions take precedence: `selector_order_by(inventory,false)` in DQL or
+`selectorOrderBy=false` in a Go view tag remains disabled even with an OrderBy
+binding. The same rule applies to fields, criteria, limit, offset, and page.
+Code constructing canonical metadata can use `Selector.SetPermission` to retain
+the distinction between an explicit false and an unspecified boolean.
+
 Declaration fragment; adapt to the [complete reader contract](../llm/datly-reader/references/reader-examples.md#parameterized-dql-reader)
 with the target view identity and existing input/output bindings.
 

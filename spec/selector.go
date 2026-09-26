@@ -8,6 +8,9 @@ type FieldPath string
 // Selector is immutable per-view query-selector policy. Request-time selector
 // values live in xdatly/state.Selector and must not be stored here.
 type Selector struct {
+	// Specified distinguishes authored permissions (including false) from
+	// defaults inferred from query-selector bindings. Use SetPermission to author.
+	Specified     []SelectorProperty   `json:"specified,omitempty"`
 	Namespace     string               `json:"namespace,omitempty"`
 	AllowFields   bool                 `json:"allowFields,omitempty"`
 	AllowOrderBy  bool                 `json:"allowOrderBy,omitempty"`

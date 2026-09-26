@@ -72,11 +72,18 @@ func (l *contractLinker) equalParams(output bool) bool {
 
 func (l *contractLinker) equalViews() bool {
 	var packageView, compiledView *spec.View
+	var err error
 	if l.packageComponent != nil {
-		packageView = l.normalizedView(l.packageComponent)
+		packageView, err = l.normalizedView(l.packageComponent)
+		if err != nil {
+			return false
+		}
 	}
 	if l.compiledComponent != nil {
-		compiledView = l.normalizedView(l.compiledComponent)
+		compiledView, err = l.normalizedView(l.compiledComponent)
+		if err != nil {
+			return false
+		}
 	}
 	packageJSON, err := json.Marshal(packageView)
 	if err != nil {
@@ -86,15 +93,21 @@ func (l *contractLinker) equalViews() bool {
 	return err == nil && bytes.Equal(packageJSON, compiledJSON)
 }
 
-func (l *contractLinker) normalizedView(component *spec.Component) *spec.View {
+func (l *contractLinker) normalizedView(component *spec.Component) (*spec.View, error) {
 	if component == nil {
-		return nil
+		return nil, nil
+	}
+	// Binding-inferred policy is not an authored output-contract change. Compare
+	// both contracts after the same resolution, without mutating package metadata.
+	component = component.Clone()
+	if err := bootstrap.ResolveQuerySelectorViews(component, false); err != nil {
+		return nil, err
 	}
 	inheritedDest := ""
 	if component.Settings != nil && component.Settings.Generation != nil {
 		inheritedDest = strings.TrimSpace(component.Settings.Generation.ViewFile)
 	}
-	return l.normalizedOwnershipView(component.RootView, inheritedDest, true)
+	return l.normalizedOwnershipView(component.RootView, inheritedDest, true), nil
 }
 
 func (l *contractLinker) normalizedOwnershipView(source *spec.View, inheritedDest string, omitNamespace bool) *spec.View {
