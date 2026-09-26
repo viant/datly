@@ -2,12 +2,44 @@ package output
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/spec"
 )
+
+type stableWireResult struct {
+	Name string `json:"name"`
+}
+type stableWireOutput struct{ Data stableWireResult }
+
+func (o *stableWireOutput) MarshalJSON() ([]byte, error) { return json.Marshal(o.Data) }
+func (*stableWireOutput) JSONWireType() reflect.Type     { return reflect.TypeFor[stableWireResult]() }
+
+func TestCustomJSONDeclaresStableWireType(t *testing.T) {
+	plan, err := (Compiler{}).Compile(CompileInput{Type: reflect.TypeFor[stableWireOutput]()})
+	require.NoError(t, err)
+	wire, err := plan.Wire("json")
+	require.NoError(t, err)
+	require.Equal(t, reflect.TypeFor[stableWireResult](), wire.Type)
+	encoded, err := plan.Encode(context.Background(), "json", &stableWireOutput{Data: stableWireResult{Name: "Ada"}})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"name":"Ada"}`, string(encoded.Data))
+	for _, format := range []string{"csv", "xml", "xlsx", "tabular"} {
+		_, err = plan.Wire(format)
+		require.ErrorContains(t, err, "custom JSON output")
+		_, err = plan.Encode(context.Background(), format, &stableWireOutput{Data: stableWireResult{Name: "Ada"}})
+		require.ErrorContains(t, err, "custom JSON output")
+	}
+	_, err = (Compiler{}).Compile(CompileInput{Type: reflect.TypeFor[stableWireOutput](),
+		Component: &spec.Component{Settings: &spec.Settings{Format: "csv"}}})
+	require.ErrorContains(t, err, "custom JSON output cannot use csv")
+	_, err = (Compiler{}).Compile(CompileInput{Type: reflect.TypeFor[stableWireOutput](),
+		Component: &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: "/records", Marshaller: "xml"}}}})
+	require.ErrorContains(t, err, "custom JSON output cannot use xml")
+}
 
 func TestWireUsesCompiledPresentation(t *testing.T) {
 	type record struct {

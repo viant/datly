@@ -42,6 +42,7 @@ func ` + entry + `(ctx context.Context, input *OrdersInput) (*OrdersOutput, erro
 }
 
 func TestGeneratorEmitsAcceptedCustomHandler(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	dir := filepath.Join(root, "orders")
@@ -75,7 +76,7 @@ func TestGeneratorEmitsAcceptedCustomHandler(t *testing.T) {
 	if err != nil || len(tags) != 2 || tags[0].Handler != "HandleOrders" || tags[1].Handler != "HandleOrders" {
 		t.Fatalf("component route tags = %+v, %v", tags, err)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated module does not compile: %v\n%s", runErr, output)

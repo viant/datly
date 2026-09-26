@@ -20,13 +20,20 @@ type contractHandler[I any, O any] struct {
 	bindErr  error
 }
 
-// BindStatic binds explicitly tagged fields of a pointer contract once,
-// before the registered handler serves any invocation. Value contracts and
-// contracts without bind tags need no initialization.
+// BindStatic compiles and binds explicitly tagged fields of a pointer contract
+// once, before the registered handler serves any invocation. Lazy lookups may
+// call it again; they must not rescan tags or rebind a shared handler.
 func (h *contractHandler[I, O]) BindStatic(ctx context.Context, injector *bindly.Injector) error {
 	if h == nil || h.contract == nil {
 		return fmt.Errorf("custom handler contract is required")
 	}
+	h.bindOnce.Do(func() {
+		h.bindErr = h.bindStaticOnce(ctx, injector)
+	})
+	return h.bindErr
+}
+
+func (h *contractHandler[I, O]) bindStaticOnce(ctx context.Context, injector *bindly.Injector) error {
 	typeOf := reflect.TypeOf(h.contract)
 	isPointer := typeOf.Kind() == reflect.Pointer
 	structType := typeOf
@@ -60,14 +67,10 @@ func (h *contractHandler[I, O]) BindStatic(ctx context.Context, injector *bindly
 	if !isPointer {
 		return fmt.Errorf("static handler bindings require a pointer contract: %s", typeOf)
 	}
-	h.bindOnce.Do(func() {
-		if injector == nil {
-			h.bindErr = fmt.Errorf("custom handler injector is required")
-			return
-		}
-		h.bindErr = injector.Bind(ctx, h.contract)
-	})
-	return h.bindErr
+	if injector == nil {
+		return fmt.Errorf("custom handler injector is required")
+	}
+	return injector.Bind(ctx, h.contract)
 }
 
 func invocationBindingKind(kind string) bool {

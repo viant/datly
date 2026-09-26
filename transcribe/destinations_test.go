@@ -23,6 +23,7 @@ import (
 )
 
 func TestDQLDestinationsSingleAndProject(t *testing.T) {
+	t.Parallel()
 	for _, project := range []bool{false, true} {
 		for _, separate := range []bool{false, true} {
 			name := "single"
@@ -126,6 +127,7 @@ func TestDQLDestinationsSingleAndProject(t *testing.T) {
 }
 
 func TestDQLDestinationsSharedPackageAndCollisions(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
@@ -277,6 +279,7 @@ func TestDQLDestinationsSymlinkAndNestedModule(t *testing.T) {
 }
 
 func TestDQLDestinationsFilePathsAndSuppliedHandlers(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"Go", "GoQualified", "Velty"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx := context.Background()
@@ -380,6 +383,7 @@ func TestDQLDestinationsRejectRetainedImportCycle(t *testing.T) {
 }
 
 func TestDQLDestinationsKeepLinkedTypesInTheirPackage(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)

@@ -19,6 +19,7 @@ import (
 )
 
 func TestMutationScaffoldTypedRolesAndImmutablePlan(t *testing.T) {
+	t.Parallel()
 	semantic := recursiveSemanticPlan(plan.OperationPost)
 	child := semantic.Root.Relations[0].Child
 	last := child.Relations[0].Child

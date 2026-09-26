@@ -20,10 +20,6 @@ type jsonKeyDominant struct {
 	jsonKeyEmbedded
 	jsonKeyTagged
 }
-type jsonKeyAmbiguous struct {
-	A int `json:"value"`
-	B int `json:"value"`
-}
 type jsonKeyCases struct {
 	First  int `json:"VALUE"`
 	Second int `json:"Value"`
@@ -36,7 +32,10 @@ type jsonKeyRecursive struct {
 func TestJSONFieldMatchingAgreesWithDecoder(t *testing.T) {
 	for _, typ := range []reflect.Type{
 		reflect.TypeFor[jsonKeyShadow](), reflect.TypeFor[jsonKeyDominant](),
-		reflect.TypeFor[jsonKeyAmbiguous](), reflect.TypeFor[jsonKeyCases](),
+		reflect.StructOf([]reflect.StructField{
+			{Name: "A", Type: reflect.TypeFor[int](), Tag: `json:"value"`},
+			{Name: "B", Type: reflect.TypeFor[int](), Tag: `json:"value"`},
+		}), reflect.TypeFor[jsonKeyCases](),
 		reflect.TypeFor[jsonKeyRecursive](),
 	} {
 		for _, key := range []string{"Value", "VALUE", "value", "vAlUe"} {

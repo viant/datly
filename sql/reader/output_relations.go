@@ -26,6 +26,7 @@ type outputRelationExecution struct {
 	planned   *RelationPlan
 	root      *cache.ParmetrizedQuery
 	db        *sql.DB
+	tx        *sql.Tx
 	output    any
 	field     *xshape.Accessor
 }
@@ -70,7 +71,7 @@ func (s *Service) bindOutputRelations(ctx context.Context, session *Session, inp
 		}
 		execution := &outputRelationExecution{
 			service: s, ctx: ctx, session: session, input: input, binder: binder,
-			selectors: selectors, planned: relation, root: root, db: connection.DB, field: field, output: output,
+			selectors: selectors, planned: relation, root: root, db: connection.DB, tx: connection.Tx, field: field, output: output,
 		}
 		if err := execution.execute(); err != nil {
 			return fmt.Errorf("read output relation %s: %w", relation.Relation.Name, err)
@@ -218,7 +219,7 @@ func (e *outputRelationExecution) read(ctx context.Context, query *cache.Parmetr
 	var result outputRead
 	visitor := newRowHookVisitor(ctx, view, nil, nil)
 	visitor.decoder = scan.decoder
-	err := scan.query(ctx, rowQuery{db: e.db, query: query, read: e.metrics, visit: func(row interface{}) error {
+	err := scan.query(ctx, rowQuery{db: e.db, tx: e.tx, query: query, read: e.metrics, visit: func(row interface{}) error {
 		if result.value.IsValid() {
 			return nil
 		}

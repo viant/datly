@@ -305,6 +305,7 @@ Write the canonical option names shown here. Do not infer input, field, column o
 | WithExample(value), Example(value) | 1 | illustrative documentation/test value; not a runtime default |
 | Cacheable(bool) | 1 | input cache policy |
 | QuerySelector(view) | 1 | selector binding |
+| FormatSelector() | 0 | bind one string query field or `header/Accept` to response-format selection |
 | WithPredicate(...), Predicate(...) | 1+ | optional leading group number, name, args; repeatable |
 | ApplyWhenAbsentPredicate(...) | 1+ | predicate active when absent |
 | When(condition) | 1 | activation condition |
@@ -353,6 +354,26 @@ Offset/Limit/Page signed integer types (pointers are unwrapped). One property
 cannot be bound twice to the same prepared view. Order aliases are explicit `allowed_order_by_columns` entries, not
 inferred SQL or wire-name conversions. Pagination, field selection and criteria
 are validated by the reader/compiler and SQL builder after declaration parsing.
+
+### Output format selection
+
+Declare one string `FormatSelector()` input when a component should choose its
+response format from a specific request source:
+
+```sql
+#define($_ = $OutputFormat<string>(header/Accept).FormatSelector())
+```
+
+Alternatively bind `query/_format` for format names such as `csv` and `xlsx`.
+An absent selector value uses the route/component format, JSON by default.
+With `header/Accept`, Datly selects a supported media type using quality
+weights; an unacceptable request returns 406. A query selector takes its exact
+authored query key and rejects unknown formats with 400. Only one format source
+may be declared per component. `Content-Type` on the response is produced by
+the selected encoder; the request's `Content-Type` is not an output selector.
+Legacy components without a declaration retain the `_format` query source.
+Custom JSON outputs cannot switch to another encoder without a separate safe
+wire projection.
 
 ### Predicate metadata and group references
 
@@ -498,9 +519,13 @@ JOIN performance perf
  AND signals.feature_value = perf.feature_value
 ~~~~
 
-Selector permission booleans are unquoted. `QuerySelector(view)` binds a request
-field to the named view; it does not itself grant permission. Selector policy
-calls grant each capability independently. `selector_default_limit` is both the
+Selector permission booleans are unquoted. An explicit `QuerySelector(view)`
+request field binds to the named view and enables its matching selector
+property, so it does not need a duplicate `selector_*` permission call.
+Selector policy calls can still enable independently injected properties.
+An explicit Criteria field defaults to the compiled view's columns unless
+`selector_filterable` narrows that set.
+`selector_default_limit` is both the
 fallback and cap for a positive requested limit while `selector_no_limit` is
 false. A positive `set_limit` sets a base view limit and clears no-limit mode;
 `set_limit(view,0)` clears that base limit and enables no-limit mode. Criteria
@@ -1101,9 +1126,12 @@ outer `CAST(items.should_delete AS bool), delete_marker(items.should_delete)`).
 Only explicitly supplied true flags with complete, authorized, parent-scoped
 identities request deletion. Omitted rows and collections never imply deletion.
 
-A concurrency token is numeric or `time.Time`, optionally pointer-valued. Its
+A concurrency token is a canonical string, numeric or `time.Time`, optionally pointer-valued. Its
 validation compares captured expected presence/value with loaded Previous before
-other validation. It does not add a SQL predicate, advance tokens, lock rows, or
-provide atomic race prevention. Init may explicitly prepare a next working token
-without changing the captured expectation. Missing/mismatched update tokens fail
-with a typed conflict before mutations proceed.
+other validation. The resulting UPDATE compares the validated Previous token
+in its SQL WHERE clause and requires one affected row, so a change after Previous was
+loaded still fails atomically with a typed conflict. Init may explicitly prepare
+a next working token without changing the captured expectation; Datly does not
+increment tokens automatically. The lifecycle or database must advance the
+token on success, or a later update can still match it. The update path uses
+no vendor-specific row lock.

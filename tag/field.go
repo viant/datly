@@ -26,23 +26,24 @@ type SQL struct {
 // Field is the parsed Datly metadata for one Go field. Generic binding and
 // SQLX metadata remain represented by their owning packages.
 type Field struct {
-	Component     *Component
-	View          *View
-	Self          *SelfReference
-	Codec         *Codec
-	SQL           *SQL
-	Binding       *bindly.BindingSpec
-	Relation      []*RelationLink
-	Predicates    []*spec.Predicate
-	QuerySelector *QuerySelector
-	Source        string
-	SelectorAlias string
-	Description   string
-	Example       string
-	Groupable     bool
-	MCP           *bool
-	PathMCP       *bool
-	Invariant     string
+	Component      *Component
+	View           *View
+	Self           *SelfReference
+	Codec          *Codec
+	SQL            *SQL
+	Binding        *bindly.BindingSpec
+	Relation       []*RelationLink
+	Predicates     []*spec.Predicate
+	QuerySelector  *QuerySelector
+	FormatSelector bool
+	Source         string
+	SelectorAlias  string
+	Description    string
+	Example        string
+	Groupable      bool
+	MCP            *bool
+	PathMCP        *bool
+	Invariant      string
 }
 
 func ParseField(field reflect.StructField) (*Field, error) {
@@ -105,6 +106,12 @@ func ParseField(field reflect.StructField) (*Field, error) {
 	}
 	if value, ok := field.Tag.Lookup(QuerySelectorName); ok {
 		result.QuerySelector, err = ParseQuerySelector(value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if value, ok := field.Tag.Lookup("formatSelector"); ok {
+		result.FormatSelector, err = parseBool("formatSelector", strings.TrimSpace(value))
 		if err != nil {
 			return nil, err
 		}

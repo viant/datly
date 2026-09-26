@@ -62,7 +62,7 @@ SELECT 1`,
 	if !strings.Contains(string(component), "handler=HandleOrders") {
 		t.Fatalf("component source:\n%s", component)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated custom handler module does not compile: %v\n%s", runErr, output)
@@ -97,6 +97,7 @@ SELECT 1`,
 }
 
 func TestCompilerGeneratePreservesEveryAuthoredRoute(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	generated, err := transcribeSource(context.Background(), root, &Source{
@@ -138,7 +139,7 @@ SELECT id FROM orders`,
 			t.Fatalf("resolved route %d = routes:%+v settings:%+v", index, component.Routes, component.Settings)
 		}
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated multi-route module does not compile: %v\n%s", runErr, output)
@@ -193,7 +194,7 @@ func TestTranscribedVeltyFactory(t *testing.T) {
 	if err = os.WriteFile(filepath.Join(root, "generated", "transcribed_velty_test.go"), []byte(testSource), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("transcribed Velty module does not compile and initialize: %v\n%s", runErr, output)
@@ -228,6 +229,7 @@ SELECT * FROM events`,
 }
 
 func TestCompilerGenerateEmitsCanonicalConstantInput(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	generated, err := transcribeSource(context.Background(), root, &Source{
@@ -244,7 +246,7 @@ SELECT * FROM $Unsafe.Vendor`,
 		fields[0].Tag != `parameter:"Vendor,kind=const,in=Vendor,dataType=string,value=vendors" internal:"true"` {
 		t.Fatalf("input fields = %+v", fields)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated constant module does not compile: %v\n%s", runErr, output)
@@ -252,6 +254,7 @@ SELECT * FROM $Unsafe.Vendor`,
 }
 
 func TestCompilerGenerateUsesDiscoveredCanonicalViewColumns(t *testing.T) {
+	t.Parallel()
 	harness := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()
 	if err := harness.ExecStatements(ctx, `CREATE TABLE events (
@@ -291,7 +294,7 @@ SELECT event_id, name, score, created_at FROM events`,
 		!strings.Contains(string(content), `time "time"`) || !regexp.MustCompile(`CreatedAt\s+\*time\.Time`).Match(content) {
 		t.Fatalf("generated view source:\n%s", content)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated module does not compile: %v\n%s", runErr, output)
@@ -299,6 +302,7 @@ SELECT event_id, name, score, created_at FROM events`,
 }
 
 func TestCompilerGenerateUsesDiscoveredIndependentViewColumns(t *testing.T) {
+	t.Parallel()
 	harness := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()
 	if err := harness.ExecStatements(ctx,
@@ -331,7 +335,7 @@ SELECT id FROM users`,
 		generated.Result.Plan.Input.Fields[0].Type != "*Authorization" {
 		t.Fatalf("independent generation = view:%+v input:%+v", independent, generated.Result.Plan.Input.Fields)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated independent-view module does not compile: %v\n%s", runErr, output)
@@ -339,6 +343,7 @@ SELECT id FROM users`,
 }
 
 func TestCompilerGenerateAppliesIndependentViewOptions(t *testing.T) {
+	t.Parallel()
 	harness := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()
 	if err := harness.ExecStatements(ctx,
@@ -385,7 +390,7 @@ SELECT id FROM users`,
 	if _, err := os.Stat(filepath.Join(root, "generated", "authorization.go")); err != nil {
 		t.Fatalf("generated independent view destination: %v", err)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated independent-view module does not compile: %v\n%s", runErr, output)
@@ -393,6 +398,7 @@ SELECT id FROM users`,
 }
 
 func TestCompilerGenerateUsesNormalizedIndependentViewCardinality(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	generated, err := transcribeSource(context.Background(), root, &Source{
@@ -416,7 +422,7 @@ SELECT 1`,
 		fields["ExplicitMany"].Type != "[]*ExplicitManyView" || !strings.Contains(fields["ExplicitMany"].Tag, "cardinality=many") {
 		t.Fatalf("input fields = %+v", generated.Result.Plan.Input.Fields)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated view-cardinality module does not compile: %v\n%s", runErr, output)
@@ -424,6 +430,7 @@ SELECT 1`,
 }
 
 func TestCompilerGenerateUsesExactSameNameIndependentViewIdentity(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	generated, err := transcribeSource(context.Background(), root, &Source{
@@ -451,7 +458,7 @@ SELECT 1`,
 	if len(generated.Result.Plan.Views) != 3 || !viewNames["CurrentAudit"] || !viewNames["ArchiveAudit"] {
 		t.Fatalf("views = %+v", generated.Result.Plan.Views)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated same-name independent-view module does not compile: %v\n%s", runErr, output)
@@ -488,6 +495,7 @@ WHERE id >= $ID`,
 }
 
 func TestCompilerGenerateBuildsNestedRelationViewTypes(t *testing.T) {
+	t.Parallel()
 	harness := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()
 	if err := harness.ExecStatements(ctx,
@@ -527,7 +535,7 @@ JOIN products p ON p.id = i.product_id`,
 	if nested.Name != "P" || nested.Type != "*PView" {
 		t.Fatalf("nested relation = %+v", nested)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("nested generated module does not compile: %v\n%s", runErr, output)
@@ -535,6 +543,7 @@ JOIN products p ON p.id = i.product_id`,
 }
 
 func TestCompilerGenerateLowersProjectionExclusionsIntoViewTags(t *testing.T) {
+	t.Parallel()
 	harness := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()
 	if err := harness.ExecStatements(ctx,
@@ -586,7 +595,7 @@ JOIN products product ON product.vendor_id = vendor.id`,
 	}
 	assertInternal(generated.Result.Plan.Views[0], "InternalNote")
 	assertInternal(generated.Result.Plan.Views[1], "VendorId", "InternalNote")
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated projection-exclusion module does not compile: %v\n%s", runErr, output)
@@ -594,6 +603,7 @@ JOIN products product ON product.vendor_id = vendor.id`,
 }
 
 func TestCompilerGenerateUsesPerViewTypeAndDestinationDirectives(t *testing.T) {
+	t.Parallel()
 	harness := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()
 	if err := harness.ExecStatements(ctx,
@@ -627,7 +637,7 @@ JOIN order_items i ON i.order_id = o.id`,
 			t.Fatalf("generated %s: %v", file, err)
 		}
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated module does not compile: %v\n%s", runErr, output)

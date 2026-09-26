@@ -139,6 +139,38 @@ one reader graph with related and DerivedView outputs. Do not preserve a
 service-local fan-out of raw SELECTs merely because the public response is an
 aggregate.
 
+### Mark presence in internal component calls
+
+An internal `InvokeComponent` call supplies a typed **bound input**, not an
+HTTP query that Datly can parse for presence. Current v1 validates every
+required request field against the transcribed input's generated `Has` marker.
+Populating a struct literal alone does not mark the field present:
+
+```go
+input := &recordread.ReadInput{}
+input.SetTenantID(tenantID) // generated setter marks Has.TenantID
+if fields != nil {
+    input.SetFields(fields) // omit this call when the selector is absent
+}
+value, err := invoker.InvokeComponent(ctx, dexec.ComponentRequest{
+    Target: target,
+    Input:  input,
+})
+```
+
+Prefer generated setters for every supplied query/path/header/body parameter
+in internal readers, writers, and cubes. A trusted Go literal may equivalently
+initialize the generated presence type explicitly, for example
+`&recordread.ReadInput{TenantID: tenantID, Has: &recordread.ReadInputHas{TenantID: true}}`.
+Mark every supplied field, including optional selectors; do not mark omitted
+fields. An explicit zero or empty value can still be present; a nonzero literal
+without its marker is not. In particular,
+do not weaken required-input validation or infer presence from Go zero values
+to make old callers pass: that can suppress a required authorization scope.
+The marker is internal bookkeeping, never a client JSON field. Include direct
+bound-invocation tests for required presence, optional omission, explicit zero,
+and wrong-scope identity when migrating callers.
+
 When several callers aggregate the same facts with different dimensions,
 measures, or windows, prefer one authorized groupable reader with a derived
 cube and, where needed, cube composition. Enable MCP cube/compose exposure only
@@ -462,6 +494,31 @@ A migrated component is complete only when all applicable gates pass:
 
 Direct SQL is acceptable in tests only for schema setup, seed fixtures, or
 narrow fixture inspection. It must not be the primary behavioral proof.
+
+### Prove the released executable, not only test packages
+
+A Go test may import a SQL driver for fixture setup even when the application
+binary does not. In that case generated components compile and tests pass, but
+the released executable cannot open its connector. Link the selected driver
+from a production bootstrap/runtime package when the standalone build needs
+it; a blank driver import is connector registration, not an application SQL
+repository. Do not add a direct `*sql.DB` path to compensate.
+
+Build the exact executable and target architecture used by deployment. Run it
+against an isolated initialized schema and verify that it reaches a generated
+reader or startup contract check, rather than merely exiting after flag
+validation. Prefer an explicit check-only mode that validates linked
+components, required identities, Auth discovery, and private storage without
+opening a listener or calling an unapproved external provider. Add a binary-
+level regression so a test-only driver import cannot mask a missing link.
+
+Treat an archive upload, a staged binary, an active service, a public route,
+and an authenticated end-to-end journey as distinct milestones. Before moving
+the default route, test the generated graph from the real browser or phone
+client, prove persisted evidence through a generated reader/cube, and verify
+rollback leaves existing data and routes intact. A deterministic provider or
+Auth fixture is useful local proof, but does not establish live provider or
+production issuer readiness.
 
 ## Migration order
 

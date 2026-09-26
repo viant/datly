@@ -114,6 +114,11 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 			return fmt.Errorf("input %s has no source type", field.Path())
 		}
 		if kind == "header" && (strings.EqualFold(name, "Authorization") || strings.EqualFold(name, "Accept") || strings.EqualFold(name, "Content-Type")) {
+			if strings.EqualFold(name, "Accept") {
+				if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil && param.FormatSelector {
+					continue // response media entries describe this selector
+				}
+			}
 			// OpenAPI ignores these header Parameter Objects. Require an enforced
 			// API-key policy or compiled verifier evidence before emitting security.
 			if strings.EqualFold(name, b.endpoint.APIKeyHeader) || strings.EqualFold(name, "Authorization") && field.VerifiesJWT() {

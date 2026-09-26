@@ -118,7 +118,7 @@ func TestInitializedBinarySQLiteRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	extra := filepath.Join(extraDir, "extra.go")
-	added := "//go:build extra\n\npackage extra\nimport (\"reflect\"; xdatly \"github.com/viant/xdatly\"; records \"example.com/buildapp/records\")\ntype Extra struct{ Read xdatly.Component[records.Input,records.Output] `component:\"Extra,path=/extra/{id},method=GET,connector=main,view=records\"` }\nfunc ExtraDatlyType() reflect.Type{return reflect.TypeOf((*Extra)(nil)).Elem()}\nvar ExtraDatlyLinkedType=ExtraDatlyType()\n"
+	added := "//go:build extra\n\npackage extra\nimport (\"reflect\"; xdatly \"github.com/viant/xdatly\"; records \"example.com/buildapp/records\")\ntype Extra struct{ Read xdatly.Component[records.Input,records.Output] `component:\"Extra,path=/extra/{id},method=GET,connector=main,view=records\"` }\nvar ComponentType = reflect.TypeOf((*Extra)(nil)).Elem()\n"
 	if err = os.WriteFile(extra, []byte(added), 0644); err != nil {
 		t.Fatal(err)
 	}

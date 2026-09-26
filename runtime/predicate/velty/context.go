@@ -47,7 +47,7 @@ func (c *Context) expandGroup(group int, operator string) (string, error) {
 		if predicate.group != group {
 			continue
 		}
-		value, present, err := predicateValue(c.input, predicate.fieldIndex, predicate.fieldName)
+		value, present, err := predicateValue(c.input, predicate)
 		if err != nil {
 			return "", err
 		}
@@ -97,39 +97,42 @@ func (c *Context) expandGroup(group int, operator string) (string, error) {
 	return joinFragments(fragments, operator), nil
 }
 
-func predicateValue(input reflect.Value, index []int, fieldName string) (any, bool, error) {
+func predicateValue(input reflect.Value, predicate compiledPredicate) (any, bool, error) {
 	if !input.IsValid() || input.Kind() != reflect.Struct {
 		return nil, false, fmt.Errorf("predicate input must be a struct")
 	}
-	value, err := input.FieldByIndexErr(index)
+	value, err := input.FieldByIndexErr(predicate.fieldIndex)
 	if err != nil {
-		return nil, false, fmt.Errorf("read predicate field %s: %w", fieldName, err)
+		return nil, false, fmt.Errorf("read predicate field %s: %w", predicate.fieldName, err)
 	}
 	actual := value.Interface()
-	if present, authoritative := markerPresence(input, fieldName); authoritative {
-		return actual, present, nil
+	if predicate.marker != nil {
+		present, err := markerPresence(input, predicate.marker)
+		return actual, present, err
 	}
 	return actual, !isUnsetPredicateValue(actual), nil
 }
 
-func markerPresence(input reflect.Value, fieldName string) (bool, bool) {
-	markerField, ok := input.Type().FieldByName("Has")
-	if !ok || markerField.Tag.Get("setMarker") != "true" {
-		return false, false
+func markerPresence(input reflect.Value, compiled *compiledMarker) (bool, error) {
+	marker, err := input.FieldByIndexErr(compiled.holderIndex)
+	if err != nil {
+		return false, fmt.Errorf("read predicate presence marker: %w", err)
 	}
-	marker := input.FieldByIndex(markerField.Index)
 	marker = dereferencePredicateValue(marker)
 	if !marker.IsValid() {
-		return false, true
+		return false, nil
 	}
 	if marker.Kind() != reflect.Struct {
-		return false, false
+		return false, fmt.Errorf("compiled predicate presence holder is %s, want struct", marker.Kind())
 	}
-	flag := marker.FieldByName(fieldName)
-	if !flag.IsValid() || flag.Kind() != reflect.Bool {
-		return false, false
+	flag, err := marker.FieldByIndexErr(compiled.flagIndex)
+	if err != nil {
+		return false, fmt.Errorf("read compiled predicate presence flag: %v", err)
 	}
-	return flag.Bool(), true
+	if flag.Kind() != reflect.Bool {
+		return false, fmt.Errorf("compiled predicate presence flag is %s, want bool", flag.Kind())
+	}
+	return flag.Bool(), nil
 }
 
 func dereferencePredicateValue(value reflect.Value) reflect.Value {

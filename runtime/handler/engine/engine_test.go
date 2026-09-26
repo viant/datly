@@ -64,6 +64,11 @@ type boundEngineInput struct {
 	Initialized int
 }
 
+type requiredBoundInput struct {
+	Tenant string
+	Has    *struct{ Tenant bool } `setMarker:"true"`
+}
+
 func (i *boundEngineInput) Init(context.Context) error {
 	i.Initialized++
 	return nil
@@ -346,6 +351,31 @@ func TestEngineExecuteRejectsInvalidBoundInputBeforeLifecycle(t *testing.T) {
 				t.Fatalf("Execute() error=%v invoked=%v", err, invoked)
 			}
 		})
+	}
+}
+
+func TestEngineRejectsMissingRequiredBoundInputBeforeHandler(t *testing.T) {
+	required := true
+	contract := testRouteInput(t, reflect.TypeOf(requiredBoundInput{}), bindly.BindingSpec{
+		Path: "Tenant", Location: bindstate.Location{Kind: "query", In: "tenant"}, Required: &required,
+	})
+	for _, input := range []*requiredBoundInput{{Tenant: "one"}, {Has: &struct{ Tenant bool }{}}} {
+		called := false
+		_, err := New().Execute(context.Background(), Request{Input: contract, BoundInput: input,
+			Handler: rhandler.HandlerFunc(func(context.Context, rhandler.Invocation) (any, error) {
+				called = true
+				return nil, nil
+			})})
+		if err == nil || called {
+			t.Fatalf("missing required bound input=%+v err=%v called=%v", input, err, called)
+		}
+	}
+	valid := &requiredBoundInput{Tenant: "one", Has: &struct{ Tenant bool }{Tenant: true}}
+	if _, err := New().Execute(context.Background(), Request{Input: contract, BoundInput: valid,
+		Handler: rhandler.HandlerFunc(func(context.Context, rhandler.Invocation) (any, error) {
+			return nil, nil
+		})}); err != nil {
+		t.Fatalf("marked required bound input rejected: %v", err)
 	}
 }
 

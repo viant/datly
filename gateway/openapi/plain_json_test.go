@@ -188,7 +188,7 @@ func TestPlainJSONWireMatchesStandardHTTP(t *testing.T) {
 		{name: "nil pointer promoted children optional", value: struct{ *PlainHolder }{nil}, names: []string{"Name", "Number"}},
 		{name: "pointer promoted values", value: struct{ *PlainHolder }{&PlainHolder{"name", 0}}, names: []string{"Name", "Number"}, types: map[string]string{"Number": "string"}},
 		{name: "omission zero method", value: omitted{Pointer: pointer, Zero: 7, Both: 7}, names: []string{"Name", "Number", "fixed", "empty", "object", "pointer", "zero", "both"}, required: []string{"fixed", "object"}},
-		{name: "all quoted scalar zero", value: plainQuoted{Ptr: pointer, Deep: &pointer, Named: plainPointer(pointer), Text: "a\"b<>&", Bytes: plainBytes{1, 2}}, names: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}, required: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}, types: map[string]string{"int": "string", "uint": "string", "float": "string", "bool": "string", "text": "string", "ptr": "string", "deep": "integer", "named": "integer", "array": "array", "object": "object", "bytes": "string"}},
+		{name: "all quoted scalar zero", value: plainQuoted{Ptr: pointer, Deep: &pointer, Named: plainPointer(pointer), Text: "a\"b<>&", Bytes: plainBytes{1, 2}}, names: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}, required: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}, types: map[string]string{"int": "string", "uint": "string", "float": "string", "bool": "string", "text": "string", "ptr": "string", "deep": "integer", "array": "array", "object": "object", "bytes": "string"}},
 		{name: "quoted null pointers", value: plainQuoted{}, names: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}, required: []string{"int", "uint", "float", "bool", "text", "ptr", "deep", "named", "array", "object", "bytes"}},
 		{name: "stdlib ignores format and internal tags", value: struct {
 			Label    string `json:"a=b" format:"name=ignored"`
@@ -239,6 +239,16 @@ func TestPlainJSONWireMatchesStandardHTTP(t *testing.T) {
 			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &value))
 			require.True(t, proof.validate(responseSchema, value), string(oracle))
 			if tc.name == "all quoted scalar zero" {
+				// The active encoding/json implementation is the wire oracle:
+				// json/v2 stringifies this named pointer, while JSON v1 did not.
+				switch value.(map[string]any)["named"].(type) {
+				case string:
+					require.Equal(t, "string", root.Properties["named"].Type)
+				case float64:
+					require.Equal(t, "integer", root.Properties["named"].Type)
+				default:
+					t.Fatalf("unexpected named pointer JSON value %#v", value.(map[string]any)["named"])
+				}
 				require.Equal(t, "byte", root.Properties["bytes"].Format)
 				require.Contains(t, string(oracle), `"ptr":"0"`)
 				require.Contains(t, string(oracle), `"bytes":"AQI="`)

@@ -15,6 +15,7 @@ import (
 )
 
 func TestStaticDQLGeneratedBinary(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	authored, generated := t.TempDir(), t.TempDir()
 	(testharness.GeneratedModule{}).Write(t, generated)

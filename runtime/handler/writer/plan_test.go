@@ -74,16 +74,16 @@ func TestUniversalWriterOrdersSiblingInsertBeforeForeignKeyValidation(t *testing
 }
 
 func TestUniversalWriterTreatsIdentityOnlySparseUpdateAsNoOp(t *testing.T) {
-	id := 7
-	record := &Record{Keys: []Field{{Name: "ID"}}}
-	if hasMutableFields(&Frame{Record: record, Fields: fieldSet{"ID": true}}) {
+	record := &Record{Keys: []Field{{Name: "ID"}}, Fields: []Field{{Name: "ID"}, {Name: "Name"}}}
+	identityOnly := &presence{record: record}
+	identityOnly.force("ID")
+	if hasMutableFields(&Frame{Record: record, Fields: identityOnly}) {
 		t.Fatal("identity-only sparse update was treated as mutable")
 	}
-	name := "updated"
-	if !hasMutableFields(&Frame{Record: record, Fields: fieldSet{"ID": true, "Name": true}, Entity: reflect.ValueOf(&struct {
-		ID   *int
-		Name *string
-	}{ID: &id, Name: &name})}) {
+	withName := &presence{record: record}
+	withName.force("ID")
+	withName.force("Name")
+	if !hasMutableFields(&Frame{Record: record, Fields: withName}) {
 		t.Fatal("supplied non-key field was not treated as mutable")
 	}
 }
@@ -92,12 +92,14 @@ func TestUniversalWriterRecognizesLifecycleSparseUpdatePresence(t *testing.T) {
 	id, name := 7, "updated"
 	row := &unitRow{ID: &id, Name: &name, Has: &unitHas{ID: true, Name: true}}
 	record := &Record{EntityType: reflect.TypeFor[unitRow](), Keys: []Field{{Name: "ID"}}, Fields: []Field{{Name: "ID", Index: []int{0}, Has: []int{5, 0}}, {Name: "Name", Index: []int{3}, Has: []int{5, 3}}}}
-	frame := &Frame{Record: record, Entity: reflect.ValueOf(row), Fields: fieldSet{"ID": true}, Action: xhandler.WriteUpdate}
-	for field, present := range suppliedFields(frame.Entity.Elem(), frame.Record.Fields) {
-		if present {
-			frame.Fields[field] = true
-		}
+	// Presence is a live view of the entity marker: a setter that flips Has.Name
+	// is visible without re-synchronising any copied set.
+	row.Has.Name = false
+	frame := &Frame{Record: record, Entity: reflect.ValueOf(row), Fields: livePresence(record, reflect.ValueOf(row).Elem()), Action: xhandler.WriteUpdate}
+	if hasMutableFields(frame) {
+		t.Fatal("identity-only row was treated as mutable")
 	}
+	row.Has.Name = true
 	if !hasMutableFields(frame) {
 		t.Fatal("lifecycle setter presence was not recognized as a sparse update")
 	}
@@ -205,7 +207,9 @@ func TestUniversalWriterAssemblesTypedPreviousRelationGraph(t *testing.T) {
 	parentRecord := &Record{Name: "Parents", Path: "Parents", EntityType: reflect.TypeFor[transientLinkParent](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
 	childRecord := &Record{Name: "Children", Path: "Parents/Children", EntityType: reflect.TypeFor[transientLinkChild](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
 	parentRecord.Relations = []*Relation{{Field: []int{2}, Child: childRecord, Links: []Link{{Parent: parentRecord.Fields[0], Child: childRecord.Fields[0]}}}}
-	program := &Program{database: &DatabaseSnapshot{Rows: map[string]reflect.Value{"Parents\x001": reflect.ValueOf(parent), "Parents/Children\x002": reflect.ValueOf(child)}}}
+	program := &Program{database: &DatabaseSnapshot{Rows: map[rowIdentity]reflect.Value{
+		{record: parentRecord, key: scalarKey(reflect.ValueOf(1))}: reflect.ValueOf(parent),
+		{record: childRecord, key: scalarKey(reflect.ValueOf(2))}:  reflect.ValueOf(child)}}}
 	if err := program.assemblePreviousRelations(parentRecord); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +231,9 @@ func TestUniversalWriterAssemblesPreviousRelationAcrossValueAndPointerKeys(t *te
 	parentRecord := &Record{Name: "Parents", Path: "Parents", EntityType: reflect.TypeFor[parent](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
 	childRecord := &Record{Name: "Children", Path: "Parents/Children", EntityType: reflect.TypeFor[transientLinkChild](), Fields: []Field{{Name: "Scope", Index: []int{1}}}}
 	parentRecord.Relations = []*Relation{{Field: []int{2}, Child: childRecord, Links: []Link{{Parent: parentRecord.Fields[0], Child: childRecord.Fields[0]}}}}
-	program := &Program{database: &DatabaseSnapshot{Rows: map[string]reflect.Value{"Parents\x001": reflect.ValueOf(parentRow), "Parents/Children\x002": reflect.ValueOf(child)}}}
+	program := &Program{database: &DatabaseSnapshot{Rows: map[rowIdentity]reflect.Value{
+		{record: parentRecord, key: scalarKey(reflect.ValueOf(1))}: reflect.ValueOf(parentRow),
+		{record: childRecord, key: scalarKey(reflect.ValueOf(2))}:  reflect.ValueOf(child)}}}
 	if err := program.assemblePreviousRelations(parentRecord); err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +273,7 @@ func TestUniversalWriterCompilesPlanOnceAndBackfillsInvariant(t *testing.T) {
 		t.Fatal("invocation recompiled immutable writer metadata")
 	}
 	previous := &unitRow{ID: &id, Start: &start, End: &end}
-	frame := &Frame{Entity: reflect.ValueOf(row), Previous: reflect.ValueOf(previous), Fields: fieldSet{"ID": true, "Start": true}, Record: handler.metadata.Root}
+	frame := &Frame{Entity: reflect.ValueOf(row), Previous: reflect.ValueOf(previous), Fields: livePresence(handler.metadata.Root, reflect.ValueOf(row).Elem()), Record: handler.metadata.Root}
 	if err = program.applyInvariants(frame); err != nil {
 		t.Fatal(err)
 	}

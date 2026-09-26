@@ -944,15 +944,17 @@ unflagged child below a marked parent fails. Database constraints still apply.
 All actions use the invocation's buffered DML and existing transaction owner;
 a supplied transaction remains caller-owned.
 
-`concurrency_token` is **validation-only**. For updates, its check runs first in
+`concurrency_token` provides validation and atomic compare-and-swap for updates
+and explicitly marked deletes.
+Its first check runs in
 the validation phase, before framework constraints and application Validate
 callbacks. It compares the captured, client-supplied expected token with the
 loaded authorized Previous token. Missing Has presence, a null token, missing
 Previous evidence, or a mismatch returns `*handler.Conflict` (status 409) before
-sequencing or queuing mutations. Inserts and explicitly marked deletes do not
-perform the update-token check.
+sequencing or queuing mutations. Inserts do not perform this token check;
+unversioned deletes continue to use their ordinary identity policy.
 
-Numeric tokens compare in their canonical Go numeric type. `time.Time` tokens
+String tokens compare exactly; numeric tokens compare in their canonical Go numeric type. `time.Time` tokens
 compare instants with `Time.Equal`, including equal instants expressed in
 different time zones. Presence is independent of the value: a supplied numeric
 zero is an expected token; an omitted numeric zero is missing.
@@ -962,10 +964,19 @@ explicitly prepare the next working token using a setter; that does not change
 the captured expected value. Token advancement is an application or database
 concern. The framework never increments or rewrites a version automatically.
 
-There is a race window between loading Previous, validating it, and executing
-DML. Another writer can change the row during that window. This annotation adds
-no token predicate to UPDATE/DELETE WHERE clauses, no vendor locks, and no
-row-count conflict machinery. It does **not** provide atomic race prevention.
+Another writer may change the row after Previous is loaded. A buffered UPDATE
+or versioned DELETE therefore includes the validated, database-decoded Previous token in its SQL
+WHERE clause as well as the complete primary key. That token was checked
+against the captured client expectation first, including equal instants in
+different time zones. Exactly one affected row is required; zero rows
+returns a typed conflict and rolls back the invocation transaction. This is
+atomic at mutation execution, without a vendor lock or an automatic token
+increment. The application lifecycle or database must advance an update token
+on success; if it leaves the token unchanged, a later update can still match it.
+Versioned updates and deletes require the optional `handler.MatchedDML`
+capability and fail closed if it is unavailable. The ordinary `handler.DML`
+interface remains source-compatible. Neither mutation proceeds after only a
+stale pre-read comparison.
 
 Regenerate through the same high-level command and preserve create-once lifecycle
 edits. Verify mixed mutations, identity-only deletes, omissions/false flags,

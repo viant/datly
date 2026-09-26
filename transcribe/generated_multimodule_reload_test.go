@@ -130,6 +130,7 @@ SELECT id, CAST(records.id AS int) FROM records WHERE id = $SelectedId ORDER BY 
 }
 
 func TestGeneratedMultiModuleSelectivePublicReloadSQLite(t *testing.T) {
+	t.Parallel()
 	fixture := &exposureWorkspace{t: t}
 	stages := fixture.stages(context.Background())
 	command := exec.Command("go", "test", "-mod=mod", "-count=1", "-timeout=120s", "-v", "-run", "^TestSelectiveReload$", "./records")
@@ -196,6 +197,7 @@ func (w *exposureWorkspace) emit(ctx context.Context, stage, module string, comp
 }
 
 func TestGeneratedOpenAPIMultiModuleReloadSQLite(t *testing.T) {
+	t.Parallel()
 	fixture := &exposureWorkspace{t: t, documents: true}
 	stages := fixture.stages(context.Background())
 	command := exec.Command("go", "test", "-mod=mod", "-count=1", "-timeout=120s", "-v", "-run", "^TestOpenAPIReload$", "./records")

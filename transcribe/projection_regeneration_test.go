@@ -16,6 +16,7 @@ import (
 )
 
 func TestProjectionRemovalRegeneratesReaderAndWriterShapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		handler HandlerOptions
@@ -154,6 +155,7 @@ func TestProjectionShape(t *testing.T){
 }
 
 func TestProjectionHelpersUseCurrentShapeAcrossRegeneration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	h := testharness.NewSQLiteHarness(t)
 	if err := h.ExecStatements(ctx, "CREATE TABLE EVENTS(ID INTEGER PRIMARY KEY, NAME TEXT NOT NULL, EXTRA INTEGER)"); err != nil {

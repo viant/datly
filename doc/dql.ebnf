@@ -55,7 +55,7 @@ location = ? provider-owned location text, possibly empty, up to matching ')' ? 
 declaration_option = ".", option_name, arguments ;
 option_name = "Required" | "Optional" | "WithType" | "WithTag" | "Tag"
  | "WithCodec" | "WithStatusCode" | "WithErrorMessage" | "Cacheable"
- | "QuerySelector" | "WithPredicate" | "Predicate" | "ApplyWhenAbsentPredicate"
+ | "QuerySelector" | "FormatSelector" | "WithPredicate" | "Predicate" | "ApplyWhenAbsentPredicate"
  | "When" | "Scope" | "Of" | "Value" | "Embed" | "Cardinality" | "Async"
  | "Output" | "WithURI" | "WithMCP" | "WithPathMCP"
  | "MinAllowedRecords" | "MaxAllowedRecords" | "ExpectedReturned"

@@ -18,6 +18,7 @@ import (
 )
 
 func TestGeneratedInvariantBackfill(t *testing.T) {
+	t.Parallel()
 	semantic := rootSemanticPlan(plan.OperationPost, false)
 	semantic.Root.Entity = &plan.EntityPlan{Owned: true, MarkerField: "Has", MarkerPointer: true, MarkerType: spec.TypeRef{Name: "RecordHas"}, Fields: []plan.EntityField{
 		{Name: "Id", Type: spec.TypeRef{Name: "*int64"}, Identity: true, Writable: true},

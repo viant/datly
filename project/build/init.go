@@ -256,9 +256,7 @@ func main() {
 }
 `
 
-const linkTemplate = `// Package datlylink owns the application's explicit component imports.
-// Add one blank import for each generated component package selected by the host.
+const linkTemplate = `// Package datlylink owns the application's explicit blank imports.
+// Run "datly link sync -dir ." to add missing component-package imports.
 package datlylink
-
-func init() {}
 `

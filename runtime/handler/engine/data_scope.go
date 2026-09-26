@@ -148,6 +148,22 @@ func (c dmlCapability) Delete(tableName string, data any) error {
 	return c.service.Delete(tableName, data)
 }
 
+func (c dmlCapability) UpdateWithOptions(tableName string, data any, options ...xhandler.Option) error {
+	service, ok := c.service.(xhandler.MatchedDML)
+	if !ok {
+		return fmt.Errorf("atomic matched update is unavailable for %s", tableName)
+	}
+	return service.UpdateWithOptions(tableName, data, options...)
+}
+
+func (c dmlCapability) DeleteWithOptions(tableName string, data any, options ...xhandler.Option) error {
+	service, ok := c.service.(xhandler.MatchedDML)
+	if !ok {
+		return fmt.Errorf("atomic matched delete is unavailable for %s", tableName)
+	}
+	return service.DeleteWithOptions(tableName, data, options...)
+}
+
 func (c dmlCapability) Execute(dml string, args ...any) error {
 	return c.service.Execute(dml, args...)
 }

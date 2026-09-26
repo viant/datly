@@ -44,14 +44,23 @@ successfully without adding files or updating dependencies. This recognizes
 `pkg/dependency` and the generated `internal/datlylink` package. Subsequent
 dependency changes belong to Go module commands.
 
-## Automatic traversal and linking
+## Explicit linking and dynamic discovery
 
-Init scaffolds `cmd/datly`, `dql`, `generated`, `hooks`, `resources` and
-`datly.yaml`. Build defaults to `./...` in the project module and follows
-component inputs/outputs and reachable named types. Normal Go imports express
-actual code dependencies. No user-maintained `init()`, `Register()`, blank-import
-list or aggregate registration function is required. The private generated
-linker registers into the existing registry internally.
+Init scaffolds `cmd/datly`, `internal/datlylink`, `dql`, `generated`, `hooks`,
+`resources` and `datly.yaml`. Build defaults to `./...` in the project module.
+Runtime discovery still scans the selected packages. `cmd/datly` blank-imports
+the project-owned `internal/datlylink` package, whose only job is to blank-import
+component packages so their linked types are present in the executable. No
+component registration function or registry side effect is generated.
+
+Run `datly link sync -dir .` when desired. This explicit command scans selected
+project Go source for tagged component holders and predicate/codec interface
+implementations, then adds only missing blank imports to the existing
+`internal/datlylink/link.go`; it never removes imports or authored content.
+If a selected package lacks an explicit `init`, sync adds an empty one; a
+discovered type missing from runtime type reachability gets a package-local
+`reflect.TypeFor` reference without any registry registration. Normal transcribes
+do not scan for link updates.
 
 Go selects files using the real workspace, tags, GOOS, GOARCH and CGO settings.
 Additional positional Go package patterns select other workspace modules when

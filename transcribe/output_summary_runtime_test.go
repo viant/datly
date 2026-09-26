@@ -15,6 +15,7 @@ import (
 )
 
 func TestGeneratedInferredOutputSummary(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE orders(id INTEGER, tenant_id INTEGER, name TEXT)", "INSERT INTO orders VALUES (1,7,'a'),(2,7,'b'),(3,7,'c'),(4,9,'private')"))
@@ -49,8 +50,13 @@ SELECT orderRows.id, orderRows.name FROM orders orderRows WHERE orderRows.tenant
 	require.NoError(t, err)
 	plan := generated.Result.Plan
 	for _, field := range plan.Input.Fields {
-		if field.Name == "Fields" || field.Name == "Limit" || field.Name == "Offset" {
-			require.Contains(t, field.Tag, `querySelector:"view=Orders"`)
+		switch field.Name {
+		case "Fields":
+			require.Contains(t, field.Tag, `querySelector:"view=Orders,property=fields"`)
+		case "Limit":
+			require.Contains(t, field.Tag, `querySelector:"view=Orders,property=limit"`)
+		case "Offset":
+			require.Contains(t, field.Tag, `querySelector:"view=Orders,property=offset"`)
 		}
 	}
 	require.Equal(t, "*MetaView", plan.Output.Fields[0].Type)

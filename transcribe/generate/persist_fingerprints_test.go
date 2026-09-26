@@ -279,10 +279,7 @@ func TestStagingEditGuardPreservesLatestUserFiles(t *testing.T) {
 			fixture.init(t)
 			p := fixture.persistence()
 			stage := t.TempDir()
-			if err := p.copyExisting(fixture.dir, stage); err != nil {
-				t.Fatal(err)
-			}
-			original, err := readScaffoldSnapshot(stage)
+			original, _, err := p.copyExisting(fixture.dir, stage)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -294,7 +291,7 @@ func TestStagingEditGuardPreservesLatestUserFiles(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := p.swap(fixture.dir, stage, original); err == nil || !strings.Contains(err.Error(), "changed during staging") {
+			if err := p.swap(fixture.dir, stage, original, nil); err == nil || !strings.Contains(err.Error(), "changed during staging") {
 				t.Fatalf("swap error=%v", err)
 			}
 			after, err := readScaffoldSnapshot(fixture.dir)

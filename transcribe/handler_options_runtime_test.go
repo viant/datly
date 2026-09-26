@@ -74,6 +74,7 @@ func TestCompilerGenerateRunsCanonicalWritesThroughUnifiedEngine(t *testing.T) {
 }
 
 func TestTranscribeRunsGeneratedGoPatchThroughUnifiedEngine(t *testing.T) {
+	t.Parallel()
 	harness := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()
 	if err := harness.ExecStatements(ctx, `CREATE TABLE EVENTS (
@@ -128,6 +129,7 @@ SELECT ID, NAME FROM EVENTS`
 }
 
 func TestTranscribedPatchPreservesOmittedGeneratedViewColumns(t *testing.T) {
+	t.Parallel()
 	for _, target := range []HandlerTarget{HandlerGo, HandlerVelty} {
 		t.Run(string(target), func(t *testing.T) {
 			harness := testharness.NewSQLiteHarness(t)
@@ -204,6 +206,7 @@ func TestTranscribeRunsGeneratedGoPostAndPutThroughUnifiedEngine(t *testing.T) {
 }
 
 func TestGenerateRunsPatchWithUnsignedPointerKey(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	component := writeGenerationComponent()
@@ -240,6 +243,7 @@ func TestGenerateRunsPatchWithUnsignedPointerKey(t *testing.T) {
 }
 
 func TestGenerateRunsCompoundVeltyPatchThroughUnifiedEngine(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	component := writeGenerationComponent()
@@ -281,6 +285,7 @@ func TestGenerateRunsCompoundVeltyPatchThroughUnifiedEngine(t *testing.T) {
 }
 
 func TestGenerateRunsRecursivePatchThroughUnifiedEngine(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	component, child, detail := recursiveWriteGenerationComponent()

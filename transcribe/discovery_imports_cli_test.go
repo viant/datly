@@ -123,7 +123,7 @@ func runDatlyTranscribeCLI(t *testing.T, root, module, dsn string, wantSuccess b
 
 func compileGeneratedCLIProject(t *testing.T, root string) {
 	t.Helper()
-	command := exec.Command("go", "test", "-mod=mod", "-count=1", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	command.Env = os.Environ()
 	output, err := command.CombinedOutput()

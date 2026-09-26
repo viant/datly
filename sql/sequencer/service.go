@@ -3,11 +3,13 @@ package sequencer
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/viant/sqlx/io/insert"
+	"github.com/viant/sqlx/metadata"
 	"github.com/viant/sqlx/metadata/info/dialect"
 	"github.com/viant/sqlx/option"
 )
@@ -139,6 +141,11 @@ func (s *Service) allocate(ctx context.Context, table string, dest any, selector
 	}
 	key, err := s.nativeIdentity(ctx, inserter, record, parts[len(parts)-1])
 	if err != nil {
+		// A fully supplied identity does not require allocation. Products with
+		// native reservation still register its value for later batches.
+		if len(empty) == 0 && errors.Is(err, metadata.ErrSequenceReservationUnsupported) {
+			return nil
+		}
 		return err
 	}
 	pending := s.remember(key, cells)

@@ -52,3 +52,28 @@ func TestSQLComponent_DialectRequiresDefaultDB(t *testing.T) {
 		t.Fatal("expected nil db error")
 	}
 }
+
+func TestSQLComponent_TransactionRejectsDifferentNamedDatabase(t *testing.T) {
+	ctx := context.Background()
+	defaultDB := testharness.NewSQLiteHarness(t)
+	namedDB := testharness.NewSQLiteHarness(t)
+	tx, err := defaultDB.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	component := &SQLComponent{DB: defaultDB.DB, Tx: tx}
+	if err := component.RegisterConnector("studio", defaultDB.DB); err != nil {
+		t.Fatal(err)
+	}
+	if err := component.RegisterConnector("outside", namedDB.DB); err != nil {
+		t.Fatal(err)
+	}
+	connection, err := component.Resolve(ctx, "studio")
+	if err != nil || connection.Tx != tx {
+		t.Fatalf("same-DB transaction connection=%+v err=%v", connection, err)
+	}
+	if _, err := component.Resolve(ctx, "outside"); err == nil {
+		t.Fatal("transaction escaped to different named database")
+	}
+}

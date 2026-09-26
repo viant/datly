@@ -16,13 +16,13 @@ require (
 	github.com/viant/mcp-protocol v0.19.0
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20260921232033-929f6f50ccce
-	github.com/viant/sqlx v0.26.1-0.20260923212600-5924bf869484
-	github.com/viant/structology v0.10.1-0.20260915165514-89d421971772
+	github.com/viant/sqlx v0.26.1-0.20260925094526-0a1e6ab72989
+	github.com/viant/structology v0.10.1-0.20260925145657-42c5a7e1d1d7
 	github.com/viant/structql v0.5.4
 	github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47
-	github.com/viant/xdatly v1.0.1-0.20260924050659-3fc622bf6bb7
+	github.com/viant/xdatly v1.0.1-0.20260925011738-7249dcd4bf03
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.0
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -79,9 +79,9 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
-	github.com/aerospike/aerospike-client-go v4.5.2+incompatible // indirect
+	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/felixge/httpsnoop v1.0.4
-	github.com/francoispqt/gojay v1.2.13 // indirect
+	github.com/francoispqt/gojay v1.2.13
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

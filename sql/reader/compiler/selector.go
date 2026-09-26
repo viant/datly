@@ -73,6 +73,12 @@ func (c *selectorCompiler) compile() ([]sqlreader.SelectorBindingPlan, error) {
 			return nil, fmt.Errorf("query selector view %s has duplicate %s property", view.Spec.Name, selector.Property)
 		}
 		seen[view][selector.Property] = true
+		// A linked Go output can contribute a view after DQL transcription.
+		// Grant only its explicitly bound selector property at the final view
+		// index, just as transcription does for views already in the DQL graph.
+		if err := view.Spec.EnableQuerySelector(selector.Property); err != nil {
+			return nil, fmt.Errorf("query selector %s: %w", param.Name, err)
+		}
 		result = append(result, sqlreader.SelectorBindingPlan{
 			View:       view,
 			Property:   selector.Property,

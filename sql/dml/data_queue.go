@@ -3,6 +3,8 @@ package dml
 import (
 	"errors"
 	"strings"
+
+	xhandler "github.com/viant/xdatly/handler"
 )
 
 type dataOperationKind string
@@ -22,6 +24,7 @@ type dataOperation struct {
 	data     any
 	dml      string
 	args     []any
+	match    *xhandler.Match
 	executed bool
 	reserved bool
 }
@@ -31,11 +34,31 @@ func (d *Data) Insert(tableName string, data any) error {
 }
 
 func (d *Data) Update(tableName string, data any) error {
-	return d.append(dataOperation{kind: dataOpUpdate, table: tableName, data: data})
+	return d.UpdateWithOptions(tableName, data)
+}
+
+func (d *Data) UpdateWithOptions(tableName string, data any, options ...xhandler.Option) error {
+	condition := writeMatch(options)
+	return d.append(dataOperation{kind: dataOpUpdate, table: tableName, data: data, match: condition})
 }
 
 func (d *Data) Delete(tableName string, data any) error {
-	return d.append(dataOperation{kind: dataOpDelete, table: tableName, data: data})
+	return d.DeleteWithOptions(tableName, data)
+}
+
+func (d *Data) DeleteWithOptions(tableName string, data any, options ...xhandler.Option) error {
+	condition := writeMatch(options)
+	return d.append(dataOperation{kind: dataOpDelete, table: tableName, data: data, match: condition})
+}
+
+func writeMatch(options []xhandler.Option) *xhandler.Match {
+	settings := &xhandler.Options{}
+	for _, apply := range options {
+		if apply != nil {
+			apply(settings)
+		}
+	}
+	return settings.IfMatch
 }
 
 func (d *Data) Execute(dml string, args ...any) error {

@@ -12,6 +12,7 @@ import (
 )
 
 func TestExternalHandlerHolderImportCollisions(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	const module = "github.com/viant/datly/holderimports"
 	const factory = "github.com/viant/datly/transcribe/testdata/handleronly"

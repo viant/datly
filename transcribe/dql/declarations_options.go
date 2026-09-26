@@ -33,6 +33,7 @@ type declarationOptions struct {
 	predicates                                             []*spec.Predicate
 	codec                                                  *spec.Codec
 	querySelector                                          *spec.QuerySelectorBinding
+	formatSelector                                         bool
 	view                                                   declarationViewOptions
 }
 
@@ -183,6 +184,15 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 				return declarationOptions{}, p.fail(cursor, "parameter %s QuerySelector requires a view name", p.paramName)
 			}
 			p.result.querySelector = &spec.QuerySelectorBinding{View: viewName, Property: property}
+			if p.result.cacheable == nil {
+				cacheable := false
+				p.result.cacheable = &cacheable
+			}
+		case "formatselector":
+			if err := p.single(cursor, key, args, 0, 0); err != nil {
+				return declarationOptions{}, err
+			}
+			p.result.formatSelector = true
 			if p.result.cacheable == nil {
 				cacheable := false
 				p.result.cacheable = &cacheable

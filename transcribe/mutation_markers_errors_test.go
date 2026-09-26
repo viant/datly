@@ -24,7 +24,6 @@ func TestMutationMarkerPolicyErrors(t *testing.T) {
 	}{
 		{"identity flag", "delete_marker(o.ID)", "patch", HandlerGo},
 		{"nonboolean flag", "delete_marker(o.NAME)", "patch", HandlerGo},
-		{"string token", "concurrency_token(o.NAME)", "patch", HandlerGo},
 		{"auxiliary", "concurrency_token(Kinds.ID)", "patch", HandlerGo},
 		{"post", "concurrency_token(o.START)", "post", HandlerGo},
 		{"get", "delete_marker(o.NAME)", "get", HandlerGo},
@@ -43,5 +42,29 @@ func TestMutationMarkerPolicyErrors(t *testing.T) {
 				t.Fatal("invalid policy published files", err)
 			}
 		})
+	}
+}
+
+func TestStringConcurrencyTokenGenerates(t *testing.T) {
+	ctx := context.Background()
+	db := testharness.NewSQLiteHarness(t)
+	if err := db.ExecStatements(ctx, `CREATE TABLE transitions(run_id TEXT PRIMARY KEY, status TEXT NOT NULL)`,
+		`INSERT INTO transitions VALUES('r1','accepted')`); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	testharness.WriteGeneratedGoMod(t, root)
+	const text = `#package('api/transitions')
+#setting($_ = $route('/transitions','PATCH'))
+SELECT t.run_id, t.status, type(t,'Transition'),
+       tag(t.run_id,'sqlx:"run_id,primaryKey"'),
+       concurrency_token(t.status), lifecycle_type(t,'TransitionRules')
+FROM transitions t`
+	if _, err := (Generator{Operation: "patch"}).Generate(ctx, GenerationRequest{Destination: root,
+		Source: &Source{Name: "Transitions", Text: text, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "api", "transitions", "lifecycle.go")); err != nil {
+		t.Fatalf("string-token lifecycle scaffold: %v", err)
 	}
 }

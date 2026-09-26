@@ -196,7 +196,7 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 	if p := r.child.Parent(); p != nil {
 		parent = p.Id
 	}
-	return scan.query(r.ctx, rowQuery{collector: r.child, db: r.connection.DB, query: query, visit: visitor.Visit, read: r.read, id: r.child.Id, parent: parent})
+	return scan.query(r.ctx, rowQuery{collector: r.child, db: r.connection.DB, tx: r.connection.Tx, query: query, visit: visitor.Visit, read: r.read, id: r.child.Id, parent: parent})
 }
 
 func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *cache.ParmetrizedQuery, columns []string) error {

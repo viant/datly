@@ -376,6 +376,7 @@ func TestResolvePlan_GeneratesCanonicalViewColumns(t *testing.T) {
 }
 
 func TestResolvePlan_GeneratesNestedRelationViewTypes(t *testing.T) {
+	t.Parallel()
 	products := &spec.View{Name: "Products", Namespace: "p", Source: &spec.ViewSource{Table: "products"},
 		Columns: []*spec.Column{{Name: "id", Type: spec.TypeRef{Name: "int"}}, {Name: "name", Type: spec.TypeRef{Name: "string"}}}}
 	items := &spec.View{Name: "Items", Namespace: "i", Source: &spec.ViewSource{Table: "order_items", SQL: "SELECT * FROM order_items", URI: "queries/items.sql", Controls: &spec.ViewControls{OrderBy: "created_at DESC, id"}},
@@ -429,7 +430,7 @@ func TestResolvePlan_GeneratesNestedRelationViewTypes(t *testing.T) {
 	if _, err = EmitScaffold(generatedDir, plan); err != nil {
 		t.Fatalf("EmitScaffold() error = %v", err)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = rootDir
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("nested generated module does not compile: %v\n%s", runErr, output)
@@ -462,6 +463,7 @@ func TestResolvePlan_GeneratesSiblingRelations(t *testing.T) {
 }
 
 func TestResolvePlan_EmitsExplicitViewTypesAndDestinations(t *testing.T) {
+	t.Parallel()
 	product := &spec.View{Name: "Product", TypeName: "ProductRow", Dest: "products.go", Source: &spec.ViewSource{Table: "products"},
 		Columns: []*spec.Column{{Name: "created_at", Type: spec.TypeRef{Package: "time", Name: "Time"}}}}
 	item := &spec.View{Name: "Item", TypeName: "ItemRow", Source: &spec.ViewSource{Table: "items"}, Relations: []*spec.Relation{
@@ -504,7 +506,7 @@ func TestResolvePlan_EmitsExplicitViewTypesAndDestinations(t *testing.T) {
 		!strings.Contains(string(productsSource), "type ProductRow struct") || !strings.Contains(string(productsSource), `time "time"`) {
 		t.Fatalf("orders source:\n%s\nproducts source:\n%s", ordersSource, productsSource)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = dir
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("split generated views do not compile: %v\n%s", runErr, output)
@@ -1748,6 +1750,7 @@ func TestEmitScaffold_WritesFlatHasMarkerStruct(t *testing.T) {
 }
 
 func TestGeneratePackage_ProducesBuildablePackage(t *testing.T) {
+	t.Parallel()
 	source := `#setting($_ = $route('/v1/api/example/vendors', 'GET'))
 #setting($_ = $input_type('VendorInput'))
 #setting($_ = $output_type('VendorOutput'))
@@ -1777,7 +1780,7 @@ SELECT 1`
 	if result.Plan.Input.Type != "VendorInput" || result.Plan.Output.Type != "VendorOutput" {
 		t.Fatalf("unexpected generated type names: %#v", result.Plan)
 	}
-	cmd := exec.Command("go", "test", "-mod=mod", "./...")
+	cmd := exec.Command("go", "vet", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1786,6 +1789,7 @@ SELECT 1`
 }
 
 func TestGeneratePackageWithLinkedContractsProducesBuildablePackage(t *testing.T) {
+	t.Parallel()
 	type linkedInput struct{}
 	type linkedOutput struct{}
 	root := t.TempDir()
@@ -1826,7 +1830,7 @@ func TestGeneratePackageWithLinkedContractsProducesBuildablePackage(t *testing.T
 			t.Fatalf("linked contract file %s was emitted: %v", name, err)
 		}
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("linked generated package did not compile: %v\n%s", err, output)
@@ -1834,6 +1838,7 @@ func TestGeneratePackageWithLinkedContractsProducesBuildablePackage(t *testing.T
 }
 
 func TestGeneratePackageFromSource_ProducesBuildablePackage(t *testing.T) {
+	t.Parallel()
 	source := `#setting($_ = $route('/v1/api/example/vendors', 'GET'))
 #define($_ = $VendorID<int>(path/vendorID))
 #define($_ = $Data<[]*VendorView>(output/view))
@@ -1852,7 +1857,7 @@ SELECT 1`
 	}
 	assertly.AssertValues(t, "VendorCatalog", result.Plan.ComponentName)
 
-	cmd := exec.Command("go", "test", "-mod=mod", "./...")
+	cmd := exec.Command("go", "vet", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1895,6 +1900,7 @@ SELECT 1`
 }
 
 func TestGeneratePackageFromSource_ImportsQualifiedTimeInputTypes(t *testing.T) {
+	t.Parallel()
 	source := `#setting($_ = $route('/v1/api/example/keywords', 'GET'))
 #set($_ = $KeywordDate<time.Time>(form/keyword_date).Tag('format:"dateFormat=YYYY-MM-DD"').Optional())
 #set($_ = $KeywordFrom<*time.Time>(form/keyword_from).Tag('format:"dateFormat=YYYY-MM-DD"').Optional())
@@ -1938,7 +1944,7 @@ SELECT 1`
 		}
 	}
 
-	cmd := exec.Command("go", "test", "-mod=mod", "./...")
+	cmd := exec.Command("go", "vet", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1982,6 +1988,7 @@ SELECT 1`
 }
 
 func TestGeneratePackageFromSource_NestedPatchProducesBuildablePackage(t *testing.T) {
+	t.Parallel()
 	source := `#setting($_ = $route('/v1/api/example/foos', 'PATCH'))
 #set($_ = $Foos<Foos>(body/).Required())
 #set($_ = $Foos<?>(body/).Output().Tag('anonymous:"true" typeName:"Foos"'))
@@ -2000,7 +2007,7 @@ SELECT 1`
 		t.Fatalf("expected generation result with plan")
 	}
 
-	cmd := exec.Command("go", "test", "-mod=mod", "./...")
+	cmd := exec.Command("go", "vet", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -2009,6 +2016,7 @@ SELECT 1`
 }
 
 func TestGeneratePackageFromSourceWithTypeResolver_UsesTypeContextImports(t *testing.T) {
+	t.Parallel()
 	source := `#setting($_ = $route('/v1/api/example/body', 'POST'))
 #package('example.com/generated/body')
 #import('models','example.com/generated/models')
@@ -2050,7 +2058,7 @@ SELECT 1`
 		t.Fatalf("expected concrete imported type, got:\n%s", content)
 	}
 
-	cmd := exec.Command("go", "test", "-mod=mod", "./...")
+	cmd := exec.Command("go", "vet", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -2059,6 +2067,7 @@ SELECT 1`
 }
 
 func TestGeneratePackageFromSourceWithModuleLookup_UsesTypeContextImports(t *testing.T) {
+	t.Parallel()
 	source := `#setting($_ = $route('/v1/api/example/body', 'POST'))
 #package('example.com/generated/body')
 #import('models','example.com/generated/models')
@@ -2094,7 +2103,7 @@ SELECT 1`
 		t.Fatalf("expected concrete imported type, got:\n%s", content)
 	}
 
-	cmd := exec.Command("go", "test", "-mod=mod", "./...")
+	cmd := exec.Command("go", "vet", "-mod=mod", "./...")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -2290,6 +2299,7 @@ SELECT 1`
 }
 
 func TestGeneratePackageFromSource_DefaultPathUsesDefaultPackageForUnqualifiedNames(t *testing.T) {
+	t.Parallel()
 	source := `#setting($_ = $route('/v1/api/example/body', 'POST'))
 #package('example.com/generated/models')
 #set($_ = $A<?>(body/a).Tag('typeName:"Foo"'))
@@ -2338,7 +2348,7 @@ SELECT 1`
 	if strings.Contains(string(viewBytes), "type Foo struct{}") {
 		t.Fatalf("resolved default-package type leaked a local placeholder:\n%s", viewBytes)
 	}
-	cmd := exec.Command("go", "test", "-mod=mod", "./...")
+	cmd := exec.Command("go", "vet", "-mod=mod", "./...")
 	cmd.Dir = root
 	if output, runErr := cmd.CombinedOutput(); runErr != nil {
 		t.Fatalf("default-package generated module did not compile: %v\n%s", runErr, output)
@@ -2693,6 +2703,7 @@ SELECT 1`
 }
 
 func TestGeneratePackageFromSource_ArrayAggHelperFieldIsUsable(t *testing.T) {
+	t.Parallel()
 	// The generated helper exposes the exact source field slice type.
 	source := "#setting($_ = $route('/v1/api/example/events-agg', 'POST'))\n" +
 		"#import('models','example.com/generated/models')\n" +

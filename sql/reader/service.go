@@ -2,7 +2,6 @@ package reader
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"reflect"
 	"strings"
@@ -87,6 +86,9 @@ func (s *Service) Read(ctx context.Context, session *Session, input any, binder 
 }
 
 func (s *Service) readBound(ctx context.Context, session *Session, input reflect.Value, binder xhandler.Binder, selectors invocationSelectors) (_ any, err error) {
+	if session.SQL != nil && session.SQL.Tx != nil && len(session.ReadCaches) > 0 {
+		return nil, fmt.Errorf("transactional reader cannot use read caches")
+	}
 	root := session.Artifact.Root
 	read := session.rootRead
 	rootSelector := selectors.forView(root.View)
@@ -126,7 +128,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 	if !session.Artifact.DirectOutput && outputType.Kind() == reflect.Ptr {
 		outputType = outputType.Elem()
 	}
-	actual, rootCollector, rootField, rootDest, err := s.readRoot(ctx, session, rootConnection.DB, query, rootBuilderOptions, session.Artifact.OutputViewField, outputType, session.Artifact.DirectOutput)
+	actual, rootCollector, rootField, rootDest, err := s.readRoot(ctx, session, rootConnection, query, rootBuilderOptions, session.Artifact.OutputViewField, outputType, session.Artifact.DirectOutput)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +178,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 	return actual, nil
 }
 
-func (s *Service) readRoot(ctx context.Context, session *Session, db *sql.DB, query *cache.ParmetrizedQuery, builderOptions []rsql.BuilderOption, viewField string, outputType reflect.Type, direct bool) (any, *rcollector.Collector, reflect.Value, reflect.Value, error) {
+func (s *Service) readRoot(ctx context.Context, session *Session, connection dsql.Connection, query *cache.ParmetrizedQuery, builderOptions []rsql.BuilderOption, viewField string, outputType reflect.Type, direct bool) (any, *rcollector.Collector, reflect.Value, reflect.Value, error) {
 	var output reflect.Value
 	if !direct {
 		output = reflect.New(outputType)
@@ -207,7 +209,7 @@ func (s *Service) readRoot(ctx context.Context, session *Session, db *sql.DB, qu
 		}
 	}
 	if root.Partitioner != nil {
-		if err := (partitionRead{service: s, session: session, plan: root, db: db, options: builderOptions, collector: rootCollector, read: session.rootRead}).run(ctx); err != nil {
+		if err := (partitionRead{service: s, session: session, plan: root, db: connection.DB, options: builderOptions, collector: rootCollector, read: session.rootRead}).run(ctx); err != nil {
 			return nil, nil, reflect.Value{}, reflect.Value{}, err
 		}
 		rootCollector.Fetched()
@@ -217,7 +219,7 @@ func (s *Service) readRoot(ctx context.Context, session *Session, db *sql.DB, qu
 	visitor := newRowHookVisitor(ctx, view, rootCollector, rootCollector.Visitor(ctx))
 	visitor.decoder = scan.decoder
 	visitor.evidence = scan.evidence
-	if err := scan.query(ctx, rowQuery{collector: rootCollector, db: db, query: query, visit: visitor.Visit, read: session.rootRead, id: rootCollector.Id}); err != nil {
+	if err := scan.query(ctx, rowQuery{collector: rootCollector, db: connection.DB, tx: connection.Tx, query: query, visit: visitor.Visit, read: session.rootRead, id: rootCollector.Id}); err != nil {
 		return nil, nil, reflect.Value{}, reflect.Value{}, err
 	}
 	rootCollector.Fetched()
@@ -309,6 +311,9 @@ func viewConnection(ctx context.Context, session *Session, plan *ViewPlan) (dsql
 	}
 	if plan == nil || plan.View == nil {
 		return dsql.Connection{}, fmt.Errorf("reader view plan is required")
+	}
+	if session.SQL.Tx != nil && plan.Partitioner != nil {
+		return dsql.Connection{}, fmt.Errorf("transactional reader does not support partitioned view %s", viewName(plan.View))
 	}
 	connection, err := session.SQL.Resolve(ctx, plan.Connector)
 	if err != nil {

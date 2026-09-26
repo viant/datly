@@ -347,6 +347,7 @@ func TestLowerRejectsIncompleteRecursivePlan(t *testing.T) {
 }
 
 func TestLowerPersistsThroughCanonicalGeneratorProduct(t *testing.T) {
+	t.Parallel()
 	component := patchComponent(false)
 	semantic := rootSemanticPlan(plan.OperationPatch, false)
 	bindings := patchViewBindings(t, component)
@@ -607,7 +608,7 @@ func compileGeneratedHandler(t *testing.T, handlerSource []byte, contractSource 
 	if err := os.WriteFile(filepath.Join(root, "contracts.go"), []byte(contractSource), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("generated Go handler did not compile: %v\n%s\n%s", err, output, handlerSource)

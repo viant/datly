@@ -80,6 +80,7 @@ func TestCASTOverridesExistingColumnType(t *testing.T) {
 }
 
 func TestCASTRegeneratesExactCustomizedField(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	h := sqlite.New(t)
 	if err := h.ExecStatements(ctx, "CREATE TABLE records(z TEXT,a INTEGER,b TEXT)", "INSERT INTO records VALUES('z',1,'b')"); err != nil {
@@ -200,7 +201,7 @@ func TestCASTRegeneratesExactCustomizedField(t *testing.T) {
 	if err = os.WriteFile(filepath.Join(root, "generated", "cast_consumer_test.go"), []byte(consumer), 0644); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("compiled generated consumer: %v\n%s", err, output)

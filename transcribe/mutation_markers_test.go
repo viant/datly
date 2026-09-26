@@ -151,11 +151,11 @@ const mutationMarkersRuntime = `
  if err==nil{t.Fatal("cross-parent deletion accepted")}
  db.AssertQuery(t,ctx,sqlite.Query{SQL:"SELECT NAME FROM ITEMS WHERE ID=20"},[]struct{Name string}{{"other child"}})
  // Omitted children do not become deletes, even when a parent is marked.
- _,err=invoke(` + "`" + `{"Data":[{"id":2,"removeMe":true}]}` + "`" + `)
+ _,err=invoke(` + "`" + `{"Data":[{"id":2,"version":0,"removeMe":true}]}` + "`" + `)
  if err==nil{t.Fatal("parent with omitted constrained child unexpectedly deleted")}
- _,err=invoke(` + "`" + `{"Data":[{"id":2,"removeMe":true,"Items":[{"id":20}]}]}` + "`" + `)
+ _,err=invoke(` + "`" + `{"Data":[{"id":2,"version":0,"removeMe":true,"Items":[{"id":20}]}]}` + "`" + `)
  if err==nil{t.Fatal("unflagged supplied child under deleted parent accepted")}
- _,err=invoke(` + "`" + `{"Data":[{"id":2,"removeMe":true,"Items":[{"id":20,"shouldDelete":true}]}]}` + "`" + `)
+ _,err=invoke(` + "`" + `{"Data":[{"id":2,"version":0,"removeMe":true,"Items":[{"id":20,"shouldDelete":true}]}]}` + "`" + `)
  if err!=nil{t.Fatalf("explicit nested delete order: %v",err)}
  var count int;if err=db.DB.QueryRow("SELECT COUNT(*) FROM ORDERS WHERE ID=2").Scan(&count);err!=nil||count!=0{t.Fatal("nested deletion did not execute",err)}
  // Init authors advancement independently; comparison still uses original zero.
