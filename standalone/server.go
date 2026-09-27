@@ -12,22 +12,32 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/viant/bindly/locator"
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/application"
 	"github.com/viant/datly/bootstrap/connector"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/httpserver"
 	mcpserver "github.com/viant/datly/mcp/server"
+	authprovider "github.com/viant/datly/runtime/auth/provider"
+	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/datly/standalone/config"
 	"github.com/viant/mcp/server/auth"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
+	xauth "github.com/viant/xdatly/auth"
 	xcodec "github.com/viant/xdatly/codec"
 )
 
 type Options struct {
 	// Codecs supplies named application codec factories; built-in names are reserved.
 	Codecs map[string]xcodec.Factory
+	// Providers supplies immutable application-owned capabilities to every
+	// linked component. The caller owns their lifecycle.
+	Providers []locator.Provider
+	// DefaultAuthenticator is the application-owned credential implementation.
+	// It may invoke generated components through the current handler session.
+	DefaultAuthenticator xauth.Authenticator
 	// Async supplies trusted authorization and optional AFS callbacks for Config.Jobs.
 	Async     *AsyncOptions
 	Workspace *xmodule.Workspace
@@ -89,7 +99,18 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 	if options.Config.Jobs == nil && options.Async != nil {
 		return nil, fmt.Errorf("linked Async options require Jobs configuration")
 	}
-	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), requireLinked: options.RequireLinked || options.Holders != nil}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
+	providers := append([]locator.Provider(nil), options.Providers...)
+	if options.Config.JwtSigner != nil || options.Config.Cognito != nil || options.Config.Firebase != nil || options.DefaultAuthenticator != nil {
+		service, authErr := authprovider.New(ctx, authprovider.Config{
+			Default: options.DefaultAuthenticator, JWTValidator: options.Config.JWTValidator, JWTSigner: options.Config.JwtSigner,
+			Cognito: options.Config.Cognito, Firebase: options.Config.Firebase,
+		})
+		if authErr != nil {
+			return nil, authErr
+		}
+		providers = append(providers, handlerprovider.Static(xauth.ProviderKind, service))
+	}
+	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), providers: providers, requireLinked: options.RequireLinked || options.Holders != nil}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
 	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
 	if err != nil {
 		return nil, err

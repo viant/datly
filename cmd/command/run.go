@@ -8,17 +8,21 @@ import (
 	"io"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/viant/bindly/locator"
 	"github.com/viant/datly/standalone"
 	"github.com/viant/datly/standalone/config"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
+	xauth "github.com/viant/xdatly/auth"
 )
 
 type Service struct {
-	Workspace *xmodule.Workspace
-	Registry  *x.Registry
-	Holders   []any
-	Version   string
+	Workspace            *xmodule.Workspace
+	Registry             *x.Registry
+	Holders              []any
+	Providers            []locator.Provider
+	DefaultAuthenticator xauth.Authenticator
+	Version              string
 }
 
 func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -57,7 +61,7 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, RequireLinked: true, Diagnostics: stderr})
+	server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

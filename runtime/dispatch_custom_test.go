@@ -18,6 +18,9 @@ import (
 	"github.com/viant/datly/runtime/route"
 	"github.com/viant/datly/spec"
 	sqldml "github.com/viant/datly/sql/dml"
+	"github.com/viant/scy/auth/jwt/signer"
+	"github.com/viant/scy/auth/jwt/verifier"
+	xauth "github.com/viant/xdatly/auth"
 	xexec "github.com/viant/xdatly/exec"
 	xhandler "github.com/viant/xdatly/handler"
 	xresponse "github.com/viant/xdatly/response"
@@ -52,6 +55,55 @@ func (customRouteLogger) Debug(string, ...any) {}
 func (customRouteLogger) Info(string, ...any)  {}
 func (customRouteLogger) Warn(string, ...any)  {}
 func (customRouteLogger) Error(string, ...any) {}
+
+type applicationAuthProvider struct{ ID string }
+
+func (*applicationAuthProvider) Authenticator(xauth.Vendor) (xauth.Authenticator, error) {
+	return nil, nil
+}
+func (*applicationAuthProvider) Signer() *signer.Service     { return nil }
+func (*applicationAuthProvider) Verifier() *verifier.Service { return nil }
+
+type applicationProviderHandler struct {
+	Auth xauth.Auth `bind:"kind=auth,required"`
+}
+
+func (h *applicationProviderHandler) Exec(_ context.Context, _ xhandler.Session, _ *customRouteInput, output *customRouteOutput) error {
+	if h.Auth == nil {
+		return errors.New("static auth provider missing")
+	}
+	output.Tenant = "linked-auth"
+	return nil
+}
+
+func TestRuntimeBindsApplicationProviderToCustomHandler(t *testing.T) {
+	component := &spec.Component{
+		Key:    spec.Key{Kind: spec.KindComponent, Scope: "example.com/demo/custom", Name: "ApplicationProvider"},
+		Name:   "ApplicationProvider",
+		Routes: []*spec.Route{{Method: http.MethodGet, Path: "/application-provider"}},
+	}
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{
+		Component: component, InputType: reflect.TypeOf(customRouteInput{}), OutputType: reflect.TypeOf(customRouteOutput{}),
+	})
+	if err != nil {
+		t.Fatalf("BuildArtifact() error = %v", err)
+	}
+	provider := &applicationAuthProvider{ID: "linked-auth"}
+	runtime, err := NewRuntime([]*registry.RegisteredComponent{{
+		Component: component, Input: artifact.Input, OutputType: reflect.TypeOf(customRouteOutput{}),
+		Handler: customhandler.New[customRouteInput, customRouteOutput](&applicationProviderHandler{}),
+	}}, WithApplicationProviders(handlerprovider.Static(xhandler.ValueKey(xauth.ProviderKind), provider)))
+	if err != nil {
+		t.Fatalf("NewRuntime() error = %v", err)
+	}
+	actual, err := executeTestRoute(t, runtime, context.Background(), testharness.NewRequest(http.MethodGet, "/application-provider"))
+	if err != nil {
+		t.Fatalf("ExecuteRoute() error = %v", err)
+	}
+	if output := actual.(*customRouteOutput); output.Tenant != provider.ID {
+		t.Fatalf("output = %+v, want provider %q", output, provider.ID)
+	}
+}
 
 func TestServiceExecutesRegisteredCustomHandlerThroughUnifiedEngine(t *testing.T) {
 	component := &spec.Component{
@@ -295,8 +347,8 @@ func TestServiceCustomHandlerUsesEngineOwnedDMLCapability(t *testing.T) {
 		Name string `sqlx:"name"`
 	}
 	component := &spec.Component{
-		Key:    spec.Key{Kind: spec.KindComponent, Scope: "example.com/demo/custom", Name: "WriteEvent"},
-		Routes: []*spec.Route{{Method: http.MethodPost, Path: "/v1/api/custom/events"}},
+		Key:        spec.Key{Kind: spec.KindComponent, Scope: "example.com/demo/custom", Name: "WriteEvent"},
+		Routes:     []*spec.Route{{Method: http.MethodPost, Path: "/v1/api/custom/events"}},
 		Parameters: []*spec.Parameter{{Name: "Name", Source: spec.BindSource{Kind: "query", Name: "name"}}},
 	}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeOf(input{}), OutputType: reflect.TypeOf(output{})})

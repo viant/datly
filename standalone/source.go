@@ -10,6 +10,7 @@ import (
 	"time"
 
 	afsurl "github.com/viant/afs/url"
+	"github.com/viant/bindly/locator"
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/application"
 	"github.com/viant/datly/bootstrap"
@@ -19,6 +20,7 @@ import (
 	gateway "github.com/viant/datly/gateway/http"
 	"github.com/viant/datly/mcp"
 	"github.com/viant/datly/report"
+	druntime "github.com/viant/datly/runtime"
 	"github.com/viant/datly/runtime/auth"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/standalone/config"
@@ -40,6 +42,7 @@ type source struct {
 	registry       *x.Registry
 	http           gateway.Config
 	holders        []any
+	providers      []locator.Provider
 	requireLinked  bool
 	logger         *slog.Logger
 }
@@ -85,6 +88,9 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 		return nil, err
 	}
 	built := &application.Build{Index: snapshot, Materializer: &indexedMaterializer{source: s, workspace: workspace, seed: seed}, Resources: assets.Store, Types: types, HTTP: s.http, Version: s.config.Version}
+	if len(s.providers) > 0 {
+		built.RuntimeOptions = append(built.RuntimeOptions, druntime.WithApplicationProviders(s.providers...))
+	}
 	if s.logger != nil {
 		built.BootstrapLogger = s.logger
 	}
@@ -255,6 +261,9 @@ func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (
 		}
 	}
 	built := &application.Build{Resources: resources, Types: discovered.Types, HTTP: s.http, Version: s.config.Version}
+	if len(s.providers) > 0 {
+		built.RuntimeOptions = append(built.RuntimeOptions, druntime.WithApplicationProviders(s.providers...))
+	}
 	if s.config.MCP != nil {
 		built.MCP = mcp.Config{Authorization: s.config.MCP.Authorization, Folders: s.config.MCP.Folders}
 	}

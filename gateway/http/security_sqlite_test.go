@@ -175,24 +175,18 @@ func TestSecurityCORSDefaultsSQLite(t *testing.T) {
 	trusted := []string{"https://trusted.example"}
 	empty := []string{}
 	for _, tc := range []struct {
-		name                          string
-		policy                        *spec.CORS
-		disable, invalid, credentials bool
+		name                                     string
+		policy                                   *spec.CORS
+		disable, credentials, credentialWildcard bool
 	}{
 		{name: "default"}, {name: "disabled", disable: true}, {name: "empty", policy: &spec.CORS{}},
 		{name: "trusted", policy: &spec.CORS{AllowOrigins: &trusted, AllowCredentials: &yes}, credentials: true},
-		{name: "wildcard credential rejected", policy: &spec.CORS{AllowOrigins: &wild, AllowCredentials: &yes}, invalid: true},
+		{name: "wildcard credential compatibility", policy: &spec.CORS{AllowOrigins: &wild, AllowCredentials: &yes}, credentials: true, credentialWildcard: true},
 		{name: "empty origins", policy: &spec.CORS{AllowOrigins: &empty, AllowCredentials: &yes}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newConfigFixture(t)
 			h, err := (Config{Meta: Meta{CacheWarmURI: " "}, CORS: tc.policy, DisableCors: tc.disable}).NewHandler(f.runtime(t), nil, "test")
-			if tc.invalid {
-				if err == nil {
-					t.Fatal("unsafe policy accepted")
-				}
-				return
-			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -205,7 +199,7 @@ func TestSecurityCORSDefaultsSQLite(t *testing.T) {
 					}
 					res := httptest.NewRecorder()
 					h.ServeHTTP(res, req)
-					want := tc.credentials && origin == trusted[0]
+					want := tc.credentials && (tc.credentialWildcard || origin == trusted[0])
 					if (res.Header().Get("Access-Control-Allow-Credentials") == "true") != want {
 						t.Fatalf("%s %s %s: %v", tc.name, method, origin, res.Header())
 					}

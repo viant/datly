@@ -57,6 +57,27 @@ func TestCORSExistingConstructorAndOptions(t *testing.T) {
 	}
 }
 
+func TestCORSCredentialWildcardReflectsOrigin(t *testing.T) {
+	origins := []string{"*"}
+	yes := true
+	policy, err := newCORSPolicy(&spec.CORS{AllowOrigins: &origins, AllowCredentials: &yes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("GET", "/records", nil)
+	request.Header.Set("Origin", "https://browser.example")
+	response := httptest.NewRecorder()
+	if !policy.apply(response, request, "GET", false) {
+		t.Fatal("explicit compatibility policy rejected the origin")
+	}
+	if actual := response.Header().Get("Access-Control-Allow-Origin"); actual != "https://browser.example" {
+		t.Fatalf("allow origin = %q", actual)
+	}
+	if actual := response.Header().Get("Access-Control-Allow-Credentials"); actual != "true" {
+		t.Fatalf("allow credentials = %q", actual)
+	}
+}
+
 func TestCORSConcurrentRoutePolicies(t *testing.T) {
 	f := newConfigFixture(t)
 	getOrigins := []string{"https://get.example"}

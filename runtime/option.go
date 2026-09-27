@@ -27,7 +27,34 @@ type options struct {
 	// not configured the runtime creates and owns the default registry.
 	clientProviders           []locator.Provider
 	clientProvidersConfigured bool
-	remoteMapper              *remotecore.Mapper
+	// applicationProviders are immutable, application-owned capabilities made
+	// available to every component. The application retains their lifecycle.
+	applicationProviders []locator.Provider
+	remoteMapper         *remotecore.Mapper
+}
+
+// WithApplicationProviders supplies immutable application-owned capabilities
+// to every component. Providers remain subordinate to a component's explicit
+// provider of the same kind and are never closed by the runtime.
+func WithApplicationProviders(providers ...locator.Provider) Option {
+	return func(options *options) error {
+		seen := make(map[string]bool, len(providers))
+		for index, provider := range providers {
+			if provider == nil {
+				return fmt.Errorf("application provider at index %d is required", index)
+			}
+			kind := strings.TrimSpace(provider.Kind())
+			if kind == "" {
+				return fmt.Errorf("application provider at index %d has no kind", index)
+			}
+			if seen[kind] {
+				return fmt.Errorf("application provider kind %q is duplicated", kind)
+			}
+			seen[kind] = true
+		}
+		options.applicationProviders = append([]locator.Provider(nil), providers...)
+		return nil
+	}
 }
 
 // WithRemoteMapper supplies the shared mapping helper for remote handlers.
