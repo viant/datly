@@ -19,12 +19,23 @@ const JwtClaim = "JwtClaim"
 // CertURL and RSA public-key resources. Verification policy stays with Scy.
 type Config struct {
 	JWTValidator *verifier.Config
+	ClaimPolicy  *ClaimPolicy
+}
+
+// ClaimPolicy binds a successfully verified JWT to the intended issuer,
+// audience and principal. It is optional so existing Datly deployments retain
+// their current verifier contract until they opt in.
+type ClaimPolicy struct {
+	Issuer         string `json:"Issuer,omitempty" yaml:"Issuer,omitempty"`
+	Audience       string `json:"Audience,omitempty" yaml:"Audience,omitempty"`
+	RequireSubject bool   `json:"RequireSubject,omitempty" yaml:"RequireSubject,omitempty"`
 }
 
 // Service is an application-configured codec factory. Pass it through the
 // existing bootstrap CodecFactory input; only declared JwtClaim inputs use it.
 type Service struct {
 	verifier *verifier.Service
+	policy   ClaimPolicy
 }
 
 func New(ctx context.Context, config *Config) (*Service, error) {
@@ -34,6 +45,14 @@ func New(ctx context.Context, config *Config) (*Service, error) {
 	if config == nil || config.JWTValidator == nil {
 		return nil, fmt.Errorf("JWTValidator configuration is required")
 	}
+	var policy ClaimPolicy
+	if config.ClaimPolicy != nil {
+		policy = *config.ClaimPolicy
+		policy.Issuer, policy.Audience = strings.TrimSpace(policy.Issuer), strings.TrimSpace(policy.Audience)
+		if policy.Issuer == "" && policy.Audience == "" && !policy.RequireSubject {
+			return nil, fmt.Errorf("JWT claim policy requires issuer, audience or subject binding")
+		}
+	}
 	// The verifier builds its immutable key profiles during Init. Copy its
 	// configuration value so later replacement of CertURL cannot retarget it.
 	native := *config.JWTValidator
@@ -41,7 +60,7 @@ func New(ctx context.Context, config *Config) (*Service, error) {
 	if err := service.Init(ctx); err != nil {
 		return nil, fmt.Errorf("initialize JWTValidator: %w", err)
 	}
-	return &Service{verifier: service}, nil
+	return &Service{verifier: service, policy: policy}, nil
 }
 
 func (s *Service) New(config *xcodec.Config, _ ...xcodec.Option) (xcodec.Instance, error) {
@@ -57,11 +76,12 @@ func (s *Service) New(config *xcodec.Config, _ ...xcodec.Option) (xcodec.Instanc
 	if len(config.Args) != 0 {
 		return nil, fmt.Errorf("JwtClaim does not accept transformation arguments")
 	}
-	return &claimsCodec{verifier: s.verifier}, nil
+	return &claimsCodec{verifier: s.verifier, policy: s.policy}, nil
 }
 
 type claimsCodec struct {
 	verifier *verifier.Service
+	policy   ClaimPolicy
 }
 
 func (c *claimsCodec) Value(ctx context.Context, raw any, _ ...xcodec.Option) (any, error) {
@@ -88,6 +108,15 @@ func (c *claimsCodec) Value(ctx context.Context, raw any, _ ...xcodec.Option) (a
 	}
 	if claims == nil {
 		return nil, fmt.Errorf("JWTValidator returned no claims")
+	}
+	if c.policy.Issuer != "" && claims.Issuer != c.policy.Issuer {
+		return nil, fmt.Errorf("JWT issuer does not match the configured policy")
+	}
+	if c.policy.Audience != "" && !claims.VerifyAudience(c.policy.Audience, true) {
+		return nil, fmt.Errorf("JWT audience does not match the configured policy")
+	}
+	if c.policy.RequireSubject && strings.TrimSpace(claims.Subject) == "" {
+		return nil, fmt.Errorf("JWT subject is required by the configured policy")
 	}
 	return claims, nil
 }

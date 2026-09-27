@@ -19,6 +19,7 @@ import (
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
+	"github.com/viant/xunsafe"
 )
 
 var sourceFileExtensions = map[string]bool{
@@ -263,9 +264,14 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 	sort.Strings(packagePaths)
 	linked := linkedRouteTypes(routes)
 	for _, packagePath := range packagePaths {
+		compiled := linkedPackageTypes(packagePath)
 		for _, declared := range module.Packages[packagePath].Types {
 			if declared != nil {
-				declared.ReflectType = linked[packagePath+"."+declared.Name]
+				key := packagePath + "." + declared.Name
+				declared.ReflectType = linked[key]
+				if declared.ReflectType == nil {
+					declared.ReflectType = compiled[declared.Name]
+				}
 			}
 		}
 		if d.Registry != nil {
@@ -327,6 +333,32 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 		}
 	}
 	return selected, loadedPackagePaths, nil
+}
+
+// linkedPackageTypes only attaches Go identities already retained by the
+// executable. AST remains the source of package/type discovery and method
+// declarations; a source-only predicate cannot pass transcription.
+func linkedPackageTypes(packagePath string) map[string]reflect.Type {
+	result := map[string]reflect.Type{}
+	ambiguous := map[string]bool{}
+	for _, candidate := range xunsafe.PackageTypes(packagePath) {
+		for candidate != nil && candidate.Kind() == reflect.Pointer {
+			candidate = candidate.Elem()
+		}
+		if candidate == nil || candidate.PkgPath() != packagePath || candidate.Name() == "" {
+			continue
+		}
+		if ambiguous[candidate.Name()] {
+			continue
+		}
+		if prior := result[candidate.Name()]; prior != nil && prior != candidate {
+			ambiguous[candidate.Name()] = true
+			delete(result, candidate.Name())
+			continue
+		}
+		result[candidate.Name()] = candidate
+	}
+	return result
 }
 
 func linkedRouteTypes(routes []*bootstrap.RouteSource) map[string]reflect.Type {

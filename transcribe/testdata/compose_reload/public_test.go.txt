@@ -67,8 +67,8 @@ func (c composeClient) check(t *testing.T, revision int) {
 	t.Helper()
 	c.schemas(t)
 	observations.Lock()
-	observations.values = nil
-	observations.entered = nil
+	observations.Values = nil
+	observations.Entered = nil
 	observations.Unlock()
 	start := time.Now()
 	data, failed, err := c.call(c.arguments("web"))
@@ -104,7 +104,7 @@ func (c composeClient) check(t *testing.T, revision int) {
 		t.Fatalf("columns=%v body=%s", columns, data)
 	}
 	observations.Lock()
-	events := append([]frameObservation(nil), observations.values...)
+	events := append([]frameObservation(nil), observations.Values...)
 	observations.Unlock()
 	if len(events) != 2 {
 		t.Fatalf("frame observations=%+v", events)

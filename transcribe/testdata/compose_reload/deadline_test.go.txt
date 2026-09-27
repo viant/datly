@@ -31,8 +31,8 @@ func (c composeClient) deadlines(t *testing.T) {
 			defer stop()
 			entered := make(chan struct{}, 1)
 			observations.Lock()
-			observations.values = nil
-			observations.entered = entered
+			observations.Values = nil
+			observations.Entered = entered
 			observations.Unlock()
 			type response struct {
 				data   []byte
@@ -74,8 +74,8 @@ func (c composeClient) deadlines(t *testing.T) {
 				t.Fatalf("caller context lost: %v", elapsed)
 			}
 			observations.Lock()
-			events := append([]frameObservation(nil), observations.values...)
-			observations.entered = nil
+			events := append([]frameObservation(nil), observations.Values...)
+			observations.Entered = nil
 			observations.Unlock()
 			if len(events) != 1 || events[0].Frame.Frame != 1 || !errors.Is(events[0].Err, expected) {
 				t.Fatalf("timeout frame evidence=%+v expected=%v", events, expected)

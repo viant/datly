@@ -88,6 +88,24 @@ func CSV() response.Response {
 
 `WithBuffer` accepts a `*bytes.Buffer` when the application already has one.
 The caller must not mutate shared backing bytes after transferring the response.
+
+For a typed custom component whose HTTP response must set cookies or redirect,
+use an output struct embedding `*response.Buffered`. The custom handler fills
+that field with `response.NewBuffered` and `response.WithStatusCode`,
+`response.WithHeader("Location", target)` and one `response.WithHeader("Set-Cookie", value)`
+per cookie. The HTTP adapter preserves repeated `Set-Cookie` values. Declare
+request data as ordinary typed input fields, for example `kind=cookie` for an
+opaque session ID, `kind=query` for OAuth code/state and `kind=header` for
+Origin. Do not read an ambient `http.Request` or write to `http.ResponseWriter`
+from the component handler. The adapter regression test
+`gateway/http/custom_response_cookie_test.go` verifies these bindings and the
+redirect/cookie response together.
+
+The custom handler can orchestrate a trusted OAuth service, but encrypted token
+persistence should still use a declared Datly writer component (and reader for
+lookup). A custom handler does not turn a separate raw SQL store or another
+runtime into the endpoint's managed transaction.
+
 For already-compressed output, use the response's explicit compression metadata.
 The [HTTP adapter](../gateway/http/handler.go) recognizes `response.Response`
 before ordinary encoding; [writeResponse](../gateway/http/response.go) copies
