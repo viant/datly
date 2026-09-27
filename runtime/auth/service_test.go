@@ -105,3 +105,50 @@ func TestJwtClaimOriginalVerifierConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestJwtClaimPolicyRejectsWrongIssuerAudienceAndMissingSubject(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := &Config{JWTValidator: &verifier.Config{RSA: []*scy.Resource{{URL: "policy-public-key",
+		Data: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: encoded})}}},
+		ClaimPolicy: &ClaimPolicy{Issuer: "https://identity.example", Audience: "studio-web", RequireSubject: true}}
+	service, err := New(context.Background(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := service.New(&xcodec.Config{Body: JwtClaim, SourceType: reflect.TypeFor[string](), DestinationType: reflect.TypeFor[*jwt.Claims]()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range []struct {
+		name, issuer, audience, subject string
+		allowed                         bool
+	}{
+		{"matching identity", "https://identity.example", "studio-web", "alice", true},
+		{"wrong issuer", "https://other.example", "studio-web", "alice", false},
+		{"wrong audience", "https://identity.example", "other-client", "alice", false},
+		{"missing subject", "https://identity.example", "studio-web", "", false},
+	} {
+		t.Run(candidate.name, func(t *testing.T) {
+			payload := jwtv5.MapClaims{"iss": candidate.issuer, "aud": candidate.audience, "sub": candidate.subject,
+				"exp": time.Now().Add(time.Hour).Unix()}
+			value, err := jwtv5.NewWithClaims(jwtv5.SigningMethodRS256, payload).SignedString(key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			claims, err := codec.Value(context.Background(), "Bearer "+value)
+			if candidate.allowed && (err != nil || claims == nil) {
+				t.Fatalf("matching identity rejected: %v", err)
+			}
+			if !candidate.allowed && (err == nil || claims != nil) {
+				t.Fatalf("mismatched identity accepted: %#v", claims)
+			}
+		})
+	}
+}
