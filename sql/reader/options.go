@@ -2,6 +2,7 @@ package reader
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/sql/reader/readmeta"
@@ -26,11 +27,16 @@ type readerOptions struct {
 	collectProjection bool
 }
 
-func newReaderOptions(session *Session, view *data.View) readerOptions {
+func newReaderOptions(session *Session, view *data.View, tx *sql.Tx) readerOptions {
 	if session == nil || view == nil {
 		return readerOptions{}
 	}
-	result := readerOptions{readCache: session.ReadCaches[view], parameters: session.Parameters}
+	result := readerOptions{parameters: session.Parameters}
+	// A transaction reads its own snapshot and writes. Never read or populate
+	// shared caches, and never mutate the session's shared cache configuration.
+	if tx == nil {
+		result.readCache = session.ReadCaches[view]
+	}
 	result.collectProjection = session.CollectProjection
 	result.refreshCache = session.RefreshCache
 	result.cacheOnly = session.CacheOnly

@@ -215,7 +215,7 @@ func (e *outputRelationExecution) read(ctx context.Context, query *cache.Parmetr
 		return outputRead{}, fmt.Errorf("output relation holder must be a struct or pointer to struct, got %s", e.field.Type())
 	}
 	newRow := func() interface{} { return reflect.New(rowType).Interface() }
-	scan := newReaderOptions(e.session, view).rows(newRow, sqlxio.NewResolver().Resolve)
+	scan := newReaderOptions(e.session, view, e.tx).rows(newRow, sqlxio.NewResolver().Resolve)
 	var result outputRead
 	visitor := newRowHookVisitor(ctx, view, nil, nil)
 	visitor.decoder = scan.decoder

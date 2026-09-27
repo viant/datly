@@ -7,6 +7,8 @@ import (
 
 // ReaderOptions are trusted invocation controls, shared by nested reader work.
 // Cache ownership and identity remain with SQLX.
+// Transactional views bypass shared caches, including refresh/writeback, and
+// reject CacheOnly rather than silently falling back to SQL execution.
 type ReaderOptions struct {
 	RefreshCache bool
 	CacheOnly    bool

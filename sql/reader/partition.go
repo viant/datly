@@ -172,7 +172,7 @@ func (p partitionRead) readOne(ctx context.Context, prepared partitionQuery, col
 		matcher.OnSkip = collector.OnSkip
 		matchers = append(matchers, matcher)
 	}
-	scan := newReaderOptions(session, view).rows(collector.NewItem(), unmappedResolver(collector), matchers...)
+	scan := newReaderOptions(session, view, nil).rows(collector.NewItem(), unmappedResolver(collector), matchers...)
 	visitor := newRowHookVisitor(ctx, view, collector, collector.Visitor(ctx))
 	visitor.decoder = scan.decoder
 	visitor.evidence = scan.evidence
