@@ -68,9 +68,6 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if r == nil || r.invoker == nil || r.injector == nil {
 		return nil, fmt.Errorf("runtime component invocation is not configured")
 	}
-	if r.types != nil {
-		ctx = context.WithValue(ctx, typeCatalogContextKey{}, r.types)
-	}
 	if xexec.GetContext(ctx) == nil {
 		ctx = xexec.WithContext(ctx, xexec.New(xexec.WithMethod(request.Target.Route.Method)))
 	}

@@ -23,6 +23,7 @@ import (
 	"github.com/viant/datly/runtime/registry"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/transcribe"
+	"github.com/viant/datly/transcribe/testdata/linkedpredicate"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/schema"
@@ -263,7 +264,7 @@ func TestPublicReload(t *testing.T) {
 				t.Fatal(err)
 			}
 			types := typecatalog.NewCatalog()
-			for _, typ := range []reflect.Type{reflect.TypeOf(Threshold{}), reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{})} {
+			for _, typ := range []reflect.Type{reflect.TypeOf(linkedpredicate.Threshold{}), reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{})} {
 				if err := types.Register(typecatalog.TypeOriginPackage, x.NewType(typ)); err != nil {
 					t.Fatal(err)
 				}

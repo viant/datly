@@ -136,7 +136,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
 	}
 	compiledTypeContext := compileTypeContext(source, component.TypeContext)
-	if err = (readerpredicate.DefinitionCompiler{Context: compiledTypeContext}).Compile(component); err != nil {
+	if err = (readerpredicate.DefinitionCompiler{Context: compiledTypeContext, Catalog: source.Types, RequireAvailable: true}).Compile(component); err != nil {
 		return nil, err
 	}
 	var typeResolver *typecatalog.Resolver

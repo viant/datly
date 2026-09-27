@@ -411,8 +411,13 @@ declare package authority; `security.OrderScope` resolves to
 are also supported, and generated metadata retains the canonical identity. There is no
 `RegisterPredicate("OrderScope", ...)` step. Only one handler type argument is
 accepted; configure dependencies through bound fields instead of extra positional
-DQL arguments. A missing linked type or a type that does not implement the SDK
-interface fails artifact preparation.
+DQL arguments. Transcription now requires the compiled handler type to be
+linked into the transcribing executable and to implement the SDK interface;
+an AST declaration or DQL import alone is insufficient. If the type exists in
+source but is not linked, run `datly link sync` and rebuild that executable.
+The executable predicate plan is still created once when the component is
+materialized; an indexed standalone component may remain lazy until first
+use, but transcription never emits a component with an unlinked predicate.
 
 ### Application handlers
 

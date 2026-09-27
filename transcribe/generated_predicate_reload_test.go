@@ -6,11 +6,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/viant/datly/internal/testharness"
+	"github.com/viant/datly/transcribe/testdata/linkedpredicate"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/x"
 )
 
 // The subprocess links the emitted contracts and authored predicate once. Reload
@@ -29,26 +32,37 @@ func TestGeneratedCustomPredicatePublicReloadSQLite(t *testing.T) {
 			t.Fatal(err)
 		}
 		(testharness.GeneratedModule{Path: module}).Write(t, stage)
+		const predicatePath = "github.com/viant/datly/transcribe/testdata/linkedpredicate"
+		if err := os.MkdirAll(filepath.Join(stage, "records"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(stage, "records", "link.go"), []byte("package records\nimport _ \""+predicatePath+"\"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		catalog := typecatalog.NewCatalog()
+		if err := catalog.Register(typecatalog.TypeOriginPackage, x.NewType(reflect.TypeFor[linkedpredicate.Threshold]())); err != nil {
+			t.Fatal(err)
+		}
 		predicateType := "security.Threshold"
 		if revision == 2 {
-			predicateType = module + "/records.Threshold"
+			predicateType = predicatePath + ".Threshold"
 		}
 		// No #package or persisted DQL: reload must recover the emitted
 		// Go package's destination from its existing ownership manifest.
-		source := &Source{Scope: module + "/records", Name: "Records", Connector: "main", Types: typecatalog.NewCatalog(), Text: fmt.Sprintf(`#import('security', '%s/records')
+		source := &Source{Scope: module + "/records", Name: "Records", Connector: "main", Types: catalog, Text: fmt.Sprintf(`#import('security', '%s')
 #setting($_ = $route('/records','GET'))
 #setting($_ = $mcp('records.query'))
 #define($_ = $Minimum<int>(query/min).WithTag('json:"minimum"').Required().WithStatusCode(422).WithErrorMessage('minimum required').WithPredicate(0,'handler','%s'))
 SELECT id, CAST(records.id AS int) FROM records
 WHERE id <= %d
 ${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("AND")}
-ORDER BY id`, module, predicateType, revision+2)}
+ORDER BY id`, predicatePath, predicateType, revision+2)}
 		compiler := NewCompiler()
 		compiled, err := compiler.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := compiled.Component.Parameters[0].Predicates[0].Args[0]; got != module+"/records.Threshold" {
+		if got := compiled.Component.Parameters[0].Predicates[0].Args[0]; got != predicatePath+".Threshold" {
 			t.Fatalf("compiled predicate authority = %q", got)
 		}
 		input, dir, err := generationInput(stage, "records", compiled)
@@ -79,7 +93,7 @@ ORDER BY id`, module, predicateType, revision+2)}
 				}
 			}
 		}
-		for name, path := range map[string]string{"predicate.go": "testdata/predicate_reload/predicate.go.txt", "reload_test.go": "testdata/predicate_reload/reload_test.go.txt"} {
+		for name, path := range map[string]string{"reload_test.go": "testdata/predicate_reload/reload_test.go.txt"} {
 			data, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatal(err)

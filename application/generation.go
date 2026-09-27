@@ -297,11 +297,6 @@ func (m *Manager) Reload(ctx context.Context, request Request) error {
 	}
 	runtimeOptions := append([]runtime.Option(nil), built.RuntimeOptions...)
 	runtimeOptions = append(runtimeOptions, runtime.WithManagedObservability(m.observation))
-	runtimeTypes := types
-	if built.Types != nil {
-		runtimeTypes = built.Types
-	}
-	runtimeOptions = append(runtimeOptions, runtime.WithTypeCatalog(runtimeTypes))
 	if resources != nil {
 		runtimeOptions = append(runtimeOptions, runtime.WithResources(resources))
 	}
