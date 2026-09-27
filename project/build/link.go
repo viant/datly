@@ -19,8 +19,10 @@ import (
 // operations never rewrite the project's application-owned link package.
 type LinkRequest struct {
 	Dir, Tags string
-	Env       []string
-	Packages  []string
+	// LinkPackage defaults to internal/dependencylink.
+	LinkPackage string
+	Env         []string
+	Packages    []string
 }
 
 type LinkResult struct {
@@ -33,7 +35,7 @@ type linkCandidate struct {
 	hasInit            bool
 }
 
-// SyncLinks adds only missing blank imports to internal/datlylink/link.go.
+// SyncLinks adds only missing blank imports to the configured link file.
 // Runtime component discovery and exposure selection remain unchanged.
 func (Service) SyncLinks(ctx context.Context, request LinkRequest) (*LinkResult, error) {
 	root, err := filepath.Abs(request.Dir)
@@ -47,7 +49,11 @@ func (Service) SyncLinks(ctx context.Context, request LinkRequest) (*LinkResult,
 	if info.Dir != root {
 		return nil, fmt.Errorf("link directory must be the module root: %s", info.Dir)
 	}
-	linkPath := filepath.Join(root, "internal", "datlylink", "link.go")
+	linkPackage, linkName, err := resolveLinkPackage(request.LinkPackage)
+	if err != nil {
+		return nil, err
+	}
+	linkPath := filepath.Join(root, filepath.FromSlash(linkPackage), "link.go")
 	original, err := os.ReadFile(linkPath)
 	if err != nil {
 		return nil, fmt.Errorf("existing project link file is required: %w", err)
@@ -61,7 +67,7 @@ func (Service) SyncLinks(ctx context.Context, request LinkRequest) (*LinkResult,
 		return nil, err
 	}
 	wanted := map[string]*linkCandidate{}
-	err = selection.Workspace().Walk(ctx, []string{"..."}, []string{info.Path + "/cmd/datly", info.Path + "/internal/datlylink"}, func(file xmodule.File) error {
+	err = selection.Workspace().Walk(ctx, []string{"..."}, []string{info.Path + "/cmd/datly", info.Path + "/" + linkPackage}, func(file xmodule.File) error {
 		if !strings.HasSuffix(file.Path, ".go") || strings.HasSuffix(file.Path, "_test.go") ||
 			!strings.HasPrefix(file.ImportPath, info.Path+"/") {
 			return nil
@@ -104,8 +110,8 @@ func (Service) SyncLinks(ctx context.Context, request LinkRequest) (*LinkResult,
 	if err != nil {
 		return nil, err
 	}
-	if file.Name == nil || file.Name.Name != "datlylink" {
-		return nil, fmt.Errorf("link file must declare package datlylink")
+	if file.Name == nil || file.Name.Name != linkName {
+		return nil, fmt.Errorf("link file must declare package %s", linkName)
 	}
 	offset := fset.File(file.Name.End()).Offset(file.Name.End())
 	var imports strings.Builder

@@ -17,12 +17,12 @@ func TestSyncLinksAddsOnlyMissingBlankImports(t *testing.T) {
 	for _, name := range []string{"alpha", "beta"} {
 		writeLinkTestComponent(t, root, name, true)
 	}
-	linkDir := filepath.Join(root, "internal", "datlylink")
+	linkDir := filepath.Join(root, "internal", "dependencylink")
 	if err := os.MkdirAll(linkDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	linkPath := filepath.Join(linkDir, "link.go")
-	original := "// keep this authored comment\npackage datlylink\n\nimport _ \"example.com/linkapp/alpha\"\n\nconst Authored = \"keep\"\n"
+	original := "// keep this authored comment\npackage dependencylink\n\nimport _ \"example.com/linkapp/alpha\"\n\nconst Authored = \"keep\"\n"
 	if err := os.WriteFile(linkPath, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestSyncLinksAddsOnlyMissingBlankImports(t *testing.T) {
 			t.Fatalf("unanchored component did not get type reachability: %s", support)
 		}
 	}
-	probe := `package datlylink
+	probe := `package dependencylink
 import (
     "testing"
     "github.com/viant/datly/bootstrap"
@@ -102,11 +102,36 @@ func TestUnanchoredComponentIsReachable(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(linkDir, "link_probe_test.go"), []byte(probe), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.CommandContext(context.Background(), "go", "test", "./internal/datlylink")
+	command := exec.CommandContext(context.Background(), "go", "test", "./internal/dependencylink")
 	command.Dir = root
 	command.Env = append(os.Environ(), "GOWORK=off")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("linked project did not compile and discover: %v\n%s", err, output)
+	}
+}
+
+func TestSyncLinksUsesConfiguredLegacyPackageWithoutCreatingDefault(t *testing.T) {
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "example.com/legacyapp"}).Write(t, root)
+	writeLinkTestComponent(t, root, "reader", true)
+	dir := filepath.Join(root, "internal", "datlylink")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.go")
+	if err := os.WriteFile(link, []byte("package datlylink\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := (Service{}).SyncLinks(context.Background(), LinkRequest{Dir: root, LinkPackage: "datlylink"})
+	if err != nil || strings.Join(result.Added, ",") != "example.com/legacyapp/reader" {
+		t.Fatalf("custom link sync=%+v err=%v", result, err)
+	}
+	contents, err := os.ReadFile(link)
+	if err != nil || !strings.Contains(string(contents), `_ "example.com/legacyapp/reader"`) {
+		t.Fatalf("custom link file=%s err=%v", contents, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "internal", "dependencylink")); !os.IsNotExist(err) {
+		t.Fatalf("default link package was created: %v", err)
 	}
 }
 

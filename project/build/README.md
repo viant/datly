@@ -8,25 +8,23 @@ Initialize an existing module with `datly init -dir /path/to/app`. A new module
 requires an exact Datly pin or an explicit local mapping. Existing files and Go
 module choices are preserved.
 
-The scaffold contains `cmd/datly`, `internal/datlylink`, `dql`, `generated`,
+The scaffold contains `cmd/datly`, `internal/dependencylink`, `dql`, `generated`,
 `hooks`, `resources`, and `datly.yaml`. DQL must be transcribed before building;
 the build command does not silently regenerate source.
 
 ## User-owned default imports
 
-`internal/datlylink` is application-owned selection policy. The application adds
+`internal/dependencylink` is application-owned selection policy. The application adds
 or removes one blank import for each component package it wants compiled into
 the host:
 
 ```go
-package datlylink
+package dependencylink
 
 import (
 	_ "example.com/app/generated/orders/reader"
 	_ "example.com/app/generated/orders/writer"
 )
-
-func init() {}
 ```
 
 `cmd/datly` blank-imports only this link package. Generated component packages
@@ -39,7 +37,10 @@ declarations to linked concrete types and embedded filesystems.
 Run `datly link sync -dir /path/to/app` explicitly to scan selected project
 packages for actual tagged component holders and predicate/codec interface
 implementations, then add missing blank imports to the existing
-`internal/datlylink/link.go`. `-tags` and optional Go package patterns use the
+`internal/dependencylink/link.go` by default. Use `-link-package internal/<name>`
+with `datly init`, `datly build`, and `datly link sync` for a custom package
+name (including an existing `internal/datlylink`). `-tags` and optional Go
+package patterns use the
 same selection inputs as `datly build`. Sync preserves every existing import
 and authored line, never removes a package, and is idempotent. The scan uses
 Go source/AST, not runtime reflection of unlinked types. If a selected package

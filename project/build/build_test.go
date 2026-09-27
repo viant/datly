@@ -33,7 +33,7 @@ func TestInitializedBinarySQLiteRefresh(t *testing.T) {
 	}
 	(testharness.GeneratedModule{Path: "example.com/buildapp"}).Write(t, app)
 	(testharness.GeneratedModule{Path: "example.com/buildmodel"}).Write(t, model)
-	for _, pair := range [][2]string{{"testdata/app/records", filepath.Join(app, "records")}, {"testdata/app/hooks", filepath.Join(app, "hooks")}, {"testdata/app/datlylink", filepath.Join(app, "internal/datlylink")}, {"testdata/app/models", model}} {
+	for _, pair := range [][2]string{{"testdata/app/records", filepath.Join(app, "records")}, {"testdata/app/hooks", filepath.Join(app, "hooks")}, {"testdata/app/dependencylink", filepath.Join(app, "internal/dependencylink")}, {"testdata/app/models", model}} {
 		if err := os.CopyFS(pair[1], os.DirFS(pair[0])); err != nil {
 			t.Fatal(err)
 		}
@@ -122,8 +122,8 @@ func TestInitializedBinarySQLiteRefresh(t *testing.T) {
 	if err = os.WriteFile(extra, []byte(added), 0644); err != nil {
 		t.Fatal(err)
 	}
-	extraLink := filepath.Join(app, "internal/datlylink/extra.go")
-	linked := "//go:build extra\n\npackage datlylink\nimport _ \"example.com/buildapp/extra\"\nfunc init(){}\n"
+	extraLink := filepath.Join(app, "internal/dependencylink/extra.go")
+	linked := "//go:build extra\n\npackage dependencylink\nimport _ \"example.com/buildapp/extra\"\n"
 	if err = os.WriteFile(extraLink, []byte(linked), 0644); err != nil {
 		t.Fatal(err)
 	}

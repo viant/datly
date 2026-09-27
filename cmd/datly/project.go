@@ -14,6 +14,7 @@ func projectCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	dir := flags.String("dir", ".", "project module root")
+	linkPackage := flags.String("link-package", build.DefaultLinkPackage, "application link package (internal/<name>)")
 	var init build.InitRequest
 	var request build.Request
 	if args[0] == "init" {
@@ -52,9 +53,11 @@ func projectCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 			return 2
 		}
 		init.Dir = *dir
+		init.LinkPackage = *linkPackage
 		err = (build.Service{}).Init(ctx, init)
 	} else {
 		request.Dir = *dir
+		request.LinkPackage = *linkPackage
 		request.Packages = flags.Args()
 		var result *build.Result
 		result, err = (build.Service{}).Build(ctx, request)

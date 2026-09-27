@@ -132,3 +132,50 @@ func TestInitRejectsInvalidExistingModule(t *testing.T) {
 		t.Fatal("invalid module modified")
 	}
 }
+
+func TestInitUsesConfiguredLinkPackageAndRejectsInvalidNames(t *testing.T) {
+	root := t.TempDir()
+	source, err := (testharness.GeneratedModule{}).DependencyDir("github.com/viant/datly")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := build.InitRequest{Dir: root, Module: "example.com/customlink", LinkPackage: "internal/projectlinks",
+		Local: map[string]string{"github.com/viant/datly": source}}
+	if err := (build.Service{}).Init(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	link, err := os.ReadFile(filepath.Join(root, "internal", "projectlinks", "link.go"))
+	if err != nil || string(link) != "package projectlinks\n" {
+		t.Fatalf("custom link file=%q err=%v", link, err)
+	}
+	entrypoint, err := os.ReadFile(filepath.Join(root, "cmd", "datly", "main.go"))
+	if err != nil || !bytes.Contains(entrypoint, []byte(`_ "example.com/customlink/internal/projectlinks"`)) {
+		t.Fatalf("custom entrypoint=%s err=%v", entrypoint, err)
+	}
+	for _, invalid := range []string{"../outside", "internal/a/b", "internal/package", "/tmp/links"} {
+		if err := (build.Service{}).Init(context.Background(), build.InitRequest{Dir: t.TempDir(), Module: "example.com/invalid", LinkPackage: invalid}); err == nil {
+			t.Fatalf("accepted invalid link package %q", invalid)
+		}
+	}
+}
+
+func TestInitPreservesExistingEntrypointWhenLinkPackageDiffers(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/existing\n\ngo 1.25.8\nrequire github.com/viant/datly v1.0.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entrypoint := filepath.Join(root, "cmd", "datly", "main.go")
+	if err := os.MkdirAll(filepath.Dir(entrypoint), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(entrypoint, []byte("package main\nimport _ \"example.com/existing/internal/oldlinks\"\nfunc main(){}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	request := build.InitRequest{Dir: root, Module: "example.com/existing", LinkPackage: "projectlinks"}
+	if err := (build.Service{}).Init(context.Background(), request); err == nil {
+		t.Fatal("accepted a link package the existing executable does not import")
+	}
+	if _, err := os.Stat(filepath.Join(root, "internal", "projectlinks")); !os.IsNotExist(err) {
+		t.Fatalf("unused link package was created: %v", err)
+	}
+}

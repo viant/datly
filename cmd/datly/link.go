@@ -12,12 +12,13 @@ import (
 
 func linkCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "sync" {
-		fmt.Fprintln(stderr, "usage: datly link sync [-dir project] [-tags tags] [Go package patterns]")
+		fmt.Fprintln(stderr, "usage: datly link sync [-dir project] [-link-package internal/dependencylink] [-tags tags] [Go package patterns]")
 		return 2
 	}
 	flags := flag.NewFlagSet("link sync", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	dir := flags.String("dir", ".", "project module root")
+	linkPackage := flags.String("link-package", build.DefaultLinkPackage, "application link package (internal/<name>)")
 	tags := flags.String("tags", "", "Go build tags")
 	if err := flags.Parse(args[1:]); err != nil {
 		if err == flag.ErrHelp {
@@ -25,7 +26,7 @@ func linkCommand(ctx context.Context, args []string, stdout, stderr io.Writer) i
 		}
 		return 2
 	}
-	result, err := (build.Service{}).SyncLinks(ctx, build.LinkRequest{Dir: *dir, Tags: *tags, Packages: flags.Args()})
+	result, err := (build.Service{}).SyncLinks(ctx, build.LinkRequest{Dir: *dir, LinkPackage: *linkPackage, Tags: *tags, Packages: flags.Args()})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
