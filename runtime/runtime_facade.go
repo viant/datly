@@ -112,10 +112,7 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 			}
 		}
 		specs = append(specs, component.Component)
-		entry := *component
-		if reader, ok := entry.Reader.(observedReader); ok {
-			entry.Reader = reader.WithRecorder(observation.Recorder)
-		}
+		entry := registrationWithRecorder(component, observation.Recorder)
 		if entry.Output == nil {
 			var outputErr error
 			entry.Output, outputErr = (output.Compiler{}).Compile(output.CompileInput{Component: component.Component, Type: component.OutputType})
@@ -265,13 +262,13 @@ func (r *Runtime) registeredComponent(ctx context.Context, key spec.Key) (*Regis
 	return r.prepareLoadedComponent(registered)
 }
 
-// prepareLoadedComponent gives every lazy registration the same static
-// capabilities as an eagerly registered component without mutating its loader.
+// prepareLoadedComponent gives every lazy registration the same recorder and
+// static capabilities as an eager registration without mutating its loader.
 func (r *Runtime) prepareLoadedComponent(registered *RegisteredComponent) (*RegisteredComponent, error) {
 	if registered == nil || registered.Component == nil {
 		return nil, fmt.Errorf("loaded component is required")
 	}
-	entry := *registered
+	entry := registrationWithRecorder(registered, r.observability.Recorder)
 	entry.Providers = withDefaultClientProviders(append([]locator.Provider(nil), registered.Providers...), r.defaultProviders)
 	// Static dependencies are runtime-scoped, not request-scoped; a canceled
 	// first lookup must not permanently poison this handler's one-time bind.
@@ -279,6 +276,14 @@ func (r *Runtime) prepareLoadedComponent(registered *RegisteredComponent) (*Regi
 		return nil, fmt.Errorf("component %s handler: %w", entry.Component.Key.String(), err)
 	}
 	return &entry, nil
+}
+
+func registrationWithRecorder(registered *RegisteredComponent, recorder *observability.Recorder) RegisteredComponent {
+	entry := *registered
+	if reader, ok := entry.Reader.(observedReader); ok {
+		entry.Reader = reader.WithRecorder(recorder)
+	}
+	return entry
 }
 
 func bindStaticHandler(ctx context.Context, injector *bindly.Injector, entry *RegisteredComponent) error {
