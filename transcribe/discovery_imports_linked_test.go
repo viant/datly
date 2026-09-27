@@ -86,7 +86,7 @@ func TestDQLImportedLinkedTypesKeepManifestOwnership(t *testing.T) {
 	catalog := typecatalog.NewCatalog()
 	discovery := &dqlPackageDiscovery{workspace: workspace, catalog: catalog}
 	for range 2 {
-		_, err = discovery.loadSource(context.Background(), `#import('auth', '`+linkedImportsModule+`/auth')`)
+		_, err = discovery.loadSource(context.Background(), `#import('auth', '`+linkedImportsModule+`/auth')`, "")
 		require.NoError(t, err)
 		assertLinkedImportMetadata(t, catalog)
 	}
