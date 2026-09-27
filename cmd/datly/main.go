@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	_ "github.com/viant/aerospike"
 	"github.com/viant/datly/cmd/command"
 	"github.com/viant/datly/constant"
 	"io"

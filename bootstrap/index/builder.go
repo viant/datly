@@ -108,7 +108,11 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 			return nil, readErr
 		}
 		prepared := dql.PrepareSource(string(content))
-		component, parseErr := dql.ParsePreparedComponentSource(file.source.PackagePath, strings.TrimSuffix(filepath.Base(file.source.Path), filepath.Ext(file.source.Path)), prepared)
+		authority := file.source.PackagePath
+		if prepared.TypeContext != nil && strings.TrimSpace(prepared.TypeContext.PackagePath) != "" {
+			authority = strings.TrimSpace(prepared.TypeContext.PackagePath)
+		}
+		component, parseErr := dql.ParsePreparedComponentSource(authority, strings.TrimSuffix(filepath.Base(file.source.Path), filepath.Ext(file.source.Path)), prepared)
 		if errors.Is(parseErr, dql.ErrMissingRouteDirective) {
 			continue
 		}
@@ -121,10 +125,13 @@ func (b Builder) Build(ctx context.Context) (*Snapshot, error) {
 			for _, imported := range component.TypeContext.Imports {
 				componentImports = append(componentImports, imported.Package)
 			}
+			if destination := strings.TrimSpace(component.TypeContext.PackagePath); destination != "" && destination != file.source.PackagePath {
+				componentImports = append(componentImports, destination)
+			}
 		}
 		current := drafts[identity]
 		if current == nil {
-			current = &draft{component: component, packages: map[string]bool{file.source.PackagePath: true}, sources: []Source{file.source}, imports: componentImports, overlay: true, warmup: hasComponentWarmupConfiguration(component) || hasDelegatedWarmupTarget(component)}
+			current = &draft{component: component, packages: map[string]bool{file.source.PackagePath: true, authority: true}, sources: []Source{file.source}, imports: componentImports, overlay: true, warmup: hasComponentWarmupConfiguration(component) || hasDelegatedWarmupTarget(component)}
 			drafts[identity] = current
 			continue
 		}

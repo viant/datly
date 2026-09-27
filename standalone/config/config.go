@@ -15,6 +15,9 @@ import (
 	"github.com/viant/datly/runtime/auth"
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/authorization"
+	"github.com/viant/scy/auth/cognito"
+	"github.com/viant/scy/auth/firebase"
+	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
 )
 
@@ -41,6 +44,9 @@ type Config struct {
 	Caches         map[string]*spec.CacheSettings
 	CacheProviders []*CacheProvider
 	JWTValidator   *verifier.Config
+	JwtSigner      *signer.Config
+	Cognito        *cognito.Config
+	Firebase       *firebase.Config
 	JWTClaims      *auth.ClaimPolicy
 	MCP            *MCP
 	RouteURL       string

@@ -88,7 +88,9 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 	if remoteMapper == nil {
 		remoteMapper = remotecore.NewMapper()
 	}
-	defaultProviders := append(append([]locator.Provider(nil), clientProviders...), handlerprovider.Static(rhandler.RemoteMapperCapabilityKey, remoteMapper))
+	defaultProviders := append([]locator.Provider(nil), options.applicationProviders...)
+	defaultProviders = append(defaultProviders, clientProviders...)
+	defaultProviders = append(defaultProviders, handlerprovider.Static(rhandler.RemoteMapperCapabilityKey, remoteMapper))
 	specs := make([]*spec.Component, 0, len(components))
 	registered := make(map[string]*RegisteredComponent, len(components))
 	metadata := make(map[string]*spec.Component, len(components))
