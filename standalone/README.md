@@ -21,6 +21,16 @@ private type dependencies and resource snapshots. DQL changes requiring new
 runtime contract types or generated handlers are rejected. An explicit linked
 `input_type` / `output_type` can retain authored contract authority in an overlay.
 
+Handler predicates referenced by input tags are type dependencies, not additional
+component or resource roots. Run `datly link sync` and rebuild after adding a new
+predicate implementation; no separate predicate `Exports()` list is required.
+Indexed preparation loads its source declarations and available linked identity.
+Eager preparation resolves the referenced compiled type without reading source.
+Source-backed discovery resolves aliases in the field declaration's import scope;
+source-free eager tags must use canonical package/type names (or explicit import
+metadata), not guessed package basenames. Explicit registry authority retains
+precedence. Missing, unlinked, ambiguous, or incompatible predicates still fail.
+
 Report-enabled groupable GET readers register their source, POST `/cube`, and
 opt-in `/cube/compose` endpoints in the same generation. Runtime MCP exposes the
 derived tools when enabled. [Report guidance](../doc/reports.md) covers linked

@@ -53,9 +53,10 @@ func (r ContractResolver) Resolve() (*spec.Component, error) {
 	}
 	resolver := &packageComponentResolver{
 		component: component,
+		types:     r.Types,
 		contracts: []packageContract{
-			{role: inputContract, fields: inputFields},
-			{role: outputContract, fields: outputFields},
+			{role: inputContract, fields: inputFields, descriptor: r.InputType},
+			{role: outputContract, fields: outputFields, descriptor: r.OutputType},
 		},
 	}
 	resolver.indexCanonicalMetadata()
@@ -173,6 +174,7 @@ func (s *RouteSource) componentName() string {
 }
 
 type packageComponentResolver struct {
+	types         *typecatalog.Resolver
 	component     *spec.Component
 	contracts     []packageContract
 	canonical     []*spec.Parameter
@@ -188,6 +190,7 @@ const (
 )
 
 type packageContract struct {
+	descriptor    *x.Type
 	role          contractRole
 	fields        []xshape.Field
 	paramsByField map[string]*spec.Parameter
@@ -288,6 +291,9 @@ func (r *packageComponentResolver) resolveField(contract *packageContract, field
 		}
 		if !contract.role.accepts(param) {
 			return &resolvedContractField{field: field, metadata: metadata}, nil
+		}
+		if err := r.resolveFieldPredicates(contract, field, param); err != nil {
+			return nil, err
 		}
 		r.component.Parameters = append(r.component.Parameters, param)
 	}

@@ -328,6 +328,13 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 			return nil, nil, groupErr
 		}
 		for _, component := range components {
+			resolved, err := component.ResolveDescriptors(resolver)
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := d.loadComponentPredicateDependencies(ctx, workspace, catalog, resolved, resolutionContext); err != nil {
+				return nil, nil, err
+			}
 			identity := packageSourceIdentity(packagePath, component.ComponentName())
 			if selected[identity] != nil {
 				return nil, nil, fmt.Errorf("package component %q has more than one contract authority", identity)

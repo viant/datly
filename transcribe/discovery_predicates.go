@@ -1,11 +1,14 @@
 package transcribe
 
 import (
+	"context"
 	"fmt"
-	"strings"
 
+	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/typecatalog"
+	xmodule "github.com/viant/x/module"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -15,37 +18,36 @@ func collectPredicatePackages(packages map[string]bool, prepared *dql.PreparedSo
 		return nil
 	}
 	typeContext := compileTypeContext(&Source{Scope: scope}, prepared.TypeContext)
-	resolver, err := typecatalog.NewResolver(typecatalog.NewCatalog(), typecatalog.PackageAuthority, typeContext)
+	names, err := readerpredicate.References(&spec.Component{Parameters: prepared.Directives.Params}, typeContext)
 	if err != nil {
 		return err
 	}
-	packagePath := ""
-	if typeContext != nil {
-		packagePath = typeContext.PackagePath
-		if packagePath == "" {
-			packagePath = typeContext.DefaultPackage
+	return addPredicatePackages(packages, names)
+}
+
+func addPredicatePackages(packages map[string]bool, names []string) error {
+	for _, name := range names {
+		path, _, err := (xshape.Resolver{}).CanonicalReference(name)
+		if err != nil {
+			return fmt.Errorf("predicate type %s: %w", name, err)
 		}
-	}
-	for _, param := range prepared.Directives.Params {
-		if param == nil {
-			continue
-		}
-		for _, definition := range param.Predicates {
-			if definition == nil || !strings.EqualFold(strings.TrimSpace(definition.Name), "handler") || len(definition.Args) != 1 {
-				continue
-			}
-			name, err := resolver.CanonicalDeclaration(definition.Args[0], packagePath)
-			if err != nil {
-				return fmt.Errorf("predicate type for %s: %w", param.Name, err)
-			}
-			path, _, err := (xshape.Resolver{}).CanonicalReference(name)
-			if err != nil {
-				return fmt.Errorf("predicate type for %s: %w", param.Name, err)
-			}
-			if path != "" {
-				packages[path] = true
-			}
+		if path != "" {
+			packages[path] = true
 		}
 	}
 	return nil
+}
+
+func (d *Discovery) loadComponentPredicateDependencies(ctx context.Context, workspace *xmodule.Workspace, catalog *typecatalog.Catalog, component *spec.Component, scope *typecatalog.ResolutionContext) error {
+	names, err := readerpredicate.References(component, scope)
+	if err != nil {
+		return err
+	}
+	packages := map[string]bool{}
+	if err := addPredicatePackages(packages, names); err != nil {
+		return err
+	}
+	loader := &dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: d.Registry}
+	_, err = loader.loadImports(ctx, packages)
+	return err
 }

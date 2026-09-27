@@ -117,6 +117,10 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if err = (readerpredicate.DefinitionCompiler{Context: typeContext}).Compile(component); err != nil {
 		return nil, err
 	}
+	c.input.Types, err = linkPredicateTypes(c.input.Types, component, typeContext)
+	if err != nil {
+		return nil, err
+	}
 	input.Component = component
 	effective, err := input.Const.For(component)
 	if err != nil {
