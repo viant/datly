@@ -1073,8 +1073,8 @@ github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07/go.mod h1:kDXzergiv9cbyO7IOYJZWg1U88JhDg3PB6klq9Hg2pA=
-github.com/viant/aerospike v0.4.4 h1:goaX0VaHMuGdvvqct6lvJGDVRY6nSFz2oSnwosLnKKk=
-github.com/viant/aerospike v0.4.4/go.mod h1:mJUBFrJXuuX5JI7TTzlBAv8nipmLl5kHU0DylI0xaP0=
+github.com/viant/aerospike v0.4.5-0.20260927175034-4ea380729969 h1:boCJv+zO6SrkiSgNp10yVICf8erOTNx8swGpH/XTHF4=
+github.com/viant/aerospike v0.4.5-0.20260927175034-4ea380729969/go.mod h1:mJUBFrJXuuX5JI7TTzlBAv8nipmLl5kHU0DylI0xaP0=
 github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861 h1:GAqu0cnUFqBOjwMhh++IHp17Wz2PUnhJP7g956uxKlU=
 github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861/go.mod h1:rScbFd9LJPGTM8HOI8Kjwee0AZ+MZMupAvFpPg+Qdj4=
 github.com/viant/afsc v1.18.0 h1:9GxdDyMlhNhFc+Sdciclymn8/gV+PI8VPER/zEZUdno=
@@ -1123,8 +1123,8 @@ github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8 h1:3zbRaLhr9Egc59mnd
 github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8/go.mod h1:Q/UXviI2Nli8WROEpYd/BELMCSvnulQeyNrbPmMiS/Y=
 github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47 h1:VNpyUuP4Dg0FZ+C7+aAXXDbi+DDu2fSLwbemxu+/gjM=
 github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47/go.mod h1:Ud4v5LGA8uA0EfmuO4H0t0YgAq2FNLnh3ydQUjBdaLI=
-github.com/viant/xdatly v1.0.1-0.20260925011738-7249dcd4bf03 h1:FOw3+5V137h5u2vSCCXo4MQy/7B+lKItCme5UeUjlP0=
-github.com/viant/xdatly v1.0.1-0.20260925011738-7249dcd4bf03/go.mod h1:gEYEgpHrdnUaTflT2KNg6Y5RAEnE9I3cIL8cQhBCxe4=
+github.com/viant/xdatly v1.0.1-0.20260927175016-ff38d5bca9b6 h1:0wyTksc+DM96CeJPJ08Kr/lMfW0O3905w+60OIMvYpI=
+github.com/viant/xdatly v1.0.1-0.20260927175016-ff38d5bca9b6/go.mod h1:ubkUNBQv1if6sPTZCP5Qm9Opf+JZBIAxAWIqHX7U2Mo=
 github.com/viant/xlsy v0.3.1 h1:KwA7PxOTVg+ns4CCPOdfNy5aEA9OUlIByUbuNC9ju0s=
 github.com/viant/xlsy v0.3.1/go.mod h1:RajfF9HkL/PfIxRCvZSubpNlpdMUNDKYZp8C1o3vF4Q=
 github.com/viant/xmlify v0.1.2-0.20260914155716-e525a8788fd0 h1:KOvP8KJgM8+SmrsnPOOnZ6EPhAvivMj7dS/QCfBk++U=
