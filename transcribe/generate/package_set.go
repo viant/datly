@@ -80,13 +80,41 @@ func (s *packageSet) validateWithPolicy(policy GenerationPolicy) error {
 				return err
 			}
 		}
-		if p.ProjectRoot != "" {
+		if p.ExternalHandler != nil && p.ExternalHandler.Build != nil {
+			if err = s.validateSourceHandler(i); err != nil {
+				return err
+			}
+		} else if p.ProjectRoot != "" {
 			if err = s.validatePackage(i); err != nil {
 				return err
 			}
 		}
 	}
+	if len(s.plans) == 1 && s.plans[0].ExternalHandler != nil && s.plans[0].ExternalHandler.Build != nil {
+		return nil // Go's build-selected graph, not an unfiltered AST graph, is authoritative.
+	}
 	return s.validateImports()
+}
+
+func (s *packageSet) validateSourceHandler(index int) error {
+	sources, err := s.sources(index)
+	if err != nil {
+		return err
+	}
+	files := map[string][]byte{}
+	entries, err := os.ReadDir(s.dirs[index])
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") && !strings.HasSuffix(entry.Name(), "_test.go") {
+			files[filepath.Join(s.dirs[index], entry.Name())] = nil
+		}
+	}
+	for name, content := range sources {
+		files[filepath.Join(s.dirs[index], name)] = []byte(content)
+	}
+	return s.plans[index].ExternalHandler.Build.Validate(s.plans[index].Package, files)
 }
 
 // validateEphemeral avoids the persistence preview and its ownership checks.

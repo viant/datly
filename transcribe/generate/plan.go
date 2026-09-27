@@ -11,6 +11,7 @@ import (
 )
 
 type Plan struct {
+	handlerGoFiles []string
 	// Retain source dispatch requirements across intermediate shape planning.
 	lifecycleTargetError error
 	Generation           *spec.GenerationSettings

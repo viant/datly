@@ -43,6 +43,10 @@ func (g Generator) Generate(ctx context.Context, request GenerationRequest) (*Ge
 	var err error
 	if compiled == nil {
 		source := *request.Source
+		if source.BaseDir() == "" && (source.GoBuild == nil || source.GoBuild.Dir == "") {
+			source.GoBuild = source.GoBuild.WithContext(nil)
+			source.GoBuild.Dir = request.Destination
+		}
 		if source.Types == nil {
 			source.Types = typecatalog.NewCatalog()
 		} else {
@@ -76,6 +80,9 @@ func (g Generator) Generate(ctx context.Context, request GenerationRequest) (*Ge
 		return nil, fmt.Errorf("transcribe requires an explicit #package('path/to/package') destination in DQL")
 	}
 	if g.EphemeralOwnership {
+		if h := compiled.ExternalHandler; h != nil && h.Build != nil {
+			return nil, fmt.Errorf("source-authored handler registration requires persistent ownership and destination build validation")
+		}
 		return g.generateEphemeral(ctx, request.Destination, fallback, compiled)
 	}
 	generated, err := g.generate(ctx, request.Destination, fallback, compiled)
@@ -174,7 +181,7 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	operation := strings.ToLower(strings.TrimSpace(g.Operation))
 	if operation == "handler" {
 		if compiled.ExternalHandler == nil || (g.Language != "" && g.Language != HandlerGo) {
-			return nil, fmt.Errorf("handler operation requires an explicitly mapped native Go handler")
+			return nil, fmt.Errorf("handler operation requires an explicit native Go factory or compiled handler mapping")
 		}
 		return NewCompiler().generateCompiledAtWithPolicy(ctx, root, dir, compiled, g.GenerationPolicy)
 	}

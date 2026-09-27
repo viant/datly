@@ -38,6 +38,13 @@ func (d *dqlPackageDiscovery) load(ctx context.Context, files []xmodule.File) ([
 		if err != nil {
 			return nil, err
 		}
+		if header, _, err := dql.ParseHandlerSource(string(content)); err != nil {
+			return nil, err
+		} else if header != nil && header.Factory != "" {
+			// Source-backed factories resolve their imports through Go export
+			// data, not the unfiltered AST/resource discovery path used by SQL.
+			continue
+		}
 		prepared := dql.PrepareSource(string(content))
 		d.collectImports(imports, prepared)
 		if err := collectPredicatePackages(predicates, prepared, file.ImportPath); err != nil {
@@ -48,6 +55,11 @@ func (d *dqlPackageDiscovery) load(ctx context.Context, files []xmodule.File) ([
 }
 
 func (d *dqlPackageDiscovery) loadSource(ctx context.Context, source, scope string) ([]string, error) {
+	if header, _, err := dql.ParseHandlerSource(source); err != nil {
+		return nil, err
+	} else if header != nil && header.Factory != "" {
+		return nil, nil
+	}
 	imports := map[string]bool{}
 	prepared := dql.PrepareSource(source)
 	d.collectImports(imports, prepared)
