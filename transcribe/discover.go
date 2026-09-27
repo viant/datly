@@ -16,6 +16,7 @@ import (
 	packageresources "github.com/viant/datly/bootstrap/resources"
 	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/dql"
+	"github.com/viant/datly/transcribe/gobuild"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
@@ -58,6 +59,7 @@ type Discovery struct {
 	// HandlerBindings supplies application-compiled adapters for legacy
 	// SQL-free handler DQL without loading or invoking constructors.
 	HandlerBindings []*HandlerBinding
+	GoBuild         *gobuild.Context
 }
 
 // Compile discovers and compiles each component source exactly once. Plain SQL
@@ -181,6 +183,7 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		return nil, err
 	}
 	source := &Source{
+		GoBuild:         c.discovery.GoBuild.Clone(),
 		HandlerBindings: c.discovery.HandlerBindings,
 		Const:           c.discovery.Const,
 		Scope:           file.ImportPath,

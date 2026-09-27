@@ -163,11 +163,61 @@ func (p *scaffoldPersistence) Commit() error {
 			return err
 		}
 	}
+	if p.plan != nil && p.plan.ExternalHandler != nil && p.plan.ExternalHandler.Build != nil {
+		if err = p.validateHandlerStage(target, stage); err != nil {
+			return err
+		}
+	}
 	if err = p.swap(target, stage, original, stats); err != nil {
 		return err
 	}
 	committed = true
 	return nil
+}
+
+func (p *scaffoldPersistence) validateHandlerStage(target, stage string) error {
+	files := map[string][]byte{}
+	// Explicit removals are part of the build overlay, not merely absent from
+	// the proposal. Otherwise stale generated files can mask an invalid update.
+	err := filepath.WalkDir(target, func(name string, entry fs.DirEntry, err error) error {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		files[name] = nil
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	err = filepath.WalkDir(stage, func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(stage, name)
+		if err != nil {
+			return err
+		}
+		content, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		files[filepath.Join(target, rel)] = content
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	p.plan.handlerGoFiles, err = p.plan.ExternalHandler.Build.ValidateFiles(p.plan.Package, files)
+	return err
 }
 
 func (p *scaffoldPersistence) Validate() error {

@@ -115,7 +115,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 		}
 		return &dexec.ReadPlan{SQL: query.SQL, Args: append([]any(nil), query.Args...)}, nil
 	}
-	if err := (rootCacheMatcher{session: session, input: input, binder: binder, selectors: selectors, query: query}).apply(ctx); err != nil {
+	if err := (rootCacheMatcher{session: session, input: input, binder: binder, selectors: selectors, query: query}).apply(ctx, rootConnection); err != nil {
 		return nil, err
 	}
 	if session.OutputType == nil {
@@ -212,7 +212,7 @@ func (s *Service) readRoot(ctx context.Context, session *Session, connection dsq
 		rootCollector.Fetched()
 		return reflectOutput(output), rootCollector, rootField, rootDest, nil
 	}
-	scan := newReaderOptions(session, view).rows(rootCollector.NewItem(), unmappedResolver(rootCollector), query)
+	scan := newReaderOptions(session, view, connection.Tx).rows(rootCollector.NewItem(), unmappedResolver(rootCollector), query)
 	visitor := newRowHookVisitor(ctx, view, rootCollector, rootCollector.Visitor(ctx))
 	visitor.decoder = scan.decoder
 	visitor.evidence = scan.evidence
@@ -316,8 +316,8 @@ func viewConnection(ctx context.Context, session *Session, plan *ViewPlan) (dsql
 	if connection.Tx != nil && plan.Partitioner != nil {
 		return dsql.Connection{}, fmt.Errorf("transactional reader does not support partitioned view %s", viewName(plan.View))
 	}
-	if connection.Tx != nil && len(session.ReadCaches) > 0 {
-		return dsql.Connection{}, fmt.Errorf("transactional reader cannot use read caches")
+	if connection.Tx != nil && session.CacheOnly {
+		return dsql.Connection{}, fmt.Errorf("transactional reader cannot use cache-only mode for view %s", viewName(plan.View))
 	}
 	return connection, nil
 }

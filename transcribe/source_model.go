@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/gobuild"
 	"github.com/viant/datly/typecatalog"
 	xdocs "github.com/viant/xdatly/docs"
 )
@@ -49,6 +50,9 @@ type Source struct {
 	// HandlerBindings supplies explicit legacy-to-native factory authority for
 	// SQL-free handler declarations. It is not runtime handler construction.
 	HandlerBindings []*HandlerBinding
+	// GoBuild selects source-authored handler factories. Nil uses the source
+	// directory and inherited Go environment, without compiled-registry fallback.
+	GoBuild *gobuild.Context
 }
 
 func (s *Source) BaseDir() string {

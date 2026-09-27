@@ -6,16 +6,16 @@ import (
 	"strings"
 )
 
-// HandlerHeader is the SQL-free legacy component declaration. Handler adaptation
-// is supplied separately by the application; Type is not a constructor name.
+// HandlerHeader is a SQL-free component declaration. Factory explicitly names a
+// source-backed native constructor; legacy Type requires an application mapping.
 type HandlerHeader struct {
-	URI, Method, Name, Description string
-	Type, InputType, OutputType    string
-	Connector                      string
-	MCPTool, Internal              bool
+	URI, Method, Name, Description       string
+	Type, Factory, InputType, OutputType string
+	Connector                            string
+	MCPTool, Internal                    bool
 }
 
-// ParseHandlerSource recognizes a leading legacy JSON header with a Type.
+// ParseHandlerSource recognizes a leading JSON header with Type or Factory.
 // Unknown header fields are rejected rather than silently losing policy.
 func ParseHandlerSource(source string) (*HandlerHeader, string, error) {
 	text := strings.TrimSpace(source)
@@ -32,12 +32,14 @@ func ParseHandlerSource(source string) (*HandlerHeader, string, error) {
 	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(header), &fields); err != nil {
-		if !strings.Contains(header, `"Type"`) {
+		if !strings.Contains(header, `"Type"`) && !strings.Contains(header, `"Factory"`) {
 			return nil, source, nil
 		}
 		return nil, "", fmt.Errorf("legacy component header: %w", err)
 	}
-	if _, ok := fields["Type"]; !ok {
+	_, hasType := fields["Type"]
+	_, hasFactory := fields["Factory"]
+	if !hasType && !hasFactory {
 		return nil, source, nil
 	}
 	// encoding/json otherwise accepts repeated (including differently cased)
@@ -61,8 +63,8 @@ func ParseHandlerSource(source string) (*HandlerHeader, string, error) {
 	if err := decoder.Decode(&result); err != nil {
 		return nil, "", fmt.Errorf("legacy handler header: %w", err)
 	}
-	if result.URI == "" || result.Method == "" || result.Name == "" || result.Type == "" || result.InputType == "" || result.OutputType == "" {
-		return nil, "", fmt.Errorf("legacy handler requires URI, Method, Name, Type, InputType and OutputType")
+	if result.URI == "" || result.Method == "" || result.Name == "" || (result.Type == "" && result.Factory == "") || result.InputType == "" || result.OutputType == "" {
+		return nil, "", fmt.Errorf("handler requires URI, Method, Name, Type or Factory, InputType and OutputType")
 	}
 	return &result, text[end+2:], nil
 }

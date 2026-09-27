@@ -32,24 +32,61 @@ type dqlPackageDiscovery struct {
 
 func (d *dqlPackageDiscovery) load(ctx context.Context, files []xmodule.File) ([]string, error) {
 	imports := map[string]bool{}
+	predicates := map[string]bool{}
 	for _, file := range files {
 		content, err := os.ReadFile(file.Path)
 		if err != nil {
 			return nil, err
 		}
-		d.collectImports(imports, string(content))
+		if header, _, err := dql.ParseHandlerSource(string(content)); err != nil {
+			return nil, err
+		} else if header != nil && header.Factory != "" {
+			// Source-backed factories resolve their imports through Go export
+			// data, not the unfiltered AST/resource discovery path used by SQL.
+			continue
+		}
+		prepared := dql.PrepareSource(string(content))
+		d.collectImports(imports, prepared)
+		if err := collectPredicatePackages(predicates, prepared, file.ImportPath); err != nil {
+			return nil, fmt.Errorf("predicate dependencies for %s: %w", file.Path, err)
+		}
 	}
-	return d.loadImports(ctx, imports)
+	return d.loadDependencies(ctx, imports, predicates)
 }
 
-func (d *dqlPackageDiscovery) loadSource(ctx context.Context, source string) ([]string, error) {
+func (d *dqlPackageDiscovery) loadSource(ctx context.Context, source, scope string) ([]string, error) {
+	if header, _, err := dql.ParseHandlerSource(source); err != nil {
+		return nil, err
+	} else if header != nil && header.Factory != "" {
+		return nil, nil
+	}
 	imports := map[string]bool{}
-	d.collectImports(imports, source)
-	return d.loadImports(ctx, imports)
+	prepared := dql.PrepareSource(source)
+	d.collectImports(imports, prepared)
+	predicates := map[string]bool{}
+	if err := collectPredicatePackages(predicates, prepared, scope); err != nil {
+		return nil, err
+	}
+	return d.loadDependencies(ctx, imports, predicates)
 }
 
-func (d *dqlPackageDiscovery) collectImports(imports map[string]bool, source string) {
-	prepared := dql.PrepareSource(source)
+func (d *dqlPackageDiscovery) loadDependencies(ctx context.Context, imports, predicates map[string]bool) ([]string, error) {
+	resources, err := d.loadImports(ctx, imports)
+	if err != nil {
+		return nil, err
+	}
+	for _, path := range resources {
+		delete(predicates, path)
+	}
+	// Predicate packages supply type authority only, not resource or component
+	// discovery roots. Explicit DQL imports retain their existing resource role.
+	if _, err = d.loadImports(ctx, predicates); err != nil {
+		return nil, err
+	}
+	return resources, nil
+}
+
+func (d *dqlPackageDiscovery) collectImports(imports map[string]bool, prepared *dql.PreparedSource) {
 	if prepared.TypeContext == nil {
 		return
 	}

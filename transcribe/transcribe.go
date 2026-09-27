@@ -88,6 +88,10 @@ func (c *Compiler) generateCompiledAtWithPolicy(ctx context.Context, rootDir, pa
 }
 
 func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir string, compiled *Result, input gen.Input) (*GeneratedPackage, error) {
+	if h := input.ExternalHandler; h != nil && h.Build != nil {
+		input.ExternalHandler = h.Clone()
+		input.ExternalHandler.Build = h.Build.WithContext(ctx)
+	}
 	pkgDir := filepath.Join(rootDir, packageDir)
 	result, err := gen.New(input).Generate(pkgDir)
 	if err != nil {
@@ -110,7 +114,7 @@ func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir stri
 			return nil, e
 		}
 	}
-	pkg, err := loaderast.LoadPackageFS(ctx, os.DirFS(rootDir), filepath.ToSlash(packageDir))
+	pkg, err := loaderast.LoadPackageFS(ctx, result.Plan.PackageFS(rootDir, filepath.ToSlash(packageDir)), filepath.ToSlash(packageDir))
 	if err != nil {
 		return nil, err
 	}

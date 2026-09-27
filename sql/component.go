@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/txread"
 	sqlconfig "github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/metadata/info"
 )
@@ -135,7 +136,11 @@ func (c *SQLComponent) dialectFor(ctx context.Context, tx *dsql.Tx) (*info.Diale
 	if dialect != nil {
 		return dialect, nil
 	}
-	var err error
+	release, err := txread.Acquire(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if tx != nil {
 		dialect, err = sqlconfig.Dialect(ctx, c.DB, tx)
 	} else {
@@ -162,8 +167,12 @@ func (c *connection) resolveDialect(ctx context.Context, tx *dsql.Tx) (*info.Dia
 	if c.dialect != nil {
 		return c.dialect, nil
 	}
+	release, err := txread.Acquire(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	var dialect *info.Dialect
-	var err error
 	if tx != nil {
 		dialect, err = sqlconfig.Dialect(ctx, c.db, tx)
 	} else {

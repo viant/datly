@@ -5,6 +5,59 @@ native Go handler. `get` remains reader generation; `post`, `put`, and `patch`
 remain mutation generation. The authored HTTP method does not select execution
 semantics.
 
+## Source-Authored Factory
+
+New registrations can declare the native factory directly, without compiling
+that factory or its contracts into the transcription executable:
+
+```sql
+/* {
+  "URI": "/convert", "Method": "POST", "Name": "Convert",
+  "Factory": "example.com/app/conversion.NewConvert",
+  "InputType": "example.com/app/conversion.Input",
+  "OutputType": "example.com/app/conversion.Output",
+  "MCPTool": true
+} */
+#package('example.com/app/generated/convert')
+#setting($_ = $case_format('lc'))
+```
+
+Use `transcribe handler`, or the same discovery/generator API below without
+`HandlerBindings`. `Factory` identifies a handler declaration without `Type`.
+`#package` is mandatory destination authority; constructors and connectors are
+never inferred. Qualified symbols may use explicit DQL import aliases.
+
+Datly uses Go's build-selected export data to validate the actual function and
+contract identities. No reflection fallback, application-wide registry, or
+constructor execution is needed. Contracts resolve to exported nongeneric named
+structs; genuine aliases to those structs are accepted and emitted using their
+underlying named identity. DQL parameter declarations must agree with the source
+contract's bindings, types, and optionality. Remove obsolete declarations after
+auditing their behavior rather than silently dropping them.
+
+`Source.GoBuild` / `Discovery.GoBuild` optionally supplies a `gobuild.Context`
+(`github.com/viant/datly/transcribe/gobuild`) with `Dir`, `Tags`, and environment
+overrides. Otherwise the source directory and inherited Go environment apply.
+Use the same build selection as the application's workspace and deployed binary.
+The Go toolchain and source dependencies must be available. Module/workspace
+replacements, platform and CGO selection remain in effect.
+Automatic and explicit vendoring are preserved; module updates are disabled.
+
+Before publication, Datly builds the staged registration at its final package
+location through a Go file overlay. This includes retained handwritten files and
+planned removals, checks cycles and internal-package visibility, and works before
+the destination exists. Preview and commit both validate; no `go run`, test
+execution, package initialization, or database discovery occurs. Build failures
+leave the generated files and ownership manifest unchanged.
+Metadata reload uses the same build-selected source files as validation.
+Source-authored factories require persistent ownership (`merge` or `overwrite`),
+not `EphemeralOwnership`'s detached-module publication path.
+
+Existing compiled mappings remain supported. If both forms select a legacy
+`Type`, factory, destination, and actual contract identities must agree.
+
+## Legacy Declaration
+
 The SQL-free legacy JSON header can remain unchanged:
 
 ```sql
@@ -79,8 +132,8 @@ Normal manifest ownership, merge/overwrite policies, and staged publication appl
 Choose handler intent in the compiled CLI **before** selecting/opening discovery
 connectors. No `ColumnRefiner` is needed; handler compilation never calls one even
 if supplied. Datly cannot undo a connection that the calling wrapper opened first.
-The CLI syntax is `transcribe handler`; the stock unlinked command cannot adapt
-arbitrary application handlers without compiled mappings.
+The CLI syntax is `transcribe handler`. A legacy `Type` still requires a compiled
+mapping; an explicit source-backed `Factory` does not.
 
 `Source.Connector` / `Discovery.Connector` and the header's `Connector` supply
 explicit runtime metadata only. Nothing defaults to `ci_ads` or any other

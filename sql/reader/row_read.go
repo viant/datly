@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 	"database/sql"
+	"github.com/viant/datly/internal/txread"
 	"github.com/viant/datly/sql/reader/collector"
 
 	sqlxread "github.com/viant/sqlx/io/read"
@@ -58,24 +59,73 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if stmt := reader.Stmt(); stmt != nil {
-			_ = stmt.Close()
-		}
-	}()
-	err = reader.QueryAll(ctx, func(value any) error {
-		delivered++
-		if capture != nil {
-			if err := capture.snapshot(); err != nil {
-				return err
-			}
+	var buffered []any
+	start := 0
+	collectorRows := q.collector != nil
+	if collectorRows {
+		start = q.collector.Len()
+	}
+	visit := func(value any) error {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if err := q.visit(value); err != nil {
 			return err
 		}
 		rows++
 		return nil
-	}, q.query.Args...)
+	}
+	err = func() error {
+		release, err := txread.Acquire(ctx, q.tx)
+		if err != nil {
+			return err
+		}
+		defer release()
+		defer func() {
+			if stmt := reader.Stmt(); stmt != nil {
+				_ = stmt.Close()
+			}
+		}()
+		return reader.QueryAll(ctx, func(value any) error {
+			delivered++
+			if capture != nil {
+				if err := capture.snapshot(); err != nil {
+					return err
+				}
+			}
+			if q.tx == nil {
+				return visit(value)
+			}
+			// Close the transactional cursor before codecs/hooks can invoke another
+			// reader. Ordinary collector rows are already buffered in its destination.
+			if !collectorRows || r.decoder != nil {
+				buffered = append(buffered, value)
+			}
+			return nil
+		}, q.query.Args...)
+	}()
 	queried = true
+	if err == nil && q.tx != nil {
+		for i := 0; i < delivered; i++ {
+			var value any
+			if collectorRows {
+				// Value slices may have reallocated while scanning. Resolve their
+				// final addresses rather than retaining transient allocation pointers.
+				ptr, slice := q.collector.Slice()
+				value = slice.ValuePointerAt(ptr, start+i)
+				if r.decoder != nil {
+					if err = r.decoder.Rebind(buffered[i], value); err != nil {
+						break
+					}
+					value = buffered[i]
+				}
+			} else {
+				value = buffered[i]
+			}
+			if err = visit(value); err != nil {
+				break
+			}
+		}
+	}
 	return err
 }

@@ -16,6 +16,12 @@ func TestParseHandlerSource(t *testing.T) {
 	require.Equal(t, "legacy.Handler", result.Type)
 	require.True(t, result.MCPTool)
 	require.Equal(t, body, remaining)
+	authored := strings.Replace(header, `"Type":"legacy.Handler"`, `"Factory":"example.com/app/convert.New"`, 1)
+	result, remaining, err = ParseHandlerSource("/* " + authored + " */" + body)
+	require.NoError(t, err)
+	require.Equal(t, "example.com/app/convert.New", result.Factory)
+	require.Empty(t, result.Type)
+	require.Equal(t, body, remaining)
 	for _, source := range []string{"SELECT 1", "/* query hint */ SELECT 1", `/* {"URI":"/reader"} */ SELECT 1`, "/* { ordinary sql comment } */ SELECT 1"} {
 		result, remaining, err = ParseHandlerSource(source)
 		require.NoError(t, err)
@@ -28,6 +34,8 @@ func TestParseHandlerSource(t *testing.T) {
 		strings.Replace(header, `"MCPTool":true`, `"UnknownPolicy":true`, 1),
 		strings.Replace(header, `"InputType":"legacy.Input"`, `"InputType":""`, 1),
 		strings.TrimSuffix(header, "}"),
+		strings.TrimSuffix(authored, "}"),
+		strings.Replace(authored, `"Factory":"example.com/app/convert.New"`, `"Factory":""`, 1),
 	} {
 		_, _, err = ParseHandlerSource("/* " + broken + " */")
 		require.Error(t, err, broken)

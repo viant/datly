@@ -55,7 +55,7 @@ func (d *Discovery) CompileSource(ctx context.Context, source *Source) (*Result,
 			return nil, err
 		}
 	}
-	imports, err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: staged.Registry}).loadSource(ctx, source.Text)
+	imports, err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: staged.Registry}).loadSource(ctx, source.Text, source.Scope)
 	if err != nil {
 		return nil, err
 	}

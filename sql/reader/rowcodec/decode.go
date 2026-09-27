@@ -39,6 +39,20 @@ func (d *Decoder) NewRow() any {
 	return row.Interface()
 }
 
+// Rebind points a buffered scan row at its final collector slot after a value
+// slice may have grown. Decode still owns conversion and field assignment.
+func (d *Decoder) Rebind(row, actual any) error {
+	value, target := reflect.ValueOf(row), reflect.ValueOf(actual)
+	if !value.IsValid() || value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Type() != d.plan.scanType {
+		return fmt.Errorf("invalid column codec scan row %T", row)
+	}
+	if !target.IsValid() || target.Kind() != reflect.Pointer || target.IsNil() || target.Type().Elem() != d.plan.modelType {
+		return fmt.Errorf("codec row destination must be *%s", d.plan.modelType)
+	}
+	value.Elem().Field(2).Set(target)
+	return nil
+}
+
 // Observe delegates field identity to SQLX's matcher; no mapping is replaced.
 func (d *Decoder) Observe(columns []sqlxio.Column) error {
 	clear(d.active)

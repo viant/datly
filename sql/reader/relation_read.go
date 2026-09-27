@@ -188,7 +188,7 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 		matcher.Limit = 0
 	}
 	matcher.OnSkip = r.child.OnSkip
-	scan := newReaderOptions(r.session, view).rows(r.child.NewItem(), unmappedResolver(r.child), matcher)
+	scan := newReaderOptions(r.session, view, r.connection.Tx).rows(r.child.NewItem(), unmappedResolver(r.child), matcher)
 	visitor := newRowHookVisitor(r.ctx, view, r.child, r.child.Visitor(r.ctx))
 	visitor.decoder = scan.decoder
 	visitor.evidence = scan.evidence
@@ -204,7 +204,7 @@ func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *c
 		return nil
 	}
 	view := r.plan.View
-	if r.session.ReadCaches[view] == nil || view.Cache == nil {
+	if r.connection.Tx != nil || r.session.ReadCaches[view] == nil || view.Cache == nil {
 		return nil
 	}
 	warmups, err := view.Cache.EffectiveWarmups()

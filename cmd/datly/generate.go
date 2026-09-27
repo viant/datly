@@ -56,7 +56,7 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 	}
 	if *operation == "handler" {
 		if *language != "go" || schema.enabled || schema.driver != "" || schema.dsn != "" {
-			fmt.Fprintln(stderr, "handler registration uses compiled Go bindings, not database column discovery or Velty")
+			fmt.Fprintln(stderr, "handler registration uses Go factories, not database column discovery or Velty")
 			return 2
 		}
 	} else {
