@@ -3,6 +3,8 @@ package reader
 import (
 	"context"
 	"sync"
+
+	"github.com/viant/datly/exec"
 )
 
 // fetchSet bounds independent read jobs and drains every started worker before
@@ -28,7 +30,7 @@ func (s fetchSet) run(ctx context.Context, read func(context.Context, int) error
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if err := read(ctx, index); err != nil {
+			if err := runFetch(ctx, index, read); err != nil {
 				return err
 			}
 		}
@@ -52,7 +54,7 @@ func (s fetchSet) run(ctx context.Context, read func(context.Context, int) error
 				if workCtx.Err() != nil {
 					continue
 				}
-				if err := read(workCtx, index); err != nil {
+				if err := runFetch(workCtx, index, read); err != nil {
 					once.Do(func() { first = err; cancel() })
 				}
 			}
@@ -63,4 +65,15 @@ func (s fetchSet) run(ctx context.Context, read func(context.Context, int) error
 		return first
 	}
 	return ctx.Err()
+}
+
+// Batch and partition jobs may run outside the relation scheduler's goroutine.
+// Recover locally so the owning fetch set can cancel and join every worker.
+func runFetch(ctx context.Context, index int, read func(context.Context, int) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = exec.NewPanicError("reader fetch worker", recovered)
+		}
+	}()
+	return read(ctx, index)
 }
