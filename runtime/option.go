@@ -10,6 +10,7 @@ import (
 	"github.com/viant/bindly/resource"
 	remotecore "github.com/viant/datly/runtime/remote"
 	"github.com/viant/datly/runtime/route"
+	"github.com/viant/datly/typecatalog"
 )
 
 // Option configures application-scoped runtime dependencies.
@@ -28,6 +29,7 @@ type options struct {
 	clientProviders           []locator.Provider
 	clientProvidersConfigured bool
 	remoteMapper              *remotecore.Mapper
+	types                     *typecatalog.Catalog
 }
 
 // WithRemoteMapper supplies the shared mapping helper for remote handlers.

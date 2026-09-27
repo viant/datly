@@ -20,6 +20,7 @@ import (
 	remotecore "github.com/viant/datly/runtime/remote"
 	rroute "github.com/viant/datly/runtime/route"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/typecatalog"
 	xexec "github.com/viant/xdatly/exec"
 )
 
@@ -46,6 +47,7 @@ type Runtime struct {
 	defaultProviders []locator.Provider
 	clients          *clients.Registry
 	ownsClients      bool
+	types            *typecatalog.Catalog
 }
 
 // ComponentLoader materializes one indexed component inside the currently
@@ -69,6 +71,14 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 			if err := configure(options); err != nil {
 				return nil, err
 			}
+		}
+	}
+	var runtimeTypes *typecatalog.Catalog
+	if options.types != nil {
+		var err error
+		runtimeTypes, err = options.types.Clone()
+		if err != nil {
+			return nil, err
 		}
 	}
 	observation := options.managedObservability
@@ -166,6 +176,7 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 		metadata: metadata,
 		invoker:  handlerengine.New(), injector: injector,
 		clientProviders: clientProviders, defaultProviders: defaultProviders, clients: ownedClients, ownsClients: ownedClients != nil,
+		types: runtimeTypes,
 	}, nil
 }
 
