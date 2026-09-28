@@ -46,6 +46,9 @@ func (d *dqlPackageDiscovery) load(ctx context.Context, files []xmodule.File) ([
 			continue
 		}
 		prepared := dql.PrepareSource(string(content))
+		if err := d.loadPreparedCodecs(ctx, prepared, file.ImportPath); err != nil {
+			return nil, err
+		}
 		d.collectImports(imports, prepared)
 		if err := collectPredicatePackages(predicates, prepared, file.ImportPath); err != nil {
 			return nil, fmt.Errorf("predicate dependencies for %s: %w", file.Path, err)
@@ -62,6 +65,9 @@ func (d *dqlPackageDiscovery) loadSource(ctx context.Context, source, scope stri
 	}
 	imports := map[string]bool{}
 	prepared := dql.PrepareSource(source)
+	if err := d.loadPreparedCodecs(ctx, prepared, scope); err != nil {
+		return nil, err
+	}
 	d.collectImports(imports, prepared)
 	predicates := map[string]bool{}
 	if err := collectPredicatePackages(predicates, prepared, scope); err != nil {

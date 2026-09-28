@@ -64,8 +64,11 @@ func New(ctx context.Context, config *Config) (*Service, error) {
 }
 
 func (s *Service) New(config *xcodec.Config, _ ...xcodec.Option) (xcodec.Instance, error) {
-	if config == nil || !strings.EqualFold(strings.TrimSpace(config.Body), JwtClaim) {
+	if config == nil {
 		return nil, fmt.Errorf("expected %s codec configuration", JwtClaim)
+	}
+	if !strings.EqualFold(strings.TrimSpace(config.Body), JwtClaim) {
+		return nil, fmt.Errorf("codec %q is not registered", config.Body)
 	}
 	if s == nil || s.verifier == nil {
 		return nil, fmt.Errorf("JWTValidator is not initialized")

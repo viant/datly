@@ -126,7 +126,14 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, err = NormalizeCodecReferences(component, typeContext); err != nil {
+		return nil, err
+	}
 	factory := newCodecFactory(input.CodecFactory)
+	factory.lookup, err = c.codecTypeLookup(component, typeContext)
+	if err != nil {
+		return nil, err
+	}
 	compiledInput, err := handlercompiler.New(handlercompiler.Input{
 		Component: input.Component, InputType: input.InputType,
 		CodecFactory: factory, Resources: effective.Resources(input.Resources), TypeLookup: c.lookupType,

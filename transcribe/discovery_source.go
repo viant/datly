@@ -77,5 +77,12 @@ func (d *Discovery) CompileSource(ctx context.Context, source *Source) (*Result,
 	if compiledSource.Resources == nil {
 		compiledSource.Resources = resource.New()
 	}
-	return NewCompiler().Compile(ctx, &compiledSource)
+	result, err := NewCompiler().Compile(ctx, &compiledSource)
+	if err != nil {
+		return nil, err
+	}
+	if err := (&dqlPackageDiscovery{workspace: workspace, catalog: result.Source.Types, registry: staged.Registry}).loadCodecDependencies(ctx, result.Component, result.TypeContext); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

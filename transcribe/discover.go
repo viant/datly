@@ -126,7 +126,7 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 		return nil, err
 	}
 	project.Resources = assets.Store
-	compilation := &discoveryCompilation{discovery: d, catalog: catalog, packages: packageSources, resources: assets.Store, defaults: map[string]*resource.Store{}}
+	compilation := &discoveryCompilation{discovery: d, catalog: catalog, packages: packageSources, resources: assets.Store, defaults: map[string]*resource.Store{}, workspace: workspace}
 	compiledPackages := map[string]bool{}
 	for _, file := range files {
 		if assets.IsAsset(file.Path) {
@@ -166,6 +166,7 @@ func (d *Discovery) Generate(ctx context.Context, rootDir string) (*GeneratedPro
 }
 
 type discoveryCompilation struct {
+	workspace *xmodule.Workspace
 	discovery *Discovery
 	catalog   *typecatalog.Catalog
 	packages  map[string]*bootstrap.PackageComponentSource
@@ -203,6 +204,9 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("compile component source %q: %w", file.Path, err)
+	}
+	if err := (&dqlPackageDiscovery{workspace: c.workspace, catalog: result.Source.Types, registry: c.discovery.Registry}).loadCodecDependencies(ctx, result.Component, result.TypeContext, result.Source.LinkedInputType, result.Source.LinkedOutputType); err != nil {
+		return nil, err
 	}
 	return result, nil
 }
@@ -333,6 +337,9 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 				return nil, nil, err
 			}
 			if err := d.loadComponentPredicateDependencies(ctx, workspace, catalog, resolved, resolutionContext); err != nil {
+				return nil, nil, err
+			}
+			if err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: d.Registry}).loadCodecDependencies(ctx, resolved, resolutionContext); err != nil {
 				return nil, nil, err
 			}
 			identity := packageSourceIdentity(packagePath, component.ComponentName())

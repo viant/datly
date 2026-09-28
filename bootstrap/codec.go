@@ -12,9 +12,10 @@ import (
 type codecFactory struct {
 	builtins map[string]xcodec.Factory
 	fallback xcodec.Factory
+	lookup   func(string) (reflect.Type, error)
 }
 
-func newCodecFactory(fallback xcodec.Factory) xcodec.Factory {
+func newCodecFactory(fallback xcodec.Factory) *codecFactory {
 	return &codecFactory{
 		builtins: map[string]xcodec.Factory{structqlcodec.Name: structqlcodec.Factory{}},
 		fallback: fallback,
@@ -31,7 +32,11 @@ func (f *codecFactory) New(config *xcodec.Config, options ...xcodec.Option) (xco
 		copy.Body = name
 		return factory.New(&copy, options...)
 	}
-	if lookup := xcodec.NewOptions(options).LookupType; lookup != nil {
+	lookup := f.lookup
+	if lookup == nil {
+		lookup = xcodec.NewOptions(options).LookupType
+	}
+	if lookup != nil {
 		typeOf, err := lookup(strings.TrimSpace(config.Body))
 		if err != nil {
 			return nil, fmt.Errorf("resolve codec type %q: %w", config.Body, err)

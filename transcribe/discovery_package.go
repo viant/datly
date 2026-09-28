@@ -36,6 +36,9 @@ func (c *discoveryCompilation) compilePackages(ctx context.Context, project *Pro
 		if err != nil {
 			return fmt.Errorf("compile package component %q: %w", identity, err)
 		}
+		if err := (&dqlPackageDiscovery{workspace: c.workspace, catalog: result.Source.Types, registry: c.discovery.Registry}).loadCodecDependencies(ctx, result.Component, result.TypeContext, result.Source.LinkedInputType, result.Source.LinkedOutputType); err != nil {
+			return err
+		}
 		project.Components = append(project.Components, result)
 	}
 	return nil

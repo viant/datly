@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/viant/datly/bootstrap"
 	routecompiler "github.com/viant/datly/bootstrap/routes"
 	"path"
 	"strings"
@@ -204,6 +205,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if err := resolveQuerySelectorViews(component); err != nil {
 		return nil, err
 	}
+	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
+		return nil, err
+	}
 	var declaredViews map[string]*spec.View
 	if declarations != nil {
 		declaredViews = declarations.viewsByParam
@@ -236,6 +240,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			return nil, err
 		}
 	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources); err != nil {
+		return nil, err
+	}
+	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
 		return nil, err
 	}
 	enrichDescription(ctx, component, source.Docs)
