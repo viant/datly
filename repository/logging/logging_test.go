@@ -256,3 +256,83 @@ func TestLog_RedactsAuditAndTraceErrorsBeforeEmission(t *testing.T) {
 	assert.Contains(t, logged, "[TRACE]")
 	assert.Contains(t, logged, redactedValue)
 }
+
+func TestShouldAuditURI(t *testing.T) {
+	enabled := true
+	disabled := false
+
+	cases := []struct {
+		name   string
+		config *Config
+		uri    string
+		want   bool
+	}{
+		{
+			name:   "default excludes meta metric scrapes",
+			config: &Config{},
+			uri:    "/v1/api/meta/metric/mdp/adorder/operation/foo/recent",
+			want:   false,
+		},
+		{
+			name:   "default excludes meta status",
+			config: &Config{},
+			uri:    "/v1/api/meta/status",
+			want:   false,
+		},
+		{
+			name:   "default keeps business routes",
+			config: &Config{},
+			uri:    "/v1/api/mdp/kpiperf/produce",
+			want:   true,
+		},
+		{
+			name:   "strips query before prefix match",
+			config: &Config{},
+			uri:    "/v1/api/meta/metric/x?foo=1",
+			want:   false,
+		},
+		{
+			name:   "EnableAudit false disables all",
+			config: &Config{EnableAudit: &disabled},
+			uri:    "/v1/api/mdp/kpiperf/produce",
+			want:   false,
+		},
+		{
+			name:   "empty exclude list audits meta",
+			config: &Config{EnableAudit: &enabled, AuditExcludeURIPrefixes: []string{}},
+			uri:    "/v1/api/meta/metric/x",
+			want:   true,
+		},
+		{
+			name:   "custom exclude prefix",
+			config: &Config{AuditExcludeURIPrefixes: []string{"/v1/api/mdp/internal/"}},
+			uri:    "/v1/api/mdp/internal/health",
+			want:   false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tc.config.ShouldAuditURI(tc.uri))
+		})
+	}
+}
+
+func TestLog_SkipsMetaAudit(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+
+	execCtx := exec.NewContext("GET", "/v1/api/meta/metric/mdp/adorder/operation/foo/recent", nil, "")
+	Log(&Config{}, execCtx)
+
+	require.NoError(t, w.Close())
+	os.Stdout = oldStdout
+	defer r.Close()
+
+	var output bytes.Buffer
+	_, err = io.Copy(&output, r)
+	require.NoError(t, err)
+	assert.NotContains(t, output.String(), "[AUDIT]")
+}

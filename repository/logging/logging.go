@@ -18,7 +18,7 @@ func Log(config *Config, execContext *exec.Context) {
 	if !includeSQL {
 		snap.Metrics = snap.Metrics.HideMetrics()
 	}
-	if config.IsAuditEnabled() {
+	if config.ShouldAuditURI(execContext.URI) {
 		data := safeMarshal("EXECCONTEXT", snap)
 		fmt.Println("[AUDIT]", string(data))
 	}
