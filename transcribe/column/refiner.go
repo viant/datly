@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/constant"
+	"github.com/viant/tagly/tags"
 	"io/fs"
 	"reflect"
 	"strings"
@@ -562,6 +563,17 @@ func mergeColumns(base, discovered []*spec.Column) []*spec.Column {
 			continue
 		}
 		cloned := column.Clone()
+		// DQL tag roles are authored metadata, not connector-discovered defaults.
+		// An explicit canonical flag takes precedence when both are present.
+		if cloned.Groupable == nil {
+			if tag := tags.NewTags(strings.ReplaceAll(strings.TrimSpace(cloned.Tag), `\"`, `"`)).Lookup("groupable"); tag != nil {
+				value := strings.TrimSpace(string(tag.Values))
+				if strings.EqualFold(value, "true") || strings.EqualFold(value, "false") {
+					groupable := strings.EqualFold(value, "true")
+					cloned.Groupable = &groupable
+				}
+			}
+		}
 		key := strings.ToLower(strings.TrimSpace(column.Name))
 		fresh := byName[key]
 		if fresh == nil && column.Source != "" {
