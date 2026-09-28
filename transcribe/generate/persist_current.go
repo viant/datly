@@ -201,8 +201,14 @@ func (p *scaffoldPersistence) matchesCurrentDeclarations(name string, content []
 			return false
 		}
 		previous, declarations, err := legacySourceDeclarations(content)
-		if err != nil || previous.Package != current.Package || len(declarations) == 0 {
+		if err != nil || previous.Package != current.Package {
 			return false
+		}
+		if len(declarations) == 0 {
+			// Package/comment-only support is still a current generated artifact.
+			// Legacy component evidence is checked by the caller; reject import-only
+			// authored files and never let an empty file stand in for real declarations.
+			return len(expected) == 0 && len(previous.Imports) == 0 && len(current.Imports) == 0
 		}
 		for declaration := range declarations {
 			if !expected[declaration] {

@@ -54,7 +54,10 @@ Regenerate once using the existing DQL destinations before changing filenames.
 Old input/output/view/component scaffold comments identify existing generated
 code. For older support/resource files without a standard header, the existing
 component holder and matching current Go AST declarations establish the upgrade
-at the declared destination. Regeneration adds the standard generated header and
+at the declared destination. Receiver methods are matched by canonical receiver
+and signature, including setter-only files. Package/comment-only support files
+can match a current package-only artifact; imports, initializers and unrelated
+application declarations are excluded. Regeneration adds the standard generated header and
 removes the legacy sidecar. No application file needs to be edited for migration.
 Subsequent filename changes retire the component's old generated artifacts.
 

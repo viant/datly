@@ -201,3 +201,39 @@ func TestLegacyMethodOnlyArtifactUpgrade(t *testing.T) {
 		})
 	}
 }
+
+func TestLegacyPackageOnlySupportUpgrade(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		upgrade      bool
+	}{
+		{"old support comment", "// The generated writer actions are defined in entities.go.", true},
+		{"package only", "", true},
+		{"authored import", `import _ "fmt"`, false},
+		{"authored initializer", `func init(){}`, false},
+		{"authored declaration", `const ApplicationOwned=true`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			plan := &Plan{ComponentName: "Records", RouterDest: "router.go", Input: generatedContract("Input", "input.go"), Output: generatedContract("Output", "output.go")}
+			plan.Settings.Mutation = "patch"
+			_, err := EmitScaffold(dir, plan)
+			require.NoError(t, err)
+			path := filepath.Join(dir, "actions.go")
+			old := "package records\n" + tc.source + "\n"
+			require.NoError(t, os.WriteFile(path, []byte(old), 0644))
+			_, err = EmitScaffold(dir, plan)
+			if tc.upgrade {
+				require.NoError(t, err)
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				require.Equal(t, "Records", generatedOwner(data))
+			} else {
+				require.ErrorContains(t, err, "unowned package file")
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				require.Equal(t, old, string(data))
+			}
+		})
+	}
+}

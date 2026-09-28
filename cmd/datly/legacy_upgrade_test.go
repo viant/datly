@@ -16,12 +16,12 @@ import (
 	xshape "github.com/viant/x/shape"
 )
 
-func TestLegacyReaderUpgradeWithoutManifest(t *testing.T) {
+func TestLegacyComponentUpgradeWithoutManifest(t *testing.T) {
 	type usecase struct {
-		name string
-		cli  bool
+		name, operation string
+		cli             bool
 	}
-	for _, tc := range []usecase{{"CLI", true}, {"API", false}} {
+	for _, tc := range []usecase{{"GET/CLI", "get", true}, {"GET/API", "get", false}, {"POST/CLI", "post", true}, {"POST/API", "post", false}, {"PUT/CLI", "put", true}, {"PUT/API", "put", false}, {"PATCH/CLI", "patch", true}, {"PATCH/API", "patch", false}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			root := t.TempDir()
@@ -29,7 +29,7 @@ func TestLegacyReaderUpgradeWithoutManifest(t *testing.T) {
 			(testharness.GeneratedModule{Path: module}).Write(t, root)
 			require.NoError(t, os.MkdirAll(filepath.Join(root, "source"), 0755))
 			require.NoError(t, os.MkdirAll(filepath.Join(root, "contracts"), 0755))
-			linked := "package contracts\ntype Key string\n"
+			linked := "package contracts\ntype Key = string\n"
 			linkedPath := filepath.Join(root, "contracts", "key.go")
 			require.NoError(t, os.WriteFile(linkedPath, []byte(linked), 0644))
 			source := `#package('records')
@@ -41,9 +41,13 @@ func TestLegacyReaderUpgradeWithoutManifest(t *testing.T) {
 #define($_ = $ID<int>(query/id).Optional())
 #define($_ = $ApiKey<contracts.Key>(header/X-Api-Key).Optional())
 #define($_ = $Data<[]*Record>(output/view))
-SELECT r.id,r.name,type(r,'Record'),CAST(r.id AS int),CAST(r.name AS *string)
+SELECT r.id,r.name,type(r,'Record'),CAST(r.id AS int),CAST(r.name AS *string),tag(r.id,'sqlx:"id,primaryKey"')
 FROM records r`
-			require.NoError(t, os.WriteFile(filepath.Join(root, "source", "api_key.dql"), []byte(source), 0644))
+			source = strings.Replace(source, "'/records','GET'", "'/records','"+strings.ToUpper(tc.operation)+"'", 1)
+			if tc.operation != "get" {
+				source = strings.Replace(source, "(output/view)", "(output/body)", 1)
+			}
+			require.NoError(t, os.WriteFile(filepath.Join(root, "source", "legacy_reader.dql"), []byte(source), 0644))
 			request := func() transcribe.GenerationRequest {
 				t.Helper()
 				project, err := (&transcribe.Discovery{BaseDir: root, Include: []string{module + "/source"}}).Compile(ctx)
@@ -51,7 +55,7 @@ FROM records r`
 				require.Len(t, project.Components, 1)
 				return transcribe.GenerationRequest{Compiled: project.Components[0], Destination: root}
 			}
-			seed, err := (transcribe.Generator{Operation: "get"}).Generate(ctx, request())
+			seed, err := (transcribe.Generator{Operation: tc.operation}).Generate(ctx, request())
 			require.NoError(t, err)
 			dir := filepath.Join(root, "records")
 			// Hydrate the old native output layout: scaffold comments and holder/embed
@@ -79,11 +83,20 @@ FROM records r`
 			require.Contains(t, string(data), "SetID(")
 			require.Contains(t, string(data), "SetApiKey(")
 			require.NotContains(t, string(data), "Code generated")
+			if tc.operation != "get" {
+				// Previous generators emitted these support roles with comments only.
+				actions := filepath.Join(dir, "actions.go")
+				require.NoError(t, os.WriteFile(actions, []byte("package records\n\n// The generated writer actions are defined in entities.go.\n"), 0644))
+				empty, err := (xshape.SourceParser{}).ParseFile(actions)
+				require.NoError(t, err)
+				require.Empty(t, empty.Declarations)
+				require.Empty(t, empty.Imports)
+			}
 			hooks := "package records\nimport \\\"context\\\"\nvar ApplicationInitCalls int\nfunc(*ApiKeyInput)Init(context.Context)error{ApplicationInitCalls++;return nil}\n"
 			hooks = strings.ReplaceAll(hooks, `\"`, `"`)
 			hookPath := filepath.Join(dir, "hooks.go")
 			require.NoError(t, os.WriteFile(hookPath, []byte(hooks), 0644))
-			runtime := strings.NewReplacer("HOLDER", seed.Result.Plan.HolderName(), "RecordsInput", "ApiKeyInput", "RecordsOutput", "ApiKeyOutput", "OPERATION", "get", "METHOD", "GET").Replace(manifestfree.RuntimeSource)
+			runtime := strings.NewReplacer("HOLDER", seed.Result.Plan.HolderName(), "RecordsInput", "ApiKeyInput", "RecordsOutput", "ApiKeyOutput", "OPERATION", tc.operation, "METHOD", strings.ToUpper(tc.operation)).Replace(manifestfree.RuntimeSource)
 			runtime = strings.Replace(runtime, "import (", "import (\n \\\""+module+"/contracts\\\"", 1)
 			runtime = strings.ReplaceAll(runtime, `\"`, `"`)
 			runtime += `
@@ -97,9 +110,9 @@ func TestLegacySetters(t *testing.T){
 			for attempt := 0; attempt < 2; attempt++ {
 				if tc.cli {
 					var out, diagnostic bytes.Buffer
-					require.Equal(t, 0, generationCommand(ctx, []string{"transcribe", "get", "-dir", root, module + "/source"}, &out, &diagnostic), diagnostic.String())
+					require.Equal(t, 0, generationCommand(ctx, []string{"transcribe", tc.operation, "-dir", root, module + "/source"}, &out, &diagnostic), diagnostic.String())
 				} else {
-					_, err = (transcribe.Generator{Operation: "get"}).Generate(ctx, request())
+					_, err = (transcribe.Generator{Operation: tc.operation}).Generate(ctx, request())
 					require.NoError(t, err)
 				}
 				for _, path := range generatedGo {
