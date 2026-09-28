@@ -82,7 +82,21 @@ func resolveProjectedLinks(view *data.View, links data.Links, rewrite bool) (err
 			continue
 		}
 		matched := false
-		reference := link.Column
+		sqlColumn := link.Column
+		for _, metadata := range view.Columns {
+			if metadata == nil || metadata.Column == "" || (!strings.EqualFold(metadata.Name, link.Column) && !strings.EqualFold(metadata.Name, link.Field)) {
+				continue
+			}
+			found, _, err := projection.HasOutput(metadata.Column)
+			if err != nil {
+				return err
+			}
+			if found {
+				sqlColumn = metadata.Column
+				break
+			}
+		}
+		reference := sqlColumn
 		if link.Namespace != "" {
 			reference = link.Namespace + "." + reference
 		}
@@ -92,13 +106,13 @@ func resolveProjectedLinks(view *data.View, links data.Links, rewrite bool) (err
 			if parseErr == nil && len(parts) == 1 && link.Namespace != "" {
 				sourceReference = link.Namespace + "." + sourceReference
 			}
-			if !column.MatchesOutput(link.Column) && !(dsql.ProjectionNames{sourceReference}).Matches(reference) {
+			if !column.MatchesOutput(sqlColumn) && !(dsql.ProjectionNames{sourceReference}).Matches(reference) {
 				continue
 			}
 			if parseErr != nil || len(parts) == 0 || len(parts) > 2 {
 				// Parent collectors consume the projected value itself. Only a
 				// child predicate requires a direct source-column expression.
-				if !rewrite && column.MatchesOutput(link.Column) {
+				if !rewrite && column.MatchesOutput(sqlColumn) {
 					matched = true
 					break
 				}

@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/internal/testharness"
+	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
@@ -57,17 +59,35 @@ JOIN (${embed:meta/ci_publisher.sql}) publisher ON publisher.ID=site.PUBLISHER_I
 	require.NoError(t, err)
 	input, _, err := generationInput(root, "records", compiled)
 	require.NoError(t, err)
+	vendorViews := map[string]*spec.View{}
+	var inspect func(*spec.View)
+	inspect = func(view *spec.View) {
+		if view == nil {
+			return
+		}
+		if view.Namespace == "site" || view.Namespace == "publisher" {
+			vendorViews[view.Namespace] = view
+			require.NotContains(t, view.Source.SQL, "AS SITE_NAME")
+			require.NotContains(t, view.Source.SQL, "AS PUBLISHER_NAME")
+			require.NotContains(t, view.Source.SQL, "AS PUBLISHER_ID")
+			t.Logf("%s SQL: %s", view.Namespace, view.Source.SQL)
+		}
+		for _, relation := range view.Relations {
+			inspect(relation.View)
+		}
+	}
+	inspect(compiled.Component.RootView)
 	plan, err := gen.New(input).Plan()
 	require.NoError(t, err)
 	type expected struct {
-		field, physical, alias, query string
-		value                         any
+		field, physical, alias, namespace string
+		value                             any
 	}
 	require.NoError(t, db.ExecStatements(ctx, "INSERT INTO CI_SITE VALUES(5,'site-alpha',7)", "INSERT INTO CI_PUBLISHER VALUES(7,'publisher-alpha')"))
 	for _, want := range []expected{
-		{"SiteName", "NAME", "SITE_NAME", "SELECT NAME AS SITE_NAME FROM CI_SITE", "site-alpha"},
-		{"PublisherId", "ID", "PUBLISHER_ID", "SELECT ID AS PUBLISHER_ID FROM CI_PUBLISHER", 7},
-		{"PublisherName", "NAME", "PUBLISHER_NAME", "SELECT NAME AS PUBLISHER_NAME FROM CI_PUBLISHER", "publisher-alpha"},
+		{"SiteName", "NAME", "SITE_NAME", "site", "site-alpha"},
+		{"PublisherId", "ID", "PUBLISHER_ID", "publisher", 7},
+		{"PublisherName", "NAME", "PUBLISHER_NAME", "publisher", "publisher-alpha"},
 	} {
 		found := false
 		for _, view := range plan.Views {
@@ -79,17 +99,46 @@ JOIN (${embed:meta/ci_publisher.sql}) publisher ON publisher.ID=site.PUBLISHER_I
 				raw := reflect.StructTag(field.Tag).Get("sqlx")
 				mappings := strings.Split(strings.Split(raw, ",")[0], "|")
 				require.Equal(t, want.physical, mappings[0], "%s: %s", field.Name, field.Tag)
-				require.Contains(t, mappings, want.alias, "%s query emits its exact SQL alias", field.Name)
+				require.Equal(t, []string{want.physical}, mappings, "outer configuration alias must not become a SQL result alias")
 				t.Logf("%s: %s", field.Name, field.Tag)
-				// Hydrate an aliased query column using the exact generated SQLX tag.
-				// This proves that preserving the physical mapping also reads the alias.
-				rowType := reflect.StructOf([]reflect.StructField{{Name: field.Name, Type: reflect.TypeOf(want.value), Tag: reflect.StructTag(field.Tag)}})
-				reader, err := sqlxread.New(ctx, db.DB, want.query, func() any { return reflect.New(rowType).Interface() })
+				// Execute the actual compiler-produced vendor query, including its
+				// backing columns and embedded inner SQL. No artificial AS is introduced.
+				source := vendorViews[want.namespace].Source.Clone()
+				require.NoError(t, dsql.ResolveSource(want.namespace, source, resources))
+				var fields []reflect.StructField
+				for _, generated := range view.Fields {
+					if generated.RelationHolder {
+						continue
+					}
+					base := strings.TrimPrefix(generated.Type, "*")
+					var typ reflect.Type
+					switch base {
+					case "int":
+						typ = reflect.TypeOf(int(0))
+					case "int64":
+						typ = reflect.TypeOf(int64(0))
+					case "string":
+						typ = reflect.TypeOf("")
+					default:
+						t.Fatalf("unexpected fixture type %s", generated.Type)
+					}
+					if strings.HasPrefix(generated.Type, "*") {
+						typ = reflect.PointerTo(typ)
+					}
+					fields = append(fields, reflect.StructField{Name: generated.Name, Type: typ, Tag: reflect.StructTag(generated.Tag)})
+				}
+				rowType := reflect.StructOf(fields)
+				reader, err := sqlxread.New(ctx, db.DB, source.SQL, func() any { return reflect.New(rowType).Interface() })
 				require.NoError(t, err)
 				count := 0
 				err = reader.QueryAll(ctx, func(value any) error {
 					count++
-					require.Equal(t, want.value, reflect.ValueOf(value).Elem().FieldByName(field.Name).Interface())
+					actual := reflect.ValueOf(value).Elem().FieldByName(field.Name)
+					if actual.Kind() == reflect.Pointer {
+						require.False(t, actual.IsNil())
+						actual = actual.Elem()
+					}
+					require.EqualValues(t, want.value, actual.Interface())
 					return nil
 				})
 				if reader.Stmt() != nil {

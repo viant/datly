@@ -1,15 +1,19 @@
 # Named view projection authority
 
 The outer DQL SELECT list defines each named view's output. The read compiler
-partitions native sqlparser projection items by canonical namespace and preserves
-SQL expressions and output aliases in the independently executable sources. It
+partitions native sqlparser projection items by canonical namespace. An outer
+scalar alias such as `site.NAME AS SITE_NAME` is configuration for the Go field:
+`SiteName` maps to the vendor result column `NAME` with `sqlx:"NAME"`. It is not
+copied into the independently executable SQL as an `AS SITE_NAME` expression.
+Aliases authored inside a view's SQL remain SQL result aliases. Their result
+names continue to use native SQLX mapping and source-lineage rules. It
 never flattens the nested DB SQL or replaces a restricted SQL source with its
 Table metadata. Outer root filters, ordering and limits retain their scope.
 Unknown projection namespaces fail explicitly. Outer multi-view UNION and
 DISTINCT remain unsupported rather than changing their row semantics.
 
 Unselected ordinary fields disappear from generated row and presence shapes
-through the existing ownership-controlled persistence path. Relation holders
+through the current manifest-free generation path. Relation holders
 and roles remain. For an outer projection over a named root source, an unlisted
 named SQL child retains only matching and identity backing fields. A table-root
 read retains each unlisted child's own SQL projection; explicit child selections
@@ -20,13 +24,13 @@ source lineage prove that the named source already exposes it. Keys absent from
 an inner projection, computed keys, ambiguous identities and grouped/set source
 semantics do not grant authority to broaden that source.
 
-Names and storage mapping are distinct: SQL output aliases remain canonical
-column names, while established direct lineage supplies physical DML columns.
-SQLX's existing alternative mappings carry exact aliases that differ from Go
-field spelling, keeping the physical column first. No local row mapper is used.
-After source resources resolve, the reader compiler maps a relation's SQL side
-to its native projection source expression; its typed output field stays intact.
-This includes aliases declared inside a named source.
+Names and storage mapping are distinct: outer scalar aliases rename Go fields,
+while their Source metadata and SQLX tags retain the original view output name.
+For an inner SQL alias, established direct lineage supplies physical DML columns
+and SQLX alternative mappings retain the actual aliased result name. No local row
+mapper is used. Relation SQL predicates use actual source/result columns; the
+collector keeps the renamed Go-field identity. This also handles an outer rename
+of a column that is already aliased inside the named source.
 
 Standalone annotations target projected outputs before backing fields are
 inserted. Removed/renamed physical CAST, tag and invariant targets fail. Explicitly typed transient logical fields still require a corresponding
@@ -35,10 +39,10 @@ Wildcard physical CAST and invariant targets are also checked by SQLX discovery.
 Quoted StructQL FROM paths use native identifier decoding so generated child key
 helpers resolve the actual child rather than a same-named parent field.
 
-An exact generated relation `on` tag may follow canonical output aliases only
-when its prior type/tag still match the manifest and its child type is unchanged.
-Other relation tags, source/destination authority, cardinality migration checks,
-authored edits and staged publication retain their existing protections.
+Generated relation tags follow the current DQL graph on regeneration. Separate
+application hooks and linked contracts remain authoritative; edited generated
+files are replaceable. Staged publication preserves the previous package on
+validation failure.
 
 The original Datly shape compiler's canonical view declarations and internal
 projection-column tags are the reference for ownership. This implementation

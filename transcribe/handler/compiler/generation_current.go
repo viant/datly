@@ -74,7 +74,8 @@ func (b *inputGeneration) addCurrent(view *spec.View, body string, path []string
 		source := key.Field
 		if output := outputs[strings.ToLower(strings.TrimSpace(key.Source))]; output != "" {
 			alias = typecatalog.FieldName(output)
-			source = alias
+			// StructQL reads the entity Go field; the destination alias names
+			// the current SQL output. An outer field-only rename can differ.
 			if !strings.EqualFold(strings.TrimSpace(output), strings.TrimSpace(key.Source)) {
 				aliased = append(aliased, alias)
 			}
@@ -165,7 +166,8 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 			if !strings.EqualFold(strings.TrimSpace(name), physical) {
 				directTableRead = false
 			}
-			col.Name = name
+			// Preserve the entity Go-field name on Current; only the SQL label
+			// is selected below and recorded in its SQLX read mapping.
 			// The entity may keep a derived relation key transient so it never
 			// becomes a DML column. Its generated Current carrier is a read shape,
 			// however, and must scan the projected alias for matching/linking.

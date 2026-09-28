@@ -47,3 +47,18 @@ func TestRelationProjectionSourceScope(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigurationFieldRenameUsesVendorRelationColumn(t *testing.T) {
+	child := &data.View{Spec: spec.View{Name: "Items", Namespace: "items", Source: &spec.ViewSource{SQL: `SELECT items.ORDER_ID FROM (SELECT ORDER_ID FROM ITEMS) items`}}, Columns: []*data.Column{{Name: "ParentKey", Column: "ORDER_ID", Tag: `sqlx:"ORDER_ID"`}}}
+	link := data.NewLink("items", "ParentKey", "ParentKey")
+	root := &data.View{Relations: []*data.Relation{{Name: "Items", Of: &data.RelationRef{View: child, On: data.Links{link}}}}}
+	if err := resolveRelationProjections(root); err != nil {
+		t.Fatal(err)
+	}
+	if link.Field != "ParentKey" || link.Column != "ORDER_ID" || link.OutputColumn() != "ORDER_ID" {
+		t.Fatalf("logical field / vendor SQL mapping: %+v", link)
+	}
+	if err := resolveRelationProjections(root); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -294,6 +294,11 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 		}
 		output := normalizedName(column.Name)
 		sourceName, ok := lineage.direct[output]
+		if !ok && column.Source != "" {
+			// A configuration-only outer rename keeps the original SQL output in
+			// Source; prove its lineage before applying physical table constraints.
+			sourceName, ok = lineage.direct[normalizedName(column.Source)]
+		}
 		if !ok && lineage.wildcard && !lineage.blocked[output] {
 			sourceName = output
 			ok = sourceName != ""

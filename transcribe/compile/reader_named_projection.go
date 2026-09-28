@@ -2,18 +2,22 @@ package compile
 
 import (
 	"fmt"
-	sqlio "github.com/viant/sqlx/io"
 	"reflect"
 	"strings"
+
+	sqlio "github.com/viant/sqlx/io"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
+	"github.com/viant/tagly/tags"
 )
 
 // readViewProjection partitions the authored outer list by canonical namespace.
-// It retains source AST expressions and aliases; it never rewrites an inner
+// Outer scalar aliases rename Go fields; executable projections keep the source
+// column label. Expressions and aliases inside the source SQL remain intact.
+// It retains source AST expressions; it never rewrites an inner
 // query or substitutes its table for SQL. Missing matching columns are internal
 // backing fields, using the same contract as explicit star exclusions.
 func readViewProjection(parsed *query.Select, root, view *spec.View) (query.List, error) {
@@ -59,9 +63,50 @@ func readViewProjection(parsed *query.Select, root, view *spec.View) (query.List
 		if column.Expression == "" {
 			direct[strings.ToLower(projectionColumnName(column.Name))] = append(direct[strings.ToLower(projectionColumnName(column.Name))], column.Identity())
 		}
-		result = append(result, item)
+		projected := item
+		if item.Alias != "" && column.Expression == "" {
+			// This SELECT describes the component shape, not a vendor SQL alias.
+			// Record the Go name against the independently executed source output.
+			var metadata *spec.Column
+			for _, existing := range view.Columns {
+				if existing != nil && strings.EqualFold(existing.Name, item.Alias) {
+					metadata = existing
+					break
+				}
+			}
+			if metadata == nil {
+				metadata = &spec.Column{Name: item.Alias}
+				view.Columns = append(view.Columns, metadata)
+			}
+			metadata.Source = column.Name
+			if reflect.StructTag(metadata.Tag).Get(sqlio.TagSqlx) == "" {
+				parsedTags := tags.NewTags(metadata.Tag)
+				parsedTags.Set(sqlio.TagSqlx, column.Name)
+				metadata.Tag = parsedTags.Stringify()
+			}
+			copy := *item
+			copy.Alias = ""
+			copy.Raw = ""
+			projected = &copy
+		}
+		result = append(result, projected)
 	}
 	if wildcard {
+		// A field rename over a wildcard must not select the same SQL column twice.
+		var filtered query.List
+		for _, item := range result {
+			if _, star := projectionStar(item); star {
+				filtered = append(filtered, item)
+				continue
+			}
+			column := sqlparser.NewColumn(item)
+			if column.Expression == "" {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		result = filtered
+
 		if len(result) == 1 {
 			return nil, nil
 		}

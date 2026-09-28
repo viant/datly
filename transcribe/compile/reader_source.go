@@ -16,8 +16,27 @@ import (
 // root executable source. Each canonical relation already owns its parser-
 // derived child table or subquery and is read independently by the reader.
 func decomposeReadSources(parsed *query.Select, root *spec.View, frame TemplateFrame) (bool, error) {
-	if parsed == nil || root == nil || len(root.Relations) == 0 {
+	if parsed == nil || root == nil {
 		return false, nil
+	}
+	if len(root.Relations) == 0 {
+		table, _, err := sqlparser.SourceTable(parsed.From.X)
+		if err != nil {
+			return false, err
+		}
+		if table != "" && !referencesCTE(parsed.From.X, parsed.WithSelects) {
+			return false, nil
+		}
+		renamed := false
+		for _, item := range parsed.List {
+			if item != nil && item.Alias != "" && sqlparser.NewColumn(item).Expression == "" {
+				renamed = true
+				break
+			}
+		}
+		if !renamed {
+			return false, nil
+		}
 	}
 	if parsed.Union != nil || strings.EqualFold(strings.TrimSpace(parsed.Kind), "DISTINCT") {
 		return false, &Error{Code: CodeRelationUnsupported, Cause: fmt.Errorf("multi-view read declarations cannot use an outer UNION or DISTINCT")}
