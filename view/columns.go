@@ -208,7 +208,14 @@ func NewColumns(columns sqlparser.Columns, config map[string]*ColumnConfig) Colu
 		if ok {
 			if columnConfig.Alias != "" {
 				item.Name = columnConfig.Alias
-				item.Tag += fmt.Sprintf(` sqlx:"%v"`, columnConfig.Name)
+				sqlxName := strings.TrimSpace(columnConfig.Name)
+				if sqlxName == "" {
+					sqlxName = name
+				}
+				if !strings.EqualFold(sqlxName, columnConfig.Alias) {
+					sqlxName += "|" + columnConfig.Alias
+				}
+				item.Tag += fmt.Sprintf(` sqlx:"%v"`, sqlxName)
 			}
 		}
 		name = item.Identity()
