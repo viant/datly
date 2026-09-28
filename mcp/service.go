@@ -32,6 +32,10 @@ type Config struct {
 	// MCP tools. The compiler merges it into schema.Tool.Meta without allowing
 	// a host to replace the tool name or input/output contract.
 	ToolMetadata func(context.Context, exec.ComponentTarget) (map[string]interface{}, error)
+	// Catalog callbacks authorize metadata independently of execution. They are
+	// evaluated for the request's pinned generation, never from skill frontmatter.
+	AuthorizeCatalogTool     func(context.Context, exec.ComponentTarget, string) error
+	AuthorizeCatalogResource func(context.Context, string, string) error
 	// Indexed publishes tool identities without eager component contracts.
 	Indexed []*spec.Component
 	Loader  ComponentLoader
@@ -46,12 +50,14 @@ type ComponentRouteResolver interface {
 }
 
 type Service struct {
-	catalog           *Catalog
-	registry          *mcpserver.Registry
-	resources         *mcpresource.Handler
-	policy            *authorization.Policy
-	lazy              *lazyCatalog
-	authorizeResource func(context.Context, string) error
+	catalog                  *Catalog
+	registry                 *mcpserver.Registry
+	resources                *mcpresource.Handler
+	policy                   *authorization.Policy
+	lazy                     *lazyCatalog
+	authorizeResource        func(context.Context, string) error
+	authorizeCatalogTool     func(context.Context, exec.ComponentTarget, string) error
+	authorizeCatalogResource func(context.Context, string, string) error
 }
 
 func (s *Service) ReadResource(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {

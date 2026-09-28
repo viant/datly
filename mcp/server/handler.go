@@ -101,6 +101,13 @@ func (h *Handler) ListTools(ctx context.Context, request *jsonrpc.TypedRequest[*
 	}
 	result, protocolErr := h.DefaultHandler.ListTools(ctx, request)
 	if result != nil {
+		visible := result.Tools[:0]
+		for _, entry := range result.Tools {
+			if authorizeCatalogTool(ctx, h.service, entry.Name, "discover") == nil && authorizeCatalogTool(ctx, h.service, entry.Name, "describe") == nil {
+				visible = append(visible, entry)
+			}
+		}
+		result.Tools = visible
 		sort.SliceStable(result.Tools, func(i, j int) bool { return result.Tools[i].Name < result.Tools[j].Name })
 	}
 	return result, protocolErr
@@ -114,6 +121,13 @@ func (h *Handler) ListResources(ctx context.Context, request *jsonrpc.TypedReque
 	defer releasePinned(ctx)
 	result, protocolErr := h.DefaultHandler.ListResources(ctx, request)
 	if result != nil {
+		visible := result.Resources[:0]
+		for _, entry := range result.Resources {
+			if authorizeCatalogResource(ctx, h.service, entry.Uri, "discover") == nil && authorizeCatalogResource(ctx, h.service, entry.Uri, "describe") == nil {
+				visible = append(visible, entry)
+			}
+		}
+		result.Resources = visible
 		sort.SliceStable(result.Resources, func(i, j int) bool { return result.Resources[i].Uri < result.Resources[j].Uri })
 	}
 	return result, protocolErr
@@ -127,6 +141,13 @@ func (h *Handler) ListResourceTemplates(ctx context.Context, request *jsonrpc.Ty
 	defer releasePinned(ctx)
 	result, protocolErr := h.DefaultHandler.ListResourceTemplates(ctx, request)
 	if result != nil {
+		visible := result.ResourceTemplates[:0]
+		for _, entry := range result.ResourceTemplates {
+			if authorizeCatalogResource(ctx, h.service, entry.UriTemplate, "discover") == nil && authorizeCatalogResource(ctx, h.service, entry.UriTemplate, "describe") == nil {
+				visible = append(visible, entry)
+			}
+		}
+		result.ResourceTemplates = visible
 		sort.SliceStable(result.ResourceTemplates, func(i, j int) bool {
 			return result.ResourceTemplates[i].UriTemplate < result.ResourceTemplates[j].UriTemplate
 		})
@@ -142,6 +163,14 @@ func (h *Handler) ReadResource(ctx context.Context, request *jsonrpc.TypedReques
 	defer releasePinned(ctx)
 	if request == nil {
 		return h.service.ReadResource(h.withContext(ctx), nil)
+	}
+	if request.Request == nil {
+		return nil, jsonrpc.NewInvalidParamsError("resource request required", nil)
+	}
+	if guard, ok := h.service.(interface {
+		AuthorizeResourceRead(context.Context, string) error
+	}); ok && guard.AuthorizeResourceRead(ctx, request.Request.Params.Uri) != nil {
+		return nil, jsonrpc.NewInvalidRequest("MCP resource authorization denied", nil)
 	}
 	if result, err, ok := h.Registry.ReadStaticSkillResource(ctx, request.Request); ok {
 		return result, err

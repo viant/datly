@@ -38,7 +38,11 @@ type skillGetToolOutput struct {
 	CacheScope string       `json:"cacheScope"`
 }
 
-func registerSkillToolBridge(registry *mcpserver.Registry) error {
+func registerSkillToolBridge(registry *mcpserver.Registry, callbacks ...func(context.Context, string, string) error) error {
+	var authorize func(context.Context, string, string) error
+	if len(callbacks) > 0 {
+		authorize = callbacks[0]
+	}
 	if registry == nil || !registry.ImplementsSkills() {
 		return nil
 	}
@@ -47,17 +51,31 @@ func registerSkillToolBridge(registry *mcpserver.Registry) error {
 			return fmt.Errorf("MCP skill compatibility tool %q conflicts with an authored tool", name)
 		}
 	}
-	if err := mcpserver.RegisterTool[skillListToolInput, skillListToolOutput](registry, SkillListTool, "List published MCP skills for clients without the Skills extension.", func(_ context.Context, _ skillListToolInput) (*schema.CallToolResult, *jsonrpc.Error) {
-		return structuredSkillToolResult(skillListToolOutput{ResultType: string(schema.ResultTypeComplete), Skills: registry.ListRegisteredSkills(), TTLMillis: 0, CacheScope: "private"})
+	if err := mcpserver.RegisterTool[skillListToolInput, skillListToolOutput](registry, SkillListTool, "List published MCP skills for clients without the Skills extension.", func(ctx context.Context, input skillListToolInput) (*schema.CallToolResult, *jsonrpc.Error) {
+		result, err := listVisibleSkills(ctx, registry, authorize, input.Cursor)
+		if err != nil {
+			return nil, err
+		}
+		return structuredSkillToolResult(skillListToolOutput{ResultType: string(schema.ResultTypeComplete), Skills: result.Skills, NextCursor: result.NextCursor, TTLMillis: 0, CacheScope: "private"})
 	}); err != nil {
 		return err
 	}
-	return mcpserver.RegisterTool[skillGetToolInput, skillGetToolOutput](registry, SkillGetTool, "Get one published MCP skill manifest by its SKILL.md URI.", func(_ context.Context, input skillGetToolInput) (*schema.CallToolResult, *jsonrpc.Error) {
+	return mcpserver.RegisterTool[skillGetToolInput, skillGetToolOutput](registry, SkillGetTool, "Get one published MCP skill manifest by its SKILL.md URI.", func(ctx context.Context, input skillGetToolInput) (*schema.CallToolResult, *jsonrpc.Error) {
 		if input.URI == "" {
 			return nil, jsonrpc.NewInvalidParamsError("skill URI is required", nil)
 		}
 		for _, entry := range registry.ListRegisteredSkills() {
 			if entry.Uri == input.URI {
+				if authorize != nil {
+					if authorize(ctx, entry.Uri, "describe") != nil {
+						return nil, jsonrpc.NewInvalidParamsError("unknown skill URI", nil)
+					}
+					for _, file := range entry.Resources.Files {
+						if authorize(ctx, file.Uri, "describe") != nil {
+							return nil, jsonrpc.NewInvalidParamsError("unknown skill URI", nil)
+						}
+					}
+				}
 				return structuredSkillToolResult(skillGetToolOutput{ResultType: string(schema.ResultTypeComplete), Skill: entry, TTLMillis: 0, CacheScope: "private"})
 			}
 		}
