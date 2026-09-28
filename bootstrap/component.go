@@ -174,12 +174,14 @@ func (s *RouteSource) componentName() string {
 }
 
 type packageComponentResolver struct {
-	types         *typecatalog.Resolver
-	component     *spec.Component
-	contracts     []packageContract
-	canonical     []*spec.Parameter
-	fieldsByParam map[*spec.Parameter]string
-	viewsByName   map[string]*spec.View
+	types                 *typecatalog.Resolver
+	component             *spec.Component
+	contracts             []packageContract
+	canonical             []*spec.Parameter
+	fieldsByParam         map[*spec.Parameter]string
+	viewsByName           map[string]*spec.View
+	predicateDeclarations map[string]*x.Type
+	predicateContexts     map[predicateOwnerKey]*typecatalog.ResolutionContext
 }
 
 type contractRole uint8

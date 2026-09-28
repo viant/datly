@@ -16,9 +16,36 @@ func (r *packageComponentResolver) resolveFieldPredicates(contract *packageContr
 	if len(param.Predicates) == 0 {
 		return nil
 	}
-	descriptor, err := predicateFieldOwner(contract.descriptor, field.Index, r.types)
+	scope, err := r.predicateFieldContext(contract.descriptor, field.Index)
 	if err != nil {
 		return fmt.Errorf("predicate field %s: %w", field.Name, err)
+	}
+	return (readerpredicate.DefinitionCompiler{Context: scope}).Compile(&spec.Component{Parameters: []*spec.Parameter{param}})
+}
+
+type predicateOwnerKey struct {
+	root *x.Type
+	path string
+}
+
+// Caches belong to one ContractResolver.Resolve call and one immutable type
+// authority snapshot. Never publish these private descriptors or contexts.
+func (r *packageComponentResolver) predicateFieldContext(root *x.Type, index []int) (*typecatalog.ResolutionContext, error) {
+	key := predicateOwnerKey{root: root}
+	if len(index) > 1 {
+		// The final index identifies the field, not its declaring type.
+		key.path = fmt.Sprint(index[:len(index)-1])
+	}
+	if scope := r.predicateContexts[key]; scope != nil {
+		return scope, nil
+	}
+	var lookup xshape.Lookup
+	if r.types != nil {
+		lookup = r.predicateDeclaration
+	}
+	descriptor, err := predicateFieldOwner(root, index, lookup)
+	if err != nil {
+		return nil, err
 	}
 	scope := &typecatalog.ResolutionContext{PackagePath: r.component.Key.Scope}
 	if descriptor != nil {
@@ -35,18 +62,40 @@ func (r *packageComponentResolver) resolveFieldPredicates(contract *packageContr
 			}
 		}
 	}
-	return (readerpredicate.DefinitionCompiler{Context: scope}).Compile(&spec.Component{Parameters: []*spec.Parameter{param}})
+	if r.predicateContexts == nil {
+		r.predicateContexts = make(map[predicateOwnerKey]*typecatalog.ResolutionContext)
+	}
+	r.predicateContexts[key] = scope
+	return scope, nil
+}
+
+func (r *packageComponentResolver) predicateDeclaration(name string) (*x.Type, error) {
+	if descriptor, ok := r.predicateDeclarations[name]; ok {
+		return descriptor, nil
+	}
+	descriptor, err := r.types.Descriptor(name)
+	if err != nil {
+		return nil, err
+	}
+	if r.predicateDeclarations == nil {
+		r.predicateDeclarations = make(map[string]*x.Type)
+	}
+	r.predicateDeclarations[name] = descriptor
+	return descriptor, nil
 }
 
 // Follow the promoted field's index to its declaring type. A holder's imports
 // are not the import scope of an external or embedded input declaration.
-func predicateFieldOwner(descriptor *x.Type, index []int, types *typecatalog.Resolver) (*x.Type, error) {
+func predicateFieldOwner(descriptor *x.Type, index []int, lookup xshape.Lookup) (*x.Type, error) {
 	for depth := 0; descriptor != nil && depth < 64; depth++ {
 		if typ := dereference(descriptor.Type); typ != nil {
 			descriptor = x.NewType(typ)
 		}
-		if types != nil {
-			declared, err := types.Descriptor(descriptor.Key())
+		if lookup != nil {
+			// Key memoizes into x.Type; input descriptors may be shared by
+			// concurrent compilations. Copy only the header, not the AST.
+			identity := *descriptor
+			declared, err := lookup(identity.Key())
 			if err != nil {
 				return nil, err
 			}
@@ -56,9 +105,7 @@ func predicateFieldOwner(descriptor *x.Type, index []int, types *typecatalog.Res
 		}
 		if source := descriptor.SynteticType; source != nil && source.TypeSpec != nil {
 			resolver := xshape.Resolver{Package: source.PkgPath, Imports: map[string]string{}}
-			if types != nil {
-				resolver.Lookup = types.Descriptor
-			}
+			resolver.Lookup = lookup
 			for alias, item := range source.Imports {
 				if item != nil {
 					resolver.Imports[alias] = item.Path
