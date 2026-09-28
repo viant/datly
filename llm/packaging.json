@@ -12,6 +12,7 @@
     "datly/doc/reader-predicates.md",
     "datly/doc/reports.md",
     "datly/doc/selectors-and-formats.md",
+    "datly/doc/shaping-contract.md",
     "datly/doc/static-content.md",
     "datly/gateway/http/OPENAPI_NOTICE",
     "datly/gateway/openapi/openapi3/LICENSE",

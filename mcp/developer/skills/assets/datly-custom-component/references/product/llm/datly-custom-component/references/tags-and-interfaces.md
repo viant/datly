@@ -22,6 +22,16 @@ A tag is Go struct-tag syntax: key:"value". Datly option-bearing values generall
 
 Tag names and Go field names are not interchangeable. Go type names are case-sensitive. Write canonical option keys; infer no field or column spelling variations. Aliases must be user-defined, and duplicate output names are errors.
 
+## Field shaping contract
+
+Outer direct-column aliases rename Go fields in a named DQL graph; they retain
+original vendor result columns in SQLX tags. For example, `record.NAME AS DISPLAY_NAME`
+generates `DisplayName` with `sqlx:"NAME"` without adding `AS DISPLAY_NAME` to vendor
+SQL. Real aliases inside a view's SQL retain their database result names.
+`format` and `json` control public serialization names separately. See the
+[v1 shaping contract](../../../datly/doc/shaping-contract.md) for CAST, nullability,
+linked contracts and replaceable generated files.
+
 ## Binding and request sources
 
 ~~~~text

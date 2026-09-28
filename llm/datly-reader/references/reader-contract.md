@@ -6,6 +6,14 @@ A reader turns bound application inputs into typed views and an output contract.
 
 This guide includes required capabilities still under development. Keep the requested application contract intact; when a checkout cannot execute it, identify the blocker rather than silently weakening the design.
 
+## Field shaping and SQL boundaries
+
+Outer direct-column aliases in a named DQL graph are Go-field renames. Keep the
+original view output in SQLX mapping and in executable vendor SQL. An alias
+inside the view SQL remains a SQL result name. Public JSON/format names are a
+separate choice. Read the [v1 shaping contract](product/datly/doc/shaping-contract.md)
+before changing any of these names or regenerating linked/generated shapes.
+
 ## Choose Go shapes, DQL, or both
 
 Go shapes make application types, methods, and reusable domain objects explicit. DQL combines SQL with input, route, view, and output declarations. Both describe the same component model; avoid maintaining two competing implementations.

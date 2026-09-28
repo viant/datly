@@ -38,7 +38,7 @@ root row, and `type(items, 'Item')` names the related rows. The output type
 setting alone does not specify a result field. `case_format('lc')` applies
 lowerCamel naming to the envelope and nested fields through the runtime
 Structology JSON marshaler. Use this global policy for ordinary naming.
-For a deliberate rename, prefer `format:"name=CustomerName"`; the serializer applies `lc` to that name and emits `customerName`. An explicit
+For a deliberate public serialization rename, prefer `format:"name=CustomerName"`; the serializer applies `lc` to that name and emits `customerName`. An explicit
 nonempty `json` name is an exact override of format-name/global casing, not the
 recommended rename mechanism.
 
@@ -52,6 +52,15 @@ inside each view. Ordinary database expressions, including a database SQL
 For a writer, author the graph needed by that operation, using this view structure
 with its own destination package. Writer hook and invariant annotations extend the outer
 metadata; they do not introduce a different query language inside the views.
+
+### Shaping and alias boundaries
+
+In a named view graph, outer `record.NAME AS DISPLAY_NAME` is configuration for
+Go field `DisplayName` with `sqlx:"NAME"`. Vendor SQL continues to select `NAME`.
+An alias inside `(SELECT NAME AS STORED_LABEL FROM RECORDS)` remains an actual
+SQL result alias. Public `format`/`json` naming and standalone Go CAST are
+separate controls. Read the [v1 shaping contract](product/datly/doc/shaping-contract.md)
+for the mapping examples and regeneration rules.
 
 ## Lexical conventions
 

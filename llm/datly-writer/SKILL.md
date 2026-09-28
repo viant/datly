@@ -20,6 +20,10 @@ substitute `translate`, lower-level transcription, or manual writer plumbing.
 
 ## Read what the task needs
 
+- For Go field renames, outer projection versus inner SQL aliases, SQLX/JSON
+  naming, CAST/nullability and regeneration, read the
+  [v1 shaping contract](references/product/datly/doc/shaping-contract.md).
+
 - For migrating legacy `handler.Session`/`sess.Db()` writers or direct-SQL
   application mutations to generated Datly 1.0 graphs and hooks, read
   [legacy-to-v1-migration.md](references/product/datly/doc/legacy-to-v1-migration.md).
@@ -64,6 +68,9 @@ Go hooks own business rules. Existing linked Go types keep their authority.
 ## Non-obvious rules
 
 - DQL plus Go-shape metadata is the component contract. HTTP method alone does not decide handler policy.
+- Outer direct-column aliases in a named view graph rename Go fields and retain
+  original SQLX mappings. Aliases inside view SQL remain vendor result aliases.
+  Verify actual compiled SQL; do not inject outer field renames into it.
 - Use full Go module/package identity and declared import aliases; create empty lifecycle methods only for explicitly named unresolved types in the generated destination package. Preserve known/imported hooks; foreign missing types and invalid signatures must fail.
 - Has/presence bookkeeping is internal. Keep it out of client JSON, MCP schemas, examples of request bodies, and public error payloads.
 - Internal physical columns still participate in SQL. A logical pseudo field that is not persisted is a different concept.

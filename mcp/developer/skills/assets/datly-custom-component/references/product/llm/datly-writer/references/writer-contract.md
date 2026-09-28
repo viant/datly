@@ -41,9 +41,9 @@ orchestration.
 See [writer-examples.md](writer-examples.md) for the primary graph.
 
 Existing Go-only components remain supported for explicitly chosen application
-contracts. Preserve their types and authored methods. In generated shapes,
-update only owned projections: append fields, propagate CAST type changes and
-remove dropped owned columns without rewriting unrelated authored content.
+contracts. Preserve their types and separate application methods. Regenerate
+generated files from current DQL, including field/type/tag changes and removals.
+Direct edits inside those files are overwritten.
 
 | Operation | Policy |
 | --- | --- |
@@ -58,6 +58,11 @@ Discover connected `transcribe` support as described in
 [developer-mcp.md](developer-mcp.md).
 
 ## 3. Go shapes and tags
+
+Outer field renames keep original SQLX mappings; real aliases inside view SQL
+keep their SQL meaning. Writer identity/link matching and typed Has/setters use
+Go fields, while Current/Previous queries and lookup criteria use actual vendor
+outputs. See the [v1 shaping contract](../../../datly/doc/shaping-contract.md).
 
 Inspect the generated row shape or link an existing authoritative application type.
 The fragment below explains SQL mapping and internal presence; standard `transcribe`

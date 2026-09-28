@@ -14,6 +14,11 @@ An authored alias
 must retain its source-column and public-field identity through query building,
 projection, cache reuse and serialization.
 
+For a named DQL graph, an outer direct-column alias renames a Go field while
+retaining its original SQLX mapping and vendor output. A real alias inside the
+view SQL remains a SQL result name. Public `format`/`json` names are separate.
+See the [v1 shaping contract](shaping-contract.md) before changing these names.
+
 ## Scope each selector to a view
 
 Use one-argument `.QuerySelector('inventory')` in DQL or
