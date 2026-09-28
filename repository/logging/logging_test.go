@@ -268,28 +268,34 @@ func TestShouldAuditURI(t *testing.T) {
 		want   bool
 	}{
 		{
-			name:   "default excludes meta metric scrapes",
+			name:   "nil config audits all when enabled by zero value",
 			config: &Config{},
 			uri:    "/v1/api/meta/metric/mdp/adorder/operation/foo/recent",
-			want:   false,
+			want:   true,
 		},
 		{
-			name:   "default excludes meta status",
-			config: &Config{},
-			uri:    "/v1/api/meta/status",
-			want:   false,
-		},
-		{
-			name:   "default keeps business routes",
+			name:   "no excludes keeps business routes",
 			config: &Config{},
 			uri:    "/v1/api/mdp/kpiperf/produce",
 			want:   true,
 		},
 		{
+			name:   "configured exclude skips matching prefix",
+			config: &Config{AuditExcludeURIPrefixes: []string{"/v1/api/meta/"}},
+			uri:    "/v1/api/meta/metric/x",
+			want:   false,
+		},
+		{
 			name:   "strips query before prefix match",
-			config: &Config{},
+			config: &Config{AuditExcludeURIPrefixes: []string{"/v1/api/meta/"}},
 			uri:    "/v1/api/meta/metric/x?foo=1",
 			want:   false,
+		},
+		{
+			name:   "non-matching URI still audited",
+			config: &Config{AuditExcludeURIPrefixes: []string{"/v1/api/meta/"}},
+			uri:    "/v1/api/mdp/kpiperf/produce",
+			want:   true,
 		},
 		{
 			name:   "EnableAudit false disables all",
@@ -318,14 +324,14 @@ func TestShouldAuditURI(t *testing.T) {
 	}
 }
 
-func TestLog_SkipsMetaAudit(t *testing.T) {
+func TestLog_SkipsExcludedAudit(t *testing.T) {
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	os.Stdout = w
 
 	execCtx := exec.NewContext("GET", "/v1/api/meta/metric/mdp/adorder/operation/foo/recent", nil, "")
-	Log(&Config{}, execCtx)
+	Log(&Config{AuditExcludeURIPrefixes: []string{"/v1/api/meta/"}}, execCtx)
 
 	require.NoError(t, w.Close())
 	os.Stdout = oldStdout
