@@ -18,7 +18,7 @@ func linkCommand(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	flags := flag.NewFlagSet("link sync", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	dir := flags.String("dir", ".", "project module root")
-	linkPackage := flags.String("link-package", build.DefaultLinkPackage, "application link package (internal/<name>)")
+	linkPackage := flags.String("link-package", build.DefaultLinkPackage, "module-relative application link package (bare name means internal/name)")
 	tags := flags.String("tags", "", "Go build tags")
 	if err := flags.Parse(args[1:]); err != nil {
 		if err == flag.ErrHelp {

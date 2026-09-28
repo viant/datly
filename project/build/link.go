@@ -1,6 +1,7 @@
 package build
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"go/ast"
@@ -42,6 +43,10 @@ func (Service) SyncLinks(ctx context.Context, request LinkRequest) (*LinkResult,
 	if err != nil {
 		return nil, err
 	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, err
+	}
 	info, err := xmodule.LocateLocal(root)
 	if err != nil {
 		return nil, err
@@ -54,15 +59,50 @@ func (Service) SyncLinks(ctx context.Context, request LinkRequest) (*LinkResult,
 		return nil, err
 	}
 	linkPath := filepath.Join(root, filepath.FromSlash(linkPackage), "link.go")
-	original, err := os.ReadFile(linkPath)
-	if err != nil {
-		return nil, fmt.Errorf("existing project link file is required: %w", err)
+	if err := validateLinkPath(root, filepath.Join(filepath.FromSlash(linkPackage), "link.go")); err != nil {
+		return nil, err
 	}
-	selection, err := (xmodule.BuildWorkspace{BaseDir: root, Patterns: request.Packages, Tags: request.Tags, Env: request.Env}).Resolve(ctx)
+	linkName, err = linkPackageClause(filepath.Dir(linkPath), linkName)
 	if err != nil {
 		return nil, err
 	}
-	existing, err := linkImports(filepath.Dir(linkPath))
+	plan, err := newLinkPlan(root)
+	if err != nil {
+		return nil, err
+	}
+	defer plan.close()
+	link, err := plan.file(linkPath)
+	if err != nil {
+		return nil, err
+	}
+	original := link.original
+	if !link.exists {
+		original = []byte(fmt.Sprintf(linkTemplate, linkName))
+	}
+	if _, err = parser.ParseFile(token.NewFileSet(), linkPath, original, 0); err != nil {
+		return nil, err
+	}
+	if err := plan.overlayFile(linkPath, original); err != nil {
+		return nil, err
+	}
+	patterns := request.Packages
+	if len(patterns) == 0 {
+		patterns = []string{"./..."}
+	}
+	patterns = append(append([]string(nil), patterns...), "./"+linkPackage)
+	env := request.Env
+	if env == nil {
+		env = os.Environ()
+	}
+	env, err = plan.protectModuleFiles(ctx, env)
+	if err != nil {
+		return nil, err
+	}
+	selection, err := (xmodule.BuildWorkspace{BaseDir: root, Patterns: patterns, Tags: request.Tags, Env: env, Overlay: plan.overlay}).Resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := linkImports(selection, info.Path+"/"+linkPackage, plan)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +134,7 @@ func (Service) SyncLinks(ctx context.Context, request LinkRequest) (*LinkResult,
 		if len(candidate.holders) == 0 {
 			continue
 		}
-		if err := candidate.ensureSupport(); err != nil {
+		if err := candidate.planSupport(plan); err != nil {
 			return nil, fmt.Errorf("prepare linked package %s: %w", path, err)
 		}
 		if !existing[path] {
@@ -102,9 +142,6 @@ func (Service) SyncLinks(ctx context.Context, request LinkRequest) (*LinkResult,
 		}
 	}
 	sort.Strings(added)
-	if len(added) == 0 {
-		return &LinkResult{Added: []string{}}, nil
-	}
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, linkPath, original, parser.PackageClauseOnly|parser.ImportsOnly)
 	if err != nil {
@@ -115,11 +152,13 @@ func (Service) SyncLinks(ctx context.Context, request LinkRequest) (*LinkResult,
 	}
 	offset := fset.File(file.Name.End()).Offset(file.Name.End())
 	var imports strings.Builder
-	imports.WriteString("\n\nimport (\n")
-	for _, path := range added {
-		fmt.Fprintf(&imports, "\t_ %q\n", path)
+	if len(added) > 0 {
+		imports.WriteString("\n\nimport (\n")
+		for _, path := range added {
+			fmt.Fprintf(&imports, "\t_ %q\n", path)
+		}
+		imports.WriteString(")")
 	}
-	imports.WriteString(")")
 	updated := make([]byte, 0, len(original)+imports.Len())
 	updated = append(updated, original[:offset]...)
 	updated = append(updated, imports.String()...)
@@ -127,57 +166,47 @@ func (Service) SyncLinks(ctx context.Context, request LinkRequest) (*LinkResult,
 	if _, err := parser.ParseFile(token.NewFileSet(), linkPath, updated, 0); err != nil {
 		return nil, fmt.Errorf("updated link file is invalid: %w", err)
 	}
-	stat, err := os.Stat(linkPath)
-	if err != nil {
+	link.updated = updated
+	if err := plan.validate(ctx, request, linkPackage, env); err != nil {
 		return nil, err
 	}
-	temp, err := os.CreateTemp(filepath.Dir(linkPath), ".datly-link-*.go")
-	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(temp.Name())
-	if err = temp.Chmod(stat.Mode().Perm()); err != nil {
-		temp.Close()
-		return nil, err
-	}
-	if _, err = temp.Write(updated); err != nil {
-		temp.Close()
-		return nil, err
-	}
-	if err = temp.Sync(); err != nil {
-		temp.Close()
-		return nil, err
-	}
-	if err = temp.Close(); err != nil {
-		return nil, err
-	}
-	if err = os.Rename(temp.Name(), linkPath); err != nil {
+	if err := plan.publish(ctx, linkPath); err != nil {
 		return nil, err
 	}
 	return &LinkResult{Added: added}, nil
 }
 
-func linkImports(dir string) (map[string]bool, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
+func linkImports(selection *xmodule.BuildSelection, importPath string, plan *linkPlan) (map[string]bool, error) {
 	result := map[string]bool{}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+	linkSelected := false
+	for _, pkg := range selection.Packages {
+		if pkg.ImportPath != importPath {
 			continue
 		}
-		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, entry.Name()), nil, parser.ImportsOnly)
-		if err != nil {
-			return nil, err
-		}
-		for _, item := range file.Imports {
-			path, err := strconv.Unquote(item.Path.Value)
+		for _, name := range append(append([]string(nil), pkg.GoFiles...), pkg.CgoFiles...) {
+			if name == "link.go" {
+				linkSelected = true
+			}
+			path := filepath.Join(pkg.Dir, name)
+			content, err := plan.read(path)
 			if err != nil {
 				return nil, err
 			}
-			result[path] = true
+			file, err := parser.ParseFile(token.NewFileSet(), path, content, parser.ImportsOnly)
+			if err != nil {
+				return nil, err
+			}
+			for _, item := range file.Imports {
+				path, err := strconv.Unquote(item.Path.Value)
+				if err != nil {
+					return nil, err
+				}
+				result[path] = true
+			}
 		}
+	}
+	if !linkSelected {
+		return nil, fmt.Errorf("link.go is excluded by the active build context in %s", importPath)
 	}
 	return result, nil
 }
@@ -415,7 +444,7 @@ func componentField(value ast.Expr, imports map[string]string) bool {
 
 const linkSupportHeader = "// Code generated by datly link sync. Additive only.\n"
 
-func (c *linkCandidate) ensureSupport() error {
+func (c *linkCandidate) planSupport(plan *linkPlan) error {
 	if c.packageName == "main" {
 		return fmt.Errorf("package main cannot be blank imported")
 	}
@@ -431,11 +460,13 @@ func (c *linkCandidate) ensureSupport() error {
 		return nil
 	}
 	path := filepath.Join(c.dir, "datly_link_sync.go")
-	content, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		content = []byte(linkSupportHeader + "package " + c.packageName + "\n")
-	} else if err != nil {
+	planned, err := plan.file(path)
+	if err != nil {
 		return err
+	}
+	content := bytes.Clone(planned.original)
+	if !planned.exists {
+		content = []byte(linkSupportHeader + "package " + c.packageName + "\n")
 	}
 	if !strings.HasPrefix(string(content), linkSupportHeader) {
 		return fmt.Errorf("existing %s is not owned by link sync", path)
@@ -480,5 +511,6 @@ func (c *linkCandidate) ensureSupport() error {
 	if _, err := parser.ParseFile(token.NewFileSet(), path, content, 0); err != nil {
 		return fmt.Errorf("generated link support is invalid: %w", err)
 	}
-	return os.WriteFile(path, content, 0o644)
+	planned.updated = content
+	return nil
 }

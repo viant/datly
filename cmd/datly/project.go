@@ -14,7 +14,7 @@ func projectCommand(ctx context.Context, args []string, stdout, stderr io.Writer
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	dir := flags.String("dir", ".", "project module root")
-	linkPackage := flags.String("link-package", build.DefaultLinkPackage, "application link package (internal/<name>)")
+	linkPackage := flags.String("link-package", build.DefaultLinkPackage, "module-relative application link package (bare name means internal/name)")
 	var init build.InitRequest
 	var request build.Request
 	if args[0] == "init" {

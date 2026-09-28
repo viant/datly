@@ -46,17 +46,26 @@ dependency changes belong to Go module commands.
 
 ## Explicit linking and dynamic discovery
 
-Init scaffolds `cmd/datly`, `internal/datlylink`, `dql`, `generated`, `hooks`,
+Init scaffolds `cmd/datly`, `internal/dependencylink`, `dql`, `generated`, `hooks`,
 `resources` and `datly.yaml`. Build defaults to `./...` in the project module.
 Runtime discovery still scans the selected packages. `cmd/datly` blank-imports
-the project-owned `internal/datlylink` package, whose only job is to blank-import
+the project-owned `internal/dependencylink` package, whose only job is to blank-import
 component packages so their linked types are present in the executable. No
 component registration function or registry side effect is generated.
 
 Run `datly link sync -dir .` when desired. This explicit command scans selected
 project Go source for tagged component holders and predicate/codec interface
-implementations, then adds only missing blank imports to the existing
-`internal/datlylink/link.go`; it never removes imports or authored content.
+implementations, then adds only missing blank imports to
+`internal/dependencylink/link.go`; it never removes imports or authored content.
+A missing link directory/file is created after overlay discovery and compile
+validation. Use `-link-package pkg/componentlink` for a module-relative destination;
+a bare name remains shorthand for `internal/<name>`. The same option applies to
+init/build/sync, including the legacy `-link-package datlylink` layout.
+Existing valid package names and active build-selected imports are preserved.
+Discovery and validation failures leave the working tree unchanged. Publication
+is atomic per file, not across the file set; I/O errors identify already-published
+files. See [linking safeguards](../project/build/README.md) for containment and
+failure handling.
 If a selected package lacks an explicit `init`, sync adds an empty one; a
 discovered type missing from runtime type reachability gets a package-local
 `reflect.TypeFor` reference without any registry registration. Normal transcribes

@@ -47,6 +47,12 @@ func (Service) Build(ctx context.Context, request Request) (_ *Result, err error
 	if err != nil {
 		return nil, err
 	}
+	if err := validateLinkPath(root, filepath.Join(filepath.FromSlash(linkPackage), "link.go")); err != nil {
+		return nil, err
+	}
+	if _, err := linkPackageClause(filepath.Join(root, filepath.FromSlash(linkPackage)), filepath.Base(linkPackage)); err != nil {
+		return nil, err
+	}
 	selection, err := (xmodule.BuildWorkspace{BaseDir: root, Patterns: request.Packages, Tags: request.Tags, Env: request.Env}).Resolve(ctx)
 	if err != nil {
 		return nil, err

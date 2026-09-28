@@ -36,10 +36,15 @@ declarations to linked concrete types and embedded filesystems.
 
 Run `datly link sync -dir /path/to/app` explicitly to scan selected project
 packages for actual tagged component holders and predicate/codec interface
-implementations, then add missing blank imports to the existing
-`internal/dependencylink/link.go` by default. Use `-link-package internal/<name>`
-with `datly init`, `datly build`, and `datly link sync` for a custom package
-name (including an existing `internal/datlylink`). `-tags` and optional Go
+implementations, then add missing blank imports to
+`internal/dependencylink/link.go` by default. Sync creates a missing directory
+and link file without an authored seed. Use `-link-package pkg/componentlink`
+(or another module-relative directory) with `datly init`, `datly build`, and
+`datly link sync`. A bare name still means `internal/<name>`, including the
+legacy `datlylink` shorthand. Existing non-main package declarations take
+precedence over the directory basename. Absolute paths, traversal, nested
+modules, vendor paths, and symlinked destination paths are rejected.
+`-tags` and optional Go
 package patterns use the
 same selection inputs as `datly build`. Sync preserves every existing import
 and authored line, never removes a package, and is idempotent. The scan uses
@@ -49,6 +54,22 @@ A discovered type lacking a reachability anchor gets a `reflect.TypeFor`
 reference there too, never a registry entry. Transcribe and build do not invoke
 sync implicitly. The link file gets imports only; runtime discovery and
 exposure policy remain unchanged.
+
+Existing imports are checked only in the active build-selected files. Sync uses
+an overlay, so discovery works even when an application already imports a missing
+link package. It compiles the complete planned link package and reachability
+helpers without executing application code. Discovery/validation failures leave
+the working tree unchanged; module and workspace metadata are protected from
+implicit Go updates. Update dependencies separately if Go reports missing sums
+or an outdated module graph.
+Configured Go flags and automatic or explicit vendor selection remain intact.
+
+Publication checks for concurrent destination edits and atomically replaces each
+file, preserving existing permissions. Helpers are published before the link file.
+This is not a multi-file transaction: a filesystem failure or cancellation during
+publication may leave completed replacements and newly created directories.
+The error identifies the failed path and the files already published. No rollback
+or stale-import removal is attempted.
 
 `x.Registry` is retained for genuinely dynamic types and factories. Linked,
 generated Go contracts do not populate it.

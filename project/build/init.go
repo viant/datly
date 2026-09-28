@@ -17,7 +17,7 @@ import (
 
 type InitRequest struct {
 	Dir, Module string
-	// LinkPackage is internal/<name>; the default is internal/dependencylink.
+	// LinkPackage is module-relative; the default is internal/dependencylink.
 	LinkPackage string
 	// Pins are exact module versions; mutable queries such as latest are rejected.
 	Pins map[string]string
@@ -35,6 +35,16 @@ func (Service) Init(ctx context.Context, request InitRequest) error {
 		return err
 	}
 	linkPackage, linkName, err := resolveLinkPackage(request.LinkPackage)
+	if err != nil {
+		return err
+	}
+	if linkPackage == "cmd/datly" {
+		return fmt.Errorf("link package conflicts with cmd/datly entrypoint")
+	}
+	if err := validateLinkPath(root, filepath.Join(filepath.FromSlash(linkPackage), "link.go")); err != nil {
+		return err
+	}
+	linkName, err = linkPackageClause(filepath.Join(root, filepath.FromSlash(linkPackage)), linkName)
 	if err != nil {
 		return err
 	}
@@ -267,11 +277,15 @@ func (Service) initialized(root string, file *modfile.File, linkPackage string) 
 }
 
 func (Service) create(root, path, content string) error {
-	name := filepath.Join(root, path)
-	if err := os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+	dir, err := os.OpenRoot(root)
+	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	defer dir.Close()
+	if err := dir.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	f, err := dir.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if os.IsExist(err) {
 		return nil
 	}

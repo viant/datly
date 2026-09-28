@@ -152,7 +152,7 @@ func TestInitUsesConfiguredLinkPackageAndRejectsInvalidNames(t *testing.T) {
 	if err != nil || !bytes.Contains(entrypoint, []byte(`_ "example.com/customlink/internal/projectlinks"`)) {
 		t.Fatalf("custom entrypoint=%s err=%v", entrypoint, err)
 	}
-	for _, invalid := range []string{"../outside", "internal/a/b", "internal/package", "/tmp/links"} {
+	for _, invalid := range []string{"../outside", "internal/a/../b", "internal/package", "/tmp/links"} {
 		if err := (build.Service{}).Init(context.Background(), build.InitRequest{Dir: t.TempDir(), Module: "example.com/invalid", LinkPackage: invalid}); err == nil {
 			t.Fatalf("accepted invalid link package %q", invalid)
 		}
