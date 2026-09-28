@@ -196,27 +196,69 @@ func (p *scaffoldPersistence) matchesCurrentDeclarations(name string, content []
 		if filepath.Base(file.Path) != name {
 			continue
 		}
-		current, err := (xshape.SourceParser{}).Parse([]byte(file.Content))
+		current, expected, err := legacySourceDeclarations([]byte(file.Content))
 		if err != nil {
 			return false
 		}
-		previous, err := (xshape.SourceParser{}).Parse(content)
-		if err != nil {
+		previous, declarations, err := legacySourceDeclarations(content)
+		if err != nil || previous.Package != current.Package || len(declarations) == 0 {
 			return false
 		}
-		if len(previous.Declarations) == 0 {
-			return false
-		}
-		expected := map[string]bool{}
-		for _, d := range current.Declarations {
-			expected[d] = true
-		}
-		for _, d := range previous.Declarations {
-			if !expected[d] {
+		for declaration := range declarations {
+			if !expected[declaration] {
 				return false
 			}
 		}
 		return true
 	}
 	return false
+}
+
+// SourceParser.Declarations intentionally excludes receiver methods. Complete
+// current-source identity with native AST method receivers/signatures so old
+// setter/index files can be upgraded without claiming files by their names.
+func legacySourceDeclarations(content []byte) (*xshape.Source, map[string]bool, error) {
+	source, err := (xshape.SourceParser{}).Parse(content)
+	if err != nil {
+		return nil, nil, err
+	}
+	declarations := map[string]bool{}
+	for _, name := range source.Declarations {
+		declarations["declaration:"+name] = true
+	}
+	file, err := parser.ParseFile(token.NewFileSet(), "legacy.go", content, parser.SkipObjectResolution)
+	if err != nil {
+		return nil, nil, err
+	}
+	imports := map[string]string{}
+	for alias, imported := range source.Imports {
+		imports[alias] = imported.Path
+	}
+	for _, declaration := range file.Decls {
+		method, ok := declaration.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		if method.Recv == nil {
+			// Initializers are also excluded by SourceParser. An extra application
+			// initializer must not be silently claimed as generated support.
+			if method.Name.Name == "init" {
+				declarations["initializer:init"] = true
+			}
+			continue
+		}
+		if len(method.Recv.List) != 1 {
+			return nil, nil, fmt.Errorf("method receiver is required")
+		}
+		receiver, err := canonicalType(method.Recv.List[0].Type, imports, source.Package)
+		if err != nil {
+			return nil, nil, err
+		}
+		signature, err := canonicalType(method.Type, imports, source.Package)
+		if err != nil {
+			return nil, nil, err
+		}
+		declarations["method:"+receiver+"."+method.Name.Name+":"+signature] = true
+	}
+	return source, declarations, nil
 }

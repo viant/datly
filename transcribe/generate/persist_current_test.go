@@ -164,3 +164,40 @@ func TestMalformedGeneratedShapeIsReplaceable(t *testing.T) {
 	_, err = (xshape.SourceParser{}).ParseFile(path)
 	require.NoError(t, err)
 }
+
+func TestLegacyMethodOnlyArtifactUpgrade(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		upgrade      bool
+	}{
+		{"setter", `func(input *Input)SetId(value int){input.Id=value}`, true},
+		{"authored hook", `func(input *Input)Init()error{return nil}`, false},
+		{"foreign receiver", `func(input *Other)SetId(value int){}`, false},
+		{"extra authored declaration", `func(input *Input)SetId(value int){input.Id=value};const ApplicationOwned=true`, false},
+		{"application init", `func(input *Input)SetId(value int){input.Id=value};func init(){}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			plan := &Plan{ComponentName: "Records", RouterDest: "router.go", Input: generatedContract("Input", "input.go", Field{Name: "Id", Type: "int", Tag: `parameter:"id,kind=query,in=id"`}), Output: generatedContract("Output", "output.go")}
+			_, err := EmitScaffold(dir, plan)
+			require.NoError(t, err)
+			// The old generated input/holder comments remain, but support files have no
+			// generated-file header. Native source identity must recognize their methods.
+			path := filepath.Join(dir, "input_setters.go")
+			old := "package records\n" + tc.source + "\n"
+			require.NoError(t, os.WriteFile(path, []byte(old), 0644))
+			_, err = EmitScaffold(dir, plan)
+			if tc.upgrade {
+				require.NoError(t, err)
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				require.Equal(t, "Records", generatedOwner(data))
+			} else {
+				require.ErrorContains(t, err, "unowned package file")
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				require.Equal(t, old, string(data))
+			}
+		})
+	}
+}
