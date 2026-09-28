@@ -1,27 +1,38 @@
 package readerbuilder
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	dsql "github.com/viant/datly/sql"
+	"github.com/viant/datly/transcribe"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	sqltext "github.com/viant/sqlparser/source"
 )
 
-// validateSimpleGroupedMain applies the deliberately narrow initial cube
-// authoring contract. It validates the database SQL inside the first/root
-// wrapped view; outer DQL metadata is compiled separately by Service.Apply.
-func validateSimpleGroupedMain(source string) error {
-	views, _, err := inspectViewSources(source)
+// validateSimpleGroupedMain validates the canonical root, including its SQL
+// resources. Inspection spans describe authored text and must not determine
+// which view is the root when an embed precedes an inline lookup.
+func (s *Service) validateSimpleGroupedMain(source string) error {
+	result, err := transcribe.NewCompiler().Compile(context.Background(), &transcribe.Source{
+		Scope: s.config.Scope, Name: s.config.Name, Text: source, Types: s.config.Types,
+	})
 	if err != nil {
 		return err
 	}
-	if len(views) == 0 {
-		return fmt.Errorf("cube activation requires a wrapped main view")
+	if result.Component == nil || result.Component.RootView == nil || result.Component.RootView.Source == nil {
+		return fmt.Errorf("cube activation requires a main view")
 	}
-	main := views[0]
-	inner := maskTemplateExpressions(source[main.SourceSpan.Start:main.SourceSpan.End])
+	main := result.Component.RootView.Clone()
+	if err := dsql.ResolveSource(main.Name, main.Source, s.config.Resources); err != nil {
+		return err
+	}
+	inner := maskTemplateExpressions(main.Source.SQL)
+	// Use the runtime's grouped projection source normalization; it unwraps
+	// only transparent projections and preserves restrictive outer clauses.
+	inner = dsql.GroupedProjectionCriteriaSource(inner, []string{"*"})
 	parsed, err := sqlparser.ParseQuery(inner, sqlparser.WithStructuralValidation())
 	if err != nil {
 		return fmt.Errorf("cube main view %q SQL: %w", main.Name, err)
@@ -43,7 +54,7 @@ func validateSimpleGroupedMain(source string) error {
 		if item == nil || item.Expr == nil {
 			return fmt.Errorf("cube main view %q contains an empty projection", main.Name)
 		}
-		if call, ok := item.Expr.(*expr.Call); ok && cubeAggregate(call) {
+		if dsql.ContainsAggregate(item.Expr) {
 			if strings.TrimSpace(item.Alias) == "" {
 				return fmt.Errorf("cube aggregate %q requires a unique output alias", sqlparser.Stringify(item.Expr))
 			}
@@ -64,18 +75,6 @@ func validateSimpleGroupedMain(source string) error {
 		return fmt.Errorf("cube main view %q requires at least one dimension and one aggregate measure", main.Name)
 	}
 	return nil
-}
-
-func cubeAggregate(call *expr.Call) bool {
-	if call == nil {
-		return false
-	}
-	switch strings.ToLower(strings.TrimSpace(sqlparser.Stringify(call.X))) {
-	case "sum", "count", "min", "max", "avg":
-		return true
-	default:
-		return false
-	}
 }
 
 func normalizeGroupedExpression(value string) string {

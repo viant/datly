@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestCubeSettingRequiresSimpleGroupedMainView(t *testing.T) {
@@ -89,5 +90,30 @@ FROM (SELECT status,COUNT(*) AS total FROM spend GROUP BY status) summary`
 	dimension := service.Apply(context.Background(), Request{DQL: measure.DQL, Operation: Operation{Type: OperationSetColumnRole, ColumnRole: &ColumnRoleMutation{View: "summary", Column: "status", Role: "dimension"}}})
 	if !dimension.Applied || !strings.Contains(dimension.DQL, `groupable:"true"`) || !strings.Contains(dimension.DQL, `json:"statusName"`) {
 		t.Fatalf("dimension=%+v", dimension)
+	}
+}
+
+func TestCubeEmbeddedRootBeforeUngroupedLookup(t *testing.T) {
+	source := `#setting($_ = $route('/forecast','GET'))
+SELECT forecast.*, groupable(forecast), tag(forecast.country,'groupable:"true"')
+FROM (${embed:sql/forecast.sql}) forecast
+JOIN (SELECT ID, NAME FROM dictionary) channel ON channel.ID = forecast.channel_id AND 1=1`
+	resources := fstest.MapFS{"sql/forecast.sql": &fstest.MapFile{Data: []byte("SELECT country, channel_id, APPROX_COUNT_DISTINCT(IF(flag=1, uid, NULL)) AS devices FROM events GROUP BY country, channel_id\n")}}
+	operation := Operation{Type: OperationSetSetting, Setting: &SettingMutation{Name: "cube"}}
+	result := New(Config{Name: "Forecast", Resources: resources}).Apply(context.Background(), Request{DQL: source, Operation: operation})
+	if !result.Applied {
+		t.Fatalf("activation rejected: %+v", result.Diagnostics)
+	}
+	if !strings.Contains(result.DQL, "${embed:sql/forecast.sql}") || strings.Contains(result.DQL, "APPROX_COUNT_DISTINCT") {
+		t.Fatalf("authored resource was flattened: %s", result.DQL)
+	}
+	missing := New(Config{Name: "Forecast"}).Apply(context.Background(), Request{DQL: source, Operation: operation})
+	if missing.Applied || missing.DQL != source {
+		t.Fatal("missing SQL resources must reject atomically")
+	}
+	resources["sql/forecast.sql"].Data = []byte("SELECT country, channel_id, uid AS devices FROM events\n")
+	invalid := New(Config{Name: "Forecast", Resources: resources}).Apply(context.Background(), Request{DQL: source, Operation: operation})
+	if invalid.Applied || invalid.DQL != source {
+		t.Fatal("ungrouped root must reject atomically")
 	}
 }

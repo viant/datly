@@ -92,3 +92,15 @@ func TestSplitSelectionKind(t *testing.T) {
 		t.Fatalf("unexpected non-match selection kind: %q %q", kind, rest)
 	}
 }
+
+func TestGroupedCriteriaCanonicalStarWrapper(t *testing.T) {
+	inner := "SELECT account_id,SUM(amount) AS total FROM spend GROUP BY account_id"
+	outer := "SELECT * FROM (" + inner + ") spend"
+	if got := GroupedProjectionCriteriaSource(outer, []string{"*"}); got != inner {
+		t.Fatalf("source=%q", got)
+	}
+	filtered := outer + " WHERE total > 10"
+	if got := GroupedProjectionCriteriaSource(filtered, []string{"*"}); got != filtered {
+		t.Fatalf("outer filter lost: %q", got)
+	}
+}

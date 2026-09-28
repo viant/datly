@@ -3,6 +3,7 @@ package readerbuilder
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,8 @@ import (
 )
 
 type Config struct {
+	// Resources is the exact authored component version's SQL resource filesystem.
+	Resources           fs.FS
 	Scope               string
 	Name                string
 	Types               *typecatalog.Catalog
