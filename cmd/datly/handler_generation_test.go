@@ -23,11 +23,13 @@ func TestHandlerTranscriptionCommand(t *testing.T) {
 	before := fixture.Constructions.Load()
 	for range 2 {
 		var out, diagnostic bytes.Buffer
-		code := generationCommand(context.Background(), []string{"transcribe", "handler", "-dir", root, "-connector", "runtimeOnly", "-generation-policy", "overwrite", "example.com/generated/source"}, &out, &diagnostic, binding)
+		code := generationCommand(context.Background(), []string{"transcribe", "handler", "-dir", root, "-connector", "runtimeOnly", "example.com/generated/source"}, &out, &diagnostic, binding)
 		require.Equal(t, 0, code, diagnostic.String())
 		router, err := os.ReadFile(filepath.Join(root, "registration", "router.go"))
 		require.NoError(t, err)
 		require.Contains(t, string(router), "connector=runtimeOnly")
+		_, err = os.Stat(filepath.Join(root, "registration", ".datly-gen.json"))
+		require.True(t, os.IsNotExist(err), "manifest persisted: %v", err)
 	}
 	require.Equal(t, before, fixture.Constructions.Load())
 }
@@ -56,12 +58,14 @@ func init() { panic("generation must not execute initialization") }
 	require.NoError(t, os.WriteFile(filepath.Join(root, "source", "convert.dql"), []byte(dql), 0600))
 	for range 2 {
 		var out, diagnostic bytes.Buffer
-		status := generationCommand(context.Background(), []string{"transcribe", "handler", "-dir", root, "-generation-policy", "overwrite", "example.com/generated/source"}, &out, &diagnostic)
+		status := generationCommand(context.Background(), []string{"transcribe", "handler", "-dir", root, "example.com/generated/source"}, &out, &diagnostic)
 		require.Equal(t, 0, status, diagnostic.String())
 		router, err := os.ReadFile(filepath.Join(root, "registration", "router.go"))
 		require.NoError(t, err)
 		require.Contains(t, string(router), "handler=example.com/generated/business.New")
 		require.NotContains(t, string(router), "connector=")
+		_, err = os.Stat(filepath.Join(root, "registration", ".datly-gen.json"))
+		require.True(t, os.IsNotExist(err), "manifest persisted: %v", err)
 	}
 	var out, diagnostic bytes.Buffer
 	status := generationCommand(context.Background(), []string{"transcribe", "handler", "-dir", root, "-schema", "-driver", "must-not-open", "example.com/generated/source"}, &out, &diagnostic)

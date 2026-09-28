@@ -78,7 +78,7 @@ func assertLinkedImportMetadata(t *testing.T, catalog *typecatalog.Catalog) {
 	}
 }
 
-func TestDQLImportedLinkedTypesKeepManifestOwnership(t *testing.T) {
+func TestDQLImportedLinkedTypesIgnoreLegacyManifest(t *testing.T) {
 	base := linkedImportsWorkspace(t)
 	writeSourceFile(t, base, "auth/.datly-gen.json", `{"version":5,"owner":"Auth","files":["output.go"]}`)
 	workspace, err := (xmodule.LocalWorkspace{BaseDir: base}).Resolve(context.Background())
@@ -90,14 +90,10 @@ func TestDQLImportedLinkedTypesKeepManifestOwnership(t *testing.T) {
 		require.NoError(t, err)
 		assertLinkedImportMetadata(t, catalog)
 	}
-	// A generated descriptor must not have been promoted to package authority.
-	// A new authored declaration can shadow it without a same-origin conflict.
+	// A legacy file cannot demote an application-owned linked declaration.
 	replacement := x.NewType(reflect.TypeOf(struct{ Override bool }{}), x.WithPkgPath(linkedImportsModule+"/auth"), x.WithName("Output"))
-	require.NoError(t, catalog.Register(typecatalog.TypeOriginPackage, replacement))
-	actual, found, err := catalog.ResolveRuntimeType(typecatalog.PackageAuthority, replacement.Key())
-	require.NoError(t, err)
-	require.True(t, found)
-	require.Equal(t, replacement.Type, actual)
+	require.Error(t, catalog.Register(typecatalog.TypeOriginPackage, replacement))
+
 }
 
 func firstLocalImportType() reflect.Type {

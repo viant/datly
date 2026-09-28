@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/transcribe/column"
-	"github.com/viant/datly/transcribe/generate"
 )
 
 func TestGeneratorInMemoryRelation(t *testing.T) {
@@ -51,7 +50,7 @@ ON signals.feature_type = perf.feature_type AND signals.feature_value = perf.fea
 	// discovery-only declaration. No generated tag is edited by hand.
 	draft := *source
 	draft.Text = strings.Replace(source.Text, "in_memory(signals), ", "", 1)
-	generator := Generator{Operation: "get", GenerationPolicy: generate.GenerationPolicyOverwrite}
+	generator := Generator{Operation: "get"}
 	_, err := generator.Generate(ctx, GenerationRequest{Source: &draft, Destination: root})
 	require.NoError(t, err)
 	compiled, err := NewCompiler().Compile(ctx, source)
@@ -60,12 +59,9 @@ ON signals.feature_type = perf.feature_type AND signals.feature_value = perf.fea
 	require.True(t, child.InMemory)
 	require.Contains(t, child.Source.SQL, "discovery_only")
 	require.NotEmpty(t, child.Columns, "database discovery must still describe the intermediate row")
-	// Changing an existing execution tag follows the existing explicit
-	// migration policy. Overwrite is ownership-checked, not a manual edit.
-	generator.GenerationPolicy = generate.GenerationPolicyMerge
+	// Changing an execution tag regenerates from the current DQL.
 	_, err = generator.Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
-	require.ErrorContains(t, err, "explicit migration required")
-	generator.GenerationPolicy = generate.GenerationPolicyOverwrite
+	require.NoError(t, err)
 	generated, err := generator.Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
 	require.NoError(t, err)
 	var holders []string
@@ -95,9 +91,8 @@ ON signals.feature_type = perf.feature_type AND signals.feature_value = perf.fea
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(filepath.Join(root, "parents", name), content, 0600))
 	}
-	// Handwritten hooks remain separate and survive both persistent policies.
-	for _, policy := range []generate.GenerationPolicy{generate.GenerationPolicyMerge, generate.GenerationPolicyOverwrite} {
-		generator.GenerationPolicy = policy
+	// Handwritten hooks remain separate and survive repeated generation.
+	for range []string{"first", "repeat"} {
 		_, err = generator.Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
 		require.NoError(t, err)
 		expected, err := os.ReadFile("testdata/in_memory/hooks.go.txt")

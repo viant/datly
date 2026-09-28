@@ -79,7 +79,7 @@ func TestCASTOverridesExistingColumnType(t *testing.T) {
 	}
 }
 
-func TestCASTRegeneratesExactCustomizedField(t *testing.T) {
+func TestCASTReplacesCustomizedGeneratedField(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	h := sqlite.New(t)
@@ -140,11 +140,6 @@ func TestCASTRegeneratesExactCustomizedField(t *testing.T) {
 	if err = os.WriteFile(shapePath, []byte(customized), 0644); err != nil {
 		t.Fatal(err)
 	}
-	manifestPath := filepath.Join(root, "generated", ".datly-gen.json")
-	manifestBefore, err := os.ReadFile(manifestPath)
-	if err != nil {
-		t.Fatal(err)
-	}
 	source.Text = "#setting($_ = $route('/records','GET'))\nSELECT r.a,r.b,r.z,CAST(r.a AS *int),CAST(r.z AS string) FROM records r"
 	updated := run()
 	field, ok := updated.Result.Plan.Views[0].Field("A")
@@ -155,7 +150,7 @@ func TestCASTRegeneratesExactCustomizedField(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(after), "// Keep row comment") || !strings.Contains(string(after), "// Keep method") || !strings.Contains(string(after), `custom:"keep"`) {
+	if strings.Contains(string(after), "// Keep row comment") || strings.Contains(string(after), "// Keep method") || strings.Contains(string(after), `custom:"keep"`) {
 		t.Fatalf("customized source lost: %s", after)
 	}
 	parsed, err = (xshape.SourceParser{}).ParseFile(shapePath)
@@ -172,22 +167,8 @@ func TestCASTRegeneratesExactCustomizedField(t *testing.T) {
 			t.Fatalf("regenerated field %+v", field)
 		}
 	}
-	if strings.Join(names, ",") != "Z,A,B" {
+	if strings.Join(names, ",") != "A,Z,B" {
 		t.Fatalf("field order %v", names)
-	}
-	manifestAfter, err := os.ReadFile(manifestPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var oldManifest, newManifest struct{ Fingerprints map[string]string }
-	if err = json.Unmarshal(manifestBefore, &oldManifest); err != nil {
-		t.Fatal(err)
-	}
-	if err = json.Unmarshal(manifestAfter, &newManifest); err != nil {
-		t.Fatal(err)
-	}
-	if oldManifest.Fingerprints[view.Destination] != newManifest.Fingerprints[view.Destination] {
-		t.Fatal("customized source fingerprint was blessed")
 	}
 	run()
 	again, err := os.ReadFile(shapePath)
@@ -196,6 +177,9 @@ func TestCASTRegeneratesExactCustomizedField(t *testing.T) {
 	}
 	if !bytes.Equal(after, again) {
 		t.Fatalf("repeated CAST rewrote source: %s", again)
+	}
+	if err = os.WriteFile(filepath.Join(root, "generated", "application_methods.go"), []byte("package records\nfunc(r *"+view.Name+") Custom()string{return r.Z}\n"), 0644); err != nil {
+		t.Fatal(err)
 	}
 	consumer := strings.ReplaceAll(castOverrideConsumer, "CAST_ROW", view.Name)
 	if err = os.WriteFile(filepath.Join(root, "generated", "cast_consumer_test.go"), []byte(consumer), 0644); err != nil {

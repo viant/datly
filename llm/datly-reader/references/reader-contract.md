@@ -161,14 +161,12 @@ For a hook-built rich value, distinguish:
 
 Not every rich CAST is logical: physical JSON/custom typed columns retain mapping and codec semantics. Metadata declarations leave executable SQL; actual SQL CAST expressions remain query expressions. Full rich CAST/tag parsing and end-to-end acceptance are required but still in development at this checkpoint. Preserve requested syntax in the design; label interim linked-field or ColumnType/ColumnTag examples as interim, not complete parity.
 
-For persisted generated projections, a changed CAST updates the owned Go field
-(for example, `int` to `*int`), and removing a selected column removes its owned
-field and generated support. Retained fields keep their order; unrelated authored
-fields, methods, tags and comments stay protected. This regeneration behavior
-also applies to generated Go mutation writers. Ownership inventory and
-fingerprints must prove that an existing field can be changed or removed; an
-unproven older field is not safe to delete. Preserve SQL NULL separately from a
-non-null zero when a pointer CAST is selected.
+For persisted generated projections, a changed CAST updates the Go field
+(for example, `int` to `*int`), and removing a selected column removes its field
+and generated support. The current DQL defines generated shapes for readers and
+writers. Direct generated-file edits are overwritten; separate application hooks
+and explicitly linked contracts are preserved. Preserve SQL NULL separately from
+a non-null zero when a pointer CAST is selected.
 
 ## Reports, cube compose, and WithURI MCP routes
 

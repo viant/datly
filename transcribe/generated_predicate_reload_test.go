@@ -48,7 +48,7 @@ func TestGeneratedCustomPredicatePublicReloadSQLite(t *testing.T) {
 			predicateType = predicatePath + ".Threshold"
 		}
 		// No #package or persisted DQL: reload must recover the emitted
-		// Go package's destination from its existing ownership manifest.
+		// Go package's destination from its component holder metadata.
 		source := &Source{Scope: module + "/records", Name: "Records", Connector: "main", Types: catalog, Text: fmt.Sprintf(`#import('security', '%s')
 #setting($_ = $route('/records','GET'))
 #setting($_ = $mcp('records.query'))

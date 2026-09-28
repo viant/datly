@@ -74,7 +74,7 @@ func TestProjectionRemovalRegeneratesReaderAndWriterShapes(t *testing.T) {
 			if err = os.WriteFile(shapePath, customized, 0644); err != nil {
 				t.Fatal(err)
 			}
-			methodSource := fmt.Sprintf("package %s\n// This method remains application-owned.\nfunc(r *%s) AuthoredNoteValue() string { return r.AuthoredNote }\n", first.Package.Name, rowType)
+			methodSource := fmt.Sprintf("package %s\n// This method remains application-owned.\nfunc(r *%s) AuthoredNoteValue() string { return \"retained\" }\n", first.Package.Name, rowType)
 			methodPath := filepath.Join(root, "generated", "authored_note.go")
 			if err = os.WriteFile(methodPath, []byte(methodSource), 0644); err != nil {
 				t.Fatal(err)
@@ -139,7 +139,7 @@ func TestProjectionShape(t *testing.T){
  if _,ok:=typ.FieldByName("Name");!ok{t.Fatal("retained column disappeared")}
  if _,ok:=typ.FieldByName("Logical");!ok{t.Fatal("retained logical declaration disappeared")}
  if field,ok:=typ.FieldByName("Has");ok{marker:=field.Type;if marker.Kind()==reflect.Ptr{marker=marker.Elem()};if _,exists:=marker.FieldByName("Extra");exists{t.Fatal("removed SQL column remains in presence shape")}}
- if got:=(&%s{AuthoredNote:"retained"}).AuthoredNoteValue();got!="retained"{t.Fatal("authored field or method lost")}
+ if got:=(&%s{}).AuthoredNoteValue();got!="retained"{t.Fatal("authored field or method lost")}
 }
 `, first.Package.Name, rowType, rowType)
 			if err = os.WriteFile(filepath.Join(root, "generated", "projection_shape_test.go"), []byte(consumer), 0644); err != nil {

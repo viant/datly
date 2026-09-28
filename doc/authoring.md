@@ -156,16 +156,12 @@ are different mechanisms; neither is permission to interpolate client SQL.
 
 ## Regenerate without losing authored code
 
-Generation tracks ownership and fingerprints. Existing fields retain order;
-new generated fields append. Proven generated fields can change type or be
-removed when the owned projection changes. Unrelated authored fields, methods,
-tags and comments remain protected. An older file without sufficient ownership
-evidence is not automatically safe to overwrite or delete.
-
-Put business logic in authored handlers/hooks and keep generated orchestration
-owned by generation. If persistence rejects an edit conflict, inspect the
-conflicting ownership; do not erase hand edits just to force regeneration.
-[Regeneration rules](../transcribe/generate/REGENERATION.md) explain the evidence.
+Generation follows the current DQL and linked Go contracts without a package
+sidecar. It replaces generated shapes and support, including direct edits, and
+retires obsolete artifacts. The editor is responsible for generated-file edits.
+Put business logic in separate application handlers/hooks or linked contracts;
+those files are preserved. [Regeneration rules](../transcribe/generate/REGENERATION.md)
+explain the migration and staged publication behavior.
 
 ## Resource and reload rules
 

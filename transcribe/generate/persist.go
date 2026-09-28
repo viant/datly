@@ -1,52 +1,26 @@
 package generate
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
-
-	"github.com/viant/datly/internal/packageasset"
 )
 
-const scaffoldManifestName = packageasset.ManifestName
-
-const scaffoldManifestVersion = 5
-
-type scaffoldManifest struct {
-	Identity         string                       `json:"identity,omitempty"`
-	ComponentPackage string                       `json:"componentPackage,omitempty"`
-	Destinations     map[string]string            `json:"destinations,omitempty"`
-	Owners           map[string]*scaffoldManifest `json:"owners,omitempty"`
-	others           map[string]*scaffoldManifest
-	Version          int                                  `json:"version"`
-	Owner            string                               `json:"owner"`
-	Files            []string                             `json:"files"`
-	Roles            map[string]string                    `json:"roles,omitempty"`
-	Resources        *ResourceManifest                    `json:"resources,omitempty"`
-	Fingerprints     map[string]string                    `json:"fingerprints,omitempty"`
-	ProjectionFields map[string]*projectionFieldOwnership `json:"projectionFields,omitempty"`
-	exists           bool
-}
+// legacyManifestName is only removed during migration; its contents are never read.
+const legacyManifestName = ".datly-gen.json"
 
 type scaffoldPersistence struct {
-	dir              string
-	owner            string
-	files            []EmittedFile
-	userFiles        []EmittedFile
-	removals         []string
-	plan             *Plan
-	renames          map[string]bool
-	customizedShapes map[string]bool
-	fieldOwnership   map[string]*projectionFieldOwnership
-	proposal         []EmittedFile
-	ephemeral        bool
-	policy           GenerationPolicy
+	dir       string
+	owner     string
+	files     []EmittedFile
+	userFiles []EmittedFile
+	removals  []string
+	plan      *Plan
+	renames   map[string]bool
 }
 
 type scaffoldCommitLock struct {
@@ -88,7 +62,6 @@ func (p *scaffoldPersistence) Commit() error {
 	if err != nil {
 		return err
 	}
-	p.prepareFiles()
 	release := scaffoldLocks.acquire(target)
 	defer release()
 	parent := filepath.Dir(target)
@@ -111,44 +84,16 @@ func (p *scaffoldPersistence) Commit() error {
 	if err != nil {
 		return err
 	}
-	manifest, err := readScaffoldManifest(stage)
-	if err != nil {
-		return err
-	}
-	manifest, err = manifest.forOwner(p.owner, p.plan != nil && p.plan.GoPackage != "")
-	if err != nil {
-		return err
-	}
-	if err = p.validateExisting(target, stage, manifest); err != nil {
+	if err = p.prepareCurrent(target); err != nil {
 		return err
 	}
 	if err = p.validateUserFiles(target, stage); err != nil {
 		return err
 	}
-	if err = p.preserveEntityMethods(target, stage, manifest); err != nil {
-		return err
-	}
-	if err = p.mergeShapes(target, stage, manifest); err != nil {
-		return err
-	}
-	desired, err := p.desiredFiles(target)
-	if err != nil {
-		return err
-	}
-	desired, roles, err := p.retainShapes(target, stage, manifest, desired)
-	if err != nil {
-		return err
-	}
-	resources, err := p.retainResources(target, stage, manifest, &desired, roles)
-	if err != nil {
-		return err
-	}
-	fingerprints, err := p.protectArtifacts(target, stage, manifest, desired)
-	if err != nil {
-		return err
-	}
-	if err = p.removeStale(stage, manifest, desired); err != nil {
-		return err
+	for name := range p.renames {
+		if err = os.Remove(filepath.Join(stage, name)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 	}
 	if err = p.writeFiles(target, stage); err != nil {
 		return err
@@ -156,12 +101,8 @@ func (p *scaffoldPersistence) Commit() error {
 	if err = p.writeUserFiles(target, stage); err != nil {
 		return err
 	}
-	metadata := p.destinationMetadata()
-	metadata.Roles, metadata.Resources, metadata.Fingerprints, metadata.ProjectionFields, metadata.others = roles, resources, fingerprints, p.fieldOwnership, manifest.others
-	if !p.ephemeral {
-		if err = writeScaffoldManifest(stage, p.owner, desired, metadata); err != nil {
-			return err
-		}
+	if err = os.Remove(filepath.Join(stage, legacyManifestName)); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	if p.plan != nil && p.plan.ExternalHandler != nil && p.plan.ExternalHandler.Build != nil {
 		if err = p.validateHandlerStage(target, stage); err != nil {
@@ -225,71 +166,31 @@ func (p *scaffoldPersistence) Validate() error {
 	return err
 }
 
-// preview exposes the exact merged files to package/import validation without
-// replacing the caller's raw generator proposal with retained authored edits.
+// preview exposes the exact current proposal to package/import validation.
 func (p *scaffoldPersistence) preview() (*scaffoldPersistence, error) {
 	copy := *p
-	copy.prepareFiles()
-	if err := copy.validatePrepared(); err != nil {
+	copy.files = append([]EmittedFile(nil), p.files...)
+	target, err := copy.target()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = os.Stat(target); err == nil {
+		if err = validateScaffoldTree(target); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	if _, err = copy.desiredFiles(target); err != nil {
+		return nil, err
+	}
+	if err = copy.validateUserFiles(target, target); err != nil {
+		return nil, err
+	}
+	if err = copy.prepareCurrent(target); err != nil {
 		return nil, err
 	}
 	return &copy, nil
-}
-
-func (p *scaffoldPersistence) validatePrepared() error {
-	target, err := p.target()
-	if err != nil {
-		return err
-	}
-	info, err := os.Lstat(target)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("scaffold target %q is an unsupported symlink", target)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("scaffold target %q is not a directory", target)
-	}
-	if err = validateScaffoldTree(target); err != nil {
-		return err
-	}
-	manifest, err := readScaffoldManifest(target)
-	if err != nil {
-		return err
-	}
-	manifest, err = manifest.forOwner(p.owner, p.plan != nil && p.plan.GoPackage != "")
-	if err != nil {
-		return err
-	}
-	if err = p.validateExisting(target, target, manifest); err != nil {
-		return err
-	}
-	if err = p.validateUserFiles(target, target); err != nil {
-		return err
-	}
-	if err = p.preserveEntityMethods(target, target, manifest); err != nil {
-		return err
-	}
-	if err = p.mergeShapes(target, target, manifest); err != nil {
-		return err
-	}
-	desired, err := p.desiredFiles(target)
-	if err != nil {
-		return err
-	}
-	desired, roles, err := p.retainShapes(target, target, manifest, desired)
-	if err != nil {
-		return err
-	}
-	if _, err = p.retainResources(target, target, manifest, &desired, roles); err != nil {
-		return err
-	}
-	_, err = p.protectArtifacts(target, target, manifest, desired)
-	return err
 }
 
 func (p *scaffoldPersistence) target() (string, error) {
@@ -300,70 +201,6 @@ func (p *scaffoldPersistence) target() (string, error) {
 		return "", fmt.Errorf("scaffold component owner is required")
 	}
 	return filepath.Abs(p.dir)
-}
-
-func (p *scaffoldPersistence) validateExisting(_, existing string, manifest *scaffoldManifest) error {
-	if manifest == nil {
-		return fmt.Errorf("scaffold manifest is required")
-	}
-	if err := p.prepareRenames(existing, manifest); err != nil {
-		return err
-	}
-	if err := p.validateForeignFiles(manifest); err != nil {
-		return err
-	}
-	owned := map[string]bool{}
-	if manifest.exists {
-		if owner := strings.TrimSpace(manifest.Owner); owner != strings.TrimSpace(p.owner) {
-			return fmt.Errorf("generated package is owned by component %q, not %q", owner, p.owner)
-		}
-		for _, candidate := range manifest.Files {
-			relative, err := managedRelativePath(candidate)
-			if err != nil {
-				return err
-			}
-			if relative == "" {
-				return fmt.Errorf("generated package manifest contains an empty file path")
-			}
-			owned[relative] = true
-		}
-	}
-	generated, err := p.generatedPaths()
-	if err != nil {
-		return err
-	}
-	for _, candidate := range append(generated, p.removals...) {
-		relative, err := managedRelativePath(candidate)
-		if err != nil {
-			return err
-		}
-		if relative == "" {
-			continue
-		}
-		if _, err = os.Lstat(filepath.Join(existing, relative)); err == nil && !owned[relative] {
-			return fmt.Errorf("generated file %q collides with an unowned package file", relative)
-		} else if !os.IsNotExist(err) {
-			if err == nil {
-				continue
-			}
-			return err
-		}
-	}
-	return nil
-}
-
-func (p *scaffoldPersistence) generatedPaths() ([]string, error) {
-	result := make([]string, 0, len(p.files))
-	for _, file := range p.files {
-		relative, err := managedPath(p.dir, file.Path)
-		if err != nil {
-			return nil, err
-		}
-		if relative != "" {
-			result = append(result, relative)
-		}
-	}
-	return result, nil
 }
 
 func validateScaffoldTree(target string) error {
@@ -401,28 +238,6 @@ func (p *scaffoldPersistence) desiredFiles(target string) ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
-}
-
-func (p *scaffoldPersistence) removeStale(stage string, manifest *scaffoldManifest, desired []string) error {
-	keep := make(map[string]bool, len(desired))
-	for _, name := range desired {
-		keep[name] = true
-	}
-	candidates := append([]string(nil), manifest.Files...)
-	candidates = append(candidates, p.removals...)
-	for _, candidate := range candidates {
-		relative, err := managedRelativePath(candidate)
-		if err != nil {
-			return err
-		}
-		if relative == "" || keep[relative] {
-			continue
-		}
-		if err = os.Remove(filepath.Join(stage, relative)); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
 }
 
 func (p *scaffoldPersistence) writeFiles(target, stage string) error {
@@ -626,75 +441,4 @@ func managedRelativePath(path string) (string, error) {
 		return "", fmt.Errorf("generated path %q escapes package directory", path)
 	}
 	return path, nil
-}
-
-func readScaffoldManifest(stage string) (*scaffoldManifest, error) {
-	result, err := readScaffoldMetadata(stage)
-	if err != nil || !result.exists {
-		return result, err
-	}
-	if err := result.validateVersion(); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-func (m *scaffoldManifest) validateVersion() error {
-	if m.Version != scaffoldManifestVersion && m.Version != 4 && m.Version != 3 && m.Version != 2 {
-		return fmt.Errorf("unsupported scaffold manifest version %d", m.Version)
-	}
-	return nil
-}
-
-func readScaffoldMetadata(stage string) (*scaffoldManifest, error) {
-	data, err := os.ReadFile(filepath.Join(stage, scaffoldManifestName))
-	if os.IsNotExist(err) {
-		return &scaffoldManifest{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	result := &scaffoldManifest{}
-	if err = json.Unmarshal(data, result); err != nil {
-		return nil, fmt.Errorf("decode scaffold manifest: %w", err)
-	}
-	result.exists = true
-	return result, nil
-}
-
-func writeScaffoldManifest(stage, owner string, files []string, metadata ...*scaffoldManifest) error {
-	manifest := &scaffoldManifest{Version: scaffoldManifestVersion, Owner: strings.TrimSpace(owner), Files: files}
-	if len(metadata) > 0 && metadata[0] != nil {
-		manifest.others = metadata[0].others
-		manifest.Identity = metadata[0].Identity
-		manifest.ComponentPackage = metadata[0].ComponentPackage
-		manifest.Destinations = metadata[0].Destinations
-		manifest.Roles = metadata[0].Roles
-		manifest.Resources = metadata[0].Resources
-		manifest.Fingerprints = metadata[0].Fingerprints
-		manifest.ProjectionFields = metadata[0].ProjectionFields
-	}
-	data, err := json.MarshalIndent(manifest.aggregate(), "", "  ")
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	return os.WriteFile(filepath.Join(stage, scaffoldManifestName), data, 0o644)
-}
-
-func copyScaffoldFile(source, destination string, mode os.FileMode) error {
-	input, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer input.Close()
-	output, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
-	if err != nil {
-		return err
-	}
-	if _, err = io.Copy(output, input); err != nil {
-		_ = output.Close()
-		return err
-	}
-	return output.Close()
 }

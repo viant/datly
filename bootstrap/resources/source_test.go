@@ -25,7 +25,7 @@ func (*EmbedFS) EmbedFS() *embed.FS { return &ReportDatlyResources }
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(actual) != 1 || actual[0].Namespace != "sample_report" || !reflect.DeepEqual(actual[0].Files, []string{"sql/report.sql", "sql/keys.sql"}) {
+	if len(actual) != 1 || actual[0].Namespace != "sample_report" || !reflect.DeepEqual(actual[0].Files, []string{"sql/keys.sql", "sql/report.sql"}) {
 		t.Fatalf("resources = %#v", actual)
 	}
 }

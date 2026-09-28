@@ -48,10 +48,12 @@ location through a Go file overlay. This includes retained handwritten files and
 planned removals, checks cycles and internal-package visibility, and works before
 the destination exists. Preview and commit both validate; no `go run`, test
 execution, package initialization, or database discovery occurs. Build failures
-leave the generated files and ownership manifest unchanged.
+leave existing generated and application files unchanged.
 Metadata reload uses the same build-selected source files as validation.
-Source-authored factories require persistent ownership (`merge` or `overwrite`),
-not `EphemeralOwnership`'s detached-module publication path.
+Source-authored factories retain destination build validation through the same
+staged publication path as every other generation entry point. Generated files
+are replaceable; separate application files and linked contracts are preserved.
+No package ownership sidecar is read or written.
 
 Existing compiled mappings remain supported. If both forms select a legacy
 `Type`, factory, destination, and actual contract identities must agree.
@@ -125,7 +127,8 @@ Retire only the old component holder to avoid duplicate routes, not the factory,
 contracts, or handwritten business logic.
 
 No SQL, reader view, mutation, or business-handler implementation is generated.
-Normal manifest ownership, merge/overwrite policies, and staged publication apply.
+Normal staged publication applies. Regeneration replaces direct generated-file
+edits and preserves separate application hooks and linked contracts.
 
 ## Declaration And Connector Policy
 
@@ -150,7 +153,7 @@ Required declarations cannot be discarded this way.
 
 SQL, conflicting modern settings, unsupported header fields, missing mappings,
 wrong factory identities, and incompatible contracts fail before publication.
-Existing generated files and manifests are preserved on validation failure.
+Existing generated and application files are preserved on validation failure.
 
 `#setting($_ = $case_format('lc'))` may supplement the legacy header. It is
 preserved as component case-format metadata and uses normal native output

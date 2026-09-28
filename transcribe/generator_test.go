@@ -2,14 +2,15 @@ package transcribe
 
 import (
 	"context"
-	"github.com/viant/datly/internal/testharness"
-	"github.com/viant/datly/internal/testharness/genpatch"
-	"github.com/viant/datly/transcribe/column"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/viant/datly/internal/testharness"
+	"github.com/viant/datly/internal/testharness/genpatch"
+	"github.com/viant/datly/transcribe/column"
 )
 
 func TestGeneratorPatchDerivesState(t *testing.T) {
@@ -65,7 +66,7 @@ FROM records r`}
 	}
 }
 
-func TestGeneratorEphemeralOwnershipLeavesNoPackageManifest(t *testing.T) {
+func TestGeneratorLeavesNoPackageManifest(t *testing.T) {
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	if err := db.ExecStatements(ctx, genpatch.Schema...); err != nil {
@@ -74,7 +75,7 @@ func TestGeneratorEphemeralOwnershipLeavesNoPackageManifest(t *testing.T) {
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	request := GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Scope: "example.com/generated/orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}
-	generator := Generator{Operation: "patch", EphemeralOwnership: true}
+	generator := Generator{Operation: "patch"}
 	for attempt := 0; attempt < 2; attempt++ {
 		generated, err := generator.Generate(ctx, request)
 		if err != nil {

@@ -32,7 +32,7 @@ func TestMutationSupportRejectsConflicts(t *testing.T) {
 	}
 }
 
-func TestMutationSupportOwnsSnapshotAndProtectsEdits(t *testing.T) {
+func TestMutationSupportOwnsSnapshotAndReplacesEdits(t *testing.T) {
 	file, err := parser.ParseFile(token.NewFileSet(), "support.go", "package authored\nconst extra = 1", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -63,11 +63,11 @@ func TestMutationSupportOwnsSnapshotAndProtectsEdits(t *testing.T) {
 	if err = os.WriteFile(path, edited, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = generator.Generate(dir); err == nil {
-		t.Fatal("edited support overwritten")
+	if _, err = generator.Generate(dir); err != nil {
+		t.Fatal("regenerate support", err)
 	}
 	current, err := os.ReadFile(path)
-	if err != nil || string(current) != string(edited) {
+	if err != nil || string(current) != string(body) {
 		t.Fatal("edited support was modified")
 	}
 }

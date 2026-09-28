@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/transcribe/column"
-	"github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/transcribe/testdata/castmodel"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
@@ -21,7 +20,7 @@ func TestCASTMapFieldsGenerateAndRunHooks(t *testing.T) {
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE audience(id INTEGER, TARGET TEXT)"))
-	for _, policy := range []generate.GenerationPolicy{generate.GenerationPolicyMerge, generate.GenerationPolicyOverwrite} {
+	for _, policy := range []string{"first", "repeat"} {
 		t.Run(string(policy), func(t *testing.T) {
 			root := t.TempDir()
 			const module = "github.com/viant/datly/mapfixture"
@@ -49,7 +48,7 @@ tag(a.nested,'sqlx:"-" internal:"true" json:"-"')
 FROM (SELECT id, TARGET, 0 AS computed, 'not JSON' AS INCLUSION_MAP, 'not JSON' AS EXCLUSION_MAP,
  'not JSON' AS signals, 'not JSON' AS nested FROM audience) a`,
 			}
-			generator := Generator{Operation: "get", GenerationPolicy: policy}
+			generator := Generator{Operation: "get"}
 			generated, err := generator.Generate(ctx, GenerationRequest{Source: source, Destination: root})
 			require.NoError(t, err)
 			view := generated.Result.Plan.Views[0]

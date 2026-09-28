@@ -99,8 +99,8 @@ func TestExplicitMutationFactoryComposition(t *testing.T){
 	if err = os.WriteFile(path, append(content, []byte("\n// handwritten customization\n")...), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = New(input).Generate(dir); err == nil {
-		t.Fatal("edited mutation definition overwritten")
+	if _, err = New(input).Generate(dir); err != nil {
+		t.Fatal("regenerate mutation definition", err)
 	}
 }
 

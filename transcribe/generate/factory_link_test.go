@@ -55,11 +55,11 @@ func TestGeneratedFactoryExportsLinkAutomatically(t *testing.T) {
 			if err = os.WriteFile(path, edited, 0644); err != nil {
 				t.Fatal(err)
 			}
-			if _, err = New(input).Generate(dir); err == nil {
-				t.Fatal("edited linking artifact overwritten")
+			if _, err = New(input).Generate(dir); err != nil {
+				t.Fatal("regenerate linking artifact", err)
 			}
 			actual, err := os.ReadFile(path)
-			if err != nil || string(actual) != string(edited) {
+			if err != nil || string(actual) != string(content) {
 				t.Fatal("failed generation changed edited artifact")
 			}
 		})

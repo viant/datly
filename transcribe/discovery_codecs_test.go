@@ -124,7 +124,7 @@ func TestGeneratedCodecExecution(t *testing.T) {
   require.JSONEq(t,%q,recorder.Body.String())
  })}
 }
-`, generated.Result.Plan.ComponentPackage, codecTestPackage, generated.Result.Plan.ComponentPackage, `{"Status":"ok","Data":[{"Label":"ONE"},{"Label":"TWO"},{"Label":"THREE"}]}`)
+`, generated.Result.Plan.Package, codecTestPackage, generated.Result.Plan.Package, `{"Status":"ok","Data":[{"Label":"ONE"},{"Label":"TWO"},{"Label":"THREE"}]}`)
 	writeSourceFile(t, base, "codec_execution_test.go", fixture)
 	command := exec.Command("go", "test", "-mod=mod", "-count=1", "-timeout=120s", ".")
 	command.Dir, command.Env = base, append(os.Environ(), "GOWORK=off")

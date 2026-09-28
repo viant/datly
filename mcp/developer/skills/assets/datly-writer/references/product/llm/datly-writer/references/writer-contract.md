@@ -446,11 +446,11 @@ For scoped message-bus hook examples and the original async job/dry-run boundary
 
 ## 14. Regeneration and delivery checks
 
-Persisted dynamic shapes follow the current SQL projection for fields proven to be generated-owned. For example, changing `CAST(view.column AS int)` to `CAST(view.column AS *int)` changes the existing Go field to `*int`; reversing the CAST restores `int`. Removing a projected column removes its owned field and corresponding generated presence/accessor support. This applies to readers and generated Go mutation components, including repeated generation with the same catalog.
+Persisted generated shapes follow the current SQL projection. For example, changing `CAST(view.column AS int)` to `CAST(view.column AS *int)` changes the existing Go field to `*int`; reversing the CAST restores `int`. Removing a projected column removes its owned field and corresponding generated presence/accessor support. This applies to readers and generated Go mutation components, including repeated generation with the same catalog.
 
-Retain the order of surviving fields, append new fields, and preserve unrelated authored fields, comments, methods and tags. The projection inventory and fingerprints establish edit/removal authority; an older incomplete inventory must not authorize deletion of unproven fields. Reject conflicts with authored changes explicitly. Regenerate Go handlers and router artifacts under their ownership checks. Do not delete unknown files, remove manifests to bypass protection, or overwrite edited generated artifacts to make a run pass.
+Regenerate shapes, presence, helpers, handlers and routers from the current DQL. Direct edits inside generated files are overwritten and are the editor's responsibility. Preserve separate application hook files and explicit linked Go contracts. Unknown application files are never removed by a filename guess; no package sidecar is read or written.
 
-SQL text may be maintained as stable named resources while Go tags remain stable. Register compiled `embed.FS` resources explicitly with the shared Bindly store, or use the configured package loader's resource discovery. Missing namespaces/resources are errors, not a reason to substitute unrelated inline SQL. Preserve old resource/shape ownership when views disappear or are renamed.
+SQL text may be maintained as stable named resources while Go tags remain stable. Register compiled `embed.FS` resources explicitly with the shared Bindly store, or use the configured package loader's resource discovery. Missing namespaces/resources are errors, not a reason to substitute unrelated inline SQL. Retire obsolete generated resources and shapes when views disappear or are renamed, while preserving resources used by other namespaces.
 
 Before claiming a writer complete, verify through an isolated SQLite-backed application/runtime path:
 

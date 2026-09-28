@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/transcribe/column"
-	"github.com/viant/datly/transcribe/generate"
 )
 
 func TestGeneratorHiddenRelationHolders(t *testing.T) {
@@ -50,15 +49,14 @@ LEFT JOIN (SELECT parent_id,value FROM summaries) privateSummary ON p.id=private
 	}
 	generator := Generator{Operation: "get"}
 	// Changing existing visibility follows the explicit shape-migration policy;
-	// ownership-checked overwrite needs no edits to generated Go.
+	// regeneration updates the generated Go from DQL.
 	draft := *source
 	draft.Text = strings.ReplaceAll(draft.Text, `tag(privateTimeline,'json:"-" internal:"true"'),`, "")
 	draft.Text = strings.ReplaceAll(draft.Text, `tag(privateSummary,'json:"-" internal:"true"'),`, "")
 	_, err := generator.Generate(ctx, GenerationRequest{Source: &draft, Destination: root})
 	require.NoError(t, err)
 	_, err = generator.Generate(ctx, GenerationRequest{Source: source, Destination: root})
-	require.ErrorContains(t, err, "explicit migration required")
-	generator.GenerationPolicy = generate.GenerationPolicyOverwrite
+	require.NoError(t, err)
 	generated, err := generator.Generate(ctx, GenerationRequest{Source: source, Destination: root})
 	require.NoError(t, err)
 	holders := 0
@@ -84,8 +82,7 @@ LEFT JOIN (SELECT parent_id,value FROM summaries) privateSummary ON p.id=private
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(filepath.Join(root, "parents", name), content, 0600))
 	}
-	for _, policy := range []generate.GenerationPolicy{generate.GenerationPolicyMerge, generate.GenerationPolicyOverwrite} {
-		generator.GenerationPolicy = policy
+	for range []string{"first", "repeat"} {
 		_, err = generator.Generate(ctx, GenerationRequest{Source: source, Destination: root})
 		require.NoError(t, err)
 		after, err := os.ReadFile(viewsFile)

@@ -66,7 +66,7 @@ Go hooks own business rules. Existing linked Go types keep their authority.
 - Use full Go module/package identity and declared import aliases; never create a local empty substitute for an unresolved type.
 - Has/presence bookkeeping is internal. Keep it out of client JSON, MCP schemas, examples of request bodies, and public error payloads.
 - Internal physical columns still participate in SQL. A logical pseudo field that is not persisted is a different concept.
-- Preserve existing field order, append new fields, and retain authored handlers/hooks. Do not overwrite edited generated output to make regeneration pass.
+- Regenerate shapes from the current DQL and retain separate authored handlers/hooks. Direct edits inside generated files are overwritten and are the editor's responsibility.
 - Use ordinary SQLX mapping and the framework's scoped services through their public surfaces; never advise a parallel raw-map row pipeline.
 - Separate authoring-time developer MCP operations from runtime business MCP tools. Discover actual tool schemas; never invent a server URL, method, connector, or installed capability.
 

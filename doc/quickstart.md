@@ -64,7 +64,7 @@ private dependencies. SQL/template/document resources retain their manifests.
 | Port in use | Change `Endpoint.Address` in the demo config and curl URLs together. |
 | Route missing | Check build package selection, runtime exposure, method/path, then rebuild. |
 | Missing source/resource | Preserve the recorded source and resource paths; copying only the binary is insufficient. |
-| Generated linker conflict | Preserve authored edits and inspect build ownership; do not overwrite edited generated files blindly. |
+| Generated declaration conflict | Keep application customization in separate hooks or linked contracts; choose nonconflicting DQL names and destinations. |
 
 The demo demonstrates readers, a custom writer, native lifecycle methods and
 OpenAPI. It does not provision authentication, cache backends or async services.

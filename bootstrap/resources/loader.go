@@ -1,4 +1,4 @@
-// Package resources loads manifest-declared package assets into the shared
+// Package resources loads Go-declared package assets into the shared
 // Bindly filesystem authority used by compilation and invocation.
 package resources
 
@@ -26,10 +26,10 @@ type Loaded struct {
 	assets map[string]bool
 }
 
-// IsAsset identifies exact manifest-owned files, not filename patterns.
+// IsAsset identifies exact embedded files, not filename patterns.
 func (l *Loaded) IsAsset(path string) bool { return l != nil && l.assets[filepath.Clean(path)] }
 
-// Load creates a fresh stage-owned store. Missing files, malformed manifests
+// Load creates a fresh stage-owned store. Missing files, invalid embed declarations
 // and namespace collisions fail without mutating any previously published store.
 func (l Loader) Load(ctx context.Context) (*Loaded, error) {
 	if l.Workspace == nil || ctx == nil {
@@ -61,29 +61,30 @@ func (l Loader) Load(ctx context.Context) (*Loaded, error) {
 		}
 		defer root.Close()
 		source := root.FS()
-		manifests, err := packageasset.ReadAll(source)
+		declarations, err := sourceResources(location.Dir)
 		if err != nil {
-			return nil, fmt.Errorf("package %s assets: %w", packagePath, err)
+			return nil, fmt.Errorf("package %s embedded resources: %w", packagePath, err)
 		}
-		if len(manifests) == 0 {
-			linked := bootstrap.LinkedResources(l.Holders, packagePath)
-			for namespace, embedded := range linked {
-				if previous := namespaces[namespace]; previous != "" {
-					return nil, fmt.Errorf("resource namespace %q is declared by both %s and %s", namespace, previous, packagePath)
-				}
-				namespaces[namespace] = packagePath
-				if err := result.Store.Register(namespace, embedded); err != nil {
-					return nil, err
-				}
-			}
-			if len(linked) > 0 {
+		// Linked holders supply binary resource authority. A source workspace supplies
+		// the generation snapshot so a reload observes current SQL/static assets.
+		linked := bootstrap.LinkedResources(l.Holders, packagePath)
+		sourceNamespaces := map[string]bool{}
+		for _, declaration := range declarations {
+			sourceNamespaces[declaration.Namespace] = true
+		}
+		for namespace, embedded := range linked {
+			if sourceNamespaces[namespace] {
 				continue
 			}
-			manifests, err = sourceResources(location.Dir)
-			if err != nil {
-				return nil, fmt.Errorf("package %s embedded resources: %w", packagePath, err)
+			if previous := namespaces[namespace]; previous != "" {
+				return nil, fmt.Errorf("resource namespace %q is declared by both %s and %s", namespace, previous, packagePath)
+			}
+			namespaces[namespace] = packagePath
+			if err := result.Store.Register(namespace, embedded); err != nil {
+				return nil, err
 			}
 		}
+		manifests := declarations
 		for _, manifest := range manifests {
 			if previous := namespaces[manifest.Namespace]; previous != "" {
 				return nil, fmt.Errorf("resource namespace %q is declared by both %s and %s", manifest.Namespace, previous, packagePath)

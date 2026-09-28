@@ -61,9 +61,10 @@ func TestGeneratorEmitsCatalogGeneratedTypeAsOwnedPackageArtifact(t *testing.T) 
 	if _, err = New(Input{Component: generatedTypeComponent(), TargetPackage: targetPackage, TypeResolver: resolver}).Generate(packageDir); err != nil {
 		t.Fatal(err)
 	}
-	if retained, err := os.ReadFile(filepath.Join(packageDir, "spend_cube_input.go")); err != nil || string(retained) != text {
-		t.Fatalf("unreferenced generated shape was changed or removed: %v", err)
+	if _, err := os.Stat(filepath.Join(packageDir, "spend_cube_input.go")); !os.IsNotExist(err) {
+		t.Fatalf("obsolete generated shape remains: %v", err)
 	}
+
 }
 
 func TestGeneratorRejectsInvalidGeneratedTypeAuthorityAndCollisions(t *testing.T) {

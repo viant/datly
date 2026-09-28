@@ -113,7 +113,7 @@ func TestCompilationMetadataReuseAndArtifactParity(t *testing.T) {
 	var files [][]generate.EmittedFile
 	for _, item := range []*spec.Component{baseline, component} {
 		dir := t.TempDir()
-		result, err := generate.New(generate.Input{Component: item, PackageName: "records", TargetPackage: "example.com/records", SQLResources: true, EphemeralOwnership: true}).Generate(dir)
+		result, err := generate.New(generate.Input{Component: item, PackageName: "records", TargetPackage: "example.com/records", SQLResources: true}).Generate(dir)
 		require.NoError(t, err)
 		for i := range result.Files {
 			result.Files[i].Path, err = filepath.Rel(dir, result.Files[i].Path)

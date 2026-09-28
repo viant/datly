@@ -291,8 +291,8 @@ different parent's rows.
   generated plumbing.
 - Keep application behavior in create-once lifecycle/read hook files selected
   by the DQL contract.
-- Preserve generated manifests/fingerprints and allow transcription to reject
-  conflicts with authored edits.
+- Regenerate from current DQL without package manifests. Direct generated-file
+  edits are overwritten; separate application hooks and linked contracts survive.
 - Use prefix-free default filenames unless collision or an explicit destination
   requires a declared override.
 - Link selected generated packages through the Datly 1.0 project build policy.
@@ -456,20 +456,11 @@ not become a second generator or a place for database business logic.
   and inspect any owned-file changes. A successful CLI exit alone does not
   prove authorization, sparse presence, or transaction behavior.
 
-When newer generator metadata changes an owned relation tag, compare the DQL
-proposal, the checked-in field, and the recorded generation manifest. Datly may
-update its own join and JSON presentation tags only when the destination still
-matches that trusted baseline; an authored relation edit remains protected.
-Keep the corrected policy in Datly with a native regeneration test rather than
-hand-editing every generated view field in the application.
-
-Merge regeneration conservatively retains historical SQL resources for old
-shape references. When a relation is intentionally retired, audit that package's
-authored code and run a targeted `-generation-policy overwrite` regeneration
-only after its replacement component passes parity tests. Overwrite removes
-obsolete generated shapes and resources, but still rejects removal of a
-resource whose bytes differ from its trusted fingerprint. Do not use it to
-discard edited hooks or bypass an unexplained ownership conflict.
+When generator metadata changes a relation tag, regenerate from corrected DQL
+and verify native runtime parity. Generated relation tags, shapes and SQL follow
+the current contract; direct edits are overwritten. Separate application hooks
+and linked contracts survive. Retired resources are removed only when no other
+namespace uses them. No fingerprint sidecar or overwrite policy is required.
 
 ## Verification gates
 

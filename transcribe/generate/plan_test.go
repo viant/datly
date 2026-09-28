@@ -513,7 +513,7 @@ func TestResolvePlan_EmitsExplicitViewTypesAndDestinations(t *testing.T) {
 	}
 }
 
-func TestGeneratorRequiresExplicitMigrationForChangedViewDestination(t *testing.T) {
+func TestGeneratorReplacesChangedViewDestination(t *testing.T) {
 	dir := t.TempDir()
 	component := func(childDest string) *spec.Component {
 		return &spec.Component{
@@ -529,16 +529,17 @@ func TestGeneratorRequiresExplicitMigrationForChangedViewDestination(t *testing.
 	if _, err := os.Stat(filepath.Join(dir, "items.go")); err != nil {
 		t.Fatalf("first child destination: %v", err)
 	}
-	if _, err := New(Input{Component: component("")}).Generate(dir); err == nil || !strings.Contains(err.Error(), "explicit migration required") {
-		t.Fatalf("destination tag change error = %v", err)
+	if _, err := New(Input{Component: component("")}).Generate(dir); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "items.go")); err != nil {
-		t.Fatalf("existing child destination removed: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, "items.go")); !os.IsNotExist(err) {
+		t.Fatalf("obsolete child destination remains: %v", err)
 	}
 	content, err := os.ReadFile(filepath.Join(dir, "orders.go"))
-	if err != nil || strings.Contains(string(content), "type ItemsView struct") {
-		t.Fatalf("failed migration modified parent shape = %v\n%s", err, content)
+	if err != nil || !strings.Contains(string(content), "type ItemsView struct") {
+		t.Fatalf("relocated child: %v\n%s", err, content)
 	}
+
 }
 
 func TestResolvePlan_RejectsInvalidViewTypeAndDestination(t *testing.T) {
@@ -696,7 +697,7 @@ func TestEmitScaffold_WritesPlannedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated input file: %v", err)
 	}
-	assertly.AssertValues(t, "package vendor_catalog\n\n// VendorInput is the generated input scaffold for VendorCatalog.\ntype VendorInput struct{}\n", string(inputBytes))
+	assertly.AssertValues(t, generatedHeader(plan.ComponentName)+"package vendor_catalog\n\n// VendorInput is the generated input scaffold for VendorCatalog.\ntype VendorInput struct{}\n", string(inputBytes))
 
 	componentBytes, err := os.ReadFile(filepath.Join(dir, "vendor_router.go"))
 	if err != nil {
@@ -709,17 +710,17 @@ func TestEmitScaffold_WritesPlannedFiles(t *testing.T) {
 	assertly.AssertValues(t, dtag.Component{Name: "VendorCatalog", Path: "/v1/api/vendors", Method: "GET"}, tag)
 }
 
-func TestEmitScaffoldEphemeralWritesNoManifest(t *testing.T) {
+func TestEmitScaffoldWritesNoManifest(t *testing.T) {
 	plan := &Plan{
 		ComponentName: "Records", Routes: []RoutePlan{{Method: "GET", Path: "/records"}},
 		RouterDest: "router.go", Input: generatedContract("Input", "input.go"), Output: generatedContract("Output", "output.go"),
 	}
 	dir := t.TempDir()
-	if _, err := EmitScaffoldEphemeral(dir, plan); err != nil {
+	if _, err := EmitScaffold(dir, plan); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, scaffoldManifestName)); !os.IsNotExist(err) {
-		t.Fatalf("ephemeral generation persisted ownership manifest: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, legacyManifestName)); !os.IsNotExist(err) {
+		t.Fatalf("generation persisted a package manifest: %v", err)
 	}
 }
 
@@ -900,19 +901,12 @@ func TestEmitScaffoldSerializesConcurrentTargetWriters(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if succeeded != 1 {
-		t.Fatalf("successful writers = %d, want 1", succeeded)
+	if succeeded != writers {
+		t.Fatalf("successful writers = %d, want %d", succeeded, writers)
 	}
-	manifest, err := readScaffoldManifest(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if manifest.Owner == "" || len(manifest.Files) != 3 {
-		t.Fatalf("manifest files = %v", manifest.Files)
-	}
-	for _, name := range manifest.Files {
-		if _, err = os.Stat(filepath.Join(dir, name)); err != nil {
-			t.Fatalf("committed file %q is missing: %v", name, err)
+	for i := 0; i < writers; i++ {
+		if _, err := os.Stat(filepath.Join(dir, fmt.Sprintf("users%d_router.go", i))); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
@@ -935,7 +929,7 @@ func TestEmitScaffoldRejectsUnownedGeneratedFileCollision(t *testing.T) {
 	}
 }
 
-func TestEmitScaffoldRejectsUnownedLinkedContractRemoval(t *testing.T) {
+func TestEmitScaffoldPreservesApplicationLinkedContract(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "input.go"), []byte("package userowned\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -945,8 +939,8 @@ func TestEmitScaffoldRejectsUnownedLinkedContractRemoval(t *testing.T) {
 		Input:  ContractPlan{Type: "contracts.Input", Destination: "input.go", Ownership: ContractLinked},
 		Output: generatedContract("UsersOutput", "output.go"),
 	}
-	if _, err := EmitScaffold(dir, plan); err == nil || !strings.Contains(err.Error(), `generated file "input.go" collides with an unowned package file`) {
-		t.Fatalf("EmitScaffold() error = %v", err)
+	if _, err := EmitScaffold(dir, plan); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "input.go")); err != nil {
 		t.Fatalf("unowned linked contract was removed: %v", err)
@@ -977,7 +971,7 @@ func TestEmitScaffoldRejectsUntrackedFileInOwnedPackage(t *testing.T) {
 	}
 }
 
-func TestEmitScaffoldRejectsUntrackedRemovalInOwnedPackage(t *testing.T) {
+func TestEmitScaffoldPreservesApplicationFileOnLinkedTransition(t *testing.T) {
 	dir := t.TempDir()
 	initial := &Plan{
 		ComponentName: "Users", ViewDest: "users.go", RouterDest: "router.go",
@@ -992,8 +986,8 @@ func TestEmitScaffoldRejectsUntrackedRemovalInOwnedPackage(t *testing.T) {
 	}
 	changed := *initial
 	changed.Input = ContractPlan{Type: "contracts.Input", Destination: "input.go", Ownership: ContractLinked}
-	if _, err := EmitScaffold(dir, &changed); err == nil || !strings.Contains(err.Error(), `generated file "input.go" collides with an unowned package file`) {
-		t.Fatalf("EmitScaffold() error = %v", err)
+	if _, err := EmitScaffold(dir, &changed); err != nil {
+		t.Fatal(err)
 	}
 	content, err := os.ReadFile(untracked)
 	if err != nil || string(content) != "package users\n\ntype UsersInput struct{}\n" {
@@ -1180,18 +1174,10 @@ func TestEmitScaffold_WritesRouteMetadata(t *testing.T) {
 
 func TestEmitScaffoldMigratesOwnedDuplicateComponentHolder(t *testing.T) {
 	dir := t.TempDir()
-	fingerprints := map[string]string{}
-	for name, content := range map[string]string{
-		"component.go": "package users\n\ntype Component struct{}\n",
-		"router.go":    "package users\n\ntype Route struct{}\n",
-	} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+	for name, content := range map[string]string{"component.go": "package users\ntype Component struct{}\n", "router.go": "package users\ntype Route struct{}\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(generatedHeader("Users")+content), 0644); err != nil {
 			t.Fatal(err)
 		}
-		fingerprints[name] = scaffoldFingerprint([]byte(content))
-	}
-	if err := writeScaffoldManifest(dir, "Users", []string{"component.go", "router.go"}, &scaffoldManifest{Roles: map[string]string{"component.go": "artifact", "router.go": "artifact"}, Fingerprints: fingerprints}); err != nil {
-		t.Fatal(err)
 	}
 	plan := &Plan{
 		ComponentName: "Users", Routes: []RoutePlan{{Method: "GET", Path: "/users"}},
@@ -1275,7 +1261,7 @@ func TestEmitScaffold_WritesTypedOutputFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
-	assertly.AssertValues(t, "package vendor_catalog\n\n// VendorOutput is the generated output scaffold for VendorCatalog.\ntype VendorOutput struct {\n\tData   []*VendorView `parameter:\"view,kind=output,in=view\"`\n\tStatus string        `parameter:\"status,kind=output,in=status\"`\n}\n", string(outputBytes))
+	assertly.AssertValues(t, "package vendor_catalog\n\n// VendorOutput is the generated output scaffold for VendorCatalog.\ntype VendorOutput struct {\n\tData   []*VendorView `parameter:\"view,kind=output,in=view\"`\n\tStatus string        `parameter:\"status,kind=output,in=status\"`\n}\n", strings.TrimPrefix(string(outputBytes), generatedHeader(plan.ComponentName)))
 }
 
 func TestEmitScaffold_WritesDefaultOutputFields(t *testing.T) {
@@ -1298,7 +1284,7 @@ func TestEmitScaffold_WritesDefaultOutputFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
-	assertly.AssertValues(t, "package vendor_catalog\n\n// VendorOutput is the generated output scaffold for VendorCatalog.\ntype VendorOutput struct {\n\tStatus string  `parameter:\"status,kind=output,in=status\"`\n\tData   []*View `parameter:\"view,kind=output,in=view\"`\n}\n", string(outputBytes))
+	assertly.AssertValues(t, "package vendor_catalog\n\n// VendorOutput is the generated output scaffold for VendorCatalog.\ntype VendorOutput struct {\n\tStatus string  `parameter:\"status,kind=output,in=status\"`\n\tData   []*View `parameter:\"view,kind=output,in=view\"`\n}\n", strings.TrimPrefix(string(outputBytes), generatedHeader(plan.ComponentName)))
 }
 
 func TestResolvePlan_OutputOptionPromotesBodyFieldToOutput(t *testing.T) {
@@ -1610,7 +1596,7 @@ func TestEmitScaffold_WritesOutputSummaryField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
-	assertly.AssertValues(t, "package meta_out\n\n// MetaOutOutput is the generated output scaffold for MetaOut.\ntype MetaOutOutput struct {\n\tSummary any   `parameter:\"summary,kind=output,in=summary\"`\n\tData    *View `parameter:\"view,kind=output,in=view\"`\n}\n", string(outputBytes))
+	assertly.AssertValues(t, "package meta_out\n\n// MetaOutOutput is the generated output scaffold for MetaOut.\ntype MetaOutOutput struct {\n\tSummary any   `parameter:\"summary,kind=output,in=summary\"`\n\tData    *View `parameter:\"view,kind=output,in=view\"`\n}\n", strings.TrimPrefix(string(outputBytes), generatedHeader(plan.ComponentName)))
 }
 
 func TestEmitScaffold_WritesCombinedOutputChannels(t *testing.T) {
@@ -1634,7 +1620,7 @@ func TestEmitScaffold_WritesCombinedOutputChannels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
-	assertly.AssertValues(t, "package meta_status_out\n\n// MetaStatusOutOutput is the generated output scaffold for MetaStatusOut.\ntype MetaStatusOutOutput struct {\n\tSummary any    `parameter:\"summary,kind=output,in=summary\"`\n\tStatus  string `parameter:\"status,kind=output,in=status\"`\n\tData    *View  `parameter:\"view,kind=output,in=view\"`\n}\n", string(outputBytes))
+	assertly.AssertValues(t, "package meta_status_out\n\n// MetaStatusOutOutput is the generated output scaffold for MetaStatusOut.\ntype MetaStatusOutOutput struct {\n\tSummary any    `parameter:\"summary,kind=output,in=summary\"`\n\tStatus  string `parameter:\"status,kind=output,in=status\"`\n\tData    *View  `parameter:\"view,kind=output,in=view\"`\n}\n", strings.TrimPrefix(string(outputBytes), generatedHeader(plan.ComponentName)))
 }
 
 func TestEmitScaffold_WritesNestedPatchBodyOutputField(t *testing.T) {
@@ -1658,7 +1644,7 @@ func TestEmitScaffold_WritesNestedPatchBodyOutputField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
-	assertly.AssertValues(t, "package nested_patch_body_out\n\n// NestedPatchBodyOutOutput is the generated output scaffold for NestedPatchBodyOut.\ntype NestedPatchBodyOutOutput struct {\n\tFoos Foos `parameter:\"Foos,kind=output,in=body\" anonymous:\"true\" typeName:\"Foos\"`\n}\n", string(outputBytes))
+	assertly.AssertValues(t, "package nested_patch_body_out\n\n// NestedPatchBodyOutOutput is the generated output scaffold for NestedPatchBodyOut.\ntype NestedPatchBodyOutOutput struct {\n\tFoos Foos `parameter:\"Foos,kind=output,in=body\" anonymous:\"true\" typeName:\"Foos\"`\n}\n", strings.TrimPrefix(string(outputBytes), generatedHeader(plan.ComponentName)))
 }
 
 func TestEmitScaffold_WritesReferencedBodyPlaceholderTypes(t *testing.T) {
@@ -2726,11 +2712,7 @@ func TestGeneratePackageFromSource_ArrayAggHelperFieldIsUsable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected generate-from-source error: %v", err)
 	}
-	inputBytes, err := os.ReadFile(filepath.Join(pkgDir, "input.go"))
-	if err != nil {
-		t.Fatalf("failed to read generated input file: %v", err)
-	}
-	pkgName := strings.TrimSpace(strings.TrimPrefix(strings.SplitN(string(inputBytes), "\n", 2)[0], "package"))
+	pkgName := result.Plan.PackageName()
 	consumer := "package " + pkgName + "\n\n" +
 		"func _useArrayAggHelperValues(in *" + result.Plan.Input.Type + ") []int {\n" +
 		"\treturn in.CurEventsId.Values\n" +

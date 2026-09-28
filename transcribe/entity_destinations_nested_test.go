@@ -43,7 +43,7 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 				var err error
 				generated, err = NewCompiler().Transcribe(ctx, Request{Source: source, Destination: root, Options: options})
 				if err != nil {
-					for _, name := range []string{"entities/event.go", "entities/.datly-gen.json"} {
+					for _, name := range []string{"entities/event.go", "entities/entity_methods.go"} {
 						data, _ := os.ReadFile(filepath.Join(root, name))
 						t.Logf("%s: %s", name, data)
 					}

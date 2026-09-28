@@ -27,9 +27,11 @@ type Output struct {
 }
 
 //go:embed queries/*.sql
-var Assets embed.FS
+var DatlyResources embed.FS
 
-func (Component) EmbedFS() *embed.FS { return &Assets }
+const DatlyResourceNamespace = "build_records"
+
+func (Component) EmbedFS() *embed.FS { return &DatlyResources }
 
 func (Component) EmbedNamespace() string { return "build_records" }
 

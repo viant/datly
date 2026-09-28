@@ -149,8 +149,8 @@ func TestMutationScaffoldRevalidatesFreshAssetsAndPlans(t *testing.T) {
 					}
 				}
 			}
-			if len(before[".datly-gen.json"]) == 0 {
-				t.Fatal("missing manifest fixture")
+			if len(before[".datly-gen.json"]) != 0 {
+				t.Fatal("unexpected manifest fixture")
 			}
 			// Mutate a fresh asset after approval, and independently a returned Plan.
 			tc.change(asset)

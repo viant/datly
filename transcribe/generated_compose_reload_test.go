@@ -29,7 +29,7 @@ func testGeneratedCubeComposePublicReloadSQLite(t *testing.T, explicitAlias bool
 	ctx := context.Background()
 	const module = "github.com/viant/datly/testfixture/composereload"
 	const predicatePath = "github.com/viant/datly/transcribe/testdata/composelinked"
-	_ = reflect.TypeFor[composelinked.ChannelPredicate]()
+	_ = reflect.TypeFor[composelinked.ScopePredicate]()
 	authored, root := t.TempDir(), t.TempDir()
 	(testharness.GeneratedModule{Path: module}).Write(t, authored)
 	if err := os.MkdirAll(filepath.Join(authored, "spend"), 0755); err != nil {

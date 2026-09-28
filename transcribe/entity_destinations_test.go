@@ -105,9 +105,9 @@ func TestGeneratedEntityDestinations(t *testing.T) {
 			if err = os.WriteFile(shape, edited, 0600); err != nil {
 				t.Fatal(err)
 			}
-			custom := "package entities\nfunc(e *Event) Authored()string{return e.AuthoredNote}\n"
+			custom := "package entities\nvar setterPreserved bool\nfunc(e *Event) Authored()string{return \"authored\"}\n"
 			if tc.options.Target != "" {
-				custom += "func(e *Event) SetName(v string){e.Name=v;if e.Has==nil{e.Has=&EventHas{}};e.Has.Name=true;e.AuthoredNote=\"setter preserved\"}\n"
+				custom += "func(e *Event) SetName(v string){e.Name=v;if e.Has==nil{e.Has=&EventHas{}};e.Has.Name=true;setterPreserved=true}\n"
 			}
 			method := filepath.Join(root, "entities/authored.go")
 			if err = os.WriteFile(method, []byte(custom), 0600); err != nil {
@@ -156,7 +156,7 @@ func TestGeneratedEntityDestinations(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !strings.Contains(string(after), "AuthoredNote") || strings.Contains(string(after), "Extra ") {
+			if string(before) != string(after) || strings.Contains(string(after), "AuthoredNote") || strings.Contains(string(after), "Extra ") {
 				t.Fatal("regeneration lost edits, retained dropped field or changed stable output")
 			}
 			if lifecyclePath != "" {
@@ -180,7 +180,7 @@ func TestGeneratedEntityDestinations(t *testing.T) {
 				}
 				runtimeSource = strings.NewReplacer("EventsInput", "Request", "EventsOutput", "Response").Replace(runtimeSource)
 				runtimeSource += `
-func TestEntityMethods(t *testing.T){e:=&Event{};e.SetName("changed");if e.GetName()!="changed"||e.Authored()!="setter preserved"||e.Has==nil||!e.Has.Name{t.Fatal("entity setters/markers lost")}}
+func TestEntityMethods(t *testing.T){e:=&Event{};e.SetName("changed");if e.GetName()!="changed"||e.Authored()!="authored"||e.Has==nil||!e.Has.Name{t.Fatal("entity setters/markers lost")}}
 `
 			}
 			testFile := filepath.Join(root, "api/events/runtime_test.go")
@@ -227,16 +227,16 @@ func TestEntityMethods(t *testing.T){e:=&Event{};e.SetName("changed");if e.GetNa
 				if err != nil {
 					t.Fatal(err)
 				}
-				customBytes := append(append([]byte(nil), generatedBytes...), []byte("\n// direct edit must not be overwritten\n")...)
+				customBytes := append(append([]byte(nil), generatedBytes...), []byte("\n// direct generated edit\n")...)
 				if err = os.WriteFile(methodFile, customBytes, 0600); err != nil {
 					t.Fatal(err)
 				}
-				if _, err = transcribe("e.ID,e.NAME"); err == nil || !strings.Contains(err.Error(), "manually changed") {
-					t.Fatalf("edited method artifact accepted: %v", err)
+				if _, err = transcribe("e.ID,e.NAME"); err != nil {
+					t.Fatalf("regenerate edited method artifact: %v", err)
 				}
 				after, _ := os.ReadFile(methodFile)
-				if string(after) != string(customBytes) {
-					t.Fatal("edited method artifact lost")
+				if string(after) != string(generatedBytes) {
+					t.Fatal("edited method artifact was not restored")
 				}
 				if err = os.WriteFile(methodFile, generatedBytes, 0600); err != nil {
 					t.Fatal(err)

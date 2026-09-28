@@ -73,14 +73,14 @@ func TestSourceHandlerDiscoveryGenerationRuntime(t *testing.T) {
 	writeSourceHandlerFile(t, root, "dql/convert.dql", source.Text)
 	db := &forbiddenHandlerDB{}
 	discovery := Discovery{BaseDir: root, Include: []string{handlerFixtureModule + "/dql"}, GoBuild: source.GoBuild, ColumnRefiner: column.New(db)}
-	for _, policy := range []generate.GenerationPolicy{"", generate.GenerationPolicyOverwrite} {
+	for range []string{"first", "repeat"} {
 		project, err := discovery.Compile(ctx)
 		require.NoError(t, err)
 		require.Len(t, project.Components, 1)
 		compiled := project.Components[0]
 		require.Nil(t, compiled.Component.RootView)
 		require.Empty(t, compiled.Component.Settings.DefaultConnector)
-		result, err := (Generator{Operation: "handler", GenerationPolicy: policy}).Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
+		result, err := (Generator{Operation: "handler"}).Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
 		require.NoError(t, err)
 		require.Equal(t, generate.ContractLinked, result.Result.Plan.Input.Ownership)
 		require.Empty(t, result.Result.Plan.Views)
@@ -99,11 +99,11 @@ func TestSourceHandlerDiscoveryGenerationRuntime(t *testing.T) {
 
 func TestSourceHandlerFailuresDoNotPublish(t *testing.T) {
 	root, original := sourceHandlerFixture(t)
-	g := Generator{Operation: "handler", GenerationPolicy: generate.GenerationPolicyOverwrite}
+	g := Generator{Operation: "handler"}
 	_, err := g.Generate(context.Background(), GenerationRequest{Source: original, Destination: root})
 	require.NoError(t, err)
 	writeSourceHandlerFile(t, root, "registration/handwritten.go", "package registration\nfunc Handwritten() {}\n")
-	// Regeneration preserves authored files and refreshes the owned manifest.
+	// Regeneration preserves authored files and replaces generated artifacts.
 	_, err = g.Generate(context.Background(), GenerationRequest{Source: original, Destination: root})
 	require.NoError(t, err)
 	for _, tc := range []struct{ name, old, new, message string }{
@@ -250,7 +250,27 @@ func TestSourceHandlerRequiresHandlerOperation(t *testing.T) {
 		require.ErrorContains(t, err, "handler")
 		require.Equal(t, before, sourceHandlerSnapshot(t, root))
 	}
-	_, err := (Generator{Operation: "handler", EphemeralOwnership: true}).Generate(context.Background(), GenerationRequest{Source: source, Destination: root})
-	require.ErrorContains(t, err, "persistent ownership")
+
+}
+
+func TestSourceHandlerWithoutOwnershipManifest(t *testing.T) {
+	root, source := sourceHandlerFixture(t)
+	generator := Generator{Operation: "handler"}
+	for _, path := range []string{"/convert", "/convert/updated"} {
+		source.Text = strings.Replace(source.Text, `"URI":"/convert"`, `"URI":"`+path+`"`, 1)
+		_, err := generator.Generate(context.Background(), GenerationRequest{Source: source, Destination: root})
+		require.NoError(t, err)
+		_, err = os.Stat(filepath.Join(root, "registration", ".datly-gen.json"))
+		require.True(t, os.IsNotExist(err), "manifest persisted: %v", err)
+		router, err := os.ReadFile(filepath.Join(root, "registration", "router.go"))
+		require.NoError(t, err)
+		require.Contains(t, string(router), "path="+path)
+	}
+	// Retained application code must still be included in build validation,
+	// and a failed validation must leave every destination byte unchanged.
+	writeSourceHandlerFile(t, root, "registration/broken.go", "package registration\nvar broken = undefinedSymbol\n")
+	before := sourceHandlerSnapshot(t, root)
+	_, err := generator.Generate(context.Background(), GenerationRequest{Source: source, Destination: root})
+	require.Error(t, err)
 	require.Equal(t, before, sourceHandlerSnapshot(t, root))
 }

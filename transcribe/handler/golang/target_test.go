@@ -419,9 +419,8 @@ func TestLowerPersistsThroughCanonicalGeneratorProduct(t *testing.T) {
 	if err != nil || string(preserved) != string(userSource) {
 		t.Fatalf("disabled hook scaffold removed or rewrote user file: err=%v\n%s", err, preserved)
 	}
-	manifest, err := os.ReadFile(filepath.Join(packageDir, ".datly-gen.json"))
-	if err != nil || strings.Contains(string(manifest), "events_hooks.go") {
-		t.Fatalf("hook scaffold entered generated manifest: err=%v\n%s", err, manifest)
+	if _, err = os.Stat(filepath.Join(packageDir, ".datly-gen.json")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected generation manifest: %v", err)
 	}
 	for _, emitted := range result.Files {
 		if filepath.Base(emitted.Path) == "events_hooks.go" {

@@ -239,7 +239,7 @@ func TestGenExecutableOuterProjection(t *testing.T) {
 						t.Fatal("rejected annotation partially wrote project")
 					}
 				}
-				// The new relation-alias authority still rejects edited generated links.
+				// Regeneration replaces direct edits to generated relation links.
 				shape := read(rootPath)
 				edited := strings.Replace(shape, "Id:orders.ID=OrderId:items.ORDER_ID", "Id:orders.ID=OrderId:items.EDITED", 1)
 				if edited == shape {
@@ -247,14 +247,14 @@ func TestGenExecutableOuterProjection(t *testing.T) {
 				}
 				write(rootPath, edited)
 				write(filepath.Join(root, "source/Orders.dql"), genpatch.OuterProjectionDQL(module, operation, "orders.ID AS RootKey,orders.KIND_ID,orders.START,orders.END,orders.NAME", "items.ID,items.ORDER_ID AS ParentKey,items.NAME", split))
-				before := snapshot()
 				out, err := exec.CommandContext(ctx, binary, args...).CombinedOutput()
-				if err == nil {
-					t.Fatalf("customized relation overwritten: %s", out)
+				if err != nil {
+					t.Fatalf("regenerate edited relation: %v %s", err, out)
 				}
-				if !reflect.DeepEqual(before, snapshot()) {
-					t.Fatal("conflicting relation partially wrote project")
+				if strings.Contains(read(rootPath), "items.EDITED") {
+					t.Fatal("direct generated relation edit retained")
 				}
+
 			})
 		}
 	}

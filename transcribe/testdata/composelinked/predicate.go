@@ -10,17 +10,17 @@ import (
 	"github.com/viant/xdatly/predicate"
 )
 
-type SpendInput interface {
+type PredicateInput interface {
 	DatlyTenant() string
 	DatlyChannel() string
 }
 
-type ChannelPredicate struct {
-	Input SpendInput `bind:"kind=input,required"`
+type ScopePredicate struct {
+	Input PredicateInput `bind:"kind=input,required"`
 }
 
 // Retain the actual handler identity in a blank-importable package.
-var LinkedHandler any = &ChannelPredicate{}
+var LinkedHandler any = &ScopePredicate{}
 
 func init() { _ = LinkedHandler }
 
@@ -37,7 +37,7 @@ var Observations struct {
 	Entered chan struct{}
 }
 
-func (p *ChannelPredicate) Compute(ctx context.Context, value any) (*predicate.Criteria, error) {
+func (p *ScopePredicate) Compute(ctx context.Context, value any) (*predicate.Criteria, error) {
 	if p.Input == nil || value != p.Input.DatlyChannel() {
 		return nil, fmt.Errorf("missing canonical generated input")
 	}

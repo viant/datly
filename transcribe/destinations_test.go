@@ -206,7 +206,7 @@ func TestDQLDestinationsRejectInvalidBeforeWriting(t *testing.T) {
 	}
 }
 
-func TestDQLDestinationsPreserveEditsAndCASTDrop(t *testing.T) {
+func TestDQLDestinationsReplaceGeneratedEditsAndCASTDrop(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
@@ -243,13 +243,16 @@ func TestDQLDestinationsPreserveEditsAndCASTDrop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "UserNote") || strings.Contains(string(body), "Name ") || !strings.Contains(string(body), "*int") {
+	if strings.Contains(string(body), "UserNote") || strings.Contains(string(body), "Name ") || !strings.Contains(string(body), "*int") {
 		t.Fatalf("regenerated shape: %s", body)
 	}
 	before := string(body)
 	source.Text = strings.Replace(source.Text, "example.com/generated/models", "example.com/generated/newmodels", 1)
-	if err = run(); err == nil || !strings.Contains(err.Error(), "migration") {
-		t.Fatalf("silent relocation: %v", err)
+	if err = run(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(filepath.Join(root, "newmodels/rows.go")); err != nil {
+		t.Fatal(err)
 	}
 	body, _ = os.ReadFile(shapePath)
 	if string(body) != before {
@@ -335,7 +338,7 @@ func HandleOrders(ctx context.Context,input *dto.Request)(*dto.Response,error){r
 	}
 }
 
-func TestDQLDestinationsRejectComponentMove(t *testing.T) {
+func TestDQLDestinationsUseCurrentPackage(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
@@ -344,15 +347,16 @@ func TestDQLDestinationsRejectComponentMove(t *testing.T) {
 		t.Fatal(err)
 	}
 	source.Text = strings.Replace(source.Text, "api/records", "api/moved", 1)
-	if _, err := NewCompiler().Transcribe(ctx, Request{Source: source, Destination: root}); err == nil || !strings.Contains(err.Error(), "migration") {
-		t.Fatalf("move error=%v", err)
+	if _, err := NewCompiler().Transcribe(ctx, Request{Source: source, Destination: root}); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "api/moved")); !os.IsNotExist(err) {
-		t.Fatal("move wrote artifacts")
+	if _, err := os.Stat(filepath.Join(root, "api/moved/router.go")); err != nil {
+		t.Fatal(err)
 	}
+
 }
 
-func TestDQLDestinationsRejectRetainedImportCycle(t *testing.T) {
+func TestDQLDestinationsRejectApplicationImportCycle(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
@@ -373,13 +377,22 @@ func TestDQLDestinationsRejectRetainedImportCycle(t *testing.T) {
 	if err = os.WriteFile(file, []byte(edited), 0600); err != nil {
 		t.Fatal(err)
 	}
+	if err = run(); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(after), "AuthoredCycle") {
+		t.Fatal("generated edit retained")
+	}
+	// A separate application file introducing a real cycle must still fail.
+	writeSourceFile(t, root, "models/authored_cycle.go", "package models\nimport api \"example.com/generated/api\"\ntype AuthoredCycle = api.RecordsInput\n")
 	if err = run(); err == nil || !strings.Contains(err.Error(), "cycle") {
-		t.Fatalf("retained cycle accepted: %v", err)
+		t.Fatalf("authored import cycle accepted: %v", err)
 	}
-	after, _ := os.ReadFile(file)
-	if string(after) != edited {
-		t.Fatal("invalid generation changed user edits")
-	}
+
 }
 
 func TestDQLDestinationsKeepLinkedTypesInTheirPackage(t *testing.T) {

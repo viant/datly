@@ -15,7 +15,6 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/compile"
-	"github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/transcribe/testdata/castmodel"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
@@ -28,7 +27,7 @@ func TestCASTPreservesImportedPointerSliceShapes(t *testing.T) {
 	require.NoError(t, db.ExecStatements(ctx,
 		"CREATE TABLE shapes(scalar TEXT, pointer TEXT, values_list TEXT, pointer_list TEXT, slice_pointer TEXT)",
 		"INSERT INTO shapes VALUES(NULL,NULL,NULL,NULL,NULL)"))
-	for _, policy := range []generate.GenerationPolicy{generate.GenerationPolicyMerge, generate.GenerationPolicyOverwrite} {
+	for _, policy := range []string{"first", "repeat"} {
 		t.Run(string(policy), func(t *testing.T) {
 			root := t.TempDir()
 			(testharness.GeneratedModule{Path: "github.com/viant/datly/castshapefixture"}).Write(t, root)
@@ -51,7 +50,7 @@ FROM shapes r`, modelPackage),
 			}
 			compiled, err := NewCompiler().Compile(ctx, source)
 			require.NoError(t, err)
-			generator := Generator{Operation: "get", GenerationPolicy: policy}
+			generator := Generator{Operation: "get"}
 			// Start with value slices, as emitted by the old generator, and prove
 			// that exact CAST authority repairs those fields during regeneration.
 			oldSource := *source

@@ -15,23 +15,6 @@ type EmittedFile struct {
 }
 
 func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
-	return EmitScaffoldWithPolicy(dir, plan, GenerationPolicyMerge)
-}
-
-func EmitScaffoldWithPolicy(dir string, plan *Plan, policy GenerationPolicy) ([]EmittedFile, error) {
-	normalized, err := policy.normalize()
-	if err != nil {
-		return nil, err
-	}
-	return emitScaffold(dir, plan, false, normalized)
-}
-
-// EmitScaffoldEphemeral emits a staging package without any ownership sidecar.
-func EmitScaffoldEphemeral(dir string, plan *Plan) ([]EmittedFile, error) {
-	return emitScaffold(dir, plan, true, GenerationPolicyMerge)
-}
-
-func emitScaffold(dir string, plan *Plan, ephemeral bool, policy GenerationPolicy) ([]EmittedFile, error) {
 	if plan != nil && plan.MutationHandler == nil && plan.lifecycleTargetError != nil {
 		return nil, plan.lifecycleTargetError
 	}
@@ -39,16 +22,16 @@ func emitScaffold(dir string, plan *Plan, ephemeral bool, policy GenerationPolic
 	if err != nil {
 		return nil, err
 	}
-	if err = packages.validateWithPolicy(policy); err != nil {
+	if err = packages.validate(); err != nil {
 		return nil, err
 	}
 	var result []EmittedFile
 	for i, p := range packages.plans {
-		files, userFiles, removals, err := scaffoldArtifacts(packages.dirs[i], p)
+		files, user, removals, err := scaffoldArtifacts(packages.dirs[i], p)
 		if err != nil {
 			return nil, err
 		}
-		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: userFiles, removals: removals, plan: p, ephemeral: ephemeral, policy: policy}
+		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: user, removals: removals, plan: p}
 		if err = persistence.Commit(); err != nil {
 			return nil, err
 		}
@@ -57,30 +40,7 @@ func emitScaffold(dir string, plan *Plan, ephemeral bool, policy GenerationPolic
 	return result, nil
 }
 
-// ValidateDestination checks every package in this component before writing.
 func (p *Plan) ValidateDestination(dir string) error {
-	return p.ValidateDestinationWithPolicy(dir, GenerationPolicyMerge)
-}
-
-func (p *Plan) ValidateDestinationWithPolicy(dir string, policy GenerationPolicy) error {
-	if p != nil && p.MutationHandler == nil && p.lifecycleTargetError != nil {
-		return p.lifecycleTargetError
-	}
-	normalized, err := policy.normalize()
-	if err != nil {
-		return err
-	}
-	packages, err := p.packages(dir)
-	if err != nil {
-		return err
-	}
-	return packages.validateWithPolicy(normalized)
-}
-
-// ValidateDestinationEphemeral validates a prospective generated layout and
-// imports without applying persistence ownership checks. It is for read-only
-// project validation; real transcription still calls ValidateDestination.
-func (p *Plan) ValidateDestinationEphemeral(dir string) error {
 	if p != nil && p.MutationHandler == nil && p.lifecycleTargetError != nil {
 		return p.lifecycleTargetError
 	}
@@ -88,7 +48,7 @@ func (p *Plan) ValidateDestinationEphemeral(dir string) error {
 	if err != nil {
 		return err
 	}
-	return packages.validateEphemeral()
+	return packages.validate()
 }
 
 func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []string, error) {
@@ -290,6 +250,11 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 	}
 	if plan.Output.Ownership == ContractLinked {
 		removals = append(removals, plan.Output.Destination)
+	}
+	for i := range files {
+		if filepath.Ext(files[i].Path) == ".go" && !strings.HasPrefix(files[i].Content, generatedHeader(plan.ComponentName)) {
+			files[i].Content = generatedHeader(plan.ComponentName) + files[i].Content
+		}
 	}
 	if err := formatGoArtifacts(files, preformatted); err != nil {
 		return nil, nil, nil, err

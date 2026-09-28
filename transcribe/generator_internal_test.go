@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/transcribe/column"
-	"github.com/viant/datly/transcribe/generate"
 )
 
 func TestGeneratorPrivateReader(t *testing.T) {
@@ -39,8 +38,8 @@ SELECT r.id,r.name FROM records r`,
 	public.Text = strings.ReplaceAll(public.Text, "$internal(true)", "$internal(false)")
 	_, err := (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Source: &public, Destination: root})
 	require.NoError(t, err)
-	for _, policy := range []generate.GenerationPolicy{"", "", generate.GenerationPolicyOverwrite} {
-		generated, err := (Generator{Operation: "get", GenerationPolicy: policy}).Generate(ctx, GenerationRequest{Source: source, Destination: root})
+	for _, policy := range []string{"first", "repeat"} {
+		generated, err := (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Source: source, Destination: root})
 		require.NoError(t, err)
 		require.Len(t, generated.Result.Plan.Routes, 1)
 		require.True(t, generated.Result.Plan.Routes[0].Internal)

@@ -2,7 +2,6 @@ package generate
 
 import (
 	"errors"
-	"github.com/viant/datly/internal/testharness"
 	"go/ast"
 	"go/parser"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/viant/datly/internal/testharness"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
@@ -226,7 +227,7 @@ func TestGeneratorRemovesStaleGeneratedContractsWhenRolesBecomeLinked(t *testing
 			t.Fatalf("stale generated contract %s remains: %v", name, err)
 		}
 	}
-	if _, err = os.Stat(filepath.Join(dir, scaffoldManifestName)); err != nil {
+	if _, err = os.Stat(filepath.Join(dir, legacyManifestName)); !os.IsNotExist(err) {
 		t.Fatalf("generation manifest missing: %v", err)
 	}
 }
@@ -310,8 +311,8 @@ func TestGeneratorLinksPackageOwnedRootViewWithoutDuplicateEmission(t *testing.T
 		result.Plan.RootViewType != "contracts.Row" {
 		t.Fatalf("linked view plan = %+v", result.Plan.Views)
 	}
-	if _, err = os.Stat(filepath.Join(packageDir, "views.go")); err != nil {
-		t.Fatalf("previous generated shape was removed: %v", err)
+	if _, err = os.Stat(filepath.Join(packageDir, "views.go")); !os.IsNotExist(err) {
+		t.Fatalf("obsolete generated shape remains: %v", err)
 	}
 	for _, file := range result.Files {
 		if strings.HasSuffix(file.Path, "views.go") || strings.Contains(file.Content, "type Row struct") {

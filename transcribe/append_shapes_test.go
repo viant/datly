@@ -15,7 +15,7 @@ import (
 	xshape "github.com/viant/x/shape"
 )
 
-func TestDynamicDQLUpdatesPersistedGoShapeAppendOnly(t *testing.T) {
+func TestDynamicDQLUpdatesPersistedGoShape(t *testing.T) {
 	t.Parallel()
 	h := sqlite.New(t)
 	ctx := context.Background()
@@ -79,7 +79,7 @@ func TestDynamicDQLUpdatesPersistedGoShapeAppendOnly(t *testing.T) {
 			names = append(names, field.Names...)
 		}
 	}
-	if strings.Join(names, ",") != "Z,A,B" {
+	if strings.Join(names, ",") != "A,B,Z" {
 		t.Fatalf("updated field order %v, initial source %s", names, before)
 	}
 	if err = os.WriteFile(filepath.Join(root, "generated", "reload_test.go"), []byte(resourceReloadSource), 0644); err != nil {

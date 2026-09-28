@@ -150,19 +150,13 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("complete package compilation authority is required")
 	}
 	component := a.component.Clone()
-	// Go-only discovery has no DQL destination directive. Recover only an
-	// existing generated owner's destination, never infer one from type imports.
-	if strings.TrimSpace(a.source.Text) == "" && a.route.Dir != "" {
-		destination, err := (gen.PackageOwnership{Directory: a.route.Dir}).Destination(component.Key)
-		if err != nil {
-			return nil, err
+	// A Go holder declares the component scope; imported contract types never
+	// choose the component destination.
+	if strings.TrimSpace(a.source.Text) == "" && a.route.Dir != "" && component.Key.Scope != "" {
+		if component.TypeContext == nil {
+			component.TypeContext = &spec.TypeContext{}
 		}
-		if destination != "" {
-			if component.TypeContext == nil {
-				component.TypeContext = &spec.TypeContext{}
-			}
-			component.TypeContext.PackagePath = destination
-		}
+		component.TypeContext.PackagePath = component.Key.Scope
 	}
 	if _, err := (&componentLoader{}).normalizeIndependentViewParams(component, nil); err != nil {
 		return nil, fmt.Errorf("normalize package view contracts: %w", err)
@@ -179,6 +173,10 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		input: a.input, output: a.output,
 	}
 	result.Contracts = contracts.references()
+	if strings.TrimSpace(a.source.Text) == "" {
+		result.Contracts.Input = contracts.reference(a.route.InputType, a.input)
+		result.Contracts.Output = contracts.reference(a.route.OutputType, a.output)
+	}
 	if result.Contracts.Output != nil && a.root != nil {
 		result.Views = gen.ViewReferences{
 			gen.RootViewPath: {DescriptorKey: a.root.Key()},

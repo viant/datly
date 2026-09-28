@@ -3,15 +3,17 @@ package transcribe
 import (
 	"context"
 	"fmt"
-	"github.com/viant/bindly/resource"
 	"os"
 	"path/filepath"
+
+	"github.com/viant/bindly/resource"
+
+	"strings"
 
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
 	loaderast "github.com/viant/x/loader/ast"
 	smodel "github.com/viant/x/syntetic/model"
-	"strings"
 )
 
 // GeneratedPackage holds transcribed package artifacts for package bootstrap.
@@ -75,15 +77,10 @@ func (c *Compiler) generateCompiled(ctx context.Context, rootDir string, compile
 }
 
 func (c *Compiler) generateCompiledAt(ctx context.Context, rootDir, packageDir string, compiled *Result) (*GeneratedPackage, error) {
-	return c.generateCompiledAtWithPolicy(ctx, rootDir, packageDir, compiled, gen.GenerationPolicyMerge)
-}
-
-func (c *Compiler) generateCompiledAtWithPolicy(ctx context.Context, rootDir, packageDir string, compiled *Result, policy gen.GenerationPolicy) (*GeneratedPackage, error) {
 	input, packageDir, err := generationInput(rootDir, packageDir, compiled)
 	if err != nil {
 		return nil, err
 	}
-	input.GenerationPolicy = policy
 	return c.generateInputAt(ctx, rootDir, packageDir, compiled, input)
 }
 
