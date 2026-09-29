@@ -25,6 +25,11 @@ The ordinary native identity sequencer and its dialect policy remain separate:
 
 - Only INSERT frames with an omitted sequence are eligible. An originally
   supplied value is preserved, including zero and explicit NULL.
+- To preserve legacy nullable-sequence contracts, opt in with
+  `tag(m.sequence, 'sequenceOnNull:"allocate"')`. Originally supplied NULL then
+  qualifies for INSERT allocation; explicit zero remains supplied and UPDATE
+  NULL still clears the value. Omission or `preserve` keeps the default. The
+  policy requires a nullable target and is independent of presence markers.
 - A business hook's already assigned nonzero value is preserved.
 - UPDATE and DELETE frames never receive automatic sequence values.
 - A nil/empty-string scope is unresolved and leaves the sequence unassigned.

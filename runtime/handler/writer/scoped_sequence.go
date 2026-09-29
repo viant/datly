@@ -13,8 +13,9 @@ import (
 )
 
 type ScopedSequence struct {
-	Field Field
-	Scope []Field
+	Field        Field
+	Scope        []Field
+	AllocateNull bool
 }
 
 type scopedSequencer interface {
@@ -26,6 +27,9 @@ func compileScopedSequences(record *Record) error {
 		structField := record.EntityType.FieldByIndex(field.Index)
 		declaration := structField.Tag.Get("sequenceScope")
 		if declaration == "" {
+			if structField.Tag.Get("sequenceOnNull") != "" {
+				return fmt.Errorf("sequenceOnNull requires sequenceScope")
+			}
 			continue
 		}
 		if record.Auxiliary || field.Column == "" || field.Column == "-" || !numericField(record.EntityType, field) {
@@ -39,7 +43,14 @@ func compileScopedSequences(record *Record) error {
 		if record.ConcurrencyToken != nil && record.ConcurrencyToken.Name == field.Name {
 			return fmt.Errorf("sequence_scope cannot target a concurrency token")
 		}
-		plan := ScopedSequence{Field: field}
+		nullPolicy := structField.Tag.Get("sequenceOnNull")
+		if nullPolicy != "" && nullPolicy != "preserve" && nullPolicy != "allocate" {
+			return fmt.Errorf("invalid sequenceOnNull policy %q", nullPolicy)
+		}
+		if nullPolicy == "allocate" && structField.Type.Kind() != reflect.Pointer {
+			return fmt.Errorf("sequenceOnNull allocate requires a nullable scoped sequence")
+		}
+		plan := ScopedSequence{Field: field, AllocateNull: nullPolicy == "allocate"}
 		seen := map[string]bool{}
 		for _, name := range strings.Split(declaration, ",") {
 			name = strings.TrimSpace(name)
@@ -133,6 +144,11 @@ func (p *Program) allocateScoped(ctx context.Context, capability xhandler.Sequen
 			}
 			value := frame.Entity.Elem().FieldByIndex(plan.Field.Index)
 			supplied := frame.Original != nil && frame.Original.Has(plan.Field.Name)
+			if supplied && plan.AllocateNull && frame.Action == xhandler.WriteInsert {
+				if original, ok := p.original.Presence[frame.Entity.Pointer()]; ok && original.scopedNull[plan.Field.Name] {
+					supplied = false
+				}
+			}
 			if supplied {
 				if n, valid, err := scopedInteger(value); err != nil {
 					return err

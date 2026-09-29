@@ -731,6 +731,15 @@ func (p *Program) captureEntityOriginal(record *Record, entity reflect.Value) or
 		return existing
 	}
 	captured := originalPresence{presence: snapshotPresence(record, entity.Elem()), available: presenceAvailable(entity.Elem())}
+	for _, plan := range record.ScopedSequences {
+		value := entity.Elem().FieldByIndex(plan.Field.Index)
+		if plan.AllocateNull && value.Kind() == reflect.Pointer && value.IsNil() {
+			if captured.scopedNull == nil {
+				captured.scopedNull = map[string]bool{}
+			}
+			captured.scopedNull[plan.Field.Name] = true
+		}
+	}
 	if record.ConcurrencyToken != nil {
 		captured.token = cloneTokenValue(entity.Elem().FieldByIndex(record.ConcurrencyToken.Index))
 	}
@@ -2110,6 +2119,7 @@ type fieldSet map[string]bool
 func (s fieldSet) Has(name string) bool { return s[name] }
 
 type originalPresence struct {
+	scopedNull map[string]bool
 	*presence
 	available bool
 	token     reflect.Value

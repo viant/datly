@@ -54,6 +54,34 @@ func TestGeneratedScopedSequenceSQLite(t *testing.T) {
 	}
 }
 
+// The opt-in policy is exercised through generated metadata and actual storage.
+func TestGeneratedScopedSequenceNullAllocationSQLite(t *testing.T) {
+	ctx := context.Background()
+	h := testharness.NewSQLiteHarness(t)
+	if err := h.ExecStatements(ctx, "CREATE TABLE messages(id TEXT PRIMARY KEY,turn_id TEXT,sequence INTEGER,title TEXT,UNIQUE(turn_id,sequence))"); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "github.com/viant/datly/scopedfixture"}).Write(t, root)
+	source := strings.Replace(scopedSequenceDQL, "sequence_scope(r.sequence,r.turn_id)", `sequence_scope(r.sequence,r.turn_id),tag(r.sequence,'sequenceOnNull:"allocate"')`, 1)
+	request := GenerationRequest{Destination: root, Source: &Source{Name: "messages", Scope: "github.com/viant/datly/scopedfixture/source", Connector: "main", ColumnRefiner: column.New(column.Connections{"main": h.DB}), Text: source}}
+	if _, err := (Generator{Operation: "patch"}).Generate(ctx, request); err != nil {
+		t.Fatal(err)
+	}
+	runtime := strings.Replace(scopedSequenceRuntime, `"explicit null preserved"`, `"explicit null allocates"`, 1)
+	runtime = strings.Replace(runtime, `map[string]*int{"null":nil}`, `map[string]*int{"null":pointer(3)}`, 1)
+	writeSourceFile(t, root, "generated/scoped_sequence_test.go", runtime)
+	writeSourceFile(t, root, "generated/lifecycle.go", scopedSequenceHooks)
+	command := exec.Command("go", "test", "-mod=mod", "-count=1", "./generated")
+	command.Dir = root
+	if out, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("generated null policy: %v\n%s", err, out)
+	}
+	if _, err := (Generator{Operation: "patch"}).Generate(ctx, request); err != nil {
+		t.Fatal(err)
+	}
+}
+
 const scopedSequenceDQL = `#package('github.com/viant/datly/scopedfixture/generated')
 #setting($_ = $route('/messages','PATCH'))
 #setting($_ = $input_type('Input'))
@@ -107,6 +135,7 @@ func TestScopedWriter(t *testing.T){
   {"explicit zero preserved",` + "`" + `{"Data":[{"id":"zero","turnId":"t1","sequence":0}]}` + "`" + `,map[string]*int{"zero":pointer(0)},false},
   {"explicit null preserved",` + "`" + `{"Data":[{"id":"null","turnId":"t1","sequence":null}]}` + "`" + `,map[string]*int{"null":nil},false},
   {"empty turn is unsequenced",` + "`" + `{"Data":[{"id":"empty","turnId":""}]}` + "`" + `,map[string]*int{"empty":nil},false},
+  {"update null clears sequence",` + "`" + `{"Data":[{"id":"old1","sequence":null}]}` + "`" + `,map[string]*int{"old1":nil},false},
   {"update does not resequence",` + "`" + `{"Data":[{"id":"old1","title":"changed"}]}` + "`" + `,map[string]*int{"old1":pointer(2)},false},
   {"supplied conflict is not repaired",` + "`" + `{"Data":[{"id":"collision","turnId":"t1","sequence":2}]}` + "`" + `,nil,true},
  }{t.Run(tc.desc,func(t *testing.T){db,err:=sql.Open("sqlite3",":memory:");if err!=nil{t.Fatal(err)};defer db.Close();db.SetMaxOpenConns(1)
