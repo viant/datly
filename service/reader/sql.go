@@ -244,13 +244,19 @@ func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector 
 
 func (b *Builder) appendSelectorColumns(sb *strings.Builder, aView *view.View, selector *view.Statelet) ([]*view.Column, error) {
 	result := make([]*view.Column, 0, len(selector.Columns))
-	for i, column := range selector.Columns {
+	seen := make(map[string]bool, len(selector.Columns))
+	for _, column := range selector.Columns {
 		viewColumn, ok := aView.ColumnByName(column)
 		if !ok {
 			return nil, fmt.Errorf("not found column %v at view %v", column, aView.Name)
 		}
+		columnKey := strings.ToLower(viewColumn.Name)
+		if seen[columnKey] {
+			continue
+		}
+		seen[columnKey] = true
 
-		if i != 0 {
+		if len(result) != 0 {
 			sb.WriteString(separatorFragment)
 		}
 

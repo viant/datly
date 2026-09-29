@@ -447,6 +447,29 @@ func TestBuilder_appendRelationColumn_UsesProjectedAliasForQualifiedSourceRelati
 	})
 }
 
+func TestBuilder_appendSelectorColumns_DeduplicatesHolderAlias(t *testing.T) {
+	builder := NewBuilder()
+	aView := view.NewView("campaign", "campaign",
+		view.WithConnector(view.NewConnector("test", "sqlite3", ":memory:")),
+		view.WithColumns(view.Columns{
+			&view.Column{Name: "ID", DataType: "int"},
+			&view.Column{Name: "NAME", DataType: "string"},
+		}),
+	)
+	require.NoError(t, aView.Init(context.Background(), view.EmptyResource()))
+	require.NoError(t, aView.IndexedColumns().RegisterHolder("ID", "Adorder"))
+
+	selector := view.NewStatelet()
+	selector.Columns = []string{"ID", "NAME", "Adorder"}
+	selector.Init(aView)
+
+	sb := &strings.Builder{}
+	columns, err := builder.appendSelectorColumns(sb, aView, selector)
+	require.NoError(t, err)
+	require.Equal(t, " ID,  NAME", sb.String())
+	require.Equal(t, view.Columns{aView.Columns[0], aView.Columns[1]}, view.Columns(columns))
+}
+
 func newGroupableTestView(t *testing.T) *view.View {
 	t.Helper()
 	trueValue := true

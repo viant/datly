@@ -190,6 +190,10 @@ func (r *Collector) Lock() *sync.Mutex {
 
 // Resolve resolved unmapped column
 func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface{} {
+	if resolver := r.resolveViewColumn(column); resolver != nil {
+		return resolver
+	}
+
 	r.lockIndex()
 	buffer, ok := r.values[column.Name()]
 	if !ok {
@@ -228,6 +232,33 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 		*buffer = append(*buffer, valuePtr)
 		return valuePtr
 	}
+}
+
+// resolveViewColumn maps a projected SQL alias back to the field registered for
+// that logical view column. This keeps generated structs bound to native column
+// names (for example sqlx:"NAME") while allowing the query to return a flattened
+// alias such as SITE_NAME.
+func (r *Collector) resolveViewColumn(column io.Column) func(ptr unsafe.Pointer) interface{} {
+	if r == nil || r.view == nil || column == nil {
+		return nil
+	}
+	viewColumn, ok := r.view.ColumnByName(column.Name())
+	if !ok || !strings.EqualFold(viewColumn.Name, column.Name()) {
+		return nil
+	}
+	if viewColumn.DatabaseColumn == "" || strings.EqualFold(viewColumn.Name, viewColumn.DatabaseColumn) {
+		return nil
+	}
+	field := viewColumn.Field()
+	if field == nil {
+		return nil
+	}
+	tag := io.ParseTag(field.Tag)
+	if tag == nil || tag.Transient || tag.Column == "" || !strings.EqualFold(tag.Column, viewColumn.DatabaseColumn) {
+		return nil
+	}
+	xField := xunsafe.NewField(*field)
+	return xField.Addr
 }
 
 // parentColumnIndex returns the live parent column index. Caller must hold the parent index lock.
