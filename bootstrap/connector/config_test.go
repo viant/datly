@@ -55,3 +55,69 @@ func TestConnectorCancellationAndSafeErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestConnectorAliasesShareHandleAndTransactionIdentity(t *testing.T) {
+	ctx := context.Background()
+	set, err := connector.Open(ctx, []connector.Config{
+		{Name: "permissions", AliasOf: "authz"},
+		{Name: "authz", AliasOf: "studio"},
+		{Name: "studio", Driver: "sqlite3", DSN: filepath.Join(t.TempDir(), "alias.sqlite"), MaxOpenConns: 3},
+	}, "permissions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer set.Close()
+	studio, err := set.ResolveDB(ctx, "studio")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"authz", "permissions"} {
+		alias, err := set.ResolveDB(ctx, name)
+		if err != nil || alias != studio {
+			t.Fatalf("%s did not share the managed database identity: %v", name, err)
+		}
+	}
+	if set.SQL.DB != studio || studio.Stats().MaxOpenConnections != 3 {
+		t.Fatal("default alias did not retain target pool")
+	}
+	if _, err := studio.ExecContext(ctx, "CREATE TABLE marker(id INTEGER PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := studio.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO marker VALUES(1)"); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	alias, _ := set.ResolveDB(ctx, "authz")
+	var count int
+	if err = alias.QueryRowContext(ctx, "SELECT COUNT(*) FROM marker").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("alias observed rolled-back data: count=%d error=%v", count, err)
+	}
+	if err = set.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = alias.Ping(); err == nil {
+		t.Fatal("alias left an owned handle open")
+	}
+}
+
+func TestConnectorAliasesRejectAmbiguousOrCyclicConfiguration(t *testing.T) {
+	for _, configs := range [][]connector.Config{
+		{{Name: "alias", AliasOf: "missing"}},
+		{{Name: "alias", AliasOf: "alias"}},
+		{{Name: "one", AliasOf: "two"}, {Name: "two", AliasOf: "one"}},
+		{{Name: "alias", AliasOf: "real", Driver: "sqlite3", DSN: "private-password"}},
+		{{Name: "alias", AliasOf: "real", MaxOpenConns: 1}},
+		{{Name: "real", Driver: "sqlite3", DSN: filepath.Join(t.TempDir(), "db")}, {Name: "alias", AliasOf: "real"}, {Name: "alias", AliasOf: "real"}},
+	} {
+		set, err := connector.Open(context.Background(), configs, "")
+		if err == nil || set != nil || strings.Contains(err.Error(), "private-password") {
+			t.Fatalf("unsafe alias configuration accepted: set=%v error=%v", set, err)
+		}
+	}
+}

@@ -17,7 +17,10 @@ import (
 
 // Config retains original single-connection names, DSN expansion and pool options.
 type Config struct {
-	Name              string
+	Name string
+	// AliasOf reuses a named connector's handle, pool and transaction identity.
+	// An alias cannot also declare connection or pool settings.
+	AliasOf           string
 	Driver            string
 	DSN               string
 	Secret            *scy.Resource
@@ -50,15 +53,27 @@ func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, er
 		}
 	}()
 	seen := map[string]bool{}
+	aliases := map[string]string{}
 	for _, config := range configs {
 		config.Name = strings.TrimSpace(config.Name)
+		config.AliasOf = strings.TrimSpace(config.AliasOf)
 		if err = ctx.Err(); err != nil {
 			return nil, err
 		}
-		if config.Name == "" || seen[config.Name] || config.Driver == "" || config.DSN == "" {
+		if config.Name == "" || seen[config.Name] {
 			return nil, fmt.Errorf("connectors require unique names, drivers and DSNs")
 		}
 		seen[config.Name] = true
+		if config.AliasOf != "" {
+			if config.Driver != "" || config.DSN != "" || config.Secret != nil || config.MaxIdleConns != 0 || config.MaxOpenConns != 0 || config.ConnMaxIdleTimeMs != 0 || config.ConnMaxLifetimeMs != 0 {
+				return nil, fmt.Errorf("connector aliases cannot define connection or pool settings")
+			}
+			aliases[config.Name] = config.AliasOf
+			continue
+		}
+		if config.Driver == "" || config.DSN == "" {
+			return nil, fmt.Errorf("connectors require unique names, drivers and DSNs")
+		}
 		const maxMs = int64((1<<63 - 1) / int64(time.Millisecond))
 		for _, value := range []int{config.ConnMaxIdleTimeMs, config.ConnMaxLifetimeMs} {
 			if int64(value) > maxMs || int64(value) < -maxMs {
@@ -99,6 +114,48 @@ func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, er
 		}
 		if config.Name == defaultName {
 			set.SQL.DB = db
+		}
+	}
+	visiting := map[string]bool{}
+	var resolveAlias func(string) error
+	resolveAlias = func(name string) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if _, resolved := set.identities[name]; resolved {
+			return nil
+		}
+		target, found := aliases[name]
+		if !found || !seen[target] {
+			return fmt.Errorf("connector alias target is unavailable")
+		}
+		if visiting[name] {
+			return fmt.Errorf("connector alias cycle is not allowed")
+		}
+		visiting[name] = true
+		if err := resolveAlias(target); err != nil {
+			return err
+		}
+		db, err := set.SQL.Connector(ctx, target)
+		if err != nil {
+			return err
+		}
+		if err = set.SQL.RegisterConnector(name, db); err != nil {
+			return err
+		}
+		set.identities[name] = set.identities[target]
+		visiting[name] = false
+		if name == defaultName {
+			set.SQL.DB = db
+		}
+		return nil
+	}
+	for _, config := range configs {
+		name := strings.TrimSpace(config.Name)
+		if _, alias := aliases[name]; alias {
+			if err := resolveAlias(name); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if defaultName != "" && set.SQL.DB == nil {
