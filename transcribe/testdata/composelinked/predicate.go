@@ -3,6 +3,7 @@ package composelinked
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -19,10 +20,9 @@ type ScopePredicate struct {
 	Input PredicateInput `bind:"kind=input,required"`
 }
 
-// Retain the actual handler identity in a blank-importable package.
-var LinkedHandler any = &ScopePredicate{}
-
-func init() { _ = LinkedHandler }
+// Retain the concrete pointer type for native linked-type discovery. An unused
+// handler value and a no-op init can be eliminated by the Go linker.
+var LinkedTypes = []reflect.Type{reflect.TypeFor[*ScopePredicate]()}
 
 type FrameObservation struct {
 	Frame           cubecompose.FrameContext

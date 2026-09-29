@@ -29,7 +29,9 @@ func testGeneratedCubeComposePublicReloadSQLite(t *testing.T, explicitAlias bool
 	ctx := context.Background()
 	const module = "github.com/viant/datly/testfixture/composereload"
 	const predicatePath = "github.com/viant/datly/transcribe/testdata/composelinked"
-	_ = reflect.TypeFor[composelinked.ScopePredicate]()
+	if len(composelinked.LinkedTypes) != 1 || composelinked.LinkedTypes[0].Elem() != reflect.TypeFor[composelinked.ScopePredicate]() {
+		t.Fatal("compose predicate fixture must retain its compiled identity")
+	}
 	authored, root := t.TempDir(), t.TempDir()
 	(testharness.GeneratedModule{Path: module}).Write(t, authored)
 	if err := os.MkdirAll(filepath.Join(authored, "spend"), 0755); err != nil {
