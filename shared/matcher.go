@@ -70,12 +70,8 @@ func doesTagMatch(tag *io.Tag, columnName string) bool {
 	columnName = strings.ToLower(columnName)
 	columnName = strings.ReplaceAll(columnName, "_", "")
 
-	for _, candidate := range strings.Split(tag.Column, "|") {
-		tagName := strings.ToLower(candidate)
-		tagName = strings.ReplaceAll(tagName, "_", "")
-		if columnName == tagName {
-			return true
-		}
-	}
-	return false
+	tagName := strings.ToLower(tag.Column)
+	tagName = strings.ReplaceAll(tagName, "_", "")
+
+	return columnName == tagName
 }

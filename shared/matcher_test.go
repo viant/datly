@@ -9,17 +9,28 @@ import (
 	"github.com/viant/tagly/format/text"
 )
 
-func TestMatchField_SQLXAlternativeNames(t *testing.T) {
+func TestMatchField_NestedRelationNativeSQLXNames(t *testing.T) {
+	type siteView struct {
+		SiteName *string `sqlx:"NAME"`
+	}
 	type publisherView struct {
-		PublisherID int `sqlx:"ID|PUBLISHER_ID"`
+		PublisherID   int    `sqlx:"ID"`
+		PublisherName string `sqlx:"NAME"`
 	}
 
-	for _, columnName := range []string{"ID", "PUBLISHER_ID"} {
-		t.Run(columnName, func(t *testing.T) {
-			field := MatchField(reflect.TypeOf(publisherView{}), columnName, text.CaseFormatUpperUnderscore)
+	testCases := []struct {
+		rType      reflect.Type
+		columnName string
+		fieldName  string
+	}{
+		{reflect.TypeOf(siteView{}), "NAME", "SiteName"},
+		{reflect.TypeOf(publisherView{}), "ID", "PublisherID"},
+		{reflect.TypeOf(publisherView{}), "NAME", "PublisherName"},
+	}
+	for _, testCase := range testCases {
+		field := MatchField(testCase.rType, testCase.columnName, text.CaseFormatUpperUnderscore)
 
-			require.NotNil(t, field)
-			assert.Equal(t, "PublisherID", field.Name)
-		})
+		require.NotNil(t, field)
+		assert.Equal(t, testCase.fieldName, field.Name)
 	}
 }
