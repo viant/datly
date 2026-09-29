@@ -1048,3 +1048,12 @@ other validation. It does not add a SQL predicate, advance tokens, lock rows, or
 provide atomic race prevention. Init may explicitly prepare a next working token
 without changing the captured expectation. Missing/mismatched update tokens fail
 with a typed conflict before mutations proceed.
+
+## Scoped non-identity sequences
+
+`sequence_scope(view.numericColumn, view.scopeColumn[, view.otherScopeColumn])`
+is a standalone SELECT annotation for generated POST/PATCH/PUT writers. It emits
+`sequenceScope` field metadata. Scope references must be distinct same-view
+projected columns. Allocation, original presence, transaction ownership and
+bounded collision replay are native. See [scoped sequences](product/datly/doc/scoped-sequences.md)
+for NULL/zero semantics, MySQL ledger provisioning and verification.

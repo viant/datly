@@ -108,14 +108,14 @@
     "datly-reader/references/reader-examples.md": "d1c8b926a957d0ba48ff5e642f32139213a11b2703ecf54e629e0f22ca5e7c2d",
     "datly-reader/references/reader-predicates.md": "ff6e1a92f6ffd644049823ae133584735b559c7c376a7917233107a8a45cd5f3",
     "datly-reader/references/tags-and-interfaces.md": "e5bea75dc1fe04f28537e0b43a02d6c8d692e9bfd33653d1110085892b86b32e",
-    "datly-writer/SKILL.md": "ec5a602d1b1592ce9a81dd90bf930a933461f0151f79f30beed878b695721e1e",
+    "datly-writer/SKILL.md": "a98822c71349a9cc3617205e91c348de4aa4d9e812935cb766536b399a984e02",
     "datly-writer/agents/openai.yaml": "892fb514fbef94f779be77b15554cd700da1cd2eb1a7530d8af59970520a31cb",
     "datly-writer/references/acceptance.md": "424e46abb1f5e0eb8da449d9dd8d55b3050a3a5fcdd6af908aa53bf855ad9a2e",
     "datly-writer/references/availability-and-operations.md": "64ce4296d7c426c955c7e972e6af6f1c153f4de4725a23da619bb365551c1f7b",
     "datly-writer/references/concepts.md": "be4487cdee988feebebc8c7b34dafc7c1e82c6efb58a8796f0977165e7b491db",
     "datly-writer/references/constants-and-substitutions.md": "ba39cdfa50c583c7e45bbbdf3f236a36396def09dad1138c7d2e60944b222941",
     "datly-writer/references/developer-mcp.md": "6302318d6efd6143a4ce306f11b883815d3aa613828f264e1180e6811770e760",
-    "datly-writer/references/dql-grammar.md": "3b5fdcd631eb788d515cef8d23bf156d2e992aa143ced4ca0e500f4876a0f992",
+    "datly-writer/references/dql-grammar.md": "352cd8741081bf366f72172f8fce556e14cc45b4631fdcfa6eca39a7bbfa4e8d",
     "datly-writer/references/dql.ebnf": "ce19a5bb17b2407beae115c49fed255f0377d53ba279a90be2915792770debf5",
     "datly-writer/references/mutation-messages.md": "bc187eb106ddd76121b7de706d634ca9e0e7ba88ebc60c0539863def6150a1e6",
     "datly-writer/references/product/datly/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -161,7 +161,10 @@
     "datly-writer/references/project-build.md": "9a0ec3c9b275b8834e5c1d9ec5095a424cbab813706da79d4bd94d4342f54447",
     "datly-writer/references/tags-and-interfaces.md": "e5bea75dc1fe04f28537e0b43a02d6c8d692e9bfd33653d1110085892b86b32e",
     "datly-writer/references/writer-contract.md": "eb503c6e51a68f52dfa4a1ea20f2542d435fa270878b4ce8c4cfa1d5d953363a",
-    "datly-writer/references/writer-examples.md": "68f8c0e5baa0d6052e484bcf259b18c0bc976b96ef4dc13c789a5a9d88208b30"
+    "datly-writer/references/writer-examples.md": "68f8c0e5baa0d6052e484bcf259b18c0bc976b96ef4dc13c789a5a9d88208b30",
+    "datly-custom-component/references/product/datly/doc/scoped-sequences.md": "ee2460806d8e2db98151d311f40aa597bb9e43faed25f4dc4c0298f6a50820cd",
+    "datly-reader/references/product/datly/doc/scoped-sequences.md": "ee2460806d8e2db98151d311f40aa597bb9e43faed25f4dc4c0298f6a50820cd",
+    "datly-writer/references/product/datly/doc/scoped-sequences.md": "ee2460806d8e2db98151d311f40aa597bb9e43faed25f4dc4c0298f6a50820cd"
   },
   "ProductSources": {
     "datly/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -203,7 +206,8 @@
     "llm/datly-writer/references/writer-contract.md": "eb503c6e51a68f52dfa4a1ea20f2542d435fa270878b4ce8c4cfa1d5d953363a",
     "llm/datly-writer/references/writer-examples.md": "68f8c0e5baa0d6052e484bcf259b18c0bc976b96ef4dc13c789a5a9d88208b30",
     "xdatly/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
-    "xdatly/handler/injector_finalizer.md": "d00ea7fdf6cc32f8e48ce05b9705a4ff6a5200ded6876ac4cb01dcef5a1a695f"
+    "xdatly/handler/injector_finalizer.md": "d00ea7fdf6cc32f8e48ce05b9705a4ff6a5200ded6876ac4cb01dcef5a1a695f",
+    "datly/doc/scoped-sequences.md": "ee2460806d8e2db98151d311f40aa597bb9e43faed25f4dc4c0298f6a50820cd"
   },
   "UnresolvedReferences": []
 }

@@ -45,6 +45,8 @@ substitute `translate`, lower-level transcription, or manual writer plumbing.
 - For stable-ID/FK gaps, async, telemetry, YAML docs, static/MCP resources and standalone status, read [availability-and-operations.md](references/availability-and-operations.md). Separate current APIs from pending authoring/integration contracts.
 - Use [acceptance.md](references/acceptance.md) to verify observable application behavior. Framework maintenance is outside this skill.
 
+For per-scope non-identity numbering, read [scoped sequences](references/product/datly/doc/scoped-sequences.md). Keep allocation and collision replay native; provision the MySQL ledger before business transactions.
+
 For opt-in idempotent leaf deletion, read [delete-not-found](references/product/datly/doc/delete-not-found.md). Strict deletion remains the default.
 
 ## Authoring workflow

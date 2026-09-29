@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -61,6 +62,34 @@ func (g Generator) Generate(ctx context.Context, request GenerationRequest) (*Ge
 		}
 	}
 
+	var checkScoped func(*spec.View) error
+	checkScoped = func(view *spec.View) error {
+		if view == nil {
+			return nil
+		}
+		for _, column := range view.Columns {
+			if column != nil && reflect.StructTag(column.Tag).Get("sequenceScope") != "" {
+				operation := strings.ToLower(g.Operation)
+				if operation != "patch" && operation != "post" && operation != "put" {
+					return fmt.Errorf("sequence_scope requires a generated mutation operation")
+				}
+				if view.Auxiliary {
+					return fmt.Errorf("sequence_scope cannot target an auxiliary view")
+				}
+			}
+		}
+		for _, relation := range view.Relations {
+			if relation != nil {
+				if err := checkScoped(relation.View); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := checkScoped(compiled.Component.RootView); err != nil {
+		return nil, err
+	}
 	key, err := compiled.projectKey()
 	if err != nil {
 		return nil, err

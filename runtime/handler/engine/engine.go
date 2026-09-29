@@ -179,6 +179,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 						retry.BoundInput = nil
 						retry.Replay = &bindly.ReplayBinding{Replay: mutationReplay}
 					}
+					if guard, ok := request.Handler.(rhandler.MutationReplayContext); ok {
+						callContext = guard.MutationReplayContext(callContext, invocation)
+					}
 					return e.Execute(callContext, retry)
 				}
 				result, completionErr = completionFrame.result, nil

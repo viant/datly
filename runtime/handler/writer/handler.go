@@ -101,6 +101,7 @@ type Record struct {
 	Keys                   []Field
 	Fields                 []Field
 	Sequence               *Field
+	ScopedSequences        []ScopedSequence
 	DeleteMarker           *Field
 	ConcurrencyToken       *Field
 	Invariants             map[string][]Field
@@ -268,6 +269,7 @@ func (*Handler) RequiresReadMetadata() bool { return true }
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
+	scopedService any
 	metadata      *Metadata
 	input         any
 	output        any
@@ -488,6 +490,7 @@ type Frame struct {
 	Parent           *Frame
 	Original         xhandler.OriginalPresence
 	Hook             reflect.Value
+	ScopedAllocated  map[string]bool
 }
 
 type Action struct {
@@ -872,6 +875,13 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		if err = p.allocate(ctx, sequencer, p.metadata.Root, entities); err != nil {
 			return err
 		}
+		if err = p.reconcileLinks(false); err != nil {
+			return err
+		}
+		if err = p.allocateScoped(ctx, sequencer); err != nil {
+			return err
+		}
+
 	}
 	for _, frame := range p.frames.Rows {
 		if err = p.callEntityHook(ctx, "AfterSequence", frame); err != nil {
@@ -1453,6 +1463,9 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 		}
 		key, complete := record.key(entity.Elem())
 		previous := p.database.Rows[rowIdentity{record: record, key: key}]
+		if guard, ok := ctx.Value(scopedReplayKey{}).(map[rowIdentity]bool); ok && previous.IsValid() && guard[rowIdentity{record: record, key: key}] {
+			return fmt.Errorf("scoped sequence replay cannot replace an existing insert identity")
+		}
 		if previous.IsValid() && parent != nil {
 			relation := relationFor(parent.Record, record)
 			if relation == nil {
@@ -1793,6 +1806,9 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		root.Name = metadata.EntityType.Name()
 	}
 	root.indexFields()
+	if err := compileScopedSequences(root); err != nil {
+		return nil, err
+	}
 	if metadata.Sequence != nil {
 		root.Selector = metadata.Sequence.Name
 	}
@@ -1953,6 +1969,9 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		record.Sequence = &copy
 	}
 	record.indexFields()
+	if err := compileScopedSequences(record); err != nil {
+		return nil, err
+	}
 	for i := 0; i < inputType.NumField(); i++ {
 		field := inputType.Field(i)
 		if field.Type.Kind() != reflect.Slice && field.Type.Kind() != reflect.Pointer || !strings.Contains(field.Tag.Get("parameter"), "kind=view") {

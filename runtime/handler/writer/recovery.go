@@ -8,6 +8,9 @@ import (
 )
 
 func (h *Handler) SupportsMutationRecovery() bool {
+	if h != nil && h.metadata != nil && hasScopedSequences(h.metadata.Root) {
+		return true
+	}
 	if h == nil || h.metadata == nil || h.metadata.Root == nil || h.metadata.Root.HookType == nil {
 		return false
 	}

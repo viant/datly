@@ -59,6 +59,22 @@ func recoverMutation(ctx context.Context, request Request, data *dataScope, invo
 		return rhandler.RecoveryNone, false, nil
 	}
 	report := reporter.MutationReport()
+
+	if native, ok := request.Handler.(rhandler.ScopedMutationRecoverer); ok {
+		outcome := data.completionOutcome()
+		if completionErr != nil && len(outcome.Transactions) == 1 && outcome.Transactions[0].State == xhandler.TransactionRolledBack {
+			allowed, e := native.RecoverScopedMutation(ctx, invocation, report, outcome)
+			if e != nil {
+				return rhandler.RecoveryNone, false, e
+			}
+			if allowed {
+				if request.mutationAttempt >= native.ScopedMutationRetryLimit() {
+					return rhandler.RecoveryNone, false, fmt.Errorf("scoped sequence retry limit reached")
+				}
+				return rhandler.RecoveryRetry, true, nil
+			}
+		}
+	}
 	if report.Nested || report.Queued != 1 || len(report.Results) != 1 || report.Results[0].Records != 1 {
 		return rhandler.RecoveryNone, false, nil
 	}

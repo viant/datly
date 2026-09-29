@@ -32,3 +32,16 @@ type MutationRecoverer interface {
 	SupportsMutationRecovery() bool
 	RecoverMutation(context.Context, Invocation, any, MutationOutcome) (Recovery, error)
 }
+
+// ScopedMutationRecoverer is a framework-only policy for automatically allocated
+// scope values after a known root rollback. Caller transactions cannot enter it.
+type ScopedMutationRecoverer interface {
+	RecoverScopedMutation(context.Context, Invocation, exec.MutationReport, xhandler.Outcome) (bool, error)
+	ScopedMutationRetryLimit() int
+}
+
+// MutationReplayContext preserves immutable insert classification across native
+// retries; a newly arrived identity cannot become an UPDATE on the next attempt.
+type MutationReplayContext interface {
+	MutationReplayContext(context.Context, Invocation) context.Context
+}
