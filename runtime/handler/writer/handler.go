@@ -1518,7 +1518,7 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 		fields := livePresence(record, entity.Elem())
 		if deleteRequested {
 			if !complete || (!previous.IsValid() && !skipDelete) {
-				return fmt.Errorf("delete requires a matched complete identity")
+				return ErrDeleteNotFound
 			}
 			action = xhandler.WriteDelete
 		}
