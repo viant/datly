@@ -37,12 +37,15 @@ substitute `translate`, lower-level transcription, or manual writer plumbing.
 - Use [tags-and-interfaces.md](references/tags-and-interfaces.md) for Go shapes, binding tags, SQL mapping, predicates, validation, and public APIs.
 - For JWT-based authorization, use the [explicit input and predicate pattern](references/tags-and-interfaces.md#jwt-input-and-authorization-predicates); preserve original certificate/public-key verification and do not inject ambient claims.
 - For a typed remote authorization context, read the [auth-context contract](references/product/datly/doc/auth-context.md). Keep verification, dependency binding, outbound headers and SQL predicates explicit; confirm generic provider API availability before naming its syntax.
-- For explicit row deletion and validation-only tokens, read [the mutation marker contract](references/writer-contract.md#explicit-deletion-and-token-validation). Omitted rows never imply deletion; token checks do not make writes atomic.
+- For explicit row deletion and concurrency tokens, read [the mutation marker contract](references/writer-contract.md#explicit-deletion-and-token-validation). Omitted rows never imply deletion. Current v1 token writes use atomic IfMatch; see [mutation predicates](references/product/datly/doc/mutation-predicates.md) for general execution conditions.
+- For affected-row losses, CAS winner adoption and bounded native writer replay, read [mutation recovery](references/product/datly/doc/mutation-recovery.md). Keep recovery decisions in the root lifecycle hook and verify transaction ownership.
 - Read [writer-contract.md](references/writer-contract.md) for this component's behavior and decisions.
 - Adapt [writer-examples.md](references/writer-examples.md); examples are patterns, not authorization to access a live database.
 - For hook-injected message buses, commit-dependent publication or async job requests, read [mutation-messages.md](references/mutation-messages.md).
 - For stable-ID/FK gaps, async, telemetry, YAML docs, static/MCP resources and standalone status, read [availability-and-operations.md](references/availability-and-operations.md). Separate current APIs from pending authoring/integration contracts.
 - Use [acceptance.md](references/acceptance.md) to verify observable application behavior. Framework maintenance is outside this skill.
+
+For opt-in idempotent leaf deletion, read [delete-not-found](references/product/datly/doc/delete-not-found.md). Strict deletion remains the default.
 
 ## Authoring workflow
 

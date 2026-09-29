@@ -6,6 +6,7 @@ import (
 	"fmt"
 	goast "go/ast"
 	"go/parser"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -316,6 +317,21 @@ func (c *compiler) selectInput(component *spec.Component, name string) (*spec.Pa
 }
 
 func (c *compiler) selectOutput(component *spec.Component, name string) (*spec.Parameter, error) {
+	if strings.TrimSpace(name) == "" {
+		var body *spec.Parameter
+		for _, param := range spec.EffectiveParameters(component.Parameters) {
+			if param == nil || !strings.EqualFold(param.Source.Kind, "output") || !strings.EqualFold(param.Source.Name, "body") {
+				continue
+			}
+			if body != nil {
+				return nil, fmt.Errorf("handler transcription body output is ambiguous")
+			}
+			body = param
+		}
+		if body != nil {
+			return body, nil
+		}
+	}
 	return c.selectParam(component, name, func(param *spec.Parameter) bool {
 		if param == nil {
 			return false
@@ -389,7 +405,7 @@ func cardinalityOf(param *spec.Parameter) spec.Cardinality {
 func canonicalKeys(view *spec.View) ([]plan.KeyPart, error) {
 	var result []plan.KeyPart
 	for _, column := range view.Columns {
-		if column == nil || !column.PrimaryKey {
+		if column == nil || !effectivePrimaryKey(column) {
 			continue
 		}
 		field := typecatalog.FieldName(column.Name)
@@ -431,7 +447,7 @@ func sequencePlan(view *spec.View, explicit string, operation plan.Operation, de
 			}
 			continue
 		}
-		if column.PrimaryKey {
+		if effectivePrimaryKey(column) {
 			candidates = append(candidates, column)
 		}
 	}
@@ -478,4 +494,14 @@ func (c *compiler) nextWriteOrder() int {
 	order := c.nextOrder
 	c.nextOrder++
 	return order
+}
+
+// effectivePrimaryKey follows the same authored SQLX identity mapping emitted
+// into the Go contract. Database discovery remains evidence, not an override
+// of an explicitly declared true/false mapping.
+func effectivePrimaryKey(column *spec.Column) bool {
+	if column == nil {
+		return false
+	}
+	return typecatalog.SQLXPrimaryKey(reflect.StructTag(column.Tag), column.PrimaryKey)
 }

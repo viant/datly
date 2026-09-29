@@ -14,6 +14,12 @@ func (v View) Value() (string, error) {
 	if v.BatchConcurrency < 0 {
 		return "", fmt.Errorf("view option batchConcurrency must be a non-negative integer")
 	}
+	if v.MutationPredicateGroup != nil && *v.MutationPredicateGroup < 0 {
+		return "", fmt.Errorf("mutationPredicate must be a non-negative group")
+	}
+	if v.OnDeleteNotFound != "" && v.OnDeleteNotFound != "error" && v.OnDeleteNotFound != "ignore" {
+		return "", fmt.Errorf("onDeleteNotFound must be error or ignore")
+	}
 	var values []string
 	if name := strings.TrimSpace(v.Name); name != "" {
 		if err := validateTagToken("view name", name); err != nil {
@@ -39,7 +45,7 @@ func (v View) Value() (string, error) {
 		return nil
 	}
 	for _, item := range []struct{ name, value string }{
-		{"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
+		{"onDeleteNotFound", v.OnDeleteNotFound}, {"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
 		{"cache", v.Cache}, {"cacheWarmup", v.CacheWarmup},
 		{"orderBy", v.OrderBy}, {"match", v.Match},
 	} {
@@ -61,6 +67,9 @@ func (v View) Value() (string, error) {
 	}
 	if v.PublishParent {
 		values = append(values, "publishParent=true")
+	}
+	if v.MutationPredicateGroup != nil {
+		values = append(values, "mutationPredicate="+strconv.Itoa(*v.MutationPredicateGroup))
 	}
 	if v.Auxiliary {
 		values = append(values, "auxiliary=true")

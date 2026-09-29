@@ -12,7 +12,7 @@ func cloneView(source *View, cloned map[*View]*View) *View {
 		return existing
 	}
 	result := &View{
-		Key: source.Key, Name: source.Name, Namespace: source.Namespace, TypeName: source.TypeName, Dest: source.Dest, EntityHooks: source.EntityHooks,
+		Key: source.Key, Name: source.Name, Namespace: source.Namespace, TypeName: source.TypeName, Dest: source.Dest, EntityHooks: source.EntityHooks, OnDeleteNotFound: source.OnDeleteNotFound,
 		Cardinality: source.Cardinality,
 		InMemory:    source.InMemory,
 		AllowNulls:  cloneBool(source.AllowNulls), Groupable: cloneBool(source.Groupable), Auxiliary: source.Auxiliary,
@@ -20,6 +20,10 @@ func cloneView(source *View, cloned map[*View]*View) *View {
 		Source:  source.Source.Clone(), Selector: source.Selector.Clone(),
 		Partitioning: source.Partitioning.Clone(), SelfReference: cloneSelfReference(source.SelfReference),
 		BatchSize: source.BatchSize, BatchConcurrency: source.BatchConcurrency, PublishParent: source.PublishParent, RelationalConcurrency: source.RelationalConcurrency,
+	}
+	if source.MutationPredicateGroup != nil {
+		group := *source.MutationPredicateGroup
+		result.MutationPredicateGroup = &group
 	}
 	cloned[source] = result
 	for _, relation := range source.Relations {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/viant/sqlx"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -25,6 +26,7 @@ type dataOperation struct {
 	dml      string
 	args     []any
 	match    *xhandler.Match
+	criteria *sqlx.Criteria
 	executed bool
 	reserved bool
 }
@@ -49,6 +51,16 @@ func (d *Data) Delete(tableName string, data any) error {
 func (d *Data) DeleteWithOptions(tableName string, data any, options ...xhandler.Option) error {
 	condition := writeMatch(options)
 	return d.append(dataOperation{kind: dataOpDelete, table: tableName, data: data, match: condition})
+}
+
+// UpdateWithCriteria queues an existing predicate result in the managed unit.
+func (d *Data) UpdateWithCriteria(tableName string, data any, criteria *sqlx.Criteria, options ...xhandler.Option) error {
+	return d.append(dataOperation{kind: dataOpUpdate, table: tableName, data: data, match: writeMatch(options), criteria: criteria.Clone()})
+}
+
+// DeleteWithCriteria queues an existing predicate result in the managed unit.
+func (d *Data) DeleteWithCriteria(tableName string, data any, criteria *sqlx.Criteria, options ...xhandler.Option) error {
+	return d.append(dataOperation{kind: dataOpDelete, table: tableName, data: data, match: writeMatch(options), criteria: criteria.Clone()})
 }
 
 func writeMatch(options []xhandler.Option) *xhandler.Match {

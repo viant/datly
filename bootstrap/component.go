@@ -325,6 +325,19 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 
 func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) error {
 	param := resolved.param
+	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.OnDeleteNotFound != "" {
+		if r.component.RootView == nil {
+			return fmt.Errorf("onDeleteNotFound body requires a root view")
+		}
+		r.component.RootView.OnDeleteNotFound = resolved.metadata.View.OnDeleteNotFound
+	}
+	if param != nil && strings.EqualFold(strings.TrimSpace(param.Source.Kind), "body") && resolved.metadata.View != nil && resolved.metadata.View.MutationPredicateGroup != nil {
+		if r.component.RootView == nil {
+			return fmt.Errorf("mutation predicate body requires a root view")
+		}
+		group := *resolved.metadata.View.MutationPredicateGroup
+		r.component.RootView.MutationPredicateGroup = &group
+	}
 	if param == nil || !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "view") {
 		return nil
 	}
@@ -623,6 +636,8 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.TypeName = strings.TrimSpace(metadata.View.TypeName)
 		view.Dest = strings.TrimSpace(metadata.View.Dest)
 		view.EntityHooks = strings.TrimSpace(metadata.View.EntityHooks)
+		view.OnDeleteNotFound = metadata.View.OnDeleteNotFound
+		view.MutationPredicateGroup = metadata.View.MutationPredicateGroup
 		view.Source.URI = strings.TrimSpace(metadata.View.URI)
 		view.Source.Table = strings.TrimSpace(metadata.View.Table)
 		view.Partitioning = metadata.View.Partitioning.Clone()

@@ -20,8 +20,11 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 			supported = false
 		}
 	}
-	if supported {
-		return nil
+	predicateSupported := mutation
+	for _, route := range input.Component.Routes {
+		if route != nil && !strings.EqualFold(route.Method, "PATCH") && !strings.EqualFold(route.Method, "PUT") {
+			predicateSupported = false
+		}
 	}
 	visited := map[*spec.View]bool{}
 	var check func(*spec.View) error
@@ -30,12 +33,53 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 			return nil
 		}
 		visited[view] = true
+		if view.OnDeleteNotFound != "" {
+			if !predicateSupported || view.Auxiliary {
+				return fmt.Errorf("delete_not_found requires a generated PATCH/PUT writable view")
+			}
+			if view.OnDeleteNotFound != "error" && view.OnDeleteNotFound != "ignore" {
+				return fmt.Errorf("delete_not_found must be error or ignore")
+			}
+			if view.OnDeleteNotFound == "ignore" && len(view.Relations) > 0 {
+				return fmt.Errorf("delete_not_found(ignore) requires a leaf view; missing parents cannot suppress descendant checks")
+			}
+			found := false
+			for _, column := range view.Columns {
+				if column != nil && column.DeleteMarker {
+					found = true
+				}
+			}
+			if !found {
+				return fmt.Errorf("delete_not_found requires delete_marker")
+			}
+		}
+		if view.MutationPredicateGroup != nil {
+			if !predicateSupported {
+				return fmt.Errorf("view %s: mutation_predicate requires a generated PATCH/PUT writer", view.Name)
+			}
+			if view.Auxiliary || *view.MutationPredicateGroup < 0 {
+				return fmt.Errorf("view %s: mutation_predicate requires a writable view and non-negative group", view.Name)
+			}
+			found := false
+			for _, param := range input.Component.Parameters {
+				if param != nil {
+					for _, predicate := range param.Predicates {
+						if predicate != nil && predicate.Group == *view.MutationPredicateGroup {
+							found = true
+						}
+					}
+				}
+			}
+			if !found {
+				return fmt.Errorf("view %s: mutation_predicate group %d has no predicate inputs", view.Name, *view.MutationPredicateGroup)
+			}
+		}
 		for _, column := range view.Columns {
-			if column != nil && (column.DeleteMarker || column.ConcurrencyToken) {
+			if !supported && column != nil && (column.DeleteMarker || column.ConcurrencyToken) {
 				return fmt.Errorf("view %s: mutation markers require the generated Go mutation lifecycle", view.Name)
 			}
 		}
-		if strings.TrimSpace(view.EntityHooks) != "" {
+		if !supported && strings.TrimSpace(view.EntityHooks) != "" {
 			return fmt.Errorf("view %s: lifecycle_type(%s, %q) requires the generated Go mutation lifecycle; readers use input_type OrdersInput.Init and output_type OrdersOutput.Finalize, with row OnFetch separate", view.Name, view.Name, view.EntityHooks)
 		}
 		for _, relation := range view.Relations {

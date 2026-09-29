@@ -14,7 +14,10 @@ import (
 
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
+	predicate "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/typecatalog"
+	"github.com/viant/sqlx"
 	"github.com/viant/structology"
 	xhandler "github.com/viant/xdatly/handler"
 	"github.com/viant/xunsafe"
@@ -23,6 +26,7 @@ import (
 // Metadata is the immutable, component-specific plan interpreted by Handler.
 // It contains no generated executable phase code.
 type Metadata struct {
+	Predicates       *predicate.Program
 	Component        *spec.Component
 	Operation        string
 	InputField       int
@@ -85,21 +89,23 @@ func entityMarker(entityType reflect.Type) *structology.Marker {
 
 // Record is one writable role in a component graph.
 type Record struct {
-	Name             string
-	Path             string
-	Auxiliary        bool
-	Selector         string
-	EntityType       reflect.Type
-	CurrentField     int
-	Table            string
-	Keys             []Field
-	Fields           []Field
-	Sequence         *Field
-	DeleteMarker     *Field
-	ConcurrencyToken *Field
-	Invariants       map[string][]Field
-	HookType         reflect.Type
-	Relations        []*Relation
+	OnDeleteNotFound       string
+	MutationPredicateGroup *int
+	Name                   string
+	Path                   string
+	Auxiliary              bool
+	Selector               string
+	EntityType             reflect.Type
+	CurrentField           int
+	Table                  string
+	Keys                   []Field
+	Fields                 []Field
+	Sequence               *Field
+	DeleteMarker           *Field
+	ConcurrencyToken       *Field
+	Invariants             map[string][]Field
+	HookType               reflect.Type
+	Relations              []*Relation
 	// positions maps field names to their index in Fields; compiled once.
 	positions map[string]int
 }
@@ -476,6 +482,7 @@ type Frame struct {
 	Entity, Previous reflect.Value
 	ExpectedToken    reflect.Value
 	Fields           *presence
+	SkippedDelete    bool
 	Action           xhandler.WriteAction
 	Record           *Record
 	Parent           *Frame
@@ -504,7 +511,7 @@ func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, re
 
 func (p *Program) reconcileLinks(requireResolved bool) error {
 	for _, frame := range p.frames.Rows {
-		if frame == nil || frame.Parent == nil || frame.Record == nil {
+		if frame == nil || frame.SkippedDelete || frame.Parent == nil || frame.Record == nil {
 			continue
 		}
 		relation := relationFor(frame.Parent.Record, frame.Record)
@@ -835,7 +842,7 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		if err = p.callEntityHook(ctx, "Validate", frame); err != nil {
 			return err
 		}
-		if frame.Record.Auxiliary {
+		if frame.Record.Auxiliary || frame.SkippedDelete {
 			continue
 		}
 		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
@@ -885,51 +892,54 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		frame := p.frameFor(action.Entity)
 		value := action.Entity.Interface()
 		table := frame.Record.Table
+		var options []xhandler.Option
+		if token := frame.Record.ConcurrencyToken; token != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
+			persisted := frame.Previous
+			if persisted.IsValid() && persisted.Kind() == reflect.Pointer {
+				persisted = persisted.Elem()
+			}
+			if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
+				return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+			}
+			previousToken := persisted.FieldByName(token.Name)
+			if !previousToken.IsValid() {
+				return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+			}
+			options = append(options, xhandler.WithIfMatch(token.Column, previousToken.Interface()))
+		}
+		var criteria *sqlx.Criteria
+		if frame.Record.MutationPredicateGroup != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
+			criteria, err = p.metadata.Predicates.Criteria(ctx, binder, *frame.Record.MutationPredicateGroup)
+			if err != nil {
+				return fmt.Errorf("mutation predicate %s: %w", frame.Record.Path, err)
+			}
+		}
 		switch action.Kind {
 		case xhandler.WriteInsert:
 			err = dml.Insert(table, value)
-		case xhandler.WriteUpdate:
-			if token := frame.Record.ConcurrencyToken; token != nil {
-				matched, ok := dml.(xhandler.MatchedDML)
+		case xhandler.WriteUpdate, xhandler.WriteDelete:
+			if criteria != nil {
+				native, ok := dml.(rhandler.CriteriaDML)
 				if !ok {
-					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "atomic matched update is unavailable"}
+					return fmt.Errorf("mutation predicate requires native CriteriaDML")
 				}
-				persisted := frame.Previous
-				if persisted.IsValid() && persisted.Kind() == reflect.Pointer {
-					persisted = persisted.Elem()
+				if action.Kind == xhandler.WriteUpdate {
+					err = native.UpdateWithCriteria(table, value, criteria, options...)
+				} else {
+					err = native.DeleteWithCriteria(table, value, criteria, options...)
 				}
-				if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
-					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+			} else if len(options) != 0 {
+				native, ok := dml.(xhandler.MatchedDML)
+				if !ok {
+					return &xhandler.Conflict{Entity: frame.Record.Path, Reason: "atomic matched DML is unavailable"}
 				}
-				previousToken := persisted.FieldByName(token.Name)
-				if !previousToken.IsValid() {
-					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+				if action.Kind == xhandler.WriteUpdate {
+					err = native.UpdateWithOptions(table, value, options...)
+				} else {
+					err = native.DeleteWithOptions(table, value, options...)
 				}
-				// The earlier check proves client expectation and Previous are
-				// equivalent. Bind the database-decoded Previous representation so
-				// equal instants in different time zones still compare correctly.
-				err = matched.UpdateWithOptions(table, value, xhandler.WithIfMatch(token.Column, previousToken.Interface()))
-			} else {
+			} else if action.Kind == xhandler.WriteUpdate {
 				err = dml.Update(table, value)
-			}
-		case xhandler.WriteDelete:
-			if token := frame.Record.ConcurrencyToken; token != nil {
-				matched, ok := dml.(xhandler.MatchedDML)
-				if !ok {
-					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "atomic matched delete is unavailable"}
-				}
-				persisted := frame.Previous
-				if persisted.IsValid() && persisted.Kind() == reflect.Pointer {
-					persisted = persisted.Elem()
-				}
-				if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
-					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
-				}
-				previousToken := persisted.FieldByName(token.Name)
-				if !previousToken.IsValid() {
-					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
-				}
-				err = matched.DeleteWithOptions(table, value, xhandler.WithIfMatch(token.Column, previousToken.Interface()))
 			} else {
 				err = dml.Delete(table, value)
 			}
@@ -1206,7 +1216,7 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 }
 
 func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame) error {
-	if frame == nil || !frame.Hook.IsValid() {
+	if frame == nil || frame.SkippedDelete || !frame.Hook.IsValid() {
 		return nil
 	}
 	method := frame.Hook.MethodByName(name)
@@ -1456,12 +1466,14 @@ func (p *Program) buildEntityFrame(record *Record, entity reflect.Value, parent 
 				}
 			}
 		}
+		deleteRequested := record.DeleteMarker != nil && supplied(entity.Elem(), *record.DeleteMarker) && boolValue(entity.Elem().FieldByIndex(record.DeleteMarker.Index))
+		skipDelete := deleteRequested && complete && !previous.IsValid() && record.OnDeleteNotFound == "ignore" && record.ConcurrencyToken == nil && record.MutationPredicateGroup == nil
 		action := xhandler.WriteInsert
 		switch p.metadata.Operation {
 		case "post":
 			action = xhandler.WriteInsert
 		case "put":
-			if !previous.IsValid() {
+			if !previous.IsValid() && !skipDelete {
 				return fmt.Errorf("put requires a matched complete identity")
 			}
 			action = xhandler.WriteUpdate
@@ -1473,14 +1485,14 @@ func (p *Program) buildEntityFrame(record *Record, entity reflect.Value, parent 
 			return fmt.Errorf("unsupported writer operation %q", p.metadata.Operation)
 		}
 		fields := livePresence(record, entity.Elem())
-		if record.DeleteMarker != nil && supplied(entity.Elem(), *record.DeleteMarker) && boolValue(entity.Elem().FieldByIndex(record.DeleteMarker.Index)) {
-			if !previous.IsValid() || !complete {
+		if deleteRequested {
+			if !complete || (!previous.IsValid() && !skipDelete) {
 				return fmt.Errorf("delete requires a matched complete identity")
 			}
 			action = xhandler.WriteDelete
 		}
 		original := p.captureEntityOriginal(record, entity)
-		frame := &Frame{Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, Action: action, Record: record, Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
+		frame := &Frame{Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, SkippedDelete: skipDelete, Action: action, Record: record, Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
 			children := entity.Elem().FieldByIndex(relation.Field)
@@ -1727,7 +1739,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 			}
 		}
 		metadata.Fields = append(metadata.Fields, compiled)
-		if column != nil && column.PrimaryKey || strings.Contains(strings.ToLower(sqlx), "primarykey") {
+		if typecatalog.SQLXPrimaryKey(field.Tag, column != nil && column.PrimaryKey) {
 			metadata.Keys = append(metadata.Keys, compiled)
 		}
 		if column != nil && column.AutoIncrement || strings.Contains(strings.ToLower(sqlx), "autoincrement") {
@@ -1766,7 +1778,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		Auxiliary:    component.RootView.Auxiliary || strings.EqualFold(tagOption(rootViewTag, "auxiliary"), "true"),
 		CurrentField: metadata.CurrentField, Table: metadata.Table, Keys: metadata.Keys, Fields: metadata.Fields,
 		Sequence: metadata.Sequence, DeleteMarker: metadata.DeleteMarker, ConcurrencyToken: metadata.ConcurrencyToken,
-		Invariants: metadata.Invariants, HookType: metadata.HookType,
+		Invariants: metadata.Invariants, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
 	}
 	if root.Name == "" {
 		root.Name = metadata.EntityType.Name()
@@ -1779,6 +1791,28 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		return nil, err
 	}
 	metadata.Root = root
+	if err := validateMutationGroups(component, root); err != nil {
+		return nil, err
+	}
+	if operation == "post" && hasOnDeleteNotFoundPolicy(root) {
+		return nil, fmt.Errorf("onDeleteNotFound requires PATCH/PUT")
+	}
+	if hasMutationPredicate(root) {
+		if operation == "post" {
+			return nil, fmt.Errorf("mutation_predicate requires PATCH/PUT")
+		}
+		predicates, err := predicate.Compile(predicate.CompileInput{Component: component, InputType: inputType, Lookup: func(name string) (reflect.Type, error) {
+			typ := resolveHookType(component, name)
+			if typ == nil {
+				return nil, fmt.Errorf("predicate type %s is not linked", name)
+			}
+			return typ, nil
+		}})
+		if err != nil {
+			return nil, err
+		}
+		metadata.Predicates = predicates
+	}
 	return metadata, nil
 }
 
@@ -1838,6 +1872,8 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	record := &Record{Name: name, Path: path, EntityType: entityType, CurrentField: -1, Table: tagOption(viewTag, "table"), Auxiliary: strings.EqualFold(tagOption(viewTag, "auxiliary"), "true"), Invariants: map[string][]Field{}}
 	if view != nil {
 		record.Auxiliary = record.Auxiliary || view.Auxiliary
+		record.OnDeleteNotFound = view.OnDeleteNotFound
+		record.MutationPredicateGroup = view.MutationPredicateGroup
 		if view.Source != nil && strings.TrimSpace(view.Source.Table) != "" {
 			record.Table = strings.TrimSpace(view.Source.Table)
 		}
@@ -1880,7 +1916,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 			}
 		}
 		record.Fields = append(record.Fields, compiled)
-		if column != nil && column.PrimaryKey || strings.Contains(strings.ToLower(sqlx), "primarykey") {
+		if typecatalog.SQLXPrimaryKey(field.Tag, column != nil && column.PrimaryKey) {
 			record.Keys = append(record.Keys, compiled)
 		}
 		if column != nil && column.AutoIncrement || strings.Contains(strings.ToLower(sqlx), "autoincrement") {
@@ -2178,4 +2214,72 @@ func lookup[T any](ctx context.Context, binder xhandler.Binder, key xhandler.Val
 		return zero, fmt.Errorf("writer capability %s is unavailable", key)
 	}
 	return result, nil
+}
+
+func hasMutationPredicate(record *Record) bool {
+	if record == nil {
+		return false
+	}
+	if record.MutationPredicateGroup != nil {
+		return true
+	}
+	for _, relation := range record.Relations {
+		if hasMutationPredicate(relation.Child) {
+			return true
+		}
+	}
+	return false
+}
+
+func validateMutationGroups(component *spec.Component, record *Record) error {
+	if record == nil {
+		return nil
+	}
+	if record.OnDeleteNotFound != "" {
+		if record.OnDeleteNotFound != "error" && record.OnDeleteNotFound != "ignore" {
+			return fmt.Errorf("onDeleteNotFound must be error or ignore")
+		}
+		if record.Auxiliary || record.DeleteMarker == nil {
+			return fmt.Errorf("onDeleteNotFound requires a writable delete marker")
+		}
+		if record.OnDeleteNotFound == "ignore" && len(record.Relations) > 0 {
+			return fmt.Errorf("onDeleteNotFound ignore requires a leaf role")
+		}
+	}
+	if record.MutationPredicateGroup != nil {
+		if record.Auxiliary {
+			return fmt.Errorf("mutation_predicate requires a writable role")
+		}
+		found := false
+		for _, parameter := range component.Parameters {
+			if parameter != nil {
+				for _, definition := range parameter.Predicates {
+					if definition != nil && definition.Group == *record.MutationPredicateGroup {
+						found = true
+					}
+				}
+			}
+		}
+		if !found {
+			return fmt.Errorf("mutation_predicate group %d has no predicate inputs", *record.MutationPredicateGroup)
+		}
+	}
+	for _, relation := range record.Relations {
+		if err := validateMutationGroups(component, relation.Child); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func hasOnDeleteNotFoundPolicy(record *Record) bool {
+	if record.OnDeleteNotFound != "" {
+		return true
+	}
+	for _, relation := range record.Relations {
+		if hasOnDeleteNotFoundPolicy(relation.Child) {
+			return true
+		}
+	}
+	return false
 }

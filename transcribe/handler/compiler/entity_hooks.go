@@ -102,6 +102,13 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 			return spec.TypeRef{}, err
 		}
 		for _, method := range methods {
+			if method.Name == "Recover" {
+				expected := []string{"context.Context", "*" + input, "*" + output, "github.com/viant/datly/runtime/handler.MutationOutcome"}
+				if method.Variadic || !reflect.DeepEqual(method.Parameters, expected) || !reflect.DeepEqual(method.Results, []string{"github.com/viant/datly/runtime/handler.Recovery", "error"}) {
+					return spec.TypeRef{}, fmt.Errorf("entity hook %s.Recover has incompatible mutation recovery signature", resolved.Identity)
+				}
+				continue
+			}
 			if method.Name != "Finalize" {
 				continue
 			}

@@ -63,7 +63,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	}
 	name := normalizeViewDirectiveName(sqlparser.Stringify(call.X))
 	switch name {
-	case spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
+	case spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
 		spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 		spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 		spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
@@ -76,6 +76,9 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 		spec.ViewControlSelectorFilterable, spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods:
 	default:
 		return viewDirective{}, false, nil
+	}
+	if (name == spec.ViewControlMutationPredicate || name == spec.ViewControlOnDeleteNotFound) && item.Alias != "" {
+		return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s must be a standalone annotation without an alias", name)}
 	}
 	minimum, maximum := 2, 2
 	switch name {
@@ -107,10 +110,10 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	if target == "" || minimum > 1 && directive.value == "" {
 		return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s requires non-empty arguments", name)}
 	}
-	if name == spec.ViewControlSetLimit {
+	if name == spec.ViewControlSetLimit || name == spec.ViewControlMutationPredicate {
 		limit, err := strconv.Atoi(directive.value)
 		if err != nil || limit < 0 {
-			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("set_limit value %q must be a non-negative integer", directive.value)}
+			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s value %q must be a non-negative integer", name, directive.value)}
 		}
 	}
 	if selectorBooleanDirective(name) {
@@ -165,7 +168,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 func containsViewDirective(source node.Node) bool {
 	return containsSQLCall(source, func(name string) bool {
 		switch name {
-		case spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
+		case spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
 			spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 			spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 			spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
@@ -285,7 +288,7 @@ func viewDirectiveTarget(source node.Node) (string, bool) {
 func viewDirectiveValue(name string, argument int, source node.Node) (string, bool) {
 	switch actual := source.(type) {
 	case *expr.Literal:
-		numeric := name == spec.ViewControlSetLimit || name == spec.ViewControlBatchSize || name == spec.ViewControlConcurrency || name == spec.ViewControlBatchConcurrency || name == spec.ViewControlSelectorDefaultLimit ||
+		numeric := name == spec.ViewControlMutationPredicate || name == spec.ViewControlSetLimit || name == spec.ViewControlBatchSize || name == spec.ViewControlConcurrency || name == spec.ViewControlBatchConcurrency || name == spec.ViewControlSelectorDefaultLimit ||
 			name == spec.ViewControlPartitioner && argument == 2
 		if numeric && actual.Kind != "int" {
 			return "", false
@@ -341,6 +344,14 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			target.Source = &spec.ViewSource{}
 		}
 		switch directive.name {
+		case spec.ViewControlOnDeleteNotFound:
+			if directive.value != "error" && directive.value != "ignore" {
+				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("delete_not_found must be error or ignore")}
+			}
+			target.OnDeleteNotFound = directive.value
+		case spec.ViewControlMutationPredicate:
+			group, _ := strconv.Atoi(directive.value)
+			target.MutationPredicateGroup = &group
 		case spec.ViewControlInMemory:
 			if findDirectiveRelation(root, target) == nil {
 				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("in_memory target %q must be a related view", directive.target)}

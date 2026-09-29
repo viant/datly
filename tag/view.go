@@ -12,28 +12,30 @@ import (
 const ViewName = "view"
 
 type View struct {
-	Name                  string
-	TypeName              string
-	Dest                  string
-	EntityHooks           string
-	URI                   string
-	Connector             string
-	Table                 string
-	Cache                 string
-	CacheWarmup           string
-	OrderBy               string
-	Limit                 *int
-	Offset                *int
-	Batch                 int
-	BatchConcurrency      int
-	Match                 string
-	PublishParent         bool
-	RelationalConcurrency int
-	AllowNulls            *bool
-	Groupable             *bool
-	Auxiliary             bool
-	Partitioning          *spec.Partitioning
-	Selector              *spec.Selector
+	Name                   string
+	TypeName               string
+	Dest                   string
+	OnDeleteNotFound       string
+	MutationPredicateGroup *int
+	EntityHooks            string
+	URI                    string
+	Connector              string
+	Table                  string
+	Cache                  string
+	CacheWarmup            string
+	OrderBy                string
+	Limit                  *int
+	Offset                 *int
+	Batch                  int
+	BatchConcurrency       int
+	Match                  string
+	PublishParent          bool
+	RelationalConcurrency  int
+	AllowNulls             *bool
+	Groupable              *bool
+	Auxiliary              bool
+	Partitioning           *spec.Partitioning
+	Selector               *spec.Selector
 }
 
 func ParseView(value string) (*View, error) {
@@ -64,6 +66,23 @@ func ParseView(value string) (*View, error) {
 			result.TypeName = value
 		case "dest":
 			result.Dest = value
+		case "ondeletenotfound":
+			if result.OnDeleteNotFound != "" {
+				return fmt.Errorf("onDeleteNotFound is duplicated")
+			}
+			if value != "error" && value != "ignore" {
+				return fmt.Errorf("onDeleteNotFound must be error or ignore")
+			}
+			result.OnDeleteNotFound = value
+		case "mutationpredicate":
+			group, err := strconv.Atoi(value)
+			if err != nil || group < 0 {
+				return fmt.Errorf("mutationPredicate requires a non-negative group")
+			}
+			if result.MutationPredicateGroup != nil {
+				return fmt.Errorf("mutationPredicate is duplicated")
+			}
+			result.MutationPredicateGroup = &group
 		case "entityhooks":
 			if entityHooksSeen {
 				return fmt.Errorf("view option %s is declared more than once", key)

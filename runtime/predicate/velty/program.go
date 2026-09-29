@@ -9,6 +9,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/sqlx"
 	xhandler "github.com/viant/xdatly/handler"
 	xpredicate "github.com/viant/xdatly/predicate"
 )
@@ -180,4 +181,23 @@ func resolveHandlerType(lookup LookupType, args []string) (reflect.Type, error) 
 		return nil, fmt.Errorf("%v does not implement predicate.Handler", rType)
 	}
 	return rType, nil
+}
+
+// Criteria evaluates an existing predicate group for a database mutation.
+// It uses exactly the reader's marker-aware activation, custom handler binding,
+// templates, and ordered placeholders; SQLX owns the shared output fragment.
+func (p *Program) Criteria(ctx context.Context, binder xhandler.Binder, group int) (*sqlx.Criteria, error) {
+	result := &sqlx.Criteria{}
+	value, err := p.NewContext(ctx, binder, func(args ...any) { result.Placeholders = append(result.Placeholders, args...) })
+	if err != nil {
+		return nil, err
+	}
+	result.Expression, err = value.(*Context).Expand(group)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(result.Expression) == "" {
+		return nil, nil
+	}
+	return result, nil
 }

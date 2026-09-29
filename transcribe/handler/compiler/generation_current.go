@@ -60,7 +60,7 @@ func (b *inputGeneration) addCurrent(view *spec.View, body string, path []string
 		}
 		alias := ""
 		for _, col := range view.Columns {
-			if col != nil && col.PrimaryKey && typecatalog.FieldName(col.Name) == key.Field {
+			if col != nil && effectivePrimaryKey(col) && typecatalog.FieldName(col.Name) == key.Field {
 				// StructQL helper projections are Go shapes. Keep the physical
 				// database name in SQLX metadata and use the canonical exported
 				// field name for the generated helper contract.
@@ -119,6 +119,8 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	current.TypeName = ""
 	current.Dest = ""
 	current.EntityHooks = ""
+	current.OnDeleteNotFound = ""
+	current.MutationPredicateGroup = nil
 	current.Columns = nil
 	for _, column := range view.Columns {
 		if column == nil || column.DeleteMarker {
