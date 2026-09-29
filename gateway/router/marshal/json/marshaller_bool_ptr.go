@@ -35,5 +35,5 @@ func (i *boolPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessi
 }
 
 func (i *boolPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
-	return decoder.AddBool(xunsafe.AsBoolPtr(pointer))
+	return decoder.AddBoolNull(xunsafe.AsBoolAddrPtr(pointer))
 }

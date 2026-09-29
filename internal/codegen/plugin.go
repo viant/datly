@@ -20,7 +20,7 @@ func (p *Plugin) GenerateDependency(info *plugin.Info) string {
 
 func (p *Plugin) getImports(info *plugin.Info) string {
 	imports := inference.NewImports()
-	if len(info.CustomTypesPackages) == 0 && len(info.CustomTypesPackages) == 0 {
+	if len(info.CustomTypesPackages) == 0 && len(info.CustomCodecPackages) == 0 {
 		return ""
 	}
 	for _, pkg := range info.CustomTypesPackages {

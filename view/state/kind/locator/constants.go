@@ -3,6 +3,7 @@ package locator
 import (
 	"context"
 	"github.com/viant/datly/view/state/kind"
+	"reflect"
 	"sync"
 )
 
@@ -16,7 +17,7 @@ func (r *Constants) Names() []string {
 	return nil
 }
 
-func (r *Constants) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (r *Constants) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	if len(r.constants) > 0 {
 		if value, ok := r.constants[name]; ok {
 			return value, true, nil

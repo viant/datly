@@ -4,6 +4,10 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"reflect"
+	"strings"
+	"unicode"
+
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
@@ -11,9 +15,6 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/xreflect"
-	"reflect"
-	"strings"
-	"unicode"
 )
 
 type (
@@ -110,6 +111,10 @@ func (t *Type) ensureEmbedder(reflect.Type) {
 		t.embedder = NewFSEmbedder(nil)
 	}
 	t.embedder.SetType(reflect.TypeOf(t))
+	if t.resource != nil && t.resource.EmbedFS() == nil {
+		t.resource.SetFSEmbedder(t.embedder)
+	}
+
 }
 
 func (t *Type) adjustConstants() {
@@ -261,11 +266,16 @@ func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Param
 		isSlice = true
 		rawType = rawType.Elem()
 	}
+	isPtr := false
 	if rawType.Kind() == reflect.Ptr {
 		rawType = rawType.Elem()
+		isPtr = true
 	}
 
 	rawName := rawType.Name()
+	if isPtr {
+		rawName = "*" + rawName
+	}
 	if pTag.Cardinality != "" {
 		result.ensureSchema()
 		result.Schema.Cardinality = Cardinality(pTag.Cardinality)

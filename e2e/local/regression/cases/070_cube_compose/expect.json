@@ -1,0 +1,45 @@
+{
+  "columns": [
+    {
+      "name": "account_id",
+      "type": "int",
+      "role": "dimension"
+    },
+    {
+      "name": "current_total",
+      "type": "int",
+      "role": "measure"
+    },
+    {
+      "name": "previous_total",
+      "type": "int",
+      "role": "measure"
+    },
+    {
+      "name": "reference_total",
+      "type": "int",
+      "role": "measure"
+    },
+    {
+      "name": "total_drop",
+      "type": "number",
+      "role": "expression"
+    }
+  ],
+  "data": [
+    {
+      "account_id": 100,
+      "current_total": 1,
+      "previous_total": 4,
+      "reference_total": 4,
+      "total_drop": 3
+    },
+    {
+      "account_id": 101,
+      "current_total": 0,
+      "previous_total": 2,
+      "reference_total": 2,
+      "total_drop": 2
+    }
+  ]
+}

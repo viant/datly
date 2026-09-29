@@ -5,20 +5,21 @@ import (
 )
 
 type GeneratedStruct struct {
-	Id          int         `sqlx:"ID" velty:"names=ID|Id"`
-	Name        *string     `sqlx:"NAME" velty:"names=NAME|Name"`
-	AccountId   *int        `sqlx:"ACCOUNT_ID" velty:"names=ACCOUNT_ID|AccountId"`
-	Created     *time.Time  `sqlx:"CREATED" velty:"names=CREATED|Created"`
-	UserCreated *int        `sqlx:"USER_CREATED" velty:"names=USER_CREATED|UserCreated"`
-	Updated     *time.Time  `sqlx:"UPDATED" velty:"names=UPDATED|Updated"`
-	UserUpdated *int        `sqlx:"USER_UPDATED" velty:"names=USER_UPDATED|UserUpdated"`
-	Products    []*Products `view:",table=PRODUCT"`
+	Xmap        map[string]interface{} `sqlx:"xmap,type=map[string]interface{}" codec:"JSON" velty:"names=xmap|Xmap"`
+	Id          int                    `sqlx:"ID" velty:"names=ID|Id"`
+	Name        *string                `sqlx:"NAME" velty:"names=NAME|Name"`
+	AccountId   *int                   `sqlx:"ACCOUNT_ID" velty:"names=ACCOUNT_ID|AccountId"`
+	Created     *time.Time             `sqlx:"CREATED" velty:"names=CREATED|Created"`
+	UserCreated *int                   `sqlx:"USER_CREATED" velty:"names=USER_CREATED|UserCreated"`
+	Updated     *time.Time             `sqlx:"UPDATED" velty:"names=UPDATED|Updated"`
+	UserUpdated *int                   `sqlx:"USER_UPDATED" velty:"names=USER_UPDATED|UserUpdated"`
+	Products    []*Products            `view:",table=PRODUCT"`
 }
 
 type Products struct {
 	Id          int        `sqlx:"ID" velty:"names=ID|Id"`
 	Name        *string    `sqlx:"NAME" velty:"names=NAME|Name"`
-	VendorId    *int       `sqlx:"VENDOR_ID" velty:"names=VENDOR_ID|VendorId"`
+	VendorId    *int       `sqlx:"VENDOR_ID"   internal:"true" velty:"names=VENDOR_ID|VendorId"`
 	Status      *int       `sqlx:"STATUS" velty:"names=STATUS|Status"`
 	Created     *time.Time `sqlx:"CREATED" velty:"names=CREATED|Created"`
 	UserCreated *int       `sqlx:"USER_CREATED" velty:"names=USER_CREATED|UserCreated"`

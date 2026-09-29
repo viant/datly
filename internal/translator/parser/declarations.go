@@ -2,6 +2,10 @@ package parser
 
 import (
 	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/shared"
@@ -12,9 +16,6 @@ import (
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 type (
@@ -146,7 +147,11 @@ func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Sel
 			declaration.Kind = segments[0]
 			location := ""
 			if len(segments) > 1 {
-				location = strings.Join(segments[1:], ".")
+				joiner := "."
+				if declaration.Kind == string(state.KindComponent) {
+					joiner = "/"
+				}
+				location = strings.Join(segments[1:], joiner)
 			}
 			declaration.Location = &location
 			declaration.InOutput = declaration.Kind == string(state.KindOutput)
@@ -206,7 +211,7 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 		dataType = strings.Replace(dataType, typeName, "interface{}", 1)
 	}
 
-	if dataType != "" {
+	if dataType != "" && d.lookup != nil {
 		if schema, _ := d.lookup(dataType); schema != nil {
 			schema.Cardinality = declaration.Cardinality
 			if rType := schema.Type(); rType != nil && schema.Cardinality == state.Many {
@@ -251,6 +256,24 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 
 		case "WithURI":
 			declaration.URI = strings.Trim(args[0], "'")
+		case "WithMcp", "WithMCP":
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithMcp to have one arg, but got %v", len(args))
+			}
+			value, err := strconv.ParseBool(strings.Trim(args[0], `"'`))
+			if err != nil {
+				return fmt.Errorf("invalid WithMcp value %q: %w", args[0], err)
+			}
+			declaration.MCP = &value
+		case "WithPathMcp", "WithPathMCP":
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithPathMcp to have one arg, but got %v", len(args))
+			}
+			value, err := strconv.ParseBool(strings.Trim(args[0], `"'`))
+			if err != nil {
+				return fmt.Errorf("invalid WithPathMcp value %q: %w", args[0], err)
+			}
+			declaration.PathMCP = &value
 		case "WithTag", "Tag":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithTag to have one args, but got %v", len(args))
@@ -322,6 +345,10 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			declaration.InOutput = true
 		case "WithCache":
 			declaration.Cache = strings.Trim(args[0], `"'`)
+		case "WithLimit":
+			limit, _ := strconv.Atoi(strings.Trim(args[0], `"'`))
+			declaration.Limit = &limit
+
 		case "Cacheable":
 			literal := strings.Trim(args[0], `"'`)
 			value, _ := strconv.ParseBool(literal)

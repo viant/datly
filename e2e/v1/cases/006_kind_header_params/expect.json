@@ -1,0 +1,40 @@
+[
+  {
+    "accountId": 101,
+    "created": "${created}",
+    "id": 2,
+    "name": "Vendor 2",
+    "products": [
+      {
+        "created": "${created}",
+        "id": 3,
+        "name": "V2 Product 1",
+        "status": 1,
+        "updated": null,
+        "userCreated": 2,
+        "userUpdated": null
+      },
+      {
+        "created": "${created}",
+        "id": 4,
+        "name": "V2 Product 2",
+        "status": 1,
+        "updated": null,
+        "userCreated": 2,
+        "userUpdated": null
+      },
+      {
+        "created": "${created}",
+        "id": 5,
+        "name": "V2 Product 3",
+        "status": 1,
+        "updated": null,
+        "userCreated": 2,
+        "userUpdated": null
+      }
+    ],
+    "updated": null,
+    "userCreated": 2,
+    "userUpdated": null
+  }
+]

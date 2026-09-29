@@ -2,6 +2,7 @@ package expand
 
 import (
 	"context"
+
 	"github.com/viant/datly/service/executor/extension"
 
 	"github.com/viant/datly/view/state/predicate"
@@ -83,7 +84,7 @@ func WithCustomContext(customContext *Variable) StateOption {
 	}
 }
 
-func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, options ...StateOption) {
+func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, stateType *structology.StateType, options ...StateOption) {
 	for _, option := range options {
 		option(s)
 	}
@@ -103,8 +104,6 @@ func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, op
 	if s.DataUnit == nil {
 		s.DataUnit = NewDataUnit(nil)
 	}
-	// Ensure bindings/cursor are reset for a fresh evaluation cycle
-	s.DataUnit.Reset()
 
 	if s.Http == nil {
 		s.Http = &Http{}
@@ -122,7 +121,7 @@ func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, op
 		s.MessageBus = s.Session.MessageBus()
 	}
 
-	s.Predicate = NewPredicate(s.Context, s.ParametersState, predicates)
+	s.Predicate = NewPredicate(s.Context, s.ParametersState, predicates, stateType)
 	s.State = templateState
 }
 
@@ -149,6 +148,6 @@ func StateWithSQL(ctx context.Context, SQL string) *State {
 		Context:  &Context{Context: ctx},
 	}
 
-	aState.Init(nil, nil)
+	aState.Init(nil, nil, nil)
 	return aState
 }

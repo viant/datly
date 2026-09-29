@@ -4,7 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
+	"regexp"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+	"unsafe"
+
 	"github.com/google/uuid"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -19,10 +28,6 @@ import (
 	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/exec"
 	"github.com/viant/xdatly/handler/response"
-	"reflect"
-	"sync"
-	"time"
-	"unsafe"
 )
 
 // Service represents reader service
@@ -93,15 +98,27 @@ func (s *Service) afterRead(ctx context.Context, aSession *Session, collector *v
 		Rows:       collector.Len(),
 	}
 	aSession.AddMetric(metrics)
+	status := Success
 	if err != nil {
-		aSession.View.Counter.IncrementValue(Error)
-	} else {
-		aSession.View.Counter.IncrementValue(Success)
+		status = Error
 	}
-	onFinish(end)
+	statusText := "ok"
+	if err != nil {
+		statusText = "error"
+	}
+	onFinish(end, status)
+	if aSession.DryRun {
+		aSession.View.Counter.IncrementValue(status)
+	}
+	fmt.Printf("[INFO] datly view read reqTraceId=%s view=%s rows=%d elapsed=%s status=%s\n",
+		reqTraceID(ctx),
+		viewName,
+		collector.Len(),
+		elapsed,
+		statusText)
 	if value := ctx.Value(exec.ContextKey); value != nil {
 		if exeCtx := value.(*exec.Context); exeCtx != nil {
-			exeCtx.Metrics.Append(metrics)
+			exeCtx.AppendMetrics(metrics)
 		}
 	}
 }
@@ -147,7 +164,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	}
 
 	batchData := s.batchData(collector)
-	if len(batchData.ColumnNames) != 0 && len(batchData.Values) == 0 {
+	if len(batchData.ColumnNames) != 0 && len(batchData.Values) == 0 && len(batchData.CompositeValues) == 0 {
 		return
 	}
 
@@ -162,6 +179,8 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	if collector.ReadAll() {
 		return
 	}
+
+	collector.BootstrapFromParentHolder()
 
 	collectorFetchEmitted = true
 	collector.Fetched()
@@ -183,6 +202,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 		}
 		return
 	}
+
 	// if onRelationalConcurrency > 1 , then only we call it concurrently
 	concurrencyLimit := make(chan struct{}, onRelationerConcurrency)
 	var onRelationWaitGroup sync.WaitGroup
@@ -221,8 +241,12 @@ func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *view.Colle
 
 func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 	batchData := &view.BatchData{}
-	batchData.Values, batchData.ColumnNames = collector.ParentPlaceholders()
-	batchData.ParentReadSize = len(batchData.Values)
+	batchData.Values, batchData.CompositeValues, batchData.ColumnNames = collector.ParentPlaceholders()
+	if batchData.HasComposite() {
+		batchData.ParentReadSize = len(batchData.CompositeValues)
+	} else {
+		batchData.ParentReadSize = len(batchData.Values)
+	}
 	return batchData
 }
 
@@ -243,7 +267,11 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 }
 
 func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Statelet, info *response.SQLExecutions) error {
-	batchData.ValuesBatch, batchData.Size = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+	if batchData.HasComposite() {
+		batchData.CompositeValuesBatch, batchData.Size = sliceCompositeWithLimit(batchData.CompositeValues, batchData.Size, batchData.Size+view.Batch.Size)
+	} else {
+		batchData.ValuesBatch, batchData.Size = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+	}
 	visitor := collector.Visitor(ctx)
 	for {
 		err := s.queryInBatches(ctx, session, view, collector, visitor, info, batchData, selector)
@@ -254,17 +282,20 @@ func (s *Service) readObjects(ctx context.Context, session *Session, batchData *
 			break
 		}
 		var nextParents int
-		batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+		if batchData.HasComposite() {
+			batchData.CompositeValuesBatch, nextParents = sliceCompositeWithLimit(batchData.CompositeValues, batchData.Size, batchData.Size+view.Batch.Size)
+		} else {
+			batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Size, batchData.Size+view.Batch.Size)
+		}
 		batchData.Size += nextParents
 	}
 	return nil
 }
 
 func (s *Service) querySummary(ctx context.Context, session *Session, aView *view.View, statelet *view.Statelet, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.ViewContext) (*response.SQLExecution, error) {
-	selectorDeref := *statelet
-	selectorDeref.Fields = []string{}
-	selectorDeref.Columns = []string{}
-	selector := &selectorDeref
+	selector := statelet.CloneForSummary()
+	selector.Fields = []string{}
+	selector.Columns = []string{}
 
 	var indexed *cache.ParmetrizedQuery
 	var cacheStats *cache.Stats
@@ -289,6 +320,9 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 		}
 		cacheStats = &cache.Stats{}
 		metaOptions = []read.Option{read.WithCache(cacheService), read.WithInMatcher(cacheMatcher), read.WithCacheStats(cacheStats)}
+		if session.CacheRefresh {
+			metaOptions = append(metaOptions, read.WithCacheRefresh(session.CacheRefresh))
+		}
 	}()
 
 	var err error
@@ -346,32 +380,481 @@ func (s *Service) querySummary(ctx context.Context, session *Session, aView *vie
 	}
 	finished := Now()
 	aView.Logger.Log("reading view %v meta took %v, SQL: %v , Args: %v\n", aView.Name, finished.Sub(now).String(), SQL, args)
+	logCacheRead(ctx, aView, cacheStats, finished.Sub(now), collector.Len(), args)
 	return execInfo, nil
 }
 
 func (s *Service) buildParametrizedSQL(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, collector *view.Collector, session *Session, partitions *view.Partition) (parametrizedSQL *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
+	if session.Query != nil && aView == session.View {
+		if partitions != nil || collector.Relation() != nil {
+			return nil, nil, fmt.Errorf("an explicit reader query is only supported for a root, non-partitioned view")
+		}
+		return &cache.ParmetrizedQuery{
+			SQL:  session.Query.SQL,
+			Args: append([]interface{}{}, session.Query.Args...),
+		}, nil, nil
+	}
+	relation := collector.Relation()
+	rootWarmup := relation == nil && aView.Cache != nil && aView.Cache.HasWarmup()
+	if rootWarmup {
+		ctx = view.WithCacheIndexSelection(ctx)
+	}
+	data, _ := session.ParentData()
+	if rootWarmup {
+		parametrizedSQL, err = s.sqlBuilder.Build(ctx, WithBuilderView(aView), WithBuilderStatelet(statelet), WithBuilderPartitions(partitions), WithBuilderBatchData(batchData), WithBuilderRelation(relation), WithBuilderExclude(false, false), WithBuilderParent(data.AsParam()))
+		if err != nil {
+			return nil, nil, err
+		}
+		columnInMatcher, err = s.topLevelWarmupMatcher(ctx, aView, statelet, data.AsParam())
+		ensureWarmupIdentity(columnInMatcher)
+		return parametrizedSQL, columnInMatcher, err
+	}
+
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-
-	relation := collector.Relation()
-
 	var cacheErr error
 	go func() {
 		defer wg.Done()
-		if (aView.Cache != nil && aView.Cache.Warmup != nil) || relation != nil {
-			data, _ := session.ParentData()
+		if aView.Cache != nil && aView.Cache.HasWarmup() {
+			columnInMatcher, cacheErr = s.relationWarmupMatcher(ctx, aView, statelet, batchData, relation)
+			if cacheErr != nil || columnInMatcher != nil {
+				return
+			}
+		}
+		if relation != nil {
 			columnInMatcher, cacheErr = s.sqlBuilder.CacheSQLWithOptions(ctx, aView, statelet, batchData, relation, data.AsParam())
 		}
 	}()
-
-	data, _ := session.ParentData()
 	parametrizedSQL, err = s.sqlBuilder.Build(ctx, WithBuilderView(aView), WithBuilderStatelet(statelet), WithBuilderPartitions(partitions), WithBuilderBatchData(batchData), WithBuilderRelation(relation), WithBuilderExclude(
 		false, relation != nil && len(batchData.ValuesBatch) > 1), WithBuilderParent(data.AsParam()))
 	if err != nil {
+		wg.Wait()
 		return nil, nil, err
 	}
 	wg.Wait()
+	ensureWarmupIdentity(columnInMatcher)
 	return parametrizedSQL, columnInMatcher, cacheErr
+}
+
+func ensureWarmupIdentity(matcher *cache.ParmetrizedQuery) {
+	if matcher == nil || matcher.IdentitySQL != "" {
+		return
+	}
+	matcher.IdentitySQL = matcher.SQL
+	matcher.IdentityArgs = append([]interface{}{}, matcher.Args...)
+}
+
+func (s *Service) relationWarmupMatcher(ctx context.Context, aView *view.View, statelet *view.Statelet, batchData *view.BatchData, relation *view.Relation) (*cache.ParmetrizedQuery, error) {
+	if aView == nil || aView.Cache == nil || !aView.Cache.HasWarmup() || batchData == nil || relation == nil || relation.Of == nil || len(relation.Of.On) != 1 {
+		return nil, nil
+	}
+	if len(batchData.ValuesBatch) == 0 || batchData.HasComposite() || len(batchData.ColumnNames) != 1 {
+		return nil, nil
+	}
+	selected := selectRelationWarmup(aView, relation, batchData)
+	if selected == nil {
+		return nil, nil
+	}
+	indexColumn := strings.TrimSpace(selected.IndexColumn)
+	matcher, err := s.warmupMatcher(ctx, aView, selected, statelet, nil)
+	if err != nil || matcher == nil {
+		return matcher, err
+	}
+	matcher.By = warmupMarkerColumn(indexColumn, relation, batchData)
+	matcher.In = batchData.ValuesBatch
+	return matcher, nil
+}
+
+// selectRelationWarmup picks the effective warmup whose index column matches the relation
+// link; explicit priority wins, declaration order (singular first) breaks ties.
+func selectRelationWarmup(aView *view.View, relation *view.Relation, batchData *view.BatchData) *view.Warmup {
+	var best *view.Warmup
+	for _, candidate := range aView.Cache.EffectiveWarmups() {
+		indexColumn := strings.TrimSpace(candidate.IndexColumn)
+		if indexColumn == "" {
+			continue
+		}
+		if !matchesWarmupIndex(aView, indexColumn, relation.Of.On[0], batchData.ColumnNames[0]) {
+			continue
+		}
+		if best == nil || candidate.Priority > best.Priority {
+			best = candidate
+		}
+	}
+	return best
+}
+
+func warmupMarkerColumn(indexColumn string, relation *view.Relation, batchData *view.BatchData) string {
+	if column := normalizeWarmupColumnName(indexColumn); column != "" {
+		return column
+	}
+	if batchData != nil && len(batchData.ColumnNames) > 0 {
+		if column := normalizeWarmupColumnName(batchData.ColumnNames[0]); column != "" {
+			return column
+		}
+	}
+	if relation != nil && relation.Of != nil && len(relation.Of.On) > 0 && relation.Of.On[0] != nil {
+		if column := normalizeWarmupColumnName(relation.Of.On[0].Column); column != "" {
+			return column
+		}
+	}
+	return normalizeWarmupColumnName(indexColumn)
+}
+
+func matchesWarmupIndex(aView *view.View, indexColumn string, link *view.Link, batchColumn string) bool {
+	if matchesWarmupIndexColumn(indexColumn, link, batchColumn) {
+		return true
+	}
+	if aView == nil || link == nil {
+		return false
+	}
+	if !strings.EqualFold(normalizeWarmupColumnName(batchColumn), normalizeWarmupColumnName(link.Column)) {
+		return false
+	}
+	warmupField := warmupIndexFieldName(indexColumn)
+	if warmupField == "" {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(link.Field), strings.TrimSpace(warmupField))
+}
+
+var warmupFieldAliasPattern = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+
+func warmupIndexFieldName(indexColumn string) string {
+	normalized := strings.TrimSpace(normalizeWarmupColumnName(indexColumn))
+	if normalized == "" {
+		return ""
+	}
+	parts := warmupFieldAliasPattern.Split(strings.ToLower(normalized), -1)
+	builder := strings.Builder{}
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		builder.WriteString(strings.ToUpper(part[:1]))
+		if len(part) > 1 {
+			builder.WriteString(part[1:])
+		}
+	}
+	return builder.String()
+}
+
+func matchesWarmupIndexColumn(indexColumn string, link *view.Link, batchColumn string) bool {
+	if link == nil {
+		return false
+	}
+	relationColumn := strings.TrimSpace(link.Column)
+	if relationColumn == "" {
+		return false
+	}
+	return strings.EqualFold(normalizeWarmupColumnName(relationColumn), normalizeWarmupColumnName(indexColumn)) &&
+		strings.EqualFold(normalizeWarmupColumnName(batchColumn), normalizeWarmupColumnName(indexColumn))
+}
+
+func normalizeWarmupColumnName(input string) string {
+	input = strings.TrimSpace(input)
+	if index := strings.LastIndex(input, "."); index != -1 {
+		input = input[index+1:]
+	}
+	return strings.TrimSpace(input)
+}
+
+func cloneStructologyState(src *structology.State) *structology.State {
+	if src == nil {
+		return nil
+	}
+	cloned := src.Type().NewState()
+	dstStatePtr := reflect.ValueOf(cloned.StatePtr())
+	srcType := src.Type().Type()
+	if dstStatePtr.IsValid() {
+		if srcType.Kind() == reflect.Ptr {
+			srcStatePtr := reflect.ValueOf(src.StatePtr())
+			if srcStatePtr.IsValid() && srcStatePtr.Kind() == reflect.Ptr && !srcStatePtr.IsNil() {
+				dstStatePtr.Elem().Set(srcStatePtr.Elem())
+			}
+		} else {
+			currentValue := reflect.NewAt(srcType, src.Pointer()).Elem()
+			dstStatePtr.Elem().Set(currentValue)
+		}
+	}
+	if holder := src.MarkerHolder(); holder != nil {
+		holderVal := reflect.ValueOf(holder)
+		if holderVal.IsValid() && holderVal.Kind() == reflect.Ptr && !holderVal.IsNil() {
+			holderCopy := reflect.New(holderVal.Elem().Type())
+			holderCopy.Elem().Set(holderVal.Elem())
+			if dstStatePtr.IsValid() && dstStatePtr.Kind() == reflect.Ptr && !dstStatePtr.IsNil() {
+				hasField := dstStatePtr.Elem().FieldByName("Has")
+				if hasField.IsValid() && hasField.CanSet() {
+					hasField.Set(holderCopy)
+				}
+			}
+		}
+	}
+	cloned.Sync()
+	return cloned
+}
+
+func warmupParamValues(value interface{}) []interface{} {
+	if value == nil {
+		return nil
+	}
+	switch actual := value.(type) {
+	case []interface{}:
+		return actual
+	}
+	rType := reflect.TypeOf(value)
+	if rType.Kind() == reflect.Slice {
+		rValue := reflect.ValueOf(value)
+		ret := make([]interface{}, rValue.Len())
+		for i := 0; i < rValue.Len(); i++ {
+			ret[i] = rValue.Index(i).Interface()
+		}
+		return ret
+	}
+	return []interface{}{value}
+}
+
+type warmupCandidate struct {
+	warmup    *view.Warmup
+	parameter *state.Parameter
+	values    []interface{}
+}
+
+// selectTopLevelWarmup selects the most specific applicable effective warmup by request
+// parameter presence: a warmup applies when its index parameter carries values; among
+// applicable warmups the highest explicit Priority wins. Equal priorities use
+// the later declaration so broad-to-specific declarations select the most
+// restrictive supplied dimension.
+func selectTopLevelWarmup(aView *view.View, statelet *view.Statelet) (*warmupCandidate, error) {
+	if aView == nil || aView.Cache == nil || statelet == nil || statelet.Template == nil {
+		return nil, nil
+	}
+	var best *warmupCandidate
+	var firstErr error
+	for _, candidate := range aView.Cache.EffectiveWarmups() {
+		indexColumn := strings.TrimSpace(candidate.IndexColumn)
+		if indexColumn == "" {
+			continue
+		}
+		matchParam := warmupParameterFor(aView, candidate)
+		if matchParam == nil {
+			continue
+		}
+		liveSelector, selErr := statelet.Template.Selector(matchParam.Name)
+		if selErr != nil || liveSelector == nil {
+			if firstErr == nil {
+				firstErr = selErr
+			}
+			continue
+		}
+		value := liveSelector.Value(statelet.Template.Pointer())
+		values := warmupParamValues(value)
+		if len(values) == 0 {
+			continue
+		}
+		if best == nil || candidate.Priority >= best.warmup.Priority {
+			best = &warmupCandidate{warmup: candidate, parameter: matchParam, values: values}
+		}
+	}
+	if best == nil {
+		return nil, firstErr
+	}
+	return best, nil
+}
+
+func (s *Service) topLevelWarmupMatcher(ctx context.Context, aView *view.View, statelet *view.Statelet, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {
+	selected, err := selectAuthorizedTopLevelWarmup(ctx, aView, statelet)
+	if selected == nil || err != nil {
+		return nil, err
+	}
+	if view.SelectedCacheIndex(ctx) != nil {
+		ctx = view.WithCacheIndexIdentity(ctx)
+	}
+	matcher, err := s.warmupMatcher(ctx, aView, selected.warmup, statelet, parent)
+	if err != nil || matcher == nil {
+		return matcher, err
+	}
+	matcher.By = strings.TrimSpace(selected.warmup.IndexColumn)
+	matcher.In = selected.values
+	return matcher, nil
+}
+
+func selectAuthorizedTopLevelWarmup(ctx context.Context, aView *view.View, statelet *view.Statelet) (*warmupCandidate, error) {
+	if view.IsCacheIndexDenied(ctx) {
+		return nil, nil
+	}
+	selection := view.SelectedCacheIndex(ctx)
+	if selection == nil {
+		return selectTopLevelWarmup(aView, statelet)
+	}
+	for _, warmup := range aView.Cache.EffectiveWarmups() {
+		if strings.EqualFold(normalizeWarmupColumnName(warmup.IndexColumn), normalizeWarmupColumnName(selection.Column)) {
+			return &warmupCandidate{warmup: warmup, parameter: warmupParameterFor(aView, warmup), values: selection.Values}, nil
+		}
+	}
+	return nil, fmt.Errorf("authorized cache index %q has no configured warmup", selection.Column)
+}
+
+func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, warmup *view.Warmup, statelet *view.Statelet, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {
+	if statelet == nil || statelet.Template == nil {
+		return nil, nil
+	}
+	clonedTemplate := cloneStructologyState(statelet.Template)
+	if clonedTemplate == nil {
+		return nil, nil
+	}
+	if candidate := warmupParameterFor(aView, warmup); candidate != nil {
+		if clonedSelector, err := clonedTemplate.Selector(candidate.Name); err == nil && clonedSelector != nil {
+			zero := reflect.Zero(clonedSelector.Type()).Interface()
+			_ = clonedSelector.SetValue(clonedTemplate.Pointer(), zero)
+		}
+		if marker := clonedTemplate.Type().Marker(); marker != nil {
+			clonedTemplate.EnsureMarker()
+			if idx := marker.Index(candidate.Name); idx != -1 {
+				_ = marker.Set(clonedTemplate.Pointer(), idx, false)
+			}
+		}
+	}
+	cloned := statelet.CloneForSummary()
+	cloned.Template = clonedTemplate
+	ok, err := applyWarmupProjection(aView, warmup, cloned)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	matcher, err := s.sqlBuilder.CacheSQLWithOptions(ctx, aView, cloned, nil, nil, parent)
+	if err != nil || matcher == nil {
+		return matcher, err
+	}
+	if err = applyRequestedFields(aView, statelet, matcher); err != nil {
+		fmt.Printf("[INFO] datly warmup projection metadata error view=%s fields=%v error=%v\n", aView.Name, requestedFieldNames(statelet), err)
+		return nil, nil
+	}
+	return matcher, nil
+}
+
+func applyWarmupIdentityProjection(aView *view.View, statelet *view.Statelet) (bool, error) {
+	if aView == nil || aView.Cache == nil {
+		return true, nil
+	}
+	return applyWarmupProjection(aView, aView.Cache.Warmup, statelet)
+}
+
+func applyWarmupProjection(aView *view.View, warmup *view.Warmup, statelet *view.Statelet) (bool, error) {
+	if aView == nil || aView.Cache == nil || warmup == nil || statelet == nil {
+		return true, nil
+	}
+	fieldNames, ok := aView.Cache.WarmupFieldNames(warmup, statelet)
+	if !ok {
+		return false, nil
+	}
+	if len(fieldNames) == 0 {
+		statelet.SetColumns(nil)
+		statelet.Fields = nil
+		return true, nil
+	}
+	columns, err := view.ProjectionColumnsForNames(aView, fieldNames)
+	if err != nil {
+		return false, err
+	}
+	fields := make([]string, 0, len(columns))
+	for _, columnName := range columns {
+		column, ok := aView.ColumnByName(columnName)
+		if !ok {
+			return false, fmt.Errorf("failed to map warmup identity column %s to view %s column", columnName, aView.Name)
+		}
+		fieldName := column.FieldName()
+		if fieldName == "" {
+			fieldName = column.Name
+		}
+		fields = append(fields, fieldName)
+	}
+	statelet.SetColumns(columns)
+	statelet.Fields = fields
+	return true, nil
+}
+
+func applyRequestedFields(aView *view.View, statelet *view.Statelet, matcher *cache.ParmetrizedQuery) error {
+	if aView == nil || statelet == nil || matcher == nil {
+		return nil
+	}
+	names := statelet.Columns
+	if len(names) == 0 {
+		names = statelet.Fields
+	}
+	fields, err := view.ProjectionFieldsForNames(aView, names)
+	if err != nil {
+		return err
+	}
+	matcher.RequestedFields = view.SQLXProjectionFields(fields)
+	return nil
+}
+
+func requestedFieldNames(statelet *view.Statelet) []string {
+	if statelet == nil {
+		return nil
+	}
+	if len(statelet.Columns) != 0 {
+		return statelet.Columns
+	}
+	return statelet.Fields
+}
+
+func warmupIndexParameter(aView *view.View) *state.Parameter {
+	if aView == nil || aView.Cache == nil {
+		return nil
+	}
+	return warmupParameterFor(aView, aView.Cache.Warmup)
+}
+
+func warmupParameterFor(aView *view.View, warmup *view.Warmup) *state.Parameter {
+	if aView == nil || warmup == nil || aView.Template == nil {
+		return nil
+	}
+	parameterName := strings.TrimSpace(warmup.IndexParameter)
+	if parameterName == "" {
+		return nil
+	}
+	for _, candidate := range aView.Template.Parameters {
+		if candidate == nil {
+			continue
+		}
+		if matchesWarmupParameter(candidate, parameterName) {
+			return candidate
+		}
+	}
+	return nil
+}
+
+func matchesWarmupParameter(candidate *state.Parameter, configured string) bool {
+	if candidate == nil {
+		return false
+	}
+	configured = strings.TrimSpace(configured)
+	if configured == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(candidate.Name), configured) {
+		return true
+	}
+	if candidate.In != nil && strings.EqualFold(strings.TrimSpace(candidate.In.Name), configured) {
+		return true
+	}
+
+	fieldName := warmupIndexFieldName(configured)
+	if fieldName == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(candidate.Name), fieldName) {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(candidate.Name), fieldName+"s") {
+		return true
+	}
+	return false
 }
 
 func (s *Service) BuildCriteria(ctx context.Context, value interface{}, options *codec.CriteriaBuilderOptions) (*codec.Criteria, error) {
@@ -467,7 +950,8 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		}
 		return visitor(row)
 	}
-	return s.queryWithHandler(ctx, session, aView, collector, columnInMatcher, parametrizedSQL, db, handler, &readData)
+	execs, err := s.queryWithHandler(ctx, session, aView, collector, columnInMatcher, parametrizedSQL, db, handler, &readData)
+	return execs, err
 }
 
 func (s *Service) getParentContext(ctx context.Context, row interface{}, collector *view.Collector, parentProvider func(value interface{}) (interface{}, error)) (context.Context, error) {
@@ -513,12 +997,25 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 	if session.DryRun {
 		return []*response.SQLExecution{stats}, nil
 	}
+
+	retires := uint32(0)
+BEGIN:
 	reader, err := read.New(ctx, db, parametrizedSQL.SQL, collector.NewItem(), options...)
+
+	isInvalidConnection := err != nil && strings.Contains(err.Error(), "invalid connection")
+	if isInvalidConnection && atomic.AddUint32(&retires, 1) < 3 {
+		db, err = aView.Connector.DB()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to db: %w", err)
+		}
+		goto BEGIN
+	}
 	if err != nil {
 		stats.SetError(err)
-		anExec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
+		anExec, err := s.HandleSQLError(ctx, err, aView, parametrizedSQL, stats)
 		return []*response.SQLExecution{anExec}, err
 	}
+
 	defer func() {
 		stmt := reader.Stmt()
 		if stmt == nil {
@@ -527,11 +1024,22 @@ func (s *Service) queryWithHandler(ctx context.Context, session *Session, aView 
 		_ = stmt.Close()
 	}()
 	err = reader.QueryAll(ctx, handler, parametrizedSQL.Args...)
+
+	isInvalidConnection = err != nil && strings.Contains(err.Error(), "invalid connection")
+	if isInvalidConnection && atomic.AddUint32(&retires, 1) < 3 {
+		db, err = aView.Connector.DB()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to db: %w", err)
+		}
+		goto BEGIN
+	}
 	end := time.Now()
+
 	aView.Logger.ReadingData(end.Sub(begin), parametrizedSQL.SQL, *readData, parametrizedSQL.Args, err)
+	logCacheRead(ctx, aView, cacheStats, end.Sub(begin), *readData, parametrizedSQL.Args)
 	if err != nil {
 		stats.SetError(err)
-		anExec, err := s.HandleSQLError(err, session, aView, parametrizedSQL, stats)
+		anExec, err := s.HandleSQLError(ctx, err, aView, parametrizedSQL, stats)
 		return []*response.SQLExecution{anExec}, err
 	}
 	return []*response.SQLExecution{stats}, nil
@@ -636,27 +1144,105 @@ func (s *Service) queryWithPartitions(ctx context.Context, session *Session, aVi
 	return executions, err
 }
 
-func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.ParmetrizedQuery, stats *response.SQLExecution) (*response.SQLExecution, error) {
-	aView.Logger.LogDatabaseErr(matcher.SQL, err, matcher.Args...)
+func (s *Service) HandleSQLError(ctx context.Context, err error, aView *view.View, matcher *cache.ParmetrizedQuery, stats *response.SQLExecution) (*response.SQLExecution, error) {
+	aView.Logger.LogDatabaseErr(ctx, aView.Name, matcher.SQL, err, matcher.Args...)
 	stats.Error = err.Error()
 	return stats, fmt.Errorf("database error occured while fetching Data for view %v %w", aView.Name, err)
 }
 
+func logCacheRead(ctx context.Context, aView *view.View, stats *cache.Stats, elapsed time.Duration, rows int, args []interface{}) {
+	if stats == nil {
+		return
+	}
+	recordCacheReadMetrics(aView, stats)
+	fmt.Printf("[INFO] datly cache read reqTraceId=%s view=%s source=%s type=%s found_warmup=%t found_lazy=%t records=%d rows=%d namespace=%s set=%s elapsed=%s args=%v%s\n",
+		reqTraceID(ctx),
+		aView.Name,
+		cacheReadSource(stats),
+		stats.Type,
+		stats.FoundWarmup,
+		stats.FoundLazy,
+		stats.RecordsCounter,
+		rows,
+		stats.Namespace,
+		stats.Dataset,
+		elapsed,
+		args,
+		warmupReadKeysSuffix(stats))
+}
+
+func warmupReadKeysSuffix(stats *cache.Stats) string {
+	if stats == nil {
+		return ""
+	}
+	var result string
+	if stats.WarmupKey != "" {
+		result += " warmup_key=" + stats.WarmupKey
+	}
+	if stats.MarkerKey != "" {
+		result += " marker_key=" + stats.MarkerKey
+	}
+	return result
+}
+
+func reqTraceID(ctx context.Context) string {
+	if traceID := requesttrace.Current(ctx); traceID != "" {
+		return traceID
+	}
+	return "unknown"
+}
+
+func recordCacheReadMetrics(aView *view.View, stats *cache.Stats) {
+	if aView == nil || aView.Counter == nil || stats == nil {
+		return
+	}
+	if stats.ErrorType != "" {
+		aView.Counter.IncrementValue("cache:error")
+		return
+	}
+	if stats.FoundWarmup {
+		aView.Counter.IncrementValue("cache:hit")
+		aView.Counter.IncrementValue("cache:warmup_hit")
+		return
+	}
+	if stats.FoundLazy {
+		aView.Counter.IncrementValue("cache:hit")
+		aView.Counter.IncrementValue("cache:lazy_hit")
+		return
+	}
+	if stats.Type == cache.TypeWrite {
+		aView.Counter.IncrementValue("cache:miss")
+		aView.Counter.IncrementValue("cache:miss_write")
+		return
+	}
+	aView.Counter.IncrementValue("cache:miss")
+}
+
+func cacheReadSource(stats *cache.Stats) string {
+	if stats.ErrorType != "" {
+		return "error"
+	}
+	switch stats.Type {
+	case cache.TypeReadMulti:
+		return "warmup"
+	case cache.TypeReadSingle:
+		return "lazy"
+	case cache.TypeWrite:
+		return "miss_write"
+	}
+	if stats.FoundWarmup {
+		return "warmup"
+	}
+	if stats.FoundLazy {
+		return "lazy"
+	}
+	return "miss"
+}
+
 func NewExecutionInfo(index *cache.ParmetrizedQuery, cacheStats *cache.Stats, collector *view.Collector) (*response.SQLExecution, func()) {
-	var cache *response.CacheStats
+	var cacheInfo *response.CacheStats
 	if cacheStats != nil {
-		cache = &response.CacheStats{
-			Type:           string(cacheStats.Type),
-			RecordsCounter: cacheStats.RecordsCounter,
-			Key:            cacheStats.Key,
-			Dataset:        cacheStats.Dataset,
-			Namespace:      cacheStats.Namespace,
-			FoundWarmup:    cacheStats.FoundWarmup,
-			FoundLazy:      cacheStats.FoundLazy,
-			ErrorType:      cacheStats.ErrorType,
-			ErrorCode:      int(cacheStats.ErrorCode),
-			ExpiryTime:     cacheStats.ExpiryTime,
-		}
+		cacheInfo = &response.CacheStats{}
 	}
 	var parentId string
 	if parent := collector.Parent(); parent != nil {
@@ -671,13 +1257,28 @@ func NewExecutionInfo(index *cache.ParmetrizedQuery, cacheStats *cache.Stats, co
 		EndTime:    now,
 		SQL:        index.SQL,
 		Args:       index.Args,
-		CacheStats: cache,
+		CacheStats: cacheInfo,
 	}
 
 	return ret, func() {
 		now := time.Now()
 		ret.EndTime = now
 		ret.Rows = collector.Len()
+		if cacheStats != nil && ret.CacheStats != nil {
+			ret.CacheStats.Type = string(cacheStats.Type)
+			ret.CacheStats.RecordsCounter = cacheStats.RecordsCounter
+			ret.CacheStats.Key = cacheStats.Key
+			ret.CacheStats.Dataset = cacheStats.Dataset
+			ret.CacheStats.Namespace = cacheStats.Namespace
+			ret.CacheStats.FoundWarmup = cacheStats.FoundWarmup
+			ret.CacheStats.FoundLazy = cacheStats.FoundLazy
+			ret.CacheStats.ErrorType = cacheStats.ErrorType
+			ret.CacheStats.ErrorCode = int(cacheStats.ErrorCode)
+			ret.CacheStats.ExpiryTime = cacheStats.ExpiryTime
+			if target, ok := interface{}(ret.CacheStats).(interface{ SetCreatedTime(*time.Time) }); ok {
+				target.SetCreatedTime(cacheStats.CreatedTime)
+			}
+		}
 	}
 }
 

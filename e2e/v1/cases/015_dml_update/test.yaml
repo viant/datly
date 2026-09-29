@@ -1,0 +1,53 @@
+init:
+  parentPath: $parent.path
+  expect: $LoadData('${parentPath}/expect.json')
+pipeline:
+
+
+  signJWT:
+    action: secret:signJWT
+    privateKey:
+      URL: ${appPath}/e2e/cloud/jwt/private.enc
+      Key: blowfish://default
+    claims:
+      userID: 1
+      email: dev@viantint.com
+
+  printToken:
+    action: print
+    message: Bearer ${signJWT.TokenString}
+
+
+  test:
+    testNoAuthenticated:
+      action: http/runner:send
+      requests:
+        - Method: POST
+          description: user is authenticated
+          URL: http://127.0.0.1:8080/v1/api/shape/dev/auth/products/
+          Header:
+            Authorization: Bearer ${signJWT.TokenString}
+          JSONBody:
+            Ids:
+              - 1
+            Status: 2
+          Expect:
+            Code: 200
+
+#
+#        - Method: POST
+#          description: user is no authenticated
+#          URL: http://127.0.0.1:8080/v1/api/shape/dev/auth/products/
+#          JSONBody:
+#            Ids:
+#              - 1
+#            Status: 2
+#          Expect:
+#            Code: 401
+
+  checkDb:
+    action: 'dsunit:expect'
+    datastore: dev
+    expand: true
+    checkPolicy: 1
+    URL: ${parentPath}/expect

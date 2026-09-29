@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/utils/types"
@@ -13,6 +15,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
+	"go/format"
 	"path"
 	"reflect"
 	"strconv"
@@ -36,6 +39,12 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 		aTag.SQL = tags.NewViewSQL(c.View.Template.Source, "")
 		aTag.View = &tags.View{Name: c.View.Name}
 		if c.View != nil {
+			if c.View.Connector != nil {
+				aTag.View.Connector = generatedViewConnectorName(c.View.Connector)
+			}
+			if c.View.Cache != nil {
+				aTag.View.Cache = c.View.Cache.Ref
+			}
 			if c.View.Batch != nil {
 				aTag.View.Batch = c.View.Batch.Size
 			}
@@ -84,6 +93,7 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 
 	replacer := data.NewMap()
 	replacer.Put("WithConnector", fmt.Sprintf(`,view.WithConnectorRef("%s")`, c.View.Connector.Name))
+	replacer.Put("ApplyGeneratedCache", generatedCacheSnippet(c.View.Cache))
 	replacer.Put("Name", componentName)
 	replacer.Put("URI", c.URI)
 	replacer.Put("Method", c.Method)
@@ -190,15 +200,58 @@ func (c *Component) GenerateOutputCode(ctx context.Context, withDefineComponent,
 
 	if withEmbed {
 		embedderCode := fmt.Sprintf(`
-	func (i *%vInput) EmbedFS() *embed.FS {
-		return &%vFS
-	}`, componentName, componentName)
+func (i *%vInput) EmbedFS() *embed.FS {
+	return &%vFS
+}
+`, componentName, componentName)
 		builder.WriteString(embedderCode)
 	}
 
 	result := builder.String()
 	result = c.View.Resource().ReverseSubstitutes(result)
+	if formatted, err := format.Source([]byte(result)); err == nil {
+		result = string(formatted)
+	}
 	return result
+}
+
+func generatedViewConnectorName(connector *view.Connector) string {
+	if connector == nil {
+		return ""
+	}
+	if connector.Ref != "" {
+		return connector.Ref
+	}
+	return connector.Name
+}
+
+// ApplyGeneratedCache restores cache settings that cannot be represented by
+// the legacy view tag, notably plural cache warmups.
+func ApplyGeneratedCache(aView *view.View, encoded string) error {
+	if aView == nil || encoded == "" {
+		return nil
+	}
+	payload, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return fmt.Errorf("decode generated view cache: %w", err)
+	}
+	cache := &view.Cache{}
+	if err := json.Unmarshal(payload, cache); err != nil {
+		return fmt.Errorf("decode generated view cache metadata: %w", err)
+	}
+	aView.Cache = cache
+	return nil
+}
+
+func generatedCacheSnippet(cache *view.Cache) string {
+	if cache == nil {
+		return ""
+	}
+	payload, err := json.Marshal(cache)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("\n\tif err := repository.ApplyGeneratedCache(aComponent.View, %q); err != nil {\n\t\treturn fmt.Errorf(\"apply generated component cache: %%w\", err)\n\t}\n", base64.StdEncoding.EncodeToString(payload))
 }
 
 func (c *Component) buildDependencyTypes(inPackageComponentTypes map[string]bool, importModules map[string]string) []*xreflect.Type {
@@ -285,7 +338,13 @@ func (c *Component) generatorImports(modulePath string, component bool) []string
 
 func (c *Component) adjustStructField(embedURI string, embeds map[string]string, generateContract bool) func(aField *reflect.StructField, tag *string, typeName *string, doc *string) {
 	return func(aField *reflect.StructField, tag, typeName, doc *string) {
-		fieldTag := *tag
+		fieldTag := mergeDuplicateViewTags(*tag)
+		if !strings.Contains(fieldTag, "parameter:") {
+			if parsed, _ := tags.ParseViewTags(reflect.StructTag(fieldTag), nil); parsed != nil && parsed.View != nil && parsed.View.Cache != "" {
+				parsed.View.Cache = ""
+				fieldTag = string(parsed.UpdateTag(reflect.StructTag(fieldTag)))
+			}
+		}
 		if !generateContract {
 			fieldTag, _ = xreflect.RemoveTag(fieldTag, "on")
 		} else if !strings.Contains(fieldTag, "parameter:") {
@@ -318,6 +377,36 @@ func (c *Component) adjustStructField(embedURI string, embeds map[string]string,
 		//}
 		*tag = fieldTag
 	}
+}
+
+func mergeDuplicateViewTags(raw string) string {
+	const prefix = `view:"`
+	first := strings.Index(raw, prefix)
+	if first == -1 {
+		return raw
+	}
+	firstValue := first + len(prefix)
+	firstEnd := strings.Index(raw[firstValue:], `"`)
+	if firstEnd == -1 {
+		return raw
+	}
+	firstEnd += firstValue
+	secondRelative := strings.Index(raw[firstEnd+1:], prefix)
+	if secondRelative == -1 {
+		return raw
+	}
+	second := firstEnd + 1 + secondRelative
+	secondValue := second + len(prefix)
+	secondEnd := strings.Index(raw[secondValue:], `"`)
+	if secondEnd == -1 {
+		return raw
+	}
+	secondEnd += secondValue
+	left, right := raw[firstValue:firstEnd], raw[secondValue:secondEnd]
+	if right != "" && !strings.HasPrefix(right, ",") {
+		right = "," + right
+	}
+	return strings.TrimSpace(raw[:firstValue] + left + right + raw[firstEnd:second] + raw[secondEnd+1:])
 }
 
 func extractViewName(aField *reflect.StructField) string {

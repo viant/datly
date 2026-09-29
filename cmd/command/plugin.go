@@ -190,7 +190,7 @@ func (s *Service) reportPluginIssue(ctx context.Context, destURL string) error {
 	if fixBuilder.Len() > 0 {
 		fmt.Printf("[FIXME]: to address pulugin dependency run the following:\n")
 	}
-	fmt.Printf(fixBuilder.String())
+	fmt.Print(fixBuilder.String())
 	return nil
 }
 

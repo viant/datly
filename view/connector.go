@@ -234,6 +234,35 @@ func (c *Connection) inherit(connector *Connection) {
 	}
 }
 
+func (c *Connector) clone() *Connector {
+	if c == nil {
+		return nil
+	}
+
+	cloned := &Connector{
+		Connection:  *c.Connection.clone(),
+		Connections: make([]*Connection, 0, len(c.Connections)),
+	}
+	for _, connection := range c.Connections {
+		cloned.Connections = append(cloned.Connections, connection.clone())
+	}
+
+	return cloned
+}
+
+func (c *Connection) clone() *Connection {
+	if c == nil {
+		return nil
+	}
+
+	cloned := &Connection{
+		DBConfig: c.DBConfig,
+	}
+	cloned.DSN = c.getDSN()
+
+	return cloned
+}
+
 func (c *Connection) setDriverOptions(secret *scy.Secret) {
 	if secret == nil || c._initialized {
 		return

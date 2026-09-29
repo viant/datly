@@ -12,8 +12,11 @@ type Types struct {
 
 func (c *Types) Lookup(p reflect.Type) (*Type, bool) {
 	c.RWMutex.RLock()
+	defer c.RWMutex.RUnlock()
+	if len(c.types) == 0 {
+		return nil, false
+	}
 	ret, ok := c.types[p]
-	c.RWMutex.RUnlock()
 	return ret, ok
 }
 
