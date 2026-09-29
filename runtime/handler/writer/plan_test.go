@@ -319,7 +319,7 @@ func TestUniversalWriterBuildsToOneRelationFrames(t *testing.T) {
 		t.Fatal(err)
 	}
 	program := snapshot.(*Program)
-	if err = program.buildRecordFrames(program.metadata.Root, reflect.ValueOf(input.Rows), nil); err != nil {
+	if err = program.buildRecordFrames(context.Background(), nil, program.metadata.Root, reflect.ValueOf(input.Rows), nil); err != nil {
 		t.Fatalf("build to-one frames: %v", err)
 	}
 	if len(program.frames.Rows) != 2 || program.frames.Rows[1].Parent != program.frames.Rows[0] {

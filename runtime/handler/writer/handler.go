@@ -762,7 +762,7 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err := p.assemblePreviousRelations(p.metadata.Root); err != nil {
 		return err
 	}
-	if err := p.buildRecordFrames(p.metadata.Root, entities, nil); err != nil {
+	if err := p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 		return err
 	}
 	for record, hook := range p.hooksByRecord {
@@ -808,7 +808,7 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	// once after Init so those new rows participate in validation, ordering and
 	// DML without invoking Init twice for the original topology.
 	p.frames = &MutationFrames{}
-	if err = p.buildRecordFrames(p.metadata.Root, entities, nil); err != nil {
+	if err = p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 		return err
 	}
 	if err = p.reconcileLinks(false); err != nil {
@@ -1425,18 +1425,18 @@ func relationValuesEqual(parent, child reflect.Value, links []Link) bool {
 	return true
 }
 
-func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *Frame) error {
+func (p *Program) buildRecordFrames(ctx context.Context, binder xhandler.Binder, record *Record, rows reflect.Value, parent *Frame) error {
 	if rows.Kind() == reflect.Pointer {
 		if rows.IsNil() {
 			return nil
 		}
-		return p.buildEntityFrame(record, rows, parent, 0)
+		return p.buildEntityFrame(ctx, binder, record, rows, parent, 0)
 	}
 	if rows.Kind() != reflect.Slice {
 		return fmt.Errorf("writer role %s requires a record or collection, got %s", record.Path, rows.Type())
 	}
 	for i := 0; i < rows.Len(); i++ {
-		if err := p.buildEntityFrame(record, rows.Index(i), parent, i); err != nil {
+		if err := p.buildEntityFrame(ctx, binder, record, rows.Index(i), parent, i); err != nil {
 			return err
 		}
 	}
@@ -1445,7 +1445,7 @@ func (p *Program) buildRecordFrames(record *Record, rows reflect.Value, parent *
 
 // buildEntityFrame frames one row (a *T element or a to-one pointer holder)
 // and recurses into its relations.
-func (p *Program) buildEntityFrame(record *Record, entity reflect.Value, parent *Frame, position int) error {
+func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, record *Record, entity reflect.Value, parent *Frame, position int) error {
 	{
 		i := position
 		if entity.IsNil() {
@@ -1467,7 +1467,16 @@ func (p *Program) buildEntityFrame(record *Record, entity reflect.Value, parent 
 			}
 		}
 		deleteRequested := record.DeleteMarker != nil && supplied(entity.Elem(), *record.DeleteMarker) && boolValue(entity.Elem().FieldByIndex(record.DeleteMarker.Index))
-		skipDelete := deleteRequested && complete && !previous.IsValid() && record.OnDeleteNotFound == "ignore" && record.ConcurrencyToken == nil && record.MutationPredicateGroup == nil
+		skipDelete := deleteRequested && complete && !previous.IsValid() && record.OnDeleteNotFound == "ignore" && record.ConcurrencyToken == nil
+		if skipDelete && record.MutationPredicateGroup != nil {
+			// Optional predicate declarations do not impose a guard when the
+			// invocation supplies no active criteria. Active guards remain strict.
+			criteria, err := p.metadata.Predicates.Criteria(ctx, binder, *record.MutationPredicateGroup)
+			if err != nil {
+				return fmt.Errorf("mutation predicate %s: %w", record.Path, err)
+			}
+			skipDelete = criteria == nil
+		}
 		action := xhandler.WriteInsert
 		switch p.metadata.Operation {
 		case "post":
@@ -1501,7 +1510,7 @@ func (p *Program) buildEntityFrame(record *Record, entity reflect.Value, parent 
 			if children.Kind() != reflect.Slice && children.Kind() != reflect.Pointer {
 				return fmt.Errorf("writer relation %s is not a collection", relation.Child.Path)
 			}
-			if err := p.buildRecordFrames(relation.Child, children, frame); err != nil {
+			if err := p.buildRecordFrames(ctx, binder, relation.Child, children, frame); err != nil {
 				return err
 			}
 		}

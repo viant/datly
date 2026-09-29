@@ -24,8 +24,11 @@ unscoped fallback. Only leaf roles may use `ignore`; missing parents cannot
 silently suppress descendants. Readers, POST, auxiliary roles and marker-free
 views reject this policy.
 
-A role declaring a concurrency token or mutation predicate remains strict even
-with `ignore`: expected-state failures must not become success. Execution-time
+A role declaring a concurrency token remains strict even with `ignore`. A
+mutation predicate remains strict when its invocation evaluates active criteria;
+an omitted optional predicate group adds no guard and permits the ordinary
+idempotent missing-delete policy. Predicate evaluation errors fail closed.
+Expected-state failures must not become success. Execution-time
 guard misses continue returning Conflict. This is a deletion policy, not a
 second predicate language or an SQLX condition option.
 

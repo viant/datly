@@ -18,7 +18,7 @@ func TestGeneratedMutationPredicatesSQLite(t *testing.T) {
 	}
 	root := t.TempDir()
 	(testharness.GeneratedModule{Path: "github.com/viant/datly/predicatefixture"}).Write(t, root)
-	source := mutationPredicateDQL
+	source := strings.Replace(mutationPredicateDQL, "mutation_predicate(r,7)", "mutation_predicate(r,7),delete_not_found(r,'ignore')", 1)
 	request := GenerationRequest{Destination: root, Source: &Source{Name: "records", Scope: "github.com/viant/datly/predicatefixture/source", Text: source, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}
 	if _, err := (Generator{Operation: "patch"}).Generate(ctx, request); err != nil {
 		t.Fatal(err)
@@ -28,6 +28,7 @@ func TestGeneratedMutationPredicatesSQLite(t *testing.T) {
 		copy := *request.Source
 		invalid.Source = &copy
 		invalid.Source.Text = strings.Replace(source, "'/records','PATCH'", "'/records','"+strings.ToUpper(operation)+"'", 1)
+		invalid.Source.Text = strings.Replace(invalid.Source.Text, ",delete_not_found(r,'ignore')", "", 1)
 		invalid.Destination = t.TempDir()
 		if _, err := (Generator{Operation: operation}).Generate(ctx, invalid); err == nil || !strings.Contains(err.Error(), "mutation_predicate") {
 			t.Fatalf("unsupported operation %s error=%v", operation, err)
@@ -53,6 +54,11 @@ func TestGeneratedMutationPredicatesSQLite(t *testing.T) {
 		if required {
 			testSource = strings.ReplaceAll(testSource, `{desc:"optional omission updates by identity",input:input{body:`, `{desc:"required omission fails before writing",input:input{body:`)
 			testSource = strings.Replace(testSource, `expect:expect{title:"changed",remaining:1}},`, `expect:expect{bindingFailure:true,title:"keep",remaining:1}},`, 1)
+			testSource = strings.Replace(testSource, `desc:"inactive optional mutation group permits idempotent missing delete",input:input{body:`, `desc:"required scope omission fails for missing delete",input:input{query:"?expectedOwner=old",body:`, 1)
+			testSource = strings.Replace(testSource, `desc:"required scope omission fails for missing delete"`, `desc:"active required scope keeps missing deletion strict"`, 1)
+			testSource = strings.Replace(testSource, `expect:expect{title:"keep",remaining:1}},
+  {desc:"active mutation group keeps`, `expect:expect{identityFailure:true,title:"keep",remaining:1}},
+  {desc:"active mutation group keeps`, 1)
 			testSource = strings.ReplaceAll(testSource, `query:"?maxAttempt=0"`, `query:"?expectedOwner=old&maxAttempt=0"`)
 		}
 		writeSourceFile(t, root, "generated/predicate_test.go", testSource)
@@ -112,15 +118,19 @@ import (
 
 func TestMutationPredicateGenerated(t *testing.T){
  type input struct{query,body string}
- type expect struct{conflict,bindingFailure bool;title string;remaining int}
+ type expect struct{conflict,bindingFailure,identityFailure bool;title string;remaining int}
  type useCase struct{desc string;input input;expect expect}
  for _,test:=range []useCase{
   {desc:"optional omission updates by identity",input:input{body:` + "`" + `{"Data":[{"id":"one","title":"changed"}]}` + "`" + `},expect:expect{title:"changed",remaining:1}},
   {desc:"provided compound equality and range",input:input{query:"?expectedOwner=old&maxAttempt=0",body:` + "`" + `{"Data":[{"id":"one","title":"changed"}]}` + "`" + `},expect:expect{title:"changed",remaining:1}},
   {desc:"mismatched owner cannot update",input:input{query:"?expectedOwner=other",body:` + "`" + `{"Data":[{"id":"one","title":"changed"}]}` + "`" + `},expect:expect{conflict:true,title:"keep",remaining:1}},
+  {desc:"unchanged supplied value still checks matching criteria",input:input{query:"?expectedOwner=old",body:` + "`" + `{"Data":[{"id":"one","title":"keep"}]}` + "`" + `},expect:expect{title:"keep",remaining:1}},
+  {desc:"unchanged supplied value cannot bypass stale criteria",input:input{query:"?expectedOwner=other",body:` + "`" + `{"Data":[{"id":"one","title":"keep"}]}` + "`" + `},expect:expect{conflict:true,title:"keep",remaining:1}},
   {desc:"explicit empty owner activates predicate",input:input{query:"?expectedOwner=",body:` + "`" + `{"Data":[{"id":"one","title":"changed"}]}` + "`" + `},expect:expect{conflict:true,title:"keep",remaining:1}},
   {desc:"provided zero range permits matching zero",input:input{query:"?maxAttempt=0",body:` + "`" + `{"Data":[{"id":"one","title":"changed"}]}` + "`" + `},expect:expect{title:"changed",remaining:1}},
   {desc:"stale delete cannot remove row",input:input{query:"?expectedOwner=other",body:` + "`" + `{"Data":[{"id":"one","shouldDelete":true}]}` + "`" + `},expect:expect{conflict:true,title:"keep",remaining:1}},
+  {desc:"inactive optional mutation group permits idempotent missing delete",input:input{body:` + "`" + `{"Data":[{"id":"missing","shouldDelete":true}]}` + "`" + `},expect:expect{title:"keep",remaining:1}},
+  {desc:"active mutation group keeps missing delete strict",input:input{query:"?expectedOwner=old",body:` + "`" + `{"Data":[{"id":"missing","shouldDelete":true}]}` + "`" + `},expect:expect{identityFailure:true,title:"keep",remaining:1}},
   {desc:"matching delete removes row",input:input{query:"?expectedOwner=old",body:` + "`" + `{"Data":[{"id":"one","shouldDelete":true}]}` + "`" + `},expect:expect{remaining:0}},
  }{
   t.Run(test.desc,func(t *testing.T){
@@ -138,10 +148,10 @@ func TestMutationPredicateGenerated(t *testing.T){
    request:=httptest.NewRequest("PATCH","/records"+test.input.query,strings.NewReader(test.input.body));request.Header.Set("Content-Type","application/json")
    scope,err:=requestprovider.New(request);if err!=nil{t.Fatal(err)};defer scope.Close()
    output,err:=rt.ExecuteRoute(ctx,"PATCH","/records",scope)
-   if test.expect.bindingFailure{if err==nil{t.Fatal("required omission unexpectedly succeeded")}}else if test.expect.conflict{var conflict *xhandler.Conflict;if !errors.As(err,&conflict){t.Fatalf("expected atomic conflict, got %v",err)}}else if err!=nil{t.Fatal(err)}
+   if test.expect.bindingFailure{if err==nil{t.Fatal("required omission unexpectedly succeeded")}}else if test.expect.identityFailure{if err==nil||!strings.Contains(err.Error(),"matched complete identity"){t.Fatalf("expected strict guarded identity error, got %v",err)}}else if test.expect.conflict{var conflict *xhandler.Conflict;if !errors.As(err,&conflict){t.Fatalf("expected atomic conflict, got %v",err)}}else if err!=nil{t.Fatal(err)}
    var count int;if err=db.QueryRow("SELECT COUNT(*) FROM records").Scan(&count);err!=nil||count!=test.expect.remaining{t.Fatalf("count=%d err=%v",count,err)}
    if count!=0{var title string;if err=db.QueryRow("SELECT title FROM records").Scan(&title);err!=nil||title!=test.expect.title{t.Fatalf("title=%q err=%v",title,err)}}
-   if !test.expect.conflict && !test.expect.bindingFailure{if _,err=json.Marshal(output);err!=nil{t.Fatal(err)}}
+   if !test.expect.conflict && !test.expect.bindingFailure && !test.expect.identityFailure{if _,err=json.Marshal(output);err!=nil{t.Fatal(err)}}
   })
  }
 }
