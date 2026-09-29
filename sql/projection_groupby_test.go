@@ -405,3 +405,16 @@ func TestGroupedProjectionRewritesTransparentWrapper(t *testing.T) {
 		t.Fatalf("measure-only projection lost aggregate: %s", measureOnly)
 	}
 }
+
+func TestGroupedProjectionRewritesCommentedDerivedSource(t *testing.T) {
+	on := true
+	view := &data.View{Spec: spec.View{Groupable: &on}}
+	source := "SELECT f.country, f.region, f.total FROM (-- fixture provenance\nSELECT country, region, SUM(amount) AS total FROM events GROUP BY country, region\n) f"
+	result, err := ApplySelectorProjection(source, []string{"country", "total"}, view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(result, "GROUP BY country, region") || !strings.Contains(result, "SUM(amount)") {
+		t.Fatalf("selected grain retained source grouping: %s", result)
+	}
+}

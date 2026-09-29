@@ -43,6 +43,11 @@ sources. Explicit cube filters override their source values; omitted cube filter
 retain source binding. Composition masks omitted frame filters so they cannot
 borrow accidental values from the outer HTTP request.
 
+Dictionary enrichment follows the selected grouping grain. For a lookup keyed by
+country and region, selecting both dimensions includes the lookup; selecting only
+country leaves it out. A composite lookup must not add an unselected dimension
+and silently split the aggregate into smaller groups.
+
 ## Report ordering permission
 
 Native cubes can order selected dimensions and measures even when the source

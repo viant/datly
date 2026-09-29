@@ -42,6 +42,7 @@ func TestCompileArtifactsUsesTaggedReaderRelations(t *testing.T) {
 			want       []string
 		}{
 			{"measure", nil, []string{"amount"}},
+			{"partial composite", []string{"Country"}, []string{"country", "amount"}},
 			{"composite", []string{"Country", "Region"}, []string{"country", "region", "amount", "Lookup"}},
 		} {
 			t.Run(tc.name, func(t *testing.T) {

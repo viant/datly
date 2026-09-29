@@ -99,17 +99,33 @@ func (p *Plan) selectedFields(input reflect.Value) ([]string, error) {
 		}
 		seen[item.name] = true
 		result = append(result, item.name)
-		for _, holder := range p.holderByName[item.name] {
-			if !seen[holder] {
-				seen[holder] = true
-				result = append(result, holder)
-			}
-		}
 		return nil
 	}
 	for _, item := range append(append([]selection(nil), p.dimensions...), p.measures...) {
 		if err := appendSelection(item); err != nil {
 			return nil, err
+		}
+	}
+	// A lookup cannot enrich a coarser grain unless every part of its key was
+	// selected. Adding a composite holder for one key would silently load the
+	// other keys and split the requested aggregate into finer groups.
+	selected := append([]string(nil), result...)
+	result = result[:0]
+	for _, name := range selected {
+		result = append(result, name)
+		for _, holder := range p.holderByName[name] {
+			complete := true
+			for dimension, holders := range p.holderByName {
+				for _, candidate := range holders {
+					if candidate == holder && !seen[dimension] {
+						complete = false
+					}
+				}
+			}
+			if complete && !seen[holder] {
+				seen[holder] = true
+				result = append(result, holder)
+			}
 		}
 	}
 	return result, nil
