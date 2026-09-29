@@ -3,7 +3,6 @@ package dml
 import (
 	"errors"
 	"github.com/go-sql-driver/mysql"
-	"github.com/mattn/go-sqlite3"
 	dexec "github.com/viant/datly/exec"
 	"reflect"
 )
@@ -55,9 +54,5 @@ func mutationContention(err error) bool {
 	if errors.As(err, &mysqlError) {
 		return mysqlError.Number == 1213 || mysqlError.Number == 1205
 	}
-	var sqliteError sqlite3.Error
-	if errors.As(err, &sqliteError) {
-		return sqliteError.Code == sqlite3.ErrBusy || sqliteError.Code == sqlite3.ErrLocked
-	}
-	return false
+	return sqliteMutationContention(err)
 }
