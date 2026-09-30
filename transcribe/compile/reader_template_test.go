@@ -14,6 +14,8 @@ func TestReaderRetainsPredicateExpressions(t *testing.T) {
 		name, sql, expression string
 		rewrite               bool
 	}{
+		{"predicate and terminal lock without order", "SELECT r.id AS Identifier FROM (SELECT t.id FROM records t " + where + "\n#if($LockRows) ${View.ForUpdate()} #end\n) r", where, true},
+		{"predicate followed by lock", "SELECT r.id AS Identifier FROM (SELECT t.id FROM records t " + where + " ORDER BY t.id\n#if($LockRows) ${View.ForUpdate()} #end\n) r", where, true},
 		{"where suffix", "SELECT id FROM records r " + where + " ORDER BY id", where, false},
 		{"and suffix", "SELECT id FROM records r WHERE 1=1 " + and + " ORDER BY id", and, false},
 		{"rewritten where", "SELECT id, use_connector(r, 'main') FROM records r " + where + " ORDER BY id", where, true},
@@ -25,7 +27,7 @@ func TestReaderRetainsPredicateExpressions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(actual.Source.SQL, tt.expression) || !strings.Contains(strings.ToUpper(actual.Source.SQL), "ORDER BY") {
+			if !strings.Contains(actual.Source.SQL, tt.expression) || strings.Contains(strings.ToUpper(tt.sql), "ORDER BY") && !strings.Contains(strings.ToUpper(actual.Source.SQL), "ORDER BY") {
 				t.Fatalf("lost executable source: %s", actual.Source.SQL)
 			}
 			if tt.rewrite && strings.Contains(actual.Source.SQL, "use_connector(") {
