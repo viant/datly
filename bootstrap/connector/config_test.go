@@ -56,6 +56,37 @@ func TestConnectorCancellationAndSafeErrors(t *testing.T) {
 	}
 }
 
+func TestConfiguredDriverRequiresNoLiveDatabase(t *testing.T) {
+	ctx := context.Background()
+	set, err := connector.Open(ctx, []connector.Config{
+		{Name: "alias", AliasOf: "main"},
+		{Name: "main", Driver: "sqlite3", DSN: filepath.Join(t.TempDir(), "driver.sqlite")},
+	}, "alias")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = set.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"main", "alias", ""} {
+		driver, err := set.ConfiguredDriver(ctx, name)
+		if err != nil || driver != "sqlite3" {
+			t.Fatalf("configured driver for %q=%q: %v", name, driver, err)
+		}
+	}
+	if _, err = set.ConfiguredDriver(ctx, "missing"); err == nil {
+		t.Fatal("unknown driver resolved")
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err = set.ConfiguredDriver(canceled, "main"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation=%v", err)
+	}
+	if _, err = (*connector.Set)(nil).ConfiguredDriver(ctx, "main"); err == nil {
+		t.Fatal("nil set resolved")
+	}
+}
+
 func TestConnectorAliasesShareHandleAndTransactionIdentity(t *testing.T) {
 	ctx := context.Background()
 	set, err := connector.Open(ctx, []connector.Config{
