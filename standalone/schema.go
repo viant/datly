@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	sqlconfig "github.com/viant/sqlx/io/config"
+	"github.com/viant/sqlx/metadata/sink"
 )
 
 // ColumnInfo is live connector schema metadata for application startup checks.
@@ -19,36 +20,57 @@ type ColumnInfo struct {
 // callers receive metadata only; no raw database handle or SQL execution API
 // crosses the standalone runtime boundary.
 func (s *Server) InspectColumn(ctx context.Context, connectorName, table, column string) (*ColumnInfo, error) {
-	if s == nil || s.source == nil || s.source.connections == nil || ctx == nil {
-		return nil, fmt.Errorf("linked connector and context are required")
+	if strings.TrimSpace(column) == "" {
+		return nil, fmt.Errorf("column name is required")
 	}
-	if strings.TrimSpace(table) == "" || strings.TrimSpace(column) == "" {
-		return nil, fmt.Errorf("table and column names are required")
-	}
-	connections := s.source.connections
-	db, err := connections.ResolveDB(ctx, connectorName)
-	if err != nil {
-		return nil, err
-	}
-	dialect, err := connections.SQL.Dialect(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if dialect == nil {
-		return nil, fmt.Errorf("connector dialect is unavailable")
-	}
-	session, err := sqlconfig.Session(ctx, db, dialect)
-	if err != nil {
-		return nil, err
-	}
-	columns, err := sqlconfig.Columns(ctx, session, db, table, dialect)
+	columns, dialectName, err := s.inspectTableColumns(ctx, connectorName, table)
 	if err != nil {
 		return nil, err
 	}
 	for _, item := range columns {
 		if strings.EqualFold(item.Name, column) {
-			return &ColumnInfo{Dialect: strings.ToLower(dialect.Name), Length: item.Length}, nil
+			return &ColumnInfo{Dialect: dialectName, Length: item.Length}, nil
 		}
 	}
 	return nil, fmt.Errorf("column %s.%s is unavailable", table, column)
+}
+
+// HasTable checks live connector metadata without exposing a DB handle or SQL
+// execution surface to application callers.
+func (s *Server) HasTable(ctx context.Context, connectorName, table string) (bool, error) {
+	columns, _, err := s.inspectTableColumns(ctx, connectorName, table)
+	if err != nil {
+		return false, err
+	}
+	return len(columns) > 0, nil
+}
+
+func (s *Server) inspectTableColumns(ctx context.Context, connectorName, table string) ([]sink.Column, string, error) {
+	if s == nil || s.source == nil || s.source.connections == nil || ctx == nil {
+		return nil, "", fmt.Errorf("linked connector and context are required")
+	}
+	if strings.TrimSpace(table) == "" {
+		return nil, "", fmt.Errorf("table name is required")
+	}
+	connections := s.source.connections
+	db, err := connections.ResolveDB(ctx, connectorName)
+	if err != nil {
+		return nil, "", err
+	}
+	dialect, err := connections.SQL.Dialect(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	if dialect == nil {
+		return nil, "", fmt.Errorf("connector dialect is unavailable")
+	}
+	session, err := sqlconfig.Session(ctx, db, dialect)
+	if err != nil {
+		return nil, "", err
+	}
+	columns, err := sqlconfig.Columns(ctx, session, db, table, dialect)
+	if err != nil {
+		return nil, "", err
+	}
+	return columns, strings.ToLower(dialect.Name), nil
 }
