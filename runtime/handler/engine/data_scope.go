@@ -518,6 +518,7 @@ func (s *dataScope) seal() {
 func (s *dataScope) providers() []locator.Provider {
 	providers := []locator.Provider{
 		s.transactionStarterProvider(),
+		s.mutationReporterProvider(),
 		handlerprovider.New(xhandler.DataKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)
 			if err != nil || data == nil {
