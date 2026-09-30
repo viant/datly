@@ -191,6 +191,23 @@ func (s *Set) ConfiguredDriver(ctx context.Context, name string) (string, error)
 	return driver, nil
 }
 
+// ConnectionIdentity is an opaque fingerprint for the resolved connection.
+// It lets callers coordinate aliases/pools without receiving the DSN or DB.
+func (s *Set) ConnectionIdentity(ctx context.Context, name string) (string, error) {
+	if _, err := s.ConfiguredDriver(ctx, name); err != nil {
+		return "", err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = s.defaultName
+	}
+	identity := s.identities[name]
+	if identity == "" {
+		return "", fmt.Errorf("configured connection identity is unavailable")
+	}
+	return identity, nil
+}
+
 func (s *Set) ResolveDB(ctx context.Context, name string) (*sql.DB, error) {
 	if s == nil || s.SQL == nil || ctx == nil {
 		return nil, fmt.Errorf("connector set and context are required")

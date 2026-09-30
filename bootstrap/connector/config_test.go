@@ -73,6 +73,11 @@ func TestConfiguredDriverRequiresNoLiveDatabase(t *testing.T) {
 		if err != nil || driver != "sqlite3" {
 			t.Fatalf("configured driver for %q=%q: %v", name, driver, err)
 		}
+		identity, err := set.ConnectionIdentity(ctx, name)
+		canonical, canonicalErr := set.ConnectionIdentity(ctx, "main")
+		if err != nil || canonicalErr != nil || identity != canonical || len(identity) != 64 || strings.Contains(identity, "driver.sqlite") {
+			t.Fatalf("opaque identity for %q=%q errors=%v/%v", name, identity, err, canonicalErr)
+		}
 	}
 	if _, err = set.ConfiguredDriver(ctx, "missing"); err == nil {
 		t.Fatal("unknown driver resolved")

@@ -25,6 +25,15 @@ func (s *Server) ConfiguredDriver(ctx context.Context, connectorName string) (st
 	return s.source.connections.ConfiguredDriver(ctx, connectorName)
 }
 
+// ConnectionIdentity returns a credential-free connection fingerprint.
+// No database or schema query is performed.
+func (s *Server) ConnectionIdentity(ctx context.Context, connectorName string) (string, error) {
+	if s == nil || s.source == nil || s.source.connections == nil {
+		return "", fmt.Errorf("linked connector is required")
+	}
+	return s.source.connections.ConnectionIdentity(ctx, connectorName)
+}
+
 // InspectColumn reads one column through SQLX's metadata service. Application
 // callers receive metadata only; no raw database handle or SQL execution API
 // crosses the standalone runtime boundary.
