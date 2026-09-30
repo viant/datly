@@ -16,6 +16,7 @@ import (
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	predicate "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/sql/fragment"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlx"
 	"github.com/viant/structology"
@@ -928,7 +929,11 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		}
 		var criteria *sqlx.Criteria
 		if frame.Record.MutationPredicateGroup != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
-			criteria, err = p.metadata.Predicates.Criteria(ctx, binder, *frame.Record.MutationPredicateGroup)
+			predicateCtx, dialectErr := mutationPredicateContext(ctx, binder)
+			if dialectErr != nil {
+				return fmt.Errorf("mutation predicate %s dialect: %w", frame.Record.Path, dialectErr)
+			}
+			criteria, err = p.metadata.Predicates.Criteria(predicateCtx, binder, *frame.Record.MutationPredicateGroup)
 			if err != nil {
 				return fmt.Errorf("mutation predicate %s: %w", frame.Record.Path, err)
 			}
@@ -1493,7 +1498,11 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 		if skipDelete && record.MutationPredicateGroup != nil {
 			// Optional predicate declarations do not impose a guard when the
 			// invocation supplies no active criteria. Active guards remain strict.
-			criteria, err := p.metadata.Predicates.Criteria(ctx, binder, *record.MutationPredicateGroup)
+			predicateCtx, dialectErr := mutationPredicateContext(ctx, binder)
+			if dialectErr != nil {
+				return fmt.Errorf("mutation predicate %s dialect: %w", record.Path, dialectErr)
+			}
+			criteria, err := p.metadata.Predicates.Criteria(predicateCtx, binder, *record.MutationPredicateGroup)
 			if err != nil {
 				return fmt.Errorf("mutation predicate %s: %w", record.Path, err)
 			}
@@ -2252,6 +2261,31 @@ func lookup[T any](ctx context.Context, binder xhandler.Binder, key xhandler.Val
 		return zero, fmt.Errorf("writer capability %s is unavailable", key)
 	}
 	return result, nil
+}
+
+func mutationPredicateContext(ctx context.Context, binder xhandler.Binder) (context.Context, error) {
+	if fragment.Dialect(ctx) != nil || binder == nil {
+		return ctx, nil
+	}
+	value, found, err := binder.Lookup(ctx, xhandler.DMLKey)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return ctx, nil
+	}
+	provider, ok := value.(rhandler.DialectProvider)
+	if !ok {
+		return ctx, nil
+	}
+	dialect, err := provider.Dialect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if dialect == nil {
+		return ctx, nil
+	}
+	return fragment.WithDialect(ctx, dialect), nil
 }
 
 func hasMutationPredicate(record *Record) bool {

@@ -13,6 +13,7 @@ import (
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/sqlx"
+	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/xdatly/connector"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -135,6 +136,14 @@ func (p transactionSQLProvider) Connector(ctx context.Context, name string) (rha
 // dmlCapability exposes only buffered writes under the focused DML key.
 type dmlCapability struct {
 	service xhandler.DML
+}
+
+func (c dmlCapability) Dialect(ctx context.Context) (*info.Dialect, error) {
+	provider, ok := c.service.(rhandler.DialectProvider)
+	if !ok {
+		return nil, nil
+	}
+	return provider.Dialect(ctx)
 }
 
 func (c dmlCapability) Insert(tableName string, data any) error {

@@ -1102,6 +1102,11 @@ group is empty, both forms emit nothing: no dangling WHERE or AND, and the
 second query retains its fixed condition. Predicate values remain bound SQL
 arguments rather than text interpolated into the query.
 
+For a database UTC clock in reader SQL, `${criteria.UTCNow()}` renders
+`UTC_TIMESTAMP()` on MySQL or `DATETIME('now')` on SQLite. It adds no bind
+argument and rejects other dialects. Use it for server-owned lease times;
+substituting an application clock changes cross-worker lease behavior.
+
 ### Predicate expression API and evaluation order
 
 `Expand(group)` takes exactly one integer and joins with AND.
