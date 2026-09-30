@@ -2,9 +2,11 @@ package compile
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/sql/fragment"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser/expr"
@@ -183,12 +185,22 @@ func readTemplateAnalysisBody(source string) (string, error) {
 		return "", err
 	}
 	var result strings.Builder
+	var analysisError error
 	var visit func(ast.Statement)
 	visit = func(node ast.Statement) {
 		switch n := node.(type) {
 		case *stmt.Append:
 			result.WriteString(n.Append)
 		case *velexpr.Select:
+			scalar, recognized, err := readTemplateScalarAnalysis(n)
+			if err != nil {
+				analysisError = err
+				return
+			}
+			if recognized {
+				result.WriteString(scalar)
+				return
+			}
 			if !readTemplateSelectorCall(n) {
 				if span, ok := spans[n]; ok && span.Start >= 0 && span.End < len(source) {
 					result.WriteString(source[span.Start : span.End+1])
@@ -210,7 +222,7 @@ func readTemplateAnalysisBody(source string) (string, error) {
 	for _, node := range root.Statements() {
 		visit(node)
 	}
-	return result.String(), nil
+	return result.String(), analysisError
 }
 
 // topLevelReadFrom identifies the lexical range of the physical root source.
@@ -290,4 +302,27 @@ func readTemplateSelectorCall(node *velexpr.Select) bool {
 		return readTemplateSelectorCall(next)
 	}
 	return false
+}
+
+func readTemplateScalarAnalysis(value *velexpr.Select) (string, bool, error) {
+	if value == nil || value.ID != "View" {
+		return "", false, nil
+	}
+	method, ok := value.X.(*velexpr.Select)
+	if !ok {
+		return "", false, nil
+	}
+	if method.ID != "TimestampSecondsUTC" && method.ID != "TimestampNanoseconds" {
+		return "", false, nil
+	}
+	call, ok := method.X.(*velexpr.Call)
+	if !ok || len(call.Args) != 1 {
+		return "", true, fmt.Errorf("timestamp renderer requires one literal column expression")
+	}
+	argument, ok := call.Args[0].(*velexpr.Literal)
+	if !ok || argument.RType == nil || argument.RType.Kind() != reflect.String {
+		return "", true, fmt.Errorf("timestamp renderer requires a literal column expression")
+	}
+	scalar, err := fragment.TimestampAnalysisExpression(method.ID, argument.Value)
+	return scalar, true, err
 }

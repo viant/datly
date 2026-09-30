@@ -114,3 +114,19 @@ func (v *viewContext) expand(call sqlmacro.ParentKeyCall) (string, error) {
 	v.bindings.Append(args...)
 	return fragment, nil
 }
+
+// TimestampSecondsUTC is an explicit dialect-rendered timestamp key.
+func (v *viewContext) TimestampSecondsUTC(expression string) (string, error) {
+	if v == nil {
+		return "", fmt.Errorf("timestamp key requires view metadata")
+	}
+	return fragment.New(v.bindings).WithDialect(v.dialect).TimestampSecondsUTC(expression)
+}
+
+// TimestampNanoseconds keeps fractional ordering separate from whole seconds.
+func (v *viewContext) TimestampNanoseconds(expression string) (string, error) {
+	if v == nil {
+		return "", fmt.Errorf("timestamp key requires view metadata")
+	}
+	return fragment.New(v.bindings).WithDialect(v.dialect).TimestampNanoseconds(expression)
+}
