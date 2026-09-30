@@ -93,6 +93,25 @@ second simultaneous document configuration.
 JWTValidator continues to configure Scy's verifier only for declared JwtClaim
 inputs. Warmup prepares that same input through Bindly. A valid JWT is not an
 administrator grant and does not replace a configured component API key.
+`JWTClaims` optionally binds those successfully verified inputs to an exact
+issuer, required audience and nonempty subject. For an OIDC identity token
+used by an application client, configure all three; the audience must be the
+registered client ID. This policy applies to both HTTP and MCP component
+invocations through the same `JwtClaim` codec:
+
+```yaml
+JWTValidator:
+  CertURL: https://identity.example/certs
+JWTClaims:
+  Issuer: https://identity.example
+  Audience: application-web-client
+  RequireSubject: true
+```
+
+Absent `JWTClaims` preserves the previous verifier behavior. Configuring it
+without `JWTValidator` is rejected. Claim matching happens after signature
+and expiry verification; a mismatched issuer or audience never reaches the
+component input.
 
 ## Security defaults migration
 

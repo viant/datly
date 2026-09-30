@@ -196,6 +196,13 @@ func resolveField(param *spec.Parameter, declarations Declarations) (Field, bool
 		typ = inferFieldType(param, declarations)
 	}
 	tagName := strings.TrimSpace(param.Name)
+	if param.QuerySelector != nil {
+		// Multiple views can expose the same logical selector property (for
+		// example Fields). Bindly's input aliases must use the distinct
+		// generated field names; the selector metadata retains the canonical
+		// property and view association.
+		tagName = name
+	}
 	if tagName == "" {
 		tagName = strings.TrimSpace(param.Source.Name)
 	}
@@ -304,11 +311,14 @@ func canonicalFieldMetadata(param *spec.Parameter) ([]structTagValue, error) {
 		}
 	}
 	if param.QuerySelector != nil {
-		value, err := (dtag.QuerySelector{View: param.QuerySelector.View}).Value()
+		value, err := (dtag.QuerySelector{View: param.QuerySelector.View, Property: param.QuerySelector.Property}).Value()
 		if err != nil {
 			return nil, err
 		}
 		result = append(result, structTagValue{name: dtag.QuerySelectorName, value: value})
+	}
+	if param.FormatSelector {
+		result = append(result, structTagValue{name: "formatSelector", value: "true"})
 	}
 	for _, item := range []structTagValue{
 		{name: dtag.DescriptionName, value: param.Description},

@@ -58,15 +58,15 @@ func TestCubeDeclaredNamesPreparedSQLite(t *testing.T) {
 			defer actual.Close()
 			columns, err := actual.Columns()
 			require.NoError(t, err)
-			require.Equal(t, []string{"tenant", "account_id", "total_spend"}, columns)
+			// Tenant remains a bound scope predicate; it must not become a hidden
+			// grouping dimension solely to attach an unselected composite lookup.
+			require.Equal(t, []string{"account_id", "total_spend"}, columns)
 			var ids []int
 			var amounts []float64
 			for actual.Next() {
-				var tenant string
 				var id int
 				var amount float64
-				require.NoError(t, actual.Scan(&tenant, &id, &amount))
-				require.Equal(t, "acme", tenant)
+				require.NoError(t, actual.Scan(&id, &amount))
 				ids = append(ids, id)
 				amounts = append(amounts, amount)
 			}

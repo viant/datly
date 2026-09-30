@@ -22,7 +22,7 @@ same domain data through its own DQL, inputs and output contract.
 
 Generated file names depend on DQL names and destination options. Inspect the
 returned generation plan/file list rather than guessing paths. Generated-owned
-files can be updated under their ownership/fingerprint rules; create-once hook
+files are replaced from current DQL on regeneration; create-once hook
 files and authored edits must be preserved.
 
 ## Four different kinds of state

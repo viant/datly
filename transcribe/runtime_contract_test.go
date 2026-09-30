@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -53,6 +54,26 @@ FROM (SELECT 1 AS ID, 'one' AS NAME) vendor`,
 	actual, err := execution.Read(context.Background(), reflect.New(contract.InputType).Interface(), nil, nil)
 	if err != nil || actual == nil {
 		t.Fatalf("actual=%+v err=%v", actual, err)
+	}
+}
+
+func TestRuntimeContractsInModuleNeedsNoSourceCheckout(t *testing.T) {
+	root := t.TempDir() // deliberately no go.mod
+	source := &Source{Scope: "example.com/app/dynamic/sqltest", Name: "preview", Text: `#package('example.com/app/dynamic/sqltest')
+#setting($_ = $route('/preview','GET'))
+#define($_ = $Rows<[]*Row>(output/view))
+SELECT result.*, type(result, 'Row') FROM (SELECT 1 AS ID) result`}
+	contract, err := NewCompiler().RuntimeContractsInModule(context.Background(), "example.com/app", source)
+	if err != nil || contract == nil || contract.InputType == nil || contract.OutputType == nil {
+		t.Fatalf("source-free runtime contract=%+v err=%v", contract, err)
+	}
+	if _, err = NewCompiler().RuntimeContracts(context.Background(), root, source); err == nil {
+		t.Fatal("source-checkout contract unexpectedly accepted a directory without go.mod")
+	}
+	outside := *source
+	outside.Text = strings.ReplaceAll(source.Text, "example.com/app/dynamic/sqltest", "other.example/app/dynamic/sqltest")
+	if _, err = NewCompiler().RuntimeContractsInModule(context.Background(), "example.com/app", &outside); err == nil {
+		t.Fatal("source-free runtime contract accepted an outside-module package")
 	}
 }
 

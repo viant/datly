@@ -3,7 +3,10 @@ package transcribe
 import (
 	"context"
 	"fmt"
+	"go/token"
+	"path"
 	"reflect"
+	"strings"
 
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/spec"
@@ -46,6 +49,56 @@ func (c *Compiler) RuntimeContracts(ctx context.Context, rootDir string, source 
 	if err != nil {
 		return nil, err
 	}
+	return runtimeContractFromInput(input, compiled)
+}
+
+// RuntimeContractsInModule materializes an ephemeral reader without requiring
+// a source checkout or go.mod at runtime. The module path is host-owned and
+// authored #package must remain inside it; this path never emits Go files.
+func (c *Compiler) RuntimeContractsInModule(ctx context.Context, modulePath string, source *Source) (*RuntimeContract, error) {
+	if c == nil {
+		c = NewCompiler()
+	}
+	modulePath = strings.TrimSuffix(strings.TrimSpace(modulePath), "/")
+	if modulePath == "" || source == nil {
+		return nil, fmt.Errorf("runtime module path and source are required")
+	}
+	copy := *source
+	if copy.Types == nil {
+		copy.Types = typecatalog.NewCatalog()
+	}
+	compiled, err := c.Compile(ctx, &copy)
+	if err != nil {
+		return nil, err
+	}
+	authored := ""
+	if compiled.Component.TypeContext != nil {
+		authored = strings.TrimSpace(compiled.Component.TypeContext.PackagePath)
+	}
+	if !strings.HasPrefix(authored, modulePath+"/") {
+		return nil, fmt.Errorf("runtime package %q is outside module %q", authored, modulePath)
+	}
+	name := path.Base(authored)
+	if !token.IsIdentifier(name) || token.Lookup(name).IsKeyword() || name == "_" {
+		return nil, fmt.Errorf("runtime package %q has an invalid Go package name", authored)
+	}
+	component := compiled.Component.Clone()
+	if err = resolveComponentSources(component, compiled.Source.Resources); err != nil {
+		return nil, err
+	}
+	input := gen.Input{Resources: compiled.Source.Resources, Component: component,
+		Declarations: compiled.Declarations, SQLResources: true,
+		TargetPackage: authored, PackageName: name, Contracts: compiled.Contracts,
+		Views: compiled.Views, ViewBindings: compiled.ViewBindings,
+		GeneratedTypes: compiled.GeneratedTypes, GoHandler: compiled.GoHandler,
+		ExternalHandler: compiled.ExternalHandler.Clone(), VeltyHandler: compiled.VeltyHandler}
+	if compiled.TypeResolver != nil {
+		input.TypeResolver = compiled.TypeResolver
+	}
+	return runtimeContractFromInput(input, compiled)
+}
+
+func runtimeContractFromInput(input gen.Input, compiled *Result) (*RuntimeContract, error) {
 	generator := gen.New(input)
 	inputType, err := generator.RuntimeInputType()
 	if err != nil {

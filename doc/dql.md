@@ -38,7 +38,7 @@ root row, and `type(items, 'Item')` names the related rows. The output type
 setting alone does not specify a result field. `case_format('lc')` applies
 lowerCamel naming to the envelope and nested fields through the runtime
 Structology JSON marshaler. Use this global policy for ordinary naming.
-For a deliberate rename, prefer `format:"name=CustomerName"`; the serializer applies `lc` to that name and emits `customerName`. An explicit
+For a deliberate public serialization rename, prefer `format:"name=CustomerName"`; the serializer applies `lc` to that name and emits `customerName`. An explicit
 nonempty `json` name is an exact override of format-name/global casing, not the
 recommended rename mechanism.
 
@@ -52,6 +52,13 @@ inside each view. Ordinary database expressions, including a database SQL
 For a writer, author the graph needed by that operation, using this view structure
 with its own destination package. Writer hook and invariant annotations extend the outer
 metadata; they do not introduce a different query language inside the views.
+
+## Shaping and alias boundaries
+
+Outer direct-column aliases in named view graphs rename Go fields, retaining
+original SQLX mappings and vendor result columns. Aliases inside view SQL remain
+SQL aliases. Public serialization naming is separate. See the
+[v1 shaping contract](shaping-contract.md) for exact examples and regeneration.
 
 ## Lexical conventions
 
@@ -305,6 +312,7 @@ Write the canonical option names shown here. Do not infer input, field, column o
 | WithExample(value), Example(value) | 1 | illustrative documentation/test value; not a runtime default |
 | Cacheable(bool) | 1 | input cache policy |
 | QuerySelector(view) | 1 | selector binding |
+| FormatSelector() | 0 | bind one string query field or `header/Accept` to response-format selection |
 | WithPredicate(...), Predicate(...) | 1+ | optional leading group number, name, args; repeatable |
 | ApplyWhenAbsentPredicate(...) | 1+ | predicate active when absent |
 | When(condition) | 1 | activation condition |
@@ -353,6 +361,26 @@ Offset/Limit/Page signed integer types (pointers are unwrapped). One property
 cannot be bound twice to the same prepared view. Order aliases are explicit `allowed_order_by_columns` entries, not
 inferred SQL or wire-name conversions. Pagination, field selection and criteria
 are validated by the reader/compiler and SQL builder after declaration parsing.
+
+### Output format selection
+
+Declare one string `FormatSelector()` input when a component should choose its
+response format from a specific request source:
+
+```sql
+#define($_ = $OutputFormat<string>(header/Accept).FormatSelector())
+```
+
+Alternatively bind `query/_format` for format names such as `csv` and `xlsx`.
+An absent selector value uses the route/component format, JSON by default.
+With `header/Accept`, Datly selects a supported media type using quality
+weights; an unacceptable request returns 406. A query selector takes its exact
+authored query key and rejects unknown formats with 400. Only one format source
+may be declared per component. `Content-Type` on the response is produced by
+the selected encoder; the request's `Content-Type` is not an output selector.
+Legacy components without a declaration retain the `_format` query source.
+Custom JSON outputs cannot switch to another encoder without a separate safe
+wire projection.
 
 ### Predicate metadata and group references
 
@@ -470,9 +498,8 @@ Holder tags survive regeneration, and an authored JSON tag overrides automatic
 case-format naming. Hiding a holder does not disable its SQL, joins, hooks, or
 cache configuration. Relation execution tags (`view`, `on`, `sql`) remain owned
 by the canonical relation graph and cannot be overridden through holder tags.
-Changing tags on an existing generated holder follows the normal explicit
-shape-migration policy: use ownership-checked overwrite regeneration rather than
-editing generated Go.
+Changing tags on an existing generated holder follows the current DQL on
+regeneration. Customize DQL and application hooks instead of generated Go.
 
 `in_memory(childAlias)` declares a relation whose rows are supplied by a
 handwritten parent `OnFetch` hook, rather than fetched from SQL. Its joined SQL
@@ -484,9 +511,8 @@ actual join keys. Child `OnRelation` hooks run before the parent's `OnRelation`.
 Empty holders and relations excluded by projection do not execute nested lookups.
 Place hooks beside generated files; regeneration does not generate or replace
 their implementation. Literal SELECTs are not implicitly in-memory.
-When changing an already generated SQL-backed holder to `in_memory`, use the
-ownership-checked overwrite generation policy: default merge rejects conflicting
-execution tags. Subsequent regeneration supports either policy.
+Changing an already generated SQL-backed holder to `in_memory` replaces its
+generated execution tags on regeneration.
 
 ~~~~sql
 SELECT p.*, signals.*, perf.*, in_memory(signals), cardinality(perf,'One')
@@ -498,9 +524,16 @@ JOIN performance perf
  AND signals.feature_value = perf.feature_value
 ~~~~
 
-Selector permission booleans are unquoted. `QuerySelector(view)` binds a request
-field to the named view; it does not itself grant permission. Selector policy
-calls grant each capability independently. `selector_default_limit` is both the
+Selector permission booleans are unquoted. An explicit `QuerySelector(view)`
+request field binds to the named view and enables its matching selector
+property only when its policy is unspecified. An explicit `selector_*(view,false)`
+denies that property even if a request field binds it; generation and runtime
+compilation preserve that denial. A duplicate permission call is not required
+when binding-inferred permission is intended.
+Selector policy calls can still enable independently injected properties.
+An explicit Criteria field defaults to the compiled view's columns unless
+`selector_filterable` narrows that set.
+`selector_default_limit` is both the
 fallback and cap for a positive requested limit while `selector_no_limit` is
 false. A positive `set_limit` sets a base view limit and clears no-limit mode;
 `set_limit(view,0)` clears that base limit and enables no-limit mode. Criteria
@@ -773,16 +806,15 @@ or per-file destinations when files conflict. There is no inferred prefix or
 collision fallback. Distinct filenames also do not resolve Go declaration-name
 conflicts.
 
-The `.datly-gen.json` manifest owns generated paths and fingerprints. Filenames
-and suffixes do not establish ownership. Regeneration removes replaced,
-manifest-owned files only with trusted unchanged contents; edited or unowned
-files cause an error before publication. Existing shapes with authored edits
-retain the normal field-merge rules at the same destination. A filename move
-requires the old file to be unchanged and its declarations to have destinations.
-Cross-package moves still require explicit migration. Application lifecycle
-files never enter generated ownership and are never removed or overwritten.
+Datly generates from the current DQL and explicit Go contracts without a package
+manifest. Generated files carry ordinary generated-source comments and are
+replaced on regeneration, including direct edits. Obsolete generated artifacts
+in the affected package are removed. Separate application files, linked Go
+contracts and create-once lifecycle scaffolds are preserved. Customize DQL or
+application hooks; do not edit generated files. Package moves require updating
+application imports/link selection and retiring the previous package explicitly.
 When migrating an existing `orders_hooks.go`, keep it with
-`$lifecycle_dest('orders_hooks.go')`, or move it yourself and select its new name.
+`$lifecycle_dest('orders_hooks.go')`, or move it and select its new name.
 
 Readers using the registered reader need no generated handler or lifecycle.
 Mutation handlers and custom handlers retain their separate implementation roles.
@@ -811,10 +843,9 @@ affects only that relation; an unmarked sibling remains many. Explicit
 query keep their SQL behavior. The marker does not create a database uniqueness
 constraint.
 
-Regeneration updates generator-owned holders between `*Child` and `[]*Child`
-when their recorded type and tags remain unchanged. Edited fields, changed child
-identity, or untrustworthy ownership require an explicit migration; do not delete
-authored code to bypass that guard.
+Regeneration updates generated holders between `*Child` and `[]*Child` from
+the current relation contract. Direct generated-file edits are overwritten;
+linked application contracts must already match the declared relation shape.
 
 ## Constants and instance-specific substitution boundary
 
@@ -1101,7 +1132,7 @@ outer `CAST(items.should_delete AS bool), delete_marker(items.should_delete)`).
 Only explicitly supplied true flags with complete, authorized, parent-scoped
 identities request deletion. Omitted rows and collections never imply deletion.
 
-A concurrency token is a canonical string, numeric or `time.Time`, optionally pointer-valued. Its
+A concurrency token is a canonical boolean, string, numeric or `time.Time`, optionally pointer-valued. Its
 validation compares captured expected presence/value with loaded Previous before
 other validation. The resulting UPDATE compares the validated Previous token
 in its SQL WHERE clause and requires one affected row, so a change after Previous was

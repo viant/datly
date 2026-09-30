@@ -166,7 +166,7 @@ Generated artifacts can include:
 - SQL, template and other declared resources, with generated embedding support.
 - A selected Go writer handler and typed mutation support.
 - Create-once application hook scaffolds when requested.
-- Ownership/fingerprint information used to protect regeneration.
+- Ordinary generated-source comments identifying replaceable artifacts.
 
 Linked application types retain their existing owner. The exact files depend on
 the selected product and DQL names/destinations. Transcription, compiling the Go

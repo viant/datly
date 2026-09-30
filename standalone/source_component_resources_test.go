@@ -1,6 +1,7 @@
 package standalone
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"reflect"
@@ -9,10 +10,38 @@ import (
 
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/bootstrap"
+	"github.com/viant/datly/bootstrap/connector"
+	"github.com/viant/datly/report"
 	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/standalone/config"
 	"github.com/viant/datly/typecatalog"
 )
+
+func TestReaderConfigureBindsConnectorCapabilityForPredicates(t *testing.T) {
+	input, err := testReflectedArtifactInput(testResourceComponent("A", "testdata/eager_overlap_a/query.sql"),
+		reflect.TypeOf(eagerOverlapAInput{}), reflect.TypeOf(eagerOverlapOutput{}), resource.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	compilation, err := report.NewProjectCompiler(report.ProjectConfig{Types: typecatalog.NewCatalog()}).CompileArtifacts([]bootstrap.ArtifactInput{input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts := compilation.Artifacts()
+	if len(artifacts) != 1 {
+		t.Fatalf("reader artifacts=%d, want 1", len(artifacts))
+	}
+	sqlConnector := &dsql.SQLComponent{}
+	configured := &sourceComponent{source: &source{config: &config.Config{}, connections: &connector.Set{SQL: sqlConnector}}}
+	capabilities, err := configured.Configure(context.Background(), artifacts[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capabilities.Invocation.Connector != sqlConnector {
+		t.Fatal("reader predicate lost the configured SQL connector capability")
+	}
+}
 
 //go:embed testdata/eager_resources/root.sql testdata/eager_resources/child.sql
 var eagerComponentResources embed.FS

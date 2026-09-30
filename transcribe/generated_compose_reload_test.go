@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/viant/datly/internal/testharness"
+	"github.com/viant/datly/transcribe/testdata/composelinked"
 )
 
 // Original Datly repository/shape is the emission baseline (impl/149,152).
@@ -27,9 +28,17 @@ func TestGeneratedCubeExplicitAliasReloadSQLite(t *testing.T) {
 func testGeneratedCubeComposePublicReloadSQLite(t *testing.T, explicitAlias bool) {
 	ctx := context.Background()
 	const module = "github.com/viant/datly/testfixture/composereload"
+	const predicatePath = "github.com/viant/datly/transcribe/testdata/composelinked"
+	if len(composelinked.LinkedTypes) != 1 || composelinked.LinkedTypes[0].Elem() != reflect.TypeFor[composelinked.ScopePredicate]() {
+		t.Fatal("compose predicate fixture must retain its compiled identity")
+	}
 	authored, root := t.TempDir(), t.TempDir()
 	(testharness.GeneratedModule{Path: module}).Write(t, authored)
 	if err := os.MkdirAll(filepath.Join(authored, "spend"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	linkSource := []byte("package spend\nimport _ \"" + predicatePath + "\"\n")
+	if err := os.WriteFile(filepath.Join(authored, "spend", "link.go"), linkSource, 0644); err != nil {
 		t.Fatal(err)
 	}
 	var stages []string
@@ -41,6 +50,12 @@ func testGeneratedCubeComposePublicReloadSQLite(t *testing.T, explicitAlias bool
 		}
 		if revision == 1 {
 			(testharness.GeneratedModule{Path: module}).Write(t, stage)
+			if err := os.MkdirAll(filepath.Join(stage, "spend"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(stage, "spend", "link.go"), linkSource, 0644); err != nil {
+				t.Fatal(err)
+			}
 		} else if err := os.CopyFS(stage, os.DirFS(stages[0])); err != nil {
 			t.Fatal(err)
 		}
@@ -48,7 +63,7 @@ func testGeneratedCubeComposePublicReloadSQLite(t *testing.T, explicitAlias bool
 		if err != nil {
 			t.Fatal(err)
 		}
-		source := fmt.Sprintf(string(sourceBytes), module, revision)
+		source := fmt.Sprintf(string(sourceBytes), predicatePath, revision)
 		if explicitAlias {
 			source = strings.Replace(source, "s.account_id, SUM(s.amount) AS total_spend", "s.account_id AS AccountId, SUM(s.amount) AS TotalSpend", 1)
 			source = strings.ReplaceAll(source, "CAST(s.account_id", "CAST(s.AccountId")

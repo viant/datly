@@ -11,6 +11,7 @@ import (
 )
 
 func TestCorrectionCacheEvidence(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	if err := db.ExecStatements(ctx, genpatch.Schema...); err != nil {

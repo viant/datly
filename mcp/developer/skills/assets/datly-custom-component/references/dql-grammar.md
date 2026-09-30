@@ -38,7 +38,7 @@ root row, and `type(items, 'Item')` names the related rows. The output type
 setting alone does not specify a result field. `case_format('lc')` applies
 lowerCamel naming to the envelope and nested fields through the runtime
 Structology JSON marshaler. Use this global policy for ordinary naming.
-For a deliberate rename, prefer `format:"name=CustomerName"`; the serializer applies `lc` to that name and emits `customerName`. An explicit
+For a deliberate public serialization rename, prefer `format:"name=CustomerName"`; the serializer applies `lc` to that name and emits `customerName`. An explicit
 nonempty `json` name is an exact override of format-name/global casing, not the
 recommended rename mechanism.
 
@@ -52,6 +52,15 @@ inside each view. Ordinary database expressions, including a database SQL
 For a writer, author the graph needed by that operation, using this view structure
 with its own destination package. Writer hook and invariant annotations extend the outer
 metadata; they do not introduce a different query language inside the views.
+
+### Shaping and alias boundaries
+
+In a named view graph, outer `record.NAME AS DISPLAY_NAME` is configuration for
+Go field `DisplayName` with `sqlx:"NAME"`. Vendor SQL continues to select `NAME`.
+An alias inside `(SELECT NAME AS STORED_LABEL FROM RECORDS)` remains an actual
+SQL result alias. Public `format`/`json` naming and standalone Go CAST are
+separate controls. Read the [v1 shaping contract](product/datly/doc/shaping-contract.md)
+for the mapping examples and regeneration rules.
 
 ## Lexical conventions
 
@@ -714,17 +723,15 @@ or per-file destinations when files conflict. There is no inferred prefix or
 collision fallback. Distinct filenames also do not resolve Go declaration-name
 conflicts.
 
-The high-level `datly transcribe` command uses `.datly-gen.json` to own generated
-paths and fingerprints while preserving create-once and authored files.
-Filenames and suffixes alone do not establish ownership. Regeneration removes
-replaced, manifest-owned files only with trusted
-unchanged contents; edited or unowned files cause an error before publication. Existing shapes with authored edits
-retain the normal field-merge rules at the same destination. A filename move
-requires the old file to be unchanged and its declarations to have destinations.
-Cross-package moves still require explicit migration. Application lifecycle
-files never enter generated ownership and are never removed or overwritten.
+Datly generates from the current DQL and explicit Go contracts without a package
+manifest. Generated files carry ordinary generated-source comments and are
+replaced on regeneration, including direct edits. Obsolete generated artifacts
+in the affected package are removed. Separate application files, linked Go
+contracts and create-once lifecycle scaffolds are preserved. Customize DQL or
+application hooks; do not edit generated files. Package moves require updating
+application imports/link selection and retiring the previous package explicitly.
 When migrating an existing `orders_hooks.go`, keep it with
-`$lifecycle_dest('orders_hooks.go')`, or move it yourself and select its new name.
+`$lifecycle_dest('orders_hooks.go')`, or move it and select its new name.
 
 Readers using the registered reader need no generated handler or lifecycle.
 Mutation handlers and custom handlers retain their separate implementation roles.
@@ -753,10 +760,9 @@ affects only that relation; an unmarked sibling remains many. Explicit
 query keep their SQL behavior. The marker does not create a database uniqueness
 constraint.
 
-Regeneration updates generator-owned holders between `*Child` and `[]*Child`
-when their recorded type and tags remain unchanged. Edited fields, changed child
-identity, or untrustworthy ownership require an explicit migration; do not delete
-authored code to bypass that guard.
+Regeneration updates generated holders between `*Child` and `[]*Child` from
+the current relation contract. Direct generated-file edits are overwritten;
+linked application contracts must already match the declared relation shape.
 
 ## Constants and instance-specific substitution boundary
 

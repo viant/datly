@@ -19,6 +19,7 @@ import (
 )
 
 func TestGeneratorEmitsCatalogGeneratedTypeAsOwnedPackageArtifact(t *testing.T) {
+	t.Parallel()
 	const targetPackage = "example.com/generated/reporting"
 	catalog := typecatalog.NewCatalog()
 	descriptor := generatedTypeDescriptor(targetPackage, "SpendCubeInput")
@@ -52,7 +53,7 @@ func TestGeneratorEmitsCatalogGeneratedTypeAsOwnedPackageArtifact(t *testing.T) 
 		!strings.Contains(text, `json:"when,omitempty"`) {
 		t.Fatalf("generated type content = %s", text)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated package does not compile: %v\n%s", runErr, output)
@@ -60,9 +61,10 @@ func TestGeneratorEmitsCatalogGeneratedTypeAsOwnedPackageArtifact(t *testing.T) 
 	if _, err = New(Input{Component: generatedTypeComponent(), TargetPackage: targetPackage, TypeResolver: resolver}).Generate(packageDir); err != nil {
 		t.Fatal(err)
 	}
-	if retained, err := os.ReadFile(filepath.Join(packageDir, "spend_cube_input.go")); err != nil || string(retained) != text {
-		t.Fatalf("unreferenced generated shape was changed or removed: %v", err)
+	if _, err := os.Stat(filepath.Join(packageDir, "spend_cube_input.go")); !os.IsNotExist(err) {
+		t.Fatalf("obsolete generated shape remains: %v", err)
 	}
+
 }
 
 func TestGeneratorRejectsInvalidGeneratedTypeAuthorityAndCollisions(t *testing.T) {

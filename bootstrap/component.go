@@ -53,9 +53,10 @@ func (r ContractResolver) Resolve() (*spec.Component, error) {
 	}
 	resolver := &packageComponentResolver{
 		component: component,
+		types:     r.Types,
 		contracts: []packageContract{
-			{role: inputContract, fields: inputFields},
-			{role: outputContract, fields: outputFields},
+			{role: inputContract, fields: inputFields, descriptor: r.InputType},
+			{role: outputContract, fields: outputFields, descriptor: r.OutputType},
 		},
 	}
 	resolver.indexCanonicalMetadata()
@@ -173,11 +174,14 @@ func (s *RouteSource) componentName() string {
 }
 
 type packageComponentResolver struct {
-	component     *spec.Component
-	contracts     []packageContract
-	canonical     []*spec.Parameter
-	fieldsByParam map[*spec.Parameter]string
-	viewsByName   map[string]*spec.View
+	types                 *typecatalog.Resolver
+	component             *spec.Component
+	contracts             []packageContract
+	canonical             []*spec.Parameter
+	fieldsByParam         map[*spec.Parameter]string
+	viewsByName           map[string]*spec.View
+	predicateDeclarations map[string]*x.Type
+	predicateContexts     map[predicateOwnerKey]*typecatalog.ResolutionContext
 }
 
 type contractRole uint8
@@ -188,6 +192,7 @@ const (
 )
 
 type packageContract struct {
+	descriptor    *x.Type
 	role          contractRole
 	fields        []xshape.Field
 	paramsByField map[string]*spec.Parameter
@@ -289,6 +294,9 @@ func (r *packageComponentResolver) resolveField(contract *packageContract, field
 		if !contract.role.accepts(param) {
 			return &resolvedContractField{field: field, metadata: metadata}, nil
 		}
+		if err := r.resolveFieldPredicates(contract, field, param); err != nil {
+			return nil, err
+		}
 		r.component.Parameters = append(r.component.Parameters, param)
 	}
 	if param != nil {
@@ -317,6 +325,19 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 
 func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) error {
 	param := resolved.param
+	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.OnDeleteNotFound != "" {
+		if r.component.RootView == nil {
+			return fmt.Errorf("onDeleteNotFound body requires a root view")
+		}
+		r.component.RootView.OnDeleteNotFound = resolved.metadata.View.OnDeleteNotFound
+	}
+	if param != nil && strings.EqualFold(strings.TrimSpace(param.Source.Kind), "body") && resolved.metadata.View != nil && resolved.metadata.View.MutationPredicateGroup != nil {
+		if r.component.RootView == nil {
+			return fmt.Errorf("mutation predicate body requires a root view")
+		}
+		group := *resolved.metadata.View.MutationPredicateGroup
+		r.component.RootView.MutationPredicateGroup = &group
+	}
 	if param == nil || !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "view") {
 		return nil
 	}
@@ -527,12 +548,17 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 		param.Predicates = append(param.Predicates, &cloned)
 	}
 	if metadata.QuerySelector != nil {
-		property, ok := spec.SelectorPropertyForParam(name)
+		property := metadata.QuerySelector.Property
+		ok := property != ""
+		if !ok {
+			property, ok = spec.SelectorPropertyForParam(name)
+		}
 		if !ok {
 			return nil, fmt.Errorf("resolve package %s %s: query selector is not supported for parameter %q", role.label(), field.Name, name)
 		}
 		param.QuerySelector = &spec.QuerySelectorBinding{View: metadata.QuerySelector.View, Property: property}
 	}
+	param.FormatSelector = metadata.FormatSelector
 	return param, nil
 }
 
@@ -610,6 +636,8 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.TypeName = strings.TrimSpace(metadata.View.TypeName)
 		view.Dest = strings.TrimSpace(metadata.View.Dest)
 		view.EntityHooks = strings.TrimSpace(metadata.View.EntityHooks)
+		view.OnDeleteNotFound = metadata.View.OnDeleteNotFound
+		view.MutationPredicateGroup = metadata.View.MutationPredicateGroup
 		view.Source.URI = strings.TrimSpace(metadata.View.URI)
 		view.Source.Table = strings.TrimSpace(metadata.View.Table)
 		view.Partitioning = metadata.View.Partitioning.Clone()

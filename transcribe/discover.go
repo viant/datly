@@ -16,9 +16,11 @@ import (
 	packageresources "github.com/viant/datly/bootstrap/resources"
 	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/dql"
+	"github.com/viant/datly/transcribe/gobuild"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
+	"github.com/viant/xunsafe"
 )
 
 var sourceFileExtensions = map[string]bool{
@@ -57,6 +59,7 @@ type Discovery struct {
 	// HandlerBindings supplies application-compiled adapters for legacy
 	// SQL-free handler DQL without loading or invoking constructors.
 	HandlerBindings []*HandlerBinding
+	GoBuild         *gobuild.Context
 }
 
 // Compile discovers and compiles each component source exactly once. Plain SQL
@@ -123,7 +126,7 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 		return nil, err
 	}
 	project.Resources = assets.Store
-	compilation := &discoveryCompilation{discovery: d, catalog: catalog, packages: packageSources, resources: assets.Store, defaults: map[string]*resource.Store{}}
+	compilation := &discoveryCompilation{discovery: d, catalog: catalog, packages: packageSources, resources: assets.Store, defaults: map[string]*resource.Store{}, workspace: workspace}
 	compiledPackages := map[string]bool{}
 	for _, file := range files {
 		if assets.IsAsset(file.Path) {
@@ -163,6 +166,7 @@ func (d *Discovery) Generate(ctx context.Context, rootDir string) (*GeneratedPro
 }
 
 type discoveryCompilation struct {
+	workspace *xmodule.Workspace
 	discovery *Discovery
 	catalog   *typecatalog.Catalog
 	packages  map[string]*bootstrap.PackageComponentSource
@@ -180,6 +184,7 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		return nil, err
 	}
 	source := &Source{
+		GoBuild:         c.discovery.GoBuild.Clone(),
 		HandlerBindings: c.discovery.HandlerBindings,
 		Const:           c.discovery.Const,
 		Scope:           file.ImportPath,
@@ -199,6 +204,9 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("compile component source %q: %w", file.Path, err)
+	}
+	if err := (&dqlPackageDiscovery{workspace: c.workspace, catalog: result.Source.Types, registry: c.discovery.Registry}).loadCodecDependencies(ctx, result.Component, result.TypeContext, result.Source.LinkedInputType, result.Source.LinkedOutputType); err != nil {
+		return nil, err
 	}
 	return result, nil
 }
@@ -263,9 +271,14 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 	sort.Strings(packagePaths)
 	linked := linkedRouteTypes(routes)
 	for _, packagePath := range packagePaths {
+		compiled := linkedPackageTypes(packagePath)
 		for _, declared := range module.Packages[packagePath].Types {
 			if declared != nil {
-				declared.ReflectType = linked[packagePath+"."+declared.Name]
+				key := packagePath + "." + declared.Name
+				declared.ReflectType = linked[key]
+				if declared.ReflectType == nil {
+					declared.ReflectType = compiled[declared.Name]
+				}
 			}
 		}
 		if d.Registry != nil {
@@ -319,6 +332,16 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 			return nil, nil, groupErr
 		}
 		for _, component := range components {
+			resolved, err := component.ResolveDescriptors(resolver)
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := d.loadComponentPredicateDependencies(ctx, workspace, catalog, resolved, resolutionContext); err != nil {
+				return nil, nil, err
+			}
+			if err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: d.Registry}).loadCodecDependencies(ctx, resolved, resolutionContext); err != nil {
+				return nil, nil, err
+			}
 			identity := packageSourceIdentity(packagePath, component.ComponentName())
 			if selected[identity] != nil {
 				return nil, nil, fmt.Errorf("package component %q has more than one contract authority", identity)
@@ -327,6 +350,32 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 		}
 	}
 	return selected, loadedPackagePaths, nil
+}
+
+// linkedPackageTypes only attaches Go identities already retained by the
+// executable. AST remains the source of package/type discovery and method
+// declarations; a source-only predicate cannot pass transcription.
+func linkedPackageTypes(packagePath string) map[string]reflect.Type {
+	result := map[string]reflect.Type{}
+	ambiguous := map[string]bool{}
+	for _, candidate := range xunsafe.PackageTypes(packagePath) {
+		for candidate != nil && candidate.Kind() == reflect.Pointer {
+			candidate = candidate.Elem()
+		}
+		if candidate == nil || candidate.PkgPath() != packagePath || candidate.Name() == "" {
+			continue
+		}
+		if ambiguous[candidate.Name()] {
+			continue
+		}
+		if prior := result[candidate.Name()]; prior != nil && prior != candidate {
+			ambiguous[candidate.Name()] = true
+			delete(result, candidate.Name())
+			continue
+		}
+		result[candidate.Name()] = candidate
+	}
+	return result
 }
 
 func linkedRouteTypes(routes []*bootstrap.RouteSource) map[string]reflect.Type {

@@ -3,6 +3,7 @@ package compiler
 import (
 	"fmt"
 	plan "github.com/viant/datly/transcribe/handler/ast"
+	"strings"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
@@ -28,12 +29,20 @@ func (b *inputGeneration) addScopedCurrent(view *spec.View, name string, scope *
 		return fmt.Errorf("child Previous %s requires a bounded parent equality", name)
 	}
 	var columns []string
+	outputs := currentSourceOutputs(view.Source.SQL)
 	for _, link := range links {
 		column, err := resolveLinkColumn(view, link.Child.Source)
 		if err != nil {
 			return err
 		}
-		columns = append(columns, column.Name)
+		name := column.Name
+		for _, candidate := range []string{column.Source, column.Name} {
+			if output := outputs[strings.ToLower(strings.TrimSpace(candidate))]; output != "" {
+				name = output
+				break
+			}
+		}
+		columns = append(columns, name)
 	}
 	method := "Project" + typecatalog.FieldName(name) + "ParentKeys"
 	if err = b.appendCurrent(view, name, "$criteria.CompositeIn(\"r\", $Unsafe."+method+"($"+scope.input+"))"); err != nil {

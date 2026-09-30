@@ -14,6 +14,7 @@ import (
 )
 
 func TestGeneratorResolvedIdentityIndexes(t *testing.T) {
+	t.Parallel()
 	for _, deep := range []bool{false, true} {
 		t.Run(fmt.Sprint("named_deep=", deep), func(t *testing.T) {
 			ctx := context.Background()
@@ -52,6 +53,7 @@ func TestGeneratorResolvedIdentityIndexes(t *testing.T) {
 }
 
 func TestGeneratorResolvedCompositeZeroIdentity(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	schema := append(append([]string(nil), genpatch.CompositeSchema...), genpatch.ResolvedCompositeSchema...)
@@ -81,6 +83,7 @@ func TestGeneratorResolvedCompositeZeroIdentity(t *testing.T) {
 }
 
 func TestGeneratorNamedResolvedSplitPackages(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	schema := append(append(append([]string(nil), genpatch.Schema...), genpatch.ResolvedIdentitySchema...), genpatch.DeepIdentitySchema...)
@@ -108,6 +111,7 @@ func TestGeneratorNamedResolvedSplitPackages(t *testing.T) {
 }
 
 func TestGeneratedIdentityPreparationCost(t *testing.T) {
+	t.Parallel()
 	for _, wide := range []bool{false, true} {
 		t.Run(fmt.Sprint("wide_high_cardinality=", wide), func(t *testing.T) {
 			ctx := context.Background()

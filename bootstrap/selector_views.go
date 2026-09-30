@@ -89,6 +89,9 @@ func ResolveQuerySelectorViews(component *spec.Component, strict bool) error {
 				return fmt.Errorf("query selector %s: canonical view name %q is ambiguous", param.Name, name)
 			}
 			selector.View = name
+			if err := view.EnableQuerySelector(selector.Property); err != nil {
+				return fmt.Errorf("query selector %s: %w", param.Name, err)
+			}
 		}
 		param.QuerySelector = &selector
 	}

@@ -122,6 +122,10 @@ func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.
 
 func (c *sourceComponent) Configure(ctx context.Context, artifact *report.ComponentArtifact) (report.RuntimeCapabilities, error) {
 	result := report.RuntimeCapabilities{}
+	// Reader predicates can bind the connector capability too (for example,
+	// Studio's owner-scoped ACL predicate). Do not reserve it for custom
+	// handlers: both route kinds execute under the same configured SQL host.
+	result.Invocation.Connector = c.source.connections.SQL
 	views, err := artifact.NewViewProvider(bootstrap.ViewRuntimeConfig{SQL: c.source.connections.SQL})
 	if err != nil {
 		return result, err
@@ -142,7 +146,6 @@ func (c *sourceComponent) Configure(ctx context.Context, artifact *report.Compon
 			return result, err
 		}
 		result.DataSource = dml.Source{DB: db}
-		result.Invocation.Connector = c.source.connections.SQL
 	}
 	return result, nil
 }

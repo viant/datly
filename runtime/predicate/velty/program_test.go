@@ -289,6 +289,11 @@ func TestProgram_ContextUsesPresenceMarkerInsteadOfZeroHeuristic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compile failed: %v", err)
 	}
+	if len(program.predicates) != 1 || program.predicates[0].marker == nil ||
+		!reflect.DeepEqual(program.predicates[0].marker.holderIndex, []int{1}) ||
+		!reflect.DeepEqual(program.predicates[0].marker.flagIndex, []int{0}) {
+		t.Fatalf("presence marker was not compiled: %+v", program.predicates)
+	}
 	for _, testCase := range []struct {
 		name     string
 		input    input
@@ -314,6 +319,63 @@ func TestProgram_ContextUsesPresenceMarkerInsteadOfZeroHeuristic(t *testing.T) {
 				t.Fatalf("unexpected presence result: fragment=%q args=%#v", fragment, args)
 			}
 		})
+	}
+}
+
+func TestCompileRejectsMalformedPredicatePresenceMarker(t *testing.T) {
+	type missingFlag struct{ Other bool }
+	type missingInput struct {
+		Limit int
+		Has   *missingFlag `setMarker:"true"`
+	}
+	type wrongInput struct {
+		Limit int
+		Has   *string `setMarker:"true"`
+	}
+	component := &spec.Component{Parameters: []*spec.Parameter{{
+		Name: "Limit", Predicates: []*spec.Predicate{{Name: predicateEqual, Args: []string{"u", "limit"}}},
+	}}}
+	for _, testCase := range []struct {
+		name   string
+		typeOf reflect.Type
+		want   string
+	}{
+		{name: "missing flag", typeOf: reflect.TypeOf(missingInput{}), want: "needs boolean field Limit"},
+		{name: "wrong holder", typeOf: reflect.TypeOf(wrongInput{}), want: "must be a struct"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := Compile(CompileInput{Component: component, InputType: testCase.typeOf})
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("expected %q, got %v", testCase.want, err)
+			}
+		})
+	}
+}
+
+func TestProgram_UnmarkedPredicateKeepsValueFallback(t *testing.T) {
+	type input struct{ Limit int }
+	component := &spec.Component{Parameters: []*spec.Parameter{{
+		Name: "Limit", Predicates: []*spec.Predicate{{Name: predicateEqual, Args: []string{"u", "limit"}}},
+	}}}
+	program, err := Compile(CompileInput{Component: component, InputType: reflect.TypeOf(input{})})
+	if err != nil || len(program.predicates) != 1 || program.predicates[0].marker != nil {
+		t.Fatalf("unmarked input compile=%+v, %v", program, err)
+	}
+	for _, testCase := range []struct {
+		value int
+		want  string
+	}{
+		{value: 0, want: ""},
+		{value: 7, want: "( u.limit = ? )"},
+	} {
+		actual, err := program.NewContext(context.Background(), predicateBinder{input: &input{Limit: testCase.value}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fragment, err := actual.(*Context).FilterGroup(0, "AND")
+		if err != nil || fragment != testCase.want {
+			t.Fatalf("value=%d fragment=%q err=%v", testCase.value, fragment, err)
+		}
 	}
 }
 
@@ -409,5 +471,57 @@ func TestCompileUsesCompiledBindingPathForLogicalAlias(t *testing.T) {
 	if len(program.predicates) != 1 || program.predicates[0].fieldName != "Projection" ||
 		!reflect.DeepEqual(program.predicates[0].fieldIndex, []int{0}) {
 		t.Fatalf("predicates = %+v", program.predicates)
+	}
+}
+
+func TestMutationCriteriaReusesCustomPredicateAndPresence(t *testing.T) {
+	type presence struct{ Status, Attempt bool }
+	type input struct {
+		Status  string
+		Attempt int
+		Has     *presence `setMarker:"true"`
+	}
+	component := &spec.Component{Parameters: []*spec.Parameter{
+		{Name: "Status", Predicates: []*spec.Predicate{{Group: 7, Name: "handler", Args: []string{"business.Status"}}}},
+		{Name: "Attempt", Predicates: []*spec.Predicate{{Group: 7, Name: "less_or_equal", Args: []string{"u", "attempt"}}}},
+	}}
+	program, err := Compile(CompileInput{Component: component, InputType: reflect.TypeFor[input](), Lookup: func(name string) (reflect.Type, error) { return reflect.TypeFor[statusPredicate](), nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	type expect struct {
+		empty bool
+		args  []any
+	}
+	type useCase struct {
+		desc   string
+		input  input
+		expect expect
+	}
+	for _, tc := range []useCase{
+		{"absent custom predicate and range", input{Has: &presence{}}, expect{empty: true}},
+		{"provided empty custom trigger and zero range", input{Has: &presence{Status: true, Attempt: true}}, expect{args: []any{"", 0}}},
+		{"provided business status", input{Status: "open", Has: &presence{Status: true}}, expect{args: []any{"open"}}},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			observedPredicateContext = nil
+			ctx := context.WithValue(context.Background(), predicateContextKey{}, "mutation")
+			criteria, err := program.Criteria(ctx, predicateBinder{input: &tc.input}, 7)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.expect.empty {
+				if criteria != nil || observedPredicateContext != nil {
+					t.Fatal("absent custom predicate was evaluated")
+				}
+				return
+			}
+			if criteria == nil || !reflect.DeepEqual(criteria.Placeholders, tc.expect.args) || !strings.Contains(criteria.Expression, "u.status = ?") {
+				t.Fatalf("criteria=%+v", criteria)
+			}
+			if observedPredicateContext != "mutation" {
+				t.Fatal("custom business predicate lost invocation context")
+			}
+		})
 	}
 }

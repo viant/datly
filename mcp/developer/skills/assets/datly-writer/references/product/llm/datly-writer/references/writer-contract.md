@@ -41,9 +41,9 @@ orchestration.
 See [writer-examples.md](../../../../writer-examples.md) for the primary graph.
 
 Existing Go-only components remain supported for explicitly chosen application
-contracts. Preserve their types and authored methods. In generated shapes,
-update only owned projections: append fields, propagate CAST type changes and
-remove dropped owned columns without rewriting unrelated authored content.
+contracts. Preserve their types and separate application methods. Regenerate
+generated files from current DQL, including field/type/tag changes and removals.
+Direct edits inside those files are overwritten.
 
 | Operation | Policy |
 | --- | --- |
@@ -58,6 +58,11 @@ Discover connected `transcribe` support as described in
 [developer-mcp.md](../../../../developer-mcp.md).
 
 ## 3. Go shapes and tags
+
+Outer field renames keep original SQLX mappings; real aliases inside view SQL
+keep their SQL meaning. Writer identity/link matching and typed Has/setters use
+Go fields, while Current/Previous queries and lookup criteria use actual vendor
+outputs. See the [v1 shaping contract](../../../datly/doc/shaping-contract.md).
 
 Inspect the generated row shape or link an existing authoritative application type.
 The fragment below explains SQL mapping and internal presence; standard `transcribe`
@@ -446,11 +451,11 @@ For scoped message-bus hook examples and the original async job/dry-run boundary
 
 ## 14. Regeneration and delivery checks
 
-Persisted dynamic shapes follow the current SQL projection for fields proven to be generated-owned. For example, changing `CAST(view.column AS int)` to `CAST(view.column AS *int)` changes the existing Go field to `*int`; reversing the CAST restores `int`. Removing a projected column removes its owned field and corresponding generated presence/accessor support. This applies to readers and generated Go mutation components, including repeated generation with the same catalog.
+Persisted generated shapes follow the current SQL projection. For example, changing `CAST(view.column AS int)` to `CAST(view.column AS *int)` changes the existing Go field to `*int`; reversing the CAST restores `int`. Removing a projected column removes its owned field and corresponding generated presence/accessor support. This applies to readers and generated Go mutation components, including repeated generation with the same catalog.
 
-Retain the order of surviving fields, append new fields, and preserve unrelated authored fields, comments, methods and tags. The projection inventory and fingerprints establish edit/removal authority; an older incomplete inventory must not authorize deletion of unproven fields. Reject conflicts with authored changes explicitly. Regenerate Go handlers and router artifacts under their ownership checks. Do not delete unknown files, remove manifests to bypass protection, or overwrite edited generated artifacts to make a run pass.
+Regenerate shapes, presence, helpers, handlers and routers from the current DQL. Direct edits inside generated files are overwritten and are the editor's responsibility. Preserve separate application hook files and explicit linked Go contracts. Unknown application files are never removed by a filename guess; no package sidecar is read or written.
 
-SQL text may be maintained as stable named resources while Go tags remain stable. Register compiled `embed.FS` resources explicitly with the shared Bindly store, or use the configured package loader's resource discovery. Missing namespaces/resources are errors, not a reason to substitute unrelated inline SQL. Preserve old resource/shape ownership when views disappear or are renamed.
+SQL text may be maintained as stable named resources while Go tags remain stable. Register compiled `embed.FS` resources explicitly with the shared Bindly store, or use the configured package loader's resource discovery. Missing namespaces/resources are errors, not a reason to substitute unrelated inline SQL. Retire obsolete generated resources and shapes when views disappear or are renamed, while preserving resources used by other namespaces.
 
 Before claiming a writer complete, verify through an isolated SQLite-backed application/runtime path:
 
@@ -548,13 +553,14 @@ unflagged child below a marked parent fails. Database constraints still apply.
 All actions use the invocation's buffered DML and existing transaction owner;
 a supplied transaction remains caller-owned.
 
-`concurrency_token` is **validation-only**. For updates, its check runs first in
+`concurrency_token` validates captured expectations and supplies an atomic
+IfMatch condition at execution. For updates, its check runs first in
 the validation phase, before framework constraints and application Validate
 callbacks. It compares the captured, client-supplied expected token with the
 loaded authorized Previous token. Missing Has presence, a null token, missing
 Previous evidence, or a mismatch returns `*handler.Conflict` (status 409) before
-sequencing or queuing mutations. Inserts and explicitly marked deletes do not
-perform the update-token check.
+sequencing or queuing mutations. Inserts do not
+perform the token check; marked deletes also require valid expected-token evidence.
 
 Numeric tokens compare in their canonical Go numeric type. `time.Time` tokens
 compare instants with `Time.Equal`, including equal instants expressed in
@@ -566,10 +572,13 @@ explicitly prepare the next working token using a setter; that does not change
 the captured expected value. Token advancement is an application or database
 concern. The framework never increments or rewrites a version automatically.
 
-There is a race window between loading Previous, validating it, and executing
-DML. Another writer can change the row during that window. This annotation adds
-no token predicate to UPDATE/DELETE WHERE clauses, no vendor locks, and no
-row-count conflict machinery. It does **not** provide atomic race prevention.
+For UPDATE and DELETE, queued DML carries the persisted Previous token as an
+IfMatch guard in the native mutation condition. A row changed between the
+Previous read and execution returns `*handler.Conflict` instead of a successful
+write. Managed completion rolls back earlier actions. No vendor-specific lock
+or automatic token advancement is added. General compound/range/custom guards
+reuse existing predicate groups through `mutation_predicate(view,group)`; see
+[mutation predicates](../../../datly/doc/mutation-predicates.md).
 
 Regenerate through the same high-level command and preserve create-once lifecycle
 edits. Verify mixed mutations, identity-only deletes, omissions/false flags,

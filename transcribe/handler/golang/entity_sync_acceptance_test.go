@@ -15,6 +15,7 @@ import (
 )
 
 func TestGeneratedRecursivePresenceCore(t *testing.T) {
+	t.Parallel()
 	semantic := recursiveSemanticPlan(plan.OperationPost)
 	root := semantic.Root
 	child := root.Relations[0].Child

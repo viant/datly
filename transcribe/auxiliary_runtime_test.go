@@ -25,6 +25,7 @@ var auxiliarySchema = []string{
 }
 
 func TestAuxiliaryRelationsGenerateAndRegenerateWithoutMutationSQLite(t *testing.T) {
+	t.Parallel()
 	for _, target := range []HandlerTarget{HandlerGo, HandlerVelty} {
 		for _, operation := range []WriteOperation{WritePost, WritePut, WritePatch} {
 			for _, auxRoot := range []bool{false, true} {

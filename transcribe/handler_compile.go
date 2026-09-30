@@ -36,25 +36,11 @@ func (c *Compiler) compileHandler(source *Source, header *dql.HandlerHeader, bod
 	if header.InputType != mapping.LegacyInput || header.OutputType != mapping.LegacyOutput {
 		return nil, fmt.Errorf("legacy handler contract declarations conflict with mapping for %q", header.Type)
 	}
-	prepared := dql.PrepareSource(body)
-	if err := prepared.Err(); err != nil {
+	prepared, settings, err := prepareHandlerSource(body)
+	if err != nil {
 		return nil, err
 	}
 	directives := prepared.Directives
-	if strings.TrimSpace(prepared.SQL) != "" || len(directives.Views) != 0 || directives.Static != nil {
-		return nil, fmt.Errorf("handler-only DQL cannot contain SQL or reader views")
-	}
-	// Case formatting supplements the legacy header, which has no equivalent
-	// setting. Do not relax validation for unrelated execution declarations.
-	settings := directives.Settings.Clone()
-	if settings == nil {
-		settings = &spec.Settings{}
-	}
-	remainingSettings := *settings
-	remainingSettings.CaseFormat = ""
-	if directives.Route != nil || directives.MCP != nil || directives.MCPOnly || directives.Internal || !remainingSettings.IsZero() || !directives.Documentation.IsZero() {
-		return nil, fmt.Errorf("handler-only DQL settings conflict with the legacy header; retain settings in one declaration")
-	}
 	if prepared.TypeContext != nil && prepared.TypeContext.PackagePath != "" && prepared.TypeContext.PackagePath != mapping.DestinationPackage {
 		return nil, fmt.Errorf("handler destination conflicts with #package")
 	}
@@ -79,7 +65,6 @@ func (c *Compiler) compileHandler(source *Source, header *dql.HandlerHeader, bod
 		component.Routes[0].MCP = []*spec.MCPExposure{{Kind: "tool", Name: header.Name}}
 	}
 	copy := *source
-	var err error
 	if source.Types == nil {
 		copy.Types = typecatalog.NewCatalog()
 	} else if copy.Types, err = source.Types.Clone(); err != nil {
@@ -116,6 +101,29 @@ func (c *Compiler) compileHandler(source *Source, header *dql.HandlerHeader, bod
 		}
 	}
 	return result, nil
+}
+
+func prepareHandlerSource(body string) (*dql.PreparedSource, *spec.Settings, error) {
+	prepared := dql.PrepareSource(body)
+	if err := prepared.Err(); err != nil {
+		return nil, nil, err
+	}
+	d := prepared.Directives
+	if strings.TrimSpace(prepared.SQL) != "" || len(d.Views) != 0 || d.Static != nil {
+		return nil, nil, fmt.Errorf("handler-only DQL cannot contain SQL or reader views")
+	}
+	// Case formatting supplements the header, which has no equivalent setting.
+	// All execution declarations remain authoritative in exactly one place.
+	settings := d.Settings.Clone()
+	if settings == nil {
+		settings = &spec.Settings{}
+	}
+	remainder := *settings
+	remainder.CaseFormat = ""
+	if d.Route != nil || d.MCP != nil || d.MCPOnly || d.Internal || !remainder.IsZero() || !d.Documentation.IsZero() {
+		return nil, nil, fmt.Errorf("handler-only DQL settings conflict with the header; retain settings in one declaration")
+	}
+	return prepared, settings, nil
 }
 
 func validateHandlerParameters(binding *HandlerBinding, authored, bound []*spec.Parameter, resolver *typecatalog.Resolver) error {

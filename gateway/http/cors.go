@@ -14,13 +14,10 @@ func newCORSPolicy(config *spec.CORS) (*corsPolicy, error) {
 	if config == nil {
 		return nil, nil
 	}
-	if config.AllowCredentials != nil && *config.AllowCredentials && config.AllowOrigins != nil {
-		for _, origin := range *config.AllowOrigins {
-			if origin == "*" {
-				return nil, fmt.Errorf("credentialed CORS requires explicitly configured origins; wildcard is not allowed")
-			}
-		}
-	}
+	// An explicitly configured credentialed wildcard preserves original Datly
+	// behavior: the response reflects the request Origin rather than emitting
+	// the browser-invalid "*" value with credentials. The safer default remains
+	// noncredentialed; applications must opt into this compatibility policy.
 	if config.MaxAge != nil && *config.MaxAge < 0 {
 		return nil, fmt.Errorf("MaxAge must not be negative")
 	}
@@ -80,7 +77,8 @@ func (p *corsPolicy) apply(writer stdhttp.ResponseWriter, req *stdhttp.Request, 
 			requested = append(requested, name)
 		}
 	}
-	// Credentialed policies have been validated to contain explicit origins.
+	// Wildcard policies also reflect the request origin, matching original Datly
+	// and keeping credentialed responses valid for browsers.
 	headers.Set("Access-Control-Allow-Origin", origin)
 	if p.config.AllowCredentials != nil && *p.config.AllowCredentials {
 		headers.Set("Access-Control-Allow-Credentials", "true")

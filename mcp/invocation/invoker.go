@@ -63,7 +63,7 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 		}
 	}
 	ctx = exec.CaptureOutputSelection(ctx)
-	execContext := xexec.New(xexec.WithMethod(request.Method), xexec.WithURI(request.URI))
+	execContext := newExecutionContext(ctx, request)
 	ctx = xexec.WithContext(ctx, execContext)
 	if _, ok := xmcp.LookupContext(ctx); !ok {
 		ctx = xmcp.WithContext(ctx, i.mcp)
@@ -84,6 +84,23 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 		encode = i.output(request.Target)
 	}
 	return &Execution{value: result, err: err, context: execContext, selection: exec.SelectedOutputFields(ctx, result), encodeOutput: encode, encodingContext: ctx}, nil
+}
+
+func newExecutionContext(ctx context.Context, request Request) *xexec.Context {
+	result := xexec.New(xexec.WithMethod(request.Method), xexec.WithURI(request.URI), xexec.WithTraceResource("datly", ""))
+	// Only server-supplied context carries trusted correlation. Never reuse its
+	// mutable execution/trace state or derive correlation from tool arguments.
+	if parent := xexec.GetContext(ctx); parent != nil {
+		traceID := parent.TraceID
+		if traceID == "" && parent.Trace != nil {
+			traceID = parent.Trace.TraceID
+		}
+		if traceID != "" {
+			result.TraceID = traceID
+			result.Trace.TraceID = traceID
+		}
+	}
+	return result
 }
 
 func authorizationHeader(ctx context.Context) string {

@@ -50,11 +50,11 @@ func TestReaderNamedOuterProjection(t *testing.T) {
 			}
 			if tc.name == "aliased matching fields" {
 				link := actual.Relations[0].On[0]
-				if link.ParentColumn != "RootKey" || link.ChildColumn != "ParentKey" || len(actual.Columns) != 0 || len(child.Columns) != 0 {
+				if link.ParentColumn != "RootKey" || link.ChildColumn != "ParentKey" || len(actual.Columns) != 1 || len(child.Columns) != 2 {
 					t.Fatalf("alias association: %+v", link)
 				}
 			}
-			if tc.name == "wildcard plus alias" && !strings.Contains(actual.Source.SQL, "orders.NAME AS DisplayName") {
+			if tc.name == "wildcard plus alias" && (strings.Contains(actual.Source.SQL, "AS DisplayName") || len(actual.Columns) != 1 || actual.Columns[0].Name != "DisplayName" || actual.Columns[0].Source != "NAME") {
 				t.Fatal(actual.Source.SQL)
 			}
 		})
@@ -126,6 +126,56 @@ func TestReaderUnlistedRelationProjectionBoundary(t *testing.T) {
 				}
 			} else if !strings.HasPrefix(child.Source.SQL, "SELECT * FROM") {
 				t.Fatalf("child row contract narrowed: %s", child.Source.SQL)
+			}
+		})
+	}
+}
+
+func TestOuterFieldRenameDoesNotRewriteInnerSQLAlias(t *testing.T) {
+	SQL := `SELECT root.ID,site.DISPLAY_NAME AS SiteName
+ FROM (SELECT ID FROM ROOT) root
+ JOIN (SELECT ID,NAME AS DISPLAY_NAME FROM SITE) site ON site.ID=root.ID AND 1=1`
+	actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Root"}, SQL: SQL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := actual.Relations[0].View
+	if !strings.Contains(child.Source.SQL, "NAME AS DISPLAY_NAME") || strings.Contains(child.Source.SQL, "AS SiteName") {
+		t.Fatal(child.Source.SQL)
+	}
+	found := false
+	for _, column := range child.Columns {
+		if column.Name == "SiteName" {
+			found = true
+			if column.Source != "DISPLAY_NAME" || reflect.StructTag(column.Tag).Get("sqlx") != "DISPLAY_NAME" {
+				t.Fatalf("field rename metadata: %+v", column)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("outer Go field name lost")
+	}
+}
+
+func TestSingleNamedOuterFieldRename(t *testing.T) {
+	for _, tc := range []struct {
+		name, SQL string
+		config    bool
+	}{
+		{"named source", `SELECT site.NAME AS SiteName FROM (SELECT NAME FROM SITE) site`, true},
+		{"ordinary vendor SQL", `SELECT site.NAME AS SiteName FROM SITE site`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Site"}, SQL: tc.SQL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.config {
+				if strings.Contains(actual.Source.SQL, "AS SiteName") || len(actual.Columns) != 1 || actual.Columns[0].Name != "SiteName" || actual.Columns[0].Source != "NAME" {
+					t.Fatalf("outer field rename: %+v SQL=%s", actual.Columns, actual.Source.SQL)
+				}
+			} else if len(actual.Columns) != 0 {
+				t.Fatal("ordinary SQL alias was treated as configuration")
 			}
 		})
 	}

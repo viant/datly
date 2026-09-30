@@ -18,6 +18,7 @@ import (
 	"github.com/viant/datly/internal/testharness/mcpclient"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	"github.com/viant/datly/report"
+	"github.com/viant/datly/transcribe/testdata/composelinked"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/mcp-protocol/schema"
@@ -126,7 +127,7 @@ func TestComposeReload(t *testing.T) {
 				t.Fatal(err)
 			}
 			types := typecatalog.NewCatalog()
-			for _, typ := range []reflect.Type{reflect.TypeOf(SpendInput{}), reflect.TypeOf(SpendOutput{}), reflect.TypeOf(ChannelPredicate{})} {
+			for _, typ := range []reflect.Type{reflect.TypeOf(SpendInput{}), reflect.TypeOf(SpendOutput{}), reflect.TypeOf(composelinked.ScopePredicate{})} {
 				if err := types.Register(typecatalog.TypeOriginPackage, x.NewType(typ)); err != nil {
 					t.Fatal(err)
 				}

@@ -5,9 +5,35 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/spec"
 )
+
+func TestCompileSelectorBindingsPreservesLinkedChildDenial(t *testing.T) {
+	type input struct {
+		OrderBy string
+		Page    int
+	}
+	policy := &spec.Selector{}
+	require.NoError(t, policy.SetPermission(spec.SelectorPropertyOrderBy, false))
+	require.NoError(t, policy.SetPermission(spec.SelectorPropertyPage, false))
+	child := &data.View{Spec: spec.View{Name: "child", Selector: policy}}
+	root := &data.View{Spec: spec.View{Name: "root"}, Relations: []*data.Relation{{Of: &data.RelationRef{View: child}}}}
+	component := &spec.Component{Name: "Root", Parameters: []*spec.Parameter{
+		{Name: "OrderBy", Source: spec.BindSource{Kind: "query", Name: "sort"}, QuerySelector: &spec.QuerySelectorBinding{View: "child", Property: spec.SelectorPropertyOrderBy}},
+		{Name: "Page", Source: spec.BindSource{Kind: "query", Name: "page"}, QuerySelector: &spec.QuerySelectorBinding{View: "child", Property: spec.SelectorPropertyPage}},
+	}}
+	bindings, err := testBindings(component, reflect.TypeFor[input]())
+	require.NoError(t, err)
+	result, err := CompileSelectorBindings(component, reflect.TypeFor[input](), root, bindings)
+	require.NoError(t, err)
+	require.Len(t, result, 2, "denied permissions do not remove the input bindings")
+	require.False(t, child.Spec.Selector.AllowOrderBy)
+	require.False(t, child.Spec.Selector.AllowPage)
+	require.Nil(t, root.Spec.Selector)
+}
 
 func TestCompileSelectorBindings_ResolvesExactViewAndField(t *testing.T) {
 	type input struct {
@@ -43,6 +69,12 @@ func TestCompileSelectorBindings_ResolvesExactViewAndField(t *testing.T) {
 	}
 	if bindings[1].View != child || bindings[1].Property != spec.SelectorPropertyLimit {
 		t.Fatalf("unexpected child binding: %+v", bindings[1])
+	}
+	if root.Spec.Selector == nil || !root.Spec.Selector.AllowFields || root.Spec.Selector.AllowLimit {
+		t.Fatalf("root selector permissions = %+v", root.Spec.Selector)
+	}
+	if child.Spec.Selector == nil || !child.Spec.Selector.AllowLimit || child.Spec.Selector.AllowFields {
+		t.Fatalf("child selector permissions = %+v", child.Spec.Selector)
 	}
 }
 

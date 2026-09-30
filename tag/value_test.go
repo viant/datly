@@ -54,6 +54,22 @@ func TestQuerySelectorValueRoundTrips(t *testing.T) {
 	}
 }
 
+func TestQuerySelectorValueRoundTripsExplicitProperty(t *testing.T) {
+	value, err := (QuerySelector{View: "viewer", Property: spec.SelectorPropertyFields}).Value()
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := ParseQuerySelector(value)
+	if err != nil || actual.View != "viewer" || actual.Property != spec.SelectorPropertyFields {
+		t.Fatalf("ParseQuerySelector() = %+v, %v\n%s", actual, err, value)
+	}
+	for _, invalid := range []string{"view=viewer,property=unknown", "view=viewer,property=fields,property=fields", "property=fields"} {
+		if _, err := ParseQuerySelector(invalid); err == nil {
+			t.Fatalf("expected invalid selector metadata %q to fail", invalid)
+		}
+	}
+}
+
 func TestParseFieldSelectorAlias(t *testing.T) {
 	type row struct {
 		AdvertiserID int `sqlx:"advertiser_id" selectorAlias:"advertiserId"`

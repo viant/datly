@@ -1,7 +1,6 @@
 package generate
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -21,7 +20,6 @@ type packageSet struct {
 	dirs     []string
 	files    [][]EmittedFile
 	removals []map[string]bool
-	policies []GenerationPolicy
 }
 
 func (p *Plan) packages(dir string) (*packageSet, error) {
@@ -50,29 +48,19 @@ func (p *Plan) packages(dir string) (*packageSet, error) {
 	return result, nil
 }
 func (s *packageSet) validate() error {
-	return s.validateWithPolicy(GenerationPolicyMerge)
-}
-
-func (s *packageSet) validateWithPolicy(policy GenerationPolicy) error {
-	normalized, err := policy.normalize()
-	if err != nil {
-		return err
-	}
 	s.removals = make([]map[string]bool, len(s.plans))
-	s.policies = make([]GenerationPolicy, len(s.plans))
 	for i, p := range s.plans {
 		files, user, removals, err := scaffoldArtifacts(s.dirs[i], p)
 		if err != nil {
 			return err
 		}
-		persistence := &scaffoldPersistence{dir: s.dirs[i], owner: p.ComponentName, files: files, userFiles: user, removals: removals, plan: p, policy: normalized}
+		persistence := &scaffoldPersistence{dir: s.dirs[i], owner: p.ComponentName, files: files, userFiles: user, removals: removals, plan: p}
 		preview, err := persistence.preview()
 		if err != nil {
 			return err
 		}
 		s.files[i] = preview.files
 		s.removals[i] = preview.renames
-		s.policies[i] = normalized
 		for _, file := range preview.userFiles {
 			if _, err := os.Stat(file.Path); os.IsNotExist(err) {
 				s.files[i] = append(s.files[i], file)
@@ -80,32 +68,43 @@ func (s *packageSet) validateWithPolicy(policy GenerationPolicy) error {
 				return err
 			}
 		}
-		if p.ProjectRoot != "" {
+		if p.ExternalHandler != nil && p.ExternalHandler.Build != nil {
+			if err = s.validateSourceHandler(i); err != nil {
+				return err
+			}
+		} else if p.ProjectRoot != "" {
 			if err = s.validatePackage(i); err != nil {
 				return err
 			}
 		}
+	}
+	if len(s.plans) == 1 && s.plans[0].ExternalHandler != nil && s.plans[0].ExternalHandler.Build != nil {
+		return nil // Go's build-selected graph, not an unfiltered AST graph, is authoritative.
 	}
 	return s.validateImports()
 }
 
-// validateEphemeral avoids the persistence preview and its ownership checks.
-// Existing sidecar-free generated resources are not user-owned files.
-func (s *packageSet) validateEphemeral() error {
-	for i, p := range s.plans {
-		files, _, _, err := scaffoldArtifacts(s.dirs[i], p)
-		if err != nil {
-			return err
-		}
-		s.files[i] = files
-		if p.ProjectRoot != "" {
-			if err = s.validatePackage(i); err != nil {
-				return err
-			}
+func (s *packageSet) validateSourceHandler(index int) error {
+	sources, err := s.sources(index)
+	if err != nil {
+		return err
+	}
+	files := map[string][]byte{}
+	entries, err := os.ReadDir(s.dirs[index])
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") && !strings.HasSuffix(entry.Name(), "_test.go") {
+			files[filepath.Join(s.dirs[index], entry.Name())] = nil
 		}
 	}
-	return s.validateImports()
+	for name, content := range sources {
+		files[filepath.Join(s.dirs[index], name)] = []byte(content)
+	}
+	return s.plans[index].ExternalHandler.Build.Validate(s.plans[index].Package, files)
 }
+
 func (s *packageSet) sources(index int) (map[string]string, error) {
 	sources := map[string]string{}
 	entries, err := os.ReadDir(s.dirs[index])
@@ -132,30 +131,8 @@ func (s *packageSet) sources(index int) (map[string]string, error) {
 			}
 		}
 	}
-	manifest, err := readScaffoldManifest(s.dirs[index])
-	if err != nil {
-		return nil, err
-	}
-	manifest, err = manifest.forOwner(s.plans[index].ComponentName, s.plans[index].GoPackage != "")
-	if err != nil {
-		return nil, err
-	}
-	for _, name := range manifest.Files {
-		proposed := false
-		for _, group := range s.files {
-			for _, file := range group {
-				if filepath.Clean(file.Path) == filepath.Clean(filepath.Join(s.dirs[index], name)) {
-					proposed = true
-				}
-			}
-		}
-		if manifest.Roles[name] != "artifact" && (index >= len(s.removals) || !s.removals[index][name]) {
-			if index < len(s.policies) && s.policies[index] == GenerationPolicyOverwrite && !proposed {
-				delete(sources, name)
-			}
-			continue
-		}
-		if !proposed {
+	if index < len(s.removals) {
+		for name := range s.removals[index] {
 			delete(sources, name)
 		}
 	}
@@ -224,17 +201,6 @@ func (s *packageSet) validateImports() error {
 			if _, err := os.Stat(filepath.Join(file, "go.mod")); err == nil {
 				return filepath.SkipDir
 			}
-		}
-		if content, err := os.ReadFile(filepath.Join(file, scaffoldManifestName)); err == nil {
-			manifest := &scaffoldManifest{}
-			if err = json.Unmarshal(content, manifest); err != nil {
-				return err
-			}
-			if err = manifest.validateComponentDestination(s.plans); err != nil {
-				return err
-			}
-		} else if !os.IsNotExist(err) {
-			return err
 		}
 		if _, ok := proposed[filepath.Clean(file)]; ok {
 			return nil
@@ -329,14 +295,6 @@ type PackagePlan struct {
 type Packages []PackagePlan
 
 func (p Packages) Validate() error {
-	return p.ValidateWithPolicy(GenerationPolicyMerge)
-}
-
-func (p Packages) ValidateWithPolicy(policy GenerationPolicy) error {
-	normalized, err := policy.normalize()
-	if err != nil {
-		return err
-	}
 	all := &packageSet{}
 	paths := map[string]string{}
 	for _, entry := range p {
@@ -357,32 +315,5 @@ func (p Packages) ValidateWithPolicy(policy GenerationPolicy) error {
 		all.dirs = append(all.dirs, group.dirs...)
 		all.files = append(all.files, group.files...)
 	}
-	return all.validateWithPolicy(normalized)
-}
-
-// ValidateEphemeral validates the generated package layout without treating
-// existing generated artifacts as user-owned merely because no persistence
-// sidecar is present. It is deliberately limited to read-only validation.
-func (p Packages) ValidateEphemeral() error {
-	all := &packageSet{}
-	paths := map[string]string{}
-	for _, entry := range p {
-		group, err := entry.Plan.packages(entry.Directory)
-		if err != nil {
-			return err
-		}
-		for _, files := range group.files {
-			for _, file := range files {
-				key := filepath.Clean(file.Path)
-				if prior := paths[key]; prior != "" {
-					return fmt.Errorf("generated destination %s collides between components %s and %s", key, prior, entry.Plan.ComponentName)
-				}
-				paths[key] = entry.Plan.ComponentName
-			}
-		}
-		all.plans = append(all.plans, group.plans...)
-		all.dirs = append(all.dirs, group.dirs...)
-		all.files = append(all.files, group.files...)
-	}
-	return all.validateEphemeral()
+	return all.validate()
 }

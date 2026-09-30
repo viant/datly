@@ -35,19 +35,19 @@ func TestStandaloneReportsAutomaticCustomBuildSQLite(t *testing.T) {
 	env := append(os.Environ(), "GOFLAGS=-mod=mod")
 	service := build.Service{}
 	require.NoError(t, service.Init(ctx, build.InitRequest{Dir: f.Root}))
-	link := `package datlylink
+	link := `package dependencylink
 import _ "example.com/standalone/reporting/spend"
 func init(){}
 `
 	formattedLink, err := format.Source([]byte(link))
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(f.Root, "internal/datlylink/link.go"), formattedLink, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(f.Root, "internal/dependencylink/link.go"), formattedLink, 0600))
 	result, err := service.Build(ctx, build.Request{Dir: f.Root, Packages: []string{"./spend"}, Env: env})
 	require.NoError(t, err)
 	require.Equal(t, 2, result.Components)
 	// Exercise the user-selected default import with no generated registry.
 	// The binary is built above; HTTP handlers can be tested without a TCP socket.
-	code := `package datlylink
+	code := `package dependencylink
 import (
  _ "github.com/mattn/go-sqlite3"
  "context"
@@ -131,8 +131,8 @@ func TestDiscoveredReports(t *testing.T) {
 `
 	formatted, err := format.Source([]byte(code))
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(f.Root, "internal/datlylink/report_test.go"), formatted, 0600))
-	command := exec.CommandContext(ctx, "go", "test", "./internal/datlylink", "-run", "TestDiscoveredReports", "-count=1", "-v")
+	require.NoError(t, os.WriteFile(filepath.Join(f.Root, "internal/dependencylink/report_test.go"), formatted, 0600))
+	command := exec.CommandContext(ctx, "go", "test", "./internal/dependencylink", "-run", "TestDiscoveredReports", "-count=1", "-v")
 	command.Dir = f.Root
 	command.Env = env
 	output, err := command.CombinedOutput()

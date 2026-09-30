@@ -3,6 +3,7 @@ package readerbuilder
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,8 @@ import (
 )
 
 type Config struct {
+	// Resources is the exact authored component version's SQL resource filesystem.
+	Resources           fs.FS
 	Scope               string
 	Name                string
 	Types               *typecatalog.Catalog
@@ -632,7 +635,8 @@ func inspectViewSources(source string) ([]ViewOccurrence, []PredicateExpansion, 
 		if cursor == start {
 			continue
 		}
-		views = append(views, ViewOccurrence{Name: masked[start:cursor], SQL: strings.TrimSpace(source[pos+1 : end-1]), SourceSpan: dql.SourceSpan{Start: pos + 1, End: end - 1}})
+		innerSQL := strings.TrimSpace(source[pos+1 : end-1])
+		views = append(views, ViewOccurrence{Name: masked[start:cursor], SQL: innerSQL, SourceProjectionAll: selectsAllPhysicalColumns(innerSQL), SourceSpan: dql.SourceSpan{Start: pos + 1, End: end - 1}})
 		skipUntil = end
 	}
 	seen := map[string]bool{}

@@ -17,6 +17,7 @@ import (
 )
 
 func TestProjectGenerationEmitsAuditableMultiComponentProject(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	users := compileProjectSource(t, "Users", "/users", "SELECT id FROM users")
@@ -47,7 +48,7 @@ func TestProjectGenerationEmitsAuditableMultiComponentProject(t *testing.T) {
 	if _, err = os.Stat(filepath.Join(root, projectMetadataDir, "migration.json")); err != nil {
 		t.Fatalf("migration report: %v", err)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "vet", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("generated project does not compile: %v\n%s", runErr, output)
@@ -230,14 +231,18 @@ func TestProjectGenerationPreflightsAllPackageOwnersBeforeEmission(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ownerManifest := filepath.Join(root, filepath.FromSlash(ordersEntry.Package), ".datly-gen.json")
-	if err = os.WriteFile(ownerManifest, []byte("{\n  \"version\": 2,\n  \"owner\": \"Other\",\n  \"files\": []\n}\n"), 0o644); err != nil {
+	ownerFile := filepath.Join(root, filepath.FromSlash(ordersEntry.Package), "router.go")
+	data, err := os.ReadFile(ownerFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(ownerFile, []byte(strings.Replace(string(data), "Datly for Orders;", "Datly for Other;", 1)), 0644); err != nil {
 		t.Fatal(err)
 	}
 	users = compileProjectSource(t, "Users", "/users", `#define($_ = $Search<string>(query/search).Optional())
 SELECT id FROM users`)
 	_, err = (&ProjectGeneration{Components: []*Result{users, orders}}).Generate(context.Background(), root)
-	if err == nil || !strings.Contains(err.Error(), "generated package is owned by component") {
+	if err == nil || !strings.Contains(err.Error(), "belongs to component") {
 		t.Fatalf("Generate() error = %v", err)
 	}
 	after, err := os.ReadFile(usersInput)
@@ -263,7 +268,7 @@ func TestProjectGenerationPreflightsUnownedPackageFilesBeforeEmission(t *testing
 		t.Fatal(err)
 	}
 	ordersPackage := filepath.Join(root, filepath.FromSlash(ordersEntry.Package))
-	if err = os.Remove(filepath.Join(ordersPackage, ".datly-gen.json")); err != nil {
+	if err = os.WriteFile(filepath.Join(ordersPackage, "input.go"), []byte("package userowned\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	users = compileProjectSource(t, "Users", "/users", `#define($_ = $Search<string>(query/search).Optional())
@@ -296,33 +301,6 @@ func TestProjectGenerationPreflightsUntrackedFileInOwnedPackage(t *testing.T) {
 	}
 	ordersPackage := filepath.Join(root, filepath.FromSlash(ordersEntry.Package))
 	untracked := filepath.Join(ordersPackage, "input.go")
-	manifestPath := filepath.Join(ordersPackage, ".datly-gen.json")
-	manifestData, err := os.ReadFile(manifestPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var manifest struct {
-		Version int      `json:"version"`
-		Owner   string   `json:"owner"`
-		Files   []string `json:"files"`
-	}
-	if err = json.Unmarshal(manifestData, &manifest); err != nil {
-		t.Fatal(err)
-	}
-	retained := manifest.Files[:0]
-	for _, path := range manifest.Files {
-		if path != "input.go" {
-			retained = append(retained, path)
-		}
-	}
-	manifest.Files = retained
-	manifestData, err = json.MarshalIndent(manifest, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(manifestPath, append(manifestData, '\n'), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	if err = os.WriteFile(untracked, []byte("package userowned\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -46,6 +46,23 @@ specialized integrations. It returns a borrowed DB for an exact configured name,
 not a managed transaction. Do not close it or assume direct work silently joins
 Data's transaction; it is not client-bindable or installed by default.
 
+## One transaction for a native mutation
+
+The first endpoint invocation owns transaction completion. Its first generic
+writer starts the transaction. Invoke child readers and writers through the
+scoped `exec.ComponentInvoker`; they share the database unit and buffered DML.
+An imperative child writer flushes its queued prefix into that same transaction
+before returning, so a later child reader sees the write. The endpoint's final
+error rolls the entire unit back, including already flushed child writes.
+
+Do not construct another `Runtime` with a fresh `*sql.Tx` inside a handler for
+the same database. Datly rejects that conflicting owner. For immediate SQL
+that is not a reader or writer component, resolve the connector through
+`handler.TransactionSQLCapabilityKey`; its capability has no commit or rollback
+method. A child success finalizer runs after the root completes. If a parent
+needs data from a child before then, read the child's typed view or call a pure
+projection method rather than depending on a success finalizer's output fields.
+
 ## Return already-shaped bytes
 
 The canonical SDK transport contract is `response.Response`: body reader,
@@ -71,6 +88,24 @@ func CSV() response.Response {
 
 `WithBuffer` accepts a `*bytes.Buffer` when the application already has one.
 The caller must not mutate shared backing bytes after transferring the response.
+
+For a typed custom component whose HTTP response must set cookies or redirect,
+use an output struct embedding `*response.Buffered`. The custom handler fills
+that field with `response.NewBuffered` and `response.WithStatusCode`,
+`response.WithHeader("Location", target)` and one `response.WithHeader("Set-Cookie", value)`
+per cookie. The HTTP adapter preserves repeated `Set-Cookie` values. Declare
+request data as ordinary typed input fields, for example `kind=cookie` for an
+opaque session ID, `kind=query` for OAuth code/state and `kind=header` for
+Origin. Do not read an ambient `http.Request` or write to `http.ResponseWriter`
+from the component handler. The adapter regression test
+`gateway/http/custom_response_cookie_test.go` verifies these bindings and the
+redirect/cookie response together.
+
+The custom handler can orchestrate a trusted OAuth service, but encrypted token
+persistence should still use a declared Datly writer component (and reader for
+lookup). A custom handler does not turn a separate raw SQL store or another
+runtime into the endpoint's managed transaction.
+
 For already-compressed output, use the response's explicit compression metadata.
 The [HTTP adapter](../gateway/http/handler.go) recognizes `response.Response`
 before ordinary encoding; [writeResponse](../gateway/http/response.go) copies

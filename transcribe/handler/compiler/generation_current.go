@@ -60,7 +60,7 @@ func (b *inputGeneration) addCurrent(view *spec.View, body string, path []string
 		}
 		alias := ""
 		for _, col := range view.Columns {
-			if col != nil && col.PrimaryKey && typecatalog.FieldName(col.Name) == key.Field {
+			if col != nil && effectivePrimaryKey(col) && typecatalog.FieldName(col.Name) == key.Field {
 				// StructQL helper projections are Go shapes. Keep the physical
 				// database name in SQLX metadata and use the canonical exported
 				// field name for the generated helper contract.
@@ -74,7 +74,8 @@ func (b *inputGeneration) addCurrent(view *spec.View, body string, path []string
 		source := key.Field
 		if output := outputs[strings.ToLower(strings.TrimSpace(key.Source))]; output != "" {
 			alias = typecatalog.FieldName(output)
-			source = alias
+			// StructQL reads the entity Go field; the destination alias names
+			// the current SQL output. An outer field-only rename can differ.
 			if !strings.EqualFold(strings.TrimSpace(output), strings.TrimSpace(key.Source)) {
 				aliased = append(aliased, alias)
 			}
@@ -118,6 +119,8 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	current.TypeName = ""
 	current.Dest = ""
 	current.EntityHooks = ""
+	current.OnDeleteNotFound = ""
+	current.MutationPredicateGroup = nil
 	current.Columns = nil
 	for _, column := range view.Columns {
 		if column == nil || column.DeleteMarker {
@@ -141,6 +144,7 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	// CompositeIn narrows that read; it must never replace authored row scope.
 	outputs := currentSourceOutputs(sql)
 	var columns []string
+	directTableRead := simpleCurrentTableSource(sql, view.Source.Table)
 	for _, col := range current.Columns {
 		if col != nil {
 			name := col.Name
@@ -157,17 +161,33 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 				col.Expression = col.Source
 				col.Source = name
 			}
-			col.Name = name
+			physical := strings.TrimSpace(col.Source)
+			if physical == "" {
+				physical = strings.TrimSpace(col.Name)
+			}
+			if !strings.EqualFold(strings.TrimSpace(name), physical) {
+				directTableRead = false
+			}
+			// Preserve the entity Go-field name on Current; only the SQL label
+			// is selected below and recorded in its SQLX read mapping.
 			// The entity may keep a derived relation key transient so it never
 			// becomes a DML column. Its generated Current carrier is a read shape,
 			// however, and must scan the projected alias for matching/linking.
 			col.Tag = currentReadTag(col.Tag, name)
-			columns = append(columns, `r."`+strings.ReplaceAll(name, `"`, `""`)+`"`)
+			// Current-state aliases are generated canonical identifiers. Keep them
+			// unquoted so the generated reader is portable across MySQL, SQLite,
+			// PostgreSQL and other supported dialects; ANSI double quotes are not
+			// identifier quotes in MySQL's default mode.
+			columns = append(columns, "r."+name)
 		}
 	}
 	current.Source = view.Source.Clone()
 	current.Source.URI = ""
-	current.Source.SQL = "SELECT " + strings.Join(columns, ", ") + " FROM (" + strings.TrimSuffix(sql, ";") + ") r WHERE " + predicate
+	if directTableRead {
+		current.Source.SQL = "SELECT " + strings.Join(columns, ", ") + " FROM " + view.Source.Table + " r WHERE " + predicate
+	} else {
+		current.Source.SQL = "SELECT " + strings.Join(columns, ", ") + " FROM (" + strings.TrimSuffix(sql, ";") + ") r WHERE " + predicate
+	}
 
 	p := &spec.Parameter{Name: currentName, Source: spec.BindSource{Kind: "view", Name: currentName}, Cardinality: "Many"}
 	if err := b.append(p); err != nil {
@@ -180,6 +200,20 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	}
 	b.request.ViewBindings[p.Identity()] = currentIdentity
 	return nil
+}
+
+func simpleCurrentTableSource(sql, table string) bool {
+	normalized := strings.ToUpper(strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimSpace(sql), ";")), " "))
+	table = strings.ToUpper(strings.TrimSpace(table))
+	if table == "" || !strings.HasPrefix(normalized, "SELECT ") || !strings.Contains(normalized, " FROM "+table) {
+		return false
+	}
+	for _, disallowed := range []string{" WHERE ", " JOIN ", " UNION ", " GROUP BY ", " HAVING ", " ORDER BY ", " LIMIT ", " FROM ("} {
+		if strings.Contains(normalized, disallowed) {
+			return false
+		}
+	}
+	return true
 }
 
 func currentReadTag(tag, column string) string {

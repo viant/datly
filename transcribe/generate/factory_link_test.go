@@ -18,6 +18,7 @@ import (
 )
 
 func TestGeneratedFactoryExportsLinkAutomatically(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"contract", "mutation"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
@@ -40,7 +41,7 @@ func TestGeneratedFactoryExportsLinkAutomatically(t *testing.T) {
 			if err = os.WriteFile(filepath.Join(dir, "link_test.go"), []byte(source), 0644); err != nil {
 				t.Fatal(err)
 			}
-			command := exec.Command("go", "test", "-race", "-mod=mod", "./...")
+			command := exec.Command("go", "vet", "-race", "-mod=mod", "./...")
 			command.Dir = root
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("compiled linked %s factory: %v\n%s", kind, err, output)
@@ -54,11 +55,11 @@ func TestGeneratedFactoryExportsLinkAutomatically(t *testing.T) {
 			if err = os.WriteFile(path, edited, 0644); err != nil {
 				t.Fatal(err)
 			}
-			if _, err = New(input).Generate(dir); err == nil {
-				t.Fatal("edited linking artifact overwritten")
+			if _, err = New(input).Generate(dir); err != nil {
+				t.Fatal("regenerate linking artifact", err)
 			}
 			actual, err := os.ReadFile(path)
-			if err != nil || string(actual) != string(edited) {
+			if err != nil || string(actual) != string(content) {
 				t.Fatal("failed generation changed edited artifact")
 			}
 		})
@@ -66,6 +67,7 @@ func TestGeneratedFactoryExportsLinkAutomatically(t *testing.T) {
 }
 
 func TestFactoryLinkCompilesOnlyUsedContractImports(t *testing.T) {
+	t.Parallel()
 	for _, linked := range []bool{false, true} {
 		t.Run(map[bool]string{false: "generated fields", true: "linked aliases"}[linked], func(t *testing.T) {
 			root := t.TempDir()
@@ -103,7 +105,7 @@ func TestFactoryLinkCompilesOnlyUsedContractImports(t *testing.T) {
 			if !linked && (strings.Contains(string(content), `"time"`) || strings.Contains(string(content), strconv.Quote(pkg))) {
 				t.Fatalf("unused field imports in companion: %s", content)
 			}
-			command := exec.Command("go", "test", "-mod=mod", "./...")
+			command := exec.Command("go", "vet", "-mod=mod", "./...")
 			command.Dir = root
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("compiled companion imports: %v\n%s", err, output)

@@ -16,6 +16,10 @@ func (c *Config) ResolveConstants() (*Config, error) {
 		return nil, fmt.Errorf("standalone configuration is required")
 	}
 	result := *c
+	if c.JWTClaims != nil {
+		policy := *c.JWTClaims
+		result.JWTClaims = &policy
+	}
 	var err error
 	result.Caches, err = namedCaches(c.Caches, c.CacheProviders)
 	if err != nil {

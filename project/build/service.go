@@ -1,5 +1,5 @@
 // Package build owns custom project initialization and compilation. The
-// application-owned internal/datlylink package selects compiled components.
+// application-owned internal/dependencylink package selects compiled components.
 // The service is independent of CLI flags and can be reused by developer tools.
 package build
 
@@ -19,6 +19,8 @@ import (
 type Service struct{}
 type Request struct {
 	Dir, Output, Tags string
+	// LinkPackage defaults to internal/dependencylink.
+	LinkPackage string
 	// Env is the complete Go environment; nil inherits it, including GOWORK.
 	Env []string
 	// Packages uses Go package patterns. The default is ./... in the project module.
@@ -41,6 +43,16 @@ func (Service) Build(ctx context.Context, request Request) (_ *Result, err error
 	if info.Dir != root {
 		return nil, fmt.Errorf("build directory must be the module root: %s", info.Dir)
 	}
+	linkPackage, _, err := resolveLinkPackage(request.LinkPackage)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateLinkPath(root, filepath.Join(filepath.FromSlash(linkPackage), "link.go")); err != nil {
+		return nil, err
+	}
+	if _, err := linkPackageClause(filepath.Join(root, filepath.FromSlash(linkPackage)), filepath.Base(linkPackage)); err != nil {
+		return nil, err
+	}
 	selection, err := (xmodule.BuildWorkspace{BaseDir: root, Patterns: request.Packages, Tags: request.Tags, Env: request.Env}).Resolve(ctx)
 	if err != nil {
 		return nil, err
@@ -48,7 +60,7 @@ func (Service) Build(ctx context.Context, request Request) (_ *Result, err error
 	routes, err := (bootstrap.PackageDiscovery{
 		Workspace: selection.Workspace(),
 		Include:   []string{"..."},
-		Exclude:   []string{info.Path + "/cmd/datly", info.Path + "/internal/datlylink"},
+		Exclude:   []string{info.Path + "/cmd/datly", info.Path + "/" + linkPackage},
 	}).Discover(ctx)
 	if err != nil {
 		return nil, err

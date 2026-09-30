@@ -131,6 +131,32 @@ SELECT id FROM users`
 	}
 }
 
+func TestParseComponentSource_FormatSelectorSource(t *testing.T) {
+	for _, source := range []string{"header/Accept", "query/_format"} {
+		component, err := parseComponentSource("example.com/demo/records", "Records", "#setting($_ = $route('/records', 'GET'))\n#define($_ = $OutputFormat<string>("+source+").FormatSelector())\nSELECT id FROM records")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(component.Parameters) != 1 || !component.Parameters[0].FormatSelector || component.Parameters[0].Required == nil || *component.Parameters[0].Required ||
+			component.Parameters[0].Cacheable == nil || *component.Parameters[0].Cacheable {
+			t.Fatalf("format selector %s: %+v", source, component.Parameters)
+		}
+	}
+	for _, declaration := range []string{
+		`$OutputFormat<int>(header/Accept).FormatSelector()`,
+		`$OutputFormat<string>(header/Content-Type).FormatSelector()`,
+		`$OutputFormat<string>(body/format).FormatSelector()`,
+		`$OutputFormat<string>(query/).FormatSelector()`,
+		`$OutputFormat<string>(header/Accept).FormatSelector('extra')`,
+		`$OrderBy<string>(query/order).QuerySelector('records').FormatSelector()`,
+	} {
+		_, err := parseComponentSource("example.com/demo/records", "Records", "#define($_ = "+declaration+")\nSELECT id FROM records")
+		if err == nil {
+			t.Fatalf("invalid format selector %s compiled", declaration)
+		}
+	}
+}
+
 func TestParseComponentSource_AppliesOriginalRequiredDefaults(t *testing.T) {
 	source := `#setting($_ = $route('/required-defaults', 'POST'))
 #define($_ = $Search<string>(query/search))

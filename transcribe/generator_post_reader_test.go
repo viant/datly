@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/transcribe/column"
-	"github.com/viant/datly/transcribe/generate"
 )
 
 func TestGeneratorPostReader(t *testing.T) {
@@ -37,7 +36,7 @@ func TestGeneratorPostReader(t *testing.T) {
 #set($_ = $Data<?>(output/view).WithTag('json:"data"'))
 SELECT p.id, p.name FROM profiles p WHERE p.category = $Inclusion AND p.name <> $Exclusion ORDER BY p.id`,
 	}
-	generator := Generator{Operation: "get", GenerationPolicy: generate.GenerationPolicyOverwrite}
+	generator := Generator{Operation: "get"}
 	// Cover direct generation and the discovery-then-generation path used by
 	// application wrappers, including persistent overwrite regeneration.
 	compiled, err := NewCompiler().Compile(ctx, source)

@@ -3,15 +3,17 @@ package transcribe
 import (
 	"context"
 	"fmt"
-	"github.com/viant/bindly/resource"
 	"os"
 	"path/filepath"
+
+	"github.com/viant/bindly/resource"
+
+	"strings"
 
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
 	loaderast "github.com/viant/x/loader/ast"
 	smodel "github.com/viant/x/syntetic/model"
-	"strings"
 )
 
 // GeneratedPackage holds transcribed package artifacts for package bootstrap.
@@ -75,19 +77,18 @@ func (c *Compiler) generateCompiled(ctx context.Context, rootDir string, compile
 }
 
 func (c *Compiler) generateCompiledAt(ctx context.Context, rootDir, packageDir string, compiled *Result) (*GeneratedPackage, error) {
-	return c.generateCompiledAtWithPolicy(ctx, rootDir, packageDir, compiled, gen.GenerationPolicyMerge)
-}
-
-func (c *Compiler) generateCompiledAtWithPolicy(ctx context.Context, rootDir, packageDir string, compiled *Result, policy gen.GenerationPolicy) (*GeneratedPackage, error) {
 	input, packageDir, err := generationInput(rootDir, packageDir, compiled)
 	if err != nil {
 		return nil, err
 	}
-	input.GenerationPolicy = policy
 	return c.generateInputAt(ctx, rootDir, packageDir, compiled, input)
 }
 
 func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir string, compiled *Result, input gen.Input) (*GeneratedPackage, error) {
+	if h := input.ExternalHandler; h != nil && h.Build != nil {
+		input.ExternalHandler = h.Clone()
+		input.ExternalHandler.Build = h.Build.WithContext(ctx)
+	}
 	pkgDir := filepath.Join(rootDir, packageDir)
 	result, err := gen.New(input).Generate(pkgDir)
 	if err != nil {
@@ -110,7 +111,7 @@ func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir stri
 			return nil, e
 		}
 	}
-	pkg, err := loaderast.LoadPackageFS(ctx, os.DirFS(rootDir), filepath.ToSlash(packageDir))
+	pkg, err := loaderast.LoadPackageFS(ctx, result.Plan.PackageFS(rootDir, filepath.ToSlash(packageDir)), filepath.ToSlash(packageDir))
 	if err != nil {
 		return nil, err
 	}

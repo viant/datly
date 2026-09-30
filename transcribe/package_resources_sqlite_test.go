@@ -30,13 +30,13 @@ func (w *resourceWorkspace) init(t *testing.T) {
 	writeSourceFile(t, w.root, "app/go.mod", "module corp.example/app\ngo 1.25\nreplace corp.example/private => ../private\n")
 	writeSourceFile(t, w.root, "private/go.mod", "module corp.example/private\ngo 1.25\n")
 	writeSourceFile(t, w.root, "private/model/model.go", "package model\ntype Row struct {ID int `sqlx:\"id\"`}\n")
-	writeSourceFile(t, w.root, "private/model/.datly-gen.json", `{"resources":{"namespace":"private_sql","files":["datly_sql/query.sql"]}}`)
+	writeSourceFile(t, w.root, "private/model/resources.go", resourceDeclaration("model", "private_sql", "datly_sql/query.sql"))
 	writeSourceFile(t, w.root, "private/model/datly_sql/query.sql", "SELECT id FROM records WHERE id=1")
 	writeSourceFile(t, w.root, "app/api/holder.go", "package api\nimport (model \"corp.example/private/model\"; xdatly \"github.com/viant/xdatly\")\ntype Input struct{}\ntype Output struct {Rows []*model.Row `parameter:\"Rows,kind=output,in=view\" view:\"records,table=records\" sql:\"uri=private_sql:datly_sql/query.sql\"`}\ntype Holder struct {Contract xdatly.Component[Input,Output] `component:\"Records,path=/records,method=GET,view=records\"`}\n")
 	writeSourceFile(t, w.root, "app/api/Records.sql", `#setting($_ = $route('/records','GET'))
 SELECT * FROM (${embed:private_sql:datly_sql/query.sql}) records`)
 	writeSourceFile(t, w.root, "app/api/local.sql", "SELECT 10 AS id")
-	writeSourceFile(t, w.root, "app/api/.datly-gen.json", `{"resources":{"namespace":"app_sql","files":["datly_sql/not_a_component.sql"]}}`)
+	writeSourceFile(t, w.root, "app/api/resources.go", resourceDeclaration("api", "app_sql", "datly_sql/not_a_component.sql"))
 	writeSourceFile(t, w.root, "app/api/datly_sql/not_a_component.sql", `#setting($_ = $route('/not-a-route','GET')) SELECT 999 AS id`)
 	w.discovery = Discovery{BaseDir: filepath.Join(w.root, "app"), Include: []string{"corp.example/app/api/..."}, Exclude: []string{"corp.example/private/..."}}
 }
@@ -66,7 +66,7 @@ func TestDiscoveryResourcesTwoModulesAndReloadSQLite(t *testing.T) {
 			return nil, err
 		}
 		if len(project.Components) != 1 {
-			return nil, fmt.Errorf("manifest asset became a component: %d", len(project.Components))
+			return nil, fmt.Errorf("embedded asset became a component: %d", len(project.Components))
 		}
 		compiled := project.Components[0]
 		artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: compiled.Component, Types: compiled.Source.Types, Resources: compiled.Source.Resources, InputType: reflect.TypeOf(struct{}{}), OutputType: reflect.TypeOf(output{}), DirectViewField: "Rows"})
@@ -126,7 +126,7 @@ func TestDiscoveryResourcesTwoModulesAndReloadSQLite(t *testing.T) {
 			}
 		}
 	}
-	writeSourceFile(t, workspace.root, "private/model/.datly-gen.json", `{"resources":{"namespace":"private_sql","files":["datly_sql/missing.sql"]}}`)
+	writeSourceFile(t, workspace.root, "private/model/resources.go", resourceDeclaration("model", "private_sql", "datly_sql/missing.sql"))
 	if err := manager.Reload(ctx, application.Request{Revision: 3, Compile: compile}); err == nil {
 		t.Fatal("missing resource reload accepted")
 	}
@@ -149,18 +149,22 @@ func TestDiscoveryResourcesTwoModulesAndReloadSQLite(t *testing.T) {
 }
 
 func TestDiscoveryResourceFailuresAreExplicit(t *testing.T) {
-	for _, test := range []struct{ name, manifest, want string }{
-		{"namespace collision", `{"resources":{"namespace":"app_sql","files":["datly_sql/query.sql"]}}`, "declared by both"},
-		{"missing asset", `{"resources":{"namespace":"private_sql","files":["datly_sql/missing.sql"]}}`, "missing.sql"},
-		{"malformed manifest", `{"resources":`, "read .datly-gen.json"},
+	for _, test := range []struct{ name, declaration, want string }{
+		{"namespace collision", resourceDeclaration("model", "app_sql", "datly_sql/query.sql"), "declared by both"},
+		{"missing asset", resourceDeclaration("model", "private_sql", "datly_sql/missing.sql"), "missing.sql"},
+		{"missing namespace", "package model\nimport \"embed\"\n//go:embed datly_sql/query.sql\nvar DatlyResources embed.FS\n", "no matching namespace"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			w := &resourceWorkspace{}
 			w.init(t)
-			writeSourceFile(t, w.root, "private/model/.datly-gen.json", test.manifest)
+			writeSourceFile(t, w.root, "private/model/resources.go", test.declaration)
 			if _, err := w.discovery.Compile(context.Background()); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error=%v want=%s", err, test.want)
 			}
 		})
 	}
+}
+
+func resourceDeclaration(pkg, namespace, file string) string {
+	return fmt.Sprintf("package %s\nimport \"embed\"\nconst DatlyResourceNamespace = %q\n//go:embed %s\nvar DatlyResources embed.FS\n", pkg, namespace, file)
 }

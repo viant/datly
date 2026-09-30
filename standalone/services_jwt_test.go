@@ -15,6 +15,7 @@ import (
 
 	jwtv5 "github.com/golang-jwt/jwt/v5"
 	gateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/runtime/auth"
 	"github.com/viant/datly/standalone/config"
 	fixture "github.com/viant/datly/standalone/testdata/app"
 	"github.com/viant/datly/standalone/testdata/app/authrecords"
@@ -41,6 +42,7 @@ func TestConfiguredWarmupJWTIsNotAdministrator(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.JWTValidator = &verifier.Config{RSA: []*scy.Resource{{URL: "inline-public-key", Data: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: public})}}}
+	cfg.JWTClaims = &auth.ClaimPolicy{Issuer: "https://identity.example", Audience: "studio-web", RequireSubject: true}
 	dql := fmt.Sprintf(`#setting($_ = $route('/protected/{id}', 'GET'))
 #setting($_ = $input_type('Input'))
 #setting($_ = $output_type('Output'))
@@ -58,15 +60,25 @@ SELECT records.* FROM (SELECT id,name FROM records WHERE id=:ID) records`, filep
 	if err = s.Reload(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
-	token := jwtv5.NewWithClaims(jwtv5.SigningMethodRS256, jwtv5.MapClaims{"sub": "user", "exp": time.Now().Add(time.Hour).Unix()})
+	token := jwtv5.NewWithClaims(jwtv5.SigningMethodRS256, jwtv5.MapClaims{"sub": "user", "iss": "https://identity.example", "aud": "studio-web", "exp": time.Now().Add(time.Hour).Unix()})
 	signed, err := token.SignedString(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongAudience, err := jwtv5.NewWithClaims(jwtv5.SigningMethodRS256, jwtv5.MapClaims{"sub": "user", "iss": "https://identity.example", "aud": "other-client", "exp": time.Now().Add(time.Hour).Unix()}).SignedString(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongIssuer, err := jwtv5.NewWithClaims(jwtv5.SigningMethodRS256, jwtv5.MapClaims{"sub": "user", "iss": "https://other.example", "aud": "studio-web", "exp": time.Now().Add(time.Hour).Unix()}).SignedString(key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
 		name, admin, token string
 		status             int
-	}{{"token is not admin", "", "Bearer " + signed, 403}, {"missing JWT", "admin-key", "", 401}, {"bad JWT", "admin-key", "Bearer invalid", 401}, {"admin key and declared JWT", "admin-key", "Bearer " + signed, 200}} {
+	}{{"token is not admin", "", "Bearer " + signed, 403}, {"missing JWT", "admin-key", "", 401}, {"bad JWT", "admin-key", "Bearer invalid", 401},
+		{"wrong audience", "admin-key", "Bearer " + wrongAudience, 401}, {"wrong issuer", "admin-key", "Bearer " + wrongIssuer, 401},
+		{"admin key and declared JWT", "admin-key", "Bearer " + signed, 200}} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest("POST", "/warm/protected/1", nil)
 			req.Header.Set("X-Read", "read-key")

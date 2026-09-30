@@ -23,10 +23,10 @@ type rootCacheMatcher struct {
 	query     *cache.ParmetrizedQuery
 }
 
-func (m rootCacheMatcher) apply(ctx context.Context) error {
+func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection) error {
 	root := m.session.Artifact.Root
 	view := root.View
-	if m.session.ReadCaches[view] == nil || view.Cache == nil {
+	if connection.Tx != nil || m.session.ReadCaches[view] == nil || view.Cache == nil {
 		return nil
 	}
 	warmups, err := view.Cache.EffectiveWarmups()
@@ -68,10 +68,6 @@ func (m rootCacheMatcher) apply(ctx context.Context) error {
 	}
 	selector.Fields = append([]string(nil), settings.FieldNames...)
 	selector.Columns = nil
-	connection, err := viewConnection(ctx, m.session, root)
-	if err != nil {
-		return err
-	}
 	identity, err := builder.NewBuilder().CacheSQL(ctx,
 		builder.WithBuilderComponent(m.session.Component), builder.WithBuilderView(view), builder.WithBuilderCriteriaCompiler(root.Criteria),
 		builder.WithBuilderSelector(selector), builder.WithBuilderProjection(viewProjection(view, selector)),

@@ -22,6 +22,7 @@ import (
 )
 
 type Request struct {
+	mutationAttempt int
 	// SequenceStrategy is canonical component metadata, not a client-bound value.
 	SequenceStrategy string
 	OutputType       reflect.Type
@@ -52,6 +53,7 @@ type Engine struct{}
 func New() *Engine { return &Engine{} }
 
 func (e *Engine) Execute(ctx context.Context, request Request) (actual any, failure error) {
+	callContext := ctx
 	if e == nil {
 		return nil, fmt.Errorf("handler engine is required")
 	}
@@ -123,11 +125,14 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			runtimeProviders = append(runtimeProviders, data.providers()...)
 		}
 		ctx = withDataScope(ctx, data)
+		ctx = dexec.WithInvocationTransactionLookup(ctx, data.transactionForDatabase)
 	}
 	if ownsData {
 		defer data.releaseContexts()
 	}
 	invocation := rhandler.Invocation{Input: input, Response: newResponseWriter(ctx)}
+	var mutationReplay *bindly.Replay
+	var mutationInput any
 	var completionFrame *outcomeFrame
 	if outcomeAware {
 		completionFrame, err = data.registerOutcome(ctx, request.Input.Route().String(), outcomeFinalizer)
@@ -142,6 +147,46 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			data.finishOutcome(completionFrame, invocation, result, operationErr)
 		}
 		result, completionErr := finishDataScope(ctx, data, ownsData, result, operationErr)
+		if ownsData && data != nil && (mutationReplay != nil || mutationInput != nil) {
+			decision, recovered, recoveryErr := recoverMutation(callContext, request, data, invocation, completionErr)
+			if recoveryErr != nil {
+				completionErr = errors.Join(completionErr, recoveryErr)
+				data.finishOutcome(completionFrame, invocation, completionFrame.result, completionErr)
+			} else if recovered {
+				if decision == rhandler.RecoveryRetry {
+					// Finalize this attempt with truthful transaction evidence and
+					// an explicit retry disposition; no success publication yet.
+					data.finishOutcome(completionFrame, invocation, completionFrame.result, errMutationRetry)
+					var finalizationError *FinalizationError
+					if finalErr := data.finalizeOutcomes(completionErr); errors.As(finalErr, &finalizationError) || completionIntroducedError(finalErr, completionErr) {
+						if request.Completion != nil {
+							request.Completion(data.completionOutcome())
+						}
+						return result, finalErr
+					}
+					retry := request
+					retry.mutationAttempt++
+					if mutationInput != nil {
+						retry.BoundInput, err = captureMutationInput(request.Input, mutationInput)
+						if err != nil {
+							if request.Completion != nil {
+								request.Completion(data.completionOutcome())
+							}
+							return nil, err
+						}
+						retry.Replay = nil
+					} else {
+						retry.BoundInput = nil
+						retry.Replay = &bindly.ReplayBinding{Replay: mutationReplay}
+					}
+					if guard, ok := request.Handler.(rhandler.MutationReplayContext); ok {
+						callContext = guard.MutationReplayContext(callContext, invocation)
+					}
+					return e.Execute(callContext, retry)
+				}
+				result, completionErr = completionFrame.result, nil
+			}
+		}
 		if ownsData && data != nil {
 			completionErr = data.finalizeOutcomes(completionErr)
 		}
@@ -255,6 +300,22 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	if reads != nil {
 		reads.seal()
+	}
+	if recoverer, ok := request.Handler.(rhandler.MutationRecoverer); ok && recoverer.SupportsMutationRecovery() && ownsData {
+		plan, captureErr := request.Input.ReplayPlan()
+		if captureErr != nil {
+			return finish(nil, fmt.Errorf("mutation recovery request replay: %w", captureErr))
+		}
+		if bound {
+			mutationInput, captureErr = captureMutationInput(request.Input, input)
+		} else if request.Replay != nil {
+			mutationReplay = request.Replay.Replay
+		} else {
+			mutationReplay, captureErr = plan.CaptureSources(ctx, providers)
+		}
+		if captureErr != nil {
+			return finish(nil, fmt.Errorf("capture mutation recovery request: %w", captureErr))
+		}
 	}
 	if capturer, ok := request.Handler.(rhandler.InputCapturer); ok {
 		snapshot, err = capturer.CaptureInput(ctx, input)

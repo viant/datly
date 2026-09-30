@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/viant/datly/constant"
 	"path/filepath"
+
+	"github.com/viant/datly/constant"
 
 	"github.com/viant/datly/transcribe/column"
 )
@@ -80,7 +81,7 @@ func (v *Validator) Validate(ctx context.Context) (*ValidationReport, error) {
 	if err = ctx.Err(); err != nil {
 		return report, report.failure(err)
 	}
-	prepared, err := project.prepareEphemeral(base)
+	prepared, err := project.prepare(base)
 	if err != nil {
 		return report, report.failure(err)
 	}

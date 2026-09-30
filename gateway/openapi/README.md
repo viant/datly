@@ -73,7 +73,10 @@ Supported document behavior:
   internal. An output presence holder must also be JSON-hidden in the actual
   encoding contract; otherwise generation fails instead of hiding a wire leak.
 - The compiled output plan's `Wire` authority and default format, with route marshaller precedence.
-  JSON has a typed schema, CSV a text schema, XLS/XLSX a binary schema. HEAD has
+  A declared `FormatSelector()` lists the representable JSON, CSV, XML and XLSX
+  response media types; `header/Accept` is represented by those media types,
+  while a query source remains an input parameter. JSON has a typed schema,
+  CSV/XML a text schema, XLS/XLSX a binary schema. HEAD has
   no response body. The ordinary HTTP success response is 200.
 - API-key security from the route policy actually enforced by gateway/http, and
   bearer JWT security from an explicitly constructed runtime/auth verifier codec.
@@ -87,8 +90,9 @@ Supported document behavior:
   types, and unsupported shapes fail with an error and no partial document.
 
 This is a bounded generator, not complete original OpenAPI feature parity.
-CLI export and automatic endpoint mounting are not wired. `_format` negotiation
-and all alternate response representations, dynamic handler-selected status,
+CLI export and automatic endpoint mounting are not wired. Legacy `_format`
+overrides without a declared selector, tabular JSON's alternate shape under
+the same media type, dynamic handler-selected status,
 response headers, explicit Response objects, and arbitrary error bodies are not
 invented from types. The document describes the default response representation.
 There is no header-text bearer, OAuth, or custom authentication schema inference.

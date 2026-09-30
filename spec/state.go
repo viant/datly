@@ -94,6 +94,7 @@ type Parameter struct {
 	Predicates        []*Predicate           `json:"predicates,omitempty"`
 	Codec             *Codec                 `json:"codec,omitempty"`
 	QuerySelector     *QuerySelectorBinding  `json:"querySelector,omitempty"`
+	FormatSelector    bool                   `json:"formatSelector,omitempty"`
 	WireSchema        *WireSchema            `json:"wireSchema,omitempty"`
 	WireSchemas       map[string]*WireSchema `json:"wireSchemas,omitempty"`
 	Raw               string                 `json:"raw,omitempty"`

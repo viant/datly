@@ -9,6 +9,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/sqlx"
 	xhandler "github.com/viant/xdatly/handler"
 	xpredicate "github.com/viant/xdatly/predicate"
 )
@@ -52,9 +53,17 @@ type compiledPredicate struct {
 	group           int
 	fieldName       string
 	fieldIndex      []int
+	marker          *compiledMarker
 	applyWhenAbsent bool
 	evaluator       *templateEvaluator
 	handlerType     reflect.Type
+}
+
+// compiledMarker is immutable input-presence metadata. Invocation reads only
+// the marker value; it never reparses a struct tag or rediscovers a field.
+type compiledMarker struct {
+	holderIndex []int
+	flagIndex   []int
 }
 
 func Compile(input CompileInput) (*Program, error) {
@@ -76,6 +85,10 @@ func Compile(input CompileInput) (*Program, error) {
 		if !ok {
 			return nil, fmt.Errorf("predicate input field %q was not found on %v", param.Name, inputType)
 		}
+		marker, err := compileMarker(inputType, field.Name)
+		if err != nil {
+			return nil, fmt.Errorf("predicate input field %q: %w", field.Name, err)
+		}
 		for _, definition := range param.Predicates {
 			if definition == nil {
 				continue
@@ -88,6 +101,7 @@ func Compile(input CompileInput) (*Program, error) {
 				group:           definition.Group,
 				fieldName:       field.Name,
 				fieldIndex:      append([]int(nil), field.Index...),
+				marker:          marker,
 				applyWhenAbsent: definition.ApplyWhenAbsent,
 			}
 			var err error
@@ -103,6 +117,25 @@ func Compile(input CompileInput) (*Program, error) {
 		}
 	}
 	return program, nil
+}
+
+func compileMarker(inputType reflect.Type, fieldName string) (*compiledMarker, error) {
+	holder, ok := inputType.FieldByName("Has")
+	if !ok || holder.Tag.Get("setMarker") != "true" {
+		return nil, nil
+	}
+	markerType := derefType(holder.Type)
+	if markerType == nil || markerType.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("setMarker Has must be a struct or pointer to struct")
+	}
+	flag, ok := markerType.FieldByName(fieldName)
+	if !ok || flag.Type.Kind() != reflect.Bool {
+		return nil, fmt.Errorf("setMarker Has needs boolean field %s", fieldName)
+	}
+	return &compiledMarker{
+		holderIndex: append([]int(nil), holder.Index...),
+		flagIndex:   append([]int(nil), flag.Index...),
+	}, nil
 }
 
 func predicateField(inputType reflect.Type, param *spec.Parameter, bindings []bindly.BindingSpec) (reflect.StructField, bool) {
@@ -148,4 +181,23 @@ func resolveHandlerType(lookup LookupType, args []string) (reflect.Type, error) 
 		return nil, fmt.Errorf("%v does not implement predicate.Handler", rType)
 	}
 	return rType, nil
+}
+
+// Criteria evaluates an existing predicate group for a database mutation.
+// It uses exactly the reader's marker-aware activation, custom handler binding,
+// templates, and ordered placeholders; SQLX owns the shared output fragment.
+func (p *Program) Criteria(ctx context.Context, binder xhandler.Binder, group int) (*sqlx.Criteria, error) {
+	result := &sqlx.Criteria{}
+	value, err := p.NewContext(ctx, binder, func(args ...any) { result.Placeholders = append(result.Placeholders, args...) })
+	if err != nil {
+		return nil, err
+	}
+	result.Expression, err = value.(*Context).Expand(group)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(result.Expression) == "" {
+		return nil, nil
+	}
+	return result, nil
 }

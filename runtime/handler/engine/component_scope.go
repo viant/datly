@@ -35,3 +35,11 @@ func componentFromContext(ctx context.Context) componentScope {
 	}
 	return value
 }
+
+// IsImperativeComponent reports whether this handler was invoked as an
+// explicit child call. A child writer may flush its own buffered prefix so
+// later sibling readers observe it inside the root-owned transaction.
+func IsImperativeComponent(ctx context.Context) bool {
+	scope, ok := ctx.Value(componentScopeKey{}).(componentScope)
+	return ok && scope.relation == ComponentImperative
+}

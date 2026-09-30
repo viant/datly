@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/txread"
 	sqlconfig "github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/metadata/info"
 )
@@ -37,6 +39,20 @@ type Connection struct {
 	DB      *dsql.DB
 	Tx      *dsql.Tx
 	Dialect *info.Dialect
+}
+
+func transactionFor(ctx context.Context, db *dsql.DB, configured *dsql.Tx) (*dsql.Tx, error) {
+	active, err := dexec.InvocationTransaction(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	if configured != nil && active != nil && configured != active {
+		return nil, fmt.Errorf("reader transaction conflicts with the invocation database unit")
+	}
+	if configured != nil {
+		return configured, nil
+	}
+	return active, nil
 }
 
 // RegisterConnector binds an authored connector name to its database handle.
@@ -79,11 +95,15 @@ func (c *SQLComponent) Resolve(ctx context.Context, connector string) (Connectio
 		if c.Tx != nil && named.db != defaultDB {
 			return Connection{}, fmt.Errorf("transactional reader connector %s must use the transaction database", connector)
 		}
-		dialect, err := named.resolveDialect(ctx)
+		tx, err := transactionFor(ctx, named.db, c.Tx)
+		if err != nil {
+			return Connection{}, err
+		}
+		dialect, err := named.resolveDialect(ctx, tx)
 		if err != nil {
 			return Connection{}, fmt.Errorf("resolve connector %s dialect: %w", connector, err)
 		}
-		return Connection{DB: named.db, Tx: c.Tx, Dialect: dialect}, nil
+		return Connection{DB: named.db, Tx: tx, Dialect: dialect}, nil
 	}
 	if connector != "" && hasNamed {
 		return Connection{}, fmt.Errorf("sql connector %s is not registered", connector)
@@ -91,14 +111,22 @@ func (c *SQLComponent) Resolve(ctx context.Context, connector string) (Connectio
 	if defaultDB == nil {
 		return Connection{}, fmt.Errorf("sql component db is required")
 	}
-	dialect, err := c.Dialect(ctx)
+	tx, err := transactionFor(ctx, defaultDB, c.Tx)
 	if err != nil {
 		return Connection{}, err
 	}
-	return Connection{DB: defaultDB, Tx: c.Tx, Dialect: dialect}, nil
+	dialect, err := c.dialectFor(ctx, tx)
+	if err != nil {
+		return Connection{}, err
+	}
+	return Connection{DB: defaultDB, Tx: tx, Dialect: dialect}, nil
 }
 
 func (c *SQLComponent) Dialect(ctx context.Context) (*info.Dialect, error) {
+	return c.dialectFor(ctx, c.Tx)
+}
+
+func (c *SQLComponent) dialectFor(ctx context.Context, tx *dsql.Tx) (*info.Dialect, error) {
 	if c == nil || c.DB == nil {
 		return nil, fmt.Errorf("sql component db is required")
 	}
@@ -108,7 +136,16 @@ func (c *SQLComponent) Dialect(ctx context.Context) (*info.Dialect, error) {
 	if dialect != nil {
 		return dialect, nil
 	}
-	dialect, err := sqlconfig.Dialect(ctx, c.DB)
+	release, err := txread.Acquire(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	if tx != nil {
+		dialect, err = sqlconfig.Dialect(ctx, c.DB, tx)
+	} else {
+		dialect, err = sqlconfig.Dialect(ctx, c.DB)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +158,7 @@ func (c *SQLComponent) Dialect(ctx context.Context) (*info.Dialect, error) {
 	return dialect, nil
 }
 
-func (c *connection) resolveDialect(ctx context.Context) (*info.Dialect, error) {
+func (c *connection) resolveDialect(ctx context.Context, tx *dsql.Tx) (*info.Dialect, error) {
 	if c == nil || c.db == nil {
 		return nil, fmt.Errorf("connector db is required")
 	}
@@ -130,7 +167,17 @@ func (c *connection) resolveDialect(ctx context.Context) (*info.Dialect, error) 
 	if c.dialect != nil {
 		return c.dialect, nil
 	}
-	dialect, err := sqlconfig.Dialect(ctx, c.db)
+	release, err := txread.Acquire(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	var dialect *info.Dialect
+	if tx != nil {
+		dialect, err = sqlconfig.Dialect(ctx, c.db, tx)
+	} else {
+		dialect, err = sqlconfig.Dialect(ctx, c.db)
+	}
 	if err != nil {
 		return nil, err
 	}

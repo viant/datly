@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"github.com/viant/datly/transcribe/gobuild"
 	"go/token"
 )
 
@@ -10,6 +11,9 @@ import (
 type ExternalHandler struct {
 	Package string
 	Name    string
+	// Build validates source-authored factories and staged registrations without
+	// requiring their contracts to be linked into the transcription executable.
+	Build *gobuild.Context
 }
 
 func (h *ExternalHandler) Clone() *ExternalHandler {
@@ -17,6 +21,7 @@ func (h *ExternalHandler) Clone() *ExternalHandler {
 		return nil
 	}
 	result := *h
+	result.Build = h.Build.Clone()
 	return &result
 }
 

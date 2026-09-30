@@ -20,6 +20,10 @@ substitute `translate`, lower-level transcription, or manual writer plumbing.
 
 ## Read what the task needs
 
+- For Go field renames, outer projection versus inner SQL aliases, SQLX/JSON
+  naming, CAST/nullability and regeneration, read the
+  [v1 shaping contract](references/product/datly/doc/shaping-contract.md).
+
 - For migrating legacy `handler.Session`/`sess.Db()` writers or direct-SQL
   application mutations to generated Datly 1.0 graphs and hooks, read
   [legacy-to-v1-migration.md](references/product/datly/doc/legacy-to-v1-migration.md).
@@ -33,12 +37,17 @@ substitute `translate`, lower-level transcription, or manual writer plumbing.
 - Use [tags-and-interfaces.md](references/tags-and-interfaces.md) for Go shapes, binding tags, SQL mapping, predicates, validation, and public APIs.
 - For JWT-based authorization, use the [explicit input and predicate pattern](references/tags-and-interfaces.md#jwt-input-and-authorization-predicates); preserve original certificate/public-key verification and do not inject ambient claims.
 - For a typed remote authorization context, read the [auth-context contract](references/product/datly/doc/auth-context.md). Keep verification, dependency binding, outbound headers and SQL predicates explicit; confirm generic provider API availability before naming its syntax.
-- For explicit row deletion and validation-only tokens, read [the mutation marker contract](references/writer-contract.md#explicit-deletion-and-token-validation). Omitted rows never imply deletion; token checks do not make writes atomic.
+- For explicit row deletion and concurrency tokens, read [the mutation marker contract](references/writer-contract.md#explicit-deletion-and-token-validation). Omitted rows never imply deletion. Current v1 token writes use atomic IfMatch; see [mutation predicates](references/product/datly/doc/mutation-predicates.md) for general execution conditions.
+- For affected-row losses, CAS winner adoption and bounded native writer replay, read [mutation recovery](references/product/datly/doc/mutation-recovery.md). Keep recovery decisions in the root lifecycle hook and verify transaction ownership.
 - Read [writer-contract.md](references/writer-contract.md) for this component's behavior and decisions.
 - Adapt [writer-examples.md](references/writer-examples.md); examples are patterns, not authorization to access a live database.
 - For hook-injected message buses, commit-dependent publication or async job requests, read [mutation-messages.md](references/mutation-messages.md).
 - For stable-ID/FK gaps, async, telemetry, YAML docs, static/MCP resources and standalone status, read [availability-and-operations.md](references/availability-and-operations.md). Separate current APIs from pending authoring/integration contracts.
 - Use [acceptance.md](references/acceptance.md) to verify observable application behavior. Framework maintenance is outside this skill.
+
+For per-scope non-identity numbering, read [scoped sequences](references/product/datly/doc/scoped-sequences.md). Keep allocation and collision replay native; provision the MySQL ledger before business transactions.
+
+For opt-in idempotent leaf deletion, read [delete-not-found](references/product/datly/doc/delete-not-found.md). Strict deletion remains the default.
 
 ## Authoring workflow
 
@@ -64,10 +73,13 @@ Go hooks own business rules. Existing linked Go types keep their authority.
 ## Non-obvious rules
 
 - DQL plus Go-shape metadata is the component contract. HTTP method alone does not decide handler policy.
+- Outer direct-column aliases in a named view graph rename Go fields and retain
+  original SQLX mappings. Aliases inside view SQL remain vendor result aliases.
+  Verify actual compiled SQL; do not inject outer field renames into it.
 - Use full Go module/package identity and declared import aliases; create empty lifecycle methods only for explicitly named unresolved types in the generated destination package. Preserve known/imported hooks; foreign missing types and invalid signatures must fail.
 - Has/presence bookkeeping is internal. Keep it out of client JSON, MCP schemas, examples of request bodies, and public error payloads.
 - Internal physical columns still participate in SQL. A logical pseudo field that is not persisted is a different concept.
-- Preserve existing field order, append new fields, and retain authored handlers/hooks. Do not overwrite edited generated output to make regeneration pass.
+- Regenerate shapes from the current DQL and retain separate authored handlers/hooks. Direct edits inside generated files are overwritten and are the editor's responsibility.
 - Use ordinary SQLX mapping and the framework's scoped services through their public surfaces; never advise a parallel raw-map row pipeline.
 - Separate authoring-time developer MCP operations from runtime business MCP tools. Discover actual tool schemas; never invent a server URL, method, connector, or installed capability.
 

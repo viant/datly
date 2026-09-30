@@ -110,8 +110,8 @@ func (c *Catalog) RegisterPackage(origin TypeOrigin, pkg *smodel.Package) error 
 }
 
 // RegisterPackageFiles preserves source ownership in a shared generated package.
-// The file ownership manifest classifies declarations; it never promotes an
-// unrelated authored file to generated authority.
+// Current emitted files and generated source comments classify declarations;
+// unrelated authored files retain package authority.
 func (c *Catalog) RegisterPackageFiles(pkg *smodel.Package, generatedFiles map[string]bool) error {
 	if pkg == nil {
 		return fmt.Errorf("synthetic package is required")

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"sync"
 
+	dexec "github.com/viant/datly/exec"
+
 	"github.com/viant/datly/sql/sequencer"
 	"github.com/viant/datly/sql/validation"
 	"github.com/viant/sqlx/io/delete"
@@ -24,27 +26,28 @@ var (
 )
 
 type Data struct {
-	mu           sync.Mutex
-	executionMu  sync.Mutex
-	db           *sql.DB
-	tx           *sql.Tx
-	externalTx   bool
-	onCommit     func(context.Context)
-	queue        []*dataOperation
-	dialect      *info.Dialect
-	invocation   bool
-	completed    bool
-	failed       error
-	outcome      xhandler.TransactionOutcome
-	outcomeReady bool
-	root         *Data
-	parent       *Data
-	relation     string
-	order        string
-	open         bool
-	markers      []componentMarker
-	bindings     []*Data
-	nextOp       uint64
+	mu              sync.Mutex
+	executionMu     sync.Mutex
+	db              *sql.DB
+	tx              *sql.Tx
+	externalTx      bool
+	onCommit        func(context.Context)
+	queue           []*dataOperation
+	dialect         *info.Dialect
+	invocation      bool
+	completed       bool
+	failed          error
+	outcome         xhandler.TransactionOutcome
+	outcomeReady    bool
+	root            *Data
+	parent          *Data
+	relation        string
+	order           string
+	open            bool
+	markers         []componentMarker
+	bindings        []*Data
+	nextOp          uint64
+	mutationResults []dexec.MutationResult
 
 	insertServices     map[string]*insert.Service
 	updateServices     map[string]*update.Service
@@ -67,6 +70,19 @@ func NewData(db *sql.DB, opts ...Option) *Data {
 		deleteServices:   map[string]*delete.Service{},
 		open:             true,
 	}
+}
+
+// InvocationTransaction exposes the currently active database transaction to
+// Datly's internal reader connector resolution. Callers must never commit or
+// roll it back; the root invocation remains its sole owner.
+func (d *Data) InvocationTransaction() (*sql.DB, *sql.Tx) {
+	if d == nil {
+		return nil, nil
+	}
+	owner := d.owner()
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	return owner.db, owner.tx
 }
 
 func (d *Data) Allocate(ctx context.Context, tableName string, dest any, selector string) error {

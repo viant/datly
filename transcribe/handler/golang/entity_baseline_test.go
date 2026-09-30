@@ -16,6 +16,7 @@ import (
 )
 
 func TestEntityProcessingBaselineSelectedGraph(t *testing.T) {
+	t.Parallel()
 	for _, pointer := range []bool{false, true} {
 		name := "value"
 		prefix := ""

@@ -21,6 +21,7 @@ import (
 )
 
 func TestGeneratedMutationHookPrerequisiteSQLite(t *testing.T) {
+	t.Parallel()
 	const target = "github.com/viant/datly/hookprerequisite/generated"
 	pkg := reflect.TypeOf(model.Row{}).PkgPath()
 	key := semantic.KeyPart{Field: "ID", Source: "id", Type: spec.TypeRef{Name: "int"}}

@@ -42,7 +42,8 @@ zero-argument functions returning `handler.Contract[I,O]`, a supported
 mutation definition or typed handler, optionally with error. Discovery does not
 execute factories. Add/remove linked packages and rebuild; private imported
 types do not expose routes. Preserve the previous executable on
-build failure and report conflicts with edited generated files.
+build failure. Regeneration replaces direct edits inside generated files;
+application customization belongs in separate hooks or linked contracts.
 
 Parent real-TCP acceptance passes custom-build read/mutation endpoints and
 add/remove package rebuilds. Do not present the documentation author's sandbox

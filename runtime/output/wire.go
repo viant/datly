@@ -20,6 +20,13 @@ type WireContract struct {
 	Binary             bool
 }
 
+// JSONWireType is an optional declaration for custom JSON marshalers whose
+// successful wire value has a stable, separately typed shape. OpenAPI uses the
+// declared type instead of treating the marshaler as arbitrary JSON.
+type JSONWireType interface {
+	JSONWireType() reflect.Type
+}
+
 // TransportReady reports the declared SDK response contract, independently of
 // any invocation result. Documentation may supply static HTTP response schemas.
 func (p *Plan) TransportReady() bool {
@@ -41,6 +48,9 @@ func (p *Plan) Wire(format string) (WireContract, error) {
 		format = p.DefaultFormat()
 	}
 	format = strings.ToLower(strings.TrimSpace(format))
+	if format != "json" && p.JSONOnly() {
+		return WireContract{}, fmt.Errorf("custom JSON output does not declare a safe %s representation", format)
+	}
 	contentType, err := ContentType(format)
 	if err != nil {
 		return WireContract{}, err
@@ -60,10 +70,24 @@ func (p *Plan) Wire(format string) (WireContract, error) {
 		if err != nil {
 			return WireContract{}, err
 		}
+		candidate := reflect.New(p.typeOf)
+		if p.typeOf.Kind() == reflect.Pointer {
+			candidate = reflect.New(p.typeOf.Elem())
+		}
+		if declared, ok := candidate.Interface().(JSONWireType); ok {
+			wireType := declared.JSONWireType()
+			if wireType == nil {
+				return WireContract{}, fmt.Errorf("custom JSON wire type is nil")
+			}
+			result.JSON = nil
+			result.Type = wireType
+		}
 	case "csv":
 		if p.rows == nil {
 			return WireContract{}, fmt.Errorf("CSV output requires typed rows")
 		}
+		result.Type = reflect.TypeFor[string]()
+	case "xml":
 		result.Type = reflect.TypeFor[string]()
 	case "xls", "xlsx":
 		result.Type = reflect.TypeFor[string]()

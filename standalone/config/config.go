@@ -12,8 +12,12 @@ import (
 	gateway "github.com/viant/datly/gateway/http"
 	"github.com/viant/datly/gateway/openapi/openapi3"
 	"github.com/viant/datly/mcp/resource"
+	"github.com/viant/datly/runtime/auth"
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/authorization"
+	"github.com/viant/scy/auth/cognito"
+	"github.com/viant/scy/auth/firebase"
+	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
 )
 
@@ -40,6 +44,10 @@ type Config struct {
 	Caches         map[string]*spec.CacheSettings
 	CacheProviders []*CacheProvider
 	JWTValidator   *verifier.Config
+	JwtSigner      *signer.Config
+	Cognito        *cognito.Config
+	Firebase       *firebase.Config
+	JWTClaims      *auth.ClaimPolicy
 	MCP            *MCP
 	RouteURL       string
 	PluginsURL     string
@@ -114,6 +122,9 @@ func (e Endpoint) ShutdownTimeout() time.Duration {
 func (c *Config) Validate() error {
 	if c == nil {
 		return fmt.Errorf("standalone configuration is required")
+	}
+	if c.JWTClaims != nil && c.JWTValidator == nil {
+		return fmt.Errorf("JWTClaims requires JWTValidator")
 	}
 	if (c.GoBootstrap == nil || len(c.GoBootstrap.Packages) == 0) && len(c.StaticContent) == 0 {
 		return fmt.Errorf("GoBootstrap.Packages is required")

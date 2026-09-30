@@ -395,3 +395,17 @@ func TestRefinerTemplateCollectionsSQLite(t *testing.T) {
 		}
 	}
 }
+
+func TestMergeColumnsPreservesAuthoredGroupableTag(t *testing.T) {
+	discovered := true
+	for _, tag := range []string{`groupable:"false"`, `groupable:\"false\"`} {
+		original := &spec.Column{Name: "total", Tag: tag}
+		result := mergeColumns([]*spec.Column{original}, []*spec.Column{{Name: "total", Groupable: &discovered}})
+		if result[0].Groupable == nil || *result[0].Groupable {
+			t.Fatalf("tag=%s merged=%+v", tag, result[0])
+		}
+		if original.Groupable != nil {
+			t.Fatal("authored column was mutated")
+		}
+	}
+}

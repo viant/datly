@@ -28,14 +28,14 @@ func TestHandlerOnlyCaseFormat(t *testing.T) {
 	db := &forbiddenHandlerDB{}
 	discovery := Discovery{BaseDir: root, Include: []string{handlerFixtureModule + "/dql"}, HandlerBindings: []*HandlerBinding{binding}, ColumnRefiner: column.New(db)}
 	before := fixture.Constructions.Load()
-	for _, policy := range []generate.GenerationPolicy{"", "", generate.GenerationPolicyOverwrite} {
+	for range []string{"first", "repeat"} {
 		project, err := discovery.Compile(ctx)
 		require.NoError(t, err)
 		require.Len(t, project.Components, 1)
 		compiled := project.Components[0]
 		require.Equal(t, "lc", compiled.Component.Settings.CaseFormat)
 		require.Empty(t, compiled.Component.Settings.DefaultConnector)
-		result, err := (Generator{Operation: "handler", GenerationPolicy: policy}).Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
+		result, err := (Generator{Operation: "handler"}).Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
 		require.NoError(t, err)
 		require.Equal(t, "lc", result.Result.Plan.Settings.CaseFormat)
 		require.Equal(t, generate.ContractLinked, result.Result.Plan.Output.Ownership)

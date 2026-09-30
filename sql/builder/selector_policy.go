@@ -1,11 +1,13 @@
 package builder
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/exec"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/sqlparser"
@@ -15,6 +17,30 @@ import (
 	xresponse "github.com/viant/xdatly/response"
 	xstate "github.com/viant/xdatly/state"
 )
+
+func applyReportOrdering(ctx context.Context, options *builderOptions) {
+	if options.component == nil || options.view == nil ||
+		!exec.AllowsReportOrdering(ctx, options.component.Key, options.view.Spec.CanonicalName()) {
+		return
+	}
+	options.reportOrderFields = exec.ReportOrderingFields(ctx, options.component.Key, options.view.Spec.CanonicalName())
+	policy := options.selectorPolicy
+	if policy == nil && options.component.RootView != nil {
+		policy = options.component.RootView.Selector
+	}
+	if policy != nil {
+		// The compiled policy is shared by readers and reports. Only this local
+		// copy may open the ordering gate; column restrictions remain intact.
+		local := *policy
+		local.AllowOrderBy = true
+		options.selectorPolicy = &local
+	}
+}
+
+func invalidOrdering(format string, args ...any) error {
+	err := fmt.Errorf(format, args...)
+	return &xresponse.Error{Code: 400, Payload: xresponse.Status{Status: "error", Message: err.Error()}, Cause: err}
+}
 
 func (b *Builder) resolveControls(options *builderOptions, excludePagination bool) (*spec.ViewControls, error) {
 	if options == nil {
@@ -35,7 +61,7 @@ func (b *Builder) resolveControls(options *builderOptions, excludePagination boo
 		}
 		source.sqlText = prepared.sql
 	}
-	resolver := selectorResolver{policy: policy, sqlText: source.sqlText, view: source.view, projection: source.projection}
+	resolver := selectorResolver{policy: policy, sqlText: source.sqlText, view: source.view, projection: source.projection, reportOrderFields: options.reportOrderFields}
 	return resolver.controls(options.controls, options.selector, excludePagination)
 }
 
@@ -66,10 +92,11 @@ func applyMatcherWindow(query *cache.ParmetrizedQuery, controls *spec.ViewContro
 }
 
 type selectorResolver struct {
-	projection []string
-	view       *data.View
-	policy     *spec.Selector
-	sqlText    string
+	reportOrderFields []string
+	projection        []string
+	view              *data.View
+	policy            *spec.Selector
+	sqlText           string
 }
 
 func (r selectorResolver) controls(base *spec.ViewControls, input *xstate.Selector, excludePagination bool) (*spec.ViewControls, error) {
@@ -92,7 +119,7 @@ func (r selectorResolver) controls(base *spec.ViewControls, input *xstate.Select
 	if input != nil {
 		if strings.TrimSpace(input.OrderBy) != "" {
 			if r.policy != nil && !r.policy.AllowOrderBy {
-				return nil, fmt.Errorf("selector order by is not allowed")
+				return nil, invalidOrdering("selector order by is not allowed")
 			}
 			orderBy, err := r.orderBy(input.OrderBy)
 			if err != nil {
@@ -150,7 +177,7 @@ func (r selectorResolver) controls(base *spec.ViewControls, input *xstate.Select
 func (r selectorResolver) orderBy(source string) (string, error) {
 	items, err := r.parseOrder(source)
 	if err != nil {
-		return "", err
+		return "", invalidOrdering("%s", err)
 	}
 
 	sqlText := r.sqlText
@@ -173,30 +200,30 @@ func (r selectorResolver) orderBy(source string) (string, error) {
 		if positional {
 			position, _ := strconv.Atoi(name)
 			if position < 1 || position > len(ordered) {
-				return "", fmt.Errorf("order by position %s is outside source projection", name)
+				return "", invalidOrdering("order by position %s is outside source projection", name)
 			}
 			if !r.orderPermitted(ordered[position-1]) {
-				return "", fmt.Errorf("order by position %s is not allowed", name)
+				return "", invalidOrdering("order by position %s is not allowed", name)
 			}
 		} else {
 			mapped, aliased, err := r.orderAlias(name)
 			if err != nil {
-				return "", err
+				return "", invalidOrdering("%s", err)
 			}
 			var matched *dsql.ProjectionColumn
 			for i := range projected {
 				if projected[i].Matches(mapped) && (!aliased || projected[i].MatchesOutput(mapped)) {
 					if matched != nil {
-						return "", fmt.Errorf("ambiguous order by field %q", name)
+						return "", invalidOrdering("ambiguous order by field %q", name)
 					}
 					matched = &projected[i]
 				}
 			}
 			if matched == nil {
-				return "", fmt.Errorf("order by field %q is not in source projection", name)
+				return "", invalidOrdering("order by field %q is not in source projection", name)
 			}
 			if !r.orderPermitted(*matched) {
-				return "", fmt.Errorf("order by field %q is not allowed", name)
+				return "", invalidOrdering("order by field %q is not allowed", name)
 			}
 			name = matched.OrderExpression()
 			if len(r.projection) > 0 && !sqltext.HasTopLevelClause(r.sqlText, "union") {
@@ -210,7 +237,7 @@ func (r selectorResolver) orderBy(source string) (string, error) {
 				}
 				if !retained {
 					if r.view != nil && r.view.IsGroupable() {
-						return "", fmt.Errorf("order by field %q is not selected in grouped projection", name)
+						return "", invalidOrdering("order by field %q is not selected in grouped projection", name)
 					}
 					name = matched.SourceExpression()
 				}
@@ -225,6 +252,18 @@ func (r selectorResolver) orderBy(source string) (string, error) {
 }
 
 func (r selectorResolver) orderPermitted(column dsql.ProjectionColumn) bool {
+	if r.reportOrderFields != nil {
+		selected := false
+		for _, name := range r.reportOrderFields {
+			if column.Matches(name) {
+				selected = true
+				break
+			}
+		}
+		if !selected {
+			return false
+		}
+	}
 	if r.policy == nil || len(r.policy.Orderable) == 0 && len(r.policy.OrderAliases) == 0 {
 		return true
 	}

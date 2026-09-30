@@ -1,6 +1,8 @@
 package spec
 
 const (
+	ViewControlOnDeleteNotFound     = "delete_not_found"
+	ViewControlMutationPredicate    = "mutation_predicate"
 	ViewControlUseConnector         = "use_connector"
 	ViewControlSetLimit             = "set_limit"
 	ViewControlOrderBy              = "order_by"

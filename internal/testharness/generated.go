@@ -11,6 +11,7 @@ import (
 
 	xmodule "github.com/viant/x/module"
 	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/module"
 )
 
 // GeneratedModule derives fixture replacements from the actual source checkout,
@@ -94,8 +95,13 @@ func (m GeneratedModule) DependencyDir(name string) (string, error) {
 		}
 		return filepath.Clean(location), nil
 	}
-	// Resolve published dependencies through Go's selected graph, without
-	// requiring a sibling checkout or introducing a fixture replacement.
+	// Published dependencies resolve straight from go.mod into the module
+	// cache, the same way Go lays it out, without spawning the go tool.
+	if location, ok := moduleCacheDir(file, name); ok {
+		return location, nil
+	}
+	// Fallback for selections go.mod alone cannot answer (indirect versions,
+	// custom GOFLAGS): ask Go's selected graph.
 	command := exec.Command("go", "list", "-mod=readonly", "-m", "-f", "{{.Dir}}", "--", name)
 	command.Dir = root
 	output, err := command.CombinedOutput()
@@ -107,6 +113,38 @@ func (m GeneratedModule) DependencyDir(name string) (string, error) {
 		return "", fmt.Errorf("dependency %s has no resolved module directory: %q", name, location)
 	}
 	return filepath.Clean(location), nil
+}
+
+// moduleCacheDir derives GOMODCACHE/<escaped path>@<version> for a module
+// required (and not replaced) by the source go.mod.
+func moduleCacheDir(file *modfile.File, name string) (string, bool) {
+	for _, required := range file.Require {
+		if required.Mod.Path != name || required.Mod.Version == "" {
+			continue
+		}
+		escaped, err := module.EscapePath(required.Mod.Path)
+		if err != nil {
+			return "", false
+		}
+		cache := os.Getenv("GOMODCACHE")
+		if cache == "" {
+			gopath := os.Getenv("GOPATH")
+			if gopath == "" {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return "", false
+				}
+				gopath = filepath.Join(home, "go")
+			}
+			cache = filepath.Join(filepath.SplitList(gopath)[0], "pkg", "mod")
+		}
+		location := filepath.Join(cache, escaped+"@"+required.Mod.Version)
+		if info, err := os.Stat(location); err == nil && info.IsDir() {
+			return location, true
+		}
+		return "", false
+	}
+	return "", false
 }
 
 func (m GeneratedModule) Write(t testing.TB, root string) {

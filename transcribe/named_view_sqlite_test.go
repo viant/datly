@@ -22,6 +22,7 @@ import (
 )
 
 func TestNamedViewReaderRestrictionsSQLite(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	h := sqlite.New(t)
 	schema := []string{

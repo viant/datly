@@ -166,7 +166,7 @@ Require evidence that an explicit zero identity is preserved, missing identity i
 
 For DQL stored in a DB or mutable resource store, stage the new DQL, shapes, handlers, resources and exposure as one generation. Validate before activation. Use an atomic revision-checked replacement; failed staging leaves the old generation active. In-flight requests must remain on one coherent generation. Never replace only the type name while old components still reference incompatible fields.
 
-Persisted shapes retain existing field order and append new fields. Preserve authored hooks/handlers and decline to overwrite edited generated files. The tool should report conflicts, not silently discard edits.
+Persisted shapes follow the current DQL. Regeneration overwrites direct edits inside generated files. Preserve separate application hooks/handlers and explicit linked Go contracts.
 
 ## Side effects and retries
 

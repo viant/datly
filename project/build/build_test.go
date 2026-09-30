@@ -33,7 +33,7 @@ func TestInitializedBinarySQLiteRefresh(t *testing.T) {
 	}
 	(testharness.GeneratedModule{Path: "example.com/buildapp"}).Write(t, app)
 	(testharness.GeneratedModule{Path: "example.com/buildmodel"}).Write(t, model)
-	for _, pair := range [][2]string{{"testdata/app/records", filepath.Join(app, "records")}, {"testdata/app/hooks", filepath.Join(app, "hooks")}, {"testdata/app/datlylink", filepath.Join(app, "internal/datlylink")}, {"testdata/app/models", model}} {
+	for _, pair := range [][2]string{{"testdata/app/records", filepath.Join(app, "records")}, {"testdata/app/hooks", filepath.Join(app, "hooks")}, {"testdata/app/dependencylink", filepath.Join(app, "internal/dependencylink")}, {"testdata/app/models", model}} {
 		if err := os.CopyFS(pair[1], os.DirFS(pair[0])); err != nil {
 			t.Fatal(err)
 		}
@@ -118,12 +118,12 @@ func TestInitializedBinarySQLiteRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	extra := filepath.Join(extraDir, "extra.go")
-	added := "//go:build extra\n\npackage extra\nimport (\"reflect\"; xdatly \"github.com/viant/xdatly\"; records \"example.com/buildapp/records\")\ntype Extra struct{ Read xdatly.Component[records.Input,records.Output] `component:\"Extra,path=/extra/{id},method=GET,connector=main,view=records\"` }\nfunc ExtraDatlyType() reflect.Type{return reflect.TypeOf((*Extra)(nil)).Elem()}\nvar ExtraDatlyLinkedType=ExtraDatlyType()\n"
+	added := "//go:build extra\n\npackage extra\nimport (\"reflect\"; xdatly \"github.com/viant/xdatly\"; records \"example.com/buildapp/records\")\ntype Extra struct{ Read xdatly.Component[records.Input,records.Output] `component:\"Extra,path=/extra/{id},method=GET,connector=main,view=records\"` }\nvar ComponentType = reflect.TypeOf((*Extra)(nil)).Elem()\n"
 	if err = os.WriteFile(extra, []byte(added), 0644); err != nil {
 		t.Fatal(err)
 	}
-	extraLink := filepath.Join(app, "internal/datlylink/extra.go")
-	linked := "//go:build extra\n\npackage datlylink\nimport _ \"example.com/buildapp/extra\"\nfunc init(){}\n"
+	extraLink := filepath.Join(app, "internal/dependencylink/extra.go")
+	linked := "//go:build extra\n\npackage dependencylink\nimport _ \"example.com/buildapp/extra\"\n"
 	if err = os.WriteFile(extraLink, []byte(linked), 0644); err != nil {
 		t.Fatal(err)
 	}

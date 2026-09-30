@@ -19,6 +19,7 @@ import (
 )
 
 func TestLifecycleTargetRejectsReaderBeforeWrites(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	if err := db.ExecStatements(ctx, "CREATE TABLE ORDERS(ID INTEGER PRIMARY KEY)"); err != nil {

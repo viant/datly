@@ -135,7 +135,7 @@ func (s *Service) editSetting(source string, mutation *SettingMutation) (string,
 	enableCube := !mutation.Remove && (strings.EqualFold(mutation.Name, "cube") || strings.EqualFold(mutation.Name, "report"))
 	enableCompose := !mutation.Remove && strings.EqualFold(mutation.Name, "cubeCompose") && firstBoolean(mutation.Args)
 	if enableCube || enableCompose {
-		if err := validateSimpleGroupedMain(source); err != nil {
+		if err := s.validateSimpleGroupedMain(source); err != nil {
 			return "", err
 		}
 	}

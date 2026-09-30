@@ -4,12 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/viant/datly/constant"
 	"io"
+
+	"github.com/viant/datly/constant"
 
 	"github.com/viant/datly/transcribe"
 	"github.com/viant/datly/transcribe/column"
-	gen "github.com/viant/datly/transcribe/generate"
 )
 
 func generationCommand(ctx context.Context, args []string, stdout, stderr io.Writer, handlers ...*transcribe.HandlerBinding) int {
@@ -41,7 +41,6 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 	directory := flags.String("dir", ".", "project root; DQL/package metadata controls artifact destinations")
 	operation := &operationValue
 	language := flags.String("lang", "go", "handler language: go or velty")
-	policy := flags.String("generation-policy", "merge", "persistent artifact reconciliation policy: merge or overwrite")
 	var schema schemaOptions
 	schema.flags(flags)
 	if err := flags.Parse(arguments); err != nil {
@@ -56,7 +55,7 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 	}
 	if *operation == "handler" {
 		if *language != "go" || schema.enabled || schema.driver != "" || schema.dsn != "" {
-			fmt.Fprintln(stderr, "handler registration uses compiled Go bindings, not database column discovery or Velty")
+			fmt.Fprintln(stderr, "handler registration uses Go factories, not database column discovery or Velty")
 			return 2
 		}
 	} else {
@@ -95,7 +94,7 @@ func generationCommand(ctx context.Context, args []string, stdout, stderr io.Wri
 		fmt.Fprintf(stderr, "transcribe requires exactly one component in the selected source package; found %d\n", len(project.Components))
 		return 1
 	}
-	generated, err := (transcribe.Generator{Operation: *operation, Language: transcribe.HandlerTarget(*language), GenerationPolicy: gen.GenerationPolicy(*policy)}).Generate(ctx, transcribe.GenerationRequest{Compiled: project.Components[0], Destination: resolvedDirectory})
+	generated, err := (transcribe.Generator{Operation: *operation, Language: transcribe.HandlerTarget(*language)}).Generate(ctx, transcribe.GenerationRequest{Compiled: project.Components[0], Destination: resolvedDirectory})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

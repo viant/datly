@@ -19,6 +19,7 @@ import (
 // (impl/149 and impl/152). This acceptance crosses discovery, persisted Go and
 // resource generation, compiled holder reload, and the public HTTP/MCP owners.
 func TestGeneratedWithURIPublicReloadSQLite(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, uri, visibility string }{
 		{"relative", "/{id}", ""},
 		{"absolute", "/records/{id}", ""},

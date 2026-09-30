@@ -3,13 +3,17 @@ package tag
 import (
 	"fmt"
 	"strings"
+
+	"github.com/viant/datly/spec"
+	tagly "github.com/viant/tagly/tags"
 )
 
 const QuerySelectorName = "querySelector"
 
 // QuerySelector identifies the view property bound to one selector input field.
 type QuerySelector struct {
-	View string
+	View     string
+	Property spec.SelectorProperty
 }
 
 // Value formats query-selector metadata using ParseQuerySelector's grammar.
@@ -18,7 +22,15 @@ func (q QuerySelector) Value() (string, error) {
 	if view == "" {
 		return "", fmt.Errorf("query selector view is required")
 	}
-	return "view=" + encodeScalarValue(view), nil
+	result := "view=" + encodeScalarValue(view)
+	if q.Property != "" {
+		property, ok := spec.SelectorPropertyForParam(string(q.Property))
+		if !ok {
+			return "", fmt.Errorf("unsupported query selector property %q", q.Property)
+		}
+		result += ",property=" + string(property)
+	}
+	return result, nil
 }
 
 // ParseQuerySelector accepts querySelector:"users" and
@@ -28,19 +40,47 @@ func ParseQuerySelector(value string) (*QuerySelector, error) {
 	if value == "" {
 		return nil, fmt.Errorf("query selector view is required")
 	}
-	if key, mapped, ok := strings.Cut(value, "="); ok {
-		if !strings.EqualFold(strings.TrimSpace(key), "view") {
-			return nil, fmt.Errorf("unsupported query selector option %q", key)
+	if !strings.Contains(value, "=") {
+		view, err := decodeScalarValue(value)
+		if err != nil {
+			return nil, err
 		}
-		value = strings.TrimSpace(mapped)
+		if view == "" {
+			return nil, fmt.Errorf("query selector view is required")
+		}
+		return &QuerySelector{View: view}, nil
 	}
-	var err error
-	value, err = decodeScalarValue(value)
+	result := &QuerySelector{}
+	seen := map[string]bool{}
+	err := tagly.Values(value).MatchRawPairs(func(key, value string) error {
+		key = strings.ToLower(strings.TrimSpace(key))
+		if seen[key] {
+			return fmt.Errorf("duplicate query selector option %q", key)
+		}
+		seen[key] = true
+		decoded, err := decodeScalarValue(strings.TrimSpace(value))
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "view":
+			result.View = decoded
+		case "property":
+			property, ok := spec.SelectorPropertyForParam(decoded)
+			if !ok {
+				return fmt.Errorf("unsupported query selector property %q", decoded)
+			}
+			result.Property = property
+		default:
+			return fmt.Errorf("unsupported query selector option %q", key)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if value == "" {
+	if result.View == "" {
 		return nil, fmt.Errorf("query selector view is required")
 	}
-	return &QuerySelector{View: value}, nil
+	return result, nil
 }

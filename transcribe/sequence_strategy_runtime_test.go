@@ -14,6 +14,7 @@ import (
 )
 
 func TestSequenceStrategyGeneratedRuntimeSQLite(t *testing.T) {
+	t.Parallel()
 	for _, strategy := range []string{"", "transient", "reservation"} {
 		t.Run("strategy="+strategy, func(t *testing.T) {
 			ctx := context.Background()

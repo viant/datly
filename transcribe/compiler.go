@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/viant/datly/bootstrap"
 	routecompiler "github.com/viant/datly/bootstrap/routes"
 	"path"
 	"strings"
@@ -70,6 +71,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if header, body, err := dql.ParseHandlerSource(source.Text); err != nil {
 		return nil, err
 	} else if header != nil {
+		if header.Factory != "" {
+			return c.compileSourceHandler(ctx, source, header, body)
+		}
 		return c.compileHandler(source, header, body)
 	}
 	prepared := dql.PrepareSource(source.Text)
@@ -136,7 +140,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
 	}
 	compiledTypeContext := compileTypeContext(source, component.TypeContext)
-	if err = (readerpredicate.DefinitionCompiler{Context: compiledTypeContext}).Compile(component); err != nil {
+	if err = (readerpredicate.DefinitionCompiler{Context: compiledTypeContext, Catalog: source.Types, RequireAvailable: true}).Compile(component); err != nil {
 		return nil, err
 	}
 	var typeResolver *typecatalog.Resolver
@@ -201,6 +205,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if err := resolveQuerySelectorViews(component); err != nil {
 		return nil, err
 	}
+	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
+		return nil, err
+	}
 	var declaredViews map[string]*spec.View
 	if declarations != nil {
 		declaredViews = declarations.viewsByParam
@@ -211,6 +218,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	}
 	applySourceDefaults(component, source)
 	if source.ColumnRefiner != nil {
+		columnCompilation := source.ColumnRefiner.BeginCompilation()
 		templateInput, compileErr := (&discoveryInputCompiler{
 			component: component, declarations: declarations.generation,
 			viewBindings: gen.ViewBindings(viewBindings), resolver: typeResolver, source: source,
@@ -218,7 +226,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		if compileErr != nil {
 			return nil, compileErr
 		}
-		if err = source.ColumnRefiner.RefineRoot(ctx, component, source.Resources, templateInput); err != nil {
+		if err = columnCompilation.RefineRoot(ctx, component, source.Resources, templateInput); err != nil {
 			return nil, err
 		}
 		templateInput, compileErr = (&discoveryInputCompiler{
@@ -228,10 +236,13 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		if compileErr != nil {
 			return nil, compileErr
 		}
-		if err = source.ColumnRefiner.RefineViews(ctx, component, source.Resources, templateInput); err != nil {
+		if err = columnCompilation.RefineViews(ctx, component, source.Resources, templateInput); err != nil {
 			return nil, err
 		}
 	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources); err != nil {
+		return nil, err
+	}
+	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
 		return nil, err
 	}
 	enrichDescription(ctx, component, source.Docs)

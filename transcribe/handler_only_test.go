@@ -105,7 +105,7 @@ func TestHandlerOnlyDiscovery(t *testing.T) {
 		require.Len(t, project.Components, 1)
 		compiled := project.Components[0]
 		require.Equal(t, "explicit", compiled.Component.Settings.DefaultConnector)
-		_, err = (Generator{Operation: "handler", GenerationPolicy: generate.GenerationPolicyOverwrite}).Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
+		_, err = (Generator{Operation: "handler"}).Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
 		require.NoError(t, err)
 	}
 	require.Zero(t, db.calls)
@@ -140,8 +140,8 @@ func TestHandlerOnlyGeneration(t *testing.T) {
 	(testharness.GeneratedModule{Path: handlerFixtureModule}).Write(t, root)
 	source := handlerSource(t)
 	before := fixture.Constructions.Load()
-	for _, policy := range []generate.GenerationPolicy{"", "", generate.GenerationPolicyOverwrite} {
-		result, err := (Generator{Operation: "handler", GenerationPolicy: policy}).Generate(ctx, GenerationRequest{Source: source, Destination: root})
+	for range []string{"first", "repeat"} {
+		result, err := (Generator{Operation: "handler"}).Generate(ctx, GenerationRequest{Source: source, Destination: root})
 		require.NoError(t, err)
 		require.Equal(t, generate.ContractLinked, result.Result.Plan.Input.Ownership)
 		require.Equal(t, generate.ContractLinked, result.Result.Plan.Output.Ownership)
@@ -170,7 +170,7 @@ func TestHandlerOnlyFailureDoesNotPublish(t *testing.T) {
 	(testharness.GeneratedModule{Path: handlerFixtureModule}).Write(t, root)
 	source := handlerSource(t)
 	source.Text += "\n#setting($_ = $case_format('lc'))"
-	g := Generator{Operation: "handler", GenerationPolicy: generate.GenerationPolicyOverwrite}
+	g := Generator{Operation: "handler"}
 	_, err := g.Generate(ctx, GenerationRequest{Source: source, Destination: root})
 	require.NoError(t, err)
 	snapshot := func(directory string) map[string]string {
@@ -224,13 +224,15 @@ func TestHandlerOnlyFailureDoesNotPublish(t *testing.T) {
 	for _, entry := range entries {
 		require.False(t, entry.IsDir(), entry.Name())
 	}
-	// An edited owned file remains protected even under overwrite policy.
+	// A direct edit inside the generated router is replaced on regeneration.
 	routerPath := filepath.Join(root, "registration", "router.go")
 	router, err := os.ReadFile(routerPath)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(routerPath, append(router, []byte("\n// handwritten edit\n")...), 0600))
-	edited := snapshot(root)
 	_, err = g.Generate(ctx, GenerationRequest{Source: source, Destination: root})
-	require.Error(t, err)
-	require.Equal(t, edited, snapshot(root))
+	require.NoError(t, err)
+	restored, err := os.ReadFile(routerPath)
+	require.NoError(t, err)
+	require.Equal(t, router, restored)
+
 }

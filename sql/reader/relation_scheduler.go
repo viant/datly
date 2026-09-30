@@ -3,6 +3,8 @@ package reader
 import (
 	"context"
 	"sync"
+
+	"github.com/viant/datly/exec"
 )
 
 const defaultRelationFetchConcurrency = 4
@@ -51,7 +53,7 @@ func (s *relationScheduler) Run(work []relationWork) error {
 	for index := range work {
 		item := work[index]
 		if s.ctx.Err() != nil {
-			item.releaseSkipped()
+			s.execute(item)
 			continue
 		}
 		if s.tryAcquire() {
@@ -70,6 +72,15 @@ func (s *relationScheduler) Run(work []relationWork) error {
 }
 
 func (s *relationScheduler) execute(work relationWork) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			s.fail(exec.NewPanicError("relation worker", recovered))
+		}
+	}()
+	if s.ctx.Err() != nil {
+		work.releaseSkipped()
+		return
+	}
 	if work.run == nil {
 		return
 	}

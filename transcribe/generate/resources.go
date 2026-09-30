@@ -3,11 +3,12 @@ package generate
 import (
 	"context"
 	"fmt"
-	docs "github.com/viant/datly/documentation"
 	"io/fs"
 	"sort"
 	"strconv"
 	"strings"
+
+	docs "github.com/viant/datly/documentation"
 
 	"golang.org/x/mod/module"
 
@@ -25,10 +26,6 @@ type ResourcePlan struct {
 	Files       []EmittedFile
 	sourceText  string
 }
-
-// ResourceManifest is persisted beside generated package ownership metadata.
-// Paths are relative to the generated package directory.
-type ResourceManifest = packageasset.Resources
 
 func (r *ResourcePlan) retained(file string) bool {
 	if r == nil || r.sourceText == "" {

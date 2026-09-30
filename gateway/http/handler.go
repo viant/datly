@@ -121,6 +121,29 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 			return
 		}
 	}
+	// Reject an unsupported representation before executing a reader or writer.
+	// In particular, a JSON-only public projection must not be bypassed by
+	// requesting CSV/XML/XLSX after a mutation has already been committed.
+	contract, formatErr := h.runtime.ResolveOutputByRoute(req.Context(), req.Method, escapedPath)
+	if formatErr != nil {
+		h.writeOutputError(writer, formatErr)
+		return
+	}
+	if !contract.TransportReady() {
+		if source, ok := contract.FormatSelector(); ok && source.Kind == "header" {
+			writer.Header().Add("Vary", "Accept")
+		}
+		format, selectedErr := h.outputFormatWithDefault(req, contract)
+		if selectedErr == nil && format != "json" && format != "tabular" {
+			_, selectedErr = contract.Wire(format)
+		}
+		if selectedErr != nil {
+			code := xresponse.ErrorStatusCode(selectedErr, stdhttp.StatusNotAcceptable)
+			message := stdhttp.StatusText(code)
+			writeJSON(writer, code, xresponse.Status{Status: "error", Message: message, Error: message})
+			return
+		}
+	}
 	started := time.Now()
 	ctx := context.WithValue(req.Context(), xexec.ContextKey, xexec.NewContext(req.Method, req.RequestURI, req.Header, h.version))
 	ctx = dexec.CaptureOutputSelection(ctx)

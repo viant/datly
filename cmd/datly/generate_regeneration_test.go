@@ -81,17 +81,14 @@ func TestGenExecutableNamedGraphRegeneration(t *testing.T) {
 				return result
 			}
 			args := []string{"transcribe", "patch", "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module + "/source"}
-			run := func(t *testing.T, failure bool) {
+			run := func(t *testing.T) {
 				t.Helper()
 				output, err := exec.CommandContext(ctx, binary, args...).CombinedOutput()
-				if failure {
-					if err == nil || (!strings.Contains(string(output), "customized type or tag") && !strings.Contains(string(output), "explicit migration required")) {
-						t.Fatalf("expected source conflict: %v\n%s", err, output)
-					}
-				} else if err != nil || !strings.Contains(string(output), "Generated go patch") {
+				if err != nil || !strings.Contains(string(output), "Generated go patch") {
 					t.Fatalf("gen: %v\n%s", err, output)
 				}
 			}
+
 			annotate := func(annotations string) string {
 				if annotations == "" {
 					return base
@@ -103,7 +100,7 @@ func TestGenExecutableNamedGraphRegeneration(t *testing.T) {
 			}
 			base = strings.Replace(base, "kind.*", "kind.*, lifecycle_type(orders,'OrderRules')", 1)
 			write(sourcePath, base)
-			run(t, false)
+			run(t)
 			hookPath := filepath.Join(root, "api/orders/lifecycle.go")
 			hooks := strings.Replace(read(hookPath), "return nil", "// authored lifecycle\n\tlifecycleCalls++\n\treturn nil", 1) + "\nvar lifecycleCalls int\n"
 			write(hookPath, hooks)
@@ -141,7 +138,7 @@ func TestAuthoredLifecycle(t *testing.T) {
 						dql = strings.Replace(dql, "SELECT o.* FROM ORDERS", "SELECT o.ID, o.KIND_ID, o.START, o.END FROM ORDERS", 1)
 					}
 					write(sourcePath, dql)
-					run(t, false)
+					run(t)
 					parsed, err := (xshape.SourceParser{}).ParseFile(shapePath)
 					if err != nil {
 						t.Fatal(err)
@@ -197,7 +194,7 @@ func TestAuthoredLifecycle(t *testing.T) {
 						t.Fatal("authored lifecycle changed")
 					}
 					before := snapshot()
-					run(t, false)
+					run(t)
 					if !reflect.DeepEqual(before, snapshot()) {
 						t.Fatal("identical gen changed project bytes")
 					}
@@ -210,24 +207,23 @@ func TestAuthoredLifecycle(t *testing.T) {
 			}
 			// Restoring the DQL column is a generated addition, never a manual fix.
 			write(sourcePath, base)
-			run(t, false)
+			run(t)
 			clean := read(shapePath)
 			for _, edit := range []struct{ name, old, next, annotations string }{
 				{"tag", `sqlx:"START,required=true"`, `sqlx:"START,required=true" custom:"edited"`, invariant("Window")},
 				{"tag equals proposal", `sqlx:"START,required=true"`, `invariant:"Window" sqlx:"START,required=true"`, invariant("Window")},
 				{"type before cast", "Name *string", "Name *int", "CAST(orders.NAME AS string)"},
 			} {
-				t.Run("conflict/"+edit.name, func(t *testing.T) {
+				t.Run("overwrite/"+edit.name, func(t *testing.T) {
 					changed := strings.Replace(clean, edit.old, edit.next, 1)
 					if changed == clean {
 						t.Fatalf("missing edit target %q", edit.old)
 					}
-					write(shapePath, changed)
+					write(shapePath, changed+"\n// direct generated edit\n")
 					write(sourcePath, annotate(edit.annotations))
-					before := snapshot()
-					run(t, true)
-					if !reflect.DeepEqual(before, snapshot()) {
-						t.Fatal("conflicting gen partially wrote project")
+					run(t)
+					if strings.Contains(read(shapePath), "direct generated edit") {
+						t.Fatal("generated edit retained")
 					}
 				})
 			}

@@ -61,6 +61,11 @@ func unwrapGroupedProjectionWrapper(sqlText string, selected []string) (string, 
 		if item == nil || strings.TrimSpace(item.Alias) != "" {
 			return sqlText, selected
 		}
+		// A canonical compiler wrapper can project an unqualified star.
+		// It is transparent over this single grouped derived source.
+		if _, star := item.Expr.(*expr.Star); star {
+			continue
+		}
 		itemName := sqlparser.Stringify(item.Expr)
 		parts, err := sqlparser.TableIdentifierParts(itemName)
 		if err != nil || len(parts) != 2 || !strings.EqualFold(parts[0], alias) {

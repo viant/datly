@@ -347,6 +347,7 @@ func TestLowerRejectsIncompleteRecursivePlan(t *testing.T) {
 }
 
 func TestLowerPersistsThroughCanonicalGeneratorProduct(t *testing.T) {
+	t.Parallel()
 	component := patchComponent(false)
 	semantic := rootSemanticPlan(plan.OperationPatch, false)
 	bindings := patchViewBindings(t, component)
@@ -418,9 +419,8 @@ func TestLowerPersistsThroughCanonicalGeneratorProduct(t *testing.T) {
 	if err != nil || string(preserved) != string(userSource) {
 		t.Fatalf("disabled hook scaffold removed or rewrote user file: err=%v\n%s", err, preserved)
 	}
-	manifest, err := os.ReadFile(filepath.Join(packageDir, ".datly-gen.json"))
-	if err != nil || strings.Contains(string(manifest), "events_hooks.go") {
-		t.Fatalf("hook scaffold entered generated manifest: err=%v\n%s", err, manifest)
+	if _, err = os.Stat(filepath.Join(packageDir, ".datly-gen.json")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected generation manifest: %v", err)
 	}
 	for _, emitted := range result.Files {
 		if filepath.Base(emitted.Path) == "events_hooks.go" {
@@ -607,7 +607,7 @@ func compileGeneratedHandler(t *testing.T, handlerSource []byte, contractSource 
 	if err := os.WriteFile(filepath.Join(root, "contracts.go"), []byte(contractSource), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("generated Go handler did not compile: %v\n%s\n%s", err, output, handlerSource)

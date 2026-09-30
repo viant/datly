@@ -44,6 +44,22 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		if options.formatSelector {
+			if options.querySelector != nil {
+				return nil, nil, nil, fmt.Errorf("parameter %s cannot be both an output format and view query selector", holder)
+			}
+			source := strings.ToLower(strings.TrimSpace(kind))
+			if !(source == "query" && strings.TrimSpace(location) != "") && !(source == "header" && strings.EqualFold(strings.TrimSpace(location), "Accept")) {
+				return nil, nil, nil, fmt.Errorf("parameter %s FormatSelector requires a query source or header/Accept", holder)
+			}
+			if !strings.EqualFold(strings.TrimSpace(inputType), "string") {
+				return nil, nil, nil, fmt.Errorf("parameter %s FormatSelector requires a string type", holder)
+			}
+			if options.required == nil {
+				optional := false
+				options.required = &optional
+			}
+		}
 		declarationSQL := options.declarationSQL
 		if implicit && declarationSQL == "" {
 			if declarationKind == spec.DeclarationKindDefine {
@@ -122,6 +138,7 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 			Predicates:      options.predicates,
 			Codec:           options.codec,
 			QuerySelector:   options.querySelector,
+			FormatSelector:  options.formatSelector,
 			Raw:             strings.TrimSpace(block.body),
 		}
 		key := param.Identity()

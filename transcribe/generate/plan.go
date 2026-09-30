@@ -11,12 +11,10 @@ import (
 )
 
 type Plan struct {
+	handlerGoFiles []string
 	// Retain source dispatch requirements across intermediate shape planning.
 	lifecycleTargetError error
 	Generation           *spec.GenerationSettings
-	OwnerIdentity        string
-	ComponentPackage     string
-	Destinations         map[string]string
 	Aliases              []TypeAlias
 	Package              string
 	GoPackage            string
@@ -235,7 +233,6 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 
 	plan := &Plan{
 		ComponentName: name, Generation: generation.Clone(),
-		OwnerIdentity: component.Key.String(), ComponentPackage: r.input.TargetPackage,
 		Package: r.input.TargetPackage, GoPackage: r.input.PackageName, ProjectRoot: r.input.ProjectRoot,
 		Documentation: component.Documentation.Clone(),
 		Description:   strings.TrimSpace(component.Description),

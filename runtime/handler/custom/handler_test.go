@@ -148,4 +148,10 @@ func TestHandlerStaticBindingRejectsRequestScopeEvenWithProvider(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "request-scoped") || contract.Token != "" {
 		t.Fatalf("request-scoped handler binding = %q, %v", contract.Token, err)
 	}
+	second := handler.(interface {
+		BindStatic(context.Context, *bindly.Injector) error
+	}).BindStatic(context.Background(), injector)
+	if second != err {
+		t.Fatalf("static binding validation was reparsed: first=%p second=%p", err, second)
+	}
 }

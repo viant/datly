@@ -117,12 +117,23 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if err = (readerpredicate.DefinitionCompiler{Context: typeContext}).Compile(component); err != nil {
 		return nil, err
 	}
+	c.input.Types, err = linkPredicateTypes(c.input.Types, component, typeContext)
+	if err != nil {
+		return nil, err
+	}
 	input.Component = component
 	effective, err := input.Const.For(component)
 	if err != nil {
 		return nil, err
 	}
+	if _, err = NormalizeCodecReferences(component, typeContext); err != nil {
+		return nil, err
+	}
 	factory := newCodecFactory(input.CodecFactory)
+	factory.lookup, err = c.codecTypeLookup(component, typeContext)
+	if err != nil {
+		return nil, err
+	}
 	compiledInput, err := handlercompiler.New(handlercompiler.Input{
 		Component: input.Component, InputType: input.InputType,
 		CodecFactory: factory, Resources: effective.Resources(input.Resources), TypeLookup: c.lookupType,

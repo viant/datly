@@ -16,10 +16,8 @@ type Component struct {
 	Write xdatly.Component[hooks.Input, hooks.Output] `component:"Write,path=/records,method=POST,connector=main,handler=hooks.NewWrite"`
 }
 
-func RecordsDatlyType() reflect.Type { return reflect.TypeOf((*Component)(nil)).Elem() }
-
 var RecordsDatly = new(Component)
-var RecordsDatlyLinkedType = RecordsDatlyType()
+var ComponentType = reflect.TypeOf((*Component)(nil)).Elem()
 
 type Input struct {
 	ID int `parameter:"ID,kind=path,in=id,required"`
@@ -29,9 +27,11 @@ type Output struct {
 }
 
 //go:embed queries/*.sql
-var Assets embed.FS
+var DatlyResources embed.FS
 
-func (Component) EmbedFS() *embed.FS { return &Assets }
+const DatlyResourceNamespace = "build_records"
+
+func (Component) EmbedFS() *embed.FS { return &DatlyResources }
 
 func (Component) EmbedNamespace() string { return "build_records" }
 

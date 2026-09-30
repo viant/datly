@@ -54,6 +54,97 @@ func TestEngineDataScopeDoesNotLoseOpenError(t *testing.T) {
 	}
 }
 
+func TestEngineImperativeReaderSeesWriterInRootTransaction(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		rollback bool
+	}{
+		{name: "commit"}, {name: "rollback", rollback: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			h := testharness.NewSQLiteHarness(t)
+			ctx := context.Background()
+			if err := h.ExecStatements(ctx, `CREATE TABLE audit (id INTEGER PRIMARY KEY, name TEXT)`); err != nil {
+				t.Fatal(err)
+			}
+			connector := &dsql.SQLComponent{DB: h.DB}
+			if err := connector.RegisterConnector("main", h.DB); err != nil {
+				t.Fatal(err)
+			}
+			source := sqldml.Source{DB: h.DB}
+			capabilities := rhandler.InvocationCapabilities{Connector: connector}
+			type input struct{}
+			child := func(ctx context.Context, handler rhandler.Handler) error {
+				_, err := New().Execute(PrepareComponent(ctx, ComponentImperative, ""), Request{
+					Input: testRouteInput(t, reflect.TypeOf(input{})), DataSource: source,
+					Capabilities: capabilities, Handler: handler,
+				})
+				return err
+			}
+			abort := errors.New("abort root")
+			_, err := New().Execute(ctx, Request{
+				Input: testRouteInput(t, reflect.TypeOf(input{})), DataSource: source,
+				Capabilities: capabilities,
+				Handler: rhandler.HandlerFunc(func(ctx context.Context, _ rhandler.Invocation) (any, error) {
+					if err := child(ctx, rhandler.HandlerFunc(func(ctx context.Context, invocation rhandler.Invocation) (any, error) {
+						value, found, err := invocation.Binder.Lookup(ctx, xhandler.DMLKey)
+						if err != nil || !found {
+							return nil, fmt.Errorf("writer DML unavailable: %v", err)
+						}
+						if err := value.(xhandler.DML).Execute(`INSERT INTO audit(id,name) VALUES (?,?)`, 1, "child"); err != nil {
+							return nil, err
+						}
+						value, found, err = invocation.Binder.Lookup(ctx, xhandler.FlusherKey)
+						if err != nil || !found {
+							return nil, fmt.Errorf("writer flusher unavailable: %v", err)
+						}
+						return nil, value.(xhandler.Flusher).Flush(ctx, "")
+					})); err != nil {
+						return nil, err
+					}
+					if err := child(ctx, rhandler.HandlerFunc(func(ctx context.Context, _ rhandler.Invocation) (any, error) {
+						connection, err := connector.Resolve(ctx, "main")
+						if err != nil {
+							return nil, err
+						}
+						if connection.Tx == nil {
+							return nil, errors.New("reader did not join the root transaction")
+						}
+						var name string
+						if err := connection.Tx.QueryRowContext(ctx, `SELECT name FROM audit WHERE id=1`).Scan(&name); err != nil {
+							return nil, err
+						}
+						if name != "child" {
+							return nil, fmt.Errorf("reader saw %q", name)
+						}
+						return nil, nil
+					})); err != nil {
+						return nil, err
+					}
+					if testCase.rollback {
+						return nil, abort
+					}
+					return nil, nil
+				}),
+			})
+			if testCase.rollback && !errors.Is(err, abort) || !testCase.rollback && err != nil {
+				t.Fatalf("root error = %v", err)
+			}
+			var count int
+			if err := h.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit`).Scan(&count); err != nil {
+				t.Fatal(err)
+			}
+			want := 1
+			if testCase.rollback {
+				want = 0
+			}
+			if count != want {
+				t.Fatalf("committed rows = %d, want %d", count, want)
+			}
+		})
+	}
+}
+
 func TestEngineDataScopeIsLazyAndSharedByCustomHandlerCapabilities(t *testing.T) {
 	h := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()

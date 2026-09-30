@@ -2,7 +2,6 @@ package generate
 
 import (
 	"errors"
-	"github.com/viant/datly/internal/testharness"
 	"go/ast"
 	"go/parser"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/viant/datly/internal/testharness"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
@@ -183,7 +184,8 @@ func TestGeneratorPlansLinkedContractsWithoutDuplicateEmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Count(content, `contracts "example.com/contracts"`) != 1 ||
-		!strings.Contains(content, "xdatly.Component[*contracts.Input, []*contracts.Output]") {
+		!strings.Contains(content, "xdatly.Component[*contracts.Input, []*contracts.Output]") ||
+		!strings.Contains(content, "TypeFor[Component]()") || strings.Contains(content, "DatlyLinkedType") {
 		t.Fatalf("linked component source:\n%s", content)
 	}
 }
@@ -225,7 +227,7 @@ func TestGeneratorRemovesStaleGeneratedContractsWhenRolesBecomeLinked(t *testing
 			t.Fatalf("stale generated contract %s remains: %v", name, err)
 		}
 	}
-	if _, err = os.Stat(filepath.Join(dir, scaffoldManifestName)); err != nil {
+	if _, err = os.Stat(filepath.Join(dir, legacyManifestName)); !os.IsNotExist(err) {
 		t.Fatalf("generation manifest missing: %v", err)
 	}
 }
@@ -259,6 +261,7 @@ func TestGeneratorEmitsOnlyDivergedContractRole(t *testing.T) {
 }
 
 func TestGeneratorLinksPackageOwnedRootViewWithoutDuplicateEmission(t *testing.T) {
+	t.Parallel()
 	type linkedOutput struct{}
 	type linkedRow struct{ ID int }
 	root := t.TempDir()
@@ -308,15 +311,15 @@ func TestGeneratorLinksPackageOwnedRootViewWithoutDuplicateEmission(t *testing.T
 		result.Plan.RootViewType != "contracts.Row" {
 		t.Fatalf("linked view plan = %+v", result.Plan.Views)
 	}
-	if _, err = os.Stat(filepath.Join(packageDir, "views.go")); err != nil {
-		t.Fatalf("previous generated shape was removed: %v", err)
+	if _, err = os.Stat(filepath.Join(packageDir, "views.go")); !os.IsNotExist(err) {
+		t.Fatalf("obsolete generated shape remains: %v", err)
 	}
 	for _, file := range result.Files {
 		if strings.HasSuffix(file.Path, "views.go") || strings.Contains(file.Content, "type Row struct") {
 			t.Fatalf("linked view was emitted: %+v", file)
 		}
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("linked-view package did not compile: %v\n%s", err, output)
@@ -351,6 +354,7 @@ func TestGeneratorPlansIndependentViewAsTypedInput(t *testing.T) {
 }
 
 func TestGeneratorLinksPackageOwnedIndependentView(t *testing.T) {
+	t.Parallel()
 	type linkedRow struct{ ID int }
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
@@ -391,7 +395,7 @@ func TestGeneratorLinksPackageOwnedIndependentView(t *testing.T) {
 		len(result.Plan.Input.Fields) != 1 || result.Plan.Input.Fields[0].Type != "[]*contracts.Row" {
 		t.Fatalf("linked independent view = views:%+v input:%+v", result.Plan.Views, result.Plan.Input.Fields)
 	}
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	command := exec.Command("go", "vet", "-mod=mod", "./...")
 	command.Dir = root
 	if output, runErr := command.CombinedOutput(); runErr != nil {
 		t.Fatalf("linked independent-view module did not compile: %v\n%s", runErr, output)

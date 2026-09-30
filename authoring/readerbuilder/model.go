@@ -242,8 +242,12 @@ type ViewOccurrence struct {
 	// SQL is the exact embedded query for this named view. It intentionally
 	// excludes the outer graph projection and join wrapper so authoring clients
 	// can edit a view without reverse-engineering compiled runtime SQL.
-	SQL        string         `json:"sql,omitempty"`
-	SourceSpan dql.SourceSpan `json:"sourceSpan"`
+	SQL string `json:"sql,omitempty"`
+	// SourceProjectionAll is true only for a single-table SELECT * without
+	// exclusions, joins, or computed projection fields. Authoring clients may
+	// then use connector columns as a complete fallback for an unresolved view.
+	SourceProjectionAll bool           `json:"sourceProjectionAll,omitempty"`
+	SourceSpan          dql.SourceSpan `json:"sourceSpan"`
 }
 
 type PredicateExpansion struct {

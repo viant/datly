@@ -32,10 +32,10 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			continue
 		}
 		name := strings.ToLower(strings.TrimSpace(sqlparser.Stringify(call.X)))
-		if (name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required") && item.Alias != "" {
+		if (name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required" || name == "sequence_scope") && item.Alias != "" {
 			return false, fmt.Errorf("%s must be a standalone SELECT annotation without an alias", name)
 		}
-		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token" && name != "required") {
+		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token" && name != "required" && name != "sequence_scope") {
 			filtered = append(filtered, item)
 			continue
 		}
@@ -46,6 +46,27 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 				return false, err
 			}
 			target, typeName = cast.Operand, cast.Type
+
+		} else if name == "sequence_scope" {
+			if len(call.Args) < 2 {
+				return false, fmt.Errorf("sequence_scope requires a numeric column and scope columns")
+			}
+			target = sqlparser.Stringify(call.Args[0])
+			targetParts, e := sqlparser.TableIdentifierParts(target)
+			if e != nil || len(targetParts) != 2 {
+				return false, fmt.Errorf("sequence_scope target must be a qualified column")
+			}
+			scope := []string{}
+			seen := map[string]bool{}
+			for _, arg := range call.Args[1:] {
+				parts, e := sqlparser.TableIdentifierParts(sqlparser.Stringify(arg))
+				if e != nil || len(parts) != 2 || !strings.EqualFold(parts[0], targetParts[0]) || strings.EqualFold(parts[1], targetParts[1]) || seen[strings.ToLower(parts[1])] {
+					return false, fmt.Errorf("sequence_scope requires distinct same-view scope columns")
+				}
+				seen[strings.ToLower(parts[1])] = true
+				scope = append(scope, parts[1])
+			}
+			rawTag = (tags.Tags{&tags.Tag{Name: "sequenceScope", Values: tags.Values(strings.Join(scope, ","))}}).Literal()
 		} else if name == "delete_marker" || name == "concurrency_token" || name == "required" {
 			if len(call.Args) != 1 {
 				return false, fmt.Errorf("%s requires one qualified view column", name)
@@ -90,6 +111,12 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			return false, fmt.Errorf("%s target %q has no canonical view", name, target)
 		}
 		targets[view] = append(targets[view], parts[1])
+		if name == "sequence_scope" {
+			for _, arg := range call.Args[1:] {
+				scopeParts, _ := sqlparser.TableIdentifierParts(sqlparser.Stringify(arg))
+				targets[view] = append(targets[view], scopeParts[1])
+			}
+		}
 		var column *spec.Column
 		for _, candidate := range view.Columns {
 			if candidate != nil && sameProjectionColumn(candidate, parts[1]) {
@@ -171,7 +198,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 	}
 	misplaced := ""
 	if containsSQLCall(parsed, func(name string) bool {
-		if name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required" {
+		if name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required" || name == "sequence_scope" {
 			misplaced = name
 			return true
 		}

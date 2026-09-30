@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	h "github.com/viant/xdatly/handler"
@@ -19,6 +20,18 @@ func (*optionalEntityHooks) Finalize(context.Context, *hookInput, *hookOutput, h
 }
 
 type wrongCompletionHooks struct{ rootEntityHooks }
+
+type recoveryEntityHooks struct{ rootEntityHooks }
+
+func (*recoveryEntityHooks) Recover(context.Context, *hookInput, *hookOutput, rhandler.MutationOutcome) (rhandler.Recovery, error) {
+	return rhandler.RecoveryNone, nil
+}
+
+type wrongRecoveryHooks struct{ rootEntityHooks }
+
+func (*wrongRecoveryHooks) Recover(context.Context, *hookInput, *hookOutput, h.Outcome) error {
+	return nil
+}
 
 func (*wrongCompletionHooks) Finalize(context.Context, *hookInput, *hookOutput, error) error {
 	return nil
@@ -45,7 +58,7 @@ func TestEntityHookOptionalContracts(t *testing.T) {
 	for _, tc := range []struct {
 		value any
 		fail  bool
-	}{{rootEntityHooks{}, false}, {optionalEntityHooks{}, false}, {wrongSequenceHooks{}, true}, {wrongQueueHooks{}, true}, {wrongCompletionHooks{}, true}} {
+	}{{rootEntityHooks{}, false}, {optionalEntityHooks{}, false}, {recoveryEntityHooks{}, false}, {wrongRecoveryHooks{}, true}, {wrongSequenceHooks{}, true}, {wrongQueueHooks{}, true}, {wrongCompletionHooks{}, true}} {
 		typ := reflect.TypeOf(tc.value)
 		t.Run(typ.Name(), func(t *testing.T) {
 			catalog := typecatalog.NewCatalog()

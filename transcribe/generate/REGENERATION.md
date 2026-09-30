@@ -1,135 +1,81 @@
-# Regeneration ownership
+# Regeneration
 
-## Schema null constraints
+DQL and explicitly linked Go contracts define a component. Every generation
+entry point (`datly transcribe`, `Generator.Generate`, `Compiler.Transcribe`,
+and project generation) uses the same publication path. Datly no longer writes
+or reads `.datly-gen.json`. There is no manifest option, fingerprint ownership
+mode, or replacement sidecar. Old sidecars are removed during publication,
+including malformed ones; their contents have no authority.
 
-Explicit table metadata can supply a NOT NULL validation constraint independently
-of query-result nullability. Drivers can report different metadata for a result
-set and its source table. This does not change an explicit Go CAST type: a
-`*int` field can remain a pointer while native validation rejects a nil value.
-Missing table metadata is not interpreted as a NOT NULL constraint. Authored
-`sqlx:"...,required=false"` and transient mappings retain their authority.
+## Generated code and application code
 
-Generated projection metadata follows the current canonical DQL/schema proposal.
-Regeneration may add, change or remove invariant, validation and SQLX tags only
-when the manifest records that field's prior generated type and tag, and the
-current destination still matches both. Even a hand edit equal to the new
-proposal is not accepted as previous generated source. Missing trustworthy field
-ownership retains conflict protection. Authored `required=false` in the current
-DQL remains authoritative; removing a generated constraint is now supported.
+Generated shapes, presence markers, setters, indexes, component holders,
+handlers and packaged SQL follow the current DQL/schema proposal. Regeneration
+replaces their contents and removes obsolete artifacts in the affected package.
+Direct edits inside generated files are overwritten; the editor is responsible
+for those edits. Standard `Code generated ... DO NOT EDIT` comments identify
+replaceable Go artifacts. A filename alone does not identify application code
+as generated.
 
-The same field evidence permits inferred type changes, including removing a
-CAST and returning to discovered nullability. A changed generated type must
-still match the prior emitted type. Existing explicit CAST policy preserves
-unrelated authored tags when DQL has not changed those generated tags. It cannot
-silently omit a requested metadata update or overwrite a conflicting edited type.
-The native `x/shape.SourceParser` performs all exact type/tag edits, import
-rewrites, and removals; Datly supplies only source-ownership authorization.
-Relation holder tags retain their separate destination/cardinality protections.
-An exact `on`-only transition may follow canonical projected key aliases when
-the prior generated type/tag still match and the child type is unchanged; other
-relation tags retain conflict protection.
+Put business behavior in separate application files, declared lifecycle hooks,
+or explicitly linked Go contracts. Lifecycle scaffolds are created once and
+remain application-owned. Linked contracts keep their Go authority, including
+contracts named `input.go` or `output.go`. Application methods remain in their
+separate files; incompatible signatures and duplicate declarations still fail
+validation. When DQL removes a generated field, update application code that
+uses it.
 
-Automatic UNIQUE discovery is not being expanded across drivers, per user
-direction. Authored native UNIQUE tags remain the explicit contract; missing
-driver metadata does not prove that a database constraint is absent.
+DQL owns projected field additions/removals, CAST/nullability, tags, relation
+keys/cardinality, and generated helper shapes. Removed projections lose their
+Has markers and setters too. Explicit schema constraints remain distinct from
+query-result nullability: a nullable Go pointer can still have a NOT NULL
+validation constraint. Missing metadata does not imply a required or UNIQUE
+constraint. Authored native SQLX tags remain authoritative.
 
-`.datly-gen.json` version 5 records `sha256:` content fingerprints and exact
-generated projection-field ownership for emitted files. A generated filename alone is not permission to overwrite its contents.
+## Resources and reload
 
-Regeneration replaces or removes an artifact only when its current bytes match
-the last recorded generated fingerprint. An edited Go handler, Velty template,
-router, or SQL resource causes an explicit conflict. Identical desired bytes are
-safe to retain, even if an older fingerprint is unavailable. Conflict validation
-runs during project preflight and again against the staged package before any
-generated files are published.
+Generated holders expose `EmbedFS()` and `EmbedNamespace()`. Source discovery
+uses the corresponding `*DatlyResourceNamespace` constants and
+`*DatlyResources` embed declarations. SQL/static/MCP files are selected from
+these declarations; namespaces, paths and missing files are validated.
+A workspace reload snapshots current source assets, while linked holders supply
+binary embed capabilities when source declarations are unavailable. Published
+resource stores are immutable per generation. Obsolete resources are removed
+only for the affected component; assets referenced by other namespaces survive.
+Linked Go-only contracts retain their declared SQL URIs and source embed files.
 
-Generated shapes keep unowned and customized type/tag conflict protection.
-Canonical field ownership and explicit user authorities apply across reader, Go,
-Velty and generic mutation writer transcription:
+Lazy component materialization and request-local writer `ReadIndexes()` use
+in-memory component metadata and loaded reader results. Neither uses a package
+manifest.
 
-- Standalone `CAST(view.column AS *int)` changes that exact generated-owned
-  field's type, including `int` to `*int` and reverse casts. Exact CAST type
-  authority overrides inferred database nullability. SQL-aliased CAST remains
-  executable SQL and grants no Go source edit authority. Conflicting CASTs in
-  one source fail even though a CAST may override a prior column definition.
-- Changing canonical relation cardinality changes that generated holder between
-  `*Child` and `[]*Child`, including adding/removing the outer DQL JOIN
-  `AND 1=1` marker or changing an explicit `cardinality(...)` directive. This
-  applies to reader and Go/Velty writer generation. The field plan records
-  relation authority separately from CAST. Persistence requires the holder to
-  match its previously recorded generated type and tag, and permits only the
-  slice wrapper to change. Authored edits, changed child types/tags, and missing
-  trustworthy field ownership require explicit migration. Older manifests may
-  bootstrap ownership only through the existing whole-file evidence rules.
-- Removing a projected SQL column removes its previously generated field and
-  associated generated presence fields. Current explicit logical declarations
-  and projection helpers remain. Field order, unrelated authored fields,
-  methods and comments stay destination-owned.
+## Upgrading older generated packages
 
-`spec.Column.ExplicitType` flows through generated fields and typed projection
-helpers. Persistence passes exact type changes, obsolete owned fields, and
-guarded projection metadata changes and narrow helper codec-reference changes to native `viant/x/shape.SourceParser`.
-`EditStructFields` accepts exact requests; `AppendStructFields` and the existing
-`UpdateStructFields` API keep their default behavior. No Datly source AST merger
-or deletion walker is involved. Imports are adjusted only as required by these
-field edits; grouped/embedded field changes fail closed when the selected field
-cannot be isolated. External linked types cannot be rewritten and must already
-match explicit CAST field types, including nested relation paths.
+Regenerate once using the existing DQL destinations before changing filenames.
+Old input/output/view/component scaffold comments identify existing generated
+code. For older support/resource files without a standard header, the existing
+component holder and matching current Go AST declarations establish the upgrade
+at the declared destination. Receiver methods are matched by canonical receiver
+and signature, including setter-only files. Package/comment-only support files
+can match a current package-only artifact; imports, initializers and unrelated
+application declarations are excluded. Regeneration adds the standard generated header and
+removes the legacy sidecar. No application file needs to be edited for migration.
+Subsequent filename changes retire the component's old generated artifacts.
 
-The manifest's `projectionFields` inventory records struct owner, field name,
-canonical type and prior emitted tag from the raw generator proposal. It covers
-view fields, generated presence fields, projection helpers and their generated
-input references. It never adopts an existing unowned field just because a later
-proposal happens to contain the same field. The `complete` flag records whether
-prior generated-field ownership is exhaustive. A removed field whose type/tag
-was customized fails closed; comments are preserved because the inventory does
-not grant comment-deletion rights.
+Changing `#package` or moving contracts between packages is an application
+migration: update imports and the application link selection, and retire the old
+package explicitly. Generation does not guess that a same-named component in a
+different package is obsolete. Separate components sharing a package must use
+nonconflicting declarations and destinations.
 
-Generated helper field types follow the current view plan, ahead of stale
-catalog snapshots. A helper still referencing a removed current field fails
-before persistence. If its authored projection changes, its generated codec tag
-may change only from the exact previously emitted tag and only when other tag
-keys are unchanged. Customized or unrelated tags retain conflict protection.
+## Publication
 
-Original Datly `repository/shape/xgen` preserves field positions and authored
-type authority across discovery. The explicit new projection-removal requirement
-diverges from its retained-removed-field behavior: old generated projection
-fields now disappear, while unrelated application fields remain. This is a
-user-authorized design change with reader/writer regression evidence.
+Packages are staged before publication. Source-authored handler factories build
+against the real destination module using Go overlays, preserving workspace,
+vendor, build-tag, target and internal-package rules. Validation executes no
+application initialization or hook logic. A failed stage leaves the previous
+package intact.
 
-Customized shapes retain their earlier trusted whole-file fingerprint (or its
-absence), even after exact field edits. Untouched fingerprinted shapes can still
-follow an intentional generated-to-linked transition; field ownership does not
-grant permission to replace or delete customized files. User-owned hook files
-remain outside the generated fingerprint inventory. Obsolete whole shape files
-and type declarations retain the existing conservative retention policy; this
-field-removal authority does not authorize deleting customized declarations.
-
-Retained SQL assets keep their previous fingerprint. Keeping a manually edited
-asset does not silently approve overwriting it in a later regeneration.
-
-## Migrating version 2 or 3 manifests
-
-Versions 2 and 3 remain readable. Prior field ownership can be bootstrapped when
-the current file exactly matches its trusted generated fingerprint, or when its
-entire bytes match the current raw generator proposal. These are concrete source
-evidence; a filename, role, Go tag or similar-looking field is not evidence.
-
-A customized older file without field inventory cannot prove which omitted
-fields were generated. Projection removal fails closed when that uncertainty
-affects the current projected shape. Regeneration can add provably new fields,
-but does not silently acquire deletion authority over existing fields. Generate
-the desired output separately and reconcile older customized source deliberately;
-do not fabricate fingerprints or field inventories. Changes to helper references
-without a trustworthy prior emitted tag also retain default conflict protection.
-
-Removing a field may require updates to application code that directly refers to
-that field. Application methods are preserved, not rewritten by the source
-merger. The same exact-field validation runs in preflight and again in staging;
-a conflict leaves the package and its manifest unchanged.
-
-The package is staged separately. Before publication, the renamed original tree
-is checked against the staging snapshot, including user-owned files; detected
-concurrent edits abort publication and restore that tree. Other processes should
-still coordinate writes during publication: an uncooperative writer holding an
-open file descriptor cannot participate in an application-level filesystem lock.
+A transient content snapshot detects edits made during staging and restores the
+original tree if publication detects a concurrent change. These hashes exist
+only for the publication transaction and are never persisted as ownership data.
+Other processes should coordinate filesystem writes during publication.

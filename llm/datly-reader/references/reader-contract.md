@@ -6,6 +6,14 @@ A reader turns bound application inputs into typed views and an output contract.
 
 This guide includes required capabilities still under development. Keep the requested application contract intact; when a checkout cannot execute it, identify the blocker rather than silently weakening the design.
 
+## Field shaping and SQL boundaries
+
+Outer direct-column aliases in a named DQL graph are Go-field renames. Keep the
+original view output in SQLX mapping and in executable vendor SQL. An alias
+inside the view SQL remains a SQL result name. Public JSON/format names are a
+separate choice. Read the [v1 shaping contract](product/datly/doc/shaping-contract.md)
+before changing any of these names or regenerating linked/generated shapes.
+
 ## Choose Go shapes, DQL, or both
 
 Go shapes make application types, methods, and reusable domain objects explicit. DQL combines SQL with input, route, view, and output declarations. Both describe the same component model; avoid maintaining two competing implementations.
@@ -161,14 +169,12 @@ For a hook-built rich value, distinguish:
 
 Not every rich CAST is logical: physical JSON/custom typed columns retain mapping and codec semantics. Metadata declarations leave executable SQL; actual SQL CAST expressions remain query expressions. Full rich CAST/tag parsing and end-to-end acceptance are required but still in development at this checkpoint. Preserve requested syntax in the design; label interim linked-field or ColumnType/ColumnTag examples as interim, not complete parity.
 
-For persisted generated projections, a changed CAST updates the owned Go field
-(for example, `int` to `*int`), and removing a selected column removes its owned
-field and generated support. Retained fields keep their order; unrelated authored
-fields, methods, tags and comments stay protected. This regeneration behavior
-also applies to generated Go mutation writers. Ownership inventory and
-fingerprints must prove that an existing field can be changed or removed; an
-unproven older field is not safe to delete. Preserve SQL NULL separately from a
-non-null zero when a pointer CAST is selected.
+For persisted generated projections, a changed CAST updates the Go field
+(for example, `int` to `*int`), and removing a selected column removes its field
+and generated support. The current DQL defines generated shapes for readers and
+writers. Direct generated-file edits are overwritten; separate application hooks
+and explicitly linked contracts are preserved. Preserve SQL NULL separately from
+a non-null zero when a pointer CAST is selected.
 
 ## Reports, cube compose, and WithURI MCP routes
 

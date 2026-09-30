@@ -1,14 +1,20 @@
 # Output encoding
 
 Output contracts are compiled at bootstrap and published with the registered
-component. HTTP selects `_format`, then the route marshaller, then the component
-format (JSON by default). A handler-provided response retains control of its
+component. A declared `FormatSelector()` input chooses the request source:
+`header/Accept` negotiates media types, or a query source such as
+`query/_format` accepts format names. Without a declaration the legacy `_format`
+query source remains available. An absent value uses the route marshaller, then
+the component format (JSON by default). A handler-provided response retains control of its
 status, headers, and body. Execution and encoding failures use JSON errors.
 
 Supported formats are `json`, `csv`, `xml`, `tabular`, and `xls`/`xlsx`. XLS
 responses contain an XLSX workbook. Native SQLX, Structology, XMLify, and XLSy
 encoders retain typed values; tabular JSON preserves the surrounding output
 envelope and transforms its data slot.
+Unsupported `Accept` values return 406; invalid query format names return 400.
+Formats are checked before route execution, so a JSON-only custom output cannot
+be used to reveal internal fields through a different encoder after a mutation.
 
 CSV and tabular row authority includes a direct view declared with cardinality
 `one`, or an explicitly named struct/pointer data slot (`DataField` or an

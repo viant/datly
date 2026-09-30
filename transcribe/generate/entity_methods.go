@@ -20,21 +20,17 @@ type entityMethodOwnership struct {
 	packageName string
 }
 
-func (p *scaffoldPersistence) preserveEntityMethods(target, existing string, manifest *scaffoldManifest) error {
+func (p *scaffoldPersistence) preserveEntityMethods(target, existing string) error {
 	if p.plan == nil || p.plan.EntitySupport == nil || len(p.plan.EntitySupport.Methods) == 0 {
 		return nil
 	}
-	owned := map[string]bool{}
-	for _, file := range manifest.Files {
-		owned[file] = true
-	}
-	proposed := map[string]string{}
+	proposed := map[string]bool{}
 	for _, file := range p.files {
 		relative, err := managedPath(target, file.Path)
 		if err != nil {
 			return err
 		}
-		proposed[relative] = scaffoldFingerprint([]byte(file.Content))
+		proposed[relative] = true
 	}
 	index := -1
 	for i, file := range p.files {
@@ -50,7 +46,7 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string, man
 	if index < 0 {
 		return fmt.Errorf("entity support artifact is missing")
 	}
-	file, err := parser.ParseFile(token.NewFileSet(), "entities.go", p.files[index].Content, parser.ParseComments)
+	file, err := parser.ParseFile(token.NewFileSet(), "entities.go", strings.TrimPrefix(p.files[index].Content, generatedHeader(p.owner)), parser.ParseComments)
 	if err != nil {
 		return err
 	}
@@ -84,31 +80,15 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string, man
 			continue
 		}
 		path := filepath.Join(existing, name)
-		if fingerprint := proposed[name]; fingerprint != "" {
-			content, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			if fingerprint == scaffoldFingerprint(content) {
-				continue
-			}
+		if proposed[name] || p.renames[name] {
+			continue
 		}
-		if owned[name] {
-			if manifest.Roles[name] != "shape" && !p.shapeDestinations()[name] {
-				continue
-			}
-			// An unchanged generated shape is Datly-owned output, not an
-			// authored implementation of the methods being regenerated. Only
-			// inspect a shape after its trusted fingerprint diverges.
-			if fingerprint := manifest.Fingerprints[name]; fingerprint != "" {
-				content, readErr := os.ReadFile(path)
-				if readErr != nil {
-					return readErr
-				}
-				if fingerprint == scaffoldFingerprint(content) {
-					continue
-				}
-			}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if generatedOwner(content) != "" {
+			continue
 		}
 		source, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
 		if err != nil {
@@ -167,7 +147,7 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string, man
 	if err = format.Node(&result, token.NewFileSet(), file); err != nil {
 		return err
 	}
-	p.files[index].Content = result.String() + "\n"
+	p.files[index].Content = generatedHeader(p.owner) + result.String() + "\n"
 	return nil
 }
 

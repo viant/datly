@@ -49,6 +49,7 @@ func (r *planResolver) resolveContract(role string, contract *ContractPlan, refe
 		return fmt.Errorf("resolve linked %s contract: %w", role, err)
 	}
 	contract.Type = expression
+	contract.Package = descriptor.PkgPath
 	contract.Ownership = ContractLinked
 	contract.DescriptorKey = key
 	return nil

@@ -28,29 +28,27 @@ type DeclarationProjection struct {
 type Declarations map[string]Declaration
 
 type Input struct {
-	Resources          *resource.Store
-	Component          *spec.Component
-	Declarations       Declarations
-	TypeResolver       *typecatalog.Resolver
-	TargetPackage      string
-	PackageName        string
-	ProjectRoot        string
-	Contracts          ContractReferences
-	Views              ViewReferences
-	ViewBindings       ViewBindings
-	GeneratedTypes     []GeneratedTypeReference
-	SetMarkerViews     map[string]bool
-	GoHandler          *GoHandlerAsset
-	ExternalHandler    *ExternalHandler
-	ContractHandler    *ContractHandlerAsset
-	MutationHandler    *MutationHandlerAsset
-	ReadIndexes        *ReadIndexSource
-	HookScaffold       *HookScaffoldAsset
-	VeltyHandler       *VeltyHandlerAsset
-	SQLResources       bool
-	EntitySupport      *EntitySupportAsset
-	EphemeralOwnership bool
-	GenerationPolicy   GenerationPolicy
+	Resources       *resource.Store
+	Component       *spec.Component
+	Declarations    Declarations
+	TypeResolver    *typecatalog.Resolver
+	TargetPackage   string
+	PackageName     string
+	ProjectRoot     string
+	Contracts       ContractReferences
+	Views           ViewReferences
+	ViewBindings    ViewBindings
+	GeneratedTypes  []GeneratedTypeReference
+	SetMarkerViews  map[string]bool
+	GoHandler       *GoHandlerAsset
+	ExternalHandler *ExternalHandler
+	ContractHandler *ContractHandlerAsset
+	MutationHandler *MutationHandlerAsset
+	ReadIndexes     *ReadIndexSource
+	HookScaffold    *HookScaffoldAsset
+	VeltyHandler    *VeltyHandlerAsset
+	SQLResources    bool
+	EntitySupport   *EntitySupportAsset
 }
 
 type ContractReference struct {
@@ -202,12 +200,7 @@ func (g *Generator) Generate(dir string) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	var files []EmittedFile
-	if g.input.EphemeralOwnership {
-		files, err = EmitScaffoldEphemeral(dir, plan)
-	} else {
-		files, err = EmitScaffoldWithPolicy(dir, plan, g.input.GenerationPolicy)
-	}
+	files, err := EmitScaffold(dir, plan)
 	if err != nil {
 		return nil, err
 	}

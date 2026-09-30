@@ -115,7 +115,7 @@ type UserContextOutput struct {
 		t.Fatal(err)
 	}
 	catalog := typecatalog.NewCatalog()
-	loaded, err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog}).loadSource(context.Background(), "#import('auth','example.com/app/auth')\nSELECT 1")
+	loaded, err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog}).loadSource(context.Background(), "#import('auth','example.com/app/auth')\nSELECT 1", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ type Hook struct { Value string }
 	catalog := typecatalog.NewCatalog()
 	loaded, err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog}).loadSource(context.Background(), `#import('assets','example.com/app/assets')
 #import('hooks','example.com/app/hooks')
-SELECT 1`)
+SELECT 1`, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,6 +218,7 @@ func containsString(values []string, candidate string) bool {
 }
 
 func TestDiscoveryComposesExactPackageAndDQLAuthority(t *testing.T) {
+	t.Parallel()
 	base := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, base)
 	writeSourceFile(t, base, "model/audit.go", "package model\n\ntype AuditRow struct { ID int `sqlx:\"ID\"` }\n")

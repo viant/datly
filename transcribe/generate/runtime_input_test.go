@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/viant/bindly"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
@@ -339,9 +340,21 @@ func TestGeneratedSelectorNamesRetainDistinctSourceIdentity(t *testing.T) {
 	}
 	for _, test := range []struct{ name, source string }{{"Fields", "_fields"}, {"ProductFields", "product_fields"}} {
 		field, ok := typ.FieldByName(test.name)
-		if !ok || !field.IsExported() || !strings.Contains(field.Tag.Get("parameter"), "in="+test.source) {
+		if !ok || !field.IsExported() || !strings.HasPrefix(field.Tag.Get("parameter"), test.name+",") ||
+			!strings.Contains(field.Tag.Get("parameter"), "in="+test.source) {
 			t.Fatalf("field %s: %+v", test.name, field)
 		}
+	}
+	injector, err := bindly.NewInjector()
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectionPlan, err := injector.CompilePlan(typ)
+	if err != nil {
+		t.Fatalf("compile selector input plan: %v", err)
+	}
+	if _, err := projectionPlan.Projection(); err != nil {
+		t.Fatalf("distinct selector input aliases: %v", err)
 	}
 	component.Parameters[0].Source.Name = "productFields"
 	if _, err = New(Input{Component: component}).RuntimeInputType(); err == nil || !strings.Contains(err.Error(), "collides") {

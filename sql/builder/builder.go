@@ -30,6 +30,7 @@ func NewBuilder() *Builder {
 
 func (b *Builder) CacheSQL(ctx context.Context, opts ...BuilderOption) (*cache.ParmetrizedQuery, error) {
 	options := newBuilderOptions(opts...)
+	applyReportOrdering(ctx, options)
 	window, err := b.resolveControls(options, false)
 	if err != nil {
 		return nil, err
@@ -96,6 +97,7 @@ func (b *Builder) QueryMatcher(ctx context.Context, query *cache.ParmetrizedQuer
 		return nil, fmt.Errorf("relation query is required")
 	}
 	options := newBuilderOptions(opts...)
+	applyReportOrdering(ctx, options)
 	window, err := b.resolveControls(options, false)
 	if err != nil {
 		return nil, err
@@ -130,6 +132,7 @@ func (b *Builder) QueryMatcher(ctx context.Context, query *cache.ParmetrizedQuer
 
 func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.ParmetrizedQuery, error) {
 	options := newBuilderOptions(opts...)
+	applyReportOrdering(ctx, options)
 	if options.template != nil {
 		viewInput := sqltemplate.ViewInput{
 			Dialect:               options.dialect,
@@ -159,7 +162,17 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 		options.templateArgs = append([]any(nil), evaluated.Args...)
 		options.templateParentBindings = evaluated.ParentBindings
 		if len(options.templateArgs) > 0 && !options.templateParentBindings && (len(options.positionalArgs) > 0 || len(options.compositeRows) > 0) {
-			return nil, fmt.Errorf("SQL template bindings cannot be combined with relation positional bindings")
+			if options.relation == nil {
+				return nil, fmt.Errorf("SQL template bindings cannot be combined with relation positional bindings without relation metadata")
+			}
+			// Template values belong to the evaluated source. Give them stable
+			// names before injecting independent relation keys so ordinary SQLX
+			// binding can preserve their final SQL order without mixing counts.
+			options.sqlText, options.parameterResolver, err = nameProjectionBindings(options.sqlText, options.templateArgs, options.parameterResolver)
+			if err != nil {
+				return nil, err
+			}
+			options.templateArgs = nil
 		}
 	}
 	if err := b.resolveSourceSQL(options); err != nil {
@@ -396,6 +409,7 @@ type builderOptions struct {
 	projection             []string
 	skipRelationFilter     bool
 	selectorPolicy         *spec.Selector
+	reportOrderFields      []string
 	criteriaCompiler       *criteria.Compiler
 	criteriaHaving         bool
 	excludePagination      bool

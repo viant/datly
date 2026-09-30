@@ -21,6 +21,7 @@ import (
 )
 
 func TestMutationHookScaffoldCreateOnceSQLite(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, destination, filename string
 		existing                    bool
@@ -119,8 +120,8 @@ SELECT ID, NAME FROM EVENTS`}
 			if err != nil || string(after) != custom {
 				t.Fatal("scaffold was overwritten", err)
 			}
-			manifest, err := os.ReadFile(filepath.Join(root, "generated", ".datly-gen.json"))
-			if err != nil || strings.Contains(string(manifest), tc.filename) {
+			_, err = os.Stat(filepath.Join(root, "generated", ".datly-gen.json"))
+			if !os.IsNotExist(err) {
 				t.Fatal("user scaffold entered generated ownership", err)
 			}
 			consumer := generatedGoWriteRuntimeSource(WritePost, false)
@@ -167,8 +168,8 @@ SELECT ID, NAME FROM EVENTS`}
 				if err != nil || string(after) != custom {
 					t.Fatal("rejected plan changed authored hook", err)
 				}
-				afterManifest, err := os.ReadFile(filepath.Join(root, "generated", ".datly-gen.json"))
-				if err != nil || !bytes.Equal(afterManifest, manifest) {
+				_, err = os.Stat(filepath.Join(root, "generated", ".datly-gen.json"))
+				if !os.IsNotExist(err) {
 					t.Fatal("rejected plan changed manifest", err)
 				}
 			})
@@ -179,10 +180,6 @@ SELECT ID, NAME FROM EVENTS`}
 			if err = os.WriteFile(path, []byte(bad), 0644); err != nil {
 				t.Fatal(err)
 			}
-			beforeManifest, err := os.ReadFile(filepath.Join(root, "generated", ".datly-gen.json"))
-			if err != nil {
-				t.Fatal(err)
-			}
 			if _, err = NewCompiler().Transcribe(ctx, Request{Source: source, Destination: root, Options: options}); err == nil {
 				t.Fatal("incompatible authored hook signature accepted")
 			}
@@ -190,8 +187,8 @@ SELECT ID, NAME FROM EVENTS`}
 			if err != nil || string(actual) != bad {
 				t.Fatal("failed hook preflight modified authored source", err)
 			}
-			afterManifest, err := os.ReadFile(filepath.Join(root, "generated", ".datly-gen.json"))
-			if err != nil || !bytes.Equal(beforeManifest, afterManifest) {
+			_, err = os.Stat(filepath.Join(root, "generated", ".datly-gen.json"))
+			if !os.IsNotExist(err) {
 				t.Fatal("failed hook preflight changed manifest", err)
 			}
 		})

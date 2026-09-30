@@ -54,7 +54,6 @@ func TestUnrepresentableContractsFailClosed(t *testing.T) {
 			A string `parameter:"A,kind=form,in=a"`
 			B string `parameter:"B,kind=body,in=b"`
 		}](), want: "mixed body and form"},
-		{name: "XML", settings: &spec.Settings{Format: "xml"}, want: "wire schema projection"},
 		{name: "tabular", settings: &spec.Settings{Format: "tabular"}, want: "wire schema projection"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -73,6 +72,14 @@ func TestUnrepresentableContractsFailClosed(t *testing.T) {
 			require.Nil(t, doc)
 		})
 	}
+}
+
+func TestXMLResponseHasOpaqueTextSchema(t *testing.T) {
+	entry := (fixture{component: &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "Records"},
+		Routes: []*spec.Route{{Method: "POST", Path: "/records"}}, Settings: &spec.Settings{Format: "xml"}}}).registration(t)
+	doc, err := (openapi.Generator{}).Generate(context.Background(), documentRequest(entry))
+	require.NoError(t, err)
+	require.Equal(t, "string", doc.Paths["/records"].Post.Responses["200"].Content["application/xml"].Schema.Type)
 }
 
 func TestRouteAndRegistrationFailures(t *testing.T) {

@@ -15,23 +15,6 @@ type EmittedFile struct {
 }
 
 func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
-	return EmitScaffoldWithPolicy(dir, plan, GenerationPolicyMerge)
-}
-
-func EmitScaffoldWithPolicy(dir string, plan *Plan, policy GenerationPolicy) ([]EmittedFile, error) {
-	normalized, err := policy.normalize()
-	if err != nil {
-		return nil, err
-	}
-	return emitScaffold(dir, plan, false, normalized)
-}
-
-// EmitScaffoldEphemeral emits a staging package without any ownership sidecar.
-func EmitScaffoldEphemeral(dir string, plan *Plan) ([]EmittedFile, error) {
-	return emitScaffold(dir, plan, true, GenerationPolicyMerge)
-}
-
-func emitScaffold(dir string, plan *Plan, ephemeral bool, policy GenerationPolicy) ([]EmittedFile, error) {
 	if plan != nil && plan.MutationHandler == nil && plan.lifecycleTargetError != nil {
 		return nil, plan.lifecycleTargetError
 	}
@@ -39,16 +22,16 @@ func emitScaffold(dir string, plan *Plan, ephemeral bool, policy GenerationPolic
 	if err != nil {
 		return nil, err
 	}
-	if err = packages.validateWithPolicy(policy); err != nil {
+	if err = packages.validate(); err != nil {
 		return nil, err
 	}
 	var result []EmittedFile
 	for i, p := range packages.plans {
-		files, userFiles, removals, err := scaffoldArtifacts(packages.dirs[i], p)
+		files, user, removals, err := scaffoldArtifacts(packages.dirs[i], p)
 		if err != nil {
 			return nil, err
 		}
-		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: userFiles, removals: removals, plan: p, ephemeral: ephemeral, policy: policy}
+		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: user, removals: removals, plan: p}
 		if err = persistence.Commit(); err != nil {
 			return nil, err
 		}
@@ -57,30 +40,7 @@ func emitScaffold(dir string, plan *Plan, ephemeral bool, policy GenerationPolic
 	return result, nil
 }
 
-// ValidateDestination checks every package in this component before writing.
 func (p *Plan) ValidateDestination(dir string) error {
-	return p.ValidateDestinationWithPolicy(dir, GenerationPolicyMerge)
-}
-
-func (p *Plan) ValidateDestinationWithPolicy(dir string, policy GenerationPolicy) error {
-	if p != nil && p.MutationHandler == nil && p.lifecycleTargetError != nil {
-		return p.lifecycleTargetError
-	}
-	normalized, err := policy.normalize()
-	if err != nil {
-		return err
-	}
-	packages, err := p.packages(dir)
-	if err != nil {
-		return err
-	}
-	return packages.validateWithPolicy(normalized)
-}
-
-// ValidateDestinationEphemeral validates a prospective generated layout and
-// imports without applying persistence ownership checks. It is for read-only
-// project validation; real transcription still calls ValidateDestination.
-func (p *Plan) ValidateDestinationEphemeral(dir string) error {
 	if p != nil && p.MutationHandler == nil && p.lifecycleTargetError != nil {
 		return p.lifecycleTargetError
 	}
@@ -88,7 +48,7 @@ func (p *Plan) ValidateDestinationEphemeral(dir string) error {
 	if err != nil {
 		return err
 	}
-	return packages.validateEphemeral()
+	return packages.validate()
 }
 
 func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []string, error) {
@@ -128,11 +88,15 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 	}
 	sort.Strings(orderedViewDestinations)
 	files := make([]EmittedFile, 0, len(orderedViewDestinations)+len(plan.GeneratedTypes)+5)
+	// preformatted lists artifacts rendered through SourceParser.FormatFile,
+	// which already yields gofmt output; the final formatting pass skips them.
+	preformatted := map[string]bool{}
 	if plan.EntitySupport != nil {
 		content, err := plan.EntitySupport.source(packageName)
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		preformatted[filepath.Join(dir, plan.EntitySupport.Destination)] = true
 		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.EntitySupport.Destination), Content: content})
 		if invariants := activeEntityInvariants(plan); len(invariants) > 0 {
 			files = append(files, EmittedFile{Path: filepath.Join(dir, plan.Generation.File("invariants", "invariants.go")), Content: invariantIndexSource(packageName, invariants)})
@@ -174,6 +138,7 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		preformatted[filepath.Join(dir, plan.ReadIndexes.Source.Destination)] = true
 		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.ReadIndexes.Source.Destination), Content: content})
 	}
 	if plan.Input.Ownership == ContractGenerated && plan.localShape(plan.Input.Package) {
@@ -209,6 +174,7 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		preformatted[filepath.Join(dir, plan.GoHandler.Destination)] = true
 		files = append(files, EmittedFile{
 			Path: filepath.Join(dir, plan.GoHandler.Destination), Content: content,
 		})
@@ -218,6 +184,7 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		preformatted[filepath.Join(dir, plan.ContractHandler.Destination)] = true
 		files = append(files, EmittedFile{
 			Path: filepath.Join(dir, plan.ContractHandler.Destination), Content: content,
 		})
@@ -227,12 +194,14 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		preformatted[filepath.Join(dir, plan.MutationHandler.Destination)] = true
 		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.MutationHandler.Destination), Content: content})
 		for _, source := range plan.MutationHandler.Support {
 			content, err := source.source(packageName)
 			if err != nil {
 				return nil, nil, nil, err
 			}
+			preformatted[filepath.Join(dir, source.Destination)] = true
 			files = append(files, EmittedFile{Path: filepath.Join(dir, source.Destination), Content: content})
 		}
 	}
@@ -282,15 +251,20 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 	if plan.Output.Ownership == ContractLinked {
 		removals = append(removals, plan.Output.Destination)
 	}
-	if err := formatGoArtifacts(files); err != nil {
+	for i := range files {
+		if filepath.Ext(files[i].Path) == ".go" && !strings.HasPrefix(files[i].Content, generatedHeader(plan.ComponentName)) {
+			files[i].Content = generatedHeader(plan.ComponentName) + files[i].Content
+		}
+	}
+	if err := formatGoArtifacts(files, preformatted); err != nil {
 		return nil, nil, nil, err
 	}
 	return files, userFiles, removals, nil
 }
 
-func formatGoArtifacts(files []EmittedFile) error {
+func formatGoArtifacts(files []EmittedFile, preformatted map[string]bool) error {
 	for index := range files {
-		if filepath.Ext(files[index].Path) != ".go" {
+		if filepath.Ext(files[index].Path) != ".go" || preformatted[files[index].Path] {
 			continue
 		}
 		formatted, err := format.Source([]byte(files[index].Content))

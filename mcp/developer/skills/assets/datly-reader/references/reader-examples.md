@@ -241,7 +241,7 @@ acceptance beyond manually linked runtime tests.
 
 ## Dynamic source
 
-For mutable DQL/resources, validate and atomically activate the matching component/types/resources. Failed staging leaves the previous generation active. Persisted shapes retain field order and append new fields; authored hooks survive regeneration.
+For mutable DQL/resources, validate and atomically activate the matching component/types/resources. Failed staging leaves the previous generation active. Persisted shapes follow current DQL; direct generated-file edits are overwritten, while separate application hooks survive regeneration.
 
 ## Optional predicates and multiple groups
 

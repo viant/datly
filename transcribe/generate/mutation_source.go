@@ -3,6 +3,8 @@ package generate
 import (
 	"fmt"
 	"go/ast"
+	"go/scanner"
+	"go/token"
 	"strings"
 
 	xshape "github.com/viant/x/shape"
@@ -61,14 +63,45 @@ func (s MutationSource) source(packageName string) (string, error) {
 	if s.File == nil {
 		return "", fmt.Errorf("mutation source AST is required")
 	}
-	file, err := cloneGoFile(s.File)
-	if err != nil {
-		return "", err
-	}
-	file.Name.Name = packageName
-	source, err := (xshape.SourceParser{}).FormatFile(file)
+	// Only the package clause changes, so format the shared AST once and
+	// rename the clause in the rendered text instead of cloning (which costs a
+	// print, a parse and a second print) and formatting again.
+	source, err := (xshape.SourceParser{}).FormatFile(s.File)
 	if err != nil {
 		return "", fmt.Errorf("format mutation source: %w", err)
 	}
-	return string(source), nil
+	renamed, err := renamePackageClause(source, packageName)
+	if err != nil {
+		return "", fmt.Errorf("rename mutation source package: %w", err)
+	}
+	return string(renamed), nil
+}
+
+// renamePackageClause replaces the identifier of the package clause in
+// formatted Go source using the Go scanner, so comments or strings that
+// mention "package" are never touched.
+func renamePackageClause(source []byte, packageName string) ([]byte, error) {
+	fset := token.NewFileSet()
+	file := fset.AddFile("source.go", -1, len(source))
+	var scan scanner.Scanner
+	scan.Init(file, source, nil, 0)
+	for {
+		pos, tok, _ := scan.Scan()
+		if tok == token.EOF {
+			return nil, fmt.Errorf("package clause not found")
+		}
+		if tok != token.PACKAGE {
+			continue
+		}
+		namePos, nameTok, name := scan.Scan()
+		if nameTok != token.IDENT {
+			return nil, fmt.Errorf("package clause at %s has no identifier", fset.Position(pos))
+		}
+		start := file.Offset(namePos)
+		result := make([]byte, 0, len(source)+len(packageName))
+		result = append(result, source[:start]...)
+		result = append(result, packageName...)
+		result = append(result, source[start+len(name):]...)
+		return result, nil
+	}
 }

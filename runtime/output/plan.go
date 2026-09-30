@@ -35,6 +35,7 @@ type Compiler struct {
 type Plan struct {
 	typeOf          reflect.Type
 	format          string
+	formatSelector  *spec.BindSource
 	caseFormat      text.CaseFormat
 	timeLayout      string
 	custom          Marshaller
@@ -62,6 +63,27 @@ func (c Compiler) Compile(input CompileInput) (*Plan, error) {
 	settings := (*spec.Settings)(nil)
 	if input.Component != nil {
 		settings = input.Component.Settings
+		for _, parameter := range spec.EffectiveParameters(input.Component.Parameters) {
+			if parameter == nil || !parameter.FormatSelector {
+				continue
+			}
+			if p.formatSelector != nil {
+				return nil, fmt.Errorf("output format selector is declared more than once")
+			}
+			if parameter.QuerySelector != nil {
+				return nil, fmt.Errorf("one input cannot be both an output format and view query selector")
+			}
+			source := parameter.Source
+			source.Kind = strings.ToLower(strings.TrimSpace(source.Kind))
+			source.Name = strings.TrimSpace(source.Name)
+			if !(source.Kind == "query" && source.Name != "") && !(source.Kind == "header" && strings.EqualFold(source.Name, "Accept")) {
+				return nil, fmt.Errorf("output format selector requires a query source or header/Accept")
+			}
+			if parameter.TypeExpr != "" && parameter.TypeExpr != "string" {
+				return nil, fmt.Errorf("output format selector requires a string type")
+			}
+			p.formatSelector = &source
+		}
 	}
 	if settings != nil {
 		if settings.Format != "" {
@@ -106,11 +128,20 @@ func (c Compiler) Compile(input CompileInput) (*Plan, error) {
 	if _, err := ContentType(p.format); err != nil {
 		return nil, err
 	}
+	if p.JSONOnly() && p.format != "json" {
+		return nil, fmt.Errorf("custom JSON output cannot use %s as its default format", p.format)
+	}
+	if p.formatSelector != nil && p.TransportReady() {
+		return nil, fmt.Errorf("explicit Response output owns its media type and cannot use FormatSelector")
+	}
 	if input.Component != nil {
 		for _, route := range input.Component.Routes {
 			if route != nil && route.Marshaller != "" {
 				if _, err := ContentType(route.Marshaller); err != nil {
 					return nil, err
+				}
+				if p.JSONOnly() && !strings.EqualFold(route.Marshaller, "json") {
+					return nil, fmt.Errorf("custom JSON output cannot use %s route format", route.Marshaller)
 				}
 			}
 		}
@@ -161,6 +192,31 @@ func (p *Plan) DefaultFormat() string {
 	return p.format
 }
 
+// FormatSelector returns the single declared HTTP source for request-selected
+// output formats. Without one, the legacy _format query source remains active.
+func (p *Plan) FormatSelector() (spec.BindSource, bool) {
+	if p == nil || p.formatSelector == nil {
+		return spec.BindSource{}, false
+	}
+	return *p.formatSelector, true
+}
+
+func (p *Plan) JSONOnly() bool {
+	if p == nil {
+		return false
+	}
+	if p.custom != nil {
+		return true
+	}
+	if p.typeOf == nil {
+		return false
+	}
+	marshaller := reflect.TypeFor[json.Marshaler]()
+	wire := reflect.TypeFor[JSONWireType]()
+	return p.typeOf.Implements(marshaller) || reflect.PointerTo(p.typeOf).Implements(marshaller) ||
+		p.typeOf.Implements(wire) || reflect.PointerTo(p.typeOf).Implements(wire)
+}
+
 func ContentType(format string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(format)) {
 	case "", "json", "tabular":
@@ -184,6 +240,9 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 		format = p.DefaultFormat()
 	}
 	format = strings.ToLower(strings.TrimSpace(format))
+	if format != "json" && p.JSONOnly() {
+		return Result{}, fmt.Errorf("custom JSON output does not declare a safe %s representation", format)
+	}
 	contentType, err := ContentType(format)
 	if err != nil {
 		return Result{}, err

@@ -12,6 +12,7 @@ import (
 )
 
 func TestGeneratedAsyncMutationRefreshesProvenanceSQLite(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	h := testharness.NewSQLiteHarness(t)
 	if err := h.ExecStatements(ctx, `CREATE TABLE EVENTS(ID INTEGER PRIMARY KEY AUTOINCREMENT, NAME TEXT NOT NULL, QTY INTEGER NOT NULL DEFAULT 0, NOTE TEXT)`); err != nil {

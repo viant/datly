@@ -2,10 +2,12 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	stdhttp "net/http"
 	"strconv"
 
+	"github.com/viant/sqlx/io/errx"
 	xexec "github.com/viant/xdatly/exec"
 	xresponse "github.com/viant/xdatly/response"
 )
@@ -16,6 +18,9 @@ func classifyRequestError(err error) int {
 	}
 	if code := xresponse.ErrorStatusCode(err, 0); code != 0 {
 		return code
+	}
+	if errors.Is(err, errx.ErrDuplicateKey) {
+		return stdhttp.StatusConflict
 	}
 	return stdhttp.StatusInternalServerError
 }

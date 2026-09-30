@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/viant/datly/internal/packageasset"
 	"github.com/viant/datly/typecatalog"
 )
 
@@ -39,23 +40,26 @@ func (r *planResolver) linkedResources(plan *ResourcePlan) (*ResourcePlan, error
 		return nil, err
 	}
 	dir := filepath.Join(r.input.ProjectRoot, destination.Directory)
-	manifest, err := readScaffoldManifest(dir)
+	declarations, err := packageasset.DiscoverSourceResources(dir)
 	if err != nil {
 		return nil, err
 	}
-	manifest, err = manifest.forOwner(r.plan.ComponentName, true)
-	if err != nil {
-		return nil, err
+	var selected *packageasset.Resources
+	for _, declaration := range declarations {
+		if declaration.Namespace == plan.Namespace || declaration.SourceFile == plan.Destination || plan.Symbol != "" && declaration.Symbol == plan.Symbol {
+			if selected != nil {
+				return nil, fmt.Errorf("ambiguous linked component resources for %s", r.plan.ComponentName)
+			}
+			selected = declaration
+		}
 	}
-	if !manifest.exists || manifest.Resources == nil {
+	if selected == nil {
 		return nil, nil
 	}
-	if manifest.Identity != r.plan.OwnerIdentity || manifest.ComponentPackage != r.input.TargetPackage || manifest.Resources.Namespace != plan.Namespace {
-		return nil, fmt.Errorf("linked package resource ownership changed; explicit migration required")
-	}
-	if err = manifest.Resources.Validate(); err != nil {
-		return nil, err
-	}
+	// Go-only reload retains the actual namespace, symbol and embed filename.
+	// They come from native declarations, rather than historical generator defaults.
+	plan.Namespace, plan.Symbol, plan.Destination = selected.Namespace, selected.Symbol, selected.SourceFile
+	files := selected.Files
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return nil, err
@@ -66,7 +70,7 @@ func (r *planResolver) linkedResources(plan *ResourcePlan) (*ResourcePlan, error
 		return nil, err
 	}
 	plan.sourceText = string(content)
-	for _, file := range manifest.Resources.Files {
+	for _, file := range files {
 		content, err = fs.ReadFile(root.FS(), file)
 		if err != nil {
 			return nil, err

@@ -14,6 +14,11 @@ An authored alias
 must retain its source-column and public-field identity through query building,
 projection, cache reuse and serialization.
 
+For a named DQL graph, an outer direct-column alias renames a Go field while
+retaining its original SQLX mapping and vendor output. A real alias inside the
+view SQL remains a SQL result name. Public `format`/`json` names are separate.
+See the [v1 shaping contract](shaping-contract.md) before changing these names.
+
 ## Scope each selector to a view
 
 Use one-argument `.QuerySelector('inventory')` in DQL or
@@ -22,6 +27,13 @@ not the output holder path or a guessed SQL alias. The selector property comes
 from the declared logical control, such as Fields, OrderBy, Offset, Limit, Page
 or Criteria. Do not use a two-argument selector form or invent a query parameter
 name; binding locations are authored independently.
+
+A binding enables its property only if view policy is unspecified. Explicit
+permissions take precedence: `selector_order_by(inventory,false)` in DQL or
+`selectorOrderBy=false` in a Go view tag remains disabled even with an OrderBy
+binding. The same rule applies to fields, criteria, limit, offset, and page.
+Code constructing canonical metadata can use `Selector.SetPermission` to retain
+the distinction between an explicit false and an unspecified boolean.
 
 Declaration fragment; adapt to the [complete reader contract](../llm/datly-reader/references/reader-examples.md#parameterized-dql-reader)
 with the target view identity and existing input/output bindings.
@@ -32,11 +44,16 @@ with the target view identity and existing input/output bindings.
 #define($_ = $Offset<int>(query/offset).Optional().QuerySelector('inventory'))
 ```
 
-This fragment needs a view named `inventory` with the corresponding selectors
-enabled and an explicit allowed-column/method policy. Child/sibling views have
-independent controls. Offset requires a positive limit; page and limit follow
-the view's supported pagination policy. Use bound values for Criteria and exact
-authored order mappings; arbitrary SQL expressions are not request input.
+This fragment needs a view named `inventory`. Each explicit `QuerySelector`
+declaration enables its own property on that view; no duplicate
+`selector_fields`, `selector_limit`, or `selector_offset` setting is required.
+Child/sibling views have independent controls. Selector policy settings remain
+available for defaults, caps, allowed columns/methods, and selectors injected
+without a declared field. Offset requires a positive limit; page and limit
+follow the view's supported pagination policy. Use bound values for Criteria
+and exact authored order mappings; arbitrary SQL expressions are not request
+input. A declared Criteria field uses the compiled view's columns when no
+narrower `selector_filterable` allowlist is authored.
 
 Allowed source columns must actually belong to the selected query/view and the
 authored public policy. A column's existence does not grant access. Omitted

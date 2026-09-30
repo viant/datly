@@ -2,18 +2,18 @@ package generate
 
 import (
 	"fmt"
-	"github.com/viant/datly/spec"
-	xshape "github.com/viant/x/shape"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/viant/datly/spec"
+	xshape "github.com/viant/x/shape"
 )
 
 func (d *shapeDestinations) partition(p *Plan) error {
 	if d.authority == nil {
 		return nil
 	}
-	p.Destinations = map[string]string{}
 	// Defaults become concrete only in the canonical shape planner.
 	add := func(role, name, file string) shapeDestination {
 		dest, ok := d.byRole[role]
@@ -25,7 +25,6 @@ func (d *shapeDestinations) partition(p *Plan) error {
 			dest.file = file
 		}
 		d.byName[name] = dest
-		p.Destinations[role] = dest.pkg + "/" + dest.file + ":" + name
 		return dest
 	}
 	if p.Input.Ownership == ContractGenerated {
@@ -70,7 +69,7 @@ func (d *shapeDestinations) partition(p *Plan) error {
 		if result := groups[pkg]; result != nil {
 			return result
 		}
-		result := &Plan{Generation: p.Generation.Clone(), OwnerIdentity: p.OwnerIdentity, ComponentPackage: p.ComponentPackage, ComponentName: p.ComponentName, Package: pkg, GoPackage: filepath.Base(pkg), ProjectRoot: p.ProjectRoot, ShapesOnly: true, RouterDest: p.RouterDest, ViewDest: p.ViewDest, Imports: append([]spec.ImportSpec(nil), p.Imports...)}
+		result := &Plan{Generation: p.Generation.Clone(), ComponentName: p.ComponentName, Package: pkg, GoPackage: filepath.Base(pkg), ProjectRoot: p.ProjectRoot, ShapesOnly: true, RouterDest: p.RouterDest, ViewDest: p.ViewDest, Imports: append([]spec.ImportSpec(nil), p.Imports...)}
 		groups[pkg] = result
 		return result
 	}

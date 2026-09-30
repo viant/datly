@@ -86,9 +86,6 @@ func (s *Service) Read(ctx context.Context, session *Session, input any, binder 
 }
 
 func (s *Service) readBound(ctx context.Context, session *Session, input reflect.Value, binder xhandler.Binder, selectors invocationSelectors) (_ any, err error) {
-	if session.SQL != nil && session.SQL.Tx != nil && len(session.ReadCaches) > 0 {
-		return nil, fmt.Errorf("transactional reader cannot use read caches")
-	}
 	root := session.Artifact.Root
 	read := session.rootRead
 	rootSelector := selectors.forView(root.View)
@@ -118,7 +115,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 		}
 		return &dexec.ReadPlan{SQL: query.SQL, Args: append([]any(nil), query.Args...)}, nil
 	}
-	if err := (rootCacheMatcher{session: session, input: input, binder: binder, selectors: selectors, query: query}).apply(ctx); err != nil {
+	if err := (rootCacheMatcher{session: session, input: input, binder: binder, selectors: selectors, query: query}).apply(ctx, rootConnection); err != nil {
 		return nil, err
 	}
 	if session.OutputType == nil {
@@ -215,7 +212,7 @@ func (s *Service) readRoot(ctx context.Context, session *Session, connection dsq
 		rootCollector.Fetched()
 		return reflectOutput(output), rootCollector, rootField, rootDest, nil
 	}
-	scan := newReaderOptions(session, view).rows(rootCollector.NewItem(), unmappedResolver(rootCollector), query)
+	scan := newReaderOptions(session, view, connection.Tx).rows(rootCollector.NewItem(), unmappedResolver(rootCollector), query)
 	visitor := newRowHookVisitor(ctx, view, rootCollector, rootCollector.Visitor(ctx))
 	visitor.decoder = scan.decoder
 	visitor.evidence = scan.evidence
@@ -312,12 +309,15 @@ func viewConnection(ctx context.Context, session *Session, plan *ViewPlan) (dsql
 	if plan == nil || plan.View == nil {
 		return dsql.Connection{}, fmt.Errorf("reader view plan is required")
 	}
-	if session.SQL.Tx != nil && plan.Partitioner != nil {
-		return dsql.Connection{}, fmt.Errorf("transactional reader does not support partitioned view %s", viewName(plan.View))
-	}
 	connection, err := session.SQL.Resolve(ctx, plan.Connector)
 	if err != nil {
 		return dsql.Connection{}, fmt.Errorf("resolve view %s connector %s: %w", viewName(plan.View), plan.Connector, err)
+	}
+	if connection.Tx != nil && plan.Partitioner != nil {
+		return dsql.Connection{}, fmt.Errorf("transactional reader does not support partitioned view %s", viewName(plan.View))
+	}
+	if connection.Tx != nil && session.CacheOnly {
+		return dsql.Connection{}, fmt.Errorf("transactional reader cannot use cache-only mode for view %s", viewName(plan.View))
 	}
 	return connection, nil
 }

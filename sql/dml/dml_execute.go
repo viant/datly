@@ -40,6 +40,7 @@ func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 			payload := batchInsertPayload(step.operations)
 			options := buildExecutionOptions(tx, db, boundedInsertBatchSize(len(step.operations)))
 			count, _, err := service.Exec(ctx, payload, options...)
+			d.recordMutation(step, len(step.operations), count, err)
 			metric.complete(count, err)
 			return err
 		}
@@ -50,6 +51,7 @@ func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 			metric.restart()
 		}
 		count, _, err := service.Exec(ctx, operation.data, options...)
+		d.recordMutation(step, mutationRecordCount(operation.data), count, err)
 		metric.complete(count, err)
 		if err != nil {
 			return err
@@ -73,13 +75,17 @@ func (d *Data) executeUpdateStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 		if operation.match != nil {
 			writeOptions = append(append([]option.Option(nil), options...), option.IfMatch{Column: operation.match.Column, Value: operation.match.Value})
 		}
+		if operation.criteria != nil {
+			writeOptions = append(append([]option.Option(nil), writeOptions...), operation.criteria)
+		}
 		count, err := service.Exec(ctx, operation.data, writeOptions...)
-		if operation.match != nil && errors.Is(err, option.ErrNoMatch) {
-			err = &xhandler.Conflict{Entity: step.table, Field: operation.match.Column, Reason: "expected token no longer matches persisted row"}
+		if (operation.match != nil || operation.criteria != nil) && errors.Is(err, option.ErrNoMatch) {
+			err = &xhandler.Conflict{Entity: step.table, Field: operationConflictField(operation), Reason: "mutation predicate no longer matches persisted row"}
 		}
-		if err == nil && operation.match != nil && count != 1 {
-			err = &xhandler.Conflict{Entity: step.table, Field: operation.match.Column, Reason: "expected token no longer matches persisted row"}
+		if err == nil && (operation.match != nil || operation.criteria != nil) && count != 1 {
+			err = &xhandler.Conflict{Entity: step.table, Field: operationConflictField(operation), Reason: "mutation predicate no longer matches persisted row"}
 		}
+		d.recordMutation(step, mutationRecordCount(operation.data), count, err)
 		metric.complete(count, err)
 		if err != nil {
 			return err
@@ -103,13 +109,17 @@ func (d *Data) executeDeleteStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 		if operation.match != nil {
 			writeOptions = append(append([]option.Option(nil), options...), option.IfMatch{Column: operation.match.Column, Value: operation.match.Value})
 		}
+		if operation.criteria != nil {
+			writeOptions = append(append([]option.Option(nil), writeOptions...), operation.criteria)
+		}
 		count, err := service.Exec(ctx, operation.data, writeOptions...)
-		if operation.match != nil && errors.Is(err, option.ErrNoMatch) {
-			err = &xhandler.Conflict{Entity: step.table, Field: operation.match.Column, Reason: "expected token no longer matches persisted row"}
+		if (operation.match != nil || operation.criteria != nil) && errors.Is(err, option.ErrNoMatch) {
+			err = &xhandler.Conflict{Entity: step.table, Field: operationConflictField(operation), Reason: "mutation predicate no longer matches persisted row"}
 		}
-		if err == nil && operation.match != nil && count != 1 {
-			err = &xhandler.Conflict{Entity: step.table, Field: operation.match.Column, Reason: "expected token no longer matches persisted row"}
+		if err == nil && (operation.match != nil || operation.criteria != nil) && count != 1 {
+			err = &xhandler.Conflict{Entity: step.table, Field: operationConflictField(operation), Reason: "mutation predicate no longer matches persisted row"}
 		}
+		d.recordMutation(step, mutationRecordCount(operation.data), count, err)
 		metric.complete(count, err)
 		if err != nil {
 			return err
@@ -133,4 +143,11 @@ func buildExecutionOptions(tx *sql.Tx, db *sql.DB, batchSize int) []option.Optio
 		options = append(options, option.BatchSize(batchSize))
 	}
 	return options
+}
+
+func operationConflictField(operation *dataOperation) string {
+	if operation.match != nil {
+		return operation.match.Column
+	}
+	return "predicate"
 }

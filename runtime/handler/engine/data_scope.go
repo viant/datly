@@ -12,6 +12,7 @@ import (
 	dexec "github.com/viant/datly/exec"
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
+	"github.com/viant/sqlx"
 	"github.com/viant/xdatly/connector"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -162,6 +163,22 @@ func (c dmlCapability) DeleteWithOptions(tableName string, data any, options ...
 		return fmt.Errorf("atomic matched delete is unavailable for %s", tableName)
 	}
 	return service.DeleteWithOptions(tableName, data, options...)
+}
+
+func (c dmlCapability) UpdateWithCriteria(tableName string, data any, criteria *sqlx.Criteria, options ...xhandler.Option) error {
+	service, ok := c.service.(rhandler.CriteriaDML)
+	if !ok {
+		return fmt.Errorf("native update criteria unavailable for %s", tableName)
+	}
+	return service.UpdateWithCriteria(tableName, data, criteria, options...)
+}
+
+func (c dmlCapability) DeleteWithCriteria(tableName string, data any, criteria *sqlx.Criteria, options ...xhandler.Option) error {
+	service, ok := c.service.(rhandler.CriteriaDML)
+	if !ok {
+		return fmt.Errorf("native delete criteria unavailable for %s", tableName)
+	}
+	return service.DeleteWithCriteria(tableName, data, criteria, options...)
 }
 
 func (c dmlCapability) Execute(dml string, args ...any) error {
@@ -400,6 +417,35 @@ func sourceKey(source dexec.DataSource) any {
 		return key
 	}
 	return nil
+}
+
+func (s *dataScope) transactionForDatabase(ctx context.Context, db *sql.DB) (*sql.Tx, error) {
+	if s == nil || db == nil {
+		return nil, nil
+	}
+	root := s.root
+	if root == nil {
+		root = s
+	}
+	root.mu.Lock()
+	unit := root.bySource[db]
+	root.mu.Unlock()
+	if unit == nil {
+		return nil, nil
+	}
+	data, err := unit.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	owned, ok := data.(interface{ InvocationTransaction() (*sql.DB, *sql.Tx) })
+	if !ok {
+		return nil, nil
+	}
+	resolvedDB, tx := owned.InvocationTransaction()
+	if resolvedDB != db {
+		return nil, ErrUnknownDatabaseIdentity
+	}
+	return tx, nil
 }
 
 func sourceTransactionKey(source dexec.DataSource) any {

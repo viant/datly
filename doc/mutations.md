@@ -156,7 +156,7 @@ already-authored contracts and is a separate API; application authors do not nee
 to recreate those contracts to generate a standard writer.
 
 The CLI reports the operation, language and artifact count. Inspect emitted files
-and `.datly-gen.json`, then add business behavior to
+without a package sidecar, then add business behavior to
 the create-once Go hook file, build/link the component and run it. Do not create
 a combined reader/writer component or manually recreate generated matching and
 Current-state support.

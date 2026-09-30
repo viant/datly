@@ -260,10 +260,10 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 	if err := catalog.resources.RegisterSkills(protocolRegistry); err != nil {
 		return nil, err
 	}
-	if err := registerSkillToolBridge(protocolRegistry); err != nil {
+	if err := registerSkillToolBridge(protocolRegistry, c.config.AuthorizeCatalogResource); err != nil {
 		return nil, err
 	}
-	return &Service{catalog: catalog, registry: protocolRegistry, resources: resourceHandler, policy: policy, authorizeResource: c.config.AuthorizeResource}, nil
+	return &Service{catalog: catalog, registry: protocolRegistry, resources: resourceHandler, policy: policy, authorizeResource: c.config.AuthorizeResource, authorizeCatalogTool: c.config.AuthorizeCatalogTool, authorizeCatalogResource: c.config.AuthorizeCatalogResource}, nil
 }
 
 func resourceBaseURI(value string) string {

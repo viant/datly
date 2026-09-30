@@ -133,6 +133,11 @@ rejected rather than silently generating a public route.
 
 ## Imported types, field tags and SQL macros
 
+Read the [v1 shaping contract](shaping-contract.md) for outer Go-field renames,
+inner vendor SQL aliases, SQLX mappings and public serialization names. Outer
+`record.NAME AS DISPLAY_NAME` generates `DisplayName` mapped to `NAME`; it does not
+add that alias to vendor SQL.
+
 Use full module/package identities and declared import aliases. Rich projections
 can refer to an imported type with `CAST(view.field AS alias.Type)` and refine
 metadata through `tag(view.column, '...')`. Whether a field is a physical JSON
@@ -156,16 +161,12 @@ are different mechanisms; neither is permission to interpolate client SQL.
 
 ## Regenerate without losing authored code
 
-Generation tracks ownership and fingerprints. Existing fields retain order;
-new generated fields append. Proven generated fields can change type or be
-removed when the owned projection changes. Unrelated authored fields, methods,
-tags and comments remain protected. An older file without sufficient ownership
-evidence is not automatically safe to overwrite or delete.
-
-Put business logic in authored handlers/hooks and keep generated orchestration
-owned by generation. If persistence rejects an edit conflict, inspect the
-conflicting ownership; do not erase hand edits just to force regeneration.
-[Regeneration rules](../transcribe/generate/REGENERATION.md) explain the evidence.
+Generation follows the current DQL and linked Go contracts without a package
+sidecar. It replaces generated shapes and support, including direct edits, and
+retires obsolete artifacts. The editor is responsible for generated-file edits.
+Put business logic in separate application handlers/hooks or linked contracts;
+those files are preserved. [Regeneration rules](../transcribe/generate/REGENERATION.md)
+explain the migration and staged publication behavior.
 
 ## Resource and reload rules
 
@@ -179,10 +180,9 @@ validate. Reload can change supported metadata/DQL against linked contracts;
 Go method or shape changes require rebuilding. [Configuration](configuration.md)
 explains this boundary for standalone applications.
 
-For a generated component loaded from its Go package, the ownership manifest
-retains its destination and linked SQL resources. Static validation and reload
-preserve those resources and do not adopt edited SQL as a fresh generator
-baseline. Later transcription still protects authored changes.
+For a generated component loaded from Go, holder/type metadata and native embed
+capabilities retain destination and SQL resources. Package manifests are not
+used. Current source supplies resource snapshots during reload.
 
 ## CAST, pointers, column drop and to-one regeneration
 
@@ -192,10 +192,9 @@ removing the pointer changes nullability again. SQL `CAST(expr AS SQLType) AS na
 remains executable SQL. Physical JSON/custom typed fields retain SQL mapping and
 codecs; logical pseudo fields need their explicit non-DML policy.
 
-Regeneration must propagate reader and writer pointer/value changes and remove
-only proven generated columns that disappeared from the owned projection. Keep
-field order stable, append additions, protect authored methods/tags/comments and
-reject edited generated-field conflicts. Never infer a new output alias to
+Regeneration propagates reader/writer pointer/value changes and removes
+generated columns absent from the current projection. It overwrites direct
+generated-file edits and preserves separate application hooks and linked contracts. Never infer a new output alias to
 resolve duplicate column names; follow the integrated
 [naming rules](selectors-and-formats.md).
 
@@ -205,6 +204,6 @@ It is not an authorization condition and does not enforce database uniqueness.
 The reader/writer shape uses a pointer holder for One and a slice for Many.
 Adding the hint must regenerate a generated Many holder to One; removing it must
 regenerate One back to Many, including generated access/presence and writer
-traversal. Explicit cardinality controls retain precedence over the hint. Authored holder edits remain
-protected in either direction. Check both transitions through generation,
+traversal. Explicit cardinality controls retain precedence over the hint. Put customization
+in DQL or linked application contracts; generated holder edits are overwritten. Check both transitions through generation,
 reload and real query/write behavior, not just a parsed cardinality flag.

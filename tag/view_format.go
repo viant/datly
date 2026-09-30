@@ -5,12 +5,20 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/viant/datly/spec"
 )
 
 // Value formats view metadata using the same grammar accepted by ParseView.
 func (v View) Value() (string, error) {
 	if v.BatchConcurrency < 0 {
 		return "", fmt.Errorf("view option batchConcurrency must be a non-negative integer")
+	}
+	if v.MutationPredicateGroup != nil && *v.MutationPredicateGroup < 0 {
+		return "", fmt.Errorf("mutationPredicate must be a non-negative group")
+	}
+	if v.OnDeleteNotFound != "" && v.OnDeleteNotFound != "error" && v.OnDeleteNotFound != "ignore" {
+		return "", fmt.Errorf("onDeleteNotFound must be error or ignore")
 	}
 	var values []string
 	if name := strings.TrimSpace(v.Name); name != "" {
@@ -37,7 +45,7 @@ func (v View) Value() (string, error) {
 		return nil
 	}
 	for _, item := range []struct{ name, value string }{
-		{"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
+		{"onDeleteNotFound", v.OnDeleteNotFound}, {"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
 		{"cache", v.Cache}, {"cacheWarmup", v.CacheWarmup},
 		{"orderBy", v.OrderBy}, {"match", v.Match},
 	} {
@@ -59,6 +67,9 @@ func (v View) Value() (string, error) {
 	}
 	if v.PublishParent {
 		values = append(values, "publishParent=true")
+	}
+	if v.MutationPredicateGroup != nil {
+		values = append(values, "mutationPredicate="+strconv.Itoa(*v.MutationPredicateGroup))
 	}
 	if v.Auxiliary {
 		values = append(values, "auxiliary=true")
@@ -84,17 +95,17 @@ func (v View) Value() (string, error) {
 		if err := appendPair("selectorNamespace", v.Selector.Namespace); err != nil {
 			return "", err
 		}
-		appendFlag := func(name string, enabled bool) {
-			if enabled {
-				values = append(values, name+"=true")
+		appendFlag := func(name string, property spec.SelectorProperty, enabled bool) {
+			if enabled || v.Selector.PermissionSpecified(property) {
+				values = append(values, name+"="+strconv.FormatBool(enabled))
 			}
 		}
-		appendFlag("selectorProjection", v.Selector.AllowFields)
-		appendFlag("selectorOrderBy", v.Selector.AllowOrderBy)
-		appendFlag("selectorCriteria", v.Selector.AllowCriteria)
-		appendFlag("selectorLimit", v.Selector.AllowLimit)
-		appendFlag("selectorOffset", v.Selector.AllowOffset)
-		appendFlag("selectorPage", v.Selector.AllowPage)
+		appendFlag("selectorProjection", spec.SelectorPropertyFields, v.Selector.AllowFields)
+		appendFlag("selectorOrderBy", spec.SelectorPropertyOrderBy, v.Selector.AllowOrderBy)
+		appendFlag("selectorCriteria", spec.SelectorPropertyCriteria, v.Selector.AllowCriteria)
+		appendFlag("selectorLimit", spec.SelectorPropertyLimit, v.Selector.AllowLimit)
+		appendFlag("selectorOffset", spec.SelectorPropertyOffset, v.Selector.AllowOffset)
+		appendFlag("selectorPage", spec.SelectorPropertyPage, v.Selector.AllowPage)
 		if len(v.Selector.SQLMethods) > 0 {
 			encoded, err := encodeSQLMethods(v.Selector.SQLMethods)
 			if err != nil {
