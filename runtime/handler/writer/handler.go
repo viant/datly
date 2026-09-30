@@ -487,6 +487,7 @@ type Frame struct {
 	SkippedDelete    bool
 	Action           xhandler.WriteAction
 	Record           *Record
+	Location         string
 	Parent           *Frame
 	Original         xhandler.OriginalPresence
 	Hook             reflect.Value
@@ -1046,7 +1047,7 @@ func (p *Program) unresolvedParentLinks(frame *Frame) bool {
 }
 
 func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhandler.ValidationOptions {
-	options := xhandler.ValidationOptions{Action: frame.Action, Location: frame.Record.Path, Shallow: true}
+	options := xhandler.ValidationOptions{Action: frame.Action, Location: frame.Location, Shallow: true}
 	if frame.Previous.IsValid() {
 		options.Previous = frame.Previous.Interface()
 		options.PreviousFields = p.fieldsOf(frame.Previous.Elem().Type())
@@ -1249,6 +1250,9 @@ func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame)
 	state := reflect.New(methodType.In(2)).Elem()
 	entityState := state.FieldByName("EntityState")
 	if entityState.IsValid() {
+		if location := entityState.FieldByName("Location"); location.IsValid() && location.CanSet() {
+			location.SetString(frame.Location)
+		}
 		if previous := entityState.FieldByName("Previous"); previous.IsValid() && previous.CanSet() && frame.Previous.IsValid() && frame.Previous.Type().AssignableTo(previous.Type()) {
 			previous.Set(frame.Previous)
 		}
@@ -1449,22 +1453,44 @@ func (p *Program) buildRecordFrames(ctx context.Context, binder xhandler.Binder,
 		if rows.IsNil() {
 			return nil
 		}
-		return p.buildEntityFrame(ctx, binder, record, rows, parent, 0)
+		return p.buildEntityFrame(ctx, binder, record, rows, parent, 0, false)
 	}
 	if rows.Kind() != reflect.Slice {
 		return fmt.Errorf("writer role %s requires a record or collection, got %s", record.Path, rows.Type())
 	}
 	for i := 0; i < rows.Len(); i++ {
-		if err := p.buildEntityFrame(ctx, binder, record, rows.Index(i), parent, i); err != nil {
+		if err := p.buildEntityFrame(ctx, binder, record, rows.Index(i), parent, i, true); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// rowLocation follows canonical Go holders, never transport aliases or tables.
+func (p *Program) rowLocation(record *Record, parent *Frame, position int, indexed bool) string {
+	location := record.Path
+	if parent != nil {
+		if relation := relationFor(parent.Record, record); relation != nil {
+			location = parent.Location + "." + parent.Record.EntityType.FieldByIndex(relation.Field).Name
+		}
+	} else if input := reflect.ValueOf(p.input); input.IsValid() {
+		typ := input.Type()
+		for typ.Kind() == reflect.Pointer {
+			typ = typ.Elem()
+		}
+		if typ.Kind() == reflect.Struct && p.metadata.InputField >= 0 && p.metadata.InputField < typ.NumField() {
+			location = typ.Field(p.metadata.InputField).Name
+		}
+	}
+	if indexed {
+		location += fmt.Sprintf("[%d]", position)
+	}
+	return location
+}
+
 // buildEntityFrame frames one row (a *T element or a to-one pointer holder)
 // and recurses into its relations.
-func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, record *Record, entity reflect.Value, parent *Frame, position int) error {
+func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, record *Record, entity reflect.Value, parent *Frame, position int, indexed bool) error {
 	{
 		i := position
 		if entity.IsNil() {
@@ -1523,7 +1549,7 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 			action = xhandler.WriteDelete
 		}
 		original := p.captureEntityOriginal(record, entity)
-		frame := &Frame{Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, SkippedDelete: skipDelete, Action: action, Record: record, Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
+		frame := &Frame{Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, SkippedDelete: skipDelete, Action: action, Record: record, Location: p.rowLocation(record, parent, position, indexed), Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
 			children := entity.Elem().FieldByIndex(relation.Field)

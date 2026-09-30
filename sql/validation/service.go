@@ -120,7 +120,7 @@ func (s *Service) validateGoEntity(ctx context.Context, value any, prepared *gov
 		return nil, err
 	}
 	for _, violation := range goResult.Violations {
-		result.Violations = append(result.Violations, &xhandler.Violation{Location: violation.Location, Field: violation.Field, Message: violation.Message, Check: violation.Check})
+		result.Violations = append(result.Violations, &xhandler.Violation{Location: violation.Location, Field: violation.Field, Message: violation.Message, Check: violation.Check, CheckedValue: violation.Value, HasCheckedValue: true})
 	}
 	return result, nil
 }
@@ -137,7 +137,7 @@ func (p *plan) appendSQL(result *xhandler.Validation, sqlResult *sqlvalidator.Va
 				break
 			}
 		}
-		result.Violations = append(result.Violations, &xhandler.Violation{Location: violation.Location, Field: violation.Field, Message: message, Check: violation.Check})
+		result.Violations = append(result.Violations, &xhandler.Violation{Location: violation.Location, Field: violation.Field, Message: message, Check: violation.Check, CheckedValue: violation.Value, HasCheckedValue: true})
 	}
 }
 
