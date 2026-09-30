@@ -559,9 +559,13 @@ Syntax fragment; adapt within the [complete reader contract](dql-grammar.md#a-sh
 -- Projection annotations:
 CAST(r.bounds AS model.Bounds)
 tag(r.bounds, 'sqlx:"-"')
-tag(r.BOUND_UNIT, 'internal:"true"')
+internal(r.BOUND_UNIT) -- shorthand for tag(r.BOUND_UNIT, 'internal:"true"')
 tag(r.name, 'validate:"required"')
 ~~~~
+
+The column shorthand controls one field's application-facing visibility and
+retains its SQL mapping. `#setting($_ = $internal(true))` controls the entire
+component route's external HTTP visibility. One does not imply the other.
 
 Prefer an outer CAST to declare the intended Go type, especially for rich hook-populated fields:
 

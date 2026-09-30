@@ -36,8 +36,13 @@ SELECT r.id,r.name FROM records r`,
 	}
 	public := *source
 	public.Text = strings.ReplaceAll(public.Text, "$internal(true)", "$internal(false)")
-	_, err := (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Source: &public, Destination: root})
+	public.Text = strings.ReplaceAll(public.Text, "SELECT r.id,r.name FROM", "SELECT r.id,r.name,internal(r.name) FROM")
+	publicResult, err := (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Source: &public, Destination: root})
 	require.NoError(t, err)
+	require.False(t, publicResult.Result.Plan.Routes[0].Internal)
+	publicView, err := os.ReadFile(filepath.Join(root, "records", "views.go"))
+	require.NoError(t, err)
+	require.Contains(t, string(publicView), `internal:"true"`)
 	for _, policy := range []string{"first", "repeat"} {
 		generated, err := (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Source: source, Destination: root})
 		require.NoError(t, err)
@@ -47,6 +52,9 @@ SELECT r.id,r.name FROM records r`,
 		require.NoError(t, err)
 		require.Contains(t, string(router), "internal=true")
 		require.Contains(t, string(router), "EmbedNamespace", "policy=%q router=%s", policy, router)
+		privateView, err := os.ReadFile(filepath.Join(root, "records", "views.go"))
+		require.NoError(t, err)
+		require.NotContains(t, string(privateView), `internal:"true"`, "global route visibility must not annotate individual fields")
 	}
 	runtimeTest, err := os.ReadFile("testdata/private_reader/runtime_test.go.txt")
 	require.NoError(t, err)

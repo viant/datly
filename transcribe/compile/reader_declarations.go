@@ -32,10 +32,10 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			continue
 		}
 		name := strings.ToLower(strings.TrimSpace(sqlparser.Stringify(call.X)))
-		if (name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required" || name == "sequence_scope") && item.Alias != "" {
+		if (name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required" || name == "sequence_scope" || name == "internal") && item.Alias != "" {
 			return false, fmt.Errorf("%s must be a standalone SELECT annotation without an alias", name)
 		}
-		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token" && name != "required" && name != "sequence_scope") {
+		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token" && name != "required" && name != "sequence_scope" && name != "internal") {
 			filtered = append(filtered, item)
 			continue
 		}
@@ -67,11 +67,14 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 				scope = append(scope, parts[1])
 			}
 			rawTag = (tags.Tags{&tags.Tag{Name: "sequenceScope", Values: tags.Values(strings.Join(scope, ","))}}).Literal()
-		} else if name == "delete_marker" || name == "concurrency_token" || name == "required" {
+		} else if name == "delete_marker" || name == "concurrency_token" || name == "required" || name == "internal" {
 			if len(call.Args) != 1 {
 				return false, fmt.Errorf("%s requires one qualified view column", name)
 			}
 			target = sqlparser.Stringify(call.Args[0])
+			if name == "internal" {
+				rawTag = `internal:"true"`
+			}
 		} else {
 			if len(call.Args) != 2 {
 				return false, fmt.Errorf("%s requires a column and a string literal", name)
@@ -198,7 +201,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 	}
 	misplaced := ""
 	if containsSQLCall(parsed, func(name string) bool {
-		if name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required" || name == "sequence_scope" {
+		if name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required" || name == "sequence_scope" || name == "internal" {
 			misplaced = name
 			return true
 		}

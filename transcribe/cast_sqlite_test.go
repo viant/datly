@@ -51,7 +51,7 @@ func TestCASTImportedRichShapeSQLite(t *testing.T) {
 			const pkg = "github.com/viant/datly/internal/testfixture/castmodel"
 			text := `#import('domain','` + pkg + `')
 #setting($_ = $route('/records','GET'))
-SELECT r.*, CAST(r.bounds AS domain.Bounds), tag(r.bounds,'sqlx:"-"'), tag(r.unit,'internal:"true"'), tag(r.cap,'internal:"true"'), CAST(r.labels AS '[]string'), tag(r.labels,'sqlx:"labels,enc=JSON"')
+SELECT r.*, CAST(r.bounds AS domain.Bounds), tag(r.bounds,'sqlx:"-"'), internal(r.unit), tag(r.cap,'internal:"true"'), CAST(r.labels AS '[]string'), tag(r.labels,'sqlx:"labels,enc=JSON"')
 FROM (SELECT id, unit, cap, labels, '' AS bounds FROM records) r`
 			if tc.wildcard {
 				text = strings.Replace(text, "SELECT id, unit, cap, labels, '' AS bounds FROM records", "SELECT o.*, '' AS bounds FROM records o", 1)
@@ -193,6 +193,7 @@ func TestCASTNamedPseudoViewOwnershipSQLite(t *testing.T) {
 		{"unknown physical remains strict", `SELECT r.*, CAST(r.bounds AS int), tag(r.bounds,'sqlx:"-"') FROM (SELECT o.*, '' AS bounds FROM records o) r`, "unable discover column unknown type"},
 		{"inner alias is not view alias", `SELECT r.*, CAST(o.bounds AS int), tag(o.bounds,'sqlx:"-"') FROM (SELECT id, '' AS bounds FROM records o) r`, "has no canonical view"},
 		{"database scope annotation restricted", `SELECT r.*, CAST(r.bounds AS int), tag(r.bounds,'sqlx:"-"') FROM (SELECT id, '' AS bounds, tag(o.id,'internal:"true"') FROM records o) r`, "outer"},
+		{"database scope internal shorthand restricted", `SELECT r.*, CAST(r.bounds AS int), tag(r.bounds,'sqlx:"-"') FROM (SELECT id, '' AS bounds, internal(o.id) FROM records o) r`, "outer"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			compiled, err := NewCompiler().Compile(ctx, &Source{Name: "Records", Connector: "main", ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": h.DB}), Text: "#setting($_ = $route('/records','GET'))\n" + tc.sql})

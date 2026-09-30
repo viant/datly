@@ -639,9 +639,14 @@ Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-vie
 -- Projection annotations:
 CAST(r.bounds AS model.Bounds)
 tag(r.bounds, 'sqlx:"-"')
-tag(r.BOUND_UNIT, 'internal:"true"')
+internal(r.BOUND_UNIT) -- shorthand for tag(r.BOUND_UNIT, 'internal:"true"')
 tag(r.name, 'validate:"required"')
 ~~~~
+
+`#setting($_ = $internal(true))` marks the whole component route for internal
+invocation and omits it from external HTTP routing. `internal(view.column)`
+annotates one output field with `internal:"true"`; it does not change route
+visibility or remove the field's SQL mapping. These are independent controls.
 
 Prefer an outer CAST to declare the intended Go type, especially for rich hook-populated fields:
 
