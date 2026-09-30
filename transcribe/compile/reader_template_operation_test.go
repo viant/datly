@@ -34,6 +34,7 @@ func TestOperationGetPreservesConditionalLocksGeneratedRuntime(t *testing.T) {
 #define($_ = $LockRows<bool>(query/lock).Optional())
 #define($_ = $ChildLock<bool>(query/childLock).Optional())
 #define($_ = $Excluded<[]int>(query/excluded).Optional())
+#define($_ = $OuterLock<bool>(query/outerLock).Optional())
 #define($_ = $Data<[]*Row>(output/view))
 SELECT rows.id AS Identifier,rows.name,children.id,children.parent_id,children.name,type(rows,'Row'),type(children,'Child')
 FROM (
@@ -46,7 +47,9 @@ FROM (
 ) rows LEFT JOIN (
  SELECT c.id,c.parent_id,c.name FROM children c ORDER BY c.id
  #if($ChildLock) ${View.ForUpdate()} #end
-) children ON children.parent_id=rows.id`
+) children ON children.parent_id=rows.id
+ORDER BY rows.name DESC,rows.id
+#if($OuterLock) ${View.ForUpdate()} #end`
 	if err := os.WriteFile(filepath.Join(root, "source", "reader.dql"), []byte(source), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -103,9 +106,15 @@ func TestGeneratedConditionalLockContract(t *testing.T){
  childLocked:=&Input{};childLocked.SetChildLock(true);if _,err=newExecution(&dsql.SQLComponent{DB:db.DB}).Read(ctx,childLocked,binder{},nil);err==nil||!strings.Contains(err.Error(),"active transaction"){t.Fatalf("child lock without transaction: %v",err)}
  tx,err:=db.DB.BeginTx(ctx,nil);if err!=nil{t.Fatal(err)};defer tx.Rollback();if _,err=tx.ExecContext(ctx,"INSERT INTO records VALUES(2,'uncommitted')");err!=nil{t.Fatal(err)}
  rows,err=newExecution(&dsql.SQLComponent{DB:db.DB,Tx:tx}).Read(ctx,locked,binder{},nil);if err!=nil{t.Fatal(err)};if len(rows.(*Output).Data)!=2{t.Fatal("reader did not share caller transaction")};if _,err=tx.ExecContext(ctx,"INSERT INTO children VALUES(2,1,'uncommitted')");err!=nil{t.Fatal(err)}
- rows,err=newExecution(&dsql.SQLComponent{DB:db.DB,Tx:tx}).Read(ctx,childLocked,binder{},nil);if err!=nil{t.Fatal(err)};childRows:=reflect.ValueOf(rows.(*Output).Data[0]).Elem().FieldByName("Children");if !childRows.IsValid()||childRows.Len()!=2{t.Fatalf("child reader did not share caller tx: %#v",rows)}
+ rows,err=newExecution(&dsql.SQLComponent{DB:db.DB,Tx:tx}).Read(ctx,childLocked,binder{},nil);if err!=nil{t.Fatal(err)};matchedChildren:=false;for _,row:=range rows.(*Output).Data{children:=reflect.ValueOf(row).Elem().FieldByName("Children");if children.IsValid()&&children.Len()==2{matchedChildren=true}};if !matchedChildren{t.Fatalf("child reader did not share caller tx: %#v",rows)}
  if err=tx.Rollback();err!=nil{t.Fatal(err)}
  program,err:=(sqltemplate.Compiler{Source:artifact.Reader.Root.View.Spec.Source.SQL,InputType:reflect.TypeFor[Input]()}).Compile();if err!=nil{t.Fatal(err)}
- for _,active:=range []bool{false,true}{query,err:=builder.NewBuilder().Build(ctx,builder.WithBuilderTemplate(program),builder.WithBuilderInput(reflect.ValueOf(locked)),builder.WithBuilderDialect(&info.Dialect{Product:database.Product{Name:"mysql"},Placeholder:"?"}),builder.WithBuilderTransactionActive(active));if !active{if err==nil{t.Fatal("MySQL lock without transaction succeeded")};continue};if err!=nil{t.Fatal(err)};if !strings.Contains(query.SQL,"FOR UPDATE"){t.Fatalf("missing MySQL lock clause: %s",query.SQL)}}
+
+ outerLocked:=&Input{};outerLocked.SetOuterLock(true)
+ for _,input:=range []*Input{locked,outerLocked}{for _,active:=range []bool{false,true}{query,err:=builder.NewBuilder().Build(ctx,builder.WithBuilderTemplate(program),builder.WithBuilderInput(reflect.ValueOf(input)),builder.WithBuilderDialect(&info.Dialect{Product:database.Product{Name:"mysql"},Placeholder:"?"}),builder.WithBuilderTransactionActive(active));if !active{if err==nil{t.Fatal("MySQL lock without transaction succeeded")};continue};if err!=nil{t.Fatal(err)}
+ normalized:=strings.Join(strings.Fields(query.SQL)," ")
+ if input==outerLocked{want:="SELECT rows.id, rows.name FROM ( SELECT r.id,r.name FROM records r WHERE 1=1 ORDER BY r.id ) rows ORDER BY rows.name DESC, rows.id FOR UPDATE";explicitDirection:=strings.Replace(want,"rows.id FOR UPDATE","rows.id ASC FOR UPDATE",1);if normalized!=want&&normalized!=explicitDirection{t.Fatalf("wrong complete MySQL SQL order: got %s want %s",normalized,want)}}else if !strings.Contains(normalized,"FOR UPDATE"){t.Fatalf("missing MySQL lock clause: %s",normalized)}
+ }}
+
 }
 `

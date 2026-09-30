@@ -125,6 +125,13 @@ func (s *readTemplateSource) restore(root *spec.View, parsed *query.Select, fram
 				}
 			}
 			for _, fragment := range s.fragments {
+				// A terminal executable statement belongs after the complete query. The
+				// SQL parser may attach its analysis comment to the final ORDER operand;
+				// restoring there would put it before an implicit ASC/DESC direction.
+				if view == root && fragment.terminal && strings.TrimSpace(fragment.body) == "" && strings.Contains(view.Source.SQL, fragment.marker) {
+					view.Source.SQL = strings.ReplaceAll(view.Source.SQL, fragment.marker, "")
+					continue
+				}
 				if start := strings.Index(view.Source.SQL, fragment.marker); start >= 0 {
 					finish := start + len(fragment.marker)
 					if fragment.closing != "" {

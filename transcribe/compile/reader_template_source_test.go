@@ -19,6 +19,8 @@ AND r.owner_id=$Owner
 AND r.public=1
 #end
 ORDER BY r.id`, []string{"#if($Scoped)\nAND r.owner_id=$Owner\n#else\nAND r.public=1\n#end"}},
+		{"outer implicit order suffix", `SELECT records.id AS Identifier FROM (SELECT r.id FROM records r) records ORDER BY records.id
+#if($LockRows) ${View.ForUpdate()} #end`, []string{"#if($LockRows) ${View.ForUpdate()} #end"}},
 		{"named projection", `SELECT records.id AS Identifier FROM (
  SELECT r.id FROM records r WHERE 1=1
  #if($LockRows) ${View.ForUpdate()} #end
@@ -64,6 +66,9 @@ ORDER BY r.id`, []string{"#if($Scoped)\nAND r.owner_id=$Owner\n#else\nAND r.publ
 			}
 			if strings.Contains(text, "__datly_read_template_") {
 				t.Fatalf("analysis source leaked into executable SQL: %s", text)
+			}
+			if tc.name == "outer implicit order suffix" && strings.Contains(text, "#end ASC") {
+				t.Fatalf("terminal template statement became an ORDER operand: %s", text)
 			}
 			if tc.name == "distinct repeated source bodies" {
 				if strings.Contains(root.Source.SQL, "SecondLock") || strings.Contains(root.Relations[0].View.Source.SQL, "FirstLock") {
