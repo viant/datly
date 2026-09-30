@@ -102,7 +102,7 @@ func (s *Service) nonWindowQuery(ctx context.Context, session *Session, input re
 		rsql.WithBuilderParameterResolver(session.Parameters),
 		rsql.WithBuilderTemplate(rootPlan.Template),
 		rsql.WithBuilderBinder(binder),
-		rsql.WithBuilderDialect(connection.Dialect),
+		rsql.WithBuilderDialect(connection.Dialect), rsql.WithBuilderTransactionActive(connection.Tx != nil),
 		rsql.WithBuilderExcludePagination(true),
 	)
 	if err != nil {
@@ -170,7 +170,7 @@ func (e *outputRelationExecution) query(ctx context.Context, partition *xreader.
 			rsql.WithBuilderParameterResolver(e.session.Parameters),
 			rsql.WithBuilderTemplate(program),
 			rsql.WithBuilderBinder(e.binder),
-			rsql.WithBuilderDialect(connection.Dialect),
+			rsql.WithBuilderDialect(connection.Dialect), rsql.WithBuilderTransactionActive(connection.Tx != nil),
 			rsql.WithBuilderParentQuery(e.root),
 			rsql.WithBuilderParentSelector(e.selectors.forView(e.session.Artifact.Root.View)),
 		}

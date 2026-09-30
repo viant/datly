@@ -155,7 +155,7 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 		rsql.WithBuilderRelation(r.child.Relation()),
 		rsql.WithBuilderTemplate(r.plan.Template),
 		rsql.WithBuilderBinder(r.binder),
-		rsql.WithBuilderDialect(r.connection.Dialect),
+		rsql.WithBuilderDialect(r.connection.Dialect), rsql.WithBuilderTransactionActive(r.connection.Tx != nil),
 		rsql.WithBuilderSkipRelationFilter(r.readAll),
 	}
 	if r.readAll || r.parentCount > 1 {
@@ -226,7 +226,7 @@ func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *c
 		rsql.WithBuilderComponent(r.session.Component), rsql.WithBuilderView(view), rsql.WithBuilderCriteriaCompiler(r.plan.Criteria),
 		rsql.WithBuilderSelector(selector), rsql.WithBuilderProjection(viewProjection(view, selector)),
 		rsql.WithBuilderInput(r.input.Elem()), rsql.WithBuilderParameterResolver(r.session.Parameters),
-		rsql.WithBuilderTemplate(r.plan.Template), rsql.WithBuilderBinder(r.binder), rsql.WithBuilderDialect(r.connection.Dialect))
+		rsql.WithBuilderTemplate(r.plan.Template), rsql.WithBuilderBinder(r.binder), rsql.WithBuilderDialect(r.connection.Dialect), rsql.WithBuilderTransactionActive(r.connection.Tx != nil))
 	if err != nil {
 		return err
 	}

@@ -103,7 +103,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 		rsql.WithBuilderParameterResolver(session.Parameters),
 		rsql.WithBuilderTemplate(root.Template),
 		rsql.WithBuilderBinder(binder),
-		rsql.WithBuilderDialect(rootConnection.Dialect),
+		rsql.WithBuilderDialect(rootConnection.Dialect), rsql.WithBuilderTransactionActive(rootConnection.Tx != nil),
 	}
 	query, err := rsql.NewBuilder().Build(ctx, rootBuilderOptions...)
 	if err != nil {

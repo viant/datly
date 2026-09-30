@@ -1107,6 +1107,29 @@ For a database UTC clock in reader SQL, `${criteria.UTCNow()}` renders
 argument and rejects other dialects. Use it for server-owned lease times;
 substituting an application clock changes cross-worker lease behavior.
 
+For a locking reader, append `${View.ForUpdate()}` to the authored SELECT.
+The runtime requires an active transaction before evaluating that clause.
+MySQL and PostgreSQL render `FOR UPDATE`; SQLite emits no clause and uses its
+transaction locking. Unknown dialects fail. Keep the lock switch in a trusted
+provider when the same reader also serves ordinary requests.
+
+Custom orchestration may request an explicit isolation before starting the
+managed unit:
+
+```go
+ctx = exec.WithTransactionIsolation(ctx, exec.IsolationSerializable)
+if err := starter.Start(ctx); err != nil {
+    return err
+}
+```
+
+The supported policies are `IsolationReadCommitted`, `IsolationRepeatableRead`
+and `IsolationSerializable`. Every generated component invoked with that
+context and connector joins the same managed unit. Changing an existing unit's isolation,
+requesting an unknown policy, or asserting the isolation of a caller-supplied
+transaction fails the invocation. The caller retains ownership of a supplied
+transaction. Driver rejection propagates without falling back to the default.
+
 ### Predicate expression API and evaluation order
 
 `Expand(group)` takes exactly one integer and joins with AND.

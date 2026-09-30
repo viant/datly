@@ -30,6 +30,7 @@ type Data struct {
 	executionMu     sync.Mutex
 	db              *sql.DB
 	tx              *sql.Tx
+	txIsolation     sql.IsolationLevel
 	externalTx      bool
 	onCommit        func(context.Context)
 	queue           []*dataOperation

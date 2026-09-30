@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	dexec "github.com/viant/datly/exec"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -16,23 +17,58 @@ func (d *Data) database() (*sql.DB, error) {
 	return owner.db, nil
 }
 
-func (d *Data) transaction(ctx context.Context) (*sql.Tx, error) {
+func (d *Data) transaction(ctx context.Context) (result *sql.Tx, retErr error) {
 	owner := d.owner()
 	owner.mu.Lock()
-	defer owner.mu.Unlock()
+	defer func() {
+		managed := owner.invocation
+		owner.mu.Unlock()
+		if managed && retErr != nil {
+			owner.markFailed(retErr)
+		}
+	}()
+	isolation, requested, err := requestedIsolation(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if owner.tx != nil {
+		if requested && (owner.externalTx || owner.txIsolation != isolation) {
+			return nil, fmt.Errorf("requested transaction isolation cannot change or verify an existing transaction")
+		}
 		return owner.tx, nil
 	}
 	db, err := d.database()
 	if err != nil {
 		return nil, err
 	}
-	tx, err := db.BeginTx(ctx, nil)
+	var options *sql.TxOptions
+	if requested {
+		options = &sql.TxOptions{Isolation: isolation}
+	}
+	tx, err := db.BeginTx(ctx, options)
 	if err != nil {
 		return nil, err
 	}
 	owner.tx = tx
+	owner.txIsolation = isolation
 	return tx, nil
+}
+
+func requestedIsolation(ctx context.Context) (sql.IsolationLevel, bool, error) {
+	policy, requested := dexec.RequestedTransactionIsolation(ctx)
+	if !requested {
+		return sql.LevelDefault, false, nil
+	}
+	switch policy {
+	case dexec.IsolationReadCommitted:
+		return sql.LevelReadCommitted, true, nil
+	case dexec.IsolationRepeatableRead:
+		return sql.LevelRepeatableRead, true, nil
+	case dexec.IsolationSerializable:
+		return sql.LevelSerializable, true, nil
+	default:
+		return sql.LevelDefault, true, fmt.Errorf("unsupported transaction isolation %q", policy)
+	}
 }
 
 func (d *Data) Flush(ctx context.Context, tableName string) error {
