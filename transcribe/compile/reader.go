@@ -53,7 +53,11 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if parseSQL == "" {
 		return nil, fmt.Errorf("read SQL is required")
 	}
-	parsed, err := parseReadSQL(lineDirectiveSkeleton(parseSQL))
+	templates, err := newReadTemplateSource(parseSQL)
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := parseReadSQL(templates.AnalysisSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -126,24 +130,10 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err := validateView(root, map[*spec.View]bool{}); err != nil {
 		return nil, err
 	}
-	return root, nil
-}
-
-func lineDirectiveSkeleton(sql string) string {
-	lines := strings.SplitAfter(sql, "\n")
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "#if(") || strings.HasPrefix(trimmed, "#else") || strings.HasPrefix(trimmed, "#end") {
-			ending := ""
-			if strings.HasSuffix(line, "\r\n") {
-				ending = "\r\n"
-			} else if strings.HasSuffix(line, "\n") {
-				ending = "\n"
-			}
-			lines[i] = ending
-		}
+	if err := templates.restore(root, parsed, input.Template); err != nil {
+		return nil, err
 	}
-	return strings.Join(lines, "")
+	return root, nil
 }
 
 func (r *Reader) compileRelations(parsed *query.Select, root *spec.View, frame TemplateFrame) ([]*spec.Relation, error) {

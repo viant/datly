@@ -1,6 +1,17 @@
 package handler
 
-import xhandler "github.com/viant/xdatly/handler"
+import (
+	"context"
+	"github.com/viant/sqlx/metadata/info"
+	xhandler "github.com/viant/xdatly/handler"
+)
+
+// DialectProvider is an optional Datly-owned capability for predicates that
+// must render a database-specific expression. It exposes metadata, never a
+// database handle, through the invocation's existing DML capability.
+type DialectProvider interface {
+	Dialect(context.Context) (*info.Dialect, error)
+}
 
 const (
 	// DifferCapabilityKey exposes typed comparisons through scoped DI.

@@ -72,7 +72,7 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 		builder.WithBuilderComponent(m.session.Component), builder.WithBuilderView(view), builder.WithBuilderCriteriaCompiler(root.Criteria),
 		builder.WithBuilderSelector(selector), builder.WithBuilderProjection(viewProjection(view, selector)),
 		builder.WithBuilderInput(input.Elem()), builder.WithBuilderParameterResolver(prepared.Parameters),
-		builder.WithBuilderTemplate(root.Template), builder.WithBuilderBinder(prepared.Binder), builder.WithBuilderDialect(connection.Dialect))
+		builder.WithBuilderTemplate(root.Template), builder.WithBuilderBinder(prepared.Binder), builder.WithBuilderDialect(connection.Dialect), builder.WithBuilderTransactionActive(connection.Tx != nil))
 	if err != nil {
 		return err
 	}

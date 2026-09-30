@@ -559,9 +559,13 @@ Syntax fragment; adapt within the [complete reader contract](dql-grammar.md#a-sh
 -- Projection annotations:
 CAST(r.bounds AS model.Bounds)
 tag(r.bounds, 'sqlx:"-"')
-tag(r.BOUND_UNIT, 'internal:"true"')
+internal(r.BOUND_UNIT) -- shorthand for tag(r.BOUND_UNIT, 'internal:"true"')
 tag(r.name, 'validate:"required"')
 ~~~~
+
+The column shorthand controls one field's application-facing visibility and
+retains its SQL mapping. `#setting($_ = $internal(true))` controls the entire
+component route's external HTTP visibility. One does not imply the other.
 
 Prefer an outer CAST to declare the intended Go type, especially for rich hook-populated fields:
 
@@ -1007,6 +1011,11 @@ keyword, not the operator inside a group. Empty groups are omitted. If every
 group is empty, both forms emit nothing: no dangling WHERE or AND, and the
 second query retains its fixed condition. Predicate values remain bound SQL
 arguments rather than text interpolated into the query.
+
+For a database UTC clock in reader SQL, `${criteria.UTCNow()}` renders
+`UTC_TIMESTAMP()` on MySQL or `DATETIME('now')` on SQLite. It adds no bind
+argument and rejects other dialects. Use it for server-owned lease times;
+substituting an application clock changes cross-worker lease behavior.
 
 ### Predicate expression API and evaluation order
 

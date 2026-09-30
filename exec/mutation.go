@@ -1,5 +1,10 @@
 package exec
 
+import xhandler "github.com/viant/xdatly/handler"
+
+// MutationReporterKey binds detached, invocation-scoped execution evidence.
+const MutationReporterKey xhandler.ValueKey = "mutationReporter"
+
 // MutationResult is detached execution evidence, not a planned write or a
 // transaction handle. Batched inserts report an aggregate count and Records.
 type MutationResult struct {

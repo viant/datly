@@ -46,6 +46,15 @@ func (d *Data) dialectFor(ctx context.Context, db *sql.DB) (*info.Dialect, error
 	return dialect, nil
 }
 
+// Dialect returns this invocation's resolved database dialect without
+// exposing its DB or transaction to application predicates.
+func (d *Data) Dialect(ctx context.Context) (*info.Dialect, error) {
+	if d == nil || d.db == nil {
+		return nil, nil
+	}
+	return d.dialectFor(ctx, d.db)
+}
+
 func (d *Data) inserter(ctx context.Context, db *sql.DB, table string) (*insert.Service, error) {
 	if d.insertServices == nil {
 		d.insertServices = map[string]*insert.Service{}

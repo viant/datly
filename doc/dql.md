@@ -639,9 +639,14 @@ Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-vie
 -- Projection annotations:
 CAST(r.bounds AS model.Bounds)
 tag(r.bounds, 'sqlx:"-"')
-tag(r.BOUND_UNIT, 'internal:"true"')
+internal(r.BOUND_UNIT) -- shorthand for tag(r.BOUND_UNIT, 'internal:"true"')
 tag(r.name, 'validate:"required"')
 ~~~~
+
+`#setting($_ = $internal(true))` marks the whole component route for internal
+invocation and omits it from external HTTP routing. `internal(view.column)`
+annotates one output field with `internal:"true"`; it does not change route
+visibility or remove the field's SQL mapping. These are independent controls.
 
 Prefer an outer CAST to declare the intended Go type, especially for rich hook-populated fields:
 
@@ -1096,6 +1101,34 @@ keyword, not the operator inside a group. Empty groups are omitted. If every
 group is empty, both forms emit nothing: no dangling WHERE or AND, and the
 second query retains its fixed condition. Predicate values remain bound SQL
 arguments rather than text interpolated into the query.
+
+For a database UTC clock in reader SQL, `${criteria.UTCNow()}` renders
+`UTC_TIMESTAMP()` on MySQL or `DATETIME('now')` on SQLite. It adds no bind
+argument and rejects other dialects. Use it for server-owned lease times;
+substituting an application clock changes cross-worker lease behavior.
+
+For a locking reader, append `${View.ForUpdate()}` to the authored SELECT.
+The runtime requires an active transaction before evaluating that clause.
+MySQL and PostgreSQL render `FOR UPDATE`; SQLite emits no clause and uses its
+transaction locking. Unknown dialects fail. Keep the lock switch in a trusted
+provider when the same reader also serves ordinary requests.
+
+Custom orchestration may request an explicit isolation before starting the
+managed unit:
+
+```go
+ctx = exec.WithTransactionIsolation(ctx, exec.IsolationSerializable)
+if err := starter.Start(ctx); err != nil {
+    return err
+}
+```
+
+The supported policies are `IsolationReadCommitted`, `IsolationRepeatableRead`
+and `IsolationSerializable`. Every generated component invoked with that
+context and connector joins the same managed unit. Changing an existing unit's isolation,
+requesting an unknown policy, or asserting the isolation of a caller-supplied
+transaction fails the invocation. The caller retains ownership of a supplied
+transaction. Driver rejection propagates without falling back to the default.
 
 ### Predicate expression API and evaluation order
 

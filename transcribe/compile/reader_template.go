@@ -48,6 +48,25 @@ func readPredicateSuffix(cursor *parsly.Cursor, from *query.From) bool {
 		cursor.Pos = start
 		return false
 	}
+	// A template predicate may be followed by analysis comments representing
+	// executable statements. Keep those comments in the same parser-owned
+	// suffix; SQLParser resumes at the next real clause.
+	for {
+		position := cursor.Pos
+		for cursor.Pos < len(cursor.Input) && strings.ContainsRune(" \t\r\n", rune(cursor.Input[cursor.Pos])) {
+			cursor.Pos++
+		}
+		if cursor.Pos+2 > len(cursor.Input) || string(cursor.Input[cursor.Pos:cursor.Pos+2]) != "/*" {
+			cursor.Pos = position
+			break
+		}
+		closing := strings.Index(string(cursor.Input[cursor.Pos+2:]), "*/")
+		if closing < 0 {
+			cursor.Pos = position
+			break
+		}
+		cursor.Pos += closing + 4
+	}
 	from.Unparsed = strings.TrimSpace(from.Unparsed + " " + string(cursor.Input[expressionStart:cursor.Pos]))
 	return true
 }

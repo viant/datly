@@ -23,6 +23,30 @@ func TestServiceInspectReturnsCanonicalAndAuthoringMetadata(t *testing.T) {
 	}
 }
 
+func TestServiceInspectReturnsExactEmbeddedViewSQL(t *testing.T) {
+	const source = `#setting($_ = $route('/vendors','GET'))
+SELECT vendor.*, products.*
+FROM (SELECT v.id, v.name FROM VENDOR v
+${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("WHERE")}) vendor
+LEFT JOIN (SELECT p.id, p.vendor_id FROM PRODUCT p) products ON products.vendor_id = vendor.id`
+	response := New(Config{Name: "Vendor"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationInspect}})
+	if !response.Applied || response.Structure == nil || len(response.Diagnostics) != 0 || len(response.Structure.Views) != 2 {
+		t.Fatalf("inspection=%+v", response)
+	}
+	want := map[string]string{
+		"vendor":   "SELECT v.id, v.name FROM VENDOR v\n${predicate.Builder().CombineAnd($predicate.FilterGroup(0, \"AND\")).Build(\"WHERE\")}",
+		"products": "SELECT p.id, p.vendor_id FROM PRODUCT p",
+	}
+	for _, view := range response.Structure.Views {
+		if view.SQL != want[view.Name] || source[view.SourceSpan.Start:view.SourceSpan.End] != view.SQL {
+			t.Fatalf("view %q SQL=%q span=%+v", view.Name, view.SQL, view.SourceSpan)
+		}
+		if strings.Contains(view.SQL, "SELECT vendor.*") || strings.Contains(view.SQL, "LEFT JOIN") {
+			t.Fatalf("view %q includes outer wrapper: %q", view.Name, view.SQL)
+		}
+	}
+}
+
 func TestServiceAddPredicateAlsoAddsMissingViewExpansion(t *testing.T) {
 	response := New(Config{Name: "Records", Scope: "example.com/records"}).Apply(context.Background(), Request{
 		DQL: baseDQL,

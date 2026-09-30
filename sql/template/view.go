@@ -12,6 +12,7 @@ import (
 // ViewInput contains invocation-scoped values exposed through $View.
 type ViewInput struct {
 	Dialect               *info.Dialect
+	TransactionActive     bool
 	ParentValues          []any
 	ParentCompositeValues [][]interface{}
 	ExcludeParent         bool
@@ -23,9 +24,11 @@ type ViewInput struct {
 }
 
 type viewContext struct {
-	Limit  int
-	Offset int
-	Page   int
+	Limit             int
+	Offset            int
+	Page              int
+	dialect           *info.Dialect
+	transactionActive bool
 
 	expander       sqlmacro.ParentKeyExpander
 	bindings       *fragment.Bindings
@@ -36,9 +39,11 @@ type viewContext struct {
 
 func newViewContext(input ViewInput, bindings *fragment.Bindings) *viewContext {
 	return &viewContext{
-		Limit:  input.Limit,
-		Offset: input.Offset,
-		Page:   input.Page,
+		Limit:             input.Limit,
+		Offset:            input.Offset,
+		Page:              input.Page,
+		dialect:           input.Dialect,
+		transactionActive: input.TransactionActive,
 		expander: sqlmacro.ParentKeyExpander{
 			Dialect:       input.Dialect,
 			ScalarValues:  input.ParentValues,
@@ -48,6 +53,25 @@ func newViewContext(input ViewInput, bindings *fragment.Bindings) *viewContext {
 		bindings:      bindings,
 		nonWindowSQL:  input.NonWindowSQL,
 		nonWindowArgs: append([]any(nil), input.NonWindowArgs...),
+	}
+}
+
+// ForUpdate renders the dialect's row-lock clause for an active transaction.
+// SQLite relies on its transaction locking and has no SELECT row-lock clause.
+func (v *viewContext) ForUpdate() (string, error) {
+	if v == nil || !v.transactionActive {
+		return "", fmt.Errorf("FOR UPDATE requires an active transaction")
+	}
+	if v.dialect == nil {
+		return "", fmt.Errorf("FOR UPDATE requires a dialect")
+	}
+	switch strings.ToLower(strings.TrimSpace(v.dialect.Name)) {
+	case "mysql", "postgresql", "postgres", "pg":
+		return "FOR UPDATE", nil
+	case "sqlite", "sqlite3":
+		return "", nil
+	default:
+		return "", fmt.Errorf("FOR UPDATE is unsupported for dialect %q", v.dialect.Name)
 	}
 }
 
@@ -89,4 +113,20 @@ func (v *viewContext) expand(call sqlmacro.ParentKeyCall) (string, error) {
 	}
 	v.bindings.Append(args...)
 	return fragment, nil
+}
+
+// TimestampSecondsUTC is an explicit dialect-rendered timestamp key.
+func (v *viewContext) TimestampSecondsUTC(expression string) (string, error) {
+	if v == nil {
+		return "", fmt.Errorf("timestamp key requires view metadata")
+	}
+	return fragment.New(v.bindings).WithDialect(v.dialect).TimestampSecondsUTC(expression)
+}
+
+// TimestampNanoseconds keeps fractional ordering separate from whole seconds.
+func (v *viewContext) TimestampNanoseconds(expression string) (string, error) {
+	if v == nil {
+		return "", fmt.Errorf("timestamp key requires view metadata")
+	}
+	return fragment.New(v.bindings).WithDialect(v.dialect).TimestampNanoseconds(expression)
 }

@@ -106,6 +106,16 @@ persistence should still use a declared Datly writer component (and reader for
 lookup). A custom handler does not turn a separate raw SQL store or another
 runtime into the endpoint's managed transaction.
 
+For exact execution counts from invoked generated writers, bind the read-only
+`exec.MutationReporter` capability with `bind:"kind=mutationReporter,required"`.
+Its detached report distinguishes affected rows from queued or intended writes,
+including a zero-row update suppressed by a database trigger. Compare the
+executed result list before and after an imperative component call; validate
+the operation/table and count before using the evidence. This capability
+exposes no database handle, write method, or transaction completion method.
+Affected rows inside a parent transaction still await that parent's outcome;
+use outcome-aware finalization for commit-dependent effects.
+
 For already-compressed output, use the response's explicit compression metadata.
 The [HTTP adapter](../gateway/http/handler.go) recognizes `response.Response`
 before ordinary encoding; [writeResponse](../gateway/http/response.go) copies

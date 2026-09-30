@@ -58,6 +58,7 @@ func (b *Builder) CacheSQL(ctx context.Context, opts ...BuilderOption) (*cache.P
 		WithBuilderParameterResolver(options.parameterResolver),
 		WithBuilderRelation(options.relation),
 		WithBuilderDialect(options.dialect),
+		WithBuilderTransactionActive(options.transactionActive),
 		WithBuilderMatcher(options.matcherBy, cacheMatcherIn),
 		WithBuilderProjection(options.projection),
 		WithBuilderTemplate(options.template),
@@ -136,6 +137,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	if options.template != nil {
 		viewInput := sqltemplate.ViewInput{
 			Dialect:               options.dialect,
+			TransactionActive:     options.transactionActive,
 			ParentValues:          options.positionalArgs,
 			ParentCompositeValues: options.compositeRows,
 			ExcludeParent:         options.skipRelationFilter,
@@ -390,6 +392,7 @@ func renderCompositeIn(dialect *info.Dialect, columns []string, rowCount int) st
 type BuilderOption func(*builderOptions)
 
 type builderOptions struct {
+	transactionActive      bool
 	component              *spec.Component
 	source                 *spec.ViewSource
 	view                   *data.View
@@ -564,6 +567,12 @@ func WithBuilderDialect(dialect *info.Dialect) BuilderOption {
 	return func(o *builderOptions) {
 		o.dialect = dialect
 	}
+}
+
+// WithBuilderTransactionActive supplies connector-resolved transaction state
+// to SQL template lock clauses. It does not begin or own a transaction.
+func WithBuilderTransactionActive(active bool) BuilderOption {
+	return func(o *builderOptions) { o.transactionActive = active }
 }
 
 func WithBuilderPositionalArgs(args []any) BuilderOption {

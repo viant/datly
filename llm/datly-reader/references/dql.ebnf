@@ -104,7 +104,7 @@ key_equality = column_ref, "=", column_ref ;
    ordinary (SELECT ...) alone does not make a view auxiliary. *)
 outer_sql_tail = ? SQLparser-owned outer clauses, subject to graph compilation ? ;
 outer_projection = star_projection | column_ref, [sql_alias]
-                 | view_control | rich_cast | column_tag | invariant | mutation_marker
+                 | view_control | rich_cast | column_tag | internal_column | invariant | mutation_marker
                  | outer_sql_expression ;
 star_projection = [view_name, "."], "*", ["EXCEPT", exclusion_names] ;
 exclusion_names = sql_column, {",", sql_column} ;
@@ -120,6 +120,7 @@ column_type_name = identifier, [".", identifier] ;
    channel/generic-instantiation AST expressions are rejected. Named rich types
    remain possible. WithColumnType/ColumnType use this same production. *)
 column_tag = "tag", "(", column_ref, ",", string, ")" ;
+internal_column = "internal", "(", column_ref, ")" ;
 invariant = "invariant", "(", column_ref, ",", string, ")" ;
 mutation_marker = ("delete_marker" | "concurrency_token"), "(", column_ref, ")" ;
 (* One of each per mutable view, generated PATCH/PUT Go policy only.
@@ -129,7 +130,7 @@ mutation_marker = ("delete_marker" | "concurrency_token"), "(", column_ref, ")" 
 column_ref = view_name, ".", sql_column ;
 outer_sql_expression = ? expression accepted by SQLparser and outer projection
                         compiler; not a substitute for declaring column authority ? ;
-(* Rich CAST, tag and invariant address named outer views, not inner aliases.
+(* Rich CAST, tag, internal and invariant address named outer views, not inner aliases.
    Inner CAST(expr AS database_type) is SQL, not a Go type annotation. *)
 
 view_control = named_binding_control | numeric_control | flag_control

@@ -49,7 +49,7 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 		builder.WithBuilderSelector(selector), builder.WithBuilderProjection(viewProjection(root.View, selector)),
 		builder.WithBuilderInput(value.Elem()), builder.WithBuilderParameterResolver(resolver),
 		builder.WithBuilderTemplate(root.Template), builder.WithBuilderBinder(binder),
-		builder.WithBuilderDialect(connection.Dialect), builder.WithBuilderExcludePagination(true),
+		builder.WithBuilderDialect(connection.Dialect), builder.WithBuilderTransactionActive(connection.Tx != nil), builder.WithBuilderExcludePagination(true),
 	)
 	if err != nil {
 		return nil, err

@@ -33,9 +33,11 @@ type Config struct {
 // Set owns only handles opened for this application lifetime. Reader, dialect,
 // transaction and row mapping ownership remains with SQLComponent and SQLX.
 type Set struct {
-	identities map[string]string
-	SQL        *dsql.SQLComponent
-	handles    []*sql.DB
+	identities  map[string]string
+	drivers     map[string]string
+	defaultName string
+	SQL         *dsql.SQLComponent
+	handles     []*sql.DB
 }
 
 func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, err error) {
@@ -46,7 +48,7 @@ func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, er
 		return nil, err
 	}
 	defaultName = strings.TrimSpace(defaultName)
-	set := &Set{SQL: &dsql.SQLComponent{}, identities: map[string]string{}}
+	set := &Set{SQL: &dsql.SQLComponent{}, identities: map[string]string{}, drivers: map[string]string{}, defaultName: defaultName}
 	defer func() {
 		if err != nil {
 			_ = set.Close()
@@ -112,6 +114,7 @@ func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, er
 		if err = set.SQL.RegisterConnector(config.Name, db); err != nil {
 			return nil, err
 		}
+		set.drivers[config.Name] = strings.TrimSpace(config.Driver)
 		if config.Name == defaultName {
 			set.SQL.DB = db
 		}
@@ -144,6 +147,7 @@ func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, er
 			return err
 		}
 		set.identities[name] = set.identities[target]
+		set.drivers[name] = set.drivers[target]
 		visiting[name] = false
 		if name == defaultName {
 			set.SQL.DB = db
@@ -165,6 +169,43 @@ func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, er
 		return nil, err
 	}
 	return set, nil
+}
+
+// ConfiguredDriver returns immutable configuration metadata without a schema
+// query, database handle, credentials, or DSN. Aliases retain the target driver.
+func (s *Set) ConfiguredDriver(ctx context.Context, name string) (string, error) {
+	if s == nil || ctx == nil {
+		return "", fmt.Errorf("connector set and context are required")
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = s.defaultName
+	}
+	driver, ok := s.drivers[name]
+	if !ok || driver == "" {
+		return "", fmt.Errorf("configured connector driver is unavailable")
+	}
+	return driver, nil
+}
+
+// ConnectionIdentity is an opaque fingerprint for the resolved connection.
+// It lets callers coordinate aliases/pools without receiving the DSN or DB.
+func (s *Set) ConnectionIdentity(ctx context.Context, name string) (string, error) {
+	if _, err := s.ConfiguredDriver(ctx, name); err != nil {
+		return "", err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = s.defaultName
+	}
+	identity := s.identities[name]
+	if identity == "" {
+		return "", fmt.Errorf("configured connection identity is unavailable")
+	}
+	return identity, nil
 }
 
 func (s *Set) ResolveDB(ctx context.Context, name string) (*sql.DB, error) {

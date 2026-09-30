@@ -27,6 +27,23 @@ func (c *Context) WithDialect(dialect *info.Dialect) *Context {
 	return &result
 }
 
+// UTCNow renders the database server's UTC clock for a SQL template or native
+// predicate. It carries no client value or extra binding, and rejects unknown
+// dialects instead of falling back to the application clock.
+func (c *Context) UTCNow() (string, error) {
+	if c == nil || c.dialect == nil {
+		return "", fmt.Errorf("UTC database clock requires a dialect")
+	}
+	switch strings.ToLower(strings.TrimSpace(c.dialect.Name)) {
+	case "mysql":
+		return "UTC_TIMESTAMP()", nil
+	case "sqlite", "sqlite3":
+		return "DATETIME('now')", nil
+	default:
+		return "", fmt.Errorf("UTC database clock is unsupported for dialect %q", c.dialect.Name)
+	}
+}
+
 func (c *Context) AppendBinding(value any) (string, error) {
 	if c == nil || c.bindings == nil {
 		return "", fmt.Errorf("SQL fragment bindings are required")

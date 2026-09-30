@@ -13,6 +13,13 @@ func TestReaderColumnDeclarations(t *testing.T) {
 		wantErr   bool
 	}{
 		{"logical", "SELECT r.*,CAST(r.bounds AS model.Bounds),tag(r.bounds,'sqlx:\"-\"'),tag(r.unit,'internal:\"true\"') FROM records r", 2, false},
+		{"internal shorthand", "SELECT r.*,internal(r.unit) FROM records r", 1, false},
+		{"internal matches tag", "SELECT r.*,internal(r.unit),tag(r.unit,'internal:\"true\"') FROM records r", 1, false},
+		{"internal conflicts", "SELECT r.*,internal(r.unit),tag(r.unit,'internal:\"false\"') FROM records r", 0, true},
+		{"internal missing target", "SELECT r.*,internal() FROM records r", 0, true},
+		{"internal extra target", "SELECT r.*,internal(r.unit,r.id) FROM records r", 0, true},
+		{"internal unqualified", "SELECT r.*,internal(unit) FROM records r", 0, true},
+		{"internal aliased", "SELECT r.*,internal(r.unit) AS visible FROM records r", 0, true},
 		{"physical cast", "SELECT r.*,CAST(r.body AS model.Body) FROM records r", 1, false},
 		{"same canonical aliases", "SELECT r.*,CAST(r.body AS model.Body),CAST(r.body AS model2.Body) FROM records r", 1, false},
 		{"executable", "SELECT CAST(r.id AS INTEGER) AS id FROM records r", 0, false},
@@ -50,6 +57,11 @@ func TestReaderColumnDeclarations(t *testing.T) {
 			if tc.name == "logical" {
 				if got.Columns[0].Type.Name != "Bounds" || got.Columns[0].Type.Package != "example.com/model" || got.Columns[0].Tag != `sqlx:"-"` || got.Columns[1].Tag != `internal:"true"` {
 					t.Fatalf("columns=%+v/%+v", got.Columns[0], got.Columns[1])
+				}
+			}
+			if tc.name == "internal shorthand" || tc.name == "internal matches tag" {
+				if got.Columns[0].Tag != `internal:"true"` || got.Columns[0].Source != "unit" || strings.Contains(strings.ToLower(got.Source.SQL), "internal(") {
+					t.Fatalf("internal declaration changed mapping or leaked into SQL: %+v / %s", got.Columns[0], got.Source.SQL)
 				}
 			}
 			if tc.name == "physical cast" && got.Columns[0].Tag != "" {
