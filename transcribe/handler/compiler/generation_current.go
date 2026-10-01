@@ -149,7 +149,12 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	directTableRead := simpleCurrentTableSource(sql, view.Source.Table)
 	for _, col := range current.Columns {
 		if col != nil {
-			name := col.Name
+			// A wildcard exposes physical source labels, not the entity's Go
+			// field aliases. Explicit SQL output aliases below remain authoritative.
+			name := strings.TrimSpace(col.Source)
+			if name == "" {
+				name = col.Name
+			}
 			for _, candidate := range []string{col.Name, col.Source} {
 				if output := outputs[strings.ToLower(strings.TrimSpace(candidate))]; output != "" {
 					name = output
