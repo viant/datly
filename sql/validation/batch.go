@@ -53,6 +53,9 @@ func (s *Service) batch(value any, policies []xhandler.ValidationOptions) (*vali
 		if i > 0 && policy.Connector != policies[0].Connector {
 			return nil, fmt.Errorf("validation batch candidates must use the same connector")
 		}
+		if i > 0 && (checkEnabled(batch.policies[i].CheckUnique) != checkEnabled(batch.policies[0].CheckUnique) || checkEnabled(batch.policies[i].CheckRef) != checkEnabled(batch.policies[0].CheckRef)) {
+			return nil, fmt.Errorf("validation batch candidates must use the same database checks")
+		}
 		if batch.policies[i].Location == "" {
 			batch.policies[i].Location = fmt.Sprintf("[%d]", i)
 		}
@@ -112,7 +115,7 @@ func (s *Service) validateBatch(ctx context.Context, value any, policies []xhand
 		}
 		result.Violations = append(result.Violations, goResult.Violations...)
 	}
-	nativeOptions := []sqlvalidator.Option{sqlvalidator.WithShallow(true), sqlvalidator.WithLocation("_batch"), sqlvalidator.WithCandidatePolicies(batch.nativePolicies)}
+	nativeOptions := append(nativeCheckOptions(batch.policies[0]), []sqlvalidator.Option{sqlvalidator.WithShallow(true), sqlvalidator.WithLocation("_batch"), sqlvalidator.WithCandidatePolicies(batch.nativePolicies)}...)
 	if connection.Tx != nil {
 		nativeOptions = append(nativeOptions, sqlvalidator.WithTransaction(connection.Tx))
 	}

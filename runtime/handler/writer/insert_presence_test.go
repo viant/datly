@@ -31,6 +31,11 @@ func TestWriterInsertPresenceOnlyInitialPass(t *testing.T) {
 			t.Fatalf("passes%v", caps.validations)
 		}
 		first, last := caps.validations[0][0], caps.validations[1][0]
+		for _, policy := range []xhandler.ValidationOptions{first, last} {
+			if policy.CheckUnique == nil || !*policy.CheckUnique || policy.CheckRef == nil || !*policy.CheckRef {
+				t.Fatalf("mandatory database checks missing %+v", policy)
+			}
+		}
 		if first.Action != xhandler.WriteInsert || first.Previous != nil || first.HonorPresence != enabled {
 			t.Fatalf("first %+v", first)
 		}

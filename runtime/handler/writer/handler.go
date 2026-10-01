@@ -1078,18 +1078,19 @@ func (p *Program) unresolvedParentLinks(frame *Frame) bool {
 }
 
 func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhandler.ValidationOptions {
+	unique, refs := true, true
 	if frame.NoopMissingIdentity {
 		// An unmatched no-op has no Previous evidence. Complete candidate
 		// checks use the existing no-Previous validation contract; this does
 		// not classify the row as an insert or authorize persistence.
-		options := xhandler.ValidationOptions{Action: xhandler.WriteInsert, Shallow: true, Location: frame.Location}
+		options := xhandler.ValidationOptions{Action: xhandler.WriteInsert, Shallow: true, Location: frame.Location, CheckUnique: &unique, CheckRef: &refs}
 		if frame.Record.InsertValidationPresence && !transactionStarted {
 			options.HonorPresence, options.Fields = true, frame.Fields
 		}
 		return options
 	}
 
-	options := xhandler.ValidationOptions{Action: frame.Action, Location: frame.Location, Shallow: true}
+	options := xhandler.ValidationOptions{Action: frame.Action, Location: frame.Location, Shallow: true, CheckUnique: &unique, CheckRef: &refs}
 	if frame.Action == xhandler.WriteInsert && frame.Record.InsertValidationPresence && !transactionStarted {
 		options.HonorPresence = true
 		options.Fields = frame.Fields

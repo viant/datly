@@ -43,6 +43,9 @@ func (p *plan) checkCoverage(policy xhandler.ValidationOptions) error {
 	if keys == 0 {
 		return fmt.Errorf("update validation requires declared primary keys")
 	}
+	if !checkEnabled(policy.CheckUnique) {
+		return nil
+	}
 	for _, column := range p.columns {
 		tag := column.Tag()
 		if tag == nil || tag.UniqueDep == "" {

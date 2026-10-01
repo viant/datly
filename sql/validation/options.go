@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	sqlvalidator "github.com/viant/sqlx/io/validator"
 	xshape "github.com/viant/x/shape"
 	xhandler "github.com/viant/xdatly/handler"
 	"reflect"
@@ -17,6 +18,8 @@ func (s *Service) options(value any, options []any) (xhandler.ValidationOptions,
 	if !ok {
 		return policy, fmt.Errorf("unsupported framework validation options %T", options[0])
 	}
+	policy.CheckUnique = snapshotCheck(policy.CheckUnique)
+	policy.CheckRef = snapshotCheck(policy.CheckRef)
 	shape := xshape.Runtime{}
 	if shape.IsNil(policy.DeferredFields) {
 		policy.DeferredFields = nil
@@ -74,4 +77,16 @@ func (s *Service) options(value any, options []any) (xhandler.ValidationOptions,
 		return policy, fmt.Errorf("unsupported framework validation action %q", policy.Action)
 	}
 	return policy, nil
+}
+
+func checkEnabled(value *bool) bool { return value == nil || *value }
+func snapshotCheck(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+	snapshot := *value
+	return &snapshot
+}
+func nativeCheckOptions(policy xhandler.ValidationOptions) []sqlvalidator.Option {
+	return []sqlvalidator.Option{sqlvalidator.WithUnique(checkEnabled(policy.CheckUnique)), sqlvalidator.WithRef(checkEnabled(policy.CheckRef))}
 }
