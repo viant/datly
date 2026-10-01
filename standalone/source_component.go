@@ -126,6 +126,7 @@ func (c *sourceComponent) Configure(ctx context.Context, artifact *report.Compon
 	// Studio's owner-scoped ACL predicate). Do not reserve it for custom
 	// handlers: both route kinds execute under the same configured SQL host.
 	result.Invocation.Connector = c.source.connections.SQL
+	result.Invocation.Logger = c.source.invocationLogger
 	views, err := artifact.NewViewProvider(bootstrap.ViewRuntimeConfig{SQL: c.source.connections.SQL})
 	if err != nil {
 		return result, err

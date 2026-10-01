@@ -29,22 +29,24 @@ import (
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
 	xcodec "github.com/viant/xdatly/codec"
+	xlogger "github.com/viant/xdatly/logger"
 )
 
 type source struct {
-	Workspace      *xmodule.Workspace
-	resources      *resource.Store
-	caches         aerospike.Pool
-	config         *config.Config
-	connections    *connector.Set
-	codecs         xcodec.Factory
-	codecFactories map[string]xcodec.Factory
-	registry       *x.Registry
-	http           gateway.Config
-	holders        []any
-	providers      []locator.Provider
-	requireLinked  bool
-	logger         *slog.Logger
+	invocationLogger xlogger.Logger
+	Workspace        *xmodule.Workspace
+	resources        *resource.Store
+	caches           aerospike.Pool
+	config           *config.Config
+	connections      *connector.Set
+	codecs           xcodec.Factory
+	codecFactories   map[string]xcodec.Factory
+	registry         *x.Registry
+	http             gateway.Config
+	holders          []any
+	providers        []locator.Provider
+	requireLinked    bool
+	logger           *slog.Logger
 }
 
 func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {

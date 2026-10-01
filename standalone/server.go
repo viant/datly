@@ -27,9 +27,13 @@ import (
 	xmodule "github.com/viant/x/module"
 	xauth "github.com/viant/xdatly/auth"
 	xcodec "github.com/viant/xdatly/codec"
+	xlogger "github.com/viant/xdatly/logger"
 )
 
 type Options struct {
+	// InvocationLogger is the trusted host logger statically bound to component
+	// contracts and lifecycle hooks. It is separate from bootstrap diagnostics.
+	InvocationLogger xlogger.Logger
 	// Codecs supplies named application codec factories; built-in names are reserved.
 	Codecs map[string]xcodec.Factory
 	// Providers supplies immutable application-owned capabilities to every
@@ -110,7 +114,7 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 		}
 		providers = append(providers, handlerprovider.Static(xauth.ProviderKind, service))
 	}
-	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), providers: providers, requireLinked: options.RequireLinked || options.Holders != nil}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
+	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
 	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
 	if err != nil {
 		return nil, err
