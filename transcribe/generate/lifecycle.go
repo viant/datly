@@ -14,8 +14,14 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 	if input == nil || input.Component == nil {
 		return nil
 	}
-	deleteRouteSupported := mutation && input.Component.Settings != nil &&
-		(input.Component.Settings.Mutation == "patch" || input.Component.Settings.Mutation == "put") && HasWritableDeleteMarker(input.Component.RootView)
+	// Shape planning precedes explicit operation selection. An unset policy
+	// may stage a declared DELETE graph; final emission still validates the
+	// selected generated target and patch/put policy.
+	policy := ""
+	if input.Component.Settings != nil {
+		policy = input.Component.Settings.Mutation
+	}
+	deleteRouteSupported := mutation && (policy == "" || policy == "patch" || policy == "put") && HasWritableDeleteMarker(input.Component.RootView)
 	supported := mutation
 	for _, route := range input.Component.Routes {
 		if route != nil && !strings.EqualFold(route.Method, "POST") && !strings.EqualFold(route.Method, "PUT") && !strings.EqualFold(route.Method, "PATCH") && !(strings.EqualFold(route.Method, "DELETE") && deleteRouteSupported) {

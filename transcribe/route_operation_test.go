@@ -39,3 +39,19 @@ func TestDeleteTransportPreservesDeclaredWriterLifecyclePolicy(t *testing.T) {
 		}
 	}
 }
+
+func TestDeleteStagingRejectsAuxiliaryOnlyAndExplicitInconsistentPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name, policy string
+		aux          bool
+	}{
+		{name: "auxiliary marker only", aux: true}, {name: "explicit post", policy: "post"}, {name: "explicit get", policy: "get"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			component := &spec.Component{Settings: &spec.Settings{Mutation: tc.policy}, Routes: []*spec.Route{{Method: "DELETE"}}, RootView: &spec.View{Name: "Records", Auxiliary: tc.aux, EntityHooks: "Lifecycle", Columns: []*spec.Column{{Name: "Remove", DeleteMarker: true}}}}
+			if err := (&gen.Input{Component: component}).ValidateLifecycleTarget(true); err == nil {
+				t.Fatal("inconsistent staged DELETE policy accepted")
+			}
+		})
+	}
+}
