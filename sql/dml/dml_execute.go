@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/option"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -40,6 +42,9 @@ func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 			payload := batchInsertPayload(step.operations)
 			options := buildExecutionOptions(tx, db, boundedInsertBatchSize(len(step.operations)))
 			count, _, err := service.Exec(ctx, payload, options...)
+			if d.insertConnectionRetryEligible(ctx, dialect, err) {
+				count, _, err = service.Exec(ctx, payload, options...)
+			}
 			d.recordMutation(step, len(step.operations), count, err)
 			metric.complete(count, err)
 			return err
@@ -51,6 +56,9 @@ func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 			metric.restart()
 		}
 		count, _, err := service.Exec(ctx, operation.data, options...)
+		if d.insertConnectionRetryEligible(ctx, dialect, err) {
+			count, _, err = service.Exec(ctx, operation.data, options...)
+		}
 		d.recordMutation(step, mutationRecordCount(operation.data), count, err)
 		metric.complete(count, err)
 		if err != nil {
@@ -150,4 +158,22 @@ func operationConflictField(operation *dataOperation) string {
 		return operation.match.Column
 	}
 	return "predicate"
+}
+
+// insertConnectionRetryEligible preserves the source's dialect and successful
+// mutation gates. The failed statement is retried at most once in this call.
+// Retaining the owned transaction avoids legacy's stale-option/new-Tx split.
+func (d *Data) insertConnectionRetryEligible(ctx context.Context, dialect *info.Dialect, cause error) bool {
+	if cause == nil || ctx.Err() != nil || !strings.Contains(cause.Error(), "invalid connection") || !supportsInsertBatching(dialect) {
+		return false
+	}
+	owner := d.owner()
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	for _, result := range owner.mutationResults {
+		if result.Error == nil && result.Affected > 0 && (result.Operation == string(dataOpInsert) || result.Operation == string(dataOpUpdate)) {
+			return false
+		}
+	}
+	return true
 }
