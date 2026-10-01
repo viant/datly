@@ -11,10 +11,11 @@ import (
 	"testing"
 )
 
-func TestOptInQueryCSVAndRepeatedLists(t *testing.T) {
+func TestDefaultQueryCSVAndRepeatedLists(t *testing.T) {
 	type input struct {
-		IDs   []int  `parameter:",kind=query,in=id" queryList:"csv"`
-		Plain string `parameter:",kind=query,in=plain"`
+		Labels []string `parameter:",kind=query,in=labels"`
+		IDs    []int    `parameter:",kind=query,in=id"`
+		Plain  string   `parameter:",kind=query,in=plain"`
 	}
 	compiled, err := New(Input{Component: &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: "/lists"}}}, InputType: reflect.TypeFor[input]()}).Compile()
 	if err != nil {
@@ -31,7 +32,7 @@ func TestOptInQueryCSVAndRepeatedLists(t *testing.T) {
 		invalid bool
 	}{{"CSV", []string{"1001,1002"}, []int{1001, 1002}, false}, {"repeated", []string{"1001", "1002"}, []int{1001, 1002}, false}, {"mixed keeps occurrence order", []string{"3,1", "2", "1,4"}, []int{3, 1, 2, 1, 4}, false}, {"absent", nil, nil, false}, {"empty", []string{""}, nil, true}, {"empty token", []string{"1,,2"}, nil, true}, {"invalid token", []string{"1,no,3"}, nil, true}, {"overflow", []string{"999999999999999999999999"}, nil, true}} {
 		t.Run(tc.name, func(t *testing.T) {
-			values := url.Values{"plain": {"a,b"}}
+			values := url.Values{"plain": {"a,b"}, "labels": {"a,b", "c"}}
 			if tc.values != nil {
 				values["id"] = tc.values
 			}
@@ -53,7 +54,7 @@ func TestOptInQueryCSVAndRepeatedLists(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || !reflect.DeepEqual(out.IDs, tc.want) || out.Plain != "a,b" {
+			if err != nil || !reflect.DeepEqual(out.IDs, tc.want) || out.Plain != "a,b" || !reflect.DeepEqual(out.Labels, []string{"a", "b", "c"}) {
 				t.Fatalf("out%+v err%v", out, err)
 			}
 		})
@@ -74,6 +75,24 @@ func TestQueryCSVTypedArrayAndMetadataRestrictions(t *testing.T) {
 		binding.Location.Kind = tc.kind
 		if err := applyQueryList(tc.field, false, &binding); err == nil {
 			t.Fatal("invalid list metadata accepted")
+		}
+	}
+}
+
+func TestDefaultQueryPrimitiveScalar(t *testing.T) {
+	for _, raw := range []any{1001, float64(1001)} {
+		out, err := (&queryListTransformer{target: reflect.TypeFor[[]int]()}).Transform(context.Background(), nil, raw)
+		if err != nil || !reflect.DeepEqual(out, []int{1001}) {
+			t.Fatalf("scalar %T: %v, %v", raw, out, err)
+		}
+	}
+}
+func TestDefaultQueryListPreservesComplexShapesAndCodecs(t *testing.T) {
+	for _, typ := range []reflect.Type{reflect.TypeFor[[]struct{ ID int }](), reflect.TypeFor[[]*int](), reflect.TypeFor[[]map[string]int](), reflect.TypeFor[string]()} {
+		binding := bindly.BindingSpec{}
+		binding.Location.Kind = "query"
+		if err := applyQueryList(reflect.StructField{Name: "Value", Type: typ}, false, &binding); err != nil || binding.Transformer != nil {
+			t.Fatalf("%v modified: %v", typ, err)
 		}
 	}
 }

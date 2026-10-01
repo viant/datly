@@ -185,3 +185,24 @@ func TestSourceGoCommandUsesExplicitSDKWithoutChangingSourceModule(t *testing.T)
 		t.Fatal("tracked source module changed")
 	}
 }
+
+func TestGeneratedModuleUsesSelectedModfile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/source\ngo 1.25\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	selected := filepath.Join(t.TempDir(), "selected.mod")
+	if err := os.WriteFile(selected, []byte("module example.com/source\ngo 1.25\nrequire example.com/dependency v0.0.0\nreplace example.com/dependency => example.com/selected v1.2.3\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	content, err := (GeneratedModule{SourceRoot: root, SourceModFile: selected}).Content()
+	if err != nil || !strings.Contains(content, "example.com/selected v1.2.3") {
+		t.Fatalf("selected module: %s %v", content, err)
+	}
+	if err := os.WriteFile(selected, []byte("module example.com/other\ngo 1.25\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = (GeneratedModule{SourceRoot: root, SourceModFile: selected}).Content(); err == nil {
+		t.Fatal("mismatched selected source accepted")
+	}
+}

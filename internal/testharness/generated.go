@@ -19,6 +19,8 @@ import (
 type GeneratedModule struct {
 	Path       string
 	SourceRoot string
+	// SourceModFile selects the same dependency graph used by an isolated build.
+	SourceModFile string
 }
 
 func (m GeneratedModule) source() (*modfile.File, string, error) {
@@ -34,11 +36,18 @@ func (m GeneratedModule) source() (*modfile.File, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	content, err := os.ReadFile(filepath.Join(info.Dir, "go.mod"))
+	sourceFile := filepath.Join(info.Dir, "go.mod")
+	if m.SourceModFile != "" {
+		sourceFile = m.SourceModFile
+	}
+	content, err := os.ReadFile(sourceFile)
 	if err != nil {
 		return nil, "", err
 	}
-	file, err := modfile.Parse("go.mod", content, nil)
+	file, err := modfile.Parse(sourceFile, content, nil)
+	if err == nil && (file.Module == nil || file.Module.Mod.Path != info.Path) {
+		return nil, "", fmt.Errorf("generated fixture modfile must declare source module %s", info.Path)
+	}
 	if err == nil {
 		err = applyTestSDKSource(file)
 	}

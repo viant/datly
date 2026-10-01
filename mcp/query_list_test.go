@@ -12,25 +12,29 @@ import (
 	"testing"
 )
 
-func TestOptInQueryListsPreserveTypedMCPArrays(t *testing.T) {
+func TestDefaultQueryListsPreserveTypedMCPArrays(t *testing.T) {
 	type input struct {
-		IDs []int `parameter:",kind=query,in=id" queryList:"csv"`
+		Labels []string `parameter:",kind=query,in=labels"`
+		IDs    []int    `parameter:",kind=query,in=id"`
 	}
 	type output struct {
-		IDs []int `json:"ids"`
+		Labels []string `json:"labels"`
+		IDs    []int    `json:"ids"`
 	}
-	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: "example.com/querylists", Name: "Lists"}, Routes: []*spec.Route{{Method: "GET", Path: "/lists", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "Lists"}}}}, Parameters: []*spec.Parameter{{Name: "IDs", Source: spec.BindSource{Kind: "query", Name: "id"}, QueryListCSV: true, TypeExpr: "[]int"}}}
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: "example.com/querylists", Name: "Lists"}, Routes: []*spec.Route{{Method: "GET", Path: "/lists", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "Lists"}}}}, Parameters: []*spec.Parameter{{Name: "IDs", Source: spec.BindSource{Kind: "query", Name: "id"}, TypeExpr: "[]int"}}}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[input](), OutputType: reflect.TypeFor[output]()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	registered := &registry.RegisteredComponent{Component: artifact.Component, Input: artifact.Input, Output: artifact.Output, OutputType: reflect.TypeFor[output](), Handler: customhandler.NewFunc(func(_ context.Context, in *input) (*output, error) { return &output{IDs: in.IDs}, nil })}
+	registered := &registry.RegisteredComponent{Component: artifact.Component, Input: artifact.Input, Output: artifact.Output, OutputType: reflect.TypeFor[output](), Handler: customhandler.NewFunc(func(_ context.Context, in *input) (*output, error) {
+		return &output{IDs: in.IDs, Labels: in.Labels}, nil
+	})}
 	service := runtimeToolService(t, registered)
 	entry, ok := service.Registry().ToolRegistry.Get("Lists")
 	if !ok {
 		t.Fatal("tool")
 	}
-	result, protocolErr := entry.Handler(context.Background(), &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "Lists", Arguments: map[string]any{"IDs": []any{3, 1, 3}}}})
+	result, protocolErr := entry.Handler(context.Background(), &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "Lists", Arguments: map[string]any{"IDs": []any{3, 1, 3}, "Labels": []any{"a,b", "c"}}}})
 	if protocolErr != nil {
 		t.Fatal(protocolErr)
 	}
@@ -45,7 +49,7 @@ func TestOptInQueryListsPreserveTypedMCPArrays(t *testing.T) {
 	if err = json.Unmarshal(raw, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(out.IDs, []int{3, 1, 3}) {
+	if !reflect.DeepEqual(out.IDs, []int{3, 1, 3}) || !reflect.DeepEqual(out.Labels, []string{"a,b", "c"}) {
 		t.Fatalf("MCP typed array changed%s", raw)
 	}
 }

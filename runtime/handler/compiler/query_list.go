@@ -7,11 +7,12 @@ import (
 	bindinput "github.com/viant/bindly/input"
 	"github.com/viant/bindly/locator"
 	"github.com/viant/bindly/xform/conv"
+	xexec "github.com/viant/xdatly/exec"
 	"reflect"
 	"strings"
 )
 
-// queryListTransformer expands only explicitly opted-in query lists. HTTP wire
+// queryListTransformer expands primitive query lists by default. HTTP wire
 // occurrences remain ordered; already typed protocol arrays keep their type.
 type queryListTransformer struct{ target reflect.Type }
 
@@ -20,7 +21,7 @@ func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if raw != nil && reflect.TypeOf(raw).AssignableTo(t.target) {
+	if raw != nil && reflect.TypeOf(raw).AssignableTo(t.target) && (t.target.Elem().Kind() != reflect.String || nativeToolArguments(ctx)) {
 		return raw, nil
 	}
 	var occurrences []string
@@ -30,6 +31,9 @@ func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver
 	case []string:
 		occurrences = value
 	default:
+		if raw != nil && primitiveListItem(reflect.TypeOf(raw)) {
+			return (conv.ValueConverter{}).Convert([]any{raw}, t.target)
+		}
 		return (conv.ValueConverter{}).Convert(raw, t.target)
 	}
 	tokens := []string{}
@@ -58,7 +62,8 @@ func applyQueryList(field reflect.StructField, paramCSV bool, binding *bindly.Bi
 	if hasTag && tag != "csv" {
 		return fmt.Errorf("queryList must be csv")
 	}
-	if !paramCSV && !hasTag {
+	explicit := paramCSV || hasTag
+	if !explicit && (binding.Location.Kind != "query" || field.Type.Kind() != reflect.Slice || !primitiveListItem(field.Type.Elem()) || binding.Transformer != nil) {
 		return nil
 	}
 	if binding.Location.Kind != "query" {
@@ -67,10 +72,7 @@ func applyQueryList(field reflect.StructField, paramCSV bool, binding *bindly.Bi
 	if field.Type.Kind() != reflect.Slice {
 		return fmt.Errorf("queryList csv requires a typed slice")
 	}
-	typ := field.Type.Elem()
-	switch typ.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64, reflect.String, reflect.Bool:
-	default:
+	if !primitiveListItem(field.Type.Elem()) {
 		return fmt.Errorf("queryList csv requires scalar list items")
 	}
 	if binding.Transformer != nil {
@@ -79,4 +81,19 @@ func applyQueryList(field reflect.StructField, paramCSV bool, binding *bindly.Bi
 	binding.SourceType = reflect.TypeFor[any]()
 	binding.Transformer = &queryListTransformer{target: field.Type}
 	return nil
+}
+
+func primitiveListItem(typ reflect.Type) bool {
+	switch typ.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64, reflect.String, reflect.Bool:
+		return true
+	}
+	return false
+}
+
+// Tool arguments have already been validated as native typed arrays before
+// projection into request providers. URI and HTTP query values are wire text.
+func nativeToolArguments(ctx context.Context) bool {
+	invocation := xexec.GetContext(ctx)
+	return invocation != nil && invocation.Method == "tools/call"
 }
