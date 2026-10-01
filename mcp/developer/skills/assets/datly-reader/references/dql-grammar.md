@@ -167,6 +167,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `output_exclude` | 1+ | all arguments are output field paths; repeated calls append |
 | `output_omit_empty` | exactly 1 | boolean |
 | `output_title` | exactly 1 | title |
+| `response_compression` | exactly 2 | quoted `gzip`, nonnegative minimum encoded byte count; singleton, no modifiers |
 | `const` | 2+ | identifier and value; later arguments ignored; names must be Go identifiers and unique case-insensitively |
 | `DocGlobalURLs`, `DocURLs` | 1+ | all nonempty documentation resource references; no tail |
 | `DocURL`, `DocBaseURL` | exactly 1 | nonempty rule reference or base URL; no tail |
@@ -206,6 +207,17 @@ global lowerCamel names; the output compiler validates other case-format names
 through its text-format owner. `date_format` passes through the date-format to
 Go-layout converter. Per-field tags and explicit JSON names retain their
 separate precedence (`runtime/output/plan.go`, `formats.go`, `wire.go`).
+
+### HTTP response compression
+
+`#setting($_ = $response_compression('gzip',2048))` opts the component into
+HTTP compression after output encoding. Gzip applies only when encoded bytes
+are strictly greater than the minimum: 2048 stays plain, 2049 compresses.
+The policy intentionally does not negotiate `Accept-Encoding`. Components
+without the setting, internal/MCP values, and application-owned explicit response
+streams retain their existing behavior. Explicit compressed responses are never
+compressed again. HTTP status/content type/disposition remain authoritative;
+compressed `Content-Length` describes wire bytes and HEAD sends no body.
 
 ### Cache settings and warmup options
 
@@ -559,9 +571,13 @@ Syntax fragment; adapt within the [complete reader contract](dql-grammar.md#a-sh
 -- Projection annotations:
 CAST(r.bounds AS model.Bounds)
 tag(r.bounds, 'sqlx:"-"')
-tag(r.BOUND_UNIT, 'internal:"true"')
+internal(r.BOUND_UNIT) -- shorthand for tag(r.BOUND_UNIT, 'internal:"true"')
 tag(r.name, 'validate:"required"')
 ~~~~
+
+The column shorthand controls one field's application-facing visibility and
+retains its SQL mapping. `#setting($_ = $internal(true))` controls the entire
+component route's external HTTP visibility. One does not imply the other.
 
 Prefer an outer CAST to declare the intended Go type, especially for rich hook-populated fields:
 
@@ -1008,6 +1024,11 @@ group is empty, both forms emit nothing: no dangling WHERE or AND, and the
 second query retains its fixed condition. Predicate values remain bound SQL
 arguments rather than text interpolated into the query.
 
+For a database UTC clock in reader SQL, `${criteria.UTCNow()}` renders
+`UTC_TIMESTAMP()` on MySQL or `DATETIME('now')` on SQLite. It adds no bind
+argument and rejects other dialects. Use it for server-owned lease times;
+substituting an application clock changes cross-worker lease behavior.
+
 ### Predicate expression API and evaluation order
 
 `Expand(group)` takes exactly one integer and joins with AND.
@@ -1049,3 +1070,33 @@ other validation. It does not add a SQL predicate, advance tokens, lock rows, or
 provide atomic race prevention. Init may explicitly prepare a next working token
 without changing the captured expectation. Missing/mismatched update tokens fail
 with a typed conflict before mutations proceed.
+
+## Default CSV and repeated query lists
+
+Query-bound primitive slices accept both `?id=1001,1002` and
+`?id=1001&id=1002` by default. Mixed occurrences expand in request order without
+sorting or deduplication. This includes string slices, so `?fields=id,name`
+and `?fields=id&fields=name` select the same fields. Single numeric values can
+bind to primitive slices. Complex slice items and explicit codecs keep their
+own binding contracts; ordinary scalar strings keep commas as literal text.
+
+Empty items and invalid primitive values produce client binding errors. A
+missing optional query remains missing, and the existing ignore-empty-query
+setting retains its provider policy. Native MCP tool arrays keep their array
+wire schema and values, including a string item such as `"a,b"`; MCP resource
+URI query values use CSV and repeated query syntax.
+
+No list-style option is required in DQL:
+
+```sql
+#define($_ = $Id<[]int>(query/id).Optional())
+#define($_ = $Fields<[]string>(query/fields).Optional())
+```
+
+`.WithQueryListCSV()` remains an optional legacy explicit directive. Native
+generation preserves it as `queryList:"csv"`; it is query-only, requires a
+primitive slice, and cannot replace an explicit codec.
+
+Verified regressions cover default CSV/repeated/mixed HTTP int and string
+lists, malformed values, numeric scalar wrapping, native MCP arrays with
+comma-containing strings, and a generated reader running against SQLite.
