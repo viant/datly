@@ -7,6 +7,7 @@ import (
 	bindinput "github.com/viant/bindly/input"
 	"github.com/viant/bindly/locator"
 	"github.com/viant/bindly/xform/conv"
+	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	xexec "github.com/viant/xdatly/exec"
 	"reflect"
 	"strings"
@@ -20,6 +21,12 @@ func (t *queryListTransformer) WireSourceType() reflect.Type { return t.target }
 func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver, raw any) (any, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if typed, ok := raw.(handlerprovider.TypedQueryValue); ok {
+		if typed.Value == nil || !reflect.TypeOf(typed.Value).AssignableTo(t.target) {
+			return nil, fmt.Errorf("typed query value requires %s, got %T", t.target, typed.Value)
+		}
+		return typed.Value, nil
 	}
 	if raw != nil && reflect.TypeOf(raw).AssignableTo(t.target) && (t.target.Elem().Kind() != reflect.String || nativeToolArguments(ctx)) {
 		return raw, nil

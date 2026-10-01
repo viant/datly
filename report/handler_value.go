@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/viant/bindly/locator"
+	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/structology"
 )
 
@@ -53,11 +54,15 @@ func (l *typedValueLocator) Value(_ context.Context, targetType reflect.Type, na
 	if !ok {
 		return nil, false, nil
 	}
-	if targetType != value.typeOf {
+	typedQueryList := l.provider.kind == "query" && targetType == reflect.TypeFor[any]() && value.typeOf != nil && value.typeOf.Kind() == reflect.Slice
+	if targetType != value.typeOf && !typedQueryList {
 		return nil, false, fmt.Errorf("report %s/%s requires source type %s, got %s", l.provider.kind, name, value.typeOf, targetType)
 	}
 	if !value.found {
 		return nil, false, nil
+	}
+	if typedQueryList {
+		return handlerprovider.TypedQueryValue{Value: value.value}, true, nil
 	}
 	return value.value, true, nil
 }
