@@ -158,6 +158,19 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 
 	finish := func(result any, operationErr error) (any, error) {
 		finishing = true
+		// Mutation adapters may opt into a declared error output before a
+		// program exists. Their outcome callback still owns once-only dispatch
+		// after root cleanup; this path never executes the output hook itself.
+		if operationErr != nil && outcomeAware && invocation.Snapshot == nil && result == nil {
+			if early, ok := request.Handler.(rhandler.EarlyErrorOutputFinalizer); ok && early.EarlyErrorOutputEnabled() {
+				result = errorAwareOutput(request.OutputType)
+				if result != nil {
+					if bindErr := bindOutput(result); bindErr != nil {
+						operationErr = errors.Join(operationErr, bindErr)
+					}
+				}
+			}
+		}
 		// Opted-in typed outputs can observe early binding/initialization/read
 		// failures. No successful finalizer is run on this path.
 		if operationErr != nil && !outputFinalized && !outcomeAware {

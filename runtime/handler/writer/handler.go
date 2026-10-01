@@ -660,9 +660,19 @@ func prepareReadIndexes(ctx context.Context, input any) error {
 	return methodError("PrepareReadIndexes", results)
 }
 
-func (h *Handler) FinalizeOutcome(ctx context.Context, invocation rhandler.Invocation, _ any, outcome xhandler.Outcome) error {
+func (*Handler) EarlyErrorOutputEnabled() bool { return true }
+
+func (h *Handler) FinalizeOutcome(ctx context.Context, invocation rhandler.Invocation, result any, outcome xhandler.Outcome) error {
 	program, _ := invocation.Snapshot.(*Program)
-	if program == nil || !program.hook.IsValid() {
+	if program == nil {
+		if outcome.Error != nil {
+			if finalizer, ok := result.(xhandler.ErrorFinalizer); ok {
+				return finalizer.Finalize(ctx, outcome.Error)
+			}
+		}
+		return nil
+	}
+	if !program.hook.IsValid() {
 		return nil
 	}
 	method := program.hook.MethodByName("Finalize")
