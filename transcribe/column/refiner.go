@@ -16,6 +16,7 @@ import (
 	sqltemplate "github.com/viant/datly/sql/template"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx"
@@ -370,13 +371,31 @@ func directSourceTable(SQL string) string {
 	// on the same table across branches, but that is insufficient writer or
 	// metadata-lookup authority.
 	hasUnion := false
-	sqlparser.Traverse(parsed, func(current node.Node) bool {
+	var visit func(node.Node) bool
+	visit = func(current node.Node) bool {
+		// Tuple expressions are native node lists. Older Traverse versions
+		// delegate them to the visitor but cannot descend into the container.
+		if children, ok := current.([]node.Node); ok {
+			for _, child := range children {
+				sqlparser.Traverse(child, visit)
+			}
+			return false
+		}
+		// Traverse's legacy Raw handling visits text rather than its parsed
+		// source. Keep derived SELECTs in the same conservative UNION guard.
+		if raw, ok := current.(*expr.Raw); ok {
+			if raw.X != nil {
+				sqlparser.Traverse(raw.X, visit)
+			}
+			return false
+		}
 		if selection, ok := current.(*query.Select); ok && selection.Union != nil {
 			hasUnion = true
 			return false
 		}
 		return true
-	})
+	}
+	sqlparser.Traverse(parsed, visit)
 	if hasUnion {
 		return ""
 	}

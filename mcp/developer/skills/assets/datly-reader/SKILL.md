@@ -63,6 +63,21 @@ For aggregates or intentionally restricted shapes, keep the necessary SQL expres
 
 Use `case_format('lc')` for naming. JSON tags belong only to genuine wire exceptions or omission/visibility policy, never repetitive lowercasing. Keep SQL aliases short and independent from public field names; avoid database keywords. `type(u,'UsageView','Usage')` gives a related SQL view an explicit Go holder without renaming its SQL namespace.
 
+## Keep view SQL in adjacent assets
+
+For readers and writers, move substantial or nontrivial named-source SQL into the component's `sql/` subfolder. Keep parameters, predicates, defaults, the view graph and genuine Go-shape annotations in the main DQL. Use the supported `${embed:sql/records.sql}` resource syntax; assets belong beside their authoritative DQL, not in generated Go or flattened sibling files.
+
+Graph fragment, retaining the component's existing declarations:
+
+```sql
+SELECT records.*, type(records,'Record')
+FROM (${embed:sql/records.sql}) records
+```
+
+Preserve each query's SQL, template expressions, aliases, predicates, ordering and transaction capabilities. Share an asset only when its content and parameter/predicate context are identical. Keep embed tokens out of SQL comments and quoted strings: the raw resource scanner expands them there too.
+
+For a cleanup sweep, inspect every reader and writer rather than only the named example. Record source/asset locations and any intentionally inline simple query. Verify stock transcription resolves the assets, preserves generated Go and runtime SQL semantics, and leaves no unresolved embed references; exercise the affected selectors and supported database dialects. Discovery must not bake its fixture dialect's quoting into portable persisted SQL.
+
 ## Authoring workflow
 
 The standard workflow is **reader-like declarative DQL graph + explicit `transcribe`
