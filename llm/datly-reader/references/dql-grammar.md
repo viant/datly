@@ -1070,3 +1070,19 @@ other validation. It does not add a SQL predicate, advance tokens, lock rows, or
 provide atomic race prevention. Init may explicitly prepare a next working token
 without changing the captured expectation. Missing/mismatched update tokens fail
 with a typed conflict before mutations proceed.
+
+## Opt-in CSV and repeated query lists
+
+`.WithQueryListCSV()` is a zero-argument query-only option for a typed scalar
+slice. Native generation preserves it as `queryList:"csv"`. It accepts both
+`?id=1001,1002` and `?id=1001&id=1002`; mixed occurrences expand in request order
+without sorting or deduplication. Empty items and invalid scalar values retain
+client binding errors. A missing optional query remains missing, and an existing
+ignore-empty-query setting retains its own provider policy. Ordinary scalar
+strings and query inputs without this opt-in keep their previous behavior.
+Explicit codecs cannot be combined with the option. Typed MCP arrays retain
+their array wire schema and values.
+
+```sql
+#define($_ = $Id<[]int>(query/id).Optional().WithQueryListCSV())
+```

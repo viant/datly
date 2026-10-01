@@ -114,7 +114,7 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 				Kind: kind,
 				Name: location,
 			},
-			TypeExpr:          inputType,
+			QueryListCSV: options.queryListCSV, TypeExpr: inputType,
 			OutputTypeExpr:    outputType,
 			DeclarationSQL:    declarationSQL,
 			Tag:               options.tag,

@@ -65,6 +65,7 @@ type Parameter struct {
 	Name           string          `json:"name,omitempty"`
 	Declaration    DeclarationKind `json:"declaration,omitempty"`
 	Source         BindSource      `json:"source,omitempty"`
+	QueryListCSV   bool            `json:"queryListCSV,omitempty"`
 	TypeExpr       string          `json:"typeExpr,omitempty"`
 	OutputTypeExpr string          `json:"outputTypeExpr,omitempty"`
 	// DeclarationSQL preserves the `/* ... */` SQL/comment body attached to a

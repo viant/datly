@@ -523,7 +523,7 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 	}
 	param := &spec.Parameter{
 		Name: name, Source: spec.BindSource{Kind: binding.Location.Kind, Name: binding.Location.In},
-		TypeExpr: binding.DataType, Tag: string(field.Tag), Cardinality: binding.Cardinality,
+		QueryListCSV: metadata.QueryListCSV, TypeExpr: binding.DataType, Tag: string(field.Tag), Cardinality: binding.Cardinality,
 		Required: binding.Required, Cacheable: binding.Cacheable,
 		MinAllowedRecords: binding.MinAllowedRecords, MaxAllowedRecords: binding.MaxAllowedRecords, ExpectedReturned: binding.ExpectedReturned,
 		MCP: metadata.MCP, PathMCP: metadata.PathMCP,

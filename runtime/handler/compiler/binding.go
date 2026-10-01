@@ -46,6 +46,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 		param := fieldParams[field.Name]
 		if param == nil {
 			if hasTag {
+				if err := applyQueryList(field, false, &tagged); err != nil {
+					return nil, err
+				}
 				if err := applyTimeFormat(field, &tagged); err != nil {
 					return nil, err
 				}
@@ -61,6 +64,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 			return nil, err
 		}
 		if ok {
+			if err := applyQueryList(field, param.QueryListCSV, &compiled); err != nil {
+				return nil, err
+			}
 			if err := applyTimeFormat(field, &compiled); err != nil {
 				return nil, err
 			}

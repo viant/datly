@@ -1082,3 +1082,11 @@ FROM (SELECT ID, NAME FROM records) r
 Unknown policies, GET/POST/PUT targets, auxiliary roles, nonnumeric/composite
 identities and roles with descendants are rejected. Current/Previous reads
 retain their declared ownership and predicate requirements.
+
+## Opt-in CSV and repeated query lists
+
+For query-bound scalar slices, `.WithQueryListCSV()` accepts both CSV and repeated
+occurrences in request order. It emits `queryList:"csv"` on the generated field.
+It cannot replace an explicit codec or apply to body/scalar parameters; ordinary
+strings and non-opted-in parameters are unchanged. Empty/invalid items remain
+binding errors, while MCP typed arrays retain their native array contract.
