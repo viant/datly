@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/viant/bindly"
 	requestprovider "github.com/viant/bindly/provider/request"
@@ -194,5 +195,30 @@ func TestBodyFormatJSONEmbeddingDominance(t *testing.T) {
 	actual := reviewTransform(t, reflect.TypeFor[*bodyFormatDominantField](), `{"when":"not-a-date","other":"2026-10-01T04:20:27+00"}`).(*bodyFormatDominantField)
 	if actual.When != "not-a-date" || actual.bodyFormatShadowedEmbedded.When != nil || actual.Other == nil {
 		t.Fatal("embedding dominance changed ordinary JSON field authority")
+	}
+}
+
+type bodyFormatArbitraryJSON struct {
+	When   *time.Time `format:"timeLayout=2006-01-02T15:04:05Z07"`
+	Raw    json.RawMessage
+	Values []string
+	Number int64
+}
+
+func TestBodyFormatUnformattedJSONSiblingsRemainCanonical(t *testing.T) {
+	for _, tc := range []struct {
+		description, input string
+		expectedRaw        string
+	}{
+		{"raw scalar", `{"when":"2026-10-01T04:20:27+00","raw":"typed","values":["a","b"],"number":9007199254740993}`, `"typed"`},
+		{"raw array", `{"when":"2026-10-01T04:20:27+00","raw":[1,false,null],"values":["a","b"],"number":9007199254740993}`, `[1,false,null]`},
+		{"raw object", `{"when":"2026-10-01T04:20:27+00","raw":{"x":false},"values":["a","b"],"number":9007199254740993}`, `{"x":false}`},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			actual := reviewTransform(t, reflect.TypeFor[*bodyFormatArbitraryJSON](), tc.input).(*bodyFormatArbitraryJSON)
+			if string(actual.Raw) != tc.expectedRaw || !reflect.DeepEqual(actual.Values, []string{"a", "b"}) || actual.Number != 9007199254740993 {
+				t.Fatalf("unformatted sibling changed: %+v", actual)
+			}
+		})
 	}
 }

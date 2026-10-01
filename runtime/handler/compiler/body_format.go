@@ -59,6 +59,13 @@ func compileBodyFormat(target reflect.Type, memo map[reflect.Type]*bodyFormatPla
 	if target == reflect.TypeFor[time.Time]() {
 		return nil, nil
 	}
+	// A reusable type's explicit JSON method owns its representation. Authored
+	// time.Time leaves are selected by their enclosing binding field instead.
+	unmarshaler := reflect.TypeFor[json.Unmarshaler]()
+	if target.Implements(unmarshaler) || reflect.PointerTo(target).Implements(unmarshaler) {
+		return nil, nil
+	}
+
 	if target.Kind() == reflect.Slice || target.Kind() == reflect.Array || target.Kind() == reflect.Map {
 		if plan, ok := memo[target]; ok {
 			return plan, nil
@@ -253,6 +260,9 @@ func (t *bodyFormatTransformer) Transform(ctx context.Context, _ locator.Resolve
 	return value, err
 }
 func (p *bodyFormatPlan) normalize(raw json.RawMessage, path string) (json.RawMessage, error) {
+	if p == nil || !p.hasLayout(map[*bodyFormatPlan]bool{}) {
+		return raw, nil
+	}
 	if strings.TrimSpace(string(raw)) == "null" {
 		return raw, nil
 	}
