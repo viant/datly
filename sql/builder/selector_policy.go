@@ -152,13 +152,19 @@ func (r selectorResolver) controls(base *spec.ViewControls, input *xstate.Select
 					return nil, fmt.Errorf("selector page is not allowed")
 				}
 				if result.Limit == nil || *result.Limit <= 0 {
-					return nil, fmt.Errorf("selector page requires a positive limit")
+					if r.policy == nil || !r.policy.NoLimit {
+						return nil, fmt.Errorf("selector page requires a positive limit")
+					}
+					// An explicitly unlimited view has no page window. Preserve
+					// its complete result rather than inventing a limit or offset.
+					result.Offset = nil
+				} else {
+					if input.Page-1 > int(^uint(0)>>1) / *result.Limit {
+						return nil, &xresponse.Error{Code: 400, Payload: xresponse.Status{Status: "error", Message: "selector page and limit overflow offset"}, Cause: fmt.Errorf("selector page and limit overflow offset")}
+					}
+					offset := *result.Limit * (input.Page - 1)
+					result.Offset = &offset
 				}
-				if input.Page-1 > int(^uint(0)>>1) / *result.Limit {
-					return nil, &xresponse.Error{Code: 400, Payload: xresponse.Status{Status: "error", Message: "selector page and limit overflow offset"}, Cause: fmt.Errorf("selector page and limit overflow offset")}
-				}
-				offset := *result.Limit * (input.Page - 1)
-				result.Offset = &offset
 			}
 		}
 	}

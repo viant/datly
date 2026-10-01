@@ -196,6 +196,42 @@ func TestBuilder_SelectorPolicyDerivedFromComponent(t *testing.T) {
 	}
 }
 
+func TestBuilder_UnlimitedPagePolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		policy    *spec.Selector
+		selector  *xstate.Selector
+		wantSQL   string
+		wantError string
+	}{
+		{name: "first unlimited page", policy: &spec.Selector{NoLimit: true, AllowPage: true}, selector: &xstate.Selector{Page: 1}, wantSQL: "SELECT id FROM users"},
+		{name: "later unlimited page", policy: &spec.Selector{NoLimit: true, AllowPage: true, DefaultLimit: 100}, selector: &xstate.Selector{Page: 5}, wantSQL: "SELECT id FROM users"},
+		{name: "largest unlimited page", policy: &spec.Selector{NoLimit: true, AllowPage: true}, selector: &xstate.Selector{Page: int(^uint(0) >> 1)}, wantSQL: "SELECT id FROM users"},
+		{name: "explicit limit still pages", policy: &spec.Selector{NoLimit: true, AllowPage: true, AllowLimit: true}, selector: &xstate.Selector{Page: 3, Limit: 5}, wantSQL: "SELECT id FROM users LIMIT 5 OFFSET 10"},
+		{name: "explicit offset retains precedence", policy: &spec.Selector{NoLimit: true, AllowPage: true, AllowLimit: true, AllowOffset: true}, selector: &xstate.Selector{Page: 3, Limit: 5, Offset: 2}, wantSQL: "SELECT id FROM users LIMIT 5 OFFSET 2"},
+		{name: "page permission required", policy: &spec.Selector{NoLimit: true}, selector: &xstate.Selector{Page: 1}, wantError: "selector page is not allowed"},
+		{name: "missing limit without explicit policy", policy: &spec.Selector{AllowPage: true}, selector: &xstate.Selector{Page: 1}, wantError: "selector page requires a positive limit"},
+		{name: "negative page still invalid", policy: &spec.Selector{NoLimit: true, AllowPage: true}, selector: &xstate.Selector{Page: -1}, wantError: "selector pagination values must be non-negative"},
+		{name: "positive limit still checks overflow", policy: &spec.Selector{NoLimit: true, AllowPage: true, AllowLimit: true}, selector: &xstate.Selector{Page: int(^uint(0) >> 1), Limit: 2}, wantError: "selector page and limit overflow offset"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			query, err := NewBuilder().Build(context.Background(), WithBuilderSQL("SELECT id FROM users"), WithBuilderInput(reflect.ValueOf(struct{}{})), WithBuilderSelectorPolicy(tc.policy), WithBuilderSelector(tc.selector))
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("expected %q, got %v", tc.wantError, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if query.SQL != tc.wantSQL {
+				t.Fatalf("got %q, want %q", query.SQL, tc.wantSQL)
+			}
+		})
+	}
+}
+
 func TestBuilder_CacheSQLPreservesMatcherWindow(t *testing.T) {
 	staticLimit, staticOffset := 2, 3
 	overrideLimit, overrideOffset := 50, 5
