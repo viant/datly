@@ -2851,3 +2851,28 @@ SELECT 1`
 	}
 	assertly.AssertValues(t, "any", authField.Type)
 }
+
+func TestOutputLoggerRetainsCapabilitySourceAndHiddenTag(t *testing.T) {
+	source := `#import('logger','github.com/viant/xdatly/logger')
+#setting($_ = $route('/capabilities','GET'))
+#define($_ = $Logger<logger.Logger>(logger/).Optional().Output().WithTag('json:"-"'))
+SELECT 1`
+	component, err := parseTestComponentSource("example.test/capabilities", "Capabilities", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, param := range component.Parameters {
+		if param.Name != "Logger" {
+			continue
+		}
+		if !param.EmitOutput || param.Source.Kind != "logger" {
+			t.Fatal("declaration authority changed")
+		}
+		tag := reflect.StructTag(fieldTag(param, "Logger", nil))
+		if !strings.Contains(tag.Get("parameter"), "kind=logger") || strings.Contains(tag.Get("parameter"), "kind=output") || tag.Get("json") != "-" {
+			t.Fatalf("capability binding was rewritten:%s", tag)
+		}
+		return
+	}
+	t.Fatal("declared output logger missing")
+}

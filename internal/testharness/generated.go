@@ -39,6 +39,9 @@ func (m GeneratedModule) source() (*modfile.File, string, error) {
 		return nil, "", err
 	}
 	file, err := modfile.Parse("go.mod", content, nil)
+	if err == nil {
+		err = applyTestSDKSource(file)
+	}
 	return file, info.Dir, err
 }
 
@@ -198,4 +201,28 @@ func GeneratedGoModWithoutModule() string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// applyTestSDKSource is fixture-only authority for testing an unpublished SDK.
+// It changes generated test module metadata, never the source checkout go.mod.
+func applyTestSDKSource(file *modfile.File) error {
+	source := os.Getenv("DATLY_TEST_XDATLY_DIR")
+	if source == "" {
+		return nil
+	}
+	if !filepath.IsAbs(source) {
+		return fmt.Errorf("DATLY_TEST_XDATLY_DIR must be absolute")
+	}
+	data, err := os.ReadFile(filepath.Join(source, "go.mod"))
+	if err != nil {
+		return fmt.Errorf("read DATLY_TEST_XDATLY_DIR module: %w", err)
+	}
+	sdk, err := modfile.Parse("go.mod", data, nil)
+	if err != nil {
+		return fmt.Errorf("parse DATLY_TEST_XDATLY_DIR module: %w", err)
+	}
+	if sdk.Module == nil || sdk.Module.Mod.Path != "github.com/viant/xdatly" {
+		return fmt.Errorf("DATLY_TEST_XDATLY_DIR must identify github.com/viant/xdatly")
+	}
+	return file.AddReplace("github.com/viant/xdatly", "", filepath.Clean(source), "")
 }

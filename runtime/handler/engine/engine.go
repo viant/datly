@@ -24,17 +24,18 @@ import (
 type Request struct {
 	mutationAttempt int
 	// SequenceStrategy is canonical component metadata, not a client-bound value.
-	SequenceStrategy string
-	OutputType       reflect.Type
-	Injector         *bindly.Injector
-	Input            *registry.RouteInputContract
-	BoundInput       any
-	Replay           *bindly.ReplayBinding
-	BindingOutput    any
-	Injectors        func(context.Context, any, xhandler.Route) (xhandler.Binder, error)
-	Scope            dexec.ProviderScope
-	Capabilities     rhandler.InvocationCapabilities
-	Providers        []locator.Provider
+	SequenceStrategy   string
+	OutputType         reflect.Type
+	OutputCapabilities *bindly.Plan
+	Injector           *bindly.Injector
+	Input              *registry.RouteInputContract
+	BoundInput         any
+	Replay             *bindly.ReplayBinding
+	BindingOutput      any
+	Injectors          func(context.Context, any, xhandler.Route) (xhandler.Binder, error)
+	Scope              dexec.ProviderScope
+	Capabilities       rhandler.InvocationCapabilities
+	Providers          []locator.Provider
 	// Constants is runtime-derived canonical constant authority. It remains
 	// separate from caller-controlled providers so authority cannot be forged.
 	Constants locator.Provider
@@ -141,8 +142,36 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 	}
 	finishing := false
+	outputFinalized := false
+	var scope *bindly.Injector
+	bindOutput := func(value any) (err error) {
+		defer func() {
+			if value := recover(); value != nil {
+				err = dexec.NewPanicError("output capability binding", value)
+			}
+		}()
+		if request.OutputCapabilities == nil || value == nil || scope == nil {
+			return nil
+		}
+		return scope.Bind(ctx, value, bindly.WithPlan(request.OutputCapabilities), bindly.WithSource(input))
+	}
+
 	finish := func(result any, operationErr error) (any, error) {
 		finishing = true
+		// Opted-in typed outputs can observe early binding/initialization/read
+		// failures. No successful finalizer is run on this path.
+		if operationErr != nil && !outputFinalized && !outcomeAware {
+			if result == nil {
+				result = errorAwareOutput(request.OutputType)
+			}
+			if result != nil {
+				if bindErr := bindOutput(result); bindErr != nil {
+					operationErr = errors.Join(operationErr, bindErr)
+				}
+				outputFinalized = true
+				result, operationErr = finalizeBeforeCompletion(ctx, result, operationErr)
+			}
+		}
 		if data != nil {
 			data.finishOutcome(completionFrame, invocation, result, operationErr)
 		}
@@ -238,7 +267,6 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 		return snapshot, snapshot != nil, nil
 	}))
-	var scope *bindly.Injector
 	runtimeProviders = append(runtimeProviders, handlerprovider.Static(dexec.ReaderInputPreparerKey, dexec.ReaderInputPreparer(func(ctx context.Context, names ...string) (*dexec.ReaderInput, error) {
 		prepared, err := request.Input.Without(input, names...)
 		if err != nil {
@@ -341,6 +369,14 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	dexec.BeginOutputSelection(ctx)
 	result, handlerErr := request.Handler.Execute(ctx, invocation)
+	if result == nil && handlerErr != nil && !outcomeAware {
+		result = errorAwareOutput(request.OutputType)
+	}
+	if result != nil {
+		if outputErr := bindOutput(result); outputErr != nil {
+			handlerErr = errors.Join(handlerErr, outputErr)
+		}
+	}
 	completeSelection(result, handlerErr)
 	if outcomeAware {
 		return finish(result, handlerErr)
@@ -371,6 +407,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			handlerErr = prepareErr
 		}
 	}
+	outputFinalized = true
 	result, handlerErr = finalizeBeforeCompletion(ctx, result, handlerErr)
 	if data != nil && !ownsData && hasCompletionHooks(ctx, result) {
 		var registerErr error
@@ -458,4 +495,11 @@ func (r Request) hasInjectorFinalizer() bool {
 	}
 	contract := reflect.TypeFor[xhandler.InjectorFinalizer]()
 	return outputType.Implements(contract) || (outputType.Kind() != reflect.Pointer && reflect.PointerTo(outputType).Implements(contract))
+}
+
+func errorAwareOutput(outputType reflect.Type) any {
+	if outputType == nil || outputType.Kind() != reflect.Struct || !reflect.PointerTo(outputType).Implements(reflect.TypeFor[xhandler.ErrorFinalizer]()) {
+		return nil
+	}
+	return reflect.New(outputType).Interface()
 }

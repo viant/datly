@@ -33,7 +33,7 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 		value = strings.ReplaceAll(value, `'`, `\'`)
 		return "'" + value + "'"
 	}
-	if param.EmitOutput {
+	if param.EmitOutput && kind != "logger" {
 		kind = "output"
 		if inName == "" {
 			inName = "body"

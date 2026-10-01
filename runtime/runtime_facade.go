@@ -26,19 +26,20 @@ import (
 type RegisteredComponent = rregistry.RegisteredComponent
 
 type Runtime struct {
-	ownsObservability  bool
-	observability      *Observability
-	bundle             *rroute.Bundle
-	publicBundle       *rroute.Bundle
-	registered         map[string]*RegisteredComponent
-	metadata           map[string]*spec.Component
-	loader             ComponentLoader
-	exposure           *rroute.Exposure
-	relatedExposure    sync.Map
-	relatedMetadata    sync.Map
-	canonicalConstants map[string]locator.Provider
-	invoker            *handlerengine.Engine
-	injector           *bindly.Injector
+	ownsObservability     bool
+	observability         *Observability
+	bundle                *rroute.Bundle
+	publicBundle          *rroute.Bundle
+	registered            map[string]*RegisteredComponent
+	metadata              map[string]*spec.Component
+	loader                ComponentLoader
+	exposure              *rroute.Exposure
+	relatedExposure       sync.Map
+	relatedMetadata       sync.Map
+	outputCapabilityPlans sync.Map
+	canonicalConstants    map[string]locator.Provider
+	invoker               *handlerengine.Engine
+	injector              *bindly.Injector
 	// clientProviders are applied to every component that does not register
 	// the same kind itself. clients is the default registry the runtime
 	// created when no providers were configured; it is closed on Shutdown.

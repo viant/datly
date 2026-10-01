@@ -108,3 +108,49 @@ func TestGeneratedModuleResolvesSelectedSDK(t *testing.T) {
 		t.Fatalf("resolved wrong SDK: %s", location)
 	}
 }
+
+func TestGeneratedModuleExplicitTestSDKSource(t *testing.T) {
+	source := t.TempDir()
+	if err := os.WriteFile(filepath.Join(source, "go.mod"), []byte("module example.test/source\ngo 1.25\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, path, module string
+		valid              bool
+	}{
+		{"correct", filepath.Join(t.TempDir(), "sdk"), "github.com/viant/xdatly", true},
+		{"wrong module", filepath.Join(t.TempDir(), "other"), "example.test/other", false},
+		{"relative", "relative-sdk", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.module != "" {
+				if err := os.Mkdir(tc.path, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(tc.path, "go.mod"), []byte("module "+tc.module+"\ngo 1.25\n"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("DATLY_TEST_XDATLY_DIR", tc.path)
+			fixture := GeneratedModule{SourceRoot: source}
+			content, err := fixture.Content()
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v err=%v", tc.valid, err)
+			}
+			if !tc.valid {
+				return
+			}
+			if !strings.Contains(content, tc.path) {
+				t.Fatal("explicit source mapping missing")
+			}
+			actual, err := fixture.DependencyDir("github.com/viant/xdatly")
+			if err != nil || actual != tc.path {
+				t.Fatalf("dependency source%s err%v", actual, err)
+			}
+			unchanged, err := os.ReadFile(filepath.Join(source, "go.mod"))
+			if err != nil || strings.Contains(string(unchanged), "replace") {
+				t.Fatal("fixture selection mutated source module")
+			}
+		})
+	}
+}

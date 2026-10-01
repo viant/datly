@@ -525,6 +525,11 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 		Activation: activationFromBinding(binding.URI), ResourceRef: resourceFromBinding(binding.URI, binding.ResourceRef), Async: binding.Async,
 		ErrorStatusCode: binding.ErrorCode, ErrorMessage: binding.ErrorMessage,
 	}
+	// Output-owned capability bindings retain their server source rather than
+	// becoming body slots. The SDK logger remains an ordinary typed capability.
+	if role == outputContract && strings.EqualFold(binding.Location.Kind, "logger") {
+		param.EmitOutput = true
+	}
 	if binding.DefaultValue != nil {
 		value, ok := binding.DefaultValue.(string)
 		if !ok {

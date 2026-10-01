@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	dexec "github.com/viant/datly/exec"
 
 	rhandler "github.com/viant/datly/runtime/handler"
 	xhandler "github.com/viant/xdatly/handler"
@@ -15,10 +16,15 @@ import (
 // the engine before this once-only callback.
 func finalizeBeforeCompletion(ctx context.Context, result any, handlerErr error) (any, error) {
 	if finalizer, ok := result.(xhandler.ErrorFinalizer); ok {
-		finalizeErr := finalizer.Finalize(ctx, handlerErr)
+		finalizeErr := invokeErrorFinalizer(ctx, finalizer, handlerErr)
 		switch {
 		case handlerErr != nil && finalizeErr != nil:
-			return result, errors.Join(handlerErr, finalizeErr)
+			joined := errors.Join(handlerErr, finalizeErr)
+			projection := (&outcomeErrors{}).publicError(finalizeErr, handlerErr)
+			if projection != nil {
+				return result, &publicOutcomeError{BodyError: projection, cause: joined}
+			}
+			return result, joined
 		case handlerErr != nil:
 			return result, handlerErr
 		case finalizeErr != nil:
@@ -69,4 +75,15 @@ func hasCompletionHooks(ctx context.Context, result any) bool {
 		return ok
 	}
 	return false
+}
+
+// Recover at the callback boundary: completion must still run even when the
+// engine is already finishing an earlier failure. Panic values remain private.
+func invokeErrorFinalizer(ctx context.Context, finalizer xhandler.ErrorFinalizer, cause error) (err error) {
+	defer func() {
+		if value := recover(); value != nil {
+			err = dexec.NewPanicError("output error finalizer", value)
+		}
+	}()
+	return finalizer.Finalize(ctx, cause)
 }
