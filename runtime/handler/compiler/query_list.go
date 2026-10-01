@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/bindly"
 	bindinput "github.com/viant/bindly/input"
@@ -76,6 +77,13 @@ func applyQueryList(field reflect.StructField, paramCSV bool, binding *bindly.Bi
 		return fmt.Errorf("queryList must be csv")
 	}
 	explicit := paramCSV || hasTag
+	if !explicit && binding.Location.Kind == "path" {
+		if field.Type.Kind() == reflect.Slice && primitiveListItem(field.Type.Elem()) && field.Type.Elem().Kind() != reflect.Uint8 && binding.Transformer == nil {
+			binding.SourceType = reflect.TypeFor[any]()
+			binding.Transformer = &pathListTransformer{target: field.Type}
+		}
+		return nil
+	}
 	if !explicit && (binding.Location.Kind != "query" || field.Type.Kind() != reflect.Slice || !primitiveListItem(field.Type.Elem()) || binding.Transformer != nil) {
 		return nil
 	}
@@ -109,4 +117,33 @@ func primitiveListItem(typ reflect.Type) bool {
 func nativeToolArguments(ctx context.Context) bool {
 	invocation := xexec.GetContext(ctx)
 	return invocation != nil && invocation.Method == "tools/call"
+}
+
+// pathListTransformer preserves HTTP CSV paths and native tool JSON arrays.
+// An explicit codec remains authoritative and does not use this default.
+type pathListTransformer struct{ target reflect.Type }
+
+func (t *pathListTransformer) WireSourceType() reflect.Type { return t.target }
+func (t *pathListTransformer) Transform(ctx context.Context, resolver locator.Resolver, raw any) (any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !nativeToolArguments(ctx) {
+		return (&queryListTransformer{target: t.target}).Transform(ctx, resolver, raw)
+	}
+	if raw != nil && reflect.TypeOf(raw).AssignableTo(t.target) {
+		return raw, nil
+	}
+	wire, ok := raw.(string)
+	if !ok {
+		return nil, &bindinput.Error{Cause: fmt.Errorf("native path collection requires JSON array, got %T", raw)}
+	}
+	if strings.TrimSpace(wire) == "null" {
+		return nil, &bindinput.Error{Cause: fmt.Errorf("native path collection requires a non-null array")}
+	}
+	value := reflect.New(t.target)
+	if err := json.Unmarshal([]byte(wire), value.Interface()); err != nil {
+		return nil, &bindinput.Error{Cause: fmt.Errorf("native path collection: %w", err)}
+	}
+	return value.Elem().Interface(), nil
 }

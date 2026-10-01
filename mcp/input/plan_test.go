@@ -319,3 +319,21 @@ func assertValue(t *testing.T, provider interface {
 		t.Fatalf("value %s = %#v, %v, %v; want %#v", name, value, ok, err, want)
 	}
 }
+
+func TestNativePrimitivePathArrayProjectionIsLossless(t *testing.T) {
+	plan, err := NewCompiler().Compile([]Argument{{PublicName: "labels", Source: bindstate.Location{Kind: "path", In: "labels"}, SourceType: reflect.TypeFor[[]string]()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope, err := plan.Scope(Arguments{"labels": []string{"a,b", "c", ""}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer scope.Close()
+	assertValue(t, scope.Path(), reflect.TypeFor[string](), "labels", `["a,b","c",""]`)
+	for _, typ := range []reflect.Type{reflect.TypeFor[[]byte](), reflect.TypeFor[[]struct{ ID int }](), reflect.TypeFor[string](), reflect.TypeFor[[]*int]()} {
+		if primitivePathSlice(typ) {
+			t.Fatalf("unsupported path collection%v", typ)
+		}
+	}
+}

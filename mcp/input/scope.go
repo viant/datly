@@ -167,6 +167,14 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 	if err != nil {
 		return resolvedValue{}, false, fmt.Errorf("encode MCP argument %q as request value: %w", argument.PublicName, err)
 	}
+	if argument.Source.Kind == requestprovider.PathKind && primitivePathSlice(argument.SourceType) {
+		if value == nil || reflect.ValueOf(value).IsNil() {
+			return resolvedValue{}, false, fmt.Errorf("MCP path argument %q requires a non-null array", argument.PublicName)
+		}
+		// Preserve native arrays as one lossless path-provider value. URI paths
+		// continue through URI.resolve and retain their original wire text.
+		wire = []string{string(encoded)}
+	}
 	return resolvedValue{wire: wire}, true, nil
 }
 
@@ -340,4 +348,15 @@ func isCollection(typeOf reflect.Type) bool {
 		typeOf = typeOf.Elem()
 	}
 	return typeOf != nil && (typeOf.Kind() == reflect.Slice || typeOf.Kind() == reflect.Array)
+}
+
+func primitivePathSlice(typ reflect.Type) bool {
+	if typ == nil || typ.Kind() != reflect.Slice {
+		return false
+	}
+	switch typ.Elem().Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64, reflect.String, reflect.Bool:
+		return true
+	}
+	return false
 }
