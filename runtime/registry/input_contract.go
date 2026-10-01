@@ -278,10 +278,15 @@ func (c *RouteInputContract) Fields() []InputField {
 
 func (f InputField) Path() string                  { return f.path }
 func (f InputField) DestinationType() reflect.Type { return f.destinationType }
-func (f InputField) SourceType() reflect.Type      { return f.binding.SourceType }
-func (f InputField) Binding() bindly.BindingSpec   { return cloneBindingSpec(f.binding) }
-func (f InputField) Anonymous() bool               { return f.anonymous }
-func (f InputField) WireSchema() *spec.WireSchema  { return f.wireSchema.Clone() }
+func (f InputField) SourceType() reflect.Type {
+	if source, ok := f.binding.Transformer.(interface{ WireSourceType() reflect.Type }); ok {
+		return source.WireSourceType()
+	}
+	return f.binding.SourceType
+}
+func (f InputField) Binding() bindly.BindingSpec  { return cloneBindingSpec(f.binding) }
+func (f InputField) Anonymous() bool              { return f.anonymous }
+func (f InputField) WireSchema() *spec.WireSchema { return f.wireSchema.Clone() }
 func (f InputField) WireSchemas() map[string]*spec.WireSchema {
 	return cloneWireSchemas(f.wireSchemas)
 }

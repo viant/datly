@@ -49,6 +49,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 				if err := applyTimeFormat(field, &tagged); err != nil {
 					return nil, err
 				}
+				if err := applyBodyFormat(field, &tagged); err != nil {
+					return nil, err
+				}
 				result = append(result, tagged)
 			}
 			continue
@@ -59,6 +62,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 		}
 		if ok {
 			if err := applyTimeFormat(field, &compiled); err != nil {
+				return nil, err
+			}
+			if err := applyBodyFormat(field, &compiled); err != nil {
 				return nil, err
 			}
 			result = append(result, compiled)
