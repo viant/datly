@@ -157,3 +157,42 @@ func TestBodyWithoutAuthoredFormatKeepsOrdinaryDecoder(t *testing.T) {
 		t.Fatal("unauthored short date must not silently gain parsing behavior")
 	}
 }
+
+type bodyFormatDuplicateFixture struct {
+	When  *time.Time `format:"timeLayout=2006-01-02T15:04:05Z07"`
+	Count int64      `json:"count"`
+}
+
+func TestBodyFormatRetainsDuplicateOrderAndIntegerPrecision(t *testing.T) {
+	for _, tc := range []struct {
+		description, input string
+		expected           int64
+	}{
+		{"same key last wins", `{"count":1,"count":2,"when":"2026-10-01T04:20:27+00"}`, 2},
+		{"case variant order reverses", `{"Count":2,"count":1,"when":"2026-10-01T04:20:27+00"}`, 1},
+		{"large integer stays exact", `{"count":9007199254740993,"when":"2026-10-01T04:20:27+00"}`, 9007199254740993},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			actual := reviewTransform(t, reflect.TypeFor[*bodyFormatDuplicateFixture](), tc.input).(*bodyFormatDuplicateFixture)
+			if actual.Count != tc.expected {
+				t.Fatalf("count=%d expected=%d", actual.Count, tc.expected)
+			}
+		})
+	}
+}
+
+type bodyFormatShadowedEmbedded struct {
+	When *time.Time `format:"timeLayout=2006-01-02T15:04:05Z07"`
+}
+type bodyFormatDominantField struct {
+	bodyFormatShadowedEmbedded
+	When  string
+	Other *time.Time `format:"timeLayout=2006-01-02T15:04:05Z07"`
+}
+
+func TestBodyFormatJSONEmbeddingDominance(t *testing.T) {
+	actual := reviewTransform(t, reflect.TypeFor[*bodyFormatDominantField](), `{"when":"not-a-date","other":"2026-10-01T04:20:27+00"}`).(*bodyFormatDominantField)
+	if actual.When != "not-a-date" || actual.bodyFormatShadowedEmbedded.When != nil || actual.Other == nil {
+		t.Fatal("embedding dominance changed ordinary JSON field authority")
+	}
+}

@@ -1,10 +1,12 @@
 package compiler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,11 +24,11 @@ func applyBodyFormat(field reflect.StructField, binding *bindly.BindingSpec) err
 	if binding.Transformer != nil || binding.Location.Kind != "body" {
 		return nil
 	}
-	plan, err := compileBodyFormat(field.Type, map[reflect.Type]bool{})
+	plan, err := compileBodyFormat(field.Type, map[reflect.Type]*bodyFormatPlan{})
 	if err != nil {
 		return fmt.Errorf("body field %s format: %w", field.Name, err)
 	}
-	if plan == nil {
+	if plan == nil || !plan.hasLayout(map[*bodyFormatPlan]bool{}) {
 		return nil
 	}
 	binding.SourceType = reflect.TypeFor[json.RawMessage]()
@@ -40,11 +42,17 @@ type bodyFormatPlan struct {
 	fields []bodyFormatField
 }
 type bodyFormatField struct {
-	names []string
-	plan  *bodyFormatPlan
+	name string
+	plan *bodyFormatPlan
+}
+type bodyJSONField struct {
+	name   string
+	tagged bool
+	index  []int
+	field  reflect.StructField
 }
 
-func compileBodyFormat(target reflect.Type, visiting map[reflect.Type]bool) (*bodyFormatPlan, error) {
+func compileBodyFormat(target reflect.Type, memo map[reflect.Type]*bodyFormatPlan) (*bodyFormatPlan, error) {
 	for target.Kind() == reflect.Pointer {
 		target = target.Elem()
 	}
@@ -52,34 +60,28 @@ func compileBodyFormat(target reflect.Type, visiting map[reflect.Type]bool) (*bo
 		return nil, nil
 	}
 	if target.Kind() == reflect.Slice || target.Kind() == reflect.Array || target.Kind() == reflect.Map {
-		item, err := compileBodyFormat(target.Elem(), visiting)
-		if err != nil || item == nil {
+		if plan, ok := memo[target]; ok {
+			return plan, nil
+		}
+		plan := &bodyFormatPlan{}
+		memo[target] = plan
+		item, err := compileBodyFormat(target.Elem(), memo)
+		if err != nil {
 			return nil, err
 		}
-		return &bodyFormatPlan{item: item}, nil
+		plan.item = item
+		return plan, nil
 	}
-	if target.Kind() != reflect.Struct || visiting[target] {
+	if target.Kind() != reflect.Struct {
 		return nil, nil
 	}
-	visiting[target] = true
-	defer delete(visiting, target)
+	if plan, ok := memo[target]; ok {
+		return plan, nil
+	}
 	plan := &bodyFormatPlan{}
-	for i := 0; i < target.NumField(); i++ {
-		field := target.Field(i)
-		if field.PkgPath != "" || field.Tag.Get("setMarker") == "true" {
-			continue
-		}
-		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
-		if name == "-" {
-			continue
-		}
-		if name == "" {
-			name = field.Name
-		}
-		names := []string{name}
-		if name != field.Name {
-			names = append(names, field.Name)
-		}
+	memo[target] = plan
+	for _, candidate := range authorizedBodyJSONFields(target) {
+		field := candidate.field
 		typ := field.Type
 		for typ.Kind() == reflect.Pointer {
 			typ = typ.Elem()
@@ -95,19 +97,123 @@ func compileBodyFormat(target reflect.Type, visiting map[reflect.Type]bool) (*bo
 			}
 		} else {
 			var err error
-			child, err = compileBodyFormat(field.Type, visiting)
+			child, err = compileBodyFormat(field.Type, memo)
 			if err != nil {
 				return nil, err
 			}
 		}
-		if child != nil {
-			plan.fields = append(plan.fields, bodyFormatField{names: names, plan: child})
-		}
-	}
-	if len(plan.fields) == 0 {
-		return nil, nil
+		// Unformatted fields remain in the name graph so JSON's exact-name
+		// preference and embedding dominance cannot authorize another field.
+		plan.fields = append(plan.fields, bodyFormatField{name: candidate.name, plan: child})
 	}
 	return plan, nil
+}
+func (p *bodyFormatPlan) hasLayout(seen map[*bodyFormatPlan]bool) bool {
+	if p == nil || seen[p] {
+		return false
+	}
+	seen[p] = true
+	if p.layout != "" {
+		return true
+	}
+	if p.item != nil && p.item.hasLayout(seen) {
+		return true
+	}
+	for _, field := range p.fields {
+		if field.plan.hasLayout(seen) {
+			return true
+		}
+	}
+	return false
+}
+func authorizedBodyJSONFields(target reflect.Type) []bodyJSONField {
+	var candidates []bodyJSONField
+	var collect func(reflect.Type, []int, map[reflect.Type]bool)
+	collect = func(typ reflect.Type, index []int, visiting map[reflect.Type]bool) {
+		if visiting[typ] {
+			return
+		}
+		visiting[typ] = true
+		defer delete(visiting, typ)
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			child := field.Type
+			for child.Kind() == reflect.Pointer {
+				child = child.Elem()
+			}
+			if field.Tag.Get("setMarker") == "true" || field.PkgPath != "" && (!field.Anonymous || child.Kind() != reflect.Struct) {
+				continue
+			}
+			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			if name == "-" {
+				continue
+			}
+			position := append(append([]int{}, index...), i)
+			if field.Anonymous && name == "" && child.Kind() == reflect.Struct && child != reflect.TypeFor[time.Time]() {
+				collect(child, position, visiting)
+				continue
+			}
+			if field.PkgPath != "" {
+				continue
+			}
+			tagged := name != ""
+			if name == "" {
+				name = field.Name
+			}
+			candidates = append(candidates, bodyJSONField{name: name, tagged: tagged, index: position, field: field})
+		}
+	}
+	collect(target, nil, map[reflect.Type]bool{})
+	groups := map[string][]bodyJSONField{}
+	for _, field := range candidates {
+		groups[field.name] = append(groups[field.name], field)
+	}
+	var result []bodyJSONField
+	for _, fields := range groups {
+		depth := len(fields[0].index)
+		for _, field := range fields {
+			if len(field.index) < depth {
+				depth = len(field.index)
+			}
+		}
+		var shallow, tagged []bodyJSONField
+		for _, field := range fields {
+			if len(field.index) == depth {
+				shallow = append(shallow, field)
+				if field.tagged {
+					tagged = append(tagged, field)
+				}
+			}
+		}
+		if len(tagged) == 1 {
+			result = append(result, tagged[0])
+		} else if len(tagged) == 0 && len(shallow) == 1 {
+			result = append(result, shallow[0])
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		a, b := result[i].index, result[j].index
+		for n := 0; n < len(a) && n < len(b); n++ {
+			if a[n] != b[n] {
+				return a[n] < b[n]
+			}
+		}
+		return len(a) < len(b)
+	})
+	return result
+}
+func (p *bodyFormatPlan) field(name string) *bodyFormatPlan {
+	for _, field := range p.fields {
+		if field.name == name {
+			return field.plan
+		}
+	}
+	for _, field := range p.fields {
+		if strings.EqualFold(field.name, name) {
+			return field.plan
+		}
+	}
+	return nil
 }
 
 type bodyFormatTransformer struct {
@@ -164,57 +270,71 @@ func (p *bodyFormatPlan) normalize(raw json.RawMessage, path string) (json.RawMe
 		}
 		return json.Marshal(stamp.Format(time.RFC3339Nano))
 	}
-	if p.item != nil {
-		trimmed := strings.TrimSpace(string(raw))
-		if strings.HasPrefix(trimmed, "{") {
-			var values map[string]json.RawMessage
-			if err := json.Unmarshal(raw, &values); err != nil {
-				return nil, err
-			}
-			for key, value := range values {
-				normalized, err := p.item.normalize(value, path+"["+key+"]")
-				if err != nil {
-					return nil, err
-				}
-				values[key] = normalized
-			}
-			return json.Marshal(values)
-		}
-		var values []json.RawMessage
-		if err := json.Unmarshal(raw, &values); err != nil {
-			return nil, err
-		}
-		for i, value := range values {
-			normalized, err := p.item.normalize(value, fmt.Sprintf("%s[%d]", path, i))
-			if err != nil {
-				return nil, err
-			}
-			values[i] = normalized
-		}
-		return json.Marshal(values)
+
+	trimmed := strings.TrimSpace(string(raw))
+	if p.item != nil && strings.HasPrefix(trimmed, "[") {
+		return rewriteBodyJSONValues(raw, func(_ string, index int, value json.RawMessage) (json.RawMessage, error) {
+			return p.item.normalize(value, fmt.Sprintf("%s[%d]", path, index))
+		})
 	}
-	var values map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &values); err != nil {
+	return rewriteBodyJSONValues(raw, func(key string, _ int, value json.RawMessage) (json.RawMessage, error) {
+		child := p.item
+		if child == nil {
+			child = p.field(key)
+		}
+		if child == nil {
+			return value, nil
+		}
+		return child.normalize(value, path+"."+key)
+	})
+}
+
+// Preserve lexical key order and duplicates; ordinary typed JSON decoding owns
+// last-wins and case-variant selection. Only authorized value spans are replaced.
+func rewriteBodyJSONValues(raw json.RawMessage, convert func(string, int, json.RawMessage) (json.RawMessage, error)) (json.RawMessage, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil {
 		return nil, err
 	}
-	for _, field := range p.fields {
-		for key, value := range values {
-			matched := false
-			for _, name := range field.names {
-				if strings.EqualFold(key, name) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				continue
-			}
-			normalized, err := field.plan.normalize(value, path+"."+key)
+	delimiter, ok := token.(json.Delim)
+	if !ok || (delimiter != '{' && delimiter != '[') {
+		return nil, fmt.Errorf("expected JSON object or array")
+	}
+	result := make([]byte, 0, len(raw))
+	previous := int64(0)
+	index := 0
+	for decoder.More() {
+		key := ""
+		if delimiter == '{' {
+			token, err := decoder.Token()
 			if err != nil {
 				return nil, err
 			}
-			values[key] = normalized
+			var ok bool
+			key, ok = token.(string)
+			if !ok {
+				return nil, fmt.Errorf("expected JSON key")
+			}
 		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+		end := decoder.InputOffset()
+		start := end - int64(len(value))
+		result = append(result, raw[previous:start]...)
+		normalized, err := convert(key, index, value)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, normalized...)
+		previous = end
+		index++
 	}
-	return json.Marshal(values)
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	result = append(result, raw[previous:]...)
+	return result, nil
 }
