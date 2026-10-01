@@ -154,3 +154,34 @@ func TestGeneratedModuleExplicitTestSDKSource(t *testing.T) {
 		})
 	}
 }
+
+func TestSourceGoCommandUsesExplicitSDKWithoutChangingSourceModule(t *testing.T) {
+	source := t.TempDir()
+	sdk := t.TempDir()
+	original := []byte("module example.test/source\ngo 1.25\n")
+	if err := os.WriteFile(filepath.Join(source, "go.mod"), original, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "go.sum"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sdk, "go.mod"), []byte("module github.com/viant/xdatly\ngo 1.25\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DATLY_TEST_XDATLY_DIR", sdk)
+	command := SourceGoCommand(t, source, "build", "./cmd/example")
+	if command.Dir != source || len(command.Args) != 4 || !strings.HasPrefix(command.Args[2], "-modfile=") {
+		t.Fatalf("source build mapping:%v", command.Args)
+	}
+	content, err := os.ReadFile(strings.TrimPrefix(command.Args[2], "-modfile="))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), sdk) || !strings.Contains(string(content), "module example.test/source") {
+		t.Fatal("temporary source module authority changed")
+	}
+	after, err := os.ReadFile(filepath.Join(source, "go.mod"))
+	if err != nil || string(after) != string(original) {
+		t.Fatal("tracked source module changed")
+	}
+}

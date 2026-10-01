@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/runtime/handler/custom"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
+	sqldml "github.com/viant/datly/sql/dml"
 	"github.com/viant/datly/sql/reader/compiler"
 	viewprovider "github.com/viant/datly/sql/reader/provider"
 	xhandler "github.com/viant/xdatly/handler"
@@ -157,6 +158,116 @@ func TestEngineReadMetadataSQLite(t *testing.T) {
 			}
 			if got := actual.(*metadataSQLiteOutput); len(got.IDs) != 0 || len(got.NameLoaded) != 0 {
 				t.Fatalf("stale invocation: %+v", got)
+			}
+		})
+	}
+}
+
+type conditionalMetadataInput struct {
+	Fail    bool
+	Enabled bool                `parameter:"Enabled,kind=query,in=enabled"`
+	Current []metadataSQLiteRow `parameter:"Current,kind=view,in=CurrentView,when=Enabled"`
+}
+type conditionalMetadataContract struct{}
+
+func (*conditionalMetadataContract) RequiresReadMetadata() bool { return true }
+func (*conditionalMetadataContract) CaptureInput(ctx context.Context, input *conditionalMetadataInput) (any, error) {
+	reads, ok := xhandler.ReadMetadataFromContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("read metadata missing")
+	}
+	projection, err := reads.Projection("Current")
+	if err != nil {
+		return nil, err
+	}
+	if !input.Enabled {
+		if _, err = projection.Fields(0); err == nil {
+			return nil, fmt.Errorf("skipped read claimed loaded fields")
+		}
+	}
+	for n := range input.Current {
+		fields, err := projection.Fields(n)
+		if err != nil || !fields.Has("ID") {
+			return nil, fmt.Errorf("active read identity evidence: %v", err)
+		}
+	}
+	return projection, nil
+}
+func (*conditionalMetadataContract) Exec(ctx context.Context, session xhandler.Session, input *conditionalMetadataInput, output *int) error {
+	value, found, err := session.Binder().Lookup(ctx, xhandler.DataKey)
+	if err != nil || !found {
+		return fmt.Errorf("data unavailable: %v", err)
+	}
+	data := value.(xhandler.Data)
+	if err = data.Execute("INSERT INTO audit(id) VALUES(1)"); err != nil {
+		return err
+	}
+	*output = len(input.Current)
+	if input.Fail {
+		return fmt.Errorf("late business failure")
+	}
+	return nil
+}
+func TestConditionalAuxiliaryReadMetadataSQLite(t *testing.T) {
+	for _, tc := range []struct{ enabled, fail bool }{{false, false}, {true, false}, {true, true}} {
+		enabled := tc.enabled
+		t.Run(fmt.Sprintf("enabled%v/failure%v", enabled, tc.fail), func(t *testing.T) {
+			h := sqlite.New(t)
+			ctx := context.Background()
+			if err := h.ExecStatements(ctx, "CREATE TABLE records(id INTEGER PRIMARY KEY,name TEXT)", "INSERT INTO records VALUES(1,'one')", "CREATE TABLE audit(id INTEGER PRIMARY KEY)"); err != nil {
+				t.Fatal(err)
+			}
+			inputType := reflect.TypeFor[conditionalMetadataInput]()
+			bindings := []bindly.BindingSpec{{Path: "Current", Name: "Current", Location: bindstate.Location{Kind: "view", In: "CurrentView"}, When: "Enabled"}}
+			seed, err := bindly.NewInjector()
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan, err := seed.CompilePlan(inputType, bindings...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			projection, err := plan.Projection()
+			if err != nil {
+				t.Fatal(err)
+			}
+			query := "SELECT id,name FROM records"
+			// This must never reach SQL when the condition is false.
+			if !enabled {
+				query = "SELECT id,name FROM nonexistent_inactive_table"
+			}
+			component := &spec.Component{Parameters: []*spec.Parameter{{Name: "Current", Source: spec.BindSource{Kind: "view", Name: "CurrentView"}, When: "Enabled"}}, Views: []*spec.View{{Name: "CurrentView", Source: &spec.ViewSource{SQL: query}}}}
+			dependencies, err := compiler.CompileViewDependencies(compiler.Input{Component: component, InputType: inputType, Bindings: bindings})
+			if err != nil {
+				t.Fatal(err)
+			}
+			views, err := viewprovider.New(viewprovider.Config{Dependencies: dependencies, Input: projection, SQL: &dsql.SQLComponent{DB: h.DB}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			actual, err := New().Execute(ctx, Request{Input: testRouteInputWithPlan(t, inputType, plan, bindings...), BoundInput: &conditionalMetadataInput{Enabled: enabled, Fail: tc.fail}, DataSource: sqldml.Source{DB: h.DB}, Handler: custom.New[conditionalMetadataInput, int](&conditionalMetadataContract{}), Providers: []locator.Provider{views}})
+			var auditCount int
+			if queryErr := h.DB.QueryRow("SELECT COUNT(*) FROM audit").Scan(&auditCount); queryErr != nil {
+				t.Fatal(queryErr)
+			}
+			if tc.fail {
+				if err == nil || auditCount != 0 {
+					t.Fatalf("rollback/error lost: count%d err%v", auditCount, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if auditCount != 1 {
+				t.Fatal("successful conditional invocation did not commit")
+			}
+			want := 0
+			if enabled {
+				want = 1
+			}
+			if *actual.(*int) != want {
+				t.Fatalf("rows%d want%d", *actual.(*int), want)
 			}
 		})
 	}

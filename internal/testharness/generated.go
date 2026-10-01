@@ -226,3 +226,37 @@ func applyTestSDKSource(file *modfile.File) error {
 	}
 	return file.AddReplace("github.com/viant/xdatly", "", filepath.Clean(source), "")
 }
+
+// SourceGoCommand builds/runs the source checkout with the same explicit test
+// SDK mapping as generated consumers. It never alters tracked module files and
+// passes -modfile only to this command, not to the resulting application process.
+func SourceGoCommand(t testing.TB, root, verb string, args ...string) *exec.Cmd {
+	t.Helper()
+	flags := []string{verb}
+	if os.Getenv("DATLY_TEST_XDATLY_DIR") != "" {
+		file, source, err := (GeneratedModule{SourceRoot: root}).source()
+		if err != nil {
+			t.Fatal(err)
+		}
+		dir := t.TempDir()
+		path := filepath.Join(dir, "source.mod")
+		content, err := file.Format()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(path, content, 0644); err != nil {
+			t.Fatal(err)
+		}
+		sums, err := os.ReadFile(filepath.Join(source, "go.sum"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(dir, "source.sum"), sums, 0644); err != nil {
+			t.Fatal(err)
+		}
+		flags = append(flags, "-modfile="+path)
+	}
+	command := exec.Command("go", append(flags, args...)...)
+	command.Dir = root
+	return command
+}

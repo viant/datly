@@ -91,7 +91,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	var reads *inputReadMetadata
 	var readAccess xhandler.ReadMetadata
 	if consumer, ok := request.Handler.(xhandler.ReadMetadataConsumer); ok && consumer.RequiresReadMetadata() {
-		reads = &inputReadMetadata{target: input, projections: map[string]xhandler.ReadProjection{}}
+		reads = &inputReadMetadata{target: input, declared: request.Input.Fields(), projections: map[string]xhandler.ReadProjection{}}
 		readAccess = reads
 	}
 	// Every component shadows inherited evidence, including ordinary handlers.

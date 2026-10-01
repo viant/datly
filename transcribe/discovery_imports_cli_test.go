@@ -106,7 +106,7 @@ func writeDQLImportCLIProject(t *testing.T, source func(string) string) cliProje
 
 func runDatlyTranscribeCLI(t *testing.T, root, module, dsn string, wantSuccess bool) string {
 	t.Helper()
-	command := exec.Command("go", "run", "./cmd/datly", "transcribe", "patch", "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", dsn, module+"/source")
+	command := testharness.SourceGoCommand(t, repoRoot(t), "run", "./cmd/datly", "transcribe", "patch", "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", dsn, module+"/source")
 	command.Dir = repoRoot(t)
 	command.Env = os.Environ()
 	output, err := command.CombinedOutput()

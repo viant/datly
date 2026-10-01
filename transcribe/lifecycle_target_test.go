@@ -26,7 +26,7 @@ func TestLifecycleTargetRejectsReaderBeforeWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	binary := filepath.Join(t.TempDir(), "datly")
-	build := exec.Command("go", "build", "-o", binary, "./cmd/datly")
+	build := testharness.SourceGoCommand(t, repoRoot(t), "build", "-o", binary, "./cmd/datly")
 	build.Dir = repoRoot(t)
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build CLI: %v\n%s", err, out)

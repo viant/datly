@@ -14,15 +14,17 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 	if input == nil || input.Component == nil {
 		return nil
 	}
+	deleteRouteSupported := mutation && input.Component.Settings != nil &&
+		(input.Component.Settings.Mutation == "patch" || input.Component.Settings.Mutation == "put") && HasWritableDeleteMarker(input.Component.RootView)
 	supported := mutation
 	for _, route := range input.Component.Routes {
-		if route != nil && !strings.EqualFold(route.Method, "POST") && !strings.EqualFold(route.Method, "PUT") && !strings.EqualFold(route.Method, "PATCH") {
+		if route != nil && !strings.EqualFold(route.Method, "POST") && !strings.EqualFold(route.Method, "PUT") && !strings.EqualFold(route.Method, "PATCH") && !(strings.EqualFold(route.Method, "DELETE") && deleteRouteSupported) {
 			supported = false
 		}
 	}
 	predicateSupported := mutation
 	for _, route := range input.Component.Routes {
-		if route != nil && !strings.EqualFold(route.Method, "PATCH") && !strings.EqualFold(route.Method, "PUT") {
+		if route != nil && !strings.EqualFold(route.Method, "PATCH") && !strings.EqualFold(route.Method, "PUT") && !(strings.EqualFold(route.Method, "DELETE") && deleteRouteSupported) {
 			predicateSupported = false
 		}
 	}
@@ -100,4 +102,28 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 		}
 	}
 	return nil
+}
+
+// HasWritableDeleteMarker addresses explicit graph policy, not transport verbs.
+func HasWritableDeleteMarker(root *spec.View) bool {
+	seen := map[*spec.View]bool{}
+	var has func(*spec.View) bool
+	has = func(view *spec.View) bool {
+		if view == nil || seen[view] || view.Auxiliary {
+			return false
+		}
+		seen[view] = true
+		for _, column := range view.Columns {
+			if column != nil && column.DeleteMarker {
+				return true
+			}
+		}
+		for _, relation := range view.Relations {
+			if relation != nil && has(relation.View) {
+				return true
+			}
+		}
+		return false
+	}
+	return has(root)
 }
