@@ -1083,10 +1083,24 @@ Unknown policies, GET/POST/PUT targets, auxiliary roles, nonnumeric/composite
 identities and roles with descendants are rejected. Current/Previous reads
 retain their declared ownership and predicate requirements.
 
-## Opt-in CSV and repeated query lists
+## Default CSV and repeated query lists
 
-For query-bound scalar slices, `.WithQueryListCSV()` accepts both CSV and repeated
-occurrences in request order. It emits `queryList:"csv"` on the generated field.
-It cannot replace an explicit codec or apply to body/scalar parameters; ordinary
-strings and non-opted-in parameters are unchanged. Empty/invalid items remain
-binding errors, while MCP typed arrays retain their native array contract.
+Query-bound primitive slices accept CSV and repeated occurrences by default:
+`?id=1001,1002` and `?id=1001&id=1002` bind the same list. Mixed occurrences
+expand in request order without sorting or deduplication. String slices support
+both forms too; ordinary scalar strings retain literal commas. Single numeric
+values can bind to primitive slices. Complex slice items and explicit codecs
+retain their existing binding contracts.
+
+No list-style DQL option is required. `.WithQueryListCSV()` remains an optional
+legacy explicit directive that emits `queryList:"csv"`. It requires a query-bound
+primitive slice and cannot replace an explicit codec or apply to body/scalar
+parameters. Empty/invalid list items remain binding errors; missing optional
+queries and the existing ignore-empty-query policy retain their presence rules.
+Native MCP tool arrays preserve their array schema and values, including a
+string item containing a comma. MCP resource URI query values use CSV and
+repeated syntax.
+
+Verified regressions cover default HTTP int/string CSV and repeated lists,
+numeric scalar wrapping, native MCP arrays with comma-containing string items,
+and a generated reader executing against SQLite.

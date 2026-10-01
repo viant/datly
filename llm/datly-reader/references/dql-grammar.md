@@ -1071,18 +1071,32 @@ provide atomic race prevention. Init may explicitly prepare a next working token
 without changing the captured expectation. Missing/mismatched update tokens fail
 with a typed conflict before mutations proceed.
 
-## Opt-in CSV and repeated query lists
+## Default CSV and repeated query lists
 
-`.WithQueryListCSV()` is a zero-argument query-only option for a typed scalar
-slice. Native generation preserves it as `queryList:"csv"`. It accepts both
-`?id=1001,1002` and `?id=1001&id=1002`; mixed occurrences expand in request order
-without sorting or deduplication. Empty items and invalid scalar values retain
-client binding errors. A missing optional query remains missing, and an existing
-ignore-empty-query setting retains its own provider policy. Ordinary scalar
-strings and query inputs without this opt-in keep their previous behavior.
-Explicit codecs cannot be combined with the option. Typed MCP arrays retain
-their array wire schema and values.
+Query-bound primitive slices accept both `?id=1001,1002` and
+`?id=1001&id=1002` by default. Mixed occurrences expand in request order without
+sorting or deduplication. This includes string slices, so `?fields=id,name`
+and `?fields=id&fields=name` select the same fields. Single numeric values can
+bind to primitive slices. Complex slice items and explicit codecs keep their
+own binding contracts; ordinary scalar strings keep commas as literal text.
+
+Empty items and invalid primitive values produce client binding errors. A
+missing optional query remains missing, and the existing ignore-empty-query
+setting retains its provider policy. Native MCP tool arrays keep their array
+wire schema and values, including a string item such as `"a,b"`; MCP resource
+URI query values use CSV and repeated query syntax.
+
+No list-style option is required in DQL:
 
 ```sql
-#define($_ = $Id<[]int>(query/id).Optional().WithQueryListCSV())
+#define($_ = $Id<[]int>(query/id).Optional())
+#define($_ = $Fields<[]string>(query/fields).Optional())
 ```
+
+`.WithQueryListCSV()` remains an optional legacy explicit directive. Native
+generation preserves it as `queryList:"csv"`; it is query-only, requires a
+primitive slice, and cannot replace an explicit codec.
+
+Verified regressions cover default CSV/repeated/mixed HTTP int and string
+lists, malformed values, numeric scalar wrapping, native MCP arrays with
+comma-containing strings, and a generated reader running against SQLite.
