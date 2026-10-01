@@ -41,6 +41,25 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 			return nil
 		}
 		visited[view] = true
+		if view.WriterIdentityPolicy != "" {
+			if view.WriterIdentityPolicy != "assigned-update" {
+				return fmt.Errorf("writer_identity must be assigned-update")
+			}
+			if !mutation || view.Auxiliary {
+				return fmt.Errorf("writer_identity requires a generated PATCH writable view")
+			}
+			if policy != "" && policy != "patch" {
+				return fmt.Errorf("writer_identity requires PATCH operation policy")
+			}
+			for _, route := range input.Component.Routes {
+				if route != nil && !strings.EqualFold(route.Method, "PATCH") {
+					return fmt.Errorf("writer_identity requires PATCH routes")
+				}
+			}
+			if len(view.Relations) > 0 {
+				return fmt.Errorf("writer_identity assigned-update requires a leaf view")
+			}
+		}
 		if view.OnDeleteNotFound != "" {
 			if !predicateSupported || view.Auxiliary {
 				return fmt.Errorf("delete_not_found requires a generated PATCH/PUT writable view")

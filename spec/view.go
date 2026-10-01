@@ -20,6 +20,7 @@ type View struct {
 	TypeName string `json:"typeName,omitempty"`
 	Dest     string `json:"dest,omitempty"`
 	// EntityHooks is generation-only metadata for the authored entity hook reference.
+	WriterIdentityPolicy   string         `json:"writerIdentityPolicy,omitempty"`
 	OnDeleteNotFound       string         `json:"onDeleteNotFound,omitempty"`
 	MutationPredicateGroup *int           `json:"mutationPredicateGroup,omitempty"`
 	EntityHooks            string         `json:"entityHooks,omitempty"`

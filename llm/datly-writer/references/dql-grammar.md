@@ -1057,3 +1057,28 @@ is a standalone SELECT annotation for generated POST/PATCH/PUT writers. It emits
 projected columns. Allocation, original presence, transaction ownership and
 bounded collision replay are native. See [scoped sequences](product/datly/doc/scoped-sequences.md)
 for NULL/zero semantics, MySQL ledger provisioning and verification.
+
+## Opt-in assigned update identity
+
+`writer_identity(view,'assigned-update')` applies only to a generated PATCH leaf
+role with one numeric primary key. It survives generation as canonical
+`view:"...,writerIdentity=assigned-update"` metadata. Omission preserves the
+normal native identity-matching policy.
+
+A supplied nonzero identity with no matched Previous row becomes a no-op: no
+sequencing or DML is emitted. Candidate schema checks and business hooks still
+run without fabricating Previous evidence. Omitted, null and zero identities
+remain inserts. A matched complete Previous row follows the ordinary native
+update path, including scope, references, concurrency and actual DML failures.
+An unmatched identity cannot satisfy a supplied concurrency token or active
+mutation predicate. The policy does not authorize access, manufacture a current
+row or turn failed updates into successes.
+
+```sql
+SELECT r.*, writer_identity(r,'assigned-update')
+FROM (SELECT ID, NAME FROM records) r
+```
+
+Unknown policies, GET/POST/PUT targets, auxiliary roles, nonnumeric/composite
+identities and roles with descendants are rejected. Current/Previous reads
+retain their declared ownership and predicate requirements.

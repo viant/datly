@@ -12,7 +12,7 @@ func cloneView(source *View, cloned map[*View]*View) *View {
 		return existing
 	}
 	result := &View{
-		Key: source.Key, Name: source.Name, Namespace: source.Namespace, TypeName: source.TypeName, Dest: source.Dest, EntityHooks: source.EntityHooks, OnDeleteNotFound: source.OnDeleteNotFound,
+		Key: source.Key, Name: source.Name, Namespace: source.Namespace, TypeName: source.TypeName, Dest: source.Dest, EntityHooks: source.EntityHooks, OnDeleteNotFound: source.OnDeleteNotFound, WriterIdentityPolicy: source.WriterIdentityPolicy,
 		Cardinality: source.Cardinality,
 		InMemory:    source.InMemory,
 		AllowNulls:  cloneBool(source.AllowNulls), Groupable: cloneBool(source.Groupable), Auxiliary: source.Auxiliary,

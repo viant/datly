@@ -1,6 +1,7 @@
 package spec
 
 const (
+	ViewControlWriterIdentity       = "writer_identity"
 	ViewControlOnDeleteNotFound     = "delete_not_found"
 	ViewControlMutationPredicate    = "mutation_predicate"
 	ViewControlUseConnector         = "use_connector"

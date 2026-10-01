@@ -325,6 +325,12 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 
 func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) error {
 	param := resolved.param
+	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.WriterIdentityPolicy != "" {
+		if r.component.RootView == nil {
+			return fmt.Errorf("writer identity body requires a root view")
+		}
+		r.component.RootView.WriterIdentityPolicy = resolved.metadata.View.WriterIdentityPolicy
+	}
 	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.OnDeleteNotFound != "" {
 		if r.component.RootView == nil {
 			return fmt.Errorf("onDeleteNotFound body requires a root view")
@@ -641,6 +647,7 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.TypeName = strings.TrimSpace(metadata.View.TypeName)
 		view.Dest = strings.TrimSpace(metadata.View.Dest)
 		view.EntityHooks = strings.TrimSpace(metadata.View.EntityHooks)
+		view.WriterIdentityPolicy = metadata.View.WriterIdentityPolicy
 		view.OnDeleteNotFound = metadata.View.OnDeleteNotFound
 		view.MutationPredicateGroup = metadata.View.MutationPredicateGroup
 		view.Source.URI = strings.TrimSpace(metadata.View.URI)

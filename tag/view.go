@@ -15,6 +15,7 @@ type View struct {
 	Name                   string
 	TypeName               string
 	Dest                   string
+	WriterIdentityPolicy   string
 	OnDeleteNotFound       string
 	MutationPredicateGroup *int
 	EntityHooks            string
@@ -66,6 +67,14 @@ func ParseView(value string) (*View, error) {
 			result.TypeName = value
 		case "dest":
 			result.Dest = value
+		case "writeridentity":
+			if result.WriterIdentityPolicy != "" {
+				return fmt.Errorf("writerIdentity is duplicated")
+			}
+			if value != "assigned-update" {
+				return fmt.Errorf("writerIdentity must be assigned-update")
+			}
+			result.WriterIdentityPolicy = value
 		case "ondeletenotfound":
 			if result.OnDeleteNotFound != "" {
 				return fmt.Errorf("onDeleteNotFound is duplicated")

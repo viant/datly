@@ -90,6 +90,7 @@ func entityMarker(entityType reflect.Type) *structology.Marker {
 
 // Record is one writable role in a component graph.
 type Record struct {
+	WriterIdentityPolicy   string
 	OnDeleteNotFound       string
 	MutationPredicateGroup *int
 	Name                   string
@@ -482,17 +483,18 @@ type Hooks struct{}
 type Stage uint8
 
 type Frame struct {
-	Entity, Previous reflect.Value
-	ExpectedToken    reflect.Value
-	Fields           *presence
-	SkippedDelete    bool
-	Action           xhandler.WriteAction
-	Record           *Record
-	Location         string
-	Parent           *Frame
-	Original         xhandler.OriginalPresence
-	Hook             reflect.Value
-	ScopedAllocated  map[string]bool
+	Entity, Previous    reflect.Value
+	ExpectedToken       reflect.Value
+	Fields              *presence
+	SkippedDelete       bool
+	NoopMissingIdentity bool
+	Action              xhandler.WriteAction
+	Record              *Record
+	Location            string
+	Parent              *Frame
+	Original            xhandler.OriginalPresence
+	Hook                reflect.Value
+	ScopedAllocated     map[string]bool
 }
 
 type Action struct {
@@ -501,6 +503,19 @@ type Action struct {
 }
 
 func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, record *Record, roots reflect.Value) error {
+	if record.WriterIdentityPolicy == assignedUpdateIdentity {
+		selected := reflect.MakeSlice(reflect.SliceOf(reflect.PointerTo(record.EntityType)), 0, 0)
+		for _, frame := range p.frames.Rows {
+			if frame.Record == record && frame.Action == xhandler.WriteInsert && !frame.NoopMissingIdentity {
+				selected = reflect.Append(selected, frame.Entity)
+			}
+		}
+		if selected.Len() == 0 {
+			return nil
+		}
+		roots = selected
+	}
+
 	if record.Sequence != nil {
 		if err := sequencer.Allocate(ctx, record.Table, roots.Interface(), record.Selector); err != nil {
 			return fmt.Errorf("allocate %s: %w", record.Path, err)
@@ -866,7 +881,7 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		if err = p.callEntityHook(ctx, "Validate", frame); err != nil {
 			return err
 		}
-		if frame.Record.Auxiliary || frame.SkippedDelete {
+		if frame.Record.Auxiliary || frame.SkippedDelete || frame.NoopMissingIdentity {
 			continue
 		}
 		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
@@ -1062,6 +1077,13 @@ func (p *Program) unresolvedParentLinks(frame *Frame) bool {
 }
 
 func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhandler.ValidationOptions {
+	if frame.NoopMissingIdentity {
+		// An unmatched no-op has no Previous evidence. Complete candidate
+		// checks use the existing no-Previous validation contract; this does
+		// not classify the row as an insert or authorize persistence.
+		return xhandler.ValidationOptions{Action: xhandler.WriteInsert, Shallow: true, Location: frame.Location}
+	}
+
 	options := xhandler.ValidationOptions{Action: frame.Action, Location: frame.Location, Shallow: true}
 	if frame.Previous.IsValid() {
 		options.Previous = frame.Previous.Interface()
@@ -1513,6 +1535,9 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 		}
 		key, complete := record.key(entity.Elem())
 		previous := p.database.Rows[rowIdentity{record: record, key: key}]
+		if record.WriterIdentityPolicy == assignedUpdateIdentity && !requestedNonzeroIdentity(record, entity.Elem()) {
+			previous = reflect.Value{}
+		}
 		if guard, ok := ctx.Value(scopedReplayKey{}).(map[rowIdentity]bool); ok && previous.IsValid() && guard[rowIdentity{record: record, key: key}] {
 			return fmt.Errorf("scoped sequence replay cannot replace an existing insert identity")
 		}
@@ -1560,6 +1585,13 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 		default:
 			return fmt.Errorf("unsupported writer operation %q", p.metadata.Operation)
 		}
+		noopMissing := p.metadata.Operation == "patch" && record.WriterIdentityPolicy == assignedUpdateIdentity && !previous.IsValid() && requestedNonzeroIdentity(record, entity.Elem()) && !deleteRequested
+		if noopMissing {
+			if err := p.checkMissingIdentityGuards(ctx, binder, record, entity.Elem()); err != nil {
+				return err
+			}
+			action = xhandler.WriteUpdate
+		}
 		fields := livePresence(record, entity.Elem())
 		if deleteRequested {
 			if !complete || (!previous.IsValid() && !skipDelete) {
@@ -1568,7 +1600,7 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 			action = xhandler.WriteDelete
 		}
 		original := p.captureEntityOriginal(record, entity)
-		frame := &Frame{Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, SkippedDelete: skipDelete, Action: action, Record: record, Location: p.rowLocation(record, parent, position, indexed), Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
+		frame := &Frame{Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, SkippedDelete: skipDelete, NoopMissingIdentity: noopMissing, Action: action, Record: record, Location: p.rowLocation(record, parent, position, indexed), Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
 			children := entity.Elem().FieldByIndex(relation.Field)
@@ -1854,7 +1886,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		Auxiliary:    component.RootView.Auxiliary || strings.EqualFold(tagOption(rootViewTag, "auxiliary"), "true"),
 		CurrentField: metadata.CurrentField, Table: metadata.Table, Keys: metadata.Keys, Fields: metadata.Fields,
 		Sequence: metadata.Sequence, DeleteMarker: metadata.DeleteMarker, ConcurrencyToken: metadata.ConcurrencyToken,
-		Invariants: metadata.Invariants, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
+		Invariants: metadata.Invariants, WriterIdentityPolicy: component.RootView.WriterIdentityPolicy, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
 	}
 	if root.Name == "" {
 		root.Name = metadata.EntityType.Name()
@@ -1870,6 +1902,9 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		return nil, err
 	}
 	metadata.Root = root
+	if err := validateWriterIdentityPolicy(root, operation); err != nil {
+		return nil, err
+	}
 	if err := validateMutationGroups(component, root); err != nil {
 		return nil, err
 	}
@@ -1951,6 +1986,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	record := &Record{Name: name, Path: path, EntityType: entityType, CurrentField: -1, Table: tagOption(viewTag, "table"), Auxiliary: strings.EqualFold(tagOption(viewTag, "auxiliary"), "true"), Invariants: map[string][]Field{}}
 	if view != nil {
 		record.Auxiliary = record.Auxiliary || view.Auxiliary
+		record.WriterIdentityPolicy = view.WriterIdentityPolicy
 		record.OnDeleteNotFound = view.OnDeleteNotFound
 		record.MutationPredicateGroup = view.MutationPredicateGroup
 		if view.Source != nil && strings.TrimSpace(view.Source.Table) != "" {

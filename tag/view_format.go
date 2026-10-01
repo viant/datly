@@ -20,6 +20,9 @@ func (v View) Value() (string, error) {
 	if v.OnDeleteNotFound != "" && v.OnDeleteNotFound != "error" && v.OnDeleteNotFound != "ignore" {
 		return "", fmt.Errorf("onDeleteNotFound must be error or ignore")
 	}
+	if v.WriterIdentityPolicy != "" && v.WriterIdentityPolicy != "assigned-update" {
+		return "", fmt.Errorf("writerIdentity must be assigned-update")
+	}
 	var values []string
 	if name := strings.TrimSpace(v.Name); name != "" {
 		if err := validateTagToken("view name", name); err != nil {
@@ -45,7 +48,7 @@ func (v View) Value() (string, error) {
 		return nil
 	}
 	for _, item := range []struct{ name, value string }{
-		{"onDeleteNotFound", v.OnDeleteNotFound}, {"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
+		{"writerIdentity", v.WriterIdentityPolicy}, {"onDeleteNotFound", v.OnDeleteNotFound}, {"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
 		{"cache", v.Cache}, {"cacheWarmup", v.CacheWarmup},
 		{"orderBy", v.OrderBy}, {"match", v.Match},
 	} {
