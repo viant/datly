@@ -323,20 +323,10 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if err := ValidateProjectionAnnotations(view, projected); err != nil {
 		return nil, err
 	}
-	// Successful database discovery can materialize a named outer wildcard
-	// even when the local parser cannot enumerate its inner dialect SQL.
-	// The authored source is retained exactly. A predicate template can make
-	// SQL parser projection rewriting unsafe even though discovery has already
-	// produced canonical columns for dynamic runtime shapes.
-	if !strings.Contains(view.Source.SQL, "${predicate.") {
-		resolvedSQL, changed, err := (dsql.SelectorProjection{SQL: view.Source.SQL}).ResolveDiscoveredColumns(projected, dialect)
-		if err != nil {
-			return nil, err
-		}
-		if changed {
-			view.Source.SQL = resolvedSQL
-		}
-	}
+	// Discovery adds shape metadata without lowering authored wildcard SQL.
+	// Persisting a projection quoted with this discovery connector's dialect
+	// would make otherwise portable resources depend on the schema fixture.
+	// Runtime selector lowering uses the actual execution dialect instead.
 	view.Columns = mergeColumns(view.Columns, columns)
 	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
 		lineage, err := directProjectionLineage(source)

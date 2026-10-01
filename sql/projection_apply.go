@@ -44,6 +44,13 @@ func (p SelectorProjection) Prepare(selected []string) (result *Projection, fail
 		return p.prepare(selected)
 	}
 	if _, _, err := (SelectorProjection{SQL: sqlText, View: view}).columns(); err != nil {
+		var unprepared *databaseProjectionSchema
+		if errors.As(err, &unprepared) {
+			// A default opaque wildcard needs no projection rewrite. Its first
+			// SQLX read supplies actual database labels; prepared Go fields are
+			// not schema authority. Explicit selection still requires metadata.
+			return &Projection{Source: sqlText}, nil
+		}
 		var duplicate *duplicateProjectionError
 		if view != nil || errors.As(err, &duplicate) {
 			return nil, err
