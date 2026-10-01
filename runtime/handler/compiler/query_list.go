@@ -15,7 +15,10 @@ import (
 
 // queryListTransformer expands primitive query lists by default. HTTP wire
 // occurrences remain ordered; already typed protocol arrays keep their type.
-type queryListTransformer struct{ target reflect.Type }
+type queryListTransformer struct {
+	target     reflect.Type
+	allowEmpty bool
+}
 
 func (t *queryListTransformer) WireSourceType() reflect.Type { return t.target }
 func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver, raw any) (any, error) {
@@ -42,6 +45,9 @@ func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver
 			return (conv.ValueConverter{}).Convert([]any{raw}, t.target)
 		}
 		return (conv.ValueConverter{}).Convert(raw, t.target)
+	}
+	if t.allowEmpty && len(occurrences) == 1 && occurrences[0] == "" {
+		return reflect.MakeSlice(t.target, 0, 0).Interface(), nil
 	}
 	tokens := []string{}
 	for _, occurrence := range occurrences {
@@ -86,7 +92,7 @@ func applyQueryList(field reflect.StructField, paramCSV bool, binding *bindly.Bi
 		return fmt.Errorf("queryList csv cannot replace an explicit codec")
 	}
 	binding.SourceType = reflect.TypeFor[any]()
-	binding.Transformer = &queryListTransformer{target: field.Type}
+	binding.Transformer = &queryListTransformer{target: field.Type, allowEmpty: binding.Required != nil && !*binding.Required}
 	return nil
 }
 

@@ -96,3 +96,40 @@ func TestDefaultQueryListPreservesComplexShapesAndCodecs(t *testing.T) {
 		}
 	}
 }
+
+func TestExplicitOptionalQueryListEmptyValue(t *testing.T) {
+	optional, required := false, true
+	for _, item := range []struct {
+		name     string
+		required *bool
+		raw      []string
+		invalid  bool
+	}{
+		{"optional empty", &optional, []string{""}, false},
+		{"unspecified empty", nil, []string{""}, true},
+		{"required empty", &required, []string{""}, true},
+		{"optional CSV hole", &optional, []string{"1,,2"}, true},
+		{"optional mixed empty", &optional, []string{"", "1"}, true},
+		{"optional repeated empty", &optional, []string{"", ""}, true},
+		{"optional whitespace", &optional, []string{" "}, true},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			binding := bindly.BindingSpec{Required: item.required}
+			binding.Location.Kind = "query"
+			if err := applyQueryList(reflect.StructField{Name: "IDs", Type: reflect.TypeFor[[]int]()}, false, &binding); err != nil {
+				t.Fatal(err)
+			}
+			got, err := binding.Transformer.Transform(context.Background(), nil, item.raw)
+			if item.invalid {
+				if err == nil {
+					t.Fatalf("invalid list accepted: %v", got)
+				}
+				return
+			}
+			ids, ok := got.([]int)
+			if err != nil || !ok || ids == nil || len(ids) != 0 {
+				t.Fatalf("empty typed list: %T %v err%v", got, got, err)
+			}
+		})
+	}
+}

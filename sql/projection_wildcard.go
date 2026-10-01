@@ -382,7 +382,7 @@ func (s wildcardSource) preservesPreparedWildcard(ctes query.WithSelects, depth 
 				return false
 			}
 			_, literal := item.Expr.(*expr.Literal)
-			if (joined || !literal) && !preparedOutputs[canonicalProjectionName(output)] {
+			if !literal && !preparedOutputs[canonicalProjectionName(output)] {
 				return false
 			}
 		}

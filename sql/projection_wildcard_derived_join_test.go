@@ -41,3 +41,37 @@ func TestPreparedWildcardDerivedPrimaryAndExplicitJoinedFields(t *testing.T) {
 		require.Error(t, err, query)
 	}
 }
+
+func TestPreparedJoinedWildcardLiteralAliases(t *testing.T) {
+	source := `SELECT n.* FROM (SELECT r.*, '' AS pseudo_column FROM records r LEFT JOIN other o ON r.id=o.id) n`
+	view := &data.View{Spec: spec.View{Source: &spec.ViewSource{Table: "records"}, Columns: []*spec.Column{{Name: "Pseudo", Source: "pseudo_column", Tag: `sqlx:"-"`}}}, Columns: []*data.Column{{Name: "Id", Column: "id"}}}
+	h := testharness.NewSQLiteHarness(t)
+	require.NoError(t, h.ExecStatements(context.Background(), `CREATE TABLE records(id INTEGER)`, `CREATE TABLE other(id INTEGER)`, `INSERT INTO records VALUES(7)`))
+	for _, fields := range [][]string{{"id"}, {"pseudo_column"}, {"id", "pseudo_column"}} {
+		result, err := (SelectorProjection{SQL: source, View: view}).Prepare(fields)
+		require.NoError(t, err)
+		rows, err := h.DB.Query(result.Render(result.Source))
+		require.NoError(t, err)
+		require.True(t, rows.Next())
+		columns, err := rows.Columns()
+		require.NoError(t, err)
+		require.Len(t, columns, len(fields))
+		require.NoError(t, rows.Close())
+	}
+	for _, table := range []string{"", "other"} {
+		view.Spec.Source.Table = table
+		_, err := (SelectorProjection{SQL: source, View: view}).Prepare([]string{"id"})
+		require.Error(t, err)
+	}
+	view.Spec.Source.Table = "records"
+	for _, sql := range []string{
+		`SELECT n.* FROM (SELECT *, '' AS pseudo_column FROM records r JOIN other o ON r.id=o.id) n`,
+		`SELECT n.* FROM (SELECT r.*,o.*, '' AS pseudo_column FROM records r JOIN other o ON r.id=o.id) n`,
+		`SELECT n.* FROM (SELECT r.*, '' AS pseudo_column, 1 AS pseudo_column FROM records r JOIN other o ON r.id=o.id) n`,
+		`SELECT n.* FROM (SELECT r.*, r.id+1 AS unprepared FROM records r JOIN other o ON r.id=o.id) n`,
+		`SELECT n.* FROM (SELECT r.*, o.id AS unprepared FROM records r JOIN other o ON r.id=o.id) n`,
+	} {
+		_, err := (SelectorProjection{SQL: sql, View: view}).Prepare([]string{"id"})
+		require.Error(t, err, sql)
+	}
+}
