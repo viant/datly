@@ -12,7 +12,7 @@ func TestRequestedUnknownProjectionColumnIsTyped(t *testing.T) {
 		view := &data.View{Columns: []*data.Column{{Name: "id", Column: "id"}, {Name: "name", Column: "name"}}}
 		_, err := ApplySelectorProjection(source, []string{"notThere"}, view)
 		var unknown *UnknownProjectionColumnError
-		if !errors.As(fmt.Errorf("reader: %w", err), &unknown) || unknown.Column != "notthere" || unknown.Error() != "not found column notthere" {
+		if !errors.As(fmt.Errorf("reader: %w", err), &unknown) || unknown.Column != "notthere" || unknown.RequestedColumn != "notThere" || unknown.Error() != "not found column notthere" {
 			t.Fatalf("source%s err%v", source, err)
 		}
 	}
