@@ -3,6 +3,7 @@ package transcribe
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -179,5 +180,57 @@ func TestDiscoveryInputCompilerSupportsDatabaseDiscoveryWithUnsetOptionalDates(t
 	}
 	if len(component.RootView.Columns) != 2 || component.RootView.Columns[0].Name != "id" || component.RootView.Columns[1].Name != "dstamp" {
 		t.Fatalf("columns=%+v", component.RootView.Columns)
+	}
+}
+
+func TestDiscoveryConstCodecUsesSourceTypeWithoutExecutingCodec(t *testing.T) {
+	for _, tc := range []struct {
+		name, source, literal string
+		fail                  bool
+	}{
+		{name: "current time string source", source: "string", literal: ""},
+		{name: "typed source rejects invalid literal", source: "int", literal: "bad", fail: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			compiled, err := (&discoveryInputCompiler{component: &spec.Component{Name: "Clock", Parameters: []*spec.Parameter{{Name: "StartTime", Source: spec.BindSource{Kind: "const", Name: "StartTime"}, TypeExpr: tc.source, OutputTypeExpr: "time.Time", Value: &tc.literal, Codec: &spec.Codec{Body: "RequestClock", OutputType: "time.Time"}}}}}).compile()
+			if tc.fail {
+				if err == nil || !strings.Contains(err.Error(), "cannot convert to source int") {
+					t.Fatalf("unexpected invalid source result %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value, ok := compiled.Value.FieldByName("StartTime").Interface().(time.Time); !ok || !value.IsZero() {
+				t.Fatalf("discovery executed/transformed runtime codec: %#v", compiled.Value.Interface())
+			}
+			binder := sqlx.NewParameterBinder(compiled.ParameterResolver)
+			_, args, err := binder.Bind("SELECT :StartTime")
+			if err != nil || len(args) != 1 {
+				t.Fatalf("typed destination discovery: %v/%v", args, err)
+			}
+			if _, ok := args[0].(time.Time); !ok {
+				t.Fatalf("destination discovery type %T", args[0])
+			}
+		})
+	}
+}
+
+func TestDiscoveryPlainConstRemainsTypedAndRejectsInvalidLiteral(t *testing.T) {
+	for _, literal := range []string{"17", "invalid"} {
+		compiled, err := (&discoveryInputCompiler{component: &spec.Component{Name: "Constants", Parameters: []*spec.Parameter{{Name: "ID", TypeExpr: "int", Source: spec.BindSource{Kind: "const", Name: "ID"}, Value: &literal}}}}).compile()
+		if literal == "invalid" {
+			if err == nil {
+				t.Fatal("invalid plain constant admitted")
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if compiled.Value.FieldByName("ID").Int() != 17 {
+			t.Fatal("plain typed constant changed")
+		}
 	}
 }
