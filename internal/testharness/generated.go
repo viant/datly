@@ -39,6 +39,11 @@ func (m GeneratedModule) source() (*modfile.File, string, error) {
 	sourceFile := filepath.Join(info.Dir, "go.mod")
 	if m.SourceModFile != "" {
 		sourceFile = m.SourceModFile
+	} else if selected := os.Getenv("DATLY_TEST_MODFILE"); selected != "" && info.Path == "github.com/viant/datly" {
+		if !filepath.IsAbs(selected) {
+			return nil, "", fmt.Errorf("DATLY_TEST_MODFILE must be absolute")
+		}
+		sourceFile = selected
 	}
 	content, err := os.ReadFile(sourceFile)
 	if err != nil {
