@@ -12,31 +12,32 @@ import (
 const ViewName = "view"
 
 type View struct {
-	Name                   string
-	TypeName               string
-	Dest                   string
-	WriterIdentityPolicy   string
-	OnDeleteNotFound       string
-	MutationPredicateGroup *int
-	EntityHooks            string
-	URI                    string
-	Connector              string
-	Table                  string
-	Cache                  string
-	CacheWarmup            string
-	OrderBy                string
-	Limit                  *int
-	Offset                 *int
-	Batch                  int
-	BatchConcurrency       int
-	Match                  string
-	PublishParent          bool
-	RelationalConcurrency  int
-	AllowNulls             *bool
-	Groupable              *bool
-	Auxiliary              bool
-	Partitioning           *spec.Partitioning
-	Selector               *spec.Selector
+	Name                     string
+	TypeName                 string
+	Dest                     string
+	InsertValidationPresence bool
+	WriterIdentityPolicy     string
+	OnDeleteNotFound         string
+	MutationPredicateGroup   *int
+	EntityHooks              string
+	URI                      string
+	Connector                string
+	Table                    string
+	Cache                    string
+	CacheWarmup              string
+	OrderBy                  string
+	Limit                    *int
+	Offset                   *int
+	Batch                    int
+	BatchConcurrency         int
+	Match                    string
+	PublishParent            bool
+	RelationalConcurrency    int
+	AllowNulls               *bool
+	Groupable                *bool
+	Auxiliary                bool
+	Partitioning             *spec.Partitioning
+	Selector                 *spec.Selector
 }
 
 func ParseView(value string) (*View, error) {
@@ -67,6 +68,12 @@ func ParseView(value string) (*View, error) {
 			result.TypeName = value
 		case "dest":
 			result.Dest = value
+		case "insertvalidationpresence":
+			var err error
+			result.InsertValidationPresence, err = strconv.ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("insertValidationPresence must be true or false")
+			}
 		case "writeridentity":
 			if result.WriterIdentityPolicy != "" {
 				return fmt.Errorf("writerIdentity is duplicated")

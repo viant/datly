@@ -40,11 +40,20 @@ func (s *Service) options(value any, options []any) (xhandler.ValidationOptions,
 	}
 	switch policy.Action {
 	case xhandler.WriteInsert:
-		if !shape.IsNil(policy.Previous) || !shape.IsNil(policy.PreviousFields) || !shape.IsNil(policy.Fields) {
+		if !shape.IsNil(policy.Previous) || !shape.IsNil(policy.PreviousFields) || (!policy.HonorPresence && !shape.IsNil(policy.Fields)) {
 			return policy, fmt.Errorf("insert validation requires no previous row and full coverage")
 		}
-		policy.Previous, policy.PreviousFields, policy.Fields = nil, nil, nil
+		if policy.HonorPresence && shape.IsNil(policy.Fields) {
+			return policy, fmt.Errorf("presence-aware insert validation requires explicit coverage")
+		}
+		policy.Previous, policy.PreviousFields = nil, nil
+		if !policy.HonorPresence {
+			policy.Fields = nil
+		}
 	case xhandler.WriteUpdate:
+		if policy.HonorPresence {
+			return policy, fmt.Errorf("HonorPresence requires an insert validation policy")
+		}
 		if policy.DeferredFields != nil {
 			return policy, fmt.Errorf("deferred fields require an insert validation policy")
 		}

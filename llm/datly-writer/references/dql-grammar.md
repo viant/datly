@@ -1060,6 +1060,18 @@ for NULL/zero semantics, MySQL ledger provisioning and verification.
 
 ## Opt-in assigned update identity
 
+`insert_validation_presence(view,true)` opts a writable view into supplied-field
+coverage for its first INSERT validation pass. It emits
+`view:"...,insertValidationPresence=true"`; omission keeps complete INSERT
+validation. The first pass carries `ValidationOptions{Action: WriteInsert,
+HonorPresence: true, Fields: effectiveHas}` with no `Previous` or
+`PreviousFields`. Application hooks retain required-field business checks and
+server defaults. Explicit null and zero fields remain supplied. A complete final
+validation pass checks the finished write, and database constraints remain active.
+For a supplied unique field with an omitted dependency, INSERT validation uses
+the current request default (including zero). Sparse UPDATE checks continue to
+use genuine Previous evidence for omitted tuple members.
+
 `writer_identity(view,'assigned-update')` applies only to a generated PATCH leaf
 role with one numeric primary key. It survives generation as canonical
 `view:"...,writerIdentity=assigned-update"` metadata. Omission preserves the

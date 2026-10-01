@@ -1057,3 +1057,62 @@ is a standalone SELECT annotation for generated POST/PATCH/PUT writers. It emits
 projected columns. Allocation, original presence, transaction ownership and
 bounded collision replay are native. See [scoped sequences](product/datly/doc/scoped-sequences.md)
 for NULL/zero semantics, MySQL ledger provisioning and verification.
+
+## Opt-in assigned update identity
+
+`insert_validation_presence(view,true)` opts a writable view into supplied-field
+coverage for its first INSERT validation pass. It emits
+`view:"...,insertValidationPresence=true"`; omission keeps complete INSERT
+validation. The first pass carries `ValidationOptions{Action: WriteInsert,
+HonorPresence: true, Fields: effectiveHas}` with no `Previous` or
+`PreviousFields`. Application hooks retain required-field business checks and
+server defaults. Explicit null and zero fields remain supplied. A complete final
+validation pass checks the finished write, and database constraints remain active.
+For a supplied unique field with an omitted dependency, INSERT validation uses
+the current request default (including zero). Sparse UPDATE checks continue to
+use genuine Previous evidence for omitted tuple members.
+
+`writer_identity(view,'assigned-update')` applies only to a generated PATCH leaf
+role with one numeric primary key. It survives generation as canonical
+`view:"...,writerIdentity=assigned-update"` metadata. Omission preserves the
+normal native identity-matching policy.
+
+A supplied nonzero identity with no matched Previous row becomes a no-op: no
+sequencing or DML is emitted. Candidate schema checks and business hooks still
+run without fabricating Previous evidence. Omitted, null and zero identities
+remain inserts. A matched complete Previous row follows the ordinary native
+update path, including scope, references, concurrency and actual DML failures.
+An unmatched identity cannot satisfy a supplied concurrency token or active
+mutation predicate. The policy does not authorize access, manufacture a current
+row or turn failed updates into successes.
+
+```sql
+SELECT r.*, writer_identity(r,'assigned-update')
+FROM (SELECT ID, NAME FROM records) r
+```
+
+Unknown policies, GET/POST/PUT targets, auxiliary roles, nonnumeric/composite
+identities and roles with descendants are rejected. Current/Previous reads
+retain their declared ownership and predicate requirements.
+
+## Default CSV and repeated query lists
+
+Query-bound primitive slices accept CSV and repeated occurrences by default:
+`?id=1001,1002` and `?id=1001&id=1002` bind the same list. Mixed occurrences
+expand in request order without sorting or deduplication. String slices support
+both forms too; ordinary scalar strings retain literal commas. Single numeric
+values can bind to primitive slices. Complex slice items and explicit codecs
+retain their existing binding contracts.
+
+No list-style DQL option is required. `.WithQueryListCSV()` remains an optional
+legacy explicit directive that emits `queryList:"csv"`. It requires a query-bound
+primitive slice and cannot replace an explicit codec or apply to body/scalar
+parameters. Empty/invalid list items remain binding errors; missing optional
+queries and the existing ignore-empty-query policy retain their presence rules.
+Native MCP tool arrays preserve their array schema and values, including a
+string item containing a comma. MCP resource URI query values use CSV and
+repeated syntax.
+
+Verified regressions cover default HTTP int/string CSV and repeated lists,
+numeric scalar wrapping, native MCP arrays with comma-containing string items,
+and a generated reader executing against SQLite.

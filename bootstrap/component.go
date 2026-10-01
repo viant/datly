@@ -325,6 +325,12 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 
 func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) error {
 	param := resolved.param
+	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.InsertValidationPresence {
+		if r.component.RootView == nil {
+			return fmt.Errorf("insert validation body requires a root view")
+		}
+		r.component.RootView.InsertValidationPresence = true
+	}
 	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.WriterIdentityPolicy != "" {
 		if r.component.RootView == nil {
 			return fmt.Errorf("writer identity body requires a root view")
@@ -366,6 +372,12 @@ func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) e
 
 func (r *packageComponentResolver) applyOutput(resolved *resolvedContractField) error {
 	param := resolved.param
+	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.InsertValidationPresence {
+		if r.component.RootView == nil {
+			return fmt.Errorf("insert validation body requires a root view")
+		}
+		r.component.RootView.InsertValidationPresence = true
+	}
 	if param.IsDerivedOutput() {
 		return r.addOutputRelation(resolved.field, param, resolved.metadata)
 	}
@@ -648,6 +660,7 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.Dest = strings.TrimSpace(metadata.View.Dest)
 		view.EntityHooks = strings.TrimSpace(metadata.View.EntityHooks)
 		view.WriterIdentityPolicy = metadata.View.WriterIdentityPolicy
+		view.InsertValidationPresence = metadata.View.InsertValidationPresence
 		view.OnDeleteNotFound = metadata.View.OnDeleteNotFound
 		view.MutationPredicateGroup = metadata.View.MutationPredicateGroup
 		view.Source.URI = strings.TrimSpace(metadata.View.URI)

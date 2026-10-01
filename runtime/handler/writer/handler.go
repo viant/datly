@@ -90,25 +90,26 @@ func entityMarker(entityType reflect.Type) *structology.Marker {
 
 // Record is one writable role in a component graph.
 type Record struct {
-	WriterIdentityPolicy   string
-	OnDeleteNotFound       string
-	MutationPredicateGroup *int
-	Name                   string
-	Path                   string
-	Auxiliary              bool
-	Selector               string
-	EntityType             reflect.Type
-	CurrentField           int
-	Table                  string
-	Keys                   []Field
-	Fields                 []Field
-	Sequence               *Field
-	ScopedSequences        []ScopedSequence
-	DeleteMarker           *Field
-	ConcurrencyToken       *Field
-	Invariants             map[string][]Field
-	HookType               reflect.Type
-	Relations              []*Relation
+	InsertValidationPresence bool
+	WriterIdentityPolicy     string
+	OnDeleteNotFound         string
+	MutationPredicateGroup   *int
+	Name                     string
+	Path                     string
+	Auxiliary                bool
+	Selector                 string
+	EntityType               reflect.Type
+	CurrentField             int
+	Table                    string
+	Keys                     []Field
+	Fields                   []Field
+	Sequence                 *Field
+	ScopedSequences          []ScopedSequence
+	DeleteMarker             *Field
+	ConcurrencyToken         *Field
+	Invariants               map[string][]Field
+	HookType                 reflect.Type
+	Relations                []*Relation
 	// positions maps field names to their index in Fields; compiled once.
 	positions map[string]int
 }
@@ -1081,10 +1082,18 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		// An unmatched no-op has no Previous evidence. Complete candidate
 		// checks use the existing no-Previous validation contract; this does
 		// not classify the row as an insert or authorize persistence.
-		return xhandler.ValidationOptions{Action: xhandler.WriteInsert, Shallow: true, Location: frame.Location}
+		options := xhandler.ValidationOptions{Action: xhandler.WriteInsert, Shallow: true, Location: frame.Location}
+		if frame.Record.InsertValidationPresence && !transactionStarted {
+			options.HonorPresence, options.Fields = true, frame.Fields
+		}
+		return options
 	}
 
 	options := xhandler.ValidationOptions{Action: frame.Action, Location: frame.Location, Shallow: true}
+	if frame.Action == xhandler.WriteInsert && frame.Record.InsertValidationPresence && !transactionStarted {
+		options.HonorPresence = true
+		options.Fields = frame.Fields
+	}
 	if frame.Previous.IsValid() {
 		options.Previous = frame.Previous.Interface()
 		options.PreviousFields = p.fieldsOf(frame.Previous.Elem().Type())
@@ -1886,7 +1895,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		Auxiliary:    component.RootView.Auxiliary || strings.EqualFold(tagOption(rootViewTag, "auxiliary"), "true"),
 		CurrentField: metadata.CurrentField, Table: metadata.Table, Keys: metadata.Keys, Fields: metadata.Fields,
 		Sequence: metadata.Sequence, DeleteMarker: metadata.DeleteMarker, ConcurrencyToken: metadata.ConcurrencyToken,
-		Invariants: metadata.Invariants, WriterIdentityPolicy: component.RootView.WriterIdentityPolicy, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
+		Invariants: metadata.Invariants, WriterIdentityPolicy: component.RootView.WriterIdentityPolicy, InsertValidationPresence: component.RootView.InsertValidationPresence, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
 	}
 	if root.Name == "" {
 		root.Name = metadata.EntityType.Name()
@@ -1987,6 +1996,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	if view != nil {
 		record.Auxiliary = record.Auxiliary || view.Auxiliary
 		record.WriterIdentityPolicy = view.WriterIdentityPolicy
+		record.InsertValidationPresence = view.InsertValidationPresence
 		record.OnDeleteNotFound = view.OnDeleteNotFound
 		record.MutationPredicateGroup = view.MutationPredicateGroup
 		if view.Source != nil && strings.TrimSpace(view.Source.Table) != "" {

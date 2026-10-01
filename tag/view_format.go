@@ -68,6 +68,9 @@ func (v View) Value() (string, error) {
 	if v.BatchConcurrency > 0 {
 		values = append(values, "batchConcurrency="+strconv.Itoa(v.BatchConcurrency))
 	}
+	if v.InsertValidationPresence {
+		values = append(values, "insertValidationPresence=true")
+	}
 	if v.PublishParent {
 		values = append(values, "publishParent=true")
 	}
