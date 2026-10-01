@@ -32,7 +32,10 @@ contract identities. No reflection fallback, application-wide registry, or
 constructor execution is needed. Contracts resolve to exported nongeneric named
 structs; genuine aliases to those structs are accepted and emitted using their
 underlying named identity. DQL parameter declarations must agree with the source
-contract's bindings, types, and optionality. Remove obsolete declarations after
+contract's bindings, types, optionality, codec/source/destination types, safe error
+status, and existing serialization tags. Output declarations are checked against
+the output contract. Matching declarations remain canonical component metadata;
+conflicting codec/status/type/tag/provider changes fail before publication. Remove obsolete declarations after
 auditing their behavior rather than silently dropping them.
 
 `Source.GoBuild` / `Discovery.GoBuild` optionally supplies a `gobuild.Context`

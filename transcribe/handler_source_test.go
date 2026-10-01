@@ -321,3 +321,53 @@ func TestDeclarativeSourceHandlerDiscoveryGenerationRuntime(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "%s", out)
 }
+
+func TestDeclarativeSourceHandlerCompleteBindingMetadata(t *testing.T) {
+	root, source := sourceHandlerFixture(t)
+	path := filepath.Join(root, "business/contracts.go")
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	code := strings.Replace(string(raw), "Debug     bool     `parameter:\",kind=form,in=debug\"`", "Debug bool `parameter:\",kind=form,in=debug,required=true,errorCode=401\" codec:\"identity\"`", 1)
+	code = strings.Replace(code, "type Output struct{ Value string }", "type Output struct{ Value string `parameter:\",kind=output,in=body\" json:\"value\"` }", 1)
+	writeSourceHandlerFile(t, root, "business/contracts.go", code)
+	source.Text = fmt.Sprintf(`#package(%q)
+#import('business',%q)
+#setting($_ = $handler_factory('business.NewConvert','Convert'))
+#setting($_ = $route('/convert','POST'))
+#setting($_ = $input_type('business.Alias'))
+#setting($_ = $output_type('business.Output'))
+#define($_ = $Debug<bool,bool>(form/debug).Required().WithCodec('identity').WithStatusCode(401))
+#define($_ = $Value<string>(output/body).WithTag('json:"value"'))`, handlerFixtureModule+"/registration", handlerFixtureModule+"/business")
+	compiled, err := NewCompiler().Compile(context.Background(), source)
+	require.NoError(t, err)
+	require.Len(t, compiled.Component.Parameters, 2)
+	require.Equal(t, 401, compiled.Component.Parameters[0].ErrorStatusCode)
+	require.Equal(t, "identity", compiled.Component.Parameters[0].Codec.Body)
+	require.Equal(t, "output", compiled.Component.Parameters[1].Source.Kind)
+	for _, change := range []struct{ old, new string }{
+		{"WithStatusCode(401)", "WithStatusCode(400)"},
+		{"WithCodec('identity')", "WithCodec('other')"},
+		{"$Debug<bool,bool>", "$Debug<string,bool>"},
+		{`json:"value"`, `json:"other"`},
+		{"$Value<string>", "$Value<int>"},
+		{"(output/body)", "(output/status)"},
+	} {
+		modified := *source
+		modified.Text = strings.Replace(source.Text, change.old, change.new, 1)
+		_, err := NewCompiler().Compile(context.Background(), &modified)
+		require.Error(t, err, change.new)
+	}
+	writeSourceHandlerFile(t, root, "business/contracts.go", strings.Replace(code, `json:"value"`, `xjson:"value"`, 1))
+	_, err = NewCompiler().Compile(context.Background(), source)
+	require.ErrorContains(t, err, "tags conflict")
+}
+
+func TestSourceHandlerTagsMatchExactKeys(t *testing.T) {
+	require.False(t, sourceHandlerTagsMatch(`xjson:"value"`, `json:"value"`, false))
+	require.False(t, sourceHandlerTagsMatch(`json:"value"`, `json:"value" json:"value"`, false))
+	require.False(t, sourceHandlerTagsMatch(`json:"value"`, `json:"value"suffix`, false))
+	require.False(t, sourceHandlerTagsMatch(`json:"value"`, `json:"unterminated`, false))
+	require.True(t, sourceHandlerTagsMatch(`json:"value" parameter:"Value,kind=output,in=body"`, `json:"value"`, false))
+	require.True(t, sourceHandlerTagsMatch(`json:"value"`, `anonymous:"true" json:"value"`, true))
+	require.False(t, sourceHandlerTagsMatch(`json:"value"`, `anonymous:"true"`, false))
+}

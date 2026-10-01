@@ -6,10 +6,12 @@ import (
 	"go/token"
 	"go/types"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/viant/bindly"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
@@ -140,7 +142,7 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 			}
 		}
 	}
-	if err = validateSourceHandlerParameters(loader, contracts[0], prepared.TypeContext, d.Params); err != nil {
+	if err = validateSourceHandlerParameters(loader, contracts[0], contracts[1], prepared.TypeContext, d.Params); err != nil {
 		return nil, err
 	}
 	connector := header.Connector
@@ -153,7 +155,7 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	settings.DefaultConnector = connector
 	component := &spec.Component{
 		Key: spec.Key{Kind: spec.KindComponent, Scope: source.Scope, Name: header.Name}, Name: header.Name, Description: header.Description,
-		TypeContext: prepared.TypeContext, Settings: settings,
+		TypeContext: prepared.TypeContext, Settings: settings, Parameters: d.Params,
 		Routes: []*spec.Route{{Name: header.Name, Path: header.URI, Method: header.Method, Internal: header.Internal, Handler: packages[0] + "." + names[0]}},
 	}
 	if header.Declarative {
@@ -209,8 +211,10 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 }
 
 type sourceHandlerField struct {
-	typ     types.Type
-	binding bindly.BindingSpec
+	typ      types.Type
+	binding  bindly.BindingSpec
+	tags     reflect.StructTag
+	embedded bool
 }
 
 func sourceHandlerFields(typ types.Type) (map[string]sourceHandlerField, error) {
@@ -271,13 +275,17 @@ func sourceHandlerFields(typ types.Type) (map[string]sourceHandlerField, error) 
 		if _, exists := result[key]; exists {
 			return nil, fmt.Errorf("ambiguous handler binding %q", key)
 		}
-		result[key] = sourceHandlerField{typ: field.Type(), binding: binding}
+		result[key] = sourceHandlerField{typ: field.Type(), binding: binding, tags: reflect.StructTag(tags), embedded: field.Embedded()}
 	}
 	return result, nil
 }
 
-func validateSourceHandlerParameters(loader types.Importer, input types.Type, tc *spec.TypeContext, params []*spec.Parameter) error {
+func validateSourceHandlerParameters(loader types.Importer, input, output types.Type, tc *spec.TypeContext, params []*spec.Parameter) error {
 	fields, err := sourceHandlerFields(input)
+	if err != nil {
+		return err
+	}
+	outputs, err := sourceHandlerFields(output)
 	if err != nil {
 		return err
 	}
@@ -302,6 +310,9 @@ func validateSourceHandlerParameters(loader types.Importer, input types.Type, tc
 		}
 		seen[param.Name] = true
 		field, ok := fields[param.Name]
+		if param.Source.Kind == "output" {
+			field, ok = outputs[param.Name]
+		}
 		if !ok {
 			return fmt.Errorf("handler parameter %q is not in the source contract; remove obsolete declarations", param.Name)
 		}
@@ -312,8 +323,28 @@ func validateSourceHandlerParameters(loader types.Importer, input types.Type, tc
 		if param.Required != nil && *param.Required != (binding.Required != nil && *binding.Required) {
 			return fmt.Errorf("handler parameter %q requiredness conflicts with source contract", param.Name)
 		}
-		if param.TypeExpr != "" && param.TypeExpr != "?" {
-			value, err := types.Eval(token.NewFileSet(), scope, token.NoPos, param.TypeExpr)
+		typeExpr := param.TypeExpr
+		if param.Codec != nil {
+			metadata, err := tag.ParseCodec(field.tags.Get("codec"))
+			if err != nil {
+				return err
+			}
+			if metadata == nil || param.Codec.Body != metadata.Body || !reflect.DeepEqual(param.Codec.Args, metadata.Arguments) {
+				return fmt.Errorf("handler parameter %q codec conflicts with source contract", param.Name)
+			}
+			if binding.DataType != "" && param.TypeExpr != binding.DataType {
+				return fmt.Errorf("handler parameter %q codec source type conflicts with source contract", param.Name)
+			}
+			if binding.DataType == "" {
+				value, err := types.Eval(token.NewFileSet(), scope, token.NoPos, param.TypeExpr)
+				if err != nil || !types.Identical(value.Type, field.typ) {
+					return fmt.Errorf("handler parameter %q codec source type cannot be proved from source contract", param.Name)
+				}
+			}
+			typeExpr = param.OutputTypeExpr
+		}
+		if typeExpr != "" && typeExpr != "?" {
+			value, err := types.Eval(token.NewFileSet(), scope, token.NoPos, typeExpr)
 			if err != nil {
 				return fmt.Errorf("handler parameter %q: %w", param.Name, err)
 			}
@@ -324,9 +355,77 @@ func validateSourceHandlerParameters(loader types.Importer, input types.Type, tc
 		remainder := *param
 		remainder.Name, remainder.TypeExpr, remainder.Raw = "", "", ""
 		remainder.Source, remainder.Required, remainder.Declaration = spec.BindSource{}, nil, ""
+		if param.ErrorStatusCode != 0 {
+			if param.ErrorStatusCode != binding.ErrorCode {
+				return fmt.Errorf("handler parameter %q error status conflicts with source contract", param.Name)
+			}
+			remainder.ErrorStatusCode = 0
+		}
+		if param.Tag != "" {
+			if !sourceHandlerTagsMatch(field.tags, param.Tag, field.embedded) {
+				return fmt.Errorf("handler parameter %q tags conflict with source contract", param.Name)
+			}
+			remainder.Tag = ""
+		}
+		remainder.Codec = nil
+		if param.Codec != nil {
+			remainder.OutputTypeExpr = ""
+		}
 		if !reflect.DeepEqual(remainder, spec.Parameter{}) {
 			return fmt.Errorf("handler parameter %q has unsupported contract overrides", param.Name)
 		}
 	}
 	return nil
+}
+
+// Compare complete tag keys and decoded values. Substring matching would let
+// xjson satisfy json, and cannot prove a declaration belongs to the contract.
+func sourceHandlerTagsMatch(existing reflect.StructTag, authored string, embedded bool) bool {
+	seen := map[string]bool{}
+	for rest := strings.TrimSpace(authored); rest != ""; {
+		colon := strings.IndexByte(rest, ':')
+		if colon <= 0 {
+			return false
+		}
+		key := rest[:colon]
+		if strings.ContainsAny(key, " \t\r\n\"") || seen[key] {
+			return false
+		}
+		seen[key] = true
+		quoted := rest[colon+1:]
+		if len(quoted) < 2 || quoted[0] != '"' {
+			return false
+		}
+		end := 1
+		for end < len(quoted) {
+			if quoted[end] == '\\' {
+				end += 2
+				continue
+			}
+			if quoted[end] == '"' {
+				break
+			}
+			end++
+		}
+		if end >= len(quoted) {
+			return false
+		}
+		value, err := strconv.Unquote(quoted[:end+1])
+		if err != nil {
+			return false
+		}
+		actual, found := existing.Lookup(key)
+		if !found && embedded && key == "anonymous" && value == "true" {
+			actual, found = "true", true
+		}
+		if !found || actual != value {
+			return false
+		}
+		rest = quoted[end+1:]
+		if rest != "" && rest[0] != ' ' {
+			return false
+		}
+		rest = strings.TrimSpace(rest)
+	}
+	return len(seen) != 0
 }
