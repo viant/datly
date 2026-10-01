@@ -123,7 +123,7 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 				return nil, fmt.Errorf("component %s output: %w", component.Component.Key.String(), outputErr)
 			}
 		}
-		entry.Providers = withDefaultClientProviders(append([]locator.Provider(nil), component.Providers...), defaultProviders)
+		entry.Providers = withDefaultClientProviders(append([]locator.Provider(nil), entry.Providers...), defaultProviders)
 		constants, constantsErr := canonicalConstantValues(component.Component)
 		if constantsErr != nil {
 			return nil, fmt.Errorf("component %s constants: %w", component.Component.Key.String(), constantsErr)
@@ -285,6 +285,14 @@ func registrationWithRecorder(registered *RegisteredComponent, recorder *observa
 	entry := *registered
 	if reader, ok := entry.Reader.(observedReader); ok {
 		entry.Reader = reader.WithRecorder(recorder)
+	}
+	if len(entry.Providers) > 0 {
+		entry.Providers = append([]locator.Provider(nil), entry.Providers...)
+		for index, provided := range entry.Providers {
+			if observed, ok := provided.(observedProvider); ok {
+				entry.Providers[index] = observed.WithRecorder(recorder)
+			}
+		}
 	}
 	return entry
 }

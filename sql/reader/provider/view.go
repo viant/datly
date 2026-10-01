@@ -11,6 +11,7 @@ import (
 	"github.com/viant/bindly/locator"
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/observability"
 	dsql "github.com/viant/datly/sql"
 	sqlreader "github.com/viant/datly/sql/reader"
 	"github.com/viant/sqlx"
@@ -91,6 +92,22 @@ func New(config Config) (locator.Provider, error) {
 		provider.views[name] = &boundView{targetType: dependency.TargetType, execution: execution}
 	}
 	return provider, nil
+}
+
+// WithRecorder detaches provider execution wrappers for one runtime while
+// retaining immutable read plans and canonical input/projection authority.
+func (p *viewProvider) WithRecorder(recorder *observability.Recorder) locator.Provider {
+	if p == nil {
+		return p
+	}
+	result := *p
+	result.views = make(map[string]*boundView, len(p.views))
+	for name, view := range p.views {
+		detached := *view
+		detached.execution = view.execution.WithRecorder(recorder).(*sqlreader.Execution)
+		result.views[name] = &detached
+	}
+	return &result
 }
 
 func (p *viewProvider) Kind() string           { return sqlreader.ViewDependencyKind }
