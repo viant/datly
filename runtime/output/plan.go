@@ -33,22 +33,23 @@ type Compiler struct {
 
 // Plan contains registered output authority, never invocation input or rows.
 type Plan struct {
-	typeOf          reflect.Type
-	format          string
-	formatSelector  *spec.BindSource
-	caseFormat      text.CaseFormat
-	timeLayout      string
-	custom          Marshaller
-	rows            *rowsPlan
-	exclude         exclusions
-	jsonEncoder     *structjson.Marshaller
-	standardJSON    *jsonmarshal.Standard
-	omitEmpty       bool
-	title           string
-	presentation    *presentation
-	rowPresentation *presentation
-	csvEncoder      cachedCSV
-	xmlEncoders     sync.Map
+	responseCompression *spec.ResponseCompression
+	typeOf              reflect.Type
+	format              string
+	formatSelector      *spec.BindSource
+	caseFormat          text.CaseFormat
+	timeLayout          string
+	custom              Marshaller
+	rows                *rowsPlan
+	exclude             exclusions
+	jsonEncoder         *structjson.Marshaller
+	standardJSON        *jsonmarshal.Standard
+	omitEmpty           bool
+	title               string
+	presentation        *presentation
+	rowPresentation     *presentation
+	csvEncoder          cachedCSV
+	xmlEncoders         sync.Map
 }
 
 type Result struct {
@@ -86,6 +87,10 @@ func (c Compiler) Compile(input CompileInput) (*Plan, error) {
 		}
 	}
 	if settings != nil {
+		if err := settings.ResponseCompression.Validate(); err != nil {
+			return nil, err
+		}
+		p.responseCompression = settings.ResponseCompression.Clone()
 		if settings.Format != "" {
 			p.format = strings.ToLower(strings.TrimSpace(settings.Format))
 		}
@@ -471,4 +476,13 @@ func (r *rowsPlan) value(output any) (reflect.Value, error) {
 		return rows, nil
 	}
 	return value, nil
+}
+
+// ResponseCompression returns isolated HTTP policy; Encode and internal/MCP
+// output stay uncompressed. HTTP applies this after encoding the selected format.
+func (p *Plan) ResponseCompression() *spec.ResponseCompression {
+	if p == nil {
+		return nil
+	}
+	return p.responseCompression.Clone()
 }

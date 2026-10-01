@@ -31,7 +31,7 @@ setting_name = "route" | "api_key" | "connector"
  | "report" | "cube" | "cubeCompose" | "cache" | "cache_warmup"
  | "marshal" | "unmarshal" | "format" | "date_format" | "case_format"
  | "ignoreEmptyQueryParameters" | "output_exclude" | "output_omit_empty"
- | "output_title" | "const" | "DocGlobalURLs" | "DocURLs" | "DocURL"
+ | "output_title" | "response_compression" | "const" | "DocGlobalURLs" | "DocURLs" | "DocURL"
  | "DocBaseURL" | "static_resource" | "static_content" ;
 cache_modifier = ".", ("WithProvider" | "WithLocation" | "WithTimeToLiveMs"),
                  arguments ;

@@ -350,6 +350,19 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				return nil, fmt.Errorf("invalid case_format directive: missing format")
 			}
 			ret.CaseFormat = trimQuote(args[len(args)-1])
+		case strings.EqualFold(name, "response_compression"):
+			if len(args) != 2 || tail != "" || ret.ResponseCompression != nil {
+				return nil, fmt.Errorf("response_compression requires encoding and minimum byte size, once, without modifiers")
+			}
+			encoding, quoted := parseQuotedLiteral(args[0])
+			minimum, valid := parseIntArg(args[1])
+			if !quoted || !valid {
+				return nil, fmt.Errorf("response_compression requires quoted encoding and an integer byte size")
+			}
+			ret.ResponseCompression = &spec.ResponseCompression{Encoding: encoding, MinSizeBytes: minimum}
+			if err := ret.ResponseCompression.Validate(); err != nil {
+				return nil, err
+			}
 		case strings.EqualFold(name, "output_exclude"):
 			if len(args) == 0 {
 				return nil, fmt.Errorf("output_exclude requires at least one field path")
@@ -429,7 +442,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			compose.MCPTool = new(bool)
 		}
 	}
-	if !ret.IndependentChildTransactions && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
+	if ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
 		ret.MCP == nil && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&

@@ -32,6 +32,7 @@ type ImportSpec struct {
 }
 
 type Settings struct {
+	ResponseCompression *ResponseCompression `json:"responseCompression,omitempty"`
 	// IndependentChildTransactions opts a source-less custom orchestrator into
 	// separately completed generated child units. Default composition is shared.
 	IndependentChildTransactions bool                `json:"independentChildTransactions,omitempty"`
@@ -172,7 +173,7 @@ func (s *Settings) IsZero() bool {
 	if s == nil {
 		return true
 	}
-	return !s.IndependentChildTransactions && len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
+	return s.ResponseCompression == nil && !s.IndependentChildTransactions && len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
 		s.DefaultConnector == "" && s.SequenceStrategy == "" && s.Report == nil && s.Cache == nil &&
 		(s.Generation == nil || s.Generation.IsZero()) && s.InputType == "" && s.OutputType == "" &&
 		s.JSONMarshalType == "" && s.JSONUnmarshalType == "" && s.XMLUnmarshalType == "" &&

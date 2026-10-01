@@ -60,3 +60,10 @@ owns the complete JSON representation instead of the default formatting policy.
 CSV and XML codec metadata is reused safely by a registered plan. Each XLSX
 workbook keeps its own mutable native encoder session. Field/type discovery and
 serialization-shape construction use `viant/x/shape`.
+
+HTTP response compression is opt-in component metadata:
+`Settings.ResponseCompression = &spec.ResponseCompression{Encoding: "gzip", MinSizeBytes: 2048}`.
+The immutable output plan carries it; ordinary `Encode` stays uncompressed so
+internal/MCP consumers keep typed/raw output. HTTP applies gzip after encoding
+only for lengths strictly above the threshold, independently of Accept-Encoding.
+Explicit response objects own their streams/headers/encoding and bypass this policy.

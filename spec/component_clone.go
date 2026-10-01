@@ -40,6 +40,7 @@ func (s *Settings) Clone() *Settings {
 		value := *s.IgnoreEmptyQueryParameters
 		result.IgnoreEmptyQueryParameters = &value
 	}
+	result.ResponseCompression = s.ResponseCompression.Clone()
 	result.Generation = s.Generation.Clone()
 	if s.Output != nil {
 		value := *s.Output

@@ -6,6 +6,7 @@ import (
 )
 
 type componentSettings struct {
+	ResponseCompression          *spec.ResponseCompression
 	IndependentChildTransactions bool
 	SequenceStrategy             string
 	MCPFolders                   []spec.ResourceFolder

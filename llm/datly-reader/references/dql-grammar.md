@@ -167,6 +167,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `output_exclude` | 1+ | all arguments are output field paths; repeated calls append |
 | `output_omit_empty` | exactly 1 | boolean |
 | `output_title` | exactly 1 | title |
+| `response_compression` | exactly 2 | quoted `gzip`, nonnegative minimum encoded byte count; singleton, no modifiers |
 | `const` | 2+ | identifier and value; later arguments ignored; names must be Go identifiers and unique case-insensitively |
 | `DocGlobalURLs`, `DocURLs` | 1+ | all nonempty documentation resource references; no tail |
 | `DocURL`, `DocBaseURL` | exactly 1 | nonempty rule reference or base URL; no tail |
@@ -206,6 +207,17 @@ global lowerCamel names; the output compiler validates other case-format names
 through its text-format owner. `date_format` passes through the date-format to
 Go-layout converter. Per-field tags and explicit JSON names retain their
 separate precedence (`runtime/output/plan.go`, `formats.go`, `wire.go`).
+
+### HTTP response compression
+
+`#setting($_ = $response_compression('gzip',2048))` opts the component into
+HTTP compression after output encoding. Gzip applies only when encoded bytes
+are strictly greater than the minimum: 2048 stays plain, 2049 compresses.
+The policy intentionally does not negotiate `Accept-Encoding`. Components
+without the setting, internal/MCP values, and application-owned explicit response
+streams retain their existing behavior. Explicit compressed responses are never
+compressed again. HTTP status/content type/disposition remain authoritative;
+compressed `Content-Length` describes wire bytes and HEAD sends no body.
 
 ### Cache settings and warmup options
 

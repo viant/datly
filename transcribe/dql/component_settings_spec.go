@@ -11,6 +11,7 @@ func toSpecSettings(input *componentSettings) *spec.Settings {
 		return nil
 	}
 	ret := &spec.Settings{
+		ResponseCompression:          input.ResponseCompression.Clone(),
 		SequenceStrategy:             input.SequenceStrategy,
 		MCPFolders:                   append([]spec.ResourceFolder(nil), input.MCPFolders...),
 		DefaultConnector:             strings.TrimSpace(input.DefaultConnector),

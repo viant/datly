@@ -232,11 +232,11 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	writer.Header().Set(datlyServiceTimeHeader, time.Since(started).String())
 	h.publishMetricsHeaders(writer, req, execCtx)
 	if response, ok := actual.(xresponse.Response); ok {
-		writeResponse(writer, statusCode, hasExplicitStatusCode(execCtx, execErr), response)
+		writeResponse(writer, statusCode, hasExplicitStatusCode(execCtx, execErr), response, req)
 		return
 	}
 	if execErr != nil {
-		writeJSON(writer, statusCode, actual)
+		h.writeHTTPJSON(ctx, writer, req, statusCode, actual)
 		return
 	}
 	h.writeEncoded(ctx, writer, req, statusCode, actual)

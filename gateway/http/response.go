@@ -25,7 +25,7 @@ func classifyRequestError(err error) int {
 	return stdhttp.StatusInternalServerError
 }
 
-func writeResponse(writer stdhttp.ResponseWriter, statusCode int, explicitStatus bool, response xresponse.Response) {
+func writeResponse(writer stdhttp.ResponseWriter, statusCode int, explicitStatus bool, response xresponse.Response, requests ...*stdhttp.Request) {
 	if writer == nil || response == nil {
 		return
 	}
@@ -48,6 +48,9 @@ func writeResponse(writer stdhttp.ResponseWriter, statusCode int, explicitStatus
 		statusCode = stdhttp.StatusOK
 	}
 	writer.WriteHeader(responseStatusCode(statusCode))
+	if len(requests) > 0 && requests[0] != nil && requests[0].Method == stdhttp.MethodHead {
+		return
+	}
 	if body := response.Body(); body != nil {
 		_, _ = io.Copy(writer, body)
 	}
