@@ -9,9 +9,14 @@ import (
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
 	sqltext "github.com/viant/sqlparser/source"
+	"github.com/viant/sqlx/metadata/info"
 )
 
-func prepareStarProjection(sqlText string, selected []string, view *data.View) (*Projection, bool, error) {
+func prepareStarProjection(sqlText string, selected []string, view *data.View, dialects ...*info.Dialect) (*Projection, bool, error) {
+	var dialect *info.Dialect
+	if len(dialects) > 0 {
+		dialect = dialects[0]
+	}
 	if view == nil || len(view.Columns) == 0 {
 		return nil, false, nil
 	}
@@ -63,7 +68,11 @@ func prepareStarProjection(sqlText string, selected []string, view *data.View) (
 		}
 		resolved.Name = resolved.Column
 		resolved.Expression = ""
-		expression := strings.TrimSpace(resolved.SelectExpression(allowNulls))
+		expression, err := generatedColumnExpression(&resolved, allowNulls, dialect)
+		if err != nil {
+			return nil, true, err
+		}
+		expression = strings.TrimSpace(expression)
 		if expression != "" {
 			projection = append(projection, expression)
 		}
@@ -105,11 +114,15 @@ func (p SelectorProjection) prepareSelectedStar(columns, chosen []ProjectionColu
 		projection := make([]string, 0, len(chosen))
 		for _, name := range names {
 			column := projectionMetadataColumn(name, metadata)
-			projection = append(projection, column.SelectExpression(view.NullsAllowed()))
+			expression, err := generatedColumnExpression(column, view.NullsAllowed(), p.Dialect)
+			if err != nil {
+				return nil, err
+			}
+			projection = append(projection, expression)
 		}
 		return &Projection{Source: expanded, outer: projection, columns: columns}, nil
 	}
-	projected, handled, err := prepareStarProjection(source, names, &view)
+	projected, handled, err := prepareStarProjection(source, names, &view, p.Dialect)
 	if err != nil {
 		return nil, err
 	}

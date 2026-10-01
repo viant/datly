@@ -49,7 +49,7 @@ func (p SelectorProjection) Prepare(selected []string) (result *Projection, fail
 			return nil, err
 		}
 	}
-	if projected, handled, err := prepareStarProjection(sqlText, selected, view); handled || err != nil {
+	if projected, handled, err := prepareStarProjection(sqlText, selected, view, p.Dialect); handled || err != nil {
 		return projected, err
 	}
 	source, err := applyNullProjection(sqlText, view)
@@ -178,7 +178,11 @@ func (p SelectorProjection) prepareOuterDependentProjection(sqlText string, colu
 		outer.Name = output
 		outer.Column = output
 		outer.Expression = ""
-		expression := strings.TrimSpace(outer.SelectExpression(allowNulls))
+		expression, err := generatedColumnExpression(&outer, allowNulls, p.Dialect)
+		if err != nil {
+			return nil, err
+		}
+		expression = strings.TrimSpace(expression)
 		if expression == "" {
 			return nil, fmt.Errorf("source projection is unresolved")
 		}

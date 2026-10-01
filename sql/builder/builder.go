@@ -227,12 +227,12 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 		bindingPositionalArgs = nil
 	}
 	if options.selector != nil && strings.TrimSpace(options.selector.OrderBy) != "" && len(options.projection) == 0 {
-		sourceSQL, err = (dsql.SelectorProjection{SQL: sourceSQL, View: options.view}).Expand()
+		sourceSQL, err = (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Expand()
 		if err != nil {
 			return nil, err
 		}
 	}
-	projection, err := (dsql.SelectorProjection{SQL: sourceSQL, View: options.view}).Prepare(options.projection)
+	projection, err := (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Prepare(options.projection)
 	if err != nil {
 		return nil, err
 	}

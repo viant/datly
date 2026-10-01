@@ -10,13 +10,15 @@ import (
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
 	sqltext "github.com/viant/sqlparser/source"
+	"github.com/viant/sqlx/metadata/info"
 )
 
 // SelectorProjection owns selector membership in the authored SQL projection.
 // Prepared columns resolve physical wildcard outputs; explicit SQL always wins.
 type SelectorProjection struct {
-	SQL  string
-	View *data.View
+	Dialect *info.Dialect
+	SQL     string
+	View    *data.View
 }
 
 type ProjectionColumn struct {
