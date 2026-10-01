@@ -18,6 +18,12 @@ Check the installed capability before generation. If operation-based `transcribe
 missing, return the DQL and application hook contract and report that gap. Do not
 substitute `translate`, lower-level transcription, or manual writer plumbing.
 
+## Preserve the database during migration
+
+A migration to Datly must preserve the existing database schema. Never propose a counter table, sequence ledger, reservation store, new column or other DDL as a migration prerequisite. Preserve MySQL's existing native auto-increment and the version-matched SQLX default transient allocation behavior; never replace internal auto-increment with external sequence storage.
+
+Scoped non-identity numbering is a separate capability. Its optional ledger is not a migration default or a substitute for native identity allocation. When the existing schema and transient mechanism cannot express the requested scope, report that specific framework gap and preserve the current behavior. Do not silently add storage or DDL. A separately requested new allocator design must be evaluated as a separate change.
+
 ## Read what the task needs
 
 - For Go field renames, outer projection versus inner SQL aliases, SQLX/JSON
@@ -45,7 +51,7 @@ substitute `translate`, lower-level transcription, or manual writer plumbing.
 - For stable-ID/FK gaps, async, telemetry, YAML docs, static/MCP resources and standalone status, read [availability-and-operations.md](references/availability-and-operations.md). Separate current APIs from pending authoring/integration contracts.
 - Use [acceptance.md](references/acceptance.md) to verify observable application behavior. Framework maintenance is outside this skill.
 
-For per-scope non-identity numbering, read [scoped sequences](references/product/datly/doc/scoped-sequences.md). Keep allocation and collision replay native; provision the MySQL ledger before business transactions.
+For explicitly requested per-scope non-identity numbering, read [scoped sequences](references/product/datly/doc/scoped-sequences.md). Its optional ledger requires a separate allocator design decision; never introduce it to migrate an existing database or replace MySQL auto-increment.
 
 For opt-in idempotent leaf deletion, read [delete-not-found](references/product/datly/doc/delete-not-found.md). Strict deletion remains the default.
 

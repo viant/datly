@@ -1061,7 +1061,7 @@ is a standalone SELECT annotation for generated POST/PATCH/PUT writers. It emits
 `sequenceScope` field metadata. Scope references must be distinct same-view
 projected columns. Allocation, original presence, transaction ownership and
 bounded collision replay are native. See [scoped sequences](product/datly/doc/scoped-sequences.md)
-for NULL/zero semantics, MySQL ledger provisioning and verification.
+for NULL/zero semantics and verification. The ledger is an explicitly selected feature for a separate allocator design; it must not become a migration prerequisite or replace MySQL native auto-increment. Migrations preserve the existing schema and SQLX default transient allocation.
 
 ## Compact shape declarations
 

@@ -1,5 +1,7 @@
 # Migrating legacy Datly components to Datly 1.0
 
+Preserve the existing database schema throughout migration. Keep MySQL native auto-increment and the SQLX default transient allocator. Never add a sequence ledger, counter table, reservation store or other DDL to replace existing allocation. If a requested scope lacks native support on the existing schema, report the framework gap and preserve the current behavior.
+
 Use this guide when an application has legacy Datly handlers, handwritten SQL
 services, or manually registered components and the target is a Datly 1.0
 generated component architecture.
