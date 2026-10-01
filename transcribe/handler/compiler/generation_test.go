@@ -117,3 +117,56 @@ func TestBuildInputHonorsRootCardinality(t *testing.T) {
 		t.Fatal("explicit input conflict ignored")
 	}
 }
+
+func TestBuildInputLeafAuxiliaryRootRetainsReadOnlyIntent(t *testing.T) {
+	for _, operation := range []plan.Operation{plan.OperationPatch, plan.OperationPut} {
+		for _, keyed := range []bool{false, true} {
+			t.Run(string(operation)+map[bool]string{false: "/keyless", true: "/keyed"}[keyed], func(t *testing.T) {
+				view := &spec.View{Name: "Preferences", Auxiliary: true, Source: &spec.ViewSource{Table: "PREFERENCES", SQL: "SELECT ID FROM PREFERENCES"}, Columns: []*spec.Column{{Name: "ID", Source: "ID", PrimaryKey: keyed, Type: spec.TypeRef{Name: "int"}}}}
+				got, err := (&Compiler{}).BuildInput(Request{Component: &spec.Component{Name: "Preferences", RootView: view}, Operation: operation}, "Preference")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(got.Currents) != 0 || len(got.Component.Views) != 0 || len(got.Component.Parameters) != 2 {
+					t.Fatal("leaf auxiliary body acquired implicit Current authority")
+				}
+				semantic, err := (&Compiler{}).Compile(got)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if semantic.Root.Current != nil || semantic.Root.Sequence != nil || len(semantic.Root.Write.Allowed) != 0 {
+					t.Fatal("leaf auxiliary body acquired reads, sequences or DML")
+				}
+			})
+		}
+	}
+}
+
+func TestBuildInputAuxiliaryRootPreservesExplicitCurrent(t *testing.T) {
+	view := &spec.View{Name: "Preferences", Auxiliary: true, Source: &spec.ViewSource{Table: "PREFERENCES", SQL: "SELECT ID FROM PREFERENCES"}, Columns: []*spec.Column{{Name: "ID", Source: "ID", PrimaryKey: true, Type: spec.TypeRef{Name: "int"}}}}
+	identity, err := view.Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := &spec.Parameter{Name: "Before", Source: spec.BindSource{Kind: "view", Name: "Preferences"}, TypeExpr: "[]*Preference", Cardinality: "Many"}
+	got, err := (&Compiler{}).BuildInput(Request{Component: &spec.Component{Name: "Preferences", RootView: view, Parameters: []*spec.Parameter{current}}, Operation: plan.OperationPatch, Current: "Before", Currents: []CurrentBinding{{ViewIdentity: identity, Param: "Before"}}, ViewBindings: map[string]string{current.Identity(): identity}}, "Preference")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Currents) != 1 || got.Currents[0].Param != "Before" {
+		t.Fatal("explicit auxiliary Current authority was removed")
+	}
+}
+
+func TestBuildInputAuxiliaryRootPreservesWritableDescendant(t *testing.T) {
+	root := &spec.View{Name: "Orders", Auxiliary: true, Source: &spec.ViewSource{Table: "ORDERS", SQL: "SELECT ID FROM ORDERS"}, Columns: []*spec.Column{{Name: "ID", Source: "ID", PrimaryKey: true, Type: spec.TypeRef{Name: "int"}}}}
+	child := &spec.View{Name: "Items", Source: &spec.ViewSource{Table: "ITEMS", SQL: "SELECT ID,ORDER_ID FROM ITEMS"}, Columns: []*spec.Column{{Name: "ID", Source: "ID", PrimaryKey: true, Type: spec.TypeRef{Name: "int"}}, {Name: "ORDER_ID", Source: "ORDER_ID", Type: spec.TypeRef{Name: "int"}}}}
+	root.Relations = []*spec.Relation{{Name: "Items", View: child, Cardinality: spec.CardinalityMany, On: []*spec.RelationLink{{ParentColumn: "ID", ChildColumn: "ORDER_ID"}}}}
+	got, err := (&Compiler{}).BuildInput(Request{Component: &spec.Component{Name: "Orders", RootView: root}, Operation: plan.OperationPatch}, "Order")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Currents) != 2 || !got.Component.RootView.Auxiliary || got.Component.RootView.Relations[0].View.Auxiliary {
+		t.Fatal("auxiliary ancestry altered writable descendant generation")
+	}
+}

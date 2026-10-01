@@ -105,13 +105,6 @@ func (b *inputGeneration) record(view *spec.View, body string, path []string, sc
 		return fmt.Errorf("generation writable view %q occurs in multiple roles; automatic current-state derivation requires distinct view identities", identity)
 	}
 	b.visiting[identity] = true
-	keys, err := canonicalKeys(view)
-	if err != nil {
-		return err
-	}
-	if len(keys) == 0 {
-		return fmt.Errorf("generation view %q requires discovered primary keys", identity)
-	}
 	currentName := ""
 	if len(path) == 0 {
 		currentName = b.request.Current
@@ -123,6 +116,19 @@ func (b *inputGeneration) record(view *spec.View, body string, path []string, sc
 			}
 			currentName = binding.Param
 		}
+	}
+	// A leaf auxiliary root supplies a body shape, not an implicit database
+	// lookup. Explicit Current authority and relation-bearing roots retain
+	// their existing generation path, including writable descendants.
+	if view.Auxiliary && len(view.Relations) == 0 && currentName == "" {
+		return nil
+	}
+	keys, err := canonicalKeys(view)
+	if err != nil {
+		return err
+	}
+	if len(keys) == 0 {
+		return fmt.Errorf("generation view %q requires discovered primary keys", identity)
 	}
 	if currentName == "" {
 		currentName, err = b.currentName(view)
