@@ -114,8 +114,7 @@ func TestRunAuthoredPackageSQLite(t *testing.T) {
 func TestExecutableSQLiteAndSignal(t *testing.T) {
 	f := fixture.New(t)
 	binary := filepath.Join(t.TempDir(), "datly")
-	build := exec.Command("go", "build", "-o", binary, "../../standalone/testdata/app/cmd")
-	build.Env = append(os.Environ(), "GOWORK=off")
+	build := testharness.SourceGoCommand(t, commandSourceRoot(t), "build", "-o", binary, "./standalone/testdata/app/cmd")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build executable: %v %s", err, output)
 	}

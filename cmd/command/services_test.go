@@ -27,8 +27,7 @@ func TestExecutableConfiguredHTTPAndOTLP(t *testing.T) {
 	f.Services(t, collector.Server.URL)
 	f.YAML(t)
 	binary := filepath.Join(t.TempDir(), "app")
-	build := exec.Command("go", "build", "-o", binary, "../../standalone/testdata/app/cmd")
-	build.Env = append(os.Environ(), "GOWORK=off")
+	build := testharness.SourceGoCommand(t, commandSourceRoot(t), "build", "-o", binary, "./standalone/testdata/app/cmd")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build %v %s", err, output)
 	}
