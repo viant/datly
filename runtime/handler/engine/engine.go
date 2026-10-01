@@ -16,9 +16,11 @@ import (
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/sqlx"
+	xbind "github.com/viant/xdatly/bind"
 	xhandler "github.com/viant/xdatly/handler"
 	handlerexec "github.com/viant/xdatly/handler/exec"
 	xmcp "github.com/viant/xdatly/handler/mcp"
+	xlogger "github.com/viant/xdatly/logger"
 )
 
 type Request struct {
@@ -306,6 +308,13 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if err != nil {
 		return finish(nil, err)
 	}
+	// Resolve once from the composed trusted scope, preserving the same logger
+	// authority as static input/output capabilities. Rows only use typed context.
+	invocationLogger, _, loggerErr := xbind.Lookup[xlogger.Logger](ctx, rhandler.NewBinder(scope, input), rhandler.LoggerCapabilityKey)
+	if loggerErr != nil {
+		return finish(nil, fmt.Errorf("resolve invocation logger: %w", loggerErr))
+	}
+	ctx = xlogger.WithContext(ctx, invocationLogger)
 	if transaction, ok := request.Handler.(rhandler.PreBindingTransaction); ok && transaction.RequiresPreBindingTransaction() && data != nil {
 		resolved, resolveErr := data.resolve(ctx)
 		if resolveErr != nil {
