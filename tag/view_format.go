@@ -45,7 +45,7 @@ func (v View) Value() (string, error) {
 		return nil
 	}
 	for _, item := range []struct{ name, value string }{
-		{"onDeleteNotFound", v.OnDeleteNotFound}, {"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
+		{"onDeleteNotFound", v.OnDeleteNotFound}, {"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"rowLock", v.RowLock}, {"rowLockOrder", v.RowLockOrder}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
 		{"cache", v.Cache}, {"cacheWarmup", v.CacheWarmup},
 		{"orderBy", v.OrderBy}, {"match", v.Match},
 	} {

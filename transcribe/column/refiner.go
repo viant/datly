@@ -328,13 +328,22 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	// The authored source is retained exactly. A predicate template can make
 	// SQL parser projection rewriting unsafe even though discovery has already
 	// produced canonical columns for dynamic runtime shapes.
-	if !strings.Contains(view.Source.SQL, "${predicate.") {
-		resolvedSQL, changed, err := (dsql.SelectorProjection{SQL: view.Source.SQL}).ResolveDiscoveredColumns(projected, dialect)
+	// Resource references are opaque before expansion, but their resolved SQL
+	// may already declare every output. Decide from that authored SQL first so
+	// an embed does not turn a portable wildcard into discovery-dialect quotes.
+	if !strings.Contains(authoredSource.SQL, "${predicate.") {
+		_, materialize, err := (dsql.SelectorProjection{SQL: authoredSource.SQL}).ResolveDiscoveredColumns(projected, dialect)
 		if err != nil {
 			return nil, err
 		}
-		if changed {
-			view.Source.SQL = resolvedSQL
+		if materialize {
+			resolvedSQL, changed, err := (dsql.SelectorProjection{SQL: view.Source.SQL}).ResolveDiscoveredColumns(projected, dialect)
+			if err != nil {
+				return nil, err
+			}
+			if changed {
+				view.Source.SQL = resolvedSQL
+			}
 		}
 	}
 	view.Columns = mergeColumns(view.Columns, columns)

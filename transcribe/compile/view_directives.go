@@ -2,6 +2,7 @@ package compile
 
 import (
 	"fmt"
+	"go/token"
 	"strconv"
 	"strings"
 
@@ -86,7 +87,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 		minimum, maximum = 1, 1
 	case spec.ViewControlSelfRef:
 		minimum, maximum = 4, 4
-	case spec.ViewControlPartitioner:
+	case spec.ViewControlPartitioner, spec.ViewControlType:
 		minimum, maximum = 2, 3
 	}
 	if len(call.Args) < minimum || len(call.Args) > maximum {
@@ -417,6 +418,17 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			}
 		case spec.ViewControlType:
 			target.TypeName = directive.value
+			if len(directive.values) == 2 {
+				holder := directive.values[1]
+				if !token.IsIdentifier(holder) || token.Lookup(holder).IsKeyword() {
+					return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("type holder %q must be a Go field identifier", holder)}
+				}
+				relation := findDirectiveRelation(root, target)
+				if relation == nil {
+					return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("type holder applies only to a related view")}
+				}
+				relation.Holder = holder
+			}
 		case spec.ViewControlDest:
 			target.Dest = directive.value
 		case spec.ViewControlEntityHooks:

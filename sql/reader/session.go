@@ -47,6 +47,7 @@ type Session struct {
 	RefreshCache      bool
 	CacheOnly         bool
 	QueryScope        *sqlxread.QueryScope
+	ForUpdate         []string
 	outputSlots       map[string][]*readmeta.Record
 	outputAccessors   *outputAccessors
 	Output
@@ -97,6 +98,7 @@ func (s *Session) Init() error {
 // reads and reads that expose column metadata to canonical dependency binding.
 func (s *Session) applyReadOptions(ctx context.Context) {
 	options := dexec.ReaderOptionsFromContext(ctx)
+	s.ForUpdate = append([]string(nil), options.ForUpdate...)
 	s.RefreshCache = options.RefreshCache
 	s.CacheOnly = options.CacheOnly
 	s.QueryScope = options.QueryScope

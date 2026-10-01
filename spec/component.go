@@ -63,6 +63,8 @@ type OutputSettings struct {
 // GenerationSettings contains transcription controls that are consumed while
 // producing a Go package and are not part of runtime component behavior.
 type GenerationSettings struct {
+	ClientInputType     string            `json:"clientInputType,omitempty"`
+	WriterOmitEmpty     bool              `json:"writerOmitEmpty,omitempty"`
 	FilePrefix          string            `json:"filePrefix,omitempty"`
 	Template            string            `json:"template,omitempty"`
 	DescriptionResource string            `json:"descriptionResource,omitempty"`
@@ -81,7 +83,7 @@ type GenerationSettings struct {
 }
 
 func (s GenerationSettings) IsZero() bool {
-	return s.FilePrefix == "" && s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
+	return s.ClientInputType == "" && !s.WriterOmitEmpty && s.FilePrefix == "" && s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
 		s.InputFile == "" && s.OutputFile == "" && s.RouterFile == "" &&
 		s.HandlerFile == "" && s.LifecycleFile == "" && s.MutationFile == "" &&
 		s.ResourcesFile == "" && s.LinksFile == "" && s.TemplateFile == "" && len(s.SupportFiles) == 0 && len(s.SQLFiles) == 0

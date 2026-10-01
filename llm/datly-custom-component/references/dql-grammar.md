@@ -164,7 +164,8 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `date_format`, `case_format` | 1+ | last argument; date layout and global name policy respectively |
 | `ignoreEmptyQueryParameters` | exactly 1 | boolean; absent differs from explicit false |
 | `output_exclude` | 1+ | all arguments are output field paths; repeated calls append |
-| `output_omit_empty` | exactly 1 | boolean |
+| `output_omit_empty` | exactly 1 | global runtime output omission boolean |
+| `writer_omit_empty` | exactly 1 | generated writer default omission boolean; explicit JSON tags override |
 | `output_title` | exactly 1 | title |
 | `const` | 2+ | identifier and value; later arguments ignored; names must be Go identifiers and unique case-insensitively |
 | `DocGlobalURLs`, `DocURLs` | 1+ | all nonempty documentation resource references; no tail |
@@ -1047,3 +1048,7 @@ other validation. It does not add a SQL predicate, advance tokens, lock rows, or
 provide atomic race prevention. Init may explicitly prepare a next working token
 without changing the captured expectation. Missing/mismatched update tokens fail
 with a typed conflict before mutations proceed.
+
+### Compact shape declarations
+
+Use view wildcards and list only genuine metadata overrides. `required(view.column)` chooses an inferred scalar value, `optional(view.column)` chooses a pointer, and neither changes physical constraints. Use CAST for actual inferred-type differences, not to restate strings or control nullability. `type(view,'GoType','GoHolder')` may give a related view an explicit Go holder while preserving its SQL alias. Verify runtime selector/transaction behavior after simplifying.

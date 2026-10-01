@@ -93,7 +93,12 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 	if err != nil {
 		return nil, err
 	}
+	lockRows, err := session.rowLock(root.View)
+	if err != nil {
+		return nil, err
+	}
 	rootBuilderOptions := []rsql.BuilderOption{
+		rsql.WithBuilderForUpdate(lockRows),
 		rsql.WithBuilderComponent(session.Component),
 		rsql.WithBuilderView(root.View),
 		rsql.WithBuilderCriteriaCompiler(root.Criteria),

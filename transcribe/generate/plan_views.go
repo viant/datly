@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -17,15 +18,16 @@ import (
 )
 
 type viewPlanner struct {
-	plan     *Plan
-	velty    bool
-	names    map[*spec.View]string
-	owners   map[string]*spec.View
-	parents  map[*spec.View]string
-	dests    map[*spec.View]string
-	visiting map[*spec.View]bool
-	ordered  []*spec.View
-	outputs  map[*spec.Relation]*spec.Parameter
+	plan           *Plan
+	velty          bool
+	names          map[*spec.View]string
+	owners         map[string]*spec.View
+	parents        map[*spec.View]string
+	dests          map[*spec.View]string
+	visiting       map[*spec.View]bool
+	ordered        []*spec.View
+	outputs        map[*spec.Relation]*spec.Parameter
+	reuseLeafTypes bool
 }
 
 func (r *planResolver) resolveViews() (map[string]int, error) {
@@ -38,7 +40,8 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 	planner := &viewPlanner{
 		plan: plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
 		parents: map[*spec.View]string{}, dests: map[*spec.View]string{}, visiting: map[*spec.View]bool{},
-		outputs: map[*spec.Relation]*spec.Parameter{},
+		outputs:        map[*spec.Relation]*spec.Parameter{},
+		reuseLeafTypes: len(r.input.SetMarkerViews) == 0,
 	}
 	for _, param := range preferDefinedParams(component.Parameters) {
 		if !param.IsDerivedOutput() {
@@ -117,6 +120,7 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		}
 		generatedRoots[view] = identity
 	}
+	emittedTypes := map[string]int{}
 	for _, view := range planner.ordered {
 		fields, err := planner.fields(view)
 		if err != nil {
@@ -127,9 +131,20 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		if err != nil {
 			return nil, fmt.Errorf("plan generated view %q: %w", name, err)
 		}
+		if index, exists := emittedTypes[name]; exists {
+			previous := &plan.Views[index]
+			if previous.Destination != planner.dests[view] || !reflect.DeepEqual(previous.Fields, fields) {
+				return nil, fmt.Errorf("generated views %q and %q map to type %q with different shapes or destinations", planner.owners[name].Name, view.Name, name)
+			}
+			if identity := generatedRoots[view]; identity != "" {
+				indexes[identity] = index
+			}
+			continue
+		}
 		if identity := generatedRoots[view]; identity != "" {
 			indexes[identity] = len(plan.Views)
 		}
+		emittedTypes[name] = len(plan.Views)
 		plan.Views = append(plan.Views, ViewPlan{
 			Identity: identity, Name: name, Type: name, Destination: planner.dests[view], Fields: fields, Ownership: ViewGenerated,
 		})
@@ -362,10 +377,17 @@ func (p *viewPlanner) assign(view *spec.View, typeName, destination string) erro
 		return fmt.Errorf("generated view %q type %q must be an exported Go identifier", view.Name, typeName)
 	}
 	if owner := p.owners[typeName]; owner != nil && owner != view {
-		return fmt.Errorf("generated views %q and %q map to type %q", owner.Name, view.Name, typeName)
+		// Explicit names can share one generated leaf contract. Keep inferred
+		// name collisions, mutation presence and relation-specific metadata strict.
+		if !p.reuseLeafTypes || owner.TypeName == "" || view.TypeName == "" ||
+			len(owner.Relations) != 0 || len(view.Relations) != 0 || owner.SelfReference != nil || view.SelfReference != nil {
+			return fmt.Errorf("generated views %q and %q map to type %q", owner.Name, view.Name, typeName)
+		}
 	}
 	p.names[view] = typeName
-	p.owners[typeName] = view
+	if p.owners[typeName] == nil {
+		p.owners[typeName] = view
+	}
 	p.dests[view] = destination
 	p.ordered = append(p.ordered, view)
 	p.visiting[view] = true
@@ -505,7 +527,7 @@ func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) ([]
 			ensureImport(plan, alias, packagePath)
 			typeName = alias + "." + typeName
 		}
-		if effectiveType.Pointer && (column.ExplicitType || strings.HasPrefix(typeName, "map[") || nullablePointerType(typeName)) {
+		if effectiveType.Pointer && (column.Optional || column.ExplicitType || strings.HasPrefix(typeName, "map[") || nullablePointerType(typeName)) {
 			typeName = "*" + typeName
 		}
 		if effectiveType.Cardinality == spec.CardinalityMany {
@@ -519,6 +541,7 @@ func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) ([]
 			source = strings.TrimSpace(column.Name)
 		}
 		fieldTag := scalarColumnFieldTag(column, source, includeVelty)
+		fieldTag = writerScalarJSONTag(plan, name, fieldTag)
 		if column.Groupable != nil && *column.Groupable && !hasStructTag(fieldTag, "groupable") {
 			fieldTag = appendStructTag(fieldTag, "groupable", "true")
 		}
@@ -622,7 +645,7 @@ func appendViewTagsWithMatch(fieldTag string, view *spec.View, match string) (st
 		return fieldTag, nil
 	}
 	fieldTag = withoutStructTags(fieldTag, tag.ViewName, tag.SQLName)
-	metadata := tag.View{Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
+	metadata := tag.View{Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, RowLock: view.RowLock, RowLockOrder: view.RowLockOrder, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
 		BatchConcurrency: view.BatchConcurrency,
 		Auxiliary:        view.Auxiliary,
 		Match:            match,

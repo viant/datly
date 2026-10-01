@@ -145,7 +145,12 @@ func (r *relationRead) batches(placeholders []interface{}, composite [][]interfa
 
 func (r *relationRead) readBatch(placeholders []interface{}, composite [][]interface{}, columns []string) error {
 	view := r.plan.View
+	lockRows, err := r.session.rowLock(view)
+	if err != nil {
+		return err
+	}
 	options := []rsql.BuilderOption{
+		rsql.WithBuilderForUpdate(lockRows),
 		rsql.WithBuilderView(view),
 		rsql.WithBuilderCriteriaCompiler(r.plan.Criteria),
 		rsql.WithBuilderSelector(r.selector.forView(view)),

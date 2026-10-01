@@ -24,6 +24,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 	filtered := make(query.List, 0, len(parsed.List))
 	changed := false
 	casts := map[*spec.Column]spec.TypeRef{}
+	nullability := map[*spec.Column]bool{}
 	targets := map[*spec.View][]string{}
 	for _, item := range parsed.List {
 		call, ok := item.Expr.(*expr.Call)
@@ -32,10 +33,10 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			continue
 		}
 		name := strings.ToLower(strings.TrimSpace(sqlparser.Stringify(call.X)))
-		if (name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required" || name == "sequence_scope" || name == "internal") && item.Alias != "" {
+		if (name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || (name == "required" || name == "optional") || name == "sequence_scope" || name == "internal") && item.Alias != "" {
 			return false, fmt.Errorf("%s must be a standalone SELECT annotation without an alias", name)
 		}
-		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token" && name != "required" && name != "sequence_scope" && name != "internal") {
+		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token" && name != "required" && name != "optional" && name != "sequence_scope" && name != "internal") {
 			filtered = append(filtered, item)
 			continue
 		}
@@ -67,7 +68,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 				scope = append(scope, parts[1])
 			}
 			rawTag = (tags.Tags{&tags.Tag{Name: "sequenceScope", Values: tags.Values(strings.Join(scope, ","))}}).Literal()
-		} else if name == "delete_marker" || name == "concurrency_token" || name == "required" || name == "internal" {
+		} else if name == "delete_marker" || name == "concurrency_token" || (name == "required" || name == "optional") || name == "internal" {
 			if len(call.Args) != 1 {
 				return false, fmt.Errorf("%s requires one qualified view column", name)
 			}
@@ -133,9 +134,14 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			column = &spec.Column{Name: parts[1], Source: parts[1]}
 			view.Columns = append(view.Columns, column)
 		}
-		if name == "required" {
-			column.Required = true
-			column.Nullable = false
+		if name == "required" || name == "optional" {
+			required := name == "required"
+			if previous, declared := nullability[column]; declared && previous != required {
+				return false, fmt.Errorf("%s target %q conflicts with another nullability declaration", name, target)
+			}
+			nullability[column] = required
+			column.Required, column.Optional = required, !required
+			column.Nullable = !required
 		}
 
 		if name == "delete_marker" || name == "concurrency_token" {
@@ -201,7 +207,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 	}
 	misplaced := ""
 	if containsSQLCall(parsed, func(name string) bool {
-		if name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || name == "required" || name == "sequence_scope" || name == "internal" {
+		if name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || (name == "required" || name == "optional") || name == "sequence_scope" || name == "internal" {
 			misplaced = name
 			return true
 		}

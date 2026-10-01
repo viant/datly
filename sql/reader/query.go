@@ -22,6 +22,7 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 		return nil, fmt.Errorf("reader execution is required")
 	}
 	session := e.session()
+	session.applyReadOptions(ctx)
 	if err := session.Init(); err != nil {
 		return nil, err
 	}
@@ -43,7 +44,12 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 		return nil, err
 	}
 	selector := builder.NonWindowSelector(selectors.forView(root.View))
+	lockRows, err := session.rowLock(root.View)
+	if err != nil {
+		return nil, err
+	}
 	query, err := builder.NewBuilder().Build(ctx,
+		builder.WithBuilderForUpdate(lockRows),
 		builder.WithBuilderComponent(session.Component), builder.WithBuilderView(root.View),
 		builder.WithBuilderCriteriaCompiler(root.Criteria),
 		builder.WithBuilderSelector(selector), builder.WithBuilderProjection(viewProjection(root.View, selector)),

@@ -351,6 +351,24 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			for _, argument := range args {
 				ret.Output.Exclude = append(ret.Output.Exclude, trimQuote(argument))
 			}
+		case strings.EqualFold(name, "client_input_type"):
+			if len(args) != 1 || tail != "" || ret.Generation.ClientInputType != "" {
+				return nil, fmt.Errorf("client_input_type requires one exported type name, once, without modifiers")
+			}
+			clientType, err := parseClientInputType(args[0])
+			if err != nil {
+				return nil, err
+			}
+			ret.Generation.ClientInputType = clientType
+		case strings.EqualFold(name, "writer_omit_empty"):
+			if len(args) != 1 || tail != "" {
+				return nil, fmt.Errorf("writer_omit_empty requires one boolean without modifiers")
+			}
+			enabled, err := strconv.ParseBool(trimQuote(args[0]))
+			if err != nil {
+				return nil, err
+			}
+			ret.Generation.WriterOmitEmpty = enabled
 		case strings.EqualFold(name, "output_omit_empty"):
 			if len(args) != 1 {
 				return nil, fmt.Errorf("output_omit_empty requires one boolean")

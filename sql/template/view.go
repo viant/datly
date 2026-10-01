@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/sql/fragment"
+	"github.com/viant/datly/sql/locking"
 	sqlmacro "github.com/viant/datly/sql/macro"
 	"github.com/viant/sqlx/metadata/info"
 )
@@ -59,20 +60,10 @@ func newViewContext(input ViewInput, bindings *fragment.Bindings) *viewContext {
 // ForUpdate renders the dialect's row-lock clause for an active transaction.
 // SQLite relies on its transaction locking and has no SELECT row-lock clause.
 func (v *viewContext) ForUpdate() (string, error) {
-	if v == nil || !v.transactionActive {
-		return "", fmt.Errorf("FOR UPDATE requires an active transaction")
+	if v == nil {
+		return locking.Clause(nil, false)
 	}
-	if v.dialect == nil {
-		return "", fmt.Errorf("FOR UPDATE requires a dialect")
-	}
-	switch strings.ToLower(strings.TrimSpace(v.dialect.Name)) {
-	case "mysql", "postgresql", "postgres", "pg":
-		return "FOR UPDATE", nil
-	case "sqlite", "sqlite3":
-		return "", nil
-	default:
-		return "", fmt.Errorf("FOR UPDATE is unsupported for dialect %q", v.dialect.Name)
-	}
+	return locking.Clause(v.dialect, v.transactionActive)
 }
 
 func (v *viewContext) NonWindowSQL() (string, error) {

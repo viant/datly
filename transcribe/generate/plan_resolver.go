@@ -127,6 +127,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 	if err = r.resolveEntitySupport(); err != nil {
 		return nil, err
 	}
+	if err = r.resolveClientInput(); err != nil {
+		return nil, err
+	}
 	if err = r.plan.validateGeneratedNames(); err != nil {
 		return nil, err
 	}

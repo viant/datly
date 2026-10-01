@@ -42,8 +42,10 @@ type Plan struct {
 	RootSource   string
 	Views        []ViewPlan
 
-	Input  ContractPlan
-	Output ContractPlan
+	// ClientInput is an opt-in generation-only transport projection.
+	ClientInput *ContractPlan
+	Input       ContractPlan
+	Output      ContractPlan
 
 	HelperTypes       []HelperType
 	GeneratedTypes    []GeneratedTypePlan

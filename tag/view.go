@@ -18,6 +18,8 @@ type View struct {
 	OnDeleteNotFound       string
 	MutationPredicateGroup *int
 	EntityHooks            string
+	RowLock                string
+	RowLockOrder           string
 	URI                    string
 	Connector              string
 	Table                  string
@@ -92,6 +94,16 @@ func ParseView(value string) (*View, error) {
 			}
 			entityHooksSeen = true
 			result.EntityHooks = value
+		case "rowlockorder":
+			if result.RowLockOrder != "" || strings.TrimSpace(value) == "" {
+				return fmt.Errorf("rowLockOrder requires one non-empty column")
+			}
+			result.RowLockOrder = value
+		case "rowlock":
+			if result.RowLock != "" || strings.TrimSpace(value) == "" {
+				return fmt.Errorf("rowLock requires one non-empty target")
+			}
+			result.RowLock = value
 		case "uri":
 			result.URI = value
 		case "connector":

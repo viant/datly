@@ -144,6 +144,10 @@ func (e *outputRelationExecution) query(ctx context.Context, partition *xreader.
 	}
 	relation := planned.Relation
 	view := planned.Target.View
+	lockRows, err := e.session.rowLock(view)
+	if err != nil {
+		return nil, err
+	}
 	if e.root == nil {
 		return nil, fmt.Errorf("output relation parent query is required")
 	}
@@ -161,6 +165,7 @@ func (e *outputRelationExecution) query(ctx context.Context, partition *xreader.
 			return nil, err
 		}
 		options := []rsql.BuilderOption{
+			rsql.WithBuilderForUpdate(lockRows),
 			rsql.WithBuilderComponent(e.session.Component),
 			rsql.WithBuilderView(view),
 			rsql.WithBuilderCriteriaCompiler(planned.Target.Criteria),
@@ -187,8 +192,14 @@ func (e *outputRelationExecution) query(ctx context.Context, partition *xreader.
 	if err != nil {
 		return nil, err
 	}
+	connection, err := viewConnection(ctx, e.session, planned.Target)
+	if err != nil {
+		return nil, err
+	}
 	selector := e.selectors.forView(view)
 	options := []rsql.BuilderOption{
+		rsql.WithBuilderForUpdate(lockRows),
+		rsql.WithBuilderDialect(connection.Dialect), rsql.WithBuilderTransactionActive(connection.Tx != nil),
 		rsql.WithBuilderView(view),
 		rsql.WithBuilderCriteriaCompiler(planned.Target.Criteria),
 		rsql.WithBuilderSelector(selector),

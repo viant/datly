@@ -636,6 +636,8 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.TypeName = strings.TrimSpace(metadata.View.TypeName)
 		view.Dest = strings.TrimSpace(metadata.View.Dest)
 		view.EntityHooks = strings.TrimSpace(metadata.View.EntityHooks)
+		view.RowLock = strings.TrimSpace(metadata.View.RowLock)
+		view.RowLockOrder = strings.TrimSpace(metadata.View.RowLockOrder)
 		view.OnDeleteNotFound = metadata.View.OnDeleteNotFound
 		view.MutationPredicateGroup = metadata.View.MutationPredicateGroup
 		view.Source.URI = strings.TrimSpace(metadata.View.URI)

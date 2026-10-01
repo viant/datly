@@ -15,6 +15,11 @@ type View struct {
 	// InMemory marks a child populated by its parent hook. Source is retained
 	// for column discovery only; runtime traverses the existing holder rows.
 	InMemory bool `json:"inMemory,omitempty"`
+	// RowLock identifies the physical table and alias allowed for trusted row locking.
+	// An empty capability keeps ordinary/native reads unlocked.
+	RowLock string `json:"rowLock,omitempty"`
+	// RowLockOrder is a stable physical column used only by locking invocations.
+	RowLockOrder string `json:"rowLockOrder,omitempty"`
 	// TypeName and Dest retain authored package-generation choices. Runtime
 	// view resolution deliberately ignores both fields.
 	TypeName string `json:"typeName,omitempty"`

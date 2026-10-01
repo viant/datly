@@ -20,6 +20,9 @@ type Column struct {
 	// Required is an authored non-null output declaration, not a table constraint
 	// or input validation rule. It suppresses inferred nullable pointers only.
 	Required bool `json:"required,omitempty"`
+	// Optional explicitly requests a pointer-valued Go column; it does not
+	// change the database constraint or add a validation rule.
+	Optional bool `json:"optional,omitempty"`
 	// NotNull records an authoritative table constraint, independently of reader nullability.
 	NotNull       bool    `json:"notNull,omitempty"`
 	Groupable     *bool   `json:"groupable,omitempty"`
@@ -40,6 +43,14 @@ func (c *Column) EffectiveType() TypeRef {
 	}
 	result := c.Type
 	name := strings.TrimSpace(result.Name)
+	if c.Optional && name != "" && name != "any" && name != "interface{}" {
+		if result.Cardinality == CardinalityMany {
+			result.SlicePointer = true
+		} else {
+			result.Pointer = true
+		}
+		return result
+	}
 	if !c.ExplicitType && !c.Required && c.Nullable && result.Cardinality != CardinalityMany && name != "" && name != "any" && name != "interface{}" &&
 		!strings.HasPrefix(name, "*") && !strings.HasPrefix(name, "[]") && !strings.HasPrefix(name, "map[") {
 		result.Pointer = true

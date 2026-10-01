@@ -263,6 +263,10 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 		return nil, err
 	}
 	boundSQL = dsql.PrepareExecutableSQL(projection.Render(boundSQL), controls)
+	boundSQL, err = options.applyRowLock(boundSQL)
+	if err != nil {
+		return nil, err
+	}
 	result := &cache.ParmetrizedQuery{
 		SQL:  boundSQL,
 		Args: interfaceSlice(args),
@@ -393,6 +397,7 @@ type BuilderOption func(*builderOptions)
 
 type builderOptions struct {
 	transactionActive      bool
+	forUpdate              bool
 	component              *spec.Component
 	source                 *spec.ViewSource
 	view                   *data.View
@@ -624,4 +629,10 @@ func WithBuilderPartition(partition *PartitionInput) BuilderOption {
 	return func(o *builderOptions) {
 		o.partition = partition.Clone()
 	}
+}
+
+// WithBuilderForUpdate requests only the declared physical row-lock capability.
+// The builder validates its target, dialect and caller-owned transaction.
+func WithBuilderForUpdate(enabled bool) BuilderOption {
+	return func(o *builderOptions) { o.forUpdate = enabled }
 }

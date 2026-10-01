@@ -109,6 +109,10 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err := validateViewNamespaces(root); err != nil {
 		return nil, err
 	}
+	locksRewritten, err := lowerReaderLockCapabilities(parsed, root)
+	if err != nil {
+		return nil, &Error{Code: CodeViewDirective, Cause: err}
+	}
 	projectionRewritten, err := lowerProjectionExclusions(parsed, root)
 	if err != nil {
 		return nil, err
@@ -124,7 +128,7 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err := applyViewDirectives(root, directives); err != nil {
 		return nil, err
 	}
-	if !sourceDecomposed && (projectionRewritten || columnsRewritten || len(directives) > 0 || directAuxiliary || root.Source.SQL == "" && (table == "" || referencesCTE(parsed.From.X, parsed.WithSelects))) {
+	if !sourceDecomposed && (locksRewritten || projectionRewritten || columnsRewritten || len(directives) > 0 || directAuxiliary || root.Source.SQL == "" && (table == "" || referencesCTE(parsed.From.X, parsed.WithSelects))) {
 		root.Source.SQL = wrapReadProgram(input.Template, strings.TrimSpace((sqlparser.Stringifier{PreserveWindow: true}).String(parsed)))
 	}
 	if err := validateView(root, map[*spec.View]bool{}); err != nil {

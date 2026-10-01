@@ -44,6 +44,16 @@ func (plan *Plan) validateGeneratedNames() error {
 			return err
 		}
 	}
+	if client := plan.ClientInput; client != nil {
+		if err := reserve(client.Type, "client input projection"); err != nil {
+			return err
+		}
+		if hasBodyFields(client.Fields) {
+			if err := reserve(client.Type+"Has", "client input presence marker"); err != nil {
+				return err
+			}
+		}
+	}
 	for _, view := range plan.Views {
 		name := view.Name
 		if view.Ownership == ViewLinked {
@@ -219,6 +229,16 @@ func (plan *Plan) validateGeneratedDestinations() error {
 		}
 		owners[destination] = owner
 		return nil
+	}
+	if client := plan.ClientInput; client != nil {
+		if err := reserve(client.Destination, "client input projection", false); err != nil {
+			return err
+		}
+		if hasBodyFields(client.Fields) {
+			if err := reserve(plan.Generation.File("client_input_setters", "client_input_setters.go"), "client input setters", false); err != nil {
+				return err
+			}
+		}
 	}
 	generatedViews := 0
 	for _, view := range plan.Views {

@@ -162,12 +162,25 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `date_format`, `case_format` | 1+ | last argument; date layout and global name policy respectively |
 | `ignoreEmptyQueryParameters` | exactly 1 | boolean; absent differs from explicit false |
 | `output_exclude` | 1+ | all arguments are output field paths; repeated calls append |
-| `output_omit_empty` | exactly 1 | boolean |
+| `output_omit_empty` | exactly 1 | global runtime output omission boolean |
+| `writer_omit_empty` | exactly 1 | generated writer field default omission boolean; explicit JSON tags override |
 | `output_title` | exactly 1 | title |
 | `const` | 2+ | identifier and value; later arguments ignored; names must be Go identifiers and unique case-insensitively |
 | `DocGlobalURLs`, `DocURLs` | 1+ | all nonempty documentation resource references; no tail |
 | `DocURL`, `DocBaseURL` | exactly 1 | nonempty rule reference or base URL; no tail |
 | `static_resource`, `static_content` | exactly 2 | quoted namespace/root or content URL/root; one static declaration; no tail |
+
+
+Generated scalar fields also carry the existing presentation settings
+into Go JSON tags for readers and writers. `case_format('lc')` supplies lower camel names when a field
+has no explicit JSON name, including `json:",omitempty"` tags. A nonempty
+explicit name, `json:"-"`, and internal-only fields retain their authored policy.
+`writer_omit_empty(true)` opts generated writer fields without an explicit JSON
+tag into omission of zero values; omission stays off when the setting is absent.
+An explicit tag such as `json:"id"` keeps that field present even when the
+component opts into omission. Presence markers keep their separate hidden tags.
+These policies change Go JSON presentation, not SQL column names, nullability,
+validation, or database constraints.
 
 Sequence defaults are original MySQL transient allocation, PostgreSQL 10+ exact
 native nextval values, and SQLite native reservation. The MySQL allocator table
@@ -1174,3 +1187,11 @@ a next working token without changing the captured expectation; Datly does not
 increment tokens automatically. The lifecycle or database must advance the
 token on success, or a later update can still match it. The update path uses
 no vendor-specific row lock.
+
+### Scalar nullability and related Go holders
+
+Standalone outer annotations `required(view.column)` and `optional(view.column)` choose inferred value and explicit pointer shape respectively. They do not alter physical NOT NULL constraints or add zero-value validation. Contradictory declarations on one column fail. An explicit CAST still declares its underlying Go type.
+
+`type(view, 'GoType', 'GoHolder')` accepts an optional third argument for a related view's Go field; its SQL alias and relation links remain unchanged. For example, SQL alias `u` can populate Go `Usage` and, with lower-camel casing, JSON `usage`. The holder must be a Go identifier; root output names remain defined by output parameters.
+
+Repeated explicit reader leaf type names may share a generated definition only when emitted fields, tags, order and destination match. Their SQL resources and relation bindings remain distinct. Different shapes, implicit collisions and mutation/presence views continue to fail.

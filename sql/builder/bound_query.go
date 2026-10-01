@@ -62,6 +62,10 @@ func (b *Builder) ShapeBound(query *cache.ParmetrizedQuery, opts ...BuilderOptio
 		return nil, err
 	}
 	boundSQL = dsql.PrepareExecutableSQL(projection.Render(boundSQL), controls)
+	boundSQL, err = options.applyRowLock(boundSQL)
+	if err != nil {
+		return nil, err
+	}
 	result := &cache.ParmetrizedQuery{
 		By:        query.By,
 		ByColumns: append([]string(nil), query.ByColumns...),

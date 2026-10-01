@@ -153,6 +153,13 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 			files = append(files, EmittedFile{Path: filepath.Join(dir, plan.Generation.File("input_setters", "input_setters.go")), Content: setters})
 		}
 	}
+	if client := plan.ClientInput; client != nil {
+		files = append(files, EmittedFile{Path: filepath.Join(dir, client.Destination), Content: inputStructFile(packageName,
+			fmt.Sprintf("// %s is the public transport input projection of %s.", client.Type, plan.ComponentName), client.Type, client.Fields, plan.Imports)})
+		if setters := inputSetterFile(packageName, client.Type, client.Fields, plan.Imports); setters != "" {
+			files = append(files, EmittedFile{Path: filepath.Join(dir, plan.Generation.File("client_input_setters", "client_input_setters.go")), Content: setters})
+		}
+	}
 	if plan.Output.Ownership == ContractGenerated && plan.localShape(plan.Output.Package) {
 		files = append(files, EmittedFile{
 			Path: filepath.Join(dir, plan.Output.Destination),
