@@ -322,6 +322,15 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				return nil, fmt.Errorf("invalid format directive: missing format")
 			}
 			ret.Format = normalizeFormat(trimQuote(args[len(args)-1]))
+		case strings.EqualFold(name, "independent_child_transactions"):
+			if len(args) != 1 {
+				return nil, fmt.Errorf("independent_child_transactions requires one boolean")
+			}
+			value, err := strconv.ParseBool(trimQuote(args[0]))
+			if err != nil {
+				return nil, fmt.Errorf("independent_child_transactions requires true or false")
+			}
+			ret.IndependentChildTransactions = value
 		case strings.EqualFold(name, "ignoreEmptyQueryParameters"):
 			if len(args) != 1 {
 				return nil, fmt.Errorf("ignoreEmptyQueryParameters requires one boolean")
@@ -420,7 +429,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			compose.MCPTool = new(bool)
 		}
 	}
-	if ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
+	if !ret.IndependentChildTransactions && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
 		ret.MCP == nil && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&

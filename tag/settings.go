@@ -29,18 +29,19 @@ const (
 // constants are deliberately excluded because transcription consumes or
 // materializes them before package bootstrap.
 type Settings struct {
-	Mutation                   string
-	SequenceStrategy           string
-	MCPFolders                 []spec.ResourceFolder
-	IgnoreEmptyQueryParameters *bool
-	CaseFormat                 string
-	Cache                      *spec.CacheSettings
-	JSONMarshalType            string
-	JSONUnmarshalType          string
-	XMLUnmarshalType           string
-	Format                     string
-	DateFormat                 string
-	Output                     *spec.OutputSettings
+	IndependentChildTransactions bool
+	Mutation                     string
+	SequenceStrategy             string
+	MCPFolders                   []spec.ResourceFolder
+	IgnoreEmptyQueryParameters   *bool
+	CaseFormat                   string
+	Cache                        *spec.CacheSettings
+	JSONMarshalType              string
+	JSONUnmarshalType            string
+	XMLUnmarshalType             string
+	Format                       string
+	DateFormat                   string
+	Output                       *spec.OutputSettings
 }
 
 func SettingsFromSpec(source *spec.Settings) Settings {
@@ -49,11 +50,12 @@ func SettingsFromSpec(source *spec.Settings) Settings {
 	}
 	cloned := source.Clone()
 	return Settings{
-		Mutation:                   cloned.Mutation,
-		SequenceStrategy:           cloned.SequenceStrategy,
-		MCPFolders:                 cloned.MCPFolders,
-		IgnoreEmptyQueryParameters: cloned.IgnoreEmptyQueryParameters,
-		CaseFormat:                 cloned.CaseFormat, Cache: cloned.Cache,
+		IndependentChildTransactions: cloned.IndependentChildTransactions,
+		Mutation:                     cloned.Mutation,
+		SequenceStrategy:             cloned.SequenceStrategy,
+		MCPFolders:                   cloned.MCPFolders,
+		IgnoreEmptyQueryParameters:   cloned.IgnoreEmptyQueryParameters,
+		CaseFormat:                   cloned.CaseFormat, Cache: cloned.Cache,
 		JSONMarshalType: cloned.JSONMarshalType, JSONUnmarshalType: cloned.JSONUnmarshalType,
 		XMLUnmarshalType: cloned.XMLUnmarshalType, Format: cloned.Format, DateFormat: cloned.DateFormat,
 		Output: cloned.Output,
@@ -64,6 +66,7 @@ func (s Settings) Apply(target *spec.Settings) {
 	if target == nil {
 		return
 	}
+	target.IndependentChildTransactions = s.IndependentChildTransactions
 	target.SequenceStrategy = s.SequenceStrategy
 	target.Mutation = s.Mutation
 	target.CaseFormat = s.CaseFormat
@@ -100,6 +103,9 @@ func (s Settings) StructTag() (string, error) {
 		if value != "" {
 			tags = append(tags, name+":"+strconv.Quote(value))
 		}
+	}
+	if s.IndependentChildTransactions {
+		appendValue("independentChildTransactions", "true")
 	}
 	appendValue(SequenceStrategyTag, s.SequenceStrategy)
 	appendValue(MutationTag, s.Mutation)
@@ -143,6 +149,13 @@ func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 		CaseFormat:       structTag.Get(CaseFormatTag), JSONMarshalType: structTag.Get(JSONMarshalTag),
 		JSONUnmarshalType: structTag.Get(JSONUnmarshalTag), XMLUnmarshalType: structTag.Get(XMLUnmarshalTag),
 		Format: structTag.Get(FormatTag), DateFormat: structTag.Get(DateFormatTag),
+	}
+	if value, ok := structTag.Lookup("independentChildTransactions"); ok {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return Settings{}, fmt.Errorf("parse independent child transactions policy: %w", err)
+		}
+		result.IndependentChildTransactions = parsed
 	}
 	if value, ok := structTag.Lookup("mcpFolders"); ok {
 		if err := json.Unmarshal([]byte(value), &result.MCPFolders); err != nil {

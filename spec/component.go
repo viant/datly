@@ -32,25 +32,28 @@ type ImportSpec struct {
 }
 
 type Settings struct {
-	Mutation                   string              `json:"mutation,omitempty"`
-	SequenceStrategy           string              `json:"sequenceStrategy,omitempty"`
-	MCPFolders                 []ResourceFolder    `json:"mcpFolders,omitempty"`
-	IgnoreEmptyQueryParameters *bool               `json:"ignoreEmptyQueryParameters,omitempty"`
-	DefaultConnector           string              `json:"defaultConnector,omitempty"`
-	Report                     *ReportSettings     `json:"report,omitempty"`
-	Cache                      *CacheSettings      `json:"cache,omitempty"`
-	Generation                 *GenerationSettings `json:"generation,omitempty"`
-	InputType                  string              `json:"inputType,omitempty"`
-	OutputType                 string              `json:"outputType,omitempty"`
-	JSONMarshalType            string              `json:"jsonMarshalType,omitempty"`
-	JSONUnmarshalType          string              `json:"jsonUnmarshalType,omitempty"`
-	XMLUnmarshalType           string              `json:"xmlUnmarshalType,omitempty"`
-	Format                     string              `json:"format,omitempty"`
-	DateFormat                 string              `json:"dateFormat,omitempty"`
-	Output                     *OutputSettings     `json:"output,omitempty"`
-	CaseFormat                 string              `json:"caseFormat,omitempty"`
-	Const                      map[string]string   `json:"const,omitempty"`
-	WarmupTarget               *RouteRef           `json:"warmupTarget,omitempty"`
+	// IndependentChildTransactions opts a source-less custom orchestrator into
+	// separately completed generated child units. Default composition is shared.
+	IndependentChildTransactions bool                `json:"independentChildTransactions,omitempty"`
+	Mutation                     string              `json:"mutation,omitempty"`
+	SequenceStrategy             string              `json:"sequenceStrategy,omitempty"`
+	MCPFolders                   []ResourceFolder    `json:"mcpFolders,omitempty"`
+	IgnoreEmptyQueryParameters   *bool               `json:"ignoreEmptyQueryParameters,omitempty"`
+	DefaultConnector             string              `json:"defaultConnector,omitempty"`
+	Report                       *ReportSettings     `json:"report,omitempty"`
+	Cache                        *CacheSettings      `json:"cache,omitempty"`
+	Generation                   *GenerationSettings `json:"generation,omitempty"`
+	InputType                    string              `json:"inputType,omitempty"`
+	OutputType                   string              `json:"outputType,omitempty"`
+	JSONMarshalType              string              `json:"jsonMarshalType,omitempty"`
+	JSONUnmarshalType            string              `json:"jsonUnmarshalType,omitempty"`
+	XMLUnmarshalType             string              `json:"xmlUnmarshalType,omitempty"`
+	Format                       string              `json:"format,omitempty"`
+	DateFormat                   string              `json:"dateFormat,omitempty"`
+	Output                       *OutputSettings     `json:"output,omitempty"`
+	CaseFormat                   string              `json:"caseFormat,omitempty"`
+	Const                        map[string]string   `json:"const,omitempty"`
+	WarmupTarget                 *RouteRef           `json:"warmupTarget,omitempty"`
 }
 
 // OutputSettings describes presentation policy independently of the row shape.
@@ -169,7 +172,7 @@ func (s *Settings) IsZero() bool {
 	if s == nil {
 		return true
 	}
-	return len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
+	return !s.IndependentChildTransactions && len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
 		s.DefaultConnector == "" && s.SequenceStrategy == "" && s.Report == nil && s.Cache == nil &&
 		(s.Generation == nil || s.Generation.IsZero()) && s.InputType == "" && s.OutputType == "" &&
 		s.JSONMarshalType == "" && s.JSONUnmarshalType == "" && s.XMLUnmarshalType == "" &&

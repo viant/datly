@@ -23,6 +23,9 @@ import (
 
 type Request struct {
 	mutationAttempt int
+	// IndependentChildTransactions retains all invocation capabilities/context but
+	// prevents connector-only neutral ownership after strict source-less guards.
+	IndependentChildTransactions bool
 	// SequenceStrategy is canonical component metadata, not a client-bound value.
 	SequenceStrategy   string
 	OutputType         reflect.Type
@@ -101,6 +104,11 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if request.Scope != nil {
 		protocolProviders = request.Scope.Providers()
 	}
+	if request.IndependentChildTransactions {
+		if err := validateIndependentChildren(ctx, request); err != nil {
+			return nil, err
+		}
+	}
 	data, ownsData := invocationDataScope(ctx, request.DataSource)
 	if data != nil {
 		data.sequenceStrategy = request.SequenceStrategy
@@ -115,7 +123,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if data == nil && (outcomeAware || request.Completion != nil || request.hasInjectorFinalizer()) {
 		data, ownsData = neutralDataScope(), true
 	}
-	if data == nil && request.Capabilities.Connector != nil {
+	if data == nil && request.Capabilities.Connector != nil && !request.IndependentChildTransactions {
 		data, ownsData = neutralDataScope(), true
 	}
 	if data != nil {
