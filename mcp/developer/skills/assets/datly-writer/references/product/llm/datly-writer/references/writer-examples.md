@@ -2,6 +2,10 @@
 
 Select mutation behavior explicitly; the HTTP verb alone is not the generated policy.
 
+For migrations, first apply [complete writer reverse engineering](../../../../reverse-engineering.md).
+The introductory example below teaches syntax; the multi-relation example shows
+body and table-role reconstruction. Neither substitutes for source-specific acceptance.
+
 ## PATCH graph and application hooks
 
 ```sql
@@ -142,3 +146,101 @@ Use the complete DQL, JSON and high-level `datly transcribe patch` example in
 Choose entity, lifecycle, token and flag names in DQL. Keep logical flags in the
 inner projection and annotate their outer view column; never replace generation
 with hand-written Velty loops, manual Current reads, or missing-child deletion.
+
+
+## Multiple writable collections and auxiliary lookup data
+
+This complete DQL authoring example extends the maintained
+[writable graph/body contract](../../../datly/doc/mutations.md). It assumes actual
+ORDERS, ITEMS, ORDER_NOTES, ORDER_KINDS and PRODUCTS schema authority; substitute
+the original application's names, keys, filters and policies rather than adding
+these tables to a migration. Discover all column types, defaults and FK metadata
+from that schema. The example is an authoring pattern, not Platform acceptance.
+
+| View | Role | Generated body/Current and mutation behavior |
+|---|---|---|
+| orders | Writable root | Order records with independent Items and Notes collections |
+| items | Writable child | Full item identity; TENANT_ID and ORDER_ID link to parent |
+| notes | Writable child | Separate collection; same complete parent link |
+| kind | Read-only auxiliary | To-one kind lookup; excluded from sequencing and DML |
+| product | Read-only auxiliary | Item lookup by tenant and product; excluded from DML |
+
+```sql
+#package('example.com/shop/orders/write')
+#import('jwt','github.com/viant/scy/auth/jwt')
+#setting($_ = $input_type('OrdersInput'))
+#setting($_ = $output_type('OrdersOutput'))
+#setting($_ = $case_format('lc'))
+#setting($_ = $route('/orders','PATCH'))
+#setting($_ = $connector('main'))
+#define($_ = $Jwt<string,*jwt.Claims>(header/Authorization).Required().WithCodec(JwtClaim).WithStatusCode(401))
+#define($_ = $TenantID<int>(param/Jwt.AccountId).WithPredicate(0,'equal','o','TENANT_ID'))
+#define($_ = $Data<[]*Order>(output/body))
+SELECT orders.*, items.*, notes.*, kind.*, product.*,
+       type(orders,'Order'), type(items,'Item'), type(notes,'Note'),
+       type(kind,'Kind'), type(product,'Product'),
+       lifecycle_type(orders,'OrderLifecycle'),
+       lifecycle_type(items,'ItemLifecycle'),
+       lifecycle_type(notes,'NoteLifecycle'),
+       invariant(orders.WINDOW_START,'DeliveryWindow'),
+       invariant(orders.WINDOW_END,'DeliveryWindow')
+FROM (${embed:sql/orders.sql}) orders
+LEFT JOIN (${embed:sql/items.sql}) items
+  ON items.ORDER_ID=orders.ID AND items.TENANT_ID=orders.TENANT_ID
+LEFT JOIN (${embed:sql/notes.sql}) notes
+  ON notes.ORDER_ID=orders.ID AND notes.TENANT_ID=orders.TENANT_ID
+LEFT JOIN (${embed:sql/kind.sql}) kind
+  ON kind.ID=orders.KIND_ID AND 1=1
+LEFT JOIN (${embed:sql/product.sql}) product
+  ON product.ID=items.PRODUCT_ID AND product.TENANT_ID=items.TENANT_ID AND 1=1
+```
+
+Adjacent SQL assets:
+
+```sql
+-- sql/orders.sql
+SELECT o.* FROM ORDERS o
+${predicate.Builder().CombineOr($predicate.FilterGroup(0,"AND")).Build("WHERE")}
+```
+
+```sql
+-- sql/items.sql
+SELECT i.* FROM ITEMS i
+```
+
+```sql
+-- sql/notes.sql
+SELECT n.* FROM ORDER_NOTES n
+```
+
+```sql
+-- sql/kind.sql
+SELECT k.* FROM (ORDER_KINDS) k
+```
+
+```sql
+-- sql/product.sql
+SELECT p.* FROM (PRODUCTS) p
+```
+
+Use the actual claim/property and original authorization policy, not the example's
+TenantID blindly. Filtering Previous does not authorize a new body record:
+OrderLifecycle must verify the source policy and assign trusted ownership with
+generated setters. Child hooks validate source-specific rules using typed parent,
+Previous and auxiliary indexes. They never bind input, issue reads, allocate IDs
+or write SQL. Add explicit delete markers only when the original operation has
+that deletion behavior; omission of Notes or Items must not delete stored rows.
+
+Transcribe with the source database dialect. For a MySQL-original migration,
+use `transcribe patch -schema -connector main -driver mysql` with a private,
+prepared authoring connector; use generated shapes unchanged in the hydrated
+SQLite runtime tier. MySQL identity allocation stays original transient by native
+default where that is the source policy. Do not enable reservation/scoped
+sequences or add allocator tables to compensate for a generation problem.
+
+Inspect generated body, field types, presence markers, Current reads, relation
+holders and FK tags. Prove two independent child collections, new parent/child
+IDs, every composite link, cross-tenant rejection, sparse update, explicit deletion
+when declared, auxiliary no-DML, complete physical rollback and generation
+stability. Add original event/side-effect requirements to the graph and acceptance
+matrix separately; this example does not claim append-only event semantics.

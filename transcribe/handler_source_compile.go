@@ -156,6 +156,15 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 		TypeContext: prepared.TypeContext, Settings: settings,
 		Routes: []*spec.Route{{Name: header.Name, Path: header.URI, Method: header.Method, Internal: header.Internal, Handler: packages[0] + "." + names[0]}},
 	}
+	if header.Declarative {
+		component.Documentation = d.Documentation.Clone()
+		component.Routes[0].Internal = d.Internal || d.MCPOnly
+		component.Routes[0].APIKeyHeader = d.Route.APIKeyHeader
+		component.Routes[0].APIKeyValue = d.Route.APIKeyValue
+		if d.MCP != nil {
+			component.Routes[0].MCP = []*spec.MCPExposure{d.MCP.Clone()}
+		}
+	}
 	if header.MCPTool {
 		component.Routes[0].MCP = []*spec.MCPExposure{{Kind: "tool", Name: header.Name}}
 	}

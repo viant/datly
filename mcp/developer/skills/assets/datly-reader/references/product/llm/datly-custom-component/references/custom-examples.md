@@ -161,3 +161,29 @@ Request Data or narrow DML/Sequencer capabilities per invocation. Validate befor
 Custom orchestration must explicitly preserve sparse identity, validation and transaction semantics. It is not automatically protected by all generated writer phases.
 
 Use outcome-aware finalization for commit-dependent publication. Ordinary output Finalize(ctx) and Finalize(ctx,error) are separate supported contracts, not interchangeable signatures.
+
+
+## Native handler registration without a JSON header
+
+Use canonical settings for a genuine typed custom handler whose contracts and
+factory already exist in separate packages:
+
+```sql
+#package('example.com/app/generated/greeting')
+#import('greeting','example.com/app/greeting')
+#setting($_ = $route('/greeting','POST'))
+#setting($_ = $handler_factory('greeting.NewGreeting','Greeting'))
+#setting($_ = $input_type('greeting.Input'))
+#setting($_ = $output_type('greeting.Output'))
+#setting($_ = $case_format('lc'))
+#setting($_ = $mcp('Greeting'))
+```
+
+`transcribe handler` validates the build-selected source factory's exact
+`func() handler.Contract[Input,Output]` signature without running constructors or
+package initialization, then generates its typed registration. Native directives
+retain route, exposure and casing policy. Legacy JSON declarations remain a
+compatibility input; new contracts use directives. This registration example
+assumes existing authoritative contracts and does not generate a database writer
+or excuse a handwritten body wrapper. Use the writer skill's complete graph and
+body reconstruction for database mutation.

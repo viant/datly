@@ -43,18 +43,20 @@ type PreparedSource struct {
 // directive scan. Component assembly consumes this plan and never rescans the
 // original source for routes, settings, or declarations.
 type DirectivePlan struct {
-	Static        *spec.StaticContent
-	Documentation xdocs.Source
-	Route         *RoutePlan
-	Settings      *spec.Settings
-	MCP           *spec.MCPExposure
-	MCPOnly       bool
-	Internal      bool
-	Params        []*spec.Parameter
-	Views         []*spec.View
-	ParamSpans    map[string]SourceSpan
-	ConstSpans    map[string]SourceSpan
-	viewOptions   map[string]declarationViewOptions
+	HandlerFactory string
+	HandlerName    string
+	Static         *spec.StaticContent
+	Documentation  xdocs.Source
+	Route          *RoutePlan
+	Settings       *spec.Settings
+	MCP            *spec.MCPExposure
+	MCPOnly        bool
+	Internal       bool
+	Params         []*spec.Parameter
+	Views          []*spec.View
+	ParamSpans     map[string]SourceSpan
+	ConstSpans     map[string]SourceSpan
+	viewOptions    map[string]declarationViewOptions
 }
 
 type SourceSpan struct {
@@ -215,6 +217,8 @@ func normalizeDirectivePlan(blocks []directiveBlock) (*DirectivePlan, error) {
 	}
 	result := &DirectivePlan{Settings: toSpecSettings(settings), Params: params, ParamSpans: paramSpans, viewOptions: viewOptions}
 	if settings != nil {
+		result.HandlerFactory = settings.HandlerFactory
+		result.HandlerName = settings.HandlerName
 		result.MCP = settings.MCP.Clone()
 		result.MCPOnly = settings.MCPOnly
 		result.Internal = settings.Internal

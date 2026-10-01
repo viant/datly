@@ -10,6 +10,7 @@
     "datly/doc/legacy-to-v1-migration.md",
     "datly/doc/mutation-predicates.md",
     "datly/doc/mutation-recovery.md",
+    "datly/doc/mutations.md",
     "datly/doc/observability.md",
     "datly/doc/reader-predicates.md",
     "datly/doc/remote-handlers.md",
@@ -36,6 +37,7 @@
     "llm/datly-writer/references/developer-mcp.md",
     "llm/datly-writer/references/mutation-messages.md",
     "llm/datly-writer/references/project-build.md",
+    "llm/datly-writer/references/reverse-engineering.md",
     "llm/datly-writer/references/tags-and-interfaces.md",
     "llm/datly-writer/references/writer-contract.md",
     "llm/datly-writer/references/writer-examples.md",
@@ -78,6 +80,11 @@
       "StartAt": "# Reader predicates and groups",
       "EndBefore": "## Verification",
       "Reason": "Maintained reader authoring examples and predicate composition semantics; excludes repository test navigation."
+    },
+    "datly/doc/mutations.md": {
+      "StartAt": "## Describe the writable graph",
+      "EndBefore": "## CLI generation and generated code",
+      "Reason": "Maintained writer graph, generated body/Current contract, child lifecycle and read-only auxiliary source authoring; excludes repository navigation and unrelated sections."
     }
   }
 }

@@ -147,6 +147,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `api_key` | 2+ | header, value; further arguments ignored |
 | `connector` | 1+ | last argument is default connector |
 | `sequence_strategy` | exactly 1 | quoted `transient` or `reservation`; singleton, no modifiers; omitted selects native dialect default |
+| `handler_factory` | 1–2 | quoted qualified native factory, optional component name; singleton, no modifiers; explicit route and qualified input/output contracts required |
 | `input_type`, `output_type` | 1+ | last argument is contract type |
 | `client_input_type` | exactly 1 | exported public request type name; singleton, no modifiers |
 | `independent_child_transactions` | exactly 1 | boolean opt-in for source-less custom orchestration; child components retain their native transaction boundaries |
@@ -1077,6 +1078,8 @@ without changing the captured expectation. Missing/mismatched update tokens fail
 with a typed conflict before mutations proceed.
 
 ## Compact shape declarations
+
+Visibility tags address implicit wildcard fields or existing graph views; do not add columns or extra view wildcards solely for visibility. Do not repeat schema-inferred types/constraints through bulk CAST or WithColumnType declarations. Keep ordinary naming under global case_format and preserve executable source SQL during reader migration. Report missing compact-authoring support rather than masking it with expanded projections.
 
 Use view wildcards and list only genuine metadata overrides. `required(view.column)` chooses an inferred scalar value, `optional(view.column)` chooses a pointer, and neither changes physical constraints. Use CAST for actual inferred-type differences, not to restate strings or control nullability. `type(view,'GoType','GoHolder')` may give a related view an explicit Go holder while preserving its SQL alias. Verify runtime selector/transaction behavior after simplifying.
 
