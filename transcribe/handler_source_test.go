@@ -274,3 +274,50 @@ func TestSourceHandlerWithoutOwnershipManifest(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, before, sourceHandlerSnapshot(t, root))
 }
+
+func TestDeclarativeSourceHandlerDiscoveryGenerationRuntime(t *testing.T) {
+	ctx := context.Background()
+	root, source := sourceHandlerFixture(t)
+	source.Text = fmt.Sprintf(`#package(%q)
+#import('business',%q)
+#setting($_ = $handler_factory('business.NewConvert','Convert'))
+#setting($_ = $route('/convert','POST'))
+#setting($_ = $input_type('business.Alias'))
+#setting($_ = $output_type('business.Output'))
+#setting($_ = $mcp('Convert','Typed conversion'))
+#setting($_ = $case_format('lc'))
+#define($_ = $Debug<bool>(form/debug).Optional())
+#define($_ = $TenantID<int>(query/tenant_id).Optional())`, handlerFixtureModule+"/registration", handlerFixtureModule+"/business")
+	writeSourceHandlerFile(t, root, "dql/convert.dql", source.Text)
+	db := &forbiddenHandlerDB{}
+	discovery := Discovery{BaseDir: root, Include: []string{handlerFixtureModule + "/dql"}, GoBuild: source.GoBuild, ColumnRefiner: column.New(db)}
+	var first map[string]string
+	for pass := 0; pass < 2; pass++ {
+		project, err := discovery.Compile(ctx)
+		require.NoError(t, err)
+		require.Len(t, project.Components, 1)
+		compiled := project.Components[0]
+		require.Nil(t, compiled.Component.RootView)
+		require.Equal(t, "Convert", compiled.Component.Name)
+		require.Equal(t, "Convert", compiled.Component.Routes[0].MCP[0].Name)
+		require.Equal(t, "Typed conversion", compiled.Component.Routes[0].MCP[0].Description)
+		generated, err := (Generator{Operation: "handler"}).Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
+		require.NoError(t, err)
+		require.Equal(t, generate.ContractLinked, generated.Result.Plan.Input.Ownership)
+		snapshot := sourceHandlerSnapshot(t, root)
+		if pass == 0 {
+			first = snapshot
+		} else {
+			require.Equal(t, first, snapshot)
+		}
+	}
+	require.Zero(t, db.calls)
+	runtimeTest, err := os.ReadFile("testdata/handleronly/runtime_test.go.txt")
+	require.NoError(t, err)
+	code := strings.ReplaceAll(string(runtimeTest), handlerFixturePackage, handlerFixtureModule+"/business")
+	writeSourceHandlerFile(t, root, "registration/runtime_test.go", code)
+	cmd := exec.CommandContext(ctx, "go", "test", "-mod=readonly", "-count=1", "-timeout=2m", "./registration")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s", out)
+}

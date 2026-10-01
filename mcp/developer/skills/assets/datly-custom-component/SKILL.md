@@ -55,6 +55,21 @@ Scoped non-identity numbering is a separate capability. Its optional ledger is n
 - For direct bytes, conditional finalizers, YAML docs, static/MCP resources and operational services, read [output-and-operations.md](references/output-and-operations.md). Separate current APIs from pending authoring/integration contracts.
 - Use [acceptance.md](references/acceptance.md) to verify observable application behavior. Framework maintenance is outside this skill.
 
+## Simplify projections
+
+Start with `view.*` for ordinary fields. Add outer declarations only for genuine shape or behavior configuration: type/holder names, actual type conversions, required/optional overrides, codecs, validation, relations or lifecycle policy. Do not enumerate columns beside a wildcard or repeat inferred types through CAST, WithColumnType or per-column JSON tags.
+
+```sql
+SELECT c.*, type(c,'Conversation'), optional(c.summary)
+FROM conversation c
+```
+
+Infer column types, defaults, keys and FK annotations from the authoritative source schema. Keep generated constraints instead of restating them in DQL. Use `required(view.column)` or `optional(view.column)` only when the desired scalar/pointer differs from inference; these do not change database constraints or reject legitimate zero values. CAST is for a real type difference, such as integer width, decoded bytes or a structured value. A standalone DQL CAST is shape metadata; an SQL-aliased CAST is executable SQL.
+
+Visibility metadata targets fields or views already in the graph. It does not require adding an explicit column or another `view.*` to the outer projection solely to hide it. Keep structural relation declarations when needed. Use global `case_format('lc')`; author JSON names only for real wire exceptions and tags only for actual visibility/omission policy.
+
+Keep necessary aggregates, computed expressions and intentionally restricted projections inside named source SQL; use the source wildcard outside. Never broaden the original public shape through a wildcard. Verify names, types, nullability, presence, selectors, serialization and actual database behavior after native regeneration. If the connected build requires redundant declarations or projections, report that capability gap with a minimal compact contract instead of inflating the DQL to conceal it.
+
 ## Authoring workflow
 
 - Decide whether a standard reader or generated writer already expresses the task. Use custom orchestration when the user chooses it or application behavior requires it; do not silently substitute it for a requested generated policy.

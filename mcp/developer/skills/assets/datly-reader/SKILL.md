@@ -56,18 +56,24 @@ Scoped non-identity numbering is a separate capability. Its optional ledger is n
 
 ## Simplify projections
 
-Prefer `view.*` for ordinary columns. Keep the outer SELECT for genuine Go-shape or behavior declarations: `type`, `required`, `optional`, codecs, validation, visibility, relations and lifecycle policy. Do not repeat every column alongside a wildcard.
+Start with `view.*` for ordinary fields. Add outer declarations only for genuine shape or behavior configuration: type/holder names, actual type conversions, required/optional overrides, codecs, validation, relations or lifecycle policy. Do not enumerate columns beside a wildcard or repeat inferred types through CAST, WithColumnType or per-column JSON tags.
 
 ```sql
-SELECT c.*, type(c,'Conversation'), required(c.id), optional(c.summary)
+SELECT c.*, type(c,'Conversation'), optional(c.summary)
 FROM conversation c
 ```
 
-Use inferred driver types. A string column already represented as Go `string` needs no CAST. Use `required(view.column)` for an inferred scalar value and `optional(view.column)` for an explicit pointer; these do not change database constraints or reject legitimate zero values. Keep CAST only for a genuine type mismatch, such as integer width, a textual timestamp, decoded bytes or a structured codec value. A standalone DQL CAST is Go-shape metadata; an SQL-aliased CAST remains executable SQL.
+Infer column types, defaults, keys and FK annotations from the authoritative source schema. Keep generated constraints instead of restating them in DQL. Use `required(view.column)` or `optional(view.column)` only when the desired scalar/pointer differs from inference; these do not change database constraints or reject legitimate zero values. CAST is for a real type difference, such as integer width, decoded bytes or a structured value. A standalone DQL CAST is shape metadata; an SQL-aliased CAST is executable SQL.
 
-For aggregates or intentionally restricted shapes, keep the necessary SQL expressions/projection inside a named source and use its wildcard in the outer shape declaration. A wildcard must not broaden the contract. Verify generated field names, types, nullability, presence, JSON and relations, then run actual selectors and database reads/writes; compilation alone does not prove wildcard runtime support.
+Visibility metadata targets fields or views already in the graph. It does not require adding an explicit column or another `view.*` to the outer projection solely to hide it. Keep structural relation declarations when needed. Use global `case_format('lc')`; author JSON names only for real wire exceptions and tags only for actual visibility/omission policy.
 
-Use `case_format('lc')` for naming. JSON tags belong only to genuine wire exceptions or omission/visibility policy, never repetitive lowercasing. Keep SQL aliases short and independent from public field names; avoid database keywords. `type(u,'UsageView','Usage')` gives a related SQL view an explicit Go holder without renaming its SQL namespace.
+Keep necessary aggregates, computed expressions and intentionally restricted projections inside named source SQL; use the source wildcard outside. Never broaden the original public shape through a wildcard. Verify names, types, nullability, presence, selectors, serialization and actual database behavior after native regeneration. If the connected build requires redundant declarations or projections, report that capability gap with a minimal compact contract instead of inflating the DQL to conceal it.
+
+## Preserve reader SQL during migration
+
+Carry the original executable SQL closely into the named sources, ideally unchanged. Preserve the original DQL directory hierarchy and filenames; extract SQL into adjacent sql folders without reorganizing the component contracts. Preserve joins, predicates, vendor expressions, aggregates, grouping, ordering and summary semantics; change declaration/binding syntax separately. Simplification applies to shape declarations, not to rewriting the query for easier generation or tests. Document each unavoidable executable SQL change and prove source parity. If a runtime test dialect lacks a source function, identify the dialect gap or use an explicitly declared faithful compatibility tier rather than silently replacing product SQL.
+
+Keep SQL aliases short and independent from public field names; avoid database keywords. An explicit related holder name does not rename its SQL namespace.
 
 ## Keep view SQL in adjacent assets
 

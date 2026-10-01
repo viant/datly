@@ -25,6 +25,22 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			return nil, fmt.Errorf("invalid setting: expected a directive call")
 		}
 		switch {
+		case strings.EqualFold(name, "handler_factory"):
+			if ret.HandlerFactory != "" || len(args) < 1 || len(args) > 2 || tail != "" {
+				return nil, fmt.Errorf("handler_factory requires a quoted factory and optional component name, once, without modifiers")
+			}
+			factory, ok := parseQuotedLiteral(args[0])
+			if !ok || strings.TrimSpace(factory) == "" {
+				return nil, fmt.Errorf("handler_factory requires a nonempty quoted factory")
+			}
+			ret.HandlerFactory = strings.TrimSpace(factory)
+			if len(args) == 2 {
+				name, ok := parseQuotedLiteral(args[1])
+				if !ok || !token.IsIdentifier(name) {
+					return nil, fmt.Errorf("handler_factory component name must be a quoted identifier")
+				}
+				ret.HandlerName = name
+			}
 		case strings.EqualFold(name, "route"), strings.EqualFold(name, "api_key"):
 			// Route settings are validated by parseRouteDirective.
 		case strings.EqualFold(name, "internal"):

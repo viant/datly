@@ -118,6 +118,11 @@ func prepareHandlerSource(body string) (*dql.PreparedSource, *spec.Settings, err
 	if settings == nil {
 		settings = &spec.Settings{}
 	}
+	if d.HandlerFactory != "" {
+		settings.InputType = ""
+		settings.OutputType = ""
+		return prepared, settings, nil
+	}
 	remainder := *settings
 	remainder.CaseFormat = ""
 	if d.Route != nil || d.MCP != nil || d.MCPOnly || d.Internal || !remainder.IsZero() || !d.Documentation.IsZero() {

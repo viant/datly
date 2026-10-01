@@ -13,11 +13,12 @@ type HandlerHeader struct {
 	Type, Factory, InputType, OutputType string
 	Connector                            string
 	MCPTool, Internal                    bool
+	Declarative                          bool
 }
 
 // ParseHandlerSource recognizes a leading JSON header with Type or Factory.
 // Unknown header fields are rejected rather than silently losing policy.
-func ParseHandlerSource(source string) (*HandlerHeader, string, error) {
+func parseLegacyHandlerSource(source string) (*HandlerHeader, string, error) {
 	text := strings.TrimSpace(source)
 	if !strings.HasPrefix(text, "/*") {
 		return nil, source, nil
@@ -67,4 +68,45 @@ func ParseHandlerSource(source string) (*HandlerHeader, string, error) {
 		return nil, "", fmt.Errorf("handler requires URI, Method, Name, Type or Factory, InputType and OutputType")
 	}
 	return &result, text[end+2:], nil
+}
+
+// ParseHandlerSource accepts canonical DQL factory declarations and preserves
+// legacy header parsing for existing sources. Canonical declarations retain
+// their complete source so ordinary parameter and route diagnostics apply.
+func ParseHandlerSource(source string) (*HandlerHeader, string, error) {
+	legacy, body, err := parseLegacyHandlerSource(source)
+	if err != nil {
+		return nil, "", err
+	}
+	hasFactory := false
+	for _, block := range extractDirectiveBlocks(body) {
+		name, _, _, ok := parseDirectiveCall(block.body)
+		if block.kind == directiveKindSetting && ok && strings.EqualFold(name, "handler_factory") {
+			hasFactory = true
+		}
+	}
+	prepared := PrepareSource(body)
+	if hasFactory && prepared.Err() != nil {
+		return nil, "", prepared.Err()
+	}
+	if legacy != nil {
+		if hasFactory {
+			return nil, "", fmt.Errorf("handler_factory cannot be combined with a legacy handler header")
+		}
+		return legacy, body, nil
+	}
+	d := prepared.Directives
+	if !hasFactory {
+		return nil, source, nil
+	}
+	if err := prepared.Err(); err != nil {
+		return nil, "", err
+	}
+	if d.Route == nil || len(d.Route.Methods) != 1 {
+		return nil, "", fmt.Errorf("handler_factory requires exactly one explicit route method")
+	}
+	if d.Settings.InputType == "" || d.Settings.OutputType == "" {
+		return nil, "", fmt.Errorf("handler_factory requires explicit input_type and output_type")
+	}
+	return &HandlerHeader{URI: d.Route.URI, Method: d.Route.Methods[0], Name: d.HandlerName, Factory: d.HandlerFactory, InputType: d.Settings.InputType, OutputType: d.Settings.OutputType, Connector: d.Settings.DefaultConnector, Internal: d.Internal, Declarative: true}, source, nil
 }

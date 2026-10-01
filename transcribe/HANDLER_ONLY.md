@@ -11,21 +11,21 @@ New registrations can declare the native factory directly, without compiling
 that factory or its contracts into the transcription executable:
 
 ```sql
-/* {
-  "URI": "/convert", "Method": "POST", "Name": "Convert",
-  "Factory": "example.com/app/conversion.NewConvert",
-  "InputType": "example.com/app/conversion.Input",
-  "OutputType": "example.com/app/conversion.Output",
-  "MCPTool": true
-} */
 #package('example.com/app/generated/convert')
+#import('conversion','example.com/app/conversion')
+#setting($_ = $route('/convert','POST'))
+#setting($_ = $handler_factory('conversion.NewConvert','Convert'))
+#setting($_ = $input_type('conversion.Input'))
+#setting($_ = $output_type('conversion.Output'))
+#setting($_ = $mcp('Convert'))
 #setting($_ = $case_format('lc'))
 ```
 
+
 Use `transcribe handler`, or the same discovery/generator API below without
-`HandlerBindings`. `Factory` identifies a handler declaration without `Type`.
+`HandlerBindings`. `handler_factory` selects source-backed typed handler generation without a JSON header. Its first argument is the qualified factory (full package or import alias); the optional second argument preserves the component name. Otherwise the source name is used. It requires one route method and explicit qualified input/output types. Duplicate factories, modifiers, missing contracts and mixing the directive with a legacy handler header fail.
 `#package` is mandatory destination authority; constructors and connectors are
-never inferred. Qualified symbols may use explicit DQL import aliases.
+never inferred. Qualified symbols may use explicit DQL import aliases. Route, connector, MCP exposure, API key, visibility, casing and generation destinations use ordinary DQL settings. Binding declarations must agree with the linked source contract; generated body-shape authoring remains a distinct required stage.
 
 Datly uses Go's build-selected export data to validate the actual function and
 contract identities. No reflection fallback, application-wide registry, or

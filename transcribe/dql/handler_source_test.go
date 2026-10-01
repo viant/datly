@@ -41,3 +41,36 @@ func TestParseHandlerSource(t *testing.T) {
 		require.Error(t, err, broken)
 	}
 }
+
+func TestParseDeclarativeHandlerSource(t *testing.T) {
+	source := `#package('example.com/app/generated')
+#setting($_ = $handler_factory('business.NewConvert','Convert'))
+#setting($_ = $route('/convert','POST'))
+#setting($_ = $input_type('business.Input'))
+#setting($_ = $output_type('business.Output'))
+#setting($_ = $case_format('lc'))
+#define($_ = $Debug<bool>(form/debug).Optional())`
+	header, body, err := ParseHandlerSource(source)
+	require.NoError(t, err)
+	require.True(t, header.Declarative)
+	require.Equal(t, "business.NewConvert", header.Factory)
+	require.Equal(t, "Convert", header.Name)
+	require.Equal(t, "POST", header.Method)
+	require.Equal(t, source, body)
+	for _, invalid := range []string{
+		strings.Replace(source, "'business.NewConvert','Convert'", "", 1),
+		strings.Replace(source, "'business.NewConvert','Convert'", "business.NewConvert", 1),
+		strings.Replace(source, "'business.NewConvert','Convert'", "'business.NewConvert','Convert','extra'", 1),
+		source + "\n#setting($_ = $handler_factory('business.Other'))",
+		strings.Replace(source, "#setting($_ = $input_type('business.Input'))", "", 1),
+		strings.Replace(source, "'/convert','POST'", "'/convert','POST','GET'", 1),
+		`/* {"URI":"/convert","Method":"POST","Name":"Convert","Factory":"business.NewConvert","InputType":"business.Input","OutputType":"business.Output"} */` + source,
+	} {
+		_, _, err := ParseHandlerSource(invalid)
+		require.Error(t, err, invalid)
+	}
+	// Handler-looking text inside an ordinary comment is not a declaration.
+	h, _, err := ParseHandlerSource("-- handler_factory is documentation\nSELECT 1")
+	require.NoError(t, err)
+	require.Nil(t, h)
+}

@@ -6,6 +6,8 @@ import (
 )
 
 type componentSettings struct {
+	HandlerFactory               string
+	HandlerName                  string
 	ResponseCompression          *spec.ResponseCompression
 	IndependentChildTransactions bool
 	SequenceStrategy             string

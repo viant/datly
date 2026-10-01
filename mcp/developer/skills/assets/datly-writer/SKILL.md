@@ -26,6 +26,8 @@ Scoped non-identity numbering is a separate capability. Its optional ledger is n
 
 ## Read what the task needs
 
+- For a legacy migration, read [reverse-engineering.md](references/reverse-engineering.md) before authoring. Reconstruct the complete body, Current/auxiliary reads, writable graph, authorization, original ID mechanism, validation/error order and events. A route header or handler registration is not a migrated writer.
+
 - For Go field renames, outer projection versus inner SQL aliases, SQLX/JSON
   naming, CAST/nullability and regeneration, read the
   [v1 shaping contract](references/product/datly/doc/shaping-contract.md).
@@ -46,7 +48,7 @@ Scoped non-identity numbering is a separate capability. Its optional ledger is n
 - For explicit row deletion and concurrency tokens, read [the mutation marker contract](references/writer-contract.md#explicit-deletion-and-token-validation). Omitted rows never imply deletion. Current v1 token writes use atomic IfMatch; see [mutation predicates](references/product/datly/doc/mutation-predicates.md) for general execution conditions.
 - For affected-row losses, CAS winner adoption and bounded native writer replay, read [mutation recovery](references/product/datly/doc/mutation-recovery.md). Keep recovery decisions in the root lifecycle hook and verify transaction ownership.
 - Read [writer-contract.md](references/writer-contract.md) for this component's behavior and decisions.
-- Adapt [writer-examples.md](references/writer-examples.md); examples are patterns, not authorization to access a live database.
+- Read the maintained [writable graph and generated body contract](references/product/datly/doc/mutations.md), then adapt [writer-examples.md](references/writer-examples.md), including its multiple writable collections and auxiliary lookups. Examples are patterns, not authorization to access a live database.
 - For hook-injected message buses, commit-dependent publication or async job requests, read [mutation-messages.md](references/mutation-messages.md).
 - For stable-ID/FK gaps, async, telemetry, YAML docs, static/MCP resources and standalone status, read [availability-and-operations.md](references/availability-and-operations.md). Separate current APIs from pending authoring/integration contracts.
 - Use [acceptance.md](references/acceptance.md) to verify observable application behavior. Framework maintenance is outside this skill.
@@ -57,18 +59,20 @@ For opt-in idempotent leaf deletion, read [delete-not-found](references/product/
 
 ## Simplify projections
 
-Prefer `view.*` for ordinary columns. Keep the outer SELECT for genuine Go-shape or behavior declarations: `type`, `required`, `optional`, codecs, validation, visibility, relations and lifecycle policy. Do not repeat every column alongside a wildcard.
+Start with `view.*` for ordinary fields. Add outer declarations only for genuine shape or behavior configuration: type/holder names, actual type conversions, required/optional overrides, codecs, validation, relations or lifecycle policy. Do not enumerate columns beside a wildcard or repeat inferred types through CAST, WithColumnType or per-column JSON tags.
 
 ```sql
-SELECT c.*, type(c,'Conversation'), required(c.id), optional(c.summary)
+SELECT c.*, type(c,'Conversation'), optional(c.summary)
 FROM conversation c
 ```
 
-Use inferred driver types. A string column already represented as Go `string` needs no CAST. Use `required(view.column)` for an inferred scalar value and `optional(view.column)` for an explicit pointer; these do not change database constraints or reject legitimate zero values. Keep CAST only for a genuine type mismatch, such as integer width, a textual timestamp, decoded bytes or a structured codec value. A standalone DQL CAST is Go-shape metadata; an SQL-aliased CAST remains executable SQL.
+Infer column types, defaults, keys and FK annotations from the authoritative source schema. Keep generated constraints instead of restating them in DQL. Use `required(view.column)` or `optional(view.column)` only when the desired scalar/pointer differs from inference; these do not change database constraints or reject legitimate zero values. CAST is for a real type difference, such as integer width, decoded bytes or a structured value. A standalone DQL CAST is shape metadata; an SQL-aliased CAST is executable SQL.
 
-For aggregates or intentionally restricted shapes, keep the necessary SQL expressions/projection inside a named source and use its wildcard in the outer shape declaration. A wildcard must not broaden the contract. Verify generated field names, types, nullability, presence, JSON and relations, then run actual selectors and database reads/writes; compilation alone does not prove wildcard runtime support.
+Visibility metadata targets fields or views already in the graph. It does not require adding an explicit column or another `view.*` to the outer projection solely to hide it. Keep structural relation declarations when needed. Use global `case_format('lc')`; author JSON names only for real wire exceptions and tags only for actual visibility/omission policy.
 
-Use `case_format('lc')` for naming. JSON tags belong only to genuine wire exceptions or omission/visibility policy, never repetitive lowercasing. Keep SQL aliases short and independent from public field names; avoid database keywords. `type(u,'UsageView','Usage')` gives a related SQL view an explicit Go holder without renaming its SQL namespace.
+Keep necessary aggregates, computed expressions and intentionally restricted projections inside named source SQL; use the source wildcard outside. Never broaden the original public shape through a wildcard. Verify names, types, nullability, presence, selectors, serialization and actual database behavior after native regeneration. If the connected build requires redundant declarations or projections, report that capability gap with a minimal compact contract instead of inflating the DQL to conceal it.
+
+Keep SQL aliases short and independent from public field names; avoid database keywords. An explicit related holder name does not rename its SQL namespace.
 
 ## Keep view SQL in adjacent assets
 

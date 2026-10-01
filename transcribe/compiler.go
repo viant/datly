@@ -71,6 +71,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if header, body, err := dql.ParseHandlerSource(source.Text); err != nil {
 		return nil, err
 	} else if header != nil {
+		if header.Name == "" {
+			header.Name = source.Name
+		}
 		if header.Factory != "" {
 			return c.compileSourceHandler(ctx, source, header, body)
 		}
