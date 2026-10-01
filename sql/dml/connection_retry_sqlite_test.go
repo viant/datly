@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -95,6 +96,115 @@ func TestConnectionRetryPreservesCallerTransactionSQLite(t *testing.T) {
 }
 
 var retryDriverCounter atomic.Int32
+
+func TestConnectionRetryAfterPartialBatchDeliverySQLite(t *testing.T) {
+	type input struct {
+		faultIndex  int
+		priorDelete bool
+	}
+	type expected struct {
+		failed     bool
+		faultCalls int32
+		rows       int
+	}
+	type useCase struct {
+		desc     string
+		input    input
+		expected expected
+	}
+	for _, tc := range []useCase{
+		{"fault before delivered rows recovers", input{0, false}, expected{false, 2, 103}},
+		{"partial first chunk then failure rolls back every row", input{100, false}, expected{true, 1, 2}},
+		{"partial delivery with prior delete rolls back the complete journal", input{100, true}, expected{true, 1, 2}},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			var faultCalls, triggerCalls atomic.Int32
+			name := fmt.Sprintf("datly_retry_partial_%d", retryDriverCounter.Add(1))
+			sql.Register(name, &sqlite3.SQLiteDriver{ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+				return conn.RegisterFunc("insert_fault", func(value string) (int, error) {
+					triggerCalls.Add(1)
+					if value == "fault" && faultCalls.Add(1) == 1 {
+						return 0, errors.New("driver: invalid connection")
+					}
+					return 1, nil
+				}, false)
+			}})
+			db, err := sql.Open(name, filepath.Join(t.TempDir(), "partial.sqlite")+"?_journal_mode=WAL")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			for _, statement := range []string{"CREATE TABLE records(id INTEGER PRIMARY KEY,value TEXT NOT NULL)", "INSERT INTO records VALUES(1,'original'),(99,'sentinel')", "CREATE TRIGGER fault BEFORE INSERT ON records BEGIN SELECT insert_fault(NEW.value); END"} {
+				if _, err = db.Exec(statement); err != nil {
+					t.Fatal(err)
+				}
+			}
+			data := NewData(db)
+			if err = data.BeginInvocation(); err != nil {
+				t.Fatal(err)
+			}
+			if tc.input.priorDelete {
+				if err = data.Delete("records", &retryRecord{1, "original"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for i := 0; i < 101; i++ {
+				value := fmt.Sprintf("safe-%d", i)
+				if i == tc.input.faultIndex {
+					value = "fault"
+				}
+				if err = data.Insert("records", &retryRecord{1000 + i, value}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err = data.Complete(context.Background(), nil)
+			if (err != nil) != tc.expected.failed {
+				t.Fatalf("completion=%v", err)
+			}
+			if tc.expected.failed && !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				t.Fatalf("expected replay duplicate after partial delivery: %v", err)
+			}
+			if faultCalls.Load() != tc.expected.faultCalls || triggerCalls.Load() != 102 {
+				t.Fatalf("fault/row attempts=%d/%d", faultCalls.Load(), triggerCalls.Load())
+			}
+			rows, err := db.Query("SELECT id,value FROM records ORDER BY id")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var actual []string
+			for rows.Next() {
+				var id int
+				var value string
+				if err = rows.Scan(&id, &value); err != nil {
+					t.Fatal(err)
+				}
+				actual = append(actual, fmt.Sprintf("%d:%s", id, value))
+			}
+			if err = rows.Err(); err != nil {
+				t.Fatal(err)
+			}
+			if err = rows.Close(); err != nil {
+				t.Fatal(err)
+			}
+			wanted := []string{"1:original", "99:sentinel"}
+			if !tc.expected.failed {
+				for i := 0; i < 101; i++ {
+					value := fmt.Sprintf("safe-%d", i)
+					if i == tc.input.faultIndex {
+						value = "fault"
+					}
+					wanted = append(wanted, fmt.Sprintf("%d:%s", 1000+i, value))
+				}
+			}
+			if len(actual) != tc.expected.rows || fmt.Sprint(actual) != fmt.Sprint(wanted) {
+				t.Fatalf("complete persisted rows=%v", actual)
+			}
+			if db.Stats().InUse != 0 {
+				t.Fatal("partial-batch transaction leak")
+			}
+		})
+	}
+}
 
 func TestConnectionRetrySQLitePersistenceAndCleanup(t *testing.T) {
 	type input struct {
