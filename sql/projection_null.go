@@ -46,7 +46,7 @@ func prepareStarProjection(sqlText string, selected []string, view *data.View) (
 		for _, name := range selected {
 			column := projectionMetadataColumn(name, available)
 			if column == nil {
-				return nil, true, fmt.Errorf("not found column %s", name)
+				return nil, true, &UnknownProjectionColumnError{Column: name}
 			}
 			columns = append(columns, column)
 		}

@@ -126,7 +126,7 @@ func applyFilteredSelectorProjection(sqlText string, selected []string, groupabl
 	}
 	for _, selectedName := range selected {
 		if !matched[selectedName] && !matchedCanonical[canonicalProjectionName(selectedName)] {
-			return "", fmt.Errorf("not found column %s", selectedName)
+			return "", &UnknownProjectionColumnError{Column: selectedName}
 		}
 	}
 	if (selectStmt.Union != nil || sqltext.HasTopLevelClause(sqlText, "union")) && len(filtered) < len(source.parts) {

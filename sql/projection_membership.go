@@ -196,7 +196,7 @@ func (p SelectorProjection) selectColumns(columns []ProjectionColumn, selected [
 			match = i
 		}
 		if match == -1 {
-			return nil, fmt.Errorf("not found column %s", name)
+			return nil, &UnknownProjectionColumnError{Column: name}
 		}
 		if !indexes[match] && wildcard {
 			column := columns[match]
