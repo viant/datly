@@ -48,7 +48,7 @@ func (Serializer) Export(component *spec.Component, authored string) SourceExpor
 		copy := s.Clone()
 		copy.DefaultConnector = ""
 		copy.SequenceStrategy = ""
-		if copy.InputType != "" || copy.OutputType != "" || copy.Cache != nil || copy.Report != nil || copy.Generation != nil || len(copy.MCPFolders) > 0 || copy.Output != nil || len(copy.Const) > 0 || copy.Format != "" || copy.CaseFormat != "" || copy.DateFormat != "" || copy.JSONMarshalType != "" || copy.JSONUnmarshalType != "" || copy.XMLUnmarshalType != "" || copy.IgnoreEmptyQueryParameters != nil {
+		if copy.ResponseCompression != nil || copy.IndependentChildTransactions || copy.InputType != "" || copy.OutputType != "" || copy.Cache != nil || copy.Report != nil || copy.Generation != nil || len(copy.MCPFolders) > 0 || copy.Output != nil || len(copy.Const) > 0 || copy.Format != "" || copy.CaseFormat != "" || copy.DateFormat != "" || copy.JSONMarshalType != "" || copy.JSONUnmarshalType != "" || copy.XMLUnmarshalType != "" || copy.IgnoreEmptyQueryParameters != nil {
 			result.Limitations = append(result.Limitations, "settings beyond the connector are not reconstructed")
 		}
 	}

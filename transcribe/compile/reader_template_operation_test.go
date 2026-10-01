@@ -53,7 +53,7 @@ ORDER BY rows.name DESC,rows.id
 	if err := os.WriteFile(filepath.Join(root, "source", "reader.dql"), []byte(source), 0644); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.CommandContext(ctx, "go", "run", "./cmd/datly", "transcribe", "get", "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module+"/source")
+	command := testharness.SourceGoCommand(t, repo, "run", "./cmd/datly", "transcribe", "get", "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module+"/source")
 	command.Dir = repo
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("operation get: %v\n%s", err, output)

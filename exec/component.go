@@ -30,8 +30,11 @@ func (t ComponentTarget) String() string {
 // ComponentRequest invokes an exact target. Input is reserved for a trusted
 // caller that already owns the canonical typed component input.
 type ComponentRequest struct {
-	Target ComponentTarget
-	Input  any
+	// IndependentChildTransactions is trusted service policy, never a transport
+	// input. It requires a source-less custom root with no inherited managed unit.
+	IndependentChildTransactions bool
+	Target                       ComponentTarget
+	Input                        any
 	// Replay is a native binding seed, never pre-bound component input.
 	Replay *bindly.ReplayBinding
 	// BindingOutput supplies the calling output to explicitly declared output bindings.

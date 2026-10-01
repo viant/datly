@@ -219,24 +219,30 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if registered.Component.Settings != nil {
 		sequenceStrategy = registered.Component.Settings.SequenceStrategy
 	}
+	outputPlan, err := r.outputCapabilityPlan(registered)
+	if err != nil {
+		return nil, err
+	}
 	return r.invoker.Execute(ctx, handlerengine.Request{
-		SequenceStrategy: sequenceStrategy,
-		Injector:         r.injector,
-		Input:            inputRoute,
-		OutputType:       registered.OutputType,
-		BoundInput:       request.Input,
-		Replay:           request.Replay,
-		BindingOutput:    request.BindingOutput,
-		Injectors:        (&componentInjectors{runtime: r, scope: effectiveScope}).Lookup,
-		Scope:            effectiveScope,
-		Capabilities:     registered.Capabilities,
-		Providers:        registered.Providers,
-		Constants:        r.canonicalConstants[identity],
-		Components:       r.componentProvider(effectiveScope, registered.Component),
-		ComponentInvoker: r.componentInvokerProvider(effectiveScope),
-		DataSource:       dataSource,
-		Handler:          handler,
-		Completion:       request.Completion,
+		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
+		SequenceStrategy:             sequenceStrategy,
+		Injector:                     r.injector,
+		Input:                        inputRoute,
+		OutputType:                   registered.OutputType,
+		OutputCapabilities:           outputPlan,
+		BoundInput:                   request.Input,
+		Replay:                       request.Replay,
+		BindingOutput:                request.BindingOutput,
+		Injectors:                    (&componentInjectors{runtime: r, scope: effectiveScope}).Lookup,
+		Scope:                        effectiveScope,
+		Capabilities:                 registered.Capabilities,
+		Providers:                    registered.Providers,
+		Constants:                    r.canonicalConstants[identity],
+		Components:                   r.componentProvider(effectiveScope, registered.Component),
+		ComponentInvoker:             r.componentInvokerProvider(effectiveScope),
+		DataSource:                   dataSource,
+		Handler:                      handler,
+		Completion:                   request.Completion,
 	})
 }
 

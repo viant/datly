@@ -148,6 +148,8 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `connector` | 1+ | last argument is default connector |
 | `sequence_strategy` | exactly 1 | quoted `transient` or `reservation`; singleton, no modifiers; omitted selects native dialect default |
 | `input_type`, `output_type` | 1+ | last argument is contract type |
+| `client_input_type` | exactly 1 | exported public request type name; singleton, no modifiers |
+| `independent_child_transactions` | exactly 1 | boolean opt-in for source-less custom orchestration; child components retain their native transaction boundaries |
 | `dest`, `input_dest`, `output_dest`, `router_dest` | 1+ | last argument is nonempty destination |
 | `file_prefix`, `handler_dest`, `lifecycle_dest`, `mutation_dest`, `resources_dest`, `links_dest` | exactly 1 | nonempty quoted value; no fluent tail; duplicate setting fails |
 | `sql_dest` | exactly 2 | canonical root view or generated SQL field/view name and relative `.sql` destination; duplicate role fails |
@@ -165,8 +167,10 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `date_format`, `case_format` | 1+ | last argument; date layout and global name policy respectively |
 | `ignoreEmptyQueryParameters` | exactly 1 | boolean; absent differs from explicit false |
 | `output_exclude` | 1+ | all arguments are output field paths; repeated calls append |
-| `output_omit_empty` | exactly 1 | boolean |
+| `output_omit_empty` | exactly 1 | global runtime output omission boolean |
+| `writer_omit_empty` | exactly 1 | generated writer default omission boolean; explicit JSON tags override |
 | `output_title` | exactly 1 | title |
+| `response_compression` | exactly 2 | quoted `gzip`, nonnegative minimum encoded byte count; singleton, no modifiers |
 | `const` | 2+ | identifier and value; later arguments ignored; names must be Go identifiers and unique case-insensitively |
 | `DocGlobalURLs`, `DocURLs` | 1+ | all nonempty documentation resource references; no tail |
 | `DocURL`, `DocBaseURL` | exactly 1 | nonempty rule reference or base URL; no tail |
@@ -206,6 +210,17 @@ global lowerCamel names; the output compiler validates other case-format names
 through its text-format owner. `date_format` passes through the date-format to
 Go-layout converter. Per-field tags and explicit JSON names retain their
 separate precedence (`runtime/output/plan.go`, `formats.go`, `wire.go`).
+
+### HTTP response compression
+
+`#setting($_ = $response_compression('gzip',2048))` opts the component into
+HTTP compression after output encoding. Gzip applies only when encoded bytes
+are strictly greater than the minimum: 2048 stays plain, 2049 compresses.
+The policy intentionally does not negotiate `Accept-Encoding`. Components
+without the setting, internal/MCP values, and application-owned explicit response
+streams retain their existing behavior. Explicit compressed responses are never
+compressed again. HTTP status/content type/disposition remain authoritative;
+compressed `Content-Length` describes wire bytes and HEAD sends no body.
 
 ### Cache settings and warmup options
 
@@ -445,7 +460,9 @@ the entire projection.
 | order allowlist | allowed_order_by_columns(alias,'column,alias:column,...') |
 | cardinality | cardinality(alias,'One'|'Many') |
 | self relation | self_ref(alias,'Holder','ChildKey','ParentKey') |
-| row type/file | type(alias,'GoType'), dest(alias,'file.go') |
+| row type/file | type(alias,'GoType'[, 'GoHolder']), dest(alias,'file.go'); the holder override applies only to a related view |
+| scalar nullability | required(view.column), optional(view.column); one qualified column each, without changing physical constraints |
+| row-lock capability | row_lock(alias,'physical_table table_alias'[, 'table_alias.id']); opt-in trusted reader control under an active transaction |
 | batching | batch_size(alias,integer), batch_concurrency(alias,integer) |
 | relation concurrency | relational_concurrency(alias,integer) |
 | parent publication | publish_parent(alias) |
@@ -457,7 +474,7 @@ the entire projection.
 Numeric control arguments are unquoted, nonnegative integer literals. set_limit(alias,0) removes the view limit; it does not erase an explicitly authored SQL LIMIT. Controls are consumed as metadata rather than sent to the DB. Every listed
 control has exactly 2 arguments except the four flags (`allow_nulls`, `groupable`,
 `grouping_enabled`, `publish_parent`: exactly 1), `self_ref` (exactly 4) and
-`set_partitioner` (2 or 3). String values are quoted; only connector/cache/warmup
+`set_partitioner`, `type`, and `row_lock` (2 or 3), and the scalar nullability annotations (exactly 1). String values are quoted; only connector/cache/warmup
 names also accept a bare identifier. All controls are singleton per target except
 `allowed_order_by_columns`, whose repeats must not create ambiguous mappings.
 `groupable` and `grouping_enabled` share one singleton slot. `tag` and `invariant`
@@ -559,9 +576,13 @@ Syntax fragment; adapt within the [complete reader contract](dql-grammar.md#a-sh
 -- Projection annotations:
 CAST(r.bounds AS model.Bounds)
 tag(r.bounds, 'sqlx:"-"')
-tag(r.BOUND_UNIT, 'internal:"true"')
+internal(r.BOUND_UNIT) -- shorthand for tag(r.BOUND_UNIT, 'internal:"true"')
 tag(r.name, 'validate:"required"')
 ~~~~
+
+The column shorthand controls one field's application-facing visibility and
+retains its SQL mapping. `#setting($_ = $internal(true))` controls the entire
+component route's external HTTP visibility. One does not imply the other.
 
 Prefer an outer CAST to declare the intended Go type, especially for rich hook-populated fields:
 
@@ -1008,6 +1029,11 @@ group is empty, both forms emit nothing: no dangling WHERE or AND, and the
 second query retains its fixed condition. Predicate values remain bound SQL
 arguments rather than text interpolated into the query.
 
+For a database UTC clock in reader SQL, `${criteria.UTCNow()}` renders
+`UTC_TIMESTAMP()` on MySQL or `DATETIME('now')` on SQLite. It adds no bind
+argument and rejects other dialects. Use it for server-owned lease times;
+substituting an application clock changes cross-worker lease behavior.
+
 ### Predicate expression API and evaluation order
 
 `Expand(group)` takes exactly one integer and joins with AND.
@@ -1049,3 +1075,37 @@ other validation. It does not add a SQL predicate, advance tokens, lock rows, or
 provide atomic race prevention. Init may explicitly prepare a next working token
 without changing the captured expectation. Missing/mismatched update tokens fail
 with a typed conflict before mutations proceed.
+
+## Compact shape declarations
+
+Use view wildcards and list only genuine metadata overrides. `required(view.column)` chooses an inferred scalar value, `optional(view.column)` chooses a pointer, and neither changes physical constraints. Use CAST for actual inferred-type differences, not to restate strings or control nullability. `type(view,'GoType','GoHolder')` may give a related view an explicit Go holder while preserving its SQL alias. Verify runtime selector/transaction behavior after simplifying.
+
+## Default CSV and repeated query lists
+
+Query-bound primitive slices accept both `?id=1001,1002` and
+`?id=1001&id=1002` by default. Mixed occurrences expand in request order without
+sorting or deduplication. This includes string slices, so `?fields=id,name`
+and `?fields=id&fields=name` select the same fields. Single numeric values can
+bind to primitive slices. Complex slice items and explicit codecs keep their
+own binding contracts; ordinary scalar strings keep commas as literal text.
+
+Empty items and invalid primitive values produce client binding errors. A
+missing optional query remains missing, and the existing ignore-empty-query
+setting retains its provider policy. Native MCP tool arrays keep their array
+wire schema and values, including a string item such as `"a,b"`; MCP resource
+URI query values use CSV and repeated query syntax.
+
+No list-style option is required in DQL:
+
+```sql
+#define($_ = $Id<[]int>(query/id).Optional())
+#define($_ = $Fields<[]string>(query/fields).Optional())
+```
+
+`.WithQueryListCSV()` remains an optional legacy explicit directive. Native
+generation preserves it as `queryList:"csv"`; it is query-only, requires a
+primitive slice, and cannot replace an explicit codec.
+
+Verified regressions cover default CSV/repeated/mixed HTTP int and string
+lists, malformed values, numeric scalar wrapping, native MCP arrays with
+comma-containing strings, and a generated reader running against SQLite.

@@ -11,17 +11,18 @@ import (
 )
 
 const (
-	SequenceStrategyTag = "sequenceStrategy"
-	CaseFormatTag       = "caseFormat"
-	CacheTag            = "cache"
-	JSONMarshalTag      = "jsonMarshal"
-	JSONUnmarshalTag    = "jsonUnmarshal"
-	XMLUnmarshalTag     = "xmlUnmarshal"
-	FormatTag           = "format"
-	DateFormatTag       = "dateFormat"
-	OutputSettingsTag   = "output"
-	IgnoreEmptyQueryTag = "ignoreEmptyQueryParameters"
-	MutationTag         = "mutation"
+	ResponseCompressionTag = "responseCompression"
+	SequenceStrategyTag    = "sequenceStrategy"
+	CaseFormatTag          = "caseFormat"
+	CacheTag               = "cache"
+	JSONMarshalTag         = "jsonMarshal"
+	JSONUnmarshalTag       = "jsonUnmarshal"
+	XMLUnmarshalTag        = "xmlUnmarshal"
+	FormatTag              = "format"
+	DateFormatTag          = "dateFormat"
+	OutputSettingsTag      = "output"
+	IgnoreEmptyQueryTag    = "ignoreEmptyQueryParameters"
+	MutationTag            = "mutation"
 )
 
 // Settings contains component settings that remain meaningful after package
@@ -29,18 +30,20 @@ const (
 // constants are deliberately excluded because transcription consumes or
 // materializes them before package bootstrap.
 type Settings struct {
-	Mutation                   string
-	SequenceStrategy           string
-	MCPFolders                 []spec.ResourceFolder
-	IgnoreEmptyQueryParameters *bool
-	CaseFormat                 string
-	Cache                      *spec.CacheSettings
-	JSONMarshalType            string
-	JSONUnmarshalType          string
-	XMLUnmarshalType           string
-	Format                     string
-	DateFormat                 string
-	Output                     *spec.OutputSettings
+	ResponseCompression          *spec.ResponseCompression
+	IndependentChildTransactions bool
+	Mutation                     string
+	SequenceStrategy             string
+	MCPFolders                   []spec.ResourceFolder
+	IgnoreEmptyQueryParameters   *bool
+	CaseFormat                   string
+	Cache                        *spec.CacheSettings
+	JSONMarshalType              string
+	JSONUnmarshalType            string
+	XMLUnmarshalType             string
+	Format                       string
+	DateFormat                   string
+	Output                       *spec.OutputSettings
 }
 
 func SettingsFromSpec(source *spec.Settings) Settings {
@@ -49,11 +52,13 @@ func SettingsFromSpec(source *spec.Settings) Settings {
 	}
 	cloned := source.Clone()
 	return Settings{
-		Mutation:                   cloned.Mutation,
-		SequenceStrategy:           cloned.SequenceStrategy,
-		MCPFolders:                 cloned.MCPFolders,
-		IgnoreEmptyQueryParameters: cloned.IgnoreEmptyQueryParameters,
-		CaseFormat:                 cloned.CaseFormat, Cache: cloned.Cache,
+		ResponseCompression:          cloned.ResponseCompression,
+		IndependentChildTransactions: cloned.IndependentChildTransactions,
+		Mutation:                     cloned.Mutation,
+		SequenceStrategy:             cloned.SequenceStrategy,
+		MCPFolders:                   cloned.MCPFolders,
+		IgnoreEmptyQueryParameters:   cloned.IgnoreEmptyQueryParameters,
+		CaseFormat:                   cloned.CaseFormat, Cache: cloned.Cache,
 		JSONMarshalType: cloned.JSONMarshalType, JSONUnmarshalType: cloned.JSONUnmarshalType,
 		XMLUnmarshalType: cloned.XMLUnmarshalType, Format: cloned.Format, DateFormat: cloned.DateFormat,
 		Output: cloned.Output,
@@ -64,6 +69,8 @@ func (s Settings) Apply(target *spec.Settings) {
 	if target == nil {
 		return
 	}
+	target.IndependentChildTransactions = s.IndependentChildTransactions
+	target.ResponseCompression = s.ResponseCompression.Clone()
 	target.SequenceStrategy = s.SequenceStrategy
 	target.Mutation = s.Mutation
 	target.CaseFormat = s.CaseFormat
@@ -95,11 +102,24 @@ func (s Settings) StructTag() (string, error) {
 	if err := (&spec.Settings{SequenceStrategy: s.SequenceStrategy}).ValidateSequenceStrategy(); err != nil {
 		return "", err
 	}
+	if err := s.ResponseCompression.Validate(); err != nil {
+		return "", err
+	}
 	var tags []string
 	appendValue := func(name, value string) {
 		if value != "" {
 			tags = append(tags, name+":"+strconv.Quote(value))
 		}
+	}
+	if s.IndependentChildTransactions {
+		appendValue("independentChildTransactions", "true")
+	}
+	if s.ResponseCompression != nil {
+		data, err := json.Marshal(s.ResponseCompression)
+		if err != nil {
+			return "", err
+		}
+		appendValue(ResponseCompressionTag, string(data))
 	}
 	appendValue(SequenceStrategyTag, s.SequenceStrategy)
 	appendValue(MutationTag, s.Mutation)
@@ -144,6 +164,13 @@ func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 		JSONUnmarshalType: structTag.Get(JSONUnmarshalTag), XMLUnmarshalType: structTag.Get(XMLUnmarshalTag),
 		Format: structTag.Get(FormatTag), DateFormat: structTag.Get(DateFormatTag),
 	}
+	if value, ok := structTag.Lookup("independentChildTransactions"); ok {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return Settings{}, fmt.Errorf("parse independent child transactions policy: %w", err)
+		}
+		result.IndependentChildTransactions = parsed
+	}
 	if value, ok := structTag.Lookup("mcpFolders"); ok {
 		if err := json.Unmarshal([]byte(value), &result.MCPFolders); err != nil {
 			return Settings{}, err
@@ -165,6 +192,15 @@ func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 		result.Cache = &spec.CacheSettings{}
 		if err := json.Unmarshal([]byte(value), result.Cache); err != nil {
 			return Settings{}, fmt.Errorf("parse cache tag: %w", err)
+		}
+	}
+	if value, ok := structTag.Lookup(ResponseCompressionTag); ok {
+		result.ResponseCompression = &spec.ResponseCompression{}
+		if err := json.Unmarshal([]byte(value), result.ResponseCompression); err != nil {
+			return Settings{}, fmt.Errorf("parse response compression tag: %w", err)
+		}
+		if err := result.ResponseCompression.Validate(); err != nil {
+			return Settings{}, err
 		}
 	}
 	if value, ok := structTag.Lookup(OutputSettingsTag); ok {

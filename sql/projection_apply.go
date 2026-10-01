@@ -23,7 +23,20 @@ func ApplySelectorProjection(sqlText string, selected []string, view *data.View)
 
 // Prepare narrows authored outputs before binding while deferring wrappers
 // that hide the source namespace until source predicates have been assembled.
-func (p SelectorProjection) Prepare(selected []string) (*Projection, error) {
+func (p SelectorProjection) Prepare(selected []string) (result *Projection, failure error) {
+	requested := append([]string(nil), selected...)
+	defer func() {
+		var unknown *UnknownProjectionColumnError
+		if errors.As(failure, &unknown) {
+			for _, name := range requested {
+				if canonicalProjectionName(name) == canonicalProjectionName(unknown.Column) {
+					unknown.RequestedColumn = name
+					break
+				}
+			}
+		}
+	}()
+
 	p.SQL = unwrapProjectionSQL(p.SQL)
 	sqlText, view := p.SQL, p.View
 	selected = normalizeProjectionSelection(selected)
@@ -31,12 +44,19 @@ func (p SelectorProjection) Prepare(selected []string) (*Projection, error) {
 		return p.prepare(selected)
 	}
 	if _, _, err := (SelectorProjection{SQL: sqlText, View: view}).columns(); err != nil {
+		var unprepared *databaseProjectionSchema
+		if errors.As(err, &unprepared) {
+			// A default opaque wildcard needs no projection rewrite. Its first
+			// SQLX read supplies actual database labels; prepared Go fields are
+			// not schema authority. Explicit selection still requires metadata.
+			return &Projection{Source: sqlText}, nil
+		}
 		var duplicate *duplicateProjectionError
 		if view != nil || errors.As(err, &duplicate) {
 			return nil, err
 		}
 	}
-	if projected, handled, err := prepareStarProjection(sqlText, selected, view); handled || err != nil {
+	if projected, handled, err := prepareStarProjection(sqlText, selected, view, p.Dialect); handled || err != nil {
 		return projected, err
 	}
 	source, err := applyNullProjection(sqlText, view)
@@ -126,7 +146,7 @@ func applyFilteredSelectorProjection(sqlText string, selected []string, groupabl
 	}
 	for _, selectedName := range selected {
 		if !matched[selectedName] && !matchedCanonical[canonicalProjectionName(selectedName)] {
-			return "", fmt.Errorf("not found column %s", selectedName)
+			return "", &UnknownProjectionColumnError{Column: selectedName}
 		}
 	}
 	if (selectStmt.Union != nil || sqltext.HasTopLevelClause(sqlText, "union")) && len(filtered) < len(source.parts) {
@@ -165,7 +185,11 @@ func (p SelectorProjection) prepareOuterDependentProjection(sqlText string, colu
 		outer.Name = output
 		outer.Column = output
 		outer.Expression = ""
-		expression := strings.TrimSpace(outer.SelectExpression(allowNulls))
+		expression, err := generatedColumnExpression(&outer, allowNulls, p.Dialect)
+		if err != nil {
+			return nil, err
+		}
+		expression = strings.TrimSpace(expression)
 		if expression == "" {
 			return nil, fmt.Errorf("source projection is unresolved")
 		}

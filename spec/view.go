@@ -25,22 +25,24 @@ type View struct {
 	TypeName string `json:"typeName,omitempty"`
 	Dest     string `json:"dest,omitempty"`
 	// EntityHooks is generation-only metadata for the authored entity hook reference.
-	OnDeleteNotFound       string         `json:"onDeleteNotFound,omitempty"`
-	MutationPredicateGroup *int           `json:"mutationPredicateGroup,omitempty"`
-	EntityHooks            string         `json:"entityHooks,omitempty"`
-	Cardinality            Cardinality    `json:"cardinality,omitempty"`
-	AllowNulls             *bool          `json:"allowNulls,omitempty"`
-	Groupable              *bool          `json:"groupable,omitempty"`
-	Columns                []*Column      `json:"columns,omitempty"`
-	Source                 *ViewSource    `json:"source,omitempty"`
-	Selector               *Selector      `json:"selector,omitempty"`
-	Partitioning           *Partitioning  `json:"partitioning,omitempty"`
-	SelfReference          *SelfReference `json:"selfReference,omitempty"`
-	BatchSize              int            `json:"batchSize,omitempty"`
-	BatchConcurrency       int            `json:"batchConcurrency,omitempty"`
-	PublishParent          bool           `json:"publishParent,omitempty"`
-	RelationalConcurrency  int            `json:"relationalConcurrency,omitempty"`
-	Relations              []*Relation    `json:"relations,omitempty"`
+	InsertValidationPresence bool           `json:"insertValidationPresence,omitempty"`
+	WriterIdentityPolicy     string         `json:"writerIdentityPolicy,omitempty"`
+	OnDeleteNotFound         string         `json:"onDeleteNotFound,omitempty"`
+	MutationPredicateGroup   *int           `json:"mutationPredicateGroup,omitempty"`
+	EntityHooks              string         `json:"entityHooks,omitempty"`
+	Cardinality              Cardinality    `json:"cardinality,omitempty"`
+	AllowNulls               *bool          `json:"allowNulls,omitempty"`
+	Groupable                *bool          `json:"groupable,omitempty"`
+	Columns                  []*Column      `json:"columns,omitempty"`
+	Source                   *ViewSource    `json:"source,omitempty"`
+	Selector                 *Selector      `json:"selector,omitempty"`
+	Partitioning             *Partitioning  `json:"partitioning,omitempty"`
+	SelfReference            *SelfReference `json:"selfReference,omitempty"`
+	BatchSize                int            `json:"batchSize,omitempty"`
+	BatchConcurrency         int            `json:"batchConcurrency,omitempty"`
+	PublishParent            bool           `json:"publishParent,omitempty"`
+	RelationalConcurrency    int            `json:"relationalConcurrency,omitempty"`
+	Relations                []*Relation    `json:"relations,omitempty"`
 }
 
 func (v *View) CanonicalName() string {

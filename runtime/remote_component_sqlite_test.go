@@ -34,10 +34,18 @@ type remoteAuthInput = remote.Input
 
 // remoteAuthContext is an ordinary user-declared output; the runtime never
 // interprets its field names.
+type remoteEntityPermission struct {
+	Type        string   `json:"type"`
+	ID          int      `json:"id"`
+	Permissions []string `json:"permissions"`
+}
+
 type remoteAuthContext struct {
-	UserID          int
-	Roles           []string
-	AllowedEntities map[string][]int
+	EntityPermissions map[string]map[string][]int
+	UserID            int
+	Roles             []string
+	GrantedScopes     []string
+	AllowedEntities   map[string][]int
 }
 
 type remoteAuthOutput struct {
@@ -56,7 +64,17 @@ func (p *remoteEntityPredicate) Compute(_ context.Context, value any) (*xpredica
 	if !ok || auth == nil {
 		return nil, fmt.Errorf("authorization context missing")
 	}
-	ids := auth.AllowedEntities["project"]
+	allowedScope := false
+	for _, scope := range auth.GrantedScopes {
+		if scope == "project:read" {
+			allowedScope = true
+			break
+		}
+	}
+	if !allowedScope {
+		return &xpredicate.Criteria{Expression: "1 = 0"}, nil
+	}
+	ids := auth.EntityPermissions["project"]["read"]
 	if len(ids) == 0 {
 		return &xpredicate.Criteria{Expression: "1 = 0"}, nil
 	}
@@ -71,8 +89,21 @@ func (p *remoteEntityPredicate) Compute(_ context.Context, value any) (*xpredica
 func remoteAuthConfig(url string) string {
 	return `{"client":{"transport":"http","http":{"url":"` + url + `/whoami","method":"GET"}},` +
 		`"request":[{"input":"Token","header":"Authorization"}],` +
-		`"response":{"mappings":[{"path":"/user/id","output":"Context.UserID"},{"path":"/user/roles","output":"Context.Roles"},{"path":"/user/allowedEntities","output":"Context.AllowedEntities"}]},` +
+		`"response":{"mappings":[{"path":"/user/id","output":"Context.UserID"},{"path":"/user/roles","output":"Context.Roles"},{"path":"/user/scopes","output":"Context.GrantedScopes"},{"path":"/user/allowedEntities","output":"Context.AllowedEntities"},{"path":"/user/entityPermissions","output":"Context.EntityPermissions"}]},` +
 		`"cache":{"name":"auth","ttl":"5m","partition":["Token"]}}`
+}
+
+func TestRemoteAuthPredicateRequiresGrantedScope(t *testing.T) {
+	value := &remoteAuthContext{EntityPermissions: map[string]map[string][]int{"project": {"read": {101}}}}
+	criteria, err := new(remoteEntityPredicate).Compute(context.Background(), value)
+	if err != nil || criteria.Expression != "1 = 0" {
+		t.Fatalf("missing scope criteria = %+v, error = %v", criteria, err)
+	}
+	value.GrantedScopes = []string{"project:read"}
+	criteria, err = new(remoteEntityPredicate).Compute(context.Background(), value)
+	if err != nil || criteria.Expression != "id IN (?)" || !reflect.DeepEqual(criteria.Placeholders, []any{101}) {
+		t.Fatalf("granted scope criteria = %+v, error = %v", criteria, err)
+	}
 }
 
 func TestRemoteHandlerFeedsNativeComponentDependencyAndPredicateSQLite(t *testing.T) {
@@ -86,9 +117,9 @@ func TestRemoteHandlerFeedsNativeComponentDependencyAndPredicateSQLite(t *testin
 		calls.Add(1)
 		switch request.Header.Get("Authorization") {
 		case "Bearer alice":
-			_, _ = writer.Write([]byte(`{"user":{"id":1,"roles":["admin"],"allowedEntities":{"project":[101,102],"organization":[7]}}}`))
+			_, _ = writer.Write([]byte(`{"user":{"id":1,"roles":["admin"],"scopes":["project:read"],"allowedEntities":{"project":[101,102],"organization":[7]},"entityPermissions":{"project":{"read":[101,102],"edit":[102]}}}}`))
 		case "Bearer bob":
-			_, _ = writer.Write([]byte(`{"user":{"id":2,"roles":["viewer"],"allowedEntities":{"project":[103]}}}`))
+			_, _ = writer.Write([]byte(`{"user":{"id":2,"roles":["viewer"],"scopes":["project:read"],"allowedEntities":{"project":[103]},"entityPermissions":{"project":{"read":[103]}}}}`))
 		default:
 			writer.WriteHeader(http.StatusUnauthorized)
 		}
@@ -181,7 +212,7 @@ func TestRemoteHandlerFeedsNativeComponentDependencyAndPredicateSQLite(t *testin
 		t.Fatal("rejected credential produced rows")
 	}
 	// Caller-supplied fake authorization facts never replace the component-bound input.
-	fake := url.Values{"Auth": {`{"Context":{"UserID":9,"AllowedEntities":{"project":[104]}}}`}, "Context": {`{"UserID":9,"AllowedEntities":{"project":[104]}}`}, "AllowedEntities": {`{"project":[104]}`}}
+	fake := url.Values{"Auth": {`{"Context":{"UserID":9,"GrantedScopes":["project:write"],"AllowedEntities":{"project":[104]}}}`}, "Context": {`{"UserID":9,"GrantedScopes":["project:write"],"AllowedEntities":{"project":[104]}}`}, "AllowedEntities": {`{"project":[104]}`}}
 	if rows, err = projects(t, "Bearer alice", fake, 3); err != nil || !reflect.DeepEqual(rows, []row{{101}, {102}}) {
 		t.Fatalf("fake auth rows = %#v err = %v", rows, err)
 	}
@@ -197,7 +228,7 @@ func TestRemoteHandlerFeedsNativeComponentDependencyAndPredicateSQLite(t *testin
 		t.Fatal(err)
 	}
 	authContext := actual.(*remoteAuthOutput).Context
-	if authContext == nil || authContext.UserID != 2 || !reflect.DeepEqual(authContext.AllowedEntities, map[string][]int{"project": {103}}) || calls.Load() != 3 {
+	if authContext == nil || !reflect.DeepEqual(authContext.EntityPermissions["project"]["read"], []int{103}) || !reflect.DeepEqual(authContext.GrantedScopes, []string{"project:read"}) || authContext.UserID != 2 || !reflect.DeepEqual(authContext.AllowedEntities, map[string][]int{"project": {103}}) || calls.Load() != 3 {
 		t.Fatalf("direct auth output = %#v calls = %d", authContext, calls.Load())
 	}
 	if removed, err := mapper.Invalidate(ctx, cacheConfig, cacheRegistry, "Bearer bob"); err != nil || removed != 1 {

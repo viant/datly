@@ -18,8 +18,28 @@ Declare the authorization context as an ordinary typed component/context input
 dependency. Its output can be a registered application type such as
 `auth.Context` with `userId`, `tenant`, `roles`, `exposures`, `validUntil` and
 `allowedEntities` keyed by entity type, for example
-`{"project":[101,102],"organization":["north"]}`. The dependency uses the
-normal typed DI and lifecycle path. There is no `CaptureScopeBinding`, second
+`{"project":[101,102],"organization":["north"]}`. Entity permissions are a separate typed list attached directly to entity IDs,
+for example `entityPermissions: [{type: "project", id: "101", permissions: ["read"]}]`.
+The canonical grants are a list, not an entity hierarchy, and an entity permission named `admin`
+never implies a global role. Business code defines permission meaning. Providers
+must explicitly map this list into the declared context output; consumers must
+intersect it with the narrowed allowed IDs and check the required permission
+before releasing rows. Do not silently drop permissions when binding/caching
+context, and never substitute a caller-supplied permission list.
+For SQL-facing contexts, materialize a lookup once after mandatory narrowing,
+for example `EntityPermissions["project"]["read"] -> []int{101,102}`. StructQL
+can project/aggregate the typed records during this context transformation;
+consuming queries use `criteria.In` directly on the resulting slice, without
+iterating the raw grant list. The lookup must contain only IDs surviving the
+resource decision. Application-defined output types support this through the
+same ordinary response mapping and native component binding.
+If a component needs OAuth scope checks, include `grantedScopes: []string` in
+the application-owned `auth.Context` and explicitly map it from a provider that
+has verified the credential's granted scopes. Scope names are distinct from
+entity bounds and permissions. Check every required scope alongside the entity
+predicate, outside optional OR filters; an absent scope list grants none.
+An ID-token user-info response alone must not assert access-token scopes.
+The dependency uses the normal typed DI and lifecycle path. There is no `CaptureScopeBinding`, second
 per-version auth registry, or special runtime behavior for a component named
 "auth". Missing or empty IDs grant no rows; never interpret them as all IDs.
 

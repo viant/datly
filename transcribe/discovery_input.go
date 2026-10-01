@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlx"
 	"github.com/viant/toolbox"
+	xshape "github.com/viant/x/shape"
 )
 
 type discoveryInputCompiler struct {
@@ -84,6 +85,26 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 			return nil, fmt.Errorf("transcribe column: default field %s is not addressable", field.Name)
 		}
 		if strings.EqualFold(param.Source.Kind, "const") {
+			if param.Codec != nil && strings.TrimSpace(param.TypeExpr) != "" {
+				resolver := c.resolver
+				if resolver == nil {
+					resolver, err = typecatalog.NewResolver(typecatalog.NewCatalog(), typecatalog.TranscribeAuthority, nil)
+					if err != nil {
+						return nil, err
+					}
+				}
+				sourceType, resolveErr := (xshape.Runtime{Lookup: resolver.Type}).Type(param.TypeExpr)
+				if resolveErr != nil || sourceType == nil {
+					return nil, fmt.Errorf("transcribe column: constant %s source type %q cannot resolve: %v", param.Name, param.TypeExpr, resolveErr)
+				}
+				if _, convertErr := (conv.ValueConverter{}).Convert(*param.Value, sourceType); convertErr != nil {
+					return nil, fmt.Errorf("transcribe column: constant %s cannot convert to source %s", param.Name, sourceType)
+				}
+				// The literal belongs to the codec's source. Discovery must not
+				// execute request codecs or assign it to their destination field.
+				// Retain the typed destination's zero discovery value instead.
+				continue
+			}
 			converted, convertErr := (conv.ValueConverter{}).Convert(*param.Value, target.Type())
 			if convertErr != nil {
 				return nil, fmt.Errorf("transcribe column: constant %s cannot convert to %s", param.Name, target.Type())

@@ -33,8 +33,9 @@ func (h *Handler) writeEncoded(ctx context.Context, writer stdhttp.ResponseWrite
 	if encoded.ContentDisposition != "" {
 		writer.Header().Set("Content-Disposition", encoded.ContentDisposition)
 	}
-	writer.WriteHeader(responseStatusCode(status))
-	_, _ = writer.Write(encoded.Data)
+	if err := writeEncodedBytes(writer, request, status, encoded.Data, contract.ResponseCompression()); err != nil {
+		h.writeOutputError(writer, err)
+	}
 }
 
 func (h *Handler) writeOutputError(writer stdhttp.ResponseWriter, err error) {

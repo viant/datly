@@ -26,19 +26,20 @@ import (
 type RegisteredComponent = rregistry.RegisteredComponent
 
 type Runtime struct {
-	ownsObservability  bool
-	observability      *Observability
-	bundle             *rroute.Bundle
-	publicBundle       *rroute.Bundle
-	registered         map[string]*RegisteredComponent
-	metadata           map[string]*spec.Component
-	loader             ComponentLoader
-	exposure           *rroute.Exposure
-	relatedExposure    sync.Map
-	relatedMetadata    sync.Map
-	canonicalConstants map[string]locator.Provider
-	invoker            *handlerengine.Engine
-	injector           *bindly.Injector
+	ownsObservability     bool
+	observability         *Observability
+	bundle                *rroute.Bundle
+	publicBundle          *rroute.Bundle
+	registered            map[string]*RegisteredComponent
+	metadata              map[string]*spec.Component
+	loader                ComponentLoader
+	exposure              *rroute.Exposure
+	relatedExposure       sync.Map
+	relatedMetadata       sync.Map
+	outputCapabilityPlans sync.Map
+	canonicalConstants    map[string]locator.Provider
+	invoker               *handlerengine.Engine
+	injector              *bindly.Injector
 	// clientProviders are applied to every component that does not register
 	// the same kind itself. clients is the default registry the runtime
 	// created when no providers were configured; it is closed on Shutdown.
@@ -122,7 +123,7 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 				return nil, fmt.Errorf("component %s output: %w", component.Component.Key.String(), outputErr)
 			}
 		}
-		entry.Providers = withDefaultClientProviders(append([]locator.Provider(nil), component.Providers...), defaultProviders)
+		entry.Providers = withDefaultClientProviders(append([]locator.Provider(nil), entry.Providers...), defaultProviders)
 		constants, constantsErr := canonicalConstantValues(component.Component)
 		if constantsErr != nil {
 			return nil, fmt.Errorf("component %s constants: %w", component.Component.Key.String(), constantsErr)
@@ -284,6 +285,14 @@ func registrationWithRecorder(registered *RegisteredComponent, recorder *observa
 	entry := *registered
 	if reader, ok := entry.Reader.(observedReader); ok {
 		entry.Reader = reader.WithRecorder(recorder)
+	}
+	if len(entry.Providers) > 0 {
+		entry.Providers = append([]locator.Provider(nil), entry.Providers...)
+		for index, provided := range entry.Providers {
+			if observed, ok := provided.(observedProvider); ok {
+				entry.Providers[index] = observed.WithRecorder(recorder)
+			}
+		}
 	}
 	return entry
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/viant/bindly/locator"
 	dexec "github.com/viant/datly/exec"
 	"sync"
 
@@ -161,4 +162,10 @@ func (o *Observability) ExportStats() otel.Stats {
 // observedReader wires application services into a detached registered execution.
 type observedReader interface {
 	WithRecorder(*observability.Recorder) dexec.Reader
+}
+
+// observedProvider attaches runtime-owned observation to detached dependency
+// providers. It does not provide or override protected invocation capabilities.
+type observedProvider interface {
+	WithRecorder(*observability.Recorder) locator.Provider
 }

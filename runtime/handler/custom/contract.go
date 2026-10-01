@@ -88,6 +88,12 @@ func New[I any, O any](contract xhandler.Contract[I, O]) rhandler.TypedHandler {
 	return &contractHandler[I, O]{contract: contract}
 }
 
+// SupportsIndependentChildTransactions marks this source-less custom adapter;
+// actual source/inheritance/completion ownership is guarded by the engine.
+func (h *contractHandler[I, O]) SupportsIndependentChildTransactions() bool {
+	return h != nil && h.contract != nil
+}
+
 func (h *contractHandler[I, O]) InputType() reflect.Type {
 	return reflect.TypeFor[I]()
 }

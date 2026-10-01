@@ -1,6 +1,7 @@
 package tag
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -26,6 +27,7 @@ type SQL struct {
 // Field is the parsed Datly metadata for one Go field. Generic binding and
 // SQLX metadata remain represented by their owning packages.
 type Field struct {
+	QueryListCSV   bool
 	Component      *Component
 	View           *View
 	Self           *SelfReference
@@ -52,6 +54,12 @@ func ParseField(field reflect.StructField) (*Field, error) {
 		SelectorAlias: strings.TrimSpace(field.Tag.Get(SelectorAlias)),
 		Description:   strings.TrimSpace(field.Tag.Get(DescriptionName)),
 		Example:       strings.TrimSpace(field.Tag.Get(ExampleName)),
+	}
+	if value, ok := field.Tag.Lookup("queryList"); ok {
+		if value != "csv" {
+			return nil, fmt.Errorf("queryList must be csv")
+		}
+		result.QueryListCSV = true
 	}
 	var err error
 	if value, ok := field.Tag.Lookup(InvariantName); ok {

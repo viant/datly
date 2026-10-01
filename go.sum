@@ -1119,6 +1119,8 @@ github.com/viant/sqlx v0.26.1-0.20260929151803-0df7f08c4926 h1:XjxEfMblt3mppQpf1
 github.com/viant/sqlx v0.26.1-0.20260929151803-0df7f08c4926/go.mod h1:PF2N+v9OR8EIAkYy2brhAjFX8GJDelZoqzrs5KTTY3k=
 github.com/viant/sqlx v0.26.1-0.20261001150121-782de2ba03e4 h1:zBKVt4MIUoU/FtEtBGhGyeNH9ylim4wpBKvI6Hv00XA=
 github.com/viant/sqlx v0.26.1-0.20261001150121-782de2ba03e4/go.mod h1:PF2N+v9OR8EIAkYy2brhAjFX8GJDelZoqzrs5KTTY3k=
+github.com/viant/sqlx v0.26.1-0.20261001153633-c707e294db3b h1:9G0ElRgayyZ5300vfVlbv7AudvETT31A8QXe/7C0J/g=
+github.com/viant/sqlx v0.26.1-0.20261001153633-c707e294db3b/go.mod h1:PF2N+v9OR8EIAkYy2brhAjFX8GJDelZoqzrs5KTTY3k=
 github.com/viant/structology v0.10.1-0.20260925145657-42c5a7e1d1d7 h1:QZspu4WMT/zagjFcakoCExFjF+N4VV+p0KuaEpxeykw=
 github.com/viant/structology v0.10.1-0.20260925145657-42c5a7e1d1d7/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
 github.com/viant/structql v0.5.4 h1:bMdcOpzU8UMoe5OBcyJVRxLAndvU1oj3ysvPUgBckCI=
@@ -1135,6 +1137,8 @@ github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47 h1:VNpyUuP4Dg0FZ+C7+aAXX
 github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47/go.mod h1:Ud4v5LGA8uA0EfmuO4H0t0YgAq2FNLnh3ydQUjBdaLI=
 github.com/viant/xdatly v1.0.1-0.20260927175016-ff38d5bca9b6 h1:0wyTksc+DM96CeJPJ08Kr/lMfW0O3905w+60OIMvYpI=
 github.com/viant/xdatly v1.0.1-0.20260927175016-ff38d5bca9b6/go.mod h1:ubkUNBQv1if6sPTZCP5Qm9Opf+JZBIAxAWIqHX7U2Mo=
+github.com/viant/xdatly v1.0.1-0.20261001162605-e2b68d4babd9 h1:4FT48ql7Tpp7f77Gww2BklN/aj4TappUCa1NJdSYW/Q=
+github.com/viant/xdatly v1.0.1-0.20261001162605-e2b68d4babd9/go.mod h1:ubkUNBQv1if6sPTZCP5Qm9Opf+JZBIAxAWIqHX7U2Mo=
 github.com/viant/xlsy v0.3.1 h1:KwA7PxOTVg+ns4CCPOdfNy5aEA9OUlIByUbuNC9ju0s=
 github.com/viant/xlsy v0.3.1/go.mod h1:RajfF9HkL/PfIxRCvZSubpNlpdMUNDKYZp8C1o3vF4Q=
 github.com/viant/xmlify v0.1.2-0.20260914155716-e525a8788fd0 h1:KOvP8KJgM8+SmrsnPOOnZ6EPhAvivMj7dS/QCfBk++U=

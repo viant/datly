@@ -14,15 +14,23 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 	if input == nil || input.Component == nil {
 		return nil
 	}
+	// Shape planning precedes explicit operation selection. An unset policy
+	// may stage a declared DELETE graph; final emission still validates the
+	// selected generated target and patch/put policy.
+	policy := ""
+	if input.Component.Settings != nil {
+		policy = input.Component.Settings.Mutation
+	}
+	deleteRouteSupported := mutation && (policy == "" || policy == "patch" || policy == "put") && HasWritableDeleteMarker(input.Component.RootView)
 	supported := mutation
 	for _, route := range input.Component.Routes {
-		if route != nil && !strings.EqualFold(route.Method, "POST") && !strings.EqualFold(route.Method, "PUT") && !strings.EqualFold(route.Method, "PATCH") {
+		if route != nil && !strings.EqualFold(route.Method, "POST") && !strings.EqualFold(route.Method, "PUT") && !strings.EqualFold(route.Method, "PATCH") && !(strings.EqualFold(route.Method, "DELETE") && deleteRouteSupported) {
 			supported = false
 		}
 	}
 	predicateSupported := mutation
 	for _, route := range input.Component.Routes {
-		if route != nil && !strings.EqualFold(route.Method, "PATCH") && !strings.EqualFold(route.Method, "PUT") {
+		if route != nil && !strings.EqualFold(route.Method, "PATCH") && !strings.EqualFold(route.Method, "PUT") && !(strings.EqualFold(route.Method, "DELETE") && deleteRouteSupported) {
 			predicateSupported = false
 		}
 	}
@@ -33,6 +41,25 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 			return nil
 		}
 		visited[view] = true
+		if view.WriterIdentityPolicy != "" {
+			if view.WriterIdentityPolicy != "assigned-update" {
+				return fmt.Errorf("writer_identity must be assigned-update")
+			}
+			if !mutation || view.Auxiliary {
+				return fmt.Errorf("writer_identity requires a generated PATCH writable view")
+			}
+			if policy != "" && policy != "patch" {
+				return fmt.Errorf("writer_identity requires PATCH operation policy")
+			}
+			for _, route := range input.Component.Routes {
+				if route != nil && !strings.EqualFold(route.Method, "PATCH") {
+					return fmt.Errorf("writer_identity requires PATCH routes")
+				}
+			}
+			if len(view.Relations) > 0 {
+				return fmt.Errorf("writer_identity assigned-update requires a leaf view")
+			}
+		}
 		if view.OnDeleteNotFound != "" {
 			if !predicateSupported || view.Auxiliary {
 				return fmt.Errorf("delete_not_found requires a generated PATCH/PUT writable view")
@@ -100,4 +127,28 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 		}
 	}
 	return nil
+}
+
+// HasWritableDeleteMarker addresses explicit graph policy, not transport verbs.
+func HasWritableDeleteMarker(root *spec.View) bool {
+	seen := map[*spec.View]bool{}
+	var has func(*spec.View) bool
+	has = func(view *spec.View) bool {
+		if view == nil || seen[view] || view.Auxiliary {
+			return false
+		}
+		seen[view] = true
+		for _, column := range view.Columns {
+			if column != nil && column.DeleteMarker {
+				return true
+			}
+		}
+		for _, relation := range view.Relations {
+			if relation != nil && has(relation.View) {
+				return true
+			}
+		}
+		return false
+	}
+	return has(root)
 }

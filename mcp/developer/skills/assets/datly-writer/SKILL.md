@@ -49,6 +49,21 @@ For per-scope non-identity numbering, read [scoped sequences](references/product
 
 For opt-in idempotent leaf deletion, read [delete-not-found](references/product/datly/doc/delete-not-found.md). Strict deletion remains the default.
 
+## Simplify projections
+
+Prefer `view.*` for ordinary columns. Keep the outer SELECT for genuine Go-shape or behavior declarations: `type`, `required`, `optional`, codecs, validation, visibility, relations and lifecycle policy. Do not repeat every column alongside a wildcard.
+
+```sql
+SELECT c.*, type(c,'Conversation'), required(c.id), optional(c.summary)
+FROM conversation c
+```
+
+Use inferred driver types. A string column already represented as Go `string` needs no CAST. Use `required(view.column)` for an inferred scalar value and `optional(view.column)` for an explicit pointer; these do not change database constraints or reject legitimate zero values. Keep CAST only for a genuine type mismatch, such as integer width, a textual timestamp, decoded bytes or a structured codec value. A standalone DQL CAST is Go-shape metadata; an SQL-aliased CAST remains executable SQL.
+
+For aggregates or intentionally restricted shapes, keep the necessary SQL expressions/projection inside a named source and use its wildcard in the outer shape declaration. A wildcard must not broaden the contract. Verify generated field names, types, nullability, presence, JSON and relations, then run actual selectors and database reads/writes; compilation alone does not prove wildcard runtime support.
+
+Use `case_format('lc')` for naming. JSON tags belong only to genuine wire exceptions or omission/visibility policy, never repetitive lowercasing. Keep SQL aliases short and independent from public field names; avoid database keywords. `type(u,'UsageView','Usage')` gives a related SQL view an explicit Go holder without renaming its SQL namespace.
+
 ## Authoring workflow
 
 The standard workflow is **reader-like declarative DQL graph + explicit `transcribe`
@@ -92,7 +107,11 @@ Return the component's purpose, public input/output contract, DQL/Go files, hook
 Use separate reader/writer DQL with required `#package`. Declare `input_type`,
 `output_type`, outer `type(view,'Entity')` names, a typed main output holder
 (`$Data<[]*Entity>(output/body)` for generated writes), and global
-`#setting($_ = $case_format('lc'))`. Use Structology casing rather than JSON tags
+`#setting($_ = $case_format('lc'))`. Generated writer JSON tags also honor this policy.
+Use `#setting($_ = $writer_omit_empty(true))` to opt a component into omitted
+zero values without repetitive column tags; explicit JSON names/options remain
+authoritative. Presence markers and internal/ignored fields retain their policy.
+Use Structology casing rather than JSON tags
 or holder `WithTag` solely for lowercasing; inner SQL aliases remain local.
 Auxiliary `(TABLE)` sources are nonmutating, and outer `AND 1=1` marks a to-one
 relation while retaining real equality links. See the grammar for CAST authority

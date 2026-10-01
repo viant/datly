@@ -10,9 +10,12 @@ import (
 	"github.com/viant/datly/constant"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	sqltemplate "github.com/viant/datly/sql/template"
 	"github.com/viant/sqlx"
 	sqlio "github.com/viant/sqlx/io"
+	"github.com/viant/sqlx/metadata/database"
+	"github.com/viant/sqlx/metadata/info"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"github.com/viant/sqlx/metadata/sink"
 )
@@ -407,5 +410,36 @@ func TestMergeColumnsPreservesAuthoredGroupableTag(t *testing.T) {
 		if original.Groupable != nil {
 			t.Fatal("authored column was mutated")
 		}
+	}
+}
+
+func TestRefinerPreservesAuthoredJoinedWildcardAcrossDiscoveryDialect(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := h.ExecStatements(ctx, `CREATE TABLE events(id INTEGER PRIMARY KEY, name TEXT)`, `CREATE TABLE details(event_id INTEGER, status INTEGER)`); err != nil {
+		t.Fatal(err)
+	}
+	authored := `SELECT current.* FROM (SELECT e.*,d.status AS related_status FROM events e LEFT JOIN details d ON d.event_id=e.id) current`
+	view := &spec.View{Name: "Current", Source: &spec.ViewSource{SQL: authored, Table: "events"}}
+	component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: view}
+	if err := New(Connections{"main": h.DB}).Refine(ctx, component, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if view.Source.SQL != authored {
+		t.Fatalf("schema discovery rewrote authored wildcard: %s", view.Source.SQL)
+	}
+	names := []string{}
+	for _, column := range view.Columns {
+		names = append(names, column.Name)
+	}
+	if !reflect.DeepEqual(names, []string{"id", "name", "related_status"}) {
+		t.Fatalf("lost discovered metadata: %v", names)
+	}
+	runtimeSQL, changed, err := (dsql.SelectorProjection{SQL: view.Source.SQL}).ResolveDiscoveredColumns(names, &info.Dialect{Product: database.Product{Name: "MySQL"}, QuoteCharacter: '`'})
+	if err != nil || !changed {
+		t.Fatalf("runtime projection cannot use actual dialect: %s/%v/%v", runtimeSQL, changed, err)
+	}
+	if strings.Contains(runtimeSQL, `"id"`) || !strings.Contains(runtimeSQL, "current.`id`") {
+		t.Fatalf("discovery dialect escaped into runtime: %s", runtimeSQL)
 	}
 }

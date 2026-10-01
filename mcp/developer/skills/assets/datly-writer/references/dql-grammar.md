@@ -148,6 +148,8 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `connector` | 1+ | last argument is default connector |
 | `sequence_strategy` | exactly 1 | quoted `transient` or `reservation`; singleton, no modifiers; omitted selects native dialect default |
 | `input_type`, `output_type` | 1+ | last argument is contract type |
+| `client_input_type` | exactly 1 | exported public request type name; singleton, no modifiers |
+| `independent_child_transactions` | exactly 1 | boolean opt-in for source-less custom orchestration; child components retain their native transaction boundaries |
 | `dest`, `input_dest`, `output_dest`, `router_dest` | 1+ | last argument is nonempty destination |
 | `file_prefix`, `handler_dest`, `lifecycle_dest`, `mutation_dest`, `resources_dest`, `links_dest` | exactly 1 | nonempty quoted value; no fluent tail; duplicate setting fails |
 | `support_dest` | exactly 2 | quoted role and filename; no tail; duplicate role fails |
@@ -164,7 +166,8 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `date_format`, `case_format` | 1+ | last argument; date layout and global name policy respectively |
 | `ignoreEmptyQueryParameters` | exactly 1 | boolean; absent differs from explicit false |
 | `output_exclude` | 1+ | all arguments are output field paths; repeated calls append |
-| `output_omit_empty` | exactly 1 | boolean |
+| `output_omit_empty` | exactly 1 | global runtime output omission boolean |
+| `writer_omit_empty` | exactly 1 | generated writer default omission boolean; explicit JSON tags override |
 | `output_title` | exactly 1 | title |
 | `const` | 2+ | identifier and value; later arguments ignored; names must be Go identifiers and unique case-insensitively |
 | `DocGlobalURLs`, `DocURLs` | 1+ | all nonempty documentation resource references; no tail |
@@ -444,7 +447,9 @@ the entire projection.
 | order allowlist | allowed_order_by_columns(alias,'column,alias:column,...') |
 | cardinality | cardinality(alias,'One'|'Many') |
 | self relation | self_ref(alias,'Holder','ChildKey','ParentKey') |
-| row type/file | type(alias,'GoType'), dest(alias,'file.go') |
+| row type/file | type(alias,'GoType'[, 'GoHolder']), dest(alias,'file.go'); the holder override applies only to a related view |
+| scalar nullability | required(view.column), optional(view.column); one qualified column each, without changing physical constraints |
+| row-lock capability | row_lock(alias,'physical_table table_alias'[, 'table_alias.id']); opt-in trusted reader control under an active transaction |
 | batching | batch_size(alias,integer), batch_concurrency(alias,integer) |
 | relation concurrency | relational_concurrency(alias,integer) |
 | parent publication | publish_parent(alias) |
@@ -456,7 +461,7 @@ the entire projection.
 Numeric control arguments are unquoted, nonnegative integer literals. set_limit(alias,0) removes the view limit; it does not erase an explicitly authored SQL LIMIT. Controls are consumed as metadata rather than sent to the DB. Every listed
 control has exactly 2 arguments except the four flags (`allow_nulls`, `groupable`,
 `grouping_enabled`, `publish_parent`: exactly 1), `self_ref` (exactly 4) and
-`set_partitioner` (2 or 3). String values are quoted; only connector/cache/warmup
+`set_partitioner`, `type`, and `row_lock` (2 or 3), and the scalar nullability annotations (exactly 1). String values are quoted; only connector/cache/warmup
 names also accept a bare identifier. All controls are singleton per target except
 `allowed_order_by_columns`, whose repeats must not create ambiguous mappings.
 `groupable` and `grouping_enabled` share one singleton slot. `tag` and `invariant`
@@ -1057,3 +1062,66 @@ is a standalone SELECT annotation for generated POST/PATCH/PUT writers. It emits
 projected columns. Allocation, original presence, transaction ownership and
 bounded collision replay are native. See [scoped sequences](product/datly/doc/scoped-sequences.md)
 for NULL/zero semantics, MySQL ledger provisioning and verification.
+
+## Compact shape declarations
+
+Use view wildcards and list only genuine metadata overrides. `required(view.column)` chooses an inferred scalar value, `optional(view.column)` chooses a pointer, and neither changes physical constraints. Use CAST for actual inferred-type differences, not to restate strings or control nullability. `type(view,'GoType','GoHolder')` may give a related view an explicit Go holder while preserving its SQL alias. Verify runtime selector/transaction behavior after simplifying.
+
+## Opt-in assigned update identity
+
+`insert_validation_presence(view,true)` opts a writable view into supplied-field
+coverage for its first INSERT validation pass. It emits
+`view:"...,insertValidationPresence=true"`; omission keeps complete INSERT
+validation. The first pass carries `ValidationOptions{Action: WriteInsert,
+HonorPresence: true, Fields: effectiveHas}` with no `Previous` or
+`PreviousFields`. Application hooks retain required-field business checks and
+server defaults. Explicit null and zero fields remain supplied. A complete final
+validation pass checks the finished write, and database constraints remain active.
+For a supplied unique field with an omitted dependency, INSERT validation uses
+the current request default (including zero). Sparse UPDATE checks continue to
+use genuine Previous evidence for omitted tuple members.
+
+`writer_identity(view,'assigned-update')` applies only to a generated PATCH leaf
+role with one numeric primary key. It survives generation as canonical
+`view:"...,writerIdentity=assigned-update"` metadata. Omission preserves the
+normal native identity-matching policy.
+
+A supplied nonzero identity with no matched Previous row becomes a no-op: no
+sequencing or DML is emitted. Candidate schema checks and business hooks still
+run without fabricating Previous evidence. Omitted, null and zero identities
+remain inserts. A matched complete Previous row follows the ordinary native
+update path, including scope, references, concurrency and actual DML failures.
+An unmatched identity cannot satisfy a supplied concurrency token or active
+mutation predicate. The policy does not authorize access, manufacture a current
+row or turn failed updates into successes.
+
+```sql
+SELECT r.*, writer_identity(r,'assigned-update')
+FROM (SELECT ID, NAME FROM records) r
+```
+
+Unknown policies, GET/POST/PUT targets, auxiliary roles, nonnumeric/composite
+identities and roles with descendants are rejected. Current/Previous reads
+retain their declared ownership and predicate requirements.
+
+## Default CSV and repeated query lists
+
+Query-bound primitive slices accept CSV and repeated occurrences by default:
+`?id=1001,1002` and `?id=1001&id=1002` bind the same list. Mixed occurrences
+expand in request order without sorting or deduplication. String slices support
+both forms too; ordinary scalar strings retain literal commas. Single numeric
+values can bind to primitive slices. Complex slice items and explicit codecs
+retain their existing binding contracts.
+
+No list-style DQL option is required. `.WithQueryListCSV()` remains an optional
+legacy explicit directive that emits `queryList:"csv"`. It requires a query-bound
+primitive slice and cannot replace an explicit codec or apply to body/scalar
+parameters. Empty/invalid list items remain binding errors; missing optional
+queries and the existing ignore-empty-query policy retain their presence rules.
+Native MCP tool arrays preserve their array schema and values, including a
+string item containing a comma. MCP resource URI query values use CSV and
+repeated syntax.
+
+Verified regressions cover default HTTP int/string CSV and repeated lists,
+numeric scalar wrapping, native MCP arrays with comma-containing string items,
+and a generated reader executing against SQLite.

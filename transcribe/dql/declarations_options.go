@@ -10,6 +10,7 @@ import (
 )
 
 type declarationOptions struct {
+	queryListCSV                                           bool
 	declarationSQL                                         string
 	typeExpr                                               string
 	tag                                                    string
@@ -206,6 +207,11 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 				return declarationOptions{}, p.fail(cursor, "%s requires a predicate name", name)
 			}
 			p.result.predicates = append(p.result.predicates, predicate)
+		case "withquerylistcsv":
+			if err := p.single(cursor, key, args, 0, 0); err != nil {
+				return declarationOptions{}, err
+			}
+			p.result.queryListCSV = true
 		case "when":
 			if err := p.single(cursor, key, args, 1, 1); err != nil {
 				return declarationOptions{}, err

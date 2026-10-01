@@ -24,14 +24,15 @@ sequence_strategy_literal = "'transient'" | '"transient"'
 setting_keyword = "#setting" | "#settings" ;
 assignment_prefix = "$_", "=" ;
 setting_name = "route" | "api_key" | "connector"
- | "input_type" | "output_type" | "dest" | "input_dest" | "output_dest"
+ | "input_type" | "output_type" | "client_input_type" | "dest" | "input_dest" | "output_dest"
  | "file_prefix" | "handler_dest" | "lifecycle_dest" | "mutation_dest"
  | "resources_dest" | "links_dest" | "support_dest" | "router_dest"
  | "meta" | "mcp" | "mcp_folder" | "mcp_skill_folder"
  | "report" | "cube" | "cubeCompose" | "cache" | "cache_warmup"
  | "marshal" | "unmarshal" | "format" | "date_format" | "case_format"
  | "ignoreEmptyQueryParameters" | "output_exclude" | "output_omit_empty"
- | "output_title" | "const" | "DocGlobalURLs" | "DocURLs" | "DocURL"
+ | "independent_child_transactions"
+ | "writer_omit_empty" | "output_title" | "response_compression" | "const" | "DocGlobalURLs" | "DocURLs" | "DocURL"
  | "DocBaseURL" | "static_resource" | "static_content" ;
 cache_modifier = ".", ("WithProvider" | "WithLocation" | "WithTimeToLiveMs"),
                  arguments ;
@@ -104,7 +105,7 @@ key_equality = column_ref, "=", column_ref ;
    ordinary (SELECT ...) alone does not make a view auxiliary. *)
 outer_sql_tail = ? SQLparser-owned outer clauses, subject to graph compilation ? ;
 outer_projection = star_projection | column_ref, [sql_alias]
-                 | view_control | rich_cast | column_tag | invariant | mutation_marker
+                 | view_control | rich_cast | column_tag | internal_column | column_nullability | invariant | mutation_marker
                  | outer_sql_expression ;
 star_projection = [view_name, "."], "*", ["EXCEPT", exclusion_names] ;
 exclusion_names = sql_column, {",", sql_column} ;
@@ -120,6 +121,8 @@ column_type_name = identifier, [".", identifier] ;
    channel/generic-instantiation AST expressions are rejected. Named rich types
    remain possible. WithColumnType/ColumnType use this same production. *)
 column_tag = "tag", "(", column_ref, ",", string, ")" ;
+internal_column = "internal", "(", column_ref, ")" ;
+column_nullability = ("required" | "optional"), "(", column_ref, ")" ;
 invariant = "invariant", "(", column_ref, ",", string, ")" ;
 mutation_marker = ("delete_marker" | "concurrency_token"), "(", column_ref, ")" ;
 (* One of each per mutable view, generated PATCH/PUT Go policy only.
@@ -129,11 +132,11 @@ mutation_marker = ("delete_marker" | "concurrency_token"), "(", column_ref, ")" 
 column_ref = view_name, ".", sql_column ;
 outer_sql_expression = ? expression accepted by SQLparser and outer projection
                         compiler; not a substitute for declaring column authority ? ;
-(* Rich CAST, tag and invariant address named outer views, not inner aliases.
+(* Rich CAST, tag, internal and invariant address named outer views, not inner aliases.
    Inner CAST(expr AS database_type) is SQL, not a Go type annotation. *)
 
 view_control = named_binding_control | numeric_control | flag_control
-             | string_control | self_reference | partitioner ;
+             | string_control | row_type | row_lock_control | self_reference | partitioner ;
 named_binding_control = ("use_connector" | "use_cache" | "cache_warmup"),
                         "(", view_name, ",", (string | identifier), ")" ;
 numeric_control = ("set_limit" | "batch_size" | "batch_concurrency"
@@ -142,8 +145,10 @@ numeric_control = ("set_limit" | "batch_size" | "batch_concurrency"
 flag_control = ("allow_nulls" | "groupable" | "grouping_enabled"
                | "publish_parent"), "(", view_name, ")" ;
 string_control = ("order_by" | "allowed_order_by_columns" | "cardinality"
-                 | "type" | "dest" | "match_strategy" | "lifecycle_type"),
+                 | "dest" | "match_strategy" | "lifecycle_type"),
                  "(", view_name, ",", string, ")" ;
+row_type = "type", "(", view_name, ",", string, [",", string], ")" ;
+row_lock_control = "row_lock", "(", view_name, ",", string, [",", string], ")" ;
 self_reference = "self_ref", "(", view_name, ",", string, ",", string,
                  ",", string, ")" ;
 partitioner = "set_partitioner", "(", view_name, ",", string,

@@ -31,7 +31,7 @@ func (c OutputBindingCompiler) CompileBindings() ([]bindly.BindingSpec, error) {
 	}
 	canonical := map[string]*spec.Parameter{}
 	for _, param := range spec.EffectiveParameters(c.Component.Parameters) {
-		if param == nil || !selected[strings.ToLower(param.Source.Kind)] {
+		if param == nil || !param.EmitOutput && !strings.EqualFold(param.Source.Kind, "output") || !selected[strings.ToLower(param.Source.Kind)] {
 			continue
 		}
 		field, found, err := fields.resolve(param)

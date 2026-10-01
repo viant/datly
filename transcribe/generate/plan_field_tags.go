@@ -33,7 +33,7 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 		value = strings.ReplaceAll(value, `'`, `\'`)
 		return "'" + value + "'"
 	}
-	if param.EmitOutput {
+	if param.EmitOutput && kind != "logger" {
 		kind = "output"
 		if inName == "" {
 			inName = "body"
@@ -87,6 +87,9 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 	}
 	for _, item := range metadata {
 		base = appendStructTag(base, item.name, item.value)
+	}
+	if param.QueryListCSV {
+		base = appendStructTag(base, "queryList", "csv")
 	}
 	return base
 }

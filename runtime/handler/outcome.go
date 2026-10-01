@@ -13,3 +13,10 @@ import (
 type OutcomeFinalizer interface {
 	FinalizeOutcome(context.Context, Invocation, any, xhandler.Outcome) error
 }
+
+// EarlyErrorOutputFinalizer opts a mutation adapter into error-aware output
+// construction for failures before its execution snapshot exists. Its outcome
+// callback remains the sole finalizer and runs after normal root cleanup.
+type EarlyErrorOutputFinalizer interface {
+	EarlyErrorOutputEnabled() bool
+}

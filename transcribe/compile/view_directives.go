@@ -64,7 +64,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	}
 	name := normalizeViewDirectiveName(sqlparser.Stringify(call.X))
 	switch name {
-	case spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
+	case spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
 		spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 		spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 		spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
@@ -78,7 +78,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	default:
 		return viewDirective{}, false, nil
 	}
-	if (name == spec.ViewControlMutationPredicate || name == spec.ViewControlOnDeleteNotFound) && item.Alias != "" {
+	if (name == spec.ViewControlInsertValidationPresence || name == spec.ViewControlWriterIdentity || name == spec.ViewControlMutationPredicate || name == spec.ViewControlOnDeleteNotFound) && item.Alias != "" {
 		return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s must be a standalone annotation without an alias", name)}
 	}
 	minimum, maximum := 2, 2
@@ -117,7 +117,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s value %q must be a non-negative integer", name, directive.value)}
 		}
 	}
-	if selectorBooleanDirective(name) {
+	if name == spec.ViewControlInsertValidationPresence || selectorBooleanDirective(name) {
 		if _, err := strconv.ParseBool(strings.ToLower(directive.value)); err != nil {
 			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s value %q must be true or false", name, directive.value)}
 		}
@@ -169,7 +169,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 func containsViewDirective(source node.Node) bool {
 	return containsSQLCall(source, func(name string) bool {
 		switch name {
-		case spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
+		case spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
 			spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 			spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 			spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
@@ -294,7 +294,7 @@ func viewDirectiveValue(name string, argument int, source node.Node) (string, bo
 		if numeric && actual.Kind != "int" {
 			return "", false
 		}
-		boolean := selectorBooleanDirective(name)
+		boolean := name == spec.ViewControlInsertValidationPresence || selectorBooleanDirective(name)
 		if boolean && actual.Kind != "bool" {
 			return "", false
 		}
@@ -345,6 +345,13 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			target.Source = &spec.ViewSource{}
 		}
 		switch directive.name {
+		case spec.ViewControlInsertValidationPresence:
+			target.InsertValidationPresence, _ = strconv.ParseBool(directive.value)
+		case spec.ViewControlWriterIdentity:
+			if directive.value != "assigned-update" {
+				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("writer_identity must be assigned-update")}
+			}
+			target.WriterIdentityPolicy = directive.value
 		case spec.ViewControlOnDeleteNotFound:
 			if directive.value != "error" && directive.value != "ignore" {
 				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("delete_not_found must be error or ignore")}

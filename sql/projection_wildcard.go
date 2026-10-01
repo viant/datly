@@ -161,7 +161,7 @@ func (p SelectorProjection) wildcardSourceColumns(stmt *query.Select, src wildca
 			// Only a proven unchanged physical wildcard may use prepared columns.
 			child := SelectorProjection{}
 			if prepared {
-				child = SelectorProjection{SQL: raw, View: p.View}
+				child = SelectorProjection{SQL: raw, View: p.View, Dialect: p.Dialect}
 			}
 			copyStmt := *nested
 			copyStmt.WithSelects = append(append(query.WithSelects(nil), nested.WithSelects...), stmt.WithSelects...)
@@ -197,7 +197,15 @@ func (p SelectorProjection) wildcardSourceColumns(stmt *query.Select, src wildca
 		if src.alias != "" {
 			ref = src.alias + "." + name
 		}
-		columns[i] = ProjectionColumn{names: []string{name}, order: ref, source: ref, output: name, wildcard: true}
+		rendered := ref
+		var err error
+		if p.Dialect != nil {
+			rendered, err = p.Dialect.ColumnIdentifier(ref)
+			if err != nil {
+				return nil, err
+			}
+		}
+		columns[i] = ProjectionColumn{names: []string{name}, order: ref, source: rendered, output: name, wildcard: true}
 	}
 	return columns, nil
 }
@@ -252,7 +260,14 @@ func (p SelectorProjection) wildcardMetadataColumns(stmt *query.Select, src wild
 		ref := src.alias + "." + output
 		names := projectionItemNames(nil, ref)
 
-		columns = append(columns, ProjectionColumn{names: names, order: ref, source: ref, output: output, metadata: col, wildcard: true})
+		rendered := ref
+		if p.Dialect != nil {
+			rendered, err = p.Dialect.ColumnIdentifier(ref)
+			if err != nil {
+				return nil, err
+			}
+		}
+		columns = append(columns, ProjectionColumn{names: names, order: ref, source: rendered, output: output, metadata: col, wildcard: true})
 	}
 	if len(columns) == 0 {
 		return nil, fmt.Errorf("wildcard source projection is unresolved or empty")

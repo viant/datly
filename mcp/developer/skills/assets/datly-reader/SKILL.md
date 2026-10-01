@@ -48,6 +48,21 @@ see [reports](references/product/datly/doc/reports.md) for declared configuratio
 - For cache/warmup, multiview selectors, YAML docs, static/MCP resources, deployment, async and telemetry status, read [cache-and-operations.md](references/cache-and-operations.md). Separate current APIs from pending authoring/integration contracts.
 - Use [acceptance.md](references/acceptance.md) to verify observable application behavior. Framework maintenance is outside this skill.
 
+## Simplify projections
+
+Prefer `view.*` for ordinary columns. Keep the outer SELECT for genuine Go-shape or behavior declarations: `type`, `required`, `optional`, codecs, validation, visibility, relations and lifecycle policy. Do not repeat every column alongside a wildcard.
+
+```sql
+SELECT c.*, type(c,'Conversation'), required(c.id), optional(c.summary)
+FROM conversation c
+```
+
+Use inferred driver types. A string column already represented as Go `string` needs no CAST. Use `required(view.column)` for an inferred scalar value and `optional(view.column)` for an explicit pointer; these do not change database constraints or reject legitimate zero values. Keep CAST only for a genuine type mismatch, such as integer width, a textual timestamp, decoded bytes or a structured codec value. A standalone DQL CAST is Go-shape metadata; an SQL-aliased CAST remains executable SQL.
+
+For aggregates or intentionally restricted shapes, keep the necessary SQL expressions/projection inside a named source and use its wildcard in the outer shape declaration. A wildcard must not broaden the contract. Verify generated field names, types, nullability, presence, JSON and relations, then run actual selectors and database reads/writes; compilation alone does not prove wildcard runtime support.
+
+Use `case_format('lc')` for naming. JSON tags belong only to genuine wire exceptions or omission/visibility policy, never repetitive lowercasing. Keep SQL aliases short and independent from public field names; avoid database keywords. `type(u,'UsageView','Usage')` gives a related SQL view an explicit Go holder without renaming its SQL namespace.
+
 ## Authoring workflow
 
 The standard workflow is **reader-like declarative DQL graph + explicit `transcribe`

@@ -119,6 +119,8 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	current.TypeName = ""
 	current.Dest = ""
 	current.EntityHooks = ""
+	current.WriterIdentityPolicy = ""
+	current.InsertValidationPresence = false
 	current.OnDeleteNotFound = ""
 	current.MutationPredicateGroup = nil
 	current.Columns = nil

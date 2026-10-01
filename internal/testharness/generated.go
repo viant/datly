@@ -19,6 +19,8 @@ import (
 type GeneratedModule struct {
 	Path       string
 	SourceRoot string
+	// SourceModFile selects the same dependency graph used by an isolated build.
+	SourceModFile string
 }
 
 func (m GeneratedModule) source() (*modfile.File, string, error) {
@@ -34,11 +36,26 @@ func (m GeneratedModule) source() (*modfile.File, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	content, err := os.ReadFile(filepath.Join(info.Dir, "go.mod"))
+	sourceFile := filepath.Join(info.Dir, "go.mod")
+	if m.SourceModFile != "" {
+		sourceFile = m.SourceModFile
+	} else if selected := os.Getenv("DATLY_TEST_MODFILE"); selected != "" && info.Path == "github.com/viant/datly" {
+		if !filepath.IsAbs(selected) {
+			return nil, "", fmt.Errorf("DATLY_TEST_MODFILE must be absolute")
+		}
+		sourceFile = selected
+	}
+	content, err := os.ReadFile(sourceFile)
 	if err != nil {
 		return nil, "", err
 	}
-	file, err := modfile.Parse("go.mod", content, nil)
+	file, err := modfile.Parse(sourceFile, content, nil)
+	if err == nil && (file.Module == nil || file.Module.Mod.Path != info.Path) {
+		return nil, "", fmt.Errorf("generated fixture modfile must declare source module %s", info.Path)
+	}
+	if err == nil {
+		err = applyTestSDKSource(file)
+	}
 	return file, info.Dir, err
 }
 
@@ -198,4 +215,62 @@ func GeneratedGoModWithoutModule() string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// applyTestSDKSource is fixture-only authority for testing an unpublished SDK.
+// It changes generated test module metadata, never the source checkout go.mod.
+func applyTestSDKSource(file *modfile.File) error {
+	source := os.Getenv("DATLY_TEST_XDATLY_DIR")
+	if source == "" {
+		return nil
+	}
+	if !filepath.IsAbs(source) {
+		return fmt.Errorf("DATLY_TEST_XDATLY_DIR must be absolute")
+	}
+	data, err := os.ReadFile(filepath.Join(source, "go.mod"))
+	if err != nil {
+		return fmt.Errorf("read DATLY_TEST_XDATLY_DIR module: %w", err)
+	}
+	sdk, err := modfile.Parse("go.mod", data, nil)
+	if err != nil {
+		return fmt.Errorf("parse DATLY_TEST_XDATLY_DIR module: %w", err)
+	}
+	if sdk.Module == nil || sdk.Module.Mod.Path != "github.com/viant/xdatly" {
+		return fmt.Errorf("DATLY_TEST_XDATLY_DIR must identify github.com/viant/xdatly")
+	}
+	return file.AddReplace("github.com/viant/xdatly", "", filepath.Clean(source), "")
+}
+
+// SourceGoCommand builds/runs the source checkout with the same explicit test
+// SDK mapping as generated consumers. It never alters tracked module files and
+// passes -modfile only to this command, not to the resulting application process.
+func SourceGoCommand(t testing.TB, root, verb string, args ...string) *exec.Cmd {
+	t.Helper()
+	flags := []string{verb}
+	if os.Getenv("DATLY_TEST_XDATLY_DIR") != "" {
+		file, source, err := (GeneratedModule{SourceRoot: root}).source()
+		if err != nil {
+			t.Fatal(err)
+		}
+		dir := t.TempDir()
+		path := filepath.Join(dir, "source.mod")
+		content, err := file.Format()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(path, content, 0644); err != nil {
+			t.Fatal(err)
+		}
+		sums, err := os.ReadFile(filepath.Join(source, "go.sum"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(dir, "source.sum"), sums, 0644); err != nil {
+			t.Fatal(err)
+		}
+		flags = append(flags, "-modfile="+path)
+	}
+	command := exec.Command("go", append(flags, args...)...)
+	command.Dir = root
+	return command
 }

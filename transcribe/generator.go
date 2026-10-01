@@ -142,8 +142,10 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		return nil, fmt.Errorf("unsupported transcribe language %q", language)
 	}
 	for _, route := range compiled.Component.Routes {
-		if operation != "get" && route != nil && route.Method != "" && !strings.EqualFold(route.Method, operation) {
-			return nil, fmt.Errorf("transcribe operation %q conflicts with authored route method %q", operation, route.Method)
+		if route != nil {
+			if err := validateWriterRoute(operation, route.Method, compiled.Component.RootView); err != nil {
+				return nil, err
+			}
 		}
 	}
 	inputTarget := gen.Input{Component: compiled.Component}
@@ -202,4 +204,14 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		return nil, handlers.diagnostic(err)
 	}
 	return NewCompiler().generateInputAt(ctx, root, dir, &copy, input)
+}
+
+func validateWriterRoute(operation, method string, root *spec.View) error {
+	if operation == "get" || method == "" || strings.EqualFold(method, operation) {
+		return nil
+	}
+	if strings.EqualFold(method, "DELETE") && (operation == "patch" || operation == "put") && gen.HasWritableDeleteMarker(root) {
+		return nil
+	}
+	return fmt.Errorf("transcribe operation %q conflicts with authored route method %q; DELETE requires explicit PATCH/PUT delete-marker semantics", operation, method)
 }

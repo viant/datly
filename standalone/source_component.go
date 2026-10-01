@@ -126,12 +126,18 @@ func (c *sourceComponent) Configure(ctx context.Context, artifact *report.Compon
 	// Studio's owner-scoped ACL predicate). Do not reserve it for custom
 	// handlers: both route kinds execute under the same configured SQL host.
 	result.Invocation.Connector = c.source.connections.SQL
-	views, err := artifact.NewViewProvider(bootstrap.ViewRuntimeConfig{SQL: c.source.connections.SQL})
-	if err != nil {
-		return result, err
-	}
-	if views != nil {
-		result.Providers = append(result.Providers, views)
+	result.Invocation.Logger = c.source.invocationLogger
+	var err error
+	component := artifact.Component()
+	independentSourceLess := artifact.HasLinkedHandler() && component.Settings != nil && component.Settings.IndependentChildTransactions && component.Settings.DefaultConnector == ""
+	if !independentSourceLess {
+		views, err := artifact.NewViewProvider(bootstrap.ViewRuntimeConfig{SQL: c.source.connections.SQL})
+		if err != nil {
+			return result, err
+		}
+		if views != nil {
+			result.Providers = append(result.Providers, views)
+		}
 	}
 	if reader := artifact.ReaderCompilation(); reader != nil {
 		result.Reader, err = reader.NewExecution(bootstrap.ReaderRuntimeConfig{CacheIdentity: c.source.connections.CacheIdentity(), SQL: c.source.connections.SQL, Aerospike: &c.source.caches, CacheSettings: c.source.config.Caches})
@@ -139,7 +145,6 @@ func (c *sourceComponent) Configure(ctx context.Context, artifact *report.Compon
 			return result, err
 		}
 	}
-	component := artifact.Component()
 	if artifact.HasLinkedHandler() && component.Settings != nil && component.Settings.DefaultConnector != "" {
 		db, err := c.source.connections.ResolveDB(ctx, component.Settings.DefaultConnector)
 		if err != nil {

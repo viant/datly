@@ -150,7 +150,7 @@ func (s *RouteSource) canonicalComponent() (*spec.Component, error) {
 			settings.Report.MCPTool = &enabled
 		}
 	}
-	if len(settings.MCPFolders) > 0 || settings.Mutation != "" || settings.SequenceStrategy != "" || settings.DefaultConnector != "" || settings.InputType != "" || settings.OutputType != "" || settings.Report != nil ||
+	if settings.ResponseCompression != nil || settings.IndependentChildTransactions || len(settings.MCPFolders) > 0 || settings.Mutation != "" || settings.SequenceStrategy != "" || settings.DefaultConnector != "" || settings.InputType != "" || settings.OutputType != "" || settings.Report != nil ||
 		settings.Cache != nil || settings.CaseFormat != "" || settings.JSONMarshalType != "" ||
 		settings.JSONUnmarshalType != "" || settings.XMLUnmarshalType != "" || settings.Format != "" || settings.DateFormat != "" || settings.Output != nil || settings.IgnoreEmptyQueryParameters != nil || settings.WarmupTarget != nil {
 		component.Settings = settings
@@ -325,6 +325,18 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 
 func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) error {
 	param := resolved.param
+	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.InsertValidationPresence {
+		if r.component.RootView == nil {
+			return fmt.Errorf("insert validation body requires a root view")
+		}
+		r.component.RootView.InsertValidationPresence = true
+	}
+	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.WriterIdentityPolicy != "" {
+		if r.component.RootView == nil {
+			return fmt.Errorf("writer identity body requires a root view")
+		}
+		r.component.RootView.WriterIdentityPolicy = resolved.metadata.View.WriterIdentityPolicy
+	}
 	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.OnDeleteNotFound != "" {
 		if r.component.RootView == nil {
 			return fmt.Errorf("onDeleteNotFound body requires a root view")
@@ -360,6 +372,12 @@ func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) e
 
 func (r *packageComponentResolver) applyOutput(resolved *resolvedContractField) error {
 	param := resolved.param
+	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.InsertValidationPresence {
+		if r.component.RootView == nil {
+			return fmt.Errorf("insert validation body requires a root view")
+		}
+		r.component.RootView.InsertValidationPresence = true
+	}
 	if param.IsDerivedOutput() {
 		return r.addOutputRelation(resolved.field, param, resolved.metadata)
 	}
@@ -517,13 +535,18 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 	}
 	param := &spec.Parameter{
 		Name: name, Source: spec.BindSource{Kind: binding.Location.Kind, Name: binding.Location.In},
-		TypeExpr: binding.DataType, Tag: string(field.Tag), Cardinality: binding.Cardinality,
+		QueryListCSV: metadata.QueryListCSV, TypeExpr: binding.DataType, Tag: string(field.Tag), Cardinality: binding.Cardinality,
 		Required: binding.Required, Cacheable: binding.Cacheable,
 		MinAllowedRecords: binding.MinAllowedRecords, MaxAllowedRecords: binding.MaxAllowedRecords, ExpectedReturned: binding.ExpectedReturned,
 		MCP: metadata.MCP, PathMCP: metadata.PathMCP,
 		When: binding.When, Scope: binding.Scope, With: binding.With,
 		Activation: activationFromBinding(binding.URI), ResourceRef: resourceFromBinding(binding.URI, binding.ResourceRef), Async: binding.Async,
 		ErrorStatusCode: binding.ErrorCode, ErrorMessage: binding.ErrorMessage,
+	}
+	// Output-owned capability bindings retain their server source rather than
+	// becoming body slots. The SDK logger remains an ordinary typed capability.
+	if role == outputContract && strings.EqualFold(binding.Location.Kind, "logger") {
+		param.EmitOutput = true
 	}
 	if binding.DefaultValue != nil {
 		value, ok := binding.DefaultValue.(string)
@@ -638,6 +661,8 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.EntityHooks = strings.TrimSpace(metadata.View.EntityHooks)
 		view.RowLock = strings.TrimSpace(metadata.View.RowLock)
 		view.RowLockOrder = strings.TrimSpace(metadata.View.RowLockOrder)
+		view.WriterIdentityPolicy = metadata.View.WriterIdentityPolicy
+		view.InsertValidationPresence = metadata.View.InsertValidationPresence
 		view.OnDeleteNotFound = metadata.View.OnDeleteNotFound
 		view.MutationPredicateGroup = metadata.View.MutationPredicateGroup
 		view.Source.URI = strings.TrimSpace(metadata.View.URI)
