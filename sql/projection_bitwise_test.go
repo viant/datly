@@ -18,7 +18,7 @@ func TestForecastingProjectionRejectsIncompleteExpressions(t *testing.T) {
 	for _, input := range []string{
 		"SELECT country, events & AS mask, SUM(avails) AS avails FROM records GROUP BY country, mask",
 		"SELECT country, events << AS mask, SUM(avails) AS avails FROM records GROUP BY country, mask",
-		"SELECT country, a || b AS label, SUM(avails) AS avails FROM records GROUP BY country, label",
+		"SELECT country, a ||| b AS label, SUM(avails) AS avails FROM records GROUP BY country, label",
 		"SELECT country, SUM(avails) AS avails FROM records WHERE events & GROUP BY country",
 		"SELECT country, SUM(avails) AS avails FROM records GROUP BY country HAVING SUM(avails) |",
 	} {
