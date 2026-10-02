@@ -8,6 +8,7 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
+	sqltext "github.com/viant/sqlparser/source"
 )
 
 func discoveryQuery(source *spec.ViewSource) (string, error) {
@@ -21,6 +22,9 @@ func discoveryQuery(source *spec.ViewSource) (string, error) {
 	if text == "" {
 		return "", nil
 	}
+	// Pagination is applied by the runtime builder. Metadata discovery has no
+	// request window; remove only executable markers from its private SQL copy.
+	text = sqltext.Token("$PAGINATION").ReplaceAll(text, "")
 	parsed, err := sqlparser.ParseQuery(text)
 	if err != nil || parsed == nil || len(parsed.List) == 0 {
 		// Inner dialect SQL is database-owned. Preserve it as an opaque source

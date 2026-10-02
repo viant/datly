@@ -9,7 +9,67 @@ import (
 	"github.com/viant/datly/internal/testharness/sqlite"
 	"github.com/viant/datly/spec"
 	"github.com/viant/sqlparser"
+	sqltext "github.com/viant/sqlparser/source"
 )
+
+func TestDiscoveryQuerySourceScopedPagination(t *testing.T) {
+	h := sqlite.New(t)
+	if _, err := h.DB.Exec("CREATE TABLE discovery_pagination (id INTEGER, `$PAGINATION` TEXT); INSERT INTO discovery_pagination VALUES (1, 'retained')"); err != nil {
+		t.Fatal(err)
+	}
+	for _, authored := range []string{
+		"SELECT q.id FROM (SELECT id FROM discovery_pagination ORDER BY id $PAGINATION) q",
+		"SELECT '$PAGINATION' AS marker, `$PAGINATION` FROM discovery_pagination $PAGINATION -- $PAGINATION\n",
+		"SELECT id FROM discovery_pagination /* $PAGINATION */ $PAGINATION",
+	} {
+		source := &spec.ViewSource{SQL: authored}
+		actual, err := discoveryQuery(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if source.SQL != authored {
+			t.Fatal("metadata discovery changed authored SQL")
+		}
+		if sqltext.Token("$PAGINATION").Contains(actual) {
+			t.Fatalf("executable pagination marker reached metadata SQL: %s", actual)
+		}
+		if strings.Contains(authored, "AS marker") && (!strings.Contains(actual, "'$PAGINATION'") || !strings.Contains(actual, "`$PAGINATION`")) {
+			t.Fatalf("protected marker changed: %s", actual)
+		}
+		rows, err := h.DB.Query(actual)
+		if err != nil {
+			t.Fatalf("metadata query failed: %v", err)
+		}
+		returned := rows.Next()
+		rowErr := rows.Err()
+		rows.Close()
+		if returned || rowErr != nil {
+			t.Fatalf("metadata query must return zero rows: returned=%v err=%v", returned, rowErr)
+		}
+	}
+}
+
+func TestSchemaDiscoveryPaginationPreservesLineageAndProtectedText(t *testing.T) {
+	const authored = "SELECT q.id FROM (SELECT id FROM discovery_pagination ORDER BY id $PAGINATION) q"
+	prepared, err := schemaDiscoverySQL(authored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if table := directSourceTable(prepared); table != "discovery_pagination" {
+		t.Fatalf("pagination prevented source-table inference: %q", table)
+	}
+	const protected = "SELECT '$PAGINATION', `$PAGINATION`, $PAGINATION_SUFFIX /* $PAGINATION */ -- $PAGINATION\nFROM discovery_pagination $PAGINATION"
+	actual, err := schemaDiscoverySQL(protected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actual != strings.TrimSuffix(protected, "$PAGINATION") {
+		t.Fatalf("private preparation changed protected text: %s", actual)
+	}
+	if sqltext.Token("$PAGINATION").Contains(prepared) {
+		t.Fatal("private preparation retained executable pagination")
+	}
+}
 
 func TestTableFreeDiscoverySQLExecutes(t *testing.T) {
 	query, err := discoveryQuery(&spec.ViewSource{SQL: "SELECT 1 AS id"})

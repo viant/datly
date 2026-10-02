@@ -19,6 +19,7 @@ import (
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
+	sqltext "github.com/viant/sqlparser/source"
 	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
@@ -341,12 +342,14 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	return evaluated, nil
 }
 
-// schemaDiscoverySQL removes unresolved predicate expansions only from the
-// zero-row metadata query. Runtime/authored SQL remains owned by the original
-// view source and evaluated result.
+// schemaDiscoverySQL prepares a private metadata copy by removing unresolved
+// predicate expansions and runtime pagination markers before evaluation and
+// lineage inference. The original view source retains authored SQL.
 func schemaDiscoverySQL(SQL string) (string, error) {
 	const prefix = "${predicate."
-	result := SQL
+	// Prepare a private metadata copy before evaluation and lineage inference.
+	// Runtime pagination has no window during discovery; authored SQL is retained.
+	result := sqltext.Token("$PAGINATION").ReplaceAll(SQL, "")
 	for {
 		start := strings.Index(result, prefix)
 		if start < 0 {
